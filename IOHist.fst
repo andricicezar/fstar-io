@@ -58,6 +58,22 @@ let rec iohist_interpretation #a
       iohist_interpretation (fnc res) (event :: past_events) (gen_post p event)))
   end
 
+
+let rec fin_prefs #a
+  (m : io a) 
+  (past_events : events_trace) 
+  (traces : list events_trace) : Type0 = 
+  match m with
+  | Return x -> past_events `List.memP` traces
+  | Throw err -> past_events `List.memP` traces
+  | Cont t -> begin
+    match t with
+    | Call cmd args fnc -> (forall res. (
+      FStar.WellFounded.axiom1 fnc res;
+      let event : io_event = convert_call_to_event cmd args res in
+      fin_prefs (fnc res) (event :: past_events) traces))
+  end
+
 (* total *)
 (* reifiable *)
 (* reflectable *)

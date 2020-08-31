@@ -167,18 +167,16 @@ let incrs2' : int -> M4 int = export incrs2
 
 instance ml_file_descr : ml file_descr = { mldummy = () }
 
-// Error: highlighted io_all cmd args in M4?.reflect, with the error:
-// (Error) Failed to resolve implicit argument ?498 of type m4_wpty (Mkcmd_sig?.res io_cmd_sig cmd) introduced for restricted ?490
-let rec _export_IOStHist_to_M4 #t2 (tree : io (events_trace * t2)) : M4 t2 by (dump "h" )= 
+let rec _export_IOStHist_to_M4 #t2 (tree : io (events_trace * t2)) : M4 t2 (decreases tree) = 
   match tree with
   | Return (s1, r) -> r
-  | Throw r -> M4?.reflect (fun _ -> io_throw _ r)
+  | Throw r -> M4.raise r
   | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = M4?.reflect (fun _ -> io_all cmd argz) in
-      let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
-      _export_IOStHist_to_M4 z'
-
-
+      let rez : res cmd = M4.static_cmd cmd argz in
+      let z' : sys io_cmds io_cmd_sig (events_trace * t2) = fnc (Inl rez) in
+      // can this be avoided?
+      FStar.WellFounded.axiom1 fnc (Inl rez);
+      _export_IOStHist_to_M4 #t2 z'
 
 instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0) (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d4:checkable2 pre |} : exportable ((x:t1) -> IOStHist t2 (pre x) (post x)) = 
@@ -188,11 +186,9 @@ instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0
         let x : t1 = import x in
         let s0 : events_trace = M4.get_history () in
         (if check2 #t1 #events_trace #pre x s0 then (
-          let tree = reify (f x) in
-
-          _export_IOStHist_to_M4 (tree s0)
-          // let z' : unit -> M4 d2.etype = export (sys_map _ _ _ _ (z s0) (fun (_, r) -> r)) in
-          // z' ()
+          let tree = reify (f x) (fun r le -> post x s0 r le) in
+          let z = _export_IOStHist_to_M4 (tree s0) in
+          export z
         ) else M4.raise Contract_failure) <: M4 d2.etype))
 
 instance ml_check_type : ml check_type = { mldummy = () }
@@ -216,16 +212,16 @@ let rec _import_M4_to_IOStHist #t2 (tree : io (t2)) :
     | Inr err -> True) = begin
   match tree with
   | Return r -> r
-  | Throw r -> IOStHist.raise r
+  | Throw r -> IOStHist.throw r
   | Cont (Call cmd argz fnc) ->
       let s0 = IOStHist.get () in
       if default_check s0 (| cmd, argz |) then (
-        let rez = static_cmd cmd argz in 
+        let rez = IOStHist.static_cmd cmd argz in 
         FStar.WellFounded.axiom1 fnc (Inl rez);
         let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
         rev_append_rev_append ();
         _import_M4_to_IOStHist z'
-      ) else IOStHist.raise Contract_failure
+      ) else IOStHist.throw Contract_failure
 end
 
 // this can not have a precondition because you can not dynamically
@@ -245,48 +241,34 @@ let extract_local_events (s0 s1:events_trace) :
   let (le, _) = List.Tot.Base.splitAt n s1 in
   List.rev le
 
-instance importable_M4_to_IOStHist t1 t2 (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  {| d1:exportable t1 |} {| d2:ml t2 |} {| checkable4 post |}:
-  importable(x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le)) by (explode (); 
-  ExtraTactics.bump_nth 13;
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  // tadmit ();
-  ExtraTactics.branch_on_match ();
- explode ();
-  dump "h")=
-  mk_importable (d1.etype -> M4 t2) #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
-    (fun (f:(d1.etype -> M4 t2)) ->
-      (fun (x:t1) ->
-        let s0 : events_trace = IOStHist.get () in
-        rev_append_rev_append ();
-        let x' : d1.etype = export x in
-        assume (forall x err s0 le. post x s0 (Inr err) le == true);
-        let tree = reify (f x') in
-        let result = _import_M4_to_IOStHist #t2 tree in
-        let s1 : events_trace = IOStHist.get () in
-        let le = extract_local_events s0 s1 in
+// instance importable_M4_to_IOStHist t1 t2 (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+//   {| d1:exportable t1 |} {| d2:ml t2 |} {| checkable4 post |}:
+//   importable(x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le)) =
+//   mk_importable (d1.etype -> M4 t2) #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
+//     (fun (f:(d1.etype -> M4 t2)) ->
+//       (fun (x:t1) ->
+//         let s0 : events_trace = IOStHist.get () in
+//         rev_append_rev_append ();
+//         let x' : d1.etype = export x in
+//         assume (forall x err s0 le. post x s0 (Inr err) le == true);
+//         let tree = reify (f x') (fun r -> True) in
+//         let result = _import_M4_to_IOStHist #t2 tree in
+//         let s1 : events_trace = IOStHist.get () in
+//         let le = extract_local_events s0 s1 in
 
 
-        // the casting is done wrongly because you don't have an extra le...
-        // in a way this is not correct because it uses the materialized le ^ and the ghost le
-        // without realizing that are the same thing.
-        (if check4 #t1 #t2 #post x s0 (Inl (s1, result)) le then (admit (); result)
-        else (IOStHist.raise Contract_failure)) ))
-          //<: IOStHistwp t2 (fun s0 p -> forall resxy le. post x s0 resxy le ==>  p resxy le)))
+//         // the casting is done wrongly because you don't have an extra le...
+//         // in a way this is not correct because it uses the materialized le ^ and the ghost le
+//         // without realizing that are the same thing.
+//         (if check4 #t1 #t2 #post x s0 (Inl (s1, result)) le then (admit (); result)
+//         else (IOStHist.throw Contract_failure)) ))
+//           //<: IOStHistwp t2 (fun s0 p -> forall resxy le. post x s0 resxy le ==>  p resxy le)))
       
 
 let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = begin
   match tree with
   | Return r -> r 
-  | Throw r -> IOStHist.raise r
+  | Throw r -> IOStHist.throw r
   | Cont (Call cmd argz fnc) ->
       let rez : res cmd = dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
@@ -301,7 +283,7 @@ instance importable_M4_arrow_spec t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
     (fun (f:(d1.etype -> M4 t2)) ->
       (fun (pi:check_type) (x:t1) ->
         let x : d1.etype = export x in
-        let tree = reify (f x) in
+        let tree = reify (f x) (fun r -> True) in
         _import_M4_to_GIO #t2 tree pi <: GIO t2 pi))
 
 val allowed_file : string -> bool
@@ -334,7 +316,7 @@ let webserver (plugin:plugin_type) : GIO unit pi =
   let fd = pi_static_cmd Openfile pi "Demos.fst" in
   plugin pi fd
 
-let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) = M4?.reflect (io_all cmd argz)
+let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) = M4?.reflect (fun p -> io_all cmd argz)
 
 let plugin1 : file_descr -> M4 unit = fun fd ->
   m4_cmd Close fd
