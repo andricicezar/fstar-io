@@ -8,6 +8,7 @@ class ml (t:Type) = { mldummy : unit }
 
 instance ml_int : ml int = { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> ML t2) = { mldummy = () }
+instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
 
 class importable (t : Type) = { itype : Type; import : itype -> ML t; ml_itype : ml itype }
 
@@ -34,3 +35,14 @@ instance importable_darrow_refined t1 t2 (p:t1->t2->Type0)
 // Example 
 let incr (x:int) : ML int = x + 1
 let incr' : (x:int) -> ML (y:int{y = x + 1}) = import incr
+
+instance importable_dpair_refined t1 t2 (p:t1 -> t2 -> Type0)
+  {| d1:importable t1 |} {| d2:importable t2 |} {| d3:checkable2 p |} : importable (x:t1 & y:t2{p x y}) =
+  mk_importable (d1.itype & d2.itype) #(x:t1 & y:t2{p x y})
+    (fun ((x', y')) ->
+        let (x : t1) = import x' in
+        let (y : t2) = import y' in
+        (if check2 #t1 #t2 #p x y then (| x, y |) 
+        else raise Contract_failure) <: (x:t1 & y:t2{p x y}))
+
+let test_dpair_refined : (a:int & b:int{b = a + 1}) = import (10, 11)
