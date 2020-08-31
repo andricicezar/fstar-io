@@ -7,6 +7,7 @@ class ml (t:Type) = { mldummy : unit }
 
 instance ml_int : ml int = { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> M4 t2) = { mldummy = () }
+instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
 
 class importable (t : Type) = { itype : Type; import : itype -> M4 t; ml_itype : ml itype }
 
@@ -30,8 +31,21 @@ instance importable_darrow_refined t1 t2 (p:t1->t2->Type0)
         (if check2 #t1 #t2 #p x y then y 
          else raise Contract_failure) <: M4 (y:t2{p x y})))
 
-// Example 
 let incr (x:int) : M4 int = x + 1
+// Bug 1 
 //(Error) user tactic failed: Typeclass resolution failed: could not solve constraint: UnknM4.importable (x: Prims.int -> M4.M4 (y: Prims.int{y = x + 1}))
 // Related location (C-c C-' to visit, M-, to come back): FStar/ulib/FStar.Tactics.Derived.fst(358,4-360,16) 
 let incr' : (x:int) -> M4 (y:int{y = x + 1}) = import incr
+
+instance importable_dpair_refined t1 t2 (p:t1 -> t2 -> Type0)
+  {| d1:importable t1 |} {| d2:importable t2 |} {| d3:checkable2 p |} : importable (x:t1 & y:t2{p x y}) =
+  mk_importable (d1.itype & d2.itype) #(x:t1 & y:t2{p x y})
+    (fun ((x', y')) ->
+        let (x : t1) = import x' in
+        let (y : t2) = import y' in
+        (if check2 #t1 #t2 #p x y then (| x, y |) 
+        else M4.raise Contract_failure) <: (x:t1 & y:t2{p x y}))
+
+// (Error) ASSERTION FAILURE: Empty option
+// F* may be in an inconsistent state.
+let test_dpair_refined : (a:int & b:int{b = a + 1}) = import (10, 11)
