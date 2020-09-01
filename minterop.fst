@@ -209,7 +209,11 @@ let rec _import_M4_to_IOStHist #t2 (tree : io (t2)) :
     match result with
     | Inl v -> 
         let (s1, _) = v in s1 == (apply_changes s0 le)
-    | Inr err -> True) = begin
+    | Inr err -> True) by (
+    explode ();
+    bump_nth 44;
+    dump "h"
+  )= begin
   match tree with
   | Return r -> r
   | Throw r -> IOStHist.throw r
