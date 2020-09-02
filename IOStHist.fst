@@ -96,6 +96,7 @@ let ireturn (a : Type) (x : a) : irepr a (iosthist_return_wp a x) =
 
 let w = iosthist_wpty
 
+unfold
 val w_ord (#a : Type) : w a -> w a -> Type0
 let w_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
 
@@ -110,12 +111,15 @@ let ibind (a b : Type) (wp_v : w a) (wp_f: a -> w b) (v : irepr a wp_v)
     assume (iohist_interpretation t s0 p);
     t
 
+unfold
 let isubcomp (a:Type) (wp1 wp2: w a) (f : irepr a wp1) :
   Pure (irepr a wp2) (requires w_ord wp2 wp1) (ensures fun _ -> True) = f
 
+unfold
 let wp_if_then_else (#a:Type) (wp1 wp2:w a) (b:bool) : w a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
 
+unfold
 let i_if_then_else (a : Type) (wp1 wp2 : w a) (f : irepr a wp1) (g : irepr a wp2) (b : bool) : Type =
   irepr a (wp_if_then_else wp1 wp2 b)
 
@@ -186,13 +190,22 @@ unfold let convert_event_to_action (event:io_event) : action_type =
   | EClose args _ -> (| Close, args |)
 
 
-let rec fold_left (check : (events_trace -> action_type -> bool)) (h : events_trace) : bool =
+let rec enforced_globally (check : (events_trace -> action_type -> bool)) (h : events_trace) : bool =
   match h with
   | [] -> true
   | h  ::  t ->
        let action = convert_event_to_action h in
        if check t action then
-         fold_left (check) t
+         enforced_globally (check) t
+       else false
+
+let rec enforced_locally (check : (events_trace -> action_type -> bool)) (acc : events_trace) (l : events_trace) : Tot bool (decreases l) =
+  match l with
+  | [] -> true
+  | h  ::  t ->
+       let action = convert_event_to_action h in
+       if check acc action then
+         enforced_locally (check) (h::acc) t
        else false
 
 let some_wp (cmd : io_cmds) (argz: args cmd) = (fun s0 p -> 
@@ -202,7 +215,8 @@ let some_wp (cmd : io_cmds) (argz: args cmd) = (fun s0 p ->
       (match result with
       | Inl v -> let (s1, r) = v in (
           local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace))
+          s1 == (apply_changes s0 local_trace)) /\
+          enforced_locally default_check s0 local_trace
       | Inr _ -> True) ==>  p result local_trace))
 
 let ioo_bind #a #b = io_bind a b
@@ -239,7 +253,9 @@ let pi_static_cmd
       (match result with
       | Inl v -> let (s1, r) = v in (
           local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace))
+          s1 == (apply_changes s0 local_trace) /\
+          enforced_locally default_check s0 local_trace /\
+          enforced_locally pi_check s0 local_trace)
       | Inr _ -> True))) =
   static_cmd cmd argz
 
@@ -256,7 +272,9 @@ let mixed_cmd
       (match result with
       | Inl v -> let (s1, r) = v in (
           local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace))
+          s1 == (apply_changes s0 local_trace) /\
+          enforced_locally default_check s0 local_trace /\
+          enforced_locally pi_check s0 local_trace)
       | Inr _ -> True))) =
   let s0 = get () in
   let action = (| cmd, argz |) in
@@ -274,7 +292,9 @@ let dynamic_cmd
       (match result with
       | Inl v -> let (s1, r) = v in (
           local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace))
+          s1 == (apply_changes s0 local_trace) /\
+          enforced_locally default_check s0 local_trace /\
+          enforced_locally pi_check s0 local_trace)
       | Inr _ -> True))) =
   let s0 = get () in
   let action = (| cmd, argz |) in
@@ -287,14 +307,14 @@ effect GIO
   (pi_check : check_type) =
   IOStHist a
     (requires (fun s0 ->
-      fold_left default_check s0 &&
-      fold_left pi_check s0))
+      enforced_globally default_check s0 &&
+      enforced_globally pi_check s0))
     (ensures (fun s0 (result) local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
           s1 == (apply_changes s0 local_trace) /\
-          fold_left (default_check) s1 /\
-          fold_left (pi_check) s1)
+          enforced_globally (default_check) s1 /\
+          enforced_globally (pi_check) s1)
       | Inr _ -> True)))
 
 val to_runtime_check : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
@@ -317,7 +337,46 @@ val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:
     | Inl v -> let (s1, r) = v in (
         s1 == (apply_changes s0 le) /\
         // this one does not make sense
-        fold_left (pi_check) s1)
+        enforced_globally (pi_check) s1)
     | Inr _ -> True)))
     
 
+type set_of_traces = events_trace -> Type0
+
+val include_in : set_of_traces -> set_of_traces -> Type0
+let include_in s1 s2 = forall t. s1 t ==>  s2 t
+
+let rec behavior #a
+  (m : io a) : set_of_traces =
+  match m with
+  | Return x -> fun t -> t == []
+  | Throw err -> fun t -> t == []
+  | Cont t -> begin
+    match t with
+    | Call cmd args fnc -> (fun t' -> 
+      (exists res t. (
+         FStar.WellFounded.axiom1 fnc res;
+         (behavior (fnc res) t) /\
+         t' == ((convert_call_to_event cmd args res)::t))))
+  end
+
+let include_in_trans #a #b #c () : Lemma (
+  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `include_in` behavior t2 /\ behavior t2 `include_in` behavior t3 ==>
+    behavior t1 `include_in` behavior t3) = ()
+
+let rec iost_to_io #t2 (tree : io (events_trace * t2)) : 
+  Pure (io t2)
+    (requires True)
+    (ensures (fun (res:io t2) -> True)) =
+      // behavior res `include_in` behavior tree)) =
+  match tree with
+  | Return (s1, r) -> Return r
+  | Throw r -> Throw r
+  | Cont (Call cmd argz fnc) ->
+  //   io_bind (events_trace * t2) t2
+  //     (Cont (Call cmd argz fnc))
+  //     (fun (_, r) -> io_return _ r)
+
+     Cont (Call cmd argz (fun res -> 
+       WellFounded.axiom1 fnc res;
+       iost_to_io (fnc res)))

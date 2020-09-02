@@ -21,6 +21,11 @@ instance ml_string : ml string = { mldummy = () }
 instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> M4 t2) = { mldummy = () }
 
+instance ml_file_descr : ml file_descr = { mldummy = () }
+instance ml_check_type : ml check_type = { mldummy = () }
+
+
+
 (** ** `exportable` and `importable` classes *)
 (* Intuition, **with** extra checking, wrapping, and type erasure (extraction):
 // - the types of values we can safely `import` from malicious M4 code
@@ -133,8 +138,6 @@ let incr'' (x:int) : M4 (y:int{p x y}) = import (incr x)
 //   let (z:(x:int) -> M4 (y:int{p x y})) = import incr2 in
 //   z
 
-
-
 instance exportable_purearrow_spec t1 t2 (pre : t1 -> Type0) (post : t1 -> t2 -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d3:checkable pre |} : exportable ((x:t1) -> Pure t2 (pre x) (post x)) = 
   mk_exportable (d1.itype -> M4 d2.etype)
@@ -153,31 +156,6 @@ let incrs1' : int -> M4 int = export incrs1
 let incrs2  : (x:int) -> Pure int (x > 0) (fun (y:int) -> y = x + 1) = fun x -> x + 1
 let incrs2' : int -> M4 int = export incrs2
 
-
-// let reify2 (a:Type) 
-//   (pre:(events_trace->Type0)) 
-//   (post:(events_trace->(maybe (events_trace*a))->events_trace->Type0))
-//   (f:(unit -> IOStHist a pre post)) 
-//   (p:iosthist_post a)
-//   (s0:events_trace) : 
-//     Pure (io (events_trace * a)) 
-//       (pre s0) 
-//       (fun x -> iohist_interpretation x s0 (fun r le -> post s0 r le)) by (explode (); dump "j") 
-//  = reify (f ()) p s0 
-
-instance ml_file_descr : ml file_descr = { mldummy = () }
-
-let rec _export_IOStHist_to_M4 #t2 (tree : io (events_trace * t2)) : M4 t2 (decreases tree) = 
-  match tree with
-  | Return (s1, r) -> r
-  | Throw r -> M4.raise r
-  | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = M4.static_cmd cmd argz in
-      let z' : sys io_cmds io_cmd_sig (events_trace * t2) = fnc (Inl rez) in
-      // can this be avoided?
-      FStar.WellFounded.axiom1 fnc (Inl rez);
-      _export_IOStHist_to_M4 #t2 z'
-
 instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0) (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d4:checkable2 pre |} : exportable ((x:t1) -> IOStHist t2 (pre x) (post x)) = 
   mk_exportable (d1.itype -> M4 d2.etype)
@@ -187,12 +165,9 @@ instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0
         let s0 : events_trace = M4.get_history () in
         (if check2 #t1 #events_trace #pre x s0 then (
           let tree = reify (f x) (fun r le -> post x s0 r le) in
-          let z = _export_IOStHist_to_M4 (tree s0) in
-          export z
+          let m4repr : M4.irepr t2 (fun p -> forall res. p res) = fun _ -> iost_to_io (tree s0) in 
+          export (M4?.reflect (m4repr))
         ) else M4.raise Contract_failure) <: M4 d2.etype))
-
-instance ml_check_type : ml check_type = { mldummy = () }
-
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
@@ -205,15 +180,11 @@ let rev_append_rev_append () : Lemma (
   end in Classical.forall_intro_3 aux
 
 let rec _import_M4_to_IOStHist #t2 (tree : io (t2)) : 
-    IOStHist (t2) (fun _ -> True) (fun s0 result le ->
+    IOStHist t2 (fun _ -> True) (fun s0 result le ->
     match result with
     | Inl v -> 
         let (s1, _) = v in s1 == (apply_changes s0 le)
-    | Inr err -> True) by (
-    explode ();
-    bump_nth 44;
-    dump "h"
-  )= begin
+    | Inr err -> True) by (explode ())= begin
   match tree with
   | Return r -> r
   | Throw r -> IOStHist.throw r
@@ -228,45 +199,6 @@ let rec _import_M4_to_IOStHist #t2 (tree : io (t2)) :
       ) else IOStHist.throw Contract_failure
 end
 
-// this can not have a precondition because you can not dynamically
-// check it and still return in IOStHist pre if it fails. also it does
-// not make sense to have a precondition for a computation
-
-// the post has to accept as a result any errors, espicially 
-// Contract_failure
-
-let extract_local_events (s0 s1:events_trace) :
-  Pure events_trace
-    (requires (exists le. s1 == apply_changes s0 le))
-    (ensures (fun le -> s1 == apply_changes s0 le)) = 
-  admit ();
-  assert (List.length s1 >= List.length s0);
-  let n : nat = (List.length s1) - (List.length s0) in
-  let (le, _) = List.Tot.Base.splitAt n s1 in
-  List.rev le
-
-// instance importable_M4_to_IOStHist t1 t2 (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-//   {| d1:exportable t1 |} {| d2:ml t2 |} {| checkable4 post |}:
-//   importable(x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le)) =
-//   mk_importable (d1.etype -> M4 t2) #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
-//     (fun (f:(d1.etype -> M4 t2)) ->
-//       (fun (x:t1) ->
-//         let s0 : events_trace = IOStHist.get () in
-//         rev_append_rev_append ();
-//         let x' : d1.etype = export x in
-//         assume (forall x err s0 le. post x s0 (Inr err) le == true);
-//         let tree = reify (f x') (fun r -> True) in
-//         let result = _import_M4_to_IOStHist #t2 tree in
-//         let s1 : events_trace = IOStHist.get () in
-//         let le = extract_local_events s0 s1 in
-
-
-//         // the casting is done wrongly because you don't have an extra le...
-//         // in a way this is not correct because it uses the materialized le ^ and the ghost le
-//         // without realizing that are the same thing.
-//         (if check4 #t1 #t2 #post x s0 (Inl (s1, result)) le then (admit (); result)
-//         else (IOStHist.throw Contract_failure)) ))
-//           //<: IOStHistwp t2 (fun s0 p -> forall resxy le. post x s0 resxy le ==>  p resxy le)))
       
 
 let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = begin
@@ -274,7 +206,7 @@ let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = beg
   | Return r -> r 
   | Throw r -> IOStHist.throw r
   | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = dynamic_cmd cmd pi argz in
+      let rez : res cmd = IOStHist.dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
       let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
       rev_append_rev_append ();
@@ -320,7 +252,8 @@ let webserver (plugin:plugin_type) : GIO unit pi =
   let fd = pi_static_cmd Openfile pi "Demos.fst" in
   plugin pi fd
 
-let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) = M4?.reflect (fun p -> io_all cmd argz)
+let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) = 
+  M4?.reflect (fun p -> io_all cmd argz)
 
 let plugin1 : file_descr -> M4 unit = fun fd ->
   m4_cmd Close fd
@@ -342,3 +275,46 @@ let plugin2_g = import plugin2
   
 let sdz () : GIO unit pi = 
   webserver (plugin2_g)
+
+// TODO : try to import from M4 to IOStHist and dynamically enforce the
+// post condition
+
+// this can not have a precondition because you can not dynamically
+// check it and still return in IOStHist pre if it fails. also it does
+// not make sense to have a precondition for a computation
+
+// the post has to accept as a result any errors, espicially 
+// Contract_failure
+
+// let extract_local_events (s0 s1:events_trace) :
+//   Pure events_trace
+//     (requires (exists le. s1 == apply_changes s0 le))
+//     (ensures (fun le -> s1 == apply_changes s0 le)) = 
+//   admit ();
+//   assert (List.length s1 >= List.length s0);
+//   let n : nat = (List.length s1) - (List.length s0) in
+//   let (le, _) = List.Tot.Base.splitAt n s1 in
+//   List.rev le
+
+// instance importable_M4_to_IOStHist t1 t2 (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+//   {| d1:exportable t1 |} {| d2:ml t2 |} {| checkable4 post |}:
+//   importable(x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le)) =
+//   mk_importable (d1.etype -> M4 t2) #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
+//     (fun (f:(d1.etype -> M4 t2)) ->
+//       (fun (x:t1) ->
+//         let s0 : events_trace = IOStHist.get () in
+//         rev_append_rev_append ();
+//         let x' : d1.etype = export x in
+//         assume (forall x err s0 le. post x s0 (Inr err) le == true);
+//         let tree = reify (f x') (fun r -> True) in
+//         let result = _import_M4_to_IOStHist #t2 tree in
+//         let s1 : events_trace = IOStHist.get () in
+//         let le = extract_local_events s0 s1 in
+
+
+//         // the casting is done wrongly because you don't have an extra le...
+//         // in a way this is not correct because it uses the materialized le ^ and the ghost le
+//         // without realizing that are the same thing.
+//         (if check4 #t1 #t2 #post x s0 (Inl (s1, result)) le then (admit (); result)
+//         else (IOStHist.throw Contract_failure)) ))
+//           //<: IOStHistwp t2 (fun s0 p -> forall resxy le. post x s0 resxy le ==>  p resxy le)))
