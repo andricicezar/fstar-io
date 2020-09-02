@@ -162,14 +162,14 @@ instance ml_file_descr : ml file_descr = { mldummy = () }
 
 
 // prove that behavior of tree is the same as behavior of result.
-let rec drop_trace #t2 (tree : io (events_trace * t2)) : Tot (res:(io t2){IOHist.behavior res `IOHist.subset` IOHist.behavior tree}) =
+let rec drop_trace #t2 (tree : io (events_trace * t2)) : Tot (res:(io t2){IOHist.behavior res `IOHist.include_in` IOHist.behavior tree}) =
   match tree with
   | Return (s1, r) -> Return r
   | Throw r -> Throw r
   | Cont (Call cmd argz fnc) ->
      assume (IOHist.behavior (Cont (Call cmd argz (fun res -> 
        WellFounded.axiom1 fnc res;
-       drop_trace (fnc res)))) `IOHist.subset` IOHist.behavior (Cont (Call cmd argz fnc))
+       drop_trace (fnc res)))) `IOHist.include_in` IOHist.behavior (Cont (Call cmd argz fnc))
         );
 
      Cont (Call cmd argz (fun res -> 
@@ -185,17 +185,17 @@ let myexport #t1 #t2
      let f' = reify (f x) in
      let res' = reify (res x) in
      
-     (behavior (res') `IOHist.subset` (behavior (f' [])))}) 
+     (behavior (res') `IOHist.include_in` (behavior (f' [])))}) 
    by (explode (); 
    ExtraTactics.bump_nth 10;
    dump "h") =
   (fun x -> 
-    let s0 : events_trace = M4?.reflect (M4.get_history0 ()) in
+    let s0 : events_trace = [] in
     (if check2 #t1 #events_trace #pre x s0 then (
         let tree = reify2 t2 (pre x) (post x) (fun () -> f x) in
         let tree' = drop_trace (tree s0) in
         assume (tree == reify (f x));
-        assert (behavior tree' `IOHist.subset` behavior (tree s0));
+        assert (behavior tree' `IOHist.include_in` behavior (tree s0));
         assert (tree' == reify (M4?.reflect tree'));
         M4?.reflect (tree')
     ) else M4.raise Contract_failure) <: M4 t2)
@@ -257,7 +257,7 @@ let _ = assert (x' == (lift_io_iost y' [])) by (
 
 let mylemma () : Lemma (
   let (f' : args Openfile -> M4 (res Openfile)) = export openfile in
-  (IOHist.behavior (reify (openfile "asd") []) `IOHist.subset` (IOHist.behavior (reify (f' "asd"))))) by (
+  (IOHist.behavior (reify (openfile "asd") []) `IOHist.include_in` (IOHist.behavior (reify (f' "asd"))))) by (
     unfold_def (`export);
     unfold_def (`reify);
     explode (); 
