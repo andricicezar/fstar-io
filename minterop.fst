@@ -218,7 +218,18 @@ instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0
           export (M4?.reflect (m4repr))
         ) else M4.raise Contract_failure) <: M4 d2.etype))
 
-
+let export_lemma #t1 #t2
+  {| d1:ml t1 |} {| d2:ml t2 |}
+  (pre : t1 -> events_trace -> Type0)
+  {| checkable2 pre |}
+  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+  (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
+  (x:t1) : Lemma (requires (pre x []))
+    (ensures (
+        let res' = reify ((export f <: (t1 -> M4 t2)) x) (fun _ -> True) in
+        let f' = reify (f x) (post x []) in
+        behavior res' `include_in` behavior (f' [])
+      )) = admit()
 
 // let lemasdf #t1 #t2 
 //   (pre : t1 -> events_trace -> Type0)
