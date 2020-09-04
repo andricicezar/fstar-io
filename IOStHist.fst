@@ -367,8 +367,9 @@ let include_in_trans #a #b #c () : Lemma (
 let rec iost_to_io #t2 (tree : io (events_trace * t2)) : 
   Pure (io t2)
     (requires True)
-    (ensures (fun (res:io t2) -> True)) =
-      // behavior res `include_in` behavior tree)) =
+    (ensures (fun (res:io t2) ->
+      behavior res `include_in` behavior tree)) =
+  admit ();
   match tree with
   | Return (s1, r) -> Return r
   | Throw r -> Throw r
