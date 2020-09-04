@@ -343,8 +343,8 @@ val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:
 
 type set_of_traces = events_trace -> Type0
 
-val include_in : set_of_traces -> set_of_traces -> Type0
-let include_in s1 s2 = forall t. s1 t ==>  s2 t
+val included_in : set_of_traces -> set_of_traces -> Type0
+let included_in s1 s2 = forall t. s1 t ==>  s2 t
 
 let rec behavior #a
   (m : io a) : set_of_traces =
@@ -360,16 +360,11 @@ let rec behavior #a
          t' == ((convert_call_to_event cmd args res)::t))))
   end
 
-let include_in_trans #a #b #c () : Lemma (
-  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `include_in` behavior t2 /\ behavior t2 `include_in` behavior t3 ==>
-    behavior t1 `include_in` behavior t3) = ()
+let included_in_trans #a #b #c () : Lemma (
+  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `included_in` behavior t2 /\ behavior t2 `included_in` behavior t3 ==>
+    behavior t1 `included_in` behavior t3) = ()
 
-let rec iost_to_io #t2 (tree : io (events_trace * t2)) : 
-  Pure (io t2)
-    (requires True)
-    (ensures (fun (res:io t2) ->
-      behavior res `include_in` behavior tree)) =
-  admit ();
+let rec iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   match tree with
   | Return (s1, r) -> Return r
   | Throw r -> Throw r
@@ -381,3 +376,6 @@ let rec iost_to_io #t2 (tree : io (events_trace * t2)) :
      Cont (Call cmd argz (fun res -> 
        WellFounded.axiom1 fnc res;
        iost_to_io (fnc res)))
+
+let behavior_iost_to_io () : Lemma
+  (forall a tree. behavior (iost_to_io tree) `included_in` behavior tree) = admit ()

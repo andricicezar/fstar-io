@@ -35,32 +35,19 @@ instance ml_check_type : ml check_type = { mldummy = () }
 // *)
 
 exception Contract_failure
-
 class exportable (t : Type) = { etype : Type; export : t -> etype; ml_etype : ml etype }
-class tot_importable (t : Type) = { titype : Type; tot_import : titype -> option t; ml_titype : ml titype }
 class importable (t : Type) = { itype : Type; import : itype -> M4 t; ml_itype : ml itype }
 
 let mk_exportable (#t1 t2 : Type) {|ml t2|} (exp : t1 -> t2) : exportable t1 =
   { etype = t2; export = exp;  ml_etype = solve }
-let mk_tot_importable (t1 #t2 : Type) {|ml t1|} (imp : t1 -> option t2) : tot_importable t2 =
-  { titype = t1; tot_import = imp; ml_titype = solve }
-
 let mk_importable (t1 #t2 : Type) {|ml t1|} (imp : t1 -> M4 t2) : importable t2 =
-  { itype = t1; import = imp; ml_itype = solve }
-  
+  { itype = t1; import = imp;  ml_itype = solve }
 
 instance ml_exportable (#t : Type) (d : exportable t) : ml (d.etype) = d.ml_etype
-instance ml_tot_importable (#t : Type) (d : tot_importable t) : ml (d.titype) = d.ml_titype
 instance ml_importable (#t : Type) (d : importable t) : ml (d.itype) = d.ml_itype
 
 instance exportable_ml t {| ml t|} : exportable t = mk_exportable t (fun x -> x)
-instance tot_importable_ml t {| ml t|} : tot_importable t = mk_tot_importable t (fun x -> Some x)
-// instance importable_ml t {| ml t|} : importable t = mk_importable t (fun x -> x)
-instance importable_tot_importable t {| d:tot_importable t |} : importable t = 
-  mk_importable d.titype (fun x -> 
-    match tot_import x with 
-    | Some y -> y 
-    | None -> M4.raise Contract_failure)
+instance importable_ml t {| ml t|} : importable t = mk_importable t (fun x -> x)
 
 instance exportable_refinement t {| d:exportable t |} (p : t -> Type0)  : exportable (x:t{p x})
 = mk_exportable (d.etype) export // TODO: Eta expanding causes type error
@@ -73,17 +60,15 @@ instance general_is_checkeable2 t1 t2 (p : t1 -> t2 -> bool) : checkable2 (fun x
 class checkable4 (#t1 #t2:Type) (p : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) = { check4 : (x1:t1 -> s0:events_trace -> r:maybe (events_trace * t2) -> le:events_trace -> b:bool{b ==> p x1 s0 r le}) }
 instance general_is_checkeable4 t1 t2 (p : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
 
-instance tot_importable_refinement 
-  t {| d:tot_importable t |} 
+instance importable_refinement 
+  t {| d:importable t |} 
   (rp : t -> Type0) {| checkable rp |} : 
-    tot_importable (x:t{rp x}) = 
-  mk_tot_importable (d.titype)
-    (fun (x:d.titype) ->
-      match tot_import x with
-      | None -> None
-      | Some x ->
-        (if check #t #rp x then Some x
-        else None) <: option (x:t{rp x}))
+    importable (x:t{rp x}) = 
+  mk_importable (d.itype)
+    (fun (x:d.itype) ->
+      let x : t = import x in
+      (if check #t #rp x then x
+       else M4.raise Contract_failure) <: M4 (x:t{rp x}))
 
 let test_refinement () : M4 (y:int{y = 5}) = import 5
 
@@ -92,23 +77,18 @@ let test_refinement () : M4 (y:int{y = 5}) = import 5
 instance exportable_pair t1 t2 {| d1:exportable t1 |} {| d2:exportable t2 |} : exportable (t1 * t2) =
   mk_exportable (d1.etype * d2.etype) (fun (x,y) -> (export x, export y))
 
-instance importable_pair t1 t2 {| d1:tot_importable t1 |} {| d2:tot_importable t2 |} : tot_importable (t1 * t2) =
-  mk_tot_importable (d1.titype * d2.titype) (fun (x,y) -> 
-    (match (tot_import x, tot_import y) with 
-    | (Some x, Some y) -> Some (x, y)
-    | _ -> None) <: option (t1 * t2))
+instance importable_pair t1 t2 {| d1:importable t1 |} {| d2:importable t2 |} : importable (t1 * t2) =
+  mk_importable (d1.itype * d2.itype) (fun (x,y) -> (import x, import y) <: M4 (t1 * t2))
 
 instance importable_dpair_refined t1 t2 (p:t1 -> t2 -> Type0)
-  {| d1:tot_importable t1 |} {| d2:tot_importable t2 |} {| d3:checkable2 p |} : tot_importable (x:t1 & y:t2{p x y}) =
-  mk_tot_importable (d1.titype & d2.titype) #(x:t1 & y:t2{p x y})
+  {| d1:importable t1 |} {| d2:importable t2 |} {| d3:checkable2 p |} : importable (x:t1 & y:t2{p x y}) =
+  mk_importable (d1.itype & d2.itype) #(x:t1 & y:t2{p x y})
     (fun ((x', y')) ->
-      (match tot_import x', tot_import y' with
-      | Some x, Some y -> begin
-        if check2 #t1 #t2 #p x y then Some (| x, y |) 
-        else None 
-      end
-      | _ -> None) <: option (x:t1 & y:t2{p x y}))
-      
+        let (x : t1) = import x' in
+        let (y : t2) = import y' in
+        (if check2 #t1 #t2 #p x y then (| x, y |) 
+        else M4.raise Contract_failure) <: (x:t1 & y:t2{p x y}))
+
 let test_dpair_refined () : M4 (a:int & b:int{b = a + 1}) = import (10, 11)
 
 // A typed term in an untyped context
@@ -179,31 +159,25 @@ let incrs2' : int -> M4 int = export incrs2
 //   let xx = M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res) in
 //   behavior (reify xx) (fun _ -> True) `include_in` behavior x) = ()
 
-let interstinglemma #a (x: io a) : Lemma (
+let interstinglemma () : Lemma (forall a x.
   let xx : unit -> M4 a = (fun () -> (M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res))) in
-  behavior (reify (xx ()) (fun _ -> True)) `include_in` behavior x) = ()
+  behavior (reify (xx ()) (fun _ -> True)) `included_in` behavior x) = ()
     
     
 
 
-// let myexport #t1 #t2 
-//   (pre : t1 -> events_trace -> Type0)
-//   {| checkable2 pre |}
-//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-//   (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : Pure (t1 -> M4 t2) 
-//     (requires True)
-//     (ensures (fun (res:t1 -> M4 t2) -> 
-//       forall x.
-//         let f' = reify (f x) (fun r le -> post x [] r le) in
-//         let res' = reify (res x) (fun _ -> True) in
-
-//         behavior res' `include_in` behavior (f' [])
-//       ))  = 
-//     (fun (x:t1) ->
-//     (if check2 #t1 #events_trace #pre x [] then (
-//         let tree = reify (f x) (fun r le -> post x [] r le) in
-//         M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res)
-//     ) else M4.raise Contract_failure) <: M4 t2)
+let _export_IOStHist_arrow_spec #t1 #t2 
+  {| d1:ml t1 |} {| d2:exportable t2 |}
+  (pre : t1 -> events_trace -> Type0)
+  {| checkable2 pre |}
+  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : 
+  Tot (t1 -> M4 d2.etype) =
+    (fun (x:t1) ->
+        if (check2 #t1 #events_trace #pre x []) then (
+            let tree = reify (f x) (fun r le -> post x [] r le) in
+            export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))
+        ) else M4.raise Contract_failure)
 
 instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0) (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d4:checkable2 pre |} : exportable ((x:t1) -> IOStHist t2 (pre x) (post x)) = 
@@ -218,29 +192,66 @@ instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0
           export (M4?.reflect (m4repr))
         ) else M4.raise Contract_failure) <: M4 d2.etype))
 
+let pre_lemma #t1
+  (pre : t1 -> events_trace -> Type0)  {| checkable2 pre |}
+  (x : t1): Lemma (check2 #t1 #events_trace #pre x [] == true) = admit()
+
+
+// let export_lemma #t1 #t2
+//   {| d1:ml t1 |} {| d2:ml t2 |}
+//   (pre : t1 -> events_trace -> Type0)
+//   {| checkable2 pre |}
+//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+//   (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
+//   (x:t1)  : Lemma (
+//     let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
+//     let f' = reify (f x) (post x []) in
+//     check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
+//   ) =
+//   assume (behavior (iost_to_io (reify (f x) (post x []) [])) `included_in` behavior (reify (f x) (post x []) []));
+//   assert (
+//     check2 #t1 #events_trace #pre x [] == true ==>  behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True)) `included_in` behavior (reify (f x) (post x []) []))
+//   by (
+//   let stst1 = implies_intro () in
+//   unfold_def (`included_in);
+//   let t = forall_intro () in
+//   unfold_def (`_export_IOStHist_arrow_spec);
+//   let tres = implies_intro () in
+//   binder_retype tres;
+    
+//     rewrite_eqs_from_context ();
+//   trefl ();
+//   dump "h"
+//   )
+
+
 let export_lemma #t1 #t2
   {| d1:ml t1 |} {| d2:ml t2 |}
   (pre : t1 -> events_trace -> Type0)
   {| checkable2 pre |}
   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
-  (x:t1) : Lemma (requires (pre x []))
-    (ensures (
-        let res' = reify ((export f <: (t1 -> M4 t2)) x) (fun _ -> True) in
-        let f' = reify (f x) (post x []) in
-        behavior res' `include_in` behavior (f' [])
-      )) = admit()
-
-// let lemasdf #t1 #t2 
-//   (pre : t1 -> events_trace -> Type0)
-//   {| checkable2 pre |}
-//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-//   (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : Lemma
-//   (forall x.
-//     let f' = reify (f x) (fun r le -> post x [] r le) [] in
-//     let ef : t1 -> M4 t2 = export f in
-//     let ef' = reify (ef x) (fun _ -> True) in
-//     behavior ef' `include_in` behavior f') = ()
+  (x:t1)  : Lemma (
+    let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
+    let f' = reify (f x) (post x []) in
+    check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
+  ) by (    
+  split ();
+  smt (); 
+  let pp = forall_intro () in
+  let myp = implies_intro () in
+  let pr = forall_intro () in
+  let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
+  mapply (binder_to_term asd);
+  let stst1 = implies_intro () in
+  unfold_def (`included_in);
+  let t = forall_intro () in
+  unfold_def (`_export_IOStHist_arrow_spec);
+  rewrite_eqs_from_context ();
+  dump "h";
+  tadmit ();
+  ()) = 
+  ()
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
