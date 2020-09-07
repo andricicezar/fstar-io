@@ -327,8 +327,6 @@ val to_runtime_check : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0)
     | Inr Contract_failure -> le == []
     | _ -> pre x s0)))
 
-
-
 val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
   (pi_check:check_type) -> ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
   Tot ((x:t1) -> IOStHist t2 (pre x) (fun s0 result le ->
@@ -339,30 +337,6 @@ val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:
         // this one does not make sense
         enforced_globally (pi_check) s1)
     | Inr _ -> True)))
-    
-
-type set_of_traces = events_trace -> Type0
-
-val included_in : set_of_traces -> set_of_traces -> Type0
-let included_in s1 s2 = forall t. s1 t ==>  s2 t
-
-let rec behavior #a
-  (m : io a) : set_of_traces =
-  match m with
-  | Return x -> fun t -> t == []
-  | Throw err -> fun t -> t == []
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (fun t' -> 
-      (exists res t. (
-         FStar.WellFounded.axiom1 fnc res;
-         (behavior (fnc res) t) /\
-         t' == ((convert_call_to_event cmd args res)::t))))
-  end
-
-let included_in_trans #a #b #c () : Lemma (
-  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `included_in` behavior t2 /\ behavior t2 `included_in` behavior t3 ==>
-    behavior t1 `included_in` behavior t3) = ()
 
 let rec iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   match tree with
@@ -376,6 +350,3 @@ let rec iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
      Cont (Call cmd argz (fun res -> 
        WellFounded.axiom1 fnc res;
        iost_to_io (fnc res)))
-
-let behavior_iost_to_io () : Lemma
-  (forall a tree. behavior (iost_to_io tree) `included_in` behavior tree) = admit ()

@@ -154,17 +154,6 @@ let incrs1' : int -> M4 int = export incrs1
 
 let incrs2  : (x:int) -> Pure int (x > 0) (fun (y:int) -> y = x + 1) = fun x -> x + 1
 let incrs2' : int -> M4 int = export incrs2
-  
-// let interstinglemma #a (x: io a) : Lemma (
-//   let xx = M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res) in
-//   behavior (reify xx) (fun _ -> True) `include_in` behavior x) = ()
-
-let interstinglemma () : Lemma (forall a x.
-  let xx : unit -> M4 a = (fun () -> (M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res))) in
-  behavior (reify (xx ()) (fun _ -> True)) `included_in` behavior x) = ()
-    
-    
-
 
 let _export_IOStHist_arrow_spec #t1 #t2 
   {| d1:ml t1 |} {| d2:exportable t2 |}
@@ -191,67 +180,6 @@ instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0
           let m4repr : M4.irepr t2 (fun p -> forall res. p res) = fun _ -> iost_to_io (tree s0) in 
           export (M4?.reflect (m4repr))
         ) else M4.raise Contract_failure) <: M4 d2.etype))
-
-let pre_lemma #t1
-  (pre : t1 -> events_trace -> Type0)  {| checkable2 pre |}
-  (x : t1): Lemma (check2 #t1 #events_trace #pre x [] == true) = admit()
-
-
-// let export_lemma #t1 #t2
-//   {| d1:ml t1 |} {| d2:ml t2 |}
-//   (pre : t1 -> events_trace -> Type0)
-//   {| checkable2 pre |}
-//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-//   (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
-//   (x:t1)  : Lemma (
-//     let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
-//     let f' = reify (f x) (post x []) in
-//     check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
-//   ) =
-//   assume (behavior (iost_to_io (reify (f x) (post x []) [])) `included_in` behavior (reify (f x) (post x []) []));
-//   assert (
-//     check2 #t1 #events_trace #pre x [] == true ==>  behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True)) `included_in` behavior (reify (f x) (post x []) []))
-//   by (
-//   let stst1 = implies_intro () in
-//   unfold_def (`included_in);
-//   let t = forall_intro () in
-//   unfold_def (`_export_IOStHist_arrow_spec);
-//   let tres = implies_intro () in
-//   binder_retype tres;
-    
-//     rewrite_eqs_from_context ();
-//   trefl ();
-//   dump "h"
-//   )
-
-
-let export_lemma #t1 #t2
-  {| d1:ml t1 |} {| d2:ml t2 |}
-  (pre : t1 -> events_trace -> Type0)
-  {| checkable2 pre |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
-  (x:t1)  : Lemma (
-    let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
-    let f' = reify (f x) (post x []) in
-    check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
-  ) by (    
-  split ();
-  smt (); 
-  let pp = forall_intro () in
-  let myp = implies_intro () in
-  let pr = forall_intro () in
-  let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
-  mapply (binder_to_term asd);
-  let stst1 = implies_intro () in
-  unfold_def (`included_in);
-  let t = forall_intro () in
-  unfold_def (`_export_IOStHist_arrow_spec);
-  rewrite_eqs_from_context ();
-  dump "h";
-  tadmit ();
-  ()) = 
-  ()
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
@@ -342,23 +270,23 @@ let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) =
 let plugin1 : file_descr -> M4 unit = fun fd ->
   m4_cmd Close fd
 
-val plugin1_g : (pi:check_type) -> file_descr -> GIO unit pi 
-let plugin1_g = import plugin1
+// val plugin1_g : (pi:check_type) -> file_descr -> GIO unit pi 
+// let plugin1_g = import plugin1
 
-let sdx () : GIO unit pi = 
-  webserver (plugin1_g)
+// let sdx () : GIO unit pi = 
+//   webserver (plugin1_g)
 
-let plugin2 : file_descr -> M4 unit = fun fd ->
-  let fd = m4_cmd Openfile "../Makefile" in
-  m4_cmd Close fd;
-  let msg = m4_cmd Read fd in ()
+// let plugin2 : file_descr -> M4 unit = fun fd ->
+//   let fd = m4_cmd Openfile "../Makefile" in
+//   m4_cmd Close fd;
+//   let msg = m4_cmd Read fd in ()
 
 
-val plugin2_g : (pi:check_type) -> file_descr -> GIO unit pi 
-let plugin2_g = import plugin2
+// val plugin2_g : (pi:check_type) -> file_descr -> GIO unit pi 
+// let plugin2_g = import plugin2
   
-let sdz () : GIO unit pi = 
-  webserver (plugin2_g)
+// let sdz () : GIO unit pi = 
+//   webserver (plugin2_g)
 
 // TODO : try to import from M4 to IOStHist and dynamically enforce the
 // post condition
