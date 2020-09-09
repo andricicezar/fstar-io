@@ -84,10 +84,9 @@ layered_effect {
 let lift_pure_m4wp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
   Pure (irepr a (fun p -> wp (fun r -> p (Inl r)))) (requires True)
                     (ensures (fun _ -> True))
-  = fun p -> let r = elim_pure f (fun r -> p (Inl r)) in io_return _ r
+  = fun p -> let r = elim_pure #a #wp f (fun r -> p (Inl r)) in io_return a r
 
 sub_effect PURE ~> M4wp = lift_pure_m4wp
-
 
 effect M4
   (a:Type) =
@@ -98,9 +97,3 @@ let raise #a (e:exn) : M4wp a (fun p -> p (Inr e)) =
 
 let get_history () : M4wp events_trace (fun p -> p (Inl [])) = 
   M4?.reflect (fun _ -> io_return _ [])
-
-let static_cmd
-  (cmd : io_cmds)
-  (argz : args cmd) :
-  M4 (res cmd) = M4wp?.reflect(fun p -> ((io_all cmd argz)))
-  

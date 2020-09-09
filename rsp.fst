@@ -1,5 +1,6 @@
 module Rsp
 
+open FStar.Calc
 open FStar.Tactics
 
 open Common
@@ -26,93 +27,46 @@ let rec behavior #a
          t' == ((convert_call_to_event cmd args res)::t))))
   end
 
-let included_in_trans #a #b #c () : Lemma (
-  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `included_in` behavior t2 /\ behavior t2 `included_in` behavior t3 ==>
-    behavior t1 `included_in` behavior t3) = ()
-
 let behavior_iost_to_io () : Lemma
-  (forall a tree. behavior (iost_to_io tree) `included_in` behavior tree) = admit ()
-
-// let interstinglemma #a (x: io a) : Lemma (
-//   let xx = M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res) in
-//   behavior (reify xx) (fun _ -> True) `include_in` behavior x) = ()
-
-let interstinglemma () : Lemma (forall a (x:io a).
-  reify (M4.M4wp?.reflect (fun _ -> x) <: M4.M4wp a (fun p -> forall res. p res)) (fun _ -> True) == x) = ()
-
-let interstinglemma () : Lemma (forall a x.
-  let xx : unit -> M4 a = (fun () -> (M4?.reflect (fun _ -> x) <: M4wp a (fun p -> forall res. p res))) in
-  behavior (reify (xx ()) (fun _ -> True)) `included_in` behavior x) = ()
+  (forall (a:Type) (tree:io (events_trace * a)). behavior (iost_to_io tree) `included_in` behavior tree) = admit ()
     
-let pre_lemma #t1
-  (pre : t1 -> events_trace -> Type0)  {| checkable2 pre |}
-  (x : t1): Lemma (check2 #t1 #events_trace #pre x [] == true) = admit()
-
-// let export_lemma #t1 #t2
-//   {| d1:ml t1 |} {| d2:ml t2 |}
-//   (pre : t1 -> events_trace -> Type0)
-//   {| checkable2 pre |}
-//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-//   (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
-//   (x:t1)  : Lemma (
-//     let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
-//     let f' = reify (f x) (post x []) in
-//     check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
-//   ) =
-//   assume (behavior (iost_to_io (reify (f x) (post x []) [])) `included_in` behavior (reify (f x) (post x []) []));
-//   assert (
-//     check2 #t1 #events_trace #pre x [] == true ==>  behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True)) `included_in` behavior (reify (f x) (post x []) []))
-//   by (
-//   let stst1 = implies_intro () in
-//   unfold_def (`included_in);
-//   let t = forall_intro () in
-//   unfold_def (`_export_IOStHist_arrow_spec);
-//   let tres = implies_intro () in
-//   binder_retype tres;
-    
-//     rewrite_eqs_from_context ();
-//   trefl ();
-//   dump "h"
-//   )
-
-let __export #t1 #t2 
-  (pre : t1 -> events_trace -> Type0)
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) 
-  (x:t1)
-  : Pure (unit -> M4 t2) (requires (pre x [])) (ensures (fun _ -> True))
-= (fun _ ->
-  (M4wp?.reflect (fun _ -> iost_to_io (reify (f x) (fun r le -> post x [] r le) [])) <: M4wp t2 (fun p -> forall res. p res)))
-
-
-let export_lemma #t1 #t2
+let _export_IOStHist_lemma #t1 #t2
+  {| d1:importable t1 |}
+  {| d2:exportable t2 |}
   (pre : t1 -> events_trace -> Type0)
   {| checkable2 pre |}
   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : Lemma (
-    forall x. pre x [] ==> (
-      let res' = reify ((__export pre post f x <: (unit -> M4 t2)) ()) (fun _ -> True) in
-      let f' = reify (f x) (post x []) in (
-      behavior res' `included_in` behavior (f' [])))
-  ) by (    
-    split ();
-    smt ();
-    let pp = forall_intro () in
-    let myp = implies_intro () in
-    let pr = forall_intro () in
-    let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
-    mapply (binder_to_term asd);
-    let x = forall_intro () in
-    let _ = implies_intro () in
-    unfold_def (`included_in);
-    let t = forall_intro () in
-    unfold_def (`__export);
-    norm [iota];
-    
-    dump "h"
-) = () 
+  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) 
+  (x':d1.itype)
+  : Lemma (match import x' with
+    | Some x -> (
+        let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True) in
+        let f' = reify (f x) (post x []) in
+        check2 #t1 #events_trace #pre x [] ==>  behavior res' `included_in` behavior (f' []))
+    | None -> True) =
+  match import x' with
+  | Some x -> begin
+    if (check2 #t1 #events_trace #pre x []) then (
+        calc (included_in) {
+            behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
+            `included_in` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]) }
+            behavior (reify (
+                        let tree = reify (f x) (post x []) in
+                        export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            // `included_in` {}
+            // behavior (reify (
+            //             export (M4wp?.reflect (fun _ -> iost_to_io (reify (f x) (post x []) [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            `included_in` { admit () }
+            behavior (iost_to_io (reify (f x) (post x []) []));
+            `included_in` { behavior_iost_to_io () }
+            behavior (reify (f x) (post x []) []);
+        }
+    ) else ()
+  end
+  | None -> ()
 
-let export_lemma #t1 #t2
+
+let export_IOStHist_lemma #t1 #t2
   {| d1:importable t1 |} {| d2:exportable t2 |}
   (pre : t1 -> events_trace -> Type0)
   {| checkable2 pre |}
@@ -124,57 +78,49 @@ let export_lemma #t1 #t2
         let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True) in
         let f' = reify (f x) (post x []) in
         check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' []))
-    | None -> True)
-  ) by (    
-    split ();
-    smt ();
-    let pp = forall_intro () in
-    let myp = implies_intro () in
-    let pr = forall_intro () in
-    let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
-    mapply (binder_to_term asd);
-    let x' = forall_intro () in
-    let ox = forall_intro () in
-    let _ = t_destruct (ox) in
-    let _ = intro () in
-    smt ();
-    let x = intro () in
-    let xeqs = intro () in
-    let xeqx = implies_intro () in
-    rewrite xeqs;
-    norm [iota];
-    let stst1 = implies_intro () in
-    unfold_def (`included_in);
-    let t = forall_intro () in
-    unfold_def (`_export_IOStHist_arrow_spec);
-    dump "h"
-) = () 
+    | None -> True))
+//   ) by (    
+//     split ();
+//     smt ();
+//     let pp = forall_intro () in
+//     let myp = implies_intro () in
+//     let pr = forall_intro () in
+//     let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
+//     mapply (binder_to_term asd);
+//     let x' = forall_intro () in
+//     let ox = forall_intro () in
+//     let _ = t_destruct (ox) in
+//     let _ = intro () in
+//     smt ();
+//     let x = intro () in
+//     let xeqs = intro () in
+//     let xeqx = implies_intro () in
+//     rewrite xeqs;
+//     norm [iota];
+//     let stst1 = implies_intro () in
+//     unfold_def (`included_in);
+//     let t = forall_intro () in
+//     unfold_def (`_export_IOStHist_arrow_spec);
+//     tadmit ();
+//     dump "h"
+// ) = () 
+= Classical.forall_intro (_export_IOStHist_lemma #t1 #t2 pre post f)
 
-let export_lemma' #t1 #t2
-  {| d1:ml t1 |} {| d2:ml t2 |}
-  (pre : t1 -> events_trace -> Type0)
-  {| checkable2 pre |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x)))
-  (x:t1)  : Lemma (
-    let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (t1 -> M4 t2)) x) (fun _ -> True) in
-    let f' = reify (f x) (post x []) in
-    check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' [])
-  ) by (    
-  split ();
-  smt (); 
-  let pp = forall_intro () in
-  let myp = implies_intro () in
-  let pr = forall_intro () in
-  let asd = FStar.Tactics.Logic.instantiate (binder_to_term myp) (binder_to_term pr) in
-  mapply (binder_to_term asd);
-  let stst1 = implies_intro () in
-  unfold_def (`included_in);
-  let t = forall_intro () in
-  unfold_def (`_export_IOStHist_arrow_spec);
-  rewrite_eqs_from_context ();
-  dump "h";
-  tadmit ();
-  ()) = 
-  ()
 
+// let rsp_left 
+//   (a : Type) {| d1:exportable a |}
+//   (b : Type) {| d2:ml b |}
+//   (c : Type) {| d3:exportable c |}
+//   (pi : check_type)
+//   (p : ((ct:(a -> GIO b pi)) -> GIO c pi))
+//   (ct : (d1.etype -> M4 b)) :
+//   Lemma (forall (pi_as_set:set_of_traces).
+//     match import ct with
+//     | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
+//         behavior (reify (p (ct' pi)) (fun r le -> True) []) `included_in` pi_as_set ==> 
+//         behavior (reify (export (p (ct' pi))) (fun _ _ -> True) []) `included_in` pi_as_set
+//     | None -> False) = 
+//   match import ct with
+//   | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
+//       export_lemma #unit #c _ _ (fun _ -> p (ct' pi))
+//   | None -> ()

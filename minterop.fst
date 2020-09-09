@@ -187,16 +187,17 @@ let _export_IOStHist_arrow_spec #t1 #t2
 
 instance exportable_IOStHist_arrow_spec t1 t2 (pre : t1 -> events_trace -> Type0) (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d4:checkable2 pre |} : exportable ((x:t1) -> IOStHist t2 (pre x) (post x)) = 
-  mk_exportable (d1.itype -> M4 d2.etype)
-    (fun (f:(x:t1 -> IOStHist t2 (pre x) (post x))) ->
-      (fun (x:d1.itype) ->
-        let x : t1 = exn_import x in
-        let s0 : events_trace = M4.get_history () in
-        (if check2 #t1 #events_trace #pre x s0 then (
-          let tree = reify (f x) (fun r le -> post x s0 r le) in
-          let m4repr : M4.irepr t2 (fun p -> forall res. p res) = fun _ -> iost_to_io (tree s0) in 
-          export (M4?.reflect (m4repr))
-        ) else M4.raise Contract_failure) <: M4 d2.etype))
+  mk_exportable (d1.itype -> M4 d2.etype) (_export_IOStHist_arrow_spec #t1 #t2 pre post)
+
+    // (fun (f:(x:t1 -> IOStHist t2 (pre x) (post x))) ->
+    //   (fun (x:d1.itype) ->
+    //     let x : t1 = exn_import x in
+    //     let s0 : events_trace = M4.get_history () in
+    //     (if check2 #t1 #events_trace #pre x s0 then (
+    //       let tree = reify (f x) (fun r le -> post x s0 r le) in
+    //       let m4repr : M4.irepr t2 (fun p -> forall res. p res) = fun _ -> iost_to_io (tree s0) in 
+    //       export (M4?.reflect (m4repr))
+    //     ) else M4.raise Contract_failure) <: M4 d2.etype))
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
