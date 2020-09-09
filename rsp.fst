@@ -40,14 +40,22 @@ let _export_IOStHist_lemma #t1 #t2
   (x':d1.itype)
   : Lemma (match import x' with
     | Some x -> (
-        let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True) in
+        let ef : d1.itype -> M4 d2.etype = export f in
+        let res' = reify (ef x') (fun _ -> True) in
+
         let f' = reify (f x) (post x []) in
         check2 #t1 #events_trace #pre x [] ==>  behavior res' `included_in` behavior (f' []))
-    | None -> True) =
+        // TODO: prove that behavior of res is empty trace if check2 fails?
+    | None -> 
+       // TODO: prove that behavior of res is the empty trace if import fails?
+           True) =
   match import x' with
   | Some x -> begin
     if (check2 #t1 #events_trace #pre x []) then (
+        let ef : d1.itype -> M4 d2.etype = export f in
         calc (included_in) {
+            behavior (reify (ef x') (fun _ -> True));
+            `included_in` {}
             behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
             `included_in` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]) }
             behavior (reify (
@@ -75,8 +83,11 @@ let export_IOStHist_lemma #t1 #t2
     forall (x':d1.itype) (x:option t1). x == import x' ==>
     (match x with
     | Some x -> (
-        let res' = reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True) in
+        let ef : d1.itype -> M4 d2.etype = export f in
+        let res' = reify (ef x') (fun _ -> True) in
+
         let f' = reify (f x) (post x []) in
+
         check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' []))
     | None -> True))
 //   ) by (    
