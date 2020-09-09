@@ -302,20 +302,24 @@ let dynamic_cmd
   | true -> mixed_cmd cmd pi_check argz
   | false -> throw GIO_default_check_failed
 
-effect GIO
-  (a:Type)
-  (pi_check : check_type) =
-  IOStHist a
-    (requires (fun s0 ->
+let gio_pre (pi_check : check_type) : events_trace -> Type0 = (fun s0 ->
       enforced_globally default_check s0 &&
-      enforced_globally pi_check s0))
-    (ensures (fun s0 (result) local_trace ->
+      enforced_globally pi_check s0)
+
+let gio_post #a (pi_check : check_type) : events_trace -> maybe (events_trace * a) -> events_trace -> Type0 = (fun s0 (result) local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
           s1 == (apply_changes s0 local_trace) /\
           enforced_globally (default_check) s1 /\
           enforced_globally (pi_check) s1)
-      | Inr _ -> True)))
+      | Inr _ -> True))
+
+effect GIO
+  (a:Type)
+  (pi_check : check_type) =
+  IOStHist a
+    (requires (gio_pre pi_check))
+    (ensures (gio_post pi_check))
 
 val to_runtime_check : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
   ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
