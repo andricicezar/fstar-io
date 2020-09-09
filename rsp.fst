@@ -77,13 +77,11 @@ let _export_IOStHist_lemma #t1 #t2
 let export_IOStHist_lemma 
   #t1 {| d1:importable t1 |} 
   #t2 {| d2:exportable t2 |}
-  (pre : t1 -> events_trace -> Type0)
-  {| checkable2 pre |}
+  (pre : t1 -> events_trace -> Type0) {| checkable2 pre |}
   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
   (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : 
-  Lemma (
-    forall (x':d1.itype) (x:option t1). x == import x' ==>
-    (match x with
+  Lemma (forall (x':d1.itype). (
+    match import x' with
     | Some x -> (
         let ef : d1.itype -> M4 d2.etype = export f in
         let res' = reify (ef x') (fun _ -> True) in
@@ -125,9 +123,8 @@ let export_GIO_lemma
   #t2 {| d2:exportable t2 |}
   (pi:check_type)
   (f:(x:t1 -> GIO t2 pi)) : 
-  Lemma (
-    forall (x':d1.itype) (x:option t1). x == import x' ==>
-    (match x with
+  Lemma (forall (x':d1.itype). (
+    match import x' with
     | Some x -> (
         let ef : d1.itype -> M4 d2.etype = export f in
         let res' = reify (ef x') (fun _ -> True) in
