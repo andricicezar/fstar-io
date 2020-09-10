@@ -208,23 +208,20 @@ let rec enforced_locally (check : (events_trace -> action_type -> bool)) (acc : 
          enforced_locally (check) (h::acc) t
        else false
 
-let some_wp (cmd : io_cmds) (argz: args cmd) = (fun s0 p -> 
-  // precondition
-  (default_check s0 (| cmd, argz |)) /\
-  (forall (result:maybe (events_trace * (res cmd))) local_trace.
-      (match result with
-      | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace)) /\
-          enforced_locally default_check s0 local_trace
-      | Inr _ -> True) ==>  p result local_trace))
-
 let ioo_bind #a #b = io_bind a b
 
-let static_cmd
+let unsafe_cmd
   (cmd : io_cmds)
   (argz : args cmd) :
-  IOStHistwp (res cmd) (some_wp cmd argz)
+  IOStHist (res cmd) 
+    (requires (fun _ -> True))
+    (ensures (fun s0 result local_trace ->
+      match result with
+      | Inl v -> let (s1, r) = v in (
+          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+          s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+          local_trace == [convert_call_to_event cmd argz (Inr err)]))
   by (
     let cmd' = match List.Tot.nth (cur_binders ()) 0 with
     | Some x -> x | None -> fail "verification condition changed" in
@@ -233,13 +230,27 @@ let static_cmd
       ignore(intro ());
       rewrite_eqs_from_context ();
       compute ()
-    )
-  ) =
-  IOStHistwp?.reflect(fun p (s0:events_trace) -> 
+    )) =
+  IOStHistwp?.reflect(fun p (s0:events_trace) ->
       ((io_all cmd argz) `ioo_bind` 
       (fun r -> io_return _ (s0, r))) `ioo_bind`
       (fun (s0, rez) -> io_return _ ((convert_call_to_event cmd argz (Inl rez)) :: s0, rez))
   )
+
+let static_cmd
+  (cmd : io_cmds)
+  (argz : args cmd) :
+  IOStHist (res cmd)
+    (requires (fun s0 -> default_check s0 (| cmd, argz |)))
+    (ensures (fun s0 result local_trace ->
+      (match result with
+      | Inl v -> let (s1, r) = v in (
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)])
+      /\  enforced_locally default_check s0 local_trace)) =
+  unsafe_cmd cmd argz
 
 let pi_static_cmd
   (cmd : io_cmds)
@@ -249,14 +260,15 @@ let pi_static_cmd
     (requires (fun s0 ->
       default_check s0 (| cmd, argz |) &&
       pi_check s0 (| cmd, argz |)))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) =
   static_cmd cmd argz
 
 exception GIO_default_check_failed
@@ -268,14 +280,16 @@ let mixed_cmd
   (argz : args cmd) :
   IOStHist (res cmd)
     (requires (fun s0 -> default_check s0 (| cmd, argz |)))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)] \/
+         local_trace == [])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) =
   let s0 = get () in
   let action = (| cmd, argz |) in
   match pi_check s0 action with
@@ -286,33 +300,40 @@ let dynamic_cmd
   (cmd : io_cmds)
   (pi_check : check_type)
   (argz : args cmd) :
-  IOStHist (res cmd)
+  IOStHist (res cmd) 
     (requires (fun s0 -> True))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)] \/
+         local_trace == [])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) = 
   let s0 = get () in
   let action = (| cmd, argz |) in
   match default_check s0 action with
   | true -> mixed_cmd cmd pi_check argz
   | false -> throw GIO_default_check_failed
 
-let gio_pre (pi_check : check_type) : events_trace -> Type0 = (fun s0 ->
-      enforced_globally default_check s0 &&
-      enforced_globally pi_check s0)
+let gio_pre (pi_check : check_type) (s0:events_trace) : Type0 =
+  enforced_globally default_check s0 &&
+  enforced_globally pi_check s0
 
-let gio_post #a (pi_check : check_type) : events_trace -> maybe (events_trace * a) -> events_trace -> Type0 = (fun s0 (result) local_trace ->
-      (match result with
-      | Inl v -> let (s1, r) = v in (
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_globally (default_check) s1 /\
-          enforced_globally (pi_check) s1)
-      | Inr _ -> True))
+let gio_post 
+  #a 
+  (pi_check : check_type)
+  (s0:events_trace)
+  (result:maybe (events_trace * a))
+  (local_trace:events_trace) :
+  Tot Type0 =
+  enforced_globally (default_check) (apply_changes s0 local_trace) /\
+  enforced_globally (pi_check) (apply_changes s0 local_trace) /\
+  (match result with
+  | Inl v -> let (s1, r) = v in s1 == (apply_changes s0 local_trace)
+  | Inr _ -> True)
 
 effect GIO
   (a:Type)
@@ -320,27 +341,6 @@ effect GIO
   IOStHist a
     (requires (gio_pre pi_check))
     (ensures (gio_post pi_check))
-
-val to_runtime_check : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
-  ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
-  Tot ((x:t1) -> IOStHist t2 (fun _ -> True) (fun s0 result le ->
-    post x s0 result le /\
-    // this is trying to enforce the pre condition, but this is not enough
-    // I suppose a match on result is needed and checked if it was a contract_failure or not
-    (match result with
-    | Inr Contract_failure -> le == []
-    | _ -> pre x s0)))
-
-val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
-  (pi_check:check_type) -> ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
-  Tot ((x:t1) -> IOStHist t2 (pre x) (fun s0 result le ->
-    post x s0 result le /\
-    (match result with
-    | Inl v -> let (s1, r) = v in (
-        s1 == (apply_changes s0 le) /\
-        // this one does not make sense
-        enforced_globally (pi_check) s1)
-    | Inr _ -> True)))
 
 let rec iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   match tree with
