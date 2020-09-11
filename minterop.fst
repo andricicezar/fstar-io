@@ -59,7 +59,7 @@ instance exn_importable_importable t {| d:importable t |} : exn_importable t =
     | None -> raise Contract_failure) <: M4 t)
 
 instance exportable_refinement t {| d:exportable t |} (p : t -> Type0)  : exportable (x:t{p x})
-= mk_exportable (d.etype) export // TODO: Eta expanding causes type error
+= mk_exportable (d.etype) export
 
 class checkable (#t:Type) (p : t -> Type0) = { check : (x:t -> b:bool{b ==> p x}) }
 instance general_is_checkeable t (p : t -> bool) : checkable (fun x -> p x) = { check = fun x -> p x }
@@ -80,8 +80,6 @@ instance importable_refinement
       | None -> None) <: option (x:t{rp x}))
 
 let test_refinement () : M4 (y:int{y = 5}) = exn_import 5
-
-(* TODO: quite a few type annotations needed above *)
 
 instance exportable_pair t1 t2 {| d1:exportable t1 |} {| d2:exportable t2 |} : exportable (t1 * t2) =
   mk_exportable (d1.etype * d2.etype) (fun (x,y) -> (export x, export y))
@@ -145,6 +143,7 @@ let incr2 : int -> M4 int = incr
 let p x y : bool = (y = x + 1)
 let incr'' (x:int) : M4 (y:int{p x y}) = exn_import (incr x)
 
+// TODO: fix this. see https://github.com/FStarLang/FStar/issues/2128
 // val incr' : unit -> M4 ((x:int) -> M4 (y:int{p x y}))
 // let incr' () = 
 //   let (z:(x:int) -> M4 (y:int{p x y})) = import incr2 in

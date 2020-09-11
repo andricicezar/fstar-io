@@ -26,10 +26,41 @@ let rec behavior #a
          (behavior (fnc res) t) /\
          t' == ((convert_call_to_event cmd args res)::t))))
   end
+  
 
-let behavior_iost_to_io () : Lemma
-  (forall (a:Type) (tree:io (events_trace * a)). behavior (iost_to_io tree) `included_in` behavior tree) = admit ()
-    
+let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
+  match tree with
+  | Return (s1, r) -> Return r
+  | Throw r -> Throw r
+  | Cont (Call cmd argz fnc) ->
+    io_bind (events_trace * t2) t2
+      (Cont (Call cmd argz fnc))
+      (fun (_, r) -> io_return _ r)
+
+let _behavior_iost_to_io (a:Type) (tree:io (events_trace * a)) : 
+  Lemma (behavior (iost_to_io tree) `included_in` behavior tree) =
+  match tree with
+  | Cont (Call cmd argz fnc) -> begin
+    calc (included_in) {
+        behavior (iost_to_io (Cont (Call cmd argz fnc)));
+        `included_in` { _ by (unfold_def(`iost_to_io)) }
+        behavior (io_bind (events_trace * a) a
+            (Cont (Call cmd argz fnc))
+            (fun (_, r) -> io_return _ r));
+        `included_in` { admit () }
+        // behavior (Cont (Call cmd argz fnc));
+        behavior tree;
+    }
+  end
+  | _ -> ()
+
+let behavior_iost_to_io () : 
+  Lemma (forall (a:Type) (tree:io (events_trace * a)). 
+    behavior (iost_to_io tree) `included_in` behavior tree) =
+  Classical.forall_intro_2 _behavior_iost_to_io
+
+unfold let ref #a (x : io a) : M4.irepr a (fun p -> forall res. p res) = (fun _ -> x)
+
 let _export_IOStHist_lemma #t1 #t2
   {| d1:importable t1 |}
   {| d2:exportable t2 |}
@@ -61,10 +92,13 @@ let _export_IOStHist_lemma #t1 #t2
             behavior (reify (
                         let tree = reify (f x) (post x []) in
                         export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            // `included_in` {}
-            // behavior (reify (
-            //             export (M4wp?.reflect (fun _ -> iost_to_io (reify (f x) (post x []) [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` { admit () }
+            `included_in` {}
+            behavior (reify (
+                        export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            `included_in` {}
+            behavior (reify (
+                        (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            `included_in` { _ by (unfold_def(`ref); norm [iota]) }
             behavior (iost_to_io (reify (f x) (post x []) []));
             `included_in` { behavior_iost_to_io () }
             behavior (reify (f x) (post x []) []);
