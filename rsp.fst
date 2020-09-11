@@ -85,23 +85,24 @@ let _export_IOStHist_lemma #t1 #t2
     if (check2 #t1 #events_trace #pre x []) then (
         let ef : d1.itype -> M4 d2.etype = export f in
         calc (included_in) {
-            behavior (reify (ef x') (fun _ -> True));
-            `included_in` {}
-            behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
-            `included_in` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]) }
-            behavior (reify (
-                        let tree = reify (f x) (post x []) in
-                        export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` {}
-            behavior (reify (
-                        export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` {}
+            // behavior (reify (ef x') (fun _ -> True));
+            // `included_in` {}
+            // behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
+            // `included_in` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]) }
+            // behavior (reify (
+            //             let tree = reify (f x) (post x []) in
+            //             export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            // `included_in` {}
+            // behavior (reify (
+            //             export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
+            // `included_in` { admit () }
             behavior (reify (
                         (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` { _ by (unfold_def(`ref); norm [iota]) }
-            behavior (iost_to_io (reify (f x) (post x []) []));
-            `included_in` { behavior_iost_to_io () }
-            behavior (reify (f x) (post x []) []);
+            `included_in` { _ by (norm [iota]; dump "h") }
+            behavior (ref (iost_to_io (reify (f x) (post x []) [])) (fun p -> True));
+            // behavior (iost_to_io (reify (f x) (post x []) []));
+            // `included_in` { behavior_iost_to_io () }
+            // behavior (reify (f x) (post x []) []);
         }
     ) else ()
   end
