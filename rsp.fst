@@ -95,10 +95,11 @@ let _export_IOStHist_lemma #t1 #t2
             `included_in` {}
             behavior (reify (
                         export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` {}
+            `included_in` { admit () }
             behavior (reify (
                         (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res))) (fun _ -> True));
-            `included_in` { _ by (unfold_def(`ref); norm [iota]) }
+            `included_in` { admit () }
+            // `included_in` { _ by (norm [iota]; dump "h") }
             behavior (iost_to_io (reify (f x) (post x []) []));
             `included_in` { behavior_iost_to_io () }
             behavior (reify (f x) (post x []) []);
@@ -169,32 +170,50 @@ let export_GIO_lemma
     | None -> True)) =
   Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
 
-// let rsp_left 
-//   (a : Type) {| d1:exportable a |}
-//   (b : Type) {| d2:ml b |}
-//   (c : Type) {| d3:exportable c |}
-//   (pi : check_type)
-//   (p : ((ct:(a -> GIO b pi)) -> GIO c pi))
-//   (ct : (d1.etype -> M4 b)) :
-//   Lemma (forall (pi_as_set:set_of_traces).
-//     match import ct with
-//     | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
-//         let pct : unit -> GIO c pi = fun _ -> p (ct' pi) in
-//         let pct' : unit -> M4 d3.etype = export pct in
-//         behavior (reify (pct ()) (gio_post pi []) []) `included_in` pi_as_set ==> 
-//         behavior (reify (pct' ()) (fun _ -> True)) `included_in` pi_as_set
-//     | None -> False) // by (explode (); bump_nth 10; explode (); dump "h")
-//   = 
-//   match import ct with
-//   | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
-//       let pct : unit -> GIO c pi = fun _ -> p (ct' pi) in
-//       export_GIO_lemma pi pct;
-//       // let pct' : unit -> M4 d3.etype = export pct in
-//       calc (included_in) {
-//         // behavior (reify (pct' ()) (fun _ -> True));
-//         // `included_in` {}
-//         behavior (reify (pct ()) (gio_post pi []) []);
-//         `included_in` {}
-//         behavior (reify (p (ct' pi)) (gio_post pi []) []);
-//       }
-//   | None -> ()
+let export_GIO_lemma' 
+  #t1 {| d1:importable t1 |} 
+  #t2 {| d2:exportable t2 |}
+  (pi:check_type)
+  (f:(x:t1 -> GIO t2 pi)) : 
+  Lemma (forall (x':d1.itype). (
+    match import x' with
+    | Some x -> (
+        let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f in
+        let res' = reify (ef x') (fun _ -> True) in
+
+        let f' = reify (f x) (gio_post pi []) in
+
+        check2 #t1 #events_trace #(fun _ -> gio_pre pi) x [] == true ==>  behavior res' `included_in` behavior (f' []))
+    | None -> True)) =
+  Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
+
+let rsp_left 
+  (a : Type) {| d1:exportable a |}
+  (b : Type) {| d2:ml b |}
+  (c : Type) {| d3:exportable c |}
+  (pi : check_type)
+  (p : ((ct:(a -> GIO b pi)) -> GIO c pi))
+  (ct : (d1.etype -> M4 b)) :
+  Lemma (forall (pi_as_set:set_of_traces).
+    match import ct with
+    | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
+        let pct : unit -> GIO c pi = fun _ -> p (ct' pi) in
+        let pct' : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) pct in
+        behavior (reify (pct ()) (gio_post pi []) []) `included_in` pi_as_set ==> 
+        behavior (reify (pct' ()) (fun _ -> True)) `included_in` pi_as_set
+    | None -> False) // by (explode (); bump_nth 10; explode (); dump "h")
+  = 
+  match import ct with
+  | Some (ct' : (pi:check_type) -> a -> GIO b pi) -> 
+      let pct : unit -> GIO c pi = fun _ -> p (ct' pi) in
+      export_GIO_lemma pi pct;
+      let pct' : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) pct in
+      export_GIO_lemma' pi pct;
+      calc (included_in) {
+        behavior (reify (pct' ()) (fun _ -> True));
+        `included_in` { _ by (dump "h") }
+        behavior (reify (pct ()) (gio_post pi []) []);
+        `included_in` {}
+        behavior (reify (p (ct' pi)) (gio_post pi []) []);
+      }
+  | None -> ()
