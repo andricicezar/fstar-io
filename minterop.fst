@@ -178,8 +178,8 @@ let _export_IOStHist_arrow_spec
       match import x with
       | Some x -> (
         if (check2 #t1 #events_trace #pre x []) then (
-            let tree = reify (f x) (fun r le -> post x [] r le) in
-            export (M4wp?.reflect (fun _ -> iost_to_io (tree [])) <: M4wp t2 (fun p -> forall res. p res))
+          let tree : io (events_trace * t2) = reify (f x) (fun r le -> post x [] r le) [] in
+          export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))
         ) else M4.raise Contract_failure)
       | None -> M4.raise Contract_failure)
         

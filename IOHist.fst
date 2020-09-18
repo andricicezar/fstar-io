@@ -8,9 +8,9 @@ open IO.Free
 
 noeq
 type io_event =
-    | EOpenfile : args Openfile -> resm Openfile -> io_event
-    | ERead : args Read -> resm Read -> io_event
-    | EClose : args Close -> resm Close -> io_event
+    | EOpenfile : a:args Openfile -> (r:resm Openfile) -> io_event
+    | ERead : a:args Read -> (r:resm Read) -> io_event
+    | EClose : a:args Close -> (r:resm Close) -> io_event
 
 type events_trace = list io_event
 
