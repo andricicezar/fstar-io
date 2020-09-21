@@ -10,8 +10,8 @@ open Minterop
 
 type set_of_traces (a:Type) = events_trace * a -> Type0
 
-val included_in : (#a:Type) -> (#b:Type) -> (a -> b) -> set_of_traces a -> set_of_traces b -> Type0
-let included_in rel s1 s2 = forall t r. s1 (t, r) ==>  s2 (t, rel r)
+val included_in : (#a:Type) -> (#b:Type) -> (b -> a) -> set_of_traces a -> set_of_traces b -> Type0
+let included_in rel s1 s2 = forall t r. s1 (t, rel r) ==>  s2 (t, r)
 
 let rec behavior #a
   (m : io a) : set_of_traces (maybe a) =
@@ -90,11 +90,10 @@ let beh_extend_trace_in_bind
           unfold_def (`convert_call_to_event); assumption (); dump "H")
 
 let extract_result (cmd:io_cmds) (event:io_event) : Pure (resm cmd)
-  (requires ((cmd == Openfile ==>  EOpenfile? event) \/
-      (cmd == Read ==> ERead? event) \/
-      (cmd == Close ==> EClose? event)))
+  (requires ((cmd == Openfile /\ EOpenfile? event) \/
+      (cmd == Read /\ ERead? event) \/
+      (cmd == Close /\ EClose? event)))
   (ensures (fun r -> True)) = 
-  admit ();
   match cmd with 
   | Openfile -> EOpenfile?.r event 
   | Read -> ERead?.r event 
@@ -160,7 +159,6 @@ let beh_bind_0
       Classical.move_requires_3 (beh_bind_inl m k (Inl?.v r1)))
   )
 
-
 let beh_bind
   #a #b
   (m : io a)
@@ -172,62 +170,91 @@ let beh_bind
                               behavior (io_bind _ _ m k) (t1 @ t2, r2)))) =
   Classical.forall_intro (beh_bind_0 m k)
 
-unfold let oal #a #b (f:a -> b) (x:maybe a) : maybe b =
+unfold let inl_app #a #b (f:a -> b) (x:maybe a) : maybe b =
   match x with
   | Inl x -> Inl (f x)
   | Inr err -> Inr err
- 
-let beh_bind_tot_0
+
+let rec beh_bind_tot_0
   #a #b
-  (f:io a)
+  (f:io a) 
   (g:a -> Tot b)
+  (_:squash (forall x y. g x == g y ==>  x == y))
   (r:maybe a)
   (t:events_trace) :
   Lemma 
-    (requires (behavior f (t, r)))
-    (ensures (behavior (io_bind a b f (fun x -> io_return _ (g x)))) (t, (oal g r))) =
- 
-  assert (forall (x:a). behavior (io_return _ (g x)) `included_in id` empty_set ());
-  beh_bind f (fun x -> io_return _ (g x));
-  if (Inr? r) then admit ()
-  else admit ()
-  
+    (requires (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, (inl_app g r))))
+    (ensures (behavior f (t,r)))  =
+  let m = io_bind a b f ((fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) in 
+  assert (behavior m (t, inl_app g r));
+  match f with
+  | Return x -> ()
+  | Throw err -> ()
+  | Cont (Call cmd argz fnc) ->
+    let (ht1 :: tt1) = t in
+    let rez : resm cmd = extract_result cmd ht1 in
+    FStar.WellFounded.axiom1 fnc rez;
+    beh_bind_tot_0 (fnc rez) g _ r tt1;
+    beh_extend_trace cmd argz rez fnc (tt1) r
+       
 let beh_bind_tot
   #a #b
   (f:io a)
-  (g:a -> Tot b) :
+  (g:a -> Tot b)
+  (d:squash (forall x y. g x == g y ==>  x == y)) :
   Lemma 
-    (forall r t. behavior f (t, r) ==> 
-      (behavior (io_bind a b f (fun x -> io_return _ (g x)))) (t, (oal g r))) =
-  Classical.forall_intro_2 (Classical.move_requires_2 (beh_bind_tot_0 f g))
+    (forall r t. (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, (inl_app g r))) ==> (behavior f (t,r))) =
+  Classical.forall_intro_2 (Classical.move_requires_2 (beh_bind_tot_0 f g d))
 
 let beh_included_bind_tot
   #a #b
   (f:io a) 
-  (g:a -> Tot b):
+  (g:a -> Tot b) :
   Lemma
-    (included_in (oal g)
-      (behavior f)
-      (behavior (io_bind a b f (fun x -> io_return _ (g x))))) = 
-  beh_bind_tot #a #b f g;
-  ()
+    (included_in (inl_app g)
+      (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
+      (behavior f)) = 
+  let d:squash (forall x y. g x == g y ==>  x == y) = admit () in
+  beh_bind_tot f g d
+  
+let cdr #a (_, (x:a)) : a = x
 
 let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
-  match tree with
-  | Return (s1, r) -> Return r
-  | Throw r -> Throw r
-  | Cont (Call cmd argz fnc) ->
-    io_bind (events_trace * t2) t2
-      (Cont (Call cmd argz fnc))
-      (fun (_, r) -> io_return _ r)
+ io_bind (events_trace * t2) t2
+   tree
+   (fun r -> io_return _ (cdr r))
 
-let behavior_iost_to_io () : 
+let beh_iost_to_io () : 
   Lemma (forall (a:Type) (tree:io (events_trace * a)). 
-    behavior (iost_to_io tree) `included_in` behavior tree) = admit ()
-
-
+    behavior (iost_to_io tree) `included_in (inl_app cdr)` behavior tree) = admit ()
 
 unfold let ref #a (x : io a) : M4.irepr a (fun p -> forall res. p res) = (fun _ -> x)
+
+let beh_included_in_trans_id x y z :
+  Lemma (
+    (behavior x `included_in id` behavior y /\
+    behavior y `included_in id` behavior z) ==>
+      behavior x `included_in id` behavior z) = ()
+  
+let beh_included_in_trans_id_g x y z g:
+  Lemma (
+    (behavior x `included_in id` behavior y /\
+    behavior y `included_in g` behavior z) ==>
+      behavior x `included_in g` behavior z) = ()
+  
+let beh_included_in_trans_g_id x y z g:
+  Lemma (
+    (behavior x `included_in g` behavior y /\
+    behavior y `included_in id` behavior z) ==>
+      behavior x `included_in g` behavior z) = ()
+
+let compose g f = fun x -> g (f x)
+
+let beh_included_in_merge_f_g x y z f g:
+  Lemma (
+    (behavior x `included_in f` behavior y /\
+    behavior y `included_in g` behavior z) ==>
+      behavior x `included_in (compose f g)` behavior z) = ()
 
 let _export_IOStHist_lemma #t1 #t2
   {| d1:importable t1 |}
@@ -243,39 +270,56 @@ let _export_IOStHist_lemma #t1 #t2
         let res' = reify (ef x') (fun _ -> True) in
 
         let f' = reify (f x) (post x []) in
-        check2 #t1 #events_trace #pre x [] ==>  behavior res' `included_in` behavior (f' []))
+        check2 #t1 #events_trace #pre x [] ==>  
+          behavior res' `included_in (inl_app (compose export cdr))` behavior (f' []))
         // TODO: prove that behavior of res is empty trace if check2 fails?
     | None -> 
        // TODO: prove that behavior of res is the empty trace if import fails?
            True)=
-
   match import x' with
   | Some x -> begin
     if (check2 #t1 #events_trace #pre x []) then (
         let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec pre post f in
-        calc (included_in) {
+        let included_in_id #a = included_in #a #a (id #a) in
+        calc (included_in_id) {
             behavior (reify (ef x') (fun _ -> True));
-            `included_in` {}
+            `included_in_id` {}
             behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
-            `included_in` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]) }
+            `included_in_id` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]; tadmit (); dump "h") }
             behavior (reify (
               (export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) <: d2.etype)) (fun _ -> True));
-            == { admit () } // unfold reify
-            // Cezar: is the 3rd argument correct? I suppose it should pre and post
+            `included_in_id` { admit () } // unfold reify
+            // // Cezar: is the 3rd argument correct? I suppose it should pre and post
             behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
                 (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)))
                 (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True));
-            `included_in` { _ by (unfold_def (`ibind); dump "H"); admit () }
-            behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
-                (ref (iost_to_io (reify (f x) (post x []) [])))
-                (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True));
-        //     `included_in` { test  (ref (iost_to_io (reify (f x) (post x []) []))) }
-        //     // `included_in` { _ by (norm [iota]; dump "h") }
-            == { admit () }
-            behavior (iost_to_io (reify (f x) (post x []) []));
-            `included_in` { behavior_iost_to_io () }
-            behavior (reify (f x) (post x []) []);
-        }
+        };
+
+        beh_included_bind_tot #t2 #d2.etype
+          (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (compute_post t2 (Mkexportable?.etype d2) (fun x -> m4_return_wp (Mkexportable?.etype d2) (export x)) (fun _ -> True)))
+            export;
+
+        assert (
+            (behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
+                (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)))
+                (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True)))
+          `included_in (inl_app export)`
+            (behavior (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (fun _ -> True)))
+        ) by (unfold_def (`ibind));
+
+       calc (included_in_id) {
+         behavior (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (fun _ -> True));
+         `included_in_id` {}
+         behavior (iost_to_io (reify (f x) (post x []) []));
+       };
+
+       beh_iost_to_io ();
+
+       assert (
+         behavior (iost_to_io (reify (f x) (post x []) []))
+         `included_in (inl_app cdr)` 
+         behavior (reify (f x) (post x []) []));
+       ()
     ) else ()
   end
   | None -> ()
