@@ -77,7 +77,7 @@ let beh_extend_trace_in_bind
       io_bind a b (Cont (Call cmd argz fnc)) k;
       == {}
       sys_bind io_cmds io_cmd_sig a b (Cont (Call cmd argz fnc)) k;
-      == { admit () }
+      == { _ by (norm [iota; delta]; compute ()) }
       Cont (sysf_fmap (fun fnci -> 
         sys_bind io_cmds io_cmd_sig a b fnci k) (Call cmd argz fnc));
       == { _ by (unfold_def(`sysf_fmap); norm [iota]; unfold_def(`io_bind)) }
@@ -209,12 +209,12 @@ let beh_bind_tot
 let beh_included_bind_tot
   #a #b
   (f:io a) 
-  (g:a -> Tot b) :
+  (g:a -> Tot b)
+  (d:squash (forall x y. g x == g y ==>  x == y)) :
   Lemma
     (included_in (inl_app g)
       (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
       (behavior f)) = 
-  let d:squash (forall x y. g x == g y ==>  x == y) = admit () in
   beh_bind_tot f g d
   
 let cdr #a (_, (x:a)) : a = x
@@ -256,6 +256,8 @@ let beh_included_in_merge_f_g x y z f g:
     behavior y `included_in g` behavior z) ==>
       behavior x `included_in (compose f g)` behavior z) = ()
 
+let export_inj (a:Type) {| exportable a |} () : Lemma (forall (x y:a). export x == export y ==>  x == y) = admit ()
+
 let _export_IOStHist_lemma #t1 #t2
   {| d1:importable t1 |}
   {| d2:exportable t2 |}
@@ -285,11 +287,21 @@ let _export_IOStHist_lemma #t1 #t2
             behavior (reify (ef x') (fun _ -> True));
             `included_in_id` {}
             behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
+            // TODO: Cezar: this was working before. I do not understand why it fails now.
+            // The idea behind this is to get rid of the `match` and the `if` because we did them
+            // already in the proof.
             `included_in_id` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]; tadmit (); dump "h") }
             behavior (reify (
               (export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) <: d2.etype)) (fun _ -> True));
-            `included_in_id` { admit () } // unfold reify
-            // // Cezar: is the 3rd argument correct? I suppose it should pre and post
+            // TODO: Cezar: this should be just an unfolding of `reify`. I talked with Guido
+            // and it seems using tactics is not a solution to unfold `reify` for 
+            // layered effects because: "reification of layered effects is explicitly disabled
+            // since it requires producing the indices for the bind, and we do not store them
+            // anywhere". I tried to manually unfold looking at EMF* (Dijkstra Monads for
+            // Free), but it seems that F* does not accept this proof. I created a new file only
+            // for this problem: `UnfoldReify.fst`.
+            `included_in_id` { admit () }
+            // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
             behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
                 (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)))
                 (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True));
@@ -297,7 +309,7 @@ let _export_IOStHist_lemma #t1 #t2
 
         beh_included_bind_tot #t2 #d2.etype
           (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (compute_post t2 (Mkexportable?.etype d2) (fun x -> m4_return_wp (Mkexportable?.etype d2) (export x)) (fun _ -> True)))
-            export;
+            export (export_inj t2 (Classical.lemma_to_squash_gtot (export_inj t2) ()));
 
         assert (
             (behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
@@ -342,7 +354,6 @@ let export_IOStHist_lemma
         check2 #t1 #events_trace #pre x [] == true ==>  behavior res' `included_in` behavior (f' []))
     | None -> True)) =
   Classical.forall_intro (_export_IOStHist_lemma #t1 #t2 pre post f)
-
 
 let export_GIO_lemma 
   #t1 {| d1:importable t1 |} 
