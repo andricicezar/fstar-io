@@ -273,7 +273,7 @@ let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = beg
       _import_M4_to_GIO z' pi
 end
 
-instance importable_M4_arrow_spec t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
+instance importable_M4_to_pi_GIO t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
   importable(pi:check_type -> t1 -> GIO t2 pi) =
   mk_importable (d1.etype -> M4 t2) #(pi:check_type -> t1 -> GIO t2 pi)
     (fun (f:(d1.etype -> M4 t2)) ->
@@ -281,6 +281,19 @@ instance importable_M4_arrow_spec t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
         let x : d1.etype = export x in
         let tree = reify (f x) (fun r -> True) in
         _import_M4_to_GIO #t2 tree pi <: GIO t2 pi) in Some f')
+
+instance importable_M4_to_GIO 
+  t1 {| d1:exportable t1 |} 
+  t2 {| d2:ml t2 |} 
+  (pi:check_type) :
+  Tot (importable (t1 -> GIO t2 pi)) =
+  mk_importable (d1.etype -> M4 t2) #(t1 -> GIO t2 pi)
+    (fun (f:(d1.etype -> M4 t2)) ->
+      let f' : (t1 -> GIO t2 pi) = (fun (x:t1) ->
+        let x : d1.etype = export x in
+        let tree = reify (f x) (fun r -> True) in
+        _import_M4_to_GIO #t2 tree pi <: GIO t2 pi) in Some f')
+
 
 val allowed_file : string -> bool
 let allowed_file fnm = match fnm with
