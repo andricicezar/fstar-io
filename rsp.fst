@@ -406,22 +406,18 @@ let export_GIO_lemma
     | None ->  behavior res' `included_in id` empty_set ())) =
   Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
 
-let export_GIO_lemma'
-  #t1 {| d1:importable t1 |} 
+let export_unit_GIO_lemma
   #t2 {| d2:exportable t2 |}
   (pi:check_type)
-  (f:(x:t1 -> GIO t2 pi)) : 
-  Lemma (forall (x':d1.itype). (
-    let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f in
-    let res' = reify (ef x') (fun _ -> True) in
-    match import x' with
-    | Some x -> (
-      let f' = reify (f x) (gio_post pi []) in
-      (check2 #t1 #events_trace #(fun _ -> gio_pre pi) x [] ==>  
+  (f:(unit -> GIO t2 pi)) : 
+  Lemma (
+    let ef : unit -> M4 d2.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f in
+    let res' = reify (ef ()) (fun _ -> True) in
+      let f' = reify (f ()) (gio_post pi []) in
+      (check2 #unit #events_trace #(fun _ -> gio_pre pi) () [] ==>  
         behavior res' `included_in (inl_app (compose export cdr))` behavior (f' [])) /\
-      (~(check2 #t1 #events_trace #(fun _ -> gio_pre pi) x []) ==>  
-        behavior res' `included_in id` empty_set ()))
-    | None ->  behavior res' `included_in id` empty_set ())) =
+      (~(check2 #unit #events_trace #(fun _ -> gio_pre pi) () []) ==>  
+        behavior res' `included_in id` empty_set ())) =
   Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
 
 let rsp_simple_linking
@@ -460,9 +456,5 @@ let rsp_simple_linking
           `included_in_id` { admit () }
           behavior (reify (wt ()) (fun _ -> True));
         };
-        export_GIO_lemma' pi ws;
-        // TODO: Cezar: I should get this from the previous lemma. I am not sure why is not 
-        // accepted.
-        assume (check2 #unit #events_trace #(fun _ -> gio_pre pi) () [] ==>  behavior (reify (wt ()) (fun _ -> True)) `included_in (inl_app (compose export cdr))` behavior (reify (ws ()) (gio_post pi []) []));
-        ()
+        export_unit_GIO_lemma pi ws
     | None -> ()
