@@ -177,6 +177,8 @@ let _export_IOStHist_arrow_spec
     (fun (x:d1.itype) ->
       match import x with
       | Some x -> (
+        // TODO: Cezar: This is not quite right. Instead of [], it should access the 
+        // materialized trace from the global state.
         if (check2 #t1 #events_trace #pre x []) then (
           let tree : io (events_trace * t2) = reify (f x) (fun r le -> post x [] r le) [] in
           export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))

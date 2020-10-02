@@ -342,15 +342,7 @@ effect GIO
     (requires (gio_pre pi_check))
     (ensures (gio_post pi_check))
 
-let rec iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
-  match tree with
-  | Return (s1, r) -> Return r
-  | Throw r -> Throw r
-  | Cont (Call cmd argz fnc) ->
-  //   io_bind (events_trace * t2) t2
-  //     (Cont (Call cmd argz fnc))
-  //     (fun (_, r) -> io_return _ r)
-
-     Cont (Call cmd argz (fun res -> 
-       WellFounded.axiom1 fnc res;
-       iost_to_io (fnc res)))
+let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
+  io_bind (events_trace * t2) t2
+    tree
+    (fun r -> io_return _ (cdr r))

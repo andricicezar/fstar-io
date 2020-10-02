@@ -29,8 +29,6 @@ let rec behavior #a
 
 let empty_set (#a:Type) () : set_of_traces a = fun (t,r) -> t == []
 
-let id #a (x:a) = x
-
 let beh_shift_trace
   #a
   (cmd : io_cmds)
@@ -181,11 +179,6 @@ let beh_bind
                               behavior (io_bind _ _ m k) (t1 @ t2, r2)))) =
   Classical.forall_intro (beh_bind_0 m k)
 
-unfold let inl_app #a #b (f:a -> b) (x:maybe a) : maybe b =
-  match x with
-  | Inl x -> Inl (f x)
-  | Inr err -> Inr err
-
 let rec beh_bind_tot_0
   #a #b
   (f:io a) 
@@ -226,13 +219,6 @@ let beh_included_bind_tot
       (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
       (behavior f)) = 
   beh_bind_tot f g
-  
-let cdr #a (_, (x:a)) : a = x
-
-let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
-  io_bind (events_trace * t2) t2
-    tree
-    (fun r -> io_return _ (cdr r))
 
 let beh_iost_to_io (a:Type) (tree:io (events_trace * a)) :
   Lemma (behavior (iost_to_io tree) `included_in (inl_app cdr)` behavior tree) 
@@ -260,8 +246,6 @@ let beh_included_in_trans_g_id x y z g:
     (behavior x `included_in g` behavior y /\
     behavior y `included_in id` behavior z) ==>
       behavior x `included_in g` behavior z) = ()
-
-let compose g f = fun x -> g (f x)
 
 let beh_included_in_merge_f_g x y z f g:
   Lemma (
@@ -299,7 +283,7 @@ let _export_IOStHist_lemma
             behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
             // TODO: Cezar: The idea behind this is to get rid of the `match` and the `if` 
             // because we did them already in the proof.
-            `included_in_id` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]; tadmit (); dump "h") }
+            `included_in_id` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]; tadmit ()) }
             behavior (reify (
               (export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) <: d2.etype)) (fun _ -> True));
             // TODO: Cezar: this should be just an unfolding of `reify`. I talked with Guido
@@ -346,7 +330,7 @@ let _export_IOStHist_lemma
             == {}
             reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True);
             == { 
-            _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit (); dump "h") }
+            _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit ()) }
             reify (M4.raise Contract_failure) (fun _ -> True);
             // TODO: Cezar: The idea behind this is to get rid of the `match` and the `if` 
             // because we did them already in the proof.
@@ -360,8 +344,9 @@ let _export_IOStHist_lemma
         reify (ef x') (fun _ -> True);
         == {}
         reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True);
+        // TODO: Cezar: two admits here.
         == { 
-          _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit (); dump "h") }
+          _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit ()) }
         reify (M4.raise Contract_failure) (fun _ -> True);
         == { admit () }
         Throw Contract_failure;
