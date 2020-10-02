@@ -50,10 +50,8 @@ let rec iohist_interpretation #a
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (forall res. (
+  | Cont (Call cmd args fnc) -> (
+    forall res. (
       FStar.WellFounded.axiom1 fnc res;
       let event : io_event = convert_call_to_event cmd args res in
       iohist_interpretation (fnc res) (event :: past_events) (gen_post p event)))
-  end

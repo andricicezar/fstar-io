@@ -443,3 +443,134 @@ let rsp_simple_linking
         };
         export_unit_GIO_lemma pi ws
     | None -> ()
+
+let pi_to_set #a (pi : check_type) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
+
+let gio_post_implies_set_of_traces 
+  (a : Type)
+  (b : Type)
+  (pi : check_type)
+  (t : events_trace)
+  (r : maybe (events_trace * b)) :
+  Lemma 
+    (requires  (gio_post pi [] r t))
+    (ensures (pi_to_set pi (t, r))) = 
+    List.Tot.Properties.append_l_nil (List.rev t);
+    ()
+
+let iohist_interp_shift_trace
+  #a
+  (cmd : io_cmds)
+  (argz : args cmd)
+  (rez : resm cmd)
+  (fnc : resm cmd -> io a)
+  (h:events_trace)
+  p:
+  Lemma 
+    (requires (iohist_interpretation (Cont (Call cmd argz fnc)) h p))
+    (ensures (
+      iohist_interpretation (fnc rez) (convert_call_to_event cmd argz rez :: h) (gen_post p (convert_call_to_event cmd argz rez)))) = 
+  calc (==) {
+    iohist_interpretation (Cont (Call cmd argz fnc)) h p;
+    == { _ by (compute ())}
+    (forall res. (
+      let event : io_event = convert_call_to_event cmd argz res in
+      iohist_interpretation (fnc res) (event :: h) (gen_post p event)));
+  }
+
+let rec gio_interpretation_implies_set_of_traces
+  (a : Type)
+  (pi : check_type)
+  (m : io (events_trace * a)) 
+  (h : events_trace)
+  (le : events_trace)
+  (r : maybe (events_trace * a)) 
+  p :
+  Lemma 
+    (requires (iohist_interpretation m h p) /\ behavior m (le, r))
+    (ensures (p r le)) =
+  match m with
+  | Return _ -> ()
+  | Throw _ -> ()
+  | Cont (Call cmd argz fnc) -> begin
+    let (ht1 :: tt1) = le in
+    let rez : resm cmd = extract_result cmd ht1 in
+    FStar.WellFounded.axiom1 fnc rez;
+    beh_shift_trace cmd argz rez fnc tt1 r;
+    iohist_interp_shift_trace cmd argz rez fnc h p;
+    // TODO: Cezar: The previous line gives me exacty this. Idk why F* does not accept it.
+    admit ();
+    assert (iohist_interpretation (fnc rez) (ht1 :: h) (gen_post p ht1));
+    gio_interpretation_implies_set_of_traces a pi (fnc rez) (ht1 :: h) tt1 r (gen_post p ht1)
+  end
+
+let beh_gio_implies_post 
+  (a : Type)
+  (b : Type)
+  (pi : check_type)
+  (ws : a -> GIO b pi) 
+  (x : a)
+  (t : events_trace)
+  (r : maybe (events_trace * b)) :
+  Lemma 
+    (requires (behavior (reify (ws x) (gio_post pi []) []) (t, r)))
+    (ensures  (gio_post pi [] r t)) =
+  let ws' = reify (ws x) (gio_post pi []) [] in
+  gio_interpretation_implies_set_of_traces b pi ws' [] t r (gio_post pi []) 
+
+let beh_gio_in_pi_0 
+  (a : Type)
+  (b : Type)
+  (pi : check_type)
+  (ws : a -> GIO b pi) 
+  (x : a)
+  (t : events_trace)
+  (r : maybe (events_trace * b)) :
+  Lemma 
+    (requires (behavior (reify (ws x) (gio_post pi []) []) (t, r)))
+    (ensures  ((pi_to_set pi) (t, r))) =
+  beh_gio_implies_post a b pi ws x t r;
+  gio_post_implies_set_of_traces a b pi t r
+  
+let beh_gio_in_pi
+  (a : Type)
+  (b : Type)
+  (pi : check_type)
+  (ws : a -> GIO b pi) 
+  (x : a) :
+  Lemma 
+    ((behavior (reify (ws x) (gio_post pi []) [])) `included_in id`
+      (pi_to_set pi)) =
+  Classical.forall_intro_2 (Classical.move_requires_2 (beh_gio_in_pi_0 a b pi ws x))
+  
+let rsp_assumption
+  (a : Type) {| d1:exportable a |}
+  (b : Type) {| d2:ml b |}
+  (c : Type) {| d3:exportable c |}
+  (pi : check_type)
+  (ps : (a -> GIO b pi) -> GIO c pi)
+  (ct : d1.etype -> M4 b) :
+  Lemma
+    (match import ct with
+    | Some (cs : a -> GIO b pi) -> 
+       behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)
+    | None -> True) =
+  match import ct with
+  | Some (cs : a -> GIO b pi) ->
+      beh_gio_in_pi _ _ pi ps cs
+  | None -> ()
+
+
+let rec beh_implies_iohist_interp 
+  (a : Type)
+  (m : io (events_trace * a)) 
+  (h : events_trace)
+  (t : events_trace)
+  (r : maybe (events_trace * a)) :
+  Lemma 
+    (requires (behavior m (t,r)))
+    (ensures (iohist_interpretation m h (fun res le -> (t,res) == (le,r)))) = 
+  match m with
+  | Return _ -> ()
+  | Throw _ -> ()
+  | Cont (Call cmd argz fnc) -> admit ()
