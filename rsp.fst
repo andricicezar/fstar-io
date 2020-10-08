@@ -353,7 +353,6 @@ let _export_IOStHist_lemma
     }
   end
 
-
 let export_IOStHist_lemma 
   #t1 {| d1:importable t1 |} 
   #t2 {| d2:exportable t2 |}
@@ -391,7 +390,7 @@ let export_GIO_lemma
     | None ->  behavior res' `included_in id` empty_set ())) =
   Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
 
-let export_unit_GIO_lemma
+let beh_export_unit_GIO_lemma
   #t2 {| d2:exportable t2 |}
   (pi:check_type)
   (f:(unit -> GIO t2 pi)) : 
@@ -405,44 +404,34 @@ let export_unit_GIO_lemma
         behavior res' `included_in id` empty_set ())) =
   Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
 
-let rsp_simple_linking
-  (a : Type) {| d1:exportable a |}
-  (b : Type) {| d2:ml b |}
-  (c : Type) {| d3:exportable c |}
-  (pi_as_set : set_of_traces (maybe (events_trace * c)))
-  (pi : check_type)
-  (ps : (a -> GIO b pi) -> GIO c pi)
-  (ct : d1.etype -> M4 b) :
-  Lemma
-    (requires (forall (cs:(a -> GIO b pi)). 
-      behavior (reify (ps cs) (gio_post pi []) []) `included_in id` pi_as_set))
-    (ensures (
-      let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-      behavior (reify (pt ct) (fun _ -> True)) `included_in (inl_app (compose export cdr))` pi_as_set)) = 
-    match import ct with
-    | Some (cs : a -> GIO b pi) -> 
-      assert (behavior (reify (ps cs) (gio_post pi []) []) `included_in id` pi_as_set) by (
-        let prepost = match (List.Tot.nth (cur_binders ()) 11) with
-          | Some y -> y | None -> fail "no wp?" in
-        let (pre, post) = destruct_and (binder_to_term prepost) in
-        let pre = instantiate pre (fresh_uvar None) in
-        apply pre);
-      
-        let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-        let ws : unit -> GIO c pi = fun _ -> ps cs in
-        assert (behavior (reify (ws ()) (gio_post pi []) []) `included_in id` 
-          behavior (reify (ps cs) (gio_post pi []) []));
-        let wt : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
-        let included_in_id #a = included_in #a #a (id #a) in
-        calc (included_in_id) {
-          behavior (reify (pt ct) (fun _ -> True));
-          // TODO: Cezar: I try to show that ((export ps) ct) == (export (ps (import ct))).
-          // I am not sure how to rewrite and unfold things.
-          `included_in_id` { admit () }
-          behavior (reify (wt ()) (fun _ -> True));
-        };
-        export_unit_GIO_lemma pi ws
-    | None -> ()
+
+// let wcc_lemma
+//   #t1 {| d1:ml t1 |}
+//   #t2 {| d2:ml t2 |}
+//   (pi:check_type)
+//   (ws:(t1 -> GIO t2 pi)) 
+//   (x:t1) : 
+//   Lemma (
+//     let wd : (t1 -> M4 t2) = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
+//     match import wd with
+//     | Some (ws':t1 -> GIO t2 pi) -> 
+//       let tree_ws' = reify (ws' x) (gio_post pi []) [] in
+//       let tree_ws = reify (ws x) (gio_post pi []) [] in
+//       behavior tree_ws' `included_in id` behavior tree_ws
+//     | None -> True 
+//   ) =
+//   let wd : (t1 -> M4 t2) = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
+//   let tree_ws = reify (ws x) (gio_post pi []) [] in
+//   let tree_wd = reify (wd x) (fun _ -> True) in
+//   assume (behavior tree_wd `included_in (inl_app (compose export cdr))` behavior tree_ws);
+//   match import wd with
+//   | Some (ws':t1 -> GIO t2 pi) -> 
+//     let tree_ws' = reify (ws' x) (gio_post pi []) [] in
+//     assert (behavior tree_ws' `included_in id` behavior tree_ws)
+//   | None -> ()
+
+
+
 
 let pi_to_set #a (pi : check_type) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
 
@@ -478,6 +467,7 @@ let iohist_interp_shift_trace
       iohist_interpretation (fnc res) (event :: h) (gen_post p event)));
   }
 
+
 let rec gio_interpretation_implies_set_of_traces
   (a : Type)
   (pi : check_type)
@@ -498,10 +488,7 @@ let rec gio_interpretation_implies_set_of_traces
     FStar.WellFounded.axiom1 fnc rez;
     beh_shift_trace cmd argz rez fnc tt1 r;
     iohist_interp_shift_trace cmd argz rez fnc h p;
-    // TODO: Cezar: The previous line gives me exacty this. Idk why F* does not accept it.
-    admit ();
-    assert (iohist_interpretation (fnc rez) (ht1 :: h) (gen_post p ht1));
-    gio_interpretation_implies_set_of_traces a pi (fnc rez) (ht1 :: h) tt1 r (gen_post p ht1)
+    gio_interpretation_implies_set_of_traces a pi (fnc rez) (convert_call_to_event cmd argz rez :: h) tt1 r (gen_post p (convert_call_to_event cmd argz rez))
   end
 
 let beh_gio_implies_post 
@@ -543,22 +530,82 @@ let beh_gio_in_pi
       (pi_to_set pi)) =
   Classical.forall_intro_2 (Classical.move_requires_2 (beh_gio_in_pi_0 a b pi ws x))
   
-let rsp_assumption
+let beh_forall_f_in_pi
+  (a : Type)
+  (b : Type)
+  (pi : check_type)
+  (m : io a) :
+  Lemma 
+    (forall f. behavior m `included_in (inl_app f)` pi_to_set pi) = admit ()
+  
+let rsp_premise
   (a : Type) {| d1:exportable a |}
   (b : Type) {| d2:ml b |}
   (c : Type) {| d3:exportable c |}
   (pi : check_type)
   (ps : (a -> GIO b pi) -> GIO c pi)
   (ct : d1.etype -> M4 b) :
-  Lemma
-    (match import ct with
-    | Some (cs : a -> GIO b pi) -> 
-       behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)
-    | None -> True) =
-  match import ct with
-  | Some (cs : a -> GIO b pi) ->
-      beh_gio_in_pi _ _ pi ps cs
-  | None -> ()
+  Lemma (
+    let Some (cs : a -> GIO b pi) = import ct in
+    behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)) =
+  let Some (cs : a -> GIO b pi) = import ct in
+  beh_gio_in_pi _ _ pi ps cs
+
+let beh_export_ps_ct_in_export_ws
+  (a : Type) {| d1:exportable a |}
+  (b : Type) {| d2:ml b |}
+  (c : Type) {| d3:exportable c |}
+  (pi : check_type)
+  (ps : (a -> GIO b pi) -> GIO c pi)
+  (ct : d1.etype -> M4 b) : 
+  Lemma (
+    let Some (cs : a -> GIO b pi) = import ct in
+    let ws : unit -> GIO c pi = fun _ -> ps cs in
+    let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
+    let wt : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
+    behavior (reify (pt ct) (fun _ -> True)) `included_in id` behavior (reify (wt ()) (fun _ -> True))
+  ) =
+  let Some (cs : a -> GIO b pi) = import ct in
+  let ws : unit -> GIO c pi = fun _ -> ps cs in
+  let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
+  let wt : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
+  
+  let included_in_id #a = included_in #a #a (id #a) in
+  calc (included_in_id) {
+    behavior (reify (pt ct) (fun _ -> True));
+    `included_in_id` { admit () }
+    behavior (reify (wt ()) (fun _ -> True));
+  }
+    
+let rsp_conclusion 
+  (a : Type) {| d1:exportable a |}
+  (b : Type) {| d2:ml b |}
+  (c : Type) {| d3:exportable c |}
+  (pi : check_type)
+  (ps : (a -> GIO b pi) -> GIO c pi)
+  (ct : d1.etype -> M4 b) :
+  Lemma (
+    let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
+      behavior (reify (pt ct) (fun _ -> True)) `included_in #(maybe d3.etype) #(maybe (events_trace * c)) (inl_app (compose export cdr))` (pi_to_set pi)) = 
+  let Some (cs : a -> GIO b pi) = import ct in
+  let ws : unit -> GIO c pi = fun _ -> ps cs in
+  beh_gio_in_pi unit c pi ws (); // Beh (ws ()) in pi
+  beh_export_unit_GIO_lemma pi ws; // Beh (export ws ()) in Beh (ws ())
+  beh_export_ps_ct_in_export_ws a b c pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
+
+let rsp_simple_linking
+  (a : Type) {| d1:exportable a |}
+  (b : Type) {| d2:ml b |}
+  (c : Type) {| d3:exportable c |}
+  (pi : check_type)
+  (ps : (a -> GIO b pi) -> GIO c pi)
+  (ct : d1.etype -> M4 b) :
+  Lemma(
+    (forall (cs:(a -> GIO b pi)). 
+      behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)) 
+  ==> (let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
+     behavior (reify (pt ct) (fun _ -> True)) `included_in #(maybe d3.etype) #(maybe (events_trace * c)) (inl_app (compose export cdr))` (pi_to_set pi))) = 
+  rsp_conclusion a b c pi ps ct
 
 
 let rec beh_implies_iohist_interp 

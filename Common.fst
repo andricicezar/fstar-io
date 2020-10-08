@@ -4,14 +4,15 @@ open FStar.Exn
 
 type maybe a = either a exn
 
-let compose g f = fun x -> g (f x)
+let compose #a #b #c (g:b->c) (f:a->b) = fun x -> g (f x)
 
 let id #a (x:a) = x
 
-unfold let inl_app #a #b (f:a -> b) (x:maybe a) : maybe b =
-  match x with
-  | Inl x -> Inl (f x)
-  | Inr err -> Inr err
+unfold let inl_app #a #b (f:a -> b) : maybe a -> maybe b =
+  fun x -> 
+    match x with
+    | Inl x -> Inl (f x)
+    | Inr err -> Inr err
 
   
 let cdr #a (_, (x:a)) : a = x
