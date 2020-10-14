@@ -9,41 +9,42 @@ open M4
 open Minterop
 open IO.Behavior
 
-noeq type linker = {
-  set_of_traces : Type -> Type;
-  
-  res_s : Type;
-  res_t : Type;
+noeq type language = {
+  interface : Type;
 
-  prog_s  : Type;  prog_t  : Type;
-  ctx_s   : Type;  ctx_t   : Type;
-  whole_s : Type;  whole_t : Type;
+  res : interface -> Type;
   
-  link_s : ctx_s -> prog_s -> whole_s;
-  link_t : ctx_t -> prog_t -> whole_t;
-  
-  beh_s : whole_s -> set_of_traces res_s;
-  beh_t : whole_t -> set_of_traces res_t;
-  
-  included_in_s : set_of_traces res_s -> set_of_traces res_s -> Type;
-  included_in_t : set_of_traces res_t -> set_of_traces res_s -> Type;
-  
-  compile_prog : prog_s -> prog_t;
-  compile_whole : whole_s -> whole_t;
+  prog: interface -> Type;
+  ctx : interface -> Type;
+  whole : interface -> Type;
+
+  link : (i:interface) -> ctx i -> prog i -> whole i;
 }
 
-let rsp (op:linker) : Type0 =
-  forall (ps:op.prog_s) (pi:op.set_of_traces op.res_s). (
-    (forall (cs:op.ctx_s). op.beh_s (cs `op.link_s` ps) `op.included_in_s` pi)
-    ==> (forall (ct:op.ctx_t). (
-        let pt : op.prog_t = op.compile_prog ps in
-        op.beh_t (ct `op.link_t` pt) `op.included_in_t` pi)))
+noeq type compiler = {
+  source : language;
+  target : language;
+
+  set_of_traces : Type -> Type;
+  beh_s : (i:source.interface) -> source.whole i -> set_of_traces (source.res i);
+  beh_t : (i:target.interface) -> target.whole i -> set_of_traces (target.res i);
+
+  cint : source.interface -> target.interface;
   
-let tp (op:linker) : Type0 =
-  forall (pi:op.set_of_traces op.res_s). forall (ws:op.whole_s).
-    (op.beh_s ws  `op.included_in_s` pi) ==>
-      (op.beh_t (op.compile_whole ws) `op.included_in_t` pi) 
-    
+  included_in_s : (i:source.interface) -> set_of_traces (source.res i) -> set_of_traces (source.res i) -> Type;
+  included_in_t : (i:source.interface) -> set_of_traces (target.res (cint i)) -> set_of_traces (source.res i) -> Type;
+
+  compile_prog : i:source.interface -> source.prog i -> target.prog (cint i);
+  compile_whole : i:source.interface -> source.whole i -> target.whole (cint i);
+}
+  
+let rsp (op:compiler) : Type0 =
+  forall (i:op.source.interface) (ps:op.source.prog i) (pi:op.set_of_traces (op.source.res i)). (
+    (forall cs. op.beh_s i (cs `op.source.link i` ps) `op.included_in_s i` pi)
+    ==> (forall (ct: op.target.ctx (op.cint i)). (
+        let pt = op.compile_prog i ps in
+        op.beh_t (op.cint i) (ct `op.target.link (op.cint i)` pt) `op.included_in_t i` pi)))
+
 noeq type interface = {
   a : Type;  ad : exportable a;
   b : Type;  bd : ml b;         // b has to be importable and exportable
@@ -86,30 +87,40 @@ let export_prog_s
       let tree : io (events_trace * i.c) = reify (f cs) (gio_post pi []) [] in
       export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp i.c (fun p -> forall res. p res)))
 
+let secure_interop (pi:check_type) : compiler = {
+  source = {
+    interface = interface;
+    res   = (fun i -> maybe (events_trace * i.c));
+    prog  = (fun i -> prog_s pi i);
+    ctx   = (fun i -> ctx_s pi i);
+    whole = (fun i -> whole_s pi i);
+  
+    link = (fun i c p -> (fun _ -> p c) <: whole_s pi i);
+  };
 
-let secure_linker (pi:check_type) (i:interface) : linker = {
+  target = {
+    interface = interface;
+    res   = (fun i -> maybe (i.cd.etype));
+    prog  = (fun i -> prog_t i);
+    ctx   = (fun i -> ctx_t i);
+    whole = (fun i -> whole_t i);
+  
+    link = (fun i c p -> (fun _ -> p c) <: whole_t i);
+  };
+
+  cint = (fun i -> i);
+  
   set_of_traces = set_of_traces;
 
-  res_s = maybe (events_trace * i.c);
-  res_t = maybe (i.cd.etype);
-
-  prog_s  = prog_s pi i;    prog_t = prog_t i;
-  ctx_s   = ctx_s pi i;     ctx_t = ctx_t i;
-  whole_s = whole_s pi i;   whole_t = whole_t i;
+  beh_s = (fun i w -> beh_s #unit #i.c pi w ());
+  beh_t = (fun i w -> beh_t #unit #i.cd.etype w ());
   
-  link_s = (fun c p -> (fun _ -> p c) <: whole_s pi i);
-  link_t = (fun c p -> (fun _ -> p c) <: whole_t i);
+  included_in_s = (fun i -> included_in id);
+  included_in_t = (fun i -> included_in #(maybe i.cd.etype) #(maybe (events_trace * i.c)) (inl_app (compose export cdr)));
   
-  beh_s = (fun w -> beh_s #unit #i.c pi w ());
-  beh_t = (fun w -> beh_t #unit #i.cd.etype w ());
-  
-  included_in_s = included_in id;
-  included_in_t = included_in #(maybe i.cd.etype) #(maybe (events_trace * i.c)) (inl_app (compose export cdr));
-  
-  compile_prog  = export_prog_s i pi;
-  compile_whole = _export_GIO_arrow_spec pi;
+  compile_prog  = (fun i -> export_prog_s i pi);
+  compile_whole = (fun i -> _export_GIO_arrow_spec pi);
 }
-
 
 let _export_GIO_lemma
   #t1 {| d1:importable t1 |} 
@@ -315,8 +326,8 @@ let rsp_simple_linking''
   beh_export_ps_ct_in_export_ws i pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
  
 let rsp_simple_linking'
-  (i  : interface)
   (pi : check_type)
+  (i  : interface)
   (ps : prog_s pi i)
   (pi' : set_of_traces (maybe (events_trace * i.c))) :
   Lemma(
@@ -329,11 +340,11 @@ let rsp_simple_linking'
 
 
 let secure_linker_respects_rsp () : 
-  Lemma (forall i pi. rsp (secure_linker pi i)) =
-  let aux i pi : Lemma (rsp (secure_linker pi i)) by (
+  Lemma (forall pi. rsp (secure_interop pi)) =
+  let aux pi : Lemma (rsp (secure_interop pi)) by (
     unfold_def(`rsp);
     explode ();
-    rewrite_lemma 6 7;
+    rewrite_lemma 5 6;
     assumption ()) = begin
-    Classical.forall_intro_2 (rsp_simple_linking' i pi)
-  end in Classical.forall_intro_2 (aux)
+    Classical.forall_intro_3 (rsp_simple_linking' pi)
+  end in Classical.forall_intro (aux)
