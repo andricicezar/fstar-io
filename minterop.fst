@@ -159,14 +159,6 @@ instance exportable_purearrow_spec t1 t2 (pre : t1 -> Type0) (post : t1 -> t2 ->
           export (f x)
         ) else raise Contract_failure) <: M4 d2.etype))
 
-// Example incrs
-let postcond (x:int) (y:int) : Type0 = y = x + 1
-let incrs1 : (x:int) -> Pure int (x > 0) (postcond x) = fun x -> x + 1
-let incrs1' : int -> M4 int = export incrs1
-
-let incrs2  : (x:int) -> Pure int (x > 0) (fun (y:int) -> y = x + 1) = fun x -> x + 1
-let incrs2' : int -> M4 int = export incrs2
-
 let _export_IOStHist_arrow_spec 
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
@@ -179,12 +171,27 @@ let _export_IOStHist_arrow_spec
       | Some x -> (
         // TODO: Cezar: This is not quite right. Instead of [], it should access the 
         // materialized trace from the global state.
+        // This case makes export to be useful only for whole programs.
         if (check2 #t1 #events_trace #pre x []) then (
           let tree : io (events_trace * t2) = reify (f x) (fun r le -> post x [] r le) [] in
           export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))
         ) else M4.raise Contract_failure)
       | None -> M4.raise Contract_failure)
         
+let _export_GIO_arrow_spec 
+  (#t1:Type) {| d1:importable t1 |}
+  (#t2:Type) {| d2:exportable t2 |}
+  (pi_check:check_type)
+  (f:(x:t1 -> GIO t2 pi_check)) : 
+  Tot (d1.itype -> M4 d2.etype) =
+    (fun (x:d1.itype) ->
+      match import x with
+      | Some x -> (
+        // TODO: Cezar: The fact that we pass [] as the starting history means that this is 
+        // correct only if we export whole programs.
+        let tree : io (events_trace * t2) = reify (f x) (gio_post pi_check []) [] in
+        export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res)))
+      | None -> M4.raise Contract_failure)
 
 instance exportable_IOStHist_arrow_spec 
   (t1:Type) {| d1:importable t1 |} 
@@ -194,18 +201,6 @@ instance exportable_IOStHist_arrow_spec
   Tot (exportable ((x:t1) -> IOStHist t2 (pre x) (post x))) = 
     mk_exportable (d1.itype -> M4 d2.etype) (_export_IOStHist_arrow_spec #t1 #d1 #t2 #d2 pre post)
 
-let pre : int -> events_trace -> Type0 = fun x _ -> x = 2
-let post : int -> events_trace -> maybe (events_trace * int) -> events_trace -> Type0 = fun x _ _ _ -> x == 2
-
-val f : (x:int) -> IOStHist int (pre x) (post x)
-let f (x:int) = 5
-
-val f' : int -> M4 int
-let f' = _export_IOStHist_arrow_spec pre post f
-
-// TODO: why is this failing?
-// let f'' = export f
-
 instance exportable_GIO_arrow_spec 
   (t1:Type) {| d1:importable t1 |} 
   (t2:Type) {| d2:exportable t2 |}
@@ -213,23 +208,7 @@ instance exportable_GIO_arrow_spec
   Tot (exportable (t1 -> GIO t2 pi_check)) = 
   mk_exportable 
     (d1.itype -> M4 d2.etype) 
-    (_export_IOStHist_arrow_spec (fun _ -> gio_pre pi_check) (fun _ -> gio_post pi_check))
-
-let pis : check_type = fun _ _ -> true
-let g () : GIO int pis = 5
-// TODO: why is this failing?
-// let g' : unit -> M4 int = export g
-
-
-    // (fun (f:(x:t1 -> IOStHist t2 (pre x) (post x))) ->
-    //   (fun (x:d1.itype) ->
-    //     let x : t1 = exn_import x in
-    //     let s0 : events_trace = M4.get_history () in
-    //     (if check2 #t1 #events_trace #pre x s0 then (
-    //       let tree = reify (f x) (fun r le -> post x s0 r le) in
-    //       let m4repr : M4.irepr t2 (fun p -> forall res. p res) = fun _ -> iost_to_io (tree s0) in 
-    //       export (M4?.reflect (m4repr))
-    //     ) else M4.raise Contract_failure) <: M4 d2.etype))
+    (_export_GIO_arrow_spec pi_check)
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
