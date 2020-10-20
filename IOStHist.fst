@@ -72,14 +72,14 @@ let iosthist_bind_wp (a b:Type) (w : iosthist_wpty a) (kw : a -> iosthist_wpty b
 // THETA
 
 let iosthist_interpretation #a (m : iost a) (s0 : events_trace) (p : iosthist_post a) : Type0 =
-  iohist_interpretation (m s0) s0 (fun r le -> p r le)
+  iohist_interpretation (m s0) (fun r le -> p r le)
 
 // REFINED COMPUTATION MONAD (repr)
 let irepr (a:Type) (wp:iosthist_wpty a) =
   post:iosthist_post a -> h:events_trace ->
     Pure (io (events_trace * a))
       (requires (wp h post))
-      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t h post))
+      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t post))
 
 // let irepr (a:Type) (wp:iosthist_wpty a) =
 //   h:events_trace ->
@@ -106,7 +106,7 @@ let ibind (a b : Type) (wp_v : w a) (wp_f: a -> w b) (v : irepr a wp_v)
         (fun (s1, x) ->
           assume (wp_f x s1 p);
            f x p s1)) in
-    assume (iohist_interpretation t s0 p);
+    assume (iohist_interpretation t p);
     t
 
 unfold

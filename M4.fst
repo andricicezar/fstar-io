@@ -94,5 +94,5 @@ effect M4
 let raise #a (e:exn) : M4wp a (fun p -> p (Inr e)) = 
   M4?.reflect (fun _ -> io_throw _ e)
 
-let get_history () : M4wp events_trace (fun p -> p (Inl [])) = 
+let get_history () : M4wp events_trace (fun p -> p (Inl [])) =
   M4?.reflect (fun _ -> io_return _ [])

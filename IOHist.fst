@@ -45,7 +45,6 @@ unfold let convert_call_to_event (cmd:io_cmds) (args:args cmd) (res:resm cmd) =
 
 let rec iohist_interpretation #a
   (m : io a) 
-  (past_events : events_trace)
   (p : iohist_post a) : Type0 = 
   match m with
   | Return x -> p (Inl x) []
@@ -54,4 +53,4 @@ let rec iohist_interpretation #a
     forall res. (
       FStar.WellFounded.axiom1 fnc res;
       let event : io_event = convert_call_to_event cmd args res in
-      iohist_interpretation (fnc res) (event :: past_events) (gen_post p event)))
+      iohist_interpretation (fnc res) (gen_post p event)))
