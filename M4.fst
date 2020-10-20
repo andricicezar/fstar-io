@@ -6,7 +6,6 @@ open FStar.Tactics
 open Common
 open IO.Free
 open IOHist
-open IOStHist 
 
 let m4_post a = maybe a -> Type0
 let m4_wpty a = m4_post a -> Type0

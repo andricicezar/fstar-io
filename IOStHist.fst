@@ -4,13 +4,11 @@ open FStar.Tactics
 
 open Common
 open FStar.Exn
-open FStar.ST
 include IO.Free
 include IOHist
-include ExtraTactics
 
 // Extraction hack
-val hh : ref events_trace
+val hh : ST.ref events_trace
 let hh = ST.alloc []
 
 let get_history () = !hh
@@ -37,10 +35,10 @@ type iost a = events_trace -> io (events_trace * a)
 
 unfold
 let iost_return (a:Type) (x:a) : iost a = fun s -> io_return (events_trace * a) (s, x)
-  
+
 unfold
 let iost_throw (a:Type) (x:exn) : iost a = fun s -> io_throw (events_trace * a) x
-  
+
 unfold
 let iost_bind (a:Type) (b:Type) (l : iost a) (k : a -> iost b) : iost b =
   fun s -> io_bind (events_trace * a)
