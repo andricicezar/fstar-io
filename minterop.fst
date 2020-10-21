@@ -173,11 +173,11 @@ let _export_IOStHist_arrow_spec
         // materialized trace from the global state.
         // This case makes export to be useful only for whole programs.
         if (check2 #t1 #events_trace #pre x []) then (
-          let tree : io (events_trace * t2) = reify (f x) (fun r le -> post x [] r le) [] in
-          export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))
+          let tree : io (events_trace * t2) = (*IOStHistwp?.*)reify (f x) (fun r le -> post x [] r le) [] in
+          export (MFOUR?.reflect (fun _ -> iost_to_io tree) <: MFOUR t2 (fun p -> forall res. p res))
         ) else M4.raise Contract_failure)
       | None -> M4.raise Contract_failure)
-        
+
 let _export_GIO_arrow_spec 
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
@@ -190,7 +190,7 @@ let _export_GIO_arrow_spec
         // TODO: Cezar: The fact that we pass [] as the starting history means that this is 
         // correct only if we export whole programs.
         let tree : io (events_trace * t2) = reify (f x) (gio_post pi_check []) [] in
-        export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res)))
+        export (MFOUR?.reflect (fun _ -> iost_to_io tree) <: MFOUR t2 (fun p -> forall res. p res)))
       | None -> M4.raise Contract_failure)
 
 instance exportable_IOStHist_arrow_spec 
@@ -260,7 +260,7 @@ instance importable_M4_to_pi_GIO t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
     (fun (f:(d1.etype -> M4 t2)) ->
       let f' : (pi:check_type -> t1 -> GIO t2 pi) = (fun (pi:check_type) (x:t1) ->
         let x : d1.etype = export x in
-        let tree = reify (f x) (fun r -> True) in
+        let tree = (* MFOUR?.*)reify (f x) (fun r -> True) in
         _import_M4_to_GIO #t2 tree pi <: GIO t2 pi) in Some f')
 
 instance importable_M4_to_GIO 

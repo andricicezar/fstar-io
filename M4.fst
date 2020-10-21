@@ -67,10 +67,12 @@ let i_if_then_else (a : Type) (wp1 wp2 : w a) (f : irepr a wp1) (g : irepr a wp2
   irepr a (wp_if_then_else wp1 wp2 b)
 
 total
-reifiable
+reifiable (* this means that we are not using a primitive ML implementation of
+             this effect, but we're instead linking with ML code written in
+             in the irepr monad, which is not as useful in practice *)
 reflectable
 layered_effect {
-  M4wp : a:Type -> wp : m4_wpty a -> Effect
+  MFOUR : a:Type -> wp : m4_wpty a -> Effect
   with
        repr       = irepr
      ; return     = ireturn
@@ -79,20 +81,17 @@ layered_effect {
      ; subcomp      = isubcomp
      ; if_then_else = i_if_then_else
 }
-  
-let lift_pure_m4wp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
+
+let lift_pure_mfour (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
   Pure (irepr a (fun p -> wp (fun r -> p (Inl r)))) (requires True)
                     (ensures (fun _ -> True))
   = fun p -> let r = elim_pure #a #wp f (fun r -> p (Inl r)) in io_return a r
 
-sub_effect PURE ~> M4wp = lift_pure_m4wp
+sub_effect PURE ~> MFOUR = lift_pure_mfour
 
 effect M4
   (a:Type) =
-  M4wp a (fun (p:m4_post a) -> forall res. p res)
+  MFOUR a (fun (p:m4_post a) -> forall res. p res)
 
-let raise #a (e:exn) : M4wp a (fun p -> p (Inr e)) = 
+let raise #a (e:exn) : MFOUR a (fun p -> p (Inr e)) =
   M4?.reflect (fun _ -> io_throw _ e)
-
-let get_history () : M4wp events_trace (fun p -> p (Inl [])) =
-  M4?.reflect (fun _ -> io_return _ [])

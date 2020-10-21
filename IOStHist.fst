@@ -162,7 +162,7 @@ exception Contract_failure
 
 let get () : IOStHistwp events_trace (fun s0 p -> p (Inl (s0, s0)) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_return (events_trace * events_trace) (s0, s0))
-  
+
 let throw (err:exn) : IOStHistwp events_trace (fun s0 p -> p (Inr err) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_throw _ err)
 
