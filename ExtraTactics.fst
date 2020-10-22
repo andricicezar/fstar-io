@@ -67,13 +67,14 @@ let let_intro () : Tac unit =
       iterAll (fun () -> ignore (intro ()); ignore (intro ()); grewrite_eq (intro ()))
     )
 
-let rewrite_lemma () : Tac unit =
-    let _ = forall_intro () in (* pure_result, useless *)
-    let b = implies_intro () in (* forall r1. .... *)
-    let _ = forall_intro () in (* any_result *)
-
-    // instantiate the quantified variables with fresh uvars
-    let b' = instantiate (binder_to_term b) (`()) in
+let rewrite_lemma (n:nat) (m:nat) : Tac unit =
+    let zz = match (List.Tot.nth (cur_binders ()) n) with
+    | Some y -> y | None -> fail "no binder" in
+    
+    let zz' = match (List.Tot.nth (cur_binders ()) m) with
+    | Some y -> y | None -> fail "no binder" in
+    
+    let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
     mapply (binder_to_term b')
  
     // by (explode (); bump_nth 3; 
@@ -97,6 +98,12 @@ let copy_binder (b:binder) : Tac binder =
     exact (binder_to_term b);
     nb
   )
+
+let get_binder (n:nat) : Tac binder =
+  match (List.Tot.nth (cur_binders ()) n) with
+  | Some y -> y 
+  | None -> fail "no binder"
+  
 
 let rec instantiate_multiple_foralls (b:binder) (l : list term) : Tac binder =
   match l with

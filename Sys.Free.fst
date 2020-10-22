@@ -16,10 +16,11 @@ type sysf op (s : cmd_sig op) a =
 
 // #pop-options
 
-val sysf_fmap : (#a:Type) -> (#b:Type) -> (#op:Type) -> (#s:cmd_sig op) -> (a -> b) -> sysf op s a -> sysf op s b
-let sysf_fmap #a #b #op #s f m =
+val sysf_fmap : (#a:Type) -> (#b:Type) -> (#op:Type) -> (#s:cmd_sig op) ->
+                m:sysf op s a -> (x:a{x<<m} -> b) -> sysf op s b
+let sysf_fmap #a #b #op #s m f=
   match m with
-  | Call cmd args fnc -> Call cmd args (fun i -> f (fnc i))
+  | Call cmd args fnc -> Call cmd args (fun i -> FStar.WellFounded.axiom1 fnc i; f (fnc i))
 
 noeq
 type sys (op:Type u#o) (s:cmd_sig op) (a:Type u#a) : Type u#(max o a) =
@@ -34,9 +35,8 @@ let rec sys_bind (op:Type u#o) (s:cmd_sig op) (a:Type u#a) (b:Type u#b) (l : sys
   match l with
   | Return x -> k x 
   | Throw err -> Throw err 
-  | Cont t -> Cont (sysf_fmap (fun fnci ->
-      assume (fnci <<  l);
-      sys_bind op s a b fnci k) t)
+  | Cont t -> Cont (sysf_fmap t (fun fnci ->
+      sys_bind op s a b fnci k))
 
 val lift_error : (#op:Type) -> (#s:cmd_sig op) -> (#a:Type) -> (maybe a) -> sys op s a
 let lift_error #op #s #a v =
@@ -47,9 +47,9 @@ let lift_error #op #s #a v =
 val sys_perform : (#op:Type) -> (#s:cmd_sig op) -> (#a:Type) -> sysf op s (maybe a) -> sys op s a
 let sys_perform #op #s #a v = 
   sys_bind op s (maybe a) (a) 
-    (Cont (sysf_fmap #(maybe a) #_ (Return) v))
+    (Cont (sysf_fmap #(maybe a) #_ v Return))
     lift_error
 
-let rec sys_map (op:Type u#o) (s:cmd_sig op) (a:Type u#a) (b:Type u#b) (l : sys op s a) (k : a -> b) : sys op s b =
+let sys_map (op:Type u#o) (s:cmd_sig op) (a:Type u#a) (b:Type u#b) (l : sys op s a) (k : a -> b) : sys op s b =
   sys_bind op s a b 
     l (fun a -> sys_return op s b (k a))

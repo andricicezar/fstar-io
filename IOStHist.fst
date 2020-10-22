@@ -4,19 +4,9 @@ open FStar.Tactics
 
 open Common
 open FStar.Exn
-open FStar.ST
 include IO.Free
 include IOHist
-include ExtraTactics
 
-// Extraction hack
-val hh : ref events_trace
-let hh = ST.alloc []
-
-let get_history () = !hh
-let update_history (event) =
-  hh := event :: !hh
-  
 // UTILS
 let rec is_open (fd:file_descr) (past_events: events_trace) :
   Tot bool =
@@ -37,10 +27,10 @@ type iost a = events_trace -> io (events_trace * a)
 
 unfold
 let iost_return (a:Type) (x:a) : iost a = fun s -> io_return (events_trace * a) (s, x)
-  
+
 unfold
 let iost_throw (a:Type) (x:exn) : iost a = fun s -> io_throw (events_trace * a) x
-  
+
 unfold
 let iost_bind (a:Type) (b:Type) (l : iost a) (k : a -> iost b) : iost b =
   fun s -> io_bind (events_trace * a)
@@ -74,14 +64,14 @@ let iosthist_bind_wp (a b:Type) (w : iosthist_wpty a) (kw : a -> iosthist_wpty b
 // THETA
 
 let iosthist_interpretation #a (m : iost a) (s0 : events_trace) (p : iosthist_post a) : Type0 =
-  iohist_interpretation (m s0) s0 (fun r le -> p r le)
+  iohist_interpretation (m s0) (fun r le -> p r le)
 
 // REFINED COMPUTATION MONAD (repr)
 let irepr (a:Type) (wp:iosthist_wpty a) =
   post:iosthist_post a -> h:events_trace ->
     Pure (io (events_trace * a))
       (requires (wp h post))
-      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t h post))
+      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t post))
 
 // let irepr (a:Type) (wp:iosthist_wpty a) =
 //   h:events_trace ->
@@ -108,7 +98,7 @@ let ibind (a b : Type) (wp_v : w a) (wp_f: a -> w b) (v : irepr a wp_v)
         (fun (s1, x) ->
           assume (wp_f x s1 p);
            f x p s1)) in
-    assume (iohist_interpretation t s0 p);
+    assume (iohist_interpretation t p);
     t
 
 unfold
@@ -164,7 +154,7 @@ exception Contract_failure
 
 let get () : IOStHistwp events_trace (fun s0 p -> p (Inl (s0, s0)) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_return (events_trace * events_trace) (s0, s0))
-  
+
 let throw (err:exn) : IOStHistwp events_trace (fun s0 p -> p (Inr err) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_throw _ err)
 
@@ -208,23 +198,20 @@ let rec enforced_locally (check : (events_trace -> action_type -> bool)) (acc : 
          enforced_locally (check) (h::acc) t
        else false
 
-let some_wp (cmd : io_cmds) (argz: args cmd) = (fun s0 p -> 
-  // precondition
-  (default_check s0 (| cmd, argz |)) /\
-  (forall (result:maybe (events_trace * (res cmd))) local_trace.
-      (match result with
-      | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace)) /\
-          enforced_locally default_check s0 local_trace
-      | Inr _ -> True) ==>  p result local_trace))
-
 let ioo_bind #a #b = io_bind a b
 
-let static_cmd
+let unsafe_cmd
   (cmd : io_cmds)
   (argz : args cmd) :
-  IOStHistwp (res cmd) (some_wp cmd argz)
+  IOStHist (res cmd) 
+    (requires (fun _ -> True))
+    (ensures (fun s0 result local_trace ->
+      match result with
+      | Inl v -> let (s1, r) = v in (
+          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+          s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+          local_trace == [convert_call_to_event cmd argz (Inr err)]))
   by (
     let cmd' = match List.Tot.nth (cur_binders ()) 0 with
     | Some x -> x | None -> fail "verification condition changed" in
@@ -233,13 +220,27 @@ let static_cmd
       ignore(intro ());
       rewrite_eqs_from_context ();
       compute ()
-    )
-  ) =
-  IOStHistwp?.reflect(fun p (s0:events_trace) -> 
+    )) =
+  IOStHistwp?.reflect(fun p (s0:events_trace) ->
       ((io_all cmd argz) `ioo_bind` 
       (fun r -> io_return _ (s0, r))) `ioo_bind`
       (fun (s0, rez) -> io_return _ ((convert_call_to_event cmd argz (Inl rez)) :: s0, rez))
   )
+
+let static_cmd
+  (cmd : io_cmds)
+  (argz : args cmd) :
+  IOStHist (res cmd)
+    (requires (fun s0 -> default_check s0 (| cmd, argz |)))
+    (ensures (fun s0 result local_trace ->
+      (match result with
+      | Inl v -> let (s1, r) = v in (
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)])
+      /\  enforced_locally default_check s0 local_trace)) =
+  unsafe_cmd cmd argz
 
 let pi_static_cmd
   (cmd : io_cmds)
@@ -249,14 +250,15 @@ let pi_static_cmd
     (requires (fun s0 ->
       default_check s0 (| cmd, argz |) &&
       pi_check s0 (| cmd, argz |)))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) =
   static_cmd cmd argz
 
 exception GIO_default_check_failed
@@ -268,14 +270,16 @@ let mixed_cmd
   (argz : args cmd) :
   IOStHist (res cmd)
     (requires (fun s0 -> default_check s0 (| cmd, argz |)))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)] \/
+         local_trace == [])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) =
   let s0 = get () in
   let action = (| cmd, argz |) in
   match pi_check s0 action with
@@ -286,97 +290,49 @@ let dynamic_cmd
   (cmd : io_cmds)
   (pi_check : check_type)
   (argz : args cmd) :
-  IOStHist (res cmd)
+  IOStHist (res cmd) 
     (requires (fun s0 -> True))
-    (ensures (fun s0 (result:maybe (events_trace * (res cmd))) local_trace ->
+    (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
-          local_trace == [convert_call_to_event cmd argz (Inl r)] /\
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_locally default_check s0 local_trace /\
-          enforced_locally pi_check s0 local_trace)
-      | Inr _ -> True))) =
+         local_trace == [convert_call_to_event cmd argz (Inl r)] /\
+         s1 == (apply_changes s0 local_trace))
+      | Inr err ->
+         local_trace == [convert_call_to_event cmd argz (Inr err)] \/
+         local_trace == [])
+      /\ enforced_locally default_check s0 local_trace
+      /\ enforced_locally pi_check s0 local_trace)) = 
   let s0 = get () in
   let action = (| cmd, argz |) in
   match default_check s0 action with
   | true -> mixed_cmd cmd pi_check argz
   | false -> throw GIO_default_check_failed
 
+let gio_pre (pi_check : check_type) (s0:events_trace) : Type0 =
+  enforced_globally default_check s0 &&
+  enforced_globally pi_check s0
+
+let gio_post 
+  #a 
+  (pi_check : check_type)
+  (s0:events_trace)
+  (result:maybe (events_trace * a))
+  (local_trace:events_trace) :
+  Tot Type0 =
+  enforced_globally (default_check) (apply_changes s0 local_trace) /\
+  enforced_globally (pi_check) (apply_changes s0 local_trace) /\
+  (match result with
+  | Inl v -> let (s1, r) = v in s1 == (apply_changes s0 local_trace)
+  | Inr _ -> True)
+
 effect GIO
   (a:Type)
   (pi_check : check_type) =
   IOStHist a
-    (requires (fun s0 ->
-      enforced_globally default_check s0 &&
-      enforced_globally pi_check s0))
-    (ensures (fun s0 (result) local_trace ->
-      (match result with
-      | Inl v -> let (s1, r) = v in (
-          s1 == (apply_changes s0 local_trace) /\
-          enforced_globally (default_check) s1 /\
-          enforced_globally (pi_check) s1)
-      | Inr _ -> True)))
+    (requires (gio_pre pi_check))
+    (ensures (gio_post pi_check))
 
-val to_runtime_check : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
-  ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
-  Tot ((x:t1) -> IOStHist t2 (fun _ -> True) (fun s0 result le ->
-    post x s0 result le /\
-    // this is trying to enforce the pre condition, but this is not enough
-    // I suppose a match on result is needed and checked if it was a contract_failure or not
-    (match result with
-    | Inr Contract_failure -> le == []
-    | _ -> pre x s0)))
-
-
-
-val enforce : (#t1:Type) -> (#t2:Type) -> pre:(t1->events_trace->Type0) -> post:(t1->events_trace->maybe (events_trace * t2)->events_trace->Type0) ->
-  (pi_check:check_type) -> ((x:t1) -> IOStHist t2 (pre x) (post x)) -> 
-  Tot ((x:t1) -> IOStHist t2 (pre x) (fun s0 result le ->
-    post x s0 result le /\
-    (match result with
-    | Inl v -> let (s1, r) = v in (
-        s1 == (apply_changes s0 le) /\
-        // this one does not make sense
-        enforced_globally (pi_check) s1)
-    | Inr _ -> True)))
-    
-
-type set_of_traces = events_trace -> Type0
-
-val include_in : set_of_traces -> set_of_traces -> Type0
-let include_in s1 s2 = forall t. s1 t ==>  s2 t
-
-let rec behavior #a
-  (m : io a) : set_of_traces =
-  match m with
-  | Return x -> fun t -> t == []
-  | Throw err -> fun t -> t == []
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (fun t' -> 
-      (exists res t. (
-         FStar.WellFounded.axiom1 fnc res;
-         (behavior (fnc res) t) /\
-         t' == ((convert_call_to_event cmd args res)::t))))
-  end
-
-let include_in_trans #a #b #c () : Lemma (
-  forall (t1:io a) (t2:io b) (t3:io c). behavior t1 `include_in` behavior t2 /\ behavior t2 `include_in` behavior t3 ==>
-    behavior t1 `include_in` behavior t3) = ()
-
-let rec iost_to_io #t2 (tree : io (events_trace * t2)) : 
-  Pure (io t2)
-    (requires True)
-    (ensures (fun (res:io t2) -> True)) =
-      // behavior res `include_in` behavior tree)) =
-  match tree with
-  | Return (s1, r) -> Return r
-  | Throw r -> Throw r
-  | Cont (Call cmd argz fnc) ->
-  //   io_bind (events_trace * t2) t2
-  //     (Cont (Call cmd argz fnc))
-  //     (fun (_, r) -> io_return _ r)
-
-     Cont (Call cmd argz (fun res -> 
-       WellFounded.axiom1 fnc res;
-       iost_to_io (fnc res)))
+let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
+  io_bind (events_trace * t2) t2
+    tree
+    (fun r -> io_return _ (cdr r))

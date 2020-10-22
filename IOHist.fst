@@ -8,9 +8,9 @@ open IO.Free
 
 noeq
 type io_event =
-    | EOpenfile : args Openfile -> resm Openfile -> io_event
-    | ERead : args Read -> resm Read -> io_event
-    | EClose : args Close -> resm Close -> io_event
+    | EOpenfile : a:args Openfile -> (r:resm Openfile) -> io_event
+    | ERead : a:args Read -> (r:resm Read) -> io_event
+    | EClose : a:args Close -> (r:resm Close) -> io_event
 
 type events_trace = list io_event
 
@@ -45,48 +45,12 @@ unfold let convert_call_to_event (cmd:io_cmds) (args:args cmd) (res:resm cmd) =
 
 let rec iohist_interpretation #a
   (m : io a) 
-  (past_events : events_trace)
   (p : iohist_post a) : Type0 = 
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (forall res. (
+  | Cont (Call cmd args fnc) -> (
+    forall res. (
       FStar.WellFounded.axiom1 fnc res;
       let event : io_event = convert_call_to_event cmd args res in
-      iohist_interpretation (fnc res) (event :: past_events) (gen_post p event)))
-  end
-
-
-let rec fin_prefs #a
-  (m : io a) 
-  (past_events : events_trace) 
-  (traces : list events_trace) : Type0 = 
-  match m with
-  | Return x -> past_events `List.memP` traces
-  | Throw err -> past_events `List.memP` traces
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (forall res. (
-      FStar.WellFounded.axiom1 fnc res;
-      let event : io_event = convert_call_to_event cmd args res in
-      fin_prefs (fnc res) (event :: past_events) traces))
-  end
-
-(* total *)
-(* reifiable *)
-(* reflectable *)
-(* new_effect { *)
-(*   IOHist : a:Type -> Effect *)
-(*   with  *)
-(*        repr       = io *)
-(*      ; return     = io_return *)
-(*      ; bind       = io_bind *)
-
-(*      ; wp_type    = iohist_wpty *)
-(*      ; return_wp  = iohist_return_wp *)
-(*      ; bind_wp    = iohist_bind_wp *)
-
-(*      ; interp     = iohist_interpretation *)
-(* } *)
+      iohist_interpretation (fnc res) (gen_post p event)))
