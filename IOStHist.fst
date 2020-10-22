@@ -4,13 +4,11 @@ open FStar.Tactics
 
 open Common
 open FStar.Exn
-open FStar.ST
 include IO.Free
 include IOHist
-include ExtraTactics
 
 // Extraction hack
-val hh : ref events_trace
+val hh : ST.ref events_trace
 let hh = ST.alloc []
 
 let get_history () = !hh
@@ -37,10 +35,10 @@ type iost a = events_trace -> io (events_trace * a)
 
 unfold
 let iost_return (a:Type) (x:a) : iost a = fun s -> io_return (events_trace * a) (s, x)
-  
+
 unfold
 let iost_throw (a:Type) (x:exn) : iost a = fun s -> io_throw (events_trace * a) x
-  
+
 unfold
 let iost_bind (a:Type) (b:Type) (l : iost a) (k : a -> iost b) : iost b =
   fun s -> io_bind (events_trace * a)
@@ -74,14 +72,14 @@ let iosthist_bind_wp (a b:Type) (w : iosthist_wpty a) (kw : a -> iosthist_wpty b
 // THETA
 
 let iosthist_interpretation #a (m : iost a) (s0 : events_trace) (p : iosthist_post a) : Type0 =
-  iohist_interpretation (m s0) s0 (fun r le -> p r le)
+  iohist_interpretation (m s0) (fun r le -> p r le)
 
 // REFINED COMPUTATION MONAD (repr)
 let irepr (a:Type) (wp:iosthist_wpty a) =
   post:iosthist_post a -> h:events_trace ->
     Pure (io (events_trace * a))
       (requires (wp h post))
-      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t h post))
+      (ensures (fun (t:io (events_trace * a)) -> iohist_interpretation t post))
 
 // let irepr (a:Type) (wp:iosthist_wpty a) =
 //   h:events_trace ->
@@ -108,7 +106,7 @@ let ibind (a b : Type) (wp_v : w a) (wp_f: a -> w b) (v : irepr a wp_v)
         (fun (s1, x) ->
           assume (wp_f x s1 p);
            f x p s1)) in
-    assume (iohist_interpretation t s0 p);
+    assume (iohist_interpretation t p);
     t
 
 unfold
@@ -164,7 +162,7 @@ exception Contract_failure
 
 let get () : IOStHistwp events_trace (fun s0 p -> p (Inl (s0, s0)) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_return (events_trace * events_trace) (s0, s0))
-  
+
 let throw (err:exn) : IOStHistwp events_trace (fun s0 p -> p (Inr err) []) =
   IOStHistwp?.reflect(fun _ s0 -> io_throw _ err)
 
