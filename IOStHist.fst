@@ -7,14 +7,6 @@ open FStar.Exn
 include IO.Free
 include IOHist
 
-// Extraction hack
-val hh : ST.ref events_trace
-let hh = ST.alloc []
-
-let get_history () = !hh
-let update_history (event) =
-  hh := event :: !hh
-  
 // UTILS
 let rec is_open (fd:file_descr) (past_events: events_trace) :
   Tot bool =

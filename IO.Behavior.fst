@@ -6,6 +6,7 @@ open FStar.Tactics
 open Common
 open IO.Free
 open IOStHist
+open M4
 
 type set_of_traces (a:Type) = events_trace * a -> Type0
 
@@ -96,8 +97,8 @@ let beh_extend_trace_in_bind
     == {}
     sys_bind io_cmds io_cmd_sig a b (Cont (Call cmd argz fnc)) k;
     == { _ by (norm [iota; delta]; compute ()) }
-    Cont (sysf_fmap (fun fnci -> 
-      sys_bind io_cmds io_cmd_sig a b fnci k) (Call cmd argz fnc));
+    Cont (sysf_fmap (Call cmd argz fnc) 
+      (fun fnci -> sys_bind io_cmds io_cmd_sig a b fnci k));
     == { _ by (unfold_def(`sysf_fmap); norm [iota]; unfold_def(`io_bind)) }
     Cont (Call cmd argz (fun rez -> 
       io_bind a b (fnc rez) k));
@@ -200,7 +201,7 @@ let rec beh_bind_tot_0
   (r1:maybe b)
   (t:events_trace) :
   Lemma 
-    (requires (behavior (io_bind a b f (fun x -> M4.lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)))
+    (requires (behavior (io_bind a b f (fun x -> M4.lift_pure_mfour b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)))
     (ensures (exists r2. inl_app g r2 == r1 /\ behavior f (t, r2)))  =
   match f with
   | Return x -> 
@@ -221,7 +222,7 @@ let beh_bind_tot
   (f:io a)
   (g:a -> Tot b) :
   Lemma 
-    (forall r1 t. (behavior (io_bind a b f (fun x -> M4.lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)) ==>  (exists r2. r1 == inl_app g r2 /\ behavior f (t,r2))) =
+    (forall r1 t. (behavior (io_bind a b f (fun x -> M4.lift_pure_mfour b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)) ==>  (exists r2. r1 == inl_app g r2 /\ behavior f (t,r2))) =
   Classical.forall_intro_2 (Classical.move_requires_2 (beh_bind_tot_0 f g))
 
 let beh_included_bind_tot
@@ -230,7 +231,7 @@ let beh_included_bind_tot
   (g:a -> Tot b) :
   Lemma
     (included_in (inl_app g)
-      (behavior (io_bind a b f (fun x -> M4.lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
+      (behavior (io_bind a b f (fun x -> M4.lift_pure_mfour b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
       (behavior f)) = 
   beh_bind_tot f g
 
@@ -271,12 +272,11 @@ let beh_included_in_merge_f_g x y z f g:
 let beh_implies_iohist_interp 
   (a : Type)
   (m : io (events_trace * a)) 
-  (h : events_trace)
   (t : events_trace)
   (r : maybe (events_trace * a)) :
   Lemma 
     (requires (behavior m (t,r)))
-    (ensures (iohist_interpretation m h (fun res le -> (t,res) == (le,r)))) = 
+    (ensures (iohist_interpretation m (fun res le -> (t,res) == (le,r)))) = 
   match m with
   | Return _ -> ()
   | Throw _ -> ()
@@ -300,30 +300,28 @@ let iohist_interp_shift_trace
   (argz : args cmd)
   (rez : resm cmd)
   (fnc : resm cmd -> io a)
-  (h:events_trace)
   p:
   Lemma 
-    (requires (iohist_interpretation (Cont (Call cmd argz fnc)) h p))
+    (requires (iohist_interpretation (Cont (Call cmd argz fnc)) p))
     (ensures (
-      iohist_interpretation (fnc rez) (convert_call_to_event cmd argz rez :: h) (gen_post p (convert_call_to_event cmd argz rez)))) = 
+      iohist_interpretation (fnc rez) (gen_post p (convert_call_to_event cmd argz rez)))) = 
   calc (==) {
-    iohist_interpretation (Cont (Call cmd argz fnc)) h p;
+    iohist_interpretation (Cont (Call cmd argz fnc)) p;
     == { _ by (compute ())}
     (forall res. (
       let event : io_event = convert_call_to_event cmd argz res in
-      iohist_interpretation (fnc res) (event :: h) (gen_post p event)));
+      iohist_interpretation (fnc res) (gen_post p event)));
   }
 
 let rec gio_interpretation_implies_set_of_traces
   (a : Type)
   (pi : check_type)
   (m : io (events_trace * a)) 
-  (h : events_trace)
   (le : events_trace)
   (r : maybe (events_trace * a)) 
   p :
   Lemma 
-    (requires (iohist_interpretation m h p) /\ behavior m (le, r))
+    (requires (iohist_interpretation m p) /\ behavior m (le, r))
     (ensures (p r le)) =
   match m with
   | Return _ -> ()
@@ -333,8 +331,8 @@ let rec gio_interpretation_implies_set_of_traces
     let rez : resm cmd = extract_result cmd ht1 in
     FStar.WellFounded.axiom1 fnc rez;
     beh_shift_trace cmd argz rez fnc tt1 r;
-    iohist_interp_shift_trace cmd argz rez fnc h p;
-    gio_interpretation_implies_set_of_traces a pi (fnc rez) (convert_call_to_event cmd argz rez :: h) tt1 r (gen_post p (convert_call_to_event cmd argz rez))
+    iohist_interp_shift_trace cmd argz rez fnc p;
+    gio_interpretation_implies_set_of_traces a pi (fnc rez) tt1 r (gen_post p (convert_call_to_event cmd argz rez))
   end
 
 
@@ -354,7 +352,7 @@ let beh_gio_implies_post
     (requires (beh pi ws x (t, r)))
     (ensures  (gio_post pi [] r t)) =
   let ws' = reify (ws x) (gio_post pi []) [] in
-  gio_interpretation_implies_set_of_traces b pi ws' [] t r (gio_post pi []) 
+  gio_interpretation_implies_set_of_traces b pi ws' t r (gio_post pi []) 
 
 let beh_gio_in_pi_0 
   (a b : Type)

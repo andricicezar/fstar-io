@@ -341,94 +341,94 @@ let plugin1 : file_descr -> M4 unit = fun fd ->
 // the post has to accept as a result any errors, espicially 
 // Contract_failure
 
-let extract_local_events (s0 s1:events_trace) :
-  Pure events_trace
-    (requires (exists le. s1 == apply_changes s0 le))
-    (ensures (fun le -> s1 == apply_changes s0 le)) = 
-  admit ();
-  assert (List.length s1 >= List.length s0);
-  let n : nat = (List.length s1) - (List.length s0) in
-  let (le, _) = List.Tot.Base.splitAt n s1 in
-  List.rev le
+// let extract_local_events (s0 s1:events_trace) :
+//   Pure events_trace
+//     (requires (exists le. s1 == apply_changes s0 le))
+//     (ensures (fun le -> s1 == apply_changes s0 le)) = 
+//   admit ();
+//   assert (List.length s1 >= List.length s0);
+//   let n : nat = (List.length s1) - (List.length s0) in
+//   let (le, _) = List.Tot.Base.splitAt n s1 in
+//   List.rev le
 
 
-let _import_M44_to_GIO
-  (t1:Type) {| d1:exportable t1 |}
-  (t2:Type) {| d2:ml t2 |}
-  (f:(d1.etype -> M4 t2))
-  (pi:check_type) :
-  Tot (t1 -> GIO t2 pi) = admit ()
+// let _import_M44_to_GIO
+//   (t1:Type) {| d1:exportable t1 |}
+//   (t2:Type) {| d2:ml t2 |}
+//   (f:(d1.etype -> M4 t2))
+//   (pi:check_type) :
+//   Tot (t1 -> GIO t2 pi) = admit ()
 
-let someother
-  (t1:Type) {| d1:exportable t1 |}
-  (t2:Type) {| d2:ml t2 |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) 
-  (_:squash (forall x err s0 le. post x s0 (Inr err) le == true))
-  {| d3:checkable4 post |}
-  (f:(d1.etype -> M4 t2))
-  (pi:check_type)
-  (x:t1) :
-  IOStHist t2
-    (gio_pre pi)
-    (fun h res le -> gio_post pi h res le /\ post x h res le) 
-  by (
-    explode ();
-    bump_nth 23;
-    let zz = get_binder 13 in 
-    focus (fun () ->
-      let _ = t_destruct zz in
-      iterAll (fun () ->
-        let bs = repeat intro in
-        let b = last bs in (* this one is the equality *)
-        rewrite_eqs_from_context ();
-        norm [iota];
-        ())
-    );
-    let aq = get_binder 16 in
-    focus (fun () -> 
-      let _ = t_destruct aq in
-      let bs1 = intro () in
-      let br = intro () in
-      let b = intro () in (* this one is the equality *)
-      rewrite_eqs_from_context ();
-      norm [iota];
-      let goal = match (List.Tot.Base.nth (goals ()) 0) with
-      | Some z -> z | None -> fail "Asd" in
-      let _ = inspect (goal) in
-      ()
-    );
-    dump "h"
-  ) =
-  // rev_append_rev_append ();
-  // assume (forall x err s0 le. post x s0 (Inr err) le == true);
-  let (f':t1 -> GIO t2 pi) = _import_M44_to_GIO t1 t2 f pi in
-  let s0 : events_trace = IOStHist.get () in
-  let result : t2 = f' x in
-  let s1 : events_trace = IOStHist.get () in
-  let le = extract_local_events s0 s1 in
+// let someother
+//   (t1:Type) {| d1:exportable t1 |}
+//   (t2:Type) {| d2:ml t2 |}
+//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) 
+//   (_:squash (forall x err s0 le. post x s0 (Inr err) le == true))
+//   {| d3:checkable4 post |}
+//   (f:(d1.etype -> M4 t2))
+//   (pi:check_type)
+//   (x:t1) :
+//   IOStHist t2
+//     (gio_pre pi)
+//     (fun h res le -> gio_post pi h res le /\ post x h res le) 
+//   by (
+//     explode ();
+//     bump_nth 23;
+//     let zz = get_binder 13 in 
+//     focus (fun () ->
+//       let _ = t_destruct zz in
+//       iterAll (fun () ->
+//         let bs = repeat intro in
+//         let b = last bs in (* this one is the equality *)
+//         rewrite_eqs_from_context ();
+//         norm [iota];
+//         ())
+//     );
+//     let aq = get_binder 16 in
+//     focus (fun () -> 
+//       let _ = t_destruct aq in
+//       let bs1 = intro () in
+//       let br = intro () in
+//       let b = intro () in (* this one is the equality *)
+//       rewrite_eqs_from_context ();
+//       norm [iota];
+//       let goal = match (List.Tot.Base.nth (goals ()) 0) with
+//       | Some z -> z | None -> fail "Asd" in
+//       let _ = inspect (goal) in
+//       ()
+//     );
+//     dump "h"
+//   ) =
+//   // rev_append_rev_append ();
+//   // assume (forall x err s0 le. post x s0 (Inr err) le == true);
+//   let (f':t1 -> GIO t2 pi) = _import_M44_to_GIO t1 t2 f pi in
+//   let s0 : events_trace = IOStHist.get () in
+//   let result : t2 = f' x in
+//   let s1 : events_trace = IOStHist.get () in
+//   let le = extract_local_events s0 s1 in
 
-  // // the casting is done wrongly because you don't have an extra le...
-  // // in a way this is not correct because it uses the materialized le ^ and the ghost le
-  // // without realizing that are the same thing.
-  if check4 #t1 #t2 #post #d3 x s0 (Inl (s1, result)) le then (
-    assert (post x s0 (Inl (s1, result)) le);
-    result
-  ) else (
-    IOStHist.throw Contract_failure
-  )
+//   // // the casting is done wrongly because you don't have an extra le...
+//   // // in a way this is not correct because it uses the materialized le ^ and the ghost le
+//   // // without realizing that are the same thing.
+//   if check4 #t1 #t2 #post #d3 x s0 (Inl (s1, result)) le then (
+//     assert (post x s0 (Inl (s1, result)) le);
+//     result
+//   ) else (
+//     IOStHist.throw Contract_failure
+//   )
   
 
 
-instance importable_M4_to_IOStHist 
-  (t1:Type) {| d1:exportable t1 |}
-  (t2:Type) {| d2:ml t2 |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) 
-  {| checkable4 post |} :
-  Tot (importable (x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le))) =
-  mk_importable 
-    (d1.etype -> M4 t2) 
-    #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
-    (fun (f:(d1.etype -> M4 t2)) -> Some (someother t1 t2 post f))
+// instance importable_M4_to_IOStHist 
+//   (t1:Type) {| d1:exportable t1 |}
+//   (t2:Type) {| d2:ml t2 |}
+//   (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) 
+//   {| checkable4 post |} :
+//   Tot (importable (x:t1 -> IOStHistwp t2 (fun s0 p -> forall res le. post x s0 res le ==>  p res le))) =
+//   mk_importable 
+//     (d1.etype -> M4 t2) 
+//     #(x:t1 -> IOStHistwp t2 (fun s0 p -> forall restl le. post x s0 restl le ==>  p restl le)) 
+//     (fun (f:(d1.etype -> M4 t2)) -> Some (someother t1 t2 post f))
 
 
 
