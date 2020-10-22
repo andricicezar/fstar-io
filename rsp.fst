@@ -7,372 +7,133 @@ open Common
 open IOStHist
 open M4
 open Minterop
+open IO.Behavior
 
-type set_of_traces (a:Type) = events_trace * a -> Type0
+noeq type language = {
+  interface : Type;
 
-val included_in : (#a:Type) -> (#b:Type) -> (b -> a) -> set_of_traces a -> set_of_traces b -> Type0
-let included_in rel s1 s2 = forall t r1. s1 (t, r1) ==>  (exists r2. rel r2 == r1 /\ s2 (t, r2))
+  res : interface -> Type;
+  
+  prog: interface -> Type;
+  ctx : interface -> Type;
+  whole : interface -> Type;
 
-let rec behavior #a
-  (m : io a) : set_of_traces (maybe a) =
-  match m with
-  | Return x -> fun t -> t == ([], Inl x)
-  | Throw err -> fun t -> t == ([], Inr err)
-  | Cont t -> begin
-    match t with
-    | Call cmd args fnc -> (fun (t', r') -> 
-      (exists (res:resm cmd) t. (
-         FStar.WellFounded.axiom1 fnc res;
-         (behavior (fnc res) (t,r')) /\
-         t' == (convert_call_to_event cmd args res)::t)))
-  end
+  link : (i:interface) -> ctx i -> prog i -> whole i;
+}
 
-let empty_set (#a:Type) () : set_of_traces a = fun (t,r) -> t == []
+noeq type compiler = {
+  source : language;
+  target : language;
 
-let beh_shift_trace
-  #a
-  (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
-  (t:events_trace)
-  (r:maybe a) :
-  Lemma 
-    (requires (behavior (Cont (Call cmd argz fnc)) ((convert_call_to_event cmd argz rez :: t), r)))
-    (ensures (behavior (fnc rez) (t, r))) = 
-  () 
+  cint : source.interface -> target.interface;
 
-let beh_extend_trace 
-  #a
-  (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
-  (t:events_trace)
-  (r:maybe a) :
-  Lemma
-    (requires (behavior (fnc rez) (t, r)))
-    (ensures (behavior (Cont (Call cmd argz fnc)) ((convert_call_to_event cmd argz rez) :: t, r))) 
-  by (compute ()) = 
-  ()
+  set_of_traces : Type -> Type;
+  beh_s : (i:source.interface) -> source.whole i -> set_of_traces (source.res i);
+  beh_t : (i:source.interface) -> target.whole (cint i) -> set_of_traces (target.res (cint i));
+  
+  included_in_s : (i:source.interface) -> set_of_traces (source.res i) -> set_of_traces (source.res i) -> Type;
+  included_in_t : (i:source.interface) -> set_of_traces (target.res (cint i)) -> set_of_traces (source.res i) -> Type;
 
-let beh_extend_trace_d
-  #a
-  (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
-  (t:events_trace) :
-  Lemma
-    (forall r. (behavior (fnc rez) (t, r) ==>
-      (behavior (Cont (Call cmd argz fnc)) ((convert_call_to_event cmd argz rez) :: t, r)))) =
-  Classical.forall_intro (
-    Classical.move_requires (beh_extend_trace cmd argz rez fnc t))
+  rel_ctx : (i:source.interface) -> source.ctx i -> target.ctx (cint i) -> Type0;
 
-let beh_extend_trace_in_bind 
-  #a #b
-  (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
-  (k : a -> io b)
-  (t:events_trace)
-  (r:maybe b) :
-  Lemma
-    (requires (behavior (io_bind a b (fnc rez) k) (t, r))) 
-    (ensures (behavior (io_bind a b (Cont (Call cmd argz fnc)) k) ((convert_call_to_event cmd argz rez) :: t, r))) =
-  calc (==) {
-    io_bind a b (Cont (Call cmd argz fnc)) k;
-    == {}
-    sys_bind io_cmds io_cmd_sig a b (Cont (Call cmd argz fnc)) k;
-    == { _ by (norm [iota; delta]; compute ()) }
-    Cont (sysf_fmap (fun fnci -> 
-      sys_bind io_cmds io_cmd_sig a b fnci k) (Call cmd argz fnc));
-    == { _ by (unfold_def(`sysf_fmap); norm [iota]; unfold_def(`io_bind)) }
-    Cont (Call cmd argz (fun rez -> 
-      io_bind a b (fnc rez) k));
-  };
-  beh_extend_trace cmd argz rez (fun rez -> io_bind a b (fnc rez) k) t r;
-  assert (behavior (Cont (Call cmd argz (fun rez -> 
-    io_bind a b (fnc rez) k))) ((convert_call_to_event cmd argz rez) :: t, r)) by (
-    unfold_def (`convert_call_to_event); assumption ())
+  compile_prog : i:source.interface -> source.prog i -> target.prog (cint i);
+  compile_whole : i:source.interface -> source.whole i -> target.whole (cint i);
+}
+  
+let rsp (op:compiler) (i:op.source.interface) (ps:op.source.prog i) (pi_set:op.set_of_traces (op.source.res i)) : Type0 =
+  (forall cs. op.beh_s i (cs `op.source.link i` ps) `op.included_in_s i` pi_set)
+  ==> (forall (ct: op.target.ctx (op.cint i)). (
+      let pt = op.compile_prog i ps in
+      op.beh_t i (ct `op.target.link (op.cint i)` pt) `op.included_in_t i` pi_set))
 
-let extract_result (cmd:io_cmds) (event:io_event) : 
-  Pure (resm cmd)
-    (requires ((cmd == Openfile /\ EOpenfile? event) \/
-               (cmd == Read /\ ERead? event) \/
-               (cmd == Close /\ EClose? event)))
-    (ensures (fun r -> True)) = 
-  match cmd with 
-  | Openfile -> EOpenfile?.r event 
-  | Read -> ERead?.r event 
-  | Close -> EClose?.r event 
+let tp (op:compiler) (i:op.source.interface) (ws:op.source.whole i) (pi_set:op.set_of_traces (op.source.res i)): Type0 =
+    ((op.beh_s i ws `op.included_in_s i` pi_set) ==>  (op.beh_t i (op.compile_whole i ws) `op.included_in_t i` pi_set))
+
+let ccc (op:compiler) (i:op.source.interface) (ps:op.source.prog i) (cs:op.source.ctx i) (ct:op.target.ctx (op.cint i)) : Type0 =
+  op.rel_ctx i cs ct ==> (
+  let pt : op.target.prog (op.cint i) = op.compile_prog i ps in
+  op.beh_t i (ct `op.target.link (op.cint i)` pt) `op.included_in_t i` 
+    (op.beh_s i (cs `op.source.link i` ps)))
     
-let rec beh_bind_inl
-  #a #b
-  (m : io a)
-  (k : a -> io b) 
-  (r1:a) 
-  (t1 t2 : events_trace)
-  (r2:maybe b) :
-  Lemma 
-    (requires (behavior m (t1, (Inl r1)) /\ behavior (k r1) (t2, r2)))
-    (ensures (behavior (io_bind _ _ m k) (t1 @ t2, r2))) =
-  match m with
-  | Return x -> ()
-  | Throw err -> ()
-  | Cont (Call cmd argz fnc) -> begin
-    let (ht1 :: tt1) = t1 in
-    let rez : resm cmd = extract_result cmd ht1 in
-    FStar.WellFounded.axiom1 fnc rez;
-    beh_shift_trace cmd argz rez fnc tt1 (Inl r1);
-    beh_bind_inl (fnc rez) k r1 tt1 t2 r2;
-    beh_extend_trace_in_bind cmd argz rez fnc k (tt1@t2) r2
-  end
+
+noeq type interface = {
+  a : Type;  ad : exportable a;
+  b : Type;  bd : ml b;         // b has to be importable and exportable
+  c : Type;  cd : exportable c;
+}
+
+type whole_s (pi:check_type) (i:interface) = unit -> GIO i.c pi
+type whole_t (i:interface) = unit -> M4 i.cd.etype
+
+type ctx_s (pi:check_type) (i:interface) = i.a -> GIO i.b pi
+type ctx_t (i:interface) = i.ad.etype -> M4 i.b
+
+type prog_s (pi:check_type) (i:interface) = ctx_s pi i -> GIO i.c pi
+type prog_t (i:interface) = ctx_t i -> M4 i.cd.etype
+
+unfold 
+let beh_s #a #b (pi:check_type) (ws:a -> GIO b pi) (x:a) =
+  behavior (reify (ws x) (gio_post pi []) [])
+
+unfold
+let beh_t #a #b (wt:a -> M4 b) (x:a) =
+  behavior (reify (wt x) (fun _ -> True))
+
+val import_ctx_t : (#pi:check_type) -> (#i:interface) -> ctx_t i -> option (ctx_s pi i)
+let import_ctx_t #pi #i f =
+  let f' : (ctx_s pi i) = (
+    fun (x:i.a) ->
+      let x : i.ad.etype = export x in
+      let tree = reify (f x) (fun r -> True) in
+      _import_M4_to_GIO #i.b tree pi <: GIO i.b pi) in 
+  Some f'
+
+let export_prog_s
+  (i  : interface)
+  (pi : check_type)
+  (f  : prog_s pi i) : 
+  Tot (prog_t i) =
+    (fun (ct:ctx_t i) ->
+      let Some (cs : ctx_s pi i) = import_ctx_t ct in
+      let tree : io (events_trace * i.c) = reify (f cs) (gio_post pi []) [] in
+      export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp i.c (fun p -> forall res. p res)))
+
+let secure_interop (pi:check_type) : compiler = {
+  source = {
+    interface = interface;
+    res   = (fun i -> maybe (events_trace * i.c));
+    prog  = (fun i -> prog_s pi i);
+    ctx   = (fun i -> ctx_s pi i);
+    whole = (fun i -> whole_s pi i);
   
-let rec beh_bind_inr
-  #a #b
-  (m : io a)
-  (k : a -> io b)
-  (r1:exn)
-  (t1 : events_trace) :
-  Lemma 
-    (requires (behavior m (t1, (Inr r1))))
-    (ensures (behavior (io_bind _ _ m k) (t1, (Inr r1)))) =
-  match m with
-  | Throw err -> ()
-  | Cont (Call cmd argz fnc) -> begin
-    let (ht1 :: tt1) = t1 in
-    let rez : resm cmd = extract_result cmd ht1 in
-    FStar.WellFounded.axiom1 fnc rez;
-    beh_shift_trace cmd argz rez fnc tt1 (Inr r1);
-    beh_bind_inr (fnc rez) k r1 tt1;
-    beh_extend_trace_in_bind cmd argz rez fnc k (tt1) (Inr r1)
-  end
+    link = (fun i c p -> (fun _ -> p c) <: whole_s pi i);
+  };
 
-let beh_bind_0 
-  #a #b
-  (m : io a)
-  (k : a -> io b) 
-  (r1:maybe a) :
-  Lemma (forall t1.
-    behavior m (t1, r1) ==>
-      (Inr? r1 ==>  behavior (io_bind _ _ m k) (t1, (Inr (Inr?.v r1)))) /\
-      (Inl? r1 ==>  (forall t2 r2. (behavior (k (Inl?.v r1)) (t2, r2) ==>  
-                     behavior (io_bind _ _ m k) (t1 @ t2, r2))))) =
-  if (Inr? r1) then (
-    Classical.forall_intro (
-      Classical.move_requires (beh_bind_inr m k (Inr?.v r1)))
-  ) else (
-    Classical.forall_intro_3 (
-      Classical.move_requires_3 (beh_bind_inl m k (Inl?.v r1)))
-  )
-
-let beh_bind
-  #a #b
-  (m : io a)
-  (k : a -> io b) :
-  Lemma (forall (r1:maybe a) t1.
-    behavior m (t1, r1) ==>
-      (Inr? r1 ==>  behavior (io_bind _ _ m k) (t1, (Inr (Inr?.v r1)))) /\
-      (Inl? r1 ==>  (forall t2 r2. behavior (k (Inl?.v r1)) (t2, r2) ==>  
-                              behavior (io_bind _ _ m k) (t1 @ t2, r2)))) =
-  Classical.forall_intro (beh_bind_0 m k)
-
-let rec beh_bind_tot_0
-  #a #b
-  (f:io a) 
-  (g:a -> Tot b)
-  (r1:maybe b)
-  (t:events_trace) :
-  Lemma 
-    (requires (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)))
-    (ensures (exists r2. inl_app g r2 == r1 /\ behavior f (t, r2)))  =
-  match f with
-  | Return x -> 
-      assert (inl_app g (Inl x) == r1);
-      assert (behavior f (t, (Inl x)))
-  | Throw err -> 
-      assert (inl_app g (Inr err) == r1);
-      assert (behavior f (t, (Inr err)))
-  | Cont (Call cmd argz fnc) ->
-    let (ht1 :: tt1) = t in
-    let rez : resm cmd = extract_result cmd ht1 in
-    FStar.WellFounded.axiom1 fnc rez;
-    beh_bind_tot_0 (fnc rez) g r1 tt1;
-    beh_extend_trace_d cmd argz rez fnc (tt1)
-       
-let beh_bind_tot
-  #a #b
-  (f:io a)
-  (g:a -> Tot b) :
-  Lemma 
-    (forall r1 t. (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))) (t, r1)) ==>  (exists r2. r1 == inl_app g r2 /\ behavior f (t,r2))) =
-  Classical.forall_intro_2 (Classical.move_requires_2 (beh_bind_tot_0 f g))
-
-let beh_included_bind_tot
-  #a #b
-  (f:io a) 
-  (g:a -> Tot b) :
-  Lemma
-    (included_in (inl_app g)
-      (behavior (io_bind a b f (fun x -> lift_pure_m4wp b (fun p -> p (g x)) (fun _ -> g x) (fun _ -> True))))
-      (behavior f)) = 
-  beh_bind_tot f g
-
-let beh_iost_to_io (a:Type) (tree:io (events_trace * a)) :
-  Lemma (behavior (iost_to_io tree) `included_in (inl_app cdr)` behavior tree) 
-  by (unfold_def (`iost_to_io); norm [iota;delta]; compute ()) =
-  beh_included_bind_tot #(events_trace * a) #a
-    tree
-    cdr
-
-unfold let ref #a (x : io a) : M4.irepr a (fun p -> forall res. p res) = (fun _ -> x)
-
-let beh_included_in_trans_id x y z :
-  Lemma (
-    (behavior x `included_in id` behavior y /\
-    behavior y `included_in id` behavior z) ==>
-      behavior x `included_in id` behavior z) = ()
+  target = {
+    interface = interface;
+    res   = (fun i -> maybe (i.cd.etype));
+    prog  = (fun i -> prog_t i);
+    ctx   = (fun i -> ctx_t i);
+    whole = (fun i -> whole_t i);
   
-let beh_included_in_trans_id_g x y z g:
-  Lemma (
-    (behavior x `included_in id` behavior y /\
-    behavior y `included_in g` behavior z) ==>
-      behavior x `included_in g` behavior z) = ()
+    link = (fun i c p -> (fun _ -> p c) <: whole_t i);
+  };
+
+  cint = (fun i -> i);
   
-let beh_included_in_trans_g_id x y z g:
-  Lemma (
-    (behavior x `included_in g` behavior y /\
-    behavior y `included_in id` behavior z) ==>
-      behavior x `included_in g` behavior z) = ()
+  set_of_traces = set_of_traces;
 
-let beh_included_in_merge_f_g x y z f g:
-  Lemma (
-    (behavior x `included_in f` behavior y /\
-    behavior y `included_in g` behavior z) ==>
-      behavior x `included_in (compose f g)` behavior z) = ()
+  beh_s = (fun i w -> beh_s #unit #i.c pi w ());
+  beh_t = (fun i w -> beh_t #unit #i.cd.etype w ());
+  
+  included_in_s = (fun i -> included_in id);
+  included_in_t = (fun i -> included_in #(maybe i.cd.etype) #(maybe (events_trace * i.c)) (inl_app (compose export cdr)));
 
-let _export_IOStHist_lemma
-  #t1 {| d1:importable t1 |} 
-  #t2 {| d2:exportable t2 |}
-  (pre : t1 -> events_trace -> Type0) {| checkable2 pre |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) 
-  (x':d1.itype) : 
-  Lemma (
-    let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec pre post f in
-    let res' = reify (ef x') (fun _ -> True) in
-    match import x' with
-    | Some x -> (
-      let f' = reify (f x) (post x []) in
-      (check2 #t1 #events_trace #pre x [] ==>  
-        behavior res' `included_in (inl_app (compose export cdr))` behavior (f' [])) /\
-      (~(check2 #t1 #events_trace #pre x []) ==>  
-        behavior res' `included_in id` empty_set ()))
-    | None -> behavior res' `included_in id` empty_set ()) =
-
-  let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec pre post f in
-  let included_in_id #a = included_in #a #a (id #a) in
-  match import x' with
-  | Some x -> begin
-    if (check2 #t1 #events_trace #pre x []) then (
-        calc (included_in_id) {
-            behavior (reify (ef x') (fun _ -> True));
-            `included_in_id` {}
-            behavior (reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True));
-            // TODO: Cezar: The idea behind this is to get rid of the `match` and the `if` 
-            // because we did them already in the proof.
-            `included_in_id` { _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [delta]; tadmit ()) }
-            behavior (reify (
-              (export (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) <: d2.etype)) (fun _ -> True));
-            // TODO: Cezar: this should be just an unfolding of `reify`. I talked with Guido
-            // and it seems using tactics is not a solution to unfold `reify` for 
-            // layered effects because: "reification of layered effects is explicitly disabled
-            // since it requires producing the indices for the bind, and we do not store them
-            // anywhere". I tried to manually unfold looking at EMF* (Dijkstra Monads for
-            // Free), but it seems that F* does not accept this proof. I created a new file only
-            // for this problem: `UnfoldReify.fst`.
-            `included_in_id` { admit () }
-            // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
-            behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
-                (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)))
-                (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True));
-        };
-
-        beh_included_bind_tot #t2 #d2.etype
-          (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (compute_post t2 (Mkexportable?.etype d2) (fun x -> m4_return_wp (Mkexportable?.etype d2) (export x)) (fun _ -> True)))
-            export;
-
-        assert (
-            (behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
-                (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)))
-                (fun x -> lift_pure_m4wp d2.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True)))
-          `included_in (inl_app export)`
-            (behavior (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (fun _ -> True)))
-        ) by (unfold_def (`ibind));
-
-       calc (included_in_id) {
-         behavior (reify (M4wp?.reflect (ref (iost_to_io (reify (f x) (post x []) []))) <: M4wp t2 (fun p -> forall res. p res)) (fun _ -> True));
-         `included_in_id` {}
-         behavior (iost_to_io (reify (f x) (post x []) []));
-       };
-
-       beh_iost_to_io t2 (reify (f x) (post x []) []);
-
-       assert (
-         behavior (iost_to_io (reify (f x) (post x []) []))
-         `included_in (inl_app cdr)` 
-         behavior (reify (f x) (post x []) []))
-    ) else begin
-        calc (==) {
-            reify (ef x') (fun _ -> True);
-            == {}
-            reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True);
-            == { 
-            _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit ()) }
-            reify (M4.raise Contract_failure) (fun _ -> True);
-            // TODO: Cezar: The idea behind this is to get rid of the `match` and the `if` 
-            // because we did them already in the proof.
-            == { admit () }
-            Throw Contract_failure;
-        }
-    end
-  end
-  | None -> begin
-    calc (==) {
-        reify (ef x') (fun _ -> True);
-        == {}
-        reify ((_export_IOStHist_arrow_spec pre post f <: (d1.itype -> M4 d2.etype)) x') (fun _ -> True);
-        // TODO: Cezar: two admits here.
-        == { 
-          _ by (unfold_def(`_export_IOStHist_arrow_spec); norm [iota]; tadmit ()) }
-        reify (M4.raise Contract_failure) (fun _ -> True);
-        == { admit () }
-        Throw Contract_failure;
-    }
-  end
-
-let export_IOStHist_lemma 
-  #t1 {| d1:importable t1 |} 
-  #t2 {| d2:exportable t2 |}
-  (pre : t1 -> events_trace -> Type0) {| checkable2 pre |}
-  (post : t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
-  (f:(x:t1 -> IOStHist t2 (pre x) (post x))) : 
-  Lemma (forall (x':d1.itype). (
-    let ef : d1.itype -> M4 d2.etype = _export_IOStHist_arrow_spec pre post f in
-    let res' = reify (ef x') (fun _ -> True) in
-    match import x' with
-    | Some x -> (
-      let f' = reify (f x) (post x []) in
-      (check2 #t1 #events_trace #pre x [] ==>  
-        behavior res' `included_in (inl_app (compose export cdr))` behavior (f' [])) /\
-      (~(check2 #t1 #events_trace #pre x []) ==>  
-        behavior res' `included_in id` empty_set ()))
-    | None -> behavior res' `included_in id` empty_set ())) =
-  Classical.forall_intro (_export_IOStHist_lemma #t1 #d1 #t2 #d2 pre post f)
-
-
+  rel_ctx = (fun i cs ct -> let Some cs' = import_ctx_t #pi #i ct in cs' == cs);
+  
+  compile_prog  = (fun i -> export_prog_s i pi);
+  compile_whole = (fun i -> _export_GIO_arrow_spec pi);
+}
 
 let _export_GIO_lemma
   #t1 {| d1:importable t1 |} 
@@ -382,30 +143,31 @@ let _export_GIO_lemma
   (x':d1.itype) : 
   Lemma (
     let ef : d1.itype -> M4 d2.etype = _export_GIO_arrow_spec pi f in
-    let res' = reify (ef x') (fun _ -> True) in
     match import x' with
     | Some x -> (
-      let f' = reify (f x) (gio_post pi []) in
-        behavior res' `included_in (inl_app (compose export cdr))` behavior (f' []))
-    | None -> behavior res' `included_in id` empty_set ()) =
+       beh_t ef x' `included_in (inl_app (compose export cdr))` beh_s pi f x)
+    | None -> beh_t ef x' `included_in id` empty_set ()) =
 
   let ef : d1.itype -> M4 d2.etype = _export_GIO_arrow_spec pi f in
   let included_in_id #a = included_in #a #a (id #a) in
   match import x' with
   | Some x -> begin
-    let l : io (events_trace * d2.etype) = reify (ef x') (fun _ -> True) in
-    let ll : io (d2.etype) = reify (
+    let l = reify (ef x') (fun _ -> True) in
+    let __ll : unit -> M4wp d2.etype (fun p -> forall res. p res) = (fun _ -> 
             let tree : io (events_trace * t2) = reify (f x) (gio_post pi []) [] in
-            export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))
-        ) (fun _ -> True) in
+            export (M4wp?.reflect (fun _ -> iost_to_io tree) <: M4wp t2 (fun p -> forall res. p res))) in
+    let ll = reify (__ll ()) (fun _ -> True) in
     // TODO: Cezar: The idea behind this is to get rid of the `match`  
     // because we did it already in the proof.
+    // Related github issues: https://github.com/FStarLang/FStar/issues/2169
     assert (l == ll) by (
       unfold_def (`_export_GIO_arrow_spec);
       let xkkk = (match (List.Tot.nth (cur_binders ()) 12) with
       | Some y -> y | None -> fail "asdf") in
-      l_to_r [`xkkk];
-      dump "h");
+      // l_to_r [`xkkk];
+      tadmit ()//;
+      // dump "h"
+    );
     assert (behavior l `included_in_id` behavior ll);
 
     calc (included_in_id) {
@@ -420,6 +182,7 @@ let _export_GIO_lemma
         // anywhere". I tried to manually unfold looking at EMF* (Dijkstra Monads for
         // Free), but it seems that F* does not accept this proof. I created a new file only
         // for this problem: `UnfoldReify.fst`.
+        // Related github issue: https://github.com/FStarLang/FStar/issues/2163
         `included_in_id` { admit () }
         // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
         behavior (M4.ibind t2 d2.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (d2.etype) (export x))
@@ -450,7 +213,7 @@ let _export_GIO_lemma
     assert (
         behavior (iost_to_io (reify (f x) (gio_post pi []) []))
         `included_in (inl_app cdr)` 
-        behavior (reify (f x) (gio_post pi []) []))
+        beh_s pi f x)
   end
   | None -> begin
     calc (==) {
@@ -473,245 +236,136 @@ let export_GIO_lemma
   (f:(x:t1 -> GIO t2 pi)) : 
   Lemma (forall (x':d1.itype). (
     let ef : d1.itype -> M4 d2.etype = export f in
-    let res' = reify (ef x') (fun _ -> True) in
     match import x' with
     | Some x -> (
-      let f' = reify (f x) (gio_post pi []) in
-      (check2 #t1 #events_trace #(fun _ -> gio_pre pi) x [] ==>  
-        behavior res' `included_in (inl_app (compose export cdr))` behavior (f' [])) /\
-      (~(check2 #t1 #events_trace #(fun _ -> gio_pre pi) x []) ==>  
-        behavior res' `included_in id` empty_set ()))
-    | None ->  behavior res' `included_in id` empty_set ())) =
-  Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
+        beh_t ef x' `included_in (inl_app (compose export cdr))` beh_s pi f x)
+    | None ->  beh_t ef x' `included_in id` empty_set ())) =
+  Classical.forall_intro (_export_GIO_lemma pi f)
 
 let beh_export_unit_GIO_lemma
   #t2 {| d2:exportable t2 |}
   (pi:check_type)
   (f:(unit -> GIO t2 pi)) : 
   Lemma (
-    let ef : unit -> M4 d2.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f in
-    let res' = reify (ef ()) (fun _ -> True) in
-      let f' = reify (f ()) (gio_post pi []) in
-      (check2 #unit #events_trace #(fun _ -> gio_pre pi) () [] ==>  
-        behavior res' `included_in (inl_app (compose export cdr))` behavior (f' [])) /\
-      (~(check2 #unit #events_trace #(fun _ -> gio_pre pi) () []) ==>  
-        behavior res' `included_in id` empty_set ())) =
-  Classical.forall_intro (_export_IOStHist_lemma (fun _ -> gio_pre pi) (fun _ -> gio_post pi) f)
+    let ef : unit -> M4 d2.etype = _export_GIO_arrow_spec pi f in
+    beh_t ef () `included_in (inl_app (compose export cdr))` beh_s pi f ()) =
+  _export_GIO_lemma pi f ()
 
-
-// let wcc_lemma
-//   #t1 {| d1:ml t1 |}
-//   #t2 {| d2:ml t2 |}
-//   (pi:check_type)
-//   (ws:(t1 -> GIO t2 pi)) 
-//   (x:t1) : 
-//   Lemma (
-//     let wd : (t1 -> M4 t2) = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
-//     match import wd with
-//     | Some (ws':t1 -> GIO t2 pi) -> 
-//       let tree_ws' = reify (ws' x) (gio_post pi []) [] in
-//       let tree_ws = reify (ws x) (gio_post pi []) [] in
-//       behavior tree_ws' `included_in id` behavior tree_ws
-//     | None -> True 
-//   ) =
-//   let wd : (t1 -> M4 t2) = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
-//   let tree_ws = reify (ws x) (gio_post pi []) [] in
-//   let tree_wd = reify (wd x) (fun _ -> True) in
-//   assume (behavior tree_wd `included_in (inl_app (compose export cdr))` behavior tree_ws);
-//   match import wd with
-//   | Some (ws':t1 -> GIO t2 pi) -> 
-//     let tree_ws' = reify (ws' x) (gio_post pi []) [] in
-//     assert (behavior tree_ws' `included_in id` behavior tree_ws)
-//   | None -> ()
-
-
-
-
-let pi_to_set #a (pi : check_type) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
-
-let gio_post_implies_set_of_traces 
-  (a : Type)
-  (b : Type)
-  (pi : check_type)
-  (t : events_trace)
-  (r : maybe (events_trace * b)) :
-  Lemma 
-    (requires  (gio_post pi [] r t))
-    (ensures (pi_to_set pi (t, r))) = 
-    List.Tot.Properties.append_l_nil (List.rev t);
-    ()
-
-let iohist_interp_shift_trace
-  #a
-  (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
-  (h:events_trace)
-  p:
-  Lemma 
-    (requires (iohist_interpretation (Cont (Call cmd argz fnc)) h p))
-    (ensures (
-      iohist_interpretation (fnc rez) (convert_call_to_event cmd argz rez :: h) (gen_post p (convert_call_to_event cmd argz rez)))) = 
-  calc (==) {
-    iohist_interpretation (Cont (Call cmd argz fnc)) h p;
-    == { _ by (compute ())}
-    (forall res. (
-      let event : io_event = convert_call_to_event cmd argz res in
-      iohist_interpretation (fnc res) (event :: h) (gen_post p event)));
-  }
-
-
-let rec gio_interpretation_implies_set_of_traces
-  (a : Type)
-  (pi : check_type)
-  (m : io (events_trace * a)) 
-  (h : events_trace)
-  (le : events_trace)
-  (r : maybe (events_trace * a)) 
-  p :
-  Lemma 
-    (requires (iohist_interpretation m h p) /\ behavior m (le, r))
-    (ensures (p r le)) =
-  match m with
-  | Return _ -> ()
-  | Throw _ -> ()
-  | Cont (Call cmd argz fnc) -> begin
-    let (ht1 :: tt1) = le in
-    let rez : resm cmd = extract_result cmd ht1 in
-    FStar.WellFounded.axiom1 fnc rez;
-    beh_shift_trace cmd argz rez fnc tt1 r;
-    iohist_interp_shift_trace cmd argz rez fnc h p;
-    gio_interpretation_implies_set_of_traces a pi (fnc rez) (convert_call_to_event cmd argz rez :: h) tt1 r (gen_post p (convert_call_to_event cmd argz rez))
-  end
-
-let beh_gio_implies_post 
-  (a : Type)
-  (b : Type)
-  (pi : check_type)
-  (ws : a -> GIO b pi) 
-  (x : a)
-  (t : events_trace)
-  (r : maybe (events_trace * b)) :
-  Lemma 
-    (requires (behavior (reify (ws x) (gio_post pi []) []) (t, r)))
-    (ensures  (gio_post pi [] r t)) =
-  let ws' = reify (ws x) (gio_post pi []) [] in
-  gio_interpretation_implies_set_of_traces b pi ws' [] t r (gio_post pi []) 
-
-let beh_gio_in_pi_0 
-  (a : Type)
-  (b : Type)
-  (pi : check_type)
-  (ws : a -> GIO b pi) 
-  (x : a)
-  (t : events_trace)
-  (r : maybe (events_trace * b)) :
-  Lemma 
-    (requires (behavior (reify (ws x) (gio_post pi []) []) (t, r)))
-    (ensures  ((pi_to_set pi) (t, r))) =
-  beh_gio_implies_post a b pi ws x t r;
-  gio_post_implies_set_of_traces a b pi t r
-  
-let beh_gio_in_pi
-  (a : Type)
-  (b : Type)
-  (pi : check_type)
-  (ws : a -> GIO b pi) 
-  (x : a) :
-  Lemma 
-    ((behavior (reify (ws x) (gio_post pi []) [])) `included_in id`
-      (pi_to_set pi)) =
-  Classical.forall_intro_2 (Classical.move_requires_2 (beh_gio_in_pi_0 a b pi ws x))
-  
-let beh_forall_f_in_pi
-  (a : Type)
-  (b : Type)
-  (pi : check_type)
-  (m : io a) :
-  Lemma 
-    (forall f. behavior m `included_in (inl_app f)` pi_to_set pi) = admit ()
   
 let rsp_premise
-  (a : Type) {| d1:exportable a |}
-  (b : Type) {| d2:ml b |}
-  (c : Type) {| d3:exportable c |}
+  (i:interface)
   (pi : check_type)
-  (ps : (a -> GIO b pi) -> GIO c pi)
-  (ct : d1.etype -> M4 b) :
+  (ps : prog_s pi i)
+  (ct : ctx_t i) :
   Lemma (
-    let Some (cs : a -> GIO b pi) = import ct in
-    behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)) =
-  let Some (cs : a -> GIO b pi) = import ct in
-  beh_gio_in_pi _ _ pi ps cs
+    let Some (cs : ctx_s pi i) = import_ctx_t ct in
+    beh_s pi ps cs `included_in id` (pi_to_set pi)) =
+  let Some (cs : ctx_s pi i) = import_ctx_t ct in
+  beh_gio_in_pi (ctx_s pi i) i.c pi ps cs
 
 let beh_export_ps_ct_in_export_ws
-  (a : Type) {| d1:exportable a |}
-  (b : Type) {| d2:ml b |}
-  (c : Type) {| d3:exportable c |}
+  (i  : interface)
   (pi : check_type)
-  (ps : (a -> GIO b pi) -> GIO c pi)
-  (ct : d1.etype -> M4 b) : 
+  (ps : prog_s pi i)
+  (ct : ctx_t i) : 
   Lemma (
-    let Some (cs : a -> GIO b pi) = import ct in
-    let ws : unit -> GIO c pi = fun _ -> ps cs in
-    let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-    let wt : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
-    behavior (reify (pt ct) (fun _ -> True)) `included_in id` behavior (reify (wt ()) (fun _ -> True))
-  ) =
-  let Some (cs : a -> GIO b pi) = import ct in
-  let ws : unit -> GIO c pi = fun _ -> ps cs in
-  let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-  let wt : unit -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ws in
+    let Some (cs : ctx_s pi i) = import_ctx_t ct in
+    let ws : unit -> GIO i.c pi = fun _ -> ps cs in
+    let pt : (ctx_t i) -> M4 i.cd.etype = export_prog_s i pi ps in
+    let wt : unit -> M4 i.cd.etype = _export_GIO_arrow_spec pi ws in
+    beh_t pt ct `included_in id` beh_t wt ()
+  ) = 
+  let Some (cs : ctx_s pi i) = import_ctx_t ct in
+  let ws : whole_s pi i = fun _ -> ps cs in
+  let pt : (ctx_t i) -> M4 i.cd.etype = export_prog_s i pi ps in
+  let wt : whole_t i = _export_GIO_arrow_spec pi ws in
   
   let included_in_id #a = included_in #a #a (id #a) in
-  calc (included_in_id) {
-    behavior (reify (pt ct) (fun _ -> True));
-    `included_in_id` { admit () }
-    behavior (reify (wt ()) (fun _ -> True));
-  }
+  assert (import () == Some ());
+  // TODO: apply l_to_r for: import () == Some ()
+  //       apply l_to_r for: import_ctx_t ct == Some b
+  //       Qed.
+  // Related github issue: https://github.com/FStarLang/FStar/issues/2169
+  assert (reify (pt ct) (fun _ -> True) == reify (wt ()) (fun _ -> True)) by (
+    unfold_def (`export_prog_s);
+    unfold_def (`_export_GIO_arrow_spec);
+    // dump "x"
+    tadmit ()
+  )
     
 let rsp_conclusion 
-  (a : Type) {| d1:exportable a |}
-  (b : Type) {| d2:ml b |}
-  (c : Type) {| d3:exportable c |}
+  (i  : interface)
   (pi : check_type)
-  (ps : (a -> GIO b pi) -> GIO c pi)
-  (ct : d1.etype -> M4 b) :
+  (ps : prog_s pi i)
+  (ct : ctx_t i) :
   Lemma (
-    let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-      behavior (reify (pt ct) (fun _ -> True)) `included_in #(maybe d3.etype) #(maybe (events_trace * c)) (inl_app (compose export cdr))` (pi_to_set pi)) = 
-  let Some (cs : a -> GIO b pi) = import ct in
-  let ws : unit -> GIO c pi = fun _ -> ps cs in
-  beh_gio_in_pi unit c pi ws (); // Beh (ws ()) in pi
-  beh_export_unit_GIO_lemma pi ws; // Beh (export ws ()) in Beh (ws ())
-  beh_export_ps_ct_in_export_ws a b c pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
+    let pt : prog_t i = export_prog_s i pi ps in
+    beh_t pt ct `included_in #_ #(maybe (events_trace * i.c)) (inl_app (compose export cdr))` (pi_to_set pi)) = 
+  let Some (cs : ctx_s pi i) = import_ctx_t ct in
+  let ws : whole_s pi i = fun _ -> ps cs in
+  beh_gio_in_pi unit i.c pi ws (); // Beh (ws ()) in pi
+  beh_export_unit_GIO_lemma #i.c #i.cd pi ws; // Beh (export ws ()) in Beh (ws ())
+  beh_export_ps_ct_in_export_ws i pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
 
-let rsp_simple_linking
-  (a : Type) {| d1:exportable a |}
-  (b : Type) {| d2:ml b |}
-  (c : Type) {| d3:exportable c |}
+let rsp_variant
+  (i  : interface)
   (pi : check_type)
-  (ps : (a -> GIO b pi) -> GIO c pi)
-  (ct : d1.etype -> M4 b) :
+  (ps : prog_s pi i)
+  (ct : ctx_t i) :
   Lemma(
-    (forall (cs:(a -> GIO b pi)). 
-      behavior (reify (ps cs) (gio_post pi []) []) `included_in id` (pi_to_set pi)) 
-  ==> (let pt : (d1.etype -> M4 b) -> M4 d3.etype = _export_IOStHist_arrow_spec (fun _ -> gio_pre pi) (fun _ -> gio_post pi) ps in
-     behavior (reify (pt ct) (fun _ -> True)) `included_in #(maybe d3.etype) #(maybe (events_trace * c)) (inl_app (compose export cdr))` (pi_to_set pi))) = 
-  rsp_conclusion a b c pi ps ct
+    (forall (cs:(ctx_s pi i)). beh_s pi ps cs `included_in id` (pi_to_set pi)) 
+    ==> 
+    (let pt : prog_t i = export_prog_s i pi ps in
+     beh_t pt ct `included_in #_ #(maybe (events_trace * i.c)) (inl_app (compose export cdr))` (pi_to_set pi))) = 
+  rsp_conclusion i pi ps ct
 
 
-let rec beh_implies_iohist_interp 
-  (a : Type)
-  (m : io (events_trace * a)) 
-  (h : events_trace)
-  (t : events_trace)
-  (r : maybe (events_trace * a)) :
-  Lemma 
-    (requires (behavior m (t,r)))
-    (ensures (iohist_interpretation m h (fun res le -> (t,res) == (le,r)))) = 
-  match m with
-  | Return _ -> ()
-  | Throw _ -> ()
-  | Cont (Call cmd argz fnc) -> admit ()
+let si = secure_interop
+
+// This was working before, but after parameterizing with the interface
+// some types do not match and some manual needs to be done to show that b and b' are the same or 
+// smth. 
+let rsp_simple_linking''
+  (pi  : check_type)
+  (i   : (si pi).source.interface)
+  (ps  : (si pi).source.prog i)
+  (ct  : (si pi).target.ctx ((si pi).cint i)) 
+  pi_set :
+  Lemma (
+  (forall cs. (si pi).beh_s i (cs `(si pi).source.link i` ps) `(si pi).included_in_s i` pi_set)
+  ==>  (
+      let pt = (si pi).compile_prog i ps in
+      (si pi).beh_t i (ct `(si pi).target.link ((si pi).cint i)` pt) `(si pi).included_in_t i` pi_set)) = admit ();
+  let Some (cs:ctx_s pi i) = import_ctx_t ct in
+  let ws : whole_s pi i = fun _ -> ps cs in
+  assert (beh_s pi ws () `included_in id` beh_s pi ps cs);
+  beh_export_unit_GIO_lemma #i.c #i.cd pi ws; // Beh (export ws ()) in Beh (ws ())
+  beh_export_ps_ct_in_export_ws i pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
+ 
+let rsp_lemma
+  (pi : check_type)
+  (i  : (si pi).source.interface)
+  (ps : (si pi).source.prog i) :
+  Lemma (forall pi_set. rsp (secure_interop pi) i ps pi_set) =
+    Classical.forall_intro_2 (rsp_simple_linking'' pi i ps)
+  
+let tp_lemma
+  (pi : check_type)
+  (i : (si pi).source.interface)
+  (ws : (si pi).source.whole i) : 
+  Lemma (forall pi_set. tp (si pi) (i) (ws) pi_set)  = 
+  beh_export_unit_GIO_lemma #i.c #i.cd pi ws
+
+let secure_linker_respects_rsp () : 
+  Lemma (forall pi i ps pi_set. rsp (secure_interop pi) i ps pi_set)
+  by (
+    unfold_def(`rsp);
+    explode ();
+    rewrite_lemma 2 3;
+    norm [iota]
+  ) =
+  Classical.forall_intro_3 (rsp_lemma)
+  
+let secure_linker_respects_tp () :
+  Lemma (forall pi i ws pi_set. tp (si pi) i ws pi_set) = 
+    Classical.forall_intro_3 tp_lemma

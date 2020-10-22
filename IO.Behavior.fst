@@ -9,6 +9,15 @@ open IOStHist
 
 type set_of_traces (a:Type) = events_trace * a -> Type0
 
+val set_of_traces_ret : (#a:Type) -> a -> set_of_traces a
+let set_of_traces_ret x (es, x') = x == x' /\ es == []
+
+val set_of_traces_bind : (#a:Type) -> (#b:Type) -> set_of_traces a -> (a -> set_of_traces b) -> set_of_traces b
+let set_of_traces_bind p f (es, b) = exists (es1 es2 : events_trace) . exists a . es == (es1 @ es2) /\ p (es1, a) /\ f a (es2, b)
+
+val set_of_traces_map : (#a:Type) -> (#b:Type) -> (a -> b) -> set_of_traces a -> set_of_traces b
+let set_of_traces_map f p (es, b) = exists a . f a == b /\ p (es, a)
+
 let empty_set (#a:Type) () : set_of_traces a = fun (t,r) -> t == []
 let pi_to_set #a (pi : check_type) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
 
@@ -169,15 +178,19 @@ let beh_bind_0
       Classical.move_requires_3 (beh_bind_inl m k (Inl?.v r1)))
   )
 
+type set_of_traces' (a:Type) = set_of_traces (maybe a)
+val set_of_traces_bind' : (#a:Type) -> (#b:Type) -> set_of_traces' a -> (a -> set_of_traces' b) -> set_of_traces' b
+let set_of_traces_bind' p f (es, b) = exists es1 es2 . exists a . es == (es1 @ es2) /\ p (es1, a) /\ (Inr? a ==> es2 == [] /\ b == Inr (Inr?.v a)) /\ (Inl? a ==> f (Inl?.v a) (es2, b))
+
 let beh_bind
   #a #b
   (m : io a)
   (k : a -> io b) :
-  Lemma (forall (r1:maybe a) t1.
-    behavior m (t1, r1) ==>
-      (Inr? r1 ==>  behavior (io_bind _ _ m k) (t1, (Inr (Inr?.v r1)))) /\
-      (Inl? r1 ==>  (forall t2 r2. behavior (k (Inl?.v r1)) (t2, r2) ==>  
-                              behavior (io_bind _ _ m k) (t1 @ t2, r2)))) =
+  Lemma (
+    set_of_traces_bind' (behavior m) (fun a -> behavior (k a)) 
+      `included_in id` 
+    behavior (io_bind _ _ m k)) 
+  by (unfold_def (`included_in); unfold_def (`set_of_traces_bind')) =
   Classical.forall_intro (beh_bind_0 m k)
 
 let rec beh_bind_tot_0
@@ -255,7 +268,7 @@ let beh_included_in_merge_f_g x y z f g:
       behavior x `included_in (compose f g)` behavior z) = ()
 
 
-let rec beh_implies_iohist_interp 
+let beh_implies_iohist_interp 
   (a : Type)
   (m : io (events_trace * a)) 
   (h : events_trace)

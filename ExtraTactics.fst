@@ -68,13 +68,13 @@ let let_intro () : Tac unit =
     )
 
 let rewrite_lemma (n:nat) (m:nat) : Tac unit =
-    let x = match (List.Tot.nth (cur_binders ()) n) with
+    let zz = match (List.Tot.nth (cur_binders ()) n) with
     | Some y -> y | None -> fail "no binder" in
     
-    let z = match (List.Tot.nth (cur_binders ()) m) with
+    let zz' = match (List.Tot.nth (cur_binders ()) m) with
     | Some y -> y | None -> fail "no binder" in
     
-    let b' = instantiate (binder_to_term x) (binder_to_term z) in
+    let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
     mapply (binder_to_term b')
  
     // by (explode (); bump_nth 3; 
@@ -98,6 +98,12 @@ let copy_binder (b:binder) : Tac binder =
     exact (binder_to_term b);
     nb
   )
+
+let get_binder (n:nat) : Tac binder =
+  match (List.Tot.nth (cur_binders ()) n) with
+  | Some y -> y 
+  | None -> fail "no binder"
+  
 
 let rec instantiate_multiple_foralls (b:binder) (l : list term) : Tac binder =
   match l with
