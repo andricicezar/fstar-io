@@ -332,6 +332,14 @@ effect GIO
     (requires (gio_pre pi_check))
     (ensures (gio_post pi_check))
 
+effect M4wp
+  (a:Type)
+  (pi_check : check_type) 
+  (post : events_trace -> maybe (events_trace * a) -> events_trace -> Type0) =
+  IOStHist a
+    (requires (gio_pre pi_check))
+    (ensures (fun h r le -> gio_post pi_check h r le /\ post h r le))
+
 let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   io_bind (events_trace * t2) t2
     tree
