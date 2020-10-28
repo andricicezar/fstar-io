@@ -99,7 +99,9 @@ let beh_extend_trace_in_bind
     == { _ by (norm [iota; delta]; compute ()) }
     Cont (sysf_fmap (Call cmd argz fnc) 
       (fun fnci -> sys_bind io_cmds io_cmd_sig a b fnci k));
-    == { _ by (unfold_def(`sysf_fmap); norm [iota]; unfold_def(`io_bind)) }
+    == { _ by (norm [delta_only [`%sysf_fmap]]; 
+               norm [iota]; 
+               norm [delta_only [`%io_bind]]) }
     Cont (Call cmd argz (fun rez -> 
       io_bind a b (fnc rez) k));
   };
@@ -344,7 +346,7 @@ let beh_gio_implies_post
   (a : Type)
   (b : Type)
   (pi : check_type)
-  (ws : a -> GIO b pi) 
+  (ws : a -> M4wp b pi (fun _ _ _ -> True)) 
   (x : a)
   (t : events_trace)
   (r : maybe (events_trace * b)) :
@@ -357,7 +359,7 @@ let beh_gio_implies_post
 let beh_gio_in_pi_0 
   (a b : Type)
   (pi : check_type)
-  (ws : a -> GIO b pi) 
+  (ws : a -> M4wp b pi (fun _ _ _ -> True)) 
   (x : a)
   (t : events_trace)
   (r : maybe (events_trace * b)) :
@@ -370,7 +372,7 @@ let beh_gio_in_pi_0
 let beh_gio_in_pi
   (a b : Type)
   (pi : check_type)
-  (ws : a -> GIO b pi) 
+  (ws : a -> M4wp b pi (fun _ _ _ -> True))
   (x : a) :
   Lemma (beh pi ws x `included_in id` pi_to_set pi) =
   Classical.forall_intro_2 (Classical.move_requires_2 (beh_gio_in_pi_0 a b pi ws x))
