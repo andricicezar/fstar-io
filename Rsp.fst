@@ -4,6 +4,7 @@ open FStar.Calc
 open FStar.Tactics
 
 open Common
+open ExtraTactics
 
 open IO.Behavior
 open IOStHist
@@ -73,18 +74,6 @@ unfold
 let beh_t #a #b (wt:a -> M4 b) (x:a) =
   behavior (reify (wt x) (fun _ -> True))
 
-let rec handle #t2 (tree : io (t2)) (pi:monitorable_prop) : M4wp t2 pi (fun _ _ _ -> True) = begin
-  match tree with
-  | Return r -> r 
-  | Throw r -> IOStHist.throw r
-  | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = IOStHist.dynamic_cmd cmd pi argz in
-      FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
-      rev_append_rev_append ();
-      handle z' pi
-end
-
 let extract_local_events (s0 s1:events_trace) :
   Pure events_trace
     (requires (exists le. s1 == apply_changes s0 le))
@@ -99,11 +88,37 @@ let ctx_p_to_ctx_s
   (i  : interface)
   (pi : monitorable_prop)
   (cp  : ctx_p i pi) : 
-  Tot (ctx_s i pi) =
+  Tot (ctx_s i pi) by (
+    explode ();
+    tadmit ();
+    let zz = get_binder 9 in 
+    focus (fun () ->
+      let _ = t_destruct zz in
+      iterAll (fun () ->
+        let bs = repeat intro in
+        let b = last bs in (* this one is the equality *)
+        rewrite_eqs_from_context ();
+        norm [iota];
+        ())
+    );
+    let aq = get_binder 12 in
+    focus (fun () -> 
+      let _ = t_destruct aq in
+      let bs1 = intro () in
+      let br = intro () in
+      let b = intro () in (* this one is the equality *)
+      rewrite_eqs_from_context ();
+      l_to_r [`b];
+      norm [iota];
+      ()
+    );
+    explode ();
+    dump "h"
+  ) =
   fun (x:i.a) -> 
-    admit ();
+    assume (forall x err s0 le. i.post x s0 (Inr err) le == true);
     let s0 : events_trace = IOStHist.get () in
-    let result : i.b = cp x in
+    let result : i.b = cp (export x) in
     let s1 : events_trace = IOStHist.get () in
     let le = extract_local_events s0 s1 in
 
@@ -112,6 +127,18 @@ let ctx_p_to_ctx_s
       result
     ) else IOStHist.throw Contract_failure
 
+let rec handle #t2 (tree : io (t2)) (pi:monitorable_prop) : M4wp t2 pi (fun _ _ _ -> True) = begin
+  match tree with
+  | Return r -> r 
+  | Throw r -> IOStHist.throw r
+  | Cont (Call cmd argz fnc) ->
+      let rez : res cmd = IOStHist.dynamic_cmd cmd pi argz in
+      FStar.WellFounded.axiom1 fnc (Inl rez);
+      let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
+      rev_append_rev_append ();
+      handle z' pi
+end
+  
 let ctx_t_to_ctx_p
   (i  : interface)
   (pi : monitorable_prop)
@@ -151,53 +178,26 @@ val included_in_s : (#i:interface) -> set_of_traces (res_s i) -> set_of_traces (
 let included_in_s = (fun (#i:interface) -> included_in #(res_s i) #(res_s i) id)
 let included_in_t = (fun (#i:interface) -> included_in #(maybe i.cd.etype) #(maybe (events_trace * i.c)) (inl_app (compose export cdr)))
 
-let seci : compiler = {
-  interface = interface;
-  monitorable_prop = check_type;
-  safety_prop = pi_to_set;
-
-  set_of_traces = set_of_traces;
-
-  res_s   = (fun i -> maybe (events_trace * i.c));
-  prog_s  = prog_s;
-  ctx_s   = ctx_s;
-  whole_s = whole_s;
+let tp (i:interface) (pi:monitorable_prop) (ws:whole_s i pi) : Type0 =
+  ((beh_s pi ws () `included_in_s` (safety_prop pi)) ==>  
+    (beh_t (compile_whole ws) () `included_in_t` (safety_prop pi)))
   
-  link_s = link_s;
-
-  res_t   = (fun i -> maybe (i.cd.etype));
-  prog_t  = prog_t;
-  ctx_t   = ctx_t;
-  whole_t = whole_t;
-  link_t = link_t;
-
-  beh_s = (fun #i #pi w -> beh_s #unit #i.c pi w ());
-  beh_t = (fun #i w -> beh_t #unit #i.cd.etype w ());
-  
-  included_in_s = included_in_s;
-  included_in_t = included_in_t;
-
-  compile_prog  = compile_prog;
-  compile_whole = compile_whole;
-}
-
-
-let beh_export_whole
+let seci_respects_tp
   (i  : interface)
   (pi : check_type) 
-  (f  : whole_s i pi) :
-  Lemma (
-    let ef : whole_t i = compile_whole f in
-    beh_t ef () `included_in (inl_app (compose export cdr))` beh_s pi f ()) =
+  (ws  : whole_s i pi) :
+  Lemma (tp i pi ws) = 
 
-  let ef : whole_t i = compile_whole f in
+  let wt : whole_t i = compile_whole ws in
   let included_in_id #a = included_in #a #a (id #a) in
-  let l1 = reify (ef ()) (fun _ -> True) in
+  let l1 = reify (wt ()) (fun _ -> True) in
 
   let l2 = reify (
-          (export (M4?.reflect (ref (iost_to_io (reify (f ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) <: i.cd.etype)) (fun _ -> True) in 
+          (export (M4?.reflect (ref (iost_to_io (reify (ws ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) <: i.cd.etype)) (fun _ -> True) in 
 
-  let l3s = reify (M4?.reflect (ref (iost_to_io (reify (f ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) in
+  let l3s = reify (M4?.reflect (ref (iost_to_io (reify (ws ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) in
+  // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
+  // behavior (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
   let l3 = (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
           (l3s)
           (fun x -> lift_pure_mfour i.cd.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True)) in
@@ -212,9 +212,6 @@ let beh_export_whole
   // Free), but it seems that F* does not accept this proof. I created a new file only
   // for this problem: `UnfoldReify.fst`.
   // Related github issue: https://github.com/FStarLang/FStar/issues/2163
-  // `included_in_id` { admit () }
-  // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
-  // behavior (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
   assume (behavior l2 `included_in id` behavior l3);
 
   beh_included_bind_tot #i.c #i.cd.etype
@@ -230,15 +227,15 @@ let beh_export_whole
   assert (
       behavior (l3s (fun _ -> True))
       `included_in id`
-      behavior (iost_to_io (reify (f ()) (gio_post pi []) []))
+      behavior (iost_to_io (reify (ws ()) (gio_post pi []) []))
   );
 
-  beh_iost_to_io i.c (reify (f ()) (gio_post pi []) []);
+  beh_iost_to_io i.c (reify (ws ()) (gio_post pi []) []);
 
   assert (
-      behavior (iost_to_io (reify (f ()) (gio_post pi []) []))
+      behavior (iost_to_io (reify (ws ()) (gio_post pi []) []))
       `included_in (inl_app cdr)` 
-      beh_s pi f ())
+      beh_s pi ws ())
 
 val import_ctx_t : (#i:interface) -> (#pi:check_type) -> ctx_t i -> ctx_s i pi
 let import_ctx_t #i #pi ct =
@@ -289,7 +286,7 @@ let seci_rsp_0
   let (cs:ctx_s i pi) = ctx_p_to_ctx_s i pi cp in
   let ws : whole_s i pi = link_s cs ps in
   beh_gio_in_pi _ _ pi ws (); // Beh (ws ()) in pi
-  beh_export_whole i pi ws; // Beh (export ws ()) in Beh (ws ())
+  seci_respects_tp i pi ws; // Beh (export ws ()) in Beh (ws ())
   beh_export_ps_ct_in_export_ws i pi ps ct // Beh ((export ps) ct) in Beh (export ws ())
 
 let rsp (i:interface) (pi:monitorable_prop) (ps:prog_s i pi) : Type0 =
@@ -302,10 +299,34 @@ let seci_respects_rsp () :
   Lemma (forall i pi ps. rsp i pi ps) =
     Classical.forall_intro_4 (seci_rsp_0)
   
-let tp (i:interface) (pi:monitorable_prop) (ws:whole_s i pi) : Type0 =
-    ((beh_s pi ws () `included_in_s` (safety_prop pi)) ==>  
-      (beh_t (compile_whole ws) () `included_in_t` (safety_prop pi)))
+
+
+// let seci : compiler = {
+//   interface = interface;
+//   monitorable_prop = check_type;
+//   safety_prop = pi_to_set;
+
+//   set_of_traces = set_of_traces;
+
+//   res_s   = (fun i -> maybe (events_trace * i.c));
+//   prog_s  = prog_s;
+//   ctx_s   = ctx_s;
+//   whole_s = whole_s;
   
-let seci_respects_tp () :
-  Lemma (forall pi i ws. tp i pi ws) = 
-    Classical.forall_intro_3 beh_export_whole
+//   link_s = link_s;
+
+//   res_t   = (fun i -> maybe (i.cd.etype));
+//   prog_t  = prog_t;
+//   ctx_t   = ctx_t;
+//   whole_t = whole_t;
+//   link_t = link_t;
+
+//   beh_s = (fun #i #pi w -> beh_s #unit #i.c pi w ());
+//   beh_t = (fun #i w -> beh_t #unit #i.cd.etype w ());
+  
+//   included_in_s = included_in_s;
+//   included_in_t = included_in_t;
+
+//   compile_prog  = compile_prog;
+//   compile_whole = compile_whole;
+// }
