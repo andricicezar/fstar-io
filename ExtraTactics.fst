@@ -10,21 +10,21 @@ let grewrite_eq (b:binder) : Tac unit =
   | _ -> fail "failed in grewrite_eq"
 
 
-let rec extract_nth (n:nat) (l : list 'a) : option ('a * list 'a) =
-  match n, l with
-  | _, [] -> None
-  | 0, hd::tl -> Some (hd, tl)
-  | _, hd::tl -> begin
-    match extract_nth (n-1) tl with
-    | Some (hd', tl') -> Some (hd', hd::tl')
-    | None -> None
-  end
+// let rec extract_nth (n:nat) (l : list 'a) : option ('a * list 'a) =
+//   match n, l with
+//   | _, [] -> None
+//   | 0, hd::tl -> Some (hd, tl)
+//   | _, hd::tl -> begin
+//     match extract_nth (n-1) tl with
+//     | Some (hd', tl') -> Some (hd', hd::tl')
+//     | None -> None
+//   end
 
-let bump_nth (n:pos) : Tac unit =
-  // n-1 since goal numbering begins at 1
-  match extract_nth (n - 1) (goals ()) with
-  | None -> fail "bump_nth: not that many goals"
-  | Some (h, t) -> set_goals (h :: t)
+// let bump_nth (n:pos) : Tac unit =
+//   // n-1 since goal numbering begins at 1
+//   match extract_nth (n - 1) (goals ()) with
+//   | None -> fail "bump_nth: not that many goals"
+//   | Some (h, t) -> set_goals (h :: t)
 
 
 private
@@ -40,7 +40,7 @@ let get_match_body () : Tac term =
              | Tv_Match sc _ -> innermost_sc sc
              | _ -> fail "Goal is not a match"
 
-private let rec last (x : list 'a) : Tac 'a =
+let rec last (x : list 'a) : Tac 'a =
     match x with
     | [] -> fail "last: empty list"
     | [x] -> x

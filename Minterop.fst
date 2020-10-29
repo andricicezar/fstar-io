@@ -7,6 +7,7 @@ open IO.Free
 open IOHist
 open IOStHist
 open M4
+open M4wp
 
 (** ** `ml` class *)
 (* Intuition, this are morally M4 types written in F* syntax *)
@@ -22,7 +23,7 @@ instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> M4 t2) = { mldummy = () }
 
 instance ml_file_descr : ml file_descr = { mldummy = () }
-instance ml_check_type : ml check_type = { mldummy = () }
+instance ml_monitorable_prop : ml monitorable_prop = { mldummy = () }
 
 
 
@@ -178,18 +179,19 @@ let _export_IOStHist_arrow_spec
         ) else M4.raise Contract_failure)
       | None -> M4.raise Contract_failure)
 
-let _export_GIO_arrow_spec 
+let _export_M4wp_arrow_spec 
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
-  (pi_check:check_type)
-  (f:(x:t1 -> GIO t2 pi_check)) : 
+  (pi:monitorable_prop)
+  (post: t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0)
+  (f:(x:t1 -> M4wp t2 pi (post x))) : 
   Tot (d1.itype -> M4 d2.etype) =
     (fun (x:d1.itype) ->
       match import x with
       | Some x -> (
         // TODO: Cezar: The fact that we pass [] as the starting history means that this is 
         // correct only if we export whole programs.
-        let tree : io (events_trace * t2) = reify (f x) (gio_post pi_check []) [] in
+        let tree : io (events_trace * t2) = reify (f x) (m4wp_invariant_post pi []) [] in
         export (MFOUR?.reflect (fun _ -> iost_to_io tree) <: MFOUR t2 (fun p -> forall res. p res)))
       | None -> M4.raise Contract_failure)
 
@@ -201,14 +203,15 @@ instance exportable_IOStHist_arrow_spec
   Tot (exportable ((x:t1) -> IOStHist t2 (pre x) (post x))) = 
     mk_exportable (d1.itype -> M4 d2.etype) (_export_IOStHist_arrow_spec #t1 #d1 #t2 #d2 pre post)
 
-instance exportable_GIO_arrow_spec 
+instance exportable_M4wp_arrow_spec 
   (t1:Type) {| d1:importable t1 |} 
   (t2:Type) {| d2:exportable t2 |}
-  (pi_check:check_type) : 
-  Tot (exportable (t1 -> GIO t2 pi_check)) = 
+  (pi:monitorable_prop)
+  (post: t1 -> events_trace -> maybe (events_trace * t2) -> events_trace -> Type0) :
+  Tot (exportable (x:t1 -> M4wp t2 pi (post x))) = 
   mk_exportable 
     (d1.itype -> M4 d2.etype) 
-    (_export_GIO_arrow_spec pi_check)
+    (_export_M4wp_arrow_spec pi post)
 
 let rev_append_rev_append () : Lemma (
   forall (s0 le1 le2:events_trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
@@ -242,7 +245,7 @@ end
 
       
 
-let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = begin
+let rec _import_M4_to_M4wp #t2 (tree : io (t2)) (pi:monitorable_prop) : M4wp t2 pi (fun _ _ _ -> True) = begin
   match tree with
   | Return r -> r 
   | Throw r -> IOStHist.throw r
@@ -251,30 +254,30 @@ let rec _import_M4_to_GIO #t2 (tree : io (t2)) (pi:check_type) : GIO t2 pi = beg
       FStar.WellFounded.axiom1 fnc (Inl rez);
       let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
       rev_append_rev_append ();
-      _import_M4_to_GIO z' pi
+      _import_M4_to_M4wp z' pi
 end
 
 instance importable_M4_to_pi_GIO t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
-  importable(pi:check_type -> t1 -> GIO t2 pi) =
-  mk_importable (d1.etype -> M4 t2) #(pi:check_type -> t1 -> GIO t2 pi)
+  importable(pi:monitorable_prop -> t1 -> M4wp t2 pi (fun _ _ _ -> True)) =
+  mk_importable (d1.etype -> M4 t2) #(pi:monitorable_prop -> t1 -> M4wp t2 pi (fun _ _ _ -> True))
     (fun (f:(d1.etype -> M4 t2)) ->
-      let f' : (pi:check_type -> t1 -> GIO t2 pi) = (fun (pi:check_type) (x:t1) ->
+      let f' : (pi:monitorable_prop -> t1 -> M4wp t2 pi (fun _ _ _ -> True)) = (fun (pi:monitorable_prop) (x:t1) ->
         let x : d1.etype = export x in
         let tree = (* MFOUR?.*)reify (f x) (fun r -> True) in
-        _import_M4_to_GIO #t2 tree pi <: GIO t2 pi) in Some f')
+        _import_M4_to_M4wp #t2 tree pi <: M4wp t2 pi (fun _ _ _ -> True)) in Some f')
 
 
-instance importable_M4_to_GIO 
+instance importable_M4_to_M4wp 
   t1 {| d1:exportable t1 |} 
   t2 {| d2:ml t2 |} 
-  (pi:check_type) :
-  Tot (importable (t1 -> GIO t2 pi)) =
-  mk_importable (d1.etype -> M4 t2) #(t1 -> GIO t2 pi)
+  (pi:monitorable_prop) :
+  Tot (importable (t1 -> M4wp t2 pi (fun _ _ _ -> True))) =
+  mk_importable (d1.etype -> M4 t2) #(t1 -> M4wp t2 pi (fun _ _ _ -> True))
     (fun (f:(d1.etype -> M4 t2)) ->
-      let f' : (t1 -> GIO t2 pi) = (fun (x:t1) ->
+      let f' : (t1 -> M4wp t2 pi (fun _ _ _ -> True)) = (fun (x:t1) ->
         let x : d1.etype = export x in
         let tree = reify (f x) (fun r -> True) in
-        _import_M4_to_GIO #t2 tree pi <: GIO t2 pi) in Some f')
+        _import_M4_to_M4wp #t2 tree pi <: M4wp t2 pi (fun _ _ _ -> True)) in Some f')
 
 
 val allowed_file : string -> bool
@@ -292,17 +295,17 @@ let rec allowed_fd fd s0 =
   | EClose fd' _  :: t -> if fd = fd' then false else allowed_fd fd t
   | _ :: t -> allowed_fd fd t
 
-let pi : check_type = (fun s0 action -> 
+let pi : monitorable_prop = (fun s0 action -> 
   match action with
   | (| Openfile, fnm |) -> allowed_file(fnm)
   | (| Read, fd |) -> allowed_fd fd s0
   | (| Close, fd |) -> allowed_fd fd s0)
 
 // the plugin will be written in GIO (should be ML?)
-let plugin_type = (pi:check_type) -> file_descr -> GIO unit pi
+let plugin_type = (pi:monitorable_prop) -> file_descr -> M4wp unit pi (fun _ _ _ -> True)
 
 // import plugin_type 
-let webserver (plugin:plugin_type) : GIO unit pi =
+let webserver (plugin:plugin_type) : M4wp unit pi (fun _ _ _ -> True) =
   rev_append_rev_append ();
   let fd = pi_static_cmd Openfile pi "Demos.fst" in
   plugin pi fd
@@ -313,7 +316,7 @@ let m4_cmd (cmd:io_cmds) (argz: args cmd) : M4 (res cmd) =
 let plugin1 : file_descr -> M4 unit = fun fd ->
   m4_cmd Close fd
 
-// val plugin1_g : unit -> M4 ((pi:check_type) -> file_descr -> GIO unit pi)
+// val plugin1_g : unit -> M4 ((pi:monitorable_prop) -> file_descr -> GIO unit pi)
 // let plugin1_g () = exn_import plugin1
 
 // let sdx () : GIO unit pi = 
@@ -325,7 +328,7 @@ let plugin1 : file_descr -> M4 unit = fun fd ->
 //   let msg = m4_cmd Read fd in ()
 
 
-// val plugin2_g : (pi:check_type) -> file_descr -> GIO unit pi 
+// val plugin2_g : (pi:monitorable_prop) -> file_descr -> GIO unit pi 
 // let plugin2_g = import plugin2
   
 // let sdz () : GIO unit pi = 
@@ -356,7 +359,7 @@ let plugin1 : file_descr -> M4 unit = fun fd ->
 //   (t1:Type) {| d1:exportable t1 |}
 //   (t2:Type) {| d2:ml t2 |}
 //   (f:(d1.etype -> M4 t2))
-//   (pi:check_type) :
+//   (pi:monitorable_prop) :
 //   Tot (t1 -> GIO t2 pi) = admit ()
 
 // let someother
@@ -366,7 +369,7 @@ let plugin1 : file_descr -> M4 unit = fun fd ->
 //   (_:squash (forall x err s0 le. post x s0 (Inr err) le == true))
 //   {| d3:checkable4 post |}
 //   (f:(d1.etype -> M4 t2))
-//   (pi:check_type)
+//   (pi:monitorable_prop)
 //   (x:t1) :
 //   IOStHist t2
 //     (gio_pre pi)

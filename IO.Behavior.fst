@@ -7,6 +7,7 @@ open Common
 open IO.Free
 open IOStHist
 open M4
+open M4wp
 
 type set_of_traces (a:Type) = events_trace * a -> Type0
 
@@ -20,7 +21,7 @@ val set_of_traces_map : (#a:Type) -> (#b:Type) -> (a -> b) -> set_of_traces a ->
 let set_of_traces_map f p (es, b) = exists a . f a == b /\ p (es, a)
 
 let empty_set (#a:Type) () : set_of_traces a = fun (t,r) -> t == []
-let pi_to_set #a (pi : check_type) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
+let pi_to_set #a (pi : monitorable_prop) : set_of_traces a = fun (t, _) -> enforced_globally pi (List.rev t)
 
 
 val included_in : (#a:Type) -> (#b:Type) -> (b -> a) -> set_of_traces a -> set_of_traces b -> Type0
@@ -287,11 +288,11 @@ let beh_implies_iohist_interp
 let gio_post_implies_set_of_traces 
   (a : Type)
   (b : Type)
-  (pi : check_type)
+  (pi : monitorable_prop)
   (t : events_trace)
   (r : maybe (events_trace * b)) :
   Lemma 
-    (requires  (gio_post pi [] r t))
+    (requires  (m4wp_invariant_post pi [] r t))
     (ensures (pi_to_set pi (t, r))) = 
     List.Tot.Properties.append_l_nil (List.rev t);
     ()
@@ -317,7 +318,7 @@ let iohist_interp_shift_trace
 
 let rec gio_interpretation_implies_set_of_traces
   (a : Type)
-  (pi : check_type)
+  (pi : monitorable_prop)
   (m : io (events_trace * a)) 
   (le : events_trace)
   (r : maybe (events_trace * a)) 
@@ -339,26 +340,26 @@ let rec gio_interpretation_implies_set_of_traces
 
 
 unfold 
-let beh #a #b (pi:check_type) (ws:a -> GIO b pi) (x:a) =
-  behavior (reify (ws x) (gio_post pi []) [])
+let beh #a #b (pi:monitorable_prop) (ws:a -> M4wp b pi (fun _ _ _ -> True)) (x:a) =
+  behavior (reify (ws x) (m4wp_invariant_post pi []) [])
   
 let beh_gio_implies_post 
   (a : Type)
   (b : Type)
-  (pi : check_type)
+  (pi : monitorable_prop)
   (ws : a -> M4wp b pi (fun _ _ _ -> True)) 
   (x : a)
   (t : events_trace)
   (r : maybe (events_trace * b)) :
   Lemma 
     (requires (beh pi ws x (t, r)))
-    (ensures  (gio_post pi [] r t)) =
-  let ws' = reify (ws x) (gio_post pi []) [] in
-  gio_interpretation_implies_set_of_traces b pi ws' t r (gio_post pi []) 
+    (ensures  (m4wp_invariant_post pi [] r t)) =
+  let ws' = reify (ws x) (m4wp_invariant_post pi []) [] in
+  gio_interpretation_implies_set_of_traces b pi ws' t r (m4wp_invariant_post pi []) 
 
 let beh_gio_in_pi_0 
   (a b : Type)
-  (pi : check_type)
+  (pi : monitorable_prop)
   (ws : a -> M4wp b pi (fun _ _ _ -> True)) 
   (x : a)
   (t : events_trace)
@@ -371,7 +372,7 @@ let beh_gio_in_pi_0
   
 let beh_gio_in_pi
   (a b : Type)
-  (pi : check_type)
+  (pi : monitorable_prop)
   (ws : a -> M4wp b pi (fun _ _ _ -> True))
   (x : a) :
   Lemma (beh pi ws x `included_in id` pi_to_set pi) =

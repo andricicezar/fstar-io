@@ -161,9 +161,9 @@ let throw (err:exn) : IOStHistwp events_trace (fun s0 p -> p (Inr err) []) =
 // type iost a = events_trace -> io (events_trace * a)
   
 // DEFINE THE PRIMITIVES
-type check_type = (state:events_trace) -> (action:action_type) -> Tot bool
+type monitorable_prop = (state:events_trace) -> (action:action_type) -> Tot bool
 
-val default_check : check_type
+val default_check : monitorable_prop
 let default_check (state:events_trace) (action:action_type) =
   match action with
   | (| Openfile, fnm |) -> true
@@ -180,7 +180,7 @@ unfold let convert_event_to_action (event:io_event) : action_type =
   | EClose args _ -> (| Close, args |)
 
 
-let rec enforced_globally (check : (events_trace -> action_type -> bool)) (h : events_trace) : bool =
+let rec enforced_globally (check : monitorable_prop) (h : events_trace) : bool =
   match h with
   | [] -> true
   | h  ::  t ->
@@ -189,7 +189,7 @@ let rec enforced_globally (check : (events_trace -> action_type -> bool)) (h : e
          enforced_globally (check) t
        else false
 
-let rec enforced_locally (check : (events_trace -> action_type -> bool)) (acc : events_trace) (l : events_trace) : Tot bool (decreases l) =
+let rec enforced_locally (check : monitorable_prop) (acc : events_trace) (l : events_trace) : Tot bool (decreases l) =
   match l with
   | [] -> true
   | h  ::  t ->
@@ -244,12 +244,12 @@ let static_cmd
 
 let pi_static_cmd
   (cmd : io_cmds)
-  (pi_check : check_type)
+  (pi : monitorable_prop)
   (argz : args cmd) :
   IOStHist (res cmd)
     (requires (fun s0 ->
       default_check s0 (| cmd, argz |) &&
-      pi_check s0 (| cmd, argz |)))
+      pi s0 (| cmd, argz |)))
     (ensures (fun s0 result local_trace ->
       (match result with
       | Inl v -> let (s1, r) = v in (
@@ -258,15 +258,15 @@ let pi_static_cmd
       | Inr err ->
          local_trace == [convert_call_to_event cmd argz (Inr err)])
       /\ enforced_locally default_check s0 local_trace
-      /\ enforced_locally pi_check s0 local_trace)) =
+      /\ enforced_locally pi s0 local_trace)) =
   static_cmd cmd argz
 
 exception GIO_default_check_failed
-exception GIO_pi_check_failed
+exception GIO_pi_failed
 
 let mixed_cmd
   (cmd : io_cmds)
-  (pi_check : check_type)
+  (pi : monitorable_prop)
   (argz : args cmd) :
   IOStHist (res cmd)
     (requires (fun s0 -> default_check s0 (| cmd, argz |)))
@@ -279,16 +279,16 @@ let mixed_cmd
          local_trace == [convert_call_to_event cmd argz (Inr err)] \/
          local_trace == [])
       /\ enforced_locally default_check s0 local_trace
-      /\ enforced_locally pi_check s0 local_trace)) =
+      /\ enforced_locally pi s0 local_trace)) =
   let s0 = get () in
   let action = (| cmd, argz |) in
-  match pi_check s0 action with
-  | true -> pi_static_cmd cmd pi_check argz
-  | false -> throw GIO_pi_check_failed
+  match pi s0 action with
+  | true -> pi_static_cmd cmd pi argz
+  | false -> throw GIO_pi_failed
 
 let dynamic_cmd
   (cmd : io_cmds)
-  (pi_check : check_type)
+  (pi : monitorable_prop)
   (argz : args cmd) :
   IOStHist (res cmd) 
     (requires (fun s0 -> True))
@@ -301,44 +301,19 @@ let dynamic_cmd
          local_trace == [convert_call_to_event cmd argz (Inr err)] \/
          local_trace == [])
       /\ enforced_locally default_check s0 local_trace
-      /\ enforced_locally pi_check s0 local_trace)) = 
+      /\ enforced_locally pi s0 local_trace)) = 
   let s0 = get () in
   let action = (| cmd, argz |) in
   match default_check s0 action with
-  | true -> mixed_cmd cmd pi_check argz
+  | true -> mixed_cmd cmd pi argz
   | false -> throw GIO_default_check_failed
 
-let gio_pre (pi_check : check_type) (s0:events_trace) : Type0 =
-  enforced_globally default_check s0 &&
-  enforced_globally pi_check s0
-
-let gio_post 
-  #a 
-  (pi_check : check_type)
-  (s0:events_trace)
-  (result:maybe (events_trace * a))
-  (local_trace:events_trace) :
-  Tot Type0 =
-  enforced_globally (default_check) (apply_changes s0 local_trace) /\
-  enforced_globally (pi_check) (apply_changes s0 local_trace) /\
-  (match result with
-  | Inl v -> let (s1, r) = v in s1 == (apply_changes s0 local_trace)
-  | Inr _ -> True)
-
-effect GIO
-  (a:Type)
-  (pi_check : check_type) =
-  IOStHist a
-    (requires (gio_pre pi_check))
-    (ensures (gio_post pi_check))
-
-effect M4wp
-  (a:Type)
-  (pi_check : check_type) 
-  (post : events_trace -> maybe (events_trace * a) -> events_trace -> Type0) =
-  IOStHist a
-    (requires (gio_pre pi_check))
-    (ensures (fun h r le -> gio_post pi_check h r le /\ post h r le))
+// effect GIO
+//   (a:Type)
+//   (pi : monitorable_prop) =
+//   IOStHist a
+//     (requires (gio_pre pi))
+//     (ensures (gio_post pi))
 
 let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   io_bind (events_trace * t2) t2

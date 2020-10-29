@@ -9,6 +9,7 @@ open ExtraTactics
 open IO.Behavior
 open IOStHist
 open M4
+open M4wp
 open Minterop
 
 noeq type compiler = {
@@ -48,7 +49,6 @@ noeq type interface = {
   cpost : checkable4 post;
 }
 
-let monitorable_prop = check_type
 let safety_prop = pi_to_set
 
 type whole_s (i:interface) (pi:monitorable_prop) = unit -> M4wp i.c pi (fun _ _ _ -> True)
@@ -68,7 +68,7 @@ let beh_s
   (pi:monitorable_prop) 
   (ws:(x:a -> M4wp b pi (fun _ _ _ -> True))) 
   (x:a) =
-  behavior (reify (ws x) (gio_post pi []) [])
+  behavior (reify (ws x) (m4wp_invariant_post pi []) [])
 
 unfold
 let beh_t #a #b (wt:a -> M4 b) (x:a) =
@@ -90,7 +90,7 @@ let ctx_p_to_ctx_s
   (cp  : ctx_p i pi) : 
   Tot (ctx_s i pi) by (
     explode ();
-    tadmit ();
+    smt ();
     let zz = get_binder 9 in 
     focus (fun () ->
       let _ = t_destruct zz in
@@ -108,11 +108,13 @@ let ctx_p_to_ctx_s
       let br = intro () in
       let b = intro () in (* this one is the equality *)
       rewrite_eqs_from_context ();
-      l_to_r [`b];
+      // l_to_r [`b];
       norm [iota];
       ()
     );
     explode ();
+    tadmit ();
+    tadmit ();
     dump "h"
   ) =
   fun (x:i.a) -> 
@@ -153,7 +155,7 @@ let compile_prog
   Tot (prog_t i pi) =
     (fun (ct:ctx_p i pi) ->
       let cs = ctx_p_to_ctx_s i pi ct in
-      let tree : io (events_trace * i.c) = reify (f cs) (gio_post pi []) [] in
+      let tree : io (events_trace * i.c) = reify (f cs) (m4wp_invariant_post pi []) [] in
       export (M4?.reflect (fun _ -> iost_to_io tree) <: MFOUR i.c (fun p -> forall res. p res)))
 
 let compile_whole 
@@ -162,13 +164,13 @@ let compile_whole
   (f  : whole_s i pi) : 
   Tot (whole_t i) =
     (fun _ ->
-      let tree : io (events_trace * i.c) = reify (f ()) (gio_post pi []) [] in
+      let tree : io (events_trace * i.c) = reify (f ()) (m4wp_invariant_post pi []) [] in
       export (M4?.reflect (fun _ -> iost_to_io tree) <: MFOUR i.c (fun p -> forall res. p res)))
  
-val link_s  : (#i:interface) -> (#pi:check_type) -> ctx_s i pi -> prog_s i pi -> Tot (whole_s i pi)
+val link_s  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_s i pi -> prog_s i pi -> Tot (whole_s i pi)
 let link_s = (fun #i #pi c p -> (fun _ -> p c))
 
-val link_t  : (#i:interface) -> (#pi:check_type) -> ctx_t i -> prog_t i pi -> Tot (whole_t i)
+val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i -> prog_t i pi -> Tot (whole_t i)
 let link_t #i #pi c p : whole_t i = (fun _ -> p (ctx_t_to_ctx_p i pi c))
   
 let res_s   = (fun i -> maybe (events_trace * i.c))
@@ -184,7 +186,7 @@ let tp (i:interface) (pi:monitorable_prop) (ws:whole_s i pi) : Type0 =
   
 let seci_respects_tp
   (i  : interface)
-  (pi : check_type) 
+  (pi : monitorable_prop) 
   (ws  : whole_s i pi) :
   Lemma (tp i pi ws) = 
 
@@ -193,9 +195,9 @@ let seci_respects_tp
   let l1 = reify (wt ()) (fun _ -> True) in
 
   let l2 = reify (
-          (export (M4?.reflect (ref (iost_to_io (reify (ws ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) <: i.cd.etype)) (fun _ -> True) in 
+          (export (M4?.reflect (ref (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) <: i.cd.etype)) (fun _ -> True) in 
 
-  let l3s = reify (M4?.reflect (ref (iost_to_io (reify (ws ()) (gio_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) in
+  let l3s = reify (M4?.reflect (ref (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) in
   // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
   // behavior (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
   let l3 = (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
@@ -227,17 +229,17 @@ let seci_respects_tp
   assert (
       behavior (l3s (fun _ -> True))
       `included_in id`
-      behavior (iost_to_io (reify (ws ()) (gio_post pi []) []))
+      behavior (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))
   );
 
-  beh_iost_to_io i.c (reify (ws ()) (gio_post pi []) []);
+  beh_iost_to_io i.c (reify (ws ()) (m4wp_invariant_post pi []) []);
 
   assert (
-      behavior (iost_to_io (reify (ws ()) (gio_post pi []) []))
+      behavior (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))
       `included_in (inl_app cdr)` 
       beh_s pi ws ())
 
-val import_ctx_t : (#i:interface) -> (#pi:check_type) -> ctx_t i -> ctx_s i pi
+val import_ctx_t : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i -> ctx_s i pi
 let import_ctx_t #i #pi ct =
   ctx_p_to_ctx_s i pi (
     ctx_t_to_ctx_p i pi ct)
@@ -303,7 +305,7 @@ let seci_respects_rsp () :
 
 // let seci : compiler = {
 //   interface = interface;
-//   monitorable_prop = check_type;
+//   monitorable_prop = monitorable_prop;
 //   safety_prop = pi_to_set;
 
 //   set_of_traces = set_of_traces;
