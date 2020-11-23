@@ -3,8 +3,6 @@ module IO.Free
 open Common
 include Sys.Free
 
-type file_descr = int
-
 type io_cmds = | Openfile | Read | Close
 
 let io_cmd_sig : cmd_sig io_cmds = { 

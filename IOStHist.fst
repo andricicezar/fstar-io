@@ -4,8 +4,9 @@ open FStar.Tactics
 
 open Common
 open FStar.Exn
+include IIO.Free
 include IO.Free
-include IOHist
+include IO
 
 // UTILS
 let rec is_open (fd:file_descr) (past_events: events_trace) :
@@ -307,13 +308,6 @@ let dynamic_cmd
   match default_check s0 action with
   | true -> mixed_cmd cmd pi argz
   | false -> throw GIO_default_check_failed
-
-// effect GIO
-//   (a:Type)
-//   (pi : monitorable_prop) =
-//   IOStHist a
-//     (requires (gio_pre pi))
-//     (ensures (gio_post pi))
 
 let iost_to_io #t2 (tree : io (events_trace * t2)) : io t2 =
   io_bind (events_trace * t2) t2

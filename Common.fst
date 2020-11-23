@@ -4,6 +4,8 @@ open FStar.Exn
 
 type maybe a = either a exn
 
+type file_descr = int
+
 let compose #a #b #c (g:b->c) (f:a->b) = fun x -> g (f x)
 
 let id #a (x:a) = x
