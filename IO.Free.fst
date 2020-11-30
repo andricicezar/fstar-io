@@ -64,22 +64,35 @@ let io_return (a:Type) (x:a) = sys_return io_cmds io_sig a x
 let io_throw (a:Type) (x:exn) = sys_throw io_cmds io_sig a x
 let io_bind (a:Type) (b:Type) l k = sys_bind io_cmds io_sig a b l k
 
-// let rec cast_io_iio #a (x:io a) : iio a = 
-//   match x with
-//   | Return z -> Return z
-//   | Throw z -> Throw z
-//   | Cont (Call cmd args fnc) ->
-//          Cont (Call (cmd <: cmds) args (fun res ->
-//            FStar.WellFounded.axiom1 fnc res;
-//            cast_io_iio (fnc res)))
+// ACTIONS
+val io_openfile : io_args Openfile -> io (io_res Openfile) 
+let io_openfile fnm =
+  sys_perform (Call Openfile (fnm) (fun fd -> fd))
 
+val io_read : io_args Read -> io (io_res Read)
+let io_read fd =
+  sys_perform (Call Read (fd) (fun msg -> msg))
+
+val io_close : io_args Close -> io (io_res Close)
+let io_close fd =
+  sys_perform (Call Close (fd) (fun fd -> fd))
+
+val io_all : (cmd:io_cmds) -> io_args cmd -> io (io_res cmd)
+let io_all cmd args =
+  match cmd with
+  | Openfile -> io_openfile args
+  | Read -> io_read args
+  | Close -> io_close args
+
+// THE IIO FREE MONAD
 type iio = sys cmds all_sig
 let iio_return (a:Type) (x:a) = sys_return cmds all_sig a x
 let iio_throw (a:Type) (x:exn) = sys_throw cmds all_sig a x
 let iio_bind (a:Type) (b:Type) l k = sys_bind cmds all_sig a b l k
 
+// OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
-// DEFINE THE PRIMITIVES
+
 type monitorable_prop = (state:events_trace) -> (action:action_type) -> Tot bool
 
 unfold let convert_event_to_action (event:io_event) : action_type =
@@ -109,36 +122,3 @@ let rec enforced_globally (check : monitorable_prop) (h : events_trace) : bool =
 unfold
 let apply_changes (old_state local_trace:events_trace) = (List.rev local_trace) @ old_state
 
-val io_openfile : io_args Openfile -> io (io_res Openfile) 
-let io_openfile fnm =
-  sys_perform (Call Openfile (fnm) (fun fd -> fd))
-
-val io_read : io_args Read -> io (io_res Read)
-let io_read fd =
-  sys_perform (Call Read (fd) (fun msg -> msg))
-
-val io_close : io_args Close -> io (io_res Close)
-let io_close fd =
-  sys_perform (Call Close (fd) (fun fd -> fd))
-
-val io_all : (cmd:io_cmds) -> io_args cmd -> io (io_res cmd)
-let io_all cmd args =
-  match cmd with
-  | Openfile -> io_openfile args
-  | Read -> io_read args
-  | Close -> io_close args
-
-val iio_all : (cmd:io_cmds) -> io_args cmd -> iio (io_res cmd)
-let iio_all cmd args =
-  admit();
-  match cmd with
-  | GetTrace -> sys_perform (Call GetTrace () (fun h -> h))
-  | _ -> io_all cmd args
-  
-
-// val iio_all : (cmd:io_cmds) -> args cmd -> iio (res cmd)
-// let iio_all cmd args =
-//   match cmd with
-//   | Openfile -> iio_openfile args
-//   | Read -> iio_read args
-//   | Close -> iio_close args
