@@ -5,9 +5,10 @@ open FStar.Tactics
 
 open Common
 open IO.Free
-open IOStHist
-open M4
-open M4wp
+open IO.Effect
+open IIO.Effect
+open MIO.Effect
+open MIIO.Effect
 
 type set_of_traces (a:Type) = events_trace * a -> Type0
 
@@ -44,9 +45,9 @@ let rec behavior #a
 let beh_shift_trace
   #a
   (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
+  (argz : io_args cmd)
+  (rez : io_resm cmd)
+  (fnc : io_resm cmd -> io a)
   (t:events_trace)
   (r:maybe a) :
   Lemma 
@@ -57,9 +58,9 @@ let beh_shift_trace
 let beh_extend_trace 
   #a
   (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
+  (argz : io_args cmd)
+  (rez : io_resm cmd)
+  (fnc : io_resm cmd -> io a)
   (t:events_trace)
   (r:maybe a) :
   Lemma
@@ -71,9 +72,9 @@ let beh_extend_trace
 let beh_extend_trace_d
   #a
   (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
+  (argz : io_args cmd)
+  (rez : io_resm cmd)
+  (fnc : io_resm cmd -> io a)
   (t:events_trace) :
   Lemma
     (forall r. (behavior (fnc rez) (t, r) ==>
@@ -84,9 +85,9 @@ let beh_extend_trace_d
 let beh_extend_trace_in_bind 
   #a #b
   (cmd : io_cmds)
-  (argz : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> io a)
+  (argz : io_args cmd)
+  (rez : io_resm cmd)
+  (fnc : io_resm cmd -> io a)
   (k : a -> io b)
   (t:events_trace)
   (r:maybe b) :
@@ -96,10 +97,10 @@ let beh_extend_trace_in_bind
   calc (==) {
     io_bind a b (Cont (Call cmd argz fnc)) k;
     == {}
-    sys_bind io_cmds io_cmd_sig a b (Cont (Call cmd argz fnc)) k;
+    sys_bind io_cmds io_sig a b (Cont (Call cmd argz fnc)) k;
     == { _ by (norm [iota; delta]; compute ()) }
     Cont (sysf_fmap (Call cmd argz fnc) 
-      (fun fnci -> sys_bind io_cmds io_cmd_sig a b fnci k));
+      (fun fnci -> sys_bind io_cmds io_sig a b fnci k));
     == { _ by (norm [delta_only [`%sysf_fmap]]; 
                norm [iota]; 
                norm [delta_only [`%io_bind]]) }
