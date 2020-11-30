@@ -1,21 +1,21 @@
-module IO
+module IO.Effect
 
 open FStar.Tactics
 open ExtraTactics
 
 open Common
-open IIO.Free
+open IO.Free
 
-let iohist_post a = maybe a -> events_trace -> Type0  // local_events (from old to new)
-let iohist_wpty a = events_trace -> iohist_post a -> Type0  // past_events (from new to old; reversed compared with local_events)
+let io_post a = maybe a -> events_trace -> Type0  // local_events (from old to new)
+let io_wpty a = events_trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_events)
 
 unfold
-let iohist_return_wp (a:Type) (x:a) : iohist_wpty a =
+let io_return_wp (a:Type) (x:a) : io_wpty a =
   fun past_events p -> p (Inl x) []
 
 unfold
-let compute_post (a b:Type) (past_events:events_trace) (kw : a -> iohist_wpty b) (p:iohist_post b)
-  : iohist_post a =
+let compute_post (a b:Type) (past_events:events_trace) (kw : a -> io_wpty b) (p:io_post b)
+  : io_post a =
       (fun result local_events -> 
         match result with
         | Inl result -> (
@@ -26,11 +26,11 @@ let compute_post (a b:Type) (past_events:events_trace) (kw : a -> iohist_wpty b)
         | Inr err -> p (Inr err) local_events)
 
 unfold
-let iohist_bind_wp (a:Type) (b:Type) (w : iohist_wpty a) (kw : a -> iohist_wpty b) : iohist_wpty b =
+let io_bind_wp (a:Type) (b:Type) (w : io_wpty a) (kw : a -> io_wpty b) : io_wpty b =
   fun past_events p -> 
     w past_events (compute_post a b past_events kw p)
 
-unfold let gen_post #a (post:iohist_post a) (event:io_event) = 
+unfold let gen_post #a (post:io_post a) (event:io_event) = 
   fun x local_events -> post x (event :: local_events)
 
 unfold let convert_call_to_event (cmd:io_cmds) (args:args cmd) (res:resm cmd) =
@@ -39,9 +39,9 @@ unfold let convert_call_to_event (cmd:io_cmds) (args:args cmd) (res:resm cmd) =
   | Read -> ERead args res
   | Close -> EClose args res
 
-let rec iohist_interpretation #a
+let rec io_interpretation #a
   (m : io a) 
-  (p : iohist_post a) : Type0 = 
+  (p : io_post a) : Type0 = 
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
@@ -49,20 +49,20 @@ let rec iohist_interpretation #a
     forall res. (
       FStar.WellFounded.axiom1 fnc res;
       let event : io_event = convert_call_to_event cmd args res in
-      iohist_interpretation (fnc res) (gen_post p event)))
+      io_interpretation (fnc res) (gen_post p event)))
 
 
 // REFINED COMPUTATION MONAD (repr)
-let irepr (a:Type) (wp:iohist_wpty a) =
-  h:events_trace -> post:iohist_post a ->
+let irepr (a:Type) (wp:io_wpty a) =
+  h:events_trace -> post:io_post a ->
     Pure (io a)
       (requires (wp h post))
-      (ensures (fun (t:io a) -> iohist_interpretation t post))
+      (ensures (fun (t:io a) -> io_interpretation t post))
 
-let ireturn (a : Type) (x : a) : irepr a (iohist_return_wp a x) =
+let ireturn (a : Type) (x : a) : irepr a (io_return_wp a x) =
   fun _ _ -> io_return a x
 
-let w = iohist_wpty
+let w = io_wpty
 
 unfold
 val w_ord (#a : Type) : w a -> w a -> Type0
@@ -73,14 +73,14 @@ let apply_changes (old_state local_trace:events_trace) = (List.rev local_trace) 
 
 
 let ibind (a b : Type) (wp_v : w a) (wp_f: a -> w b) (v : irepr a wp_v)
-  (f : (x:a -> irepr b (wp_f x))) : irepr b (iohist_bind_wp _ _ wp_v wp_f) =
+  (f : (x:a -> irepr b (wp_f x))) : irepr b (io_bind_wp _ _ wp_v wp_f) =
   fun h p -> 
     let t = (io_bind a b 
         (v h (compute_post a b h wp_f p))
         (fun x ->
           assume (wp_f x h p);
            f x h p)) in
-    assume (iohist_interpretation t p);
+    assume (io_interpretation t p);
     t
 
 unfold
@@ -99,7 +99,7 @@ total
 reifiable
 reflectable
 layered_effect {
-  IOwp : a:Type -> wp : iohist_wpty a -> Effect
+  IOwp : a:Type -> wp : io_wpty a -> Effect
   with
        repr       = irepr
      ; return     = ireturn
@@ -120,7 +120,7 @@ effect IO
   (a:Type)
   (pre : events_trace -> Type0)
   (post : events_trace -> maybe a -> events_trace -> Type0) =
-  IOwp a (fun (h:events_trace) (p:iohist_post a) ->
+  IOwp a (fun (h:events_trace) (p:io_post a) ->
     pre h /\ (forall res le. post h res le ==>  p res le))
 
 let rec is_open (fd:file_descr) (past_events: events_trace) :
