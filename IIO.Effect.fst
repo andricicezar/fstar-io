@@ -103,14 +103,14 @@ let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
 
 sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
   
-effect IIO
+effect IIOi
   (a:Type)
   (pre : events_trace -> Type0)
   (post : events_trace -> maybe a -> events_trace -> Type0) =
   IIOwp a (fun (h:events_trace) (p:io_post a) ->
     pre h /\ (forall res le. post h res le ==>  p res le))
 
-let get_trace () : IIO events_trace (fun h -> True) 
+let get_trace () : IIOi events_trace (fun h -> True) 
   (fun h r le -> r == (Inl h) /\ le == []) =
   IIOwp?.reflect (fun _ _ -> sys_perform (Call GetTrace () (fun h -> h)))
 
@@ -121,7 +121,7 @@ let pi_static_cmd
   (cmd : io_cmds)
   (pi : monitorable_prop)
   (arg : args cmd) :
-  IIO (res cmd)
+  IIOi (res cmd)
     (requires (fun h ->
       default_check h (| cmd, arg |) &&
       pi h (| cmd, arg |)))
@@ -138,7 +138,7 @@ let mixed_cmd
   (cmd : io_cmds)
   (pi : monitorable_prop)
   (arg : args cmd) :
-  IIO (res cmd)
+  IIOi (res cmd)
     (requires (fun s0 -> default_check s0 (| cmd, arg |)))
     (ensures (fun h r le ->
       (match r with
@@ -158,7 +158,7 @@ let dynamic_cmd
   (cmd : io_cmds)
   (pi : monitorable_prop)
   (arg : args cmd) :
-  IIO (res cmd) 
+  IIOi (res cmd) 
     (requires (fun s0 -> True))
     (ensures (fun h r le ->
       (match r with
@@ -173,3 +173,25 @@ let dynamic_cmd
   match default_check s0 action with
   | true -> mixed_cmd cmd pi arg
   | false -> throw GIO_default_check_failed
+
+let iio_pre (pi_check : monitorable_prop) (s0:events_trace) : Type0 =
+  enforced_globally default_check s0 &&
+  enforced_globally pi_check s0
+
+let iio_invariant_post
+  (#a:Type)
+  (pi_check : monitorable_prop)
+  (s0:events_trace)
+  (result:maybe a)
+  (local_trace:events_trace) :
+  Tot Type0 =
+  enforced_globally (default_check) (apply_changes s0 local_trace) /\
+  enforced_globally (pi_check) (apply_changes s0 local_trace)
+
+effect IIO 
+  (a:Type)
+  (pi_check : monitorable_prop) 
+  (post : events_trace -> maybe a -> events_trace -> Type0) =
+  IIOi a
+    (requires (iio_pre pi_check))
+    (ensures (fun h r le -> iio_invariant_post pi_check h r le /\ post h r le))
