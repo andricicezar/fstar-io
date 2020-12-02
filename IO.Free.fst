@@ -5,7 +5,7 @@ include Sys.Free
 
 type cmds = | Openfile | Read | Close | GetTrace
 
-// observable actions
+// Observable actions
 type io_cmds = x:cmds{x = Openfile || x = Read || x = Close}
 
 let io_sig : cmd_sig io_cmds = { 
@@ -19,28 +19,40 @@ let io_sig : cmd_sig io_cmds = {
     | Close -> unit)
 }
 
+(** It is obvious that the primitives have no reason to throw 
+`Contract_failure`, because they do not enforce any policy. 
+In practice, a primitive can throw any error, but I think
+this is an assumption we can make to have more precise specification.
+`Contract_failure` is an exception defined by us in `Common.fst` **)
 unfold let io_args (op:io_cmds) : Type = io_sig.args op
 unfold let io_res (op:io_cmds) = io_sig.res op
-unfold let io_resm (op:io_cmds) = maybe (io_sig.res op)
+unfold let io_resm (op:io_cmds) = r:(maybe (io_sig.res op)){~(Inr? r /\ Inr?.v r == Contract_failure)}
 
 noeq
-type io_event =
-    | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> io_event
-    | ERead     : a:io_args Read     -> (r:io_resm Read)     -> io_event
-    | EClose    : a:io_args Close    -> (r:io_resm Close)    -> io_event
+type event =
+  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
+  | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
+  | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
 
-type events_trace = list io_event
+type trace = list event
 
 // silent actions/steps
-// Silent steps refer to the impossibility of an observer to seeing them, and equivalence of computations. Two computations, one that uses GetTrace and does some IO, and another that does directly the same IO thing without playing with the trace, are equivalent from the observer point of view.
+(** Silent steps refer to the impossibility of an observer to see
+them. Two computations, one that uses GetTrace and does some IO, 
+and another that does directly the same IO thing without playing with the trace, are equivalent from the observer point of view. **)
 type tau_cmds = x:cmds{x = GetTrace}
 
-
+(** We only need GetTrace because we assume that our actions are
+updating the trace for us. Therefore, at extraction, our actions
+should be linked with wrapped primitives that initialize a 
+trace on the heap (?) and updates it with events. 
+GetTrace will be linked with a function that returns the reference
+to the trace from the heap. **)
 let tau_sig : cmd_sig tau_cmds = { 
   args = (fun (x:tau_cmds) -> match x with
     | GetTrace -> unit ) ;
   res = (fun (x:tau_cmds) -> match x with
-    | GetTrace -> list io_event)
+    | GetTrace -> list event)
 }
 
 let add_sig 
@@ -56,69 +68,55 @@ let add_sig
 let all_sig = add_sig io_sig tau_sig 
 
 unfold let args (op:cmds) : Type = all_sig.args op
-unfold let res (op:cmds) = all_sig.res op
-unfold let resm (op:cmds) = maybe (all_sig.res op)
+unfold let res (op:cmds)  : Type = all_sig.res op
+unfold let resm (op:cmds) : Type = maybe (all_sig.res op)
 
 type io = sys io_cmds io_sig
-let io_return (a:Type) (x:a) = sys_return io_cmds io_sig a x
-let io_throw (a:Type) (x:exn) = sys_throw io_cmds io_sig a x
-let io_bind (a:Type) (b:Type) l k = sys_bind io_cmds io_sig a b l k
+let io_return (a:Type) (x:a) : io a= sys_return io_cmds io_sig a x
+let io_throw (a:Type) (x:exn) : io a= sys_throw io_cmds io_sig a x
+let io_bind (a:Type) (b:Type) l k : io b = sys_bind io_cmds io_sig a b l k
 
-// ACTIONS
-val io_openfile : io_args Openfile -> io (io_res Openfile) 
-let io_openfile fnm =
-  sys_perform (Call Openfile (fnm) (fun fd -> fd))
-
-val io_read : io_args Read -> io (io_res Read)
-let io_read fd =
-  sys_perform (Call Read (fd) (fun msg -> msg))
-
-val io_close : io_args Close -> io (io_res Close)
-let io_close fd =
-  sys_perform (Call Close (fd) (fun fd -> fd))
-
-val io_all : (cmd:io_cmds) -> io_args cmd -> io (io_res cmd)
-let io_all cmd args =
-  match cmd with
-  | Openfile -> io_openfile args
-  | Read -> io_read args
-  | Close -> io_close args
+let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
+  sys_perform (Call cmd arg (fun fd -> fd))
 
 // THE IIO FREE MONAD
 type iio = sys cmds all_sig
-let iio_return (a:Type) (x:a) = sys_return cmds all_sig a x
-let iio_throw (a:Type) (x:exn) = sys_throw cmds all_sig a x
-let iio_bind (a:Type) (b:Type) l k = sys_bind cmds all_sig a b l k
+let iio_return (a:Type) (x:a) : iio a = sys_return cmds all_sig a x
+let iio_throw (a:Type) (x:exn) : iio a = sys_throw cmds all_sig a x
+let iio_bind (a:Type) (b:Type) l k : iio b = sys_bind cmds all_sig a b l k
 
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
 
-type monitorable_prop = (state:events_trace) -> (action:action_type) -> Tot bool
+type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
 
-unfold let convert_event_to_action (event:io_event) : action_type =
-  match event with
-  | EOpenfile args _ -> (| Openfile, args |)
-  | ERead args _ -> (| Read, args |)
-  | EClose args _ -> (| Close, args |)
+let convert_event_to_action (e:event) : action_type =
+  match e with
+  | EOpenfile arg _ -> (| Openfile, arg |)
+  | ERead arg _ -> (| Read, arg |)
+  | EClose arg _ -> (| Close, arg |)
 
-let rec enforced_locally (check : monitorable_prop) (acc : events_trace) (l : events_trace) : Tot bool (decreases l) =
+let convert_call_to_event (cmd:io_cmds) (arg:io_args cmd) (r:io_resm cmd) =
+  match cmd with
+  | Openfile -> EOpenfile arg r
+  | Read -> ERead arg r
+  | Close -> EClose arg r
+
+let rec enforced_locally (check : monitorable_prop) (h l: trace) : Tot bool (decreases l) =
   match l with
   | [] -> true
-  | h  ::  t ->
-       let action = convert_event_to_action h in
-       if check acc action then
-         enforced_locally (check) (h::acc) t
-       else false
+  | hd  ::  t ->
+    let action = convert_event_to_action hd in
+    if check h action then enforced_locally (check) (hd::h) t
+    else false
 
-let rec enforced_globally (check : monitorable_prop) (h : events_trace) : bool =
+let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
   match h with
   | [] -> true
   | h  ::  t ->
-       let action = convert_event_to_action h in
-       if check t action then
-         enforced_globally (check) t
-       else false
+    let action = convert_event_to_action h in
+    if check t action then enforced_globally (check) t
+    else false
 
 unfold
-let apply_changes (old_state local_trace:events_trace) = (List.rev local_trace) @ old_state
-
+let apply_changes (history local_events:trace) : Tot trace = (List.rev local_events) @ history 

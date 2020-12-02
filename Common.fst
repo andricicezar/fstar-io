@@ -2,8 +2,7 @@ module Common
 
 open FStar.Exn
 
-exception GIO_default_check_failed
-exception GIO_pi_failed
+exception Contract_failure
 
 type maybe a = either a exn
 
