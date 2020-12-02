@@ -25,7 +25,6 @@ let rec iio_interpretation #a
       let e : event = convert_call_to_event cmd args res in
       iio_interpretation (fnc res) (e::h) (gen_post p e)))
 
-
 // REFINED COMPUTATION MONAD (repr)
 let iio_irepr (a:Type) (wp:io_wpty a) =
   h:trace -> post:io_post a ->
@@ -79,8 +78,7 @@ layered_effect {
 }
 
 let lift_pure_iiowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
-  Pure (iio_irepr a (fun s0 p -> wp (fun r -> p (Inl r) []))) (requires True)
-                    (ensures (fun _ -> True))
+  Tot (iio_irepr a (fun s0 p -> wp (fun r -> p (Inl r) [])))
   = fun s0 p -> let r = elim_pure f (fun r -> p (Inl r) []) in iio_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
@@ -145,7 +143,7 @@ effect IIOPrePost
 
 let get_trace () : IIOwp trace 
   (fun h p -> forall r le. r == (Inl h) /\ le == [] ==>  p r le) =
-  IIOwp?.reflect (fun _ _ -> sys_perform (Call GetTrace () (fun h -> h)))
+  IIOwp?.reflect (fun _ _ -> iio_get_trace ())
 
 let throw (err:exn) : IIOwp trace (fun _ p -> p (Inr err) []) =
   IIOwp?.reflect(fun _ _ -> iio_throw _ err)

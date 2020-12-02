@@ -33,11 +33,6 @@ let io_bind_wp (a:Type) (b:Type) (w : io_wpty a) (kw : a -> io_wpty b) : io_wpty
 let gen_post #a (post:io_post a) (e:event) = 
   fun x local_events -> post x (e :: local_events)
 
-// It is weird that this interpretation knows about
-// contract failure. Somebody will be able to throw this errors
-// manually so, I don't think this is the best place to do them.
-// Probably it will be better to refine the output of the `io_all`
-// than to modify the interpretation here.
 let rec io_interpretation #a
   (m : io a) 
   (p : io_post a) : Type0 = 
@@ -142,9 +137,7 @@ let static_cmd
   IO (res cmd)
     (requires (fun h -> default_check h (| cmd, argz |)))
     (ensures (fun h r local_trace ->
-      (match r with
-      | Inr Contract_failure -> False
-      | _ -> True) /\
+      ~(Inr? r /\ Inr?.v r == Contract_failure) /\
       local_trace == [convert_call_to_event cmd argz r]
       /\ enforced_locally default_check h local_trace
   )) =

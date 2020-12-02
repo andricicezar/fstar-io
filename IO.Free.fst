@@ -84,6 +84,7 @@ type iio = sys cmds all_sig
 let iio_return (a:Type) (x:a) : iio a = sys_return cmds all_sig a x
 let iio_throw (a:Type) (x:exn) : iio a = sys_throw cmds all_sig a x
 let iio_bind (a:Type) (b:Type) l k : iio b = sys_bind cmds all_sig a b l k
+let iio_get_trace () : iio trace = sys_perform (Call GetTrace () (fun h -> h))
 
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
