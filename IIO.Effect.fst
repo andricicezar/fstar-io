@@ -93,7 +93,7 @@ let rec cast_io_iio #a (x:io a) : iio a =
        cast_io_iio (fnc res)))
 
 let rec io_interp_to_iio_interp' (#a:Type u#a) 
-  (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> sys io_cmds io_sig a)) 
+  (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> io a)) 
   (h:trace) (p:io_post a) 
   (r:(io_resm cmd)) :
   Lemma
@@ -125,9 +125,7 @@ let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
   | _ -> ()
 
 let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
-  Pure (iio_irepr a (fun s0 p -> wp s0 (fun r le -> p r le))) 
-    (requires True)
-    (ensures (fun _ -> True)) = 
+  Tot (iio_irepr a (fun s0 p -> wp s0 (fun r le -> p r le))) = 
   fun s0 p ->
     io_interp_to_iio_interp (f s0 p) s0 p;
     cast_io_iio (f s0 p)
