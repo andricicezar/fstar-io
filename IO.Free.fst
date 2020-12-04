@@ -78,7 +78,6 @@ unfold let args (op:cmds) : Type = all_sig.args op
 unfold let res (op:cmds)  : Type = all_sig.res op
 unfold let resm (op:cmds) : Type = maybe (all_sig.res op)
 
-// TODO: free should become free
 type io = free io_cmds io_sig
 let io_return (a:Type) (x:a) : io a= free_return io_cmds io_sig a x
 let io_throw (a:Type) (x:exn) : io a= free_throw io_cmds io_sig a x
@@ -96,9 +95,6 @@ let iio_bind (a:Type) (b:Type) l k : iio b = free_bind cmds all_sig a b l k
 let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
   free_perform (Call cmd arg (fun fd -> fd))
   
-// TODO: remove this
-let iio_get_trace () : iio trace = free_perform (Call GetTrace () (fun h -> h))
-
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
 
@@ -125,13 +121,23 @@ let rec enforced_locally (check : monitorable_prop) (h l: trace) : Tot bool (dec
     else false
 
 let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
-  (** enforced_locally check [] h **)
+  (** enforced_locally check [] h // - fstar does not like this **)
   match h with
   | [] -> true
   | h  ::  t ->
     let action = convert_event_to_action h in
     if check t action then enforced_globally (check) t
     else false
+
+let rev_append_rev_append () : Lemma (
+  forall (h le1 le2:trace). ((List.rev le2) @ (List.rev le1) @ h) ==
+     ((List.rev (le1@le2)) @ h)) =
+  let aux (h le1 le2:trace) : Lemma (
+    ((List.rev le2) @ (List.rev le1) @ h) ==
+       ((List.rev (le1@le2)) @ h)) = begin
+    List.rev_append le1 le2;
+    List.append_assoc (List.rev le2) (List.rev le1) h
+  end in Classical.forall_intro_3 aux
 
 unfold
 let apply_changes (history local_events:trace) : Tot trace = (List.rev local_events) @ history 

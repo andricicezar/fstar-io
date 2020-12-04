@@ -91,7 +91,7 @@ let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ 
   | Cont (Call cmd argz fnc) ->
       let rez : res cmd = dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : sys cmds all_sig t2 = fnc (Inl rez) in
+      let z' : free cmds all_sig t2 = fnc (Inl rez) in
       rev_append_rev_append ();
       handle z' pi
 end

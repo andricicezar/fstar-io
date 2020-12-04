@@ -57,11 +57,6 @@ unfold
 let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : iio_irepr a wp1) :
   Pure (iio_irepr a wp2) (requires io_wpty_ord wp2 wp1) (ensures fun _ -> True) = f
 
-// TODO: remove this
-unfold
-let wp_if_then_else (#a:Type) (wp1 wp2:io_wpty a) (b:bool) : io_wpty a =
-  fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
-
 unfold
 let i_if_then_else (a : Type) (wp1 wp2 : io_wpty a) (f : iio_irepr a wp1) (g : iio_irepr a wp2) (b : bool) : Type =
   iio_irepr a (wp_if_then_else wp1 wp2 b)
@@ -86,7 +81,8 @@ let lift_pure_iiowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
 
-(** We need this because we do not have depth subtyping on inductives **)
+(** This is a identity function, and we need it because 
+F* does not have depth subtyping on inductives. **)
 let rec cast_io_iio #a (x:io a) : iio a =
   match x with
   | Return z -> Return z
@@ -145,7 +141,7 @@ effect IIOPrePost
 
 let get_trace () : IIOwp trace 
   (fun h p -> forall r le. r == (Inl h) /\ le == [] ==>  p r le) =
-  IIOwp?.reflect (fun _ _ -> iio_get_trace ())
+  IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
 
 let throw (err:exn) : IIOwp trace (fun _ p -> p (Inr err) []) =
   IIOwp?.reflect(fun _ _ -> iio_throw _ err)

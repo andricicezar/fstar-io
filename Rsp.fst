@@ -64,18 +64,6 @@ type ctx_t (i:interface) = i.ad -> MIO i.b
 type prog_s (i:interface) (pi:monitorable_prop) = ctx_s i pi -> IIO i.c pi (fun _ _ _ -> True)
 type prog_t (i:interface) (pi:monitorable_prop) = ctx_p i pi -> MIIO i.cd
 
-
-let rev_append_rev_append () : Lemma (
-  forall (s0 le1 le2:trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
-     ((List.rev (le1@le2)) @ s0)) =
-  let aux (s0 le1 le2:trace) : Lemma (
-    ((List.rev le2) @ (List.rev le1) @ s0) ==
-       ((List.rev (le1@le2)) @ s0)) = begin
-    List.rev_append le1 le2;
-    List.append_assoc (List.rev le2) (List.rev le1) s0
-  end in Classical.forall_intro_3 aux
-
-
 let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
   match tree with
   | Return r -> r 
@@ -88,7 +76,7 @@ let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ 
   | Cont (Call cmd argz fnc) ->
       let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : sys cmds all_sig t2 = fnc (Inl rez) in
+      let z' : iio t2 = fnc (Inl rez) in
       rev_append_rev_append ();
       handle z' pi
 end
@@ -114,7 +102,7 @@ let ctx_t_to_ctx_p
     // Cezar: I don't think post unfolded like that is ok.
     handle (cast_io_iio (reify (ct x) h (fun _ _ -> True))) pi
 
-let extract_local_events (s0 s1:trace) :
+eet extract_local_events (s0 s1:trace) :
   Pure trace
     (requires (exists le. s1 == apply_changes s0 le))
     (ensures (fun le -> s1 == apply_changes s0 le)) = 

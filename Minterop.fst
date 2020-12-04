@@ -11,17 +11,6 @@ open MIIO.Effect
 
 type ctx_t (a b:Type) = a -> MIIO b
 
-let rev_append_rev_append () : Lemma (
-  forall (s0 le1 le2:trace). ((List.rev le2) @ (List.rev le1) @ s0) ==
-     ((List.rev (le1@le2)) @ s0)) =
-  let aux (s0 le1 le2:trace) : Lemma (
-    ((List.rev le2) @ (List.rev le1) @ s0) ==
-       ((List.rev (le1@le2)) @ s0)) = begin
-    List.rev_append le1 le2;
-    List.append_assoc (List.rev le2) (List.rev le1) s0
-  end in Classical.forall_intro_3 aux
-
-
 let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
   match tree with
   | Return r -> r 
@@ -34,7 +23,7 @@ let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ 
   | Cont (Call cmd argz fnc) ->
       let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : sys cmds all_sig t2 = fnc (Inl rez) in
+      let z' : iio t2 = fnc (Inl rez) in
       rev_append_rev_append ();
       handle z' pi
 end
