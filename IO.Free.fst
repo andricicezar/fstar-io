@@ -1,7 +1,7 @@
 module IO.Free
 
 open Common
-include Sys.Free
+include Free
 
 type cmds = | Openfile | Read | Close | GetTrace
 
@@ -39,7 +39,8 @@ type trace = list event
 // silent actions/steps
 (** Silent steps refer to the impossibility of an observer to see
 them. Two computations, one that uses GetTrace and does some IO, 
-and another that does directly the same IO thing without playing with the trace, are equivalent from the observer point of view. **)
+and another that does directly the same IO thing without playing 
+with the trace, are equivalent from the observer point of view. **)
 type tau_cmds = x:cmds{x = GetTrace}
 
 (** We only need GetTrace because we assume that our actions are
@@ -48,9 +49,15 @@ should be linked with wrapped primitives that initialize a
 trace on the heap (?) and updates it with events. 
 GetTrace will be linked with a function that returns the reference
 to the trace from the heap. **)
+
+(** Is our assumption limiting how the IO effect can be used?
+ What if somebody wants to use only the IO effect? Then,
+at extraction, they have to be careful to link it directly with the
+primitives, and not with the wrapped version, otherwise, they will
+suffer a performance penalty. **)
 let tau_sig : cmd_sig tau_cmds = { 
   args = (fun (x:tau_cmds) -> match x with
-    | GetTrace -> unit ) ;
+    | GetTrace -> unit) ;
   res = (fun (x:tau_cmds) -> match x with
     | GetTrace -> list event)
 }
@@ -71,20 +78,26 @@ unfold let args (op:cmds) : Type = all_sig.args op
 unfold let res (op:cmds)  : Type = all_sig.res op
 unfold let resm (op:cmds) : Type = maybe (all_sig.res op)
 
-type io = sys io_cmds io_sig
-let io_return (a:Type) (x:a) : io a= sys_return io_cmds io_sig a x
-let io_throw (a:Type) (x:exn) : io a= sys_throw io_cmds io_sig a x
-let io_bind (a:Type) (b:Type) l k : io b = sys_bind io_cmds io_sig a b l k
+// TODO: free should become free
+type io = free io_cmds io_sig
+let io_return (a:Type) (x:a) : io a= free_return io_cmds io_sig a x
+let io_throw (a:Type) (x:exn) : io a= free_throw io_cmds io_sig a x
+let io_bind (a:Type) (b:Type) l k : io b = free_bind io_cmds io_sig a b l k
 
 let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
-  sys_perform (Call cmd arg (fun fd -> fd))
+  free_perform (Call cmd arg (fun fd -> fd))
 
 // THE IIO FREE MONAD
-type iio = sys cmds all_sig
-let iio_return (a:Type) (x:a) : iio a = sys_return cmds all_sig a x
-let iio_throw (a:Type) (x:exn) : iio a = sys_throw cmds all_sig a x
-let iio_bind (a:Type) (b:Type) l k : iio b = sys_bind cmds all_sig a b l k
-let iio_get_trace () : iio trace = sys_perform (Call GetTrace () (fun h -> h))
+type iio = free cmds all_sig
+let iio_return (a:Type) (x:a) : iio a = free_return cmds all_sig a x
+let iio_throw (a:Type) (x:exn) : iio a = free_throw cmds all_sig a x
+let iio_bind (a:Type) (b:Type) l k : iio b = free_bind cmds all_sig a b l k
+
+let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
+  free_perform (Call cmd arg (fun fd -> fd))
+  
+// TODO: remove this
+let iio_get_trace () : iio trace = free_perform (Call GetTrace () (fun h -> h))
 
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
@@ -112,6 +125,7 @@ let rec enforced_locally (check : monitorable_prop) (h l: trace) : Tot bool (dec
     else false
 
 let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
+  (** enforced_locally check [] h **)
   match h with
   | [] -> true
   | h  ::  t ->

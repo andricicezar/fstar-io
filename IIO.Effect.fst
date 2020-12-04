@@ -15,10 +15,12 @@ let rec iio_interpretation #a
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
+  (** silent actions / tau_cmds **)
   | Cont (Call GetTrace args fnc) -> (
     FStar.WellFounded.axiom1 fnc (Inl h);
     iio_interpretation (fnc (Inl h)) h p
   )
+  (** observable actions / io_cmds **)
   | Cont (Call cmd args fnc) -> (
     forall res. (
       FStar.WellFounded.axiom1 fnc res;
@@ -55,6 +57,7 @@ unfold
 let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : iio_irepr a wp1) :
   Pure (iio_irepr a wp2) (requires io_wpty_ord wp2 wp1) (ensures fun _ -> True) = f
 
+// TODO: remove this
 unfold
 let wp_if_then_else (#a:Type) (wp1 wp2:io_wpty a) (b:bool) : io_wpty a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
@@ -78,11 +81,12 @@ layered_effect {
 }
 
 let lift_pure_iiowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (iio_irepr a (fun s0 p -> wp (fun r -> p (Inl r) [])))
-  = fun s0 p -> let r = elim_pure f (fun r -> p (Inl r) []) in iio_return _ r
+  Tot (iio_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
+  = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in iio_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
 
+(** We need this because we do not have depth subtyping on inductives **)
 let rec cast_io_iio #a (x:io a) : iio a =
   match x with
   | Return z -> Return z
@@ -125,10 +129,10 @@ let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
   | _ -> ()
 
 let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
-  Tot (iio_irepr a (fun s0 p -> wp s0 (fun r le -> p r le))) = 
-  fun s0 p ->
-    io_interp_to_iio_interp (f s0 p) s0 p;
-    cast_io_iio (f s0 p)
+  Tot (iio_irepr a (fun h p -> wp h (fun r le -> p r le))) = 
+  fun h p ->
+    io_interp_to_iio_interp (f h p) h p;
+    cast_io_iio (f h p)
 
 sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
   
@@ -167,7 +171,7 @@ let mixed_cmd
   (pi : monitorable_prop)
   (arg : args cmd) :
   IIOPrePost (res cmd)
-    (requires (fun s0 -> default_check s0 (| cmd, arg |)))
+    (requires (fun h -> default_check h (| cmd, arg |)))
     (ensures (fun h r le ->
       (match r with
       | Inr Contract_failure -> le == []
@@ -175,9 +179,9 @@ let mixed_cmd
       /\ enforced_locally default_check h le
       /\ enforced_locally pi h le
       )) =
-  let s0 = get_trace () in
+  let h = get_trace () in
   let action = (| cmd, arg |) in
-  match pi s0 action with
+  match pi h action with
   | true -> pi_static_cmd cmd pi arg
   | false -> throw Contract_failure 
 
@@ -186,7 +190,7 @@ let dynamic_cmd
   (pi : monitorable_prop)
   (arg : args cmd) :
   IIOPrePost (res cmd) 
-    (requires (fun s0 -> True))
+    (requires (fun h -> True))
     (ensures (fun h r le ->
       (match r with
       | Inr Contract_failure -> le == []
@@ -194,25 +198,25 @@ let dynamic_cmd
       /\ enforced_locally default_check h le
       /\ enforced_locally pi h le
   )) =
-  let s0 = get_trace () in
+  let h = get_trace () in
   let action = (| cmd, arg |) in
-  match default_check s0 action with
+  match default_check h action with
   | true -> mixed_cmd cmd pi arg
   | false -> throw Contract_failure
 
-let iio_pre (pi : monitorable_prop) (s0:trace) : Type0 =
-  enforced_globally default_check s0 &&
-  enforced_globally pi s0
+let iio_pre (pi : monitorable_prop) (h:trace) : Type0 =
+  enforced_globally default_check h &&
+  enforced_globally pi h
 
 let iio_post
   (#a:Type)
   (pi : monitorable_prop)
-  (s0:trace)
+  (h:trace)
   (result:maybe a)
   (local_trace:trace) :
   Tot Type0 =
-  enforced_globally (default_check) (apply_changes s0 local_trace) /\
-  enforced_globally (pi) (apply_changes s0 local_trace)
+  enforced_globally (default_check) (apply_changes h local_trace) /\
+  enforced_globally (pi) (apply_changes h local_trace)
 
 effect IIO 
   (a:Type)

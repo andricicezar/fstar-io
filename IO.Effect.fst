@@ -6,8 +6,8 @@ open ExtraTactics
 open Common
 open IO.Free
 
-let io_post a = maybe a -> trace -> Type0  // local_events (from old to new)
-let io_wpty a = trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_events)
+let io_post a = maybe a -> le:trace -> Type0  // local_events (from old to new)
+let io_wpty a = h:trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_events)
 
 unfold
 let io_return_wp (a:Type) (x:a) : io_wpty a =
@@ -48,10 +48,12 @@ let rec io_interpretation #a
 
 // REFINED COMPUTATION MONAD (repr)
 let io_irepr (a:Type) (wp:io_wpty a) =
+  // TODO: more intuition about this? why does this look like a
+  // reader monad? 
   h:trace -> post:io_post a ->
     Pure (io a)
       (requires (wp h post))
-      (ensures (fun (t:io a) -> io_interpretation t post))
+      (ensures (fun (m:io a) -> io_interpretation m post))
 
 let io_ireturn (a : Type) (x : a) : io_irepr a (io_return_wp a x) =
   fun _ _ -> io_return a x
@@ -102,6 +104,9 @@ let lift_pure_iowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)
   = fun s0 p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
+
+let throw (err:exn) : IOwp trace (fun _ p -> p (Inr err) []) =
+  IOwp?.reflect(fun _ _ -> io_throw _ err)
   
 effect IO
   (a:Type)
@@ -141,3 +146,6 @@ let static_cmd
       /\ enforced_locally default_check h local_trace
   )) =
   IOwp?.reflect(fun _ _ -> io_call cmd argz)
+
+
+// let fd = static_cmd Openfile "../Makefile" 
