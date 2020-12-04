@@ -40,12 +40,12 @@ let ctx_t_to_ctx_p
 
 // IO -> IIO (Done)
 // IIO -> IO (not possible, because the runtime checks can not be enforced statically)
-// IO -> MIO (Automatically)
-// MIO -> IO (Automatically)
-// IIO -> MIIO (Automatically)
+// IO -> MIO (they are synonyms)
+// MIO -> IO (not done, but it is not relevant. reification should be used to enforce preconditions)
+// IIO -> MIIO (they are synonyms)
 // MIIO -> MIO (Not possible because of GetTrace)
 // MIO -> MIIO (Lift from IO to IIO should work here too)
-// MIIO -> IIO (Should do)
+// MIIO -> IIO (done, using reification)
 // MIO -> IIO (Should come from the other two).
 
  

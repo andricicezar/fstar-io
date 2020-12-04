@@ -115,37 +115,17 @@ effect IO
   IOwp a (fun (h:trace) (p:io_post a) ->
     pre h /\ (forall res le. post h res le ==>  p res le))
 
-let rec is_open (fd:file_descr) (h: trace) :
-  Tot bool =
-  match h with
-  | [] -> false
-  | h :: tail -> match h with
-               | EOpenfile _ (Inl fd') ->
-                   if fd = fd' then true
-                   else is_open fd tail
-               | EClose fd' _ -> 
-                    if fd = fd' then false
-                    else is_open fd tail
-               | _ -> is_open fd tail
-
-val default_check : monitorable_prop
-let default_check (h:trace) (action:action_type) =
-  match action with
-  | (| Openfile, fnm |) -> true
-  | (| Read, fd |) -> is_open fd h
-  | (| Close, fd |) -> is_open fd h
-
 let static_cmd
   (cmd : io_cmds)
+  (pi : monitorable_prop)
   (argz : io_args cmd) :
   IO (res cmd)
-    (requires (fun h -> default_check h (| cmd, argz |)))
+    (requires (fun h -> pi h (| cmd, argz |)))
     (ensures (fun h r local_trace ->
       ~(Inr? r /\ Inr?.v r == Contract_failure) /\
       local_trace == [convert_call_to_event cmd argz r]
-      /\ enforced_locally default_check h local_trace
+      /\ enforced_locally pi h local_trace
   )) =
   IOwp?.reflect(fun _ _ -> io_call cmd argz)
-
 
 // let fd = static_cmd Openfile "../Makefile" 

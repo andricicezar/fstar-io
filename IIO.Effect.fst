@@ -146,41 +146,6 @@ let get_trace () : IIOwp trace
 let throw (err:exn) : IIOwp trace (fun _ p -> p (Inr err) []) =
   IIOwp?.reflect(fun _ _ -> iio_throw _ err)
 
-let pi_static_cmd
-  (cmd : io_cmds)
-  (pi : monitorable_prop)
-  (arg : args cmd) :
-  IIOPrePost (res cmd)
-    (requires (fun h ->
-      default_check h (| cmd, arg |) &&
-      pi h (| cmd, arg |)))
-    (ensures (fun h r le ->
-      (match r with
-      | Inr Contract_failure -> False
-      | _ -> le == [convert_call_to_event cmd arg r])
-      /\ enforced_locally default_check h le
-      /\ enforced_locally pi h le)) =
-  static_cmd cmd arg
-
-let mixed_cmd
-  (cmd : io_cmds)
-  (pi : monitorable_prop)
-  (arg : args cmd) :
-  IIOPrePost (res cmd)
-    (requires (fun h -> default_check h (| cmd, arg |)))
-    (ensures (fun h r le ->
-      (match r with
-      | Inr Contract_failure -> le == []
-      | _ -> le == [convert_call_to_event cmd arg r])
-      /\ enforced_locally default_check h le
-      /\ enforced_locally pi h le
-      )) =
-  let h = get_trace () in
-  let action = (| cmd, arg |) in
-  match pi h action with
-  | true -> pi_static_cmd cmd pi arg
-  | false -> throw Contract_failure 
-
 let dynamic_cmd
   (cmd : io_cmds)
   (pi : monitorable_prop)
@@ -191,17 +156,14 @@ let dynamic_cmd
       (match r with
       | Inr Contract_failure -> le == []
       | _ -> le == [convert_call_to_event cmd arg r])
-      /\ enforced_locally default_check h le
-      /\ enforced_locally pi h le
-  )) =
+      /\ enforced_locally pi h le)) =
   let h = get_trace () in
   let action = (| cmd, arg |) in
-  match default_check h action with
-  | true -> mixed_cmd cmd pi arg
+  match pi h action with
+  | true -> static_cmd cmd pi arg
   | false -> throw Contract_failure
 
 let iio_pre (pi : monitorable_prop) (h:trace) : Type0 =
-  enforced_globally default_check h &&
   enforced_globally pi h
 
 let iio_post
@@ -211,8 +173,7 @@ let iio_post
   (result:maybe a)
   (local_trace:trace) :
   Tot Type0 =
-  enforced_globally (default_check) (apply_changes h local_trace) /\
-  enforced_globally (pi) (apply_changes h local_trace)
+  enforced_globally pi (apply_changes h local_trace)
 
 effect IIO 
   (a:Type)
