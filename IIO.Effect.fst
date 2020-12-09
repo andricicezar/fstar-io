@@ -125,42 +125,35 @@ let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
   | _ -> ()
 
 let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
-  Tot (iio_irepr a (fun h p -> wp h (fun r le -> p r le))) = 
+  Tot (iio_irepr a (fun h p -> wp h (fun r lt -> p r lt))) = 
   fun h p ->
     io_interp_to_iio_interp (f h p) h p;
     cast_io_iio (f h p)
 
 sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
   
-effect IIOPrePost
-  (a:Type)
-  (pre : trace -> Type0)
-  (post : trace -> maybe a -> trace -> Type0) =
-  IIOwp a (fun (h:trace) (p:io_post a) ->
-    pre h /\ (forall res le. post h res le ==>  p res le))
-
 let get_trace () : IIOwp trace 
-  (fun h p -> forall r le. r == (Inl h) /\ le == [] ==>  p r le) =
+  (fun h p -> forall r lt. r == (Inl h) /\ lt == [] ==>  p r lt) =
   IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
 
 let throw (err:exn) : IIOwp trace (fun _ p -> p (Inr err) []) =
   IIOwp?.reflect(fun _ _ -> iio_throw _ err)
 
 let dynamic_cmd
-  (cmd : io_cmds)
   (pi : monitorable_prop)
+  (cmd : io_cmds)
   (arg : args cmd) :
-  IIOPrePost (res cmd) 
-    (requires (fun h -> True))
-    (ensures (fun h r le ->
+  IIOwp (res cmd)
+    (fun h p ->
+      forall r lt. (
       (match r with
-      | Inr Contract_failure -> le == []
-      | _ -> le == [convert_call_to_event cmd arg r])
-      /\ enforced_locally pi h le)) =
+      | Inr Contract_failure -> lt == []
+      | _ -> lt == [convert_call_to_event cmd arg r])
+      /\ enforced_locally pi h lt) ==>  p r lt) =
   let h = get_trace () in
   let action = (| cmd, arg |) in
   match pi h action with
-  | true -> static_cmd cmd pi arg
+  | true -> static_cmd pi cmd arg
   | false -> throw Contract_failure
 
 let iio_pre (pi : monitorable_prop) (h:trace) : Type0 =
@@ -178,7 +171,9 @@ let iio_post
 effect IIO 
   (a:Type)
   (pi : monitorable_prop) 
+  (pre : trace -> Type0)
   (post : trace -> maybe a -> trace -> Type0) =
-  IIOPrePost a
-    (requires (iio_pre pi))
-    (ensures (fun h r le -> iio_post pi h r le /\ post h r le))
+  IIOwp a
+    (fun h p ->
+      pre h /\ iio_pre pi h /\
+      (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))

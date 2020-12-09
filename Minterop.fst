@@ -9,35 +9,6 @@ open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
 
-type ctx_t (a b:Type) = a -> MIIO b
-
-let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
-  match tree with
-  | Return r -> r 
-  | Throw r -> IIO.Effect.throw r
-  | Cont (Call GetTrace argz fnc) ->
-      let h = IIO.Effect.get_trace () in
-      FStar.WellFounded.axiom1 fnc (Inl h);
-      let z' = fnc (Inl h) in
-      handle z' pi
-  | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
-      FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : iio t2 = fnc (Inl rez) in
-      rev_append_rev_append ();
-      handle z' pi
-end
-  
-let ctx_t_to_ctx_p
-  (a b:Type)
-  (pi : monitorable_prop)
-  (ct : a -> MIIO b) :
-  Tot (a -> IIO b pi (fun _ _ _ -> True)) =
-  fun (x:a) -> 
-    let h = get_trace () in
-    // Cezar: I don't think this is ok.
-    handle (reify (ct x) h (fun _ _ -> True)) pi
-
 // IO -> IIO (Done)
 // IIO -> IO (not possible, because the runtime checks can not be enforced statically)
 // IO -> MIO (they are synonyms)
@@ -231,10 +202,8 @@ let _export_IIO_arrow_spec
       match import x with
       | Some x -> (
         let h = get_trace () in
-        if enforced_globally default_check h then
-          if enforced_globally pi h then
-            export (f x)
-          else IIO.Effect.throw Contract_failure
+        if enforced_globally pi h then
+          export (f x)
         else IIO.Effect.throw Contract_failure)
       | None -> IIO.Effect.throw Contract_failure)
 
@@ -285,7 +254,7 @@ let rec _import_MIO_to_IIO #t2 (tree : io (t2)) (pi:monitorable_prop) : IIO t2 p
   | Cont (Call cmd argz fnc) ->
       let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : sys io_cmds io_sig t2 = fnc (Inl rez) in
+      let z' : io t2 = fnc (Inl rez) in
       rev_append_rev_append ();
       _import_MIO_to_IIO z' pi
 end
@@ -344,7 +313,7 @@ let plugin_type = (pi:monitorable_prop) -> file_descr -> IIO unit pi (fun _ _ _ 
 // import plugin_type 
 let webserver (plugin:plugin_type) : IIO unit pi (fun _ _ _ -> True) =
   rev_append_rev_append ();
-  let fd = pi_static_cmd Openfile pi "Demos.fst" in
+  let fd = static_cmd Openfile pi "Demos.fst" in
   plugin pi fd
 
 let m4_cmd (cmd:io_cmds) (argz: args cmd) : MIO (res cmd) = 

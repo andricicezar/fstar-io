@@ -6,8 +6,8 @@ open ExtraTactics
 open Common
 open IO.Free
 
-let io_post a = maybe a -> le:trace -> Type0  // local_events (from old to new)
-let io_wpty a = h:trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_events)
+let io_post a = maybe a -> le:trace -> Type0  // local_trace (from old to new)
+let io_wpty a = h:trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_trace)
 
 unfold
 let io_return_wp (a:Type) (x:a) : io_wpty a =
@@ -16,14 +16,14 @@ let io_return_wp (a:Type) (x:a) : io_wpty a =
 unfold
 let compute_post (a b:Type) (h:trace) (kw : a -> io_wpty b) (p:io_post b)
   : io_post a =
-      (fun result local_events -> 
+      (fun result local_trace -> 
         match result with
         | Inl result -> (
             kw result
-            ((List.rev local_events) @ h) 
-            (fun result' local_events' -> 
-                p result' (local_events @ local_events')))
-        | Inr err -> p (Inr err) local_events)
+            ((List.rev local_trace) @ h) 
+            (fun result' local_trace' -> 
+                p result' (local_trace @ local_trace')))
+        | Inr err -> p (Inr err) local_trace)
 
 unfold
 let io_bind_wp (a:Type) (b:Type) (w : io_wpty a) (kw : a -> io_wpty b) : io_wpty b =
@@ -31,7 +31,7 @@ let io_bind_wp (a:Type) (b:Type) (w : io_wpty a) (kw : a -> io_wpty b) : io_wpty
     w h (compute_post a b h kw p)
 
 let gen_post #a (post:io_post a) (e:event) = 
-  fun x local_events -> post x (e :: local_events)
+  fun x local_trace -> post x (e :: local_trace)
 
 let rec io_interpretation #a
   (m : io a) 
@@ -107,25 +107,33 @@ sub_effect PURE ~> IOwp = lift_pure_iowp
 
 let throw (err:exn) : IOwp trace (fun _ p -> p (Inr err) []) =
   IOwp?.reflect(fun _ _ -> io_throw _ err)
+
+let static_cmd
+  (pi : monitorable_prop)
+  (cmd : io_cmds)
+  (argz : io_args cmd) :
+  IOwp 
+    (res cmd) 
+    (fun h p -> 
+      (** precondition **)
+      pi h (| cmd, argz |) /\
+      (forall (r:io_resm cmd) lt. (
+      (** postcondition **)
+        ~(Inr? r /\ Inr?.v r == Contract_failure) /\ 
+        lt == [convert_call_to_event cmd argz r] /\
+        enforced_locally pi h lt) ==>  p r lt)) =
+  IOwp?.reflect(fun _ _ -> io_call cmd argz)
   
 effect IO
   (a:Type)
+  (pi : monitorable_prop)
   (pre : trace -> Type0)
   (post : trace -> maybe a -> trace -> Type0) =
   IOwp a (fun (h:trace) (p:io_post a) ->
-    pre h /\ (forall res le. post h res le ==>  p res le))
+    enforced_globally pi h /\
+    pre h /\ 
+    (forall res lt. (
+      enforced_globally pi (apply_changes h lt) /\
+      post h res lt ==>  p res lt)))
 
-let static_cmd
-  (cmd : io_cmds)
-  (pi : monitorable_prop)
-  (argz : io_args cmd) :
-  IO (res cmd)
-    (requires (fun h -> pi h (| cmd, argz |)))
-    (ensures (fun h r local_trace ->
-      ~(Inr? r /\ Inr?.v r == Contract_failure) /\
-      local_trace == [convert_call_to_event cmd argz r]
-      /\ enforced_locally pi h local_trace
-  )) =
-  IOwp?.reflect(fun _ _ -> io_call cmd argz)
-
-// let fd = static_cmd Openfile "../Makefile" 
+// let fd = static_cmd pi Openfile "../Makefile" 
