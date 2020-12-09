@@ -6,7 +6,19 @@ open ExtraTactics
 open Common
 open IO.Free
 
-let io_post a = maybe a -> le:trace -> Type0  // local_trace (from old to new)
+(** The postcondition for an io computation is defined over the 
+result (type: a + exn) and local trace (type: trace).
+The local trace represents the events that happend during the 
+computation. Local trace is in chronological order.
+
+We also have the history (type: trace) which represents the
+events that happend until the beggining of the io computation.
+The history is reverse chronology order. 
+
+At the end of an io computation, the trace will be 
+(reverse of local trace) appended to the history. **)
+
+let io_post a = maybe a -> lt:trace -> Type0  // local_trace (from old to new)
 let io_wpty a = h:trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_trace)
 
 unfold
