@@ -9,16 +9,30 @@ open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
 
-// IO -> IIO (Done)
-// IIO -> IO (not possible, because the runtime checks can not be enforced statically)
-// IO -> MIO (they are synonyms)
-// MIO -> IO (not done, but it is not relevant. reification should be used to enforce preconditions)
-// IIO -> MIIO (they are synonyms)
-// MIIO -> MIO (Not possible because of GetTrace)
-// MIO -> MIIO (Lift from IO to IIO should work here too)
-// MIIO -> IIO (done, using reification)
-// MIO -> IIO (Should come from the other two).
+(**
+lift: IO -> IIO (Done)
+export: IIO -> MIIO (Done: _export_IIO)
 
+possible: IO -> MIIO (lift automatically to IIO, and then use export: IIO -> MIIO)
+possible: MIO -> MIIO (the lift from IO to IIO should work automatically)
+
+import: MIIO -> IIO (Done: _import_IIO)
+possible: MIO -> IIO (lift from MIO to MIIO, and then import to IIO)
+
+Not possible cases:
+IIO -> IO
+IIO -> MIO (the runtime checks can not be
+           enforced statically because GetTrace is missing in IO)
+
+IO -> MIO (the preconditions can not be enforced
+           dynamically because GetTrace is missing in IO)
+
+MIO -> IO (we can not enforce preconditions
+           statically)
+
+MIIO -> IO
+MIIO -> MIO (Not possible because we can not get rid of GetTrace)
+**)
  
 (** ** `ml` class *)
 (* Intuition, this are morally MIO types written in F* syntax *)
@@ -79,7 +93,7 @@ instance general_is_checkeable t (p : t -> bool) : checkable (fun x -> p x) = { 
 class checkable2 (#t1 #t2:Type) (p : t1 -> t2 -> Type0) = { check2 : (x1:t1 -> x2:t2 -> b:bool{b ==> p x1 x2}) }
 instance general_is_checkeable2 t1 t2 (p : t1 -> t2 -> bool) : checkable2 (fun x y -> p x y) = { check2 = fun x y -> p x y}
   
-class checkable4 (#t1 #t2:Type) (p : t1 -> trace -> maybe (trace * t2) -> trace -> Type0) = { check4 : (x1:t1 -> s0:trace -> r:maybe (trace * t2) -> le:trace -> b:bool{b ==> p x1 s0 r le}) }
+class checkable4 (#t1 #t2:Type) (p : t1 -> trace -> maybe (t2) -> trace -> Type0) = { check4 : (x1:t1 -> s0:trace -> r:maybe (t2) -> lt:trace -> b:bool{b ==> p x1 s0 r lt}) }
 instance general_is_checkeable4 t1 t2 (p : t1 -> trace -> maybe (trace * t2) -> trace -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
 
 instance importable_refinement 
@@ -172,103 +186,143 @@ instance exportable_purearrow_spec t1 t2 (pre : t1 -> Type0) (post : t1 -> t2 ->
           export (f x)
         ) else IO.Effect.throw Contract_failure) <: MIO d2.etype))
 
-// let _export_IOStHist_arrow_spec 
-//   (#t1:Type) {| d1:importable t1 |}
-//   (#t2:Type) {| d2:exportable t2 |}
-//   (pre : t1 -> trace -> Type0) {| checkable2 pre |}
-//   (post : t1 -> trace -> maybe t2 -> trace -> Type0)
-//   (f:(x:t1 -> IIO t2 (pre x) (post x))) : 
-//   Tot (d1.itype -> MIO d2.etype) =
-//     (fun (x:d1.itype) ->
-//       match import x with
-//       | Some x -> (
-//         // TODO: Cezar: This is not quite right. Instead of [], it should access the 
-//         // materialized trace from the global state.
-//         // This case makes export to be useful only for whole programs.
-//         if (check2 #t1 #trace #pre x []) then (
-//           let tree : io (trace * t2) = (*IOStHistwp?.*)reify (f x) (fun r le -> post x [] r le) [] in
-//           export (MFOUR?.reflect (fun _ -> iost_to_io tree) <: MFOUR t2 (fun p -> forall res. p res))
-//         ) else MIO.raise Contract_failure)
-//       | None -> MIO.raise Contract_failure)
-
-let _export_IIO_arrow_spec 
+let _export_IIO
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
   (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post: t1 -> trace -> maybe t2 -> trace -> Type0)
-  (f:(x:t1 -> IIO t2 pi (post x))) : 
+  (f:(x:t1 -> IIO t2 pi (pre x) (post x))) : 
   Tot (d1.itype -> MIIO d2.etype) =
     (fun (x:d1.itype) ->
       match import x with
       | Some x -> (
         let h = get_trace () in
-        if enforced_globally pi h then
-          export (f x)
+        if check2 #t1 #trace #pre x h then
+          if enforced_globally pi h then
+            export (f x)
+          else IIO.Effect.throw Contract_failure
         else IIO.Effect.throw Contract_failure)
       | None -> IIO.Effect.throw Contract_failure)
 
-// instance exportable_IOStHist_arrow_spec 
-//   (t1:Type) {| d1:importable t1 |} 
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pre : t1 -> trace -> Type0) {| checkable2 pre |}
-//   (post : t1 -> trace -> maybe (trace * t2) -> trace -> Type0) :
-//   Tot (exportable ((x:t1) -> IOStHist t2 (pre x) (post x))) = 
-//     mk_exportable (d1.itype -> MIO d2.etype) (_export_IOStHist_arrow_spec #t1 #d1 #t2 #d2 pre post)
-
-instance exportable_IIO_arrow_spec 
+instance exportable_IIO
   (t1:Type) {| d1:importable t1 |} 
   (t2:Type) {| d2:exportable t2 |}
   (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
-  Tot (exportable (x:t1 -> IIO t2 pi (post x))) = 
+  Tot (exportable (x:t1 -> IIO t2 pi (pre x) (post x))) = 
   mk_exportable 
     (d1.itype -> MIIO d2.etype) 
-    (_export_IIO_arrow_spec pi post)
+    (_export_IIO pi pre post)
 
-// let rec _import_MIO_to_IOStHist #t2 (tree : io (t2)) : 
-//     IOStHist t2 (fun _ -> True) (fun s0 result le ->
-//     match result with
-//     | Inl v -> 
-//         let (s1, _) = v in s1 == (apply_changes s0 le)
-//     | Inr err -> True) by (explode ())= begin
-//   match tree with
-//   | Return r -> r
-//   | Throw r -> IOStHist.throw r
-//   | Cont (Call cmd argz fnc) ->
-//       let s0 = IOStHist.get () in
-//       if default_check s0 (| cmd, argz |) then (
-//         let rez = IOStHist.static_cmd cmd argz in 
-//         FStar.WellFounded.axiom1 fnc (Inl rez);
-//         let z' : sys io_cmds io_cmd_sig t2 = fnc (Inl rez) in
-//         rev_append_rev_append ();
-//         _import_MIO_to_IOStHist z'
-//       ) else IOStHist.throw Contract_failure
-// end
+instance exportable_IO
+  (t1:Type) {| d1:importable t1 |} 
+  (t2:Type) {| d2:exportable t2 |}
+  (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
+  (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
+  Tot (exportable (x:t1 -> IO t2 pi (pre x) (post x))) = 
+  mk_exportable 
+    (d1.itype -> MIIO d2.etype) 
+    (fun (f:(x:t1 -> IO t2 pi (pre x) (post x))) ->
+      _export_IIO pi pre post f)
 
-      
-
-let rec _import_MIO_to_IIO #t2 (tree : io (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
+let rec _import_pi_IIO 
+  (#t2:Type)
+  (tree : io (t2)) 
+  (pi:monitorable_prop) : 
+  IIO t2 pi (fun _ -> True) (fun _ _ _ -> True) =
   match tree with
   | Return r -> r 
   | Throw r -> IIO.Effect.throw r
   | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
+      let rez : res cmd = IIO.Effect.dynamic_cmd pi cmd argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
       let z' : io t2 = fnc (Inl rez) in
       rev_append_rev_append ();
-      _import_MIO_to_IIO z' pi
-end
+      _import_pi_IIO z' pi
 
-instance importable_MIO_to_pi_IIO t1 t2 {| d1:exportable t1 |} {| d2:ml t2 |} :
-  importable(pi:monitorable_prop -> t1 -> IIO t2 pi (fun _ _ _ -> True)) =
-  mk_importable (d1.etype -> MIO t2) #(pi:monitorable_prop -> t1 -> IIO t2 pi (fun _ _ _ -> True))
+let _import_pre_pi_IIO 
+  (#t1:Type)
+  (#t2:Type)
+  (tree : io (t2)) 
+  (pi:monitorable_prop) 
+  (pre:t1 -> trace -> Type0) {| checkable2 pre |} : 
+  Tot (x:t1 -> IIO t2 pi (pre x) (fun _ _ _ -> True)) =
+  (fun x ->
+    let h = get_trace () in
+    if check2 #t1 #trace #pre x h then
+      _import_pi_IIO tree pi 
+    else IIO.Effect.throw Contract_failure)
+
+
+let extract_local_trace (s0 s1:trace) :
+  Pure trace
+    (requires (exists lt. s1 == apply_changes s0 lt))
+    (ensures (fun lt -> s1 == apply_changes s0 lt)) = 
+  admit ();
+  assert (List.length s1 >= List.length s0);
+  let n : nat = (List.length s1) - (List.length s0) in
+  let (lt, _) = List.Tot.Base.splitAt n s1 in
+  List.rev lt
+
+// TODO: fix admit here. this enforces the post condition of IIO *)
+let _import_IIO_0
+  (#t1:Type)
+  (#t2:Type)
+  (tree : io (t2)) 
+  (pi:monitorable_prop) 
+  (pre:t1 -> trace -> Type0) {| checkable2 pre |} 
+  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| checkable4 post |} : 
+  Tot (x:t1 -> IIO t2 pi (pre x) (post x)) =
+  (fun x ->
+    admit ();
+    let h = get_trace () in
+    let f = _import_pre_pi_IIO tree pi pre in
+    let r : t2 = f x in
+    let h' = get_trace () in
+    let lt = extract_local_trace h h' in
+    if check4 #t1 #t2 #post x h (Inl r) lt then (
+      assert (post x h (Inl r) lt);
+      r
+    ) else IIO.Effect.throw Contract_failure)
+  
+let _import_IIO
+  (#t1:Type) {| d1:exportable t1 |} 
+  (#t2:Type) {| d2:importable t2 |}
+  (tree : io (t2)) 
+  (pi:monitorable_prop) 
+  (pre:t1 -> trace -> Type0) {| checkable2 pre |} 
+  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| checkable4 post |} : 
+  Tot (x:t1 -> IIO t2 pi (pre x) (post x)) =
+    (fun (x:t1) -> 
+    let x' : d1.etype = export x in
+    let f : d1.etype -> IIO d2.itype pi (pre x) (post x) = 
+      _import_IIO_0 tree pi pre post in
+    let r : d2.itype = f x' in
+    import r)
+
+instance importable_IIO 
+  (t1:Type) {| d1:exportable t1 |} 
+  (t2:Type) {| d2:ml t2 |}
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
+  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
+  Tot (importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
+  mk_importable 
+    (d1.etype -> MIO t2) 
+    #(pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))
     (fun (f:(d1.etype -> MIO t2)) ->
-      let f' : (pi:monitorable_prop -> t1 -> IIO t2 pi (fun _ _ _ -> True)) =
-      (fun (pi:monitorable_prop) (x:t1) ->
-        let x : d1.etype = export x in
-        let h = get_trace () in
-        let tree = (* MIO?.*)reify (f x) h (fun _ r -> True) in
-        _import_MIO_to_IIO #t2 tree pi <: IIO t2 pi (fun _ _ _ -> True)) 
+      let f' : (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x)) =
+        (fun (pi:monitorable_prop) (x:t1) ->
+          let x' : d1.etype = export x in
+          let h = get_trace () in
+          (** TODO: This seems weird. 
+            Why do I pass my post condition (fun _ -> True)?
+            Guido recommended me to do this, but I don't remember why
+            should this be safe. **)
+          let tree : io t2 = (* MIO?.*)reify (f x') h (fun _ r -> True) in
+          _import_IIO tree pi pre post x <: IIO t2 pi (pre x) (post x))
       in Some f')
 
 
@@ -276,14 +330,16 @@ instance importable_MIO_to_IIO
   t1 {| d1:exportable t1 |} 
   t2 {| d2:ml t2 |} 
   (pi:monitorable_prop) :
-  Tot (importable (t1 -> IIO t2 pi (fun _ _ _ -> True))) =
-  mk_importable (d1.etype -> MIO t2) #(t1 -> IIO t2 pi (fun _ _ _ -> True))
+  Tot (importable (t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True))) =
+  mk_importable (d1.etype -> MIO t2) #(t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True))
     (fun (f:(d1.etype -> MIO t2)) ->
-      let f' : (t1 -> IIO t2 pi (fun _ _ _ -> True)) = (fun (x:t1) ->
-        let x : d1.etype = export x in
-        let h = get_trace () in
-        let tree = reify (f x) h (fun _ r -> True) in
-        _import_MIO_to_IIO #t2 tree pi <: IIO t2 pi (fun _ _ _ -> True)) in Some f')
+      let f' : (t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) = (
+        fun (x:t1) ->
+            let x : d1.etype = export x in
+            let h = get_trace () in
+            let tree = reify (f x) h (fun _ r -> True) in
+            _import_MIO_to_IIO #t2 tree pi <: IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) 
+      in Some f')
 
 
 val allowed_file : string -> bool
@@ -308,12 +364,12 @@ let pi : monitorable_prop = (fun s0 action ->
   | (| Close, fd |) -> allowed_fd fd s0)
 
 // the plugin will be written in GIO (should be ML?)
-let plugin_type = (pi:monitorable_prop) -> file_descr -> IIO unit pi (fun _ _ _ -> True)
+let plugin_type = (pi:monitorable_prop) -> file_descr -> IIO unit pi (fun _ -> True) (fun _ _ _ -> True)
 
 // import plugin_type 
-let webserver (plugin:plugin_type) : IIO unit pi (fun _ _ _ -> True) =
+let webserver (plugin:plugin_type) : IIO unit pi (fun _ -> True) (fun _ _ _ -> True) =
   rev_append_rev_append ();
-  let fd = static_cmd Openfile pi "Demos.fst" in
+  let fd = static_cmd pi Openfile "Demos.fst" in
   plugin pi fd
 
 let m4_cmd (cmd:io_cmds) (argz: args cmd) : MIO (res cmd) = 
