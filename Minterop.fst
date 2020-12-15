@@ -10,14 +10,14 @@ open MIO.Effect
 open MIIO.Effect
 
 (**
-lift: IO -> IIO (Done)
-export: IIO -> MIIO (Done: _export_IIO)
+lift: IO -> IIO (Done - in IIO.Effect.fst)
+lift: MIO -> MIIO (the lift from IO to IIO should work automatically)
 
-possible: IO -> MIIO (lift automatically to IIO, and then use export: IIO -> MIIO)
-possible: MIO -> MIIO (the lift from IO to IIO should work automatically)
+export: IIO -> MIIO (Done: exportable_IIO)
+export: IO -> MIIO (Done: exportable_IO - lift automatically to IIO, and then use export: IIO -> MIIO)
 
-import: MIIO -> IIO (Done: _import_IIO)
-possible: MIO -> IIO (lift from MIO to MIIO, and then import to IIO)
+import: MIIO -> IIO (Done: importable_MIIO_IIO)
+import: MIO -> IIO (Done: importable_MIO_IIO) lift from MIO to MIIO, and then import to IIO)
 
 Not possible cases:
 IIO -> IO
@@ -49,7 +49,8 @@ instance ml_mioarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> MIO t2) = { mldum
 instance ml_miioarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> MIIO t2) = { mldummy = () }
 
 instance ml_file_descr : ml file_descr = { mldummy = () }
-instance ml_monitorable_prop : ml monitorable_prop = { mldummy = () }
+(** CA: Is this required? **)
+// instance ml_monitorable_prop : ml monitorable_prop = { mldummy = () }
 
 
 
@@ -61,10 +62,27 @@ instance ml_monitorable_prop : ml monitorable_prop = { mldummy = () }
 // adding extra checking and wrapping.
 // *)
 
-exception Contract_failure
+(** TODO: 
+we have 3 importable classes and I don't think they are named very well.
+
+Context:
+One thing we learned is that our import function should not throw errors because we
+need to use it in writing specifications, therefore we want an import function of
+type t1 -> option t2. In the same time, it is much easier to write code using 
+exceptions, therefore there is the exn_import, which is just a lift from option to
+exceptions.
+
+There is a special case for functions. Functions always can be imported, because
+the cast from the strong type to the weak type is done inside the function (?).
+Also, ml types can be always imported safely. Therefore, I added safe_import of type
+t1 -> t2. I am not that happy with the safe_ part in the name. To me import and 
+safe_import are both 'safe'.
+**)
+
 class exportable (t : Type) = { etype : Type; export : t -> etype; ml_etype : ml etype }
 class importable (t : Type) = { itype : Type; import : itype -> option t; ml_itype : ml itype }
 class exn_importable (t : Type) = { eitype : Type; exn_import : eitype -> MIO t; ml_eitype : ml eitype }
+class safe_importable (t : Type) = { sitype : Type; safe_import : sitype -> t; ml_sitype : ml sitype }
 
 let mk_exportable (#t1 t2 : Type) {| ml t2 |} (exp : t1 -> t2) : exportable t1 =
   { etype = t2; export = exp;  ml_etype = solve }
@@ -72,15 +90,20 @@ let mk_importable (t1 #t2 : Type) {| ml t1 |} (imp : t1 -> option t2) : importab
   { itype = t1; import = imp; ml_itype = solve }
 let mk_exn_importable (t1 #t2 : Type) {| ml t1 |} (imp : t1 -> MIO t2) : exn_importable t2 =
   { eitype = t1; exn_import = imp; ml_eitype = solve }
+let mk_safe_importable (t1 #t2 : Type) {| ml t1 |} (imp : t1 -> t2) : safe_importable t2 =
+  { sitype = t1; safe_import = imp; ml_sitype = solve }
 
 instance ml_exportable (#t : Type) (d : exportable t) : ml (d.etype) = d.ml_etype
 instance ml_importable (#t : Type) (d : importable t) : ml (d.itype) = d.ml_itype
 
 instance exportable_ml t {| ml t |} : exportable t = mk_exportable t (fun x -> x)
-instance importable_ml t {| ml t |} : importable t = mk_importable t (fun x -> Some x)
+instance safe_importable_ml t {| ml t |} : safe_importable t = mk_safe_importable t (fun x -> x)
+
+instance importable_safe_importable t {| d:safe_importable t |} : importable t =
+  mk_importable d.sitype #t #d.ml_sitype (fun (x:d.sitype) -> (Some (safe_import x)) <: option t)
 
 instance exn_importable_importable t {| d:importable t |} : exn_importable t =
-  mk_exn_importable d.itype (fun x -> 
+  mk_exn_importable d.itype (fun (x:d.itype) -> 
     (match import x with
     | Some x -> x
     | None -> IO.Effect.throw Contract_failure) <: MIO t)
@@ -91,15 +114,15 @@ instance exportable_refinement t {| d:exportable t |} (p : t -> Type0)  : export
 class checkable (#t:Type) (p : t -> Type0) = { check : (x:t -> b:bool{b ==> p x}) }
 instance general_is_checkeable t (p : t -> bool) : checkable (fun x -> p x) = { check = fun x -> p x }
 class checkable2 (#t1 #t2:Type) (p : t1 -> t2 -> Type0) = { check2 : (x1:t1 -> x2:t2 -> b:bool{b ==> p x1 x2}) }
-instance general_is_checkeable2 t1 t2 (p : t1 -> t2 -> bool) : checkable2 (fun x y -> p x y) = { check2 = fun x y -> p x y}
+instance general_is_checkable2 t1 t2 (p : t1 -> t2 -> bool) : checkable2 (fun x y -> p x y) = { check2 = fun x y -> p x y}
   
-class checkable4 (#t1 #t2:Type) (p : t1 -> trace -> maybe (t2) -> trace -> Type0) = { check4 : (x1:t1 -> s0:trace -> r:maybe (t2) -> lt:trace -> b:bool{b ==> p x1 s0 r lt}) }
-instance general_is_checkeable4 t1 t2 (p : t1 -> trace -> maybe (trace * t2) -> trace -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
+class checkable4 (#t1 #t2:Type) (p : t1 -> trace -> maybe (t2) -> trace -> Type0) = { check4 : (x1:t1 -> s0:trace -> r:maybe t2 -> lt:trace -> b:bool{b ==> p x1 s0 r lt}) }
+instance general_is_checkable4 t1 t2 (p : t1 -> trace -> maybe t2 -> trace -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
 
 instance importable_refinement 
   t {| d:importable t |} 
   (rp : t -> Type0) {| checkable rp |} : 
-    importable (x:t{rp x}) = 
+  Tot (importable (x:t{rp x})) = 
   mk_importable (d.itype)
     (fun (x:d.itype) ->
       (match import x with
@@ -139,42 +162,44 @@ instance exportable_arrow t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |} : 
 
 instance exportable_mlarrow t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |} : exportable (t1 -> MIO t2)  =
   mk_exportable (d1.itype -> MIO d2.etype)
-    (fun (f:(t1 -> MIO t2)) -> (fun (x:d1.itype) -> export (f (exn_import x)) <: MIO d2.etype))
+    (fun (f:(t1 -> MIO t2)) -> 
+      (fun (x:d1.itype) -> export (f (exn_import x)) <: MIO d2.etype))
 
 // An untyped term in a typed context
-instance importable_mlarrow t1 t2 {| d1:exportable t1 |} {| d2:importable t2 |} : importable (t1 -> MIO t2)  =
-  mk_importable (d1.etype -> MIO d2.itype)
+instance importable_mlarrow t1 t2 {| d1:exportable t1 |} {| d2:importable t2 |} : safe_importable (t1 -> MIO t2)  =
+  mk_safe_importable (d1.etype -> MIO d2.itype)
     (fun (f:(d1.etype -> MIO d2.itype)) -> 
-      Some (fun (x:t1) -> exn_import (f (export x)) <: MIO t2))
+      (fun (x:t1) -> exn_import (f (export x)) <: MIO t2))
   
 // Example trueish
 let trueish (x:int{x >= 0}) : bool = true
 let trueish' (x:int) : MIO bool = (trueish (exn_import x))
 let trueish'' : int -> MIO bool = export trueish
 
-instance importable_darrow_refined t1 t2 (p:t1->t2->Type0)
-  {| d1:ml t1 |} {| d2:ml t2 |} {| d3:checkable2 p |} : importable (x:t1 -> MIO (y:t2{p x y})) =
-  mk_importable (t1 -> MIO t2) #(x:t1 -> MIO (y:t2{p x y}))
-    (fun (f:(t1 -> MIO t2)) -> 
-      let f':(x:t1 -> MIO (y:t2{p x y})) = (fun (x:t1) -> 
-        let y : t2 = f x in
-        (if check2 #t1 #t2 #p x y then y 
-         else IO.Effect.throw Contract_failure) <: MIO (y:t2{p x y})) in Some f')
+instance importable_darrow_refined 
+  (t1:Type) {| d1:exportable t1 |}
+  (t2:Type) {| d2:importable t2 |}
+  (p:t1->t2->Type0) {| d3:checkable2 p |} : 
+  Tot (safe_importable (x:t1 -> MIO (y:t2{p x y}))) =
+  mk_safe_importable (d1.etype -> MIO d2.itype) #(x:t1 -> MIO (y:t2{p x y}))
+    (fun (f:(d1.etype -> MIO d2.itype)) -> 
+      (fun (x:t1) -> 
+        let y : t2 = exn_import (f (export x)) in
+        if check2 #t1 #t2 #p x y then y 
+        else IO.Effect.throw Contract_failure))
 
 // Example incr
 
 let incr (x:int) : int = x + 1
 
-let incr2 : int -> MIO int = incr
+let incr2 : int -> MIO int = export incr
 
 let p x y : bool = (y = x + 1)
 let incr'' (x:int) : MIO (y:int{p x y}) = exn_import (incr x)
 
 // TODO: fix this. see https://github.com/FStarLang/FStar/issues/2128
-// val incr' : unit -> MIO ((x:int) -> MIO (y:int{p x y}))
-// let incr' () = 
-//   let (z:(x:int) -> MIO (y:int{p x y})) = import incr2 in
-//   z
+// val incr' : (x:int) -> MIO (y:int{p x y})
+// let incr' = safe_import incr2
 
 instance exportable_purearrow_spec t1 t2 (pre : t1 -> Type0) (post : t1 -> t2 -> Type0)
   {| d1:importable t1 |} {| d2:exportable t2 |} {| d3:checkable pre |} : exportable ((x:t1) -> Pure t2 (pre x) (post x)) = 
@@ -265,8 +290,6 @@ let _import_pi_exp_IIO
       let tree : iio d2.itype = (* MIO?.*)reify (f x') h (fun _ r -> True) in
       _import_pi_IIO tree pi <: IIO d2.itype pi (fun _ -> True) (fun _ _ _ -> True))
   
-
-
 let _import_pre_pi_IIO 
   (#t1:Type) {| d1:exportable t1 |}
   (#t2:Type) {| d2:importable t2 |}
@@ -283,7 +306,6 @@ let _import_pre_pi_IIO
       | Some a -> a
       | None -> IIO.Effect.throw Contract_failure
     else IIO.Effect.throw Contract_failure)
-
 
 let extract_local_trace (s0 s1:trace) :
   Pure trace
@@ -321,14 +343,12 @@ instance importable_MIO_pi_IIO
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
-  Tot (importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
-  mk_importable 
+  Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
+  mk_safe_importable 
     (d1.etype -> MIO d2.itype)
     #(pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))
     (fun (f:(d1.etype -> MIO d2.itype)) ->
-      let f' : (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x)) = 
-        (fun pi -> _import_IIO pi pre post f)
-      in Some f')
+      (fun pi -> _import_IIO pi pre post f))
 
 instance importable_MIO_IIO 
   (t1:Type) {| d1:exportable t1 |} 
@@ -336,28 +356,23 @@ instance importable_MIO_IIO
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
-  Tot (importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
-  mk_importable 
+  Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
+  mk_safe_importable 
     (d1.etype -> MIO d2.itype)
     #(x:t1 -> IIO t2 pi (pre x) (post x))
-    (fun (f:(d1.etype -> MIO d2.itype)) ->
-      let f' : (x:t1 -> IIO t2 pi (pre x) (post x)) = 
-        _import_IIO pi pre post f
-      in Some f')
+    (_import_IIO pi pre post #d4)
 
 instance importable_MIIO_pi_IIO 
   (t1:Type) {| d1:exportable t1 |} 
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
-  Tot (importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
-  mk_importable 
+  Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
+  mk_safe_importable 
     (d1.etype -> MIIO d2.itype)
     #(pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))
     (fun (f:(d1.etype -> MIIO d2.itype)) ->
-      let f' : (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x)) = 
-        (fun pi -> _import_IIO pi pre post f)
-      in Some f')
+        (fun pi -> _import_IIO pi pre post f))
 
 instance importable_MIIO_IIO 
   (t1:Type) {| d1:exportable t1 |} 
@@ -365,47 +380,8 @@ instance importable_MIIO_IIO
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
-  Tot (importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
-  mk_importable 
+  Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
+  mk_safe_importable 
     (d1.etype -> MIIO d2.itype)
     #(x:t1 -> IIO t2 pi (pre x) (post x))
-    (fun (f:(d1.etype -> MIIO d2.itype)) ->
-      let f' : (x:t1 -> IIO t2 pi (pre x) (post x)) = 
-        _import_IIO pi pre post f
-      in Some f')
-
-val allowed_file : string -> bool
-let allowed_file fnm = match fnm with
-  | "../Makefile" -> false
-  | "Demos.fst" -> true
-  | _ -> false
-
-val allowed_fd : file_descr -> trace -> bool
-let rec allowed_fd fd s0 =
-  match s0 with
-  | [] -> false
-  | EOpenfile fnm (Inl fd') :: t -> if fd = fd' then allowed_file(fnm)
-                                  else allowed_fd fd t
-  | EClose fd' _  :: t -> if fd = fd' then false else allowed_fd fd t
-  | _ :: t -> allowed_fd fd t
-
-let pi : monitorable_prop = (fun s0 action -> 
-  match action with
-  | (| Openfile, fnm |) -> allowed_file(fnm)
-  | (| Read, fd |) -> allowed_fd fd s0
-  | (| Close, fd |) -> allowed_fd fd s0)
-
-// the plugin will be written in GIO (should be ML?)
-let plugin_type = (pi:monitorable_prop) -> file_descr -> IIO unit pi (fun _ -> True) (fun _ _ _ -> True)
-
-// import plugin_type 
-let webserver (plugin:plugin_type) : IIO unit pi (fun _ -> True) (fun _ _ _ -> True) =
-  rev_append_rev_append ();
-  let fd = static_cmd pi Openfile "Demos.fst" in
-  plugin pi fd
-
-let m4_cmd (cmd:io_cmds) (argz: args cmd) : MIO (res cmd) = 
-  MIO?.reflect (fun _ _ -> io_call cmd argz)
-
-let plugin1 : file_descr -> MIO unit = fun fd ->
-  m4_cmd Close fd
+    (_import_IIO pi pre post #d4)
