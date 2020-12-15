@@ -198,7 +198,7 @@ let p x y : bool = (y = x + 1)
 let incr'' (x:int) : MIO (y:int{p x y}) = exn_import (incr x)
 
 // TODO: fix this. see https://github.com/FStarLang/FStar/issues/2128
-// val incr' : (x:int) -> MIO (y:int{p x y})
+val incr' : (x:int) -> MIO (y:int{p x y})
 // let incr' = safe_import incr2
 
 instance exportable_purearrow_spec t1 t2 (pre : t1 -> Type0) (post : t1 -> t2 -> Type0)

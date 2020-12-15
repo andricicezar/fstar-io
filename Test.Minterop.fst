@@ -37,9 +37,15 @@ let webserver (plugin:plugin_type) : IIO unit pi (fun _ -> True) (fun _ _ _ -> T
   let fd = static_cmd pi Openfile "Demos.fst" in
   plugin pi fd
 
-let plugin1 : file_descr -> MIO unit = fun fd ->
+let ml_plugin1 : file_descr -> MIO unit = fun fd ->
   unsafe_cmd Close fd
 
-(** TODO: Why is this failing? **)
-val safe_plugin1 : file_descr -> IIO unit pi (fun _ -> true) (fun _ _ _ -> true)
-let safe_plugin1 = safe_import plugin1
+val pre : file_descr -> trace -> Type0
+let pre = (fun _ _ -> true)
+val post : file_descr -> trace -> maybe unit -> trace -> Type0
+let post = (fun _ _ _ _ -> true)
+
+(** TODO: Why is this failing? Seems similar with the problem of
+incr' in the Minterop file. **)
+val plugin1 : x:file_descr -> IIO unit pi (pre x) (post x)
+// let plugin1 = safe_import ml_plugin1
