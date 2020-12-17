@@ -56,7 +56,8 @@ let branch_on_match () : Tac unit =
       iterAll (fun () ->
         let bs = repeat intro in
         let b = last bs in (* this one is the equality *)
-        grewrite_eq b;
+        // grewrite_eq b;
+        rewrite_eqs_from_context ();
         norm [iota])
     )
 

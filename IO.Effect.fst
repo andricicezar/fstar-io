@@ -112,8 +112,8 @@ layered_effect {
 }
 
 let lift_pure_iowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (io_irepr a (fun s0 p -> wp (fun r -> p (Inl r) [])))
-  = fun s0 p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
+  Tot (io_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
+  = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
 

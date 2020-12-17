@@ -116,8 +116,8 @@ instance general_is_checkeable t (p : t -> bool) : checkable (fun x -> p x) = { 
 class checkable2 (#t1 #t2:Type) (p : t1 -> t2 -> Type0) = { check2 : (x1:t1 -> x2:t2 -> b:bool{b ==> p x1 x2}) }
 instance general_is_checkable2 t1 t2 (p : t1 -> t2 -> bool) : checkable2 (fun x y -> p x y) = { check2 = fun x y -> p x y}
   
-class checkable4 (#t1 #t2:Type) (p : t1 -> trace -> maybe (t2) -> trace -> Type0) = { check4 : (x1:t1 -> s0:trace -> r:maybe t2 -> lt:trace -> b:bool{b ==> p x1 s0 r lt}) }
-instance general_is_checkable4 t1 t2 (p : t1 -> trace -> maybe t2 -> trace -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
+class checkable4 (#b1 #b2 #b3 #b4:Type) (p : b1 -> b2 -> b3 -> b4 -> Type0) = { check4 : (x1:b1 -> x2:b2 -> x3:b3 -> x4:b4 -> b:bool{b ==> p x1 x2 x3 x4}) }
+instance general_is_checkable4 b1 b2 b3 b4 (p : b1 -> b2 -> b3 -> b4 -> bool) : checkable4 (fun x1 x2 x3 x4 -> p x1 x2 x3 x4) = { check4 = fun x1 x2 x3 x4 -> p x1 x2 x3 x4}
 
 instance importable_refinement 
   t {| d:importable t |} 
@@ -296,7 +296,7 @@ let _import_pre_pi_IIO
   (pi:monitorable_prop) 
   (pre:t1 -> trace -> Type0) {| checkable2 pre |}
   (f : d1.etype -> MIIO d2.itype) :
-  Tot (x:t1 -> IIO t2 pi (pre x) (fun _ _ _ -> True)) =
+  Tot (x:t1 -> IIO t2 pi (pre x) (fun (h:trace) (r:maybe t2) (le:trace) -> True)) =
   (fun x ->
     rev_append_rev_append ();
     let h = get_trace () in
@@ -307,42 +307,86 @@ let _import_pre_pi_IIO
       | None -> IIO.Effect.throw Contract_failure
     else IIO.Effect.throw Contract_failure)
 
-let extract_local_trace (s0 s1:trace) :
-  Pure trace
-    (requires (exists lt. s1 == apply_changes s0 lt))
-    (ensures (fun lt -> s1 == apply_changes s0 lt)) = 
-  admit ();
-  assert (List.length s1 >= List.length s0);
-  let n : nat = (List.length s1) - (List.length s0) in
-  let (lt, _) = List.Tot.Base.splitAt n s1 in
-  List.rev lt
+let rec prefix_of (#a: Type) (l1 l2: list a)
+: Pure Type0
+  (requires True)
+  (ensures (fun _ -> True))
+  (decreases l2)
+= l1 == l2 \/
+  (match l2 with
+  | [] -> False
+  | _ :: q -> l1 `prefix_of` q)
+
+let rec prefix_of_length (l1 l2: trace)
+: Lemma
+  (requires (prefix_of l1 l2))
+  (ensures (List.length l2 >= List.length l1))
+  (decreases l2)
+= admit ();
+  match l2 with
+  | [] -> ()
+  | _ :: q ->
+    prefix_of_length l1 q
+
+let x (h h':trace) :
+  Lemma (requires (prefix_of h h'))
+    (ensures (
+      prefix_of_length h h';
+      let n : nat = (List.length h') - (List.length h) in
+      let (lt, _) = List.Tot.Base.splitAt n h' in
+      h == lt @ h')) =
+  admit ()
+
+let extract_local_trace (h:trace) :
+  IIOwp trace (fun h' p ->
+    prefix_of h h' /\
+    (forall r lt. (
+      lt == [] /\
+      Inl? r /\
+      h' == (apply_changes h (Inl?.v r))) ==>  p r lt))
+  = admit ()
+  // let h' = get_trace () in
+  // assert (prefix_of h h');
+  // prefix_of_length h h';
+  // let n : nat = (List.length h') - (List.length h) in
+  // let (lt, _) = List.Tot.Base.splitAt n h' in
+  // List.Tot.Properties.rev_involutive lt;
+  // x h h';
+  // assert (h' == apply_changes h (List.rev lt)) by (
+  //   norm [delta_only[`%apply_changes]];
+  //   norm [iota];
+  //   // let lt = ExtraTactics.get_binder 5 in
+  //   l_to_r [`List.Tot.Properties.rev_involutive lt]);
+  // List.rev lt
 
 // TODO: fix admit here. this enforces the post condition of IIO *)
 let _import_IIO
   (#t1:Type) {| d1:exportable t1 |}
   (#t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop) 
-  (pre:t1 -> trace -> Type0) {| checkable2 pre |} 
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| checkable4 post |}
-  (f : d1.etype -> MIIO d2.itype) :
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |} 
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |}
+  (f : (d1.etype -> MIIO d2.itype)) :
   Tot (x:t1 -> IIO t2 pi (pre x) (post x)) =
-  (fun x ->
+  (fun (x:t1) -> 
+    (** The post condition should allow the computation to fail.
+    The computation can fail by itself or because it does not 
+    respect the contracts. It is not reasonable to assume the 
+    computation handles by itself all errors, therefore the 
+    context that imported this function should expeect errors. **)
     admit ();
-    let h = get_trace () in
-    let f = _import_pre_pi_IIO pi pre f in
+    let h : trace = get_trace () in
+    let f = _import_pre_pi_IIO pi pre f in 
     let r : t2 = f x in
-    let h' = get_trace () in
-    let lt = extract_local_trace h h' in
-    if check4 #t1 #t2 #post x h (Inl r) lt then (
-      assert (post x h (Inl r) lt);
-      r
-    ) else IIO.Effect.throw Contract_failure)
+    let lt : trace = extract_local_trace h in
+    if (check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt) then r
+    else IIO.Effect.throw Contract_failure)
 
 instance importable_MIO_pi_IIO 
   (t1:Type) {| d1:exportable t1 |} 
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
   Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable 
     (d1.etype -> MIO d2.itype)
@@ -355,7 +399,7 @@ instance importable_MIO_IIO
   (t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
   Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable 
     (d1.etype -> MIO d2.itype)
@@ -366,7 +410,7 @@ instance importable_MIIO_pi_IIO
   (t1:Type) {| d1:exportable t1 |} 
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
   Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable 
     (d1.etype -> MIIO d2.itype)
@@ -379,7 +423,7 @@ instance importable_MIIO_IIO
   (t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
   Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable 
     (d1.etype -> MIIO d2.itype)

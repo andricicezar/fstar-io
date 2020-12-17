@@ -139,5 +139,17 @@ let rev_append_rev_append () : Lemma (
     List.append_assoc (List.rev le2) (List.rev le1) h
   end in Classical.forall_intro_3 aux
 
+// val rev_append_rev_append_pat : h:trace -> le1:trace -> le2:trace ->
+//   Lemma (requires True)
+//         (ensures (((List.rev le2) @ (List.rev le1) @ h) ==
+//      ((List.rev (le1@le2)) @ h))) [SMTPat (((List.rev le2) @ (List.rev le1) @ h))]
+// let rev_append_rev_append_pat h le1 le2 = rev_append_rev_append ()
+
+// val rev_nil : a:Type ->
+//   Lemma (requires True)
+//         (ensures (List.rev #a [] == []))
+//         [SMTPat (List.rev #a [])]
+// let rev_nil a = ()
+
 unfold
 let apply_changes (history local_events:trace) : Tot trace = (List.rev local_events) @ history 

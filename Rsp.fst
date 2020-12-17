@@ -11,6 +11,7 @@ open IO.Effect
 open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
+open Minterop
 
 noeq type compiler = {
   interface : Type;
@@ -42,29 +43,32 @@ noeq type compiler = {
 }
   
 noeq type interface = {
-  a : Type; // ad : exportable a;
-  ad : Type;
-  b : Type; // bd : ml b;         // b has to be importable and exportable
-  c : Type; // cd : exportable c;
-  cd : Type;
-  post : a -> trace -> maybe b -> trace -> Type; 
-  //cpost : checkable4 post;
+  a : Type; ad : exportable a;
+  b : Type; bdi : importable b; bde : exportable b;         // b has to be importable and exportable
+  c : Type; cd : exportable c;
+  post:a -> trace -> (m:maybe b) -> trace -> (r:Type0{Inr? m ==> r});
+  cpost : checkable4 post;
 }
 
 let safety_prop = (#a:Type) -> a -> Type0
 // let safety_prop = pi_to_set
 
-type whole_s (i:interface) (pi:monitorable_prop) = unit -> IIO i.c pi (fun _ _ _ -> True)
-type whole_t (i:interface) = unit -> MIIO i.cd
+type whole_s (i:interface) (pi:monitorable_prop) = unit -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
+type whole_t (i:interface) = unit -> MIIO i.cd.etype
 
-type ctx_s (i:interface) (pi:monitorable_prop) = (x:i.a) -> IIO i.b pi (i.post x)
-type ctx_p (i:interface) (pi:monitorable_prop) = i.ad -> IIO i.b pi (fun _ _ _ -> True)
-type ctx_t (i:interface) = i.ad -> MIO i.b
+(** the lift from "MIO to MIIO" for the context should happen
+during linking. It is improper to say "should happen", because
+the lift represents the assumptions: "the context uses
+only the IO library which comes with instrumentation".
+ **)
+type ctx_s (i:interface) (pi:monitorable_prop) = (x:i.a) -> IIO i.b pi (fun _ -> True) (i.post x)
+type ctx_p (i:interface) (pi:monitorable_prop) = i.ad.etype -> IIO i.bdi.itype pi (fun _ -> True) (fun _ _ _ -> True)
+type ctx_t (i:interface) = i.ad.etype -> MIO i.bdi.itype
 
-type prog_s (i:interface) (pi:monitorable_prop) = ctx_s i pi -> IIO i.c pi (fun _ _ _ -> True)
-type prog_t (i:interface) (pi:monitorable_prop) = ctx_p i pi -> MIIO i.cd
+type prog_s (i:interface) (pi:monitorable_prop) = ctx_s i pi -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
+type prog_t (i:interface) (pi:monitorable_prop) = ctx_p i pi -> MIIO i.cd.etype
 
-let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
+let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ -> True) (fun _ _ _ -> True) = begin
   match tree with
   | Return r -> r 
   | Throw r -> IIO.Effect.throw r
@@ -74,88 +78,36 @@ let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ 
       let z' = fnc (Inl h) in
       handle z' pi
   | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = IIO.Effect.dynamic_cmd cmd pi argz in
+      let rez : res cmd = IIO.Effect.dynamic_cmd pi cmd argz in
       FStar.WellFounded.axiom1 fnc (Inl rez);
       let z' : iio t2 = fnc (Inl rez) in
       rev_append_rev_append ();
       handle z' pi
 end
-  
-let import_mio
-  (a b : Type)
-  (pi : monitorable_prop)
-  (f : a -> MIO b) :
-  Tot (a -> IIO b pi (fun _ _ _ -> True)) =
-    fun (x:a) -> 
-        let h = get_trace () in
-        // Cezar: I don't think this is ok.
-        handle (cast_io_iio (reify (f x) h (fun _ _ -> True))) pi
-
 
 let ctx_t_to_ctx_p
   (i  : interface)
   (pi : monitorable_prop)
   (ct : ctx_t i) :
   Tot (ctx_p i pi) =
-  fun (x:i.ad) -> 
+  fun (x:i.ad.etype) -> 
     let h = get_trace () in
     // Cezar: I don't think post unfolded like that is ok.
     handle (cast_io_iio (reify (ct x) h (fun _ _ -> True))) pi
-
-eet extract_local_events (s0 s1:trace) :
-  Pure trace
-    (requires (exists le. s1 == apply_changes s0 le))
-    (ensures (fun le -> s1 == apply_changes s0 le)) = 
-  admit ();
-  assert (List.length s1 >= List.length s0);
-  let n : nat = (List.length s1) - (List.length s0) in
-  let (le, _) = List.Tot.Base.splitAt n s1 in
-  List.rev le
 
 let ctx_p_to_ctx_s
   (i  : interface)
   (pi : monitorable_prop)
   (cp  : ctx_p i pi) : 
-  Tot (ctx_s i pi) by (
-    explode ();
-    smt ();
-    let zz = get_binder 9 in 
-    focus (fun () ->
-      let _ = t_destruct zz in
-      iterAll (fun () ->
-        let bs = repeat intro in
-        let b = last bs in (* this one is the equality *)
-        rewrite_eqs_from_context ();
-        norm [iota];
-        ())
-    );
-    let aq = get_binder 12 in
-    focus (fun () -> 
-      let _ = t_destruct aq in
-      let bs1 = intro () in
-      let br = intro () in
-      let b = intro () in (* this one is the equality *)
-      rewrite_eqs_from_context ();
-      // l_to_r [`b];
-      norm [iota];
-      ()
-    );
-    explode ();
-    tadmit ();
-    tadmit ();
-    dump "h"
-  ) =
+  Tot (ctx_s i pi) =
+  admit ();
   fun (x:i.a) -> 
-    assume (forall x err s0 le. i.post x s0 (Inr err) le == true);
-    let s0 : trace = IIO.Effect.get_trace () in
-    let result : i.b = cp (export x) in
-    let s1 : trace = IIO.Effect.get_trace () in
-    let le = extract_local_events s0 s1 in
-
-    if check4 #i.a #i.b #i.post #i.cpost x s0 (Inl (s1, result)) le then (
-      assert (i.post x s0 (Inl (s1, result)) le);
-      result
-    ) else IOStHist.throw Contract_failure
+    let h : trace = get_trace () in
+    let f = _import_pre_pi_IIO pi (fun _ _ -> true) cp in 
+    let r : i.b = f x in
+    let lt : trace = extract_local_trace h in
+    if (check4 #i.a #trace #(maybe i.b) #trace #i.post #i.cpost x h (Inl r) lt) then r
+    else IIO.Effect.throw Contract_failure
 
 unfold 
 let beh_s 
