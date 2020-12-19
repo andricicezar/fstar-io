@@ -205,8 +205,8 @@ val app3 : unit -> IIO unit pi3 (fun _ -> True) (fun _ _ _ -> True)
 let app3 () = webserver3 plugin3
 
 
-(** Example 4: the post condition of the plugin forces the
-    plugin to have only one Openfile. **)
+(** Example 4: plugin's post-condition checks if 
+    only one Openfile was done during the plugin's execution. **)
 
 val i4pre : unit -> trace -> bool
 let i4pre fd h = true
