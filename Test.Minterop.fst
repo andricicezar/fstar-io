@@ -68,7 +68,7 @@ val app1 : unit -> IIO unit pi1 (fun _ -> True) (fun _ _ _ -> True)
 let app1 () = webserver1 plugin1
 
 
-(** Example 2: the post condition of the plugin requires that the 
+(** Example 2: plugin's post-condition enforces that the 
     file_descr given as argument to remain opened. Probably this 
     should be enforced by pi. **)
 
@@ -135,8 +135,8 @@ let plugin2 = safe_import #_ #(
 val app2 : unit -> IIO unit pi2 (fun _ -> True) (fun _ _ _ -> True)
 let app2 () = webserver2 plugin2
 
-(** Example 3: the post condition of the plugin requires that the 
-    file_descr returned to be opened remain opened. **)
+(** Example 3: plugin's post-condition enforces that the 
+    returned file_descr to be opened. **)
 
 val i3pre : unit -> trace -> bool
 let i3pre fd h = true

@@ -6,7 +6,7 @@ open IO.Effect
 open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
-open FStar.All
+open Minterop
 open FStar.Tactics
 open ExtraTactics
 
@@ -36,8 +36,9 @@ let pi : monitorable_prop = (fun s0 action ->
   | (| Close, fd |) -> allowed_fd fd s0)
 
 // the plugin will be written in GIO (should be ML?)
-// let plugin_type = (pi:monitorable_prop) -> file_descr -> IIO file_descr pi (fun _ r le -> Inl? r /\ is_open (Inl?.v r) le)
-let plugin_type = file_descr -> IIO file_descr pi (fun _ _ _ -> True)
+let plugin_type = file_descr -> IIO file_descr pi
+  (requires (fun _ -> true))
+  (ensures (fun _ r le -> Inl? r /\ is_open (Inl?.v r) le))
 let ml_plugin_type = file_descr -> MIO file_descr 
 
 // ex1. the webserver register a log for every run of a plugin
@@ -77,38 +78,14 @@ let ml_plugin3 : ml_plugin_type = fun fd ->
   let d = unsafe_cmd Read fd in
   fd
 
+val plugin1 : plugin_type
+let plugin1 = import ml_plugin1
 
+val plugin2 : plugin_type
+let plugin2 = import ml_plugin2
 
-let rec handle #t2 (tree : iio (t2)) (pi:monitorable_prop) : IIO t2 pi (fun _ _ _ -> True) = begin
-  match tree with
-  | Return r -> r 
-  | Throw r -> throw r
-  | Cont (Call GetTrace argz fnc) ->
-      let h = get_trace () in
-      FStar.WellFounded.axiom1 fnc (Inl h);
-      let z' = fnc (Inl h) in
-      handle z' pi
-  | Cont (Call cmd argz fnc) ->
-      let rez : res cmd = dynamic_cmd cmd pi argz in
-      FStar.WellFounded.axiom1 fnc (Inl rez);
-      let z' : free cmds all_sig t2 = fnc (Inl rez) in
-      rev_append_rev_append ();
-      handle z' pi
-end
-  
-let import_mio
-  (a b : Type)
-  (pi : monitorable_prop)
-  (f : a -> MIO b) :
-  Tot (a -> IIO b pi (fun _ _ _ -> True)) =
-    fun (x:a) -> 
-        let h = get_trace () in
-        // Cezar: I don't think this is ok.
-        handle (cast_io_iio (reify (f x) h (fun _ _ -> True))) pi
-
-let plugin1 = import_mio _ _ pi ml_plugin1
-let plugin2 = import_mio _ _ pi ml_plugin2
-let plugin3 = import_mio _ _ pi ml_plugin3
+val plugin3 : plugin_type
+let plugin3 = import pi ml_plugin3
 
 let whole1 () : IIO unit pi (fun _ _ _ -> True) = webserver plugin1
 let whole2 () : IIO unit pi (fun _ _ _ -> True) = webserver plugin2
