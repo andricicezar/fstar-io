@@ -81,6 +81,7 @@ safe_import are both 'safe'.
 
 class exportable (t : Type) = { etype : Type; export : t -> etype; ml_etype : ml etype }
 class importable (t : Type) = { itype : Type; import : itype -> option t; ml_itype : ml itype }
+
 class exn_importable (t : Type) = { eitype : Type; exn_import : eitype -> MIO t; ml_eitype : ml eitype }
 class safe_importable (t : Type) = { sitype : Type; safe_import : sitype -> t; ml_sitype : ml sitype }
 
@@ -93,6 +94,7 @@ let mk_exn_importable (t1 #t2 : Type) {| ml t1 |} (imp : t1 -> MIO t2) : exn_imp
 let mk_safe_importable (t1 #t2 : Type) {| ml t1 |} (imp : t1 -> t2) : safe_importable t2 =
   { sitype = t1; safe_import = imp; ml_sitype = solve }
 
+(** Are this two needed? **)
 instance ml_exportable (#t : Type) (d : exportable t) : ml (d.etype) = d.ml_etype
 instance ml_importable (#t : Type) (d : importable t) : ml (d.itype) = d.ml_itype
 
@@ -223,10 +225,10 @@ let _export_IIO
       match import x with
       | Some x -> (
         let h = get_trace () in
-        if check2 #t1 #trace #pre x h then
-          if enforced_globally pi h then
-            export (f x)
-          else IIO.Effect.throw Contract_failure
+        (** TODO: Can any global property help us remove 'enforced_globally'?
+            The context is instrumented, therefore this should check **)
+        if check2 #t1 #trace #pre x h && enforced_globally pi h then
+          export (f x)
         else IIO.Effect.throw Contract_failure)
       | None -> IIO.Effect.throw Contract_failure)
 
@@ -283,29 +285,26 @@ let _import_pi_exp_IIO
     (fun (x:t1) ->
       let x' = export x in
       let h = get_trace () in
-      (** TODO: This seems weird. 
-        Why do I pass my post condition (fun _ -> True)?
-        Guido recommended me to do this, but I don't remember why
-        should this be safe. **)
+      (** The pre-condition of MIO is always true so we can pass any
+      post-condition to reify **)
       let tree : iio d2.itype = (* MIO?.*)reify (f x') h (fun _ r -> True) in
       _import_pi_IIO tree pi <: IIO d2.itype pi (fun _ -> True) (fun _ _ _ -> True))
   
+
+(** TODO: the code here is pretty trivial **)
 let _import_pre_pi_IIO 
   (#t1:Type) {| d1:exportable t1 |}
   (#t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop) 
   (pre:t1 -> trace -> Type0) {| checkable2 pre |}
   (f : d1.etype -> MIIO d2.itype) :
-  Tot (x:t1 -> IIO t2 pi (pre x) (fun (h:trace) (r:maybe t2) (le:trace) -> True)) =
+  Tot (x:t1 -> IIO t2 pi (pre x) (fun _ _ _ -> True)) =
   (fun x ->
     rev_append_rev_append ();
-    let h = get_trace () in
-    if check2 #t1 #trace #pre x h then
-      let (r:d2.itype) = _import_pi_exp_IIO pi f x in
-      match import r with
-      | Some a -> a
-      | None -> IIO.Effect.throw Contract_failure
-    else IIO.Effect.throw Contract_failure)
+    let (r:d2.itype) = _import_pi_exp_IIO pi f x in
+    match import r with
+    | Some a -> a
+    | None -> IIO.Effect.throw Contract_failure)
 
 let rec prefix_of (#a: Type) (l1 l2: list a)
 : Pure Type0
