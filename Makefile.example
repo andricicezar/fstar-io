@@ -1,0 +1,5 @@
+export PATH := ../z3/bin:$(PATH);
+export PATH := ../FStar/bin:$(PATH);
+
+verify:
+	fstar.exe Common.fst Free.fst IO.Free.fst IO.Effect.fst IIO.Effect.fst MIO.Effect.fst MIIO.Effect.fst Test.IIO.Effect.fst Minterop.fst

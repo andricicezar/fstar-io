@@ -84,7 +84,7 @@ let io_throw (a:Type) (x:exn) : io a= free_throw io_cmds io_sig a x
 let io_bind (a:Type) (b:Type) l k : io b = free_bind io_cmds io_sig a b l k
 
 let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
-  free_perform (Call cmd arg (fun fd -> fd))
+  free_perform (Call cmd arg Return)
 
 // THE IIO FREE MONAD
 type iio = free cmds all_sig
@@ -93,7 +93,7 @@ let iio_throw (a:Type) (x:exn) : iio a = free_throw cmds all_sig a x
 let iio_bind (a:Type) (b:Type) l k : iio b = free_bind cmds all_sig a b l k
 
 let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
-  free_perform (Call cmd arg (fun fd -> fd))
+  free_perform (Call cmd arg Return)
   
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
@@ -130,25 +130,28 @@ let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
     else false
 
 let rev_append_rev_append () : Lemma (
-  forall (h le1 le2:trace). ((List.rev le2) @ (List.rev le1) @ h) ==
-     ((List.rev (le1@le2)) @ h)) =
+  forall (h le1 le2:trace). ((List.Tot.Base.rev le2) @ (List.Tot.Base.rev le1) @ h) ==
+     ((List.Tot.Base.rev (le1@le2)) @ h)) =
   let aux (h le1 le2:trace) : Lemma (
-    ((List.rev le2) @ (List.rev le1) @ h) ==
-       ((List.rev (le1@le2)) @ h)) = begin
+    ((List.Tot.Base.rev le2) @ (List.Tot.Base.rev le1) @ h) ==
+       ((List.Tot.Base.rev (le1@le2)) @ h)) = begin
     List.rev_append le1 le2;
     List.append_assoc (List.rev le2) (List.rev le1) h
   end in Classical.forall_intro_3 aux
+  
+val rev_append_rev_append_pat_nil : h:trace ->
+  Lemma 
+   (ensures ((List.Tot.Base.rev #event []) @ h == h))
+   [SMTPat ((List.Tot.Base.rev #event []) @ h)]
+let rev_append_rev_append_pat_nil h = rev_append_rev_append ()
 
-val rev_append_rev_append_pat : h:trace -> le1:trace -> le2:trace ->
-  Lemma (requires True)
-        (ensures (((List.rev le2) @ (List.rev le1) @ h) ==
-     ((List.rev (le1@le2)) @ h))) [SMTPat (((List.rev le2) @ (List.rev le1) @ h))]
-let rev_append_rev_append_pat h le1 le2 = rev_append_rev_append ()
 
-val rev_nil : unit ->
-  Lemma (requires True)
-        (ensures (List.rev #trace [] == []))
-let rev_nil () = ()
+// val rev_append_rev_append_pat : h:trace -> le1:trace -> le2:trace ->
+//   Lemma 
+//     (ensures ((List.Tot.Base.rev #event le2) @ (List.Tot.Base.rev #event le1) @ h ==
+//      (List.Tot.Base.rev #event (le1@le2)) @ h))
+//     [SMTPat ((List.Tot.Base.rev #event le2) @ (List.Tot.Base.rev #event le1) @ h)]
+// let rev_append_rev_append_pat h le1 le2 = rev_append_rev_append ()
 
 unfold
 let apply_changes (history local_events:trace) : Tot trace = (List.rev local_events) @ history 

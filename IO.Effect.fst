@@ -51,9 +51,8 @@ let rec io_interpretation #a
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
-  | Cont (Call cmd args fnc) -> (
+  | Call cmd args fnc -> (
     forall res. (
-      FStar.WellFounded.axiom1 fnc res;
       let e : event = convert_call_to_event cmd args res in
       io_interpretation (fnc res) (gen_post p e)))
 

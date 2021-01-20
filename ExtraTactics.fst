@@ -115,3 +115,38 @@ let rec instantiate_multiple_foralls (b:binder) (l : list term) : Tac binder =
     (if List.length tail = 0 then ()
     else clear b');
     r
+
+(** The boom_binder is not working. Binder can be any kind of binder,
+but I only try to destruct recursivly the ones that are conjunctions. destruct_and unfortunately throws an error if the binder is not a
+conjunctions and I can not catch the error. **)
+// let rec boom_binder (b : binder) : Tac bool =
+//   let bv, (x, y) = inspect_binder b in
+//   match x with
+//   | Q_Explicit -> begin
+//     try (let b1, _ = destruct_and b in
+//          // ignore (boom_binder b1);
+//          true)
+//     with | _ -> false
+//   end
+//   | _ -> false
+
+//   // match term_as_formula' b with
+//   // | Name 
+//   // | And _ _ -> (dump "cezar123"; try (let b1, _ = destruct_and b in
+//   //                   ignore (boom_binder b1);
+//   //                   true)
+//   //             with | _ -> false)
+//   // | _ -> false
+
+// let boom () : Tac unit =
+//     ignore (
+//       repeatseq (fun () -> first [
+//         (fun () -> ignore (l_intro ()));
+//           // let x = l_intro () in
+//           // if boom_binder x then (
+//           //   rewrite_eqs_from_context ();
+//           //   norm [iota]
+//           // ) else ()
+//           // );
+//         (fun () -> ignore (split ()));
+//         (fun () -> branch_on_match ())]))

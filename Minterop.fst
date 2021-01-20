@@ -263,15 +263,13 @@ let rec _import_pi_IIO
   match tree with
   | Return r -> r 
   | Throw r -> IIO.Effect.throw r
-  | Cont (Call GetTrace argz fnc) ->
+  | Call GetTrace argz fnc ->
       let h = IIO.Effect.get_trace () in
-      FStar.WellFounded.axiom1 fnc (Inl h);
       let z' : iio b = fnc (Inl h) in
       rev_append_rev_append ();
       _import_pi_IIO z' pi
-  | Cont (Call (cmd:io_cmds) argz fnc) ->
+  | Call (cmd:io_cmds) argz fnc ->
       let rez : res cmd = IIO.Effect.dynamic_cmd pi cmd argz in
-      FStar.WellFounded.axiom1 fnc (Inl rez);
       let z' : iio b = fnc (Inl rez) in
       rev_append_rev_append ();
       _import_pi_IIO z' pi
