@@ -244,23 +244,32 @@ let pi4 : monitorable_prop = (fun _ _ -> true)
 
 open FStar.Tactics 
 
-let webserver4 : webserver_type i4 pi4 = (fun plugin -> 
-  rev_append_rev_append ();
-  let fd = plugin () in
-  ())
+open FStar.List.Tot.Properties
 
-// let ml_plugin4 : unit -> MIO file_descr = fun () ->
-//   unsafe_cmd Openfile "Demo.fst"
+(** TODO: the type of webserver4 should be `webserver4 : webserver_type i4 pi4`,
+but for some reason, F* can not prove if it is like that, therefore I manually 
+unfolded it. **)
+let webserver4 (plugin:plugin_type i4 pi4) :
+  IIO i4.c pi4 (fun _ -> True) (fun _ _ _ -> True) by (
+  (** CA: Why are these needed when they have patterns? **)
+  l_to_r [`List.Tot.Properties.append_l_nil;  
+    `IO.Free.rev_append_rev_append_pat_nil;
+    `IO.Free.rev_append_rev_append];
+  explode ()
+) = let fd = plugin () in
+  ()
 
-// val plugin4 : plugin_type i4 pi4
-// let plugin4 = safe_import #_ #(
-//   importable_MIO_IIO 
-//     i4.a #i4.ad 
-//     i4.b #i4.bdi
+let ml_plugin4 : unit -> MIO file_descr = fun () ->
+  unsafe_cmd Openfile "Demo.fst"
 
-//     pi4
-//     i4.pre #i4.cpre
-//     i4.post #i4.cpost) ml_plugin4
+val plugin4 : plugin_type i4 pi4
+let plugin4 = safe_import #_ #(
+  importable_MIO_IIO 
+    i4.a #i4.ad 
+    i4.b #i4.bdi
+    pi4
+    i4.pre #i4.cpre
+    i4.post #i4.cpost) ml_plugin4
 
-// val app4 : unit -> IIO unit pi4 (fun _ -> True) (fun _ _ _ -> True)
-// let app4 () = webserver4 plugin4
+val app4 : unit -> IIO unit pi4 (fun _ -> True) (fun _ _ _ -> True)
+let app4 () = webserver4 plugin4

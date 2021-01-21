@@ -105,6 +105,14 @@ let get_binder (n:nat) : Tac binder =
   | Some y -> y 
   | None -> fail "no binder"
   
+let rec instantiate_n_times_with_none (b:binder) (n : nat{n>0}) : Tac binder =
+  let b' = instantiate b (fresh_uvar None) in
+  if n = 1 then b else (
+    let r = instantiate_n_times_with_none b' (n-1) in
+    clear b';
+    r
+  )
+
 
 let rec instantiate_multiple_foralls (b:binder) (l : list term) : Tac binder =
   match l with
