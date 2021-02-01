@@ -130,28 +130,18 @@ let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
     else false
 
 let rev_append_rev_append () : Lemma (
-  forall (h le1 le2:trace). ((List.Tot.Base.rev le2) @ (List.Tot.Base.rev le1) @ h) ==
-     ((List.Tot.Base.rev (le1@le2)) @ h)) =
-  let aux (h le1 le2:trace) : Lemma (
-    ((List.Tot.Base.rev le2) @ (List.Tot.Base.rev le1) @ h) ==
-       ((List.Tot.Base.rev (le1@le2)) @ h)) = begin
-    List.rev_append le1 le2;
-    List.append_assoc (List.rev le2) (List.rev le1) h
-  end in Classical.forall_intro_3 aux
-  
+  forall (h le1 le2:trace).
+    ((List.rev le2) @ (List.rev le1) @ h) ==
+      ((List.rev (le1@le2)) @ h))
+   by (FStar.Tactics.Derived.l_to_r [`List.append_assoc;`List.rev_append])
+      = ()
+
 val rev_append_rev_append_pat_nil : h:trace ->
-  Lemma 
-   (ensures ((List.Tot.Base.rev #event []) @ h == h))
-   [SMTPat ((List.Tot.Base.rev #event []) @ h)]
+  Lemma
+   (ensures ((List.rev #event []) @ h == h))
+   [SMTPat ((List.rev #event []) @ h)]
 let rev_append_rev_append_pat_nil h = rev_append_rev_append ()
 
-
-// val rev_append_rev_append_pat : h:trace -> le1:trace -> le2:trace ->
-//   Lemma 
-//     (ensures ((List.Tot.Base.rev #event le2) @ (List.Tot.Base.rev #event le1) @ h ==
-//      (List.Tot.Base.rev #event (le1@le2)) @ h))
-//     [SMTPat ((List.Tot.Base.rev #event le2) @ (List.Tot.Base.rev #event le1) @ h)]
-// let rev_append_rev_append_pat h le1 le2 = rev_append_rev_append ()
-
 unfold
-let apply_changes (history local_events:trace) : Tot trace = (List.rev local_events) @ history 
+let apply_changes (history local_events:trace) : Tot trace =
+  (List.rev local_events) @ history

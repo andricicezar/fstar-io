@@ -9,9 +9,9 @@ open IO.Free
 open IO.Effect
 
 let rec iio_interpretation #a
-  (m : iio a) 
+  (m : iio a)
   (h : trace)
-  (p : io_post a) : Type0 = 
+  (p : io_post a) : Type0 =
   match m with
   | Return x -> p (Inl x) []
   | Throw err -> p (Inr err) []
@@ -35,15 +35,15 @@ let iio_irepr (a:Type) (wp:io_wpty a) =
 let iio_ireturn (a : Type) (x : a) : iio_irepr a (io_return_wp a x) =
   fun _ _ -> iio_return a x
 
-let iio_ibind 
-  (a b : Type) 
-  (wp_v : io_wpty a) 
-  (wp_f: a -> io_wpty b) 
+let iio_ibind
+  (a b : Type)
+  (wp_v : io_wpty a)
+  (wp_f: a -> io_wpty b)
   (v : iio_irepr a wp_v)
-  (f : (x:a -> iio_irepr b (wp_f x))) : 
+  (f : (x:a -> iio_irepr b (wp_f x))) :
   Tot (iio_irepr b (io_bind_wp _ _ wp_v wp_f)) =
-  fun h p -> 
-    let t = (iio_bind a b 
+  fun h p ->
+    let t = (iio_bind a b
         (v h (compute_post a b h wp_f p))
         (fun x ->
           assume (wp_f x h p);
@@ -53,10 +53,18 @@ let iio_ibind
 
 unfold
 let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : iio_irepr a wp1) :
-  Pure (iio_irepr a wp2) (requires io_wpty_ord wp2 wp1) (ensures fun _ -> True) = f
+  Pure (iio_irepr a wp2)
+    (requires io_wpty_ord wp2 wp1)
+    (ensures fun _ -> True) = f
 
 unfold
-let i_if_then_else (a : Type) (wp1 wp2 : io_wpty a) (f : iio_irepr a wp1) (g : iio_irepr a wp2) (b : bool) : Type =
+let i_if_then_else
+  (a : Type)
+  (wp1 wp2 : io_wpty a)
+  (f : iio_irepr a wp1)
+  (g : iio_irepr a wp2)
+  (b : bool) :
+  Tot Type =
   iio_irepr a (wp_if_then_else wp1 wp2 b)
 
 total
@@ -73,13 +81,16 @@ layered_effect {
      ; if_then_else = i_if_then_else
 }
 
-let lift_pure_iiowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
+let lift_pure_iiowp
+  (a:Type)
+  (wp:pure_wp a)
+  (f:(eqtype_as_type unit -> PURE a wp)) :
   Tot (iio_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
   = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in iio_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
 
-(** This is a identity function, and we need it because 
+(** This is a identity function, and we need it because
 F* does not have depth subtyping on inductives. **)
 let rec cast_io_iio #a (x:io a) : iio a =
   match x with
@@ -89,49 +100,53 @@ let rec cast_io_iio #a (x:io a) : iio a =
      Call cmd args (fun res ->
        cast_io_iio (fnc res))
 
-let rec io_interp_to_iio_interp' (#a:Type u#a) 
-  (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> io a)) 
-  (h:trace) (p:io_post a) 
+let rec io_interp_to_iio_interp' (#a:Type u#a)
+  (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> io a))
+  (h:trace) (p:io_post a)
   (r:(io_resm cmd)) :
   Lemma
-    (requires 
-      (io_interpretation 
-        (fnc r) 
+    (requires
+      (io_interpretation
+        (fnc r)
         (gen_post p (convert_call_to_event cmd arg r))))
     (ensures (
       let e : event = convert_call_to_event cmd arg r in
-      iio_interpretation 
-        (cast_io_iio (fnc r)) 
-        (e::h) 
-        (gen_post p e))) 
-    (decreases fnc) = 
+      iio_interpretation
+        (cast_io_iio (fnc r))
+        (e::h)
+        (gen_post p e)))
+    (decreases fnc) =
   admit (); (** after updating F* this is not checking anymore.
   Error: can not prove post condition **)
   match fnc r with
   | Call cmd' arg' fnc' ->
       assert (fnc' << fnc r);
       let e : event = convert_call_to_event cmd arg r in
-      Classical.forall_intro (Classical.move_requires (io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p e)))
+      Classical.forall_intro (
+        Classical.move_requires (
+          io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p e)))
   | _ -> ()
 
-let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) : 
+let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
   Lemma
     (requires (io_interpretation x p))
     (ensures  (iio_interpretation (cast_io_iio x) h p)) =
   match x with
-  | Call (cmd:io_cmds) arg fnc -> 
-      Classical.forall_intro (Classical.move_requires (io_interp_to_iio_interp' cmd arg fnc h p))
+  | Call (cmd:io_cmds) arg fnc ->
+      Classical.forall_intro (
+        Classical.move_requires (
+          io_interp_to_iio_interp' cmd arg fnc h p))
   | _ -> ()
 
 let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
-  Tot (iio_irepr a (fun h p -> wp h (fun r lt -> p r lt))) = 
+  Tot (iio_irepr a (fun h p -> wp h (fun r lt -> p r lt))) =
   fun h p ->
     io_interp_to_iio_interp (f h p) h p;
     cast_io_iio (f h p)
 
 sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
-  
-let get_trace () : IIOwp trace 
+
+let get_trace () : IIOwp trace
   (fun h p -> forall r lt. r == (Inl h) /\ lt == [] ==>  p r lt) =
   IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
 
@@ -148,7 +163,7 @@ let dynamic_cmd
       (match r with
       | Inr Contract_failure -> lt == []
       | _ -> lt == [convert_call_to_event cmd arg r])
-      /\ enforced_locally pi h lt) ==>  p r lt) 
+      /\ enforced_locally pi h lt) ==>  p r lt)
   =
   let h = get_trace () in
   let action = (| cmd, arg |) in
@@ -168,12 +183,32 @@ let iio_post
   Tot Type0 =
   enforced_globally pi (apply_changes h local_trace)
 
-effect IIO 
+effect IIO
   (a:Type)
-  (pi : monitorable_prop) 
+  (pi : monitorable_prop)
   (pre : trace -> Type0)
   (post : trace -> maybe a -> trace -> Type0) =
   IIOwp a
     (fun h p ->
       pre h /\ iio_pre pi h /\
       (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))
+
+// let rewrite_rev_append_in_enforced_globally (pi:monitorable_prop) :
+//   Lemma (forall (h lt1 lt2:trace). (
+//       enforced_globally pi ((List.rev lt2)@(List.rev lt1)@h)) ==>
+//     (
+//       enforced_globally pi ((List.rev (lt1@lt2))@h))) =
+//   rev_append_rev_append ()
+
+(** This tactic has the role to help F*/SMT to prove
+larger function bodies in the IIO Effect. This is
+needed for function bodies that contain a function
+call to other IIO computations.
+
+CA: I don't like that it explodes the goal. **)
+let iio_tactic (pi:monitorable_prop) : Tac unit =
+    l_to_r [`List.append_l_nil];
+    // let lem = pose_lemma (`(rewrite_rev_append_in_enforced_globally (`@pi))) in
+    let lem = pose_lemma (`(rev_append_rev_append ())) in
+    norm [delta_only [`%iio_post;`%apply_changes]];
+    explode ()
