@@ -12,7 +12,7 @@ open ExtraTactics
 
 
 // Case 1. Verified web server tries to enforce pi on
-//         plugin 
+//         plugin
 
 val allowed_file : string -> bool
 let allowed_file fnm = match fnm with
@@ -24,8 +24,9 @@ val allowed_fd : file_descr -> trace -> bool
 let rec allowed_fd fd s0 =
   match s0 with
   | [] -> false
-  | EOpenfile fnm (Inl fd') :: t -> if fd = fd' then allowed_file(fnm)
-                                  else allowed_fd fd t
+  | EOpenfile fnm (Inl fd') :: t -> 
+     if fd = fd' then allowed_file(fnm)
+     else allowed_fd fd t
   | EClose fd' _  :: t -> if fd = fd' then false else allowed_fd fd t
   | _ :: t -> allowed_fd fd t
 

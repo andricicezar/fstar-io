@@ -255,7 +255,7 @@ F* can not prove it if it is uses the synonym.**)
 let webserver4 (plugin:plugin_type i4 pi4) :
   IIO i4.c pi4 (fun _ -> True) (fun _ r le ->
     Inl? r ==> only_one_openfile true le)
-  by (iio_tactic pi4) =
+  by (iio_tactic ()) =
   let fd = plugin () in
   ()
 

@@ -94,7 +94,7 @@ let iio_bind (a:Type) (b:Type) l k : iio b = free_bind cmds all_sig a b l k
 
 let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
   free_perform (Call cmd arg Return)
-  
+
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
 

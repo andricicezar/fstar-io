@@ -45,7 +45,7 @@ let iio_ibind
   fun h p ->
     let t = (iio_bind a b
         (v h (compute_post a b h wp_f p))
-        (fun x ->
+        (fun (x:a) ->
           assume (wp_f x h p);
            f x h p)) in
     assume (iio_interpretation t h p);
@@ -150,8 +150,8 @@ let get_trace () : IIOwp trace
   (fun h p -> forall r lt. r == (Inl h) /\ lt == [] ==>  p r lt) =
   IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
 
-let throw (err:exn) : IIOwp trace (fun _ p -> p (Inr err) []) =
-  IIOwp?.reflect(fun _ _ -> iio_throw _ err)
+let throw (#a:Type) (err:exn) : IIOwp a (fun _ p -> p (Inr err) []) =
+  IIOwp?.reflect(fun _ _ -> iio_throw a err)
 
 let dynamic_cmd
   (pi : monitorable_prop)
@@ -206,7 +206,7 @@ needed for function bodies that contain a function
 call to other IIO computations.
 
 CA: I don't like that it explodes the goal. **)
-let iio_tactic (pi:monitorable_prop) : Tac unit =
+let iio_tactic () : Tac unit =
     l_to_r [`List.append_l_nil];
     // let lem = pose_lemma (`(rewrite_rev_append_in_enforced_globally (`@pi))) in
     let lem = pose_lemma (`(rev_append_rev_append ())) in

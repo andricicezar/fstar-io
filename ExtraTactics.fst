@@ -49,17 +49,6 @@ let rec last (x : list 'a) : Tac 'a =
 (** When the goal is [match e with | p1 -> e1 ... | pn -> en],
 destruct it into [n] goals for each possible case, including an
 hypothesis for [e] matching the correposnding pattern. *)
-let branch_on_match () : Tac unit =
-    focus (fun () ->
-      let x = get_match_body () in
-      let _ = t_destruct x in
-      iterAll (fun () ->
-        let bs = repeat intro in
-        let b = last bs in (* this one is the equality *)
-        // grewrite_eq b;
-        rewrite_eqs_from_context ();
-        norm [iota])
-    )
 
 let let_intro () : Tac unit =
     focus (fun () ->
@@ -124,37 +113,63 @@ let rec instantiate_multiple_foralls (b:binder) (l : list term) : Tac binder =
     else clear b');
     r
 
-(** The boom_binder is not working. Binder can be any kind of binder,
-but I only try to destruct recursivly the ones that are conjunctions. destruct_and unfortunately throws an error if the binder is not a
-conjunctions and I can not catch the error. **)
-// let rec boom_binder (b : binder) : Tac bool =
-//   let bv, (x, y) = inspect_binder b in
-//   match x with
-//   | Q_Explicit -> begin
-//     try (let b1, _ = destruct_and b in
-//          // ignore (boom_binder b1);
-//          true)
-//     with | _ -> false
-//   end
-//   | _ -> false
+let rec blowup_binder (x:term) (x':binder) : Tac unit =
+  match term_as_formula' x with
+  | And a b ->
+    let a', b' = destruct_and (binder_to_term x') in
+    clear x';
+    blowup_binder a a';
+    blowup_binder b b'
+  | Comp (Eq _) v _ -> (
+    match inspect v with
+    | Tv_Var _
+    | Tv_BVar _
+    | Tv_FVar _ ->
+      ignore (trytac (fun () ->
+        rewrite x'; norm [iota]))
+    | _ -> ())
+  | _ -> ()
 
-//   // match term_as_formula' b with
-//   // | Name 
-//   // | And _ _ -> (dump "cezar123"; try (let b1, _ = destruct_and b in
-//   //                   ignore (boom_binder b1);
-//   //                   true)
-//   //             with | _ -> false)
-//   // | _ -> false
+let rec blowup () : Tac unit =
+  let goal = cur_goal () in
+  match term_as_formula goal with
+  | Forall _ _ -> ignore (forall_intro ()); blowup ()
+  | And _ _ ->
+      focus (fun () -> split (); iterAll blowup)
+  | Implies x _ ->
+      let x' = implies_intro () in
+      blowup_binder x x';
+      blowup ()
+  | _  -> ()
+  // begin
+  //   let goal = FStar.Reflection.Formula.unsquash goal in
+  //   match goal with
+  //   | None -> ()
+  //   | Some goal -> (
+  //   print (term_to_string goal);
+  //   match inspect goal with
+  //   | Tv_Match sc _ ->
+  //     print "Este match!";
+  //     let x = innermost_sc sc in
+  //     focus (fun () ->
+  //     ignore (trytac (fun () ->
+  //       let _ = t_destruct x in
+  //       iterAll (fun () →
+  //         let bs = repeat intro in
+  //         let b = last bs in (* this one is the equality *)
+  //         grewrite_eq b;
+  //         // rewrite_eqs_from_context ();
+  //         norm [iota];
+  //         blowup ()))))
+  //   | _ -> print "Nu este match!"; ())
+  // end
 
-// let boom () : Tac unit =
-//     ignore (
-//       repeatseq (fun () -> first [
-//         (fun () -> ignore (l_intro ()));
-//           // let x = l_intro () in
-//           // if boom_binder x then (
-//           //   rewrite_eqs_from_context ();
-//           //   norm [iota]
-//           // ) else ()
-//           // );
-//         (fun () -> ignore (split ()));
-//         (fun () -> branch_on_match ())]))
+let branch_on (b:binder) : Tac unit =
+    focus (fun () ->
+      destruct b;
+      iterAll (fun () ->
+        let _ = intro () in
+        let b = intro () in
+        rewrite b;
+        norm [iota])
+    )
