@@ -360,6 +360,55 @@ let suffix_of_append () :
 val rev_nil : unit -> Lemma (List.rev #event [] == [])
 let rev_nil () = ()
 
+
+val append_rev: l1:trace -> l2:trace ->
+  Lemma (((List.Tot.Base.rev l1)@(List.Tot.Base.rev l2)) == (List.Tot.Base.rev (l2@l1)))
+let append_rev l1 l2 = List.rev_append l2 l1
+
+
+let fnc
+  (#t1:Type) {| d1:exportable t1 |}
+  (#t2:Type) {| d2:importable t2 |}
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |}
+  (x:t1)
+  (h:trace)
+  (r:t2)
+  (lt:trace) :
+  IIOwp t2 (fun _ p ->
+    let b = check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt in
+    (b ==>  p (Inl r) []) /\
+    (~b ==> p  (Inr Contract_failure) [])) =
+  (if check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt
+  then r
+  else IIO.Effect.throw #t2 Contract_failure)
+
+val append_inv_tail:
+  #t1:Type ->
+  #t2:Type ->
+  x:t1 ->
+  h:trace ->
+  r:t2 ->
+  post:(t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) ->
+  {| d4:checkable4 post |} ->
+  rlt:(maybe trace){Inl? rlt} ->
+  lt1:trace ->
+  lt2:trace ->
+  Lemma
+   (requires (
+      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
+      /\ check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) (Inl?.v rlt)
+   ))
+   (ensures (post x h (Inl r) (lt1 @ lt2)))
+let append_inv_tail x h r lt1 lt2 post rlt = admit()
+
+// val append_inv_tail: l:trace -> l1:trace -> l2:trace -> l3:(maybe trace){Inl? l3} ->
+//   Lemma
+//       (((List.rev l1 @ List.rev l2 @ l) == (List.rev (Inl?.v l3) @ l))
+//       ==>
+//       ((Inl?.v l3) == l2@l1))
+// let rec append_inv_tail l l1 l2 l3 = admit()
+
 // TODO: fix admit here. this enforces the post condition of IIO *)
 let _import_IIO
   (#t1:Type) {| d1:exportable t1 |}
@@ -376,32 +425,57 @@ let _import_IIO
     norm [delta_only [`%pure_null_wp;`%pure_assume_wp;`%pure_bind_wp]];
     norm [delta_only [`%iio_post;`%apply_changes]];
     ExtraTactics.blowup ();
-    bump_nth 9;
+    bump_nth 6;
     ExtraTactics.branch_on (ExtraTactics.get_binder 22);
-    (* Branch 2: *) bump_nth 2; smt ();
-    (* Branch 1: *)
+    (* Branch 2: Inr *) bump_nth 2; smt ();
+    (* Branch 1: Inl *)
+      // l_to_r [`List.append_assoc; `append_rev];
       ExtraTactics.blowup (); (* 2 new goals *)
       smt (); smt ();
+
       ExtraTactics.branch_on (ExtraTactics.get_binder 27);
-      (* Branch 1.2: *) bump_nth 2; smt ();
-      (* Branch 1.1: *)
-        ExtraTactics.blowup (); (* 4 new goals *)
-        smt ();
-
-        (** apply wp **)
-        // l_to_r [`rev_nil; `List.append_l_nil; `List.append_nil_l];
+      (* Branch 1.2: Inr *) bump_nth 2; smt ();
+      (* Branch 1.1: Inl *)
+        let wp = ExtraTactics.get_binder 15 in
+        let x3 = ExtraTactics.get_binder 19 in
+        let x5 = ExtraTactics.get_binder 23 in
         let av = ExtraTactics.get_binder 25 in
-        let z = ExtraTactics.get_binder 38 in
-        let z = ExtraTactics.instantiate_multiple_foralls z [fresh_uvar None; (`[])] in
-        mapply z;
 
-        smt (); smt ();
-
-        (** TODO: apply wp **)
+        ExtraTactics.blowup (); (* 4 new goals *)
         l_to_r [`rev_nil; `List.append_l_nil; `List.append_nil_l];
+        let wp' = ExtraTactics.instantiate_multiple_foralls wp [(`(Inl (`#av))); (`((`#x3)@(`#x5)))] in
+        mapply wp';
+        split ();
+        smt ();
+        (** this one is easy. should get out that av == x'3@x'5 **)
 
-    dump "a";
-    tadmit ()
+        let eq = ExtraTactics.get_binder 30 in
+        let x0 = ExtraTactics.get_binder 13 in
+        let x6 = ExtraTactics.get_binder 27 in
+        ExtraTactics.branch_on x6;
+        // apply_lemma (`append_inv_tail);
+        // let breq = ExtraTactics.get_binder 34 in
+        // let lem = pose_lemma (`(Classical.forall_intro_4 append_inv_tail)) in
+        // let lem' = ExtraTactics.instantiate_multiple_foralls lem [
+        //   binder_to_term x0;
+        //   binder_to_term x5;
+        //   binder_to_term x3;
+        //   binder_to_term x6
+        // ] in
+        // clear lem;
+        // mapply lem';
+        dump "x";
+        later ();
+        tadmit ()
+
+        // l_to_r [`rev_nil; `List.append_l_nil; `List.append_nil_l];
+        // let wp' = ExtraTactics.instantiate_multiple_foralls wp [(`(Inr Contract_failure)); (`((`#x3)@(`#x5)))] in
+        // mapply wp';
+        // split ();
+        // smt ();
+
+        (** this one should be easy. post is refined to accept any
+        Inr therefore it is weird that F* does not accept this **)
   )=
   (** The post condition should allow the computation to fail.
   The computation can fail by itself or because it does not
@@ -409,14 +483,11 @@ let _import_IIO
   computation handles by itself all errors, therefore the
   context that imported this function should expeect errors. **)
   let h : trace = get_trace () in
-  let f' : ((x:t1) -> IIO t2 pi (pre x) (fun _ _ _ -> True)) =
-    _import_pre_pi_IIO pi pre f in
+  let f' = _import_pre_pi_IIO pi pre f in
   let r : t2 = f' x in
   let lt : trace = extract_local_trace h pi in
-  (if check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt
-  then r
-  else IIO.Effect.throw #t2 Contract_failure)
-    <: IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)
+  Classical.forall_intro_2 (Classical.move_requires_2 (append_inv_tail #t1 #t2 x h r post #d4 (Inl lt)));
+  fnc #t1 #d1 #t2 #d2 post #d4 x h r lt
 
 instance importable_MIO_pi_IIO
   (t1:Type) {| d1:exportable t1 |}
