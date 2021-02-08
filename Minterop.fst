@@ -326,15 +326,6 @@ let rec prefix_of_length (l1 l2: trace)
     prefix_of_length t1 t2
   | _ -> ()
 
-// let x (h h':trace) :
-//   Lemma (requires (prefix_of h h'))
-//     (ensures (
-//       prefix_of_length h h';
-//       let n : nat = (List.length h') - (List.length h) in
-//       let (lt, _) = List.Tot.Base.splitAt n h' in
-//       h == lt @ h')) =
-//   ()
-
 let extract_local_trace (h:trace) (pi:monitorable_prop) :
   IIO trace pi
     (requires (fun h' -> suffix_of h h'))
@@ -360,13 +351,57 @@ let suffix_of_append () :
 val rev_nil : unit -> Lemma (List.rev #event [] == [])
 let rev_nil () = ()
 
-
 val append_rev: l1:trace -> l2:trace ->
-  Lemma (((List.Tot.Base.rev l1)@(List.Tot.Base.rev l2)) == (List.Tot.Base.rev (l2@l1)))
+  Lemma (
+    ((List.rev l1)@(List.rev l2)) == (List.rev (l2@l1)))
 let append_rev l1 l2 = List.rev_append l2 l1
 
+(** TODO: this should be really just apply append_inv_tail. **)
+let custom_append_inv_tail
+  (h:trace)
+  (rlt:(maybe trace){Inl? rlt})
+  (lt1:trace)
+  (lt2:trace) :
+  Lemma
+   (requires (
+      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
+   ))
+   (ensures (Inl?.v rlt == (lt2 @ lt1))) by (
+     l_to_r [`List.append_assoc];
+     l_to_r [`append_rev];
+     // l_to_r [`List.append_inv_tail];
+     tadmit ())= ()
 
-let fnc
+let check4_implies_post
+  (#t1:Type)
+  (#t2:Type)
+  (x:t1)
+  (h:trace)
+  (r:t2)
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |}
+  (rlt:(maybe trace){Inl? rlt})
+  (lt1:trace)
+  (lt2:trace) :
+  Lemma
+   (requires (
+      ((List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h))
+      /\ check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) (Inl?.v rlt)
+   ))
+   (ensures (post x h (Inl r) (lt2 @ lt1))) =
+     custom_append_inv_tail h rlt lt1 lt2
+
+(** TODO: this is trivial. Quite sad to write it **)
+let explain_post_refinement
+  (#t1:Type)
+  (#t2:Type)
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) :
+  Lemma (forall x h lt1 lt2. post x h (Inr Contract_failure) (lt1@lt2)) = ()
+
+(** CA: The body of this function was inlined in _import_IIO but the block
+if-then-else added some extra weird goals which did not make sense,
+therefore a fast fix was extracting the block in a different function. **)
+let enforce_post
   (#t1:Type) {| d1:exportable t1 |}
   (#t2:Type) {| d2:importable t2 |}
   (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
@@ -378,38 +413,19 @@ let fnc
   IIOwp t2 (fun _ p ->
     let b = check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt in
     (b ==>  p (Inl r) []) /\
-    (~b ==> p  (Inr Contract_failure) [])) =
+    (~b ==>  p (Inr Contract_failure) [])) =
   (if check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) lt
   then r
   else IIO.Effect.throw #t2 Contract_failure)
 
-val append_inv_tail:
-  #t1:Type ->
-  #t2:Type ->
-  x:t1 ->
-  h:trace ->
-  r:t2 ->
-  post:(t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) ->
-  {| d4:checkable4 post |} ->
-  rlt:(maybe trace){Inl? rlt} ->
-  lt1:trace ->
-  lt2:trace ->
-  Lemma
-   (requires (
-      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
-      /\ check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) (Inl?.v rlt)
-   ))
-   (ensures (post x h (Inl r) (lt1 @ lt2)))
-let append_inv_tail x h r lt1 lt2 post rlt = admit()
 
-// val append_inv_tail: l:trace -> l1:trace -> l2:trace -> l3:(maybe trace){Inl? l3} ->
-//   Lemma
-//       (((List.rev l1 @ List.rev l2 @ l) == (List.rev (Inl?.v l3) @ l))
-//       ==>
-//       ((Inl?.v l3) == l2@l1))
-// let rec append_inv_tail l l1 l2 l3 = admit()
+(** TODO: why is the binder `x'3 == []` unusable to rewrite the goal. **)
 
-// TODO: fix admit here. this enforces the post condition of IIO *)
+(** The post-condition should allow the computation to fail.
+The computation can fail by itself or because it does not
+respect the contracts. It is not reasonable to assume the
+computation handles by itself all errors, therefore the
+context that imported this function should expect errors. **)
 let _import_IIO
   (#t1:Type) {| d1:exportable t1 |}
   (#t2:Type) {| d2:importable t2 |}
@@ -425,75 +441,41 @@ let _import_IIO
     norm [delta_only [`%pure_null_wp;`%pure_assume_wp;`%pure_bind_wp]];
     norm [delta_only [`%iio_post;`%apply_changes]];
     ExtraTactics.blowup ();
-    bump_nth 6;
+    bump_nth 12;
     ExtraTactics.branch_on (ExtraTactics.get_binder 22);
-    (* Branch 2: Inr *) bump_nth 2; smt ();
     (* Branch 1: Inl *)
-      // l_to_r [`List.append_assoc; `append_rev];
-      ExtraTactics.blowup (); (* 2 new goals *)
+      ExtraTactics.blowup (); (* splits goal in 3 *)
       smt (); smt ();
 
       ExtraTactics.branch_on (ExtraTactics.get_binder 27);
-      (* Branch 1.2: Inr *) bump_nth 2; smt ();
       (* Branch 1.1: Inl *)
+        ExtraTactics.blowup ();
+        bump_nth 7;
+
         let wp = ExtraTactics.get_binder 15 in
         let x3 = ExtraTactics.get_binder 19 in
         let x5 = ExtraTactics.get_binder 23 in
-        let av = ExtraTactics.get_binder 25 in
-
-        ExtraTactics.blowup (); (* 4 new goals *)
         l_to_r [`rev_nil; `List.append_l_nil; `List.append_nil_l];
-        let wp' = ExtraTactics.instantiate_multiple_foralls wp [(`(Inl (`#av))); (`((`#x3)@(`#x5)))] in
-        mapply wp';
-        split ();
-        smt ();
-        (** this one is easy. should get out that av == x'3@x'5 **)
-
-        let eq = ExtraTactics.get_binder 30 in
-        let x0 = ExtraTactics.get_binder 13 in
-        let x6 = ExtraTactics.get_binder 27 in
-        ExtraTactics.branch_on x6;
-        // apply_lemma (`append_inv_tail);
-        // let breq = ExtraTactics.get_binder 34 in
-        // let lem = pose_lemma (`(Classical.forall_intro_4 append_inv_tail)) in
-        // let lem' = ExtraTactics.instantiate_multiple_foralls lem [
-        //   binder_to_term x0;
-        //   binder_to_term x5;
-        //   binder_to_term x3;
-        //   binder_to_term x6
-        // ] in
-        // clear lem;
-        // mapply lem';
-        dump "x";
-        later ();
-        tadmit ()
-
-        // l_to_r [`rev_nil; `List.append_l_nil; `List.append_nil_l];
-        // let wp' = ExtraTactics.instantiate_multiple_foralls wp [(`(Inr Contract_failure)); (`((`#x3)@(`#x5)))] in
-        // mapply wp';
-        // split ();
-        // smt ();
-
-        (** this one should be easy. post is refined to accept any
-        Inr therefore it is weird that F* does not accept this **)
+        let wp' = ExtraTactics.instantiate_multiple_foralls wp
+          [(`(Inr Contract_failure)); (`((`#x3)@(`#x5)))] in
+        mapply wp'
   )=
-  (** The post condition should allow the computation to fail.
-  The computation can fail by itself or because it does not
-  respect the contracts. It is not reasonable to assume the
-  computation handles by itself all errors, therefore the
-  context that imported this function should expeect errors. **)
   let h : trace = get_trace () in
   let f' = _import_pre_pi_IIO pi pre f in
   let r : t2 = f' x in
   let lt : trace = extract_local_trace h pi in
-  Classical.forall_intro_2 (Classical.move_requires_2 (append_inv_tail #t1 #t2 x h r post #d4 (Inl lt)));
-  fnc #t1 #d1 #t2 #d2 post #d4 x h r lt
+  Classical.forall_intro_2 (
+    Classical.move_requires_2 (
+      check4_implies_post #t1 #t2 x h r post #d4 (Inl lt)));
+  explain_post_refinement post;
+  enforce_post #t1 #d1 #t2 #d2 post #d4 x h r lt
 
 instance importable_MIO_pi_IIO
   (t1:Type) {| d1:exportable t1 |}
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |} :
   Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable
     (d1.etype -> MIO d2.itype)
@@ -506,7 +488,8 @@ instance importable_MIO_IIO
   (t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |} :
   Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable
     (d1.etype -> MIO d2.itype)
@@ -517,7 +500,8 @@ instance importable_MIIO_pi_IIO
   (t1:Type) {| d1:exportable t1 |}
   (t2:Type) {| d2:importable t2 |}
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |} :
   Tot (safe_importable (pi:monitorable_prop -> x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable
     (d1.etype -> MIIO d2.itype)
@@ -530,7 +514,8 @@ instance importable_MIIO_IIO
   (t2:Type) {| d2:importable t2 |}
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) {| d4:checkable4 post |} :
+  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r}))
+  {| d4:checkable4 post |} :
   Tot (safe_importable (x:t1 -> IIO t2 pi (pre x) (post x))) =
   mk_safe_importable
     (d1.etype -> MIIO d2.itype)
