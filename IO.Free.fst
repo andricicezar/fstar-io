@@ -8,9 +8,9 @@ type cmds = | Openfile | Read | Close | GetTrace
 // Observable actions
 type io_cmds = x:cmds{x = Openfile || x = Read || x = Close}
 
-let io_sig : cmd_sig io_cmds = { 
+let io_sig : cmd_sig io_cmds = {
   args = (fun (x:io_cmds) -> match x with
-    | Openfile -> string 
+    | Openfile -> string
     | Read -> file_descr
     | Close -> file_descr);
   res = (fun (x:io_cmds) -> match x with
@@ -19,8 +19,8 @@ let io_sig : cmd_sig io_cmds = {
     | Close -> unit)
 }
 
-(** It is obvious that the primitives have no reason to throw 
-`Contract_failure`, because they do not enforce any policy. 
+(** It is obvious that the primitives have no reason to throw
+`Contract_failure`, because they do not enforce any policy.
 In practice, a primitive can throw any error, but I think
 this is an assumption we can make to have more precise specification.
 `Contract_failure` is an exception defined by us in `Common.fst` **)
@@ -38,15 +38,15 @@ type trace = list event
 
 // silent actions/steps
 (** Silent steps refer to the impossibility of an observer to see
-them. Two computations, one that uses GetTrace and does some IO, 
-and another that does directly the same IO thing without playing 
+them. Two computations, one that uses GetTrace and does some IO,
+and another that does directly the same IO thing without playing
 with the trace, are equivalent from the observer point of view. **)
 type tau_cmds = x:cmds{x = GetTrace}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
-should be linked with wrapped primitives that initialize a 
-trace on the heap (?) and updates it with events. 
+should be linked with wrapped primitives that initialize a
+trace on the heap (?) and updates it with events.
 GetTrace will be linked with a function that returns the reference
 to the trace from the heap. **)
 
@@ -55,24 +55,24 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let tau_sig : cmd_sig tau_cmds = { 
+let tau_sig : cmd_sig tau_cmds = {
   args = (fun (x:tau_cmds) -> match x with
     | GetTrace -> unit) ;
   res = (fun (x:tau_cmds) -> match x with
     | GetTrace -> list event)
 }
 
-let add_sig 
-  (#p:cmds -> bool) 
-  (#q:cmds -> bool) 
-  (s1:cmd_sig (x:cmds{p x})) 
-  (s2:cmd_sig (x:cmds{q x})) : 
+let add_sig
+  (#p:cmds -> bool)
+  (#q:cmds -> bool)
+  (s1:cmd_sig (x:cmds{p x}))
+  (s2:cmd_sig (x:cmds{q x})) :
   Tot (cmd_sig (y:cmds{p y || q y})) = {
     args = (fun (x:cmds{p x || q x}) -> if p x then s1.args x else s2.args x);
     res = (fun (x:cmds{p x || q x}) -> if p x then s1.res x else s2.res x)
   }
 
-let all_sig = add_sig io_sig tau_sig 
+let all_sig = add_sig io_sig tau_sig
 
 unfold let args (op:cmds) : Type = all_sig.args op
 unfold let res (op:cmds)  : Type = all_sig.res op
@@ -112,7 +112,10 @@ let convert_call_to_event (cmd:io_cmds) (arg:io_args cmd) (r:io_resm cmd) =
   | Read -> ERead arg r
   | Close -> EClose arg r
 
-let rec enforced_locally (check : monitorable_prop) (h l: trace) : Tot bool (decreases l) =
+let rec enforced_locally
+  (check : monitorable_prop)
+  (h l: trace) :
+  Tot bool (decreases l) =
   match l with
   | [] -> true
   | hd  ::  t ->
@@ -120,8 +123,10 @@ let rec enforced_locally (check : monitorable_prop) (h l: trace) : Tot bool (dec
     if check h action then enforced_locally (check) (hd::h) t
     else false
 
+(** enforced_globally could be written as:
+`enforced_locally check [] h` but fstar can not prove as easily that
+form **)
 let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
-  (** enforced_locally check [] h // - fstar does not like this **)
   match h with
   | [] -> true
   | h  ::  t ->
