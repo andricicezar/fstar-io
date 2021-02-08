@@ -3,7 +3,7 @@ module Test.IIO.Effect
 open Common
 open IO.Free
 open IO.Effect
-open IIO.Effect 
+open IIO.Effect
 
 let rec is_open (fd:file_descr) (h: trace) :
   Tot bool =
@@ -13,7 +13,7 @@ let rec is_open (fd:file_descr) (h: trace) :
                | EOpenfile _ (Inl fd') ->
                    if fd = fd' then true
                    else is_open fd tail
-               | EClose fd' _ -> 
+               | EClose fd' _ ->
                     if fd = fd' then false
                     else is_open fd tail
                | _ -> is_open fd tail

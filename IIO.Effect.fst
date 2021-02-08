@@ -13,17 +13,21 @@ let rec iio_interpretation #a
   (h : trace)
   (p : io_post a) : Type0 =
   match m with
-  | Return x -> p (Inl x) []
-  | Throw err -> p (Inr err) []
-  (** silent actions / tau_cmds **)
+  | Return x -> p x []
+  (** internal_cmds **)
   | Call GetTrace args fnc -> (
     iio_interpretation (fnc (Inl h)) h p
   )
-  (** observable actions / io_cmds **)
+  (** io_cmds **)
   | Call cmd args fnc -> (
-    forall res. (
-      let e : event = convert_call_to_event cmd args res in
-      iio_interpretation (fnc res) (e::h) (gen_post p e)))
+    if _obs_cmds cmd then (
+      forall res. (
+        let e : event = convert_call_to_event cmd args res in
+        iio_interpretation (fnc res) (e::h) (gen_post p cmd args res)))
+    else (
+      forall res. (
+        iio_interpretation (fnc res) h p)
+    ))
 
 // REFINED COMPUTATION MONAD (repr)
 let iio_irepr (a:Type) (wp:io_wpty a) =
@@ -95,7 +99,6 @@ F* does not have depth subtyping on inductives. **)
 let rec cast_io_iio #a (x:io a) : iio a =
   match x with
   | Return z -> Return z
-  | Throw z -> Throw z
   | Call (cmd:io_cmds) args fnc ->
      Call cmd args (fun res ->
        cast_io_iio (fnc res))
@@ -108,13 +111,13 @@ let rec io_interp_to_iio_interp' (#a:Type u#a)
     (requires
       (io_interpretation
         (fnc r)
-        (gen_post p (convert_call_to_event cmd arg r))))
+        (gen_post p cmd arg r)))
     (ensures (
-      let e : event = convert_call_to_event cmd arg r in
       iio_interpretation
         (cast_io_iio (fnc r))
-        (e::h)
-        (gen_post p e)))
+        (if _obs_cmds cmd then (convert_call_to_event cmd arg r)::h
+         else h)
+        (gen_post p cmd arg r)))
     (decreases fnc) =
   admit (); (** after updating F* this is not checking anymore.
   Error: can not prove post condition **)
@@ -124,7 +127,7 @@ let rec io_interp_to_iio_interp' (#a:Type u#a)
       let e : event = convert_call_to_event cmd arg r in
       Classical.forall_intro (
         Classical.move_requires (
-          io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p e)))
+          io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p cmd arg r)))
   | _ -> ()
 
 let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
@@ -162,7 +165,8 @@ let dynamic_cmd
       forall r lt. (
       (match r with
       | Inr Contract_failure -> lt == []
-      | _ -> lt == [convert_call_to_event cmd arg r])
+      | _ -> (_obs_cmds cmd ==> lt == [convert_call_to_event cmd arg r]) /\
+            (_tau_cmds cmd ==> lt == []))
       /\ enforced_locally pi h lt) ==>  p r lt)
   =
   let h = get_trace () in
@@ -193,13 +197,6 @@ effect IIO
       pre h /\ iio_pre pi h /\
       (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))
 
-// let rewrite_rev_append_in_enforced_globally (pi:monitorable_prop) :
-//   Lemma (forall (h lt1 lt2:trace). (
-//       enforced_globally pi ((List.rev lt2)@(List.rev lt1)@h)) ==>
-//     (
-//       enforced_globally pi ((List.rev (lt1@lt2))@h))) =
-//   rev_append_rev_append ()
-
 (** This tactic has the role to help F*/SMT to prove
 larger function bodies in the IIO Effect. This is
 needed for function bodies that contain a function
@@ -207,8 +204,7 @@ call to other IIO computations.
 
 CA: I don't like that it explodes the goal. **)
 let iio_tactic () : Tac unit =
-    l_to_r [`List.append_l_nil];
-    // let lem = pose_lemma (`(rewrite_rev_append_in_enforced_globally (`@pi))) in
+    l_to_r [`List.append_l_nil; `List.append_nil_l];
     let lem = pose_lemma (`(rev_append_rev_append ())) in
     norm [delta_only [`%iio_post;`%apply_changes]];
     explode ()

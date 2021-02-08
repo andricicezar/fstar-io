@@ -18,8 +18,11 @@ The history is reverse chronology order.
 At the end of an io computation, the trace will be
 (reverse of local trace) appended to the history. **)
 
-let io_post a = maybe a -> lt:trace -> Type0  // local_trace (from old to new)
-let io_wpty a = h:trace -> io_post a -> Type0  // past_events (from new to old; reversed compared with local_trace)
+// local_trace (from old to new)
+let io_post a = maybe a -> lt:trace -> Type0
+
+// past_events (from new to old; reversed compared with local_trace)
+let io_wpty a = h:trace -> io_post a -> Type0
 
 unfold
 let io_return_wp (a:Type) (x:a) : io_wpty a =
@@ -38,23 +41,30 @@ let compute_post (a b:Type) (h:trace) (kw : a -> io_wpty b) (p:io_post b)
         | Inr err -> p (Inr err) local_trace)
 
 unfold
-let io_bind_wp (a:Type) (b:Type) (w : io_wpty a) (kw : a -> io_wpty b) : io_wpty b =
+let io_bind_wp
+  (a:Type)
+  (b:Type)
+  (w : io_wpty a)
+  (kw : a -> io_wpty b) :
+  Tot (io_wpty b) =
   fun h p ->
     w h (compute_post a b h kw p)
 
-let gen_post #a (post:io_post a) (e:event) =
-  fun x local_trace -> post x (e :: local_trace)
+let gen_post #a (post:io_post a) (cmd:io_cmds) args res =
+  if _obs_cmds cmd then
+    (fun x local_trace ->
+      post x (convert_call_to_event cmd args res :: local_trace))
+  else
+    post
 
 let rec io_interpretation #a
   (m : io a)
   (p : io_post a) : Type0 =
   match m with
-  | Return x -> p (Inl x) []
-  | Throw err -> p (Inr err) []
+  | Return x -> p x []
   | Call cmd args fnc -> (
     forall res. (
-      let e : event = convert_call_to_event cmd args res in
-      io_interpretation (fnc res) (gen_post p e)))
+      io_interpretation (fnc res) (gen_post p cmd args res)))
 
 
 // REFINED COMPUTATION MONAD (repr)
@@ -73,8 +83,13 @@ unfold
 val io_wpty_ord (#a : Type) : io_wpty a -> io_wpty a -> Type0
 let io_wpty_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
 
-let io_ibind (a b : Type) (wp_v : io_wpty a) (wp_f: a -> io_wpty b) (v : io_irepr a wp_v)
-  (f : (x:a -> io_irepr b (wp_f x))) : io_irepr b (io_bind_wp _ _ wp_v wp_f) =
+let io_ibind
+  (a b : Type)
+  (wp_v : io_wpty a)
+  (wp_f: a -> io_wpty b)
+  (v : io_irepr a wp_v)
+  (f : (x:a -> io_irepr b (wp_f x))) :
+  Tot (io_irepr b (io_bind_wp _ _ wp_v wp_f)) =
   fun h p ->
     let t = (io_bind a b
         (v h (compute_post a b h wp_f p))
@@ -86,14 +101,22 @@ let io_ibind (a b : Type) (wp_v : io_wpty a) (wp_f: a -> io_wpty b) (v : io_irep
 
 unfold
 let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : io_irepr a wp1) :
-  Pure (io_irepr a wp2) (requires io_wpty_ord wp2 wp1) (ensures fun _ -> True) = f
+  Pure (io_irepr a wp2)
+    (requires io_wpty_ord wp2 wp1)
+    (ensures fun _ -> True) =
+  f
 
 unfold
 let wp_if_then_else (#a:Type) (wp1 wp2:io_wpty a) (b:bool) : io_wpty a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
 
 unfold
-let i_if_then_else (a : Type) (wp1 wp2: io_wpty a) (f : io_irepr a wp1) (g : io_irepr a wp2) (b : bool) : Type =
+let i_if_then_else
+  (a : Type)
+  (wp1 wp2: io_wpty a)
+  (f : io_irepr a wp1)
+  (g : io_irepr a wp2) (b : bool) :
+  Tot Type =
   io_irepr a (wp_if_then_else wp1 wp2 b)
 
 total
@@ -110,7 +133,10 @@ layered_effect {
      ; if_then_else = i_if_then_else
 }
 
-let lift_pure_iowp (a:Type) (wp:pure_wp a) (f:(eqtype_as_type unit -> PURE a wp)) :
+let lift_pure_iowp
+  (a:Type)
+  (wp:pure_wp a)
+  (f:(eqtype_as_type unit -> PURE a wp)) :
   Tot (io_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
   = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
 
@@ -131,10 +157,14 @@ let static_cmd
       (forall (r:io_resm cmd) lt. (
       (** postcondition **)
         ~(Inr? r /\ Inr?.v r == Contract_failure) /\
-        lt == [convert_call_to_event cmd argz r] /\
-        enforced_locally pi h lt) ==>  p r lt)) =
+        (_obs_cmds cmd ==>  lt == [convert_call_to_event cmd argz r]) /\
+        (_tau_cmds cmd ==>  lt == []) /\
+        enforced_locally pi h lt)
+       ==>  p r lt)) =
   IOwp?.reflect(fun _ _ -> io_call cmd argz)
- 
+
+// let fd = static_cmd pi Openfile "../Makefile"
+
 effect IO
   (a:Type)
   (pi : monitorable_prop)
@@ -147,4 +177,3 @@ effect IO
       enforced_globally pi (apply_changes h lt) /\
       post h res lt ==>  p res lt)))
 
-// let fd = static_cmd pi Openfile "../Makefile"

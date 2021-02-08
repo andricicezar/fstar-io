@@ -263,8 +263,8 @@ let rec _import_pi_IIO
   (pi:monitorable_prop) :
   IIO b pi (fun _ -> True) (fun _ _ _ -> True) =
   match tree with
-  | Return r -> r
-  | Throw r -> IIO.Effect.throw r
+  | Return (Inl r) -> r
+  | Return (Inr err) -> IIO.Effect.throw err
   | Call GetTrace argz fnc ->
       let h = IIO.Effect.get_trace () in
       let z' : iio b = fnc (Inl h) in
@@ -272,7 +272,8 @@ let rec _import_pi_IIO
       _import_pi_IIO z' pi
   | Call (cmd:io_cmds) argz fnc ->
       let rez : res cmd = IIO.Effect.dynamic_cmd pi cmd argz in
-      let z' : iio b = fnc (Inl rez) in
+      let rezm : resm cmd = Inl rez in
+      let z' : iio b = fnc rezm in
       rev_append_rev_append ();
       _import_pi_IIO z' pi
 
@@ -295,37 +296,6 @@ let _import_pre_pi_IIO
   | Some a -> a
   | None -> IIO.Effect.throw #t2 Contract_failure
 
-let rec suffix_of (l1 l2: trace)
-: Tot Type0 (decreases l2)
-= l1 == l2 \/ (match l2 with
-  | [] -> False
-  | _ :: q ->  l1 `suffix_of` q)
-
-let rec suffix_of_length (l1 l2: trace)
-: Lemma
-  (requires (suffix_of l1 l2))
-  (ensures (List.length l1 <= List.length l2))
-  (decreases l2) =
-  admit ()
-
-let rec prefix_of (#a: Type) (l1 l2: list a)
-: Tot Type0 (decreases l2)
-= match l1, l2 with
-  | [], [] -> True
-  | [], _ -> True
-  | _, [] -> False
-  | h1 :: t1, h2 :: t2 -> h1 == h2 /\ t1 `prefix_of` t2
-
-let rec prefix_of_length (l1 l2: trace)
-: Lemma
-  (requires (prefix_of l1 l2))
-  (ensures (List.length l1 <= List.length l2))
-  (decreases l1)
-= match l1, l2 with
-  | h1 :: t1, h2 :: t2 ->
-    prefix_of_length t1 t2
-  | _ -> ()
-
 let extract_local_trace (h:trace) (pi:monitorable_prop) :
   IIO trace pi
     (requires (fun h' -> suffix_of h h'))
@@ -343,18 +313,6 @@ let extract_local_trace (h:trace) (pi:monitorable_prop) :
   List.Tot.Properties.rev_involutive lt;
   assert (h' == apply_changes h (List.rev lt));
   List.rev lt
-
-let suffix_of_append () :
-  Lemma (forall h l1 l2. suffix_of h ((List.rev l1) @ (List.rev l2) @ h)) =
-  admit()
-
-val rev_nil : unit -> Lemma (List.rev #event [] == [])
-let rev_nil () = ()
-
-val append_rev: l1:trace -> l2:trace ->
-  Lemma (
-    ((List.rev l1)@(List.rev l2)) == (List.rev (l2@l1)))
-let append_rev l1 l2 = List.rev_append l2 l1
 
 (** TODO: this should be really just apply append_inv_tail. **)
 let custom_append_inv_tail
@@ -436,7 +394,7 @@ let _import_IIO
   (f : (d1.etype -> MIIO d2.itype))
   (x:t1) :
   IIO t2 pi (pre x) (post x) by (
-    ignore (pose_lemma (`(suffix_of_append ())));
+    ignore (pose_lemma (`(suffix_of_append #event ())));
     ignore (pose_lemma (`(rev_append_rev_append ())));
     norm [delta_only [`%pure_null_wp;`%pure_assume_wp;`%pure_bind_wp]];
     norm [delta_only [`%iio_post;`%apply_changes]];
