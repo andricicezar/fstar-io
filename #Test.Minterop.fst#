@@ -20,8 +20,10 @@ noeq type interface = {
 }
 
 // the plugin will be written in GIO (should be ML?)
-type plugin_type (i:interface) (pi:monitorable_prop) = x:i.a -> IIO i.b pi (i.pre x) (i.post x)
-type webserver_type (i:interface) (pi:monitorable_prop) = (plugin:plugin_type i pi) -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
+type plugin_type (i:interface) (pi:monitorable_prop) =
+  x:i.a -> IIO i.b pi (i.pre x) (i.post x)
+type webserver_type (i:interface) (pi:monitorable_prop) =
+  (plugin:plugin_type i pi) -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
 
 (*** Example 1: simple interface where pre and post return always
 true ***)

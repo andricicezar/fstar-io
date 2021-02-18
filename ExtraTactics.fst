@@ -173,3 +173,17 @@ let branch_on (b:binder) : Tac unit =
         rewrite b;
         norm [iota])
     )
+
+
+let implies_elim (#p #q: prop)
+                 (i: (p ==> q))
+                 (j: p)
+   : squash q
+   = ()
+let apply_in (t:term) (b:binder) : Tac binder =
+  let p =
+   Tv_App (Tv_App (`implies_elim) (t, Q_Explicit))
+          (binder_to_term b, Q_Explicit)
+  in
+  print (term_to_string p);
+  pose p
