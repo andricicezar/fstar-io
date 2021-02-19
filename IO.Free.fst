@@ -14,13 +14,13 @@ let _obs_cmds x = x = Openfile || x = Read || x = Close
 
 (** Silent steps refer to the impossibility of an observer to see
 them. **)
-let _tau_cmds x = x = Throw
+let _tau_cmds x = not (_obs_cmds x)
 
 type obs_cmds = x:cmds{_obs_cmds x}
 type tau_cmds = x:cmds{_tau_cmds x}
 
 (** the io free monad does not contain the GetTrace step **)
-type io_cmds = x:cmds{_obs_cmds x || _tau_cmds x}
+type io_cmds = x:cmds{_obs_cmds x || x = Throw}
 
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
@@ -34,7 +34,7 @@ unfold let io_res (cmd:io_cmds) : Type =
 In practice, a primitive can throw any error, but I think
 this is an assumption we can make to have more precise specification.
 `Contract_failure` is an exception defined in `Common.fst` **)
-unfold let io_resm (cmd:io_cmds) =
+let io_resm (cmd:io_cmds) =
   r:(maybe (io_res cmd))
     {~(Inr? r /\ Inr?.v r == Contract_failure)}
 
@@ -47,7 +47,7 @@ let io_sig : cmd_sig io_cmds = {
   res = io_resm
 }
 
-unfold let io_args (op:io_cmds) : Type = io_sig.args op
+let io_args (op:io_cmds) : Type = io_sig.args op
 
 noeq
 type event =
@@ -84,12 +84,14 @@ let internal_sig : cmd_sig internal_cmds = {
 
 let all_sig = add_sig cmds io_sig internal_sig
 
-unfold let args (cmd:cmds) : Type = all_sig.args cmd
-unfold let res (cmd:cmds)  : Type =
+let args (cmd:cmds) : Type = all_sig.args cmd
+let res (cmd:cmds)  : Type =
   if cmd = GetTrace then internal_res cmd
   else io_res cmd
 
-unfold let resm (cmd:cmds) : Type = maybe (res cmd)
+let resm (cmd:cmds) : (x:Type{x == all_sig.res cmd}) =
+  admit ();
+  maybe (res cmd)
 
 type io a = free io_cmds io_sig (maybe a)
 let io_return (a:Type) (x:a) : io a =
