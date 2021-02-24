@@ -267,24 +267,34 @@ instance exportable_purearrow_spec
           export (f x)
         ) else IO.Effect.throw Contract_failure) <: MIO d2.etype))
 
+let _export_IIO_0
+  (#t1:Type)
+  (#t2:Type)
+  (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
+  (post: t1 -> trace -> maybe t2 -> trace -> Type0)
+  (f:(x:t1 -> IIO t2 pi (pre x) (post x)))
+  (x:t1) :
+  MIIO t2 =
+  let h = get_trace () in
+  (** TODO: Can any global property help us remove 'enforced_globally'?
+      The context is instrumented, therefore this should check **)
+  if check2 #t1 #trace #pre x h && enforced_globally pi h then
+    f x
+  else IIO.Effect.throw Contract_failure
+
 let _export_IIO
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
   (post: t1 -> trace -> maybe t2 -> trace -> Type0)
-  (f:(x:t1 -> IIO t2 pi (pre x) (post x))) :
-  Tot (d1.itype -> MIIO d2.etype) =
-    (fun (x:d1.itype) ->
-      match import x with
-      | Some x -> (
-        let h = get_trace () in
-        (** TODO: Can any global property help us remove 'enforced_globally'?
-            The context is instrumented, therefore this should check **)
-        if check2 #t1 #trace #pre x h && enforced_globally pi h then
-          export (f x)
-        else IIO.Effect.throw Contract_failure)
-      | None -> IIO.Effect.throw Contract_failure)
+  (f:(x:t1 -> IIO t2 pi (pre x) (post x)))
+  (x:d1.itype) :
+  MIIO d2.etype =
+  match import x with
+  | Some x -> export (_export_IIO_0 pi pre post f x)
+  | None -> IIO.Effect.throw Contract_failure
 
 instance exportable_IIO
   (t1:Type) {| d1:importable t1 |}

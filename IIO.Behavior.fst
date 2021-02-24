@@ -1,4 +1,4 @@
-module IO.Behavior
+module IIO.Behavior
 
 open FStar.Calc
 open FStar.Tactics
@@ -12,34 +12,15 @@ open MIIO.Effect
 
 type set_of_traces (a:Type) = trace * a -> Type0
 
-val set_of_traces_return : 'a -> set_of_traces 'a
-let set_of_traces_return x (h, x') =
-  h == [] /\ x == x'
-
-val set_of_traces_bind :
-  set_of_traces 'a ->
-  ('a -> set_of_traces 'b) ->
-  set_of_traces 'b
-let set_of_traces_bind p f (h, x) =
-  exists (h1 h2 : trace) .
-    exists x'. h == (h1 @ h2) /\ p (h1, x') /\ f x' (h2, x)
-
-val set_of_traces_map :
-  ('a -> 'b) ->
-  set_of_traces 'a ->
-  set_of_traces 'b
-let set_of_traces_map f p (h, x) =
-  exists x'. f x' == x /\ p (h, x')
-
 let empty_set (#a:Type) () : set_of_traces a =
   fun (t,r) -> t == []
 
 let pi_to_set #a (pi : monitorable_prop) : set_of_traces a =
   fun (t, _) -> enforced_globally pi (List.rev t)
 
-val included_in : ('b -> 'a) -> set_of_traces 'a -> set_of_traces 'b -> Type0
-let included_in rel s1 s2 =
-  forall t r1. s1 (t, r1) ==>  (exists r2. rel r2 == r1 /\ s2 (t, r2))
+val included_in : set_of_traces 'a -> set_of_traces 'a -> Type0
+let included_in s1 s2 =
+  forall t r1. s1 (t, r1) ==>  s2 (t, r1)
 
 let rec behavior #a
   (m : iio a) : set_of_traces (maybe a) =
@@ -308,29 +289,29 @@ let beh_extend_trace_d
 
 // unfold let ref #a (x : io a) : M4.irepr a (fun p -> forall res. p res) = (fun _ -> x)
 
-let beh_included_in_trans_id x y z :
-  Lemma (
-    (behavior x `included_in id` behavior y /\
-    behavior y `included_in id` behavior z) ==>
-      behavior x `included_in id` behavior z) = ()
+// let beh_included_in_trans_id x y z :
+//   Lemma (
+//     (behavior x `included_in id` behavior y /\
+//     behavior y `included_in id` behavior z) ==>
+//       behavior x `included_in id` behavior z) = ()
   
-let beh_included_in_trans_id_g x y z g:
-  Lemma (
-    (behavior x `included_in id` behavior y /\
-    behavior y `included_in g` behavior z) ==>
-      behavior x `included_in g` behavior z) = ()
+// let beh_included_in_trans_id_g x y z g:
+//   Lemma (
+//     (behavior x `included_in id` behavior y /\
+//     behavior y `included_in g` behavior z) ==>
+//       behavior x `included_in g` behavior z) = ()
   
-let beh_included_in_trans_g_id x y z g:
-  Lemma (
-    (behavior x `included_in g` behavior y /\
-    behavior y `included_in id` behavior z) ==>
-      behavior x `included_in g` behavior z) = ()
+// let beh_included_in_trans_g_id x y z g:
+//   Lemma (
+//     (behavior x `included_in g` behavior y /\
+//     behavior y `included_in id` behavior z) ==>
+//       behavior x `included_in g` behavior z) = ()
 
-let beh_included_in_merge_f_g x y z f g:
-  Lemma (
-    (behavior x `included_in f` behavior y /\
-    behavior y `included_in g` behavior z) ==>
-      behavior x `included_in (compose f g)` behavior z) = ()
+// let beh_included_in_merge_f_g x y z f g:
+//   Lemma (
+//     (behavior x `included_in f` behavior y /\
+//     behavior y `included_in g` behavior z) ==>
+//       behavior x `included_in (compose f g)` behavior z) = ()
 
 
 // let beh_implies_iohist_interp 

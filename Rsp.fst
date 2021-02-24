@@ -12,7 +12,7 @@ open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
 open Minterop
-open IO.Behavior
+open IIO.Behavior
 
 noeq type compiler = {
   interface : Type;
@@ -28,11 +28,11 @@ noeq type compiler = {
             ctx_s i pi -> prog_s i pi -> Tot (whole_s i pi);
 
   res_t   : interface -> Type;
-  prog_t  : interface -> monitorable_prop -> Type;
+  prog_t  : interface -> Type;
   ctx_t   : interface -> Type;
   whole_t : interface -> Type;
   link_t  : (#i:interface) -> (#pi:monitorable_prop) ->
-            ctx_t i -> prog_t i pi -> Tot (whole_t i);
+            ctx_t i -> prog_t i -> Tot (whole_t i);
 
 
   beh_s : (#i:interface) -> (#pi:monitorable_prop) ->
@@ -45,43 +45,55 @@ noeq type compiler = {
                   set_of_traces (res_s i) -> Type;
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
-                  prog_s i pi -> Tot (prog_t i pi);
+                  prog_s i pi -> Tot (prog_t i);
   compile_whole : (#i:interface) -> (#pi:monitorable_prop) ->
                   whole_s i pi -> Tot (whole_t i);
 }
 
 noeq type interface = {
-  a : Type; ad : exportable a;
-  b : Type; bdi : importable b; bde : exportable b;
-  c : Type; cd : exportable c;
-  post:a -> trace -> (m:maybe b) -> trace -> (r:Type0{Inr? m ==> r});
-  cpost : checkable4 post;
+  ctx_arg : Type;
+  ctx_arg_ce : exportable ctx_arg;
+  ctx_ret: Type;
+  ctx_ret_ci : importable ctx_ret;
+  ctx_ret_ce : exportable ctx_ret;
+  ret : Type; ret_cm: ml ret;
+  ctx_post :
+    ctx_arg -> trace -> (m:maybe ctx_ret) -> trace -> (r:Type0{Inr? m ==> r});
+  ctx_post_c : checkable4 ctx_post;
 }
 
-// let safety_prop = (#a:Type) -> a -> Type0
 let safety_prop = pi_to_set
 
+val whole_pre' : unit -> trace -> bool
+let whole_pre' _ _ = true
+
+val whole_pre : unit -> trace -> Type0
+let whole_pre x h = whole_pre' x h
+
+let whole_pre_cc : checkable2 whole_pre =
+  general_is_checkable2 unit trace whole_pre'
+
 type whole_s (i:interface) (pi:monitorable_prop) =
-  unit -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
-type whole_t (i:interface) = unit -> MIIO i.cd.etype
+  x:unit -> IIO i.ret pi (whole_pre x) (fun _ _ _ -> True)
+type whole_t (i:interface) = unit -> MIIO i.ret
 
 (** the lift from "MIO to MIIO" for the context should happen
 during linking. It is improper to say "should happen", because
 the lift represents the assumptions: "the context uses
 only the IO library which comes with instrumentation".
  **)
-let tpre : (i:interface) -> (i.a -> trace -> bool) = fun i x h -> true
+let tpre : (i:interface) -> (i.ctx_arg -> trace -> bool) = fun i x h -> true
 type ctx_s (i:interface) (pi:monitorable_prop) =
-  (x:i.a) -> IIO i.b pi (fun h -> tpre i x h) (i.post x)
+  (x:i.ctx_arg) -> IIO i.ctx_ret pi (fun h -> tpre i x h) (i.ctx_post x)
 type ctx_p (i:interface) (pi:monitorable_prop) =
-  x:i.ad.etype -> MIIO i.bdi.itype
+  x:i.ctx_arg_ce.etype -> MIIO i.ctx_ret_ci.itype
 
-type ctx_t (i:interface) = i.ad.etype -> MIO i.bdi.itype
+type ctx_t (i:interface) = i.ctx_arg_ce.etype -> MIO i.ctx_ret_ci.itype
 
 type prog_s (i:interface) (pi:monitorable_prop) =
-  ctx_s i pi -> IIO i.c pi (fun _ -> True) (fun _ _ _ -> True)
+  ctx_s i pi -> IIO i.ret pi (fun _ -> True) (fun _ _ _ -> True)
 type prog_t (i:interface) (pi:monitorable_prop) =
-  ctx_p i pi -> MIIO i.cd.etype
+  ctx_p i pi -> MIIO i.ret
 
 
 let importable_ctx_s (i:interface) (pi:monitorable_prop) :
@@ -89,13 +101,13 @@ let importable_ctx_s (i:interface) (pi:monitorable_prop) :
   importable_safe_importable
     (ctx_s i pi)
     #(importable_MIIO_IIO
-        i.a #i.ad
-        i.b #i.bdi
+        i.ctx_arg #i.ctx_arg_ce
+        i.ctx_ret #i.ctx_ret_ci
         pi
         (fun x h -> tpre i x h)
-        #(general_is_checkable2 i.a trace (tpre i))
-        i.post
-        #i.cpost)
+        #(general_is_checkable2 i.ctx_arg trace (tpre i))
+        i.ctx_post
+        #i.ctx_post_c)
 
 let handle = _import_pi_IIO
 
@@ -110,28 +122,15 @@ let ctx_p_to_ctx_s
   (pi : monitorable_prop)
   (cp  : ctx_p i pi) :
   Tot (ctx_s i pi) =
-  let pre : (i.a -> trace -> bool) = fun _ _ -> true in
+  let pre : (i.ctx_arg -> trace -> bool) = fun _ _ -> true in
   _import_IIO
-    #i.a #i.ad
-    #i.b #i.bdi
+    #i.ctx_arg #i.ctx_arg_ce
+    #i.ctx_ret #i.ctx_ret_ci
     pi
     (fun x h -> pre x h)
-    #(general_is_checkable2 i.a trace pre)
-    i.post #i.cpost
+    #(general_is_checkable2 i.ctx_arg trace pre)
+    i.ctx_post #i.ctx_post_c
     cp
-
-unfold
-let beh_s
-  #a
-  #b
-  (pi:monitorable_prop)
-  (ws:(x:a -> IIO b pi (fun _ -> True) (fun _ _ _ -> True)))
-  (x:a) =
-  behavior (reify (ws x) [] (iio_post pi []))
-
-unfold
-let beh_t #a #b (wt:a -> MIO b) (x:a) =
-  behavior (cast_io_iio (reify (wt x) [] (fun _ _ -> True)))
 
 let compile_prog
   (#i  : interface)
@@ -141,7 +140,7 @@ let compile_prog
   let pre : ctx_s i pi -> trace -> bool =  fun _ _ -> true in
   _export_IIO
     #(ctx_s i pi) #(importable_ctx_s i pi)
-    #i.c #i.cd
+    #i.ret #(exportable_ml i.ret #i.ret_cm)
     pi
     (fun x h -> pre x h)
     #(general_is_checkable2 (ctx_s i pi) trace pre)
@@ -153,14 +152,11 @@ let compile_whole
   (#pi : monitorable_prop)
   (f  : whole_s i pi) :
   Tot (whole_t i) =
-  let pre : unit -> trace -> bool =  fun _ _ -> true in
-  _export_IIO
-    #unit
-    #(importable_safe_importable unit #(safe_importable_ml unit #ml_unit))
-    #i.c #i.cd
+  _export_IIO_0
+    #unit #i.ret
     pi
-    (fun x h -> pre x h)
-    #(general_is_checkable2 unit trace pre)
+    whole_pre
+    #whole_pre_cc
     (fun x h r lt -> True)
     f
 
@@ -172,74 +168,75 @@ val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i ->
               prog_t i pi -> Tot (whole_t i)
 let link_t #i #pi c p : whole_t i = (fun _ -> p (ctx_t_to_ctx_p i pi c))
 
-let res_s   = (fun i -> maybe (trace * i.c))
-let res_t   = (fun i -> maybe (i.cd.etype))
+val included_in' : (#i:interface) -> set_of_traces (maybe i.ret) ->
+                    set_of_traces (maybe i.ret) -> Type0
+let included_in' = (fun (#i:interface) -> included_in)
 
-val included_in_s : (#i:interface) -> set_of_traces (res_s i) ->
-                    set_of_traces (res_s i) -> Type0
-let included_in_s = (fun (#i:interface) -> included_in #(res_s i) #(res_s i) id)
-let included_in_t = (fun (#i:interface) ->
-  included_in #(maybe i.cd.etype) #(maybe (trace * i.c))
-    (inl_app (compose export cdr)))
+let beh_s
+  (#i:interface)
+  (#pi:monitorable_prop)
+  (ws:whole_s i pi) =
+  behavior (reify (ws ()) [] (iio_post pi []))
+
+let beh_t
+  (#i:interface)
+  (wt:whole_t i) =
+  behavior (reify (wt ()) [] (fun _ _ -> True))
+
+let sc (i:interface) (pi:monitorable_prop) (ws:whole_s i pi) : Type0 =
+  ((beh_t (compile_whole ws)) `included_in` beh_s ws)
+
+let seci_respects_sc
+  (i  : interface)
+  (pi : monitorable_prop)
+  (ws  : whole_s i pi) :
+  Lemma (sc i pi ws) =
+  (** proof by unfolding of LHS **)
+
+  (** this is LHS unfolded **)
+  let ww1 = reify (
+            let h = get_trace () in
+            if check2 #_ #_ #whole_pre #whole_pre_cc () h &&
+               enforced_globally pi h then ws ()
+            else IIO.Effect.throw (Contract_failure)
+  ) [] (iio_post pi []) in
+
+  (** TODO: prove that lift from MIIO to IIO preserves behavior **)
+  assert (beh_t (compile_whole ws) `included_in` behavior ww1) by (
+    norm [delta_only [`%compile_whole;`%_export_IIO_0;`%beh_t]; iota];
+    dump "x";
+    tadmit ()
+  );
+
+  let ww2 = reify (
+            let h = [] in
+            if check2 #_ #_ #whole_pre #whole_pre_cc () h &&
+               enforced_globally pi h then ws ()
+            else IIO.Effect.throw (Contract_failure)
+  ) [] (iio_post pi []) in
+
+  assume (ww1 == ww2)
+  (** from this point, is obvious that the condition is true,
+  and after normalization ws is obtained. **)
 
 let tp (i:interface) (pi:monitorable_prop) (ws:whole_s i pi) : Type0 =
-  ((beh_s pi ws () `included_in_s` (safety_prop pi)) ==>
-    (beh_t (compile_whole ws) () `included_in_t` (safety_prop pi)))
+  ((beh_s ws `included_in'` (safety_prop pi)) ==>
+    (beh_t (compile_whole ws) `included_in'` (safety_prop pi)))
 
 let seci_respects_tp
   (i  : interface)
   (pi : monitorable_prop)
   (ws  : whole_s i pi) :
   Lemma (tp i pi ws) =
+  (** we have to show:
+      ```if beh ws ⊆ π then beh (compile ws) ⊆ π```
+      proof:
+      we show first that ```beh (compile ws) ⊆ beh ws```
+      by unfolding compile.
+      apply ⊆-transitivity property and we get
+      ```beh (compile ws) ⊆ π```. **)
+  seci_respects_sc i pi ws
 
-  let wt : whole_t i = compile_whole ws in
-  let included_in_id #a = included_in #a #a (id #a) in
-  let l1 = reify (wt ()) (fun _ -> True) in
-
-  let l2 = reify (
-          (export (M4?.reflect (ref (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) <: i.cd.etype)) (fun _ -> True) in 
-
-  let l3s = reify (M4?.reflect (ref (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))) <: MFOUR i.c (fun p -> forall res. p res)) in
-  // TODO: Cezar: is the 3rd argument correct? I suppose it should use pre and post
-  // behavior (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
-  let l3 = (M4.ibind i.c i.cd.etype (fun p -> forall res. p res) (fun x -> m4_return_wp (i.cd.etype) (export x))
-          (l3s)
-          (fun x -> lift_pure_mfour i.cd.etype (fun p -> p (export x)) (fun _ -> export x)) (fun _ -> True)) in
-
-  assert (l1 == l2) by (norm [delta_only [`%compile_whole]]);
-  assert (behavior l1 `included_in id` behavior l2);
-  // TODO: Cezar: this should be just an unfolding of `reify`. I talked with Guido
-  // and it seems using tactics is not a solution to unfold `reify` for 
-  // layered effects because: "reification of layered effects is explicitly disabled
-  // since it requires producing the indices for the bind, and we do not store them
-  // anywhere". I tried to manually unfold looking at EMF* (Dijkstra Monads for
-  // Free), but it seems that F* does not accept this proof. I created a new file only
-  // for this problem: `UnfoldReify.fst`.
-  // Related github issue: https://github.com/FStarLang/FStar/issues/2163
-  assume (behavior l2 `included_in id` behavior l3);
-
-  beh_included_bind_tot #i.c #i.cd.etype
-      (l3s (compute_post i.c (Mkexportable?.etype i.cd) (fun x -> m4_return_wp (Mkexportable?.etype i.cd) (export x)) (fun _ -> True)))
-      export;
-
-  assert (
-      behavior l3
-      `included_in (inl_app export)`
-      behavior (l3s (fun _ -> True))
-  ) by (norm [delta_only [`%ibind]]);
-
-  assert (
-      behavior (l3s (fun _ -> True))
-      `included_in id`
-      behavior (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))
-  );
-
-  beh_iost_to_io i.c (reify (ws ()) (m4wp_invariant_post pi []) []);
-
-  assert (
-      behavior (iost_to_io (reify (ws ()) (m4wp_invariant_post pi []) []))
-      `included_in (inl_app cdr)` 
-      beh_s pi ws ())
 
 val import_ctx_t : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i -> ctx_s i pi
 let import_ctx_t #i #pi ct =
@@ -250,29 +247,32 @@ let beh_export_ps_ct_in_export_ws
   (i  : interface)
   (pi : monitorable_prop)
   (ps : prog_s i pi)
-  (ct : ctx_t i) : 
+  (ct : ctx_t i) :
   Lemma (
     let (cs : ctx_s i pi) = import_ctx_t #i #pi ct in
     let ws : whole_s i pi = cs `link_s #i` ps in
     let pt : prog_t i pi = compile_prog ps in
     let wt : whole_t i = compile_whole #i #pi ws in
-    beh_t (ct `link_t` pt) () `included_in id` beh_t wt ()
-  ) = 
+    beh_t (ct `link_t` pt) `included_in` beh_t wt
+  ) =
   let cp = ctx_t_to_ctx_p i pi ct in
   let (cs : ctx_s i pi) = ctx_p_to_ctx_s i pi cp in
   let ws : whole_s i pi = cs `link_s` ps in
   let (cs : ctx_s i pi) = ctx_p_to_ctx_s i pi cp in
   let pt : prog_t i pi = compile_prog ps in
   let wt : whole_t i = compile_whole ws in
-  assert (reify (pt cp) (fun _ -> True) == reify (wt ()) (fun _ -> True)) by (
-    norm [delta_only [`%compile_prog]];
-    norm [delta_only [`%compile_whole]];
-    norm [delta_only [`%link_s]]
+  let wt' : whole_t i = fun _ -> pt cp in
+  assert (reify (wt' ()) [] (fun _ _ -> true) == reify (wt ()) [] (fun _ _ -> True)) by (
+    norm [delta_only [`%ctx_t_to_ctx_p]];
+    norm [delta_only [`%compile_prog; `%compile_whole; `%_export_IIO]];
+    norm [delta_only [`%link_s]; iota];
+    dump "h"
   );
+  admit ();
   assert (
-    beh_t (ct `link_t #i #pi` pt) ()
-      `included_in id`
-    beh_t ((fun _ -> pt cp) <: whole_t i) ()) 
+    beh_t (ct `link_t #i #pi` pt)
+      `included_in`
+    beh_t ((fun _ -> pt cp) <: whole_t i))
   by (norm [delta_only [`%link_t]])
 
 let seci_rsp_0
@@ -281,7 +281,7 @@ let seci_rsp_0
   (ps  : prog_s i pi)
   (ct  : ctx_t i) :
   Lemma (
-  (forall (cs:ctx_s i pi). 
+  (forall (cs:ctx_s i pi).
     (beh_s pi (cs `link_s` ps) ()) `included_in_s` (safety_prop pi))
   ==>  (
       let pt = compile_prog #i ps in
@@ -302,7 +302,7 @@ let rsp (i:interface) (pi:monitorable_prop) (ps:prog_s i pi) : Type0 =
 let seci_respects_rsp () :
   Lemma (forall i pi ps. rsp i pi ps) =
     Classical.forall_intro_4 (seci_rsp_0)
-  
+
 
 
 // let seci : compiler = {
@@ -316,7 +316,7 @@ let seci_respects_rsp () :
 //   prog_s  = prog_s;
 //   ctx_s   = ctx_s;
 //   whole_s = whole_s;
-  
+
 //   link_s = link_s;
 
 //   res_t   = (fun i -> maybe (i.cd.etype));
@@ -327,7 +327,7 @@ let seci_respects_rsp () :
 
 //   beh_s = (fun #i #pi w -> beh_s #unit #i.c pi w ());
 //   beh_t = (fun #i w -> beh_t #unit #i.cd.etype w ());
-  
+
 //   included_in_s = included_in_s;
 //   included_in_t = included_in_t;
 

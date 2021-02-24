@@ -22,6 +22,13 @@ type tau_cmds = x:cmds{_tau_cmds x}
 (** the io free monad does not contain the GetTrace step **)
 type io_cmds = x:cmds{_obs_cmds x || x = Throw}
 
+unfold let io_args (cmd:io_cmds) : Type =
+  match cmd with
+  | Openfile -> string
+  | Read -> file_descr
+  | Close -> file_descr
+  | Throw -> exn
+
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
@@ -38,16 +45,7 @@ let io_resm (cmd:io_cmds) =
   r:(maybe (io_res cmd))
     {~(Inr? r /\ Inr?.v r == Contract_failure)}
 
-let io_sig : cmd_sig io_cmds = {
-  args = (fun (cmd:io_cmds) -> match cmd with
-    | Openfile -> string
-    | Read -> file_descr
-    | Close -> file_descr
-    | Throw -> exn);
-  res = io_resm
-}
-
-let io_args (op:io_cmds) : Type = io_sig.args op
+let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
 
 noeq
 type event =
@@ -76,7 +74,7 @@ let internal_res (x:internal_cmds) =
   | GetTrace -> list event
 let internal_resm (x:internal_cmds) = maybe (internal_res x)
 
-let internal_sig : cmd_sig internal_cmds = {
+let internal_sig : op_sig internal_cmds = {
   args = (fun (x:internal_cmds) -> match x with
     | GetTrace -> unit) ;
   res = internal_resm
@@ -116,7 +114,7 @@ let io_bind (a:Type) (b:Type) l k : io b =
   io_try_catch_finnaly a b l (io_throw b) k
 
 let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
-  Call cmd arg (fun v ->
+  Call cmd arg (fun (v:io_resm cmd) ->
     match v with
     | Inl x -> io_return (io_res cmd) x
     | Inr err -> io_throw (io_res cmd) err)
