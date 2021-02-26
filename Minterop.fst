@@ -376,22 +376,6 @@ let extract_local_trace (h:trace) (pi:monitorable_prop) :
   assert (h' == apply_changes h (List.rev lt));
   List.rev lt
 
-(** TODO: this should be really just apply append_inv_tail. **)
-let custom_append_inv_tail
-  (h:trace)
-  (rlt:(maybe trace){Inl? rlt})
-  (lt1:trace)
-  (lt2:trace) :
-  Lemma
-   (requires (
-      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
-   ))
-   (ensures (Inl?.v rlt == (lt2 @ lt1))) by (
-     l_to_r [`List.append_assoc];
-     l_to_r [`append_rev];
-     // l_to_r [`List.append_inv_tail];
-     tadmit ())= ()
-
 let check4_implies_post
   (#t1:Type)
   (#t2:Type)
@@ -409,7 +393,7 @@ let check4_implies_post
       /\ check4 #t1 #trace #(maybe t2) #trace #post x h (Inl r) (Inl?.v rlt)
    ))
    (ensures (post x h (Inl r) (lt2 @ lt1))) =
-     custom_append_inv_tail h rlt lt1 lt2
+     custom_append_inv_tail #event h rlt lt1 lt2
 
 (** TODO: this is trivial. Quite sad to write it **)
 let explain_post_refinement

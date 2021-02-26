@@ -1,6 +1,7 @@
 module Common
 
 open FStar.Exn
+open FStar.Tactics
 
 exception Contract_failure
 
@@ -70,3 +71,18 @@ val append_rev: l1:list 'a -> l2:list 'a ->
   Lemma (
     ((List.rev l1)@(List.rev l2)) == (List.rev (l2@l1)))
 let append_rev l1 l2 = List.rev_append l2 l1
+
+(** TODO: this should be really just apply append_inv_tail. **)
+let custom_append_inv_tail
+  (h:list 'a)
+  (rlt:(maybe (list 'a)){Inl? rlt})
+  (lt1:list 'a)
+  (lt2:list 'a) :
+  Lemma
+   (requires (
+      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
+   ))
+   (ensures (Inl?.v rlt == (lt2 @ lt1))) by (
+     l_to_r [`List.append_assoc; `append_rev];
+     // l_to_r [`List.append_inv_tail];
+     tadmit ())= ()
