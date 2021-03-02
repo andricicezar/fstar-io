@@ -26,79 +26,78 @@ let rec behavior #a
   (m : iio a) : set_of_traces (maybe a) =
   match m with
   | Return x -> fun t -> t == ([], x)
+  | Call GetTrace arg fnc -> (fun (t', r') ->
+    behavior (fnc (Inl t')) (t', r'))
   | Call cmd arg fnc -> (fun (t', r') ->
-    (_obs_cmds cmd ==> (
       exists r t. (
        (behavior (fnc r) (t,r')) /\
-       t' == (convert_call_to_event cmd arg r)::t))) /\
-    (~(_obs_cmds cmd) ==> (
-      (exists (rez:resm cmd). behavior (fnc rez) (t', r')))))
+       t' == (convert_call_to_event cmd arg r)::t))
 
-let beh_shift_trace
-  (cmd : obs_cmds)
-  (arg : args cmd)
-  (rez : io_resm cmd)
-  (fnc : (resm cmd) -> iio 'a)
-  (t:trace)
-  (r:maybe 'a) :
-  Lemma
-    (requires
-      (behavior
-        (Call cmd arg fnc)
-        ((convert_call_to_event cmd arg rez :: t), r)))
-    (ensures (behavior (fnc rez) (t, r))) =
-  ()
+// let beh_shift_trace
+//   (cmd : cmds)
+//   (arg : args cmd)
+//   (rez : io_resm cmd)
+//   (fnc : (resm cmd) -> iio 'a)
+//   (t:trace)
+//   (r:maybe 'a) :
+//   Lemma
+//     (requires
+//       (behavior
+//         (Call cmd arg fnc)
+//         ((convert_call_to_event cmd arg rez :: t), r)))
+//     (ensures (behavior (fnc rez) (t, r))) =
+//   ()
 
-let beh_shift_trace_silent
-  (cmd : tau_cmds)
-  (arg : args cmd)
-  (fnc : (resm cmd) -> iio 'a)
-  (t : trace)
-  (r : maybe 'a) :
-  Lemma
-    (requires
-      (behavior
-        (Call cmd arg fnc)
-        (t, r)))
-    (ensures (exists rez. behavior (fnc rez) (t, r))) =
-  assert (~(_obs_cmds cmd));
-  assert (exists rez. behavior (fnc rez) (t, r)) by (
-    let wp = ExtraTactics.get_binder 7 in
-    let x, _ = destruct_and wp in
-    binder_retype x;
-      norm [delta; zeta];
-    trefl ()
-  )
+// let beh_shift_trace_silent
+//   (cmd : tau_cmds)
+//   (arg : args cmd)
+//   (fnc : (resm cmd) -> iio 'a)
+//   (t : trace)
+//   (r : maybe 'a) :
+//   Lemma
+//     (requires
+//       (behavior
+//         (Call cmd arg fnc)
+//         (t, r)))
+//     (ensures (exists rez. behavior (fnc rez) (t, r))) =
+//   assert (~(_obs_cmds cmd));
+//   assert (exists rez. behavior (fnc rez) (t, r)) by (
+//     let wp = ExtraTactics.get_binder 7 in
+//     let x, _ = destruct_and wp in
+//     binder_retype x;
+//       norm [delta; zeta];
+//     trefl ()
+//   )
 
 
-let beh_extend_trace
-  (cmd : obs_cmds)
-  (arg : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> iio 'a)
-  (t:trace)
-  (r:maybe 'a) :
-  Lemma
-    (requires (behavior (fnc rez) (t, r)))
-    (ensures (
-      behavior
-        (Call cmd arg fnc)
-        ((convert_call_to_event cmd arg rez) :: t, r))) =
-  ()
+// let beh_extend_trace
+//   (cmd : obs_cmds)
+//   (arg : args cmd)
+//   (rez : resm cmd)
+//   (fnc : resm cmd -> iio 'a)
+//   (t:trace)
+//   (r:maybe 'a) :
+//   Lemma
+//     (requires (behavior (fnc rez) (t, r)))
+//     (ensures (
+//       behavior
+//         (Call cmd arg fnc)
+//         ((convert_call_to_event cmd arg rez) :: t, r))) =
+//   ()
 
-let beh_extend_trace_d
-  (cmd : obs_cmds)
-  (arg : args cmd)
-  (rez : resm cmd)
-  (fnc : resm cmd -> iio 'a)
-  (t:trace) :
-  Lemma
-    (forall r. (behavior (fnc rez) (t, r) ==>
-      (behavior
-        (Call cmd arg fnc)
-        ((convert_call_to_event cmd arg rez) :: t, r)))) =
-  Classical.forall_intro (
-    Classical.move_requires (beh_extend_trace cmd arg rez fnc t))
+// let beh_extend_trace_d
+//   (cmd : obs_cmds)
+//   (arg : args cmd)
+//   (rez : resm cmd)
+//   (fnc : resm cmd -> iio 'a)
+//   (t:trace) :
+//   Lemma
+//     (forall r. (behavior (fnc rez) (t, r) ==>
+//       (behavior
+//         (Call cmd arg fnc)
+//         ((convert_call_to_event cmd arg rez) :: t, r)))) =
+//   Classical.forall_intro (
+//     Classical.move_requires (beh_extend_trace cmd arg rez fnc t))
 
 // let beh_extend_trace_in_bind
 //   (cmd : obs_cmds)

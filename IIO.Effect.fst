@@ -176,12 +176,11 @@ let dynamic_cmd
   (pi : monitorable_prop)
   (cmd : io_cmds)
   (arg : args cmd) :
-  IIO (res cmd) pi
-    (requires (fun _ -> True))
-    (ensures (fun _ r lt ->
+  IIOwp (res cmd) (fun h p ->
+    (forall r lt.
       (match r with
       | Inr Contract_failure -> lt == []
-      | _ -> lt == [convert_call_to_event cmd arg r]))) =
+      | _ -> lt == [convert_call_to_event cmd arg r]) ==> p r lt)) =
   let h = get_trace () in
   let action = (| cmd, arg |) in
   match pi h action with

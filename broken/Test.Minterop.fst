@@ -2,12 +2,34 @@ module Test.Minterop
 
 open FStar.Tactics
 
+open FStar.All
 open Common
 open IO.Free
 open IO.Effect
 open IIO.Effect
 open MIO.Effect
 open Minterop
+
+let test_refinement () : ML (y:int{y = 5}) = exn_import 5
+
+let test_dpair_refined () : ML (a:int & b:int{b = a + 1}) = exn_import (10, 11)
+
+// Example trueish
+let trueish (x:int{x >= 0}) : bool = true
+let trueish' (x:int) : ML bool = (trueish (exn_import x))
+let trueish'' : int -> ML bool = export trueish
+
+// Example incr
+let incr (x:int) : int = x + 1
+
+let incr2 : int -> ML int = export incr
+
+let p x y : bool = (y = x + 1)
+let incr'' (x:int) : ML (y:int{p x y}) = exn_import (incr x)
+
+// TODO: fix this. see https://github.com/FStarLang/FStar/issues/2128
+val incr' : (x:int) -> ML (y:int{p x y})
+// let incr' = safe_import incr2
 
 noeq type interface = {
   a : Type; ad : exportable a;

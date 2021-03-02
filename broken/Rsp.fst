@@ -11,7 +11,7 @@ open IO.Effect
 open IIO.Effect
 open MIO.Effect
 open MIIO.Effect
-open Minterop
+open MMinterop
 open IIO.Behavior
 
 noeq type compiler = {
@@ -96,21 +96,21 @@ type prog_t (i:interface) (pi:monitorable_prop) =
   ctx_p i pi -> MIIO i.ret
 
 
-let importable_ctx_s (i:interface) (pi:monitorable_prop) :
-  Tot (r:(importable (ctx_s i pi)){r.itype == ctx_p i pi}) by (compute ()) =
-  admit ();
-  importable_safe_importable
-    (ctx_s i pi)
-    #(importable_MIIO_IIO
-        i.ctx_arg #i.ctx_arg_ce
-        i.ctx_ret #i.ctx_ret_ci
-        pi
-        (fun x h -> tpre i x h)
-        #(general_is_checkable2 i.ctx_arg trace (tpre i))
-        i.ctx_post
-        #i.ctx_post_c)
+// let importable_ctx_s (i:interface) (pi:monitorable_prop) :
+//   Tot (r:(importable (ctx_s i pi)){r.itype == ctx_p i pi}) by (compute ()) =
+//   admit ();
+//   importable_safe_importable
+//     (ctx_s i pi)
+//     #(importable_MIIO_IIO
+//         i.ctx_arg #i.ctx_arg_ce
+//         i.ctx_ret #i.ctx_ret_ci
+//         pi
+//         (fun x h -> tpre i x h)
+//         #(general_is_checkable2 i.ctx_arg trace (tpre i))
+//         i.ctx_post
+//         #i.ctx_post_c)
 
-let handle = _import_pi_IIO
+// let handle = _import_pi_IIO
 
 let ctx_t_to_ctx_p
   (i  : interface)
