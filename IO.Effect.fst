@@ -51,11 +51,8 @@ let io_bind_wp
     w h (compute_post a b h kw p)
 
 let gen_post #a (post:io_post a) (cmd:io_cmds) args res =
-  if _obs_cmds cmd then
-    (fun x local_trace ->
-      post x (convert_call_to_event cmd args res :: local_trace))
-  else
-    post
+  fun x local_trace ->
+    post x (convert_call_to_event cmd args res :: local_trace)
 
 let rec io_interpretation #a
   (m : io a)
@@ -163,11 +160,15 @@ let static_cmd
   (pi : monitorable_prop)
   (cmd : io_cmds)
   (argz : io_args cmd) :
-  IO (res cmd) pi
-    (requires (fun h -> pi h (| cmd, argz |)))
-    (ensures (fun _ r lt ->
-      ~(Inr? r /\ Inr?.v r == Contract_failure) /\
-      (_obs_cmds cmd ==>  lt == [convert_call_to_event cmd argz r]) /\
-      (_tau_cmds cmd ==>  lt == []))) =
+  IOwp
+    (res cmd)
+    (fun h p ->
+      (** precondition **)
+      pi h (| cmd, argz |) /\
+      (forall (r:io_resm cmd) lt. (
+      (** postcondition **)
+        ~(Inr? r /\ Inr?.v r == Contract_failure) /\
+        lt == [convert_call_to_event cmd argz r] /\
+        enforced_locally pi h lt)
+       ==>  p r lt)) =
   IOwp?.reflect(fun _ _ -> io_call cmd argz)
-

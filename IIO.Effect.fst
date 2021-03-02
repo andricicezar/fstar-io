@@ -15,19 +15,13 @@ let rec iio_interpretation #a
   match m with
   | Return x -> p x []
   (** internal_cmds **)
-  | Call GetTrace args fnc -> (
+  | Call GetTrace args fnc ->
     iio_interpretation (fnc (Inl h)) h p
-  )
   (** io_cmds **)
   | Call cmd args fnc -> (
-    if _obs_cmds cmd then (
-      forall res. (
-        let e : event = convert_call_to_event cmd args res in
-        iio_interpretation (fnc res) (e::h) (gen_post p cmd args res)))
-    else (
-      forall res. (
-        iio_interpretation (fnc res) h p)
-    ))
+    forall res. (
+      let e : event = convert_call_to_event cmd args res in
+      iio_interpretation (fnc res) (e::h) (gen_post p cmd args res)))
 
 // REFINED COMPUTATION MONAD (repr)
 let iio_irepr (a:Type) (wp:io_wpty a) =
@@ -115,8 +109,7 @@ let rec io_interp_to_iio_interp' (#a:Type u#a)
     (ensures (
       iio_interpretation
         (cast_io_iio (fnc r))
-        (if _obs_cmds cmd then (convert_call_to_event cmd arg r)::h
-         else h)
+        ((convert_call_to_event cmd arg r)::h)
         (gen_post p cmd arg r)))
     (decreases fnc) =
   admit (); (** after updating F* this is not checking anymore.
@@ -188,8 +181,7 @@ let dynamic_cmd
     (ensures (fun _ r lt ->
       (match r with
       | Inr Contract_failure -> lt == []
-      | _ -> (_obs_cmds cmd ==> lt == [convert_call_to_event cmd arg r]) /\
-            (_tau_cmds cmd ==> lt == [])))) =
+      | _ -> lt == [convert_call_to_event cmd arg r]))) =
   let h = get_trace () in
   let action = (| cmd, arg |) in
   match pi h action with

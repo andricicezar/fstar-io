@@ -9,18 +9,8 @@ type cmds = | Openfile | Read | Close | Throw | GetTrace
 that to define io on top of exn, but we use this big cmds with
 refeniments, therefore we have to make a monolith **)
 
-(** This steps are observable and produce events **)
-let _obs_cmds x = x = Openfile || x = Read || x = Close
-
-(** Silent steps refer to the impossibility of an observer to see
-them. **)
-let _tau_cmds x = not (_obs_cmds x)
-
-type obs_cmds = x:cmds{_obs_cmds x}
-type tau_cmds = x:cmds{_tau_cmds x}
-
 (** the io free monad does not contain the GetTrace step **)
-type io_cmds = x:cmds{_obs_cmds x || x = Throw}
+type io_cmds = x:cmds{x = Openfile || x = Read || x = Close || x = Throw}
 
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
@@ -52,6 +42,7 @@ type event =
   | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
   | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
   | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
+  | EThrow    : a:io_args Throw    -> (r:io_resm Throw)    -> event
 
 type trace = list event
 
@@ -158,15 +149,17 @@ let convert_event_to_action (e:event) : action_type =
   | EOpenfile arg _ -> (| Openfile, arg |)
   | ERead arg _ -> (| Read, arg |)
   | EClose arg _ -> (| Close, arg |)
+  | EThrow arg _ -> (| Throw, arg |)
 
 let convert_call_to_event
-  (cmd:obs_cmds)
+  (cmd:io_cmds)
   (arg:io_args cmd)
   (r:io_resm cmd) =
   match cmd with
   | Openfile -> EOpenfile arg r
   | Read -> ERead arg r
   | Close -> EClose arg r
+  | Throw -> EThrow arg r
 
 let rec enforced_locally
   (check : monitorable_prop)
