@@ -275,7 +275,9 @@ let _export_IIO_0
   (post: t1 -> trace -> maybe t2 -> trace -> Type0)
   (f:(x:t1 -> IIO t2 pi (pre x) (post x)))
   (x:t1) :
-  MIIO t2 =
+  IIOwp t2 (fun h p -> forall r lt.
+    ((Inr? r /\ Inr?.v r == Contract_failure /\ lt == []) \/
+    post x h r lt) ==> p r lt) = admit();
   let h = get_trace () in
   (** TODO: Can any global property help us remove 'enforced_globally'?
       The context is instrumented, therefore this should check **)
@@ -333,6 +335,9 @@ let rec _import_pi_IIO
       rev_append_rev_append ();
       _import_pi_IIO z' pi
   | Call (cmd:io_cmds) argz fnc ->
+      (** TODO: The scope of import is to show that export works correctly,
+          therefore instead of using a written dynamic_cmd, would be correct
+          to use the exported version of static_cmd. **)
       let rez : res cmd = IIO.Effect.dynamic_cmd pi cmd argz in
       let rezm : resm cmd = Inl rez in
       let z' : iio b = fnc rezm in

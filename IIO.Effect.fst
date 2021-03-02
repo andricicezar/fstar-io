@@ -156,24 +156,6 @@ let get_trace () : IIOwp trace
 let throw (#a:Type) (err:exn) : IIOwp a (fun _ p -> p (Inr err) []) =
   IIOwp?.reflect(fun _ _ -> iio_throw a err)
 
-let dynamic_cmd
-  (pi : monitorable_prop)
-  (cmd : io_cmds)
-  (arg : args cmd) :
-  IIOwp (res cmd)
-    (fun h p ->
-      forall r lt. (
-      (match r with
-      | Inr Contract_failure -> lt == []
-      | _ -> (_obs_cmds cmd ==> lt == [convert_call_to_event cmd arg r]) /\
-            (_tau_cmds cmd ==> lt == []))
-      /\ enforced_locally pi h lt) ==>  p r lt)
-  =
-  let h = get_trace () in
-  let action = (| cmd, arg |) in
-  match pi h action with
-  | true -> static_cmd pi cmd arg
-  | false -> throw Contract_failure
 
 let iio_pre (pi : monitorable_prop) (h:trace) : Type0 =
   enforced_globally pi h
@@ -196,6 +178,23 @@ effect IIO
     (fun h p ->
       pre h /\ iio_pre pi h /\
       (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))
+
+let dynamic_cmd
+  (pi : monitorable_prop)
+  (cmd : io_cmds)
+  (arg : args cmd) :
+  IIO (res cmd) pi
+    (requires (fun _ -> True))
+    (ensures (fun _ r lt ->
+      (match r with
+      | Inr Contract_failure -> lt == []
+      | _ -> (_obs_cmds cmd ==> lt == [convert_call_to_event cmd arg r]) /\
+            (_tau_cmds cmd ==> lt == [])))) =
+  let h = get_trace () in
+  let action = (| cmd, arg |) in
+  match pi h action with
+  | true -> static_cmd pi cmd arg
+  | false -> throw Contract_failure
 
 (** This tactic has the role to help F*/SMT to prove
 larger function bodies in the IIO Effect. This is

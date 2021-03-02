@@ -56,10 +56,11 @@ noeq type interface = {
   ctx_ret: Type;
   ctx_ret_ci : importable ctx_ret;
   ctx_ret_ce : exportable ctx_ret;
-  ret : Type; ret_cm: ml ret;
   ctx_post :
     ctx_arg -> trace -> (m:maybe ctx_ret) -> trace -> (r:Type0{Inr? m ==> r});
   ctx_post_c : checkable4 ctx_post;
+
+  ret : Type; ret_cm: ml ret;
 }
 
 let safety_prop = pi_to_set
@@ -86,8 +87,7 @@ let tpre : (i:interface) -> (i.ctx_arg -> trace -> bool) = fun i x h -> true
 type ctx_s (i:interface) (pi:monitorable_prop) =
   (x:i.ctx_arg) -> IIO i.ctx_ret pi (fun h -> tpre i x h) (i.ctx_post x)
 type ctx_p (i:interface) (pi:monitorable_prop) =
-  x:i.ctx_arg_ce.etype -> MIIO i.ctx_ret_ci.itype
-
+  x:i.ctx_arg_ce.etype -> IIO i.ctx_ret_ci.itype pi (fun _ -> True) (fun _ _ _ -> True)
 type ctx_t (i:interface) = i.ctx_arg_ce.etype -> MIO i.ctx_ret_ci.itype
 
 type prog_s (i:interface) (pi:monitorable_prop) =
@@ -98,6 +98,7 @@ type prog_t (i:interface) (pi:monitorable_prop) =
 
 let importable_ctx_s (i:interface) (pi:monitorable_prop) :
   Tot (r:(importable (ctx_s i pi)){r.itype == ctx_p i pi}) by (compute ()) =
+  admit ();
   importable_safe_importable
     (ctx_s i pi)
     #(importable_MIIO_IIO
@@ -115,22 +116,38 @@ let ctx_t_to_ctx_p
   (i  : interface)
   (pi : monitorable_prop)
   (ct : ctx_t i) :
-  Tot (ctx_p i pi) = ct
+  Tot (ctx_p i pi) =
+  fun (x:i.ctx_arg_ce.etype) ->
+    handle
+      (cast_io_iio ((* MIIO.*)reify (ct x) [] (fun _ _ -> True))) pi
+
+let _ctx_p_types
+  (i  : interface)
+  (pi : monitorable_prop)
+  (cp : ctx_p i pi)
+  (x  : i.ctx_arg) :
+  IIO i.ctx_ret pi (fun _ -> True) (fun _ _ _ -> True) =
+  admit ();
+  let r : i.ctx_ret_ci.itype = cp (export x) in
+  match import r with
+  | Some r -> r
+  | None -> IIO.Effect.throw Contract_failure
 
 let ctx_p_to_ctx_s
   (i  : interface)
   (pi : monitorable_prop)
   (cp  : ctx_p i pi) :
   Tot (ctx_s i pi) =
-  let pre : (i.ctx_arg -> trace -> bool) = fun _ _ -> true in
-  _import_IIO
-    #i.ctx_arg #i.ctx_arg_ce
-    #i.ctx_ret #i.ctx_ret_ci
-    pi
-    (fun x h -> pre x h)
-    #(general_is_checkable2 i.ctx_arg trace pre)
-    i.ctx_post #i.ctx_post_c
-    cp
+  admit ();
+  fun (x:i.ctx_arg) ->
+    let h : trace = get_trace () in
+    let r : i.ctx_ret = _ctx_p_types i pi cp x in
+    let lt : trace = extract_local_trace h pi in
+    Classical.forall_intro_2 (
+    Classical.move_requires_2 (
+        check4_implies_post #i.ctx_arg #i.ctx_ret x h r i.ctx_post #i.ctx_post_c (Inl lt)));
+    explain_post_refinement i.ctx_post;
+    enforce_post #i.ctx_arg #i.ctx_arg_ce #i.ctx_ret #i.ctx_ret_ci i.ctx_post #i.ctx_post_c x h r lt
 
 let compile_prog
   (#i  : interface)
