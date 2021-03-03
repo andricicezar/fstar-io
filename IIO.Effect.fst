@@ -7,11 +7,12 @@ open FStar.Calc
 include Common
 open IO.Free
 open IO.Effect
+open Hist
 
 let rec iio_interpretation #a
   (m : iio a)
   (h : trace)
-  (p : io_post a) : Type0 =
+  (p : hist_post a) : Type0 =
   match m with
   | Return x -> p x []
   (** internal_cmds **)
@@ -24,22 +25,22 @@ let rec iio_interpretation #a
       iio_interpretation (fnc res) (e::h) (gen_post p cmd args res)))
 
 // REFINED COMPUTATION MONAD (repr)
-let iio_irepr (a:Type) (wp:io_wpty a) =
-  h:trace -> post:io_post a ->
+let iio_irepr (a:Type) (wp:hist a) =
+  h:trace -> post:hist_post a ->
     Pure (iio a)
       (requires (wp h post))
       (ensures (fun (t:iio a) -> iio_interpretation t h post))
 
-let iio_ireturn (a : Type) (x : a) : iio_irepr a (io_return_wp a x) =
+let iio_ireturn (a : Type) (x : a) : iio_irepr a (hist_return a x) =
   fun _ _ -> iio_return a x
 
 let iio_ibind
   (a b : Type)
-  (wp_v : io_wpty a)
-  (wp_f: a -> io_wpty b)
+  (wp_v : hist a)
+  (wp_f: a -> hist b)
   (v : iio_irepr a wp_v)
   (f : (x:a -> iio_irepr b (wp_f x))) :
-  Tot (iio_irepr b (io_bind_wp _ _ wp_v wp_f)) =
+  Tot (iio_irepr b (hist_bind _ _ wp_v wp_f)) =
   fun h p ->
     let t = (iio_bind a b
         (v h (compute_post a b h wp_f p))
@@ -50,26 +51,26 @@ let iio_ibind
     t
 
 unfold
-let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : iio_irepr a wp1) :
+let isubcomp (a:Type) (wp1 wp2: hist a) (f : iio_irepr a wp1) :
   Pure (iio_irepr a wp2)
-    (requires io_wpty_ord wp2 wp1)
+    (requires hist_ord wp2 wp1)
     (ensures fun _ -> True) = f
 
 unfold
 let i_if_then_else
   (a : Type)
-  (wp1 wp2 : io_wpty a)
+  (wp1 wp2 : hist a)
   (f : iio_irepr a wp1)
   (g : iio_irepr a wp2)
   (b : bool) :
   Tot Type =
-  iio_irepr a (wp_if_then_else wp1 wp2 b)
+  iio_irepr a (hist_if_then_else wp1 wp2 b)
 
 total
 reifiable
 reflectable
 layered_effect {
-  IIOwp : a:Type -> wp : io_wpty a -> Effect
+  IIOwp : a:Type -> wp : hist a -> Effect
   with
        repr       = iio_irepr
      ; return     = iio_ireturn
@@ -86,7 +87,7 @@ let lift_pure_iiowp
   Tot (iio_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
   = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in iio_return _ r
 
-sub_effect PURE ~> IOwp = lift_pure_iowp
+sub_effect PURE ~> IIOwp = lift_pure_iiowp
 
 (** This is a identity function, and we need it because
 F* does not have depth subtyping on inductives. **)
@@ -99,7 +100,7 @@ let rec cast_io_iio #a (x:io a) : iio a =
 
 let rec io_interp_to_iio_interp' (#a:Type u#a)
   (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> io a))
-  (h:trace) (p:io_post a)
+  (h:trace) (p:hist_post a)
   (r:(io_resm cmd)) :
   Lemma
     (requires
@@ -123,7 +124,7 @@ let rec io_interp_to_iio_interp' (#a:Type u#a)
           io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p cmd arg r)))
   | _ -> ()
 
-let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
+let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:hist_post a) :
   Lemma
     (requires (io_interpretation x p))
     (ensures  (iio_interpretation (cast_io_iio x) h p)) =
@@ -134,7 +135,7 @@ let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:io_post a) :
           io_interp_to_iio_interp' cmd arg fnc h p))
   | _ -> ()
 
-let lift_iowp_iiowp (a:Type) (wp:io_wpty a) (f:io_irepr a wp) :
+let lift_iowp_iiowp (a:Type) (wp:hist a) (f:io_irepr a wp) :
   Tot (iio_irepr a (fun h p -> wp h (fun r lt -> p r lt))) =
   fun h p ->
     io_interp_to_iio_interp (f h p) h p;

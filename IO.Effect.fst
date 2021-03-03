@@ -5,6 +5,7 @@ open ExtraTactics
 
 open Common
 open IO.Free
+open Hist
 
 (** The postcondition for an io computation is defined over the
 result (type: a + exn) and local trace (type: trace).
@@ -18,45 +19,9 @@ The history is reverse chronology order.
 At the end of an io computation, the trace will be
 (reverse of local trace) appended to the history. **)
 
-// local_trace (from old to new)
-let io_post a = maybe a -> lt:trace -> Type0
-
-// past_events (from new to old; reversed compared with local_trace)
-let io_wpty a = h:trace -> io_post a -> Type0
-
-unfold
-let io_return_wp (a:Type) (x:a) : io_wpty a =
-  fun _ p -> p (Inl x) []
-
-unfold
-let compute_post (a b:Type) (h:trace) (kw : a -> io_wpty b) (p:io_post b)
-  : io_post a =
-      (fun result local_trace ->
-        match result with
-        | Inl result -> (
-            kw result
-            ((List.rev local_trace) @ h)
-            (fun result' local_trace' ->
-                p result' (local_trace @ local_trace')))
-        | Inr err -> p (Inr err) local_trace)
-
-unfold
-let io_bind_wp
-  (a:Type)
-  (b:Type)
-  (w : io_wpty a)
-  (kw : a -> io_wpty b) :
-  Tot (io_wpty b) =
-  fun h p ->
-    w h (compute_post a b h kw p)
-
-let gen_post #a (post:io_post a) (cmd:io_cmds) args res =
-  fun x local_trace ->
-    post x (convert_call_to_event cmd args res :: local_trace)
-
 let rec io_interpretation #a
   (m : io a)
-  (p : io_post a) : Type0 =
+  (p : hist_post a) : Type0 =
   match m with
   | Return x -> p x []
   | Call cmd args fnc -> (
@@ -65,28 +30,24 @@ let rec io_interpretation #a
 
 
 // REFINED COMPUTATION MONAD (repr)
-let io_irepr (a:Type) (wp:io_wpty a) =
+let io_irepr (a:Type) (wp:hist a) =
   // TODO: more intuition about this? why does this look like a
   // reader monad?
-  h:trace -> post:io_post a ->
+  h:trace -> post:hist_post a ->
     Pure (io a)
       (requires (wp h post))
       (ensures (fun (m:io a) -> io_interpretation m post))
 
-let io_ireturn (a : Type) (x : a) : io_irepr a (io_return_wp a x) =
+let io_ireturn (a : Type) (x : a) : io_irepr a (hist_return a x) =
   fun _ _ -> io_return a x
-
-unfold
-val io_wpty_ord (#a : Type) : io_wpty a -> io_wpty a -> Type0
-let io_wpty_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
 
 let io_ibind
   (a b : Type)
-  (wp_v : io_wpty a)
-  (wp_f: a -> io_wpty b)
+  (wp_v : hist a)
+  (wp_f: a -> hist b)
   (v : io_irepr a wp_v)
   (f : (x:a -> io_irepr b (wp_f x))) :
-  Tot (io_irepr b (io_bind_wp _ _ wp_v wp_f)) =
+  Tot (io_irepr b (hist_bind _ _ wp_v wp_f)) =
   fun h p ->
     let t = (io_bind a b
         (v h (compute_post a b h wp_f p))
@@ -97,30 +58,26 @@ let io_ibind
     t
 
 unfold
-let isubcomp (a:Type) (wp1 wp2: io_wpty a) (f : io_irepr a wp1) :
+let isubcomp (a:Type) (wp1 wp2: hist a) (f : io_irepr a wp1) :
   Pure (io_irepr a wp2)
-    (requires io_wpty_ord wp2 wp1)
+    (requires hist_ord wp2 wp1)
     (ensures fun _ -> True) =
   f
 
 unfold
-let wp_if_then_else (#a:Type) (wp1 wp2:io_wpty a) (b:bool) : io_wpty a =
-  fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
-
-unfold
 let i_if_then_else
   (a : Type)
-  (wp1 wp2: io_wpty a)
+  (wp1 wp2: hist a)
   (f : io_irepr a wp1)
   (g : io_irepr a wp2) (b : bool) :
   Tot Type =
-  io_irepr a (wp_if_then_else wp1 wp2 b)
+  io_irepr a (hist_if_then_else wp1 wp2 b)
 
 total
 reifiable
 reflectable
 layered_effect {
-  IOwp : a:Type -> wp : io_wpty a -> Effect
+  IOwp : a:Type -> wp : hist a -> Effect
   with
        repr       = io_irepr
      ; return     = io_ireturn
@@ -149,7 +106,7 @@ effect IO
   (pi : monitorable_prop)
   (pre : trace -> Type0)
   (post : trace -> maybe a -> trace -> Type0) =
-  IOwp a (fun (h:trace) (p:io_post a) ->
+  IOwp a (fun (h:trace) (p:hist_post a) ->
     enforced_globally pi h /\
     pre h /\
     (forall res lt. (
