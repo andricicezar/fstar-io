@@ -46,7 +46,7 @@ type event =
 
 type trace = list event
 
-type internal_cmds = x:cmds{x = GetTrace}
+type inst_cmds = x:cmds{x = GetTrace}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
@@ -60,25 +60,25 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let internal_res (x:internal_cmds) =
+let inst_res (x:inst_cmds) =
   match x with
   | GetTrace -> list event
-let internal_resm (x:internal_cmds) = maybe (internal_res x)
+let inst_resm (x:inst_cmds) = maybe (inst_res x)
 
-let internal_sig : op_sig internal_cmds = {
-  args = (fun (x:internal_cmds) -> match x with
+let inst_sig : op_sig inst_cmds = {
+  args = (fun (x:inst_cmds) -> match x with
     | GetTrace -> unit) ;
-  res = internal_resm
+  res = inst_resm
 }
 
-let all_sig = add_sig cmds io_sig internal_sig
+let iio_sig = add_sig cmds io_sig inst_sig
 
-let args (cmd:cmds) : Type = all_sig.args cmd
+let args (cmd:cmds) : Type = iio_sig.args cmd
 let res (cmd:cmds)  : Type =
-  if cmd = GetTrace then internal_res cmd
+  if cmd = GetTrace then inst_res cmd
   else io_res cmd
 
-let resm (cmd:cmds) : (x:Type{x == all_sig.res cmd}) =
+let resm (cmd:cmds) : (x:Type{x == iio_sig.res cmd}) =
   admit ();
   maybe (res cmd)
 
@@ -111,11 +111,11 @@ let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
     | Inr err -> io_throw (io_res cmd) err)
 
 // THE IIO FREE MONAD
-type iio a = free cmds all_sig (maybe a)
+type iio a = free cmds iio_sig (maybe a)
 let iio_return (a:Type) (x:a) : iio a =
-  free_return cmds all_sig (maybe a) (Inl x)
+  free_return cmds iio_sig (maybe a) (Inl x)
 let iio_throw (a:Type) (x:exn) : iio a =
-  free_return cmds all_sig (maybe a) (Inr x)
+  free_return cmds iio_sig (maybe a) (Inr x)
 
 let rec iio_try_catch_finnaly
   (a b:Type)
