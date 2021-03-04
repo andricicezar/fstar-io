@@ -9,14 +9,12 @@ effect MIIO
 
 let _IIOwp_as_MIIO
   (pre:'a -> trace -> bool)
-  (post:'a -> trace -> (m:maybe 'b) -> trace -> (r:Type0))
+  (post:'a -> trace -> (m:maybe 'b) -> trace -> Type0)
   (f:(x:'a ->
     IIOwp 'b (fun h p -> pre x h /\ (forall r lt. post x h r lt ==> p r lt))))
   (x:'a) :
   MIIO 'b =
-  let h = get_trace () in
-  if pre x h then f x
-  else IIO.Effect.throw Contract_failure
+  _IIOwp_as_IIO pre post f x
 
 (** this is just a backup. not useful anymore. **)
 // let _IIO_as_MIIO

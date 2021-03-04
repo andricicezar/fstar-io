@@ -114,8 +114,8 @@ effect IO
       post h res lt ==>  p res lt)))
 
 let static_cmd
-  (pi : monitorable_prop)
   (cmd : io_cmds)
+  (pi : monitorable_prop)
   (argz : io_args cmd) :
   IOwp
     (res cmd)

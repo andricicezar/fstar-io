@@ -173,20 +173,61 @@ effect IIO
       pre h /\ iio_pre pi h /\
       (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))
 
-let dynamic_cmd
-  (pi : monitorable_prop)
-  (cmd : io_cmds)
-  (arg : args cmd) :
+let _IIOwp_as_IIO
+  (pre:'a -> trace -> bool)
+  (post:'a -> trace -> (m:maybe 'b) -> trace -> Type0)
+  (f:(x:'a ->
+    IIOwp 'b (fun h p -> pre x h /\ (forall r lt. post x h r lt ==> p r lt))))
+  (x:'a) :
+  IIOwp 'b (fun h p ->
+    (~(pre x h) ==> p (Inr Contract_failure) []) /\
+    (pre x h ==> (forall r lt. post x h r lt ==> p r lt))) =
+  let h = get_trace () in
+  if pre x h then f x
+  else IIO.Effect.throw Contract_failure
+
+let _IIOwp_as_IIO_2
+  (pre:'a -> 'b -> trace -> bool)
+  (post:'a -> 'b -> trace -> (m:maybe 'c) -> trace -> Type0)
+  (f:(x:'a -> y:'b ->
+    IIOwp 'c (fun h p -> pre x y h /\ (forall r lt. post x y h r lt ==> p r lt))))
+  (x:'a) (y:'b) :
+  IIOwp 'c (fun h p ->
+    (~(pre x y h) ==> p (Inr Contract_failure) []) /\
+    (pre x y h ==> (forall r lt. post x y h r lt ==> p r lt))) =
+  let h = get_trace () in
+  if pre x y h then f x y
+  else IIO.Effect.throw Contract_failure
+
+let _IIOwp_as_IIO_3
+  (pre:'a -> 'b -> 'c -> trace -> bool)
+  (post:'a -> 'b -> 'c -> trace -> (m:maybe 'd) -> trace -> Type0)
+  (f:(x:'a -> y:'b -> z:'c ->
+    IIOwp 'd (fun h p -> pre x y z h /\ (forall r lt. post x y z h r lt ==> p r lt))))
+  (x:'a) (y:'b) (z:'c) :
+  IIOwp 'd (fun h p ->
+    (~(pre x y z h) ==> p (Inr Contract_failure) []) /\
+    (pre x y z h ==> (forall r lt. post x y z h r lt ==> p r lt))) =
+  let h = get_trace () in
+  if pre x y z h then f x y z
+  else IIO.Effect.throw Contract_failure
+
+val dynamic_cmd :
+  (cmd : io_cmds) ->
+  (pi : monitorable_prop) ->
+  (arg : args cmd) ->
   IIOwp (res cmd) (fun h p ->
     (forall r lt.
       (match r with
       | Inr Contract_failure -> lt == []
-      | _ -> lt == [convert_call_to_event cmd arg r]) ==> p r lt)) =
-  let h = get_trace () in
-  let action = (| cmd, arg |) in
-  match pi h action with
-  | true -> static_cmd pi cmd arg
-  | false -> throw Contract_failure
+      | _ -> lt == [convert_call_to_event cmd arg r]) ==> p r lt))
+let dynamic_cmd (cmd:io_cmds) = _IIOwp_as_IIO_2 #monitorable_prop #(args cmd)
+  (fun pi (argz:args cmd) h -> pi h (| cmd, argz |))
+  (fun pi (argz:args cmd) h r lt ->
+      ~(Inr? r /\ Inr?.v r == Contract_failure) /\
+      lt == [convert_call_to_event cmd argz r] /\
+      enforced_locally pi h lt)
+  (static_cmd cmd)
 
 (** This tactic has the role to help F*/SMT to prove
 larger function bodies in the IIO Effect. This is
