@@ -227,12 +227,12 @@ instance exportable_purearrow_spec
           export (f x)
         ) else FStar.All.raise Contract_failure) <: ML d2.etype))
 
-let rec run_iio #t1 (t:iio t1) : ML t1 =
+let rec iio_interpreter #t1 (t:iio t1) : ML t1 =
   match t with
   | Return (Inl r) -> r
   | Return (Inr r) -> FStar.All.raise r
   | Call cmd argz fnc ->
-      run_iio #t1 (fnc (ml_io_execute cmd argz))
+      iio_interpreter #t1 (fnc (ml_io_execute cmd argz))
 
 let _export_MIIO
   (#t1:Type) {| d1:importable t1 |}
@@ -243,7 +243,7 @@ let _export_MIIO
   match import x with
   | Some x ->
      let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
-     let r : t2 = run_iio tree in
+     let r : t2 = iio_interpreter tree in
      export r
   | None -> FStar.All.raise Contract_failure
 

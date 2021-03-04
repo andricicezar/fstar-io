@@ -14,16 +14,20 @@ let hist_return (a:Type) (x:a) : hist a =
   fun _ p -> p (Inl x) []
 
 unfold
-let compute_post (a b:Type) (h:trace) (kw : a -> hist b) (p:hist_post b)
-  : hist_post a =
-      (fun result local_trace ->
-        match result with
-        | Inl result -> (
-            kw result
-            ((List.rev local_trace) @ h)
-            (fun result' local_trace' ->
-                p result' (local_trace @ local_trace')))
-        | Inr err -> p (Inr err) local_trace)
+let compute_post
+  (a b:Type)
+  (h:trace)
+  (kw : a -> hist b)
+  (p:hist_post b) :
+  Tot (hist_post a) =
+  (fun result local_trace ->
+    match result with
+    | Inl result -> (
+      kw result
+       ((List.rev local_trace) @ h)
+       (fun result' local_trace' ->
+         p result' (local_trace @ local_trace')))
+    | Inr err -> p (Inr err) local_trace)
 
 unfold
 let hist_bind
