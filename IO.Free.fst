@@ -3,28 +3,26 @@ module IO.Free
 open Common
 include Free
 
-type cmds = | Openfile | Read | Close | Throw | GetTrace
+type cmds = | Openfile | Read | Close | GetTrace
 
 (** Wish: It would be nice to define exn on top of free, and after
 that to define io on top of exn, but we use this big cmds with
 refeniments, therefore we have to make a monolith **)
 
 (** the io free monad does not contain the GetTrace step **)
-type io_cmds = x:cmds{x = Openfile || x = Read || x = Close || x = Throw}
+type io_cmds = x:cmds{x = Openfile || x = Read || x = Close}
 
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> string
   | Read -> file_descr
   | Close -> file_descr
-  | Throw -> exn
 
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
   | Close -> unit
-  | Throw -> unit
 
 (** The IO primitives have no reason to throw
 `Contract_failure`, because they do not enforce any policy.
@@ -42,7 +40,6 @@ type event =
   | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
   | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
   | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
-  | EThrow    : a:io_args Throw    -> (r:io_resm Throw)    -> event
 
 type trace = list event
 
@@ -149,7 +146,6 @@ let convert_event_to_action (e:event) : action_type =
   | EOpenfile arg _ -> (| Openfile, arg |)
   | ERead arg _ -> (| Read, arg |)
   | EClose arg _ -> (| Close, arg |)
-  | EThrow arg _ -> (| Throw, arg |)
 
 let convert_call_to_event
   (cmd:io_cmds)
@@ -159,7 +155,6 @@ let convert_call_to_event
   | Openfile -> EOpenfile arg r
   | Read -> ERead arg r
   | Close -> EClose arg r
-  | Throw -> EThrow arg r
 
 let rec enforced_locally
   (check : monitorable_prop)
