@@ -16,7 +16,6 @@ let ml_io_all cmd args =
   | Openfile -> ml_openfile args
   | Read -> ml_read args
   | Close -> ml_close args
-  | Throw -> raise args
 
 
 val ml_io_execute : (cmd:cmds) -> args cmd -> ML (resm cmd)

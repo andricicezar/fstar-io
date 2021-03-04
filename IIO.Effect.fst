@@ -218,9 +218,10 @@ val dynamic_cmd :
   (arg : args cmd) ->
   IIOwp (res cmd) (fun h p ->
     (forall r lt.
-      (match r with
+      ((match r with
       | Inr Contract_failure -> lt == []
-      | _ -> lt == [convert_call_to_event cmd arg r]) ==> p r lt))
+      | _ -> lt == [convert_call_to_event cmd arg r]) /\
+      enforced_locally pi h lt) ==> p r lt))
 let dynamic_cmd (cmd:io_cmds) = _IIOwp_as_IIO_2 #monitorable_prop #(args cmd)
   (fun pi (argz:args cmd) h -> pi h (| cmd, argz |))
   (fun pi (argz:args cmd) h r lt ->

@@ -29,29 +29,31 @@ let somePi : monitorable_prop = (fun s0 action ->
 [@expect_failure]
 let testStatic2 () : IIO unit somePi (fun _ -> True) (fun _ _ _ -> True) =
   let fd = static_cmd Openfile somePi "../Makefile" in
-  let msg = static_cmd somePi Read fd in
+  let msg = static_cmd Read somePi fd in
   static_cmd Close somePi fd
 
+open FStar.Tactics
+
 let testStatic1 () : IIO unit somePi (fun _ -> True) (fun _ _ _ -> True) =
-  let fd = static_cmd somePi Openfile "../Makefile" in
-  let msg = dynamic_cmd somePi Read fd in
-  static_cmd somePi Close fd
+  let fd = static_cmd Openfile somePi "../Makefile" in
+  let msg = dynamic_cmd Read somePi fd in
+  static_cmd Close somePi fd
 
 // dynamic_cmd Openfile enforces the default precondition statically
 // and the pi dynamically.
 let testDynamic1 (pi:monitorable_prop) : IIO unit pi (fun _ -> True) (fun _ _ _ -> True) =
-  let fd = dynamic_cmd pi Openfile "../Makefile" in
-  let msg = dynamic_cmd pi Read fd in
-  dynamic_cmd pi Close fd
+  let fd = dynamic_cmd Openfile pi "../Makefile" in
+  let msg = dynamic_cmd Read pi fd in
+  dynamic_cmd Close pi fd
 
 let testDynamic2 (pi:monitorable_prop) : IIO unit pi (fun _ -> True) (fun _ _ _ -> True) =
-  let fd = dynamic_cmd pi Openfile "../Makefile" in
-  dynamic_cmd pi Close fd;
-  let msg = dynamic_cmd pi Read fd in
+  let fd = dynamic_cmd Openfile pi "../Makefile" in
+  dynamic_cmd Close pi fd;
+  let msg = dynamic_cmd Read pi fd in
   ()
 
 let testDynamic3 (pi:monitorable_prop) : IIO unit pi (fun _ -> True) (fun _ _ _ -> True) =
-  let fd = dynamic_cmd pi Openfile "../Makefile" in
-  let msg = dynamic_cmd pi Close fd in
-  dynamic_cmd pi Close fd
+  let fd = dynamic_cmd Openfile pi "../Makefile" in
+  let msg = dynamic_cmd Close pi fd in
+  dynamic_cmd Close pi fd
 
