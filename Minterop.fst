@@ -52,6 +52,8 @@ instance ml_string : ml string = { mldummy = () }
 instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> ML t2) =
   { mldummy = () }
+instance ml_mlarrow2 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml (t1 -> t2 -> ML t3) =
+  { mldummy = () }
 
 instance ml_file_descr : ml file_descr = { mldummy = () }
 (** CA: Is this required? **)
@@ -153,6 +155,16 @@ instance general_is_checkable2
   t1 t2 (p : t1 -> t2 -> bool) :
   Tot (checkable2 (fun x y -> p x y)) =
   { check2 = fun x y -> p x y}
+
+class checkable3
+  (#b1 #b2 #b3:Type)
+  (p : b1 -> b2 -> b3 -> Type0) =
+  { check3 : (x1:b1 -> x2:b2 -> x3:b3 -> b:bool{b ==> p x1 x2 x3}) }
+instance general_is_checkable3
+  b1 b2 b3
+  (p : b1 -> b2 -> b3 -> bool) :
+  Tot (checkable3 (fun x1 x2 x3 -> p x1 x2 x3)) =
+  { check3 = fun x1 x2 x3 -> p x1 x2 x3}
 
 class checkable4
   (#b1 #b2 #b3 #b4:Type)
@@ -280,17 +292,19 @@ instance exportable_IOwp
 //     (d1.itype -> ML d2.etype)
 //     _export_MIIO
 
-// instance exportable_IIOwp
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-//   (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
-//   Tot (exportable (x:t1 ->
-//     IIOwp t2 (fun h p ->
-//       pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     (fun f -> _export_MIIO (_IIOwp_as_MIIO pre post f))
+instance exportable_IIOwp
+  (t1:Type) {| d1:importable t1 |}
+  (t2:Type) {| d2:exportable t2 |}
+  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
+  (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
+  Tot (exportable (x:t1 ->
+    IIOwp t2 (fun h p ->
+      pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) =
+  mk_exportable
+    (d1.itype -> ML d2.etype)
+    (fun (f:(x:t1 ->
+    IIOwp t2 (fun h p -> pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) ->
+            _export_MIIO (_IIOwp_as_MIIO d3.check2 post f))
 
 // instance exportable_IO
 //   (t1:Type) {| d1:importable t1 |}
