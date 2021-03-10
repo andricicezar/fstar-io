@@ -50,6 +50,8 @@ instance ml_bool : ml bool = { mldummy = () }
 instance ml_int : ml int = { mldummy = () }
 instance ml_string : ml string = { mldummy = () }
 instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
+instance ml_totarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> Tot t2) =
+  { mldummy = () }
 instance ml_mlarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> ML t2) =
   { mldummy = () }
 instance ml_mlarrow2 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml (t1 -> t2 -> ML t3) =
