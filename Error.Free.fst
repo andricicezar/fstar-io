@@ -3,6 +3,17 @@ module Error.Free
 open Free
 open Common
 
+(** Cezar: this file is an experiment to:
+
+Tasks:
+- [x] define Throw as an operation on the Free Monad
+- [ ] update the effect observation
+      (if needed, also the post-condition may change)
+- [ ] define the try_catch block
+- [ ] Cezar: I don't have a good intuition about how trace properties look
+for programs that contain try_catch blocks. Is our pi expressive enough for
+this kind of programs? **)
+
 type io_cmds = | Openfile | Throw
 
 unfold let io_args (cmd:io_cmds) : Type =
@@ -38,6 +49,7 @@ let rec io_try_catch_finnaly
       Call cmd argz (fun res ->
         io_try_catch_finnaly a b (fnc res) catch_block finnaly)
 
+(** Cezar: is it weird that we do not use the bind of free? **)
 let io_bind (a:Type) (b:Type) l k : io b =
   io_try_catch_finnaly a b l (fun err -> Call Throw err Return) k
 
@@ -77,9 +89,6 @@ let rec enforced_locally
     if check h action then enforced_locally (check) (hd::h) t
     else false
 
-(** enforced_globally could be written as:
-`enforced_locally check [] h` but fstar can not prove as easily that
-form **)
 let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
   match h with
   | [] -> true
@@ -88,18 +97,15 @@ let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
     if check t action then enforced_globally (check) t
     else false
 
-let rev_append_rev_append () : Lemma (
-  forall (h le1 le2:trace).
-    ((List.rev le2) @ (List.rev le1) @ h) ==
-      ((List.rev (le1@le2)) @ h))
-   by (FStar.Tactics.Derived.l_to_r [`List.append_assoc;`List.rev_append])
-      = ()
-
 unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
 // local_trace (from old to new)
+(** Cezar: Should `post` be defined over `maybe a` or `a`?
+I suppose `maybe a` is more expressive, but this implies
+special treatment of exceptions in the effect observation
+to optionalize errors and results. **)
 let hist_post a = maybe a -> lt:trace -> Type0
 
 // past_events (from new to old; reversed compared with local_trace)
@@ -147,6 +153,8 @@ unfold
 let hist_if_then_else (#a:Type) (wp1 wp2:hist a) (b:bool) : hist a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
 
+(** Cezar: here Throw does not produce an event, should it?
+I am not sure if the Catch should also appear **)
 let rec io_interpretation #a
   (m : io a)
   (p : hist_post a) : Type0 =
@@ -240,6 +248,10 @@ effect IO
       enforced_globally pi (apply_changes h lt) /\
       post h res lt ==>  p res lt)))
 
+(** Cezar: automatically lifting errors does not fit very well,
+because our event for Openfile contains already the error.
+If we want to also have an event for throwing errors, implies
+the error will appear twice. I am not sure how to avoid this. **)
 let openfile
   (pi : monitorable_prop)
   (argz : io_args Openfile) :
