@@ -33,6 +33,7 @@ unfold let io_res (cmd:io_cmds) : Type =
 let io_sig : op_sig io_cmds = { args = io_args; res = io_res; }
 
 type io a = free io_cmds io_sig a
+
 let io_return (a:Type) (x:a) : io a =
   free_return io_cmds io_sig a x
 
@@ -48,6 +49,26 @@ let rec io_try_catch_finnaly
   | Call cmd argz fnc ->
       Call cmd argz (fun res ->
         io_try_catch_finnaly a b (fnc res) catch_block finnaly)
+
+let rec io_try_catch
+  (#a:Type)
+  (try_block:io a)
+  (catch_block:exn -> io a) :
+  Tot (io a) =
+  match try_block with
+  | Return x -> Return x
+  | Call Throw err fnc -> catch_block err
+  | Call cmd argz fnc ->
+      Call cmd argz (fun res ->
+        io_try_catch (fnc res) catch_block)
+
+(** TODO: try to define this using io_try_catch + free_bind 
+let rec io_try_catch_finnaly
+  (a b:Type)
+  (try_block:io a)
+  (catch_block:exn -> io a)
+  (finnaly:a -> io b) :
+  Tot (io b) = **)
 
 (** Cezar: is it weird that we do not use the bind of free? **)
 let io_bind (a:Type) (b:Type) l k : io b =
@@ -160,10 +181,69 @@ let rec io_interpretation #a
   (p : hist_post a) : Type0 =
   match m with
   | Return x -> p (Inl x) []
-  | Call Throw err fnc -> p (Inr err) []
+  | Call Throw err fnc -> p (Inr err) [EThrow err]
   | Call cmd args fnc -> (
     forall res. (
       io_interpretation (fnc res) (gen_post p cmd args res)))
+
+open FStar.Tactics
+
+let prog1 : io unit = 
+  Call Throw Contract_failure Return
+
+let _ = assert (io_interpretation prog1 (fun r lt -> r == (Inr Contract_failure) /\ lt == [EThrow Contract_failure]))
+
+
+let prog2 : io unit =
+  io_try_catch
+    (Call Throw Contract_failure Return)
+    (fun exn -> Return ())
+  
+(** Cezar: notice how the catch hides the throw **)
+let _ = 
+  assert (io_interpretation prog2 (fun r lt -> r == (Inl ()) /\ lt == []))
+
+let prog3 : io unit = 
+   Call Openfile "text.txt" (fun (x:either int exn) ->
+    match x with | Inl x' -> Return () | Inr err -> Call Throw err Return)
+
+let _ = 
+  assert (io_interpretation prog3 (fun r lt ->
+      match r with
+      | Inl r' -> exists fd. lt == [EOpenfile "text.txt" (Inl fd)]
+      | Inr err -> lt == [EOpenfile "text.txt" (Inr err); EThrow err])) 
+      
+let prog4 : io unit =
+  io_try_catch
+    prog3
+    (fun err -> Return ())
+
+let _ =
+  assert (io_interpretation prog4 (fun r lt -> 
+    r == (Inl ()) /\ (exists fd. lt == [EOpenfile "text.txt" fd])))
+   by 
+   (compute ();
+   let x = forall_intro () in
+   let _ = t_destruct x in
+   iterAll (fun () ->
+     let bs = repeat intro in
+     rewrite_eqs_from_context ();
+     norm [iota];
+     unfold_def (`gen_post);
+     norm [iota];
+     split ();
+     smt ();
+     witness x;
+     smt ()
+     );
+   dump "H")
+
+
+
+
+
+
+
 
 
 // REFINED COMPUTATION MONAD (repr)
@@ -252,17 +332,19 @@ effect IO
 because our event for Openfile contains already the error.
 If we want to also have an event for throwing errors, implies
 the error will appear twice. I am not sure how to avoid this. **)
+
 let openfile
   (pi : monitorable_prop)
   (argz : io_args Openfile) :
-  IOwp
-    (_io_res Openfile)
+  IOwp (maybe file_descr)
+  
     (fun h p ->
       (** precondition **)
       pi h (| Openfile, argz |) /\
       (forall (r:io_sig.res Openfile) lt. (
       (** postcondition **)
         lt == [convert_call_to_event Openfile argz r] /\
+        // lt == [(| EOpenfile argz (Inr no_file) |); (| EThrow (Inr no_file) |)]
         enforced_locally pi h lt)
        ==>  p r lt)) =
   IOwp?.reflect(fun _ _ -> Call Openfile argz (fun (x:io_sig.res Openfile) ->
