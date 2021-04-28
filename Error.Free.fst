@@ -57,7 +57,7 @@ let rec io_try_catch
   Tot (io a) =
   match try_block with
   | Return x -> Return x
-  | Call Throw err fnc -> catch_block err
+  | Call Throw err fnc -> Call Throw err (fun _ -> catch_block err)
   | Call cmd argz fnc ->
       Call cmd argz (fun res ->
         io_try_catch (fnc res) catch_block)
@@ -181,7 +181,6 @@ let rec io_interpretation #a
   (p : hist_post a) : Type0 =
   match m with
   | Return x -> p (Inl x) []
-  | Call Throw err fnc -> p (Inr err) [EThrow err]
   | Call cmd args fnc -> (
     forall res. (
       io_interpretation (fnc res) (gen_post p cmd args res)))
@@ -201,7 +200,7 @@ let prog2 : io unit =
   
 (** Cezar: notice how the catch hides the throw **)
 let _ = 
-  assert (io_interpretation prog2 (fun r lt -> r == (Inl ()) /\ lt == []))
+  assert (io_interpretation prog2 (fun r lt -> r == (Inl ()) /\ lt == [EThrow Contract_failure]))
 
 let prog3 : io unit = 
    Call Openfile "text.txt" (fun (x:either int exn) ->
@@ -220,26 +219,9 @@ let prog4 : io unit =
 
 let _ =
   assert (io_interpretation prog4 (fun r lt -> 
-    r == (Inl ()) /\ (exists fd. lt == [EOpenfile "text.txt" fd])))
-   by 
-   (compute ();
-   let x = forall_intro () in
-   let _ = t_destruct x in
-   iterAll (fun () ->
-     let bs = repeat intro in
-     rewrite_eqs_from_context ();
-     norm [iota];
-     unfold_def (`gen_post);
-     norm [iota];
-     split ();
-     smt ();
-     witness x;
-     smt ()
-     );
-   dump "H")
-
-
-
+    r == (Inl ()) /\ (
+      (exists fd. lt == [EOpenfile "text.txt" (Inl fd)]) \/
+      (exists err. lt == [EOpenfile "text.txt" (Inr err); EThrow err])) ))
 
 
 
