@@ -1,7 +1,22 @@
 module Error.Free
 
-open Free
-open Common
+exception Contract_failure
+
+type maybe a = either a exn
+
+noeq
+type op_sig (op:Type u#a) = {
+  args : op -> Type u#a;
+  res : op -> Type u#a;
+}
+
+noeq
+type free (op:Type u#o) (s:op_sig op) (a:Type u#a) : Type u#(max o a) =
+| Call : (l:op) -> s.args l -> cont:(s.res l -> free op s a) -> free op s a
+| Return : a -> free op s a
+
+let free_return (op:Type) (s:op_sig op) (a:Type) (x:a) : free op s a =
+  Return x
 
 (** Cezar: this file is an experiment to:
 
@@ -45,6 +60,11 @@ let rec io_try_catch_finnaly
   Tot (io b) =
   match try_block with
   | Return x -> finnaly x
+  (** Cezar: we can replace the node Throw directly with the catch_block.
+      This is a nice solution because it implies that in the tree a 
+      node Throw is a 'leaf' (except, it is followed by a `Return False`
+      node). This simplifies how we do the interpretation later where,
+      if we meet a Throw node, then we know the computation ended. **)
   | Call Throw err fnc -> catch_block err
   | Call cmd argz fnc ->
       Call cmd argz (fun res ->
@@ -101,17 +121,18 @@ special treatment of exceptions in the effect observation
 to optionalize errors and results. **)
 let hist_post a = maybe a -> lt:trace -> Type0
 
+(** Cezar: TODO: this type-checks for some reason, but it 
+    should not. it should require cmd to have a refinement **)
 let gen_post #a (post:hist_post a) (cmd:io_cmds) args res =
   fun r local_trace ->
     post r (convert_call_to_event cmd args res :: local_trace)
 
-(** Cezar: here Throw does not produce an event, should it?
-I am not sure if the Catch should also appear **)
 let rec io_interpretation #a
   (m : io a)
   (p : hist_post a) : Type0 =
   match m with
   | Return x -> p (Inl x) []
+  | Call Throw exn _ -> p (Inr exn) []
   | Call cmd args fnc -> (
     forall res. (
       io_interpretation (fnc res) (gen_post p cmd args res)))
@@ -119,6 +140,7 @@ let rec io_interpretation #a
 let prog1 : io unit = 
   Call Throw Contract_failure Return
 
+(** Cezar: why is this working? **)
 let _ = assert (io_interpretation prog1 (fun r lt ->
   r == (Inr Contract_failure) /\ lt == []))
 
@@ -131,7 +153,6 @@ let prog2 : io unit =
 can be checked by looking if r is Inl and not Inr.**)
 let _ = assert (io_interpretation prog2 (fun r lt -> 
   r == (Inl ()) /\ lt == []))
-(** fail_with can be wrapped and instrument catch **)
 
 let prog3 : io unit = 
    Call Openfile "text.txt" (fun (x:either int exn) ->
@@ -153,174 +174,3 @@ let _ =
     r == (Inl ()) /\ (
       (exists fd. lt == [EOpenfile "text.txt" (Inl fd)]) \/
       (exists err. lt == [EOpenfile "text.txt" (Inr err)])) ))
-
-
-
-
-
-type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
-
-let rec enforced_locally
-  (check : monitorable_prop)
-  (h l: trace) :
-  Tot bool (decreases l) =
-  match l with
-  | [] -> true
-  | hd  ::  t ->
-    let action = convert_event_to_action hd in
-    if check h action then enforced_locally (check) (hd::h) t
-    else false
-
-let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
-  match h with
-  | [] -> true
-  | h  ::  t ->
-    let action = convert_event_to_action h in
-    if check t action then enforced_globally (check) t
-    else false
-
-unfold
-let apply_changes (history local_events:trace) : Tot trace =
-  (List.rev local_events) @ history
-
-// past_events (from new to old; reversed compared with local_trace)
-let hist a = h:trace -> hist_post a -> Type0
-
-unfold
-let compute_post
-  (a b:Type)
-  (h:trace)
-  (kw : a -> hist b)
-  (p:hist_post b) :
-  Tot (hist_post a) =
-  (fun result local_trace ->
-    match result with
-    | Inl result -> (
-      kw result
-       ((List.rev local_trace) @ h)
-       (fun result' local_trace' ->
-         p result' (local_trace @ local_trace')))
-    | Inr err -> p (Inr err) local_trace)
-
-unfold
-let hist_return (a:Type) (x:a) : hist a =
-  fun _ p -> p (Inl x) []
-
-unfold
-let hist_bind
-  (a:Type)
-  (b:Type)
-  (w : hist a)
-  (kw : a -> hist b) :
-  Tot (hist b) =
-  fun h p ->
-    w h (compute_post a b h kw p)
-
-unfold
-val hist_ord (#a : Type) : hist a -> hist a -> Type0
-let hist_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
-
-unfold
-let hist_if_then_else (#a:Type) (wp1 wp2:hist a) (b:bool) : hist a =
-  fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
-
-// REFINED COMPUTATION MONAD (repr)
-let io_irepr (a:Type) (wp:hist a) =
-  h:trace -> post:hist_post a ->
-    Pure (io a)
-      (requires (wp h post))
-      (ensures (fun (m:io a) -> io_interpretation m post))
-
-let io_ireturn (a : Type) (x : a) : io_irepr a (hist_return a x) =
-  fun _ _ -> io_return a x
-
-let io_ibind
-  (a b : Type)
-  (wp_v : hist a)
-  (wp_f: a -> hist b)
-  (v : io_irepr a wp_v)
-  (f : (x:a -> io_irepr b (wp_f x))) :
-  Tot (io_irepr b (hist_bind _ _ wp_v wp_f)) =
-  fun h p ->
-    let t = (io_bind a b
-        (v h (compute_post a b h wp_f p))
-        (fun x ->
-          assume (wp_f x h p);
-           f x h p)) in
-    assume (io_interpretation t p);
-    t
-
-unfold
-let isubcomp (a:Type) (wp1 wp2: hist a) (f : io_irepr a wp1) :
-  Pure (io_irepr a wp2)
-    (requires hist_ord wp2 wp1)
-    (ensures fun _ -> True) =
-  f
-
-unfold
-let i_if_then_else
-  (a : Type)
-  (wp1 wp2: hist a)
-  (f : io_irepr a wp1)
-  (g : io_irepr a wp2) (b : bool) :
-  Tot Type =
-  io_irepr a (hist_if_then_else wp1 wp2 b)
-
-total
-reifiable
-reflectable
-layered_effect {
-  IOwp : a:Type -> wp : hist a -> Effect
-  with
-       repr       = io_irepr
-     ; return     = io_ireturn
-     ; bind       = io_ibind
-
-     ; subcomp      = isubcomp
-     ; if_then_else = i_if_then_else
-}
-
-let lift_pure_iowp
-  (a:Type)
-  (wp:pure_wp a)
-  (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (io_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
-  = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
-
-sub_effect PURE ~> IOwp = lift_pure_iowp
-
-let throw (#a:Type) (err:exn) : IOwp a (fun _ p -> p (Inr err) []) =
-  IOwp?.reflect(fun _ _ -> Call Throw err Return)
-
-effect IO
-  (a:Type)
-  (pi : monitorable_prop)
-  (pre : trace -> Type0)
-  (post : trace -> maybe a -> trace -> Type0) =
-  IOwp a (fun (h:trace) (p:hist_post a) ->
-    enforced_globally pi h /\
-    pre h /\
-    (forall res lt. (
-      enforced_globally pi (apply_changes h lt) /\
-      post h res lt ==>  p res lt)))
-
-(** Cezar: automatically lifting errors does not fit very well,
-because our event for Openfile contains already the error.
-If we want to also have an event for throwing errors, implies
-the error will appear twice. I am not sure how to avoid this. **)
-
-let openfile
-  (pi : monitorable_prop)
-  (argz : io_args Openfile) :
-  IOwp file_descr
-  
-    (fun h p ->
-      (** precondition **)
-      pi h (| Openfile, argz |) /\
-      (forall (r:io_sig.res Openfile) lt. (
-      (** postcondition **)
-        lt == [convert_call_to_event Openfile argz r] /\
-        enforced_locally pi h lt)
-       ==>  p r lt)) =
-  IOwp?.reflect(fun _ _ -> Call Openfile argz (fun (x:io_sig.res Openfile) ->
-    match x with | Inl x' -> Return x' | Inr err -> Call Throw err Return))
