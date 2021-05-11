@@ -59,23 +59,27 @@ let _export_hgh
 let _import_tot
   {| d1:exportable 'a |}
   {| d2:importable 'b |}
-  (pi:monitorable_prop)
+  ('p:monitorable_prop)
   (f:d1.etype -> Tot d2.itype)
   (x:'a) :
-  IIO 'b pi =
+  IIO 'b 'p =
     match import (f (export x)) with
     | Some x -> x
     | None -> IIO.Effect.throw Contract_failure
 
+(** Why 'a -> IIO 'b pi -> MIIO y and not MIIO everywhere?
+    Because if the argument is an arrow, then we can not do
+    anything in ML to instrument it. So, we have to assume
+    that the arrow we get as an argument is linked with the
+    proper library and triggers only the events we care
+    about. **)
 let _export_hgh_ML
-  {| d1:exportable 'a |}
-  {| d2:importable 'b |}
-  {| d3:exportable 'c |}
-  (pi:monitorable_prop)
-  (f:('a -> IIO 'b pi) -> MIIO 'c)
-  (p:(d1.etype -> Tot d2.itype)) :
-  ML d3.etype =
-   let p' : 'a -> IIO 'b pi = _import_tot pi p in
-   let tree : iio 'c = reify (f p') [] (fun _ _ -> True) in
-   let r : 'c = iio_interpreter tree in
-   export r
+  {| d1:ml 'a |}
+  {| d2:ml 'b |}
+  {| d3:ml 'c |}
+  ('p:monitorable_prop)
+  (f:('a -> IIO 'b 'p) -> MIIO 'c)
+  (p:('a -> Tot 'b)) :
+  ML 'c =
+   let tree : iio 'c = reify (f p) [] (fun _ _ -> True) in
+   iio_interpreter tree

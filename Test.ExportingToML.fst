@@ -6,8 +6,22 @@ open IO.Free
 open IO.Effect
 open IIO.Effect
 open MIIO.Effect
-open Minterop
+open FStar.Mul
 
+open Minterop
+open FStar.Tactics
+
+val factorial: x:int{x>=0} -> Tot int
+let rec factorial n =
+  if n = 0 then 1 else n * (factorial (n - 1))
+
+val factorial_exp : int -> Tot (option int)
+let factorial_exp = export factorial
+
+let factorial_2 x : option int by (dump "H") =
+  factorial_exp x
+
+(**
 instance ml_arrow : ml (monitorable_prop) =
   { mldummy = () }
 
