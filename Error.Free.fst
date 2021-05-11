@@ -123,7 +123,7 @@ let hist_post a = maybe a -> lt:trace -> Type0
 
 (** Cezar: TODO: this type-checks for some reason, but it 
     should not. it should require cmd to have a refinement **)
-let gen_post #a (post:hist_post a) (cmd:io_cmds) args res =
+let gen_post #a (post:hist_post a) (cmd:io_cmds{Openfile == cmd}) args res =
   fun r local_trace ->
     post r (convert_call_to_event cmd args res :: local_trace)
 
@@ -140,7 +140,6 @@ let rec io_interpretation #a
 let prog1 : io unit = 
   Call Throw Contract_failure Return
 
-(** Cezar: why is this working? **)
 let _ = assert (io_interpretation prog1 (fun r lt ->
   r == (Inr Contract_failure) /\ lt == []))
 
@@ -174,3 +173,7 @@ let _ =
     r == (Inl ()) /\ (
       (exists fd. lt == [EOpenfile "text.txt" (Inl fd)]) \/
       (exists err. lt == [EOpenfile "text.txt" (Inr err)])) ))
+
+(** Cezar: what other interesting examples or tests can we do to check
+if this solution is the one we want? we want a monad that enables
+precise specifications and can be used to write programs easily **)
