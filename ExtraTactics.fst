@@ -30,14 +30,14 @@ let grewrite_eq (b:binder) : Tac unit =
 private
 let rec innermost_sc (t:term) : Tac term =
   match inspect t with
-  | Tv_Match s _ -> innermost_sc s
+  | Tv_Match s _ _ -> innermost_sc s
   | _ -> t
 
 let get_match_body () : Tac term =
   match FStar.Reflection.Formula.unsquash (cur_goal ()) with
   | None -> fail "Goal is not squashed"
   | Some t -> match inspect t with
-             | Tv_Match sc _ -> innermost_sc sc
+             | Tv_Match sc _ _ -> innermost_sc sc
              | _ -> fail "Goal is not a match"
 
 let rec last (x : list 'a) : Tac 'a =
