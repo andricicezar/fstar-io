@@ -1,8 +1,8 @@
-module MIIO.Effect
+module DM.MIIO
 
 open Common
-open IO.Free
-open IIO.Effect
+open Free.IO
+open DM.IIO
 
 effect MIIO
   (a:Type) =

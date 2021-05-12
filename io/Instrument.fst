@@ -1,11 +1,10 @@
-module Handle
+module Instrument
 
-open IO.Free
-open IO.Effect
-open IIO.Effect
-open MIIO.Effect
 open FStar.All
-open Minterop
+
+open Free.IO
+open DM
+open Export
 
 let rec _import_pi_IIO
   (tree : iio 'a)

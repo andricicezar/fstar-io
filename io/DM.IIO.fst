@@ -1,12 +1,12 @@
-module IIO.Effect
+module DM.IIO
 
 open FStar.Tactics
 open ExtraTactics
 open FStar.Calc
 
 open Common
-open IO.Free
-open IO.Effect
+open Free.IO
+open DM.IO
 open Hist
 
 let rec iio_interpretation #a

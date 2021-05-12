@@ -1,7 +1,7 @@
 module Hist
 
 open Common
-open IO.Free
+open Free.IO
 
 // local_trace (from old to new)
 let hist_post a = a -> lt:trace -> Type0

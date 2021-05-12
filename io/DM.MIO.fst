@@ -1,7 +1,7 @@
-module MIO.Effect
+module DM.MIO
 
-open IO.Free
-open IO.Effect
+open Free.IO
+open DM.IO
 
 effect MIO
   (a:Type) =

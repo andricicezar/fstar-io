@@ -1,4 +1,4 @@
-module IO.Free
+module Free.IO
 
 open Common
 include Free

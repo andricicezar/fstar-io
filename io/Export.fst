@@ -1,16 +1,10 @@
-module Minterop
+module Export
 
-open FStar.All
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
-open Common
-open IO.Free
-open IO.Effect
-open IIO.Effect
-open MIO.Effect
-open MIIO.Effect
 
-open IIO.ML
+open Common
+open DM
 
 (**
 lift: IO -> IIO (Done - in IIO.Effect.fst)
@@ -140,12 +134,6 @@ instance importable_safe_importable t {| d:safe_importable t |} : importable t =
   mk_importable d.sitype #t #d.ml_sitype
     (fun (x:d.sitype) -> (Some (safe_import x)) <: option t)
 
-// instance exn_importable_importable t {| d:importable t |} : exn_importable t =
-//   mk_exn_importable d.itype (fun (x:d.itype) ->
-//     (match import x with
-//     | Some x -> x
-//     | None -> FStar.All.raise Contract_failure) <: ML t)
-
 instance exportable_refinement
   t {| d:exportable t |}
   (p : t -> Type0) :
@@ -249,25 +237,6 @@ instance exportable_purearrow_spec
           else None
         | None -> None))
 
-let rec iio_interpreter #t1 (t:iio t1) : ML t1 =
-  match t with
-  | Return (Inl r) -> r
-  | Return (Inr r) -> FStar.All.raise r
-  | Call cmd argz fnc ->
-      iio_interpreter #t1 (fnc (ml_io_execute cmd argz))
-
-let _export_MIIO
-  (#t1:Type) {| d1:importable t1 |}
-  (#t2:Type) {| d2:exportable t2 |}
-  (f:t1 -> MIIO t2)
-  (x:d1.itype) :
-  ML d2.etype =
-  match import x with
-  | Some x ->
-     let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
-     let r : t2 = iio_interpreter tree in
-     export r
-  | None -> FStar.All.raise Contract_failure
 
 instance exportable_IOwp
   (t1:Type) {| d1:importable t1 |}
@@ -285,59 +254,3 @@ instance exportable_IOwp
         match import x with
         | Some x' -> export (_IIOwp_as_MIIO d3.check2 post f x')
         | None -> IIO.Effect.throw Contract_failure))
-
-(** The following are valid, but are not useful **)
-// instance exportable_MIO
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pi:monitorable_prop) :
-//   Tot (exportable (t1 -> MIO t2)) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     (fun (f:(x:t1 -> MIO t2)) -> _export_MIIO f)
-
-// instance exportable_MIIO
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pi:monitorable_prop) :
-//   Tot (exportable (t1 -> MIIO t2)) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     _export_MIIO
-
-// instance exportable_IIOwp
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-//   (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
-//   Tot (exportable (x:t1 ->
-//     IIOwp t2 (fun h p ->
-//       pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     (fun (f:(x:t1 ->
-//     IIOwp t2 (fun h p -> pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) ->
-//             _export_MIIO (_IIOwp_as_MIIO d3.check2 post f))
-
-// instance exportable_IO
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pi:monitorable_prop)
-//   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-//   (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
-//   Tot (exportable (x:t1 -> IO t2 pi (pre x) (post x))) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     (fun (f:(x:t1 -> IO t2 pi (pre x) (post x))) ->
-//       _export_MIIO (_IIO_as_MIIO pi pre post f))
-
-// instance exportable_IIO
-//   (t1:Type) {| d1:importable t1 |}
-//   (t2:Type) {| d2:exportable t2 |}
-//   (pi:monitorable_prop)
-//   (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-//   (post: t1 -> trace -> maybe t2 -> trace -> Type0) :
-//   Tot (exportable (x:t1 -> IIO t2 pi (pre x) (post x))) =
-//   mk_exportable
-//     (d1.itype -> ML d2.etype)
-//     (fun f -> _export_MIIO (_IIO_as_MIIO pi pre post f))

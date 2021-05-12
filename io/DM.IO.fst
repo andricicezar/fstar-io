@@ -1,10 +1,10 @@
-module IO.Effect
+module DM.IO
 
 open FStar.Tactics
 open ExtraTactics
 
 open Common
-open IO.Free
+open Free.IO
 open Hist
 
 (** The postcondition for an io computation is defined over the
