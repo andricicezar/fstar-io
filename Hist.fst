@@ -4,14 +4,14 @@ open Common
 open IO.Free
 
 // local_trace (from old to new)
-let hist_post a = maybe a -> lt:trace -> Type0
+let hist_post a = a -> lt:trace -> Type0
 
 // past_events (from new to old; reversed compared with local_trace)
 let hist a = h:trace -> hist_post a -> Type0
 
 unfold
 let hist_return (a:Type) (x:a) : hist a =
-  fun _ p -> p (Inl x) []
+  fun _ p -> p x []
 
 unfold
 let compute_post
@@ -21,13 +21,10 @@ let compute_post
   (p:hist_post b) :
   Tot (hist_post a) =
   (fun result local_trace ->
-    match result with
-    | Inl result -> (
       kw result
        ((List.rev local_trace) @ h)
        (fun result' local_trace' ->
          p result' (local_trace @ local_trace')))
-    | Inr err -> p (Inr err) local_trace)
 
 unfold
 let hist_bind

@@ -56,7 +56,8 @@ instance ml_totarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> Tot t2) =
 instance ml_purearrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> Pure t2 True (fun _ -> True)) =
   { mldummy = () }
 
-instance ml_miioarrow t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 -> MIIO t2) =
+instance ml_miioarrow (t1:Type u#a) (t2:Type u#b)
+  {| ml t1 |} {| ml t2 |} : ml (t1 -> MIIO t2) =
   { mldummy = () }
 
 // instance ml_mlarrow2 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml (t1 -> t2 -> ML t3) =

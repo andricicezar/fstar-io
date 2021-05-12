@@ -1,5 +1,6 @@
 module MIIO.Effect
 
+open Common
 open IO.Free
 open IIO.Effect
 
@@ -9,20 +10,20 @@ effect MIIO
 
 let _IIOwp_as_MIIO
   (pre:'a -> trace -> bool)
-  (post:'a -> trace -> (m:maybe 'b) -> trace -> Type0)
+  (post:'a -> trace -> (m:'b) -> trace -> Type0)
   (f:(x:'a ->
     IIOwp 'b (fun h p -> pre x h /\ (forall r lt. post x h r lt ==> p r lt))))
   (x:'a) :
-  MIIO 'b =
+  MIIO (maybe 'b) =
   _IIOwp_as_IIO pre post f x
 
 let _IIOwp_as_MIIO_2
   (pre:'a -> 'b -> trace -> bool)
-  (post:'a -> 'b -> trace -> (m:maybe 'c) -> trace -> Type0)
+  (post:'a -> 'b -> trace -> (m:'c) -> trace -> Type0)
   (f:(x:'a -> y:'b ->
     IIOwp 'c (fun h p -> pre x y h /\ (forall r lt. post x y h r lt ==> p r lt))))
   (x:'a) (y:'b):
-  MIIO 'c =
+  MIIO (maybe 'c) =
   _IIOwp_as_IIO_2 pre post f x y
 
 (** this is just a backup. not useful anymore. **)

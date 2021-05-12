@@ -91,21 +91,16 @@ let lift_pure_iowp
   (a:Type)
   (wp:pure_wp a)
   (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (io_irepr a (fun h p -> wp (fun r -> p (Inl r) [])))
-  = fun h p -> let r = elim_pure f (fun r -> p (Inl r) []) in io_return _ r
+  Tot (io_irepr a (fun h p -> wp (fun r -> p r [])))
+  = fun h p -> let r = elim_pure f (fun r -> p r []) in io_return _ r
 
 sub_effect PURE ~> IOwp = lift_pure_iowp
-
-let throw (#a:Type) (err:exn) : IOwp a (fun _ p -> p (Inr err) []) =
-  IOwp?.reflect(fun _ _ -> io_throw a err)
-
-// let fd = static_cmd pi Openfile "../Makefile"
 
 effect IO
   (a:Type)
   (pi : monitorable_prop)
   (pre : trace -> Type0)
-  (post : trace -> maybe a -> trace -> Type0) =
+  (post : trace -> a -> trace -> Type0) =
   IOwp a (fun (h:trace) (p:hist_post a) ->
     enforced_globally pi h /\
     pre h /\
@@ -124,7 +119,7 @@ let static_cmd
       pi h (| cmd, argz |) /\
       (forall (r:io_resm cmd) lt. (
       (** postcondition **)
-        ~(Inr? r /\ Inr?.v r == Contract_failure) /\
+//        ~(Inr? r /\ Inr?.v r == Contract_failure) /\
         lt == [convert_call_to_event cmd argz r] /\
         enforced_locally pi h lt)
        ==>  p r lt)) =

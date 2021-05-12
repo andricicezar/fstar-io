@@ -32,7 +32,7 @@ this is an assumption we can make to have more precise specification.
 `Contract_failure` is an exception defined in `Common.fst` **)
 let io_resm (cmd:io_cmds) =
   r:(maybe (io_res cmd))
-    {~(Inr? r /\ Inr?.v r == Contract_failure)}
+    // {~(Inr? r /\ Inr?.v r == Contract_failure)}
 
 let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
 
@@ -61,81 +61,41 @@ suffer a performance penalty. **)
 let inst_res (x:inst_cmds) =
   match x with
   | GetTrace -> list event
-let inst_resm (x:inst_cmds) = maybe (inst_res x)
 
 let inst_sig : op_sig inst_cmds = {
   args = (fun (x:inst_cmds) -> match x with
     | GetTrace -> unit) ;
-  res = inst_resm
+  res = inst_res
 }
 
 let iio_sig = add_sig cmds io_sig inst_sig
 
 let args (cmd:cmds) : Type = iio_sig.args cmd
-let res (cmd:cmds)  : Type =
-  if cmd = GetTrace then inst_res cmd
-  else io_res cmd
-
-let resm (cmd:cmds) : (x:Type{x == iio_sig.res cmd}) =
+let res (cmd:cmds)  : (x:Type{x == iio_sig.res cmd}) =
   admit ();
-  maybe (res cmd)
+  if cmd = GetTrace then inst_res cmd
+  else io_resm cmd
 
-type io a = free io_cmds io_sig (maybe a)
+type io a = free io_cmds io_sig a
 let io_return (a:Type) (x:a) : io a =
-  free_return io_cmds io_sig (maybe a) (Inl x)
-let io_throw (a:Type) (x:exn) : io a =
-  free_return io_cmds io_sig (maybe a) (Inr x)
-
-let rec io_try_catch_finnaly
-  (a b:Type)
-  (try_block:io a)
-  (catch_block:exn -> io b)
-  (finnaly:a -> io b) :
-  Tot (io b) =
-  match try_block with
-  | Return (Inl x) -> finnaly x
-  | Return (Inr err) -> catch_block err
-  | Call cmd argz fnc ->
-      Call cmd argz (fun res ->
-        io_try_catch_finnaly a b (fnc res) catch_block finnaly)
+  free_return io_cmds io_sig a x
 
 let io_bind (a:Type) (b:Type) l k : io b =
-  io_try_catch_finnaly a b l (io_throw b) k
+  free_bind io_cmds io_sig a b l k
 
-let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_res cmd) =
-  Call cmd arg (fun (v:io_resm cmd) ->
-    match v with
-    | Inl x -> io_return (io_res cmd) x
-    | Inr err -> io_throw (io_res cmd) err)
+let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_resm cmd) =
+  Call cmd arg Return
 
 // THE IIO FREE MONAD
-type iio a = free cmds iio_sig (maybe a)
+type iio a = free cmds iio_sig a
 let iio_return (a:Type) (x:a) : iio a =
-  free_return cmds iio_sig (maybe a) (Inl x)
-let iio_throw (a:Type) (x:exn) : iio a =
-  free_return cmds iio_sig (maybe a) (Inr x)
-
-let rec iio_try_catch_finnaly
-  (a b:Type)
-  (try_block:iio a)
-  (catch_block:exn -> iio b)
-  (finnaly:a -> iio b) :
-  Tot (iio b) =
-  match try_block with
-  | Return (Inl x) -> finnaly x
-  | Return (Inr err) -> catch_block err
-  | Call cmd argz fnc ->
-      Call cmd argz (fun res ->
-        iio_try_catch_finnaly a b (fnc res) catch_block finnaly)
+  free_return cmds iio_sig a x
 
 let iio_bind (a:Type) (b:Type) l k : iio b =
-  iio_try_catch_finnaly a b l (iio_throw b) k
+  free_bind cmds iio_sig a b l k
 
 let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
-  Call cmd arg (fun (v:(maybe (res cmd))) ->
-    match v with
-    | Inl x -> iio_return (res cmd) x
-    | Inr err -> iio_throw (res cmd) err)
+  Call cmd arg Return
 
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
