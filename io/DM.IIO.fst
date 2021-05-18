@@ -136,7 +136,7 @@ let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:hist_post a) :
   | _ -> ()
 
 let lift_iowp_iiowp (a:Type) (wp:hist a) (f:io_irepr a wp) :
-  Tot (iio_irepr a (fun h p -> wp h (fun r lt -> p r lt))) =
+  Tot (iio_irepr a (fun h p -> wp h p)) =
   fun h p ->
     io_interp_to_iio_interp (f h p) h p;
     cast_io_iio (f h p)
