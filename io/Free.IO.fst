@@ -25,14 +25,7 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Read -> string
   | Close -> unit
 
-(** The IO primitives have no reason to throw
-`Contract_failure`, because they do not enforce any policy.
-In practice, a primitive can throw any error, but I think
-this is an assumption we can make to have more precise specification.
-`Contract_failure` is an exception defined in `Common.fst` **)
-let io_resm (cmd:io_cmds) =
-  r:(maybe (io_res cmd))
-    // {~(Inr? r /\ Inr?.v r == Contract_failure)}
+let io_resm (cmd:io_cmds) = maybe (io_res cmd)
 
 let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
 

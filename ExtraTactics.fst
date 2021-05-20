@@ -57,15 +57,20 @@ let let_intro () : Tac unit =
       iterAll (fun () -> ignore (intro ()); ignore (intro ()); grewrite_eq (intro ()))
     )
 
+let get_binder (n:nat) : Tac binder =
+  match (List.Tot.nth (cur_binders ()) n) with
+  | Some y -> y
+  | None -> fail "no binder"
+
 let rewrite_lemma (n:nat) (m:nat) : Tac unit =
-    let zz = match (List.Tot.nth (cur_binders ()) n) with
-    | Some y -> y | None -> fail "no binder" in
-    
-    let zz' = match (List.Tot.nth (cur_binders ()) m) with
-    | Some y -> y | None -> fail "no binder" in
-    
+    (** n is for the index of the wp
+        m is for the index of the pure_result:unit **)
+    let zz = get_binder n in
+    let zz' = get_binder m in
     let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
-    mapply (binder_to_term b')
+    mapply (binder_to_term b');
+    ignore (trytac (fun () -> clear b'; clear zz; clear zz'))
+    
  
     // by (explode (); bump_nth 3; 
     // let bs = List.Tot.map (fun (_, b) -> b) (skolem ()) in
@@ -89,10 +94,6 @@ let copy_binder (b:binder) : Tac binder =
     nb
   )
 
-let get_binder (n:nat) : Tac binder =
-  match (List.Tot.nth (cur_binders ()) n) with
-  | Some y -> y 
-  | None -> fail "no binder"
   
 let rec instantiate_n_times_with_none (b:binder) (n : nat{n>0}) : Tac binder =
   let b' = instantiate b (fresh_uvar None) in
