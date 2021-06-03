@@ -1,7 +1,5 @@
 module Instrument
 
-open FStar.All
-
 open Common
 open Free.IO
 open DM
