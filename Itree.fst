@@ -1,27 +1,86 @@
 module Itree
 
-(* If we specialised itrees to our needs, we might not need noeq, branching would be known. *)
-noeq
-type itree_choice =
-| Tau_pos : itree_choice
-| Event_pos : #x : Type -> x -> itree_choice
+(* Enconding of interaction trees, specialised to a free monad
 
-type itree_pos = list itree_choice
+   For now, they are unconstrained, which means that wrong data
+   can be represented.
+
+*)
+
+noeq
+type op_sig (op : Type) = {
+  args : op -> eqtype ;
+  res : op -> eqtype
+}
+
+type ichoice (op : Type) (s : op_sig op) =
+| Tau_choice : ichoice op s
+| Call_choice : o:op -> s.args o -> s.res o -> ichoice op s
+
+type ipos op s = list (ichoice op s)
+
+type inode op (s : op_sig op) (a:Type) =
+| Ret : a -> ipos op s -> inode op s a
+| Call : o:op -> s.args o -> inode op s a
+| Tau : inode op s a
+
+type itree op s a =
+  ipos op s -> option (inode op s a)
+
+let ret op s a (x:a) : itree op s a =
+  fun p -> Some (Ret x p)
+
+let call (op:eqtype) s a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
+  fun p ->
+    match p with
+    | [] -> Some (Call o x)
+    | Tau_choice :: p -> None
+    | Call_choice o' x' y :: p ->
+      if o = o' && x = x'
+      then k y p
+      else None
+
+let tau op s a (k : itree op s a) : itree op s a =
+  fun p ->
+    match p with
+    | [] -> Some Tau
+    | Tau_choice :: p -> k p
+    | _ -> None
+
+let bind op s a b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
+  fun p ->
+    match x p with
+    | None -> None
+    | Some (Ret u q) -> f u q
+    | Some (Call o arg) -> Some (Call o arg)
+    | Some Tau -> Some Tau
+
+(* A loop with no events/effects except non-termination *)
+let loop op s a : itree op s a =
+  fun p -> Some Tau
+
+(* If we specialised itrees to our needs, we might not need noeq, branching would be known. *)
+// noeq
+// type itree_choice =
+// | Tau_pos : itree_choice
+// | Event_pos : #x : Type -> x -> itree_choice
+
+// type itree_pos = list itree_choice
 
 (* It will be a pain to define a notion of prefix given the noeq *)
 (* let prefix p1 p2 =
   exists l. p2 = p1 @ l
 *)
 
-noeq
-type itree_node (e : Type -> Type) 'r =
-| Ret : 'r -> itree_node e 'r
-| Tau : itree_node e 'r
-| Event : #x : Type -> e x -> itree_node e 'r
+// noeq
+// type itree_node (e : Type -> Type) 'r =
+// | Ret : 'r -> itree_node e 'r
+// | Tau : itree_node e 'r
+// | Event : #x : Type -> e x -> itree_node e 'r
 
 (* First approach, unguarded. Would need an interface to operate safely. *)
-type itree1 (e : Type -> Type) (r : Type) =
-  itree_pos -> option (itree_node e r)
+// type itree1 (e : Type -> Type) (r : Type) =
+//   itree_pos -> option (itree_node e r)
 
 (* Second approach, constraint the tree so that it is consistent. *)
 (*
