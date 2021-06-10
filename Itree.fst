@@ -24,13 +24,20 @@ type inode op (s : op_sig op) (a:Type) =
 | Call : o:op -> s.args o -> inode op s a
 | Tau : inode op s a
 
-type itree op s a =
+type raw_itree op s a =
   ipos op s -> option (inode op s a)
 
-let ret op s a (x:a) : itree op s a =
+let valid_itree #op #s #a (t : raw_itree op s a) =
+  // Some? (t []) // Not preserved by bind without restrictions on ret
+  True
+
+let itree op s a =
+  t:(raw_itree op s a) { valid_itree t }
+
+let ret #op #s #a (x:a) : itree op s a =
   fun p -> Some (Ret x p)
 
-let call (op:eqtype) s a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
+let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
   fun p ->
     match p with
     | [] -> Some (Call o x)
@@ -40,14 +47,14 @@ let call (op:eqtype) s a (o : op) (x : s.args o) (k : s.res o -> itree op s a) :
       then k y p
       else None
 
-let tau op s a (k : itree op s a) : itree op s a =
+let tau #op #s #a (k : itree op s a) : itree op s a =
   fun p ->
     match p with
     | [] -> Some Tau
     | Tau_choice :: p -> k p
     | _ -> None
 
-let bind op s a b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
+let bind #op #s #a #b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
   fun p ->
     match x p with
     | None -> None
@@ -56,7 +63,7 @@ let bind op s a b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
     | Some Tau -> Some Tau
 
 (* A loop with no events/effects except non-termination *)
-let loop op s a : itree op s a =
+let loop #op #s a : itree op s a =
   fun p -> Some Tau
 
 (* If we specialised itrees to our needs, we might not need noeq, branching would be known. *)
