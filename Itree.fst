@@ -1,5 +1,7 @@
 module Itree
 
+open FStar.List.Tot
+
 (* Enconding of interaction trees, specialised to a free monad
 
    For now, they are unconstrained, which means that wrong data
@@ -27,11 +29,24 @@ type inode op (s : op_sig op) (a:Type) =
 type raw_itree op s a =
   ipos op s -> option (inode op s a)
 
-let valid_itree #op #s #a (t : raw_itree op s a) =
+let isRet #op #s #a (n : option (inode op s a)) =
+  match n with
+  | Some (Ret x p) -> true
+  | _ -> false
+
+let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
+  match n with
+  | Some (Ret x p) -> p
+
+let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   // Some? (t []) // Not preserved by bind without restrictions on ret
+  // forall p. None? (t p) ==> (forall q. None? (t (p @ q))) // Same here
+  // forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi)) // even for call it's not automatic
+  // forall p. isRet (t p) ==> (forall q. isRet (t (p @ q)) /\ ret_pos (t (p @ q)) = ret_pos (t p) @ q) // passes call but not tau for some reason
+  // forall p. isRet (t p) ==> (exists q. p = q @ (ret_pos (t p))) // Not even auto for ret
   True
 
-let itree op s a =
+let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
 
 let ret #op #s #a (x:a) : itree op s a =
