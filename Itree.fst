@@ -39,12 +39,12 @@ let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
   | Some (Ret x p) -> p
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
-  // Some? (t []) // Not preserved by bind without restrictions on ret
-  // forall p. None? (t p) ==> (forall q. None? (t (p @ q))) // Same here
-  // forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi)) // even for call it's not automatic
-  // forall p. isRet (t p) ==> (forall q. isRet (t (p @ q)) /\ ret_pos (t (p @ q)) = ret_pos (t p) @ q) // passes call but not tau for some reason
-  // forall p. isRet (t p) ==> (exists q. p = q @ (ret_pos (t p))) // Not even auto for ret
-  True
+  Some? (t []) /\
+  // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
+  // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind
+  // (forall p. isRet (t p) ==> (forall q. isRet (t (p @ q)) /\ ret_pos (t (p @ q)) = ret_pos (t p) @ q)) /\ // Fails at bind
+  (forall p. isRet (t p) ==> (exists q. p = q @ (ret_pos (t p)))) /\
+  isRet (t []) ==> ret_pos (t []) = [] // weaker than the above but helps with the root condition
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
