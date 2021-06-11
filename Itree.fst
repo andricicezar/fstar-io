@@ -136,9 +136,18 @@ let io_wp #a (t : itree cmds io_op_sig a) =
 let io a (w : wp a) =
   t:itree cmds io_op_sig a { io_wp t `stronger_wp` w }
 
-let io_return #a (x : a) : io a (wp_return x) =
+let io_return a (x : a) : io a (wp_return x) =
   ret x
 
-let io_bind #a #b #w #wf (x : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
+let io_bind a b w wf (x : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
   admit () ;
   bind x f
+
+[@@allow_informative_binders]
+reifiable total layered_effect {
+  IO : a:Type -> wp a -> Effect
+  with
+    repr   = io ;
+    return = io_return ;
+    bind   = io_bind
+}
