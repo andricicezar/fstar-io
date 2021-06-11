@@ -139,9 +139,68 @@ let io a (w : wp a) =
 let io_return a (x : a) : io a (wp_return x) =
   ret x
 
-let io_bind a b w wf (x : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
-  admit () ;
-  bind x f
+let bind_isRet_inv #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
+  Lemma
+    (requires True)
+    (ensures (
+      forall p.
+        isRet (bind m f p) ==>
+        isRet (m p) /\ isRet (f (ret_val (m p)) (ret_pos (m p)))
+    ))
+= ()
+
+let bind_isRet #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
+  Lemma
+    (requires True)
+    (ensures (
+      forall p.
+        isRet (m p) ==>
+        isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
+        isRet (bind m f p)
+    ))
+= ()
+
+let bind_ret_val #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
+  Lemma
+    (requires True)
+    (ensures (
+      forall p.
+        isRet (m p) ==>
+        isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
+        (forall post. post (ret_val (bind m f p)) ==> post (ret_val (f (ret_val (m p)) (ret_pos (m p)))))
+    ))
+= ()
+
+// Can we prove something like below?
+// We actually want to relate
+// f (ret_val (m p)) q
+// and
+// f (ret_val (m p)) (ret_pos (m p))
+// which we know are both some Ret
+// can we replace the suffix [ret_pos (m p)] with [q] in [p] and give that position to [bind m f]?
+// let bind_ret_val' #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
+//   Lemma
+//     (requires True)
+//     (ensures (
+//       forall p q.
+//         isRet (m p) ==>
+//         isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
+//         isRet (f (ret_val (m p)) q) ==>
+//         (forall post. post (ret_val (bind m f p)) ==> post (ret_val (f (ret_val (m p)) q)))
+//     ))
+// = ()
+
+let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
+  // assert (io_wp x `stronger_wp` w) ;
+  assert (forall post. (forall p. isRet (m p) ==> post (ret_val (m p))) ==> w post) ;
+  // assert (forall x. io_wp (f x) `stronger_wp` wf x) ;
+  assert (forall x post. (forall p. isRet (f x p) ==> post (ret_val (f x p))) ==> wf x post) ;
+  bind_isRet m f ;
+  bind_ret_val m f ;
+  // assume (io_wp (bind x f) `stronger_wp` wp_bind w wf) ;
+  // assume (forall post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> w (fun x -> wf x post)) ;
+  assume (forall p q post. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
+  bind m f
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
