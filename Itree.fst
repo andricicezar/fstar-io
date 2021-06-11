@@ -38,6 +38,10 @@ let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
   match n with
   | Some (Ret x p) -> p
 
+let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
+  match n with
+  | Some (Ret x p) -> x
+
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
@@ -108,4 +112,33 @@ let io_op_sig : op_sig cmds = {
   res = io_res
 }
 
-let io a = itree cmds io_op_sig a
+(*
+  The trace can be read from the position + eventually the node it leads to.
+  Care has to be taken to actually remove the postfix when it leads to return
+  because the postfix is forwarded, thus essentially ignored, and could be
+  garbage.
+*)
+
+let wp a = (a -> Type0) -> Type0
+
+let wp_return #a (x : a) : wp a =
+  fun post -> post x
+
+let wp_bind #a #b (w : wp a) (f : a -> wp b) : wp b =
+  fun post -> w (fun x -> f x post)
+
+let stronger_wp #a (wp1 wp2 : wp a) : Type0 =
+  forall post. wp1 post ==> wp2 post
+
+let io_wp #a (t : itree cmds io_op_sig a) =
+  fun post -> forall p. isRet (t p) ==> post (ret_val (t p))
+
+let io a (w : wp a) =
+  t:itree cmds io_op_sig a { io_wp t `stronger_wp` w }
+
+let io_return #a (x : a) : io a (wp_return x) =
+  ret x
+
+let io_bind #a #b #w #wf (x : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
+  admit () ;
+  bind x f
