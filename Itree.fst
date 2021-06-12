@@ -1,6 +1,7 @@
 module Itree
 
 open FStar.List.Tot
+open FStar.List.Tot.Properties
 
 (* Enconding of interaction trees, specialised to a free monad
 
@@ -42,18 +43,25 @@ let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
   match n with
   | Some (Ret x p) -> x
 
+let rec suffix_of (#a: Type) (l1 l2 : list a) :
+  Pure Type0
+    (requires True)
+    (ensures (fun _ -> True))
+    (decreases l2)
+= match l2 with
+  | [] -> l1 == []
+  | x :: t -> l1 == x :: t \/ l1 `suffix_of` t
+
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
   // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind
   (forall p.
     isRet (t p) ==>
-    (exists q.
-      p == q @ (ret_pos (t p)) // /\
-      // isRet (t q) /\
-      // ret_val (t q) == ret_val (t p)
-      // /\ ret_pos (t q) == []
-    ) // /\
+    ret_pos (t p) `suffix_of` p // /\ // Is there an easy way to get the prefix now? probably l `minus_suffix` s defined as suffix_of
+    // isRet (t q) /\
+    // ret_val (t q) == ret_val (t p)
+    // /\ ret_pos (t q) == [] // /\
     // (forall q.
     //   isRet (t (p @ q)) // /\
     //   // ret_pos (t (p @ q)) == ret_pos (t p) @ q /\
@@ -69,7 +77,6 @@ let ret #op #s #a (x:a) : itree op s a =
   fun p -> Some (Ret x p)
 
 let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
-  admit () ;
   fun p ->
     match p with
     | [] -> Some (Call o x)
@@ -80,7 +87,6 @@ let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a
       else None
 
 let tau #op #s #a (k : itree op s a) : itree op s a =
-  admit () ;
   fun p ->
     match p with
     | [] -> Some Tau
@@ -88,7 +94,7 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | _ -> None
 
 let bind #op #s #a #b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
-  admit () ;
+  admit () ; // we're probably just missing transitivity of suffix_of
   fun p ->
     match x p with
     | None -> None
