@@ -47,8 +47,8 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
   // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind
   // (forall p. isRet (t p) ==> (forall q. isRet (t (p @ q)) /\ ret_pos (t (p @ q)) = ret_pos (t p) @ q)) /\ // Fails at bind
-  (forall p. isRet (t p) ==> (exists q. p = q @ (ret_pos (t p)))) /\
-  isRet (t []) ==> ret_pos (t []) = [] // weaker than the above but helps with the root condition
+  (forall p. isRet (t p) ==> (exists q. p == q @ (ret_pos (t p)))) /\
+  isRet (t []) ==> ret_pos (t []) == [] // weaker than the above but helps with the root condition
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
@@ -167,7 +167,7 @@ let bind_ret_val #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
       forall p.
         isRet (m p) ==>
         isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
-        (forall post. post (ret_val (bind m f p)) ==> post (ret_val (f (ret_val (m p)) (ret_pos (m p)))))
+        ret_val (bind m f p) == ret_val (f (ret_val (m p)) (ret_pos (m p)))
     ))
 = ()
 
