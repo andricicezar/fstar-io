@@ -53,6 +53,31 @@ let rec suffix_of (#a: Type) (l1 l2 : list a) :
   | [] -> l1 == []
   | x :: t -> l1 == x :: t \/ l1 `suffix_of` t
 
+let rec suffix_le_length (#a : Type) (l1 l2 : list a) :
+  Lemma
+    (requires True)
+    (ensures l1 `suffix_of` l2 ==> length l1 <= length l2)
+= match l2 with
+  | [] -> ()
+  | x :: t -> suffix_le_length l1 t
+
+let suffix_same_length (#a : Type) (l1 l2 : list a) :
+  Lemma
+    (requires length l1 == length l2 /\ l1 `suffix_of` l2)
+    (ensures l1 == l2)
+= match l2 with
+  | [] -> ()
+  | x :: t -> suffix_le_length l1 t
+
+let rec minus_suffix (#a : Type) (l2 l1 : list a) :
+  Pure (list a) (requires l1 `suffix_of` l2) (ensures (fun l -> l @ l1 == l2)) =
+  match l2 with
+  | [] -> []
+  | x :: t ->
+    if length l1 = length (x :: t)
+    then begin suffix_same_length l1 (x :: t) ; [] end
+    else x :: (t `minus_suffix` l1)
+
 let rec suffix_of_trans #a (l1 l2 l3 : list a) :
   Lemma
     (requires True)
@@ -84,7 +109,7 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind
   (forall p.
     isRet (t p) ==>
-    ret_pos (t p) `suffix_of` p // /\ // Is there an easy way to get the prefix now? probably l `minus_suffix` s defined as suffix_of
+    ret_pos (t p) `suffix_of` p // /\
     // isRet (t q) /\
     // ret_val (t q) == ret_val (t p)
     // /\ ret_pos (t q) == [] // /\
