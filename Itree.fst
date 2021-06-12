@@ -2,6 +2,7 @@ module Itree
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
+open FStar.Classical
 
 (* Enconding of interaction trees, specialised to a free monad
 
@@ -52,6 +53,31 @@ let rec suffix_of (#a: Type) (l1 l2 : list a) :
   | [] -> l1 == []
   | x :: t -> l1 == x :: t \/ l1 `suffix_of` t
 
+let rec suffix_of_trans #a (l1 l2 l3 : list a) :
+  Lemma
+    (requires True)
+    (ensures l1 `suffix_of` l2 /\ l2 `suffix_of` l3 ==> l1 `suffix_of` l3)
+    (decreases l3)
+= match l3 with
+  | [] -> ()
+  | x :: t -> suffix_of_trans l1 l2 t
+
+let suffix_of_trans_mid #a l2 :
+  Lemma (requires True) (ensures forall l1 l3. l1 `suffix_of` l2 /\ l2 `suffix_of` l3 ==> l1 `suffix_of` l3)
+=
+  let lem (l1 l3 : list a) :
+    Lemma
+      (requires l1 `suffix_of` l2 /\ l2 `suffix_of` l3)
+      (ensures l1 `suffix_of` l3)
+      [SMTPat (l1 `suffix_of` l3)]
+    = suffix_of_trans l1 l2 l3
+  in
+  ()
+
+let suffix_of_trans_forall a :
+  Lemma (requires True) (ensures forall l1 l2 (l3 : list a). l1 `suffix_of` l2 /\ l2 `suffix_of` l3 ==> l1 `suffix_of` l3)
+= forall_intro_3 (suffix_of_trans #a)
+
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
@@ -94,7 +120,7 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | _ -> None
 
 let bind #op #s #a #b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
-  admit () ; // we're probably just missing transitivity of suffix_of
+  suffix_of_trans_forall (ichoice op s) ;
   fun p ->
     match x p with
     | None -> None
