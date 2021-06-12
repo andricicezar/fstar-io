@@ -46,9 +46,21 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
   // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind
-  // (forall p. isRet (t p) ==> (forall q. isRet (t (p @ q)) /\ ret_pos (t (p @ q)) = ret_pos (t p) @ q)) /\ // Fails at bind
-  (forall p. isRet (t p) ==> (exists q. p == q @ (ret_pos (t p)) /\ isRet (t q) /\ ret_val (t q) == ret_val (t p) /\ ret_pos (t q) == [])) /\
-  isRet (t []) ==> ret_pos (t []) == [] // weaker than the above but helps with the root condition
+  (forall p.
+    isRet (t p) ==>
+    (exists q.
+      p == q @ (ret_pos (t p)) // /\
+      // isRet (t q) /\
+      // ret_val (t q) == ret_val (t p)
+      // /\ ret_pos (t q) == []
+    ) // /\
+    // (forall q.
+    //   isRet (t (p @ q)) // /\
+    //   // ret_pos (t (p @ q)) == ret_pos (t p) @ q /\
+    //   // ret_val (t (p @ q)) == ret_val (t p)
+    // )
+  ) /\
+  (isRet (t []) ==> ret_pos (t []) == [])
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
@@ -57,6 +69,7 @@ let ret #op #s #a (x:a) : itree op s a =
   fun p -> Some (Ret x p)
 
 let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
+  admit () ;
   fun p ->
     match p with
     | [] -> Some (Call o x)
@@ -67,6 +80,7 @@ let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a
       else None
 
 let tau #op #s #a (k : itree op s a) : itree op s a =
+  admit () ;
   fun p ->
     match p with
     | [] -> Some Tau
@@ -74,6 +88,7 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | _ -> None
 
 let bind #op #s #a #b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
+  admit () ;
   fun p ->
     match x p with
     | None -> None
