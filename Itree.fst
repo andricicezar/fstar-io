@@ -103,6 +103,12 @@ let suffix_of_trans_forall a :
   Lemma (requires True) (ensures forall l1 l2 (l3 : list a). l1 `suffix_of` l2 /\ l2 `suffix_of` l3 ==> l1 `suffix_of` l3)
 = forall_intro_3 (suffix_of_trans #a)
 
+// let minus_suffix_trans #a (p q r : list a) :
+//   Lemma
+//     (requires p `suffix_of` q /\ q `suffix_of` r)
+//     (ensures r `minus_suffix` q == (r `minus_suffix` p) `minus_suffix` (q `minus_suffix` p))
+// = admit ()
+
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
@@ -110,14 +116,17 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   (forall p.
     isRet (t p) ==>
     ret_pos (t p) `suffix_of` p // /\
-    // isRet (t q) /\
-    // ret_val (t q) == ret_val (t p)
-    // /\ ret_pos (t q) == [] // /\
-    // (forall q.
-    //   isRet (t (p @ q)) // /\
-    //   // ret_pos (t (p @ q)) == ret_pos (t p) @ q /\
-    //   // ret_val (t (p @ q)) == ret_val (t p)
-    // )
+    // begin
+    //   let q = p `minus_suffix` ret_pos (t p) in
+    //   isRet (t q) // /\
+    //   // ret_val (t q) == ret_val (t p)
+    //   // /\ ret_pos (t q) == [] // /\
+    //   // (forall q.
+    //   //   isRet (t (p @ q)) // /\
+    //   //   // ret_pos (t (p @ q)) == ret_pos (t p) @ q /\
+    //   //   // ret_val (t (p @ q)) == ret_val (t p)
+    //   // )
+    // end
   ) /\
   (isRet (t []) ==> ret_pos (t []) == [])
 
@@ -144,10 +153,11 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | Tau_choice :: p -> k p
     | _ -> None
 
-let bind #op #s #a #b (x : itree op s a) (f : a -> itree op s b) : itree op s b =
+let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
   suffix_of_trans_forall (ichoice op s) ;
+  // Can't prove isRet of the minus_suffix bit
   fun p ->
-    match x p with
+    match m p with
     | None -> None
     | Some (Ret u q) -> f u q
     | Some (Call o arg) -> Some (Call o arg)
