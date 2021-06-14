@@ -14,6 +14,14 @@ let rec strict_suffix_of #a (s l : list a) :
     | [] -> True
     | y :: s -> x == y /\ s `strict_suffix_of` l
 
+let rec strict_suffix_or_eq_append #a (s l : list a) :
+  Lemma
+    (ensures l == [] \/ s `strict_suffix_of` (s @ l))
+    (decreases s)
+= match s with
+  | [] -> ()
+  | y :: s -> strict_suffix_or_eq_append s l
+
 (* Enconding of interaction trees, specialised to a free monad
 
    For now, they are unconstrained, which means that wrong data
@@ -108,10 +116,7 @@ let rec find_ret_append_aux #op #s #a (m : itree op s a) pp p q :
     (ensures isRet (m (pp @ p)) ==> find_ret m pp (p @ q) == Some (ret_val (m (pp @ p)), q))
     (decreases p)
 = if isRet (m pp)
-  then begin
-    // Here we want to use valid_itree to conclude isRet (m (pp @ p)) ==> p = []
-    assume (isRet (m (pp @ p)) ==> (ret_val (m pp), p @ q) == (ret_val (m (pp @ p)), q))
-  end
+  then strict_suffix_or_eq_append pp p
   else begin
     match p with
     | [] -> ()
