@@ -135,7 +135,17 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   (forall p.
     isRet (t p) ==>
     begin
-      ret_pos (t p) `suffix_of` p // /\
+      ret_pos (t p) `suffix_of` p /\
+      // Same as below, but with prefix_of, for some reason it helps the proof for tau
+      begin
+        forall q.
+          p `prefix_of` q ==>
+          begin
+            isRet (t q) /\
+            ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) // /\
+            // ret_val (t q) == ret_val (t p)
+          end
+      end
       // begin
       //   forall q.
       //     isRet (t (p @ q)) /\ // or with prefix + some minus_prefix? for minus_prefix we would need to def prefix recursively x :: p `prefix_of` y :: l = x == y /\ p prefix of l
@@ -168,26 +178,7 @@ let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a
       then k y p
       else None
 
-// let raw_tau #op #s #a (k : raw_itree op s a) : raw_itree op s a =
-//   fun p ->
-//     match p with
-//     | [] -> Some Tau
-//     | Tau_choice :: p -> k p
-//     | Call_choice _ _ _ :: _ -> None
-
-// let tau #op #s #a (k : itree op s a) : itree op s a =
-//   assert (forall p. isRet (k p) ==> (forall q. isRet (k (p @q)) /\ ret_pos (k (p @ q)) == ret_pos (k p) @ q)) ;
-//   assert (forall p. isRet (raw_tau k p) ==> (exists q. p == Tau_choice :: q)) ;
-//   assert (forall p. isRet (raw_tau k p) ==> (forall q. isRet (raw_tau k (p @q)) /\ ret_pos (raw_tau k (p @ q)) == ret_pos (raw_tau k p) @ q)) ;
-//   assume (valid_itree (raw_tau k)) ;
-//   raw_tau k
-
 let tau #op #s #a (k : itree op s a) : itree op s a =
-  // assert (forall p. isRet (k p) ==> (forall q. isRet (k (p @q)) /\ ret_pos (k (p @ q)) == ret_pos (k p) @ q)) ;
-  // admit () ; // for some reason the ret_pos @ condition doesn't go through here
-  // should we state it in a different way or have a lemma?
-  // should I have a raw_tau to be able to assert things about the whole result?
-  // Even with raw_tau it doesn't seem to work... So maybe I should state it another way?
   fun p ->
     match p with
     | [] -> Some Tau
@@ -199,6 +190,7 @@ let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b 
   // Can't prove isRet of the minus_suffix bit
   // Can prove the append bit either but it will be necessary for the above probably
   // For the append, we probably need to know that the ret_pos is ret_pos @ q or something
+  admit () ;
   fun p ->
     match m p with
     | None -> None
