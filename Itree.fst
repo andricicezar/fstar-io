@@ -4,45 +4,7 @@ open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Classical
 
-(* Enconding of interaction trees, specialised to a free monad
-
-   For now, they are unconstrained, which means that wrong data
-   can be represented.
-
-*)
-
-noeq
-type op_sig (op : Type) = {
-  args : op -> eqtype ;
-  res : op -> eqtype
-}
-
-type ichoice (op : Type) (s : op_sig op) =
-| Tau_choice : ichoice op s
-| Call_choice : o:op -> s.args o -> s.res o -> ichoice op s
-
-type ipos op s = list (ichoice op s)
-
-type inode op (s : op_sig op) (a:Type) =
-| Ret : a -> ipos op s -> inode op s a
-| Call : o:op -> s.args o -> inode op s a
-| Tau : inode op s a
-
-type raw_itree op s a =
-  ipos op s -> option (inode op s a)
-
-let isRet #op #s #a (n : option (inode op s a)) =
-  match n with
-  | Some (Ret x p) -> true
-  | _ -> false
-
-let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
-  match n with
-  | Some (Ret x p) -> p
-
-let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
-  match n with
-  | Some (Ret x p) -> x
+(* General properties first. Like on lists. *)
 
 let rec suffix_of (#a: Type) (l1 l2 : list a) :
   Pure Type0
@@ -127,6 +89,46 @@ let rec minus_prefix #a (l p : list a) :
   | x :: p ->
     match l with
     | y :: l -> l `minus_prefix` p
+
+(* Enconding of interaction trees, specialised to a free monad
+
+   For now, they are unconstrained, which means that wrong data
+   can be represented.
+
+*)
+
+noeq
+type op_sig (op : Type) = {
+  args : op -> eqtype ;
+  res : op -> eqtype
+}
+
+type ichoice (op : Type) (s : op_sig op) =
+| Tau_choice : ichoice op s
+| Call_choice : o:op -> s.args o -> s.res o -> ichoice op s
+
+type ipos op s = list (ichoice op s)
+
+type inode op (s : op_sig op) (a:Type) =
+| Ret : a -> ipos op s -> inode op s a
+| Call : o:op -> s.args o -> inode op s a
+| Tau : inode op s a
+
+type raw_itree op s a =
+  ipos op s -> option (inode op s a)
+
+let isRet #op #s #a (n : option (inode op s a)) =
+  match n with
+  | Some (Ret x p) -> true
+  | _ -> false
+
+let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
+  match n with
+  | Some (Ret x p) -> p
+
+let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
+  match n with
+  | Some (Ret x p) -> x
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
