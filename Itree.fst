@@ -213,6 +213,12 @@ let rec find_ret_None_noRet #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> append_assoc pp [c] p ; find_ret_None_noRet m (pp @ [c]) p
   end
 
+// For this we basically want that isRet (m p) implies that find_ret finds this instance, in other words, ret is final
+// The other option would have been to use find_ret instead of isRet in the DM
+let find_ret_append #op #s #a (m : itree op s a) :
+  Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
+= admit ()
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -286,7 +292,8 @@ let io_return a (x : a) : io a (wp_return x) =
   ret x
 
 let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
-  assume (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ; // probably need to extend valid_itree to enforce this
+  find_ret_append m ;
+  assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
   bind m f
