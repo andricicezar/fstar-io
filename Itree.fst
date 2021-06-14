@@ -103,9 +103,22 @@ let rec find_ret_None_noRet #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> append_assoc pp [c] p ; find_ret_None_noRet m (pp @ [c]) p
   end
 
+let rec find_ret_append_aux #op #s #a (m : itree op s a) pp p q :
+  Lemma
+    (ensures isRet (m (pp @ p)) ==> find_ret m pp (p @ q) == Some (ret_val (m (pp @ p)), q))
+= if isRet (m pp)
+  then begin
+    admit ()
+  end
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p -> admit ()
+  end
+
 let find_ret_append #op #s #a (m : itree op s a) :
   Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
-= admit ()
+= forall_intro_2 (find_ret_append_aux m [])
 
 let find_ret_strict_suffix #op #s #a (m : itree op s a) :
   Lemma
