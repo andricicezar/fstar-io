@@ -136,14 +136,15 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
     isRet (t p) ==>
     begin
       ret_pos (t p) `suffix_of` p /\
+      // Going forward after a result has been reached
       // Same as below, but with prefix_of, for some reason it helps the proof for tau
       begin
         forall q.
           p `prefix_of` q ==>
           begin
             isRet (t q) /\
-            ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) // /\
-            // ret_val (t q) == ret_val (t p)
+            ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) /\
+            ret_val (t q) == ret_val (t p)
           end
       end
       // begin
@@ -152,6 +153,7 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
       //     ret_pos (t (p @ q)) == ret_pos (t p) @ q // /\
       //     // ret_val (t (p @ q)) == ret_val (t p)
       // end // /\
+      // Going back to when the result was found
       // begin
       //   let q = p `minus_suffix` ret_pos (t p) in
       //   isRet (t q) // /\
