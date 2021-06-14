@@ -4,6 +4,16 @@ open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Classical
 
+(* Similar to strict_prefix_of, I believe the names should be swapped but well... *)
+let rec strict_suffix_of #a (s l : list a) :
+  Pure Type0 (requires True) (ensures fun _ -> True) (decreases l)
+= match l with
+  | [] -> False
+  | x :: l ->
+    match s with
+    | [] -> True
+    | y :: s -> x == y /\ s `strict_suffix_of` l
+
 (* Enconding of interaction trees, specialised to a free monad
 
    For now, they are unconstrained, which means that wrong data
@@ -41,41 +51,7 @@ let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
   | Some (Ret x) -> x
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
-  True
-  // Some? (t []) // /\
-  // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
-  // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind // Maybe specialise for each node case
-  // (forall p.
-  //   isRet (t p) ==>
-  //   begin
-  //     ret_pos (t p) `suffix_of` p /\
-  //     // Going forward after a result has been reached
-  //     // Same as below, but with prefix_of, for some reason it helps the proof for tau
-  //     begin
-  //       forall q.
-  //         p `prefix_of` q ==>
-  //         begin
-  //           isRet (t q) /\
-  //           ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) /\
-  //           ret_val (t q) == ret_val (t p)
-  //         end
-  //     end
-  //     // begin
-  //     //   forall q.
-  //     //     isRet (t (p @ q)) /\ // or with prefix + some minus_prefix? for minus_prefix we would need to def prefix recursively x :: p `prefix_of` y :: l = x == y /\ p prefix of l
-  //     //     ret_pos (t (p @ q)) == ret_pos (t p) @ q // /\
-  //     //     // ret_val (t (p @ q)) == ret_val (t p)
-  //     // end // /\
-  //     // Going back to when the result was found
-  //     // begin
-  //     //   let q = p `minus_suffix` ret_pos (t p) in
-  //     //   isRet (t q) // /\
-  //     //   // ret_val (t q) == ret_val (t p) // /\
-  //     //   // ret_pos (t q) == [] // /\
-  //     // end
-  //   end
-  // ) /\
-  // (isRet (t []) ==> ret_pos (t []) == [])
+  forall p. isRet (t p) ==> (forall q. p `strict_suffix_of` q ==> None? (t q)) // Ret is final
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
@@ -127,10 +103,18 @@ let rec find_ret_None_noRet #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> append_assoc pp [c] p ; find_ret_None_noRet m (pp @ [c]) p
   end
 
-// For this we basically want that isRet (m p) implies that find_ret finds this instance, in other words, ret is final
-// The other option would have been to use find_ret instead of isRet in the DM
 let find_ret_append #op #s #a (m : itree op s a) :
   Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
+= admit ()
+
+let find_ret_strict_suffix #op #s #a (m : itree op s a) :
+  Lemma
+    (ensures
+      forall p q u p'.
+        find_ret m [] p == Some (u, p') ==>
+        p `strict_suffix_of` q ==>
+        (exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_suffix_of` q')
+    )
 = admit ()
 
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
@@ -140,7 +124,7 @@ let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : optio
   | None -> None
 
 let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
-  // suffix_of_trans_forall (ichoice op s) ;
+  find_ret_strict_suffix m ;
   fun p ->
     match find_ret m [] p with
     | Some (x, q) -> f x q
