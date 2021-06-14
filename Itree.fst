@@ -110,7 +110,7 @@ type ichoice (op : Type) (s : op_sig op) =
 type ipos op s = list (ichoice op s)
 
 type inode op (s : op_sig op) (a:Type) =
-| Ret : a -> ipos op s -> inode op s a
+| Ret : a -> inode op s a
 | Call : o:op -> s.args o -> inode op s a
 | Tau : inode op s a
 
@@ -119,58 +119,58 @@ type raw_itree op s a =
 
 let isRet #op #s #a (n : option (inode op s a)) =
   match n with
-  | Some (Ret x p) -> true
+  | Some (Ret x) -> true
   | _ -> false
-
-let ret_pos #op #s #a (n : option (inode op s a) { isRet n }) =
-  match n with
-  | Some (Ret x p) -> p
 
 let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
   match n with
-  | Some (Ret x p) -> x
+  | Some (Ret x) -> x
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
-  Some? (t []) /\
+  True
+  // Some? (t []) // /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
   // (forall p. Some? (t p) ==> (forall pi pe. p = pi @ pe ==> Some? (t pi))) /\ // Fails for bind // Maybe specialise for each node case
-  (forall p.
-    isRet (t p) ==>
-    begin
-      ret_pos (t p) `suffix_of` p /\
-      // Going forward after a result has been reached
-      // Same as below, but with prefix_of, for some reason it helps the proof for tau
-      begin
-        forall q.
-          p `prefix_of` q ==>
-          begin
-            isRet (t q) /\
-            ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) /\
-            ret_val (t q) == ret_val (t p)
-          end
-      end
-      // begin
-      //   forall q.
-      //     isRet (t (p @ q)) /\ // or with prefix + some minus_prefix? for minus_prefix we would need to def prefix recursively x :: p `prefix_of` y :: l = x == y /\ p prefix of l
-      //     ret_pos (t (p @ q)) == ret_pos (t p) @ q // /\
-      //     // ret_val (t (p @ q)) == ret_val (t p)
-      // end // /\
-      // Going back to when the result was found
-      // begin
-      //   let q = p `minus_suffix` ret_pos (t p) in
-      //   isRet (t q) // /\
-      //   // ret_val (t q) == ret_val (t p) // /\
-      //   // ret_pos (t q) == [] // /\
-      // end
-    end
-  ) /\
-  (isRet (t []) ==> ret_pos (t []) == [])
+  // (forall p.
+  //   isRet (t p) ==>
+  //   begin
+  //     ret_pos (t p) `suffix_of` p /\
+  //     // Going forward after a result has been reached
+  //     // Same as below, but with prefix_of, for some reason it helps the proof for tau
+  //     begin
+  //       forall q.
+  //         p `prefix_of` q ==>
+  //         begin
+  //           isRet (t q) /\
+  //           ret_pos (t q) == ret_pos (t p) @ (q `minus_prefix` p) /\
+  //           ret_val (t q) == ret_val (t p)
+  //         end
+  //     end
+  //     // begin
+  //     //   forall q.
+  //     //     isRet (t (p @ q)) /\ // or with prefix + some minus_prefix? for minus_prefix we would need to def prefix recursively x :: p `prefix_of` y :: l = x == y /\ p prefix of l
+  //     //     ret_pos (t (p @ q)) == ret_pos (t p) @ q // /\
+  //     //     // ret_val (t (p @ q)) == ret_val (t p)
+  //     // end // /\
+  //     // Going back to when the result was found
+  //     // begin
+  //     //   let q = p `minus_suffix` ret_pos (t p) in
+  //     //   isRet (t q) // /\
+  //     //   // ret_val (t q) == ret_val (t p) // /\
+  //     //   // ret_pos (t q) == [] // /\
+  //     // end
+  //   end
+  // ) /\
+  // (isRet (t []) ==> ret_pos (t []) == [])
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
 
 let ret #op #s #a (x:a) : itree op s a =
-  fun p -> Some (Ret x p)
+  fun p ->
+    match p with
+    | [] -> Some (Ret x)
+    | _ -> None
 
 let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
   fun p ->
@@ -189,18 +189,42 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | Tau_choice :: p -> k p
     | Call_choice _ _ _ :: _ -> None
 
+// Before we can bind, we have to find a prefix of the position which returns and then forwards the suffix
+// pp is an accumaltor prefix, not efficient
+let rec find_ret #op #s #a (m : itree op s a) (pp p : ipos op s) : Pure (option (a * ipos op s)) (requires True) (ensures fun r -> True) (decreases p) =
+  if isRet (m pp)
+  then Some (ret_val (m pp), p)
+  else begin
+    match p with
+    | [] -> None
+    | c :: p -> find_ret m (pp @ [c]) p
+  end
+
+let rec find_ret_None_noRet #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma
+    (requires find_ret m pp p == None)
+    (ensures ~ (isRet (m (pp @ p))))
+    (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p -> append_assoc pp [c] p ; find_ret_None_noRet m (pp @ [c]) p
+  end
+
+let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
+  match n with
+  | Some Tau -> Some Tau
+  | Some (Call o x) -> Some (Call o x)
+  | None -> None
+
 let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
-  suffix_of_trans_forall (ichoice op s) ;
-  // Can't prove isRet of the minus_suffix bit
-  // Can prove the append bit either but it will be necessary for the above probably
-  // For the append, we probably need to know that the ret_pos is ret_pos @ q or something
-  admit () ;
+  // suffix_of_trans_forall (ichoice op s) ;
   fun p ->
-    match m p with
-    | None -> None
-    | Some (Ret u q) -> f u q
-    | Some (Call o arg) -> Some (Call o arg)
-    | Some Tau -> Some Tau
+    match find_ret m [] p with
+    | Some (x, q) -> f x q
+    | None -> find_ret_None_noRet m [] p ; cast_node (m p)
 
 (* A loop with no events/effects except non-termination *)
 let loop #op #s a : itree op s a =
@@ -258,39 +282,12 @@ let io a (w : wp a) =
   t:itree cmds io_op_sig a { io_wp t `stronger_wp` w }
 
 let io_return a (x : a) : io a (wp_return x) =
+  assert (isRet (ret #cmds #io_op_sig #a x [])) ;
   ret x
 
-let bind_isRet_inv #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
-  Lemma
-    (requires True)
-    (ensures (
-      forall p.
-        isRet (bind m f p) ==>
-        isRet (m p) /\ isRet (f (ret_val (m p)) (ret_pos (m p)))
-    ))
-= ()
-
-let bind_isRet #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
-  Lemma
-    (requires True)
-    (ensures (
-      forall p.
-        isRet (m p) ==>
-        isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
-        isRet (bind m f p)
-    ))
-= ()
-
-let bind_ret_val #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
-  Lemma
-    (requires True)
-    (ensures (
-      forall p.
-        isRet (m p) ==>
-        isRet (f (ret_val (m p)) (ret_pos (m p))) ==>
-        ret_val (bind m f p) == ret_val (f (ret_val (m p)) (ret_pos (m p)))
-    ))
-= ()
+let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
+  assume (forall p q post. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
+  bind m f
 
 // Can we prove something like below?
 // We actually want to relate
@@ -319,18 +316,18 @@ let bind_ret_val #op #s #a #b (m : itree op s a) (f : a -> itree op s b) :
 //     ))
 // = admit ()
 
-let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
-  // assert (io_wp x `stronger_wp` w) ;
-  assert (forall post. (forall p. isRet (m p) ==> post (ret_val (m p))) ==> w post) ;
-  // assert (forall x. io_wp (f x) `stronger_wp` wf x) ;
-  assert (forall x post. (forall p. isRet (f x p) ==> post (ret_val (f x p))) ==> wf x post) ;
-  bind_isRet m f ;
-  bind_ret_val m f ;
-  // assume (io_wp (bind x f) `stronger_wp` wp_bind w wf) ;
-  // assume (forall post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> w (fun x -> wf x post)) ;
-  assume (forall p q post. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
-  // bind_ret_val' m f ;
-  bind m f
+// let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
+//   // assert (io_wp x `stronger_wp` w) ;
+//   assert (forall post. (forall p. isRet (m p) ==> post (ret_val (m p))) ==> w post) ;
+//   // assert (forall x. io_wp (f x) `stronger_wp` wf x) ;
+//   assert (forall x post. (forall p. isRet (f x p) ==> post (ret_val (f x p))) ==> wf x post) ;
+//   bind_isRet m f ;
+//   bind_ret_val m f ;
+//   // assume (io_wp (bind x f) `stronger_wp` wp_bind w wf) ;
+//   // assume (forall post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> w (fun x -> wf x post)) ;
+//   assume (forall p q post. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
+//   // bind_ret_val' m f ;
+//   bind m f
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
