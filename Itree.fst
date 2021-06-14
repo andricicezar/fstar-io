@@ -112,6 +112,22 @@ let suffix_of_trans_forall a :
 // let prefix_of (#a: Type) (p l : list a) : Type0 =
 //   exists q. l == p @ q
 
+let rec prefix_of #a (p l : list a) : Type0 =
+  match p with
+  | [] -> True
+  | x :: p ->
+    match l with
+    | y :: l -> x == y /\ p `prefix_of` l
+    | [] -> False
+
+let rec minus_prefix #a (l p : list a) :
+  Pure (list a) (requires p `prefix_of` l) (ensures (fun r -> p @ r == l)) =
+  match p with
+  | [] -> l
+  | x :: p ->
+    match l with
+    | y :: l -> l `minus_prefix` p
+
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   Some? (t []) /\
   // (forall p. None? (t p) ==> (forall q. None? (t (p @ q)))) /\ // Fails for bind
