@@ -162,10 +162,8 @@ let io_op_sig : op_sig cmds = {
 }
 
 (*
-  The trace can be read from the position + eventually the node it leads to.
-  Care has to be taken to actually remove the postfix when it leads to return
-  because the postfix is forwarded, thus essentially ignored, and could be
-  garbage.
+  For now only simple spec monad without trace.
+  For later, the trace can be read from the position + eventually the node it leads to.
 *)
 
 let wp a = (a -> Type0) -> Type0
