@@ -106,14 +106,20 @@ let rec find_ret_None_noRet #op #s #a (m : itree op s a) (pp p : ipos op s) :
 let rec find_ret_append_aux #op #s #a (m : itree op s a) pp p q :
   Lemma
     (ensures isRet (m (pp @ p)) ==> find_ret m pp (p @ q) == Some (ret_val (m (pp @ p)), q))
+    (decreases p)
 = if isRet (m pp)
   then begin
-    admit ()
+    // Here we want to use valid_itree to conclude isRet (m (pp @ p)) ==> p = []
+    assume (isRet (m (pp @ p)) ==> (ret_val (m pp), p @ q) == (ret_val (m (pp @ p)), q))
   end
   else begin
     match p with
     | [] -> ()
-    | c :: p -> admit ()
+    | c :: p ->
+      begin
+        append_assoc pp [c] p ;
+        find_ret_append_aux m (pp @ [c]) p q
+      end
   end
 
 let find_ret_append #op #s #a (m : itree op s a) :
