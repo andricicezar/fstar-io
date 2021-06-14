@@ -131,6 +131,28 @@ let find_ret_append #op #s #a (m : itree op s a) :
   Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
 = forall_intro_2 (find_ret_append_aux m [])
 
+let rec find_ret_strict_suffix_aux #op #s #a (m : itree op s a) pp p q u p' :
+  Lemma
+    (ensures
+      find_ret m pp p == Some (u, p') ==>
+      p `strict_suffix_of` q ==>
+      (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_suffix_of` q')
+    )
+    (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p ->
+      assume (
+        find_ret m (pp @ [c]) p == Some (u, p') ==>
+        (c :: p) `strict_suffix_of` q ==>
+        (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_suffix_of` q')
+      )
+      //append_assoc pp [c] p ; find_ret_strict_suffix_aux m (pp @ [c]) p q u p'
+  end
+
 let find_ret_strict_suffix #op #s #a (m : itree op s a) :
   Lemma
     (ensures
@@ -139,7 +161,7 @@ let find_ret_strict_suffix #op #s #a (m : itree op s a) :
         p `strict_suffix_of` q ==>
         (exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_suffix_of` q')
     )
-= admit ()
+= forall_intro_4 (find_ret_strict_suffix_aux m [])
 
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
