@@ -145,12 +145,12 @@ let rec find_ret_strict_suffix_aux #op #s #a (m : itree op s a) pp p q u p' :
     match p with
     | [] -> ()
     | c :: p ->
-      assume (
-        find_ret m (pp @ [c]) p == Some (u, p') ==>
-        (c :: p) `strict_suffix_of` q ==>
-        (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_suffix_of` q')
-      )
-      //append_assoc pp [c] p ; find_ret_strict_suffix_aux m (pp @ [c]) p q u p'
+      begin
+        match q with
+        | [] -> ()
+        | c' :: q ->
+          find_ret_strict_suffix_aux m (pp @ [c]) p q u p'
+      end
   end
 
 let find_ret_strict_suffix #op #s #a (m : itree op s a) :
