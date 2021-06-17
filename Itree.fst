@@ -180,6 +180,40 @@ let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b 
 let loop #op #s a : itree op s a =
   fun p -> Some Tau
 
+let cont #op #s #a (n : inode op s a) =
+  match n with
+  | Ret x -> false
+  | Call o x -> true
+  | Tau -> true
+
+noeq
+type sig a (b : a -> Type) =
+| Dpair : x:a -> b x -> sig a b
+
+let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> (sig (inode op s b) (fun n -> if cont n then a else unit))) (i : a) (p : ipos op s) :
+  Pure (option (inode op s b)) (requires True) (ensures fun _ -> True) (decreases p) =
+  match p with
+  | [] ->
+    let Dpair n _ = f i in Some n
+  | Tau_choice :: p ->
+    begin match f i with
+    | Dpair Tau next -> itree_corec_aux f next p
+    | _ -> None
+    end
+  | Call_choice o x y :: p ->
+    begin match f i with
+    | Dpair (Call o' x') next ->
+      if o = o' && x = x'
+      then itree_corec_aux f next p
+      else None
+    | _ -> None
+    end
+
+let itree_corec (#op : eqtype) #s #a #b (f : a -> (sig (inode op s b) (fun n -> if cont n then a else unit))) (i : a) : itree op s b =
+  // Probably need to be done while defining the aux version
+  admit () ;
+  itree_corec_aux f i
+
 (* Monad instance
 
    Without GetTrace for now
