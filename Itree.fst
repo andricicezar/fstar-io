@@ -22,6 +22,10 @@ let rec strict_suffix_or_eq_append #a (s l : list a) :
   | [] -> ()
   | y :: s -> strict_suffix_or_eq_append s l
 
+noeq
+type sig a (b : a -> Type) =
+| Dpair : x:a -> b x -> sig a b
+
 (* Enconding of interaction trees, specialised to a free monad
 
    For now, they are unconstrained, which means that wrong data
@@ -60,6 +64,7 @@ let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   forall p. isRet (t p) ==> (forall q. p `strict_suffix_of` q ==> None? (t q)) // Ret is final
+  // Should we instead use some [consistent t p] boolean predicate that would traverse the itree
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
@@ -180,19 +185,18 @@ let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b 
 let loop #op #s a : itree op s a =
   fun p -> Some Tau
 
-let cont #op #s #a (n : inode op s a) =
+let cont #op #s #a (n : inode op s a) r =
   match n with
-  | Ret x -> false
-  | Call o x -> true
-  | Tau -> true
+  | Ret x -> unit
+  | Call o x -> s.res o -> r
+  | Tau -> r
 
-noeq
-type sig a (b : a -> Type) =
-| Dpair : x:a -> b x -> sig a b
+let cont_node op s a r =
+  sig (inode op s a) (fun n -> cont n r)
 
-let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> (sig (inode op s b) (fun n -> if cont n then a else unit))) (i : a) (p : ipos op s) :
-  Pure (option (inode op s b)) (requires True) (ensures fun _ -> True) (decreases p) =
-  match p with
+let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) (p : ipos op s) :
+  Pure (option (inode op s b)) (requires True) (ensures fun r -> True) (decreases p)
+= match p with
   | [] ->
     let Dpair n _ = f i in Some n
   | Tau_choice :: p ->
@@ -204,7 +208,7 @@ let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> (sig (inode op s b) (f
     begin match f i with
     | Dpair (Call o' x') next ->
       if o = o' && x = x'
-      then itree_corec_aux f next p
+      then itree_corec_aux f (next y) p
       else None
     | _ -> None
     end
