@@ -213,10 +213,50 @@ let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i
     | _ -> None
     end
 
-let itree_corec (#op : eqtype) #s #a #b (f : a -> (sig (inode op s b) (fun n -> if cont n then a else unit))) (i : a) : itree op s b =
-  // Probably need to be done while defining the aux version
-  admit () ;
+let rec itree_corec_aux_final_ret (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) i p q :
+  Lemma
+    (ensures isRet (itree_corec_aux f i p) ==> p `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+    (decreases p)
+= match p with
+  | [] ->
+    begin match f i with
+    | Dpair (Ret x) n -> ()
+    | Dpair Tau n -> ()
+    | Dpair (Call o' x') n -> ()
+    end
+  | Tau_choice :: p ->
+    begin match f i with
+    | Dpair (Ret x) n -> ()
+    | Dpair Tau n ->
+      // itree_corec_aux_final_ret f n p q
+      assume (isRet (itree_corec_aux f n p) ==> (Tau_choice :: p) `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+    | Dpair (Call o' x') n -> ()
+    end
+  | Call_choice o x y :: p ->
+    begin match f i with
+    | Dpair (Ret x) n -> ()
+    | Dpair Tau n -> ()
+    | Dpair (Call o' x') n ->
+      if o = o' && x = x'
+      then begin
+        // itree_corec_aux_final_ret f (n y) p q
+        assume (isRet (itree_corec_aux f (n y) p) ==> (Call_choice o x y :: p) `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+      end
+      else ()
+    end
+
+let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : itree op s b =
+  forall_intro_2 (itree_corec_aux_final_ret f i) ;
   itree_corec_aux f i
+
+// Unclear how to use the corecursor that way
+// let iter #op #s #a #b (f : a -> itree op s (either a b)) (i : a) : itree op s b =
+//   itree_corec
+
+// Coq def:
+// Definition iter {E : Type -> Type} {R I: Type}
+//            (step : I -> itree E (I + R)) : I -> itree E R :=
+//   cofix iter_ i := bind (step i) (fun lr => on_left lr l (Tau (iter_ l))).
 
 (* Monad instance
 
