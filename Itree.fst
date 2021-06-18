@@ -228,8 +228,11 @@ let rec itree_corec_aux_final_ret (#op : eqtype) #s #a #b (f : a -> cont_node op
     begin match f i with
     | Dpair (Ret x) n -> ()
     | Dpair Tau n ->
-      // itree_corec_aux_final_ret f n p q
-      assume (isRet (itree_corec_aux f n p) ==> (Tau_choice :: p) `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+      begin match q with
+      | [] -> ()
+      | Tau_choice :: q -> itree_corec_aux_final_ret f n p q
+      | Call_choice o x y :: q -> ()
+      end
     | Dpair (Call o' x') n -> ()
     end
   | Call_choice o x y :: p ->
@@ -239,8 +242,11 @@ let rec itree_corec_aux_final_ret (#op : eqtype) #s #a #b (f : a -> cont_node op
     | Dpair (Call o' x') n ->
       if o = o' && x = x'
       then begin
-        // itree_corec_aux_final_ret f (n y) p q
-        assume (isRet (itree_corec_aux f (n y) p) ==> (Call_choice o x y :: p) `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+        match q with
+        | [] -> ()
+        | Tau_choice :: q -> ()
+        | Call_choice oo xx yy :: q ->
+          itree_corec_aux_final_ret f (n y) p q
       end
       else ()
     end
