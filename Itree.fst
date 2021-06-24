@@ -332,3 +332,60 @@ reifiable total layered_effect {
     return = io_return ;
     bind   = io_bind
 }
+
+(*
+  Spec with trace
+  The trace contains the response of the environment, in fact it is a subset of positions
+  where Tau steps are ignored.
+*)
+
+let trace = list (c: ichoice cmds io_op_sig { c <> Tau_choice })
+
+let rec ipos_trace (p : ipos cmds io_op_sig) : trace =
+  match p with
+  | [] -> []
+  | Tau_choice :: p -> ipos_trace p
+  | Call_choice o x y :: p -> Call_choice o x y :: ipos_trace p
+
+let twp a = (trace -> option a -> Type0) -> Type0
+
+let twp_return #a (x : a) : twp a =
+  fun post -> post [] (Some x)
+
+let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
+  fun post ->
+    w (fun t x ->
+      match x with
+      | Some x -> f x post
+      | None -> post t None
+    )
+
+let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
+  forall post. wp1 post ==> wp2 post
+
+let io_twp #a (t : itree cmds io_op_sig a) =
+  fun post -> forall p. Some? (t p) ==> post (ipos_trace p) (match t p with Some (Ret x) -> Some x | _ -> None)
+
+let tio a (w : twp a) =
+  t:itree cmds io_op_sig a { io_twp t `stronger_twp` w }
+
+let tio_return a (x : a) : tio a (twp_return x) =
+  assert (isRet (ret #cmds #io_op_sig #a x [])) ;
+  ret x
+
+let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
+  // find_ret_append m ;
+  // assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
+  // assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
+  // assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
+  admit () ;
+  bind m f
+
+[@@allow_informative_binders]
+reifiable total layered_effect {
+  TIO : a:Type -> twp a -> Effect
+  with
+    repr   = tio ;
+    return = tio_return ;
+    bind   = tio_bind
+}
