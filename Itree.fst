@@ -378,7 +378,50 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   // assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
   // assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   // assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
-  admit () ;
+
+  // assume (forall post. io_twp (bind m f) post ==> twp_bind w wf post) ;
+  // assume (forall post. (forall p. Some? (bind m f p) ==> post (ipos_trace p) (match bind m f p with Some (Ret x) -> Some x | _ -> None)) ==> twp_bind w wf post) ;
+  // assume (
+  //   forall post p.
+  //     Some? (m p) ==>
+  //     begin match (match m p with Some (Ret x) -> Some x | _ -> None) with
+  //     | Some z -> wf z post
+  //     | None -> post (ipos_trace p) None
+  //     end
+  // ) ;
+  assume (
+    forall post p.
+      isRet (m p) ==>
+      wf (ret_val (m p)) post
+  ) ;
+  assume (
+    forall post p.
+      (Some? (m p) /\ ~ (isRet (m p))) ==>
+      post (ipos_trace p) (None #b)
+  ) ;
+  assert (
+    forall p.
+      Some? (m p) ==>
+      begin
+        begin
+          isRet (m p) /\
+          Some (ret_val (m p)) == (match m p with Some (Ret x) -> Some x | _ -> None)
+        end
+        \/
+        begin
+          ~ (isRet (m p))
+        end
+      end
+  ) ;
+  assert (
+    forall post p.
+      Some? (m p) ==>
+      begin match (match m p with Some (Ret x) -> Some x | _ -> None) with
+      | Some z -> wf z post
+      | None -> post (ipos_trace p) None
+      end
+  ) ;
+
   bind m f
 
 [@@allow_informative_binders]
