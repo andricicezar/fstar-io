@@ -408,7 +408,9 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   forall_intro_2 ipos_trace_append ;
   assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post)) ;
 
-  assume (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
+  assume (forall p. isEvent (m p) ==> find_ret m [] p == None) ; // comes from validity of m
+  assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
+  assert (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
 
   bind m f
 
