@@ -176,6 +176,23 @@ let find_ret_strict_suffix #op #s #a (m : itree op s a) :
     )
 = forall_intro_4 (find_ret_strict_suffix_aux m [])
 
+let rec find_ret_Event_None #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma
+    (requires isEvent (m (pp @ p)))
+    (ensures find_ret m pp p == None)
+    (decreases p)
+= if isRet (m pp)
+  then begin
+    match p with
+    | [] -> ()
+    | c :: p -> strict_suffix_or_eq_append pp (c :: p)
+  end
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p -> append_assoc pp [c] p ; find_ret_Event_None m (pp @ [c]) p
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -345,6 +362,9 @@ reifiable total layered_effect {
   Spec with trace
   The trace contains the response of the environment, in fact it is a subset of positions
   where Tau steps are ignored.
+
+  This specification if enough to talk about (non)-termination of a program with respect to
+  its interaction with the environmnet.
 *)
 
 let trace = list (c: ichoice cmds io_op_sig { c <> Tau_choice })
@@ -408,7 +428,8 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   forall_intro_2 ipos_trace_append ;
   assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post)) ;
 
-  assume (forall p. isEvent (m p) ==> find_ret m [] p == None) ; // comes from validity of m
+  forall_intro (move_requires (find_ret_Event_None m [])) ;
+  assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
   assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
   assert (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
 
