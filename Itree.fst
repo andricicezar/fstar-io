@@ -388,62 +388,18 @@ let tio_return a (x : a) : tio a (twp_return x) =
   ret x
 
 let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
-  // find_ret_append m ;
-  // assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
-  // assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
+  find_ret_append m ;
+  assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
+  assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   // assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
 
-  // assume (forall post. io_twp (bind m f) post ==> twp_bind w wf post) ;
-  // assume (forall post. (forall p. Some? (bind m f p) ==> post (ipos_trace p) (match bind m f p with Some (Ret x) -> Some x | _ -> None)) ==> twp_bind w wf post) ;
-  // assume (
-  //   forall post p.
-  //     Some? (m p) ==>
-  //     begin match (match m p with Some (Ret x) -> Some x | _ -> None) with
-  //     | Some z -> wf z post
-  //     | None -> post (ipos_trace p) None
-  //     end
-  // ) ;
+  assume (forall post p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (bind m f (p @ q))))) ;
+  assert (forall post p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (f (ret_val (m p)) q)))) ;
+  assume (forall post p q. isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace q) (None #b)) ;
+  assert (forall x. io_twp (f x) `stronger_twp` (wf x)) ;
+  // missing hyp io_twp (bind m f) post
+  assert (forall post p. isRet (m p) ==> wf (ret_val (m p)) post) ;
 
-  // assume (
-  //   forall post p.
-  //     isRet (m p) ==>
-  //     wf (ret_val (m p)) post
-  // ) ;
-  // assume (
-  //   forall p.
-  //     Some? (m p) ==>
-  //     ~ (isRet (m p)) ==>
-  //     Some? (bind m f p) /\ (match bind m f p with Some (Ret x) -> Some x | _ -> None) == None
-  // ) ;
-  // assume (
-  //   forall post p.
-  //     (Some? (m p) /\ ~ (isRet (m p))) ==>
-  //     post (ipos_trace p) (None #b)
-  // ) ;
-  // assert (
-  //   forall p.
-  //     Some? (m p) ==>
-  //     begin
-  //       begin
-  //         isRet (m p) /\
-  //         Some (ret_val (m p)) == (match m p with Some (Ret x) -> Some x | _ -> None)
-  //       end
-  //       \/
-  //       begin
-  //         ~ (isRet (m p))
-  //       end
-  //     end
-  // ) ;
-  // assert (
-  //   forall post p.
-  //     Some? (m p) ==>
-  //     begin match (match m p with Some (Ret x) -> Some x | _ -> None) with
-  //     | Some z -> wf z post
-  //     | None -> post (ipos_trace p) None
-  //     end
-  // ) ;
-
-  assume (forall post p. isRet (m p) ==> wf (ret_val (m p)) post) ;
   assume (forall post p. isEvent (m p) ==> post (ipos_trace p) (None #b)) ;
 
   bind m f
