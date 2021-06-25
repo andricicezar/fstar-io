@@ -393,14 +393,16 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   // assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
 
-  assume (forall post p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (bind m f (p @ q))))) ;
-  assert (forall post p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (f (ret_val (m p)) q)))) ;
-  assume (forall post p q. isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace q) (None #b)) ;
+  // To conclude this one, I would need the trace induced by (p @ q) not just by q
+  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
+  // here it's only q, twp_bind is probably wrong then, instead of f x post maybe f x (fun tr o -> post (t @ tr) o) or something
+  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (bind m f (p @ q))))) ;
+  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (f (ret_val (m p)) q)))) ;
+  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace q) None) ;
   assert (forall x. io_twp (f x) `stronger_twp` (wf x)) ;
-  // missing hyp io_twp (bind m f) post
-  assert (forall post p. isRet (m p) ==> wf (ret_val (m p)) post) ;
+  assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) post) ;
 
-  assume (forall post p. isEvent (m p) ==> post (ipos_trace p) (None #b)) ;
+  assume (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
 
   bind m f
 
