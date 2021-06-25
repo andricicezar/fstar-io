@@ -64,7 +64,9 @@ let ret_val #op #s #a (n : option (inode op s a) { isRet n }) =
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   forall p. isRet (t p) ==> (forall q. p `strict_suffix_of` q ==> None? (t q)) // Ret is final
-  // Should we instead use some [consistent t p] boolean predicate that would traverse the itree
+  // Should we instead use some [consistent t p] boolean predicate that would traverse the itree?
+  // Maybe forall p. (p == [] /\ Some? (t [])) \/ (exists q c. p == q @ [c] /\ consistent_choice (t q) c)
+  // where consistent_choice n c checks that both are call or both tau
 
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
@@ -393,6 +395,12 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
     forall post p.
       isRet (m p) ==>
       wf (ret_val (m p)) post
+  ) ;
+  assume (
+    forall p.
+      Some? (m p) ==>
+      ~ (isRet (m p)) ==>
+      Some? (bind m f p) /\ (match bind m f p with Some (Ret x) -> Some x | _ -> None) == None
   ) ;
   assume (
     forall post p.
