@@ -355,17 +355,27 @@ let rec ipos_trace (p : ipos cmds io_op_sig) : trace =
   | Tau_choice :: p -> ipos_trace p
   | Call_choice o x y :: p -> Call_choice o x y :: ipos_trace p
 
+let rec ipos_trace_append (p q : ipos cmds io_op_sig) :
+  Lemma (ensures ipos_trace (p @ q) == ipos_trace p @ ipos_trace q) (decreases p)
+= match p with
+  | [] -> ()
+  | Tau_choice :: p -> ipos_trace_append p q
+  | Call_choice o x y :: p -> ipos_trace_append p q
+
 let twp a = (trace -> option a -> Type0) -> Type0
 
 let twp_return #a (x : a) : twp a =
   fun post -> post [] (Some x)
 
+let shift_post #a (tr : trace) (post : trace -> option a -> Type0) =
+  fun tr' x -> post (tr @ tr') x
+
 let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
   fun post ->
-    w (fun t x ->
-      match x with
-      | Some x -> f x post
-      | None -> post t None
+    w (fun tr v ->
+      match v with
+      | Some x -> f x (shift_post tr post)
+      | None -> post tr None
     )
 
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
@@ -391,16 +401,12 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   find_ret_append m ;
   assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
-  // assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
-
-  // To conclude this one, I would need the trace induced by (p @ q) not just by q
   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
-  // here it's only q, twp_bind is probably wrong then, instead of f x post maybe f x (fun tr o -> post (t @ tr) o) or something
-  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (bind m f (p @ q))))) ;
-  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace q) (Some (ret_val (f (ret_val (m p)) q)))) ;
-  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace q) None) ;
+  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
+  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) None) ;
   assert (forall x. io_twp (f x) `stronger_twp` (wf x)) ;
-  assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) post) ;
+  forall_intro_2 ipos_trace_append ;
+  assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post)) ;
 
   assume (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
 
