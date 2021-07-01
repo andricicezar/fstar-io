@@ -280,6 +280,27 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
   forall_intro_2 (itree_corec_aux_final_ret f i) ;
   itree_corec_aux f i
 
+// Some notion of cofixpoint where the function should produce at least one constructor
+// before calling itself recursively.
+
+// To have this work, we want to show that bind preserves productivity
+let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
+  forall r x.
+    (exists y. ff r x == ret y) \/
+    (exists o arg k. ff r x == call o arg k) \/
+    (exists k. ff r x == tau k)
+
+let itree_cofix_aux (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) (p : ipos op s) :
+  Pure (option (inode op s b)) (requires itree_productive ff) (ensures fun _ -> True) (decreases p)
+= match p with
+  | [] -> ff (magic ()) x [] // morally any recursive call would work, so we want a dummy here, can we prove that by productivity the recusrive call is unnecessary?
+  // maybe it should land in option or exception monad?
+  | c :: p -> magic ()
+
+let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
+  Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
+= magic ()
+
 // Unclear how to use the corecursor that way
 // let iter #op #s #a #b (f : a -> itree op s (either a b)) (i : a) : itree op s b =
 //   itree_corec
