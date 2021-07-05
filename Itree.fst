@@ -304,6 +304,11 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
+// Probably requires productivity
+let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
+  Lemma (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
+= admit ()
+
 // The productivity condition is only necessary to ensure we do not reach Tau coming from loop
 // maybe we don't really care about it since we would pad with Taus anyway to forget this condition
 //   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
@@ -314,9 +319,8 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> it
   assert (forall n. valid_itree (itree_cofix_unfoldn ff n x)) ;
   assert (forall n p. isRet (itree_cofix_unfoldn ff n x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff n x q))) ;
   assert (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length p) x q))) ;
-  assume (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length q) x q))) ;
-  // assert (forall p. isRet (itree_cofix_raw ff x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_raw ff x q))) ;
-  // assume (valid_itree (itree_cofix_raw ff x)) ;
+  forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
+  assert (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length q) x q))) ;
   itree_cofix_raw ff x
 
 // Coq def:
