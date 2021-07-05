@@ -290,20 +290,16 @@ let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a 
     (exists o arg k. ff r x == call o arg k) \/
     (exists k. ff r x == tau k)
 
-let itree_cofix_aux (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) (p : ipos op s) :
-  Pure (option (inode op s b)) (requires itree_productive ff) (ensures fun _ -> True) (decreases p)
-= match p with
-  | [] -> ff (magic ()) x [] // morally any recursive call would work, so we want a dummy here, can we prove that by productivity the recusrive call is unnecessary?
-  // maybe it should land in option or exception monad?
-  | c :: p -> magic ()
+let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (n : nat) : a -> itree op s b =
+  if n = 0
+  then ff (fun _ -> loop _)
+  else ff (itree_cofix_unfoldn ff (n - 1))
 
+// The productivity condition is only necessary to ensure we do not reach Tau coming from loop
+// maybe we don't really care about it since we would pad with Taus anyway to forget this condition
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
-= magic ()
-
-// Unclear how to use the corecursor that way
-// let iter #op #s #a #b (f : a -> itree op s (either a b)) (i : a) : itree op s b =
-//   itree_corec
+= admit () ; fun p -> itree_cofix_unfoldn ff (length p) x p
 
 // Coq def:
 // Definition iter {E : Type -> Type} {R I: Type}
