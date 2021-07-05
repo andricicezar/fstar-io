@@ -293,6 +293,7 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 // before calling itself recursively.
 
 // To have this work, we want to show that bind preserves productivity
+// It might be better to have the forall r inside the exists
 let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
   forall r x.
     (exists y. ff r x == ret y) \/
@@ -304,20 +305,15 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
-// Probably requires productivity
 let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
-  Lemma (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
+  Lemma
+    (ensures itree_productive ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
 = admit ()
 
-// The productivity condition is only necessary to ensure we do not reach Tau coming from loop
-// maybe we don't really care about it since we would pad with Taus anyway to forget this condition
-//   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
-let itree_cofix_raw (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) : raw_itree op s b =
+let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
+  Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
+= forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
   fun p -> itree_cofix_unfoldn ff (length p) x p
-
-let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) : itree op s b =
-  forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
-  itree_cofix_raw ff x
 
 // Coq def:
 // Definition iter {E : Type -> Type} {R I: Type}
