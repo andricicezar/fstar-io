@@ -316,11 +316,7 @@ let itree_cofix_raw (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -
   fun p -> itree_cofix_unfoldn ff (length p) x p
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) : itree op s b =
-  assert (forall n. valid_itree (itree_cofix_unfoldn ff n x)) ;
-  assert (forall n p. isRet (itree_cofix_unfoldn ff n x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff n x q))) ;
-  assert (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length p) x q))) ;
   forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
-  assert (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length q) x q))) ;
   itree_cofix_raw ff x
 
 // Coq def:
