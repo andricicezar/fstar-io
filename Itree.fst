@@ -22,6 +22,15 @@ let rec strict_suffix_or_eq_append #a (s l : list a) :
   | [] -> ()
   | y :: s -> strict_suffix_or_eq_append s l
 
+let rec strict_suffix_length #a (s l : list a) :
+  Lemma (ensures s `strict_suffix_of` l ==> length s <= length l) (decreases l)
+= match l with
+  | [] -> ()
+  | x :: l ->
+    match s with
+    | [] -> ()
+    | y :: s -> strict_suffix_length s l
+
 noeq
 type sig a (b : a -> Type) =
 | Dpair : x:a -> b x -> sig a b
@@ -297,9 +306,18 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
 
 // The productivity condition is only necessary to ensure we do not reach Tau coming from loop
 // maybe we don't really care about it since we would pad with Taus anyway to forget this condition
-let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
-  Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
-= admit () ; fun p -> itree_cofix_unfoldn ff (length p) x p
+//   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
+let itree_cofix_raw (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) : raw_itree op s b =
+  fun p -> itree_cofix_unfoldn ff (length p) x p
+
+let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) : itree op s b =
+  assert (forall n. valid_itree (itree_cofix_unfoldn ff n x)) ;
+  assert (forall n p. isRet (itree_cofix_unfoldn ff n x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff n x q))) ;
+  assert (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length p) x q))) ;
+  assume (forall p. isRet (itree_cofix_unfoldn ff (length p) x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_unfoldn ff (length q) x q))) ;
+  // assert (forall p. isRet (itree_cofix_raw ff x p) ==> (forall q. p `strict_suffix_of` q ==> None? (itree_cofix_raw ff x q))) ;
+  // assume (valid_itree (itree_cofix_raw ff x)) ;
+  itree_cofix_raw ff x
 
 // Coq def:
 // Definition iter {E : Type -> Type} {R I: Type}
