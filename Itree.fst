@@ -292,23 +292,32 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 // Some notion of cofixpoint where the function should produce at least one constructor
 // before calling itself recursively.
 
-// To have this work, we want to show that bind preserves productivity
-// It might be better to have the forall r inside the exists
 let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
-  forall r x.
-    (exists y. ff r x == ret y) \/
-    (exists o arg k. ff r x == call o arg k) \/
-    (exists k. ff r x == tau k)
+  // forall r x.
+  //   (exists y. ff r x == ret y) \/
+  //   (exists o arg k. ff r x == call o arg k) \/
+  //   (exists k. ff r x == tau k)
+  forall x. exists node. forall r. ff r x [] == node
 
+// Unfold the function (n+1) times
 let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (n : nat) : a -> itree op s b =
   if n = 0
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
+// The itree_productive predicate is probably not strong enough.
+// It doesn't prescribe enough how the recursive call can be used.
+// It might be better to let go of this condition and use Tau padding instead
+// and find a way to enforce the valid_itree condition rather than productivity.
 let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
   Lemma
     (ensures itree_productive ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-= admit ()
+= match p with
+  | [] -> ()
+  | c :: p ->
+    // assume (itree_productive ff ==> length p + 1 <= n ==> itree_cofix_unfoldn ff (length p + 1) x (c :: p) == itree_cofix_unfoldn ff n x (c :: p))
+    assume (itree_productive ff ==> length p + 1 <= n ==> ff (itree_cofix_unfoldn ff (length p)) x (c :: p) == ff (itree_cofix_unfoldn ff (n-1)) x (c :: p))
+    // if length (c :: p) <= n then itree_cofix_unfoldn_enough ff x (n-1) p else ()
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
