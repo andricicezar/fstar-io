@@ -292,8 +292,9 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 // Some notion of cofixpoint where the function should produce at least one constructor
 // before calling itself recursively.
 
-// After all, it would more reliable to use the first version
-// we might need a lemma saying that itree_productive ff and ff r x [] == Ret y implies we are in the ret case etc.
+// Maybe itree_cofix_guard?
+// From Coq refman: each recursive call in the definition must be protected by at least one constructor, and only by constructors
+// sounds hard to enforce internally, maybe with an inductive predicate?
 let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
   forall x.
     (exists y. forall r. ff r x == ret y) \/
@@ -328,10 +329,13 @@ let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (r:(a -> itree 
     | Some (Call o arg) -> admit ()
     | Some Tau ->
       assert (itree_productive ff ==> (forall r. exists k. ff r x == tau k)) ;
-      // We now know how ff will behave on (c :: p), it will call k p
+      // We now know how ff will behave on (Tau_choice :: p), it will call k p
       // but we don't know anything about the two k that we have, only that they depend on the recursive call
       // can we be more precise in itree_productive?
-      admit ()
+      begin match c with
+      | Tau_choice -> admit ()
+      | Call_choice _ _ _ -> ()
+      end
     | None -> ()
 
     // if length (c :: p) <= n
