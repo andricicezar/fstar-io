@@ -292,12 +292,18 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 // Some notion of cofixpoint where the function should produce at least one constructor
 // before calling itself recursively.
 
+// After all, it would more reliable to use the first version
+// we might need a lemma saying that itree_productive ff and ff r x [] == Ret y implies we are in the ret case etc.
 let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
+  forall x.
+    (exists y. forall r. ff r x == ret y) \/
+    (exists o arg. forall r. exists k. ff r x == call o arg k) \/
+    (forall r. exists k. ff r x == tau k)
   // forall r x.
   //   (exists y. ff r x == ret y) \/
   //   (exists o arg k. ff r x == call o arg k) \/
   //   (exists k. ff r x == tau k)
-  forall x. exists node. forall r. ff r x [] == node
+  // forall x. exists node. forall r. ff r x [] == node
 
 // Unfold the function (n+1) times
 let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (n : nat) : a -> itree op s b =
@@ -316,8 +322,24 @@ let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (r:(a -> itree 
   | [] -> ()
   | c :: p ->
     // assume (itree_productive ff ==> length p + 1 <= n ==> itree_cofix_unfoldn ff (length p + 1) x (c :: p) == itree_cofix_unfoldn ff n x (c :: p))
-    assume (itree_productive ff ==> length p + 1 <= n ==> ff (itree_cofix_unfoldn ff (length p)) x (c :: p) == ff (itree_cofix_unfoldn ff (n-1)) x (c :: p))
-    // if length (c :: p) <= n then itree_cofix_unfoldn_enough ff x (n-1) p else ()
+    // assume (itree_productive ff ==> length p + 1 <= n ==> ff (itree_cofix_unfoldn ff (length p)) x (c :: p) == ff (itree_cofix_unfoldn ff (n-1)) x (c :: p))
+    match ff (fun _ -> loop _) x [] with
+    | Some (Ret y) -> ()
+    | Some (Call o arg) -> admit ()
+    | Some Tau ->
+      assert (itree_productive ff ==> (forall r. exists k. ff r x == tau k)) ;
+      // We now know how ff will behave on (c :: p), it will call k p
+      // but we don't know anything about the two k that we have, only that they depend on the recursive call
+      // can we be more precise in itree_productive?
+      admit ()
+    | None -> ()
+
+    // if length (c :: p) <= n
+    // then begin
+    //   itree_cofix_unfoldn_enough ff x (n-1) p ;
+    //   admit ()
+    // end
+    // else ()
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_productive ff) (ensures fun _ -> True)
