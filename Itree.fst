@@ -292,9 +292,26 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 // Some notion of cofixpoint where the function should produce at least one constructor
 // before calling itself recursively.
 
+// For some reason I have to force Type0 for a and b
+noeq
+type guarded_gen (#op : eqtype) #s (#a : Type0) (#b : Type0) : ((a -> itree op s b) -> itree op s b) -> Type0 =
+| Guarded_ret : u:b -> guarded_gen #op #s #a #b (fun r -> ret u)
+| Guarded_tau_rec : x:a -> guarded_gen #op #s #a #b (fun r -> tau (r x))
+| Guarded_call_rec : o:op -> arg:(s.args o) -> k:(s.res o -> a) -> guarded_gen #op #s #a #b (fun r -> call o arg (fun z -> r (k z)))
+| Guarded_tau : g:((a -> itree op s b) -> itree op s b) -> guarded_gen g -> guarded_gen #op #s #a #b (fun r -> tau (g r))
+| Guarded_call : o:op -> arg:(s.args o) -> g:(s.res o -> (a -> itree op s b) -> itree op s b) -> (z:(s.res o) -> guarded_gen (g z)) -> guarded_gen #op #s #a #b (fun r -> call o arg (fun z -> g z r))
+
+type cofix_gen (op : eqtype) s (a : Type0) (b : Type0) =
+  g:((a -> itree op s b) -> itree op s b) { guarded_gen g }
+
+let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) =
+  forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r
+
 // Maybe itree_cofix_guard?
 // From Coq refman: each recursive call in the definition must be protected by at least one constructor, and only by constructors
 // sounds hard to enforce internally, maybe with an inductive predicate?
+// New plan: forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r
+// where cofix_gen is a function with a refinement that is inductively certifying that recursive calls are guarded
 let itree_productive (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) =
   forall x.
     (exists y. forall r. ff r x == ret y) \/
