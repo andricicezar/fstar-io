@@ -327,14 +327,43 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       // assume (length p + 1 <= n ==> tau (itree_cofix_unfoldn (fun r x -> g x r) (length p) u) (Tau_choice :: p) == tau (itree_cofix_unfoldn (fun r x -> g x r) (n-1) u) (Tau_choice :: p))
       // assume (length p + 1 <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) u p == itree_cofix_unfoldn (fun r x -> g x r) (n-1) u p)
       if length p + 1 <= n
-      then begin
-        itree_cofix_unfoldn_enough_aux g h u (n-1) p
-      end
+      then itree_cofix_unfoldn_enough_aux g h u (n-1) p
       else ()
     | Call_choice _ _ _ :: p -> ()
     end
-  | Guarded_call_rec o arg k -> admit ()
-  | Guarded_tau g' h' -> admit ()
+  | Guarded_call_rec o arg k ->
+    begin match p with
+    | [] -> ()
+    | Tau_choice :: p -> ()
+    | Call_choice o' arg' y :: p ->
+      // assume (length p + 1 <= n ==> g x (itree_cofix_unfoldn (fun r x -> g x r) (length p)) (Call_choice o' arg' y :: p) == g x (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) (Call_choice o' arg' y :: p))
+      // assume (length p + 1 <= n ==> call o arg (fun z -> itree_cofix_unfoldn (fun r x -> g x r) (length p) (k z)) (Call_choice o' arg' y :: p) == call o arg (fun z -> itree_cofix_unfoldn (fun r x -> g x r) (n-1) (k z)) (Call_choice o' arg' y :: p))
+      if o = o' && arg = arg'
+      then begin
+        // assume (length p + 1 <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) (k y) p == itree_cofix_unfoldn (fun r x -> g x r) (n-1) (k y) p)
+        if length p + 1 <= n
+        then itree_cofix_unfoldn_enough_aux g h (k y) (n-1) p
+        else ()
+      end
+      else ()
+    end
+  | Guarded_tau g' h' ->
+    // assume (length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p)
+    begin match p with
+    | [] -> ()
+    | Tau_choice :: p ->
+      // assume (length p + 1 <= n ==> (fun r x -> g x r) (itree_cofix_unfoldn (fun r x -> g x r) (length p)) x (Tau_choice :: p) == (fun r x -> g x r) (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) x (Tau_choice :: p))
+      // assume (length p + 1 <= n ==> g x (itree_cofix_unfoldn (fun r x -> g x r) (length p)) (Tau_choice :: p) == g x (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) (Tau_choice :: p))
+      // assume (length p + 1 <= n ==> tau (g' (itree_cofix_unfoldn (fun r x -> g x r) (length p))) (Tau_choice :: p) == tau (g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1))) (Tau_choice :: p))
+      assume (length p + 1 <= n ==> g' (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p)
+      // g' is guarded by h' but how can we exploit that fact? Will an auxiliary lemma be sufficient, or do we need to strengthen IH?
+      // Given g', h' and p, we should return p' and v such that p' << p, forall r. g' r p == r v p' (or it doesn't return p' and v, and instead forall r. g' r p == some_cst, maybe None)
+
+      // if length p + 1 <= n
+      // then itree_cofix_unfoldn_enough_aux g h ?? (n-1) p
+      // else ()
+    | Call_choice _ _ _ :: p -> ()
+    end
   | Guarded_call o arg g' h' -> admit ()
 
 // It might be better to let go of this condition and use Tau padding instead
