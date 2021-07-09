@@ -313,6 +313,22 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
+let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> itree op s b) -> itree op s b) (h : guarded_gen g) (p : ipos op s) :
+  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p) (decreases h)
+= match h with
+  | Guarded_ret u ->
+    exists_intro (fun c -> ret u p == c) (ret u p) ;
+    None
+  | Guarded_tau_rec u ->
+    begin match p with
+    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) [] == c) (Some Tau) ; None
+    | Tau_choice :: p -> admit () ; magic ()
+    | Call_choice o' arg' y :: p -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) (Call_choice o' arg' y :: p) == c) None ; None
+    end
+  | Guarded_call_rec o arg k -> admit () ; magic ()
+  | Guarded_tau g' h' -> admit () ; magic ()
+  | Guarded_call o arg g' h' -> admit () ; magic ()
+
 let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)) (x : a) (n : nat) (p : ipos op s) :
   Lemma (ensures length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p) (decreases p)
 = match h x with
