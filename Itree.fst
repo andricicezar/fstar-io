@@ -392,7 +392,23 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       // assume (length p + 1 <= n ==> (fun r x -> g x r) (itree_cofix_unfoldn (fun r x -> g x r) (length p)) x (Tau_choice :: p) == (fun r x -> g x r) (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) x (Tau_choice :: p))
       // assume (length p + 1 <= n ==> g x (itree_cofix_unfoldn (fun r x -> g x r) (length p)) (Tau_choice :: p) == g x (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) (Tau_choice :: p))
       // assume (length p + 1 <= n ==> tau (g' (itree_cofix_unfoldn (fun r x -> g x r) (length p))) (Tau_choice :: p) == tau (g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1))) (Tau_choice :: p))
-      assume (length p + 1 <= n ==> g' (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p)
+      // assume (length p + 1 <= n ==> g' (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p)
+      begin match guarded_gen_at g' h' p with
+      | None -> ()
+      | Some (q, v) ->
+        if length p + 1 <= n
+        then begin
+          // maybe we're missing length q <= length p? Although it's morally in q << p
+          assume (length q < length p) ; // not proven
+          // assert (forall r. g' r p == r v q) ;
+          // assume (g' (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p) ;
+          itree_cofix_unfoldn_enough_aux g h v (n-1) q ; // itree_cofix_unfoldn (fun r x -> g x r) (length q) v q == itree_cofix_unfoldn (fun r x -> g x r) n v q
+          // How to bridge the gap between length q and length p?
+          itree_cofix_unfoldn_enough_aux g h v (length p) q // ;
+          // assert (itree_cofix_unfoldn (fun r x -> g x r) (length p) v q == itree_cofix_unfoldn (fun r x -> g x r) (n-1) v q)
+        end
+        else ()
+      end
       // g' is guarded by h' but how can we exploit that fact? Will an auxiliary lemma be sufficient, or do we need to strengthen IH?
       // Given g', h' and p, we should return p' and v such that p' << p, forall r. g' r p == r v p' (or it doesn't return p' and v, and instead forall r. g' r p == some_cst, maybe None)
 
