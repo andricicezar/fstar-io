@@ -314,7 +314,7 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
 let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> itree op s b) -> itree op s b) (h : guarded_gen g) (p : ipos op s) :
-  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p /\ (forall r. g r p == r v q)) (decreases p)
+  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p /\ length q < length p /\ (forall r. g r p == r v q)) (decreases p)
 = match h with
   | Guarded_ret u ->
     exists_intro (fun c -> ret u p == c) (ret u p) ;
@@ -399,7 +399,7 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
         if length p + 1 <= n
         then begin
           // maybe we're missing length q <= length p? Although it's morally in q << p
-          assume (length q < length p) ; // not proven
+          // assume (length q < length p) ; // not proven
           // assert (forall r. g' r p == r v q) ;
           // assume (g' (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p) ;
           itree_cofix_unfoldn_enough_aux g h v (n-1) q ; // itree_cofix_unfoldn (fun r x -> g x r) (length q) v q == itree_cofix_unfoldn (fun r x -> g x r) n v q
@@ -417,7 +417,30 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       // else ()
     | Call_choice _ _ _ :: p -> ()
     end
-  | Guarded_call o arg g' h' -> admit ()
+  | Guarded_call o arg g' h' ->
+    begin match p with
+    | [] -> ()
+    | Tau_choice :: p -> ()
+    | Call_choice o' arg' y :: p ->
+      if o = o' && arg = arg'
+      then begin
+        begin match guarded_gen_at (g' y) (h' y) p with
+        | None -> ()
+        | Some (q, v) ->
+          if length p + 1 <= n
+          then begin
+            itree_cofix_unfoldn_enough_aux g h v (n-1) q ;
+            itree_cofix_unfoldn_enough_aux g h v (length p) q
+          end
+          else ()
+        end
+        // assume (length p + 1 <= n ==> g x (itree_cofix_unfoldn (fun r x -> g x r) (length p)) (Call_choice o' arg' y :: p) == g x (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) (Call_choice o' arg' y :: p))
+        // assume (length p + 1 <= n ==> call o arg (fun z -> g' z (itree_cofix_unfoldn (fun r x -> g x r) (length p))) (Call_choice o arg y :: p) == call o arg (fun z -> g' z (itree_cofix_unfoldn (fun r x -> g x r) (n-1))) (Call_choice o arg y :: p))
+        // assume (length p + 1 <= n ==> (fun z -> g' z (itree_cofix_unfoldn (fun r x -> g x r) (length p))) y p == (fun z -> g' z (itree_cofix_unfoldn (fun r x -> g x r) (n-1))) y p)
+        // assume (length p + 1 <= n ==> g' y (itree_cofix_unfoldn (fun r x -> g x r) (length p)) p == g' y (itree_cofix_unfoldn (fun r x -> g x r) (n-1)) p)
+      end
+      else ()
+    end
 
 // It might be better to let go of this condition and use Tau padding instead
 // and find a way to enforce the valid_itree condition rather than productivity.
