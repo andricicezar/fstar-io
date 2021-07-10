@@ -314,7 +314,7 @@ let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
 let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> itree op s b) -> itree op s b) (h : guarded_gen g) (p : ipos op s) :
-  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p) (decreases h)
+  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p /\ (forall r. g r p == r v q)) (decreases p)
 = match h with
   | Guarded_ret u ->
     exists_intro (fun c -> ret u p == c) (ret u p) ;
@@ -322,12 +322,33 @@ let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> it
   | Guarded_tau_rec u ->
     begin match p with
     | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) [] == c) (Some Tau) ; None
-    | Tau_choice :: p -> admit () ; magic ()
-    | Call_choice o' arg' y :: p -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) (Call_choice o' arg' y :: p) == c) None ; None
+    | Tau_choice :: q -> Some (q, u)
+    | Call_choice o' arg' y :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) p == c) None ; None
     end
-  | Guarded_call_rec o arg k -> admit () ; magic ()
-  | Guarded_tau g' h' -> admit () ; magic ()
-  | Guarded_call o arg g' h' -> admit () ; magic ()
+  | Guarded_call_rec o arg k ->
+    begin match p with
+    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) [] == c) (Some (Call o arg)) ; None
+    | Tau_choice :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) p == c) None ; None
+    | Call_choice o' arg' y :: q ->
+      if o = o' && arg = arg'
+      then Some (q, k y)
+      else begin exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) p == c) None ; None end
+    end
+  | Guarded_tau g' h' ->
+    begin match p with
+    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (g' r) [] == c) (Some Tau) ; None
+    | Tau_choice :: q -> guarded_gen_at g' h' q
+    | Call_choice o' arg' y :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (g' r) p == c) None ; None
+    end
+  | Guarded_call o arg g' h' ->
+    begin match p with
+    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) [] == c) (Some (Call o arg)) ; None
+    | Tau_choice :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) p == c) None ; None
+    | Call_choice o' arg' y :: q ->
+      if o = o' && arg = arg'
+      then guarded_gen_at (g' y) (h' y) q
+      else begin exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) p == c) None ; None end
+    end
 
 let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)) (x : a) (n : nat) (p : ipos op s) :
   Lemma (ensures length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p) (decreases p)
