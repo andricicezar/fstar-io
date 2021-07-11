@@ -413,39 +413,18 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       else ()
     end
 
-// It might be better to let go of this condition and use Tau padding instead
-// and find a way to enforce the valid_itree condition rather than productivity.
-let rec itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
-  Lemma
-    (ensures itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-= match p with
-  | [] ->
-    assume (itree_cofix_guarded ff ==> ff (fun _ -> loop _) x [] == itree_cofix_unfoldn ff n x []) ;
-    assume (itree_cofix_unfoldn ff 0 == ff (fun _ -> loop _)) ; // why can't the SMT see it?
-    assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff 0 x [] == itree_cofix_unfoldn ff n x [])
-  | c :: p ->
-    // assume (itree_cofix_guarded ff ==> length p + 1 <= n ==> itree_cofix_unfoldn ff (length p + 1) x (c :: p) == itree_cofix_unfoldn ff n x (c :: p))
-    assume (itree_cofix_guarded ff ==> length p + 1 <= n ==> ff (itree_cofix_unfoldn ff (length p)) x (c :: p) == ff (itree_cofix_unfoldn ff (n-1)) x (c :: p))
-    // match ff (fun _ -> loop _) x [] with
-    // | Some (Ret y) -> ()
-    // | Some (Call o arg) -> admit ()
-    // | Some Tau ->
-    //   assert (itree_cofix_guarded ff ==> (forall r. exists k. ff r x == tau k)) ;
-    //   // We now know how ff will behave on (Tau_choice :: p), it will call k p
-    //   // but we don't know anything about the two k that we have, only that they depend on the recursive call
-    //   // can we be more precise in itree_productive?
-    //   begin match c with
-    //   | Tau_choice -> admit ()
-    //   | Call_choice _ _ _ -> ()
-    //   end
-    // | None -> ()
-
-    // if length (c :: p) <= n
-    // then begin
-    //   itree_cofix_unfoldn_enough ff x (n-1) p ;
-    //   admit ()
-    // end
-    // else ()
+// The goal now is to use itree_cofix_unfoldn_enough_aux to conclude
+let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
+  Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
+= // assert (itree_cofix_guarded ff ==> (forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r)) ;
+  assert (itree_cofix_guarded ff ==> (forall x. exists (g : (a -> itree op s b) -> itree op s b). guarded_gen g /\ (forall r. ff r x == g r))) ;
+  // assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). (forall x. guarded_gen (g x)) /\ (forall r. ff r x == g x r))) ;
+  // assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). (x:a -> guarded_gen (g x)) /\ (forall r. ff r x == g x r))) ;
+  // assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). (x:a -> guarded_gen (g x)) /\ (ff == (fun r x -> g x r)))) ;
+  assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). (ff == (fun r x -> g x r)))) ;
+  forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p) // ;
+  // assert (forall (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p) ;
+  // assert (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
