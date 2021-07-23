@@ -3,6 +3,7 @@ module Itree
 open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Classical
+open FStar.IndefiniteDescription
 
 (* Similar to strict_prefix_of, I believe the names should be swapped but well... *)
 let rec strict_suffix_of #a (s l : list a) :
@@ -413,20 +414,19 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       else ()
     end
 
-let forall_exists_swap #a #b (p : a -> b -> Type0) :
-  Lemma ((forall x. exists b. p x b) ==> (exists f. forall x. p x (f x)))
-= arrow_to_impl #(forall x. exists b. p x b) #(exists f. forall x. p x (f x)) (fun h ->
-    Squash.bind_squash #(forall x. exists b. p x b) #(exists f. forall x. p x (f x)) h (fun h ->
-      Squash.bind_squash #(x:a -> GTot (exists b. p x b)) h (fun h ->
-        Squash.return_squash (
-          Squash.return_squash #(f : (a -> b) & (forall x. p x (f x))) (|
-            (fun x -> magic ()) ,
-            magic ()
-          |)
-        )
-      )
-    )
-  )
+// From Aseem
+// but it only gives us a GTot function so I might be better off by giving an alternative
+// definition of itree_cofix_guarded so that it's what I want
+// and care later about SMT
+let forall_exists_swap #a #b (p : a -> b -> prop)
+  : Lemma ((forall x. exists b. p x b) ==> (exists (f:a -> GTot b). forall x. p x (f x)))
+  = let aux ()
+      : Lemma
+          (requires forall x. exists b. p x b)
+          (ensures exists (f:a -> GTot b). forall x. p x (f x))
+          [SMTPat ()]
+      = exists_intro (fun (f:a -> GTot b) -> forall x. p x (f x)) (fun x -> indefinite_description_ghost b (fun y -> p x y)) in
+    ()
 
 // The goal now is to use itree_cofix_unfoldn_enough_aux to conclude
 let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
@@ -437,10 +437,10 @@ let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b)
   // assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). (x:a -> guarded_gen (g x)) /\ (forall r. ff r x == g x r))) ;
   // assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). (x:a -> guarded_gen (g x)) /\ (ff == (fun r x -> g x r)))) ;
   forall_exists_swap (fun x g -> guarded_gen g /\ (forall r. ff r x == g r)) ;
-  assert ((forall x. exists g. ((fun x g -> guarded_gen g /\ (forall r. ff r x == g r)) x g)) ==> (exists f. forall x. (fun x g -> guarded_gen g /\ (forall r. ff r x == g r)) x (f x))) ;
-  assert ((forall x. exists g. (guarded_gen g /\ (forall r. ff r x == g r))) ==> (exists f. forall x. guarded_gen (f x) /\ (forall r. ff r x == (f x) r))) ;
-  assert (itree_cofix_guarded ff ==> (forall x. exists g. (guarded_gen g /\ (forall r. ff r x == g r)))) ;
-  assert (itree_cofix_guarded ff ==> (exists g. forall x. guarded_gen (g x) /\ (forall r. ff r x == (g x) r))) ;
+  // assert ((forall x. exists g. ((fun x g -> guarded_gen g /\ (forall r. ff r x == g r)) x g)) ==> (exists f. forall x. (fun x g -> guarded_gen g /\ (forall r. ff r x == g r)) x (f x))) ;
+  // assert ((forall x. exists g. (guarded_gen g /\ (forall r. ff r x == g r))) ==> (exists f. forall x. guarded_gen (f x) /\ (forall r. ff r x == (f x) r))) ;
+  // assert (itree_cofix_guarded ff ==> (forall x. exists g. (guarded_gen g /\ (forall r. ff r x == g r)))) ;
+  // assert (itree_cofix_guarded ff ==> (exists g. forall x. guarded_gen (g x) /\ (forall r. ff r x == (g x) r))) ;
   // assert (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b). forall x. (guarded_gen (g x)) (*/\ (forall r. ff r x == g r) *))) ; // fails!
   assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). (ff == (fun r x -> g x r)))) ;
   forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p) // ;
