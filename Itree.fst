@@ -435,6 +435,14 @@ let forall_fun #a (p : a -> Type) :
     Classical.give_witness_from_squash #((x:a) -> GTot (p x)) f
   in ()
 
+let and_exists p q :
+  Lemma ((p /\ q) ==> (exists (h : p). q))
+= let aux () : Lemma (requires p /\ q) (ensures exists (h : p). q) [SMTPat ()] =
+    let h = Squash.get_proof p in
+    let hh = Squash.bind_squash #p #(squash (exists (h : p). q)) h (fun h' -> exists_intro (fun (h : p) -> q) h') in
+    Classical.give_witness_from_squash hh
+  in ()
+
 // The goal now is to use itree_cofix_unfoldn_enough_aux to conclude
 let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
   Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
@@ -459,7 +467,8 @@ let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b)
   in
   assert (forall (g : a -> GTot ((a -> itree op s b) -> itree op s b)). (forall x. guarded_gen (g x)) ==> ((x:a) -> GTot (guarded_gen (g x)))) ;
   assert (itree_cofix_guarded ff ==> (exists (g : a -> GTot ((a -> itree op s b) -> itree op s b)). ((x:a) -> GTot (guarded_gen (g x))) /\ (forall r. ff r x == g x r))) ;
-  // assert (itree_cofix_guarded ff ==> (exists (g : a -> GTot ((a -> itree op s b) -> itree op s b)) (h : (x:a) -> GTot (guarded_gen (g x))). forall r. ff r x == g x r)) ;
+  forall_intro_2 (and_exists) ;
+  assert (itree_cofix_guarded ff ==> (exists (g : a -> GTot ((a -> itree op s b) -> itree op s b)) (h : (x:a) -> GTot (guarded_gen (g x))). forall r. ff r x == g x r)) ;
   // assert (itree_cofix_guarded ff ==> (exists (g : a -> GTot ((a -> itree op s b) -> itree op s b)) (h : (x:a) -> guarded_gen (g x)). (ff == (fun r x -> g x r)))) ; // Problem between GTot and Tot
   assume (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). (ff == (fun r x -> g x r)))) ;
   forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p) // ;
