@@ -424,10 +424,24 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> it
 = forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
   fun p -> itree_cofix_unfoldn ff (length p) x p
 
-// Coq def:
-// Definition iter {E : Type -> Type} {R I: Type}
-//            (step : I -> itree E (I + R)) : I -> itree E R :=
-//   cofix iter_ i := bind (step i) (fun lr => on_left lr l (Tau (iter_ l))).
+(* Alternative def of loop using cofix to test it *)
+let loop' #op #s a : itree op s a =
+  admit () ;
+  itree_cofix (fun loop_ (_ : unit) ->
+    tau (loop_ ())
+  ) ()
+
+(* Definition of iter from cofixpoint *)
+let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
+  admit () ;
+  itree_cofix (fun iter_ i ->
+    bind (step i) (fun ir ->
+      begin match ir with
+      | Inl j -> tau (iter_ j)
+      | Inr r -> ret r
+      end
+    )
+  )
 
 (* Monad instance
 
