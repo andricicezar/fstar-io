@@ -307,7 +307,8 @@ type guarded_gen (#op : eqtype) #s (#a : Type0) (#b : Type0) : ((a -> itree op s
 
 let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) =
   // forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r
-  exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)
+  // exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)
+  (x:a) -> guarded_gen (fun r -> ff r x)
 
 // Unfold the function (n+1) times
 let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (n : nat) : a -> itree op s b =
@@ -416,9 +417,20 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       else ()
     end
 
+let itree_cofix_guarded_alt #op #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) :
+  Lemma (((x:a) -> guarded_gen (fun r -> ff r x)) ==> (exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)))
+= let aux () :
+    Lemma
+      (requires (x:a) -> guarded_gen (fun r -> ff r x))
+      (ensures exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r))
+      [SMTPat ()]
+  = exists_intro (fun (g : a -> (a -> itree op s b) -> itree op s b) -> ((x:a) -> guarded_gen (g x))) (fun x r -> ff r x) ; admit ()
+  in ()
+
 let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
   Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-= forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p)
+= itree_cofix_guarded_alt ff ;
+  forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p)
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
@@ -430,16 +442,11 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> it
 *)
 
 (* Trivial cofix *)
-let ret' #op #s #a (x : a) : itree op s a =
-  // exists_intro (fun (g : unit -> (a -> itree op s a) -> itree op s a) -> (fun _ _ -> ret x) == (fun r x -> g x r)) (fun _ _ -> ret x) ; // succeeds
-  // exists_intro (fun (g : unit -> (a -> itree op s a) -> itree op s a) -> (forall (u:unit). guarded_gen (g u)) /\ (fun _ _ -> ret x) == (fun r x -> g x r)) (fun _ _ -> ret x) ;
-  // exists_intro (fun (g : unit -> (a -> itree op s a) -> itree op s a) -> exists (h : (u:unit) -> guarded_gen (g u)). (fun _ _ -> ret x) == (fun r x -> g x r)) (fun _ _ -> ret x) ;
-  exists_intro
-    (fun (gh : (g : (unit -> (a -> itree op s a) -> itree op s a)) & ((u:unit) -> guarded_gen (g u))) -> let (| g, h |) = gh in (fun _ _ -> ret x) == (fun r x -> g x r))
-    (| (fun _ _ -> ret x), magic () |) ;
-  // Not even enough to conclude...
-  admit () ;
-  itree_cofix (fun _ (_ : unit) -> ret x) ()
+let ret' #op #s #a (v : a) : itree op s a =
+  give_witness (fun (_:unit) -> Guarded_ret #op #s #unit #a v) ;
+  assert ((x:unit) -> guarded_gen (fun r -> (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) r x)) ;
+  assume (itree_cofix_guarded #op #s #unit #a (fun _ (_ : unit) -> ret v)) ; // Isn't it just the above?
+  itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
 
 (* Alternative def of loop using cofix to test it *)
 let loop' #op #s a : itree op s a =
