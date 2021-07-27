@@ -356,7 +356,7 @@ let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> it
     end
 
 // Needs to be tried several times when it fails
-let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)) (x : a) (n : nat) (p : ipos op s) :
+let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> GTot (guarded_gen (g x))) (x : a) (n : nat) (p : ipos op s) :
   Lemma (ensures length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p) (decreases p)
 = match h x with
   | Guarded_ret u -> ()
@@ -419,20 +419,16 @@ let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> i
       else ()
     end
 
-let itree_cofix_guarded_alt #op #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) :
-  Lemma (itree_cofix_guarded ff ==> (exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)))
+let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
+  Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
 = let aux () :
     Lemma
       (requires itree_cofix_guarded ff)
-      (ensures exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r))
+      (ensures (x:a) -> GTot (guarded_gen ((fun x r -> ff r x) x)))
       [SMTPat ()]
-  = admit ()
-  in ()
-
-let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
-  Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-= itree_cofix_guarded_alt ff ;
-  forall_intro_2 (fun g h -> itree_cofix_unfoldn_enough_aux #op #s #a #b g h x n p)
+  = give_witness_from_squash #((x:a) -> GTot (guarded_gen ((fun x r -> ff r x) x))) (get_forall (fun (x:a) -> guarded_gen ((fun x r -> ff r x) x)))
+  in
+  impl_intro (fun h -> itree_cofix_unfoldn_enough_aux #op #s #a #b (fun x r -> ff r x) h x n p)
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
