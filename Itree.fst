@@ -302,6 +302,10 @@ type guarded_gen (#op : eqtype) #s (#a : Type0) (#b : Type0) : ((a -> itree op s
 | Guarded_tau : g:((a -> itree op s b) -> itree op s b) -> guarded_gen g -> guarded_gen #op #s #a #b (fun r -> tau (g r))
 | Guarded_call : o:op -> arg:(s.args o) -> g:(s.res o -> (a -> itree op s b) -> itree op s b) -> (z:(s.res o) -> guarded_gen (g z)) -> guarded_gen #op #s #a #b (fun r -> call o arg (fun z -> g z r))
 
+let guarded_ret_hint #op #s #a #b (u:b) :
+  Lemma (guarded_gen #op #s #a #b (fun r -> ret u)) [SMTPat (guarded_gen #op #s #a #b (fun r -> ret u))]
+= give_witness (Guarded_ret #op #s #a #b u)
+
 // type cofix_gen (op : eqtype) s (a : Type0) (b : Type0) =
 //   g:((a -> itree op s b) -> itree op s b) { guarded_gen g }
 
@@ -442,6 +446,10 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> it
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
   give_witness (Guarded_ret #op #s #unit #a v) ;
+  // let guarded_ret_hint #op #s #a #b (u:b) :
+  //   Lemma (guarded_gen #op #s #a #b (fun r -> ret u)) [SMTPat (guarded_gen #op #s #a #b (fun r -> ret u))]
+  // = give_witness (Guarded_ret #op #s #a #b u)
+  // in
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
 
 (* Alternative def of loop using cofix to test it *)
