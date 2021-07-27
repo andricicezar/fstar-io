@@ -305,6 +305,7 @@ type guarded_gen (#op : eqtype) #s (#a : Type0) (#b : Type0) : ((a -> itree op s
 // type cofix_gen (op : eqtype) s (a : Type0) (b : Type0) =
 //   g:((a -> itree op s b) -> itree op s b) { guarded_gen g }
 
+unfold
 let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) =
   // forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r
   // exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)
@@ -444,14 +445,12 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> it
 
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
-  give_witness (Guarded_ret #op #s #unit #a v) ; // Not sufficient
-  assert (forall (x:unit). guarded_gen (fun r -> (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) r x)) ;
-  assume (itree_cofix_guarded #op #s #unit #a (fun _ (_ : unit) -> ret v)) ; // Isn't it just the above??
+  give_witness (Guarded_ret #op #s #unit #a v) ;
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
 
 (* Alternative def of loop using cofix to test it *)
 let loop' #op #s a : itree op s a =
-  admit () ;
+  give_witness (Guarded_tau_rec #op #s #unit #a ()) ;
   itree_cofix (fun loop_ (_ : unit) ->
     tau (loop_ ())
   ) ()
