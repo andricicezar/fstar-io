@@ -460,6 +460,10 @@ let loop' #op #s a : itree op s a =
   ) ()
 
 (* Definition of iter from cofixpoint *)
+// Not clear how to prove the guard for bind, maybe we should have a rule that says that any itree that
+// is not dependent on the recursive call is also guarded? Otherwise [step i] wouldn't be guarded.
+// TODO: Maybe we should simply define a general [(t)io_cofix] which inserts [tau]s when necessary
+// so that any function is guarded (this is not obvious with the current guard).
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
   admit () ;
   itree_cofix (fun iter_ i ->
