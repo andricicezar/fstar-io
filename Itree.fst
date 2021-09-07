@@ -5,7 +5,10 @@ open FStar.List.Tot.Properties
 open FStar.Classical
 open FStar.IndefiniteDescription
 
-(* Similar to strict_prefix_of, I believe the names should be swapped but well... *)
+(** Similar to strict_prefix_of, but the opposite.
+
+    I believe the names should be swapped but well...
+*)
 let rec strict_suffix_of #a (s l : list a) :
   Pure Type0 (requires True) (ensures fun _ -> True) (decreases l)
 = match l with
@@ -32,14 +35,19 @@ let rec strict_suffix_length #a (s l : list a) :
     | [] -> ()
     | y :: s -> strict_suffix_length s l
 
+(** Redefining Sigma-types because I couldn't find them TODO REMOVE *)
 noeq
 type sig a (b : a -> Type) =
 | Dpair : x:a -> b x -> sig a b
 
-(* Enconding of interaction trees, specialised to a free monad
+(** Encoding of interaction trees, specialised to a free monad
 
-   For now, they are unconstrained, which means that wrong data
-   can be represented.
+   The idea is to bypass the absence of coinductive datatypes in F* by instead
+   doing something similar to how one would encode the type [stream A] as
+   functions [nat -> A].
+   Here we define itrees as functions from positions (or paths in the tree) to
+   nodes which contain a label corresponding to either [Ret] for return, [Tau]
+   for delays, and [Call] for the monadic operations.
 
 *)
 
@@ -53,13 +61,21 @@ type ichoice (op : Type) (s : op_sig op) =
 | Tau_choice : ichoice op s
 | Call_choice : o:op -> s.args o -> s.res o -> ichoice op s
 
+(** Type of positions as sequences of choices in the tree *)
 type ipos op s = list (ichoice op s)
 
+(** Nodes of an itree *)
 type inode op (s : op_sig op) (a:Type) =
 | Ret : a -> inode op s a
 | Call : o:op -> s.args o -> inode op s a
 | Tau : inode op s a
 
+(** A *raw* itree
+
+    This type is unconstrained, and potentially nonsensical data could be
+    represented.
+
+*)
 type raw_itree op s a =
   ipos op s -> option (inode op s a)
 
@@ -83,16 +99,32 @@ let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
   // Should we instead use some [consistent t p] boolean predicate that would traverse the itree?
   // Maybe forall p. (p == [] /\ Some? (t [])) \/ (exists q c. p == q @ [c] /\ consistent_choice (t q) c)
   // where consistent_choice n c checks that both are call or both tau
+  // Two other options:
+  // - say that isCall (t p) ==> forall y. Some? (t (p @ [Call_choice o x y])) where o and x are extracted from isCall
+  //   and that isCall (t p) ==> None?(p @ [Tau_choice])
+  //   and that None is final probably
+  // - define the itree at a given position (not just the node) and say that at every (Some) position, the resulting
+  //   itree is either ret or call or tau. Probably not going to work for SMT.
 
+(** Itrees are defined by refinement over [raw_itree].
+
+    The choice of only specifying what happens when an itree returns and
+    nothing more can seem arbitrary as it doesn't forbid all ill-formed
+    itrees. The reason for this choice is that it seems to be the minimal
+    requirement to obtain a Dijkstra monad in the end.
+
+*)
 let itree (op:eqtype) s a =
   t:(raw_itree op s a) { valid_itree t }
 
+(** return of the monad *)
 let ret #op #s #a (x:a) : itree op s a =
   fun p ->
     match p with
     | [] -> Some (Ret x)
     | _ -> None
 
+(** monadic operations *)
 let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a) : itree op s a =
   fun p ->
     match p with
@@ -103,6 +135,7 @@ let call (#op:eqtype) #s #a (o : op) (x : s.args o) (k : s.res o -> itree op s a
       then k y p
       else None
 
+(** delay *)
 let tau #op #s #a (k : itree op s a) : itree op s a =
   fun p ->
     match p with
@@ -110,8 +143,15 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | Tau_choice :: p -> k p
     | Call_choice _ _ _ :: _ -> None
 
-// Before we can bind, we have to find a prefix of the position which returns and then forwards the suffix
-// pp is an accumaltor prefix, not efficient
+(** Before we can bind, we have to find a prefix of the position which returns
+    and then forwards the suffix.
+    Indeed, take for instance [ret x p] it will only return its contents it [p]
+    is the empty list (or root position). [find_ret (ret x) [] p] will thus
+    return [Some (x, p)] meaning that we can graft the other tree in place of
+    the return leaf by forwarding the position [p] to it.
+
+    [pp] is an accumaltor prefix, not efficient.
+*)
 let rec find_ret #op #s #a (m : itree op s a) (pp p : ipos op s) : Pure (option (a * ipos op s)) (requires True) (ensures fun r -> True) (decreases p) =
   if isRet (m pp)
   then Some (ret_val (m pp), p)
@@ -209,6 +249,15 @@ let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : optio
   | Some (Call o x) -> Some (Call o x)
   | None -> None
 
+(** bind function
+
+    We use [find_ret] as described above.
+    We also make use of [cast_node] to deal with the case where there is
+    no return leaf in the considered branch and the return type can then
+    be anything as we return [m p] which is of type [inode op s a]
+    instead of [inode op s b].
+
+*)
 let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
   find_ret_strict_suffix m ;
   fun p ->
@@ -216,15 +265,24 @@ let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b 
     | Some (x, q) -> f x q
     | None -> find_ret_None_noRet m [] p ; cast_node (m p)
 
-(* A loop with no events/effects except non-termination *)
-let loop #op #s a : itree op s a =
+(* An ill-formed loop *)
+let bad_loop #op #s a : itree op s a =
   fun p -> Some Tau
+
+(** A loop with no events/effects except non-termination *)
+let loop #op #s a : itree op s a =
+  fun p ->
+    match filter (fun c -> c = Tau_choice) p with
+    | [] -> Some Tau
+    | _ -> None
 
 let cont #op #s #a (n : inode op s a) r =
   match n with
   | Ret x -> unit
   | Call o x -> s.res o -> r
   | Tau -> r
+
+(** Definition of a co-recursor *)
 
 let cont_node op s a r =
   sig (inode op s a) (fun n -> cont n r)
@@ -290,8 +348,15 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
   forall_intro_2 (itree_corec_aux_final_ret f i) ;
   itree_corec_aux f i
 
-// Some notion of cofixpoint where the function should produce at least one constructor
-// before calling itself recursively.
+(** Some notion of cofixpoint where the function should produce at least one
+    constructor before calling itself recursively.
+
+    Sadly, we need the productivity because we have to be able to produce a
+    node when given a position.
+    The idea is that we only have to unfold the cofixpoint [length p + 1]
+    times to be able to get the node at position [p].
+
+*)
 
 // For some reason I have to force Type0 for a and b
 noeq
@@ -317,7 +382,7 @@ let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -
   forall (x:a). guarded_gen (fun r -> ff r x)
 
 // Unfold the function (n+1) times
-let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (n : nat) : a -> itree op s b =
+let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (n : nat) : a -> itree op s b =
   if n = 0
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
@@ -434,7 +499,7 @@ let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b)
   in
   impl_intro (fun h -> itree_cofix_unfoldn_enough_aux #op #s #a #b (fun x r -> ff r x) h x n p)
 
-let itree_cofix (#op : eqtype) #s #a #b (ff : (r:(a -> itree op s b)) -> a -> itree op s b) (x : a) :
+let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
 = forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
   fun p -> itree_cofix_unfoldn ff (length p) x p
@@ -475,7 +540,7 @@ let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : i
     )
   )
 
-(* Monad instance
+(** Monad instance
 
    Without GetTrace for now
 
@@ -502,10 +567,7 @@ let io_op_sig : op_sig cmds = {
   res = io_res
 }
 
-(*
-  For now only simple spec monad without trace.
-  For later, the trace can be read from the position + eventually the node it leads to.
-*)
+(** For now only simple spec monad without trace. (More interesting DM below) *)
 
 let wp a = (a -> Type0) -> Type0
 
@@ -544,13 +606,14 @@ reifiable total layered_effect {
     bind   = io_bind
 }
 
-(*
+(**
   Spec with trace
-  The trace contains the response of the environment, in fact it is a subset of positions
-  where Tau steps are ignored.
+  The trace contains the response of the environment, in fact it is a subset of
+  positions where Tau steps are ignored.
 
-  This specification if enough to talk about (non)-termination of a program with respect to
-  its interaction with the environmnet.
+  This specification if enough to talk about (non)-termination of a program
+  with respect to its interaction with the environmnet. Unfortunately, it is
+  still more limited than the Itrees in Coq.
 *)
 
 let trace = list (c: ichoice cmds io_op_sig { c <> Tau_choice })
@@ -603,6 +666,7 @@ let tio_return a (x : a) : tio a (twp_return x) =
   assert (isRet (ret #cmds #io_op_sig #a x [])) ;
   ret x
 
+// Sometimes need to be retried
 let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
   find_ret_append m ;
   assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
@@ -620,6 +684,10 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
 
   bind m f
+
+// let tio_cofix a b w (ff : (a -> tio b w) -> a -> tio b w) (x : a) :
+//   Pure (tio b w) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
+// = magic ()
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
