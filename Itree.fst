@@ -35,11 +35,6 @@ let rec strict_suffix_length #a (s l : list a) :
     | [] -> ()
     | y :: s -> strict_suffix_length s l
 
-(** Redefining Sigma-types because I couldn't find them TODO REMOVE *)
-noeq
-type sig a (b : a -> Type) =
-| Dpair : x:a -> b x -> sig a b
-
 (** Encoding of interaction trees, specialised to a free monad
 
    The idea is to bypass the absence of coinductive datatypes in F* by instead
@@ -285,21 +280,21 @@ let cont #op #s #a (n : inode op s a) r =
 (** Definition of a co-recursor *)
 
 let cont_node op s a r =
-  sig (inode op s a) (fun n -> cont n r)
+  n: inode op s a & cont n r
 
 let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) (p : ipos op s) :
   Pure (option (inode op s b)) (requires True) (ensures fun r -> True) (decreases p)
 = match p with
   | [] ->
-    let Dpair n _ = f i in Some n
+    let (| n, _ |) = f i in Some n
   | Tau_choice :: p ->
     begin match f i with
-    | Dpair Tau next -> itree_corec_aux f next p
+    | (| Tau, next |) -> itree_corec_aux f next p
     | _ -> None
     end
   | Call_choice o x y :: p ->
     begin match f i with
-    | Dpair (Call o' x') next ->
+    | (| Call o' x', next |) ->
       if o = o' && x = x'
       then itree_corec_aux f (next y) p
       else None
@@ -313,26 +308,26 @@ let rec itree_corec_aux_final_ret (#op : eqtype) #s #a #b (f : a -> cont_node op
 = match p with
   | [] ->
     begin match f i with
-    | Dpair (Ret x) n -> ()
-    | Dpair Tau n -> ()
-    | Dpair (Call o' x') n -> ()
+    | (| Ret x, n |) -> ()
+    | (| Tau,  n |) -> ()
+    | (| Call o' x', n |) -> ()
     end
   | Tau_choice :: p ->
     begin match f i with
-    | Dpair (Ret x) n -> ()
-    | Dpair Tau n ->
+    | (| Ret x, n |) -> ()
+    | (| Tau, n |) ->
       begin match q with
       | [] -> ()
       | Tau_choice :: q -> itree_corec_aux_final_ret f n p q
       | Call_choice o x y :: q -> ()
       end
-    | Dpair (Call o' x') n -> ()
+    | (| Call o' x', n |) -> ()
     end
   | Call_choice o x y :: p ->
     begin match f i with
-    | Dpair (Ret x) n -> ()
-    | Dpair Tau n -> ()
-    | Dpair (Call o' x') n ->
+    | (| Ret x, n |) -> ()
+    | (| Tau, n |) -> ()
+    | (| Call o' x', n |) ->
       if o = o' && x = x'
       then begin
         match q with
