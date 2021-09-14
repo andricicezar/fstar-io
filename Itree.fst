@@ -549,9 +549,13 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
 
   bind m f
 
-// let tio_cofix a b w (ff : (a -> tio b w) -> a -> tio b w) (x : a) :
-//   Pure (tio b w) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
-// = magic ()
+// Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
+// of [loop]. Here we would need something in [tio b w] for an arbitrary [w].
+// Another point for going for [iter] directly.
+// let rec tio_cofix_unfoldn #a #b #w (ff : (a -> tio b w) -> a -> tio b w) (n : nat) : a -> tio b w =
+//   if n = 0
+//   then ff (fun _ -> loop _)
+//   else ff (tio_cofix_unfoldn ff (n - 1))
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
