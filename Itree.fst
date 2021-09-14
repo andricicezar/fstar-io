@@ -353,177 +353,38 @@ let itree_corec (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i : a) : 
 
 *)
 
-// For some reason I have to force Type0 for a and b
-noeq
-type guarded_gen (#op : eqtype) #s (#a : Type0) (#b : Type0) : ((a -> itree op s b) -> itree op s b) -> Type0 =
-| Guarded_ret : u:b -> guarded_gen #op #s #a #b (fun r -> ret u)
-| Guarded_tau_rec : x:a -> guarded_gen #op #s #a #b (fun r -> tau (r x))
-| Guarded_call_rec : o:op -> arg:(s.args o) -> k:(s.res o -> a) -> guarded_gen #op #s #a #b (fun r -> call o arg (fun z -> r (k z)))
-| Guarded_tau : g:((a -> itree op s b) -> itree op s b) -> guarded_gen g -> guarded_gen #op #s #a #b (fun r -> tau (g r))
-| Guarded_call : o:op -> arg:(s.args o) -> g:(s.res o -> (a -> itree op s b) -> itree op s b) -> (z:(s.res o) -> guarded_gen (g z)) -> guarded_gen #op #s #a #b (fun r -> call o arg (fun z -> g z r))
-
-let guarded_ret_hint #op #s #a #b (u:b) :
-  Lemma (guarded_gen #op #s #a #b (fun r -> ret u)) [SMTPat (guarded_gen #op #s #a #b (fun r -> ret u))]
-= give_witness (Guarded_ret #op #s #a #b u)
-
-// type cofix_gen (op : eqtype) s (a : Type0) (b : Type0) =
-//   g:((a -> itree op s b) -> itree op s b) { guarded_gen g }
-
-unfold
-let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) =
-  // forall x. exists (g : cofix_gen op s a b). forall r. ff r x == g r
-  // exists (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> guarded_gen (g x)). ff == (fun r x -> g x r)
-  // (x:a) -> guarded_gen (fun r -> ff r x)
-  forall (x:a). guarded_gen (fun r -> ff r x)
-
-// Unfold the function (n+1) times
+(* Unfold the function (n+1) times *)
 let rec itree_cofix_unfoldn (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (n : nat) : a -> itree op s b =
   if n = 0
   then ff (fun _ -> loop _)
   else ff (itree_cofix_unfoldn ff (n - 1))
 
-let rec guarded_gen_at (#op : eqtype) #s (#a : Type0) (#b : Type0) (g : (a -> itree op s b) -> itree op s b) (h : guarded_gen g) (p : ipos op s) :
-  Pure (option (ipos op s * a)) (requires True) (ensures fun o -> match o with | None -> exists c. forall r. g r p == c | Some (q, v) -> q << p /\ length q < length p /\ (forall r. g r p == r v q)) (decreases p)
-= match h with
-  | Guarded_ret u ->
-    exists_intro (fun c -> ret u p == c) (ret u p) ;
-    None
-  | Guarded_tau_rec u ->
-    begin match p with
-    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) [] == c) (Some Tau) ; None
-    | Tau_choice :: q -> Some (q, u)
-    | Call_choice o' arg' y :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (r u) p == c) None ; None
-    end
-  | Guarded_call_rec o arg k ->
-    begin match p with
-    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) [] == c) (Some (Call o arg)) ; None
-    | Tau_choice :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) p == c) None ; None
-    | Call_choice o' arg' y :: q ->
-      if o = o' && arg = arg'
-      then Some (q, k y)
-      else begin exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> r (k z)) p == c) None ; None end
-    end
-  | Guarded_tau g' h' ->
-    begin match p with
-    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (g' r) [] == c) (Some Tau) ; None
-    | Tau_choice :: q -> guarded_gen_at g' h' q
-    | Call_choice o' arg' y :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). tau (g' r) p == c) None ; None
-    end
-  | Guarded_call o arg g' h' ->
-    begin match p with
-    | [] -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) [] == c) (Some (Call o arg)) ; None
-    | Tau_choice :: q -> exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) p == c) None ; None
-    | Call_choice o' arg' y :: q ->
-      if o = o' && arg = arg'
-      then guarded_gen_at (g' y) (h' y) q
-      else begin exists_intro (fun c -> forall (r : (a -> itree op s b)). call o arg (fun z -> g' z r) p == c) None ; None end
-    end
-
-// Needs to be tried several times when it fails
-let rec itree_cofix_unfoldn_enough_aux (#op : eqtype) #s #a #b (g : a -> (a -> itree op s b) -> itree op s b) (h : (x:a) -> GTot (guarded_gen (g x))) (x : a) (n : nat) (p : ipos op s) :
-  Lemma (ensures length p <= n ==> itree_cofix_unfoldn (fun r x -> g x r) (length p) x p == itree_cofix_unfoldn (fun r x -> g x r) n x p) (decreases p)
-= match h x with
-  | Guarded_ret u -> ()
-  | Guarded_tau_rec u ->
-    begin match p with
-    | [] -> ()
-    | Tau_choice :: p ->
-      if length p + 1 <= n
-      then itree_cofix_unfoldn_enough_aux g h u (n-1) p
-      else ()
-    | Call_choice _ _ _ :: p -> ()
-    end
-  | Guarded_call_rec o arg k ->
-    begin match p with
-    | [] -> ()
-    | Tau_choice :: p -> ()
-    | Call_choice o' arg' y :: p ->
-      if o = o' && arg = arg'
-      then begin
-        if length p + 1 <= n
-        then itree_cofix_unfoldn_enough_aux g h (k y) (n-1) p
-        else ()
-      end
-      else ()
-    end
-  | Guarded_tau g' h' ->
-    begin match p with
-    | [] -> ()
-    | Tau_choice :: p ->
-      begin match guarded_gen_at g' h' p with
-      | None -> ()
-      | Some (q, v) ->
-        if length p + 1 <= n
-        then begin
-          itree_cofix_unfoldn_enough_aux g h v (n-1) q ;
-          itree_cofix_unfoldn_enough_aux g h v (length p) q
-        end
-        else ()
-      end
-    | Call_choice _ _ _ :: p -> ()
-    end
-  | Guarded_call o arg g' h' ->
-    begin match p with
-    | [] -> ()
-    | Tau_choice :: p -> ()
-    | Call_choice o' arg' y :: p ->
-      if o = o' && arg = arg'
-      then begin
-        begin match guarded_gen_at (g' y) (h' y) p with
-        | None -> ()
-        | Some (q, v) ->
-          if length p + 1 <= n
-          then begin
-            itree_cofix_unfoldn_enough_aux g h v (n-1) q ;
-            itree_cofix_unfoldn_enough_aux g h v (length p) q
-          end
-          else ()
-        end
-      end
-      else ()
-    end
-
-let itree_cofix_unfoldn_enough (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) (n : nat) (p : ipos op s) :
-  Lemma (itree_cofix_guarded ff ==> length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-= let aux () :
-    Lemma
-      (requires itree_cofix_guarded ff)
-      (ensures (x:a) -> GTot (guarded_gen ((fun x r -> ff r x) x)))
-      [SMTPat ()]
-  = give_witness_from_squash #((x:a) -> GTot (guarded_gen ((fun x r -> ff r x) x))) (get_forall (fun (x:a) -> guarded_gen ((fun x r -> ff r x) x)))
-  in
-  impl_intro (fun h -> itree_cofix_unfoldn_enough_aux #op #s #a #b (fun x r -> ff r x) h x n p)
+unfold
+let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) =
+  forall (x : a) (n : nat) (p : ipos op s).
+    length p <= n ==>
+    itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p
 
 let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
-= forall_intro_2 (itree_cofix_unfoldn_enough ff x) ;
-  fun p -> itree_cofix_unfoldn ff (length p) x p
-
-(* The SMT solver can't prove itree_cofix_guarded on its own so we need to help it
-   TODO: Can we automate it? Maybe we need to find an alternate presentation.
-*)
+= fun p -> itree_cofix_unfoldn ff (length p) x p
 
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
-  give_witness (Guarded_ret #op #s #unit #a v) ;
-  // let guarded_ret_hint #op #s #a #b (u:b) :
-  //   Lemma (guarded_gen #op #s #a #b (fun r -> ret u)) [SMTPat (guarded_gen #op #s #a #b (fun r -> ret u))]
-  // = give_witness (Guarded_ret #op #s #a #b u)
-  // in
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
+
+(* It seems that the guard is too hard to prove for the SMT when there is a
+   recursive call
+ *)
 
 (* Alternative def of loop using cofix to test it *)
 let loop' #op #s a : itree op s a =
-  give_witness (Guarded_tau_rec #op #s #unit #a ()) ;
+  admit () ;
   itree_cofix (fun loop_ (_ : unit) ->
     tau (loop_ ())
   ) ()
 
 (* Definition of iter from cofixpoint *)
-// Not clear how to prove the guard for bind, maybe we should have a rule that says that any itree that
-// is not dependent on the recursive call is also guarded? Otherwise [step i] wouldn't be guarded.
-// TODO: Maybe we should simply define a general [(t)io_cofix] which inserts [tau]s when necessary
-// so that any function is guarded (this is not obvious with the current guard).
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
   admit () ;
   itree_cofix (fun iter_ i ->
