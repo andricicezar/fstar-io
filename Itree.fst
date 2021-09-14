@@ -374,7 +374,8 @@ let ret' #op #s #a (v : a) : itree op s a =
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
 
 (* It seems that the guard is too hard to prove for the SMT when there is a
-   recursive call
+   recursive call. This suggests that maybe we should go for iter directly
+   instead.
  *)
 
 (* Alternative def of loop using cofix to test it *)
@@ -468,7 +469,7 @@ reifiable total layered_effect {
   positions where Tau steps are ignored.
 
   This specification if enough to talk about (non)-termination of a program
-  with respect to its interaction with the environmnet. Unfortunately, it is
+  with respect to its interaction with the environment. Unfortunately, it is
   still more limited than the Itrees in Coq.
 *)
 
