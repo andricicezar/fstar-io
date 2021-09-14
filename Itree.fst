@@ -507,10 +507,17 @@ let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
-// let io_twp #a (t : itree cmds io_op_sig a) =
-//   fun post -> forall p. Some? (t p) ==> post (ipos_trace p) (match t p with Some (Ret x) -> Some x | _ -> None)
+// Alternative to remove prefixes of return traces
 
-// Equivalent but maybe nicer for the SMT
+// unfold
+// let noFutureRet #a (t : itree cmds io_op_sig a) p =
+//   forall q. p `strict_suffix_of` q ==> ~ (isRet (t q))
+
+// let io_twp #a (t : itree cmds io_op_sig a) =
+//   fun post ->
+//     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
+//     (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
+
 let io_twp #a (t : itree cmds io_op_sig a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
