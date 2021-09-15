@@ -35,6 +35,12 @@ let rec strict_suffix_length #a (s l : list a) :
     | [] -> ()
     | y :: s -> strict_suffix_length s l
 
+let rec strict_suffix_append_one #a (p : list a) x :
+  Lemma (ensures p `strict_suffix_of` (p @ [x])) (decreases p)
+= match p with
+  | [] -> ()
+  | y :: q -> strict_suffix_append_one q x
+
 (** Encoding of interaction trees, specialised to a free monad
 
    The idea is to bypass the absence of coinductive datatypes in F* by instead
@@ -513,7 +519,7 @@ let rec noFutureRet_find_ret_None_aux' #a (m : iotree a) pp p :
       begin
         noFutureRet_find_ret_None_aux' m (pp @ [c]) p ;
         assert (~ (isRet (m (pp @ [c]))) ==> noFutureRet m (pp @ [c]) ==> find_ret m (pp @ [c]) p == None) ;
-        assume (pp `strict_suffix_of` (pp @ [c])) ; // Should be easy
+        strict_suffix_append_one pp c ;
         assert (~ (isRet (m pp)) ==> noFutureRet m pp ==> ~ (isRet (m (pp @ [c])))) ;
         assume (forall q. (pp @ [c]) `strict_suffix_of` q ==> pp `strict_suffix_of` q) ;
         assert (~ (isRet (m pp)) ==> noFutureRet m pp ==> noFutureRet m (pp @ [c])) ;
