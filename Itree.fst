@@ -427,45 +427,6 @@ let io_op_sig : op_sig cmds = {
 unfold
 let iotree a = itree cmds io_op_sig a
 
-(** For now only simple spec monad without trace. (More interesting DM below) *)
-
-let wp a = (a -> Type0) -> Type0
-
-let wp_return #a (x : a) : wp a =
-  fun post -> post x
-
-let wp_bind #a #b (w : wp a) (f : a -> wp b) : wp b =
-  fun post -> w (fun x -> f x post)
-
-let stronger_wp #a (wp1 wp2 : wp a) : Type0 =
-  forall post. wp1 post ==> wp2 post
-
-let io_wp #a (t : iotree a) =
-  fun post -> forall p. isRet (t p) ==> post (ret_val (t p))
-
-let io a (w : wp a) =
-  t: iotree a { io_wp t `stronger_wp` w }
-
-let io_return a (x : a) : io a (wp_return x) =
-  assert (isRet (ret #cmds #io_op_sig #a x [])) ;
-  ret x
-
-let io_bind a b w wf (m : io a w) (f : (x:a) -> io b (wf x)) : io b (wp_bind w wf) =
-  find_ret_append m ;
-  assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
-  assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
-  assert (forall p q post. (forall p. isRet (bind m f p) ==> post (ret_val (bind m f p))) ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ret_val (f (ret_val (m p)) q))) ;
-  bind m f
-
-[@@allow_informative_binders]
-reifiable total layered_effect {
-  IO : a:Type -> wp a -> Effect
-  with
-    repr   = io ;
-    return = io_return ;
-    bind   = io_bind
-}
-
 (**
   Spec with trace
   The trace contains the response of the environment, in fact it is a subset of
