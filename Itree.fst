@@ -500,10 +500,31 @@ let tio_return a (x : a) : tio a (twp_return x) =
   assert (isRet (ioret #a x [])) ;
   ret x
 
-// Should be similar to find_ret_strict_suffix
+let rec noFutureRet_find_ret_None_aux #a (m : iotree a) pp p q :
+  Lemma
+    (ensures find_ret m pp p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m pp q == None)
+    (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> assume (noFutureRet m [] ==> [] `strict_suffix_of` q ==> find_ret m pp q == None)
+    | c :: p ->
+      begin match q with
+      | [] -> ()
+      | c' :: q ->
+        begin
+          noFutureRet_find_ret_None_aux m (pp @ [c]) p q ;
+          // The problem is that noFutureRet should also mention pp
+          assert (find_ret m (pp @ [c]) p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m (pp @ [c]) q == None) ;
+          assume (find_ret m (pp @ [c]) p == None ==> noFutureRet m (c :: p) ==> (c :: p) `strict_suffix_of` (c' :: q) ==> find_ret m (pp @ [c]) q == None)
+        end
+      end
+  end
+
 let noFutureRet_find_ret_None #a (m : iotree a) :
   Lemma (forall p q. find_ret m [] p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m [] q == None)
-= admit ()
+= forall_intro_2 (noFutureRet_find_ret_None_aux m [])
 
 let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
   Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
