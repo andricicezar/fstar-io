@@ -424,6 +424,9 @@ let io_op_sig : op_sig cmds = {
   res = io_res
 }
 
+unfold
+let iotree a = itree cmds io_op_sig a
+
 (** For now only simple spec monad without trace. (More interesting DM below) *)
 
 let wp a = (a -> Type0) -> Type0
@@ -437,11 +440,11 @@ let wp_bind #a #b (w : wp a) (f : a -> wp b) : wp b =
 let stronger_wp #a (wp1 wp2 : wp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
-let io_wp #a (t : itree cmds io_op_sig a) =
+let io_wp #a (t : iotree a) =
   fun post -> forall p. isRet (t p) ==> post (ret_val (t p))
 
 let io a (w : wp a) =
-  t:itree cmds io_op_sig a { io_wp t `stronger_wp` w }
+  t: iotree a { io_wp t `stronger_wp` w }
 
 let io_return a (x : a) : io a (wp_return x) =
   assert (isRet (ret #cmds #io_op_sig #a x [])) ;
@@ -488,12 +491,15 @@ let rec ipos_trace_append (p q : ipos cmds io_op_sig) :
   | Tau_choice :: p -> ipos_trace_append p q
   | Call_choice o x y :: p -> ipos_trace_append p q
 
-let twp a = (trace -> option a -> Type0) -> Type0
+unfold
+let tio_post a = trace -> option a -> Type0
+
+let twp a = tio_post a -> Type0
 
 let twp_return #a (x : a) : twp a =
   fun post -> post [] (Some x)
 
-let shift_post #a (tr : trace) (post : trace -> option a -> Type0) =
+let shift_post #a (tr : trace) (post : tio_post a) : tio_post a =
   fun tr' x -> post (tr @ tr') x
 
 let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
@@ -518,7 +524,7 @@ let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
 //     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
 //     (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
 
-let io_twp #a (t : itree cmds io_op_sig a) =
+let io_twp #a (t : iotree a) : twp a =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall p. isEvent (t p) ==> post (ipos_trace p) None)
