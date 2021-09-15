@@ -500,24 +500,43 @@ let tio_return a (x : a) : tio a (twp_return x) =
   assert (isRet (ioret #a x [])) ;
   ret x
 
-let rec noFutureRet_find_ret_None_aux #a (m : iotree a) pp p q :
+let rec noFutureRet_find_ret_None_aux' #a (m : iotree a) pp p :
   Lemma
-    (ensures find_ret m pp p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m pp q == None)
+    (ensures ~ (isRet (m pp)) ==> noFutureRet m pp ==> find_ret m pp p == None)
     (decreases p)
 = if isRet (m pp)
   then ()
   else begin
     match p with
-    | [] -> assume (noFutureRet m [] ==> [] `strict_suffix_of` q ==> find_ret m pp q == None)
+    | [] -> ()
+    | c :: p ->
+      begin
+        noFutureRet_find_ret_None_aux' m (pp @ [c]) p ;
+        assert (~ (isRet (m (pp @ [c]))) ==> noFutureRet m (pp @ [c]) ==> find_ret m (pp @ [c]) p == None) ;
+        assume (pp `strict_suffix_of` (pp @ [c])) ; // Should be easy
+        assert (~ (isRet (m pp)) ==> noFutureRet m pp ==> ~ (isRet (m (pp @ [c])))) ;
+        assume (forall q. (pp @ [c]) `strict_suffix_of` q ==> pp `strict_suffix_of` q) ;
+        assert (~ (isRet (m pp)) ==> noFutureRet m pp ==> noFutureRet m (pp @ [c])) ;
+        assert (~ (isRet (m pp)) ==> noFutureRet m pp ==> find_ret m pp (c :: p) == None)
+      end
+  end
+
+let rec noFutureRet_find_ret_None_aux #a (m : iotree a) pp p q :
+  Lemma
+    (ensures find_ret m pp p == None ==> noFutureRet m (pp @ p) ==> p `strict_suffix_of` q ==> find_ret m pp q == None)
+    (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> noFutureRet_find_ret_None_aux' m pp q
     | c :: p ->
       begin match q with
       | [] -> ()
       | c' :: q ->
         begin
           noFutureRet_find_ret_None_aux m (pp @ [c]) p q ;
-          // The problem is that noFutureRet should also mention pp
-          assert (find_ret m (pp @ [c]) p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m (pp @ [c]) q == None) ;
-          assume (find_ret m (pp @ [c]) p == None ==> noFutureRet m (c :: p) ==> (c :: p) `strict_suffix_of` (c' :: q) ==> find_ret m (pp @ [c]) q == None)
+          append_assoc pp [c] p
         end
       end
   end
