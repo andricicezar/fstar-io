@@ -507,7 +507,9 @@ let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
-  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
+  find_ret_strict_suffix m ;
+  assert (forall p q. isRet (m p) ==> noFutureRet (f (ret_val (m p))) q ==> noFutureRet (bind m f) (p @ q)) ;
+  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
   assert (forall x. io_twp (f x) `stronger_twp` wf x) ;
   forall_intro_2 ipos_trace_append
 
