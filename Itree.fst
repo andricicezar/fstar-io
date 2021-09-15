@@ -500,6 +500,11 @@ let tio_return a (x : a) : tio a (twp_return x) =
   assert (isRet (ioret #a x [])) ;
   ret x
 
+// Should be similar to find_ret_strict_suffix
+let noFutureRet_find_ret_None #a (m : iotree a) :
+  Lemma (forall p q. find_ret m [] p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m [] q == None)
+= admit ()
+
 let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
   Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
 = find_ret_append m ;
@@ -518,8 +523,8 @@ let tio_bind_aux2 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
 = forall_intro (move_requires (find_ret_Event_None m [])) ;
   assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
   assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
-  // For this we need to prove that bind m f q for p `strict_suffix_of` q is still cast_node (m q) because noFutureRet m p
-  assume (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
+  noFutureRet_find_ret_None m ;
+  assert (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
 
 // Sometimes need to be retried
 let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
