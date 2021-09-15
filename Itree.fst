@@ -427,25 +427,35 @@ let io_op_sig : op_sig cmds = {
 unfold
 let iotree a = itree cmds io_op_sig a
 
+unfold
+let iopos = ipos cmds io_op_sig
+
+unfold
+let iochoice = ichoice cmds io_op_sig
+
+unfold
+let ioret #a (x : a) : iotree a =
+  ret x
+
 (**
   Spec with trace
   The trace contains the response of the environment, in fact it is a subset of
   positions where Tau steps are ignored.
 
-  This specification if enough to talk about (non)-termination of a program
+  This specification if enough to talk about (non-)termination of a program
   with respect to its interaction with the environment. Unfortunately, it is
   still more limited than the Itrees in Coq.
 *)
 
-let trace = list (c: ichoice cmds io_op_sig { c <> Tau_choice })
+let trace = list (c: iochoice { c <> Tau_choice })
 
-let rec ipos_trace (p : ipos cmds io_op_sig) : trace =
+let rec ipos_trace (p : iopos) : trace =
   match p with
   | [] -> []
   | Tau_choice :: p -> ipos_trace p
   | Call_choice o x y :: p -> Call_choice o x y :: ipos_trace p
 
-let rec ipos_trace_append (p q : ipos cmds io_op_sig) :
+let rec ipos_trace_append (p q : iopos) :
   Lemma (ensures ipos_trace (p @ q) == ipos_trace p @ ipos_trace q) (decreases p)
 = match p with
   | [] -> ()
@@ -474,46 +484,45 @@ let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
-// Alternative to remove prefixes of return traces
+unfold
+let noFutureRet #a (t : iotree a) p =
+  forall q. p `strict_suffix_of` q ==> ~ (isRet (t q))
 
-// unfold
-// let noFutureRet #a (t : itree cmds io_op_sig a) p =
-//   forall q. p `strict_suffix_of` q ==> ~ (isRet (t q))
-
-// let io_twp #a (t : itree cmds io_op_sig a) =
-//   fun post ->
-//     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
-//     (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
-
-let io_twp #a (t : iotree a) : twp a =
+let io_twp #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
-    (forall p. isEvent (t p) ==> post (ipos_trace p) None)
+    (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
 
 let tio a (w : twp a) =
-  t:itree cmds io_op_sig a { io_twp t `stronger_twp` w }
+  t: iotree a { io_twp t `stronger_twp` w }
 
 let tio_return a (x : a) : tio a (twp_return x) =
-  assert (isRet (ret #cmds #io_op_sig #a x [])) ;
+  assert (isRet (ioret #a x [])) ;
   ret x
 
-// Sometimes need to be retried
-let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
-  find_ret_append m ;
+let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
+  Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
+= find_ret_append m ;
   assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
-  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) None) ;
-  assert (forall x. io_twp (f x) `stronger_twp` (wf x)) ;
-  forall_intro_2 ipos_trace_append ;
-  assert (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post)) ;
+  assume (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
+  assert (forall x. io_twp (f x) `stronger_twp` wf x) ;
+  forall_intro_2 ipos_trace_append
 
-  forall_intro (move_requires (find_ret_Event_None m [])) ;
+let tio_bind_aux2 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
+  Lemma (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)
+= forall_intro (move_requires (find_ret_Event_None m [])) ;
   assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
   assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
-  assert (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> post (ipos_trace p) None) ;
+  // For this we need to prove that bind m f q for p `strict_suffix_of` q is still cast_node (m q) because noFutureRet m p
+  assume (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
 
+// Sometimes need to be retried
+let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
+  tio_bind_aux1 a b w wf m f ;
+  tio_bind_aux2 a b w wf m f ;
   bind m f
 
 // Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
