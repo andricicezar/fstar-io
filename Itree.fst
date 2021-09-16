@@ -609,10 +609,7 @@ let tio_call_aux_noret #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> t
     io_twp (call o x k) post ==>
     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
   )
-= assume (forall (post : tio_post a) y.
-    (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None) ==>
-    (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
-  )
+= assert (forall p y. isEvent (k y p) ==> noFutureRet (k y) p ==> isEvent (call o x k (Call_choice o x y :: p)) /\ noFutureRet (call o x k) (Call_choice o x y :: p))
 
 let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
   assert (forall post y. io_twp (k y) post ==> w y post) ;
