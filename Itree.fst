@@ -594,6 +594,62 @@ let tio_tau #a #w (m : tio a w) : tio a w =
   assert (forall p. isEvent (m p) ==> noFutureRet m p ==> isEvent (tau m (Tau_choice :: p)) /\ noFutureRet (tau m) (Tau_choice :: p)) ;
   tau m
 
+let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
+  fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
+
+let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
+  assert (forall post y. io_twp (k y) post ==> w y post) ;
+
+  // Subgoal 1: ret
+  assume (forall post y.
+    (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) ==>
+    (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p))))
+  ) ;
+
+  // Subgoal 2: noret
+  assume (forall (post : tio_post a) y.
+    (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None) ==>
+    (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
+  ) ;
+
+  // Now we conclude (if only, it seems it doesn't work it out)
+  assume (forall post y.
+    begin
+      (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
+      (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
+    end ==>
+    begin
+      (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
+      (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
+    end
+  ) ;
+  assert (forall post y.
+    begin
+      (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
+      (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
+    end ==>
+    begin
+      (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
+      (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) None)
+    end
+  ) ;
+  // assume (forall post y.
+  //   begin
+  //     (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
+  //     (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
+  //   end ==>
+  //   begin
+  //     (forall p. isRet (k y p) ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) (Some (ret_val (k y p)))) /\
+  //     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) None)
+  //   end
+  // ) ;
+  // assume (forall post y. io_twp (call o x k) post ==> io_twp (k y) (shift_post [ Call_choice o x y ] post)) ;
+  // assume (forall post y. io_twp (call o x k) post ==> w y (shift_post [ Call_choice o x y ] post)) ;
+  // assume (forall post. io_twp (call o x k) post ==> (forall y. w y (shift_post [ Call_choice o x y ] post))) ;
+  // assume (forall post. io_twp (call o x k) post ==> twp_call o x w post) ;
+  // assume (io_twp (call o x k) `stronger_twp` twp_call o x w) ;
+  call o x k
+
 // Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
 // of [loop]. Here we would need something in [tio b w] for an arbitrary [w].
 // Another point for going for [iter] directly.
@@ -609,4 +665,6 @@ reifiable total layered_effect {
     repr   = tio ;
     return = tio_return ;
     bind   = tio_bind
+    // tau    = tio_tau ; // Universe problems
+    // call   = tio_call
 }
