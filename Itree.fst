@@ -600,49 +600,43 @@ let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
 let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
   assert (forall post y. io_twp (k y) post ==> w y post) ;
 
-  // Subgoal 1: ret
-  assume (forall post y.
+  // ret
+  assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p))) ;
+  assert (forall post y.
     (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) ==>
     (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p))))
   ) ;
+  assert (forall post y.
+    io_twp (call o x k) post ==>
+    (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p))))
+  ) ;
 
-  // Subgoal 2: noret
-  assume (forall (post : tio_post a) y.
-    (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None) ==>
+  // noret
+  // assume (forall (post : tio_post a) y.
+  //   (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None) ==>
+  //   (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
+  // ) ;
+  // The above is not enough...
+  assume (forall post y.
+    io_twp (call o x k) post ==>
     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
   ) ;
 
-  // Now we conclude (if only, it seems it doesn't work it out)
-  assume (forall post y.
-    begin
-      (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
-      (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-    end ==>
+  // Conclude
+  assert (forall post y.
+    io_twp (call o x k) post ==>
     begin
       (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
       (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
     end
   ) ;
   assert (forall post y.
-    begin
-      (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
-      (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-    end ==>
+    io_twp (call o x k) post ==>
     begin
       (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
       (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) None)
     end
   ) ;
-  // assume (forall post y.
-  //   begin
-  //     (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
-  //     (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-  //   end ==>
-  //   begin
-  //     (forall p. isRet (k y p) ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) (Some (ret_val (k y p)))) /\
-  //     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) None)
-  //   end
-  // ) ;
   // assume (forall post y. io_twp (call o x k) post ==> io_twp (k y) (shift_post [ Call_choice o x y ] post)) ;
   // assume (forall post y. io_twp (call o x k) post ==> w y (shift_post [ Call_choice o x y ] post)) ;
   // assume (forall post. io_twp (call o x k) post ==> (forall y. w y (shift_post [ Call_choice o x y ] post))) ;
