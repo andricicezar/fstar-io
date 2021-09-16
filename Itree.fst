@@ -598,67 +598,26 @@ let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
 
 let tio_call_aux_ret #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) :
-  Lemma (forall post y.
+  Lemma (forall (post : tio_post a) y.
     io_twp (call o x k) post ==>
     (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p))))
   )
 = assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p)))
 
 let tio_call_aux_noret #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) :
-  Lemma (forall post y.
+  Lemma (forall (post : tio_post a) y.
     io_twp (call o x k) post ==>
     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
   )
 = assume (forall (post : tio_post a) y.
     (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None) ==>
     (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
-  ) ;
-  // I don't understand why this isn't enough
-  // let weak_impl (p q r : tio_post a -> io_res o -> Type0) :
-  //   Lemma (forall post y. (p post y ==> r post y) ==> (p post y /\ q post y ==> r post y))
-  // = ()
-  // in
-  // weak_impl
-  //   (fun post y -> forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-  //   (fun post y -> forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-  //   (fun post y -> forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None) ;
-  assume (forall post y.
-    begin
-      (forall p. isRet (call o x k p) ==> post (ipos_trace p) (Some (ret_val (call o x k p)))) /\
-      (forall p. isEvent (call o x k p) ==> noFutureRet (call o x k) p ==> post (ipos_trace p) None)
-    end ==>
-    (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
   )
 
 let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
   assert (forall post y. io_twp (k y) post ==> w y post) ;
-
-  // ret
   tio_call_aux_ret o x k ;
-
-  // noret
   tio_call_aux_noret o x k ;
-
-  // Conclude
-  assert (forall post y.
-    io_twp (call o x k) post ==>
-    begin
-      (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
-      (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
-    end
-  ) ;
-  assert (forall post y.
-    io_twp (call o x k) post ==>
-    begin
-      (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p)))) /\
-      (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> (shift_post [ Call_choice o x y ] post) (ipos_trace p) None)
-    end
-  ) ;
-  // assume (forall post y. io_twp (call o x k) post ==> io_twp (k y) (shift_post [ Call_choice o x y ] post)) ;
-  // assume (forall post y. io_twp (call o x k) post ==> w y (shift_post [ Call_choice o x y ] post)) ;
-  // assume (forall post. io_twp (call o x k) post ==> (forall y. w y (shift_post [ Call_choice o x y ] post))) ;
-  // assume (forall post. io_twp (call o x k) post ==> twp_call o x w post) ;
-  // assume (io_twp (call o x k) `stronger_twp` twp_call o x w) ;
   call o x k
 
 // Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
