@@ -590,21 +590,8 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
 
 // More like a sanity check
 let tio_tau #a #w (m : tio a w) : tio a w =
-  // Subgoal 1: on ret
   assert (forall p. isRet (m p) ==> isRet (tau m (Tau_choice :: p))) ;
-  // assert (forall post. (forall p. isRet (tau m p) ==> post (ipos_trace p) (Some (ret_val (tau m p)))) ==> (forall p. isRet (m p) ==> post (ipos_trace p) (Some (ret_val (m p))))) ;
-
-  // Subgoal 2: on event / no future ret
   assert (forall p. isEvent (m p) ==> noFutureRet m p ==> isEvent (tau m (Tau_choice :: p)) /\ noFutureRet (tau m) (Tau_choice :: p)) ;
-  // assert (forall (post : tio_post a).
-  //   (forall p. isEvent (tau m p) ==> noFutureRet (tau m) p ==> post (ipos_trace p) None) ==>
-  //   (forall p. isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)
-  // ) ;
-
-  // Now we conclude
-  // assert (forall post. io_twp (tau m) post ==> (forall p. isRet (m p) ==> post (ipos_trace p) (Some (ret_val (m p))))) ;
-  // assert (forall (post : tio_post a). io_twp (tau m) post ==> (forall p. isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)) ;
-  // assert (forall post. io_twp (tau m) post ==> io_twp m post) ;
   tau m
 
 // Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
