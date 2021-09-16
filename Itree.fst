@@ -597,24 +597,14 @@ let tio_tau #a #w (m : tio a w) : tio a w =
 let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
 
-let tio_call_aux_ret #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) :
-  Lemma (forall (post : tio_post a) y.
-    io_twp (call o x k) post ==>
-    (forall p. isRet (k y p) ==> post (Call_choice o x y :: ipos_trace p) (Some (ret_val (k y p))))
-  )
-= assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p)))
-
-let tio_call_aux_noret #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) :
-  Lemma (forall (post : tio_post a) y.
-    io_twp (call o x k) post ==>
-    (forall p. isEvent (k y p) ==> noFutureRet (k y) p ==> post (Call_choice o x y :: ipos_trace p) None)
-  )
-= assert (forall p y. isEvent (k y p) ==> noFutureRet (k y) p ==> isEvent (call o x k (Call_choice o x y :: p)) /\ noFutureRet (call o x k) (Call_choice o x y :: p))
-
 let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
   assert (forall post y. io_twp (k y) post ==> w y post) ;
-  tio_call_aux_ret o x k ;
-  tio_call_aux_noret o x k ;
+  assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p))) ;
+  assert (forall p y.
+    isEvent (k y p) ==>
+    noFutureRet (k y) p ==>
+    isEvent (call o x k (Call_choice o x y :: p)) /\ noFutureRet (call o x k) (Call_choice o x y :: p)
+  ) ;
   call o x k
 
 // Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
