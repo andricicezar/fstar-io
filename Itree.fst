@@ -292,13 +292,13 @@ let loop #op #s a : itree op s a =
     | [] -> Some Tau
     | _ -> None
 
+(** Definition of a co-recursor *)
+
 let cont #op #s #a (n : inode op s a) r =
   match n with
   | Ret x -> unit
   | Call o x -> s.res o -> r
   | Tau -> r
-
-(** Definition of a co-recursor *)
 
 let cont_node op s a r =
   n: inode op s a & cont n r
