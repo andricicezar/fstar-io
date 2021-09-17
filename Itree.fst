@@ -452,10 +452,8 @@ let repeat #op #s (body : itree op s unit) : itree op s unit =
       | Tau_choice :: r ->
         if length r + 1 <= n
         then begin
-          aux r (n-1) ; // right call?
-          assert (length r <= n-1 ==> itree_cofix_unfoldn ff (length r) () r == itree_cofix_unfoldn ff (n-1) () r) ;
-          // The problem is that we did not go back only one step but potentially more
-          assume (length p <= n ==> itree_cofix_unfoldn ff (length p) () p == itree_cofix_unfoldn ff n () p)
+          aux r (n-1) ;
+          aux r (length p - 1)
         end
         else ()
       | _ -> ()
