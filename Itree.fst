@@ -410,6 +410,14 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree 
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
 = fun p -> itree_cofix_unfoldn ff (length p) x p
 
+// let funext a b (f g : a -> b) :
+//   Lemma (requires forall x. f x == g x) (ensures f == g)
+// = ()
+
+// let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) :
+//   Lemma (itree_cofix_guarded ff ==> itree_cofix ff == ff (itree_cofix ff))
+// = assume (forall (x : a). itree_cofix_guarded ff ==> itree_cofix ff x == ff (itree_cofix ff) x)
+
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
