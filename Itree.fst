@@ -259,6 +259,26 @@ let rec find_ret_Event_None #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> append_assoc pp [c] p ; find_ret_Event_None m (pp @ [c]) p
   end
 
+let rec find_ret_smaller #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> p == q \/ q << p) (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p' -> find_ret_smaller m (pp @ [c]) p'
+  end
+
+let rec find_ret_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> length q <= length p) (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p' -> find_ret_length m (pp @ [c]) p'
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -418,8 +438,31 @@ let loop' #op #s a : itree op s a =
 
 (* Definition of repeat *)
 let repeat #op #s (body : itree op s unit) : itree op s unit =
-  admit () ;
-  itree_cofix (fun repeat_ _ -> bind body (fun _ -> tau (repeat_ ()))) ()
+  let ff repeat_ _ = bind body (fun _ -> tau (repeat_ ())) in
+  let rec aux p n :
+    Lemma
+      (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) () p == itree_cofix_unfoldn ff n () p)
+      (decreases p)
+      [SMTPat ()]
+  = match find_ret body [] p with
+    | Some (x, q) ->
+      find_ret_smaller body [] p ;
+      find_ret_length body [] p ;
+      begin match q with
+      | Tau_choice :: r ->
+        if length r + 1 <= n
+        then begin
+          aux r (n-1) ; // right call?
+          assert (length r <= n-1 ==> itree_cofix_unfoldn ff (length r) () r == itree_cofix_unfoldn ff (n-1) () r) ;
+          // The problem is that we did not go back only one step but potentially more
+          assume (length p <= n ==> itree_cofix_unfoldn ff (length p) () p == itree_cofix_unfoldn ff n () p)
+        end
+        else ()
+      | _ -> ()
+      end
+    | None -> ()
+  in
+  itree_cofix ff ()
 
 (* Definition of iter from cofixpoint *)
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
