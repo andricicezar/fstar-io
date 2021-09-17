@@ -401,10 +401,25 @@ let ret' #op #s #a (v : a) : itree op s a =
 
 (* Alternative def of loop using cofix to test it *)
 let loop' #op #s a : itree op s a =
+  let ff loop_ _ = tau (loop_ ()) in
+  let rec aux p n :
+    Lemma
+      (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) () p == itree_cofix_unfoldn ff n () p)
+      (decreases p)
+      [SMTPat ()]
+  = match p with
+    | Tau_choice :: q ->
+      if length q + 1 <= n
+      then aux q (n-1)
+      else ()
+    | _ -> ()
+  in
+  itree_cofix ff ()
+
+(* Definition of repeat *)
+let repeat #op #s (body : itree op s unit) : itree op s unit =
   admit () ;
-  itree_cofix (fun loop_ (_ : unit) ->
-    tau (loop_ ())
-  ) ()
+  itree_cofix (fun repeat_ _ -> bind body (fun _ -> tau (repeat_ ()))) ()
 
 (* Definition of iter from cofixpoint *)
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
