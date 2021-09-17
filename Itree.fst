@@ -464,15 +464,37 @@ let repeat #op #s (body : itree op s unit) : itree op s unit =
 
 (* Definition of iter from cofixpoint *)
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
-  admit () ;
-  itree_cofix (fun iter_ i ->
+  let ff iter_ i =
     bind (step i) (fun ir ->
       begin match ir with
       | Inl j -> tau (iter_ j)
       | Inr r -> ret r
       end
     )
-  )
+  in
+  let rec aux p n x :
+    Lemma
+      (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
+      (decreases p)
+      [SMTPat ()]
+  = match find_ret (step x) [] p with
+    | Some (Inl j, q) ->
+      find_ret_smaller (step x) [] p ;
+      find_ret_length (step x) [] p ;
+      begin match q with
+      | Tau_choice :: r ->
+        if length r + 1 <= n
+        then begin
+          aux r (n-1) j ;
+          aux r (length p - 1) j
+        end
+        else ()
+      | _ -> ()
+      end
+    | Some (Inr r, q) -> ()
+    | None -> ()
+  in
+  itree_cofix ff
 
 (** Monad instance
 
