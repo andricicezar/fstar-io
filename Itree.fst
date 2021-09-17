@@ -414,11 +414,6 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree 
 let ret' #op #s #a (v : a) : itree op s a =
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
 
-(* It seems that the guard is too hard to prove for the SMT when there is a
-   recursive call. This suggests that maybe we should go for iter directly
-   instead.
- *)
-
 (* Alternative def of loop using cofix to test it *)
 let loop' #op #s a : itree op s a =
   let ff loop_ _ = tau (loop_ ()) in
@@ -685,13 +680,23 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
   ) ;
   call o x k
 
-// Cannot reproduce itree_cofix_unfoldn as above because of the "base"-case
-// of [loop]. Here we would need something in [tio b w] for an arbitrary [w].
-// Another point for going for [iter] directly.
-// let rec tio_cofix_unfoldn #a #b #w (ff : (a -> tio b w) -> a -> tio b w) (n : nat) : a -> tio b w =
-//   if n = 0
-//   then ff (fun _ -> loop _)
-//   else ff (tio_cofix_unfoldn ff (n - 1))
+// TODO of course
+assume val repeats_trace (t t' : trace) : Type0
+
+let twp_repeat (w : twp unit) : twp unit =
+  fun post -> // Is it really the right spec?
+    // Either the body doesn't terminate or it does and the trace is repeated
+    w (fun tr v ->
+      match v with
+      | Some () -> forall tr'. tr' `repeats_trace` tr ==> post tr' None
+      | None -> post tr None
+    )
+
+let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
+  assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
+  assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
+  repeat body
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
