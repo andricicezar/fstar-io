@@ -406,18 +406,17 @@ let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -
     length p <= n ==>
     itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p
 
-// Do we really need the require here? Maybe we can accept anything and just prove stuff
-// using the guard.
 let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) :
   Pure (a -> itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
 = fun (x : a) p -> itree_cofix_unfoldn ff (length p) x p
 
-let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) p :
-  Lemma (itree_cofix_guarded ff ==> itree_cofix ff x p == ff (itree_cofix ff) x p)
-= assert (itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix_unfoldn ff (length p)) x p) ;
-  assume (itree_cofix_guarded ff ==> ff (itree_cofix_unfoldn ff (length p)) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
-  assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
-  assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
+// let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) p :
+//   Lemma (itree_cofix_guarded ff ==> itree_cofix ff x p == ff (itree_cofix ff) x p)
+// = assert (itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix_unfoldn ff (length p)) x p) ;
+// // WAIT! Capture problem here.
+//   assume (itree_cofix_guarded ff ==> ff (itree_cofix_unfoldn ff (length p)) x p == ff (fun x q -> itree_cofix_unfoldn ff (length p) x q) x p) ;
+//   assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
+//   assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
 
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
