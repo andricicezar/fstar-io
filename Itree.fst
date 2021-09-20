@@ -415,12 +415,9 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree 
 let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) p :
   Lemma (itree_cofix_guarded ff ==> itree_cofix ff x p == ff (itree_cofix ff) x p)
 = assert (itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix_unfoldn ff (length p)) x p) ;
-  assert (itree_cofix_guarded ff ==> itree_cofix ff == (fun x p -> itree_cofix_unfoldn ff (length p) x p)) ;
-
-  // assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
-  // assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix ff) x p) ;
-  // assume (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff (length p + 1) x p)
-  assume (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
+  assume (itree_cofix_guarded ff ==> ff (itree_cofix_unfoldn ff (length p)) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
+  assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
+  assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
 
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
