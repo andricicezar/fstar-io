@@ -406,17 +406,23 @@ let itree_cofix_guarded (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -
     length p <= n ==>
     itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p
 
+// Do we really need the require here? Maybe we can accept anything and just prove stuff
+// using the guard.
 let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) :
   Pure (itree op s b) (requires itree_cofix_guarded ff) (ensures fun _ -> True)
 = fun p -> itree_cofix_unfoldn ff (length p) x p
 
-// let funext a b (f g : a -> b) :
-//   Lemma (requires forall x. f x == g x) (ensures f == g)
-// = ()
+let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) p :
+  Lemma (itree_cofix_guarded ff ==> itree_cofix ff x p == ff (itree_cofix ff) x p)
+= assert (itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix_unfoldn ff (length p)) x p) ;
+  assert (forall x. itree_cofix_guarded ff ==> itree_cofix ff x == (fun p -> itree_cofix_unfoldn ff (length p) x p)) ;
+  // We don't have the following because we don't have eta
+  // assert (itree_cofix_guarded ff ==> itree_cofix ff == (fun x p -> itree_cofix_unfoldn ff (length p) x p)) ;
 
-// let itree_cofix_isfix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) :
-//   Lemma (itree_cofix_guarded ff ==> itree_cofix ff == ff (itree_cofix ff))
-// = assume (forall (x : a). itree_cofix_guarded ff ==> itree_cofix ff x == ff (itree_cofix ff) x)
+  // assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
+  // assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p + 1) x p == ff (itree_cofix ff) x p) ;
+  // assume (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff (length p + 1) x p)
+  assume (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
 
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
@@ -713,6 +719,7 @@ let rec consume_trace_smaller (t t' : trace) :
       else ()
     end
 
+(** Says that t is a prefix of t' infinitely repeated *)
 let rec repeats_trace (t t' : trace) : Type0 =
   match consume_trace t t' with
   | Some [] -> True
@@ -729,8 +736,14 @@ let twp_repeat (w : twp unit) : twp unit =
     )
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
+  assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
+
+  // ret
   assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
+
+  // noret
   assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
+
   assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
