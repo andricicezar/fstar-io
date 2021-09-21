@@ -736,14 +736,16 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
   // noret
-  assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
+  assume (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
+  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
+  // Is the split above reasonable? Maybe it should be around find_ret?
   assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
-  TIO : a:Type -> twp a -> Effect
+  IODiv : a:Type -> twp a -> Effect
   with
     repr   = tio ;
     return = tio_return ;
