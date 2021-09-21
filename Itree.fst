@@ -772,11 +772,12 @@ let rec trace_prefix_lift p tr :
   Pure iopos (requires tr `strict_suffix_of` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
 = match p with
   | [] -> []
+  | Tau_choice :: p -> Tau_choice :: trace_prefix_lift p tr
   | c :: p ->
     begin match tr with
     | [] -> []
     | c' :: tr ->
-      admit () ; magic ()
+      c :: trace_prefix_lift p tr
     end
 
 let rec repeat_pos_lift (body : iotree unit) p tr :
