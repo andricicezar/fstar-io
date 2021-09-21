@@ -768,6 +768,17 @@ let twp_repeat (w : twp unit) : twp unit =
       | None -> post tr None
     )
 
+let rec trace_prefix_lift p tr :
+  Pure iopos (requires tr `strict_suffix_of` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
+= match p with
+  | [] -> []
+  | c :: p ->
+    begin match tr with
+    | [] -> []
+    | c' :: tr ->
+      admit () ; magic ()
+    end
+
 let rec repeat_pos_lift (body : iotree unit) p tr :
   Pure iopos (requires tr `repeats_trace` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
 = match tr `list_minus` ipos_trace p with
@@ -782,13 +793,13 @@ let rec repeat_pos_lift (body : iotree unit) p tr :
     if length tr' < length (ipos_trace p)
     then begin
       assert (tr' `strict_suffix_of` ipos_trace p) ;
-      admit () ;
-      p @ Tau_choice :: (magic ()) // magic is lifted from tr'
+      forall_intro_2 ipos_trace_append ;
+      p @ Tau_choice :: (trace_prefix_lift p tr')
     end
     else begin
       assert (tr' `repeats_trace` ipos_trace p) ;
       list_minus_smaller tr (ipos_trace p) ;
-      admit () ;
+      forall_intro_2 ipos_trace_append ;
       p @ Tau_choice :: repeat_pos_lift body p tr'
     end
 
