@@ -749,7 +749,7 @@ let rec repeats_trace (t t' : trace) : Type0 =
   match t `list_minus` t' with
   | Some [] -> True
   | Some tt -> list_minus_smaller t t' ; tt `repeats_trace` t'
-  | None -> False
+  | None -> False // TODO WAIT Now it's too restrictive, it only allows repetitions of t'
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post ->
@@ -759,6 +759,14 @@ let twp_repeat (w : twp unit) : twp unit =
       | Some () -> forall tr'. tr' `repeats_trace` tr ==> post tr' None
       | None -> post tr None
     )
+
+let rec repeat_pos_lift (body : iotree unit) p tr :
+  Pure iopos (requires tr `repeats_trace` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
+= match tr `list_minus` ipos_trace p with
+  | Some [] ->
+    list_minus_Some tr (ipos_trace p) ;
+    p
+  | Some tr' -> admit () ; magic () // TODO Fix def of repeats_trace first
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
