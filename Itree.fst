@@ -27,7 +27,7 @@ let rec strict_suffix_or_eq_append #a (s l : list a) :
   | y :: s -> strict_suffix_or_eq_append s l
 
 let rec strict_suffix_length #a (s l : list a) :
-  Lemma (ensures s `strict_suffix_of` l ==> length s <= length l) (decreases l)
+  Lemma (ensures s `strict_suffix_of` l ==> length s < length l) (decreases l)
 = match l with
   | [] -> ()
   | x :: l ->
@@ -753,6 +753,12 @@ let rec repeats_trace (t t' : trace) : Type0 =
     tt `repeats_trace` t' \/ tt `strict_suffix_of` t'
   | None -> False
 
+let rec repeats_trace_length t t' :
+  Lemma (t `repeats_trace` t' ==> length t' <= length t)
+= match t `list_minus` t' with
+  | Some x -> list_minus_Some t t'
+  | None -> ()
+
 let twp_repeat (w : twp unit) : twp unit =
   fun post ->
     // Either the body doesn't terminate or it does and the trace is repeated
@@ -768,7 +774,24 @@ let rec repeat_pos_lift (body : iotree unit) p tr :
   | Some [] ->
     list_minus_Some tr (ipos_trace p) ;
     p
-  | Some tr' -> admit () ; magic ()
+  | Some tr' ->
+    list_minus_Some tr (ipos_trace p) ;
+    assert (tr' `repeats_trace` ipos_trace p \/ tr' `strict_suffix_of` ipos_trace p) ;
+    repeats_trace_length tr' (ipos_trace p) ;
+    strict_suffix_length tr' (ipos_trace p) ;
+    if length tr' < length (ipos_trace p)
+    then begin
+      assert (tr' `strict_suffix_of` ipos_trace p) ;
+      admit () ;
+      p @ Tau_choice :: (magic ()) // magic is lifted from tr'
+    end
+    else begin
+      assert (tr' `repeats_trace` ipos_trace p) ;
+      list_minus_smaller tr (ipos_trace p) ;
+      admit () ;
+      p @ Tau_choice :: repeat_pos_lift body p tr'
+    end
+
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
