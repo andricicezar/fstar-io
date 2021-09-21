@@ -88,6 +88,19 @@ let rec list_minus_smaller (#a : eqtype) (l l' : list a) :
       else ()
     end
 
+let rec list_minus_Some (#a : eqtype) (l l' : list a) :
+  Lemma (forall r. l `list_minus` l' == Some r ==> l == l' @ r)
+= match l with
+  | [] -> ()
+  | x :: l ->
+    begin match l' with
+    | [] -> ()
+    | y :: l' ->
+      if x = y
+      then list_minus_Some l l'
+      else ()
+    end
+
 (** Encoding of interaction trees, specialised to a free monad
 
    The idea is to bypass the absence of coinductive datatypes in F* by instead
