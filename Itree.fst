@@ -59,28 +59,32 @@ let rec strict_suffix_of_trans #a (p q r : list a) :
 (** [l `list_minus` l'] return [Some r] when [l == l' @ r] and [None]
     otherwise.
 *)
-let rec list_minus (#a : eqtype) (t t' : list a) : option (list a) =
-  match t with
-  | [] -> Some []
-  | x :: t ->
-    begin match t' with
+let rec list_minus (#a : eqtype) (l l' : list a) : option (list a) =
+  match l with
+  | [] ->
+    begin match l' with
+    | [] -> Some []
+    | y :: l' -> None
+    end
+  | x :: l ->
+    begin match l' with
     | [] -> None
-    | y :: t' ->
+    | y :: l' ->
       if x = y
-      then list_minus t t'
+      then l `list_minus` l'
       else None
     end
 
-let rec list_minus_smaller (#a : eqtype) (t t' : list a) :
-  Lemma (forall tt. list_minus t t' == Some tt ==> t == [] \/ tt << t)
-= match t with
+let rec list_minus_smaller (#a : eqtype) (l l' : list a) :
+  Lemma (forall r. l `list_minus` l' == Some r ==> (l == [] /\ l' == []) \/ r << l)
+= match l with
   | [] -> ()
-  | x :: t ->
-    begin match t' with
+  | x :: l ->
+    begin match l' with
     | [] -> ()
-    | y :: t' ->
+    | y :: l' ->
       if x = y
-      then list_minus_smaller t t'
+      then list_minus_smaller l l'
       else ()
     end
 
@@ -725,11 +729,13 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
   ) ;
   call o x k
 
-(** Says that t is a prefix of t'ω (t' infinitely repeated) *)
+(** Says that t is a prefix of t'ω (t' infinitely repeated)
+   which contains t' at least once.
+*)
 let rec repeats_trace (t t' : trace) : Type0 =
-  match list_minus t t' with
+  match t `list_minus` t' with
   | Some [] -> True
-  | Some tt -> list_minus_smaller t t' ; repeats_trace tt t'
+  | Some tt -> list_minus_smaller t t' ; tt `repeats_trace` t'
   | None -> False
 
 let twp_repeat (w : twp unit) : twp unit =
@@ -749,7 +755,6 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   // but we should lift this q from tr
   // tr `repeats_trace` ipos_trace p ==> exists q. q repeats p and tr == ipos_trace q or something
   // better if we get our hands on the q with a name
-  // Also maybe repeats_trace should not accept the empty list, or we should force tr to be at least ipos_trace p
   assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
   // noret
