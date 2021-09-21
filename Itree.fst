@@ -748,8 +748,10 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
 let rec repeats_trace (t t' : trace) : Type0 =
   match t `list_minus` t' with
   | Some [] -> True
-  | Some tt -> list_minus_smaller t t' ; tt `repeats_trace` t'
-  | None -> False // TODO WAIT Now it's too restrictive, it only allows repetitions of t'
+  | Some tt ->
+    list_minus_smaller t t' ;
+    tt `repeats_trace` t' \/ tt `strict_suffix_of` t'
+  | None -> False
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post ->
@@ -766,7 +768,7 @@ let rec repeat_pos_lift (body : iotree unit) p tr :
   | Some [] ->
     list_minus_Some tr (ipos_trace p) ;
     p
-  | Some tr' -> admit () ; magic () // TODO Fix def of repeats_trace first
+  | Some tr' -> admit () ; magic ()
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
