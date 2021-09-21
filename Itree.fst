@@ -746,14 +746,8 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
 
   // noret
   forall_intro (move_requires (find_ret_Event_None body [])) ;
-  forall_intro (itree_cofix_unfold_1 (repeat_fix body) ()) ;
   forall_intro_2 (repeat_fix_guarded body) ;
-  assert (forall p. itree_cofix (repeat_fix body) () p == repeat_fix body (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) () p) ;
-  assert (forall p. itree_cofix (repeat_fix body) () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
-  assert (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
-  assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p)) ;
   noFutureRet_find_ret_None body ;
-  assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
   // Is the split above reasonable? Maybe it should be around find_ret?
