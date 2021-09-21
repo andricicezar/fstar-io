@@ -56,6 +56,34 @@ let rec strict_suffix_of_trans #a (p q r : list a) :
     end
   end
 
+(** [l `list_minus` l'] return [Some r] when [l == l' @ r] and [None]
+    otherwise.
+*)
+let rec list_minus (#a : eqtype) (t t' : list a) : option (list a) =
+  match t with
+  | [] -> Some []
+  | x :: t ->
+    begin match t' with
+    | [] -> None
+    | y :: t' ->
+      if x = y
+      then list_minus t t'
+      else None
+    end
+
+let rec list_minus_smaller (#a : eqtype) (t t' : list a) :
+  Lemma (forall tt. list_minus t t' == Some tt ==> t == [] \/ tt << t)
+= match t with
+  | [] -> ()
+  | x :: t ->
+    begin match t' with
+    | [] -> ()
+    | y :: t' ->
+      if x = y
+      then list_minus_smaller t t'
+      else ()
+    end
+
 (** Encoding of interaction trees, specialised to a free monad
 
    The idea is to bypass the absence of coinductive datatypes in F* by instead
@@ -697,36 +725,11 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
   ) ;
   call o x k
 
-let rec consume_trace (t t' : trace) : option trace =
-  match t with
-  | [] -> Some []
-  | x :: t ->
-    begin match t' with
-    | [] -> None
-    | y :: t' ->
-      if x = y
-      then consume_trace t t'
-      else None
-    end
-
-let rec consume_trace_smaller (t t' : trace) :
-  Lemma (forall tt. consume_trace t t' == Some tt ==> t == [] \/ tt << t)
-= match t with
-  | [] -> ()
-  | x :: t ->
-    begin match t' with
-    | [] -> ()
-    | y :: t' ->
-      if x = y
-      then consume_trace_smaller t t'
-      else ()
-    end
-
-(** Says that t is a prefix of t' infinitely repeated *)
+(** Says that t is a prefix of t'ω (t' infinitely repeated) *)
 let rec repeats_trace (t t' : trace) : Type0 =
-  match consume_trace t t' with
+  match list_minus t t' with
   | Some [] -> True
-  | Some tt -> consume_trace_smaller t t' ; repeats_trace tt t'
+  | Some tt -> list_minus_smaller t t' ; repeats_trace tt t'
   | None -> False
 
 let twp_repeat (w : twp unit) : twp unit =
