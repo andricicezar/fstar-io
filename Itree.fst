@@ -418,6 +418,10 @@ let itree_cofix (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree 
 //   assert (itree_cofix_guarded ff ==> ff (itree_cofix ff) x p == ff (fun x p -> itree_cofix_unfoldn ff (length p) x p) x p) ;
 //   assert (itree_cofix_guarded ff ==> itree_cofix_unfoldn ff (length p) x p == ff (itree_cofix ff) x p)
 
+let itree_cofix_unfold_1 (#op : eqtype) #s #a #b (ff : (a -> itree op s b) -> a -> itree op s b) (x : a) p :
+  Lemma (itree_cofix_guarded ff ==> itree_cofix ff x p == ff (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) x p)
+= ()
+
 (* Trivial cofix *)
 let ret' #op #s #a (v : a) : itree op s a =
   itree_cofix (fun (_ : unit -> itree op s a) (_ : unit) -> ret v) ()
@@ -736,6 +740,17 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
   // noret
+  forall_intro (move_requires (find_ret_Event_None body [])) ;
+  // assert (forall p. isEvent (body p) ==> noFutureRet body p ==> find_ret body [] p == None) ;
+  let ff (repeat_ : unit -> iotree unit) _ = bind body (fun _ -> tau (repeat_ ())) in
+  forall_intro (itree_cofix_unfold_1 ff ()) ;
+  assert (forall p. (itree_cofix_guarded ff ==> itree_cofix ff () p == ff (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) () p)) ;
+  assert (forall p. (itree_cofix_guarded ff ==> itree_cofix ff () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p)) ;
+  // Unfolding is hard it seems...
+  // assert (forall p. (itree_cofix_guarded ff ==> repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p)) ;
+  //
+  // assert (forall p. isEvent (body p) ==> repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p) ;
+  // assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p)) ;
   assume (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
