@@ -443,31 +443,36 @@ let loop' #op #s a : itree op s a =
   in
   itree_cofix ff ()
 
-(* Definition of repeat *)
-let repeat #op #s (body : itree op s unit) : itree op s unit =
-  let ff repeat_ _ = bind body (fun _ -> tau (repeat_ ())) in
-  let rec aux p n :
-    Lemma
-      (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) () p == itree_cofix_unfoldn ff n () p)
-      (decreases p)
-      [SMTPat ()]
-  = match find_ret body [] p with
-    | Some (x, q) ->
-      find_ret_smaller body [] p ;
-      find_ret_length body [] p ;
-      begin match q with
-      | Tau_choice :: r ->
-        if length r + 1 <= n
-        then begin
-          aux r (n-1) ;
-          aux r (length p - 1)
-        end
-        else ()
-      | _ -> ()
+(** Definition of repeat
+   Is is achieved using a cofix. For proof purposes we define it in three parts.
+*)
+
+let repeat_fix #op #s (body : itree op s unit) repeat_ (_ : unit) : itree op s unit =
+  bind body (fun _ -> tau (repeat_ ()))
+
+let rec repeat_fix_guarded #op #s (body : itree op s unit) p n :
+  Lemma
+    (ensures length p <= n ==> itree_cofix_unfoldn (repeat_fix body) (length p) () p == itree_cofix_unfoldn (repeat_fix body) n () p)
+    (decreases p)
+= match find_ret body [] p with
+  | Some (x, q) ->
+    find_ret_smaller body [] p ;
+    find_ret_length body [] p ;
+    begin match q with
+    | Tau_choice :: r ->
+      if length r + 1 <= n
+      then begin
+        repeat_fix_guarded body r (n-1) ;
+        repeat_fix_guarded body r (length p - 1)
       end
-    | None -> ()
-  in
-  itree_cofix ff ()
+      else ()
+    | _ -> ()
+    end
+  | None -> ()
+
+let repeat #op #s (body : itree op s unit) : itree op s unit =
+  forall_intro_2 (repeat_fix_guarded body) ;
+  itree_cofix (repeat_fix body) ()
 
 (* Definition of iter from cofixpoint *)
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
@@ -741,16 +746,12 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
 
   // noret
   forall_intro (move_requires (find_ret_Event_None body [])) ;
-  // assert (forall p. isEvent (body p) ==> noFutureRet body p ==> find_ret body [] p == None) ;
-  let ff (repeat_ : unit -> iotree unit) _ = bind body (fun _ -> tau (repeat_ ())) in
-  forall_intro (itree_cofix_unfold_1 ff ()) ;
-  assert (forall p. (itree_cofix_guarded ff ==> itree_cofix ff () p == ff (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) () p)) ;
-  assert (forall p. (itree_cofix_guarded ff ==> itree_cofix ff () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p)) ;
-  // Unfolding is hard it seems...
-  // assert (forall p. (itree_cofix_guarded ff ==> repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p)) ;
-  //
-  // assert (forall p. isEvent (body p) ==> repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn ff (length p - 1)) ())) p) ;
-  // assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p)) ;
+  forall_intro (itree_cofix_unfold_1 (repeat_fix body) ()) ;
+  forall_intro_2 (repeat_fix_guarded body) ;
+  assert (forall p. itree_cofix (repeat_fix body) () p == repeat_fix body (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) () p) ;
+  assert (forall p. itree_cofix (repeat_fix body) () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
+  assert (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
+  assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p)) ;
   assume (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
