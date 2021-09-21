@@ -742,6 +742,11 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
 
   // ret
+  // We want to show that isRet (body p) implies that for any q "repeat" of p, isEvent (repeat body q) and noFutureRet (repeat body) q
+  // but we should lift this q from tr
+  // tr `repeats_trace` ipos_trace p ==> exists q. q repeats p and tr == ipos_trace q or something
+  // better if we get our hands on the q with a name
+  // Also maybe repeats_trace should not accept the empty list, or we should force tr to be at least ipos_trace p
   assume (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
   // noret
@@ -750,7 +755,6 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   noFutureRet_find_ret_None body ;
   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
-  // Is the split above reasonable? Maybe it should be around find_ret?
   assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
