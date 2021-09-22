@@ -804,12 +804,17 @@ let rec repeat_pos_lift (body : iotree unit) p tr :
       p @ Tau_choice :: repeat_pos_lift body p tr'
     end
 
+let rec repeat_pos_lift_ret (body : iotree unit) p tr :
+  Lemma (
+    isRet (body p) ==>
+    tr `repeats_trace` ipos_trace p ==>
+    isEvent (repeat body (repeat_pos_lift body p tr)) /\ noFutureRet (repeat body) (repeat_pos_lift body p tr)
+  )
+= admit ()
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
-  assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
-
   // ret
-  assume (forall p tr. isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> isEvent (repeat body (repeat_pos_lift body p tr)) /\ noFutureRet (repeat body) (repeat_pos_lift body p tr)) ;
+  forall_intro_2 (repeat_pos_lift_ret body) ;
   assert (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
   // noret
@@ -818,6 +823,7 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   noFutureRet_find_ret_None body ;
   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
+  // Conclusion
   assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
