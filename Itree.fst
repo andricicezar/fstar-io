@@ -811,6 +811,12 @@ let rec repeat_pos_lift_ret (body : iotree unit) p tr :
     isEvent (repeat body (repeat_pos_lift body p tr)) /\ noFutureRet (repeat body) (repeat_pos_lift body p tr)
   )
 = admit ()
+// While it seems that this approach will succeed.
+// Sadly, it's probably not the best spec. We have an underspec in fact
+// Here we repeat p with Taus in between to get a path
+// but we could alternate between different return paths in body.
+// Worse, once we add more effects, these paths will not be independent.
+// This could also be the case with access to history.
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   // ret
