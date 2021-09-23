@@ -772,17 +772,13 @@ let rec repeat_not_ret (body : iotree unit) p :
 = match find_ret body [] p with
   | Some ((), q) ->
     repeat_unfold_1 body ;
-    // assume (~ (isRet (tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ()) q)))
     if length p = 0
     then ()
     else begin
-      // assume (~ (isRet (tau (itree_cofix_unfoldn (repeat_fix body) (length p - 1) ()) q)))
       match q with
       | Tau_choice :: r ->
-        // assume (~ (isRet (itree_cofix_unfoldn (repeat_fix body) (length p - 1) () r)))
         find_ret_length body [] p ;
         forall_intro_2 (repeat_fix_guarded body) ;
-        // assume (~ (isRet (repeat body r)))
         find_ret_smaller body [] p ;
         repeat_not_ret body r
       | _ :: r -> ()
@@ -796,15 +792,12 @@ let tio_repeat_prefix #w (body : tio unit w) :
   forall_intro (repeat_not_ret body) ;
 
   // ret
-  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> post (ipos_trace p @ ipos_trace q) (Some (ret_val (repeat body q)))) ;
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
 
   // noret
   repeat_one_ret body ;
-  assert (forall p q. isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> isEvent (repeat body (p @ Tau_choice :: q)) /\ noFutureRet (repeat body) (p @ Tau_choice :: q)) ;
   forall_intro_2 ipos_trace_append ;
   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
-  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> post (ipos_trace p @ ipos_trace q) None) ;
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
 let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
@@ -819,32 +812,13 @@ let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
 
     // noret
     forall_intro (move_requires (find_ret_Event_None body [])) ;
-    // forall_intro (itree_cofix_unfold_1 (repeat_fix body) ()) ;
-    // forall_intro_2 (repeat_fix_guarded body) ;
-    // assert (forall p. itree_cofix (repeat_fix body) () p == repeat_fix body (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) () p) ;
-    // assert (forall p. itree_cofix (repeat_fix body) () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
-    // assert (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p) ;
     repeat_unfold_1 body ;
-    assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p)) ;
     noFutureRet_find_ret_None body ;
-    assert (forall p. isEvent (body p) ==> noFutureRet body p ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None)
   end
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
-  // // ret
-  // forall_intro_2 (repeat_pos_lift_ret body) ;
-  // assert (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
-
-  // // noret
-  // forall_intro (move_requires (find_ret_Event_None body [])) ;
-  // forall_intro_2 (repeat_fix_guarded body) ;
-  // noFutureRet_find_ret_None body ;
-  // assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
-
   forall_intro (tio_repeat_proof body) ;
-  assert (forall (post : tio_post unit) n. io_twp (repeat body) post ==> twp_repeat_trunc w n post) ;
-  assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
 [@@allow_informative_binders]
