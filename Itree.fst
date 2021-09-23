@@ -752,8 +752,19 @@ let twp_repeat (w : twp unit) : twp unit =
 
 let tio_repeat_prefix #w (body : tio unit w) :
   Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
-= // split again and reconstruct new path
-  admit ()
+= // ret
+  assume (forall q. isRet (repeat body q) ==> False) ; // Maybe hard to prove, perhaps is it easier to get the thing below
+  // assume (forall p q. isRet (body p) ==> isRet (repeat body q) ==> isRet (repeat body (p @ Tau_choice :: q))) ;
+  // forall_intro_2 ipos_trace_append ; // + something about ret_val
+  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> post (ipos_trace p @ ipos_trace q) (Some (ret_val (repeat body q)))) ;
+  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
+
+  // noret
+  assume (forall p q. isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> isEvent (repeat body (p @ Tau_choice :: q)) /\ noFutureRet (repeat body) (p @ Tau_choice :: q)) ;
+  forall_intro_2 ipos_trace_append ;
+  assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
+  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> post (ipos_trace p @ ipos_trace q) None) ;
+  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
 let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
