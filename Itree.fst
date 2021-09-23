@@ -758,13 +758,14 @@ let repeat_unfold_1 (body : iotree unit) :
   assert (forall p. itree_cofix (repeat_fix body) () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p)
 
 let repeat_one_ret (body : iotree unit) :
-  Lemma (forall p q.
+  Lemma (forall p q. isRet (body p) ==> repeat body (p @ Tau_choice :: q) == repeat body q)
+= repeat_unfold_1 body ;
+  find_ret_append body ;
+  assert (forall p q.
     isRet (body p) ==>
     repeat body (p @ Tau_choice :: q) == itree_cofix_unfoldn (repeat_fix body) (length (p @ Tau_choice :: q) - 1) () q
-  )
-= repeat_unfold_1 body ;
-  // assert (forall p q. repeat body (p @ Tau_choice :: q) == bind body (fun _ -> tau ((if length (p @ Tau_choice :: q) = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length (p @ Tau_choice :: q) - 1)) ())) (p @ Tau_choice :: q)) ;
-  find_ret_append body
+  ) ;
+  forall_intro_2 (repeat_fix_guarded body)
 
 let tio_repeat_prefix #w (body : tio unit w) :
   Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
@@ -777,7 +778,7 @@ let tio_repeat_prefix #w (body : tio unit w) :
 
   // noret
   repeat_one_ret body ;
-  assume (forall p q. isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> isEvent (repeat body (p @ Tau_choice :: q)) /\ noFutureRet (repeat body) (p @ Tau_choice :: q)) ;
+  assert (forall p q. isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> isEvent (repeat body (p @ Tau_choice :: q)) /\ noFutureRet (repeat body) (p @ Tau_choice :: q)) ;
   forall_intro_2 ipos_trace_append ;
   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> post (ipos_trace p @ ipos_trace q) None) ;
