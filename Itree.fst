@@ -850,15 +850,7 @@ let repeat_ret_loops () :
     then ()
     else begin
       aux (n - 1) ;
-      // assume (twp_repeat_trunc (twp_return ()) (n -1) diverges) ;
-      assert (forall (post : tio_post unit) tr x. shift_post [] post tr x == post tr x) ;
-      assert (forall tr x. shift_post [] diverges tr x == diverges #unit tr x) ;
-      twp_repeat_trunc_ext (twp_return ()) (n-1) (shift_post [] diverges) (diverges #unit) ;
-      assert ((forall tr x. (shift_post [] diverges) tr x == diverges #unit tr x) ==> twp_repeat_trunc (twp_return ()) (n-1) (shift_post [] diverges) == twp_repeat_trunc (twp_return ()) (n-1) (diverges #unit)) ;
-      assert (twp_repeat_trunc (twp_return ()) (n -1) (shift_post [] diverges) == twp_repeat_trunc (twp_return ()) (n -1) diverges) ;
-      // assume (shift_post [] diverges == diverges #unit) ;
-      assert (twp_repeat_trunc (twp_return ()) (n -1) (shift_post [] diverges))
-      // assume (twp_bind (twp_return ()) (fun _ -> twp_repeat_trunc (twp_return ()) (n -1)) diverges)
+      twp_repeat_trunc_ext (twp_return ()) (n-1) (shift_post [] diverges) (diverges #unit)
     end
   in
   ()
