@@ -742,75 +742,84 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
   ) ;
   call o x k
 
-(** Says that t is a prefix of t'ω (t' infinitely repeated)
-   which contains t' at least once.
-*)
-let rec repeats_trace (t t' : trace) : Type0 =
-  match t `list_minus` t' with
-  | Some [] -> True
-  | Some tt ->
-    list_minus_smaller t t' ;
-    tt `repeats_trace` t' \/ tt `strict_suffix_of` t'
-  | None -> False
+// (** Says that t is a prefix of t'ω (t' infinitely repeated)
+//    which contains t' at least once.
+// *)
+// let rec repeats_trace (t t' : trace) : Type0 =
+//   match t `list_minus` t' with
+//   | Some [] -> True
+//   | Some tt ->
+//     list_minus_smaller t t' ;
+//     tt `repeats_trace` t' \/ tt `strict_suffix_of` t'
+//   | None -> False
 
-let rec repeats_trace_length t t' :
-  Lemma (t `repeats_trace` t' ==> length t' <= length t)
-= match t `list_minus` t' with
-  | Some x -> list_minus_Some t t'
-  | None -> ()
+// let repeats_trace_length t t' :
+//   Lemma (t `repeats_trace` t' ==> length t' <= length t)
+// = match t `list_minus` t' with
+//   | Some x -> list_minus_Some t t'
+//   | None -> ()
+
+// This version seemed to "work", but is probably too weak
+// let twp_repeat (w : twp unit) : twp unit =
+//   fun post ->
+//     // Either the body doesn't terminate or it does and the trace is repeated
+//     w (fun tr v ->
+//       match v with
+//       | Some () -> forall tr'. tr' `repeats_trace` tr ==> post tr' None
+//       | None -> post tr None
+//     )
+
+let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
+  if n = 0
+  then fun post -> True
+  else twp_bind w (fun _ -> twp_repeat_trunc w (n -1))
 
 let twp_repeat (w : twp unit) : twp unit =
-  fun post ->
-    // Either the body doesn't terminate or it does and the trace is repeated
-    w (fun tr v ->
-      match v with
-      | Some () -> forall tr'. tr' `repeats_trace` tr ==> post tr' None
-      | None -> post tr None
-    )
+  fun post -> forall n. twp_repeat_trunc w n post
 
-let rec trace_prefix_lift p tr :
-  Pure iopos (requires tr `strict_suffix_of` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
-= match p with
-  | [] -> []
-  | Tau_choice :: p -> Tau_choice :: trace_prefix_lift p tr
-  | c :: p ->
-    begin match tr with
-    | [] -> []
-    | c' :: tr ->
-      c :: trace_prefix_lift p tr
-    end
+// let rec trace_prefix_lift p tr :
+//   Pure iopos (requires tr `strict_suffix_of` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
+// = match p with
+//   | [] -> []
+//   | Tau_choice :: p -> Tau_choice :: trace_prefix_lift p tr
+//   | c :: p ->
+//     begin match tr with
+//     | [] -> []
+//     | c' :: tr ->
+//       c :: trace_prefix_lift p tr
+//     end
 
-let rec repeat_pos_lift (body : iotree unit) p tr :
-  Pure iopos (requires tr `repeats_trace` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
-= match tr `list_minus` ipos_trace p with
-  | Some [] ->
-    list_minus_Some tr (ipos_trace p) ;
-    p
-  | Some tr' ->
-    list_minus_Some tr (ipos_trace p) ;
-    assert (tr' `repeats_trace` ipos_trace p \/ tr' `strict_suffix_of` ipos_trace p) ;
-    repeats_trace_length tr' (ipos_trace p) ;
-    strict_suffix_length tr' (ipos_trace p) ;
-    if length tr' < length (ipos_trace p)
-    then begin
-      assert (tr' `strict_suffix_of` ipos_trace p) ;
-      forall_intro_2 ipos_trace_append ;
-      p @ Tau_choice :: (trace_prefix_lift p tr')
-    end
-    else begin
-      assert (tr' `repeats_trace` ipos_trace p) ;
-      list_minus_smaller tr (ipos_trace p) ;
-      forall_intro_2 ipos_trace_append ;
-      p @ Tau_choice :: repeat_pos_lift body p tr'
-    end
+// let rec repeat_pos_lift (body : iotree unit) p tr :
+//   Pure iopos (requires tr `repeats_trace` ipos_trace p) (ensures fun q -> tr == ipos_trace q)
+// = match tr `list_minus` ipos_trace p with
+//   | Some [] ->
+//     list_minus_Some tr (ipos_trace p) ;
+//     p
+//   | Some tr' ->
+//     list_minus_Some tr (ipos_trace p) ;
+//     assert (tr' `repeats_trace` ipos_trace p \/ tr' `strict_suffix_of` ipos_trace p) ;
+//     repeats_trace_length tr' (ipos_trace p) ;
+//     strict_suffix_length tr' (ipos_trace p) ;
+//     if length tr' < length (ipos_trace p)
+//     then begin
+//       assert (tr' `strict_suffix_of` ipos_trace p) ;
+//       forall_intro_2 ipos_trace_append ;
+//       p @ Tau_choice :: (trace_prefix_lift p tr')
+//     end
+//     else begin
+//       assert (tr' `repeats_trace` ipos_trace p) ;
+//       list_minus_smaller tr (ipos_trace p) ;
+//       forall_intro_2 ipos_trace_append ;
+//       p @ Tau_choice :: repeat_pos_lift body p tr'
+//     end
 
-let rec repeat_pos_lift_ret (body : iotree unit) p tr :
-  Lemma (
-    isRet (body p) ==>
-    tr `repeats_trace` ipos_trace p ==>
-    isEvent (repeat body (repeat_pos_lift body p tr)) /\ noFutureRet (repeat body) (repeat_pos_lift body p tr)
-  )
-= admit ()
+// let rec repeat_pos_lift_ret (body : iotree unit) p tr :
+//   Lemma (
+//     isRet (body p) ==>
+//     tr `repeats_trace` ipos_trace p ==>
+//     isEvent (repeat body (repeat_pos_lift body p tr)) /\ noFutureRet (repeat body) (repeat_pos_lift body p tr)
+//   )
+// = admit ()
 // While it seems that this approach will succeed.
 // Sadly, it's probably not the best spec. We have an underspec in fact
 // Here we repeat p with Taus in between to get a path
@@ -819,18 +828,18 @@ let rec repeat_pos_lift_ret (body : iotree unit) p tr :
 // This could also be the case with access to history.
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
-  // ret
-  forall_intro_2 (repeat_pos_lift_ret body) ;
-  assert (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
+  // // ret
+  // forall_intro_2 (repeat_pos_lift_ret body) ;
+  // assert (forall (post : tio_post unit) p tr. io_twp (repeat body) post ==> isRet (body p) ==> tr `repeats_trace` ipos_trace p ==> post tr None) ;
 
-  // noret
-  forall_intro (move_requires (find_ret_Event_None body [])) ;
-  forall_intro_2 (repeat_fix_guarded body) ;
-  noFutureRet_find_ret_None body ;
-  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
+  // // noret
+  // forall_intro (move_requires (find_ret_Event_None body [])) ;
+  // forall_intro_2 (repeat_fix_guarded body) ;
+  // noFutureRet_find_ret_None body ;
+  // assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None) ;
 
   // Conclusion
-  assert (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
+  assume (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat w post) ;
   repeat body
 
 [@@allow_informative_binders]
