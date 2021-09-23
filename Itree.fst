@@ -767,12 +767,35 @@ let repeat_one_ret (body : iotree unit) :
   ) ;
   forall_intro_2 (repeat_fix_guarded body)
 
+let rec repeat_not_ret (body : iotree unit) p :
+  Lemma (~ (isRet (repeat body p)))
+= match find_ret body [] p with
+  | Some ((), q) ->
+    repeat_unfold_1 body ;
+    // assume (~ (isRet (tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ()) q)))
+    if length p = 0
+    then ()
+    else begin
+      // assume (~ (isRet (tau (itree_cofix_unfoldn (repeat_fix body) (length p - 1) ()) q)))
+      match q with
+      | Tau_choice :: r ->
+        // assume (~ (isRet (itree_cofix_unfoldn (repeat_fix body) (length p - 1) () r)))
+        find_ret_length body [] p ;
+        forall_intro_2 (repeat_fix_guarded body) ;
+        // assume (~ (isRet (repeat body r)))
+        find_ret_smaller body [] p ;
+        repeat_not_ret body r
+      | _ :: r -> ()
+      | [] -> ()
+    end
+  | None -> ()
+
 let tio_repeat_prefix #w (body : tio unit w) :
   Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
-= // ret
-  assume (forall q. isRet (repeat body q) ==> False) ; // Maybe hard to prove, perhaps is it easier to get the thing below
-  // assume (forall p q. isRet (body p) ==> isRet (repeat body q) ==> isRet (repeat body (p @ Tau_choice :: q))) ;
-  // forall_intro_2 ipos_trace_append ; // + something about ret_val
+= // Common to both branches
+  forall_intro (repeat_not_ret body) ;
+
+  // ret
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> post (ipos_trace p @ ipos_trace q) (Some (ret_val (repeat body q)))) ;
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
 
