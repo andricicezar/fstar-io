@@ -745,7 +745,7 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
 let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
   if n = 0
   then fun post -> True
-  else twp_bind w (fun _ -> twp_repeat_trunc w (n -1))
+  else twp_bind w (fun _ -> twp_repeat_trunc w (n - 1))
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post -> forall n. twp_repeat_trunc w n post
@@ -821,16 +821,28 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   forall_intro (tio_repeat_proof body) ;
   repeat body
 
-// Some specifications
+// Can we do some loop invariant?
+// We can at least "inline" the induction by asking the SMT to prove (p n ==> p (n+1)) which might work sometimes
+// but the better would be to have an alternative which asks prop to be an invariant for w
+// maybe post tr (Some ()) ==> w (shift_post tr post) or the other way around?
+// maybe it should be some weakened post to allow Some? Because the post should only accept loops
+// also maybe it only works when we also have [w terminates]?
 
 let terminates #a : tio_post a =
   fun tr v -> Some? v
+
+// post tr (Some ()) feels wrong somehow
+// let tio_repeat_inv (w : twp unit) : twp unit =
+//   fun post -> w terminates /\ (forall tr. post tr (Some ()) ==> w (shift_post tr post))
+
+// Some specifications
 
 let diverges #a : tio_post a =
   fun tr v -> None? v
 
 let ret_terminates a (x : a) : Lemma (twp_return x terminates) = ()
 
+// Should be p1 ==> p2 rather than ==
 let rec twp_repeat_trunc_ext w n (p1 p2 : tio_post unit) :
   Lemma ((forall tr x. p1 tr x == p2 tr x) ==> twp_repeat_trunc w n p1 == twp_repeat_trunc w n p2)
 = if n = 0
