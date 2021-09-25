@@ -831,9 +831,12 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
 let terminates #a : tio_post a =
   fun tr v -> Some? v
 
-// post tr (Some ()) feels wrong somehow
-// let tio_repeat_inv (w : twp unit) : twp unit =
-//   fun post -> w terminates /\ (forall tr. post tr (Some ()) ==> w (shift_post tr post))
+let post_None #a (post : tio_post a) : tio_post a =
+  fun tr v -> post tr None
+
+// We'll see if we need termination
+let tio_repeat_inv (w : twp unit) : twp unit =
+  fun post -> (* w terminates /\ *) (forall tr. post tr None ==> w (shift_post tr (post_None post)))
 
 // Some specifications
 
