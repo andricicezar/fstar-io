@@ -835,8 +835,17 @@ let post_None #a (post : tio_post a) : tio_post a =
   fun tr v -> post tr None
 
 // We'll see if we need termination
-let tio_repeat_inv (w : twp unit) : twp unit =
+let twp_repeat_inv (w : twp unit) : twp unit =
   fun post -> (* w terminates /\ *) (forall tr. post tr None ==> w (shift_post tr (post_None post)))
+  // it should force post to only accept None somewhere
+  // at least disallow stuff like terminates as spec
+
+// or
+let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+  fun post ->
+    inv [] /\ // or maybe it's better to take w (fun tr v -> inv tr /\ Some? v) ?
+    (forall tr. inv tr ==> w (fun tr' v -> inv (tr @ tr') /\ Some? v)) /\ // inv is invariant // this forces termination, maybe we can simply remove the Some?
+    (forall tr. inv tr ==> post tr None) // or something?
 
 // Some specifications
 
