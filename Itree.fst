@@ -829,7 +829,9 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   The invariant is relative to the predicate transformer of the body.
   It must hold for the empty list / root position because postconditions
   must be downward closed for non-terminating / infinite branches
-  (all finite prefixes are considered).
+  (all finite prefixes are considered as long as they don't have future
+  returns, so maybe downward-closed is wrong in general. For infinite loops
+  however, it is true).
 
 *)
 
@@ -841,12 +843,38 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall tr. inv tr ==> post tr None
 
+// For some reason the identity doesn't work
+let rec trace_to_pos (tr : trace) : Pure iopos (requires True) (ensures fun p -> ipos_trace p == tr) =
+  match tr with
+  | [] -> []
+  | c :: tr -> c :: trace_to_pos tr
+
+let on_ipos_trace_enough (pr : trace -> Type0) :
+  Lemma ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr tr))
+= assert ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr (ipos_trace (trace_to_pos tr))))
+
+let tio_repeat_with_inv_proof #w (body : tio unit w) (inv : trace -> Type0) :
+  Lemma
+    (requires trace_invariant w inv)
+    (ensures forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None)
+= assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
+
+  // This is not ok... If inv is True, we only know that w terminates holds
+  // Nothing on p... Is the whole approach flawed?
+  assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p)) ;
+
+  forall_intro (repeat_not_ret body) ;
+  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
+
+  on_ipos_trace_enough (fun tr -> forall (post : tio_post unit). io_twp (repeat body) post ==> inv tr ==> post tr None) ;
+  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> post (ipos_trace p) None)
+
 let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
   Pure
     (tio unit (twp_repeat_with_inv w inv))
     (requires trace_invariant w inv)
     (ensures fun _ -> True)
-= assume (forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None) ;
+= tio_repeat_with_inv_proof body inv ;
   repeat body
 
 // Some specifications
