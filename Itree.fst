@@ -821,33 +821,38 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   forall_intro (tio_repeat_proof body) ;
   repeat body
 
-// Can we do some loop invariant?
-// We can at least "inline" the induction by asking the SMT to prove (p n ==> p (n+1)) which might work sometimes
-// but the better would be to have an alternative which asks prop to be an invariant for w
-// maybe post tr (Some ()) ==> w (shift_post tr post) or the other way around?
-// maybe it should be some weakened post to allow Some? Because the post should only accept loops
-// also maybe it only works when we also have [w terminates]?
+// We can also "inline" the induction by asking the SMT to prove (p n ==> p (n+1)) which might work sometimes
+
+(**
+
+  Alternatively, we propose a definition of tio_repeat using an invariant.
+  The invariant is relative to the predicate transformer of the body.
+  It must hold for the empty list / root position because postconditions
+  must be downward closed for non-terminating / infinite branches
+  (all finite prefixes are considered).
+
+*)
+
+let trace_invariant (w : twp unit) (inv : trace -> Type0) =
+  inv [] /\
+  (forall tr. inv tr ==> w (fun tr' v -> inv (tr @ tr') /\ Some? v))
+  // this forces termination, maybe we can simply remove the Some?
+
+let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+  fun post -> forall tr. inv tr ==> post tr None
+
+let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
+  Pure
+    (tio unit (twp_repeat_with_inv w inv))
+    (requires trace_invariant w inv)
+    (ensures fun _ -> True)
+= assume (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_with_inv w inv post) ;
+  repeat body
+
+// Some specifications
 
 let terminates #a : tio_post a =
   fun tr v -> Some? v
-
-let post_None #a (post : tio_post a) : tio_post a =
-  fun tr v -> post tr None
-
-// We'll see if we need termination
-let twp_repeat_inv (w : twp unit) : twp unit =
-  fun post -> (* w terminates /\ *) (forall tr. post tr None ==> w (shift_post tr (post_None post)))
-  // it should force post to only accept None somewhere
-  // at least disallow stuff like terminates as spec
-
-// or
-let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
-  fun post ->
-    inv [] /\ // or maybe it's better to take w (fun tr v -> inv tr /\ Some? v) ?
-    (forall tr. inv tr ==> w (fun tr' v -> inv (tr @ tr') /\ Some? v)) /\ // inv is invariant // this forces termination, maybe we can simply remove the Some?
-    (forall tr. inv tr ==> post tr None) // or something?
-
-// Some specifications
 
 let diverges #a : tio_post a =
   fun tr v -> None? v
