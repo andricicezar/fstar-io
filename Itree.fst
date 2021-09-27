@@ -846,7 +846,7 @@ let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
     (tio unit (twp_repeat_with_inv w inv))
     (requires trace_invariant w inv)
     (ensures fun _ -> True)
-= assume (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_with_inv w inv post) ;
+= assume (forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None) ;
   repeat body
 
 // Some specifications
@@ -883,6 +883,11 @@ let repeat_ret_loops () :
     end
   in
   ()
+
+// Much better
+let repeat_ret_loops_with_inv () :
+  Lemma (twp_repeat_with_inv (twp_return ()) (fun _ -> True) diverges)
+= ()
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
