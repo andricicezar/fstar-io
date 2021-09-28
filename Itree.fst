@@ -858,7 +858,21 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // noret.noret
-  assume (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post b) p.
+    twp_bind w wf post ==>
+    isEvent (bind m f p) ==>
+    noFutureRet (bind m f) p ==>
+    None? (find_ret m [] p) ==>
+    isEvent (m p)
+  ) ;
+  assume (forall (post : tio_post b) p.
+    twp_bind w wf post ==>
+    isEvent (bind m f p) ==>
+    noFutureRet (bind m f) p ==>
+    None? (find_ret m [] p) ==>
+    noFutureRet m p // Doesn't seem true, split on find_ret was wrong
+  ) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // noret
   assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> post (ipos_trace p) None) ;
