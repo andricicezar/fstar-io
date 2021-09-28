@@ -356,6 +356,19 @@ let rec find_ret_Some_pos #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> append_assoc pp [c] p ; find_ret_Some_pos m (pp @ [c]) p
   end
 
+let rec find_ret_prefix_val #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures
+    Some? (find_ret m pp p) ==>
+    ret_val (m (find_ret_prefix m pp p)) == find_ret_val m pp p
+  ) (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p -> find_ret_prefix_val m (pp @ [c]) p
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -753,9 +766,6 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post a). w post ==> io_twp m post) ;
   assert (forall (post : tio_post b) x. wf x post ==> io_twp (f x) post) ;
 
-  // tio_bind_aux1 a b w wf m f ;
-  // tio_bind_aux2 a b w wf m f ;
-
   // ret
   assert (forall p. isRet (bind m f p) ==> Some? (find_ret m [] p)) ;
   assert (forall p. isRet (bind m f p) ==> isRet (m (find_ret_prefix m [] p))) ;
@@ -766,7 +776,49 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post b) p. isRet (bind m f p) ==> wf (find_ret_val m [] p) post ==> io_twp (f (find_ret_val m [] p)) post) ;
   assert (forall (post : tio_post b) p. isRet (bind m f p) ==> wf (find_ret_val m [] p) post ==> post (ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
   forall_intro_2 ipos_trace_append ;
-  assume (forall (post : tio_post b) p.
+  forall_intro (find_ret_prefix_val m []) ;
+  assert (forall (post : tio_post b) p.
+    isRet (bind m f p) ==>
+    wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ==>
+    io_twp (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)
+  ) ;
+  assert (forall (post : tio_post b) p.
+    isRet (bind m f p) ==>
+    wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ==>
+    shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))
+  ) ;
+  assert (forall (post : tio_post b) p.
+    io_twp m (fun tr v ->
+      match v with
+      | Some x -> wf x (shift_post tr post)
+      | None -> post tr None
+    ) ==>
+    isRet (bind m f p) ==>
+    wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)
+  ) ;
+  assert (forall (post : tio_post b) p.
+    io_twp m (fun tr v ->
+      match v with
+      | Some x -> wf x (shift_post tr post)
+      | None -> post tr None
+    ) ==>
+    isRet (bind m f p) ==>
+    shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))
+  ) ;
+  assert (forall (post : tio_post b).
+    twp_bind w wf post ==>
+    io_twp m (fun tr v ->
+      match v with
+      | Some x -> wf x (shift_post tr post)
+      | None -> post tr None
+    )
+  ) ;
+  assert (forall (post : tio_post b) p.
+    twp_bind w wf post ==>
+    isRet (bind m f p) ==>
+    shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))
+  ) ;
+  assert (forall (post : tio_post b) p.
     twp_bind w wf post ==>
     isRet (bind m f p) ==>
     post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))
