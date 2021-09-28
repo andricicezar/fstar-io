@@ -324,6 +324,38 @@ let rec find_ret_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p' -> find_ret_length m (pp @ [c]) p'
   end
 
+let find_ret_val #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Pure a (requires Some? (find_ret m pp p)) (ensures fun _ -> True)
+= match find_ret m pp p with
+  | Some (x, q) -> x
+
+let find_ret_pos #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Pure (ipos op s) (requires Some? (find_ret m pp p)) (ensures fun _ -> True)
+= match find_ret m pp p with
+  | Some (x, q) -> q
+
+let rec find_ret_prefix #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Pure (ipos op s) (requires Some? (find_ret m pp p)) (ensures fun q -> isRet (m q)) (decreases p)
+= if isRet (m pp)
+  then pp
+  else begin
+    match p with
+    | c :: p -> find_ret_prefix m (pp @ [c]) p
+  end
+
+let rec find_ret_Some_pos #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures
+    Some? (find_ret m pp p) ==>
+    pp @ p == (find_ret_prefix m pp p) @ (find_ret_pos m pp p)
+  ) (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p -> append_assoc pp [c] p ; find_ret_Some_pos m (pp @ [c]) p
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -650,10 +682,9 @@ let io_twp #a (t : iotree a) =
     (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
 
 let tio a (w : twp a) =
-  t: iotree a { io_twp t `stronger_twp` w }
+  t: iotree a { w `stronger_twp` io_twp t }
 
 let tio_return a (x : a) : tio a (twp_return x) =
-  assert (isRet (ioret #a x [])) ;
   ret x
 
 let rec noFutureRet_find_ret_None_aux' #a (m : iotree a) pp p :
@@ -697,49 +728,77 @@ let noFutureRet_find_ret_None #a (m : iotree a) :
   Lemma (forall p q. find_ret m [] p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m [] q == None)
 = forall_intro_2 (noFutureRet_find_ret_None_aux m [])
 
-let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
-  Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
-= find_ret_append m ;
-  assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
-  assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
-  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
-  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
-  find_ret_strict_suffix m ;
-  assert (forall p q. isRet (m p) ==> noFutureRet (f (ret_val (m p))) q ==> noFutureRet (bind m f) (p @ q)) ;
-  assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
-  assert (forall x. io_twp (f x) `stronger_twp` wf x) ;
-  forall_intro_2 ipos_trace_append
+// let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
+//   Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
+// = find_ret_append m ;
+//   assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
+//   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
+//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
+//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
+//   find_ret_strict_suffix m ;
+//   assert (forall p q. isRet (m p) ==> noFutureRet (f (ret_val (m p))) q ==> noFutureRet (bind m f) (p @ q)) ;
+//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
+//   assert (forall x. io_twp (f x) `stronger_twp` wf x) ;
+//   forall_intro_2 ipos_trace_append
 
-let tio_bind_aux2 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
-  Lemma (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)
-= forall_intro (move_requires (find_ret_Event_None m [])) ;
-  assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
-  assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
-  noFutureRet_find_ret_None m ;
-  assert (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
+// let tio_bind_aux2 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
+//   Lemma (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)
+// = forall_intro (move_requires (find_ret_Event_None m [])) ;
+//   assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
+//   assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
+//   noFutureRet_find_ret_None m ;
+//   assert (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
 
 let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
-  tio_bind_aux1 a b w wf m f ;
-  tio_bind_aux2 a b w wf m f ;
+  assert (forall (post : tio_post a). w post ==> io_twp m post) ;
+  assert (forall (post : tio_post b) x. wf x post ==> io_twp (f x) post) ;
+
+  // tio_bind_aux1 a b w wf m f ;
+  // tio_bind_aux2 a b w wf m f ;
+
+  // ret
+  assert (forall p. isRet (bind m f p) ==> Some? (find_ret m [] p)) ;
+  assert (forall p. isRet (bind m f p) ==> isRet (m (find_ret_prefix m [] p))) ;
+  assert (forall p. isRet (bind m f p) ==> bind m f p == f (find_ret_val m [] p) (find_ret_pos m [] p)) ;
+  forall_intro (find_ret_Some_pos m []) ;
+  assert (forall p. isRet (bind m f p) ==> p == find_ret_prefix m [] p @ find_ret_pos m [] p) ;
+  assert (forall p. isRet (bind m f p) ==> isRet (f (find_ret_val m [] p) (find_ret_pos m [] p))) ;
+  assert (forall (post : tio_post b) p. isRet (bind m f p) ==> wf (find_ret_val m [] p) post ==> io_twp (f (find_ret_val m [] p)) post) ;
+  assert (forall (post : tio_post b) p. isRet (bind m f p) ==> wf (find_ret_val m [] p) post ==> post (ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
+  forall_intro_2 ipos_trace_append ;
+  assume (forall (post : tio_post b) p.
+    twp_bind w wf post ==>
+    isRet (bind m f p) ==>
+    post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))
+  ) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
+
+  // noret
+  assume (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> post (ipos_trace p) None) ;
+
+  assert (forall (post : tio_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
   bind m f
 
 // More like a sanity check
 let tio_tau #a #w (m : tio a w) : tio a w =
-  assert (forall p. isRet (m p) ==> isRet (tau m (Tau_choice :: p))) ;
-  assert (forall p. isEvent (m p) ==> noFutureRet m p ==> isEvent (tau m (Tau_choice :: p)) /\ noFutureRet (tau m) (Tau_choice :: p)) ;
+  // assert (forall p. isRet (m p) ==> isRet (tau m (Tau_choice :: p))) ;
+  // assert (forall p. isEvent (m p) ==> noFutureRet m p ==> isEvent (tau m (Tau_choice :: p)) /\ noFutureRet (tau m) (Tau_choice :: p)) ;
+  admit () ;
   tau m
 
 let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
 
 let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)) : tio a (twp_call o x w) =
-  assert (forall post y. io_twp (k y) post ==> w y post) ;
-  assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p))) ;
-  assert (forall p y.
-    isEvent (k y p) ==>
-    noFutureRet (k y) p ==>
-    isEvent (call o x k (Call_choice o x y :: p)) /\ noFutureRet (call o x k) (Call_choice o x y :: p)
-  ) ;
+  // assert (forall post y. io_twp (k y) post ==> w y post) ;
+  // assert (forall p y. isRet (k y p) ==> isRet (call o x k (Call_choice o x y :: p))) ;
+  // assert (forall p y.
+  //   isEvent (k y p) ==>
+  //   noFutureRet (k y) p ==>
+  //   isEvent (call o x k (Call_choice o x y :: p)) /\ noFutureRet (call o x k) (Call_choice o x y :: p)
+  // ) ;
+  admit () ;
   call o x k
 
 let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
@@ -800,25 +859,26 @@ let tio_repeat_prefix #w (body : tio unit w) :
   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
-let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
-  Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
-= if n = 0
-  then ()
-  else begin
-    // ret
-    tio_repeat_proof body (n - 1) ;
-    tio_repeat_prefix body ;
-    assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> twp_repeat_trunc w (n-1) (shift_post (ipos_trace p) post)) ;
+// let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
+//   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
+// = if n = 0
+//   then ()
+//   else begin
+//     // ret
+//     tio_repeat_proof body (n - 1) ;
+//     tio_repeat_prefix body ;
+//     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> twp_repeat_trunc w (n-1) (shift_post (ipos_trace p) post)) ;
 
-    // noret
-    forall_intro (move_requires (find_ret_Event_None body [])) ;
-    repeat_unfold_1 body ;
-    noFutureRet_find_ret_None body ;
-    assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None)
-  end
+//     // noret
+//     forall_intro (move_requires (find_ret_Event_None body [])) ;
+//     repeat_unfold_1 body ;
+//     noFutureRet_find_ret_None body ;
+//     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None)
+//   end
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
-  forall_intro (tio_repeat_proof body) ;
+  // forall_intro (tio_repeat_proof body) ;
+  admit () ;
   repeat body
 
 // We can also "inline" the induction by asking the SMT to prove (p n ==> p (n+1)) which might work sometimes
@@ -853,28 +913,29 @@ let on_ipos_trace_enough (pr : trace -> Type0) :
   Lemma ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr tr))
 = assert ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr (ipos_trace (trace_to_pos tr))))
 
-let tio_repeat_with_inv_proof #w (body : tio unit w) (inv : trace -> Type0) :
-  Lemma
-    (requires trace_invariant w inv)
-    (ensures forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None)
-= assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
+// let tio_repeat_with_inv_proof #w (body : tio unit w) (inv : trace -> Type0) :
+//   Lemma
+//     (requires trace_invariant w inv)
+//     (ensures forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None)
+// = assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
 
-  // This is not ok... If inv is True, we only know that w terminates holds
-  // Nothing on p... Is the whole approach flawed?
-  assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p)) ;
+//   // This is not ok... If inv is True, we only know that w terminates holds
+//   // Nothing on p... Is the whole approach flawed?
+//   assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p)) ;
 
-  forall_intro (repeat_not_ret body) ;
-  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
+//   forall_intro (repeat_not_ret body) ;
+//   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
 
-  on_ipos_trace_enough (fun tr -> forall (post : tio_post unit). io_twp (repeat body) post ==> inv tr ==> post tr None) ;
-  assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> post (ipos_trace p) None)
+//   on_ipos_trace_enough (fun tr -> forall (post : tio_post unit). io_twp (repeat body) post ==> inv tr ==> post tr None) ;
+//   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> post (ipos_trace p) None)
 
 let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
   Pure
     (tio unit (twp_repeat_with_inv w inv))
     (requires trace_invariant w inv)
     (ensures fun _ -> True)
-= tio_repeat_with_inv_proof body inv ;
+= // tio_repeat_with_inv_proof body inv ;
+  admit () ;
   repeat body
 
 // Some specifications
