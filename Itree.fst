@@ -691,82 +691,24 @@ let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
-unfold
-let noFutureRet #a (t : iotree a) p =
-  forall q. p `strict_suffix_of` q ==> ~ (isRet (t q))
+// Expresses that position p is in an infinite branch
+// It would be nice to find a simpler statement
+let futureloop #a (t : iotree a) p =
+  exists (u : nat -> iopos).
+    u 0 == p /\
+    (forall n. u n `strict_suffix_of` u (n+1)) /\
+    (forall n. isEvent (t (u n)))
 
 let io_twp #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
-    (forall p. isEvent (t p) ==> noFutureRet t p ==> post (ipos_trace p) None)
+    (forall p. isEvent (t p) ==> futureloop t p ==> post (ipos_trace p) None)
 
 let tio a (w : twp a) =
   t: iotree a { w `stronger_twp` io_twp t }
 
 let tio_return a (x : a) : tio a (twp_return x) =
   ret x
-
-let rec noFutureRet_find_ret_None_aux' #a (m : iotree a) pp p :
-  Lemma
-    (ensures ~ (isRet (m pp)) ==> noFutureRet m pp ==> find_ret m pp p == None)
-    (decreases p)
-= if isRet (m pp)
-  then ()
-  else begin
-    match p with
-    | [] -> ()
-    | c :: p ->
-      begin
-        noFutureRet_find_ret_None_aux' m (pp @ [c]) p ;
-        strict_suffix_append_one pp c ;
-        forall_intro (strict_suffix_of_trans pp (pp @ [c]))
-      end
-  end
-
-let rec noFutureRet_find_ret_None_aux #a (m : iotree a) pp p q :
-  Lemma
-    (ensures find_ret m pp p == None ==> noFutureRet m (pp @ p) ==> p `strict_suffix_of` q ==> find_ret m pp q == None)
-    (decreases p)
-= if isRet (m pp)
-  then ()
-  else begin
-    match p with
-    | [] -> noFutureRet_find_ret_None_aux' m pp q
-    | c :: p ->
-      begin match q with
-      | [] -> ()
-      | c' :: q ->
-        begin
-          noFutureRet_find_ret_None_aux m (pp @ [c]) p q ;
-          append_assoc pp [c] p
-        end
-      end
-  end
-
-let noFutureRet_find_ret_None #a (m : iotree a) :
-  Lemma (forall p q. find_ret m [] p == None ==> noFutureRet m p ==> p `strict_suffix_of` q ==> find_ret m [] q == None)
-= forall_intro_2 (noFutureRet_find_ret_None_aux m [])
-
-// let tio_bind_aux1 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
-//   Lemma (forall post p. io_twp (bind m f) post ==> isRet (m p) ==> wf (ret_val (m p)) (shift_post (ipos_trace p) post))
-// = find_ret_append m ;
-//   assert (forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q)) ;
-//   assert (forall p q. isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> ret_val (bind m f (p @ q)) == ret_val (f (ret_val (m p)) q)) ;
-//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (bind m f (p @ q))))) ;
-//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isRet (f (ret_val (m p)) q) ==> post (ipos_trace (p @ q)) (Some (ret_val (f (ret_val (m p)) q)))) ;
-//   find_ret_strict_suffix m ;
-//   assert (forall p q. isRet (m p) ==> noFutureRet (f (ret_val (m p))) q ==> noFutureRet (bind m f) (p @ q)) ;
-//   assert (forall post p q. io_twp (bind m f) post ==> isRet (m p) ==> isEvent (f (ret_val (m p)) q) ==> noFutureRet (f (ret_val (m p))) q ==> post (ipos_trace (p @ q)) None) ;
-//   assert (forall x. io_twp (f x) `stronger_twp` wf x) ;
-//   forall_intro_2 ipos_trace_append
-
-// let tio_bind_aux2 a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) :
-//   Lemma (forall post p. io_twp (bind m f) post ==> isEvent (m p) ==> noFutureRet m p ==> post (ipos_trace p) None)
-// = forall_intro (move_requires (find_ret_Event_None m [])) ;
-//   assert (forall p. isEvent (m p) ==> find_ret m [] p == None) ;
-//   assert (forall p. isEvent (m p) ==> isEvent (bind m f p)) ;
-//   noFutureRet_find_ret_None m ;
-//   assert (forall p. isEvent (m p) ==> noFutureRet m p ==> noFutureRet (bind m f) p)
 
 let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bind w wf) =
   assert (forall (post : tio_post a). w post ==> io_twp m post) ;
@@ -778,104 +720,104 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   forall_intro (find_ret_prefix_val m []) ;
   assert (forall (post : tio_post b) p. twp_bind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
 
-  // noret.ret
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    wf (find_ret_val m [] p) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)
-  ) ;
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    isEvent (f (find_ret_val m [] p) (find_ret_pos m [] p))
-  ) ;
-  find_ret_strict_suffix m ;
-  assert (forall p q.
-    Some? (find_ret m [] p) ==>
-    p `strict_suffix_of` q ==>
-    Some? (find_ret m [] q) /\ find_ret_val m [] q == find_ret_val m [] p /\ find_ret_pos m [] p `strict_suffix_of` find_ret_pos m [] q
-  ) ;
-  forall_intro_3 (strict_suffix_of_append #iochoice) ;
-  assert (forall (post : tio_post b) p q.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    find_ret_pos m [] p `strict_suffix_of` q ==>
-    (find_ret_prefix m [] p @ find_ret_pos m [] p) `strict_suffix_of` (find_ret_prefix m [] p @ q)
-  ) ;
-  assert (forall (post : tio_post b) p q.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    find_ret_pos m [] p `strict_suffix_of` q ==>
-    p `strict_suffix_of` (find_ret_prefix m [] p @ q)
-  ) ;
-  assert (forall (post : tio_post b) p q.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    find_ret_pos m [] p `strict_suffix_of` q ==>
-    ~ (isRet (bind m f (find_ret_prefix m [] p @ q)))
-  ) ;
-  find_ret_append m ;
-  assert (forall (post : tio_post b) p q.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    find_ret_pos m [] p `strict_suffix_of` q ==>
-    ~ (isRet (f (find_ret_val m [] p) q))
-  ) ;
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    noFutureRet (f (find_ret_val m [] p)) (find_ret_pos m [] p)
-  ) ;
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) None
-  ) ;
-  assert (forall p q (post : tio_post b). shift_post p post q None ==> post (p @ q) None) ; // Odd that it's needed
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
-    Some? (find_ret m [] p) ==>
-    post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) None
-  ) ;
-  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  // futureloop.ret
+  // assert (forall (post : tio_post b) p.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   wf (find_ret_val m [] p) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)
+  // ) ;
+  // assert (forall (post : tio_post b) p.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   isEvent (f (find_ret_val m [] p) (find_ret_pos m [] p))
+  // ) ;
+  // find_ret_strict_suffix m ;
+  // assert (forall p q.
+  //   Some? (find_ret m [] p) ==>
+  //   p `strict_suffix_of` q ==>
+  //   Some? (find_ret m [] q) /\ find_ret_val m [] q == find_ret_val m [] p /\ find_ret_pos m [] p `strict_suffix_of` find_ret_pos m [] q
+  // ) ;
+  // forall_intro_3 (strict_suffix_of_append #iochoice) ;
+  // assert (forall (post : tio_post b) p q.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   find_ret_pos m [] p `strict_suffix_of` q ==>
+  //   (find_ret_prefix m [] p @ find_ret_pos m [] p) `strict_suffix_of` (find_ret_prefix m [] p @ q)
+  // ) ;
+  // assert (forall (post : tio_post b) p q.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   find_ret_pos m [] p `strict_suffix_of` q ==>
+  //   p `strict_suffix_of` (find_ret_prefix m [] p @ q)
+  // ) ;
+  // assert (forall (post : tio_post b) p q.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   find_ret_pos m [] p `strict_suffix_of` q ==>
+  //   ~ (isRet (bind m f (find_ret_prefix m [] p @ q)))
+  // ) ;
+  // find_ret_append m ;
+  // assert (forall (post : tio_post b) p q.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   find_ret_pos m [] p `strict_suffix_of` q ==>
+  //   ~ (isRet (f (find_ret_val m [] p) q))
+  // ) ;
+  // assert (forall (post : tio_post b) p.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   futureloop (f (find_ret_val m [] p)) (find_ret_pos m [] p)
+  // ) ;
+  // assert (forall (post : tio_post b) p.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) None
+  // ) ;
+  // assert (forall p q (post : tio_post b). shift_post p post q None ==> post (p @ q) None) ; // Odd that it's needed
+  // assert (forall (post : tio_post b) p.
+  //   twp_bind w wf post ==>
+  //   isEvent (bind m f p) ==>
+  //   futureloop (bind m f) p ==>
+  //   Some? (find_ret m [] p) ==>
+  //   post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) None
+  // ) ;
+  assume (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
-  // noret.noret
+  // futureloop.noret
   assert (forall (post : tio_post b) p.
     twp_bind w wf post ==>
     isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
+    futureloop (bind m f) p ==>
     None? (find_ret m [] p) ==>
     isEvent (m p)
   ) ;
   assume (forall (post : tio_post b) p.
     twp_bind w wf post ==>
     isEvent (bind m f p) ==>
-    noFutureRet (bind m f) p ==>
+    futureloop (bind m f) p ==>
     None? (find_ret m [] p) ==>
-    noFutureRet m p // Doesn't seem true, split on find_ret was wrong
+    futureloop m p
   ) ;
-  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // noret
-  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> noFutureRet (bind m f) p ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> post (ipos_trace p) None) ;
 
   assert (forall (post : tio_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
   bind m f
@@ -953,11 +895,11 @@ let tio_repeat_prefix #w (body : tio unit w) :
   // ret
   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
 
-  // noret
+  // futureloop
   repeat_one_ret body ;
   forall_intro_2 ipos_trace_append ;
   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
-  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> noFutureRet (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
+  assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> futureloop (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
 // let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
 //   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
