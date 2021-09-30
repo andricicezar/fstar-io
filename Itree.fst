@@ -730,11 +730,23 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
   bind m f
 
-// More like a sanity check
 let tio_tau #a #w (m : tio a w) : tio a w =
-  // assert (forall p. isRet (m p) ==> isRet (tau m (Tau_choice :: p))) ;
-  // assert (forall p. isEvent (m p) ==> noFutureRet m p ==> isEvent (tau m (Tau_choice :: p)) /\ noFutureRet (tau m) (Tau_choice :: p)) ;
-  admit () ;
+  assert (forall (post : tio_post a). w post ==> io_twp m post) ;
+
+  // ret
+  assert (forall (post : tio_post a) p. w post ==> isRet (tau m p) ==> post (ipos_trace p) (Some (ret_val (tau m p)))) ;
+
+  // event.root
+  assume (forall (post : tio_post a). w post ==> post [] None) ;
+  assert (forall (post : tio_post a). w post ==> isEvent (tau m []) ==> post [] None) ;
+
+  // event.cons
+  assert (forall (post : tio_post a) c p. w post ==> isEvent (tau m (c :: p)) ==> post (ipos_trace (c :: p)) None) ;
+
+  // event
+  assert (forall (post : tio_post a) p. w post ==> isEvent (tau m p) ==> post (ipos_trace p) None) ;
+
+  assert (forall (post : tio_post a). w post ==> io_twp (tau m) post) ;
   tau m
 
 let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
