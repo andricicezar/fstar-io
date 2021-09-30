@@ -826,7 +826,16 @@ let rec tio_repeat_proof #w (body : tio unit w) p :
     )
     (decreases p)
 = match find_ret body [] p with
-  | Some ((), q) -> admit ()
+  | Some ((), q) ->
+    assert (isRet (body (find_ret_prefix body [] p))) ;
+    find_ret_Some_pos body [] p ;
+    assert (p == find_ret_prefix body [] p @ q) ;
+    repeat_unfold_1 body ;
+    begin match q with
+    | [] -> admit () // Seems we are missing some twp_tau
+    | Tau_choice :: r -> admit ()
+    | c :: r -> ()
+    end
   | None ->
     assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post)
 
