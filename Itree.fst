@@ -836,12 +836,30 @@ let rec tio_repeat_proof #w (body : tio unit w) p :
       assert (repeat body p == Some Tau) ;
       assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post) ;
       assert (p == find_ret_prefix body [] p) ;
-      assume (forall (post : tio_post unit).
+      assert (forall (post : tio_post unit).
         twp_repeat w post ==>
-        // isEvent (repeat body p) ==>
-        post (ipos_trace p) None
+        twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
+      ) ;
+      assert (forall (post : tio_post unit).
+        twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post) ==>
+        shift_post (ipos_trace p) post [] None
       )
-    | Tau_choice :: r -> admit ()
+    | Tau_choice :: r ->
+      repeat_one_ret body ;
+      assert (repeat body p == repeat body r) ;
+      find_ret_smaller body [] p ;
+      tio_repeat_proof body r ;
+      assert (forall (post : tio_post unit).
+        twp_repeat w post ==>
+        isEvent (repeat body p) ==>
+        post (ipos_trace r) None
+      ) ;
+      // assume (forall (post : tio_post unit).
+      //   twp_repeat w post ==>
+      //   isEvent (repeat body p) ==>
+      //   post (ipos_trace p) None
+      // )
+      admit ()
     | c :: r -> ()
     end
   | None ->
