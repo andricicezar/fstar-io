@@ -691,18 +691,10 @@ let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
-// Expresses that position p is in an infinite branch
-// It would be nice to find a simpler statement
-let futureloop #a (t : iotree a) p =
-  exists (u : nat -> iopos).
-    u 0 == p /\
-    (forall n. u n `strict_suffix_of` u (n+1)) /\
-    (forall n. isEvent (t (u n)))
-
 let io_twp #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
-    (forall p. isEvent (t p) ==> futureloop t p ==> post (ipos_trace p) None)
+    (forall p. isEvent (t p) ==> post (ipos_trace p) None)
 
 let tio a (w : twp a) =
   t: iotree a { w `stronger_twp` io_twp t }
@@ -797,27 +789,19 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   //   Some? (find_ret m [] p) ==>
   //   post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) None
   // ) ;
-  assume (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assume (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
-  // futureloop.noret
+  // event.noret
   assert (forall (post : tio_post b) p.
     twp_bind w wf post ==>
     isEvent (bind m f p) ==>
-    futureloop (bind m f) p ==>
     None? (find_ret m [] p) ==>
     isEvent (m p)
   ) ;
-  assume (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    futureloop (bind m f) p ==>
-    None? (find_ret m [] p) ==>
-    futureloop m p
-  ) ;
-  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
-  // noret
-  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> futureloop (bind m f) p ==> post (ipos_trace p) None) ;
+  // event
+  assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> post (ipos_trace p) None) ;
 
   assert (forall (post : tio_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
   bind m f
@@ -899,7 +883,7 @@ let tio_repeat_prefix #w (body : tio unit w) :
   repeat_one_ret body ;
   forall_intro_2 ipos_trace_append ;
   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
-  assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> futureloop (repeat body) q ==> shift_post (ipos_trace p) post (ipos_trace q) None)
+  assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
 // let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
 //   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
@@ -982,13 +966,14 @@ let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
 
 // Some specifications
 
-let terminates #a : tio_post a =
-  fun tr v -> Some? v
+// Does not make sense at the moment
+// let terminates #a : tio_post a =
+//   fun tr v -> Some? v
 
 let diverges #a : tio_post a =
   fun tr v -> None? v
 
-let ret_terminates a (x : a) : Lemma (twp_return x terminates) = ()
+// let ret_terminates a (x : a) : Lemma (twp_return x terminates) = ()
 
 // Should be p1 ==> p2 rather than ==
 let rec twp_repeat_trunc_ext w n (p1 p2 : tio_post unit) :
