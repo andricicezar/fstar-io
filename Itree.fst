@@ -745,7 +745,7 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
 let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
   if n = 0
   then fun post -> True
-  else twp_bind w (fun (_:unit) -> twp_repeat_trunc w (n - 1))
+  else twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1)))
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post -> forall n. twp_repeat_trunc w n post
@@ -832,7 +832,15 @@ let rec tio_repeat_proof #w (body : tio unit w) p :
     assert (p == find_ret_prefix body [] p @ q) ;
     repeat_unfold_1 body ;
     begin match q with
-    | [] -> admit () // Seems we are missing some twp_tau
+    | [] ->
+      assert (repeat body p == Some Tau) ;
+      assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post) ;
+      assert (p == find_ret_prefix body [] p) ;
+      assume (forall (post : tio_post unit).
+        twp_repeat w post ==>
+        // isEvent (repeat body p) ==>
+        post (ipos_trace p) None
+      )
     | Tau_choice :: r -> admit ()
     | c :: r -> ()
     end
