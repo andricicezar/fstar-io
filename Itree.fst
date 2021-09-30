@@ -745,7 +745,7 @@ let tio_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> tio a (w r)
 let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
   if n = 0
   then fun post -> True
-  else twp_bind w (fun _ -> twp_repeat_trunc w (n - 1))
+  else twp_bind w (fun (_:unit) -> twp_repeat_trunc w (n - 1))
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post -> forall n. twp_repeat_trunc w n post
@@ -786,19 +786,19 @@ let rec repeat_not_ret (body : iotree unit) p :
     end
   | None -> ()
 
-let tio_repeat_prefix #w (body : tio unit w) :
-  Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
-= // Common to both branches
-  forall_intro (repeat_not_ret body) ;
+// let tio_repeat_prefix #w (body : tio unit w) :
+//   Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
+// = // Common to both branches
+//   forall_intro (repeat_not_ret body) ;
 
-  // ret
-  assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
+//   // ret
+//   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
 
-  // futureloop
-  repeat_one_ret body ;
-  forall_intro_2 ipos_trace_append ;
-  assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
-  assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) None)
+//   // futureloop
+//   repeat_one_ret body ;
+//   forall_intro_2 ipos_trace_append ;
+//   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
+//   assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) None)
 
 // let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
 //   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
@@ -817,9 +817,29 @@ let tio_repeat_prefix #w (body : tio unit w) :
 //     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None)
 //   end
 
+let rec tio_repeat_proof #w (body : tio unit w) p :
+  Lemma
+    (ensures forall (post : tio_post unit).
+      twp_repeat w post ==>
+      isEvent (repeat body p) ==>
+      post (ipos_trace p) None
+    )
+    (decreases p)
+= match find_ret body [] p with
+  | Some ((), q) -> admit ()
+  | None ->
+    assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post)
+
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
-  // forall_intro (tio_repeat_proof body) ;
-  admit () ;
+  // assert (forall (post : tio_post unit). w post ==> io_twp body post) ;
+
+  // ret
+  forall_intro (repeat_not_ret body) ;
+
+  // event
+  forall_intro (tio_repeat_proof body) ;
+
+  assert (forall (post : tio_post unit). twp_repeat w post ==> io_twp (repeat body) post) ;
   repeat body
 
 // We can also "inline" the induction by asking the SMT to prove (p n ==> p (n+1)) which might work sometimes
