@@ -730,23 +730,25 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
   bind m f
 
-let tio_tau #a #w (m : tio a w) : tio a w =
+let twp_tau #a (w : twp a) : twp a =
+  fun post -> post [] None /\ w post
+
+let tio_tau #a #w (m : tio a w) : tio a (twp_tau w) =
   assert (forall (post : tio_post a). w post ==> io_twp m post) ;
 
   // ret
-  assert (forall (post : tio_post a) p. w post ==> isRet (tau m p) ==> post (ipos_trace p) (Some (ret_val (tau m p)))) ;
+  assert (forall (post : tio_post a) p. twp_tau w post ==> isRet (tau m p) ==> post (ipos_trace p) (Some (ret_val (tau m p)))) ;
 
   // event.root
-  assume (forall (post : tio_post a). w post ==> post [] None) ;
-  assert (forall (post : tio_post a). w post ==> isEvent (tau m []) ==> post [] None) ;
+  assert (forall (post : tio_post a). twp_tau w post ==> isEvent (tau m []) ==> post [] None) ;
 
   // event.cons
-  assert (forall (post : tio_post a) c p. w post ==> isEvent (tau m (c :: p)) ==> post (ipos_trace (c :: p)) None) ;
+  assert (forall (post : tio_post a) c p. twp_tau w post ==> isEvent (tau m (c :: p)) ==> post (ipos_trace (c :: p)) None) ;
 
   // event
-  assert (forall (post : tio_post a) p. w post ==> isEvent (tau m p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : tio_post a) p. twp_tau w post ==> isEvent (tau m p) ==> post (ipos_trace p) None) ;
 
-  assert (forall (post : tio_post a). w post ==> io_twp (tau m) post) ;
+  assert (forall (post : tio_post a). twp_tau w post ==> io_twp (tau m) post) ;
   tau m
 
 let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
