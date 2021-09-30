@@ -713,31 +713,6 @@ let tio_bind a b w wf (m : tio a w) (f : (x:a) -> tio b (wf x)) : tio b (twp_bin
   assert (forall (post : tio_post b) p. twp_bind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
 
   // event.ret
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    Some? (find_ret m [] p) ==>
-    wf (find_ret_val m [] p) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)
-  ) ;
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    Some? (find_ret m [] p) ==>
-    isEvent (f (find_ret_val m [] p) (find_ret_pos m [] p))
-  ) ;
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    Some? (find_ret m [] p) ==>
-    shift_post (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) None
-  ) ;
-  assert (forall p q (post : tio_post b). shift_post p post q None ==> post (p @ q) None) ; // Odd that it's needed
-  assert (forall (post : tio_post b) p.
-    twp_bind w wf post ==>
-    isEvent (bind m f p) ==>
-    Some? (find_ret m [] p) ==>
-    post (ipos_trace (find_ret_prefix m [] p) @ ipos_trace (find_ret_pos m [] p)) None
-  ) ;
   assert (forall (post : tio_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // event.noret
