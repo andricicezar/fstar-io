@@ -4,6 +4,7 @@ open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Classical
 open FStar.IndefiniteDescription
+open FStar.Calc
 
 (** Similar to strict_prefix_of, but the opposite.
 
@@ -809,6 +810,25 @@ let rec mem_append (#a : eqtype) l r (x : a) :
 = match l with
   | [] -> ()
   | hd :: tl -> if hd = x then () else mem_append tl r x
+
+let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
+  Lemma
+    (requires forall pp. mem pp pl ==> isRet (body pp))
+    (ensures repeat body (flatten_sep [Tau_choice] pl @ p) == repeat body p)
+= match pl with
+  | [] -> ()
+  | pp :: pl ->
+    calc (==) {
+      repeat body (flatten_sep [Tau_choice] (pp :: pl) @ p) ;
+      == {}
+      repeat body ((pp @ [Tau_choice] @ flatten_sep [Tau_choice] pl) @ p) ;
+      == { forall_intro_3 (append_assoc #iochoice) }
+      repeat body (pp @ Tau_choice :: (flatten_sep [Tau_choice] pl @ p)) ;
+      == { repeat_one_ret body }
+      repeat body (flatten_sep [Tau_choice] pl @ p) ;
+      == { repeat_any_ret body pl p }
+      repeat body p ;
+    }
 
 let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
