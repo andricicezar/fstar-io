@@ -994,31 +994,38 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall tr. inv tr ==> post tr None
 
-let rec twp_repeat_with_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
-  Lemma (forall (post : tio_post unit).
+let invpost (inv : trace -> Type0) : tio_post unit =
+  fun tr v -> inv tr /\ None? v
+
+let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
+  Lemma (
     trace_invariant w inv ==>
-    twp_repeat_with_inv w inv post ==>
-    twp_repeat_trunc w n post
+    twp_repeat_trunc w n (invpost inv)
   )
 = if n = 0
   then ()
   else begin
-    twp_repeat_with_inv_trunc w inv (n - 1) ;
-    assume (forall (post : tio_post unit).
+    twp_repeat_inv_trunc w inv (n - 1) ;
+    assume (
       trace_invariant w inv ==>
-      twp_repeat_with_inv w inv post ==>
-      twp_repeat_trunc w (n-1) post ==>
-      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post
+      twp_repeat_trunc w (n-1) (invpost inv) ==>
+      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) (invpost inv)
+      // ==
+      // w (fun tr v ->
+      //   match v with
+      //   | Some x -> (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) x (shift_post tr (invpost inv))
+      //     == twp_tau (twp_repeat_trunc w (n - 1)) (shift_post tr (invpost inv))
+      //   | None -> invpost inv tr None // == inv tr
+      // )
     ) ;
     assume (forall (post : tio_post unit).
       twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post ==>
       twp_repeat_trunc w n post
     ) ; // why??
-    assert (forall (post : tio_post unit).
+    assert (
       trace_invariant w inv ==>
-      twp_repeat_with_inv w inv post ==>
-      twp_repeat_trunc w (n-1) post ==>
-      twp_repeat_trunc w n post
+      twp_repeat_trunc w (n-1) (invpost inv) ==>
+      twp_repeat_trunc w n (invpost inv)
     )
   end
 
