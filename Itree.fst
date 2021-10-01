@@ -873,10 +873,14 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
     begin match q with
     | [] ->
       repeat_any_ret body pl p ;
+      repeat_unfold_1 body ;
+      assert (repeat body p == Some Tau) ;
+      repeat_any_ret_post body pl p ;
+      assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
       assume (forall (post : tio_post unit).
         twp_repeat w post ==>
         isEvent (repeat body p) ==>
-        post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None // Can make a lemma to give me this, with a w and shift-post to factorise both branches?
+        post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
       )
     | Tau_choice :: r ->
       forall_intro (mem_append pl [find_ret_prefix body [] p]) ;
@@ -894,7 +898,13 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
     end
   | None ->
     repeat_any_ret body pl p ;
-    assume (forall (post : tio_post unit).
+    repeat_any_ret_post body pl p ;
+    assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
+    repeat_unfold_1 body ;
+    assert (
+      isEvent (repeat body p) ==> isEvent (body p)
+    ) ;
+    assert (forall (post : tio_post unit).
       twp_repeat w post ==>
       isEvent (repeat body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
