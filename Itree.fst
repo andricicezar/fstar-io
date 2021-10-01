@@ -830,35 +830,20 @@ let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
       repeat body p ;
     }
 
-// twp_repeat_trunc w (n+1) post
-// when isRet (body p)
-// twp_tau (twp_repeat_trunc w n) (shift_post (ipos_trace p) post)
-// shift_post (ipos_trace p) post [] None /\ twp_repeat_trunc w n (shift_post (ipos_trace p) post)
 let rec repeat_any_ret_post #w (body : tio unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : tio_post unit).
-      twp_repeat w post ==>
+      twp_repeat_trunc w (1 + length pl) post ==>
       isEvent (body p) ==>
       // post (ipos_trace (flatten_sep [Tau_choice] pl)) None /\
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
     (decreases pl)
 = match pl with
-  | [] ->
-    assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post)
+  | [] -> ()
   | pp :: pl ->
     repeat_any_ret_post body pl p ;
-    assert (forall (post : tio_post unit).
-      twp_repeat w post ==>
-      isEvent (body p) ==>
-      post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
-    ) ;
-    assert (forall (post : tio_post unit).
-      twp_repeat w (shift_post (ipos_trace pp) post) ==>
-      isEvent (body p) ==>
-      shift_post (ipos_trace pp) post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
-    ) ;
     calc (==) {
       ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p) ;
       == {}
@@ -869,24 +854,7 @@ let rec repeat_any_ret_post #w (body : tio unit w) (pl : list iopos) p :
       ipos_trace pp @ ipos_trace (Tau_choice :: flatten_sep [Tau_choice] pl @ p) ;
       == {}
       ipos_trace pp @ ipos_trace (flatten_sep [Tau_choice] pl @ p) ;
-    } ;
-    assert (forall (post : tio_post unit).
-      twp_repeat w (shift_post (ipos_trace pp) post) ==>
-      isEvent (body p) ==>
-      post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
-    ) ;
-    // Maybe should strengthen theorem to only use twp_repeat_truc (1 + length pl)
-    assume (forall (post : tio_post unit).
-      twp_repeat w post ==>
-      isEvent (body p) ==>
-      twp_repeat w (shift_post (ipos_trace pp) post)
-    ) ;
-    assert (forall (post : tio_post unit).
-      twp_repeat w post ==>
-      isEvent (body p) ==>
-      // post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl))) None /\
-      post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
-    )
+    }
 
 let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
