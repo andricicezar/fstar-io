@@ -786,12 +786,13 @@ let rec repeat_not_ret (body : iotree unit) p :
     end
   | None -> ()
 
-let rec tio_repeat_proof #w (body : tio unit w) p :
+let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
+    (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : tio_post unit).
       twp_repeat w post ==>
-      isEvent (repeat body p) ==>
-      post (ipos_trace p) None
+      isEvent (repeat body (flatten pl @ p)) ==> // rather flatten_sep with Tau_choice
+      post (ipos_trace (flatten pl @ p)) None
     )
     (decreases p)
 = match find_ret body [] p with
@@ -799,43 +800,67 @@ let rec tio_repeat_proof #w (body : tio unit w) p :
     assert (isRet (body (find_ret_prefix body [] p))) ;
     find_ret_Some_pos body [] p ;
     assert (p == find_ret_prefix body [] p @ q) ;
-    repeat_unfold_1 body ;
     begin match q with
-    | [] ->
-      assert (repeat body p == Some Tau) ;
-      assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post) ;
-      assert (p == find_ret_prefix body [] p) ;
-      assert (forall (post : tio_post unit).
-        twp_repeat w post ==>
-        twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
-      ) ;
-      assert (forall (post : tio_post unit).
-        twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post) ==>
-        shift_post (ipos_trace p) post [] None
-      )
+    | [] -> admit ()
     | Tau_choice :: r ->
-      repeat_one_ret body ;
-      assert (repeat body p == repeat body r) ;
+      assume (forall pp. mem pp (pl @ [find_ret_prefix body [] p]) ==> isRet (body pp)) ;
       find_ret_smaller body [] p ;
-      tio_repeat_proof body r ;
-      assert (forall (post : tio_post unit).
-        twp_repeat w post ==>
-        isEvent (repeat body p) ==>
-        post (ipos_trace r) None
-      ) ;
-      // assume (forall (post : tio_post unit).
-      //   twp_repeat w post ==>
-      //   isEvent (repeat body p) ==>
-      //   post (ipos_trace p) None
-      // )
-      // Maybe it should be generalised to take a list of previous return positions for body
-      // maybe using requires, then the recursive call will be the easy bit
-      // for the other ones, we will need to also use recursion using the thing with n = 1 + length of that list
+      tio_repeat_proof_gen body (pl @ [find_ret_prefix body [] p]) r ;
       admit ()
-    | c :: r -> ()
+    | c :: r -> admit ()
     end
-  | None ->
-    assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post)
+  | None -> admit ()
+
+let rec tio_repeat_proof #w (body : tio unit w) p :
+  Lemma (forall (post : tio_post unit).
+    twp_repeat w post ==>
+    isEvent (repeat body p) ==>
+    post (ipos_trace p) None
+  )
+= tio_repeat_proof_gen body [] p
+
+  // match find_ret body [] p with
+  // | Some ((), q) ->
+  //   assert (isRet (body (find_ret_prefix body [] p))) ;
+  //   find_ret_Some_pos body [] p ;
+  //   assert (p == find_ret_prefix body [] p @ q) ;
+  //   repeat_unfold_1 body ;
+  //   begin match q with
+  //   | [] ->
+  //     assert (repeat body p == Some Tau) ;
+  //     assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post) ;
+  //     assert (p == find_ret_prefix body [] p) ;
+  //     assert (forall (post : tio_post unit).
+  //       twp_repeat w post ==>
+  //       twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
+  //     ) ;
+  //     assert (forall (post : tio_post unit).
+  //       twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post) ==>
+  //       shift_post (ipos_trace p) post [] None
+  //     )
+  //   | Tau_choice :: r ->
+  //     repeat_one_ret body ;
+  //     assert (repeat body p == repeat body r) ;
+  //     find_ret_smaller body [] p ;
+  //     tio_repeat_proof body r ;
+  //     assert (forall (post : tio_post unit).
+  //       twp_repeat w post ==>
+  //       isEvent (repeat body p) ==>
+  //       post (ipos_trace r) None
+  //     ) ;
+  //     // assume (forall (post : tio_post unit).
+  //     //   twp_repeat w post ==>
+  //     //   isEvent (repeat body p) ==>
+  //     //   post (ipos_trace p) None
+  //     // )
+  //     // Maybe it should be generalised to take a list of previous return positions for body
+  //     // maybe using requires, then the recursive call will be the easy bit
+  //     // for the other ones, we will need to also use recursion using the thing with n = 1 + length of that list
+  //     admit ()
+  //   | c :: r -> ()
+  //   end
+  // | None ->
+  //   assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w 1 post)
 
 let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   // assert (forall (post : tio_post unit). w post ==> io_twp body post) ;
