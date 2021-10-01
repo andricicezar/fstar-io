@@ -830,20 +830,19 @@ let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
       repeat body p ;
     }
 
-let rec repeat_any_ret_post #w (body : tio unit w) (pl : list iopos) p :
+let rec repeat_any_ret_event_post #w (body : tio unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : tio_post unit).
       twp_repeat_trunc w (1 + length pl) post ==>
       isEvent (body p) ==>
-      // post (ipos_trace (flatten_sep [Tau_choice] pl)) None /\
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
     (decreases pl)
 = match pl with
   | [] -> ()
   | pp :: pl ->
-    repeat_any_ret_post body pl p ;
+    repeat_any_ret_event_post body pl p ;
     calc (==) {
       ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p) ;
       == {}
@@ -855,6 +854,56 @@ let rec repeat_any_ret_post #w (body : tio unit w) (pl : list iopos) p :
       == {}
       ipos_trace pp @ ipos_trace (flatten_sep [Tau_choice] pl @ p) ;
     }
+
+let rec repeat_any_ret_ret_post #w (body : tio unit w) (pl : list iopos) p :
+  Lemma
+    (requires forall pp. mem pp pl ==> isRet (body pp))
+    (ensures forall (post : tio_post unit).
+      twp_repeat_trunc w (1 + length pl) post ==>
+      isRet (body p) ==>
+      post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
+    )
+    (decreases pl)
+= match pl with
+  | [] ->
+    assert (forall (post : tio_post unit).
+      twp_repeat_trunc w 1 post ==>
+      isRet (body p) ==>
+      twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
+    )
+  | pp :: pl ->
+    repeat_any_ret_ret_post body pl p ;
+    assert (forall (post : tio_post unit).
+      twp_repeat_trunc w (1 + length pl) post ==>
+      isRet (body p) ==>
+      post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
+    ) ;
+    assert (forall (post : tio_post unit).
+      twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
+      isRet (body p) ==>
+      shift_post (ipos_trace pp) post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
+    ) ;
+    calc (==) {
+      ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p) ;
+      == {}
+      ipos_trace ((pp @ Tau_choice :: flatten_sep [Tau_choice] pl) @ p) ;
+      == { forall_intro_3 (append_assoc #iochoice) }
+      ipos_trace (pp @ Tau_choice :: flatten_sep [Tau_choice] pl @ p) ;
+      == { forall_intro_2 ipos_trace_append }
+      ipos_trace pp @ ipos_trace (Tau_choice :: flatten_sep [Tau_choice] pl @ p) ;
+      == {}
+      ipos_trace pp @ ipos_trace (flatten_sep [Tau_choice] pl @ p) ;
+    } ;
+    assert (forall (post : tio_post unit).
+      twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
+      isRet (body p) ==>
+      post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
+    ) ;
+    assert (forall (post : tio_post unit).
+      twp_repeat_trunc w (2 + length pl) post ==>
+      isRet (body p) ==>
+      post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
+    )
 
 let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
@@ -875,9 +924,10 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
       repeat_any_ret body pl p ;
       repeat_unfold_1 body ;
       assert (repeat body p == Some Tau) ;
-      repeat_any_ret_post body pl p ;
+      repeat_any_ret_ret_post body pl p ;
+      assert (isRet (body p)) ;
       assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
-      assume (forall (post : tio_post unit).
+      assert (forall (post : tio_post unit).
         twp_repeat w post ==>
         isEvent (repeat body p) ==>
         post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -898,7 +948,7 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
     end
   | None ->
     repeat_any_ret body pl p ;
-    repeat_any_ret_post body pl p ;
+    repeat_any_ret_event_post body pl p ;
     assert (forall (post : tio_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
     repeat_unfold_1 body ;
     assert (
