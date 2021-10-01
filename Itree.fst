@@ -786,37 +786,6 @@ let rec repeat_not_ret (body : iotree unit) p :
     end
   | None -> ()
 
-// let tio_repeat_prefix #w (body : tio unit w) :
-//   Lemma (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> io_twp (repeat body) (shift_post (ipos_trace p) post))
-// = // Common to both branches
-//   forall_intro (repeat_not_ret body) ;
-
-//   // ret
-//   assert (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isRet (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) (Some (ret_val (repeat body q)))) ;
-
-//   // futureloop
-//   repeat_one_ret body ;
-//   forall_intro_2 ipos_trace_append ;
-//   assert (forall p q. ipos_trace (p @ Tau_choice :: q) == ipos_trace p @ ipos_trace q) ;
-//   assume (forall (post : tio_post unit) p q. io_twp (repeat body) post ==> isRet (body p) ==> isEvent (repeat body q) ==> shift_post (ipos_trace p) post (ipos_trace q) None)
-
-// let rec tio_repeat_proof #w (body : tio unit w) (n : nat) :
-//   Lemma (forall (post : tio_post unit). io_twp (repeat body) post ==> twp_repeat_trunc w n post)
-// = if n = 0
-//   then ()
-//   else begin
-//     // ret
-//     tio_repeat_proof body (n - 1) ;
-//     tio_repeat_prefix body ;
-//     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isRet (body p) ==> twp_repeat_trunc w (n-1) (shift_post (ipos_trace p) post)) ;
-
-//     // noret
-//     forall_intro (move_requires (find_ret_Event_None body [])) ;
-//     repeat_unfold_1 body ;
-//     noFutureRet_find_ret_None body ;
-//     assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> isEvent (body p) ==> noFutureRet body p ==> post (ipos_trace p) None)
-//   end
-
 let rec tio_repeat_proof #w (body : tio unit w) p :
   Lemma
     (ensures forall (post : tio_post unit).
@@ -859,6 +828,9 @@ let rec tio_repeat_proof #w (body : tio unit w) p :
       //   isEvent (repeat body p) ==>
       //   post (ipos_trace p) None
       // )
+      // Maybe it should be generalised to take a list of previous return positions for body
+      // maybe using requires, then the recursive call will be the easy bit
+      // for the other ones, we will need to also use recursion using the thing with n = 1 + length of that list
       admit ()
     | c :: r -> ()
     end
