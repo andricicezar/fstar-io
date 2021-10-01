@@ -804,6 +804,12 @@ let flatten_sep_nil #a (sep : list a) :
   Lemma (flatten_sep sep [] == [])
 = ()
 
+let rec mem_append (#a : eqtype) l r (x : a) :
+  Lemma (mem x (l @ r) == (mem x l || mem x r))
+= match l with
+  | [] -> ()
+  | hd :: tl -> if hd = x then () else mem_append tl r x
+
 let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
@@ -821,7 +827,8 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
     begin match q with
     | [] -> admit ()
     | Tau_choice :: r ->
-      assume (forall pp. mem pp (pl @ [find_ret_prefix body [] p]) ==> isRet (body pp)) ;
+      forall_intro (mem_append pl [find_ret_prefix body [] p]) ;
+      assert (forall pp. mem pp (pl @ [find_ret_prefix body [] p]) ==> isRet (body pp)) ;
       assert (p == find_ret_prefix body [] p @ Tau_choice :: r) ;
       forall_intro_3 (append_assoc #iochoice) ;
       forall_intro_2 (flatten_sep_append #iochoice [Tau_choice]) ;
