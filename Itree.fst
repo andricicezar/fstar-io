@@ -786,13 +786,31 @@ let rec repeat_not_ret (body : iotree unit) p :
     end
   | None -> ()
 
+// TODO MOVE
+let rec flatten_sep #a (sep : list a) (l : list (list a)) : list a =
+  match l with
+  | [] -> []
+  | x :: r -> x @ sep @ flatten_sep sep r
+
+let rec flatten_sep_append #a (sep : list a) (l r : list (list a)) :
+  Lemma (flatten_sep sep (l @ r) == flatten_sep sep l @ flatten_sep sep r)
+= match l with
+  | [] -> ()
+  | x :: l ->
+    flatten_sep_append sep l r ;
+    forall_intro_3 (append_assoc #a)
+
+let flatten_sep_nil #a (sep : list a) :
+  Lemma (flatten_sep sep [] == [])
+= ()
+
 let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : tio_post unit).
       twp_repeat w post ==>
-      isEvent (repeat body (flatten pl @ p)) ==> // rather flatten_sep with Tau_choice
-      post (ipos_trace (flatten pl @ p)) None
+      isEvent (repeat body (flatten_sep [Tau_choice] pl @ p)) ==>
+      post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
     (decreases p)
 = match find_ret body [] p with
@@ -804,14 +822,20 @@ let rec tio_repeat_proof_gen #w (body : tio unit w) (pl : list iopos) p :
     | [] -> admit ()
     | Tau_choice :: r ->
       assume (forall pp. mem pp (pl @ [find_ret_prefix body [] p]) ==> isRet (body pp)) ;
+      assert (p == find_ret_prefix body [] p @ Tau_choice :: r) ;
+      forall_intro_3 (append_assoc #iochoice) ;
+      forall_intro_2 (flatten_sep_append #iochoice [Tau_choice]) ;
+      assert (flatten_sep [Tau_choice] (pl @ [find_ret_prefix body [] p]) == flatten_sep [Tau_choice] pl @ flatten_sep [Tau_choice] [find_ret_prefix body [] p]) ;
+      assert (flatten_sep [Tau_choice] [find_ret_prefix body [] p] == find_ret_prefix body [] p @ [Tau_choice] @ flatten_sep [Tau_choice] []) ;
+      flatten_sep_nil #iochoice [Tau_choice] ;
+      assert (flatten_sep [Tau_choice] pl @ p == flatten_sep [Tau_choice] (pl @ [find_ret_prefix body [] p]) @ r) ;
       find_ret_smaller body [] p ;
-      tio_repeat_proof_gen body (pl @ [find_ret_prefix body [] p]) r ;
-      admit ()
+      tio_repeat_proof_gen body (pl @ [find_ret_prefix body [] p]) r
     | c :: r -> admit ()
     end
   | None -> admit ()
 
-let rec tio_repeat_proof #w (body : tio unit w) p :
+let tio_repeat_proof #w (body : tio unit w) p :
   Lemma (forall (post : tio_post unit).
     twp_repeat w post ==>
     isEvent (repeat body p) ==>
