@@ -980,55 +980,44 @@ let tio_repeat #w (body : tio unit w) : tio unit (twp_repeat w) =
   Alternatively, we propose a definition of tio_repeat using an invariant.
   The invariant is relative to the predicate transformer of the body.
   It must hold for the empty list / root position because postconditions
-  must be downward closed for non-terminating / infinite branches
-  (all finite prefixes are considered as long as they don't have future
-  returns, so maybe downward-closed is wrong in general. For infinite loops
-  however, it is true).
+  must be downward closed.
 
 *)
 
 let trace_invariant (w : twp unit) (inv : trace -> Type0) =
   inv [] /\
   (forall tr. inv tr ==> w (fun tr' v -> inv (tr @ tr') /\ Some? v))
-  // this forces termination, maybe we can simply remove the Some?
 
 let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall tr. inv tr ==> post tr None
 
-// For some reason the identity doesn't work
-let rec trace_to_pos (tr : trace) : Pure iopos (requires True) (ensures fun p -> ipos_trace p == tr) =
-  match tr with
-  | [] -> []
-  | c :: tr -> c :: trace_to_pos tr
-
-let on_ipos_trace_enough (pr : trace -> Type0) :
-  Lemma ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr tr))
-= assert ((forall (p : iopos). pr (ipos_trace p)) ==> (forall (tr : trace). pr (ipos_trace (trace_to_pos tr))))
-
-// let tio_repeat_with_inv_proof #w (body : tio unit w) (inv : trace -> Type0) :
-//   Lemma
-//     (requires trace_invariant w inv)
-//     (ensures forall (post : tio_post unit) tr. io_twp (repeat body) post ==> inv tr ==> post tr None)
-// = assert (forall (post : tio_post unit). io_twp body post ==> w post) ;
-
-//   // This is not ok... If inv is True, we only know that w terminates holds
-//   // Nothing on p... Is the whole approach flawed?
-//   assume (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p)) ;
-
-//   forall_intro (repeat_not_ret body) ;
-//   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> isEvent (repeat body p) /\ noFutureRet (repeat body) p) ;
-
-//   on_ipos_trace_enough (fun tr -> forall (post : tio_post unit). io_twp (repeat body) post ==> inv tr ==> post tr None) ;
-//   assert (forall (post : tio_post unit) p. io_twp (repeat body) post ==> inv (ipos_trace p) ==> post (ipos_trace p) None)
-
-let tio_repeat_with_inv #w (body : tio unit w) (inv : trace -> Type0) :
-  Pure
-    (tio unit (twp_repeat_with_inv w inv))
-    (requires trace_invariant w inv)
-    (ensures fun _ -> True)
-= // tio_repeat_with_inv_proof body inv ;
-  admit () ;
-  repeat body
+let rec twp_repeat_with_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
+  Lemma (forall (post : tio_post unit).
+    trace_invariant w inv ==>
+    twp_repeat_with_inv w inv post ==>
+    twp_repeat_trunc w n post
+  )
+= if n = 0
+  then ()
+  else begin
+    twp_repeat_with_inv_trunc w inv (n - 1) ;
+    assume (forall (post : tio_post unit).
+      trace_invariant w inv ==>
+      twp_repeat_with_inv w inv post ==>
+      twp_repeat_trunc w (n-1) post ==>
+      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post
+    ) ;
+    assume (forall (post : tio_post unit).
+      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post ==>
+      twp_repeat_trunc w n post
+    ) ; // why??
+    assert (forall (post : tio_post unit).
+      trace_invariant w inv ==>
+      twp_repeat_with_inv w inv post ==>
+      twp_repeat_trunc w (n-1) post ==>
+      twp_repeat_trunc w n post
+    )
+  end
 
 // Some specifications
 
