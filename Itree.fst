@@ -108,6 +108,33 @@ let rec list_minus_Some (#a : eqtype) (l l' : list a) :
       else ()
     end
 
+(** flatten but with sep after each cons *)
+
+let rec flatten_sep #a (sep : list a) (l : list (list a)) : list a =
+  match l with
+  | [] -> []
+  | x :: r -> x @ sep @ flatten_sep sep r
+
+let rec flatten_sep_append #a (sep : list a) (l r : list (list a)) :
+  Lemma (flatten_sep sep (l @ r) == flatten_sep sep l @ flatten_sep sep r)
+= match l with
+  | [] -> ()
+  | x :: l ->
+    flatten_sep_append sep l r ;
+    forall_intro_3 (append_assoc #a)
+
+let flatten_sep_nil #a (sep : list a) :
+  Lemma (flatten_sep sep [] == [])
+= ()
+
+(** mem property *)
+
+let rec mem_append (#a : eqtype) l r (x : a) :
+  Lemma (mem x (l @ r) == (mem x l || mem x r))
+= match l with
+  | [] -> ()
+  | hd :: tl -> if hd = x then () else mem_append tl r x
+
 (** Encoding of interaction trees, specialised to a free monad
 
    The idea is to bypass the absence of coinductive datatypes in F* by instead
@@ -786,30 +813,6 @@ let rec repeat_not_ret (body : iotree unit) p :
       | [] -> ()
     end
   | None -> ()
-
-// TODO MOVE
-let rec flatten_sep #a (sep : list a) (l : list (list a)) : list a =
-  match l with
-  | [] -> []
-  | x :: r -> x @ sep @ flatten_sep sep r
-
-let rec flatten_sep_append #a (sep : list a) (l r : list (list a)) :
-  Lemma (flatten_sep sep (l @ r) == flatten_sep sep l @ flatten_sep sep r)
-= match l with
-  | [] -> ()
-  | x :: l ->
-    flatten_sep_append sep l r ;
-    forall_intro_3 (append_assoc #a)
-
-let flatten_sep_nil #a (sep : list a) :
-  Lemma (flatten_sep sep [] == [])
-= ()
-
-let rec mem_append (#a : eqtype) l r (x : a) :
-  Lemma (mem x (l @ r) == (mem x l || mem x r))
-= match l with
-  | [] -> ()
-  | hd :: tl -> if hd = x then () else mem_append tl r x
 
 let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
   Lemma
