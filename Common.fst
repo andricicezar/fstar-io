@@ -1,7 +1,9 @@
 module Common
 
+open FStar.Monotonic.Pure
 open FStar.Exn
 open FStar.Tactics
+open FStar.List.Tot
 
 exception Contract_failure
 
@@ -22,12 +24,12 @@ unfold let inl_app #a #b (f:a -> b) : maybe a -> maybe b =
 
 let cdr #a (_, (x:a)) : a = x
 
-let elim_pure #a #wp ($f : unit -> PURE a wp) p :
-  Pure a (requires (wp p)) (ensures (fun r -> p r)) =
+let elim_pure #a #wp ($f : unit -> PURE a wp) p
+ : Pure a (requires (wp p)) (ensures (fun r -> p r))
   //: PURE a (fun p' -> wp p /\ (forall r. p r ==> p' r))
-  // ^ basically this, requires monotonicity
-  FStar.Monotonic.Pure.wp_monotonic_pure ();
-  f ()
+   // ^ basically this, requires monotonicity
+ = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+   f ()
 
 let rec prefix_of (l1 l2: list 'a)
 : Tot Type0 (decreases l2)

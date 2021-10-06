@@ -5,6 +5,7 @@ open FStar.Tactics.Typeclasses
 
 open Common
 open DM
+open Checkable
 
 (**
 lift: IO -> IIO (Done - in IIO.Effect.fst)
@@ -221,4 +222,4 @@ instance exportable_IOwp
       (fun x ->
         match import x with
         | Some x' -> export (_IIOwp_as_MIIO d3.check2 post f x')
-        | None -> IIO.Effect.throw Contract_failure))
+        | None -> DM.IIO.raise Contract_failure))

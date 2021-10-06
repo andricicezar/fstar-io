@@ -188,8 +188,8 @@ let _IIOwp_as_IIO
     IIOwp 'b (fun h p -> pre x h /\ (forall r lt. post x h r lt ==> p r lt))))
   (x:'a) :
   IIOwp (maybe 'b) (fun h p ->
-    (~(pre x h) ==> p (Inr Contract_failure) []) /\
-    (pre x h ==> (forall r lt. post x h r lt ==> p (Inl r) lt)))
+    (~(pre x h) ==>  p (Inr Contract_failure) []) /\
+    (pre x h ==>  (forall r lt. post x h r lt ==>  p (Inl r) lt)))
     by (iio_tactic ()) =
   let h = get_trace () in
   if pre x h then (Inl (f x))

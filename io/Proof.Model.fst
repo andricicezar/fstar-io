@@ -158,22 +158,22 @@ let instrument
 let compile_prog
   (#i  : interface)
   (#pi : monitorable_prop)
-  (f  : prog_s i pi) :
+  (p  : prog_s i pi) :
   Tot (prog_t i pi) =
   _IIOwp_as_MIIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
-    f
+    p
 
 let compile_whole
   (#i  : interface)
   (#pi : monitorable_prop)
-  (f  : whole_s i pi) :
+  (w  : whole_s i pi) :
   Tot (whole_t i) =
   _IIOwp_as_MIIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
-    f
+    w
 
 val link_s  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_s i pi ->
               prog_s i pi -> Tot (whole_s i pi)
@@ -183,8 +183,80 @@ val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i ->
               prog_t i pi -> Tot (whole_t i)
 let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument i pi c))
 
-let test #i #pi p c : IIO (maybe i.ret) pi (fun _ -> True) (fun _ _ _ -> True)=
+let test #i #pi p c : IIO (maybe i.ret) pi (fun _ -> True) (fun _ _ _ -> True) =
   (_IIOwp_as_IIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
     p) (instrument i pi c)
+
+let awesome
+  (#i : interface)
+  (#pi : monitorable_prop)
+  (p : prog_s i pi)
+  (c : ctx_s i pi) :
+  Lemma (
+      let t = (reify (p c) [] (fun r lt -> iio_post pi [] r lt)) in
+     (iio_interpretation t [] (fun r lt -> iio_post pi [] r lt))
+    )
+  = 
+   let t = (reify (p c) [] (fun r lt -> iio_post pi [] r lt)) in ()
+
+open FStar.WellFounded
+
+(**
+  The lemma is about computation p being securely compiled.
+  The lemma guarantees that computation p after being compiled
+  still respects pi.
+
+  Context: During compilation, p is wrapped in a new function
+  that first does a runtime check. The final step of the
+  compilation is to change the effect from IIO, to MIIO and
+  remove the pre- and post-condition.
+
+  Proof: The compilation process preserves the effect IIO and the
+  pre- and post-condition until the last step, when there is a
+  cast to MIIO, which does not influence the behavior of
+  computation p.
+**)
+
+  // IIOwp (maybe 'b) (fun h p ->
+  //   (~(pre x h) ==> p (Inr Contract_failure) []) /\
+  //   (pre x h ==> (forall r lt. post x h r lt ==> p (Inl r) lt)))
+
+let lemma_secure_prog_compilation
+  (#i  : interface)
+  (#pi : monitorable_prop)
+  (p  : prog_s i pi)
+  (c : ctx_s i pi) :
+    Lemma (True) =
+      let p'' = _IIOwp_as_IIO (fun _ -> iio_pre pi) (fun _ h r lt -> iio_post pi h r lt) p in
+      let t = reify (p'' c) [] (fun r lt -> iio_post pi [] r lt) in
+
+      let p' = compile_prog p in
+
+      // I want to show that p' is functional extensional with p''
+      // p' has a more general weakest precondition
+      // p''
+
+      // assert (p' == p'')
+      //   by (
+      //     norm [delta_only[`%compile_prog;`%_IIOwp_as_MIIO]];
+      //     norm [iota];
+      //     dump "x");
+      let t' = reify (p' c) [] (fun r lt -> iio_post pi [] r lt) in
+      assume (iio_interpretation t' [] (fun r lt -> iio_post pi [] r lt));
+      ()
+
+// TODO:
+// should prove a lemma like this:
+// pre-condition: p is in IIO
+// post-condition: forall c. iio_interpretation (compile_prog p c) [] (post pi)
+
+// TODO:
+// should prove a lemma like this:
+// pre-condition: p was compiled from IIO
+// post-condition: iio_interpretation (reify (link_t c p) ()) [] (post pi)
+
+// then we can define a behavior function and try to
+// show that iio_interpretation implies it
+// Cezar and Exe did this in previous version
