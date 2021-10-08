@@ -719,10 +719,23 @@ let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
+(** Effect observation *)
 let io_twp #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall p. isEvent (t p) ==> post (ipos_trace p) None)
+
+// Alternatively, to account for termination
+// it might be possible to state
+let io_twp' #a (t : iotree a) =
+  fun post ->
+    (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
+    (forall (u : nat -> iopos).
+      (forall n. u n `strict_suffix_of` u (n+1)) ==> // or u 0 == [] and u (n+1) adds exactly one choice?
+      (forall n. isEvent (t (u n))) ==>
+      (forall n. post (ipos_trace (u n)) None) // post could also be more dependent and have a sequence of increasing traces
+    )
+// for bind, we might be able to make it work as we have the prefixes of traces leading to a ret
 
 let iodiv a (w : twp a) =
   t: iotree a { w `stronger_twp` io_twp t }
@@ -997,6 +1010,7 @@ let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
 let invpost (inv : trace -> Type0) : iodiv_post unit =
   fun tr v -> inv tr /\ None? v
 
+// Maybe prove it on the effect observation directly
 let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
   Lemma (
     trace_invariant w inv ==>
