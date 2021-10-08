@@ -732,6 +732,7 @@ let io_twp' #a (t : iotree a) =
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall (u : nat -> iopos).
       (forall n. u n `strict_suffix_of` u (n+1)) ==> // or u 0 == [] and u (n+1) adds exactly one choice?
+      // or better, a nat -> iochoice (so a stream) and then an iotrace (also a stream) or something?
       (forall n. isEvent (t (u n))) ==>
       (forall n. post (ipos_trace (u n)) None) // post could also be more dependent and have a sequence of increasing traces
     )
