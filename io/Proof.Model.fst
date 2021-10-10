@@ -98,11 +98,12 @@ type ctx_s (i:interface) (pi:monitorable_prop) =
     it is the starting point of the execution in this model. **)
 type prog_s (i:interface) (pi:monitorable_prop) =
   ctx_s i pi -> IIO i.ret pi (fun _ -> True) (fun _ _ _ -> True)
-(** prog_t can not fail since it is statically verified. The instrumentation
-    of the context may return an error, but the partial program should treat
-    that error **)
+(** compared to prog_s, prog_t can fail because it has to check the
+    history with which it starts. prog_t is prog_s wrapped in a new 
+    function which adds a runtime check for verifying if pi was 
+    respected until now **)
 type prog_t (i:interface) (pi:monitorable_prop) =
-  ctx_s i pi -> MIIO i.ret
+  ctx_s i pi -> MIIO (maybe i.ret)
 
 let extract_local_trace (h:trace) (pi:monitorable_prop) :
   IIO trace pi
@@ -159,31 +160,34 @@ let instrument
 (**
   Context: During compilation, p is wrapped in a new function
   that first does a runtime check. The runtime check verifies if the 
-  history respects pi. Since the partial program is our starting
+  history respects pi. 
+  
+  One possible assumption: Since the partial program is our starting
   point, the history is always empty, and the result of the runtime 
-  check is always true.
-
-  TODO: I don't know how to state that the history is always empty.
+  check is always true. This assumption would simplify the compilation
+  since we do not need to add the runtime check.
+  But, I do not think that this is a good assumption. I do not think
+  that it can be guaranteed that when the partial program starts, the 
+  history is empty. 
+        let compile_prog'
+        (#i  : interface)
+        (#pi : monitorable_prop)
+        (p  : prog_s i pi) 
+        (c : ctx_s i pi) :
+        MIIO i.ret by (iio_tactic ()) = 
+        assume (get_trace () == []);
+        p c
 **)
-
-(** Blocked: the assumption simplifies the compilation function, but
-I don't see how we can get rid of it. In the end, it can not be guaranteed
-that when the partial program starts, the history is empty. **)
-let compile_prog'
-  (#i  : interface)
-  (#pi : monitorable_prop)
-  (p  : prog_s i pi) 
-  (c : ctx_s i pi) :
-  MIIO i.ret by (iio_tactic ()) = 
-  assume (get_trace () == []);
-  p c
 
 let compile_prog
   (#i  : interface)
   (#pi : monitorable_prop)
   (p  : prog_s i pi) :
   Tot (prog_t i pi) =
-      compile_prog' p
+  _IIOwp_as_MIIO
+    (fun _ -> iio_pre pi)
+    (fun _ h r lt -> iio_post pi h r lt)
+    p
 
 (**
 let compile_whole
@@ -194,7 +198,8 @@ let compile_whole
   _IIOwp_as_MIIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
-    w**)
+    w
+**)
 
 (** the lift from "MIO to MIIO" for the context should happen
 during linking. It is improper to say "should happen", because
@@ -230,6 +235,9 @@ let awesome
 open FStar.WellFounded
 
 (**
+  We should show that (compile_prog p) respects pi, because the p
+  respects pi.
+
   The lemma is about computation p being securely compiled.
   The lemma guarantees that computation p after being compiled
   still respects pi.
@@ -246,10 +254,6 @@ open FStar.WellFounded
   compilation, not much is changed. 
 **)
 
-  // IIOwp (maybe 'b) (fun h p ->
-  //   (~(pre x h) ==> p (Inr Contract_failure) []) /\
-  //   (pre x h ==> (forall r lt. post x h r lt ==> p (Inl r) lt)))
-
 let interp = iio_interpretation
 
 let lemma_secure_prog_compilation
@@ -265,23 +269,8 @@ let lemma_secure_prog_compilation
     let wt = (**IIOwp.**)reify (pt cs) [] (fun r lt -> 
 	    (~(iio_pre pi []) ==> r == (Inr Contract_failure) /\ lt == []) /\
 	    (iio_pre pi [] ==> iio_post pi [] r lt)) in
-     (** because (pt c) is in MIIO, we lose that it respects the interpretation **)
-    assert (interp wt [] (fun r lt -> 
-	    (~(iio_pre pi []) ==> r == (Inr Contract_failure) /\ lt == []) /\
-	    (iio_pre pi [] ==> iio_post pi [] r lt)));
-	    (**
-    let pt' : ctx_s i pi -> MIIO (maybe i.ret) = pt in
-    let wt' = (**MIIO.**)reify (pt' cs) [] (fun r lt -> True) in
-    assume (interp wt' [] (fun r lt -> 
-	    (~(iio_pre pi []) ==> r == (Inr Contract_failure) /\ lt == []) /\
-	    (iio_pre pi [] ==> iio_post pi [] r lt)));
-
-    let pt'' = compile_prog ps in
-    (** this two are not equal because one is in IIOwp and the other in MIIO **)
-(**    assert ((pt <: ctx_s i pi -> MIIO (maybe i.ret)) == pt') by (
-           norm [delta_only[`%compile_prog;`%_IIOwp_as_MIIO]];
-	   norm [iota]);**)**)
-	 _ by (dump "h");
+    (** TODO: try to prove this by matching on wt. wt is of type `iio a` and it
+        should start with `Call GetTrace () cont`. **)
 	 pt cs
   
      
