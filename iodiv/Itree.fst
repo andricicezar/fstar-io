@@ -638,7 +638,7 @@ let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : i
 
 *)
 
-open Common
+assume val file_descr : eqtype
 
 type cmds = | Openfile | Read | Close
 
