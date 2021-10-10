@@ -8,6 +8,16 @@ open FStar.Calc
 open Util
 open Itree
 
+(** SIODiv
+
+    In this file we define a simple version of the IODiv effect for I/O and
+    non-termination.
+    This effect is simpler in the sense that its associated effect observation
+    is not strong enough to express a termination predicate.
+    It supports a divergence predicate however.
+
+*)
+
 (** Monad instance
 
    Without GetTrace for now
@@ -53,9 +63,8 @@ let ioret #a (x : a) : iotree a =
   The trace contains the response of the environment, in fact it is a subset of
   positions where Tau steps are ignored.
 
-  This specification if enough to talk about (non-)termination of a program
-  with respect to its interaction with the environment. Unfortunately, it is
-  still more limited than the Itrees in Coq.
+  This specification if enough to talk about non-termination of a program
+  with respect to its interaction with the environment.
 *)
 
 let trace = list (c: iochoice { c <> Tau_choice })
@@ -74,17 +83,17 @@ let rec ipos_trace_append (p q : iopos) :
   | Call_choice o x y :: p -> ipos_trace_append p q
 
 unfold
-let iodiv_post a = trace -> option a -> Type0
+let wpost a = trace -> option a -> Type0
 
-let twp a = iodiv_post a -> Type0
+let twp a = wpost a -> Type0
 
-let twp_return #a (x : a) : twp a =
+let wret #a (x : a) : twp a =
   fun post -> post [] (Some x)
 
-let shift_post #a (tr : trace) (post : iodiv_post a) : iodiv_post a =
+let shift_post #a (tr : trace) (post : wpost a) : wpost a =
   fun tr' x -> post (tr @ tr') x
 
-let twp_bind #a #b (w : twp a) (f : a -> twp b) : twp b =
+let wbind #a #b (w : twp a) (f : a -> twp b) : twp b =
   fun post ->
     w (fun tr v ->
       match v with
@@ -96,14 +105,14 @@ let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
 (** Effect observation *)
-let io_twp #a (t : iotree a) =
+let theta #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall p. isEvent (t p) ==> post (ipos_trace p) None)
 
 // Alternatively, to account for termination
 // it might be possible to state
-let io_twp' #a (t : iotree a) =
+let theta' #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall (u : nat -> iopos).
@@ -115,37 +124,37 @@ let io_twp' #a (t : iotree a) =
 // for bind, we might be able to make it work as we have the prefixes of traces leading to a ret
 
 let iodiv a (w : twp a) =
-  t: iotree a { w `stronger_twp` io_twp t }
+  t: iotree a { w `stronger_twp` theta t }
 
-let iodiv_return a (x : a) : iodiv a (twp_return x) =
+let iodiv_ret a (x : a) : iodiv a (wret x) =
   ret x
 
-let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (twp_bind w wf) =
-  assert (forall (post : iodiv_post a). w post ==> io_twp m post) ;
-  assert (forall (post : iodiv_post b) x. wf x post ==> io_twp (f x) post) ;
+let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
+  assert (forall (post : wpost a). w post ==> theta m post) ;
+  assert (forall (post : wpost b) x. wf x post ==> theta (f x) post) ;
 
   // ret
   forall_intro (find_ret_Some_pos m []) ;
   forall_intro_2 ipos_trace_append ;
   forall_intro (find_ret_prefix_val m []) ;
-  assert (forall (post : iodiv_post b) p. twp_bind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
+  assert (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
 
   // event.ret
-  assert (forall (post : iodiv_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // event.noret
-  assert (forall (post : iodiv_post b) p.
-    twp_bind w wf post ==>
+  assert (forall (post : wpost b) p.
+    wbind w wf post ==>
     isEvent (bind m f p) ==>
     None? (find_ret m [] p) ==>
     isEvent (m p)
   ) ;
-  assert (forall (post : iodiv_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
 
   // event
-  assert (forall (post : iodiv_post b) p. twp_bind w wf post ==> isEvent (bind m f p) ==> post (ipos_trace p) None) ;
+  assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> post (ipos_trace p) None) ;
 
-  assert (forall (post : iodiv_post b). twp_bind w wf post ==> io_twp (bind m f) post) ;
+  assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
   bind m f
 
 let twp_tau #a (w : twp a) : twp a =
@@ -163,7 +172,7 @@ let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (
 let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
   if n = 0
   then fun post -> True
-  else twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1)))
+  else wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1)))
 
 let twp_repeat (w : twp unit) : twp unit =
   fun post -> forall n. twp_repeat_trunc w n post
@@ -226,7 +235,7 @@ let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
 let rec repeat_any_ret_event_post #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
-    (ensures forall (post : iodiv_post unit).
+    (ensures forall (post : wpost unit).
       twp_repeat_trunc w (1 + length pl) post ==>
       isEvent (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -251,7 +260,7 @@ let rec repeat_any_ret_event_post #w (body : iodiv unit w) (pl : list iopos) p :
 let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
-    (ensures forall (post : iodiv_post unit).
+    (ensures forall (post : wpost unit).
       twp_repeat_trunc w (1 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -259,19 +268,19 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
     (decreases pl)
 = match pl with
   | [] ->
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat_trunc w 1 post ==>
       isRet (body p) ==>
       twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
     )
   | pp :: pl ->
     repeat_any_ret_ret_post body pl p ;
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat_trunc w (1 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     ) ;
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
       isRet (body p) ==>
       shift_post (ipos_trace pp) post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -287,12 +296,12 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
       == {}
       ipos_trace pp @ ipos_trace (flatten_sep [Tau_choice] pl @ p) ;
     } ;
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
     ) ;
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat_trunc w (2 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
@@ -301,7 +310,7 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
 let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
-    (ensures forall (post : iodiv_post unit).
+    (ensures forall (post : wpost unit).
       twp_repeat w post ==>
       isEvent (repeat body (flatten_sep [Tau_choice] pl @ p)) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -319,8 +328,8 @@ let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
       assert (repeat body p == Some Tau) ;
       repeat_any_ret_ret_post body pl p ;
       assert (isRet (body p)) ;
-      assert (forall (post : iodiv_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
-      assert (forall (post : iodiv_post unit).
+      assert (forall (post : wpost unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
+      assert (forall (post : wpost unit).
         twp_repeat w post ==>
         isEvent (repeat body p) ==>
         post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
@@ -342,19 +351,19 @@ let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
   | None ->
     repeat_any_ret body pl p ;
     repeat_any_ret_event_post body pl p ;
-    assert (forall (post : iodiv_post unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
+    assert (forall (post : wpost unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
     repeat_unfold_1 body ;
     assert (
       isEvent (repeat body p) ==> isEvent (body p)
     ) ;
-    assert (forall (post : iodiv_post unit).
+    assert (forall (post : wpost unit).
       twp_repeat w post ==>
       isEvent (repeat body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
 
 let iodiv_repeat_proof #w (body : iodiv unit w) p :
-  Lemma (forall (post : iodiv_post unit).
+  Lemma (forall (post : wpost unit).
     twp_repeat w post ==>
     isEvent (repeat body p) ==>
     post (ipos_trace p) None
@@ -384,7 +393,7 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall tr. inv tr ==> post tr None
 
-let invpost (inv : trace -> Type0) : iodiv_post unit =
+let invpost (inv : trace -> Type0) : wpost unit =
   fun tr v -> inv tr /\ None? v
 
 // Maybe prove it on the effect observation directly
@@ -400,7 +409,7 @@ let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
     assume (
       trace_invariant w inv ==>
       twp_repeat_trunc w (n-1) (invpost inv) ==>
-      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) (invpost inv)
+      wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) (invpost inv)
       // ==
       // w (fun tr v ->
       //   match v with
@@ -409,8 +418,8 @@ let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
       //   | None -> invpost inv tr None // == inv tr
       // )
     ) ;
-    assume (forall (post : iodiv_post unit).
-      twp_bind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post ==>
+    assume (forall (post : wpost unit).
+      wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post ==>
       twp_repeat_trunc w n post
     ) ; // why??
     assert (
@@ -423,42 +432,42 @@ let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
 // Some specifications
 
 // Does not make sense at the moment
-// let terminates #a : iodiv_post a =
+// let terminates #a : wpost a =
 //   fun tr v -> Some? v
 
-let diverges #a : iodiv_post a =
+let diverges #a : wpost a =
   fun tr v -> None? v
 
-// let ret_terminates a (x : a) : Lemma (twp_return x terminates) = ()
+// let ret_terminates a (x : a) : Lemma (wret x terminates) = ()
 
 // Should be p1 ==> p2 rather than ==
-let rec twp_repeat_trunc_ext w n (p1 p2 : iodiv_post unit) :
+let rec twp_repeat_trunc_ext w n (p1 p2 : wpost unit) :
   Lemma ((forall tr x. p1 tr x == p2 tr x) ==> twp_repeat_trunc w n p1 == twp_repeat_trunc w n p2)
 = if n = 0
   then ()
   else begin
     // twp_repeat_trunc_ext w (n-1) p1 p2 ;
-    // assume ((forall tr x. p1 tr x == p2 tr x) ==> twp_bind w (fun _ -> twp_repeat_trunc w (n -1)) p1 == twp_bind w (fun _ -> twp_repeat_trunc w (n -1)) p2)
-    // assert (twp_repeat_trunc w n == twp_bind w (fun _ -> twp_repeat_trunc w (n -1))) ; // Isn't this by def??
+    // assume ((forall tr x. p1 tr x == p2 tr x) ==> wbind w (fun _ -> twp_repeat_trunc w (n -1)) p1 == wbind w (fun _ -> twp_repeat_trunc w (n -1)) p2)
+    // assert (twp_repeat_trunc w n == wbind w (fun _ -> twp_repeat_trunc w (n -1))) ; // Isn't this by def??
     assume ((forall tr x. p1 tr x == p2 tr x) ==> twp_repeat_trunc w n p1 == twp_repeat_trunc w n p2)
   end
 
 let repeat_ret_loops () :
-  Lemma (twp_repeat (twp_return ()) diverges)
+  Lemma (twp_repeat (wret ()) diverges)
 = let rec aux n :
-    Lemma (twp_repeat_trunc (twp_return ()) n diverges) [SMTPat ()]
+    Lemma (twp_repeat_trunc (wret ()) n diverges) [SMTPat ()]
   = if n = 0
     then ()
     else begin
       aux (n - 1) ;
-      twp_repeat_trunc_ext (twp_return ()) (n-1) (shift_post [] diverges) (diverges #unit)
+      twp_repeat_trunc_ext (wret ()) (n-1) (shift_post [] diverges) (diverges #unit)
     end
   in
   ()
 
 // Much better
 let repeat_ret_loops_with_inv () :
-  Lemma (twp_repeat_with_inv (twp_return ()) (fun _ -> True) diverges)
+  Lemma (twp_repeat_with_inv (wret ()) (fun _ -> True) diverges)
 = ()
 
 [@@allow_informative_binders]
@@ -466,7 +475,7 @@ reifiable total layered_effect {
   IODiv : a:Type -> twp a -> Effect
   with
     repr   = iodiv ;
-    return = iodiv_return ;
+    return = iodiv_ret ;
     bind   = iodiv_bind
     // tau    = iodiv_tau ; // Universe problems
     // call   = iodiv_call
