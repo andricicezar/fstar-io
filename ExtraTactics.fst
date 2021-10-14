@@ -2,6 +2,21 @@ module ExtraTactics
 
 open FStar.Tactics
 
+(** This was just a exercise for me. This is equivalent to `:|` operator from Dafny **)
+val forall_x_0 :
+  (p:    ('a -> Type0)) ->
+  (post: (x:'a{p x} -> Type0)) ->
+  (f:    (x:'a -> Lemma (requires (p x)) (ensures (post x)))) ->
+  (x : 'a{p x}) ->
+  Lemma (post x)
+let forall_x_0 p post f x = f x
+
+let forall_x_cond p post f :
+  Lemma (forall x. post x) = Classical.forall_intro (forall_x_0 p post f)
+
+let forall_x post f :
+  Lemma (forall x. post x) = Classical.forall_intro (forall_x_0 (fun _ -> True) post f)
+
 let grewrite_eq (b:binder) : Tac unit =
   match term_as_formula (type_of_binder b) with
   | Comp (Eq _) l r ->

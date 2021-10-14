@@ -201,52 +201,56 @@ let compile_whole
     w
 **)
 
-(** the lift from "MIO to MIIO" for the context should happen
-during linking. It is improper to say "should happen", because
-the lift represents the assumptions: "the context uses
-only the IO library which comes with instrumentation".
- **)
 val link_s  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_s i pi ->
               prog_s i pi -> Tot (whole_s i pi)
 let link_s = (fun #i #pi c p -> (fun _ -> p c))
 
+(** during linking, p expects a context of type ctx_s, but link_t 
+gets a context of type ctx_t, therefore, the linker must instrument 
+the context. **)
 val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i ->
               prog_t i pi -> Tot (whole_t i)
 let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument i pi c))
 
-let test #i #pi p c : IIO (maybe i.ret) pi (fun _ -> True) (fun _ _ _ -> True) =
+let simple_linking_post pi h r lt =
+  (~(iio_pre pi h) ==> r == (Inr (Contract_failure)) /\ lt == []) /\
+    (iio_pre pi h ==> iio_post pi h r lt)
+
+(** p "compiled" linked with instrumented c, gives a computation in IIO,
+that respects the compuation **)
+let simple_linking #i #pi (p:prog_s i pi) (c:ctx_t i) : 
+  IIOwp (maybe i.ret)
+    (fun h p -> forall r lt. simple_linking_post pi h r lt ==> p r lt) =
   (_IIOwp_as_IIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
     p) (instrument i pi c)
 
-let awesome
-  (#i : interface)
-  (#pi : monitorable_prop)
-  (p : prog_s i pi)
-  (c : ctx_s i pi) :
-  Lemma (
-      let t = (reify (p c) [] (fun r lt -> iio_post pi [] r lt)) in
-     (iio_interpretation t [] (fun r lt -> iio_post pi [] r lt))
-    )
-  = 
-   let t = (reify (p c) [] (fun r lt -> iio_post pi [] r lt)) in ()
+(**    assert (iio_interpretation wt h (fun r lt -> iio_post pi h r lt)) by (
+      norm [delta_only [`%iio_interpretation]];
+      norm [delta_only [`%simple_linking_post]];
+      dump "h"
+    )**)
 
-open FStar.WellFounded
+(** the difference between _IIOwp_as_IIO and compile_prog is that 
+the later casts the computation to MIIO, therefore we're losing 
+the interpretation of p.
+TODO: show this
+Problem: Aseem: IIO is a layered effect, then this will not work since layered effects can only be reasoned about using their types and this example requires reasoning that g x == f x. We can only reason with the types of the layered effects code, and here once we have g with the type as shown, we don't have access to any postcondition about its result. To recover that, we need to look at the definition of g **)
+let complex_linking #i #pi p c : 
+  IIOwp (maybe i.ret)
+    (fun h p -> 
+      (~(iio_pre pi h) ==> p (Inr (Contract_failure)) []) /\
+        (iio_pre pi h ==> (forall r lt. iio_post pi h r lt ==> p r lt))) =
+  admit ();
+  (compile_prog p) (instrument i pi c)
 
 (**
-  We should show that (compile_prog p) respects pi, because the p
-  respects pi.
+  We have to show: 
+    `(Beh W) in pi`, where W = link_t (compile_prog p) c.
+  Proof: We know `interp W pi`, therefore we only have to define
+  a Beh that can be implied out of the interp function.
 
-  The lemma is about computation p being securely compiled.
-  The lemma guarantees that computation p after being compiled
-  still respects pi.
-
-  Proof: The compilation process preserves the effect IIO and the
-  pre- and post-condition until the last step, when there is a
-  cast to MIIO, which does not influence the behavior of
-  computation p.
-  
   Just a note here about the Beh function. We did not know how to
   define it when silent steps were involved. For io we had a Beh
   function, but for io+exn, not. That's why we try to do the proof
@@ -254,91 +258,97 @@ open FStar.WellFounded
   compilation, not much is changed. 
 **)
 
-let interp = iio_interpretation
+type set_of_traces (a:Type) = trace * a -> Type0
 
-let lemma_secure_prog_compilation
-  (#i  : interface)
-  (#pi : monitorable_prop)
-  (ps  : prog_s i pi)
-  (cs : ctx_s i pi) : 
-  IIOwp (maybe i.ret) (fun h p -> 
-    (~(iio_pre pi h) ==> p (Inr (Contract_failure)) []) /\
-      (iio_pre pi h ==>
-        (forall r lt. iio_post pi h r lt ==> p (Inl r) lt))) =
-    let pt = _IIOwp_as_IIO (fun _ h -> iio_pre pi h) (fun _ h r lt -> iio_post pi h r lt) ps in
-    let wt = (**IIOwp.**)reify (pt cs) [] (fun r lt -> 
-	    (~(iio_pre pi []) ==> r == (Inr Contract_failure) /\ lt == []) /\
-	    (iio_pre pi [] ==> iio_post pi [] r lt)) in
-    (** TODO: try to prove this by matching on wt. wt is of type `iio a` and it
-        should start with `Call GetTrace () cont`. **)
-	 pt cs
+let empty_set (#a:Type) () : set_of_traces a =
+  fun (t,r) -> t == []
+
+let pi_to_set #a (pi : monitorable_prop) : set_of_traces a =
+  fun (t, _) -> enforced_globally pi (List.rev t)
+
+val included_in : set_of_traces 'a -> set_of_traces 'a -> Type0
+let included_in s1 s2 =
+  forall t r1. s1 (t, r1) ==>  s2 (t, r1)
+
+(** The behavior function has to keep the history along because
+the behavior of iio programs depends on it. **)
+let rec behavior #a
+  (m : iio a) 
+  (h : trace) : set_of_traces a =
+  match m with
+  | Return x -> fun t -> t == ([], x)
+  | Call GetTrace arg fnc -> (fun (t', r') ->
+    behavior (fnc h) h (t', r'))
+  | Call cmd arg fnc -> (fun (t', r') ->
+      exists r t. let e = (convert_call_to_event cmd arg r) in (
+       (behavior (fnc r) (e::h) (t, r')) /\
+       t' == e::t))
+
+let rec lemma_interp_cont_interp i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h (r:res cmd) :
+  Lemma 
+    (requires (iio_interpretation (Call cmd arg cont) h (simple_linking_post pi h)))
+    (ensures (
+      let h' = (convert_call_to_event cmd arg r) :: h in
+      iio_interpretation (cont r) h' (simple_linking_post pi h'))) =
+  let h' = (convert_call_to_event cmd arg r) :: h in
+  assert (iio_interpretation (cont r) h' (Hist.gen_post (simple_linking_post pi h) cmd arg r));
+  admit ()
   
-     
+let rec lemma_beh_cont i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h (r:res cmd) :
+  Lemma
+    (requires (
+        let e = convert_call_to_event cmd arg r in 
+        (b2t(pi h (| cmd, arg |))) /\
+        behavior (cont r) (e::h) `included_in` (pi_to_set pi)))
+    (ensures (behavior (Call cmd arg cont) h `included_in` (pi_to_set pi))) = 
+    admit ()
 
-let lemma_secure_prog_compilation
-  (#i  : interface)
-  (#pi : monitorable_prop)
-  (p  : prog_s i pi)
-  (c : ctx_s i pi) :
-     Lemma (
-     	let ws = (**IIO.**)reify (p c) [] (fun r lt -> iio_post pi [] r lt) in
-     	interp ws [] (fun r lt -> iio_post pi [] r lt) ==> (
-	let pt = compile_prog p in
-	let wt = (**MIIO.**)reify (pt c) [] (fun r lt -> True) in
-	(** the problem is that because (pt c) is in MIIO, we lose the fact that it respects
-	    the interpretation **)
-	interp wt [] (fun r lt -> 
-	    (~(iio_pre pi []) ==> r == (Inr Contract_failure) /\ lt == []) /\
-	    (iio_pre pi [] ==> iio_post pi [] r lt))
-     )) =
-     	let pt = compile_prog p in
-	(** p is not equal with pt because of the following:
-	    1. pt adds a runtime checks that calls get_trace (). we are intersted in this 
-	       equality when the history is empty, therefore we should add a precondition
-	       stating that
-	    2. the output type of p is (t), but the output type for pt is (maybe t).
-	**)
-	assert (p == pt) by (
-           norm [delta_only[`%compile_prog;`%_IIOwp_as_MIIO;`%_IIOwp_as_IIO]];
-           norm [iota];
-	   dump "h");
-	()
+let lemma_pi_cont i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h :
+  Lemma 
+    (requires (iio_interpretation (Call cmd arg cont) h (simple_linking_post pi h)))
+    (ensures (pi h (| cmd, arg |))) = 
+    (** `Call cmd arg cont` implies that the proper checks were done already and for sure
+    	it respects pi, therefore it is ok to run the cmd. **)
+    admit ()
+    
+(** TODO: this function should not be here. the following two lemmas, _beh_1 and _beh
+    are mutually recursive, but when I try to define them as such, F* returns a universe error **)
+let lemma_interp_implies_beh' i pi (w:iio (maybe i.ret)) (h:trace) :
+  Lemma 
+    (requires (iio_interpretation w h (simple_linking_post pi h)))
+    (ensures (behavior w h `included_in` (pi_to_set pi))) = admit ()
 
-
-let lemma_secure_prog_compilation
-  (#i  : interface)
-  (#pi : monitorable_prop)
-  (p  : prog_s i pi)
-  (c : ctx_s i pi) :
-    Lemma (True) =
-      let p'' = _IIOwp_as_IIO (fun _ -> iio_pre pi) (fun _ h r lt -> iio_post pi h r lt) p in
-      let t = reify (p'' c) [] (fun r lt -> iio_post pi [] r lt) in
-
-      let p' = compile_prog p in
-
-      // I want to show that p' is functional extensional with p''
-      // p' has a more general weakest precondition
-      // p''
-
-      // assert (p' == p'')
-      //   by (
-      //     norm [delta_only[`%compile_prog;`%_IIOwp_as_MIIO]];
-      //     norm [iota];
-      //     dump "x");
-      let t' = reify (p' c) [] (fun r lt -> iio_post pi [] r lt) in
-      assume (iio_interpretation t' [] (fun r lt -> iio_post pi [] r lt));
-      ()
-
-// TODO:
-// should prove a lemma like this:
-// pre-condition: p is in IIO
-// post-condition: forall c. iio_interpretation (compile_prog p c) [] (post pi)
-
-// TODO:
-// should prove a lemma like this:
-// pre-condition: p was compiled from IIO
-// post-condition: iio_interpretation (reify (link_t c p) ()) [] (post pi)
-
-// then we can define a behavior function and try to
-// show that iio_interpretation implies it
-// Cezar and Exe did this in previous version
+let lemma_interp_implies_beh_1 i pi (cmd:io_cmds) (arg:args cmd) (cont:(res cmd -> iio (maybe i.ret))) (h:trace) (r:res cmd) :
+  Lemma 
+    (requires (
+      let e = convert_call_to_event cmd arg r in 
+      iio_interpretation (cont r) (e::h) (simple_linking_post pi (e::h))))
+    (ensures (
+      let e = convert_call_to_event cmd arg r in 
+      behavior (cont r) (e::h) `included_in` (pi_to_set pi))) =
+    let e = convert_call_to_event cmd arg r in 
+    lemma_interp_implies_beh' i pi (cont r) (e::h)
+    
+let rec lemma_interp_implies_beh i pi (w:iio (maybe i.ret)) (h:trace) :
+  Lemma 
+    (requires (iio_interpretation w h (simple_linking_post pi h)))
+    (ensures (behavior w h `included_in` (pi_to_set pi))) =
+  match w with
+  | Return x -> ()
+  | Call cmd arg cont -> begin
+    match cmd with
+    | GetTrace -> 
+      lemma_interp_implies_beh i pi (cont h) h
+    | _ ->
+      Classical.forall_intro (Classical.move_requires 
+        (lemma_interp_cont_interp i pi cmd arg cont h));
+      Classical.forall_intro (Classical.move_requires (lemma_interp_implies_beh_1 i pi cmd arg cont h));
+      (** assert (forall r. 
+        let e = convert_call_to_event cmd arg r in 
+        behavior (cont r) (e::h) `included_in` (pi_to_set pi));**)
+      lemma_pi_cont i pi cmd arg cont h;
+      (** assert (pi h (| cmd, arg |)); **)
+      Classical.forall_intro (Classical.move_requires (
+        (lemma_beh_cont i pi cmd arg cont h)))
+      (** assert (behavior w h `included_in` (pi_to_set pi)) **)
+  end
