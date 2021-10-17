@@ -110,19 +110,6 @@ let theta #a (t : iotree a) =
     (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
     (forall p. isEvent (t p) ==> post (ipos_trace p) None)
 
-// Alternatively, to account for termination
-// it might be possible to state
-let theta' #a (t : iotree a) =
-  fun post ->
-    (forall p. isRet (t p) ==> post (ipos_trace p) (Some (ret_val (t p)))) /\
-    (forall (u : nat -> iopos).
-      (forall n. u n `strict_suffix_of` u (n+1)) ==> // or u 0 == [] and u (n+1) adds exactly one choice?
-      // or better, a nat -> iochoice (so a stream) and then an iotrace (also a stream) or something?
-      (forall n. isEvent (t (u n))) ==>
-      (forall n. post (ipos_trace (u n)) None) // post could also be more dependent and have a sequence of increasing traces
-    )
-// for bind, we might be able to make it work as we have the prefixes of traces leading to a ret
-
 let iodiv a (w : twp a) =
   t: iotree a { w `stronger_twp` theta t }
 
@@ -431,14 +418,8 @@ let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
 
 // Some specifications
 
-// Does not make sense at the moment
-// let terminates #a : wpost a =
-//   fun tr v -> Some? v
-
 let diverges #a : wpost a =
   fun tr v -> None? v
-
-// let ret_terminates a (x : a) : Lemma (wret x terminates) = ()
 
 // Should be p1 ==> p2 rather than ==
 let rec twp_repeat_trunc_ext w n (p1 p2 : wpost unit) :
@@ -472,7 +453,7 @@ let repeat_ret_loops_with_inv () :
 
 [@@allow_informative_binders]
 reifiable total layered_effect {
-  IODiv : a:Type -> twp a -> Effect
+  SIODiv : a:Type -> twp a -> Effect
   with
     repr   = iodiv ;
     return = iodiv_ret ;

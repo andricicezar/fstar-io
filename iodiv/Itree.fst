@@ -503,3 +503,22 @@ let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : i
     | None -> ()
   in
   itree_cofix ff
+
+(** Position streams
+
+   Potentially infinite counterpart to iopos.
+
+*)
+let postream op s =
+  nat -> ichoice op s
+
+let rec postream_trunc #op #s (p : postream op s) (n : nat) : ipos op s =
+  if n = 0
+  then []
+  else postream_trunc p (n - 1) @ [ p n ]
+
+let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s =
+  fun n ->
+    if n < length p
+    then index p n
+    else ps (n - length p)
