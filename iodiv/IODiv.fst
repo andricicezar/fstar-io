@@ -116,12 +116,16 @@ let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
+unfold
+let event_stream #a (t : iotree a) (p : iopostream) =
+  forall n. isEvent (t (postream_trunc p n))
+
 (** Effect observation *)
 let theta #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p)))) /\
     (forall (p : iopostream).
-      (forall n. isEvent (t (postream_trunc p n))) ==>
+      event_stream t p ==>
       post (Inf p)
     )
 
@@ -133,33 +137,29 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall (p : iopostream). ~ (isEvent (ioret x (postream_trunc p 0)))) ;
   ret x
 
-// let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
-//   assert (forall (post : wpost a). w post ==> theta m post) ;
-//   assert (forall (post : wpost b) x. wf x post ==> theta (f x) post) ;
+let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
+  assert (forall (post : wpost a). w post ==> theta m post) ;
+  assert (forall (post : wpost b) x. wf x post ==> theta (f x) post) ;
 
-//   // ret
-//   forall_intro (find_ret_Some_pos m []) ;
-//   forall_intro_2 ipos_trace_append ;
-//   forall_intro (find_ret_prefix_val m []) ;
-//   assert (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (ipos_trace p) (Some (ret_val (bind m f p)))) ;
+  // fin
+  forall_intro (find_ret_Some_pos m []) ;
+  forall_intro_2 ipos_trace_append ;
+  forall_intro (find_ret_prefix_val m []) ;
+  assert (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p)))) ;
 
-//   // event.ret
-//   assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  // inf.fin
+  // assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  assume (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> post (Inf p)) ;
+  // from ~ (event_stream m p) we should obtain a prefix of p that is a ret of m
 
-//   // event.noret
-//   assert (forall (post : wpost b) p.
-//     wbind w wf post ==>
-//     isEvent (bind m f p) ==>
-//     None? (find_ret m [] p) ==>
-//     isEvent (m p)
-//   ) ;
-//   assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> None? (find_ret m [] p) ==> post (ipos_trace p) None) ;
+  // inf.inf
+  assert (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> post (Inf p)) ;
 
-//   // event
-//   assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> post (ipos_trace p) None) ;
+  // inf
+  assert (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> post (Inf p)) ;
 
-//   assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
-//   bind m f
+  assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
+  bind m f
 
 // let twp_tau #a (w : twp a) : twp a =
 //   fun post -> post [] None /\ w post
