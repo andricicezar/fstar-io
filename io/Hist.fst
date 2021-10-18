@@ -1,5 +1,6 @@
 module Hist
 
+open FStar.List.Tot.Base
 open Common
 open Free.IO
 
@@ -36,9 +37,9 @@ let hist_bind
   fun h p ->
     w h (compute_post a b h kw p)
 
-let gen_post #a (post:hist_post a) (cmd:io_cmds) args res =
-  fun x local_trace ->
-    post x (convert_call_to_event cmd args res :: local_trace)
+let gen_post #a (post:hist_post a) (cmd:io_cmds) arg res =
+  fun r local_trace ->
+    post r (convert_call_to_event cmd arg res :: local_trace)
 
 unfold
 val hist_ord (#a : Type) : hist a -> hist a -> Type0

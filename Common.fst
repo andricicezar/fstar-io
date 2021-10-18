@@ -88,3 +88,11 @@ let custom_append_inv_tail
      l_to_r [`List.append_assoc; `append_rev];
      // l_to_r [`List.append_inv_tail];
      tadmit ())= ()
+
+let rev_head_append
+  (h:list 'a)
+  (e:'a)
+  (l:list 'a) :
+  Lemma
+    ((List.rev (e::l) @ h) == (List.rev l @ (e::h))) = admit ()
+  
