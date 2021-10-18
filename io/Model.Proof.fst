@@ -58,8 +58,6 @@ let complex_linking #i #pi p c :
   compilation, not much is changed. 
 **)
 
-type set_of_traces (a:Type) = trace * a -> Type0
-
 let empty_set (#a:Type) () : set_of_traces a =
   fun (t,r) -> t == []
 

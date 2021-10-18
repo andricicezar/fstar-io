@@ -16,24 +16,21 @@ noeq type compiler = {
   interface : Type;
   set_of_traces : Type -> Type;
   monitorable_prop : Type;
-  safety_prop   : (#a:Type) -> monitorable_prop -> set_of_traces a;
 
-  res_s   : interface -> Type;
   prog_s  : interface -> monitorable_prop -> Type;
   ctx_s   : interface -> monitorable_prop -> Type;
   whole_s : interface -> monitorable_prop -> Type;
   link_s  : (#i:interface) -> (#pi:monitorable_prop) ->
             ctx_s i pi -> prog_s i pi -> Tot (whole_s i pi);
 
-  res_t   : interface -> Type;
-  prog_t  : interface -> Type;
+  prog_t  : interface -> monitorable_prop -> Type;
   ctx_t   : interface -> Type;
   whole_t : interface -> Type;
   link_t  : (#i:interface) -> (#pi:monitorable_prop) ->
-            ctx_t i -> prog_t i -> Tot (whole_t i);
+            ctx_t i -> prog_t i pi -> Tot (whole_t i);
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
-                  prog_s i pi -> Tot (prog_t i);
+                  prog_s i pi -> Tot (prog_t i pi);
 //  compile_whole : (#i:interface) -> (#pi:monitorable_prop) ->
 //                  whole_s i pi -> Tot (whole_t i);
 }
@@ -211,3 +208,23 @@ the context. **)
 val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i ->
               prog_t i pi -> Tot (whole_t i)
 let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument i pi c))
+
+type set_of_traces (a:Type) = trace * a -> Type0
+
+let comp : compiler = {
+  interface = interface;
+  set_of_traces = set_of_traces;
+  monitorable_prop = monitorable_prop;
+
+  prog_s  = prog_s;
+  ctx_s   = ctx_s;
+  whole_s = whole_s;
+  link_s  = link_s;
+
+  prog_t  = prog_t;
+  ctx_t   = ctx_t;
+  whole_t = whole_t;
+  link_t  = link_t;
+
+  compile_prog = compile_prog; 
+}
