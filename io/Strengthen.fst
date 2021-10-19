@@ -8,14 +8,21 @@ open Export
 open Checkable
 open DM
 
+(** Discussion: maybe it will be better to define as "weak functions":
+functions that have trivial pre-conditions. I don't think it's right 
+that while trying to weaken the types of a function, we also affect the specification. We should take care of the specification before weaking 
+the type. **)
+
 (** Principles for strengthen/weaken: 
 1. they do not change the effect of the argument.
 2. The pre-condition must be converted to a runtime check because the argument is 
    imported at runtime, therefore the pre-condition must be checked at runtime.
-2. The post should be rewritten to accept the possibility of a failure.
+3. The output type usually changes to accept the possiblity of failure.
+4. The post should be rewritten to accept the possibility of a failure, but should still
+   guarantee the old post if the pre-condition is met.
    Erasing or weakeaning the post-condition even further can be done through sub-typing, 
    therefore we try to give the best post-condition we can do after weakeaning.
-3. We need to be really careful with what we say it is `weak` since
+5. We need to be really careful with what we say it is `weak` since
    there are no restrictions.
 **)
 
@@ -53,7 +60,6 @@ instance weakable_arrow
         | Some x' -> Inl (export (f x')) <: Tot (maybe d2.etype)
         | None -> Inr Contract_failure <: Tot (maybe d2.etype)))
 
-
 let adapt_post #t1 #t2 {| d1:importable t1 |} {| d2:exportable t2 |} 
   (pre:t1 -> Type0)
   (post:t1 -> t2 -> Type0) :
@@ -65,6 +71,7 @@ let adapt_post #t1 #t2 {| d1:importable t1 |} {| d2:exportable t2 |}
        (~(pre x) ==> re == (Inr Contract_failure)))
     | _ -> re == (Inr Contract_failure)
 
+(** The post-condition does not respect principle 4. **)
 instance weakable_purearrow
   t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |}
   (pre : t1 -> Type0) {| d3:checkable pre |}
@@ -97,3 +104,5 @@ instance exportable_IOwp
         | Some x' -> Inl (export (_IIOwp_as_MIIO d3.check2 post f x'))
         | None -> Inr Contract_failure))
 **)
+
+(** TODO: write strengthen_iio from the thesis **)
