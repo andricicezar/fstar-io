@@ -3,29 +3,65 @@ module Free.IO
 open FStar.List.Tot.Base
 
 open Common
+open Types
 include Free
 
-type cmds = | Openfile | Read | Close | GetTrace
+type cmds =
+  (* files *)
+  | Openfile 
+  (* file descriptors *)
+  | Read 
+  | Write
+  | Close
+  (* sockets *)
+  | Socket
+  | Setsockopt
+  | Bind
+  | SetNonblock
+  | Listen
+  | Accept
+  | Select
+  (* instrumentation *)
+  | GetTrace
 
 (** Wish: It would be nice to define exn on top of free, and after
 that to define io on top of exn, but we use this big cmds with
 refeniments, therefore we have to make a monolith **)
 
 (** the io free monad does not contain the GetTrace step **)
-let _io_cmds x : bool = x = Openfile || x = Read || x = Close
+let _io_cmds x : bool = 
+  x = Openfile || x = Read || x = Write || x = Close || 
+  x = Socket || x = Setsockopt || x = Bind || x = SetNonblock ||
+  x = Listen || x = Accept || x = Select
 type io_cmds = x:cmds{_io_cmds x}
 
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
-  | Openfile -> string
-  | Read -> file_descr
+  | Openfile -> string * (list open_flag) * zfile_perm
+  | Read -> file_descr * UInt32.t
+  | Write -> file_descr * Bytes.bytes
   | Close -> file_descr
+  | Socket -> unit
+  | Setsockopt -> file_descr * socket_bool_option * bool
+  | Bind -> file_descr * string * UInt32.t
+  | SetNonblock -> file_descr
+  | Listen -> file_descr * Int32.t
+  | Accept -> file_descr
+  | Select -> lfds * lfds * lfds * Int32.t
 
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
-  | Read -> string
+  | Read -> Bytes.bytes * UInt32.t
+  | Write -> unit
   | Close -> unit
+  | Socket -> file_descr
+  | Setsockopt -> unit
+  | Bind -> unit
+  | SetNonblock -> unit
+  | Listen -> unit
+  | Accept -> file_descr
+  | Select -> lfds * lfds * lfds 
 
 let io_resm (cmd:io_cmds) = maybe (io_res cmd)
 
@@ -35,7 +71,15 @@ noeq
 type event =
   | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
   | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
+  | EWrite : a:io_args Write -> (r:io_resm Write) -> event
   | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
+  | ESocket : a:io_args Socket -> (r:io_resm Socket) -> event
+  | ESetsockopt : a:io_args Setsockopt -> (r:io_resm Setsockopt) -> event
+  | EBind : a:io_args Bind -> (r:io_resm Bind) -> event
+  | ESetNonblock : a:io_args SetNonblock -> (r:io_resm SetNonblock) -> event
+  | EListen : a:io_args Listen -> (r:io_resm Listen) -> event
+  | EAccept : a:io_args Accept -> (r:io_resm Accept) -> event
+  | ESelect : a:io_args Select -> (r:io_resm Select) -> event
 
 type trace = list event
 
@@ -101,7 +145,15 @@ let convert_event_to_action (e:event) : action_type =
   match e with
   | EOpenfile arg _ -> (| Openfile, arg |)
   | ERead arg _ -> (| Read, arg |)
+  | EWrite arg _ -> (| Write, arg |)
   | EClose arg _ -> (| Close, arg |)
+  | ESocket arg _ -> (| Socket, arg |)
+  | ESetsockopt arg _ -> (| Setsockopt, arg |)
+  | EBind arg _ -> (| Bind, arg |)
+  | ESetNonblock arg _ -> (| SetNonblock, arg |)
+  | EListen arg _ -> (| Listen, arg |)
+  | EAccept arg _ -> (| Accept, arg |)
+  | ESelect arg _ -> (| Select, arg |)
 
 let convert_call_to_event
   (cmd:io_cmds)
@@ -110,7 +162,15 @@ let convert_call_to_event
   match cmd with
   | Openfile -> EOpenfile arg r
   | Read -> ERead arg r
+  | Write -> EWrite arg r
   | Close -> EClose arg r
+  | Socket -> ESocket arg r
+  | Setsockopt -> ESetsockopt arg r
+  | Bind -> EBind arg r
+  | SetNonblock -> ESetNonblock arg r
+  | Listen -> EListen arg r
+  | Accept -> EAccept arg r
+  | Select -> ESelect arg r
 
 let rec enforced_locally
   (check : monitorable_prop)

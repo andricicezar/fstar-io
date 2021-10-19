@@ -113,7 +113,7 @@ let static_cmd
   (pi : monitorable_prop)
   (argz : io_args cmd) :
   IOwp
-    (res cmd)
+    (io_resm cmd)
     (fun h p ->
       (** precondition **)
       pi h (| cmd, argz |) /\

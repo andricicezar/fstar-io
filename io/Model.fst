@@ -31,13 +31,11 @@ noeq type compiler = {
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
                   prog_s i pi -> Tot (prog_t i pi);
-//  compile_whole : (#i:interface) -> (#pi:monitorable_prop) ->
-//                  whole_s i pi -> Tot (whole_t i);
 }
 
 noeq type interface = {
   ctx_arg : Type;
-  ctx_ret: Type;
+  ctx_ret : Type;
   ctx_post :
     ctx_arg -> trace -> maybe ctx_ret -> trace -> Type0;
   ctx_post_c : checkable4 ctx_post;
@@ -141,8 +139,8 @@ let enforce_post
   else (Inr Contract_failure)
 
 let instrument
-  (i  : interface)
-  (pi : monitorable_prop)
+  (#i  : interface)
+  (#pi : monitorable_prop)
   (ct : ctx_t i) :
   Tot (ctx_s i pi) =
   fun (x:i.ctx_arg) ->
@@ -186,18 +184,6 @@ let compile_prog
     (fun _ h r lt -> iio_post pi h r lt)
     p
 
-(**
-let compile_whole
-  (#i  : interface)
-  (#pi : monitorable_prop)
-  (w  : whole_s i pi) :
-  Tot (whole_t i) =
-  _IIOwp_as_MIIO
-    (fun _ -> iio_pre pi)
-    (fun _ h r lt -> iio_post pi h r lt)
-    w
-**)
-
 val link_s  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_s i pi ->
               prog_s i pi -> Tot (whole_s i pi)
 let link_s = (fun #i #pi c p -> (fun _ -> p c))
@@ -207,7 +193,7 @@ gets a context of type ctx_t, therefore, the linker must instrument
 the context. **)
 val link_t  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_t i ->
               prog_t i pi -> Tot (whole_t i)
-let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument i pi c))
+let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument #i #pi c))
 
 type set_of_traces (a:Type) = trace * a -> Type0
 

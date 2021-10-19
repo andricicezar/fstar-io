@@ -10,5 +10,5 @@ effect MIO
 let unsafe_cmd
   (cmd : io_cmds)
   (argz : io_args cmd) :
-  MIO (res cmd) =
+  MIO (io_resm cmd) =
     IOwp?.reflect(fun _ _ -> io_call cmd argz)
