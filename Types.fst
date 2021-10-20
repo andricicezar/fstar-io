@@ -1,11 +1,6 @@
 module Types
 
-open Common
-
-type lfds = (l:list file_descr) //{List.no_repeats_p l})
-
-let list_subset_of_list (l1:lfds) (l2:lfds) : Type0 =
-  (forall x. (List.memP x l2) ==>  (List.memP x l1))
+type file_descr = int
 
 type error = 
   | EAGAIN
@@ -27,8 +22,6 @@ type open_flag =
   | O_SHARE_DELETE
   | O_CLOEXEC
   | O_KEEPEXEC
-
-type zfile_perm = int
 
 type socket_bool_option = 
   | SO_DEBUG

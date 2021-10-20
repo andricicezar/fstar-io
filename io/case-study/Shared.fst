@@ -11,15 +11,21 @@ let rec is_open (fd:file_descr) (h: trace) : Tot bool =
   match h with
   | [] -> false
   | h :: tail -> match h with
-               | EOpenfile _ (Inl fd') ->
-                   if fd = fd' then true
-                   else is_open fd tail
-               | ESocket _ (Inl fd') ->
-                   if fd = fd' then true
-                   else is_open fd tail
-               | EClose fd' _ ->
-                    if fd = fd' then false
-                    else is_open fd tail
+               | EOpenfile _ x -> begin
+                 match x with
+                 | Inl fd' -> if fd = fd' then true
+                              else is_open fd tail
+                 | _ -> is_open fd tail
+                 end
+               | ESocket _ x -> begin
+                 match x with
+                 | Inl fd' -> if fd = fd' then true
+                              else is_open fd tail
+                 | _ -> is_open fd tail
+                 end
+               | EClose fd' _ -> 
+                 if fd = fd' then false
+                 else is_open fd tail
                | _ -> is_open fd tail
 
 let ctx_post : file_descr -> trace -> maybe unit -> trace -> Tot bool = 

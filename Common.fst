@@ -5,11 +5,18 @@ open FStar.Exn
 open FStar.Tactics
 open FStar.List.Tot
 
+include Types
+
 exception Contract_failure
 
-type maybe a = either a exn
+type zfile_perm = int
 
-type file_descr = int
+type lfds = (l:list file_descr) //{List.no_repeats_p l})
+
+let list_subset_of_list (l1:lfds) (l2:lfds) : Type0 =
+  (forall x. (List.memP x l2) ==>  (List.memP x l1))
+
+type maybe a = either a exn
 
 let compose #a #b #c (g:b->c) (f:a->b) = fun x -> g (f x)
 
@@ -20,7 +27,6 @@ unfold let inl_app #a #b (f:a -> b) : maybe a -> maybe b =
     match x with
     | Inl x -> Inl (f x)
     | Inr err -> Inr err
-
 
 let cdr #a (_, (x:a)) : a = x
 

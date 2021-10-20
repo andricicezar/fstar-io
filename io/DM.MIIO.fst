@@ -1,8 +1,10 @@
 module DM.MIIO
 
 open Common
+open Free
 open Free.IO
 open DM.IIO
+open DM.IIO.Primitives
 
 effect MIIO
   (a:Type) =

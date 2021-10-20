@@ -4,6 +4,7 @@ open FStar.Tactics
 open ExtraTactics
 
 open Common
+open Free
 open Free.IO
 open Hist
 

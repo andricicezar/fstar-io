@@ -1,6 +1,7 @@
 module Instrument
 
 open Common
+open Free
 open Free.IO
 open DM
 

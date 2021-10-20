@@ -3,7 +3,7 @@ module Free.IO
 open FStar.List.Tot.Base
 
 open Common
-include Free
+open Free
 
 type cmds = | Openfile | Read | Close | GetTrace
 

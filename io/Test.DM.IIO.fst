@@ -2,6 +2,7 @@ module Test.DM.IIO
 
 open Common
 open DM
+open DM.IIO.Primitives
 
 let rec is_open (fd:file_descr) (h: trace) :
   Tot bool =

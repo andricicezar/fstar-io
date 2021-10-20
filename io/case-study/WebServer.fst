@@ -2,6 +2,7 @@ module WebServer
 
 open FStar.Tactics
 open ExtraTactics
+open DM.IIO.Tactics
 
 open Common
 open Types
@@ -27,7 +28,7 @@ let rec process_connections
     let rest = process_connections tail to_read (request_handler) in
     if List.mem client to_read then begin
       let _ = request_handler client in 
-      let _ = static_cmd Close pi client in
+      // let _ = static_cmd Close pi client in
       tail 
     end else clients
   end
@@ -105,8 +106,8 @@ let webserver
   IIO i.ret pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 11; iio_tactic ()) =
-  match create_basic_server "127.0.0.1" 12345ul 5l with
+  match create_basic_server "0.0.0.0" 12345ul 5l with
   | Inl server -> begin
-      server_loop 5 server request_handler []
+      server_loop 100000000000 server request_handler []
     end
   | Inr _ -> ()

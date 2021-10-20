@@ -4,7 +4,7 @@ open FStar.List.Tot.Base
 
 open Common
 open Types
-include Free
+open Free
 
 type cmds =
   (* files *)
