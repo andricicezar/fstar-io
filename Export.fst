@@ -7,7 +7,7 @@ open Common
 open DM
 open Checkable
 
-(** Principles for import/export:
+(** Principles for ml/import/export:
 1. they work only with basic types (no functions).
 2. We need to be really careful with what we say it is `ml` since
    F* does not check any restrictions.

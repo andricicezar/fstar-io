@@ -1,5 +1,5 @@
 open Prims
-(** this file is needed because of bug
+(** this file is needed because of the bug:
     https://github.com/FStarLang/FStar/issues/2241 **)
 
 type 't ml = {

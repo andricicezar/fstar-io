@@ -1,5 +1,7 @@
 module Types
 
+(** this file contains types that have a direct equivalent in OCaml **)
+
 type file_descr = int
 
 type error = 
