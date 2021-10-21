@@ -134,3 +134,19 @@ let rec mem_append (#a : eqtype) l r (x : a) :
 = match l with
   | [] -> ()
   | hd :: tl -> if hd = x then () else mem_append tl r x
+
+(** Minimal version of indefinite description for natural numbers *)
+
+let indefinite_description_ghost_nat_min (p : (nat -> prop) { exists n. p n }) :
+  GTot (n : nat { p n /\ (forall m. m < n ==> ~ (p m)) })
+= let bound = indefinite_description_ghost nat p in
+  let rec aux (x : nat { x <= bound }) :
+    Ghost nat (requires forall m. m < bound - x ==> ~ (p m)) (ensures fun n -> p n /\ (forall m. m < n ==> ~ (p m)))
+  = if x = 0
+    then bound
+    else begin
+      if strong_excluded_middle (p (bound - x))
+      then bound - x
+      else aux (x - 1)
+    end
+  in aux bound
