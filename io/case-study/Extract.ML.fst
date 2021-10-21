@@ -19,3 +19,5 @@ assume val ml_listen : args Listen -> ML (res Listen)
 assume val ml_accept : args Accept -> ML (res Accept)
 assume val ml_select : args Select -> ML (res Select)
 assume val ml_gettrace : args GetTrace -> ML (res GetTrace)
+
+assume val console_log : string -> Tot unit

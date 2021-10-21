@@ -38,12 +38,12 @@ type io_cmds = x:cmds{_io_cmds x}
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> string * (list open_flag) * zfile_perm
-  | Read -> file_descr * UInt32.t
+  | Read -> file_descr * Int32.t
   | Write -> file_descr * Bytes.bytes
   | Close -> file_descr
   | Socket -> unit
   | Setsockopt -> file_descr * socket_bool_option * bool
-  | Bind -> file_descr * string * UInt32.t
+  | Bind -> file_descr * string * Int32.t
   | SetNonblock -> file_descr
   | Listen -> file_descr * Int32.t
   | Accept -> file_descr
@@ -52,7 +52,7 @@ unfold let io_args (cmd:io_cmds) : Type =
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
-  | Read -> Bytes.bytes * UInt32.t
+  | Read -> Bytes.bytes * Int32.t
   | Write -> unit
   | Close -> unit
   | Socket -> file_descr

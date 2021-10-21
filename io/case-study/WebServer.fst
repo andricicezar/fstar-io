@@ -11,6 +11,7 @@ open Model
 open Shared
 
 type plugin_type = ctx_s i pi
+let console_log = Extract.ML.console_log
 
 (** since we do not have exceptions, we have to handle errors manually **)
 
@@ -21,14 +22,17 @@ let rec process_connections
   IIO lfds pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (
-    explode (); bump_nth 34; iio_tactic ()) =
+    explode (); bump_nth 23; iio_tactic ()) =
   match clients with
   | [] -> []
   | client :: tail -> begin
+    console_log "Processing connections...";
     let rest = process_connections tail to_read (request_handler) in
     if List.mem client to_read then begin
+      console_log "Handling request...";
       let _ = request_handler client in 
-      // let _ = static_cmd Close pi client in
+      console_log "Request handled...";
+      let _ = static_cmd Close pi client in
       tail 
     end else clients
   end
@@ -41,8 +45,10 @@ let get_new_connection (socket : file_descr) :
   | Inl (to_accept, _, _) ->
     if FStar.List.length to_accept > 0 then begin 
       match static_cmd Accept pi socket with
-      | Inl client -> let _ = static_cmd SetNonblock pi client in
-                      Some client
+      | Inl client -> 
+        console_log "Accepted a new client!!!!";
+        let _ = static_cmd SetNonblock pi client in
+        Some client
       | _ -> None
     end else None
   | _ -> None
@@ -85,7 +91,7 @@ let rec server_loop
     server_loop (iterations_count - 1) socket request_handler clients'
   end
 
-let create_basic_server (ip:string) (port:UInt32.t) (limit:Int32.t) :
+let create_basic_server (ip:string) (port:Int32.t) (limit:Int32.t) :
   IO (maybe file_descr) pi
     (requires (fun h -> True))
     (ensures (fun h r lt ->
@@ -106,7 +112,7 @@ let webserver
   IIO i.ret pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 11; iio_tactic ()) =
-  match create_basic_server "0.0.0.0" 12345ul 5l with
+  match create_basic_server "0.0.0.0" 8080l 5l with
   | Inl server -> begin
       server_loop 100000000000 server request_handler []
     end
