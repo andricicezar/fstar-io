@@ -17,7 +17,7 @@ type plugin_type = ctx_s i pi
 let rec process_connections 
   (clients : lfds) 
   (to_read : lfds) 
-  (request_handler : plugin_type) : 
+  (plugin : plugin_type) : 
   IIO lfds pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (
@@ -25,9 +25,9 @@ let rec process_connections
   match clients with
   | [] -> []
   | client :: tail -> begin
-    let rest = process_connections tail to_read (request_handler) in
+    let rest = process_connections tail to_read (plugin) in
     if List.mem client to_read then begin
-      let _ = request_handler client in 
+      let _ = plugin client in 
       let _ = static_cmd Close pi client in
       tail 
     end else clients
@@ -50,19 +50,19 @@ let get_new_connection (socket : file_descr) :
 
 let handle_connections
   (clients:lfds)
-  (request_handler : plugin_type) :
+  (plugin : plugin_type) :
   IIO lfds pi 
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (iio_tactic ()) =
   match static_cmd Select pi (clients, [], [], 100uy) with
   | Inl (to_read, _, _) ->
-    let clients'' = process_connections clients to_read request_handler in
+    let clients'' = process_connections clients to_read plugin in
     clients''
   | _ -> clients
 
 let server_loop_body 
   (socket : file_descr) 
-  (request_handler : plugin_type)
+  (plugin : plugin_type)
   (clients : lfds) :
   IIO lfds pi
     (requires (fun h -> True)) 
@@ -70,20 +70,20 @@ let server_loop_body
   let clients' = (match get_new_connection socket with
                  | None -> clients
                  | Some fd -> fd :: clients) in
-  handle_connections clients' request_handler
+  handle_connections clients' plugin
 
 let rec server_loop 
   (iterations_count : nat)
   (socket : file_descr) 
-  (request_handler : plugin_type)
+  (plugin : plugin_type)
   (clients : lfds) :
   IIO unit pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 18; iio_tactic ()) =
   if iterations_count = 0 then ()
   else begin
-    let clients' = server_loop_body socket request_handler clients in
-    server_loop (iterations_count - 1) socket request_handler clients'
+    let clients' = server_loop_body socket plugin clients in
+    server_loop (iterations_count - 1) socket plugin clients'
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
@@ -103,12 +103,12 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
   | Inr err -> Inr err
 
 let webserver 
-  (request_handler : plugin_type) :
+  (plugin : plugin_type) :
   IIO i.ret pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 11; iio_tactic ()) =
   match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
-      server_loop 100000000000 server request_handler []
+      server_loop 100000000000 server plugin []
     end
   | Inr _ -> ()
