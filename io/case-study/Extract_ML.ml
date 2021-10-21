@@ -11,7 +11,6 @@ let ml_openfile (file_name, flags, perm) : file_descr maybe =
 
 let ml_read (fd, limit) : (FStar_Bytes.bytes * int) maybe =
   try
-    let (_, limit) : (file_descr * int) = Obj.magic (fd, (Stdint.Int32.of_int (256))) in
     print_int limit;
     print_newline ();
     let buff = Bytes.make 256 '\000' in
@@ -47,9 +46,6 @@ let ml_setsockopt (socket, opt, value) : unit maybe =
 
 let ml_bind (socket, address, port) : unit maybe =
   try
-    let limit : int = Stdint.Int.of_int (256) in
-    print_int limit;
-    print_newline ();
     Unix.bind socket (Unix.ADDR_INET(Unix.inet_addr_of_string address, port));
     print_string "Binded ...\n";
     print_newline ();
@@ -84,6 +80,8 @@ let ml_select (l1, l2, l3, t) : (lfds * lfds * lfds) maybe =
 let ml_gettrace () : Free_IO.trace = []
 
 let console_log s =
+  print_string "Consoling\n";
+  print_newline ();
   print_string s;
   print_string "\n";
   print_newline ();

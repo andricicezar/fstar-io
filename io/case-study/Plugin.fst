@@ -8,9 +8,9 @@ open Shared
 
 val plugin : ctx_t i
 let plugin (client:file_descr) = 
-  match unsafe_cmd Read (client, 256l) with
+  match unsafe_cmd Read (client, 250uy) with
   | Inl (msg, size) ->
-    if Int32.lt size 1l then ()
+    if UInt8.lt size 1uy then ()
     else (
       let _ = unsafe_cmd Write (client, msg) in
       ())

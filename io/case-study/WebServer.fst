@@ -41,7 +41,7 @@ let get_new_connection (socket : file_descr) :
   IO (option file_descr) pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True )) =
-  match static_cmd Select pi ([socket], [], [], 100l) with
+  match static_cmd Select pi ([socket], [], [], 100uy) with
   | Inl (to_accept, _, _) ->
     if FStar.List.length to_accept > 0 then begin 
       match static_cmd Accept pi socket with
@@ -59,7 +59,7 @@ let handle_connections
   IIO lfds pi 
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (iio_tactic ()) =
-  match static_cmd Select pi (clients, [], [], 100l) with
+  match static_cmd Select pi (clients, [], [], 100uy) with
   | Inl (to_read, _, _) ->
     let clients'' = process_connections clients to_read request_handler in
     clients''
@@ -91,7 +91,7 @@ let rec server_loop
     server_loop (iterations_count - 1) socket request_handler clients'
   end
 
-let create_basic_server (ip:string) (port:Int32.t) (limit:Int32.t) :
+let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
   IO (maybe file_descr) pi
     (requires (fun h -> True))
     (ensures (fun h r lt ->
@@ -112,7 +112,7 @@ let webserver
   IIO i.ret pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 11; iio_tactic ()) =
-  match create_basic_server "0.0.0.0" 8080l 5l with
+  match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
       server_loop 100000000000 server request_handler []
     end
