@@ -11,7 +11,6 @@ open Model
 open Shared
 
 type plugin_type = ctx_s i pi
-let console_log = Extract.ML.console_log
 
 (** since we do not have exceptions, we have to handle errors manually **)
 
@@ -22,16 +21,13 @@ let rec process_connections
   IIO lfds pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (
-    explode (); bump_nth 23; iio_tactic ()) =
+    explode (); bump_nth 34; iio_tactic ()) =
   match clients with
   | [] -> []
   | client :: tail -> begin
-    console_log "Processing connections...";
     let rest = process_connections tail to_read (request_handler) in
     if List.mem client to_read then begin
-      console_log "Handling request...";
       let _ = request_handler client in 
-      console_log "Request handled...";
       let _ = static_cmd Close pi client in
       tail 
     end else clients
@@ -46,7 +42,6 @@ let get_new_connection (socket : file_descr) :
     if FStar.List.length to_accept > 0 then begin 
       match static_cmd Accept pi socket with
       | Inl client -> 
-        console_log "Accepted a new client!!!!";
         let _ = static_cmd SetNonblock pi client in
         Some client
       | _ -> None

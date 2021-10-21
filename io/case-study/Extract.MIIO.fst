@@ -11,18 +11,8 @@ open Extract.ML
 val ml_cmd : cmd:cmds -> args cmd -> ML (res cmd)
 let ml_cmd cmd =
   match cmd with
-  | Openfile -> ml_openfile
-  | Read -> ml_read
-  | Write -> ml_write
-  | Close -> ml_close
-  | Socket -> ml_socket
-  | Setsockopt -> ml_setsockopt
-  | Bind -> ml_bind
-  | SetNonblock -> ml_setnonblock
-  | Listen -> ml_listen
-  | Accept -> ml_accept
-  | Select -> ml_select
   | GetTrace -> ml_gettrace
+  | _ -> ml_io_cmd cmd
 
 let rec iio_interpreter #t1 (t:iio t1) : ML t1 =
   match t with
