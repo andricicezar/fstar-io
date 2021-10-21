@@ -8,7 +8,8 @@ open FStar.Calc
 
 (** Similar to strict_prefix_of, but the opposite.
 
-    I believe the names should be swapped but well...
+    Names are now swapped in standard library, will need to change it
+    when updating.
 *)
 let rec strict_suffix_of #a (s l : list a) :
   Pure Type0 (requires True) (ensures fun _ -> True) (decreases l)
@@ -18,6 +19,12 @@ let rec strict_suffix_of #a (s l : list a) :
     match s with
     | [] -> True
     | y :: s -> x == y /\ s `strict_suffix_of` l
+
+let suffix_of #a (s l : list a) =
+  s == l \/ s `strict_suffix_of` l
+
+let prefix_of #a (p l : list a) =
+  p == l \/ p `strict_prefix_of` l
 
 let rec strict_suffix_or_eq_append #a (s l : list a) :
   Lemma
@@ -62,6 +69,18 @@ let rec strict_suffix_of_append #a (p q r : list a) :
 = match r with
   | [] -> ()
   | x :: r' -> strict_suffix_of_append p q r'
+
+let rec suffix_of_append_one #a (s l : list a) x :
+  Lemma (s `suffix_of` (l @ [ x ]) ==> s `suffix_of` l \/ s == l @ [ x ])
+= assert (~ (l @ [x] == [])) ;
+  assert (s `suffix_of` (l @ [ x ]) ==> s == l @ [x] \/ s `strict_suffix_of` (l @ [ x ])) ;
+  match l with
+  | [] -> ()
+  | y :: l' ->
+    begin match s with
+    | z :: s' -> suffix_of_append_one s' l' x
+    | [] -> ()
+    end
 
 (** [l `list_minus` l'] return [Some r] when [l == l' @ r] and [None]
     otherwise.

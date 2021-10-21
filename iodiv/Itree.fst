@@ -220,6 +220,16 @@ let rec find_ret_smaller #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p' -> find_ret_smaller m (pp @ [c]) p'
   end
 
+let rec find_ret_prefix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> q `prefix_of` p) (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p' -> find_ret_prefix_of m (pp @ [c]) p'
+  end
+
 let rec find_ret_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
   Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> length q <= length p) (decreases p)
 = if isRet (m pp)
@@ -522,3 +532,15 @@ let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s
     if n < length p
     then index p n
     else ps (n - length p)
+
+let rec suffix_of_postream_trunc #op #s (p : postream op s) (n : nat) (q : ipos op s) :
+  Lemma (
+    q `suffix_of` postream_trunc p n ==>
+    (exists m. m <= n /\ q == postream_trunc p m)
+  )
+= if n = 0
+  then ()
+  else begin
+    suffix_of_append_one q (postream_trunc p (n - 1)) (p n) ;
+    suffix_of_postream_trunc p (n-1) q
+  end
