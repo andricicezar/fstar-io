@@ -173,3 +173,25 @@ let indefinite_description_ghost_nat_min (p : (nat -> prop) { exists n. p n }) :
       else aux (x - 1)
     end
   in aux bound
+
+(** Properties of index *)
+
+let rec index_append_left #a (l1 l2 : list a) (n : nat) :
+  Lemma
+    (requires n < length l1 /\ n < length (l1 @ l2))
+    (ensures index (l1 @ l2) n == index l1 n)
+= if n = 0
+  then ()
+  else index_append_left (tl l1) l2 (n-1)
+
+let rec index_append_right #a (l1 l2 : list a) (n : nat) :
+  Lemma
+    (requires n >= length l1 /\ n < length (l1 @ l2))
+    (ensures index (l1 @ l2) n == index l2 (n - length l1))
+= match l1 with
+  | [] -> ()
+  | x :: l1' ->
+    begin if n = 0
+      then ()
+      else index_append_right l1' l2 (n-1)
+    end
