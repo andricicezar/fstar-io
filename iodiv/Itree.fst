@@ -548,6 +548,9 @@ let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s
     then index p n
     else ps (n - length p)
 
+let postream_drop #op #s (n : nat) (p : postream op s) : postream op s =
+  fun m -> p (n + m)
+
 let rec suffix_of_postream_trunc #op #s (p : postream op s) (n : nat) (q : ipos op s) :
   Lemma (
     q `suffix_of` postream_trunc p n ==>
@@ -558,4 +561,32 @@ let rec suffix_of_postream_trunc #op #s (p : postream op s) (n : nat) (q : ipos 
   else begin
     suffix_of_append_one q (postream_trunc p (n - 1)) (p n) ;
     suffix_of_postream_trunc p (n-1) q
+  end
+
+let rec postream_trunc_length #op #s (p : postream op s) (n : nat) :
+  Lemma (length (postream_trunc p n) == n)
+= if n = 0
+  then ()
+  else begin
+    append_length (postream_trunc p (n - 1)) [p n] ;
+    postream_trunc_length p (n-1)
+  end
+
+let rec index_postream_trunc #op #s (p : postream op s) (n m : nat) :
+  Lemma (m < length (postream_trunc p n) ==> index (postream_trunc p n) m == p m)
+= admit () // need index_append
+
+let postream_trunc_drop #op #s (n : nat) (p : postream op s) :
+  Lemma (forall m. p m == postream_prepend (postream_trunc p n) (postream_drop n p) m)
+= if n = 0
+  then ()
+  else begin
+    postream_trunc_length p n ;
+
+    forall_intro (index_postream_trunc p n) ;
+    assert (forall m. m < n ==> p m == index (postream_trunc p n) m) ;
+    assert (forall m. m < n ==> p m == postream_prepend (postream_trunc p n) (postream_drop n p) m) ;
+
+    assert (forall m. m >= n ==> p m == postream_drop n p (m - n)) ;
+    assert (forall m. m >= n ==> p m == postream_prepend (postream_trunc p n) (postream_drop n p) m)
   end
