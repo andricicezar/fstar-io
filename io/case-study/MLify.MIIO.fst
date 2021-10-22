@@ -20,6 +20,9 @@ let mlify_MIIO
      let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
      match tree with
      | Return y -> export y
+     (** during extraction, Free.IO.Call is replaced with an actual
+     implementation of the commands, therefore, the `Call` constructor
+     does not exist **)
      | _ -> FStar.All.raise Something_went_really_bad
   end
   | None -> FStar.All.raise Contract_failure
