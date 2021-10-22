@@ -150,16 +150,10 @@ let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostrea
   // with either Some Ret, or None, we first show the latter is not possible
   match m (postream_trunc p n) with
   | None ->
-    assert (isEvent (bind m f (postream_trunc p n))) ;
     begin match find_ret m [] (postream_trunc p n) with
     | Some (x, q) ->
-      begin
-        find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
-        assert (find_ret_prefix m [] (postream_trunc p n) `suffix_of` (postream_trunc p n)) ;
-        suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n)) ;
-        assert (exists nn. nn < n /\ find_ret_prefix m [] (postream_trunc p n) == postream_trunc p nn) ;
-        assert (isRet (m (find_ret_prefix m [] (postream_trunc p n))))
-      end
+      find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
+      suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n))
     | None -> ()
     end
   | Some (Ret x) -> admit ()
