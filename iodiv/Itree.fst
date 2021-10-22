@@ -593,15 +593,5 @@ let rec index_postream_trunc #op #s (p : postream op s) (n m : nat) :
 
 let postream_trunc_drop #op #s (n : nat) (p : postream op s) :
   Lemma (forall m. p m == postream_prepend (postream_trunc p n) (postream_drop n p) m)
-= if n = 0
-  then ()
-  else begin
-    postream_trunc_length p n ;
-
-    forall_intro (index_postream_trunc p n) ;
-    assert (forall m. m < n ==> p m == index (postream_trunc p n) m) ;
-    assert (forall m. m < n ==> p m == postream_prepend (postream_trunc p n) (postream_drop n p) m) ;
-
-    assert (forall m. m >= n ==> p m == postream_drop n p (m - n)) ;
-    assert (forall m. m >= n ==> p m == postream_prepend (postream_trunc p n) (postream_drop n p) m)
-  end
+= postream_trunc_length p n ;
+  forall_intro (index_postream_trunc p n)
