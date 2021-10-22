@@ -285,6 +285,21 @@ let rec find_ret_prefix_val #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> find_ret_prefix_val m (pp @ [c]) p
   end
 
+let rec find_ret_prefix_suffix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures
+    Some? (find_ret m pp p) ==>
+    find_ret_prefix m pp p `suffix_of` (pp @ p)
+  ) (decreases p)
+= if isRet (m pp)
+  then suffix_of_append pp p
+  else begin
+    match p with
+    | [] -> ()
+    | c :: p ->
+      append_assoc pp [c] p ;
+      find_ret_prefix_suffix_of m (pp @ [c]) p
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau

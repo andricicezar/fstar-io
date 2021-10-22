@@ -34,6 +34,10 @@ let rec strict_suffix_or_eq_append #a (s l : list a) :
   | [] -> ()
   | y :: s -> strict_suffix_or_eq_append s l
 
+let suffix_of_append #a (s l : list a) :
+  Lemma (s `suffix_of` (s @ l))
+= strict_suffix_or_eq_append s l
+
 let rec strict_suffix_length #a (s l : list a) :
   Lemma (ensures s `strict_suffix_of` l ==> length s < length l) (decreases l)
 = match l with
