@@ -1,4 +1,4 @@
-module Extract.MIIO
+module MLify.MIIO
 
 open FStar.All
 open Common
@@ -9,7 +9,7 @@ open Export
 
 exception Something_went_really_bad
 
-let extract_MIIO
+let mlify_MIIO
   (#t1:Type) {| d1:importable t1 |}
   (#t2:Type) {| d2:exportable t2 |}
   (f:t1 -> MIIO t2)
@@ -20,6 +20,6 @@ let extract_MIIO
      let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
      match tree with
      | Return y -> export y
-     | _ -> raise Something_went_really_bad
+     | _ -> FStar.All.raise Something_went_really_bad
   end
   | None -> FStar.All.raise Contract_failure
