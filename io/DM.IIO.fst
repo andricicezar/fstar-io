@@ -7,6 +7,7 @@ open FStar.Calc
 open Common
 open Free
 open Free.IO
+open Free.IO.Call
 open DM.IO
 open Hist
 

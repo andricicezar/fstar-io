@@ -6,19 +6,8 @@ open Free
 open Free.IO
 open DM
 open Export
-open Extract.ML
 
-val ml_cmd : cmd:cmds -> args cmd -> ML (res cmd)
-let ml_cmd cmd =
-  match cmd with
-  | GetTrace -> ml_gettrace
-  | _ -> ml_io_cmd cmd
-
-let rec iio_interpreter #t1 (t:iio t1) : ML t1 =
-  match t with
-  | Return r -> r
-  | Call cmd argz fnc ->
-      iio_interpreter #t1 (fnc (ml_cmd cmd argz))
+exception Something_went_really_bad
 
 let extract_MIIO
   (#t1:Type) {| d1:importable t1 |}
@@ -27,8 +16,10 @@ let extract_MIIO
   (x:d1.itype) :
   ML d2.etype =
   match import x with
-  | Some x ->
+  | Some x -> begin
      let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
-     let r : t2 = iio_interpreter tree in
-     export r
+     match tree with
+     | Return y -> export y
+     | _ -> raise Something_went_really_bad
+  end
   | None -> FStar.All.raise Contract_failure

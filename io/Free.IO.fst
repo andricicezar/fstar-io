@@ -78,9 +78,6 @@ let io_return (a:Type) (x:a) : io a =
 let io_bind (a:Type) (b:Type) l k : io b =
   free_bind io_cmds io_sig a b l k
 
-let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_resm cmd) =
-  Call cmd arg Return
-
 // THE IIO FREE MONAD
 type iio a = free cmds iio_sig a
 let iio_return (a:Type) (x:a) : iio a =
@@ -88,9 +85,6 @@ let iio_return (a:Type) (x:a) : iio a =
 
 let iio_bind (a:Type) (b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
-
-let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
-  Call cmd arg Return
 
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)

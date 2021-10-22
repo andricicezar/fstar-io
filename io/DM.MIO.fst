@@ -1,6 +1,7 @@
 module DM.MIO
 
 open Free.IO
+open Free.IO.Call
 open DM.IO
 
 effect MIO
