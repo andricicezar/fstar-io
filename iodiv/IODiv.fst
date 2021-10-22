@@ -124,10 +124,7 @@ let event_stream #a (t : iotree a) (p : iopostream) =
 let theta #a (t : iotree a) =
   fun post ->
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p)))) /\
-    (forall (p : iopostream).
-      event_stream t p ==>
-      post (Inf p)
-    )
+    (forall (p : iopostream). event_stream t p ==> post (Inf p))
 
 let iodiv a (w : twp a) =
   t: iotree a { w `stronger_twp` theta t }
@@ -136,6 +133,36 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall p. ~ (isEvent (ioret x p))) ;
   assert (forall (p : iopostream). ~ (isEvent (ioret x (postream_trunc p 0)))) ;
   ret x
+
+let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
+  Lemma
+    (requires
+      (exists n. ~ (isEvent (m (postream_trunc p n)))) /\
+      event_stream (bind m f) p
+    )
+    (ensures
+      exists (q : iopos) (s : iopostream).
+        (forall n. p n == postream_prepend q s n) /\ // or directly the condition on bind m f p
+        isRet (m q)
+    )
+= let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (postream_trunc p n)))) in
+  // We now before n we only have events, and n is not an event: this leaves us
+  // with either Some Ret, or None, we first show the latter is not possible
+  match m (postream_trunc p n) with
+  | None ->
+    assert (isEvent (bind m f (postream_trunc p n))) ;
+    begin match find_ret m [] (postream_trunc p n) with
+    | Some (x, q) ->
+      begin
+        find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
+        assert (find_ret_prefix m [] (postream_trunc p n) `suffix_of` (postream_trunc p n)) ;
+        suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n)) ;
+        assert (exists nn. nn < n /\ find_ret_prefix m [] (postream_trunc p n) == postream_trunc p nn) ;
+        assert (isRet (m (find_ret_prefix m [] (postream_trunc p n))))
+      end
+    | None -> ()
+    end
+  | Some (Ret x) -> admit ()
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   assert (forall (post : wpost a). w post ==> theta m post) ;
@@ -149,8 +176,12 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
 
   // inf.fin
   // assert (forall (post : wpost b) p. wbind w wf post ==> isEvent (bind m f p) ==> Some? (find_ret m [] p) ==> post (ipos_trace p) None) ;
-  assume (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> post (Inf p)) ;
+  // assume (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. isEvent (m (postream_trunc p n)) /\ ~ (isEvent (m (postream_trunc p (n+1))))) ==> post (Inf p)) ;
+  assume (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> post (Inf p)) ;
   // from ~ (event_stream m p) we should obtain a prefix of p that is a ret of m
+  // the above doesn't tell us we have the smallest n
+  // the problem is how to deduce there is a return from this, in the case None, how do we conclude?
+  assert (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> post (Inf p)) ;
 
   // inf.inf
   assert (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> post (Inf p)) ;
