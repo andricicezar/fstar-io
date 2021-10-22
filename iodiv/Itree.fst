@@ -540,7 +540,7 @@ let postream op s =
 let rec postream_trunc #op #s (p : postream op s) (n : nat) : ipos op s =
   if n = 0
   then []
-  else postream_trunc p (n - 1) @ [ p n ] // should be p (n -1)!!
+  else postream_trunc p (n - 1) @ [ p (n-1) ]
 
 let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s =
   fun n ->
@@ -559,7 +559,7 @@ let rec suffix_of_postream_trunc #op #s (p : postream op s) (n : nat) (q : ipos 
 = if n = 0
   then ()
   else begin
-    suffix_of_append_one q (postream_trunc p (n - 1)) (p n) ;
+    suffix_of_append_one q (postream_trunc p (n - 1)) (p (n-1)) ;
     suffix_of_postream_trunc p (n-1) q
   end
 
@@ -568,7 +568,7 @@ let rec postream_trunc_length #op #s (p : postream op s) (n : nat) :
 = if n = 0
   then ()
   else begin
-    append_length (postream_trunc p (n - 1)) [p n] ;
+    append_length (postream_trunc p (n - 1)) [p (n-1)] ;
     postream_trunc_length p (n-1)
   end
 
@@ -577,20 +577,16 @@ let rec index_postream_trunc #op #s (p : postream op s) (n m : nat) :
 = if n = 0
   then ()
   else begin
-    append_length (postream_trunc p (n - 1)) [p n] ;
+    append_length (postream_trunc p (n - 1)) [p (n-1)] ;
     if m < length (postream_trunc p n) - 1
     then begin
-      index_append_left (postream_trunc p (n - 1)) [p n] m ;
+      index_append_left (postream_trunc p (n - 1)) [p (n-1)] m ;
       index_postream_trunc p (n-1) m
     end
     else if m = length (postream_trunc p n) - 1
     then begin
-      index_append_right (postream_trunc p (n - 1)) [p n] m ;
-      assert (index (postream_trunc p (n - 1) @ [ p n ]) m == index [ p n ] (m - (length (postream_trunc p n) - 1))) ;
-      assert (m == length (postream_trunc p n) - 1) ;
-      assert (index (postream_trunc p (n - 1) @ [ p n ]) m == index [ p n ] 0) ;
-      assert (index (postream_trunc p (n - 1) @ [ p n ]) m == p n) ;
-      assume (index (postream_trunc p (n - 1) @ [ p n ]) m == p m) // postream_trunc is not the right def!
+      index_append_right (postream_trunc p (n - 1)) [p (n-1)] m ;
+      postream_trunc_length p (n-1)
     end
     else ()
   end
