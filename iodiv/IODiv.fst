@@ -156,7 +156,7 @@ let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostrea
       suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n))
     | None -> ()
     end
-  | Some (Ret x) -> admit ()
+  | Some (Ret x) -> postream_trunc_drop n p
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   assert (forall (post : wpost a). w post ==> theta m post) ;
