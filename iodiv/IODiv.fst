@@ -184,8 +184,10 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   // inf.fin
   forall_intro (move_requires (finite_branch_prefix m f)) ;
   event_stream_bind m f ;
+  assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> shift_post (ipos_trace q) post (Inf s)) ;
+  assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> post (Inf (postream_prepend (trace_to_pos (ipos_trace q)) s))) ;
+  // Maybe we will need to change theta to be up to pseq but how? Maybe we have funext on postreams?
   assume (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> post (Inf p)) ;
-  // Maybe we will need to change theta to be upto ext
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> wf (ret_val (m q)) (shift_post (ipos_trace q) post) ==> post (Inf p)) ;
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> post (Inf p)) ;
   assert (forall (post : wpost b) (p : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ==> post (Inf p)) ;
