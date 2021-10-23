@@ -551,6 +551,10 @@ let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s
 let postream_drop #op #s (n : nat) (p : postream op s) : postream op s =
   fun m -> p (n + m)
 
+unfold
+let pseq #op #s (p q : postream op s) : prop =
+  forall n. p n == q n
+
 let rec suffix_of_postream_trunc #op #s (p : postream op s) (n : nat) (q : ipos op s) :
   Lemma (
     q `suffix_of` postream_trunc p n ==>
@@ -592,6 +596,6 @@ let rec index_postream_trunc #op #s (p : postream op s) (n m : nat) :
   end
 
 let postream_trunc_drop #op #s (n : nat) (p : postream op s) :
-  Lemma (forall m. p m == postream_prepend (postream_trunc p n) (postream_drop n p) m)
+  Lemma (p `pseq` postream_prepend (postream_trunc p n) (postream_drop n p))
 = postream_trunc_length p n ;
   forall_intro (index_postream_trunc p n)
