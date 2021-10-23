@@ -195,3 +195,11 @@ let rec index_append_right #a (l1 l2 : list a) (n : nat) :
       then ()
       else index_append_right l1' l2 (n-1)
     end
+
+let index_append #a (l1 l2 : list a) (i : nat) :
+  Lemma (i < length (l1 @ l2) ==> index (l1 @ l2) i == (if i < length l1 then index l1 i else index l2 (i - length l1)))
+= if i < length l1
+  then index_append_left l1 l2 i
+  else if i < length (l1 @ l2)
+  then index_append_right l1 l2 i
+  else ()

@@ -163,8 +163,9 @@ let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) :
 = let aux (p : iopostream) (q : iopos) (s : iopostream) (i : nat) :
     Lemma (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (postream_trunc s i))) [SMTPat ()]
   = assert (event_stream (bind m f) p ==> isEvent (bind m f (postream_trunc p (length q + i)))) ;
+    postream_trunc_ext p (postream_prepend q s) (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (postream_trunc (postream_prepend q s) (length q + i)))) ;
     // need some postream_trunc_add + some way to mix it with postream_prepend to get back q
-    // but first some extensionality of postreams when truncated
     admit ()
   in ()
 
