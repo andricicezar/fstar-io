@@ -599,3 +599,10 @@ let postream_trunc_drop #op #s (n : nat) (p : postream op s) :
   Lemma (p `pseq` postream_prepend (postream_trunc p n) (postream_drop n p))
 = postream_trunc_length p n ;
   forall_intro (index_postream_trunc p n)
+
+// Could also only require ext on positions below n
+let rec postream_trunc_ext #op #s (p q : postream op s) (n  : nat) :
+  Lemma (p `pseq` q ==> postream_trunc p n == postream_trunc q n)
+= if n = 0
+  then ()
+  else postream_trunc_ext p q (n - 1)
