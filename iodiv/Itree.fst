@@ -536,7 +536,7 @@ let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : i
 
 *)
 let postream op s =
-  nat -> ichoice op s
+  nat ^-> ichoice op s
 
 let rec postream_trunc #op #s (p : postream op s) (n : nat) : ipos op s =
   if n = 0
@@ -544,14 +544,16 @@ let rec postream_trunc #op #s (p : postream op s) (n : nat) : ipos op s =
   else postream_trunc p (n - 1) @ [ p (n-1) ]
 
 let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s =
-  fun n ->
+  on nat (fun n ->
     if n < length p
     then index p n
     else ps (n - length p)
+  )
 
 let postream_drop #op #s (n : nat) (p : postream op s) : postream op s =
-  fun m -> p (n + m)
+  on nat (fun m -> p (n + m))
 
+// Could use feq instead
 unfold
 let pseq #op #s (p q : postream op s) : prop =
   forall n. p n == q n
@@ -634,8 +636,4 @@ let postream_prepend_trunc_right #op #s (p : ipos op s) (ps : postream op s) (n 
 
 let postream_ext #op #s (p q : postream op s) :
   Lemma (p `pseq` q ==> p == q)
-= extensionality nat (fun _ -> ichoice op s) p q ;
-  assert (p `pseq` q ==> feq p q) ;
-  assert (p `pseq` q ==> on_domain nat p == on_domain nat q) ;
-  // Maybe use nat ^-> ichoice op s instead?
-  admit ()
+= extensionality nat (fun _ -> ichoice op s) p q
