@@ -165,8 +165,12 @@ let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) :
   = assert (event_stream (bind m f) p ==> isEvent (bind m f (postream_trunc p (length q + i)))) ;
     postream_trunc_ext p (postream_prepend q s) (length q + i) ;
     assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (postream_trunc (postream_prepend q s) (length q + i)))) ;
-    // need some postream_trunc_add + some way to mix it with postream_prepend to get back q
-    admit ()
+    postream_prepend_trunc_right q s (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (q @ postream_trunc s i))) ;
+    find_ret_append m ;
+    assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i)) ;
+    assert (isRet (m q) ==> bind m f (q @ postream_trunc s i) == f (ret_val (m q)) (postream_trunc s i)) ;
+    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (postream_trunc s i)))
   in ()
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
