@@ -5,6 +5,7 @@ open FStar.List.Tot.Properties
 open FStar.Classical
 open FStar.IndefiniteDescription
 open FStar.Calc
+open FStar.FunctionalExtensionality
 open Util
 
 (** Encoding of interaction trees, specialised to a free monad
@@ -630,3 +631,11 @@ let postream_prepend_trunc_right #op #s (p : ipos op s) (ps : postream op s) (n 
     assert (forall i. i < n ==> index (postream_trunc (postream_prepend p ps) n) i == index (p @ postream_trunc ps (n - length p)) i)
   end
   else ()
+
+let postream_ext #op #s (p q : postream op s) :
+  Lemma (p `pseq` q ==> p == q)
+= extensionality nat (fun _ -> ichoice op s) p q ;
+  assert (p `pseq` q ==> feq p q) ;
+  assert (p `pseq` q ==> on_domain nat p == on_domain nat q) ;
+  // Maybe use nat ^-> ichoice op s instead?
+  admit ()
