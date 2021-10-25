@@ -614,6 +614,22 @@ let postream_prepend_nil #op #s (ps : postream op s) :
   Lemma (postream_prepend [] ps `pseq` ps)
 = ()
 
+let postream_prepend_trunc_left #op #s (p : ipos op s) (ps : postream op s) (n : nat) :
+  Lemma (n <= length p ==> postream_trunc (postream_prepend p ps) n == fst (splitAt n p))
+= if n <= length p
+  then begin
+    move_requires (index_extensionality (postream_trunc (postream_prepend p ps) n)) (fst (splitAt n p)) ;
+    postream_trunc_length (postream_prepend p ps) n ;
+    lemma_splitAt_fst_length n p ;
+    forall_intro (index_postream_trunc (postream_prepend p ps) n) ;
+    postream_trunc_length ps n ;
+    assert (forall i. i < n ==> index (postream_trunc (postream_prepend p ps) n) i == postream_prepend p ps i) ;
+    index_fst_splitAt n p ;
+    assert (forall i. i < n ==> index (fst (splitAt n p)) i == index p i) ;
+    assert (forall i. i < n ==> index (postream_trunc (postream_prepend p ps) n) i == index (fst (splitAt n p)) i)
+  end
+  else ()
+
 let postream_prepend_trunc_right #op #s (p : ipos op s) (ps : postream op s) (n : nat) :
   Lemma (n >= length p ==> postream_trunc (postream_prepend p ps) n == p @ postream_trunc ps (n - length p))
 = if n >= length p
