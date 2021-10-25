@@ -161,7 +161,7 @@ let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostrea
     )
     (ensures
       exists (q : iopos) (s : iopostream).
-        p `pseq` postream_prepend q s /\ // or directly the condition on bind m f p
+        p `pseq` postream_prepend q s /\
         isRet (m q)
     )
 = let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (postream_trunc p n)))) in
@@ -189,10 +189,6 @@ let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) :
     find_ret_append m ;
     assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i))
   in ()
-
-let foo a (m : iotree a) :
-  Lemma (forall p. ~ (event_stream m p) <==> (exists n. ~ (isEvent (m (postream_trunc p n)))))
-= ()
 
 let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
@@ -228,19 +224,24 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
 
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
-= calc (==>) {
-    True ;
-    ==> { admit () }
-    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> p `uptotau` p' ==> post (Inf p') ;
-    ==> {}
-    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> wf (ret_val (m q)) (shift_post (ipos_trace q) post) ==> p `uptotau` p' ==> post (Inf p') ;
-    ==> { event_stream_bind m f }
-    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> p `uptotau` p' ==> post (Inf p') ;
-    ==> {}
-    forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ==> p `uptotau` p' ==> post (Inf p') ;
-    ==> { forall_intro (move_requires (finite_branch_prefix m f)) ; admit () }
-    forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `uptotau` p' ==> post (Inf p') ;
-  }
+= let aux (post : wpost b) (p p' : iopostream) :
+    Lemma
+      (requires wbind w wf post /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p')
+      (ensures post (Inf p'))
+      [SMTPat ()]
+  = finite_branch_prefix m f p ;
+    assert (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ;
+    let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) in
+    let s = indefinite_description_ghost iopostream (fun s -> p `pseq` postream_prepend q s /\ isRet (m q)) in
+    assert (theta (f (ret_val (m q))) (shift_post (ipos_trace q) post)) ;
+    event_stream_bind m f ;
+    // assert (forall (p : iopostream) (q : iopos) (s : iopostream). event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> event_stream (f (ret_val (m q))) s) ;
+    assume (event_stream (f (ret_val (m q))) s) ; // should follow from above
+    assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
+    // assert (forall (s' : iopostream). s `uptotau` s' ==> post (Inf (postream_prepend (trace_to_pos (ipos_trace q)) s'))) ;
+    // Should shift_post also quantify uptotau?
+    admit ()
+  in ()
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   assert (forall (post : wpost a). w post ==> theta m post) ;
