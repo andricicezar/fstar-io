@@ -1,4 +1,4 @@
-module Checkable
+module TC.Checkable
 
 class checkable (#t:Type) (p : t -> Type0) =
   { check : (x:t -> b:bool{b ==> p x}) }

@@ -1,11 +1,10 @@
-module Export
+module TC.Export
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
-open DM
-open Checkable
+open TC.Checkable
 
 (** Principles for ml/import/export:
 1. they work only with basic types (no functions).
@@ -27,8 +26,8 @@ instance ml_option t1 {| ml t1 |} : ml (option t1) = { mldummy = () }
 instance ml_maybe t1 {| ml t1 |} : ml (maybe t1) = { mldummy = () }
 instance ml_file_descr : ml file_descr = { mldummy = () }
 (** ** Arrows are not ml! **)
-(**: Arrows are not ml, because in F* they have an associated effect, concept that does 
-not exists in ML. **)
+(**: Arrows are not ml, because in F* they have an associated effect, 
+concept that does not exists in ML. **)
 
 
 (** *** `exportable` and `importable` classes *)

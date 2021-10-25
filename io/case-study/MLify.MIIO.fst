@@ -5,7 +5,7 @@ open Common
 open Free
 open Free.IO
 open DM
-open Export
+open TC.Export
 
 exception Something_went_really_bad
 

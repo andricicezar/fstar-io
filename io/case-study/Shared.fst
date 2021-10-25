@@ -4,7 +4,7 @@ open FStar.Tactics
 
 open Common
 open Free.IO
-open Checkable
+open TC.Checkable
 open Model
 
 let rec is_open (fd:file_descr) (h: trace) : Tot bool =

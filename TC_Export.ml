@@ -121,7 +121,7 @@ let exportable_refinement : 't . 't exportable -> unit -> 't exportable =
   fun d -> fun p -> mk_exportable (Obj.magic (ml_exportable d)) (export d)
 let importable_refinement :
   't .
-    't importable -> unit -> ('t, Obj.t) Checkable.checkable -> 't importable
+    't importable -> unit -> ('t, Obj.t) TC_Checkable.checkable -> 't importable
   =
   fun d ->
     fun rp ->
@@ -130,7 +130,7 @@ let importable_refinement :
           (fun x ->
              match import d x with
              | FStar_Pervasives_Native.Some x1 ->
-                 if Checkable.check () uu___ x1
+                 if TC_Checkable.check () uu___ x1
                  then FStar_Pervasives_Native.Some x1
                  else FStar_Pervasives_Native.None
              | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None)
@@ -166,7 +166,7 @@ let importable_dpair_refined :
   't1 't2 'p .
     't1 importable ->
       't2 importable ->
-        ('t1, 't2, 'p) Checkable.checkable2 ->
+        ('t1, 't2, 'p) TC_Checkable.checkable2 ->
           ('t1, 't2) Prims.dtuple2 importable
   =
   fun d1 ->
@@ -183,7 +183,7 @@ let importable_dpair_refined :
                   | (FStar_Pervasives_Native.Some x,
                      FStar_Pervasives_Native.Some y) ->
                       if
-                        Checkable.check2 () () (Obj.magic d3) x (Obj.magic y)
+                        TC_Checkable.check2 () () (Obj.magic d3) x (Obj.magic y)
                       then
                         FStar_Pervasives_Native.Some (Prims.Mkdtuple2 (x, y))
                       else FStar_Pervasives_Native.None

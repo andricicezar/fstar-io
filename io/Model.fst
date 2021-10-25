@@ -8,7 +8,7 @@ open FStar.Tactics
 open Free.IO
 open Common
 open ExtraTactics
-open Checkable
+open TC.Checkable
 open DM
 open Instrument
 
