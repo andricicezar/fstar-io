@@ -228,7 +228,19 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
 
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
-= admit ()
+= calc (==>) {
+    True ;
+    ==> { admit () }
+    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> p `uptotau` p' ==> post (Inf p') ;
+    ==> {}
+    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> wf (ret_val (m q)) (shift_post (ipos_trace q) post) ==> p `uptotau` p' ==> post (Inf p') ;
+    ==> { event_stream_bind m f }
+    forall (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> p `uptotau` p' ==> post (Inf p') ;
+    ==> {}
+    forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ==> p `uptotau` p' ==> post (Inf p') ;
+    ==> { forall_intro (move_requires (finite_branch_prefix m f)) ; admit () }
+    forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `uptotau` p' ==> post (Inf p') ;
+  }
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   assert (forall (post : wpost a). w post ==> theta m post) ;
