@@ -100,6 +100,13 @@ let uptotau_trans () :
   Lemma (forall p q r. p `uptotau` q ==> q `uptotau` r ==> p `uptotau` r)
 = ()
 
+// Could also be proved without using extensionality
+let pseq_uptotau p q :
+  Lemma
+    (requires p `pseq` q)
+    (ensures p `uptotau` q)
+= postream_ext p q
+
 noeq
 type branch a =
 | Fin : tr:trace -> res:a -> branch a
@@ -246,6 +253,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (event_stream (f (ret_val (m q))) s) ;
     assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
     assert (shift_post (ipos_trace q) post (Inf s)) ;
+    // pseq_uptotau p (postream_prepend q s) ;
     assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
     shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
   in ()
