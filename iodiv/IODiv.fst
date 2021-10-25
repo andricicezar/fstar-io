@@ -224,6 +224,12 @@ let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) 
     assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i))
   in ()
 
+let shift_post_Inf_spe #a tr s p (post : wpost a) :
+  Lemma
+    (requires shift_post tr post (Inf s) /\ postream_prepend (trace_to_pos tr) s `uptotau` p)
+    (ensures post (Inf p))
+= ()
+
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
 = let aux (post : wpost b) (p p' : iopostream) :
@@ -241,8 +247,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
     assert (shift_post (ipos_trace q) post (Inf s)) ;
     assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
-    // assert (forall (s' : iopostream). postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` s' ==> post (Inf s')) ;
-    admit ()
+    shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
   in ()
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
