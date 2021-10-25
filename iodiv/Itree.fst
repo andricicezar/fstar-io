@@ -628,8 +628,6 @@ let postream_prepend_trunc_right #op #s (p : ipos op s) (ps : postream op s) (n 
     assert (forall i. i < n ==> index (p @ postream_trunc ps (n - length p)) i == (if i < length p then index p i else index (postream_trunc ps (n - length p)) (i - length p))) ;
     forall_intro (index_postream_trunc ps (n - length p)) ;
     assert (forall i. i < n ==> index (p @ postream_trunc ps (n - length p)) i == (if i < length p then index p i else ps (i - length p))) ;
-    // assume (forall i. i < n ==> postream_prepend p ps i == (if i < length p then index p i else index (postream_trunc ps (n - length p)) (i - length p))) ;
-    // assume (forall i. i < n ==> postream_prepend p ps i == index (p @ postream_trunc ps (n - length p)) i) ;
     assert (forall i. i < n ==> index (postream_trunc (postream_prepend p ps) n) i == index (p @ postream_trunc ps (n - length p)) i)
   end
   else ()

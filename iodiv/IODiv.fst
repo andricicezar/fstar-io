@@ -120,6 +120,12 @@ unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
   forall n. isEvent (t (postream_trunc p n))
 
+let embeds (p q : iopostream) =
+  forall n. exists m. ipos_trace (postream_trunc q n) == ipos_trace (postream_trunc p m)
+
+let uptotau (p q : iopostream) =
+  p `embeds` q /\ q `embeds` p
+
 (** Effect observation *)
 let theta #a (t : iotree a) =
   fun post ->
@@ -186,7 +192,14 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   event_stream_bind m f ;
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> shift_post (ipos_trace q) post (Inf s)) ;
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> post (Inf (postream_prepend (trace_to_pos (ipos_trace q)) s))) ;
-  // Maybe we will need to change theta to be up to pseq but how? Maybe we have funext on postreams?
+  // Even with postream_ext we have the problem that we have a position where Taus are removed...
+  // the easiest would be to shift_post with a pos rather than a trace
+  // the other option is to have theta up to Tau but that might be painful
+  // not possible since we only have a trace at hand
+  // we will need equivalence up to Tau
+  // for this we say p `uptotau` q when there is s, pp, qq such that p = pp @ s, q = qq @ s and ipos_trace pp == ipos_trace qq
+  // or could be forall n. exists m. ipos_trace (postream_trunc p n) == ipos_trace (postream_trunc q m) + symmetric! (not symmetric otherwise)
+  // can be embeds/refines predicate first
   assume (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ==> post (Inf p)) ;
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> wf (ret_val (m q)) (shift_post (ipos_trace q) post) ==> post (Inf p)) ;
   assert (forall (post : wpost b) (p : iopostream) (q : iopos) (s : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> (exists n. ~ (isEvent (m (postream_trunc p n)))) ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> post (Inf p)) ;
