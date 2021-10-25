@@ -203,3 +203,21 @@ let index_append #a (l1 l2 : list a) (i : nat) :
   else if i < length (l1 @ l2)
   then index_append_right l1 l2 i
   else ()
+
+(** Properties on splitAt *)
+
+let rec lemma_splitAt_fst_length (#a:Type) (n : nat) (l : list a) :
+  Lemma
+    (requires n <= length l)
+    (ensures length (fst (splitAt n l)) = n) =
+  match n, l with
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, _ :: l' -> lemma_splitAt_fst_length (n - 1) l'
+
+let rec index_fst_splitAt #a (n : nat) (l : list a) :
+  Lemma (forall i. n <= length l ==> i < n ==> i < length (fst (splitAt n l)) ==> index (fst (splitAt n l)) i == index l i)
+= match n, l with
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, _ :: l' -> index_fst_splitAt (n - 1) l'
