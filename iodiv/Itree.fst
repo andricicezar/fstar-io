@@ -648,6 +648,10 @@ let postream_prepend_trunc_right #op #s (p : ipos op s) (ps : postream op s) (n 
   end
   else ()
 
+let postream_prepend_trunc #op #s (p : ipos op s) (ps : postream op s) (n : nat) :
+  Lemma (postream_trunc (postream_prepend p ps) n == (if n <= length p then fst (splitAt n p) else p @ postream_trunc ps (n - length p)))
+= postream_prepend_trunc_left p ps n ; postream_prepend_trunc_right p ps n
+
 let postream_ext #op #s (p q : postream op s) :
   Lemma (p `pseq` q ==> p == q)
 = extensionality nat (fun _ -> ichoice op s) p q
