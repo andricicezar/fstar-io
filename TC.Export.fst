@@ -20,11 +20,19 @@ class ml (t:Type) = { mldummy : unit }
 instance ml_unit : ml unit = { mldummy = () }
 instance ml_bool : ml bool = { mldummy = () }
 instance ml_int : ml int = { mldummy = () }
+instance ml_uint8 : ml UInt8.t = { mldummy = () }
 instance ml_string : ml string = { mldummy = () }
+instance ml_bytes : ml Bytes.bytes = { mldummy = () }
+instance ml_open_flag : ml open_flag = { mldummy = () } 
+instance ml_socket_bool_option : ml socket_bool_option = { mldummy = () }
+instance ml_file_descr : ml file_descr = { mldummy = () }
+instance ml_zfile_perm : ml zfile_perm = { mldummy = () }
 instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
+instance ml_pair_2 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml (t1 * t2 * t3) = { mldummy = () }
+instance ml_pair_3 t1 t2 t3 t4 {| ml t1 |} {| ml t2 |} {| ml t3 |} {| ml t4 |} : ml (t1 * t2 * t3 * t4) = { mldummy = () }
 instance ml_option t1 {| ml t1 |} : ml (option t1) = { mldummy = () }
 instance ml_maybe t1 {| ml t1 |} : ml (maybe t1) = { mldummy = () }
-instance ml_file_descr : ml file_descr = { mldummy = () }
+instance ml_list t1 {| ml t1 |} : ml (list t1) = { mldummy = () }
 (** ** Arrows are not ml! **)
 (**: Arrows are not ml, because in F* they have an associated effect, 
 concept that does not exists in ML. **)

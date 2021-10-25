@@ -6,7 +6,7 @@ open FStar.Tactics.Typeclasses
 open Common
 open TC.Checkable
 open TC.Export
-open TC.Weaken
+include TC.Weaken
 open TC.Trivialize.MIIO
 open DM.MIIO
 
