@@ -4,11 +4,12 @@ open FStar.List.Tot
 open FStar.Calc
 open FStar.Tactics
 
-
+open Free
 open Free.IO
 open Common
 open ExtraTactics
 open TC.Checkable
+open TC.Trivialize.IIOwp
 open DM
 open Model
 
@@ -21,10 +22,13 @@ that respects the compuation **)
 let simple_linking #i #pi (p:prog_s i pi) (c:ctx_t i) : 
   IIOwp (maybe i.ret)
     (fun h p -> forall r lt. simple_linking_post pi h r lt ==> p r lt) =
-  (_IIOwp_as_IIO
-    (fun _ -> iio_pre pi)
-    (fun _ h r lt -> iio_post pi h r lt)
-    p) (instrument i pi c)
+  (trivialize 
+    #_ 
+    #(trivializeable_IIOwp _ _ 
+      (fun _ h -> iio_pre pi h) 
+      (fun _ h r lt -> iio_post pi h r lt))
+    p) (instrument #i #pi c)
+
 
 (**    assert (iio_interpretation wt h (fun r lt -> iio_post pi h r lt)) by (
       norm [delta_only [`%iio_interpretation]];
@@ -43,7 +47,7 @@ let complex_linking #i #pi p c :
       (~(iio_pre pi h) ==> p (Inr (Contract_failure)) []) /\
         (iio_pre pi h ==> (forall r lt. iio_post pi h r lt ==> p r lt))) =
   admit ();
-  (compile_prog p) (instrument i pi c)
+  (compile_prog p) (instrument #i #pi c)
 
 (**
   We have to show: 

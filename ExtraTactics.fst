@@ -86,6 +86,16 @@ let rewrite_lemma (n:nat) (m:nat) : Tac unit =
     mapply (binder_to_term b');
     ignore (trytac (fun () -> clear b'; clear zz; clear zz'))
     
+let rewrite_lemma_2 (n:nat) (m:nat) (m':nat) : Tac unit =
+    (** n is for the index of the wp
+        m is for the index of the pure_result:unit **)
+    let zz = get_binder n in
+    let zz' = get_binder m in
+    let zz'' = get_binder m' in
+    let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
+    let b'' = instantiate (binder_to_term b') (binder_to_term zz'') in
+    mapply (binder_to_term b'');
+    ignore (trytac (fun () -> clear b'; clear zz; clear zz'; clear zz''; clear b''))
  
     // by (explode (); bump_nth 3; 
     // let bs = List.Tot.map (fun (_, b) -> b) (skolem ()) in

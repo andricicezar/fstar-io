@@ -7,23 +7,12 @@ open Common
 open TC.Checkable
 
 (** By trivial functions, we understand functions that have the pre-condition True. 
-    We must be careful with what we label with `trivial` since an effect can hide pre-conditions.
+We must be careful with what we label with `trivial` since an effect can hide pre-conditions.
 
-    For exemple, we can define a synonym effect:
-      effect PureExtraPre a pre post = Pure a (5 == 7 /\ pre) post
+For exemple, we can define a synonym effect:
+  effect PureExtraPre a pre post = Pure a (5 == 7 /\ pre) post
 
-    Any function with the PureExtraPre effect is not a trivial function.
-
-    Trivialize wraps the function in a new function that checks the 
-    pre-condition dynamically. Not all effects support dynamic verification
-    of the pre-condition. Also, because the pre-condition is checked dynamically
-    it means that the check may fail, therefore, the new output of the function
-    may be different.
-
-    Principels for trivialize:
-    1. does not change the effect of the computation.
-    2. does preserver the post-condition as much as possible.
-
+Any function with the PureExtraPre effect is not a trivial function.
 **)
 
 class trivial (t:Type) = { mldummy: unit }
@@ -34,6 +23,18 @@ instance trivial_totarrow t1 t2 : trivial (t1 -> Tot t2) =
 instance trivial_purearrow 
   t1 t2 (post:t1 -> t2 -> Type0) : trivial ((x:t1) -> Pure t2 True (post x)) =
   { mldummy = () }
+
+(**
+Trivialize wraps the function in a new function that checks the 
+pre-condition dynamically. Not all effects support dynamic verification
+of the pre-condition. Also, because the pre-condition is checked dynamically
+it means that the check may fail, therefore, the new output of the function
+may be different.
+
+Principles for trivialize:
+1. does not change the effect of the computation.
+2. does preserver the post-condition as much as possible.
+**)
 
 class trivializeable (t : Type) =
   { ttype : Type; trivialize : t -> ttype; trivial_ttype : trivial ttype }
