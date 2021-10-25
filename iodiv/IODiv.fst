@@ -153,43 +153,6 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall (p : iopostream). ~ (isEvent (ioret x (postream_trunc p 0)))) ;
   ret x
 
-let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
-  Lemma
-    (requires
-      (exists n. ~ (isEvent (m (postream_trunc p n)))) /\
-      event_stream (bind m f) p
-    )
-    (ensures
-      exists (q : iopos) (s : iopostream).
-        p `pseq` postream_prepend q s /\
-        isRet (m q)
-    )
-= let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (postream_trunc p n)))) in
-  // We now before n we only have events, and n is not an event: this leaves us
-  // with either Some Ret, or None, we first show the latter is not possible
-  match m (postream_trunc p n) with
-  | None ->
-    begin match find_ret m [] (postream_trunc p n) with
-    | Some (x, q) ->
-      find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
-      suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n))
-    | None -> ()
-    end
-  | Some (Ret x) -> postream_trunc_drop n p
-
-let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) :
-  Lemma (forall (p : iopostream) (q : iopos) (s : iopostream). event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> event_stream (f (ret_val (m q))) s)
-= let aux (p : iopostream) (q : iopos) (s : iopostream) (i : nat) :
-    Lemma (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (postream_trunc s i))) [SMTPat ()]
-  = assert (event_stream (bind m f) p ==> isEvent (bind m f (postream_trunc p (length q + i)))) ;
-    postream_trunc_ext p (postream_prepend q s) (length q + i) ;
-    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (postream_trunc (postream_prepend q s) (length q + i)))) ;
-    postream_prepend_trunc_right q s (length q + i) ;
-    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (q @ postream_trunc s i))) ;
-    find_ret_append m ;
-    assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i))
-  in ()
-
 let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
 = let aux (post : wpost b) p :
@@ -222,6 +185,45 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
       }
     in ()
 
+let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
+  Lemma
+    (requires
+      (exists n. ~ (isEvent (m (postream_trunc p n)))) /\
+      event_stream (bind m f) p
+    )
+    (ensures
+      exists (q : iopos) (s : iopostream).
+        p `pseq` postream_prepend q s /\
+        isRet (m q)
+    )
+= let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (postream_trunc p n)))) in
+  // We now before n we only have events, and n is not an event: this leaves us
+  // with either Some Ret, or None, we first show the latter is not possible
+  match m (postream_trunc p n) with
+  | None ->
+    begin match find_ret m [] (postream_trunc p n) with
+    | Some (x, q) ->
+      find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
+      suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n))
+    | None -> ()
+    end
+  | Some (Ret x) -> postream_trunc_drop n p
+
+let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) (q : iopos) (s : iopostream) :
+  Lemma
+    (requires event_stream (bind m f) p /\ p `pseq` postream_prepend q s /\ isRet (m q))
+    (ensures event_stream (f (ret_val (m q))) s)
+= let aux (p : iopostream) (q : iopos) (s : iopostream) (i : nat) :
+    Lemma (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (postream_trunc s i))) [SMTPat ()]
+  = assert (event_stream (bind m f) p ==> isEvent (bind m f (postream_trunc p (length q + i)))) ;
+    postream_trunc_ext p (postream_prepend q s) (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (postream_trunc (postream_prepend q s) (length q + i)))) ;
+    postream_prepend_trunc_right q s (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (q @ postream_trunc s i))) ;
+    find_ret_append m ;
+    assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i))
+  in ()
+
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
 = let aux (post : wpost b) (p p' : iopostream) :
@@ -234,9 +236,8 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) in
     let s = indefinite_description_ghost iopostream (fun s -> p `pseq` postream_prepend q s /\ isRet (m q)) in
     assert (theta (f (ret_val (m q))) (shift_post (ipos_trace q) post)) ;
-    event_stream_bind m f ;
-    // assert (forall (p : iopostream) (q : iopos) (s : iopostream). event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> event_stream (f (ret_val (m q))) s) ;
-    assume (event_stream (f (ret_val (m q))) s) ; // should follow from above
+    event_stream_bind m f p q s ;
+    assert (event_stream (f (ret_val (m q))) s) ;
     assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
     assert (shift_post (ipos_trace q) post (Inf s)) ;
     assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
