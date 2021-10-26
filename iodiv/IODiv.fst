@@ -331,6 +331,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ;
     let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) in
     let s = indefinite_description_ghost iopostream (fun s -> p `pseq` postream_prepend q s /\ isRet (m q)) in
+    // assert (p `pseq` postream_prepend q s) ; // This one works
     assert (theta (f (ret_val (m q))) (shift_post (ipos_trace q) post)) ;
     event_stream_bind m f p q s ;
     assert (event_stream (f (ret_val (m q))) s) ;
@@ -338,7 +339,10 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (shift_post (ipos_trace q) post (Inf s)) ;
     let up_aux () :
       Lemma (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
-    = admit ()
+    = // assert (p `pseq` postream_prepend q s) ; // This one doesn't
+      assert (p `uptotau` p') ;
+      admit ()
+      // iodiv_bind_inf_fin_upto_aux s p p' q
     in
     up_aux () ;
     //
