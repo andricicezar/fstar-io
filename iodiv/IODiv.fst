@@ -306,12 +306,19 @@ let postream_prepend_uptotau (p q : iopos) (s : iopostream) :
     (ensures postream_prepend p s `uptotau` postream_prepend q s)
 = postream_prepend_embeds p q s ; postream_prepend_embeds q p s
 
+let rec ipos_trace_to_pos (tr : trace) :
+  Lemma (ipos_trace (trace_to_pos tr) == tr)
+= match tr with
+  | [] -> ()
+  | c :: tr' -> ipos_trace_to_pos tr'
+
 let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   Lemma
     (requires p `pseq` postream_prepend q s /\ p `uptotau` p')
     (ensures postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
 = pseq_uptotau p (postream_prepend q s) ;
-  assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` postream_prepend q s)
+  ipos_trace_to_pos (ipos_trace q) ;
+  postream_prepend_uptotau (trace_to_pos (ipos_trace q)) q s
 
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
