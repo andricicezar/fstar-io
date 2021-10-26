@@ -101,7 +101,7 @@ let uptotau_trans () :
 = ()
 
 // Could also be proved without using extensionality
-let pseq_uptotau p q :
+let pseq_uptotau (p q : iopostream) :
   Lemma
     (requires p `pseq` q)
     (ensures p `uptotau` q)
@@ -237,6 +237,51 @@ let shift_post_Inf_spe #a tr s p (post : wpost a) :
     (ensures post (Inf p))
 = ()
 
+let rec ipos_trace_fst_splitAt (p : iopos) (n : nat) :
+  Lemma (exists m. ipos_trace (fst (splitAt n p)) == fst (splitAt m (ipos_trace p)))
+= match n, p with
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, Tau_choice :: p' -> ipos_trace_fst_splitAt p' (n - 1)
+  | _, x :: p' ->
+    ipos_trace_fst_splitAt p' (n - 1) ;
+    assert (exists m. ipos_trace (fst (splitAt (n-1) p')) == fst (splitAt m (ipos_trace p'))) ;
+    assert (forall m. fst (splitAt (m + 1) (ipos_trace p)) == x :: fst (splitAt m (ipos_trace p'))) ;
+    assert (exists m. x :: ipos_trace (fst (splitAt (n-1) p')) == fst (splitAt m (ipos_trace p)))
+
+let postream_prepend_embeds (p q : iopos) (s : iopostream) :
+  Lemma
+    (requires ipos_trace p == ipos_trace q)
+    (ensures postream_prepend p s `embeds` postream_prepend q s)
+= let aux n :
+    Lemma (exists m. ipos_trace (postream_trunc (postream_prepend q s) n) == ipos_trace (postream_trunc (postream_prepend p s) m)) [SMTPat ()]
+  = if n <= length q
+    then begin
+      postream_prepend_trunc_left q s n ;
+      ipos_trace_fst_splitAt q n ;
+      forall_intro (postream_prepend_trunc_left p s) ;
+      assume (exists m. ipos_trace (fst (splitAt n q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
+    end
+    else admit ()
+
+  // postream_prepend_trunc q s n ;
+  //   postream_prepend_trunc p s n ;
+  //   admit ()
+  in ()
+
+let postream_prepend_uptotau (p q : iopos) (s : iopostream) :
+  Lemma
+    (requires ipos_trace p == ipos_trace q)
+    (ensures postream_prepend p s `uptotau` postream_prepend q s)
+= postream_prepend_embeds p q s ; postream_prepend_embeds q p s
+
+let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
+  Lemma
+    (requires p `pseq` postream_prepend q s /\ p `uptotau` p')
+    (ensures postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
+= pseq_uptotau p (postream_prepend q s) ;
+  assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` postream_prepend q s)
+
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
 = let aux (post : wpost b) (p p' : iopostream) :
@@ -253,8 +298,13 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (event_stream (f (ret_val (m q))) s) ;
     assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
     assert (shift_post (ipos_trace q) post (Inf s)) ;
-    // pseq_uptotau p (postream_prepend q s) ;
-    assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
+    let up_aux () :
+      Lemma (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
+    = admit ()
+    in
+    up_aux () ;
+    //
+    // assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
     shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
   in ()
 
