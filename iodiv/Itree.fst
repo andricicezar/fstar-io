@@ -553,6 +553,12 @@ let postream_prepend #op #s (p : ipos op s) (ps : postream op s) : postream op s
 let postream_drop #op #s (n : nat) (p : postream op s) : postream op s =
   on nat (fun m -> p (n + m))
 
+let pshead #op #s (p : postream op s) : ichoice op s =
+  p 0
+
+let pstail #op #s (p : postream op s) : postream op s =
+  postream_drop 1 p
+
 // Could use feq instead
 unfold
 let pseq #op #s (p q : postream op s) : prop =
