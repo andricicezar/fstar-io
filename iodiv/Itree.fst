@@ -665,3 +665,9 @@ let postream_ext #op #s (p q : postream op s) :
 let pseq_head_tail #op #s (p : postream op s) :
   Lemma (postream_prepend [pshead p] (pstail p) `pseq` p)
 = ()
+
+let rec postream_trunc_succ #op #s (p : postream op s) (n : nat) :
+  Lemma (postream_trunc p (n+1) == pshead p :: postream_trunc (pstail p) n)
+= if n = 0
+  then ()
+  else postream_trunc_succ p (n-1)

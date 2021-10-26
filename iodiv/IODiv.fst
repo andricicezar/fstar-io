@@ -375,6 +375,18 @@ let uptotau_cons_tau (p q : iopostream) :
   Lemma (p `uptotau` q ==> postream_prepend [ Tau_choice ] p `uptotau` q)
 = admit ()
 
+let event_stream_tau #a (m : iotree a) (p : iopostream) :
+    Lemma
+      (requires event_stream (tau m) p)
+      (ensures pshead p == Tau_choice /\ event_stream m (pstail p))
+= assert (isEvent (tau m (postream_trunc p 1))) ;
+  assert (pshead p == Tau_choice) ;
+
+  let aux n : Lemma (isEvent (m (postream_trunc (pstail p) n))) [SMTPat ()] =
+    assert (isEvent (tau m (postream_trunc p (n+1)))) ;
+    postream_trunc_succ p n
+  in ()
+
 let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
 
   // fin
