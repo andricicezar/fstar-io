@@ -393,13 +393,20 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
   assert (forall (post : wpost a) p. w post ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p)))) ;
 
   // inf
-  // assert (forall (p : iopostream). event_stream (tau m) p ==> isEvent (tau m (postream_trunc p 1))) ;
-  assume (forall (p : iopostream). event_stream (tau m) p ==> pshead p == Tau_choice) ;
-  assume (forall (p : iopostream). event_stream (tau m) p ==> event_stream m (pstail p)) ;
-  assert (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> pstail p `uptotau` p' ==> post (Inf p')) ;
-  // assume (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> postream_prepend (pshead p) (pstail p) `uptotau` p' ==> post (Inf p')) ;
-  // forall_intro (fun (p : iopostream) -> pseq_head_tail p) ;
-  assume (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> p `uptotau` p' ==> post (Inf p')) ;
+  let aux_inf (post : wpost a) (p p' : iopostream) :
+    Lemma
+      (requires w post /\ event_stream (tau m) p /\ p `uptotau` p')
+      (ensures post (Inf p'))
+      [SMTPat ()]
+    = event_stream_tau m p ;
+      assert (forall q. pstail p `uptotau` q ==> post (Inf q)) ; // (*)
+      pseq_head_tail p ;
+      assert (p `pseq` postream_prepend [pshead p] (pstail p)) ;
+      pseq_uptotau p (postream_prepend [Tau_choice] (pstail p)) ;
+      assume (pstail p `uptotau` postream_prepend [Tau_choice] (pstail p)) ; // TODO lemma abstract pstail p
+      assert (pstail p `uptotau` p') ;
+      admit () // Should follow from (*)
+  in
 
   assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
   tau m
