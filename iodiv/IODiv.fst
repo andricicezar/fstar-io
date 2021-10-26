@@ -238,16 +238,12 @@ let shift_post_Inf_spe #a tr s p (post : wpost a) :
 = ()
 
 let rec ipos_trace_fst_splitAt (p : iopos) (n : nat) :
-  Lemma (exists m. ipos_trace (fst (splitAt n p)) == fst (splitAt m (ipos_trace p)))
+  Lemma (ipos_trace (fst (splitAt n p)) == fst (splitAt (length (ipos_trace (fst (splitAt n p)))) (ipos_trace p)))
 = match n, p with
   | 0, _ -> ()
   | _, [] -> ()
   | _, Tau_choice :: p' -> ipos_trace_fst_splitAt p' (n - 1)
-  | _, x :: p' ->
-    ipos_trace_fst_splitAt p' (n - 1) ;
-    assert (exists m. ipos_trace (fst (splitAt (n-1) p')) == fst (splitAt m (ipos_trace p'))) ;
-    assert (forall m. fst (splitAt (m + 1) (ipos_trace p)) == x :: fst (splitAt m (ipos_trace p'))) ;
-    assert (exists m. x :: ipos_trace (fst (splitAt (n-1) p')) == fst (splitAt m (ipos_trace p)))
+  | _, x :: p' -> ipos_trace_fst_splitAt p' (n - 1)
 
 let postream_prepend_embeds (p q : iopos) (s : iopostream) :
   Lemma
@@ -257,10 +253,26 @@ let postream_prepend_embeds (p q : iopos) (s : iopostream) :
     Lemma (exists m. ipos_trace (postream_trunc (postream_prepend q s) n) == ipos_trace (postream_trunc (postream_prepend p s) m)) [SMTPat ()]
   = if n <= length q
     then begin
-      postream_prepend_trunc_left q s n ;
-      ipos_trace_fst_splitAt q n ;
-      forall_intro (postream_prepend_trunc_left p s) ;
-      assume (exists m. ipos_trace (fst (splitAt n q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
+      // forall_intro (postream_prepend_trunc_left p s) ;
+      let mm : nat = magic () in
+      assume (mm <= length p) ;
+      calc (==) {
+        ipos_trace (postream_trunc (postream_prepend q s) n) ;
+        == { postream_prepend_trunc_left q s n }
+        ipos_trace (fst (splitAt n q)) ;
+        == { ipos_trace_fst_splitAt q n }
+        fst (splitAt (length (ipos_trace (fst (splitAt n q)))) (ipos_trace q)) ;
+        == {}
+        fst (splitAt (length (ipos_trace (fst (splitAt n q)))) (ipos_trace p)) ;
+        == { admit () }
+        fst (splitAt (length (ipos_trace (fst (splitAt mm p)))) (ipos_trace p)) ;
+        == { ipos_trace_fst_splitAt p mm }
+        ipos_trace (fst (splitAt mm p)) ;
+        == { postream_prepend_trunc_left p s mm }
+        ipos_trace (postream_trunc (postream_prepend p s) mm) ;
+      }
+      // assume (exists m. fst (splitAt (length (ipos_trace (fst (splitAt n q)))) (ipos_trace q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
+      // assume (exists m. ipos_trace (fst (splitAt n q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
     end
     else admit ()
 
