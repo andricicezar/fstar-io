@@ -280,14 +280,24 @@ let postream_prepend_embeds (p q : iopos) (s : iopostream) :
         == { postream_prepend_trunc_left p s m }
         ipos_trace (postream_trunc (postream_prepend p s) m) ;
       }
-      // assume (exists m. fst (splitAt (length (ipos_trace (fst (splitAt n q)))) (ipos_trace q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
-      // assume (exists m. ipos_trace (fst (splitAt n q)) == ipos_trace (postream_trunc (postream_prepend p s) m))
     end
-    else admit ()
-
-  // postream_prepend_trunc q s n ;
-  //   postream_prepend_trunc p s n ;
-  //   admit ()
+    else begin
+      calc (==) {
+        ipos_trace (postream_trunc (postream_prepend q s) n) ;
+        == { postream_prepend_trunc_right q s n }
+        ipos_trace (q @ postream_trunc s (n - length q)) ;
+        == { forall_intro_2 ipos_trace_append }
+        ipos_trace q @ ipos_trace (postream_trunc s (n - length q)) ;
+        == {}
+        ipos_trace p @ ipos_trace (postream_trunc s (n - length q)) ;
+        == {}
+        ipos_trace p @ ipos_trace (postream_trunc s ((length p + n - length q) - length p)) ;
+        == { forall_intro_2 ipos_trace_append }
+        ipos_trace (p @ postream_trunc s ((length p + n - length q) - length p)) ;
+        == { postream_prepend_trunc_right p s (length p + n - length q) }
+        ipos_trace (postream_trunc (postream_prepend p s) (length p + n - length q)) ;
+      }
+    end
   in ()
 
 let postream_prepend_uptotau (p q : iopos) (s : iopostream) :
