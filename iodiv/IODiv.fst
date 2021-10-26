@@ -371,11 +371,26 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
   bind m f
 
-// let twp_tau #a (w : twp a) : twp a =
-//   fun post -> post [] None /\ w post
+let uptotau_cons_tau (p q : iopostream) :
+  Lemma (p `uptotau` q ==> postream_prepend [ Tau_choice ] p `uptotau` q)
+= admit ()
 
-// let iodiv_tau #a #w (m : iodiv a w) : iodiv a (twp_tau w) =
-//   tau m
+let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
+
+  // fin
+  assert (forall (post : wpost a) p. w post ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p)))) ;
+
+  // inf
+  // assert (forall (p : iopostream). event_stream (tau m) p ==> isEvent (tau m (postream_trunc p 1))) ;
+  assume (forall (p : iopostream). event_stream (tau m) p ==> pshead p == Tau_choice) ;
+  assume (forall (p : iopostream). event_stream (tau m) p ==> event_stream m (pstail p)) ;
+  assert (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> pstail p `uptotau` p' ==> post (Inf p')) ;
+  // assume (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> postream_prepend (pshead p) (pstail p) `uptotau` p' ==> post (Inf p')) ;
+  // forall_intro (fun (p : iopostream) -> pseq_head_tail p) ;
+  assume (forall (post : wpost a) (p p' : iopostream). w post ==> event_stream (tau m) p ==> p `uptotau` p' ==> post (Inf p')) ;
+
+  assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
+  tau m
 
 // let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
 //   fun post -> post [] None /\ (forall y. w y (shift_post [ Call_choice o x y ] post))

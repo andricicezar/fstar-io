@@ -661,3 +661,7 @@ let postream_prepend_trunc #op #s (p : ipos op s) (ps : postream op s) (n : nat)
 let postream_ext #op #s (p q : postream op s) :
   Lemma (p `pseq` q ==> p == q)
 = extensionality nat (fun _ -> ichoice op s) p q
+
+let pseq_head_tail #op #s (p : postream op s) :
+  Lemma (postream_prepend [pshead p] (pstail p) `pseq` p)
+= ()
