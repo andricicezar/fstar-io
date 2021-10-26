@@ -312,6 +312,20 @@ let rec ipos_trace_to_pos (tr : trace) :
   | [] -> ()
   | c :: tr' -> ipos_trace_to_pos tr'
 
+let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream) :
+  Lemma
+    (requires wbind w wf post /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p' /\ p `pseq` postream_prepend q s /\ isRet (m q))
+    (ensures shift_post (ipos_trace q) post (Inf s))
+= calc (==>) {
+    True ;
+    ==> {}
+    theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) ;
+    ==> { event_stream_bind m f p q s ; assert (event_stream (f (ret_val (m q))) s) }
+    forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s') ;
+    ==> {}
+    shift_post (ipos_trace q) post (Inf s) ;
+  }
+
 let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   Lemma
     (requires p `pseq` postream_prepend q s /\ p `uptotau` p')
@@ -331,22 +345,10 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     assert (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ;
     let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) in
     let s = indefinite_description_ghost iopostream (fun s -> p `pseq` postream_prepend q s /\ isRet (m q)) in
-    // assert (p `pseq` postream_prepend q s) ; // This one works
-    assert (theta (f (ret_val (m q))) (shift_post (ipos_trace q) post)) ;
-    event_stream_bind m f p q s ;
-    assert (event_stream (f (ret_val (m q))) s) ;
-    assert (forall (s' : iopostream). s `uptotau` s' ==> shift_post (ipos_trace q) post (Inf s')) ;
-    assert (shift_post (ipos_trace q) post (Inf s)) ;
-    let up_aux () :
-      Lemma (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
-    = // assert (p `pseq` postream_prepend q s) ; // This one doesn't
-      assert (p `uptotau` p') ;
-      admit ()
-      // iodiv_bind_inf_fin_upto_aux s p p' q
-    in
-    up_aux () ;
-    //
-    // assume (postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p') ;
+    assert (p `pseq` postream_prepend q s) ;
+    assert (isRet (m q)) ;
+    iodiv_bind_inf_fin_shift_post m f post p p' q s ;
+    iodiv_bind_inf_fin_upto_aux s p p' q ;
     shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
   in ()
 
