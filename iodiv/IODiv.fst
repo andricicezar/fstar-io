@@ -415,14 +415,13 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
       (ensures post (Inf p'))
       [SMTPat ()]
     = event_stream_tau m p ;
-      assert (forall q. stail p `uptotau` q ==> post (Inf q)) ; // (*)
+      assert (forall q. stail p `uptotau` q ==> post (Inf q)) ;
       feq_head_tail p ;
       assert (p `feq` stream_prepend [shead p] (stail p)) ;
       feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
       uptotau_prepend_tau (stail p) ;
       assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
-      assert (stail p `uptotau` p') ;
-      admit () // Should follow from (*)
+      assert (stail p `uptotau` p')
   in
 
   assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
