@@ -373,10 +373,6 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
   bind m f
 
-let uptotau_cons_tau (p q : iopostream) :
-  Lemma (p `uptotau` q ==> stream_prepend [ Tau_choice ] p `uptotau` q)
-= admit ()
-
 let event_stream_tau #a (m : iotree a) (p : iopostream) :
     Lemma
       (requires event_stream (tau m) p)
@@ -387,6 +383,24 @@ let event_stream_tau #a (m : iotree a) (p : iopostream) :
   let aux n : Lemma (isEvent (m (stream_trunc (stail p) n))) [SMTPat ()] =
     assert (isEvent (tau m (stream_trunc p (n+1)))) ;
     stream_trunc_succ p n
+  in ()
+
+let uptotau_prepend_tau (p : iopostream) :
+  Lemma (p `uptotau` stream_prepend [Tau_choice] p)
+= let aux1 n :
+    Lemma
+      (exists m. ipos_trace (stream_trunc p n) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) m))
+      [SMTPat ()]
+  = stream_prepend_trunc [Tau_choice] p (n+1) ;
+    assert (stream_trunc (stream_prepend [Tau_choice] p) (n+1) == Tau_choice :: stream_trunc p n)
+  in
+  let aux2 n :
+    Lemma
+      (exists m. ipos_trace (stream_trunc p m) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) n))
+      [SMTPat ()]
+  = if n = 0
+    then ()
+    else stream_prepend_trunc [Tau_choice] p n
   in ()
 
 let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
@@ -405,7 +419,8 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
       feq_head_tail p ;
       assert (p `feq` stream_prepend [shead p] (stail p)) ;
       feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
-      assume (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ; // TODO lemma abstract pstail p
+      uptotau_prepend_tau (stail p) ;
+      assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
       assert (stail p `uptotau` p') ;
       admit () // Should follow from (*)
   in
