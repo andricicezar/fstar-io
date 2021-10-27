@@ -139,7 +139,7 @@ let stream_ext #a (p q : stream a) :
   Lemma (p `feq` q ==> p == q)
 = extensionality nat (fun _ -> a) p q
 
-let pseq_head_tail #a (s : stream a) :
+let feq_head_tail #a (s : stream a) :
   Lemma (stream_prepend [shead s] (stail s) `feq` s)
 = ()
 

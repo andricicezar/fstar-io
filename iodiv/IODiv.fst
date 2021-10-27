@@ -5,7 +5,9 @@ open FStar.List.Tot.Properties
 open FStar.Classical
 open FStar.IndefiniteDescription
 open FStar.Calc
+open FStar.FunctionalExtensionality
 open Util
+open Stream
 open Itree
 
 (** IODiv
@@ -83,7 +85,7 @@ let rec ipos_trace_append (p q : iopos) :
 
 (** Up to tau relation on position streams *)
 let embeds (p q : iopostream) =
-  forall n. exists m. ipos_trace (postream_trunc q n) == ipos_trace (postream_trunc p m)
+  forall n. exists m. ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m)
 
 let uptotau (p q : iopostream) =
   p `embeds` q /\ q `embeds` p
@@ -101,11 +103,11 @@ let uptotau_trans () :
 = ()
 
 // Could also be proved without using extensionality
-let pseq_uptotau (p q : iopostream) :
+let feq_uptotau (p q : iopostream) :
   Lemma
-    (requires p `pseq` q)
+    (requires p `feq` q)
     (ensures p `uptotau` q)
-= postream_ext p q
+= stream_ext p q
 
 noeq
 type branch a =
@@ -129,7 +131,7 @@ let shift_post #a (tr : trace) (post : wpost a) : wpost a =
   fun b ->
     match b with
     | Fin tr' x -> post (Fin (tr @ tr') x)
-    | Inf p -> forall (p' : iopostream). postream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p')
+    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p')
 
 let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
   fun post ->
@@ -144,7 +146,7 @@ let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
 
 unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
-  forall n. isEvent (t (postream_trunc p n))
+  forall n. isEvent (t (stream_trunc p n))
 
 (** Effect observation *)
 let theta #a (t : iotree a) =
@@ -157,7 +159,7 @@ let iodiv a (w : twp a) =
 
 let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall p. ~ (isEvent (ioret x p))) ;
-  assert (forall (p : iopostream). ~ (isEvent (ioret x (postream_trunc p 0)))) ;
+  assert (forall (p : iopostream). ~ (isEvent (ioret x (stream_trunc p 0)))) ;
   ret x
 
 let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
@@ -195,45 +197,45 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
 let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
   Lemma
     (requires
-      (exists n. ~ (isEvent (m (postream_trunc p n)))) /\
+      (exists n. ~ (isEvent (m (stream_trunc p n)))) /\
       event_stream (bind m f) p
     )
     (ensures
       exists (q : iopos) (s : iopostream).
-        p `pseq` postream_prepend q s /\
+        p `feq` stream_prepend q s /\
         isRet (m q)
     )
-= let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (postream_trunc p n)))) in
+= let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (stream_trunc p n)))) in
   // We now before n we only have events, and n is not an event: this leaves us
   // with either Some Ret, or None, we first show the latter is not possible
-  match m (postream_trunc p n) with
+  match m (stream_trunc p n) with
   | None ->
-    begin match find_ret m [] (postream_trunc p n) with
+    begin match find_ret m [] (stream_trunc p n) with
     | Some (x, q) ->
-      find_ret_prefix_suffix_of m [] (postream_trunc p n) ;
-      suffix_of_postream_trunc p n (find_ret_prefix m [] (postream_trunc p n))
+      find_ret_prefix_suffix_of m [] (stream_trunc p n) ;
+      suffix_of_stream_trunc p n (find_ret_prefix m [] (stream_trunc p n))
     | None -> ()
     end
-  | Some (Ret x) -> postream_trunc_drop n p
+  | Some (Ret x) -> stream_trunc_drop n p
 
 let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) (q : iopos) (s : iopostream) :
   Lemma
-    (requires event_stream (bind m f) p /\ p `pseq` postream_prepend q s /\ isRet (m q))
+    (requires event_stream (bind m f) p /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures event_stream (f (ret_val (m q))) s)
 = let aux (p : iopostream) (q : iopos) (s : iopostream) (i : nat) :
-    Lemma (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (postream_trunc s i))) [SMTPat ()]
-  = assert (event_stream (bind m f) p ==> isEvent (bind m f (postream_trunc p (length q + i)))) ;
-    postream_trunc_ext p (postream_prepend q s) (length q + i) ;
-    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (postream_trunc (postream_prepend q s) (length q + i)))) ;
-    postream_prepend_trunc_right q s (length q + i) ;
-    assert (event_stream (bind m f) p ==> p `pseq` postream_prepend q s ==> isEvent (bind m f (q @ postream_trunc s i))) ;
+    Lemma (event_stream (bind m f) p ==> p `feq` stream_prepend q s ==> isRet (m q) ==> isEvent (f (ret_val (m q)) (stream_trunc s i))) [SMTPat ()]
+  = assert (event_stream (bind m f) p ==> isEvent (bind m f (stream_trunc p (length q + i)))) ;
+    stream_trunc_ext p (stream_prepend q s) (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `feq` stream_prepend q s ==> isEvent (bind m f (stream_trunc (stream_prepend q s) (length q + i)))) ;
+    stream_prepend_trunc_right q s (length q + i) ;
+    assert (event_stream (bind m f) p ==> p `feq` stream_prepend q s ==> isEvent (bind m f (q @ stream_trunc s i))) ;
     find_ret_append m ;
-    assert (isRet (m q) ==> find_ret m [] (q @ postream_trunc s i) == Some (ret_val (m q), postream_trunc s i))
+    assert (isRet (m q) ==> find_ret m [] (q @ stream_trunc s i) == Some (ret_val (m q), stream_trunc s i))
   in ()
 
 let shift_post_Inf_spe #a tr s p (post : wpost a) :
   Lemma
-    (requires shift_post tr post (Inf s) /\ postream_prepend (trace_to_pos tr) s `uptotau` p)
+    (requires shift_post tr post (Inf s) /\ stream_prepend (trace_to_pos tr) s `uptotau` p)
     (ensures post (Inf p))
 = ()
 
@@ -262,49 +264,49 @@ let rec ipos_trace_firstn_eq (p q : iopos) (n : nat) :
       end
   end
 
-let postream_prepend_embeds (p q : iopos) (s : iopostream) :
+let stream_prepend_embeds (p q : iopos) (s : iopostream) :
   Lemma
     (requires ipos_trace p == ipos_trace q)
-    (ensures postream_prepend p s `embeds` postream_prepend q s)
+    (ensures stream_prepend p s `embeds` stream_prepend q s)
 = let aux n :
-    Lemma (exists m. ipos_trace (postream_trunc (postream_prepend q s) n) == ipos_trace (postream_trunc (postream_prepend p s) m)) [SMTPat ()]
+    Lemma (exists m. ipos_trace (stream_trunc (stream_prepend q s) n) == ipos_trace (stream_trunc (stream_prepend p s) m)) [SMTPat ()]
   = if n <= length q
     then begin
       let m = ipos_trace_firstn_eq q p n in
       calc (==) {
-        ipos_trace (postream_trunc (postream_prepend q s) n) ;
-        == { postream_prepend_trunc_left q s n }
+        ipos_trace (stream_trunc (stream_prepend q s) n) ;
+        == { stream_prepend_trunc_left q s n }
         ipos_trace (fst (splitAt n q)) ;
         == {}
         ipos_trace (fst (splitAt m p)) ;
-        == { postream_prepend_trunc_left p s m }
-        ipos_trace (postream_trunc (postream_prepend p s) m) ;
+        == { stream_prepend_trunc_left p s m }
+        ipos_trace (stream_trunc (stream_prepend p s) m) ;
       }
     end
     else begin
       calc (==) {
-        ipos_trace (postream_trunc (postream_prepend q s) n) ;
-        == { postream_prepend_trunc_right q s n }
-        ipos_trace (q @ postream_trunc s (n - length q)) ;
+        ipos_trace (stream_trunc (stream_prepend q s) n) ;
+        == { stream_prepend_trunc_right q s n }
+        ipos_trace (q @ stream_trunc s (n - length q)) ;
         == { forall_intro_2 ipos_trace_append }
-        ipos_trace q @ ipos_trace (postream_trunc s (n - length q)) ;
+        ipos_trace q @ ipos_trace (stream_trunc s (n - length q)) ;
         == {}
-        ipos_trace p @ ipos_trace (postream_trunc s (n - length q)) ;
+        ipos_trace p @ ipos_trace (stream_trunc s (n - length q)) ;
         == {}
-        ipos_trace p @ ipos_trace (postream_trunc s ((length p + n - length q) - length p)) ;
+        ipos_trace p @ ipos_trace (stream_trunc s ((length p + n - length q) - length p)) ;
         == { forall_intro_2 ipos_trace_append }
-        ipos_trace (p @ postream_trunc s ((length p + n - length q) - length p)) ;
-        == { postream_prepend_trunc_right p s (length p + n - length q) }
-        ipos_trace (postream_trunc (postream_prepend p s) (length p + n - length q)) ;
+        ipos_trace (p @ stream_trunc s ((length p + n - length q) - length p)) ;
+        == { stream_prepend_trunc_right p s (length p + n - length q) }
+        ipos_trace (stream_trunc (stream_prepend p s) (length p + n - length q)) ;
       }
     end
   in ()
 
-let postream_prepend_uptotau (p q : iopos) (s : iopostream) :
+let stream_prepend_uptotau (p q : iopos) (s : iopostream) :
   Lemma
     (requires ipos_trace p == ipos_trace q)
-    (ensures postream_prepend p s `uptotau` postream_prepend q s)
-= postream_prepend_embeds p q s ; postream_prepend_embeds q p s
+    (ensures stream_prepend p s `uptotau` stream_prepend q s)
+= stream_prepend_embeds p q s ; stream_prepend_embeds q p s
 
 let rec ipos_trace_to_pos (tr : trace) :
   Lemma (ipos_trace (trace_to_pos tr) == tr)
@@ -314,7 +316,7 @@ let rec ipos_trace_to_pos (tr : trace) :
 
 let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream) :
   Lemma
-    (requires wbind w wf post /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p' /\ p `pseq` postream_prepend q s /\ isRet (m q))
+    (requires wbind w wf post /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures shift_post (ipos_trace q) post (Inf s))
 = calc (==>) {
     True ;
@@ -328,11 +330,11 @@ let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x:a) -> iod
 
 let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   Lemma
-    (requires p `pseq` postream_prepend q s /\ p `uptotau` p')
-    (ensures postream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
-= pseq_uptotau p (postream_prepend q s) ;
+    (requires p `feq` stream_prepend q s /\ p `uptotau` p')
+    (ensures stream_prepend (trace_to_pos (ipos_trace q)) s `uptotau` p')
+= feq_uptotau p (stream_prepend q s) ;
   ipos_trace_to_pos (ipos_trace q) ;
-  postream_prepend_uptotau (trace_to_pos (ipos_trace q)) q s
+  stream_prepend_uptotau (trace_to_pos (ipos_trace q)) q s
 
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
@@ -342,10 +344,10 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
       (ensures post (Inf p'))
       [SMTPat ()]
   = finite_branch_prefix m f p ;
-    assert (exists (q : iopos) (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) ;
-    let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `pseq` postream_prepend q s /\ isRet (m q)) in
-    let s = indefinite_description_ghost iopostream (fun s -> p `pseq` postream_prepend q s /\ isRet (m q)) in
-    assert (p `pseq` postream_prepend q s) ;
+    assert (exists (q : iopos) (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) ;
+    let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) in
+    let s = indefinite_description_ghost iopostream (fun s -> p `feq` stream_prepend q s /\ isRet (m q)) in
+    assert (p `feq` stream_prepend q s) ;
     assert (isRet (m q)) ;
     iodiv_bind_inf_fin_shift_post m f post p p' q s ;
     iodiv_bind_inf_fin_upto_aux s p p' q ;
@@ -372,19 +374,19 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   bind m f
 
 let uptotau_cons_tau (p q : iopostream) :
-  Lemma (p `uptotau` q ==> postream_prepend [ Tau_choice ] p `uptotau` q)
+  Lemma (p `uptotau` q ==> stream_prepend [ Tau_choice ] p `uptotau` q)
 = admit ()
 
 let event_stream_tau #a (m : iotree a) (p : iopostream) :
     Lemma
       (requires event_stream (tau m) p)
-      (ensures pshead p == Tau_choice /\ event_stream m (pstail p))
-= assert (isEvent (tau m (postream_trunc p 1))) ;
-  assert (pshead p == Tau_choice) ;
+      (ensures shead p == Tau_choice /\ event_stream m (stail p))
+= assert (isEvent (tau m (stream_trunc p 1))) ;
+  assert (shead p == Tau_choice) ;
 
-  let aux n : Lemma (isEvent (m (postream_trunc (pstail p) n))) [SMTPat ()] =
-    assert (isEvent (tau m (postream_trunc p (n+1)))) ;
-    postream_trunc_succ p n
+  let aux n : Lemma (isEvent (m (stream_trunc (stail p) n))) [SMTPat ()] =
+    assert (isEvent (tau m (stream_trunc p (n+1)))) ;
+    stream_trunc_succ p n
   in ()
 
 let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
@@ -399,12 +401,12 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
       (ensures post (Inf p'))
       [SMTPat ()]
     = event_stream_tau m p ;
-      assert (forall q. pstail p `uptotau` q ==> post (Inf q)) ; // (*)
-      pseq_head_tail p ;
-      assert (p `pseq` postream_prepend [pshead p] (pstail p)) ;
-      pseq_uptotau p (postream_prepend [Tau_choice] (pstail p)) ;
-      assume (pstail p `uptotau` postream_prepend [Tau_choice] (pstail p)) ; // TODO lemma abstract pstail p
-      assert (pstail p `uptotau` p') ;
+      assert (forall q. stail p `uptotau` q ==> post (Inf q)) ; // (*)
+      feq_head_tail p ;
+      assert (p `feq` stream_prepend [shead p] (stail p)) ;
+      feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
+      assume (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ; // TODO lemma abstract pstail p
+      assert (stail p `uptotau` p') ;
       admit () // Should follow from (*)
   in
 
