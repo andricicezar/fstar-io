@@ -13,6 +13,11 @@ open DM.MIIO
 instance weak_miio t1 t2 {| ml t1 |} {| ml t2 |} : weak (t1 -> MIIO t2) =
   { mldummy = () }
 
+(** TODO: is this really a weak arrow? Is type (t1 -> Tot t2) weak? 
+We need this for extracting higher order MIIO computations. **)
+instance weak_tot_miio t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : weak ((t1 -> Tot t2) -> MIIO t3) =
+  { mldummy = () }
+
 instance weakable_miio
   t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |} :
   Tot (weakable (t1 -> MIIO t2))  =
