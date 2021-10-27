@@ -12,6 +12,10 @@ open TC.Export
 class ml_arrow (t:Type) = { mldummy : unit }
 instance ml_arrow_1 t1 t2 {| ml t1 |} {| ml t2 |} : ml_arrow (t1 -> ML t2) = { mldummy = () }
 
+(** TODO: Is this really a ML arrow? 
+This is just a hack to be able to extract higher-order functions in the MIIO effect **)
+instance ml_tot_arrow_1 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml_arrow ((t1 -> Tot t2) -> ML t3) = { mldummy = () }
+
 class mlifyable (t : Type) =
   { mtype : Type; 
     trivial_t: trivial t;

@@ -1,4 +1,5 @@
 open Prims
+
 (** this file is needed because of the bug:
     https://github.com/FStarLang/FStar/issues/2241 **)
 
@@ -9,14 +10,28 @@ type 't ml = {
 let (ml_unit : unit ml) = { mldummy = () }
 let (ml_bool : Prims.bool ml) = { mldummy = () }
 let (ml_int : Prims.int ml) = { mldummy = () }
+let (ml_uint8 : FStar_UInt8.t ml) = { mldummy = () }
 let (ml_string : Prims.string ml) = { mldummy = () }
+let (ml_bytes : FStar_Bytes.bytes ml) = { mldummy = () }
+let (ml_open_flag : Types.open_flag ml) = { mldummy = () }
+let (ml_socket_bool_option : Types.socket_bool_option ml) = { mldummy = () }
+let (ml_file_descr : Types.file_descr ml) = { mldummy = () }
+let (ml_zfile_perm : Common.zfile_perm ml) = { mldummy = () }
 let ml_pair : 't1 't2 . 't1 ml -> 't2 ml -> ('t1 * 't2) ml =
   fun uu___ -> fun uu___1 -> { mldummy = () }
+let ml_pair_2 :
+  't1 't2 't3 . 't1 ml -> 't2 ml -> 't3 ml -> ('t1 * 't2 * 't3) ml =
+  fun uu___ -> fun uu___1 -> fun uu___2 -> { mldummy = () }
+let ml_pair_3 :
+  't1 't2 't3 't4 .
+    't1 ml -> 't2 ml -> 't3 ml -> 't4 ml -> ('t1 * 't2 * 't3 * 't4) ml
+  = fun uu___ -> fun uu___1 -> fun uu___2 -> fun uu___3 -> { mldummy = () }
 let ml_option : 't1 . 't1 ml -> 't1 FStar_Pervasives_Native.option ml =
   fun uu___ -> { mldummy = () }
 let ml_maybe : 't1 . 't1 ml -> 't1 Common.maybe ml =
   fun uu___ -> { mldummy = () }
-let (ml_file_descr : Types.file_descr ml) = { mldummy = () }
+let ml_list : 't1 . 't1 ml -> 't1 Prims.list ml =
+  fun uu___ -> { mldummy = () }
 type 't exportable = {
   etype: unit ;
   export: 't -> Obj.t ;
@@ -121,7 +136,8 @@ let exportable_refinement : 't . 't exportable -> unit -> 't exportable =
   fun d -> fun p -> mk_exportable (Obj.magic (ml_exportable d)) (export d)
 let importable_refinement :
   't .
-    't importable -> unit -> ('t, Obj.t) TC_Checkable.checkable -> 't importable
+    't importable ->
+      unit -> ('t, Obj.t) TC_Checkable.checkable -> 't importable
   =
   fun d ->
     fun rp ->
@@ -183,7 +199,8 @@ let importable_dpair_refined :
                   | (FStar_Pervasives_Native.Some x,
                      FStar_Pervasives_Native.Some y) ->
                       if
-                        TC_Checkable.check2 () () (Obj.magic d3) x (Obj.magic y)
+                        TC_Checkable.check2 () () (Obj.magic d3) x
+                          (Obj.magic y)
                       then
                         FStar_Pervasives_Native.Some (Prims.Mkdtuple2 (x, y))
                       else FStar_Pervasives_Native.None
