@@ -433,23 +433,22 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
 let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
 
-let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
-  match t with
-  | Call_choice o' x' y -> o = o' && x = x'
-  | _ -> false
+// let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
+//   match t with
+//   | Call_choice o' x' y -> o = o' && x = x'
+//   | _ -> false
 
-let call_choice_res (o : cmds) (x : io_args o) (t : iochoice) :
-  Pure (io_res o) (requires isCall_choice o x t) (ensures fun _ -> True)
-= match t with
-  | Call_choice o' x' y -> y
+// let call_choice_res (o : cmds) (x : io_args o) (t : iochoice) :
+//   Pure (io_res o) (requires isCall_choice o x t) (ensures fun _ -> True)
+// = match t with
+//   | Call_choice o' x' y -> y
 
 let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
   // fin
-  assert (forall p. isRet (call o x k p) ==> isCall_choice o x (hd p) /\ isRet (k (call_choice_res o x (hd p)) (tl p))) ;
-  assume (forall (post : wpost a) p. wcall o x w post ==> isRet (call o x k p) ==> theta (call o x k) post) ;
+  assert (forall (post : wpost a) p. wcall o x w post ==> isRet (call o x k p) ==> post (Fin (ipos_trace p) (ret_val (call o x k p)))) ;
 
   // inf
-  assume (forall (post : wpost a) (p p' : iopostream). wcall o x w post ==> event_stream (call o x k) p ==> p `uptotau` p' ==> theta (call o x k) post) ;
+  assume (forall (post : wpost a) (p p' : iopostream). wcall o x w post ==> event_stream (call o x k) p ==> p `uptotau` p' ==> post (Inf p')) ;
 
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
   call o x k
