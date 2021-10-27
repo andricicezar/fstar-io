@@ -144,25 +144,25 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b 
   assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
   bind m f
 
-let twp_tau #a (w : twp a) : twp a =
+let wtau #a (w : twp a) : twp a =
   fun post -> post [] None /\ w post
 
-let iodiv_tau #a #w (m : iodiv a w) : iodiv a (twp_tau w) =
+let iodiv_tau #a #w (m : iodiv a w) : iodiv a (wtau w) =
   tau m
 
-let twp_call #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
+let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> post [] None /\ (forall y. w y (shift_post [ Call_choice o x y ] post))
 
-let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (twp_call o x w) =
+let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
   call o x k
 
-let rec twp_repeat_trunc (w : twp unit) (n : nat) : twp unit =
+let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
   if n = 0
   then fun post -> True
-  else wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1)))
+  else wbind w (fun (_:unit) -> wtau (wrepeat_trunc w (n - 1)))
 
-let twp_repeat (w : twp unit) : twp unit =
-  fun post -> forall n. twp_repeat_trunc w n post
+let wrepeat (w : twp unit) : twp unit =
+  fun post -> forall n. wrepeat_trunc w n post
 
 let repeat_unfold_1 (body : iotree unit) :
   Lemma (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p)
@@ -223,7 +223,7 @@ let rec repeat_any_ret_event_post #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : wpost unit).
-      twp_repeat_trunc w (1 + length pl) post ==>
+      wrepeat_trunc w (1 + length pl) post ==>
       isEvent (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
@@ -248,7 +248,7 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : wpost unit).
-      twp_repeat_trunc w (1 + length pl) post ==>
+      wrepeat_trunc w (1 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
@@ -256,19 +256,19 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
 = match pl with
   | [] ->
     assert (forall (post : wpost unit).
-      twp_repeat_trunc w 1 post ==>
+      wrepeat_trunc w 1 post ==>
       isRet (body p) ==>
-      twp_tau (twp_repeat_trunc w 0) (shift_post (ipos_trace p) post)
+      wtau (wrepeat_trunc w 0) (shift_post (ipos_trace p) post)
     )
   | pp :: pl ->
     repeat_any_ret_ret_post body pl p ;
     assert (forall (post : wpost unit).
-      twp_repeat_trunc w (1 + length pl) post ==>
+      wrepeat_trunc w (1 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     ) ;
     assert (forall (post : wpost unit).
-      twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
+      wrepeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
       isRet (body p) ==>
       shift_post (ipos_trace pp) post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     ) ;
@@ -284,12 +284,12 @@ let rec repeat_any_ret_ret_post #w (body : iodiv unit w) (pl : list iopos) p :
       ipos_trace pp @ ipos_trace (flatten_sep [Tau_choice] pl @ p) ;
     } ;
     assert (forall (post : wpost unit).
-      twp_repeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
+      wrepeat_trunc w (1 + length pl) (shift_post (ipos_trace pp) post) ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
     ) ;
     assert (forall (post : wpost unit).
-      twp_repeat_trunc w (2 + length pl) post ==>
+      wrepeat_trunc w (2 + length pl) post ==>
       isRet (body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] (pp :: pl) @ p)) None
     )
@@ -298,7 +298,7 @@ let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
     (ensures forall (post : wpost unit).
-      twp_repeat w post ==>
+      wrepeat w post ==>
       isEvent (repeat body (flatten_sep [Tau_choice] pl @ p)) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
@@ -315,9 +315,9 @@ let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
       assert (repeat body p == Some Tau) ;
       repeat_any_ret_ret_post body pl p ;
       assert (isRet (body p)) ;
-      assert (forall (post : wpost unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
+      assert (forall (post : wpost unit). wrepeat w post ==> wrepeat_trunc w (1 + length pl) post) ;
       assert (forall (post : wpost unit).
-        twp_repeat w post ==>
+        wrepeat w post ==>
         isEvent (repeat body p) ==>
         post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
       )
@@ -338,26 +338,26 @@ let rec iodiv_repeat_proof_gen #w (body : iodiv unit w) (pl : list iopos) p :
   | None ->
     repeat_any_ret body pl p ;
     repeat_any_ret_event_post body pl p ;
-    assert (forall (post : wpost unit). twp_repeat w post ==> twp_repeat_trunc w (1 + length pl) post) ;
+    assert (forall (post : wpost unit). wrepeat w post ==> wrepeat_trunc w (1 + length pl) post) ;
     repeat_unfold_1 body ;
     assert (
       isEvent (repeat body p) ==> isEvent (body p)
     ) ;
     assert (forall (post : wpost unit).
-      twp_repeat w post ==>
+      wrepeat w post ==>
       isEvent (repeat body p) ==>
       post (ipos_trace (flatten_sep [Tau_choice] pl @ p)) None
     )
 
 let iodiv_repeat_proof #w (body : iodiv unit w) p :
   Lemma (forall (post : wpost unit).
-    twp_repeat w post ==>
+    wrepeat w post ==>
     isEvent (repeat body p) ==>
     post (ipos_trace p) None
   )
 = iodiv_repeat_proof_gen body [] p
 
-let iodiv_repeat #w (body : iodiv unit w) : iodiv unit (twp_repeat w) =
+let iodiv_repeat #w (body : iodiv unit w) : iodiv unit (wrepeat w) =
   forall_intro (repeat_not_ret body) ;
   forall_intro (iodiv_repeat_proof body) ;
   repeat body
@@ -377,42 +377,42 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
   inv [] /\
   (forall tr. inv tr ==> w (fun tr' v -> inv (tr @ tr') /\ Some? v))
 
-let twp_repeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+let wrepeat_with_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall tr. inv tr ==> post tr None
 
 let invpost (inv : trace -> Type0) : wpost unit =
   fun tr v -> inv tr /\ None? v
 
 // Maybe prove it on the effect observation directly
-let rec twp_repeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
+let rec wrepeat_inv_trunc (w : twp unit) (inv : trace -> Type0) n :
   Lemma (
     trace_invariant w inv ==>
-    twp_repeat_trunc w n (invpost inv)
+    wrepeat_trunc w n (invpost inv)
   )
 = if n = 0
   then ()
   else begin
-    twp_repeat_inv_trunc w inv (n - 1) ;
+    wrepeat_inv_trunc w inv (n - 1) ;
     assume (
       trace_invariant w inv ==>
-      twp_repeat_trunc w (n-1) (invpost inv) ==>
-      wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) (invpost inv)
+      wrepeat_trunc w (n-1) (invpost inv) ==>
+      wbind w (fun (_:unit) -> wtau (wrepeat_trunc w (n - 1))) (invpost inv)
       // ==
       // w (fun tr v ->
       //   match v with
-      //   | Some x -> (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) x (shift_post tr (invpost inv))
-      //     == twp_tau (twp_repeat_trunc w (n - 1)) (shift_post tr (invpost inv))
+      //   | Some x -> (fun (_:unit) -> wtau (wrepeat_trunc w (n - 1))) x (shift_post tr (invpost inv))
+      //     == wtau (wrepeat_trunc w (n - 1)) (shift_post tr (invpost inv))
       //   | None -> invpost inv tr None // == inv tr
       // )
     ) ;
     assume (forall (post : wpost unit).
-      wbind w (fun (_:unit) -> twp_tau (twp_repeat_trunc w (n - 1))) post ==>
-      twp_repeat_trunc w n post
+      wbind w (fun (_:unit) -> wtau (wrepeat_trunc w (n - 1))) post ==>
+      wrepeat_trunc w n post
     ) ; // why??
     assert (
       trace_invariant w inv ==>
-      twp_repeat_trunc w (n-1) (invpost inv) ==>
-      twp_repeat_trunc w n (invpost inv)
+      wrepeat_trunc w (n-1) (invpost inv) ==>
+      wrepeat_trunc w n (invpost inv)
     )
   end
 
@@ -422,33 +422,33 @@ let diverges #a : wpost a =
   fun tr v -> None? v
 
 // Should be p1 ==> p2 rather than ==
-let rec twp_repeat_trunc_ext w n (p1 p2 : wpost unit) :
-  Lemma ((forall tr x. p1 tr x == p2 tr x) ==> twp_repeat_trunc w n p1 == twp_repeat_trunc w n p2)
+let rec wrepeat_trunc_ext w n (p1 p2 : wpost unit) :
+  Lemma ((forall tr x. p1 tr x == p2 tr x) ==> wrepeat_trunc w n p1 == wrepeat_trunc w n p2)
 = if n = 0
   then ()
   else begin
-    // twp_repeat_trunc_ext w (n-1) p1 p2 ;
-    // assume ((forall tr x. p1 tr x == p2 tr x) ==> wbind w (fun _ -> twp_repeat_trunc w (n -1)) p1 == wbind w (fun _ -> twp_repeat_trunc w (n -1)) p2)
-    // assert (twp_repeat_trunc w n == wbind w (fun _ -> twp_repeat_trunc w (n -1))) ; // Isn't this by def??
-    assume ((forall tr x. p1 tr x == p2 tr x) ==> twp_repeat_trunc w n p1 == twp_repeat_trunc w n p2)
+    // wrepeat_trunc_ext w (n-1) p1 p2 ;
+    // assume ((forall tr x. p1 tr x == p2 tr x) ==> wbind w (fun _ -> wrepeat_trunc w (n -1)) p1 == wbind w (fun _ -> wrepeat_trunc w (n -1)) p2)
+    // assert (wrepeat_trunc w n == wbind w (fun _ -> wrepeat_trunc w (n -1))) ; // Isn't this by def??
+    assume ((forall tr x. p1 tr x == p2 tr x) ==> wrepeat_trunc w n p1 == wrepeat_trunc w n p2)
   end
 
 let repeat_ret_loops () :
-  Lemma (twp_repeat (wret ()) diverges)
+  Lemma (wrepeat (wret ()) diverges)
 = let rec aux n :
-    Lemma (twp_repeat_trunc (wret ()) n diverges) [SMTPat ()]
+    Lemma (wrepeat_trunc (wret ()) n diverges) [SMTPat ()]
   = if n = 0
     then ()
     else begin
       aux (n - 1) ;
-      twp_repeat_trunc_ext (wret ()) (n-1) (shift_post [] diverges) (diverges #unit)
+      wrepeat_trunc_ext (wret ()) (n-1) (shift_post [] diverges) (diverges #unit)
     end
   in
   ()
 
 // Much better
 let repeat_ret_loops_with_inv () :
-  Lemma (twp_repeat_with_inv (wret ()) (fun _ -> True) diverges)
+  Lemma (wrepeat_with_inv (wret ()) (fun _ -> True) diverges)
 = ()
 
 [@@allow_informative_binders]
