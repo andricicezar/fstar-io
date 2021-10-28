@@ -433,22 +433,55 @@ let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
 let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
   fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
 
-// let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
-//   match t with
-//   | Call_choice o' x' y -> o = o' && x = x'
-//   | _ -> false
+let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
+  match t with
+  | Call_choice o' x' y -> o = o' && x = x'
+  | _ -> false
 
-// let call_choice_res (o : cmds) (x : io_args o) (t : iochoice) :
-//   Pure (io_res o) (requires isCall_choice o x t) (ensures fun _ -> True)
-// = match t with
-//   | Call_choice o' x' y -> y
+let call_choice_res (o : cmds) (x : io_args o) (t : iochoice) :
+  Pure (io_res o) (requires isCall_choice o x t) (ensures fun _ -> True)
+= match t with
+  | Call_choice o' x' y -> y
+
+// Essentially the same proof as event_stream_tau
+// is there some hope of factorisation?
+let event_stream_call #a (o : cmds) (x : io_args o) (k : io_res o -> iotree a) (p : iopostream) :
+  Lemma
+    (requires event_stream (call o x k) p)
+    (ensures isCall_choice o x (shead p) /\ event_stream (k (call_choice_res o x (shead p))) (stail p))
+= assert (isEvent (call o x k (stream_trunc p 1))) ;
+  assert (isCall_choice o x (shead p)) ;
+
+  let aux n : Lemma (isEvent (k (call_choice_res o x (shead p)) (stream_trunc (stail p) n))) [SMTPat ()] =
+    assert (isEvent (call o x k (stream_trunc p (n+1)))) ;
+    stream_trunc_succ p n
+  in ()
 
 let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
   // fin
   assert (forall (post : wpost a) p. wcall o x w post ==> isRet (call o x k p) ==> post (Fin (ipos_trace p) (ret_val (call o x k p)))) ;
 
   // inf
-  assume (forall (post : wpost a) (p p' : iopostream). wcall o x w post ==> event_stream (call o x k) p ==> p `uptotau` p' ==> post (Inf p')) ;
+  let aux_inf (post : wpost a) (p p' : iopostream) :
+    Lemma
+      (requires wcall o x w post /\ event_stream (call o x k) p /\ p `uptotau` p')
+      (ensures post (Inf p'))
+      [SMTPat ()]
+    = event_stream_call o x k p ;
+      assert (w (call_choice_res o x (shead p)) (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post)) ;
+      assert (theta (k (call_choice_res o x (shead p))) (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post)) ;
+      assert (forall q. stail p `uptotau` q ==> shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post (Inf q)) ;
+      assert (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post (Inf (stail p))) ;
+
+      feq_head_tail p ;
+      assert (stream_prepend [shead p] (stail p) `feq` p) ;
+      assert (isCall_choice o x (shead p)) ;
+      assert (shead p == Call_choice o x (call_choice_res o x (shead p))) ;
+      assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) `feq` p) ;
+      // assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `feq` p') ;
+      // feq_uptotau (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p ;
+      assume (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `uptotau` p')
+  in
 
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
   call o x k
