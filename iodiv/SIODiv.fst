@@ -164,61 +164,6 @@ let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
 let wrepeat (w : twp unit) : twp unit =
   fun post -> forall n. wrepeat_trunc w n post
 
-let repeat_unfold_1 (body : iotree unit) :
-  Lemma (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p)
-= forall_intro (itree_cofix_unfold_1 (repeat_fix body) ()) ;
-  forall_intro_2 (repeat_fix_guarded body) ;
-  assert (forall p. itree_cofix (repeat_fix body) () p == repeat_fix body (if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) () p) ;
-  assert (forall p. itree_cofix (repeat_fix body) () p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p)
-
-let repeat_one_ret (body : iotree unit) :
-  Lemma (forall p q. isRet (body p) ==> repeat body (p @ Tau_choice :: q) == repeat body q)
-= repeat_unfold_1 body ;
-  find_ret_append body ;
-  assert (forall p q.
-    isRet (body p) ==>
-    repeat body (p @ Tau_choice :: q) == itree_cofix_unfoldn (repeat_fix body) (length (p @ Tau_choice :: q) - 1) () q
-  ) ;
-  forall_intro_2 (repeat_fix_guarded body)
-
-let rec repeat_not_ret (body : iotree unit) p :
-  Lemma (~ (isRet (repeat body p)))
-= match find_ret body [] p with
-  | Some ((), q) ->
-    repeat_unfold_1 body ;
-    if length p = 0
-    then ()
-    else begin
-      match q with
-      | Tau_choice :: r ->
-        find_ret_length body [] p ;
-        forall_intro_2 (repeat_fix_guarded body) ;
-        find_ret_smaller body [] p ;
-        repeat_not_ret body r
-      | _ :: r -> ()
-      | [] -> ()
-    end
-  | None -> ()
-
-let rec repeat_any_ret (body : iotree unit) (pl : list iopos) p :
-  Lemma
-    (requires forall pp. mem pp pl ==> isRet (body pp))
-    (ensures repeat body (flatten_sep [Tau_choice] pl @ p) == repeat body p)
-= match pl with
-  | [] -> ()
-  | pp :: pl ->
-    calc (==) {
-      repeat body (flatten_sep [Tau_choice] (pp :: pl) @ p) ;
-      == {}
-      repeat body ((pp @ [Tau_choice] @ flatten_sep [Tau_choice] pl) @ p) ;
-      == { forall_intro_3 (append_assoc #iochoice) }
-      repeat body (pp @ Tau_choice :: (flatten_sep [Tau_choice] pl @ p)) ;
-      == { repeat_one_ret body }
-      repeat body (flatten_sep [Tau_choice] pl @ p) ;
-      == { repeat_any_ret body pl p }
-      repeat body p ;
-    }
-
 let rec repeat_any_ret_event_post #w (body : iodiv unit w) (pl : list iopos) p :
   Lemma
     (requires forall pp. mem pp pl ==> isRet (body pp))
