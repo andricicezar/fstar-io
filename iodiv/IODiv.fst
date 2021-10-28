@@ -790,13 +790,13 @@ let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (
 //   Lemma (wrepeat_with_inv (wret ()) (fun _ -> True) diverges)
 // = ()
 
-// [@@allow_informative_binders]
-// reifiable total layered_effect {
-//   IODiv : a:Type -> twp a -> Effect
-//   with
-//     repr   = iodiv ;
-//     return = iodiv_ret ;
-//     bind   = iodiv_bind
-//     // tau    = iodiv_tau ; // Universe problems
-//     // call   = iodiv_call
-// }
+[@@allow_informative_binders]
+reifiable total layered_effect {
+  IODiv : a:Type -> twp a -> Effect
+  with
+    repr   = iodiv ;
+    return = iodiv_ret ;
+    bind   = iodiv_bind
+    // tau    = iodiv_tau ; // Universe problems
+    // call   = iodiv_call
+}
