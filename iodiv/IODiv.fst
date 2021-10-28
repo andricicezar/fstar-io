@@ -93,16 +93,16 @@ let embeds (p q : iopostream) =
 let uptotau (p q : iopostream) =
   p `embeds` q /\ q `embeds` p
 
-let uptotau_refl () :
-  Lemma (forall p. p `uptotau` p)
+let uptotau_refl (p : iopostream) :
+  Lemma (p `uptotau` p)
 = ()
 
-let uptotau_sym () :
-  Lemma (forall p q. p `uptotau` q ==> q `uptotau` p)
+let uptotau_sym (p q : iopostream) :
+  Lemma (requires p `uptotau` q) (ensures q `uptotau` p)
 = ()
 
-let uptotau_trans () :
-  Lemma (forall p q r. p `uptotau` q ==> q `uptotau` r ==> p `uptotau` r)
+let uptotau_trans (p q r : iopostream) :
+  Lemma (requires p `uptotau` q /\ q `uptotau` r) (ensures p `uptotau` r)
 = ()
 
 // Could also be proved without using extensionality
@@ -478,9 +478,12 @@ let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (
       assert (isCall_choice o x (shead p)) ;
       assert (shead p == Call_choice o x (call_choice_res o x (shead p))) ;
       assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) `feq` p) ;
-      // assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `feq` p') ;
-      // feq_uptotau (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p ;
-      assume (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `uptotau` p')
+      assert (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ] == [ Call_choice o x (call_choice_res o x (shead p)) ]) ;
+      assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) == stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) ;
+      assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `feq` p) ;
+      feq_uptotau (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p ;
+      uptotau_trans (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p p' ;
+      assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `uptotau` p')
   in
 
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
