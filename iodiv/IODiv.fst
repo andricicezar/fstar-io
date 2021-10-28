@@ -489,13 +489,13 @@ let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
   call o x k
 
-// let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
-//   if n = 0
-//   then fun post -> True
-//   else wbind w (fun (_:unit) -> wtau (wrepeat_trunc w (n - 1)))
+let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
+  if n = 0
+  then fun post -> True
+  else wbind w (fun (_:unit) -> wrepeat_trunc w (n - 1))
 
-// let wrepeat (w : twp unit) : twp unit =
-//   fun post -> forall n. wrepeat_trunc w n post
+let wrepeat (w : twp unit) : twp unit =
+  fun post -> forall n. wrepeat_trunc w n post
 
 // let repeat_unfold_1 (body : iotree unit) :
 //   Lemma (forall p. repeat body p == bind body (fun _ -> tau ((if length p = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length p - 1)) ())) p)
