@@ -497,15 +497,55 @@ let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
 let wrepeat (w : twp unit) : twp unit =
   fun post -> forall n. wrepeat_trunc w n post
 
-let iodiv_repeat #w (body : iodiv unit w) : iodiv unit (wrepeat w) =
-  // fin
+// Somehow it should be the concatenation of a stream of finite runs of body
+// or a finite number of finite runs followed by an infinite run
+// might be easier to produce a colist?
+// What is not clear is how to exploit finite information since we are not concluding about
+// a finite prefix...
+// Might be easier to go directly for a spec with invariants including some
+// inv ... ==> post (Inf p)
+// with the lhs talking about finite approximations potentially (forall n trunc)
+// let event_stream_repeat (body : iotree unit) (p : iopostream) :
+//   Lemma
+//     (requires event_stream (repeat body) p)
+//     (ensures
+
+// let iodiv_repeat #w (body : iodiv unit w) : iodiv unit (wrepeat w) =
+//   // fin
+//   forall_intro (repeat_not_ret body) ;
+//   assert (forall (post : wpost unit) p. wrepeat w post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
+
+//   // inf
+//   assume (forall (post : wpost unit) (p p' : iopostream). wrepeat w post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
+
+//   assert (forall (post : wpost unit). wrepeat w post ==> theta (repeat body) post) ;
+//   repeat body
+
+let trace_invariant (w : twp unit) (inv : trace -> Type0) =
+  inv [] /\ // Or maybe inv downward closed instead?
+  (forall tr.
+    inv tr ==>
+    w (fun b ->
+      match b with
+      | Fin tr' x -> inv (tr @ tr')
+      | Inf p -> forall n. inv (tr @ ipos_trace (stream_trunc p n))
+    )
+  )
+
+let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+  fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
+
+let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
+  Pure (iodiv unit (wrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
+= // fin
   forall_intro (repeat_not_ret body) ;
-  assert (forall (post : wpost unit) p. wrepeat w post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
+  assert (forall (post : wpost unit) p. wrepeat_inv w inv post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
 
   // inf
-  assume (forall (post : wpost unit) (p p' : iopostream). wrepeat w post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
+  assume (forall (post : wpost unit) (p p' : iopostream) n. wrepeat_inv w inv post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> inv (ipos_trace (stream_trunc p' n))) ;
+  assert (forall (post : wpost unit) (p p' : iopostream). wrepeat_inv w inv post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
 
-  assert (forall (post : wpost unit). wrepeat w post ==> theta (repeat body) post) ;
+  assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
   repeat body
 
 [@@allow_informative_binders]
