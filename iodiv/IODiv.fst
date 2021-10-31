@@ -112,6 +112,12 @@ let feq_uptotau (p q : iopostream) :
     (ensures p `uptotau` q)
 = stream_ext p q
 
+let embeds_trace_implies (pr : trace -> Type0) (p p' : iopostream) :
+  Lemma
+    (requires p `embeds` p' /\ (forall n. pr (ipos_trace (stream_trunc p n))))
+    (ensures forall n. pr (ipos_trace (stream_trunc p' n)))
+= ()
+
 noeq
 type branch a =
 | Fin : tr:trace -> res:a -> branch a
@@ -535,11 +541,28 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
-let rec iodviv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) (post : wpost unit) (p p' : iopostream) n :
+let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (post : wpost unit) (p p' : iopostream) n :
   Lemma
     (requires trace_invariant w inv /\ event_stream (repeat body) p /\ p `uptotau` p')
     (ensures inv (ipos_trace (stream_trunc p' n)))
-= admit () // Maybe first get rid of the uptotau by replacing one forall n with another. Then prove rec on p not p' // Can be a lemma on embeds for any prop on ipos_trace trunc n
+= admit ()
+
+let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
+  Lemma
+    (requires trace_invariant w inv)
+    (ensures
+      forall (post : wpost unit) (p p' : iopostream).
+        event_stream (repeat body) p ==>
+        p `uptotau` p' ==>
+        (forall n. inv (ipos_trace (stream_trunc p' n)))
+    )
+= let aux (post : wpost unit) (p p' : iopostream) n :
+    Lemma
+      (requires event_stream (repeat body) p /\ p `uptotau` p')
+      (ensures inv (ipos_trace (stream_trunc p' n)))
+      [SMTPat ()]
+  = iodiv_repeat_inv_proof_aux body inv post p p' n
+  in ()
 
 let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
   Pure (iodiv unit (wrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
@@ -548,13 +571,7 @@ let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
   assert (forall (post : wpost unit) p. wrepeat_inv w inv post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
 
   // inf
-  let aux_inf (post : wpost unit) (p p' : iopostream) n :
-    Lemma
-      (requires event_stream (repeat body) p /\ p `uptotau` p')
-      (ensures inv (ipos_trace (stream_trunc p' n)))
-      [SMTPat ()]
-  = iodviv_repeat_inv_proof body inv post p p' n
-  in
+  iodiv_repeat_inv_proof body inv ;
   assert (forall (post : wpost unit) (p p' : iopostream). wrepeat_inv w inv post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
 
   assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
