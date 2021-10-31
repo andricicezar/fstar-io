@@ -541,10 +541,10 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
-let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (post : wpost unit) (p p' : iopostream) n :
+let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (post : wpost unit) (p : iopostream) n :
   Lemma
-    (requires trace_invariant w inv /\ event_stream (repeat body) p /\ p `uptotau` p')
-    (ensures inv (ipos_trace (stream_trunc p' n)))
+    (requires trace_invariant w inv /\ event_stream (repeat body) p)
+    (ensures inv (ipos_trace (stream_trunc p n)))
 = admit ()
 
 let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
@@ -558,11 +558,12 @@ let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
     )
 = let aux (post : wpost unit) (p p' : iopostream) n :
     Lemma
-      (requires event_stream (repeat body) p /\ p `uptotau` p')
-      (ensures inv (ipos_trace (stream_trunc p' n)))
+      (requires event_stream (repeat body) p)
+      (ensures inv (ipos_trace (stream_trunc p n)))
       [SMTPat ()]
-  = iodiv_repeat_inv_proof_aux body inv post p p' n
-  in ()
+  = iodiv_repeat_inv_proof_aux body inv post p n
+  in
+  forall_intro_2 (move_requires_2 (embeds_trace_implies inv))
 
 let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
   Pure (iodiv unit (wrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
