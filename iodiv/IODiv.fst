@@ -527,16 +527,22 @@ let wrepeat (w : twp unit) : twp unit =
 //   assert (forall (post : wpost unit). wrepeat w post ==> theta (repeat body) post) ;
 //   repeat body
 
-let trace_invariant (w : twp unit) (inv : trace -> Type0) =
-  inv [] /\ // Or maybe inv downward closed instead?
-  (forall tr.
+let loop_preserving (w : twp unit) (inv : trace -> Type0) =
+  forall tr.
     inv tr ==>
     w (fun b ->
       match b with
       | Fin tr' x -> inv (tr @ tr')
       | Inf p -> forall n. inv (tr @ ipos_trace (stream_trunc p n))
     )
-  )
+
+let downward_closed (inv : trace -> Type0) =
+  forall tr tr'. tr `suffix_of` tr' ==> inv tr' ==> inv tr
+
+let trace_invariant (w : twp unit) (inv : trace -> Type0) =
+  inv [] /\
+  downward_closed inv /\
+  loop_preserving w inv
 
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
@@ -547,13 +553,13 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     (ensures inv (ipos_trace (stream_trunc p n)))
 = admit ()
 // To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
-// then in case stream_trucn p n gives a return in repeat then by going through theta we know that adding
+// then in case stream_trunc p n gives a return in repeat then by going through theta we know that adding
 // the new trace will still preserve the invariant, then we unfold the repeat and shift the stream to
 // call ourselves recursively
 // in case the position doesn't give a return, we have (like for bind) to decide whether
 // there will be a return later, in which case we have to go forward and then "rewind" by using the
 // fact that inv is downward-closed (in addition to holding on [], we will have to require it)
-// (this might be annoying for termination)
+// (this might be annoying for termination, maybe we can do it with another lemma since it's just one step)
 // if it is infinite then we should be able to conclude
 
 let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
