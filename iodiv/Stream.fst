@@ -98,18 +98,18 @@ let stream_prepend_nil #a (s : stream a) :
 = ()
 
 let stream_prepend_trunc_left #a (l : list a) (s : stream a) (n : nat) :
-  Lemma (n <= length l ==> stream_trunc (stream_prepend l s) n == fst (splitAt n l))
+  Lemma (n <= length l ==> stream_trunc (stream_prepend l s) n == firstn n l)
 = if n <= length l
   then begin
-    move_requires (index_extensionality (stream_trunc (stream_prepend l s) n)) (fst (splitAt n l)) ;
+    move_requires (index_extensionality (stream_trunc (stream_prepend l s) n)) (firstn n l) ;
     stream_trunc_length (stream_prepend l s) n ;
-    lemma_splitAt_fst_length n l ;
+    lemma_firstn_length n l ;
     forall_intro (index_stream_trunc (stream_prepend l s) n) ;
     stream_trunc_length s n ;
     assert (forall i. i < n ==> index (stream_trunc (stream_prepend l s) n) i == stream_prepend l s i) ;
-    index_fst_splitAt n l ;
-    assert (forall i. i < n ==> index (fst (splitAt n l)) i == index l i) ;
-    assert (forall i. i < n ==> index (stream_trunc (stream_prepend l s) n) i == index (fst (splitAt n l)) i)
+    index_firstn n l ;
+    assert (forall i. i < n ==> index (firstn n l) i == index l i) ;
+    assert (forall i. i < n ==> index (stream_trunc (stream_prepend l s) n) i == index (firstn n l) i)
   end
   else ()
 
@@ -132,7 +132,7 @@ let stream_prepend_trunc_right #a (l : list a) (s : stream a) (n : nat) :
   else ()
 
 let stream_prepend_trunc #a (l : list a) (s : stream a) (n : nat) :
-  Lemma (stream_trunc (stream_prepend l s) n == (if n <= length l then fst (splitAt n l) else l @ stream_trunc s (n - length l)))
+  Lemma (stream_trunc (stream_prepend l s) n == (if n <= length l then firstn n l else l @ stream_trunc s (n - length l)))
 = stream_prepend_trunc_left l s n ; stream_prepend_trunc_right l s n
 
 let stream_ext #a (p q : stream a) :

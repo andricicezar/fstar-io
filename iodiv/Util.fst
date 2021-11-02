@@ -206,18 +206,24 @@ let index_append #a (l1 l2 : list a) (i : nat) :
 
 (** Properties on splitAt *)
 
-let rec lemma_splitAt_fst_length (#a:Type) (n : nat) (l : list a) :
+let firstn #a (n : nat) (l : list a) =
+  fst (splitAt n l)
+
+let skipn #a (n : nat) (l : list a) =
+  snd (splitAt n l)
+
+let rec lemma_firstn_length (#a:Type) (n : nat) (l : list a) :
   Lemma
     (requires n <= length l)
-    (ensures length (fst (splitAt n l)) = n) =
+    (ensures length (firstn n l) = n) =
   match n, l with
   | 0, _ -> ()
   | _, [] -> ()
-  | _, _ :: l' -> lemma_splitAt_fst_length (n - 1) l'
+  | _, _ :: l' -> lemma_firstn_length (n - 1) l'
 
-let rec index_fst_splitAt #a (n : nat) (l : list a) :
-  Lemma (forall i. n <= length l ==> i < n ==> i < length (fst (splitAt n l)) ==> index (fst (splitAt n l)) i == index l i)
+let rec index_firstn #a (n : nat) (l : list a) :
+  Lemma (forall i. n <= length l ==> i < n ==> i < length (firstn n l) ==> index (firstn n l) i == index l i)
 = match n, l with
   | 0, _ -> ()
   | _, [] -> ()
-  | _, _ :: l' -> index_fst_splitAt (n - 1) l'
+  | _, _ :: l' -> index_firstn (n - 1) l'

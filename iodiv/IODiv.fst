@@ -259,7 +259,7 @@ let shift_post_Inf_spe #a tr s p (post : wpost a) :
 let rec ipos_trace_firstn_eq (p q : iopos) (n : nat) :
   Ghost nat
     (requires ipos_trace p == ipos_trace q)
-    (ensures fun m -> ipos_trace (fst (splitAt n p)) == ipos_trace (fst (splitAt m q)) /\ m <= length q)
+    (ensures fun m -> ipos_trace (firstn n p) == ipos_trace (firstn m q) /\ m <= length q)
 = if n = 0
   then 0
   else begin
@@ -285,9 +285,9 @@ let stream_prepend_embeds (p q : iopos) (s : iopostream) :
       calc (==) {
         ipos_trace (stream_trunc (stream_prepend q s) n) ;
         == { stream_prepend_trunc_left q s n }
-        ipos_trace (fst (splitAt n q)) ;
+        ipos_trace (firstn n q) ;
         == {}
-        ipos_trace (fst (splitAt m p)) ;
+        ipos_trace (firstn m p) ;
         == { stream_prepend_trunc_left p s m }
         ipos_trace (stream_trunc (stream_prepend p s) m) ;
       }
@@ -559,6 +559,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
     ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
     append_assoc tr0 (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
+    // We should first qualify q as a stream_trunc as well but of the stream_drop
     // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
     assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
     // Can I rule out the case where the prefix is just []?
