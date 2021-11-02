@@ -603,3 +603,15 @@ reifiable total layered_effect {
     // tau    = iodiv_tau ; // Universe problems
     // call   = iodiv_call
 }
+
+(** Tests *)
+
+let terminates #a : wpost a =
+  fun b -> Fin? b
+
+let diverges #a : wpost a =
+  fun b -> Inf? b
+
+let repeat_ret_loops () :
+  Lemma (wrepeat_inv (wret ()) (fun _ -> True) diverges)
+= ()
