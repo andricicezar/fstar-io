@@ -547,11 +547,26 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
-let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (post : wpost unit) (p : iopostream) n :
+let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
-    (requires trace_invariant w inv /\ event_stream (repeat body) p)
-    (ensures inv (ipos_trace (stream_trunc p n)))
-= admit ()
+    (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
+    (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
+= match find_ret body [] (stream_trunc p n) with
+  | Some ((), q) ->
+    assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
+    assert (inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+    find_ret_Some_pos body [] (stream_trunc p n) ;
+    assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
+    ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
+    append_assoc tr0 (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
+    // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+    assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
+    // Can I rule out the case where the prefix is just []?
+    // Maybe it's fine, and it's event_stream of repeat which saves the day because a Tau will be on top of the stack then.
+    // Maybe prove a separate lemma event_stream_repeat_ret
+  | None ->
+    admit ()
+
 // To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
 // then in case stream_trunc p n gives a return in repeat then by going through theta we know that adding
 // the new trace will still preserve the invariant, then we unfold the repeat and shift the stream to
@@ -576,7 +591,7 @@ let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
       (requires event_stream (repeat body) p)
       (ensures inv (ipos_trace (stream_trunc p n)))
       [SMTPat ()]
-  = iodiv_repeat_inv_proof_aux body inv post p n
+  = iodiv_repeat_inv_proof_aux body inv [] post p n
   in
   forall_intro_2 (move_requires_2 (embeds_trace_implies inv))
 
