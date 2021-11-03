@@ -575,21 +575,23 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     begin match q with
     | [] -> ()
     | Tau_choice :: q' ->
-      let foo () : Lemma (True) =
-        find_ret_prefix_length body [] (stream_trunc p n) ;
-        stream_trunc_length p n ;
-        calc (==) {
-          q ;
-          == { stream_trunc_split_drop n p (find_ret_prefix body [] (stream_trunc p n)) q }
-          stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - length (find_ret_prefix body [] (stream_trunc p n))) ;
-          == { stream_trunc_length (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - length (find_ret_prefix body [] (stream_trunc p n))) }
-          stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (1 + (n - 1 - length (find_ret_prefix body [] (stream_trunc p n)))) ;
-          == { stream_trunc_succ (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) }
-          shead (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) :: stream_trunc (stail (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p)) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
-          // == { stream_drop_drop 1 (length (find_ret_prefix body [] (stream_trunc p n))) p ; stream_trunc_ext (stail (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p)) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) }
-          // shead (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) :: stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
-        }
-      in
+      // Ideally, these computations will be performed in the lemma above, which will provide just the right
+      // arguments to do a recursive call
+      // let foo () : Lemma (True) =
+      //   find_ret_prefix_length body [] (stream_trunc p n) ;
+      //   stream_trunc_length p n ;
+      //   calc (==) {
+      //     q ;
+      //     == { stream_trunc_split_drop n p (find_ret_prefix body [] (stream_trunc p n)) q }
+      //     stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      //     == { stream_trunc_length (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - length (find_ret_prefix body [] (stream_trunc p n))) }
+      //     stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (1 + (n - 1 - length (find_ret_prefix body [] (stream_trunc p n)))) ;
+      //     == { stream_trunc_succ (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) }
+      //     shead (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) :: stream_trunc (stail (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p)) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      //     // == { stream_drop_drop 1 (length (find_ret_prefix body [] (stream_trunc p n))) p ; stream_trunc_ext (stail (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p)) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) }
+      //     // shead (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) :: stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      //   }
+      // in
       // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
       assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
     | c :: q' ->
