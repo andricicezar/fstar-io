@@ -549,13 +549,16 @@ let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
 
 let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n c q' :
   Lemma
-    (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), c :: q'))
+    (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
     (ensures
-      c == Tau_choice /\
       event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) // /\
       // q' == stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n)))
     )
-= admit ()
+= let aux x :
+    Lemma (isEvent (repeat body (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) x)))
+    [SMTPat ()]
+  = admit ()
+  in ()
 
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
@@ -571,7 +574,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     append_assoc tr0 (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
     begin match q with
     | [] -> ()
-    | c :: q' ->
+    | Tau_choice :: q' ->
       let foo () : Lemma (True) =
         find_ret_prefix_length body [] (stream_trunc p n) ;
         stream_trunc_length p n ;
@@ -589,6 +592,9 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       in
       // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
       assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
+    | c :: q' ->
+      assert (isEvent (repeat body (stream_trunc p n))) ;
+      repeat_unfold_1 body
     end
   | None ->
     admit ()
