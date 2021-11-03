@@ -180,4 +180,8 @@ let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
     stream_trunc (stream_drop (length l1) s) (n - length l1) ;
   }
 
+let stream_drop_drop #a (n m : nat) (s : stream a) :
+  Lemma (stream_drop n (stream_drop m s) `feq` stream_drop (n + m) s)
+= ()
+
 // TODO cofix
