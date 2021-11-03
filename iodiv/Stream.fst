@@ -149,4 +149,25 @@ let rec stream_trunc_succ #a (s : stream a) (n : nat) :
   then ()
   else stream_trunc_succ s (n-1)
 
+let skipn_stream_trunc #a (n m : nat) (s : stream a) :
+  Lemma
+    (requires n <= m)
+    (ensures skipn n (stream_trunc s m) == stream_trunc (stream_drop n s) (m - n))
+= calc (==) {
+    skipn n (stream_trunc s m) ;
+    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s m }
+    skipn n (stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) m) ;
+    == { stream_prepend_trunc (stream_trunc s n) (stream_drop n s) m }
+    skipn n (if m <= length (stream_trunc s n) then firstn m (stream_trunc s n) else (stream_trunc s n) @ stream_trunc (stream_drop n s) (m - length (stream_trunc s n))) ;
+    == { stream_trunc_length s n }
+    skipn n (if m <= n then firstn m (stream_trunc s n) else (stream_trunc s n) @ stream_trunc (stream_drop n s) (m - n)) ;
+  } ;
+  admit ()
+
+// let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
+//   Lemma
+//     (requires l1 @ l2 == stream_trunc s n)
+//     (ensures l2 == stream_trunc (stream_drop (length l1) s) (n - length l1))
+//     // or maybe with skipn?
+
 // TODO cofix
