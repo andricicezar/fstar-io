@@ -165,10 +165,19 @@ let skipn_stream_trunc #a (n m : nat) (s : stream a) :
     stream_trunc (stream_drop n s) (m - n) ;
   }
 
-// let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
-//   Lemma
-//     (requires l1 @ l2 == stream_trunc s n)
-//     (ensures l2 == stream_trunc (stream_drop (length l1) s) (n - length l1))
-//     // or maybe with skipn?
+// TODO Worth keeping?
+let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
+  Lemma
+    (requires l1 @ l2 == stream_trunc s n /\ n >= length l1)
+    (ensures l2 == stream_trunc (stream_drop (length l1) s) (n - length l1))
+= calc (==) {
+    l2 ;
+    == { skipn_append_right (length l1) l1 l2 }
+    skipn (length l1) (l1 @ l2) ;
+    == {}
+    skipn (length l1) (stream_trunc s n) ;
+    == { skipn_stream_trunc (length l1) n s }
+    stream_trunc (stream_drop (length l1) s) (n - length l1) ;
+  }
 
 // TODO cofix
