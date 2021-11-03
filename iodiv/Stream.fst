@@ -159,8 +159,11 @@ let skipn_stream_trunc #a (n m : nat) (s : stream a) :
     skipn n (stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) m) ;
     == { stream_trunc_length s n ; stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) m }
     skipn n ((stream_trunc s n) @ stream_trunc (stream_drop n s) (m - n)) ;
-  } ;
-  admit ()
+    == { stream_trunc_length s n ; skipn_append_right n (stream_trunc s n) (stream_trunc (stream_drop n s) (m - n)) }
+    skipn 0 (stream_trunc (stream_drop n s) (m - n)) ;
+    == {}
+    stream_trunc (stream_drop n s) (m - n) ;
+  }
 
 // let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
 //   Lemma
