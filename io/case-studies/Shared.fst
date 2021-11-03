@@ -28,8 +28,9 @@ let rec is_open (fd:file_descr) (h: trace) : Tot bool =
                  else is_open fd tail
                | _ -> is_open fd tail
 
-let ctx_post : file_descr -> trace -> maybe unit -> trace -> Tot bool = 
-  fun fd h r lt -> is_open fd (apply_changes h lt)
+let ctx_post : file_descr -> trace -> r:(maybe unit) -> trace -> Tot (b:bool{r == Inr Contract_failure ==> b == true}) = 
+  fun fd h r lt -> admit (); if Inr? r && Inr?.v r = Contract_failure then true 
+                 else is_open fd (apply_changes h lt)
 
 let i : comp.interface = {
   ctx_arg = file_descr;

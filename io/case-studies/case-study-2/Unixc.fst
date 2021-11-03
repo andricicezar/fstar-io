@@ -12,9 +12,6 @@ open TC.Weaken.MIIO
 open TC.MLify.MIIO
 open Shared
 
-type file_descr = Types.file_descr
-
-(** Move flatten_maybes to where dynamic_cmd is written **)
 let lift_error (x:maybe (maybe 'a)) : ML 'a =
   match x with
   | Inl (Inl y) -> y

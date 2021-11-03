@@ -86,8 +86,8 @@ let lift_pure_iiowp
   (a:Type)
   (wp:pure_wp a)
   (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (iio_irepr a (fun h p -> wp (fun r -> p r [])))
-  = fun h p -> let r = elim_pure f (fun r -> p r []) in iio_return _ r
+  Tot (iio_irepr a (fun h p -> wp (fun r -> p r []))) = 
+  fun h p -> let r = elim_pure f (fun r -> p r []) in iio_return _ r
 
 sub_effect PURE ~> IIOwp = lift_pure_iiowp
 

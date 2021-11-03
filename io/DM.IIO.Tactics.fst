@@ -14,7 +14,7 @@ call to other IIO computations.
 
 CA: I don't like that it explodes the goal. **)
 let iio_tactic () : Tac unit =
+    norm [delta_only [`%iio_post;`%apply_changes]];
     l_to_r [`List.append_l_nil; `List.append_nil_l];
     let lem = pose_lemma (`(rev_append_rev_append ())) in
-    norm [delta_only [`%iio_post;`%apply_changes]];
     explode ()

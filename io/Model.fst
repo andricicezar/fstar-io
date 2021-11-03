@@ -31,13 +31,14 @@ noeq type compiler = {
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
                   prog_s i pi -> Tot (prog_t i pi);
+  (** instrument should be part of the model **)
 }
 
 noeq type interface = {
   ctx_arg : Type;
   ctx_ret : Type;
   ctx_post :
-    ctx_arg -> trace -> maybe ctx_ret -> trace -> Type0;
+    ctx_arg -> trace -> r:(maybe ctx_ret) -> trace -> b:Type0{r == Inr Contract_failure ==> b};
   ctx_post_c : checkable4 ctx_post;
 
   ret : Type;

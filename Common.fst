@@ -37,40 +37,16 @@ let elim_pure #a #wp ($f : unit -> PURE a wp) p
  = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
    f ()
 
-let rec prefix_of (l1 l2: list 'a)
+let suffix_of (l1 l2: list 'a)
 : Tot Type0 (decreases l2)
-= match l1, l2 with
-  | [], [] -> True
-  | [], _ -> True
-  | _, [] -> False
-  | h1 :: t1, h2 :: t2 -> h1 == h2 /\ t1 `prefix_of` t2
-
-let rec prefix_of_length (l1 l2: list 'a)
-: Lemma
-  (requires (prefix_of l1 l2))
-  (ensures (List.length l1 <= List.length l2))
-  (decreases l1)
-= match l1, l2 with
-  | h1 :: t1, h2 :: t2 ->
-    prefix_of_length t1 t2
-  | _ -> ()
-
-let rec suffix_of (l1 l2: list 'a)
-: Tot Type0 (decreases l2)
-= l1 == l2 \/ (match l2 with
-  | [] -> False
-  | _ :: q ->  l1 `suffix_of` q)
+= l1 == l2 \/ l1 `strict_suffix_of` l2
 
 let rec suffix_of_length (l1 l2: list 'a)
 : Lemma
   (requires (suffix_of l1 l2))
   (ensures (List.length l1 <= List.length l2))
-  (decreases l2) =
-  admit ()
+  (decreases l2) = admit ()
 
-let suffix_of_append () :
-  Lemma (forall h l1 l2. suffix_of h ((List.rev l1) @ (List.rev l2) @ h)) =
-  admit()
 
 val rev_nil : (a:Type) -> Lemma (List.rev #a [] == [])
 let rev_nil a = ()
@@ -80,21 +56,6 @@ val append_rev: l1:list 'a -> l2:list 'a ->
     ((List.rev l1)@(List.rev l2)) == (List.rev (l2@l1)))
 let append_rev l1 l2 = List.rev_append l2 l1
 
-(** TODO: this should be really just apply append_inv_tail. **)
-let custom_append_inv_tail
-  (h:list 'a)
-  (rlt:(maybe (list 'a)){Inl? rlt})
-  (lt1:list 'a)
-  (lt2:list 'a) :
-  Lemma
-   (requires (
-      (List.rev lt1 @ List.rev lt2 @ h) == (List.rev (Inl?.v rlt) @ h)
-   ))
-   (ensures (Inl?.v rlt == (lt2 @ lt1))) by (
-     l_to_r [`List.append_assoc; `append_rev];
-     // l_to_r [`List.append_inv_tail];
-     tadmit ())= ()
-
 let rev_head_append
   (h:list 'a)
   (e:'a)
@@ -102,3 +63,59 @@ let rev_head_append
   Lemma
     ((List.rev (e::l) @ h) == (List.rev l @ (e::h))) = admit ()
   
+
+let rec lemma_splitAt_equal (n:nat) (l:list 'a) :
+  Lemma
+    (requires (n <= List.length l))
+    (ensures (
+      let b0, b1 = List.Tot.Base.splitAt n l in
+      b0 @ b1 == l)) = 
+  match n, l with
+  | 0, _ -> ()
+  | _, x::xs -> lemma_splitAt_equal (n-1) xs
+
+let lemma_splitAt_equal_length (l l':list 'a) :
+  Lemma
+    (requires (l' `suffix_of` l /\ List.length l == List.length l'))
+    (ensures (l == l')) =
+  assume (~(l == l'));
+  match l with
+  | [] -> ()
+  | _ :: xs -> 
+    assert (l' `suffix_of` xs);
+    suffix_of_length l' xs;
+    assert (List.length xs < List.length l')
+
+let rec lemma_splitAt_suffix (l l':list 'a) :
+  Lemma
+    (requires (l' `suffix_of` l))
+    (ensures (
+      suffix_of_length l' l;
+      let _, b1 = List.Tot.Base.splitAt (List.length l - List.length l') l in
+      b1 == l')) =
+  suffix_of_length l' l;
+  let n:nat = List.length l - List.length l' in
+  match n, l with
+  | 0, _ -> lemma_splitAt_equal_length l l'
+  | _, x::xs -> lemma_splitAt_suffix xs l'
+
+let rec lemma_suffixOf_append (l l':list 'a) :
+  Lemma (l `suffix_of` (l' @ l)) =
+  match l' with
+  | [] -> ()
+  | x::xs -> lemma_suffixOf_append l xs
+
+let rec lemma_rev_rev_equal (l l':list 'a) :
+  Lemma
+    (requires (rev l == rev l'))
+    (ensures (l == l')) 
+    (decreases l, l') = admit () 
+
+let lemma_append_rev_inv_tail (l l' l'':list 'a) :
+  Lemma 
+    (requires (rev l' @ l) == (rev l'' @ l))
+    (ensures (l' == l'')) = 
+  List.Tot.Properties.append_inv_tail l (rev l') (rev l'');
+  lemma_rev_rev_equal l' l''
+   
+
