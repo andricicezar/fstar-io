@@ -25,9 +25,13 @@ noeq type compiler = {
 
   prog_t  : interface -> monitorable_prop -> Type;
   ctx_t   : interface -> Type;
+  ictx_t   : interface -> monitorable_prop -> Type;
   whole_t : interface -> Type;
   link_t  : (#i:interface) -> (#pi:monitorable_prop) ->
             ctx_t i -> prog_t i pi -> Tot (whole_t i);
+
+  instrument : (#i:interface) -> (#pi:monitorable_prop) ->
+               ctx_t i -> ictx_t i pi;
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
                   prog_s i pi -> Tot (prog_t i pi);
@@ -82,6 +86,9 @@ We make the following remarks about a context's post-condition:
 
 let tpre : (i:interface) -> (i.ctx_arg -> trace -> bool) = fun i x h -> true
 type ctx_t (i:interface) = i.ctx_arg -> MIO i.ctx_ret
+
+type ictx_t (i:interface) (pi:monitorable_prop) =
+  (x:i.ctx_arg) -> IIO (maybe i.ctx_ret) pi (fun h -> tpre i x h) (fun _ _ _ -> True)
 (** The ctx_s stands for the instrumented context, therefore the
     output type is different compared to ctx_t.
     ctx_t has the output type `i.ctx_ret`, but ctx_s has `maybe i.ctx_ret`.
@@ -99,59 +106,46 @@ type prog_s (i:interface) (pi:monitorable_prop) =
     function which adds a runtime check for verifying if pi was 
     respected until now **)
 type prog_t (i:interface) (pi:monitorable_prop) =
-  ctx_s i pi -> MIIO (maybe i.ret)
-
-let extract_local_trace (h:trace) (pi:monitorable_prop) :
-  IIO trace pi
-    (requires (fun h' -> True)) // suffix_of h h'))
-    (ensures (fun h' r lt ->
-      lt == [] /\
-      h' == (apply_changes h r)))
-  =
-  admit ();
-  let h' = get_trace () in
-  suffix_of_length h h';
-  let n : nat = (List.length h') - (List.length h) in
-  let (lt, ht) = List.Tot.Base.splitAt n h' in
-  assume (lt @ ht == h');
-  assume (ht == h);
-  List.Tot.Properties.rev_involutive lt;
-  assert (h' == apply_changes h (List.rev lt));
-  List.rev lt
-
-(** CA: The body of this function was inlined in `instrument` but the block
-if-then-else added some extra weird goals which did not make sense,
-therefore a fast fix was extracting the block in a different function. **)
-let enforce_post
-  (#t1:Type)
-  (#t2:Type)
-  (post:t1 -> trace -> maybe t2 -> trace -> Type0)
-  {| d4:checkable4 post |}
-  (x:t1)
-  (h:trace)
-  (r:maybe t2)
-  (lt:trace) :
-  IIOwp (maybe t2) (fun _ p ->
-    let b = check4 #t1 #trace #(maybe t2) #trace #post x h r lt in
-    (b ==>  p r []) /\
-    (~b ==>  p (Inr Contract_failure) [])) =
-  if check4 #t1 #trace #(maybe t2) #trace #post x h r lt
-  then r
-  else (Inr Contract_failure)
+  ictx_t i pi -> MIIO (maybe i.ret)
 
 let instrument
   (#i  : interface)
   (#pi : monitorable_prop)
   (ct : ctx_t i) :
-  Tot (ctx_s i pi) =
-  fun (x:i.ctx_arg) ->
-    admit ();
-    let h : trace = get_trace () in
-    let r : maybe i.ctx_ret =
+  Tot (ictx_t i pi) =
+    fun x ->
       instrument_MIIO
-        (cast_io_iio ((* MIIO.*)reify (ct x) [] (fun _ _ -> True))) pi in
-    let lt : trace = extract_local_trace h pi in
-    enforce_post #i.ctx_arg #i.ctx_ret i.ctx_post #i.ctx_post_c x h r lt
+        (cast_io_iio ((* MIIO.*)reify (ct x) [] (fun _ _ -> True))) pi
+ 
+let extract_local_trace (h':trace) (pi:monitorable_prop) :
+  IIO trace pi
+    (requires (fun h -> h' `suffix_of` h))
+    (ensures (fun h lt' lt ->
+      lt == [] /\
+      h == (apply_changes h' lt'))) =
+  let h = get_trace () in
+  suffix_of_length h' h;
+  let n : nat = (List.length h) - (List.length h') in
+  let (lt', ht) = List.Tot.Base.splitAt n h in
+  lemma_splitAt_equal n h;
+  lemma_splitAt_suffix h h';
+  List.Tot.Properties.rev_involutive lt';
+  assert (h == apply_changes h' (List.rev lt'));
+  List.rev lt'
+
+let enforce_post
+  (#i:interface)
+  (#pi:monitorable_prop)
+  (f:i.ctx_arg -> IIO (maybe i.ctx_ret) pi (fun _ -> True) (fun _ _ _ -> true))
+  (x:i.ctx_arg) :
+  IIO (maybe i.ctx_ret) pi (fun _ -> True) (i.ctx_post x)  =
+  let h = get_trace () in
+  let r : maybe i.ctx_ret = f x in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let lt = extract_local_trace h pi in
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+  if i.ctx_post_c.check4 x h r lt then r
+  else Inr Contract_failure
 
 (**
   Context: During compilation, p is wrapped in a new function
@@ -180,10 +174,11 @@ let compile_prog
   (#pi : monitorable_prop)
   (p  : prog_s i pi) :
   Tot (prog_t i pi) =
+  (** TODO: this is not enough. prog_t should become something else **)
   _IIOwp_as_MIIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
-    p
+    (fun (ict:ictx_t i pi) -> p (enforce_post #i #pi ict))
 
 val link_s  : (#i:interface) -> (#pi:monitorable_prop) -> ctx_s i pi ->
               prog_s i pi -> Tot (whole_s i pi)
@@ -210,8 +205,10 @@ let comp : compiler = {
 
   prog_t  = prog_t;
   ctx_t   = ctx_t;
+  ictx_t  = ictx_t;
   whole_t = whole_t;
   link_t  = link_t;
 
+  instrument = instrument;
   compile_prog = compile_prog; 
 }

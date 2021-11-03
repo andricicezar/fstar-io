@@ -27,7 +27,7 @@ let simple_linking #i #pi (p:prog_s i pi) (c:ctx_t i) :
     #(trivializeable_IIOwp _ _ 
       (fun _ h -> iio_pre pi h) 
       (fun _ h r lt -> iio_post pi h r lt))
-    p) (instrument #i #pi c)
+    p) (enforce_post #i #pi (instrument #i #pi c))
 
 
 (**    assert (iio_interpretation wt h (fun r lt -> iio_post pi h r lt)) by (
