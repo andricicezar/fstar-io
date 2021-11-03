@@ -302,6 +302,13 @@ let rec find_ret_prefix_suffix_of #op #s #a (m : itree op s a) (pp p : ipos op s
       find_ret_prefix_suffix_of m (pp @ [c]) p
   end
 
+let find_ret_prefix_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma
+    (requires Some? (find_ret m pp p))
+    (ensures length (find_ret_prefix m pp p) <= length (pp @ p))
+= find_ret_prefix_suffix_of m pp p ;
+  suffix_length (find_ret_prefix m pp p) (pp @ p)
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
