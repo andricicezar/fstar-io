@@ -47,6 +47,12 @@ let rec strict_suffix_length #a (s l : list a) :
     | [] -> ()
     | y :: s -> strict_suffix_length s l
 
+let suffix_length #a (s l : list a) :
+  Lemma
+    (requires s `suffix_of` l)
+    (ensures length s <= length l)
+= strict_suffix_length s l
+
 let rec strict_suffix_append_one #a (p : list a) x :
   Lemma (ensures p `strict_suffix_of` (p @ [x])) (decreases p)
 = match p with
