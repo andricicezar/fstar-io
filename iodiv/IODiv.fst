@@ -547,6 +547,12 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
+let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q :
+  Lemma
+    (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), q))
+    (ensures event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p))
+= admit ()
+
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
@@ -559,12 +565,22 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
     ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
     append_assoc tr0 (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
-    // We should first qualify q as a stream_trunc as well but of the stream_drop
+    let foo () : Lemma (True) =
+      find_ret_prefix_length body [] (stream_trunc p n) ;
+      stream_trunc_length p n ;
+      calc (==) {
+        q ;
+        == { stream_trunc_split_drop n p (find_ret_prefix body [] (stream_trunc p n)) q }
+        stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) (n - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      }
+    in
     // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
     assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
     // Can I rule out the case where the prefix is just []?
     // Maybe it's fine, and it's event_stream of repeat which saves the day because a Tau will be on top of the stack then.
-    // Maybe prove a separate lemma event_stream_repeat_ret
+    // The actual thing to take care of is when this n - length is 0
+    // In the q equality above, we cannot extract Tau in the head becasue it might be empty
+    // Probably just a question of checking if q == [], in which case we conclude easily
   | None ->
     admit ()
 
