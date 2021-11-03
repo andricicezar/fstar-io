@@ -157,10 +157,8 @@ let skipn_stream_trunc #a (n m : nat) (s : stream a) :
     skipn n (stream_trunc s m) ;
     == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s m }
     skipn n (stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) m) ;
-    == { stream_prepend_trunc (stream_trunc s n) (stream_drop n s) m }
-    skipn n (if m <= length (stream_trunc s n) then firstn m (stream_trunc s n) else (stream_trunc s n) @ stream_trunc (stream_drop n s) (m - length (stream_trunc s n))) ;
-    == { stream_trunc_length s n }
-    skipn n (if m <= n then firstn m (stream_trunc s n) else (stream_trunc s n) @ stream_trunc (stream_drop n s) (m - n)) ;
+    == { stream_trunc_length s n ; stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) m }
+    skipn n ((stream_trunc s n) @ stream_trunc (stream_drop n s) (m - n)) ;
   } ;
   admit ()
 

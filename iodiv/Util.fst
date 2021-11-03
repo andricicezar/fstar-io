@@ -215,8 +215,8 @@ let skipn #a (n : nat) (l : list a) =
 let rec lemma_firstn_length (#a:Type) (n : nat) (l : list a) :
   Lemma
     (requires n <= length l)
-    (ensures length (firstn n l) = n) =
-  match n, l with
+    (ensures length (firstn n l) = n)
+= match n, l with
   | 0, _ -> ()
   | _, [] -> ()
   | _, _ :: l' -> lemma_firstn_length (n - 1) l'
@@ -227,3 +227,24 @@ let rec index_firstn #a (n : nat) (l : list a) :
   | 0, _ -> ()
   | _, [] -> ()
   | _, _ :: l' -> index_firstn (n - 1) l'
+
+let rec splitAt_append_right #a (n : nat) (l1 l2 : list a) :
+  Lemma
+    (requires n >= length l1)
+    (ensures splitAt n (l1 @ l2) == (l1 @ firstn (n - length l1) l2, skipn (n - length l1) l2))
+= match n, l1 with
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, _ :: l' -> splitAt_append_right (n - 1) l' l2
+
+let firstn_append_right #a (n : nat) (l1 l2 : list a) :
+  Lemma
+    (requires n >= length l1)
+    (ensures firstn n (l1 @ l2) == l1 @ firstn (n - length l1) l2)
+= splitAt_append_right n l1 l2
+
+let skipn_append_right #a (n : nat) (l1 l2 : list a) :
+  Lemma
+    (requires n >= length l1)
+    (ensures skipn n (l1 @ l2) == skipn (n - length l1) l2)
+= splitAt_append_right n l1 l2
