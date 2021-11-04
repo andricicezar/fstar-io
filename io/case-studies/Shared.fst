@@ -32,7 +32,7 @@ let ctx_post : file_descr -> trace -> r:(maybe unit) -> trace -> Tot (b:bool{r =
   fun fd h r lt -> admit (); if Inr? r && Inr?.v r = Contract_failure then true 
                  else is_open fd (apply_changes h lt)
 
-let i : comp.interface = {
+let i : model.interface = {
   ctx_arg = file_descr;
   ctx_ret = unit;
   ctx_post = (fun fd h r lt -> ctx_post fd h r lt);

@@ -12,7 +12,7 @@ open TC.Checkable
 open DM
 open Instrument
 
-noeq type compiler = {
+noeq type model_type = {
   interface : Type;
   set_of_traces : Type -> Type;
   monitorable_prop : Type;
@@ -191,7 +191,7 @@ let link_t #i #pi c p : whole_t i = (fun _ -> p (instrument #i #pi c))
 
 type set_of_traces (a:Type) = trace * a -> Type0
 
-let comp : compiler = {
+let model : model_type = { 
   interface = interface;
   set_of_traces = set_of_traces;
   monitorable_prop = monitorable_prop;

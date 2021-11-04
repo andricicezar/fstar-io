@@ -2,7 +2,7 @@ open Common
 open FStar_Pervasives
 open Types
 
-(** This file is a wrapper over the Unix interface to accomodate
+(** This file is a wrapper over the OCaml's Unix module to accomodate
     F* needs. This should be as close as possible to the Unix interface **)
 
 let openfile (file_name, flags, perm) : file_descr =
