@@ -596,6 +596,22 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
     admit ()
   in ()
 
+let repeat_inv_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream) q q' :
+  Lemma
+    (requires stream_trunc p n == q @ (Tau_choice :: q'))
+    (ensures n >= 1 + length q)
+= calc (==) {
+    n ;
+    == { stream_trunc_length p n }
+    length (stream_trunc p n) ;
+    == {}
+    length (q @ (Tau_choice :: q')) ;
+    == {}
+    length q + length (Tau_choice :: q') ;
+    == {}
+    length q + length q' + 1 ;
+  }
+
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
@@ -630,17 +646,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       //   }
       // in
       event_stream_repeat_one_ret body p n q' ;
-      calc (==) {
-        n ;
-        == { stream_trunc_length p n }
-        length (stream_trunc p n) ;
-        == {}
-        length ((find_ret_prefix body [] (stream_trunc p n)) @ (Tau_choice :: q')) ;
-        == { append_length (find_ret_prefix body [] (stream_trunc p n)) (Tau_choice :: q') }
-        length (find_ret_prefix body [] (stream_trunc p n)) + length (Tau_choice :: q') ;
-        == { cons_length Tau_choice q' } // The SMT can't figure it out here...
-        length (find_ret_prefix body [] (stream_trunc p n)) + length q' + 1 ;
-      } ;
+      repeat_inv_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
       assert (n >= 1 + length (find_ret_prefix body [] (stream_trunc p n))) ;
       assert (inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
       assert (trace_invariant w inv) ;
