@@ -588,6 +588,10 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
       == { append_length (find_ret_prefix body [] (stream_trunc p n)) [Tau_choice] }
       stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n)) + 1) p) (length q') ;
       // Here we have almost what we want, only we want x and have length q'
+      // Another option is to specialise to isEvent for one particular n, we might not need event_stream in general
+      // Sadly we might need it for theta
+      // The mistake might be to focus too much on q', we probably want to use (length find_ret_prefix + 1 + x) as trunc or something
+      // This could be another lemma that concludes on q' using the calc above
     } ;
     admit ()
   in ()
@@ -596,6 +600,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
+    (decreases n)
 = match find_ret body [] (stream_trunc p n) with
   | Some ((), q) ->
     assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
@@ -624,7 +629,13 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       //     // shead (stream_drop (length (find_ret_prefix body [] (stream_trunc p n))) p) :: stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
       //   }
       // in
-      // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      event_stream_repeat_one_ret body p n q' ;
+      assume (n >= 1 + length (find_ret_prefix body [] (stream_trunc p n))) ;
+      assert (inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+      assert (trace_invariant w inv) ;
+      assert (event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p)) ;
+      iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      assert (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n)))))) ;
       assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
     | c :: q' ->
       assert (isEvent (repeat body (stream_trunc p n))) ;
