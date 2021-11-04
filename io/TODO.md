@@ -3,10 +3,10 @@
 - [ ] can the effects be used to write something useful?
 
 # Extraction
-- [ ] is extracting defined correctly?
-- [ ] arrows can not be ml-ish, therefore we should rethink what is noted
+- [v] is extracting defined correctly?
+- [v] arrows can not be ml-ish, therefore we should rethink what is noted
       with ml
-- [ ] check extraction
+- [v] check extraction
 
 # Model & Proof
 - [ ] make sure the model is correct
