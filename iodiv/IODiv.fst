@@ -630,7 +630,18 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       //   }
       // in
       event_stream_repeat_one_ret body p n q' ;
-      assume (n >= 1 + length (find_ret_prefix body [] (stream_trunc p n))) ;
+      calc (==) {
+        n ;
+        == { stream_trunc_length p n }
+        length (stream_trunc p n) ;
+        == {}
+        length ((find_ret_prefix body [] (stream_trunc p n)) @ (Tau_choice :: q')) ;
+        == { append_length (find_ret_prefix body [] (stream_trunc p n)) (Tau_choice :: q') }
+        length (find_ret_prefix body [] (stream_trunc p n)) + length (Tau_choice :: q') ;
+        == { cons_length Tau_choice q' } // The SMT can't figure it out here...
+        length (find_ret_prefix body [] (stream_trunc p n)) + length q' + 1 ;
+      } ;
+      assert (n >= 1 + length (find_ret_prefix body [] (stream_trunc p n))) ;
       assert (inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
       assert (trace_invariant w inv) ;
       assert (event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p)) ;
