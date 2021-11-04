@@ -547,7 +547,11 @@ let trace_invariant (w : twp unit) (inv : trace -> Type0) =
 let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
-let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n c q' :
+let cons_length #a (x : a) (l : list a) :
+  Lemma (length (x :: l) = length l + 1)
+= ()
+
+let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
   Lemma
     (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
     (ensures
@@ -557,7 +561,34 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n c q' :
 = let aux x :
     Lemma (isEvent (repeat body (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) x)))
     [SMTPat ()]
-  = admit ()
+  = assert (isEvent (repeat body (stream_trunc p n))) ;
+    find_ret_Some_pos body [] (stream_trunc p n) ;
+    assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ Tau_choice :: q') ;
+    repeat_one_ret body ;
+    assert (isEvent (repeat body q')) ;
+    calc (==) {
+      n ;
+      == { stream_trunc_length p n }
+      length (stream_trunc p n) ;
+      == {}
+      length ((find_ret_prefix body [] (stream_trunc p n)) @ (Tau_choice :: q')) ;
+      == { append_length (find_ret_prefix body [] (stream_trunc p n)) (Tau_choice :: q') }
+      length (find_ret_prefix body [] (stream_trunc p n)) + length (Tau_choice :: q') ;
+      == { cons_length Tau_choice q' } // The SMT can't figure it out here...
+      length (find_ret_prefix body [] (stream_trunc p n)) + length q' + 1 ;
+    } ;
+    // calc (==) {
+    //   q' ;
+    //   == {
+    //     // forall_intro_3 (append_assoc #iochoice) ;
+    //     // assert (stream_trunc p n == ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) @ q') ;
+    //     // stream_trunc_split_drop n p ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) q' ;
+    //     admit ()
+    //   }
+    //   stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n)) + 1) p) (n - length (find_ret_prefix body [] (stream_trunc p n)) - 1) ;
+    //   // Maybe stream_trunc_split_drop should use the length of q' instead
+    // } ;
+    admit ()
   in ()
 
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
@@ -593,7 +624,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       //   }
       // in
       // iodiv_repeat_inv_proof_aux body inv (tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
-      assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q))
+      assume (inv ((tr0 @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
     | c :: q' ->
       assert (isEvent (repeat body (stream_trunc p n))) ;
       repeat_unfold_1 body
