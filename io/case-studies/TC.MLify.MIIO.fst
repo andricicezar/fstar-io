@@ -12,6 +12,7 @@ open TC.Trivialize.MIIO
 
 open Free
 open Free.IO
+open DM.IIO
 open DM.MIIO
 
 exception Something_went_really_bad
@@ -31,9 +32,12 @@ instance mlifyable_miio
      does not exist **)
      | _ -> FStar.All.raise Something_went_really_bad)
 
-(** Ideas to improve this:
-1. The initial function should be t1 -> IIO t2 pi.
-2. What if instead of Tot, we use Ex, to be able to internalize try_catch.
+
+(** this is necessary, because F* does not add at extraction the lift from Tot to IIO. **)
+let wrap (f:'a -> Tot 'b) pi (x:'a) : IIO 'b pi (fun _ -> True) (fun _ _ _ -> True) = f x
+  
+(** Ideas to improve mlifyable_iio_miio:
+1. What if instead of Tot, we use Ex, to be able to internalize try_catch.
    This implies writing a lift from Ex to IIOwp. To do that, we also have to 
    write elim_ex (similar to elim_pure). I did not try to write it yet.
    But what does exactly means to use Ex? 
@@ -41,19 +45,21 @@ instance mlifyable_miio
      therefore the try_with block will be extracted to the OCaml's native
      try/with.
    Maybe to not create more confusion & to not tie things too much to F*,
-   it is better to not use Ex since it may be just a hack (check with Catalin).
-3. 
-
+   it is better to not use Ex since it may be just a hack (check with Catalin). 
+2. can I move enforcing the post-condition here? It should be possible.
 **)
 
-instance mlifyable_tot_miio
-  t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} :
-  Tot (mlifyable ((t1 -> Tot t2) -> MIIO t3)) =
+instance mlifyable_iio_miio
+  t1 t2 t3 (pi:monitorable_prop)
+  {| ml t1 |} {| ml t2 |} {| ml t3 |} :
+  Tot (mlifyable ((t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) -> MIIO t3)) =
   mk_mlifyable
-    #((t1 -> Tot t2) -> MIIO t3) #(trivial_MIIO (t1 -> Tot t2) _) #(weak_tot_miio t1 t2 t3)
+    #_
+    #(trivial_MIIO (t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) _)
+    #(weak_iio_miio t1 t2 t3 pi)
     ((t1 -> Tot t2) -> ML t3)
-    (fun f x ->
-     let tree : iio t3 = reify (f x) [] (fun _ _ -> True) in
+    (fun p (ct:t1 -> Tot t2) ->
+     let tree : iio t3 = reify (p (wrap ct pi)) [] (fun _ _ -> True) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual

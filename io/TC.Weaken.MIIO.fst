@@ -8,14 +8,16 @@ open TC.Checkable
 open TC.Export
 include TC.Weaken
 open TC.Trivialize.MIIO
+open DM.IIO
 open DM.MIIO
 
 instance weak_miio t1 t2 {| ml t1 |} {| ml t2 |} : weak (t1 -> MIIO t2) =
   { mldummy = () }
 
-(** TODO: is this really a weak arrow? Is type (t1 -> Tot t2) weak? 
-We need this for extracting higher order MIIO computations. **)
-instance weak_tot_miio t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : weak ((t1 -> Tot t2) -> MIIO t3) =
+(** TODO: is this really a weak arrow? Is type (t1 -> IIO t2 pi .. ..) weak? 
+We need this for extracting higher order MIIO computations. Is pi weak? **)
+instance weak_iio_miio t1 t2 t3 pi {| ml t1 |} {| ml t2 |} {| ml t3 |} : 
+  weak ((t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) -> MIIO t3) =
   { mldummy = () }
 
 instance weakable_miio
