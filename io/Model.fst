@@ -35,7 +35,6 @@ noeq type compiler = {
 
   compile_prog  : (#i:interface) -> (#pi:monitorable_prop) ->
                   prog_s i pi -> Tot (prog_t i pi);
-  (** instrument should be part of the model **)
 }
 
 noeq type interface = {
@@ -174,7 +173,6 @@ let compile_prog
   (#pi : monitorable_prop)
   (p  : prog_s i pi) :
   Tot (prog_t i pi) =
-  (** TODO: this is not enough. prog_t should become something else **)
   _IIOwp_as_MIIO
     (fun _ -> iio_pre pi)
     (fun _ h r lt -> iio_post pi h r lt)
