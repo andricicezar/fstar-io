@@ -566,28 +566,29 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
     assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ Tau_choice :: q') ;
     repeat_one_ret body ;
     assert (isEvent (repeat body q')) ;
-    calc (==) {
-      n ;
-      == { stream_trunc_length p n }
-      length (stream_trunc p n) ;
-      == {}
-      length ((find_ret_prefix body [] (stream_trunc p n)) @ (Tau_choice :: q')) ;
-      == { append_length (find_ret_prefix body [] (stream_trunc p n)) (Tau_choice :: q') }
-      length (find_ret_prefix body [] (stream_trunc p n)) + length (Tau_choice :: q') ;
-      == { cons_length Tau_choice q' } // The SMT can't figure it out here...
-      length (find_ret_prefix body [] (stream_trunc p n)) + length q' + 1 ;
-    } ;
     // calc (==) {
-    //   q' ;
-    //   == {
-    //     // forall_intro_3 (append_assoc #iochoice) ;
-    //     // assert (stream_trunc p n == ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) @ q') ;
-    //     // stream_trunc_split_drop n p ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) q' ;
-    //     admit ()
-    //   }
-    //   stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n)) + 1) p) (n - length (find_ret_prefix body [] (stream_trunc p n)) - 1) ;
-    //   // Maybe stream_trunc_split_drop should use the length of q' instead
+    //   n ;
+    //   == { stream_trunc_length p n }
+    //   length (stream_trunc p n) ;
+    //   == {}
+    //   length ((find_ret_prefix body [] (stream_trunc p n)) @ (Tau_choice :: q')) ;
+    //   == { append_length (find_ret_prefix body [] (stream_trunc p n)) (Tau_choice :: q') }
+    //   length (find_ret_prefix body [] (stream_trunc p n)) + length (Tau_choice :: q') ;
+    //   == { cons_length Tau_choice q' } // The SMT can't figure it out here...
+    //   length (find_ret_prefix body [] (stream_trunc p n)) + length q' + 1 ;
     // } ;
+    calc (==) {
+      q' ;
+      == {
+        forall_intro_3 (append_assoc #iochoice) ;
+        assert (stream_trunc p n == ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) @ q') ;
+        stream_trunc_split_drop n p ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice]) q'
+      }
+      stream_trunc (stream_drop (length ((find_ret_prefix body [] (stream_trunc p n)) @ [Tau_choice])) p) (length q') ;
+      == { append_length (find_ret_prefix body [] (stream_trunc p n)) [Tau_choice] }
+      stream_trunc (stream_drop (length (find_ret_prefix body [] (stream_trunc p n)) + 1) p) (length q') ;
+      // Here we have almost what we want, only we want x and have length q'
+    } ;
     admit ()
   in ()
 
