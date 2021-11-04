@@ -599,6 +599,32 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
     admit ()
   in ()
 
+let repeat_inv_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
+  Lemma
+    (requires
+      n >= 1 + length p0 /\
+      stream_trunc p n == (p0 @ [Tau_choice]) @ q'
+    )
+    (ensures q' == stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0))
+= calc (==) {
+    q' ;
+    == { stream_trunc_split_drop n p (p0 @ [Tau_choice]) q' }
+    stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length q') ;
+    == { append_length p0 [Tau_choice] }
+    stream_trunc (stream_drop (length p0 + 1) p) (length q') ;
+  } ;
+  calc (==) {
+    n ;
+    == { stream_trunc_length p n }
+    length (stream_trunc p n) ;
+    == {}
+    length ((p0 @ [Tau_choice]) @ q') ;
+    == {}
+    length (p0 @ [Tau_choice]) + length q' ;
+    == { append_length p0 [Tau_choice] }
+    length p0 + 1 + length q' ;
+  }
+
 let repeat_inv_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream) q q' :
   Lemma
     (requires stream_trunc p n == q @ (Tau_choice :: q'))
