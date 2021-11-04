@@ -165,12 +165,20 @@ let skipn_stream_trunc #a (n m : nat) (s : stream a) :
     stream_trunc (stream_drop n s) (m - n) ;
   }
 
-// TODO Worth keeping?
 let stream_trunc_split_drop #a (n : nat) (s : stream a) l1 l2 :
   Lemma
-    (requires l1 @ l2 == stream_trunc s n /\ n >= length l1)
-    (ensures l2 == stream_trunc (stream_drop (length l1) s) (n - length l1))
+    (requires l1 @ l2 == stream_trunc s n)
+    (ensures l2 == stream_trunc (stream_drop (length l1) s) (length l2))
 = calc (==) {
+    n ;
+    == { stream_trunc_length s n }
+    length (stream_trunc s n) ;
+    == {}
+    length (l1 @ l2) ;
+    == {}
+    length l1 + length l2 ;
+  } ;
+  calc (==) {
     l2 ;
     == { skipn_append_right (length l1) l1 l2 }
     skipn (length l1) (l1 @ l2) ;
