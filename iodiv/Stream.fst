@@ -192,4 +192,27 @@ let stream_drop_drop #a (n m : nat) (s : stream a) :
   Lemma (stream_drop n (stream_drop m s) `feq` stream_drop (n + m) s)
 = ()
 
+let firstn_stream_trunc_left #a (n m : nat) (s : stream a) :
+  Lemma (requires n <= m) (ensures firstn n (stream_trunc s m) == stream_trunc s n)
+= calc (==) {
+    firstn n (stream_trunc s m) ;
+    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s m }
+    firstn n (stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) m) ;
+    == { stream_trunc_length s n ; stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) m }
+    firstn n ((stream_trunc s n) @ stream_trunc (stream_drop n s) (m - n)) ;
+    == { stream_trunc_length s n ; firstn_append_left n (stream_trunc s n) (stream_trunc (stream_drop n s) (m - n)) }
+    firstn n (stream_trunc s n) ;
+    == { stream_trunc_length s n ; firstn_all n (stream_trunc s n) }
+    stream_trunc s n ;
+  }
+
+let firstn_stream_trunc #a (n m : nat) (s : stream a) :
+  Lemma (firstn n (stream_trunc s m) == (if n <= m then stream_trunc s n else stream_trunc s m))
+= if n <= m
+  then firstn_stream_trunc_left n m s
+  else begin
+    stream_trunc_length s m ;
+    firstn_all n (stream_trunc s m)
+  end
+
 // TODO cofix
