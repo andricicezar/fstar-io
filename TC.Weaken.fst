@@ -47,11 +47,10 @@ instance weakable_arrow
   t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |} :
   Tot (weakable (t1 -> Tot t2))  =
   mk_weakable (d1.itype -> Tot (maybe d2.etype))
-    (fun (f:(t1 -> t2)) ->
-      (fun (x:d1.itype) ->
+    (fun (f:(t1 -> Tot t2)) (x:d1.itype) ->
         match import x with
-        | Some x' -> Inl (export (f x')) <: Tot (maybe d2.etype)
-        | None -> Inr Contract_failure <: Tot (maybe d2.etype)))
+        | Some x' -> Inl (export (f x'))
+        | None -> Inr Contract_failure)
 
 (** The post-condition does not respect principle 4.
   The post-condition should look something like this: 

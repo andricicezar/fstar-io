@@ -52,29 +52,9 @@ instance trivializeable_purearrow
   (post : t1 -> t2 -> Type0) :
   Tot (trivializeable ((x:t1) -> Pure t2 (pre x) (post x))) =
   mk_trivializeable (x:t1 -> Pure (maybe t2) True (fun (r:maybe t2) -> (
+    (~(check #t1 #pre x) ==> r == Inr Contract_failure) /\
     (check #t1 #pre x ==> Inl? r /\ post x (Inl?.v r)))))
     (fun (f:(x:t1 -> Pure t2 (pre x) (post x))) ->
       (fun (x:t1) ->
         if check #t1 #pre x then Inl (f x)
         else Inr Contract_failure))
-
-(**
-instance exportable_IOwp
-  (t1:Type) {| d1:importable t1 |}
-  (t2:Type) {| d2:exportable t2 |}
-  (pre:t1 -> trace -> Type0) {| d3:checkable2 pre |}
-  (post:t1 -> trace -> (m:maybe t2) -> trace -> (r:Type0{Inr? m ==> r})) :
-  Tot (exportable (x:t1 ->
-    IOwp t2 (fun h p ->
-      pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) =
-  mk_exportable
-    (d1.itype -> MIIO (maybe d2.etype))
-    (fun (f:(x:t1 -> IOwp t2 (fun h p ->
-      pre x h /\ (forall r lt. post x h r lt ==>  p r lt)))) ->
-      (fun x ->
-        match import x with
-        | Some x' -> Inl (export (_IIOwp_as_MIIO d3.check2 post f x'))
-        | None -> Inr Contract_failure))
-**)
-
-(** TODO: write strengthen_iio from the thesis **)
