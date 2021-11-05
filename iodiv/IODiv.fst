@@ -551,6 +551,32 @@ let cons_length #a (x : a) (l : list a) :
   Lemma (length (x :: l) = length l + 1)
 = ()
 
+let event_stream_repeat_one_ret_aux_eq (p0 : iopos) (p : iopostream) (m : nat) :
+  Lemma
+    (requires stream_trunc p (length (p0 @ [Tau_choice])) == p0 @ [Tau_choice])
+    (ensures stream_trunc p (length (p0 @ [Tau_choice]) + m) == p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))
+= stream_trunc_length p (length (p0 @ [Tau_choice])) ;
+  calc (==) {
+    stream_trunc p (length (p0 @ [Tau_choice]) + m) ;
+    == {
+      stream_trunc_drop (length (p0 @ [Tau_choice])) p ;
+      stream_trunc_ext (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) p (length (p0 @ [Tau_choice]) + m)
+    }
+    stream_trunc (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) (length (p0 @ [Tau_choice]) + m) ;
+    == {
+      stream_prepend_trunc_right (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m)
+    }
+    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m - length (p0 @ [Tau_choice]))) ;
+    == {}
+    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == {}
+    (p0 @ [Tau_choice]) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == { append_assoc p0 [Tau_choice] (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) }
+    p0 @ [Tau_choice] @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == {}
+    p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+  }
+
 let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
   Lemma
     (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
@@ -573,11 +599,9 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
     //   == {}
     //   length (p0 @ Tau_choice :: q') ;
     //   == {}
-    //   length p0 + length (Tau_choice :: q') ;
+    //   length ((p0 @ [Tau_choice]) @ q') ;
     //   == {}
-    //   length p0 + (1 + length q') ;
-    //   == {}
-    //   length p0 + 1 + length q' ;
+    //   length (p0 @ [Tau_choice]) + length q' ;
     // } ;
     assume (length (p0 @ [Tau_choice]) <= n) ; // It doesn't follow from the above for F*
     calc (==) {
@@ -595,27 +619,7 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
       p0 @ [Tau_choice] ;
     } ;
     assert (isEvent (repeat body (stream_trunc p (length (p0 @ [Tau_choice]) + m)))) ;
-    stream_trunc_length p (length (p0 @ [Tau_choice])) ;
-    calc (==) {
-      stream_trunc p (length (p0 @ [Tau_choice]) + m) ;
-      == {
-        stream_trunc_drop (length (p0 @ [Tau_choice])) p ;
-        stream_trunc_ext (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) p (length (p0 @ [Tau_choice]) + m)
-      }
-      stream_trunc (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) (length (p0 @ [Tau_choice]) + m) ;
-      == {
-        stream_prepend_trunc_right (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m)
-      }
-      (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m - length (p0 @ [Tau_choice]))) ;
-      == {}
-      (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-      == {}
-      (p0 @ [Tau_choice]) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-      == { append_assoc p0 [Tau_choice] (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) }
-      p0 @ [Tau_choice] @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-      == {}
-      p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-    } ;
+    event_stream_repeat_one_ret_aux_eq p0 p m ;
     assert (isEvent (repeat body (p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m)))) ;
     repeat_one_ret body ;
     assert (isEvent (repeat body (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))) ;
