@@ -354,6 +354,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
       [SMTPat ()]
   = finite_branch_prefix m f p ;
     assert (exists (q : iopos) (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) ;
+    // TODO Use eliminate instead?
     let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) in
     let s = indefinite_description_ghost iopostream (fun s -> p `feq` stream_prepend q s /\ isRet (m q)) in
     assert (p `feq` stream_prepend q s) ;
@@ -716,7 +717,47 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
       repeat_unfold_1 body
     end
   | None ->
-    admit ()
+    // In case where we still haven't reached a return, we do a case
+    // analysis on wheter there will ever be such a return.
+    eliminate (event_stream body p) \/ ~ (event_stream body p)
+    returns inv (tr0 @ ipos_trace (stream_trunc p n))
+    with h. begin
+      assert (event_stream body p) ;
+      assert (inv tr0) ;
+      assert (trace_invariant w inv) ;
+      assert (loop_preserving w inv) ;
+      // Below is def of loop_preserving but I get unknown assertion failed
+      // same for all three
+      // Probably should take it out as lemma too
+      assume (
+        forall tr.
+          inv tr ==>
+          w (fun b ->
+            match b with
+            | Fin tr' x -> inv (tr @ tr')
+            | Inf p -> forall n. inv (tr @ ipos_trace (stream_trunc p n))
+          )
+      ) ;
+      assume (
+        w (fun b ->
+          match b with
+          | Fin tr' x -> inv (tr0 @ tr')
+          | Inf p -> forall n. inv (tr0 @ ipos_trace (stream_trunc p n))
+        )
+      ) ;
+      assume (
+        theta body (fun b ->
+          match b with
+          | Fin tr' x -> inv (tr0 @ tr')
+          | Inf p -> forall n. inv (tr0 @ ipos_trace (stream_trunc p n))
+        )
+      ) ;
+      assert (p `uptotau` p) ;
+      assert (inv (tr0 @ ipos_trace (stream_trunc p n)))
+    end
+    and  h. begin
+      admit ()
+    end
 
 // To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
 // then in case stream_trunc p n gives a return in repeat then by going through theta we know that adding
