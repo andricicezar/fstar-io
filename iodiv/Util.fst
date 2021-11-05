@@ -275,3 +275,15 @@ let skipn_append_right #a (n : nat) (l1 l2 : list a) :
     (requires n >= length l1)
     (ensures skipn n (l1 @ l2) == skipn (n - length l1) l2)
 = splitAt_append_right n l1 l2
+
+let firstn_all #a (n : nat) (l : list a) :
+  Lemma (requires n >= length l) (ensures firstn n l == l)
+= calc (==) {
+    firstn n l ;
+    == {}
+    firstn n (l @ []) ;
+    == { firstn_append_right n l [] }
+    l @ firstn (n - length l) [] ;
+    == {}
+    l ;
+  }
