@@ -691,6 +691,12 @@ let repeat_inv_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream)
     length q + length q' + 1 ;
   }
 
+let iodiv_repeat_inv_proof_aux_inf #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
+  Lemma
+    (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ event_stream body p)
+    (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
+= assert (p `uptotau` p)
+
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
@@ -721,40 +727,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     // analysis on wheter there will ever be such a return.
     eliminate (event_stream body p) \/ ~ (event_stream body p)
     returns inv (tr0 @ ipos_trace (stream_trunc p n))
-    with h. begin
-      assert (event_stream body p) ;
-      assert (inv tr0) ;
-      assert (trace_invariant w inv) ;
-      assert (loop_preserving w inv) ;
-      // Below is def of loop_preserving but I get unknown assertion failed
-      // same for all three
-      // Probably should take it out as lemma too
-      assume (
-        forall tr.
-          inv tr ==>
-          w (fun b ->
-            match b with
-            | Fin tr' x -> inv (tr @ tr')
-            | Inf p -> forall n. inv (tr @ ipos_trace (stream_trunc p n))
-          )
-      ) ;
-      assume (
-        w (fun b ->
-          match b with
-          | Fin tr' x -> inv (tr0 @ tr')
-          | Inf p -> forall n. inv (tr0 @ ipos_trace (stream_trunc p n))
-        )
-      ) ;
-      assume (
-        theta body (fun b ->
-          match b with
-          | Fin tr' x -> inv (tr0 @ tr')
-          | Inf p -> forall n. inv (tr0 @ ipos_trace (stream_trunc p n))
-        )
-      ) ;
-      assert (p `uptotau` p) ;
-      assert (inv (tr0 @ ipos_trace (stream_trunc p n)))
-    end
+    with h. iodiv_repeat_inv_proof_aux_inf body inv tr0 post p n
     and  h. begin
       admit ()
     end
