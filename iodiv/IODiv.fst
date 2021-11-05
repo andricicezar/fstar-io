@@ -555,17 +555,42 @@ let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
   Lemma
     (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
     (ensures event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p))
-= let aux (p0 : iopos) m :
+= find_ret_Some_pos body [] (stream_trunc p n) ;
+  let aux (p0 : iopos) m :
     Lemma
+      (requires isRet (body p0) /\ stream_trunc p n == p0 @ Tau_choice :: q')
       (ensures isEvent (repeat body (stream_trunc (stream_drop (1 + length p0) p) m)))
       [SMTPat ()]
-  = assert (isEvent (repeat body (stream_trunc p n))) ; // go for n + 1 + length p0 probably
-    find_ret_Some_pos body [] (stream_trunc p n) ;
-    assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ Tau_choice :: q') ;
-    repeat_one_ret body ;
-    assert (isEvent (repeat body q')) ;
+  = calc (==) {
+      n ;
+      == { stream_trunc_length p n }
+      length (stream_trunc p n) ;
+      == {}
+      length (p0 @ Tau_choice :: q') ;
+      == {}
+      length p0 + length (Tau_choice :: q') ;
+      == {}
+      length p0 + (1 + length q') ;
+      == {}
+      length p0 + 1 + length q' ;
+    } ;
+    assume (length p0 + 1 <= n) ; // It doesn't follow from the above for F*
+    calc (==) {
+      stream_trunc p (length p0 + 1) ;
+      == { firstn_stream_trunc_left (length p0 + 1) n p }
+      firstn (length p0 + 1) (stream_trunc p n) ;
+      == {}
+      firstn (length p0 + 1) (p0 @ Tau_choice :: q') ; // To progress faster, it might be better to move Tau_choice on the left and use length (p0 @ [Tau_choice])
+    } ;
+    assert (isEvent (repeat body (stream_trunc p n))) ; // go for n + 1 + length p0 probably
+    // find_ret_Some_pos body [] (stream_trunc p n) ;
+    // assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ Tau_choice :: q') ;
+    // repeat_one_ret body ;
+    // assert (isEvent (repeat body q')) ;
     admit ()
   in ()
+
+
   // let aux x :
   //   Lemma (isEvent (repeat body (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) x)))
   //   [SMTPat ()]
