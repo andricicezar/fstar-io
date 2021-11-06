@@ -697,6 +697,17 @@ let iodiv_repeat_inv_proof_aux_inf #w (body : iodiv unit w) (inv : trace -> Type
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
 = assert (p `uptotau` p)
 
+// If we play well we can reuse the bits used in the ret case below.
+// The only thing we need to do is to use the not event_stream to find a ret that
+// is the first ret of the stream (hence a prefix)
+// For this, we should already have the proof somewhere in the bind case, if it's not a lemma
+// might be worth it to take it out as such
+let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
+  Lemma
+    (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ ~ (event_stream body p))
+    (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
+= admit ()
+
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p)
@@ -728,14 +739,7 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     eliminate (event_stream body p) \/ ~ (event_stream body p)
     returns inv (tr0 @ ipos_trace (stream_trunc p n))
     with h. iodiv_repeat_inv_proof_aux_inf body inv tr0 post p n
-    and  h. begin
-      admit () // No need for a recusrive call so we can probably take it out too!
-      // If we play well we can reuse the bits used in the ret case above.
-      // The only thing we need to do is to use the not event_stream to find a ret that
-      // is the first ret of the stream (hence a prefix)
-      // For this, we should already have the proof somewhere in the bind case, if it's not a lemma
-      // might be worth it to take it out as such
-    end
+    and  h. iodiv_repeat_inv_proof_aux_overfin body inv tr0 post p n
 
 // To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
 // then in case stream_trunc p n gives a return in repeat then by going through theta we know that adding
