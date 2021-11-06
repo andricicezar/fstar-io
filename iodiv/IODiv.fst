@@ -729,7 +729,12 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     returns inv (tr0 @ ipos_trace (stream_trunc p n))
     with h. iodiv_repeat_inv_proof_aux_inf body inv tr0 post p n
     and  h. begin
-      admit ()
+      admit () // No need for a recusrive call so we can probably take it out too!
+      // If we play well we can reuse the bits used in the ret case above.
+      // The only thing we need to do is to use the not event_stream to find a ret that
+      // is the first ret of the stream (hence a prefix)
+      // For this, we should already have the proof somewhere in the bind case, if it's not a lemma
+      // might be worth it to take it out as such
     end
 
 // To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
