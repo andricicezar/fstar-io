@@ -732,8 +732,7 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
     then begin
       stream_trunc_leq_suffix_of p n n0 ;
       ipos_trace_suffix_of (stream_trunc p n) (stream_trunc p n0) ;
-      assume ((tr0 @ ipos_trace (stream_trunc p n)) `suffix_of` (tr0 @ ipos_trace (stream_trunc p n0))) ; // Need lemma suffix_of_append_left
-      ()
+      suffix_of_append_left (ipos_trace (stream_trunc p n)) (ipos_trace (stream_trunc p n0)) tr0
     end
     else begin
       find_ret_append body ;
