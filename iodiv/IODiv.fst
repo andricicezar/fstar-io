@@ -697,6 +697,17 @@ let iodiv_repeat_inv_proof_aux_inf #w (body : iodiv unit w) (inv : trace -> Type
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
 = assert (p `uptotau` p)
 
+let rec ipos_trace_suffix_of (p q : iopos) :
+  Lemma
+    (requires p `suffix_of` q)
+    (ensures ipos_trace p `suffix_of` ipos_trace q)
+= match p with
+  | [] -> ()
+  | x :: p' ->
+    begin match q with
+    | y :: q' -> ipos_trace_suffix_of p' q'
+    end
+
 let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
@@ -716,11 +727,11 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
     end
   | Some (Ret ()) ->
     assert (isRet (body (stream_trunc p n0))) ;
-    assert (inv (tr0 @ ipos_trace (stream_trunc p n0))) ; // Something like that + the fact that the pos should be a suffix
+    assert (inv (tr0 @ ipos_trace (stream_trunc p n0))) ;
     if n < n0
     then begin
       stream_trunc_leq_suffix_of p n n0 ;
-      assume (ipos_trace (stream_trunc p n) `suffix_of` ipos_trace (stream_trunc p n0)) ; // Need lemma ipos_trace_suffix_of
+      ipos_trace_suffix_of (stream_trunc p n) (stream_trunc p n0) ;
       assume ((tr0 @ ipos_trace (stream_trunc p n)) `suffix_of` (tr0 @ ipos_trace (stream_trunc p n0))) ; // Need lemma suffix_of_append_left
       ()
     end
