@@ -780,16 +780,6 @@ let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type
     with h. iodiv_repeat_inv_proof_aux_inf body inv tr0 post p n
     and  h. iodiv_repeat_inv_proof_aux_overfin body inv tr0 post p n
 
-// To prove it I will need to generalise over a trace that verifies the invariant and is placed as prefix
-// then in case stream_trunc p n gives a return in repeat then by going through theta we know that adding
-// the new trace will still preserve the invariant, then we unfold the repeat and shift the stream to
-// call ourselves recursively
-// in case the position doesn't give a return, we have (like for bind) to decide whether
-// there will be a return later, in which case we have to go forward and then "rewind" by using the
-// fact that inv is downward-closed (in addition to holding on [], we will have to require it)
-// (this might be annoying for termination, maybe we can do it with another lemma since it's just one step)
-// if it is infinite then we should be able to conclude
-
 let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
   Lemma
     (requires trace_invariant w inv)
