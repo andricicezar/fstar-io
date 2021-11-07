@@ -80,6 +80,12 @@ let rec strict_suffix_of_append #a (p q r : list a) :
   | [] -> ()
   | x :: r' -> strict_suffix_of_append p q r'
 
+let suffix_of_append_left #a (p q r : list a) :
+  Lemma
+    (requires p `suffix_of` q)
+    (ensures (r @ p) `suffix_of` (r @ q ))
+= strict_suffix_of_append p q r
+
 let rec suffix_of_append_one #a (s l : list a) x :
   Lemma (s `suffix_of` (l @ [ x ]) ==> s `suffix_of` l \/ s == l @ [ x ])
 = assert (~ (l @ [x] == [])) ;
