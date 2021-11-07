@@ -218,6 +218,13 @@ let firstn #a (n : nat) (l : list a) =
 let skipn #a (n : nat) (l : list a) =
   snd (splitAt n l)
 
+let rec splitAt_eq #a (n : nat) (l : list a) :
+  Lemma (l == firstn n l @ skipn n l)
+= match n, l with
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, _ :: l' -> splitAt_eq (n - 1) l'
+
 let rec lemma_firstn_length (#a:Type) (n : nat) (l : list a) :
   Lemma
     (requires n <= length l)
