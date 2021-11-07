@@ -745,7 +745,22 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
       repeat_unfold_1 body ;
       assert (isEvent (bind body (fun _ -> tau ((if length (stream_trunc p n0) = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length (stream_trunc p n0) - 1)) ())) (stream_trunc p n0)))
     end
-  | Some (Ret ()) -> admit ()
+  | Some (Ret ()) ->
+    assert (isRet (body (stream_trunc p n0))) ;
+    assert (inv (tr0 @ ipos_trace (stream_trunc p n0))) ; // Something like that + the fact that the pos should be a suffix
+    if n < n0
+    then begin
+      stream_trunc_leq_suffix_of p n n0 ;
+      assume (ipos_trace (stream_trunc p n) `suffix_of` ipos_trace (stream_trunc p n0)) ; // Need lemma ipos_trace_suffix_of
+      assume ((tr0 @ ipos_trace (stream_trunc p n)) `suffix_of` (tr0 @ ipos_trace (stream_trunc p n0))) ; // Need lemma suffix_of_append_left
+      ()
+    end
+    else begin
+      stream_trunc_leq_suffix_of p n0 n ;
+      // Now to a contradiction because find_ret found nothing before n
+      // We do not have that information at hand however.
+      admit ()
+    end
 
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma

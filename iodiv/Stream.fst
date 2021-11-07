@@ -53,6 +53,17 @@ let rec suffix_of_stream_trunc #a (s : stream a) (n : nat) (l : list a) :
     suffix_of_stream_trunc s (n-1) l
   end
 
+let rec stream_trunc_leq_suffix_of #a (s : stream a) (n m : nat) :
+  Lemma
+    (requires n <= m)
+    (ensures stream_trunc s n `suffix_of` stream_trunc s m)
+= // if n = 0
+  // then ()
+  // else begin
+  //   stream_trunc_leq_suffix_of s (n - 1) (m - 1)
+  // end
+  admit ()
+
 let rec stream_trunc_length #a (s : stream a) (n : nat) :
   Lemma (length (stream_trunc s n) == n)
 = if n = 0
