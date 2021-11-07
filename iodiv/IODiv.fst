@@ -697,40 +697,9 @@ let iodiv_repeat_inv_proof_aux_inf #w (body : iodiv unit w) (inv : trace -> Type
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
 = assert (p `uptotau` p)
 
-// If we play well we can reuse the bits used in the ret case below.
-// The only thing we need to do is to use the not event_stream to find a ret that
-// is the first ret of the stream (hence a prefix)
-// For this, we have
-//
-// let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
-//   Lemma
-//     (requires
-//       (exists n. ~ (isEvent (m (stream_trunc p n)))) /\
-//       event_stream (bind m f) p
-//     )
-//     (ensures
-//       exists (q : iopos) (s : iopostream).
-//         p `feq` stream_prepend q s /\
-//         isRet (m q)
-//     )
-// = let n = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (m (stream_trunc p n)))) in
-//   // We know before n we only have events, and n is not an event: this leaves us
-//   // with either Some Ret, or None, we first show the latter is not possible
-//   match m (stream_trunc p n) with
-//   | None ->
-//     begin match find_ret m [] (stream_trunc p n) with
-//     | Some (x, q) ->
-//       find_ret_prefix_suffix_of m [] (stream_trunc p n) ;
-//       suffix_of_stream_trunc p n (find_ret_prefix m [] (stream_trunc p n))
-//     | None -> ()
-//     end
-//   | Some (Ret x) -> stream_trunc_drop n p
-//
-// It would be nice to be able to reuse it, but it might be easier to just duplicate it (might factorise later)
-
 let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
-    (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ ~ (event_stream body p))
+    (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
 = // Similar to finite_branch_prefix
   let n0 = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (body (stream_trunc p n)))) in
@@ -756,10 +725,16 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
       ()
     end
     else begin
-      stream_trunc_leq_suffix_of p n0 n ;
-      // Now to a contradiction because find_ret found nothing before n
-      // We do not have that information at hand however.
-      admit ()
+      find_ret_append body ;
+      assert (Some? (find_ret body [] (stream_trunc p n0 @ skipn n0 (stream_trunc p n)))) ;
+      calc (==) {
+        stream_trunc p n ;
+        == { splitAt_eq n0 (stream_trunc p n) }
+        firstn n0 (stream_trunc p n) @ skipn n0 (stream_trunc p n) ;
+        == { firstn_stream_trunc_left n0 n p }
+        stream_trunc p n0 @ skipn n0 (stream_trunc p n) ;
+      } ;
+      assert (Some? (find_ret body [] (stream_trunc p n)))
     end
 
 let rec iodiv_repeat_inv_proof_aux #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
