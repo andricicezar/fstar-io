@@ -64,7 +64,7 @@ let isEvent #op #s #a (n : option (inode op s a)) =
   | _ -> false
 
 let valid_itree (#op:eqtype) #s #a (t : raw_itree op s a) =
-  forall p. isRet (t p) ==> (forall q. p `strict_suffix_of` q ==> None? (t q)) // Ret is final
+  forall p. isRet (t p) ==> (forall q. p `strict_prefix_of` q ==> None? (t q)) // Ret is final
   // Should we instead use some [consistent t p] boolean predicate that would traverse the itree?
   // Maybe forall p. (p == [] /\ Some? (t [])) \/ (exists q c. p == q @ [c] /\ consistent_choice (t q) c)
   // where consistent_choice n c checks that both are call or both tau
@@ -148,7 +148,7 @@ let rec find_ret_append_aux #op #s #a (m : itree op s a) pp p q :
     (ensures isRet (m (pp @ p)) ==> find_ret m pp (p @ q) == Some (ret_val (m (pp @ p)), q))
     (decreases p)
 = if isRet (m pp)
-  then strict_suffix_or_eq_append pp p
+  then strict_prefix_or_eq_append pp p
   else begin
     match p with
     | [] -> ()
@@ -163,12 +163,12 @@ let find_ret_append #op #s #a (m : itree op s a) :
   Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
 = forall_intro_2 (find_ret_append_aux m [])
 
-let rec find_ret_strict_suffix_aux #op #s #a (m : itree op s a) pp p q u p' :
+let rec find_ret_strict_prefix_aux #op #s #a (m : itree op s a) pp p q u p' :
   Lemma
     (ensures
       find_ret m pp p == Some (u, p') ==>
-      p `strict_suffix_of` q ==>
-      (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_suffix_of` q')
+      p `strict_prefix_of` q ==>
+      (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_prefix_of` q')
     )
     (decreases p)
 = if isRet (m pp)
@@ -181,19 +181,19 @@ let rec find_ret_strict_suffix_aux #op #s #a (m : itree op s a) pp p q u p' :
         match q with
         | [] -> ()
         | c' :: q ->
-          find_ret_strict_suffix_aux m (pp @ [c]) p q u p'
+          find_ret_strict_prefix_aux m (pp @ [c]) p q u p'
       end
   end
 
-let find_ret_strict_suffix #op #s #a (m : itree op s a) :
+let find_ret_strict_prefix #op #s #a (m : itree op s a) :
   Lemma
     (ensures
       forall p q u p'.
         find_ret m [] p == Some (u, p') ==>
-        p `strict_suffix_of` q ==>
-        (exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_suffix_of` q')
+        p `strict_prefix_of` q ==>
+        (exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_prefix_of` q')
     )
-= forall_intro_4 (find_ret_strict_suffix_aux m [])
+= forall_intro_4 (find_ret_strict_prefix_aux m [])
 
 let rec find_ret_Event_None #op #s #a (m : itree op s a) (pp p : ipos op s) :
   Lemma
@@ -204,7 +204,7 @@ let rec find_ret_Event_None #op #s #a (m : itree op s a) (pp p : ipos op s) :
   then begin
     match p with
     | [] -> ()
-    | c :: p -> strict_suffix_or_eq_append pp (c :: p)
+    | c :: p -> strict_prefix_or_eq_append pp (c :: p)
   end
   else begin
     match p with
@@ -222,14 +222,14 @@ let rec find_ret_smaller #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p' -> find_ret_smaller m (pp @ [c]) p'
   end
 
-let rec find_ret_prefix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
-  Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> q `prefix_of` p) (decreases p)
+let rec find_ret_suffix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
+  Lemma (ensures forall x q. find_ret m pp p == Some (x, q) ==> q `suffix_of` p) (decreases p)
 = if isRet (m pp)
   then ()
   else begin
     match p with
     | [] -> ()
-    | c :: p' -> find_ret_prefix_of m (pp @ [c]) p'
+    | c :: p' -> find_ret_suffix_of m (pp @ [c]) p'
   end
 
 let rec find_ret_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
@@ -287,27 +287,27 @@ let rec find_ret_prefix_val #op #s #a (m : itree op s a) (pp p : ipos op s) :
     | c :: p -> find_ret_prefix_val m (pp @ [c]) p
   end
 
-let rec find_ret_prefix_suffix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
+let rec find_ret_prefix_prefix_of #op #s #a (m : itree op s a) (pp p : ipos op s) :
   Lemma (ensures
     Some? (find_ret m pp p) ==>
-    find_ret_prefix m pp p `suffix_of` (pp @ p)
+    find_ret_prefix m pp p `prefix_of` (pp @ p)
   ) (decreases p)
 = if isRet (m pp)
-  then suffix_of_append pp p
+  then prefix_of_append pp p
   else begin
     match p with
     | [] -> ()
     | c :: p ->
       append_assoc pp [c] p ;
-      find_ret_prefix_suffix_of m (pp @ [c]) p
+      find_ret_prefix_prefix_of m (pp @ [c]) p
   end
 
 let find_ret_prefix_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
   Lemma
     (requires Some? (find_ret m pp p))
     (ensures length (find_ret_prefix m pp p) <= length (pp @ p))
-= find_ret_prefix_suffix_of m pp p ;
-  suffix_length (find_ret_prefix m pp p) (pp @ p)
+= find_ret_prefix_prefix_of m pp p ;
+  prefix_length (find_ret_prefix m pp p) (pp @ p)
 
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
@@ -325,7 +325,7 @@ let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : optio
 
 *)
 let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
-  find_ret_strict_suffix m ;
+  find_ret_strict_prefix m ;
   fun p ->
     match find_ret m [] p with
     | Some (x, q) -> f x q
@@ -374,7 +374,7 @@ let rec itree_corec_aux (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) (i
 
 let rec itree_corec_aux_final_ret (#op : eqtype) #s #a #b (f : a -> cont_node op s b a) i p q :
   Lemma
-    (ensures isRet (itree_corec_aux f i p) ==> p `strict_suffix_of` q ==> None? (itree_corec_aux f i q))
+    (ensures isRet (itree_corec_aux f i p) ==> p `strict_prefix_of` q ==> None? (itree_corec_aux f i q))
     (decreases p)
 = match p with
   | [] ->

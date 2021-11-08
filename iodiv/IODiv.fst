@@ -221,8 +221,8 @@ let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostrea
   | None ->
     begin match find_ret m [] (stream_trunc p n) with
     | Some (x, q) ->
-      find_ret_prefix_suffix_of m [] (stream_trunc p n) ;
-      suffix_of_stream_trunc p n (find_ret_prefix m [] (stream_trunc p n))
+      find_ret_prefix_prefix_of m [] (stream_trunc p n) ;
+      prefix_of_stream_trunc p n (find_ret_prefix m [] (stream_trunc p n))
     | None -> ()
     end
   | Some (Ret x) -> stream_trunc_drop n p
@@ -538,7 +538,7 @@ let loop_preserving (w : twp unit) (inv : trace -> Type0) =
     )
 
 let downward_closed (inv : trace -> Type0) =
-  forall tr tr'. tr `suffix_of` tr' ==> inv tr' ==> inv tr
+  forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
 
 let trace_invariant (w : twp unit) (inv : trace -> Type0) =
   inv [] /\
@@ -697,15 +697,15 @@ let iodiv_repeat_inv_proof_aux_inf #w (body : iodiv unit w) (inv : trace -> Type
     (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
 = assert (p `uptotau` p)
 
-let rec ipos_trace_suffix_of (p q : iopos) :
+let rec ipos_trace_prefix_of (p q : iopos) :
   Lemma
-    (requires p `suffix_of` q)
-    (ensures ipos_trace p `suffix_of` ipos_trace q)
+    (requires p `prefix_of` q)
+    (ensures ipos_trace p `prefix_of` ipos_trace q)
 = match p with
   | [] -> ()
   | x :: p' ->
     begin match q with
-    | y :: q' -> ipos_trace_suffix_of p' q'
+    | y :: q' -> ipos_trace_prefix_of p' q'
     end
 
 let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
@@ -718,8 +718,8 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
   | None ->
     begin match find_ret body [] (stream_trunc p n0) with
     | Some (x, q) ->
-      find_ret_prefix_suffix_of body [] (stream_trunc p n0) ;
-      suffix_of_stream_trunc p n0 (find_ret_prefix body [] (stream_trunc p n0))
+      find_ret_prefix_prefix_of body [] (stream_trunc p n0) ;
+      prefix_of_stream_trunc p n0 (find_ret_prefix body [] (stream_trunc p n0))
     | None ->
       assert (isEvent (repeat body (stream_trunc p n0))) ;
       repeat_unfold_1 body ;
@@ -730,9 +730,9 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
     assert (inv (tr0 @ ipos_trace (stream_trunc p n0))) ;
     if n < n0
     then begin
-      stream_trunc_leq_suffix_of p n n0 ;
-      ipos_trace_suffix_of (stream_trunc p n) (stream_trunc p n0) ;
-      suffix_of_append_left (ipos_trace (stream_trunc p n)) (ipos_trace (stream_trunc p n0)) tr0
+      stream_trunc_leq_prefix_of p n n0 ;
+      ipos_trace_prefix_of (stream_trunc p n) (stream_trunc p n0) ;
+      prefix_of_append_left (ipos_trace (stream_trunc p n)) (ipos_trace (stream_trunc p n0)) tr0
     end
     else begin
       find_ret_append body ;

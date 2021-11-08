@@ -41,26 +41,26 @@ let shead #a (s : stream a) : a =
 let stail #a (s : stream a) : stream a =
   stream_drop 1 s
 
-let rec suffix_of_stream_trunc #a (s : stream a) (n : nat) (l : list a) :
+let rec prefix_of_stream_trunc #a (s : stream a) (n : nat) (l : list a) :
   Lemma (
-    l `suffix_of` stream_trunc s n ==>
+    l `prefix_of` stream_trunc s n ==>
     (exists m. m <= n /\ l == stream_trunc s m)
   )
 = if n = 0
   then ()
   else begin
-    suffix_of_append_one l (stream_trunc s (n - 1)) (s (n-1)) ;
-    suffix_of_stream_trunc s (n-1) l
+    prefix_of_append_one l (stream_trunc s (n - 1)) (s (n-1)) ;
+    prefix_of_stream_trunc s (n-1) l
   end
 
-let rec stream_trunc_leq_suffix_of #a (s : stream a) (n m : nat) :
+let rec stream_trunc_leq_prefix_of #a (s : stream a) (n m : nat) :
   Lemma
     (requires n <= m)
-    (ensures stream_trunc s n `suffix_of` stream_trunc s m)
+    (ensures stream_trunc s n `prefix_of` stream_trunc s m)
 = // if n = 0
   // then ()
   // else begin
-  //   stream_trunc_leq_suffix_of s (n - 1) (m - 1)
+  //   stream_trunc_leq_prefix_of s (n - 1) (m - 1)
   // end
   admit ()
 

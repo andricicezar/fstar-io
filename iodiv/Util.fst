@@ -6,61 +6,58 @@ open FStar.Classical
 open FStar.IndefiniteDescription
 open FStar.Calc
 
-(** Similar to strict_prefix_of, but the opposite.
+(** Properties of prefix and suffix on lists *)
 
-    Names are now swapped in standard library, will need to change it
-    when updating.
-*)
-let rec strict_suffix_of #a (s l : list a) :
+let rec strict_prefix_of #a (s l : list a) :
   Pure Type0 (requires True) (ensures fun _ -> True) (decreases l)
 = match l with
   | [] -> False
   | x :: l ->
     match s with
     | [] -> True
-    | y :: s -> x == y /\ s `strict_suffix_of` l
+    | y :: s -> x == y /\ s `strict_prefix_of` l
 
-let suffix_of #a (s l : list a) =
-  s == l \/ s `strict_suffix_of` l
+let prefix_of #a (s l : list a) =
+  s == l \/ s `strict_prefix_of` l
 
-let prefix_of #a (p l : list a) =
-  p == l \/ p `strict_prefix_of` l
+let suffix_of #a (p l : list a) =
+  p == l \/ p `strict_suffix_of` l
 
-let rec strict_suffix_or_eq_append #a (s l : list a) :
+let rec strict_prefix_or_eq_append #a (s l : list a) :
   Lemma
-    (ensures l == [] \/ s `strict_suffix_of` (s @ l))
+    (ensures l == [] \/ s `strict_prefix_of` (s @ l))
     (decreases s)
 = match s with
   | [] -> ()
-  | y :: s -> strict_suffix_or_eq_append s l
+  | y :: s -> strict_prefix_or_eq_append s l
 
-let suffix_of_append #a (s l : list a) :
-  Lemma (s `suffix_of` (s @ l))
-= strict_suffix_or_eq_append s l
+let prefix_of_append #a (s l : list a) :
+  Lemma (s `prefix_of` (s @ l))
+= strict_prefix_or_eq_append s l
 
-let rec strict_suffix_length #a (s l : list a) :
-  Lemma (ensures s `strict_suffix_of` l ==> length s < length l) (decreases l)
+let rec strict_prefix_length #a (s l : list a) :
+  Lemma (ensures s `strict_prefix_of` l ==> length s < length l) (decreases l)
 = match l with
   | [] -> ()
   | x :: l ->
     match s with
     | [] -> ()
-    | y :: s -> strict_suffix_length s l
+    | y :: s -> strict_prefix_length s l
 
-let suffix_length #a (s l : list a) :
+let prefix_length #a (s l : list a) :
   Lemma
-    (requires s `suffix_of` l)
+    (requires s `prefix_of` l)
     (ensures length s <= length l)
-= strict_suffix_length s l
+= strict_prefix_length s l
 
-let rec strict_suffix_append_one #a (p : list a) x :
-  Lemma (ensures p `strict_suffix_of` (p @ [x])) (decreases p)
+let rec strict_prefix_append_one #a (p : list a) x :
+  Lemma (ensures p `strict_prefix_of` (p @ [x])) (decreases p)
 = match p with
   | [] -> ()
-  | y :: q -> strict_suffix_append_one q x
+  | y :: q -> strict_prefix_append_one q x
 
-let rec strict_suffix_of_trans #a (p q r : list a) :
-  Lemma (ensures p `strict_suffix_of` q ==> q `strict_suffix_of` r ==> p `strict_suffix_of` r) (decreases p)
+let rec strict_prefix_of_trans #a (p q r : list a) :
+  Lemma (ensures p `strict_prefix_of` q ==> q `strict_prefix_of` r ==> p `strict_prefix_of` r) (decreases p)
 = begin match p with
   | [] -> ()
   | x :: p' ->
@@ -69,32 +66,32 @@ let rec strict_suffix_of_trans #a (p q r : list a) :
     | y :: q' ->
       begin match r with
       | [] -> ()
-      | z :: r' -> strict_suffix_of_trans p' q' r'
+      | z :: r' -> strict_prefix_of_trans p' q' r'
       end
     end
   end
 
-let rec strict_suffix_of_append #a (p q r : list a) :
-  Lemma (ensures p `strict_suffix_of` q ==> (r @ p) `strict_suffix_of` (r @ q)) (decreases r)
+let rec strict_prefix_of_append #a (p q r : list a) :
+  Lemma (ensures p `strict_prefix_of` q ==> (r @ p) `strict_prefix_of` (r @ q)) (decreases r)
 = match r with
   | [] -> ()
-  | x :: r' -> strict_suffix_of_append p q r'
+  | x :: r' -> strict_prefix_of_append p q r'
 
-let suffix_of_append_left #a (p q r : list a) :
+let prefix_of_append_left #a (p q r : list a) :
   Lemma
-    (requires p `suffix_of` q)
-    (ensures (r @ p) `suffix_of` (r @ q ))
-= strict_suffix_of_append p q r
+    (requires p `prefix_of` q)
+    (ensures (r @ p) `prefix_of` (r @ q ))
+= strict_prefix_of_append p q r
 
-let rec suffix_of_append_one #a (s l : list a) x :
-  Lemma (s `suffix_of` (l @ [ x ]) ==> s `suffix_of` l \/ s == l @ [ x ])
+let rec prefix_of_append_one #a (s l : list a) x :
+  Lemma (s `prefix_of` (l @ [ x ]) ==> s `prefix_of` l \/ s == l @ [ x ])
 = assert (~ (l @ [x] == [])) ;
-  assert (s `suffix_of` (l @ [ x ]) ==> s == l @ [x] \/ s `strict_suffix_of` (l @ [ x ])) ;
+  assert (s `prefix_of` (l @ [ x ]) ==> s == l @ [x] \/ s `strict_prefix_of` (l @ [ x ])) ;
   match l with
   | [] -> ()
   | y :: l' ->
     begin match s with
-    | z :: s' -> suffix_of_append_one s' l' x
+    | z :: s' -> prefix_of_append_one s' l' x
     | [] -> ()
     end
 
