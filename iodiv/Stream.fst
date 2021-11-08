@@ -53,17 +53,6 @@ let rec prefix_of_stream_trunc #a (s : stream a) (n : nat) (l : list a) :
     prefix_of_stream_trunc s (n-1) l
   end
 
-let rec stream_trunc_leq_prefix_of #a (s : stream a) (n m : nat) :
-  Lemma
-    (requires n <= m)
-    (ensures stream_trunc s n `prefix_of` stream_trunc s m)
-= // if n = 0
-  // then ()
-  // else begin
-  //   stream_trunc_leq_prefix_of s (n - 1) (m - 1)
-  // end
-  admit ()
-
 let rec stream_trunc_length #a (s : stream a) (n : nat) :
   Lemma (length (stream_trunc s n) == n)
 = if n = 0
@@ -225,5 +214,18 @@ let firstn_stream_trunc #a (n m : nat) (s : stream a) :
     stream_trunc_length s m ;
     firstn_all n (stream_trunc s m)
   end
+
+let stream_trunc_leq_prefix_of #a (s : stream a) (n m : nat) :
+  Lemma
+    (requires n <= m)
+    (ensures stream_trunc s n `prefix_of` stream_trunc s m)
+= calc (==) {
+    stream_trunc s m ;
+    == { splitAt_eq n (stream_trunc s m) }
+    firstn n (stream_trunc s m) @ skipn n (stream_trunc s m) ;
+    == { firstn_stream_trunc_left n m s }
+    stream_trunc s n @ skipn n (stream_trunc s m) ;
+  } ;
+  prefix_of_append (stream_trunc s n) (skipn n (stream_trunc s m))
 
 // TODO cofix
