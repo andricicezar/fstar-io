@@ -811,13 +811,18 @@ let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
   assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
   repeat body
 
+let iodiv_subcomp (a : Type) (w1 w2 : twp a) (m : iodiv a w1) :
+  Pure (iodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
+= m
+
 [@@allow_informative_binders]
 reifiable total layered_effect {
   IODiv : a:Type -> twp a -> Effect
   with
-    repr   = iodiv ;
-    return = iodiv_ret ;
-    bind   = iodiv_bind
+    repr    = iodiv ;
+    return  = iodiv_ret ;
+    bind    = iodiv_bind ;
+    subcomp = iodiv_subcomp
     // tau    = iodiv_tau ; // Universe problems
     // call   = iodiv_call
 }
@@ -833,3 +838,46 @@ let diverges #a : wpost a =
 let repeat_ret_loops () :
   Lemma (wrepeat_inv (wret ()) (fun _ -> True) diverges)
 = ()
+
+
+(** EXPERIMENT Making the effect partial *)
+
+let piodiv a (w : twp a) =
+  squash (w (fun _ -> True)) -> iodiv a w
+
+let piodiv_ret a (x : a) : piodiv a (wret x) =
+  fun _ -> iodiv_ret a x
+
+// We use pwbind instead of wbind to get the precondition
+// Is it the most conservative choice here?
+let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
+  fun post ->
+    w (fun _ -> True) /\
+    (forall x. wf x (fun _ -> True)) /\ // Maybe here we can assume the post holds for x? Like w (fun b -> b == Fin ? x) or so.
+    wbind w wf post
+
+let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodiv b (pwbind w wf) =
+  fun h -> iodiv_bind a b w wf (m ()) (fun x -> f x ())
+
+let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
+  Pure (piodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
+= m
+
+let wlift #a (w : pure_wp a) : twp a =
+  fun post -> w (fun x -> post (Fin [] x))
+
+// I don't really understand the semantics of PURE a w
+
+// let elim_pure #a #wp ($f : unit -> PURE a wp) p
+//  : Pure a (requires (wp p)) (ensures (fun r -> p r))
+//  //: PURE a (fun p' -> wp p /\ (forall r. p r ==> p' r))
+//  // ^ basically this, requires monotonicity
+//  = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+//    f ()
+
+// let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv a (wlift w) =
+//   fun h ->
+//     assume (w (fun _ -> True)) ;
+//     let r = elim_pure f (fun _ -> True) in
+//     assume ((wret r) `stronger_twp` (wlift w)) ;
+//     iodiv_ret a r
