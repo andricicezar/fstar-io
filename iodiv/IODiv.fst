@@ -866,18 +866,22 @@ let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
 let wlift #a (w : pure_wp a) : twp a =
   fun post -> w (fun x -> post (Fin [] x))
 
-// I don't really understand the semantics of PURE a w
+let wlift_unfold #a (w : pure_wp a) post :
+  Lemma (wlift w post == w (fun x -> post (Fin [] x)))
+= ()
 
-// let elim_pure #a #wp ($f : unit -> PURE a wp) p
-//  : Pure a (requires (wp p)) (ensures (fun r -> p r))
-//  //: PURE a (fun p' -> wp p /\ (forall r. p r ==> p' r))
-//  // ^ basically this, requires monotonicity
-//  = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-//    f ()
-
-// let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv a (wlift w) =
-//   fun h ->
-//     assume (w (fun _ -> True)) ;
-//     let r = elim_pure f (fun _ -> True) in
-//     assume ((wret r) `stronger_twp` (wlift w)) ;
-//     iodiv_ret a r
+let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv a (wlift w) =
+  fun h ->
+    assert (wlift w (fun _ -> True)) ;
+    calc (==>) {
+      wlift w (fun _ -> True) ;
+      == { wlift_unfold w (fun _ -> True) }
+      w (fun x -> (fun _ -> True) (Fin [] x)) ;
+      == {}
+      w (fun _ -> True) ;
+    } ;
+    assert (w (fun _ -> True)) ;
+    let r = f () in
+    let r' : iodiv a (wret r) = iodiv_ret a r in
+    assume ((wlift w) `stronger_twp` (wret r)) ;
+    iodiv_subcomp _ (wret r) (wlift w) r'
