@@ -883,5 +883,13 @@ let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv 
     assert (w (fun _ -> True)) ;
     let r = f () in
     let r' : iodiv a (wret r) = iodiv_ret a r in
-    assume ((wlift w) `stronger_twp` (wret r)) ;
+    let aux (post : wpost a) : Lemma (requires wlift w post) (ensures wret r post) [SMTPat ()] =
+      // wlift_unfold w post ;
+      // assume (w (fun x -> post (Fin [] x))) ;
+      // assume (post (Fin [] r)) ;
+      // Somehow missing "validity" of w.
+      admit ()
+    in
+    assert (forall (post : wpost a). wlift w post ==> wret r post) ;
+    assume ((wlift w) `stronger_twp` (wret r)) ; // Why not?
     iodiv_subcomp _ (wret r) (wlift w) r'
