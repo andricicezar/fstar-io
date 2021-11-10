@@ -879,7 +879,7 @@ let wlift_unfold #a (w : pure_wp a) post :
   Lemma (wlift w post == w (fun x -> post (Fin [] x)))
 = ()
 
-let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv a (wlift w) =
+let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : piodiv a (wlift w) =
   fun h ->
     assert (wlift w (fun _ -> True)) ;
     calc (==>) {
@@ -902,3 +902,16 @@ let lift_pure_piodiv (a : Type) (w : pure_wp a) (f : unit -> PURE a w) : piodiv 
     assert (forall (post : wpost a). wlift w post ==> wret r post) ;
     assume ((wlift w) `stronger_twp` (wret r)) ; // Why not?
     iodiv_subcomp _ (wret r) (wlift w) r'
+
+[@@allow_informative_binders]
+reflectable reifiable total layered_effect {
+  PIODiv : a:Type -> w:twp a -> Effect
+  with
+    repr         = piodiv ;
+    return       = piodiv_ret ;
+    bind         = piodiv_bind ;
+    subcomp      = piodiv_subcomp
+    // if_then_else = piodiv_if_then_else
+}
+
+sub_effect PURE ~> PIODiv = lift_pure_piodiv
