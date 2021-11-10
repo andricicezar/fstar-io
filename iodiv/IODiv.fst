@@ -248,14 +248,6 @@ let shift_post_Inf_spe #a tr s p (post : wpost a) :
     (ensures post (Inf p))
 = ()
 
-// let rec ipos_trace_fst_splitAt (p : iopos) (n : nat) :
-//   Lemma (ipos_trace (fst (splitAt n p)) == fst (splitAt (length (ipos_trace (fst (splitAt n p)))) (ipos_trace p)))
-// = match n, p with
-//   | 0, _ -> ()
-//   | _, [] -> ()
-//   | _, Tau_choice :: p' -> ipos_trace_fst_splitAt p' (n - 1)
-//   | _, x :: p' -> ipos_trace_fst_splitAt p' (n - 1)
-
 let rec ipos_trace_firstn_eq (p q : iopos) (n : nat) :
   Ghost nat
     (requires ipos_trace p == ipos_trace q)
@@ -822,7 +814,7 @@ let iodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : iodiv a w1) (g : iodiv a 
   iodiv a (wite w1 w2 b)
 
 [@@allow_informative_binders]
-reifiable total layered_effect {
+reflectable reifiable total layered_effect {
   IODiv : a:Type -> w:twp a -> Effect
   with
     repr         = iodiv ;
@@ -830,9 +822,19 @@ reifiable total layered_effect {
     bind         = iodiv_bind ;
     subcomp      = iodiv_subcomp ;
     if_then_else = iodiv_if_then_else
-    // tau          = iodiv_tau // Universe problems
-    // call         = iodiv_call // Also universe problems
 }
+
+// Actions cannot be universe polymoprhic, have to use reflect to add them
+// But reify doesn't work here, probably need a lift from PURE to do it.
+// let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
+//   IODiv?.reflect (iodiv_tau a w (reify (m ())))
+
+let act_tau' () : IODiv unit (wret ()) =
+  IODiv?.reflect (iodiv_tau _ _ (iodiv_ret _ ()))
+
+// Still not possible without a lift from PURE
+// let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
+//   act_tau' () ; m ()
 
 (** Tests *)
 
