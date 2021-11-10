@@ -346,14 +346,19 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
       [SMTPat ()]
   = finite_branch_prefix m f p ;
     assert (exists (q : iopos) (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) ;
-    // TODO Use eliminate instead?
-    let q = indefinite_description_ghost iopos (fun q -> exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)) in
-    let s = indefinite_description_ghost iopostream (fun s -> p `feq` stream_prepend q s /\ isRet (m q)) in
-    assert (p `feq` stream_prepend q s) ;
-    assert (isRet (m q)) ;
-    iodiv_bind_inf_fin_shift_post m f post p p' q s ;
-    iodiv_bind_inf_fin_upto_aux s p p' q ;
-    shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
+    eliminate exists q. exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)
+    returns post (Inf p')
+    with hq. begin
+      eliminate exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)
+      returns post (Inf p')
+      with hs. begin
+        assert (p `feq` stream_prepend q s) ;
+        assert (isRet (m q)) ;
+        iodiv_bind_inf_fin_shift_post m f post p p' q s ;
+        iodiv_bind_inf_fin_upto_aux s p p' q ;
+        shift_post_Inf_spe (ipos_trace q) s p' post // weird that it is needed
+      end
+    end
   in ()
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
