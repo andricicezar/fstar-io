@@ -867,7 +867,7 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
 let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
   fun post ->
     w (fun _ -> True) /\
-    (forall x. wf x (fun _ -> True)) /\ // Maybe here we can assume the post holds for x? Like w (fun b -> b == Fin ? x) or so.
+    (forall x. wf x (fun _ -> True)) /\ // We shouldn't need it at all, should follow from wbind w wf in the particular case we're interested in
     wbind w wf post
 
 let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodiv b (pwbind w wf) =
@@ -920,3 +920,37 @@ reflectable reifiable total layered_effect {
 }
 
 sub_effect PURE ~> PIODiv = lift_pure_piodiv
+
+(** Another EXPERIMENT Making the effect partial
+
+   This time by taking a post as argument.
+   Sadly for this version, it is unclear wether one can just build it on top
+   of iodiv...
+
+*)
+
+let ppiodiv a (w : twp a) =
+  post : wpost a -> Pure (iotree a) (requires w post) (ensures fun t -> theta t post)
+
+let to_p #a #w (m : iodiv a w) : ppiodiv a w =
+  fun post -> m
+
+// Is there no from_p on the other hand?
+
+let ppiodiv_ret a (x : a) : ppiodiv a (wret x) =
+  fun post -> iodiv_ret a x
+
+let ppiodiv_bind a b w wf (m : ppiodiv a w) (f : (x:a) -> ppiodiv b (wf x)) : ppiodiv b (wbind w wf) =
+  fun post ->
+    assert (wbind w wf post) ;
+    // iodiv_bind a b w wf (m (fun b -> match b with Fin tr x -> wf x post | Inf p -> post (Inf p))) (fun x -> f x post)
+    let m' =
+      m (fun b ->
+        match b with
+        | Fin tr x -> wf x (shift_post tr post)
+        | Inf p -> post (Inf p)
+      )
+    in
+    // iodiv_bind a b w wf m' (fun x -> f x post)
+    // Maybe we can use iodiv_bind by having bridges between iodiv and ppiodiv?
+    admit ()
