@@ -464,7 +464,7 @@ let event_stream_call #a (o : cmds) (x : io_args o) (k : io_res o -> iotree a) (
     stream_trunc_succ p n
   in ()
 
-let iodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
+let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
   // fin
   assert (forall (post : wpost a) p. wcall o x w post ==> isRet (call o x k p) ==> post (Fin (ipos_trace p) (ret_val (call o x k p)))) ;
 
@@ -831,7 +831,7 @@ reifiable total layered_effect {
     subcomp      = iodiv_subcomp ;
     if_then_else = iodiv_if_then_else
     // tau          = iodiv_tau // Universe problems
-    // call         = iodiv_call
+    // call         = iodiv_call // Also universe problems
 }
 
 (** Tests *)
