@@ -413,7 +413,7 @@ let uptotau_prepend_tau (p : iopostream) :
     else stream_prepend_trunc [Tau_choice] p n
   in ()
 
-let iodiv_tau #a #w (m : iodiv a w) : iodiv a w =
+let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
 
   // fin
   assert (forall (post : wpost a) p. w post ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p)))) ;
@@ -815,16 +815,23 @@ let iodiv_subcomp (a : Type) (w1 w2 : twp a) (m : iodiv a w1) :
   Pure (iodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
 = m
 
+let wite #a (w1 w2 : twp a) (b : bool) : twp a =
+  fun post -> (b ==> w1 post) /\ (~ b ==> w2 post)
+
+let iodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
+  iodiv a (wite w1 w2 b)
+
 [@@allow_informative_binders]
 reifiable total layered_effect {
-  IODiv : a:Type -> twp a -> Effect
+  IODiv : a:Type -> w:twp a -> Effect
   with
-    repr    = iodiv ;
-    return  = iodiv_ret ;
-    bind    = iodiv_bind ;
-    subcomp = iodiv_subcomp
-    // tau    = iodiv_tau ; // Universe problems
-    // call   = iodiv_call
+    repr         = iodiv ;
+    return       = iodiv_ret ;
+    bind         = iodiv_bind ;
+    subcomp      = iodiv_subcomp ;
+    if_then_else = iodiv_if_then_else
+    // tau          = iodiv_tau // Universe problems
+    // call         = iodiv_call
 }
 
 (** Tests *)
