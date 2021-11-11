@@ -510,39 +510,40 @@ let repeat #op #s (body : itree op s unit) : itree op s unit =
   forall_intro_2 (repeat_fix_guarded body) ;
   itree_cofix (repeat_fix body) ()
 
-(* Definition of iter from cofixpoint *)
+(** Definition of iter from cofixpoint *)
+
+let iter_fix (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) iter_ (i : ind) : itree op s a =
+  bind (step i) (fun ir ->
+    begin match ir with
+    | Inl j -> tau (iter_ j)
+    | Inr r -> ret r
+    end
+  )
+
+let rec iter_fix_guarded (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) p n x :
+  Lemma
+    (ensures length p <= n ==> itree_cofix_unfoldn (iter_fix step) (length p) x p == itree_cofix_unfoldn (iter_fix step) n x p)
+    (decreases p)
+= match find_ret (step x) [] p with
+  | Some (Inl j, q) ->
+    find_ret_smaller (step x) [] p ;
+    find_ret_length (step x) [] p ;
+    begin match q with
+    | Tau_choice :: r ->
+      if length r + 1 <= n
+      then begin
+        iter_fix_guarded step r (n-1) j ;
+        iter_fix_guarded step r (length p - 1) j
+      end
+      else ()
+    | _ -> ()
+    end
+  | Some (Inr r, q) -> ()
+  | None -> ()
+
 let iter (#op : eqtype) #s #ind #a (step : ind -> itree op s (either ind a)) : ind -> itree op s a =
-  let ff iter_ i =
-    bind (step i) (fun ir ->
-      begin match ir with
-      | Inl j -> tau (iter_ j)
-      | Inr r -> ret r
-      end
-    )
-  in
-  let rec aux p n x :
-    Lemma
-      (ensures length p <= n ==> itree_cofix_unfoldn ff (length p) x p == itree_cofix_unfoldn ff n x p)
-      (decreases p)
-      [SMTPat ()]
-  = match find_ret (step x) [] p with
-    | Some (Inl j, q) ->
-      find_ret_smaller (step x) [] p ;
-      find_ret_length (step x) [] p ;
-      begin match q with
-      | Tau_choice :: r ->
-        if length r + 1 <= n
-        then begin
-          aux r (n-1) j ;
-          aux r (length p - 1) j
-        end
-        else ()
-      | _ -> ()
-      end
-    | Some (Inr r, q) -> ()
-    | None -> ()
-  in
-  itree_cofix ff
+  forall_intro_3 (iter_fix_guarded step) ;
+  itree_cofix (iter_fix step)
 
 (** Position streams
 
