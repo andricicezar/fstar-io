@@ -334,23 +334,7 @@ let raw_bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) ->
 
 let bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) -> itree op s b) : itree op s b =
   find_ret_strict_prefix m ;
-  let aux (p q : ipos op s) :
-    Lemma
-      (requires isRet (raw_bind m f p) /\ p `strict_prefix_of` q)
-      (ensures None? (raw_bind m f q))
-      [SMTPat ()]
-  = assert (Some? (find_ret m [] p)) ;
-    eliminate exists u p'. find_ret m [] p == Some (u, p')
-    returns None? (raw_bind m f q)
-    with h1. begin
-      eliminate exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_prefix_of` q'
-      returns None? (raw_bind m f q)
-      with h2. begin
-        find_ret_prefix_val m [] p ;
-        assert (raw_bind m f p == f u p')
-      end
-    end
-  in
+  forall_intro (find_ret_prefix_val m []) ;
   raw_bind m f
 
 (* An ill-formed loop *)
