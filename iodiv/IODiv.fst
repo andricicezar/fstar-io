@@ -705,6 +705,35 @@ let rec ipos_trace_prefix_of (p q : iopos) :
     | y :: q' -> ipos_trace_prefix_of p' q'
     end
 
+let iodiv_repeat_inv_proof_aux_overfin_None #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) (n n0 : nat) :
+  Lemma
+    (requires
+      inv tr0 /\
+      trace_invariant w inv /\
+      event_stream (repeat body) p /\
+      ~ (event_stream body p) /\
+      find_ret body [] (stream_trunc p n) == None /\
+      ~ (isEvent (body (stream_trunc p n0))) /\
+      (forall (m : nat). m < n0 ==> ~ (~ (isEvent (body (stream_trunc p m))))) /\
+      body (stream_trunc p n0) == None
+    )
+    (ensures inv (tr0 @ ipos_trace (stream_trunc p n)))
+= begin match find_ret body [] (stream_trunc p n0) with
+    | Some (x, q) ->
+      find_ret_prefix_prefix_of body [] (stream_trunc p n0) ;
+      // assert (find_ret_prefix body [] (stream_trunc p n0) `prefix_of` (stream_trunc p n0)) ;
+      prefix_of_stream_trunc p n0 (find_ret_prefix body [] (stream_trunc p n0)) ;
+      assert (exists (m : nat). m <= n0 /\ find_ret_prefix body [] (stream_trunc p n0) == stream_trunc p m) ;
+      assert (exists (m : nat). m <= n0 /\ isRet (body (stream_trunc p m))) ;
+      assert (forall (m : nat). m < n0 ==> isEvent (body (stream_trunc p m))) ;
+      assert (forall (m : nat). m < n0 ==> ~ (isRet (body (stream_trunc p m)))) ;
+      assert (forall (m : nat). m <= n0 ==> ~ (isRet (body (stream_trunc p m))))
+    | None ->
+      assert (isEvent (repeat body (stream_trunc p n0))) ;
+      repeat_unfold_1 body ;
+      assert (isEvent (bind body (fun _ -> tau ((if length (stream_trunc p n0) = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length (stream_trunc p n0) - 1)) ())) (stream_trunc p n0)))
+    end
+
 let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) n :
   Lemma
     (requires inv tr0 /\ trace_invariant w inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
@@ -712,16 +741,7 @@ let iodiv_repeat_inv_proof_aux_overfin #w (body : iodiv unit w) (inv : trace -> 
 = // Similar to finite_branch_prefix
   let n0 = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (body (stream_trunc p n)))) in
   match body (stream_trunc p n0) with
-  | None ->
-    begin match find_ret body [] (stream_trunc p n0) with
-    | Some (x, q) ->
-      find_ret_prefix_prefix_of body [] (stream_trunc p n0) ;
-      prefix_of_stream_trunc p n0 (find_ret_prefix body [] (stream_trunc p n0))
-    | None ->
-      assert (isEvent (repeat body (stream_trunc p n0))) ;
-      repeat_unfold_1 body ;
-      assert (isEvent (bind body (fun _ -> tau ((if length (stream_trunc p n0) = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length (stream_trunc p n0) - 1)) ())) (stream_trunc p n0)))
-    end
+  | None -> iodiv_repeat_inv_proof_aux_overfin_None body inv tr0 post p n n0
   | Some (Ret ()) ->
     assert (isRet (body (stream_trunc p n0))) ;
     assert (inv (tr0 @ ipos_trace (stream_trunc p n0))) ;
@@ -888,10 +908,6 @@ let wbind_inst #a #b (w : twp a) (wf : a -> twp b) (post : wpost b) :
     )
 = ()
 
-// TODO MOVE
-let return_of #a (x : a) (m : iotree a) =
-  exists p. isRet (m p) /\ ret_val (m p) == x
-
 let shift_post_unfold #a (tr : trace) (post : wpost a) :
   Lemma (
     shift_post tr post ==
@@ -911,8 +927,12 @@ let shift_post_True a (tr : trace) :
     | Fin tr' x -> wTrue a (Fin (tr @ tr') x)
     | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
     end ;
+    == { assert (forall tr' x. wTrue a (Fin (tr @ tr') x) == True) ; admit () }
+    begin fun (b : branch a) -> match b with
+    | Fin tr' x -> True
+    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
+    end ;
     == {
-      assert (forall tr' x. wTrue a (Fin (tr @ tr') x) == True) ;
       assert (forall p'. wTrue a (Inf p') == True) ;
       admit ()
     }

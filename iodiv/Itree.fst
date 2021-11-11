@@ -112,6 +112,9 @@ let tau #op #s #a (k : itree op s a) : itree op s a =
     | Tau_choice :: p -> k p
     | Call_choice _ _ _ :: _ -> None
 
+let return_of #op #s #a (x : a) (m : itree op s a) =
+  exists p. isRet (m p) /\ ret_val (m p) == x
+
 (** Before we can bind, we have to find a prefix of the position which returns
     and then forwards the suffix.
     Indeed, take for instance [ret x p] it will only return its contents it [p]
@@ -324,12 +327,31 @@ let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : optio
     instead of [inode op s b].
 
 *)
-let bind #op #s #a #b (m : itree op s a) (f : a -> itree op s b) : itree op s b =
+let raw_bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) -> itree op s b) (p : ipos op s) : option (inode op s b) =
+  match find_ret m [] p with
+  | Some (x, q) -> find_ret_prefix_val m [] p ; f x q
+  | None -> find_ret_None_noRet m [] p ; cast_node (m p)
+
+let bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) -> itree op s b) : itree op s b =
   find_ret_strict_prefix m ;
-  fun p ->
-    match find_ret m [] p with
-    | Some (x, q) -> f x q
-    | None -> find_ret_None_noRet m [] p ; cast_node (m p)
+  let aux (p q : ipos op s) :
+    Lemma
+      (requires isRet (raw_bind m f p) /\ p `strict_prefix_of` q)
+      (ensures None? (raw_bind m f q))
+      [SMTPat ()]
+  = assert (Some? (find_ret m [] p)) ;
+    eliminate exists u p'. find_ret m [] p == Some (u, p')
+    returns None? (raw_bind m f q)
+    with h1. begin
+      eliminate exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_prefix_of` q'
+      returns None? (raw_bind m f q)
+      with h2. begin
+        find_ret_prefix_val m [] p ;
+        assert (raw_bind m f p == f u p')
+      end
+    end
+  in
+  raw_bind m f
 
 (* An ill-formed loop *)
 let bad_loop #op #s a : itree op s a =
