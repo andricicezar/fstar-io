@@ -171,14 +171,15 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall (p : iopostream). ~ (isEvent (ioret x (stream_trunc p 0)))) ;
   ret x
 
-let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
+let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
 = let aux (post : wpost b) p :
     Lemma
       (requires wbind w wf post /\ isRet (bind m f p))
       (ensures post (Fin (ipos_trace p) (ret_val (bind m f p))))
       [SMTPat ()]
-    = calc (==>) {
+    = find_ret_prefix_val m [] p ;
+      calc (==>) {
         True ;
         ==> {}
         Some? (find_ret m [] p) == true ;
@@ -188,7 +189,7 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
         wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ;
         ==> {}
         theta (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ;
-        ==> { find_ret_prefix_val m [] p }
+        ==> {}
         theta (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ;
         ==> { assert (isRet (f (find_ret_val m [] p) (find_ret_pos m [] p))) }
         shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p)))) ;
@@ -203,7 +204,7 @@ let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
       }
     in ()
 
-let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) :
+let finite_branch_prefix #a #b (m : iotree a) (f : (x : a { x `return_of` m }) -> iotree b) (p : iopostream) :
   Lemma
     (requires
       (exists n. ~ (isEvent (m (stream_trunc p n)))) /\
@@ -227,7 +228,7 @@ let finite_branch_prefix #a #b (m : iotree a) (f : a -> iotree b) (p : iopostrea
     end
   | Some (Ret x) -> stream_trunc_drop n p
 
-let event_stream_bind #a #b (m : iotree a) (f : a -> iotree b) (p : iopostream) (q : iopos) (s : iopostream) :
+let event_stream_bind #a #b (m : iotree a) (f : (x : a { x `return_of` m }) -> iotree b) (p : iopostream) (q : iopos) (s : iopostream) :
   Lemma
     (requires event_stream (bind m f) p /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures event_stream (f (ret_val (m q))) s)
@@ -315,7 +316,7 @@ let rec ipos_trace_to_pos (tr : trace) :
   | [] -> ()
   | c :: tr' -> ipos_trace_to_pos tr'
 
-let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream) :
+let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (p p' : iopostream) (q : iopos) (s : iopostream) :
   Lemma
     (requires wbind w wf post /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures shift_post (ipos_trace q) post (Inf s))
@@ -337,7 +338,7 @@ let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   ipos_trace_to_pos (ipos_trace q) ;
   stream_prepend_uptotau (trace_to_pos (ipos_trace q)) q s
 
-let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
+let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> ~ (event_stream m p) ==> p `uptotau` p' ==> post (Inf p'))
 = let aux (post : wpost b) (p p' : iopostream) :
     Lemma
@@ -361,7 +362,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) :
     end
   in ()
 
-let iodiv_bind a b w wf (m : iodiv a w) (f : (x:a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
+let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   assert (forall (post : wpost a). w post ==> theta m post) ;
   assert (forall (post : wpost b) x. wf x post ==> theta (f x) post) ;
 
@@ -838,13 +839,17 @@ let wite #a (w1 w2 : twp a) (b : bool) : twp a =
 let iodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
   iodiv a (wite w1 w2 b)
 
+(* In order for F* to accept it, we must remove the refinement *)
+let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
+  iodiv_bind a b w wf m f
+
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IODiv : a:Type -> w:twp a -> Effect
   with
     repr         = iodiv ;
     return       = iodiv_ret ;
-    bind         = iodiv_bind ;
+    bind         = iodiv_bind' ;
     subcomp      = iodiv_subcomp ;
     if_then_else = iodiv_if_then_else
 }
@@ -959,7 +964,6 @@ let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodi
     forall_intro (shift_post_True b) ;
     assert (forall p. isRet (m () p) ==> wf (ret_val (m () p)) (wTrue b)) ;
     assert (forall x. x `return_of` m () ==> wf x (wTrue b)) ;
-    admit () ; // Now, if we add return_of to bind we should be able to conclude
     iodiv_bind a b w wf (m ()) (fun x -> f x ())
 
 let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
