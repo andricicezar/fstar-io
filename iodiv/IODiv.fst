@@ -867,11 +867,80 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
 let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
   fun post ->
     w (fun _ -> True) /\
-    (forall x. wf x (fun _ -> True)) /\ // We shouldn't need it at all, should follow from wbind w wf in the particular case we're interested in
+    // (forall x. wf x (fun _ -> True)) /\ // We shouldn't need it at all, should follow from wbind w wf in the particular case we're interested in
+    // For that I might have to modify bind itself to strengthen it with a requires in the f type, telling it can assume x to be a ret of m or something
+    // It would be ideal if it could be done on top of bind though.
     wbind w wf post
 
+// TODO MOVE
+let wbind_inst #a #b (w : twp a) (wf : a -> twp b) (post : wpost b) :
+  Lemma
+    (requires wbind w wf post)
+    (ensures
+      w (fun b ->
+        match b with
+        | Fin tr x -> wf x (shift_post tr post)
+        | Inf p -> post (Inf p)
+      )
+    )
+= ()
+
+// TODO MOVE
+let return_of #a (x : a) (m : iotree a) =
+  exists p. isRet (m p) /\ ret_val (m p) == x
+
+let wTrue a : wpost a =
+  fun _ -> True
+
+let shift_post_unfold #a (tr : trace) (post : wpost a) :
+  Lemma (
+    shift_post tr post ==
+    (fun b ->
+      match b with
+      | Fin tr' x -> post (Fin (tr @ tr') x)
+      | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p'))
+  )
+= ()
+
+let shift_post_True a (tr : trace) :
+  Lemma (shift_post tr (wTrue a) == wTrue a)
+= calc (==) {
+    shift_post tr (wTrue a) ;
+    == { shift_post_unfold tr (wTrue a) }
+    begin fun (b : branch a) -> match b with
+    | Fin tr' x -> wTrue a (Fin (tr @ tr') x)
+    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
+    end ;
+    == {
+      assert (forall tr' x. wTrue a (Fin (tr @ tr') x) == True) ;
+      assert (forall p'. wTrue a (Inf p') == True) ;
+      admit ()
+    }
+    begin fun (b : branch a) -> match b with
+    | Fin tr' x -> True
+    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> True
+    end ;
+    == {} // Why is this step ok, but not the previous?
+    begin fun (b : branch a) -> match b with
+    | Fin tr' x -> True
+    | Inf p -> True
+    end ;
+    == {}
+    begin fun (b : branch a) -> True end ;
+    == {}
+    wTrue a ;
+  }
+
 let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodiv b (pwbind w wf) =
-  fun h -> iodiv_bind a b w wf (m ()) (fun x -> f x ())
+  fun h ->
+    assert (wbind w wf (wTrue b)) ;
+    wbind_inst w wf (wTrue b) ;
+    assert (forall p. isRet (m () p) ==> wf (ret_val (m () p)) (shift_post (ipos_trace p) (wTrue b))) ;
+    forall_intro (shift_post_True b) ;
+    assert (forall p. isRet (m () p) ==> wf (ret_val (m () p)) (wTrue b)) ;
+    assert (forall x. x `return_of` m () ==> wf x (wTrue b)) ;
+    admit () ; // Now, if we add return_of to bind we should be able to conclude
+    iodiv_bind a b w wf (m ()) (fun x -> f x ())
 
 let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
   Pure (piodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
