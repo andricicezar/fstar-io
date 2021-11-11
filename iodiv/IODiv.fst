@@ -856,8 +856,11 @@ let repeat_ret_loops () :
 
 (** EXPERIMENT Making the effect partial *)
 
+let wTrue a : wpost a =
+  fun _ -> True
+
 let piodiv a (w : twp a) =
-  squash (w (fun _ -> True)) -> iodiv a w
+  squash (w (wTrue a)) -> iodiv a w
 
 let piodiv_ret a (x : a) : piodiv a (wret x) =
   fun _ -> iodiv_ret a x
@@ -866,7 +869,7 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
 // Is it the most conservative choice here?
 let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
   fun post ->
-    w (fun _ -> True) /\
+    w (wTrue a) /\
     // (forall x. wf x (fun _ -> True)) /\ // We shouldn't need it at all, should follow from wbind w wf in the particular case we're interested in
     // For that I might have to modify bind itself to strengthen it with a requires in the f type, telling it can assume x to be a ret of m or something
     // It would be ideal if it could be done on top of bind though.
@@ -888,9 +891,6 @@ let wbind_inst #a #b (w : twp a) (wf : a -> twp b) (post : wpost b) :
 // TODO MOVE
 let return_of #a (x : a) (m : iotree a) =
   exists p. isRet (m p) /\ ret_val (m p) == x
-
-let wTrue a : wpost a =
-  fun _ -> True
 
 let shift_post_unfold #a (tr : trace) (post : wpost a) :
   Lemma (
