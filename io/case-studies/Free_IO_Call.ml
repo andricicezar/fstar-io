@@ -1,7 +1,6 @@
 open Prims
 open Common
 open FStar_Pervasives
-open Types
 open Free_IO
 
 let global_trace : trace ref = ref []
@@ -11,6 +10,9 @@ let ml_gettrace () : trace =
 
 let update_trace (cmd:io_cmds) (argz:Obj.t) (rez:Obj.t maybe) : Obj.t maybe =
   global_trace := (convert_call_to_event cmd argz rez) :: !global_trace;
+  print_int (List.length !global_trace);
+  print_newline ();
+  flush stdout;
   rez
 
 let ml_call (cmd:io_cmds) =
