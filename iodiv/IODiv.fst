@@ -891,14 +891,8 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
   fun _ -> iodiv_ret a x
 
 // We use pwbind instead of wbind to get the precondition
-// Is it the most conservative choice here?
 let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
-  fun post ->
-    w (wTrue a) /\
-    // (forall x. wf x (fun _ -> True)) /\ // We shouldn't need it at all, should follow from wbind w wf in the particular case we're interested in
-    // For that I might have to modify bind itself to strengthen it with a requires in the f type, telling it can assume x to be a ret of m or something
-    // It would be ideal if it could be done on top of bind though.
-    wbind w wf post
+  fun post -> w (wTrue a) /\ wbind w wf post
 
 // TODO MOVE
 let wbind_inst #a #b (w : twp a) (wf : a -> twp b) (post : wpost b) :
@@ -979,6 +973,13 @@ let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a
     assert (forall (y : io_res o). w y (wTrue a)) ;
     iodiv_call a o x (fun z -> k z ())
 
+let pwrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+  fun post -> w (wTrue unit) /\ wrepeat_inv w inv post
+
+let piodiv_repeat_with_inv #w (body : piodiv unit w) (inv : trace -> Type0) :
+  Pure (piodiv unit (pwrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
+= fun h -> iodiv_repeat_with_inv (body ()) inv
+
 let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
   Pure (piodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
 = m
@@ -1054,6 +1055,9 @@ let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> term
 let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Close fd (result r)]) =
   act_call Close fd
 
+let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
+  IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
+
 // Sadly the following fails...
 // let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) = // (ensures fun r -> terminates r /\ (exists fd msg. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Read fd msg ; Call_choice Close fd () ])) =
 //   let fd = open_file s in
@@ -1069,6 +1073,14 @@ let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> 
 //   let x = open_file s in
 //   let y = open_file s in
 //   ()
+
+// Fails because it can't infer something (the w??)
+// let repeat_open_close_test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
+//   repeat_inv (fun _ -> open_close_test s) (fun _ -> True)
+
+// Similar problem it seems
+// let repeat_pure (t : unit -> unit) : IODiv unit (requires True) (ensures fun r -> True) =
+//   repeat_inv t (fun _ -> True)
 
 (** Another EXPERIMENT Making the effect partial
 
