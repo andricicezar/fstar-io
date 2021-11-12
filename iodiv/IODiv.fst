@@ -977,6 +977,14 @@ let wlift_unfold #a (w : pure_wp a) post :
   Lemma (wlift w post == w (fun x -> post (Fin [] x)))
 = ()
 
+let elim_pure #a #w (f : unit -> PURE a w) :
+  Pure
+    a
+    (requires w (fun _ -> True))
+    (ensures fun r -> forall post. w post ==> post r)
+= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+  f ()
+
 let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : piodiv a (wlift w) =
   fun h ->
     assert (wlift w (fun _ -> True)) ;
@@ -988,17 +996,9 @@ let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE 
       w (fun _ -> True) ;
     } ;
     assert (w (fun _ -> True)) ;
-    let r = f () in
+    let r = elim_pure #a #w f in
+    assert (forall post. w post ==> post r) ;
     let r' : iodiv a (wret r) = iodiv_ret a r in
-    let aux (post : wpost a) : Lemma (requires wlift w post) (ensures wret r post) [SMTPat ()] =
-      // wlift_unfold w post ;
-      // assume (w (fun x -> post (Fin [] x))) ;
-      // assume (post (Fin [] r)) ;
-      // Somehow missing "validity" of w.
-      admit ()
-    in
-    assert (forall (post : wpost a). wlift w post ==> wret r post) ;
-    assume ((wlift w) `stronger_twp` (wret r)) ; // Why not?
     iodiv_subcomp _ (wret r) (wlift w) r'
 
 [@@allow_informative_binders]
