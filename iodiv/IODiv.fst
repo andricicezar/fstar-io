@@ -843,24 +843,24 @@ let iodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : iodiv a w1) (g : iodiv a 
 let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   iodiv_bind a b w wf m f
 
-[@@allow_informative_binders]
-reflectable reifiable total layered_effect {
-  IODiv : a:Type -> w:twp a -> Effect
-  with
-    repr         = iodiv ;
-    return       = iodiv_ret ;
-    bind         = iodiv_bind' ;
-    subcomp      = iodiv_subcomp ;
-    if_then_else = iodiv_if_then_else
-}
+// [@@allow_informative_binders]
+// reflectable reifiable total layered_effect {
+//   IODiv : a:Type -> w:twp a -> Effect
+//   with
+//     repr         = iodiv ;
+//     return       = iodiv_ret ;
+//     bind         = iodiv_bind' ;
+//     subcomp      = iodiv_subcomp ;
+//     if_then_else = iodiv_if_then_else
+// }
 
 // Actions cannot be universe polymoprhic, have to use reflect to add them
 // But reify doesn't work here, probably need a lift from PURE to do it.
 // let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
 //   IODiv?.reflect (iodiv_tau a w (reify (m ())))
 
-let act_tau' () : IODiv unit (wret ()) =
-  IODiv?.reflect (iodiv_tau _ _ (iodiv_ret _ ()))
+// let act_tau' () : IODiv unit (wret ()) =
+//   IODiv?.reflect (iodiv_tau _ _ (iodiv_ret _ ()))
 
 // Still not possible without a lift from PURE
 // let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
@@ -923,6 +923,10 @@ let shift_post_unfold #a (tr : trace) (post : wpost a) :
   )
 = ()
 
+let wTrue_cst a :
+  Lemma (forall (x : branch a). wTrue a x == True)
+= ()
+
 let shift_post_True a (tr : trace) :
   Lemma (shift_post tr (wTrue a) == wTrue a)
 = calc (==) {
@@ -966,9 +970,21 @@ let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodi
     assert (forall x. x `return_of` m () ==> wf x (wTrue b)) ;
     iodiv_bind a b w wf (m ()) (fun x -> f x ())
 
+(** We don't really need tau do we? *)
+
+let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a (w r)) : piodiv a (wcall o x w) =
+  fun h ->
+    assert (wcall o x w (wTrue a)) ;
+    forall_intro (shift_post_True a) ;
+    assert (forall (y : io_res o). w y (wTrue a)) ;
+    iodiv_call a o x (fun z -> k z ())
+
 let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
   Pure (piodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
 = m
+
+let piodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : piodiv a w1) (g : piodiv a w2) (b : bool) : Type =
+  piodiv a (wite w1 w2 b)
 
 let wlift #a (w : pure_wp a) : twp a =
   fun post -> w (fun x -> post (Fin [] x))
@@ -1003,16 +1019,56 @@ let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE 
 
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
-  PIODiv : a:Type -> w:twp a -> Effect
+  IODIV : a:Type -> w:twp a -> Effect
   with
     repr         = piodiv ;
     return       = piodiv_ret ;
     bind         = piodiv_bind ;
-    subcomp      = piodiv_subcomp
-    // if_then_else = piodiv_if_then_else
+    subcomp      = piodiv_subcomp ;
+    if_then_else = piodiv_if_then_else
 }
 
-sub_effect PURE ~> PIODiv = lift_pure_piodiv
+sub_effect PURE ~> IODIV = lift_pure_piodiv
+
+effect IODiv (a : Type) (pre : Type0) (post : wpost a) =
+  IODIV a (fun p -> pre /\ (forall x. post x ==> p x))
+
+// TODO MOVE
+let ret_trace #a (r : branch a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Fin tr x -> tr
+
+let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Fin tr x -> x
+
+let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice o x (result r)]) =
+  IODIV?.reflect (piodiv_call o x (fun y -> piodiv_ret _ y))
+
+let open_file (s : string) : IODiv file_descr (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Openfile s (result r)]) =
+  act_call Openfile s
+
+let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Read fd (result r)]) =
+  act_call Read fd
+
+let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Close fd (result r)]) =
+  act_call Close fd
+
+// Sadly the following fails...
+// let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) = // (ensures fun r -> terminates r /\ (exists fd msg. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Read fd msg ; Call_choice Close fd () ])) =
+//   let fd = open_file s in
+//   let msg = read fd in
+//   close fd
+
+// Somehow this one is ok though...
+let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> terminates r /\ (exists fd. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Close fd () ])) =
+  let fd = open_file s in
+  close fd
+
+// let many_open_test (s : string) : IODiv unit (requires True) (ensures fun r -> terminates r) =
+//   let x = open_file s in
+//   let y = open_file s in
+//   ()
 
 (** Another EXPERIMENT Making the effect partial
 
@@ -1020,30 +1076,33 @@ sub_effect PURE ~> PIODiv = lift_pure_piodiv
    Sadly for this version, it is unclear wether one can just build it on top
    of iodiv...
 
+   If the above is sufficient, then this is not needed.
+   Commented out for now.
+
 *)
 
-let ppiodiv a (w : twp a) =
-  post : wpost a -> Pure (iotree a) (requires w post) (ensures fun t -> theta t post)
+// let ppiodiv a (w : twp a) =
+//   post : wpost a -> Pure (iotree a) (requires w post) (ensures fun t -> theta t post)
 
-let to_p #a #w (m : iodiv a w) : ppiodiv a w =
-  fun post -> m
+// let to_p #a #w (m : iodiv a w) : ppiodiv a w =
+//   fun post -> m
 
-// Is there no from_p on the other hand?
+// // Is there no from_p on the other hand?
 
-let ppiodiv_ret a (x : a) : ppiodiv a (wret x) =
-  fun post -> iodiv_ret a x
+// let ppiodiv_ret a (x : a) : ppiodiv a (wret x) =
+//   fun post -> iodiv_ret a x
 
-let ppiodiv_bind a b w wf (m : ppiodiv a w) (f : (x:a) -> ppiodiv b (wf x)) : ppiodiv b (wbind w wf) =
-  fun post ->
-    assert (wbind w wf post) ;
-    // iodiv_bind a b w wf (m (fun b -> match b with Fin tr x -> wf x post | Inf p -> post (Inf p))) (fun x -> f x post)
-    let m' =
-      m (fun b ->
-        match b with
-        | Fin tr x -> wf x (shift_post tr post)
-        | Inf p -> post (Inf p)
-      )
-    in
-    // iodiv_bind a b w wf m' (fun x -> f x post)
-    // Maybe we can use iodiv_bind by having bridges between iodiv and ppiodiv?
-    admit ()
+// let ppiodiv_bind a b w wf (m : ppiodiv a w) (f : (x:a) -> ppiodiv b (wf x)) : ppiodiv b (wbind w wf) =
+//   fun post ->
+//     assert (wbind w wf post) ;
+//     // iodiv_bind a b w wf (m (fun b -> match b with Fin tr x -> wf x post | Inf p -> post (Inf p))) (fun x -> f x post)
+//     let m' =
+//       m (fun b ->
+//         match b with
+//         | Fin tr x -> wf x (shift_post tr post)
+//         | Inf p -> post (Inf p)
+//       )
+//     in
+//     // iodiv_bind a b w wf m' (fun x -> f x post)
+//     // Maybe we can use iodiv_bind by having bridges between iodiv and ppiodiv?
+//     admit ()
