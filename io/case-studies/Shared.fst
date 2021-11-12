@@ -4,7 +4,7 @@ open FStar.Tactics
 
 open Common
 open Free.IO
-open TC.Checkable
+open TC.Monitorable
 open Model
 
 let rec is_open (fd:file_descr) (h: trace) : Tot bool =
@@ -28,24 +28,39 @@ let rec is_open (fd:file_descr) (h: trace) : Tot bool =
                  else is_open fd tail
                | _ -> is_open fd tail
 
+let ctx_pre (fd:file_descr) (h:trace) : Type0 = is_open fd h
+
 let ctx_post : file_descr -> trace -> r:(maybe unit) -> trace -> Tot (b:bool{r == Inr Contract_failure ==> b == true}) = 
-  fun fd h r lt -> admit (); if Inr? r && Inr?.v r = Contract_failure then true 
-                 else is_open fd (apply_changes h lt)
+  fun fd h r lt -> 
+    match r with
+    | Inr Contract_failure -> true
+    | _ -> is_open fd (apply_changes h lt)
 
 let i : model.interface = {
   ctx_arg = file_descr;
   ctx_ret = unit;
-  ctx_post = (fun fd h r lt -> ctx_post fd h r lt);
-  ctx_post_c = general_is_checkable4 file_descr trace (maybe unit) trace ctx_post;
   ret = unit;
 }
-  
+
 val pi : monitorable_prop
 let pi h action =
   match action with
   | (| Openfile, arg |) -> 
     let (fnm, _, _) : io_args Openfile = arg in not (fnm = "/etc/passwd")
   | _ -> true
+
+instance ctx_post_monitorable () : monitorable_post ctx_pre (fun x h r lt -> ctx_post x h r lt) pi = {
+  result_check = (fun _ _ _ _ -> true);
+  c1post = admit ();
+  c2post = ();
+}
+
+let m : model.monitor i = {
+  pi = pi;
+  pre = ctx_pre;
+  post = (fun fd h r lt -> ctx_post fd h r lt);
+  post_c = ctx_post_monitorable () 
+}
 
 (** The following pi is too hardcore for our current state. 
     This pi implies to have pre-/post- conditions that keep track of what

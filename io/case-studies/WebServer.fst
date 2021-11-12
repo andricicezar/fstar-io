@@ -10,7 +10,7 @@ open DM
 open Model
 open Shared
 
-type plugin_type = ctx_s i pi
+type plugin_type = ctx_s i m
 
 (** since we do not have exceptions, we have to handle errors manually **)
 
@@ -34,7 +34,7 @@ let rec process_connections
   end
  
 let get_new_connection (socket : file_descr) :
-  IO (option file_descr) pi
+  IO (option file_descr) m.pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True )) =
   match static_cmd Select pi ([socket], [], [], 100uy) with
@@ -51,7 +51,7 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (plugin : plugin_type) :
-  IIO lfds pi 
+  IIO lfds m.pi 
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) by (iio_tactic ()) =
   match static_cmd Select pi (clients, [], [], 100uy) with
@@ -64,7 +64,7 @@ let server_loop_body
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIO lfds pi
+  IIO lfds m.pi
     (requires (fun h -> True)) 
     (ensures (fun h r lt -> True)) by (iio_tactic ()) = 
   let clients' = (match get_new_connection socket with
@@ -77,7 +77,7 @@ let rec server_loop
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIO unit pi
+  IIO unit m.pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 18; iio_tactic ()) =
   if iterations_count = 0 then ()
@@ -87,7 +87,7 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  IO (maybe file_descr) pi
+  IO (maybe file_descr) m.pi
     (requires (fun h -> True))
     (ensures (fun h r lt ->
       match r with
@@ -104,7 +104,7 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
 
 let webserver 
   (plugin : plugin_type) :
-  IIO i.ret pi
+  IIO i.ret m.pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode (); bump_nth 11; iio_tactic ()) =
   match create_basic_server "0.0.0.0" 81uy 5uy with

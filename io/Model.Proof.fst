@@ -19,15 +19,15 @@ let simple_linking_post pi h r lt =
 
 (** p "compiled" linked with instrumented c, gives a computation in IIO,
 that respects the compuation **)
-let simple_linking #i #pi (p:prog_s i pi) (c:ctx_t i) : 
+let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) : 
   IIOwp (maybe i.ret)
-    (fun h p -> forall r lt. simple_linking_post pi h r lt ==> p r lt) =
+    (fun h p -> forall r lt. simple_linking_post m.pi h r lt ==> p r lt) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ 
-      (fun _ h -> iio_pre pi h) 
-      (fun _ h r lt -> iio_post pi h r lt))
-    p) (enforce_post #i #pi (instrument #i #pi c))
+      (fun _ h -> iio_pre m.pi h) 
+      (fun _ h r lt -> iio_post m.pi h r lt))
+    p) (enforce_post #i #m (instrument #i #m c))
 
 
 (**    assert (iio_interpretation wt h (fun r lt -> iio_post pi h r lt)) by (
@@ -41,13 +41,13 @@ the later casts the computation to MIIO, therefore we're losing
 the interpretation of p.
 TODO: show this
 Problem: Aseem: IIO is a layered effect, then this will not work since layered effects can only be reasoned about using their types and this example requires reasoning that g x == f x. We can only reason with the types of the layered effects code, and here once we have g with the type as shown, we don't have access to any postcondition about its result. To recover that, we need to look at the definition of g **)
-let complex_linking #i #pi p c : 
+let complex_linking #i #m p c : 
   IIOwp (maybe i.ret)
     (fun h p -> 
-      (~(iio_pre pi h) ==> p (Inr (Contract_failure)) []) /\
-        (iio_pre pi h ==> (forall r lt. iio_post pi h r lt ==> p r lt))) =
+      (~(iio_pre m.pi h) ==> p (Inr (Contract_failure)) []) /\
+        (iio_pre m.pi h ==> (forall r lt. iio_post m.pi h r lt ==> p r lt))) =
   admit ();
-  (compile_prog p) (instrument #i #pi c)
+  (compile_prog p) (instrument #i #m c)
 
 (**
   We have to show: 
@@ -61,6 +61,8 @@ let complex_linking #i #pi p c :
   using only the interpretation, because during the process of 
   compilation, not much is changed. 
 **)
+
+type set_of_traces (a:Type) = trace * a -> Type0
 
 let empty_set (#a:Type) () : set_of_traces a =
   fun (t,r) -> t == []
