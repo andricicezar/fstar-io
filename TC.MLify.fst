@@ -12,25 +12,27 @@ open TC.Export
 class ml_arrow (t:Type) = { mldummy : unit }
 instance ml_arrow_1 t1 t2 {| ml t1 |} {| ml t2 |} : ml_arrow (t1 -> ML t2) = { mldummy = () }
 
-(** TODO: Is this really a ML arrow? 
+
+(** TODO: Are the following two ML arrows?
 This is just a hack to be able to extract higher-order functions in the MIIO effect **)
-instance ml_tot_arrow_1 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml_arrow ((t1 -> Tot t2) -> ML t3) = { mldummy = () }
+instance ml_arrow_tot_1 t1 t2 {| ml t1 |} {| ml t2 |} : ml_arrow (t1 -> Tot t2) = { mldummy = () }
+instance ml_ml_arrow_1 t1 t2 {| ml_arrow t1 |} {| ml t2 |} : ml_arrow (t1 -> ML t2) = { mldummy = () }
 
 class mlifyable (t : Type) =
   { mtype : Type; 
-    trivial_t: trivial t;
-    weak_t: weak t;
+//    trivial_t: trivial t;
+//    weak_t: weak t;
     mlify : t -> mtype; 
     ml_arrow_mtype : ml_arrow mtype }
 
 let mk_mlifyable
-  (#t1:Type) {| trivial t1 |} {| weak t1 |}
+  (#t1:Type) // {| trivial t1 |} {| weak t1 |}
   (t2:Type) {| ml_arrow t2 |} 
   (exp : t1 -> t2) : 
   mlifyable t1 =
   { mtype = t2; 
-    trivial_t = solve;
-    weak_t = solve;
+  //  trivial_t = solve;
+  //  weak_t = solve;
     mlify = exp;
     ml_arrow_mtype = solve }
 

@@ -105,6 +105,9 @@ type prog_s (i:interface) (m:monitor i) =
 type prog_t (i:interface) (m:monitor i) =
   ictx_t i m -> MIIO (maybe i.ret)
 
+(** this is not related to the typeclass istrumentable.
+this actually instruments by using reify. this 
+function can not be extracted because it uses reify. **)
 let instrument
   (#i : interface)
   (#m : monitor i)
@@ -114,38 +117,13 @@ let instrument
       instrument_MIIO
         (cast_io_iio ((* MIIO.*)reify (ct x) [] (fun _ _ -> True))) m.pi
  
-let extract_local_trace (h':trace) (pi:monitorable_prop) :
-  IIO trace pi
-    (requires (fun h -> h' `suffix_of` h))
-    (ensures (fun h lt' lt ->
-      lt == [] /\
-      h == (apply_changes h' lt'))) =
-  let h = get_trace () in
-  suffix_of_length h' h;
-  let n : nat = (List.length h) - (List.length h') in
-  let (lt', ht) = List.Tot.Base.splitAt n h in
-  lemma_splitAt_equal n h;
-  lemma_splitAt_suffix h h';
-  List.Tot.Properties.rev_involutive lt';
-  assert (h == apply_changes h' (List.rev lt'));
-  List.rev lt'
-
+(** this is just a synonym to make things easier **)
 let enforce_post
   (#i:interface)
-  (#m:monitor i)
-  (f:i.ctx_arg -> IIO (maybe i.ctx_ret) (m.pi) (fun _ -> True) (fun _ _ _ -> True))
-  (x:i.ctx_arg) :
-  IIO (maybe i.ctx_ret) m.pi (m.pre x) (m.post x) =
-  let h = get_trace () in
-  let r : maybe i.ctx_ret = f x in
-  Classical.forall_intro (lemma_suffixOf_append h);
-  let lt = extract_local_trace h m.pi in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-  if m.post_c.result_check x h r lt then begin
-    assume (enforced_globally m.pi ((rev lt)@h) ==> enforced_locally m.pi h lt);
-    r
-  end else Inr Contract_failure
-
+  (#m:monitor i) =
+  TC.Instrumentable.enforce_post
+    #i.ctx_arg #i.ctx_ret m.pi m.pre m.post #m.post_c
+    
 (**
   Context: During compilation, p is wrapped in a new function
   that first does a runtime check. The runtime check verifies if the 

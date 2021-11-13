@@ -9,6 +9,7 @@ open TC.Export
 include TC.MLify
 open TC.Weaken.MIIO
 open TC.Trivialize.MIIO
+open TC.Instrumentable
 
 open Free
 open Free.IO
@@ -32,10 +33,6 @@ instance mlifyable_miio
      does not exist **)
      | _ -> FStar.All.raise Something_went_really_bad)
 
-
-(** this is necessary, because F* does not add at extraction the lift from Tot to IIO. **)
-let wrap (f:'a -> Tot 'b) pi (x:'a) : IIO 'b pi (fun _ -> True) (fun _ _ _ -> True) = f x
-  
 (** Ideas to improve mlifyable_iio_miio:
 1. What if instead of Tot, we use Ex, to be able to internalize try_catch.
    This implies writing a lift from Ex to IIOwp. To do that, we also have to 
@@ -49,17 +46,18 @@ let wrap (f:'a -> Tot 'b) pi (x:'a) : IIO 'b pi (fun _ -> True) (fun _ _ _ -> Tr
 2. can I move enforcing the post-condition here? It should be possible.
 **)
 
-instance mlifyable_iio_miio
-  t1 t2 t3 (pi:monitorable_prop)
-  {| ml t1 |} {| ml t2 |} {| ml t3 |} :
-  Tot (mlifyable ((t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) -> MIIO t3)) =
+instance mlifyable_inst_miio
+  t1 t3
+  {| d1:instrumentable t1 |} {| d2:ml t3 |} :
+  Tot (mlifyable (t1 -> MIIO t3)) =
   mk_mlifyable
     #_
-    #(trivial_MIIO (t1 -> IIO t2 pi (fun _ -> True) (fun _ _ _ -> True)) _)
-    #(weak_iio_miio t1 t2 t3 pi)
-    ((t1 -> Tot t2) -> ML t3)
-    (fun p (ct:t1 -> Tot t2) ->
-     let tree : iio t3 = reify (p (wrap ct pi)) [] (fun _ _ -> True) in
+//    #(trivial_MIIO t1 _)
+//    #(weak_iio_miio a b t3)
+    (d1.start_type -> ML t3)
+    #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
+    (fun (p:t1 -> MIIO t3) (ct:d1.start_type) ->
+     let tree : iio t3 = reify (p (d1.instrument ct)) [] (fun _ _ -> True) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual
