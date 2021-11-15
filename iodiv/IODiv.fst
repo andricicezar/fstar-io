@@ -1047,11 +1047,24 @@ let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> termi
 let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
 
-// Sadly the following fails...
+// Sadly the following fails... because of a failed subcomp it seems.
 // let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) = // (ensures fun r -> terminates r /\ (exists fd msg. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Read fd msg ; Call_choice Close fd () ])) =
 //   let fd = open_file s in
 //   let msg = read fd in
 //   close fd
+
+let test'' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
+  let msg = read fd in
+  ()
+
+// let test' (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
+//   let fd = open_file s in
+//   let msg = read fd in
+//   ()
+
+let test' (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
+  let fd = open_file s in
+  read fd
 
 // Somehow this one is ok though...
 let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> terminates r /\ (exists fd. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Close fd () ])) =
@@ -1062,6 +1075,12 @@ let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> 
 //   let x = open_file s in
 //   let y = open_file s in
 //   ()
+
+let many_open_test' (s : string) : IODiv file_descr (requires True) (ensures fun r -> terminates r) =
+  let x = open_file s in
+  open_file s
+
+// From this, it seems every time I stack more than two binds I get an error.
 
 // Fails because it can't infer something (the w??)
 // let repeat_open_close_test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
@@ -1074,7 +1093,7 @@ let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> 
 (** Another EXPERIMENT Making the effect partial
 
    This time by taking a post as argument.
-   Sadly for this version, it is unclear wether one can just build it on top
+   Sadly for this version, it is unclear whether one can just build it on top
    of iodiv...
 
    If the above is sufficient, then this is not needed.
