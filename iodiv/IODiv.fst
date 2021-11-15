@@ -2,6 +2,7 @@ module IODiv
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
+open FStar.Tactics // Also defines forall_intro so place before Classical
 open FStar.Classical
 open FStar.IndefiniteDescription
 open FStar.Calc
@@ -917,10 +918,6 @@ let shift_post_unfold #a (tr : trace) (post : wpost a) :
   )
 = ()
 
-let wTrue_cst a :
-  Lemma (forall (x : branch a). wTrue a x == True)
-= ()
-
 let shift_post_True a (tr : trace) :
   Lemma (shift_post tr (wTrue a) == wTrue a)
 = calc (==) {
@@ -930,20 +927,12 @@ let shift_post_True a (tr : trace) :
     | Fin tr' x -> wTrue a (Fin (tr @ tr') x)
     | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
     end ;
-    == { assert (forall tr' x. wTrue a (Fin (tr @ tr') x) == True) ; admit () }
-    begin fun (b : branch a) -> match b with
-    | Fin tr' x -> True
-    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
-    end ;
-    == {
-      assert (forall p'. wTrue a (Inf p') == True) ;
-      admit ()
-    }
+    == { _ by (norm [ nbe ; iota ; delta ]) }
     begin fun (b : branch a) -> match b with
     | Fin tr' x -> True
     | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> True
     end ;
-    == {} // Why is this step ok, but not the previous?
+    == {}
     begin fun (b : branch a) -> match b with
     | Fin tr' x -> True
     | Inf p -> True
