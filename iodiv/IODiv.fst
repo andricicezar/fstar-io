@@ -72,13 +72,25 @@ let ioret #a (x : a) : iotree a =
   For non-termination however, we make use of potentially infinite traces.
 *)
 
-let trace = list (c: iochoice { c <> Tau_choice })
+noeq
+type event =
+| EOpenfile : arg : io_args Openfile -> res : io_res Openfile -> event
+| ERead     : arg : io_args Read     -> res : io_res Read     -> event
+| EClose    : arg : io_args Close    -> res : io_res Close    -> event
+
+let choice_to_event (c : iochoice { c <> Tau_choice }) : event =
+  match c with
+  | Call_choice Openfile x y -> EOpenfile x y
+  | Call_choice Read x y -> ERead x y
+  | Call_choice Close x y -> EClose x y
+
+let trace = list event
 
 let rec ipos_trace (p : iopos) : trace =
   match p with
   | [] -> []
   | Tau_choice :: p -> ipos_trace p
-  | Call_choice o x y :: p -> Call_choice o x y :: ipos_trace p
+  | c :: p -> choice_to_event c :: ipos_trace p
 
 let rec ipos_trace_append (p q : iopos) :
   Lemma (ensures ipos_trace (p @ q) == ipos_trace p @ ipos_trace q) (decreases p)
@@ -132,10 +144,27 @@ let twp a = wpost a -> Type0
 let wret #a (x : a) : twp a =
   fun post -> post (Fin [] x)
 
+let event_to_choice (e : event) : iochoice =
+  match e with
+  | EOpenfile x y -> Call_choice Openfile x y
+  | ERead x y -> Call_choice Read x y
+  | EClose x y -> Call_choice Close x y
+
+let choice_to_event_to_choice (c : iochoice { c <> Tau_choice }) :
+  Lemma (event_to_choice (choice_to_event c) == c)
+= match c with
+  | Call_choice o x y ->
+    begin match o with
+    | Openfile -> ()
+    | Read -> ()
+    | Close -> ()
+    end
+
+// Just a map
 let rec trace_to_pos (tr : trace) : iopos =
   match tr with
   | [] -> []
-    | c :: tr -> c :: trace_to_pos tr
+  | c :: tr -> event_to_choice c :: trace_to_pos tr
 
 let shift_post #a (tr : trace) (post : wpost a) : wpost a =
   fun b ->
@@ -437,7 +466,7 @@ let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
   tau m
 
 let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
-  fun post -> forall y. w y (shift_post [ Call_choice o x y ] post)
+  fun post -> forall y. w y (shift_post [ choice_to_event (Call_choice o x y) ] post)
 
 let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
   match t with
@@ -474,22 +503,28 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
       (ensures post (Inf p'))
       [SMTPat ()]
     = event_stream_call o x k p ;
-      assert (w (call_choice_res o x (shead p)) (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post)) ;
-      assert (theta (k (call_choice_res o x (shead p))) (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post)) ;
-      assert (forall q. stail p `uptotau` q ==> shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post (Inf q)) ;
-      assert (shift_post [ Call_choice o x (call_choice_res o x (shead p)) ] post (Inf (stail p))) ;
+      assert (w (call_choice_res o x (shead p)) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post)) ;
+      assert (theta (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post)) ;
+      assert (forall q. stail p `uptotau` q ==> shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post (Inf q)) ;
+      assert (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post (Inf (stail p))) ;
 
       feq_head_tail p ;
       assert (stream_prepend [shead p] (stail p) `feq` p) ;
       assert (isCall_choice o x (shead p)) ;
       assert (shead p == Call_choice o x (call_choice_res o x (shead p))) ;
       assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) `feq` p) ;
-      assert (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ] == [ Call_choice o x (call_choice_res o x (shead p)) ]) ;
-      assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) == stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) ;
-      assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `feq` p) ;
-      feq_uptotau (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p ;
-      uptotau_trans (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p)) p p' ;
-      assert (stream_prepend (trace_to_pos [ Call_choice o x (call_choice_res o x (shead p)) ]) (stail p) `uptotau` p')
+      calc (==) {
+        trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] ;
+        == {}
+        [ event_to_choice (choice_to_event (Call_choice o x (call_choice_res o x (shead p)))) ] ;
+        == { choice_to_event_to_choice (Call_choice o x (call_choice_res o x (shead p))) }
+        [ Call_choice o x (call_choice_res o x (shead p)) ] ;
+      } ;
+      assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) == stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) ;
+      assert (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `feq` p) ;
+      feq_uptotau (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p ;
+      uptotau_trans (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p p' ;
+      assert (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `uptotau` p')
   in
 
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
@@ -1032,16 +1067,16 @@ let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> 
   match r with
   | Fin tr x -> x
 
-let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice o x (result r)]) =
+let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ choice_to_event (Call_choice o x (result r)) ]) =
   IODIV?.reflect (piodiv_call o x (fun y -> piodiv_ret _ y))
 
-let open_file (s : string) : IODiv file_descr (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Openfile s (result r)]) =
+let open_file (s : string) : IODiv file_descr (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
   act_call Openfile s
 
-let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Read fd (result r)]) =
+let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
   act_call Read fd
 
-let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [Call_choice Close fd (result r)]) =
+let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
   act_call Close fd
 
 let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
@@ -1057,6 +1092,10 @@ let test'' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True
   let msg = read fd in
   ()
 
+let test3 (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
+  let msg = read fd in
+  () ; () ; ()
+
 // let test' (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
 //   let fd = open_file s in
 //   let msg = read fd in
@@ -1067,7 +1106,7 @@ let test' (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
   read fd
 
 // Somehow this one is ok though...
-let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> terminates r /\ (exists fd. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Close fd () ])) =
+let open_close_test (s : string) : IODiv unit (requires True) (ensures fun r -> terminates r /\ (exists fd. ret_trace r == [ EOpenfile s fd ; EClose fd () ])) =
   let fd = open_file s in
   close fd
 
@@ -1081,6 +1120,7 @@ let many_open_test' (s : string) : IODiv file_descr (requires True) (ensures fun
   open_file s
 
 // From this, it seems every time I stack more than two binds I get an error.
+// But () ; () is ok.
 
 // Fails because it can't infer something (the w??)
 // let repeat_open_close_test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
