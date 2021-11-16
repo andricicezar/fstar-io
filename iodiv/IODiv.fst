@@ -1082,6 +1082,19 @@ let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> termi
 let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
 
+let test_1 (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
+  let fd = open_file s in
+  read fd
+
+// let test_1' (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
+//   let fd = open_file s in
+//   let fd' = open_file s in
+//   read fd
+
+// let test_2 (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
+//   let msg = test_1 s in
+//   open_file s
+
 // Sadly the following fails... because of a failed subcomp it seems.
 // let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) = // (ensures fun r -> terminates r /\ (exists fd msg. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Read fd msg ; Call_choice Close fd () ])) =
 //   let fd = open_file s in
@@ -1091,6 +1104,19 @@ let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_
 let test'' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
   let msg = read fd in
   ()
+
+let test_more (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
+  test'' fd ; test'' fd
+
+let test_more' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
+  // assume (forall (w1 w2 : twp unit). w1 `stronger_twp` w2) ;
+  // assume (forall (w : twp unit). (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) `stronger_twp` w) ;
+  // assume (forall (w : twp unit) (wf : unit -> twp unit). (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) `stronger_twp` wbind w wf) ;
+  assume (forall (wf : unit -> twp unit). (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) `stronger_twp` wbind (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) wf) ; // Enough, note it's wbind and not pwbind
+  // assume ((fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) `stronger_twp` wbind #unit #unit (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)) (fun (x : unit) -> (fun p -> True /\ (forall x. (fun _ -> True) x ==> p x)))) ; // Not that one
+  test'' fd ;
+  test'' fd ;
+  test'' fd
 
 let test3 (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
   let msg = read fd in
