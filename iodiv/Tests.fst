@@ -17,12 +17,6 @@ let test_1 (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
   read fd
 
 let test_1' (s : string) : IODiv string (requires True) (ensures fun _ -> True)
-by (
-  explode () ;
-  bump_nth 3 ;
-  squash_intro () ;
-  explode ()
-)
 = let fd = open_file s in
   let fd' = open_file s in
   read fd
@@ -31,14 +25,8 @@ let test_2 (s : string) : IODiv file_descr (requires True) (ensures fun _ -> Tru
   let msg = test_1 s in
   open_file s
 
-let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True)
-by (
-  explode () ;
-  bump_nth 3 ;
-  squash_intro () ;
-  explode ()
-)
-= let fd = open_file s in
+let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
+  let fd = open_file s in
   let msg = read fd in
   close fd
 
@@ -68,14 +56,8 @@ let test_more (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> T
 //   test'' fd ;
 //   test'' fd
 
-let test_more' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True)
-by (
-  explode () ;
-  bump_nth 3 ;
-  squash_intro () ;
-  explode ()
-)
-= test'' fd ;
+let test_more' (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True) =
+  test'' fd ;
   test'' fd ;
   test'' fd
 
@@ -85,9 +67,6 @@ let test3 (fd : file_descr) : IODiv unit (requires True) (ensures fun _ -> True)
 
 let test' (s : string) : IODiv unit (requires True) (ensures fun _ -> True)
 by (
-  explode () ;
-  bump_nth 4 ;
-  squash_intro () ;
   explode ()
 )
 = let fd = open_file s in

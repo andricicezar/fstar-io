@@ -928,6 +928,7 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
   fun _ -> iodiv_ret a x
 
 // We use pwbind instead of wbind to get the precondition
+unfold
 let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
   fun post -> w (wTrue a) /\ wbind w wf post
 
