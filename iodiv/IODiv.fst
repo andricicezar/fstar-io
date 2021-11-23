@@ -180,6 +180,7 @@ let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
       | Inf p -> post (Inf p)
     )
 
+unfold
 let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
   forall post. wp1 post ==> wp2 post
 
@@ -1086,14 +1087,20 @@ let test_1 (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
   let fd = open_file s in
   read fd
 
-// let test_1' (s : string) : IODiv string (requires True) (ensures fun _ -> True) =
-//   let fd = open_file s in
-//   let fd' = open_file s in
-//   read fd
+let test_1' (s : string) : IODiv string (requires True) (ensures fun _ -> True)
+by (
+  explode () ;
+  bump_nth 3 ;
+  squash_intro () ;
+  explode ()
+)
+= let fd = open_file s in
+  let fd' = open_file s in
+  read fd
 
-// let test_2 (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
-//   let msg = test_1 s in
-//   open_file s
+let test_2 (s : string) : IODiv file_descr (requires True) (ensures fun _ -> True) =
+  let msg = test_1 s in
+  open_file s
 
 // Sadly the following fails... because of a failed subcomp it seems.
 // let test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) = // (ensures fun r -> terminates r /\ (exists fd msg. ret_trace r == [ Call_choice #cmds #io_op_sig Openfile s fd ; Call_choice Read fd msg ; Call_choice Close fd () ])) =
