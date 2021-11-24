@@ -148,7 +148,6 @@ let twp a = wpost a -> wpre a
 let wret #a (x : a) : twp a =
   fun post hist -> post (Fin [] x)
 
-(*
 let event_to_choice (e : event) : iochoice =
   match e with
   | EOpenfile x y -> Call_choice Openfile x y
@@ -178,27 +177,30 @@ let shift_post #a (tr : trace) (post : wpost a) : wpost a =
     | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p')
 
 let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
-  fun post ->
+  fun post hist ->
     w (fun b ->
       match b with
-      | Fin tr x -> wf x (shift_post tr post)
+      | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
       | Inf p -> post (Inf p)
-    )
+    ) hist
 
 unfold
-let stronger_twp #a (wp1 wp2 : twp a) : Type0 =
-  forall post. wp1 post ==> wp2 post
+let stronger_twp #a (w1 w2 : twp a) : Type0 =
+  forall post hist. w1 post hist ==> w2 post hist
 
 unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
   forall n. isEvent (t (stream_trunc p n))
 
+// Right now the theta ignores the history but shouldn't of course.
+// It would be nice if it could enforce is_open fd for read fd etc.
 (** Effect observation *)
-let theta #a (t : iotree a) =
-  fun post ->
+let theta #a (t : iotree a) : twp a =
+  fun post hist ->
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p)))) /\
     (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p'))
 
+(*
 let iodiv a (w : twp a) =
   t: iotree a { w `stronger_twp` theta t }
 
