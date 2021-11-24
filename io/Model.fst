@@ -121,7 +121,7 @@ let instrument
 let enforce_post
   (#i:interface)
   (#m:monitor i) =
-  TC.Instrumentable.enforce_post
+  TC.Instrumentable.IIO.enforce_post
     #i.ctx_arg #i.ctx_ret m.pi m.pre m.post #m.post_c
     
 (**

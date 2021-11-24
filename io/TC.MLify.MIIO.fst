@@ -52,8 +52,6 @@ instance mlifyable_inst_miio
   Tot (mlifyable (t1 -> MIIO t3)) =
   mk_mlifyable
     #_
-//    #(trivial_MIIO t1 _)
-//    #(weak_iio_miio a b t3)
     (d1.start_type -> ML t3)
     #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
     (fun (p:t1 -> MIIO t3) (ct:d1.start_type) ->

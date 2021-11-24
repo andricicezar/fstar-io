@@ -59,8 +59,9 @@ instance instrumentable_IIO
     start_type = t1 -> Tot (maybe t2);
     start_type_c = ml_arrow_tot_1 t1 (maybe t2);
     instrument = (fun (f:t1 -> Tot (maybe t2)) ->
-      (** automatic lift from Pure to IIO. pi is enforced because a Pure 
-        computation has an empty trace **)
-      let f' : t1 -> IIO (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True) = f in 
+      (** automatic lift from Pure to IIO. 
+        The explicit (fun x -> f x) is necessary for the lift to be added by F*.
+        we can say that f respects pi because a Pure computation has an empty trace. **)
+      let f' : t1 -> IIO (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True) = (fun x -> f x) in 
       enforce_post #t1 #t2 pi pre post #post_c f')
   }
