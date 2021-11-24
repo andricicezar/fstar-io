@@ -460,7 +460,8 @@ let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
       feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
       uptotau_prepend_tau (stail p) ;
       assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
-      assert (stail p `uptotau` p')
+      uptotau_trans (stail p) (stream_prepend [Tau_choice] (stail p)) p ;
+      uptotau_trans (stail p) p p'
   in
 
   assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
