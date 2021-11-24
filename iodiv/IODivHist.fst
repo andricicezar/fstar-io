@@ -143,9 +143,9 @@ let wpost a = branch a -> Type0
 unfold
 let wpre a = hist:trace -> Type0
 
-let twp a = wpost a -> wpre a
+let wp a = wpost a -> wpre a
 
-let wret #a (x : a) : twp a =
+let wret #a (x : a) : wp a =
   fun post hist -> post (Fin [] x)
 
 let event_to_choice (e : event) : iochoice =
@@ -176,7 +176,7 @@ let shift_post #a (tr : trace) (post : wpost a) : wpost a =
     | Fin tr' x -> post (Fin (tr @ tr') x)
     | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p')
 
-let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
+let wbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
   fun post hist ->
     w (fun b ->
       match b with
@@ -185,7 +185,7 @@ let wbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
     ) hist
 
 unfold
-let stronger_twp #a (w1 w2 : twp a) : Type0 =
+let stronger_wp #a (w1 w2 : wp a) : Type0 =
   forall post hist. w1 post hist ==> w2 post hist
 
 unfold
@@ -195,14 +195,14 @@ let event_stream #a (t : iotree a) (p : iopostream) =
 // Right now the theta ignores the history but shouldn't of course.
 // It would be nice if it could enforce is_open fd for read fd etc.
 (** Effect observation *)
-let theta #a (t : iotree a) : twp a =
+let theta #a (t : iotree a) : wp a =
   fun post hist ->
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p)))) /\
     (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p'))
 
 (*
-let iodiv a (w : twp a) =
-  t: iotree a { w `stronger_twp` theta t }
+let iodiv a (w : wp a) =
+  t: iotree a { w `stronger_wp` theta t }
 
 let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall p. ~ (isEvent (ioret x p))) ;
@@ -474,7 +474,7 @@ let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
   assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
   tau m
 
-let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> twp a) : twp a =
+let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> wp a) : wp a =
   fun post -> forall y. w y (shift_post [ choice_to_event (Call_choice o x y) ] post)
 
 let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) =
@@ -539,12 +539,12 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
   assert (forall (post : wpost a). wcall o x w post ==> theta (call o x k) post) ;
   call o x k
 
-let rec wrepeat_trunc (w : twp unit) (n : nat) : twp unit =
+let rec wrepeat_trunc (w : wp unit) (n : nat) : wp unit =
   if n = 0
   then fun post -> True
   else wbind w (fun (_:unit) -> wrepeat_trunc w (n - 1))
 
-let wrepeat (w : twp unit) : twp unit =
+let wrepeat (w : wp unit) : wp unit =
   fun post -> forall n. wrepeat_trunc w n post
 
 // Somehow it should be the concatenation of a stream of finite runs of body
@@ -571,7 +571,7 @@ let wrepeat (w : twp unit) : twp unit =
 //   assert (forall (post : wpost unit). wrepeat w post ==> theta (repeat body) post) ;
 //   repeat body
 
-let loop_preserving (w : twp unit) (inv : trace -> Type0) =
+let loop_preserving (w : wp unit) (inv : trace -> Type0) =
   forall tr.
     inv tr ==>
     w (fun b ->
@@ -583,12 +583,12 @@ let loop_preserving (w : twp unit) (inv : trace -> Type0) =
 let downward_closed (inv : trace -> Type0) =
   forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
 
-let trace_invariant (w : twp unit) (inv : trace -> Type0) =
+let trace_invariant (w : wp unit) (inv : trace -> Type0) =
   inv [] /\
   downward_closed inv /\
   loop_preserving w inv
 
-let wrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+let wrepeat_inv (w : wp unit) (inv : trace -> Type0) : wp unit =
   fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
 let cons_length #a (x : a) (l : list a) :
@@ -874,14 +874,14 @@ let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
   assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
   repeat body
 
-let iodiv_subcomp (a : Type) (w1 w2 : twp a) (m : iodiv a w1) :
-  Pure (iodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
+let iodiv_subcomp (a : Type) (w1 w2 : wp a) (m : iodiv a w1) :
+  Pure (iodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
 = m
 
-let wite #a (w1 w2 : twp a) (b : bool) : twp a =
+let wite #a (w1 w2 : wp a) (b : bool) : wp a =
   fun post -> (b ==> w1 post) /\ (~ b ==> w2 post)
 
-let iodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
+let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
   iodiv a (wite w1 w2 b)
 
 (* In order for F* to accept it, we must remove the refinement *)
@@ -890,7 +890,7 @@ let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv
 
 // [@@allow_informative_binders]
 // reflectable reifiable total layered_effect {
-//   IODiv : a:Type -> w:twp a -> Effect
+//   IODiv : a:Type -> w:wp a -> Effect
 //   with
 //     repr         = iodiv ;
 //     return       = iodiv_ret ;
@@ -929,7 +929,7 @@ let repeat_ret_loops () :
 let wTrue a : wpost a =
   fun _ -> True
 
-let piodiv a (w : twp a) =
+let piodiv a (w : wp a) =
   squash (w (wTrue a)) -> iodiv a w
 
 let piodiv_ret a (x : a) : piodiv a (wret x) =
@@ -937,11 +937,11 @@ let piodiv_ret a (x : a) : piodiv a (wret x) =
 
 // We use pwbind instead of wbind to get the precondition
 unfold
-let pwbind #a #b (w : twp a) (wf : a -> twp b) : twp b =
+let pwbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
   fun post -> w (wTrue a) /\ wbind w wf post
 
 // TODO MOVE
-let wbind_inst #a #b (w : twp a) (wf : a -> twp b) (post : wpost b) :
+let wbind_inst #a #b (w : wp a) (wf : a -> wp b) (post : wpost b) :
   Lemma
     (requires wbind w wf post)
     (ensures
@@ -1007,21 +1007,21 @@ let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a
     assert (forall (y : io_res o). w y (wTrue a)) ;
     iodiv_call a o x (fun z -> k z ())
 
-let pwrepeat_inv (w : twp unit) (inv : trace -> Type0) : twp unit =
+let pwrepeat_inv (w : wp unit) (inv : trace -> Type0) : wp unit =
   fun post -> w (wTrue unit) /\ wrepeat_inv w inv post
 
 let piodiv_repeat_with_inv #w (body : piodiv unit w) (inv : trace -> Type0) :
   Pure (piodiv unit (pwrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
 = fun h -> iodiv_repeat_with_inv (body ()) inv
 
-let piodiv_subcomp (a : Type) (w1 w2 : twp a) (m : piodiv a w1) :
-  Pure (piodiv a w2) (requires w2 `stronger_twp` w1) (ensures fun _ -> True)
+let piodiv_subcomp (a : Type) (w1 w2 : wp a) (m : piodiv a w1) :
+  Pure (piodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
 = m
 
-let piodiv_if_then_else (a : Type) (w1 w2 : twp a) (f : piodiv a w1) (g : piodiv a w2) (b : bool) : Type =
+let piodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : piodiv a w1) (g : piodiv a w2) (b : bool) : Type =
   piodiv a (wite w1 w2 b)
 
-let wlift #a (w : pure_wp a) : twp a =
+let wlift #a (w : pure_wp a) : wp a =
   fun post -> w (fun x -> post (Fin [] x))
 
 let wlift_unfold #a (w : pure_wp a) post :
@@ -1054,7 +1054,7 @@ let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE 
 
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
-  IODIV : a:Type -> w:twp a -> Effect
+  IODIV : a:Type -> w:wp a -> Effect
   with
     repr         = piodiv ;
     return       = piodiv_ret ;
