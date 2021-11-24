@@ -297,3 +297,11 @@ let firstn_all #a (n : nat) (l : list a) :
     == {}
     l ;
   }
+
+(** Misc. *)
+
+let forall_below_and_eq (p : nat -> Type0) (m : nat) :
+  Lemma
+    (requires (forall (n : nat). n < m ==> p n) /\ p m)
+    (ensures forall (n : nat). n <= m ==> p n)
+= ()

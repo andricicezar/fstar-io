@@ -744,13 +744,6 @@ let rec ipos_trace_prefix_of (p q : iopos) :
     | y :: q' -> ipos_trace_prefix_of p' q'
     end
 
-// TODO MOVE
-let forall_below_and_eq (p : nat -> Type0) (m : nat) :
-  Lemma
-    (requires (forall (n : nat). n < m ==> p n) /\ p m)
-    (ensures forall (n : nat). n <= m ==> p n)
-= ()
-
 let iodiv_repeat_inv_proof_aux_overfin_None #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) (n n0 : nat) :
   Lemma
     (requires
