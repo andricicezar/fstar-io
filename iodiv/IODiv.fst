@@ -134,7 +134,7 @@ let embeds_trace_implies (pr : trace -> Type0) (p p' : iopostream) :
 noeq
 type branch a =
 | Fin : tr:trace -> res:a -> branch a
-| Inf : p : iopostream -> branch a
+| Inf : p:iopostream -> branch a
 
 unfold
 let wpost a = branch a -> Type0

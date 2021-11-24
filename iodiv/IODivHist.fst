@@ -1,4 +1,4 @@
-module IODiv
+module IODivHist
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
@@ -11,10 +11,11 @@ open Util
 open Stream
 open Itree
 
-(** IODiv
+(** IODivHist
 
-    In this file we define a more complete version of the IODiv effect for I/O and
-    non-termination than in SIODiv.
+    In this file we define a more complete version of the IODiv effect for I/O
+    and non-termination than in SIODiv.
+    In addition to that, IODivHist also comes with a history for preconditions.
 
 *)
 
@@ -134,16 +135,20 @@ let embeds_trace_implies (pr : trace -> Type0) (p p' : iopostream) :
 noeq
 type branch a =
 | Fin : tr:trace -> res:a -> branch a
-| Inf : p : iopostream -> branch a
+| Inf : p:iopostream -> branch a
 
 unfold
 let wpost a = branch a -> Type0
 
-let twp a = wpost a -> Type0
+unfold
+let wpre a = hist:trace -> Type0
+
+let twp a = wpost a -> wpre a
 
 let wret #a (x : a) : twp a =
-  fun post -> post (Fin [] x)
+  fun post hist -> post (Fin [] x)
 
+(*
 let event_to_choice (e : event) : iochoice =
   match e with
   | EOpenfile x y -> Call_choice Openfile x y
@@ -1084,3 +1089,4 @@ let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> termi
 
 let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
+*)
