@@ -751,6 +751,13 @@ let rec ipos_trace_prefix_of (p q : iopos) :
     | y :: q' -> ipos_trace_prefix_of p' q'
     end
 
+// TODO MOVE
+let forall_below_and_eq (p : nat -> Type0) (m : nat) :
+  Lemma
+    (requires (forall (n : nat). n < m ==> p n) /\ p m)
+    (ensures forall (n : nat). n <= m ==> p n)
+= ()
+
 let iodiv_repeat_inv_proof_aux_overfin_None #w (body : iodiv unit w) (inv : trace -> Type0) (tr0 : trace) (post : wpost unit) (p : iopostream) (n n0 : nat) :
   Lemma
     (requires
@@ -773,6 +780,7 @@ let iodiv_repeat_inv_proof_aux_overfin_None #w (body : iodiv unit w) (inv : trac
       assert (exists (m : nat). m <= n0 /\ isRet (body (stream_trunc p m))) ;
       assert (forall (m : nat). m < n0 ==> isEvent (body (stream_trunc p m))) ;
       assert (forall (m : nat). m < n0 ==> ~ (isRet (body (stream_trunc p m)))) ;
+      forall_below_and_eq (fun m -> ~ (isRet (body (stream_trunc p m)))) n0 ;
       assert (forall (m : nat). m <= n0 ==> ~ (isRet (body (stream_trunc p m))))
     | None ->
       assert (isEvent (repeat body (stream_trunc p n0))) ;
