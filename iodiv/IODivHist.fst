@@ -192,13 +192,38 @@ unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
   forall n. isEvent (t (stream_trunc p n))
 
-// Right now the theta ignores the history but shouldn't of course.
-// It would be nice if it could enforce is_open fd for read fd etc.
+(** Check that a file is open *)
+let rec is_open_rev (hist : trace) (fd : file_descr) : bool =
+  match hist with
+  | [] -> false
+  | EClose fd' () :: hist' ->
+    if fd = fd'
+    then false
+    else is_open_rev hist' fd
+  | EOpenfile s fd' :: hist -> fd = fd'
+  | e :: hist' -> is_open_rev hist' fd
+
+let is_open (hist : trace) (fd : file_descr) : bool =
+  is_open_rev (rev hist) fd
+
+(** Event valid with respect to a history *)
+let valid_event (hist : trace) (e : event) =
+  match e with
+  | EOpenfile s fd -> true // Doesn't need to check it's closed right?
+  | ERead fd s -> is_open hist fd
+  | EClose fd () -> is_open hist fd
+
+(** Trace valid with respect to a history *)
+let rec valid_trace (hist : trace) (tr : trace) : Pure bool (requires True) (ensures fun _ -> True) (decreases tr) =
+  match tr with
+  | [] -> true
+  | e :: tr' -> valid_event hist e && valid_trace (hist @ [e]) tr'
+
 (** Effect observation *)
 let theta #a (t : iotree a) : wp a =
   fun post hist ->
-    (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p)))) /\
-    (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p'))
+    (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
+    (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n))))
 
 (*
 let iodiv a (w : wp a) =
