@@ -225,7 +225,6 @@ let theta #a (t : iotree a) : wp a =
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
     (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n))))
 
-(*
 let iodiv a (w : wp a) =
   t: iotree a { w `stronger_wp` theta t }
 
@@ -234,6 +233,7 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall (p : iopostream). ~ (isEvent (ioret x (stream_trunc p 0)))) ;
   ret x
 
+(*
 let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
 = let aux (post : wpost b) p :
