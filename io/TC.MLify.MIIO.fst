@@ -25,6 +25,9 @@ instance mlifyable_miio
     #(t1 -> MIIO t2)
     (t1 -> ML t2)
     (fun f x -> 
+     (** TODO: is it correct that we pass the empty trace here? 
+     add a Monitor module from where I get the trace using get_trace,
+     something like Monitor.get_trace () **)
      let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
      match tree with
      | Return y -> y
