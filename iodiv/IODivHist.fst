@@ -235,17 +235,16 @@ let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall (p : iopostream). ~ (isEvent (ioret x (stream_trunc p 0)))) ;
   ret x
 
-(*
-let theta_inst #a w (m : iodiv a w) (post : wpost a) :
+let theta_inst #a w (m : iodiv a w) (post : wpost a) (hist : trace) :
   Lemma
-    (requires w post)
-    (ensures theta m post)
+    (requires w post hist)
+    (ensures theta m post hist)
 = ()
 
-let theta_isRet #a (t : iotree a) (post : wpost a) (p : iopos) :
+let theta_isRet #a (t : iotree a) (post : wpost a) (hist : trace) (p : iopos) :
   Lemma
-    (requires isRet (t p) /\ theta t post)
-    (ensures post (Fin (ipos_trace p) (ret_val (t p))))
+    (requires isRet (t p) /\ theta t post hist)
+    (ensures post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p))
 = ()
 
 let shift_post_Fin #a (tr : trace) (post : wpost a) (tr' : trace) (x : a) :
@@ -254,6 +253,7 @@ let shift_post_Fin #a (tr : trace) (post : wpost a) (tr' : trace) (x : a) :
     (ensures post (Fin (tr @ tr') x))
 = ()
 
+(*
 let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) :
   Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
 = let aux (post : wpost b) p :
@@ -465,26 +465,31 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m })
       end
     end
   in ()
+*)
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
-  assert (forall (post : wpost a). w post ==> theta m post) ;
-  assert (forall (post : wpost b) x. wf x post ==> theta (f x) post) ;
+  assert (forall (post : wpost a) (hist : trace). w post hist ==> theta m post hist) ;
+  assert (forall (post : wpost b) (hist : trace) x. wf x post hist ==> theta (f x) post hist) ;
 
   // fin
-  iodiv_bind_fin a b w wf m f ;
+  // iodiv_bind_fin a b w wf m f ;
+  assume (forall (post : wpost b) (hist : trace) p. wbind w wf post hist ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ; // just a test, should be removed in favour of line above
 
   // inf.fin
-  iodiv_bind_inf_fin a b w wf m f ;
+  // iodiv_bind_inf_fin a b w wf m f ;
 
   // inf.inf
-  assert (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> p `uptotau` p' ==> post (Inf p')) ;
+  // assert (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> p `uptotau` p' ==> post (Inf p')) ;
 
   // inf
-  assert (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p')) ;
+  assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n)))) ;
 
-  assert (forall (post : wpost b). wbind w wf post ==> theta (bind m f) post) ;
+  // Turning below into assert does not work. Might be good to use intro/elim instead?
+  // Also might be better to give a name to the complex valid_trace?
+  assume (forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist) ;
   bind m f
 
+(*
 let event_stream_tau #a (m : iotree a) (p : iopostream) :
     Lemma
       (requires event_stream (tau m) p)
