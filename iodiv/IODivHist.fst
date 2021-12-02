@@ -256,37 +256,48 @@ let shift_post_Fin #a (tr : trace) (post : wpost a) (tr' : trace) (x : a) :
     (ensures post (Fin (tr @ tr') x))
 = ()
 
-(*
-let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) :
-  Lemma (forall (post : wpost b) p. wbind w wf post ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))))
-= let aux (post : wpost b) p :
-    Lemma
-      (requires wbind w wf post /\ isRet (bind m f p))
-      (ensures post (Fin (ipos_trace p) (ret_val (bind m f p))))
-      [SMTPat ()]
-    = find_ret_prefix_val m [] p ;
-      theta_inst w m (fun b ->
-        match b with
-        | Fin tr x -> wf x (shift_post tr post)
-        | Inf p -> post (Inf p)
-      ) ;
-      theta_isRet m (fun b ->
-        match b with
-        | Fin tr x -> wf x (shift_post tr post)
-        | Inf p -> post (Inf p)
-      ) (find_ret_prefix m [] p) ;
-      assert (wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)) ;
-      theta_inst (wf (ret_val (m (find_ret_prefix m [] p)))) (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) ;
-      assert (theta (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post)) ;
-      theta_isRet (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (find_ret_pos m [] p) ;
-      assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
-      assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)))) ;
-      shift_post_Fin (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)) ;
-      forall_intro_2 ipos_trace_append ;
-      assert (post (Fin (ipos_trace (find_ret_prefix m [] p @ find_ret_pos m [] p)) (ret_val (bind m f p)))) ;
-      find_ret_Some_pos m [] p
-    in ()
+let rec valid_trace_append (hist tr tr' : trace) :
+  Lemma
+    (requires valid_trace hist tr /\ valid_trace (hist @ tr) tr')
+    (ensures valid_trace hist (tr @ tr'))
+    (decreases tr)
+= match tr with
+  | [] -> ()
+  | e :: t ->
+    append_assoc hist [e] t ;
+    valid_trace_append (hist @ [e]) t tr'
 
+let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p : iopos) :
+  Lemma
+    (requires wbind w wf post hist /\ isRet (bind m f p))
+    (ensures post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p))
+= find_ret_prefix_val m [] p ;
+  theta_inst w m (fun b ->
+    match b with
+      | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+      | Inf p -> post (Inf p)
+  ) hist ;
+  theta_isRet m (fun b ->
+    match b with
+    | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+    | Inf p -> post (Inf p)
+  ) hist (find_ret_prefix m [] p) ;
+  assert (wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p)))) ;
+  assert (valid_trace hist (ipos_trace (find_ret_prefix m [] p))) ;
+  theta_inst (wf (ret_val (m (find_ret_prefix m [] p)))) (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p))) ;
+  assert (theta (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p)))) ;
+  theta_isRet (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p))) (find_ret_pos m [] p) ;
+  assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
+  assert (valid_trace (hist @ (ipos_trace (find_ret_prefix m [] p))) (ipos_trace (find_ret_pos m [] p))) ;
+  assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)))) ;
+  shift_post_Fin (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)) ;
+  forall_intro_2 ipos_trace_append ;
+  assert (post (Fin (ipos_trace (find_ret_prefix m [] p @ find_ret_pos m [] p)) (ret_val (bind m f p)))) ;
+  find_ret_Some_pos m [] p ;
+  assert (post (Fin (ipos_trace p) (ret_val (bind m f p)))) ;
+  valid_trace_append hist (ipos_trace (find_ret_prefix m [] p)) (ipos_trace (find_ret_pos m [] p))
+
+(*
 let finite_branch_prefix #a #b (m : iotree a) (f : (x : a { x `return_of` m }) -> iotree b) (p : iopostream) :
   Lemma
     (requires
@@ -494,9 +505,7 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
       introduce forall (p : iopos). isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)
       with begin
         introduce isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)
-        with h2. begin
-          admit ()
-        end
+        with h2. iodiv_bind_fin a b w wf m f post hist p
       end ;
 
       // inf
