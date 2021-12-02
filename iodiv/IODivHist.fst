@@ -102,7 +102,7 @@ let rec ipos_trace_append (p q : iopos) :
 
 (** Up to tau relation on position streams *)
 let embeds (p q : iopostream) =
-  forall n. exists m. ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m)
+  forall (n : nat). exists (m : nat). ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m)
 
 let uptotau (p q : iopostream) =
   p `embeds` q /\ q `embeds` p
@@ -128,8 +128,8 @@ let feq_uptotau (p q : iopostream) :
 
 let embeds_trace_implies (pr : trace -> Type0) (p p' : iopostream) :
   Lemma
-    (requires p `embeds` p' /\ (forall n. pr (ipos_trace (stream_trunc p n))))
-    (ensures forall n. pr (ipos_trace (stream_trunc p' n)))
+    (requires p `embeds` p' /\ (forall (n : nat). pr (ipos_trace (stream_trunc p n))))
+    (ensures forall (n : nat). pr (ipos_trace (stream_trunc p' n)))
 = ()
 
 noeq
@@ -179,7 +179,7 @@ let shift_post #a (tr : trace) (post : wpost a) : wpost a =
 
 unfold
 let wbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  fun post hist ->
+  fun (post : wpost b) (hist : trace) ->
     w (fun b ->
       match b with
       | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
@@ -188,11 +188,11 @@ let wbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
 
 unfold
 let stronger_wp #a (w1 w2 : wp a) : Type0 =
-  forall post hist. w1 post hist ==> w2 post hist
+  forall (post : wpost a) (hist : trace). w1 post hist ==> w2 post hist
 
 unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
-  forall n. isEvent (t (stream_trunc p n))
+  forall (n : nat). isEvent (t (stream_trunc p n))
 
 (** Check that a file is open *)
 let rec is_open_rev (hist : trace) (fd : file_descr) : bool =
@@ -226,8 +226,8 @@ let valid_postream (hist : trace) (s : iopostream) : Type0 =
 
 (** Effect observation *)
 let theta #a (t : iotree a) : wp a =
-  fun post hist ->
-    (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
+  fun (post : wpost a) (hist : trace) ->
+    (forall (p : iopos). isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
     (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
 
 let iodiv a (w : wp a) =
@@ -487,14 +487,12 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
   // inf
   // assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p') ;
 
-  begin introduce forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist
-  with
-    begin introduce wbind w wf post hist ==> theta (bind m f) post hist
-    with h1.
-      // assume (forall p. isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ;
-      // assume (forall (p p' : iopostream). event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
-      // The above is not enough
-      assume (theta (bind m f) post hist)
+  introduce forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist
+  with begin
+    introduce wbind w wf post hist ==> theta (bind m f) post hist
+    with h1. begin
+      assume (forall (p : iopos). isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ;
+      assume (forall (p p' : iopostream). event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
     end
   end ;
 
