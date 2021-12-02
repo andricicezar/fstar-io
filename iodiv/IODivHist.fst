@@ -454,6 +454,26 @@ let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   ipos_trace_to_pos (ipos_trace q) ;
   stream_prepend_uptotau (trace_to_pos (ipos_trace q)) q s
 
+let valid_postream_prepend (hist tr : trace) (s p' : iopostream) :
+  Lemma
+    (requires valid_postream (hist @ tr) s /\ stream_prepend (trace_to_pos tr) s `uptotau` p')
+    (ensures valid_postream hist p')
+= introduce forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n))
+  with begin
+    eliminate exists (m : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc (stream_prepend (trace_to_pos tr) s) m)
+    returns valid_trace hist (ipos_trace (stream_trunc p' n))
+    with _. begin
+      stream_prepend_trunc (trace_to_pos tr) s m ;
+      // In both cases, probably missing something like validity of the thing before f is called
+      if m <= length (trace_to_pos tr)
+      then assume (valid_trace hist (ipos_trace (firstn m (trace_to_pos tr))))
+      else begin
+        ipos_trace_append (trace_to_pos tr) (stream_trunc s (m - length (trace_to_pos tr))) ;
+        assume (valid_trace hist (ipos_trace (trace_to_pos tr) @ ipos_trace (stream_trunc s (m - length (trace_to_pos tr)))))
+      end
+    end
+  end
+
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) :
   Lemma
     (requires wbind w wf post hist /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p')
@@ -471,7 +491,11 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m })
       iodiv_bind_inf_fin_shift_post m f post hist p p' q s ;
       iodiv_bind_inf_fin_upto_aux s p p' q ;
       shift_post_Inf_spe (ipos_trace q) s p' post ;
-      admit () // what's missing?
+      valid_postream_prepend hist (ipos_trace q) s p' ; // probably requires more
+      assert (post (Inf p')) ; // remove
+      assert (valid_postream (hist @ ipos_trace q) s) ; // remove
+      assume (valid_postream hist p') ; // not enough?? also not proven??
+      assume (post (Inf p') /\ valid_postream hist p')
     end
   end
 
