@@ -476,7 +476,7 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
 
   // fin
   // iodiv_bind_fin a b w wf m f ;
-  assume (forall (post : wpost b) (hist : trace) p. wbind w wf post hist ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ; // just a test, should be removed in favour of line above
+  // assume (forall (post : wpost b) (hist : trace) p. wbind w wf post hist ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ; // just a test, should be removed in favour of line above
 
   // inf.fin
   // iodiv_bind_inf_fin a b w wf m f ;
@@ -485,10 +485,19 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
   // assert (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> p `uptotau` p' ==> post (Inf p')) ;
 
   // inf
-  assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p') ;
+  // assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p') ;
 
-  // Turning below into assert does not work. Might be good to use intro/elim instead?
-  assume (forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist) ;
+  begin introduce forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist
+  with
+    begin introduce wbind w wf post hist ==> theta (bind m f) post hist
+    with h1.
+      // assume (forall p. isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ;
+      // assume (forall (p p' : iopostream). event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
+      // The above is not enough
+      assume (theta (bind m f) post hist)
+    end
+  end ;
+
   bind m f
 
 (*
