@@ -221,11 +221,14 @@ let rec valid_trace (hist : trace) (tr : trace) : Pure bool (requires True) (ens
   | [] -> true
   | e :: tr' -> valid_event hist e && valid_trace (hist @ [e]) tr'
 
+let valid_postream (hist : trace) (s : iopostream) : Type0 =
+  forall (n : nat). valid_trace hist (ipos_trace (stream_trunc s n))
+
 (** Effect observation *)
 let theta #a (t : iotree a) : wp a =
   fun post hist ->
     (forall p. isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
-    (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n))))
+    (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
 
 let iodiv a (w : wp a) =
   t: iotree a { w `stronger_wp` theta t }
@@ -482,10 +485,9 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
   // assert (forall (post : wpost b) (p p' : iopostream). wbind w wf post ==> event_stream (bind m f) p ==> event_stream m p ==> p `uptotau` p' ==> post (Inf p')) ;
 
   // inf
-  assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n)))) ;
+  assume (forall (post : wpost b) (hist : trace) (p p' : iopostream). wbind w wf post hist ==> event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p') ;
 
   // Turning below into assert does not work. Might be good to use intro/elim instead?
-  // Also might be better to give a name to the complex valid_trace?
   assume (forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist) ;
   bind m f
 
