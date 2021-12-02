@@ -476,7 +476,6 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
 
   // fin
   // iodiv_bind_fin a b w wf m f ;
-  // assume (forall (post : wpost b) (hist : trace) p. wbind w wf post hist ==> isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ; // just a test, should be removed in favour of line above
 
   // inf.fin
   // iodiv_bind_inf_fin a b w wf m f ;
@@ -491,7 +490,16 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
   with begin
     introduce wbind w wf post hist ==> theta (bind m f) post hist
     with h1. begin
-      assume (forall (p : iopos). isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)) ;
+      // fin
+      introduce forall (p : iopos). isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)
+      with begin
+        introduce isRet (bind m f p) ==> post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p)
+        with h2. begin
+          admit ()
+        end
+      end ;
+
+      // inf
       assume (forall (p p' : iopostream). event_stream (bind m f) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
     end
   end ;
