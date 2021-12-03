@@ -667,12 +667,11 @@ let theta_wcall_inf #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodi
   theta_inst (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist @ [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) ;
   theta_event_stream (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist @ [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) (stail p)
 
-let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p p' : iopostream) :
+let iodiv_call_aux_upto (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p p' : iopostream) :
   Lemma
-    (requires wcall o x w post hist /\ event_stream (call o x k) p /\ p `uptotau` p')
-    (ensures post (Inf p') /\ valid_postream hist p')
-= theta_wcall_inf o x k post hist p ;
-  feq_head_tail p ;
+    (requires isCall_choice o x (shead p) /\ p `uptotau` p')
+    (ensures stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `uptotau` p')
+= feq_head_tail p ;
   assert (stream_prepend [shead p] (stail p) `feq` p) ;
   assert (isCall_choice o x (shead p)) ;
   assert (shead p == Call_choice o x (call_choice_res o x (shead p))) ;
@@ -687,12 +686,17 @@ let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) 
   assert (stream_prepend [ Call_choice o x (call_choice_res o x (shead p)) ] (stail p) == stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) ;
   assert (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `feq` p) ;
   feq_uptotau (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p ;
-  uptotau_trans (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p p' ;
-  assert (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `uptotau` p') ;
+  uptotau_trans (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p p'
+
+let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p p' : iopostream) :
+  Lemma
+    (requires wcall o x w post hist /\ event_stream (call o x k) p /\ p `uptotau` p')
+    (ensures post (Inf p') /\ valid_postream hist p')
+= theta_wcall_inf o x k post hist p ;
+  iodiv_call_aux_upto a o x k post hist p p' ;
   assert (post (Inf p')) ;
   valid_postream_prepend hist [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] (stail p) p' ;
-  assert (valid_postream hist p') ;
-  admit () // sad
+  assert (valid_postream hist p')
 
 let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
 
