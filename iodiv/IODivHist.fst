@@ -440,7 +440,7 @@ let theta_event_stream #a w (m : iodiv a w) (post : wpost a) (hist : trace) (p p
 
 let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) (q : iopos) (s : iopostream) :
   Lemma
-    (requires wbind w wf post hist /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
+    (requires wbind w wf post hist /\ event_stream (bind m f) p /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures shift_post (ipos_trace q) post (Inf s) /\ valid_trace hist (ipos_trace q) /\ valid_postream (hist @ ipos_trace q) s)
 = theta_bind_inst w wf m f post hist q ;
   event_stream_bind m f p q s ;
@@ -503,6 +503,15 @@ let valid_postream_prepend (hist tr : trace) (s p' : iopostream) :
     end
   end
 
+let iodiv_bind_inf_fin_aux a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) (q : iopos) (s : iopostream) :
+  Lemma
+    (requires wbind w wf post hist /\ event_stream (bind m f) p /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
+    (ensures post (Inf p') /\ valid_postream hist p')
+= iodiv_bind_inf_fin_shift_post m f post hist p p' q s ;
+  iodiv_bind_inf_fin_upto_aux s p p' q ;
+  shift_post_Inf_spe (ipos_trace q) s p' post ;
+  valid_postream_prepend hist (ipos_trace q) s p'
+
 let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) :
   Lemma
     (requires wbind w wf post hist /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p')
@@ -513,18 +522,7 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m })
   with _. begin
     eliminate exists (s : iopostream). p `feq` stream_prepend q s /\ isRet (m q)
     returns post (Inf p') /\ valid_postream hist p'
-    with _. begin
-      assert (p `feq` stream_prepend q s) ;
-      assert (isRet (m q)) ;
-      iodiv_bind_inf_fin_shift_post m f post hist p p' q s ;
-      iodiv_bind_inf_fin_upto_aux s p p' q ;
-      shift_post_Inf_spe (ipos_trace q) s p' post ;
-      valid_postream_prepend hist (ipos_trace q) s p' ;
-      assert (post (Inf p')) ; // remove
-      assert (valid_postream (hist @ ipos_trace q) s) ; // remove
-      assume (valid_postream hist p') ; // not enough?? also not proven??
-      assume (post (Inf p') /\ valid_postream hist p')
-    end
+    with _. iodiv_bind_inf_fin_aux a b w wf m f post hist p p' q s
   end
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
