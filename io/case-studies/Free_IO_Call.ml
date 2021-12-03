@@ -22,13 +22,13 @@ let ml_call (cmd:io_cmds) =
 let io_call (cmd:io_cmds) argz =
   try
     let rez = ml_call cmd argz in
-    Monitor.update_trace cmd argz (Inl rez); 
+    Monitor.update_trace (Obj.magic cmd) (Obj.magic argz) (Obj.magic (Inl rez)); 
     io_return (Inl rez)
   with err ->
-    Monitor.update_trace cmd argz (Inr err);
+    Monitor.update_trace (Obj.magic cmd) (Obj.magic argz) (Obj.magic (Inr err));
     io_return (Inr err)
 
 let (iio_call : inst_cmds -> Obj.t -> Obj.t iio) =
   fun cmd -> fun argz ->
   match cmd with
-  | GetTrace -> iio_return (Monitor.get_trace ())
+  | GetTrace -> iio_return (Obj.magic (Monitor.get_trace ()))
