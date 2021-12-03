@@ -559,7 +559,6 @@ let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodi
 
   bind m f
 
-(*
 let event_stream_tau #a (m : iotree a) (p : iopostream) :
     Lemma
       (requires event_stream (tau m) p)
@@ -567,54 +566,53 @@ let event_stream_tau #a (m : iotree a) (p : iopostream) :
 = assert (isEvent (tau m (stream_trunc p 1))) ;
   assert (shead p == Tau_choice) ;
 
-  let aux n : Lemma (isEvent (m (stream_trunc (stail p) n))) [SMTPat ()] =
+  introduce forall (n : nat). isEvent (m (stream_trunc (stail p) n))
+  with begin
     assert (isEvent (tau m (stream_trunc p (n+1)))) ;
     stream_trunc_succ p n
-  in ()
+  end
 
 let uptotau_prepend_tau (p : iopostream) :
   Lemma (p `uptotau` stream_prepend [Tau_choice] p)
-= let aux1 n :
-    Lemma
-      (exists m. ipos_trace (stream_trunc p n) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) m))
-      [SMTPat ()]
-  = stream_prepend_trunc [Tau_choice] p (n+1) ;
+= introduce forall n. exists m. ipos_trace (stream_trunc p n) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) m)
+  with begin
+    stream_prepend_trunc [Tau_choice] p (n+1) ;
     assert (stream_trunc (stream_prepend [Tau_choice] p) (n+1) == Tau_choice :: stream_trunc p n)
-  in
-  let aux2 n :
-    Lemma
-      (exists m. ipos_trace (stream_trunc p m) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) n))
-      [SMTPat ()]
-  = if n = 0
+  end ;
+  introduce forall n. exists m. ipos_trace (stream_trunc p m) == ipos_trace (stream_trunc (stream_prepend [Tau_choice] p) n)
+  with begin
+    if n = 0
     then ()
     else stream_prepend_trunc [Tau_choice] p n
-  in ()
+  end
 
 let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
 
   // fin
-  assert (forall (post : wpost a) p. w post ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p)))) ;
+  assert (forall (post : wpost a) (hist : trace) p. w post hist ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p))) /\ valid_trace hist (ipos_trace p)) ;
 
   // inf
-  let aux_inf (post : wpost a) (p p' : iopostream) :
-    Lemma
-      (requires w post /\ event_stream (tau m) p /\ p `uptotau` p')
-      (ensures post (Inf p'))
-      [SMTPat ()]
-    = event_stream_tau m p ;
-      assert (forall q. stail p `uptotau` q ==> post (Inf q)) ;
-      feq_head_tail p ;
-      assert (p `feq` stream_prepend [shead p] (stail p)) ;
-      feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
-      uptotau_prepend_tau (stail p) ;
-      assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
-      uptotau_trans (stail p) (stream_prepend [Tau_choice] (stail p)) p ;
-      uptotau_trans (stail p) p p'
-  in
+  // let aux_inf (post : wpost a) (hist : trace) (p p' : iopostream) :
+  //   Lemma
+  //     (requires w post hist /\ event_stream (tau m) p /\ p `uptotau` p')
+  //     (ensures post (Inf p') /\ valid_postream hist p')
+  //     [SMTPat ()]
+  //   = event_stream_tau m p ;
+  //     assert (forall q. stail p `uptotau` q ==> post (Inf q)) ;
+  //     feq_head_tail p ;
+  //     assert (p `feq` stream_prepend [shead p] (stail p)) ;
+  //     feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
+  //     uptotau_prepend_tau (stail p) ;
+  //     assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
+  //     uptotau_trans (stail p) (stream_prepend [Tau_choice] (stail p)) p ;
+  //     uptotau_trans (stail p) p p' ;
+  //     admit ()
+  // in
 
-  assert (forall (post : wpost a). w post ==> theta (tau m) post) ;
+  assume (forall (post : wpost a) (hist : trace). w post hist ==> theta (tau m) post hist) ;
   tau m
 
+(*
 unfold
 let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> wp a) : wp a =
   fun post -> forall y. w y (shift_post [ choice_to_event (Call_choice o x y) ] post)
