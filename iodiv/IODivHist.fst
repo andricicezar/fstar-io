@@ -588,28 +588,35 @@ let uptotau_prepend_tau (p : iopostream) :
 
 let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
 
-  // fin
-  assert (forall (post : wpost a) (hist : trace) p. w post hist ==> isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p))) /\ valid_trace hist (ipos_trace p)) ;
+  introduce forall (post : wpost a) (hist : trace). w post hist ==> theta (tau m) post hist
+  with begin
+    introduce w post hist ==> theta (tau m) post hist
+    with _. begin
+      // fin
+      assert (forall p. isRet (tau m p) ==> post (Fin (ipos_trace p) (ret_val (tau m p))) /\ valid_trace hist (ipos_trace p)) ;
 
-  // inf
-  // let aux_inf (post : wpost a) (hist : trace) (p p' : iopostream) :
-  //   Lemma
-  //     (requires w post hist /\ event_stream (tau m) p /\ p `uptotau` p')
-  //     (ensures post (Inf p') /\ valid_postream hist p')
-  //     [SMTPat ()]
-  //   = event_stream_tau m p ;
-  //     assert (forall q. stail p `uptotau` q ==> post (Inf q)) ;
-  //     feq_head_tail p ;
-  //     assert (p `feq` stream_prepend [shead p] (stail p)) ;
-  //     feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
-  //     uptotau_prepend_tau (stail p) ;
-  //     assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
-  //     uptotau_trans (stail p) (stream_prepend [Tau_choice] (stail p)) p ;
-  //     uptotau_trans (stail p) p p' ;
-  //     admit ()
-  // in
+      // inf
+      introduce forall (p p' : iopostream). event_stream (tau m) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+      with begin
+        introduce event_stream (tau m) p ==> (p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
+        with _. begin
+          introduce p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+          with _. begin
+            event_stream_tau m p ;
+            assert (forall q. stail p `uptotau` q ==> post (Inf q)) ;
+            feq_head_tail p ;
+            assert (p `feq` stream_prepend [shead p] (stail p)) ;
+            feq_uptotau p (stream_prepend [Tau_choice] (stail p)) ;
+            uptotau_prepend_tau (stail p) ;
+            assert (stail p `uptotau` stream_prepend [Tau_choice] (stail p)) ;
+            uptotau_trans (stail p) (stream_prepend [Tau_choice] (stail p)) p ;
+            uptotau_trans (stail p) p p'
+          end
+        end
+      end
+    end
+  end ;
 
-  assume (forall (post : wpost a) (hist : trace). w post hist ==> theta (tau m) post hist) ;
   tau m
 
 (*
