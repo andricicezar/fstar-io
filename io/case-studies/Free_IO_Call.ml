@@ -3,18 +3,6 @@ open Common
 open FStar_Pervasives
 open Free_IO
 
-let global_trace : trace ref = ref []
-
-let ml_gettrace () : trace =
-  !global_trace
-
-let update_trace (cmd:io_cmds) (argz:Obj.t) (rez:Obj.t maybe) : Obj.t maybe =
-  global_trace := (convert_call_to_event cmd argz rez) :: !global_trace;
-  print_int (List.length !global_trace);
-  print_newline ();
-  flush stdout;
-  rez
-
 let ml_call (cmd:io_cmds) =
   match cmd with
   | Openfile -> Obj.magic (Obj.repr Unix_Star.openfile)
@@ -33,14 +21,14 @@ let ml_call (cmd:io_cmds) =
 
 let io_call (cmd:io_cmds) argz =
   try
-    let x = ml_call cmd argz in
-    io_return (Obj.magic (update_trace cmd argz (Inl x)))
+    let rez = ml_call cmd argz in
+    Monitor.update_trace cmd argz (Inl rez); 
+    io_return (Inl rez)
   with err ->
-    io_return (Obj.magic (update_trace cmd argz (Inr err)))
+    Monitor.update_trace cmd argz (Inr err);
+    io_return (Inr err)
 
 let (iio_call : inst_cmds -> Obj.t -> Obj.t iio) =
   fun cmd -> fun argz ->
   match cmd with
-  | GetTrace -> iio_return (Obj.magic (ml_gettrace ()))
-
-
+  | GetTrace -> iio_return (Monitor.get_trace ())

@@ -25,7 +25,7 @@ instance mlifyable_miio
     #(t1 -> MIIO t2)
     (t1 -> ML t2)
     (fun f x -> 
-     let tree : iio t2 = reify (f x) [] (fun _ _ -> True) in
+     let tree : iio t2 = reify (f x) (Monitor.get_trace ()) (fun _ _ -> True) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual
@@ -55,7 +55,7 @@ instance mlifyable_inst_miio
     (d1.start_type -> ML t3)
     #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
     (fun (p:t1 -> MIIO t3) (ct:d1.start_type) ->
-     let tree : iio t3 = reify (p (d1.instrument ct)) [] (fun _ _ -> True) in
+     let tree : iio t3 = reify (p (d1.instrument ct)) (Monitor.get_trace ()) (fun _ _ -> True) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual

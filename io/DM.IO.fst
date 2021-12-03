@@ -10,16 +10,16 @@ open Free.IO.Call
 open Hist
 
 (** The postcondition for an io computation is defined over the
-result (type: a + exn) and local trace (type: trace).
+result (type: a) and local trace (type: trace).
 The local trace represents the events that happend during the
 computation. Local trace is in chronological order.
 
 We also have the history (type: trace) which represents the
 events that happend until the beggining of the io computation.
-The history is reverse chronology order.
+The history is  in reverse chronology order.
 
-At the end of an io computation, the trace will be
-(reverse of local trace) appended to the history. **)
+At the end of an io computation, the local trace is appended
+in reverse order to the history. **)
 
 let rec io_interpretation #a
   (m : io a)
@@ -108,7 +108,7 @@ effect IO
     pre h /\
     (forall res lt. (
       enforced_globally pi (apply_changes h lt) /\
-      post h res lt ==>  p res lt)))
+      post h res lt ==> p res lt)))
 
 let static_cmd
   (cmd : io_cmds)
