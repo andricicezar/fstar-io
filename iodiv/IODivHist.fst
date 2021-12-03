@@ -497,7 +497,8 @@ let valid_postream_prepend (hist tr : trace) (s p' : iopostream) :
       end
       else begin
         ipos_trace_append (trace_to_pos tr) (stream_trunc s (m - length (trace_to_pos tr))) ;
-        assume (valid_trace hist (ipos_trace (trace_to_pos tr) @ ipos_trace (stream_trunc s (m - length (trace_to_pos tr)))))
+        ipos_trace_to_pos tr ;
+        valid_trace_append hist tr (ipos_trace (stream_trunc s (m - length (trace_to_pos tr))))
       end
     end
   end
