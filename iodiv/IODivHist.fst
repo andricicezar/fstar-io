@@ -721,39 +721,9 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
 
   call o x k
 
+// For repeat, I still don't know if I want to keep them as in IODiv or if instead I want
+// to leverage the history a bit more.
 (*
-let rec wrepeat_trunc (w : wp unit) (n : nat) : wp unit =
-  if n = 0
-  then fun post -> True
-  else wbind w (fun (_:unit) -> wrepeat_trunc w (n - 1))
-
-let wrepeat (w : wp unit) : wp unit =
-  fun post -> forall n. wrepeat_trunc w n post
-
-// Somehow it should be the concatenation of a stream of finite runs of body
-// or a finite number of finite runs followed by an infinite run
-// might be easier to produce a colist?
-// What is not clear is how to exploit finite information since we are not concluding about
-// a finite prefix...
-// Might be easier to go directly for a spec with invariants including some
-// inv ... ==> post (Inf p)
-// with the lhs talking about finite approximations potentially (forall n trunc)
-// let event_stream_repeat (body : iotree unit) (p : iopostream) :
-//   Lemma
-//     (requires event_stream (repeat body) p)
-//     (ensures
-
-// let iodiv_repeat #w (body : iodiv unit w) : iodiv unit (wrepeat w) =
-//   // fin
-//   forall_intro (repeat_not_ret body) ;
-//   assert (forall (post : wpost unit) p. wrepeat w post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
-
-//   // inf
-//   assume (forall (post : wpost unit) (p p' : iopostream). wrepeat w post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
-
-//   assert (forall (post : wpost unit). wrepeat w post ==> theta (repeat body) post) ;
-//   repeat body
-
 let loop_preserving (w : wp unit) (inv : trace -> Type0) =
   forall tr.
     inv tr ==>
@@ -1057,13 +1027,14 @@ let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
 
   assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
   repeat body
+*)
 
 let iodiv_subcomp (a : Type) (w1 w2 : wp a) (m : iodiv a w1) :
   Pure (iodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
 = m
 
 let wite #a (w1 w2 : wp a) (b : bool) : wp a =
-  fun post -> (b ==> w1 post) /\ (~ b ==> w2 post)
+  fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)
 
 let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
   iodiv a (wite w1 w2 b)
@@ -1072,30 +1043,7 @@ let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w
 let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   iodiv_bind a b w wf m f
 
-// [@@allow_informative_binders]
-// reflectable reifiable total layered_effect {
-//   IODiv : a:Type -> w:wp a -> Effect
-//   with
-//     repr         = iodiv ;
-//     return       = iodiv_ret ;
-//     bind         = iodiv_bind' ;
-//     subcomp      = iodiv_subcomp ;
-//     if_then_else = iodiv_if_then_else
-// }
-
-// Actions cannot be universe polymoprhic, have to use reflect to add them
-// But reify doesn't work here, probably need a lift from PURE to do it.
-// let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
-//   IODiv?.reflect (iodiv_tau a w (reify (m ())))
-
-// let act_tau' () : IODiv unit (wret ()) =
-//   IODiv?.reflect (iodiv_tau _ _ (iodiv_ret _ ()))
-
-// Still not possible without a lift from PURE
-// let act_tau #a #w (m : unit -> IODiv a w) : IODiv a w =
-//   act_tau' () ; m ()
-
-(** Tests *)
+(** Predicates *)
 
 let terminates #a : wpost a =
   fun b -> Fin? b
@@ -1103,17 +1051,21 @@ let terminates #a : wpost a =
 let diverges #a : wpost a =
   fun b -> Inf? b
 
-let repeat_ret_loops () :
-  Lemma (wrepeat_inv (wret ()) (fun _ -> True) diverges)
-= ()
+// let repeat_ret_loops () :
+//   Lemma (wrepeat_inv (wret ()) (fun _ -> True) diverges)
+// = ()
 
 
-(** EXPERIMENT Making the effect partial *)
+(** Making the effect partial *)
 
 unfold
 let wTrue a : wpost a =
   fun _ -> True
 
+// Since the pre-condition is not a prop, it's not clear what to do here
+// Use the empty history? Quantify over every history?
+// Do we have to pass hist around instead?
+(*
 let piodiv a (w : wp a) =
   squash (w (wTrue a)) -> iodiv a w
 

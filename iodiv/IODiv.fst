@@ -971,7 +971,7 @@ let repeat_ret_loops () :
 = ()
 
 
-(** EXPERIMENT Making the effect partial *)
+(** Making the effect partial *)
 
 unfold
 let wTrue a : wpost a =
