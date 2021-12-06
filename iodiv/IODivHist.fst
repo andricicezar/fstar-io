@@ -209,7 +209,7 @@ let is_open (hist : trace) (fd : file_descr) : bool =
   is_open_rev (rev hist) fd
 
 (** Event valid with respect to a history *)
-let valid_event (hist : trace) (e : event) =
+let valid_event (hist : trace) (e : event) : bool =
   match e with
   | EOpenfile s fd -> true // Doesn't need to check it's closed right?
   | ERead fd s -> is_open hist fd
@@ -721,29 +721,51 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
 
   call o x k
 
-// For repeat, I still don't know if I want to keep them as in IODiv or if instead I want
-// to leverage the history a bit more.
-(*
-let loop_preserving (w : wp unit) (inv : trace -> Type0) =
-  forall tr.
-    inv tr ==>
-    w (fun b ->
-      match b with
-      | Fin tr' x -> inv (tr @ tr')
-      | Inf p -> forall n. inv (tr @ ipos_trace (stream_trunc p n))
-    )
+(** repeat *)
+
+unfold
+let wprepost #a (pre : trace -> Type0) (post : trace -> branch a -> Type0) : wp a =
+  fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
+
+(** Morally,
+   t : IODiv unit
+         (requires inv)
+         (ensures fun hist r ->
+           (terminates r /\ inv (hist @ tr)) \/
+           (diverges r /\ inv (hist @ every_tr))
+         )
+   by subcomp.
+   Maybe not necessary to talk about the computed wp of t.
+*)
+// let loop_preserving (w : wp unit) (inv : trace -> Type0) =
+//   forall hist.
+//     inv hist ==>
+//     w (fun b ->
+//       match b with
+//       | Fin tr x -> inv (hist @ tr)
+//       | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
+//     ) hist
 
 let downward_closed (inv : trace -> Type0) =
   forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
 
-let trace_invariant (w : wp unit) (inv : trace -> Type0) =
+let trace_invariant (inv : trace -> Type0) =
   inv [] /\
-  downward_closed inv /\
-  loop_preserving w inv
+  downward_closed inv // /\
+  // loop_preserving w inv
 
-let wrepeat_inv (w : wp unit) (inv : trace -> Type0) : wp unit =
-  fun post -> forall (p : iopostream). (forall n. inv (ipos_trace (stream_trunc p n))) ==> post (Inf p)
+let wrepeat_inv (inv : trace -> Type0) : wp unit =
+  fun post hist -> forall (p : iopostream). (forall n. inv (hist @ ipos_trace (stream_trunc p n))) ==> post (Inf p)
 
+unfold
+let winv (inv : trace -> Type0) : wp unit =
+  wprepost inv (fun hist b ->
+    match b with
+    | Fin tr () -> inv (hist @ tr)
+    | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
+  )
+
+(*
 let cons_length #a (x : a) (l : list a) :
   Lemma (length (x :: l) = length l + 1)
 = ()
@@ -1014,20 +1036,41 @@ let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
   = iodiv_repeat_inv_proof_aux body inv [] post p n
   in
   forall_intro_2 (move_requires_2 (embeds_trace_implies inv))
-
-let iodiv_repeat_with_inv #w (body : iodiv unit w) (inv : trace -> Type0) :
-  Pure (iodiv unit (wrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
-= // fin
-  forall_intro (repeat_not_ret body) ;
-  assert (forall (post : wpost unit) p. wrepeat_inv w inv post ==> isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p)))) ;
-
-  // inf
-  iodiv_repeat_inv_proof body inv ;
-  assert (forall (post : wpost unit) (p p' : iopostream). wrepeat_inv w inv post ==> event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p')) ;
-
-  assert (forall (post : wpost unit). wrepeat_inv w inv post ==> theta (repeat body) post) ;
-  repeat body
 *)
+
+let iodiv_repeat_inv_proof (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p p' : iopostream) :
+  Lemma
+    (requires wrepeat_inv inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
+    (ensures post (Inf p') /\ valid_postream hist p')
+= admit ()
+
+let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) :
+  Pure (iodiv unit (wrepeat_inv inv)) (requires trace_invariant inv) (ensures fun _ -> True)
+= introduce forall (post : wpost unit) (hist : trace). wrepeat_inv inv post hist ==> theta (repeat body) post hist
+  with begin
+    introduce wrepeat_inv inv post hist ==> theta (repeat body) post hist
+    with _. begin
+      // fin
+      introduce forall p. isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p))) /\ valid_trace hist (ipos_trace p)
+      with begin
+        repeat_not_ret body p
+      end ;
+
+      // inf
+      introduce forall (p p' : iopostream). event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+      with begin
+        introduce event_stream (repeat body) p ==> (p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
+        with _. begin
+          introduce p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+          with _. begin
+            iodiv_repeat_inv_proof inv body post hist p p'
+          end
+        end
+      end
+    end
+  end ;
+
+  repeat body
 
 let iodiv_subcomp (a : Type) (w1 w2 : wp a) (m : iodiv a w1) :
   Pure (iodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
@@ -1065,6 +1108,10 @@ let wTrue a : wpost a =
 // Since the pre-condition is not a prop, it's not clear what to do here
 // Use the empty history? Quantify over every history?
 // Do we have to pass hist around instead?
+// Say you take read which requires the history to guarantee the file is open, it should not check in isolation
+// but should check after open. Also how to make use of ambient assumptions over the history? How do they materialise? Via subcomp.
+// The precondition / partiality is really just an illusion, the only issue is getting the lift from PURE in fact
+// Maybe easier to see with how we would define wlift
 (*
 let piodiv a (w : wp a) =
   squash (w (wTrue a)) -> iodiv a w
