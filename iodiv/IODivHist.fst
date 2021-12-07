@@ -733,6 +733,30 @@ let wprepost_id_inst #a (pre : trace -> Type0) (post : trace -> branch a -> Type
     (ensures theta t (post hist) hist)
 = ()
 
+(** Basic predicates *)
+
+let terminates #a : wpost a =
+  fun b -> Fin? b
+
+let diverges #a : wpost a =
+  fun b -> Inf? b
+
+let ret_trace #a (r : branch a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Fin tr x -> tr
+
+let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Fin tr x -> x
+
+let inf_branch #a (r : branch a) : Pure iopostream (requires diverges r) (ensures fun _ -> True) =
+  match r with
+  | Inf p -> p
+
+unfold
+let inf_prefix #a (r : branch a) (n : nat) : Pure trace (requires diverges r) (ensures fun _ -> True)  =
+  ipos_trace (stream_trunc (inf_branch r) n)
+
 (** repeat *)
 
 (** Morally,
@@ -745,25 +769,13 @@ let wprepost_id_inst #a (pre : trace -> Type0) (post : trace -> branch a -> Type
    by subcomp.
    Maybe not necessary to talk about the computed wp of t.
 *)
-// let loop_preserving (w : wp unit) (inv : trace -> Type0) =
-//   forall hist.
-//     inv hist ==>
-//     w (fun b ->
-//       match b with
-//       | Fin tr x -> inv (hist @ tr)
-//       | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
-//     ) hist
 
 let downward_closed (inv : trace -> Type0) =
   forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
 
-let trace_invariant (inv : trace -> Type0) =
-  inv [] /\
-  downward_closed inv // /\
-  // loop_preserving w inv
-
+unfold
 let wrepeat_inv (inv : trace -> Type0) : wp unit =
-  fun post hist -> forall (p : iopostream). (forall n. inv (hist @ ipos_trace (stream_trunc p n))) ==> post (Inf p)
+  wprepost inv (fun hist r -> diverges r /\ (forall n. inv (hist @ inf_prefix r n)))
 
 unfold
 let winv (inv : trace -> Type0) : wp unit =
@@ -947,7 +959,7 @@ let repeat_inv_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream)
 
 let iodiv_repeat_inv_proof_aux_inf (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) n :
   Lemma
-    (requires inv hist /\ trace_invariant inv /\ event_stream (repeat body) p /\ event_stream body p)
+    (requires inv hist /\ downward_closed inv /\ event_stream (repeat body) p /\ event_stream body p)
     (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 = winv_event_stream inv body hist p p
 
@@ -966,7 +978,7 @@ let iodiv_repeat_inv_proof_aux_overfin_None (inv : trace -> Type0) (body : iodiv
   Lemma
     (requires
       inv hist /\
-      trace_invariant inv /\
+      downward_closed inv /\
       event_stream (repeat body) p /\
       ~ (event_stream body p) /\
       find_ret body [] (stream_trunc p n) == None /\
@@ -1007,7 +1019,7 @@ let rec valid_trace_prefix (hist tr tr' : trace) :
 
 let iodiv_repeat_inv_proof_aux_overfin (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) n :
   Lemma
-    (requires inv hist /\ trace_invariant inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
+    (requires inv hist /\ downward_closed inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
     (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 = // Similar to finite_branch_prefix
   let n0 = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (body (stream_trunc p n)))) in
@@ -1039,7 +1051,7 @@ let iodiv_repeat_inv_proof_aux_overfin (inv : trace -> Type0) (body : iodiv unit
 
 let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
   Lemma
-    (requires inv hist /\ trace_invariant inv /\ event_stream (repeat body) p)
+    (requires inv hist /\ downward_closed inv /\ event_stream (repeat body) p)
     (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
     (decreases n)
 = match find_ret body [] (stream_trunc p n) with
@@ -1074,41 +1086,19 @@ let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (wi
     with h. iodiv_repeat_inv_proof_aux_inf inv body post hist p n
     and  h. iodiv_repeat_inv_proof_aux_overfin inv body post hist p n
 
-// let iodiv_repeat_inv_proof #w (body : iodiv unit w) (inv : trace -> Type0) :
-//   Lemma
-//     (requires trace_invariant w inv)
-//     (ensures
-//       forall (post : wpost unit) (p p' : iopostream).
-//         event_stream (repeat body) p ==>
-//         p `uptotau` p' ==>
-//         (forall n. inv (ipos_trace (stream_trunc p' n)))
-//     )
-// = let aux (post : wpost unit) (p p' : iopostream) n :
-//     Lemma
-//       (requires event_stream (repeat body) p)
-//       (ensures inv (ipos_trace (stream_trunc p n)))
-//       [SMTPat ()]
-//   = iodiv_repeat_inv_proof_aux body inv [] post p n
-//   in
-//   forall_intro_2 (move_requires_2 (embeds_trace_implies inv))
-
 let iodiv_repeat_inv_proof (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p p' : iopostream) :
   Lemma
-    (requires trace_invariant inv /\ wrepeat_inv inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
+    (requires downward_closed inv /\ wrepeat_inv inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
-= // Did I wrongfully merge hist and a prefix of the local trace?
-  // Without hist, I would instantiate with [] and thus get inv [] from trace_invariant
-  // But maybe I should require inv hist here?
-  // Unclear which approach is the best.
-  introduce forall (n : nat). inv hist ==> inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
+= introduce forall (n : nat). inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
   with begin
-    introduce inv hist ==> inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
-    with _. iodiv_repeat_inv_proof_aux inv body post hist p n
+    iodiv_repeat_inv_proof_aux inv body post hist p n
   end ;
-  admit ()
+  embeds_trace_implies (fun tr -> inv (hist @ tr)) p p' ;
+  embeds_trace_implies (fun tr -> valid_trace hist tr) p p'
 
 let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) :
-  Pure (iodiv unit (wrepeat_inv inv)) (requires trace_invariant inv) (ensures fun _ -> True)
+  Pure (iodiv unit (wrepeat_inv inv)) (requires downward_closed inv) (ensures fun _ -> True)
 = introduce forall (post : wpost unit) (hist : trace). wrepeat_inv inv post hist ==> theta (repeat body) post hist
   with begin
     introduce wrepeat_inv inv post hist ==> theta (repeat body) post hist
@@ -1148,19 +1138,6 @@ let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w
 (* In order for F* to accept it, we must remove the refinement *)
 let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   iodiv_bind a b w wf m f
-
-(** Predicates *)
-
-let terminates #a : wpost a =
-  fun b -> Fin? b
-
-let diverges #a : wpost a =
-  fun b -> Inf? b
-
-// let repeat_ret_loops () :
-//   Lemma (wrepeat_inv (wret ()) (fun _ -> True) diverges)
-// = ()
-
 
 (** Making the effect partial *)
 
@@ -1258,7 +1235,7 @@ let pwrepeat_inv (w : wp unit) (inv : trace -> Type0) : wp unit =
   fun post -> w (wTrue unit) /\ wrepeat_inv w inv post
 
 let piodiv_repeat_with_inv #w (body : piodiv unit w) (inv : trace -> Type0) :
-  Pure (piodiv unit (pwrepeat_inv w inv)) (requires trace_invariant w inv) (ensures fun _ -> True)
+  Pure (piodiv unit (pwrepeat_inv w inv)) (requires downward_closed w inv) (ensures fun _ -> True)
 = fun h -> iodiv_repeat_with_inv (body ()) inv
 
 let piodiv_subcomp (a : Type) (w1 w2 : wp a) (m : piodiv a w1) :
@@ -1315,15 +1292,6 @@ sub_effect PURE ~> IODIV = lift_pure_piodiv
 effect IODiv (a : Type) (pre : Type0) (post : wpost a) =
   IODIV a (fun p -> pre /\ (forall x. post x ==> p x))
 
-// TODO MOVE
-let ret_trace #a (r : branch a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Fin tr x -> tr
-
-let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Fin tr x -> x
-
 let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ choice_to_event (Call_choice o x (result r)) ]) =
   IODIV?.reflect (piodiv_call o x (fun y -> piodiv_ret _ y))
 
@@ -1336,6 +1304,6 @@ let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> term
 let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
   act_call Close fd
 
-let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
+let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { downward_closed w inv }) : IODIV unit (pwrepeat_inv w inv) =
   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
 *)
