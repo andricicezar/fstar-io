@@ -721,11 +721,19 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
 
   call o x k
 
-(** repeat *)
+(** Turning pre-/post-conditions into wp *)
 
 unfold
 let wprepost #a (pre : trace -> Type0) (post : trace -> branch a -> Type0) : wp a =
   fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
+
+let wprepost_id_inst #a (pre : trace -> Type0) (post : trace -> branch a -> Type0) (t : iodiv a (wprepost pre post)) (hist : trace) :
+  Lemma
+    (requires pre hist)
+    (ensures theta t (post hist) hist)
+= ()
+
+(** repeat *)
 
 (** Morally,
    t : IODiv unit
@@ -764,6 +772,35 @@ let winv (inv : trace -> Type0) : wp unit =
     | Fin tr () -> inv (hist @ tr)
     | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
   )
+
+let winv_inst (inv : trace -> Type0) (t : iodiv unit (winv inv)) (hist : trace) :
+  Lemma
+    (requires inv hist)
+    (ensures
+      theta t (fun b ->
+        match b with
+        | Fin tr () -> inv (hist @ tr)
+        | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
+      ) hist
+    )
+= ()
+
+let winv_ret (inv : trace -> Type0) (t : iodiv unit (winv inv)) (hist : trace) (p : iopos) :
+  Lemma
+    (requires inv hist /\ isRet (t p))
+    (ensures inv (hist @ ipos_trace p) /\ valid_trace hist (ipos_trace p))
+= winv_inst inv t hist
+
+let winv_event_stream (inv : trace -> Type0) (t : iodiv unit (winv inv)) (hist : trace) (p p' : iopostream) :
+  Lemma
+    (requires inv hist /\ event_stream t p /\ p `uptotau` p')
+    (ensures (forall n. inv (hist @ ipos_trace (stream_trunc p' n))) /\ valid_postream hist p')
+= winv_inst inv t hist ;
+  theta_event_stream (winv inv) t (fun b ->
+    match b with
+    | Fin tr () -> inv (hist @ tr)
+    | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
+  ) hist p p'
 
 let cons_length #a (x : a) (l : list a) :
   Lemma (length (x :: l) = length l + 1)
@@ -995,6 +1032,8 @@ let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (wi
     assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
     // assert (winv inv ??
     // In the other version it followed from trace_invariant, now should come from the spec
+    // Here we should have a wprepost_id_inst which takes pre and uses post ==> post to conclude theta
+    // and then some winv_inst for the particular case
     // assert (inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
     // find_ret_Some_pos body [] (stream_trunc p n) ;
     // assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
