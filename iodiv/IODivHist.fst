@@ -1096,7 +1096,16 @@ let iodiv_repeat_inv_proof (inv : trace -> Type0) (body : iodiv unit (winv inv))
   Lemma
     (requires trace_invariant inv /\ wrepeat_inv inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
-= admit ()
+= // Did I wrongfully merge hist and a prefix of the local trace?
+  // Without hist, I would instantiate with [] and thus get inv [] from trace_invariant
+  // But maybe I should require inv hist here?
+  // Unclear which approach is the best.
+  introduce forall (n : nat). inv hist ==> inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
+  with begin
+    introduce inv hist ==> inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
+    with _. iodiv_repeat_inv_proof_aux inv body post hist p n
+  end ;
+  admit ()
 
 let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) :
   Pure (iodiv unit (wrepeat_inv inv)) (requires trace_invariant inv) (ensures fun _ -> True)
