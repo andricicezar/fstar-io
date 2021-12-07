@@ -1030,28 +1030,24 @@ let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (wi
 = match find_ret body [] (stream_trunc p n) with
   | Some ((), q) ->
     assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
-    // assert (winv inv ??
-    // In the other version it followed from trace_invariant, now should come from the spec
-    // Here we should have a wprepost_id_inst which takes pre and uses post ==> post to conclude theta
-    // and then some winv_inst for the particular case
-    // assert (inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
-    // find_ret_Some_pos body [] (stream_trunc p n) ;
-    // assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
-    // ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
-    // append_assoc hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
-    // begin match q with
-    // | [] -> ()
-    // | Tau_choice :: q' ->
-    //   event_stream_repeat_one_ret body p n q' ;
-    //   repeat_inv_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
-    //   iodiv_repeat_inv_proof_aux body inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) post (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
-    //   repeat_inv_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
-    //   assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
-    // | c :: q' ->
-    //   assert (isEvent (repeat body (stream_trunc p n))) ;
-    //   repeat_unfold_1 body
-    // end
-    admit ()
+    winv_ret inv body hist (find_ret_prefix body [] (stream_trunc p n)) ;
+    assert (inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+    find_ret_Some_pos body [] (stream_trunc p n) ;
+    assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
+    ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
+    append_assoc hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
+    begin match q with
+    | [] -> ()
+    | Tau_choice :: q' ->
+      event_stream_repeat_one_ret body p n q' ;
+      repeat_inv_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
+      iodiv_repeat_inv_proof_aux inv body post (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      repeat_inv_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
+      assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
+    | c :: q' ->
+      assert (isEvent (repeat body (stream_trunc p n))) ;
+      repeat_unfold_1 body
+    end
   | None ->
     // In case where we still haven't reached a return, we do a case
     // analysis on wheter there will ever be such a return.
