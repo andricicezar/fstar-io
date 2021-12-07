@@ -1025,13 +1025,14 @@ let rec ipos_trace_prefix_of (p q : iopos) :
 let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
   Lemma
     (requires inv hist /\ trace_invariant inv /\ event_stream (repeat body) p)
-    (ensures inv (hist @ ipos_trace (stream_trunc p n))) // + valid_trace?
+    (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
     (decreases n)
 = match find_ret body [] (stream_trunc p n) with
   | Some ((), q) ->
     assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
     winv_ret inv body hist (find_ret_prefix body [] (stream_trunc p n)) ;
     assert (inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+    assert (valid_trace hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
     find_ret_Some_pos body [] (stream_trunc p n) ;
     assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
     ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
@@ -1043,7 +1044,9 @@ let rec iodiv_repeat_inv_proof_aux (inv : trace -> Type0) (body : iodiv unit (wi
       repeat_inv_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
       iodiv_repeat_inv_proof_aux inv body post (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
       repeat_inv_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
-      assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
+      assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q')) ;
+      valid_trace_append hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q') ;
+      assert (valid_trace hist ((ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
     | c :: q' ->
       assert (isEvent (repeat body (stream_trunc p n))) ;
       repeat_unfold_1 body
