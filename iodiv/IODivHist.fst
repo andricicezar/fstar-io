@@ -1097,6 +1097,12 @@ let iodiv_repeat_inv_proof (inv : trace -> Type0) (body : iodiv unit (winv inv))
   embeds_trace_implies (fun tr -> inv (hist @ tr)) p p' ;
   embeds_trace_implies (fun tr -> valid_trace hist tr) p p'
 
+// This is probably wrong.
+// Also downward_closed makes things complicated.
+// One option would be to prove something like forall n. exists m. m >= n /\ inv (stream_trunc p n)
+// or something so that we don't have to deal with this.
+// Also, it would be nice not to enforce a precondition on the whole history
+// or rather have both?
 let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) :
   Pure (iodiv unit (wrepeat_inv inv)) (requires downward_closed inv) (ensures fun _ -> True)
 = introduce forall (post : wpost unit) (hist : trace). wrepeat_inv inv post hist ==> theta (repeat body) post hist
