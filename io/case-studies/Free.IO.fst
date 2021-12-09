@@ -131,6 +131,10 @@ let iio_bind (a:Type) (b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
 
 // OTHER TYPES & UTILS
+unfold
+let apply_changes (history local_events:trace) : Tot trace =
+  (List.rev local_events) @ history
+
 type action_type = (cmd : io_cmds) & (args cmd)
 
 type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
@@ -177,6 +181,42 @@ let rec enforced_locally
     if check h action then enforced_locally (check) (hd::h) t
     else false
 
+open FStar.Tactics
+
+let rec lemma_append_enforced_locally_0 pi (h lt1 lt2:trace) :
+  Lemma (requires (
+    enforced_locally pi h lt1 /\
+    enforced_locally pi (apply_changes h lt1) lt2))
+    (ensures ( 
+    enforced_locally pi h (lt1 @ lt2))) (decreases lt2) = 
+  match lt2 with
+  | [] -> ()
+  | e::tl -> admit ()
+  (**
+    let lt1' = apply_changes lt1 [e] in
+    assume (enforced_locally pi h lt1');
+    calc (==) {
+      enforced_locally pi (apply_changes h (apply_changes lt1 [e])) tl;
+      == {}
+      enforced_locally pi (rev (rev [e] @ lt1) @ h) tl;
+      == {}
+      enforced_locally pi (rev ([e] @ lt1) @ h) tl;
+      == { _ by (compute ()) }
+      enforced_locally pi ((rev lt1 @ [e]) @ h) tl;
+    };
+    assume (enforced_locally pi (apply_changes h lt1') tl);
+    lemma_append_enforced_locally_0 pi h lt1' tl **)
+
+
+let lemma_append_enforced_locally pi :
+  Lemma (forall h lt1 lt2.
+    enforced_locally pi h lt1 /\
+    enforced_locally pi (apply_changes h lt1) lt2 ==> 
+    enforced_locally pi h (lt1 @ lt2)) by (
+      explode ();
+      dump "h"
+    ) = Classical.forall_intro_3 (lemma_append_enforced_locally_0 pi)
+
 (** enforced_globally could be written as:
 `enforced_locally check [] h` but fstar can not prove as easily that
 form **)
@@ -194,7 +234,3 @@ let rev_append_rev_append () : Lemma (
       ((List.rev (le1@le2)) @ h))
    by (FStar.Tactics.Derived.l_to_r [`List.append_assoc;`List.rev_append])
       = ()
-
-unfold
-let apply_changes (history local_events:trace) : Tot trace =
-  (List.rev local_events) @ history

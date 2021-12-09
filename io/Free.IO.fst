@@ -117,17 +117,6 @@ let rec enforced_locally
     if check h action then enforced_locally (check) (hd::h) t
     else false
 
-(** enforced_globally could be written as:
-`enforced_locally check [] h` but fstar can not prove as easily that
-form **)
-let rec enforced_globally (check : monitorable_prop) (h : trace) : Tot bool =
-  match h with
-  | [] -> true
-  | h  ::  t ->
-    let action = convert_event_to_action h in
-    if check t action then enforced_globally (check) t
-    else false
-
 let rev_append_rev_append () : Lemma (
   forall (h le1 le2:trace).
     ((List.rev le2) @ (List.rev le1) @ h) ==

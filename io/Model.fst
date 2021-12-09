@@ -152,7 +152,7 @@ let compile_prog
   (p  : prog_s i m) :
   Tot (prog_t i m) =
   _IIOwp_as_MIIO
-    (fun _ -> iio_pre m.pi)
+    (fun _ _ -> true)
     (fun _ h r lt -> iio_post m.pi h r lt)
     (fun (ict:ictx_t i m) -> p (enforce_post #i #m ict))
 

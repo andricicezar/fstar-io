@@ -28,7 +28,7 @@ let rec is_open (fd:file_descr) (h: trace) : Tot bool =
                  else is_open fd tail
                | _ -> is_open fd tail
 
-let ctx_pre (fd:file_descr) (h:trace) : Type0 = is_open fd h
+let ctx_pre (fd:file_descr) (h:trace) : Type0 = True 
 
 let ctx_post : file_descr -> trace -> r:(maybe unit) -> trace -> Tot (b:bool{r == Inr Contract_failure ==> b == true}) = 
   fun fd h r lt -> 

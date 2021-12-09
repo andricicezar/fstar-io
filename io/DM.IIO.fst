@@ -149,9 +149,6 @@ let get_trace () : IIOwp trace
   (fun h p -> forall lt. lt == [] ==>  p h lt) =
   IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
 
-let iio_pre (pi : monitorable_prop) (h:trace) : bool =
-  enforced_globally pi h
-
 let iio_post
   (#a:Type)
   (pi : monitorable_prop)
@@ -159,7 +156,7 @@ let iio_post
   (result:a)
   (local_trace:trace) :
   Tot bool =
-  enforced_globally pi (apply_changes h local_trace)
+  enforced_locally pi h local_trace
 
 effect IIO
   (a:Type)
@@ -168,5 +165,5 @@ effect IIO
   (post : trace -> a -> trace -> Type0) =
   IIOwp a
     (fun h p ->
-      pre h /\ iio_pre pi h /\
+      pre h /\
       (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))

@@ -104,10 +104,9 @@ effect IO
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   IOwp a (fun (h:trace) (p:hist_post a) ->
-    enforced_globally pi h /\
     pre h /\
     (forall res lt. (
-      enforced_globally pi (apply_changes h lt) /\
+      enforced_locally pi h lt /\
       post h res lt ==> p res lt)))
 
 let static_cmd

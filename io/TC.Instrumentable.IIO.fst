@@ -44,7 +44,6 @@ let enforce_post
   let lt = extract_local_trace h pi in
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   if post_c.result_check x h r lt then begin
-    assume (enforced_globally pi ((rev lt)@h) ==> enforced_locally pi h lt);
     r
   end else Inr Contract_failure
 

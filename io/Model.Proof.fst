@@ -13,9 +13,8 @@ open TC.Trivialize.IIOwp
 open DM
 open Model
 
-let simple_linking_post pi h r lt =
-  (~(iio_pre pi h) ==> r == (Inr (Contract_failure)) /\ lt == []) /\
-  (iio_pre pi h ==> iio_post pi h r lt)
+let simple_linking_post pi h r lt : Type0 =
+  iio_post pi h r lt
 
 (** p "compiled" linked with instrumented c, gives a computation in IIO,
 that respects the compuation **)
@@ -25,7 +24,7 @@ let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) :
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ 
-      (fun _ h -> iio_pre m.pi h) 
+      (fun _ h -> true) 
       (fun _ h r lt -> iio_post m.pi h r lt))
     p) (enforce_post #i #m (instrument #i #m c))
 
@@ -43,9 +42,7 @@ TODO: show this
 Problem: Aseem: IIO is a layered effect, then this will not work since layered effects can only be reasoned about using their types and this example requires reasoning that g x == f x. We can only reason with the types of the layered effects code, and here once we have g with the type as shown, we don't have access to any postcondition about its result. To recover that, we need to look at the definition of g **)
 let complex_linking #i #m p c : 
   IIOwp (maybe i.ret)
-    (fun h p -> 
-      (~(iio_pre m.pi h) ==> p (Inr (Contract_failure)) []) /\
-        (iio_pre m.pi h ==> (forall r lt. iio_post m.pi h r lt ==> p r lt))) =
+    (fun h p -> (forall r lt. iio_post m.pi h r lt ==> p r lt)) =
   admit ();
   (compile_prog p) (instrument #i #m c)
 
@@ -68,7 +65,7 @@ let empty_set (#a:Type) () : set_of_traces a =
   fun (t,r) -> t == []
 
 let pi_to_set #a (pi : monitorable_prop) : set_of_traces a =
-  fun (t, _) -> enforced_globally pi (List.rev t)
+  fun (t, _) -> enforced_locally pi [] t
 
 val included_in : set_of_traces 'a -> set_of_traces 'a -> Type0
 let included_in s1 s2 =

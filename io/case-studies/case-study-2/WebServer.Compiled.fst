@@ -17,7 +17,7 @@ open WebServer
 val compiled_webserver : (x:Types.file_descr -> IIO (maybe unit) (m.pi) (m.pre x) (m.post x)) -> MIIO (maybe unit)
 let compiled_webserver = 
   _IIOwp_as_MIIO
-    (fun _ -> iio_pre m.pi)
+    (fun _ _ -> true)
     (fun _ h r lt -> iio_post m.pi h r lt)
     webserver
 
