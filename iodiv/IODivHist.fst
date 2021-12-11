@@ -29,13 +29,13 @@ assume val file_descr : eqtype
 
 type cmds = | Openfile | Read | Close
 
-unfold let io_args cmd : eqtype =
+let io_args cmd : eqtype =
   match cmd with
   | Openfile -> string
   | Read -> file_descr
   | Close -> file_descr
 
-unfold let io_res cmd : eqtype =
+let io_res cmd : eqtype =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
