@@ -1103,6 +1103,16 @@ let iodiv_repeat_inv_proof (inv : trace -> Type0) (body : iodiv unit (winv inv))
 // or something so that we don't have to deal with this.
 // Also, it would be nice not to enforce a precondition on the whole history
 // or rather have both?
+
+// Maybe a better version would be along those lines
+// pre : trace -> prop
+// inv : trace -> prop
+// body : iodiv unit (requires pre) (ensures fun hist r -> (terminates r ==> pre (hist @ tr r) /\ forall p. inv p ==> inv (tr r @ p)) /\ (diverges r ==> inv (str r)))
+// repeat body : iodiv unit (requires pre) (ensures fun hist r -> diverges r /\ inv (str r))
+
+// Hopefully it works, might require some initialisation somewhere.
+
+// Then we would derive from it some repeat_fin that requires termination of body to conclude a periodic thing
 let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) :
   Pure (iodiv unit (wrepeat_inv inv)) (requires downward_closed inv) (ensures fun _ -> True)
 = introduce forall (post : wpost unit) (hist : trace). wrepeat_inv inv post hist ==> theta (repeat body) post hist
@@ -1144,6 +1154,41 @@ let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w
 (* In order for F* to accept it, we must remove the refinement *)
 let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
   iodiv_bind a b w wf m f
+
+(** Some test *)
+
+let wlift #a (w : pure_wp a) : wp a =
+  fun post hist -> w (fun x -> post (Fin [] x))
+
+let elim_pure #a #w (f : unit -> PURE a w) :
+  Pure
+    a
+    (requires w (fun _ -> True))
+    (ensures fun r -> forall post. w post ==> post r)
+= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+  f ()
+
+let lift_pure_iodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
+  Pure (iodiv a (wlift w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
+  let r = elim_pure #a #w f in
+  let r' : iodiv a (wret r) = iodiv_ret a r in
+  iodiv_subcomp _ (wret r) (wlift w) r'
+
+[@@allow_informative_binders]
+reflectable reifiable total layered_effect {
+  IODIV : a:Type -> w:wp a -> Effect
+  with
+    repr         = iodiv ;
+    return       = iodiv_ret ;
+    bind         = iodiv_bind' ;
+    subcomp      = iodiv_subcomp ;
+    if_then_else = iodiv_if_then_else
+}
+
+sub_effect PURE ~> IODIV = lift_pure_iodiv
+
+effect IODiv (a : Type) (pre : trace -> Type0) (post : trace -> branch a -> Type0) =
+  IODIV a (wprepost pre post)
 
 (** Making the effect partial *)
 
