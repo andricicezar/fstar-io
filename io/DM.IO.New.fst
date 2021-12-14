@@ -97,8 +97,8 @@ let dm_bind
   (f : (x:a -> dm b (wp_f x))) :
   Tot (dm b (hist_bind wp_v wp_f)) =
   lemma_theta_is_monad_morphism_bind v f;
-  assert (wp_v `hist_ord` (theta v));
-  assert (forall r. (wp_f r) `hist_ord` (theta (f r)));
+  assert (wp_v `hist_ord` theta v);
+  assert (forall r. wp_f r `hist_ord` theta (f r));
   assume (hist_bind wp_v wp_f `hist_ord` hist_bind (theta v) (fun x -> theta (f x)));
   io_bind v f
 

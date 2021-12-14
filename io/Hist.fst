@@ -37,7 +37,7 @@ let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
 
 unfold
 val hist_ord (#a : Type) : hist a -> hist a -> Type0
-let hist_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
+let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
 
 unfold
 let hist_if_then_else (wp1 wp2:hist 'a) (b:bool) : hist 'a =
