@@ -1,34 +1,16 @@
-module DM.IO.New
+module DM
 
 open FStar.List.Tot.Base
 open FStar.Tactics
-open ExtraTactics
 
-open Common
 open Free
 open Free.IO
-open Free.IO.Call
 open Hist
 
 (** TODO:
-- [v] define as io_sig, io_spec that is a struct { pre: ...; post: ...; }
-- [v] define hist as Theo: hist a = hist_post a -> hist_pre a
 - [ ] prove bind
-- [ ] extract the 3 relevant files: the free monad, the hist monad, a sig file, and this one with the DM effect.
 - [ ] write a test file
 **)
-
-(** The postcondition for an io computation is defined over the
-result (type: a) and local trace (type: trace).
-The local trace represents the events that happend during the
-computation. Local trace is in chronological order.
-
-We also have the history (type: trace) which represents the
-events that happend until the beginning of the io computation.
-The history is in reverse chronology order.
-
-At the end of an io computation, the trace will be
-(reverse of local trace) appended to the history. **)
 
 (** Inspierd from Kenji's thesis (2.4.5) **)
 let rec theta #a
@@ -159,12 +141,12 @@ let static_cmd
 
 let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
   let fd = static_cmd Openfile "../Makefile" in
-  if Inl? fd then (** test if Openfile was successful **)
-    let msg = static_cmd Read (Inl?.v fd) in
-    let _ = static_cmd Close (Inl?.v fd) in
+  if Some? fd then (** test if Openfile was successful **)
+    let msg = static_cmd Read (Some?.v fd) in
+    let _ = static_cmd Close (Some?.v fd) in
     ()
   else ()
 
-let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h r lt -> ~(is_open fd (apply_changes h lt))) =
+let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h r lt -> ~(is_open fd (trace_append h lt))) =
   let _ = static_cmd Close fd in
   ()
