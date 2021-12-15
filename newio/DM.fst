@@ -32,9 +32,9 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       theta (io_bind (Return x) f);
       == {} // unfold io_bind
       theta (f x); 
-      == { _ by (tadmit ()) } // fold hist_bind
+      == { _ by (tadmit ()) } // unfold hist_bind
       hist_bind (hist_return x) (fun x -> theta (f x));
-      == { _ by (compute ()) } // fold theta
+      == { _ by (compute ()) } // unfold theta
       hist_bind (theta (Return x)) (fun x -> theta (f x));
     };
     (** this should be inside calc, but for some reason it fails there **)
@@ -56,12 +56,10 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       hist_bind (io_wps cmd arg) (fun r -> theta (io_bind (k r) f));
       == { _ by (tadmit ()) } // rewrite here by applying this lemma again for (k r) and f
       hist_bind (io_wps cmd arg) (fun r -> hist_bind (theta (k r)) (fun x -> theta (f x)));
-      == { lemma_hist_bind_associavity (io_wps cmd arg) (fun r -> theta (k r)) (fun x -> theta (f x)) } // monad law 3
+      == { lemma_hist_bind_associativity (io_wps cmd arg) (fun r -> theta (k r)) (fun x -> theta (f x)) }
       hist_bind (hist_bind (io_wps cmd arg) (fun r -> theta (k r))) (fun x -> theta (f x));
-      == { _ by (compute ()) } // fold theta
+      == { _ by (compute ()) } // unfold theta
       hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x));
-      == { assert (m == Call cmd arg k); _ by (rewrite_eqs_from_context (); tadmit ()) }
-      hist_bind (theta m) (fun x -> theta (f x));
     };
     (** this should be inside calc, but for some reason it fails there **)
     assert (hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x))

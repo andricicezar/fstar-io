@@ -67,7 +67,7 @@ unfold
 let hist_if_then_else (wp1 wp2:hist 'a) (b:bool) : hist 'a =
   fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
   
-let lemma_hist_bind_associavity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
+let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
   Lemma (
     hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) == hist_bind (hist_bind w1 w2) w3)
   by (l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]) =
