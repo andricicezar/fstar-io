@@ -30,6 +30,8 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
   match m with
   | Return x ->
     calc (==) {
+      theta (io_bind m f);
+      == {}
       theta (io_bind (Return x) f);
       == {} // unfold io_bind
       theta (f x); 
@@ -37,15 +39,13 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       hist_bind (hist_return x) (fun x -> theta (f x));
       == { _ by (compute ()) } // fold theta
       hist_bind (theta (Return x)) (fun x -> theta (f x));
-    };
-    (** not sure why these asserts are needed: **)
-    assert (theta (io_bind m f) == hist_bind (theta m) (fun x -> theta (f x))) by (
-      rewrite_eqs_from_context ();
-      compute ();
-      assumption ()
-    )
+      == { assert (m == Return x); _ by (rewrite_eqs_from_context (); tadmit ()) }
+      hist_bind (theta m) (fun x -> theta (f x));
+    }
   | Call cmd arg k ->
     calc (==) {
+      theta (io_bind m f);
+      == {}
       theta (io_bind (Call cmd arg k) f);
       == { _ by (compute ()) } // unfold io_bind
       theta (Call cmd arg (fun r -> io_bind (k r) f));
@@ -57,12 +57,9 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       hist_bind (hist_bind (io_wps cmd arg) (fun r -> theta (k r))) (fun x -> theta (f x));
       == { _ by (compute ()) } // fold theta
       hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x));
-    };
-    (** not sure why these asserts are needed: **)
-    assert (theta (io_bind (Call cmd arg k) f) == hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x)))
-      by (assumption ());
-    assert (theta (io_bind m f) == hist_bind (theta m) (fun x -> theta (f x)))
-      by (rewrite_eqs_from_context (); assumption ())
+      == { assert (m == Call cmd arg k); _ by (rewrite_eqs_from_context (); tadmit ()) }
+      hist_bind (theta m) (fun x -> theta (f x));
+    }
   
 // The Dijkstra Monad
 let dm (a:Type) (wp:hist a) =
@@ -79,9 +76,15 @@ let dm_bind
   (f : (x:a -> dm b (wp_f x))) :
   Tot (dm b (hist_bind wp_v wp_f)) =
   lemma_theta_is_monad_morphism_bind v f;
+  (** hist is monotonic.
+  
+  assert (theta (io_bind v f) == hist_bind (theta v) (fun x -> theta (f x)));
   assert (wp_v `hist_ord` theta v);
   assert (forall r. wp_f r `hist_ord` theta (f r));
-  assume (hist_bind wp_v wp_f `hist_ord` hist_bind (theta v) (fun x -> theta (f x)));
+  assert (hist_bind wp_v wp_f `hist_ord` hist_bind (theta v) (fun x -> theta (f x)));
+
+  (** goal: **)
+  assert (hist_bind wp_v wp_f `hist_ord` theta (io_bind v f));**)
   io_bind v f
 
 let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
@@ -114,7 +117,7 @@ let elim_pure #a #w (f : unit -> PURE a w) :
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   f ()
 
-(** inspired from Alg **)
+(** inspired from fstar/examples/layeredeffects/Alg.fst **)
 let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
   Pure (dm a (wp_lift_pure_hist w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
   let r = elim_pure #a #w f in
@@ -126,16 +129,16 @@ sub_effect PURE ~> IOwp = lift_pure_dm
 effect IO
   (a:Type)
   (pre : trace -> Type0)
-  (post : trace -> a -> trace -> Type0) =
+  (post : trace -> trace -> a -> Type0) =
   IOwp a (fun (p:hist_post a) (h:trace) ->
-    pre h /\ (forall res lt. post h res lt ==>  p res lt))
+    pre h /\ (forall lt r. post h lt r ==>  p lt r))
 
 let static_cmd
   (cmd : io_cmds)
   (argz : io_args cmd) :
   IO (io_resm cmd)
     (requires (fun h -> io_pres cmd argz h))
-    (ensures (fun h r lt ->
+    (ensures (fun h lt r ->
         lt == [convert_call_to_event cmd argz r])) =
   IOwp?.reflect (io_call cmd argz)
 
@@ -147,6 +150,6 @@ let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
     ()
   else ()
 
-let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h r lt -> ~(is_open fd (trace_append h lt))) =
+let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (trace_append h lt))) =
   let _ = static_cmd Close fd in
   ()

@@ -64,9 +64,9 @@ unfold let io_pres (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Read -> is_open arg h
   | Close -> is_open arg h
 
-unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) (p:io_resm cmd -> trace -> Type0) (h:trace) : Type0 =
+unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) (p:trace -> io_resm cmd -> Type0) (h:trace) : Type0 =
   match cmd with
-  | _ -> io_pres cmd arg h /\ (forall r. p r [convert_call_to_event cmd arg r])
+  | _ -> io_pres cmd arg h /\ (forall r. p [convert_call_to_event cmd arg r] r)
 
 type io a = free io_cmds io_sig a
 let io_return (x:'a) : io 'a =

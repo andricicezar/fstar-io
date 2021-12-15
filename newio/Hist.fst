@@ -16,18 +16,23 @@ At the end of an io computation, the trace will be
 
 let trace = Free.IO.trace
 
-let hist_post a = r:a -> lt:trace -> Type0
+let hist_post a = lt:trace -> r:a -> Type0
 let hist_pre a = h:trace -> Type0
 
-let hist a = hist_post a -> hist_pre a 
+let hist0 a = hist_post a -> hist_pre a 
+
+let hist_wp_monotonic (wp:hist0 'a) =
+  forall h p1 p2. (forall lt r. p1 lt r ==> p2 lt r) ==> wp p1 h ==> wp p2 h
+
+let hist a = wp:(hist0 a){hist_wp_monotonic wp}
 
 unfold
 let hist_return (x:'a) : hist 'a =
-  fun p _ -> p x []
+  fun p _ -> p [] x
 
 unfold 
 let hist_shift_post (p:hist_post 'a) (lt:trace) : hist_post 'a =
-  fun r lt' -> p r (lt @ lt')
+  fun lt' r -> p (lt @ lt') r
 
 unfold
 let trace_append (h lt:trace) = List.rev lt @ h
@@ -38,7 +43,7 @@ let hist_post_bind
   (kw : 'a -> hist 'b)
   (p:hist_post 'b) :
   Tot (hist_post 'a) =
-  fun r lt ->
+  fun lt r ->
     kw r (hist_shift_post p lt) (trace_append h lt)
 
 unfold
@@ -47,7 +52,8 @@ let hist_bind (w : hist 'a) (kw : 'a -> hist 'b) : hist 'b =
 
 unfold
 let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
-  fun p _ -> w (fun x -> p x [])
+  reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
+  fun p _ -> w (p [])
 
 unfold
 val hist_ord (#a : Type) : hist a -> hist a -> Type0
