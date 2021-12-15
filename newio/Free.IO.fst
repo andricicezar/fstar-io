@@ -8,11 +8,6 @@ assume val file_descr : eqtype
 
 type cmds = | Openfile | Read | Close | GetTrace
 
-(** Wish: It would be nice to define exn on top of free, and after
-that to define io on top of exn, but we use this big cmds with
-refeniments, therefore we have to make a monolith **)
-
-(** the io free monad does not contain the GetTrace step **)
 let _io_cmds x : bool = x = Openfile || x = Read || x = Close
 type io_cmds = x:cmds{_io_cmds x}
 
