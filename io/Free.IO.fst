@@ -15,13 +15,13 @@ refeniments, therefore we have to make a monolith **)
 let _io_cmds x : bool = x = Openfile || x = Read || x = Close
 type io_cmds = x:cmds{_io_cmds x}
 
-let io_args (cmd:io_cmds) : Type =
+unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> string
   | Read -> file_descr
   | Close -> file_descr
 
-let io_res (cmd:io_cmds) : Type =
+unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
@@ -37,35 +37,7 @@ type event =
   | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
   | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
 
-let convert_call_to_event (cmd:io_cmds) (arg:io_args cmd) (r:io_resm cmd) : event =
-  match cmd with
-  | Openfile -> EOpenfile arg r
-  | Read -> ERead arg r
-  | Close -> EClose arg r
-
 type trace = list event
-
-let rec is_open (fd:file_descr) (h:trace) : bool =
-  match h with
-  | [] -> false
-  | h :: tail -> match h with
-               | EOpenfile _ (Inl fd') ->
-                   if fd = fd' then true
-                   else is_open fd tail
-               | EClose fd' _ ->
-                    if fd = fd' then false
-                    else is_open fd tail
-               | _ -> is_open fd tail
-
-unfold let io_pres (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
-  match cmd with
-  | Openfile -> True
-  | Read -> is_open arg h
-  | Close -> is_open arg h
-
-unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) (p:io_resm cmd -> trace -> Type0) (h:trace) : Type0 =
-  match cmd with
-  | _ -> io_pres cmd arg h /\ (forall r. p r [convert_call_to_event cmd arg r])
 
 type inst_cmds = x:cmds{x = GetTrace}
 
@@ -86,8 +58,7 @@ let inst_res (x:inst_cmds) =
   | GetTrace -> list event
 
 let inst_sig : op_sig inst_cmds = {
-  args = (fun (x:inst_cmds) ->
-    match x with
+  args = (fun (x:inst_cmds) -> match x with
     | GetTrace -> unit) ;
   res = inst_res
 }
@@ -101,10 +72,10 @@ let res (cmd:cmds)  : (x:Type{x == iio_sig.res cmd}) =
   else io_resm cmd
 
 type io a = free io_cmds io_sig a
-let io_return (x:'a) : io 'a =
-  free_return io_cmds io_sig 'a x
+let io_return (a:Type) (x:a) : io a =
+  free_return io_cmds io_sig a x
 
-let io_bind (#a:Type) (#b:Type) l k : io b =
+let io_bind (a:Type) (b:Type) l k : io b =
   free_bind io_cmds io_sig a b l k
 
 // THE IIO FREE MONAD
@@ -118,13 +89,22 @@ let iio_bind (a:Type) (b:Type) l k : iio b =
 // OTHER TYPES & UTILS
 type action_type = (cmd : io_cmds) & (args cmd)
 
+type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
+
 let convert_event_to_action (e:event) : action_type =
   match e with
   | EOpenfile arg _ -> (| Openfile, arg |)
   | ERead arg _ -> (| Read, arg |)
   | EClose arg _ -> (| Close, arg |)
 
-type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
+let convert_call_to_event
+  (cmd:io_cmds)
+  (arg:io_args cmd)
+  (r:io_resm cmd) =
+  match cmd with
+  | Openfile -> EOpenfile arg r
+  | Read -> ERead arg r
+  | Close -> EClose arg r
 
 let rec enforced_locally
   (check : monitorable_prop)
