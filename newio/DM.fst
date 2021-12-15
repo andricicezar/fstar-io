@@ -12,6 +12,23 @@ open Hist
 - [ ] write a test file
 **)
 
+type test a =
+ | Ret : a -> test a
+ | Call' : int -> a -> test a
+
+assume val f : hist 'a -> hist 'a
+assume val g : test 'a -> hist 'a 
+
+let testing (m:test 'a) =
+  match m with
+  | Ret x -> 
+    calc (==) {
+      f (g (m));
+      == {}
+      f (g (Ret x));
+    }
+  | _ -> ()
+
 (** Inspierd from Kenji's thesis (2.4.5) **)
 let rec theta #a
   (m : io a) : hist a =
@@ -24,7 +41,7 @@ let lemma_theta_is_monad_morphism_ret v h p :
   Lemma
     (theta (io_return v) == hist_return v) by (compute ()) = ()
 
-let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
+let lemma_theta_is_monad_morphism_bind (#a:Type u#a) (#b:Type u#b) (m:io a) (f:a -> io b) :
   Lemma
     (theta (io_bind m f) == hist_bind (theta m) (fun x -> theta (f x))) = 
   match m with
@@ -39,9 +56,10 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       hist_bind (hist_return x) (fun x -> theta (f x));
       == { _ by (compute ()) } // fold theta
       hist_bind (theta (Return x)) (fun x -> theta (f x));
-      == { assert (m == Return x); _ by (rewrite_eqs_from_context (); tadmit ()) }
-      hist_bind (theta m) (fun x -> theta (f x));
-    }
+    };
+    (** this should be inside calc, but for some reason it fails there **)
+    assert (hist_bind (theta (Return x)) (fun x -> theta (f x))
+      == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
   | Call cmd arg k ->
     calc (==) {
       theta (io_bind m f);
@@ -51,7 +69,7 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       theta (Call cmd arg (fun r -> io_bind (k r) f));
       == { _ by (compute ()) } // unfold theta
       hist_bind (io_wps cmd arg) (fun r -> theta (io_bind (k r) f));
-      == { _ by (tadmit ())} // apply this lemma again for (k r) and f
+      == { (** lemma_theta_is_monad_morphism_bind_cont k f; **) _ by (tadmit ()) } // apply this lemma again for (k r) and f
       hist_bind (io_wps cmd arg) (fun r -> hist_bind (theta (k r)) (fun x -> theta (f x)));
       == { _ by (tadmit ()) } // monad law 3
       hist_bind (hist_bind (io_wps cmd arg) (fun r -> theta (k r))) (fun x -> theta (f x));
@@ -59,7 +77,15 @@ let lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x));
       == { assert (m == Call cmd arg k); _ by (rewrite_eqs_from_context (); tadmit ()) }
       hist_bind (theta m) (fun x -> theta (f x));
-    }
+    };
+    (** this should be inside calc, but for some reason it fails there **)
+    assert (hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x))
+      == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
+
+let lemma_theta_is_monad_morphism_bind_cont (#a:Type u#a) (#b:Type u#b) (#c:Type u#c) (k:c -> io a) (f:a -> io b) (r:c) :
+  Lemma
+    (theta (io_bind (k r) f) == hist_bind (theta (k r)) (fun x -> theta (f x))) = 
+  lemma_theta_is_monad_morphism_bind #a #b (k r) f
   
 // The Dijkstra Monad
 let dm (a:Type) (wp:hist a) =

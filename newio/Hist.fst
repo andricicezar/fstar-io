@@ -26,11 +26,10 @@ let hist_wp_monotonic (wp:hist0 'a) =
 
 let hist a = wp:(hist0 a){hist_wp_monotonic wp}
 
-unfold
 let hist_return (x:'a) : hist 'a =
   fun p _ -> p [] x
 
-unfold 
+unfold
 let hist_shift_post (p:hist_post 'a) (lt:trace) : hist_post 'a =
   fun lt' r -> p (lt @ lt') r
 
