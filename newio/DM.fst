@@ -100,20 +100,6 @@ let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
 let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
   dm a (hist_if_then_else wp1 wp2 b)
 
-total
-reifiable
-reflectable
-layered_effect {
-  IOwp : a:Type -> wp : hist a -> Effect
-  with
-       repr       = dm 
-     ; return     = dm_return
-     ; bind       = dm_bind
-
-     ; subcomp      = dm_subcomp
-     ; if_then_else = dm_if_then_else
-}
-
 let elim_pure #a #w (f : unit -> PURE a w) :
   Pure a
     (requires w (fun _ -> True))
@@ -128,14 +114,70 @@ let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)
   let r' : dm a (hist_return r) = dm_return a r in
   dm_subcomp _ (hist_return r) (wp_lift_pure_hist w) r'
 
-sub_effect PURE ~> IOwp = lift_pure_dm
+////////////////////////////////////////////////////////////////////////////////////////
+
+let l_repr (a:Type) (wp:hist a) (p:pure_pre) = 
+  squash p -> dm a wp
+
+let l_return (a:Type) (x:a) : l_repr a (hist_return x) True = fun () -> dm_return a x
+
+unfold
+let trivial_pre : pure_pre = True
+unfold
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre)
+  : pure_pre
+  = p1 /\ (forall x. q1 x ==> p2 x)
+
+let l_bind (a b:Type)
+  (wp1:hist a) (wp2:a -> hist b)
+  (p1:pure_pre) (p2:a -> pure_pre)
+  (f:l_repr a wp1 p1) (g:(x:a -> l_repr b (wp2 x) (p2 x)))
+  : l_repr b (hist_bind wp1 wp2) (p1 /\ (forall x. p2 x))
+  = fun _ ->
+  dm_bind a b wp1 wp2 (f _) (fun x -> g x _)
+
+
+let l_subcomp (a:Type) (wp1 wp2:hist a) (p1 p2:pure_pre) (f:l_repr a wp1 p1)
+  : Pure (l_repr a wp2 p2) 
+    (requires (p2 ==> p1 /\ (hist_ord wp2 wp1)))
+    (ensures fun _ -> True)
+  = fun _ -> f ()
+
+unfold
+let l_if_then_else (a : Type) (wp1 wp2: hist a) (p1 p2: pure_pre) (f : l_repr a wp1 p1) (g : l_repr a wp2 p2) (b : bool) : Type =
+  l_repr a (hist_if_then_else wp1 wp2 b) ((b ==> p1) /\ ((~b) ==> p2))
+
+total
+reifiable
+reflectable
+layered_effect {
+  IOwp : a:Type -> wp : hist a -> p : pure_pre -> Effect
+  with
+       repr       = l_repr 
+     ; return     = l_return
+     ; bind       = l_bind
+
+     ; subcomp      = l_subcomp
+     ; if_then_else = l_if_then_else
+}
+
+
+(** inspired from fstar/examples/layeredeffects/Alg.fst **)
+let lift_pure_l (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
+  Pure (l_repr a (wp_lift_pure_hist w) (w (fun _ -> True))) (requires w (fun _ -> True)) (ensures fun _ -> True) =
+  let r = elim_pure #a #w f in
+  let r'  = l_return a r in
+  l_subcomp _ (hist_return r) (wp_lift_pure_hist w) True (w (fun _ -> True)) r'
+
+sub_effect PURE ~> IOwp = lift_pure_l
 
 effect IO
   (a:Type)
   (pre : trace -> Type0)
   (post : trace -> trace -> a -> Type0) =
-  IOwp a (fun (p:hist_post a) (h:trace) ->
-    pre h /\ (forall lt r. post h lt r ==>  p lt r))
+  IOwp a 
+    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
+    True
 
 let static_cmd
   (cmd : io_cmds)
@@ -144,16 +186,34 @@ let static_cmd
     (requires (fun h -> io_pres cmd argz h))
     (ensures (fun h lt r ->
         lt == [convert_call_to_event cmd argz r])) =
-  IOwp?.reflect (io_call cmd argz)
+  IOwp?.reflect (fun _ -> io_call cmd argz)
 
 let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
   let fd = static_cmd Openfile "../Makefile" in
-  if Some? fd then (** test if Openfile was successful **)
+  if Some? fd then begin (** test if Openfile was successful **)
     let msg = static_cmd Read (Some?.v fd) in
     let _ = static_cmd Close (Some?.v fd) in
     ()
-  else ()
+  end else ()
 
 let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (trace_append h lt))) =
   let _ = static_cmd Close fd in
   ()
+
+
+assume val p' : prop
+assume val pure_lemma (_:unit) : Lemma p'
+assume val some_f : unit -> IO unit (requires (fun _ -> p')) (ensures fun _ _ _ -> True)
+  
+let test () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  pure_lemma ();
+  assert p'
+  
+let test' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  pure_lemma ();
+  some_f ()
+
+let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) by (explode (); dump "H") =
+  pure_lemma ();
+  assert p';
+  some_f ()
