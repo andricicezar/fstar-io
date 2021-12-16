@@ -116,42 +116,111 @@ let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-let l_repr (a:Type) (wp:hist a) (p:pure_pre) = 
-  squash p -> dm a wp
+let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:hist (v:a{q v})) = 
+  squash p -> dm (v:a{q v}) wp 
 
-let l_return (a:Type) (x:a) : l_repr a (hist_return x) True = fun () -> dm_return a x
+let l_return (a:Type) (x:a) : l_repr a True (fun _ -> True) (hist_return x) = fun () -> dm_return a x
+
+unfold let trivial_pre : pure_pre = True
 
 unfold
-let trivial_pre : pure_pre = True
-unfold
-let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre)
-  : pure_pre
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:(v:a{q1 v}) -> pure_pre) : pure_pre
   = p1 /\ (forall x. q1 x ==> p2 x)
 
+unfold
+let bind_post (#a #b:Type) (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
+  : pure_post b
+  = fun y -> exists (x:a{q1 x}). q2 x y
+
+let lemma_recast_wp000
+  (a b:Type)
+  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
+  (xwp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
+  (x: a{q1 x})
+  (p1 p2 : hist_post (v:b{bind_post q1 q2 v}))
+  (h:trace) :
+  Lemma
+    (requires (p1 `hist_post_ord` p2 /\ xwp x (fun lt r -> p1 lt r) h))
+    (ensures (xwp x (fun lt r -> p2 lt r) h)) = ()
+
+let recast_wp
+  (a b:Type)
+  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
+  (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
+  (x: a{q1 x}) :
+  Tot (hist (v:b{bind_post q1 q2 v})) = 
+  Classical.forall_intro_3 (Classical.move_requires_3 (lemma_recast_wp000 a b q1 q2 wp2 x));
+  fun p -> wp2 x (fun lt (r: b{q2 x r}) -> p lt r)
+
+let recast_dm
+  (a b:Type)
+  (q1:pure_post a) 
+  (q2:(v:a{q1 v}) -> pure_post b)
+  (wp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
+  (x: a{q1 x})
+  (g: dm (v:b{q2 x v}) (wp x)) :
+  Tot (dm (v:b{bind_post q1 q2 v}) (recast_wp a b q1 q2 wp x)) = 
+  admit ();
+  dm_bind
+    (v:b{q2 x v}) (v:b{bind_post q1 q2 v})
+    (wp x)
+    (fun r -> hist_return r)
+    g
+    (fun (v:b{q2 x v}) -> 
+      let v' : (vv:b{bind_post q1 q2 vv}) = v in
+      Return v')
+  
+  
+
 let l_bind (a b:Type)
-  (wp1:hist a) (wp2:a -> hist b)
-  (p1:pure_pre) (p2:a -> pure_pre)
-  (f:l_repr a wp1 p1) (g:(x:a -> l_repr b (wp2 x) (p2 x)))
-  : l_repr b (hist_bind wp1 wp2) (p1 /\ (forall x. p2 x))
-  = fun _ ->
-  dm_bind a b wp1 wp2 (f _) (fun x -> g x _)
+  (p1:pure_pre) (q1:pure_post a)
+  (p2:(v:a{q1 v}) -> pure_pre) (q2:(v:a{q1 v}) -> pure_post b)
+  (wp1:hist (v:a{q1 v})) (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v}))
+  (f:l_repr a p1 q1 wp1) (g:(x:a{q1 x} -> l_repr b (p2 x) (q2 x) (wp2 x))) :
+  Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
+  fun _ -> 
+    dm_bind 
+      (v:a{q1 v})
+      (v:b{bind_post q1 q2 v})
+      wp1
+      (recast_wp a b q1 q2 wp2)
+      (f _)
+      (fun (x:a{q1 x}) -> 
+        let g' : dm (v:b{q2 x v}) (wp2 x) = g x _ in
+        recast_dm a b q1 q2 wp2 x g')
 
-
-let l_subcomp (a:Type) (wp1 wp2:hist a) (p1 p2:pure_pre) (f:l_repr a wp1 p1)
-  : Pure (l_repr a wp2 p2) 
-    (requires (p2 ==> p1 /\ (hist_ord wp2 wp1)))
+let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v})) (wp2:hist (v:a{q2 v})) (f:l_repr a p1 q1 wp1)
+  : Pure (l_repr a p2 q2 wp2)
+    (requires (
+      (p2 ==> p1) /\
+      (forall x. q1 x ==> q2 x) /\
+      (forall (p:hist_post (v:a{q2 v})) h. wp2 p h ==> wp1 (fun lt r -> p lt (r <: (v:a{q2 v}))) h)))
     (ensures fun _ -> True)
-  = fun _ -> f ()
+  = fun _ ->  (
+    admit ();
+    f ())
 
 unfold
-let l_if_then_else (a : Type) (wp1 wp2: hist a) (p1 p2: pure_pre) (f : l_repr a wp1 p1) (g : l_repr a wp2 p2) (b : bool) : Type =
-  l_repr a (hist_if_then_else wp1 wp2 b) ((b ==> p1) /\ ((~b) ==> p2))
+let l_if_then_else 
+  (a : Type)
+  (p1 p2: pure_pre)
+  (q1 q2: pure_post a)
+  (wp1: hist (v:a{q1 v}))
+  (wp2: hist (v:a{q2 v}))
+  (f : l_repr a p1 q1 wp1)
+  (g : l_repr a p2 q2 wp2)
+  (b : bool) : Type =
+  admit ();
+  l_repr (x:a{(b ==> q1 x) /\ ((~b) ==> q2 x)})
+    ((b ==> p1) /\ ((~b) ==> p2)) 
+    (fun x -> (b ==> q1 x) /\ ((~b) ==> q2 x)) 
+    (fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h))
 
 total
 reifiable
 reflectable
 layered_effect {
-  IOwp : a:Type -> wp : hist a -> p : pure_pre -> Effect
+  IOwp : a:Type -> p : pure_pre -> q : pure_post a -> wp : hist (v:a{q v}) -> Effect
   with
        repr       = l_repr 
      ; return     = l_return

@@ -19,9 +19,9 @@ reversed and appended to the history. **)
 let trace = Free.IO.trace
 
 let hist_post a = lt:trace -> r:a -> Type0
-let hist_pre a = h:trace -> Type0
+let hist_pre = h:trace -> Type0
 
-private let hist0 a = hist_post a -> hist_pre a 
+private let hist0 a = hist_post a -> hist_pre
 
 unfold
 let hist_post_ord (p1 p2:hist_post 'a) = forall lt r. p1 lt r ==> p2 lt r
