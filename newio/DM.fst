@@ -66,155 +66,108 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:'a -> io 'b) :
       == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
 
 // The Dijkstra Monad
-let dm (a:Type) (wp:hist a) =
-  (m:(io a){wp `hist_ord` theta m})
+let dm (a:Type) (wp:hist a) (q:pure_post a) = 
+  m:(io (v:a{q v})){wp `hist_ord` theta m}
 
-let dm_return (a : Type) (x : a) : dm a (hist_return x) =
+let dm_return (a : Type) (x : a) : dm a (hist_return x) (fun r -> r == x) =
   io_return x
 
-let dm_bind
+unfold
+let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b)
+  : pure_post b
+  = fun y -> exists x. q1 x ==> q2 x y
+
+let dm_subcomp
+  (q1 q2:pure_post 'a)
+  (wp1 wp2 : hist 'a)
+  (m: dm 'a wp1 q1) 
+  (_:squash (forall x. q1 x ==> q2 x))
+  (_:squash (wp1 `hist_ord` wp2)) :
+  dm 'a wp2 q2= 
+  admit ();
+  m 
+  
+let dm_bind0
   (a b : Type)
   (wp_v : hist a)
-  (wp_f: a -> hist b)
-  (v : dm a wp_v)
-  (f : (x:a -> dm b (wp_f x))) :
-  Tot (dm b (hist_bind wp_v wp_f)) =
+  (wp_f:  a -> hist b)
+  (post_v: pure_post a)
+  (post_f: a -> pure_post b)
+  (v : dm a wp_v post_v)
+  (f : (x:a{post_v x} -> dm b (wp_f x) (bind_post post_v post_f))) :
+  Tot (dm b (hist_bind wp_v wp_f) (bind_post post_v post_f)) =
+  admit ();
   lemma_theta_is_monad_morphism_bind v f;
-  (** hist is monotonic.
-  
+
   assert (theta (io_bind v f) == hist_bind (theta v) (fun x -> theta (f x)));
   assert (wp_v `hist_ord` theta v);
   assert (forall r. wp_f r `hist_ord` theta (f r));
   assert (hist_bind wp_v wp_f `hist_ord` hist_bind (theta v) (fun x -> theta (f x)));
 
   (** goal: **)
-  assert (hist_bind wp_v wp_f `hist_ord` theta (io_bind v f));**)
-  io_bind v f
+  assert (hist_bind wp_v wp_f `hist_ord` theta (io_bind v f));
 
-let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
-  Pure (dm a wp2)
-    (requires hist_ord wp2 wp1)
-    (ensures fun _ -> True) =
-  f
-
-let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
-  dm a (hist_if_then_else wp1 wp2 b)
-
-let elim_pure #a #w (f : unit -> PURE a w) :
-  Pure a
-    (requires w (fun _ -> True))
-    (ensures fun r -> forall post. w post ==> post r) =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  f ()
-
-(** inspired from fstar/examples/layeredeffects/Alg.fst **)
-let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  Pure (dm a (wp_lift_pure_hist w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
-  let r = elim_pure #a #w f in
-  let r' : dm a (hist_return r) = dm_return a r in
-  dm_subcomp _ (hist_return r) (wp_lift_pure_hist w) r'
+  io_bind #(x:a{post_v x}) #(x:b{bind_post post_v post_f x}) v f
+  
+let dm_bind
+  (a b : Type)
+  (wp_v : hist a)
+  (wp_f: a -> hist b)
+  (post_v: pure_post a)
+  (post_f: a -> pure_post b)
+  (v : dm a wp_v post_v)
+  (f : (x:a{post_v x} -> dm b (wp_f x) (post_f x))) :
+  Tot (dm b (hist_bind wp_v wp_f) (bind_post post_v post_f)) =
+  let f' : (x:a{post_v x} -> dm b (wp_f x) (bind_post post_v post_f)) = begin
+    fun x -> 
+      dm_subcomp (post_f x) (bind_post post_v post_f) (wp_f x) (wp_f x) (f x) _ _
+  end in
+  dm_bind0 a b wp_v wp_f post_v post_f v f'
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:hist (v:a{q v})) = 
-  squash p -> dm (v:a{q v}) wp 
+let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:hist a) = 
+  squash p -> dm a wp q
 
-let l_return (a:Type) (x:a) : l_repr a True (fun _ -> True) (hist_return x) = fun () -> dm_return a x
+let l_return (a:Type) (x:a) : l_repr a True (fun r -> r == x) (hist_return x) = fun () -> dm_return a x
 
 unfold let trivial_pre : pure_pre = True
 
 unfold
-let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:(v:a{q1 v}) -> pure_pre) : pure_pre
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
   = p1 /\ (forall x. q1 x ==> p2 x)
-
-unfold
-let bind_post (#a #b:Type) (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
-  : pure_post b
-  = fun y -> exists (x:a{q1 x}). q2 x y
-
-let lemma_recast_wp000
-  (a b:Type)
-  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
-  (xwp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
-  (x: a{q1 x})
-  (p1 p2 : hist_post (v:b{bind_post q1 q2 v}))
-  (h:trace) :
-  Lemma
-    (requires (p1 `hist_post_ord` p2 /\ xwp x (fun lt r -> p1 lt r) h))
-    (ensures (xwp x (fun lt r -> p2 lt r) h)) = ()
-
-let recast_wp
-  (a b:Type)
-  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
-  (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
-  (x: a{q1 x}) :
-  Tot (hist (v:b{bind_post q1 q2 v})) = 
-  Classical.forall_intro_3 (Classical.move_requires_3 (lemma_recast_wp000 a b q1 q2 wp2 x));
-  fun p -> wp2 x (fun lt (r: b{q2 x r}) -> p lt r)
-
-let recast_dm
-  (a b:Type)
-  (q1:pure_post a) 
-  (q2:(v:a{q1 v}) -> pure_post b)
-  (wp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
-  (x: a{q1 x})
-  (g: dm (v:b{q2 x v}) (wp x)) :
-  Tot (dm (v:b{bind_post q1 q2 v}) (recast_wp a b q1 q2 wp x)) = 
-  admit ();
-  dm_bind
-    (v:b{q2 x v}) (v:b{bind_post q1 q2 v})
-    (wp x)
-    (fun r -> hist_return r)
-    g
-    (fun (v:b{q2 x v}) -> 
-      let v' : (vv:b{bind_post q1 q2 vv}) = v in
-      Return v')
-  
-  
 
 let l_bind (a b:Type)
   (p1:pure_pre) (q1:pure_post a)
-  (p2:(v:a{q1 v}) -> pure_pre) (q2:(v:a{q1 v}) -> pure_post b)
-  (wp1:hist (v:a{q1 v})) (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v}))
-  (f:l_repr a p1 q1 wp1) (g:(x:a{q1 x} -> l_repr b (p2 x) (q2 x) (wp2 x))) :
-  Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
-  fun _ -> 
-    dm_bind 
-      (v:a{q1 v})
-      (v:b{bind_post q1 q2 v})
-      wp1
-      (recast_wp a b q1 q2 wp2)
-      (f _)
-      (fun (x:a{q1 x}) -> 
-        let g' : dm (v:b{q2 x v}) (wp2 x) = g x _ in
-        recast_dm a b q1 q2 wp2 x g')
+  (p2:a -> pure_pre) (q2:a -> pure_post b)
+  (wp1:hist a) (wp2:a -> hist b)
+  (f:l_repr a p1 q1 wp1) (g:(x:a) -> l_repr b (p2 x) (q2 x) (wp2 x)) :
+  Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 wp2)) =
+  fun _ -> dm_bind a b wp1 wp2 q1 q2 (f _) (fun x -> g x _)
 
-let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v})) (wp2:hist (v:a{q2 v})) (f:l_repr a p1 q1 wp1)
+let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist a) (wp2:hist a) (f:l_repr a p1 q1 wp1)
   : Pure (l_repr a p2 q2 wp2)
     (requires (
       (p2 ==> p1) /\
       (forall x. q1 x ==> q2 x) /\
-      (forall (p:hist_post (v:a{q2 v})) h. wp2 p h ==> wp1 (fun lt r -> p lt (r <: (v:a{q2 v}))) h)))
-    (ensures fun _ -> True)
-  = fun _ ->  (
-    admit ();
-    f ())
+      (wp1 `hist_ord` wp2)))
+    (ensures fun _ -> True) =
+  fun _ -> dm_subcomp q1 q2 wp1 wp2 (f _) _ _
 
 unfold
 let l_if_then_else 
   (a : Type)
   (p1 p2: pure_pre)
   (q1 q2: pure_post a)
-  (wp1: hist (v:a{q1 v}))
-  (wp2: hist (v:a{q2 v}))
+  (wp1: hist a)
+  (wp2: hist a)
   (f : l_repr a p1 q1 wp1)
   (g : l_repr a p2 q2 wp2)
   (b : bool) : Type =
-  admit ();
-  l_repr (x:a{(b ==> q1 x) /\ ((~b) ==> q2 x)})
+  l_repr a
     ((b ==> p1) /\ ((~b) ==> p2)) 
     (fun x -> (b ==> q1 x) /\ ((~b) ==> q2 x)) 
-    (fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h))
+    (hist_if_then_else wp1 wp2 b)
 
 total
 reifiable
