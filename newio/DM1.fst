@@ -115,7 +115,9 @@ let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:hist (v:a{q v})) = 
+let histq a q = hist (v:a{q v})
+
+let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:histq a q) = 
   squash p -> dm (v:a{q v}) wp 
 
 let l_return (a:Type) (x:a) : l_repr a True (fun _ -> True) (hist_return x) = fun () -> dm_return a x
@@ -123,17 +125,17 @@ let l_return (a:Type) (x:a) : l_repr a True (fun _ -> True) (hist_return x) = fu
 unfold let trivial_pre : pure_pre = True
 
 unfold
-let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:(v:a{q1 v}) -> pure_pre) : pure_pre
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
   = p1 /\ (forall x. q1 x ==> p2 x)
 
 unfold
-let bind_post (#a #b:Type) (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
+let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b)
   : pure_post b
   = fun y -> exists (x:a{q1 x}). q2 x y
 
 let lemma_recast_wp000
   (a b:Type)
-  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
+  (q1:pure_post a) (q2:a -> pure_post b)
   (xwp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
   (x: a{q1 x})
   (p1 p2 : hist_post (v:b{bind_post q1 q2 v}))
@@ -144,8 +146,8 @@ let lemma_recast_wp000
 
 let recast_wp
   (a b:Type)
-  (q1:pure_post a) (q2:(v:a{q1 v}) -> pure_post b)
-  (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
+  (q1:pure_post a) (q2:a -> pure_post b)
+  (wp2:(x:a) -> histq b (q2 x)) 
   (x: a{q1 x}) :
   Tot (hist (v:b{bind_post q1 q2 v})) = 
   Classical.forall_intro_3 (Classical.move_requires_3 (lemma_recast_wp000 a b q1 q2 wp2 x));
@@ -186,10 +188,11 @@ let dm_subcompp (a:Type)
   m
 
 let l_bind (a b:Type)
-  (p1:pure_pre) (q1:pure_post a)
-  (p2:(v:a{q1 v}) -> pure_pre) (q2:(v:a{q1 v}) -> pure_post b)
-  (wp1:hist (v:a{q1 v})) (wp2:(x:a{q1 x}) -> hist (v:b{q2 x v}))
-  (f:l_repr a p1 q1 wp1) (g:(x:a{q1 x} -> l_repr b (p2 x) (q2 x) (wp2 x))) :
+  (p1:pure_pre) (p2:a -> pure_pre)
+  (q1:pure_post a) (q2:a -> pure_post b)
+  (wp1:histq a q1) (wp2:(x:a) -> histq b (q2 x))
+  (f:l_repr a p1 q1 wp1) 
+  (g:(x:a) -> l_repr b (p2 x) (q2 x) (wp2 x)) :
   Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
   fun _ -> 
     dm_bind 
@@ -214,26 +217,26 @@ let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v}
     (ensures fun _ -> True)
   = fun _ -> dm_subcompp a q1 q2 wp1 wp2 (f ())
 
-total
-reifiable
-reflectable
-layered_effect {
-  IOwp : a:Type -> p : pure_pre -> q : pure_post a -> wp : hist (v:a{q v}) -> Effect
-  with
+effect {
+  IOwp (a:Type) (p : pure_pre) (q : pure_post a) (wp : histq a q)
+  with {
        repr       = l_repr 
      ; return     = l_return
-     ; bind       = l_bind
-
-     ; subcomp      = l_subcomp
+     ; bind       = l_bind 
+     }
 }
+
 
 
 (** inspired from fstar/examples/layeredeffects/Alg.fst **)
 let lift_pure_l (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  Pure (l_repr a (wp_lift_pure_hist w) (w (fun _ -> True))) (requires w (fun _ -> True)) (ensures fun _ -> True) =
-  let r = elim_pure #a #w f in
+  l_repr a (as_requires w) (as_ensures w) (fun p h -> as_requires w /\ (forall r. as_ensures w r ==> p [] r)) =
+  fun _ -> 
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  let r = f () in
   let r'  = l_return a r in
-  l_subcomp _ (hist_return r) (wp_lift_pure_hist w) True (w (fun _ -> True)) r'
+  l_subcomp a True (as_requires w) (fun x -> x == r) (as_ensures w) (hist_return r)  (fun p h -> as_requires w /\ (forall r. as_ensures w r ==> p [] r)) r'
+
 
 sub_effect PURE ~> IOwp = lift_pure_l
 
