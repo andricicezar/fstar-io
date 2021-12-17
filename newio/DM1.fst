@@ -115,18 +115,21 @@ let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-let histq a q = hist (v:a{q v})
-
-let l_repr (a:Type) (p:pure_pre) (q:pure_post a) (wp:histq a q) = 
-  squash p -> dm (v:a{q v}) wp 
-
-let l_return (a:Type) (x:a) : l_repr a True (fun _ -> True) (hist_return x) = fun () -> dm_return a x
-
-unfold let trivial_pre : pure_pre = True
+unfold
+let histq a (q:pure_post a) = hist (v:a{q v})
 
 unfold
-let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
-  = p1 /\ (forall x. q1 x ==> p2 x)
+let eq_post (x y:'a) : Type0 = x == y
+
+unfold
+let histq_return (x:'a) : histq 'a (eq_post x) =
+  hist_return x
+
+let dmq (a:Type) (q:pure_post a) (wp:histq a q) = 
+  dm (v:a{q v}) wp 
+
+let dmq_return (a:Type) (x:a) : dmq a (eq_post x) (histq_return x) = 
+  dm_return _ x
 
 unfold
 let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b)
@@ -136,7 +139,7 @@ let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b)
 let lemma_recast_wp000
   (a b:Type)
   (q1:pure_post a) (q2:a -> pure_post b)
-  (xwp:(x:a{q1 x}) -> hist (v:b{q2 x v})) 
+  (xwp:(x:a{q1 x}) -> histq b (q2 x)) 
   (x: a{q1 x})
   (p1 p2 : hist_post (v:b{bind_post q1 q2 v}))
   (h:trace) :
@@ -165,8 +168,8 @@ let io_subcomp (a:Type)
 unfold
 let hist_ordp 
   (q1:pure_post 'a) (q2:pure_post 'a)
-  (wp1: hist (v:'a{q1 v})) 
-  (wp2: hist (v:'a{q2 v})) :
+  (wp1: histq 'a q1) 
+  (wp2: histq 'a q2) :
   Pure Type0
     (requires (forall x. q2 x ==> q1 x))
     (ensures (fun _ -> True)) =
@@ -175,8 +178,8 @@ let hist_ordp
 
 let dm_subcompp (a:Type) 
   (q1:pure_post a) (q2:pure_post a)
-  (wp1: hist (v:a{q1 v})) 
-  (wp2: hist (v:a{q2 v}))
+  (wp1: histq a q1) 
+  (wp2: histq a q2)
   (f : dm (v:a{q1 v}) wp1) :
   Pure (dm (v:a{q2 v}) wp2)
     (requires ((forall x. q1 x ==> q2 x) /\ hist_ordp q2 q1 wp2 wp1))
@@ -187,66 +190,151 @@ let dm_subcompp (a:Type)
   assert (wp2 `hist_ord` (theta m));
   m
 
-let l_bind (a b:Type)
-  (p1:pure_pre) (p2:a -> pure_pre)
+let dmq_bind (a b:Type)
   (q1:pure_post a) (q2:a -> pure_post b)
   (wp1:histq a q1) (wp2:(x:a) -> histq b (q2 x))
-  (f:l_repr a p1 q1 wp1) 
-  (g:(x:a) -> l_repr b (p2 x) (q2 x) (wp2 x)) :
-  Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
-  fun _ -> 
+  (f:dmq a q1 wp1) 
+  (g:(x:a{q1 x}) -> dmq b (q2 x) (wp2 x)) :
+  Tot (dmq b (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
     dm_bind 
       (v:a{q1 v})
       (v:b{bind_post q1 q2 v})
       wp1
       (recast_wp a b q1 q2 wp2)
-      (f _)
+      f
       (fun (x:a{q1 x}) -> 
         dm_subcompp b
          (q2 x) (bind_post q1 q2)
          (wp2 x)
          (recast_wp a b q1 q2 wp2 x)
-         (g x _))
+         (g x))
 
-let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v})) (wp2:hist (v:a{q2 v})) (f:l_repr a p1 q1 wp1)
-  : Pure (l_repr a p2 q2 wp2)
+let dmq_subcomp (a:Type) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v})) (wp2:hist (v:a{q2 v})) (f:dmq a q1 wp1) :
+  Pure (dmq a q2 wp2)
+    (requires (
+      (forall x. q1 x ==> q2 x) /\
+      (hist_ordp q2 q1 wp2 wp1)))
+    (ensures fun _ -> True) =
+  dm_subcompp a q1 q2 wp1 wp2 f
+
+///////////////////////////////////////////////////////////////////////////
+
+
+let pdmq (a:Type) (p:pure_pre) (q:pure_post a) (wp:histq a q) = 
+  squash p -> dmq a q wp 
+
+let pdmq_return (a:Type) (x:a) : pdmq a True (eq_post x) (histq_return x) = 
+  fun _ -> dmq_return _ x
+
+unfold
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
+  = p1 /\ (forall x. q1 x ==> p2 x)
+
+let pdmq_bind (a b:Type)
+  (p1:pure_pre) (p2:a -> pure_pre)
+  (q1:pure_post a) (q2:a -> pure_post b)
+  (wp1:histq a q1) (wp2:(x:a) -> histq b (q2 x))
+  (f:pdmq a p1 q1 wp1) 
+  (g:(x:a) -> pdmq b (p2 x) (q2 x) (wp2 x)) :
+  Tot (pdmq b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 (recast_wp a b q1 q2 wp2))) =
+  fun (pre:squash (bind_pre p1 q1 p2)) ->
+  dmq_bind a b q1 q2 wp1 wp2 (f pre) (fun (x:a{q1 x}) -> g x pre)
+
+let pdmq_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1 v})) (wp2:hist (v:a{q2 v})) (f:pdmq a p1 q1 wp1) :
+  Pure (pdmq a p2 q2 wp2)
     (requires (
       (p2 ==> p1) /\
       (forall x. q1 x ==> q2 x) /\
       (hist_ordp q2 q1 wp2 wp1)))
-    (ensures fun _ -> True)
-  = fun _ -> dm_subcompp a q1 q2 wp1 wp2 (f ())
+    (ensures fun _ -> True) =
+  fun _ ->
+    dmq_subcomp a q1 q2 wp1 wp2 (f ())
 
+unfold
+let q_if_then_else (q1 q2:pure_post 'a) (b:bool) : pure_post 'a =
+  (fun x -> (b ==> q1 x) /\ ((~b) ==> q2 x)) 
+
+unfold
+let histq_if_then_else (q1 q2:pure_post 'a) (wp1:histq 'a q1) (wp2:histq 'a q2) (b:bool) : histq 'a (q_if_then_else q1 q2 b) by (
+  explode ();
+  dump "H"
+)=
+  admit ();
+  fun (p:trace -> (x:'a{q_if_then_else q1 q2 b x}) -> Type0) h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
+  
+unfold
+let pdmq_if_then_else 
+  (a : Type)
+  (p1 p2: pure_pre)
+  (q1 q2: pure_post a)
+  (wp1: histq a q1)
+  (wp2: histq a q2)
+  (f : pdmq a p1 q1 wp1)
+  (g : pdmq a p2 q2 wp2)
+  (b : bool) : Type =
+  pdmq a
+    ((b ==> p1) /\ ((~b) ==> p2)) 
+    (q_if_then_else q1 q2 b)
+    (histq_if_then_else q1 q2 wp1 wp2 b)
+
+
+total
+reifiable
+reflectable
 effect {
   IOwp (a:Type) (p : pure_pre) (q : pure_post a) (wp : histq a q)
   with {
-       repr       = l_repr 
-     ; return     = l_return
-     ; bind       = l_bind 
+       repr       = pdmq
+     ; return     = pdmq_return
+     ; bind       = pdmq_bind 
+     ; subcomp    = pdmq_subcomp
+     ; if_then_else = pdmq_if_then_else
      }
 }
-
-
-
-(** inspired from fstar/examples/layeredeffects/Alg.fst **)
-let lift_pure_l (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  l_repr a (as_requires w) (as_ensures w) (fun p h -> as_requires w /\ (forall r. as_ensures w r ==> p [] r)) =
-  fun _ -> 
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  let r = f () in
-  let r'  = l_return a r in
-  l_subcomp a True (as_requires w) (fun x -> x == r) (as_ensures w) (hist_return r)  (fun p h -> as_requires w /\ (forall r. as_ensures w r ==> p [] r)) r'
-
-
-sub_effect PURE ~> IOwp = lift_pure_l
 
 effect IO
   (a:Type)
   (pre : trace -> Type0)
   (post : trace -> trace -> a -> Type0) =
   IOwp a 
-    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
     True
+    (fun _ -> True)
+    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
+
+let trivial_wp (#a:Type) q : histq a q = fun p h -> forall (r:a{q r}). p [] r
+
+unfold let as_requires (#a: Type) (wp: pure_wp a) = wp (fun x -> True)
+unfold let as_ensures (#a: Type) (wp: pure_wp a) (x: a) = ~(wp (fun y -> (y =!= x)))
+
+let lift_pure_pdmq (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : 
+  pdmq a (as_requires w) (as_ensures w) (trivial_wp (as_ensures w)) =
+  fun _ ->
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+    let r = f () in
+    let r' = dmq_return a r in
+    dmq_subcomp _ _ _ _ _ r'
+
+sub_effect PURE ~> IOwp = lift_pure_pdmq
+
+assume val p' : prop
+assume val p'' : prop
+assume val pure_lemma (_:unit) : Lemma p'
+assume val some_f : unit -> IO unit (requires (fun _ -> p')) (ensures fun _ _ _ -> p'')
+assume val some_f' : unit -> IO unit (requires (fun _ -> p'')) (ensures fun _ _ _ -> True)
+  
+let test () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  pure_lemma ();
+  assert p'
+  
+let test' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  pure_lemma ();
+  some_f ()
+
+let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) by (explode ())=
+  pure_lemma ();
+  some_f ();
+  assert p';
+  some_f' ()
 
 let static_cmd
   (cmd : io_cmds)
@@ -257,32 +345,15 @@ let static_cmd
         lt == [convert_call_to_event cmd argz r])) =
   IOwp?.reflect (fun _ -> io_call cmd argz)
 
-let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (trace_append h lt))) by (explode ()) =
+  let _ = static_cmd Close fd in
+  ()
+
+let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) by (
+  explode ()) =
   let fd = static_cmd Openfile "../Makefile" in
   if Some? fd then begin (** test if Openfile was successful **)
     let msg = static_cmd Read (Some?.v fd) in
     let _ = static_cmd Close (Some?.v fd) in
     ()
   end else ()
-
-let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (trace_append h lt))) =
-  let _ = static_cmd Close fd in
-  ()
-
-
-assume val p' : prop
-assume val pure_lemma (_:unit) : Lemma p'
-assume val some_f : unit -> IO unit (requires (fun _ -> p')) (ensures fun _ _ _ -> True)
-  
-let test () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  pure_lemma ();
-  assert p'
-  
-let test' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  pure_lemma ();
-  some_f ()
-
-let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) by (explode (); dump "H") =
-  pure_lemma ();
-  assert p';
-  some_f ()
