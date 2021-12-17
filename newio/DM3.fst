@@ -115,8 +115,52 @@ let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+let wconj (wp:hist 'a) (q:pure_post 'a) : hist 'a =
+  fun p -> wp (fun lt r -> q r /\ p lt r)
+
+let dmq (a:Type) (wp:hist a) (q:pure_post a) =
+  dm a (wconj wp q)
+
+let dmq_return (a:Type) (x:a) : dmq a (hist_return x) (fun r -> r == x) =
+  dm_return a x
+  
+unfold
+let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b) : pure_post b =
+  fun y -> exists x. q1 x ==> q2 x y
+
+let lemma_wconj_bind_hist_ord_bind_wconj
+ (a b:Type)
+ (q1:pure_post a) (q2:a -> pure_post b)
+ (wp1:hist a) (wp2:(x:a) -> hist b) :
+ Lemma (
+   wconj (hist_bind wp1 wp2) (bind_post q1 q2) `hist_ord`
+     hist_bind (wconj wp1 q1) (fun x -> wconj (wp2 x) (q2 x))) = 
+ 
+ assume (forall h p.
+   (fun lt r -> wp2 r (fun lt' r' -> (bind_post q1 q2 r') /\ p (lt @ lt') r') (rev lt @ h))
+   `hist_post_ord` (fun lt r -> q1 r /\ wp2 r (fun lt' r' -> q2 r r' /\ p (lt @ lt') r') (rev lt @ h))) (*by (
+   norm [delta_only [`%hist_post_ord;`%bind_post]];
+   explode ();
+   norm [iota];
+   dump "h"
+ )**);
+ admit ();
+ ()
+
+
+let dmq_bind (a b:Type)
+  (q1:pure_post a) (q2:a -> pure_post b)
+  (wp1:hist a) (wp2:(x:a) -> hist b)
+  (f:dmq a wp1 q1) 
+  (g:(x:a) -> dmq b (wp2 x) (q2 x)) :
+  Tot (dmq b (hist_bind wp1 wp2) (bind_post q1 q2))  =
+  let d = dm_bind a b (wconj wp1 q1) (fun x -> wconj (wp2 x) (q2 x)) f g in
+  lemma_wconj_bind_hist_ord_bind_wconj a b q1 q2 wp1 wp2;
+  dm_subcomp _ _ _ d
+
+
 let l_repr (a:Type) (pre:pure_pre) (q:pure_post a) (wp:hist a) = 
-  squash pre -> dm a (fun p -> wp (fun lt r -> q r /\ p lt r))
+  squash pre -> dmq a wp q
 
 let l_return (a:Type) (x:a) : l_repr a True (fun r -> r == x) (hist_return x) = 
   fun () -> dm_return a x
@@ -127,10 +171,6 @@ unfold
 let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
   = p1 /\ (forall x. q1 x ==> p2 x)
 
-unfold
-let bind_post (#a #b:Type) (q1:pure_post a) (q2:a -> pure_post b)
-  : pure_post b
-  = fun y -> exists x. q1 x ==> q2 x y
 (**
 let lemma_recast_wp000
   (a b:Type)
@@ -193,9 +233,8 @@ let l_bind (a b:Type)
   (f:l_repr a p1 q1 wp1) 
   (g:(x:a) -> l_repr b (p2 x) (q2 x) (wp2 x)) :
   Tot (l_repr b (bind_pre p1 q1 p2) (bind_post q1 q2) (hist_bind wp1 wp2)) =
-  fun _ -> 
-    admit ();
-    dm_bind a b (fun p -> wp1 (fun lt r -> q1 r /\ p lt r)) (fun x p -> wp2 x (fun lt r -> q2 x r /\ p lt r)) (f _) (fun x -> g x _)
+  fun (pre:squash (bind_pre p1 q1 p2)) -> 
+    dmq_bind a b q1 q2 wp1 wp2 (f pre) (fun x -> assume (q1 x); g x pre)
 
 let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1 wp2:hist a) (f:l_repr a p1 q1 wp1)
   : Pure (l_repr a p2 q2 wp2)
@@ -204,7 +243,7 @@ let l_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1 wp2:hist a) (f:
       (forall x. q1 x ==> q2 x) /\
       (hist_ord wp2 wp1)))
     (ensures fun _ -> True)
-  = fun _ -> admit (); dm_subcomp a  (fun p -> wp1 (fun lt r -> q1 r /\ p lt r)) (fun p -> wp2 (fun lt r -> q2 r /\ p lt r)) (f ())
+  = fun _ -> qdm_subcomp a (fun p -> wp1 (fun lt r -> q1 r /\ p lt r)) (fun p -> wp2 (fun lt r -> q2 r /\ p lt r)) (f ())
 
 total
 reifiable
