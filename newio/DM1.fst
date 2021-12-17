@@ -227,8 +227,8 @@ let pdmq_return (a:Type) (x:a) : pdmq a True (eq_post x) (histq_return x) =
   fun _ -> dmq_return _ x
 
 unfold
-let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre
-  = p1 /\ (forall x. q1 x ==> p2 x)
+let bind_pre (#a:Type) (p1:pure_pre) (q1:pure_post a) (p2:a -> pure_pre) : pure_pre =
+  p1 /\ (forall x. q1 x ==> p2 x)
 
 let pdmq_bind (a b:Type)
   (p1:pure_pre) (p2:a -> pure_pre)
@@ -252,7 +252,7 @@ let pdmq_subcomp (a:Type) (p1 p2:pure_pre) (q1 q2:pure_post a) (wp1:hist (v:a{q1
 
 unfold
 let q_if_then_else (q1 q2:pure_post 'a) (b:bool) : pure_post 'a =
-  (fun x -> (b ==> q1 x) /\ ((~b) ==> q2 x)) 
+  fun x -> (b ==> q1 x) /\ ((~b) ==> q2 x)
 
 unfold
 let histq_if_then_else (q1 q2:pure_post 'a) (wp1:histq 'a q1) (wp2:histq 'a q2) (b:bool) : histq 'a (q_if_then_else q1 q2 b) by (
@@ -260,6 +260,7 @@ let histq_if_then_else (q1 q2:pure_post 'a) (wp1:histq 'a q1) (wp2:histq 'a q2) 
   dump "H"
 )=
   admit ();
+  (** TODO: show that histq_if_then_else is monotonic **)
   fun (p:trace -> (x:'a{q_if_then_else q1 q2 b x}) -> Type0) h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
   
 unfold
@@ -276,7 +277,6 @@ let pdmq_if_then_else
     ((b ==> p1) /\ ((~b) ==> p2)) 
     (q_if_then_else q1 q2 b)
     (histq_if_then_else q1 q2 wp1 wp2 b)
-
 
 total
 reifiable
