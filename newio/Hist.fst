@@ -56,7 +56,7 @@ let hist_bind (w : hist 'a) (kw : 'a -> hist 'b) : hist 'b =
 
 unfold
 let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
-  reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
 
 unfold
