@@ -99,20 +99,6 @@ let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
 let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
   dm a (hist_if_then_else wp1 wp2 b)
 
-let elim_pure #a #w (f : unit -> PURE a w) :
-  Pure a
-    (requires w (fun _ -> True))
-    (ensures fun r -> forall post. w post ==> post r) =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  f ()
-
-(** inspired from fstar/examples/layeredeffects/Alg.fst **)
-let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  Pure (dm a (wp_lift_pure_hist w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
-  let r = elim_pure #a #w f in
-  let r' : dm a (hist_return r) = dm_return a r in
-  dm_subcomp _ (hist_return r) (wp_lift_pure_hist w) r'
-
 ////////////////////////////////////////////////////////////////////////////////////////
 
 let io_subcomp (a:Type)
@@ -139,7 +125,7 @@ let pure_post_if_then_else (q1 q2:pure_post 'a) (b:bool) : pure_post 'a =
 
 (** Later we refine the output type of the dijkstra monad with the pure post condition (q),
 which forces us to index the dijkstra monad by a weakest-precondition of type `hist (v:a{q v})`.
-For cleanliness reasons, we define a synonym for that, called `histq`. **)
+For cleanliness reasons, we define a synonym for that called `histq`. **)
 
 unfold
 let histq a (q:pure_post a) = hist (v:a{q v})
@@ -315,8 +301,9 @@ effect IO
 unfold let as_requires (#a: Type) (wp: pure_wp a) = wp (fun x -> True)
 unfold let as_ensures (#a: Type) (wp: pure_wp a) (x: a) = ~(wp (fun y -> (y =!= x)))
 
-(** histq_for_pure is labeled with unfold, but when trying to prove the lift, it confuses
-the SMT. Therefore, this is just a trick to get an automated proof of the lift **)
+(** histq_for_pure is labeled with unfold, but when trying to prove the lift,
+the unfolding confuses
+the SMT. Therefore, the following is just a trick to get an automated proof of the lift **)
 let histq_for_pure0 = histq_for_pure
 let lift_pure_pdmq0 (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : 
   pdmq a (as_requires w) (as_ensures w) (histq_for_pure0 (as_ensures w)) =
