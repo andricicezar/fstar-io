@@ -8,6 +8,8 @@ open Free
 open Free.IO
 open Hist
 
+(** TODO: parameterize the entire file by op and sig **)
+
 (** Inspierd from Kenji's thesis (2.4.5) **)
 let rec theta #a
   (m : io a) : hist a =
@@ -128,7 +130,7 @@ which forces us to index the dijkstra monad by a weakest-precondition of type `h
 For cleanliness reasons, we define a synonym for that called `histq`. **)
 
 unfold
-let histq a (q:pure_post a) = hist (v:a{q v})
+let histq #event a (q:pure_post a) = hist #event (v:a{q v})
 
 unfold
 let histq_ord
@@ -168,8 +170,7 @@ let histq_subcomp_bind
 
 unfold
 let histq_if_then_else (q1 q2:pure_post 'a) (wp1:histq 'a q1) (wp2:histq 'a q2) (b:bool) : histq 'a (pure_post_if_then_else q1 q2 b) by (
-  explode ();
-  dump "H"
+  explode ()
 )=
   admit ();
   (** TODO: show that histq_if_then_else is monotonic **)
@@ -278,7 +279,7 @@ total
 reifiable
 reflectable
 effect {
-  IOwp (a:Type) (p : pure_pre) (q : pure_post a) (wp : histq a q)
+  IOwp (a:Type) (p : pure_pre) (q : pure_post a) (wp : histq #event a q)
   with {
        repr       = pdmq
      ; return     = pdmq_return
@@ -320,24 +321,11 @@ let lift_pure_pdmq (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a 
 sub_effect PURE ~> IOwp = lift_pure_pdmq
 
 assume val p' : prop
-assume val p'' : prop
-assume val pure_lemma (_:unit) : Lemma p'
-assume val some_f : unit -> IO unit (requires (fun _ -> p')) (ensures fun _ _ _ -> p'')
-assume val some_f' : unit -> IO unit (requires (fun _ -> p'')) (ensures fun _ _ _ -> True)
+assume val some_f : unit -> IO unit (requires (fun _ -> True)) (ensures fun _ _ _ -> p')
   
-let test () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  pure_lemma ();
-  assert p'
-  
-let test' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  pure_lemma ();
-  some_f ()
-
 let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  pure_lemma ();
   some_f ();
-  assert p';
-  some_f' ()
+  assert p'
 
 let static_cmd
   (cmd : io_cmds)
@@ -348,7 +336,7 @@ let static_cmd
         lt == [convert_call_to_event cmd argz r])) =
   IOwp?.reflect (fun _ -> io_call cmd argz)
 
-let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (trace_append h lt))) =
+let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (List.rev lt @ h))) =
   let _ = static_cmd Close fd in
   ()
 
