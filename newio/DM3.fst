@@ -189,7 +189,7 @@ total
 reifiable
 reflectable
 layered_effect {
-  IOwp : a:Type -> p : pure_pre -> q : pure_post a -> wp : hist a -> Effect
+  IOwp : a:Type -> p : pure_pre -> q : pure_post a -> wp : hist #event a -> Effect
   with
        repr       = l_repr 
      ; return     = l_return
