@@ -106,11 +106,11 @@ unfold
 let hist_bind_v2 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) : hist 'b =
   fun p2 h -> (forall (p1:hist_post 'a). wp1 p1 h /\ (forall (lt:trace) r. p1 lt r ==> (wp2 r p2 (List.rev lt @ h))))
 
-let lemma_hist_bind_implies_hist_bind_v2 (w : hist 'a) (kw : 'a -> hist 'b) :
-  Lemma (hist_bind w kw `hist_ord` hist_bind_v2 w kw) = admit ()
-  
+let lemma_hist_bind_implies_hist_bind_v2 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) :
+  Lemma (hist_bind wp1 wp2 `hist_ord` hist_bind_v2 wp1 wp2) = admit ()
+
 let pdm_bind_v2_0 (a b:Type)
-  (wp1:hist a) (wp2:(x:a) -> hist b)
+  (wp1:hist a) (wp2:a -> hist b)
   (f:pdm a wp1) 
   (g:(x:a) -> pdm b (wp2 x))
   (pre:squash (hist_as_requires (hist_bind_v2 wp1 wp2))) :
