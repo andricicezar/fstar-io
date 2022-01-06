@@ -104,7 +104,7 @@ total
 reifiable
 reflectable
 layered_effect {
-  IOwp : a:Type -> wp : hist a -> Effect
+  IOwp : a:Type -> wp : hist #event a -> Effect
   with
        repr       = dm 
      ; return     = dm_return
@@ -136,6 +136,34 @@ effect IO
   (post : trace -> trace -> a -> Type0) =
   IOwp a (fun (p:hist_post a) (h:trace) ->
     pre h /\ (forall lt r. post h lt r ==>  p lt r))
+
+assume val p' : prop
+assume val pure_lemma : unit -> Lemma p'
+assume val some_f : unit -> IO unit (requires (fun _ -> p')) (ensures fun _ _ _ -> True)
+  
+let test () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  (** this works because it is a pure bind, and then
+  a lift to IO **)
+  pure_lemma ();
+  assert (p')
+  
+let test' () : IO unit (fun _ -> p') (fun _ _ _ -> True) =
+  (** this works because the pure computation has a true pre-condition **)
+  pure_lemma ();
+  some_f ()
+
+#set-options "--log_queries"
+let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  (pure_lemma ();
+  assert (p'));
+  some_f ()
+
+#set-options "--log_queries"
+let test''' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+  pure_lemma ();
+  (_assert (p');
+  some_f ())
+
 
 let static_cmd
   (cmd : io_cmds)
