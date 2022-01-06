@@ -96,10 +96,10 @@ let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (
 
 let hist_as_requires (wp:hist 'a) = forall h. wp (fun _ _ -> True) h
 
-let pdmq (a:Type) (wp:hist a) = 
+let pdm (a:Type) (wp:hist a) = 
   squash (hist_as_requires wp) -> dm a wp 
 
-let pdmq_return (a:Type) (x:a) : pdmq a (hist_return x) =
+let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
   fun _ -> dm_return _ x
 
 unfold
@@ -109,10 +109,10 @@ let hist_bind_v2 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) : hist 'b =
 let lemma_hist_bind_implies_hist_bind_v2 (w : hist 'a) (kw : 'a -> hist 'b) :
   Lemma (hist_bind w kw `hist_ord` hist_bind_v2 w kw) = admit ()
   
-let pdmq_bind_v2_0 (a b:Type)
+let pdm_bind_v2_0 (a b:Type)
   (wp1:hist a) (wp2:(x:a) -> hist b)
-  (f:pdmq a wp1) 
-  (g:(x:a) -> pdmq b (wp2 x))
+  (f:pdm a wp1) 
+  (g:(x:a) -> pdm b (wp2 x))
   (pre:squash (hist_as_requires (hist_bind_v2 wp1 wp2))) :
   Tot (dm b (hist_bind_v2 wp1 wp2)) =
   assert (hist_as_requires wp1); (** this should be easy to prove by instantiating pre **)
@@ -122,39 +122,39 @@ let pdmq_bind_v2_0 (a b:Type)
     assert (hist_as_requires (wp2 x));
     g x _)
 
-let pdmq_bind_v2 (a b:Type)
+let pdm_bind_v2 (a b:Type)
   (wp1:hist a) (wp2:(x:a) -> hist b)
-  (f:pdmq a wp1) 
-  (g:(x:a) -> pdmq b (wp2 x)) :
-  pdmq b (hist_bind_v2 wp1 wp2) =
-  pdmq_bind_v2_0 a b wp1 wp2 f g 
+  (f:pdm a wp1) 
+  (g:(x:a) -> pdm b (wp2 x)) :
+  pdm b (hist_bind_v2 wp1 wp2) =
+  pdm_bind_v2_0 a b wp1 wp2 f g 
 
-let pdmq_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdmq a wp1) :
-  Pure (pdmq a wp2)
+let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
+  Pure (pdm a wp2)
     (requires (
       (wp2 `hist_ord` wp1)))
     (ensures fun _ -> True) =
   fun _ -> dm_subcomp a wp1 wp2 (f ())
   
-let pdmq_bind (a b:Type)
+let pdm_bind (a b:Type)
   (wp1:hist a) (wp2:(x:a) -> hist b)
-  (f:pdmq a wp1) 
-  (g:(x:a) -> pdmq b (wp2 x)) :
-  pdmq b (hist_bind wp1 wp2) =
+  (f:pdm a wp1) 
+  (g:(x:a) -> pdm b (wp2 x)) :
+  pdm b (hist_bind wp1 wp2) =
   lemma_hist_bind_implies_hist_bind_v2 wp1 wp2;
   assert ((hist_bind wp1 wp2) `hist_ord` (hist_bind_v2 wp1 wp2)); 
-  pdmq_subcomp _ (hist_bind_v2 wp1 wp2) (hist_bind wp1 wp2) (pdmq_bind_v2 a b wp1 wp2 f g) 
+  pdm_subcomp _ (hist_bind_v2 wp1 wp2) (hist_bind wp1 wp2) (pdm_bind_v2 a b wp1 wp2 f g) 
 
   
 unfold
-let pdmq_if_then_else 
+let pdm_if_then_else 
   (a : Type)
   (wp1: hist a)
   (wp2: hist a)
-  (f : pdmq a wp1)
-  (g : pdmq a wp2)
+  (f : pdm a wp1)
+  (g : pdm a wp2)
   (b : bool) : Type =
-  pdmq a
+  pdm a
     (hist_if_then_else wp1 wp2 b)
 
 total
@@ -163,11 +163,11 @@ reflectable
 effect {
   IOwp (a:Type) (wp : hist #event a) 
   with {
-       repr       = pdmq
-     ; return     = pdmq_return
-     ; bind       = pdmq_bind 
-     ; subcomp    = pdmq_subcomp
-     ; if_then_else = pdmq_if_then_else
+       repr       = pdm
+     ; return     = pdm_return
+     ; bind       = pdm_bind 
+     ; subcomp    = pdm_subcomp
+     ; if_then_else = pdm_if_then_else
      }
 }
 
@@ -178,8 +178,8 @@ effect IO
   IOwp a 
     (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
 
-let lift_pure_pdmq0 (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  pdmq a (wp_lift_pure_hist w) =
+let lift_pure_pdm0 (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
+  pdm a (wp_lift_pure_hist w) =
   fun (pre:squash (hist_as_requires (wp_lift_pure_hist w))) ->
     assert (hist_as_requires (wp_lift_pure_hist #a w) ==>
         as_requires w) by (
@@ -193,11 +193,11 @@ let lift_pure_pdmq0 (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a
     let r' = dm_return _ r in
     dm_subcomp _ _ _ r'
 
-let lift_pure_pdmq (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  pdmq a (wp_lift_pure_hist w) =
-    lift_pure_pdmq0 a w f
+let lift_pure_pdm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
+  pdm a (wp_lift_pure_hist w) =
+    lift_pure_pdm0 a w f
 
-sub_effect PURE ~> IOwp = lift_pure_pdmq
+sub_effect PURE ~> IOwp = lift_pure_pdm
   
 assume val p : prop
 assume val p' : prop
