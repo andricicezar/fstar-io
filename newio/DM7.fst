@@ -10,26 +10,20 @@ open Hist
 open DM
 
 let pdm (a:Type) (wp:hist a) = 
-  pre : pure_pre { forall p h. wp p h ==> pre } & squash pre -> dm a wp
+  pre : pure_pre { forall p h. wp p h ==> pre } & (squash pre -> dm a wp)
 
 let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
-  fun _ -> dm_return _ x
+ (| True, (fun _ -> dm_return _ x) |)
 
-let pdm_bind_0 (a b:Type)
-  (wp1:hist a) (wp2:a -> hist b)
-  (f:pdm a wp1) 
-  (g:(x:a) -> pdm b (wp2 x))
-  (pre:pure_pre { forall p h. (hist_bind wp1 wp2) p h ==> pre })
-  (spre:squash (pre)) :
-  Tot (dm b (hist_bind wp1 wp2)) =
-  dm_bind a b wp1 wp2 (f (| pre, _|)) (fun (x:a) -> g x (| pre, _ |))
-  
 let pdm_bind (a b:Type)
   (wp1:hist a) (wp2:a -> hist b)
   (f:pdm a wp1) 
   (g:(x:a) -> pdm b (wp2 x)) :
   pdm b (hist_bind wp1 wp2) =
-  fun ((| pre, spre |)) -> pdm_bind_0 _ _ wp1 wp2 f g pre spre
+  let (| fpre, f |) = f in
+  (| fpre, (fun _ -> dm_bind a b wp1 wp2 (f _) (fun x -> 
+    let (| gpre, g |) = g x in 
+    g _)) |)
 
 let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
   Pure (pdm a wp2)
@@ -71,18 +65,14 @@ effect IO
   IOwp a 
     (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
 
-let lift_pure_pdm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  pdm a (wp_lift_pure_hist w) =
-  fun ((| pre, pres |)) ->
+let lift_pure_pdm (a : Type) 
+  (w : pure_wp a)
+  (f:(eqtype_as_type unit -> PURE a w))
+  (pre : pure_pre { forall p h. (wp_lift_pure_hist w) p h ==> pre })
+  (spre:squash pre) : 
+  dm a (wp_lift_pure_hist w) =
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-    assert ((forall p h. wp_lift_pure_hist #a w p h ==> pre));
-  admit ();
-    assert (as_requires w) by (
-        norm [delta_only [`%wp_lift_pure_hist; `%as_requires]];
-        let impl = implies_intro () in
-        let impl = instantiate impl (`([])) in
-        assumption ()
-    );
+    assume (pre == as_requires w);
     let r = f () in
     let r' = dm_return _ r in
     dm_subcomp _ _ _ r'
