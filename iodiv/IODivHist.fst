@@ -795,8 +795,11 @@ let inf_prefix #a (r : branch a) (n : nat) : Pure trace (requires diverges r) (e
          )
    by subcomp.
    Maybe not necessary to talk about the computed wp of t.
-*)
 
+   This definition is wrong, and with reversed history it makes even less sense.
+   Will update later.
+*)
+(*
 let downward_closed (inv : trace -> Type0) =
   forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
 
@@ -1167,9 +1170,10 @@ let iodiv_repeat_with_inv (inv : trace -> Type0) (body : iodiv unit (winv inv)) 
   end ;
 
   repeat body
+*)
 
 let iodiv_subcomp (a : Type) (w1 w2 : wp a) (m : iodiv a w1) :
-  Pure (iodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
+  Pure (iodiv a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
 = m
 
 let wite #a (w1 w2 : wp a) (b : bool) : wp a =
@@ -1214,7 +1218,7 @@ reflectable reifiable total layered_effect {
 
 sub_effect PURE ~> IODIV = lift_pure_iodiv
 
-effect IODiv (a : Type) (pre : trace -> Type0) (post : trace -> branch a -> Type0) =
+effect IODiv (a : Type) (pre : history -> Type0) (post : history -> branch a -> Type0) =
   IODIV a (wprepost pre post)
 
 (** Making the effect partial *)
