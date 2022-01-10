@@ -140,8 +140,36 @@ type branch a =
 unfold
 let wpost a = branch a -> Type0
 
+(** History is in reverse order (last event first)
+  The point is that the SMT will have to prove goal with an unknown full history
+  only the latest elements will be concrete.
+*)
 unfold
-let wpre a = hist:trace -> Type0
+let history = trace
+
+// TODO Replace hist_cons hist [e] with e :: hist?
+unfold
+let hist_cons (hist : history) (tr : trace) : history =
+  (rev tr) @ hist
+
+let hist_cons_append (hist : history) (tr tr' : trace) :
+  Lemma (hist_cons (hist_cons hist tr) tr' == hist_cons hist (tr @ tr'))
+= calc (==) {
+    hist_cons (hist_cons hist tr) tr' ;
+    == {}
+    rev tr' @ (hist_cons hist tr) ;
+    == {}
+    rev tr' @ (rev tr @ hist) ;
+    == { append_assoc (rev tr') (rev tr) hist }
+    (rev tr' @ rev tr) @ hist ;
+    == { rev_append tr tr' }
+    rev (tr @ tr') @ hist ;
+    == {}
+    hist_cons hist (tr @ tr') ;
+  }
+
+unfold
+let wpre a = hist:history -> Type0
 
 let wp a = wpost a -> wpre a
 
@@ -179,72 +207,72 @@ let shift_post #a (tr : trace) (post : wpost a) : wpost a =
 
 unfold
 let wbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  fun (post : wpost b) (hist : trace) ->
+  fun (post : wpost b) (hist : history) ->
     w (fun b ->
       match b with
-      | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+      | Fin tr x -> wf x (shift_post tr post) (hist_cons hist tr)
       | Inf p -> post (Inf p)
     ) hist
 
 unfold
-let stronger_wp #a (w1 w2 : wp a) : Type0 =
-  forall (post : wpost a) (hist : trace). w1 post hist ==> w2 post hist
+let wle #a (w1 w2 : wp a) : Type0 =
+  forall (post : wpost a) (hist : history). w2 post hist ==> w1 post hist
 
 unfold
 let event_stream #a (t : iotree a) (p : iopostream) =
   forall (n : nat). isEvent (t (stream_trunc p n))
 
 (** Check that a file is open *)
-let rec is_open_rev (hist : trace) (fd : file_descr) : bool =
+let rec is_open (fd : file_descr) (hist : history) : bool =
   match hist with
   | [] -> false
   | EClose fd' () :: hist' ->
     if fd = fd'
     then false
-    else is_open_rev hist' fd
-  | EOpenfile s fd' :: hist -> fd = fd'
-  | e :: hist' -> is_open_rev hist' fd
-
-let is_open (fd : file_descr) (hist : trace) : bool =
-  is_open_rev (rev hist) fd
+    else is_open fd hist'
+  | EOpenfile s fd' :: hist' ->
+    if fd = fd'
+    then true
+    else is_open fd hist'
+  | e :: hist' -> is_open fd hist'
 
 (** Event valid with respect to a history *)
-let valid_event (hist : trace) (e : event) : bool =
+let valid_event (hist : history) (e : event) : bool =
   match e with
   | EOpenfile s fd -> true
   | ERead fd s -> is_open fd hist
   | EClose fd () -> is_open fd hist
 
 (** Trace valid with respect to a history *)
-let rec valid_trace (hist : trace) (tr : trace) : Pure bool (requires True) (ensures fun _ -> True) (decreases tr) =
+let rec valid_trace (hist : history) (tr : trace) : Pure bool (requires True) (ensures fun _ -> True) (decreases tr) =
   match tr with
   | [] -> true
-  | e :: tr' -> valid_event hist e && valid_trace (hist @ [e]) tr'
+  | e :: tr' -> valid_event hist e && valid_trace (hist_cons hist [e]) tr'
 
-let valid_postream (hist : trace) (s : iopostream) : Type0 =
+let valid_postream (hist : history) (s : iopostream) : Type0 =
   forall (n : nat). valid_trace hist (ipos_trace (stream_trunc s n))
 
 (** Effect observation *)
 let theta #a (t : iotree a) : wp a =
-  fun (post : wpost a) (hist : trace) ->
+  fun (post : wpost a) (hist : history) ->
     (forall (p : iopos). isRet (t p) ==> post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p)) /\
     (forall (p p' : iopostream). event_stream t p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
 
 let iodiv a (w : wp a) =
-  t: iotree a { w `stronger_wp` theta t }
+  t: iotree a { theta t `wle` w }
 
 let iodiv_ret a (x : a) : iodiv a (wret x) =
   assert (forall p. ~ (isEvent (ioret x p))) ;
   assert (forall (p : iopostream). ~ (isEvent (ioret x (stream_trunc p 0)))) ;
   ret x
 
-let theta_inst #a w (m : iodiv a w) (post : wpost a) (hist : trace) :
+let theta_inst #a w (m : iodiv a w) (post : wpost a) (hist : history) :
   Lemma
     (requires w post hist)
     (ensures theta m post hist)
 = ()
 
-let theta_isRet #a (t : iotree a) (post : wpost a) (hist : trace) (p : iopos) :
+let theta_isRet #a (t : iotree a) (post : wpost a) (hist : history) (p : iopos) :
   Lemma
     (requires isRet (t p) /\ theta t post hist)
     (ensures post (Fin (ipos_trace p) (ret_val (t p))) /\ valid_trace hist (ipos_trace p))
@@ -256,39 +284,39 @@ let shift_post_Fin #a (tr : trace) (post : wpost a) (tr' : trace) (x : a) :
     (ensures post (Fin (tr @ tr') x))
 = ()
 
-let rec valid_trace_append (hist tr tr' : trace) :
+let rec valid_trace_append (hist : history) (tr tr' : trace) :
   Lemma
-    (requires valid_trace hist tr /\ valid_trace (hist @ tr) tr')
+    (requires valid_trace hist tr /\ valid_trace (hist_cons hist tr) tr')
     (ensures valid_trace hist (tr @ tr'))
     (decreases tr)
 = match tr with
   | [] -> ()
   | e :: t ->
-    append_assoc hist [e] t ;
-    valid_trace_append (hist @ [e]) t tr'
+    hist_cons_append hist [e] t ;
+    valid_trace_append (hist_cons hist [e]) t tr'
 
-let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p : iopos) :
+let iodiv_bind_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : history) (p : iopos) :
   Lemma
     (requires wbind w wf post hist /\ isRet (bind m f p))
     (ensures post (Fin (ipos_trace p) (ret_val (bind m f p))) /\ valid_trace hist (ipos_trace p))
 = find_ret_prefix_val m [] p ;
   theta_inst w m (fun b ->
     match b with
-      | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+      | Fin tr x -> wf x (shift_post tr post) (hist_cons hist tr)
       | Inf p -> post (Inf p)
   ) hist ;
   theta_isRet m (fun b ->
     match b with
-    | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+    | Fin tr x -> wf x (shift_post tr post) (hist_cons hist tr)
     | Inf p -> post (Inf p)
   ) hist (find_ret_prefix m [] p) ;
-  assert (wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p)))) ;
+  assert (wf (ret_val (m (find_ret_prefix m [] p))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist_cons hist (ipos_trace (find_ret_prefix m [] p)))) ;
   assert (valid_trace hist (ipos_trace (find_ret_prefix m [] p))) ;
-  theta_inst (wf (ret_val (m (find_ret_prefix m [] p)))) (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p))) ;
-  assert (theta (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p)))) ;
-  theta_isRet (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist @ (ipos_trace (find_ret_prefix m [] p))) (find_ret_pos m [] p) ;
+  theta_inst (wf (ret_val (m (find_ret_prefix m [] p)))) (f (ret_val (m (find_ret_prefix m [] p)))) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist_cons hist (ipos_trace (find_ret_prefix m [] p))) ;
+  assert (theta (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist_cons hist (ipos_trace (find_ret_prefix m [] p)))) ;
+  theta_isRet (f (find_ret_val m [] p)) (shift_post (ipos_trace (find_ret_prefix m [] p)) post) (hist_cons hist (ipos_trace (find_ret_prefix m [] p))) (find_ret_pos m [] p) ;
   assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (f (find_ret_val m [] p) (find_ret_pos m [] p))))) ;
-  assert (valid_trace (hist @ (ipos_trace (find_ret_prefix m [] p))) (ipos_trace (find_ret_pos m [] p))) ;
+  assert (valid_trace (hist_cons hist (ipos_trace (find_ret_prefix m [] p))) (ipos_trace (find_ret_pos m [] p))) ;
   assert (shift_post (ipos_trace (find_ret_prefix m [] p)) post (Fin (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)))) ;
   shift_post_Fin (ipos_trace (find_ret_prefix m [] p)) post (ipos_trace (find_ret_pos m [] p)) (ret_val (bind m f p)) ;
   forall_intro_2 ipos_trace_append ;
@@ -410,7 +438,7 @@ let rec ipos_trace_to_pos (tr : trace) :
   | c :: tr' -> ipos_trace_to_pos tr'
 
 // theta_inst and theta_isRet at once
-let theta_inst_Ret #a (w : wp a) (m : iodiv a w) (post : wpost a) (hist : trace) (p : iopos) :
+let theta_inst_Ret #a (w : wp a) (m : iodiv a w) (post : wpost a) (hist : history) (p : iopos) :
   Lemma
     (requires w post hist /\ isRet (m p))
     (ensures post (Fin (ipos_trace p) (ret_val (m p))) /\ valid_trace hist (ipos_trace p))
@@ -422,29 +450,29 @@ let ret_val_return_of #a (m : iotree a) (p : iopos) :
     (ensures ret_val (m p) `return_of` m)
 = ()
 
-let theta_bind_inst #a #b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (q : iopos) :
+let theta_bind_inst #a #b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : history) (q : iopos) :
   Lemma
     (requires wbind w wf post hist /\ isRet (m q))
-    (ensures theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) (hist @ ipos_trace q) /\ valid_trace hist (ipos_trace q))
+    (ensures theta (f (ret_val (m q))) (shift_post (ipos_trace q) post) (hist_cons hist (ipos_trace q)) /\ valid_trace hist (ipos_trace q))
 = theta_inst_Ret w m (fun b ->
     match b with
-    | Fin tr x -> wf x (shift_post tr post) (hist @ tr)
+    | Fin tr x -> wf x (shift_post tr post) (hist_cons hist tr)
     | Inf p -> post (Inf p)
   ) hist q
 
-let theta_event_stream #a w (m : iodiv a w) (post : wpost a) (hist : trace) (p p' : iopostream) :
+let theta_event_stream #a w (m : iodiv a w) (post : wpost a) (hist : history) (p p' : iopostream) :
   Lemma
     (requires theta m post hist /\ event_stream m p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
 = ()
 
-let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) (q : iopos) (s : iopostream) :
+let iodiv_bind_inf_fin_shift_post #a #b #w #wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : history) (p p' : iopostream) (q : iopos) (s : iopostream) :
   Lemma
     (requires wbind w wf post hist /\ event_stream (bind m f) p /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
-    (ensures shift_post (ipos_trace q) post (Inf s) /\ valid_trace hist (ipos_trace q) /\ valid_postream (hist @ ipos_trace q) s)
+    (ensures shift_post (ipos_trace q) post (Inf s) /\ valid_trace hist (ipos_trace q) /\ valid_postream (hist_cons hist (ipos_trace q)) s)
 = theta_bind_inst w wf m f post hist q ;
   event_stream_bind m f p q s ;
-  theta_event_stream (wf (ret_val (m q))) (f (ret_val (m q))) (shift_post (ipos_trace q) post) (hist @ ipos_trace q) s s
+  theta_event_stream (wf (ret_val (m q))) (f (ret_val (m q))) (shift_post (ipos_trace q) post) (hist_cons hist (ipos_trace q)) s s
 
 let iodiv_bind_inf_fin_upto_aux (s p p' : iopostream) (q : iopos) :
   Lemma
@@ -461,18 +489,18 @@ let rec firstn_trace_to_pos (n : nat) (tr : trace) :
   | _, [] -> ()
   | _, e :: tr' -> firstn_trace_to_pos (n-1) tr'
 
-let rec valid_trace_firstn (n : nat) (hist tr : trace) :
+let rec valid_trace_firstn (n : nat) (hist : history) (tr : trace) :
   Lemma
     (requires valid_trace hist tr)
     (ensures valid_trace hist (firstn n tr))
 = match n, tr with
   | 0, _ -> ()
   | _, [] -> ()
-  | _, e :: tr' -> valid_trace_firstn (n-1) (hist @ [e]) tr'
+  | _, e :: tr' -> valid_trace_firstn (n-1) (hist_cons hist [e]) tr'
 
-let valid_postream_prepend (hist tr : trace) (s p' : iopostream) :
+let valid_postream_prepend (hist : history) (tr : trace) (s p' : iopostream) :
   Lemma
-    (requires valid_trace hist tr /\ valid_postream (hist @ tr) s /\ stream_prepend (trace_to_pos tr) s `uptotau` p')
+    (requires valid_trace hist tr /\ valid_postream (hist_cons hist tr) s /\ stream_prepend (trace_to_pos tr) s `uptotau` p')
     (ensures valid_postream hist p')
 = introduce forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p' n))
   with begin
@@ -503,7 +531,7 @@ let valid_postream_prepend (hist tr : trace) (s p' : iopostream) :
     end
   end
 
-let iodiv_bind_inf_fin_aux a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) (q : iopos) (s : iopostream) :
+let iodiv_bind_inf_fin_aux a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : history) (p p' : iopostream) (q : iopos) (s : iopostream) :
   Lemma
     (requires wbind w wf post hist /\ event_stream (bind m f) p /\ p `uptotau` p' /\ p `feq` stream_prepend q s /\ isRet (m q))
     (ensures post (Inf p') /\ valid_postream hist p')
@@ -512,7 +540,7 @@ let iodiv_bind_inf_fin_aux a b w wf (m : iodiv a w) (f : (x : a { x `return_of` 
   shift_post_Inf_spe (ipos_trace q) s p' post ;
   valid_postream_prepend hist (ipos_trace q) s p'
 
-let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : trace) (p p' : iopostream) :
+let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) (post : wpost b) (hist : history) (p p' : iopostream) :
   Lemma
     (requires wbind w wf post hist /\ event_stream (bind m f) p /\ ~ (event_stream m p) /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
@@ -526,10 +554,10 @@ let iodiv_bind_inf_fin a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m })
   end
 
 let iodiv_bind a b w wf (m : iodiv a w) (f : (x : a { x `return_of` m }) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
-  assert (forall (post : wpost a) (hist : trace). w post hist ==> theta m post hist) ;
-  assert (forall (post : wpost b) (hist : trace) x. wf x post hist ==> theta (f x) post hist) ;
+  assert (forall (post : wpost a) (hist : history). w post hist ==> theta m post hist) ;
+  assert (forall (post : wpost b) (hist : history) x. wf x post hist ==> theta (f x) post hist) ;
 
-  introduce forall (post : wpost b) (hist : trace). wbind w wf post hist ==> theta (bind m f) post hist
+  introduce forall (post : wpost b) (hist : history). wbind w wf post hist ==> theta (bind m f) post hist
   with begin
     introduce wbind w wf post hist ==> theta (bind m f) post hist
     with _. begin
@@ -588,7 +616,7 @@ let uptotau_prepend_tau (p : iopostream) :
 
 let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
 
-  introduce forall (post : wpost a) (hist : trace). w post hist ==> theta (tau m) post hist
+  introduce forall (post : wpost a) (hist : history). w post hist ==> theta (tau m) post hist
   with begin
     introduce w post hist ==> theta (tau m) post hist
     with _. begin
@@ -621,9 +649,9 @@ let iodiv_tau (a:Type) w (m : iodiv a w) : iodiv a w =
 
 unfold
 let wcall #a (o : cmds) (x : io_args o) (w : io_res o -> wp a) : wp a =
-  fun (post : wpost a) (hist : trace) ->
+  fun (post : wpost a) (hist : history) ->
     forall (y : io_res o).
-      w y (shift_post [ choice_to_event (Call_choice o x y) ] post) (hist @ [ choice_to_event (Call_choice o x y) ]) /\
+      w y (shift_post [ choice_to_event (Call_choice o x y) ] post) (hist_cons hist [ choice_to_event (Call_choice o x y) ]) /\
       valid_event hist (choice_to_event (Call_choice o x y))
 
 let isCall_choice (o : cmds) (x : io_args o) (t : iochoice) : bool =
@@ -651,23 +679,22 @@ let event_stream_call #a (o : cmds) (x : io_args o) (k : io_res o -> iotree a) (
     stream_trunc_succ p n
   end
 
-let wcall_inst #a (o : cmds) (x : io_args o) (w : io_res o -> wp a) (post : wpost a) (hist : trace) (y : io_res o) :
+let wcall_inst #a (o : cmds) (x : io_args o) (w : io_res o -> wp a) (post : wpost a) (hist : history) (y : io_res o) :
   Lemma
     (requires wcall o x w post hist)
-    (ensures w y (shift_post [ choice_to_event (Call_choice o x y) ] post) (hist @ [ choice_to_event (Call_choice o x y) ]) /\ valid_event hist (choice_to_event (Call_choice o x y)))
+    (ensures w y (shift_post [ choice_to_event (Call_choice o x y) ] post) (hist_cons hist [ choice_to_event (Call_choice o x y) ]) /\ valid_event hist (choice_to_event (Call_choice o x y)))
 = ()
 
-
-let theta_wcall_inf #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p : iopostream) :
+let theta_wcall_inf #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : history) (p : iopostream) :
   Lemma
     (requires wcall o x w post hist /\ event_stream (call o x k) p)
-    (ensures isCall_choice o x (shead p) /\ shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post (Inf (stail p)) /\ valid_event hist (choice_to_event (Call_choice o x (call_choice_res o x (shead p)))) /\ valid_postream (hist @ [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p))
+    (ensures isCall_choice o x (shead p) /\ shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post (Inf (stail p)) /\ valid_event hist (choice_to_event (Call_choice o x (call_choice_res o x (shead p)))) /\ valid_postream (hist_cons hist [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p))
 = event_stream_call o x k p ;
   wcall_inst o x w post hist (call_choice_res o x (shead p)) ;
-  theta_inst (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist @ [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) ;
-  theta_event_stream (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist @ [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) (stail p)
+  theta_inst (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist_cons hist [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) ;
+  theta_event_stream (w (call_choice_res o x (shead p))) (k (call_choice_res o x (shead p))) (shift_post [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ] post) (hist_cons hist [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) (stail p)
 
-let iodiv_call_aux_upto (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p p' : iopostream) :
+let iodiv_call_aux_upto (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : history) (p p' : iopostream) :
   Lemma
     (requires isCall_choice o x (shead p) /\ p `uptotau` p')
     (ensures stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p) `uptotau` p')
@@ -688,7 +715,7 @@ let iodiv_call_aux_upto (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_re
   feq_uptotau (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p ;
   uptotau_trans (stream_prepend (trace_to_pos [ choice_to_event (Call_choice o x (call_choice_res o x (shead p))) ]) (stail p)) p p'
 
-let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : trace) (p p' : iopostream) :
+let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) (post : wpost a) (hist : history) (p p' : iopostream) :
   Lemma
     (requires wcall o x w post hist /\ event_stream (call o x k) p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
@@ -700,7 +727,7 @@ let iodiv_call_aux (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) 
 
 let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> iodiv a (w r)) : iodiv a (wcall o x w) =
 
-  introduce forall (post : wpost a) (hist : trace). wcall o x w post hist ==> theta (call o x k) post hist
+  introduce forall (post : wpost a) (hist : history). wcall o x w post hist ==> theta (call o x k) post hist
   with begin
     introduce wcall o x w post hist ==> theta (call o x k) post hist
     with _. begin
@@ -724,10 +751,10 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
 (** Turning pre-/post-conditions into wp *)
 
 unfold
-let wprepost #a (pre : trace -> Type0) (post : trace -> branch a -> Type0) : wp a =
+let wprepost #a (pre : history -> Type0) (post : history -> branch a -> Type0) : wp a =
   fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
 
-let wprepost_id_inst #a (pre : trace -> Type0) (post : trace -> branch a -> Type0) (t : iodiv a (wprepost pre post)) (hist : trace) :
+let wprepost_id_inst #a (pre : history -> Type0) (post : history -> branch a -> Type0) (t : iodiv a (wprepost pre post)) (hist : history) :
   Lemma
     (requires pre hist)
     (ensures theta t (post hist) hist)
