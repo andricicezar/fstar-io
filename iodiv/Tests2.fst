@@ -12,31 +12,6 @@ open Stream
 open Itree
 open IODivHist
 
-unfold
-let ret_trace #a (r : branch a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Fin tr x -> tr
-
-unfold
-let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Fin tr x -> x
-
-let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires fun hist -> forall y. valid_event hist (choice_to_event (Call_choice o x y))) (ensures fun hist r -> terminates r /\ ret_trace r == [ choice_to_event (Call_choice o x (result r)) ]) =
-  IODIV?.reflect (piodiv_subcomp _ _ _ (piodiv_call o x (fun y -> piodiv_ret _ y)))
-
-let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
-  act_call Openfile s
-
-let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
-  act_call Read fd
-
-let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
-  act_call Close fd
-
-// let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
-//   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
-
 // assume val get_trace : unit -> IODiv trace (fun hist -> True) (ensures fun hist r -> terminates r /\ result r == hist)
 
 let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True) =
