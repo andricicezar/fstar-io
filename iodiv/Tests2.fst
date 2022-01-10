@@ -23,7 +23,7 @@ let result #a (r : branch a) : Pure a (requires terminates r) (ensures fun _ -> 
   | Fin tr x -> x
 
 let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires fun hist -> forall y. valid_event hist (choice_to_event (Call_choice o x y))) (ensures fun hist r -> terminates r /\ ret_trace r == [ choice_to_event (Call_choice o x (result r)) ]) =
-  IODIV?.reflect (iodiv_call _ o x (fun y -> iodiv_ret _ y))
+  IODIV?.reflect (piodiv_subcomp _ _ _ (piodiv_call o x (fun y -> piodiv_ret _ y)))
 
 let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
   act_call Openfile s
@@ -37,7 +37,7 @@ let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) 
 // let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
 //   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
 
-assume val get_trace : unit -> IODiv trace (fun hist -> True) (ensures fun hist r -> terminates r /\ result r == hist)
+// assume val get_trace : unit -> IODiv trace (fun hist -> True) (ensures fun hist r -> terminates r /\ result r == hist)
 
 let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True) =
   let fd = open_file s in
@@ -108,3 +108,13 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
 // Similar problem it seems
 // let repeat_pure (t : unit -> unit) : IODiv unit (requires True) (ensures fun r -> True) =
 //   repeat_inv t (fun _ -> True)
+
+let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
+  assume (forall hist. is_open fd hist) ;
+  read fd
+
+
+// A second test to make sure exfalso isn't used
+let test_assume #a #pre (f : unit -> IODiv a (requires fun hist -> pre) (ensures fun hist r -> True)) : IODiv a (fun hist -> True) (fun hist r -> True) =
+  assume pre ;
+  f ()

@@ -1182,11 +1182,11 @@ let wite #a (w1 w2 : wp a) (b : bool) : wp a =
 let iodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : iodiv a w1) (g : iodiv a w2) (b : bool) : Type =
   iodiv a (wite w1 w2 b)
 
-(* In order for F* to accept it, we must remove the refinement *)
-let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
-  iodiv_bind a b w wf m f
+// (* In order for F* to accept it, we must remove the refinement *)
+// let iodiv_bind' a b w wf (m : iodiv a w) (f : (x : a) -> iodiv b (wf x)) : iodiv b (wbind w wf) =
+//   iodiv_bind a b w wf m f
 
-(** Some test *)
+(** Towards lift from PURE *)
 
 let wlift #a (w : pure_wp a) : wp a =
   fun post hist -> w (fun x -> post (Fin [] x))
@@ -1199,164 +1199,77 @@ let elim_pure #a #w (f : unit -> PURE a w) :
 = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
   f ()
 
-let lift_pure_iodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  Pure (iodiv a (wlift w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
-  let r = elim_pure #a #w f in
-  let r' : iodiv a (wret r) = iodiv_ret a r in
-  iodiv_subcomp _ (wret r) (wlift w) r'
+// The following lift works by adding a precondition to it. Not the best way to go.
+// let lift_pure_iodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
+//   Pure (iodiv a (wlift w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
+//   let r = elim_pure #a #w f in
+//   let r' : iodiv a (wret r) = iodiv_ret a r in
+//   iodiv_subcomp _ (wret r) (wlift w) r'
 
-[@@allow_informative_binders]
-reflectable reifiable total layered_effect {
-  IODIV : a:Type -> w:wp a -> Effect
-  with
-    repr         = iodiv ;
-    return       = iodiv_ret ;
-    bind         = iodiv_bind' ;
-    subcomp      = iodiv_subcomp ;
-    if_then_else = iodiv_if_then_else
-}
+// [@@allow_informative_binders]
+// reflectable reifiable total layered_effect {
+//   IODIV : a:Type -> w:wp a -> Effect
+//   with
+//     repr         = iodiv ;
+//     return       = iodiv_ret ;
+//     bind         = iodiv_bind' ;
+//     subcomp      = iodiv_subcomp ;
+//     if_then_else = iodiv_if_then_else
+// }
 
-sub_effect PURE ~> IODIV = lift_pure_iodiv
+// sub_effect PURE ~> IODIV = lift_pure_iodiv
 
-effect IODiv (a : Type) (pre : history -> Type0) (post : history -> branch a -> Type0) =
-  IODIV a (wprepost pre post)
+// effect IODiv (a : Type) (pre : history -> Type0) (post : history -> branch a -> Type0) =
+//   IODIV a (wprepost pre post)
 
-(** Making the effect partial *)
+(** Making the effect partial
 
-unfold
-let wTrue a : wpost a =
-  fun _ -> True
+   Based on Assem's idea. The hope is that it yields something general enough
+   to get partial DMs.
+   Essentially, we can require any pure precondition that is entailed by all
+   preconditions.
+*)
 
-// Since the pre-condition is not a prop, it's not clear what to do here
-// Use the empty history? Quantify over every history?
-// Do we have to pass hist around instead?
-// Say you take read which requires the history to guarantee the file is open, it should not check in isolation
-// but should check after open. Also how to make use of ambient assumptions over the history? How do they materialise? Via subcomp.
-// The precondition / partiality is really just an illusion, the only issue is getting the lift from PURE in fact
-// Maybe easier to see with how we would define wlift
-(*
 let piodiv a (w : wp a) =
-  squash (w (wTrue a)) -> iodiv a w
+  pre : pure_pre { forall post hist. w post hist ==> pre } & (squash pre -> iodiv a w)
+
+let get_pre #a #w (t : piodiv a w) : Pure pure_pre (requires True) (ensures fun r -> forall post hist. w post hist ==> r) =
+  let (| pre , f |) = t in pre
+
+let get_fun #a #w (t : piodiv a w) : Pure (iodiv a w) (requires get_pre t) (ensures fun _ -> True) =
+  let (| pre, f |) = t in f ()
 
 let piodiv_ret a (x : a) : piodiv a (wret x) =
-  fun _ -> iodiv_ret a x
+  (| True , (fun () -> iodiv_ret a x) |)
 
-// We use pwbind instead of wbind to get the precondition
-unfold
-let pwbind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  fun post -> w (wTrue a) /\ wbind w wf post
-
-// TODO MOVE
-let wbind_inst #a #b (w : wp a) (wf : a -> wp b) (post : wpost b) :
-  Lemma
-    (requires wbind w wf post)
-    (ensures
-      w (fun b ->
-        match b with
-        | Fin tr x -> wf x (shift_post tr post)
-        | Inf p -> post (Inf p)
-      )
-    )
-= ()
-
-let shift_post_unfold #a (tr : trace) (post : wpost a) :
-  Lemma (
-    shift_post tr post ==
-    (fun b ->
-      match b with
-      | Fin tr' x -> post (Fin (tr @ tr') x)
-      | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> post (Inf p'))
-  )
-= ()
-
-let shift_post_True a (tr : trace) :
-  Lemma (shift_post tr (wTrue a) == wTrue a)
-= calc (==) {
-    shift_post tr (wTrue a) ;
-    == { shift_post_unfold tr (wTrue a) }
-    begin fun (b : branch a) -> match b with
-    | Fin tr' x -> wTrue a (Fin (tr @ tr') x)
-    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> wTrue a (Inf p')
-    end ;
-    == { _ by (norm [ nbe ; iota ; delta ]) }
-    begin fun (b : branch a) -> match b with
-    | Fin tr' x -> True
-    | Inf p -> forall (p' : iopostream). stream_prepend (trace_to_pos tr) p `uptotau` p' ==> True
-    end ;
-    == {}
-    begin fun (b : branch a) -> match b with
-    | Fin tr' x -> True
-    | Inf p -> True
-    end ;
-    == {}
-    begin fun (b : branch a) -> True end ;
-    == {}
-    wTrue a ;
-  }
-
-let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodiv b (pwbind w wf) =
-  fun h ->
-    assert (wbind w wf (wTrue b)) ;
-    wbind_inst w wf (wTrue b) ;
-    assert (forall p. isRet (m () p) ==> wf (ret_val (m () p)) (shift_post (ipos_trace p) (wTrue b))) ;
-    forall_intro (shift_post_True b) ;
-    assert (forall p. isRet (m () p) ==> wf (ret_val (m () p)) (wTrue b)) ;
-    assert (forall x. x `return_of` m () ==> wf x (wTrue b)) ;
-    iodiv_bind a b w wf (m ()) (fun x -> f x ())
-
-(** We don't really need tau do we? *)
+let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodiv b (wbind w wf) =
+  (| (get_pre m /\ (forall x. x `return_of` (get_fun m) ==> get_pre (f x))) , (fun _ -> iodiv_bind a b w wf (get_fun m) (fun x -> get_fun (f x))) |)
 
 let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a (w r)) : piodiv a (wcall o x w) =
-  fun h ->
-    assert (wcall o x w (wTrue a)) ;
-    forall_intro (shift_post_True a) ;
-    assert (forall (y : io_res o). w y (wTrue a)) ;
-    iodiv_call a o x (fun z -> k z ())
+  (| (forall r. get_pre (k r)) , (fun _ -> iodiv_call a o x (fun r -> get_fun (k r))) |)
 
-let pwrepeat_inv (w : wp unit) (inv : trace -> Type0) : wp unit =
-  fun post -> w (wTrue unit) /\ wrepeat_inv w inv post
-
-let piodiv_repeat_with_inv #w (body : piodiv unit w) (inv : trace -> Type0) :
-  Pure (piodiv unit (pwrepeat_inv w inv)) (requires downward_closed w inv) (ensures fun _ -> True)
-= fun h -> iodiv_repeat_with_inv (body ()) inv
+(** TODO repeat *)
 
 let piodiv_subcomp (a : Type) (w1 w2 : wp a) (m : piodiv a w1) :
-  Pure (piodiv a w2) (requires w2 `stronger_wp` w1) (ensures fun _ -> True)
-= m
+  Pure (piodiv a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
+= (| get_pre m , (fun _ -> get_fun m) |)
 
 let piodiv_if_then_else (a : Type) (w1 w2 : wp a) (f : piodiv a w1) (g : piodiv a w2) (b : bool) : Type =
   piodiv a (wite w1 w2 b)
 
-let wlift #a (w : pure_wp a) : wp a =
-  fun post -> w (fun x -> post (Fin [] x))
-
-let wlift_unfold #a (w : pure_wp a) post :
-  Lemma (wlift w post == w (fun x -> post (Fin [] x)))
-= ()
-
-let elim_pure #a #w (f : unit -> PURE a w) :
-  Pure
-    a
-    (requires w (fun _ -> True))
-    (ensures fun r -> forall post. w post ==> post r)
-= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
-  f ()
+let as_requires_wlift #a (w : pure_wp a) :
+  Lemma (forall post hist. wlift w post hist ==> as_requires w)
+= assert (forall post (x : a). post (Fin [] x) ==> True) ;
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+  assert (forall post. w (fun x -> post (Fin [] x)) ==> w (fun _ -> True))
 
 let lift_pure_piodiv (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : piodiv a (wlift w) =
-  fun h ->
-    assert (wlift w (fun _ -> True)) ;
-    calc (==>) {
-      wlift w (fun _ -> True) ;
-      == { wlift_unfold w (fun _ -> True) }
-      w (fun x -> (fun _ -> True) (Fin [] x)) ;
-      == {}
-      w (fun _ -> True) ;
-    } ;
-    assert (w (fun _ -> True)) ;
+  as_requires_wlift w ;
+  (| as_requires w , (fun _ ->
     let r = elim_pure #a #w f in
-    assert (forall post. w post ==> post r) ;
     let r' : iodiv a (wret r) = iodiv_ret a r in
     iodiv_subcomp _ (wret r) (wlift w) r'
+  ) |)
 
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
@@ -1371,21 +1284,7 @@ reflectable reifiable total layered_effect {
 
 sub_effect PURE ~> IODIV = lift_pure_piodiv
 
-effect IODiv (a : Type) (pre : Type0) (post : wpost a) =
-  IODIV a (fun p -> pre /\ (forall x. post x ==> p x))
+effect IODiv (a : Type) (pre : history -> Type0) (post : history -> branch a -> Type0) =
+  IODIV a (wprepost pre post)
 
-let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ choice_to_event (Call_choice o x (result r)) ]) =
-  IODIV?.reflect (piodiv_call o x (fun y -> piodiv_ret _ y))
-
-let open_file (s : string) : IODiv file_descr (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
-  act_call Openfile s
-
-let read (fd : file_descr) : IODiv string (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
-  act_call Read fd
-
-let close (fd : file_descr) : IODiv unit (requires True) (ensures fun r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
-  act_call Close fd
-
-let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { downward_closed w inv }) : IODIV unit (pwrepeat_inv w inv) =
-  IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
-*)
+(** Actions are defined in Tests2 *)
