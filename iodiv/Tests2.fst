@@ -28,10 +28,10 @@ let act_call (o : cmds) (x : io_args o) : IODiv (io_res o) (requires fun hist ->
 let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
   act_call Openfile s
 
-let read (fd : file_descr) : IODiv string (requires fun hist -> is_open hist fd) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
+let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
   act_call Read fd
 
-let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open hist fd) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
+let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
   act_call Close fd
 
 // let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
@@ -39,6 +39,7 @@ let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open hist fd) 
 
 assume val get_trace : unit -> IODiv trace (fun hist -> True) (ensures fun hist r -> terminates r /\ result r == hist)
 
+// Have hist in reverse order to help F*
 let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True)
 by (
   explode () ;

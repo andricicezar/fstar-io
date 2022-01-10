@@ -205,15 +205,15 @@ let rec is_open_rev (hist : trace) (fd : file_descr) : bool =
   | EOpenfile s fd' :: hist -> fd = fd'
   | e :: hist' -> is_open_rev hist' fd
 
-let is_open (hist : trace) (fd : file_descr) : bool =
+let is_open (fd : file_descr) (hist : trace) : bool =
   is_open_rev (rev hist) fd
 
 (** Event valid with respect to a history *)
 let valid_event (hist : trace) (e : event) : bool =
   match e with
-  | EOpenfile s fd -> true // Doesn't need to check it's closed right?
-  | ERead fd s -> is_open hist fd
-  | EClose fd () -> is_open hist fd
+  | EOpenfile s fd -> true
+  | ERead fd s -> is_open fd hist
+  | EClose fd () -> is_open fd hist
 
 (** Trace valid with respect to a history *)
 let rec valid_trace (hist : trace) (tr : trace) : Pure bool (requires True) (ensures fun _ -> True) (decreases tr) =
