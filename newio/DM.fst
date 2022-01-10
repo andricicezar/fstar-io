@@ -99,31 +99,3 @@ let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
 
 let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
   dm a (hist_if_then_else wp1 wp2 b)
-
-total
-reifiable
-reflectable
-layered_effect {
-  IOwp : a:Type -> wp : hist #event a -> Effect
-  with
-       repr       = dm 
-     ; return     = dm_return
-     ; bind       = dm_bind
-
-     ; subcomp      = dm_subcomp
-     ; if_then_else = dm_if_then_else
-}
-
-let elim_pure #a #w (f : unit -> PURE a w) :
-  Pure a
-    (requires w (fun _ -> True))
-    (ensures fun r -> forall post. w post ==> post r) =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  f ()
-
-(** inspired from fstar/examples/layeredeffects/Alg.fst **)
-let lift_pure_dm (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) :
-  Pure (dm a (wp_lift_pure_hist w)) (requires w (fun _ -> True)) (ensures fun _ -> True) =
-  let r = elim_pure #a #w f in
-  let r' : dm a (hist_return r) = dm_return a r in
-  dm_subcomp _ (hist_return r) (wp_lift_pure_hist w) r'
