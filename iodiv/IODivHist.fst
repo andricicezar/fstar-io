@@ -812,11 +812,37 @@ unfold
 let wrepeat (pre : history -> Type0) (inv : iopostream -> Type0) : wp unit =
   wprepost pre (fun hist r -> diverges r /\ inv (inf_branch r))
 
+let iodiv_repeat_inv_proof (pre : history -> Type0) (inv : iopostream -> Type0)
+  (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p p' : iopostream) :
+  Lemma
+    (requires wrepeat pre inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
+    (ensures post (Inf p') /\ valid_postream hist p')
+= admit ()
+
 let iodiv_repeat (pre : history -> Type0) (inv : iopostream -> Type0) (body : iodiv unit (winv pre inv)) :
   iodiv unit (wrepeat pre inv)
 = introduce forall (post : wpost unit) (hist : trace). wrepeat pre inv post hist ==> theta (repeat body) post hist
   with begin
-    admit ()
+    introduce wrepeat pre inv post hist ==> theta (repeat body) post hist
+    with _. begin
+      // fin
+      introduce forall p. isRet (repeat body p) ==> post (Fin (ipos_trace p) (ret_val (repeat body p))) /\ valid_trace hist (ipos_trace p)
+      with begin
+        repeat_not_ret body p
+      end ;
+
+      // inf
+      introduce forall (p p' : iopostream). event_stream (repeat body) p ==> p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+      with begin
+        introduce event_stream (repeat body) p ==> (p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p')
+        with _. begin
+          introduce p `uptotau` p' ==> post (Inf p') /\ valid_postream hist p'
+          with _. begin
+            iodiv_repeat_inv_proof pre inv body post hist p p'
+          end
+        end
+      end
+    end
   end ;
 
   repeat body
