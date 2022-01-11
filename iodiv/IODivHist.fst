@@ -784,7 +784,42 @@ unfold
 let inf_prefix #a (r : branch a) (n : nat) : Pure trace (requires diverges r) (ensures fun _ -> True)  =
   ipos_trace (stream_trunc (inf_branch r) n)
 
-(** repeat *)
+(** repeat
+
+   repeat body will bind body with itself indefinitely.
+   The body has a pre-condition pre on the history, and after terminating, the
+   new history should still verify pre.
+   Additionally, there is an invariant on the infinite trace that must be
+   extensible by any finite trace obtained from a run of body.
+
+   TODO: Is it enough to conclude? There is no initialisation per se. Might
+   have to resort to finite prefixes instead.
+
+*)
+
+unfold
+let preserves_inv (inv : iopostream -> Type0) (tr : trace) =
+  forall (s : iopostream). inv s ==> inv (stream_prepend (trace_to_pos tr) s)
+
+unfold
+let winv (pre : history -> Type0) (inv : iopostream -> Type0) : wp unit =
+  wprepost pre (fun hist r ->
+    (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ preserves_inv inv (ret_trace r)) /\
+    (diverges r ==> inv (inf_branch r))
+  )
+
+unfold
+let wrepeat (pre : history -> Type0) (inv : iopostream -> Type0) : wp unit =
+  wprepost pre (fun hist r -> diverges r /\ inv (inf_branch r))
+
+let iodiv_repeat (pre : history -> Type0) (inv : iopostream -> Type0) (body : iodiv unit (winv pre inv)) :
+  iodiv unit (wrepeat pre inv)
+= introduce forall (post : wpost unit) (hist : trace). wrepeat pre inv post hist ==> theta (repeat body) post hist
+  with begin
+    admit ()
+  end ;
+
+  repeat body
 
 (** Morally,
    t : IODiv unit
