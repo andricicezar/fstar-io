@@ -789,38 +789,68 @@ let inf_prefix #a (r : branch a) (n : nat) : Pure trace (requires diverges r) (e
    repeat body will bind body with itself indefinitely.
    The body has a pre-condition pre on the history, and after terminating, the
    new history should still verify pre.
-   Additionally, there is an invariant on the infinite trace that must be
-   extensible by any finite trace obtained from a run of body.
-
-   TODO: Is it enough to conclude? There is no initialisation per se. Might
-   have to resort to finite prefixes instead.
+   Additionally, there is an invariant on the trace that will periodically
+   verified on the produced infinite trace.
 
 *)
 
 unfold
-let preserves_inv (inv : iopostream -> Type0) (tr : trace) =
-  forall (s : iopostream). inv s ==> inv (stream_prepend (trace_to_pos tr) s)
+let append_stable (inv : trace -> Type0) =
+  forall (tr tr' : trace). inv tr ==> inv tr' ==> inv (tr @ tr')
 
 unfold
-let winv (pre : history -> Type0) (inv : iopostream -> Type0) : wp unit =
+let periodically (p : nat -> Type0) : Type0 =
+  forall (n : nat). exists (m : nat). n <= m /\ p m
+
+unfold
+let winv (pre : history -> Type0) (inv : trace -> Type0) : wp unit =
   wprepost pre (fun hist r ->
-    (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ preserves_inv inv (ret_trace r)) /\
-    (diverges r ==> inv (inf_branch r))
+    (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+    (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
   )
 
 unfold
-let wrepeat (pre : history -> Type0) (inv : iopostream -> Type0) : wp unit =
-  wprepost pre (fun hist r -> diverges r /\ inv (inf_branch r))
+let wrepeat (pre : history -> Type0) (inv : trace -> Type0) : wp unit =
+  wprepost pre (fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 
-let iodiv_repeat_inv_proof (pre : history -> Type0) (inv : iopostream -> Type0)
+let embeds_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream) :
+  Lemma
+    (requires p `embeds` p' /\ periodically (fun n -> pr (ipos_trace (stream_trunc p n))))
+    (ensures periodically (fun n -> pr (ipos_trace (stream_trunc p' n))))
+= introduce forall (n : nat). exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+  with begin
+    eliminate exists (n1 : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1)
+    returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+    with _. begin
+      eliminate exists (n2 : nat). n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
+      returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+      with _. begin
+        // We probably need uptotau rather than just embeds (and some embeds_inst for efficiency)
+        // Then we get some m corresponding to n2 but for p'
+        // The idea is that since n2 is bigger than n1, the trace cut at m should be at least as big as
+        // the one cut at n. This doesn't mean that n <= m as m could be smaller and yield the same trace
+        // in which case n is a good enough answer.
+        admit ()
+      end
+    end
+  end
+
+let iodiv_repeat_inv_proof (pre : history -> Type0) (inv : trace -> Type0)
   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p p' : iopostream) :
   Lemma
-    (requires wrepeat pre inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
+    (requires append_stable inv /\ wrepeat pre inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
-= admit ()
+= // introduce forall (n : nat). inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
+  // with begin
+  //   iodiv_repeat_inv_proof_aux inv body post hist p n
+  // end ;
+  // assume (post
+  // embeds_trace_implies (fun tr -> inv (hist @ tr)) p p' ;
+  // embeds_trace_implies (fun tr -> valid_trace hist tr) p p'
+  admit ()
 
-let iodiv_repeat (pre : history -> Type0) (inv : iopostream -> Type0) (body : iodiv unit (winv pre inv)) :
-  iodiv unit (wrepeat pre inv)
+let iodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : iodiv unit (winv pre inv)) :
+  Pure (iodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
 = introduce forall (post : wpost unit) (hist : trace). wrepeat pre inv post hist ==> theta (repeat body) post hist
   with begin
     introduce wrepeat pre inv post hist ==> theta (repeat body) post hist
