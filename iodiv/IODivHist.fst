@@ -840,11 +840,32 @@ let periodically_inst (p : nat -> Type0) (n : nat) :
   Lemma (requires periodically p) (ensures exists (m : nat). n <= m /\ p m)
 = ()
 
-let uptotau_trace_implies_periodically_aux (pr : trace -> Type0) (p p' : iopostream) (n n1 : nat) :
+let uptotau_trace_implies_periodically_aux (pr : trace -> Type0) (p p' : iopostream) (n : nat) :
   Lemma
-    (requires p `uptotau` p' /\ periodically (fun n -> pr (ipos_trace (stream_trunc p n))) /\ ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1))
+    (requires
+      p' `embeds` p /\
+      periodically (fun n -> pr (ipos_trace (stream_trunc p n))) /\
+      (exists (n1 : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1))
+    )
     (ensures exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m)))
-= admit ()
+= eliminate exists (n1 : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1)
+  returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+  with _. begin
+    periodically_inst (fun n -> pr (ipos_trace (stream_trunc p n))) n1 ;
+    // Can assert the eliminate but not eliminate it.
+    eliminate exists (n2 : nat). n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
+    returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+    with _. begin
+      stream_trunc_leq_prefix_of p n1 n2 ;
+      ipos_trace_prefix_of (stream_trunc p n1) (stream_trunc p n2) ;
+      // embeds_inst p' p n2 ; // Too slow
+      // Then we get some m corresponding to n2 but for p'
+      // The idea is that since n2 is bigger than n1, the trace cut at m should be at least as big as
+      // the one cut at n. This doesn't mean that n <= m as m could be smaller and yield the same trace
+      // in which case n is a good enough answer.
+      admit ()
+    end
+  end
 
 let uptotau_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream) :
   Lemma
@@ -853,26 +874,7 @@ let uptotau_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream)
 = introduce forall (n : nat). exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
   with begin
     uptotau_l_inst p p' n ;
-    eliminate exists (n1 : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1)
-    returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
-    with _. begin
-      periodically_inst (fun n -> pr (ipos_trace (stream_trunc p n))) n1 ;
-      // Can assert the eliminate but not eliminate it.
-      // Also assertion failed when using uptotau_trace_implies_periodically_aux
-      // eliminate exists (n2 : nat). n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
-      // returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
-      // with _. begin
-      //   stream_trunc_leq_prefix_of p n1 n2 ;
-      //   ipos_trace_prefix_of (stream_trunc p n1) (stream_trunc p n2) ;
-      //   // We probably need uptotau rather than just embeds
-      //   // Then we get some m corresponding to n2 but for p'
-      //   // The idea is that since n2 is bigger than n1, the trace cut at m should be at least as big as
-      //   // the one cut at n. This doesn't mean that n <= m as m could be smaller and yield the same trace
-      //   // in which case n is a good enough answer.
-      //   admit ()
-      // end
-      admit ()
-    end
+    uptotau_trace_implies_periodically_aux pr p p' n
   end
 
 let iodiv_repeat_inv_proof (pre : history -> Type0) (inv : trace -> Type0)
