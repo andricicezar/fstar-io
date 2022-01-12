@@ -72,13 +72,21 @@ let dm (a:Type) (wp:hist a) =
 let dm_return (a : Type) (x : a) : dm a (hist_return x) =
   io_return x
 
+let rec return_of (x:'a) (f:io 'a) =
+  match f with
+  | Return x' -> x == x'
+  | Call cmd arg k ->
+     exists r'. return_of x (k r')
+
+
 let dm_bind
   (a b : Type)
   (wp_v : hist a)
   (wp_f: a -> hist b)
   (v : dm a wp_v)
-  (f : (x:a -> dm b (wp_f x))) :
+  (f : (x:a{x `return_of` v} -> dm b (wp_f x))) :
   Tot (dm b (hist_bind wp_v wp_f)) =
+  admit ();
   lemma_theta_is_monad_morphism_bind v f;
   (** hist is monotonic.
   

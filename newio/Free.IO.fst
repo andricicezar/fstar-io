@@ -39,6 +39,13 @@ let convert_call_to_event (cmd:io_cmds) (arg:io_args cmd) (r:io_resm cmd) : even
   | Read -> ERead arg r
   | Close -> EClose arg r
 
+let destruct_event (e:event) : ( cmd:io_cmds & io_args cmd & io_resm cmd )  =
+  match e with
+  | EOpenfile arg res -> (| Openfile, arg, res |)
+  | ERead arg res -> (| Read, arg, res |)
+  | EClose arg res -> (| Close, arg, res |)
+
+
 type trace = list event
 
 let rec is_open (fd:file_descr) (h:trace) : bool =
