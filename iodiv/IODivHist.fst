@@ -119,6 +119,10 @@ let uptotau_trans (p q r : iopostream) :
   Lemma (requires p `uptotau` q /\ q `uptotau` r) (ensures p `uptotau` r)
 = ()
 
+let embeds_inst (p q : iopostream) (n : nat) :
+  Lemma (requires p `embeds` q) (ensures exists (m : nat). ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m))
+= ()
+
 // Could also be proved without using extensionality
 let feq_uptotau (p q : iopostream) :
   Lemma
@@ -813,19 +817,33 @@ unfold
 let wrepeat (pre : history -> Type0) (inv : trace -> Type0) : wp unit =
   wprepost pre (fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 
+let rec ipos_trace_prefix_of (p q : iopos) :
+  Lemma
+    (requires p `prefix_of` q)
+    (ensures ipos_trace p `prefix_of` ipos_trace q)
+= match p with
+  | [] -> ()
+  | x :: p' ->
+    begin match q with
+    | y :: q' -> ipos_trace_prefix_of p' q'
+    end
+
 let embeds_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream) :
   Lemma
     (requires p `embeds` p' /\ periodically (fun n -> pr (ipos_trace (stream_trunc p n))))
     (ensures periodically (fun n -> pr (ipos_trace (stream_trunc p' n))))
 = introduce forall (n : nat). exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
   with begin
+    // embeds_inst p p' n ; // With it it fails for some reason...
     eliminate exists (n1 : nat). ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1)
     returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
     with _. begin
       eliminate exists (n2 : nat). n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
       returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
       with _. begin
-        // We probably need uptotau rather than just embeds (and some embeds_inst for efficiency)
+        stream_trunc_leq_prefix_of p n1 n2 ;
+        ipos_trace_prefix_of (stream_trunc p n1) (stream_trunc p n2) ;
+        // We probably need uptotau rather than just embeds
         // Then we get some m corresponding to n2 but for p'
         // The idea is that since n2 is bigger than n1, the trace cut at m should be at least as big as
         // the one cut at n. This doesn't mean that n <= m as m could be smaller and yield the same trace
@@ -1083,17 +1101,6 @@ let iodiv_repeat_inv_proof_aux_inf (inv : trace -> Type0) (body : iodiv unit (wi
     (requires inv hist /\ downward_closed inv /\ event_stream (repeat body) p /\ event_stream body p)
     (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 = winv_event_stream inv body hist p p
-
-let rec ipos_trace_prefix_of (p q : iopos) :
-  Lemma
-    (requires p `prefix_of` q)
-    (ensures ipos_trace p `prefix_of` ipos_trace q)
-= match p with
-  | [] -> ()
-  | x :: p' ->
-    begin match q with
-    | y :: q' -> ipos_trace_prefix_of p' q'
-    end
 
 let iodiv_repeat_inv_proof_aux_overfin_None (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n n0 : nat) :
   Lemma
