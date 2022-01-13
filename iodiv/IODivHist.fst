@@ -123,6 +123,14 @@ let embeds_inst (p q : iopostream) (n : nat) :
   Lemma (requires p `embeds` q) (ensures exists (m : nat). ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m))
 = ()
 
+let uptotau_l_inst (p q : iopostream) (n : nat) :
+  Lemma (requires p `uptotau` q) (ensures exists (m : nat). ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m))
+= ()
+
+let uptotau_r_inst (p q : iopostream) (n : nat) :
+  Lemma (requires p `uptotau` q) (ensures exists (m : nat). ipos_trace (stream_trunc p n) == ipos_trace (stream_trunc q m))
+= ()
+
 // Could also be proved without using extensionality
 let feq_uptotau (p q : iopostream) :
   Lemma
@@ -827,31 +835,9 @@ let rec ipos_trace_prefix_of (p q : iopos) :
     | y :: q' -> ipos_trace_prefix_of p' q'
     end
 
-// TODO MOVE
-let uptotau_l_inst (p q : iopostream) (n : nat) :
-  Lemma (requires p `uptotau` q) (ensures exists (m : nat). ipos_trace (stream_trunc q n) == ipos_trace (stream_trunc p m))
-= ()
-
-let uptotau_r_inst (p q : iopostream) (n : nat) :
-  Lemma (requires p `uptotau` q) (ensures exists (m : nat). ipos_trace (stream_trunc p n) == ipos_trace (stream_trunc q m))
-= ()
-
 let periodically_inst (p : nat -> Type0) (n : nat) :
   Lemma (requires periodically p) (ensures exists (m : nat). n <= m /\ p m)
 = ()
-
-// TODO MOVE
-let rec prefix_of_eq #a (p q : list a) :
-  Lemma
-    (requires p `prefix_of` q /\ q `prefix_of` p)
-    (ensures p == q)
-= match p with
-  | [] -> ()
-  | x :: p' ->
-    begin match q with
-    | [] -> ()
-    | y :: q' -> prefix_of_eq p' q'
-    end
 
 let uptotau_trace_implies_periodically_aux0 (pr : trace -> Type0) (p p' : iopostream) (n n1 n2 : nat) :
   Lemma

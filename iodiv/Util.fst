@@ -95,6 +95,18 @@ let rec prefix_of_append_one #a (s l : list a) x :
     | [] -> ()
     end
 
+let rec prefix_of_eq #a (p q : list a) :
+  Lemma
+    (requires p `prefix_of` q /\ q `prefix_of` p)
+    (ensures p == q)
+= match p with
+  | [] -> ()
+  | x :: p' ->
+    begin match q with
+    | [] -> ()
+    | y :: q' -> prefix_of_eq p' q'
+    end
+
 (** [l `list_minus` l'] return [Some r] when [l == l' @ r] and [None]
     otherwise.
 *)
