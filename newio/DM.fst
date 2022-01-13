@@ -148,8 +148,12 @@ let dm_bind
   (v : dm a wp_v)
   (f : (x:a{x `return_of` v} -> dm b (wp_f x))) :
   Tot (dm b (hist_bind wp_v wp_f)) =
+  (** we lost the fact that theta is a monad morphism because we added
+      the refinement `return_of` on the free_bind. We can prove this bind, 
+      if we specialize the proof (Theo was able to that for his DM), but that
+      implies that we do not get a DM for free. **)
+  // lemma_theta_is_monad_morphism_bind v f;
   admit ();
-  lemma_theta_is_monad_morphism_bind v f;
   io_bind v f
 
 let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
