@@ -72,13 +72,6 @@ let dm (a:Type) (wp:hist a) =
 let dm_return (a : Type) (x : a) : dm a (hist_return x) =
   io_return x
 
-let rec return_of (x:'a) (f:io 'a) =
-  match f with
-  | Return x' -> x == x'
-  | Call cmd arg k ->
-     exists r'. return_of x (k r')
-
-
 let dm_bind
   (a b : Type)
   (wp_v : hist a)
@@ -88,15 +81,7 @@ let dm_bind
   Tot (dm b (hist_bind wp_v wp_f)) =
   admit ();
   lemma_theta_is_monad_morphism_bind v f;
-  (** hist is monotonic.
-  
-  assert (theta (io_bind v f) == hist_bind (theta v) (fun x -> theta (f x)));
-  assert (wp_v `hist_ord` theta v);
-  assert (forall r. wp_f r `hist_ord` theta (f r));
-  assert (hist_bind wp_v wp_f `hist_ord` hist_bind (theta v) (fun x -> theta (f x)));
-
-  (** goal: **)
-  assert (hist_bind wp_v wp_f `hist_ord` theta (io_bind v f));**)
+  (** hist is monotonic. **)
   io_bind v f
 
 let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :

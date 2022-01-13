@@ -23,70 +23,6 @@ let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
 
 let hist_post_return (lt:trace) (x:'a) : hist_post 'a = fun lt' x' -> x == x' /\ lt == lt'
 
-(** the behavior of f can differ based on the history in iio **)
-let exists_trace (x:'a) (f:io 'a) =
-  exists lt. forall h. theta f (hist_post_return lt x) h
-
-let lemma_empty_traces_are_equal () :
-  Lemma (forall (t1 t2:trace). t1 == [] /\ t2 == [] ==> t1 == t2) = ()
-
-let emptyTrace : trace = []
-
-let lemma_theta_step cmd arg k r h klt x:
-  Lemma (requires (
-    let e = convert_call_to_event cmd arg r in
-    x `return_of` (k r) /\ x `return_of` (Call cmd arg k) /\
-    theta (k r) (hist_post_return klt x) (e::h)))
-    (ensures (
-      let e = convert_call_to_event cmd arg r in
-      theta (Call cmd arg k) (hist_post_return (e::klt) x) h)) = 
-    let e = convert_call_to_event cmd arg r in
-    let p = (hist_post_return (e::klt) x) in
-    // fun lt' x' -> x == x' /\ lt == lt'
-    calc (==) {
-      theta (Call cmd arg k) p h;
-      == { _ by (compute ())}
-      hist_bind (io_wps cmd arg) (fun r -> theta (k r)) p h;
-      == {}
-      (io_wps cmd arg) (hist_post_bind h (fun r -> theta (k r)) p) h;
-      == {_ by (compute ())}
-      io_pre cmd arg h /\ (forall r. (hist_post_bind h (fun r -> theta (k r)) p) [convert_call_to_event cmd arg r] r);
-      == {}
-      io_pre cmd arg h /\ (forall r. (fun r -> theta (k r)) r (hist_post_shift p [convert_call_to_event cmd arg r]) (List.rev [convert_call_to_event cmd arg r] @ h));
-      == {_ by (compute ())}
-      io_pre cmd arg h /\ (forall r. theta (k r) (hist_post_shift p [convert_call_to_event cmd arg r]) (convert_call_to_event cmd arg r :: h));
-    };
-    admit ()
-
-let rec lemma (x:'a) (f:io 'a) : 
-  Lemma
-    (requires (x `return_of` f))
-    (ensures (exists_trace x f)) =
-  match f with
-  | Return _ -> begin
-    lemma_empty_traces_are_equal ();
-
-    assert (exists lt. forall h. hist_return #event x (hist_post_return lt x) h) 
-    by (witness (`emptyTrace))
-  end 
-  | Call cmd arg k -> begin
-    assert (exists r. (x `return_of` (k r)));
-    eliminate exists r. (x `return_of` (k r)) returns (exists_trace x f) with _. begin
-      assert (x `return_of` (k r));
-      lemma x (k r);
-      assert (exists lt. (forall h. theta (k r) (hist_post_return lt x) h)) by (assumption ());
-      eliminate exists klt. (forall h. theta (k r) (hist_post_return klt x) h) returns (exists_trace x f) with _. begin
-        let e = convert_call_to_event cmd arg r in
-        introduce exists lt. (forall h. theta f (hist_post_return lt x) h) with (e::klt) and begin
-          introduce forall h. (theta f (hist_post_return (e::klt) x) h) with begin 
-            eliminate forall h'. theta (k r) (hist_post_return klt x) h' with (e::h);
-            lemma_theta_step cmd arg k r h klt x
-          end
-        end
-      end
-    end
-  end
-
 (** this is to complicated for io, but may be needed for iio: 
 let rec trace_of (lt:trace) (m:io 'a) (x:'a) =
   match lt, m with
@@ -106,6 +42,29 @@ let rec trace_of (lt:trace) (m:io 'a) (x:'a) =
      (let (| cmd', arg', res' |) = destruct_event e in 
           (cmd' == cmd /\ arg == arg' /\ (trace_of es (k res') x)))
   | _, _ -> False
+
+(** the behavior of f can differ based on the history in iio **)
+let exists_trace_of (x:'a) (m:io 'a) =
+  exists lt. trace_of lt m x
+
+let rec lemma_return_of_implies_exists_trace_of (x:'a) (m:io 'a) : 
+  Lemma
+    (requires (x `return_of` m))
+    (ensures (exists_trace_of x m)) =
+  match m with
+  | Return _ -> assert (trace_of [] m x)
+  | Call cmd arg k -> begin
+    eliminate exists r. (x `return_of` (k r)) returns (exists_trace_of x m) with _. begin
+      lemma_return_of_implies_exists_trace_of x (k r);
+      assert (exists klt. trace_of klt (k r) x) by (assumption ());
+      eliminate exists klt. trace_of klt (k r) x returns (exists_trace_of x m) with _. begin
+        let e = convert_call_to_event cmd arg r in
+        introduce exists lt. (trace_of lt m x) with (e::klt) and begin
+          assert (trace_of (e::klt) m x)
+        end
+      end
+    end
+  end
 
 (** maybe worth thinking about a way to avoid using a different function: 
 let exact_2 x y = fun x' y' -> x == x' /\ y == y'
@@ -139,16 +98,9 @@ let lemma_hist_bind_implies_wp2_0
   p h x :
   Lemma 
     (requires (hist_bind wp1 wp2 p h /\ x `return_of` m))
-    (ensures (exists lt. wp2 x (fun lt' r' -> p (lt @ lt') r') (List.rev lt @ h))) by (
-      ExtraTactics.blowup ();
-      bump_nth 2;
-      ExtraTactics.rewrite_lemma 9 12; 
-      let lem = ExtraTactics.get_binder 11 in
-      let bx = ExtraTactics.get_binder 7 in
-      tadmit ();
-      dump "H"
-    ) = 
-  lemma_theta_result_implies_post m (fun lt r -> wp2 r (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)) h
+    (ensures (exists lt. wp2 x (fun lt' r' -> p (lt @ lt') r') (List.rev lt @ h))) =
+  lemma_theta_result_implies_post m (fun lt r -> wp2 r (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)) h;
+  lemma_return_of_implies_exists_trace_of x m
 
 let lemma_hist_bind_implies_wp2
   (wp1:hist 'a) (wp2:'a -> hist 'b)
@@ -156,16 +108,8 @@ let lemma_hist_bind_implies_wp2
   p h x :
   Lemma 
     (requires (hist_bind wp1 wp2 p h /\ x `return_of` (get_fun m)))
-    (ensures (exists lt. wp2 x p (List.rev lt @ h))) =
+    (ensures (exists lt. wp2 x  (fun lt' r' -> p (lt @ lt') r') (List.rev lt @ h))) =
   lemma_hist_bind_implies_wp2_0 wp1 wp2 (get_fun m) p h x
-
-let glue_lemma (wp:'a -> hist 'b) (pre:Type0) : Lemma
-  (requires ((forall p h x. wp x p h ==> pre) /\ 
-             (forall p h x. exists lt. wp x p (List.rev lt @ h))))
-  (ensures pre) by (
-    ExtraTactics.blowup ();
-    dump "h"
-  )= admit ()
 
 let pdm_bind (a b:Type)
   (wp1:hist a) (wp2:a -> hist b)
@@ -173,19 +117,13 @@ let pdm_bind (a b:Type)
   (g:(x:a) -> pdm b (wp2 x)) :
   pdm b (hist_bind wp1 wp2) =
   Classical.forall_intro_3 (Classical.move_requires_3 (lemma_hist_bind_implies_wp2 wp1 wp2 f));
-  assert (forall p h x. (hist_bind wp1 wp2 p h /\ x `return_of` (get_fun f)) ==>
-            (exists lt. wp2 x p (List.rev lt @ h)));
-  assert (forall p h x. wp2 x p h ==> get_pre (g x));
-  assume ((forall p h x. exists lt. wp2 x p (List.rev lt @ h)) ==> (forall p h x. wp2 x p h));
-  assert (forall p h x. hist_bind wp1 wp2 p h /\ x `return_of` (get_fun f) ==> get_pre (g x));
   (| (get_pre f /\ (forall x. x `return_of` (get_fun f) ==> get_pre (g x))), 
-     (fun _ -> dm_bind a b wp1 wp2 (get_fun f) (fun x -> 
-       get_fun (g x))) |)
+     (fun _ -> dm_bind a b wp1 wp2 (get_fun f) (fun x -> get_fun (g x))) 
+   |)
 
 let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
   Pure (pdm a wp2)
-    (requires (
-      (wp2 `hist_ord` wp1)))
+    (requires (wp2 `hist_ord` wp1))
     (ensures fun _ -> True) =
   (| get_pre f, (fun _ -> dm_subcomp a wp1 wp2 (get_fun f)) |)
 
@@ -222,12 +160,17 @@ effect IO
   IOwp a 
     (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt r. post h lt r ==>  p lt r)) 
 
+let lemma_another #a #event w :
+  Lemma (forall (p:hist_post #event a) h. wp_lift_pure_hist w p h ==> as_requires w) =
+    assert (forall (p:hist_post #event a) x. p [] x ==> True) ;
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+    assert (forall (p:hist_post #event a). w (fun x -> p [] x) ==> w (fun _ -> True))
+
 let lift_pure_pdm (a : Type) 
   (w : pure_wp a)
   (f:(eqtype_as_type unit -> PURE a w)) : 
   pdm a (wp_lift_pure_hist w) =
-  assume (forall (p:hist_post a) h. wp_lift_pure_hist #a w p h ==> as_requires w);
-  admit ();
+  lemma_another #a #event w;
   (| as_requires w, (fun _ -> 
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
     let r = f () in

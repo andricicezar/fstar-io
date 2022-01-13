@@ -14,13 +14,19 @@ type free (op:Type u#o) (s:op_sig op) (a:Type u#a) : Type u#(max o a) =
 let free_return (op:Type) (s:op_sig op) (a:Type) (x:a) : free op s a =
   Return x
 
+let rec return_of (x:'a) (f:free 'op 's 'a) =
+  match f with
+  | Return x' -> x == x'
+  | Call cmd arg k ->
+     exists r'. return_of x (k r')
+
 let rec free_bind
   (op:Type u#o)
   (s:op_sig op)
   (a:Type u#a)
   (b:Type u#b)
   (l : free op s a)
-  (k : a -> free op s b) :
+  (k : (x:a{x `return_of` l}) -> free op s b) :
   Tot (free op s b) =
   match l with
   | Return x -> k x
