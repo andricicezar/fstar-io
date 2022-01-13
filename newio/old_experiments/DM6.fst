@@ -13,13 +13,37 @@ open DM
     of wp. Then, to prove the bind, I think a equivalent hist_bind is needed. I am not
     sure what properties this new hist_bind should have. **)
 
-let hist_as_requires (wp:hist 'a) = forall h. wp (fun _ _ -> True) h
-
 let pdm (a:Type) (wp:hist a) = 
-  squash (hist_as_requires wp) -> dm a wp 
+  (post:hist_post a) & (squash (exists h. wp post h) -> dm a wp)
 
 let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
-  fun _ -> dm_return _ x
+  (| (fun lt r -> r == x /\ lt == []), (fun _ -> dm_return _ x) |)
+
+let lemma_hist_bind_1 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) (p2:hist_post 'b) (h:trace) :
+  Lemma (hist_bind wp1 wp2 p2 h ==> (exists p1. (wp1 p1 h))) = ()
+
+let lemma_hist_bind_2 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) (p2:hist_post 'b) (h:trace) :
+  Lemma (hist_bind wp1 wp2 p2 h /\ (forall (p1:hist_post 'a) x (lt:trace). (wp1 p1 h /\ p1 lt x) ==> wp2 x p2 (List.rev lt @ h))) = ()
+
+let pdm_bind (a b:Type)
+  (wp1:hist a) (wp2:a -> hist b)
+  (f:pdm a wp1) 
+  (g:(x:a) -> pdm b (wp2 x))
+  (post:hist_post b)
+  (pre:squash (exists h. hist_bind wp1 wp2 post h)) :
+  Tot (dm b (hist_bind wp1 wp2)) =
+  let (| p1, f |) = f in
+  Classical.forall_intro (lemma_hist_bind_1 wp1 wp2 post);
+  assert ((forall h. hist_bind wp1 wp2 post h ==> (exists p1. wp1 p1 h)) ==> (exists h. wp1 p1 h) );
+  let f' = f _ in
+  //assert (exists h. wp1 p1 h);
+  admit ();
+  dm_bind a b wp1 wp2 (f _) (fun (x:a) -> 
+    assume (exists lt. p1 x lt);
+    Classical.forall_intro (lemma_hist_bind_2 wp1 wp2 post);
+    (** the f returned an x, therefore it exists a lt s.t. the following prop should be valid **)
+    let (| p2, g |) = g x in
+    g _)
 
 unfold
 let hist_bind_v2 (wp1 : hist 'a) (wp2 : 'a -> hist 'b) : hist 'b =
@@ -34,7 +58,7 @@ let pdm_bind_v2_0 (a b:Type)
   (g:(x:a) -> pdm b (wp2 x))
   (pre:squash (hist_as_requires (hist_bind_v2 wp1 wp2))) :
   Tot (dm b (hist_bind_v2 wp1 wp2)) =
-  assert (hist_as_requires wp1);
+  lemma_hist_bind_v2_1 wp1 wp2;
   dm_bind a b wp1 wp2 (f _) (fun (x:a) -> 
     (** the f returned an x, therefore it exists a lt s.t. the following prop should be valid **)
     assume (exists lt. forall p1 h. wp1 p1 h /\ p1 lt x);

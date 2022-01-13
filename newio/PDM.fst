@@ -1,4 +1,4 @@
-module DM7
+module PDM
 
 open FStar.Classical.Sugar
 open FStar.List.Tot.Base
@@ -21,27 +21,6 @@ let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fu
 let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
  (| True, (fun _ -> dm_return _ x) |)
 
-(** this is to complicated for io, but may be needed for iio: 
-let rec trace_of (lt:trace) (m:io 'a) (x:'a) =
-  match lt, m with
-  | [], Return x' -> x == x'
-  | [], Call cmd arg k -> (forall h. io_wps cmd arg (fun lt r -> lt == []) h) /\ (forall r. trace_of lt (k r) x)
-  | e::es, Call cmd arg k -> 
-          // either this is a silent call so we skip
-          ((forall h. io_wps cmd arg (fun lt r -> lt == []) h) /\ (forall r. trace_of lt (k r) x)) \/
-          // either this call has an event on the local trace
-          (let (| cmd', arg', res' |) = destruct_event e in 
-            (cmd' == cmd /\ arg == arg' /\ (trace_of es (k res') x)))
-  | _, _ -> False **)
-
-(** maybe worth thinking about a way to avoid using a different function: 
-let exact_2 x y = fun x' y' -> x == x' /\ y == y'
-
-let rec lemma_more_general_law m p h : 
-  Lemma 
-    (requires theta m p h) 
-    (ensures (forall lt x. theta m (exact_2 lt x) h ==> p lt x)) = () **)
-
 let glue_lemma_hist_bind_implies_wp2_if_x
   (wp1:hist 'a) (wp2:'a -> hist 'b)
   (m:pdm 'a wp1) 
@@ -58,7 +37,8 @@ let pdm_bind (a b:Type)
   pdm b (hist_bind wp1 wp2) =
   Classical.forall_intro_3 (Classical.move_requires_3 (glue_lemma_hist_bind_implies_wp2_if_x wp1 wp2 f));
   (| (get_pre f /\ (forall x. x `return_of` (get_fun f) ==> get_pre (g x))), 
-     (fun _ -> dm_bind a b wp1 wp2 (get_fun f) (fun x -> get_fun (g x))) 
+     (fun _ -> 
+       dm_bind a b wp1 wp2 (get_fun f) (fun x -> get_fun (g x))) 
    |)
 
 let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
