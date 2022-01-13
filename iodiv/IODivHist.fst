@@ -824,6 +824,19 @@ unfold
 let wrepeat (pre : history -> Type0) (inv : trace -> Type0) : wp unit =
   wprepost pre (fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 
+// TODO MOVE
+let wprepost_implies_post #a (pre : history -> Type0) (post : history -> branch a -> Type0) p hist r :
+  Lemma
+    (requires wprepost pre post p hist /\ post hist r)
+    (ensures p r)
+= ()
+
+let wrepeat_inst (pre : history -> Type0) (inv : trace -> Type0) post hist r :
+  Lemma
+    (requires wrepeat pre inv post hist /\ diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
+    (ensures post r)
+= ()
+
 let rec ipos_trace_prefix_of (p q : iopos) :
   Lemma
     (requires p `prefix_of` q)
@@ -898,14 +911,15 @@ let iodiv_repeat_inv_proof (pre : history -> Type0) (inv : trace -> Type0)
   Lemma
     (requires append_stable inv /\ wrepeat pre inv post hist /\ event_stream (repeat body) p /\ p `uptotau` p')
     (ensures post (Inf p') /\ valid_postream hist p')
-= // introduce forall (n : nat). inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
+= assume (periodically (fun n -> inv (ipos_trace (stream_trunc p n)))) ;
+  assume (forall (n : nat). valid_trace hist (ipos_trace (stream_trunc p n))) ;
+  // introduce forall (n : nat). inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n))
   // with begin
   //   iodiv_repeat_inv_proof_aux inv body post hist p n
   // end ;
-  // assume (post
-  // embeds_trace_implies (fun tr -> inv (hist @ tr)) p p' ;
-  // embeds_trace_implies (fun tr -> valid_trace hist tr) p p'
-  admit ()
+  uptotau_trace_implies_periodically inv p p' ;
+  embeds_trace_implies (fun tr -> valid_trace hist tr) p p' ;
+  wrepeat_inst pre inv post hist (Inf p')
 
 let iodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : iodiv unit (winv pre inv)) :
   Pure (iodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
