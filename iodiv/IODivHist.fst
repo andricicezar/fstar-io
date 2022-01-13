@@ -831,6 +831,27 @@ let wprepost_implies_post #a (pre : history -> Type0) (post : history -> branch 
     (ensures p r)
 = ()
 
+let winv_fin (pre : history -> Type0) (inv : trace -> Type0) post hist r :
+  Lemma
+    (requires winv pre inv post hist /\ terminates r /\ pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r))
+    (ensures post r)
+= ()
+
+let winv_inf (pre : history -> Type0) (inv : trace -> Type0) post hist r :
+  Lemma
+    (requires winv pre inv post hist /\ diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
+    (ensures post r)
+= ()
+
+let winv_ret (pre : history -> Type0) (inv : trace -> Type0) (t : iodiv unit (winv pre inv)) (hist : history) (p : iopos) :
+  Lemma
+    (requires pre hist /\ isRet (t p))
+    (ensures pre (hist_cons hist (ipos_trace p)) /\ inv (ipos_trace p) /\ valid_trace hist (ipos_trace p))
+= wprepost_id_inst pre (fun hist r ->
+    (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+    (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
+  ) t hist
+
 let wrepeat_inst (pre : history -> Type0) (inv : trace -> Type0) post hist r :
   Lemma
     (requires wrepeat pre inv post hist /\ diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
@@ -850,6 +871,12 @@ let rec ipos_trace_prefix_of (p q : iopos) :
 
 let periodically_inst (p : nat -> Type0) (n : nat) :
   Lemma (requires periodically p) (ensures exists (m : nat). n <= m /\ p m)
+= ()
+
+let append_stable_inst (inv : trace -> Type0) (tr tr' : trace) :
+  Lemma
+    (requires append_stable inv /\ inv tr /\ inv tr')
+    (ensures inv (tr @ tr'))
 = ()
 
 let uptotau_trace_implies_periodically_aux0 (pr : trace -> Type0) (p p' : iopostream) (n n1 n2 : nat) :
@@ -906,6 +933,145 @@ let uptotau_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream)
     uptotau_trace_implies_periodically_aux pr p p' n
   end
 
+let event_stream_repeat_one_ret_aux_ineq (p0 q' : iopos) (p : iopostream) (n : nat) :
+  Lemma
+    (requires stream_trunc p n == p0 @ Tau_choice :: q')
+    (ensures length (p0 @ [Tau_choice]) <= n)
+= calc (==) {
+    n ;
+    == { stream_trunc_length p n }
+    length (stream_trunc p n) ;
+    == {}
+    length (p0 @ Tau_choice :: q') ;
+    == { append_assoc p0 [Tau_choice] q' }
+    length ((p0 @ [Tau_choice]) @ q') ;
+    == {}
+    length (p0 @ [Tau_choice]) + length q' ;
+  }
+
+let event_stream_repeat_one_ret_aux_eq (p0 : iopos) (p : iopostream) (m : nat) :
+  Lemma
+    (requires stream_trunc p (length (p0 @ [Tau_choice])) == p0 @ [Tau_choice])
+    (ensures stream_trunc p (length (p0 @ [Tau_choice]) + m) == p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))
+= stream_trunc_length p (length (p0 @ [Tau_choice])) ;
+  calc (==) {
+    stream_trunc p (length (p0 @ [Tau_choice]) + m) ;
+    == {
+      stream_trunc_drop (length (p0 @ [Tau_choice])) p ;
+      stream_trunc_ext (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) p (length (p0 @ [Tau_choice]) + m)
+    }
+    stream_trunc (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) (length (p0 @ [Tau_choice]) + m) ;
+    == {
+      stream_prepend_trunc_right (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m)
+    }
+    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m - length (p0 @ [Tau_choice]))) ;
+    == {}
+    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == {}
+    (p0 @ [Tau_choice]) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == { append_assoc p0 [Tau_choice] (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) }
+    p0 @ [Tau_choice] @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+    == {}
+    p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
+  }
+
+let event_stream_repeat_one_ret_aux_eq' (p0 q' : iopos) (p : iopostream) (n : nat) :
+  Lemma
+    (requires stream_trunc p n == p0 @ Tau_choice :: q')
+    (ensures stream_trunc p (length (p0 @ [Tau_choice])) == p0 @ [Tau_choice])
+= event_stream_repeat_one_ret_aux_ineq p0 q' p n ;
+  calc (==) {
+    stream_trunc p (length (p0 @ [Tau_choice])) ;
+    == { firstn_stream_trunc_left (length (p0 @ [Tau_choice])) n p }
+    firstn (length (p0 @ [Tau_choice])) (stream_trunc p n) ;
+    == {}
+    firstn (length (p0 @ [Tau_choice])) (p0 @ Tau_choice :: q') ;
+    == { append_assoc p0 [Tau_choice] q' }
+    firstn (length (p0 @ [Tau_choice])) ((p0 @ [Tau_choice]) @ q') ;
+    == { firstn_append_left (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) q' }
+    firstn (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) ;
+    == { firstn_all (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) }
+    p0 @ [Tau_choice] ;
+  }
+
+let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
+  Lemma
+    (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
+    (ensures event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p))
+= find_ret_Some_pos body [] (stream_trunc p n) ;
+  let aux (p0 : iopos) m :
+    Lemma
+      (requires isRet (body p0) /\ stream_trunc p n == p0 @ Tau_choice :: q')
+      (ensures isEvent (repeat body (stream_trunc (stream_drop (1 + length p0) p) m)))
+      [SMTPat ()]
+  = calc (==) {
+      p0 @ Tau_choice :: q' ;
+      == { append_assoc p0 [Tau_choice] q' }
+      (p0 @ [Tau_choice]) @ q' ;
+    } ;
+    event_stream_repeat_one_ret_aux_eq' p0 q' p n ;
+    assert (isEvent (repeat body (stream_trunc p (length (p0 @ [Tau_choice]) + m)))) ;
+    event_stream_repeat_one_ret_aux_eq p0 p m ;
+    assert (isEvent (repeat body (p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m)))) ;
+    repeat_one_ret body ;
+    assert (isEvent (repeat body (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))) ;
+    calc (==) {
+      length (p0 @ [Tau_choice]) ;
+      == { append_length p0 [Tau_choice] }
+      length p0 + 1 ;
+      == {}
+      1 + length p0 ;
+    } ;
+    assert (isEvent (repeat body (stream_trunc (stream_drop (1 + length p0) p) m)))
+  in ()
+
+let repeat_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream) q q' :
+  Lemma
+    (requires stream_trunc p n == q @ (Tau_choice :: q'))
+    (ensures n >= 1 + length q)
+= calc (==) {
+    n ;
+    == { stream_trunc_length p n }
+    length (stream_trunc p n) ;
+    == {}
+    length (q @ (Tau_choice :: q')) ;
+    == {}
+    length q + length (Tau_choice :: q') ;
+    == {}
+    length q + length q' + 1 ;
+  }
+
+let repeat_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
+  Lemma
+    (requires
+      n >= 1 + length p0 /\
+      stream_trunc p n == p0 @ Tau_choice :: q'
+    )
+    (ensures q' == stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0))
+= calc (==) {
+    p0 @ Tau_choice :: q' ;
+    == { append_assoc p0 [Tau_choice] q' }
+    (p0 @ [Tau_choice]) @ q' ;
+  } ;
+  calc (==) {
+    q' ;
+    == { stream_trunc_split_drop n p (p0 @ [Tau_choice]) q' }
+    stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length q') ;
+    == { append_length p0 [Tau_choice] }
+    stream_trunc (stream_drop (length p0 + 1) p) (length q') ;
+  } ;
+  calc (==) {
+    n ;
+    == { stream_trunc_length p n }
+    length (stream_trunc p n) ;
+    == {}
+    length ((p0 @ [Tau_choice]) @ q') ;
+    == {}
+    length (p0 @ [Tau_choice]) + length q' ;
+    == { append_length p0 [Tau_choice] }
+    length p0 + 1 + length q' ;
+  }
+
 // let iodiv_repeat_proof_aux_inf (pre : history -> Type0) (inv : trace -> Type0)
 //   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
 //   Lemma
@@ -921,36 +1087,46 @@ let uptotau_trace_implies_periodically (pr : trace -> Type0) (p p' : iopostream)
 // = admit ()
 
 // TODO We might need to have the tr0 as in IODiv without hist
-let iodiv_repeat_proof_aux (pre : history -> Type0) (inv : trace -> Type0)
+let rec iodiv_repeat_proof_aux (pre : history -> Type0) (inv : trace -> Type0)
   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
   Lemma
     (requires append_stable inv /\ wrepeat pre inv post hist /\ event_stream (repeat body) p)
     (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
+    (decreases n)
 = match find_ret body [] (stream_trunc p n) with
   | Some ((), q) ->
-    // assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
-    // winv_ret inv body hist (find_ret_prefix body [] (stream_trunc p n)) ;
-    // assert (inv (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
-    // assert (valid_trace hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
-    // find_ret_Some_pos body [] (stream_trunc p n) ;
-    // assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
-    // ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
+    assert (isRet (body (find_ret_prefix body [] (stream_trunc p n)))) ;
+    winv_ret pre inv body hist (find_ret_prefix body [] (stream_trunc p n)) ;
+    assert (pre (hist_cons hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))))) ;
+    assert (inv (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+    assert (valid_trace hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) ;
+    find_ret_Some_pos body [] (stream_trunc p n) ;
+    assert (stream_trunc p n == (find_ret_prefix body [] (stream_trunc p n)) @ q) ;
+    ipos_trace_append (find_ret_prefix body [] (stream_trunc p n)) q ;
     // append_assoc hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q) ;
-    // begin match q with
-    // | [] -> ()
-    // | Tau_choice :: q' ->
-    //   event_stream_repeat_one_ret body p n q' ;
-    //   repeat_inv_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
-    //   iodiv_repeat_inv_proof_aux inv body post (hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
-    //   repeat_inv_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
+    begin match q with
+    | [] -> ()
+    | Tau_choice :: q' ->
+      event_stream_repeat_one_ret body p n q' ;
+      repeat_proof_aux_smaller body n p (find_ret_prefix body [] (stream_trunc p n)) q' ;
+      // preconditions
+      // assert (append_stable inv) ; // ok
+      // assert (wrepeat pre inv post (hist_cons hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))))) ; // ok
+      // assert (event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p)) ; // ok
+      iodiv_repeat_proof_aux pre inv body post (hist_cons hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
+      repeat_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
+      assert (exists (m : nat). (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) <= m /\ inv (ipos_trace (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) m))) ;
+      // We essentially want to add ipos_trace (find_ret_prefix body [] (stream_trunc p n)) to the above using append_stable inv
+      // Maybe we can use eliminate on the above
+      // Then it's a matter of obtaining (ipos_trace (stream_trunc p n')) again for some n', probably m + 1 + length ...
     //   assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q')) ;
-    //   valid_trace_append hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q') ;
-    //   assert (valid_trace hist ((ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
-    // | c :: q' ->
-    //   assert (isEvent (repeat body (stream_trunc p n))) ;
-    //   repeat_unfold_1 body
-    // end
-    admit ()
+      valid_trace_append hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q') ;
+      assert (valid_trace hist ((ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q')) ;
+      admit ()
+    | c :: q' ->
+      assert (isEvent (repeat body (stream_trunc p n))) ;
+      repeat_unfold_1 body
+    end
   | None ->
     // In case where we still haven't reached a return, we do a case
     // analysis on wheter there will ever be such a return.
@@ -1062,145 +1238,6 @@ let winv_event_stream (inv : trace -> Type0) (t : iodiv unit (winv inv)) (hist :
 let cons_length #a (x : a) (l : list a) :
   Lemma (length (x :: l) = length l + 1)
 = ()
-
-let event_stream_repeat_one_ret_aux_ineq (p0 q' : iopos) (p : iopostream) (n : nat) :
-  Lemma
-    (requires stream_trunc p n == p0 @ Tau_choice :: q')
-    (ensures length (p0 @ [Tau_choice]) <= n)
-= calc (==) {
-    n ;
-    == { stream_trunc_length p n }
-    length (stream_trunc p n) ;
-    == {}
-    length (p0 @ Tau_choice :: q') ;
-    == { append_assoc p0 [Tau_choice] q' }
-    length ((p0 @ [Tau_choice]) @ q') ;
-    == {}
-    length (p0 @ [Tau_choice]) + length q' ;
-  }
-
-let event_stream_repeat_one_ret_aux_eq (p0 : iopos) (p : iopostream) (m : nat) :
-  Lemma
-    (requires stream_trunc p (length (p0 @ [Tau_choice])) == p0 @ [Tau_choice])
-    (ensures stream_trunc p (length (p0 @ [Tau_choice]) + m) == p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))
-= stream_trunc_length p (length (p0 @ [Tau_choice])) ;
-  calc (==) {
-    stream_trunc p (length (p0 @ [Tau_choice]) + m) ;
-    == {
-      stream_trunc_drop (length (p0 @ [Tau_choice])) p ;
-      stream_trunc_ext (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) p (length (p0 @ [Tau_choice]) + m)
-    }
-    stream_trunc (stream_prepend (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p)) (length (p0 @ [Tau_choice]) + m) ;
-    == {
-      stream_prepend_trunc_right (stream_trunc p (length (p0 @ [Tau_choice]))) (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m)
-    }
-    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length (p0 @ [Tau_choice]) + m - length (p0 @ [Tau_choice]))) ;
-    == {}
-    (stream_trunc p (length (p0 @ [Tau_choice]))) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-    == {}
-    (p0 @ [Tau_choice]) @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-    == { append_assoc p0 [Tau_choice] (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) }
-    p0 @ [Tau_choice] @ (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-    == {}
-    p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m) ;
-  }
-
-let event_stream_repeat_one_ret_aux_eq' (p0 q' : iopos) (p : iopostream) (n : nat) :
-  Lemma
-    (requires stream_trunc p n == p0 @ Tau_choice :: q')
-    (ensures stream_trunc p (length (p0 @ [Tau_choice])) == p0 @ [Tau_choice])
-= event_stream_repeat_one_ret_aux_ineq p0 q' p n ;
-  calc (==) {
-    stream_trunc p (length (p0 @ [Tau_choice])) ;
-    == { firstn_stream_trunc_left (length (p0 @ [Tau_choice])) n p }
-    firstn (length (p0 @ [Tau_choice])) (stream_trunc p n) ;
-    == {}
-    firstn (length (p0 @ [Tau_choice])) (p0 @ Tau_choice :: q') ;
-    == { append_assoc p0 [Tau_choice] q' }
-    firstn (length (p0 @ [Tau_choice])) ((p0 @ [Tau_choice]) @ q') ;
-    == { firstn_append_left (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) q' }
-    firstn (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) ;
-    == { firstn_all (length (p0 @ [Tau_choice])) (p0 @ [Tau_choice]) }
-    p0 @ [Tau_choice] ;
-  }
-
-let event_stream_repeat_one_ret (body : iotree unit) (p : iopostream) n q' :
-  Lemma
-    (requires event_stream (repeat body) p /\ find_ret body [] (stream_trunc p n) == Some ((), Tau_choice :: q'))
-    (ensures event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p))
-= find_ret_Some_pos body [] (stream_trunc p n) ;
-  let aux (p0 : iopos) m :
-    Lemma
-      (requires isRet (body p0) /\ stream_trunc p n == p0 @ Tau_choice :: q')
-      (ensures isEvent (repeat body (stream_trunc (stream_drop (1 + length p0) p) m)))
-      [SMTPat ()]
-  = calc (==) {
-      p0 @ Tau_choice :: q' ;
-      == { append_assoc p0 [Tau_choice] q' }
-      (p0 @ [Tau_choice]) @ q' ;
-    } ;
-    event_stream_repeat_one_ret_aux_eq' p0 q' p n ;
-    assert (isEvent (repeat body (stream_trunc p (length (p0 @ [Tau_choice]) + m)))) ;
-    event_stream_repeat_one_ret_aux_eq p0 p m ;
-    assert (isEvent (repeat body (p0 @ Tau_choice :: (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m)))) ;
-    repeat_one_ret body ;
-    assert (isEvent (repeat body (stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) m))) ;
-    calc (==) {
-      length (p0 @ [Tau_choice]) ;
-      == { append_length p0 [Tau_choice] }
-      length p0 + 1 ;
-      == {}
-      1 + length p0 ;
-    } ;
-    assert (isEvent (repeat body (stream_trunc (stream_drop (1 + length p0) p) m)))
-  in ()
-
-let repeat_inv_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
-  Lemma
-    (requires
-      n >= 1 + length p0 /\
-      stream_trunc p n == p0 @ Tau_choice :: q'
-    )
-    (ensures q' == stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0))
-= calc (==) {
-    p0 @ Tau_choice :: q' ;
-    == { append_assoc p0 [Tau_choice] q' }
-    (p0 @ [Tau_choice]) @ q' ;
-  } ;
-  calc (==) {
-    q' ;
-    == { stream_trunc_split_drop n p (p0 @ [Tau_choice]) q' }
-    stream_trunc (stream_drop (length (p0 @ [Tau_choice])) p) (length q') ;
-    == { append_length p0 [Tau_choice] }
-    stream_trunc (stream_drop (length p0 + 1) p) (length q') ;
-  } ;
-  calc (==) {
-    n ;
-    == { stream_trunc_length p n }
-    length (stream_trunc p n) ;
-    == {}
-    length ((p0 @ [Tau_choice]) @ q') ;
-    == {}
-    length (p0 @ [Tau_choice]) + length q' ;
-    == { append_length p0 [Tau_choice] }
-    length p0 + 1 + length q' ;
-  }
-
-let repeat_inv_proof_aux_smaller (body : iotree unit) (n : nat) (p : iopostream) q q' :
-  Lemma
-    (requires stream_trunc p n == q @ (Tau_choice :: q'))
-    (ensures n >= 1 + length q)
-= calc (==) {
-    n ;
-    == { stream_trunc_length p n }
-    length (stream_trunc p n) ;
-    == {}
-    length (q @ (Tau_choice :: q')) ;
-    == {}
-    length q + length (Tau_choice :: q') ;
-    == {}
-    length q + length q' + 1 ;
-  }
 
 let iodiv_repeat_inv_proof_aux_inf (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) n :
   Lemma
