@@ -53,6 +53,12 @@ let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
 
+let lemma_wp_lift_pure_hist_implies_as_requires #a #event w :
+  Lemma (forall (p:hist_post #event a) h. wp_lift_pure_hist w p h ==> as_requires w) =
+    assert (forall (p:hist_post #event a) x. p [] x ==> True) ;
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+    assert (forall (p:hist_post #event a). w (fun x -> p [] x) ==> w (fun _ -> True))
+
 unfold
 val hist_ord (#event:Type) (#a : Type) : hist #event a -> hist #event a -> Type0
 let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
