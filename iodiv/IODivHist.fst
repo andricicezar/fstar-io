@@ -840,6 +840,44 @@ let periodically_inst (p : nat -> Type0) (n : nat) :
   Lemma (requires periodically p) (ensures exists (m : nat). n <= m /\ p m)
 = ()
 
+// TODO MOVE
+let rec prefix_of_eq #a (p q : list a) :
+  Lemma
+    (requires p `prefix_of` q /\ q `prefix_of` p)
+    (ensures p == q)
+= match p with
+  | [] -> ()
+  | x :: p' ->
+    begin match q with
+    | [] -> ()
+    | y :: q' -> prefix_of_eq p' q'
+    end
+
+let uptotau_trace_implies_periodically_aux0 (pr : trace -> Type0) (p p' : iopostream) (n n1 n2 : nat) :
+  Lemma
+    (requires
+      p' `embeds` p /\
+      ipos_trace (stream_trunc p' n) == ipos_trace (stream_trunc p n1) /\
+      n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
+    )
+    (ensures exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m)))
+= stream_trunc_leq_prefix_of p n1 n2 ;
+  ipos_trace_prefix_of (stream_trunc p n1) (stream_trunc p n2) ;
+  embeds_inst p' p n2 ;
+  eliminate exists (m : nat). ipos_trace (stream_trunc p n2) == ipos_trace (stream_trunc p' m)
+  returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
+  with _. begin
+    assert (ipos_trace (stream_trunc p' n) `prefix_of` ipos_trace (stream_trunc p' m)) ;
+    if n <= m
+    then () // m is already a suitable candidate
+    else begin
+      // If not, then then we will take n itself
+      stream_trunc_leq_prefix_of p' m n ;
+      ipos_trace_prefix_of (stream_trunc p' m) (stream_trunc p' n) ;
+      prefix_of_eq (ipos_trace (stream_trunc p' n)) (ipos_trace (stream_trunc p' m))
+    end
+  end
+
 let uptotau_trace_implies_periodically_aux (pr : trace -> Type0) (p p' : iopostream) (n : nat) :
   Lemma
     (requires
@@ -852,18 +890,10 @@ let uptotau_trace_implies_periodically_aux (pr : trace -> Type0) (p p' : iopostr
   returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
   with _. begin
     periodically_inst (fun n -> pr (ipos_trace (stream_trunc p n))) n1 ;
-    // Can assert the eliminate but not eliminate it.
     eliminate exists (n2 : nat). n1 <= n2 /\ pr (ipos_trace (stream_trunc p n2))
     returns exists (m : nat). n <= m /\ pr (ipos_trace (stream_trunc p' m))
     with _. begin
-      stream_trunc_leq_prefix_of p n1 n2 ;
-      ipos_trace_prefix_of (stream_trunc p n1) (stream_trunc p n2) ;
-      // embeds_inst p' p n2 ; // Too slow
-      // Then we get some m corresponding to n2 but for p'
-      // The idea is that since n2 is bigger than n1, the trace cut at m should be at least as big as
-      // the one cut at n. This doesn't mean that n <= m as m could be smaller and yield the same trace
-      // in which case n is a good enough answer.
-      admit ()
+      uptotau_trace_implies_periodically_aux0 pr p p' n n1 n2
     end
   end
 
