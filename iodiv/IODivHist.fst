@@ -1152,25 +1152,25 @@ let iodiv_repeat_proof_aux_inf (pre : history -> Type0) (inv : trace -> Type0)
     (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 = winv_event_stream pre inv body hist p p
 
-let iodiv_repeat_proof_aux_overfin (pre : history -> Type0) (inv : trace -> Type0)
-  (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
+let rec valid_trace_prefix (hist tr tr' : trace) :
+  Lemma
+    (requires valid_trace hist tr' /\ tr `prefix_of` tr')
+    (ensures valid_trace hist tr)
+    (decreases tr')
+= match tr' with
+  | [] -> ()
+  | e' :: tr' ->
+    begin match tr with
+    | [] -> ()
+    | e :: tr -> valid_trace_prefix (hist_cons hist [e]) tr tr'
+    end
+
+let iodiv_repeat_proof_aux_overfin_None (pre : history -> Type0) (inv : trace -> Type0)
+  (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n n0 : nat) :
   Lemma
     (requires
       append_stable inv /\
       wrepeat pre inv post hist /\
-      event_stream (repeat body) p /\
-      ~ (event_stream body p) /\
-      find_ret body [] (stream_trunc p n) == None
-    )
-    (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
-= admit ()
-
-(*
-let iodiv_repeat_inv_proof_aux_overfin_None (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n n0 : nat) :
-  Lemma
-    (requires
-      inv hist /\
-      downward_closed inv /\
       event_stream (repeat body) p /\
       ~ (event_stream body p) /\
       find_ret body [] (stream_trunc p n) == None /\
@@ -1178,7 +1178,7 @@ let iodiv_repeat_inv_proof_aux_overfin_None (inv : trace -> Type0) (body : iodiv
       (forall (m : nat). m < n0 ==> ~ (~ (isEvent (body (stream_trunc p m))))) /\
       body (stream_trunc p n0) == None
     )
-    (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
+    (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 = begin match find_ret body [] (stream_trunc p n0) with
     | Some (x, q) ->
       find_ret_prefix_prefix_of body [] (stream_trunc p n0) ;
@@ -1196,18 +1196,26 @@ let iodiv_repeat_inv_proof_aux_overfin_None (inv : trace -> Type0) (body : iodiv
       assert (isEvent (bind body (fun _ -> tau ((if length (stream_trunc p n0) = 0 then (fun _ -> loop _) else itree_cofix_unfoldn (repeat_fix body) (length (stream_trunc p n0) - 1)) ())) (stream_trunc p n0)))
     end
 
-let iodiv_repeat_inv_proof_aux_overfin (inv : trace -> Type0) (body : iodiv unit (winv inv)) (post : wpost unit) (hist : trace) (p : iopostream) n :
+let iodiv_repeat_proof_aux_overfin (pre : history -> Type0) (inv : trace -> Type0)
+  (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
   Lemma
-    (requires inv hist /\ downward_closed inv /\ event_stream (repeat body) p /\ ~ (event_stream body p) /\ find_ret body [] (stream_trunc p n) == None)
-    (ensures inv (hist @ ipos_trace (stream_trunc p n)) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
-= // Similar to finite_branch_prefix
-  let n0 = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (body (stream_trunc p n)))) in
+    (requires
+      append_stable inv /\
+      wrepeat pre inv post hist /\
+      event_stream (repeat body) p /\
+      ~ (event_stream body p) /\
+      find_ret body [] (stream_trunc p n) == None
+    )
+    (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
+= let n0 = indefinite_description_ghost_nat_min (fun n -> ~ (isEvent (body (stream_trunc p n)))) in
   match body (stream_trunc p n0) with
-  | None -> iodiv_repeat_inv_proof_aux_overfin_None inv body post hist p n n0
+  | None -> iodiv_repeat_proof_aux_overfin_None pre inv body post hist p n n0
   | Some (Ret ()) ->
     assert (isRet (body (stream_trunc p n0))) ;
-    winv_ret inv body hist (stream_trunc p n0) ;
-    assert (inv (hist @ ipos_trace (stream_trunc p n0))) ;
+    winv_ret pre inv body hist (stream_trunc p n0) ;
+    assert (pre (hist_cons hist (ipos_trace (stream_trunc p n0)))) ;
+    assert (inv (ipos_trace (stream_trunc p n0))) ;
+    assert (valid_trace hist (ipos_trace (stream_trunc p n0))) ;
     if n < n0
     then begin
       stream_trunc_leq_prefix_of p n n0 ;
@@ -1227,7 +1235,6 @@ let iodiv_repeat_inv_proof_aux_overfin (inv : trace -> Type0) (body : iodiv unit
       } ;
       assert (Some? (find_ret body [] (stream_trunc p n)))
     end
-*)
 
 let rec iodiv_repeat_proof_aux (pre : history -> Type0) (inv : trace -> Type0)
   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
@@ -1322,40 +1329,6 @@ let iodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : iodiv u
   end ;
 
   repeat body
-
-(*
-let downward_closed (inv : trace -> Type0) =
-  forall tr tr'. tr `prefix_of` tr' ==> inv tr' ==> inv tr
-
-unfold
-let wrepeat_inv (inv : trace -> Type0) : wp unit =
-  wprepost inv (fun hist r -> diverges r /\ (forall n. inv (hist @ inf_prefix r n)))
-
-unfold
-let winv (inv : trace -> Type0) : wp unit =
-  wprepost inv (fun hist b ->
-    match b with
-    | Fin tr () -> inv (hist @ tr)
-    | Inf p -> forall n. inv (hist @ ipos_trace (stream_trunc p n))
-  )
-
-let cons_length #a (x : a) (l : list a) :
-  Lemma (length (x :: l) = length l + 1)
-= ()
-
-let rec valid_trace_prefix (hist tr tr' : trace) :
-  Lemma
-    (requires valid_trace hist tr' /\ tr `prefix_of` tr')
-    (ensures valid_trace hist tr)
-    (decreases tr')
-= match tr' with
-  | [] -> ()
-  | e' :: tr' ->
-    begin match tr with
-    | [] -> ()
-    | e :: tr -> valid_trace_prefix (hist @ [e]) tr tr'
-    end
-*)
 
 let iodiv_subcomp (a : Type) (w1 w2 : wp a) (m : iodiv a w1) :
   Pure (iodiv a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
