@@ -1406,6 +1406,24 @@ let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodi
 let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a (w r)) : piodiv a (wcall o x w) =
   (| (forall r. get_pre (k r)) , (fun _ -> iodiv_call a o x (fun r -> get_fun (k r))) |)
 
+// We only need to imply winv for one specific post
+let wrepeat_winv (pre : history -> Type0) (inv : trace -> Type0) post hist :
+  Lemma
+    (requires wrepeat pre inv post hist)
+    (ensures winv pre inv post hist)
+= assert (pre hist) ;
+  assert (forall b.
+    (fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n))) hist b ==>
+    post b
+  ) ;
+  assume (forall b.
+    (fun hist r ->
+      (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+      (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
+    ) hist b ==>
+    post b
+  )
+
 let piodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : piodiv unit (winv pre inv)) :
   Pure (piodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
 = // assert (forall post hist. winv pre inv post hist ==> get_pre body) ; // Should be a consequence of get_pre??
