@@ -1412,11 +1412,16 @@ let wrepeat_winv (pre : history -> Type0) (inv : trace -> Type0) post hist :
     (ensures winv pre inv (fun r -> terminates r \/ post r) hist)
 = ()
 
+let get_pre_lemma #a (w : wp a) (t : piodiv a w) :
+  Lemma (forall post hist. w post hist ==> get_pre t)
+= ()
+
 let piodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : piodiv unit (winv pre inv)) :
   Pure (piodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
 = forall_intro_2 (move_requires_2 (wrepeat_winv pre inv)) ;
-  // assert (forall post hist. winv pre inv post hist ==> get_pre body) ; // Should be a consequence of get_pre??
   assert (forall post hist. wrepeat pre inv post hist ==> winv pre inv (fun r -> terminates r \/ post r) hist) ;
+  get_pre_lemma (winv pre inv) body ;
+  assert (forall post hist. winv pre inv post hist ==> get_pre body) ; // Why do I need a lemma??
   assume (forall post hist. wrepeat pre inv post hist ==> get_pre body) ;
   (| get_pre body , (fun _ -> iodiv_repeat pre inv (get_fun body)) |)
 
