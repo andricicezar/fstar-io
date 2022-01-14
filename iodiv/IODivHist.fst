@@ -1072,6 +1072,65 @@ let repeat_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
     length p0 + 1 + length q' ;
   }
 
+// TODO MOVE
+let stream_trunc_add #a (s : stream a) (n m : nat) :
+  Lemma (stream_trunc s (n + m) == stream_trunc s n @ stream_trunc (stream_drop n s) m)
+= stream_trunc_length s n ;
+  calc (==) {
+    stream_trunc s (n + m) ;
+    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s (n + m) }
+    stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) (n + m) ;
+    == { stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) (n + m) }
+    stream_trunc s n @ stream_trunc (stream_drop n s) ((n + m) - n) ;
+    == {}
+    stream_trunc s n @ stream_trunc (stream_drop n s) m ;
+  }
+
+// TODO MOVE
+let iopostream_ext (p q : iopostream) :
+  Lemma (p `feq` q ==> p == q)
+= stream_ext p q
+
+let repeat_proof_aux_eqtrace (p : iopostream) (p0 q' : iopos) (n m : nat) :
+  Lemma
+    (requires
+      n >= 1 + length p0 /\
+      stream_trunc p n == p0 @ Tau_choice :: q' /\
+      n - 1 - length p0 <= m
+    )
+    (ensures
+      ipos_trace (stream_trunc p (m + 1 + length p0)) ==
+      ipos_trace p0 @ ipos_trace (stream_trunc (stream_drop (1 + length p0) p) m)
+    )
+= calc (==) {
+    stream_trunc (stream_drop (1 + length p0) p) m ;
+    == {}
+    stream_trunc (stream_drop (1 + length p0) p) ((n - 1 - length p0) + (m - (n - 1 - length p0))) ;
+    == { stream_trunc_add (stream_drop (1 + length p0) p) (n - 1 - length p0) (m - (n - 1 - length p0)) }
+    stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0) @ stream_trunc (stream_drop (n - 1 - length p0) (stream_drop (1 + length p0) p)) (m - (n - 1 - length p0)) ;
+    == { stream_drop_drop (n - 1 - length p0) (1 + length p0) p ; forall_intro_2 iopostream_ext }
+    stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0) @ stream_trunc (stream_drop ((1 + length p0) + (n - 1 - length p0)) p) (m - (n - 1 - length p0)) ;
+    == {}
+    stream_trunc (stream_drop (1 + length p0) p) (n - 1 - length p0) @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0)) ;
+    == { repeat_proof_aux_eqpos p p0 q' n }
+    q' @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0)) ;
+  } ;
+  calc (==) {
+    ipos_trace p0 @ ipos_trace (stream_trunc (stream_drop (1 + length p0) p) m) ;
+    == {}
+    ipos_trace p0 @ ipos_trace (q' @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0))) ;
+    == {}
+    ipos_trace p0 @ ipos_trace (Tau_choice :: (q' @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0)))) ;
+    == { forall_intro_2 ipos_trace_append }
+    ipos_trace (p0 @ Tau_choice :: q' @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0))) ;
+    == { forall_intro_2 (append_assoc p0) }
+    ipos_trace ((p0 @ Tau_choice :: q') @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0))) ;
+    == {}
+    ipos_trace (stream_trunc p n @ stream_trunc (stream_drop n p) (m - (n - 1 - length p0))) ;
+    == { stream_trunc_add p n (m - (n - 1 - length p0)) }
+    ipos_trace (stream_trunc p (n + (m - (n - 1 - length p0)))) ;
+  }
+
 // let iodiv_repeat_proof_aux_inf (pre : history -> Type0) (inv : trace -> Type0)
 //   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
 //   Lemma
@@ -1086,7 +1145,6 @@ let repeat_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
 //     (ensures (exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))) /\ valid_trace hist (ipos_trace (stream_trunc p n)))
 // = admit ()
 
-// TODO We might need to have the tr0 as in IODiv without hist
 let rec iodiv_repeat_proof_aux (pre : history -> Type0) (inv : trace -> Type0)
   (body : iodiv unit (winv pre inv)) (post : wpost unit) (hist : trace) (p : iopostream) (n : nat) :
   Lemma
@@ -1115,14 +1173,17 @@ let rec iodiv_repeat_proof_aux (pre : history -> Type0) (inv : trace -> Type0)
       // assert (event_stream (repeat body) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p)) ; // ok
       iodiv_repeat_proof_aux pre inv body post (hist_cons hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))) (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) ;
       repeat_proof_aux_eqpos p (find_ret_prefix body [] (stream_trunc p n)) q' n ;
-      assert (exists (m : nat). (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) <= m /\ inv (ipos_trace (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) m))) ;
-      // We essentially want to add ipos_trace (find_ret_prefix body [] (stream_trunc p n)) to the above using append_stable inv
-      // Maybe we can use eliminate on the above
-      // Then it's a matter of obtaining (ipos_trace (stream_trunc p n')) again for some n', probably m + 1 + length ...
-    //   assert (inv ((hist @ ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q')) ;
+      eliminate exists (m : nat). (n - 1 - length (find_ret_prefix body [] (stream_trunc p n))) <= m /\ inv (ipos_trace (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) m))
+      returns exists (m : nat). n <= m /\ inv (ipos_trace (stream_trunc p m))
+      with _. begin
+        append_stable_inst
+          inv
+          (ipos_trace (find_ret_prefix body [] (stream_trunc p n)))
+          (ipos_trace (stream_trunc (stream_drop (1 + length (find_ret_prefix body [] (stream_trunc p n))) p) m)) ;
+        repeat_proof_aux_eqtrace p (find_ret_prefix body [] (stream_trunc p n)) q' n m
+      end ;
       valid_trace_append hist (ipos_trace (find_ret_prefix body [] (stream_trunc p n))) (ipos_trace q') ;
-      assert (valid_trace hist ((ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q')) ;
-      admit ()
+      assert (valid_trace hist ((ipos_trace (find_ret_prefix body [] (stream_trunc p n))) @ ipos_trace q'))
     | c :: q' ->
       assert (isEvent (repeat body (stream_trunc p n))) ;
       repeat_unfold_1 body
