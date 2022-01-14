@@ -1406,7 +1406,11 @@ let piodiv_bind a b w wf (m : piodiv a w) (f : (x:a) -> piodiv b (wf x)) : piodi
 let piodiv_call #a (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> piodiv a (w r)) : piodiv a (wcall o x w) =
   (| (forall r. get_pre (k r)) , (fun _ -> iodiv_call a o x (fun r -> get_fun (k r))) |)
 
-(** TODO repeat *)
+let piodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : piodiv unit (winv pre inv)) :
+  Pure (piodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
+= // assert (forall post hist. winv pre inv post hist ==> get_pre body) ; // Should be a consequence of get_pre??
+  assume (forall post hist. wrepeat pre inv post hist ==> get_pre body) ;
+  (| get_pre body , (fun _ -> iodiv_repeat pre inv (get_fun body)) |)
 
 let piodiv_subcomp (a : Type) (w1 w2 : wp a) (m : piodiv a w1) :
   Pure (piodiv a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
@@ -1459,5 +1463,15 @@ let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist)
 let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
   act_call Close fd
 
-// let repeat_inv #w (body : unit -> IODIV unit w) (inv : (trace -> Type0) { trace_invariant w inv }) : IODIV unit (pwrepeat_inv w inv) =
-//   IODIV?.reflect (piodiv_repeat_with_inv (reify (body ())) inv)
+let repeat_inv (pre : history -> Type0) (inv : (trace -> Type0){ append_stable inv })
+  (body :
+    unit ->
+    IODiv unit
+      (requires fun hist -> pre hist)
+      (ensures fun hist r ->
+        (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+        (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
+      )
+  ) :
+  IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
+= IODIV?.reflect (piodiv_repeat pre inv (reify (body ())))
