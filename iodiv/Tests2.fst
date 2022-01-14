@@ -76,20 +76,41 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
   let x = open_file s in
   open_file s
 
-// Fails because it can't infer something (the w??)
-// let repeat_open_close_test (s : string) : IODiv unit (requires True) (ensures fun _ -> True) =
-//   repeat_inv (fun _ -> open_close_test s) (fun _ -> True)
+let repeat_open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) =
+  repeat_inv (fun hist -> True) (fun tr -> True) (fun _ -> open_close_test s)
 
-// Similar problem it seems
-// let repeat_pure (t : unit -> unit) : IODiv unit (requires True) (ensures fun r -> True) =
-//   repeat_inv t (fun _ -> True)
+let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> True) =
+  repeat_inv (fun hist -> True) (fun tr -> True) t
+
+// Will need to understand what doesn't work
+// Afterwards find an example with a real invariant
+// let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r) =
+//   repeat_inv (fun hist -> is_open fd hist) (fun tr -> True) (fun _ -> let s = read fd in ())
 
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
   assume (forall hist. is_open fd hist) ;
   read fd
 
-
 // A second test to make sure exfalso isn't used
 let test_assume #a #pre (f : unit -> IODiv a (requires fun hist -> pre) (ensures fun hist r -> True)) : IODiv a (fun hist -> True) (fun hist r -> True) =
   assume pre ;
   f ()
+
+// Cezar's tests
+// Why is exploded needed?
+
+assume val p : prop
+assume val p' : prop
+assume val pure_lemma (_ : unit) : Lemma p
+assume val some_f (_ : squash p) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True)
+assume val some_f' : unit -> IODiv unit (requires fun _ -> p) (ensures fun _ _ -> p')
+
+let pure_lemma_test () : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) by (explode ()) =
+  pure_lemma () ;
+  some_f ()
+
+let pure_lemma_test2 () : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) by (explode ()) =
+  pure_lemma () ;
+  some_f () ;
+  some_f' () ;
+  assert p'
