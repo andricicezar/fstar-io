@@ -37,11 +37,11 @@ let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r
   let msg = read fd in
   close fd
 
-let test'' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
+let test'' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ is_open fd hist) =
   let msg = read fd in
   ()
 
-// Don't know why these fail
+// Before was failing because test'' had no post, now why?
 // let test_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
 //   test'' fd ; test'' fd
 
@@ -82,10 +82,10 @@ let repeat_open_close_test (s : string) : IODiv unit (requires fun _ -> True) (e
 let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> True) =
   repeat_inv (fun hist -> True) (fun tr -> True) t
 
-// Will need to understand what doesn't work
 // Afterwards find an example with a real invariant
-// let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r) =
-//   repeat_inv (fun hist -> is_open fd hist) (fun tr -> True) (fun _ -> let s = read fd in ())
+let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r)
+by (explode ()) // Why is it needed? Maybe need some more unfolds?
+= repeat_inv (fun hist -> is_open fd hist) (fun tr -> True) (fun _ -> let s = read fd in ())
 
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
   assume (forall hist. is_open fd hist) ;
