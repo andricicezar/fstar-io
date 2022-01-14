@@ -1422,7 +1422,13 @@ let piodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : piodiv
   assert (forall post hist. wrepeat pre inv post hist ==> winv pre inv (fun r -> terminates r \/ post r) hist) ;
   get_pre_lemma (winv pre inv) body ;
   assert (forall post hist. winv pre inv post hist ==> get_pre body) ; // Why do I need a lemma??
-  assume (forall post hist. wrepeat pre inv post hist ==> get_pre body) ;
+  introduce forall post hist. wrepeat pre inv post hist ==> get_pre body
+  with begin
+    introduce wrepeat pre inv post hist ==> get_pre body
+    with _. begin
+      assert (winv pre inv (fun r -> terminates r \/ post r) hist)
+    end
+  end ;
   (| get_pre body , (fun _ -> iodiv_repeat pre inv (get_fun body)) |)
 
 let piodiv_subcomp (a : Type) (w1 w2 : wp a) (m : piodiv a w1) :
