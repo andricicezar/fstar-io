@@ -1412,17 +1412,24 @@ let wrepeat_winv (pre : history -> Type0) (inv : trace -> Type0) post hist :
     (requires wrepeat pre inv post hist)
     (ensures winv pre inv post hist)
 = assert (pre hist) ;
-  assert (forall b.
-    (fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n))) hist b ==>
-    post b
+  assert (forall r.
+    (diverges r /\ periodically (fun n -> inv (inf_prefix r n))) ==>
+    post r
   ) ;
-  assume (forall b.
-    (fun hist r ->
-      (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
-      (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
-    ) hist b ==>
-    post b
-  )
+  introduce forall r.
+    ((terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+     (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))) ==>
+    post r
+  with begin
+    introduce
+      ((terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
+      (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))) ==>
+      post r
+    with _. begin
+      // Maybe we should use a different post for winv to make sure we have diverges r at hand?
+      assume (diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
+    end
+  end
 
 let piodiv_repeat (pre : history -> Type0) (inv : trace -> Type0) (body : piodiv unit (winv pre inv)) :
   Pure (piodiv unit (wrepeat pre inv)) (requires append_stable inv) (ensures fun _ -> True)
