@@ -65,6 +65,11 @@ unfold
 let ioret #a (x : a) : iotree a =
   ret x
 
+// Handy synonym
+let iopostream_ext (p q : iopostream) :
+  Lemma (p `feq` q ==> p == q)
+= stream_ext p q
+
 (**
   Spec with trace
   The trace contains the response of the environment, in fact it is a subset of
@@ -1071,25 +1076,6 @@ let repeat_proof_aux_eqpos (p : iopostream) (p0 q' : iopos) (n : nat) :
     == { append_length p0 [Tau_choice] }
     length p0 + 1 + length q' ;
   }
-
-// TODO MOVE
-let stream_trunc_add #a (s : stream a) (n m : nat) :
-  Lemma (stream_trunc s (n + m) == stream_trunc s n @ stream_trunc (stream_drop n s) m)
-= stream_trunc_length s n ;
-  calc (==) {
-    stream_trunc s (n + m) ;
-    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s (n + m) }
-    stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) (n + m) ;
-    == { stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) (n + m) }
-    stream_trunc s n @ stream_trunc (stream_drop n s) ((n + m) - n) ;
-    == {}
-    stream_trunc s n @ stream_trunc (stream_drop n s) m ;
-  }
-
-// TODO MOVE
-let iopostream_ext (p q : iopostream) :
-  Lemma (p `feq` q ==> p == q)
-= stream_ext p q
 
 let repeat_proof_aux_eqtrace (p : iopostream) (p0 q' : iopos) (n m : nat) :
   Lemma
