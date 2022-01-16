@@ -84,7 +84,7 @@ let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ens
 
 // Afterwards find an example with a real invariant
 let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r)
-by (explode ()) // Why is it needed? Maybe need some more unfolds? Can do synonyms of periodically and such that are marked unfold and use them instead of redoing the proofs with unfold
+by (explode ()) // Why is it needed even when periodically is unfolded?
 = repeat_inv (fun hist -> is_open fd hist) (fun tr -> True) (fun _ -> let s = read fd in ())
 
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =

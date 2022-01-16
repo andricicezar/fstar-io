@@ -829,8 +829,13 @@ unfold
 let append_stable (inv : trace -> Type0) =
   forall (tr tr' : trace). inv tr ==> inv tr' ==> inv (tr @ tr')
 
-let periodically (p : nat -> Type0) : Type0 =
+(** Periodically predicate, defined first unfolded, and then not *)
+unfold
+let _periodically (p : nat -> Type0) : Type0 =
   forall (n : nat). exists (m : nat). n <= m /\ p m
+
+let periodically (p : nat -> Type0) : Type0 =
+  _periodically p
 
 unfold
 let winv (pre : history -> Type0) (inv : trace -> Type0) : wp unit =
@@ -1482,14 +1487,18 @@ let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist)
 let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r) ]) =
   act_call Close fd
 
-let repeat_inv (pre : history -> Type0) (inv : (trace -> Type0){ append_stable inv })
+unfold
+let invariant =
+  inv : (trace -> Type0){ append_stable inv }
+
+let repeat_inv (pre : history -> Type0) (inv : invariant)
   (body :
     unit ->
     IODiv unit
       (requires fun hist -> pre hist)
       (ensures fun hist r ->
         (terminates r ==> pre (hist_cons hist (ret_trace r)) /\ inv (ret_trace r)) /\
-        (diverges r ==> periodically (fun n -> inv (inf_prefix r n)))
+        (diverges r ==> _periodically (fun n -> inv (inf_prefix r n)))
       )
   ) :
   IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
