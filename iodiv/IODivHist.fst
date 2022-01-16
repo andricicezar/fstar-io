@@ -1506,5 +1506,26 @@ let repeat_inv (pre : history -> Type0) (inv : invariant)
   IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 = IODIV?.reflect (piodiv_repeat pre inv (reify (body ())))
 
+(** Particular case of repeat *)
+// MOVE
+let rec list_forall #a (p : a -> Type0) (l : list a) =
+  match l with
+  | [] -> True
+  | x :: l -> p x /\ list_forall p l
+
+let append_stable_list_forall p :
+  Lemma (append_stable (fun tr -> list_forall p tr))
+= admit ()
+
+let repeat_all (pre : history -> Type0) (p : event -> Type0)
+  (body : unit -> IODiv unit (requires fun h -> pre h) (ensures fun h r ->
+    (terminates r ==> pre (hist_cons h (ret_trace r)) /\ list_forall p (ret_trace r)) /\
+    (diverges r ==> (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
+  )) :
+  IODiv unit (requires fun h -> pre h) (ensures fun h r -> diverges r /\ (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
+= append_stable_list_forall p ;
+  admit () ; // Maybe easier to prove list_forall for all prefix
+  repeat_inv pre (fun tr -> list_forall p tr) body
+
 let assert_hist (p : history -> Type0) : IODiv unit (requires p) (ensures fun hist r -> terminates r /\ p hist) =
   ()
