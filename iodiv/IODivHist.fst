@@ -793,9 +793,11 @@ let wprepost_id_inst #a (pre : history -> Type0) (post : history -> branch a -> 
 
 (** Basic predicates *)
 
+unfold
 let terminates #a : wpost a =
   fun b -> Fin? b
 
+unfold
 let diverges #a : wpost a =
   fun b -> Inf? b
 
