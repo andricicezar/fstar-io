@@ -1494,3 +1494,6 @@ let repeat_inv (pre : history -> Type0) (inv : (trace -> Type0){ append_stable i
   ) :
   IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 = IODIV?.reflect (piodiv_repeat pre inv (reify (body ())))
+
+let assert_hist (p : history -> Type0) : IODiv unit (requires p) (ensures fun hist r -> terminates r /\ p hist) =
+  ()
