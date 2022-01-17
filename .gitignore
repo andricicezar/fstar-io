@@ -4,3 +4,4 @@ out
 *.cmx
 *.o
 
+*.fst#
