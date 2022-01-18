@@ -99,6 +99,10 @@ let test_assume #a #pre (f : unit -> IODiv a (requires fun hist -> pre) (ensures
 let test_assert p : IODiv unit (requires fun hist -> p) (ensures fun hist r -> True) =
   assert p
 
+let partial_match (l : list nat) : IODiv unit (requires fun hist -> l <> []) (ensures fun hist r -> True) =
+  match l with
+  | x :: r -> ()
+
 // Cezar's tests
 // Why is exploded needed?
 
