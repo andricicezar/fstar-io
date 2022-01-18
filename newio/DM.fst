@@ -127,7 +127,7 @@ let theta_of_f_x
 let hist_bind' (m:io 'a) (f:'a -> io 'b) (wp1:hist (x:'a{x `return_of` m})) (wp2:((x:'a) -> hist (x':'b{x' `return_of` (f x)}))) : hist (x:'b{x `return_of` io_bind m f})=
   hist_bind wp1 wp2**)
   
-let lemma_theta_is_monad_morphism_ret v h p :
+let lemma_theta_is_monad_morphism_ret v :
   Lemma (theta (io_return v) == hist_return v) by (compute ()) = ()
 
 (** TODO: remove the admits **)

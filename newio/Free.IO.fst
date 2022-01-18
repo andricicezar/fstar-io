@@ -150,8 +150,3 @@ unfold let io_pre (cmd:cmds) (arg:args cmd) (h:trace) : Type0 =
   | Read -> is_open arg h
   | Close -> is_open arg h
   | GetTrace -> true
-
-unfold let io_wps (cmd:io_cmds) (arg:args cmd) (p:trace -> res cmd -> Type0) (h:trace) : Type0 =
-  match cmd with
- // | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall r. p [convert_call_to_event cmd arg r] r)
