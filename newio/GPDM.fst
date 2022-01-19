@@ -89,7 +89,7 @@ let lemma_w_monotonic_bind_magic #a #b lwp kwp l k =
     getref #(m b) #(fun l -> (kwp x) `ord_w` (subcomp_w (theta b l))) (k x)
   end;
 
-  (** i think this is the correct assumption we should ask for, close to monotonicity **)
+  (** this is the correct assumption we should ask for, close to monotonicity **)
   assume (bind_w a b lwp kwp `ord_w`
       bind_w _ b (theta a l) (fun x -> subcomp_w (theta b (k x))));
 
@@ -128,7 +128,10 @@ let subcomp_dm (a:Type) (wp1 wp2: w a) (f : dm a wp1) :
   lemma_ord_w_transitive #a wp2 wp1 (subcomp_w (theta a f));
   f
 
-(** Work in progress: **)
+
+
+
+(*** Work in progress: **)
 
 let pdm (a:Type) (wp:w a) = 
   pre : pure_pre { wp `ord_w` (lift_pure_pre_to_w pre) } & (squash pre -> dm a wp)
