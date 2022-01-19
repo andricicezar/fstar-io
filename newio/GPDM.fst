@@ -17,18 +17,18 @@ assume type m (a:Type)
 assume val return_m : a:Type -> x:a -> m a
 
 (** this is new and needed to define a Partial Dijkstra Monad **)
-assume val is_return_of : #a:Type -> x:a -> m a -> Type0
-assume val lemma_is_return_of_return_m : unit -> Lemma (forall a (x:a). x `is_return_of` return_m _ x)
+assume val return_of : #a:Type -> x:a -> m a -> Type0
+assume val lemma_return_of_return_m : unit -> Lemma (forall a (x:a). x `return_of` return_m _ x)
 
-assume val bind_m : a:Type -> b:Type -> l:(m a) -> k:((x:a{x `is_return_of` l}) -> m b) -> m b
+assume val bind_m : a:Type -> b:Type -> l:(m a) -> k:((x:a{x `return_of` l}) -> m b) -> m b
 
-assume val lemma_is_return_of_bind_m : 
+assume val lemma_return_of_bind_m : 
   a:Type -> 
   b:Type ->
   l:m a ->
-  lx:a{lx `is_return_of` l} -> 
-  k:(x:a{x `is_return_of` l} -> m b) -> 
-  Lemma (forall kx. kx `is_return_of` (k lx) ==> kx `is_return_of` (bind_m a b l k))
+  lx:a{lx `return_of` l} -> 
+  k:(x:a{x `return_of` l} -> m b) -> 
+  Lemma (forall kx. kx `return_of` (k lx) ==> kx `return_of` (bind_m a b l k))
 
 assume type w (a:Type)
 assume val return_w : a:Type -> x:a -> w a
@@ -37,16 +37,15 @@ assume val bind_w : a:Type -> b:Type -> w a -> (a -> w b) -> w b
 assume val ord_w : #a:Type -> wp1:w a -> wp2:w a -> Type0
 assume val lemma_ord_w_id : #a:Type -> wp1:w a -> Lemma (wp1 `ord_w` wp1)
 
-(** I think we can implement this, and it should be just the identiy fuction. **)
-assume val subcomp_w : #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:w (x:a{p1 x}) -> Pure (w (x:a{p2 x}))
-  (requires (forall x. p1 x ==> p2 x)) 
-  (ensures (fun _ -> True))
+assume val subcomp_w : #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:w (x:a{p1 x}) -> 
+  Pure (w (x:a{p2 x}))
+    (requires (forall x. p1 x ==> p2 x))
+    (ensures (fun _ -> True))
 
 assume val lift_pure_pre_to_w : #a:Type -> pure_pre -> w a
-
 assume val lemma_ord_w_lift_pure_pre_to_w : #a:Type -> (x:a) -> Lemma (return_w a x `ord_w` (lift_pure_pre_to_w True))
   
-assume val theta : a:Type -> (l:m a) -> w (x:a{x `is_return_of` l})
+assume val theta : a:Type -> (l:m a) -> w (x:a{x `return_of` l})
 
 assume val lemma_theta_is_monad_morphism_ret : #a:Type -> x:a ->
   Lemma (subcomp_w (theta a (return_m a x)) == return_w a x)
@@ -55,9 +54,9 @@ assume val lemma_theta_is_monad_morphism_bind :
   a:Type ->
   b:Type ->
   l:m a ->
-  k:(x:a{x `is_return_of` l} -> m b) ->
-  Lemma (theta b (bind_m a b l k) == bind_w (x:a{x `is_return_of` l}) (x:b{x `is_return_of` bind_m a b l k}) (theta a l) (fun x -> 
-    lemma_is_return_of_bind_m a b l x k;
+  k:(x:a{x `return_of` l} -> m b) ->
+  Lemma (theta b (bind_m a b l k) == bind_w (x:a{x `return_of` l}) (x:b{x `return_of` bind_m a b l k}) (theta a l) (fun x -> 
+    lemma_return_of_bind_m a b l x k;
     subcomp_w (theta b (k x))))
 
 let dm (a:Type) (wp:w a) = l:(m a){wp `ord_w` (subcomp_w (theta a l))}
@@ -67,39 +66,45 @@ let return_dm (a:Type) (x:a) : dm a (return_w a x) =
   lemma_ord_w_id (return_w a x);
   return_m a x
 
+#set-options "--print_implicits"
+
+let getref #a #p (x : a { p x }) : Lemma (p x) = ()
+
+assume val lemma_subcomp_w_bind_w : #a:Type -> #b:Type -> #p:(b -> Type0) -> wp1:w a -> wp2:(a -> w (x:b{p x})) -> 
+  Lemma
+    (bind_w a b wp1 (fun x -> subcomp_w #b #p #(fun _ -> True) (wp2 x)) == (subcomp_w #b #p #(fun _ -> True) (bind_w a (x:b{p x}) wp1 (fun x -> wp2 x))))
+
 val bind_dm :
   a:Type ->
   b:Type -> 
   lwp:w a ->
   kwp:(a -> w b) ->
   l:dm a lwp ->
-  k:(x:a{x `is_return_of` l} -> dm b (kwp x)) ->
+  k:(x:a{x `return_of` l} -> dm b (kwp x)) ->
   dm b (bind_w _ _ lwp kwp)
 let bind_dm a b lwp kwp l k =
-  (** I think this proof should be similar to the one from DM4ALL **)
-  lemma_theta_is_monad_morphism_bind a b l k;
-  (**
-  (** from the lemma: **)
-  assert (theta (bind_m l k) == bind_w _ _ (theta l) (fun x -> lemma_is_return_of_bind_m a b l x k; subcomp_w (theta _ (k x))));
-  (** from the types **)
-  assert (lwp `ord_w` (subcomp_w (theta a l));
-  assert (forall (x:a{x `is_return_of` l}). kwp x `ord_w` (subcomp_w (theta b (k x))));
+  (** from the types of l and k **)
+  assert (lwp `ord_w` (subcomp_w (theta a l)));
+  introduce forall (x:a{x `return_of` l}). (kwp x `ord_w` (subcomp_w #b (theta b (k x)))) with begin
+    getref #(m b) #(fun l -> (kwp x) `ord_w` (subcomp_w (theta b l))) (k x)
+  end;
+  (** monotonicity with some type magic (TODO: can we simplify this assumption? **)
+  assume (bind_w a b lwp kwp `ord_w`
+  	   subcomp_w (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))));
 
-  assert (bind_w a b lwp kwp `ord_w`
-  	   bind_w (x:a{x `is_return_of` v}) _ (theta l) (fun x -> theta (k x)));
-	   
+  lemma_theta_is_monad_morphism_bind a b l k;
+  (** from the lemma: **)
+  assert (bind_w _ _ (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta _ (k x))) == 
+    theta b (bind_m a b l k));
+  (** we write x == y with subcomp_w x == subcomp_w y **)
+  assert (subcomp_w #b #_ #(fun _ -> True) (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta _ (k x)))) == 
+    subcomp_w #b #_ #(fun _ -> True) (theta b (bind_m a b l k)));
+  (** We rewrite in bind of monotonicity, with the previous assert **)
   (** goal: **)
-  assert (bind_w _ b lwp kwp `hist_ord #_ #b` theta (bind_m v f));**)
-  admit ();
+  assert (bind_w _ b lwp kwp `ord_w` (subcomp_w (theta b (bind_m a b l k))));
   bind_m a b l k
 
-(** A few problems before going forward:
-  1. The `forall p h. wp p h ==> pre` is to specific. There is no `p` and `h`.
-     Maybe trying Guido's idea would be interesting:
-       wp `ord_w` lift_pure_pre_to_w pre
-
-  2. 
-**)
+(** Work in progress: **)
 
 let pdm (a:Type) (wp:w a) = 
   pre : pure_pre { wp `ord_w` (lift_pure_pre_to_w pre) } & (squash pre -> dm a wp)
@@ -112,7 +117,8 @@ let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fu
 
 let pdm_return (a:Type) (x:a) : pdm a (return_w a x) =
   lemma_ord_w_lift_pure_pre_to_w x;
- (| True, (fun _ -> return_dm a x) |)
+  (** TODO: should the True be generalized? **)
+  (| True, (fun _ -> return_dm a x) |)
 
 let pdm_bind (a b:Type)
   (wp1:w a) (wp2:a -> w b)
@@ -122,9 +128,9 @@ let pdm_bind (a b:Type)
   assert (wp1 `ord_w` (lift_pure_pre_to_w (get_pre f)));
   assume (lift_pure_pre_to_w (get_pre f) ==> get_pre f);
   assert (wp1 `ord_w` subcomp_w (theta a (get_fun f)));
-  assert (forall x. x `is_return_of` (get_fun f) ==> wp2 x `ord_w` theta b (get_fun (g x)));
-  assume (bind_w a b wp1 wp2 `ord_w` (lift_pure_pre_to_w (get_pre f /\ (forall x. x `is_return_of` (get_fun f) ==> get_pre (g x)))));
-  (| (get_pre f /\ (forall x. x `is_return_of` (get_fun f) ==> get_pre (g x))), 
+  assert (forall x. x `return_of` (get_fun f) ==> wp2 x `ord_w` theta b (get_fun (g x)));
+  assume (bind_w a b wp1 wp2 `ord_w` (lift_pure_pre_to_w (get_pre f /\ (forall x. x `return_of` (get_fun f) ==> get_pre (g x)))));
+  (| (get_pre f /\ (forall x. x `return_of` (get_fun f) ==> get_pre (g x))), 
      (fun _ -> 
        bind_dm a b wp1 wp2 (get_fun f) (fun x -> get_fun (g x))) 
    |)
@@ -208,10 +214,4 @@ let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r ->
   let _ = static_cmd Close fd in
   ()
 
-let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
-  let fd = static_cmd Openfile "../Makefile" in
-  if Some? fd then begin (** test if Openfile was successful **)
-    let msg = static_cmd Read (Some?.v fd) in
-    let _ = static_cmd Close (Some?.v fd) in
-    ()
-  end else ()
+
