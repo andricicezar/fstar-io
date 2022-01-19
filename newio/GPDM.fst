@@ -71,9 +71,32 @@ let return_dm (a:Type) (x:a) : dm a (return_w a x) =
 
 let getref #a #p (x : a { p x }) : Lemma (p x) = ()
 
-assume val lemma_subcomp_w_bind_w : #a:Type -> #b:Type -> #p:(b -> Type0) -> wp1:w a -> wp2:(a -> w (x:b{p x})) -> 
-  Lemma
-    (bind_w a b wp1 (fun x -> subcomp_w #b #p #(fun _ -> True) (wp2 x)) == (subcomp_w #b #p #(fun _ -> True) (bind_w a (x:b{p x}) wp1 (fun x -> wp2 x))))
+(** monotonicity with some type magic (TODO: can we simplify this assumption? **)
+val lemma_w_monotonic_bind_magic :
+  #a:Type ->
+  #b:Type -> 
+  lwp:w a ->
+  kwp:(a -> w b) ->
+  l:dm a lwp ->
+  k:(x:a{x `return_of` l} -> dm b (kwp x)) ->
+  Lemma (
+    bind_w a b lwp kwp `ord_w`
+      subcomp_w (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))))
+let lemma_w_monotonic_bind_magic #a #b lwp kwp l k =
+  (** from the types of l and k **)
+  assert (lwp `ord_w` (subcomp_w (theta a l)));
+  introduce forall (x:a{x `return_of` l}). (kwp x `ord_w` (subcomp_w #b (theta b (k x)))) with begin
+    getref #(m b) #(fun l -> (kwp x) `ord_w` (subcomp_w (theta b l))) (k x)
+  end;
+
+  (** i think this is the correct assumption we should ask for, close to monotonicity **)
+  assume (bind_w a b lwp kwp `ord_w`
+      bind_w _ b (theta a l) (fun x -> subcomp_w (theta b (k x))));
+
+  (** but, we need this: **)
+  assume (bind_w a b lwp kwp `ord_w`
+      subcomp_w (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))))
+
 
 val bind_dm :
   a:Type ->
@@ -84,14 +107,7 @@ val bind_dm :
   k:(x:a{x `return_of` l} -> dm b (kwp x)) ->
   dm b (bind_w _ _ lwp kwp)
 let bind_dm a b lwp kwp l k =
-  (** from the types of l and k **)
-  assert (lwp `ord_w` (subcomp_w (theta a l)));
-  introduce forall (x:a{x `return_of` l}). (kwp x `ord_w` (subcomp_w #b (theta b (k x)))) with begin
-    getref #(m b) #(fun l -> (kwp x) `ord_w` (subcomp_w (theta b l))) (k x)
-  end;
-  (** monotonicity with some type magic (TODO: can we simplify this assumption? **)
-  assume (bind_w a b lwp kwp `ord_w`
-  	   subcomp_w (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))));
+  lemma_w_monotonic_bind_magic lwp kwp l k;
 
   lemma_theta_is_monad_morphism_bind a b l k;
   (** from the lemma: **)
