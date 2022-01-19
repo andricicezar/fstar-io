@@ -36,6 +36,7 @@ assume val bind_w : a:Type -> b:Type -> w a -> (a -> w b) -> w b
 
 assume val ord_w : #a:Type -> wp1:w a -> wp2:w a -> Type0
 assume val lemma_ord_w_id : #a:Type -> wp1:w a -> Lemma (wp1 `ord_w` wp1)
+assume val lemma_ord_w_transitive : #a:Type -> wp1:w a -> wp2:w a -> wp3:w a -> Lemma (wp1 `ord_w` wp2 /\ wp2 `ord_w` wp3 ==> wp1 `ord_w #a` wp3)
 
 assume val subcomp_w : #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:w (x:a{p1 x}) -> 
   Pure (w (x:a{p2 x}))
@@ -96,13 +97,20 @@ let bind_dm a b lwp kwp l k =
   (** from the lemma: **)
   assert (bind_w _ _ (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta _ (k x))) == 
     theta b (bind_m a b l k));
-  (** we write x == y with subcomp_w x == subcomp_w y **)
+  (** we rewrite x == y with subcomp_w x == subcomp_w y, not sure why it works, there is no injectiveness of subcomp required **)
   assert (subcomp_w #b #_ #(fun _ -> True) (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta _ (k x)))) == 
     subcomp_w #b #_ #(fun _ -> True) (theta b (bind_m a b l k)));
   (** We rewrite in bind of monotonicity, with the previous assert **)
   (** goal: **)
   assert (bind_w _ b lwp kwp `ord_w` (subcomp_w (theta b (bind_m a b l k))));
   bind_m a b l k
+
+let subcomp_dm (a:Type) (wp1 wp2: w a) (f : dm a wp1) :
+  Pure (dm a wp2)
+    (requires wp2 `ord_w` wp1)
+    (ensures fun _ -> True) =
+  lemma_ord_w_transitive #a wp2 wp1 (subcomp_w (theta a f));
+  f
 
 (** Work in progress: **)
 
