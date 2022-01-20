@@ -81,7 +81,25 @@ let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
 // Also works with == but I guess wle is enough
 let theta_bind #a #b (c : m a) (f : ret c -> m b) :
   Lemma (theta (m_bind c f) `wle` w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> return_of_bind c f x ; wcast (fun y -> y `return_of` f x) _ (theta (f x))))
-= admit ()
+= forall_intro (return_of_bind c f) ;
+  introduce forall post. w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ==> theta (m_bind c f) post
+  with begin
+    introduce w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ==> theta (m_bind c f) post
+    with _. begin
+      introduce forall x. x `memP` (m_bind c f) ==> post x
+      with begin
+        introduce x `memP` (m_bind c f) ==> post x
+        with _. begin
+          assert (theta c (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post)) ;
+          assert (forall z. z `memP` c ==> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post) ;
+          assert (forall z. z `memP` c ==> theta (f z) (fun x -> post x)) ;
+          assert (forall z z'. z `memP` c /\ z' `memP` (f z) ==> post z') ;
+          // Now need a lemma to invert x `memP` (m_bind c f)
+          admit ()
+        end
+      end
+    end
+  end
 
 let d_bind #a #b #w (#wf : a -> wp b) (c : dm a w) (f : (x : ret c) -> dm b (wf x)) : dm b (w_bind w wf) =
   theta_bind c f ;
