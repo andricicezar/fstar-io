@@ -228,22 +228,17 @@ let stream_trunc_leq_prefix_of #a (s : stream a) (n m : nat) :
   } ;
   prefix_of_append (stream_trunc s n) (skipn n (stream_trunc s m))
 
-// For some reason, adding this makes the definition of bind in Itree.fst fail
-// let stream_trunc_add #a (s : stream a) (n m : nat) :
-//   Lemma (stream_trunc s (n + m) == stream_trunc s n @ stream_trunc (stream_drop n s) m)
-// = stream_trunc_length s n ;
-//   calc (==) {
-//     stream_trunc s (n + m) ;
-//     == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s (n + m) }
-//     stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) (n + m) ;
-//     == { stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) (n + m) }
-//     stream_trunc s n @ stream_trunc (stream_drop n s) ((n + m) - n) ;
-//     == {}
-//     stream_trunc s n @ stream_trunc (stream_drop n s) m ;
-//   }
-
-// Same with the following:
-// let efhihfh () : Lemma True
-// = ()
+let stream_trunc_add #a (s : stream a) (n m : nat) :
+  Lemma (stream_trunc s (n + m) == stream_trunc s n @ stream_trunc (stream_drop n s) m)
+= stream_trunc_length s n ;
+  calc (==) {
+    stream_trunc s (n + m) ;
+    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s (n + m) }
+    stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) (n + m) ;
+    == { stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) (n + m) }
+    stream_trunc s n @ stream_trunc (stream_drop n s) ((n + m) - n) ;
+    == {}
+    stream_trunc s n @ stream_trunc (stream_drop n s) m ;
+  }
 
 // TODO cofix

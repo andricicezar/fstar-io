@@ -166,38 +166,6 @@ let find_ret_append #op #s #a (m : itree op s a) :
   Lemma (ensures forall p q. isRet (m p) ==> find_ret m [] (p @ q) == Some (ret_val (m p), q))
 = forall_intro_2 (find_ret_append_aux m [])
 
-let rec find_ret_strict_prefix_aux #op #s #a (m : itree op s a) pp p q u p' :
-  Lemma
-    (ensures
-      find_ret m pp p == Some (u, p') ==>
-      p `strict_prefix_of` q ==>
-      (exists q'. find_ret m pp q == Some (u, q') /\ p' `strict_prefix_of` q')
-    )
-    (decreases p)
-= if isRet (m pp)
-  then ()
-  else begin
-    match p with
-    | [] -> ()
-    | c :: p ->
-      begin
-        match q with
-        | [] -> ()
-        | c' :: q ->
-          find_ret_strict_prefix_aux m (pp @ [c]) p q u p'
-      end
-  end
-
-let find_ret_strict_prefix #op #s #a (m : itree op s a) :
-  Lemma
-    (ensures
-      forall p q u p'.
-        find_ret m [] p == Some (u, p') ==>
-        p `strict_prefix_of` q ==>
-        (exists q'. find_ret m [] q == Some (u, q') /\ p' `strict_prefix_of` q')
-    )
-= forall_intro_4 (find_ret_strict_prefix_aux m [])
-
 let rec find_ret_Event_None #op #s #a (m : itree op s a) (pp p : ipos op s) :
   Lemma
     (requires isEvent (m (pp @ p)))
@@ -312,6 +280,23 @@ let find_ret_prefix_length #op #s #a (m : itree op s a) (pp p : ipos op s) :
 = find_ret_prefix_prefix_of m pp p ;
   prefix_length (find_ret_prefix m pp p) (pp @ p)
 
+let rec find_ret_strict_prefix #op #s #a (m : itree op s a) pp p q :
+  Lemma
+    (requires Some? (find_ret m pp p) /\ p `strict_prefix_of` q)
+    (ensures Some? (find_ret m pp q) /\ find_ret_val m pp p == find_ret_val m pp q /\ find_ret_pos m pp p `strict_prefix_of` find_ret_pos m pp q)
+    (decreases p)
+= if isRet (m pp)
+  then ()
+  else begin
+    match p with
+    | c :: p ->
+      begin
+        match q with
+        | c' :: q ->
+          find_ret_strict_prefix m (pp @ [c]) p q
+      end
+  end
+
 let cast_node #op #s #a #b (n : (option (inode op s a)) { ~ (isRet n) }) : option (inode op s b) =
   match n with
   | Some Tau -> Some Tau
@@ -333,8 +318,14 @@ let raw_bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) ->
   | None -> find_ret_None_noRet m [] p ; cast_node (m p)
 
 let bind #op #s #a #b (m : itree op s a) (f : (x : a { x `return_of` m }) -> itree op s b) : itree op s b =
-  find_ret_strict_prefix m ;
-  forall_intro (find_ret_prefix_val m []) ;
+  introduce forall p q. isRet (raw_bind m f p) /\ p `strict_prefix_of` q ==> None? (raw_bind m f q)
+  with begin
+    introduce isRet (raw_bind m f p) /\ p `strict_prefix_of` q ==> None? (raw_bind m f q)
+    with _. begin
+      find_ret_strict_prefix m [] p q ;
+      find_ret_prefix_val m [] p
+    end
+  end ;
   raw_bind m f
 
 (* An ill-formed loop *)
@@ -526,18 +517,19 @@ let rec iter_fix_guarded (#op : eqtype) #s #ind #a (step : ind -> itree op s (ei
     (decreases p)
 = match find_ret (step x) [] p with
   | Some (Inl j, q) ->
-    find_ret_smaller (step x) [] p ;
-    find_ret_length (step x) [] p ;
-    begin match q with
-    | Tau_choice :: r ->
-      if length r + 1 <= n
-      then begin
-        iter_fix_guarded step r (n-1) j ;
-        iter_fix_guarded step r (length p - 1) j
-      end
-      else ()
-    | _ -> ()
-    end
+    // find_ret_smaller (step x) [] p ;
+    // find_ret_length (step x) [] p ;
+    // begin match q with
+    // | Tau_choice :: r ->
+    //   if length r + 1 <= n
+    //   then begin
+    //     iter_fix_guarded step r (n-1) j ;
+    //     iter_fix_guarded step r (length p - 1) j
+    //   end
+    //   else ()
+    // | _ -> ()
+    // end
+    admit ()
   | Some (Inr r, q) -> ()
   | None -> ()
 

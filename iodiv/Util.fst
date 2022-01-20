@@ -310,6 +310,13 @@ let firstn_all #a (n : nat) (l : list a) :
     l ;
   }
 
+(** forall predicate *)
+
+let rec list_forall #a (p : a -> Type0) (l : list a) =
+  match l with
+  | [] -> True
+  | x :: l -> p x /\ list_forall p l
+
 (** Misc. *)
 
 let forall_below_and_eq (p : nat -> Type0) (m : nat) :

@@ -70,20 +70,6 @@ let iopostream_ext (p q : iopostream) :
   Lemma (p `feq` q ==> p == q)
 = stream_ext p q
 
-// TODO MOVE to Stream, but I cannot add it there
-let stream_trunc_add #a (s : stream a) (n m : nat) :
-  Lemma (stream_trunc s (n + m) == stream_trunc s n @ stream_trunc (stream_drop n s) m)
-= stream_trunc_length s n ;
-  calc (==) {
-    stream_trunc s (n + m) ;
-    == { stream_trunc_drop n s ; stream_trunc_ext (stream_prepend (stream_trunc s n) (stream_drop n s)) s (n + m) }
-    stream_trunc (stream_prepend (stream_trunc s n) (stream_drop n s)) (n + m) ;
-    == { stream_prepend_trunc_right (stream_trunc s n) (stream_drop n s) (n + m) }
-    stream_trunc s n @ stream_trunc (stream_drop n s) ((n + m) - n) ;
-    == {}
-    stream_trunc s n @ stream_trunc (stream_drop n s) m ;
-  }
-
 (**
   Spec with trace
   The trace contains the response of the environment, in fact it is a subset of
@@ -1506,26 +1492,21 @@ let repeat_inv (pre : history -> Type0) (inv : invariant)
   IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> diverges r /\ periodically (fun n -> inv (inf_prefix r n)))
 = IODIV?.reflect (piodiv_repeat pre inv (reify (body ())))
 
-(** Particular case of repeat *)
-// MOVE
-let rec list_forall #a (p : a -> Type0) (l : list a) =
-  match l with
-  | [] -> True
-  | x :: l -> p x /\ list_forall p l
+// (** Particular case of repeat *)
+// let append_stable_list_forall p :
+//   Lemma (append_stable (fun tr -> list_forall p tr))
+// = admit ()
 
-let append_stable_list_forall p :
-  Lemma (append_stable (fun tr -> list_forall p tr))
-= admit ()
-
-let repeat_all (pre : history -> Type0) (p : event -> Type0)
-  (body : unit -> IODiv unit (requires fun h -> pre h) (ensures fun h r ->
-    (terminates r ==> pre (hist_cons h (ret_trace r)) /\ list_forall p (ret_trace r)) /\
-    (diverges r ==> (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
-  )) :
-  IODiv unit (requires fun h -> pre h) (ensures fun h r -> diverges r /\ (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
-= append_stable_list_forall p ;
-  admit () ; // Maybe easier to prove list_forall for all prefix
-  repeat_inv pre (fun tr -> list_forall p tr) body
+// let repeat_all (pre : history -> Type0) (p : event -> Type0)
+//   (body : unit -> IODiv unit (requires fun h -> pre h) (ensures fun h r ->
+//     (terminates r ==> pre (hist_cons h (ret_trace r)) /\ list_forall p (ret_trace r)) /\
+//     (diverges r ==> (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
+//   )) :
+//   IODiv unit (requires fun h -> pre h) (ensures fun h r -> diverges r /\ (forall (n : nat). inf_branch r n == Tau_choice \/ p (choice_to_event (inf_branch r n))))
+// = append_stable_list_forall p ;
+//   admit () ; // Maybe easier to prove list_forall for all prefix
+//   repeat_inv pre (fun tr -> list_forall p tr) body
+//   // Could also use forall_event r p or something... Maybe it's not worth defning...
 
 let assert_hist (p : history -> Type0) : IODiv unit (requires p) (ensures fun hist r -> terminates r /\ p hist) =
   ()
