@@ -36,7 +36,10 @@ assume val bind_w : a:Type -> b:Type -> w a -> (a -> w b) -> w b
 
 assume val ord_w : #a:Type -> wp1:w a -> wp2:w a -> Type0
 assume val lemma_ord_w_id : #a:Type -> wp1:w a -> Lemma (wp1 `ord_w` wp1)
-assume val lemma_ord_w_transitive : #a:Type -> wp1:w a -> wp2:w a -> wp3:w a -> Lemma (wp1 `ord_w` wp2 /\ wp2 `ord_w` wp3 ==> wp1 `ord_w #a` wp3)
+assume val lemma_ord_w_transitive : #a:Type -> wp1:w a -> wp2:w a -> wp3:w a -> 
+  Lemma (wp1 `ord_w` wp2 /\ wp2 `ord_w` wp3 ==> wp1 `ord_w #a` wp3)
+assume val lemma_ord_w_bind_monotonic : #a:Type -> #b:Type -> wp1:w a -> wp2:(a -> w b) -> wp3:w a -> wp4:(a -> w b) ->
+  Lemma (wp1 `ord_w` wp3 /\ (forall x. (wp2 x) `ord_w` (wp4 x)) ==> bind_w a b wp1 wp2 `ord_w` bind_w a b wp3 wp4)
 
 assume val subcomp_w : #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:w (x:a{p1 x}) -> 
   Pure (w (x:a{p2 x}))
@@ -89,14 +92,28 @@ let lemma_w_monotonic_bind_magic #a #b lwp kwp l k =
     getref #(m b) #(fun l -> (kwp x) `ord_w` (subcomp_w (theta b l))) (k x)
   end;
 
-  (** this is the correct assumption we should ask for, close to monotonicity **)
+  (** this is the correct assumption we should ask for, aka monotonicity.
+      the lemma would be: the previous two asserts imply the following assumption **)
   assume (bind_w a b lwp kwp `ord_w`
       bind_w _ b (theta a l) (fun x -> subcomp_w (theta b (k x))));
 
+  (** I tried to extract the previous assumption in an assumed lemma, but
+      t he types don't match: **)
+  // lemma_ord_w_bind_monotonic lwp kwp (subcomp_w (theta a l)) (fun x -> subcomp_w (theta b (k x)));
+
   (** but, we need this: **)
   assume (bind_w a b lwp kwp `ord_w`
-      subcomp_w (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))))
+      subcomp_w #b #_ #(fun _ -> True) (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x)))))
 
+  (** so, the following two are equal in my mind:
+      1) bind_w _ b (theta a l) (fun x -> subcomp_w (theta b (k x))))
+      2) subcomp_w #b #_ #(fun _ -> True) (bind_w _ (x:b{x `return_of` (bind_m a b l k)}) (theta a l) (fun x -> lemma_return_of_bind_m a b l x k; subcomp_w (theta b (k x))))
+
+      I think the strategy is to get subcomp_w out of the bind_w for both, and then everything would be clear, but I have problems typing this:
+        bind_w _ _ (theta a l) (fun x -> theta b (k x))
+                 ^
+                 | I don't know what to write here. It should be something like (x:b{x `return_of` (k ?)}) 
+   **)
 
 val bind_dm :
   a:Type ->
