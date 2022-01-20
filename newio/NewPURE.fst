@@ -83,7 +83,7 @@ total
 reifiable
 reflectable
 effect {
-  PURE (a:Type) (wp : pure_wp a) 
+  NewPURE (a:Type) (wp : pure_wp a) 
   with {
        repr       = pure
      ; return     = return_pure
@@ -104,7 +104,7 @@ let lift_pure_pure (a : Type)
     let r' = return_value _ r in
     subcomp_value _ _ _ r' ) |)
   
-sub_effect Prims.PURE ~> PURE = lift_pure_pure
+sub_effect Prims.PURE ~> NewPURE = lift_pure_pure
 
 (** [Pure] is a Hoare-style counterpart of [PURE]
     
@@ -114,15 +114,20 @@ unfold
 let prepost_as_wp (a: Type) (pre: pure_pre) (post: pure_post' a pre) : pure_wp a by (explode ())=
   fun (p: pure_post a) -> pre /\ (forall (pure_result: a). post pure_result ==> p pure_result)
 
-effect Pure (a: Type) (pre: pure_pre) (post: pure_post' a pre) =
-  PURE a (prepost_as_wp a pre post)
+effect NewPure (a: Type) (pre: pure_pre) (post: pure_post' a pre) =
+  NewPURE a (prepost_as_wp a pre post)
 
-effect Tot (a: Type) = PURE a (pure_null_wp a)
+effect NewTot (a: Type) = NewPURE a (pure_null_wp a)
 
 
-let test_sum (x y:int) : Pure int (x == 7) (fun s -> s == x + y) =
+let test_sum (x y:int) : NewPure int (x == 7) (fun s -> s == x + y) =
   x + y
 
-let test () : Tot unit = 
+let test () : NewTot unit = 
   let _ = test_sum 7 10 in
   ()
+
+let rec fibbonaci (n:int) : NewPure int (n >= 0) (fun r -> r >= 0) =
+  if n = 0 then 0
+  else (if n = 1 then 1
+  else fibbonaci (n - 1) + fibbonaci (n - 2))
