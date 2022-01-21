@@ -29,8 +29,8 @@ let rec m_bind #a #b (c : m a) (f : ret c -> m b) : m b =
   | [] -> []
   | x :: l -> f x @ m_bind l f
 
-let wpre = prop
-let wpost a = a -> prop
+let wpre = Type0
+let wpost a = a -> Type0
 
 let wp a = wpost a -> wpre
 
@@ -173,25 +173,20 @@ let elim_pure #a #w (f : unit -> PURE a w) :
   f ()
 
 let wlift #a (w : pure_wp a) : wp a =
-  fun post -> True ==> w post // True ==> is just to cast
+  fun post -> w post
 
 let as_requires_wlift #a (w : pure_wp a) :
   Lemma (forall post. wlift w post ==> as_requires w)
 = assert (forall post (x : a). post x ==> True) ;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
   assert (forall post. w post ==> w (fun _ -> True)) ;
-  assert (forall post. (True ==> w post) ==> w (fun _ -> True)) ;
-  // assert (forall post. wlift w post ==> w (fun _ -> True)) ;
-  assert (forall post. (True ==> w post) ==> as_requires w) ;
-  // Works with unfold wlift
-  admit ()
+  assert (forall post. (True ==> w post) ==> w (fun _ -> True))
 
 let lift_pure (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : pdm a (wlift w) =
   as_requires_wlift w ;
   (| as_requires w , (fun _ ->
     let r = elim_pure #a #w f in
     let r' : dm a (w_return r) = d_return r in
-    assume (w_return r `wle` wlift w) ;
     d_subcomp (w_return r) (wlift w) r'
   ) |)
 
@@ -209,31 +204,28 @@ reflectable reifiable total layered_effect {
 sub_effect PURE ~> NDw = lift_pure
 
 unfold
-let wprepost #a (pre : prop) (post : a -> prop) : wp a =
+let wprepost #a (pre : Type0) (post : a -> Type0) : wp a =
   fun p -> pre /\ (forall x. post x ==> p x)
 
-effect ND (a : Type) (pre : prop) (post : a -> prop) =
+effect ND (a : Type) (pre : Type0) (post : a -> Type0) =
   NDw a (wprepost pre post)
 
 (** Some tests for ND *)
 
-// let test_assert p : ND unit (requires p) (ensures fun r -> True)
-// by (explode () ; dump "h")
-// =
-//   assert p
+let test_assert p : ND unit (requires p) (ensures fun r -> True) =
+  assert p
 
-// Maybe should drop prop in favour of Type0
-// let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> True) =
-//   match l with
-//   | x :: r -> ()
+let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> True) =
+  match l with
+  | x :: r -> ()
 
-assume val p : prop
-assume val p' : prop
+assume val p : Type0
+assume val p' : Type0
 assume val pure_lemma (_ : unit) : Lemma p
 assume val some_f (_ : squash p) : ND unit (requires True) (ensures fun _ -> True)
 assume val some_f' : unit -> ND unit (requires p) (ensures fun _ -> p')
 
-// let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) by (explode ()) =
+// let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) by (explode () ; dump "h") =
 //   pure_lemma () ;
 //   some_f ()
 
