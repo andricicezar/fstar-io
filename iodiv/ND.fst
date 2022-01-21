@@ -217,10 +217,10 @@ reflectable reifiable total layered_effect {
 sub_effect PURE ~> NDw = lift_pure
 
 unfold
-let wprepost #a (pre : Type0) (post : a -> Type0) : wp a =
+let wprepost #a (pre : Type0) (post : a -> Pure Type0 (requires pre) (ensures fun _ -> True)) : wp a =
   fun p -> pre /\ (forall x. post x ==> p x)
 
-effect ND (a : Type) (pre : Type0) (post : a -> Type0) =
+effect ND (a : Type) (pre : Type0) (post : a -> Pure Type0 (requires pre) (ensures fun _ -> True)) =
   NDw a (wprepost pre post)
 
 (** Action *)
@@ -250,7 +250,7 @@ let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> 
   | x :: r -> ()
 
 // Here a default that we have: the post may not rely on the pre!
-let partial_match_choose (l : list nat) : ND nat (requires l <> []) (ensures fun r -> l <> [] /\ r `memP` tail l) =
+let partial_match_choose (l : list nat) : ND nat (requires l <> []) (ensures fun r -> r `memP` tail l) =
   match l with
   | x :: r -> choose r
 
