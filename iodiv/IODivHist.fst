@@ -768,10 +768,10 @@ let iodiv_call (a : Type) (o : cmds) (x : io_args o) #w (k : (r : io_res o) -> i
 (** Turning pre-/post-conditions into wp *)
 
 unfold
-let wprepost #a (pre : history -> Type0) (post : history -> branch a -> Type0) : wp a =
+let wprepost #a (pre : history -> Type0) (post : (hist : history) -> branch a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) : wp a =
   fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
 
-let wprepost_id_inst #a (pre : history -> Type0) (post : history -> branch a -> Type0) (t : iodiv a (wprepost pre post)) (hist : history) :
+let wprepost_id_inst #a (pre : history -> Type0) (post : (hist : history) -> branch a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) (t : iodiv a (wprepost pre post)) (hist : history) :
   Lemma
     (requires pre hist)
     (ensures theta t (post hist) hist)
@@ -1458,7 +1458,7 @@ reflectable reifiable total layered_effect {
 
 sub_effect PURE ~> IODIV = lift_pure_piodiv
 
-effect IODiv (a : Type) (pre : history -> Type0) (post : history -> branch a -> Type0) =
+effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> branch a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IODIV a (wprepost pre post)
 
 (** Actions *)

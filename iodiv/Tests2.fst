@@ -107,6 +107,10 @@ let partial_match_io (l : list string) : IODiv file_descr (requires fun hist -> 
   match l with
   | s :: _ -> open_file s
 
+let partial_match_pre (l : list nat) : IODiv nat (requires fun hist -> l <> []) (ensures fun hist r -> terminates r /\ result r == hd l) =
+  match l with
+  | x :: r -> x
+
 // Cezar's tests
 // Why is explode needed?
 
