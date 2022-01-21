@@ -223,6 +223,23 @@ let wprepost #a (pre : Type0) (post : a -> Type0) : wp a =
 effect ND (a : Type) (pre : Type0) (post : a -> Type0) =
   NDw a (wprepost pre post)
 
+(** Action *)
+
+let m_choose #a (l : list a) : m a =
+  l
+
+let w_choose #a (l : list a) : wp a =
+  fun post -> forall x. x `memP` l ==> post x
+
+let d_choose #a (l : list a) : dm a (w_choose l) =
+  m_choose l
+
+let p_choose #a (l : list a) : pdm a (w_choose l) =
+  (| True , (fun _ -> d_choose l) |)
+
+let choose #a (l : list a) : ND a (requires True) (ensures fun r -> r `memP` l) =
+  ND?.reflect (subcomp _ _ _ (p_choose l))
+
 (** Some tests for ND *)
 
 let test_assert p : ND unit (requires p) (ensures fun r -> True) =
@@ -231,6 +248,11 @@ let test_assert p : ND unit (requires p) (ensures fun r -> True) =
 let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> True) =
   match l with
   | x :: r -> ()
+
+// Here a default that we have: the post may not rely on the pre!
+let partial_match_choose (l : list nat) : ND nat (requires l <> []) (ensures fun r -> l <> [] /\ r `memP` tail l) =
+  match l with
+  | x :: r -> choose r
 
 assume val p : Type0
 assume val p' : Type0
