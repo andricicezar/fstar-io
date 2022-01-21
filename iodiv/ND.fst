@@ -61,12 +61,30 @@ let dm a (w : wp a) =
 let d_return #a (x : a) : dm a (w_return x) =
   m_return x
 
-let memP_in_append #a (x : a) (l l' : list a) :
+let rec memP_in_append #a (x : a) (l l' : list a) :
   Lemma
     (requires x `memP` l \/ x `memP` l')
     (ensures x `memP` (l @ l'))
     [SMTPat (x `memP` (l @ l'))]
-= admit ()
+= match l with
+  | [] -> ()
+  | e :: tl ->
+    eliminate x == e \/ (x `memP` tl \/ x `memP` l')
+    returns x `memP` (l @ l')
+    with _. ()
+    and _. memP_in_append x tl l'
+
+let rec memP_append_invert #a (x : a) (l l' : list a) :
+  Lemma
+    (requires x `memP` (l @ l'))
+    (ensures x `memP` l \/ x `memP` l')
+= match l with
+  | [] -> ()
+  | e :: tl ->
+    eliminate x == e \/ x `memP` (tl @ l')
+    returns x `memP` l \/ x `memP` l'
+    with _. ()
+    and _. memP_append_invert x tl l'
 
 let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
   Lemma (forall y. y `return_of` f x ==> y `return_of` m_bind c f)
@@ -77,6 +95,18 @@ let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
     returns forall y. y `return_of` f x ==> y `return_of` m_bind c f
     with _. ()
     and _. return_of_bind l f x
+
+let rec memP_bind_inv #a #b (c : m a) (f : ret c -> m b) y :
+  Lemma
+    (requires y `memP` m_bind c f)
+    (ensures exists x. x `memP` c /\ y `memP` f x)
+= match c with
+  | e :: l ->
+    memP_append_invert y (f e) (m_bind l f) ;
+    eliminate y `memP` f e \/ y `memP` m_bind l f
+    returns exists x. x `memP` c /\ y `memP` f x
+    with _. ()
+    and _. memP_bind_inv l f y
 
 // Also works with == but I guess wle is enough
 let theta_bind #a #b (c : m a) (f : ret c -> m b) :
@@ -94,8 +124,7 @@ let theta_bind #a #b (c : m a) (f : ret c -> m b) :
           assert (forall z. z `memP` c ==> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post) ;
           assert (forall z. z `memP` c ==> theta (f z) (fun x -> post x)) ;
           assert (forall z z'. z `memP` c /\ z' `memP` (f z) ==> post z') ;
-          // Now need a lemma to invert x `memP` (m_bind c f)
-          admit ()
+          memP_bind_inv c f x
         end
       end
     end
