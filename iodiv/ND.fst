@@ -249,7 +249,6 @@ let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> 
   match l with
   | x :: r -> ()
 
-// Here a default that we have: the post may not rely on the pre!
 let partial_match_choose (l : list nat) : ND nat (requires l <> []) (ensures fun r -> r `memP` tail l) =
   match l with
   | x :: r -> choose r
