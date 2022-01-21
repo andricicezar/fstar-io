@@ -7,7 +7,7 @@ module ND
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
-open FStar.Tactics
+open FStar.Tactics // Also defines forall_intro so place before Classical
 open FStar.Classical
 
 
@@ -133,3 +133,112 @@ let theta_bind #a #b (c : m a) (f : ret c -> m b) :
 let d_bind #a #b #w (#wf : a -> wp b) (c : dm a w) (f : (x : ret c) -> dm b (wf x)) : dm b (w_bind w wf) =
   theta_bind c f ;
   m_bind c f
+
+
+let pdm a (w : wp a) =
+  pre : pure_pre { forall post. w post ==> pre } & (squash pre -> dm a w)
+
+let return a (x : a) : pdm a (w_return x) =
+  (| True , (fun _ -> d_return x) |)
+
+let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -> forall post. w post ==> r) =
+  let (| pre , f |) = t in pre
+
+let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fun _ -> True) =
+  let (| pre, f |) = t in f ()
+
+let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (w_bind w wf) =
+  (| (get_pre c /\ (forall x. x `return_of` (get_fun c) ==> get_pre (f x))) , (fun _ -> d_bind (get_fun c) (fun x -> get_fun (f x))) |)
+
+let d_subcomp #a (w1 w2 : wp a) (m : dm a w1) :
+  Pure (dm a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
+= m
+
+let subcomp (a : Type) (w1 w2 : wp a) (m : pdm a w1) :
+  Pure (pdm a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
+= (| get_pre m , (fun _ -> get_fun m) |)
+
+let w_if_then_else #a (w1 w2 : wp a) (b : bool) : wp a =
+  fun post -> (b ==> w1 post) /\ (~ b ==> w2 post)
+
+let if_then_else (a : Type) (w1 w2 : wp a) (f : pdm a w1) (g : pdm a w2) (b : bool) : Type =
+  pdm a (w_if_then_else w1 w2 b)
+
+let elim_pure #a #w (f : unit -> PURE a w) :
+  Pure
+    a
+    (requires w (fun _ -> True))
+    (ensures fun r -> forall post. w post ==> post r)
+= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+  f ()
+
+let wlift #a (w : pure_wp a) : wp a =
+  fun post -> True ==> w post // True ==> is just to cast
+
+let as_requires_wlift #a (w : pure_wp a) :
+  Lemma (forall post. wlift w post ==> as_requires w)
+= assert (forall post (x : a). post x ==> True) ;
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+  assert (forall post. w post ==> w (fun _ -> True)) ;
+  assert (forall post. (True ==> w post) ==> w (fun _ -> True)) ;
+  // assert (forall post. wlift w post ==> w (fun _ -> True)) ;
+  assert (forall post. (True ==> w post) ==> as_requires w) ;
+  // Works with unfold wlift
+  admit ()
+
+let lift_pure (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : pdm a (wlift w) =
+  as_requires_wlift w ;
+  (| as_requires w , (fun _ ->
+    let r = elim_pure #a #w f in
+    let r' : dm a (w_return r) = d_return r in
+    assume (w_return r `wle` wlift w) ;
+    d_subcomp (w_return r) (wlift w) r'
+  ) |)
+
+[@@allow_informative_binders]
+reflectable reifiable total layered_effect {
+  NDw : a:Type -> w:wp a -> Effect
+  with
+    repr         = pdm ;
+    return       = return ;
+    bind         = bind ;
+    subcomp      = subcomp ;
+    if_then_else = if_then_else
+}
+
+sub_effect PURE ~> NDw = lift_pure
+
+unfold
+let wprepost #a (pre : prop) (post : a -> prop) : wp a =
+  fun p -> pre /\ (forall x. post x ==> p x)
+
+effect ND (a : Type) (pre : prop) (post : a -> prop) =
+  NDw a (wprepost pre post)
+
+(** Some tests for ND *)
+
+// let test_assert p : ND unit (requires p) (ensures fun r -> True)
+// by (explode () ; dump "h")
+// =
+//   assert p
+
+// Maybe should drop prop in favour of Type0
+// let partial_match (l : list nat) : ND unit (requires l <> []) (ensures fun r -> True) =
+//   match l with
+//   | x :: r -> ()
+
+assume val p : prop
+assume val p' : prop
+assume val pure_lemma (_ : unit) : Lemma p
+assume val some_f (_ : squash p) : ND unit (requires True) (ensures fun _ -> True)
+assume val some_f' : unit -> ND unit (requires p) (ensures fun _ -> p')
+
+// let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) by (explode ()) =
+//   pure_lemma () ;
+//   some_f ()
+
+// let pure_lemma_test2 () : ND unit (requires True) (ensures fun _ -> True) by (explode ()) =
+//   pure_lemma () ;
+//   some_f () ;
+//   some_f' () ;
+//   assert p'

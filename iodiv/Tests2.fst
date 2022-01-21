@@ -108,7 +108,7 @@ let partial_match_io (l : list string) : IODiv file_descr (requires fun hist -> 
   | s :: _ -> open_file s
 
 // Cezar's tests
-// Why is exploded needed?
+// Why is explode needed?
 
 assume val p : prop
 assume val p' : prop
