@@ -34,14 +34,26 @@ let wpost a = a -> Type0
 
 let wp a = wpost a -> wpre
 
-let wle #a (w1 w2 : wp a) =
+unfold
+let _wle #a (w1 w2 : wp a) =
   forall x. w2 x ==> w1 x
 
-let w_return #a (x : a) : wp a =
+let wle #a (w1 w2 : wp a) =
+  _wle w1 w2
+
+unfold
+let _w_return #a (x : a) : wp a =
   fun post -> post x
 
-let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
+let w_return #a (x : a) : wp a =
+  _w_return x
+
+unfold
+let _w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
   fun post -> w (fun x -> wf x post)
+
+let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
+  _w_bind w wf
 
 // Cezar's subcomp_w
 let wcast #a p q (w : wp (x : a { p x })) :
@@ -138,7 +150,7 @@ let d_bind #a #b #w (#wf : a -> wp b) (c : dm a w) (f : (x : ret c) -> dm b (wf 
 let pdm a (w : wp a) =
   pre : pure_pre { forall post. w post ==> pre } & (squash pre -> dm a w)
 
-let return a (x : a) : pdm a (w_return x) =
+let return a (x : a) : pdm a (_w_return x) =
   (| True , (fun _ -> d_return x) |)
 
 let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -> forall post. w post ==> r) =
@@ -147,7 +159,7 @@ let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -
 let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fun _ -> True) =
   let (| pre, f |) = t in f ()
 
-let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (w_bind w wf) =
+let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
   (| (get_pre c /\ (forall x. x `return_of` (get_fun c) ==> get_pre (f x))) , (fun _ -> d_bind (get_fun c) (fun x -> get_fun (f x))) |)
 
 let d_subcomp #a (w1 w2 : wp a) (m : dm a w1) :
@@ -155,7 +167,7 @@ let d_subcomp #a (w1 w2 : wp a) (m : dm a w1) :
 = m
 
 let subcomp (a : Type) (w1 w2 : wp a) (m : pdm a w1) :
-  Pure (pdm a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
+  Pure (pdm a w2) (requires w1 `_wle` w2) (ensures fun _ -> True)
 = (| get_pre m , (fun _ -> get_fun m) |)
 
 let w_if_then_else #a (w1 w2 : wp a) (b : bool) : wp a =
@@ -172,6 +184,7 @@ let elim_pure #a #w (f : unit -> PURE a w) :
 = FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
   f ()
 
+unfold
 let wlift #a (w : pure_wp a) : wp a =
   fun post -> w post
 
@@ -225,12 +238,12 @@ assume val pure_lemma (_ : unit) : Lemma p
 assume val some_f (_ : squash p) : ND unit (requires True) (ensures fun _ -> True)
 assume val some_f' : unit -> ND unit (requires p) (ensures fun _ -> p')
 
-// let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) by (explode () ; dump "h") =
-//   pure_lemma () ;
-//   some_f ()
+let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) =
+  pure_lemma () ;
+  some_f ()
 
-// let pure_lemma_test2 () : ND unit (requires True) (ensures fun _ -> True) by (explode ()) =
-//   pure_lemma () ;
-//   some_f () ;
-//   some_f' () ;
-//   assert p'
+let pure_lemma_test2 () : ND unit (requires True) (ensures fun _ -> True) =
+  pure_lemma () ;
+  some_f () ;
+  some_f' () ;
+  assert p'
