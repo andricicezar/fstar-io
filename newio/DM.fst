@@ -8,6 +8,11 @@ open Free
 open Free.IO
 open Hist
 
+
+unfold
+let ret (m : free 'op 'sig 'a) =
+  x : 'a { x `return_of` m }
+
 (** the behavior of f can differ based on the history in iio **)
 let rec trace_of (lt:trace) (m:io 'a) (x:'a) =
   match lt, m with
@@ -65,8 +70,6 @@ unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) : hist #event (io_resm cmd) = 
  // | GetTrace -> p [] h
   | _ -> io_pre cmd arg h /\ (forall r. p [convert_call_to_event cmd arg r] r)
 
-let tret_of (m:free 'op 's 'a) : Type = (x:'a{x `return_of` m})
-
 (** Inspierd from Kenji's thesis (2.4.5) **)
 let rec theta (#a:Type) (m : io a) : hist #event (x:a{x `return_of` m}) =
   match m with
@@ -74,6 +77,7 @@ let rec theta (#a:Type) (m : io a) : hist #event (x:a{x `return_of` m}) =
   | Call cmd arg k ->
     hist_bind (io_resm cmd) (x:a{x `return_of` m}) (io_wps cmd arg) (fun r -> theta (k r))
 
+(** this proof is not robust, sometimes it passes, sometimes it is not **)
 let rec lemma_theta_result_implies_post m p h : 
   Lemma 
     (requires theta m p h) 
@@ -106,29 +110,16 @@ let rec lemma_return_of_free_bind (m:io 'a) (mx:'a{mx `return_of` m}) (f:(x:'a{x
     end
   end
 
-unfold 
-let cast_hist_bind_return_of
-  (m:io 'a)
-  (mx:'a{mx `return_of` m})
-  (f:(x:'a{x `return_of` m}) -> io 'b)
-  (wp:hist (x:'b{x `return_of` f mx})) :
-  Tot (hist (x:'b{x `return_of` (io_bind m f)})) =
-  lemma_return_of_free_bind m mx f;
-  wp
+let lemma_theta_is_monad_morphism_ret v :
+  Lemma (theta (io_return v) == hist_return v) by (compute ()) = ()
 
 let theta_of_f_x 
   (m:io 'a)
   (f:(x:'a{x `return_of` m}) -> io 'b)
   (mx:'a{mx `return_of` m}) :
-  Tot (hist (x:'b{x `return_of` (io_bind m f)})) =
-  cast_hist_bind_return_of m mx f (theta (f mx))
-
-(**
-let hist_bind' (m:io 'a) (f:'a -> io 'b) (wp1:hist (x:'a{x `return_of` m})) (wp2:((x:'a) -> hist (x':'b{x' `return_of` (f x)}))) : hist (x:'b{x `return_of` io_bind m f})=
-  hist_bind wp1 wp2**)
-  
-let lemma_theta_is_monad_morphism_ret v :
-  Lemma (theta (io_return v) == hist_return v) by (compute ()) = ()
+  Tot (hist (ret (io_bind m f))) =
+  lemma_return_of_free_bind m mx f;
+  hist_subcomp (theta (f mx))
 
 (** TODO: remove the admits **)
 let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(x:'a{x `return_of` m}) -> io 'b) :
@@ -184,21 +175,42 @@ let dm (a:Type) (wp:hist a) =
 
 let dm_return (a : Type) (x : a) : dm a (hist_return x) =
   io_return x
+  
+let getref #a #p (x : a { p x }) : Lemma (p x) = ()
+
+
+let another_lemma (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) p h : 
+  Lemma 
+    (requires ((forall x. (wp2 x) `hist_ord` (wp3 x)) /\ hist_bind _ _ wp1 wp2 p h))
+    (ensures (hist_bind _ _ wp1 wp3 p h)) = ()
+    
+#set-options "--print_implicits --print_bound_var_types"
 
 let awesome_lemma 
   (a b:Type)
   (v:io a)
-  (f:(x:a{x `return_of` v}) -> io b) : 
+  (f:(ret v) -> io b) : 
   Lemma (
-  (hist_bind (x:a{x `return_of` v}) b (theta v) (fun x -> theta (f x))) == 
-    ((hist_bind (x:a{x `return_of` v}) (x:b{x `return_of` io_bind v f}) (theta v) (theta_of_f_x v f)) <: hist b)) by 
-    (explode ();
-     tadmit (); tadmit ();
-    ExtraTactics.rewrite_lemma 5 6;
-    norm [delta_only [`%theta_of_f_x; `%cast_hist_bind_return_of]];
-    tadmit ();
-    dump "H")= () 
-    
+  (hist_bind (ret v) b (theta v) (fun x -> hist_subcomp (theta (f x)))) `hist_ord` 
+    hist_subcomp #_ #_ #(fun x -> x `return_of` (io_bind v f)) (hist_bind (ret v) (ret (io_bind v f)) (theta v) (theta_of_f_x v f))) = 
+
+  let wp1 : hist b =                   hist_bind (ret v) b                   (theta v) (fun x -> hist_subcomp (theta (f x))) in
+  let wp2 : hist (ret (io_bind v f)) = hist_bind (ret v) (ret (io_bind v f)) (theta v) (theta_of_f_x v f) in
+
+  assert (theta v `hist_ord` theta v);
+  assert (forall (x:ret v). (hist_subcomp (theta (f x))) `hist_ord #_ #b` (theta_of_f_x v f x));
+  introduce forall (p:hist_post b) h. wp1 p h ==> wp2 p h with begin
+      introduce wp1 p h ==> wp2 p h with _. begin
+        another_lemma #event #(ret v) #b (theta v) (fun x -> hist_subcomp (theta (f x))) (theta_of_f_x v f) p h;
+        let p1 = (fun lt (r:ret v) -> theta_of_f_x #a #b v f r (fun lt' (r':b) -> p (lt@lt') r') (List.rev lt @ h)) in
+        let p2 = (fun lt (r:ret v) -> theta_of_f_x #a #b v f r (fun lt' (r':ret (io_bind v f)) -> p (lt@lt') r') (List.rev lt @ h)) in
+        assert (p1 `hist_post_ord` p2);
+        assert (theta v p1 h); 
+        assert (theta v p2 h);
+        assert (wp2 p h)
+    end
+  end
+
 let dm_bind
   (a b : Type)
   (wp_v : hist a)
@@ -206,33 +218,19 @@ let dm_bind
   (v : dm a wp_v)
   (f : (x:a{x `return_of` v} -> dm b (wp_f x))) :
   Tot (dm b (hist_bind _ _ wp_v wp_f)) =
-  (** we lost the fact that theta is a monad morphism because we added
-      the refinement `return_of` on the free_bind. We can prove this bind, 
-      if we specialize the proof (Theo was able to that for his DM), but that
-      implies that we do not get a DM for free. **)
-  
-  (** hist is monotonic. **)
-  
-  lemma_theta_is_monad_morphism_bind v f;
-  (**
-  calc (==) {
-    theta (io_bind v f);
+  calc (hist_ord) {
+    hist_bind a b wp_v wp_f;
+    `hist_ord` { 
+         assert (wp_v `hist_ord` theta v); 
+         assert (forall (x:(ret v)). wp_f x `hist_ord #_ #b` theta (f x))
+         (** hist is monotonic **) 
+    } 
+    hist_bind (ret v) b (theta v) (fun x -> hist_subcomp #_ #b #(fun x' -> x' `return_of` (f x)) (theta (f x)));
+    `hist_ord` { awesome_lemma a b v f }
+    hist_subcomp #_ #b #(fun x' -> x' `return_of` (io_bind v f)) (hist_bind (ret v) (ret (io_bind v f)) (theta v) (theta_of_f_x v f));
     == { lemma_theta_is_monad_morphism_bind v f }
-    hist_bind (x:a{x `return_of` v}) _ (theta v) (theta_of_f_x v f);
-    == { _ by (norm [delta_only [`%theta_of_f_x; `%cast_hist_bind_return_of]]; dump "H") }
-    hist_bind (x:a{x `return_of` v}) b (theta v) (fun x -> theta (f x));
-  }; **)
-  assert (theta (io_bind v f) == hist_bind (x:a{return_of x v}) (x:b{return_of x (io_bind v f)}) (theta v) (theta_of_f_x v f)); 
-  assert (wp_v `hist_ord` theta v);
-  assert (forall (x:a{x `return_of` v}). wp_f x `hist_ord #_ #b` theta (f x));
-
-  assert (hist_bind a b wp_v wp_f `hist_ord #_ #b`
-  	   hist_bind (x:a{x `return_of` v}) _ (theta v) (fun x -> theta (f x)));
-	   
-  awesome_lemma a b v f;
-  (** goal: **)
-  assert (hist_bind _ b wp_v wp_f `hist_ord #_ #b` theta (io_bind v f));
-
+    hist_subcomp #_ #b #(fun x' -> x' `return_of` (io_bind v f)) (theta (io_bind v f));
+  };
   io_bind v f
 
 let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :

@@ -28,6 +28,19 @@ let hist_wp_monotonic (#event:Type) (wp:hist0 #event 'a) =
 
 let hist #event a = wp:(hist0 #event a){hist_wp_monotonic wp}
 
+val hist_subcomp0 : #event:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist #event (x:a{p1 x}) -> 
+  (hist #event (x:a{p2 x}))
+let hist_subcomp0 #_ #a #p1 #p2 #_ wp : (hist (x:a{p2 x})) =
+  let wp' : hist0 (x:a{p2 x}) = wp in
+  assert (forall (post1:hist_post (x:a{p2 x})) (post2:hist_post (x:a{p2 x})). (hist_post_ord post1 post2 ==> (forall h. wp' post1 h ==> wp' post2 h)));
+  assert (hist_wp_monotonic #(x:a{p2 x}) wp');
+  wp'
+
+val hist_subcomp : #event:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:hist #event (x:a{p1 x}) -> 
+  Pure (hist #event (x:a{p2 x})) (requires (forall x. p1 x ==> p2 x)) (ensures (fun _ -> True))
+let hist_subcomp #event #a #p1 #p2 wp = hist_subcomp0 #event #a #p1 #p2 #() wp
+
+
 let hist_return (#event:Type) (x:'a) : hist #event 'a =
   fun p _ -> p [] x
 
