@@ -20,13 +20,18 @@ type m a =
 let m_return #a (x : a) : m a =
   Return x
 
-let rec values #a (c : m a) : list a =
-  match c with
-  | Return x -> [ x ]
-  | Choose l k -> concatMap (fun x -> values (k x)) l
+// let rec values #a (c : m a) : list a =
+//   match c with
+//   | Return x -> [ x ]
+//   | Choose l k -> concatMap (fun x -> values (k x)) l
 
-let return_of #a (x : a) (c : m a) =
-  x `memP` values c
+// let return_of #a (x : a) (c : m a) =
+//   x `memP` values c
+
+let rec return_of #a (x : a) (c : m a) =
+  match c with
+  | Return y -> x == y
+  | Choose l k -> exists y. y `memP` l /\ x `return_of` (k y)
 
 unfold
 let ret #a (c : m a) =
@@ -35,7 +40,7 @@ let ret #a (c : m a) =
 let rec m_bind #a #b (c : m a) (f : ret c -> m b) : m b =
   match c with
   | Return x -> f x
-  | Choose l k -> Choose l (fun x -> m_bind (k x) f) // Would it be easier with a recursive return_of?
+  | Choose l k -> Choose l (fun x -> m_bind (k x) f) // In fact, with this version, Choose needs a more informative type!
 
 let wpre = Type0
 let wpost a = a -> Type0
