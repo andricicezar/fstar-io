@@ -12,21 +12,14 @@ open FStar.List.Tot.Properties
 open FStar.Classical
 
 
+// Because of the refinement on l, this is not an instance of Cezar's Free
 noeq
 type m a =
 | Return : x:a -> m a
-| Choose : #b:Type -> l:list b -> (b -> m a) -> m a
+| Choose : #b:Type -> l:list b -> k:((x : b { x `memP` l }) -> m a) -> m a
 
 let m_return #a (x : a) : m a =
   Return x
-
-// let rec values #a (c : m a) : list a =
-//   match c with
-//   | Return x -> [ x ]
-//   | Choose l k -> concatMap (fun x -> values (k x)) l
-
-// let return_of #a (x : a) (c : m a) =
-//   x `memP` values c
 
 let rec return_of #a (x : a) (c : m a) =
   match c with
@@ -40,7 +33,7 @@ let ret #a (c : m a) =
 let rec m_bind #a #b (c : m a) (f : ret c -> m b) : m b =
   match c with
   | Return x -> f x
-  | Choose l k -> Choose l (fun x -> m_bind (k x) f) // In fact, with this version, Choose needs a more informative type!
+  | Choose l k -> Choose l (fun x -> m_bind (k x) f)
 
 let wpre = Type0
 let wpost a = a -> Type0
