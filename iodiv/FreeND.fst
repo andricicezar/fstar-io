@@ -70,8 +70,17 @@ let wforget #a #c (w : wp (ret c)) : wp a =
   wcast (fun x -> x `return_of` c) (fun x -> True) w
 
 
-let theta #a (c : m a) : wp (ret c) =
-  fun post -> forall x. x `memP` c ==> post x
+let w_choose #a (l : list a) : wp (x : a { x `memP` l }) =
+  fun post -> forall x. x `memP` l ==> post x
+
+let rec theta #a (c : m a) : wp (ret c) =
+  match c with
+  | Return x -> w_return x
+  | Choose l k -> w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x))
+
+// This one would work too!
+// let theta #a (c : m a) : wp (ret c) =
+//   fun post -> forall x. x `return_of` c ==> post x
 
 let dm a (w : wp a) =
   c : m a { wforget (theta c) `wle` w }
