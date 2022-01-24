@@ -116,12 +116,19 @@ let rec memP_append_invert #a (x : a) (l l' : list a) :
 let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
   Lemma (forall y. y `return_of` f x ==> y `return_of` m_bind c f)
 = match c with
-  | [] -> ()
-  | e :: l ->
-    eliminate x == e \/ x `memP` l
-    returns forall y. y `return_of` f x ==> y `return_of` m_bind c f
-    with _. ()
-    and _. return_of_bind l f x
+  | Return y -> ()
+  | Choose l k ->
+    eliminate exists y. y `memP` l /\ x `return_of` (k y)
+    returns forall u. u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
+    with _. begin
+      introduce forall u. u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
+      with begin
+        introduce u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
+        with _. begin
+          return_of_bind (k y) f x
+        end
+      end
+    end
 
 let rec memP_bind_inv #a #b (c : m a) (f : ret c -> m b) y :
   Lemma
