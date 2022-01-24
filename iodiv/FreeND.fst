@@ -66,6 +66,12 @@ let wcast #a p q (w : wp (x : a { p x })) :
   Pure (wp (x : a { q x })) (requires forall x. p x ==> q x) (ensures fun _ -> True) =
   fun post -> w (fun x -> post x)
 
+let wcast_implies #a p q (w : wp (x : a { p x })) (post : wpost (x : a { q x })) :
+  Lemma
+    (requires (forall x. p x ==> q x) /\ wcast p q w post)
+    (ensures w (fun x -> post x))
+= ()
+
 let wforget #a #c (w : wp (ret c)) : wp a =
   wcast (fun x -> x `return_of` c) (fun x -> True) w
 
@@ -122,17 +128,42 @@ let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
     returns forall u. u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
     with _. return_of_bind (k y) f x
 
-let rec memP_bind_inv #a #b (c : m a) (f : ret c -> m b) y :
-  Lemma
-    (requires y `memP` m_bind c f)
-    (ensures exists x. x `memP` c /\ y `memP` f x)
-= match c with
-  | e :: l ->
-    memP_append_invert y (f e) (m_bind l f) ;
-    eliminate y `memP` f e \/ y `memP` m_bind l f
-    returns exists x. x `memP` c /\ y `memP` f x
-    with _. ()
-    and _. memP_bind_inv l f y
+// let rec memP_bind_inv #a #b (c : m a) (f : ret c -> m b) y :
+//   Lemma
+//     (requires y `memP` m_bind c f)
+//     (ensures exists x. x `memP` c /\ y `memP` f x)
+// = match c with
+//   | e :: l ->
+//     memP_append_invert y (f e) (m_bind l f) ;
+//     eliminate y `memP` f e \/ y `memP` m_bind l f
+//     returns exists x. x `memP` c /\ y `memP` f x
+//     with _. ()
+//     and _. memP_bind_inv l f y
+
+let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
+  Lemma (theta (m_bind c f) `wle` w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> return_of_bind c f x ; wcast (fun y -> y `return_of` f x) _ (theta (f x))))
+= forall_intro (return_of_bind c f) ;
+  introduce forall post. w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ==> theta (m_bind c f) post
+  with begin
+    introduce w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ==> theta (m_bind c f) post
+    with _. begin
+      match c with
+      | Return x ->
+        assert (w_bind #(ret c) #(ret (f x)) (w_return x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
+        assert (w_return x (fun z -> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post)) ;
+        assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
+        wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
+        assert (theta (f x) (fun x -> post x)) ;
+        assume (theta (f x) post) // We would need eta to conclude here
+      | Choose l k -> admit ()
+    end
+  end
+
+let _w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
+  fun post -> w (fun x -> wf x post)
+
+let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
+  _w_bind w wf
 
 // Also works with == but I guess wle is enough
 let theta_bind #a #b (c : m a) (f : ret c -> m b) :
