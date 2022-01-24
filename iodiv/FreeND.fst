@@ -151,13 +151,22 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
     introduce w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ==> theta (m_bind c f) post
     with _. begin
       match c with
-      | Return x ->
-        assert (w_bind #(ret c) #(ret (f x)) (w_return x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
-        assert (w_return x (fun z -> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post)) ;
-        assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
-        wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
-        assert (theta (f x) post)
-      | Choose l k -> admit ()
+      | Return x -> ()
+        // assert (w_bind #(ret c) #(ret (f x)) (w_return x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
+        // assert (w_return x (fun z -> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post)) ;
+        // assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
+        // wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
+        // assert (theta (f x) post)
+      | Choose l k ->
+        assert (w_bind #(ret c) #(ret (m_bind c f)) (theta (Choose l k)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
+        assert (w_bind #(ret c) #(ret (m_bind c f)) (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x))) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
+        w_bind_imples (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x))) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post ;
+        assert (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post)) ;
+        w_bind_imples #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
+        // assert (w_choose l (fun x -> theta (k x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post))) ;
+
+        assume (theta (Choose l (fun x -> m_bind (k x) f)) post)
+        // assume (w_bind #_ #(ret c) (w_choose l) (fun x -> theta ((fun x -> m_bind (k x) f) x)) post)
     end
   end
 
