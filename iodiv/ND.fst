@@ -58,17 +58,14 @@ let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
 // Cezar's subcomp_w
 let wcast #a p q (w : wp (x : a { p x })) :
   Pure (wp (x : a { q x })) (requires forall x. p x ==> q x) (ensures fun _ -> True) =
-  fun post -> w (fun x -> post x)
-
-let wforget #a #c (w : wp (ret c)) : wp a =
-  wcast (fun x -> x `return_of` c) (fun x -> True) w
+  w
 
 
 let theta #a (c : m a) : wp (ret c) =
   fun post -> forall x. x `memP` c ==> post x
 
 let dm a (w : wp a) =
-  c : m a { wforget (theta c) `wle` w }
+  c : m a { theta c `wle #a` w }
 
 let d_return #a (x : a) : dm a (w_return x) =
   m_return x

@@ -64,16 +64,13 @@ let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
 // Cezar's subcomp_w
 let wcast #a p q (w : wp (x : a { p x })) :
   Pure (wp (x : a { q x })) (requires forall x. p x ==> q x) (ensures fun _ -> True) =
-  fun post -> w (fun x -> post x)
+  w
 
 let wcast_implies #a p q (w : wp (x : a { p x })) (post : wpost (x : a { q x })) :
   Lemma
     (requires (forall x. p x ==> q x) /\ wcast p q w post)
-    (ensures w (fun x -> post x))
+    (ensures w post)
 = ()
-
-let wforget #a #c (w : wp (ret c)) : wp a =
-  wcast (fun x -> x `return_of` c) (fun x -> True) w
 
 
 let w_choose #a (l : list a) : wp (x : a { x `memP` l }) =
@@ -89,7 +86,7 @@ let rec theta #a (c : m a) : wp (ret c) =
 //   fun post -> forall x. x `return_of` c ==> post x
 
 let dm a (w : wp a) =
-  c : m a { wforget (theta c) `wle` w }
+  c : m a { theta c `wle #a` w }
 
 let d_return #a (x : a) : dm a (w_return x) =
   m_return x
@@ -146,25 +143,6 @@ let w_bind_imples #a #b (w : wp a) (wf : a -> wp b) (post : wpost b) :
     (ensures w (fun x -> wf x post))
 = ()
 
-let rec theta_eta #a (c : m a) (post : wpost (ret c)) :
-  Lemma
-    (requires theta c (fun x -> post x))
-    (ensures theta c post)
-// by (explode () ; bump_nth 8 ; dump "h")
-= match c with
-  | Return x -> ()
-  | Choose l k ->
-    assert (w_bind #(x : _ { x `memP` l }) #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x)) ;
-    w_bind_imples #(x : _ { x `memP` l }) #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x) ;
-    assume (w_choose l (fun x -> theta (k x) (fun y -> post y))) ;
-    introduce forall x. x `memP` l ==> theta (k x) post
-    with begin
-      introduce x `memP` l ==> theta (k x) post
-      with _. begin
-        theta_eta (k x) post
-      end
-    end
-
 let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
   Lemma (theta (m_bind c f) `wle` w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> return_of_bind c f x ; wcast (fun y -> y `return_of` f x) _ (theta (f x))))
 = forall_intro (return_of_bind c f) ;
@@ -178,8 +156,6 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
         assert (w_return x (fun z -> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post)) ;
         assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
         wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
-        assert (theta (f x) (fun x -> post x)) ;
-        theta_eta (f x) post ;
         assert (theta (f x) post)
       | Choose l k -> admit ()
     end
