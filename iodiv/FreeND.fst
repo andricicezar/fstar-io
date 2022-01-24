@@ -120,15 +120,7 @@ let rec return_of_bind #a #b (c : m a) (f : ret c -> m b) (x : ret c) :
   | Choose l k ->
     eliminate exists y. y `memP` l /\ x `return_of` (k y)
     returns forall u. u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
-    with _. begin
-      introduce forall u. u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
-      with begin
-        introduce u `return_of` f x ==> u `return_of` Choose l (fun z -> m_bind (k z) f)
-        with _. begin
-          return_of_bind (k y) f x
-        end
-      end
-    end
+    with _. return_of_bind (k y) f x
 
 let rec memP_bind_inv #a #b (c : m a) (f : ret c -> m b) y :
   Lemma
