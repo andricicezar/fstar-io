@@ -146,16 +146,17 @@ let w_bind_imples #a #b (w : wp a) (wf : a -> wp b) (post : wpost b) :
     (ensures w (fun x -> wf x post))
 = ()
 
-let rec theta_eta #a (c : m a) (post : wpost a) :
+let rec theta_eta #a (c : m a) (post : wpost (ret c)) :
   Lemma
     (requires theta c (fun x -> post x))
     (ensures theta c post)
+// by (explode () ; bump_nth 8 ; dump "h")
 = match c with
   | Return x -> ()
   | Choose l k ->
-    assert (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x)) ;
-    w_bind_imples #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x) ;
-    assume (w_choose l (fun x -> theta (k x) (fun x -> post x))) ;
+    assert (w_bind #(x : _ { x `memP` l }) #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x)) ;
+    w_bind_imples #(x : _ { x `memP` l }) #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> post x) ;
+    assume (w_choose l (fun x -> theta (k x) (fun y -> post y))) ;
     introduce forall x. x `memP` l ==> theta (k x) post
     with begin
       introduce x `memP` l ==> theta (k x) post
@@ -178,17 +179,11 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
         assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
         wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
         assert (theta (f x) (fun x -> post x)) ;
-        // theta_eta (f x) post ; // Wrong type for post
-        assume (theta (f x) post)
+        theta_eta (f x) post ;
+        assert (theta (f x) post)
       | Choose l k -> admit ()
     end
   end
-
-let _w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  fun post -> w (fun x -> wf x post)
-
-let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  _w_bind w wf
 
 // Also works with == but I guess wle is enough
 let theta_bind #a #b (c : m a) (f : ret c -> m b) :
