@@ -10,6 +10,7 @@ open FStar.Tactics
 open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Classical
+open FStar.Calc
 
 
 // Because of the refinement on l, this is not an instance of Cezar's Free
@@ -143,6 +144,10 @@ let w_bind_imples #a #b (w : wp a) (wf : a -> wp b) (post : wpost b) :
     (ensures w (fun x -> wf x post))
 = ()
 
+// let m_bind_choose #a #b #c (l : list a) (k : (x : a { x `memP` l }) -> m b) (f : ret (Choose l k) -> m c) :
+//   Lemma (m_bind (Choose l k) f == Choose l (fun x -> m_bind (k x) f))
+// = admit ()
+
 let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
   Lemma (theta (m_bind c f) `wle` w_bind #(ret c) #(ret (m_bind c f)) (theta c) (fun x -> return_of_bind c f x ; wcast (fun y -> y `return_of` f x) _ (theta (f x))))
 = forall_intro (return_of_bind c f) ;
@@ -165,8 +170,31 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
         w_bind_imples #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
         // assert (w_choose l (fun x -> theta (k x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post))) ;
 
-        assume (theta (Choose l (fun x -> m_bind (k x) f)) post)
+        // calc (==) {
+        //   theta (m_bind c f) post ;
+        //   == {}
+        //   theta (m_bind (Choose l k) f) post ;
+        //   == { m_bind_choose l k f }
+        //   theta (Choose l (fun x -> m_bind (k x) f)) post ;
+        //   // == {}
+        //   // w_bind #_ #(ret c) (w_choose l) (fun x -> theta ((fun x -> m_bind (k x) f) x)) post ;
+        //   == {}
+        //   forall x. x `memP` l ==> theta ((fun x -> m_bind (k x) f) x) post ;
+        // } ;
+
+        assume (forall x. x `memP` l ==> theta ((fun x -> m_bind (k x) f) x) post) ;
+
+        // calc (==) {
+        //   m_bind c f ;
+        //   == {}
+        //   m_bind (Choose l k) f ;
+        //   == {}
+        //   Choose l (fun x -> m_bind (k x) f) ;
+        // } ;
+
+        // assume (theta (Choose l (fun x -> m_bind (k x) f)) post)
         // assume (w_bind #_ #(ret c) (w_choose l) (fun x -> theta ((fun x -> m_bind (k x) f) x)) post)
+ ()
     end
   end
 
