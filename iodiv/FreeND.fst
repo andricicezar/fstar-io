@@ -157,11 +157,6 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
     with _. begin
       match c with
       | Return x -> ()
-        // assert (w_bind #(ret c) #(ret (f x)) (w_return x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
-        // assert (w_return x (fun z -> wcast (fun y -> y `return_of` f z) _ (theta (f z)) post)) ;
-        // assert (wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
-        // wcast_implies (fun y -> y `return_of` f x) _ (theta (f x)) post ;
-        // assert (theta (f x) post)
       | Choose l k ->
         assert (w_bind #(ret c) #(ret (m_bind c f)) (theta (Choose l k)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
         assert (w_bind #(ret c) #(ret (m_bind c f)) (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x))) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x))) post) ;
@@ -169,32 +164,19 @@ let rec theta_bind #a #b (c : m a) (f : ret c -> m b) :
         assert (w_bind #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post)) ;
         w_bind_imples #_ #(ret c) (w_choose l) (fun x -> theta (k x)) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post) ;
         // assert (w_choose l (fun x -> theta (k x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post))) ;
+        // assume (forall x. x `memP` l ==> theta (k x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post)) ; // Seems to be efficiency issue
 
-        // calc (==) {
-        //   theta (m_bind c f) post ;
-        //   == {}
-        //   theta (m_bind (Choose l k) f) post ;
-        //   == { m_bind_choose l k f }
-        //   theta (Choose l (fun x -> m_bind (k x) f)) post ;
-        //   // == {}
-        //   // w_bind #_ #(ret c) (w_choose l) (fun x -> theta ((fun x -> m_bind (k x) f) x)) post ;
-        //   == {}
-        //   forall x. x `memP` l ==> theta ((fun x -> m_bind (k x) f) x) post ;
-        // } ;
-
-        assume (forall x. x `memP` l ==> theta ((fun x -> m_bind (k x) f) x) post) ;
-
-        // calc (==) {
-        //   m_bind c f ;
-        //   == {}
-        //   m_bind (Choose l k) f ;
-        //   == {}
-        //   Choose l (fun x -> m_bind (k x) f) ;
-        // } ;
-
-        // assume (theta (Choose l (fun x -> m_bind (k x) f)) post)
-        // assume (w_bind #_ #(ret c) (w_choose l) (fun x -> theta ((fun x -> m_bind (k x) f) x)) post)
- ()
+        introduce forall x. x `memP` l ==> theta ((fun x -> m_bind (k x) f) x) post
+        with begin
+          introduce x `memP` l ==> theta (m_bind (k x) f) post
+          with _. begin
+            // Should follow from the above
+            assume (theta (k x) (fun x -> wcast (fun y -> y `return_of` f x) _ (theta (f x)) post)) ;
+            assume (w_bind #(ret (k x)) #(ret (m_bind (k x) f)) (theta (k x)) (fun y -> return_of_bind (k x) f y ; wcast (fun z -> z `return_of` f y) _ (theta (f y))) post) ;
+            admit () ; // Sadly not enough?
+            theta_bind (k x) f
+          end
+        end
     end
   end
 
