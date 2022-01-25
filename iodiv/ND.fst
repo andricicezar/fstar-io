@@ -279,3 +279,11 @@ let rec some_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
   if n > 3
   then 2 + some_rec (n -3)
   else 1
+
+let rec some_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
+  if n > 3
+  then begin
+    let x = some_rec (n-3) in
+    2 + x
+  end
+  else 1
