@@ -265,3 +265,17 @@ let pure_lemma_test2 () : ND unit (requires True) (ensures fun _ -> True) =
   some_f () ;
   some_f' () ;
   assert p'
+
+let rec easy_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
+  if n = 0 then 0 else easy_rec (n - 1)
+
+let rec some_rec_tot (n : nat) : nat =
+  if n > 3
+  then 2 + some_rec_tot (n -3)
+  else 1
+
+[@expect_failure]
+let rec some_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
+  if n > 3
+  then 2 + some_rec (n -3)
+  else 1
