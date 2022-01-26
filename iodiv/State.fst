@@ -85,7 +85,7 @@ let return a (x : a) : pdm a (_w_return x) =
 
 (* Trying to find the right pre for bind to see what is missing *)
 let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
-  admit ()
+  get_pre c /\ (exists s0. let (s1, x) = get_fun c s0 in get_pre (f x))
 
 let w_bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
   Lemma (forall post s0. _w_bind w wf post s0 ==> bind_pre c f)
@@ -104,15 +104,14 @@ let w_bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
       assert (get_pre (f x)) ; // The problem is that here the x is not arbitrary!
       // It makes me want to use m_bind in the definition of bind_pre with the hope
       // that we can somehow prove something about m_bind externally
-      // though it feels like we're going to land on return_of again
-      // bind_pre c f = get_pre c /\ forall s0. let (s1, x) = get_fun c s0 in get_pre (f x)
-      assume (bind_pre c f)
+      // currently it gets us return_of again...
+      assert (bind_pre c f)
     end
   end
 
 let bind_pre_left #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
   Lemma (bind_pre c f ==> get_pre c)
-= admit ()
+= ()
 
 // This one is the problem because we don't know anything about x!
 let bind_pre_right #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) (x : a) :
