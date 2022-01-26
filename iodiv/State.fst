@@ -83,7 +83,44 @@ let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fu
 let return a (x : a) : pdm a (_w_return x) =
   (| True , (fun _ -> d_return x) |)
 
-let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf)
-by (explode () ; dump "h")
-=
-  (| (get_pre c /\ (forall x. get_pre (f x))) , (fun _ -> d_bind (get_fun c) (fun x -> get_fun (f x))) |)
+(* Trying to find the right pre for bind to see what is missing *)
+let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
+  admit ()
+
+let w_bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
+  Lemma (forall post s0. _w_bind w wf post s0 ==> bind_pre c f)
+= introduce forall post s0. _w_bind w wf post s0 ==> bind_pre c f
+  with begin
+    introduce _w_bind w wf post s0 ==> bind_pre c f
+    with _. begin
+      assert (w (fun s1 x -> wf x post s1) s0) ;
+      assert (get_pre c) ;
+      // Now for the continuation, let's use theta
+      assert (theta (get_fun c) (fun s1 x -> wf x post s1) s0) ;
+      assert (let (s1, x) = (get_fun c) s0 in (fun s1 x -> wf x post s1) s1 x) ;
+      assert (let (s1, x) = (get_fun c) s0 in wf x post s1) ;
+      let (s1, x) = get_fun c s0 in
+      assert (wf x post s1) ;
+      assert (get_pre (f x)) ; // The problem is that here the x is not arbitrary!
+      // It makes me want to use m_bind in the definition of bind_pre with the hope
+      // that we can somehow prove something about m_bind externally
+      // though it feels like we're going to land on return_of again
+      // bind_pre c f = get_pre c /\ forall s0. let (s1, x) = get_fun c s0 in get_pre (f x)
+      assume (bind_pre c f)
+    end
+  end
+
+let bind_pre_left #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
+  Lemma (bind_pre c f ==> get_pre c)
+= admit ()
+
+// This one is the problem because we don't know anything about x!
+let bind_pre_right #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) (x : a) :
+  Lemma (bind_pre c f ==> get_pre (f x))
+= admit ()
+
+let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
+  w_bind_pre c f ;
+  bind_pre_left c f ;
+  forall_intro (bind_pre_right c f) ;
+  (| bind_pre c f , (fun _ -> d_bind (get_fun c) (fun x -> get_fun (f x))) |)
