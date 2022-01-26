@@ -71,6 +71,50 @@ let d_bind #a #b #w #wf (c : dm a w) (f : (x:a) -> dm b (wf x)) : dm b (w_bind w
 
 (** Partial Dijkstra monad *)
 
+// Other idea from the thread
+// let pre_of_w #a (w : wp a) : pure_pre =
+//   forall pre. (forall post s0. w post s0 ==> pre) ==> pre
+
+// let pdm a w =
+//   squash (pre_of_w w) -> dm a w
+
+// let return a (x : a) : pdm a (_w_return x) =
+//   fun _ -> d_return x
+
+// let pre_of_w_bind_l #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) :
+//   Lemma
+//     (requires pre_of_w (_w_bind w wf))
+//     (ensures pre_of_w w)
+// = ()
+
+// let pre_of_w_bind_r #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) (x : a) :
+//   Lemma
+//     (requires pre_of_w (_w_bind w wf))
+//     (ensures pre_of_w (wf x))
+// = introduce forall pre. (forall post s0. wf x post s0 ==> pre) ==> pre
+//   with begin
+//     introduce (forall post s0. wf x post s0 ==> pre) ==> pre
+//     with _. begin
+//       assert ((forall post s0. _w_bind w wf post s0 ==> pre) ==> pre) ;
+//       introduce forall post s0. _w_bind w wf post s0 ==> pre
+//       with begin
+//         introduce _w_bind w wf post s0 ==> pre
+//         with _. begin
+//           assert (w (fun s1 x -> wf x post s1) s0) ;
+//           assert (theta (c ()) (fun s1 x -> wf x post s1) s0) ;
+//           let (s1, y) = c () s0 in
+//           assert (wf y post s1) ; // But I need x not y
+//           assume pre
+//         end
+//       end ;
+//       assert pre
+//     end
+//   end
+
+// let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
+//   fun _ -> d_bind (c ()) (fun x -> f x ())
+
+
 let pdm a (w : wp a) =
   pre : pure_pre { forall post s0. w post s0 ==> pre } & (squash pre -> dm a w)
 
