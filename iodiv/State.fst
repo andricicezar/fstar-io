@@ -69,6 +69,10 @@ let d_return #a (x : a) =
 let d_bind #a #b #w #wf (c : dm a w) (f : (x:a) -> dm b (wf x)) : dm b (w_bind w wf) =
   m_bind c f
 
+let d_subcomp #a #w1 #w2 (c : dm a w1) :
+  Pure (dm a w2) (requires w1 `wle` w2) (ensures fun _ -> True)
+= c
+
 (** Partial Dijkstra monad *)
 
 // Other idea from the thread
@@ -148,45 +152,46 @@ let d_bind #a #b #w #wf (c : dm a w) (f : (x:a) -> dm b (wf x)) : dm b (w_bind w
 
 // Still with a post, but this time we get to choose it
 
-// let pw #a (post : pure_post a) (w : wp a) : wp (x:a{post x}) =
-//   fun p s0 -> w (fun s1 x -> post x /\ p s1 x) s0
+(*
+let pw #a (post : pure_post a) (w : wp a) : wp (x:a{post x}) =
+  fun p s0 -> w (fun s1 x -> post x /\ p s1 x) s0
 
-// let pdm a (w : wp a) =
-//   pre : pure_pre { forall post s0. w post s0 ==> pre } & begin
-//     (post : pure_post a { forall s0. pre ==> w (fun s1 x -> post x) s0 }) ->
-//     squash pre ->
-//     dm (x:a {post x}) (pw post w)
-//   end
+let pdm a (w : wp a) =
+  pre : pure_pre { forall post s0. w post s0 ==> pre } & begin
+    (post : pure_post a { forall s0. pre ==> w (fun s1 x -> post x) s0 }) ->
+    squash pre ->
+    dm (x:a {post x}) (pw post w)
+  end
 
-// let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -> forall post s0. w post s0 ==> r) =
-//   let (| pre , f |) = t in pre
+let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -> forall post s0. w post s0 ==> r) =
+  let (| pre , f |) = t in pre
 
-// let get_fun #a #w (t : pdm a w) (post : pure_post a { forall s0. get_pre t ==> w (fun s1 x -> post x) s0 }) :
-//   Pure (dm (x:a{post x}) (pw post w)) (requires get_pre t) (ensures fun _ -> True) =
-//   let (| pre , f |) = t in f post ()
+let get_fun #a #w (t : pdm a w) (post : pure_post a { forall s0. get_pre t ==> w (fun s1 x -> post x) s0 }) :
+  Pure (dm (x:a{post x}) (pw post w)) (requires get_pre t) (ensures fun _ -> True) =
+  let (| pre , f |) = t in f post ()
 
-// assume val empty_state : state
+assume val empty_state : state
 
-// let return a (x : a) : pdm a (_w_return x) =
-//   (| True , (fun (post : pure_post a { forall s0. True ==> _w_return x (fun s1 x -> post x) s0 }) _ ->
-//     assert (forall s0. True ==> _w_return x (fun s1 x -> post x) s0) ;
-//     eliminate forall (s0 : state). post x with empty_state ;
-//     assert (post x) ;
-//     let x : (x:a {post x}) = x in
-//     d_return x
-//   ) |)
+let return a (x : a) : pdm a (_w_return x) =
+  (| True , (fun (post : pure_post a { forall s0. True ==> _w_return x (fun s1 x -> post x) s0 }) _ ->
+    assert (forall s0. True ==> _w_return x (fun s1 x -> post x) s0) ;
+    eliminate forall (s0 : state). post x with empty_state ;
+    assert (post x) ;
+    let x : (x:a {post x}) = x in
+    d_return x
+  ) |)
 
-// let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
-//   get_pre c
+let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
+  get_pre c
 
-// let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
-//   (| bind_pre c f , (fun (post : pure_post b { forall s0. bind_pre c f ==> _w_bind w wf (fun s1 x -> post x) s0 }) _ ->
-//     assume (forall s0. get_pre c ==> w (fun s1 x -> (fun x -> get_pre (f x)) x) s0) ;
-//     assume (forall x s0. get_pre (f x) ==> wf x (fun s1 x -> post x) s0) ;
-//     admit () ; // We would need some kind of comutation with pw and w_bind
-//     d_bind (get_fun c (fun x -> get_pre (f x))) (fun x -> get_fun (f x) post)
-//   ) |)
-
+let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
+  (| bind_pre c f , (fun (post : pure_post b { forall s0. bind_pre c f ==> _w_bind w wf (fun s1 x -> post x) s0 }) _ ->
+    assume (forall s0. get_pre c ==> w (fun s1 x -> get_pre (f x)) s0) ; // Having w as a goal is going to be hard
+    assume (forall x s0. get_pre (f x) ==> wf x (fun s1 x -> post x) s0) ;
+    assume (_w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) `wle` pw post (_w_bind w wf)) ;
+    d_bind (get_fun c (fun x -> get_pre (f x))) (fun x -> get_fun (f x) post)
+  ) |)
+*)
 
 // Original idea
 
