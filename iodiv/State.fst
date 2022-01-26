@@ -114,6 +114,40 @@ let d_bind #a #b #w #wf (c : dm a w) (f : (x:a) -> dm b (wf x)) : dm b (w_bind w
 // let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
 //   fun _ -> d_bind (c ()) (fun x -> f x ())
 
+// Alt partial DM with post too
+
+// let pw #a (post : pure_post a) (w : wp a) : wp (x:a{post x}) =
+//   fun p s0 -> w (fun s1 x -> post x /\ p s1 x) s0
+
+// let pdm a (w : wp a) =
+//   pre : pure_pre { forall post s0. w post s0 ==> pre } &
+//   post : pure_post a { forall s0. pre ==> w (fun s1 x -> post x) s0 } &
+//   (squash pre -> dm (x:a {post x}) (pw post w))
+
+// let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -> forall post s0. w post s0 ==> r) =
+//   let (| pre , post , f |) = t in pre
+
+// let get_post #a #w (t : pdm a w) : Pure (pure_post a) (requires True) (ensures fun r -> forall s0. get_pre t ==> w (fun s1 x -> r x) s0) =
+//   let (| pre , post , f |) = t in post
+
+// let get_fun #a #w (t : pdm a w) : Pure (dm (x:a{get_post t x}) (pw (get_post t) w)) (requires get_pre t) (ensures fun _ -> True) =
+//   let (| pre , post , f |) = t in f ()
+
+// let return a (x : a) : pdm a (_w_return x) =
+//   (| True , (fun _ -> True) , (fun _ -> d_return x) |)
+
+// let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
+//   get_pre c /\ (forall x. get_post c x ==> get_pre (f x))
+
+// let bind_post #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_post b =
+//   fun y -> True // get_post (f ?) y
+
+// let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
+//   (| bind_pre c f , bind_post c f , (fun _ -> d_bind (get_fun c) (fun (x: a { get_post c x }) -> get_fun (f x))) |) // We would rather choose the post of c not work with any one
+//   // We would then pick the pre of f?
+
+
+// Original idea
 
 let pdm a (w : wp a) =
   pre : pure_pre { forall post s0. w post s0 ==> pre } & (squash pre -> dm a w)
@@ -128,6 +162,7 @@ let return a (x : a) : pdm a (_w_return x) =
   (| True , (fun _ -> d_return x) |)
 
 (* Trying to find the right pre for bind to see what is missing *)
+// Morally, shouldn't this be only get_pre c?
 let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
   get_pre c /\ (exists s0. let (s1, x) = get_fun c s0 in get_pre (f x))
 
