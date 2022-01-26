@@ -237,16 +237,23 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     let term4 : hist' = hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term4_rhs in
     assert (term4' == term4);
 
-    (** obtained by using the associativity of hist_bind **)
-    let term5_l : hist (io_resm cmd) = io_wps cmd arg in
-    let term5_m : io_resm cmd -> hist (ret m) = (fun r -> glue_lemma_1 cmd arg k r; theta (k r)) in
-    let term5_r : ret m -> hist' = (fun r -> fast_cast_2 cmd arg k f (theta_of_f_x m f r)) in
-    let term5 : hist' =
-      hist_bind (io_resm cmd) ret' term5_l (fun r -> hist_bind _ _ (term5_m r) term5_r) in
-    assert (term4 == term5) by (
+    (** rewriting term4 **)
+    let term4_l : hist (io_resm cmd) = io_wps cmd arg in
+    let term4_m : r:io_resm cmd -> hist (ret (k r)) = (fun r -> glue_lemma_1 cmd arg k r; theta (k r)) in
+    let term4_r : ret m -> hist' = (fun r -> fast_cast_2 cmd arg k f (theta_of_f_x m f r)) in
+    let term4_new_rhs : io_resm cmd -> hist' =
+      (fun r -> hist_bind _ ret' (term4_m r) term4_r) in
+(**    assert (term4_rhs == term4_new_rhs) by (
       norm [delta_only [`%fast_cast;`%fast_cast_1;`%fast_cast_2;`%hist_subcomp;`%hist_subcomp0]; iota];
       dump "H"
-    );
+    );**)
+(**    let term4_new : hist' =
+      hist_bind (io_resm cmd) ret' term4_l (fun r -> hist_bind _ _ (term4_m r) term4_r) in
+    assert (term4 == term4_new) by (
+      norm [delta_only [`%fast_cast;`%fast_cast_1;`%fast_cast_2;`%hist_subcomp;`%hist_subcomp0]; iota];
+      dump "H"
+    );**)
+    (** obtained by using the associativity of hist_bind **)
  //   let term5  : hist #event (ret (io_bind m f)) =
 //      hist_bind (ret m) (ret (io_bind m f)) (hist_bind _ _ term5_l term5_m) term5_r in
 //    let term5_flip' : hist' = fast_cast_2 cmd arg k f term5_flip in
