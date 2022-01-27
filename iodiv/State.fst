@@ -152,7 +152,6 @@ let d_subcomp #a #w1 #w2 (c : dm a w1) :
 
 // Still with a post, but this time we get to choose it
 
-(*
 let pw #a (post : pure_post a) (w : wp a) : wp (x:a{post x}) =
   fun p s0 -> w (fun s1 x -> post x /\ p s1 x) s0
 
@@ -186,12 +185,34 @@ let bind_pre #a #b #w #wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pure_pre =
 
 let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
   (| bind_pre c f , (fun (post : pure_post b { forall s0. bind_pre c f ==> _w_bind w wf (fun s1 x -> post x) s0 }) _ ->
-    assume (forall s0. get_pre c ==> w (fun s1 x -> get_pre (f x)) s0) ; // Having w as a goal is going to be hard
+    assert (forall s0. get_pre c ==> w (fun s1 x -> wf x (fun s1 x -> post x) s1) s0) ;
+    assert (get_pre c ==> (forall s1 x. wf x (fun s1 x -> post x) s1 ==> get_pre (f x))) ;
+    assume (forall s0. get_pre c ==> w (fun s1 x -> get_pre (f x)) s0) ; // Would follow from monotonicity of w!
+
+    assert (forall s0. w (fun s1 x -> wf x (fun s1 x -> post x) s1) s0) ;
+    assume (forall x s0. get_pre (f x) ==> pw (fun x -> get_pre (f x)) w (fun s1 x -> wf x (fun s1 x -> post x) s1) s0) ; // Should hold by monotonicity (?)
+    assume (forall x s0. get_pre (f x) ==> theta (get_fun c (fun x -> get_pre (f x))) (fun s1 x -> wf x (fun s1 x -> post x) s1) s0) ; // This from the dm spec
+    assert (forall x s0. get_pre (f x) ==> (let (s1, y) = get_fun c (fun x -> get_pre (f x)) s0 in wf y (fun s1 x -> post x) s1)) ;
+    assert (forall x s0. get_pre (f x) ==> (let (s1, y) = get_fun c (fun x -> get_pre (f x)) s0 in assert (get_pre (f y)) ; wf y (fun s1 x -> post x) s1)) ; // We're again in a case where we'd like to use return_of...
     assume (forall x s0. get_pre (f x) ==> wf x (fun s1 x -> post x) s0) ;
-    assume (_w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) `wle` pw post (_w_bind w wf)) ;
+
+    introduce forall p s0. pw post (_w_bind w wf) p s0 ==> _w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) p s0
+    with begin
+      introduce pw post (_w_bind w wf) p s0 ==> _w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) p s0
+      with _. begin
+        assume (_w_bind w wf (fun s1 x -> post x /\ p s1 x) s0) ; // unfold pw
+        assert (w (fun s1 x -> wf x (fun s2 y -> post y /\ p s2 y) s1) s0) ;
+        // The gap seems to be get_pre which we know holds, so essentially monotonicity again
+        assume (w (fun s1 x -> get_pre (f x) /\ wf x (fun s2 y -> post y /\ p s2 y) s1) s0) ; // unfold pw in below
+        assume (w (fun s1 x -> get_pre (f x) /\ pw post (wf x) p s1) s0) ; // unfold pw in below
+        assume (pw (fun x -> get_pre (f x)) w (fun s1 x -> pw post (wf x) p s1) s0) ;
+        assert (_w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) p s0)
+      end
+    end ;
+    assert (_w_bind (pw (fun x -> get_pre (f x)) w) (fun x -> pw post (wf x)) `wle` pw post (_w_bind w wf)) ;
+
     d_bind (get_fun c (fun x -> get_pre (f x))) (fun x -> get_fun (f x) post)
   ) |)
-*)
 
 // Original idea
 
