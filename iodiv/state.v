@@ -26,6 +26,12 @@ Section State.
   Definition bindᴹ [A B] (c : M A) (f : A → M B) : M B :=
     λ s₀, let '(s₁, x) := c s₀ in f x s₁.
 
+  Definition getᴹ : M state :=
+    λ s, (s, s).
+
+  Definition putᴹ (s : state) : M unit :=
+    λ s₀, (s, tt).
+
   (* Specification monad *)
 
   Definition preᵂ := state → Prop.
@@ -43,6 +49,12 @@ Section State.
 
   Definition bindᵂ [A B] (w : wp A) (wf : A → wp B) : wp B :=
     λ P, w (λ s₁ x, wf x P s₁).
+
+  Definition getᵂ : wp state :=
+    λ P s, P s s.
+
+  Definition putᵂ (s : state) : wp unit :=
+    λ P s₀, P s tt.
 
   Instance trans [A] : Transitive (@wle A).
   Proof.
@@ -73,6 +85,19 @@ Section State.
     simpl. intros s₁ x hf.
     eapply mwf. 2: exact hf.
     assumption.
+  Qed.
+
+  Instance getᵂ_ismono : Monotonous (getᵂ).
+  Proof.
+    intros P Q s₀ hPQ h.
+    red. red in h.
+    apply hPQ. assumption.
+  Qed.
+
+  Instance putᵂ_ismono : ∀ s, Monotonous (putᵂ s).
+  Proof.
+    intros s. intros P Q s₀ hPQ h.
+    apply hPQ. assumption.
   Qed.
 
   Lemma bindᵂ_mono :
@@ -145,6 +170,18 @@ Section State.
     exists (val c).
     etransitivity. 2: exact h.
     destruct c. assumption.
+  Defined.
+
+  Definition getᴰ : DM state getᵂ.
+  Proof.
+    exists getᴹ.
+    cbv. auto.
+  Defined.
+
+  Definition putᴰ s : DM unit (putᵂ s).
+  Proof.
+    exists (putᴹ s).
+    cbv. auto.
   Defined.
 
   (* Partial Dijkstra monad *)
@@ -233,7 +270,13 @@ Section State.
           verifies a property verified by every value of bind c f.
           Could the post always be the same and be something like
           { x | ∀ P, pure_post w P → P x }
-          Maybe this is enough?
+          Maybe this is enoughz
+          -- Maybe just for c here otherwise the return type of f and bind
+          won't match.
+          Can I use something similar to the consequence of return_of?
+          Something quantifying over all posts and using theta perhaps.
+          (Lookup the theorem for instantiating return_of).
+          Something like ∀ P s, w P s → ∃ s', P x?
           *)
         destruct x as [x hx].
         intros Q s h. unfold lift_post in h.
@@ -269,5 +312,23 @@ Section State.
         * eapply pdm_pure_pre. eassumption.
         * assumption.
   Admitted.
+
+  Definition getᴾ : PDM state getᵂ.
+  Proof.
+    exists True.
+    - cbv. auto.
+    - intros P _ hP.
+      (* simple refine (subcompᴰ getᴰ). *)
+      (* Is there no way without opening getᴰ? *)
+  Abort.
+
+  Definition putᴾ (s : state) : PDM unit (putᵂ s).
+  Proof.
+    exists True.
+    - cbv. auto.
+    - intros P _ hP.
+      (* simple refine (subcompᴰ (putᴰ s)). *)
+      (* Same here *)
+  Abort.
 
 End State.
