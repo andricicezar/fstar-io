@@ -149,6 +149,7 @@ Section State.
 
   (* Partial Dijkstra monad *)
 
+  (* Is it really needed? *)
   Definition pw [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
     λ Q s₀, w (λ s₁ x, ∃ (h : P x), Q s₁ (exist _ x h)) s₀.
 
@@ -162,11 +163,21 @@ Section State.
     exists hP. apply hQR. assumption.
   Qed.
 
-  Definition pure_pre [A] (w : wp A) (P : Prop) :=
-    ∀ Q s₀, w Q s₀ → P.
+  Definition lift_pre [A] (pre : Prop) : wp A :=
+    λ P s₀, pre.
 
+  (* Not sure about how to treat state *)
+  Definition lift_post [A] (post : A → Prop) : wp A :=
+    λ P s₀, ∀ x s₁, post x → P s₁ x.
+
+  Definition pure_pre [A] (w : wp A) (P : Prop) :=
+    (* ∀ Q s₀, w Q s₀ → P. *)
+    lift_pre P ≤ᵂ w.
+
+  (* Unsure about this too  *)
   Definition pure_post [A] (w : wp A) (post : A → Prop) :=
-    ∀ s₀, w (λ s₁ x, post x) s₀.
+    (* ∀ s₀, w (λ s₁ x, post x) s₀. *)
+    w ≤ᵂ lift_post post.
 
   Record PDM A (w : wp A) := {
     pdm_pre : Prop ;
@@ -186,9 +197,14 @@ Section State.
     - intros P s₀ h. constructor.
     - intros P _ hP.
       simple refine (subcompᴰ (retᴰ _)).
-      + exists x. cbv in hP. apply hP. exact empty_state.
+      + exists x. cbv in hP.
+        specialize (hP (λ _, P)). simpl in hP.
+        apply hP. 1: exact empty_state.
+        auto.
       + cbv. intros Q s₀ [h hQ].
-        replace (hP empty_state) with h by apply PIR.
+        lazymatch goal with
+        | |- Q _ (exist _ _ ?hh) => replace hh with h by apply PIR
+        end.
         assumption.
   Defined.
 
@@ -203,14 +219,34 @@ Section State.
     - intros P hpre pP.
       simple refine (subcompᴰ (bindᴰ (pdm_fun c (λ x, pdm_pre (f x)) _ _) (λ x, pdm_fun (f (val x)) P _ _))).
       + assumption.
-      + intros s₀.
-        eapply mw. 2: eapply pP.
-        simpl. intros s₁ x h.
-        eapply pdm_pure_pre. exact h.
+      + intros Q s h. unfold lift_post in h.
+        unfold pure_post in pP.
+        specialize (pP (λ _, P)). unfold lift_post in pP.
+        eapply mw. 2: eapply pP. 2:auto.
+        simpl. intros s₁ x hf.
+        apply h.
+        eapply pdm_pure_pre. exact hf.
       + destruct x as [x hx]. assumption.
-      + destruct x as [x hx]. intros s₀.
-        (* specialize (pP s₀). red in pP. *)
+      + (* Here the only assumption we have on x is pre (f x) which might
+          not be enoug.
+          Assuming pure_post is correct, we have to show every value of f x
+          verifies a property verified by every value of bind c f.
+          Could the post always be the same and be something like
+          { x | ∀ P, pure_post w P → P x }
+          Maybe this is enough?
+          *)
+        destruct x as [x hx].
+        intros Q s h. unfold lift_post in h.
+        unfold pure_post in pP.
+        specialize (pP (λ _, P)) as hP. unfold lift_post in hP.
         destruct c as [cpre hcpre c]. simpl in hpre.
+        assert (post : A → Prop) by admit.
+        pose proof (c post) as c'.
+        forward c'.
+        { assumption. }
+        forward c'.
+        { admit. }
+        destruct c' as [c' h'].
         (* pose proof (c (λ y, y = x)) as c'.
         forward c' by assumption.
         forward c'.
