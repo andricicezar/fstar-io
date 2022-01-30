@@ -186,7 +186,7 @@ Section State.
 
   (* Partial Dijkstra monad *)
 
-  (* Is it really needed? *)
+  (* Could be called refineᵂ *)
   Definition pw [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
     λ Q s₀, w (λ s₁ x, ∃ (h : P x), Q s₁ (exist _ x h)) s₀.
 
@@ -330,5 +330,38 @@ Section State.
       (* simple refine (subcompᴰ (putᴰ s)). *)
       (* Same here *)
   Abort.
+
+  (* Makes me wonder if there shouldn't be a notion of refineᴰ that allows
+  to go from DM A w to DM { x : A | P x } (pw P w) for good P.
+  This would only work under the assumption of a pre (and P would be relative
+  to it). Maybe the existence of this notion is exactly the PDM though?
+  *)
+
+  Notation "⟨ u ⟩" := (exist _ u _).
+
+  Definition refineᴰ [A w] (c : DM A w) P {h : pure_post w P} :
+    DM { x : A | P x } (pw P w).
+  Proof.
+    destruct c as [c hc].
+    unshelve eexists.
+    - intro s. pose (c' := c s). pose (s' := fst c'). pose (x := snd c').
+      split. 1: exact s'.
+      exists x.
+      cbv in hc. specialize (hc (λ _, P) s). simpl in hc.
+      destruct (c s) as [s₀ a]. subst c'. simpl in s', x. subst s' x.
+      apply hc.
+      cbv in h. specialize (h (λ _, P)). simpl in h.
+      apply h. auto.
+    - simpl. intros Q s hw.
+      unfold θ. lazy in hw.
+      apply hc in hw. unfold θ in hw.
+      lazymatch goal with
+      | |- Q _ (exist _ _ ?H) => set (hh := H) ; clearbody hh
+      end.
+      destruct (c s) as [s' x]. simpl in *.
+      destruct hw as [hP hQ].
+      assert (hh = hP) by apply PIR. subst.
+      assumption.
+  Defined.
 
 End State.
