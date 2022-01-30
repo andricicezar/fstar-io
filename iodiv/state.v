@@ -281,9 +281,20 @@ Section State.
     PDM B (bindᵂ w wf).
   Proof.
     intros mw mwf.
-    exists c.(pdm_pre).
-    1:{ intros P s₀ h. eapply pdm_pure_pre. exact h. }
-    intro hc.
+    exists (c.(pdm_pre) ∧ pure_post w (λ x : A, (f x).(pdm_pre))).
+    1:{
+      intros P s₀ h.
+      split.
+      - eapply pdm_pure_pre. exact h.
+      - intros Q s hQ. unfold lift_post in hQ.
+        (* Can we fix the different s here? *)
+        eapply mw. (* 2: eapply h. 2:auto.
+        simpl. intros s₁ x hf.
+        apply h.
+        eapply pdm_pure_pre. exact hf. *)
+        all: admit.
+    }
+    (* intro hc.
     simple refine (subcompᴰ (bindᴰ (refineᴰ (pdm_fun c _) (λ x, pdm_pre (f x))) (λ x, pdm_fun (f (val x)) _))).
     - assumption.
     - intros Q s h. unfold lift_post in h.
@@ -300,11 +311,14 @@ Section State.
       pure_post w (λ x : A, (f x).(pdm_pre)) to the pre of the whole thing.
       c.(pdm_pre) ∧ pure_post w (λ x : A, (f x).(pdm_pre))
       This is the first thing I want to try because it might be promising.
+
+      Or maybe some x ∈ w or something?
+      Could be ∀ P s₀, w P s₀ → ∃ s₁, P s₁ x
       *)
       admit.
     - destruct x. assumption.
     - admit. (* Not worth it if we change the post. *)
-
+ *)
 
 
     (* - intros P hpre pP.
