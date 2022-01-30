@@ -186,20 +186,6 @@ Section State.
 
   (* Partial Dijkstra monad *)
 
-  (* Could be called refineᵂ *)
-  Definition pw [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
-    λ Q s₀, w (λ s₁ x, ∃ (h : P x), Q s₁ (exist _ x h)) s₀.
-
-  Instance pw_ismono [A] (P : A → Prop) (w : wp A) {mw : Monotonous w} :
-    Monotonous (pw P w).
-  Proof.
-    intros Q R s₀ hQR h.
-    red. red in h.
-    eapply mw. 2: exact h.
-    simpl. intros s₁ x [hP hQ].
-    exists hP. apply hQR. assumption.
-  Qed.
-
   Definition lift_pre [A] (pre : Prop) : wp A :=
     λ P s₀, pre.
 
@@ -216,33 +202,77 @@ Section State.
     (* ∀ s₀, w (λ s₁ x, post x) s₀. *)
     w ≤ᵂ lift_post post.
 
+  Notation "⟨ u ⟩" := (exist _ u _).
+
+  Definition refineᵂ [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
+    λ Q s₀, w (λ s₁ x, ∃ (h : P x), Q s₁ (exist _ x h)) s₀.
+
+  Instance refineᵂ_ismono [A] (P : A → Prop) (w : wp A) {mw : Monotonous w} :
+    Monotonous (refineᵂ P w).
+  Proof.
+    intros Q R s₀ hQR h.
+    red. red in h.
+    eapply mw. 2: exact h.
+    simpl. intros s₁ x [hP hQ].
+    exists hP. apply hQR. assumption.
+  Qed.
+
+  Axiom PIR : ∀ (P : Prop) (h1 h2 : P), h1 = h2.
+
+  Definition refineᴰ [A w] (c : DM A w) P {h : pure_post w P} :
+    DM { x : A | P x } (refineᵂ P w).
+  Proof.
+    destruct c as [c hc].
+    unshelve eexists.
+    - intro s. pose (c' := c s). pose (s' := fst c'). pose (x := snd c').
+      split. 1: exact s'.
+      exists x.
+      cbv in hc. specialize (hc (λ _, P) s). simpl in hc.
+      destruct (c s) as [s₀ a]. subst c'. simpl in s', x. subst s' x.
+      apply hc.
+      cbv in h. specialize (h (λ _, P)). simpl in h.
+      apply h. auto.
+    - simpl. intros Q s hw.
+      unfold θ. lazy in hw.
+      apply hc in hw. unfold θ in hw.
+      lazymatch goal with
+      | |- Q _ (exist _ _ ?H) => set (hh := H) ; clearbody hh
+      end.
+      destruct (c s) as [s' x]. simpl in *.
+      destruct hw as [hP hQ].
+      assert (hh = hP) by apply PIR. subst.
+      assumption.
+  Defined.
+
   Record PDM A (w : wp A) := {
     pdm_pre : Prop ;
     pdm_pure_pre : pure_pre w pdm_pre ;
-    pdm_fun : ∀ post, pdm_pre → pure_post w post → DM (sig post) (pw post w)
+    pdm_fun : pdm_pre → DM A w
   }.
 
   Arguments pdm_pre [_ _].
   Arguments pdm_pure_pre [_ _].
   Arguments pdm_fun [_ _].
 
-  Axiom PIR : ∀ (P : Prop) (h1 h2 : P), h1 = h2.
-
   Definition retᴾ [A] (x : A) : PDM A (retᵂ x).
   Proof.
     exists True.
-    - intros P s₀ h. constructor.
-    - intros P _ hP.
-      simple refine (subcompᴰ (retᴰ _)).
-      + exists x. cbv in hP.
-        specialize (hP (λ _, P)). simpl in hP.
-        apply hP. 1: exact empty_state.
-        auto.
-      + cbv. intros Q s₀ [h hQ].
-        lazymatch goal with
-        | |- Q _ (exist _ _ ?hh) => replace hh with h by apply PIR
-        end.
-        assumption.
+    - cbv. auto.
+    - intros _. apply retᴰ.
+  Defined.
+
+  Definition getᴾ : PDM state getᵂ.
+  Proof.
+    exists True.
+    - cbv. auto.
+    - intros _. apply getᴰ.
+  Defined.
+
+  Definition putᴾ (s : state) : PDM unit (putᵂ s).
+  Proof.
+    exists True.
+    - cbv. auto.
+    - intros _. apply putᴰ.
   Defined.
 
   Definition bindᴾ [A B w wf] (c : PDM A w) (f : ∀ x, PDM B (wf x)) :
@@ -252,8 +282,32 @@ Section State.
   Proof.
     intros mw mwf.
     exists c.(pdm_pre).
-    - intros P s₀ h. eapply pdm_pure_pre. exact h.
-    - intros P hpre pP.
+    1:{ intros P s₀ h. eapply pdm_pure_pre. exact h. }
+    intro hc.
+    simple refine (subcompᴰ (bindᴰ (refineᴰ (pdm_fun c _) (λ x, pdm_pre (f x))) (λ x, pdm_fun (f (val x)) _))).
+    - assumption.
+    - intros Q s h. unfold lift_post in h.
+      (* Now it no longer works. Should I go for the
+      ∀ P, pure_post w P → P x
+      so that I can use it in the next goal instead?
+
+      To make it work I need info from bindᵂ and so I need to use a stronger
+      precondition (because it's the one that deaws from the spec of the whole
+      thing).
+      One idea could be to see (∀ P, pure_post w P → P x) as a return_of on
+      steroids and use that both in refineᴰ and in the pre as in ND.
+      Another option is to keep pre (f x) as a post in refine but instead add
+      pure_post w (λ x : A, (f x).(pdm_pre)) to the pre of the whole thing.
+      c.(pdm_pre) ∧ pure_post w (λ x : A, (f x).(pdm_pre))
+      This is the first thing I want to try because it might be promising.
+      *)
+      admit.
+    - destruct x. assumption.
+    - admit. (* Not worth it if we change the post. *)
+
+
+
+    (* - intros P hpre pP.
       simple refine (subcompᴰ (bindᴰ (pdm_fun c (λ x, pdm_pre (f x)) _ _) (λ x, pdm_fun (f (val x)) P _ _))).
       + assumption.
       + intros Q s h. unfold lift_post in h.
@@ -310,58 +364,7 @@ Section State.
         red. red. eapply mw. 2: exact h.
         simpl. intros s₁ x hf. split.
         * eapply pdm_pure_pre. eassumption.
-        * assumption.
+        * assumption. *)
   Admitted.
-
-  Definition getᴾ : PDM state getᵂ.
-  Proof.
-    exists True.
-    - cbv. auto.
-    - intros P _ hP.
-      (* simple refine (subcompᴰ getᴰ). *)
-      (* Is there no way without opening getᴰ? *)
-  Abort.
-
-  Definition putᴾ (s : state) : PDM unit (putᵂ s).
-  Proof.
-    exists True.
-    - cbv. auto.
-    - intros P _ hP.
-      (* simple refine (subcompᴰ (putᴰ s)). *)
-      (* Same here *)
-  Abort.
-
-  (* Makes me wonder if there shouldn't be a notion of refineᴰ that allows
-  to go from DM A w to DM { x : A | P x } (pw P w) for good P.
-  This would only work under the assumption of a pre (and P would be relative
-  to it). Maybe the existence of this notion is exactly the PDM though?
-  *)
-
-  Notation "⟨ u ⟩" := (exist _ u _).
-
-  Definition refineᴰ [A w] (c : DM A w) P {h : pure_post w P} :
-    DM { x : A | P x } (pw P w).
-  Proof.
-    destruct c as [c hc].
-    unshelve eexists.
-    - intro s. pose (c' := c s). pose (s' := fst c'). pose (x := snd c').
-      split. 1: exact s'.
-      exists x.
-      cbv in hc. specialize (hc (λ _, P) s). simpl in hc.
-      destruct (c s) as [s₀ a]. subst c'. simpl in s', x. subst s' x.
-      apply hc.
-      cbv in h. specialize (h (λ _, P)). simpl in h.
-      apply h. auto.
-    - simpl. intros Q s hw.
-      unfold θ. lazy in hw.
-      apply hc in hw. unfold θ in hw.
-      lazymatch goal with
-      | |- Q _ (exist _ _ ?H) => set (hh := H) ; clearbody hh
-      end.
-      destruct (c s) as [s' x]. simpl in *.
-      destruct hw as [hP hQ].
-      assert (hh = hP) by apply PIR. subst.
-      assumption.
-  Defined.
 
 End State.
