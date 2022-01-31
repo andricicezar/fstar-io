@@ -228,13 +228,15 @@ let lemma_intermediate_1 cmd arg (k:io_resm cmd -> io 'a) (f:(ret (Call cmd arg 
     let hist' : Type = hist #event ret' in
     let hist'' : Type = hist #event ret'' in
 
-    let term4_rhs : io_resm cmd -> hist #event ret'' = (fun r -> 
+    let term4_rhs : io_resm cmd -> hist'' = (fun r -> 
       fast_cast cmd arg k r f (hist_bind (ret (k r)) (ret (io_bind (k r) f)) (theta (k r)) (theta_of_f_x (k r) f))) in
-    eq2 #(hist #event ret')
-      (hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs)
-      (hist_bind (ret m) ret' (theta m) (theta_of_f_x m f))) =
-    admit ();
-    let m  : io 'a = Call cmd arg k in
+    let term4'' : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs in
+    let term4 : hist' = reverse_cast_2 event cmd arg k f term4'' in
+
+    let last_term : hist' = hist_bind (ret m) ret' (theta m) (theta_of_f_x m f) in
+    eq2 #hist' term4 last_term) =
+    admit ()
+  (**  let m  : io 'a = Call cmd arg k in
     let ret' : Type = ret (io_bind m f) in
     let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
     let hist' : Type = hist #event ret' in
@@ -246,7 +248,7 @@ let lemma_intermediate_1 cmd arg (k:io_resm cmd -> io 'a) (f:(ret (Call cmd arg 
     let term4_r : ret m -> hist' = (fun r -> fast_cast_2 cmd arg k f (theta_of_f_x m f r)) in
     let term4_new_rhs : io_resm cmd -> hist' =
       (fun r -> hist_bind _ ret' (term4_m r) term4_r) in
-    ()
+    () **)
 (**    assert (term4_rhs == term4_new_rhs) by (
       norm [delta_only [`%fast_cast;`%fast_cast_1;`%fast_cast_2;`%hist_subcomp;`%hist_subcomp0]; iota];
       dump "H"
@@ -272,8 +274,8 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
   Lemma
     (theta (io_bind m f) == hist_bind (ret m) (ret (io_bind m f)) (theta m) (theta_of_f_x m f)) = 
   match m with
-  | Return x -> admit ()
-(**    calc (==) {
+  | Return x ->
+    calc (==) {
       theta (io_bind m f);
       == {}
       theta (io_bind (Return x) f);
@@ -286,7 +288,7 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     };
     (** this should be inside calc, but for some reason it fails there **)
     assert (hist_bind _ _ (theta (Return x))  (theta_of_f_x m f)
-      == hist_bind _ _ (theta m) (theta_of_f_x m f)) by (rewrite_eqs_from_context ())**)
+      == hist_bind _ _ (theta m) (theta_of_f_x m f)) by (rewrite_eqs_from_context ())
   | Call cmd arg k -> begin 
     (** utils **)
     let ret' : Type = ret (io_bind m f) in
@@ -324,7 +326,10 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     };
     assert (eq2 #hist'' term3' term4');
     assert (eq2 #hist'' term3 term4');
-    let term4 : hist' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs in
+    
+    let term4'' : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs in
+    assert (eq2 #hist'' term4' term4'');
+    let term4 : hist' = reverse_cast_2 event cmd arg k f term4'' in
     assert (eq2 #hist' term4 (reverse_cast_2 event cmd arg k f term4'));
 
     assert (eq2 #hist' term4 (reverse_cast_2 event cmd arg k f term3));
@@ -332,17 +337,11 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     assert (eq2 #hist' first_term term4);
 
     lemma_intermediate_1 cmd arg k f;
-(**
 
-    intermediate_lemma cmd arg k f;
-
-    let last_term : hist #event (ret (io_bind m f)) = hist_bind (ret m) (ret (io_bind m f)) (theta m) (theta_of_f_x m f) in
-    assert (term4 == last_term) by (
-      rewrite_eqs_from_context ();
-      norm [delta_only [`%io_wps;`%hist_bind;`%io_pre;`%hist_post_bind; `%hist_post_shift; `%ret; `%ret_pred; `%b2t]; zeta; iota]);
- //    assert (first_term == last_term);
-**)
-   admit ()
+    let last_term : hist' = hist_bind (ret m) ret' (theta m) (theta_of_f_x m f) in
+    assume (eq2 #hist' term4 last_term);
+   (** the lemma gives me the previous assert, not sure why it is not working **)
+   assert (eq2 #hist' first_term last_term)
   end
 
 
