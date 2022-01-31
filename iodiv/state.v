@@ -348,6 +348,43 @@ Section State.
       red. red. eapply mw. 2: exact h.
       simpl. intros s₁ x hf hw.
       assumption.
-  Admitted.
+  Abort.
+
+  Definition prf [A P] (p : { x : A | P x }) : P (val p).
+  Proof.
+    destruct p. assumption.
+  Qed.
+
+  (* Trying to open the box and do it all without relying on bindᴹ *)
+  Definition bindᴾ [A B w wf] (c : PDM A w) (f : ∀ x, PDM B (wf x)) :
+    Monotonous w →
+    (∀ x, Monotonous (wf x)) →
+    PDM B (bindᵂ w wf).
+  Proof.
+    intros mw mwf.
+    exists c.(pdm_pre). (* We'll figure out later if we need more *)
+    1:{ intros P s₀ h. eapply pdm_pure_pre. eassumption. }
+    intro hc.
+    unshelve eexists.
+    - intro s₀.
+      pose (cᴰ := pdm_fun c hc).
+      pose (cᴹ := val cᴰ). pose proof (prf cᴰ : _ cᴹ) as hcᴹ. simpl in hcᴹ.
+      pose (s₁ := fst (cᴹ s₀)). pose (x := snd (cᴹ s₀)).
+      pose (fᴾ := f x).
+      assert (hfᴾ : fᴾ.(pdm_pre)).
+      { (* Here it's not clear how to get it but this is the right place to
+        investigate. We don't have any bindᵂ assumption here so nothing relating
+        f and c (or x) so no reason to believe that the pre holds.
+        It *has* to come from the pure pre, meaning the pure pre must be
+        something else that talks about the pre of f or wf x somehow.
+        Can we make it more explicit by saying ∀ s₀, ?P (c s₀) or something?
+        To get something as close as possible to goal we currently have.
+        *)
+        admit.
+      }
+      pose (fᴰ := pdm_fun fᴾ hfᴾ).
+      admit.
+    - admit.
+  Abort.
 
 End State.
