@@ -155,7 +155,7 @@ let get_pre #a #w (t : pdm a w) : Pure pure_pre (requires True) (ensures fun r -
 let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fun _ -> True) =
   let (| pre, f |) = t in f ()
 
-let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (w_bind w wf) =
+let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (_w_bind w wf) =
   elim_pure_wp_monotonicity w ;
   (| (get_pre c /\ (forall x. x `respects` w ==> get_pre (f x))) , (fun _ -> d_bind (d_ref (get_fun c)) (fun x -> get_fun (f x))) |)
 
@@ -254,19 +254,16 @@ assume val pure_lemma (_ : unit) : Lemma p
 assume val some_f (_ : squash p) : ND unit (requires True) (ensures fun _ -> True)
 assume val some_f' : unit -> ND unit (requires p) (ensures fun _ -> p')
 
-[@expect_failure]
-let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) =
+let pure_lemma_test () : ND unit (requires True) (ensures fun _ -> True) by (explode () ; dump "h") =
   pure_lemma () ;
   some_f ()
 
-[@expect_failure]
 let pure_lemma_test2 () : ND unit (requires True) (ensures fun _ -> True) =
   pure_lemma () ;
   some_f () ;
   some_f' () ;
   assert p'
 
-[@expect_failure]
 let rec easy_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
   if n = 0 then 0 else easy_rec (n - 1)
 
@@ -281,7 +278,6 @@ let rec some_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
   then 2 + some_rec (n -3)
   else 1
 
-[@expect_failure]
 let rec some_rec (n : nat) : ND nat (requires True) (ensures fun _ -> True) =
   if n > 3
   then begin
