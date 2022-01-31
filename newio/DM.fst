@@ -163,79 +163,82 @@ let fast_cast #event cmd arg (k:io_resm cmd -> io 'a) (r:io_resm cmd) (f:ret (Ca
   hist #event (ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f)))) =
   fast_cast_2 cmd arg k f (fast_cast_1 cmd arg k r f wp)
   
+unfold
+let reverse_cast_2
+  event cmd arg 
+  (k:io_resm cmd -> io 'a)
+  (f:ret (Call cmd arg k) -> io 'b)
+  (wp:hist #event (ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))))) :
+  hist #event (ret (io_bind (Call cmd arg k) f)) = 
+  let ret_pred1 = (fun x -> x `return_of` io_bind (Call cmd arg k) f) in
+  let ret_pred2 = (fun x -> x `return_of` Call cmd arg (fun r ->  glue_lemma_1 cmd arg k r; io_bind (k r) f)) in
+  lemma_unfold_io_bind_1_step cmd arg k f; 
+  assert (forall x. ret_pred2 x ==> ret_pred1 x);
+  hist_subcomp #event #_ #ret_pred2 #ret_pred1 wp
 
-(** TODO: remove the admits **)
-#set-options ""
-let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
-  Lemma
-    (theta (io_bind m f) == hist_bind (ret m) (ret (io_bind m f)) (theta m) (theta_of_f_x m f)) = 
-  match m with
-  | Return x -> admit ()
-(**    calc (==) {
-      theta (io_bind m f);
-      == {}
-      theta (io_bind (Return x) f);
-      == {} // unfold io_bind
-      theta (f x); 
-      == { _ by (tadmit ()) } // unfold hist_bind
-      hist_bind _ _ (hist_return x) (theta_of_f_x m f);
-      == { _ by (compute ()) } // unfold theta
-      hist_bind _ _ (theta (Return x)) (theta_of_f_x m f);
-    };
-    (** this should be inside calc, but for some reason it fails there **)
-    assert (hist_bind _ _ (theta (Return x))  (theta_of_f_x m f)
-      == hist_bind _ _ (theta m) (theta_of_f_x m f)) by (rewrite_eqs_from_context ())**)
-  | Call cmd arg k -> begin
-    let term0 : hist #event (ret (io_bind m f)) = theta (io_bind m f) in
-    (** obtained by rewriting m in term0 **)
-    let term1 : hist #event (ret (io_bind m f)) = theta (io_bind (Call cmd arg k) f) in
-    assert (term0 == term1);
+let lemma_intermediate_0 cmd arg (k:io_resm cmd -> io 'a) (f:(ret (Call cmd arg k)) -> io 'b):
+  Lemma (
+    let m  : io 'a = Call cmd arg k in
+    let ret' : Type = ret (io_bind m f) in
+    let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
+    let hist' : Type = hist #event ret' in
+    let hist'' : Type = hist #event ret'' in
 
-    (** we unfold io_bind in (ret (io_bind m f)) **)
-    let ret' : Type = (ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f)))) in
-    let hist' = (hist #event ret') in
+    let first_term : hist' = theta (io_bind m f) in
+
+    let term3_rhs : io_resm cmd -> hist'' = (fun r -> fast_cast cmd arg k r f (theta (io_bind (k r) f))) in
+    let term3 : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term3_rhs in
+    (** goal: **) eq2 #hist' first_term (reverse_cast_2 event cmd arg k f term3)
+    ) =
+    let m : io 'a = Call cmd arg k in
+    let ret' : Type = ret (io_bind m f) in
+    let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
+    let hist' : Type = hist #event ret' in
+    let hist'' : Type = hist #event ret'' in
+
+    let first_term : hist' = theta (io_bind m f) in
+    (** obtained by rewriting m in first_term **)
+    let term1 : hist' = theta (io_bind (Call cmd arg k) f) in
+    assert (first_term == term1);
     
     lemma_unfold_io_bind_1_step cmd arg k f; 
 
-    let term1' : hist' = term1 in
+    let term1' : hist'' = fast_cast_2 #'a #'b #event cmd arg k f term1 in
+    assert (term1 == reverse_cast_2 event cmd arg k f term1');
     (** obtained by unfolding io_bind in term1 **)
-    let term2 : hist' = theta (Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f)) in
+    let term2 : hist'' = theta (Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f)) in
 
     assert (term1' == term2);
 
-
     (** obtained by unfolding theta in term2 **)
-    let term3_rhs : io_resm cmd -> hist' = (fun r -> fast_cast cmd arg k r f (theta (io_bind (k r) f))) in
-    let term3 : hist' = hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term3_rhs in
+    let term3_rhs : io_resm cmd -> hist'' = (fun r -> fast_cast cmd arg k r f (theta (io_bind (k r) f))) in
+    let term3 : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term3_rhs in
 
     assert (term2 == term3) by (
        norm [delta_only [`%fast_cast;`%fast_cast_1;`%fast_cast_2;`%hist_subcomp;`%hist_subcomp0]; iota]; 
        norm [delta_only [`%theta]; zeta; iota]);
 
-    let term3_rhs' = on (io_resm cmd) term3_rhs in
-    let term3' : hist' = hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term3_rhs' in
-    assert(term3 == term3');
+    assert (eq2 #hist' first_term (reverse_cast_2 event cmd arg k f term3))
+  
+let lemma_intermediate_1 cmd arg (k:io_resm cmd -> io 'a) (f:(ret (Call cmd arg k)) -> io 'b):
+  Lemma (
+    let m  : io 'a = Call cmd arg k in
+    let ret' : Type = ret (io_bind m f) in
+    let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
+    let hist' : Type = hist #event ret' in
+    let hist'' : Type = hist #event ret'' in
 
-    (** obtained by using this lemma to rewrite in term3 **)
-    let term4_rhs : io_resm cmd -> hist' = (fun r -> 
+    let term4_rhs : io_resm cmd -> hist #event ret'' = (fun r -> 
       fast_cast cmd arg k r f (hist_bind (ret (k r)) (ret (io_bind (k r) f)) (theta (k r)) (theta_of_f_x (k r) f))) in
-    let term4_rhs' = on (io_resm cmd) term4_rhs in
-    introduce forall (r:io_resm cmd). term3_rhs' r == term4_rhs' r with begin
-      lemma_theta_is_monad_morphism_bind (k r) f
-    end;
-    let term4' : hist' = hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term4_rhs' in
-    FStar.FunctionalExtensionality.extensionality _ _ term3_rhs' term4_rhs';
-    assert (term3_rhs' == term4_rhs');
-    let aux : squash (term3_rhs' == term4_rhs') = () in
-    calc (==) {
-      hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term3_rhs';
-      == { _ by (l_to_r [`aux]) }
-      hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term4_rhs';
-    };
-    assert (term3' == term4');
-
-    let term4 : hist' = hist_bind #event (io_resm cmd) ret' (io_wps cmd arg) term4_rhs in
-    assert (term4' == term4);
+    eq2 #(hist #event ret')
+      (hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs)
+      (hist_bind (ret m) ret' (theta m) (theta_of_f_x m f))) =
+    admit ();
+    let m  : io 'a = Call cmd arg k in
+    let ret' : Type = ret (io_bind m f) in
+    let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
+    let hist' : Type = hist #event ret' in
+    let hist'' : Type = hist #event ret'' in
 
     (** rewriting term4 **)
     let term4_l : hist (io_resm cmd) = io_wps cmd arg in
@@ -243,6 +246,7 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     let term4_r : ret m -> hist' = (fun r -> fast_cast_2 cmd arg k f (theta_of_f_x m f r)) in
     let term4_new_rhs : io_resm cmd -> hist' =
       (fun r -> hist_bind _ ret' (term4_m r) term4_r) in
+    ()
 (**    assert (term4_rhs == term4_new_rhs) by (
       norm [delta_only [`%fast_cast;`%fast_cast_1;`%fast_cast_2;`%hist_subcomp;`%hist_subcomp0]; iota];
       dump "H"
@@ -263,8 +267,84 @@ let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
     
 //    assert (term5' == term4) by (dump "H");
 
-    admit ()
+(** TODO: remove the admits **)
+let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(ret m) -> io 'b) :
+  Lemma
+    (theta (io_bind m f) == hist_bind (ret m) (ret (io_bind m f)) (theta m) (theta_of_f_x m f)) = 
+  match m with
+  | Return x -> admit ()
+(**    calc (==) {
+      theta (io_bind m f);
+      == {}
+      theta (io_bind (Return x) f);
+      == {} // unfold io_bind
+      theta (f x); 
+      == { _ by (tadmit ()) } // unfold hist_bind
+      hist_bind _ _ (hist_return x) (theta_of_f_x m f);
+      == { _ by (compute ()) } // unfold theta
+      hist_bind _ _ (theta (Return x)) (theta_of_f_x m f);
+    };
+    (** this should be inside calc, but for some reason it fails there **)
+    assert (hist_bind _ _ (theta (Return x))  (theta_of_f_x m f)
+      == hist_bind _ _ (theta m) (theta_of_f_x m f)) by (rewrite_eqs_from_context ())**)
+  | Call cmd arg k -> begin 
+    (** utils **)
+    let ret' : Type = ret (io_bind m f) in
+    let ret'' : Type = ret ((Call cmd arg (fun r -> glue_lemma_1 cmd arg k r; io_bind (k r) f))) in
+    let hist' : Type = hist #event ret' in
+    let hist'' : Type = hist #event ret'' in
+
+    let first_term : hist' = theta (io_bind m f) in
+
+    let term3_rhs : io_resm cmd -> hist'' = (fun r -> fast_cast cmd arg k r f (theta (io_bind (k r) f))) in
+    let term3 : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term3_rhs in
+
+    lemma_intermediate_0 cmd arg k f;
+    assert (eq2 #hist' first_term (reverse_cast_2 event cmd arg k f term3));
+
+    let term3_rhs' = on (io_resm cmd) term3_rhs in
+    let term3' : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term3_rhs' in
+    assert (eq2 #hist'' term3 term3');
+
+    (** obtained by using this lemma to rewrite in term3 **)
+    let term4_rhs : io_resm cmd -> hist'' = (fun r -> 
+      fast_cast cmd arg k r f (hist_bind (ret (k r)) (ret (io_bind (k r) f)) (theta (k r)) (theta_of_f_x (k r) f))) in
+    let term4_rhs' = on (io_resm cmd) term4_rhs in
+    introduce forall (r:io_resm cmd). term3_rhs' r == term4_rhs' r with begin
+      lemma_theta_is_monad_morphism_bind (k r) f
+    end;
+    let term4' : hist'' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs' in
+    FStar.FunctionalExtensionality.extensionality _ _ term3_rhs' term4_rhs';
+    assert (term3_rhs' == term4_rhs');
+    let aux : squash (term3_rhs' == term4_rhs') = () in
+    calc (==) {
+      hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term3_rhs';
+      == { _ by (l_to_r [`aux]) }
+      hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs';
+    };
+    assert (eq2 #hist'' term3' term4');
+    assert (eq2 #hist'' term3 term4');
+    let term4 : hist' = hist_bind #event (io_resm cmd) ret'' (io_wps cmd arg) term4_rhs in
+    assert (eq2 #hist' term4 (reverse_cast_2 event cmd arg k f term4'));
+
+    assert (eq2 #hist' term4 (reverse_cast_2 event cmd arg k f term3));
+    assert (eq2 #hist' first_term (reverse_cast_2 event cmd arg k f term3)); (** from previous lemma **)
+    assert (eq2 #hist' first_term term4);
+
+    lemma_intermediate_1 cmd arg k f;
+(**
+
+    intermediate_lemma cmd arg k f;
+
+    let last_term : hist #event (ret (io_bind m f)) = hist_bind (ret m) (ret (io_bind m f)) (theta m) (theta_of_f_x m f) in
+    assert (term4 == last_term) by (
+      rewrite_eqs_from_context ();
+      norm [delta_only [`%io_wps;`%hist_bind;`%io_pre;`%hist_post_bind; `%hist_post_shift; `%ret; `%ret_pred; `%b2t]; zeta; iota]);
+ //    assert (first_term == last_term);
+**)
+   admit ()
   end
+
 
 (**      
       == { lemma_hist_bind_associativity (io_wps cmd arg) (fun r -> theta (k r)) (theta_of_f_x m f) }
