@@ -204,7 +204,7 @@ Section State.
 
   Notation "⟨ u ⟩" := (exist _ u _).
 
-  Definition refineᵂ [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
+  (* Definition refineᵂ [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
     λ Q s₀, w (λ s₁ x, ∃ (h : P x), Q s₁ (exist _ x h)) s₀.
 
   Instance refineᵂ_ismono [A] (P : A → Prop) (w : wp A) {mw : Monotonous w} :
@@ -215,11 +215,24 @@ Section State.
     eapply mw. 2: exact h.
     simpl. intros s₁ x [hP hQ].
     exists hP. apply hQR. assumption.
+  Qed. *)
+
+  Definition refineᵂ [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
+    λ Q s₀, w (λ s₁ x, ∀ (h : P x), Q s₁ (exist _ x h)) s₀.
+
+  Instance refineᵂ_ismono [A] (P : A → Prop) (w : wp A) {mw : Monotonous w} :
+    Monotonous (refineᵂ P w).
+  Proof.
+    intros Q R s₀ hQR h.
+    red. red in h.
+    eapply mw. 2: exact h.
+    simpl. intros s₁ x hQ hP.
+    apply hQR. apply hQ.
   Qed.
 
   Axiom PIR : ∀ (P : Prop) (h1 h2 : P), h1 = h2.
 
-  Definition refineᴰ [A w] (c : DM A w) P {h : pure_post w P} :
+  (* Definition refineᴰ [A w] (c : DM A w) P {h : pure_post w P} :
     DM { x : A | P x } (refineᵂ P w).
   Proof.
     destruct c as [c hc].
@@ -242,7 +255,7 @@ Section State.
       destruct hw as [hP hQ].
       assert (hh = hP) by apply PIR. subst.
       assumption.
-  Defined.
+  Defined. *)
 
   (* A variant that is a bit different *)
   Definition respects [A] (x : A) (w : wp A) :=
@@ -269,9 +282,7 @@ Section State.
       | |- Q _ (exist _ _ ?H) => set (hh := H) ; clearbody hh
       end.
       destruct (c s) as [s' x]. simpl in *.
-      destruct hw as [hP hQ].
-      assert (hh = hP) by apply PIR. subst.
-      assumption.
+      apply hw.
   Defined.
 
   Record PDM A (w : wp A) := {
@@ -322,6 +333,9 @@ Section State.
         end.
         simpl in hx.
         (* Again wrong state! This might be a fundamental issue. *)
+        (* The question is, can we something else than x ∈ w, typically
+          something that would be a consequence?
+        *)
         eapply pdm_pure_pre. eapply hx.
         admit.
     }
@@ -332,73 +346,8 @@ Section State.
       apply h. assumption.
     - intros Q s₀ h. red in h.
       red. red. eapply mw. 2: exact h.
-      simpl. intros s₁ x hf. split.
-      + (* When this was the pre of f this worked *)
-        (* eapply pdm_pure_pre. eassumption. *)
-        (* Should we go back to it or should we use wf? *)
-        (* Maybe refineᵂ should be a → rather than ∃? *)
-        admit.
-      + assumption.
-
-
-    (* - intros P hpre pP.
-      simple refine (subcompᴰ (bindᴰ (pdm_fun c (λ x, pdm_pre (f x)) _ _) (λ x, pdm_fun (f (val x)) P _ _))).
-      + assumption.
-      + intros Q s h. unfold lift_post in h.
-        unfold pure_post in pP.
-        specialize (pP (λ _, P)). unfold lift_post in pP.
-        eapply mw. 2: eapply pP. 2:auto.
-        simpl. intros s₁ x hf.
-        apply h.
-        eapply pdm_pure_pre. exact hf.
-      + destruct x as [x hx]. assumption.
-      + (* Here the only assumption we have on x is pre (f x) which might
-          not be enoug.
-          Assuming pure_post is correct, we have to show every value of f x
-          verifies a property verified by every value of bind c f.
-          Could the post always be the same and be something like
-          { x | ∀ P, pure_post w P → P x }
-          Maybe this is enoughz
-          -- Maybe just for c here otherwise the return type of f and bind
-          won't match.
-          Can I use something similar to the consequence of return_of?
-          Something quantifying over all posts and using theta perhaps.
-          (Lookup the theorem for instantiating return_of).
-          Something like ∀ P s, w P s → ∃ s', P x?
-          *)
-        destruct x as [x hx].
-        intros Q s h. unfold lift_post in h.
-        unfold pure_post in pP.
-        specialize (pP (λ _, P)) as hP. unfold lift_post in hP.
-        destruct c as [cpre hcpre c]. simpl in hpre.
-        assert (post : A → Prop) by admit.
-        pose proof (c post) as c'.
-        forward c'.
-        { assumption. }
-        forward c'.
-        { admit. }
-        destruct c' as [c' h'].
-        (* pose proof (c (λ y, y = x)) as c'.
-        forward c' by assumption.
-        forward c'.
-        { intros s₁.
-          eapply mw. 2: eapply pP.
-          simpl. intros s₂ y h.
-          (* No way it works *)
-          give_up.
-        }
-        destruct c' as [c' h'].
-        specialize (pP s₀). red in pP.
-        eapply mw in pP as h. 1: eapply h' in h.
-        2:{ simpl. intros s₁ y h. exact h. }
-        * eapply h' in h.
-        * *)
-        admit.
-      + intros Q s₀ h. red in h. red in h.
-        red. red. eapply mw. 2: exact h.
-        simpl. intros s₁ x hf. split.
-        * eapply pdm_pure_pre. eassumption.
-        * assumption. *)
+      simpl. intros s₁ x hf hw.
+      assumption.
   Admitted.
 
 End State.
