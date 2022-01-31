@@ -246,7 +246,7 @@ Section State.
 
   (* A variant that is a bit different *)
   Definition respects [A] (x : A) (w : wp A) :=
-    ∃ s₀, ∀ P, w P s₀ → ∃ s₁, P s₁ x. (* Would have liked a ∀ for s₀ *)
+    ∃ s₀ s₁, ∀ P, w P s₀ → P s₁ x.
 
   Notation "x ∈ w" := (respects x w) (at level 50).
 
@@ -257,11 +257,11 @@ Section State.
     - intro s. pose (c' := c s). pose (s' := fst c'). pose (x := snd c').
       split. 1: exact s'.
       exists x.
-      exists s. intros P h.
+      exists s, s'. intros P h.
       cbv in hc. specialize (hc P s).
       forward hc. { assumption. }
       destruct (c s) as [s₀ a]. subst c'. simpl in s', x. subst s' x.
-      exists s₀. assumption.
+      assumption.
     - simpl. intros Q s hw.
       unfold θ. lazy in hw.
       apply hc in hw. unfold θ in hw.
@@ -315,14 +315,14 @@ Section State.
     1:{
       intros P s₀ h. split.
       - eapply pdm_pure_pre. exact h.
-      - intros x hx. destruct hx as [s hx].
+      - intros x hx. destruct hx as [s [s' hx]].
         unfold bindᵂ in h.
         lazymatch type of h with
         | w ?P _ => specialize (hx P)
         end.
         simpl in hx.
         (* Again wrong state! This might be a fundamental issue. *)
-        eapply pdm_pure_pre.
+        eapply pdm_pure_pre. eapply hx.
         admit.
     }
     intro hc.
@@ -336,6 +336,7 @@ Section State.
       + (* When this was the pre of f this worked *)
         (* eapply pdm_pure_pre. eassumption. *)
         (* Should we go back to it or should we use wf? *)
+        (* Maybe refineᵂ should be a → rather than ∃? *)
         admit.
       + assumption.
 
