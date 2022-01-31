@@ -244,6 +244,36 @@ Section State.
       assumption.
   Defined.
 
+  (* A variant that is a bit different *)
+  Definition respects [A] (x : A) (w : wp A) :=
+    ∃ s₀, ∀ P, w P s₀ → ∃ s₁, P s₁ x. (* Would have liked a ∀ for s₀ *)
+
+  Notation "x ∈ w" := (respects x w) (at level 50).
+
+  Definition refᴰ [A w] (c : DM A w) : DM { x : A | x ∈ w } (refineᵂ _ w).
+  Proof.
+    destruct c as [c hc].
+    unshelve eexists.
+    - intro s. pose (c' := c s). pose (s' := fst c'). pose (x := snd c').
+      split. 1: exact s'.
+      exists x.
+      exists s. intros P h.
+      cbv in hc. specialize (hc P s).
+      forward hc. { assumption. }
+      destruct (c s) as [s₀ a]. subst c'. simpl in s', x. subst s' x.
+      exists s₀. assumption.
+    - simpl. intros Q s hw.
+      unfold θ. lazy in hw.
+      apply hc in hw. unfold θ in hw.
+      lazymatch goal with
+      | |- Q _ (exist _ _ ?H) => set (hh := H) ; clearbody hh
+      end.
+      destruct (c s) as [s' x]. simpl in *.
+      destruct hw as [hP hQ].
+      assert (hh = hP) by apply PIR. subst.
+      assumption.
+  Defined.
+
   Record PDM A (w : wp A) := {
     pdm_pre : Prop ;
     pdm_pure_pre : pure_pre w pdm_pre ;
@@ -281,44 +311,33 @@ Section State.
     PDM B (bindᵂ w wf).
   Proof.
     intros mw mwf.
-    exists (c.(pdm_pre) ∧ pure_post w (λ x : A, (f x).(pdm_pre))).
+    exists (c.(pdm_pre) ∧ ∀ x, x ∈ w → pdm_pre (f x)).
     1:{
-      intros P s₀ h.
-      split.
+      intros P s₀ h. split.
       - eapply pdm_pure_pre. exact h.
-      - intros Q s hQ. unfold lift_post in hQ.
-        (* Can we fix the different s here? *)
-        eapply mw. (* 2: eapply h. 2:auto.
-        simpl. intros s₁ x hf.
-        apply h.
-        eapply pdm_pure_pre. exact hf. *)
-        all: admit.
+      - intros x hx. destruct hx as [s hx].
+        unfold bindᵂ in h.
+        lazymatch type of h with
+        | w ?P _ => specialize (hx P)
+        end.
+        simpl in hx.
+        (* Again wrong state! This might be a fundamental issue. *)
+        eapply pdm_pure_pre.
+        admit.
     }
-    (* intro hc.
-    simple refine (subcompᴰ (bindᴰ (refineᴰ (pdm_fun c _) (λ x, pdm_pre (f x))) (λ x, pdm_fun (f (val x)) _))).
-    - assumption.
-    - intros Q s h. unfold lift_post in h.
-      (* Now it no longer works. Should I go for the
-      ∀ P, pure_post w P → P x
-      so that I can use it in the next goal instead?
-
-      To make it work I need info from bindᵂ and so I need to use a stronger
-      precondition (because it's the one that deaws from the spec of the whole
-      thing).
-      One idea could be to see (∀ P, pure_post w P → P x) as a return_of on
-      steroids and use that both in refineᴰ and in the pre as in ND.
-      Another option is to keep pre (f x) as a post in refine but instead add
-      pure_post w (λ x : A, (f x).(pdm_pre)) to the pre of the whole thing.
-      c.(pdm_pre) ∧ pure_post w (λ x : A, (f x).(pdm_pre))
-      This is the first thing I want to try because it might be promising.
-
-      Or maybe some x ∈ w or something?
-      Could be ∀ P s₀, w P s₀ → ∃ s₁, P s₁ x
-      *)
-      admit.
-    - destruct x. assumption.
-    - admit. (* Not worth it if we change the post. *)
- *)
+    intro hc.
+    simple refine (subcompᴰ (bindᴰ (refᴰ (pdm_fun c _)) (λ x, pdm_fun (f (val x)) _))).
+    - intuition assumption.
+    - destruct x as [x hx]. destruct hc as [? h].
+      apply h. assumption.
+    - intros Q s₀ h. red in h.
+      red. red. eapply mw. 2: exact h.
+      simpl. intros s₁ x hf. split.
+      + (* When this was the pre of f this worked *)
+        (* eapply pdm_pure_pre. eassumption. *)
+        (* Should we go back to it or should we use wf? *)
+        admit.
+      + assumption.
 
 
     (* - intros P hpre pP.
