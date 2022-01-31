@@ -142,9 +142,6 @@ Section State.
   Definition DM A w :=
     { c : M A | θ c ≤ᵂ w }.
 
-  (* Definition val [A w] (c : DM A w) : M A :=
-    let 'exist _ t p := c in t. *)
-
   Notation val x := (let 'exist _ t _ := x in t).
 
   Definition retᴰ [A] (x : A) : DM A (retᵂ x).
@@ -190,17 +187,17 @@ Section State.
     λ P s₀, pre.
 
   (* Not sure about how to treat state *)
-  Definition lift_post [A] (post : A → Prop) : wp A :=
-    λ P s₀, ∀ x s₁, post x → P s₁ x.
+  (* Definition lift_post [A] (post : A → Prop) : wp A :=
+    λ P s₀, ∀ x s₁, post x → P s₁ x. *)
 
   Definition pure_pre [A] (w : wp A) (P : Prop) :=
     (* ∀ Q s₀, w Q s₀ → P. *)
     lift_pre P ≤ᵂ w.
 
   (* Unsure about this too  *)
-  Definition pure_post [A] (w : wp A) (post : A → Prop) :=
+  (* Definition pure_post [A] (w : wp A) (post : A → Prop) :=
     (* ∀ s₀, w (λ s₁ x, post x) s₀. *)
-    w ≤ᵂ lift_post post.
+    w ≤ᵂ lift_post post. *)
 
   Notation "⟨ u ⟩" := (exist _ u _).
 
@@ -217,6 +214,9 @@ Section State.
     exists hP. apply hQR. assumption.
   Qed. *)
 
+  (** Is this the right definition? Maybe too weak?
+      Related to the question of what is a good PDM with respect to a DM.
+  *)
   Definition refineᵂ [A] (P : A → Prop) (w : wp A) : wp (sig P) :=
     λ Q s₀, w (λ s₁ x, ∀ (h : P x), Q s₁ (exist _ x h)) s₀.
 
@@ -257,7 +257,7 @@ Section State.
       assumption.
   Defined. *)
 
-  (* A variant that is a bit different *)
+  (* Can we instead have something related to a specific (pure) pre? *)
   Definition respects [A] (x : A) (w : wp A) :=
     ∃ s₀ s₁, ∀ P, w P s₀ → P s₁ x.
 
