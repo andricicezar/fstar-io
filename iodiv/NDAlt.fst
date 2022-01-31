@@ -156,14 +156,7 @@ let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fu
   let (| pre, f |) = t in f ()
 
 let bind a b w wf (c : pdm a w) (f : (x:a) -> pdm b (wf x)) : pdm b (w_bind w wf) =
-  assume (w_bind (w_ref w) wf `wle` w_bind w wf) ; // Missing monotonicity to prove it
-  // introduce forall post. w_bind w wf post ==> w_bind (w_ref w) wf post
-  // with begin
-  //   introduce w_bind w wf post ==> w_bind (w_ref w) wf post
-  //   with _. begin
-  //     admit ()
-  //   end
-  // end ;
+  elim_pure_wp_monotonicity w ;
   (| (get_pre c /\ (forall x. x `respects` w ==> get_pre (f x))) , (fun _ -> d_bind (d_ref (get_fun c)) (fun x -> get_fun (f x))) |)
 
 let subcomp (a : Type) (w1 w2 : wp a) (m : pdm a w1) :
