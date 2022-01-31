@@ -6,6 +6,7 @@ open FStar.List.Tot
 open FStar.List.Tot.Properties
 open FStar.Tactics
 open FStar.Classical
+open FStar.Monotonic.Pure
 
 (** Computational monad *)
 
@@ -22,7 +23,14 @@ let m_bind #a #b (c : m a) (f : a -> m b) : m b =
 let wpre = Type0
 let wpost a = a -> Type0
 
-let wp a = wpost a -> wpre
+let wp' a = wpost a -> wpre
+
+let wp a = w : wp' a { pure_wp_monotonic a w }
+
+unfold
+let as_wp #a (w : wp' a) :
+  Pure (wp a) (requires is_monotonic w) (ensures fun r -> r == w)
+= intro_pure_wp_monotonicity w ; w
 
 unfold
 let _wle #a (w1 w2 : wp a) =
@@ -33,14 +41,19 @@ let wle #a (w1 w2 : wp a) =
 
 unfold
 let _w_return #a (x : a) : wp a =
-  fun post -> post x
+  as_wp (fun post -> post x)
 
 let w_return #a (x : a) : wp a =
   _w_return x
 
 unfold
 let _w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
-  fun post -> w (fun x -> wf x post)
+  elim_pure_wp_monotonicity w ;
+  introduce forall x. is_monotonic (wf x)
+  with begin
+    elim_pure_wp_monotonicity (wf x)
+  end ;
+  as_wp (fun post -> w (fun x -> wf x post))
 
 let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
   _w_bind w wf
@@ -48,7 +61,7 @@ let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
 (** Effect observation *)
 
 let theta #a (c : m a) : wp a =
-  fun post -> forall x. x `memP` c ==> post x
+  as_wp (fun post -> forall x. x `memP` c ==> post x)
 
 (** Dijkstra monad *)
 
@@ -120,7 +133,8 @@ let resp #a (w : wp a) =
 
 unfold
 let w_ref #a (w : wp a) : wp (resp w) =
-  fun p -> w (fun x -> x `respects` w ==> p x)
+  elim_pure_wp_monotonicity w ;
+  as_wp (fun (p : wpost (resp w)) -> w (fun x -> x `respects` w ==> p x))
 
 let rec d_ref #a #w (c : dm a w) : dm (resp w) (w_ref w) =
   match c with
@@ -157,7 +171,9 @@ let subcomp (a : Type) (w1 w2 : wp a) (m : pdm a w1) :
 = (| get_pre m , (fun _ -> get_fun m) |)
 
 let w_if_then_else #a (w1 w2 : wp a) (b : bool) : wp a =
-  fun post -> (b ==> w1 post) /\ (~ b ==> w2 post)
+  elim_pure_wp_monotonicity w1 ;
+  elim_pure_wp_monotonicity w2 ;
+  as_wp (fun post -> (b ==> w1 post) /\ (~ b ==> w2 post))
 
 let if_then_else (a : Type) (w1 w2 : wp a) (f : pdm a w1) (g : pdm a w2) (b : bool) : Type =
   pdm a (w_if_then_else w1 w2 b)
@@ -167,17 +183,17 @@ let elim_pure #a #w (f : unit -> PURE a w) :
     a
     (requires w (fun _ -> True))
     (ensures fun r -> forall post. w post ==> post r)
-= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+= elim_pure_wp_monotonicity_forall () ;
   f ()
 
 unfold
 let wlift #a (w : pure_wp a) : wp a =
-  fun post -> w post
+  w
 
 let as_requires_wlift #a (w : pure_wp a) :
   Lemma (forall post. wlift w post ==> as_requires w)
 = assert (forall post (x : a). post x ==> True) ;
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+  elim_pure_wp_monotonicity w ;
   assert (forall post. w post ==> w (fun _ -> True)) ;
   assert (forall post. (True ==> w post) ==> w (fun _ -> True))
 
@@ -204,7 +220,7 @@ sub_effect PURE ~> NDw = lift_pure
 
 unfold
 let wprepost #a (pre : Type0) (post : a -> Pure Type0 (requires pre) (ensures fun _ -> True)) : wp a =
-  fun p -> pre /\ (forall x. post x ==> p x)
+  as_wp (fun p -> pre /\ (forall x. post x ==> p x))
 
 effect ND (a : Type) (pre : Type0) (post : a -> Pure Type0 (requires pre) (ensures fun _ -> True)) =
   NDw a (wprepost pre post)
@@ -215,7 +231,7 @@ let m_choose #a (l : list a) : m a =
   l
 
 let w_choose #a (l : list a) : wp a =
-  fun post -> forall x. x `memP` l ==> post x
+  as_wp (fun post -> forall x. x `memP` l ==> post x)
 
 let d_choose #a (l : list a) : dm a (w_choose l) =
   m_choose l
