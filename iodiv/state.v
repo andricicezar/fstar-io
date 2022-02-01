@@ -362,9 +362,32 @@ Section State.
     PDM B (bindᵂ w wf).
   Proof.
     intros mw mwf.
-    exists c.(pdm_pre). (* We'll figure out later if we need more *)
-    1:{ intros P s₀ h. eapply pdm_pure_pre. eassumption. }
-    intro hc.
+    exists (
+      ∃ (h : c.(pdm_pre)),
+        ∀ s₀, (f (snd (val (c.(pdm_fun) h) s₀))).(pdm_pre)
+    ).
+    1:{
+      intros P s₀ h.
+      unshelve eexists.
+      - eapply pdm_pure_pre. eassumption.
+      - intros s.
+        unfold bindᵂ in h.
+        (* As always, the mismatch in state
+          This tends to say that the problem is the PDM structure itself
+          with its insufficient notion of pure pre. (Or I went for the wrong
+          pure pre.)
+        *)
+        admit.
+    }
+    intro hpre.
+    assert (hc : c.(pdm_pre)).
+    { destruct hpre. assumption. }
+    assert (hf : ∀ s₀, (f (snd (val (c.(pdm_fun) hc) s₀))).(pdm_pre)).
+    { destruct hpre as [hc' hf].
+      assert (hc = hc') by apply PIR. subst.
+      assumption.
+    }
+    clear hpre.
     unshelve eexists.
     - intro s₀.
       pose (cᴰ := pdm_fun c hc).
@@ -372,7 +395,8 @@ Section State.
       pose (s₁ := fst (cᴹ s₀)). pose (x := snd (cᴹ s₀)).
       pose (fᴾ := f x).
       assert (hfᴾ : fᴾ.(pdm_pre)).
-      { (* Here it's not clear how to get it but this is the right place to
+      { apply hf.
+        (* Here it's not clear how to get it but this is the right place to
         investigate. We don't have any bindᵂ assumption here so nothing relating
         f and c (or x) so no reason to believe that the pre holds.
         It *has* to come from the pure pre, meaning the pure pre must be
@@ -399,11 +423,30 @@ Section State.
         always false as a precondition, and we could still prove the
         combinators.
         *)
-        admit.
       }
       pose (fᴰ := pdm_fun fᴾ hfᴾ).
-      admit.
-    - admit.
+      pose (fᴹ := val fᴰ).
+      exact (fᴹ s₁).
+    - simpl. intros P s h.
+      unfold θ.
+      destruct c as [pc ppc c]. simpl in *.
+      set (cᴰ := c hc) in *. clearbody cᴰ. clear c pc ppc hc.
+      destruct cᴰ as [c hc].
+      set (hf' := hf s) in *. clearbody hf'. clear hf.
+      unfold "≤ᵂ" in hc. specialize hc with (s := s).
+      unfold θ in hc.
+      set (c' := c s) in *. clearbody c'. clear c.
+      destruct c' as [s' x]. simpl in *.
+      set (f' := f x) in *. clearbody f'. clear f.
+      destruct f' as [pf ppf f]. simpl in *.
+      set (f' := f hf') in *. clearbody f'. clear f pf ppf hf'.
+      destruct f' as [f hf].
+      unfold "≤ᵂ" in hf. specialize hf with (s := s').
+      unfold θ in hf.
+      set (f' := f s') in *. clearbody f'. clear f.
+      destruct f' as [s₁ y].
+      apply hf. apply hc.
+      apply h.
   Abort.
 
   (* Lift from PURE (somehow) *)
