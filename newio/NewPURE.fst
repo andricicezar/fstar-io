@@ -2,6 +2,10 @@ module NewPURE
 
 open FStar.Tactics
 
+(** Some notes:
+  1. using this method does not seem to add any advantage related to lifts, because
+     lifts anyway do not reify the Pure computation **)
+
 let theta (a:Type) (m:a) : pure_wp a = FStar.Pervasives.pure_return a m
 
 type value (a:Type) (wp:pure_wp a) = x:a{forall p. wp p ==> theta a x p}

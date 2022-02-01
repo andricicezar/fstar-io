@@ -4,6 +4,9 @@ open FStar.Classical.Sugar
 open FStar.List.Tot.Base
 open FStar.Tactics
 
+(** Some notes:
+  1. maybe a more useful abstraction would be to ask for a pre such that
+     (forall p h. bind_w wp1 wp2 ==> pre) **)
 
 (** a tentative to generalize Partial Dijkstra Monads **)
 
