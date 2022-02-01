@@ -379,6 +379,25 @@ Section State.
         something else that talks about the pre of f or wf x somehow.
         Can we make it more explicit by saying ∀ s₀, ?P (c s₀) or something?
         To get something as close as possible to goal we currently have.
+
+        How about ∀ s₀, let '(s₁, x) := c s₀ in wf x ? s₁
+        or just (f x).(pdm_pre)
+
+        Again, I expect the ∀ s₀ to not be entailed by a specific instance of
+        bindᵂ...
+
+        The problem is that the pure pre must hold for all initial state so
+        anything that mentions them is going to be hard to work with. Maybe the
+        notion of pure pre must change or the pre should be taken after the
+        initial state (but it would be very invasive).
+        Thanks to monotonicity we don't have to think about specific posts and
+        can take pTrue := λ s x, True.
+        Sadly we can't take ∃ s, w pTrue s → pre because w might require s to
+        be non-empty and then we could take the false precondition.
+        This once again raises the question of how to make sure the PDM is good
+        (at least with respect to the original DM). For instance, we could take
+        always false as a precondition, and we could still prove the
+        combinators.
         *)
         admit.
       }
@@ -386,5 +405,38 @@ Section State.
       admit.
     - admit.
   Abort.
+
+  (* Lift from PURE (somehow) *)
+
+  Definition pure_wp' A := (A → Prop) → Prop.
+
+  Definition pure_mono [A] (w : pure_wp' A) : Prop :=
+    ∀ (P Q : A → Prop), (∀ x, P x → Q x) → w P → w Q.
+
+  Definition pure_wp A :=
+    { w : pure_wp' A | pure_mono w }.
+
+  Definition PURE A (w : pure_wp A) :=
+    val w (λ _, True) → { x : A | ∀ P, val w P → P x }.
+
+  Definition liftᵂ [A] (w : pure_wp A) : wp A :=
+    λ P s₀, val w (λ x, P s₀ x).
+
+  Definition liftᴾ [A w] (f : PURE A w) : PDM A (liftᵂ w).
+  Proof.
+    exists (val w (λ _, True)).
+    1:{
+      intros Q s₀ h.
+      unfold lift_pre. unfold liftᵂ in h.
+      destruct w as [w hw].
+      eapply hw. 2: exact h.
+      intuition auto.
+    }
+    intro hp. specialize (f hp).
+    simple refine (subcompᴰ (retᴰ (val f))).
+    intros P s h.
+    destruct f as [f hf].
+    cbv. apply hf. apply h.
+  Defined.
 
 End State.
