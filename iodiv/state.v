@@ -493,6 +493,12 @@ Section State.
     Still not ok because we do not recover a function in M A.
   *)
 
+  (* To check that we have a PDM with respect to a DM we should check it's
+    the least DM with lift from both PURE and DM.
+    Typically by saying that for every other P' with both lifts there is a lift
+    from P to P'.
+  *)
+
   (* Lift from PURE (somehow) *)
 
   Definition pure_wp' A := (A → Prop) → Prop.
