@@ -230,26 +230,58 @@ Section State.
 
   Notation "x ∈ w" := (respects x w) (at level 50).
 
+  Fixpoint leaf [A] (x : A) (c : M A) :=
+    match c with
+    | retᴹ y => x = y
+    | act_getᴹ k => ∃ s, leaf x (k s)
+    | act_putᴹ s k => leaf x k
+    end.
+
+  Fixpoint mapᴹ [A B] (f : A → B) (c : M A) : M B :=
+    match c with
+    | retᴹ x => retᴹ (f x)
+    | act_getᴹ k => act_getᴹ (λ s, mapᴹ f (k s))
+    | act_putᴹ s k => act_putᴹ s (mapᴹ f k)
+    end.
+
+  Fixpoint refᴹ [A] (c : M A) : M { x : A | leaf x c }.
+  Proof.
+    destruct c as [x | k | s k].
+    - apply retᴹ. exists x.
+      reflexivity.
+    - simpl. apply act_getᴹ.
+      intro s₀.
+      pose (c' := refᴹ _ (k s₀)).
+      eapply mapᴹ. 2: eapply c'.
+      intros [x h]. exists x.
+      exists s₀. assumption.
+    - simpl. apply (act_putᴹ s).
+      apply refᴹ.
+  Defined.
+
+  Lemma left_respects :
+    ∀ A w (c : M A) x,
+      θ c ≤ᵂ w →
+      leaf x c →
+      x ∈ w.
+  Proof.
+    intros A w c x hc h.
+    induction c as [y | k ih | s k ih] in w, x, hc, h |- *.
+    - simpl in h. subst y.
+      intros s₀. exists s₀. intros P h.
+      apply hc. assumption.
+    - simpl in h. destruct h as [s h].
+      specialize ih with (2 := h).
+      intro s₀. exists (fst (θ₀ (k s) s₀)). intros P hw.
+      admit.
+    - admit.
+  Abort.
+
   Definition refᴰ [A w] (c : DM A w) : DM { x : A | x ∈ w } (refineᵂ _ w).
   Proof.
     destruct c as [c hc].
     unshelve eexists.
-    - induction c as [x | k ih | s k ih] in w, hc |- *.
-      + apply retᴹ. exists x.
-        intros s₀. exists s₀.
-        intros P h. apply hc. assumption.
-      + apply act_getᴹ. intros s₀. apply (ih s₀).
-        intros P s h.
-        unfold θ in hc. unfold "≤ᵂ" in hc.
-        cbn in hc. unfold θ.
-        (* Once again, a problem with state *)
-        give_up.
-      + apply (act_putᴹ s).
-        apply ih.
-        intros P s₀ h.
-        unfold "≤ᵂ" in hc. unfold θ in hc. simpl in hc.
-        unfold θ.
-        (* Same *)
+    - eapply mapᴹ. 2: eapply refᴹ.
   Abort.
 
 End State.
