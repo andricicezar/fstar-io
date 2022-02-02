@@ -277,6 +277,25 @@ Section State.
     - admit.
   Abort.
 
+  Lemma left_respects_θ :
+    ∀ A (c : M A) x,
+      leaf x c →
+      x ∈ θ c.
+  Proof.
+    intros A c x h.
+    induction c as [y | k ih | s k ih] in x, h |- *.
+    - simpl in h. subst y.
+      intro s₀. exists s₀. intros P h.
+      apply h.
+    - simpl in h. destruct h as [s h].
+      specialize ih with (1 := h).
+      unfold θ in *. simpl.
+      intros s₀.
+      (* It seems that getting ∈ with a ∀ won't work with the free monad
+        either. *)
+      give_up.
+  Abort.
+
   Definition refᴰ [A w] (c : DM A w) : DM { x : A | x ∈ w } (refineᵂ _ w).
   Proof.
     destruct c as [c hc].
