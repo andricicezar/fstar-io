@@ -21,14 +21,24 @@ let get_fun #a #w (t : pdm a w) : Pure (dm a w) (requires get_pre t) (ensures fu
 let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
  (| True, (fun _ -> dm_return _ x) |)
 
+let glue_lemma_hist_bind_implies_wp2_if_x
+  (wp1:hist 'a) (wp2:'a -> hist 'b)
+  (m:pdm 'a wp1) 
+  p h x :
+  Lemma 
+    (requires (hist_bind _ _ wp1 wp2 p h /\ x `return_of` (get_fun m)))
+    (ensures (exists lt. wp2 x  (hist_post_shift p lt) (List.rev lt @ h))) =
+  lemma_hist_bind_implies_wp2_if_x wp1 wp2 (get_fun m) p h x
+
 let pdm_bind (a b:Type)
   (wp1:hist a) (wp2:a -> hist b)
   (f:pdm a wp1) 
   (g:(x:a) -> pdm b (wp2 x)) :
-  pdm b (hist_bind wp1 wp2) =
-  (| (get_pre f /\ (forall x. x `respects` wp1 ==> get_pre (g x))), 
+  pdm b (hist_bind _ _ wp1 wp2) =
+  Classical.forall_intro_3 (Classical.move_requires_3 (glue_lemma_hist_bind_implies_wp2_if_x wp1 wp2 f));
+  (| (get_pre f /\ (forall x. x `return_of` (get_fun f) ==> get_pre (g x))), 
      (fun _ -> 
-       dm_bind _ _ _ _ (lift_dm_dm' a wp1 (get_fun f)) (fun x -> get_fun (g x))) 
+       dm_bind a b wp1 wp2 (get_fun f) (fun x -> get_fun (g x))) 
    |)
 
 let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
@@ -110,7 +120,7 @@ let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r ->
   let _ = static_cmd Close fd in
   ()
 
-let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
+let testStatic2 () : IO unit (fun _ -> True) (fun _ _ _ -> True) by (explode ())=
   let fd = static_cmd Openfile "../Makefile" in
   if Some? fd then begin (** test if Openfile was successful **)
     let msg = static_cmd Read (Some?.v fd) in

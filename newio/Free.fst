@@ -26,7 +26,7 @@ let rec free_bind
   (a:Type u#a)
   (b:Type u#b)
   (l : free op s a)
-  (k : (x:a{x `return_of` l}) -> free op s b) :
+  (k : a -> free op s b) :
   Tot (free op s b) =
   match l with
   | Return x -> k x

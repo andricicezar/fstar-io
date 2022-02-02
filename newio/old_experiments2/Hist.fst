@@ -18,7 +18,7 @@ reversed and appended to the history. **)
 let hist_post (#event_type:Type) a = lt:list event_type -> r:a -> Type0
 let hist_pre (#event_type:Type) = h:list event_type -> Type0
 
-let hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_type
+private let hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_type
 
 unfold
 let hist_post_ord (#event_type:Type) (p1 p2:hist_post #event_type 'a) = forall lt r. p1 lt r ==> p2 lt r
@@ -59,7 +59,7 @@ let hist_post_bind
     kw r (hist_post_shift p lt) (List.rev lt @ h)
 
 unfold
-let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -> hist #event_type b) : hist #event_type b =
+let hist_bind (#event_type:Type) (a b:Type) (w : hist #event_type a) (kw : a -> hist #event_type b) : hist #event_type b =
   fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
 
 unfold
@@ -83,6 +83,6 @@ let hist_if_then_else (wp1 wp2:hist #'event 'a) (b:bool) : hist #'event 'a =
   
 let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
   Lemma (
-    hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) == hist_bind (hist_bind w1 w2) w3)
+    hist_bind _ _ w1 (fun r1 -> hist_bind  _ _ (w2 r1) w3) == hist_bind _ _ (hist_bind _ _ w1 w2) w3)
   by (l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]) =
   () 
