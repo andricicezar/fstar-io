@@ -177,8 +177,19 @@ let refine_io (wp:hist 'a) (d:dm 'a wp) : io (resp wp) =
   io_subcomp _ (fun _ -> True) (fun x -> respects x wp) d
 
 unfold
+let refine_post0 (q:pure_post 'a) (p:hist_post (v:'a{q v})) : hist_post 'a =
+  (fun lt (r:'a) -> q r ==> p lt r)
+
+let lemma_refine_post0 (q:pure_post 'a) (p:hist_post (v:'a{q v})) :
+  Lemma (
+    let p1 : hist_post (v:'a{q v}) = p in
+    let p2 : hist_post (v:'a{q v}) = fun lt r -> refine_post0 q p lt r in
+    p2 `hist_post_ord` p1
+  ) = ()
+
+unfold
 let refine_post (wp:hist 'a) (p : hist_post (resp wp)) : hist_post 'a = 
-  (fun lt (r:'a) -> r `respects` wp ==> p lt r)
+  refine_post0 (fun x -> x `respects` wp) p
 
 let refine_hist (wp:hist 'a) : resph wp = 
   let newhist : hist0 (resp wp) = (fun p -> wp (refine_post wp p)) in
@@ -239,8 +250,28 @@ let rec lemma_io_subcomp (a:Type)
     end
   end
   
+
+(** lemma is not robust **)
+let lemma_io_subcomp_2 (a:Type)
+  (q2:pure_post a)
+  (m : io a) :
+  Lemma
+    (requires (forall x. x `return_of` m ==> q2 x))
+    (ensures (forall p h. theta m (refine_post0 q2 p) h ==>
+                  theta (io_subcomp _ (fun _ -> True) q2 m) p h)) =
+  introduce forall p h. (theta m (refine_post0 q2 p) h ==>
+                  theta (io_subcomp _ (fun _ -> True) q2 m) p h) with begin 
+    introduce theta m (refine_post0 q2 p) h ==>
+                  (theta (io_subcomp _ (fun _ -> True) q2 m) p h) with _. begin 
+      assert (theta m (refine_post0 q2 p) h);
+      lemma_io_subcomp a (fun _ -> True) q2 m;
+      assert (theta (io_subcomp _ (fun _ -> True) q2 m) p h)
+    end
+  end
+
+
 let lemma_step_3 (a:Type) (wp:hist a) (d:dm a wp) :
-  Lemma (theta d `hist_ord` theta (refine_io wp d)) =
+  Lemma (forall p h. theta d (refine_post wp p) h ==> theta (refine_io wp d) p h) =
   assert (wp `hist_ord` theta d);
   introduce forall x. x `return_of` d ==> x `respects` wp with begin
     introduce x `return_of` d ==> x `respects` wp with _. begin
@@ -249,19 +280,20 @@ let lemma_step_3 (a:Type) (wp:hist a) (d:dm a wp) :
       assert (x `respects` wp)
     end
   end;
-  lemma_io_subcomp a (fun _ -> True) (fun x -> respects x wp) d
+  lemma_io_subcomp_2 a (fun x -> respects x wp) d
 
+  
 let lemma_refine_io_refine_hist (a:Type) (wp:hist a) (d:dm a wp) : Lemma (
   refine_hist wp `hist_ord` theta (refine_io wp d)) =
   assert (wp `hist_ord` theta d);
   let wp' = refine_hist wp in
   let d' = refine_io wp d in
   lemma_step_1 a wp;
-  assert (forall (p:hist_post a) h. refine_hist wp p h ==> wp (refine_post wp p) h);
+  assert (forall (p:hist_post a) h. refine_hist wp p h ==> theta d (refine_post wp p) h);
  // lemma_step_2 a wp d;
   lemma_step_3 a wp d;
-  assert (wp `hist_ord` theta (refine_io wp d));
-  admit ()
+ // assert (wp `hist_ord` theta (refine_io wp d));
+  assert (forall p h. theta d (refine_post wp p) h ==> theta (refine_io wp d) p h)
   
 
 let lift_dm_dm' (a:Type) (wp:hist a) (d:dm a wp) : dm' a wp =
