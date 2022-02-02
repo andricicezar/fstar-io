@@ -164,6 +164,7 @@ let rec lemma_theta_result_implies_post m p h :
   end
 
 
+unfold
 let refine_io (wp:hist 'a) (d:dm 'a wp) : io (resp wp) =
   assert (wp `hist_ord` theta d);
   introduce forall x. x `return_of` d ==> x `respects` wp with begin
@@ -175,25 +176,93 @@ let refine_io (wp:hist 'a) (d:dm 'a wp) : io (resp wp) =
   end;
   io_subcomp _ (fun _ -> True) (fun x -> respects x wp) d
 
+unfold
+let refine_post (wp:hist 'a) (p : hist_post (resp wp)) : hist_post 'a = 
+  (fun lt (r:'a) -> r `respects` wp ==> p lt r)
+
 let refine_hist (wp:hist 'a) : resph wp = 
-  let newhist : hist0 (resp wp) = (fun p -> wp (fun lt (r:'a) -> r `respects` wp ==> p lt r)) in
+  let newhist : hist0 (resp wp) = (fun p -> wp (refine_post wp p)) in
   assert (hist_wp_monotonic newhist);
   newhist
 
 let dm' (a:Type) (wp:hist a) = dm (resp wp) (refine_hist wp)
+
+let lemma_step_1 (a:Type) (wp:hist a) : Lemma (
+  forall (p:hist_post a) h. refine_hist wp p h ==> wp (refine_post wp p) h) = ()
+  
+let lemma_step_2 (a:Type) (wp:hist a) (m:io a) : Lemma
+  (requires (wp `hist_ord` theta m))
+  (ensures (
+    forall (p:hist_post a) h. wp (refine_post wp p) h ==> theta m (refine_post wp p) h)) = ()
+
+(** lemma is not robust **)
+let rec lemma_io_subcomp (a:Type)
+  (q1:pure_post a) (q2:pure_post a)
+  (m : io (v:a{q1 v})) :
+  Lemma
+    (requires (forall x. q1 x /\ x `return_of` m ==> q2 x))
+    (ensures (theta m `hist_ord #_ #a` theta (io_subcomp _ q1 q2 m))) =
+  match m with
+  | Return x -> assert (theta m `hist_ord #_ #a` theta (io_subcomp _ q1 q2 m)) by (compute ())
+  | Call cmd arg k -> begin
+    let fst : io_resm cmd -> hist (v:a{q1 v}) = fun r -> theta (k r) in
+    let snd : io_resm cmd -> hist (v:a{q2 v}) = fun r -> theta (io_subcomp _ q1 q2 (k r)) in
+    calc (==) {
+      theta m;
+      == {}
+      theta (Call cmd arg k);
+      == { _ by (compute ()) } // unfold theta
+      hist_bind (io_wps cmd arg) (fun r -> theta (k r));
+      == {}
+      hist_bind (io_wps cmd arg) fst;
+    };
+
+    calc (==) {
+      theta (io_subcomp _ q1 q2 m);
+      == {}
+      theta (io_subcomp _ q1 q2 (Call cmd arg k));
+      == { _ by (compute ()) }
+      theta (Call cmd arg (fun r -> io_subcomp _ q1 q2 (k r)));
+      == { _ by (compute ()) }
+      hist_bind (io_wps cmd arg) (fun r -> theta (io_subcomp _ q1 q2 (k r)));
+      == {}
+      hist_bind (io_wps cmd arg) snd;
+    };
+
+    introduce forall (r:io_resm cmd). (fst r `hist_ord #event #a` snd r) with begin
+      lemma_io_subcomp _ q1 q2 (k r)
+    end;
+    introduce forall (p:hist_post a) h. hist_bind (io_wps cmd arg) fst p h ==> hist_bind (io_wps cmd arg) snd p h with begin 
+      introduce hist_bind (io_wps cmd arg) fst p h ==> hist_bind (io_wps cmd arg) snd p h with _. begin
+        assert (hist_bind (io_wps cmd arg) snd p h)
+     end
+    end
+  end
+  
+let lemma_step_3 (a:Type) (wp:hist a) (d:dm a wp) :
+  Lemma (theta d `hist_ord` theta (refine_io wp d)) =
+  assert (wp `hist_ord` theta d);
+  introduce forall x. x `return_of` d ==> x `respects` wp with begin
+    introduce x `return_of` d ==> x `respects` wp with _. begin
+      lemma_return_of_implies_exists_trace_of d x;
+      Classical.forall_intro_2 (Classical.move_requires_2 (lemma_theta_result_implies_post d));
+      assert (x `respects` wp)
+    end
+  end;
+  lemma_io_subcomp a (fun _ -> True) (fun x -> respects x wp) d
 
 let lemma_refine_io_refine_hist (a:Type) (wp:hist a) (d:dm a wp) : Lemma (
   refine_hist wp `hist_ord` theta (refine_io wp d)) =
   assert (wp `hist_ord` theta d);
   let wp' = refine_hist wp in
   let d' = refine_io wp d in
-  introduce forall p h. wp' p h ==> theta d' p h with begin
-    introduce wp' p h ==> theta d' p h with _. begin
-      match d with
-      | Return x -> assert (theta d' p h) by (compute ())
-      | Call cmd arg k -> admit ()
-    end
-  end
+  lemma_step_1 a wp;
+  assert (forall (p:hist_post a) h. refine_hist wp p h ==> wp (refine_post wp p) h);
+ // lemma_step_2 a wp d;
+  lemma_step_3 a wp d;
+  assert (wp `hist_ord` theta (refine_io wp d));
+  admit ()
+  
 
 let lift_dm_dm' (a:Type) (wp:hist a) (d:dm a wp) : dm' a wp =
   lemma_refine_io_refine_hist _ wp d;
