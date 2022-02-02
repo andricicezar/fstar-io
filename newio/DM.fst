@@ -24,50 +24,56 @@ let rec theta #a
 let lemma_theta_is_monad_morphism_ret v h p :
   Lemma (theta (io_return v) == hist_return v) by (compute ()) = ()
 
-(** TODO: remove the admits **)
-let rec lemma_theta_is_monad_morphism_bind (m:io 'a) (f:(x:'a) -> io 'b) :
+let rec lemma_theta_is_lax_morphism_bind (m:io 'a) (f:'a -> io 'b) :
   Lemma
-    (theta (io_bind m f) == hist_bind (theta m) (fun x -> theta (f x))) = 
+    (hist_bind (theta m) (fun x -> theta (f x)) `hist_ord` theta (io_bind m f)) = 
   match m with
   | Return x ->
-    calc (==) {
-      theta (io_bind m f);
-      == {}
-      theta (io_bind (Return x) f);
-      == {} // unfold io_bind
-      theta (f x); 
-      == { _ by (tadmit ()) } // unfold hist_bind
-      hist_bind (hist_return x) (fun x -> theta (f x));
-      == { _ by (compute ()) } // unfold theta
+    calc (hist_ord) {
+      hist_bind (theta m) (fun x -> theta (f x));
+      == { 
+        assert (hist_bind (theta (Return x)) (fun x -> theta (f x))
+          == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
+      }
       hist_bind (theta (Return x)) (fun x -> theta (f x));
-    };
-    (** this should be inside calc, but for some reason it fails there **)
-    assert (hist_bind (theta (Return x)) (fun x -> theta (f x))
-      == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
-  | Call cmd arg k ->
-    (** this should be useful later to do a rewrite **)
-    introduce forall (r:io_resm cmd). theta (io_bind (k r) f) == hist_bind (theta (k r)) (fun x -> theta (f x)) with begin
-      lemma_theta_is_monad_morphism_bind (k r) f
-    end;
-
-    calc (==) {
-      theta (io_bind m f);
+      == { _ by (compute ()) } // unfold theta
+      hist_bind (hist_return x) (fun x -> theta (f x));
+      `hist_ord` {} (** here there is an eta that forces us to use `hist_ord` **)
+      theta (f x); 
+      == {} // unfold io_bind
+      theta (io_bind (Return x) f);
       == {}
-      theta (io_bind (Call cmd arg k) f);
-      == { _ by (compute ()) } // unfold io_bind
-      theta (Call cmd arg (fun r -> io_bind (k r) f));
-      == { _ by (compute ()) } // unfold theta
-      hist_bind (io_wps cmd arg) (fun r -> theta (io_bind (k r) f));
-      == { _ by (tadmit ()) } // rewrite here by applying this lemma again for (k r) and f
-      hist_bind (io_wps cmd arg) (fun r -> hist_bind (theta (k r)) (fun x -> theta (f x)));
-      == { lemma_hist_bind_associativity (io_wps cmd arg) (fun r -> theta (k r)) (fun x -> theta (f x)) }
-      hist_bind (hist_bind (io_wps cmd arg) (fun r -> theta (k r))) (fun x -> theta (f x));
-      == { _ by (compute ()) } // unfold theta
+      theta (io_bind m f);
+    }
+  | Call cmd arg k ->
+    calc (hist_ord) {
+      hist_bind (theta m) (fun x -> theta (f x)); 
+      == {
+        assert (hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x))
+           == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
+      }
       hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x));
-    };
-    (** this should be inside calc, but for some reason it fails there **)
-    assert (hist_bind (theta (Call cmd arg k)) (fun x -> theta (f x))
-      == hist_bind (theta m) (fun x -> theta (f x))) by (rewrite_eqs_from_context ())
+      == { _ by (compute ()) } // unfold theta
+      hist_bind (hist_bind (io_wps cmd arg) (fun r -> theta (k r))) (fun x -> theta (f x));
+      == { lemma_hist_bind_associativity (io_wps cmd arg) (fun r -> theta (k r)) (fun x -> theta (f x)) }
+      hist_bind (io_wps cmd arg) (fun r -> hist_bind (theta (k r)) (fun x -> theta (f x)));
+      `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
+        let rhs1 : io_resm cmd -> hist 'b = fun r -> theta (io_bind (k r) f) in
+        let rhs2 : io_resm cmd -> hist 'b = fun r -> hist_bind (theta (k r)) (fun x -> theta (f x)) in
+        introduce forall (r:io_resm cmd). (rhs2 r) `hist_ord` (rhs1 r) with begin
+          lemma_theta_is_lax_morphism_bind (k r) f
+        end;
+
+        assert (hist_bind (io_wps cmd arg) rhs2 `hist_ord` hist_bind (io_wps cmd arg) rhs1)
+      }
+      hist_bind (io_wps cmd arg) (fun r -> theta (io_bind (k r) f));
+      == { _ by (compute ()) } // unfold theta
+      theta (Call cmd arg (fun r -> io_bind (k r) f));
+      == { _ by (compute ()) } // unfold io_bind
+      theta (io_bind (Call cmd arg k) f);
+      == {}
+      theta (io_bind m f);
+    }
 
 // The Dijkstra Monad
 let dm (a:Type) (wp:hist a) =
@@ -83,7 +89,7 @@ let dm_bind
   (v : dm a wp_v)
   (f : (x:a -> dm b (wp_f x))) :
   Tot (dm b (hist_bind wp_v wp_f)) =
-  lemma_theta_is_monad_morphism_bind v f;
+  lemma_theta_is_lax_morphism_bind v f;
   io_bind v f
 
 let dm_subcomp (a:Type) (wp1 wp2: hist a) (f : dm a wp1) :
@@ -96,17 +102,6 @@ let dm_if_then_else (a : Type) (wp1 wp2: hist a) (f : dm a wp1) (g : dm a wp2) (
   dm a (hist_if_then_else wp1 wp2 b)
 
 (*** new repr for dm **)
-let rec io_subcomp (a:Type)
-  (q1:pure_post a) (q2:pure_post a)
-  (m : io (v:a{q1 v})) :
-  Pure (io (v:a{q2 v})) 
-    (requires (forall x. x `return_of` m /\ q1 x ==> q2 x))
-    (ensures (fun r -> True)) =
-  match m with
-  | Return r -> Return r
-  | Call cmd arg k -> 
-      Call cmd arg (fun r -> 
-        io_subcomp _ q1 q2 (k r))
 
 let respects (x:'a) (wp:hist #event 'a) : Type0 =
   forall (h:trace) (p:hist_post #event 'a). wp p h ==> (exists (lt:trace). p lt x)
@@ -174,7 +169,7 @@ let refine_io (wp:hist 'a) (d:dm 'a wp) : io (resp wp) =
       assert (x `respects` wp)
     end
   end;
-  io_subcomp _ (fun _ -> True) (fun x -> respects x wp) d
+  free_subcomp _ (fun _ -> True) (fun x -> respects x wp) d
 
 unfold
 let refine_post0 (q:pure_post 'a) (p:hist_post (v:'a{q v})) : hist_post 'a =
@@ -213,12 +208,12 @@ let rec lemma_io_subcomp (a:Type)
   (m : io (v:a{q1 v})) :
   Lemma
     (requires (forall x. q1 x /\ x `return_of` m ==> q2 x))
-    (ensures (theta m `hist_ord #_ #a` theta (io_subcomp _ q1 q2 m))) =
+    (ensures (theta m `hist_ord #_ #a` theta (free_subcomp _ q1 q2 m))) =
   match m with
-  | Return x -> assert (theta m `hist_ord #_ #a` theta (io_subcomp _ q1 q2 m)) by (compute ())
+  | Return x -> assert (theta m `hist_ord #_ #a` theta (free_subcomp _ q1 q2 m)) by (compute ())
   | Call cmd arg k -> begin
     let fst : io_resm cmd -> hist (v:a{q1 v}) = fun r -> theta (k r) in
-    let snd : io_resm cmd -> hist (v:a{q2 v}) = fun r -> theta (io_subcomp _ q1 q2 (k r)) in
+    let snd : io_resm cmd -> hist (v:a{q2 v}) = fun r -> theta (free_subcomp _ q1 q2 (k r)) in
     calc (==) {
       theta m;
       == {}
@@ -230,13 +225,13 @@ let rec lemma_io_subcomp (a:Type)
     };
 
     calc (==) {
-      theta (io_subcomp _ q1 q2 m);
+      theta (free_subcomp _ q1 q2 m);
       == {}
-      theta (io_subcomp _ q1 q2 (Call cmd arg k));
+      theta (free_subcomp _ q1 q2 (Call cmd arg k));
       == { _ by (compute ()) }
-      theta (Call cmd arg (fun r -> io_subcomp _ q1 q2 (k r)));
+      theta (Call cmd arg (fun r -> free_subcomp _ q1 q2 (k r)));
       == { _ by (compute ()) }
-      hist_bind (io_wps cmd arg) (fun r -> theta (io_subcomp _ q1 q2 (k r)));
+      hist_bind (io_wps cmd arg) (fun r -> theta (free_subcomp _ q1 q2 (k r)));
       == {}
       hist_bind (io_wps cmd arg) snd;
     };
@@ -259,14 +254,14 @@ let lemma_io_subcomp_2 (a:Type)
   Lemma
     (requires (forall x. x `return_of` m ==> q2 x))
     (ensures (forall p h. theta m (refine_post0 q2 p) h ==>
-                  theta (io_subcomp _ (fun _ -> True) q2 m) p h)) =
+                  theta (free_subcomp _ (fun _ -> True) q2 m) p h)) =
   introduce forall p h. (theta m (refine_post0 q2 p) h ==>
-                  theta (io_subcomp _ (fun _ -> True) q2 m) p h) with begin 
+                  theta (free_subcomp _ (fun _ -> True) q2 m) p h) with begin 
     introduce theta m (refine_post0 q2 p) h ==>
-                  (theta (io_subcomp _ (fun _ -> True) q2 m) p h) with _. begin 
+                  (theta (free_subcomp _ (fun _ -> True) q2 m) p h) with _. begin 
       assert (theta m (refine_post0 q2 p) h);
       lemma_io_subcomp a (fun _ -> True) q2 m;
-      assert (theta (io_subcomp _ (fun _ -> True) q2 m) p h)
+      assert (theta (free_subcomp _ (fun _ -> True) q2 m) p h)
     end
   end
 

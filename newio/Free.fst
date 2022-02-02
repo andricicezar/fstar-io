@@ -45,6 +45,18 @@ let free_map
   free_bind op s a b
     l (fun a -> free_return op s b (k a))
 
+let rec free_subcomp (a:Type)
+  (q1:pure_post a) (q2:pure_post a)
+  (m : free 'op 's (v:a{q1 v})) :
+  Pure (free 'op 's (v:a{q2 v})) 
+    (requires (forall x. x `return_of` m /\ q1 x ==> q2 x))
+    (ensures (fun r -> True)) =
+  match m with
+  | Return r -> Return r
+  | Call cmd arg k -> 
+      Call cmd arg (fun r -> 
+        free_subcomp _ q1 q2 (k r))
+
 let free_codomain_ordering
   (#op:Type)
   (#s:op_sig op)
