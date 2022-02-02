@@ -8,6 +8,7 @@ open Free
 open Free.IO
 open Hist
 open DM
+open DM.Refine
 
 let pdm (a:Type) (wp:hist a) = 
   pre : pure_pre { forall p h. wp p h ==> pre } & (squash pre -> dm a wp)
@@ -28,7 +29,7 @@ let pdm_bind (a b:Type)
   pdm b (hist_bind wp1 wp2) =
   (| (get_pre f /\ (forall x. x `respects` wp1 ==> get_pre (g x))), 
      (fun _ -> 
-       dm_bind _ _ _ _ (lift_dm_dm' a wp1 (get_fun f)) (fun x -> get_fun (g x))) 
+       dm_bind _ _ _ _ (refine_dm (get_fun f)) (fun x -> get_fun (g x))) 
    |)
 
 let pdm_subcomp (a:Type) (wp1:hist a) (wp2:hist a) (f:pdm a wp1) :
