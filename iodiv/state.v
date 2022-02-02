@@ -449,6 +449,50 @@ Section State.
       apply h.
   Abort.
 
+  (* In DM4Free the state monad is
+
+    D A w := ∀ s : state, PURE A (w s)
+
+    This makes me feel like there is a primitive notion of input somehow and
+    that we must take this into account for state.
+
+    In this case the general construction would require the computational
+    monad to explicitly come with an input type.
+    M A := I → C A
+    (maybe I can also depend on A I don't know)
+    and it would have to very some properties (typically related to
+    θ and some _ ∈ _ notion).
+
+    Then we wouldn't build the PDM on top of a DM but really all at once.
+    Which is fine, especially since the requirements on the DM would still
+    not be modified, only extended.
+
+    Maybe:
+    M A := ∀ (x : I A), C A x
+    W A := ∀ (x : I A), W' A x (which could ignore the argument)
+    D A w := ∀ (x : I A), D' A w x
+    where D' A w x := {
+      pre : Prop ;
+      hpre : ∀ P arg, w x P arg → pre ;
+      fun : pre → { y : C A x | θ x y ≤ᵂ w x }
+    }
+
+    Very unsure about over what the θ should be really.
+    We still want θ to be a monad morphism so over M. Though maybe it can
+    be split too? Will have to try on state then.
+    (Could also try on state + IO to have both the ghost thing and real state.)
+
+    Maybe:
+    D'' A w x := {
+      pre : Prop ;
+      hpre : ∀ P arg, w x P arg → pre ;
+      body : pre → C A x
+    }
+    D' A w := ∀ (x : I A), D'' A w x
+    D A w := { f : D' A w | ∀ (x : I A) post arg (h : w x post arg), θ ((f x).(body) (pre_from f h)) }
+    Still not ok because we do not recover a function in M A.
+  *)
+
   (* Lift from PURE (somehow) *)
 
   Definition pure_wp' A := (A → Prop) → Prop.
