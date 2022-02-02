@@ -234,7 +234,7 @@ Section State.
   Proof.
     destruct c as [c hc].
     unshelve eexists.
-    - induction c as [x | k ih | ?] in w, hc |- *.
+    - induction c as [x | k ih | s k ih] in w, hc |- *.
       + apply retᴹ. exists x.
         intros s₀. exists s₀.
         intros P h. apply hc. assumption.
@@ -244,6 +244,12 @@ Section State.
         cbn in hc. unfold θ.
         (* Once again, a problem with state *)
         give_up.
+      + apply (act_putᴹ s).
+        apply ih.
+        intros P s₀ h.
+        unfold "≤ᵂ" in hc. unfold θ in hc. simpl in hc.
+        unfold θ.
+        (* Same *)
   Abort.
 
 End State.
