@@ -25,6 +25,7 @@ Section State.
 
   Definition M A := I → C A.
 
+  (* Could equivalently have retᶜ *)
   Definition retᴹ [A] (x : A) : M A :=
     λ s₀, (s₀, x).
 
@@ -151,6 +152,9 @@ Section State.
   Definition Mᴾ A (pre : I → Prop) :=
     ∀ (s₀ : I), pre s₀ → C A.
 
+  Definition retᴾ [A pre] (x : A) : Mᴾ A pre :=
+    λ s₀ _, retᴹ x s₀.
+
   (* Partial effect observation *)
 
   Definition θᴾ [A pre] (c : Mᴾ A pre) : W A :=
@@ -158,12 +162,23 @@ Section State.
 
   (* Partial Dijkstra monad *)
 
-  Record D A (w : W A) := {
+  Record D A (w : W A) := makeD {
     Dpre : I → Prop ;
     Dhpre : ∀ s₀ post, w s₀ post → Dpre s₀ ;
     Dfun : Mᴾ A Dpre ;
     Dθ : θᴾ Dfun ≤ᵂ w
   }.
+
+  Definition retᴰ [A] (x : A) : D A (retᵂ x).
+  Proof.
+    refine {|
+      Dpre := λ _, True ;
+      Dfun := retᴾ x
+    |}.
+    - auto.
+    - (* There shoudl be a rule for this *)
+      admit.
+  Admitted.
 
   (* Lift from PURE (somehow) *)
 
@@ -183,17 +198,24 @@ Section State.
 
   Definition liftᴰ [A w] (f : PURE A w) : D A (liftᵂ w).
   Proof.
-    unshelve econstructor.
-    - exact (λ _, val w (λ _, True)).
-    - intros s₀ hpre.
-      (* Missing retᶜ and then we would express retᴹ canonically from it *)
-      admit.
+    refine {|
+      Dpre := λ _, val w (λ _, True) ;
+      Dfun := λ s₀ hpre, retᴹ (val (f hpre)) s₀
+    |}.
     - intros s₀ post h.
       simpl. unfold liftᵂ in h.
       destruct w as [w hw].
       eapply hw. 2: exact h.
       intuition auto.
-    - admit.
-  Abort.
+    - intros s P h.
+      unfold liftᵂ in h. unfold θᴾ.
+      (* Here h and hpre are redundant, maybe it's not a problem
+        but it suggests we could optimise D?
+      *)
+      intro hpre.
+      set (f' := f hpre). clearbody f'. clear f hpre.
+      destruct f' as [f hf].
+      cbv. apply hf. apply h.
+  Defined.
 
 End State.
