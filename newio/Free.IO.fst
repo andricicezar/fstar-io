@@ -77,10 +77,10 @@ let io_bind (#a:Type) (#b:Type) l k : io b =
 
 // THE IIO FREE MONAD
 type iio a = free cmds iio_sig a
-let iio_return (a:Type) (x:a) : iio a =
-  free_return cmds iio_sig a x
+let iio_return (x:'a) : iio 'a =
+  free_return cmds iio_sig 'a x
 
-let iio_bind (a:Type) (b:Type) l k : iio b =
+let iio_bind (#a:Type) (#b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
 
 // OTHER TYPES & UTILS
@@ -149,7 +149,7 @@ unfold let io_pre (cmd:cmds) (arg:args cmd) (h:trace) : Type0 =
   | Openfile -> True
   | Read -> is_open arg h
   | Close -> is_open arg h
-  | GetTrace -> true
+  | GetTrace -> True
 
 (** This file is replaced during linking with a file that contains the real
 implementation of the commands. **)
