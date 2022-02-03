@@ -29,8 +29,11 @@ Section State.
   Definition retᴹ [A] (x : A) : M A :=
     λ s₀, (s₀, x).
 
+  Definition bindᶜ [A B] (c : C A) (f : A → M B) : C B :=
+    let '(s₁, x) := c in f x s₁.
+
   Definition bindᴹ [A B] (c : M A) (f : A → M B) : M B :=
-    λ s₀, let '(s₁, x) := c s₀ in f x s₁.
+    λ s₀, bindᶜ (c s₀) f.
 
   Definition getᴹ : M state :=
     λ s, (s, s).
@@ -46,10 +49,15 @@ Section State.
   Definition Wᶜ A := postᵂ A → preᵂ.
   Definition W A := I → Wᶜ A.
 
-  Definition wle [A] (w₀ w₁ : W A) : Prop :=
-    ∀ s P, w₁ s P → w₀ s P.
+  Definition Wᶜle [A] (w₀ w₁ : Wᶜ A) : Prop :=
+    ∀ P, w₁ P → w₀ P.
 
-  Notation "x ≤ᵂ y" := (wle x y) (at level 80).
+  Notation "x ≤ᶜ y" := (Wᶜle x y) (at level 80).
+
+  Definition Wle [A] (w₀ w₁ : W A) : Prop :=
+    ∀ s, w₀ s ≤ᶜ w₁ s.
+
+  Notation "x ≤ᵂ y" := (Wle x y) (at level 80).
 
   Definition retᵂ [A] (x : A) : W A :=
     λ s₀ P, P s₀ x.
@@ -63,7 +71,7 @@ Section State.
   Definition putᵂ (s : state) : W unit :=
     λ s₀ P, P s tt.
 
-  Instance trans [A] : Transitive (@wle A).
+  Instance trans [A] : Transitive (@Wle A).
   Proof.
     intros x y z h₁ h₂. intros s₀ P h.
     apply h₁. apply h₂.
@@ -129,12 +137,20 @@ Section State.
   Definition θ [A] (c : M A) : W A :=
     λ s₀, θᶜ (c s₀).
 
+  Lemma θᶜ_ret :
+    ∀ A (x : A) (s : I),
+      θᶜ (retᴹ x s) ≤ᶜ retᵂ x s.
+  Proof.
+    intros A x s. intros P h.
+    assumption.
+  Qed.
+
   Lemma θ_ret :
     ∀ A (x : A),
       θ (retᴹ x) ≤ᵂ retᵂ x.
   Proof.
-    intros A x. intros s₀ P h.
-    cbn. red in h. assumption.
+    intros A x. intros s₀.
+    apply θᶜ_ret.
   Qed.
 
   Lemma θ_bind :
@@ -155,10 +171,32 @@ Section State.
   Definition retᴾ [A pre] (x : A) : Mᴾ A pre :=
     λ s₀ _, retᴹ x s₀.
 
+  Definition bindᴾ [A B p q] (c : Mᴾ A p) (f : ∀ (x : A), Mᴾ B (q x)) :
+    Mᴾ B p.
+  Proof.
+    refine (λ s h, bindᶜ (c s _) (λ x s₁, f x s₁ _)).
+    - assumption.
+    - (* Not clear we gain anything by doing this here rather than in D
+        directly. Or we need to ask for the pre that corresponds to the bind
+        together with a proof that it entails what it needs to entail.
+      *)
+      admit.
+  Abort.
+
   (* Partial effect observation *)
 
   Definition θᴾ [A pre] (c : Mᴾ A pre) : W A :=
     λ s₀ post, ∀ (h : pre s₀), θᶜ (c s₀ h) post.
+
+  Lemma θᴾ_ret :
+    ∀ A (x : A) pre,
+      θᴾ (@retᴾ _ pre x) ≤ᵂ retᵂ x.
+  Proof.
+    intros A x pre.
+    intros s P h.
+    intro hpre.
+    apply θᶜ_ret. assumption.
+  Qed.
 
   (* Partial Dijkstra monad *)
 
@@ -169,6 +207,11 @@ Section State.
     Dθ : θᴾ Dfun ≤ᵂ w
   }.
 
+  Arguments Dpre [_ _].
+  Arguments Dhpre [_ _].
+  Arguments Dfun [_ _].
+  Arguments Dθ [_ _].
+
   Definition retᴰ [A] (x : A) : D A (retᵂ x).
   Proof.
     refine {|
@@ -176,9 +219,16 @@ Section State.
       Dfun := retᴾ x
     |}.
     - auto.
-    - (* There shoudl be a rule for this *)
-      admit.
-  Admitted.
+    - apply θᴾ_ret.
+  Defined.
+
+  (* Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
+    D B (bindᵂ w wf).
+  Proof.
+    refine {|
+      Dpre := c.(Dpre) ;
+      Dfun := (* NEED bindᴾ *)
+    |}. *)
 
   (* Lift from PURE (somehow) *)
 
