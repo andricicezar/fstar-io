@@ -259,6 +259,27 @@ Section State.
       apply refᴹ.
   Defined.
 
+  Lemma leaf_θ_post :
+    ∀ A (c : M A) x P s₀,
+      θ c P s₀ →
+      leaf x c →
+      ∃ s₁, P s₁ x.
+  Proof.
+    intros A c x P s₀ hθ hl.
+    induction c as [y | k ih | s k ih] in x, P, s₀, hθ, hl |- *.
+    - simpl in hl. subst y.
+      exists s₀. apply hθ.
+    - simpl in hl. destruct hl as [s₁ hl].
+      unfold θ in hθ. simpl in hθ.
+      specialize ih with (2 := hl).
+      (* This time it seems to be a problem specific to get *)
+      give_up.
+    - simpl in hl.
+      unfold θ in hθ. simpl in hθ.
+      specialize ih with (2 := hl).
+      eapply ih. apply hθ.
+  Abort.
+
   Lemma left_respects :
     ∀ A w (c : M A) x,
       θ c ≤ᵂ w →

@@ -159,6 +159,7 @@ Section State.
     ∀ (s : I),
       w s (λ _ _, True) → (* We could also choose the pre *)
       { '(s', y) : state * A | ∀ P, w s P → P s' y }.
+      (* Here θ doesn't appear sadly *)
 
   Definition retᴰ [A] (x : A) : D A (retᵂ x).
   Proof.
