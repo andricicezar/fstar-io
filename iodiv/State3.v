@@ -170,6 +170,11 @@ Section State.
     apply θᶜ_ret.
   Qed.
 
+  (* Can't figure out what it should be *)
+  (* Lemma θᶜ_bind :
+    ∀ A B (c : C A) (f : A → M B),
+      θᶜ (bindᶜ c f) ≤ᶜ bindᵂ (θᶜ c) (λ x, θ (f x)). *)
+
   Lemma θ_bind :
     ∀ A B c f,
       θ (@bindᴹ A B c f) ≤ᵂ bindᵂ (θ c) (λ x, θ (f x)).
@@ -211,7 +216,21 @@ Section State.
 
   Notation "x ∈ w" := (respects x w) (at level 50).
 
+  (* Is this the right thing to refine? *)
+  Definition nextᶜ [A] (c : C A) : C (A * I) :=
+    bindᶜ c (λ x s, retᴹ (x, s) s).
+
   Definition refineᶜ [A] w (c : C A) {h : θᶜ c ≤ᶜ w} :
+    C { z : A * I | z ∈ w }.
+  Proof.
+    refine (fst c, ⟨ snd (nextᶜ c) ⟩).
+    destruct c as [s x]. simpl.
+    intros P hw. simpl.
+    apply h in hw. simpl in hw.
+    assumption.
+  Defined.
+
+  (* Definition refineᶜ [A] w (c : C A) {h : θᶜ c ≤ᶜ w} :
     C { x : A | (x, fst c) ∈ w }.
   Proof.
     refine (fst c, ⟨ snd c ⟩).
@@ -219,7 +238,7 @@ Section State.
     intros P hw. simpl.
     apply h in hw. simpl in hw.
     assumption.
-  Defined.
+  Defined. *)
 
   (* Partial Dijkstra monad *)
 
@@ -248,10 +267,14 @@ Section State.
   Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
     D B (bindᵂ w wf).
   Proof.
+    (* Notice how we ignore the state in the continuation
+      This is because we duplicated the information with refineᶜ.
+      I don't find that particularly satisfying.
+    *)
     simple refine {|
       Dpre := λ s, c.(Dpre) s ∧ ∀ x s₁, (x, s₁) ∈ w s → (f x).(Dpre) s₁ ;
       Dfun := λ s h,
-        bindᶜ (refineᶜ (w s) (c.(Dfun) s)) (λ x s₁, (f (val x)).(Dfun) s₁)
+        bindᶜ (refineᶜ (w s) (c.(Dfun) s)) (λ z _, (f (fst (val z))).(Dfun) (snd (val z)))
     |}.
     - intros s post h. simpl. split.
       + eapply Dhpre. exact h.
@@ -261,19 +284,28 @@ Section State.
     - apply h.
     - intros P hw.
       eapply Dθ. assumption.
-    - destruct x as [x hx]. simpl in h. destruct h as [? h].
-      apply h in hx.
-      (* Right now, we only have (x, _) ∈ w, but the s₁ is not explicitly tied
-        to anything. Maybe more generally, C A should more explicitly be of the
-        form I * C A or C (I * A) so that there is explicit input passing.
-
-        Wouldn't work for state as free monad.
-        Instead, keep I → C A and then have a next function
-        taking some I and C A and producing the next I.
-      *)
-      admit.
-    - admit.
-  Abort.
+    - destruct z as [[x s₁] hz].
+      simpl. simpl in h. destruct h as [hc hf].
+      apply hf. assumption.
+    - intros s.
+      (* It would be good to find a law on θᶜ that would be reusable here. *)
+      intros P h. intro hpre.
+      unfold θᶜ. simpl.
+      destruct c as [p hp c hc]. simpl in *.
+      destruct hpre as [hpc hpf].
+      apply hc in h. unfold θᴾ in h. specialize (h hpc).
+      unfold θᶜ in h.
+      set (hc' := hc s) in *. clearbody hc'.
+      unfold θᴾ in hc'. unfold "≤ᶜ" in hc'.
+      set (hc'' := λ P hw, hc' P hw hpc).
+      (* Set Printing Implicit. *)
+      change (λ P hw, hc' P hw hpc) with ((λ P hw, hc'' P hw)).
+      clearbody hc''. clear hc hc'.
+      set (c' := c s hpc) in *.
+      clearbody c'. clear c.
+      destruct c' as [s₁ x]. simpl in *.
+      eapply (f x).(Dθ) in h. apply h.
+  Defined.
 
   (* Lift from PURE (somehow) *)
 
