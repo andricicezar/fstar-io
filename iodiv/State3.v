@@ -214,7 +214,7 @@ Section State.
 
   Arguments Dpre [_ _].
   Arguments Dhpre [_ _].
-  Arguments Dfun [_ _].
+  Arguments Dfun [_ _] _ _ {_}.
   Arguments Dθ [_ _].
 
   Definition retᴰ [A] (x : A) : D A (retᵂ x).
@@ -233,7 +233,7 @@ Section State.
     simple refine {|
       Dpre := λ s, c.(Dpre) s ∧ ∀ x, x ∈ w s → ∃ s₁, (f x).(Dpre) s₁ ;
       Dfun := λ s h,
-        bindᶜ (refineᶜ (w s) (c.(Dfun) s _)) (λ x s₁, (f (val x)).(Dfun) s₁ _)
+        bindᶜ (refineᶜ (w s) (c.(Dfun) s)) (λ x s₁, (f (val x)).(Dfun) s₁)
     |}.
     - intros s post h. simpl. split.
       + eapply Dhpre. exact h.
@@ -247,7 +247,7 @@ Section State.
       apply h in hx.
       (* The exists s₁ is not enough, should we know exactly which s₁? *)
       admit.
-    - admit. (* Printing is hideous *)
+    - admit.
   Abort.
 
   (* Lift from PURE (somehow) *)
