@@ -230,20 +230,24 @@ Section State.
   Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
     D B (bindᵂ w wf).
   Proof.
-    (* The pre of f should be with a different state? *)
     simple refine {|
-      Dpre := λ s, c.(Dpre) s ∧ ∀ x, x ∈ w s → (f x).(Dpre) s ;
+      Dpre := λ s, c.(Dpre) s ∧ ∀ x, x ∈ w s → ∃ s₁, (f x).(Dpre) s₁ ;
       Dfun := λ s h,
         bindᶜ (refineᶜ (w s) (c.(Dfun) s _)) (λ x s₁, (f (val x)).(Dfun) s₁ _)
     |}.
     - intros s post h. simpl. split.
       + eapply Dhpre. exact h.
       + intros x hx.
-        admit.
+        apply hx in h. destruct h as [s₁ h].
+        exists s₁. eapply Dhpre. exact h.
     - apply h.
-    - simpl. admit.
-    - admit.
-    - admit.
+    - simpl. intros P hw.
+      eapply Dθ. assumption.
+    - destruct x as [x hx]. simpl in h. destruct h as [? h].
+      apply h in hx.
+      (* The exists s₁ is not enough, should we know exactly which s₁? *)
+      admit.
+    - admit. (* Printing is hideous *)
   Abort.
 
   (* Lift from PURE (somehow) *)
