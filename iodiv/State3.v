@@ -29,6 +29,23 @@ Section State.
   Definition retᴹ [A] (x : A) : M A :=
     λ s₀, (s₀, x).
 
+  (* Not really bind, but the main ingredient
+    Takes an input and a computation and returns the next value and input
+    for the continuation.
+
+    In this case, the s₀ argument is ignored, but if we had a free monad as
+    C then we would need it.
+
+    WRONG: This couldn't be done in general, say if we had sampling.
+    As it is I wrote a run function.
+    How else can I talk about the next state?
+  *)
+  (* Definition bindᶜ [A] (s₀ : I) (c : C A) : I * A :=
+    c.
+
+  Definition bindᴹ [A B] (c : M A) (f : A → M B) : M B :=
+    λ s₀, let '(s₁, x) := bindᶜ s₀ (c s₀) in f x s₁. *)
+
   Definition bindᶜ [A B] (c : C A) (f : A → M B) : C B :=
     let '(s₁, x) := c in f x s₁.
 
@@ -249,6 +266,10 @@ Section State.
       (* Right now, we only have (x, _) ∈ w, but the s₁ is not explicitly tied
         to anything. Maybe more generally, C A should more explicitly be of the
         form I * C A or C (I * A) so that there is explicit input passing.
+
+        Wouldn't work for state as free monad.
+        Instead, keep I → C A and then have a next function
+        taking some I and C A and producing the next I.
       *)
       admit.
     - admit.
