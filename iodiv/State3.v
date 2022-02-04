@@ -188,19 +188,20 @@ Section State.
 
   (* Refinement on outputs *)
 
-  Definition respects [A] (x : A) (w : Wᶜ A) :=
-    ∀ P, w P → ∃ s₁, P s₁ x.
+  (* It takes a final value, and the input for the next operation *)
+  Definition respects [A] (z : A * I) (w : Wᶜ A) :=
+    ∀ P, w P → P (snd z) (fst z).
 
   Notation "x ∈ w" := (respects x w) (at level 50).
 
   Definition refineᶜ [A] w (c : C A) {h : θᶜ c ≤ᶜ w} :
-    C { x : A | x ∈ w }.
+    C { x : A | (x, fst c) ∈ w }.
   Proof.
     refine (fst c, ⟨ snd c ⟩).
     destruct c as [s x]. simpl.
-    intros P hw.
+    intros P hw. simpl.
     apply h in hw. simpl in hw.
-    exists s. apply hw.
+    assumption.
   Defined.
 
   (* Partial Dijkstra monad *)
@@ -231,21 +232,24 @@ Section State.
     D B (bindᵂ w wf).
   Proof.
     simple refine {|
-      Dpre := λ s, c.(Dpre) s ∧ ∀ x, x ∈ w s → ∃ s₁, (f x).(Dpre) s₁ ;
+      Dpre := λ s, c.(Dpre) s ∧ ∀ x s₁, (x, s₁) ∈ w s → (f x).(Dpre) s₁ ;
       Dfun := λ s h,
         bindᶜ (refineᶜ (w s) (c.(Dfun) s)) (λ x s₁, (f (val x)).(Dfun) s₁)
     |}.
     - intros s post h. simpl. split.
       + eapply Dhpre. exact h.
-      + intros x hx.
-        apply hx in h. destruct h as [s₁ h].
-        exists s₁. eapply Dhpre. exact h.
+      + intros x s₁ hr.
+        apply hr in h. simpl in h.
+        eapply Dhpre. exact h.
     - apply h.
-    - simpl. intros P hw.
+    - intros P hw.
       eapply Dθ. assumption.
     - destruct x as [x hx]. simpl in h. destruct h as [? h].
       apply h in hx.
-      (* The exists s₁ is not enough, should we know exactly which s₁? *)
+      (* Right now, we only have (x, _) ∈ w, but the s₁ is not explicitly tied
+        to anything. Maybe more generally, C A should more explicitly be of the
+        form I * C A or C (I * A) so that there is explicit input passing.
+      *)
       admit.
     - admit.
   Abort.
