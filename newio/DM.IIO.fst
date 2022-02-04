@@ -11,7 +11,7 @@ open Hist
 let iio_wps (cmd:cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd) = 
   fun p (h:trace) ->
     match cmd with
-    | GetTrace -> io_pre cmd arg h /\ p [] (h <: iio_sig.res GetTrace)
+    | GetTrace -> p [] (h <: iio_sig.res GetTrace)
     | _ -> 
       io_pre cmd arg h /\ (forall (r:iio_sig.res cmd). p [convert_call_to_event (cmd <: io_cmds) arg r] r)
 
@@ -84,7 +84,7 @@ let rec lemma_theta_is_lax_morphism_bind (m:iio 'a) (f:'a -> iio 'b) :
       hist_bind (iio_wps cmd arg) (fun r -> theta (iio_bind (k r) f));
       == { _ by (compute ()) } // unfold theta
       theta (Call cmd arg (fun r -> iio_bind (k r) f));
-      `hist_ord` { _ by (compute (); dump "H") } // unfold iio_bind
+      `hist_ord` { _ by (compute ()) } // unfold iio_bind
       theta (iio_bind (Call cmd arg k) f);
       == {}
       theta (iio_bind m f);
