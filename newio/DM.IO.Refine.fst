@@ -1,4 +1,4 @@
-module DM.IIO.Refine
+module DM.IO.Refine
 
 open FStar.Classical.Sugar
 open FStar.List.Tot.Base
@@ -6,12 +6,12 @@ open FStar.Tactics
 
 open Free
 open Free.IO
-open DM.IIO
+open DM.IO
 open Hist
 
 unfold
-let refine_iio (d:dm 'a 'wp) (q:pure_post 'a) : 
-  Pure (iio (x:'a{q x}))
+let refine_io (d:dm 'a 'wp) (q:pure_post 'a) : 
+  Pure (io (x:'a{q x}))
     (requires (forall x. x `return_of` d ==> q x)) 
     (ensures (fun _ -> True)) =
   free_subcomp _ (fun _ -> True) q d
@@ -40,35 +40,34 @@ let lemma_cast_post0 (q:pure_post 'a) (p:hist_post (v:'a{q v})) :
 
 let rec lemma_io_subcomp
   (q1:pure_post 'a) (q2:pure_post 'a)
-  (m : iio (v:'a{q1 v})) :
+  (m : io (v:'a{q1 v})) :
   Lemma
     (requires (forall x. q1 x /\ x `return_of` m ==> q2 x))
     (ensures (theta m `hist_ord #_ #'a` theta (free_subcomp _ q1 q2 m))) =
-  admit ();
   match m with
   | Return x -> assert (theta m `hist_ord #_ #'a` theta (free_subcomp _ q1 q2 m)) by (compute ())
   | Call cmd arg k -> begin
-    let fst : iio_sig.res cmd -> hist (v:'a{q1 v}) = fun r -> theta (k r) in
-    let snd : iio_sig.res cmd -> hist (v:'a{q2 v}) = fun r -> theta (free_subcomp _ q1 q2 (k r)) in
+    let fst : io_resm cmd -> hist (v:'a{q1 v}) = fun r -> theta (k r) in
+    let snd : io_resm cmd -> hist (v:'a{q2 v}) = fun r -> theta (free_subcomp _ q1 q2 (k r)) in
     calc (==) {
       theta m;
       == {}
       theta (Call cmd arg k);
       == { _ by (compute ()) } // unfold theta
-      hist_bind (iio_wps cmd arg) (fun r -> theta (k r));
+      hist_bind (io_wps cmd arg) (fun r -> theta (k r));
       == {}
-      hist_bind (iio_wps cmd arg) fst;
+      hist_bind (io_wps cmd arg) fst;
     };
     (** fst ==> snd /\ hist is monotonic **)
-    introduce forall (p:hist_post 'a) h. hist_bind (iio_wps cmd arg) fst p h ==> hist_bind (iio_wps cmd arg) snd p h with begin 
-      introduce forall (r:iio_sig.res cmd). (fst r `hist_ord #event #'a` snd r) with begin
+    introduce forall (p:hist_post 'a) h. hist_bind (io_wps cmd arg) fst p h ==> hist_bind (io_wps cmd arg) snd p h with begin 
+      introduce forall (r:io_resm cmd). (fst r `hist_ord #event #'a` snd r) with begin
         lemma_io_subcomp q1 q2 (k r)
       end
     end;
     calc (==) {
-      hist_bind (iio_wps cmd arg) snd;
+      hist_bind (io_wps cmd arg) snd;
       == {}
-      hist_bind (iio_wps cmd arg) (fun r -> theta (free_subcomp _ q1 q2 (k r)));
+      hist_bind (io_wps cmd arg) (fun r -> theta (free_subcomp _ q1 q2 (k r)));
       == { _ by (compute ()) }
       theta (Call cmd arg (fun r -> free_subcomp _ q1 q2 (k r)));
       == { _ by (compute ()) }
@@ -79,7 +78,7 @@ let rec lemma_io_subcomp
   end
   
 
-let lemma_io_subcomp_2 (q:pure_post 'a) (m : iio 'a) :
+let lemma_io_subcomp_2 (q:pure_post 'a) (m : io 'a) :
   Lemma 
     (requires (forall x. x `return_of` m ==> q x))
     (ensures (forall p h. theta m (cast_post0 q p) h ==> theta (free_subcomp _ (fun _ -> True) q m) p h)) =
@@ -93,22 +92,22 @@ let lemma_io_subcomp_2 (q:pure_post 'a) (m : iio 'a) :
 
 let lemma_theta_cast_post_implies_theta_refine_io (d:dm 'a 'wp) (q:pure_post 'a) :
   Lemma (requires (forall x. x `return_of` d ==> q x))
-        (ensures (forall p h. theta d (cast_post q p) h ==> theta (refine_iio d q) p h)) =
+        (ensures (forall p h. theta d (cast_post q p) h ==> theta (refine_io d q) p h)) =
   lemma_io_subcomp_2 q d
   
 let lemma_refine_io_refine_hist (d:dm 'a 'wp) (q:pure_post 'a) : 
   Lemma
     (requires (forall x. x `return_of` d ==> q x))
-    (ensures (refine_hist 'wp q `hist_ord` theta (refine_iio d q))) =
+    (ensures (refine_hist 'wp q `hist_ord` theta (refine_io d q))) =
   assert ('wp `hist_ord` theta d);
   lemma_refine_hist_implies_weaken_post 'wp q;
   assert (forall p h. refine_hist 'wp q p h ==> theta d (cast_post q p) h);
   lemma_theta_cast_post_implies_theta_refine_io d q;
-  assert (forall p h. theta d (cast_post q p) h ==> theta (refine_iio d q) p h)
+  assert (forall p h. theta d (cast_post q p) h ==> theta (refine_io d q) p h)
   
 let refine_dm (d:dm 'a 'wp) (q:pure_post 'a) : 
   Pure (dm (v:'a{q v}) (refine_hist 'wp q))
     (requires (forall x. x `return_of` d ==> q x))
     (ensures (fun _ -> True)) =
   lemma_refine_io_refine_hist d q;
-  refine_iio d q
+  refine_io d q

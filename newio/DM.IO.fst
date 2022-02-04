@@ -1,4 +1,4 @@
-module DM
+module DM.IO
 
 open FStar.Classical.Sugar
 open FStar.List.Tot.Base
