@@ -171,18 +171,6 @@ Section State.
   Definition retᴾ [A pre] (x : A) : Mᴾ A pre :=
     λ s₀ _, retᴹ x s₀.
 
-  Definition bindᴾ [A B p q] (c : Mᴾ A p) (f : ∀ (x : A), Mᴾ B (q x)) :
-    Mᴾ B p.
-  Proof.
-    refine (λ s h, bindᶜ (c s _) (λ x s₁, f x s₁ _)).
-    - assumption.
-    - (* Not clear we gain anything by doing this here rather than in D
-        directly. Or we need to ask for the pre that corresponds to the bind
-        together with a proof that it entails what it needs to entail.
-      *)
-      admit.
-  Abort.
-
   (* Partial effect observation *)
 
   Definition θᴾ [A pre] (c : Mᴾ A pre) : W A :=
@@ -197,6 +185,23 @@ Section State.
     intro hpre.
     apply θᶜ_ret. assumption.
   Qed.
+
+  (* Refinement on outputs *)
+
+  Definition respects [A] (x : A) (w : Wᶜ A) :=
+    ∀ P, w P → ∃ s₁, P s₁ x.
+
+  Notation "x ∈ w" := (respects x w) (at level 50).
+
+  Definition refineᶜ [A] w (c : C A) {h : θᶜ c ≤ᶜ w} :
+    C { x : A | x ∈ w }.
+  Proof.
+    refine (fst c, ⟨ snd c ⟩).
+    destruct c as [s x]. simpl.
+    intros P hw.
+    apply h in hw. simpl in hw.
+    exists s. apply hw.
+  Defined.
 
   (* Partial Dijkstra monad *)
 
@@ -222,13 +227,24 @@ Section State.
     - apply θᴾ_ret.
   Defined.
 
-  (* Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
+  Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
     D B (bindᵂ w wf).
   Proof.
-    refine {|
-      Dpre := c.(Dpre) ;
-      Dfun := (* NEED bindᴾ *)
-    |}. *)
+    (* The pre of f should be with a different state? *)
+    simple refine {|
+      Dpre := λ s, c.(Dpre) s ∧ ∀ x, x ∈ w s → (f x).(Dpre) s ;
+      Dfun := λ s h,
+        bindᶜ (refineᶜ (w s) (c.(Dfun) s _)) (λ x s₁, (f (val x)).(Dfun) s₁ _)
+    |}.
+    - intros s post h. simpl. split.
+      + eapply Dhpre. exact h.
+      + intros x hx.
+        admit.
+    - apply h.
+    - simpl. admit.
+    - admit.
+    - admit.
+  Abort.
 
   (* Lift from PURE (somehow) *)
 
