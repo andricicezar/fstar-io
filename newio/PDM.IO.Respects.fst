@@ -97,7 +97,24 @@ let lemma_new_pre0_0 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
 
 let lemma_new_pre0_1 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
   Lemma (forall p h. hist_bind 'wp1 'wp2 p h ==>
-  	   (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x))) = ()
+  	    (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x))) =
+  introduce forall p h. hist_bind 'wp1 'wp2 p h ==> (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x)) with begin
+    introduce hist_bind 'wp1 'wp2 p h ==> (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x)) with _. begin
+      introduce forall x. x `respects` (get_fun d1) ==> get_pre (d2 x) with begin
+        introduce x `respects` (get_fun d1) ==> get_pre (d2 x) with _. begin
+          let p':hist_post #event 'a = (fun lt r -> 'wp2 r (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)) in
+          assert ('wp1 p' h ==> (exists (lt:trace). p' lt x)) (** the refinement of d1's pre **);
+          assert ('wp1 p' h); (** this is hist bind **)
+          assert (exists (lt:trace). p' lt x); (** from the previous two, results this **)
+          assert (exists (lt:trace). 'wp2 x (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)); (** unfolding p' **)
+          assert ((forall (lt:trace). 'wp2 x (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)) ==> get_pre (d2 x)) (** the refinement of d2's pre **);
+          assert (exists (lt:trace). get_pre (d2 x)); (** from the previous two **)
+          assert (get_pre (d2 x))
+        end
+      end
+    end
+  end
+
 
 let lemma_new_pre0 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
   Lemma (forall p h. hist_bind 'wp1 'wp2 p h ==> new_pre0 d1 d2) =
