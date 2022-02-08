@@ -16,7 +16,7 @@ Notation "⟨ u ⟩" := (exist _ u _).
 
 Section State.
 
-  Context (state : Type) (empty_state : state).
+  Context (state : Type).
 
   (* Computation monad with input *)
 
@@ -217,6 +217,7 @@ Section State.
   Notation "x ∈ w" := (respects x w) (at level 50).
 
   (* Is this the right thing to refine? *)
+  (* Should it use get instead? *)
   Definition nextᶜ [A] (c : C A) : C (A * I) :=
     bindᶜ c (λ x s, retᴹ (x, s) s).
 
