@@ -295,7 +295,8 @@ Section State.
     PDM B (bindᵂ w wf).
   Proof.
     intros mw mf.
-    unshelve eexists (∃ (h : c.(pdm_pre)), ∀ x, leaf x (val c.(pdm_fun)) → pdm_pre (f x)).
+    (* unshelve eexists (∃ (h : c.(pdm_pre)), ∀ x, leaf x (val c.(pdm_fun)) → pdm_pre (f x)). *)
+    unshelve eexists (∃ (h : c.(pdm_pre)), ∃ s₀, let '(s₁, x) := θ₀ (val c.(pdm_fun)) s₀ in pdm_pre (f x)).
     1: auto.
     1:{
       intros P s₀ h.
@@ -303,11 +304,11 @@ Section State.
       assert (hp : cpre).
       { eapply hcpre. exact h. }
       exists hp.
-      intros x hx.
+      (* intros x hx.
       set (c' := c hp) in *. clearbody c'. clear c.
       destruct c' as [c hc].
       eapply hc in h as h'.
-      unfold θ in h'.
+      unfold θ in h'. *)
       (* If we do this, we get a different x thant the x we have
         Is this where we should make use of get somehow?
         The problem is once again that we have to show the pre holds ∀ s₀
@@ -317,8 +318,34 @@ Section State.
         available to compute on. Is there a w counterpart?
         Seems we need to have a precondition on state anyway in which case
         is there a way to leverage getᴹ or getᵂ somehow?
+
+        bindᴰ getᴰ (λ s (h : pre s), c)
+
+        But there is no way to say c itself shouldn't use s. It really seems
+        like it doesn't make sense to require a pre on state.
+
+        Another option is to change bindᵂ to entail more things?
+
+        We want ∀ s₀ P, bindᵂ w wf P s₀ → ??
       *)
       (* destruct (θ₀ c s₀). *)
+
+      exists s₀.
+      set (c' := c hp) in *. clearbody c'. clear c.
+      destruct c' as [c hc].
+      eapply hc in h as h'. unfold θ in h'.
+      destruct (θ₀ c s₀).
+      eapply pdm_pure_pre. eassumption.
     }
+    intros hpre.
+    simple refine (subcompᴰ (bindᴰ c.(pdm_fun) (λ x, (f x).(pdm_fun)))).
+    - destruct hpre. assumption.
+    - destruct hpre as [hc [s₀ hf]].
+      (* Since the state is unrelated to the computation there is no hope
+        of connecting it to the x we have.
+      *)
+      give_up.
+    - admit.
+  Abort.
 
 End State.
