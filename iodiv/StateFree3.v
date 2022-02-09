@@ -239,6 +239,9 @@ Section State.
     intuition eauto.
   Qed.
 
+  (* TODO Figure out if and how the pre should be constrained with respect to
+    the spec.
+  *)
   Definition P A w :=
     D (guarded A) (guardedᵂ w).
 
@@ -247,30 +250,6 @@ Section State.
     refine (subcompᴰ (retᴰ (True ; λ _, x))).
     intros post s₀ h. assumption.
   Defined.
-
-  (* Fixpoint mapᴹ [A B] (f : A → B) (c : M A) : M B :=
-    match c with
-    | retᴹ x => retᴹ (f x)
-    | act_getᴹ k => act_getᴹ (λ s, mapᴹ f (k s))
-    | act_putᴹ s k => act_putᴹ s (mapᴹ f k)
-    end.
-
-  Definition mapᴰ [A B w] (f : A → B) (c : D A w) :
-    D B (λ post s₀, w (λ s₁ x, post s₁ (f x)) s₀).
-  Proof.
-    exists (mapᴹ f (val c)).
-    destruct c as [c hc].
-    induction c as [| ? ih | ?? ih] in B, w, f, hc |- *.
-    - simpl. etransitivity. 1: eapply θ_ret.
-      intros post s₀ h.
-      apply hc in h. assumption.
-    - simpl. intros post s₀ h.
-      unfold θ. simpl. eapply ih. 2: eapply h.
-      unfold θ in hc. simpl in hc.
-      intros ? ? h'. admit.
-      (* Maybe should prove laws for get and put after all *)
-    - admit.
-  Admitted. *)
 
   Definition mapᴰ [A B w] (f : A → B) (c : D A w) `{Monotonous _ w} :
     D B (λ post s₀, w (λ s₁ x, post s₁ (f x)) s₀)
@@ -298,6 +277,28 @@ Section State.
     simple refine (λ h, (f (x.π2 _)).π2 _).
     - destruct h. assumption.
     - destruct h as [h hf]. assumption.
+  Defined.
+
+  (* From http://web.cecs.pdx.edu/~mpj/pubs/RR-1004.pdf *)
+  Definition prodᵍ [A w] (c : guarded (P A w)) : P A w.
+  Proof.
+    destruct c as [p c]. unfold P in *.
+    (* I had hoped we could somehow "assume p" in D but I don't know how. *)
+  Abort.
+
+  (* Sadly this swap exists but it's the wrong one...
+    Is there hope of proving the correct one by leveraging some properties
+    about the pre?
+  *)
+  Definition swapᴹ [A] (c : M (guarded A)) : guarded (M A).
+  Proof.
+    induction c as [ x | k ih | s k ih].
+    - destruct x as [p x].
+      exact (p ; λ h, retᴹ (x h)).
+    - exists (∀ s, (ih s).π1).
+      intro h. apply act_getᴹ. intro s.
+      exact ((ih s).π2 (h s)).
+    - apply ih.
   Defined.
 
   Definition bindᴾ [A B w wf] (c : P A w) (f : ∀ x, P B (wf x)) :
