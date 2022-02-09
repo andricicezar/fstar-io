@@ -248,7 +248,7 @@ Section State.
     intros post s₀ h. assumption.
   Defined.
 
-  Fixpoint mapᴹ [A B] (f : A → B) (c : M A) : M B :=
+  (* Fixpoint mapᴹ [A B] (f : A → B) (c : M A) : M B :=
     match c with
     | retᴹ x => retᴹ (f x)
     | act_getᴹ k => act_getᴹ (λ s, mapᴹ f (k s))
@@ -270,7 +270,11 @@ Section State.
       intros ? ? h'. admit.
       (* Maybe should prove laws for get and put after all *)
     - admit.
-  Admitted.
+  Admitted. *)
+
+  Definition mapᴰ [A B w] (f : A → B) (c : D A w) `{Monotonous _ w} :
+    D B (λ post s₀, w (λ s₁ x, post s₁ (f x)) s₀)
+  := bindᴰ c (λ x, retᴰ (f x)).
 
   Definition getᴾ : P state getᵂ.
   Proof.
