@@ -319,4 +319,37 @@ Section State.
     }
   Abort.
 
+  (*
+    Another idea would be to quantify on the pre outside, but still require
+    it on the leaves. The point is that on the leaves we could even use get
+    to have access to the state.
+
+    ∑ (pre : state → Prop), M (∑ s, pre s → A)
+
+    This is not exactly what we want because we could use any state, not one
+    we just "got", but maybe we can add refinements to prevent these cases?
+    Or even have a smarter type?
+
+    Not clear it makes sense to do it on the leaves actually, because this is
+    not compositional. The pre will not be the same at every step of the
+    program.
+    At least on the leaves, it should not be a state pre, but a pure pre, but
+    then it's not clear what we gain.
+
+    The idea I want to translate is the "ability" to require the pre to hold on
+    the initial state. This suggests the get should be done after anything else.
+    Maybe it should stay a pure pre, but in bind we use wrap c and f with gets?
+
+    ∑ (spre : state → Prop) (s₀ : state) (pre : Prop) (h : spre s₀ → pre),
+      pre → D A w
+    ?
+
+    Or maybe we do get to get the initial state and index the result (leaves)
+    by it? For bind we might need to also force return of the final state
+    p s₀ → A * state
+    or something
+
+    If I do the pure thing first maybe it'll be easier to see what's missing?
+  *)
+
 End State.
