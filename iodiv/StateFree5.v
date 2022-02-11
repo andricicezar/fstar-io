@@ -284,6 +284,22 @@ Section State.
       (* Here we lost the true initial state for w *)
   Abort.
 
+  (* Maybe induction isn't the best way to go.
+    We can also traverse c to add to each leaf the information of all
+    previous reads and writes, information that we would need then to combine
+    with the spec to obtain like intial and final state associated to a value
+    / to a branch.
+    Maybe we can take advantage of the fact that get ; c and c should have the
+    same specification? And then do a get, traverse c with the intial state
+    "in mind" and then doing a final get on the leaf?
+    Like s₀ ← get ; map (λ x, s₁ ← get ; ret (s₀, s₁, x)) c
+
+    Maybe we can take this guy and combine it with refineᴰ from before
+    (either with w directly, or with any post that is good enough).
+    What we'd like for a refinement is (s₀, s₁, x) | ∀ p, w p s₀ → p s₁ x
+    is it easy to get, is it enough to give us enforce below?
+  *)
+
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
     D { x : A | pre_ofᵂ (wf x) } (refineᵂ _ w).
   Proof.
