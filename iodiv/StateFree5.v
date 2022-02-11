@@ -256,13 +256,12 @@ Section State.
     intros A k w h.
     unfold "≤ᵂ" in h. unfold θ in h. simpl in h.
     unfold θ.
-    eexists. split.
-    - intros q s hw. red. red. apply hw.
-    - intros s q s' hw.
-      apply h in hw.
-      (* We find ourselves again pitted against this state issue. *)
-      (* Can we hope to find another wk here? *)
-  Abort.
+    exists (λ s post s₀, s = s₀ ∧ w post s).
+    split.
+    - intros q s hw. red. red. intuition auto.
+    - intros s q s' [e hw]. subst s'.
+      apply h in hw. apply hw.
+  Qed.
 
   Lemma θ_put_inv :
     ∀ A s (k : M A) (w : W A),
@@ -272,11 +271,13 @@ Section State.
     intros A s k w h.
     unfold "≤ᵂ" in h. unfold θ in h. simpl in h.
     unfold θ.
-    eexists. split.
+    exists (λ post s₀, s₀ = s ∧ w post s).
+    split.
+    - intros q s₀ [e hw]. subst s₀.
+      apply h in hw. apply hw.
     - intros q s₀ hw.
-      eapply h in hw.
-      admit.
-    - admit.
+      red. red. intuition auto.
+      (* Here we lost the true initial state for w *)
   Abort.
 
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
@@ -292,8 +293,7 @@ Section State.
       + intros q s hq. red. red in hq.
         apply hc in hq. apply hq.
     - simple refine ⟨ act_getᴹ (λ s, _) ⟩.
-      + (* How can I properly invert hc? *)
-        admit.
+      + admit.
       + admit.
     - simple refine ⟨ act_putᴹ s _ ⟩.
   Admitted.
