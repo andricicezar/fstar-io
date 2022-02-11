@@ -1,10 +1,4 @@
-(* Another idea:
-  Could we have some type
-  guarded A := { P : Prop & P → A }
-  and then build D normally, and use D (guarded A) (gᵂ w) as PD?
-  This is a whole different approach, going inside the monad instead of
-  wrapping into a precondition.
-*)
+(* Notes are in StateFree3.v *)
 
 From Coq Require Import Utf8 RelationClasses.
 
@@ -21,6 +15,11 @@ Tactic Notation "forward" constr(H) "by" tactic(tac) := forward_gen H tac.
 
 Notation val x := (let 'exist _ t _ := x in t).
 Notation "⟨ u ⟩" := (exist _ u _).
+
+Definition prf [A P] (p : { x : A | P x }) : P (val p).
+Proof.
+  destruct p. assumption.
+Qed.
 
 Notation "'∑' x .. y , p" := (sigT (fun x => .. (sigT (fun y => p%type)) ..))
   (at level 200, x binder, right associativity,
@@ -221,162 +220,52 @@ Section State.
     cbv. auto.
   Defined.
 
-  (* Partial Dijkstra monad *)
-
-  Definition guarded A :=
-    ∑ (P : Prop), P → A.
-
-  (* TODO Figure out if it's the right spec *)
-  Definition guardedᵂ [A] (w : W A) : W (guarded A) :=
-    λ P s₀, w (λ s₁ x, P s₁ (True ; λ _, x)) s₀.
-
-  Instance guardedᵂ_ismono [A] (w : W A) {mw : Monotonous w} :
-    Monotonous (guardedᵂ w).
-  Proof.
-    intros P Q s₀ hPQ h.
-    unfold guardedᵂ in *.
-    eapply mw. 2: exact h.
-    intuition eauto.
-  Qed.
-
-  (* TODO Figure out if and how the pre should be constrained with respect to
-    the spec.
-  *)
-  Definition P A w :=
-    D (guarded A) (guardedᵂ w).
-
-  Definition retᴾ [A] (x : A) : P A (retᵂ x).
-  Proof.
-    refine (subcompᴰ (retᴰ (True ; λ _, x))).
-    intros post s₀ h. assumption.
-  Defined.
-
   Definition mapᴰ [A B w] (f : A → B) (c : D A w) `{Monotonous _ w} :
     D B (λ post s₀, w (λ s₁ x, post s₁ (f x)) s₀)
   := bindᴰ c (λ x, retᴰ (f x)).
 
-  Definition getᴾ : P state getᵂ.
-  Proof.
-    refine (subcompᴰ (mapᴰ (λ x, (True ; λ _, x)) getᴰ)).
-    intros post s₀ h. apply h.
-  Defined.
+  (* Partial Dijkstra monad *)
 
-  Definition putᴾ (s : state) : P unit (putᵂ s).
-  Proof.
-    refine (subcompᴰ (mapᴰ (λ x, (True ; λ _, x)) (putᴰ s))).
-    intros post s₀ h. apply h.
-  Defined.
+  Definition pre_ofᵂ [A] (w : W A) : Prop :=
+    ∀ (pre : Prop), (∀ post s, w post s → pre) → pre.
 
-  (* Could also use it in retᴾ for instance *)
-  Definition retᵍ [A] (x : A) : guarded A :=
-    (True ; λ _, x).
+  Definition P A (w : W A) :=
+    pre_ofᵂ w → D A w.
 
-  Definition bindᵍ [A B] (x : guarded A) (f : A → guarded B) : guarded B.
-  Proof.
-    exists (∃ (h : x.π1), (f (x.π2 h)).π1).
-    simple refine (λ h, (f (x.π2 _)).π2 _).
-    - destruct h. assumption.
-    - destruct h as [h hf]. assumption.
-  Defined.
+  Definition retᴾ [A] (x : A) : P A (retᵂ x) :=
+    λ _, retᴰ x.
 
-  (* From http://web.cecs.pdx.edu/~mpj/pubs/RR-1004.pdf *)
-  Definition prodᵍ [A w] (c : guarded (P A w)) : P A w.
+  Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
+    D { x : A | pre_ofᵂ (wf x) } (λ post s₀, w (λ s₁ x, ∀ h, post s₁ (exist _ x h)) s₀).
   Proof.
-    destruct c as [p c]. unfold P in *.
-    (* I had hoped we could somehow "assume p" in D but I don't know how. *)
-  Abort.
-
-  (* Sadly this swap exists but it's the wrong one...
-    Is there hope of proving the correct one by leveraging some properties
-    about the pre?
-  *)
-  Definition swapᴹ [A] (c : M (guarded A)) : guarded (M A).
-  Proof.
-    induction c as [ x | k ih | s k ih].
-    - destruct x as [p x].
-      exact (p ; λ h, retᴹ (x h)).
-    - exists (∀ s, (ih s).π1).
-      intro h. apply act_getᴹ. intro s.
-      exact ((ih s).π2 (h s)).
-    - apply ih.
-  Defined.
+    (* It won't work that way but it's to try and simplify the goal.
+      In any case, it cannot be done externaly otherwise we lose the connection
+      with the intial state.
+    *)
+    simple refine (subcompᴰ (mapᴰ (λ x, ⟨ x ⟩) c)).
+    - simpl. intros p hp.
+      apply h. intros q s₀ hq.
+      (* Here we would somehow like to apply θ to hq *)
+      eapply hp.
+      (* Now we see the idea, but how do we properly perform induction without
+        losing too much information?
+      *)
+  Admitted.
 
   Definition bindᴾ [A B w wf] (c : P A w) (f : ∀ x, P B (wf x)) :
     Monotonous w →
     P B (bindᵂ w wf).
   Proof.
-    intros mw.
-    unfold P in *.
-    (* refine (subcompᴰ (bindᴰ c (λ x, mapᴰ (bindᵍ x) _))). *)
-    refine (subcompᴰ (bindᴰ c (λ x, _))).
-    1:{
-      unshelve apply f.
-      (* Here I wanted to reinforce the pre of f somehow to be able to use
-        x but maybe there is no way? Can we use bindᵍ in any way?
-        With mapᴹ (bindᵍ x)?
-      *)
-      give_up.
-    }
-  Abort.
-
-  (*
-    Another idea would be to quantify on the pre outside, but still require
-    it on the leaves. The point is that on the leaves we could even use get
-    to have access to the state.
-
-    ∑ (pre : state → Prop), M (∑ s, pre s → A)
-
-    This is not exactly what we want because we could use any state, not one
-    we just "got", but maybe we can add refinements to prevent these cases?
-    Or even have a smarter type?
-
-    Not clear it makes sense to do it on the leaves actually, because this is
-    not compositional. The pre will not be the same at every step of the
-    program.
-    At least on the leaves, it should not be a state pre, but a pure pre, but
-    then it's not clear what we gain.
-
-    The idea I want to translate is the "ability" to require the pre to hold on
-    the initial state. This suggests the get should be done after anything else.
-    Maybe it should stay a pure pre, but in bind we use wrap c and f with gets?
-
-    ∑ (spre : state → Prop) (s₀ : state) (pre : Prop) (h : spre s₀ → pre),
-      pre → D A w
-    ?
-
-    Or maybe we do get to get the initial state and index the result (leaves)
-    by it? For bind we might need to also force return of the final state
-    p s₀ → A * state
-    or something
-
-    If I do the pure thing first maybe it'll be easier to see what's missing?
-    Well it's also not clear how / possible to bind with this.
-
-    Going back to the idea of using get, this means that the (partial) data
-    we have should expect to be run in an environment which does get first.
-    But ideally, it wouldn't be able to compute on this state once given.
-    We could also ensure that the state is the initial state by adding the
-    requirement in the w, like adding λ s, s = s₀ as a pre.
-    (Again might mean we need to return the final state too?)
-    So how do we represent this data? As some guarded M?
-
-    Can I also try Assem's approach where I allow myself to modify M? Just in
-    order to better see how this works.
-
-    One idea is to look at what works for the free monad without get and start
-    from there. What makes it work is that we can show that x does not depend
-    on the initial state (because there is no get) (x being the return of a
-    computation).
-    Can we instead return a computation that is depependent on this initial
-    state?
-    Or again specify the relation between the final and initial state?
-    In a sense generalising the x ∈ w idea.
-    Or maybe the problem is that we're looking for an invariant that does not
-    depend on the intial state. What if instead we went directly to prove
-    the pre of f x as a post like { x : A | pre (f x) } or something?
-    bindᵂ should tell us that.
-    Maybe with this presentation use (∀ pre, (lift_pre pre ≤ᵂ w) → pre).
-    In any case we can try to build this term and see how it fares.
-  *)
+    intro mw.
+    refine (λ h, subcompᴰ (bindᴰ (enforceᴰ (c _)) (λ x, f (val x) (prf x)))).
+    - intros p hp. apply h.
+      intros post s₀ hpost.
+      eapply hp. eapply hpost.
+    - assumption.
+    - (* This is just refineᵂ from another file no? *)
+      admit.
+    - (* Same here *)
+      admit.
+  Admitted.
 
 End State.
