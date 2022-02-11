@@ -235,8 +235,21 @@ Section State.
   Definition retᴾ [A] (x : A) : P A (retᵂ x) :=
     λ _, retᴰ x.
 
+  Definition refineᵂ [A] (P : A → Prop) (w : W A) : W (sig P) :=
+    λ Q s₀, w (λ s₁ x, ∀ (h : P x), Q s₁ (exist _ x h)) s₀.
+
+  Instance refineᵂ_ismono [A] (P : A → Prop) (w : W A) {mw : Monotonous w} :
+    Monotonous (refineᵂ P w).
+  Proof.
+    intros Q R s₀ hQR h.
+    red. red in h.
+    eapply mw. 2: exact h.
+    simpl. intros s₁ x hQ hP.
+    apply hQR. apply hQ.
+  Qed.
+
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
-    D { x : A | pre_ofᵂ (wf x) } (λ post s₀, w (λ s₁ x, ∀ h, post s₁ (exist _ x h)) s₀).
+    D { x : A | pre_ofᵂ (wf x) } (refineᵂ _ w).
   Proof.
     (* It won't work that way but it's to try and simplify the goal.
       In any case, it cannot be done externaly otherwise we lose the connection
@@ -262,10 +275,10 @@ Section State.
       intros post s₀ hpost.
       eapply hp. eapply hpost.
     - assumption.
-    - (* This is just refineᵂ from another file no? *)
-      admit.
-    - (* Same here *)
-      admit.
-  Admitted.
+    - intros Q s₀ hQ. red in hQ.
+      red. red. eapply mw. 2: exact hQ.
+      simpl. intros s₁ x hf hw.
+      assumption.
+  Defined.
 
 End State.
