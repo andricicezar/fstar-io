@@ -248,20 +248,24 @@ Section State.
     apply hQR. apply hQ.
   Qed.
 
+  Definition inv_getᵂ [A] (w : W A) : state → W A :=
+    λ s post s₀, s = s₀ ∧ w post s.
+
   Lemma θ_get_inv :
     ∀ A (k : state → M A) (w : W A),
       θ (act_getᴹ k) ≤ᵂ w →
-      ∃ wk, bindᵂ getᵂ wk ≤ᵂ w ∧ ∀ s, θ (k s) ≤ᵂ wk s.
+      bindᵂ getᵂ (inv_getᵂ w) ≤ᵂ w ∧ ∀ s, θ (k s) ≤ᵂ inv_getᵂ w s.
   Proof.
     intros A k w h.
     unfold "≤ᵂ" in h. unfold θ in h. simpl in h.
-    unfold θ.
-    exists (λ s post s₀, s = s₀ ∧ w post s).
-    split.
-    - intros q s hw. red. red. intuition auto.
+    unfold θ. split.
+    - intros q s hw. red. red. red. intuition auto.
     - intros s q s' [e hw]. subst s'.
       apply h in hw. apply hw.
   Qed.
+
+  (* Definition inv_putᵂ [A] (s : state) (w : W A) : W A :=
+    λ post s₀,  *)
 
   Lemma θ_put_inv :
     ∀ A s (k : M A) (w : W A),
@@ -293,7 +297,27 @@ Section State.
       + intros q s hq. red. red in hq.
         apply hc in hq. apply hq.
     - simple refine ⟨ act_getᴹ (λ s, _) ⟩.
-      + admit.
+      + apply θ_get_inv in hc as hk. destruct hk as [hwk hk].
+        specialize (hk s).
+        specialize ih with (1 := hk).
+        specialize (ih B wf).
+        forward ih.
+        { intros pre hpre.
+          apply h. intros post s₀ hw.
+          eapply hpre.
+          eapply bindᵂ_mono. 4: eapply hw.
+          2:{
+            intros q s₁ hq.
+            red.
+            (* We probably should not keep the same wf I guess
+              maybe something which talks about s is necessary.
+              Also not clear we need the bind≤ part in the lemma then.
+            *)
+            admit.
+          }
+          all: admit.
+        }
+        admit.
       + admit.
     - simple refine ⟨ act_putᴹ s _ ⟩.
   Admitted.
