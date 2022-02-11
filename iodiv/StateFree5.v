@@ -248,21 +248,54 @@ Section State.
     apply hQR. apply hQ.
   Qed.
 
+  Lemma θ_get_inv :
+    ∀ A (k : state → M A) (w : W A),
+      θ (act_getᴹ k) ≤ᵂ w →
+      ∃ wk, bindᵂ getᵂ wk ≤ᵂ w ∧ ∀ s, θ (k s) ≤ᵂ wk s.
+  Proof.
+    intros A k w h.
+    unfold "≤ᵂ" in h. unfold θ in h. simpl in h.
+    unfold θ.
+    eexists. split.
+    - intros q s hw. red. red. apply hw.
+    - intros s q s' hw.
+      apply h in hw.
+      (* We find ourselves again pitted against this state issue. *)
+      (* Can we hope to find another wk here? *)
+  Abort.
+
+  Lemma θ_put_inv :
+    ∀ A s (k : M A) (w : W A),
+      θ (act_putᴹ s k) ≤ᵂ w →
+      ∃ wk, θ k ≤ᵂ wk ∧ bindᵂ (putᵂ s) (λ _, wk) ≤ᵂ w.
+  Proof.
+    intros A s k w h.
+    unfold "≤ᵂ" in h. unfold θ in h. simpl in h.
+    unfold θ.
+    eexists. split.
+    - intros q s₀ hw.
+      eapply h in hw.
+      admit.
+    - admit.
+  Abort.
+
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
     D { x : A | pre_ofᵂ (wf x) } (refineᵂ _ w).
   Proof.
-    (* It won't work that way but it's to try and simplify the goal.
-      In any case, it cannot be done externaly otherwise we lose the connection
-      with the intial state.
-    *)
-    simple refine (subcompᴰ (mapᴰ (λ x, ⟨ x ⟩) c)).
-    - simpl. intros p hp.
-      apply h. intros q s₀ hq.
-      (* Here we would somehow like to apply θ to hq *)
-      eapply hp.
-      (* Now we see the idea, but how do we properly perform induction without
-        losing too much information?
-      *)
+    destruct c as [c hc].
+    induction c as [ x | k ih | s k ih] in B, w, wf, hc, h |- *.
+    - simple refine (subcompᴰ (retᴰ ⟨ x ⟩)).
+      + simpl. intros p hp.
+        apply h. intros post s hps.
+        apply hc in hps.
+        eapply hp. apply hps.
+      + intros q s hq. red. red in hq.
+        apply hc in hq. apply hq.
+    - simple refine ⟨ act_getᴹ (λ s, _) ⟩.
+      + (* How can I properly invert hc? *)
+        admit.
+      + admit.
+    - simple refine ⟨ act_putᴹ s _ ⟩.
   Admitted.
 
   Definition bindᴾ [A B w wf] (c : P A w) (f : ∀ x, P B (wf x)) :
