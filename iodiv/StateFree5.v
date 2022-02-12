@@ -402,6 +402,47 @@ Section State.
         This means it's unlikely that we can obtain the refinement we hope for.
         In other words, when you bind, because it's only tree grafting, you
         could bind with an x that is not a "real" output of the computation.
+
+        For the output, syntax and semantics are separated while the
+        precondition forces a mix of the two hence why we're stuck.
+        Does this suggest the PDM should also come with a refinement for
+        postconditions so that we also add semantic information to the output?
+
+        A noteworthy example is
+        c = s ← get ; s' ← get ; ret (s, s')
+        when you bind with f which might require its input to be a pair of
+        twice the same object (still a pure pre).
+        This is valid semantically, but syntactically not.
+
+        This is why the guarded approach was so tempting because it was still
+        separating things a bit.
+        In any case, this means we should only consider programs with good
+        outputs, or rather eliminate bad outputs.
+        Good outputs of c could be x such that ∃ s, θ₀ c s returns x.
+        However, considering c above again, there is no way to use a refinement
+        on the result to require this because there is no way to prove s = s'.
+        So it is likely we will have something like guarded where the leaves
+        can somehow assume that the "history" is well-formed.
+        Which would let us prove s = s' in the body of c. And thus let us bind
+        properly. It's not clear how—if at all possible—we can express such
+        properties.
+
+        It seems impossible. So maybe it would be better to go the other way
+        and indeed have the possibily to assume some property at any time
+        with later the verification that the semantics validate these
+        properties.
+
+        ⇒ So maybe indeed going the guarded way is the way to go, so as to
+        properly separate syntax and semantics. But without using an
+        intermediary DM, instead take advantage of the broken down presentation
+        to properly include these requires in the semantics.
+
+        Of course A ↦ M (guarded A) is not a monad as I already experienced.
+        It might be weird but it's more likely that guarded (M (guarded A)) is.
+        Or just guarded (M A)?
+        Maybe the "ideal" would be to have an extra constructor to M, but of
+        course that isn't very generic. Hopefully, the solution we come up with
+        works also for state → state * A.
       *)
   Abort.
 
