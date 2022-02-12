@@ -443,6 +443,8 @@ Section State.
         Maybe the "ideal" would be to have an extra constructor to M, but of
         course that isn't very generic. Hopefully, the solution we come up with
         works also for state → state * A.
+        The only thing is that one should be able to "require p" at any point
+        in the tree.
       *)
   Abort.
 
