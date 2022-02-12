@@ -62,6 +62,9 @@ Section State.
   Definition putᴹ (s : state) : M unit :=
     act_putᴹ s (retᴹ tt).
 
+  Definition mapᴹ [A B] (f : A → B) (c : M A) : M B :=
+    bindᴹ c (λ x, retᴹ (f x)).
+
   (* Specification monad *)
 
   Definition preᵂ := state → Prop.
@@ -299,6 +302,55 @@ Section State.
     What we'd like for a refinement is (s₀, s₁, x) | ∀ p, w p s₀ → p s₁ x
     is it easy to get, is it enough to give us enforce below?
   *)
+
+  Definition annotateᴰ [A w] (c : D A w) `{Monotonous _ w} :=
+    bindᴰ getᴰ (λ s₀, bindᴰ c (λ x, bindᴰ getᴰ (λ s₁, retᴰ (s₀, s₁, x)))).
+
+  (* Trying to get it through leaf *)
+
+  Fixpoint leaf [A] (x : A) (c : M A) :=
+    match c with
+    | retᴹ y => x = y
+    | act_getᴹ k => ∃ s, leaf x (k s)
+    | act_putᴹ s k => leaf x k
+    end.
+
+  Definition respects [A] (x : A) (w : W A) :=
+    ∃ s₀ s₁, ∀ P, w P s₀ → P s₁ x.
+
+  Notation "x ∈ w" := (respects x w) (at level 50).
+
+  Fixpoint refᴹ [A] (c : M A) : M { x : A | leaf x c }.
+  Proof.
+    destruct c as [x | k | s k].
+    - apply retᴹ. exists x.
+      reflexivity.
+    - simpl. apply act_getᴹ.
+      intro s₀.
+      pose (c' := refᴹ _ (k s₀)).
+      eapply mapᴹ. 2: eapply c'.
+      intros [x h]. exists x.
+      exists s₀. assumption.
+    - simpl. apply (act_putᴹ s).
+      apply refᴹ.
+  Defined.
+
+  Definition refᴰ [A w] (c : D A w) :
+    D { x : A | leaf x (val c) } (refineᵂ _ w).
+  Proof.
+    exists (refᴹ (val c)).
+    destruct c as [c hc].
+    induction c as [x | k ih | s k ih] in w, hc |- *.
+    - simpl. intros p s hp.
+      red. simpl. red in hp.
+      apply hc in hp. red in hp. simpl in hp.
+      apply hp.
+    - (* Always the same kind of problem that I need to invert
+        the w...
+      *)
+      give_up.
+    - give_up.
+  Abort.
 
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
     D { x : A | pre_ofᵂ (wf x) } (refineᵂ _ w).
