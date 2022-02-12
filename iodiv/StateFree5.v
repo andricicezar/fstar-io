@@ -379,17 +379,30 @@ Section State.
       ∀ p, w p s₀ → p s₁ x.
   Proof.
     intros A w c s₀ s₁ x mw h. intros p hw.
-    pose proof (annotate_spec A w c) as ha.
     destruct c as [c hc].
-    (* apply hc in hw. *)
-    red in ha. unfold bindᵂ, getᵂ, retᵂ in ha.
-    specialize ha with (s := s₀).
-    specialize ha with (P := λ s '(u, v, y), p v y). simpl in ha.
-    apply ha in hw.
-    (* Does it help in any way? Or is the spec superfluous and we'll get
-      everything we want from leaf we haven't used yet?
-      It seems right now, it's just a more complicated way of using hc direclty.
-    *)
+    apply hc in hw.
+    rewrite val_annotateᴰ in h.
+    induction c as [y | k ih | s k ih] in s₀, s₁, h, p, hw |- *.
+    - red in hw. simpl in hw.
+      simpl in h. destruct h as [? [? h]].
+      (* We already lost the necessary information...
+        Essentially, by using leaf we lose the information of the connection
+        to the initial state, and worse, we don't have access to the fact
+        that getting twice is going to land the same result.
+        So what we need is really a semantic information.
+        Syntax here is not sufficient on its own because these leaves are indeed
+        ok as long as we don't use θ₀ to interpret it.
+        So reinforcing the syntax with semantic value has little chance to
+        succeed.
+
+        In other words not every leaf of c is going to be a result of θ₀ c s₀
+        for some s₀. And this is probably the fundamental difference with a
+        version of the monad without get.
+
+        This means it's unlikely that we can obtain the refinement we hope for.
+        In other words, when you bind, because it's only tree grafting, you
+        could bind with an x that is not a "real" output of the computation.
+      *)
   Abort.
 
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
