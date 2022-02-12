@@ -202,7 +202,7 @@ Section State.
     - assumption.
     - destruct c. simpl. assumption.
     - intro x. destruct (f x). simpl. assumption.
-  Qed.
+  Defined.
 
   Definition subcompᴰ [A w w'] (c : D A w) {h : w ≤ᵂ w'} : D A w'.
   Proof.
@@ -323,7 +323,7 @@ Section State.
   Fixpoint refᴹ [A] (c : M A) : M { x : A | leaf x c }.
   Proof.
     destruct c as [x | k | s k].
-    - apply retᴹ. exists x.
+    - refine (retᴹ ⟨ x ⟩).
       reflexivity.
     - simpl. apply act_getᴹ.
       intro s₀.
@@ -340,16 +340,56 @@ Section State.
   Proof.
     exists (refᴹ (val c)).
     destruct c as [c hc].
-    induction c as [x | k ih | s k ih] in w, hc |- *.
-    - simpl. intros p s hp.
-      red. simpl. red in hp.
-      apply hc in hp. red in hp. simpl in hp.
-      apply hp.
-    - (* Always the same kind of problem that I need to invert
-        the w...
+    intros p s₀ hp. apply hc in hp.
+    induction c as [x | k ih | s k ih] in s₀, p, hp |- *.
+    - unfold θ in *. simpl in *. apply hp.
+    - unfold θ in *. simpl in *.
+      (* Cezar doesn't need map, so maybe I shouldn't either
+        Cannot do it really, so maybe should do as he did with a forall q?
+        Before, it might be a good idea to check whether leaf x c is enough
+        to imply what we want about annotate
       *)
-      give_up.
-    - give_up.
+      admit.
+    - admit.
+  Abort.
+
+  Definition annotateᴹ [A] (c : M A) :=
+    bindᴹ getᴹ (λ s₀, bindᴹ c (λ x, bindᴹ getᴹ (λ s₁, retᴹ (s₀, s₁, x)))).
+
+  Lemma val_annotateᴰ :
+    ∀ A w (c : D A w) `{Monotonous _ w},
+      val (annotateᴰ c) = annotateᴹ (val c).
+  Proof.
+    intros A w c mw. reflexivity.
+  Qed.
+
+  Lemma annotate_spec :
+    ∀ A w (c : D A w) `{Monotonous _ w},
+      θ (annotateᴹ (val c)) ≤ᵂ
+      bindᵂ getᵂ (λ s₀, bindᵂ w (λ x, bindᵂ getᵂ (λ s₁, retᵂ (s₀, s₁, x)))).
+  Proof.
+    intros A w c mw.
+    erewrite <- val_annotateᴰ.
+    apply (prf (annotateᴰ c)).
+  Qed.
+
+  Lemma annotate_leaf :
+    ∀ A w (c : D A w) s₀ s₁ x `{Monotonous _ w},
+      leaf (s₀, s₁, x) (val (annotateᴰ c)) →
+      ∀ p, w p s₀ → p s₁ x.
+  Proof.
+    intros A w c s₀ s₁ x mw h. intros p hw.
+    pose proof (annotate_spec A w c) as ha.
+    destruct c as [c hc].
+    (* apply hc in hw. *)
+    red in ha. unfold bindᵂ, getᵂ, retᵂ in ha.
+    specialize ha with (s := s₀).
+    specialize ha with (P := λ s '(u, v, y), p v y). simpl in ha.
+    apply ha in hw.
+    (* Does it help in any way? Or is the spec superfluous and we'll get
+      everything we want from leaf we haven't used yet?
+      It seems right now, it's just a more complicated way of using hc direclty.
+    *)
   Abort.
 
   Definition enforceᴰ [A B w wf] (c : D A w) {h : pre_ofᵂ (@bindᵂ A B w wf)} :
