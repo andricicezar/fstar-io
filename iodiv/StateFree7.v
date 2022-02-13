@@ -1,4 +1,6 @@
-(* Notes are in StateFree3.v *)
+(* Notes are in StateFree6.v
+  This time I bake in partiality directly in the free monad.
+*)
 
 From Coq Require Import Utf8 RelationClasses.
 
@@ -38,22 +40,25 @@ Section State.
 
   Context (state : Type).
 
-  (* Computation monad *)
+  (* Computation monad with an extra require constructor *)
 
   Inductive M A :=
   | retᴹ (x : A)
   | act_getᴹ (k : state → M A)
-  | act_putᴹ (s : state) (k : M A).
+  | act_putᴹ (s : state) (k : M A)
+  | act_reqᴹ (p : Prop) (k : p → M A).
 
   Arguments retᴹ [_].
   Arguments act_getᴹ [_].
   Arguments act_putᴹ [_].
+  Arguments act_reqᴹ [_].
 
   Fixpoint bindᴹ [A B] (c : M A) (f : A → M B) : M B :=
     match c with
     | retᴹ x => f x
     | act_getᴹ k => act_getᴹ (λ s, bindᴹ (k s) f)
     | act_putᴹ s k => act_putᴹ s (bindᴹ k f)
+    | act_reqᴹ p k => act_reqᴹ p (λ h, bindᴹ (k h) f)
     end.
 
   Definition getᴹ : M state :=
@@ -61,6 +66,9 @@ Section State.
 
   Definition putᴹ (s : state) : M unit :=
     act_putᴹ s (retᴹ tt).
+
+  Definition reqᴹ (p : Prop) : M p :=
+    act_reqᴹ p (λ h, retᴹ h).
 
   Definition mapᴹ [A B] (f : A → B) (c : M A) : M B :=
     bindᴹ c (λ x, retᴹ (f x)).
@@ -88,6 +96,9 @@ Section State.
 
   Definition putᵂ (s : state) : W unit :=
     λ P s₀, P s tt.
+
+  Definition reqᵂ (p : Prop) : W p :=
+    λ P s₀, ∃ (h : p), P s₀ h.
 
   Instance trans [A] : Transitive (@wle A).
   Proof.
@@ -133,6 +144,13 @@ Section State.
     apply hPQ. assumption.
   Qed.
 
+  Instance reqᵂ_ismono : ∀ p, Monotonous (reqᵂ p).
+  Proof.
+    intros p. intros P Q s₀ hPQ h.
+    destruct h as [hp h].
+    exists hp. apply hPQ. assumption.
+  Qed.
+
   Lemma bindᵂ_mono :
     ∀ [A B] (w w' : W A) (wf wf' : A → W B),
       Monotonous w' →
@@ -147,17 +165,17 @@ Section State.
     simpl. intros s₁ x hf. apply hwf. assumption.
   Qed.
 
-  (* Effect observation (in two passes) *)
+  (* Effect observation
+    Here I don't do it in two passes because of the req.
+  *)
 
-  Fixpoint θ₀ [A] (c : M A) (s₀ : state) : state * A :=
+  Fixpoint θ [A] (c : M A) : W A :=
     match c with
-    | retᴹ x => (s₀, x)
-    | act_getᴹ k => θ₀ (k s₀) s₀
-    | act_putᴹ s k => θ₀ k s
+    | retᴹ x => retᵂ x
+    | act_getᴹ k => bindᵂ getᵂ (λ x, θ (k x))
+    | act_putᴹ s k => bindᵂ (putᵂ s) (λ _, θ k)
+    | act_reqᴹ p k => bindᵂ (reqᵂ p) (λ x, θ (k x))
     end.
-
-  Definition θ [A] (c : M A) : W A :=
-    λ P s₀, let '(s₁, x) := θ₀ c s₀ in P s₁ x.
 
   Lemma θ_ret :
     ∀ A (x : A),
@@ -172,97 +190,95 @@ Section State.
       θ (@bindᴹ A B c f) ≤ᵂ bindᵂ (θ c) (λ x, θ (f x)).
   Proof.
     intros A B c f.
-    induction c as [| ? ih | ?? ih] in B, f |- *.
+    induction c as [| ? ih | ?? ih | ?? ih] in B, f |- *.
     - cbn. intros P s₀ h.
       assumption.
     - cbn. intros P s₀ h.
       apply ih. assumption.
     - cbn. intros P s₀ h.
       apply ih. assumption.
+    - cbn. intros P s₀ h.
+      red. red. destruct h as [hp h].
+      exists hp. apply ih. assumption.
   Qed.
 
-  (* Computational monad with guards *)
+  (* Partial Dijkstra monad *)
 
-  Definition G A :=
-    ∑ (P : Prop), P → A.
+  Definition D A w :=
+    { c : M A | θ c ≤ᵂ w }.
 
-  Definition retᵍ [A] (x : A) : G A :=
-    (True ; λ _, x).
-
-  Definition bindᵍ [A B] (x : G A) (f : A → G B) : G B.
+  Definition retᴰ [A] (x : A) : D A (retᵂ x).
   Proof.
-    exists (∃ (h : x.π1), (f (x.π2 h)).π1).
-    simple refine (λ h, (f (x.π2 _)).π2 _).
-    - destruct h. assumption.
-    - destruct h as [h hf]. assumption.
+    exists (retᴹ x).
+    apply θ_ret.
   Defined.
 
-  (* We sandwich the computational monad to be able to add precondtions
-    anywhere.
-  *)
-  Definition Mᴳ A :=
-    G (M (G A)).
-
-  Definition retᴳ [A] (x : A) : Mᴳ A :=
-    retᵍ (retᴹ (retᵍ x)).
-
-  Definition bindᴳ [A B] (c : Mᴳ A) (f : A → Mᴳ B) : Mᴳ B.
+  Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x))
+    `{Monotonous _ w} :
+    D B (bindᵂ w wf).
   Proof.
-    destruct c as [p c].
-    exists p. intro hp.
-    simple refine (bindᴹ (c hp) (λ x, _)).
-    destruct x as [q x].
-    (* Wait: here I have no surrounding G. So maybe the sandwich isn't the
-      rigth approach after all? Or maybe I need a swap operation?
-      Here from x and f I can build a new Mᴳ B but that's not what I need.
+    exists (bindᴹ (val c) (λ x, val (f x))).
+    etransitivity. 1: apply θ_bind.
+    apply bindᵂ_mono.
+    - assumption.
+    - destruct c. assumption.
+    - intro x. destruct (f x). assumption.
+  Qed.
 
-      So the sandwich doesn't have what is necessary to add requires at any
-      point. In a sense GMG doesn't allow one to interleave
-      requires and get/put. Should I try by adding another constructor to M?
-      How would it work for S → S × A?
+  Definition subcompᴰ [A w w'] (c : D A w) {h : w ≤ᵂ w'} : D A w'.
+  Proof.
+    exists (val c).
+    etransitivity. 2: exact h.
+    destruct c. assumption.
+  Defined.
 
-      Should I use a weird inductive construction taking the bind-closure?
-      Then it'd be hard to get the monadic laws probably.
-    *)
-  Abort.
+  Definition getᴰ : D state getᵂ.
+  Proof.
+    exists getᴹ.
+    cbv. auto.
+  Defined.
 
-  Inductive g A :=
-  | ret (x : M A)
-  | require (p : Prop) (k : p → g A)
-  | bind {B} (c : g B) (k : B → g A).
+  Definition putᴰ s : D unit (putᵂ s).
+  Proof.
+    exists (putᴹ s).
+    cbv. auto.
+  Defined.
 
-  (* Is something like the above desirable?
+  Definition reqᴰ (p : Prop) : D p (reqᵂ p).
+  Proof.
+    exists (reqᴹ p).
+    cbv. auto.
+  Defined.
 
-    Maybe should try with modified M to start with. For vanilla state it would
-    probably be S → G (S × A), but then θ₀ on free state + require wouldn't
-    give this would it?
-    How would I do it for ND? Just list (G A)? Or G (list A)? Unclear.
+  (* Lift from PURE (somehow) *)
 
-    One could also have something weaker and ask for the monad M to come with
-    a require operation, like ret, bind etc.
-    Maybe it makes sense to have require p : M p.
+  Definition pure_wp' A := (A → Prop) → Prop.
 
-    I think that in a lot of cases (typically without get), G ∘ M is a monad
-    that supports partiality. I mean it would be nice to keep things general
-    so that things like ND or IO remain as-is without the need to modify the
-    monad. Or maybe we can say that for those, there is an easy way to support
-    partiality. Which can be that, because they have no "bad" outputs,
-    the precondition can always be exeternal, quantifying on all paths in
-    the tree. Like it supports a swap MG → GM that doesn't strenghten the
-    precondition to be proven.
-    It would be good to work these examples out through this new lens.
-    And clarify in what sense they support partiality, figure out what we need.
+  Definition pure_mono [A] (w : pure_wp' A) : Prop :=
+    ∀ (P Q : A → Prop), (∀ x, P x → Q x) → w P → w Q.
 
-    Maybe we only need to add the ability to require right after a get? Besides
-    the external precondition.
-    This notion of whether a monad supports partiality might be relative to the
-    effect observation it's coming with.
+  Definition pure_wp A :=
+    { w : pure_wp' A | pure_mono w }.
 
-    G (M A) always has a require operator plus an injection of M A plus a monad
-    structure (I think), but it's not enough for operations like get.
-    In fact examples such as ND that work are just a reformulation of this.
-    Except that probably with this we can avoid operations like refine, the
-    use of return_of etc.
-  *)
+  Definition PURE A (w : pure_wp A) :=
+    val w (λ _, True) → { x : A | ∀ P, val w P → P x }.
+
+  Definition liftᵂ [A] (w : pure_wp A) : W A :=
+    λ P s₀, val w (λ x, P s₀ x).
+
+  Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ w).
+  Proof.
+    refine (subcompᴰ (bindᴰ (reqᴰ (val w (λ _, True))) (λ h, retᴰ (val (f h))))).
+    intros P s h.
+    assert (hpre : val w (λ _, True)).
+    { unfold liftᵂ in h.
+      destruct w as [w hw].
+      eapply hw. 2: exact h.
+      auto.
+    }
+    cbv. exists hpre.
+    pose proof (prf (f hpre)) as hf. simpl in hf.
+    apply hf in h. assumption.
+  Defined.
 
 End State.
