@@ -7,8 +7,9 @@ type op_sig (op:Type u#a) = {
 }
 
 noeq
-type free (op:Type u#o) (s:op_sig op) (a:Type u#a) : Type u#(max o a) =
+type free (op:Type0) (s:op_sig op) (a:Type) : Type =
 | Call : (l:op) -> s.args l -> cont:(s.res l -> free op s a) -> free op s a
+| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free op s a) -> free op s a
 | Return : a -> free op s a
 
 let free_return (op:Type) (s:op_sig op) (a:Type) (x:a) : free op s a =
@@ -19,12 +20,14 @@ let rec return_of (x:'a) (f:free 'op 's 'a) =
   | Return x' -> x == x'
   | Call cmd arg k ->
      exists r'. return_of x (k r')
+  | PartialCall pre k ->
+     pre ==> return_of x (k ())
 
 let rec free_bind
-  (op:Type u#o)
+  (op:Type)
   (s:op_sig op)
-  (a:Type u#a)
-  (b:Type u#b)
+  (a:Type)
+  (b:Type)
   (l : free op s a)
   (k : a -> free op s b) :
   Tot (free op s b) =
@@ -33,29 +36,20 @@ let rec free_bind
   | Call cmd args fnc ->
       Call cmd args (fun i ->
         free_bind op s a b (fnc i) k)
+  | PartialCall pre fnc ->
+      PartialCall pre (fun _ ->
+        free_bind op s a b (fnc ()) k)
 
 let free_map
-  (op:Type u#o)
+  (op:Type)
   (s:op_sig op)
-  (a:Type u#a)
-  (b:Type u#b)
+  (a:Type)
+  (b:Type)
   (l : free op s a)
   (k : a -> b) :
   Tot (free op s b) =
   free_bind op s a b
     l (fun a -> free_return op s b (k a))
-
-let rec free_subcomp (a:Type)
-  (q1:pure_post a) (q2:pure_post a)
-  (m : free 'op 's (v:a{q1 v})) :
-  Pure (free 'op 's (v:a{q2 v})) 
-    (requires (forall x. x `return_of` m /\ q1 x ==> q2 x))
-    (ensures (fun r -> True)) =
-  match m with
-  | Return r -> Return r
-  | Call cmd arg k -> 
-      Call cmd arg (fun r -> 
-        free_subcomp _ q1 q2 (k r))
 
 let free_codomain_ordering
   (#op:Type)
