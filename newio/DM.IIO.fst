@@ -8,16 +8,16 @@ open Free
 open Free.IO
 open Hist
 
-let iio_wps (cmd:cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd) = 
+let iio_wps (cmd:cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd) =
   fun p (h:trace) ->
     match cmd with
     | GetTrace -> p [] (h <: iio_sig.res GetTrace)
     | _ -> 
       io_pre cmd arg h /\ (forall (r:iio_sig.res cmd). p [convert_call_to_event (cmd <: io_cmds) arg r] r)
 
+
 (** Inspierd from Kenji's thesis (2.4.5) **)
-let rec theta #a
-  (m : iio a) : hist a =
+let rec theta #a (m : iio a) : hist a =
   match m with
   | Return x -> hist_return x
   | Call cmd arg k ->

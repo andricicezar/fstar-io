@@ -1,4 +1,4 @@
-module PDM.Free.IO.Respects
+module PDM.IO.ReturnOf
 
 open FStar.Classical.Sugar
 open FStar.List.Tot.Base
@@ -19,7 +19,7 @@ let get_fun (t : pdm 'a 'wp) : Pure (dm 'a 'wp) (requires get_pre t) (ensures fu
   let (| pre, f |) = t in f ()
 
 
-(*** Defining the predicate needed, respects **)
+(*** Defining the predicate needed, returnOf **)
 (** the post-condition is written over an output value and local trace, therefore,
   `return_of` is not enough and we need predicates and lemmas that show that for 
   each x that is a returned value by m, also exists a local trace **)
@@ -53,7 +53,7 @@ let rec lemma_return_of_implies_exists_trace_of (m:io 'a) (x:'a) :
       end
     end
   end
-
+  
 let rec lemma_theta_result_implies_post m p h : 
   Lemma 
     (requires theta m p h) 
@@ -76,36 +76,31 @@ let rec lemma_theta_result_implies_post m p h :
     end
   end
 
-(** here is Theo's idea with respects **)
-let respects (x:'a) (d:dm 'a 'wp) : Type0 =
-  forall (h:trace) (p:hist_post #event 'a). 'wp p h ==> (exists (lt:trace). p lt x)
+(** here is Theo's idea with returnOf **)
+let returnOf (x:'a) (d:dm 'a 'wp) : Type0 =
+  x `return_of` d 
 
-(** and we show that return_of implies respects **)
-let lemma_return_of_implies_respects (d:dm 'a 'wp) :
-  Lemma (forall x. x `return_of` d ==> x `respects` d) = 
-  assert ('wp `hist_ord` theta d);
-  introduce forall x. x `return_of` d ==> x `respects` d with begin
-    introduce x `return_of` d ==> x `respects` d with _. begin
-      lemma_return_of_implies_exists_trace_of d x;
-      Classical.forall_intro_2 (Classical.move_requires_2 (lemma_theta_result_implies_post d));
-      assert (x `respects` d)
-    end
-  end
+(** and we show that return_of implies returnOf **)
+let lemma_return_of_implies_returnOf (d:dm 'a 'wp) :
+  Lemma (forall x. x `return_of` d ==> x `returnOf` d) = 
+  ()
 
 let new_pre0 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) : Type0 =
-  get_pre d1 /\ (forall (x:'a). x `respects` (get_fun d1) ==> get_pre (d2 x))
+  get_pre d1 /\ (forall (x:'a). x `returnOf` (get_fun d1) ==> get_pre (d2 x))
 
 let lemma_new_pre0_0 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
   Lemma (forall p h. hist_bind 'wp1 'wp2 p h ==> get_pre d1) = ()
 
 let lemma_new_pre0_1 (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
   Lemma (forall p h. hist_bind 'wp1 'wp2 p h ==>
-  	    (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x))) =
-  introduce forall p h. hist_bind 'wp1 'wp2 p h ==> (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x)) with begin
-    introduce hist_bind 'wp1 'wp2 p h ==> (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x)) with _. begin
-      introduce forall x. x `respects` (get_fun d1) ==> get_pre (d2 x) with begin
-        introduce x `respects` (get_fun d1) ==> get_pre (d2 x) with _. begin
+  	    (forall x. x `returnOf` (get_fun d1) ==> get_pre (d2 x))) =
+  introduce forall p h. hist_bind 'wp1 'wp2 p h ==> (forall x. x `returnOf` (get_fun d1) ==> get_pre (d2 x)) with begin
+    introduce hist_bind 'wp1 'wp2 p h ==> (forall x. x `returnOf` (get_fun d1) ==> get_pre (d2 x)) with _. begin
+      introduce forall x. x `returnOf` (get_fun d1) ==> get_pre (d2 x) with begin
+        introduce x `returnOf` (get_fun d1) ==> get_pre (d2 x) with _. begin
+        lemma_return_of_implies_exists_trace_of (get_fun d1) x;
           let p':hist_post #event 'a = (fun lt r -> 'wp2 r (fun lt' r' -> p (lt @ lt') r') (rev lt @ h)) in
+ //         lemma_theta_result_implies_post (get_fun d1) p' h;
           assert ('wp1 p' h ==> (exists (lt:trace). p' lt x)) (** the refinement of d1's pre **);
           assert ('wp1 p' h); (** this is hist bind **)
           assert (exists (lt:trace). p' lt x); (** from the previous two, results this **)
@@ -136,7 +131,7 @@ let lemma1  (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
     Lemma (new_pre' d1 d2 ==> get_pre d1) by (unfold_def (`new_pre'))= ()
 
 let lemma2  (d1:pdm 'a 'wp1) (d2:(x:'a) -> pdm 'b ('wp2 x)) :
-    Lemma (new_pre' d1 d2 ==> (forall x. x `respects` (get_fun d1) ==> get_pre (d2 x))) by (unfold_def (`new_pre')) = ()
+    Lemma (new_pre' d1 d2 ==> (forall x. x `returnOf` (get_fun d1) ==> get_pre (d2 x))) by (norm [delta_only [`%new_pre'; `%new_pre]]) = ()
 
 (*** Defining the PDM **)
 let pdm_return (a:Type) (x:a) : pdm a (hist_return x) =
@@ -150,8 +145,8 @@ let pdm_bind (a b:Type)
   (| new_pre' f g, 
      (fun _ -> 
        lemma1 f g;
-       lemma_return_of_implies_respects (get_fun f);
-       let f'' = refine_dm io_wps (get_fun f) (fun x -> x `respects` (get_fun f)) in
+       lemma_return_of_implies_returnOf (get_fun f);
+       let f'' = refine_dm io_wps (get_fun f) (fun x -> x `returnOf` (get_fun f)) in
        dm_bind _ _ _ _ f'' (fun x -> 
        	 lemma2 f g;
 	 get_fun (g x))) 
