@@ -7,21 +7,13 @@ open FStar.Tactics
 open Free
 open Hist
 
-type op_wp (op:Type) (s:op_sig op) (event:Type) = (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd)
-
-let partial_call_wp (pre:pure_pre) : hist (squash pre) = 
-  let wp' : hist0 (squash pre) = fun p h -> pre /\ p [] () in
-  assert (forall post1 post2. (hist_post_ord post1 post2 ==> (forall h. wp' post1 h ==> wp' post2 h)));
-  assert (hist_wp_monotonic wp');
-  wp'
+type op_wp (op:Type) (s:op_sig op) (event:Type) = (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
 
 (** Inspierd from Kenji's thesis (2.4.5) **)
 val theta : #a:Type -> #op:Type -> #s:op_sig op -> #event:Type -> cmd_wp:op_wp op s event -> free op s a -> hist #event a
 let rec theta #a #op #s #event cmd_wp m =
   match m with
   | Return x -> hist_return x
-  | PartialCall pre k ->
-      hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (k r))
   | Call cmd arg k ->
       hist_bind (cmd_wp cmd arg) (fun r -> theta cmd_wp (k r))
   
@@ -75,12 +67,12 @@ let rec lemma_theta_is_lax_morphism_bind (#op:Type) (#s:op_sig op) (#event:Type)
       == { lemma_hist_bind_associativity (cmd_wp cmd arg) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
       hist_bind (cmd_wp cmd arg) (fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)));
       `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
-        let rhs1 : s.res cmd -> hist 'b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
-        let rhs2 : s.res cmd -> hist 'b = fun r -> theta cmd_wp (free_bind op s _ _ (k r) f) in
-        introduce forall (r:s.res cmd). (rhs1 r) `hist_ord` (rhs2 r) with begin
+        let rhs1 : s.res cmd arg -> hist 'b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
+        let rhs2 : s.res cmd arg -> hist 'b = fun r -> theta cmd_wp (free_bind op s _ _ (k r) f) in
+        introduce forall (r:s.res cmd arg). (rhs1 r) `hist_ord` (rhs2 r) with begin
           lemma_theta_is_lax_morphism_bind cmd_wp (k r) f
         end;
-        another_lemma' #event #(s.res cmd) #'b (cmd_wp cmd arg) rhs1 rhs2;
+        another_lemma' #event #(s.res cmd arg) #'b (cmd_wp cmd arg) rhs1 rhs2;
         assert (hist_bind (cmd_wp cmd arg) rhs1 `hist_ord #_ #'b` hist_bind (cmd_wp cmd arg) rhs2) by (assumption ())
       }
       hist_bind (cmd_wp cmd arg) (fun r -> theta cmd_wp (free_bind op s _ _ (k r) f));
@@ -91,38 +83,10 @@ let rec lemma_theta_is_lax_morphism_bind (#op:Type) (#s:op_sig op) (#event:Type)
       == {}
       theta cmd_wp (free_bind op s _ _ m f);
     }
-  | PartialCall pre k -> 
-    calc (hist_ord) {
-      hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x)); 
-      == {
-        assert (hist_bind (theta cmd_wp (PartialCall pre k)) (fun x -> theta cmd_wp (f x))
-           == hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x))) by (rewrite_eqs_from_context ())
-      }
-      hist_bind (theta cmd_wp (PartialCall pre k)) (fun x -> theta cmd_wp (f x));
-      == { _ by (compute ()) } // unfold theta
-      hist_bind (hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (k r))) (fun x -> theta cmd_wp (f x));
-      == { lemma_hist_bind_associativity (partial_call_wp pre) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
-      hist_bind (partial_call_wp pre) (fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)));
-      `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
-        let rhs1 : squash pre -> hist 'b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
-        let rhs2 : squash pre -> hist 'b = fun r -> theta cmd_wp (free_bind op s _ _ (k r) f) in
-        introduce forall (r:squash pre). (rhs1 r) `hist_ord` (rhs2 r) with begin
-          lemma_theta_is_lax_morphism_bind cmd_wp (k r) f
-        end;
-        another_lemma' #event #(squash pre) #'b (partial_call_wp pre) rhs1 rhs2;
-        assert (hist_bind (partial_call_wp pre) rhs1 `hist_ord #_ #'b` hist_bind (partial_call_wp pre) rhs2) by (assumption ())
-      }
-      hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (free_bind op s _ _ (k r) f));
-      == { _ by (compute ()) } // unfold theta
-      theta cmd_wp (PartialCall pre (fun r -> free_bind op s _ _ (k r) f));
-      `hist_ord` { _ by (compute ()) } // unfold iio_bind
-      theta cmd_wp (free_bind op s _ _ (PartialCall pre k) f);
-      == {}
-      theta cmd_wp (free_bind op s _ _ m f);
-    }
 
 // The Dijkstra Monad
-let dm (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) (a:Type) (wp:hist #event a) =
+#set-options "--print_universes"
+let dm (op:Type0) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) (a:Type) (wp:hist #event a) =
   (m:(free op s a){wp `hist_ord` theta cmd_wp m})
 
 let dm_return (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) (a : Type) (x : a) : dm op s event cmd_wp a (hist_return #a #event x) =
@@ -148,22 +112,3 @@ let dm_subcomp (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) (a
 let dm_if_then_else (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) (a : Type) 
   (wp1 wp2: hist a) (f : dm op s event cmd_wp a wp1) (g : dm op s event cmd_wp a wp2) (b : bool) : Type =
   dm op s event cmd_wp a (hist_if_then_else wp1 wp2 b)
-
-let dm_partial_return
-  (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event)
-  (pre:pure_pre) : dm op s event cmd_wp (squash pre) (partial_call_wp pre) =
-  let m = PartialCall pre (Return) in
-  assert (partial_call_wp pre `hist_ord` theta cmd_wp m);
-  m
-
-let lift_pure_dm (op:Type) (s:op_sig op) (event:Type) (cmd_wp:op_wp op s event) 
-  (a : Type) 
-  (w : pure_wp a)
-  (f:(eqtype_as_type unit -> PURE a w)) : 
-  dm op s event cmd_wp a (wp_lift_pure_hist w) =
-  lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  let lhs = dm_partial_return op s event cmd_wp (as_requires w) in
-  let rhs = (fun (pre:(squash (as_requires w))) -> dm_return op s event cmd_wp a (f pre)) in
-  let m = dm_bind op s event cmd_wp _ _ _ _ lhs rhs in
-  dm_subcomp op s event cmd_wp a _ _ m
