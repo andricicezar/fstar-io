@@ -1,7 +1,7 @@
 (* Define a partial Dijkstra monad for state *)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util.
+From PDM Require Import util guarded.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
@@ -9,25 +9,6 @@ Set Printing Projections.
 Section State.
 
   Context (state : Type).
-
-  (* Guarded monad *)
-
-  Definition G A :=
-    ∑ (P : Prop), P → A.
-
-  Definition retᴳ [A] (x : A) : G A :=
-    (True ; λ _, x).
-
-  Definition bindᴳ [A B] (x : G A) (f : A → G B) : G B.
-  Proof.
-    exists (∃ (h : x.π1), (f (x.π2 h)).π1).
-    simple refine (λ h, (f (x.π2 _)).π2 _).
-    - destruct h. assumption.
-    - destruct h as [h hf]. assumption.
-  Defined.
-
-  Definition reqᴳ [A] (p : Prop) (x : p → A) : G A :=
-    (p ; x).
 
   (* Computation monad *)
 
