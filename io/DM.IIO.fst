@@ -6,90 +6,51 @@ open FStar.Calc
 
 open Common
 open Free
-open Free.IO
+open DMFree
+open Free.IO.Sig
 open Free.IO.Call
-open DM.IO
 open Hist
 
-let rec iio_interpretation #a
-  (m : iio a)
-  (h : trace)
-  (p : hist_post a) : Type0 =
-  match m with
-  | Return x -> p x []
-  (** internal_cmds **)
-  | Call GetTrace args fnc ->
-    iio_interpretation (fnc h) h p
-  (** io_cmds **)
-  | Call cmd args fnc -> (
-    forall res. (
-      let e : event = convert_call_to_event cmd args res in
-      iio_interpretation (fnc res) (e::h) (gen_post p cmd args res)))
+(** The postcondition for an io computation is defined over the
+result (type: a) and local trace (type: trace).
+The local trace represents the events that happend during the
+computation. Local trace is in chronological order.
 
-// REFINED COMPUTATION MONAD (repr)
-let iio_irepr (a:Type) (wp:hist a) =
-  h:trace -> post:hist_post a ->
-    Pure (iio a)
-      (requires (wp h post))
-      (ensures (fun (t:iio a) -> iio_interpretation t h post))
+We also have the history (type: trace) which represents the
+events that happend until the beggining of the io computation.
+The history is  in reverse chronology order.
 
-let iio_ireturn (a : Type) (x : a) : iio_irepr a (hist_return a x) =
-  fun _ _ -> iio_return a x
+At the end of an io computation, the local trace is appended
+in reverse order to the history. **)
+unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd arg) = fun p h ->
+  match cmd with
+  | GetTrace -> p [] h
+  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
 
-let iio_ibind
-  (a b : Type)
-  (wp_v : hist a)
-  (wp_f: a -> hist b)
-  (v : iio_irepr a wp_v)
-  (f : (x:a -> iio_irepr b (wp_f x))) :
-  Tot (iio_irepr b (hist_bind _ _ wp_v wp_f)) =
-  fun h p ->
-    let t = (iio_bind a b
-        (v h (compute_post a b h wp_f p))
-        (fun (x:a) ->
-          assume (wp_f x h p);
-           f x h p)) in
-    assume (iio_interpretation t h p);
-    t
-
-unfold
-let isubcomp (a:Type) (wp1 wp2: hist a) (f : iio_irepr a wp1) :
-  Pure (iio_irepr a wp2)
-    (requires hist_ord wp2 wp1)
-    (ensures fun _ -> True) = f
-
-unfold
-let i_if_then_else
-  (a : Type)
-  (wp1 wp2 : hist a)
-  (f : iio_irepr a wp1)
-  (g : iio_irepr a wp2)
-  (b : bool) :
-  Tot Type =
-  iio_irepr a (hist_if_then_else wp1 wp2 b)
+let theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
+  
+let dm_iio = dm iio_cmds iio_sig event iio_wps
+let dm_iio_return = dm_return iio_cmds iio_sig event iio_wps
+let dm_iio_bind = dm_bind iio_cmds iio_sig event iio_wps
+let dm_iio_subcomp = dm_subcomp iio_cmds iio_sig event iio_wps
+let dm_iio_if_then_else = dm_if_then_else iio_cmds iio_sig event iio_wps
+let lift_pure_dm_iio = lift_pure_dm iio_cmds iio_sig event iio_wps
 
 total
 reifiable
 reflectable
-layered_effect {
-  IIOwp : a:Type -> wp : hist a -> Effect
-  with
-       repr       = iio_irepr
-     ; return     = iio_ireturn
-     ; bind       = iio_ibind
-
-     ; subcomp      = isubcomp
-     ; if_then_else = i_if_then_else
+effect {
+  IIOwp (a:Type) (wp : hist #event a) 
+  with {
+       repr       = dm_iio
+     ; return     = dm_iio_return
+     ; bind       = dm_iio_bind 
+     ; subcomp    = dm_iio_subcomp
+     ; if_then_else = dm_iio_if_then_else
+     }
 }
 
-let lift_pure_iiowp
-  (a:Type)
-  (wp:pure_wp a)
-  (f:(eqtype_as_type unit -> PURE a wp)) :
-  Tot (iio_irepr a (fun h p -> wp (fun r -> p r []))) = 
-  fun h p -> let r = elim_pure f (fun r -> p r []) in iio_return _ r
-
-sub_effect PURE ~> IIOwp = lift_pure_iiowp
+sub_effect PURE ~> IIOwp = lift_pure_dm_iio
 
 (** This is a identity function, and we need it because
 F* does not have depth subtyping on inductives. **)
@@ -99,55 +60,22 @@ let rec cast_io_iio #a (x:io a) : iio a =
   | Call (cmd:io_cmds) args fnc ->
      Call cmd args (fun res ->
        cast_io_iio (fnc res))
+  | PartialCall pre fnc ->
+     PartialCall pre (fun res ->
+       cast_io_iio (fnc res))
 
-let rec io_interp_to_iio_interp' (#a:Type u#a)
-  (cmd:io_cmds) (arg:io_args cmd) (fnc:(io_resm cmd -> io a))
-  (h:trace) (p:hist_post a)
-  (r:(io_resm cmd)) :
-  Lemma
-    (requires
-      (io_interpretation
-        (fnc r)
-        (gen_post p cmd arg r)))
-    (ensures (
-      iio_interpretation
-        (cast_io_iio (fnc r))
-        ((convert_call_to_event cmd arg r)::h)
-        (gen_post p cmd arg r)))
-    (decreases fnc) =
-  admit (); (** after updating F* this is not checking anymore.
-  Error: can not prove post condition **)
-  match fnc r with
-  | Call cmd' arg' fnc' ->
-      assert (fnc' << fnc r);
-      let e : event = convert_call_to_event cmd arg r in
-      Classical.forall_intro (
-        Classical.move_requires (
-          io_interp_to_iio_interp' cmd' arg' fnc' (e::h) (gen_post p cmd arg r)))
-  | _ -> ()
-
-let io_interp_to_iio_interp (#a:Type u#a) (x:io a) (h:trace) (p:hist_post a) :
-  Lemma
-    (requires (io_interpretation x p))
-    (ensures  (iio_interpretation (cast_io_iio x) h p)) =
-  match x with
-  | Call (cmd:io_cmds) arg fnc ->
-      Classical.forall_intro (
-        Classical.move_requires (
-          io_interp_to_iio_interp' cmd arg fnc h p))
-  | _ -> ()
-
-let lift_iowp_iiowp (a:Type) (wp:hist a) (f:io_irepr a wp) :
-  Tot (iio_irepr a (fun h p -> wp h p)) =
-  fun h p ->
-    io_interp_to_iio_interp (f h p) h p;
-    cast_io_iio (f h p)
+(**
+let lift_iowp_iiowp (a:Type) (wp:hist a) (f:DM.IO.dm_io a wp) :
+  Tot (dm_iio a wp) =
+   // io_interp_to_iio_interp (f h p) h p;
+  cast_io_iio f
 
 sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
+**)
 
 let get_trace () : IIOwp trace
-  (fun h p -> forall lt. lt == [] ==>  p h lt) =
-  IIOwp?.reflect (fun _ _ -> iio_call GetTrace ())
+  (fun p h -> forall lt. lt == [] ==>  p lt h) =
+  IIOwp?.reflect (iio_call GetTrace ())
 
 let iio_post
   (#a:Type)
@@ -158,12 +86,12 @@ let iio_post
   Tot bool =
   enforced_locally pi h local_trace
 
-effect IIO
+effect IIOpi
   (a:Type)
   (pi : monitorable_prop)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   IIOwp a
-    (fun h p ->
+    (fun p h ->
       pre h /\
-      (forall r lt. (iio_post pi h r lt /\ post h r lt) ==>  p r lt))
+      (forall r lt. (iio_post pi h r lt /\ post h r lt) ==> p lt r))

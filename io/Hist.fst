@@ -1,50 +1,88 @@
 module Hist
 
+open FStar.Tactics
 open FStar.List.Tot.Base
-open Common
-open Free.IO
 
-// local_trace (from old to new)
-let hist_post a = a -> lt:trace -> Type0
+(** The postcondition for an io computation is defined over the
+result (type: a) and local trace (type: list event).
+The local trace represents the events that happend during the
+computation. Local trace is in chronological order.
 
-// past_events (from new to old; reversed compared with local_trace)
-let hist a = h:trace -> hist_post a -> Type0
+We also have the history (type: list event) that represents the
+events that happend until the beginning of the io computation.
+The history is in reverse chronological order.
 
-unfold
-let hist_return (a:Type) (x:a) : hist a =
-  fun _ p -> p x []
+At the end of an io computation, the local trace is
+reversed and appended to the history. **)
 
-unfold
-let compute_post
-  (a b:Type)
-  (h:trace)
-  (kw : a -> hist b)
-  (p:hist_post b) :
-  Tot (hist_post a) =
-  (fun result local_trace ->
-      kw result
-       ((List.rev local_trace) @ h)
-       (fun result' local_trace' ->
-         p result' (local_trace @ local_trace')))
+let hist_post (#event_type:Type) a = lt:list event_type -> r:a -> Type0
+let hist_pre (#event_type:Type) = h:list event_type -> Type0
+
+let hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_type
 
 unfold
-let hist_bind
-  (a:Type)
-  (b:Type)
-  (w : hist a)
-  (kw : a -> hist b) :
-  Tot (hist b) =
-  fun h p ->
-    w h (compute_post a b h kw p)
+let hist_post_ord (#event_type:Type) (p1 p2:hist_post #event_type 'a) = forall lt r. p1 lt r ==> p2 lt r
 
-let gen_post #a (post:hist_post a) (cmd:io_cmds) arg res =
-  fun r local_trace ->
-    post r (convert_call_to_event cmd arg res :: local_trace)
+let hist_wp_monotonic (#event_type:Type) (wp:hist0 #event_type 'a) =
+  forall p1 p2. (p1 `hist_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
+
+let hist #event_type a = wp:(hist0 #event_type a){hist_wp_monotonic wp}
+
+val hist_subcomp0 : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist #event_type (x:a{p1 x}) -> 
+  (hist #event_type (x:a{p2 x}))
+let hist_subcomp0 #_ #a #p1 #p2 #_ wp : (hist (x:a{p2 x})) =
+  let wp' : hist0 (x:a{p2 x}) = wp in
+  assert (forall (post1:hist_post (x:a{p2 x})) (post2:hist_post (x:a{p2 x})). (hist_post_ord post1 post2 ==> (forall h. wp' post1 h ==> wp' post2 h)));
+  assert (hist_wp_monotonic #(x:a{p2 x}) wp');
+  wp'
+
+val hist_subcomp : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> wp:hist #event_type (x:a{p1 x}) -> 
+  Pure (hist #event_type (x:a{p2 x})) (requires (forall x. p1 x ==> p2 x)) (ensures (fun _ -> True))
+let hist_subcomp #event_type #a #p1 #p2 wp = hist_subcomp0 #event_type #a #p1 #p2 #() wp
+
+
+let hist_return (#event_type:Type) (x:'a) : hist #event_type 'a =
+  fun p _ -> p [] x
 
 unfold
-val hist_ord (#a : Type) : hist a -> hist a -> Type0
-let hist_ord wp1 wp2 = forall h p. wp1 h p ==> wp2 h p
+let hist_post_shift (#event_type:Type) (p:hist_post #event_type 'a) (lt:list event_type) : hist_post #event_type 'a =
+  fun lt' r -> p (lt @ lt') r
 
 unfold
-let hist_if_then_else (#a:Type) (wp1 wp2:hist a) (b:bool) : hist a =
-  fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
+let hist_post_bind
+  (#event_type:Type)
+  (h:list event_type)
+  (kw : 'a -> hist #event_type 'b)
+  (p:hist_post #event_type 'b) :
+  Tot (hist_post #event_type 'a) =
+  fun lt r ->
+    kw r (hist_post_shift p lt) (List.rev lt @ h)
+
+unfold
+let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -> hist #event_type b) : hist #event_type b =
+  fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
+
+unfold
+let wp_lift_pure_hist (#event_type:Type) (w : pure_wp 'a) : hist #event_type 'a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun p _ -> w (p [])
+
+let lemma_wp_lift_pure_hist_implies_as_requires #a #event_type w :
+  Lemma (forall (p:hist_post #event_type a) h. wp_lift_pure_hist w p h ==> as_requires w) =
+    assert (forall (p:hist_post #event_type a) x. p [] x ==> True) ;
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+    assert (forall (p:hist_post #event_type a). w (fun x -> p [] x) ==> w (fun _ -> True))
+
+unfold
+val hist_ord (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_type a -> Type0
+let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
+
+unfold
+let hist_if_then_else (wp1 wp2:hist #'event 'a) (b:bool) : hist #'event 'a =
+  fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
+  
+let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
+  Lemma (
+    hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) == hist_bind (hist_bind w1 w2) w3)
+  by (l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]) =
+  () 

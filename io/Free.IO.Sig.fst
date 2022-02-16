@@ -1,4 +1,4 @@
-module Free.IO
+module Free.IO.Sig
 
 open FStar.List.Tot.Base
 
@@ -7,13 +7,9 @@ open Free
 
 type cmds = | Openfile | Read | Close | GetTrace
 
-(** Wish: It would be nice to define exn on top of free, and after
-that to define io on top of exn, but we use this big cmds with
-refeniments, therefore we have to make a monolith **)
-
 (** the io free monad does not contain the GetTrace step **)
 let _io_cmds x : bool = x = Openfile || x = Read || x = Close
-type io_cmds = x:cmds{_io_cmds x}
+type io_cmds : Type = x:cmds{_io_cmds x}
 
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
@@ -21,21 +17,21 @@ unfold let io_args (cmd:io_cmds) : Type =
   | Read -> file_descr
   | Close -> file_descr
 
-unfold let io_res (cmd:io_cmds) : Type =
+unfold let io_res (cmd:io_cmds) (arg:io_args cmd) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) = maybe (io_res cmd)
+let io_resm (cmd:io_cmds) (arg:io_args cmd) = option (io_res cmd arg)
 
 let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
 
 noeq
 type event =
-  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
-  | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
-  | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
+  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile a) -> event
+  | ERead     : a:io_args Read     -> (r:io_resm Read a)     -> event
+  | EClose    : a:io_args Close    -> (r:io_resm Close a)    -> event
 
 type trace = list event
 
@@ -53,41 +49,40 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let inst_res (x:inst_cmds) =
-  match x with
+let inst_args (cmd:inst_cmds) =
+  match cmd with
+  | GetTrace -> unit
+
+let inst_res (cmd:inst_cmds) (arg:inst_args cmd) =
+  match cmd with
   | GetTrace -> list event
 
 let inst_sig : op_sig inst_cmds = {
-  args = (fun (x:inst_cmds) -> match x with
-    | GetTrace -> unit) ;
-  res = inst_res
+  args = inst_args;
+  res = inst_res;
 }
 
-let iio_sig = add_sig cmds io_sig inst_sig
-
-let args (cmd:cmds) : Type = iio_sig.args cmd
-let res (cmd:cmds)  : (x:Type{x == iio_sig.res cmd}) =
-  admit ();
-  if cmd = GetTrace then inst_res cmd
-  else io_resm cmd
+let _iio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
+type iio_cmds = cmd:cmds{_iio_cmds cmd}
+let iio_sig : op_sig iio_cmds = add_sig cmds io_sig inst_sig
 
 type io a = free io_cmds io_sig a
-let io_return (a:Type) (x:a) : io a =
-  free_return io_cmds io_sig a x
+let io_return (x:'a) : io 'a =
+  free_return io_cmds io_sig 'a x
 
-let io_bind (a:Type) (b:Type) l k : io b =
+let io_bind (#a:Type) (#b:Type) l k : io b =
   free_bind io_cmds io_sig a b l k
 
 // THE IIO FREE MONAD
 type iio a = free cmds iio_sig a
-let iio_return (a:Type) (x:a) : iio a =
-  free_return cmds iio_sig a x
+let iio_return (x:'a) : iio 'a =
+  free_return cmds iio_sig 'a x
 
-let iio_bind (a:Type) (b:Type) l k : iio b =
+let iio_bind (#a:Type) (#b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
 
 // OTHER TYPES & UTILS
-type action_type = (cmd : io_cmds) & (args cmd)
+type action_type = (cmd : io_cmds) & (io_sig.args cmd)
 
 type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
 
@@ -99,8 +94,8 @@ let convert_event_to_action (e:event) : action_type =
 
 let convert_call_to_event
   (cmd:io_cmds)
-  (arg:io_args cmd)
-  (r:io_resm cmd) =
+  (arg:io_sig.args cmd)
+  (r:io_sig.res cmd arg) =
   match cmd with
   | Openfile -> EOpenfile arg r
   | Read -> ERead arg r
@@ -127,3 +122,38 @@ let rev_append_rev_append () : Lemma (
 unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
+
+let destruct_event (e:event) : ( cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
+  match e with
+  | EOpenfile arg res -> (| Openfile, arg, res |)
+  | ERead arg res -> (| Read, arg, res |)
+  | EClose arg res -> (| Close, arg, res |)
+
+
+let rec is_open (fd:file_descr) (h:trace) : bool =
+  match h with
+  | [] -> false
+  | h :: tail -> match h with
+               | EOpenfile _ (Some fd') ->
+                   if fd = fd' then true
+                   else is_open fd tail
+               | EClose fd' _ ->
+                    if fd = fd' then false
+                    else is_open fd tail
+               | _ -> is_open fd tail
+
+unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
+  match cmd with
+  | Openfile -> True
+  | Read -> is_open arg h
+  | Close -> is_open arg h
+
+(** This file is replaced during linking with a file that contains the real
+implementation of the commands. **)
+let io_call (cmd:io_cmds) (arg:io_sig.args cmd) : io (io_sig.res cmd arg) =
+  Call cmd arg Return
+
+(** Since we can lift from io to iio, `iio_call` should be used only for 
+`GetTrace`. **)
+let iio_call (cmd:cmds) (arg:iio_sig.args cmd) : iio (iio_sig.res cmd arg) =
+  Call cmd arg Return
