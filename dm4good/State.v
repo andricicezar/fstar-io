@@ -1,7 +1,7 @@
 (* Define a partial Dijkstra monad for state *)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util guarded.
+From PDM Require Import util guarded PURE.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
@@ -201,18 +201,7 @@ Section State.
     cbv. auto.
   Defined.
 
-  (* Lift from PURE (somehow) *)
-
-  Definition pure_wp' A := (A → Prop) → Prop.
-
-  Definition pure_mono [A] (w : pure_wp' A) : Prop :=
-    ∀ (P Q : A → Prop), (∀ x, P x → Q x) → w P → w Q.
-
-  Definition pure_wp A :=
-    { w : pure_wp' A | pure_mono w }.
-
-  Definition PURE A (w : pure_wp A) :=
-    val w (λ _, True) → { x : A | ∀ P, val w P → P x }.
+  (* Lift from PURE *)
 
   Definition liftᵂ [A] (w : pure_wp A) : W A :=
     λ P s₀, val w (λ x, P s₀ x).
