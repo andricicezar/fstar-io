@@ -21,11 +21,16 @@ The history is  in reverse chronology order.
 
 At the end of an io computation, the local trace is appended
 in reverse order to the history. **)
-unfold let io_wps (cmd:io_cmds) (arg:io_sig.args cmd) : hist #event (io_sig.res cmd arg) = fun p h ->
-  match cmd with
-  | _ -> io_pre cmd arg h /\ (forall r. p [convert_call_to_event cmd arg r] r)
 
-let theta #a = theta #a #io_cmds #io_sig #event io_wps
+unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd arg) = fun p h ->
+  match cmd with
+  | GetTrace -> p [] h
+  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
+
+unfold let io_wps (cmd:io_cmds) (arg:io_sig.args cmd) : hist #event (io_sig.res cmd arg) =
+  iio_wps cmd arg
+
+let dm_io_theta #a = theta #a #io_cmds #io_sig #event io_wps
   
 let dm_io = dm io_cmds io_sig event io_wps
 let dm_io_return = dm_return io_cmds io_sig event io_wps

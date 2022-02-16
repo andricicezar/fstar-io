@@ -10,6 +10,7 @@ open DMFree
 open Free.IO.Sig
 open Free.IO.Call
 open Hist
+open DM.IO
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
@@ -22,12 +23,7 @@ The history is  in reverse chronology order.
 
 At the end of an io computation, the local trace is appended
 in reverse order to the history. **)
-unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd arg) = fun p h ->
-  match cmd with
-  | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
-
-let theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
+let dm_iio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
   
 let dm_iio = dm iio_cmds iio_sig event iio_wps
 let dm_iio_return = dm_return iio_cmds iio_sig event iio_wps
@@ -58,20 +54,89 @@ let rec cast_io_iio #a (x:io a) : iio a =
   match x with
   | Return z -> Return z
   | Call (cmd:io_cmds) args fnc ->
-     Call cmd args (fun res ->
-       cast_io_iio (fnc res))
+     Call cmd args (fun res -> cast_io_iio (fnc res))
   | PartialCall pre fnc ->
-     PartialCall pre (fun res ->
-       cast_io_iio (fnc res))
+     PartialCall pre (fun res -> cast_io_iio (fnc res))
 
-(**
+let rec lemma_cast_io_iio #a (m:io a) :
+  Lemma
+    (dm_io_theta m `hist_ord` dm_iio_theta (cast_io_iio m)) = 
+  match m with
+  | Return _ -> ()
+  | PartialCall pre k ->begin
+    let fst : squash pre -> hist a = fun r -> dm_io_theta (k r) in
+    let snd : squash pre -> hist a = fun r -> dm_iio_theta (cast_io_iio (k r)) in
+    calc (==) {
+      dm_io_theta m;
+      == {}
+      dm_io_theta (PartialCall pre k);
+      == { _ by (norm [delta_only [`%dm_io_theta;`%theta]; zeta; iota]) } // unfold theta
+      hist_bind (partial_call_wp pre) (fun r -> dm_io_theta (k r));
+      == {}
+      hist_bind (partial_call_wp pre) fst;
+    };
+    (** fst ==> snd /\ hist is monotonic **)
+    introduce forall (p:hist_post a) h. hist_bind (partial_call_wp pre) fst p h ==> hist_bind (partial_call_wp pre) snd p h with begin 
+      introduce forall (r:squash pre). (fst r `hist_ord` snd r) with begin
+        lemma_cast_io_iio (k r)
+      end
+    end;
+    calc (==) {
+      hist_bind (partial_call_wp pre) snd;
+      == {}
+      hist_bind (partial_call_wp pre) (fun r -> dm_iio_theta (cast_io_iio (k r)));
+      == { _ by (norm [delta_only [`%dm_iio_theta;`%theta]; zeta; iota]) }
+      dm_iio_theta (PartialCall pre (fun r -> cast_io_iio (k r)));
+      == { _ by (compute ()) }
+      dm_iio_theta (cast_io_iio (PartialCall pre k));
+      == {}
+      dm_iio_theta (cast_io_iio m);
+    }
+  end
+  | Call (cmd:io_cmds) arg k -> begin
+    let fst : io_sig.res cmd arg -> hist a = fun r -> dm_io_theta (k r) in
+    let snd : iio_sig.res cmd arg -> hist a = fun r -> dm_iio_theta (cast_io_iio (k r)) in
+    calc (==) {
+      dm_io_theta m;
+      == {}
+      dm_io_theta (Call cmd arg k);
+      == { _ by (norm [delta_only [`%dm_io_theta;`%theta]; zeta; iota]) } // unfold theta
+      hist_bind (iio_wps cmd arg) (fun r -> dm_io_theta (k r));
+      == {}
+      hist_bind (iio_wps cmd arg) fst;
+    };
+    (** fst ==> snd /\ hist is monotonic **)
+    introduce forall (p:hist_post a) h. hist_bind (iio_wps cmd arg) fst p h ==> hist_bind (iio_wps cmd arg) snd p h with begin 
+      introduce forall (r:iio_sig.res cmd arg). (fst r `hist_ord` snd r) with begin
+        lemma_cast_io_iio (k r)
+      end
+    end;
+    calc (==) {
+      hist_bind (iio_wps cmd arg) snd;
+      == {}
+      hist_bind (iio_wps cmd arg) (fun r -> dm_iio_theta (cast_io_iio (k r)));
+      == { _ by (norm [delta_only [`%dm_iio_theta;`%theta]; zeta; iota]) }
+      dm_iio_theta (Call cmd arg (fun r -> cast_io_iio (k r)));
+      == { _ by (compute ()) }
+      dm_iio_theta (cast_io_iio (Call cmd arg k));
+      == {}
+      dm_iio_theta (cast_io_iio m);
+    }
+  end
+
+let lemma_cast_io_iio_2 #a (x:io a) (wp:hist a) :
+  Lemma
+    (requires (wp `hist_ord` DM.IO.dm_io_theta x))
+    (ensures (wp `hist_ord` dm_iio_theta (cast_io_iio x))) =
+  lemma_cast_io_iio x
+
 let lift_iowp_iiowp (a:Type) (wp:hist a) (f:DM.IO.dm_io a wp) :
   Tot (dm_iio a wp) =
-   // io_interp_to_iio_interp (f h p) h p;
+  lemma_cast_io_iio_2 f wp;
   cast_io_iio f
 
-sub_effect IOwp ~> IIOwp = lift_iowp_iiowp
-**)
+sub_effect DM.IO.IOwp ~> IIOwp = lift_iowp_iiowp
+
 
 let get_trace () : IIOwp trace
   (fun p h -> forall lt. lt == [] ==>  p lt h) =
