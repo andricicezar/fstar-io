@@ -1,60 +1,39 @@
-(* Define a partial Dijkstra monad for state *)
+(* Using the construction to derive state
+
+  We do it both in the case of the usual representation, and in the case of a
+  free monad. We have to adapt both to support partiality.
+*)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util guarded PURE.
+From PDM Require Import util guarded PDM.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
+Set Universe Polymorphism.
 
 Section State.
 
   Context (state : Type).
-
-  (* Computation monad *)
-
-  Definition M A := state → G (state * A).
-
-  Definition retᴹ [A] (x : A) : M A :=
-    λ s₀, retᴳ (s₀, x).
-
-  Definition bindᴹ [A B] (c : M A) (f : A → M B) : M B :=
-    λ s₀, bindᴳ (c s₀) (λ '(s₁, x), f x s₁).
-
-  Definition getᴹ : M state :=
-    λ s, retᴳ (s, s).
-
-  Definition putᴹ (s : state) : M unit :=
-    λ s₀, retᴳ (s, tt).
-
-  Definition reqᴹ (p : Prop) : M p :=
-    λ s₀, reqᴳ p (λ h, (s₀, h)).
 
   (* Specification monad *)
 
   Definition preᵂ := state → Prop.
   Definition postᵂ A := state → A → Prop.
 
-  Definition W A := postᵂ A → preᵂ.
+  Definition W' A := postᵂ A → preᵂ.
+
+  Class Monotonous [A] (w : W' A) :=
+    ismono : ∀ (P Q : postᵂ A) s₀, (∀ s₁ x, P s₁ x → Q s₁ x) → w P s₀ → w Q s₀.
+
+  Definition W A := { w : W' A | Monotonous w }.
+
+  Definition as_wp [A] (w : W' A) `{h : Monotonous _ w} : W A :=
+    exist _ w h.
 
   Definition wle [A] (w₀ w₁ : W A) : Prop :=
-    ∀ P s, w₁ P s → w₀ P s.
+    ∀ P s, val w₁ P s → val w₀ P s.
 
   Notation "x ≤ᵂ y" := (wle x y) (at level 80).
-
-  Definition retᵂ [A] (x : A) : W A :=
-    λ P s₀, P s₀ x.
-
-  Definition bindᵂ [A B] (w : W A) (wf : A → W B) : W B :=
-    λ P, w (λ s₁ x, wf x P s₁).
-
-  Definition getᵂ : W state :=
-    λ P s, P s s.
-
-  Definition putᵂ (s : state) : W unit :=
-    λ P s₀, P s tt.
-
-  Definition reqᵂ (p : Prop) : W p :=
-    λ P s₀, ∃ (h : p), P s₀ h.
 
   Instance trans [A] : Transitive (@wle A).
   Proof.
@@ -63,100 +42,153 @@ Section State.
     assumption.
   Qed.
 
-  (* Monotonicity *)
+  Definition retᵂ' [A] (x : A) : W' A :=
+    λ P s₀, P s₀ x.
 
-  Class Monotonous [A] (w : W A) :=
-    ismono : ∀ (P Q : postᵂ A) s₀, (∀ s₁ x, P s₁ x → Q s₁ x) → w P s₀ → w Q s₀.
-
-  Instance retᵂ_ismono [A] (x : A) : Monotonous (retᵂ x).
+  Instance retᵂ_ismono [A] (x : A) : Monotonous (retᵂ' x).
   Proof.
     intros P Q s₀ hPQ h.
     apply hPQ. apply h.
   Qed.
 
+  Definition retᵂ [A] (x : A) : W A :=
+    as_wp (retᵂ' x).
+
+  Definition bindᵂ' [A B] (w : W A) (wf : A → W B) : W' B :=
+    λ P, val w (λ s₁ x, val (wf x) P s₁).
+
   Instance bindᵂ_ismono [A B] (w : W A) (wf : A → W B) :
-    Monotonous w →
-    (∀ x, Monotonous (wf x)) →
-    Monotonous (bindᵂ w wf).
+    Monotonous (bindᵂ' w wf).
   Proof.
-    intros mw mwf.
+    destruct w as [w mw].
     intros P Q s₀ hPQ h.
     eapply mw. 2: exact h.
     simpl. intros s₁ x hf.
+    destruct (wf x) as [wf' mwf].
     eapply mwf. 2: exact hf.
     assumption.
   Qed.
 
-  Instance getᵂ_ismono : Monotonous (getᵂ).
-  Proof.
-    intros P Q s₀ hPQ h.
-    red. red in h.
-    apply hPQ. assumption.
-  Qed.
+  Definition bindᵂ [A B] (w : W A) (wf : A → W B) : W B :=
+    as_wp (bindᵂ' w wf).
 
-  Instance putᵂ_ismono : ∀ s, Monotonous (putᵂ s).
-  Proof.
-    intros s. intros P Q s₀ hPQ h.
-    apply hPQ. assumption.
-  Qed.
+  Definition reqᵂ' (p : Prop) : W' p :=
+    λ P s₀, ∃ (h : p), P s₀ h.
 
-  Instance reqᵂ_ismono : ∀ p, Monotonous (reqᵂ p).
+  Instance reqᵂ_ismono : ∀ p, Monotonous (reqᵂ' p).
   Proof.
     intros p. intros P Q s₀ hPQ h.
     destruct h as [hp h].
     exists hp. apply hPQ. assumption.
   Qed.
 
+  Definition reqᵂ (p : Prop) : W p :=
+    as_wp (reqᵂ' p).
+
+  Definition getᵂ' : W' state :=
+    λ P s, P s s.
+
+  Instance getᵂ_ismono : Monotonous getᵂ'.
+  Proof.
+    intros P Q s₀ hPQ h.
+    red. red in h.
+    apply hPQ. assumption.
+  Qed.
+
+  Definition getᵂ : W state :=
+    as_wp getᵂ'.
+
+  Definition putᵂ' (s : state) : W' unit :=
+    λ P s₀, P s tt.
+
+  Instance putᵂ_ismono : ∀ s, Monotonous (putᵂ' s).
+  Proof.
+    intros s. intros P Q s₀ hPQ h.
+    apply hPQ. assumption.
+  Qed.
+
+  Definition putᵂ (s : state) : W unit :=
+    as_wp (putᵂ' s).
+
   Lemma bindᵂ_mono :
     ∀ [A B] (w w' : W A) (wf wf' : A → W B),
-      Monotonous w' →
       w ≤ᵂ w' →
       (∀ x, wf x ≤ᵂ wf' x) →
       bindᵂ w wf ≤ᵂ bindᵂ w' wf'.
   Proof.
-    intros A B w w' wf wf' mw' hw hwf.
+    intros A B w w' wf wf' hw hwf.
     intros P s₀ h.
-    red. red in h.
-    apply hw. eapply mw'. 2: exact h.
+    do 3 red. do 3 red in h.
+    apply hw. destruct w' as [w' mw']. eapply mw'. 2: exact h.
     simpl. intros s₁ x hf. apply hwf. assumption.
   Qed.
 
-  (* Effect observation *)
+  (* State transformer version *)
+  Section Passing.
 
-  Definition θ [A] (c : M A) : W A :=
-    λ post s₀,
-      let '(p ; f) := c s₀ in
-      ∃ (h : p), let '(s₁, x) := f h in post s₁ x.
+    (* Computation monad *)
 
-  Lemma θ_ret :
-    ∀ A (x : A),
-      θ (retᴹ x) ≤ᵂ retᵂ x.
-  Proof.
-    intros A x. intros post s₀ h.
-    cbn. exists I. red in h. assumption.
-  Qed.
+    Definition M : ReqMonad := {|
+      M A := state → G (state * A) ;
+      ret A x := λ s₀, retᴳ (s₀, x) ;
+      bind A B c f := λ s₀, bindᴳ (c s₀) (λ '(s₁, x), f x s₁) ;
+      req p := λ s₀, reqᴳ p (λ h, (s₀, h))
+    |}.
 
-  Lemma θ_bind :
-    ∀ A B c f,
-      θ (@bindᴹ A B c f) ≤ᵂ bindᵂ (θ c) (λ x, θ (f x)).
-  Proof.
-    intros A B c f. intros post s₀ h.
-    red. red. red in h. red in h.
-    destruct (c s₀) as [p c']. clear c.
-    destruct h as [hp h].
-    simpl.
-    unshelve eexists.
-    { exists hp. destruct (c' hp) as [s₁ x]. red in h. destruct (f x s₁).
+    Definition getᴹ : M state :=
+      λ s, retᴳ (s, s).
+
+    Definition putᴹ (s : state) : M unit :=
+      λ s₀, retᴳ (s, tt).
+
+    (* Effect observation *)
+
+    Definition θ' [A] (c : M A) : W' A :=
+      λ post s₀,
+        let '(p ; f) := c s₀ in
+        ∃ (h : p), let '(s₁, x) := f h in post s₁ x.
+
+    Instance θ_ismono : ∀ A (c : M A), Monotonous (θ' c).
+    Proof.
+      intros A c. intros P Q s₀ hPQ h.
+      red. red in h. destruct (c s₀) as [p f].
+      destruct h as [hp h]. exists hp.
+      destruct (f hp) as [s₁ x]. apply hPQ. assumption.
+    Qed.
+
+    Definition θ [A] (c : M A) : W A :=
+      as_wp (θ' c).
+
+    Lemma θ_ret :
+      ∀ A (x : A),
+        θ (retᴹ x) ≤ᵂ retᵂ x.
+    Proof.
+      intros A x. intros post s₀ h.
+      cbn. exists I. red in h. assumption.
+    Qed.
+
+    Lemma θ_bind :
+      ∀ A B c f,
+        θ (@bindᴹ A B c f) ≤ᵂ bindᵂ (θ c) (λ x, θ (f x)).
+    Proof.
+      intros A B c f. intros post s₀ h.
+      do 4 red. do 6 red in h.
+      destruct (c s₀) as [p c']. clear c.
+      destruct h as [hp h].
+      simpl.
+      unshelve eexists.
+      { exists hp. destruct (c' hp) as [s₁ x]. do 3 red in h. destruct (f x s₁).
+        simpl. destruct h. assumption.
+      }
+      simpl. destruct (c' hp) as [s₁ x]. do 3 red in h. destruct (f x s₁).
       simpl. destruct h. assumption.
-    }
-    simpl. destruct (c' hp) as [s₁ x]. red in h. destruct (f x s₁).
-    simpl. destruct h. assumption.
-  Qed.
+    Qed.
 
   (* Partial Dijkstra monad *)
 
-  Definition D A w :=
-    { c : M A | θ c ≤ᵂ w }.
+  (* Should package things up using records *)
+  Definition D A w : Type :=
+    PDM.D A w.
 
   Definition retᴰ [A] (x : A) : D A (retᵂ x).
   Proof.

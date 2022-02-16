@@ -113,6 +113,7 @@ Section PDM.
 
   (* Lift from PURE *)
 
+  (* Would be nice to have a special case when W comes from pre and post + mono *)
   Context (liftᵂ : spec_lift_pure W) (hlift : PureSpec W Word liftᵂ).
 
   Arguments liftᵂ [_].
