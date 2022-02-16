@@ -9,21 +9,21 @@ open Hist
 open DMFree
 include Free.Sig
 
-let iio_wps (cmd:cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd) =
+let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd arg) =
   fun p (h:trace) ->
     match cmd with
     | GetTrace -> p [] h
     | _ -> 
-      io_pre cmd arg h /\ (forall (r:iio_sig.res cmd). p [convert_call_to_event cmd arg r] r)
+      io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
 
-let theta #a = theta #a #cmds #iio_sig #event iio_wps
+let theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
   
-let dm = dm cmds iio_sig event iio_wps
-let dm_return = dm_return cmds iio_sig event iio_wps
-let dm_bind = dm_bind cmds iio_sig event iio_wps
-let dm_subcomp = dm_subcomp cmds iio_sig event iio_wps
-let dm_if_then_else = dm_if_then_else cmds iio_sig event iio_wps
-let lift_pure_dm = lift_pure_dm cmds iio_sig event iio_wps
+let dm = dm iio_cmds iio_sig event iio_wps
+let dm_return = dm_return iio_cmds iio_sig event iio_wps
+let dm_bind = dm_bind iio_cmds iio_sig event iio_wps
+let dm_subcomp = dm_subcomp iio_cmds iio_sig event iio_wps
+let dm_if_then_else = dm_if_then_else iio_cmds iio_sig event iio_wps
+let lift_pure_dm = lift_pure_dm iio_cmds iio_sig event iio_wps
 
 total
 reifiable
@@ -66,13 +66,12 @@ let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
 
 let static_cmd
   (cmd : io_cmds)
-  (argz : iio_sig.args cmd) :
-  IO (iio_sig.res cmd)
-    (requires (fun h -> io_pre cmd argz h))
+  (arg : iio_sig.args cmd) :
+  IO (iio_sig.res cmd arg)
+    (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h lt r ->
-        lt == [convert_call_to_event cmd argz r]))
-    =
-  IOwp?.reflect (iio_call cmd argz)
+        lt == [convert_call_to_event cmd arg r])) =
+  IOwp?.reflect (iio_call cmd arg)
 
 let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (List.rev lt @ h))) =
   let _ = static_cmd Close fd in

@@ -18,21 +18,21 @@ unfold let io_args (cmd:io_cmds) : Type =
   | Read -> file_descr
   | Close -> file_descr
 
-unfold let io_res (cmd:io_cmds) : Type =
+unfold let io_res (cmd:io_cmds) (arg:io_args cmd) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) = option (io_res cmd)
+let io_resm (cmd:io_cmds) (arg:io_args cmd) = option (io_res cmd arg)
 
 let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
 
 noeq
 type event =
-  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile) -> event
-  | ERead     : a:io_args Read     -> (r:io_resm Read)     -> event
-  | EClose    : a:io_args Close    -> (r:io_resm Close)    -> event
+  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile a) -> event
+  | ERead     : a:io_args Read     -> (r:io_resm Read a)     -> event
+  | EClose    : a:io_args Close    -> (r:io_resm Close a)    -> event
 
 type trace = list event
 
@@ -50,23 +50,22 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let inst_res (x:inst_cmds) =
-  match x with
+let inst_args (cmd:inst_cmds) =
+  match cmd with
+  | GetTrace -> unit
+
+let inst_res (cmd:inst_cmds) (arg:inst_args cmd) =
+  match cmd with
   | GetTrace -> list event
 
 let inst_sig : op_sig inst_cmds = {
-  args = (fun (x:inst_cmds) -> match x with
-    | GetTrace -> unit) ;
-  res = inst_res
+  args = inst_args;
+  res = inst_res;
 }
 
-let iio_sig : op_sig cmds = add_sig cmds io_sig inst_sig
-
-let args (cmd:cmds) : Type = iio_sig.args cmd
-let res (cmd:cmds)  : (x:Type{x == iio_sig.res cmd}) =
-  admit ();
-  if cmd = GetTrace then inst_res cmd
-  else io_resm cmd
+let _iio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
+type iio_cmds = cmd:cmds{_iio_cmds cmd}
+let iio_sig : op_sig iio_cmds = add_sig cmds io_sig inst_sig
 
 type io a = free io_cmds io_sig a
 let io_return (x:'a) : io 'a =
@@ -84,7 +83,7 @@ let iio_bind (#a:Type) (#b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
 
 // OTHER TYPES & UTILS
-type action_type = (cmd : io_cmds) & (args cmd)
+type action_type = (cmd : io_cmds) & (io_sig.args cmd)
 
 type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
 
@@ -96,8 +95,8 @@ let convert_event_to_action (e:event) : action_type =
 
 let convert_call_to_event
   (cmd:io_cmds)
-  (arg:io_args cmd)
-  (r:io_resm cmd) =
+  (arg:io_sig.args cmd)
+  (r:io_sig.res cmd arg) =
   match cmd with
   | Openfile -> EOpenfile arg r
   | Read -> ERead arg r
@@ -125,7 +124,7 @@ unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
-let destruct_event (e:event) : ( cmd:io_cmds & io_args cmd & io_resm cmd )  =
+let destruct_event (e:event) : ( cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
   match e with
   | EOpenfile arg res -> (| Openfile, arg, res |)
   | ERead arg res -> (| Read, arg, res |)
@@ -152,10 +151,10 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
 
 (** This file is replaced during linking with a file that contains the real
 implementation of the commands. **)
-let io_call (cmd:io_cmds) (arg:io_args cmd) : io (io_resm cmd) =
+let io_call (cmd:io_cmds) (arg:io_sig.args cmd) : io (io_sig.res cmd arg) =
   Call cmd arg Return
 
 (** Since we can lift from io to iio, `iio_call` should be used only for 
 `GetTrace`. **)
-let iio_call (cmd:cmds) (arg:args cmd) : iio (res cmd) =
+let iio_call (cmd:cmds) (arg:iio_sig.args cmd) : iio (iio_sig.res cmd arg) =
   Call cmd arg Return

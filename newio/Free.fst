@@ -3,12 +3,12 @@ module Free
 noeq
 type op_sig (op:Type u#a) = {
   args : op -> Type u#a;
-  res : op -> Type u#a;
+  res : (cmd:op) -> (args cmd) -> Type u#a;
 }
 
 noeq
 type free (op:Type0) (s:op_sig op) (a:Type) : Type =
-| Call : (l:op) -> s.args l -> cont:(s.res l -> free op s a) -> free op s a
+| Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free op s a) -> free op s a
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free op s a) -> free op s a
 | Return : a -> free op s a
 

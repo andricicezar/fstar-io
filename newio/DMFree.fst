@@ -7,7 +7,7 @@ open FStar.Tactics
 open Free
 open Hist
 
-type op_wp (op:Type) (s:op_sig op) (event:Type) = (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd)
+type op_wp (op:Type) (s:op_sig op) (event:Type) = (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
 
 let partial_call_wp (pre:pure_pre) : hist (squash pre) = 
   let wp' : hist0 (squash pre) = fun p h -> pre /\ p [] () in
@@ -75,12 +75,12 @@ let rec lemma_theta_is_lax_morphism_bind (#op:Type) (#s:op_sig op) (#event:Type)
       == { lemma_hist_bind_associativity (cmd_wp cmd arg) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
       hist_bind (cmd_wp cmd arg) (fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)));
       `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
-        let rhs1 : s.res cmd -> hist 'b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
-        let rhs2 : s.res cmd -> hist 'b = fun r -> theta cmd_wp (free_bind op s _ _ (k r) f) in
-        introduce forall (r:s.res cmd). (rhs1 r) `hist_ord` (rhs2 r) with begin
+        let rhs1 : s.res cmd arg -> hist 'b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
+        let rhs2 : s.res cmd arg -> hist 'b = fun r -> theta cmd_wp (free_bind op s _ _ (k r) f) in
+        introduce forall (r:s.res cmd arg). (rhs1 r) `hist_ord` (rhs2 r) with begin
           lemma_theta_is_lax_morphism_bind cmd_wp (k r) f
         end;
-        another_lemma' #event #(s.res cmd) #'b (cmd_wp cmd arg) rhs1 rhs2;
+        another_lemma' #event #(s.res cmd arg) #'b (cmd_wp cmd arg) rhs1 rhs2;
         assert (hist_bind (cmd_wp cmd arg) rhs1 `hist_ord #_ #'b` hist_bind (cmd_wp cmd arg) rhs2) by (assumption ())
       }
       hist_bind (cmd_wp cmd arg) (fun r -> theta cmd_wp (free_bind op s _ _ (k r) f));

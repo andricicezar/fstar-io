@@ -9,7 +9,7 @@ open Hist
 open DMFree
 include Free.Sig
 
-unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) : hist #event (io_resm cmd) = fun p h ->
+unfold let io_wps (cmd:io_cmds) (arg:io_args cmd) : hist #event (io_resm cmd arg) = fun p h ->
   match cmd with
  // | GetTrace -> p [] h
   | _ -> io_pre cmd arg h /\ (forall r. p [convert_call_to_event cmd arg r] r)
@@ -64,12 +64,12 @@ let test'' () : IO unit (fun _ -> True) (fun _ _ _ -> True) =
 
 let static_cmd
   (cmd : io_cmds)
-  (argz : io_sig.args cmd) :
-  IO (io_sig.res cmd)
-    (requires (fun h -> io_pre cmd argz h))
+  (arg : io_sig.args cmd) :
+  IO (io_sig.res cmd arg)
+    (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h lt r ->
-        lt == [convert_call_to_event cmd argz r])) =
-  IOwp?.reflect (io_call cmd argz)
+        lt == [convert_call_to_event cmd arg r])) =
+  IOwp?.reflect (io_call cmd arg)
 
 let testStatic3 (fd:file_descr) : IO unit (fun h -> is_open fd h) (fun h lt r -> ~(is_open fd (List.rev lt @ h))) =
   let _ = static_cmd Close fd in
