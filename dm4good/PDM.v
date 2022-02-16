@@ -18,8 +18,7 @@ Record ReqMonad := {
 Arguments ret _ [_].
 Arguments bind _ [_ _].
 
-(* Relevant so should be Order *)
-Class Ordered (W : ReqMonad) := {
+Class Order (W : ReqMonad) := {
   wle : ∀ A, W A → W A → Prop ;
   trans : ∀ A, Transitive (@wle A)
 }.
@@ -28,7 +27,7 @@ Arguments wle {_ _ _}.
 
 Notation "x ≤ᵂ y" := (wle x y) (at level 80).
 
-Class MonoSpec (W : ReqMonad) (Word : Ordered W) := {
+Class MonoSpec (W : ReqMonad) (Word : Order W) := {
   bind_mono :
     ∀ A B (w w' : W A) (wf wf' : A → W B),
       w ≤ᵂ w' →
@@ -39,7 +38,7 @@ Class MonoSpec (W : ReqMonad) (Word : Ordered W) := {
 Definition observation (M W : ReqMonad) :=
   ∀ A (c : M A), W A.
 
-Class LaxMorphism {M W} (Word : Ordered W) (θ : observation M W) := {
+Class LaxMorphism {M W} (Word : Order W) (θ : observation M W) := {
   θ_ret :
     ∀ A (x : A),
       θ _ (M.(ret) x) ≤ᵂ W.(ret) x ;
@@ -53,7 +52,7 @@ Class LaxMorphism {M W} (Word : Ordered W) (θ : observation M W) := {
 Definition spec_lift_pure (W : ReqMonad) :=
   ∀ A (w : pure_wp A), W A.
 
-Class PureSpec (W : ReqMonad) (Word : Ordered W) (liftᵂ : spec_lift_pure W) := {
+Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
   req_lift :
     ∀ A w (f : PURE A w),
       W.(bind) (W.(req) (val w (λ _, True))) (λ h, W.(ret) (val (f h))) ≤ᵂ
@@ -68,7 +67,7 @@ Section PDM.
 
   (* Specification monad *)
 
-  Context (W : ReqMonad) (Word : Ordered W) (hmono : MonoSpec W Word).
+  Context (W : ReqMonad) (Word : Order W) (hmono : MonoSpec W Word).
 
   Existing Instance trans.
 
