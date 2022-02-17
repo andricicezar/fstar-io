@@ -24,7 +24,7 @@ Record ReqMonad := {
 Arguments ret _ [_].
 Arguments bind _ [_ _].
 
-Class Order (W : ReqMonad) := {
+Class Order (W : Monad) := {
   wle : ∀ A, W A → W A → Prop ;
   trans : ∀ A, Transitive (@wle A)
 }.
@@ -33,7 +33,7 @@ Arguments wle {_ _ _}.
 
 Notation "x ≤ᵂ y" := (wle x y) (at level 80).
 
-Class MonoSpec (W : ReqMonad) (Word : Order W) := {
+Class MonoSpec (W : Monad) (Word : Order W) := {
   bind_mono :
     ∀ A B (w w' : W A) (wf wf' : A → W B),
       w ≤ᵂ w' →
