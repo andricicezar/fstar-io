@@ -55,7 +55,7 @@ Proof.
     apply h₀₁. apply h₁₂. assumption.
 Defined.
 
-Definition spec_lift_pure (W : ReqMonad) :=
+Definition spec_lift_pure (W : Monad) :=
   ∀ A (w : pure_wp A), W A.
 
 Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
