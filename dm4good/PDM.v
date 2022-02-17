@@ -8,16 +8,6 @@ Set Printing Projections.
 Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 
-Definition spec_lift_pure (W : ReqMonad) :=
-  ∀ A (w : pure_wp A), W A.
-
-Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
-  req_lift :
-    ∀ A w (f : PURE A w),
-      W.(bind) (W.(req) (val w (λ _, True))) (λ h, W.(ret) (val (f h))) ≤ᵂ
-      liftᵂ _ w
-}.
-
 Section PDM.
 
   (* Computational monad with assert/req *)
