@@ -80,7 +80,10 @@ Section Guarded.
       unfold θᴳ. cbn - [pure_wp_reqmon].
       (* Not even clear it works *)
       admit.
-  Admitted.
+  Abort.
+
+  (* Until we find the proper assumptions, we will assume it *)
+  Context (hreqlax : @ReqLaxMorphism Mᴳ Wᴳ Word θᴳ).
 
   (* Partial Dijkstra monad *)
 
@@ -94,7 +97,10 @@ Section Guarded.
     constructor.
     intros A w f.
     simpl.
-  Admitted.
+  Abort.
+
+  (* Same here *)
+  Context (hlift : PureSpec Wᴳ Word liftᵂ).
 
   Check liftᴾ (M := Mᴳ) (W := Wᴳ) hmono hreqlax hlift.
 
