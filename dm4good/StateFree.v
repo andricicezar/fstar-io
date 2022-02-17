@@ -1,7 +1,7 @@
 (* Define a partial Dijkstra monad from a free monad for state *)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util guarded PURE PDM StateSpec.
+From PDM Require Import util structures guarded PURE PDM StateSpec.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
@@ -43,7 +43,7 @@ Section State.
     act_reqᴹ p (λ h, retᴹ h).
 
   Definition MSt : ReqMonad := {|
-    PDM.M := M ;
+    structures.M := M ;
     ret := retᴹ ;
     bind := bindᴹ ;
     req := reqᴹ

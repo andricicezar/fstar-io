@@ -1,6 +1,7 @@
 -Q . PDM
 
 util.v
+structures.v
 
 guarded.v
 PURE.v

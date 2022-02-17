@@ -1,7 +1,7 @@
 (* Specification monad for state *)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util guarded PURE PDM.
+From PDM Require Import util structures guarded PURE PDM.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
