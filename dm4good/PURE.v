@@ -47,6 +47,14 @@ Proof.
   auto.
 Defined.
 
+#[export] Instance pure_wp_ord : Order pure_wp_monad.
+Proof.
+  unshelve eexists.
+  - intros A w₀ w₁. exact (∀ post, val w₁ post → val w₀ post).
+  - intros A. intros w₀ w₁ w₂ h₀₁ h₁₂. intros post h.
+    apply h₀₁. apply h₁₂. assumption.
+Defined.
+
 Definition spec_lift_pure (W : ReqMonad) :=
   ∀ A (w : pure_wp A), W A.
 
@@ -56,3 +64,18 @@ Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
       W.(bind) (W.(req) (val w (λ _, True))) (λ h, W.(ret) (val (f h))) ≤ᵂ
       liftᵂ _ w
 }.
+
+(* We can lift PURE to itself *)
+#[export] Instance PureSpec_pure : PureSpec pure_wp_reqmon _ (λ A w, w).
+Proof.
+  constructor.
+  intros A w f. intros post h.
+  simpl.
+  assert (hpre : val w (λ _, True)).
+  { destruct w as [w hw].
+    eapply hw. 2: exact h.
+    auto.
+  }
+  exists hpre. destruct (f hpre) as [a ha].
+  apply ha. apply h.
+Qed.
