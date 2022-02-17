@@ -7,5 +7,6 @@ PURE.v
 PDM.v
 
 # Examples
-StateFree.v
+StateSpec.v
 State.v
+StateFree.v
