@@ -5,7 +5,7 @@
 *)
 
 From Coq Require Import Utf8 RelationClasses.
-From PDM Require Import util guarded PDM.
+From PDM Require Import util guarded PURE PDM.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
@@ -29,18 +29,6 @@ Section State.
 
   Definition as_wp [A] (w : W' A) `{h : Monotonous _ w} : W A :=
     exist _ w h.
-
-  Definition wle [A] (w₀ w₁ : W A) : Prop :=
-    ∀ P s, val w₁ P s → val w₀ P s.
-
-  Notation "x ≤ᵂ y" := (wle x y) (at level 80).
-
-  Instance trans [A] : Transitive (@wle A).
-  Proof.
-    intros x y z h₁ h₂. intros P s₀ h.
-    apply h₁. apply h₂.
-    assumption.
-  Qed.
 
   Definition retᵂ' [A] (x : A) : W' A :=
     λ P s₀, P s₀ x.
@@ -110,12 +98,27 @@ Section State.
   Definition putᵂ (s : state) : W unit :=
     as_wp (putᵂ' s).
 
-  Lemma bindᵂ_mono :
-    ∀ [A B] (w w' : W A) (wf wf' : A → W B),
-      w ≤ᵂ w' →
-      (∀ x, wf x ≤ᵂ wf' x) →
-      bindᵂ w wf ≤ᵂ bindᵂ w' wf'.
+  Definition WSt : ReqMonad := {|
+    M := W ;
+    ret := retᵂ ;
+    bind := bindᵂ ;
+    req := reqᵂ
+  |}.
+
+  Definition wle [A] (w₀ w₁ : W A) : Prop :=
+    ∀ P s, val w₁ P s → val w₀ P s.
+
+  Instance WOrder : Order WSt.
   Proof.
+    exists wle.
+    intros A x y z h₁ h₂. intros P s₀ h.
+    apply h₁. apply h₂.
+    assumption.
+  Defined.
+
+  Instance hmono : MonoSpec WSt WOrder.
+  Proof.
+    constructor.
     intros A B w w' wf wf' hw hwf.
     intros P s₀ h.
     do 3 red. do 3 red in h.
@@ -159,98 +162,74 @@ Section State.
     Definition θ [A] (c : M A) : W A :=
       as_wp (θ' c).
 
-    Lemma θ_ret :
-      ∀ A (x : A),
-        θ (retᴹ x) ≤ᵂ retᵂ x.
+    Instance θ_morph : LaxMorphism WOrder θ.
     Proof.
-      intros A x. intros post s₀ h.
-      cbn. exists I. red in h. assumption.
-    Qed.
-
-    Lemma θ_bind :
-      ∀ A B c f,
-        θ (@bindᴹ A B c f) ≤ᵂ bindᵂ (θ c) (λ x, θ (f x)).
-    Proof.
-      intros A B c f. intros post s₀ h.
-      do 4 red. do 6 red in h.
-      destruct (c s₀) as [p c']. clear c.
-      destruct h as [hp h].
-      simpl.
-      unshelve eexists.
-      { exists hp. destruct (c' hp) as [s₁ x]. do 3 red in h. destruct (f x s₁).
+      constructor.
+      - intros A x. intros post s₀ h.
+        cbn. exists I. red in h. assumption.
+      - intros A B c f. intros post s₀ h.
+        unfold bind. simpl. unfold θ'.
+        unfold bind in h. simpl in h. unfold θ' in h.
+        destruct (c s₀) as [p c']. clear c.
+        destruct h as [hp h].
+        simpl.
+        unshelve eexists.
+        { exists hp. destruct (c' hp) as [s₁ x]. destruct (f x s₁).
+          simpl. destruct h. assumption.
+        }
+        simpl. destruct (c' hp) as [s₁ x]. destruct (f x s₁).
         simpl. destruct h. assumption.
-      }
-      simpl. destruct (c' hp) as [s₁ x]. do 3 red in h. destruct (f x s₁).
-      simpl. destruct h. assumption.
+      - intro p. intros post s₀ h.
+        assumption.
     Qed.
 
-  (* Partial Dijkstra monad *)
+    (* Partial Dijkstra monad *)
 
-  (* Should package things up using records *)
-  Definition D A w : Type :=
-    PDM.D A w.
+    Definition D : DijkstraMonad WOrder :=
+      PDM.D M WSt WOrder hmono θ θ_morph.
 
-  Definition retᴰ [A] (x : A) : D A (retᵂ x).
-  Proof.
-    exists (retᴹ x).
-    apply θ_ret.
-  Defined.
+    (* Universe inconsistency *)
+    (* Definition getᴰ : D state getᵂ.
+    Proof.
+      exists getᴹ.
+      cbv. intros post s h. exists I. assumption.
+    Defined. *)
 
-  Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x))
-    `{Monotonous _ w} :
-    D B (bindᵂ w wf).
-  Proof.
-    exists (bindᴹ (val c) (λ x, val (f x))).
-    etransitivity. 1: apply θ_bind.
-    apply bindᵂ_mono.
-    - assumption.
-    - destruct c. assumption.
-    - intro x. destruct (f x). assumption.
-  Qed.
+    Definition putᴰ s : D unit (putᵂ s).
+    Proof.
+      exists (putᴹ s).
+      cbv. intros post s₀ h. exists I. assumption.
+    Defined.
 
-  Definition subcompᴰ [A w w'] (c : D A w) {h : w ≤ᵂ w'} : D A w'.
-  Proof.
-    exists (val c).
-    etransitivity. 2: exact h.
-    destruct c. assumption.
-  Defined.
+    (* Lift from PURE *)
 
-  Definition getᴰ : D state getᵂ.
-  Proof.
-    exists getᴹ.
-    cbv. intros post s h. exists I. assumption.
-  Defined.
+    Definition liftᵂ [A] (w : pure_wp A) : W A.
+    Proof.
+      exists (λ P s₀, val w (λ x, P s₀ x)).
+      intros P Q s₀ hPQ h.
+      destruct w as [w mw].
+      eapply mw. 2: exact h.
+      apply hPQ.
+    Defined.
 
-  Definition putᴰ s : D unit (putᵂ s).
-  Proof.
-    exists (putᴹ s).
-    cbv. intros post s₀ h. exists I. assumption.
-  Defined.
+    Instance hlift : PureSpec WSt WOrder liftᵂ.
+    Proof.
+      constructor.
+      intros A w f.
+      intros P s h.
+      assert (hpre : val w (λ _, True)).
+      { unfold liftᵂ in h.
+        destruct w as [w hw].
+        eapply hw. 2: exact h.
+        auto.
+      }
+      cbv. exists hpre.
+      pose proof (prf (f hpre)) as hf. simpl in hf.
+      apply hf in h. assumption.
+    Qed.
 
-  Definition reqᴰ (p : Prop) : D p (reqᵂ p).
-  Proof.
-    exists (reqᴹ p).
-    cbv. auto.
-  Defined.
+    Check liftᴾ M WSt WOrder hmono θ θ_morph liftᵂ hlift.
 
-  (* Lift from PURE *)
-
-  Definition liftᵂ [A] (w : pure_wp A) : W A :=
-    λ P s₀, val w (λ x, P s₀ x).
-
-  Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ w).
-  Proof.
-    refine (subcompᴰ (bindᴰ (reqᴰ (val w (λ _, True))) (λ h, retᴰ (val (f h))))).
-    intros P s h.
-    assert (hpre : val w (λ _, True)).
-    { unfold liftᵂ in h.
-      destruct w as [w hw].
-      eapply hw. 2: exact h.
-      auto.
-    }
-    cbv. exists hpre.
-    pose proof (prf (f hpre)) as hf. simpl in hf.
-    apply hf in h. assumption.
-  Defined.
+  End Passing.
 
 End State.

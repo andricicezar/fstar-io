@@ -59,6 +59,17 @@ Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
       liftᵂ _ w
 }.
 
+Record DijkstraMonad {W} (WOrd : Order W) := {
+  DM :> ∀ A (w : W A), Type ;
+  retᴰ : ∀ A (x : A), DM A (W.(ret) x) ;
+  bindᴰ : ∀ A B w wf (c : DM A w) (f : ∀ x, DM B (wf x)), DM B (W.(bind) w wf) ;
+  subcompᴰ : ∀ A w w' (c : DM A w) (h : w ≤ᵂ w'), DM A w'
+}.
+
+Arguments retᴰ {_ _} _ [_].
+Arguments bindᴰ {_ _} _ [_ _ _ _].
+Arguments subcompᴰ {_ _} _ [_ _ _] _ {_}.
+
 Section PDM.
 
   (* Computational monad with assert/req *)
@@ -79,30 +90,24 @@ Section PDM.
 
   (* Partial Dijkstra monad *)
 
-  Definition D A w :=
-    { c : M A | θ c ≤ᵂ w }.
-
-  Definition retᴰ [A] (x : A) : D A (W.(ret) x).
+  Definition D : DijkstraMonad Word.
   Proof.
-    exists (M.(ret) x).
-    apply θ_ret.
-  Defined.
-
-  Definition bindᴰ [A B w wf] (c : D A w) (f : ∀ x, D B (wf x)) :
-    D B (W.(bind) w wf).
-  Proof.
-    exists (M.(bind) (val c) (λ x, val (f x))).
-    etransitivity. 1: apply θ_bind.
-    apply bind_mono.
-    - destruct c. assumption.
-    - intro x. destruct (f x). assumption.
-  Qed.
-
-  Definition subcompᴰ [A w w'] (c : D A w) {h : w ≤ᵂ w'} : D A w'.
-  Proof.
-    exists (val c).
-    etransitivity. 2: exact h.
-    destruct c. assumption.
+    simple refine {|
+      DM A w := { c : M A | θ c ≤ᵂ w }
+    |}.
+    - intros A x.
+      exists (M.(ret) x).
+      apply θ_ret.
+    - intros A B w wf c f.
+      exists (M.(bind) (val c) (λ x, val (f x))).
+      etransitivity. 1: apply θ_bind.
+      apply bind_mono.
+      + destruct c. assumption.
+      + intro x. destruct (f x). assumption.
+    - intros A w w' c h.
+      exists (val c).
+      etransitivity. 2: exact h.
+      destruct c. assumption.
   Defined.
 
   Definition reqᴰ (p : Prop) : D p (W.(req) p).
@@ -120,7 +125,7 @@ Section PDM.
 
   Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ w).
   Proof.
-    refine (subcompᴰ (bindᴰ (reqᴰ (val w (λ _, True))) (λ h, retᴰ (val (f h))))).
+    refine (D.(subcompᴰ) (D.(bindᴰ) (reqᴰ (val w (λ _, True))) (λ h, D.(retᴰ) (val (f h))))).
     apply req_lift.
   Defined.
 
