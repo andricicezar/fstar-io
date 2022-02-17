@@ -45,9 +45,57 @@ Section Guarded.
   Defined.
 
   (* Now we extend the spec monad with req, we do this using a liftᵂ *)
+  (* TODO: Should it generally be built this way? *)
 
-  (* Context (liftᵂ : spec_lift_pure W).
+  Context (liftᵂ : spec_lift_pure W).
 
-  Definition Wᴳ *)
+  Arguments liftᵂ [_].
+
+  Definition Wᴳ : ReqMonad := {|
+    Mq := W ;
+    req p := liftᵂ (pure_wp_reqmon.(req) p)
+  |}.
+
+  (* New effect observation *)
+
+  Definition θᴳ : observation Mᴳ Wᴳ :=
+    λ A c, Wᴳ.(bind) (Wᴳ.(req) c.π1) (λ h, θ (c.π2 h)).
+
+  (* We now extend the effect observation *)
+  Instance hreqlax : @ReqLaxMorphism Mᴳ Wᴳ Word θᴳ.
+  Proof.
+    constructor. 1: constructor.
+    - intros A x.
+      unfold θᴳ.
+      simpl. etransitivity.
+      + eapply bind_mono.
+        * admit. (* Maybe we need refl *)
+        * intro y. apply θ_ret.
+      + (* Would the laws help here? Not clear. *)
+        admit.
+    - intros A B c f.
+      unfold θᴳ. simpl. (* Might be hard to find a general case here *)
+      admit.
+    - intro p.
+      unfold θᴳ. cbn - [pure_wp_reqmon].
+      (* Not even clear it works *)
+      admit.
+  Admitted.
+
+  (* Partial Dijkstra monad *)
+
+  Definition D : DijkstraMonad Word :=
+    PDM.D (M := Mᴳ) (W := Wᴳ) hmono hreqlax.
+
+  (* Lift from PURE *)
+
+  Instance hlift : PureSpec Wᴳ Word liftᵂ.
+  Proof.
+    constructor.
+    intros A w f.
+    simpl.
+  Admitted.
+
+  Check liftᴾ (M := Mᴳ) (W := Wᴳ) hmono hreqlax hlift.
 
 End Guarded.
