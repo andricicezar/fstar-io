@@ -6,6 +6,7 @@ From PDM Require Import util PURE.
 Set Default Goal Selector "!".
 Set Printing Projections.
 Set Universe Polymorphism.
+Unset Universe Minimization ToSet.
 
 (* Monad with a require operator (not checking laws) *)
 Record ReqMonad := {
@@ -119,7 +120,7 @@ Section PDM.
   (* Lift from PURE *)
 
   (* Would be nice to have a special case when W comes from pre and post + mono *)
-  Context (liftᵂ : spec_lift_pure W) (hlift : PureSpec W Word liftᵂ).
+  Context {liftᵂ : spec_lift_pure W} (hlift : PureSpec W Word liftᵂ).
 
   Arguments liftᵂ [_].
 

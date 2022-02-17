@@ -6,6 +6,7 @@ From PDM Require Import util guarded PURE PDM.
 Set Default Goal Selector "!".
 Set Printing Projections.
 Set Universe Polymorphism.
+Unset Universe Minimization ToSet.
 
 Section State.
 
@@ -118,6 +119,31 @@ Section State.
     do 3 red. do 3 red in h.
     apply hw. destruct w' as [w' mw']. eapply mw'. 2: exact h.
     simpl. intros s₁ x hf. apply hwf. assumption.
+  Qed.
+
+  Definition liftᵂ [A] (w : pure_wp A) : WSt A.
+  Proof.
+    exists (λ P s₀, val w (λ x, P s₀ x)).
+    intros P Q s₀ hPQ h.
+    destruct w as [w mw].
+    eapply mw. 2: exact h.
+    apply hPQ.
+  Defined.
+
+  Instance hlift : PureSpec WSt WStOrder liftᵂ.
+  Proof.
+    constructor.
+    intros A w f.
+    intros P s h.
+    assert (hpre : val w (λ _, True)).
+    { unfold liftᵂ in h.
+      destruct w as [w hw].
+      eapply hw. 2: exact h.
+      auto.
+    }
+    cbv. exists hpre.
+    pose proof (prf (f hpre)) as hf. simpl in hf.
+    apply hf in h. assumption.
   Qed.
 
 End State.

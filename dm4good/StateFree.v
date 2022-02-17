@@ -6,6 +6,7 @@ From PDM Require Import util guarded PURE PDM StateSpec.
 Set Default Goal Selector "!".
 Set Printing Projections.
 Set Universe Polymorphism.
+Unset Universe Minimization ToSet.
 
 Section State.
 
@@ -83,11 +84,11 @@ Section State.
   Definition D : DijkstraMonad WStOrder :=
     PDM.D WStMono θ_morph.
 
-  (* Definition getᴰ : D state getᵂ.
+  Definition getᴰ : D state getᵂ.
   Proof.
     exists getᴹ.
     cbv. auto.
-  Defined. *)
+  Defined.
 
   Definition putᴰ s : D unit (putᵂ s).
   Proof.
@@ -97,22 +98,6 @@ Section State.
 
   (* Lift from PURE *)
 
-  (* Definition liftᵂ [A] (w : pure_wp A) : WSt A.
-    λ P s₀, val w (λ x, P s₀ x).
-
-  Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ w).
-  Proof.
-    refine (subcompᴰ (bindᴰ (reqᴰ (val w (λ _, True))) (λ h, retᴰ (val (f h))))).
-    intros P s h.
-    assert (hpre : val w (λ _, True)).
-    { unfold liftᵂ in h.
-      destruct w as [w hw].
-      eapply hw. 2: exact h.
-      auto.
-    }
-    cbv. exists hpre.
-    pose proof (prf (f hpre)) as hf. simpl in hf.
-    apply hf in h. assumption.
-  Defined. *)
+  Check liftᴾ WStMono θ_morph hlift.
 
 End State.
