@@ -30,7 +30,7 @@ Defined.
 
 (* Partial DM *)
 
-Definition D : ∀ A (w : pure_wp A), Type.
+Definition D : DijkstraMonad pure_wp_ord.
 Proof.
   simple refine (GuardedPDM.D (M := M) MonoSpec_pure (θ := θ) (λ A w, w) _).
   (* Proving we still have a lax morphism *)
