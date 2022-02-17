@@ -7,6 +7,9 @@ guarded.v
 PURE.v
 PDM.v
 
+# Special cases
+GuardedPDM.v
+
 # Examples
 StateSpec.v
 State.v
