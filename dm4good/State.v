@@ -68,7 +68,7 @@ Section State.
   (* Partial Dijkstra monad *)
 
   Definition D : DijkstraMonad WStOrder :=
-    PDM.D M WSt _ WStMono θ θ_morph.
+    PDM.D WStMono θ_morph.
 
   (* Universe inconsistency *)
   (* Definition getᴰ : D state getᵂ.

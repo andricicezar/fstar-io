@@ -81,7 +81,7 @@ Section State.
   (* Partial Dijkstra monad *)
 
   Definition D : DijkstraMonad WStOrder :=
-    PDM.D MSt WSt _ WStMono θ θ_morph.
+    PDM.D WStMono θ_morph.
 
   (* Definition getᴰ : D state getᵂ.
   Proof.

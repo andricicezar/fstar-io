@@ -74,17 +74,17 @@ Section PDM.
 
   (* Computational monad with assert/req *)
 
-  Context (M : ReqMonad).
+  Context {M : ReqMonad}.
 
   (* Specification monad *)
 
-  Context (W : ReqMonad) (Word : Order W) (hmono : MonoSpec W Word).
+  Context {W : ReqMonad} {Word : Order W} (hmono : MonoSpec W Word).
 
   Existing Instance trans.
 
   (* Effect observation *)
 
-  Context (θ : observation M W) (hlax : LaxMorphism Word θ).
+  Context {θ : observation M W} (hlax : LaxMorphism Word θ).
 
   Arguments θ [_].
 
