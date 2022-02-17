@@ -1,8 +1,4 @@
-(* Using the construction to derive state
-
-  We do it both in the case of the usual representation, and in the case of a
-  free monad. We have to adapt both to support partiality.
-*)
+(* Using the construction to derive state *)
 
 From Coq Require Import Utf8 RelationClasses.
 From PDM Require Import util guarded PURE PDM StateSpec.
