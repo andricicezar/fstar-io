@@ -55,6 +55,17 @@ Proof.
     apply h₀₁. apply h₁₂. assumption.
 Defined.
 
+#[export] Instance MonoSpec_pure : MonoSpec _ pure_wp_ord.
+Proof.
+  constructor.
+  intros A B w w' wf wf' hw hwf.
+  intros post h.
+  simpl. simpl in h.
+  eapply hw. destruct w' as [w' hw'].
+  eapply hw'. 2: exact h.
+  simpl. intro x. apply hwf.
+Qed.
+
 Definition spec_lift_pure (W : Monad) :=
   ∀ A (w : pure_wp A), W A.
 
