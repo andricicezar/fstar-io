@@ -16,18 +16,18 @@ Section State.
 
   Definition M : ReqMonad := {|
     Mq := {|
-      Mo A := state → G (state * A) ;
-      ret A x := λ s₀, retᴳ (s₀, x) ;
-      bind A B c f := λ s₀, bindᴳ (c s₀) (λ '(s₁, x), f x s₁)
+      Mo A := state → G (state * A)%type ;
+      ret A x := λ s₀, G.(ret) (s₀, x) ;
+      bind A B c f := λ s₀, G.(bind) (c s₀) (λ '(s₁, x), f x s₁)
     |} ;
-    req p := λ s₀, reqᴳ p (λ h, (s₀, h))
+    req p := λ s₀, G.(bind) (G.(req) p) (λ h, G.(ret) (s₀, h))
   |}.
 
   Definition getᴹ : M state :=
-    λ s, retᴳ (s, s).
+    λ s, G.(ret) (s, s).
 
   Definition putᴹ (s : state) : M unit :=
-    λ s₀, retᴳ (s, tt).
+    λ s₀, G.(ret) (s, tt).
 
   (* Effect observation *)
 
@@ -65,7 +65,11 @@ Section State.
       simpl. destruct (c' hp) as [s₁ x]. destruct (f x s₁).
       simpl. destruct h. assumption.
     - intro p. intros post s₀ h.
-      assumption.
+      cbv. cbv in h.
+      destruct h as [hp h].
+      unshelve eexists.
+      { exists hp. auto. }
+      simpl. assumption.
   Qed.
 
   (* Partial Dijkstra monad *)
