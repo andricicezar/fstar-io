@@ -21,7 +21,7 @@ Definition PURE A (w : pure_wp A) :=
 
 (* ReqMonad instance for pure_wp *)
 
-Definition pure_wp_struct : ReqMonad.
+Definition pure_wp_monad : Monad.
 Proof.
   exists pure_wp.
   - intros A x.
@@ -35,11 +35,16 @@ Proof.
     simpl. intros x hx. destruct (wf x) as [wf' h'].
     eapply h'. 2: exact hx.
     auto.
-  - intro p.
-    exists (λ post, ∃ (h : p), post h).
-    cbv. intros P Q hPQ h.
-    destruct h as [hp h]. exists hp.
-    auto.
+Defined.
+
+Definition pure_wp_reqmon : ReqMonad.
+Proof.
+  exists pure_wp_monad.
+  intro p.
+  exists (λ post, ∃ (h : p), post h).
+  cbv. intros P Q hPQ h.
+  destruct h as [hp h]. exists hp.
+  auto.
 Defined.
 
 Definition spec_lift_pure (W : ReqMonad) :=

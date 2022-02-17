@@ -94,9 +94,11 @@ Section State.
     as_wp (putᵂ' s).
 
   Definition WSt : ReqMonad := {|
-    M := W ;
-    ret := retᵂ ;
-    bind := bindᵂ ;
+    Mq := {|
+      Mo := W ;
+      ret := retᵂ ;
+      bind := bindᵂ
+    |} ;
     req := reqᵂ
   |}.
 

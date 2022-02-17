@@ -15,9 +15,11 @@ Section State.
   (* Computation monad *)
 
   Definition M : ReqMonad := {|
-    M A := state → G (state * A) ;
-    ret A x := λ s₀, retᴳ (s₀, x) ;
-    bind A B c f := λ s₀, bindᴳ (c s₀) (λ '(s₁, x), f x s₁) ;
+    Mq := {|
+      Mo A := state → G (state * A) ;
+      ret A x := λ s₀, retᴳ (s₀, x) ;
+      bind A B c f := λ s₀, bindᴳ (c s₀) (λ '(s₁, x), f x s₁)
+    |} ;
     req p := λ s₀, reqᴳ p (λ h, (s₀, h))
   |}.
 

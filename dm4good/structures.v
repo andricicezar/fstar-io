@@ -8,12 +8,17 @@ Set Printing Projections.
 Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 
-(* Monad with a require operator (not checking laws) *)
+(* Monad structure (no laws) *)
+Record Monad := {
+  Mo :> Type → Type ;
+  ret : ∀ A (x : A), Mo A ;
+  bind : ∀ A B (c : Mo A) (f : A → Mo B), Mo B
+}.
+
+(* Monad with a require operator *)
 Record ReqMonad := {
-  M :> Type → Type ;
-  ret : ∀ A (x : A), M A ;
-  bind : ∀ A B (c : M A) (f : A → M B), M B ;
-  req : ∀ (p : Prop), M p
+  Mq :> Monad ;
+  req : ∀ (p : Prop), Mq p
 }.
 
 Arguments ret _ [_].

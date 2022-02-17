@@ -43,9 +43,11 @@ Section State.
     act_reqᴹ p (λ h, retᴹ h).
 
   Definition MSt : ReqMonad := {|
-    structures.M := M ;
-    ret := retᴹ ;
-    bind := bindᴹ ;
+    Mq := {|
+      Mo := M ;
+      ret := retᴹ ;
+      bind := bindᴹ
+    |} ;
     req := reqᴹ
   |}.
 
