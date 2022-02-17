@@ -61,9 +61,9 @@ Section State.
     | act_reqᴹ p k => bindᵂ (reqᵂ p) (λ x, θ (k x))
     end.
 
-  Instance θ_morph : LaxMorphism WStOrder θ.
+  Instance θ_morph : ReqLaxMorphism WStOrder θ.
   Proof.
-    constructor.
+    constructor. 1: constructor.
     - intros A x. intros P s₀ h.
       cbn. red in h. assumption.
     - intros A B c f.

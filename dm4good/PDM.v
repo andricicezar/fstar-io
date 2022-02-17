@@ -22,7 +22,7 @@ Section PDM.
 
   (* Effect observation *)
 
-  Context {θ : observation M W} (hlax : LaxMorphism Word θ).
+  Context {θ : observation M W} (hlax : ReqLaxMorphism Word θ).
 
   Arguments θ [_].
 

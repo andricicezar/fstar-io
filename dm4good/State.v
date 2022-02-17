@@ -47,9 +47,9 @@ Section State.
   Definition θ [A] (c : M A) : W A :=
     as_wp (θ' c).
 
-  Instance θ_morph : LaxMorphism WStOrder θ.
+  Instance θ_morph : ReqLaxMorphism WStOrder θ.
   Proof.
-    constructor.
+    constructor. 1: constructor.
     - intros A x. intros post s₀ h.
       cbn. exists I. red in h. assumption.
     - intros A B c f. intros post s₀ h.

@@ -41,7 +41,7 @@ Class MonoSpec (W : ReqMonad) (Word : Order W) := {
       W.(bind) w wf ≤ᵂ W.(bind) w' wf'
 }.
 
-Definition observation (M W : ReqMonad) :=
+Definition observation (M W : Monad) :=
   ∀ A (c : M A), W A.
 
 Class LaxMorphism {M W} (Word : Order W) (θ : observation M W) := {
@@ -50,7 +50,11 @@ Class LaxMorphism {M W} (Word : Order W) (θ : observation M W) := {
       θ _ (M.(ret) x) ≤ᵂ W.(ret) x ;
   θ_bind :
     ∀ A B c f,
-      θ _ (M.(@bind) A B c f) ≤ᵂ W.(bind) (θ _ c) (λ x, θ _ (f x)) ;
+      θ _ (M.(@bind) A B c f) ≤ᵂ W.(bind) (θ _ c) (λ x, θ _ (f x))
+}.
+
+Class ReqLaxMorphism {M W : ReqMonad} (Word : Order W) (θ : observation M W) := {
+  θ_lax :> LaxMorphism Word θ ;
   θ_req :
     ∀ p, θ _ (M.(req) p) ≤ᵂ W.(req) p
 }.
