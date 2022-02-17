@@ -4,13 +4,13 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
-open Free.IO
+open IO.Sig
 open DM.IIO
 open TC.Checkable
 include TC.Trivialize
 
-let post_as_wp post = (fun h p -> forall r lt. post h r lt ==> p r lt)
-let pre_post_as_wp pre post = (fun h p -> pre h /\ (forall r lt. post h r lt ==> p r lt))
+let post_as_wp post : hist _ = (fun p h -> forall r lt. post h r lt ==> p lt r)
+let pre_post_as_wp pre post : hist _ = (fun p h -> pre h /\ (forall r lt. post h r lt ==> p lt r))
 
 (** functions in the IIO effect can not be trivial since they hide a pre-condition.
 Check TC.Trivialize for more details. **)

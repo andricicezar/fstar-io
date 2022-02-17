@@ -1,9 +1,10 @@
-module Free.IO.Sig
+module IO.Sig
 
 open FStar.List.Tot.Base
 
 open Common
-open Free
+include Free
+include Hist
 
 type cmds = | Openfile | Read | Close | GetTrace
 
@@ -17,21 +18,27 @@ unfold let io_args (cmd:io_cmds) : Type =
   | Read -> file_descr
   | Close -> file_descr
 
-unfold let io_res (cmd:io_cmds) (arg:io_args cmd) : Type =
+unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) (arg:io_args cmd) = option (io_res cmd arg)
+let io_resm (cmd:io_cmds) = option (io_res cmd)
 
-let io_sig : op_sig io_cmds = { args = io_args; res = io_resm; }
+unfold
+let io_resm' (cmd:io_cmds) (arg:io_args cmd) = io_resm cmd
+
+unfold
+let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : a:io_args Openfile -> (r:io_resm Openfile a) -> event
-  | ERead     : a:io_args Read     -> (r:io_resm Read a)     -> event
-  | EClose    : a:io_args Close    -> (r:io_resm Close a)    -> event
+  | EOpenfile : a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
+  | ERead     : a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EClose    : a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
+
+let hist = Hist.hist #event
 
 type trace = list event
 
@@ -98,8 +105,8 @@ let convert_call_to_event
   (r:io_sig.res cmd arg) =
   match cmd with
   | Openfile -> EOpenfile arg r
-  | Read -> ERead arg r
-  | Close -> EClose arg r
+  | Read     -> ERead arg r
+  | Close    -> EClose arg r
 
 let rec enforced_locally
   (check : monitorable_prop)
@@ -147,3 +154,8 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Openfile -> True
   | Read -> is_open arg h
   | Close -> is_open arg h
+
+unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
+  match cmd with
+  | GetTrace -> p [] h
+  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)

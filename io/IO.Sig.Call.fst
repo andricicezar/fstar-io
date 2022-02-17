@@ -1,7 +1,6 @@
-module Free.IO.Call
+module IO.Sig.Call
 
-open Free
-open Free.IO.Sig
+open IO.Sig
 
 (** This file is replaced during linking with a file that contains the real
 implementation of the commands. **)

@@ -5,12 +5,10 @@ open ExtraTactics
 open FStar.Calc
 
 open Common
-open Free
-open DMFree
-open Free.IO.Sig
-open Free.IO.Call
-open Hist
 open DM.IO
+open DMFree
+open IO.Sig
+open IO.Sig.Call
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
@@ -36,7 +34,7 @@ total
 reifiable
 reflectable
 effect {
-  IIOwp (a:Type) (wp : hist #event a) 
+  IIOwp (a:Type) (wp : hist a) 
   with {
        repr       = dm_iio
      ; return     = dm_iio_return

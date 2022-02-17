@@ -4,7 +4,7 @@ open FStar.Tactics
 open ExtraTactics
 
 open Common
-open Free.IO
+open IO.Sig
 open DM.IIO
 
 (** This tactic has the role to help F*/SMT to prove

@@ -4,11 +4,9 @@ open FStar.Tactics
 open ExtraTactics
 
 open Common
-open Free
 open DMFree
-open Hist
-open Free.IO.Sig
-open Free.IO.Call
+open IO.Sig
+open IO.Sig.Call
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
@@ -22,12 +20,7 @@ The history is  in reverse chronology order.
 At the end of an io computation, the local trace is appended
 in reverse order to the history. **)
 
-unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist #event (iio_sig.res cmd arg) = fun p h ->
-  match cmd with
-  | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
-
-unfold let io_wps (cmd:io_cmds) (arg:io_sig.args cmd) : hist #event (io_sig.res cmd arg) =
+unfold let io_wps (cmd:io_cmds) (arg:io_sig.args cmd) : hist (io_sig.res cmd arg) =
   iio_wps cmd arg
 
 let dm_io_theta #a = theta #a #io_cmds #io_sig #event io_wps
@@ -43,7 +36,7 @@ total
 reifiable
 reflectable
 effect {
-  IOwp (a:Type) (wp : hist #event a) 
+  IOwp (a:Type) (wp : hist a) 
   with {
        repr       = dm_io
      ; return     = dm_io_return
@@ -75,10 +68,9 @@ effect IOPi
 
 let static_cmd
   (cmd : io_cmds)
-  (pi : monitorable_prop)
   (arg : io_sig.args cmd) :
-  IOPi (io_sig.res cmd arg) pi
-    (requires (fun h -> io_pre cmd arg h /\ pi h (| cmd, arg |)))
-    (ensures (fun h r lt ->
+  IO (io_resm cmd)
+    (requires (fun h -> io_pre cmd arg h))
+    (ensures (fun h (r:io_sig.res cmd arg) lt ->
         lt == [convert_call_to_event cmd arg r])) =
   IOwp?.reflect (io_call cmd arg)
