@@ -28,11 +28,28 @@ Proof.
   apply hPQ. apply h. apply hx.
 Defined.
 
+(* LeafPred *)
+
+#[local] Instance leafpred : LeafPred M :=
+  λ A x c, In x c.
+
+Fixpoint leafine [A] (c : M A) : M { x : A | x ∈ c }.
+Proof.
+  destruct c as [| x c].
+  - exact [].
+  - refine (⟨ x ⟩ :: map (λ x, ⟨ val x ⟩) (leafine _ c)).
+    + left. reflexivity.
+    + destruct x. right. assumption.
+Defined.
+
+#[local] Instance hleaf : Leafine M leafpred :=
+  leafine.
+
 (* Partial DM *)
 
 Definition D : DijkstraMonad pure_wp_ord.
 Proof.
-  simple refine (GuardedPDM.D (M := M) MonoSpec_pure (θ := θ) (λ A w, w) _).
+  simple refine (GuardedPDM.D (M := M) MonoSpec_pure (θ := θ) leafpred hleaf (λ A w, w) _).
   (* Proving we still have a lax morphism *)
   constructor. 1: constructor.
   - intros A x. intros post h.
@@ -44,20 +61,19 @@ Proof.
     hnf. hnf in h.
     destruct h as [hp h]. simpl in hp, h.
     unshelve eexists.
-    + simpl. split. 1: apply hp.
-      intro x.
-      (* Of course I actually need the return_of if I do not go deep.
-        Hence, the unsuccessful general attempt.
-        But we don't need to put the refinement inside the bind, so maybe it's
-        not so bad. Maybe there only needs to exist a return_of like predicate
-        to use in the Mᴳ.(bind) construction.
-      *)
-      give_up.
-    + admit.
+    + simpl. exists hp.
+      intros x hx. apply h. apply hx.
+    + hnf. simpl. intros y hy.
+      apply in_concat in hy. destruct hy as [l [hl hy]].
+      apply in_map_iff in hl. destruct hl as [x [e hxc]].
+      destruct x as [x hx].
+      set (h' := h x hx) in *. clearbody h'. clear h.
+      destruct h' as [hf h]. subst l.
+      apply h. assumption.
   - intro p. intros post h.
     cbv - [In]. cbv - [In] in h. destruct h as [hp h].
     unshelve eexists.
     { exists hp. auto. }
     simpl. intros ? [? | bot]. 2: contradiction.
     subst. assumption.
-Abort.
+Qed.

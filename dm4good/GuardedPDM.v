@@ -8,6 +8,16 @@ Set Printing Projections.
 Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 
+Class LeafPred (M : Monad) :=
+  leaf : ∀ A, A → M A → Prop.
+
+Notation "x ∈ c" := (leaf _ x c) (at level 80).
+
+Class Leafine (M : Monad) (hleaf : LeafPred M) :=
+  leafine : ∀ A (c : M A), M { x : A | x ∈ c }.
+
+Arguments leafine {_ _ _} [_].
+
 Section Guarded.
 
   (* Computation monad *)
@@ -26,6 +36,10 @@ Section Guarded.
 
   Arguments θ [_].
 
+  (* We require a LiftPred before we get to partiality *)
+
+  Context (leafpred : LeafPred M) (hleaf : Leafine M leafpred).
+
   (* We first build a new computation monad with req *)
   Definition Mᴳ : ReqMonad.
   Proof.
@@ -38,10 +52,11 @@ Section Guarded.
     |}.
     (* bind *)
     hnf. intros A B c f.
-    exists (c.π1 ∧ ∀ x, (f x).π1). intro h.
-    simple refine (M.(bind) (c.π2 _) (λ x, (f x).π2 _)).
+    exists (∃ (h : c.π1), ∀ x, x ∈ c.π2 h → (f x).π1). intro h.
+    simple refine (M.(bind) (leafine (c.π2 _)) (λ x, (f (val x)).π2 _)).
     - apply h.
-    - apply h.
+    - destruct h as [hp h]. destruct x as [x hx]. apply h.
+      apply hx.
   Defined.
 
   (* Now we extend the spec monad with req, we do this using a liftᵂ *)
