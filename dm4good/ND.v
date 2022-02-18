@@ -76,4 +76,9 @@ Proof.
     { exists hp. auto. }
     simpl. intros ? [? | bot]. 2: contradiction.
     subst. assumption.
-Qed.
+Defined.
+
+(* Lift from PURE *)
+
+Definition liftᴾ [A w] (f : PURE A w) : D A w :=
+  liftᴾ MonoSpec_pure leafpred hleaf (λ A w, w) _ _ A w f.

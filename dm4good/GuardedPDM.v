@@ -117,6 +117,6 @@ Section Guarded.
   (* Same here *)
   Context (hlift : PureSpec Wᴳ Word liftᵂ).
 
-  Check liftᴾ (M := Mᴳ) (W := Wᴳ) hmono hreqlax hlift.
+  Definition liftᴾ := liftᴾ (M := Mᴳ) (W := Wᴳ) hmono hreqlax hlift.
 
 End Guarded.
