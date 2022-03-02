@@ -69,7 +69,7 @@ Section PDM.
 
   (* Laws preservation *)
 
-  Context {hr : ∀ A, Reflexive (@wle _ Word A)}.
+  Context {hr : ∀ A, Reflexive (wle (A := A))}.
   Context {hMl : MonadLaws M} {hWl : MonadLaws W}.
 
   Lemma ext :

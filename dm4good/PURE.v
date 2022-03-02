@@ -55,6 +55,11 @@ Proof.
     apply h₀₁. apply h₁₂. assumption.
 Defined.
 
+#[export] Instance pure_wp_refl [A] : Reflexive (wle (A := A)).
+Proof.
+  intro w. intros p h. assumption.
+Qed.
+
 #[export] Instance MonoSpec_pure : MonoSpec _ pure_wp_ord.
 Proof.
   constructor.
@@ -89,4 +94,18 @@ Proof.
   }
   exists hpre. destruct (f hpre) as [a ha].
   apply ha. apply h.
+Qed.
+
+(* Laws *)
+
+#[export] Instance pure_wp_law : MonadLaws pure_wp_monad.
+Proof.
+  constructor.
+  - intros A B x w.
+    simpl. destruct (w x) as [w' h].
+    reflexivity.
+  - intros A w.
+    simpl. destruct w. reflexivity.
+  - intros A B C w wf wg.
+    simpl. f_equal. apply proof_irrelevance.
 Qed.
