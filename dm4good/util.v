@@ -2,6 +2,7 @@ From Coq Require Import Utf8 RelationClasses.
 
 Set Default Goal Selector "!".
 Set Printing Projections.
+Set Universe Polymorphism.
 
 Ltac forward_gen H tac :=
   match type of H with
@@ -31,3 +32,13 @@ Notation "( x ; y ; z ; t ; u )" := (x ; ( y ; (z ; (t ; u)))).
 Notation "( x ; y ; z ; t ; u ; v )" := (x ; ( y ; (z ; (t ; (u ; v))))).
 Notation "x .π1" := (@projT1 _ _ x) (at level 3, format "x '.π1'").
 Notation "x .π2" := (@projT2 _ _ x) (at level 3, format "x '.π2'").
+
+Definition coe {A B} (e : A = B) : A → B :=
+  match e with
+  | eq_refl => λ x, x
+  end.
+
+Definition heq {A B : Type} (x : A) (y : B) :=
+  ∑ (e : A = B), coe e x = y.
+
+Notation "x ≅ y" := (heq x y) (at level 80).
