@@ -93,4 +93,13 @@ Section State.
 
   Check liftᴾ WStMono θ_morph hlift.
 
+  (* Laws *)
+
+  Instance M_laws : MonadLaws M.
+  Proof.
+    constructor.
+    - intros A B x f.
+      simpl. (* Need funext *)
+  Abort.
+
 End State.

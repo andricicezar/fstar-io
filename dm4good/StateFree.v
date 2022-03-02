@@ -102,4 +102,17 @@ Section State.
 
   Check liftᴾ WStMono θ_morph hlift.
 
+  (* Laws *)
+
+  Instance MSt_laws : MonadLaws MSt.
+  Proof.
+    constructor.
+    - intros A B x f.
+      reflexivity.
+    - intros A c.
+      induction c as [| ? ih | ?? ih | ?? ih].
+      + reflexivity.
+      + simpl. (* Only try up to funext *)
+  Abort.
+
 End State.

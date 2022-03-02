@@ -113,6 +113,11 @@ Section State.
     assumption.
   Defined.
 
+  #[export] Instance pure_wp_refl [A] : Reflexive (wle (A := A)).
+  Proof.
+    intro w. intros p s₀ h. assumption.
+  Qed.
+
   Instance WStMono : MonoSpec WSt WStOrder.
   Proof.
     constructor.
