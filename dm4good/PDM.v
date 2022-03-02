@@ -67,4 +67,18 @@ Section PDM.
     apply req_lift.
   Defined.
 
+  (* Laws preservation *)
+
+  Context {hMl : MonadLaws M} {hWl : MonadLaws W}.
+
+  Lemma left_id :
+    ∀ A w (x : A) (f : ∀ (x : A), D A (w x)),
+      D.(bindᴰ) (D.(retᴰ) x) f ≅ f x.
+  Proof.
+    intros A w x f.
+    unshelve eexists.
+    { rewrite left_id. reflexivity. }
+    (* Should use subcomp instead *)
+  Abort.
+
 End PDM.
