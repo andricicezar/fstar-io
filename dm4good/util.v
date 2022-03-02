@@ -44,3 +44,12 @@ Definition heq {A B : Type} (x : A) (y : B) :=
 Notation "x ≅ y" := (heq x y) (at level 80).
 
 Axiom proof_irrelevance : ∀ (P : Prop) (h₀ h₁ : P), h₀ = h₁.
+
+Lemma sig_ext :
+  ∀ A (P : A → Prop) (u v : { x : A | P x }),
+    val u = val v →
+    u = v.
+Proof.
+  intros A P u v e.
+  destruct u, v. subst. f_equal. apply proof_irrelevance.
+Qed.

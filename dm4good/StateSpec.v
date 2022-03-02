@@ -148,4 +148,17 @@ Section State.
     apply hf in h. assumption.
   Qed.
 
+  (* Laws *)
+
+  #[export] Instance WSt_laws : MonadLaws WSt.
+  Proof.
+    constructor.
+    - intros A B x w.
+      apply sig_ext. reflexivity.
+    - intros A w.
+      apply sig_ext. reflexivity.
+    - intros A B C w wf wg.
+      apply sig_ext. reflexivity.
+  Qed.
+
 End State.

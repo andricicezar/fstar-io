@@ -72,16 +72,6 @@ Section PDM.
   Context {hr : ∀ A, Reflexive (wle (A := A))}.
   Context {hMl : MonadLaws M} {hWl : MonadLaws W}.
 
-  Lemma ext :
-    ∀ A w (x y : D A w),
-      val x = val y →
-      x = y.
-  Proof.
-    intros A w x y h.
-    destruct x, y. subst.
-    f_equal. apply proof_irrelevance.
-  Qed.
-
   Lemma left_id_w :
     ∀ {A B} (x : A) (w : A → W B),
       w x ≤ᵂ W.(bind) (W.(ret) x) w.
@@ -95,7 +85,7 @@ Section PDM.
       D.(bindᴰ) (D.(retᴰ) x) f = D.(subcompᴰ) (h := left_id_w x w) (f x).
   Proof.
     intros A w x f.
-    apply ext. simpl.
+    apply sig_ext. simpl.
     apply left_id.
   Qed.
 
@@ -112,7 +102,7 @@ Section PDM.
       D.(bindᴰ) c (λ x, D.(retᴰ) x) = D.(subcompᴰ) (h := right_id_w w) c.
   Proof.
     intros A w c.
-    apply ext. simpl.
+    apply sig_ext. simpl.
     apply right_id.
   Qed.
 
@@ -130,7 +120,7 @@ Section PDM.
       D.(subcompᴰ) (h := assoc_w _ _ _) (D.(bindᴰ) c (λ x, D.(bindᴰ) (f x) g)).
   Proof.
     intros A B C w wf wg c f g.
-    apply ext. simpl.
+    apply sig_ext. simpl.
     apply assoc.
   Qed.
 

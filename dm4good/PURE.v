@@ -98,14 +98,13 @@ Qed.
 
 (* Laws *)
 
-#[export] Instance pure_wp_law : MonadLaws pure_wp_monad.
+#[export] Instance pure_wp_laws : MonadLaws pure_wp_monad.
 Proof.
   constructor.
   - intros A B x w.
-    simpl. destruct (w x) as [w' h].
-    reflexivity.
+    apply sig_ext. reflexivity.
   - intros A w.
-    simpl. destruct w. reflexivity.
+    apply sig_ext. reflexivity.
   - intros A B C w wf wg.
-    simpl. f_equal. apply proof_irrelevance.
+    apply sig_ext. reflexivity.
 Qed.
