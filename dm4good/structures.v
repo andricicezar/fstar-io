@@ -69,3 +69,13 @@ Record DijkstraMonad {W} (WOrd : Order W) := {
 Arguments retᴰ {_ _} _ [_].
 Arguments bindᴰ {_ _} _ [_ _ _ _].
 Arguments subcompᴰ {_ _} _ [_ _ _] _ {_}.
+
+(* Laws *)
+
+Class MonadLaws (M : Monad) := {
+  left_id : ∀ A B (x : A) (f : A → M B), M.(bind) (M.(ret) x) f = f x ;
+  right_id : ∀ A (c : M A), M.(bind) c (λ x, M.(ret) x) = c ;
+  assoc :
+    ∀ A B C (c : M A) (f : A → M B) (g : B → M C),
+      M.(bind) (M.(bind) c f) g = M.(bind) c (λ x, M.(bind) (f x) g)
+}.
