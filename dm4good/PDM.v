@@ -69,16 +69,34 @@ Section PDM.
 
   (* Laws preservation *)
 
+  Context {hr : ∀ A, Reflexive (@wle _ Word A)}.
   Context {hMl : MonadLaws M} {hWl : MonadLaws W}.
+
+  Lemma ext :
+    ∀ A w (x y : D A w),
+      val x = val y →
+      x = y.
+  Proof.
+    intros A w x y h.
+    destruct x, y. subst.
+    f_equal. apply proof_irrelevance.
+  Qed.
+
+  Lemma left_id_w :
+    ∀ {A B} (x : A) (w : A → W B),
+      w x ≤ᵂ W.(bind) (W.(ret) x) w.
+  Proof.
+    intros A B x w.
+    rewrite left_id. reflexivity.
+  Qed.
 
   Lemma left_id :
     ∀ A w (x : A) (f : ∀ (x : A), D A (w x)),
-      D.(bindᴰ) (D.(retᴰ) x) f ≅ f x.
+      D.(bindᴰ) (D.(retᴰ) x) f = D.(subcompᴰ) (h := left_id_w x w) (f x).
   Proof.
     intros A w x f.
-    unshelve eexists.
-    { rewrite left_id. reflexivity. }
-    (* Should use subcomp instead *)
-  Abort.
+    apply ext. simpl.
+    rewrite left_id. reflexivity.
+  Qed.
 
 End PDM.

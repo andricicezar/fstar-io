@@ -42,3 +42,5 @@ Definition heq {A B : Type} (x : A) (y : B) :=
   ∑ (e : A = B), coe e x = y.
 
 Notation "x ≅ y" := (heq x y) (at level 80).
+
+Axiom proof_irrelevance : ∀ (P : Prop) (h₀ h₁ : P), h₀ = h₁.
