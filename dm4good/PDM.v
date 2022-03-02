@@ -96,7 +96,42 @@ Section PDM.
   Proof.
     intros A w x f.
     apply ext. simpl.
-    rewrite left_id. reflexivity.
+    apply left_id.
+  Qed.
+
+  Lemma right_id_w :
+    ∀ {A} (w : W A),
+      w ≤ᵂ W.(bind) w (W.(ret) (A:=A)).
+  Proof.
+    intros A w.
+    rewrite right_id. reflexivity.
+  Qed.
+
+  Lemma right_id :
+    ∀ A w (c : D A w),
+      D.(bindᴰ) c (λ x, D.(retᴰ) x) = D.(subcompᴰ) (h := right_id_w w) c.
+  Proof.
+    intros A w c.
+    apply ext. simpl.
+    apply right_id.
+  Qed.
+
+  Lemma assoc_w :
+    ∀ {A B C} (w : W A) (wf : A → W B) (wg : B → W C),
+      W.(bind) w (λ x, W.(bind) (wf x) wg) ≤ᵂ W.(bind) (W.(bind) w wf) wg.
+  Proof.
+    intros A B C w wf wg.
+    rewrite assoc. reflexivity.
+  Qed.
+
+  Lemma assoc :
+    ∀ A B C w wf wg (c : D A w) (f : ∀ x, D B (wf x)) (g : ∀ y, D C (wg y)),
+      D.(bindᴰ) (D.(bindᴰ) c f) g =
+      D.(subcompᴰ) (h := assoc_w _ _ _) (D.(bindᴰ) c (λ x, D.(bindᴰ) (f x) g)).
+  Proof.
+    intros A B C w wf wg c f g.
+    apply ext. simpl.
+    apply assoc.
   Qed.
 
 End PDM.
