@@ -24,10 +24,13 @@ assert (x `memP` l)
 
 - Next step is the guarded construction and then use it for stuff like ND and
 maybe IO?
-- Laws
+
 - What are the good expectations of a PDM?
+
 - Make the DM4Free construction in general by applying the transformer to G
+
 - Is it equivalent from having a lift from PURE?
+
 - Since we can combine free monads easily, can we provide a way to define free
 monadic effect like:
 
@@ -48,6 +51,8 @@ effect STATE a (w : (state -> a -> prop) -> (state -> prop))
 ```
 
 and then allow for arbitrary combination of those?
+
+- Factories for WPs of the form post → pre + monotonicity?
 
 ## Random notes
 
