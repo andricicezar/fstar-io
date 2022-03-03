@@ -14,20 +14,23 @@ Section State.
 
   (* Computation monad *)
 
-  Definition M : ReqMonad := {|
-    Mq := {|
-      Mo A := state → G (state * A)%type ;
-      ret A x := λ s₀, G.(ret) (s₀, x) ;
-      bind A B c f := λ s₀, G.(bind) (c s₀) (λ '(s₁, x), f x s₁)
-    |} ;
-    req p := λ s₀, G.(bind) (G.(req) p) (λ h, G.(ret) (s₀, h))
+  Definition M A :=
+    state → G (state * A).
+
+  Instance Monad_M : Monad M := {|
+    ret A x := λ s₀, ret (s₀, x) ;
+    bind A B c f := λ s₀, bind (c s₀) (λ '(s₁, x), f x s₁)
+  |}.
+
+  Instance ReqMonad_M : ReqMonad M := {|
+    req p := λ s₀, bind (req p) (λ h, ret (s₀, h))
   |}.
 
   Definition getᴹ : M state :=
-    λ s, G.(ret) (s, s).
+    λ s, ret (s, s).
 
   Definition putᴹ (s : state) : M unit :=
-    λ s₀, G.(ret) (s, tt).
+    λ s₀, ret (s, tt).
 
   (* Effect observation *)
 
@@ -47,9 +50,9 @@ Section State.
   Definition θ [A] (c : M A) : W A :=
     as_wp (θ' c).
 
-  Instance θ_morph : ReqLaxMorphism WStOrder θ.
+  Instance θ_lax : @LaxMorphism _ _ _ _ WStOrder θ.
   Proof.
-    constructor. 1: constructor.
+    constructor.
     - intros A x. intros post s₀ h.
       cbn. exists I. red in h. assumption.
     - intros A B c f. intros post s₀ h.
@@ -64,18 +67,26 @@ Section State.
       }
       simpl. destruct (c' hp) as [s₁ x]. destruct (f x s₁).
       simpl. destruct h. assumption.
-    - intro p. intros post s₀ h.
-      cbv. cbv in h.
-      destruct h as [hp h].
-      unshelve eexists.
-      { exists hp. auto. }
-      simpl. assumption.
+  Qed.
+
+  Instance θ_morph : @ReqLaxMorphism _ _ _ _ _ ReqMonad_W WStOrder θ _.
+  Proof.
+    constructor.
+    intro p. intros post s₀ h.
+    cbv. cbv in h.
+    destruct h as [hp h].
+    unshelve eexists.
+    { exists hp. auto. }
+    simpl. assumption.
   Qed.
 
   (* Partial Dijkstra monad *)
 
-  Definition D : DijkstraMonad WStOrder :=
-    PDM.D WStMono θ_morph.
+  Definition D A w :=
+    PDM.D (θ := θ) (Word := WStOrder) A w.
+
+  Instance DijkstraMonad_D : DijkstraMonad (Word := WStOrder) D :=
+    PDM.DijkstraMonad_D WStMono θ_lax.
 
   Definition getᴰ : D state getᵂ.
   Proof.
@@ -91,7 +102,8 @@ Section State.
 
   (* Lift from PURE *)
 
-  Check liftᴾ WStMono θ_morph hlift.
+  Definition liftᴾ :=
+    liftᴾ WStMono θ_lax θ_morph hlift.
 
   (* Laws *)
 

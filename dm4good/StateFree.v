@@ -42,18 +42,18 @@ Section State.
   Definition reqᴹ (p : Prop) : M p :=
     act_reqᴹ p (λ h, retᴹ h).
 
-  Definition MSt : ReqMonad := {|
-    Mq := {|
-      Mo := M ;
-      ret := retᴹ ;
-      bind := bindᴹ
-    |} ;
+  Instance Monad_M : Monad M := {|
+    ret := retᴹ ;
+    bind := bindᴹ
+  |}.
+
+  Instance ReqMonad_M : ReqMonad M := {|
     req := reqᴹ
   |}.
 
   (* Effect observation *)
 
-  Fixpoint θ [A] (c : MSt A) : WSt A :=
+  Fixpoint θ [A] (c : M A) : W A :=
     match c with
     | retᴹ x => retᵂ x
     | act_getᴹ k => bindᵂ getᵂ (λ x, θ (k x))
@@ -61,9 +61,9 @@ Section State.
     | act_reqᴹ p k => bindᵂ (reqᵂ p) (λ x, θ (k x))
     end.
 
-  Instance θ_morph : ReqLaxMorphism WStOrder θ.
+  Instance θ_lax : @LaxMorphism _ _ _ _ WStOrder θ.
   Proof.
-    constructor. 1: constructor.
+    constructor.
     - intros A x. intros P s₀ h.
       cbn. red in h. assumption.
     - intros A B c f.
@@ -77,14 +77,22 @@ Section State.
       + cbn. intros P s₀ h.
         red. red. destruct h as [hp h].
         exists hp. apply ih. assumption.
-    - intros p. intros post s₀ h.
-      assumption.
+  Qed.
+
+  Instance θ_morph : @ReqLaxMorphism _ _ _ _ _ ReqMonad_W WStOrder θ _.
+  Proof.
+    constructor.
+    intros p. intros post s₀ h.
+    assumption.
   Qed.
 
   (* Partial Dijkstra monad *)
 
-  Definition D : DijkstraMonad WStOrder :=
-    PDM.D WStMono θ_morph.
+  Definition D A w :=
+    PDM.D (θ := θ) (Word := WStOrder) A w.
+
+  Instance DijkstraMonad_D : DijkstraMonad (Word := WStOrder) D :=
+    PDM.DijkstraMonad_D WStMono θ_lax.
 
   Definition getᴰ : D state getᵂ.
   Proof.
@@ -100,11 +108,12 @@ Section State.
 
   (* Lift from PURE *)
 
-  Check liftᴾ WStMono θ_morph hlift.
+  Definition liftᴾ :=
+    liftᴾ WStMono θ_lax θ_morph hlift.
 
   (* Laws *)
 
-  Instance MSt_laws : MonadLaws MSt.
+  Instance MSt_laws : MonadLaws M.
   Proof.
     constructor.
     - intros A B x f.

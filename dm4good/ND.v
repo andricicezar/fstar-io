@@ -12,15 +12,17 @@ Unset Universe Minimization ToSet.
 
 (* Computation monad *)
 
-Definition M : Monad := {|
-  Mo A := list A ;
+Definition M A :=
+  list A.
+
+#[export] Instance Monad_M : Monad M := {|
   ret A x := [ x ] ;
   bind A B c f := concat (map f c)
 |}.
 
 (* Effect observation *)
 
-Definition θ : observation M pure_wp_monad.
+Definition θ : observation M pure_wp.
 Proof.
   intros A c.
   exists (λ post, ∀ x, In x c → post x).
@@ -47,11 +49,16 @@ Defined.
 
 (* Partial DM *)
 
-Definition D : DijkstraMonad pure_wp_ord.
+Definition D A (w : pure_wp A) : Type :=
+  GuardedPDM.D (M := M) (θ := θ) (λ A w, w) A w.
+
+Definition liftᵂ : spec_lift_pure pure_wp :=
+  λ A w, w.
+
+#[local] Instance LaxMorphism_θᴳ :
+  @LaxMorphism _ _ (Monad_Mᴳ _ _) _ _ (θᴳ (θ := θ) liftᵂ).
 Proof.
-  simple refine (GuardedPDM.D (M := M) MonoSpec_pure (θ := θ) leafpred hleaf (λ A w, w) _).
-  (* Proving we still have a lax morphism *)
-  constructor. 1: constructor.
+  constructor.
   - intros A x. intros post h.
     cbv - [In] in *.
     exists I. intros y hy. destruct hy. 2: contradiction.
@@ -70,15 +77,24 @@ Proof.
       set (h' := h x hx) in *. clearbody h'. clear h.
       destruct h' as [hf h]. subst l.
       apply h. assumption.
-  - intro p. intros post h.
-    cbv - [In]. cbv - [In] in h. destruct h as [hp h].
-    unshelve eexists.
-    { exists hp. auto. }
-    simpl. intros ? [? | bot]. 2: contradiction.
-    subst. assumption.
-Defined.
+Qed.
+
+#[export] Instance DijkstraMonad_D : DijkstraMonad D :=
+  GuardedPDM.DijkstraMonad_D _ _ _ _ _.
 
 (* Lift from PURE *)
 
+#[local] Instance ReqLaxMorphism_θᴳ :
+  @ReqLaxMorphism _ _ _ (ReqMonad_Mᴳ _ _) _ _ pure_wp_ord (θᴳ (θ := θ) liftᵂ) LaxMorphism_θᴳ.
+Proof.
+  constructor.
+  intro p. intros post h.
+  cbv - [In]. cbv - [In] in h. destruct h as [hp h].
+  unshelve eexists.
+  { exists hp. auto. }
+  simpl. intros ? [? | bot]. 2: contradiction.
+  subst. assumption.
+Qed.
+
 Definition liftᴾ [A w] (f : PURE A w) : D A w :=
-  liftᴾ MonoSpec_pure leafpred hleaf (λ A w, w) _ _ A w f.
+  liftᴾ MonoSpec_pure leafpred hleaf (λ A w, w) _ _ _ A w f.

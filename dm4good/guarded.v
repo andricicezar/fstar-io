@@ -3,15 +3,13 @@ From PDM Require Import util structures.
 
 (* Guarded monad *)
 
-Definition G : ReqMonad.
+Definition G (A : Type) :=
+  ∑ (P : Prop), P → A.
+
+#[export] Instance Monad_G : Monad G.
 Proof.
   simple refine {|
-    Mq := {|
-      Mo A := ∑ (P : Prop), P → A ;
-      ret A x := (True ; λ _, x)
-      (* We provide bind with tactics *)
-    |} ;
-    req p := (p ; λ h, h)
+    ret A x := (True ; λ _, x)
   |}.
   (* bind *)
   intros A B x f. simpl.
@@ -20,3 +18,7 @@ Proof.
   - destruct h. assumption.
   - destruct h as [h hf]. assumption.
 Defined.
+
+#[export] Instance ReqMonad_G : ReqMonad G := {|
+  req p := (p ; λ h, h)
+|}.

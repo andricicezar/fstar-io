@@ -21,9 +21,9 @@ Definition PURE A (w : pure_wp A) :=
 
 (* ReqMonad instance for pure_wp *)
 
-Definition pure_wp_monad : Monad.
+#[export] Instance pure_wp_monad : Monad pure_wp.
 Proof.
-  exists pure_wp.
+  constructor.
   - intros A x.
     exists (λ post, post x).
     cbv. auto.
@@ -37,9 +37,9 @@ Proof.
     auto.
 Defined.
 
-Definition pure_wp_reqmon : ReqMonad.
+#[export] Instance pure_wp_reqmon : ReqMonad pure_wp.
 Proof.
-  exists pure_wp_monad.
+  constructor.
   intro p.
   exists (λ post, ∃ (h : p), post h).
   cbv. intros P Q hPQ h.
@@ -47,7 +47,7 @@ Proof.
   auto.
 Defined.
 
-#[export] Instance pure_wp_ord : Order pure_wp_monad.
+#[export] Instance pure_wp_ord : Order pure_wp.
 Proof.
   unshelve eexists.
   - intros A w₀ w₁. exact (∀ post, val w₁ post → val w₀ post).
@@ -60,7 +60,7 @@ Proof.
   intro w. intros p h. assumption.
 Qed.
 
-#[export] Instance MonoSpec_pure : MonoSpec _ pure_wp_ord.
+#[export] Instance MonoSpec_pure : MonoSpec pure_wp.
 Proof.
   constructor.
   intros A B w w' wf wf' hw hwf.
@@ -71,18 +71,18 @@ Proof.
   simpl. intro x. apply hwf.
 Qed.
 
-Definition spec_lift_pure (W : Monad) :=
+Definition spec_lift_pure (W : Type → Type) :=
   ∀ A (w : pure_wp A), W A.
 
-Class PureSpec (W : ReqMonad) (Word : Order W) (liftᵂ : spec_lift_pure W) := {
+Class PureSpec W `{ReqMonad W} (Word : Order W) (liftᵂ : spec_lift_pure W) := {
   req_lift :
     ∀ A w (f : PURE A w),
-      W.(bind) (W.(req) (val w (λ _, True))) (λ h, W.(ret) (val (f h))) ≤ᵂ
+      bind (req (val w (λ _, True))) (λ h, ret (val (f h))) ≤ᵂ
       liftᵂ _ w
 }.
 
 (* We can lift PURE to itself *)
-#[export] Instance PureSpec_pure : PureSpec pure_wp_reqmon _ (λ A w, w).
+#[export] Instance PureSpec_pure : PureSpec pure_wp _ (λ A w, w).
 Proof.
   constructor.
   intros A w f. intros post h.
@@ -98,7 +98,7 @@ Qed.
 
 (* Laws *)
 
-#[export] Instance pure_wp_laws : MonadLaws pure_wp_monad.
+#[export] Instance pure_wp_laws : MonadLaws pure_wp.
 Proof.
   constructor.
   - intros A B x w.

@@ -9,75 +9,72 @@ Set Universe Polymorphism.
 Unset Universe Minimization ToSet.
 
 (* Monad structure (no laws) *)
-Record Monad := {
-  Mo :> Type → Type ;
-  ret : ∀ A (x : A), Mo A ;
-  bind : ∀ A B (c : Mo A) (f : A → Mo B), Mo B
+Class Monad (M : Type → Type) := {
+  ret : ∀ A (x : A), M A ;
+  bind : ∀ A B (c : M A) (f : A → M B), M B
 }.
 
 (* Monad with a require operator *)
-Record ReqMonad := {
-  Mq :> Monad ;
-  req : ∀ (p : Prop), Mq p
+Class ReqMonad M `{Monad M} := {
+  req : ∀ (p : Prop), M p
 }.
 
-Arguments ret _ [_].
-Arguments bind _ [_ _].
+Arguments ret {_ _} [_].
+Arguments bind {_ _} [_ _].
 
-Class Order (W : Monad) := {
+Class Order W `{Monad W} := {
   wle : ∀ A, W A → W A → Prop ;
-  trans : ∀ A, Transitive (@wle A)
+  trans :> ∀ A, Transitive (@wle A)
 }.
 
-Arguments wle {_ _ _}.
+Arguments wle {_ _ _} {_}.
 
 Notation "x ≤ᵂ y" := (wle x y) (at level 80).
 
-Class MonoSpec (W : Monad) (Word : Order W) := {
+Class MonoSpec W `{Order W} := {
   bind_mono :
     ∀ A B (w w' : W A) (wf wf' : A → W B),
       w ≤ᵂ w' →
       (∀ x, wf x ≤ᵂ wf' x) →
-      W.(bind) w wf ≤ᵂ W.(bind) w' wf'
+      bind w wf ≤ᵂ bind w' wf'
 }.
 
-Definition observation (M W : Monad) :=
+Definition observation (M W : Type → Type) :=
   ∀ A (c : M A), W A.
 
-Class LaxMorphism {M W} (Word : Order W) (θ : observation M W) := {
+Class LaxMorphism {M W} `{Monad M} `{Order W} (θ : observation M W) := {
   θ_ret :
     ∀ A (x : A),
-      θ _ (M.(ret) x) ≤ᵂ W.(ret) x ;
+      θ _ (ret x) ≤ᵂ ret x ;
   θ_bind :
     ∀ A B c f,
-      θ _ (M.(@bind) A B c f) ≤ᵂ W.(bind) (θ _ c) (λ x, θ _ (f x))
+      θ _ (bind (A:=A) (B:=B) c f) ≤ᵂ bind (θ _ c) (λ x, θ _ (f x))
 }.
 
-Class ReqLaxMorphism {M W : ReqMonad} (Word : Order W) (θ : observation M W) := {
-  θ_lax :> LaxMorphism Word θ ;
-  θ_req :
-    ∀ p, θ _ (M.(req) p) ≤ᵂ W.(req) p
+Class ReqLaxMorphism
+  {M W} `{ReqMonad M} `{ReqMonad W} (Word : Order W)
+  (θ : observation M W) {θ_lax : LaxMorphism θ} := {
+  θ_req : ∀ p, θ _ (req p) ≤ᵂ req p
 }.
 
-Record DijkstraMonad {W} (WOrd : Order W) := {
-  DM :> ∀ A (w : W A), Type ;
-  retᴰ : ∀ A (x : A), DM A (W.(ret) x) ;
-  bindᴰ : ∀ A B w wf (c : DM A w) (f : ∀ x, DM B (wf x)), DM B (W.(bind) w wf) ;
-  subcompᴰ : ∀ A w w' (c : DM A w) (h : w ≤ᵂ w'), DM A w'
+Class DijkstraMonad {W} `{Word : Order W} (D : ∀ A (w : W A), Type) := {
+  retᴰ : ∀ A (x : A), D A (ret x) ;
+  bindᴰ : ∀ A B w wf (c : D A w) (f : ∀ x, D B (wf x)), D B (bind w wf) ;
+  subcompᴰ : ∀ A w w' (c : D A w) (h : w ≤ᵂ w'), D A w'
 }.
 
-Arguments retᴰ {_ _} _ [_].
-Arguments bindᴰ {_ _} _ [_ _ _ _].
-Arguments subcompᴰ {_ _} _ [_ _ _] _ {_}.
+Arguments retᴰ {_ _ _ _ _} [_].
+Arguments bindᴰ {_ _ _ _ _} [_ _ _ _].
+Arguments subcompᴰ {_ _ _ _ _} [_ _ _] _ {_}.
 
 (* Laws *)
 
-Class MonadLaws (M : Monad) := {
-  left_id : ∀ A B (x : A) (f : A → M B), M.(bind) (M.(ret) x) f = f x ;
-  right_id : ∀ A (c : M A), M.(bind) c (λ x, M.(ret) x) = c ;
+Class MonadLaws M `{Monad M} := {
+  left_id : ∀ A B (x : A) (f : A → M B), bind (ret x) f = f x ;
+  right_id : ∀ A (c : M A), bind c (λ x, ret x) = c ;
   assoc :
     ∀ A B C (c : M A) (f : A → M B) (g : B → M C),
-      M.(bind) (M.(bind) c f) g = M.(bind) c (λ x, M.(bind) (f x) g)
+      bind (bind c f) g = bind c (λ x, bind (f x) g)
 }.
 
 (* Monad transformers *)
@@ -85,6 +82,12 @@ Class MonadLaws (M : Monad) := {
 Class MonadTransformer T :=
   liftT : ∀ M (A : Type), M A → T M A.
 
-(* Monad should be a property *)
-(* #[export] Instance MonadTransformer_Monad (M : Monad) T `{MonadTransformer T} :
-  Monad *)
+Arguments liftT {_ _} [_ _].
+
+(* Not a monad in general then? *)
+(* #[export] Instance MonadTransformer_Monad M T `{Monad M} `{MonadTransformer T} :
+  Monad (T M)
+:= {|
+  ret A x := liftT (ret x) ;
+  bind A B c f := liftT (bind c f)
+|}. *)

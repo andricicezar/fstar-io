@@ -12,32 +12,31 @@ Section PDM.
 
   (* Computational monad with assert/req *)
 
-  Context {M : ReqMonad}.
+  Context {M} `{ReqMonad M}.
 
   (* Specification monad *)
 
-  Context {W : ReqMonad} {Word : Order W} (hmono : MonoSpec W Word).
-
-  Existing Instance trans.
+  Context {W} `{ReqMonad W} {Word : Order W} (hmono : MonoSpec W).
 
   (* Effect observation *)
 
-  Context {θ : observation M W} (hlax : ReqLaxMorphism Word θ).
+  Context {θ : observation M W} (θ_lax : LaxMorphism θ) (hlax : ReqLaxMorphism Word θ).
 
   Arguments θ [_].
 
   (* Partial Dijkstra monad *)
 
-  Definition D : DijkstraMonad Word.
+  Definition D A w :=
+    { c : M A | θ c ≤ᵂ w }.
+
+  Instance DijkstraMonad_D : DijkstraMonad D.
   Proof.
-    simple refine {|
-      DM A w := { c : M A | θ c ≤ᵂ w }
-    |}.
+    constructor.
     - intros A x.
-      exists (M.(ret) x).
+      exists (ret x).
       apply θ_ret.
     - intros A B w wf c f.
-      exists (M.(bind) (val c) (λ x, val (f x))).
+      exists (bind (val c) (λ x, val (f x))).
       etransitivity. 1: apply θ_bind.
       apply bind_mono.
       + destruct c. assumption.
@@ -48,9 +47,9 @@ Section PDM.
       destruct c. assumption.
   Defined.
 
-  Definition reqᴰ (p : Prop) : D p (W.(req) p).
+  Definition reqᴰ (p : Prop) : D p (req p).
   Proof.
-    exists (M.(req) p).
+    exists (req p).
     apply θ_req.
   Defined.
 
@@ -63,7 +62,7 @@ Section PDM.
 
   Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ w).
   Proof.
-    refine (D.(subcompᴰ) (D.(bindᴰ) (reqᴰ (val w (λ _, True))) (λ h, D.(retᴰ) (val (f h))))).
+    refine (subcompᴰ (bindᴰ (reqᴰ (val w (λ _, True))) (λ h, retᴰ (val (f h))))).
     apply req_lift.
   Defined.
 
@@ -74,7 +73,7 @@ Section PDM.
 
   Lemma left_id_w :
     ∀ {A B} (x : A) (w : A → W B),
-      w x ≤ᵂ W.(bind) (W.(ret) x) w.
+      w x ≤ᵂ bind (ret x) w.
   Proof.
     intros A B x w.
     rewrite left_id. reflexivity.
@@ -82,7 +81,7 @@ Section PDM.
 
   Lemma left_id :
     ∀ A w (x : A) (f : ∀ (x : A), D A (w x)),
-      D.(bindᴰ) (D.(retᴰ) x) f = D.(subcompᴰ) (h := left_id_w x w) (f x).
+      bindᴰ (retᴰ x) f = subcompᴰ (h := left_id_w x w) (f x).
   Proof.
     intros A w x f.
     apply sig_ext. simpl.
@@ -91,7 +90,7 @@ Section PDM.
 
   Lemma right_id_w :
     ∀ {A} (w : W A),
-      w ≤ᵂ W.(bind) w (W.(ret) (A:=A)).
+      w ≤ᵂ bind w (ret (A:=A)).
   Proof.
     intros A w.
     rewrite right_id. reflexivity.
@@ -99,7 +98,7 @@ Section PDM.
 
   Lemma right_id :
     ∀ A w (c : D A w),
-      D.(bindᴰ) c (λ x, D.(retᴰ) x) = D.(subcompᴰ) (h := right_id_w w) c.
+      bindᴰ c (λ x, retᴰ x) = subcompᴰ (h := right_id_w w) c.
   Proof.
     intros A w c.
     apply sig_ext. simpl.
@@ -108,7 +107,7 @@ Section PDM.
 
   Lemma assoc_w :
     ∀ {A B C} (w : W A) (wf : A → W B) (wg : B → W C),
-      W.(bind) w (λ x, W.(bind) (wf x) wg) ≤ᵂ W.(bind) (W.(bind) w wf) wg.
+      bind w (λ x, bind (wf x) wg) ≤ᵂ bind (bind w wf) wg.
   Proof.
     intros A B C w wf wg.
     rewrite assoc. reflexivity.
@@ -116,8 +115,8 @@ Section PDM.
 
   Lemma assoc :
     ∀ A B C w wf wg (c : D A w) (f : ∀ x, D B (wf x)) (g : ∀ y, D C (wg y)),
-      D.(bindᴰ) (D.(bindᴰ) c f) g =
-      D.(subcompᴰ) (h := assoc_w _ _ _) (D.(bindᴰ) c (λ x, D.(bindᴰ) (f x) g)).
+      bindᴰ (bindᴰ c f) g =
+      subcompᴰ (h := assoc_w _ _ _) (bindᴰ c (λ x, bindᴰ (f x) g)).
   Proof.
     intros A B C w wf wg c f g.
     apply sig_ext. simpl.

@@ -93,19 +93,19 @@ Section State.
   Definition putᵂ (s : state) : W unit :=
     as_wp (putᵂ' s).
 
-  Definition WSt : ReqMonad := {|
-    Mq := {|
-      Mo := W ;
-      ret := retᵂ ;
-      bind := bindᵂ
-    |} ;
+  Instance Monad_W : Monad W := {|
+    ret := retᵂ ;
+    bind := bindᵂ
+  |}.
+
+  Instance ReqMonad_W : ReqMonad W := {|
     req := reqᵂ
   |}.
 
   Definition wle [A] (w₀ w₁ : W A) : Prop :=
     ∀ P s, val w₁ P s → val w₀ P s.
 
-  Instance WStOrder : Order WSt.
+  Instance WStOrder : Order W.
   Proof.
     exists wle.
     intros A x y z h₁ h₂. intros P s₀ h.
@@ -118,7 +118,7 @@ Section State.
     intro w. intros p s₀ h. assumption.
   Qed.
 
-  Instance WStMono : MonoSpec WSt WStOrder.
+  Instance WStMono : MonoSpec W.
   Proof.
     constructor.
     intros A B w w' wf wf' hw hwf.
@@ -128,7 +128,7 @@ Section State.
     simpl. intros s₁ x hf. apply hwf. assumption.
   Qed.
 
-  Definition liftᵂ [A] (w : pure_wp A) : WSt A.
+  Definition liftᵂ [A] (w : pure_wp A) : W A.
   Proof.
     exists (λ P s₀, val w (λ x, P s₀ x)).
     intros P Q s₀ hPQ h.
@@ -137,7 +137,7 @@ Section State.
     apply hPQ.
   Defined.
 
-  Instance hlift : PureSpec WSt WStOrder liftᵂ.
+  Instance hlift : PureSpec W WStOrder liftᵂ.
   Proof.
     constructor.
     intros A w f.
@@ -155,7 +155,7 @@ Section State.
 
   (* Laws *)
 
-  #[export] Instance WSt_laws : MonadLaws WSt.
+  #[export] Instance WSt_laws : MonadLaws W.
   Proof.
     constructor.
     - intros A B x w.
