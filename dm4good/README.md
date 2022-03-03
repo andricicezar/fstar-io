@@ -54,6 +54,8 @@ and then allow for arbitrary combination of those?
 
 - Factories for WPs of the form post → pre + monotonicity?
 
+- Maybe we can do as Catalin suggests for GuardedPDM using θ and maybe liftᵂ?
+
 ## Random notes
 
 - We can do DM for free constructions, but we have more flexibility with respect
