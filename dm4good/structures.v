@@ -79,3 +79,12 @@ Class MonadLaws (M : Monad) := {
     ∀ A B C (c : M A) (f : A → M B) (g : B → M C),
       M.(bind) (M.(bind) c f) g = M.(bind) c (λ x, M.(bind) (f x) g)
 }.
+
+(* Monad transformers *)
+
+Class MonadTransformer T :=
+  liftT : ∀ M (A : Type), M A → T M A.
+
+(* Monad should be a property *)
+(* #[export] Instance MonadTransformer_Monad (M : Monad) T `{MonadTransformer T} :
+  Monad *)
