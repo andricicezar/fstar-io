@@ -79,15 +79,16 @@ Class MonadLaws M `{Monad M} := {
 
 (* Monad transformers *)
 
-Class MonadTransformer T :=
-  liftT : ∀ M (A : Type), M A → T M A.
+Class MonadTransformer T := {
+  liftᵀ : ∀ M {hM : Monad M} (A : Type), M A → T M A
+}.
 
-Arguments liftT {_ _} [_ _].
+Arguments liftᵀ {_ _} [_ _ _].
 
-(* Not a monad in general then? *)
-(* #[export] Instance MonadTransformer_Monad M T `{Monad M} `{MonadTransformer T} :
-  Monad (T M)
-:= {|
-  ret A x := liftT (ret x) ;
-  bind A B c f := liftT (bind c f)
-|}. *)
+Class MonadTransformerLaws T `{MonadTransformer T} := {
+  transf_monad :> ∀ M `{Monad M}, Monad (T M) ;
+  liftᵀ_ret : ∀ M `{Monad M} A (x : A), liftᵀ (ret x) = ret x ;
+  liftᵀ_bind :
+    ∀ M `{Monad M} A B (c : M A) (f : A → M B),
+      liftᵀ (bind c f) = bind (liftᵀ c) (λ x, liftᵀ (f x))
+}.
