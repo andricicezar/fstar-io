@@ -33,7 +33,7 @@ Section DM4Free.
   Definition W A :=
     T pure_wp A.
 
-  Instance Monad_W : Monad W.
+  #[export] Instance Monad_W : Monad W.
   Proof.
     apply transf_monad. exact _.
   Defined.
