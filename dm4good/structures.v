@@ -77,18 +77,30 @@ Class MonadLaws M `{Monad M} := {
       bind (bind c f) g = bind c (λ x, bind (f x) g)
 }.
 
+(* Monad morphism *)
+
+Class Morphism M N {hM : Monad M} {hN : Monad N} (f : ∀ A, M A → N A) := {
+  morph_ret : ∀ A (x : A), f A (ret x) = ret x ;
+  morph_bind :
+    ∀ A B (c : M A) (k : A → M B),
+      f _ (bind c k) = bind (f _ c) (λ x, f _ (k x))
+}.
+
 (* Monad transformers *)
 
 Class MonadTransformer T := {
-  liftᵀ : ∀ M {hM : Monad M} (A : Type), M A → T M A
+  liftᵀ : ∀ M {hM : Monad M} (A : Type), M A → T M A ;
+  mapᵀ : ∀ M N f `{Morphism M N f} (A : Type), T M A → T N A
 }.
 
 Arguments liftᵀ {_ _} [_ _ _].
+Arguments mapᵀ {_ _} [_ _] _ {_ _ _} [_].
 
 Class MonadTransformerLaws T `{MonadTransformer T} := {
   transf_monad :> ∀ M `{Monad M}, Monad (T M) ;
   liftᵀ_ret : ∀ M `{Monad M} A (x : A), liftᵀ (ret x) = ret x ;
   liftᵀ_bind :
     ∀ M `{Monad M} A B (c : M A) (f : A → M B),
-      liftᵀ (bind c f) = bind (liftᵀ c) (λ x, liftᵀ (f x))
+      liftᵀ (bind c f) = bind (liftᵀ c) (λ x, liftᵀ (f x)) ;
+  mapᵀ_morph : ∀ M N f `{Morphism M N f} (A : Type), Morphism _ _ (mapᵀ f)
 }.
