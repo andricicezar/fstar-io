@@ -99,13 +99,14 @@ Section DM4Free.
   Definition D A w :=
     PDM.D (θ := θ) (Word := Order_W) A w.
 
-  Instance DijkstraMonad_D : DijkstraMonad (Word := Order_W) D :=
-    PDM.DijkstraMonad_D MonoSpec_W θ_lax.
+  #[export] Instance DijkstraMonad_D : DijkstraMonad (Word := Order_W) D := _.
 
   (* Lift from PURE *)
 
   Definition liftᵂ : spec_lift_pure W :=
     λ A w, liftᵀ w.
+
+  Arguments liftᵂ [_].
 
   Instance hlift : PureSpec W Order_W liftᵂ.
   Proof.

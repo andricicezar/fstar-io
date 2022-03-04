@@ -72,4 +72,25 @@ Section State.
     intros [s₁ x]. apply hwf.
   Qed.
 
+  Lemma wle_liftᵀ :
+    ∀ A (w w' : pure_wp A), w ≤ᵂ w' → liftᵀ w ≤ᵂ liftᵀ w'.
+  Proof.
+    intros A w w' hw.
+    simpl. intros post s h.
+    apply hw. assumption.
+  Qed.
+
+  Instance Reflexive_wle : ∀ A, Reflexive (wle (W := W StT) (A := A)).
+  Proof.
+    intros A x. intros post s. auto.
+  Qed.
+
+  Definition D A w : Type :=
+    DM4Free.D StT Order_W A w.
+
+  Instance DijkstraMonad_D : DijkstraMonad (Word := Order_W) D := _.
+
+  Definition liftᴾ [A w] (f : PURE A w) : D A (liftᵂ StT _ w) :=
+    DM4Free.liftᴾ StT _ _ wle_liftᵀ _ w f.
+
 End State.
