@@ -98,9 +98,9 @@ Arguments mapᵀ {_ _} [_ _] _ {_ _ _} [_].
 
 Class MonadTransformerLaws T `{MonadTransformer T} := {
   transf_monad :> ∀ M `{Monad M}, Monad (T M) ;
-  liftᵀ_ret : ∀ M `{Monad M} A (x : A), liftᵀ (ret x) = ret x ;
+  liftᵀ_ret : ∀ M `{MonadLaws M} A (x : A), liftᵀ (ret x) = ret x ;
   liftᵀ_bind :
-    ∀ M `{Monad M} A B (c : M A) (f : A → M B),
+    ∀ M `{MonadLaws M} A B (c : M A) (f : A → M B),
       liftᵀ (bind c f) = bind (liftᵀ c) (λ x, liftᵀ (f x)) ;
   mapᵀ_morph : ∀ M N f `{Morphism M N f}, Morphism _ _ (mapᵀ f) ;
   mapᵀ_liftᵀ :

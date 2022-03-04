@@ -28,13 +28,13 @@ Section State.
         ret A x := λ s₀, ret (s₀, x) ;
         bind A B c f := λ s₀, bind (c s₀) (λ '(s₁, x), f x s₁)
       |}.
-    - intros M hM A x.
+    - intros M hM lM A x.
       simpl. extensionality s₀.
-      (* Missing monadic laws *)
-      admit.
-    - intros M hM A B c f.
+      rewrite structures.left_id. reflexivity.
+    - intros M hM lM A B c f.
       simpl. extensionality s₀.
-      admit.
+      rewrite !structures.assoc. f_equal.
+      extensionality x. rewrite structures.left_id. reflexivity.
     - intros M N f hM hN hf.
       constructor.
       + intros A x. simpl.
@@ -49,7 +49,7 @@ Section State.
       simpl. extensionality s₀.
       rewrite morph_bind. apply (f_equal (bind _)).
       extensionality x. apply morph_ret.
-  Admitted.
+  Defined.
 
   #[refine] Instance Order_W : Order (W StT) := {|
     wle A (w w' : W StT A) := ∀ post s, val (w' s) post → val (w s) post
@@ -65,8 +65,11 @@ Section State.
     constructor.
     intros A B w w' wf wf' hw hwf.
     intros post s h.
-    simpl.
-    (* Need the laws to compute because it builds a monad! *)
-  Abort.
+    simpl. apply hw.
+    simpl in h.
+    destruct w' as [w'' hm].
+    eapply hm. 2: exact h.
+    intros [s₁ x]. apply hwf.
+  Qed.
 
 End State.

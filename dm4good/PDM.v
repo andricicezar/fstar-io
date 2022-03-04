@@ -29,7 +29,7 @@ Section PDM.
   Definition D A w :=
     { c : M A | θ c ≤ᵂ w }.
 
-  Instance DijkstraMonad_D : DijkstraMonad D.
+  #[export] Instance DijkstraMonad_D : DijkstraMonad D.
   Proof.
     constructor.
     - intros A x.

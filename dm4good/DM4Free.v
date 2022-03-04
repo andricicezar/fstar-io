@@ -18,13 +18,13 @@ Section DM4Free.
   Definition M A :=
     T G A.
 
-  Instance Monad_M : Monad M.
+  #[export] Instance Monad_M : Monad M.
   Proof.
     unfold M. apply transf_monad. exact _.
   Defined.
 
   (* Instead I could show that a monad transformer preserves ReqMonad *)
-  Instance ReqMonad_M : ReqMonad M := {|
+  #[export] Instance ReqMonad_M : ReqMonad M := {|
     req p := liftᵀ (req p)
   |}.
 
@@ -38,7 +38,7 @@ Section DM4Free.
     apply transf_monad. exact _.
   Defined.
 
-  Instance ReqMonad_W : ReqMonad W := {|
+  #[export] Instance ReqMonad_W : ReqMonad W := {|
     req p := liftᵀ (req p)
   |}.
 
@@ -119,7 +119,7 @@ Section DM4Free.
     end.
     2:{
       subst e. apply (f_equal (bind _)).
-      extensionality h. apply liftᵀ_ret.
+      extensionality h. apply liftᵀ_ret. exact _.
     }
     subst e.
     lazymatch goal with
@@ -128,7 +128,7 @@ Section DM4Free.
       evar (e : T) ;
       replace lhs with e
     end.
-    2:{ subst e. apply liftᵀ_bind. }
+    2:{ subst e. apply liftᵀ_bind. exact _. }
     subst e.
     apply wle_liftᵀ.
     destruct w as [w hw]. simpl.
