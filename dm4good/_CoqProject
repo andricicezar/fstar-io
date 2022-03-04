@@ -9,6 +9,7 @@ PDM.v
 
 # Special cases
 GuardedPDM.v
+DM4Free.v
 
 # Examples
 StateSpec.v
