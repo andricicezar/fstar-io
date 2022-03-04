@@ -27,8 +27,6 @@ maybe IO?
 
 - What are the good expectations of a PDM?
 
-- Make the DM4Free construction in general by applying the transformer to G
-
 - Is it equivalent from having a lift from PURE?
 
 - Since we can combine free monads easily, can we provide a way to define free
