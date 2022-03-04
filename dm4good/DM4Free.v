@@ -75,11 +75,11 @@ Section DM4Free.
     constructor.
     - intros A x.
       unfold θ. unshelve erewrite morph_ret. 1: exact _.
-      1:{ apply mapᵀ_morph. apply A. (* ?? *) }
+      1: apply mapᵀ_morph.
       reflexivity.
     - intros A B c f.
       unfold θ. unshelve erewrite morph_bind. 1: exact _.
-      1:{ apply mapᵀ_morph. apply A. (* ?? *) }
+      1: apply mapᵀ_morph.
       reflexivity.
   Qed.
 

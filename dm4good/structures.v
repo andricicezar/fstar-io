@@ -102,5 +102,5 @@ Class MonadTransformerLaws T `{MonadTransformer T} := {
   liftᵀ_bind :
     ∀ M `{Monad M} A B (c : M A) (f : A → M B),
       liftᵀ (bind c f) = bind (liftᵀ c) (λ x, liftᵀ (f x)) ;
-  mapᵀ_morph : ∀ M N f `{Morphism M N f} (A : Type), Morphism _ _ (mapᵀ f)
+  mapᵀ_morph : ∀ M N f `{Morphism M N f}, Morphism _ _ (mapᵀ f)
 }.
