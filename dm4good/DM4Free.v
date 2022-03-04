@@ -42,8 +42,11 @@ Section DM4Free.
     req p := liftᵀ (req p)
   |}.
 
-  (* Not just a transform, but order-enriched transformer *)
+  (* Not just a transform, but order-enriched transformer.
+    Here only stated for G.
+  *)
   Context (Order_W : Order W) (MonoSpec_W : MonoSpec W).
+  Context (wle_liftᵀ : ∀ A (w w' : pure_wp A), w ≤ᵂ w' → liftᵀ w ≤ᵂ liftᵀ w').
 
   Context {hr : ∀ A, Reflexive (wle (A := A))}.
 
@@ -87,9 +90,9 @@ Section DM4Free.
   Proof.
     constructor.
     intros p.
-    unfold θ.
-    (* Missing that it is a req monad morphism *)
-  Abort.
+    unfold θ. simpl.
+    rewrite mapᵀ_liftᵀ. reflexivity.
+  Qed.
 
   (* Partial Dijkstra monad *)
 
@@ -101,7 +104,43 @@ Section DM4Free.
 
   (* Lift from PURE *)
 
-  (* Definition liftᴾ :=
-    liftᴾ MonoSpec_W θ_lax θ_reqlax hlift. *)
+  Definition liftᵂ : spec_lift_pure W :=
+    λ A w, liftᵀ w.
+
+  Instance hlift : PureSpec W Order_W liftᵂ.
+  Proof.
+    constructor.
+    intros A w f. simpl. unfold liftᵂ.
+    lazymatch goal with
+    | |- ?lhs ≤ᵂ _ =>
+      let T := type of lhs in
+      evar (e : T) ;
+      replace lhs with e
+    end.
+    2:{
+      subst e. apply (f_equal (bind _)).
+      extensionality h. apply liftᵀ_ret.
+    }
+    subst e.
+    lazymatch goal with
+    | |- ?lhs ≤ᵂ _ =>
+      let T := type of lhs in
+      evar (e : T) ;
+      replace lhs with e
+    end.
+    2:{ subst e. apply liftᵀ_bind. }
+    subst e.
+    apply wle_liftᵀ.
+    destruct w as [w hw]. simpl.
+    intros post h.
+    unshelve eexists.
+    { eapply hw. 2:exact h.
+      auto.
+    }
+    destruct f as [a ha]. apply ha. apply h.
+  Qed.
+
+  Definition liftᴾ :=
+    liftᴾ MonoSpec_W θ_lax θ_reqlax _.
 
 End DM4Free.
