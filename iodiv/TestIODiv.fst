@@ -1,4 +1,4 @@
-module Tests2
+module TestIODiv
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
@@ -10,7 +10,7 @@ open FStar.FunctionalExtensionality
 open Util
 open Stream
 open Itree
-open IODivHist
+open IODiv
 
 // assume val get_trace : unit -> IODiv trace (fun hist -> True) (ensures fun hist r -> terminates r /\ result r == hist)
 

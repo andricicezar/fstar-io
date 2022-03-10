@@ -1,4 +1,4 @@
-module IODivHist
+module IODiv
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
@@ -11,11 +11,10 @@ open Util
 open Stream
 open Itree
 
-(** IODivHist
+(** IODiv
 
-    In this file we define a more complete version of the IODiv effect for I/O
-    and non-termination than in SIODiv.
-    In addition to that, IODivHist also comes with a history for preconditions.
+    In this file we define the IODiv effect for I/O and non-termination
+    which comes with a history for preconditions.
 
 *)
 
