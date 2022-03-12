@@ -29,3 +29,9 @@ let g_bind #a #b (c : guarded a) (f : a -> guarded b) : guarded b =
   gmk (g_pre c /\ (forall (x : a). g_pre (f x))) (fun _ ->
     g_val (f (g_val c))
   )
+
+let g_req (pre : Type0) : guarded (squash pre) =
+  gmk pre (fun h -> h)
+
+let g_reqk #a (pre : Type0) (k : squash pre -> guarded a) : guarded a =
+  g_bind (g_req pre) k
