@@ -241,4 +241,15 @@ let stream_trunc_add #a (s : stream a) (n m : nat) :
     stream_trunc s n @ stream_trunc (stream_drop n s) m ;
   }
 
+let stream_prepend_app #a l l' (s : stream a) :
+  Lemma (stream_prepend l (stream_prepend l' s) == stream_prepend (l @ l') s)
+= introduce forall n. stream_prepend l (stream_prepend l' s) n == stream_prepend (l @ l') s n
+  with begin
+    append_length l l' ;
+    if n < length (l @ l')
+    then index_append l l' n
+    else ()
+  end ;
+  stream_ext (stream_prepend l (stream_prepend l' s)) (stream_prepend (l @ l') s)
+
 // TODO cofix
