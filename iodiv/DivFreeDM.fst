@@ -83,9 +83,6 @@ let rec theta_bind #a #b #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg 
     // end ;
     admit ()
   | Call ac x k ->
-    // assume (theta w_act (m_bind c f) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x))) ;
-    // assume (theta w_act (m_bind (Call ac x k) f) `wle` w_bind (theta w_act (Call ac x k)) (fun x -> theta w_act (f x))) ;
-
     calc (==) {
       m_bind (Call ac x k) f ;
       == { _ by (compute ()) }
@@ -98,16 +95,18 @@ let rec theta_bind #a #b #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg 
       w_bind (w_act ac x) (fun x -> theta w_act (k x)) ;
     } ;
 
+    calc (==) {
+      theta w_act (Call ac x (fun y -> m_bind (k y) f)) ;
+      == { _ by (compute ()) }
+      w_bind (w_act ac x) (fun x -> theta w_act (m_bind (k x) f)) ;
+    } ;
 
     w_bind_assoc (w_act ac x) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) ;
-    assert (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) `wle` w_bind (w_bind (w_act ac x) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x))) ;
 
-    assume (theta w_act (m_bind c f) `wle` w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) ;
-    assert (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x))) ;
+    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    with begin
+      theta_bind w_act (k x) f
+    end ;
+    w_bind_mono (w_act ac x) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
+
     wle_trans (theta w_act (m_bind c f)) (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) (w_bind (theta w_act c) (fun x -> theta w_act (f x)))
-
-    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    // with begin
-    //   theta_bind w_act (k x) f
-    // end ;
-    // admit ()
