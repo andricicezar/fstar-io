@@ -58,31 +58,71 @@ let shift_post_nil_imp #a (post : w_post a) :
   end
 
 // TODO Make more principled with w_bind_mono and assoc
-let rec theta_bind #a #b #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg b) :
+let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg b) :
   Lemma (theta w_act (m_bind c f) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x)))
 = match c with
   | Ret x -> forall_intro (shift_post_nil #b)
+
   | Req pre k ->
-    // Slow proof, should try to provide more explicit instances?
-    // forall_intro (shift_post_nil #a) ;
-    // forall_intro (shift_post_nil_imp #b) ;
-    // // forall_intro_3 (shift_post_mono #b) ;
-    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    // with begin
-    //   theta_bind w_act (k x) f
-    // end
-    admit ()
+
+    calc (==) {
+      m_bind (Req pre k) f ;
+      == { _ by (compute ()) }
+      Req pre (fun _ -> m_bind (k ()) f) ;
+    } ;
+
+    calc (==) {
+      theta w_act (Req pre k) ;
+      == { _ by (compute ()) }
+      w_bind (w_req pre) (fun x -> theta w_act (k x)) ;
+    } ;
+
+    calc (==) {
+      theta w_act (Req pre (fun y -> m_bind (k y) f)) ;
+      == { _ by (compute ()) }
+      w_bind (w_req pre) (fun x -> theta w_act (m_bind (k x) f)) ;
+    } ;
+
+    w_bind_assoc (w_req pre) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) ;
+
+    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    with begin
+      theta_bind w_act (k x) f
+    end ;
+    w_bind_mono (w_req pre) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))
+
   | Iter index c g i k ->
-    // forall_intro_3 (shift_post_app #b) ;
-    // forall_intro_2 (rev_acc_rev' #event) ;
-    // forall_intro_2 (rev'_append #event) ;
-    // forall_intro_3 (append_assoc #event) ;
-    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    // with begin
-    //   theta_bind w_act (k x) f
-    // end ;
-    admit ()
+
+    calc (==) {
+      m_bind (Iter index c g i k) f ;
+      == { _ by (compute ()) }
+      Iter index c (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f) ;
+    } ;
+
+    calc (==) {
+      theta w_act (Iter index c g i k) ;
+      == { _ by (compute ()) }
+      w_bind (w_iter u#a (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) ;
+    } ;
+
+    // calc (==) {
+    //   theta w_act (Iter index c g i (fun y -> m_bind (k y) f)) ;
+    //   == { _ by (compute ()) }
+    //   w_bind (w_iter u#a (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+    // } ;
+
+    w_bind_assoc (w_iter u#a (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) ;
+
+    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    with begin
+      theta_bind w_act (k x) f
+    end ;
+    w_bind_mono (w_iter u#a (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))
+
+; admit ()
+
   | Call ac x k ->
+
     calc (==) {
       m_bind (Call ac x k) f ;
       == { _ by (compute ()) }
@@ -107,6 +147,6 @@ let rec theta_bind #a #b #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg 
     with begin
       theta_bind w_act (k x) f
     end ;
-    w_bind_mono (w_act ac x) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
+    w_bind_mono (w_act ac x) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))
 
-    wle_trans (theta w_act (m_bind c f)) (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) (w_bind (theta w_act c) (fun x -> theta w_act (f x)))
+    // wle_trans (theta w_act (m_bind c f)) (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) (w_bind (theta w_act c) (fun x -> theta w_act (f x)))
