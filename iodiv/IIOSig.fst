@@ -55,3 +55,16 @@ let iio_sig : signature = {
   arg = iio_arg ;
   res = iio_res
 }
+
+let rec is_open (fd : file_descr) (hist : history) : bool =
+  match hist with
+  | [] -> false
+  | EClose fd' :: hist' ->
+    if fd = fd'
+    then false
+    else is_open fd hist'
+  | EOpenFile s fd' :: hist' ->
+    if fd = fd'
+    then true
+    else is_open fd hist'
+  | e :: hist' -> is_open fd hist'

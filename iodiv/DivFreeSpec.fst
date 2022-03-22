@@ -97,3 +97,18 @@ let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
   as_wp (fun post hist ->
     w (w_bind_post wf post hist) hist
   )
+
+let w_req (pre : pure_pre) : wp (squash pre) =
+  as_wp (fun post hist -> pre /\ post (Cv [] (Squash.get_proof pre)))
+
+let w_open (s : string) : wp file_descr =
+  as_wp (fun post hist -> forall fd. post (Cv [ EOpenFile s fd ] fd))
+
+let w_read (fd : file_descr) : wp string =
+  as_wp (fun post hist -> is_open fd hist /\ (forall s. post (Cv [ ERead fd s ] s)))
+
+let w_close (fd : file_descr) : wp unit =
+  as_wp (fun post hist -> is_open fd hist /\ post (Cv [ EClose fd ] ()))
+
+let w_get_trace : wp history =
+  as_wp (fun post hist -> post (Cv [] hist))
