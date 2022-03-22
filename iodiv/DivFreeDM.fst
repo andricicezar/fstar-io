@@ -64,26 +64,50 @@ let rec theta_bind #a #b #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg 
   | Ret x -> forall_intro (shift_post_nil #b)
   | Req pre k ->
     // Slow proof, should try to provide more explicit instances?
-    forall_intro (shift_post_nil #a) ;
-    forall_intro (shift_post_nil_imp #b) ;
-    // forall_intro_3 (shift_post_mono #b) ;
-    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    with begin
-      theta_bind w_act (k x) f
-    end
+    // forall_intro (shift_post_nil #a) ;
+    // forall_intro (shift_post_nil_imp #b) ;
+    // // forall_intro_3 (shift_post_mono #b) ;
+    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    // with begin
+    //   theta_bind w_act (k x) f
+    // end
+    admit ()
   | Iter index c g i k ->
-    forall_intro_3 (shift_post_app #b) ;
-    forall_intro_2 (rev_acc_rev' #event) ;
-    forall_intro_2 (rev'_append #event) ;
-    forall_intro_3 (append_assoc #event) ;
-    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    with begin
-      theta_bind w_act (k x) f
-    end ;
+    // forall_intro_3 (shift_post_app #b) ;
+    // forall_intro_2 (rev_acc_rev' #event) ;
+    // forall_intro_2 (rev'_append #event) ;
+    // forall_intro_3 (append_assoc #event) ;
+    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    // with begin
+    //   theta_bind w_act (k x) f
+    // end ;
     admit ()
   | Call ac x k ->
-    introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    with begin
-      theta_bind w_act (k x) f
-    end ;
-    admit ()
+    // assume (theta w_act (m_bind c f) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x))) ;
+    // assume (theta w_act (m_bind (Call ac x k) f) `wle` w_bind (theta w_act (Call ac x k)) (fun x -> theta w_act (f x))) ;
+
+    calc (==) {
+      m_bind (Call ac x k) f ;
+      == { _ by (compute ()) }
+      Call ac x (fun y -> m_bind (k y) f) ;
+    } ;
+
+    calc (==) {
+      theta w_act (Call ac x k) ;
+      == { _ by (compute ()) }
+      w_bind (w_act ac x) (fun x -> theta w_act (k x)) ;
+    } ;
+
+
+    w_bind_assoc (w_act ac x) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) ;
+    assert (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) `wle` w_bind (w_bind (w_act ac x) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x))) ;
+
+    assume (theta w_act (m_bind c f) `wle` w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) ;
+    assert (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x))) ;
+    wle_trans (theta w_act (m_bind c f)) (w_bind (w_act ac x) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) (w_bind (theta w_act c) (fun x -> theta w_act (f x)))
+
+    // introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    // with begin
+    //   theta_bind w_act (k x) f
+    // end ;
+    // admit ()

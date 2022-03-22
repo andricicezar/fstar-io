@@ -67,6 +67,12 @@ let wp a =
 let wle #a (w w' : wp a) =
   forall p. w' p `w_pre_le` w p
 
+let wle_trans #a (w1 w2 w3 : wp a) :
+  Lemma
+    (requires w1 `wle` w2 /\ w2 `wle` w3)
+    (ensures w1 `wle` w3)
+= ()
+
 let as_wp #a (w : wp' a) : Pure (wp a) (requires wp_monotonic w) (ensures fun r -> r == w) =
   w
 
