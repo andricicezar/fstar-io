@@ -121,21 +121,21 @@ let w_close (fd : file_descr) : wp unit =
 let w_get_trace : wp history =
   as_wp (fun post hist -> post (Cv [] hist))
 
-let rec w_iter_n #index #b (n : nat) (w : index -> wp (either index b)) (i : index) : wp (either index b) =
+let rec w_iter_n (#index : Type0) (#b : Type0) (n : nat) (w : index -> wp (liftType u#a (either index b))) (i : index) : wp (liftType u#a (either index b)) =
   if n = 0
   then w i
   else w_bind (w i) (fun r ->
     match r with
-    | Inl j -> w_iter_n (n-1) w j
-    | Inr x -> w_ret (Inr x)
+    | LiftTy (Inl j) -> w_iter_n (n-1) w j
+    | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
   )
 
-let w_iter #index #b (n : nat) (w : index -> wp (either index b)) (i : index) : wp b =
+let w_iter (#index : Type0) (#b : Type0) (w : index -> wp (liftType u#a (either index b))) (i : index) : wp b =
   as_wp (fun post hist ->
     // Finite iteration
     begin
       forall n tr x.
-        w_iter_n n w i (fun r -> r == Cv tr (Inr x)) hist ==>
+        w_iter_n n w i (fun r -> r == Cv tr (LiftTy (Inr x))) hist ==>
         post (Cv tr x)
     end /\
     // Finite iteration with final branch diverging
@@ -147,8 +147,8 @@ let w_iter #index #b (n : nat) (w : index -> wp (either index b)) (i : index) : 
     // Infinite iteration
     begin
       forall (js : stream index) (trs : stream trace) s.
-        w i (fun r -> r == Cv (trs 0) (Inl (js 0))) hist ==>
-        (forall (n : nat). w (js n) (fun r -> r == Cv (trs (n+1)) (Inl (js (n+1)))) (rev_acc (ttrunc trs n) hist)) ==>
+        w i (fun r -> r == Cv (trs 0) (LiftTy (Inl (js 0)))) hist ==>
+        (forall (n : nat). w (js n) (fun r -> r == Cv (trs (n+1)) (LiftTy (Inl (js (n+1))))) (rev_acc (ttrunc trs n) hist)) ==>
         s `strace_refine` trs ==>
         post (Dv s)
     end

@@ -2,15 +2,14 @@
 
 module DivFree
 
+open Util
+
 noeq
 type signature = {
   act : Type0 ;
   arg : a:act -> Type0 ;
   res : #a:act -> arg a -> Type0 ;
 }
-
-type liftType (a : Type0) : Type u#a =
-| LiftTy : x:a -> liftType a
 
 noeq
 type m (sg : signature) (a : Type u#a) : Type =

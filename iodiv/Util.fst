@@ -6,6 +6,11 @@ open FStar.Classical
 open FStar.IndefiniteDescription
 open FStar.Calc
 
+(** Lifting Type0 *)
+
+type liftType (a : Type0) : Type u#a =
+| LiftTy : x:a -> liftType a
+
 (** Properties of prefix and suffix on lists *)
 
 let rec strict_prefix_of #a (s l : list a) :
