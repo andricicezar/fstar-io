@@ -25,6 +25,14 @@ let strace_prepend (tr : trace) (st : strace) : strace =
   | Fintrace tr' -> Fintrace (tr @ tr')
   | Inftrace s -> Inftrace (stream_prepend tr s)
 
+let ttrunc (trs : stream trace) (n : nat) : trace =
+  flatten (stream_trunc trs n)
+
+let strace_refine (st : strace) (trs : stream trace) =
+  match st with
+  | Fintrace tr -> exists (n : nat). forall (m : nat). n <= m ==> tr == ttrunc trs n
+  | Inftrace s -> forall (n : nat). ttrunc trs n == stream_trunc s (length (ttrunc trs n))
+
 (** Converging or diverging run *)
 noeq
 type run a =
@@ -112,3 +120,36 @@ let w_close (fd : file_descr) : wp unit =
 
 let w_get_trace : wp history =
   as_wp (fun post hist -> post (Cv [] hist))
+
+let rec w_iter_n #index #b (n : nat) (w : index -> wp (either index b)) (i : index) : wp (either index b) =
+  if n = 0
+  then w i
+  else w_bind (w i) (fun r ->
+    match r with
+    | Inl j -> w_iter_n (n-1) w j
+    | Inr x -> w_ret (Inr x)
+  )
+
+let w_iter #index #b (n : nat) (w : index -> wp (either index b)) (i : index) : wp b =
+  as_wp (fun post hist ->
+    // Finite iteration
+    begin
+      forall n tr x.
+        w_iter_n n w i (fun r -> r == Cv tr (Inr x)) hist ==>
+        post (Cv tr x)
+    end /\
+    // Finite iteration with final branch diverging
+    begin
+      forall n st.
+        w_iter_n n w i (fun r -> r == Dv st) hist ==>
+        post (Dv st)
+    end /\
+    // Infinite iteration
+    begin
+      forall (js : stream index) (trs : stream trace) s.
+        w i (fun r -> r == Cv (trs 0) (Inl (js 0))) hist ==>
+        (forall (n : nat). w (js n) (fun r -> r == Cv (trs (n+1)) (Inl (js (n+1)))) (rev_acc (ttrunc trs n) hist)) ==>
+        s `strace_refine` trs ==>
+        post (Dv s)
+    end
+  )
