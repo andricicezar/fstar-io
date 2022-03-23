@@ -3,4 +3,4 @@
 
 
 verify:
-	fstar.exe --include ../.. --include .. Free.IO.fst IUnix.fst Shared.fst WebServer.fst
+	fstar.exe --include ../.. --include .. IO.Sig.fst IUnix.fst Shared.fst WebServer.fst

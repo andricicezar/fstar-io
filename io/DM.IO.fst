@@ -55,17 +55,6 @@ effect IO
   IOwp a 
     (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt (r:a). post h r lt ==> p lt r)) 
 
-effect IOPi
-  (a:Type)
-  (pi : monitorable_prop)
-  (pre : trace -> Type0)
-  (post : trace -> a -> trace -> Type0) =
-  IO a
-    (requires pre)
-    (ensures (fun h r lt -> 
-      enforced_locally pi h lt /\
-      post h r lt))
-
 let static_cmd
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :

@@ -1,4 +1,4 @@
-module Linker
+module Main
 
 open Model
 open Shared

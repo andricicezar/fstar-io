@@ -12,6 +12,24 @@ open TC.MLify
 include TC.Instrumentable
 open DM.IIO
 
+let iio_post
+  (#a:Type)
+  (pi : monitorable_prop)
+  (h:trace)
+  (result:a)
+  (local_trace:trace) :
+  Tot bool =
+  enforced_locally pi h local_trace
+
+effect IIOpi
+  (a:Type)
+  (pi : monitorable_prop)
+  (pre : trace -> Type0)
+  (post : trace -> a -> trace -> Type0) =
+  IIOwp a
+    (fun p h ->
+      pre h /\
+      (forall r lt. (iio_post pi h r lt /\ post h r lt) ==> p lt r))
 
 let extract_local_trace (h':trace) (pi:monitorable_prop) :
   IIOpi trace pi

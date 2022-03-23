@@ -3,7 +3,7 @@ module Shared
 open FStar.Tactics
 
 open Common
-open Free.IO
+open IO.Sig
 open TC.Monitorable
 open Model
 
