@@ -121,6 +121,13 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
     end ;
     // w_bind_mono (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
 
+    // Sadly adding this makes the whole thing fail
+    // calc (wle) {
+    //   w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i ;
+    //   `wle` { admit () }
+    //   w_iter (fun j -> theta w_act (g j)) i ;
+    // } ;
+
     // Is there a problem with respect to g satying g in theta but not in m_bind?
     calc (wle) {
       theta w_act (m_bind c f) ;
@@ -132,13 +139,15 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
       w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
       `wle` {} // If need be, can use w_bind_mono explicitly
       w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-      `wle` { admit () }
-      w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ; // Is it a good intermediary? Can also target w_bind (theta w_act c) (fun x -> theta w_act (f x)) directly
-    } ;
-    // assert (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x))) ;
-    wle_trans (theta w_act (m_bind c f)) (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x)))) (w_bind (theta w_act c) (fun x -> theta w_act (f x)))
-
-   // admit ()
+      `wle` { admit () } // Another form of monotonicity
+      w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
+      `wle` {} // w_bind_assoc
+      w_bind (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
+      == {}
+      w_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
+      == {}
+      w_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
+    }
 
   | Call ac x k ->
 
