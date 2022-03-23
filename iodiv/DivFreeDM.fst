@@ -95,25 +95,23 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
 
   | Iter index ct g i k ->
 
-    calc (==) {
-      m_bind (Iter index ct g i k) f ;
-      == { _ by (compute ()) }
-      Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f) ;
-    } ;
+    // calc (==) {
+    //   m_bind (Iter index ct g i k) f ;
+    //   == { _ by (compute ()) }
+    //   Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f) ;
+    // } ;
 
-    calc (==) {
-      theta w_act (Iter index ct g i k) ;
-      == { _ by (compute ()) }
-      w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) ;
-    } ;
+    // calc (==) {
+    //   theta w_act (Iter index ct g i k) ;
+    //   == { _ by (compute ()) }
+    //   w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) ;
+    // } ;
 
-    calc (==) {
-      theta w_act (Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)) ;
-      == { _ by (compute ()) }
-      w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
-    } ;
-
-    w_bind_assoc (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) ;
+    // calc (==) {
+    //   theta w_act (Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)) ;
+    //   == { _ by (compute ()) }
+    //   w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+    // } ;
 
     introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
     with begin
@@ -121,29 +119,28 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
     end ;
     // w_bind_mono (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
 
-    // Sadly adding this makes the whole thing fail
-    // calc (wle) {
-    //   w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i ;
-    //   `wle` { admit () }
-    //   w_iter (fun j -> theta w_act (g j)) i ;
-    // } ;
+    calc (wle) {
+      w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i ;
+      `wle` { admit () }
+      w_iter (fun j -> theta w_act (g j)) i ;
+    } ;
 
     // Is there a problem with respect to g satying g in theta but not in m_bind?
     calc (wle) {
       theta w_act (m_bind c f) ;
       == {}
       theta w_act (m_bind (Iter index ct g i k) f) ;
-      == {}
+      == { _ by (compute ()) }
       theta w_act (Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)) ;
-      == {}
+      == { _ by (compute ()) }
       w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
       `wle` {} // If need be, can use w_bind_mono explicitly
       w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-      `wle` { admit () } // Another form of monotonicity
+      `wle` {} // Another form of monotonicity
       w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-      `wle` {} // w_bind_assoc
+      `wle` { w_bind_assoc (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) }
       w_bind (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
-      == {}
+      == { _ by (compute ()) }
       w_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
       == {}
       w_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
