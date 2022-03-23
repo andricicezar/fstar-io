@@ -1,4 +1,4 @@
-module TC.MLify.MIIO
+module TC.MLify.IIOwp
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -15,7 +15,7 @@ open DM.IIO
 
 exception Something_went_really_bad
  
-instance mlifyable_miio
+instance mlifyable_iiowp
   t1 t2 {| ml t1 |} {| ml t2 |} :
   Tot (mlifyable (t1 -> IIOwp t2 (fun _ _ -> True))) =
   mk_mlifyable
@@ -43,7 +43,7 @@ instance mlifyable_miio
 2. can I move enforcing the post-condition here? It should be possible.
 **)
 
-instance mlifyable_inst_miio
+instance mlifyable_inst_iiowp
   t1 t3
   {| d1:instrumentable t1 |} {| d2:ml t3 |} :
   Tot (mlifyable (t1 -> IIOwp t3 (fun _ _ -> True))) =
