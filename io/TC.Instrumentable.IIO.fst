@@ -4,7 +4,7 @@ open FStar.List.Tot
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Free.IO
+open IO.Sig
 open Common
 open TC.Export
 open TC.Monitorable
@@ -14,7 +14,7 @@ open DM.IIO
 
 
 let extract_local_trace (h':trace) (pi:monitorable_prop) :
-  IIO trace pi
+  IIOpi trace pi
     (requires (fun h -> h' `suffix_of` h))
     (ensures (fun h lt' lt ->
       lt == [] /\
@@ -35,9 +35,9 @@ let enforce_post
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> (r:maybe t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b}))
   {| post_c:monitorable_post pre post pi |}
-  (f:t1 -> IIO (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True))
+  (f:t1 -> IIOpi (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True))
   (x:t1) :
-  IIO (maybe t2) pi (pre x) (post x) =
+  IIOpi (maybe t2) pi (pre x) (post x) =
   let h = get_trace () in
   let r : maybe t2 = f x in
   Classical.forall_intro (lemma_suffixOf_append h);
@@ -53,7 +53,7 @@ instance instrumentable_IIO
   (** it must be `maybe t2` because needs the ability to fail **)
   (post : t1 -> trace -> (r:maybe t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b}))
   (pi : monitorable_prop) {| post_c:monitorable_post pre post pi |} : 
-  instrumentable ((x:t1) -> IIO (maybe t2) pi (pre x) (post x)) =
+  instrumentable ((x:t1) -> IIOpi (maybe t2) pi (pre x) (post x)) =
   { a = t1; b = t2; a_c = d1; b_c = d2;
     start_type = t1 -> Tot (maybe t2);
     start_type_c = ml_arrow_tot_1 t1 (maybe t2);
@@ -61,6 +61,6 @@ instance instrumentable_IIO
       (** automatic lift from Pure to IIO. 
         The explicit (fun x -> f x) is necessary for the lift to be added by F*.
         we can say that f respects pi because a Pure computation has an empty trace. **)
-      let f' : t1 -> IIO (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True) = (fun x -> f x) in 
+      let f' : t1 -> IIOpi (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True) = (fun x -> f x) in 
       enforce_post #t1 #t2 pi pre post #post_c f')
   }

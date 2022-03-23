@@ -3,7 +3,6 @@ module DM.IIO.Primitives
 open FStar.Tactics
 open ExtraTactics
 open FStar.Tactics.Typeclasses
-open DM.IIO.Tactics
 
 open Common
 open IO.Sig

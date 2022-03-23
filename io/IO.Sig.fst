@@ -24,7 +24,7 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) = option (io_res cmd)
+let io_resm (cmd:io_cmds) = either (io_res cmd) exn
 
 unfold
 let io_resm' (cmd:io_cmds) (arg:io_args cmd) = io_resm cmd
@@ -141,7 +141,7 @@ let rec is_open (fd:file_descr) (h:trace) : bool =
   match h with
   | [] -> false
   | h :: tail -> match h with
-               | EOpenfile _ (Some fd') ->
+               | EOpenfile _ (Inl fd') ->
                    if fd = fd' then true
                    else is_open fd tail
                | EClose fd' _ ->

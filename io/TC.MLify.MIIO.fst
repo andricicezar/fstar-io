@@ -7,25 +7,22 @@ open FStar.All
 open Common
 open TC.Export
 include TC.MLify
-open TC.Weaken.MIIO
-open TC.Trivialize.MIIO
 open TC.Instrumentable
 
 open Free
-open Free.IO
+open IO.Sig
 open DM.IIO
-open DM.MIIO
 
 exception Something_went_really_bad
  
 instance mlifyable_miio
   t1 t2 {| ml t1 |} {| ml t2 |} :
-  Tot (mlifyable (t1 -> MIIO t2)) =
+  Tot (mlifyable (t1 -> IIOwp t2 (fun _ _ -> True))) =
   mk_mlifyable
-    #(t1 -> MIIO t2)
+    #(t1 -> IIOwp t2 (fun _ _ -> True))
     (t1 -> ML t2)
     (fun f x -> 
-     let tree : iio t2 = reify (f x) (Monitor.get_trace ()) (fun _ _ -> True) in
+     let tree : iio t2 = reify (f x) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual
@@ -49,13 +46,13 @@ instance mlifyable_miio
 instance mlifyable_inst_miio
   t1 t3
   {| d1:instrumentable t1 |} {| d2:ml t3 |} :
-  Tot (mlifyable (t1 -> MIIO t3)) =
+  Tot (mlifyable (t1 -> IIOwp t3 (fun _ _ -> True))) =
   mk_mlifyable
     #_
     (d1.start_type -> ML t3)
     #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
-    (fun (p:t1 -> MIIO t3) (ct:d1.start_type) ->
-     let tree : iio t3 = reify (p (d1.instrument ct)) (Monitor.get_trace ()) (fun _ _ -> True) in
+    (fun (p:t1 -> IIOwp t3 (fun _ _ -> True)) (ct:d1.start_type) ->
+     let tree : iio t3 = reify (p (d1.instrument ct)) in
      match tree with
      | Return y -> y
      (** during extraction, Free.IO.Call is replaced with an actual
