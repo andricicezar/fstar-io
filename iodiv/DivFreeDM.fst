@@ -57,7 +57,43 @@ let shift_post_nil_imp #a (post : w_post a) :
     | Dv s -> strace_prepend_nil s
   end
 
-// TODO Make more principled with w_bind_mono and assoc
+// TODO MOVE to spec
+let w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+  Lemma
+    (requires forall j. w j `wle` w' j)
+    (ensures w_iter_n n w i `wle` w_iter_n n w' i)
+= admit ()
+
+// TODO MOVE to spec
+let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+  Lemma
+    (requires forall j. w' j `wle` w j) // Problem: I wanted the other direction! One solution is to prove theta_bind in a non-lax way, using `weq` instead of `wle`
+    (ensures w_iter w i `wle` w_iter w' i)
+= assume (forall n. w_iter_n n w' i `wle` w_iter_n n w i) ;
+  introduce forall post hist. w_iter w' i post hist ==> w_iter w i post hist
+  with begin
+    introduce w_iter w' i post hist ==> w_iter w i post hist
+    with _. begin
+      assert (
+        forall n tr x.
+          w_iter_n n w i (fun r -> r == Cv tr (LiftTy (Inr x))) hist ==>
+          post (Cv tr x)
+      ) ;
+      assert (
+        forall n st.
+          w_iter_n n w i (fun r -> r == Dv st) hist ==>
+          post (Dv st)
+      ) ;
+      assert (
+        forall (js : stream index) (trs : stream trace) s.
+          w i (fun r -> r == Cv (trs 0) (LiftTy (Inl (js 0)))) hist ==>
+          (forall (n : nat). w (js n) (fun r -> r == Cv (trs (n+1)) (LiftTy (Inl (js (n+1))))) (rev_acc (ttrunc trs n) hist)) ==>
+          s `strace_refine` trs ==>
+          post (Dv s)
+      )
+    end
+  end
+
 let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg b) :
   Lemma (theta w_act (m_bind c f) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x)))
 = match c with
@@ -95,24 +131,6 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
 
   | Iter index ct g i k ->
 
-    // calc (==) {
-    //   m_bind (Iter index ct g i k) f ;
-    //   == { _ by (compute ()) }
-    //   Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f) ;
-    // } ;
-
-    // calc (==) {
-    //   theta w_act (Iter index ct g i k) ;
-    //   == { _ by (compute ()) }
-    //   w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) ;
-    // } ;
-
-    // calc (==) {
-    //   theta w_act (Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)) ;
-    //   == { _ by (compute ()) }
-    //   w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
-    // } ;
-
     introduce forall x. theta w_act (m_bind (k x) f) `wle` w_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
     with begin
       theta_bind w_act (k x) f
@@ -121,11 +139,12 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
 
     calc (wle) {
       w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i ;
-      `wle` { admit () }
+      `wle` { admit () } // w_iter_mono + ih
+      w_iter (fun j -> w_bind (theta w_act (g j)) (fun z -> theta w_act (match z with LiftTy x -> m_ret (LiftTy u#b x)))) i ;
+      `wle` { admit () } // Again want to use w_iter_mono + some match exchange + right id? This suggests I should prove the underlying wle at once and then use w_iter_mono
       w_iter (fun j -> theta w_act (g j)) i ;
     } ;
 
-    // Is there a problem with respect to g satying g in theta but not in m_bind?
     calc (wle) {
       theta w_act (m_bind c f) ;
       == {}
