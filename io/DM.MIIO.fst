@@ -1,21 +1,20 @@
 module DM.MIIO
 
 open Common
-open Free
-open Free.IO
+open IO.Sig
 open DM.IIO
 open DM.IIO.Primitives
 open TC.Trivialize.IIOwp
 
 effect MIIO
   (a:Type) =
-  IIOwp a (fun _ p -> forall res le. p res le)
+  IIOwp a (fun p _ -> forall res le. p le res)
 
 let _IIOwp_as_MIIO
   (pre:'a -> trace -> bool)
   (post:'a -> trace -> (m:'b) -> trace -> Type0)
   (f:(x:'a ->
-    IIOwp 'b (fun h p -> pre x h /\ (forall r lt. post x h r lt ==> p r lt))))
+    IIOwp 'b (fun p h -> pre x h /\ (forall r lt. post x h r lt ==> p lt r))))
   (x:'a) :
   MIIO (maybe 'b) =
   (trivialize 
@@ -26,7 +25,7 @@ let _IIOwp_as_MIIO_2
   (pre:'a -> 'b -> trace -> bool)
   (post:'a -> 'b -> trace -> (m:'c) -> trace -> Type0)
   (f:(x:'a -> y:'b ->
-    IIOwp 'c (fun h p -> pre x y h /\ (forall r lt. post x y h r lt ==> p r lt))))
+    IIOwp 'c (fun p h -> pre x y h /\ (forall r lt. post x y h r lt ==> p lt r))))
   (x:'a) (y:'b):
   MIIO (maybe 'c) =
   (trivialize 

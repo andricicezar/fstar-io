@@ -8,7 +8,7 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
-open Free.IO
+open IO.Sig
 open DM.IIO
 open TC.Export
 open TC.Trivialize.IIOwp
@@ -34,20 +34,8 @@ let new_post
 instance weakable_IIOwp
   t1 t2 {| d1:importable t1 |} {| d2: exportable t2 |}
   (post : t1 -> trace -> t2 -> trace -> Type0) :
-  Tot (weakable ((x:t1) -> IIOwp t2 (post_as_wp (post x)))) by ( 
-    unfold_def(`pre_post_as_wp);
-    l_to_r [`List.Tot.Properties.append_l_nil; `List.Tot.Properties.append_nil_l];
-    explode (); 
-    bump_nth 8; 
-    let _, lm = destruct_and (ExtraTactics.get_binder 17) in
-    let z = ExtraTactics.get_binder 20 in
-    let z':term = ExtraTactics.get_binder 21 in
-    let lm' = ExtraTactics.instantiate_multiple_foralls lm [(`(Inl (export (`#z)))); z'] in
-    mapply lm';
-    unfold_def(`new_post);
-    norm [iota;delta];
-    tadmit ();
-    dump "h") =
+  Tot (weakable ((x:t1) -> IIOwp t2 (post_as_wp (post x)))) =
+  admit ();
   let post' = new_post t1 t2 post in
   mk_weakable 
     ((x:d1.itype) -> IIOwp (maybe d2.etype) (pre_post_as_wp (fun _ -> True) (post' x)))

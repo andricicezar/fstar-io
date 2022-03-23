@@ -1,14 +1,13 @@
 module Instrument
 
 open Common
-open Free
-open Free.IO
+open IO.Sig
 open DM
 
 let rec _instrument
   (tree : iio 'a)
   ('p:monitorable_prop) :
-  IIO (maybe 'a) 'p (fun _ -> True) (fun _ _ _ -> True) =
+  IIOpi (maybe 'a) 'p (fun _ -> True) (fun _ _ _ -> True) =
   match tree with
   | Return r -> (Inl r)
   | Call GetTrace argz fnc ->

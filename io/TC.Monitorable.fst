@@ -3,7 +3,7 @@ module TC.Monitorable
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Free.IO
+open IO.Sig 
 
 class monitorable_post (#t1:Type) (#t2:Type) 
   (pre : t1 -> trace -> Type0)
