@@ -30,63 +30,6 @@ let theta_ret #a #sg (w_act : action_wp sg) (x : a) :
   Lemma (theta w_act (m_ret x) `wle` w_ret x)
 = ()
 
-// TODO MOVE
-let strace_prepend_nil s :
-  Lemma (strace_prepend [] s == s)
-= match s with
-  | Fintrace t -> assert (([] @ t) == t)
-  | Inftrace t -> forall_intro (stream_ext t)
-
-// TODO MOVE
-let shift_post_nil #a (post : w_post a) :
-  Lemma (shift_post [] post `w_post_le` post)
-= introduce forall r. shift_post [] post r ==> post r
-  with begin
-    match r with
-    | Cv tr x -> ()
-    | Dv s -> strace_prepend_nil s
-  end
-
-// TODO MOVE
-let shift_post_nil_imp #a (post : w_post a) :
-  Lemma (post `w_post_le` shift_post [] post)
-= introduce forall r. post r ==> shift_post [] post r
-  with begin
-    match r with
-    | Cv tr x -> ()
-    | Dv s -> strace_prepend_nil s
-  end
-
-// TODO MOVE to spec
-let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
-  Lemma
-    (requires forall j. w j `wle` w' j)
-    (ensures w_iter_n n w i `wle` w_iter_n n w' i)
-= if n = 0
-  then ()
-  else begin
-    introduce forall j. w_iter_n (n-1) w j `wle` w_iter_n (n-1) w' j
-    with begin
-      w_iter_n_mono (n-1) w w' j
-    end ;
-    // w_bind_mono (w i) (fun r -> // or w' maybe?
-    //   match r with
-    //   | LiftTy (Inl j) -> w_iter_n (n-1) w j
-    //   | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
-    // )
-    admit ()
-  end
-
-// TODO MOVE to spec
-let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
-  Lemma
-    (requires forall j. w' j `wle` w j) // Problem: I wanted the other direction! One solution is to prove theta_bind in a non-lax way, using `weq` instead of `wle`
-    (ensures w_iter w i `wle` w_iter w' i)
-= introduce forall n. w_iter_n n w' i `wle` w_iter_n n w i
-  with begin
-    w_iter_n_mono n w' w i
-  end
-
 let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg b) :
   Lemma (theta w_act (m_bind c f) `wle` w_bind (theta w_act c) (fun x -> theta w_act (f x)))
 = match c with

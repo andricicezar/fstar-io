@@ -39,6 +39,12 @@ let strace_prepend_app t t' s :
   | Fintrace tr -> append_assoc t t' tr
   | Inftrace st -> stream_prepend_app t t' st
 
+let strace_prepend_nil s :
+  Lemma (strace_prepend [] s == s)
+= match s with
+  | Fintrace t -> assert (([] @ t) == t)
+  | Inftrace t -> forall_intro (stream_ext t)
+
 (** Converging or diverging run *)
 noeq
 type run a =
@@ -96,6 +102,25 @@ let shift_post_app #a t t' (p : w_post a) :
     match r with
     | Cv tr x -> append_assoc t' t tr
     | Dv st -> strace_prepend_app t' t st
+  end
+
+let shift_post_nil #a (post : w_post a) :
+  Lemma (shift_post [] post `w_post_le` post)
+= introduce forall r. shift_post [] post r ==> post r
+  with begin
+    match r with
+    | Cv tr x -> ()
+    | Dv s -> strace_prepend_nil s
+  end
+
+// TODO Maybe merge the two with  `w_post_eq`?
+let shift_post_nil_imp #a (post : w_post a) :
+  Lemma (post `w_post_le` shift_post [] post)
+= introduce forall r. post r ==> shift_post [] post r
+  with begin
+    match r with
+    | Cv tr x -> ()
+    | Dv s -> strace_prepend_nil s
   end
 
 let w_bind_post #a #b (wf : a -> wp b) (post : w_post b) hist : w_post a =
@@ -209,3 +234,31 @@ let w_iter (#index : Type0) (#b : Type0) (w : index -> wp (liftType u#a (either 
         post (Dv s)
     end
   )
+
+let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+  Lemma
+    (requires forall j. w j `wle` w' j)
+    (ensures w_iter_n n w i `wle` w_iter_n n w' i)
+= if n = 0
+  then ()
+  else begin
+    introduce forall j. w_iter_n (n-1) w j `wle` w_iter_n (n-1) w' j
+    with begin
+      w_iter_n_mono (n-1) w w' j
+    end ;
+    // w_bind_mono (w i) (fun r -> // or w' maybe?
+    //   match r with
+    //   | LiftTy (Inl j) -> w_iter_n (n-1) w j
+    //   | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+    // )
+    admit ()
+  end
+
+let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+  Lemma
+    (requires forall j. w' j `wle` w j) // Problem: I wanted the other direction! One solution is to prove theta_bind in a non-lax way, using `weq` instead of `wle`
+    (ensures w_iter w i `wle` w_iter w' i)
+= introduce forall n. w_iter_n n w' i `wle` w_iter_n n w i
+  with begin
+    w_iter_n_mono n w' w i
+  end
