@@ -8,7 +8,9 @@ open IO.Sig
 open Common
 open ExtraTactics
 open TC.Monitorable
-open DM
+open TC.Instrumentable.IIO
+open DM.MIO
+open DM.MIIO
 open Instrument
 
 noeq type model_type = {
@@ -60,7 +62,7 @@ val whole_pre : unit -> trace -> Type0
 let whole_pre x h = whole_pre' x h
 
 type whole_s (i:interface) (m:monitor i) =
-  x:unit -> IIO i.ret m.pi (whole_pre x) (fun _ _ _ -> True)
+  x:unit -> IIOpi i.ret m.pi (whole_pre x) (fun _ _ _ -> True)
 type whole_t (i:interface) = unit -> MIIO (maybe i.ret)
 
 (** Having a pre-condition for the context is not necessary,
@@ -85,19 +87,19 @@ let tpre : (i:interface) -> (i.ctx_arg -> trace -> bool) = fun i x h -> true
 type ctx_t (i:interface) = i.ctx_arg -> MIO i.ctx_ret
 
 type ictx_t (i:interface) (m:monitor i) =
-  (x:i.ctx_arg) -> IIO (maybe i.ctx_ret) m.pi (fun h -> tpre i x h) (fun _ _ _ -> True)
+  (x:i.ctx_arg) -> IIOpi (maybe i.ctx_ret) m.pi (fun h -> tpre i x h) (fun _ _ _ -> True)
 (** The ctx_s stands for the instrumented context, therefore the
     output type is different compared to ctx_t.
     ctx_t has the output type `i.ctx_ret`, but ctx_s has `maybe i.ctx_ret`.
     This is needed to accomodate the possibility of failure during 
     instrumentation when a contract is violated. **)
 type ctx_s (i:interface) (m:monitor i) =
-  (x:i.ctx_arg) -> IIO (maybe i.ctx_ret) m.pi (m.pre x) (m.post x)
+  (x:i.ctx_arg) -> IIOpi (maybe i.ctx_ret) m.pi (m.pre x) (m.post x)
 
 (** The partial program does not need a pre- or a post-condition because
     it is the starting point of the execution in this model. **)
 type prog_s (i:interface) (m:monitor i) =
-  ctx_s i m -> IIO i.ret m.pi (fun _ -> True) (fun _ _ _ -> True)
+  ctx_s i m -> IIOpi i.ret m.pi (fun _ -> True) (fun _ _ _ -> True)
 (** compared to prog_s, prog_t can fail because it has to check the
     history with which it starts. prog_t is prog_s wrapped in a new 
     function which adds a runtime check for verifying if pi was 
@@ -115,7 +117,7 @@ let instrument
   Tot (ictx_t i m) =
     fun x ->
       instrument_MIIO
-        (cast_io_iio ((* MIIO.*)reify (ct x) [] (fun _ _ -> True))) m.pi
+        (cast_io_iio ((* MIIO.*)reify (ct x))) m.pi
  
 (** this is just a synonym to make things easier **)
 let enforce_post

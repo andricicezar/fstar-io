@@ -19,8 +19,8 @@ val dynamic_cmd :
     (fun p h ->
       (forall (r:maybe (io_sig.res cmd arg)) lt.
         (match r with
-         | Inr Contract_failure -> lt == []
-         | Inl r' -> lt == [convert_call_to_event cmd arg r']
+         | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
+         | Inl r' -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r']
          | _ -> False) ==> p lt r))
 let dynamic_cmd (cmd:io_cmds) d1 = 
   trivialize 

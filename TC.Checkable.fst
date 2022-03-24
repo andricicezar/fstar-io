@@ -12,6 +12,12 @@ instance general_is_checkable2
   Tot (checkable2 (fun x y -> p x y)) =
   { check2 = fun x y -> p x y}
 
+instance implies_is_checkable2
+  t1 t2 (c : t1 -> t2 -> bool) (p : t1 -> t2 -> Type0) 
+  (_:squash (forall x y. c x y ==> p x y)) :
+  Tot (checkable2 p) =
+  { check2 = fun x y -> c x y}
+
 class checkable3
   (#b1 #b2 #b3:Type)
   (p : b1 -> b2 -> b3 -> Type0) =

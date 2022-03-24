@@ -5,14 +5,16 @@ open FStar.Tactics.Typeclasses
 
 open IO.Sig 
 
-type action_type = (cmd : io_cmds) & (io_sig.args cmd)
-type monitorable_prop = (history:trace) -> (action:action_type) -> Tot bool
+(** why do I need action_type **)
+//type action_type = (cmd : io_cmds) & (io_sig.args cmd)
+type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
 
-let convert_event_to_action (e:event) : action_type =
+unfold
+let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
   match e with
-  | EOpenfile arg _ -> (| Openfile, arg |)
-  | ERead arg _ -> (| Read, arg |)
-  | EClose arg _ -> (| Close, arg |)
+  | EOpenfile arg _ -> check Openfile arg h
+  | ERead arg _ -> check Read arg h
+  | EClose arg _ -> check Close arg h
 
 let rec enforced_locally
   (check : monitorable_prop)
@@ -20,9 +22,8 @@ let rec enforced_locally
   Tot bool (decreases l) =
   match l with
   | [] -> true
-  | hd  ::  t ->
-    let action = convert_event_to_action hd in
-    if check h action then enforced_locally (check) (hd::h) t
+  | e  ::  t ->
+    if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
     else false
 
 class monitorable_post (#t1:Type) (#t2:Type) 
