@@ -58,40 +58,33 @@ let shift_post_nil_imp #a (post : w_post a) :
   end
 
 // TODO MOVE to spec
-let w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
   Lemma
     (requires forall j. w j `wle` w' j)
     (ensures w_iter_n n w i `wle` w_iter_n n w' i)
-= admit ()
+= if n = 0
+  then ()
+  else begin
+    introduce forall j. w_iter_n (n-1) w j `wle` w_iter_n (n-1) w' j
+    with begin
+      w_iter_n_mono (n-1) w w' j
+    end ;
+    // w_bind_mono (w i) (fun r -> // or w' maybe?
+    //   match r with
+    //   | LiftTy (Inl j) -> w_iter_n (n-1) w j
+    //   | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+    // )
+    admit ()
+  end
 
 // TODO MOVE to spec
 let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
   Lemma
     (requires forall j. w' j `wle` w j) // Problem: I wanted the other direction! One solution is to prove theta_bind in a non-lax way, using `weq` instead of `wle`
     (ensures w_iter w i `wle` w_iter w' i)
-= assume (forall n. w_iter_n n w' i `wle` w_iter_n n w i) ;
-  introduce forall post hist. w_iter w' i post hist ==> w_iter w i post hist
+= introduce forall n. w_iter_n n w' i `wle` w_iter_n n w i
   with begin
-    introduce w_iter w' i post hist ==> w_iter w i post hist
-    with _. begin
-      assert (
-        forall n tr x.
-          w_iter_n n w i (fun r -> r == Cv tr (LiftTy (Inr x))) hist ==>
-          post (Cv tr x)
-      ) ;
-      assert (
-        forall n st.
-          w_iter_n n w i (fun r -> r == Dv st) hist ==>
-          post (Dv st)
-      ) ;
-      assert (
-        forall (js : stream index) (trs : stream trace) s.
-          w i (fun r -> r == Cv (trs 0) (LiftTy (Inl (js 0)))) hist ==>
-          (forall (n : nat). w (js n) (fun r -> r == Cv (trs (n+1)) (LiftTy (Inl (js (n+1))))) (rev_acc (ttrunc trs n) hist)) ==>
-          s `strace_refine` trs ==>
-          post (Dv s)
-      )
-    end
+    w_iter_n_mono n w' w i
   end
 
 let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c : m sg a) (f : a -> m sg b) :
