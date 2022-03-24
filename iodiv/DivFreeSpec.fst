@@ -118,7 +118,7 @@ let w_bind_post_mono #a #b (wf : a -> wp b) p q hist :
     | Dv st -> ()
   end
 
-let w_bind #a #b (w : wp a) (wf : a -> wp b) : wp b =
+let w_bind (#a : Type u#a) (#b : Type u#b) (w : wp a) (wf : a -> wp b) : wp b =
   introduce forall p q hist. p `w_post_le` q ==> w_bind_post wf p hist `w_post_le` w_bind_post wf q hist
   with begin
     move_requires (w_bind_post_mono wf p q) hist
@@ -140,27 +140,19 @@ let w_bind_assoc #a #b #c (w : wp a) (wf : a -> wp b) (wg : b -> wp c) :
   Lemma (w_bind w (fun x -> w_bind (wf x) wg) `wle` w_bind (w_bind w wf) wg)
 = introduce forall post hist. w_bind (w_bind w wf) wg post hist ==> w_bind w (fun x -> w_bind (wf x) wg) post hist
   with begin
-    // assume ((w_bind w wf) (w_bind_post wg post hist) hist ==> w (w_bind_post (fun x -> w_bind (wf x) wg) post hist) hist)
-    // assume (w (w_bind_post wf (w_bind_post wg post hist) hist) hist ==> w (w_bind_post (fun x -> w_bind (wf x) wg) post hist) hist)
-    // assume (w_bind_post wf (w_bind_post wg post hist) hist `w_post_le` w_bind_post (fun x -> w_bind (wf x) wg) post hist)
     introduce forall r. w_bind_post wf (w_bind_post wg post hist) hist r ==> w_bind_post (fun x -> w_bind (wf x) wg) post hist r
     with begin
       match r with
       | Cv tr x ->
-        // assume (wf x (shift_post tr (w_bind_post wg post hist)) (rev_acc tr hist) ==> w_bind (wf x) wg (shift_post tr post) (rev_acc tr hist))
-        // assume (wf x (shift_post tr (w_bind_post wg post hist)) (rev_acc tr hist) ==> wf x (w_bind_post wg (shift_post tr post) (rev_acc tr hist)) (rev_acc tr hist))
         introduce forall r'. shift_post tr (w_bind_post wg post hist) r' ==> w_bind_post wg (shift_post tr post) (rev_acc tr hist) r'
         with begin
           match r' with
           | Cv tr' y ->
-            // assume (w_bind_post wg post hist (Cv (tr @ tr') y) ==> w_bind_post wg (shift_post tr post) (rev_acc tr hist) (Cv tr' y))
-            // assume (wg y (shift_post (tr @ tr') post) (rev_acc (tr @ tr') hist) ==> wg y (shift_post tr' (shift_post tr post)) (rev_acc tr' (rev_acc tr hist)))
             rev_acc_rev' (tr @ tr') hist ; // rev_acc (tr @ tr') hist == rev' (tr @ tr') @ hist
             rev'_append tr tr' ; // == (rev' tr' @ rev' tr) @ hist
             append_assoc (rev' tr') (rev' tr) hist ; // == rev' tr' @ rev' tr @ hist
             rev_acc_rev' tr hist ; // == rev' tr' @ rev_acc tr hist
             rev_acc_rev' tr' (rev_acc tr hist) ; // == rev_acc tr' (rev_acc tr hist)
-            // assume (wg y (shift_post (tr @ tr') post) (rev_acc (tr @ tr') hist) ==> wg y (shift_post tr' (shift_post tr post)) (rev_acc (tr @ tr') hist))
             shift_post_app tr' tr post
           | Dv st -> ()
         end ;
