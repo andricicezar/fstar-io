@@ -45,6 +45,7 @@ noeq type interface = {
 
 noeq type monitor (i:interface) = {
   pi : monitorable_prop;
+  piprop : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
   pre : i.ctx_arg -> trace -> Type0;
   post : i.ctx_arg -> trace -> r:(maybe i.ctx_ret) -> trace -> b:Type0{r == Inr Contract_failure ==> b};
   post_c : monitorable_post pre post pi;
@@ -117,7 +118,7 @@ let instrument
   Tot (ictx_t i m) =
     fun x ->
       instrument_MIIO
-        (cast_io_iio ((* MIIO.*)reify (ct x))) m.pi
+        (DM.IIO.cast_io_iio ((* MIIO.*)reify (ct x))) m.pi m.piprop
  
 (** this is just a synonym to make things easier **)
 let enforce_post
