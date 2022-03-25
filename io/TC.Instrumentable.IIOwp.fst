@@ -1,4 +1,4 @@
-module TC.Instrumentable.IIO
+module TC.Instrumentable.IIOwp
 
 open FStar.List.Tot
 open FStar.Tactics
