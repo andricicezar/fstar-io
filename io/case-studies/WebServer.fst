@@ -2,14 +2,15 @@ module WebServer
 
 open FStar.Tactics
 open ExtraTactics
-open DM.IIO.Tactics
 
 open Common
 open Types
 open DM
 open Shared
-
-type plugin_type = Model.ctx_s i m
+open Utils
+  
+type plugin_type =
+  (x:shr.ctx_arg) -> IIOpi (maybe shr.ctx_ret) shr.pi (shr.pre x) (shr.post x)
 
 (** since we do not have exceptions, we have to handle errors manually **)
 
@@ -17,7 +18,7 @@ let rec process_connections
   (clients : lfds) 
   (to_read : lfds) 
   (plugin : plugin_type) : 
-  IIO lfds pi
+  IIOpi lfds pi
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) =
   match clients with
@@ -33,10 +34,10 @@ let rec process_connections
   end
  
 let get_new_connection (socket : file_descr) :
-  IO (option file_descr) m.pi
+  IOpi (option file_descr) shr.pi
     (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True )) =
-  match static_cmd Select pi ([socket], [], [], 100uy) with
+    (ensures (fun _ _ _ -> True)) =
+  match static_cmd Select pi (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
     if FStar.List.length to_accept > 0 then begin 
       match static_cmd Accept pi socket with
@@ -50,10 +51,10 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (plugin : plugin_type) :
-  IIO lfds m.pi 
+  IIOpi lfds shr.pi 
     (requires (fun _ -> True))
     (ensures (fun _ _ _ -> True)) =
-  match static_cmd Select pi (clients, [], [], 100uy) with
+  match static_cmd Select pi (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
     let clients'' = process_connections clients to_read plugin in
     clients''
@@ -63,10 +64,10 @@ let server_loop_body
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIO lfds m.pi
+  IIOpi lfds shr.pi
     (requires (fun h -> True)) 
     (ensures (fun h r lt -> True)) = 
-  lemma_append_enforced_locally m.pi;
+  lemma_append_enforced_locally shr.pi;
   let clients' = (match get_new_connection socket with
                  | None -> clients
                  | Some fd -> fd :: clients) in
@@ -77,10 +78,10 @@ let rec server_loop
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIO unit m.pi
+  IIOpi unit shr.pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) =
-  lemma_append_enforced_locally m.pi;
+  lemma_append_enforced_locally shr.pi;
   if iterations_count = 0 then ()
   else begin
     let clients' = server_loop_body socket plugin clients in
@@ -88,7 +89,7 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  IO (maybe file_descr) m.pi
+  IOpi (maybe file_descr) shr.pi
     (requires (fun h -> True))
     (ensures (fun h r lt ->
       match r with
@@ -100,16 +101,16 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
     let _ = static_cmd Bind pi (socket, ip, port) in
     let _ = static_cmd Listen pi (socket, limit) in
     let _ = static_cmd SetNonblock pi socket in
-    lemma_append_enforced_locally m.pi;
+    lemma_append_enforced_locally shr.pi;
     Inl socket 
   | Inr err -> Inr err
 
 let webserver 
   (plugin : plugin_type) :
-  IIO i.ret m.pi
+  IIOpi shr.ret shr.pi
     (requires (fun h -> True))
     (ensures (fun h r lt -> True)) by (explode ()) =
-  lemma_append_enforced_locally m.pi;
+  lemma_append_enforced_locally shr.pi;
   match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
       server_loop 100000000000 server plugin []
