@@ -17,9 +17,9 @@ exception Something_went_really_bad
  
 instance mlifyable_iiowp
   t1 t2 {| ml t1 |} {| ml t2 |} :
-  Tot (mlifyable (t1 -> IIOwp t2 (fun _ _ -> True))) =
+  Tot (mlifyable (t1 -> IIOwp t2 (trivial_hist ()))) =
   mk_mlifyable
-    #(t1 -> IIOwp t2 (fun _ _ -> True))
+    #(t1 -> IIOwp t2 (trivial_hist ()))
     (t1 -> ML t2)
     (fun f x -> 
      let tree : iio t2 = reify (f x) in
@@ -46,12 +46,12 @@ instance mlifyable_iiowp
 instance mlifyable_inst_iiowp
   t1 t3
   {| d1:instrumentable t1 |} {| d2:ml t3 |} :
-  Tot (mlifyable (t1 -> IIOwp t3 (fun _ _ -> True))) =
+  Tot (mlifyable (t1 -> IIOwp t3 (trivial_hist ()))) =
   mk_mlifyable
     #_
     (d1.start_type -> ML t3)
     #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
-    (fun (p:t1 -> IIOwp t3 (fun _ _ -> True)) (ct:d1.start_type) ->
+    (fun (p:t1 -> IIOwp t3 (trivial_hist ())) (ct:d1.start_type) ->
      let tree : iio t3 = reify (p (d1.instrument ct)) in
      match tree with
      | Return y -> y
