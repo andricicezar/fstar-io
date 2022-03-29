@@ -20,10 +20,19 @@ let lemma_all_continuations_are_weak (tree:dm_iio 'a (weakest_hist ())) (pre:pur
   Lemma
     (requires (PartialCall? tree /\ PartialCall?.pre tree == pre /\ PartialCall?.cont tree == k))
     (ensures (weakest_hist () `hist_ord` (dm_iio_theta (k proof)))) =
-  assert (weakest_hist () `hist_ord` dm_iio_theta tree);
-  admit ()
+  calc (hist_ord #event #'a) {
+    weakest_hist ();
+    `hist_ord` {}
+    dm_iio_theta tree;
+    `hist_ord` {}
+    dm_iio_theta (PartialCall pre k);
+    `hist_ord` {}
+    hist_bind (DMFree.partial_call_wp pre) (fun r -> dm_iio_theta (k r));
+    `hist_ord` {}
+    dm_iio_theta (k proof);
+  }
 
-let rec skip_partial_calls (tree:dm_iio 'a (weakest_hist ())) : ML 'a by (explode (); dump "H") =
+let rec skip_partial_calls (tree:dm_iio 'a (weakest_hist ())) : ML 'a =
   match tree with
   | Return y -> y
   | PartialCall pre k -> begin
