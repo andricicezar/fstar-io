@@ -4,7 +4,6 @@ let ctx (x:Types.file_descr) : unit Common.maybe =
   try
     Inl (Plugin.plugin x)
   with err ->
-    raise err;
     Inr err
 
 let _ =
