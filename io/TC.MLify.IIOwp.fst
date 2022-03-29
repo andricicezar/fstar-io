@@ -16,7 +16,7 @@ open DM.IIO
 
 exception Something_went_really_bad
 
-let lemma_all_continuations_are_weak (tree:dm_iio 'a (weakest_hist ())) (pre:pure_pre) (proof:squash pre) (k:(squash pre -> iio 'a)) :
+let lemma_continuation_is_weak (tree:dm_iio 'a (weakest_hist ())) (pre:pure_pre) (proof:squash pre) (k:(squash pre -> iio 'a)) :
   Lemma
     (requires (PartialCall? tree /\ PartialCall?.pre tree == pre /\ PartialCall?.cont tree == k))
     (ensures (weakest_hist () `hist_ord` (dm_iio_theta (k proof)))) =
@@ -53,7 +53,7 @@ let rec skip_partial_calls (tree:dm_iio 'a (weakest_hist ())) : ML 'a =
       assumption ()
     );
     let proof : squash pre = () in
-    lemma_all_continuations_are_weak tree pre proof k;
+    lemma_continuation_is_weak tree pre proof k;
     let tree' : dm_iio 'a (weakest_hist ()) = k proof in
    skip_partial_calls tree'
   end
