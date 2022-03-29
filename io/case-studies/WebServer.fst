@@ -7,7 +7,6 @@ open Common
 open Types
 open DM
 open Shared
-open Utils
   
 type plugin_type =
   (x:shr.ctx_arg) -> IIOpi (maybe shr.ctx_ret) shr.pi (shr.pre x) (shr.post x)

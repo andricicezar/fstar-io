@@ -3,7 +3,7 @@
 
 
 verify:
-	fstar.exe --include ../.. --include .. IO.Sig.fst IUnix.fst Shared.fst WebServer.fst WebServer.Compiled.fst
+	fstar.exe --include ../.. --include .. IO.Sig.fst IUnix.fst Utils.fst Shared.fst WebServer.fst WebServer.Compiled.fst
 
 extract: out
 	fstar.exe --include ../.. --include .. --odir out --codegen OCaml Monitor.fst WebServer.Compiled.fst IUnix.fst

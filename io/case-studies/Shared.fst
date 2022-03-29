@@ -5,6 +5,7 @@ open FStar.Tactics
 open Common
 open IO.Sig
 open TC.Monitorable
+include Utils
 
 let rec is_open (fd:file_descr) (h: trace) : Tot bool =
   match h with
