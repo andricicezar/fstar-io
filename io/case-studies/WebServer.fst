@@ -39,7 +39,7 @@ let get_new_connection (socket : file_descr) :
     (ensures (fun _ _ _ -> True)) =
   match static_cmd Select pi (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
-    if FStar.List.length to_accept > 0 then begin 
+    if List.length to_accept > 0 then begin 
       match static_cmd Accept pi socket with
       | Inl client -> 
         let _ = static_cmd SetNonblock pi client in

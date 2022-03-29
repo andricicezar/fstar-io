@@ -87,5 +87,6 @@ let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> his
   by (l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]) =
   () 
 
+(** TODO: is this the trivial wp? **)
 let trivial_hist #a #event () : hist #event a =
-  fun p _ -> forall lt r. p lt r
+  fun p _ -> True //forall lt r. p lt r

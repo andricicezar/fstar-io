@@ -26,11 +26,43 @@ unfold let io_wps (cmd:io_cmds) (arg:io_sig.args cmd) : hist (io_sig.res cmd arg
 let dm_io_theta #a = theta #a #io_cmds #io_sig #event io_wps
   
 let dm_io = dm io_cmds io_sig event io_wps
-let dm_io_return = dm_return io_cmds io_sig event io_wps
-let dm_io_bind = dm_bind io_cmds io_sig event io_wps
-let dm_io_subcomp = dm_subcomp io_cmds io_sig event io_wps
-let dm_io_if_then_else = dm_if_then_else io_cmds io_sig event io_wps
-let lift_pure_dm_io = lift_pure_dm io_cmds io_sig event io_wps
+let dm_io_return (a:Type) (x:a) : dm_io a (hist_return x) =
+  dm_return io_cmds io_sig event io_wps a x
+
+val dm_io_bind  : 
+  a: Type ->
+  b: Type ->
+  wp_v: Hist.hist a ->
+  wp_f: (_: a -> Prims.Tot (Hist.hist b)) ->
+  v: dm_io a wp_v ->
+  f: (x: a -> Prims.Tot (dm_io b (wp_f x))) ->
+  Tot (dm_io b (hist_bind wp_v wp_f))
+let dm_io_bind a b wp_v wp_f v f = dm_bind io_cmds io_sig event io_wps a b wp_v wp_f v f
+
+val dm_io_subcomp : 
+  a: Type ->
+  wp1: hist a ->
+  wp2: hist a ->
+  f: dm_io a wp1 ->
+  Pure (dm_io a wp2) (hist_ord wp2 wp1) (fun _ -> True)
+let dm_io_subcomp a wp1 wp2 f = dm_subcomp io_cmds io_sig event io_wps a wp1 wp2 f
+
+val dm_if_then_else :
+  a: Type ->
+  wp1: hist a ->
+  wp2: hist a ->
+  f: dm_io a wp1 ->
+  g: dm_io a wp2 ->
+  b: bool ->
+  Tot Type
+let dm_io_if_then_else a wp1 wp2 f g b = dm_if_then_else io_cmds io_sig event io_wps a wp1 wp2 f g b
+
+val lift_pure_dm_io :
+  a: Type ->
+  w: pure_wp a ->
+  f: (_: eqtype_as_type unit -> Prims.PURE a w) ->
+  Tot (dm_io a (wp_lift_pure_hist w))
+let lift_pure_dm_io a w f = lift_pure_dm io_cmds io_sig event io_wps a w f
 
 total
 reifiable

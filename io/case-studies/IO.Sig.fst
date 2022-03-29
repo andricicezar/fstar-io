@@ -172,8 +172,8 @@ let rec is_open (fd:file_descr) (h:trace) : bool =
   match h with
   | [] -> false
   | h :: tail -> match h with
-               | EOpenfile _ (Inl fd') ->
-                   if fd = fd' then true
+               | EOpenfile _ fd' ->
+                   if Inl? fd' && Inl?.v fd' = fd then true
                    else is_open fd tail
                | EClose fd' _ ->
                     if fd = fd' then false

@@ -24,11 +24,44 @@ in reverse order to the history. **)
 let dm_iio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
   
 let dm_iio = dm iio_cmds iio_sig event iio_wps
-let dm_iio_return = dm_return iio_cmds iio_sig event iio_wps
-let dm_iio_bind = dm_bind iio_cmds iio_sig event iio_wps
-let dm_iio_subcomp = dm_subcomp iio_cmds iio_sig event iio_wps
-let dm_iio_if_then_else = dm_if_then_else iio_cmds iio_sig event iio_wps
-let lift_pure_dm_iio = lift_pure_dm iio_cmds iio_sig event iio_wps
+let dm_iio_return (a:Type) (x:a) : dm_iio a (hist_return x) =
+  dm_return iio_cmds iio_sig event iio_wps a x
+
+val dm_iio_bind  : 
+  a: Type ->
+  b: Type ->
+  wp_v: Hist.hist a ->
+  wp_f: (_: a -> Prims.Tot (Hist.hist b)) ->
+  v: dm_iio a wp_v ->
+  f: (x: a -> Prims.Tot (dm_iio b (wp_f x))) ->
+  Tot (dm_iio b (hist_bind wp_v wp_f))
+let dm_iio_bind a b wp_v wp_f v f = dm_bind iio_cmds iio_sig event iio_wps a b wp_v wp_f v f
+
+val dm_iio_subcomp : 
+  a: Type ->
+  wp1: hist a ->
+  wp2: hist a ->
+  f: dm_iio a wp1 ->
+  Pure (dm_iio a wp2) (hist_ord wp2 wp1) (fun _ -> True)
+let dm_iio_subcomp a wp1 wp2 f = dm_subcomp iio_cmds iio_sig event iio_wps a wp1 wp2 f
+
+val dm_if_then_else :
+  a: Type ->
+  wp1: hist a ->
+  wp2: hist a ->
+  f: dm_iio a wp1 ->
+  g: dm_iio a wp2 ->
+  b: bool ->
+  Tot Type
+let dm_iio_if_then_else a wp1 wp2 f g b = dm_if_then_else iio_cmds iio_sig event iio_wps a wp1 wp2 f g b
+
+val lift_pure_dm_iio :
+  a: Type ->
+  w: pure_wp a ->
+  f: (_: eqtype_as_type unit -> Prims.PURE a w) ->
+  Tot (dm_iio a (wp_lift_pure_hist w))
+let lift_pure_dm_iio a w f = lift_pure_dm iio_cmds iio_sig event iio_wps a w f
+
 
 total
 reifiable
@@ -128,12 +161,12 @@ let lemma_cast_io_iio_2 #a (x:io a) (wp:hist a) :
     (ensures (wp `hist_ord` dm_iio_theta (cast_io_iio x))) =
   lemma_cast_io_iio x
 
-let lift_iowp_iiowp (a:Type) (wp:hist a) (f:DM.IO.dm_io a wp) :
+let lift_io_iio (a:Type) (wp:hist a) (f:DM.IO.dm_io a wp) :
   Tot (dm_iio a wp) =
   lemma_cast_io_iio_2 f wp;
   cast_io_iio f
 
-sub_effect DM.IO.IOwp ~> IIOwp = lift_iowp_iiowp
+sub_effect DM.IO.IOwp ~> IIOwp = lift_io_iio
 
 
 let get_trace () : IIOwp trace
