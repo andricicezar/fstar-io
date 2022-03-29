@@ -14,6 +14,14 @@ open Free
 open IO.Sig
 open DM.IIO
 
+(** To be able to mlify IIOwp, the weakest-precondition of the computation must be
+    (fun p h -> True) -- this is the weakest weakest-precondition.
+
+    Previous code required (fun p h -> forall lt r. p lt r). I tought that this guarantees 
+     `p lt r` without any requirements, but it actually requires that p should be valid for 
+     all lts and rs. 
+**)
+
 exception Something_went_really_bad
 
 let lemma_continuation_is_weak (tree:dm_iio 'a (weakest_hist ())) (pre:pure_pre) (proof:squash pre) (k:(squash pre -> iio 'a)) :
