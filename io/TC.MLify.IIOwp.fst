@@ -3,6 +3,7 @@ module TC.MLify.IIOwp
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.All
+open FStar.Classical.Sugar
 
 open Common
 open TC.Export
@@ -14,17 +15,38 @@ open IO.Sig
 open DM.IIO
 
 exception Something_went_really_bad
- 
-let rec skip_partial_calls (tree:dm_iio 'a (trivial_hist ())) : ML 'a =
+
+let lemma_all_continuations_are_weak (tree:dm_iio 'a (weakest_hist ())) (pre:pure_pre) (proof:squash pre) (k:(squash pre -> iio 'a)) :
+  Lemma
+    (requires (PartialCall? tree /\ PartialCall?.pre tree == pre /\ PartialCall?.cont tree == k))
+    (ensures (weakest_hist () `hist_ord` (dm_iio_theta (k proof)))) =
+  assert (weakest_hist () `hist_ord` dm_iio_theta tree);
+  admit ()
+
+let rec skip_partial_calls (tree:dm_iio 'a (weakest_hist ())) : ML 'a by (explode (); dump "H") =
   match tree with
   | Return y -> y
   | PartialCall pre k -> begin
-    assume (trivial_hist () `hist_ord` dm_iio_theta tree); //by (norm [delta_only [`%dm_iio;`%DMFree.dm;`%dm_iio_theta]]; dump "H");
-    assert (forall p h. trivial_hist #'a #event () p h);
+    (** The intuition here is that the pre-condition is true,
+    thus, all asserts are true **)
+    (** the following assert is the refinement hidden by the dm **)
+    assert (forall p h. weakest_hist #'a #event () p h ==> dm_iio_theta tree p h);
     assert (forall p h. dm_iio_theta tree p h);
     assert (forall p h. dm_iio_theta tree p h ==> pre);
-    admit ();
-    skip_partial_calls (k ())
+    assert (forall (p:hist_post #event 'a) (h:trace). pre) by (
+      let p = FStar.Tactics.forall_intro () in
+      let h = FStar.Tactics.forall_intro () in
+      mapply (ExtraTactics.instantiate_multiple_foralls (nth_binder (-7)) [binder_to_term p;binder_to_term h]);
+      ignore (ExtraTactics.instantiate_multiple_foralls (nth_binder (-14)) [binder_to_term p;binder_to_term h]);
+      assumption ());
+    assert (pre) by (
+      ignore (ExtraTactics.instantiate_multiple_foralls (nth_binder (-1)) [(`(fun _ _ -> True)); (`[])]);
+      assumption ()
+    );
+    let proof : squash pre = () in
+    lemma_all_continuations_are_weak tree pre proof k;
+    let tree' : dm_iio 'a (weakest_hist ()) = k proof in
+   skip_partial_calls tree'
   end
   (** during extraction, Free.IO.Call is replaced with an actual
   implementation of the commands, therefore, the `Call` constructor
@@ -34,12 +56,12 @@ let rec skip_partial_calls (tree:dm_iio 'a (trivial_hist ())) : ML 'a =
 
 instance mlifyable_iiowp
   t1 t2 {| ml t1 |} {| ml t2 |} :
-  Tot (mlifyable (t1 -> IIOwp t2 (trivial_hist ()))) =
+  Tot (mlifyable (t1 -> IIOwp t2 (weakest_hist ()))) =
   mk_mlifyable
-    #(t1 -> IIOwp t2 (trivial_hist ()))
+    #(t1 -> IIOwp t2 (weakest_hist ()))
     (t1 -> ML t2)
     (fun f x -> 
-     let tree : dm_iio t2 (trivial_hist ()) = reify (f x) in
+     let tree : dm_iio t2 (weakest_hist ()) = reify (f x) in
      skip_partial_calls tree)
 
 (** Ideas to improve mlifyable_iio_miio:
@@ -58,11 +80,11 @@ instance mlifyable_iiowp
 instance mlifyable_inst_iiowp
   t1 t3
   {| d1:instrumentable t1 |} {| d2:ml t3 |} :
-  Tot (mlifyable (t1 -> IIOwp t3 (trivial_hist ()))) =
+  Tot (mlifyable (t1 -> IIOwp t3 (weakest_hist ()))) =
   mk_mlifyable
     #_
     (d1.start_type -> ML t3)
     #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
-    (fun (p:t1 -> IIOwp t3 (trivial_hist ())) (ct:d1.start_type) ->
-     let tree : dm_iio t3 (trivial_hist ()) = reify (p (d1.instrument ct)) in
+    (fun (p:t1 -> IIOwp t3 (weakest_hist ())) (ct:d1.start_type) ->
+     let tree : dm_iio t3 (weakest_hist ()) = reify (p (d1.instrument ct)) in
      skip_partial_calls tree)

@@ -50,7 +50,7 @@ let _IIOwp_as_MIIO
   (f:(x:'a ->
     IIOwp 'b (fun p h -> pre x h /\ (forall r lt. post x h r lt ==> p lt r))))
   (x:'a) :
-  IIOwp (Common.maybe 'b) (trivial_hist ()) =
+  IIOwp (Common.maybe 'b) (weakest_hist ()) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ (fun x h -> pre x h) post) f) x
@@ -61,7 +61,7 @@ let _IIOwp_as_MIIO_2
   (f:(x:'a -> y:'b ->
     IIOwp 'c (fun p h -> pre x y h /\ (forall r lt. post x y h r lt ==> p lt r))))
   (x:'a) (y:'b):
-  IIOwp (Common.maybe 'c) (trivial_hist ()) =
+  IIOwp (Common.maybe 'c) (weakest_hist ()) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp_2 _ _ _ (fun x y h -> pre x y h) post) f) x y

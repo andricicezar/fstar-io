@@ -34,7 +34,7 @@ let instrumented_cmd cmd arg = dynamic_cmd cmd (get_checkable cmd) arg
 
 (** instrumented_cmd has no pre-condition so we can just delete the post by
     doing a synonym **)
-val miio_cmd : (cmd:io_cmds) -> (arg:io_sig.args cmd) -> IIOwp (maybe (io_sig.res cmd arg)) (Hist.trivial_hist ())
+val miio_cmd : (cmd:io_cmds) -> (arg:io_sig.args cmd) -> IIOwp (maybe (io_sig.res cmd arg)) (Hist.weakest_hist ())
 let miio_cmd cmd arg = admit (); instrumented_cmd cmd arg
 
 val openfile : string -> (list open_flag) -> zfile_perm -> ML file_descr

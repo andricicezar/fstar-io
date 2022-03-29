@@ -88,5 +88,5 @@ let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> his
   () 
 
 (** TODO: is this the trivial wp? **)
-let trivial_hist #a #event () : hist #event a =
-  fun p _ -> True //forall lt r. p lt r
+let weakest_hist #a #event () : hist #event a =
+  fun _ _ -> True 

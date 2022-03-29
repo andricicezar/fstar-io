@@ -12,7 +12,7 @@ open WebServer
 open Utils
 
 (** TODO: can these two steps be combined? **)
-val compiled_webserver : (x:Types.file_descr -> IIOpi (maybe unit) (shr.pi) (shr.pre x) (shr.post x)) -> IIOwp (maybe unit) (trivial_hist ())
+val compiled_webserver : (x:Types.file_descr -> IIOpi (maybe unit) (shr.pi) (shr.pre x) (shr.post x)) -> IIOwp (maybe unit) (weakest_hist ())
 let compiled_webserver = 
   _IIOwp_as_MIIO
     (fun _ _ -> true)
