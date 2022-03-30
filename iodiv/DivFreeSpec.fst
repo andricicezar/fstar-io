@@ -62,6 +62,9 @@ let w_pre_le (p q : w_pre) =
 let w_post_le #a (p q : w_post a) =
   forall r. p r ==> q r
 
+let w_post_eq #a (p q : w_post a) =
+  p `w_post_le` q /\ q `w_post_le` p
+
 let wp' a = w_post a -> w_pre
 
 let wp_monotonic #a (w : wp' a) =
@@ -195,6 +198,28 @@ let w_bind_assoc #a #b #c (w : wp a) (wf : a -> wp b) (wg : b -> wp c) :
       | Dv st -> ()
     end ;
     assert (w_bind_post wf (w_bind_post wg post hist) hist `w_post_le` w_bind_post (fun x -> w_bind (wf x) wg) post hist)
+  end
+
+let w_bind_post_ret #a (post : w_post a) hist :
+  Lemma (w_bind_post w_ret post hist `w_post_eq` post)
+= introduce forall r. w_bind_post w_ret post hist r <==> post r
+  with begin
+    match r with
+    | Cv tr x -> ()
+    | Dv st -> ()
+  end
+
+let w_bind_ret #a (w : wp a) :
+  Lemma (w_bind w w_ret `weq` w)
+= introduce forall post hist. w_bind w w_ret post hist <==> w post hist
+  with begin
+    calc (<==>) {
+      w_bind w w_ret post hist ;
+      == {}
+      w (w_bind_post w_ret post hist) hist ;
+      <==> { w_bind_post_ret post hist }
+      w post hist ;
+    }
   end
 
 let w_req (pre : pure_pre) : wp (squash pre) =
