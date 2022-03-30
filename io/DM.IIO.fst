@@ -77,6 +77,14 @@ effect {
      }
 }
 
+effect IIO
+  (a:Type)
+  (pre : trace -> Type0)
+  (post : trace -> a -> trace -> Type0) =
+  IIOwp a 
+    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt (r:a). post h r lt ==> p lt r)) 
+
+
 sub_effect PURE ~> IIOwp = lift_pure_dm_iio
 
 (** This is a identity function, and we need it because
@@ -170,5 +178,5 @@ sub_effect DM.IO.IOwp ~> IIOwp = lift_io_iio
 
 
 let get_trace () : IIOwp trace
-  (fun p h -> forall lt. lt == [] ==>  p lt h) =
+  (fun p h -> forall lt. lt == [] ==> p lt h) =
   IIOwp?.reflect (iio_call GetTrace ())
