@@ -218,3 +218,23 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
 let theta_req #a #sg (w_act : action_wp sg) (pre : pure_pre) :
   Lemma (theta w_act (m_req pre) `wle` w_req pre)
 = ()
+
+(** Definition of the Dijkstra monad *)
+
+let dm sg (w_act : action_wp sg) (a : Type) (w : wp a) =
+  c : m sg a { theta w_act c `wle` w }
+
+let dm_ret #sg #w_act #a (x : a) : dm sg w_act a (w_ret x) =
+  m_ret x
+
+let dm_bind #sg #w_act #a #b #w #wf (c : dm sg w_act a w) (f : (x : a) -> dm sg w_act b (wf x)) : dm sg w_act b (w_bind w wf) =
+  calc (wle) {
+    theta w_act (m_bind c f) ;
+    `wle` { theta_bind w_act c f }
+    w_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
+    `wle` { w_bind_mono (theta w_act c) (fun x -> theta w_act (f x)) wf }
+    w_bind (theta w_act c) wf ;
+    `wle` {}
+    w_bind w wf ;
+  } ;
+  m_bind c f
