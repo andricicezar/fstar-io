@@ -11,7 +11,7 @@ open TC.Export
 open WebServer
 
 (** TODO: can these two steps be combined? **)
-val compiled_webserver : plugin_type -> IIOwp (maybe unit) (weakest_hist ())
+val compiled_webserver : plugin_type -> IIOwp (maybe unit) (trivial_hist ())
 let compiled_webserver = 
   simpl_trivialize
     (fun _ _ -> true)

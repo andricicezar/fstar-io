@@ -50,7 +50,7 @@ let simpl_trivialize
   (f:(x:'a ->
     IIOwp 'b (fun p h -> pre x h /\ (forall r lt. post x h r lt ==> p lt r))))
   (x:'a) :
-  IIOwp (Common.maybe 'b) (weakest_hist ()) =
+  IIOwp (Common.maybe 'b) (trivial_hist ()) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ (fun x h -> pre x h) post) f) x
