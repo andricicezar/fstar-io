@@ -292,7 +292,7 @@ let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> w
 
 let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
   Lemma
-    (requires forall j. w' j `wle` w j) // Problem: I wanted the other direction! One solution is to prove theta_bind in a non-lax way, using `weq` instead of `wle`
+    (requires forall j. w' j `wle` w j)
     (ensures w_iter w i `wle` w_iter w' i)
 = introduce forall n. w_iter_n n w' i `wle` w_iter_n n w i
   with begin
