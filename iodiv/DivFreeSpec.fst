@@ -314,3 +314,6 @@ let w_iter_cong (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a 
     (requires forall j. w j `weq` w' j)
     (ensures w_iter w i `weq` w_iter w' i)
 = w_iter_mono w w' i ; w_iter_mono w' w i
+
+let wite #a (w1 w2 : wp a) (b : bool) : wp a =
+  fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)

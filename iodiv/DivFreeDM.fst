@@ -238,3 +238,42 @@ let dm_bind #sg #w_act #a #b #w #wf (c : dm sg w_act a w) (f : (x : a) -> dm sg 
     w_bind w wf ;
   } ;
   m_bind c f
+
+let dm_subcomp #sg #w_act #a #w #w' (c : dm sg w_act a w) :
+  Pure (dm sg w_act a w') (requires w `wle` w') (ensures fun r -> r == c)
+= c
+
+let dm_if_then_else #sg #w_act (a : Type) (w1 w2 : wp a) (f : dm sg w_act a w1) (g : dm sg w_act a w2) (b : bool) : Type =
+  dm sg w_act a (wite w1 w2 b)
+
+let dm_req #sg #w_act (pre : pure_pre) : dm sg w_act (squash pre) (w_req pre) =
+  m_req pre
+
+// TODO call and iter
+
+(** Lift from PURE *)
+
+let w_lift_pure #a (w : pure_wp a) : wp a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+  fun post hist -> w (fun x -> post (Cv [] x))
+
+let elim_pure #a #w (f : unit -> PURE a w) :
+  Pure
+    a
+    (requires w (fun _ -> True))
+    (ensures fun r -> forall post. w post ==> post r)
+= FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
+  f ()
+
+let as_requires_w_lift_pure #a (w : pure_wp a) :
+  Lemma (forall post hist. w_lift_pure w post hist ==> as_requires w)
+= assert (forall post (x : a). post (Cv [] x) ==> True) ;
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
+  assert (forall post. w (fun x -> post (Cv [] x)) ==> w (fun _ -> True))
+
+let dm_lift_pure #sg #w_act (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : dm sg w_act a (w_lift_pure w) =
+  as_requires_w_lift_pure w ;
+  dm_bind #sg #w_act #_ #_ #(w_req (as_requires w)) #(fun _ -> w_lift_pure w) (dm_req (as_requires w)) (fun (_ : squash (as_requires w)) ->
+    let r = elim_pure #a #w f in
+    dm_ret #sg #w_act r
+  )
