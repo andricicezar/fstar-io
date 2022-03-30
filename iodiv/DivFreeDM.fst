@@ -81,27 +81,25 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_wp sg) (c
     //   w_iter (fun j -> theta w_act (g j)) i ;
     // } ;
 
-    // calc (wle) {
-    //   theta w_act (m_bind c f) ;
-    //   == {}
-    //   theta w_act (m_bind (Iter index ct g i k) f) ;
-    //   == { _ by (compute ()) }
-    //   theta w_act (Iter index ct (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)) ;
-    //   == { _ by (compute ()) }
-    //   w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
-    //   `wle` {} // If need be, can use w_bind_mono explicitly
-    //   w_bind (w_iter (fun j -> theta w_act (m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x)))) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-    //   `wle` {} // Another form of monotonicity
-    //   w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-    //   `wle` { w_bind_assoc (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) }
-    //   w_bind (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
-    //   == { _ by (compute ()) }
-    //   w_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
-    //   == {}
-    //   w_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
-    // }
-
-    admit ()
+    calc (wle) {
+      theta w_act (m_bind c f) ;
+      == {}
+      theta w_act (m_bind (Iter index ct g i k) f) ;
+      == { _ by (compute ()) }
+      theta w_act (Iter index ct (fun j -> m_reType (g j)) i (fun y -> m_bind (k y) f)) ;
+      == { _ by (compute ()) }
+      w_bind (w_iter (fun j -> theta w_act (m_reType (g j))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+      `wle` { admit () } // If need be, can use w_bind_mono explicitly + some lemma for w_iter and for theta of m_retType
+      w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+      `wle` {}
+      w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> w_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
+      `wle` { w_bind_assoc (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) }
+      w_bind (w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
+      == { _ by (compute ()) }
+      w_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
+      == {}
+      w_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
+    }
 
   | Call ac x k ->
 
