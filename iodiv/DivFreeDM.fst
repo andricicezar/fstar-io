@@ -249,7 +249,32 @@ let dm_if_then_else #sg #w_act (a : Type) (w1 w2 : wp a) (f : dm sg w_act a w1) 
 let dm_req #sg #w_act (pre : pure_pre) : dm sg w_act (squash pre) (w_req pre) =
   m_req pre
 
-// TODO call and iter
+let dm_call #sg (#w_act : action_wp sg) (ac : sg.act) (x : sg.arg ac) : dm sg w_act (sg.res x) (w_act ac x) =
+  calc (wle) {
+    theta w_act (m_call ac x) ;
+    == { _ by (compute ()) }
+    w_bind (w_act ac x) (fun x -> theta w_act (m_ret x)) ;
+    `wle` { w_bind_mono (w_act ac x) (fun x -> theta w_act (m_ret x)) w_ret }
+    w_bind (w_act ac x) w_ret ;
+    `wle` { w_bind_ret (w_act ac x) }
+    w_act ac x ;
+  } ;
+  m_call ac x
+
+let dm_iter #sg #w_act #index #b #w (f : (j : index) -> dm sg w_act (liftType (either index b)) (w j)) (i : index) : dm sg w_act b (w_iter w i) =
+  calc (wle) {
+    theta w_act (m_iter f i) ;
+    == { _ by (compute ()) }
+    w_bind (w_iter (fun j -> theta w_act (f j)) i) (fun x -> theta w_act (m_ret x)) ;
+    `wle` { w_bind_mono (w_iter (fun j -> theta w_act (f j)) i) (fun x -> theta w_act (m_ret x)) w_ret }
+    w_bind (w_iter (fun j -> theta w_act (f j)) i) w_ret ;
+    `wle` { w_bind_ret (w_iter (fun j -> theta w_act (f j)) i) }
+    w_iter (fun j -> theta w_act (f j)) i ;
+    `wle` { admit () } // Here the fact that w_iter is contravariant bites us!
+    // w_iter should probably be stated in a more positive way, but how?
+    w_iter w i ;
+  } ;
+  m_iter f i
 
 (** Lift from PURE *)
 

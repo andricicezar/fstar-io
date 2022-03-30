@@ -24,8 +24,8 @@ let m_ret #sg #a (x : a) : m sg a =
 let m_req #sg (pre : pure_pre) : m sg (squash pre) =
   Req pre (fun h -> m_ret h)
 
-let m_iter #sg #index #b (f : index -> m sg (liftType (either index b))) (i : index) : m sg (liftType b) =
-  Iter index b f i (fun x -> m_ret (LiftTy x))
+let m_iter #sg #index #b (f : index -> m sg (liftType (either index b))) (i : index) : m sg b =
+  Iter index b f i (fun x -> m_ret x)
 
 let m_call #sg (ac : sg.act) (x : sg.arg ac) : m sg (sg.res x) =
   Call ac x (fun y -> m_ret y)
