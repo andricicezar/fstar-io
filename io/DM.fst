@@ -8,4 +8,4 @@ include TC.Trivialize.IIOwp
 include TC.Weaken.IIOwp
 include TC.Instrumentable.IIOwp
 include TC.MLify.IIOwp
-include TC.Monitorable
+include TC.Monitorable.Hist

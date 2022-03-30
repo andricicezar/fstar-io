@@ -1,4 +1,4 @@
-module TC.Monitorable
+module TC.Monitorable.Hist
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses

@@ -7,7 +7,7 @@ open FStar.Tactics.Typeclasses
 open IO.Sig
 open Common
 open TC.Export
-open TC.Monitorable
+open TC.Monitorable.Hist
 open TC.MLify
 include TC.Instrumentable
 open DM.IIO
