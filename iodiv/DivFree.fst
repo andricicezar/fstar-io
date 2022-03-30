@@ -30,9 +30,20 @@ let m_iter #sg #index #b (f : index -> m sg (liftType (either index b))) (i : in
 let m_call #sg (ac : sg.act) (x : sg.arg ac) : m sg (sg.res x) =
   Call ac x (fun y -> m_ret y)
 
+let rec m_map #sg (#a : Type u#a) (#b : Type u#b) (f : a -> b) (c : m sg a) : m sg b =
+  match c with
+  | Ret x -> Ret (f x)
+  | Req pre k -> Req pre (fun h -> m_map f (k h))
+  | Iter index d g i k -> Iter index d (fun j -> m_map reType (g j)) i (fun y -> m_map f (k y))
+  | Call ac x k -> Call ac x (fun y -> m_map f (k y))
+
+// Could also define m_reType without going through m_map
+let m_reType #sg (#d : Type0) (c : m u#a sg (liftType d)) : m u#b sg (liftType d) =
+  m_map reType c
+
 let rec m_bind #sg (#a : Type u#a) (#b : Type u#b) (c : m sg a) (f : a -> m sg b) : m sg b =
   match c with
   | Ret x -> f x
   | Req pre k -> Req pre (fun _ -> m_bind (k ()) f)
-  | Iter index b g i k -> Iter index b (fun j -> m_bind (g j) (fun z -> match z with LiftTy x -> m_ret (LiftTy u#b x))) i (fun y -> m_bind (k y) f)
+  | Iter index d g i k -> Iter index d (fun j -> m_reType (g j)) i (fun y -> m_bind (k y) f)
   | Call ac x k -> Call ac x (fun y -> m_bind (k y) f)
