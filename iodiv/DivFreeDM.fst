@@ -31,13 +31,13 @@ let theta_ret #a #sg (w_act : action_wp sg) (x : a) :
 = ()
 
 let rec theta_reType #sg (#d : Type0) (w_act : action_wp sg) (c : m u#a sg (liftType d)) :
-  Lemma (ensures theta w_act c `wle` theta w_act (m_reType c)) (decreases c)
+  Lemma (ensures theta w_act c `weq` theta w_act (m_reType c)) (decreases c)
 = match c with
   | Ret x -> ()
 
   | Req pre k ->
 
-    introduce forall x. theta w_act (k x) `wle` theta w_act (m_reType (k x))
+    introduce forall x. theta w_act (k x) `weq` theta w_act (m_reType (k x))
     with begin
       theta_reType w_act (k x)
     end
@@ -50,31 +50,32 @@ let rec theta_reType #sg (#d : Type0) (w_act : action_wp sg) (c : m u#a sg (lift
       Iter index ct (fun j -> m_reType (g j)) i (fun y -> m_reType (k y)) ;
     } ;
 
-    introduce forall x. theta w_act (k x) `wle` theta w_act (m_reType (k x))
+    introduce forall x. theta w_act (k x) `weq` theta w_act (m_reType (k x))
     with begin
       theta_reType w_act (k x)
     end ;
 
-    // forall_intro (fun (j : index) -> assert (g j << c) ; theta_reType w_act (g j))  ;
-    assume (forall j. theta w_act (g j) `wle` theta w_act (m_reType (g j))) ;
-    // Even if we could prove it, it is in the wrong direction, we need weq
+    introduce forall j. theta w_act (g j) `weq` theta w_act (m_reType (g j))
+    with begin
+      theta_reType w_act (g j)
+    end ;
 
-    // calc (wle) {
-    //   w_iter (fun j -> theta w_act (m_reType (g j))) i ;
-    //   `wle` { w_iter_mono (fun j -> theta w_act (m_reType (g j))) (fun j -> theta w_act (g j)) i }
-    //   w_iter (fun j -> theta w_act (g j)) i ;
-    // } ;
-    assume (w_iter (fun j -> theta w_act (g j)) i `wle` w_iter (fun j -> theta w_act (m_reType (g j))) i) ;
+    calc (weq) {
+      w_iter (fun j -> theta w_act (m_reType (g j))) i ;
+      `weq` { w_iter_cong (fun j -> theta w_act (m_reType (g j))) (fun j -> theta w_act (g j)) i }
+      w_iter (fun j -> theta w_act (g j)) i ;
+    } ;
+    assert (w_iter (fun j -> theta w_act (g j)) i `weq` w_iter (fun j -> theta w_act (m_reType (g j))) i) ;
 
-    calc (wle) {
+    calc (weq) {
       theta w_act c ;
       == {}
       theta w_act (Iter index ct g i k) ;
       == { _ by (compute ()) }
       w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) ;
-      `wle` {}
+      `weq` { w_bind_cong (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (m_reType (k x))) }
       w_bind (w_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_reType (k x))) ;
-      `wle` {}
+      `weq` {}
       w_bind (w_iter (fun j -> theta w_act (m_reType (g j))) i) (fun x -> theta w_act (m_reType (k x))) ;
       == { _ by (compute ()) }
       theta w_act (Iter index ct (fun j -> m_reType (g j)) i (fun y -> m_reType (k y))) ;
@@ -92,18 +93,18 @@ let rec theta_reType #sg (#d : Type0) (w_act : action_wp sg) (c : m u#a sg (lift
       Call ac x (fun y -> m_reType (k y)) ;
     } ;
 
-    introduce forall x. theta w_act (k x) `wle` theta w_act (m_reType (k x))
+    introduce forall x. theta w_act (k x) `weq` theta w_act (m_reType (k x))
     with begin
       theta_reType w_act (k x)
     end ;
 
-    calc (wle) {
+    calc (weq) {
       theta w_act c ;
       == {}
       theta w_act (Call ac x k) ;
       == { _ by (compute ()) }
       w_bind (w_act ac x) (fun x -> theta w_act (k x)) ;
-      `wle` { w_bind_mono (w_act ac x) (fun x -> theta w_act (k x)) (fun x -> theta w_act (m_reType (k x))) }
+      `weq` { w_bind_cong (w_act ac x) (fun x -> theta w_act (k x)) (fun x -> theta w_act (m_reType (k x))) }
       w_bind (w_act ac x) (fun x -> theta w_act (m_reType (k x))) ;
       == { _ by (compute ()) }
       theta w_act (Call ac x (fun y -> m_reType (k y))) ;

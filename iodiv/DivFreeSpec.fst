@@ -73,6 +73,9 @@ let wp a =
 let wle #a (w w' : wp a) =
   forall p. w' p `w_pre_le` w p
 
+let weq #a (w w' : wp a) =
+  w `wle` w' /\ w' `wle` w
+
 let wle_trans #a (w1 w2 w3 : wp a) :
   Lemma
     (requires w1 `wle` w2 /\ w2 `wle` w3)
@@ -160,6 +163,13 @@ let w_bind_mono #a #b (w : wp a) (wf wf' : a -> wp b) :
   with begin
     assert (w_bind_post wf' post hist `w_post_le` w_bind_post wf post hist)
   end
+
+let w_bind_cong #a #b (w : wp a) (wf wf' : a -> wp b) :
+  Lemma
+    (requires forall x. wf x `weq` wf' x)
+    (ensures w_bind w wf `weq` w_bind w wf')
+= w_bind_mono w wf wf' ;
+  w_bind_mono w wf' wf
 
 let w_bind_assoc #a #b #c (w : wp a) (wf : a -> wp b) (wg : b -> wp c) :
   Lemma (w_bind w (fun x -> w_bind (wf x) wg) `wle` w_bind (w_bind w wf) wg)
@@ -298,3 +308,9 @@ let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a 
   with begin
     w_iter_n_mono n w' w i
   end
+
+let w_iter_cong (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
+  Lemma
+    (requires forall j. w j `weq` w' j)
+    (ensures w_iter w i `weq` w_iter w' i)
+= w_iter_mono w w' i ; w_iter_mono w' w i
