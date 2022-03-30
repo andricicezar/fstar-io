@@ -11,6 +11,10 @@ open FStar.Calc
 type liftType (a : Type0) : Type u#a =
 | LiftTy : x:a -> liftType a
 
+let reType #a (x : liftType u#a a) : liftType u#b a =
+  match x with
+  | LiftTy z -> LiftTy z
+
 (** Properties of prefix and suffix on lists *)
 
 let rec strict_prefix_of #a (s l : list a) :
