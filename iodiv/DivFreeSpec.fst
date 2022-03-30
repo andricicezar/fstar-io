@@ -235,9 +235,6 @@ let w_iter (#index : Type0) (#b : Type0) (w : index -> wp (liftType u#a (either 
     end
   )
 
-
-// TODO Maybe define a relift liftType u#a -> liftType u#b function and util in general for liftType
-// Also maybe we don't need the full theta_bind but just theta_map for relift? Or maybe we can even get away with something else?
 let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
   Lemma
     (requires forall j. w j `wle` w' j)
@@ -260,19 +257,37 @@ let rec w_iter_n_mono (#index : Type0) (#b : Type0) (n : nat) (w w' : index -> w
         | LiftTy (Inl j) -> w_iter_n (n-1) w' j
         | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
       ) ;
-    // assume (
-    //   w_bind (w i) (fun r ->
-    //     match r with
-    //     | LiftTy (Inl j) -> w_iter_n (n-1) w j
-    //     | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
-    //   ) `wle`
-    //   w_bind (w' i) (fun r ->
-    //     match r with
-    //     | LiftTy (Inl j) -> w_iter_n (n-1) w' j
-    //     | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
-    //   )
-    // )
-    admit ()
+    assert (
+      w_bind (w i) (fun r ->
+        match r with
+        | LiftTy (Inl j) -> w_iter_n (n-1) w j
+        | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+      ) `wle`
+      w_bind (w' i) (fun r ->
+        match r with
+        | LiftTy (Inl j) -> w_iter_n (n-1) w' j
+        | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+      )
+    ) ;
+    calc (==) {
+      w_iter_n n w i ;
+      == { admit () }
+      w_bind (w i) (fun r ->
+        match r with
+        | LiftTy (Inl j) -> w_iter_n (n-1) w j
+        | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+      ) ;
+    } ;
+    calc (==) {
+      w_iter_n n w' i ;
+      == { admit () }
+      w_bind (w' i) (fun r ->
+        match r with
+        | LiftTy (Inl j) -> w_iter_n (n-1) w' j
+        | LiftTy (Inr x) -> w_ret (LiftTy (Inr x))
+      ) ;
+    } ;
+    assert (w_iter_n n w i `wle` w_iter_n n w' i)
   end
 
 let w_iter_mono (#index : Type0) (#b : Type0) (w w' : index -> wp (liftType u#a (either index b))) (i : index) :
