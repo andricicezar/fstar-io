@@ -85,9 +85,11 @@ instance importable_safe_importable t {| d:safe_importable t |} : importable t =
   mk_importable d.sitype #t #d.ml_sitype
     (fun (x:d.sitype) -> (Some (safe_import x)) <: option t)
 
+(**
 instance safe_importable_exportable t {| d:exportable t |} : safe_importable d.etype =
   admit ();
   mk_safe_importable d.etype #t (fun x -> x)
+**) 
 
 instance exportable_refinement
   t {| d:exportable t |}
