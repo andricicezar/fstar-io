@@ -7,8 +7,8 @@ open FStar.Tactics
 open IO.Sig
 open Common
 open ExtraTactics
-open TC.Monitorable
-open TC.Instrumentable.IIO
+open TC.Monitorable.Hist
+open TC.Instrumentable.IIOwp
 open DM.MIO
 open DM.MIIO
 open Instrument
@@ -108,6 +108,7 @@ type prog_s (i:interface) (m:monitor i) =
 type prog_t (i:interface) (m:monitor i) =
   ictx_t i m -> MIIO (maybe i.ret)
 
+
 (** this is not related to the typeclass istrumentable.
 this actually instruments by using reify. this 
 function can not be extracted because it uses reify. **)
@@ -116,15 +117,17 @@ let instrument
   (#m : monitor i)
   (ct : ctx_t i) :
   Tot (ictx_t i m) =
-    fun x ->
-      instrument_MIIO
-        (DM.IIO.cast_io_iio ((* MIIO.*)reify (ct x))) m.pi m.piprop
+  fun x -> begin
+    let tree : DM.IO.dm_io i.ctx_ret (trivial_hist ()) = reify (ct x) in
+    let tree : npio (i.ctx_ret) = from_dm_io_to_npio tree in
+    instrument_MIIO tree m.pi m.piprop
+  end
  
 (** this is just a synonym to make things easier **)
 let enforce_post
   (#i:interface)
   (#m:monitor i) =
-  TC.Instrumentable.IIO.enforce_post
+  TC.Instrumentable.IIOwp.enforce_post
     #i.ctx_arg #i.ctx_ret m.pi m.pre m.post #m.post_c
     
 (**
