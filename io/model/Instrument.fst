@@ -59,4 +59,4 @@ let rec _instrument
     | Inr err -> Inr err
   end
 
-let instrument_MIIO = _instrument
+let get_IIOpi = _instrument

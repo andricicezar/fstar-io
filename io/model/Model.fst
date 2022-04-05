@@ -9,7 +9,7 @@ open Common
 open ExtraTactics
 open TC.Monitorable.Hist
 open TC.Instrumentable.IIOwp
-open Instrument
+open TC.Trivialize.IIOwp
 
 effect MIO (a:Type) = DM.IO.IOwp a (trivial_hist ())
 effect MIIO (a:Type) = DM.IIO.IIOwp a (trivial_hist ())
@@ -100,12 +100,13 @@ type ctx_s (i:interface) (m:monitor i) =
 
 (** The partial program does not need a pre- or a post-condition because
     it is the starting point of the execution in this model. **)
+(** TODO: parameterize by pre- and post- of prog_s **)
 type prog_s (i:interface) (m:monitor i) =
   ctx_s i m -> IIOpi i.ret m.pi (fun _ -> True) (fun _ _ _ -> True)
-(** compared to prog_s, prog_t can fail because it has to check the
-    history with which it starts. prog_t is prog_s wrapped in a new 
-    function which adds a runtime check for verifying if pi was 
-    respected until now **)
+(** compared to prog_s, prog_t can fail because it has to dynamically check 
+    its pre-condition. prog_t is prog_s wrapped in a new 
+    function which adds a runtime check for verifying if the pre-condition 
+    is respected **)
 type prog_t (i:interface) (m:monitor i) =
   ictx_t i m -> MIIO (maybe i.ret)
 
@@ -120,8 +121,8 @@ let instrument
   Tot (ictx_t i m) =
   fun x -> begin
     let tree : DM.IO.dm_io i.ctx_ret (trivial_hist ()) = reify (ct x) in
-    let tree : npio (i.ctx_ret) = from_dm_io_to_npio tree in
-    instrument_MIIO tree m.pi m.piprop
+    let tree : Instrument.npio (i.ctx_ret) = Instrument.from_dm_io_to_npio tree in
+    Instrument.get_IIOpi tree m.pi m.piprop
   end
  
 (** this is just a synonym to make things easier **)
@@ -153,15 +154,19 @@ let enforce_post
         p c
 **)
 
+(** TODO: here should a composition between weaken and trivialize **)
 let compile_prog
   (#i : interface)
   (#m : monitor i)
   (p  : prog_s i m) :
   Tot (prog_t i m) =
-  _IIOwp_as_MIIO
-    (fun _ _ -> true)
-    (fun _ h r lt -> iio_post m.pi h r lt)
-    (fun (ict:ictx_t i m) -> p (enforce_post #i #m ict))
+  fun x ->
+  (trivialize 
+    #_ 
+    #(trivializeable_IIOwp _ _ 
+        (fun x h -> true) 
+        (fun _ h r lt -> iio_post m.pi h r lt))
+        (fun (ict:ictx_t i m) -> p (enforce_post #i #m ict)) x)
 
 val link_s  : (#i:interface) -> (#m:monitor i) -> ctx_s i m ->
               prog_s i m -> Tot (whole_s i m)
