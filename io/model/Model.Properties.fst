@@ -11,14 +11,14 @@ open TC.Checkable
 open TC.Trivialize.IIOwp
 open Model
 
-let simple_linking_post pi h r lt : Type0 =
+let simple_linking_post pi h lt r : Type0 =
   iio_post pi h r lt
 
 (** p "compiled" linked with instrumented c, gives a computation in IIO,
 that respects the compuation **)
 let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) : 
   IIOwp (maybe i.ret)
-    (fun p h -> forall r lt. simple_linking_post m.pi h r lt ==> p lt r) =
+    (fun p h -> forall lt r. simple_linking_post m.pi h lt r ==> p lt r) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ 
@@ -78,6 +78,8 @@ let rec behavior #a
   | Return x -> fun t -> t == ([], x)
   | Call GetTrace arg fnc -> (fun (t', r') ->
     behavior (fnc h) h (t', r'))
+  | PartialCall pre k -> (fun (t', r') -> 
+      exists proof. behavior (k proof) h (t', r'))
   | Call cmd arg fnc -> (fun (t', r') ->
       exists r t. let e = (convert_call_to_event cmd arg r) in (
        (behavior (fnc r) (e::h) (t, r')) /\
@@ -85,21 +87,21 @@ let rec behavior #a
 
 (** I believe this lemma is true, because the event produced by the cmd is the first
 event from local_trace, therefore it respects the post. **)
-let lemma_pi_cont i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h :
+let lemma_pi_cont i pi (cmd:io_cmds) (arg:iio_sig.args cmd) (cont:((iio_sig.res cmd arg)->iio (maybe i.ret))) h :
   Lemma 
-    (requires (iio_interpretation (Call cmd arg cont) h (simple_linking_post pi h)))
-    (ensures (pi h (| cmd, arg |)))  = 
+    (requires (dm_iio_theta (Call cmd arg cont) (simple_linking_post pi h) h))
+    (ensures (pi cmd arg h))  = 
      (** `Call cmd arg cont` implies that the proper checks were done already and for sure
           it respects pi, therefore it is ok to run the cmd. **)
   admit ()
 
 
-let rec lemma_interp_cont_interp i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h (r:res cmd) :
+let rec lemma_interp_cont_interp i pi (cmd:io_cmds) (arg:iio_sig.args cmd) (cont:((iio_sig.res cmd arg)->iio (maybe i.ret))) h (r:iio_sig.res cmd arg) :
   Lemma 
-    (requires (iio_interpretation (Call cmd arg cont) h (simple_linking_post pi h)))
+    (requires (dm_iio_theta (Call cmd arg cont) (simple_linking_post pi h) h))
     (ensures (
       let h' = (convert_call_to_event cmd arg r) :: h in
-      iio_interpretation (cont r) h' (simple_linking_post pi h'))) =
+      dm_iio_theta (cont r) (simple_linking_post pi h') h')) =
   lemma_pi_cont i pi cmd arg cont h;
   let e = (convert_call_to_event cmd arg r) in
  (**  assert (
@@ -115,11 +117,11 @@ let rec lemma_interp_cont_interp i pi (cmd:io_cmds) (arg:args cmd) (cont:((res c
         dump "H") **)
   admit ()
   
-let rec lemma_beh_cont i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (maybe i.ret))) h (r:res cmd) :
+let rec lemma_beh_cont i (pi:monitorable_prop) (cmd:io_cmds) (arg:iio_sig.args cmd) (cont:((iio_sig.res cmd arg)->iio (maybe i.ret))) h (r:iio_sig.res cmd arg) :
   Lemma
     (requires (
         let e = convert_call_to_event cmd arg r in 
-        (b2t(pi h (| cmd, arg |))) /\
+        (b2t(pi cmd arg h)) /\
         behavior (cont r) (e::h) `included_in` (pi_to_set pi)))
     (ensures (behavior (Call cmd arg cont) h `included_in` (pi_to_set pi))) = 
     admit ()
@@ -128,14 +130,14 @@ let rec lemma_beh_cont i pi (cmd:io_cmds) (arg:args cmd) (cont:((res cmd)->iio (
     are mutually recursive, but when I try to define them as such, F* returns a universe error **)
 let lemma_interp_implies_beh' i pi (w:iio (maybe i.ret)) (h:trace) :
   Lemma 
-    (requires (iio_interpretation w h (simple_linking_post pi h)))
+    (requires (dm_iio_theta w (simple_linking_post pi h) h))
     (ensures (behavior w h `included_in` (pi_to_set pi))) = admit ()
 
-let lemma_interp_implies_beh_1 i pi (cmd:io_cmds) (arg:args cmd) (cont:(res cmd -> iio (maybe i.ret))) (h:trace) (r:res cmd) :
+let lemma_interp_implies_beh_1 i pi (cmd:io_cmds) (arg:iio_sig.args cmd) (cont:(iio_sig.res cmd arg -> iio (maybe i.ret))) (h:trace) (r:iio_sig.res cmd arg) :
   Lemma 
     (requires (
       let e = convert_call_to_event cmd arg r in 
-      iio_interpretation (cont r) (e::h) (simple_linking_post pi (e::h))))
+      dm_iio_theta (cont r) (simple_linking_post pi (e::h)) (e::h)))
     (ensures (
       let e = convert_call_to_event cmd arg r in 
       behavior (cont r) (e::h) `included_in` (pi_to_set pi))) =
@@ -144,10 +146,11 @@ let lemma_interp_implies_beh_1 i pi (cmd:io_cmds) (arg:args cmd) (cont:(res cmd 
     
 let rec lemma_interp_implies_beh i pi (w:iio (maybe i.ret)) (h:trace) :
   Lemma 
-    (requires (iio_interpretation w h (simple_linking_post pi h)))
+    (requires (dm_iio_theta w (simple_linking_post pi h) h))
     (ensures (behavior w h `included_in` (pi_to_set pi))) =
   match w with
   | Return x -> ()
+  | PartialCall pre k -> admit ()
   | Call cmd arg cont -> begin
     match cmd with
     | GetTrace -> 
@@ -160,7 +163,7 @@ let rec lemma_interp_implies_beh i pi (w:iio (maybe i.ret)) (h:trace) :
         let e = convert_call_to_event cmd arg r in 
         behavior (cont r) (e::h) `included_in` (pi_to_set pi));
       lemma_pi_cont i pi cmd arg cont h;
-      assert (pi h (| cmd, arg |));
+      assert (pi cmd arg h);
       Classical.forall_intro (Classical.move_requires (
         (lemma_beh_cont i pi cmd arg cont h)));
       assert (behavior w h `included_in` (pi_to_set pi))
