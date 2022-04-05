@@ -1,16 +1,14 @@
-module Model.Proof
+module Model.Properties
 
 open FStar.List.Tot
 open FStar.Calc
 open FStar.Tactics
 
-open Free
-open Free.IO
 open Common
+open DM
 open ExtraTactics
 open TC.Checkable
 open TC.Trivialize.IIOwp
-open DM
 open Model
 
 let simple_linking_post pi h r lt : Type0 =
@@ -20,7 +18,7 @@ let simple_linking_post pi h r lt : Type0 =
 that respects the compuation **)
 let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) : 
   IIOwp (maybe i.ret)
-    (fun h p -> forall r lt. simple_linking_post m.pi h r lt ==> p r lt) =
+    (fun p h -> forall r lt. simple_linking_post m.pi h r lt ==> p lt r) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ 
@@ -42,7 +40,7 @@ TODO: show this
 Problem: Aseem: IIO is a layered effect, then this will not work since layered effects can only be reasoned about using their types and this example requires reasoning that g x == f x. We can only reason with the types of the layered effects code, and here once we have g with the type as shown, we don't have access to any postcondition about its result. To recover that, we need to look at the definition of g **)
 let complex_linking #i #m p c : 
   IIOwp (maybe i.ret)
-    (fun h p -> (forall r lt. iio_post m.pi h r lt ==> p r lt)) =
+    (fun p h -> (forall r lt. iio_post m.pi h r lt ==> p lt r)) =
   admit ();
   (compile_prog p) (instrument #i #m c)
 

@@ -9,9 +9,10 @@ open Common
 open ExtraTactics
 open TC.Monitorable.Hist
 open TC.Instrumentable.IIOwp
-open DM.MIO
-open DM.MIIO
 open Instrument
+
+effect MIO (a:Type) = DM.IO.IOwp a (trivial_hist ())
+effect MIIO (a:Type) = DM.IIO.IIOwp a (trivial_hist ())
 
 noeq type model_type = {
   interface : Type;
