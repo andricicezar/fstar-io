@@ -51,7 +51,7 @@ let enforce_post
   (#t1 #t2:Type)
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0)
-  (post:t1 -> trace -> (r:maybe t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b}))
+  (post:t1 -> trace -> (r:maybe t2) -> trace -> Type0)
   {| post_c:monitorable_post pre post pi |}
   (f:t1 -> IIOpi (maybe t2) pi (fun _ -> True) (fun _ _ _ -> True))
   (x:t1) :
@@ -69,7 +69,7 @@ instance instrumentable_IIO
   (#t1:Type) (#t2:Type) {| d1:ml t1 |} {| d2:ml t2 |}
   (pre : t1 -> trace -> Type0)
   (** it must be `maybe t2` because needs the ability to fail **)
-  (post : t1 -> trace -> (r:maybe t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b}))
+  (post : t1 -> trace -> (r:maybe t2) -> trace -> Type0)
   (pi : monitorable_prop) {| post_c:monitorable_post pre post pi |} : 
   instrumentable ((x:t1) -> IIOpi (maybe t2) pi (pre x) (post x)) =
   { a = t1; b = t2; a_c = d1; b_c = d2;
