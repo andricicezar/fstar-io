@@ -410,3 +410,21 @@ let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a 
       end
     end
   end
+
+let i_iter_coind (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) w' :
+  Lemma
+    (requires forall j. iter_expand w j w' `ile` w' j)
+    (ensures i_iter w i `ile` w' i)
+= ()
+
+let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) :
+  Lemma (i_iter w i `ile` iter_expand w i (i_iter w))
+= introduce forall j. iter_expand w j (fun j -> iter_expand w j (i_iter w)) `ile` iter_expand w j (i_iter w)
+  with begin
+    introduce forall k. iter_expand w k (i_iter w) `ile` i_iter w k
+    with begin
+      i_iter_unfold w k
+    end ;
+    iter_expand_mono_k w j (fun j -> iter_expand w j (i_iter w)) (i_iter w)
+  end ;
+  i_iter_coind w i (fun j -> iter_expand w j (i_iter w))
