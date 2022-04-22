@@ -15,6 +15,10 @@ let reType #a (x : liftType u#a a) : liftType u#b a =
   match x with
   | LiftTy z -> LiftTy z
 
+let unLift #a (x : liftType u#a a) : a =
+  match x with
+  | LiftTy y -> y
+
 (** Properties of prefix and suffix on lists *)
 
 let rec strict_prefix_of #a (s l : list a) :
