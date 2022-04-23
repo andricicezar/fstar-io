@@ -64,8 +64,11 @@ effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> oru
 let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
   IODIV?.reflect (iodiv_call ac x)
 
-// Maybe should have more things marked unfold or maybe avoid the match?
-// let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ]) =
-//   act_call OpenFile s
+// Maybe should have more things marked unfold or maybe avoid the match? Probably ok for match, should just do as for the other IODiv. Or is it resp_eutt that bites us?
+// Tried: ile and ishift_post but it breaks proofs, I can do it by only unfolding them in this file with the usual trick.
+let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ])
+by (explode () ; bump_nth 11 ; compute ())
+=
+  act_call OpenFile s
 
 // | Call : ac:sg.act -> x:sg.arg ac -> k:(sg.res x -> m sg a) -> m sg a
