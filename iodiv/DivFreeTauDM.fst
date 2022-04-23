@@ -264,7 +264,17 @@ let dm_call #sg (#w_act : action_iwp sg) (ac : sg.act) (x : sg.arg ac) : dm sg w
   m_call ac x
 
 let dm_iter #sg #w_act #index #b #w (f : (j : index) -> dm sg w_act (liftType (either index b)) (w j)) (i : index) : dm sg w_act b (i_iter w i) =
-  admit () ;
+  calc (ile) {
+    theta w_act (m_iter f i) ;
+    == { _ by (compute ()) }
+    i_bind (i_iter (fun j -> theta w_act (f j)) i) (fun x -> theta w_act (m_ret x)) ;
+    `ile` { i_bind_mono (i_iter (fun j -> theta w_act (f j)) i) (fun x -> theta w_act (m_ret x)) i_ret }
+    i_bind (i_iter (fun j -> theta w_act (f j)) i) i_ret ;
+    `ile` { i_bind_ret (i_iter (fun j -> theta w_act (f j)) i) }
+    i_iter (fun j -> theta w_act (f j)) i ;
+    `ile` {}
+    i_iter w i ;
+  } ;
   m_iter f i
 
 (** Lift from PURE *)
