@@ -27,14 +27,14 @@ let iodiv_act : action_iwp io_sig =
 let iodiv_dm a w =
   dm io_sig iodiv_act a w
 
-let iodiv_ret a (x : a) : iodiv_dm a (i_ret x) =
+let iodiv_ret a (x : a) : iodiv_dm a (_i_ret x) =
   dm_ret x
 
-let iodiv_bind a b w wf (c : iodiv_dm a w) (f : (x : a) -> iodiv_dm b (wf x)) : iodiv_dm b (i_bind w wf) =
+let iodiv_bind a b w wf (c : iodiv_dm a w) (f : (x : a) -> iodiv_dm b (wf x)) : iodiv_dm b (_i_bind w wf) =
   dm_bind c f
 
 let iodiv_subcomp a w w' (c : iodiv_dm a w) :
-  Pure (iodiv_dm a w') (requires w `ile` w') (ensures fun _ -> True)
+  Pure (iodiv_dm a w') (requires w `_ile` w') (ensures fun _ -> True)
 = dm_subcomp c
 
 let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv_dm a w2) (b : bool) : Type =
@@ -65,10 +65,8 @@ let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv
   IODIV?.reflect (iodiv_call ac x)
 
 // Maybe should have more things marked unfold or maybe avoid the match? Probably ok for match, should just do as for the other IODiv. Or is it resp_eutt that bites us?
-// Tried: ile and ishift_post but it breaks proofs, I can do it by only unfolding them in this file with the usual trick.
+// Tried: for ishift_post, the trick isn't easy to pull, might require two defs of i_bind?
 let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ])
-by (explode () ; bump_nth 11 ; compute ())
+by (compute ())
 =
   act_call OpenFile s
-
-// | Call : ac:sg.act -> x:sg.arg ac -> k:(sg.res x -> m sg a) -> m sg a

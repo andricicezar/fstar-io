@@ -157,8 +157,11 @@ let iwp_monotonic_inst #a (w : iwp a) p q hist :
     (ensures w q hist)
 = ()
 
-let ile #a (w w' : iwp a) =
+unfold
+let _ile #a (w w' : iwp a) =
   forall p. w' p `i_pre_le` w p
+
+let ile = _ile
 
 let ieq #a (w w' : iwp a) =
   w `ile` w' /\ w' `ile` w
@@ -172,8 +175,11 @@ let ile_trans #a (w1 w2 w3 : iwp a) :
 let as_iwp #a (w : iwp' a) : Pure (iwp a) (requires iwp_monotonic w) (ensures fun r -> r == w) =
   w
 
-let i_ret #a (x : a) : iwp a =
+unfold
+let _i_ret #a (x : a) : iwp a =
   as_iwp (fun post hist -> post (Ocv [] x))
+
+let i_ret = _i_ret
 
 let ishift_post' #a (tr : otrace) (post : i_post a) : i_post' a =
   fun r ->
@@ -272,7 +278,8 @@ let i_bind_post_mono #a #b (wf : a -> iwp b) p q hist :
     | Odv s -> ()
   end
 
-let i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
+unfold
+let _i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
   introduce forall p q hist. p `i_post_le` q ==> i_bind_post wf p hist `i_post_le` i_bind_post wf q hist
   with begin
     move_requires (i_bind_post_mono wf p q) hist
@@ -280,6 +287,8 @@ let i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b
   as_iwp (fun post hist ->
     w (i_bind_post wf post hist) hist
   )
+
+let i_bind = _i_bind
 
 let i_bind_mono #a #b (w : iwp a) (wf wf' : a -> iwp b) :
   Lemma
@@ -349,23 +358,31 @@ let i_bind_ret #a (w : iwp a) :
 let i_req (pre : pure_pre) : iwp (squash pre) =
   as_iwp (fun post hist -> pre /\ post (Ocv [] (Squash.get_proof pre)))
 
+unfold
 let i_open (s : string) : iwp file_descr =
   as_iwp (fun post hist -> forall fd. post (Ocv [ Some (EOpenFile s fd) ] fd))
 
+unfold
 let i_read (fd : file_descr) : iwp string =
   as_iwp (fun post hist -> is_open fd hist /\ (forall s. post (Ocv [ Some (ERead fd s) ] s)))
 
+unfold
 let i_close (fd : file_descr) : iwp unit =
   as_iwp (fun post hist -> is_open fd hist /\ post (Ocv [ Some (EClose fd) ] ()))
 
+unfold
 let i_get_trace : iwp history =
   as_iwp (fun post hist -> post (Ocv [] hist))
 
+unfold
 let iwite #a (w1 w2 : iwp a) (b : bool) : iwp a =
   fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)
 
-let i_tau : iwp unit =
+unfold
+let _i_tau : iwp unit =
   as_iwp (fun post hist -> post (Ocv [ None ] ()))
+
+let i_tau = _i_tau
 
 (** Specification of iter using an impredicative encoding *)
 
