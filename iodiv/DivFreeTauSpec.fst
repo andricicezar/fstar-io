@@ -440,3 +440,14 @@ let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a
     (requires forall j. w j `ieq` w' j)
     (ensures i_iter w i `ieq` i_iter w' i)
 = i_iter_mono w w' i ; i_iter_mono w' w i
+
+(** Specification from pre/post *)
+// Note: don't need resp_eutt for the post, the generated pre will take care or it (post r ==> p r) where resp_eutt p
+// might also be interesting to have nice posts by construction so one doesn't need to worry about taus. One option being to go through the other spec, but
+// maybe it's not needed.
+
+unfold
+let iprepost #a (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) : iwp a =
+  fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
+
+// TODO repeat + loop invariants

@@ -53,10 +53,7 @@ reflectable reifiable total layered_effect {
 
 sub_effect PURE ~> IODIV = dm_lift_pure #(io_sig) #(iodiv_act)
 
-// iprepost should be defined in DivFreeTauSpec
-// invariants too
-
-// effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> branch a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
-//   IODIV a (wprepost pre post)
+effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
+  IODIV a (iprepost pre post)
 
 // TODO Actions

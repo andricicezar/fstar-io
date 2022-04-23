@@ -53,3 +53,6 @@ reflectable reifiable total layered_effect {
 }
 
 sub_effect PURE ~> IIODIV = dm_lift_pure #(iio_sig) #(iiodiv_act)
+
+effect IIODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
+  IIODIV a (iprepost pre post)
