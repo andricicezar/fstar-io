@@ -122,6 +122,9 @@ let resp_eutt #a (p : i_post' a) : Type0 =
 
 let i_post a = p : (i_post' a) { resp_eutt p }
 
+let as_i_post #a (p : i_post' a) : Pure (i_post a) (requires resp_eutt p) (ensures fun r -> r == p) =
+  p
+
 let i_post_resp_eutt #a (p : i_post a) r r' :
   Lemma
     (requires r `eutt` r' /\ p r)
@@ -449,5 +452,27 @@ let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a
 unfold
 let iprepost #a (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) : iwp a =
   fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
+
+(** Basic predicates *)
+
+unfold
+let terminates #a : i_post a =
+  as_i_post (fun r -> Ocv? r)
+
+unfold
+let diverges #a : i_post a =
+  as_i_post (fun r -> Odv? r)
+
+let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> to_trace tr
+
+let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> x
+
+let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
+  match r with
+  | Odv p -> p
 
 // TODO repeat + loop invariants
