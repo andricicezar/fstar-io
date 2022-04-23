@@ -113,13 +113,16 @@ let eutt #a (r r' : orun a) : Type0 =
 
 (** Specification monad *)
 
+unfold
 let i_pre = history -> Type0
 
+unfold
 let i_post' a = orun a -> Type0
 
 let resp_eutt #a (p : i_post' a) : Type0 =
   forall r r'. r `eutt` r' /\ p r ==> p r'
 
+unfold
 let i_post a = p : (i_post' a) { resp_eutt p }
 
 let as_i_post #a (p : i_post' a) : Pure (i_post a) (requires resp_eutt p) (ensures fun r -> r == p) =
