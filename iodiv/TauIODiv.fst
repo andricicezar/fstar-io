@@ -40,6 +40,9 @@ let iodiv_subcomp a w w' (c : iodiv_dm a w) :
 let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv_dm a w2) (b : bool) : Type =
   dm_if_then_else a w1 w2 f g b
 
+let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (iodiv_act ac x) =
+  dm_call ac x
+
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IODIV : a:Type -> w:iwp a -> Effect
@@ -56,4 +59,13 @@ sub_effect PURE ~> IODIV = dm_lift_pure #(io_sig) #(iodiv_act)
 effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IODIV a (iprepost pre post)
 
-// TODO Actions
+(** Actions *)
+
+let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
+  IODIV?.reflect (iodiv_call ac x)
+
+// Maybe should have more things marked unfold or maybe avoid the match?
+// let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ]) =
+//   act_call OpenFile s
+
+// | Call : ac:sg.act -> x:sg.arg ac -> k:(sg.res x -> m sg a) -> m sg a
