@@ -17,6 +17,7 @@ open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
 
+unfold
 let iodiv_act : action_iwp io_sig =
   fun ac arg ->
     match ac with

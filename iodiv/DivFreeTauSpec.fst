@@ -125,6 +125,7 @@ let resp_eutt #a (p : i_post' a) : Type0 =
 unfold
 let i_post a = p : (i_post' a) { resp_eutt p }
 
+unfold
 let as_i_post #a (p : i_post' a) : Pure (i_post a) (requires resp_eutt p) (ensures fun r -> r == p) =
   p
 
