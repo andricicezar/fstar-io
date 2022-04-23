@@ -151,41 +151,39 @@ let rec theta_bind (#a : Type u#a) (#b : Type u#b) #sg (w_act : action_iwp sg) (
 
   | Iter index ct g i k ->
 
-    // introduce forall x. theta w_act (m_bind (k x) f) `ile` i_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
-    // with begin
-    //   theta_bind w_act (k x) f
-    // end ;
+    introduce forall x. theta w_act (m_bind (k x) f) `ile` i_bind (theta w_act (k x)) (fun y -> theta w_act (f y))
+    with begin
+      theta_bind w_act (k x) f
+    end ;
 
-    // forall_intro (fun j -> theta_reType w_act (g j))  ;
-    // assert (forall j. theta w_act (g j) `ile` theta w_act (m_reType (g j))) ;
+    forall_intro (fun j -> theta_reType w_act (g j))  ;
+    assert (forall j. theta w_act (g j) `ile` theta w_act (m_reType (g j))) ;
 
-    // calc (ile) {
-    //   i_iter (fun j -> theta w_act (m_reType (g j))) i ;
-    //   `ile` { i_iter_mono (fun j -> theta w_act (m_reType (g j))) (fun j -> theta w_act (g j)) i }
-    //   i_iter (fun j -> theta w_act (g j)) i ;
-    // } ;
+    calc (ile) {
+      i_iter (fun j -> theta w_act (m_reType (g j))) i ;
+      `ile` { i_iter_mono (fun j -> theta w_act (m_reType (g j))) (fun j -> theta w_act (g j)) i }
+      i_iter (fun j -> theta w_act (g j)) i ;
+    } ;
 
-    // calc (ile) {
-    //   theta w_act (m_bind c f) ;
-    //   == {}
-    //   theta w_act (m_bind (Iter index ct g i k) f) ;
-    //   == { _ by (compute ()) }
-    //   theta w_act (Iter index ct (fun j -> m_reType (g j)) i (fun y -> m_bind (k y) f)) ;
-    //   == { _ by (compute ()) }
-    //   i_bind (i_iter (fun j -> theta w_act (m_reType (g j))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
-    //   `ile` {} // If need be, can use w_bind_mono explicitly
-    //   i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) ;
-    //   `ile` {}
-    //   i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> i_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
-    //   `ile` { i_bind_assoc (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) }
-    //   i_bind (i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
-    //   == { _ by (compute ()) }
-    //   i_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
-    //   == {}
-    //   i_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
-    // }
-
-    admit ()
+    calc (ile) {
+      theta w_act (m_bind c f) ;
+      == {}
+      theta w_act (m_bind (Iter index ct g i k) f) ;
+      == { _ by (compute ()) }
+      theta w_act (Iter index ct (fun j -> m_reType (g j)) i (fun y -> m_bind (k y) f)) ;
+      == { _ by (compute ()) }
+      i_bind (i_iter (fun j -> theta w_act (m_reType (g j))) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+      `ile` {} // If need be, can use w_bind_mono explicitly
+      i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) ;
+      `ile` { i_bind_mono (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (m_bind (k x) f)) (fun x -> i_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) }
+      i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> i_bind (theta w_act (k x)) (fun x -> theta w_act (f x))) ;
+      `ile` { i_bind_assoc (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x)) (fun x -> theta w_act (f x)) }
+      i_bind (i_bind (i_iter (fun j -> theta w_act (g j)) i) (fun x -> theta w_act (k x))) (fun x -> theta w_act (f x)) ;
+      == { _ by (compute ()) }
+      i_bind (theta w_act (Iter index ct g i k)) (fun x -> theta w_act (f x)) ;
+      == {}
+      i_bind (theta w_act c) (fun x -> theta w_act (f x)) ;
+    }
 
   | Call ac x k ->
 
