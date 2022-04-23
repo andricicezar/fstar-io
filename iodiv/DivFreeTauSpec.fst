@@ -428,3 +428,15 @@ let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (e
     iter_expand_mono_k w j (fun j -> iter_expand w j (i_iter w)) (i_iter w)
   end ;
   i_iter_coind w i (fun j -> iter_expand w j (i_iter w))
+
+let i_iter_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a (either index a))) (i : index) :
+  Lemma
+    (requires forall j. w j `ile` w' j)
+    (ensures i_iter w i `ile` i_iter w' i)
+= ()
+
+let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a (either index a))) (i : index) :
+  Lemma
+    (requires forall j. w j `ieq` w' j)
+    (ensures i_iter w i `ieq` i_iter w' i)
+= i_iter_mono w w' i ; i_iter_mono w' w i
