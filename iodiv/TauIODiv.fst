@@ -44,6 +44,9 @@ let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv
 let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (iodiv_act ac x) =
   dm_call ac x
 
+let iodiv_iter #index #b #w (f : (j : index) -> iodiv_dm (liftType (either index b)) (w j)) (i : index) : iodiv_dm b (i_iter w i) =
+  dm_iter f i
+
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IODIV : a:Type -> w:iwp a -> Effect
@@ -65,9 +68,19 @@ effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> oru
 let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
   IODIV?.reflect (iodiv_call ac x)
 
-// Maybe should have more things marked unfold or maybe avoid the match? Probably ok for match, should just do as for the other IODiv. Or is it resp_eutt that bites us?
-// Tried: for ishift_post, the trick isn't easy to pull, might require two defs of i_bind?
 let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ])
-by (compute ())
-=
-  act_call OpenFile s
+// by (compute ())
+// by (norm [delta_only [`%ishift_post ; `%as_iwp ; `%i_bind_post ; `%i_bind_post' ; `%i_pre_le]] ; dump "h") // ishift_post is still present in the goal...
+by (explode ())
+= act_call OpenFile s
+
+let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ])
+by (explode ())
+= act_call Read fd
+
+let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd ])
+by (explode ())
+= act_call Close fd
+
+let iter #index #b #w (f : (j : index) -> IODIV (liftType (either index b)) (w j)) (i : index) : IODIV b (i_iter w i) =
+  IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)

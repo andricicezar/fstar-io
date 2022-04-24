@@ -16,6 +16,7 @@ open IIOSig
 open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
+open TauIODiv
 
 let iiodiv_act : action_iwp iio_sig =
   fun ac arg ->
@@ -41,6 +42,12 @@ let iiodiv_subcomp a w w' (c : iiodiv_dm a w) :
 let iiodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iiodiv_dm a w1) (g : iiodiv_dm a w2) (b : bool) : Type =
   dm_if_then_else a w1 w2 f g b
 
+let iiodiv_call (ac : iio_sig.act) (x : iio_sig.arg ac) : iiodiv_dm (iio_sig.res x) (iiodiv_act ac x) =
+  dm_call ac x
+
+let iiodiv_iter #index #b #w (f : (j : index) -> iiodiv_dm (liftType (either index b)) (w j)) (i : index) : iiodiv_dm b (i_iter w i) =
+  dm_iter f i
+
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IIODIV : a:Type -> w:iwp a -> Effect
@@ -56,3 +63,16 @@ sub_effect PURE ~> IIODIV = dm_lift_pure #(iio_sig) #(iiodiv_act)
 
 effect IIODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IIODIV a (iprepost pre post)
+
+(** Lift from IODIV *)
+
+let iodiv_to_iiodiv #a #w (f : (eqtype_as_type unit -> IODIV a w)) : iiodiv_dm a w =
+  admit () ; // Why not?
+  reify (f ())
+
+// Why does it fail?
+// sub_effect IODIV ~> IIODIV = iodiv_to_iiodiv
+
+(** Actions *)
+
+// TODO
