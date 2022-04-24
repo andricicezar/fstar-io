@@ -277,6 +277,7 @@ let dm_iter #sg #w_act #index #b #w (f : (j : index) -> dm sg w_act (liftType (e
 
 (** Lift from PURE *)
 
+unfold
 let w_lift_pure #a (w : pure_wp a) : iwp a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
   fun post hist -> w (fun x -> post (Ocv [] x))
