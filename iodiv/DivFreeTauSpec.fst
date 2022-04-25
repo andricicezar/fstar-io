@@ -521,22 +521,70 @@ let sotrace_refines (s : sotrace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
 unfold
-let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
+let _repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
   iprepost (pre i) (fun hist r -> diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs))
+
+let repeat_inv = _repeat_inv
 
 let repeat_inv_inst #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) (post : i_post unit) hist (s : sotrace) (trs : stream trace) :
   Lemma (requires repeat_inv pre inv i post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs) (ensures post (Odv s))
 = ()
 
-let repeat_inv_expand_aux #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : index) (tr : otrace) (trs : stream trace) (s : sotrace) :
+let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace) :
   Lemma
-    (requires repeat_inv pre inv j post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs)
-    (ensures post (Odv (stream_prepend tr (stream_prepend [ None ] s))))
+    (requires to_trace tr == [] /\ s `sotrace_refines` trs)
+    (ensures stream_prepend tr s `sotrace_refines` trs)
 = admit ()
+
+let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
+  Lemma
+    (requires s `sotrace_refines` trs)
+    (ensures stream_prepend tr s `sotrace_refines` stream_prepend [ to_trace tr ] trs)
+= introduce forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
+  with begin
+    if n <= length tr
+    then begin
+      // m = length tr, k = 1
+      assume (to_trace (stream_trunc (stream_prepend tr s) (length tr)) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) 1)) ;
+      admit ()
+    end
+    else begin
+      // Specialise hyp with n = n - length tr
+      eliminate exists (m : nat) (k : nat). n - length tr <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
+      returns exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
+      with _. begin
+        // m = m + length tr, k = k + 1
+        // assume (to_trace (stream_trunc (stream_prepend tr s) (m + length tr)) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) (k + 1))) ;
+        admit ()
+      end
+    end
+  end
+
+let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : idx) (tr : otrace) (trs : stream trace) (s : sotrace) :
+  Lemma
+    (requires repeat_inv pre inv j post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs /\ inv (to_trace tr))
+    (ensures post (Odv (stream_prepend tr (stream_prepend [ None ] s))))
+= introduce forall n. inv (stream_prepend [ to_trace tr ] trs n)
+  with begin
+    if n = 0
+    then begin
+      assert_norm (stream_prepend [ to_trace tr ] trs 0 == to_trace tr)
+    end
+    else begin
+      // assume (stream_prepend [ to_trace tr ] trs n == trs (n - 1)) ; // This should be true, but even assuming it makes F* unhappy
+      admit ()
+    end
+  end ;
+
+  sotrace_refines_prepend_None [ None ] s trs ;
+  sotrace_refines_prepend tr (stream_prepend [ None ] s) trs ;
+  assert ((stream_prepend tr (stream_prepend [ None ] s)) `sotrace_refines` (stream_prepend [ to_trace tr ] trs)) ;
+
+  repeat_inv_inst pre inv j post hist (stream_prepend tr (stream_prepend [ None ] s)) (stream_prepend [ to_trace tr ] trs)
 
 let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : index) (tr : otrace) :
   Lemma
-    (requires repeat_inv pre inv j post hist /\ pre j (rev_acc (to_trace tr) hist))
+    (requires repeat_inv pre inv j post hist /\ pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr))
     (ensures repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist))
 = introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
   with begin
@@ -547,21 +595,7 @@ let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post
         eliminate exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs
         returns ishift_post [ None ] (ishift_post tr post) (Odv s)
         with _. begin
-          // calc (==) {
-          //   ishift_post [ None ] (ishift_post tr post) (Odv s) ;
-          //   == {}
-          //   ishift_post tr post (Odv (stream_prepend [ None ] s)) ;
-          //   == {}
-          //   post (Odv (stream_prepend tr (stream_prepend [ None ] s))) ;
-          // } ;
-          // let trs' = stream_prepend [ to_trace tr ] trs in
-          // assume (forall n. inv (trs' n)) ;
-          // assume ((stream_prepend tr (stream_prepend [ None ] s)) `sotrace_refines` trs') ;
-          // repeat_inv_inst pre inv j post hist (stream_prepend tr (stream_prepend [ None ] s)) trs' ;
-          // assert (repeat_inv pre inv j post hist) ; // Seems I need to revoke the unfold status of repeat_inv
-          assert ((forall n. inv (trs n)) /\ s `sotrace_refines` trs) ;
-          assume (post (Odv (stream_prepend tr (stream_prepend [ None ] s))))
-          // repeat_inv_expand_aux pre inv post hist j tr trs s
+          repeat_inv_expand_aux pre inv post hist j tr trs s
         end
     end
   end
@@ -603,7 +637,8 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
                 == { _ by (compute ()) }
                 repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
               } ;
-              admit () // Now lemma on repeat_inv itself
+              assume (repeat_inv pre inv j post hist) ; // It's my assumption already...
+              repeat_inv_expand pre inv post hist j tr
           end
         end
       end
