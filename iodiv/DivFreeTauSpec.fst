@@ -484,6 +484,10 @@ unfold
 let diverges #a : i_post a =
   as_i_post (fun r -> Odv? r)
 
+let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> tr
+
 let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
   match r with
   | Ocv tr x -> to_trace tr
@@ -496,4 +500,54 @@ let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun 
   match r with
   | Odv p -> p
 
-// TODO repeat + loop invariants
+(** Loop invariants *)
+// TODO Perhaps we should not expose the liftType to the user
+
+(* Specification of the body that always continues *)
+unfold
+let repeat_body_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (liftType u#a (either index a)) =
+  iprepost (pre i) (fun hist r ->
+    match r with
+    | Ocv tr (LiftTy (Inl j)) -> pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr)
+    | _ -> False
+  )
+
+unfold
+let sotrace_refines (s : sotrace) (trs : stream trace) =
+  forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
+
+unfold
+let repeat_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp a =
+  iprepost (pre i) (fun hist r ->
+    match r with
+    | Odv s -> exists (trs : stream trace). (forall n. inv (trs n)) /\ s `sotrace_refines` trs
+    | _ -> False
+  )
+
+// TODO MOVE
+let lval #a #b (x : either a b) : Pure a (requires Inl? x) (ensures fun _ -> True) =
+  match x with
+  | Inl v -> v
+
+let repeat_inv_proof #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) :
+  Lemma (i_iter (repeat_body_inv #index #a pre inv) i `ile` repeat_inv #index #a pre inv i)
+= introduce forall j. iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) `ile` repeat_inv #index #a pre inv j
+  with begin
+    // assume (iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) `ile` repeat_inv #index #a pre inv j)
+    // assert_norm (iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) == i_bind (repeat_body_inv #index #a pre inv j) (iter_expand_cont (fun k -> repeat_inv #index #a pre inv k))) ;
+    // assume (i_bind (repeat_body_inv #index #a pre inv j) (iter_expand_cont (fun k -> repeat_inv #index #a pre inv k)) `ile` repeat_inv #index #a pre inv j)
+    introduce forall post hist. repeat_inv #index #a pre inv j post hist ==> iter_expand (repeat_body_inv #index #a pre inv) j (fun k -> repeat_inv #index #a pre inv k) post hist
+    with begin
+      introduce repeat_inv #index #a pre inv j post hist ==> iter_expand (repeat_body_inv #index #a pre inv) j (fun k -> repeat_inv #index #a pre inv k) post hist
+      with _. begin
+        assert (pre j hist) ;
+        introduce forall r. Ocv? r /\ Inl? (unLift (result r)) /\ pre (lval (unLift (result r))) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> iter_expand_cont (fun k -> repeat_inv pre inv k) (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)
+        with begin
+          admit ()
+        end ;
+        // _ by (compute () ; explode () ; dump "h")
+        admit ()
+      end
+    end
+  end ;
+  i_iter_coind (repeat_body_inv #index #a pre inv) i (fun j -> repeat_inv #index #a pre inv j)
