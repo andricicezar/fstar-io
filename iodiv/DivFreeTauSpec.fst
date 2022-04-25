@@ -472,7 +472,7 @@ let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index
 
 unfold
 let iprepost #a (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) : iwp a =
-  fun p hist -> pre hist /\ (forall b. post hist b ==> p b)
+  fun p hist -> pre hist /\ (forall r. post hist r ==> p r)
 
 (** Basic predicates *)
 
@@ -502,51 +502,65 @@ let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun 
 
 (** Loop invariants *)
 
+// TODO MOVE
+let lval #a #b (x : either a b) : Pure a (requires Inl? x) (ensures fun _ -> True) =
+  match x with
+  | Inl v -> v
+
 (* Specification of the body that always continues *)
 unfold
-let repeat_body_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (either index a) =
-  iprepost (pre i) (fun hist r ->
-    match r with
-    | Ocv tr (Inl j) -> pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr)
-    | _ -> False
-  )
+let repeat_body_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (either index unit) =
+  iprepost (pre i) (fun hist r -> terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))
 
 unfold
 let sotrace_refines (s : sotrace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
 unfold
-let repeat_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp a =
-  iprepost (pre i) (fun hist r ->
-    match r with
-    | Odv s -> exists (trs : stream trace). (forall n. inv (trs n)) /\ s `sotrace_refines` trs
-    | _ -> False
-  )
+let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
+  iprepost (pre i) (fun hist r -> diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs))
 
-// TODO MOVE
-let lval #a #b (x : either a b) : Pure a (requires Inl? x) (ensures fun _ -> True) =
-  match x with
-  | Inl v -> v
-
-let repeat_inv_proof #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) :
-  Lemma (i_iter (repeat_body_inv #index #a pre inv) i `ile` repeat_inv #index #a pre inv i)
-= introduce forall j. iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) `ile` repeat_inv #index #a pre inv j
+let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) :
+  Lemma (i_iter (repeat_body_inv pre inv) i `ile` repeat_inv pre inv i)
+= introduce forall j. iter_expand (repeat_body_inv pre inv) j (fun j -> repeat_inv pre inv j) `ile` repeat_inv pre inv j
   with begin
-    // assume (iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) `ile` repeat_inv #index #a pre inv j)
-    // assert_norm (iter_expand (repeat_body_inv #index #a pre inv) j (fun j -> repeat_inv #index #a pre inv j) == i_bind (repeat_body_inv #index #a pre inv j) (iter_expand_cont (fun k -> repeat_inv #index #a pre inv k))) ;
-    // assume (i_bind (repeat_body_inv #index #a pre inv j) (iter_expand_cont (fun k -> repeat_inv #index #a pre inv k)) `ile` repeat_inv #index #a pre inv j)
-    introduce forall post hist. repeat_inv #index #a pre inv j post hist ==> iter_expand (repeat_body_inv #index #a pre inv) j (fun k -> repeat_inv #index #a pre inv k) post hist
+    introduce forall post hist. repeat_inv pre inv j post hist ==> iter_expand (repeat_body_inv pre inv) j (fun k -> repeat_inv pre inv k) post hist
     with begin
-      introduce repeat_inv #index #a pre inv j post hist ==> iter_expand (repeat_body_inv #index #a pre inv) j (fun k -> repeat_inv #index #a pre inv k) post hist
+      introduce repeat_inv pre inv j post hist ==> iter_expand (repeat_body_inv pre inv) j (fun k -> repeat_inv pre inv k) post hist
       with _. begin
+        calc (==) {
+          iter_expand (repeat_body_inv pre inv) j (fun k -> repeat_inv pre inv k) post hist ;
+          == { _ by (compute ()) }
+          i_bind (repeat_body_inv pre inv j) (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist ;
+          == { _ by (compute ()) }
+          repeat_body_inv pre inv j (i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist) hist ;
+        } ;
         assert (pre j hist) ;
-        introduce forall r. Ocv? r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> iter_expand_cont (fun k -> repeat_inv pre inv k) (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)
+        introduce forall (r : orun (either index unit)). terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
         with begin
-          admit ()
-        end ;
-        // _ by (compute () ; explode () ; dump "h")
-        admit ()
+          introduce terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
+          with _. begin
+            match r with
+            | Ocv tr (Inl j) ->
+              calc (==) {
+                i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r ;
+                == {}
+                iter_expand_cont (fun k -> repeat_inv pre inv k) (Inl j) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
+                == { _ by (compute ()) }
+                i_bind i_tau (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
+                == { _ by (compute ()) }
+                i_tau (i_bind_post (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist)) (rev_acc (to_trace tr) hist) ;
+                == { _ by (compute ()) }
+                i_bind_post (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist) (Ocv [ None ] ()) ;
+                == { _ by (compute ()) }
+                repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc [] (rev_acc (to_trace tr) hist)) ;
+                == { _ by (compute ()) }
+                repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
+              } ;
+              admit () // Now lemma on repeat_inv itself
+          end
+        end
       end
     end
   end ;
-  i_iter_coind (repeat_body_inv #index #a pre inv) i (fun j -> repeat_inv #index #a pre inv j)
+  i_iter_coind (repeat_body_inv pre inv) i (fun j -> repeat_inv pre inv j)
