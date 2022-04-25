@@ -72,24 +72,29 @@ let let_intro () : Tac unit =
       iterAll (fun () -> ignore (intro ()); ignore (intro ()); grewrite_eq (intro ()))
     )
 
-let rewrite_lemma n m : Tac unit =
+let get_binder (n:nat) : Tac binder =
+  match (List.Tot.nth (cur_binders ()) n) with
+  | Some y -> y
+  | None -> fail "no binder"
+
+let rewrite_lemma (n:nat) (m:nat) : Tac unit =
     (** n is for the index of the wp
         m is for the index of the pure_result:unit **)
-    let zz = nth_binder n in
-    let zz' = nth_binder m in
+    let zz = get_binder n in
+    let zz' = get_binder m in
     let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
     mapply (binder_to_term b');
     ignore (trytac (fun () -> clear b'; clear zz; clear zz'))
     
-let rewrite_lemma_2 n m m' : Tac unit =
+let rewrite_lemma_2 (n:nat) (m:nat) (m':nat) : Tac unit =
     (** n is for the index of the wp
         m is for the index of the pure_result:unit **)
-    let zz = nth_binder n in
-    let zz' = nth_binder m in
-    let zz'' = nth_binder m' in
+    let zz = get_binder n in
+    let zz' = get_binder m in
+    let zz'' = get_binder m' in
     let b' = instantiate (binder_to_term zz) (binder_to_term zz') in
     let b'' = instantiate (binder_to_term b') (binder_to_term zz'') in
-    ignore (trytac (fun () -> mapply (binder_to_term b'')));
+    mapply (binder_to_term b'');
     ignore (trytac (fun () -> clear b'; clear zz; clear zz'; clear zz''; clear b''))
  
     // by (explode (); bump_nth 3; 

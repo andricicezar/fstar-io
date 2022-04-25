@@ -1,7 +1,11 @@
 module DM
 
-include Free.IO
+include IO.Sig
 include DM.IO
 include DM.IIO
-include DM.MIO
-include DM.MIIO
+include DM.IIO.Primitives
+include TC.Trivialize.IIOwp
+include TC.Weaken.IIOwp
+include TC.Instrumentable.IIOwp
+include TC.MLify.IIOwp
+include TC.Monitorable.Hist
