@@ -388,39 +388,39 @@ let i_tau = _i_tau
 (** Specification of iter using an impredicative encoding *)
 
 unfold
-let iter_expand_cont (#index : Type0) (#b : Type0) (k : index -> iwp b) (x : liftType u#a (either index b)) : iwp b =
-  match unLift x with
+let iter_expand_cont (#index : Type0) (#a : Type0) (k : index -> iwp a) (x : either index a) : iwp a =
+  match x with
   | Inl j -> i_bind i_tau (fun _ -> k j)
   | Inr y -> i_ret y
 
-let iter_expand (#index : Type0) (#b : Type0) (w : index -> iwp (liftType u#a (either index b))) (i : index) (k : index -> iwp b) : iwp b =
+let iter_expand (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) (k : index -> iwp a) : iwp a =
   i_bind (w i) (iter_expand_cont k)
 
-let iter_expand_mono (#index : Type0) (#b : Type0) (w w' : index -> iwp (liftType u#a (either index b))) (i : index) (k : index -> iwp b) :
+let iter_expand_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index a)) (i : index) (k : index -> iwp a) :
   Lemma
     (requires w i `ile` w' i)
     (ensures iter_expand w i k `ile` iter_expand w' i k)
 = ()
 
-let iter_expand_mono_k (#index : Type0) (#b : Type0) (w : index -> iwp (liftType u#a (either index b))) (i : index) (k k' : index -> iwp b) :
+let iter_expand_mono_k (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) (k k' : index -> iwp a) :
   Lemma
     (requires forall j. k j `ile` k' j)
     (ensures iter_expand w i k `ile` iter_expand w i k')
 = introduce forall x. iter_expand_cont k x `ile` iter_expand_cont k' x
   with begin
-    match unLift x with
+    match x with
     | Inl j -> ()
     | Inr y -> ()
   end ;
   i_bind_mono (w i) (iter_expand_cont k) (iter_expand_cont k')
 
-let i_iter (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) : iwp a =
+let i_iter (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) : iwp a =
   fun post hist ->
     exists (it : index -> iwp a).
       (forall j. iter_expand w j it `ile` it j) /\
       it i post hist
 
-let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) :
+let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
   Lemma (iter_expand w i (i_iter w) `ile` i_iter w i)
 = introduce forall post hist. i_iter w i post hist ==> iter_expand w i (i_iter w) post hist
   with begin
@@ -435,13 +435,13 @@ let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a 
     end
   end
 
-let i_iter_coind (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) w' :
+let i_iter_coind (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) w' :
   Lemma
     (requires forall j. iter_expand w j w' `ile` w' j)
     (ensures i_iter w i `ile` w' i)
 = ()
 
-let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (either index a))) (i : index) :
+let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
   Lemma (i_iter w i `ile` iter_expand w i (i_iter w))
 = introduce forall j. iter_expand w j (fun j -> iter_expand w j (i_iter w)) `ile` iter_expand w j (i_iter w)
   with begin
@@ -453,13 +453,13 @@ let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (liftType u#a (e
   end ;
   i_iter_coind w i (fun j -> iter_expand w j (i_iter w))
 
-let i_iter_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a (either index a))) (i : index) :
+let i_iter_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index a)) (i : index) :
   Lemma
     (requires forall j. w j `ile` w' j)
     (ensures i_iter w i `ile` i_iter w' i)
 = ()
 
-let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a (either index a))) (i : index) :
+let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index a)) (i : index) :
   Lemma
     (requires forall j. w j `ieq` w' j)
     (ensures i_iter w i `ieq` i_iter w' i)
@@ -501,14 +501,13 @@ let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun 
   | Odv p -> p
 
 (** Loop invariants *)
-// TODO Perhaps we should not expose the liftType to the user
 
 (* Specification of the body that always continues *)
 unfold
-let repeat_body_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (liftType u#a (either index a)) =
+let repeat_body_inv #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (either index a) =
   iprepost (pre i) (fun hist r ->
     match r with
-    | Ocv tr (LiftTy (Inl j)) -> pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr)
+    | Ocv tr (Inl j) -> pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr)
     | _ -> False
   )
 
@@ -541,7 +540,7 @@ let repeat_inv_proof #index #a (pre : index -> i_pre) (inv : trace -> Type0) (i 
       introduce repeat_inv #index #a pre inv j post hist ==> iter_expand (repeat_body_inv #index #a pre inv) j (fun k -> repeat_inv #index #a pre inv k) post hist
       with _. begin
         assert (pre j hist) ;
-        introduce forall r. Ocv? r /\ Inl? (unLift (result r)) /\ pre (lval (unLift (result r))) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> iter_expand_cont (fun k -> repeat_inv pre inv k) (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)
+        introduce forall r. Ocv? r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> iter_expand_cont (fun k -> repeat_inv pre inv k) (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)
         with begin
           admit ()
         end ;

@@ -45,7 +45,7 @@ let iiodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iiodiv_dm a w1) (g : iio
 let iiodiv_call (ac : iio_sig.act) (x : iio_sig.arg ac) : iiodiv_dm (iio_sig.res x) (iiodiv_act ac x) =
   dm_call ac x
 
-let iiodiv_iter #index #b #w (f : (j : index) -> iiodiv_dm (liftType (either index b)) (w j)) (i : index) : iiodiv_dm b (i_iter w i) =
+let iiodiv_iter #index #a #w (f : (j : index) -> iiodiv_dm (either index a) (w j)) (i : index) : iiodiv_dm a (i_iter w i) =
   dm_iter f i
 
 [@@allow_informative_binders]
@@ -75,4 +75,4 @@ let iodiv_to_iiodiv #a #w (f : (eqtype_as_type unit -> IODIV a w)) : iiodiv_dm a
 
 (** Actions *)
 
-// TODO
+// TODO Mostly lifted from IODIV?

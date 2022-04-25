@@ -44,7 +44,7 @@ let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv
 let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (iodiv_act ac x) =
   dm_call ac x
 
-let iodiv_iter #index #b #w (f : (j : index) -> iodiv_dm (liftType (either index b)) (w j)) (i : index) : iodiv_dm b (i_iter w i) =
+let iodiv_iter #index #a #w (f : (j : index) -> iodiv_dm (either index a) (w j)) (i : index) : iodiv_dm a (i_iter w i) =
   dm_iter f i
 
 [@@allow_informative_binders]
@@ -82,5 +82,5 @@ let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) 
 by (explode ())
 = act_call Close fd
 
-let iter #index #b #w (f : (j : index) -> IODIV (liftType (either index b)) (w j)) (i : index) : IODIV b (i_iter w i) =
+let iter #index #a #w (f : (j : index) -> IODIV (either index a) (w j)) (i : index) : IODIV a (i_iter w i) =
   IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)
