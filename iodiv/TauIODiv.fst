@@ -84,3 +84,16 @@ by (explode ())
 
 let iter #index #a #w (f : (j : index) -> IODIV (either index a) (w j)) (i : index) : IODIV a (i_iter w i) =
   IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)
+
+let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) :
+  IODiv
+    unit
+    (requires fun hist -> pre hist)
+    (ensures fun hist r ->
+      diverges r /\
+      (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
+    )
+= admit () ;
+  repeat_inv_proof #unit (fun _ -> pre) inv () ;
+  // It's odd that I have to give the spec by hand.
+  iter #unit #unit #(fun _ -> _i_bind (iprepost #unit (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (fun _ -> _i_ret #(either unit unit) (Inl ()))) (fun _ -> body () ; Inl ()) ()
