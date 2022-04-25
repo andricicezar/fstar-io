@@ -75,4 +75,5 @@ let iodiv_to_iiodiv #a #w (f : (eqtype_as_type unit -> IODIV a w)) : iiodiv_dm a
 
 (** Actions *)
 
-// TODO Mostly lifted from IODIV?
+let get_hist () : IIODiv history (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [] /\ result r == hist)
+= IIODIV?.reflect (iiodiv_call GetTrace ())
