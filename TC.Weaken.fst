@@ -4,6 +4,7 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
+open TC.ML
 open TC.Checkable
 open TC.Export
 open TC.Trivialize
@@ -16,11 +17,11 @@ open TC.Trivialize
 **)
 class weak (t:Type) = { mldummy: unit }
 
-instance weak_totarrow t1 t2 {| ml t1 |} {| ml t2 |} : weak (t1 -> Tot t2) =
+instance weak_totarrow t1 t2 {| mlfo t1 |} {| mlfo t2 |} : weak (t1 -> Tot t2) =
   { mldummy = () }
 
 instance weak_purearrow 
-  t1 t2 {| ml t1 |} {| ml t2 |}
+  t1 t2 {| mlfo t1 |} {| mlfo t2 |}
   (pre:t1 -> Type0)
   (post:t1 -> t2 -> Type0) : 
   weak ((x:t1) -> Pure t2 (pre x) (post x)) =

@@ -6,8 +6,6 @@ open FStar.Tactics.Typeclasses
 open Common
 open IO.Sig 
 
-(** why do I need action_type **)
-//type action_type = (cmd : io_cmds) & (io_sig.args cmd)
 type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
 
 unfold

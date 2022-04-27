@@ -4,85 +4,54 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
+open TC.ML
 open TC.Checkable
-
-(** Principles for ml/import/export:
-1. they work only with basic types (no functions).
-2. We need to be really careful with what we say it is `ml` since
-   F* does not check any restrictions.
-**)
-
-(** ** `ml` class *)
-
-class ml (t:Type) = { mldummy : unit }
-
-// Basic MIO types
-instance ml_unit : ml unit = { mldummy = () }
-instance ml_bool : ml bool = { mldummy = () }
-instance ml_int : ml int = { mldummy = () }
-instance ml_uint8 : ml UInt8.t = { mldummy = () }
-instance ml_string : ml string = { mldummy = () }
-instance ml_bytes : ml Bytes.bytes = { mldummy = () }
-instance ml_open_flag : ml open_flag = { mldummy = () } 
-instance ml_socket_bool_option : ml socket_bool_option = { mldummy = () }
-instance ml_file_descr : ml file_descr = { mldummy = () }
-instance ml_zfile_perm : ml zfile_perm = { mldummy = () }
-instance ml_pair t1 t2 {| ml t1 |} {| ml t2 |} : ml (t1 * t2) = { mldummy = () }
-instance ml_pair_2 t1 t2 t3 {| ml t1 |} {| ml t2 |} {| ml t3 |} : ml (t1 * t2 * t3) = { mldummy = () }
-instance ml_pair_3 t1 t2 t3 t4 {| ml t1 |} {| ml t2 |} {| ml t3 |} {| ml t4 |} : ml (t1 * t2 * t3 * t4) = { mldummy = () }
-instance ml_option t1 {| ml t1 |} : ml (option t1) = { mldummy = () }
-instance ml_maybe t1 {| ml t1 |} : ml (maybe t1) = { mldummy = () }
-instance ml_list t1 {| ml t1 |} : ml (list t1) = { mldummy = () }
-(** ** Arrows are not ml! **)
-(**: Arrows are not ml, because in F* they have an associated effect, 
-concept that does not exists in ML. **)
-
 
 (** *** `exportable` and `importable` classes *)
 (** One thing we learned is that our import function should not throw
 errors because we need to use it in writing specifications, therefore
 we want an import function of type t1 -> option t2.
 
-ml types can be always imported safely. 'safely' must be understood as
+mlfo types can be always imported safely. 'safely' must be understood as
 there is no checking that can fail. Therefore, I added
 safe_import of type t1 -> t2. **)
 
 class exportable (t : Type) =
-  { etype : Type; export : t -> etype; ml_etype : ml etype }
+  { etype : Type; export : t -> etype; cetype : mlfo etype }
 class importable (t : Type) =
-  { itype : Type; import : itype -> option t; ml_itype : ml itype }
+  { itype : Type; import : itype -> option t; citype : mlfo itype }
 
 class safe_importable (t : Type) =
-  { sitype : Type; safe_import : sitype -> t; ml_sitype : ml sitype }
+  { sitype : Type; safe_import : sitype -> t; csitype : mlfo sitype }
 
-let mk_exportable (#t1 t2 : Type) {| ml t2 |} (exp : t1 -> t2) : exportable t1 =
-  { etype = t2; export = exp;  ml_etype = solve }
+let mk_exportable (#t1 t2 : Type) {| mlfo t2 |} (exp : t1 -> t2) : exportable t1 =
+  { etype = t2; export = exp;  cetype = solve }
 
 let mk_importable
-  (t1 #t2 : Type) {| ml t1 |}
+  (t1 #t2 : Type) {| mlfo t1 |}
   (imp : t1 -> option t2) :
   Tot (importable t2) =
-  { itype = t1; import = imp; ml_itype = solve }
+  { itype = t1; import = imp; citype = solve }
 
 let mk_safe_importable
-  (t1 #t2 : Type) {| ml t1 |}
+  (t1 #t2 : Type) {| mlfo t1 |}
   (imp : t1 -> t2) :
   Tot (safe_importable t2) =
-  { sitype = t1; safe_import = imp; ml_sitype = solve }
+  { sitype = t1; safe_import = imp; csitype = solve }
 
 (** Are this two needed? **)
-instance ml_exportable (#t : Type) (d : exportable t) : ml (d.etype) =
-  d.ml_etype
-instance ml_importable (#t : Type) (d : importable t) : ml (d.itype) =
-  d.ml_itype
+instance ml_exportable (#t : Type) (d : exportable t) : mlfo (d.etype) =
+  d.cetype
+instance ml_importable (#t : Type) (d : importable t) : mlfo (d.itype) =
+  d.citype
 
-instance exportable_ml t {| ml t |} : exportable t =
+instance exportable_ml t {| mlfo t |} : exportable t =
   mk_exportable t (fun x -> x)
-instance safe_importable_ml t {| ml t |} : safe_importable t =
+instance safe_importable_ml t {| mlfo t |} : safe_importable t =
   mk_safe_importable t (fun x -> x)
 
 instance importable_safe_importable t {| d:safe_importable t |} : importable t =
-  mk_importable d.sitype #t #d.ml_sitype
+  mk_importable d.sitype #t #d.csitype
     (fun (x:d.sitype) -> (Some (safe_import x)) <: option t)
 
 (**

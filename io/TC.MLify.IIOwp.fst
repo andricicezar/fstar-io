@@ -6,9 +6,10 @@ open FStar.All
 open FStar.Classical.Sugar
 
 open Common
+open TC.ML
+open TC.ML.HO
 open TC.Export
-include TC.MLify
-open TC.Instrumentable
+open TC.Monitorable.Hist
 
 open Free
 open IO.Sig
@@ -16,37 +17,13 @@ open DM.IIO
 
 exception Something_went_really_bad
 
-(** the_p is used at the spec level and they are used to instantiate later the 
-    refinement of the DM: wp `hist_ord` theta m. By instantiating the refinement, we get:
-    forall h. True ==> theta m (the_p ()) h, thus getting theta m. 
-    It is important that the_p is defined as such to get True as pre-condition. **)
-let the_p #a () : hist_post #event a = fun _ _ -> True
-
-let rec skip_partial_calls (tree:iio 'a) (_:squash (forall h. dm_iio_theta tree (the_p ()) h)) : ML 'a =
-  match tree with
-  | Return y -> y
-  | PartialCall pre k -> begin
-    (** The intuition here is that the pre-condition is true,
-    thus, all asserts are true **)
-   assert (dm_iio_theta tree (the_p ()) []);
-   assert pre;
-   skip_partial_calls (k ()) ()
-  end
-  (** during extraction, Free.IO.Call is replaced with an actual
-  implementation of the commands, therefore, the `Call` constructor
-  does not exist **)
-  | _ -> FStar.All.raise Something_went_really_bad
-
-
 instance mlifyable_iiowp
   t1 t2 {| ml t1 |} {| ml t2 |} :
   Tot (mlifyable (t1 -> IIOwp t2 (trivial_hist ()))) =
   mk_mlifyable
     #(t1 -> IIOwp t2 (trivial_hist ()))
-    (t1 -> ML t2)
-    (fun f x -> 
-     let tree : dm_iio t2 (trivial_hist ()) = reify (f x) in
-     skip_partial_calls tree ())
+    (t1 -> MIIO t2)
+    (fun f x -> f x)
 
 (** Ideas to improve mlifyable_iio_miio:
 1. What if instead of Tot, we use Ex, to be able to internalize try_catch.
@@ -58,17 +35,35 @@ instance mlifyable_iiowp
      try/with.
    Maybe to not create more confusion & to not tie things too much to F*,
    it is better to not use Ex since it may be just a hack (check with Catalin). 
-2. can I move enforcing the post-condition here? It should be possible.
 **)
 
 instance mlifyable_inst_iiowp
-  t1 t3
-  {| d1:instrumentable t1 |} {| d2:ml t3 |} :
-  Tot (mlifyable (t1 -> IIOwp t3 (trivial_hist ()))) =
+  t1 t2
+  {| d1:instrumentable t1 |} {| d2:ml t2 |} :
+  Tot (mlifyable (t1 -> IIOwp t2 (trivial_hist ()))) =
   mk_mlifyable
     #_
-    (d1.start_type -> ML t3)
-    #(ml_ml_arrow_1 d1.start_type t3 #d1.start_type_c #d2)
-    (fun (p:t1 -> IIOwp t3 (trivial_hist ())) (ct:d1.start_type) ->
-     let tree : dm_iio t3 (trivial_hist ()) = reify (p (d1.instrument ct)) in
-     skip_partial_calls tree ())
+    (d1.inst_type -> MIIO t2)
+    #(ml_arrow_miio d1.inst_type t2 #(ML_INST d1.cinst_type) #d2)
+    (fun (p:t1 -> IIOwp t2 (trivial_hist ())) (ct:d1.inst_type) ->
+      p (d1.strengthen ct))
+
+
+class mlifyable_guarded (a b:Type) pre post pi =
+  { cmlifyable : mlifyable ((x:a) -> IIO b (pre x) (post x));
+    cpi : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
+  
+instance hooooo
+  a b c fpre fpost cpre cpost pi 
+  {| d0: ml (maybe c) |}
+  {| d1:mlifyable_guarded a b fpre fpost pi |}
+  {| d2:monitorable_post (fun x -> cpre) (fun x -> cpost) pi |} : 
+  instrumentable ((x:a -> IIO b (fpre x) (fpost x)) -> DM.IIO.IIO (maybe c) cpre cpost) =
+  {
+    inst_type = d1.cmlifyable.matype -> IIOpi (maybe c) pi;
+    cinst_type = ml_instrumented_iio d1.cmlifyable.matype (maybe c) #(ML_ARROW d1.cmlifyable.cmatype) #d0 pi;
+    strengthen = (fun (ctx:(d1.cmlifyable.matype -> IIOpi (maybe c) pi)) -> 
+      (fun (f:(x:a -> IIO b (fpre x) (fpost x))) -> 
+      
+        TC.Instrumentable.IIOwp.enforce_post #(d1.cmlifyable.matype) #c pi (fun x -> cpre) (fun x -> cpost) #d2 ctx (d1.cmlifyable.mlify f) <: IIO (maybe c) cpre cpost))
+  }

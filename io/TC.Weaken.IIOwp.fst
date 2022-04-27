@@ -10,6 +10,7 @@ open FStar.Tactics.Typeclasses
 open Common
 open IO.Sig
 open DM.IIO
+open TC.ML
 open TC.Export
 open TC.Trivialize.IIOwp
 include TC.Weaken
@@ -18,7 +19,7 @@ instance weak_IIOwp
   t1 t2 
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> t2 -> trace -> Type0) 
-  {| ml t1 |} {| ml t2 |} : 
+  {| mlfo t1 |} {| mlfo t2 |} : 
   weak ((x:t1) -> IIOwp t2 (pre_post_as_wp (pre x) (post x))) =
   { mldummy = () }
 
