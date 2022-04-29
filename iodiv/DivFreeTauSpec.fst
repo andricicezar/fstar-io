@@ -135,7 +135,6 @@ let i_post_resp_eutt #a (p : i_post a) r r' :
     (ensures p r')
 = ()
 
-unfold
 let i_pre_le (p q : i_pre) =
   forall hist. p hist ==> q hist
 
@@ -159,11 +158,8 @@ let iwp_monotonic_inst #a (w : iwp a) p q hist :
     (ensures w q hist)
 = ()
 
-unfold
-let _ile #a (w w' : iwp a) =
+let ile #a (w w' : iwp a) =
   forall p. w' p `i_pre_le` w p
-
-let ile = _ile
 
 let ieq #a (w w' : iwp a) =
   w `ile` w' /\ w' `ile` w
@@ -177,11 +173,8 @@ let ile_trans #a (w1 w2 w3 : iwp a) :
 let as_iwp #a (w : iwp' a) : Pure (iwp a) (requires iwp_monotonic w) (ensures fun r -> r == w) =
   w
 
-unfold
-let _i_ret #a (x : a) : iwp a =
+let i_ret #a (x : a) : iwp a =
   as_iwp (fun post hist -> post (Ocv [] x))
-
-let i_ret = _i_ret
 
 let ishift_post' #a (tr : otrace) (post : i_post a) : i_post' a =
   fun r ->
@@ -230,14 +223,11 @@ let ishift_post_app #a t t' (p : i_post a) :
     | Odv st -> stream_prepend_app t' t st
   end
 
-
 let i_bind_post' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
     match r with
     | Ocv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
     | Odv st -> post (Odv st)
-
-
 
 let i_bind_post #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
   introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
@@ -283,14 +273,7 @@ let i_bind_post_mono #a #b (wf : a -> iwp b) p q hist :
     | Odv s -> ()
   end
 
-private
-let postprocess_i_bind () : Tac unit =
-  norm [delta_only [`%as_iwp; `%i_bind_post;`%i_bind_post';`%ishift_post;`%ishift_post']; iota]; 
-  trefl ()
-
-[@@ (postprocess_with postprocess_i_bind)]
-unfold
-let _i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
+let i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
   introduce forall p q hist. p `i_post_le` q ==> i_bind_post wf p hist `i_post_le` i_bind_post wf q hist
   with begin
     move_requires (i_bind_post_mono wf p q) hist
@@ -298,8 +281,6 @@ let _i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp 
   as_iwp (fun post hist ->
     w (i_bind_post wf post hist) hist
   )
-
-let i_bind = _i_bind
 
 let i_bind_mono #a #b (w : iwp a) (wf wf' : a -> iwp b) :
   Lemma
@@ -389,11 +370,8 @@ unfold
 let iwite #a (w1 w2 : iwp a) (b : bool) : iwp a =
   fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)
 
-unfold
-let _i_tau : iwp unit =
+let i_tau : iwp unit =
   as_iwp (fun post hist -> post (Ocv [ None ] ()))
-
-let i_tau = _i_tau
 
 (** Specification of iter using an impredicative encoding *)
 
@@ -410,7 +388,7 @@ let iter_expand_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (either 
   Lemma
     (requires w i `ile` w' i)
     (ensures iter_expand w i k `ile` iter_expand w' i k)
-= admit () (** this was working before adding the post-processing **)
+= ()
 
 let iter_expand_mono_k (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) (k k' : index -> iwp a) :
   Lemma
@@ -467,7 +445,7 @@ let i_iter_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index
   Lemma
     (requires forall j. w j `ile` w' j)
     (ensures i_iter w i `ile` i_iter w' i)
-= admit () (** this was working before adding the post-processing **)
+= ()
 
 let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index a)) (i : index) :
   Lemma
@@ -530,11 +508,8 @@ unfold
 let sotrace_refines (s : sotrace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
-unfold
-let _repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
+let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
   iprepost (pre i) (fun hist r -> diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs))
-
-let repeat_inv = _repeat_inv
 
 let repeat_inv_inst #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) (post : i_post unit) hist (s : sotrace) (trs : stream trace) :
   Lemma (requires repeat_inv pre inv i post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs) (ensures post (Odv s))
@@ -655,3 +630,17 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
     end
   end ;
   i_iter_coind (repeat_body_inv pre inv) i (fun j -> repeat_inv pre inv j)
+
+(** Unfolding things so that they compute better now that the proofs are done. *)
+
+let pp_unfold l () : Tac unit =
+  norm [delta_only l] ; trefl ()
+
+[@@ (postprocess_with (pp_unfold [ `%ile ; `%i_post_le ]))]
+unfold let _ile = ile
+
+[@@ (postprocess_with (pp_unfold [ `%i_ret ]))]
+unfold let _i_ret = i_ret
+
+[@@ (postprocess_with (pp_unfold [ `%i_bind ; `%i_bind_post ; `%i_bind_post' ]))]
+unfold let _i_bind = i_bind
