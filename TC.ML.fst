@@ -31,7 +31,6 @@ instance mlfo_pair t1 t2 {| mlfo t1 |} {| mlfo t2 |} : mlfo (t1 * t2) = { mlfodu
 instance mlfo_pair_2 t1 t2 t3 {| mlfo t1 |} {| mlfo t2 |} {| mlfo t3 |} : mlfo (t1 * t2 * t3) = { mlfodummy = () }
 instance mlfo_pair_3 t1 t2 t3 t4 {| mlfo t1 |} {| mlfo t2 |} {| mlfo t3 |} {| mlfo t4 |} : mlfo (t1 * t2 * t3 * t4) = { mlfodummy = () }
 instance mlfo_option t1 {| mlfo t1 |} : mlfo (option t1) = { mlfodummy = () }
-instance mlfo_maybe t1 {| mlfo t1 |} : mlfo (maybe t1) = { mlfodummy = () }
 instance mlfo_list t1 {| mlfo t1 |} : mlfo (list t1) = { mlfodummy = () }
 
 (** ** Arrows **)
@@ -74,3 +73,5 @@ type ml (t:Type) =
 | ML_FO : mlfo t -> ml t
 | ML_ARROW : ml_arrow t -> ml t
 | ML_INST : ml_instrumented t -> ml t
+
+instance mlfo_maybe t1 {| ml t1 |} : mlfo (maybe t1) = { mlfodummy = () }

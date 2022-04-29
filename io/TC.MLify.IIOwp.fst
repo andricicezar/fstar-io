@@ -49,21 +49,3 @@ instance mlifyable_inst_iiowp
       p (d1.strengthen ct))
 
 
-class mlifyable_guarded (a b:Type) pre post pi =
-  { cmlifyable : mlifyable ((x:a) -> IIO b (pre x) (post x));
-    cpi : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
-  
-instance hooooo
-  a b c fpre fpost cpre cpost pi 
-  {| d0: ml (maybe c) |}
-  {| d1:mlifyable_guarded a b fpre fpost pi |}
-  {| d2:monitorable_post (fun x -> cpre) (fun x -> cpost) pi |} : 
-  instrumentable ((x:a -> IIO b (fpre x) (fpost x)) -> DM.IIO.IIO (maybe c) cpre cpost) =
-  {
-    inst_type = d1.cmlifyable.matype -> IIOpi (maybe c) pi;
-    cinst_type = ml_instrumented_iio d1.cmlifyable.matype (maybe c) #(ML_ARROW d1.cmlifyable.cmatype) #d0 pi;
-    strengthen = (fun (ctx:(d1.cmlifyable.matype -> IIOpi (maybe c) pi)) -> 
-      (fun (f:(x:a -> IIO b (fpre x) (fpost x))) -> 
-      
-        TC.Instrumentable.IIOwp.enforce_post #(d1.cmlifyable.matype) #c pi (fun x -> cpre) (fun x -> cpost) #d2 ctx (d1.cmlifyable.mlify f) <: IIO (maybe c) cpre cpost))
-  }
