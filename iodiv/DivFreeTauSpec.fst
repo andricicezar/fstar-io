@@ -646,5 +646,5 @@ unfold let _ile = ile
 [@@ (postprocess_with (pp_unfold [ `%i_ret ; `%as_iwp ]))]
 unfold let _i_ret = i_ret
 
-[@@ (postprocess_with (pp_unfold [ `%i_bind ; `%i_bind_post ; `%i_bind_post' ; `%as_iwp ]))]
+[@@ (postprocess_with (pp_unfold [ `%i_bind ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
 unfold let _i_bind = i_bind
