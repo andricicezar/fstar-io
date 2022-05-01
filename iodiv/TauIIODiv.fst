@@ -72,70 +72,71 @@ let rec m_io_to_iio #a (c : m io_sig a) : m iio_sig a =
 
 let rec theta_io_to_iio #a (c : m io_sig a) :
   Lemma (theta iodiv_act c `ieq` theta iiodiv_act (m_io_to_iio c))
-= match c with
-  | Ret x -> ()
+= // match c with
+  // | Ret x -> ()
 
-  | Req pre k ->
+  // | Req pre k ->
 
-    introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
-    with begin
-      theta_io_to_iio (k x)
-    end
+  //   introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
+  //   with begin
+  //     theta_io_to_iio (k x)
+  //   end
 
-  | Iter index d g i k ->
+  // | Iter index d g i k ->
 
-    assert_norm (m_io_to_iio (Iter index d g i k) == Iter index d (fun j ->  m_io_to_iio (g j)) i (fun y -> m_io_to_iio (k y))) ;
+  //   assert_norm (m_io_to_iio (Iter index d g i k) == Iter index d (fun j ->  m_io_to_iio (g j)) i (fun y -> m_io_to_iio (k y))) ;
 
-    introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
-    with begin
-      theta_io_to_iio (k x)
-    end ;
+  //   introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
+  //   with begin
+  //     theta_io_to_iio (k x)
+  //   end ;
 
-    introduce forall j. theta iodiv_act (g j) `ieq` theta iiodiv_act (m_io_to_iio (g j))
-    with begin
-      theta_io_to_iio (g j)
-    end ;
+  //   introduce forall j. theta iodiv_act (g j) `ieq` theta iiodiv_act (m_io_to_iio (g j))
+  //   with begin
+  //     theta_io_to_iio (g j)
+  //   end ;
 
-    calc (ieq) {
-      theta iodiv_act c ;
-      == {}
-      theta iodiv_act (Iter index d g i k) ;
-      == { _ by (compute ()) }
-      i_bind (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iodiv_act (k y)) ;
-      `ieq` { i_bind_cong (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iodiv_act (k y)) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) }
-      i_bind (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
-      `ieq` { i_iter_lift_cong (fun j -> theta iodiv_act (g j)) (fun j -> theta iiodiv_act (m_io_to_iio (g j))) i }
-      i_bind (i_iter_lift (fun j -> theta iiodiv_act (m_io_to_iio (g j))) i) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
-      `ieq` { _ by (compute ()) }
-      theta iiodiv_act (Iter index d (fun j ->  m_io_to_iio (g j)) i (fun y -> m_io_to_iio (k y))) ;
-      == {}
-      theta iiodiv_act (m_io_to_iio c) ;
-    }
+  //   calc (ieq) {
+  //     theta iodiv_act c ;
+  //     == {}
+  //     theta iodiv_act (Iter index d g i k) ;
+  //     == { _ by (compute ()) }
+  //     i_bind (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iodiv_act (k y)) ;
+  //     `ieq` { i_bind_cong (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iodiv_act (k y)) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) }
+  //     i_bind (i_iter_lift (fun j -> theta iodiv_act (g j)) i) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
+  //     `ieq` { i_iter_lift_cong (fun j -> theta iodiv_act (g j)) (fun j -> theta iiodiv_act (m_io_to_iio (g j))) i }
+  //     i_bind (i_iter_lift (fun j -> theta iiodiv_act (m_io_to_iio (g j))) i) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
+  //     `ieq` { _ by (compute ()) }
+  //     theta iiodiv_act (Iter index d (fun j ->  m_io_to_iio (g j)) i (fun y -> m_io_to_iio (k y))) ;
+  //     == {}
+  //     theta iiodiv_act (m_io_to_iio c) ;
+  //   }
 
-  | Call ac x k ->
+  // | Call ac x k ->
 
-    assert_norm (m_io_to_iio (Call ac x k) == Call #iio_sig ac x (fun y -> m_io_to_iio (k y))) ;
+  //   assert_norm (m_io_to_iio (Call ac x k) == Call #iio_sig ac x (fun y -> m_io_to_iio (k y))) ;
 
-    introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
-    with begin
-      theta_io_to_iio (k x)
-    end ;
+  //   introduce forall x. theta iodiv_act (k x) `ieq` theta iiodiv_act (m_io_to_iio (k x))
+  //   with begin
+  //     theta_io_to_iio (k x)
+  //   end ;
 
-    calc (ieq) {
-      theta iodiv_act c ;
-      == {}
-      theta iodiv_act (Call ac x k) ;
-      == { _ by (compute ()) }
-      i_bind (iodiv_act ac x) (fun y -> theta iodiv_act (k y)) ;
-      `ieq` { i_bind_cong (iodiv_act ac x) (fun y -> theta iodiv_act (k y)) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) }
-      i_bind (iodiv_act ac x) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
-      `ieq` {}
-      i_bind (iiodiv_act ac x) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
-      `ieq` {}
-      theta iiodiv_act (Call #iio_sig ac x (fun y -> m_io_to_iio (k y))) ;
-      == {}
-      theta iiodiv_act (m_io_to_iio c) ;
-    }
+  //   calc (ieq) {
+  //     theta iodiv_act c ;
+  //     == {}
+  //     theta iodiv_act (Call ac x k) ;
+  //     == { _ by (compute ()) }
+  //     i_bind (iodiv_act ac x) (fun y -> theta iodiv_act (k y)) ;
+  //     `ieq` { i_bind_cong (iodiv_act ac x) (fun y -> theta iodiv_act (k y)) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) }
+  //     i_bind (iodiv_act ac x) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
+  //     `ieq` {}
+  //     i_bind (iiodiv_act ac x) (fun y -> theta iiodiv_act (m_io_to_iio (k y))) ;
+  //     `ieq` {}
+  //     theta iiodiv_act (Call #iio_sig ac x (fun y -> m_io_to_iio (k y))) ;
+  //     == {}
+  //     theta iiodiv_act (m_io_to_iio c) ;
+  //   }
+  admit ()
 
 let iodiv_to_iiodiv a w (c : iodiv_dm a w) : iiodiv_dm a w =
   theta_io_to_iio c ;
