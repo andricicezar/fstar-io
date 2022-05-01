@@ -45,9 +45,6 @@ let iiodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iiodiv_dm a w1) (g : iio
 let iiodiv_call (ac : iio_sig.act) (x : iio_sig.arg ac) : iiodiv_dm (iio_sig.res x) (iiodiv_act ac x) =
   dm_call ac x
 
-let iiodiv_iter #index #a #w (f : (j : index) -> iiodiv_dm (either index a) (w j)) (i : index) : iiodiv_dm a (i_iter w i) =
-  dm_iter f i
-
 [@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IIODIV : a:Type -> w:iwp a -> Effect
@@ -66,12 +63,22 @@ effect IIODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> or
 
 (** Lift from IODIV *)
 
-let iodiv_to_iiodiv #a #w (f : (eqtype_as_type unit -> IODIV a w)) : iiodiv_dm a w =
-  admit () ; // Why not?
-  reify (f ())
+let rec m_io_to_iio #a (c : m io_sig a) : m iio_sig a =
+  match c with
+  | Ret x -> Ret x
+  | Req pre k -> Req pre (fun h -> m_io_to_iio (k h))
+  | Iter index d g i k -> Iter index d (fun j ->  m_io_to_iio (g j)) i (fun y -> m_io_to_iio (k y))
+  | Call ac x k -> Call #iio_sig ac x (fun y -> m_io_to_iio (k y))
 
-// Why does it fail?
-// sub_effect IODIV ~> IIODIV = iodiv_to_iiodiv
+let theta_io_to_iio #a (c : m io_sig a) :
+  Lemma (theta iodiv_act c `ieq` theta iiodiv_act (m_io_to_iio c))
+= admit ()
+
+let iodiv_to_iiodiv a w (c : iodiv_dm a w) : iiodiv_dm a w =
+  theta_io_to_iio c ;
+  m_io_to_iio c
+
+sub_effect IODIV ~> IIODIV = iodiv_to_iiodiv
 
 (** Actions *)
 
