@@ -173,44 +173,14 @@ let ile_trans #a (w1 w2 w3 : iwp a) :
 let as_iwp #a (w : iwp' a) : Pure (iwp a) (requires iwp_monotonic w) (ensures fun r -> r == w) =
   w
 
-(** Basic predicates *)
-
-unfold
-let terminates #a : i_post a =
-  as_i_post (fun r -> Ocv? r)
-
-unfold
-let diverges #a : i_post a =
-  as_i_post (fun r -> Odv? r)
-
-let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> tr
-
-let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> to_trace tr
-
-let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> x
-
-let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
-  match r with
-  | Odv p -> p
-
-(** Specifications *)
-
 let i_ret #a (x : a) : iwp a =
   as_iwp (fun post hist -> post (Ocv [] x))
 
 let ishift_post' #a (tr : otrace) (post : i_post a) : i_post' a =
   fun r ->
-    (terminates r ==> post (Ocv (tr @ ret_otrace r) (result r))) /\
-    (diverges r ==> post (Odv (stream_prepend tr (inf_trace r))))
-    // match r with
-    // | Ocv tr' x -> post (Ocv (tr @ tr') x)
-    // | Odv st -> post (Odv (stream_prepend tr st))
+    match r with
+    | Ocv tr' x -> post (Ocv (tr @ tr') x)
+    | Odv st -> post (Odv (stream_prepend tr st))
 
 let ishift_post #a (tr : otrace) (post : i_post a) : i_post a =
   introduce forall r r'. r `eutt` r' /\ ishift_post' tr post r ==> ishift_post' tr post r'
@@ -497,6 +467,32 @@ let iprepost #a (pre : history -> Type0) (post : (hist : history) -> orun a -> P
 let iprepost_inst #a (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) (p : i_post a) h r :
   Lemma (requires iprepost pre post p h /\ post h r) (ensures p r)
 = ()
+
+(** Basic predicates *)
+
+unfold
+let terminates #a : i_post a =
+  as_i_post (fun r -> Ocv? r)
+
+unfold
+let diverges #a : i_post a =
+  as_i_post (fun r -> Odv? r)
+
+let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> tr
+
+let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> to_trace tr
+
+let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> x
+
+let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
+  match r with
+  | Odv p -> p
 
 (** Loop invariants *)
 
