@@ -34,11 +34,6 @@ let test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> 
   let msg = read fd in
   close fd
 
-// TODO MOVE
-let to_trace_append_pat t t' :
-  Lemma (to_trace (t @ t') == to_trace t @ to_trace t') [SMTPat (to_trace (t @ t'))]
-= to_trace_append t t'
-
 let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenFile s fd ; ERead fd msg ; EClose fd ])) =
   let fd = open_file s in
   let msg = read fd in

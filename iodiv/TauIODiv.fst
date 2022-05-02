@@ -64,6 +64,12 @@ sub_effect PURE ~> IODIV = dm_lift_pure #(io_sig) #(iodiv_act)
 effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IODIV a (iprepost pre post)
 
+(** Helping the SMT with the goals we generate *)
+
+let to_trace_append_pat t t' :
+  Lemma (to_trace (t @ t') == to_trace t @ to_trace t') [SMTPat (to_trace (t @ t'))]
+= to_trace_append t t'
+
 (** Actions *)
 
 let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
