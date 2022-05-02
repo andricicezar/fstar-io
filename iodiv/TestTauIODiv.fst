@@ -117,7 +117,6 @@ let partial_match_pre (l : list nat) : IODiv nat (requires fun hist -> l <> []) 
   | x :: r -> x
 
 // Cezar's tests
-// Why is explode needed?
 
 assume val p : prop
 assume val p' : prop
