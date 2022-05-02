@@ -173,14 +173,44 @@ let ile_trans #a (w1 w2 w3 : iwp a) :
 let as_iwp #a (w : iwp' a) : Pure (iwp a) (requires iwp_monotonic w) (ensures fun r -> r == w) =
   w
 
+(** Basic predicates *)
+
+unfold
+let terminates #a : i_post a =
+  as_i_post (fun r -> Ocv? r)
+
+unfold
+let diverges #a : i_post a =
+  as_i_post (fun r -> Odv? r)
+
+let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> tr
+
+let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> to_trace tr
+
+let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
+  match r with
+  | Ocv tr x -> x
+
+let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
+  match r with
+  | Odv p -> p
+
+(** Specifications *)
+
 let i_ret #a (x : a) : iwp a =
   as_iwp (fun post hist -> post (Ocv [] x))
 
 let ishift_post' #a (tr : otrace) (post : i_post a) : i_post' a =
   fun r ->
-    match r with
-    | Ocv tr' x -> post (Ocv (tr @ tr') x)
-    | Odv st -> post (Odv (stream_prepend tr st))
+    (terminates r ==> post (Ocv (tr @ ret_otrace r) (result r))) /\
+    (diverges r ==> post (Odv (stream_prepend tr (inf_trace r))))
+    // match r with
+    // | Ocv tr' x -> post (Ocv (tr @ tr') x)
+    // | Odv st -> post (Odv (stream_prepend tr st))
 
 let ishift_post #a (tr : otrace) (post : i_post a) : i_post a =
   introduce forall r r'. r `eutt` r' /\ ishift_post' tr post r ==> ishift_post' tr post r'
@@ -466,32 +496,6 @@ let iprepost_inst #a (pre : history -> Type0) (post : (hist : history) -> orun a
   Lemma (requires iprepost pre post p h /\ post h r) (ensures p r)
 = ()
 
-(** Basic predicates *)
-
-unfold
-let terminates #a : i_post a =
-  as_i_post (fun r -> Ocv? r)
-
-unfold
-let diverges #a : i_post a =
-  as_i_post (fun r -> Odv? r)
-
-let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> tr
-
-let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> to_trace tr
-
-let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
-  match r with
-  | Ocv tr x -> x
-
-let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
-  match r with
-  | Odv p -> p
-
 (** Loop invariants *)
 
 // TODO MOVE
@@ -631,6 +635,77 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
   end ;
   i_iter_coind (repeat_body_inv pre inv) i (fun j -> repeat_inv pre inv j)
 
+(** Using implications rather than match *)
+
+let i_bind_post_alt' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
+  fun r ->
+    (terminates r ==> wf (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)) /\
+    (diverges r ==> post (Odv (inf_trace r)))
+
+let i_bind_post_alt #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
+  introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
+  with begin
+    introduce r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
+    with _. begin
+      match r, r' with
+      | Ocv t x, Ocv t' x' ->
+        introduce forall r. ishift_post t post r ==> ishift_post t' post r
+        with begin
+          introduce ishift_post t post r ==> ishift_post t' post r
+          with _. begin
+            match r with
+            | Ocv tr y ->
+              to_trace_append t tr ;
+              to_trace_append t' tr ;
+              assert (Ocv (t @ tr) y `eutt` Ocv (t' @ tr) y) ;
+              i_post_resp_eutt post (Ocv (t @ tr) y) (Ocv (t' @ tr) y)
+            | Odv s ->
+              uptotau_prepend t t' s s ;
+              assert (Odv (stream_prepend t s) `eutt #a` Odv (stream_prepend t' s)) ;
+              i_post_resp_eutt post (Odv (stream_prepend t s)) (Odv (stream_prepend t' s))
+          end
+        end ;
+        iwp_monotonic_inst (wf x) (ishift_post t post) (ishift_post t' post) (rev_acc (to_trace t) hist)
+      | Odv s, Odv s' ->
+        i_post_resp_eutt post (Odv s) (Odv s')
+    end
+  end ;
+  i_bind_post_alt' wf post hist
+
+let i_bind_post_alt_mono #a #b (wf : a -> iwp b) p q hist :
+  Lemma
+    (requires p `i_post_le` q)
+    (ensures i_bind_post_alt wf p hist `i_post_le` i_bind_post_alt wf q hist)
+= introduce forall r. i_bind_post wf p hist r ==> i_bind_post wf q hist r
+  with begin
+    match r with
+    | Ocv tr x ->
+      ishift_post_mono b tr ;
+      assert (ishift_post tr p `i_post_le` ishift_post tr q) ;
+      assert (wf x (ishift_post tr p) (rev_acc (to_trace tr) hist) ==> wf x (ishift_post tr q) (rev_acc (to_trace tr) hist))
+    | Odv s -> ()
+  end
+
+let i_bind_alt (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
+  introduce forall p q hist. p `i_post_le` q ==> i_bind_post_alt wf p hist `i_post_le` i_bind_post_alt wf q hist
+  with begin
+    move_requires (i_bind_post_alt_mono wf p q) hist
+  end ;
+  as_iwp (fun post hist ->
+    w (i_bind_post_alt wf post hist) hist
+  )
+
+let i_bind_post_alt_eq #a #b (wf : a -> iwp b) (post : i_post b) hist :
+  Lemma (i_bind_post_alt wf post hist `i_post_eq` i_bind_post wf post hist)
+= ()
+
+let i_bind_alt_eq #a #b (w : iwp a) (wf : a -> iwp b) :
+  Lemma (i_bind_alt w wf `ieq` i_bind w wf)
+= introduce forall post hist. i_bind_post_alt wf post hist `i_post_eq` i_bind_post wf post hist
+  with begin
+    i_bind_post_alt_eq wf post hist
+  end
+
 (** Unfolding things so that they compute better now that the proofs are done. *)
 
 let pp_unfold l () : Tac unit =
@@ -642,5 +717,8 @@ unfold let _ile = ile
 [@@ (postprocess_with (pp_unfold [ `%i_ret ; `%as_iwp ]))]
 unfold let _i_ret = i_ret
 
-[@@ (postprocess_with (pp_unfold [ `%i_bind ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
-unfold let _i_bind = i_bind
+// [@@ (postprocess_with (pp_unfold [ `%i_bind ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
+// unfold let _i_bind = i_bind
+
+[@@ (postprocess_with (pp_unfold [ `%i_bind_alt ; `%i_bind_post_alt ; `%i_bind_post_alt' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
+unfold let _i_bind = i_bind_alt

@@ -318,7 +318,7 @@ let dm sg (w_act : action_iwp sg) (a : Type) (w : iwp a) =
 let dm_ret #sg #w_act #a (x : a) : dm sg w_act a (i_ret x) =
   m_ret x
 
-let dm_bind #sg #w_act #a #b #w #wf (c : dm sg w_act a w) (f : (x : a) -> dm sg w_act b (wf x)) : dm sg w_act b (i_bind w wf) =
+let dm_bind #sg #w_act #a #b #w #wf (c : dm sg w_act a w) (f : (x : a) -> dm sg w_act b (wf x)) : dm sg w_act b (i_bind_alt w wf) =
   calc (ile) {
     theta w_act (m_bind c f) ;
     `ile` { theta_bind w_act c f }
@@ -327,6 +327,8 @@ let dm_bind #sg #w_act #a #b #w #wf (c : dm sg w_act a w) (f : (x : a) -> dm sg 
     i_bind (theta w_act c) wf ;
     `ile` {}
     i_bind w wf ;
+    `ile` { i_bind_alt_eq w wf }
+    i_bind_alt w wf ;
   } ;
   m_bind c f
 
@@ -334,6 +336,7 @@ let dm_subcomp #sg #w_act #a #w #w' (c : dm sg w_act a w) :
   Pure (dm sg w_act a w') (requires w `ile` w') (ensures fun r -> r == c)
 = c
 
+unfold
 let dm_if_then_else #sg #w_act (a : Type) (w1 w2 : iwp a) (f : dm sg w_act a w1) (g : dm sg w_act a w2) (b : bool) : Type =
   dm sg w_act a (iwite w1 w2 b)
 

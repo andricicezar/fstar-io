@@ -29,16 +29,17 @@ let iiodiv_act : action_iwp iio_sig =
 let iiodiv_dm a w =
   dm iio_sig iiodiv_act a w
 
-let iiodiv_ret a (x : a) : iiodiv_dm a (i_ret x) =
+let iiodiv_ret a (x : a) : iiodiv_dm a (_i_ret x) =
   dm_ret x
 
-let iiodiv_bind a b w wf (c : iiodiv_dm a w) (f : (x : a) -> iiodiv_dm b (wf x)) : iiodiv_dm b (i_bind w wf) =
+let iiodiv_bind a b w wf (c : iiodiv_dm a w) (f : (x : a) -> iiodiv_dm b (wf x)) : iiodiv_dm b (_i_bind w wf) =
   dm_bind c f
 
 let iiodiv_subcomp a w w' (c : iiodiv_dm a w) :
-  Pure (iiodiv_dm a w') (requires w `ile` w') (ensures fun _ -> True)
+  Pure (iiodiv_dm a w') (requires w `_ile` w') (ensures fun _ -> True)
 = dm_subcomp c
 
+unfold
 let iiodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iiodiv_dm a w1) (g : iiodiv_dm a w2) (b : bool) : Type =
   dm_if_then_else a w1 w2 f g b
 

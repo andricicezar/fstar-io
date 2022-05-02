@@ -38,6 +38,7 @@ let iodiv_subcomp a w w' (c : iodiv_dm a w) :
   Pure (iodiv_dm a w') (requires w `_ile` w') (ensures fun _ -> True)
 = dm_subcomp c
 
+unfold
 let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv_dm a w2) (b : bool) : Type =
   dm_if_then_else a w1 w2 f g b
 
