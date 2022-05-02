@@ -43,31 +43,14 @@ by (
   explode () ;
   bump_nth 2 ;
   let fd = nth_binder 4 in
+  let fd' = binder_to_term fd in
+  let rfd = mk_app (`result) [fd' , Q_Explicit] in
+  witness rfd ;
   let msg = nth_binder 7 in
-  // let fd1 = binder_to_term fd in
-  // let fd2 = unquote fd1 in
-  // let fd3 = result #file_descr fd2 in
-  // witness (result fd) ;
-  // witness (msg) ;
-  tadmit () ;
-
-  // bump_nth 4;
-  // branch_on_match ();
-  // explode ();
-  // bump_nth 2;
-  // branch_on_match ();
-  // explode ();
-  // bump_nth 2;
-  // norm [delta_only [`%ishift_post; `%ishift_post']; iota];
-  // branch_on_match ();
-  // let r = instantiate (nth_binder 3) (fresh_uvar None) in
-  // mapply r; clear r;
-  // explode ();
-  // bump_nth 2;
-  // let fd = nth_binder 7 in
-  // let msg = nth_binder 13 in
-  // witness (fd); witness (msg);
-  // tadmit (); (** this looks like something that can be solved using a pattern/lemma **)
+  let msg' = binder_to_term msg in
+  let rmsg = mk_app (`result) [msg' , Q_Explicit] in
+  witness (rmsg) ;
+  tadmit () ; // Comment to see goal
   dump "H"
 )
 = let fd = open_file s in
