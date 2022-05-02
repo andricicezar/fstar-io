@@ -34,26 +34,13 @@ let test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> 
   let msg = read fd in
   close fd
 
-let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenFile s fd ; ERead fd msg ; EClose fd ]))
-by (
-  explode () ;
-  bump_nth 6 ;
-  let r = instantiate (nth_binder 3) (fresh_uvar None) in
-  mapply r; clear r;
-  explode () ;
-  bump_nth 2 ;
-  let fd = nth_binder 4 in
-  let fd' = binder_to_term fd in
-  let rfd = mk_app (`result) [fd' , Q_Explicit] in
-  witness rfd ;
-  let msg = nth_binder 7 in
-  let msg' = binder_to_term msg in
-  let rmsg = mk_app (`result) [msg' , Q_Explicit] in
-  witness (rmsg) ;
-  tadmit () ; // Comment to see goal
-  dump "H"
-)
-= let fd = open_file s in
+// TODO MOVE
+let to_trace_append_pat t t' :
+  Lemma (to_trace (t @ t') == to_trace t @ to_trace t') [SMTPat (to_trace (t @ t'))]
+= to_trace_append t t'
+
+let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenFile s fd ; ERead fd msg ; EClose fd ])) =
+  let fd = open_file s in
   let msg = read fd in
   close fd
 
@@ -84,7 +71,6 @@ let test'_ (s : string) : IODiv string (requires fun _ -> True) (ensures fun _ _
   read fd
 
 let open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd. ret_trace r == [ EOpenFile s fd ; EClose fd ])) =
-  admit (); (** this is similiar to test_ **)
   let fd = open_file s in
   close fd
 
