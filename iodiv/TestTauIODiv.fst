@@ -44,18 +44,17 @@ let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r
   let msg = read fd in
   close fd
 
-let test'' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ is_open fd hist) =
+let test'' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ is_open fd (rev_acc (ret_trace r) hist)) =
   let msg = read fd in
   ()
 
-// Before was failing because test'' had no post, now why?
-// let test_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
-//   test'' fd ; test'' fd
+let test_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
+  test'' fd ; test'' fd
 
-// let test_more' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
-//   test'' fd ;
-//   test'' fd ;
-//   test'' fd
+let test_more' (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
+  test'' fd ;
+  test'' fd ;
+  test'' fd
 
 let test3 (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun _ _ -> True) =
   let msg = read fd in
