@@ -133,16 +133,6 @@ let rec firstn_to_trace (t : otrace) (n : nat) :
       end
     end
 
-// TODO MOVE
-let rec firstn_min_length #a (n : nat) (l : list a) :
-  Lemma (firstn n l == firstn (min n (length l)) l)
-= match l with
-  | [] -> ()
-  | x :: l' ->
-    if n = 0
-    then ()
-    else firstn_min_length (n-1) l'
-
 let embeds_prepend (t t' : otrace) (s s' : sotrace) :
   Lemma
     (requires to_trace t == to_trace t' /\ s `embeds` s')
