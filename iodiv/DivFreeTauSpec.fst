@@ -611,11 +611,9 @@ let lval #a #b (x : either a b) : Pure a (requires Inl? x) (ensures fun _ -> Tru
   | Inl v -> v
 
 (* Specification of the body that always continues *)
-unfold
 let repeat_body_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (either index unit) =
   iprepost (pre i) (fun hist r -> terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))
 
-unfold
 let sotrace_refines (s : sotrace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
@@ -640,9 +638,21 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
   with begin
     if n <= length tr
     then begin
-      // m = length tr, k = 1
-      assume (to_trace (stream_trunc (stream_prepend tr s) (length tr)) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) 1)) ;
-      admit ()
+      introduce exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
+      with (length tr) 1
+      and begin
+        assume (n <= length tr) ; // why? :(
+        calc (==) {
+          to_trace (stream_trunc (stream_prepend tr s) (length tr)) ;
+          // == { stream_prepend_trunc_left tr s n }
+          // to_trace (firstn (length tr) tr) ;
+          // == { firstn_all (length tr) tr }
+          // to_trace tr ;
+          // == {}
+          == { admit () }
+          flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) 1) ;
+        }
+      end
     end
     else begin
       // Specialise hyp with n = n - length tr
