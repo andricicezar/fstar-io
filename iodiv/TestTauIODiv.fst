@@ -74,7 +74,7 @@ let test'_ (s : string) : IODiv string (requires fun _ -> True) (ensures fun _ _
   let fd = open_file s in
   read fd
 
-let open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd. ret_trace r == [ EOpenFile s fd ; EClose fd ])) =
+let open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd. ret_trace r == [ EOpenfile s fd ; EClose fd ])) =
   let fd = open_file s in
   close fd
 
