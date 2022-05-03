@@ -4,22 +4,33 @@ open FStar.Tactics
 open FStar.List
 
 open IIOSig
+open IIOSigSpec
 open TauIODiv
 open TauIIODiv
 open DivFreeTauSpec
 
 
 
-type lfds = (l:list file_descr) //{List.no_repeats_p l})
-
 type monitorable_prop = (cmd:io_sig.act) -> (io_sig.arg cmd) -> (history:trace) -> Tot bool
+
+let destruct_event (e:event) : ( cmd:io_sig.act & (arg:io_sig.arg cmd) & io_sig.res arg )  =
+  match e with
+  | EOpenfile arg res -> (| Openfile, arg, res |)
+  | ERead arg res -> (| Read, arg, res |)
+  | EWrite arg res -> (| Write, arg, res |)
+  | EClose arg res -> (| Close, arg, res |)
+  | ESocket arg res -> (| Socket, arg, res |)
+  | ESetsockopt arg res -> (| Setsockopt, arg, res |)
+  | EBind arg res -> (| Bind, arg, res |)
+  | ESetNonblock arg res -> (| SetNonblock, arg, res |)
+  | EListen arg res -> (| Listen, arg, res |)
+  | EAccept arg res -> (| Accept, arg, res |)
+  | ESelect arg res -> (| Select, arg, res |)
 
 unfold
 let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
-  match e with
-  | EOpenfile arg _ -> check OpenFile arg h
-  | ERead arg _ -> check Read arg h
-  | EClose arg _ -> check Close arg h
+  let (| ac, arg, res |) = destruct_event e in
+  check ac arg h
 
 let rec enforced_locally
   (check : monitorable_prop)
@@ -42,9 +53,9 @@ effect IIODivpi (a : Type) (pi:monitorable_prop) (pre : history -> Type0) (post 
 effect IIO (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IIODiv a pre (fun h r -> terminates r /\ post h r)
 
-let pi : monitorable_prop = fun cmd arg h ->
+let pi : monitorable_prop = fun cmd (arg:io_sig.arg cmd) h ->
   match cmd with
-  | OpenFile -> not (arg = "/etc/passwd")
+  | Openfile -> let (fnm, _, _) = (arg <: string * (list open_flag) * zfile_perm) in not (fnm = "/etc/passwd")
   | _ -> true
 
 type plugin_type =
@@ -68,6 +79,20 @@ let foreach #a
        else Inr ()
     end) 0
 
+(** this generates 397 goals. not sure why **)
+let process_connection
+  (plugin : plugin_type)
+  (client : file_descr) : 
+  IIODiv unit
+    (requires (fun _ -> True))
+    (ensures (fun _ _ -> True)) by (
+    explode ();
+    dump "H")
+    =
+  let _ = plugin client in
+  let _ = act_call Close client in
+  ()
+
 let process_connections 
   (clients : lfds) 
   (to_read : lfds) 
@@ -76,7 +101,7 @@ let process_connections
     (requires (fun _ -> True))
     (ensures (fun _ _ -> True)) =
   let (ready, idle) = List.Tot.partition (fun cl -> List.mem cl to_read) clients in
-  foreach (fun client -> let _, _ = plugin client, close client in ()) ready;
+  foreach (process_connection plugin) ready;
   idle
 
 let get_new_connection (socket : file_descr) :

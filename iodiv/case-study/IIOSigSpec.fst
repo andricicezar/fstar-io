@@ -40,3 +40,9 @@ unfold
 let iodiv_act : action_iwp io_sig =
   fun ac arg ->
     as_iwp (fun post hist -> forall res. post (Ocv [ Some (convert_call_to_event ac arg res) ] res))
+
+let iiodiv_act : action_iwp iio_sig =
+  fun ac arg ->
+    match ac with
+    | GetTrace -> i_get_trace
+    | _ -> iodiv_act ac arg 

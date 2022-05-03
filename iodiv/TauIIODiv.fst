@@ -13,18 +13,11 @@ open FStar.FunctionalExtensionality
 open Util
 open Stream
 open IIOSig
+open IIOSigSpec
 open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
 open TauIODiv
-
-let iiodiv_act : action_iwp iio_sig =
-  fun ac arg ->
-    match ac with
-    | OpenFile -> i_open arg
-    | Read -> i_read arg
-    | Close -> i_close arg
-    | GetTrace -> i_get_trace
 
 let iiodiv_dm a w =
   dm iio_sig iiodiv_act a w
