@@ -323,6 +323,15 @@ let firstn_all #a (n : nat) (l : list a) :
     l ;
   }
 
+let rec firstn_min_length #a (n : nat) (l : list a) :
+  Lemma (firstn n l == firstn (min n (length l)) l)
+= match l with
+  | [] -> ()
+  | x :: l' ->
+    if n = 0
+    then ()
+    else firstn_min_length (n-1) l'
+
 (** forall predicate *)
 
 let rec list_forall #a (p : a -> Type0) (l : list a) =
