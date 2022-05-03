@@ -16,14 +16,7 @@ open IIOSig
 open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
-
-unfold
-let iodiv_act : action_iwp io_sig =
-  fun ac arg ->
-    match ac with
-    | OpenFile -> i_open arg
-    | Read -> i_read arg
-    | Close -> i_close arg
+open IIOSigSpec
 
 let iodiv_dm a w =
   dm io_sig iodiv_act a w
@@ -74,15 +67,6 @@ let to_trace_append_pat t t' :
 
 let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
   IODIV?.reflect (iodiv_call ac x)
-
-let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenFile s (result r) ]) =
-  act_call OpenFile s
-
-let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
-  act_call Read fd
-
-let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd ]) =
-  act_call Close fd
 
 let iter #index #a #w (f : (j : index) -> IODIV (either index a) (w j)) (i : index) : IODIV a (i_iter w i) =
   IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)

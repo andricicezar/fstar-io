@@ -381,22 +381,6 @@ let i_req (pre : pure_pre) : iwp (squash pre) =
   as_iwp (fun post hist -> pre /\ post (Ocv [] (Squash.get_proof pre)))
 
 unfold
-let i_open (s : string) : iwp file_descr =
-  as_iwp (fun post hist -> forall fd. post (Ocv [ Some (EOpenFile s fd) ] fd))
-
-unfold
-let i_read (fd : file_descr) : iwp string =
-  as_iwp (fun post hist -> is_open fd hist /\ (forall s. post (Ocv [ Some (ERead fd s) ] s)))
-
-unfold
-let i_close (fd : file_descr) : iwp unit =
-  as_iwp (fun post hist -> is_open fd hist /\ post (Ocv [ Some (EClose fd) ] ()))
-
-unfold
-let i_get_trace : iwp history =
-  as_iwp (fun post hist -> post (Ocv [] hist))
-
-unfold
 let iwite #a (w1 w2 : iwp a) (b : bool) : iwp a =
   fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)
 
