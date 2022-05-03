@@ -16,16 +16,16 @@ open DivFreeTauSpec
 open DivFreeTauDM
 
 unfold
-let i_open (s : string) : iwp (either file_descr exn) =
+let i_open (s : string) : iwp file_descr =
   as_iwp (fun post hist -> forall fd. post (Ocv [ Some (EOpenfile s fd) ] fd))
 
 unfold
-let i_read (fd : file_descr) : iwp (either string exn) =
+let i_read (fd : file_descr) : iwp string =
   as_iwp (fun post hist -> is_open fd hist /\ (forall s. post (Ocv [ Some (ERead fd s) ] s)))
 
 unfold
-let i_close (fd : file_descr) : iwp (either unit exn) =
-  as_iwp (fun post hist -> is_open fd hist /\ (forall r. post (Ocv [ Some (EClose fd r) ] r)))
+let i_close (fd : file_descr) : iwp unit =
+  as_iwp (fun post hist -> is_open fd hist /\ (post (Ocv [ Some (EClose fd) ] ())))
 
 unfold
 let i_get_trace : iwp history =

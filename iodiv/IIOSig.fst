@@ -21,9 +21,9 @@ type io_act = ac : iio_act { not_GetTrace ac }
 
 noeq
 type event =
-| EOpenfile : string -> either file_descr exn -> event
-| ERead     : file_descr -> either string exn -> event
-| EClose    : file_descr -> either unit exn -> event
+| EOpenfile : string -> file_descr -> event
+| ERead     : file_descr -> string -> event
+| EClose    : file_descr -> event
 
 let trace = list event
 let history = list event // head: latest event
@@ -39,9 +39,9 @@ let iio_arg ac =
 unfold
 let iio_res #ac (x : iio_arg ac) =
   match ac with
-  | Openfile -> either file_descr exn
-  | Read -> either string exn
-  | Close -> either unit exn
+  | Openfile -> file_descr
+  | Read -> string
+  | Close -> unit
   | GetTrace -> history
 
 let io_sig : signature = {
@@ -59,12 +59,12 @@ let iio_sig : signature = {
 let rec is_open (fd : file_descr) (hist : history) : bool =
   match hist with
   | [] -> false
-  | EClose fd' _ :: hist' ->
+  | EClose fd' :: hist' ->
     if fd = fd'
     then false
     else is_open fd hist'
   | EOpenfile s fd' :: hist' ->
-    if Inl? fd' && fd = Inl?.v fd'
+    if fd = fd'
     then true
     else is_open fd hist'
   | e :: hist' -> is_open fd hist'

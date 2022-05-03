@@ -17,41 +17,34 @@ open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
 
-let open_file (s : string) : IODiv (either file_descr exn) (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
+let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
   act_call Openfile s
 
-let read (fd : file_descr) : IODiv (either string exn) (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
+let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ]) =
   act_call Read fd
 
-let close (fd : file_descr) : IODiv (either unit exn) (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd (result r)]) =
+let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd ]) =
   act_call Close fd
 
-let test_1 (s : string) : IODiv unit (requires fun h -> True) (ensures fun _ _ -> True) =
+let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True) =
   let fd = open_file s in
-  if Inl? fd then 
-    let _ = read (Inl?.v fd) in ()
-  else ()
+  read fd
 
-let test_1' (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True)
+let test_1' (s : string) : IODiv string (requires fun _ -> True) (ensures fun _ _ -> True)
 = let fd = open_file s in
   let fd' = open_file s in
-  if Inl? fd then 
-    let _ = read (Inl?.v fd) in ()
-  else ()
+  read fd
 
-let test_2 (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) =
+let test_2 (s : string) : IODiv file_descr (requires fun _ -> True) (ensures fun _ _ -> True) =
   let msg = test_1 s in
-  let _ = open_file s in
-  ()
+  open_file s
 
 let test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) =
   let fd = open_file s in
-  if Inl? fd then 
-    let _ = read (Inl?.v fd) in
-    let _ = close (Inl?.v fd) in ()
-  else ()
+  let _ = read fd in
+  close fd
 
-let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenFile s fd ; ERead fd msg ; EClose fd ])) =
+let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenfile s fd ; ERead fd msg ; EClose fd ])) =
   let fd = open_file s in
   let msg = read fd in
   close fd
