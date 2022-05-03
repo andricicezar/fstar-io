@@ -179,34 +179,31 @@ let embeds_prepend (t t' : otrace) (s s' : sotrace) :
     end
     else begin
       embeds_inst s s' (n - length t') ;
-      // eliminate exists m. to_trace (stream_trunc s' (n - length t')) == to_trace (stream_trunc s m)
-      // returns (exists (m : nat). to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) m))
-      // with _. begin
-      //   calc (==) {
-      //     to_trace (stream_trunc (stream_prepend t' s') n) ;
-      //     == { stream_prepend_trunc_right t' s' n }
-      //     to_trace (t' @ stream_trunc s' (n - length t')) ;
-      //     == { to_trace_append t' (stream_trunc s' (n - length t')) }
-      //     to_trace t' @ to_trace (stream_trunc s' (n - length t')) ;
-      //     == {}
-      //     to_trace t @ to_trace (stream_trunc s' (n - length t')) ;
-      //     == {}
-      //     to_trace t @ to_trace (stream_trunc s' (n - length t')) ;
-      //     == {}
-      //     to_trace t @ to_trace (stream_trunc s m) ;
-      //     == { to_trace_append t (stream_trunc s m) }
-      //     to_trace (t @ stream_trunc s m) ;
-      //   } ;
-      //   calc (==) {
-      //     to_trace (stream_trunc (stream_prepend t s) (m + length t)) ;
-      //     == { stream_prepend_trunc_right t s (m + length t) }
-      //     to_trace (t @ stream_trunc s (m + length t - length t)) ;
-      //     == {}
-      //     to_trace (t @ stream_trunc s m) ;
-      //   }
-      // end
-      // The proof works but is very very slow
-      admit ()
+      eliminate exists m. to_trace (stream_trunc s' (n - length t')) == to_trace (stream_trunc s m)
+      returns (exists (m : nat). to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) m))
+      with _. begin
+        calc (==) {
+          to_trace (stream_trunc (stream_prepend t' s') n) ;
+          == { stream_prepend_trunc_right t' s' n }
+          to_trace (t' @ stream_trunc s' (n - length t')) ;
+          == { to_trace_append t' (stream_trunc s' (n - length t')) }
+          to_trace t' @ to_trace (stream_trunc s' (n - length t')) ;
+          == {}
+          to_trace t @ to_trace (stream_trunc s' (n - length t')) ;
+          == {}
+          to_trace t @ to_trace (stream_trunc s m) ;
+          == { to_trace_append t (stream_trunc s m) }
+          to_trace (t @ stream_trunc s m) ;
+        } ;
+        calc (==) {
+          to_trace (stream_trunc (stream_prepend t s) (m + length t)) ;
+          == { stream_prepend_trunc_right t s (m + length t) }
+          to_trace (t @ stream_trunc s (m + length t - length t)) ;
+          == {}
+          to_trace (t @ stream_trunc s m) ;
+        } ;
+        assert (to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) (m + length t)))
+      end
     end
   end
 
