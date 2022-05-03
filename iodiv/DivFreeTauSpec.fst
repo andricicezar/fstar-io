@@ -47,6 +47,102 @@ let embeds_inst (p q : sotrace) (n : nat) :
     (ensures exists (m : nat). to_trace (stream_trunc q n) == to_trace (stream_trunc p m))
 = ()
 
+let rec to_trace_firstn (t : otrace) (n : nat) :
+  Lemma (exists (m : nat). to_trace (firstn n t) == firstn m (to_trace t))
+= match t with
+  | [] -> ()
+  | Some e :: t' ->
+    if n = 0
+    then ()
+    else begin
+      to_trace_firstn t' (n-1) ;
+      eliminate exists (m : nat). to_trace (firstn (n-1) t') == firstn m (to_trace t')
+      returns exists (m : nat). to_trace (firstn n t) == firstn m (to_trace t)
+      with _. begin
+        calc (==) {
+          to_trace (firstn n t) ;
+          == {}
+          e :: to_trace (firstn (n-1) t') ;
+          == {}
+          e :: firstn m (to_trace t') ;
+          == {}
+          firstn (m+1) (to_trace t) ;
+        }
+      end
+    end
+  | None :: t' ->
+    if n = 0
+    then ()
+    else begin
+      to_trace_firstn t' (n-1) ;
+      eliminate exists (m : nat). to_trace (firstn (n-1) t') == firstn m (to_trace t')
+      returns exists (m : nat). to_trace (firstn n t) == firstn m (to_trace t)
+      with _. begin
+        calc (==) {
+          to_trace (firstn n t) ;
+          == {}
+          to_trace (firstn (n-1) t') ;
+          == {}
+          firstn m (to_trace t') ;
+          == {}
+          firstn m (to_trace t) ;
+        }
+      end
+    end
+
+let rec firstn_to_trace (t : otrace) (n : nat) :
+  Lemma (exists (m : nat). firstn n (to_trace t) == to_trace (firstn m t))
+= match t with
+  | [] -> ()
+  | Some e :: t' ->
+    if n = 0
+    then ()
+    else begin
+      firstn_to_trace t' (n-1) ;
+      eliminate exists (m : nat). firstn (n-1) (to_trace t') == to_trace (firstn m t')
+      returns exists (m : nat). firstn n (to_trace t) == to_trace (firstn m t)
+      with _. begin
+        calc (==) {
+          firstn n (to_trace t) ;
+          == {}
+          e :: firstn (n-1) (to_trace t') ;
+          == {}
+          e :: to_trace (firstn m t') ;
+          == {}
+          to_trace (firstn (m+1) t) ;
+        }
+      end
+    end
+  | None :: t' ->
+    if n = 0
+    then ()
+    else begin
+      firstn_to_trace t' n ;
+      eliminate exists (m : nat). firstn n (to_trace t') == to_trace (firstn m t')
+      returns exists (m : nat). firstn n (to_trace t) == to_trace (firstn m t)
+      with _. begin
+        calc (==) {
+          firstn n (to_trace t) ;
+          == {}
+          firstn n (to_trace t') ;
+          == {}
+          to_trace (firstn m t') ;
+          == {}
+          to_trace (firstn (m+1) t) ;
+        }
+      end
+    end
+
+// TODO MOVE
+let rec firstn_min_length #a (n : nat) (l : list a) :
+  Lemma (firstn n l == firstn (min n (length l)) l)
+= match l with
+  | [] -> ()
+  | x :: l' ->
+    if n = 0
+    then ()
+    else firstn_min_length (n-1) l'
+
 let embeds_prepend (t t' : otrace) (s s' : sotrace) :
   Lemma
     (requires to_trace t == to_trace t' /\ s `embeds` s')
@@ -55,7 +151,31 @@ let embeds_prepend (t t' : otrace) (s s' : sotrace) :
   with begin
     if n <= length t'
     then begin
-      admit () // TODO LATER
+      to_trace_firstn t' n ;
+      eliminate exists (m : nat). to_trace (firstn n t') == firstn m (to_trace t')
+      returns exists (m : nat). to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) m)
+      with _. begin
+        firstn_to_trace t m ;
+        eliminate exists (k : nat). firstn m (to_trace t) == to_trace (firstn k t)
+        returns exists (m : nat). to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) m)
+        with _. begin
+          calc (==) {
+            to_trace (stream_trunc (stream_prepend t' s') n) ;
+            == { stream_prepend_trunc_left t' s' n }
+            to_trace (firstn n t') ;
+            == {}
+            firstn m (to_trace t') ;
+            == {}
+            firstn m (to_trace t) ;
+            == {}
+            to_trace (firstn k t) ;
+            == { firstn_min_length k t }
+            to_trace (firstn (min k (length t)) t) ;
+            == { stream_prepend_trunc_left t s (min k (length t)) }
+            to_trace (stream_trunc (stream_prepend t s) (min k (length t))) ;
+          }
+        end
+      end
     end
     else begin
       embeds_inst s s' (n - length t') ;
