@@ -148,3 +148,6 @@ sub_effect IODIV ~> IIODIV = iodiv_to_iiodiv
 
 let get_hist () : IIODiv history (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [] /\ result r == hist)
 = IIODIV?.reflect (iiodiv_call GetTrace ())
+
+let iter #index #a #w (f : (j : index) -> IIODIV (either index a) (w j)) (i : index) : IIODIV a (i_iter w i) =
+  IIODIV?.reflect (dm_iter (fun j -> reify (f j)) i)
