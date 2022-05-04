@@ -26,6 +26,26 @@ let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist)
 let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd ]) =
   act_call Close fd
 
+
+let open_file' = act_call Openfile
+let read' = act_call Read
+let close' = act_call Close
+
+(** this test makes the VC explode **)
+let ho_test
+  (f : (unit -> IODiv unit (fun h -> True) (fun h r -> True))) :
+  IODiv unit
+    (requires (fun _ -> True))
+    (ensures (fun _ _ -> True)) =
+  let _ = f () in
+  (** this checks instant **)
+  let _ = open_file "test.txt" in
+  (** this takes a little bit longer **)
+  //let _ = open_file' "test.txt" in
+  (** this takes a long time **)
+  //let _ = act_call Openfile "test.txt" in
+  ()
+
 let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True) =
   let fd = open_file s in
   read fd

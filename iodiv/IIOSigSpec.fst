@@ -17,15 +17,15 @@ open DivFreeTauDM
 
 unfold
 let i_open (s : string) : iwp file_descr =
-  as_iwp (fun post hist -> forall fd. post (Ocv [ Some (EOpenfile s fd) ] fd))
+  iprepost (fun _ -> True) (fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ])
 
 unfold
 let i_read (fd : file_descr) : iwp string =
-  as_iwp (fun post hist -> is_open fd hist /\ (forall s. post (Ocv [ Some (ERead fd s) ] s)))
+  iprepost (fun hist -> is_open fd hist) (fun hist r -> terminates r /\ ret_trace r == [ ERead fd (result r) ])
 
 unfold
 let i_close (fd : file_descr) : iwp unit =
-  as_iwp (fun post hist -> is_open fd hist /\ (post (Ocv [ Some (EClose fd) ] ())))
+  iprepost (fun hist -> is_open fd hist) (fun hist r -> terminates r /\ ret_trace r == [ EClose fd ])
 
 unfold
 let i_get_trace : iwp history =
@@ -38,3 +38,12 @@ let iodiv_act : action_iwp io_sig =
     | Openfile -> i_open arg
     | Read -> i_read arg
     | Close -> i_close arg
+
+unfold
+let iiodiv_act : action_iwp iio_sig =
+  fun ac arg ->
+    match ac with
+    | Openfile -> i_open arg
+    | Read -> i_read arg
+    | Close -> i_close arg
+    | GetTrace -> i_get_trace
