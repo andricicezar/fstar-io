@@ -31,19 +31,31 @@ let open_file' = act_call Openfile
 let read' = act_call Read
 let close' = act_call Close
 
-(** this test makes the VC explode **)
-let ho_test
+(** for some reason, there is a big difference in how big the VC is for these synonyms. **)
+let ho_test () :
+  IODiv unit
+    (requires (fun _ -> True))
+    (ensures (fun _ _ -> True)) by (explode (); dump "H") =
+  (** this checks instantly -- 5 goals **)
+  //let _ = open_file "test.txt" in
+  (** this takes a little bit longer -- 56 goals **)
+  let _ = open_file' "test.txt" in
+  (** this takes a long time -- 205 goals **)
+  //let _ = act_call Openfile "test.txt" in
+  ()
+
+let ho_test'
   (f : (unit -> IODiv unit (fun h -> True) (fun h r -> True))) :
   IODiv unit
     (requires (fun _ -> True))
-    (ensures (fun _ _ -> True)) =
+    (ensures (fun _ _ -> True)) by (explode (); dump "H") =
   let _ = f () in
-  (** this checks instant **)
-  let _ = open_file "test.txt" in
-  (** this takes a little bit longer **)
+  (** this checks instantly -- 10 goals **)
+  //let _ = open_file "test.txt" in
+  (** this takes a little bit longer -- 103 goals **)
   //let _ = open_file' "test.txt" in
-  (** this takes a long time **)
-  //let _ = act_call Openfile "test.txt" in
+  (** this takes a long time - 396 goals **)
+  let _ = act_call Openfile "test.txt" in
   ()
 
 let test_1 (s : string) : IODiv string (requires fun h -> True) (ensures fun _ _ -> True) =
