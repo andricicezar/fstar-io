@@ -8,7 +8,9 @@ open FStar.Classical.Sugar
 open Common
 open TC.ML
 open TC.ML.HO
+open TC.Checkable
 open TC.Export
+open TC.Trivialize.IIOwp
 open TC.Monitorable.Hist
 
 open Free
@@ -25,17 +27,18 @@ instance mlifyable_iiowp
     (t1 -> MIIO t2)
     (fun f x -> f x)
 
-(** Ideas to improve mlifyable_iio_miio:
-1. What if instead of Tot, we use Ex, to be able to internalize try_catch.
-   This implies writing a lift from Ex to IIOwp. To do that, we also have to 
-   write elim_ex (similar to elim_pure). I did not try to write it yet.
-   But what does exactly means to use Ex? 
-   Why Ex and not another effect? Answer: well, Ex has native extraction,
-     therefore the try_with block will be extracted to the OCaml's native
-     try/with.
-   Maybe to not create more confusion & to not tie things too much to F*,
-   it is better to not use Ex since it may be just a hack (check with Catalin). 
-**)
+instance mlifyable_iiowp_2
+  t1 t2 {| d1:ml t1 |} {| d2:ml t2 |} pre {| d3: checkable2 pre |} post :
+  Tot (mlifyable ((x:t1) -> IIO t2 (pre x) (post x))) =
+  mk_mlifyable
+    #((x:t1) -> IIO t2 (pre x) (post x))
+    (t1 -> MIIO (maybe t2))
+    #(ml_arrow_miio t1 (maybe t2) #d1 #(ML_FO (mlfo_maybe t2 #d2)))
+    (fun f -> 
+      let f' : (x:t1) -> IIOwp (maybe t2) (post_as_hist (new_post d3.check2 post x)) = trivialize f in
+      (** erase post **)
+      let f'' : (x:t1) -> IIOwp (maybe t2) (trivial_hist ()) = f' in
+      mlify #_ #(mlifyable_iiowp t1 (maybe t2) #d1 #(ML_FO (mlfo_maybe t2 #d2))) f'')
 
 instance mlifyable_inst_iiowp
   t1 t2
@@ -46,6 +49,17 @@ instance mlifyable_inst_iiowp
     (d1.inst_type -> MIIO t2)
     #(ml_arrow_miio d1.inst_type t2 #(ML_INST d1.cinst_type) #d2)
     (fun (p:t1 -> IIOwp t2 (trivial_hist ())) (ct:d1.inst_type) ->
+      p (d1.strengthen ct))
+
+instance mlifyable_inst_iiowp_post
+  t1 t2 post
+  {| d1:instrumentable t1 |} {| d2:ml t2 |} :
+  Tot (mlifyable (x:t1 -> IIO t2 (fun _ -> True) (post x))) =
+  mk_mlifyable
+    #_
+    (d1.inst_type -> MIIO t2)
+    #(ml_arrow_miio d1.inst_type t2 #(ML_INST d1.cinst_type) #d2)
+    (fun (p:(x:t1 -> IIO t2 (fun _ -> True) (post x))) (ct:d1.inst_type) ->
       p (d1.strengthen ct))
 
 
