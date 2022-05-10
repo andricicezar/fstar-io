@@ -48,3 +48,20 @@ instance weakable_IIOwp
       match import x with
       | Some x' -> Inl (export (f x')) 
       | None -> Inr Contract_failure)
+
+instance weakable_IIOwp_2
+  t1 t2 {| d1:importable t1 |} {| d2: exportable t2 |}
+  (post : t1 -> trace -> (maybe t2) -> trace -> Type0) :
+  Tot (weakable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x)))) =
+  mk_weakable 
+    ((x:d1.itype) -> IIOwp (maybe d2.etype) (to_hist (fun _ -> True) (fun _ _ _ -> True)))
+    #(trivial_IIOwp t1 (maybe t2) post)
+    #(weak_IIOwp d1.itype (maybe d2.etype) (fun _ _ -> True) (fun _ _ _ _ -> True) #d1.citype #(mlfo_maybe d2.etype #(ML_FO d2.cetype)))
+    (fun (f:(x:t1) -> IIOwp (maybe t2) (post_as_hist (post x))) (x:d1.itype) ->
+      match import x with
+      | Some x' -> begin
+        match f x' with
+        | Inl x'' -> Inl (export x'')
+        | Inr err -> Inr err
+      end
+      | None -> Inr Contract_failure)
