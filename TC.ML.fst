@@ -68,6 +68,7 @@ class instrumentable (t:Type) = {
 
 
 (** ** ML Target language **)
+(** why is this not a type class? **)
 noeq
 type ml (t:Type) =
 | ML_FO : mlfo t -> ml t

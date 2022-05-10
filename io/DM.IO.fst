@@ -84,8 +84,7 @@ effect IO
   (a:Type)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
-  IOwp a 
-    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt (r:a). post h r lt ==> p lt r)) 
+  IOwp a (to_hist pre post)
 
 let static_cmd
   (cmd : io_cmds)

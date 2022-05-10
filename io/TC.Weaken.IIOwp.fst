@@ -20,7 +20,7 @@ instance weak_IIOwp
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> t2 -> trace -> Type0) 
   {| mlfo t1 |} {| mlfo t2 |} : 
-  weak ((x:t1) -> IIOwp t2 (pre_post_as_wp (pre x) (post x))) =
+  weak ((x:t1) -> IIOwp t2 (to_hist (pre x) (post x))) =
   { mldummy = () }
 
 let new_post
@@ -38,13 +38,13 @@ let new_post
 instance weakable_IIOwp
   t1 t2 {| d1:importable t1 |} {| d2: exportable t2 |}
   (post : t1 -> trace -> t2 -> trace -> Type0) :
-  Tot (weakable ((x:t1) -> IIOwp t2 (post_as_wp (post x)))) =
+  Tot (weakable ((x:t1) -> IIOwp t2 (post_as_hist (post x)))) =
   let post' = new_post t1 t2 post in
   mk_weakable 
-    ((x:d1.itype) -> IIOwp (maybe d2.etype) (pre_post_as_wp (fun _ -> True) (post' x)))
+    ((x:d1.itype) -> IIOwp (maybe d2.etype) (to_hist (fun _ -> True) (post' x)))
     #(trivial_IIOwp t1 t2 post)
-    #(weak_IIOwp d1.itype (maybe d2.etype) (fun _ _ -> True) post')
-    (fun (f:(x:t1) -> IIOwp t2 (post_as_wp (post x))) (x:d1.itype) ->
+    #(weak_IIOwp d1.itype (maybe d2.etype) (fun _ _ -> True) post' #d1.citype #(mlfo_maybe d2.etype #(ML_FO d2.cetype)))
+    (fun (f:(x:t1) -> IIOwp t2 (post_as_hist (post x))) (x:d1.itype) ->
       match import x with
       | Some x' -> Inl (export (f x')) 
       | None -> Inr Contract_failure)

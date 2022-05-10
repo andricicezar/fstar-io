@@ -81,9 +81,7 @@ effect IIO
   (a:Type)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
-  IIOwp a 
-    (fun (p:hist_post a) (h:trace) -> pre h /\ (forall lt (r:a). post h r lt ==> p lt r)) 
-
+  IIOwp a (to_hist pre post) 
 
 sub_effect PURE ~> IIOwp = lift_pure_dm_iio
 

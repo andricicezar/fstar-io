@@ -17,16 +17,6 @@ open TC.Trivialize
 **)
 class weak (t:Type) = { mldummy: unit }
 
-instance weak_totarrow t1 t2 {| mlfo t1 |} {| mlfo t2 |} : weak (t1 -> Tot t2) =
-  { mldummy = () }
-
-instance weak_purearrow 
-  t1 t2 {| mlfo t1 |} {| mlfo t2 |}
-  (pre:t1 -> Type0)
-  (post:t1 -> t2 -> Type0) : 
-  weak ((x:t1) -> Pure t2 (pre x) (post x)) =
-  { mldummy = () }
-
 (** Principles for weakable/weaken: 
 1. it does not change the effect of the argument.
 2. The pre-condition must be trivial. Use `trivialize` first if the function has a 
@@ -44,14 +34,25 @@ class weakable (t : Type) =
 let mk_weakable (#t1 t2 : Type) {| trivial t1 |} {| weak t2 |} (exp : t1 -> t2) : weakable t1 =
   { wtype = t2; weaken = exp; trivial_t = solve; weak_wtype = solve }
 
+(**
+instance weak_totarrow t1 t2 {| mlfo t1 |} {| mlfo t2 |} : weak (t1 -> Tot t2) =
+  { mldummy = () }
+
+instance weak_purearrow 
+  t1 t2 {| mlfo t1 |} {| mlfo t2 |}
+  (pre:t1 -> Type0)
+  (post:t1 -> t2 -> Type0) : 
+  weak ((x:t1) -> Pure t2 (pre x) (post x)) =
+  { mldummy = () }
+
 instance weakable_arrow
   t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |} :
-  Tot (weakable (t1 -> Tot t2))  =
+  Tot (weakable (t1 -> Tot t2)) =
   mk_weakable (d1.itype -> Tot (maybe d2.etype))
     (fun (f:(t1 -> Tot t2)) (x:d1.itype) ->
         match import x with
         | Some x' -> Inl (export (f x'))
-        | None -> Inr Contract_failure)
+        | None -> Inr Contract_failure)**)
 
 (** The post-condition does not respect principle 4.
   The post-condition should look something like this: 
@@ -59,6 +60,8 @@ instance weakable_arrow
     | Some x' -> Inl? r /\ post x' (safe_import (Inl?.v r))
     | None -> r == Inr Contract_failure
 **)
+
+(**
 instance weakable_purearrow
   t1 t2 {| d1:importable t1 |} {| d2:exportable t2 |}
   (post : t1 -> t2 -> Type0) :

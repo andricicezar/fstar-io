@@ -9,25 +9,24 @@ open DM.IIO
 open TC.Checkable
 include TC.Trivialize
 
-let post_as_wp post : hist _ = (fun p h -> forall r lt. post h r lt ==> p lt r)
-let pre_post_as_wp pre post : hist _ = (fun p h -> pre h /\ (forall r lt. post h r lt ==> p lt r))
+let post_as_hist = to_hist (fun _ -> True)
 
 (** functions in the IIO effect can not be trivial since they hide a pre-condition.
 Check TC.Trivialize for more details. **)
 
 instance trivial_IIOwp
   t1 t2 (post:t1 -> trace -> t2 -> trace -> Type0) : 
-  trivial ((x:t1) -> IIOwp t2 (post_as_wp (post x))) =
+  trivial ((x:t1) -> IIOwp t2 (post_as_hist (post x))) =
   { mldummy = () }
 
 instance trivial_IIOwp_2
   t1 t2 t3 (post:t1 -> t2 -> trace -> t3 -> trace -> Type0) : 
-  trivial ((x:t1) -> (y:t2) -> IIOwp t3 (post_as_wp (post x y))) =
+  trivial ((x:t1) -> (y:t2) -> IIOwp t3 (post_as_hist (post x y))) =
   { mldummy = () }
 
 instance trivial_IIOwp_3
   t1 t2 t3 t4 (post:t1 -> t2 -> t3 -> trace -> t4 -> trace -> Type0) : 
-  trivial ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (post_as_wp (post x y z))) =
+  trivial ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (post_as_hist (post x y z))) =
   { mldummy = () }
 
 let new_post
@@ -42,10 +41,10 @@ instance trivializeable_IIOwp
   t1 t2
   (pre : t1 -> trace -> Type0) {| d:checkable2 pre |}
   (post : t1 -> trace -> t2 -> trace -> Type0) :
-  Tot (trivializeable ((x:t1) -> IIOwp t2 (pre_post_as_wp (pre x) (post x)))) =
+  Tot (trivializeable ((x:t1) -> IIOwp t2 (to_hist (pre x) (post x)))) =
   mk_trivializeable 
-    #((x:t1) -> IIOwp t2 (pre_post_as_wp (pre x) (post x)))
-    ((x:t1) -> IIOwp (maybe t2) (post_as_wp (new_post d.check2 post x)))
+    #((x:t1) -> IIOwp t2 (to_hist (pre x) (post x)))
+    ((x:t1) -> IIOwp (maybe t2) (post_as_hist (new_post d.check2 post x)))
     (fun f x ->
         let h = get_trace () in
         if d.check2 x h then Inl (f x)
@@ -63,10 +62,10 @@ instance trivializeable_IIOwp_2
   t1 t2 t3
   (pre : t1 -> t2 -> trace -> Type0) {| d:checkable3 pre |}
   (post : t1 -> t2 -> trace -> t3 -> trace -> Type0) :
-  Tot (trivializeable ((x:t1) -> (y:t2) -> IIOwp t3 (pre_post_as_wp (pre x y) (post x y)))) =
+  Tot (trivializeable ((x:t1) -> (y:t2) -> IIOwp t3 (to_hist (pre x y) (post x y)))) =
   mk_trivializeable 
-    #((x:t1) -> (y:t2) -> IIOwp t3 (pre_post_as_wp (pre x y) (post x y)))
-    ((x:t1) -> (y:t2) -> IIOwp (maybe t3) (post_as_wp (new_post_2 d.check3 post x y)))
+    #((x:t1) -> (y:t2) -> IIOwp t3 (to_hist (pre x y) (post x y)))
+    ((x:t1) -> (y:t2) -> IIOwp (maybe t3) (post_as_hist (new_post_2 d.check3 post x y)))
     (fun f x y ->
         let h = get_trace () in
         if d.check3 x y h then Inl (f x y)
@@ -84,10 +83,10 @@ instance trivializeable_IIOwp_3
   t1 t2 t3 t4
   (pre : t1 -> t2 -> t3 -> trace -> Type0) {| d:checkable4 pre |}
   (post : t1 -> t2 -> t3 -> trace -> t4 -> trace -> Type0) :
-  Tot (trivializeable ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (pre_post_as_wp (pre x y z) (post x y z)))) =
+  Tot (trivializeable ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (to_hist (pre x y z) (post x y z)))) =
   mk_trivializeable 
-    #((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (pre_post_as_wp (pre x y z) (post x y z)))
-    ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp (maybe t4) (post_as_wp (new_post_3 d.check4 post x y z)))
+    #((x:t1) -> (y:t2) -> (z:t3) -> IIOwp t4 (to_hist (pre x y z) (post x y z)))
+    ((x:t1) -> (y:t2) -> (z:t3) -> IIOwp (maybe t4) (post_as_hist (new_post_3 d.check4 post x y z)))
     (fun f x y z ->
         let h = get_trace () in
         if d.check4 x y z h then Inl (f x y z)
