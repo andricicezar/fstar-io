@@ -1,4 +1,4 @@
-module TC.Tests.HO
+module Callback
 
 open FStar.Tactics
 
@@ -86,49 +86,6 @@ let test_output_type (main:main_type) : (((cb_in_importable.itype -> MIIO (maybe
   tadmit () (** not sure how to unfold more **)
   )=
   mlify #_ #(mlifyable_inst_iiowp_post_2 f_type main_out main_post #f_type_instrumentable #main_out_exportable) main
-
-(** ** Case 2 (example) **)
-(** ** Case 2 - callback **)
-(** ***  accepts a function that accepts a callback **)
-val c2_pi : monitorable_prop
-let c2_pi cmd arg h =
-  match cmd with
-  | Openfile -> 
-    let fnm : io_args Openfile = arg in not (fnm = "/tmp/passwd")
-  | _ -> true
-
-type c2_cb_type   = fd:file_descr -> IIO bool         (fun h -> is_open fd h) (fun h _ lt -> lt == [])
-type c2_f_type    = cb:c2_cb_type    -> IIO (maybe unit) (fun _ -> True)            (fun h r lt -> enforced_locally c2_pi h lt)
-type c2_main_type = f: c2_f_type     -> IIO unit         (fun _ -> True)            (fun h r lt -> enforced_locally c2_pi h lt)
-
-let c2_cb_type_mlifyable : mlifyable c2_cb_type = mlifyable_iiowp_2 file_descr bool #(ML_FO mlfo_file_descr) #(ML_FO mlfo_bool) (fun fd h -> is_open fd h) (fun fd h _ lt -> lt == [])
-
-let c2_cb_type_mlifyable_guarded : mlifyable_guarded file_descr bool (fun fd h -> is_open fd h) (fun fd h r lt -> lt == []) c2_pi = {
-  cmlifyable = c2_cb_type_mlifyable;
-  cpi = ()
-}
-
-private
-let c2_lemma_c1post () : squash (forall (x:c2_cb_type_mlifyable_guarded.cmlifyable.matype) h lt. True /\ enforced_locally c2_pi h lt ==> (exists (r:maybe unit). enforced_locally c2_pi h lt)) by (explode (); witness (`(Inl ())))= ()
-
-private
-let c2_lemma_c2post () : squash (forall h lt. enforced_locally c2_pi h lt  ==> enforced_locally c2_pi h lt) =
-  c2_lemma_c1post ()
-
-let c2_f_post_monitorable : monitorable_post (fun fd h -> True) (fun fd h r lt -> enforced_locally c2_pi h lt) c2_pi = {
-  result_check = (fun _ _ _ _ -> true);
-  c1post = c2_lemma_c1post ();
-  c2post = c2_lemma_c2post ();
-}
-
-let c2_f_type_instrumentable : instrumentable c2_f_type =
-  instrumentable_HO file_descr bool (fun fd h -> is_open fd h) (fun fd h r lt -> lt == []) unit (fun h -> True) (fun h r lt -> enforced_locally c2_pi h lt) c2_pi
-  #(importable_safe_importable _ #(safe_importable_ml (maybe unit) #(mlfo_maybe unit #(ML_FO mlfo_unit))))
-  #c2_cb_type_mlifyable_guarded
-  #c2_f_post_monitorable
-  
-let c2_main_mlifyable : mlifyable c2_main_type =
-  mlifyable_inst_iiowp_post c2_f_type unit (fun h r lt -> enforced_locally c2_pi h lt) #c2_f_type_instrumentable #(ML_FO mlfo_unit)
 
 (** ** Case 3 - apply **)
 (** ***  - returns a function **)
