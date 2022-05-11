@@ -12,28 +12,6 @@ open TC.MLify.IIOwp
 open TC.Monitorable.Hist
 open TC.Instrumentable.IIOwp
 
-(** ** Case 1 - function map **)
-(** *** accepts a first-order function **)
-type map_iio =
-  (#a:Type) ->
-  (#b:Type) ->
-  (#pre:(a -> trace -> bool)) ->
-  (#post:(a -> trace -> b -> trace -> Type0)) ->
-  (f:(x:a -> IIO b (fun h -> pre x h) (post x))) ->
-  (xs:list a) ->
-  IIO (list b) 
-    (requires (fun h -> forall x. x `List.Tot.memP` xs ==> pre x h))
-    (ensures (fun _ _ _ -> True)) (** it is hard to write a useful post-condition. However, we're not interested in it **)
-
-let map_is_mlifyable : mlifyable map_iio = admit ()
-(** Todo:
-  1. a must be importable
-  2. b must be exportable
-  3. pre must be checkable
-  4. post must be monitorable
-  5. show that map's pre is checkable by having f's pre being checkable
-**)
-
 (** ** Case 2 (General) - callback **)
 (** ***  accepts a function that accepts a callback **)
 assume val cb_in  : Type
@@ -54,8 +32,8 @@ assume val main_out_exportable : exportable main_out
 assume val main_pre : trace -> Type0
 assume val main_post : trace -> main_out -> trace -> Type0
 
-type cb_type   = x:cb_in       -> IIO cb_out       (cb_pre x)    (cb_post x) 
-type f_type    = cb:cb_type -> IIO (maybe f_out)        f_pre f_post 
+type cb_type   = x:cb_in       -> IIO cb_out     (cb_pre x) (cb_post x) 
+type f_type    = cb:cb_type -> IIO (maybe f_out) f_pre      f_post 
 (** TODO: the pre should be genral here. it is not general because I did not write an mlify instance for a checkable pre **)
 type main_type = f: f_type  -> IIO main_out (fun _ -> True) main_post
 
@@ -86,9 +64,3 @@ let test_output_type (main:main_type) : (((cb_in_importable.itype -> MIIO (maybe
   tadmit () (** not sure how to unfold more **)
   )=
   mlify #_ #(mlifyable_inst_iiowp_post_2 f_type main_out main_post #f_type_instrumentable #main_out_exportable) main
-
-(** ** Case 3 - apply **)
-(** ***  - returns a function **)
-
-(** ** Case 4 - HO Callback **)
-(** ***  - callback with a callback **)
