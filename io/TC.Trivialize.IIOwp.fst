@@ -9,11 +9,6 @@ open DM.IIO
 open TC.Checkable
 include TC.Trivialize
 
-let post_as_hist = to_hist (fun _ -> True)
-
-(** functions in the IIO effect can not be trivial since they hide a pre-condition.
-Check TC.Trivialize for more details. **)
-
 instance trivial_IIOwp
   t1 t2 (post:t1 -> trace -> t2 -> trace -> Type0) : 
   trivial ((x:t1) -> IIOwp t2 (post_as_hist (post x))) =
@@ -48,6 +43,48 @@ instance trivializeable_IIOwp
     (fun f x ->
         let h = get_trace () in
         if d.check2 x h then Inl (f x)
+        else Inr Contract_failure)
+
+let trivialize_new_post_maybe
+  (pre:'a -> trace -> bool)
+  (post:'a -> trace -> maybe 'b -> trace -> Type0) :
+  Tot ('a -> trace -> maybe 'b -> trace -> Type0) =
+    fun x h r lt -> 
+      (~(pre x h) ==> r == (Inr Contract_failure)) /\
+      (pre x h ==> post x h r lt) 
+
+let trivialize_new_post_maybe'
+  (pre:trace -> bool)
+  (post:trace -> maybe 'b -> trace -> Type0) :
+  Tot (trace -> maybe 'b -> trace -> Type0) =
+    fun h r lt -> 
+      (~(pre h) ==> r == (Inr Contract_failure)) /\
+      (pre h ==> post h r lt) 
+
+instance trivializeable_1_IIOwp_maybe
+  t1 t2
+  (pre : trace -> Type0) {| d:checkable pre |}
+  (post : trace -> (maybe t2) -> trace -> Type0) :
+  Tot (trivializeable (t1 -> IIOwp (maybe t2) (to_hist pre post))) =
+  mk_trivializeable 
+    #(t1 -> IIOwp (maybe t2) (to_hist pre post))
+    (t1 -> IIOwp (maybe t2) (post_as_hist (trivialize_new_post_maybe' d.check post)))
+    (fun f x ->
+        let h = get_trace () in
+        if d.check h then f x
+        else Inr Contract_failure)
+
+instance trivializeable_IIOwp_maybe
+  t1 t2
+  (pre : t1 -> trace -> Type0) {| d:checkable2 pre |}
+  (post : t1 -> trace -> (maybe t2) -> trace -> Type0) :
+  Tot (trivializeable ((x:t1) -> IIOwp (maybe t2) (to_hist (pre x) (post x)))) =
+  mk_trivializeable 
+    #((x:t1) -> IIOwp (maybe t2) (to_hist (pre x) (post x)))
+    ((x:t1) -> IIOwp (maybe t2) (post_as_hist (trivialize_new_post_maybe d.check2 post x)))
+    (fun f x ->
+        let h = get_trace () in
+        if d.check2 x h then f x
         else Inr Contract_failure)
   
 let new_post_2

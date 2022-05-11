@@ -70,7 +70,7 @@ Be the following example:
 For ctx to be instrumentable, the post of f should also respect pi. 
 The post-condition of the ctx must respect pi, but because f is not instrumented, it can break this guarantee. Therefore, f can be mlifyied if its post implies the pi. **)
 class mlifyable_guarded (a b:Type) pre post pi =
-  { cmlifyable : mlifyable ((x:a) -> IIO b (pre x) (post x));
+  { cmlifyable : mlifyable ((x:a) -> IIO (maybe b) (pre x) (post x));
     cpi : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
 
 (** 
@@ -94,12 +94,12 @@ instance instrumentable_HO
   {| d0:importable (maybe cout) |}
   {| d1:mlifyable_guarded fin fout fpre fpost pi |}
   {| d2:monitorable_post #d1.cmlifyable.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
-  instrumentable ((x:fin -> IIO fout (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) =
+  instrumentable ((x:fin -> IIO (maybe fout) (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) =
   {
     inst_type = d1.cmlifyable.matype -> IIOpi d0.itype pi;
     cinst_type = ml_instrumented_iio d1.cmlifyable.matype d0.itype #(ML_ARROW d1.cmlifyable.cmatype) #(ML_FO d0.citype) pi;
     strengthen = (fun (ctx:(d1.cmlifyable.matype -> IIOpi d0.itype pi)) -> 
-      (fun (f:(x:fin -> IIO fout (fpre x) (fpost x))) -> 
+      (fun (f:(x:fin -> IIO (maybe fout) (fpre x) (fpost x))) -> 
         (
         let f' = d1.cmlifyable.mlify f in
         let ctx' = import_out d1.cmlifyable.matype cout #d0 pi ctx in
