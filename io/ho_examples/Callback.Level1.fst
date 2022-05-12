@@ -60,12 +60,13 @@ assume val pp_cb_post_cpi : squash (forall x h lt r. pp_cb_pre x h /\ pp_cb_post
 
 let pp_cb_mlifyable_guarded : mlifyable_guarded_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
   cmlifyable1 = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
+  ca1 = pp_cb_in_importable;
   cpi1 = pp_cb_post_cpi
 }
 
 assume val ctx_post_monitorable : monitorable_hist #pp_cb_mlifyable_guarded.cmlifyable1.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
 
-let ctx_instrumentable : instrumentable ctx =
+let ctx_instrumentable : instrumentable ctx pi =
   instrumentable_HO_arr1_out_importable pp_cb_in pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi
   #ctx_out_importable
   #pp_cb_mlifyable_guarded

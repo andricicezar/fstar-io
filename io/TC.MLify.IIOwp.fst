@@ -70,7 +70,8 @@ instance mlifyable_iiowp_trivialize_weaken_post
 (** *** Arrows with other arrows as input and base types as output **)
 
 instance mlifyable_inst_iiowp_weaken
-  t1 {| d1:instrumentable t1 |} 
+  (#pi:monitorable_prop)
+  t1 {| d1:instrumentable t1 pi |} 
   t2 {| d2:exportable t2 |} 
   post :
   Tot (mlifyable (t1 -> IIO t2 (fun _ -> True) post)) =
@@ -82,7 +83,8 @@ instance mlifyable_inst_iiowp_weaken
       export (p (d1.strengthen ct)))
 
 instance mlifyable_inst_iiowp_trivialize_weaken
-  t1 {| d1:instrumentable t1 |}
+  (#pi:monitorable_prop)
+  t1 {| d1:instrumentable t1 pi |}
   t2 {| d2:exportable t2 |} 
   pre {| d3:checkable pre |}
   post :

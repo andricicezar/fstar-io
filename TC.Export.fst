@@ -105,11 +105,3 @@ instance exportable_option
   Tot (exportable (option t1)) =
   mk_exportable (option d1.etype)
     (fun x -> match x with | Some x' -> Some (export x') | None -> None)
-
-instance exportable_maybe
-  t1 {| d1:exportable t1 |} :
-  Tot (exportable (maybe t1)) =
-  mk_exportable 
-    (maybe d1.etype)
-    #(mlfo_maybe d1.etype #(ML_FO d1.cetype))
-    (fun (x:maybe t1) -> match x with | Inl x' -> Inl (export x') | Inr err -> Inr err)

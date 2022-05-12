@@ -11,6 +11,7 @@ open Common
 open IO.Sig
 open DM.IIO
 open TC.ML
+open TC.ML.HO
 open TC.Export
 open TC.Trivialize.IIOwp
 include TC.Weaken
