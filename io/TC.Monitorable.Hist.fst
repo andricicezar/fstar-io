@@ -25,7 +25,7 @@ let rec enforced_locally
     if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
     else false
 
-class monitorable_post
+class monitorable_hist
   (#t1:Type)
   (#t2:Type) 
   (pre : t1 -> trace -> Type0)

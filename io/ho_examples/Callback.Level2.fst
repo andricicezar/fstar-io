@@ -46,11 +46,15 @@ type pp = ctx -> IIO (maybe pp_out) pp_pre pp_post
 
 assume val pi2 : monitorable_prop
 
-(** the problem I have exists. **)
+(** the problem I suspected exists. **)
 
-assume val ctx_cb_post_monitorable : monitorable_post ctx_cb_pre ctx_cb_post pi2 
+assume val ctx_cb_post_monitorable : monitorable_hist ctx_cb_pre ctx_cb_post pi2 
 
-let ctx_cb_instrumentable : instrumentable ctx_cb = instrumentable_IIO_strengthen ctx_cb_in #ctx_cb_in_exportable ctx_cb_out #ctx_cb_out_importable ctx_cb_pre ctx_cb_post pi2 #ctx_cb_post_monitorable
+let ctx_cb_instrumentable : instrumentable ctx_cb =
+  instrumentable_IIO_strengthen
+    ctx_cb_in #ctx_cb_in_exportable
+    ctx_cb_out #ctx_cb_out_importable
+    ctx_cb_pre ctx_cb_post pi2 #ctx_cb_post_monitorable
 
 assume val pi : monitorable_prop
 assume val pp_cb_pre_checkable : checkable pp_cb_pre
@@ -61,7 +65,7 @@ let pp_cb_mlifyable_guarded : mlifyable_guarded_arr0 ctx_cb pp_cb_out pp_cb_pre 
   cpi0 = pp_cb_post_cpi
 }
 
-assume val ctx_post_monitorable : monitorable_post #pp_cb_mlifyable_guarded.cmlifyable0.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
+assume val ctx_post_monitorable : monitorable_hist #pp_cb_mlifyable_guarded.cmlifyable0.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
 
 let ctx_instrumentable : instrumentable ctx =
   instrumentable_HO_arr0_out_importable ctx_cb pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi

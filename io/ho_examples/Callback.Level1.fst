@@ -58,15 +58,15 @@ assume val pp_cb_pre_checkable : checkable2 pp_cb_pre
 assume val pp_cb_post_cpi : squash (forall x h lt r. pp_cb_pre x h /\ pp_cb_post x h r lt ==> enforced_locally pi h lt)
 
 
-let pp_cb_mlifyable_guarded : mlifyable_guarded pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
-  cmlifyable = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
-  cpi = pp_cb_post_cpi
+let pp_cb_mlifyable_guarded : mlifyable_guarded_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
+  cmlifyable1 = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
+  cpi1 = pp_cb_post_cpi
 }
 
-assume val ctx_post_monitorable : monitorable_post #pp_cb_mlifyable_guarded.cmlifyable.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
+assume val ctx_post_monitorable : monitorable_hist #pp_cb_mlifyable_guarded.cmlifyable1.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
 
 let ctx_instrumentable : instrumentable ctx =
-  instrumentable_HO pp_cb_in pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi
+  instrumentable_HO_arr1_out_importable pp_cb_in pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi
   #ctx_out_importable
   #pp_cb_mlifyable_guarded
   #ctx_post_monitorable
@@ -78,7 +78,7 @@ let pp_mlifyable : mlifyable pp =
   mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post 
 
 let test_output_type (main:pp) : (((pp_cb_in_importable.itype -> MIIO (maybe (pp_cb_out_exportable.etype))) -> IIOpi (ctx_out_importable.itype) pi) -> MIIO (maybe (pp_out_exportable.etype)))
-  by (unfold_def (`Mkmlifyable?.matype); unfold_def (`Mkmlifyable_guarded?.cmlifyable); rewrite_eqs_from_context (); norm [iota]; 
+  by ( 
   explode ();
   bump_nth 5;
 //  dump "H";
