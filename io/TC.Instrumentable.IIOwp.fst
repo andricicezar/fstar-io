@@ -57,8 +57,26 @@ instance instrumentable_IIO
   instrumentable ((x:t1) -> IIO (maybe t2) (pre x) (post x)) =
   { inst_type = t1 -> IIOpi (maybe t2) pi;
     cinst_type = ml_instrumented_iio t1 (maybe t2) #(ML_FO d1) #(ML_FO (mlfo_maybe t2 #(ML_FO d2))) pi;
-    strengthen = (fun (f:(t1 -> IIOpi (maybe t2) pi)) ->
+    strengthen = (fun f ->
       enforce_post #t1 #t2 pi pre post #post_c f)
+  }
+  
+instance instrumentable_IIO_strengthen
+  (t1:Type) {| d1:exportable t1 |}
+  (t2:Type) {| d2:importable t2 |}
+  (pre : t1 -> trace -> Type0)
+  (** it must be `maybe t2` because needs the ability to fail **)
+  (post : t1 -> trace -> (r:maybe t2) -> trace -> Type0)
+  (pi : monitorable_prop) {| post_c:monitorable_post pre post pi |} : 
+  instrumentable ((x:t1) -> IIO (maybe t2) (pre x) (post x)) =
+  { inst_type = d1.etype -> IIOpi (maybe d2.itype) pi;
+    cinst_type = ml_instrumented_iio d1.etype (maybe d2.itype) #(ML_FO d1.cetype) #(ML_FO (mlfo_maybe d2.itype #(ML_FO d2.citype))) pi;
+    strengthen = (fun f ->
+      let f' : t1 -> IIOpi (maybe t2) pi = (fun (x:t1) -> 
+        match f (export x) with 
+        | Inl x' -> (match import x' with | Some x' -> Inl x' | None -> Inr Contract_failure)
+        | Inr err -> Inr err) in
+      enforce_post #t1 #t2 pi pre post #post_c f')
   }
 
 (** ** Higher order **)
@@ -69,9 +87,13 @@ Be the following example:
   val prog: (ctx: (f:ftype -> IO c cpre cpost) -> IO d ppre ppost.
 For ctx to be instrumentable, the post of f should also respect pi. 
 The post-condition of the ctx must respect pi, but because f is not instrumented, it can break this guarantee. Therefore, f can be mlifyied if its post implies the pi. **)
-class mlifyable_guarded (a b:Type) pre post pi =
-  { cmlifyable : mlifyable ((x:a) -> IIO (maybe b) (pre x) (post x));
-    cpi : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
+class mlifyable_guarded_arr0 (a b:Type) pre post pi =
+  { cmlifyable0 : mlifyable (a -> IIO (maybe b) pre post);
+    cpi0 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt) }
+
+class mlifyable_guarded_arr1 (a b:Type) (pre:a -> trace -> Type0) (post:a -> trace -> maybe b -> trace -> Type0) pi =
+  { cmlifyable1 : mlifyable ((x:a) -> IIO (maybe b) (pre x) (post x));
+    cpi1 : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
 
 (** 
 this instance should let us mlify example 1.
@@ -87,22 +109,41 @@ let import_out t1 t2 {| d0:importable (maybe t2) |} (pi:monitorable_prop)
   | Some x' -> x'
   | None -> Inr Contract_failure
 
-instance instrumentable_HO
+instance instrumentable_HO_arr0_out_importable
   fin fout fpre fpost 
   cout cpre cpost 
   pi 
   {| d0:importable (maybe cout) |}
-  {| d1:mlifyable_guarded fin fout fpre fpost pi |}
-  {| d2:monitorable_post #d1.cmlifyable.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
+  {| d1:mlifyable_guarded_arr0 fin fout fpre fpost pi |}
+  {| d2:monitorable_post #d1.cmlifyable0.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
+  instrumentable ((fin -> IIO (maybe fout) fpre fpost) -> DM.IIO.IIO (maybe cout) cpre cpost) =
+  {
+    inst_type = d1.cmlifyable0.matype -> IIOpi d0.itype pi;
+    cinst_type = ml_instrumented_iio d1.cmlifyable0.matype d0.itype #(ML_ARROW d1.cmlifyable0.cmatype) #(ML_FO d0.citype) pi;
+    strengthen = (fun (ctx:(d1.cmlifyable0.matype -> IIOpi d0.itype pi)) -> 
+      (fun (f:(fin -> IIO (maybe fout) fpre fpost)) -> 
+        (
+        let f' = d1.cmlifyable0.mlify f in
+        let ctx' = import_out d1.cmlifyable0.matype cout #d0 pi ctx in
+        enforce_post pi (fun x -> cpre) (fun x -> cpost) #d2 ctx' f') <: IIO (maybe cout) cpre cpost))
+  }
+
+instance instrumentable_HO_arr1_out_importable
+  fin fout fpre fpost 
+  cout cpre cpost 
+  pi 
+  {| d0:importable (maybe cout) |}
+  {| d1:mlifyable_guarded_arr1 fin fout fpre fpost pi |}
+  {| d2:monitorable_post #d1.cmlifyable1.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
   instrumentable ((x:fin -> IIO (maybe fout) (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) =
   {
-    inst_type = d1.cmlifyable.matype -> IIOpi d0.itype pi;
-    cinst_type = ml_instrumented_iio d1.cmlifyable.matype d0.itype #(ML_ARROW d1.cmlifyable.cmatype) #(ML_FO d0.citype) pi;
-    strengthen = (fun (ctx:(d1.cmlifyable.matype -> IIOpi d0.itype pi)) -> 
+    inst_type = d1.cmlifyable1.matype -> IIOpi d0.itype pi;
+    cinst_type = ml_instrumented_iio d1.cmlifyable1.matype d0.itype #(ML_ARROW d1.cmlifyable1.cmatype) #(ML_FO d0.citype) pi;
+    strengthen = (fun (ctx:(d1.cmlifyable1.matype -> IIOpi d0.itype pi)) -> 
       (fun (f:(x:fin -> IIO (maybe fout) (fpre x) (fpost x))) -> 
         (
-        let f' = d1.cmlifyable.mlify f in
-        let ctx' = import_out d1.cmlifyable.matype cout #d0 pi ctx in
+        let f' = d1.cmlifyable1.mlify f in
+        let ctx' = import_out d1.cmlifyable1.matype cout #d0 pi ctx in
         enforce_post pi (fun x -> cpre) (fun x -> cpost) #d2 ctx' f') <: IIO (maybe cout) cpre cpost))
   }
 
@@ -114,20 +155,38 @@ let strengthen_out t1 t2 {| d0:instrumentable t2 |} (pi:monitorable_prop)
   | Inl g -> Inl (d0.strengthen g)
   | Inr err -> Inr err
 
-instance instrumentable_HO_2
+instance instrumentable_HO_arr1_out_instrumentable
   fin fout fpre fpost 
   cout cpre cpost 
   pi 
   {| d0:instrumentable cout |}
-  {| d1:mlifyable_guarded fin fout fpre fpost pi |}
+  {| d1:mlifyable_guarded_arr1 fin fout fpre fpost pi |}
   {| d2:monitorable_post (fun x -> cpre) (fun x -> cpost) pi |} : 
-  instrumentable ((x:fin -> IIO fout (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) =
+  instrumentable ((x:fin -> IIO (maybe fout) (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) =
   {
-    inst_type = d1.cmlifyable.matype -> IIOpi (maybe d0.inst_type) pi;
-    cinst_type = ml_instrumented_iio d1.cmlifyable.matype (maybe d0.inst_type) #(ML_ARROW d1.cmlifyable.cmatype) #(ML_FO (mlfo_maybe d0.inst_type #(ML_INST d0.cinst_type))) pi;
-    strengthen = (fun (ctx:(d1.cmlifyable.matype -> IIOpi (maybe d0.inst_type) pi)) -> 
-      (fun (f:(x:fin -> IIO fout (fpre x) (fpost x))) -> 
+    inst_type = d1.cmlifyable1.matype -> IIOpi (maybe d0.inst_type) pi;
+    cinst_type = ml_instrumented_iio d1.cmlifyable1.matype (maybe d0.inst_type) #(ML_ARROW d1.cmlifyable1.cmatype) #(ML_FO (mlfo_maybe d0.inst_type #(ML_INST d0.cinst_type))) pi;
+    strengthen = (fun (ctx:(d1.cmlifyable1.matype -> IIOpi (maybe d0.inst_type) pi)) -> 
+      (fun (f:(x:fin -> IIO (maybe fout) (fpre x) (fpost x))) -> 
         (** TODO: import the result **)
-        (let ctx' = strengthen_out d1.cmlifyable.matype _ #d0 pi ctx in 
-        enforce_post pi (fun x -> cpre) (fun x -> cpost) #d2 ctx' (d1.cmlifyable.mlify f)) <: IIO (maybe cout) cpre cpost))
+        (let ctx' = strengthen_out d1.cmlifyable1.matype _ #d0 pi ctx in 
+        enforce_post pi (fun x -> cpre) (fun x -> cpost) #d2 ctx' (d1.cmlifyable1.mlify f)) <: IIO (maybe cout) cpre cpost))
+  }
+
+instance instrumentable_HO_arr0_out_instrumentable
+  fin fout fpre fpost 
+  cout cpre cpost 
+  pi 
+  {| d0:instrumentable cout |}
+  {| d1:mlifyable_guarded_arr0 fin fout fpre fpost pi |}
+  {| d2:monitorable_post (fun x -> cpre) (fun x -> cpost) pi |} : 
+  instrumentable ((fin -> IIO (maybe fout) fpre fpost) -> DM.IIO.IIO (maybe cout) cpre cpost) =
+  {
+    inst_type = d1.cmlifyable0.matype -> IIOpi (maybe d0.inst_type) pi;
+    cinst_type = ml_instrumented_iio d1.cmlifyable0.matype (maybe d0.inst_type) #(ML_ARROW d1.cmlifyable0.cmatype) #(ML_FO (mlfo_maybe d0.inst_type #(ML_INST d0.cinst_type))) pi;
+    strengthen = (fun (ctx:(d1.cmlifyable0.matype -> IIOpi (maybe d0.inst_type) pi)) -> 
+      (fun (f:(fin -> IIO (maybe fout) fpre fpost)) -> 
+        (** TODO: import the result **)
+        (let ctx' = strengthen_out d1.cmlifyable0.matype _ #d0 pi ctx in 
+        enforce_post pi (fun x -> cpre) (fun x -> cpost) #d2 ctx' (d1.cmlifyable0.mlify f)) <: IIO (maybe cout) cpre cpost))
   }

@@ -20,6 +20,8 @@ open DM.IIO
 
 exception Something_went_really_bad
 
+(** *** Base case **)
+
 instance mlifyable_iiowp_post
   t1 {| ml t1 |}
   t2 {| ml t2 |} 
@@ -29,6 +31,8 @@ instance mlifyable_iiowp_post
     #((x:t1) -> IIOwp t2 (post_as_hist (post x)))
     (t1 -> MIIO t2)
     (fun f x -> f x)
+
+(** *** Arrows with base types as input/output **)
 
 instance mlifyable_iiowp_weaken_post
   t1 {| d1:importable t1 |}
@@ -62,6 +66,8 @@ instance mlifyable_iiowp_trivialize_weaken_post
     #(ml_arrow_miio d1.itype (maybe d2.etype) #(ML_FO d1.citype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))))
     (fun f -> 
       mlify #_ #(mlifyable_iiowp_weaken_post t1 t2 (trivialize_new_post_maybe d3.check2 post)) (trivialize f))
+
+(** *** Arrows with other arrows as input and base types as output **)
 
 instance mlifyable_inst_iiowp_weaken
   t1 {| d1:instrumentable t1 |} 

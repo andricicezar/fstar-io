@@ -25,7 +25,7 @@ type cb_type   = fd:file_descr -> IIO bool         (fun h -> is_open fd h) (fun 
 type f_type    = cb:cb_type    -> IIO (maybe unit) (fun _ -> True)            (fun h r lt -> enforced_locally pi h lt)
 type main_type = f: f_type     -> IIO unit         (fun _ -> True)            (fun h r lt -> enforced_locally pi h lt)
 
-let cb_type_mlifyable : mlifyable cb_type = mlifyable_iiowp_2 file_descr bool #(ML_FO mlfo_file_descr) #(ML_FO mlfo_bool) (fun fd h -> is_open fd h) (fun fd h _ lt -> lt == [])
+let cb_type_mlifyable : mlifyable cb_type = mlifyable_iiowp_post file_descr #(ML_FO mlfo_file_descr) bool #(ML_FO mlfo_bool) (fun fd h -> is_open fd h) (fun fd h _ lt -> lt == [])
 
 let cb_type_mlifyable_guarded : mlifyable_guarded file_descr bool (fun fd h -> is_open fd h) (fun fd h r lt -> lt == []) pi = {
   cmlifyable = cb_type_mlifyable;
