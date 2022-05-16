@@ -106,12 +106,12 @@ Be the following example:
   val prog: (ctx: (f:ftype -> IO c cpre cpost) -> IO d ppre ppost.
 For ctx to be instrumentable, the post of f should also respect pi. 
 The post-condition of the ctx must respect pi, but because f is not instrumented, it can break this guarantee. Therefore, f can be mlifyied if its post implies the pi. **)
-class mlifyable_guarded_arr0 (a b:Type) pre post pi =
+class mlifyable_in_arr0 (a b:Type) pre post pi =
   { cmlifyable0 : mlifyable (a -> IIO (maybe b) pre post);
     ca0: instrumentable a pi;
     cpi0 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt) }
 
-class mlifyable_guarded_arr1 (a b:Type) (pre:a -> trace -> Type0) (post:a -> trace -> maybe b -> trace -> Type0) pi =
+class mlifyable_in_arr1 (a b:Type) (pre:a -> trace -> Type0) (post:a -> trace -> maybe b -> trace -> Type0) pi =
   { cmlifyable1 : mlifyable ((x:a) -> IIO (maybe b) (pre x) (post x));
     ca1: importable a;
     cpi1 : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
@@ -135,7 +135,7 @@ instance instrumentable_HO_arr0_out_importable
   cout cpre cpost 
   pi 
   {| d0:importable (maybe cout) |}
-  {| d1:mlifyable_guarded_arr0 fin fout fpre fpost pi |}
+  {| d1:mlifyable_in_arr0 fin fout fpre fpost pi |}
   {| d2:monitorable_hist #d1.cmlifyable0.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
   instrumentable ((fin -> IIO (maybe fout) fpre fpost) -> DM.IIO.IIO (maybe cout) cpre cpost) pi =
   {
@@ -154,7 +154,7 @@ instance instrumentable_HO_arr1_out_importable
   cout cpre cpost 
   pi 
   {| d0:importable (maybe cout) |}
-  {| d1:mlifyable_guarded_arr1 fin fout fpre fpost pi |}
+  {| d1:mlifyable_in_arr1 fin fout fpre fpost pi |}
   {| d2:monitorable_hist #d1.cmlifyable1.matype #cout (fun x -> cpre) (fun x -> cpost) pi |} : 
   instrumentable ((x:fin -> IIO (maybe fout) (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) pi =
   {
@@ -181,7 +181,7 @@ instance instrumentable_HO_arr0_out_instrumentable
   cout cpre cpost 
   pi 
   {| d0:instrumentable cout pi |}
-  {| d1:mlifyable_guarded_arr0 fin fout fpre fpost pi |}
+  {| d1:mlifyable_in_arr0 fin fout fpre fpost pi |}
   {| d2:monitorable_hist (fun x -> cpre) (fun x -> cpost) pi |} : 
   instrumentable ((fin -> IIO (maybe fout) fpre fpost) -> DM.IIO.IIO (maybe cout) cpre cpost) pi =
   {
@@ -199,7 +199,7 @@ instance instrumentable_HO_arr1_out_instrumentable
   cout cpre cpost 
   pi 
   {| d0:instrumentable cout pi |}
-  {| d1:mlifyable_guarded_arr1 fin fout fpre fpost pi |}
+  {| d1:mlifyable_in_arr1 fin fout fpre fpost pi |}
   {| d2:monitorable_hist (fun x -> cpre) (fun x -> cpost) pi |} : 
   instrumentable ((x:fin -> IIO (maybe fout) (fpre x) (fpost x)) -> DM.IIO.IIO (maybe cout) cpre cpost) pi =
   {

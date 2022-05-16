@@ -26,7 +26,7 @@ assume val pi : monitorable_prop
     Because the callback function is mlified, it means that the runtime checks can fail.
     Because the UNTRUSTED side is instrumented to respect pi --- meaning that the post-conditon
     of the UNTRUSTED side guarantees pi is respected --- the callback has also to respect pi.
-    Therefore, the callback function can be mlified only if it is part of the class mlifyable_guarded.
+    Therefore, the callback function can be mlified only if it is part of the class mlifyable_in.
 **)
 assume val pp_cb_in  : Type
 assume val pp_cb_in_importable : importable pp_cb_in
@@ -58,7 +58,7 @@ assume val pp_cb_pre_checkable : checkable2 pp_cb_pre
 assume val pp_cb_post_cpi : squash (forall x h lt r. pp_cb_pre x h /\ pp_cb_post x h r lt ==> enforced_locally pi h lt)
 
 
-let pp_cb_mlifyable_guarded : mlifyable_guarded_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
+let pp_cb_mlifyable_guarded : mlifyable_in_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
   cmlifyable1 = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
   ca1 = pp_cb_in_importable;
   cpi1 = pp_cb_post_cpi
