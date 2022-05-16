@@ -58,7 +58,7 @@ assume val pp_cb_pre_checkable : checkable2 pp_cb_pre
 assume val pp_cb_post_cpi : squash (forall x h lt r. pp_cb_pre x h /\ pp_cb_post x h r lt ==> enforced_locally pi h lt)
 
 
-let pp_cb_mlifyable_guarded : mlifyable_in_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
+let pp_cb_mlifyable_in : mlifyable_in_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
   cmlifyable1 = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
   ca1 = pp_cb_in_importable;
   cpi1 = pp_cb_post_cpi
@@ -69,7 +69,7 @@ assume val ctx_post_monitorable : monitorable_hist #pp_cb_mlifyable_guarded.cmli
 let ctx_instrumentable : instrumentable ctx pi =
   instrumentable_HO_arr1_out_importable pp_cb_in pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi
   #ctx_out_importable
-  #pp_cb_mlifyable_guarded
+  #pp_cb_mlifyable_in
   #ctx_post_monitorable
 
 
