@@ -40,13 +40,8 @@ let cb_mlifyable : mlifyable cb pi =
     #cb_monitorable_hist
     
 
-let cb_mlifyable_in : mlifyable_in_arr1 file_descr bool (fun fd h -> is_open fd h) (fun fd h r lt -> lt == []) pi = {
-  ca1 = importable_safe_importable file_descr;
-  cmlifyable1 = cb_mlifyable;
-}
-
 private
-let lemma_c1post () : squash (forall (x:cb_mlifyable_in.cmlifyable1.matype) h lt. True /\ enforced_locally pi h lt ==> (exists (r:maybe unit). enforced_locally pi h lt)) by (explode (); witness (`(Inl ())))= ()
+let lemma_c1post () : squash (forall (x:cb_mlifyable.matype) h lt. True /\ enforced_locally pi h lt ==> (exists (r:maybe unit). enforced_locally pi h lt)) by (explode (); witness (`(Inl ())))= ()
 
 private
 let lemma_c2post () : squash (forall h lt. enforced_locally pi h lt  ==> enforced_locally pi h lt) =
@@ -63,11 +58,11 @@ let pp_post_monitorable : checkable_hist_post (fun fd h -> True) (fun fd h r lt 
 unfold
 let ctx_instrumentable : instrumentable ctx pi =
   instrumentable_HO_arr1_out_importable
-    file_descr bool (fun fd h -> is_open fd h) (fun fd h r lt -> lt == []) 
+    cb
     unit (fun h -> True) (fun h r lt -> enforced_locally pi h lt) 
     pi
     #(importable_safe_importable _ #(safe_importable_ml (maybe unit) #(mlfo_maybe unit #(ML_FO mlfo_unit))))
-    #cb_mlifyable_in
+    #cb_mlifyable
     #pp_post_monitorable
   
 let pp_mlifyable : mlifyable pp (trivial_pi ()) =

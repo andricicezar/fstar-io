@@ -60,26 +60,23 @@ let ctx_cb_instrumentable : instrumentable ctx_cb pi =
 assume val pp_cb_pre_checkable : checkable pp_cb_pre
 assume val pp_cb_monitorable_hist : monitorable_hist #ctx_cb (fun _ -> pp_cb_pre) (fun _ -> pp_cb_post) pi 
  
-let pp_cb_mlifyable_in : mlifyable_in_arr0 ctx_cb pp_cb_out pp_cb_pre pp_cb_post pi = {
-  cmlifyable0 =
-    mlifyable_inst_iiowp_trivialize_weaken'
-      ctx_cb #ctx_cb_instrumentable
-      pp_cb_out #pp_cb_out_exportable
-      pp_cb_pre #pp_cb_pre_checkable
-      pp_cb_post
-      #pp_cb_monitorable_hist;
-  ca0 = ctx_cb_instrumentable;
-}
+let pp_cb_mlifyable : mlifyable pp_cb pi =
+  mlifyable_inst_iiowp_trivialize_weaken'
+    ctx_cb #ctx_cb_instrumentable
+    pp_cb_out #pp_cb_out_exportable
+    pp_cb_pre #pp_cb_pre_checkable
+    pp_cb_post
+    #pp_cb_monitorable_hist
 
-assume val ctx_post_monitorable : checkable_hist_post #pp_cb_mlifyable_in.cmlifyable0.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
+assume val ctx_post_monitorable : checkable_hist_post #pp_cb_mlifyable.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
 
 let ctx_instrumentable : instrumentable ctx pi =
   instrumentable_HO_arr0_out_importable
-    ctx_cb pp_cb_out pp_cb_pre pp_cb_post
+    pp_cb
     ctx_out ctx_pre ctx_post
     pi
     #ctx_out_importable
-    #pp_cb_mlifyable_in
+    #pp_cb_mlifyable
     #ctx_post_monitorable
   
 assume val pp_pre_checkable : checkable pp_pre
