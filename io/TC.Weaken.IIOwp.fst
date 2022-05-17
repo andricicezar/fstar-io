@@ -54,12 +54,59 @@ let weaken_new_post_maybe
   #t1 #t2 {| d1:importable t1 |} {| d2: exportable t2 |}
   (post:t1 -> trace -> maybe t2 -> trace -> Type0) :
   Tot (d1.itype -> trace -> maybe d2.etype -> trace -> Type0) =
-    fun x h r lt -> True
+  fun (x:d1.itype) h (r:maybe d2.etype) lt -> 
+    match import x with
+    | None -> r == Inr Contract_failure /\ lt == [] 
+    | Some x' -> (
+        match r with
+        | Inl r' -> exists (r'':t2). export r'' == r' /\ post x' h (Inl r'') lt
+        | Inr err -> post x' h (Inr err) lt)
 
 instance weakable_IIOwp_maybe
   t1 t2 {| d1:importable t1 |} {| d2: exportable t2 |}
   (post : t1 -> trace -> (maybe t2) -> trace -> Type0) :
-  Tot (weakable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x)))) =
+  Tot (weakable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x)))) by (
+    explode ();
+  
+    bump_nth 12;
+    binder_retype (nth_binder 18);
+      norm [delta_only [`%post_as_hist; `%to_hist; `%weaken_new_post_maybe]; iota];
+    trefl ();
+    ignore (destruct_and (nth_binder 17));
+//    l_to_r [`List.Tot.Properties.append_nil_l];
+//    let x = ExtraTactics.instantiate_multiple_foralls (nth_binder (-1)) [(`[]); binder_to_term (nth_binder (-4))] in
+//    mapply x;
+ //   rewrite_eqs_from_context ();
+
+    bump_nth 12;
+    let x = instantiate (nth_binder (-5)) (nth_binder (-1)) in
+    mapply x;
+    rewrite (nth_binder (-3));
+    norm [iota];
+    let t = implies_intro () in
+    norm [delta_only [`%hist_return]];
+    l_to_r [`List.Tot.Properties.append_nil_l;`List.Tot.Properties.append_l_nil];
+    binder_retype (nth_binder 18);
+      norm [delta_only [`%weaken_new_post_maybe;`%post_as_hist;`%to_hist]];
+    trefl ();
+    ignore (destruct_and (nth_binder 17));
+ //   let x = ExtraTactics.instantiate_multiple_foralls (nth_binder (-1)) [binder_to_term (nth_binder 20); binder_to_term (nth_binder (-5))] in
+//    mapply x;
+
+    bump_nth 12;
+    let x = instantiate (nth_binder (-4)) (nth_binder (-1)) in
+    mapply x;
+    rewrite (nth_binder (-3));
+    norm [iota];
+    let t = implies_intro () in
+    norm [delta_only [`%hist_return]];
+    l_to_r [`List.Tot.Properties.append_nil_l;`List.Tot.Properties.append_l_nil];
+    binder_retype (nth_binder 18);
+    trefl ();
+    ignore (destruct_and (nth_binder 17))
+
+ //   dump "H"
+  )=
   mk_weakable 
     ((x:d1.itype) -> IIOwp (maybe d2.etype) (post_as_hist ((weaken_new_post_maybe post) x)))
     #(trivial_IIOwp t1 (maybe t2) post)
