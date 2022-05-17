@@ -41,7 +41,7 @@ assume val pi : monitorable_prop
 
 (** the problem I suspected exists. **)
 
-assume val ctx_r_post_monitorable : monitorable_hist ctx_r_pre ctx_r_post pi
+assume val ctx_r_post_monitorable : checkable_hist_post ctx_r_pre ctx_r_post pi
 
 let ctx_r_instrumentable : instrumentable ctx_r pi =
   instrumentable_IIO_strengthen
@@ -49,7 +49,7 @@ let ctx_r_instrumentable : instrumentable ctx_r pi =
     ctx_r_out #ctx_r_out_importable
     ctx_r_pre ctx_r_post pi #ctx_r_post_monitorable
 
-assume val ctx_post_monitorable : monitorable_hist ctx_pre ctx_post pi
+assume val ctx_post_monitorable : checkable_hist_post ctx_pre ctx_post pi
 
 let ctx_instrumentable : instrumentable ctx pi =
   instrumentable_IIO_strengthen_inst
@@ -62,5 +62,5 @@ let ctx_instrumentable : instrumentable ctx pi =
   
 assume val pp_pre_checkable : checkable pp_pre
 
-let pp_mlifyable : mlifyable pp =
+let pp_mlifyable : mlifyable pp (trivial_pi ()) =
   mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post 

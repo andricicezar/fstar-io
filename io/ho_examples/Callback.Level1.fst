@@ -90,6 +90,16 @@ let pp_mlifyable : mlifyable pp (trivial_pi ()) =
     pp_pre #pp_pre_checkable
     pp_post 
 
+let test_output_type (main:pp) : (((pp_cb_in_importable.itype -> MIIO (maybe (pp_cb_out_exportable.etype))) -> IIOpi (ctx_out_importable.itype) pi) -> MIIO (maybe (pp_out_exportable.etype)))
+  by ( 
+  explode ();
+  bump_nth 5;
+//  dump "H";
+  tadmit ()
+  )=
+  mlify #_ #_
+    #(mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post) main
+
 (** CA: I don't like in this example that every output type contains maybe.
     It is necessary to have this for cb and f because our effect does not support halting the execution
     when a contract failure occurs. **)
