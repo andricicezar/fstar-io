@@ -51,7 +51,30 @@ instance mlifyable_iiowp_post_2
 
 (** *** Arrows with base types as input/output **)
 
-let convert #t1 #t2 {| d1:importable t1 |} {| d2: exportable t2 |} (pi:monitorable_prop) (post:t1 -> trace -> maybe t2 -> trace -> Type0) (x:monitorable_hist (fun _ _ -> True) post pi) : monitorable_hist (fun _ _ -> True) (weaken_new_post_maybe #t1 #t2 #d1 #d2 post) pi = admit ()
+let weaken_new_post 
+  #t1 {| d1:importable t1 |}
+  #t2 {| d2: exportable t2 |}
+  (pi:monitorable_prop)
+  (post:t1 -> trace -> maybe t2 -> trace -> Type0)
+  (d: squash (forall x h lt. enforced_locally pi h lt ==> (exists r. post x h r lt))) :
+  squash (forall x h lt. enforced_locally pi h lt ==> (exists r. (weaken_new_post_maybe #t1 #t2 #d1 #d2 post) x h r lt)) by (
+    explode ();
+    let x = ExtraTactics.instantiate_multiple_foralls (nth_binder 6) [binder_to_term (nth_binder 7); binder_to_term (nth_binder 8); binder_to_term (nth_binder 9)] in
+    admit ();
+  //  let _ = ExtraTactics.apply_in (nth_binder (-1)) (nth_binder (-2)) in
+ //   norm [delta_only [`%weaken_new_post_maybe]];
+    dump "H" 
+  )= ()
+
+let convert
+  #t1 {| d1:importable t1 |}
+  #t2 {| d2: exportable t2 |}
+  (pi:monitorable_prop)
+  (post:t1 -> trace -> maybe t2 -> trace -> Type0)
+  (x:monitorable_hist (fun _ _ -> True) post pi) : 
+  monitorable_hist (fun _ _ -> True) (weaken_new_post_maybe #t1 #t2 #d1 #d2 post) pi = {
+    c1post = weaken_new_post pi post x.c1post 
+  }
 
 instance mlifyable_iiowp_weaken_post
   t1 {| d1:importable t1 |}
@@ -135,6 +158,7 @@ instance mlifyable_inst_iiowp_weaken'
       | Inr err -> Inr err)
 
 #set-options "--print_implicits --print_bound_var_types"
+(** TODO: there can be two pi's where the one for instrumentable is stricter **)
 instance mlifyable_inst_iiowp_trivialize_weaken'
   (#pi:monitorable_prop)
   t1 {| d1:instrumentable t1 pi |}

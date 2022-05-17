@@ -102,6 +102,7 @@ instance weakable_IIOwp_maybe
     norm [delta_only [`%hist_return]];
     l_to_r [`List.Tot.Properties.append_nil_l;`List.Tot.Properties.append_l_nil];
     binder_retype (nth_binder 18);
+      norm [delta_only [`%weaken_new_post_maybe;`%post_as_hist;`%to_hist]];
     trefl ();
     ignore (destruct_and (nth_binder 17))
 
