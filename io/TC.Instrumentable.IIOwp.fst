@@ -109,12 +109,14 @@ The post-condition of the ctx must respect pi, but because f is not instrumented
 class mlifyable_in_arr0 (a b:Type) pre post pi =
   { cmlifyable0 : mlifyable (a -> IIO (maybe b) pre post) pi;
     ca0: instrumentable a pi;
-    cpi0 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt) }
+  //  cpi0 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)
+  }
 
 class mlifyable_in_arr1 (a b:Type) (pre:a -> trace -> Type0) (post:a -> trace -> maybe b -> trace -> Type0) pi =
   { cmlifyable1 : mlifyable ((x:a) -> IIO (maybe b) (pre x) (post x)) pi;
     ca1: importable a;
-    cpi1 : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) }
+ //   cpi1 : squash (forall (x:a) h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt) 
+ }
 
 (** 
 this instance should let us mlify example 1.

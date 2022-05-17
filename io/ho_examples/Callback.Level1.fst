@@ -55,37 +55,40 @@ assume val pp_post : trace -> maybe pp_out -> trace -> Type0
 type pp = ctx -> IIO (maybe pp_out) pp_pre pp_post
 
 assume val pp_cb_pre_checkable : checkable2 pp_cb_pre
-assume val pp_cb_post_cpi : squash (forall x h lt r. pp_cb_pre x h /\ pp_cb_post x h r lt ==> enforced_locally pi h lt)
 
+assume val pp_monitorable_hist : monitorable_hist pp_cb_pre pp_cb_post pi
 
 let pp_cb_mlifyable_in : mlifyable_in_arr1 pp_cb_in pp_cb_out pp_cb_pre pp_cb_post pi = {
-  cmlifyable1 = mlifyable_iiowp_trivialize_weaken_post pp_cb_in #pp_cb_in_importable pp_cb_out #pp_cb_out_exportable pp_cb_pre #pp_cb_pre_checkable pp_cb_post;
+  cmlifyable1 = 
+    mlifyable_iiowp_trivialize_weaken_post
+      pp_cb_in #pp_cb_in_importable
+      pp_cb_out #pp_cb_out_exportable
+      pp_cb_pre #pp_cb_pre_checkable
+      pp_cb_post
+      pi #pp_monitorable_hist;
   ca1 = pp_cb_in_importable;
-  cpi1 = pp_cb_post_cpi
 }
 
-assume val ctx_post_monitorable : monitorable_hist #pp_cb_mlifyable_guarded.cmlifyable1.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
+assume val ctx_post_monitorable : checkable_hist_post #pp_cb_mlifyable_in.cmlifyable1.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
 
 let ctx_instrumentable : instrumentable ctx pi =
-  instrumentable_HO_arr1_out_importable pp_cb_in pp_cb_out pp_cb_pre pp_cb_post ctx_out ctx_pre ctx_post pi
-  #ctx_out_importable
-  #pp_cb_mlifyable_in
-  #ctx_post_monitorable
+  instrumentable_HO_arr1_out_importable
+    pp_cb_in pp_cb_out pp_cb_pre pp_cb_post
+    ctx_out ctx_pre ctx_post
+    pi
+    #ctx_out_importable
+    #pp_cb_mlifyable_in
+    #ctx_post_monitorable
 
 
 assume val pp_pre_checkable : checkable pp_pre
   
-let pp_mlifyable : mlifyable pp =
-  mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post 
-
-let test_output_type (main:pp) : (((pp_cb_in_importable.itype -> MIIO (maybe (pp_cb_out_exportable.etype))) -> IIOpi (ctx_out_importable.itype) pi) -> MIIO (maybe (pp_out_exportable.etype)))
-  by ( 
-  explode ();
-  bump_nth 5;
-//  dump "H";
-  tadmit ()
-  )=
-  mlify #_ #(mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post) main
+let pp_mlifyable : mlifyable pp (trivial_pi ()) =
+  mlifyable_inst_iiowp_trivialize_weaken
+    ctx #ctx_instrumentable
+    pp_out #pp_out_exportable
+    pp_pre #pp_pre_checkable
+    pp_post 
 
 (** CA: I don't like in this example that every output type contains maybe.
     It is necessary to have this for cb and f because our effect does not support halting the execution

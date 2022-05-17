@@ -32,29 +32,75 @@ instance mlifyable_iiowp_post
     (t1 -> MIIO t2)
     (fun f x -> f x)
 
+instance mlifyable_iiowp_post_2
+  t1 {| d1:ml t1 |}
+  t2 {| d2:ml t2 |} 
+  post 
+  pi {| d3:monitorable_hist (fun _ _ -> True) post pi |} :
+  Tot (mlifyable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x))) pi) by (
+    explode (); bump_nth 7; 
+    tadmit ();
+    dump "H")=
+  mk_mlifyable
+    #((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x)))
+    (t1 -> IIOpi (maybe t2) pi)
+    #(ml_instrumented_iio t1 #d1 (maybe t2) #(ML_FO (mlfo_maybe t2 #d2)) pi)
+    (fun f x -> 
+      let _ = d3.c1post in
+      f x)
+
 (** *** Arrows with base types as input/output **)
+
+let convert #t1 #t2 {| d1:importable t1 |} {| d2: exportable t2 |} (pi:monitorable_prop) (post:t1 -> trace -> maybe t2 -> trace -> Type0) (x:monitorable_hist (fun _ _ -> True) post pi) : monitorable_hist (fun _ _ -> True) (weaken_new_post_maybe #t1 #t2 #d1 #d2 post) pi = admit ()
 
 instance mlifyable_iiowp_weaken_post
   t1 {| d1:importable t1 |}
   t2 {| d2:exportable t2 |}
-  post :
-  Tot (mlifyable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x))) (trivial_pi ())) =
+  post
+  pi {| d3:monitorable_hist (fun _ _ -> True) post pi |} :
+  Tot (mlifyable ((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x))) pi) =
   mk_mlifyable
     #((x:t1) -> IIOwp (maybe t2) (post_as_hist (post x)))
-    (d1.itype -> MIIO (maybe d2.etype))
-    #(ml_arrow_miio d1.itype #(ML_FO d1.citype) (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))))
+    (d1.itype -> IIOpi (maybe d2.etype) pi)
+    #(ml_instrumented_iio d1.itype #(ML_FO d1.citype) (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))) pi)
     (fun f -> 
       mlify 
         #_ #_
-        #(mlifyable_iiowp_post 
+        #(mlifyable_iiowp_post_2 
             d1.itype
             #(ML_FO d1.citype)
-            (maybe d2.etype)
-            #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype)))
-            (weaken_new_post_maybe post))
+            d2.etype
+            #(ML_FO d2.cetype)
+            (weaken_new_post_maybe post)
+            pi
+            #(convert pi post d3))
         (weaken f))
 
+let convert2 #t1 #t2 {| d1:importable t1 |} {| d2: exportable t2 |} (pi:monitorable_prop) pre {| d3: checkable2 pre |} (post:t1 -> trace -> maybe t2 -> trace -> Type0) (x:monitorable_hist pre post pi) : monitorable_hist (fun _ _ ->True) (trivialize_new_post_maybe d3.check2 post) pi = admit ()
+
 instance mlifyable_iiowp_trivialize_weaken_post
+  t1 {| d1:importable t1 |}
+  t2 {| d2:exportable t2 |}
+  pre {| d3: checkable2 pre |}
+  post 
+  pi {| d4:monitorable_hist pre post pi |} :
+  Tot (mlifyable ((x:t1) -> IIO (maybe t2) (pre x) (post x)) pi) =
+  mk_mlifyable
+    #((x:t1) -> IIO (maybe t2) (pre x) (post x))
+    (d1.itype -> IIOpi (maybe d2.etype) pi)
+    #(ml_instrumented_iio d1.itype #(ML_FO d1.citype) (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))) pi)
+    (fun f -> 
+      mlify 
+        #_ #_ 
+        #(mlifyable_iiowp_weaken_post 
+          t1
+          t2
+          (trivialize_new_post_maybe d3.check2 post)
+          pi
+          #(convert2 pi pre post d4))
+        (trivialize f))
+
+instance mlifyable_iiowp_trivialize_weaken_post'
   t1 {| d1:importable t1 |}
   t2 {| d2:exportable t2 |}
   pre {| d3: checkable2 pre |}
@@ -65,9 +111,51 @@ instance mlifyable_iiowp_trivialize_weaken_post
     (d1.itype -> MIIO (maybe d2.etype))
     #(ml_arrow_miio d1.itype #(ML_FO d1.citype) (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))))
     (fun f -> 
-      mlify #_ #_ #(mlifyable_iiowp_weaken_post t1 t2 (trivialize_new_post_maybe d3.check2 post)) (trivialize f))
+      mlify #_ #_ #(mlifyable_iiowp_trivialize_weaken_post t1 t2 pre post (trivial_pi ()) #(admit ())) (trivialize f))
 
 (** *** Arrows with other arrows as input and base types as output **)
+
+instance mlifyable_inst_iiowp_weaken'
+  (#pi:monitorable_prop)
+  t1 {| d1:instrumentable t1 pi |} 
+  t2 {| d2:exportable t2 |} 
+  post 
+  {| monitorable_hist #t1 (fun _ _ -> True) (fun _ -> post) pi |} :
+  Tot (mlifyable (t1 -> IIO (maybe t2) (fun _ -> True) post) pi) =
+  admit ();
+  mk_mlifyable
+    #(t1 -> IIO (maybe t2) (fun _ -> True) post)
+    (d1.inst_type -> IIOpi (maybe d2.etype) pi)
+    #(ml_instrumented_iio 
+        d1.inst_type #(ML_ARROW d1.cinst_type)
+        (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))) pi)
+    (fun p (ct:d1.inst_type) ->
+      match p (d1.strengthen ct) with
+      | Inl x -> Inl (export x)
+      | Inr err -> Inr err)
+
+#set-options "--print_implicits --print_bound_var_types"
+instance mlifyable_inst_iiowp_trivialize_weaken'
+  (#pi:monitorable_prop)
+  t1 {| d1:instrumentable t1 pi |}
+  t2 {| d2:exportable t2 |} 
+  pre {| d3:checkable pre |}
+  post 
+  {| monitorable_hist #t1 #t2 (fun _ -> pre) (fun _ -> post) pi |} :
+  Tot (mlifyable (t1 -> IIO (maybe t2) pre post) pi) =
+  mk_mlifyable
+    #(t1 -> IIO (maybe t2) pre post)
+    (d1.inst_type -> IIOpi (maybe d2.etype) pi)
+    #(ml_instrumented_iio d1.inst_type #(ML_ARROW d1.cinst_type) (maybe d2.etype) #(ML_FO (mlfo_maybe d2.etype #(ML_FO d2.cetype))) pi)
+    (fun p -> 
+      mlify
+        #_ #_
+        #(mlifyable_inst_iiowp_weaken'
+          t1 
+          t2 
+          (trivialize_new_post_maybe' d3.check post)
+          #(admit ()))
+        (trivialize p))
 
 instance mlifyable_inst_iiowp_weaken
   (#pi:monitorable_prop)
