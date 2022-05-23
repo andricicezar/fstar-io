@@ -1,9 +1,11 @@
-module IIO.Compile.Export
+module IIO.CompileTo.ILang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Common
+open IO.Sig
+open DM.IIO
 open TC.Monitorable.Hist
 open ILang
 open TC.Checkable
@@ -98,9 +100,6 @@ instance exportable_arrow_with_post
          enforced_locally 'pi h lt);
       let f' : t1 -> IIOpi (resexn t2) 'pi = f in
       export #_ #'pi #(exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2) f')
-
-open IO.Sig
-open DM.IIO
 
 let trivialize_new_post_maybe
   (pre:'a -> trace -> bool)
