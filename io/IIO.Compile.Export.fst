@@ -29,7 +29,7 @@ class importable (t : Type) (pi:monitorable_prop) = {
 
 
 
-(** Exportable instances **)
+(** *** Exportable instances **)
 
 let mk_exportable (#t1 t2 : Type) {| d1:ilang t2 'pi |} (exp : t1 -> t2) : exportable t1 'pi =
   { etype = t2; c_etype = d1; export = exp; }
@@ -62,6 +62,8 @@ instance exportable_either
 
 instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi = { mldummy = () }
 
+(** *** Exportable arrows **)
+
 instance exportable_arrow_with_no_pre_and_no_post
   t1 {| d1:importable t1 'pi |}
   t2 {| d2:exportable t2 'pi |} :
@@ -79,9 +81,7 @@ instance exportable_arrow_with_no_pre_and_no_post
       end
       | Inr err -> Inr err)
 
-
 (** This case does not talk about a post that depends on the input. **)
-
 instance exportable_arrow_with_post
   t1 {| d1:importable t1 'pi |}
   t2 {| d2:exportable t2 'pi |}
@@ -169,7 +169,7 @@ instance exportable_arrow_with_pre_post
     
 
 
-(** Safe importable instances **)
+(** *** Safe importable instances **)
 let mk_safe_importable
   (t1 #t2 : Type) {| d1:ilang t1 'pi |}
   (imp : t1 -> t2) :
@@ -179,7 +179,7 @@ let mk_safe_importable
 let ilang_is_safely_importable t {| ilang t 'pi |} : safe_importable t 'pi =
   mk_safe_importable t (fun x -> x)
 
-(** Importable instances **)
+(** *** Importable instances **)
 
 let mk_importable
   (t1 #t2 : Type) {| d1: ilang t1 'pi |}
@@ -267,3 +267,83 @@ instance importable_dpair_refined
        | (Inl x, Inl y) ->
             if check2 #t1 #t2 #p x y then Inl (| x, y |) else Inr Contract_failure
        | _ -> Inr Contract_failure) 
+
+
+(** *** Safe importable arrows **)
+instance safe_importable_resexn
+  t1 {| d1:importable t1 'pi |} :
+  Tot (safe_importable (resexn t1) 'pi) =
+  mk_safe_importable
+    (resexn d1.itype)
+    #_
+    #(ilang_resexn 'pi d1.itype #d1.c_itype)
+    (fun x ->
+      match x with
+      | Inl x' -> begin
+        match import x' with
+        | Inl x'' -> Inl x''
+        | Inr err -> Inr err
+      end
+      | Inr y -> Inr y)
+
+instance safe_importable_arrow
+  (t1:Type) {| d1:exportable t1 'pi |}
+  (t2:Type) {| d2:importable t2 'pi |} : 
+  safe_importable ((x:t1) -> IIOpi (resexn t2) 'pi) 'pi =
+  mk_safe_importable
+    (d1.etype -> IIOpi (resexn d2.itype) 'pi)
+    #((x:t1) -> IIOpi (resexn t2) 'pi)
+    #(ilang_arrow 'pi d1.etype #d1.c_etype d2.itype #d2.c_itype)
+    (fun f (x:t1) -> 
+      (let x' = export x in 
+      safe_import #_ #'pi #(safe_importable_resexn t2 #d2) (f x')))
+
+let extract_local_trace (h':trace) (pi:monitorable_prop) :
+  IIO trace
+    (requires (fun h -> h' `suffix_of` h))
+    (ensures (fun h lt' lt ->
+      lt == [] /\
+      enforced_locally pi h lt /\
+      h == (apply_changes h' lt'))) =
+  let h = get_trace () in
+  suffix_of_length h' h;
+  let n : nat = (List.length h) - (List.length h') in
+  let (lt', ht) = List.Tot.Base.splitAt n h in
+  lemma_splitAt_equal n h;
+  lemma_splitAt_suffix h h';
+  List.Tot.Properties.rev_involutive lt';
+  assert (h == apply_changes h' (List.rev lt'));
+  List.rev lt'
+
+let enforce_post
+  (#t1 #t2:Type)
+  (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0)
+  (post:t1 -> trace -> (r:resexn t2) -> trace -> Type0)
+  {| post_c:checkable_hist_post pre post pi |}
+  (f:t1 -> IIOpi (resexn t2) pi)
+  (x:t1) :
+  IIO (resexn t2) (pre x) (post x) =
+  let h = get_trace () in
+  let r : resexn t2 = f x in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let lt = extract_local_trace h pi in
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+  if post_c.result_check x h r lt then r
+  else Inr Contract_failure
+
+instance safe_importable_arrow_pre_post
+  (t1:Type) {| d1:exportable t1 'pi |}
+  (t2:Type) {| d2:importable t2 'pi |}
+  (pre : t1 -> trace -> Type0)
+  (** it must be `resexn t2` because needs the ability to fail **)
+  (post : t1 -> trace -> (r:resexn t2) -> trace -> Type0)
+  {| post_c:checkable_hist_post pre post 'pi |} : 
+  safe_importable ((x:t1) -> IIO (resexn t2) (pre x) (post x)) 'pi =
+  mk_safe_importable
+    (d1.etype -> IIOpi (resexn d2.itype) 'pi)
+    #((x:t1) -> IIO (resexn t2) (pre x) (post x))
+    #(ilang_arrow 'pi d1.etype #d1.c_etype d2.itype #d2.c_itype)
+    (fun f -> 
+      let f' = safe_import #_ #'pi #(safe_importable_arrow t1 #d1 t2 #d2) f in
+      enforce_post 'pi pre post #post_c f')
