@@ -38,6 +38,7 @@ effect IIOpi (a:Type) (pi : monitorable_prop) =
 class ilang (t:Type u#a) (pi:monitorable_prop) = { mldummy : unit }
 
 instance ilang_unit (pi:monitorable_prop) : ilang unit pi = { mldummy = () }
+instance ilang_file_descr (pi:monitorable_prop) : ilang file_descr pi = { mldummy = () }
 
 instance ilang_bool (pi:monitorable_prop) : ilang bool pi = { mldummy = () }
 instance ilang_int (pi:monitorable_prop) : ilang int pi = { mldummy = () }

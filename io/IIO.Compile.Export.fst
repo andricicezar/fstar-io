@@ -8,25 +8,24 @@ open TC.Monitorable.Hist
 open ILang
 open TC.Checkable
 
-class exportable (t : Type) (pi:monitorable_prop) = {
-  etype : Type;
+class exportable (t : Type u#a) (pi:monitorable_prop) = {
+  etype : Type u#a;
   c_etype : ilang etype pi;
   export : t -> etype;
 }
 
-class safe_importable (t : Type) (pi:monitorable_prop) = {
-  sitype : Type; 
+class safe_importable (t : Type u#a) (pi:monitorable_prop) = {
+  sitype : Type u#a;
   c_sitype : ilang sitype pi;
   safe_import : sitype -> t; 
 }
 
 
-class importable (t : Type) (pi:monitorable_prop) = {
-  itype : Type; 
+class importable (t : Type u#a) (pi:monitorable_prop) = {
+  itype : Type u#a; 
   c_itype : ilang itype pi;
   import : itype -> resexn t;
 }
-
 
 
 (** *** Exportable instances **)
@@ -176,7 +175,7 @@ let mk_safe_importable
   Tot (safe_importable t2 'pi) =
   { sitype = t1; c_sitype = d1; safe_import = imp; }
 
-let ilang_is_safely_importable t {| ilang t 'pi |} : safe_importable t 'pi =
+let ilang_is_safely_importable #t (_:ilang t 'pi) : safe_importable t 'pi =
   mk_safe_importable t (fun x -> x)
 
 (** *** Importable instances **)
@@ -316,7 +315,7 @@ let enforce_post
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> (r:resexn t2) -> trace -> Type0)
-  {| post_c:checkable_hist_post pre post pi |}
+  {| post_c:checkable_hist_post #t1 #t2 pre post pi |}
   (f:t1 -> IIOpi (resexn t2) pi)
   (x:t1) :
   IIO (resexn t2) (pre x) (post x) =
@@ -334,7 +333,7 @@ instance safe_importable_arrow_pre_post
   (pre : t1 -> trace -> Type0)
   (** it must be `resexn t2` because needs the ability to fail **)
   (post : t1 -> trace -> (r:resexn t2) -> trace -> Type0)
-  {| post_c:checkable_hist_post pre post 'pi |} : 
+  {| post_c:checkable_hist_post #t1 #t2 pre post 'pi |} : 
   safe_importable ((x:t1) -> IIO (resexn t2) (pre x) (post x)) 'pi =
   mk_safe_importable
     (d1.etype -> IIOpi (resexn d2.itype) 'pi)

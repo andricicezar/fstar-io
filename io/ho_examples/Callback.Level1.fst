@@ -4,13 +4,9 @@ open FStar.Tactics
 
 open Common
 open DM 
-open TC.ML
-open TC.ML.HO
+open ILang
+open IIO.Compile.Export
 open TC.Checkable
-open TC.Export
-open TC.MLify.IIOwp
-open TC.Monitorable.Hist
-open TC.Instrumentable.IIOwp
 
 (** ***  accepts a function that accepts a callback **)
 (** pp  - partial program (TRUSTED)
@@ -29,12 +25,12 @@ assume val pi : monitorable_prop
     Therefore, the callback function can be mlified only if it is part of the class mlifyable_in.
 **)
 assume val pp_cb_in  : Type
-assume val pp_cb_in_importable : importable pp_cb_in
+assume val pp_cb_in_importable : importable pp_cb_in pi
 assume val pp_cb_out : Type
-assume val pp_cb_out_exportable : exportable pp_cb_out
+assume val pp_cb_out_exportable : exportable pp_cb_out pi
 assume val pp_cb_pre : pp_cb_in -> trace -> Type0
-assume val pp_cb_post : pp_cb_in -> trace -> maybe pp_cb_out -> trace -> Type0
-type pp_cb = x:pp_cb_in -> IIO (maybe pp_cb_out) (pp_cb_pre x) (pp_cb_post x) 
+assume val pp_cb_post : pp_cb_in -> trace -> resexn pp_cb_out -> trace -> Type0
+type pp_cb = x:pp_cb_in -> IIO (resexn pp_cb_out) (pp_cb_pre x) (pp_cb_post x) 
 
 (** The UNTRUSTED side accepts the callback.
     The UNTRUSTED side expects a callback that can fail.
@@ -43,60 +39,49 @@ type pp_cb = x:pp_cb_in -> IIO (maybe pp_cb_out) (pp_cb_pre x) (pp_cb_post x)
     enforced, its output type must reflect the possibility of a contract failure.
 **)
 assume val ctx_out : Type
-assume val ctx_out_importable : importable (maybe ctx_out)
-assume val ctx_pre : trace -> Type0
-assume val ctx_post : trace -> maybe ctx_out -> trace -> Type0
-type ctx = pp_cb -> IIO (maybe ctx_out) ctx_pre ctx_post 
+assume val ctx_out_importable : importable ctx_out pi
+assume val ctx_pre : pp_cb -> trace -> Type0
+assume val ctx_post : pp_cb -> trace -> resexn ctx_out -> trace -> Type0
+type ctx = x:pp_cb -> IIO (resexn ctx_out) (ctx_pre x) (ctx_post x)
 
 assume val pp_out : Type
-assume val pp_out_exportable : exportable pp_out
-assume val pp_pre : trace -> Type0
-assume val pp_post : trace -> maybe pp_out -> trace -> Type0
-type pp = ctx -> IIO (maybe pp_out) pp_pre pp_post
+assume val pp_out_exportable : exportable pp_out pi
+assume val pp_pre : ctx -> trace -> Type0
+assume val pp_post : ctx -> trace -> resexn pp_out -> trace -> Type0
+type pp = x:ctx -> IIO (resexn pp_out) (pp_pre x) (pp_post x)
 
 
 assume val pp_cb_pre_checkable : checkable2 pp_cb_pre
 
 assume val pp_monitorable_hist : monitorable_hist pp_cb_pre pp_cb_post pi
 
-let pp_cb_mlifyable : mlifyable pp_cb pi =
-  mlifyable_iiowp_trivialize_weaken_post
+let pp_cb_exportable : exportable pp_cb pi =
+  exportable_arrow_with_pre_post
     pp_cb_in #pp_cb_in_importable
     pp_cb_out #pp_cb_out_exportable
     pp_cb_pre #pp_cb_pre_checkable
     pp_cb_post
-    pi #pp_monitorable_hist
+    #pp_monitorable_hist
 
-assume val ctx_post_monitorable : checkable_hist_post #pp_cb_mlifyable.matype (fun x -> ctx_pre) (fun x -> ctx_post) pi
+assume val ctx_post_monitorable : checkable_hist_post #pp_cb ctx_pre ctx_post pi
 
-let ctx_instrumentable : instrumentable ctx pi =
-  instrumentable_HO_arr1_out_importable
-    pp_cb
-    ctx_out ctx_pre ctx_post
-    pi
-    #ctx_out_importable
-    #pp_cb_mlifyable
-    #ctx_post_monitorable
+let ctx_importable : importable ctx pi =
+  safe_importable_is_importable ctx #(
+    safe_importable_arrow_pre_post
+      pp_cb #pp_cb_exportable
+      ctx_out #ctx_out_importable
+      ctx_pre
+      ctx_post
+      #ctx_post_monitorable)
 
-assume val pp_pre_checkable : checkable pp_pre
+assume val pp_pre_checkable : checkable2 pp_pre
   
-let pp_mlifyable : mlifyable pp (trivial_pi ()) =
-  mlifyable_inst_iiowp_trivialize_weaken
-    ctx #ctx_instrumentable
+assume val pp_hist_monitorable : monitorable_hist pp_pre pp_post pi
+
+let pp_exportable: exportable pp pi =
+  exportable_arrow_with_pre_post
+    ctx #ctx_importable
     pp_out #pp_out_exportable
     pp_pre #pp_pre_checkable
-    pp_post 
-
-let test_output_type (main:pp) : (((pp_cb_in_importable.itype -> MIIO (maybe (pp_cb_out_exportable.etype))) -> IIOpi (ctx_out_importable.itype) pi) -> MIIO (maybe (pp_out_exportable.etype)))
-  by ( 
-  explode ();
-  bump_nth 5;
-//  dump "H";
-  tadmit ()
-  )=
-  mlify #_ #_
-    #(mlifyable_inst_iiowp_trivialize_weaken ctx #ctx_instrumentable pp_out #pp_out_exportable pp_pre #pp_pre_checkable pp_post) main
-
-(** CA: I don't like in this example that every output type contains maybe.
-    It is necessary to have this for cb and f because our effect does not support halting the execution
-    when a contract failure occurs. **)
+    pp_post
+    #pp_hist_monitorable
