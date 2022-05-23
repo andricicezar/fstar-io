@@ -63,7 +63,7 @@ let pp_cb_exportable : exportable pp_cb pi =
     pp_cb_post
     #pp_monitorable_hist
 
-assume val ctx_post_monitorable : checkable_hist_post #pp_cb ctx_pre ctx_post pi
+assume val ctx_checkable_hist_post : checkable_hist_post #pp_cb ctx_pre ctx_post pi
 
 let ctx_importable : importable ctx pi =
   safe_importable_is_importable ctx #(
@@ -72,7 +72,7 @@ let ctx_importable : importable ctx pi =
       ctx_out #ctx_out_importable
       ctx_pre
       ctx_post
-      #ctx_post_monitorable)
+      #ctx_checkable_hist_post)
 
 assume val pp_pre_checkable : checkable2 pp_pre
   
