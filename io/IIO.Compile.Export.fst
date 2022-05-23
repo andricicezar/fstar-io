@@ -279,11 +279,7 @@ instance safe_importable_resexn
     #(ilang_resexn 'pi d1.itype #d1.c_itype)
     (fun x ->
       match x with
-      | Inl x' -> begin
-        match import x' with
-        | Inl x'' -> Inl x''
-        | Inr err -> Inr err
-      end
+      | Inl x' -> import x' 
       | Inr y -> Inr y)
 
 instance safe_importable_arrow
