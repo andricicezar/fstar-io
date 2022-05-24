@@ -10,9 +10,6 @@ open Common
 (** TLang is a language that acts as the target language. 
 **)
 
-
-#set-options "--print_universes"
-
 effect MIIO (a:Type) = DM.IIO.IIOwp a (Hist.trivial_hist ())
 
 class tlang (t:Type) = { mldummy : unit }
