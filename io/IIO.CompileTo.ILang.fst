@@ -33,7 +33,7 @@ class importable (t : Type u#a) (pi:monitorable_prop) = {
 (** *** Exportable instances **)
 
 let mk_exportable (#t1 t2 : Type) {| d1:ilang t2 'pi |} (exp : t1 -> t2) : exportable t1 'pi =
-  { etype = t2; c_etype = d1; export = exp; }
+  Mkexportable t2 d1 exp
 
 instance ilang_is_exportable t {| ilang t 'pi |} : exportable t 'pi =
   mk_exportable t (fun x -> x)

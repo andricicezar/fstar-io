@@ -24,38 +24,35 @@ let req_sig : op_sig req_cmds = { args = req_args; res = req_res; }
 **)
 
 noeq
-type free (op:Type0) (s:op_sig op) (a:Type) : Type =
-| Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free op s a) -> free op s a
-| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free op s a) -> free op s a
-| Return : a -> free op s a
+type free (op:Type0) (s:op_sig op) (dec:Type0) (a:Type) : Type =
+| Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free op s dec a) -> free op s dec a
+| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free op s dec a) -> free op s dec a
+| Decorated : (d:dec) -> #b:Type -> (* cont0:(unit -> *) free op s dec b (* ) *) ->
+                                      cont1:(b-> free op s dec a) -> free op s dec a
+| Return : a -> free op s dec a
 
-let free_return (op:Type) (s:op_sig op) (a:Type) (x:a) : free op s a =
+let free_return (op:Type) (s:op_sig op) (dec:Type0) (a:Type) (x:a) : free op s dec a =
   Return x
 
-let rec return_of (x:'a) (f:free 'op 's 'a) =
-  match f with
-  | Return x' -> x == x'
-  | Call cmd arg k ->
-     exists r'. return_of x (k r')
-  | PartialCall pre k ->
-     pre ==> return_of x (k ())
-
 let rec free_bind
-  (op:Type)
+  (op:Type0)
   (s:op_sig op)
+  (dec:Type0)
   (a:Type)
   (b:Type)
-  (l : free op s a)
-  (k : a -> free op s b) :
-  Tot (free op s b) =
+  (l : free op s dec a)
+  (k : a -> free op s dec b) :
+  Tot (free op s dec b) =
   match l with
   | Return x -> k x
   | Call cmd args fnc ->
       Call cmd args (fun i ->
-        free_bind op s a b (fnc i) k)
+        free_bind op s dec a b (fnc i) k)
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->
-        free_bind op s a b (fnc ()) k)
+        free_bind op s dec a b (fnc ()) k)
+  | Decorated d m fnc -> Decorated d m (fun i ->
+        free_bind op s dec a b (fnc i) k)
 
 let free_map
   (op:Type)

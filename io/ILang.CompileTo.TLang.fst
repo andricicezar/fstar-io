@@ -34,6 +34,9 @@ let rec _instrument
   | Return r -> r
   | Call GetTrace argz fnc -> Inr Contract_failure
   | PartialCall pre fnc -> Inr Contract_failure
+  | Decorated d m k ->
+      let r = IIOwp?.reflect m in
+      instrument (k r) 'p piprop
   | Call cmd argz fnc -> begin
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace ('p cmd) (io_pre cmd) piprop) in
@@ -56,11 +59,12 @@ class compile_ilang (t:Type) (pi:monitorable_prop) = {
 
 let instrument''
   (f:'a -> MIIO (resexn 'b))
+  {| compile_ilang 'a |}
   {| tlang ('a -> MIIO 'b) |}
   (pi:monitorable_prop) :
   Tot ('a -> IIOpi (resexn 'b) pi) = //{ ilang ('a -> IIOpi 'b pi) pi }) =
   fun (x:'a) -> 
-    let tree : DM.IIO.dm_iio (resexn 'b) (trivial_hist ()) = reify (f x) in
+    let tree : DM.IIO.dm_iio (resexn 'b) (trivial_hist ()) = reify (f (compile x)) in
     _instrument tree pi (admit ()) 
 
 let instrument (#a #b:Type)
@@ -74,6 +78,7 @@ instance compile_ilang_base t1 t2 pi {| d1:compile_ilang t1 pi |} {| d2:compile_
   out_type = d1.out_type -> MIIO (resexn d2.out_type);
   c_out_type = tlang_arrow d1.out_type d2.out_type #d1.c_out_type #d2.c_out_type;
   compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.out_type) ->
-     compile (f (instrument x #d1.c_out_type pi))
+     IIOwp?.reflect (Decorated pi (reify (compile (f (instrument x #d1.c_out_type pi))))
+                                  Return);
   )
 }

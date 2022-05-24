@@ -15,8 +15,8 @@ let partial_call_wp (pre:pure_pre) : hist (squash pre) =
   assert (hist_wp_monotonic wp');
   wp'
 
-(** Inspierd from Kenji's thesis (2.4.5) **)
-val theta : #a:Type -> #op:Type -> #s:op_sig op -> #event:Type -> cmd_wp:op_wp op s event -> free op s a -> hist #event a
+(** Inspired from Kenji's thesis (2.4.5) **)
+val theta : #a:Type -> #op:Type -> #s:op_sig op -> #event:Type -> cmd_wp:op_wp op s event -> free op s a (trace -> trace -> Type0) -> hist #event a
 let rec theta #a #op #s #event cmd_wp m =
   match m with
   | Return x -> hist_return x
@@ -24,7 +24,10 @@ let rec theta #a #op #s #event cmd_wp m =
       hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (k r))
   | Call cmd arg k ->
       hist_bind (cmd_wp cmd arg) (fun r -> theta cmd_wp (k r))
-  
+  | Decorated post m' k ->
+      hist_bind (fun p h -> theta cmd_wp m' (fun lt r -> post h lt ==> p lt r) h)
+                (fun r -> theta cmd_wp (k r))
+
 let lemma_theta_is_monad_morphism_ret (#op:Type) (#s:op_sig op) (#event:Type) (cmd_wp:op_wp op s event) (v:'a) :
   Lemma (theta cmd_wp (free_return op s 'a v) == hist_return v) by (compute ()) = ()
 
