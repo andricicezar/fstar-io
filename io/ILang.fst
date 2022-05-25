@@ -48,6 +48,8 @@ instance ilang_pair (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang
   { mldummy = () }
 instance ilang_either (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang t2 pi |} : ilang (either t1 t2) pi =
   { mldummy = () }
+instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi =
+  { mldummy = () }
 
 instance ilang_arrow (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang t2 pi |} : ilang (t1 -> IIOpi (resexn t2) pi) pi =
   { mldummy = () }

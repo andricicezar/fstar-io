@@ -22,6 +22,8 @@ instance tlang_pair t1 t2 {| d1:tlang t1 |} {| d2:tlang t2 |} : tlang (t1 * t2) 
   { mldummy = () }
 instance tlang_either t1 t2 {| d1:tlang t1 |} {| d2:tlang t2 |} : tlang (either t1 t2) =
   { mldummy = () }
+instance tlang_resexn t1 {| d1:tlang t1 |} : tlang (resexn t1) =
+  { mldummy = () }
 
-instance tlang_arrow t1 t2 {| d1:tlang t1 |} {| d2:tlang t2 |} : tlang (t1 -> MIIO t2) =
+instance tlang_arrow t1 t2 {| d1:tlang t1 |} {| d2:tlang t2 |} : tlang (t1 -> MIIO (resexn t2)) =
   { mldummy = () }
