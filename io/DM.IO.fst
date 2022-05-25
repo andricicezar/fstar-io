@@ -30,8 +30,8 @@ let dm_io_return (a:Type) (x:a) : dm_io a (hist_return x) =
   dm_return io_cmds io_sig event io_wps a x
 
 val dm_io_bind  : 
-  a: Type ->
-  b: Type ->
+  a: Type u#a ->
+  b: Type u#b ->
   wp_v: Hist.hist a ->
   wp_f: (_: a -> Prims.Tot (Hist.hist b)) ->
   v: dm_io a wp_v ->
@@ -58,7 +58,7 @@ val dm_if_then_else :
 let dm_io_if_then_else a wp1 wp2 f g b = dm_if_then_else io_cmds io_sig event io_wps a wp1 wp2 f g b
 
 val lift_pure_dm_io :
-  a: Type ->
+  a: Type u#a ->
   w: pure_wp a ->
   f: (_: eqtype_as_type unit -> Prims.PURE a w) ->
   Tot (dm_io a (wp_lift_pure_hist w))

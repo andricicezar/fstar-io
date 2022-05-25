@@ -94,6 +94,8 @@ let rec cast_io_iio #a (x:io a) : iio a =
      Call cmd args (fun res -> cast_io_iio (fnc res))
   | PartialCall pre fnc ->
      PartialCall pre (fun res -> cast_io_iio (fnc res))
+  | Decorated d m fnc ->
+     Decorated d (cast_io_iio m) (fun res -> cast_io_iio (fnc res))
 
 let rec lemma_cast_io_iio #a (m:io a) :
   Lemma
@@ -160,6 +162,7 @@ let rec lemma_cast_io_iio #a (m:io a) :
       dm_iio_theta (cast_io_iio m);
     }
   end
+  | Decorated _ _ _ -> admit ()
 
 let lemma_cast_io_iio_2 #a (x:io a) (wp:hist a) :
   Lemma

@@ -97,3 +97,5 @@ let post_as_hist = to_hist (fun _ -> True)
 let trivial_hist #a #event () : hist #event a =
   to_hist (fun _ -> True) (fun _ _ _ -> True)
 
+
+type dec_post #event = list event -> list event -> Type0
