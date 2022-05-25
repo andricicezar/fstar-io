@@ -6,6 +6,17 @@ type op_sig (op:Type u#a) = {
   res : (cmd:op) -> (args cmd) -> Type u#a;
 }
 
+let add_sig
+  (op:Type)
+  (#p:op -> bool)
+  (#q:op -> bool)
+  (s1:op_sig (x:op{p x}))
+  (s2:op_sig (x:op{q x})) :
+  Tot (op_sig (y:op{p y || q y})) = {
+    args = (fun (x:op{p x || q x}) -> if p x then s1.args x else s2.args x);
+    res = (fun (x:op{p x || q x}) -> if p x then s1.res x else s2.res x)
+ }
+
 (** We should try to define PartialCall as an operation, not as a new constructor
     on the free monad.
 
@@ -23,26 +34,29 @@ unfold let req_res (x:req_cmds) (pre:req_args x) : Type u#0 = squash pre
 let req_sig : op_sig req_cmds = { args = req_args; res = req_res; }
 **)
 
+type sometype : Type u#1 = list bool -> list bool -> Type0
+
 noeq
-type free (op:Type0) (s:op_sig op) (dec:Type0) (a:Type) : Type =
+type free (op:Type0) (s:op_sig op) (dec:Type u#1) (a:Type u#a) : Type u#(a+1) =
 | Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free op s dec a) -> free op s dec a
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free op s dec a) -> free op s dec a
-| Decorated : (d:dec) -> #b:Type -> (* cont0:(unit -> *) free op s dec b (* ) *) ->
-                                      cont1:(b-> free op s dec a) -> free op s dec a
+| Decorated : (d:dec) -> (#b:Type u#a) -> (* cont0:(unit -> *) free op s dec b (* ) *) ->
+                                          cont1:(b-> free op s dec a) -> free op s dec a
 | Return : a -> free op s dec a
 
-let free_return (op:Type) (s:op_sig op) (dec:Type0) (a:Type) (x:a) : free op s dec a =
+let free_return (op:Type) (s:op_sig op) (dec:Type) (a:Type) (x:a) : free op s dec a =
   Return x
 
+#set-options "--print_implicits --print_universes"
 let rec free_bind
   (op:Type0)
   (s:op_sig op)
-  (dec:Type0)
-  (a:Type)
-  (b:Type)
+  (dec:Type u#1)
+  (a:Type u#a)
+  (b:Type u#b)
   (l : free op s dec a)
   (k : a -> free op s dec b) :
-  Tot (free op s dec b) =
+  Tot u#(b+1) (free u#b op s dec b) =
   match l with
   | Return x -> k x
   | Call cmd args fnc ->
@@ -51,34 +65,26 @@ let rec free_bind
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->
         free_bind op s dec a b (fnc ()) k)
-  | Decorated d m fnc -> Decorated d m (fun i ->
+  | Decorated d #b' m fnc -> 
+      Decorated d #b' m (fun (i:b') ->
         free_bind op s dec a b (fnc i) k)
 
 let free_map
   (op:Type)
   (s:op_sig op)
+  (dec:Type)
   (a:Type)
   (b:Type)
-  (l : free op s a)
+  (l : free op s dec a)
   (k : a -> b) :
-  Tot (free op s b) =
-  free_bind op s a b
-    l (fun a -> free_return op s b (k a))
+  Tot (free op s dec b) =
+  free_bind op s dec a b
+    l (fun a -> free_return op s dec b (k a))
 
 let free_codomain_ordering
   (#op:Type)
   (#s:op_sig op)
+  (#dec:Type)
   (#a:Type)
-  (x:(free op s a){Call? x}) :
+  (x:(free op s dec a){Call? x}) :
   Lemma (forall r. Call?.cont x r << x) = ()
-
-let add_sig
-  (op:Type)
-  (#p:op -> bool)
-  (#q:op -> bool)
-  (s1:op_sig (x:op{p x}))
-  (s2:op_sig (x:op{q x})) :
-  Tot (op_sig (y:op{p y || q y})) = {
-    args = (fun (x:op{p x || q x}) -> if p x then s1.args x else s2.args x);
-    res = (fun (x:op{p x || q x}) -> if p x then s1.res x else s2.res x)
- }
