@@ -31,7 +31,7 @@ let rec theta #a #op #s #event cmd_wp m =
         #event
         #(FStar.Universe.raise_t b)
         #a
-        (fun p h -> theta cmd_wp m' (fun lt r -> post h lt) h)
+        (fun p h -> theta cmd_wp m' (fun lt r -> post h lt /\ p lt r) h)
         (fun r -> theta cmd_wp (k (FStar.Universe.downgrade_val r)))
 
 let lemma_theta_is_monad_morphism_ret (#op:Type0) (#s:op_sig op) (#event:Type0) (cmd_wp:op_wp op s event) (v:'a) :
