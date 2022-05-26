@@ -83,7 +83,9 @@ class instrumentable (t:Type) (pi:monitorable_prop) = {
   instrument: inst_type -> t 
 }
 
-instance compile_ilang_base t1 t2 pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi by (
+#push-options "--print_universes"
+(** TODO: t1 and t2 are in universe 0. is that a problem? can we do HO? **)
+instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi by (
   unfold_def (`hist_return);
   dump "H"
 ) = {
