@@ -85,24 +85,19 @@ class instrumentable (t:Type) (pi:monitorable_prop) = {
 
 #push-options "--print_universes"
 (** TODO: t1 and t2 are in universe 0. is that a problem? can we do HO? **)
-instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi by (
-  unfold_def (`hist_return);
-  dump "H"
-) = {
+instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi  = {
   c_t_ilang = ilang_arrow pi t1 #d1.cc_t_ilang t2 #d2.c_t_ilang;
   comp_type = d1.inst_type -> MIIO (resexn d2.comp_type);
   c_comp_type = tlang_arrow d1.inst_type d2.comp_type #d1.c_inst_type #d2.c_comp_type;
   compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.inst_type) ->
-   let x : dm_iio (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r)
-      (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
-     reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
-   assert (False);
-   
-   let x' : dm_iio (resexn d2.comp_type) (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r) = x in
-  // let x' : dm_iio (resexn d2.comp_type) (trivial_hist ()) = x in
-   (** this works, woaw! **)
-   (** the problem is that it does not check if the pi is actually enforced **)
-   let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
-   IIOwp?.reflect dm
+    let r : unit -> IIOpi _ pi = fun () -> Universe.raise_val (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
+    let x : dm_iio _ _ = reify (r ()) in
+    let x' : dm_iio (Universe.raise_t (resexn d2.comp_type)) (fun p h -> forall r lt. b2t(enforced_locally pi h lt) ==> p lt r) = x in
+    assert (forall h. dm_iio_theta x' (fun lt r -> enforced_locally pi h lt) h);
+    (** TODO: I have no idea what happens with the raise_t of the result. 
+        I suppose for now it does not care. There is a Universe.downgrade_val in the theta and I suppose there will be another
+        downgrade_val when interpreting the tree. **)
+    let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
+    IIOwp?.reflect dm
   );
 }
