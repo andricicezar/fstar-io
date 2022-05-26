@@ -96,13 +96,13 @@ instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable 
    let x : dm_iio (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r)
       (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
      reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
+   assert (False);
    
    let x' : dm_iio (resexn d2.comp_type) (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r) = x in
   // let x' : dm_iio (resexn d2.comp_type) (trivial_hist ()) = x in
    (** this works, woaw! **)
    (** the problem is that it does not check if the pi is actually enforced **)
-   let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> False) x' Return in
- //  let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
+   let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
    IIOwp?.reflect dm
   );
 }
