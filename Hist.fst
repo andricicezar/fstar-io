@@ -94,7 +94,7 @@ let to_hist #a #event pre post : hist #event a =
 let post_as_hist = to_hist (fun _ -> True)
 
 (** TODO: is this the trivial wp? **)
-let trivial_hist #a #event () : hist #event a =
+let trivial_hist #a #event : hist #event a =
   to_hist (fun _ -> True) (fun _ _ _ -> True)
 
 

@@ -10,7 +10,7 @@ open Common
 (** TLang is a language that acts as the target language. 
 **)
 
-effect MIIO (a:Type) = DM.IIO.IIOwp a (Hist.trivial_hist ())
+effect MIIO (a:Type) = DM.IIO.IIOwp a (Hist.trivial_hist)
 
 class tlang (t:Type) = { mldummy : unit }
 
