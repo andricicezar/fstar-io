@@ -7,7 +7,6 @@ open Common
 open MIO
 
 (** ** Mlang **)
-(** MLang is just TLang wrapped. See more in TLang**)
 
 
 class mlang_fo (t:Type) = { mldummy : unit }
