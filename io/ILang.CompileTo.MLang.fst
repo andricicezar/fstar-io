@@ -222,8 +222,17 @@ let rec _instrument
     _instrument z' p' h' proof1 pi proof2 c_pi
   end
 
-let lemma_super_lemma (m:iio (resexn 'a)) pi :
-  Lemma (MIO.basic_free m ==> inside_respects_pi m pi) = admit ()
+let rec lemma_super_lemma (m:iio (resexn 'a)) pi :
+  Lemma (MIO.basic_free m ==> inside_respects_pi m pi) =
+  match m with
+  | Return _ -> ()
+  | Decorated _ _ _ -> ()
+  | PartialCall _ _ -> ()
+  | Call GetTrace _ _ -> ()
+  | Call cmd arg k ->
+    introduce forall res. MIO.basic_free (k res) ==> inside_respects_pi (k res) pi with begin
+      lemma_super_lemma (k res) pi
+    end
 
 instance instrumentable_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:instrumentable t2 pi |} : instrumentable (t1 -> IIOpi (resexn t2) pi) pi = {
   cc_t_ilang = ilang_arrow pi t1 #d1.c_t_ilang t2 #d2.cc_t_ilang;
