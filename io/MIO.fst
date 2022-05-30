@@ -10,17 +10,16 @@ open IO.Sig
 open IO.Sig.Call
 open IIO
 
-(** The postcondition for an io computation is defined over the
-result (type: a) and local trace (type: trace).
-The local trace represents the events that happend during the
-computation. Local trace is in chronological order.
+(**
+We need this effect because we want to restrict the representation of unverified code. Unverified code should not contain GetTrace, PartialCall, Decorated. This could be a constraint in the type class instrumentable, but not sure how to implement since the type class deals with effectul types. Also, our languages have no characterization by inductive types, so I am not sure how we could discriminate between arrows and other things. It will imply to have a property as follows:
 
-We also have the history (type: trace) which represents the
-events that happend until the beggining of the io computation.
-The history is  in reverse chronology order.
+class instrumentable (t:Type) pi = {
+  c1: squash (Arrow? t ==> (forall res. basic_free (reify (t res))))
+  ...
+}
+**)
 
-At the end of an io computation, the local trace is appended
-in reverse order to the history. **)
+
 let dm_mio_theta #a = dm_iio_theta #a 
 
 let rec basic_free (x:free iio_cmds iio_sig 'dec 'a) : Type0 =
