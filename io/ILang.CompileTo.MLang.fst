@@ -1,4 +1,4 @@
-module ILang.CompileTo.TLang
+module ILang.CompileTo.MLang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -6,12 +6,12 @@ open FStar.Tactics.Typeclasses
 open Common
 
 open ILang
-open TLang
+open MLang
 open Hist
 open TC.Monitorable.Hist
 
 open IO.Sig
-open DM.IIO
+open IIO
 open TC.Checkable
 
 class compilable (t:Type) (pi:monitorable_prop) = {
@@ -24,9 +24,9 @@ class compilable (t:Type) (pi:monitorable_prop) = {
 }
 
 class instrumentable (t:Type) (pi:monitorable_prop) = {
-  cc_t_ilang : mlang t pi;
+  cc_t_ilang : ilang t pi;
   inst_type : Type;
-  c_inst_type : tlang inst_type;
+  c_inst_type : mlang inst_type;
   c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
   instrument: inst_type -> t 
 }
@@ -36,7 +36,7 @@ class instrumentable (t:Type) (pi:monitorable_prop) = {
 instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
   c_t_ilang = ilang_resexn pi t #d1.c_t_ilang;
   comp_type = resexn (d1.comp_type);
-  c_comp_type = tlang_resexn d1.comp_type #d1.c_comp_type;
+  c_comp_type = mlang_resexn d1.comp_type #d1.c_comp_type;
   compile = (fun x ->
     match x with
     | Inl r -> Inl (compile r)
@@ -49,7 +49,7 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
 instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi = {
   c_t_ilang = ilang_arrow pi t1 #d1.cc_t_ilang t2 #d2.c_t_ilang;
   comp_type = d1.inst_type -> MIIO (resexn d2.comp_type);
-  c_comp_type = tlang_arrow d1.inst_type d2.comp_type #d1.c_inst_type #d2.c_comp_type;
+  c_comp_type = mlang_arrow d1.inst_type d2.comp_type #d1.c_inst_type #d2.c_comp_type;
   compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.inst_type) ->
     let r : unit -> IIOpi _ pi = fun () -> Universe.raise_val (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
     let x : dm_iio _ _ = reify (r ()) in
@@ -67,7 +67,7 @@ instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable 
 instance instrumentable_resexn pi (t:Type) {| d1:instrumentable t pi |} : instrumentable (resexn t) pi = {
   cc_t_ilang = ilang_resexn pi t #d1.cc_t_ilang;
   inst_type = resexn (d1.inst_type);
-  c_inst_type = tlang_resexn d1.inst_type #d1.c_inst_type;
+  c_inst_type = mlang_resexn d1.inst_type #d1.c_inst_type;
   c_pi = d1.c_pi;
   instrument = (fun x ->
     match x with
@@ -218,7 +218,7 @@ let rec _instrument
 instance instrumentable_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:instrumentable t2 pi |} : instrumentable (t1 -> IIOpi (resexn t2) pi) pi = {
   cc_t_ilang = ilang_arrow pi t1 #d1.c_t_ilang t2 #d2.cc_t_ilang;
   inst_type = d1.comp_type -> MIIO (resexn d2.inst_type);
-  c_inst_type = tlang_arrow d1.comp_type d2.inst_type #d1.c_comp_type #d2.c_inst_type;
+  c_inst_type = mlang_arrow d1.comp_type d2.inst_type #d1.c_comp_type #d2.c_inst_type;
   c_pi = d2.c_pi;
   instrument = (fun (f:d1.comp_type -> MIIO (resexn d2.inst_type)) (x:t1) -> 
     let tree : dm_iio (resexn d2.inst_type) trivial_hist = reify (f (compile x)) in

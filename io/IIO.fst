@@ -1,14 +1,14 @@
-module DM.IIO
+module IIO
 
 open FStar.Tactics
 open ExtraTactics
 open FStar.Calc
 
 open Common
-open DM.IO
 open DMFree
 open IO.Sig
 open IO.Sig.Call
+open IO
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
@@ -45,14 +45,6 @@ val dm_iio_subcomp :
   Pure (dm_iio a wp2) (hist_ord wp2 wp1) (fun _ -> True)
 let dm_iio_subcomp a wp1 wp2 f = dm_subcomp iio_cmds iio_sig event iio_wps a wp1 wp2 f
 
-val dm_if_then_else :
-  a: Type ->
-  wp1: hist a ->
-  wp2: hist a ->
-  f: dm_iio a wp1 ->
-  g: dm_iio a wp2 ->
-  b: bool ->
-  Tot Type
 let dm_iio_if_then_else a wp1 wp2 f g b = dm_if_then_else iio_cmds iio_sig event iio_wps a wp1 wp2 f g b
 
 val lift_pure_dm_iio :
@@ -166,16 +158,16 @@ let rec lemma_cast_io_iio #a (m:io a) :
 
 let lemma_cast_io_iio_2 #a (x:io a) (wp:hist a) :
   Lemma
-    (requires (wp `hist_ord` DM.IO.dm_io_theta x))
+    (requires (wp `hist_ord` dm_io_theta x))
     (ensures (wp `hist_ord` dm_iio_theta (cast_io_iio x))) =
   lemma_cast_io_iio x
 
-let lift_io_iio (a:Type) (wp:hist a) (f:DM.IO.dm_io a wp) :
+let lift_io_iio (a:Type) (wp:hist a) (f:dm_io a wp) :
   Tot (dm_iio a wp) =
   lemma_cast_io_iio_2 f wp;
   cast_io_iio f
 
-sub_effect DM.IO.IOwp ~> IIOwp = lift_io_iio
+sub_effect IOwp ~> IIOwp = lift_io_iio
 
 
 let get_trace () : IIOwp trace

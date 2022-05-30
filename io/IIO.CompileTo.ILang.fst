@@ -5,7 +5,7 @@ open FStar.Tactics.Typeclasses
 
 open Common
 open IO.Sig
-open DM.IIO
+open IIO
 open TC.Monitorable.Hist
 open ILang
 open TC.Checkable
@@ -88,9 +88,9 @@ instance exportable_arrow_with_post
   t2 {| d2:exportable t2 'pi |}
   post
   {| d3: monitorable_hist (fun _ _ -> True) post 'pi |} :
-  exportable (x:t1 -> DM.IIO.IIO (resexn t2) (fun _ -> True) (post x)) 'pi =
+  exportable (x:t1 -> IIO.IIO (resexn t2) (fun _ -> True) (post x)) 'pi =
   mk_exportable #_
-    #(x:t1 -> DM.IIO.IIO (resexn t2) (fun _ -> True) (post x))
+    #(x:t1 -> IIO.IIO (resexn t2) (fun _ -> True) (post x))
     (d1.itype -> IIOpi (resexn d2.etype) 'pi)
     #(ilang_arrow 'pi d1.itype #d1.c_itype d2.etype #d2.c_etype)
     (fun f -> 
@@ -154,9 +154,9 @@ instance exportable_arrow_with_pre_post
   pre {| d3:checkable2 pre |}
   post
   {| d4: monitorable_hist pre post 'pi |} :
-  exportable (x:t1 -> DM.IIO.IIO (resexn t2) (pre x) (post x)) 'pi =
+  exportable (x:t1 -> IIO.IIO (resexn t2) (pre x) (post x)) 'pi =
   mk_exportable #_
-    #(x:t1 -> DM.IIO.IIO (resexn t2) (pre x) (post x))
+    #(x:t1 -> IIO.IIO (resexn t2) (pre x) (post x))
     (d1.itype -> IIOpi (resexn d2.etype) 'pi)
     #(ilang_arrow 'pi d1.itype #d1.c_itype d2.etype #d2.c_etype)
     (fun f -> 

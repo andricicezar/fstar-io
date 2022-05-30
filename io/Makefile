@@ -2,5 +2,5 @@
 # export PATH := ../FStar/bin:$(PATH);
 
 verify:
-	fstar.exe --include .. IO.Sig.fst DM.IO.fst DM.IIO.fst DM.IIO.Primitives.fst Monitor.fst ILang.fst IIO.CompileTo.ILang.fst DM.fst
+	fstar.exe --include .. IO.Sig.fst IO.fst IIO.fst Monitor.fst ILang.fst IIO.CompileTo.ILang.fst MLang.fst ILang.CompileTo.MLang.fst
 

@@ -1,4 +1,4 @@
-module DM.IO
+module IO
 
 open FStar.Tactics
 open ExtraTactics
@@ -47,14 +47,6 @@ val dm_io_subcomp :
   Pure (dm_io a wp2) (hist_ord wp2 wp1) (fun _ -> True)
 let dm_io_subcomp a wp1 wp2 f = dm_subcomp io_cmds io_sig event io_wps a wp1 wp2 f
 
-val dm_if_then_else :
-  a: Type ->
-  wp1: hist a ->
-  wp2: hist a ->
-  f: dm_io a wp1 ->
-  g: dm_io a wp2 ->
-  b: bool ->
-  Tot Type
 let dm_io_if_then_else a wp1 wp2 f g b = dm_if_then_else io_cmds io_sig event io_wps a wp1 wp2 f g b
 
 val lift_pure_dm_io :
