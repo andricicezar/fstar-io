@@ -1,5 +1,6 @@
 module ILang.CompileTo.MLang
 
+open FStar.List.Tot
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
@@ -84,67 +85,24 @@ instance instrumentable_resexn pi (t:Type) {| d1:instrumentable t pi |} : instru
 
 
 (** *** Instrumentable arrows **)
-assume val dynamic_cmd :
-  (cmd : io_cmds) ->
-  (d1 : checkable2 (io_pre cmd)) ->
-  (arg : io_sig.args cmd) ->
-  IIOwp (io_resm cmd)
-    (fun p h ->
-      (forall (r:(io_sig.res cmd arg)) lt.
-        (match r with
-         | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
-         | _ -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r]) ==> p lt r))
-
-let t () : Tac unit = l_to_r [`Common.rev_nil;`List.Tot.Properties.append_nil_l;`List.Tot.Properties.append_l_nil]; trefl ()
-
-[@@ (postprocess_with t)]
-let run_m
+let super_lemma 
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
-  dec
+  d
   k
   p
   (h:trace)
-  (_:squash (dm_iio_theta (Decorated dec m k) p h))
-  (_:squash (forall h lt. dec h lt ==> enforced_locally pi h lt))
-  (_:squash (dm_iio_theta m (fun lt r -> enforced_locally pi h lt) h)) :
-  IIO 
-    (Universe.raise_t 'b * trace * _)
-    (requires (fun h' -> h == h'))
-    (ensures (fun h res lt ->
-      Mktuple3?._2 res == apply_changes h lt /\
-      dm_iio_theta (k (Universe.downgrade_val (Mktuple3?._1 res))) (Mktuple3?._3 res) (Mktuple3?._2 res) /\
-      enforced_locally pi h lt)) =
-  let theM : unit -> IIOwp _ (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) = (fun () -> IIOwp?.reflect m) in
-  let r = theM () in 
-  Classical.forall_intro (lemma_suffixOf_append h);
-  let lt = IIO.CompileTo.ILang.extract_local_trace h pi in
-  let p' = hist_post_shift p lt in
-  let h' = apply_changes h lt in
-  let z' = k (Universe.downgrade_val r) in
-  assume (dm_iio_theta z' p' h');
-  (r, h', p')
-
-let rec inside_respects_pi
-  (tree : iio (resexn 'a))
-  (pi : monitorable_prop) : Type0 =
-  match tree with
-  | Return _ -> True
-  | PartialCall pre k ->
-      pre ==> (inside_respects_pi (k ()) pi)
-  | Call cmd arg k ->
-      forall res. inside_respects_pi (k res) pi
-  | Decorated dec m k ->
-      (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
-      (forall res. inside_respects_pi (k res) pi)
-
-(**
-let lemma_theta_decorated_rhs dec m k p h :
-  Lemma
-    (requires (dm_iio_theta (Decorated dec m k) p h))
-    (ensures (forall lt res. dm_iio_theta (k res) p h))
-**)
-(**    calc (==>) {
+  (_:squash (dm_iio_theta (Decorated d m k) p h))
+  (_:squash (forall h lt. d h lt ==> enforced_locally pi h lt)) :
+  Lemma (
+   dm_iio_theta m (fun lt r -> enforced_locally pi h lt) h /\
+   dm_iio_theta m
+      (fun lt r ->
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (apply_changes h lt)) h) = 
+  
+  calc (==>) {
       dm_iio_theta (Decorated d m k) p h;
       ==> { _ by (
             binder_retype (nth_binder (-1));
@@ -173,41 +131,103 @@ let lemma_theta_decorated_rhs dec m k p h :
           dm_iio_theta (k (Universe.downgrade_val r))
             (hist_post_shift p lt)
             (List.Tot.Base.rev lt @ h)) h;
-    }; **)
+    }
 
-open FStar.List.Tot
-   
+
 let lemma_smt_pat (pi:monitorable_prop) (h lt1 lt2:trace) :
   Lemma (requires (
     enforced_locally pi h lt1 /\
     enforced_locally pi (apply_changes h lt1) lt2))
     (ensures (
-    enforced_locally pi h (lt1 @ lt2))) [SMTPat (enforced_locally pi h (lt1@lt2))] = admit ()
+    enforced_locally pi h (lt1 @ lt2))) [SMTPat (enforced_locally pi h (lt1@lt2))] = (** not urgent **) admit ()
 
+let rec inside_respects_pi
+  (tree : iio (resexn 'a))
+  (pi : monitorable_prop) : Type0 =
+  match tree with
+  | Return _ -> True
+  | PartialCall pre k ->
+      pre ==> (inside_respects_pi (k ()) pi)
+  | Call cmd arg k ->
+      forall res. inside_respects_pi (k res) pi
+  | Decorated dec m k ->
+      (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
+      (forall res. inside_respects_pi (k res) pi)
+
+
+let run_m
+  (pi:monitorable_prop)
+  (m : iio (Universe.raise_t 'b))
+  dec
+  k
+  p
+  (h:trace)
+  (_:squash (inside_respects_pi (Decorated dec m k) pi))
+  (_:squash (dm_iio_theta (Decorated dec m k) p h)) :
+//  (_:squash ) :
+  IIO 
+    (iio _ * _ * trace)
+    (requires (fun h' -> h == h'))
+    (ensures (fun h (z', p', h') lt ->
+      h' == apply_changes h lt /\
+      dm_iio_theta z' p' h' /\
+      enforced_locally pi h lt /\ 
+      inside_respects_pi z' pi)) =
+  assert (forall h lt. dec h lt ==> enforced_locally pi h lt);
+  super_lemma pi m dec k p h () ();
+  let theMHistPost : trace -> _ -> trace -> Type0 = (fun h r lt -> enforced_locally pi h lt) in
+  let theMHist : hist _ = to_hist (fun h' -> h == h') theMHistPost in
+  let theM : unit -> IIOwp _ theMHist = (fun () -> IIOwp?.reflect m) in
+  let resM = theM () in 
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+
+  let z' = k (Universe.downgrade_val resM) in
+  assert (dm_iio_theta m (fun lt r -> theMHistPost h r lt) h);
+  assert (dm_iio_theta m
+        (fun lt r ->
+          dm_iio_theta (k (Universe.downgrade_val r))
+            (hist_post_shift p lt)
+            (apply_changes h lt)) h);
+
+ // assert (theMHist `hist_ord` dm_iio_theta m);
+  //assert (p lt res);
+  let p' = hist_post_shift p ltM in
+  let h' = apply_changes h ltM in
+  (** urgent - it is urgent, because I am not confident it can be proved **)
+  assert (dm_iio_theta z' p' h') by (tadmit ());
+  (z', p', h')
+
+(** not urgent assume **)
+assume val dynamic_cmd :
+  (cmd : io_cmds) ->
+  (d1 : checkable2 (io_pre cmd)) ->
+  (arg : io_sig.args cmd) ->
+  IIOwp (io_resm cmd)
+    (fun p h ->
+      (forall (r:(io_sig.res cmd arg)) lt.
+        (match r with
+         | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
+         | _ -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r]) ==> p lt r))
+
+(** this is working but needs more help to verify **)
 let rec _instrument
   (tree : iio (resexn 'a))
   (p    : hist_post (resexn 'a))
   (h    : trace)
-  (_    : squash (dm_iio_theta tree p h))
+  (d1   : squash (dm_iio_theta tree p h))
   (pi   : monitorable_prop)
-  (_:squash (inside_respects_pi tree pi))
+  (d2   : squash (inside_respects_pi tree pi))
   (c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
-  IIOwp (resexn 'a) (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) by (
-    l_to_r [`Common.rev_nil; `List.Tot.Properties.append_nil_l; `List.Tot.Properties.append_l_nil]
-  ) =
+  IIOwp (resexn 'a) (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) =
   match tree with
-  | Decorated d #b m k ->
-    let res = run_m pi m d k p h () () () in
-    let r = Mktuple3?._1 res in
-    let h' = Mktuple3?._2 res in
-    let p' = Mktuple3?._3 res in
-    let z' : iio (resexn 'a) = k (FStar.Universe.downgrade_val r) in
-    let proof1 : squash (dm_iio_theta z' p' h') = () in
-    let proof2 : squash (inside_respects_pi z' pi) = () in
-    _instrument z' p' h' proof1 pi proof2 c_pi
+  | Return r -> r
   | Call GetTrace argz fnc -> Inr Contract_failure
   | PartialCall pre fnc -> Inr Contract_failure
-  | Return r -> r
+  | Decorated d #b m k ->
+    admit ();
+    let (z', p', h') = run_m pi m d k p h d1 d2 in
+    _instrument z' p' h' () pi () c_pi
   | Call cmd argz fnc -> begin
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
@@ -240,7 +260,7 @@ instance instrumentable_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:instrumen
   c_unverified = mlang_unverified_verified d1.comp_type d2.unverified #d1.c_comp_type #d2.c_unverified;
   c_pi = d2.c_pi;
   instrument = (fun (f:d1.comp_type -> MIO.MIO (resexn d2.unverified)) (x:t1) -> 
-    (** why is this typechecking? 
+    (**TODO: why is this typechecking? 
        the argument of f is in effect MIIO and it can be composed with the effect of f if f is lifted to 
        MIIO. That happens during reification.... but I am confused if the type of this is correct. **)
     let tree : MIO.dm_mio _ trivial_hist = reify (f (compile x)) in
