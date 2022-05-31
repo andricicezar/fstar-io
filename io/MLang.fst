@@ -75,5 +75,8 @@ instance mlang_unverified_either t1 t2 {| d1:mlang_unverified t1 |} {| d2:mlang_
 
 instance mlang_unverified_resexn t1 {| d1:mlang_unverified t1 |} : mlang_unverified (resexn t1) =
   { mldummy3 = () }
- 
+
+(** this instance is broken...............................
+the unverified function will not be able to call the verified function
+because the effects are different **)
 instance mlang_unverified_verified t1 t2 {| d1:either (mlang_fo t1) (mlang_verified t1) |} {| d2:mlang_unverified t2 |} : mlang_unverified (t1 -> MIO (resexn t2)) = { mldummy3 = () }
