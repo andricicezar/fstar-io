@@ -13,6 +13,12 @@ commit=d20e32ca8ef7ab2e4cc79e0f553687ee2ae4a2ed
 
 The effect that only supports termination is found in the `io` subdirectory.
 
+The computational monad can be found in `Free`, the specification monad can 
+be found in `Hist`, and the Dijkstra Monad can be found in `DMFree`.
+The signature for the IO effect can be found in `IO.Sig`, and the definition
+of the IO effect (which is just an instantiation of `DMFree`) is in `IO`.
+
+
 ## Non-terminating effect
 
 The effect that supports non-termination is found in the `iodiv` subdirectory.
