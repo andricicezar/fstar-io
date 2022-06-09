@@ -3,8 +3,36 @@ module Utils
 open FStar.List
 open FStar.Tactics
 
-open DM
+open IO.Sig
 open IO.Sig.Call
+open IO
+
+type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
+
+unfold
+let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
+  match e with
+  | EOpenfile arg _ -> check Openfile arg h
+  | ERead arg _ -> check Read arg h
+  | EWrite arg res -> check Write arg h
+  | EClose arg res -> check Close arg h
+  | ESocket arg res -> check Socket arg h
+  | ESetsockopt arg res -> check Setsockopt arg h
+  | EBind arg res -> check Bind arg h
+  | ESetNonblock arg res -> check SetNonblock arg h
+  | EListen arg res -> check Listen arg h
+  | EAccept arg res -> check Accept arg h
+  | ESelect arg res -> check Select arg h
+
+let rec enforced_locally
+  (check : monitorable_prop)
+  (h l: trace) :
+  Tot bool (decreases l) =
+  match l with
+  | [] -> true
+  | e  ::  t ->
+    if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
+    else false
 
 let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
   Lemma 
@@ -96,21 +124,7 @@ let io_post
 
 effect IOpi
   (a:Type)
-  (pi : monitorable_prop)
-  (pre : trace -> Type0)
-  (post : trace -> a -> trace -> Type0) =
+  (pi : monitorable_prop) =
   IOwp a
     (fun p h ->
-      pre h /\
-      (forall r lt. (io_post pi h r lt /\ post h r lt) ==> p lt r))
-
-let simpl_trivialize 
-  (pre:'a -> trace -> bool)
-  (post:'a -> trace -> (m:'b) -> trace -> Type0)
-  (f:(x:'a ->
-    IIOwp 'b (fun p h -> pre x h /\ (forall r lt. post x h r lt ==> p lt r))))
-  (x:'a) :
-  IIOwp (Common.maybe 'b) (trivial_hist ()) =
-  (trivialize 
-    #_ 
-    #(trivializeable_IIOwp _ _ (fun x h -> pre x h) post) f) x
+      (forall r lt. (io_post pi h r lt) ==> p lt r))

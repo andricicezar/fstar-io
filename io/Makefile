@@ -2,5 +2,4 @@
 # export PATH := ../FStar/bin:$(PATH);
 
 verify:
-	fstar.exe --include .. IO.Sig.fst IO.fst IIO.fst
-
+	fstar.exe --include ..  Types.fst Common.fst Free.fst Hist.fst DMFree.fst ExtraTactics.fst IO.Sig.fst IO.fst

@@ -5,11 +5,19 @@ open ExtraTactics
 
 open Common
 open Types
-open DM
-open Shared
-  
+open IO.Sig
+open IO
+open Utils
+
+let pi : monitorable_prop = fun cmd arg h ->
+  match cmd with
+  | Openfile -> 
+    let (fnm, _, _) : io_sig.args Openfile = arg in 
+    if (fnm = "/etc/passwd") then false else true
+  | _ -> true
+
 type plugin_type =
-  (x:shr.ctx_arg) -> IIOpi (maybe shr.ctx_ret) shr.pi (shr.pre x) (shr.post x)
+  (x:file_descr) -> IOpi (resexn unit) pi
 
 (** since we do not have exceptions, we have to handle errors manually **)
 
@@ -17,9 +25,7 @@ let rec process_connections
   (clients : lfds) 
   (to_read : lfds) 
   (plugin : plugin_type) : 
-  IIOpi lfds pi
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
+  IOpi lfds pi =
   match clients with
   | [] -> []
   | client :: tail -> begin
@@ -33,9 +39,7 @@ let rec process_connections
   end
  
 let get_new_connection (socket : file_descr) :
-  IOpi (option file_descr) shr.pi
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
+  IOpi (option file_descr) pi =
   match static_cmd Select pi (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
     if List.length to_accept > 0 then begin 
@@ -50,9 +54,7 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (plugin : plugin_type) :
-  IIOpi lfds shr.pi 
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
+  IOpi lfds pi =
   match static_cmd Select pi (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
     let clients'' = process_connections clients to_read plugin in
@@ -63,10 +65,8 @@ let server_loop_body
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIOpi lfds shr.pi
-    (requires (fun h -> True)) 
-    (ensures (fun h r lt -> True)) = 
-  lemma_append_enforced_locally shr.pi;
+  IOpi lfds pi = 
+  lemma_append_enforced_locally pi;
   let clients' = (match get_new_connection socket with
                  | None -> clients
                  | Some fd -> fd :: clients) in
@@ -77,10 +77,8 @@ let rec server_loop
   (socket : file_descr) 
   (plugin : plugin_type)
   (clients : lfds) :
-  IIOpi unit shr.pi
-    (requires (fun h -> True))
-    (ensures (fun h r lt -> True)) =
-  lemma_append_enforced_locally shr.pi;
+  IOpi unit pi =
+  lemma_append_enforced_locally pi;
   if iterations_count = 0 then ()
   else begin
     let clients' = server_loop_body socket plugin clients in
@@ -88,28 +86,21 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  IOpi (maybe file_descr) shr.pi
-    (requires (fun h -> True))
-    (ensures (fun h r lt ->
-      match r with
-      | Inl socket -> is_open socket (apply_changes h lt)
-      | _ -> True)) by (explode ()) = 
+  IOpi (resexn file_descr) pi by (explode ()) = 
   match static_cmd Socket pi () with
   | Inl socket -> 
     let _ = static_cmd Setsockopt pi (socket, SO_REUSEADDR, true) in 
     let _ = static_cmd Bind pi (socket, ip, port) in
     let _ = static_cmd Listen pi (socket, limit) in
     let _ = static_cmd SetNonblock pi socket in
-    lemma_append_enforced_locally shr.pi;
+    lemma_append_enforced_locally pi;
     Inl socket 
   | Inr err -> Inr err
 
 let webserver 
   (plugin : plugin_type) :
-  IIOpi shr.ret shr.pi
-    (requires (fun h -> True))
-    (ensures (fun h r lt -> True)) by (explode ()) =
-  lemma_append_enforced_locally shr.pi;
+  IOpi unit pi by (explode ()) =
+  lemma_append_enforced_locally pi;
   match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
       server_loop 100000000000 server plugin []
