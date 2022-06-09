@@ -1,4 +1,4 @@
-module DM.IIO.Primitives
+module IIO.Primitives
 
 open FStar.Tactics
 open ExtraTactics
@@ -6,8 +6,8 @@ open FStar.Tactics.Typeclasses
 
 open Common
 open IO.Sig
-open DM.IO
-open DM.IIO
+open IO
+open IIO
 open TC.Checkable
 open TC.Trivialize.IIOwp
 
