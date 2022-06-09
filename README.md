@@ -16,3 +16,19 @@ The effect that only supports termination is found in the `io` subdirectory.
 ## Non-terminating effect
 
 The effect that supports non-termination is found in the `iodiv` subdirectory.
+
+`Util` contains common lemmas. `Stream` proposes an encoding of streams using
+functions from natural numbers.
+
+`DivFree` contains the definition of the free monad extended with an iter
+operator.
+`DivFreeTauSpec` contains the definition of the specification of IO +
+non-termination.
+`IIOSig` gives a signature for IO and `IIOSpec` gives the associated
+specifications.
+`DivFreeTauDM` builds a partial Dijkstra monad on top of `DivFree`.
+
+The effect is defined in `TauIODiv` and tested in `TestIODiv`.
+
+The extra I that is sometimes before IO stands for "instrumented".
+Instrumentation is something we use for secure F*-ML interoperability.
