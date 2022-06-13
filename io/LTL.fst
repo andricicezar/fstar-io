@@ -8,6 +8,9 @@ open Common
 open IO.Sig
 open IO
 
+(** This is based on the paper LTL Types FRP Linear-time Temporal Logic Propositions as Types by Alan Jeffrey 
+    Source: https://dl.acm.org/doi/10.1145/2103776.2103783 **)
+
 (** *** Figure 1 **)
 type time = (h:trace & (n:int{(-1 <= n /\ n < List.length h)}))
 
