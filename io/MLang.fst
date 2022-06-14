@@ -29,10 +29,35 @@ instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
 instance mlang_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (t1 -> MIIO (resexn t2)) =
   { mldummy = () }
 
-type unverified_arrow (t1 t2:Type) =
-  f:(t1 -> MIIO (resexn t2)){forall x. MIO.basic_free (reify (f x))}
+open IO.Sig
+open TC.Monitorable.Hist
+
+let rec special_tree
+  (pi : monitorable_prop)
+  (tree : iio 'a) : Type0 =
+  match tree with
+  | Return _ -> True
+  | PartialCall _ _ -> False
+  | Call GetTrace arg k -> False
+  | Call cmd arg k -> forall res. special_tree pi (k res)
+  | Decorated dec m k ->
+    (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
+    (forall res. special_tree pi (k res))
+
+(** this diff is problematic because it allows to use Decorated node.
+This nodes should come as input **)
+type unverified_arrow (t1 t2:Type) pi =
+  f:(t1 -> MIIO (resexn t2)){forall x. special_tree pi (reify (f x))} 
 
 (** only this type of arrows can be instrumented. therefore
     the instrumentation is partial **)
-instance mlang_unverified_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified_arrow t1 t2) =
+instance mlang_unverified_arrow #t1 #t2 pi (d1:mlang t1) (d2:mlang t2) : mlang (unverified_arrow t1 t2 pi) =
   { mldummy = () }
+
+// assume val pi : monitorable_prop
+
+// type arr1 = unit -> MIIO unit
+
+// val arr2 : unverified_arrow arr1 unit pi
+
+// let arr2 f = Inl (f ())
