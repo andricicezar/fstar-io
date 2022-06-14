@@ -13,12 +13,13 @@ open ILang
 
 let mio a pi = x:(iio a){special_tree pi x} 
 
+(** there is something in this calc that break including this file to ILang **)
 let super_lemma 
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
-  d
-  k
-  p
+  (d: dec_post #event)
+  (k: 'b -> iio 'c)
+  (p:hist_post 'c)
   (h:trace)
   (_:squash (dm_iio_theta (Decorated d m k) p h))
   (_:squash (forall h lt. d h lt ==> enforced_locally pi h lt)) :
@@ -28,8 +29,9 @@ let super_lemma
       (fun lt r ->
         dm_iio_theta (k (Universe.downgrade_val r))
           (hist_post_shift p lt)
-          (apply_changes h lt)) h) = admit ()
- (** 
+          (apply_changes h lt)) h) = 
+  admit ()
+  (**
   calc (==>) {
       dm_iio_theta (Decorated d m k) p h;
       ==> { _ by (
@@ -59,9 +61,7 @@ let super_lemma
           dm_iio_theta (k (Universe.downgrade_val r))
             (hist_post_shift p lt)
             (List.Tot.Base.rev lt @ h)) h;
-    }
-
-**) 
+    }**)
 
 let lemma_smt_pat (pi:monitorable_prop) (h lt1 lt2:trace) :
   Lemma (requires (
@@ -74,13 +74,13 @@ let run_m
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
   (dec : dec_post)
-  (k : 'b -> iio (resexn 'c))
-  (p : hist_post (resexn 'c))
+  (k : 'b -> iio 'c)
+  (p : hist_post 'c)
   (h:trace)
   (_:squash (special_tree pi (Decorated dec m k)))
   (_:squash (dm_iio_theta (Decorated dec m k) p h)) :
   IIO 
-    (mio (resexn 'c) pi * hist_post (resexn 'c) * trace)
+    (mio 'c pi * hist_post 'c * trace)
     (requires (fun h' -> h == h'))
     (ensures (fun h (z', p', h') lt ->
       h' == apply_changes h lt /\
@@ -124,7 +124,6 @@ assume val dynamic_cmd :
          | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
          | _ -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r]) ==> p lt r))
 
-(** this is working but needs more help to verify **)
 let rec _instrument
   (pi   : monitorable_prop)
   (tree : mio (resexn 'a) pi)
@@ -142,7 +141,7 @@ let rec _instrument
   | Call cmd argz fnc -> begin
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
-    (** Check if the runtime check failed, and if yes, return the error **)
+
     let rez = dynamic_cmd cmd d argz in
     let z' : iio (resexn 'a) = fnc rez in
 
@@ -150,7 +149,7 @@ let rec _instrument
 
     let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
     let h' = apply_changes h ltM in
-    assume (dm_iio_theta z' p' h');
+    assume (dm_iio_theta z' p' h'); (** same as in run_m **)
     assert (z' << tree);
     _instrument pi z' p' h' () c_pi
   end
