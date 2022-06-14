@@ -15,20 +15,26 @@ open IO.Sig
 open IIO
 open TC.Checkable
 
-class compilable (t:Type) (pi:monitorable_prop) = {
-  c_t_ilang : ilang t pi;
-  comp_type : Type;
-  c_comp_type : mlang comp_type;
-  compile: t -> comp_type
+class compilable (comp_in:Type) (pi:monitorable_prop) = {
+  comp_out : Type;
+  compile: comp_in -> comp_out;
+
+  [@@@no_method]
+  ilang_comp_in : ilang comp_in pi;
+  [@@@no_method]
+  mlang_comp_out : mlang comp_out;
 }
 
-class backtranslateable (t:Type) (pi:monitorable_prop) = {
-  ccc_t_ilang : ilang t pi;
-  impo_type : Type;
-  c_impo_type : mlang impo_type;
+class backtranslateable (btrans_out:Type) (pi:monitorable_prop) = {
+  btrans_in : Type;
+  backtranslate: btrans_in -> btrans_out;
+
+  [@@@no_method]
+  ilang_btrans_out : ilang btrans_out pi;
+  [@@@no_method]
+  mlang_btrans_in : mlang btrans_in;
   [@@@no_method]
   cc_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
-  backtranslate: impo_type -> t
 }
 
 (** There is no obvious way on how to instrument an arrow of type: t1 -> MIIO t2.
@@ -41,30 +47,36 @@ class backtranslateable (t:Type) (pi:monitorable_prop) = {
     basic_free predicate. This restriction makes instrumentation partial. 
     Therefore not everything in MLang can be backtranslated back to ILang.
 **)
-class instrumentable (t1 t2:Type) (pi:monitorable_prop) = {
-  cc_t_ilang : ilang (verified_arrow t1 t2 pi) pi;
-  t1' : Type;
-  t2' : Type;
-  c_unverified : mlang (unverified_arrow t1' t2');
+class instrumentable (inst_in_in inst_in_out:Type) (pi:monitorable_prop) = {
+  inst_out_in : Type;
+  inst_out_out : Type;
+
+  instrument: (unverified_arrow inst_out_in inst_out_out) -> Tot (verified_arrow inst_in_in inst_in_out pi); 
+
+  [@@@no_method]
+  mlang_inst_in : mlang (unverified_arrow inst_out_in inst_out_out);
+  [@@@no_method]
+  ilang_inst_out : ilang (verified_arrow inst_in_in inst_in_out pi) pi;
   [@@@no_method]
   c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
-  instrument: (unverified_arrow t1' t2') -> Tot (verified_arrow t1 t2 pi) 
 }
 
 instance instrumentable_is_backtranslateable t1 t2 pi {| d1: instrumentable t1 t2 pi |} : backtranslateable (verified_arrow t1 t2 pi) pi = {
-  ccc_t_ilang = d1.cc_t_ilang;
-  impo_type = unverified_arrow d1.t1' d1.t2';
-  c_impo_type = d1.c_unverified;
-  cc_pi = d1.c_pi;
+  btrans_in = unverified_arrow d1.inst_out_in d1.inst_out_out;
+  mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
+  ilang_btrans_out = d1.ilang_inst_out;
+  cc_pi = d1.c_pi;
 }
 
 (** *** Compilable base types **)
 
 instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
-  c_t_ilang = ilang_resexn pi t #d1.c_t_ilang;
-  comp_type = resexn (d1.comp_type);
-  c_comp_type = mlang_resexn d1.comp_type #(d1.c_comp_type);
+  ilang_comp_in = ilang_resexn pi t #d1.ilang_comp_in;
+
+  comp_out = resexn (d1.comp_out);
+  mlang_comp_out = mlang_resexn d1.comp_out #(d1.mlang_comp_out);
+
   compile = (fun x ->
     match x with
     | Inl r -> Inl (compile r)
@@ -79,31 +91,34 @@ instance compile_verified_arrow
   (t1:Type u#0) {| d1:backtranslateable t1 pi |} 
   (t2:Type u#0) {| d2:compilable t2 pi |} :
   Tot (compilable (verified_arrow t1 t2 pi) pi) = {
-  c_t_ilang = ilang_arrow pi t1 #d1.ccc_t_ilang t2 #d2.c_t_ilang;
-  comp_type = d1.impo_type -> MIIO (resexn d2.comp_type);
-  c_comp_type = mlang_arrow d1.c_impo_type d2.c_comp_type;
-  compile = (fun (f:verified_arrow t1 t2 pi) (x:d1.impo_type) ->
+  ilang_comp_in = ilang_arrow pi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
+
+  comp_out = d1.btrans_in -> MIIO (resexn d2.comp_out);
+  mlang_comp_out = mlang_arrow d1.mlang_btrans_in d2.mlang_comp_out;
+
+  compile = (fun (f:verified_arrow t1 t2 pi) (x:d1.btrans_in) ->
     let r : unit -> IIOpi _ pi = fun () -> Universe.raise_val (compile #_ #pi #(compile_resexn pi t2 #d2) (f (d1.backtranslate x))) in
     let x : dm_iio _ _ = reify (r ()) in
-    let x' : dm_iio (Universe.raise_t (resexn d2.comp_type)) (fun p h -> forall r lt. b2t(enforced_locally pi h lt) ==> p lt r) = x in
+    let x' : dm_iio (Universe.raise_t (resexn d2.comp_out)) (fun p h -> forall r lt. b2t(enforced_locally pi h lt) ==> p lt r) = x in
     assert (forall h. dm_iio_theta x' (fun lt r -> enforced_locally pi h lt) h);
-    let dm : dm_iio (resexn d2.comp_type) trivial_hist = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
+    let dm : dm_iio (resexn d2.comp_out) trivial_hist = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
     IIOwp?.reflect dm
   );
 }
 
 (** *** Backtranslate types **)
 instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : backtranslateable (resexn t) pi = {
-  ccc_t_ilang = ilang_resexn pi t #d1.ccc_t_ilang;
-  impo_type = resexn (d1.impo_type);
-  c_impo_type = mlang_resexn d1.impo_type #d1.c_impo_type;
+  ilang_btrans_out = ilang_resexn pi t #d1.ilang_btrans_out;
+
+  btrans_in = resexn (d1.btrans_in);
+  mlang_btrans_in = mlang_resexn d1.btrans_in #d1.mlang_btrans_in;
+
   cc_pi = d1.cc_pi;
   backtranslate = (fun x ->
     match x with
     | Inl r -> Inl (backtranslate r)
     | Inr err -> Inr err)
 }
-
 
 (** *** Instrumentable arrows **)
 let super_lemma 
@@ -277,17 +292,20 @@ let rec lemma_super_lemma (m:iio (resexn 'a)) pi :
     end
 
 instance instrumentable_unverified_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:backtranslateable t2 pi |} : instrumentable t1 t2 pi = {
-  cc_t_ilang = ilang_arrow pi t1 #d1.c_t_ilang t2 #d2.ccc_t_ilang;
-  t1' = d1.comp_type;
-  t2' = d2.impo_type;
-  c_unverified = mlang_unverified_arrow d1.c_comp_type d2.c_impo_type;
+  mlang_inst_in = mlang_unverified_arrow d1.mlang_comp_out d2.mlang_btrans_in;
+
+  inst_out_in = d1.comp_out;
+  inst_out_out = d2.btrans_in;
+  ilang_inst_out = ilang_arrow pi t1 #d1.ilang_comp_in t2 #d2.ilang_btrans_out;
+
   c_pi = d2.cc_pi;
-  instrument = (fun (f:unverified_arrow d1.comp_type d2.impo_type) (x:t1) -> 
+
+  instrument = (fun f x -> 
     let tree : MIO.dm_mio _ trivial_hist = reify (f (compile x)) in
     let p = fun _ _ -> True in
     let h = get_trace () in
     lemma_super_lemma tree pi;
-    let r  : resexn d2.impo_type = _instrument #d2.impo_type tree p h () pi () d2.cc_pi in 
+    let r  : resexn d2.btrans_in = _instrument #d2.btrans_in tree p h () pi () d2.cc_pi in 
     backtranslate #_ #pi #(backtranslateable_resexn pi t2 #d2) r 
   )
 }
