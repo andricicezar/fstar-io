@@ -29,8 +29,10 @@ instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
 instance mlang_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (t1 -> MIIO (resexn t2)) =
   { mldummy = () }
 
-type mio_arrow (t1 t2:Type) =
+type unverified_arrow (t1 t2:Type) =
   f:(t1 -> MIIO (resexn t2)){forall x. MIO.basic_free (reify (f x))}
 
-instance mlang_mio_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (mio_arrow t1 t2) =
+(** only this type of arrows can be instrumented. therefore
+    the instrumentation is partial **)
+instance mlang_unverified_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified_arrow t1 t2) =
   { mldummy = () }
