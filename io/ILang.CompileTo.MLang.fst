@@ -47,16 +47,16 @@ class backtranslateable (btrans_out:Type) (pi:monitorable_prop) = {
 
     So, we restrict verification to only MIIO arrows whose trees respect the 
     basic_free predicate. This restriction makes instrumentation partial. 
-    Therefore not everything in MLang can be backtranslated back to ILang.
+    Therefore not everything in MLang can be backtranslated to ILang.
 **)
 class instrumentable (inst_in_in inst_in_out:Type) (pi:monitorable_prop) = {
   inst_out_in : Type;
   inst_out_out : Type;
 
-  instrument: (unverified_arrow inst_out_in inst_out_out) -> Tot (verified_arrow inst_in_in inst_in_out pi); 
+  instrument: (unverified_arrow inst_out_in inst_out_out pi) -> Tot (verified_arrow inst_in_in inst_in_out pi); 
 
   [@@@no_method]
-  mlang_inst_in : mlang (unverified_arrow inst_out_in inst_out_out);
+  mlang_inst_in : mlang (unverified_arrow inst_out_in inst_out_out pi);
   [@@@no_method]
   ilang_inst_out : ilang (verified_arrow inst_in_in inst_in_out pi) pi;
   [@@@no_method]
@@ -64,7 +64,7 @@ class instrumentable (inst_in_in inst_in_out:Type) (pi:monitorable_prop) = {
 }
 
 instance instrumentable_is_backtranslateable t1 t2 pi {| d1: instrumentable t1 t2 pi |} : backtranslateable (verified_arrow t1 t2 pi) pi = {
-  btrans_in = unverified_arrow d1.inst_out_in d1.inst_out_out;
+  btrans_in = unverified_arrow d1.inst_out_in d1.inst_out_out pi;
   mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
   ilang_btrans_out = d1.ilang_inst_out;
@@ -124,7 +124,7 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
 
 (** *** Instrumentable arrows **)
 instance instrumentable_unverified_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:backtranslateable t2 pi |} : instrumentable t1 t2 pi = {
-  mlang_inst_in = mlang_unverified_arrow d1.mlang_comp_out d2.mlang_btrans_in;
+  mlang_inst_in = mlang_unverified_arrow pi d1.mlang_comp_out d2.mlang_btrans_in;
 
   inst_out_in = d1.comp_out;
   inst_out_out = d2.btrans_in;
@@ -132,9 +132,9 @@ instance instrumentable_unverified_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d
 
   c_pi = d2.cc_pi;
 
-  instrument = (fun (f:unverified_arrow d1.comp_out d2.btrans_in) (x:t1) -> 
+  instrument = (fun (f:unverified_arrow d1.comp_out d2.btrans_in pi) (x:t1) -> 
     let dm = reify (f (compile x)) in
-    let r  : resexn d2.btrans_in = instrument_mio dm () pi d2.cc_pi in 
+    let r  : resexn d2.btrans_in = instrument_mio pi dm () d2.cc_pi in 
     backtranslate #_ #pi #(backtranslateable_resexn pi t2 #d2) r 
   )
 }

@@ -8,10 +8,10 @@ open TC.Checkable
 open TC.Monitorable.Hist
 open IO.Sig
 open IIO
+open MLang
 open ILang
 
-let basic_free = MIO.basic_free
-let mio = MIO.mio
+let mio a pi = x:(iio a){special_tree pi x} 
 
 let super_lemma 
   (pi:monitorable_prop)
@@ -70,38 +70,23 @@ let lemma_smt_pat (pi:monitorable_prop) (h lt1 lt2:trace) :
     (ensures (
     enforced_locally pi h (lt1 @ lt2))) [SMTPat (enforced_locally pi h (lt1@lt2))] = (** not urgent **) admit ()
 
-let rec inside_respects_pi
-  (tree : iio (resexn 'a))
-  (pi : monitorable_prop) : Type0 =
-  match tree with
-  | Return _ -> True
-  | PartialCall pre k ->
-      pre ==> (inside_respects_pi (k ()) pi)
-  | Call cmd arg k ->
-      forall res. inside_respects_pi (k res) pi
-  | Decorated dec m k ->
-      (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
-      (forall res. inside_respects_pi (k res) pi)
-
-
 let run_m
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
-  dec
-  k
-  p
+  (dec : dec_post)
+  (k : 'b -> iio (resexn 'c))
+  (p : hist_post (resexn 'c))
   (h:trace)
-  (_:squash (inside_respects_pi (Decorated dec m k) pi))
+  (_:squash (special_tree pi (Decorated dec m k)))
   (_:squash (dm_iio_theta (Decorated dec m k) p h)) :
-//  (_:squash ) :
   IIO 
-    (iio _ * _ * trace)
+    (mio (resexn 'c) pi * hist_post (resexn 'c) * trace)
     (requires (fun h' -> h == h'))
     (ensures (fun h (z', p', h') lt ->
       h' == apply_changes h lt /\
       dm_iio_theta z' p' h' /\
-      enforced_locally pi h lt /\ 
-      inside_respects_pi z' pi)) =
+      enforced_locally pi h lt /\
+      z' << Decorated dec m k)) =
   assert (forall h lt. dec h lt ==> enforced_locally pi h lt);
   super_lemma pi m dec k p h () ();
   let theMHistPost : trace -> _ -> trace -> Type0 = (fun h r lt -> enforced_locally pi h lt) in
@@ -123,8 +108,8 @@ let run_m
   //assert (p lt res);
   let p' = hist_post_shift p ltM in
   let h' = apply_changes h ltM in
-  (** urgent - it is urgent, because I am not confident it can be proved **)
-  assert (dm_iio_theta z' p' h') by (tadmit ());
+  (** urgent - it is urgent because I am not confident it can be proved **)
+  assume (dm_iio_theta z' p' h');
   (z', p', h')
 
 (** not urgent assume **)
@@ -141,56 +126,41 @@ assume val dynamic_cmd :
 
 (** this is working but needs more help to verify **)
 let rec _instrument
-  (tree : iio (resexn 'a))
+  (pi   : monitorable_prop)
+  (tree : mio (resexn 'a) pi)
   (p    : hist_post (resexn 'a))
   (h    : trace)
   (d1   : squash (dm_iio_theta tree p h))
-  (pi   : monitorable_prop)
-  (d2   : squash (inside_respects_pi tree pi))
-  (c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOwp (resexn 'a) (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) =
   match tree with
   | Return r -> r
-  | Call GetTrace argz fnc -> Inr Contract_failure
-  | PartialCall pre fnc -> Inr Contract_failure
   | Decorated d #b m k ->
-    admit ();
-    let (z', p', h') = run_m pi m d k p h d1 d2 in
-    _instrument z' p' h' () pi () c_pi
+    let (z', p', h') = run_m pi m d k p h () d1 in
+    assert (z' << tree);
+    _instrument pi z' p' h' () c_pi
   | Call cmd argz fnc -> begin
-    admit ();
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
     (** Check if the runtime check failed, and if yes, return the error **)
     let rez = dynamic_cmd cmd d argz in
     let z' : iio (resexn 'a) = fnc rez in
 
-    let p' : hist_post (resexn 'a) = hist_post_shift p [convert_call_to_event cmd argz rez] in
-    let h' = apply_changes h [convert_call_to_event cmd argz rez] in
-    let proof1 : squash (dm_iio_theta z' p' h') = () in
-    let proof2 : squash (inside_respects_pi z' pi) = () in
-    _instrument z' p' h' proof1 pi proof2 c_pi
+    let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+
+    let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
+    let h' = apply_changes h ltM in
+    assume (dm_iio_theta z' p' h');
+    assert (z' << tree);
+    _instrument pi z' p' h' () c_pi
   end
 
-let rec lemma_super_lemma (m:iio (resexn 'a)) pi :
-  Lemma (basic_free m ==> inside_respects_pi m pi) =
-  match m with
-  | Return _ -> ()
-  | Decorated _ _ _ -> ()
-  | PartialCall _ _ -> ()
-  | Call GetTrace _ _ -> ()
-  | Call cmd arg k ->
-    introduce forall res. basic_free (k res) ==> inside_respects_pi (k res) pi with begin
-      lemma_super_lemma (k res) pi
-    end
-
 let instrument_mio
-  (tree:mio (resexn 'a))
-  (_:squash (trivial_hist `hist_ord` dm_iio_theta tree))
   (pi   : monitorable_prop)
-  (c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  (tree : mio (resexn 'a) pi)
+  (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
+  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOpi (resexn 'a) pi = 
   let p = fun _ _ -> True in
   let h = get_trace () in
-  lemma_super_lemma tree pi;
-  _instrument tree p h () pi () c_pi
+  _instrument pi tree p h () c_pi
