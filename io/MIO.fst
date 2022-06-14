@@ -31,6 +31,8 @@ let rec basic_free (x:free iio_cmds iio_sig 'dec 'a) : Type0 =
   | Call cmd arg k ->
     forall res. basic_free (k res)
 
+let mio a = x:(iio a){basic_free x}
+
 let dm_mio a wp = (x:(dm_iio a wp){basic_free x})
 
 let dm_mio_return (a:Type) (x:a) : dm_mio a (hist_return x) =
