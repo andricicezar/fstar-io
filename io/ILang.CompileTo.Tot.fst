@@ -29,26 +29,30 @@ instance tlang_resexn t1 {| d1:tlang t1 |} : tlang (resexn t1) =
   { mldummy = () }
 instance tlang_arrow t1 {| d1:tlang t1 |} t2 {| d2:tlang t2 |} : tlang (t1 -> Tot (resexn t2)) = { mldummy = () }
 
-class compilable (t:Type) (pi:monitorable_prop) = {
-  c_t_ilang : ilang t pi;
-  comp_type : Type;
-  c_comp_type : tlang comp_type;
-  compile: t -> comp_type
+class compilable (comp_in:Type) (pi:monitorable_prop) = {
+  comp_out : Type;
+  compile: comp_in -> comp_out;
+  [@@@no_method]
+  ilang_comp_in : ilang comp_in pi;
+  [@@@no_method]
+  tlang_comp_out : tlang comp_out;
 }
 
-class instrumentable (t:Type) (pi:monitorable_prop) = {
-  cc_t_ilang : ilang t pi;
-  unverified : Type;
-  c_unverified : tlang unverified;
-  instrument: unverified -> t 
+class instrumentable (inst_out:Type) (pi:monitorable_prop) = {
+  inst_in : Type;
+  instrument: inst_in -> inst_out;
+  [@@@no_method]
+  ilang_inst_out : ilang inst_out pi;
+  [@@@no_method]
+  tlang_inst_in : tlang inst_in;
 }
 
 (** *** Compilable base types **)
 
 instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
-  c_t_ilang = ilang_resexn pi t #d1.c_t_ilang;
-  comp_type = resexn (d1.comp_type);
-  c_comp_type = tlang_resexn d1.comp_type #(d1.c_comp_type);
+  ilang_comp_in = ilang_resexn pi t #d1.ilang_comp_in;
+  comp_out = resexn (d1.comp_out);
+  tlang_comp_out = tlang_resexn d1.comp_out #(d1.tlang_comp_out);
   compile = (fun x ->
     match x with
     | Inl r -> Inl (compile r)
@@ -101,7 +105,7 @@ let super_lemma
           dm_iio_theta (k (Universe.downgrade_val r))
             (hist_post_shift the_p lt)
             (List.Tot.Base.rev lt @ h)) h;
-      == { _ by (norm [delta_only [`%hist_post_shift; `%the_p]]; dump "H")}
+      == { _ by (norm [delta_only [`%hist_post_shift; `%the_p]])}
       dm_iio_theta m
         (fun lt r ->
           dm_iio_theta (k (Universe.downgrade_val r))
@@ -147,10 +151,10 @@ instance compile_ilang_base
   (t2:Type) {| d2:compilable t2 pi |} :
   Tot (compilable (t1 -> IIOpi (resexn t2) pi) pi) = {
 
-  c_t_ilang = ilang_arrow pi t1 #d1.cc_t_ilang t2 #d2.c_t_ilang;
-  comp_type = d1.unverified -> Tot (resexn d2.comp_type);
-  c_comp_type = (tlang_arrow d1.unverified #d1.c_unverified d2.comp_type #d2.c_comp_type);
-  compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.unverified) ->
+  ilang_comp_in = ilang_arrow pi t1 #d1.ilang_inst_out t2 #d2.ilang_comp_in;
+  comp_out = d1.inst_in -> Tot (resexn d2.comp_out);
+  tlang_comp_out = (tlang_arrow d1.inst_in #d1.tlang_inst_in d2.comp_out #d2.tlang_comp_out);
+  compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.inst_in) ->
     let r : unit -> IIOpi _ pi = fun () ->  (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
     let tree : dm_iio _ _ = reify (r ()) in
     match skip_partial_calls tree () with
@@ -160,9 +164,9 @@ instance compile_ilang_base
 
 (** *** Insturmentable types **)
 instance instrumentable_resexn pi (t:Type) {| d1:instrumentable t pi |} : instrumentable (resexn t) pi = {
-  cc_t_ilang = ilang_resexn pi t #d1.cc_t_ilang;
-  unverified = resexn (d1.unverified);
-  c_unverified = tlang_resexn d1.unverified #d1.c_unverified;
+  ilang_inst_out = ilang_resexn pi t #d1.ilang_inst_out;
+  inst_in = resexn (d1.inst_in);
+  tlang_inst_in = tlang_resexn d1.inst_in #d1.tlang_inst_in;
   instrument = (fun x ->
     match x with
     | Inl r -> Inl (d1.instrument r)
@@ -171,12 +175,14 @@ instance instrumentable_resexn pi (t:Type) {| d1:instrumentable t pi |} : instru
 
 (** *** Instrumentable arrows **)
 instance instrumentable_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:instrumentable t2 pi |} : instrumentable (t1 -> IIOpi (resexn t2) pi) pi = {
-  cc_t_ilang = ilang_arrow pi t1 #d1.c_t_ilang t2 #d2.cc_t_ilang;
-  unverified = d1.comp_type -> Tot (resexn d2.unverified);
-  c_unverified = tlang_arrow d1.comp_type #d1.c_comp_type d2.unverified #d2.c_unverified;
-  instrument = (fun (f:d1.comp_type -> Tot (resexn d2.unverified)) (x:t1) -> 
+  ilang_inst_out = ilang_arrow pi t1 #d1.ilang_comp_in t2 #d2.ilang_inst_out;
+
+  inst_in = d1.comp_out -> Tot (resexn d2.inst_in);
+  tlang_inst_in = tlang_arrow d1.comp_out #d1.tlang_comp_out d2.inst_in #d2.tlang_inst_in;
+
+  instrument = (fun (f:d1.comp_out -> Tot (resexn d2.inst_in)) (x:t1) -> 
     (** this is basically a hack to be able to extract **)
-    let f' : d1.comp_type -> IIOpi (resexn d2.unverified) pi = fun x -> f x in
-    let r : resexn d2.unverified = f' (compile x) in
-    instrument #_ #pi #(instrumentable_resexn pi t2 #d2) r);
+    (let f' : d1.comp_out -> IIOpi (resexn d2.inst_in) pi = fun x -> f x in
+    let r : resexn d2.inst_in = f' (compile x) in
+    instrument #_ #pi #(instrumentable_resexn pi t2 #d2) r) <: IIOpi (resexn t2) pi);
 }
