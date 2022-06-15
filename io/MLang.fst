@@ -45,7 +45,8 @@ let rec special_tree
     (forall res. special_tree pi (k res))
 
 (** this diff is problematic because it allows to use Decorated node.
-This nodes should come as input **)
+Decorated nodes come as input, but in the same time the predicate enables
+writing bad stuff **)
 type unverified_arrow (t1 t2:Type) pi =
   f:(t1 -> MIIO (resexn t2)){forall x. special_tree pi (reify (f x))} 
 
