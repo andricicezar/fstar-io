@@ -11,6 +11,12 @@ open IO
 (** This is based on the paper LTL Types FRP Linear-time Temporal Logic Propositions as Types by Alan Jeffrey 
     Source: https://dl.acm.org/doi/10.1145/2103776.2103783 **)
 
+let rec prefix_of (l1 l2:list 'a) : Type0 =
+  match l1, l2 with
+  | [], _ -> True
+  | _, [] -> False
+  | h1::t1, h2::t2 -> h1 == h2 /\ t1 `prefix_of` t2
+
 (** *** Figure 1 -- time model **)
 (** LTL Proposition are temporal proposition, therefore we need a time model. 
     I chose as a model for time the trace with a position.
@@ -38,10 +44,10 @@ let end_time (| h, i |) = (i+1) == List.length h
 
 (** I think here it should be prefix **)
 val time_leq : time -> time -> Type0
-let time_leq (| h1, i1 |) (| h2, i2 |) = h1 == h2 /\ i1 <= i2
+let time_leq (| h1, i1 |) (| h2, i2 |) = h1 `prefix_of` h2 /\ i1 <= i2
 
 val time_lt : time -> time -> Type0
-let time_lt (| h1, i1 |) (| h2, i2 |) = h1 == h2 /\ i1 < i2
+let time_lt (| h1, i1 |) (| h2, i2 |) = h1 `prefix_of` h2 /\ i1 < i2
 
 // time_sum should be associative, cancellative, has right unit 0
 unfold val time_sum : t:time -> n:int{-1 <= n+Mkdtuple2?._2 t /\ n+Mkdtuple2?._2 t < (List.length (Mkdtuple2?._1 t))} -> time 
@@ -141,7 +147,7 @@ let next_implies_eventually (p:ltl_prop) (t:time) :
     let u = t `time_sum` 1 in
     introduce exists (u:time). t `time_leq` u /\ p u with u and begin
         assert (p u);
-        assert (t `time_leq` u)
+        assume (t `time_leq` u)
     end;
     assert (eventually p t) by (norm [delta_only [`%eventually]])
   end
