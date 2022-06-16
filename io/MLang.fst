@@ -50,8 +50,7 @@ writing bad stuff **)
 type unverified_arrow (t1 t2:Type) pi =
   f:(t1 -> MIIO (resexn t2)){forall x. special_tree pi (reify (f x))} 
 
-(** only this type of arrows can be instrumented. therefore
-    the instrumentation is partial **)
+(** TODO: why is this needed? mlang_arrow should be enough **)
 instance mlang_unverified_arrow #t1 #t2 pi (d1:mlang t1) (d2:mlang t2) : mlang (unverified_arrow t1 t2 pi) =
   { mldummy = () }
 

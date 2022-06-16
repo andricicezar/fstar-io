@@ -63,7 +63,7 @@ class instrumentable (inst_in_in inst_in_out:Type) (pi:monitorable_prop) = {
   c_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
 }
 
-instance instrumentable_is_backtranslateable t1 t2 pi {| d1: instrumentable t1 t2 pi |} : backtranslateable (verified_arrow t1 t2 pi) pi = {
+instance instrumentable_is_backtranslateable #t1 #t2 #pi (d1: instrumentable t1 t2 pi) : backtranslateable (verified_arrow t1 t2 pi) pi = {
   btrans_in = unverified_arrow d1.inst_out_in d1.inst_out_out pi;
   mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
@@ -123,7 +123,11 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
 }
 
 (** *** Instrumentable arrows **)
-instance instrumentable_unverified_arrow t1 t2 pi {| d1:compilable t1 pi |} {| d2:backtranslateable t2 pi |} : instrumentable t1 t2 pi = {
+instance instrumentable_unverified_arrow 
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |} : 
+  instrumentable t1 t2 pi = {
   mlang_inst_in = mlang_unverified_arrow pi d1.mlang_comp_out d2.mlang_btrans_in;
 
   inst_out_in = d1.comp_out;
