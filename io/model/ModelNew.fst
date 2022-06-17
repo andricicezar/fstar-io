@@ -47,7 +47,7 @@ noeq type interface = {
 }
 
 type whole_s (i:interface) =
-  x:unit -> IIOpi i.ret i.pi
+  x:unit -> IIOpi (resexn i.ret) i.pi
 
 type whole_t (i:interface) =
   unit -> MIIO (resexn i.compilable_ret.comp_out)
@@ -59,7 +59,7 @@ type ctx_s (i:interface) =
   (x:i.ctx_arg) -> IIOpi (resexn i.ctx_ret) i.pi
 
 type prog_s (i:interface) =
-  ctx_s i -> IIOpi i.ret i.pi
+  ctx_s i -> IIOpi (resexn i.ret) i.pi
 
 type prog_t (i:interface) =
   ctx_t i -> MIIO (resexn i.compilable_ret.comp_out)
@@ -90,12 +90,12 @@ let backtranslateable_ctx_s (#i:interface) : backtranslateable (ctx_s i) i.pi =
 compile is in universe 0 bites us **)
 val compile_prog : (#i:interface) -> prog_s i -> Tot (prog_t i)
 let compile_prog #i p : prog_t i =
-  compile #_ #_ #(
+  compile #(prog_s i) #_ #(
     compile_verified_arrow
       i.pi 
       (ctx_s i) #(backtranslateable_ctx_s #i)
       i.ret #i.compilable_ret
-    ) #_ p
+    ) p
 
 let model : model_type = { 
   interface = interface;

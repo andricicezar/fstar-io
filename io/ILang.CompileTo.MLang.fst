@@ -17,8 +17,8 @@ open MLang
 
 open MLang.InstrumentTo.ILang
 
-class compilable (comp_in:Type) (pi:monitorable_prop) = {
-  comp_out : Type;
+class compilable (comp_in:Type u#a) (pi:monitorable_prop) = {
+  comp_out : Type u#a;
   compile: comp_in -> comp_out;
 
   [@@@no_method]
@@ -27,8 +27,8 @@ class compilable (comp_in:Type) (pi:monitorable_prop) = {
   mlang_comp_out : mlang comp_out;
 }
 
-class backtranslateable (btrans_out:Type) (pi:monitorable_prop) = {
-  btrans_in : Type;
+class backtranslateable (btrans_out:Type u#a) (pi:monitorable_prop) = {
+  btrans_in : Type u#a;
   backtranslate: btrans_in -> btrans_out;
 
   [@@@no_method]
@@ -90,8 +90,8 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
 (** TODO: t1 and t2 are in universe 0. is that a problem? can we do HO? **)
 instance compile_verified_arrow
   pi
-  (t1:Type u#0) {| d1:backtranslateable t1 pi |} 
-  (t2:Type u#0) {| d2:compilable t2 pi |} :
+  (t1:Type) {| d1:backtranslateable t1 pi |} 
+  (t2:Type) {| d2:compilable t2 pi |} :
   Tot (compilable (verified_arrow t1 t2 pi) pi) = {
   ilang_comp_in = ilang_arrow pi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
 
