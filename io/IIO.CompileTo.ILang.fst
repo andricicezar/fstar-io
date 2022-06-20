@@ -94,10 +94,7 @@ instance exportable_arrow_with_post
     (d1.itype -> IIOpi (resexn d2.etype) 'pi)
     #(ilang_arrow 'pi d1.itype #d1.c_itype d2.etype #d2.c_etype)
     (fun f -> 
-      assume (forall (x: t1) (h: IO.Sig.trace) (lt: IO.Sig.trace) (r':resexn t2).
-        (post x h r' lt /\
-         (enforced_locally 'pi h lt ==> (exists (r: resexn t2). post x h r lt))) ==>
-         enforced_locally 'pi h lt);
+      let _ = d3.post_implies_pi in
       let f' : t1 -> IIOpi (resexn t2) 'pi = f in
       export #_ #'pi #(exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2) f')
 
@@ -106,7 +103,7 @@ let trivialize_new_post_maybe
   (post:'a -> trace -> resexn 'b -> trace -> Type0) :
   Tot ('a -> trace -> resexn 'b -> trace -> Type0) =
     fun x h r lt -> 
-      (~(pre x h) ==> r == (Inr Contract_failure)) /\
+      (~(pre x h) ==> r == (Inr Contract_failure) /\ lt == []) /\
       (pre x h ==> post x h r lt) 
   
 let trivialize
@@ -126,17 +123,10 @@ let lemma_trivialize_new_post_monitorable
   pre {| d3: checkable2 pre |}
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi
-  (x:squash (forall (x:t1) (h lt:trace). pre x h /\ enforced_locally pi h lt ==> (exists r. post x h r lt))) :
-  squash (forall x h lt. enforced_locally pi h lt ==> (exists r. (trivialize_new_post_maybe d3.check2 post) x h r lt)) = 
-  introduce forall (x:t1) (h lt:trace). enforced_locally pi h lt ==> (exists r. (trivialize_new_post_maybe d3.check2 post) x h r lt) with begin
-    introduce enforced_locally pi h lt ==> (exists r. (trivialize_new_post_maybe d3.check2 post) x h r lt) with _. begin
-      assert (pre x h /\ enforced_locally pi h lt ==> (exists r. post x h r lt)) by (
-        ignore (ExtraTactics.instantiate_multiple_foralls (nth_binder 6) [binder_to_term (nth_binder 7)]));
-      assert (enforced_locally pi h lt);
-      assert (pre x h ==> (exists r. post x h r lt));
-      assert (exists (r:resexn t2). ~(pre x h) ==> r == Inr Contract_failure) by (witness (`(Inr Contract_failure)))
-    end
-  end
+  (x:squash (forall (x:t1) (h lt:trace) r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
+  squash (forall x h lt r. (trivialize_new_post_maybe d3.check2 post) x h r lt ==> enforced_locally pi h lt) = 
+  ()
+
 
 let convert_hist_to_trivialize_hist
   #t1
@@ -145,7 +135,7 @@ let convert_hist_to_trivialize_hist
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi (x:monitorable_hist pre post pi) :
   monitorable_hist (fun _ _ ->True) (trivialize_new_post_maybe d3.check2 post) pi = {
-    c1post = lemma_trivialize_new_post_monitorable pre post pi x.c1post
+    post_implies_pi = lemma_trivialize_new_post_monitorable pre post pi x.post_implies_pi;
   }
 
 instance exportable_arrow_with_pre_post
