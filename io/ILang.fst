@@ -22,13 +22,6 @@ open TC.Monitorable.Hist
 **)
 
 
-(** *** First order **)
-
-(** Principles for ilang_fo:
-1. it works only with basic types (no functions).
-2. Arrows are not ilang_fo.
-3. inductive types are ilang_fo 
-**)
   
 #set-options "--print_universes"
 

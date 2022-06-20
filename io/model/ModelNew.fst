@@ -86,8 +86,6 @@ let backtranslateable_ctx_s (#i:interface) : backtranslateable (ctx_s i) i.pi =
       i.ctx_ret 
       #i.backtranslateable_ctx_ret)
 
-(** TODO: universe problems. it seems that the fact that 
-compile is in universe 0 bites us **)
 val compile_prog : (#i:interface) -> prog_s i -> Tot (prog_t i)
 let compile_prog #i p : prog_t i =
   compile #(prog_s i) #_ #(

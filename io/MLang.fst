@@ -50,6 +50,12 @@ writing bad stuff **)
 type unverified_arrow (t1 t2:Type) pi =
   f:(t1 -> MIIO (resexn t2)){forall x. special_tree pi (reify (f x))} 
 
+(** I think I would like more a refinement like this one:
+    forall x. arrow? x /\ special_tree x ==> special_tree f
+    where special_tree' returns False for Decorated. But,
+    how can one write 'arrow?'?
+**)
+
 (** TODO: why is this needed? mlang_arrow should be enough **)
 instance mlang_unverified_arrow #t1 #t2 pi (d1:mlang t1) (d2:mlang t2) : mlang (unverified_arrow t1 t2 pi) =
   { mldummy = () }
