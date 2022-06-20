@@ -120,7 +120,7 @@ let trivialize
   if d.check2 x h then f x
   else Inr Contract_failure
 
-let convert222
+let lemma_trivialize_new_post_monitorable
   #t1
   #t2
   pre {| d3: checkable2 pre |}
@@ -134,18 +134,18 @@ let convert222
         ignore (ExtraTactics.instantiate_multiple_foralls (nth_binder 6) [binder_to_term (nth_binder 7)]));
       assert (enforced_locally pi h lt);
       assert (pre x h ==> (exists r. post x h r lt));
-      admit ()
+      assert (exists (r:resexn t2). ~(pre x h) ==> r == Inr Contract_failure) by (witness (`(Inr Contract_failure)))
     end
   end
 
-let convert2
+let convert_hist_to_trivialize_hist
   #t1
   #t2
   pre {| d3: checkable2 pre |}
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi (x:monitorable_hist pre post pi) :
   monitorable_hist (fun _ _ ->True) (trivialize_new_post_maybe d3.check2 post) pi = {
-    c1post = convert222 pre post pi x.c1post
+    c1post = lemma_trivialize_new_post_monitorable pre post pi x.c1post
   }
 
 instance exportable_arrow_with_pre_post
@@ -161,7 +161,7 @@ instance exportable_arrow_with_pre_post
     #(ilang_arrow 'pi d1.itype #d1.c_itype d2.etype #d2.c_etype)
     (fun f -> 
       export #_ #'pi
-        #(exportable_arrow_with_post t1 #d1 t2 #d2 (trivialize_new_post_maybe d3.check2 post) #(convert2 pre post 'pi d4))
+        #(exportable_arrow_with_post t1 #d1 t2 #d2 (trivialize_new_post_maybe d3.check2 post) #(convert_hist_to_trivialize_hist pre post 'pi d4))
         (trivialize t1 t2 pre post f)
     )
     
