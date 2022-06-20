@@ -24,7 +24,7 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) = either (io_res cmd) exn
+let io_resm (cmd:io_cmds) = resexn (io_res cmd)
 
 unfold
 let io_resm' (cmd:io_cmds) (arg:io_args cmd) = io_resm cmd

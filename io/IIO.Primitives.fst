@@ -9,15 +9,15 @@ open IO.Sig
 open IO
 open IIO
 open TC.Checkable
-open TC.Trivialize.IIOwp
+open TC.Trivialize
 
 val dynamic_cmd :
   (cmd : io_cmds) ->
   (d1 : checkable2 (io_pre cmd)) ->
   (arg : io_sig.args cmd) ->
-  IIOwp (maybe (io_resm cmd)) 
+  IIOwp (resexn (io_resm cmd)) 
     (fun p h ->
-      (forall (r:maybe (io_sig.res cmd arg)) lt.
+      (forall (r:resexn (io_sig.res cmd arg)) lt.
         (match r with
          | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
          | Inl r' -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r']
@@ -25,7 +25,7 @@ val dynamic_cmd :
 let dynamic_cmd (cmd:io_cmds) d1 = 
   trivialize 
     #_ 
-    #(trivializeable_IIOwp
+    #(trivializeable_IOwp
        (io_sig.args cmd)
        (io_resm cmd)
        (io_pre cmd)

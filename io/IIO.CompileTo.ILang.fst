@@ -9,6 +9,7 @@ open IIO
 open TC.Monitorable.Hist
 open ILang
 open TC.Checkable
+open TC.Trivialize
 
 class exportable (t : Type u#a) (pi:monitorable_prop) = {
   etype : Type u#a;
@@ -98,25 +99,6 @@ instance exportable_arrow_with_post
       let f' : t1 -> IIOpi (resexn t2) 'pi = f in
       export #_ #'pi #(exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2) f')
 
-let trivialize_new_post_maybe
-  (pre:'a -> trace -> bool)
-  (post:'a -> trace -> resexn 'b -> trace -> Type0) :
-  Tot ('a -> trace -> resexn 'b -> trace -> Type0) =
-    fun x h r lt -> 
-      (~(pre x h) ==> r == (Inr Contract_failure) /\ lt == []) /\
-      (pre x h ==> post x h r lt) 
-  
-let trivialize
-  t1 t2
-  (pre : t1 -> trace -> Type0) {| d:checkable2 pre |}
-  (post : t1 -> trace -> (resexn t2) -> trace -> Type0)
-  (f:((x:t1) -> IIO (resexn t2) (pre x) (post x)))
-  (x:t1) : 
-  IIO (resexn t2) (fun _ -> True) (trivialize_new_post_maybe d.check2 post x) =
-  let h = get_trace () in
-  if d.check2 x h then f x
-  else Inr Contract_failure
-
 let lemma_trivialize_new_post_monitorable
   #t1
   #t2
@@ -124,9 +106,8 @@ let lemma_trivialize_new_post_monitorable
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi
   (x:squash (forall (x:t1) (h lt:trace) r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
-  squash (forall x h lt r. (trivialize_new_post_maybe d3.check2 post) x h r lt ==> enforced_locally pi h lt) = 
+  squash (forall x h lt r. (trivialize_new_post_resexn d3.check2 post) x h r lt ==> enforced_locally pi h lt) = 
   ()
-
 
 let convert_hist_to_trivialize_hist
   #t1
@@ -134,7 +115,7 @@ let convert_hist_to_trivialize_hist
   pre {| d3: checkable2 pre |}
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi (x:monitorable_hist pre post pi) :
-  monitorable_hist (fun _ _ ->True) (trivialize_new_post_maybe d3.check2 post) pi = {
+  monitorable_hist (fun _ _ ->True) (trivialize_new_post_resexn d3.check2 post) pi = {
     post_implies_pi = lemma_trivialize_new_post_monitorable pre post pi x.post_implies_pi;
   }
 
@@ -151,12 +132,10 @@ instance exportable_arrow_with_pre_post
     #(ilang_arrow 'pi d1.itype #d1.c_itype d2.etype #d2.c_etype)
     (fun f -> 
       export #_ #'pi
-        #(exportable_arrow_with_post t1 #d1 t2 #d2 (trivialize_new_post_maybe d3.check2 post) #(convert_hist_to_trivialize_hist pre post 'pi d4))
-        (trivialize t1 t2 pre post f)
+        #(exportable_arrow_with_post t1 #d1 t2 #d2 (trivialize_new_post_resexn d3.check2 post) #(convert_hist_to_trivialize_hist pre post 'pi d4))
+        (trivialize f)
     )
     
-
-
 (** *** Safe importable instances **)
 let mk_safe_importable
   (t1 #t2 : Type) {| d1:ilang t1 'pi |}
