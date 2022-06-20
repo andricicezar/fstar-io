@@ -112,18 +112,6 @@ let run_m
   assume (dm_iio_theta z' p' h');
   (z', p', h')
 
-(** not urgent assume **)
-assume val dynamic_cmd :
-  (cmd : io_cmds) ->
-  (d1 : checkable2 (io_pre cmd)) ->
-  (arg : io_sig.args cmd) ->
-  IIOwp (io_resm cmd)
-    (fun p h ->
-      (forall (r:(io_sig.res cmd arg)) lt.
-        (match r with
-         | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
-         | _ -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r]) ==> p lt r))
-
 let rec _instrument
   (pi   : monitorable_prop)
   (tree : mio (resexn 'a) pi)
@@ -142,17 +130,23 @@ let rec _instrument
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
 
-    let rez = dynamic_cmd cmd d argz in
-    let z' : iio (resexn 'a) = fnc rez in
+    let inst_res : resexn (io_sig.res cmd argz) = IIO.Primitives.dynamic_cmd cmd d argz in
+    match inst_res with
+    (** the instrumentation failed, so we stop execution **)
+    | Inr Contract_failure -> Inr Contract_failure
+    (** instrumentation succeded and we continue **)
+    | Inl rez -> begin
+        let z' : iio (resexn 'a) = fnc rez in
 
-    let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+        let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
 
-    let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
-    let h' = apply_changes h ltM in
-    assume (dm_iio_theta z' p' h'); (** same as in run_m **)
-    assert (z' << tree);
-    _instrument pi z' p' h' () c_pi
-  end
+        let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
+        let h' = apply_changes h ltM in
+        assume (dm_iio_theta z' p' h'); (** same as in run_m **)
+        assert (z' << tree);
+        _instrument pi z' p' h' () c_pi
+    end
+  end 
 
 let instrument_mio
   (pi   : monitorable_prop)

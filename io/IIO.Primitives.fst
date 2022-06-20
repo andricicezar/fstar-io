@@ -15,7 +15,7 @@ val dynamic_cmd :
   (cmd : io_cmds) ->
   (d1 : checkable2 (io_pre cmd)) ->
   (arg : io_sig.args cmd) ->
-  IIOwp (resexn (io_resm cmd)) 
+  IIOwp (resexn (io_sig.res cmd arg)) 
     (fun p h ->
       (forall (r:resexn (io_sig.res cmd arg)) lt.
         (match r with
