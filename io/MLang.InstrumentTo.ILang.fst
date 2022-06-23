@@ -24,22 +24,19 @@ let super_lemma
   (_:squash (dm_iio_theta (Decorated d m k) p h))
   (_:squash (forall h lt. d h lt ==> enforced_locally pi h lt)) :
   Lemma (
-   dm_iio_theta m (fun lt r -> enforced_locally pi h lt) h /\
    dm_iio_theta m
       (fun lt r ->
+        enforced_locally pi h lt /\
         dm_iio_theta (k (Universe.downgrade_val r))
           (hist_post_shift p lt)
           (apply_changes h lt)) h) = 
-  admit ()
-  (**
   calc (==>) {
       dm_iio_theta (Decorated d m k) p h;
-      ==> { _ by (
-            binder_retype (nth_binder (-1));
-            norm [delta_only [`%dm_iio_theta;`%DMFree.theta]; zeta];
-            trefl ();
-            norm [delta_only [`%dm_iio_theta]];
-            assumption ()) }
+      == {}
+      DMFree.theta iio_wps (Decorated d m k) p h;
+      == { _ by (
+        norm [delta_only [`%DMFree.theta]; zeta]; 
+        norm [delta_only [`%dm_iio_theta]; zeta]) }
       hist_bind
              (fun p h -> dm_iio_theta m (fun lt r -> d h lt /\ p lt r) h)
              (fun r -> dm_iio_theta (k (Universe.downgrade_val r))) p h;
@@ -47,21 +44,14 @@ let super_lemma
       hist_bind
              (fun p h -> dm_iio_theta m (fun lt r -> enforced_locally pi h lt /\ p lt r) h)
              (fun r -> dm_iio_theta (k (Universe.downgrade_val r))) p h;
-      ==> { _ by (binder_retype (nth_binder (-1));
-                  norm [delta_only [`%hist_bind;`%hist_post_bind]]; trefl (); assumption ()) }
+      == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind]]) }
       dm_iio_theta m
         (fun lt r ->
           enforced_locally pi h lt /\
           dm_iio_theta (k (Universe.downgrade_val r))
             (hist_post_shift p lt)
-            (List.Tot.Base.rev lt @ h)) h;
-      ==> {}
-      dm_iio_theta m
-        (fun lt r ->
-          dm_iio_theta (k (Universe.downgrade_val r))
-            (hist_post_shift p lt)
-            (List.Tot.Base.rev lt @ h)) h;
-    }**)
+            (rev lt @ h)) h;
+    }
 
 let lemma_smt_pat (pi:monitorable_prop) (h lt1 lt2:trace) :
   Lemma (requires (
@@ -87,29 +77,28 @@ let run_m
       dm_iio_theta z' p' h' /\
       enforced_locally pi h lt /\
       z' << Decorated dec m k)) =
-  assert (forall h lt. dec h lt ==> enforced_locally pi h lt);
   super_lemma pi m dec k p h () ();
-  let theMHistPost : trace -> _ -> trace -> Type0 = (fun h r lt -> enforced_locally pi h lt) in
+  let intP = (fun lt r ->
+          dm_iio_theta (k (Universe.downgrade_val r))
+            (hist_post_shift p lt)
+            (apply_changes h lt)) in
+  let theMHistPost : trace -> _ -> trace -> Type0 = (fun h r lt -> enforced_locally pi h lt /\ intP lt r) in
   let theMHist : hist _ = to_hist (fun h' -> h == h') theMHistPost in
   let theM : unit -> IIOwp _ theMHist = (fun () -> IIOwp?.reflect m) in
   let resM = theM () in 
+  // this is an alternative to the previous two lines
+  // let resM = IIOwp?.reflect (m <: dm_iio _ theMHist) in
   Classical.forall_intro (lemma_suffixOf_append h);
   let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+  Classical.forall_intro (Classical.move_requires (lemma_append_rev_inv_tail h ltM));
+  assert (intP ltM resM);
 
   let z' = k (Universe.downgrade_val resM) in
-  assert (dm_iio_theta m (fun lt r -> theMHistPost h r lt) h);
-  assert (dm_iio_theta m
-        (fun lt r ->
-          dm_iio_theta (k (Universe.downgrade_val r))
-            (hist_post_shift p lt)
-            (apply_changes h lt)) h);
-
- // assert (theMHist `hist_ord` dm_iio_theta m);
-  //assert (p lt res);
   let p' = hist_post_shift p ltM in
   let h' = apply_changes h ltM in
-  (** urgent - it is urgent because I am not confident it can be proved **)
-  assume (dm_iio_theta z' p' h');
+
+  assert (dm_iio_theta z' p' h');
+
   (z', p', h')
 
 let rec _instrument
@@ -139,10 +128,11 @@ let rec _instrument
         let z' : iio (resexn 'a) = fnc rez in
 
         let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+        Classical.forall_intro (Classical.move_requires (lemma_append_rev_inv_tail h ltM));
 
         let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
         let h' = apply_changes h ltM in
-        assume (dm_iio_theta z' p' h'); (** same as in run_m **)
+        assert (dm_iio_theta z' p' h');
         assert (z' << tree);
         _instrument pi z' p' h' () c_pi
     end
