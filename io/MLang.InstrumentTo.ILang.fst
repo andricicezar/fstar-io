@@ -159,7 +159,7 @@ let rec _instrument
     assert (z' << tree);
     _instrument pi z' p' h' () c_pi
 
-let instrument_mio
+let instrument_instrumentable
   (pi   : monitorable_prop)
   (tree : instrumentable (resexn 'a) pi)
   (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
@@ -168,3 +168,29 @@ let instrument_mio
   let p = fun _ _ -> True in
   let h = get_trace () in
   _instrument pi tree p h () c_pi
+
+let rec lemma_mio_tree_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a) :
+  Lemma
+    (requires (special_tree pi tree))
+    (ensures (instrumentable_tree pi tree)) = 
+    match tree with
+    | Return _ -> ()
+    | PartialCall _ _ -> ()
+    | Call GetTrace _ _ -> ()
+    | Call cmd arg k -> 
+       introduce forall res. special_tree pi (k res) ==> instrumentable_tree pi (k res) with begin
+         lemma_mio_tree_implies_instrumentable_tree pi (k res)
+       end
+    | Decorated dec m k -> 
+       introduce forall res. special_tree pi (k res) ==> instrumentable_tree pi (k res) with begin
+         lemma_mio_tree_implies_instrumentable_tree pi (k res)
+       end
+
+let instrument_mio
+  (pi   : monitorable_prop)
+  (tree : (iio (resexn 'a)){special_tree pi tree})
+  (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
+  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  IIOpi (resexn 'a) pi = 
+  lemma_mio_tree_implies_instrumentable_tree pi tree;
+  instrument_instrumentable pi tree () c_pi
