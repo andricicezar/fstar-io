@@ -11,9 +11,20 @@ open IIO
 open MLang
 open ILang
 
-let mio a pi = x:(iio a){special_tree pi x} 
+let rec instrumentable_tree
+  (pi : monitorable_prop)
+  (tree : iio 'a) : Type0 =
+  match tree with
+  | Return _ -> True
+  | PartialCall _ k -> forall res. instrumentable_tree pi (k res)
+  | Call GetTrace arg k -> forall res. instrumentable_tree pi (k res)
+  | Call cmd arg k -> forall res. instrumentable_tree pi (k res)
+  | Decorated dec m k ->
+    (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
+    (forall res. instrumentable_tree pi (k res))
 
-(** there is something in this calc that break including this file to ILang **)
+let instrumentable a pi = x:(iio a){instrumentable_tree pi x} 
+
 let super_lemma 
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
@@ -58,7 +69,8 @@ let lemma_smt_pat (pi:monitorable_prop) (h lt1 lt2:trace) :
     enforced_locally pi h lt1 /\
     enforced_locally pi (apply_changes h lt1) lt2))
     (ensures (
-    enforced_locally pi h (lt1 @ lt2))) [SMTPat (enforced_locally pi h (lt1@lt2))] = (** not urgent **) admit ()
+    enforced_locally pi h (lt1 @ lt2))) [SMTPat (enforced_locally pi h (lt1@lt2))] =
+    (** not urgent **) admit ()
 
 let run_m
   (pi:monitorable_prop)
@@ -67,10 +79,10 @@ let run_m
   (k : 'b -> iio 'c)
   (p : hist_post 'c)
   (h:trace)
-  (_:squash (special_tree pi (Decorated dec m k)))
+  (_:squash (instrumentable_tree pi (Decorated dec m k)))
   (_:squash (dm_iio_theta (Decorated dec m k) p h)) :
   IIO 
-    (mio 'c pi * hist_post 'c * trace)
+    (instrumentable 'c pi * hist_post 'c * trace)
     (requires (fun h' -> h == h'))
     (ensures (fun h (z', p', h') lt ->
       h' == apply_changes h lt /\
@@ -101,9 +113,10 @@ let run_m
 
   (z', p', h')
 
+#set-options "--z3rlimit 10 --fuel 10 --z3seed 10"
 let rec _instrument
   (pi   : monitorable_prop)
-  (tree : mio (resexn 'a) pi)
+  (tree : instrumentable (resexn 'a) pi)
   (p    : hist_post (resexn 'a))
   (h    : trace)
   (d1   : squash (dm_iio_theta tree p h))
@@ -111,10 +124,16 @@ let rec _instrument
   IIOwp (resexn 'a) (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) =
   match tree with
   | Return r -> r
-  | Decorated d #b m k ->
-    let (z', p', h') = run_m pi m d k p h () d1 in
-    assert (z' << tree);
-    _instrument pi z' p' h' () c_pi
+  | PartialCall pre k -> 
+      let z' = k () in
+      let p' : hist_post (resexn 'a) = hist_post_shift p [] in
+      let h' = apply_changes h [] in
+      _instrument pi z' p' h' () c_pi
+  | Call GetTrace argz k -> 
+      let z' = k h in
+      let p' : hist_post (resexn 'a) = hist_post_shift p [] in
+      let h' = apply_changes h [] in
+      _instrument pi z' p' h' () c_pi
   | Call cmd argz fnc -> begin
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
@@ -132,15 +151,17 @@ let rec _instrument
 
         let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
         let h' = apply_changes h ltM in
-        assert (dm_iio_theta z' p' h');
-        assert (z' << tree);
         _instrument pi z' p' h' () c_pi
     end
   end 
+  | Decorated d #b m k ->
+    let (z', p', h') = run_m pi m d k p h () d1 in
+    assert (z' << tree);
+    _instrument pi z' p' h' () c_pi
 
 let instrument_mio
   (pi   : monitorable_prop)
-  (tree : mio (resexn 'a) pi)
+  (tree : instrumentable (resexn 'a) pi)
   (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
   (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOpi (resexn 'a) pi = 
