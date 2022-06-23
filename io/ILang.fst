@@ -25,8 +25,11 @@ open TC.Monitorable.Hist
   
 #set-options "--print_universes"
 
+let pi_hist (a:Type) (pi:monitorable_prop) : Hist.hist a =
+  (fun p h -> (forall r lt. (enforced_locally pi h lt) ==> p lt r))
+
 effect IIOpi (a:Type) (pi : monitorable_prop) = 
-  IIO.IIOwp a (fun p h -> (forall r lt. (enforced_locally pi h lt) ==> p lt r))
+  IIO.IIOwp a (pi_hist a pi)
 
 class ilang (t:Type u#a) (pi:monitorable_prop) = { mldummy : unit }
 

@@ -194,3 +194,32 @@ let instrument_mio
   IIOpi (resexn 'a) pi = 
   lemma_mio_tree_implies_instrumentable_tree pi tree;
   instrument_instrumentable pi tree () c_pi
+  
+let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a) :
+  Lemma
+    (requires (pi_hist _ pi `hist_ord` dm_iio_theta tree))
+    (ensures (instrumentable_tree pi tree)) = 
+    match tree with
+    | Return _ -> ()
+    | PartialCall _ k ->
+       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
+         lemma_iiopi_implies_instrumentable_tree pi (k res)
+       end
+    | Call GetTrace _ _ -> admit ()
+    | Call cmd arg k ->
+       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
+         admit ();
+         lemma_iiopi_implies_instrumentable_tree pi (k res)
+       end
+    | Decorated dec m k -> admit ();
+       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
+         lemma_iiopi_implies_instrumentable_tree pi (k res)
+       end
+  
+let instrument_iiopi
+  (pi   : monitorable_prop)
+  (tree : dm_iio (resexn 'a) (pi_hist _ pi))
+  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  IIOpi (resexn 'a) pi = 
+  lemma_iiopi_implies_instrumentable_tree pi tree;
+  instrument_instrumentable pi tree () c_pi
