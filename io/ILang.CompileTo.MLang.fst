@@ -39,16 +39,6 @@ class backtranslateable (btrans_out:Type u#a) (pi:monitorable_prop) = {
   cc_pi:squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h);
 }
 
-(** There is no obvious way on how to instrument an arrow of type: t1 -> MIIO t2.
-    Such an arrow contains PartialCall, Decorated and Call GetTrace, nodes that
-    complicate instrumentation a lot. Because these nodes have no equivalent in OCaml, 
-    we think it is reasonable to restrict instrumentation to only computations that do not
-    contain these nodes.
-
-    So, we restrict verification to only MIIO arrows whose trees respect the 
-    basic_free predicate. This restriction makes instrumentation partial. 
-    Therefore not everything in MLang can be backtranslated to ILang.
-**)
 class instrumentable (inst_in_in inst_in_out:Type) (pi:monitorable_prop) = {
   inst_out_in : Type;
   inst_out_out : Type;
