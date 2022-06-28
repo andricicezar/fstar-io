@@ -17,13 +17,11 @@ let rec instrumentable_tree
   match tree with
   | Return _ -> True
   | PartialCall _ k -> forall res. instrumentable_tree pi (k res)
-  | Call GetTrace arg k -> forall res. instrumentable_tree pi (k res)
+  | Call GetTrace arg k -> forall h. instrumentable_tree pi (k h)
   | Call cmd arg k -> forall res. instrumentable_tree pi (k res)
   | Decorated dec m k ->
     (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
     (forall res. instrumentable_tree pi (k res))
-
-let instrumentable a pi = x:(iio a){instrumentable_tree pi x} 
 
 let super_lemma 
   (pi:monitorable_prop)
@@ -82,10 +80,11 @@ let run_m
   (_:squash (instrumentable_tree pi (Decorated dec m k)))
   (_:squash (dm_iio_theta (Decorated dec m k) p h)) :
   IIO 
-    (instrumentable 'c pi * hist_post 'c * trace)
+    (iio 'c * hist_post 'c * trace)
     (requires (fun h' -> h == h'))
     (ensures (fun h (z', p', h') lt ->
       h' == apply_changes h lt /\
+      instrumentable_tree pi z' /\
       dm_iio_theta z' p' h' /\
       enforced_locally pi h lt /\
       z' << Decorated dec m k)) =
@@ -113,27 +112,28 @@ let run_m
 
   (z', p', h')
 
-#set-options "--z3rlimit 10 --fuel 10 --z3seed 10"
+#set-options "--z3rlimit 10 --fuel 10 --z3seed 10 --quake 1/5"
 let rec _instrument
   (pi   : monitorable_prop)
-  (tree : instrumentable (resexn 'a) pi)
+  (tree : iio (resexn 'a))
   (p    : hist_post (resexn 'a))
   (h    : trace)
   (d1   : squash (dm_iio_theta tree p h))
+  (d2   : squash (instrumentable_tree pi tree))
   (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
-  IIOwp (resexn 'a) (fun p h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p lt r)) =
+  IIOwp (resexn 'a) (fun p' h' -> h == h' /\ (forall lt r. enforced_locally pi h lt ==> p' lt r)) =
   match tree with
   | Return r -> r
   | PartialCall pre k -> 
-      let z' = k () in
-      let p' : hist_post (resexn 'a) = hist_post_shift p [] in
-      let h' = apply_changes h [] in
-      _instrument pi z' p' h' () c_pi
+    let z' = k () in
+    let p' : hist_post (resexn 'a) = hist_post_shift p [] in
+    let h' = apply_changes h [] in
+    _instrument pi z' p' h' () () c_pi
   | Call GetTrace argz k -> 
-      let z' = k h in
-      let p' : hist_post (resexn 'a) = hist_post_shift p [] in
-      let h' = apply_changes h [] in
-      _instrument pi z' p' h' () c_pi
+    let z' = k h in
+    let p' : hist_post (resexn 'a) = hist_post_shift p [] in
+    let h' = apply_changes h [] in
+    _instrument pi z' p' h' () () c_pi
   | Call cmd argz fnc -> begin
     let d : checkable2 (io_pre cmd) = (
       implies_is_checkable2 (io_sig.args cmd) trace (pi cmd) (io_pre cmd) c_pi) in
@@ -144,30 +144,31 @@ let rec _instrument
     | Inr Contract_failure -> Inr Contract_failure
     (** instrumentation succeded and we continue **)
     | Inl rez -> begin
-        let z' : iio (resexn 'a) = fnc rez in
+      let z' : iio (resexn 'a) = fnc rez in
 
-        let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
-        Classical.forall_intro (Classical.move_requires (lemma_append_rev_inv_tail h ltM));
+      let ltM = IIO.CompileTo.ILang.extract_local_trace h pi in
+      Classical.forall_intro (Classical.move_requires (lemma_append_rev_inv_tail h ltM));
 
-        let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
-        let h' = apply_changes h ltM in
-        _instrument pi z' p' h' () c_pi
+      let p' : hist_post (resexn 'a) = hist_post_shift p ltM in
+      let h' = apply_changes h ltM in
+      _instrument pi z' p' h' () () c_pi
     end
   end 
   | Decorated d #b m k ->
     let (z', p', h') = run_m pi m d k p h () d1 in
     assert (z' << tree);
-    _instrument pi z' p' h' () c_pi
+    _instrument pi z' p' h' () () c_pi
 
 let instrument_instrumentable
+  (tree : iio (resexn 'a))
   (pi   : monitorable_prop)
-  (tree : instrumentable (resexn 'a) pi)
-  (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
-  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  (#_    : squash (instrumentable_tree pi tree))
+  (#_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
+  (#c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOpi (resexn 'a) pi = 
   let p = fun _ _ -> True in
   let h = get_trace () in
-  _instrument pi tree p h () c_pi
+  _instrument pi tree p h () () c_pi
 
 let rec lemma_mio_tree_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a) :
   Lemma
@@ -187,39 +188,39 @@ let rec lemma_mio_tree_implies_instrumentable_tree (pi:monitorable_prop) (tree:i
        end
 
 let instrument_mio
+  (tree : iio (resexn 'a))
   (pi   : monitorable_prop)
-  (tree : (iio (resexn 'a)){special_tree pi tree})
-  (_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
-  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  (#_    : squash (special_tree pi tree))
+  (#_    : squash (trivial_hist `hist_ord` dm_iio_theta tree))
+  (#c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOpi (resexn 'a) pi = 
   lemma_mio_tree_implies_instrumentable_tree pi tree;
-  instrument_instrumentable pi tree () c_pi
+  instrument_instrumentable tree pi #() #() #()
   
-let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a) :
+let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a):
   Lemma
     (requires (pi_hist _ pi `hist_ord` dm_iio_theta tree))
     (ensures (instrumentable_tree pi tree)) = 
     match tree with
     | Return _ -> ()
-    | PartialCall _ k ->
-       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
-         lemma_iiopi_implies_instrumentable_tree pi (k res)
-       end
-    | Call GetTrace _ _ -> admit ()
-    | Call cmd arg k ->
-       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
-         admit ();
-         lemma_iiopi_implies_instrumentable_tree pi (k res)
-       end
-    | Decorated dec m k -> admit ();
-       introduce forall res. (pi_hist _ pi `hist_ord` dm_iio_theta tree) ==> instrumentable_tree pi (k res) with begin
-         lemma_iiopi_implies_instrumentable_tree pi (k res)
-       end
-  
+    | Call GetTrace _ k -> 
+      assert (forall p h. pi_hist _ pi p h ==> dm_iio_theta tree p h);
+
+      assert (forall p h. pi_hist _ pi p h ==> dm_iio_theta (k h) p h);
+      introduce forall h. instrumentable_tree pi (k h) with begin
+//        eliminate forall h. (forall p. pi_hist _ pi p h ==> dm_iio_theta (k h) p h) with h;
+        assume (forall p h'. pi_hist _ pi p h' ==> dm_iio_theta (k h) p h');
+        lemma_iiopi_implies_instrumentable_tree pi (k h)
+      end
+    | _ -> admit ()
+
+private
 let instrument_iiopi
+  (tree : iio (resexn 'a))
   (pi   : monitorable_prop)
-  (tree : dm_iio (resexn 'a) (pi_hist _ pi))
-  (c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
+  (#_    : squash (special_tree pi tree))
+  (#_    : squash (pi_hist _ pi `hist_ord` dm_iio_theta tree))
+  (#c_pi : squash (forall h cmd arg. pi cmd arg h ==> io_pre cmd arg h)) :
   IIOpi (resexn 'a) pi = 
   lemma_iiopi_implies_instrumentable_tree pi tree;
-  instrument_instrumentable pi tree () c_pi
+  instrument_instrumentable tree pi #() #() #()

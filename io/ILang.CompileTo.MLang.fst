@@ -15,8 +15,6 @@ open IIO
 open ILang
 open MLang
 
-open MLang.InstrumentTo.ILang
-
 class compilable (comp_in:Type u#a) (pi:monitorable_prop) = {
   comp_out : Type u#a;
   compile: comp_in -> comp_out;
@@ -127,8 +125,8 @@ instance instrumentable_unverified_arrow
   c_pi = d2.cc_pi;
 
   instrument = (fun (f:unverified_arrow d1.comp_out d2.btrans_in pi) (x:t1) -> 
-    let dm = reify (f (compile x)) in
-    let r  : resexn d2.btrans_in = instrument_mio pi dm () d2.cc_pi in 
+    let (dm : (dm_iio (resexn d2.btrans_in) trivial_hist){ special_tree pi dm }) = reify (f (compile x)) in
+    let r  : resexn d2.btrans_in = MLang.InstrumentTo.ILang.instrument_mio dm pi #() #() #d2.cc_pi in 
     backtranslate #_ #pi #(backtranslateable_resexn pi t2 #d2) r 
   )
 }

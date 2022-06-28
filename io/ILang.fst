@@ -23,10 +23,8 @@ open TC.Monitorable.Hist
 
 
   
-#set-options "--print_universes"
-
-let pi_hist (a:Type) (pi:monitorable_prop) : Hist.hist a =
-  (fun p h -> (forall r lt. (enforced_locally pi h lt) ==> p lt r))
+unfold let pi_hist (a:Type) (pi:monitorable_prop) : Hist.hist a =
+  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
 effect IIOpi (a:Type) (pi : monitorable_prop) = 
   IIO.IIOwp a (pi_hist a pi)
