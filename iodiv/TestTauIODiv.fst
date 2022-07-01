@@ -38,9 +38,9 @@ let ho_test () :
   (** this checks instantly -- 5 goals **)
   //let _ = open_file "test.txt" in
   (** this takes a little bit longer -- 56 goals **)
-  let _ = open_file' "test.txt" in
-  (** this takes a long time -- 205 goals **)
-  //let _ = act_call Openfile "test.txt" in
+  // let _ = open_file' "test.txt" in
+  (** this takes a long time -- 205 goals // It's now only 23! **)
+  let _ = act_call Openfile "test.txt" in
   ()
 
 let ho_test'
@@ -53,7 +53,7 @@ let ho_test'
   //let _ = open_file "test.txt" in
   (** this takes a little bit longer -- 103 goals **)
   //let _ = open_file' "test.txt" in
-  (** this takes a long time - 396 goals **)
+  (** this takes a long time - 396 goals // Now 25 **)
   let _ = act_call Openfile "test.txt" in
   ()
 

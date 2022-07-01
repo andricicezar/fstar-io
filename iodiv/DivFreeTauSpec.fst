@@ -805,7 +805,9 @@ let i_bind_alt (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : i
     move_requires (i_bind_post_alt_mono wf p q) hist
   end ;
   as_iwp (fun post hist ->
-    w (i_bind_post_alt wf post hist) hist
+    forall (k : i_post b).
+      (forall (rb : orun b). {:pattern (guard_free (k rb))} post rb ==> k rb) ==>
+      w (i_bind_post_alt wf k hist) hist
   )
 
 let i_bind_post_alt_eq #a #b (wf : a -> iwp b) (post : i_post b) hist :
@@ -817,7 +819,28 @@ let i_bind_alt_eq #a #b (w : iwp a) (wf : a -> iwp b) :
 = introduce forall post hist. i_bind_post_alt wf post hist `i_post_eq` i_bind_post wf post hist
   with begin
     i_bind_post_alt_eq wf post hist
+  end ;
+  assert (i_bind w wf `ile` i_bind_alt w wf) ;
+  introduce forall p hist. i_bind w wf p hist ==> i_bind_alt w wf p hist
+  with begin
+    introduce i_bind w wf p hist ==> i_bind_alt w wf p hist
+    with _. begin
+      introduce forall (k : i_post b).
+        (forall (rb : orun b). {:pattern (guard_free (k rb))} p rb ==> k rb) ==>
+        w (i_bind_post_alt wf k hist) hist
+      with begin
+        introduce
+          (forall (rb : orun b). {:pattern (guard_free (k rb))} p rb ==> k rb) ==>
+          w (i_bind_post_alt wf k hist) hist
+        with _. begin
+          assert (w (i_bind_post wf p hist) hist) ;
+          i_bind_post_mono wf p k hist ;
+          ()
+        end
+      end
+    end
   end
+  // assert (i_bind_alt w wf `ile` i_bind w wf) ;
 
 (** Unfolding things so that they compute better now that the proofs are done. *)
 
