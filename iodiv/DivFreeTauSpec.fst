@@ -820,7 +820,7 @@ let i_bind_alt_eq #a #b (w : iwp a) (wf : a -> iwp b) :
   with begin
     i_bind_post_alt_eq wf post hist
   end ;
-  assert (i_bind w wf `ile` i_bind_alt w wf) ;
+  // i_bind_alt w wf `ile` i_bind w wf
   introduce forall p hist. i_bind w wf p hist ==> i_bind_alt w wf p hist
   with begin
     introduce i_bind w wf p hist ==> i_bind_alt w wf p hist
@@ -833,14 +833,11 @@ let i_bind_alt_eq #a #b (w : iwp a) (wf : a -> iwp b) :
           (forall (rb : orun b). {:pattern (guard_free (k rb))} p rb ==> k rb) ==>
           w (i_bind_post_alt wf k hist) hist
         with _. begin
-          assert (w (i_bind_post wf p hist) hist) ;
-          i_bind_post_mono wf p k hist ;
-          ()
+          i_bind_post_mono wf p k hist
         end
       end
     end
   end
-  // assert (i_bind_alt w wf `ile` i_bind w wf) ;
 
 (** Unfolding things so that they compute better now that the proofs are done. *)
 
