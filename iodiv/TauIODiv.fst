@@ -80,6 +80,24 @@ let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) 
 let iter #index #a #w (f : (j : index) -> IODIV (either index a) (w j)) (i : index) : IODIV a (i_iter w i) =
   IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)
 
+let _repeat_with_inv_aux pre inv (body : iodiv_dm (either unit unit) (repeat_body_inv (fun _ -> pre) inv ())) :
+  iodiv_dm unit (repeat_inv (fun _ -> pre) inv ())
+= repeat_inv_proof #unit (fun _ -> pre) inv () ;
+  i_iter_mono (fun _ -> repeat_body_inv (fun _ -> pre) inv ()) (repeat_body_inv (fun _ -> pre) inv) () ;
+  dm_subcomp (dm_iter (fun _ -> body) ())
+
+let _repeat_with_inv pre inv (body : iodiv_dm unit (iprepost (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r)))) :
+  iodiv_dm
+    unit
+    (iprepost
+      (fun hist -> pre hist)
+      (fun hist r ->
+        diverges r /\
+        (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
+      )
+    )
+= _repeat_with_inv_aux pre inv (dm_bind body (fun _ -> dm_ret (Inl ())))
+
 let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) :
   IODiv
     unit
@@ -88,12 +106,4 @@ let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> p
       diverges r /\
       (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
     )
-// by (explode () ; dump "h")
-= admit () ;
-  // repeat_inv_proof #unit (fun _ -> pre) inv () ;
-  // It's odd that I have to give the spec by hand.
-  // assume (i_iter #unit #unit (fun _ -> _i_bind (iprepost #unit (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (fun _ -> _i_ret #(either unit unit) (Inl ()))) () `ile` iprepost (fun hist -> pre hist) (fun hist r ->
-  //     diverges r /\
-  //     (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
-  //   )) ;
-  iter #unit #unit #(fun _ -> _i_bind (iprepost #unit (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (fun _ -> _i_ret #(either unit unit) (Inl ()))) (fun _ -> body () ; Inl ()) ()
+= IODIV?.reflect (_repeat_with_inv pre inv (reify (body ())))
