@@ -30,7 +30,8 @@ let i_iter_lift_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftTyp
   Lemma
     (requires forall j. w j `ile` w' j)
     (ensures i_iter_lift w i `ile` i_iter_lift w' i)
-= ()
+= // reveal_i_iter index a // Works too but slower and unnecessary
+  i_iter_mono (fun j -> i_unLift (w j)) (fun j -> i_unLift (w' j)) i
 
 let i_iter_lift_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (liftType u#a (either index a))) (i : index) :
   Lemma

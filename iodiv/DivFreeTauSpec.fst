@@ -523,32 +523,44 @@ let iter_expand_mono_k (#index : Type0) (#a : Type0) (w : index -> iwp (either i
   end ;
   i_bind_mono (w i) (iter_expand_cont k) (iter_expand_cont k')
 
-let i_iter (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) : iwp a =
+let i_iter_def (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) : iwp a =
   fun post hist ->
     exists (it : index -> iwp a).
       (forall j. iter_expand w j it `ile` it j) /\
       it i post hist
 
-let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
-  Lemma (iter_expand w i (i_iter w) `ile` i_iter w i)
-= introduce forall post hist. i_iter w i post hist ==> iter_expand w i (i_iter w) post hist
+[@"opaque_to_smt"]
+let i_iter = i_iter_def
+
+let reveal_i_iter (index a : Type0) :
+  Lemma (i_iter #index #a == i_iter_def)
+= reveal_opaque (`%i_iter) (i_iter #index #a)
+
+let i_iter_def_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
+  Lemma (iter_expand w i (i_iter_def w) `ile` i_iter_def w i)
+= introduce forall post hist. i_iter_def w i post hist ==> iter_expand w i (i_iter_def w) post hist
   with begin
-    introduce i_iter w i post hist ==> iter_expand w i (i_iter w) post hist
+    introduce i_iter_def w i post hist ==> iter_expand w i (i_iter_def w) post hist
     with _. begin
       eliminate exists (it : index -> iwp a). (forall j. iter_expand w j it `ile` it j) /\ it i post hist
-      returns iter_expand w i (i_iter w) post hist
+      returns iter_expand w i (i_iter_def w) post hist
       with _. begin
         assert (iter_expand w i it post hist) ;
-        iter_expand_mono_k w i (i_iter w) it
+        iter_expand_mono_k w i (i_iter_def w) it
       end
     end
   end
+
+let i_iter_unfold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
+  Lemma (iter_expand w i (i_iter w) `ile` i_iter w i)
+= reveal_i_iter index a ;
+  i_iter_def_unfold w i
 
 let i_iter_coind (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) w' :
   Lemma
     (requires forall j. iter_expand w j w' `ile` w' j)
     (ensures i_iter w i `ile` w' i)
-= ()
+= reveal_i_iter index a
 
 let i_iter_fold (#index : Type0) (#a : Type0) (w : index -> iwp (either index a)) (i : index) :
   Lemma (i_iter w i `ile` iter_expand w i (i_iter w))
@@ -566,7 +578,7 @@ let i_iter_mono (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index
   Lemma
     (requires forall j. w j `ile` w' j)
     (ensures i_iter w i `ile` i_iter w' i)
-= ()
+= reveal_i_iter index a
 
 let i_iter_cong (#index : Type0) (#a : Type0) (w w' : index -> iwp (either index a)) (i : index) :
   Lemma

@@ -88,7 +88,12 @@ let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> p
       diverges r /\
       (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
     )
+// by (explode () ; dump "h")
 = admit () ;
-  repeat_inv_proof #unit (fun _ -> pre) inv () ;
+  // repeat_inv_proof #unit (fun _ -> pre) inv () ;
   // It's odd that I have to give the spec by hand.
+  // assume (i_iter #unit #unit (fun _ -> _i_bind (iprepost #unit (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (fun _ -> _i_ret #(either unit unit) (Inl ()))) () `ile` iprepost (fun hist -> pre hist) (fun hist r ->
+  //     diverges r /\
+  //     (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
+  //   )) ;
   iter #unit #unit #(fun _ -> _i_bind (iprepost #unit (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (fun _ -> _i_ret #(either unit unit) (Inl ()))) (fun _ -> body () ; Inl ()) ()
