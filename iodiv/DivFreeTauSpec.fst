@@ -785,29 +785,35 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
           repeat_body_inv pre inv j (i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist) hist ;
         } ;
         assert (pre j hist) ;
-        introduce forall (r : orun (either index unit)). terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
+        introduce
+          forall (r : orun (either index unit)).
+            terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==>
+            i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
         with begin
-          introduce terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==> i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
+          introduce
+            terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==>
+            i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
           with _. begin
+            // assert (repeat_inv pre inv j post hist) ;
             match r with
-            | Ocv tr (Inl j) ->
+            | Ocv tr (Inl jj) ->
               calc (==) {
                 i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r ;
                 == {}
-                iter_expand_cont (fun k -> repeat_inv pre inv k) (Inl j) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
+                iter_expand_cont (fun k -> repeat_inv pre inv k) (Inl jj) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
                 == { _ by (compute ()) }
-                i_bind i_tau (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
+                i_bind i_tau (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist) ;
                 == { _ by (compute ()) }
-                i_tau (i_bind_post (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist)) (rev_acc (to_trace tr) hist) ;
+                i_tau (i_bind_post (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist)) (rev_acc (to_trace tr) hist) ;
                 == { _ by (compute ()) }
-                i_bind_post (fun _ -> repeat_inv pre inv j) (ishift_post tr post) (rev_acc (to_trace tr) hist) (Ocv [ None ] ()) ;
+                i_bind_post (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist) (Ocv [ None ] ()) ;
                 == { _ by (compute ()) }
-                repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc [] (rev_acc (to_trace tr) hist)) ;
+                repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc [] (rev_acc (to_trace tr) hist)) ;
                 == { _ by (compute ()) }
-                repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
+                repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
               } ;
-              assume (repeat_inv pre inv j post hist) ; // It's my assumption already...
-              repeat_inv_expand pre inv post hist j tr
+              assume (repeat_inv pre inv jj post hist) ; // I have the same with j instead of jj
+              repeat_inv_expand pre inv post hist jj tr
           end
         end
       end
