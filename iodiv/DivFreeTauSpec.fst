@@ -621,21 +621,55 @@ let lval #a #b (x : either a b) : Pure a (requires Inl? x) (ensures fun _ -> Tru
 let repeat_body_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp (either index unit) =
   iprepost (pre i) (fun hist r -> terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))
 
+[@"opaque_to_smt"]
 let sotrace_refines (s : sotrace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
+let sotrace_refine_inst (s : sotrace) (trs : stream trace) (n : nat) :
+  Lemma
+    (requires s `sotrace_refines` trs)
+    (ensures exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k))
+= reveal_opaque (`%sotrace_refines) sotrace_refines
+
+[@"opaque_to_smt"]
+let repeat_inv_post (inv : trace -> Type0) (r : orun unit { diverges r }) =
+  exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs
+
 let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
-  iprepost (pre i) (fun hist r -> diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs))
+  iprepost (pre i) (fun hist r -> diverges r /\ repeat_inv_post inv r)
 
 let repeat_inv_inst #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) (post : i_post unit) hist (s : sotrace) (trs : stream trace) :
   Lemma (requires repeat_inv pre inv i post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs) (ensures post (Odv s))
-= ()
+= reveal_opaque (`%repeat_inv_post) repeat_inv_post
 
 let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace) :
   Lemma
     (requires to_trace tr == [] /\ s `sotrace_refines` trs)
     (ensures stream_prepend tr s `sotrace_refines` trs)
-= admit ()
+= introduce forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc trs k)
+  with begin
+    sotrace_refine_inst s trs n ;
+    eliminate exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
+    returns (exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc trs k))
+    with _. begin
+      calc (==) {
+        to_trace (stream_trunc (stream_prepend tr s) (m + length tr)) ;
+        == { stream_prepend_trunc_right tr s (m + length tr) }
+        to_trace (tr @ stream_trunc s (m + length tr - length tr)) ;
+        == {}
+        to_trace (tr @ stream_trunc s m) ;
+        == { to_trace_append tr (stream_trunc s m) }
+        to_trace tr @ to_trace (stream_trunc s m) ;
+        == {}
+        [] @ to_trace (stream_trunc s m) ;
+        == {}
+        to_trace (stream_trunc s m) ;
+        == {}
+        flatten (stream_trunc trs k) ;
+      }
+    end
+  end ;
+  reveal_opaque (`%sotrace_refines) sotrace_refines
 
 let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
   Lemma
@@ -663,6 +697,7 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
     end
     else begin
       // Specialise hyp with n = n - length tr
+      sotrace_refine_inst s trs (n - length tr) ;
       eliminate exists (m : nat) (k : nat). n - length tr <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
       returns exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
       with _. begin
@@ -671,7 +706,8 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
         admit ()
       end
     end
-  end
+  end ;
+  reveal_opaque (`%sotrace_refines) sotrace_refines
 
 let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : idx) (tr : otrace) (trs : stream trace) (s : sotrace) :
   Lemma
@@ -711,7 +747,8 @@ let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post
           repeat_inv_expand_aux pre inv post hist j tr trs s
         end
     end
-  end
+  end ;
+  reveal_opaque (`%repeat_inv_post) repeat_inv_post
 
 let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) :
   Lemma (i_iter (repeat_body_inv pre inv) i `ile` repeat_inv pre inv i)

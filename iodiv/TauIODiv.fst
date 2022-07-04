@@ -91,10 +91,7 @@ let _repeat_with_inv pre inv (body : iodiv_dm unit (iprepost (fun hist -> pre hi
     unit
     (iprepost
       (fun hist -> pre hist)
-      (fun hist r ->
-        diverges r /\
-        (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
-      )
+      (fun hist r -> diverges r /\ repeat_inv_post inv r)
     )
 = _repeat_with_inv_aux pre inv (dm_bind body (fun _ -> dm_ret (Inl ())))
 
@@ -102,8 +99,5 @@ let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> p
   IODiv
     unit
     (requires fun hist -> pre hist)
-    (ensures fun hist r ->
-      diverges r /\
-      (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs)
-    )
+    (ensures fun hist r -> diverges r /\ repeat_inv_post inv r)
 = IODIV?.reflect (_repeat_with_inv pre inv (reify (body ())))
