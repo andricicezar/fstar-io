@@ -750,10 +750,10 @@ let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post
 
   repeat_inv_inst pre inv j post hist (stream_prepend tr (stream_prepend [ None ] s)) (stream_prepend [ to_trace tr ] trs)
 
-let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : index) (tr : otrace) :
+let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j jj : index) (tr : otrace) :
   Lemma
-    (requires repeat_inv pre inv j post hist /\ pre j (rev_acc (to_trace tr) hist) /\ inv (to_trace tr))
-    (ensures repeat_inv pre inv j (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist))
+    (requires repeat_inv pre inv j post hist /\ pre jj (rev_acc (to_trace tr) hist) /\ inv (to_trace tr))
+    (ensures repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist))
 = introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
   with begin
     introduce diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
@@ -794,7 +794,6 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
             terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r) ==>
             i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
           with _. begin
-            // assert (repeat_inv pre inv j post hist) ;
             match r with
             | Ocv tr (Inl jj) ->
               calc (==) {
@@ -812,8 +811,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
                 == { _ by (compute ()) }
                 repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
               } ;
-              assume (repeat_inv pre inv jj post hist) ; // I have the same with j instead of jj
-              repeat_inv_expand pre inv post hist jj tr
+              repeat_inv_expand pre inv post hist j jj tr
           end
         end
       end
