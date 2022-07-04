@@ -101,3 +101,26 @@ let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> p
     (requires fun hist -> pre hist)
     (ensures fun hist r -> diverges r /\ repeat_inv_post inv r)
 = IODIV?.reflect (_repeat_with_inv pre inv (reify (body ())))
+
+let _repeat_aux #a (pre : a -> i_pre) inv (body : (x:a) -> iodiv_dm (either a unit) (repeat_body_inv pre inv x)) (x : a) :
+  iodiv_dm unit (repeat_inv pre inv x)
+= repeat_inv_proof pre inv x ;
+  i_iter_mono (fun y -> repeat_body_inv pre inv y) (repeat_body_inv pre inv) x ;
+  dm_subcomp (dm_iter body x)
+
+let _repeat #a (pre : a -> i_pre) inv (body : (x:a) -> iodiv_dm a (iprepost (fun hist -> pre x hist) (fun hist r -> terminates r /\ pre (result r) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r)))) (x : a) :
+  iodiv_dm
+    unit
+    (iprepost
+      (fun hist -> pre x hist)
+      (fun hist r -> diverges r /\ repeat_inv_post inv r)
+    )
+by (explode ())
+= _repeat_aux pre inv (fun y -> dm_subcomp (dm_bind (body y) (fun z -> dm_ret (Inl z)))) x
+
+let repeat #a pre inv (body : (x:a) -> IODiv a (requires fun hist -> pre x hist) (ensures fun hist r -> terminates r /\ pre (result r) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (x : a) :
+  IODiv
+    unit
+    (requires fun hist -> pre x hist)
+    (ensures fun hist r -> diverges r /\ repeat_inv_post inv r)
+= IODIV?.reflect (_repeat pre inv (fun y -> reify (body y)) x)
