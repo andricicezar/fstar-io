@@ -671,18 +671,6 @@ let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace
   end ;
   reveal_opaque (`%sotrace_refines) sotrace_refines
 
-// TODO MOVE
-let flatten_one #a (l : list a) :
-  Lemma (flatten [ l ] == l)
-= assert_norm (flatten [ l ] == l @ [])
-
-// TODO MOVE
-let rec flatten_append #a (l1 l2 : list (list a)) :
-  Lemma (flatten (l1 @ l2) == flatten l1 @ flatten l2)
-= match l1 with
-  | [] -> ()
-  | x :: l1' -> flatten_append l1' l2 ; append_assoc x (flatten l1') (flatten l2)
-
 let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
   Lemma
     (requires s `sotrace_refines` trs)

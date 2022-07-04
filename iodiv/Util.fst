@@ -165,6 +165,18 @@ let rec list_minus_Some (#a : eqtype) (l l' : list a) :
       else ()
     end
 
+(** Properties of flatten *)
+
+let flatten_one #a (l : list a) :
+  Lemma (flatten [ l ] == l)
+= assert_norm (flatten [ l ] == l @ [])
+
+let rec flatten_append #a (l1 l2 : list (list a)) :
+  Lemma (flatten (l1 @ l2) == flatten l1 @ flatten l2)
+= match l1 with
+  | [] -> ()
+  | x :: l1' -> flatten_append l1' l2 ; append_assoc x (flatten l1') (flatten l2)
+
 (** flatten but with sep after each cons *)
 
 let rec flatten_sep #a (sep : list a) (l : list (list a)) : list a =
