@@ -740,8 +740,7 @@ let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post
       assert_norm (stream_prepend [ to_trace tr ] trs 0 == to_trace tr)
     end
     else begin
-      // assume (stream_prepend [ to_trace tr ] trs n == trs (n - 1)) ; // This should be true, but even assuming it makes F* unhappy
-      admit ()
+      assert (stream_prepend [ to_trace tr ] trs n == trs (n - 1))
     end
   end ;
 
