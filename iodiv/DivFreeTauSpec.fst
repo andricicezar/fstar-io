@@ -28,6 +28,7 @@ let rec to_trace (t : otrace) : trace =
   | Some e :: t -> e :: to_trace t
   | None :: t -> to_trace t
 
+[@"opaque_to_smt"]
 let embeds (p q : sotrace) =
   forall (n : nat). exists (m : nat). to_trace (stream_trunc q n) == to_trace (stream_trunc p m)
 
@@ -45,7 +46,15 @@ let embeds_inst (p q : sotrace) (n : nat) :
   Lemma
     (requires p `embeds` q)
     (ensures exists (m : nat). to_trace (stream_trunc q n) == to_trace (stream_trunc p m))
-= ()
+= reveal_opaque (`%embeds) embeds
+
+let embeds_refl (p : sotrace) :
+  Lemma (p `embeds` p)
+= reveal_opaque (`%embeds) embeds
+
+let uptotau_refl (p : sotrace) :
+  Lemma (p `uptotau` p)
+= embeds_refl p
 
 let rec to_trace_firstn (t : otrace) (n : nat) :
   Lemma (exists (m : nat). to_trace (firstn n t) == firstn m (to_trace t))
@@ -195,7 +204,8 @@ let embeds_prepend (t t' : otrace) (s s' : sotrace) :
         assert (to_trace (stream_trunc (stream_prepend t' s') n) == to_trace (stream_trunc (stream_prepend t s) (m + length t)))
       end
     end
-  end
+  end ;
+  reveal_opaque (`%embeds) embeds
 
 let uptotau_prepend (t t' : otrace) (s s' : sotrace) :
   Lemma
@@ -384,6 +394,7 @@ let i_bind_post #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
               assert (Ocv (t @ tr) y `eutt` Ocv (t' @ tr) y) ;
               i_post_resp_eutt post (Ocv (t @ tr) y) (Ocv (t' @ tr) y)
             | Odv s ->
+              uptotau_refl s ;
               uptotau_prepend t t' s s ;
               assert (Odv (stream_prepend t s) `eutt #a` Odv (stream_prepend t' s)) ;
               i_post_resp_eutt post (Odv (stream_prepend t s)) (Odv (stream_prepend t' s))
@@ -773,6 +784,7 @@ let i_bind_post_alt #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
               assert (Ocv (t @ tr) y `eutt` Ocv (t' @ tr) y) ;
               i_post_resp_eutt post (Ocv (t @ tr) y) (Ocv (t' @ tr) y)
             | Odv s ->
+              uptotau_refl s ;
               uptotau_prepend t t' s s ;
               assert (Odv (stream_prepend t s) `eutt #a` Odv (stream_prepend t' s)) ;
               i_post_resp_eutt post (Odv (stream_prepend t s)) (Odv (stream_prepend t' s))
