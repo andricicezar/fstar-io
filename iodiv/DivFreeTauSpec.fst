@@ -671,6 +671,18 @@ let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace
   end ;
   reveal_opaque (`%sotrace_refines) sotrace_refines
 
+// TODO MOVE
+let flatten_one #a (l : list a) :
+  Lemma (flatten [ l ] == l)
+= assert_norm (flatten [ l ] == l @ [])
+
+// TODO MOVE
+let rec flatten_append #a (l1 l2 : list (list a)) :
+  Lemma (flatten (l1 @ l2) == flatten l1 @ flatten l2)
+= match l1 with
+  | [] -> ()
+  | x :: l1' -> flatten_append l1' l2 ; append_assoc x (flatten l1') (flatten l2)
+
 let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
   Lemma
     (requires s `sotrace_refines` trs)
@@ -682,15 +694,18 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
       introduce exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
       with (length tr) 1
       and begin
-        assume (n <= length tr) ; // why? :(
+        assert (n <= length tr) ;
         calc (==) {
           to_trace (stream_trunc (stream_prepend tr s) (length tr)) ;
-          // == { stream_prepend_trunc_left tr s n }
-          // to_trace (firstn (length tr) tr) ;
-          // == { firstn_all (length tr) tr }
-          // to_trace tr ;
-          // == {}
-          == { admit () }
+          == { stream_prepend_trunc_left tr s (length tr) }
+          to_trace (firstn (length tr) tr) ;
+          == { firstn_all (length tr) tr }
+          to_trace tr ;
+          == { flatten_one (to_trace tr) }
+          flatten [ to_trace tr ] ;
+          == {}
+          flatten (firstn 1 [ to_trace tr ]) ;
+          == { stream_prepend_trunc_left [ to_trace tr ] trs 1 }
           flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) 1) ;
         }
       end
@@ -702,8 +717,25 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
       returns exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
       with _. begin
         // m = m + length tr, k = k + 1
-        // assume (to_trace (stream_trunc (stream_prepend tr s) (m + length tr)) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) (k + 1))) ;
-        admit ()
+        calc (==) {
+          to_trace (stream_trunc (stream_prepend tr s) (m + length tr)) ;
+          == { stream_prepend_trunc_right tr s (m + length tr) }
+          to_trace (tr @ stream_trunc s (m + length tr - length tr)) ;
+          == {}
+          to_trace (tr @ stream_trunc s m) ;
+          == { to_trace_append tr (stream_trunc s m) }
+          to_trace tr @ to_trace (stream_trunc s m) ;
+          == {}
+          to_trace tr @ flatten (stream_trunc trs k) ;
+          == { flatten_one (to_trace tr) }
+          flatten [ to_trace tr ] @ flatten (stream_trunc trs k) ;
+          == { flatten_append [ to_trace tr ] (stream_trunc trs k) }
+          flatten ([ to_trace tr ] @ stream_trunc trs k) ;
+          == {}
+          flatten ([ to_trace tr ] @ stream_trunc trs (k + 1 - length [ to_trace tr ])) ;
+          == { stream_prepend_trunc_right [ to_trace tr ] trs (k+1) }
+          flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) (k + 1)) ;
+        }
       end
     end
   end ;
