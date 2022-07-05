@@ -911,6 +911,40 @@ let i_bind_alt_eq #a #b (w : iwp a) (wf : a -> iwp b) :
     end
   end
 
+(** Other alternative to i_bind that uses the generalisation but still uses a match *)
+
+let i_bind_alt2 (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
+  introduce forall p q hist. p `i_post_le` q ==> i_bind_post wf p hist `i_post_le` i_bind_post wf q hist
+  with begin
+    move_requires (i_bind_post_mono wf p q) hist
+  end ;
+  as_iwp (fun post hist ->
+    forall (k : i_post b).
+      (forall (rb : orun b). {:pattern (guard_free (k rb))} post rb ==> k rb) ==>
+      w (i_bind_post wf k hist) hist
+  )
+
+let i_bind_alt2_eq #a #b (w : iwp a) (wf : a -> iwp b) :
+  Lemma (i_bind_alt2 w wf `ieq` i_bind w wf)
+= // i_bind_alt2 w wf `ile` i_bind w wf
+  introduce forall p hist. i_bind w wf p hist ==> i_bind_alt2 w wf p hist
+  with begin
+    introduce i_bind w wf p hist ==> i_bind_alt2 w wf p hist
+    with _. begin
+      introduce forall (k : i_post b).
+        (forall (rb : orun b). {:pattern (guard_free (k rb))} p rb ==> k rb) ==>
+        w (i_bind_post wf k hist) hist
+      with begin
+        introduce
+          (forall (rb : orun b). {:pattern (guard_free (k rb))} p rb ==> k rb) ==>
+          w (i_bind_post wf k hist) hist
+        with _. begin
+          i_bind_post_mono wf p k hist
+        end
+      end
+    end
+  end
+
 (** Unfolding things so that they compute better now that the proofs are done. *)
 
 let pp_unfold l () : Tac unit =
@@ -927,3 +961,6 @@ unfold let _i_ret = i_ret
 
 [@@ (postprocess_with (pp_unfold [ `%i_bind_alt ; `%i_bind_post_alt ; `%i_bind_post_alt' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
 unfold let _i_bind = i_bind_alt
+
+// [@@ (postprocess_with (pp_unfold [ `%i_bind_alt2 ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
+// unfold let _i_bind = i_bind_alt2
