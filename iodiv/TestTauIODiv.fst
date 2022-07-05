@@ -135,6 +135,14 @@ let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures f
     if b && x = "" then true else false
   ) false
 
+let repeat_test_aux1 (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r /\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r)
+// by (explode () ; bump_nth 12 ; dump "hh")
+= admit () ;
+  repeat (fun b hist -> is_open fd hist) (fun tr -> exists s. tr == [ERead fd s]) (fun b ->
+    let x = read fd in
+    if b && x = "" then true else false
+  ) false
+
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
   assume (forall hist. is_open fd hist) ;
   read fd
