@@ -11,6 +11,10 @@ open IIO
 open MLang
 open ILang
 
+(**
+Things we tried:
+1) we can not index this by h because in the Decorated case
+   we don't have the local trace of m to be able to accumulate **)
 let rec instrumentable_tree
   (pi : monitorable_prop)
   (tree : iio 'a) : Type0 =
@@ -23,14 +27,294 @@ let rec instrumentable_tree
     (forall h lt. dec h lt ==> enforced_locally pi h lt) /\
     (forall res. instrumentable_tree pi (k res))
 
+val theta' : iio 'a -> monitorable_prop -> hist 'a
+let rec theta' m pi =
+  match m with
+  | Return x -> dm_iio_theta m
+  | PartialCall pre k ->
+      hist_bind (DMFree.partial_call_wp pre) (fun r -> theta' (k r) pi)
+  | Call cmd arg k ->
+      hist_bind (iio_wps cmd arg) (fun r -> theta' (k r) pi)
+  | Decorated post #b m' k ->
+      hist_bind 
+        #event
+        #(FStar.Universe.raise_t b)
+        #_
+        (fun p h -> dm_iio_theta m' (fun lt r -> enforced_locally pi h lt /\ p lt r) h)
+        (fun r -> theta' (k (FStar.Universe.downgrade_val r)) pi)
+
+let super_lemma 
+  (pi:monitorable_prop)
+  (m : iio (Universe.raise_t 'b))
+  (dec: dec_post #event)
+  (p:hist_post unit)
+  (h:trace)  
+  (_:squash (pi_hist _ pi p h ==> dm_iio_theta (Decorated dec m (fun x -> Return ())) p h)) :
+  Lemma (forall lt. dec h lt ==> enforced_locally pi h lt) =
+  introduce forall lt. ~(dec h lt ==> enforced_locally pi h lt) ==> False with begin
+    introduce dec h lt /\ ~(enforced_locally pi h lt) ==> False with _. begin
+      calc (==) {
+        dm_iio_theta (Decorated dec m (fun x -> Return ())) p h;
+        == {}
+        DMFree.theta iio_wps (Decorated dec m (fun x -> Return ())) p h;
+        == { _ by (norm [delta_only [`%DMFree.theta;`%dm_iio_theta]; zeta;iota]) }
+        hist_bind
+          (fun p h -> dm_iio_theta m (fun lt r -> dec h lt /\ p lt r) h)
+          (fun r -> dm_iio_theta (Return ())) p h;
+        == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind]]) }
+        dm_iio_theta
+          m
+          (fun lt r ->
+              dec h lt /\
+              dm_iio_theta (Return ()) (hist_post_shift p lt) (rev lt @ h)) 
+          h;
+        == { _ by (norm [delta_only [`%DMFree.theta;`%dm_iio_theta]; zeta;iota]) }
+        dm_iio_theta m (fun lt r -> dec h lt /\ (hist_return () (hist_post_shift p lt) (rev lt @ h))) h;
+        == { _ by (norm [delta_only [`%hist_return]; zeta;iota])}
+        dm_iio_theta m (fun lt r -> dec h lt /\ (hist_post_shift p lt) [] ()) h;
+      };
+      assert (~(enforced_locally pi h lt));
+      assert (pi_hist _ pi p h ==> dm_iio_theta m (fun lt r -> dec h lt /\ p lt ()) h);
+      assert (dec h lt);
+      //dm_iio_theta m (fun lt r -> False) h);
+      //assert (enforced_locally pi h lt ==> p lt ());
+      admit ()
+    end
+  end
+
+let super_lemma 
+  (pi:monitorable_prop)
+  (m : iio (Universe.raise_t 'b))
+  (dec: dec_post #event)
+  (k: 'b -> iio 'c)
+  (p:hist_post 'c)
+  (h:trace)  
+  (_:squash (pi_hist _ pi p h ==> dm_iio_theta (Decorated dec m k) p h)) :
+  Lemma (
+   dm_iio_theta m
+     (fun lt r ->
+        dec h lt /\
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (apply_changes h lt)) h ==>
+   dm_iio_theta m
+      (fun lt r ->
+        enforced_locally pi h lt /\
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (apply_changes h lt)) h) =
+  calc (==>) {
+    dm_iio_theta (Decorated dec m k) p h;
+    == {}
+    DMFree.theta iio_wps (Decorated dec m k) p h;
+    == { _ by (
+      norm [delta_only [`%DMFree.theta]; zeta]; 
+      norm [delta_only [`%dm_iio_theta]; zeta]) }
+    hist_bind
+      (fun p h -> dm_iio_theta m (fun lt r -> dec h lt /\ p lt r) h)
+      (fun r -> dm_iio_theta (k (Universe.downgrade_val r))) p h;
+    == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind]]) }
+    dm_iio_theta m
+      (fun lt r ->
+        dec h lt /\
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (rev lt @ h)) h;
+    ==> {}
+    dm_iio_theta m
+      (fun lt r ->
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (rev lt @ h)) h;
+  };
+  assert ((forall r lt. enforced_locally pi h lt ==> p lt r) ==> 
+    dm_iio_theta m
+      (fun lt r ->
+        dm_iio_theta (k (Universe.downgrade_val r))
+          (hist_post_shift p lt)
+          (rev lt @ h)) h);
+  assert ((forall r lt. enforced_locally pi h lt ==> p lt r) ==> 
+    dm_iio_theta m (fun lt r -> enforced_locally pi h lt ==> p lt r) h);
+   admit ()
+   (**;
+   calc (==>) {
+      dm_iio_theta m
+        (fun lt r ->
+          dec h lt /\
+          dm_iio_theta (k (Universe.downgrade_val r))
+            (hist_post_shift p lt)
+            (rev lt @ h)) h;
+      ==> {}
+      dm_iio_theta m
+        (fun lt r ->
+          enforced_locally pi h lt /\
+          dm_iio_theta (k (Universe.downgrade_val r)) (hist_post_shift p lt) (apply_changes h lt))
+        h;
+    }**)
+
+#set-options "--fuel 10 --ifuel 10 --z3rlimit 30"
+let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a) p h:
+  Lemma
+    (requires (pi_hist _ pi p h ==> dm_iio_theta tree p h))
+    (ensures (dm_iio_theta tree p h ==> theta' tree pi p h)) = 
+    match tree with
+    | Return _ -> ()
+  
+    (** *** Call GetTrace**)
+    | Call GetTrace arg k -> 
+      calc (==>) {
+        dm_iio_theta (Call GetTrace arg k) p h;
+        == { _ by (norm [delta_only [`%dm_iio_theta; `%DMFree.theta]; zeta;iota]) }
+        hist_bind (iio_wps GetTrace arg) (fun r -> dm_iio_theta (k r)) p h;
+        == {
+          _ by (
+              norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%iio_wps];iota];
+              l_to_r [`List.Tot.Properties.append_nil_l])
+        }
+        dm_iio_theta (k h) (fun lt' r -> p lt' r) h;
+        ==> {
+          assert (pi_hist _ pi p h ==> dm_iio_theta (k h) p h) by (rewrite_eqs_from_context (); norm [iota]);
+          lemma_iiopi_implies_instrumentable_tree pi (k h) p h;
+          assert (dm_iio_theta (k h) p h ==> theta' (k h) pi p h)
+        }
+        theta' (k h) pi (fun lt' r -> p lt' r) h;
+        == {
+          _ by (
+              norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%iio_wps];iota];
+              l_to_r [`List.Tot.Properties.append_nil_l])
+        }
+        hist_bind (iio_wps GetTrace arg) (fun r -> theta' (k r) pi) p h;
+        == { _ by (norm [delta_only [`%theta']; zeta;iota])}
+        theta' (Call GetTrace arg k) pi p h;
+      }
+
+    (** *** Call cmd**)
+    | Call (cmd:io_cmds) arg k ->
+      calc (==) {
+        dm_iio_theta (Call cmd arg k) p h;
+        == { _ by (norm [delta_only [`%dm_iio_theta; `%DMFree.theta]; zeta;iota]) }
+        hist_bind (iio_wps cmd arg) (fun r -> dm_iio_theta (k r)) p h;
+        == {
+          _ by (
+            norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%iio_wps];iota];
+            l_to_r [`List.Tot.Properties.append_nil_l]
+          )
+        }
+        io_pre cmd arg h /\
+         (forall (r: iio_sig.res cmd arg).
+            hist_post_bind h (fun r -> dm_iio_theta (k r)) p [convert_call_to_event cmd arg r] r);
+      };
+      introduce forall (r:iio_sig.res cmd arg). (
+        let ltM : trace = [convert_call_to_event cmd arg r] in
+        let p' = hist_post_shift p ltM in
+        let h' = apply_changes h ltM in
+        (dm_iio_theta (k r) p' h' ==> theta' (k r) pi p' h')) with begin
+        let ltM = [convert_call_to_event cmd arg r] in
+        let p' = hist_post_shift p ltM in
+        let h' = apply_changes h ltM in
+        assume (pi_hist _ pi p' h' ==> pi_hist _ pi p h);
+        assert (dm_iio_theta tree p h ==> dm_iio_theta (k r) p' h');
+        assert (pi_hist _ pi p' h' ==> dm_iio_theta (k r) p' h');
+        lemma_iiopi_implies_instrumentable_tree pi (k r) p' h';
+        assert (dm_iio_theta (k r) p' h' ==> theta' (k r) pi p' h')
+      end;
+      calc (==) {
+        io_pre cmd arg h /\
+         (forall (r: iio_sig.res cmd arg).
+            hist_post_bind h (fun r -> theta' (k r) pi) p [convert_call_to_event cmd arg r] r);
+        == {
+          _ by (
+              norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%iio_wps];iota];
+              l_to_r [`List.Tot.Properties.append_nil_l])
+        }
+        hist_bind (iio_wps cmd arg) (fun r -> theta' (k r) pi) p h;
+        == { _ by (norm [delta_only [`%theta']; zeta;iota])}
+        theta' (Call cmd arg k) pi p h;
+      }
+
+    (** *** PartialCall **)
+    | PartialCall pre k ->
+      calc (==) {
+        dm_iio_theta (PartialCall pre k) p h;
+        == { _ by (norm [delta_only [`%dm_iio_theta; `%DMFree.theta]; zeta;iota]) }
+        hist_bind (DMFree.partial_call_wp pre) (fun r -> dm_iio_theta (k r)) p h;
+        == {
+          _ by (
+            norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%DMFree.partial_call_wp];iota];
+            l_to_r [`List.Tot.Properties.append_nil_l]
+          )
+        }
+        pre /\ dm_iio_theta (k ()) (fun lt' r -> p lt' r) h;
+      };
+      introduce forall (r:squash pre). dm_iio_theta (k r) p h ==> theta' (k r) pi p h with begin
+        assert (pi_hist _ pi p h ==> dm_iio_theta (k r) p h);
+        lemma_iiopi_implies_instrumentable_tree pi (k r) p h;
+        assert (dm_iio_theta (k r) p h ==> theta' (k r) pi p h)
+      end;
+      calc (==) {
+        pre /\ theta' (k ()) pi (fun lt' r -> p lt' r) h;
+        == {
+          _ by (
+              norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift;`%DMFree.partial_call_wp];iota];
+              l_to_r [`List.Tot.Properties.append_nil_l])
+        }
+        hist_bind (DMFree.partial_call_wp pre) (fun r -> theta' (k r) pi) p h;
+        == { _ by (norm [delta_only [`%theta']; zeta;iota])}
+        theta' (PartialCall pre k) pi p h;
+      }
+    | Decorated dec m k ->
+      calc (==>) {
+        dm_iio_theta (Decorated dec m k) p h;
+        == { _ by (norm [delta_only [`%dm_iio_theta; `%DMFree.theta]; zeta;iota]) }
+        hist_bind
+          (fun p h -> dm_iio_theta m (fun lt r -> dec h lt /\ p lt r) h)
+          (fun r -> dm_iio_theta (k (Universe.downgrade_val r))) 
+          p 
+          h;
+        == {}
+        dm_iio_theta
+          m
+          (fun lt r ->
+            dec h lt /\
+            dm_iio_theta (k (Universe.downgrade_val r)) (hist_post_shift p lt) (apply_changes h lt))
+          h;
+        ==> { super_lemma pi m dec k p h () }
+        dm_iio_theta
+          m
+          (fun lt r ->
+            enforced_locally pi h lt /\
+            dm_iio_theta (k (Universe.downgrade_val r)) (hist_post_shift p lt) (apply_changes h lt))
+          h;
+        ==> {
+          assume (forall lt r.
+            dm_iio_theta (k (Universe.downgrade_val r)) (hist_post_shift p lt) (apply_changes h lt) ==> 
+            theta' (k (Universe.downgrade_val r)) pi (hist_post_shift p lt) (apply_changes h lt))
+ //         admit ()
+        }
+        dm_iio_theta 
+          m
+          (fun lt r ->
+            enforced_locally pi h lt /\
+            theta' (k (Universe.downgrade_val r)) pi (hist_post_shift p lt) (apply_changes h lt))
+          h;
+        == {}
+        hist_bind
+          (fun p h -> dm_iio_theta m (fun lt r -> enforced_locally pi h lt /\ p lt r) h)
+          (fun r -> theta' (k (Universe.downgrade_val r)) pi)
+          p 
+          h;
+        == { _ by (norm [delta_only [`%theta']; zeta;iota]) }
+        theta' (Decorated dec m k) pi p h;
+      }
+#reset-options	
+  
 let super_lemma 
   (pi:monitorable_prop)
   (m : iio (Universe.raise_t 'b))
   (d: dec_post #event)
   (k: 'b -> iio 'c)
   (p:hist_post 'c)
-  (h:trace)
-  (_:squash (dm_iio_theta (Decorated d m k) p h))
+  (h:trace)  (_:squash (dm_iio_theta (Decorated d m k) p h))
   (_:squash (forall h lt. d h lt ==> enforced_locally pi h lt)) :
   Lemma (
    dm_iio_theta m
@@ -158,6 +442,7 @@ let rec _instrument
     let (z', p', h') = run_m pi m d k p h () d1 in
     assert (z' << tree);
     _instrument pi z' p' h' () () c_pi
+#reset-options
 
 let instrument_instrumentable
   (tree : iio (resexn 'a))
@@ -197,6 +482,7 @@ let instrument_mio
   lemma_mio_tree_implies_instrumentable_tree pi tree;
   instrument_instrumentable tree pi #() #() #()
   
+
 let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 'a):
   Lemma
     (requires (pi_hist _ pi `hist_ord` dm_iio_theta tree))
@@ -205,8 +491,7 @@ let rec lemma_iiopi_implies_instrumentable_tree (pi:monitorable_prop) (tree:iio 
     | Return _ -> ()
     | Call GetTrace _ k -> 
       assert (forall p h. pi_hist _ pi p h ==> dm_iio_theta tree p h);
-
-      assert (forall p h. pi_hist _ pi p h ==> dm_iio_theta (k h) p h);
+      //assert_norm (forall p h. pi_hist _ pi p h ==> dm_iio_theta (k h) p h);
       introduce forall h. instrumentable_tree pi (k h) with begin
 //        eliminate forall h. (forall p. pi_hist _ pi p h ==> dm_iio_theta (k h) p h) with h;
         assume (forall p h'. pi_hist _ pi p h' ==> dm_iio_theta (k h) p h');
