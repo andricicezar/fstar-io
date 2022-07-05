@@ -132,8 +132,7 @@ let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures f
 = let fd = open_file s in
   repeat (fun b hist -> is_open fd hist) (fun tr -> exists s. tr == [ERead fd s]) (fun b ->
     let x = read fd in
-    // if b && x = "" then true else false
-    true
+    if b && x = "" then true else false
   ) false
 
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
