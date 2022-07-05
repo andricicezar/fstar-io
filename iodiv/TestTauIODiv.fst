@@ -129,9 +129,7 @@ let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd 
 = repeat_with_inv #(fun hist -> is_open fd hist) #(fun tr -> True) (fun _ -> let s = read fd in ())
 
 let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> (*exists fd.*) diverges r (*/\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r*))
-by (explode () ; bump_nth 12 ; smt ())
-= admit () ; // Subtyping fails but I don't understand why
-  let fd = open_file s in
+= let fd = open_file s in
   repeat (fun b hist -> is_open fd hist) (fun tr -> exists s. tr == [ERead fd s]) (fun b ->
     let x = read fd in
     // if b && x = "" then true else false
