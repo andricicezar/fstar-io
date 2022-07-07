@@ -111,6 +111,6 @@ let test_assert_false
   (x:t1) : 
   Lemma False =
   let _ : dm_free (option d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
-                                                   (fun (r:option t2) -> hist_return (compile #_ #(compile_option t2 #d2) r))) =
-       reify (compile #_ #(compile_option t2 #d2) (f x)) in
+                                                   (fun (r:option t2) -> hist_return (compile #(option t2) #(compile_option t2 #d2) r))) =
+       reify (compile #(option t2) #(compile_option t2 #d2) (f x)) in
   assert (False)
