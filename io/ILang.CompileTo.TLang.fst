@@ -9,6 +9,7 @@ noeq
 type free (a:Type u#a) : Type u#(max a 1) =
 | Return : a -> free a
 
+(** *** Spec **)
 noeq
 type event =
   | EReturn : int -> event
@@ -57,7 +58,9 @@ let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
 
+(** *** DM **)
 assume val theta : #a:Type -> free a -> hist a
+
 let dm_free (a:Type) (wp:hist a) =
   tree:(free a){wp `hist_ord` theta tree} 
 
@@ -77,6 +80,7 @@ assume val dm_free_subcomp :
   f: dm_free a wp1 ->
   Pure (dm_free a wp2) (hist_ord wp2 wp1) (fun _ -> True)
 
+(** necessary **)
 assume val lift_pure_dm_free :
   a: Type ->
   w: pure_wp a ->
@@ -98,7 +102,7 @@ effect {
 
 sub_effect PURE ~> FREEwp = lift_pure_dm_free
 
-type monitorable_prop = trace -> trace -> Tot bool
+type monitorable_prop = trace -> Tot bool
  
 class compilable (t:Type) (pi:monitorable_prop) = {
   comp_type : Type;
@@ -114,11 +118,11 @@ instance compile_resexn (pi:monitorable_prop) (t:Type) {| d1:compilable t pi |} 
 }
 
 effect FREEpi (a:Type) (pi : monitorable_prop) = 
-  FREEwp a (fun p h -> (forall r lt. (pi h lt) ==> p lt r))
+  FREEwp a (fun p h -> (forall r lt. pi h ==> p lt r))
 effect MFREE (a:Type) = 
   FREEwp a (fun p h -> forall lt r. p lt r)
 
-let test_123
+let test_assert_false
   (t1:Type)
   (t2:Type)
   pi
@@ -130,8 +134,9 @@ let test_123
 ) = {
   comp_type = t1 -> MFREE (resexn d2.comp_type);
   compile = (fun (f:(t1 -> FREEpi (resexn t2) pi)) (x:t1) ->
-   let x : dm_free (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). pi h lt ==> p lt r)
-      (fun r -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
+   let x : dm_free (resexn d2.comp_type) (
+         hist_bind (fun p h -> forall r (lt: trace). pi h ==> p lt r)
+                   (fun r -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
      reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
    assert (False);
    FREEwp?.reflect x
