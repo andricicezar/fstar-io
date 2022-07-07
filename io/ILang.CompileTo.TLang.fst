@@ -8,8 +8,6 @@ open IO.Sig
 
 noeq
 type free (a:Type u#a) : Type u#(max a 1) =
-| Call : unit -> cont:(unit -> free u#a a) -> free a
-| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a a) -> free a
 | Return : a -> free a
 
 //let dm_free = DMFree.dm free_cmds free_sig event free_wps
