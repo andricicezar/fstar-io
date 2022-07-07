@@ -14,25 +14,8 @@ If I assume free, the PoC does not work
 assume type free (a:Type u#a) : Type u#(max a 1) **)
 
 (** *** Spec **)
-type event =
-  | EReturn : int -> event
-(** 
-If I assume event, the PoC does not work  
-assume type event **)
-
-let hist_post a = pure_post a 
-let hist_pre = pure_pre 
-
-let hist0 a = hist_post a -> hist_pre
-
-unfold
-let hist_post_ord (p1 p2:hist_post 'a) = forall r. p1 r ==> p2 r
-
-let hist_wp_monotonic (wp:hist0 'a) =
-  forall p1 p2. (p1 `hist_post_ord` p2) ==> (wp p1 ==> wp p2) 
-
 (** monotonicity seems relevant **)
-let hist a = wp:(hist0 a){hist_wp_monotonic wp}
+let hist a = wp:(pure_wp' a){pure_wp_monotonic0 a wp}
 
 unfold
 val hist_ord (#a : Type) : hist a -> hist a -> Type0
