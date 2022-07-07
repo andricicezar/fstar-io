@@ -121,20 +121,15 @@ instance compile_resexn (pi:monitorable_prop) (t:Type) {| d1:compilable t pi |} 
     | Inr err -> Inr err)
 }
 
-effect FREEpi (a:Type) (pi : monitorable_prop) = 
-  FREEwp a (fun p h -> (forall r lt. pi h ==> p lt r))
-effect MFREE (a:Type) = 
-  FREEwp a (fun p h -> forall lt r. p lt r)
-
 let test_assert_false
   (t1:Type)
   (t2:Type)
   pi
   {| d2:compilable t2 pi |} 
-  (f:(t1 -> FREEpi (resexn t2) pi)) 
-  (x:t1) : Lemma False =
-   let x : dm_free (resexn d2.comp_type) (
-         hist_bind (fun p h -> forall r (lt: trace). pi h ==> p lt r)
-                   (fun r -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
-     reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
-   assert (False)
+  (f:(t1 -> FREEwp (resexn t2) (fun p h -> (forall r lt. pi h ==> p lt r)))) 
+  (x:t1) : 
+  Lemma False =
+  let x : dm_free (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). pi h ==> p lt r)
+                                                   (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
+    reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
+  assert (False)
