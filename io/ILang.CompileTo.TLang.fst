@@ -4,14 +4,24 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open Hist
-open IO.Sig
+
+type resexn a = either a exn
 
 noeq
 type free (a:Type u#a) : Type u#(max a 1) =
 | Return : a -> free a
 
+noeq
+type event =
+  | EReturn : int -> event
+
+let hist = Hist.hist #event
+
+type trace = list event
+
 //let dm_free = DMFree.dm free_cmds free_sig event free_wps
 //assume type free (a:Type)
+
 assume val theta : #a:Type -> free a -> hist a
 let dm_free (a:Type) (wp:hist a) =
   tree:(free a){wp `hist_ord` theta tree} 
@@ -52,8 +62,6 @@ effect {
 }
 
 sub_effect PURE ~> FREEwp = lift_pure_dm_free
-
-type resexn a = either a exn
 
 type monitorable_prop = trace -> trace -> Tot bool
  
