@@ -126,7 +126,7 @@ let test_assert_false
   (f:(t1 -> FREEwp (resexn t2) (fun p h -> (forall r lt. p lt r)))) 
   (x:t1) : 
   Lemma False =
-  let x : dm_free (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
+  let _ : dm_free (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
                                                    (fun (r:resexn t2) -> hist_return (compile #_ #(compile_resexn t2 #d2) r))) =
-    reify (compile #_ #(compile_resexn t2 #d2) (f x)) in
+       reify (compile #_ #(compile_resexn t2 #d2) (f x)) in
   assert (False)
