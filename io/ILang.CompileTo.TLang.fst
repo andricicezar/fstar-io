@@ -27,12 +27,14 @@ let hist_post_ord (p1 p2:hist_post 'a) = forall lt r. p1 lt r ==> p2 lt r
 let hist_wp_monotonic (wp:hist0 'a) =
   forall p1 p2. (p1 `hist_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
 
+(** monotonicity seems relevant **)
 let hist a = wp:(hist0 a){hist_wp_monotonic wp}
 
 unfold
 val hist_ord (#a : Type) : hist a -> hist a -> Type0
 let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
 
+unfold
 let hist_return (x:'a) : hist 'a =
   fun p _ -> p [] x
 
@@ -128,10 +130,7 @@ let test_assert_false
   pi
   {| d2:compilable t2 pi |} :
   (** resexn is also necessary for the PoC to work **)
-  compilable (t1 -> FREEpi (resexn t2) pi) pi by (
-  (** This is needed for it to be unsound, otherwise I get an error **)
-  unfold_def (`hist_return)
-) = {
+  compilable (t1 -> FREEpi (resexn t2) pi) pi  = {
   comp_type = t1 -> MFREE (resexn d2.comp_type);
   compile = (fun (f:(t1 -> FREEpi (resexn t2) pi)) (x:t1) ->
    let x : dm_free (resexn d2.comp_type) (
