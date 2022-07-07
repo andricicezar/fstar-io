@@ -111,6 +111,18 @@ let test_assert_false
   (x:t1) : 
   Lemma False =
   let _ : dm_free (option d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
+                                                   (fun (r:option t2) -> hist_return (compile #_ #(compile_option t2 #d2) r))) =
+       reify (compile #_ #(compile_option t2 #d2) (f x)) in
+  assert (False)
+
+(** tried to remove the reify to see if the PoC works, but this fails as expected **)
+let other_tests 
+  (t1:Type)
+  (t2:Type)
+  {| d2:compilable t2 |} 
+  (f:(t1 -> FREEwp (option t2) (fun p h -> (forall r lt. p lt r)))) : 
+  Lemma False =
+  let _ : unit -> FREEwp (option d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
                                                    (fun (r:option t2) -> hist_return (compile #(option t2) #(compile_option t2 #d2) r))) =
-       reify (compile #(option t2) #(compile_option t2 #d2) (f x)) in
+       fun x -> (compile #(option t2) #(compile_option t2 #d2) (f x)) in
   assert (False)
