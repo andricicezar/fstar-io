@@ -3,10 +3,10 @@ module ILang.CompileTo.TLang
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Common
-
 open Hist
 open IO.Sig
+
+type resexn a = either a exn
 
 type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
 unfold
@@ -39,33 +39,25 @@ instance compile_resexn (pi:monitorable_prop) (t:Type) {| d1:compilable t pi |} 
     | Inr err -> Inr err)
 }
 
-class instrumentable (t:Type) (pi:monitorable_prop) = {
-  inst_type : Type;
-  instrument: inst_type -> t 
-}
-
-
 effect IIOpi (a:Type) (pi : monitorable_prop) = 
   DM.IIO.IIOwp a (fun p h -> (forall r lt. (enforced_locally pi h lt) ==> p lt r))
 effect MIIO (a:Type) = DM.IIO.IIOwp a (Hist.trivial_hist)
 
 #set-options "--query_stats"
 let test_123
-  (t1:Type u#0)
-  (t2:Type u#0)
+  (t1:Type)
+  (t2:Type)
   pi
-  {| d1:instrumentable t1 pi |}
-  {| d2:compilable t2 pi |}
-  (f : (t1 -> IIOpi (resexn t2) pi)) 
-  (x : d1.inst_type) :
+  {| d2:compilable t2 pi |} :
   compilable (t1 -> IIOpi (resexn t2) pi) pi by (
+  (** This is needed for it to be unsound, otherwise I get an error **)
   unfold_def (`hist_return)
 ) = {
-  comp_type = d1.inst_type -> MIIO (resexn d2.comp_type);
-  compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.inst_type) ->
+  comp_type = t1 -> MIIO (resexn d2.comp_type);
+  compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:t1) ->
    let x : DM.IIO.dm_iio (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r)
       (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
-     reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
+     reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
    assert (False);
    DM.IIO.IIOwp?.reflect x
   );
