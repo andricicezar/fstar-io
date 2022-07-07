@@ -57,10 +57,6 @@ let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
 
-
-//let dm_free = DMFree.dm free_cmds free_sig event free_wps
-//assume type free (a:Type)
-
 assume val theta : #a:Type -> free a -> hist a
 let dm_free (a:Type) (wp:hist a) =
   tree:(free a){wp `hist_ord` theta tree} 
@@ -69,10 +65,10 @@ assume val dm_free_return : (a:Type) -> (x:a) -> dm_free a (hist_return x)
 assume val dm_free_bind  : 
   a: Type ->
   b: Type ->
-  wp_v: Hist.hist a ->
-  wp_f: (_: a -> Prims.Tot (Hist.hist b)) ->
+  wp_v: hist a ->
+  wp_f: (_: a -> Tot (hist b)) ->
   v: dm_free a wp_v ->
-  f: (x: a -> Prims.Tot (dm_free b (wp_f x))) ->
+  f: (x: a -> Tot (dm_free b (wp_f x))) ->
   Tot (dm_free b (hist_bind wp_v wp_f))
 assume val dm_free_subcomp : 
   a: Type ->
@@ -84,7 +80,7 @@ assume val dm_free_subcomp :
 assume val lift_pure_dm_free :
   a: Type ->
   w: pure_wp a ->
-  f: (_: eqtype_as_type unit -> Prims.PURE a w) ->
+  f: (_: eqtype_as_type unit -> PURE a w) ->
   Tot (dm_free a (wp_lift_pure_hist w))
 
 total
