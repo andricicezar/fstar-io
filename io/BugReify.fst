@@ -2,7 +2,6 @@ module BugReify
 
 
 open FStar.List.Tot
-open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 (** Working on F* release: 2022.05.06 **)
