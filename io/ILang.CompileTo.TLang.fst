@@ -3,8 +3,6 @@ module ILang.CompileTo.TLang
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Hist
-
 type resexn a = either a exn
 
 noeq
@@ -15,9 +13,50 @@ noeq
 type event =
   | EReturn : int -> event
 
-let hist = Hist.hist #event
-
 type trace = list event
+
+let hist_post a = lt:trace -> r:a -> Type0
+let hist_pre = h:trace -> Type0
+
+let hist0 a = hist_post a -> hist_pre
+
+unfold
+let hist_post_ord (p1 p2:hist_post 'a) = forall lt r. p1 lt r ==> p2 lt r
+
+let hist_wp_monotonic (wp:hist0 'a) =
+  forall p1 p2. (p1 `hist_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
+
+let hist a = wp:(hist0 a){hist_wp_monotonic wp}
+
+unfold
+val hist_ord (#a : Type) : hist a -> hist a -> Type0
+let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
+
+let hist_return (x:'a) : hist 'a =
+  fun p _ -> p [] x
+
+unfold
+let hist_post_shift (p:hist_post 'a) (lt:trace) : hist_post 'a =
+  fun lt' r -> p (lt @ lt') r
+
+unfold
+let hist_post_bind
+  (h:trace)
+  (kw : 'a -> hist 'b)
+  (p:hist_post 'b) :
+  Tot (hist_post 'a) =
+  fun lt r ->
+    kw r (hist_post_shift p lt) (List.rev lt @ h)
+
+unfold
+let hist_bind (#a #b:Type) (w : hist a) (kw : a -> hist b) : hist b =
+  fun p h -> w (hist_post_bind #a #b h kw p) h
+
+unfold
+let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun p _ -> w (p [])
+
 
 //let dm_free = DMFree.dm free_cmds free_sig event free_wps
 //assume type free (a:Type)
