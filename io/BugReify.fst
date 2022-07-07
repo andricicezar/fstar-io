@@ -20,15 +20,13 @@ type event =
 If I assume event, the PoC does not work  
 assume type event **)
 
-type trace = list event
-
-let hist_post a = trace -> r:a -> Type0
-let hist_pre = Type0
+let hist_post a = pure_post a 
+let hist_pre = pure_pre 
 
 let hist0 a = hist_post a -> hist_pre
 
 unfold
-let hist_post_ord (p1 p2:hist_post 'a) = forall lt r. p1 lt r ==> p2 lt r
+let hist_post_ord (p1 p2:hist_post 'a) = forall r. p1 r ==> p2 r
 
 let hist_wp_monotonic (wp:hist0 'a) =
   forall p1 p2. (p1 `hist_post_ord` p2) ==> (wp p1 ==> wp p2) 
@@ -42,16 +40,16 @@ let hist_ord wp1 wp2 = forall p. wp1 p ==> wp2 p
 
 unfold
 let hist_return (x:'a) : hist 'a =
-  fun p -> p [] x
+  fun p -> p x
 
 unfold
 let hist_bind (#a #b:Type) (w : hist a) (kw : a -> hist b) : hist b =
-  fun p -> w (fun lt r -> kw r (fun lt' r -> p (lt @ lt') r))
+  fun p -> w (fun r -> kw r p)
 
 unfold
 let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun p -> w (p [])
+  w
 
 (** *** Dijkstra Monad **)
 assume val theta : #a:Type -> free a -> hist a
@@ -107,10 +105,10 @@ let test_assert_false
   (t1:Type)
   (t2:Type)
   {| d2:compilable t2 |} 
-  (f:(t1 -> FREEwp (option t2) (fun p -> (forall r lt. p lt r)))) 
+  (f:(t1 -> FREEwp (option t2) (fun p -> (forall r. p r)))) 
   (x:t1) : 
   Lemma False =
-  let _ : dm_free (option d2.comp_type) (hist_bind (fun p -> forall r (lt: trace). p lt r)
+  let _ : dm_free (option d2.comp_type) (hist_bind (fun p -> forall r . p r)
                                                    (fun (r:option t2) -> hist_return (compile #_ #(compile_option t2 #d2) r))) =
        reify (compile #_ #(compile_option t2 #d2) (f x)) in
   assert (False)
@@ -120,9 +118,9 @@ let other_tests
   (t1:Type)
   (t2:Type)
   {| d2:compilable t2 |} 
-  (f:(t1 -> FREEwp (option t2) (fun p -> (forall r lt. p lt r)))) : 
+  (f:(t1 -> FREEwp (option t2) (fun p -> (forall r. p r)))) : 
   Lemma False =
-  let _ : t1 -> FREEwp (option d2.comp_type) (hist_bind (fun p -> forall r (lt: trace). p lt r)
+  let _ : t1 -> FREEwp (option d2.comp_type) (hist_bind (fun p -> forall r. p r)
                                                    (fun (r:option t2) -> hist_return (compile #(option t2) #(compile_option t2 #d2) r))) =
        fun x -> (compile #(option t2) #(compile_option t2 #d2) (f x)) in
   assert (False)
