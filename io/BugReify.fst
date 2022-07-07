@@ -130,16 +130,11 @@ let test_assert_false
   (t1:Type)
   (t2:Type)
   pi
-  {| d2:compilable t2 pi |} :
-  (** resexn is also necessary for the PoC to work **)
-  compilable (t1 -> FREEpi (resexn t2) pi) pi  = {
-  comp_type = t1 -> MFREE (resexn d2.comp_type);
-  compile = (fun (f:(t1 -> FREEpi (resexn t2) pi)) (x:t1) ->
+  {| d2:compilable t2 pi |} 
+  (f:(t1 -> FREEpi (resexn t2) pi)) 
+  (x:t1) : Lemma False =
    let x : dm_free (resexn d2.comp_type) (
          hist_bind (fun p h -> forall r (lt: trace). pi h ==> p lt r)
                    (fun r -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
      reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
-   assert (False);
-   FREEwp?.reflect x
-  );
-}
+   assert (False)
