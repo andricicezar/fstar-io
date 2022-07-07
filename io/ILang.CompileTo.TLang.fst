@@ -5,71 +5,34 @@ open FStar.Tactics.Typeclasses
 
 open Common
 
-open ILang
-open TLang
 open Hist
-open TC.Monitorable.Hist
-
 open IO.Sig
-open DM.IIO
-open TC.Checkable
 
-assume val dynamic_cmd :
-  (cmd : io_cmds) ->
-  (d1 : checkable2 (io_pre cmd)) ->
-  (arg : io_sig.args cmd) ->
-  IIOwp (io_resm cmd)
-    (fun p h ->
-      (forall (r:(io_sig.res cmd arg)) lt.
-        (match r with
-         | Inr Contract_failure -> ~(d1.check2 arg h) /\ lt == []
-         | _ -> d1.check2 arg h /\ lt == [convert_call_to_event cmd arg r]) ==> p lt r))
+type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
+unfold
+let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
+  match e with
+  | EOpenfile arg _ -> check Openfile arg h
+  | ERead arg _ -> check Read arg h
+  | EClose arg _ -> check Close arg h
 
-let run_m
-  (pi:monitorable_prop)
-  (tree : iio 'b) :
-  IIOpi 'b pi =
-  admit ();
-  let tree : dm_iio 'b (fun p h -> forall (r: 'b) (lt: trace). enforced_locally pi h lt ==> p lt r) = tree in
-  IIOwp?.reflect tree
-
-let rec _instrument
-  (tree : iio (resexn 'a))
-  ('p    : monitorable_prop)
-  (piprop:squash (forall h cmd arg. 'p cmd arg h ==> io_pre cmd arg h)) :
-  IIOpi (resexn 'a) 'p =
-  match tree with
-  | Return r -> r
-  | Call GetTrace argz fnc -> Inr Contract_failure
-  | PartialCall pre fnc -> Inr Contract_failure
-  | Decorated d #b m k ->
-      let r : b = FStar.Universe.downgrade_val (run_m 'p m) in
-      admit ();
-      _instrument (k r) 'p piprop
-  | Call cmd argz fnc -> begin
-    let d : checkable2 (io_pre cmd) = (
-      implies_is_checkable2 (io_sig.args cmd) trace ('p cmd) (io_pre cmd) piprop) in
-    (** Check if the runtime check failed, and if yes, return the error **)
-    let rez = dynamic_cmd cmd d argz in
-    let z' : iio (resexn 'a) = fnc rez in
-    _instrument z' 'p piprop
-  end
-
-
+let rec enforced_locally
+  (check : monitorable_prop)
+  (h l: trace) :
+  Tot bool (decreases l) =
+  match l with
+  | [] -> true
+  | e  ::  t ->
+    if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
+    else false
 
 class compilable (t:Type) (pi:monitorable_prop) = {
-  c_t_ilang : ilang t pi;
   comp_type : Type;
-  c_comp_type : tlang comp_type;
   compile: t -> comp_type
-  // CC theorem?
-  // c_compile: squash (forall (wS:t). theta (reify (compile wS)) `hist_ord` theta (reify wS)) 
 }
 
-instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
-  c_t_ilang = ilang_resexn pi t #d1.c_t_ilang;
+instance compile_resexn (pi:monitorable_prop) (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
   comp_type = resexn (d1.comp_type);
-  c_comp_type = tlang_resexn d1.comp_type #d1.c_comp_type;
   compile = (fun x ->
     match x with
     | Inl r -> Inl (compile r)
@@ -77,32 +40,33 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
 }
 
 class instrumentable (t:Type) (pi:monitorable_prop) = {
-  cc_t_ilang : ilang t pi;
   inst_type : Type;
-  c_inst_type : tlang inst_type;
   instrument: inst_type -> t 
 }
 
-#push-options "--print_universes"
-(** TODO: t1 and t2 are in universe 0. is that a problem? can we do HO? **)
-instance compile_ilang_base (t1:Type u#0) (t2:Type u#0) pi {| d1:instrumentable t1 pi |} {| d2:compilable t2 pi |} : compilable (t1 -> IIOpi (resexn t2) pi) pi by (
-  unfold_def (`hist_return);
-  dump "H"
+
+effect IIOpi (a:Type) (pi : monitorable_prop) = 
+  DM.IIO.IIOwp a (fun p h -> (forall r lt. (enforced_locally pi h lt) ==> p lt r))
+effect MIIO (a:Type) = DM.IIO.IIOwp a (Hist.trivial_hist)
+
+#set-options "--query_stats"
+let test_123
+  (t1:Type u#0)
+  (t2:Type u#0)
+  pi
+  {| d1:instrumentable t1 pi |}
+  {| d2:compilable t2 pi |}
+  (f : (t1 -> IIOpi (resexn t2) pi)) 
+  (x : d1.inst_type) :
+  compilable (t1 -> IIOpi (resexn t2) pi) pi by (
+  unfold_def (`hist_return)
 ) = {
-  c_t_ilang = ilang_arrow pi t1 #d1.cc_t_ilang t2 #d2.c_t_ilang;
   comp_type = d1.inst_type -> MIIO (resexn d2.comp_type);
-  c_comp_type = tlang_arrow d1.inst_type d2.comp_type #d1.c_inst_type #d2.c_comp_type;
   compile = (fun (f:(t1 -> IIOpi (resexn t2) pi)) (x:d1.inst_type) ->
-   let x : dm_iio (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r)
+   let x : DM.IIO.dm_iio (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r)
       (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
      reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f (instrument x))) in
    assert (False);
-   
-   let x' : dm_iio (resexn d2.comp_type) (fun p h -> forall r (lt: trace). enforced_locally pi h lt ==> p lt r) = x in
-  // let x' : dm_iio (resexn d2.comp_type) (trivial_hist ()) = x in
-   (** this works, woaw! **)
-   (** the problem is that it does not check if the pi is actually enforced **)
-   let dm : dm_iio (resexn d2.comp_type) (trivial_hist ()) = Decorated (fun h lt -> b2t (enforced_locally pi h lt)) x' Return in
-   IIOwp?.reflect dm
+   DM.IIO.IIOwp?.reflect x
   );
 }
