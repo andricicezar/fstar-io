@@ -106,12 +106,12 @@ effect {
 
 sub_effect PURE ~> FREEwp = lift_pure_dm_free
 
-class compilable (t:Type) (pi:hist_pre) = {
+class compilable (t:Type) = {
   comp_type : Type;
   compile: t -> comp_type
 }
 
-instance compile_resexn (pi:hist_pre) (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
+instance compile_resexn (t:Type) {| d1:compilable t |} : compilable (resexn t) = {
   comp_type = resexn (d1.comp_type);
   compile = (fun x ->
     match x with
@@ -122,12 +122,11 @@ instance compile_resexn (pi:hist_pre) (t:Type) {| d1:compilable t pi |} : compil
 let test_assert_false
   (t1:Type)
   (t2:Type)
-  (pi:hist_pre)
-  {| d2:compilable t2 pi |} 
+  {| d2:compilable t2 |} 
   (f:(t1 -> FREEwp (resexn t2) (fun p h -> (forall r lt. p lt r)))) 
   (x:t1) : 
   Lemma False =
   let x : dm_free (resexn d2.comp_type) (hist_bind (fun p h -> forall r (lt: trace). p lt r)
-                                                   (fun (r:resexn t2) -> hist_return (compile #_ #pi #(compile_resexn pi t2 #d2) r))) =
-    reify (compile #_ #pi #(compile_resexn pi t2 #d2) (f x)) in
+                                                   (fun (r:resexn t2) -> hist_return (compile #_ #(compile_resexn t2 #d2) r))) =
+    reify (compile #_ #(compile_resexn t2 #d2) (f x)) in
   assert (False)
