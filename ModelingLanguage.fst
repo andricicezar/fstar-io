@@ -21,7 +21,7 @@ let ctx : Type = mon:monad -> acts mon -> ct mon.m
 
 assume val free : monad
 
-let prog : Type = ct free.m -> pt free.m
+let prog : Type = ctx -> pt free.m
 
 let stuff = string (* TODO: cheating, to be fixed later *)
 assume val check_get_trace : stuff -> free.m bool
@@ -37,11 +37,26 @@ let wrapped_acts : acts free = {
     bind_free (check_get_trace s) (fun b -> if b then free_acts.read s else free.ret None)
 }
 
-let link (p:prog) (c:ctx) : whole = p (c free wrapped_acts)
+let link (p:prog) (c:ctx) : whole = p c
 
 (* used to state transparency *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
-let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts)
+(* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
+
+(* new attempt -- but we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
+(* forall p c pi. link p c ~> t /\ t \in pi => exists ip. link (compile ip) c ~> t *)
+
+(* switch to my version of transparency? -- TODO needs ccompile and that's not easy because ctx has abstract mon *)
+(* forall ip ic pi. ilink ip ic ~> t [/\ t \in pi] => link (compile pi ip) (ccompile ic) ~> t *)
+(* let ccompile (ic:ictx) : ctx = fun (mon:monad) (a:acts) (x:alpha) -> (ccompile (reify (ic (backtranslate x)))) <: ct mon.m *)
+(* we again need type classes, by example:
+   ct mon.m = alpha -> mon.m beta
+   ictx for this = alpha -> IIO beta pi
+   where backtranslatable alpha and compilable beta are typeclass constraints
+*)
+
+(* new idea, doesn't seem to bad: *)
+(* forall ip c pi. link (compile true ip) c ~> t /\ t \in pi => link (compile pi ip) c ~> t *)
 
 assume val ictx : Type0
 assume val iwhole : Type0
@@ -52,12 +67,13 @@ let iprog : Type0 = ictx -> iwhole
 assume val backtranslate : ct free.m -> ictx
 assume val compile_whole : iwhole -> pt free.m
 
-let compile (ip:iprog) : prog = fun (c:ct free.m) -> compile_whole (ip (backtranslate c))
+let compile (ip:iprog) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free wrapped_acts)))
+
+
+(* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
 
 (* soundness *)
 (* forall ip c pi. compile ip `link pi` c ~> t => t \in pi *)
-
-
 
 (* Example:
    ct free.m = alpha -> free.m beta
@@ -66,8 +82,8 @@ let compile (ip:iprog) : prog = fun (c:ct free.m) -> compile_whole (ip (backtran
 
 assume val alpha : Type0
 assume val beta : Type0
-let bt (pi:...) (f : (alpha -> free.m beta)) (a:alpha) : IIO beta pi =
-  IIO?.reflect (f a) (* TODO: but how do he get that pi holds, if we can get actions that weren't wrapped, as done in link_no_check! *)
+(* let bt (pi:...) (f : (alpha -> free.m beta)) (a:alpha) : IIO beta pi = *)
+(*   IIO?.reflect (f a) (\* TODO: but how do he get that pi holds, if we can get actions that weren't wrapped, as done in link_no_check! *\) *)
 
 (* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
    while in F* effects are only allowed at the right or arrows;
