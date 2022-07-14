@@ -1,4 +1,7 @@
 module ModelingLanguage2ContextTakesProgram
+(* Trying to swap program and context, as we did the first time we spoke about effect parametricity *)
+(* This is just a thought exercise for now, since it would require changes to higher languages too *)
+(* It's also unclear what the gain would be given that we now anyway try to support full higher-order *)
 
 noeq type monad = {
   m : Type -> Type;
@@ -17,46 +20,44 @@ noeq type acts (mon:monad) = {
 assume val ct : (m:Type->Type) -> Type0
 assume val pt : (m:Type->Type) -> Type0
 
-let ctx : Type = mon:monad -> acts mon -> ct mon.m
+let prog : Type = mon:monad -> acts mon -> pt mon.m
+
+let ctx : Type = mon:monad -> acts mon -> prog -> ct mon.m
 
 assume val free : monad
 
-let prog : Type = ctx -> pt free.m
-
 let stuff = string (* TODO: cheating, to be fixed later *)
-assume val check_get_trace : stuff -> free.m bool
+assume val pi_type : Type0
+assume val check_get_trace : stuff -> pi_type -> free.m bool
 assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free.m b
 
-let whole : Type = pt free.m
+let whole : Type = ct free.m
 
 assume val free_acts : acts free
 
 (* TODO: wrapper should probably take a pi *)
-let wrapped_acts : acts free = {
+
+let wrapped_acts (pi:pi_type) : acts free = {
   read = fun s ->
-    bind_free (check_get_trace s) (fun b -> if b then free_acts.read s else free.ret None)
+    bind_free (check_get_trace s pi) (fun b -> if b then free_acts.read s else free.ret None)
 }
 
-let link (p:prog) (c:ctx) : whole = p c
+let link (p:prog) (c:ctx) (pi:pi_type) : whole = c free (wrapped_acts pi) p
 
-(* used to state transparency *)
-(* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
-(* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
+(* back to the original way to state transparency *)
+(* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c pi ~> t *)
+let link_no_check (p:prog) (c:ctx) : whole = c free free_acts p
 
-(* new attempt -- but we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
-(* forall p c pi. link p c ~> t /\ t \in pi => exists ip. link (compile ip) c ~> t *)
+(* new idea is now special case of the above? *)
+(* forall ip c pi. link true (compile ip) c ~> t /\ t \in pi => link pi (compile ip) c ~> t *)
+(* not equivalent! ... link_no_check (compile ip) c ... *)
+(* `free_acts` is not equivalent to `wrapped_acts true`:
+    certain things checked by wrapped_acts are not in pi!
+    this means that this way of stating transparency is anyway not good enough! *)
 
-(* switch to my version of transparency? -- TODO needs ccompile and that's not easy because ctx has abstract mon *)
-(* forall ip ic pi. ilink ip ic ~> t [/\ t \in pi] => link (compile pi ip) (ccompile ic) ~> t *)
-(* let ccompile (ic:ictx) : ctx = fun (mon:monad) (a:acts) (x:alpha) -> (ccompile (reify (ic (backtranslate x)))) <: ct mon.m *)
-(* we again need type classes, by example:
-   ct mon.m = alpha -> mon.m beta
-   ictx for this = alpha -> IIO beta pi
-   where backtranslatable alpha and compilable beta are typeclass constraints
-*)
+(*** The rest of the file as before, still needs update *)
 
-(* new idea, doesn't seem to bad: *)
-(* forall ip c pi. link (compile true ip) c ~> t /\ t \in pi => link (compile pi ip) c ~> t *)
+
 
 assume val ictx : Type0
 assume val iwhole : Type0
