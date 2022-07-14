@@ -1,13 +1,20 @@
 module ModelingLanguage
 
+open Free
+open IO
+open IO.Sig
+open TC.Monitorable.Hist
+open IIO
+
 noeq type monad = {
-  m : Type -> Type;
+  m : Type u#a -> Type u#(max 1 a);
+  cmds : Type;
+  sig : op_sig cmds;
   ret : #a:Type -> a -> m a
 }
 
-noeq type acts (mon:monad) = {
-  read : string -> mon.m (option string);
-}
+type acts (mon:monad) = op:mon.cmds -> arg:mon.sig.args op -> mon.m (mon.sig.res op arg)
+
 (* TODO: our monad also needs a way to represent failure,
          or is it enough to have it in actions? *)
 
@@ -19,24 +26,33 @@ assume val pt : (m:Type->Type) -> Type0
 
 let ctx : Type = mon:monad -> acts mon -> ct mon.m
 
-assume val free : monad
+val free : monad
+let free = {
+  m = iio;
+  cmds = io_cmds;
+  sig = io_sig;
+  ret = iio_return;
+}
 
 let prog : Type = ctx -> pt free.m
 
 let stuff = string (* TODO: cheating, to be fixed later *)
-assume val pi_type : Type0
-assume val check_get_trace : stuff -> pi_type -> free.m bool
+let  pi_type = monitorable_prop
+assume val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
 assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free.m b
 
 let whole : Type = pt free.m
 
-assume val free_acts : acts free
+val free_acts : acts free
+(** CA: I can't not reify here because there is no precondition **)
+let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
 
 (* TODO: wrapper should probably take a pi *)
-let wrapped_acts (pi:pi_type) : acts free = {
-  read = fun s ->
-    bind_free (check_get_trace s pi) (fun b -> if b then free_acts.read s else free.ret None)
-}
+let wrapped_acts (pi:pi_type) : acts free = 
+  fun cmd arg ->
+    bind_free
+      (check_get_trace pi cmd arg)
+      (fun b -> if b then free_acts cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
 
 let link (p:prog) (c:ctx) : whole = p c
 
