@@ -24,7 +24,8 @@ assume val free : monad
 let prog : Type = ctx -> pt free.m
 
 let stuff = string (* TODO: cheating, to be fixed later *)
-assume val check_get_trace : stuff -> free.m bool
+assume val pi_type : Type0
+assume val check_get_trace : stuff -> pi_type -> free.m bool
 assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free.m b
 
 let whole : Type = pt free.m
@@ -32,9 +33,9 @@ let whole : Type = pt free.m
 assume val free_acts : acts free
 
 (* TODO: wrapper should probably take a pi *)
-let wrapped_acts : acts free = {
+let wrapped_acts (pi:pi_type) : acts free = {
   read = fun s ->
-    bind_free (check_get_trace s) (fun b -> if b then free_acts.read s else free.ret None)
+    bind_free (check_get_trace s pi) (fun b -> if b then free_acts.read s else free.ret None)
 }
 
 let link (p:prog) (c:ctx) : whole = p c
@@ -55,11 +56,8 @@ let link (p:prog) (c:ctx) : whole = p c
    where backtranslatable alpha and compilable beta are typeclass constraints
 *)
 
-(* new idea, no longer sure about it: *)
-(* forall ip c pi. link (compile true ip) c ~> t /\ t \in pi => link (compile pi ip) c ~> t *)
-(* `free_acts` is not equivalent to `wrapped_acts true`:
-    certain things checked by wrapped_acts are not in pi!
-    this means that this way of stating transparency is not good enough!? *)
+(* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
+(* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
 
 assume val ictx : Type0
 assume val iwhole : Type0
@@ -70,7 +68,7 @@ let iprog : Type0 = ictx -> iwhole
 assume val backtranslate : ct free.m -> ictx
 assume val compile_whole : iwhole -> pt free.m
 
-let compile (ip:iprog) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free wrapped_acts)))
+let compile (ip:iprog) (ca:acts free) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free ca)))
 
 
 (* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
