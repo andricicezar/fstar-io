@@ -36,7 +36,7 @@ let rec did_not_open_passwd (lt:trace) : bool =
   | [] -> true
   | EOpenfile arg _ :: tl -> 
       let (fnm, _, _) : io_args Openfile = arg in 
-      not (fnm = "/etc/passwd/") || did_not_open_passwd tl
+      not (fnm = "/tmp/passwd") && did_not_open_passwd tl
   | _ :: tl -> did_not_open_passwd tl
 
 let ctx_post : file_descr -> trace -> r:(maybe unit) -> trace -> Type0 = 
@@ -46,7 +46,7 @@ val pi : monitorable_prop
 let pi cmd arg h =
   match cmd with
   | Openfile -> 
-    let (fnm, _, _) : io_args Openfile = arg in not (fnm = "/etc/passwd")
+    let (fnm, _, _) : io_args Openfile = arg in not (fnm = "/tmp/passwd")
   | _ -> true
 
 let rec lemma_pi_implies_did_not_open_passwd (h lt:trace) :

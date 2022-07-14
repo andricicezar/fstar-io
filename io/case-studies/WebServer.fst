@@ -5,7 +5,7 @@ open ExtraTactics
 
 open Common
 open Types
-open DM
+open IIO
 open Shared
   
 type plugin_type =
@@ -17,9 +17,7 @@ let rec process_connections
   (clients : lfds) 
   (to_read : lfds) 
   (plugin : plugin_type) : 
-  IIOpi lfds pi
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
+  IIOpi lfds pi =
   match clients with
   | [] -> []
   | client :: tail -> begin

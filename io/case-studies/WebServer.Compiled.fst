@@ -1,14 +1,12 @@
 module WebServer.Compiled
 
 open FStar.Tactics
-open FStar.All
 open FStar.List.Tot
 
 open Common
-open DM
 open Shared
-open TC.Export
 open WebServer
+open ILang.CompileTo.Tot
 
 (** TODO: can these two steps be combined? **)
 val compiled_webserver : plugin_type -> IIOwp (maybe unit) (trivial_hist ())

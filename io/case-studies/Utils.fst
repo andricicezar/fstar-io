@@ -3,8 +3,11 @@ module Utils
 open FStar.List
 open FStar.Tactics
 
-open DM
+open IO.Sig
 open IO.Sig.Call
+open IO
+open IIO
+open TC.Monitorable.Hist
 
 let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
   Lemma 
@@ -110,7 +113,7 @@ let simpl_trivialize
   (f:(x:'a ->
     IIOwp 'b (fun p h -> pre x h /\ (forall r lt. post x h r lt ==> p lt r))))
   (x:'a) :
-  IIOwp (Common.maybe 'b) (trivial_hist ()) =
+  IIOwp (Common.resexn 'b) (trivial_hist ()) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ (fun x h -> pre x h) post) f) x

@@ -11,14 +11,17 @@ open TC.Checkable
 open TC.Trivialize.IIOwp
 open Model
 
-let simple_linking_post pi h lt r : Type0 =
+(** The whole program (obtained after linking) is having a specification even if it
+    is erased during compilation. Because the linking from the model erases the
+    post-condition, we redefine it here s.t. we presevere the post-condition. **)
+
+let simple_linking_post pi h lt r: Type0 =
   iio_post pi h r lt
 
 (** p "compiled" linked with instrumented c, gives a computation in IIO,
-that respects the compuation **)
+that respects the post-condition **)
 let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) : 
-  IIOwp (maybe i.ret)
-    (fun p h -> forall lt r. simple_linking_post m.pi h lt r ==> p lt r) =
+  IIO (maybe i.ret) (fun _ -> True) (fun h r lt -> simple_linking_post m.pi h lt r) =
   (trivialize 
     #_ 
     #(trivializeable_IIOwp _ _ 
@@ -26,17 +29,8 @@ let simple_linking #i #m (p:prog_s i m) (c:ctx_t i) :
       (fun _ h r lt -> iio_post m.pi h r lt))
     p) (enforce_post #i #m (instrument #i #m c))
 
-
-(**    assert (iio_interpretation wt h (fun r lt -> iio_post pi h r lt)) by (
-      norm [delta_only [`%iio_interpretation]];
-      norm [delta_only [`%simple_linking_post]];
-      dump "h"
-    )**)
-
-(** the difference between _IIOwp_as_IIO and compile_prog is that 
-the later casts the computation to MIIO, therefore we're losing 
-the interpretation of p.
-TODO: show this
+(**
+compile_prog erases the post-condition of p and we are not able to recovere it.
 Problem: Aseem: IIO is a layered effect, then this will not work since layered effects can only be reasoned about using their types and this example requires reasoning that g x == f x. We can only reason with the types of the layered effects code, and here once we have g with the type as shown, we don't have access to any postcondition about its result. To recover that, we need to look at the definition of g **)
 let complex_linking #i #m p c : 
   IIOwp (maybe i.ret)
