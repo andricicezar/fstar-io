@@ -5,6 +5,7 @@ open IO
 open IO.Sig
 open TC.Monitorable.Hist
 open IIO
+open ILang
 
 noeq type monad = {
   m : Type u#a -> Type u#(max 1 a);
@@ -44,10 +45,13 @@ assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free
 let whole : Type = pt free.m
 
 val free_acts : acts free
-(** CA: I can't not reify here because there is no precondition **)
+(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
 let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
 
-(* TODO: wrapper should probably take a pi *)
+(** CA: I would like this to be obtained by reifing the compilation of the IO primitives.
+A solution will be to reify IIO.Primitives.dynamic_call.
+Otherwise, we can implement it again here and show equivalence between this 
+implenetation and the compilation **)
 let wrapped_acts (pi:pi_type) : acts free = 
   fun cmd arg ->
     bind_free
@@ -75,16 +79,28 @@ let link (p:prog) (c:ctx) : whole = p c
 (* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
 
-assume val ictx : Type0
-assume val iwhole : Type0
-let iprog : Type0 = ictx -> iwhole
+noeq
+type interface = {
+  pi : pi_type;
+  ctx_in : Type;
+  ctx_out : Type;
+  prog_out : Type; 
+}
+
+let ictx (i:interface) = x:i.ctx_in -> IIOpi i.ctx_out i.pi
+let iwhole (i:interface) = unit -> IIOpi i.prog_out i.pi
+
+let iprog (i:interface) = ictx i -> iwhole i
 (* TODO: this needs to be/include IIO pi arrow; which may bring back reification? in compile_whole? on the argument of compile_whole? *)
 
 (* TODO: these will need to be type-classes depending on structure of ct and pt *)
-assume val backtranslate : ct free.m -> ictx
-assume val compile_whole : iwhole -> pt free.m
+assume val backtranslate : (#i:interface) -> ct free.m -> ictx i
 
-let compile (ip:iprog) (ca:acts free) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free ca)))
+val compile_whole : (#i:interface) -> iwhole i -> pt free.m
+let compile_whole #i w call_cmd () : iio i.prog_out =
+  admit ()
+
+let compile (i:interface) (ip:iprog i) (ca:acts free) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free ca)))
 
 
 (* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
