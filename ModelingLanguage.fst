@@ -55,8 +55,11 @@ let link (p:prog) (c:ctx) : whole = p c
    where backtranslatable alpha and compilable beta are typeclass constraints
 *)
 
-(* new idea, doesn't seem to bad: *)
+(* new idea, no longer sure about it: *)
 (* forall ip c pi. link (compile true ip) c ~> t /\ t \in pi => link (compile pi ip) c ~> t *)
+(* `free_acts` is not equivalent to `wrapped_acts true`:
+    certain things checked by wrapped_acts are not in pi!
+    this means that this way of stating transparency is not good enough!? *)
 
 assume val ictx : Type0
 assume val iwhole : Type0
