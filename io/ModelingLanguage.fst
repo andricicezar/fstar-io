@@ -54,23 +54,12 @@ let link (i:interface) (p:prog i) (c:ctx i) : whole i free = fun () -> p c
 assume val backtranslate : (#i:interface) -> ct i free -> ictx i
 
 (** *** Compilation **)
-(* TODO: this could be for any mon:monad not for free *)
-val compile_tree : (#a:Type u#c) -> (m:iio a) -> acts free -> iio a
-let rec compile_tree #a m call_cmd =
-  match m with
-  | Return x -> iio_return x
-  | Call GetTrace arg k -> admit ()
-  | Call cmd arg k -> iio_bind #(iio_sig.res cmd arg) #a (call_cmd cmd arg) (fun x -> compile_tree (k x) call_cmd)
-  | Decorated _ _ _ -> admit () 
-  | PartialCall _ _ -> admit ()
-
 (* TODO: this needs to be/include IIO pi arrow; which may bring back reification? in compile_whole? on the argument of compile_whole? *)
 let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.prog_out (ILang.pi_hist _ i.pi) = 
       reify (ip (backtranslate (c free ca))) in
-    let tree' : iio i.prog_out = tree in
-    compile_tree #i.prog_out tree' ca 
+    tree
 
 
 (* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
