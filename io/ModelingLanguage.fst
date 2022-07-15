@@ -5,13 +5,22 @@ open IO
 open IO.Sig
 open TC.Monitorable.Hist
 open IIO
-open ILang
 
 noeq type monad = {
   m : Type u#a -> Type u#(max 1 a);
   cmds : Type;
   sig : op_sig cmds;
   ret : #a:Type -> a -> m a
+}
+
+let  pi_type = monitorable_prop
+
+noeq
+type interface = {
+  pi : pi_type;
+  ctx_in : Type;
+  ctx_out : Type;
+  prog_out : Type; 
 }
 
 type acts (mon:monad) = op:mon.cmds -> arg:mon.sig.args op -> mon.m (mon.sig.res op arg)
@@ -22,10 +31,11 @@ type acts (mon:monad) = op:mon.cmds -> arg:mon.sig.args op -> mon.m (mon.sig.res
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-assume val ct : (m:Type->Type) -> Type0
-assume val pt : (m:Type->Type) -> Type0
 
-let ctx : Type = mon:monad -> acts mon -> ct mon.m
+type ct (i:interface) (m:Type->Type) = i.ctx_in -> m i.ctx_out
+type pt (i:interface) (m:Type->Type) = ct i m -> m i.prog_out 
+
+type ctx (i:interface) = mon:monad -> acts mon -> ct i mon.m
 
 val free : monad
 let free = {
@@ -35,14 +45,13 @@ let free = {
   ret = iio_return;
 }
 
-let prog : Type = ctx -> pt free.m
+type prog (i:interface) = ctx i -> pt i free.m
 
 let stuff = string (* TODO: cheating, to be fixed later *)
-let  pi_type = monitorable_prop
 assume val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
 assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free.m b
 
-let whole : Type = pt free.m
+type whole (i:interface) = pt i
 
 val free_acts : acts free
 (** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
@@ -58,7 +67,7 @@ let wrapped_acts (pi:pi_type) : acts free =
       (check_get_trace pi cmd arg)
       (fun b -> if b then free_acts cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
 
-let link (p:prog) (c:ctx) : whole = p c
+let link (i:interface) (p:prog i) (c:ctx i) : whole i free.m = p c
 
 (* used to state transparency *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
@@ -79,28 +88,21 @@ let link (p:prog) (c:ctx) : whole = p c
 (* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
 
-noeq
-type interface = {
-  pi : pi_type;
-  ctx_in : Type;
-  ctx_out : Type;
-  prog_out : Type; 
-}
-
-let ictx (i:interface) = x:i.ctx_in -> IIOpi i.ctx_out i.pi
-let iwhole (i:interface) = unit -> IIOpi i.prog_out i.pi
+let ictx (i:interface) = x:i.ctx_in -> ILang.IIOpi i.ctx_out i.pi
+let iwhole (i:interface) = unit -> ILang.IIOpi i.prog_out i.pi
 
 let iprog (i:interface) = ictx i -> iwhole i
 (* TODO: this needs to be/include IIO pi arrow; which may bring back reification? in compile_whole? on the argument of compile_whole? *)
 
 (* TODO: these will need to be type-classes depending on structure of ct and pt *)
-assume val backtranslate : (#i:interface) -> ct free.m -> ictx i
+assume val backtranslate : (#i:interface) -> ct i free.m -> ictx i
 
-val compile_whole : (#i:interface) -> iwhole i -> pt free.m
-let compile_whole #i w call_cmd () : iio i.prog_out =
+val compile_whole : (#i:interface) -> iwhole i -> pt i free.m
+let compile_whole #i w call_cmd : free.m i.prog_out =
   admit ()
 
-let compile (i:interface) (ip:iprog i) (ca:acts free) : prog = fun (c:ctx) -> compile_whole (ip (backtranslate (c free ca)))
+let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
+  fun (c:ctx i) -> compile_whole (ip (backtranslate (c free ca)))
 
 
 (* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
