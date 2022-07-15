@@ -6,10 +6,14 @@ open IO.Sig
 open TC.Monitorable.Hist
 open IIO
 
+(* TODO: our monad also needs a way to represent failure,
+         or is it enough to have it in actions? *)
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
 }
+
+type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
 //type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m a -> (a -> mon.m b) -> mon.m b
 
@@ -26,15 +30,6 @@ type interface = {
   prog_out : Type u#c; 
 }
 
-type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
-
-(* TODO: our monad also needs a way to represent failure,
-         or is it enough to have it in actions? *)
-
-(* will eventually need a signature and what not;
-   I think we need to pass the abstract monad inside is we want to support higher-order types.
-   in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-
 (** *** Intermediate Lang **)
 type ictx (i:interface) = x:i.ctx_in -> ILang.IIOpi i.ctx_out i.pi
 type iprog (i:interface) = ictx i -> ILang.IIOpi i.prog_out i.pi
@@ -42,6 +37,9 @@ type iwhole (i:interface) = unit -> ILang.IIOpi i.prog_out i.pi
 let ilink (i:interface) (ip:iprog i) (ic:ictx i) : iwhole i = fun () -> ip ic
 
 (** *** Target Lang **)
+(* will eventually need a signature and what not;
+   I think we need to pass the abstract monad inside is we want to support higher-order types.
+   in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
 type ct (i:interface) (mon:monad) = i.ctx_in -> mon.m i.ctx_out
 type pt (i:interface) (mon:monad) = mon.m i.prog_out 
 
