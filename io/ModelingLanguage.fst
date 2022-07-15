@@ -51,14 +51,20 @@ let link (i:interface) (p:prog i) (c:ctx i) : whole i free = fun () -> p c
 
 (** *** Backtranslate **)
 (* TODO: these will need to be type-classes depending on structure of ct and pt *)
-assume val backtranslate : (#i:interface) -> ct i free -> ictx i
+val backtranslate : (i:interface) -> ct i free -> ictx i
+let backtranslate i c (x:i.ctx_in) : ILang.IIOpi i.ctx_out i.pi =
+  let tree : iio i.ctx_out = c x in
+  assume (tree `has_type` dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)); 
+  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = tree in
+  IIOwp?.reflect dm_tree
 
 (** *** Compilation **)
 (* TODO: this needs to be/include IIO pi arrow; which may bring back reification? in compile_whole? on the argument of compile_whole? *)
+(* CA: What does reify do if `ip` is returning an arrow? **)
 let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.prog_out (ILang.pi_hist _ i.pi) = 
-      reify (ip (backtranslate (c free ca))) in
+      reify (ip (backtranslate i (c free ca))) in
     tree
 
 
