@@ -51,8 +51,9 @@ let link (i:interface) (p:prog i) (c:ctx i) : whole i free = fun () -> p c
 
 (** *** Backtranslate **)
 (* TODO: these will need to be type-classes depending on structure of ct and pt *)
-val backtranslate : (i:interface) -> ct i free -> ictx i
-let backtranslate i c (x:i.ctx_in) : ILang.IIOpi i.ctx_out i.pi =
+val backtranslate : (i:interface) -> ctx i -> acts free -> ictx i
+let backtranslate i c (ca:acts free) (x:i.ctx_in) : ILang.IIOpi i.ctx_out i.pi =
+  let c : ct i free = c free ca in
   let tree : iio i.ctx_out = c x in
   assume (tree `has_type` dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)); 
   let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = tree in
@@ -64,7 +65,7 @@ let backtranslate i c (x:i.ctx_in) : ILang.IIOpi i.ctx_out i.pi =
 let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.prog_out (ILang.pi_hist _ i.pi) = 
-      reify (ip (backtranslate i (c free ca))) in
+      reify (ip (backtranslate i c ca)) in
     tree
 
 
