@@ -7,10 +7,9 @@ open TC.Monitorable.Hist
 open IIO
 
 noeq type monad = {
-  m : Type u#a -> Type u#(max 1 a);
-  cmds : Type;
-  sig : op_sig cmds;
-  ret : #a:Type -> a -> m a
+  m    : Type u#a -> Type u#(max 1 a);
+  ret  : #a:Type -> a -> m a;
+  bind : #a:Type -> #b:Type -> m a -> (a -> m b) -> m b;
 }
 
 let  pi_type = monitorable_prop
@@ -18,12 +17,12 @@ let  pi_type = monitorable_prop
 noeq
 type interface = {
   pi : pi_type;
-  ctx_in : Type;
-  ctx_out : Type;
-  prog_out : Type; 
+  ctx_in : Type u#a;
+  ctx_out : Type u#b;
+  prog_out : Type u#c; 
 }
 
-type acts (mon:monad) = op:mon.cmds -> arg:mon.sig.args op -> mon.m (mon.sig.res op arg)
+type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
 (* TODO: our monad also needs a way to represent failure,
          or is it enough to have it in actions? *)
@@ -40,16 +39,14 @@ type ctx (i:interface) = mon:monad -> acts mon -> ct i mon.m
 val free : monad
 let free = {
   m = iio;
-  cmds = io_cmds;
-  sig = io_sig;
   ret = iio_return;
+  bind = iio_bind;
 }
 
 type prog (i:interface) = ctx i -> pt i free.m
 
 let stuff = string (* TODO: cheating, to be fixed later *)
 assume val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
-assume val bind_free : #a:Type -> #b:Type -> free.m a -> (a -> free.m b) -> free.m b
 
 type whole (i:interface) = pt i
 
@@ -63,7 +60,7 @@ Otherwise, we can implement it again here and show equivalence between this
 implenetation and the compilation **)
 let wrapped_acts (pi:pi_type) : acts free = 
   fun cmd arg ->
-    bind_free
+    free.bind
       (check_get_trace pi cmd arg)
       (fun b -> if b then free_acts cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
 
@@ -97,9 +94,22 @@ let iprog (i:interface) = ictx i -> iwhole i
 (* TODO: these will need to be type-classes depending on structure of ct and pt *)
 assume val backtranslate : (#i:interface) -> ct i free.m -> ictx i
 
+#set-options "--print_universes"
+
+val compile_tree : (#a:Type u#c) -> (m:iio a) -> (mon:monad) -> acts mon -> mon.m a
+let rec compile_tree #a m mon call_cmd =
+  match m with
+  | Return x -> mon.ret x
+  | Call GetTrace arg k -> admit ()
+  | Call cmd arg k -> mon.bind #(iio_sig.res cmd arg) #a (call_cmd cmd arg) (fun x -> compile_tree (k x) mon call_cmd)
+  | Decorated _ _ _ -> admit () 
+  | PartialCall _ _ -> admit ()
+
 val compile_whole : (#i:interface) -> iwhole i -> pt i free.m
-let compile_whole #i w call_cmd : free.m i.prog_out =
-  admit ()
+let compile_whole #i (w:unit -> ILang.IIOpi i.prog_out i.pi) call_cmd : free.m i.prog_out =
+  let tree : dm_iio i.prog_out (ILang.pi_hist _ i.pi) = reify (w ()) in
+  let tree' : iio i.prog_out = tree in
+  compile_tree #i.prog_out tree' free call_cmd
 
 let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
   fun (c:ctx i) -> compile_whole (ip (backtranslate (c free ca)))

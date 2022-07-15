@@ -81,7 +81,8 @@ let io_bind (#a:Type) (#b:Type) l k : io b =
   free_bind io_cmds io_sig _ a b l k
 
 // THE IIO FREE MONAD
-type iio a = free cmds iio_sig (dec_post #event) a
+type iio (a:Type u#c) = free cmds iio_sig (dec_post #event) a
+
 let iio_return (x:'a) : iio 'a =
   free_return cmds iio_sig _ 'a x
 
