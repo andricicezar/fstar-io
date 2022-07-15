@@ -53,16 +53,18 @@ type prog (i:interface) = ctx i -> pt i free
 type whole (i:interface) (mon:monad) = unit -> pt i mon
 let link (i:interface) (p:prog i) (c:ctx i) : whole i free = fun () -> p c
 
-(* TODO: to avoid to do typeclasses *)
+(* TODO: these should be replaced by typeclasses *)
 assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
 assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
 assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
 
 (** *** Backtranslate **)
-(* TODO: these will need to be type-classes depending on structure of ct and pt *)
+assume val wrap : pi_type -> acts free -> acts free
+
+(* TODO: the wrap does not have the intended effect *)
 val backtranslate : (i:interface) -> ctx i -> acts free -> ictx i
 let backtranslate i c (ca:acts free) (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
-  let c : ct i free = c free ca in
+  let c : ct i free = c free (wrap i.pi ca) in
   let tree : iio i.ctx_out = c (compile' i x) in
   assume (tree `has_type` dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)); 
   let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = tree in
@@ -74,18 +76,15 @@ do that **)
 
 (* Case 2: We want to backtranslate a higher order context. **)
 
+(* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
+
 
 (** *** Compilation **)
-(* TODO: this needs to be/include IIO pi arrow; which may bring back reification? in compile_whole? on the argument of compile_whole? *)
-(* CA: What does reify do if `ip` is returning an arrow? **)
 let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.iprog_out (ILang.pi_hist _ i.pi) = 
       reify (ip (backtranslate i c ca)) in
-    iio_bind tree (fun x -> Return (compile'' i x))
-
-
-(* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
+    iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** *** soundness *)
 (* forall ip c pi. compile ip `link pi` c ~> t => t \in pi *)
