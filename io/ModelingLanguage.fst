@@ -8,6 +8,11 @@ open IO.Sig
 open TC.Monitorable.Hist
 open IIO
 
+(* TODO: state properties: soundness, transparency, RTP **)
+
+(* TODO : think about higher-order **)
+
+
 (* TODO: our monad also needs a way to represent failure,
          or is it enough to have it in actions? *)
 noeq type monad = {
