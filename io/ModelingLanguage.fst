@@ -24,17 +24,19 @@ let free = { m = iio; ret = iio_return; }
 
 let pi_type = monitorable_prop
 
+  
+// #set-options "--print_universes --detail_errors"
 
 noeq
-type interface : Type u#(max (1 + a) (1 + b) (1 + c)) = {
+type interface = {
   pi : pi_type;
   ictx_in : Type u#a;
-  ictx_out : Type u#b;
-  iprog_out : Type u#c; 
+  ictx_out : Type u#a;
+  iprog_out : Type u#a; 
 
   ctx_in : Type u#a;
-  ctx_out : Type u#b;
-  prog_out : Type u#c; 
+  ctx_out : Type u#a;
+  prog_out : Type u#a; 
 }
 
 (** *** Intermediate Lang **)
@@ -70,14 +72,17 @@ type monad_p (mon:monad) = {
 }
 
 (* TODO: *)
-type io_cmds_p (cmd:io_cmds) : Type =
+[@@ "opaque_to_smt"]
+type io_cmds_p (cmd:io_cmds) =
   True
 
 (* TODO: *)
+[@@ "opaque_to_smt"]
 type io_sig_args_p (op:io_cmds) (arg:io_sig.args op) =
   True
 
 (* TODO: *)
+[@@ "opaque_to_smt"]
 type io_sig_res_p (op:io_cmds) (arg:io_sig.args op) (res:io_sig.res op arg) =
   True
 
@@ -86,13 +91,14 @@ type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) =
   arg:io_sig.args op -> arg_p : (io_sig_args_p op arg) ->
   Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
 
-
+(* TODO: check if we need parametricity for the interface **)
 type ct_p (i:interface) (mon:monad) (mon_p:monad_p mon) (c:ct i mon) =
-  x:i.ctx_in -> Lemma (mon_p.m_p i.ctx_out (fun x -> True) (c x))
+  squash (forall x. mon_p.m_p i.ctx_out (fun x -> True) (c x))
 
 type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:ctx i) =
   ct_p i mon mon_p (c mon theActs)
 
+(* TODO: check with others **)
 assume val ctx_param : 
   (i:interface) ->
   (mon:monad) -> (mon_p:monad_p mon) ->
@@ -121,10 +127,6 @@ open FStar.Tactics
 
 let spec_free_acts (ca:acts free) =
   squash (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
-
-let lemma_free_acts (ca:acts free): 
-  Lemma (spec_free_acts ca) = admit ()
-
 
 val wrap_p : (pi:monitorable_prop) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
 let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
@@ -181,18 +183,17 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
     end
   end
 
-  
 val cast_to_dm_iio  : (i:interface) -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)
-let cast_to_dm_iio i c ca x =
- // ctx_param i free (free_p i.pi) (wrap i.pi ca) (wrap_p i.pi ca) c;
+let cast_to_dm_iio i c ca x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   let c' : ct i free = c free (wrap i.pi ca) in
   let tree : iio i.ctx_out = c' x in
-  assume (ILang.pi_hist i.ctx_out i.pi `hist_ord` dm_iio_theta tree);
+  ctx_param i free (free_p i.pi) (wrap i.pi ca) (wrap_p i.pi ca) c;
+  assert (ILang.pi_hist i.ctx_out i.pi `hist_ord` dm_iio_theta tree);
   tree
 
 (* TODO: the wrap does not have the intended effect *)
-val backtranslate : (i:interface) -> ctx i -> acts free -> ictx i
-let backtranslate i c (ca:acts free) (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
+val backtranslate : (i:interface) -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> ictx i
+let backtranslate i c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
   let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = cast_to_dm_iio i c ca (compile' i x) in
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
@@ -201,7 +202,7 @@ let backtranslate i c (ca:acts free) (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi
 
 
 (** *** Compilation **)
-let compile (i:interface) (ip:iprog i) (ca:acts free) : prog i = 
+let compile (i:interface) (ip:iprog i) (ca:(acts free){spec_free_acts ca}) : prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.iprog_out (ILang.pi_hist _ i.pi) = 
       reify (ip (backtranslate i c ca)) in
@@ -249,6 +250,9 @@ assume val beta : Type0
 val free_acts : acts free
 (** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
 let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
+  
+let lemma_free_acts () : 
+  Lemma (spec_free_acts free_acts) = admit ()
 
 val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
 let check_get_trace pi cmd arg = 
