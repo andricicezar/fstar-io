@@ -1,5 +1,7 @@
 module ModelingLanguage
 
+open FStar.Classical.Sugar
+
 open Free
 open IO
 open IO.Sig
@@ -15,15 +17,16 @@ noeq type monad = {
 
 type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
-//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m a -> (a -> mon.m b) -> mon.m b
+//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
 
 val free : monad
 let free = { m = iio; ret = iio_return; }
 
 let pi_type = monitorable_prop
 
+
 noeq
-type interface = {
+type interface : Type u#(max (1 + a) (1 + b) (1 + c)) = {
   pi : pi_type;
   ictx_in : Type u#a;
   ictx_out : Type u#b;
@@ -58,23 +61,141 @@ assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
 assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
 assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
 
+
+(** *** Parametricity **)
+noeq
+type monad_p (mon:monad) = {
+  m_p : a:Type -> a_p:(a -> Type) -> x:(mon.m a) -> Type;
+  ret_p : a:Type -> a_p:(a -> Type) -> (x:a) -> x_p:(a_p x) -> Lemma (m_p a a_p (mon.ret x));
+}
+
+(* TODO: *)
+type io_cmds_p (cmd:io_cmds) : Type =
+  True
+
+(* TODO: *)
+type io_sig_args_p (op:io_cmds) (arg:io_sig.args op) =
+  True
+
+(* TODO: *)
+type io_sig_res_p (op:io_cmds) (arg:io_sig.args op) (res:io_sig.res op arg) =
+  True
+
+type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) = 
+  op:io_cmds -> op_p : (io_cmds_p op) -> 
+  arg:io_sig.args op -> arg_p : (io_sig_args_p op arg) ->
+  Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
+
+
+type ct_p (i:interface) (mon:monad) (mon_p:monad_p mon) (c:ct i mon) =
+  x:i.ctx_in -> Lemma (mon_p.m_p i.ctx_out (fun x -> True) (c x))
+
+type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:ctx i) =
+  ct_p i mon mon_p (c mon theActs)
+
+assume val ctx_param : 
+  (i:interface) ->
+  (mon:monad) -> (mon_p:monad_p mon) ->
+  (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
+  (c:ctx i) -> 
+  Lemma (ctx_p i mon mon_p theActs theActs_p c)
+
+(** **** Parametricity - instances **)
+let free_p (pi:monitorable_prop) : monad_p free = {
+  m_p = (fun a a_p tree -> ILang.pi_hist a pi `hist_ord` dm_iio_theta tree);
+  ret_p = (fun a a_p tree tree_p -> ());
+}
+
 (** *** Backtranslate **)
-assume val wrap : pi_type -> acts free -> acts free
+unfold val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
+let check_get_trace pi cmd arg = 
+  iio_bind (IO.Sig.Call.iio_call GetTrace ()) (fun h -> Return (pi cmd arg h))
+
+val wrap : pi_type -> acts free -> acts free
+let wrap pi theActs cmd arg =
+  iio_bind
+    (check_get_trace pi cmd arg)
+    (fun b -> if b then theActs cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
+
+open FStar.Tactics
+
+let spec_free_acts (ca:acts free) =
+  squash (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
+
+let lemma_free_acts (ca:acts free): 
+  Lemma (spec_free_acts ca) = admit ()
+
+
+val wrap_p : (pi:monitorable_prop) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
+let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
+  Lemma ((free_p pi).m_p (io_sig.res op arg) (io_sig_res_p op arg) ((wrap pi ca) op arg)) = 
+  assert (spec_free_acts ca);
+  assert (iio_wps op arg `hist_ord` dm_iio_theta (ca op arg)) by (
+    let lem = nth_binder 9 in
+    let lem = instantiate lem (nth_binder 2) in
+    let lem = instantiate lem (nth_binder 4) in
+    assumption ()
+  );
+  introduce forall p h. ILang.pi_hist _ pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with begin
+    introduce ILang.pi_hist _ pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with _. begin
+ //     assume (pi op arg h ==> io_pre op arg h);
+//      assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h);
+//      assume (dm_iio_theta (ca op arg) p h);
+//      assume (dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h);
+      (** pi must imply iio_wps **)
+      calc (==>) {
+        if pi op arg h then
+          (* TODO: I only have to prove this one *)
+          dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h
+        else 
+          (* this branch is proved automatically *)
+          dm_iio_theta (Return (Inr Common.Contract_failure)) (fun lt' r -> p lt' r) h;
+        ==> { _ by (tadmit ()) (* should move theta in the if *) }
+        dm_iio_theta (if pi op arg h then ca op arg
+          else Return (Inr Common.Contract_failure))
+        (fun lt' r -> p lt' r)
+        h;
+        == { _ by (
+          norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift];zeta;iota];
+          l_to_r [`List.Tot.Properties.append_nil_l]
+        )}
+        hist_bind
+          (fun p h -> p [] (pi op arg h))
+          (fun b -> dm_iio_theta (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
+          p h;
+        == { _ by (compute ()) }
+        hist_bind
+          (dm_iio_theta (check_get_trace pi op arg))
+          (fun b -> dm_iio_theta (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
+          p h;
+        == { _ by (tadmit ()) (* monad morphism *) }
+        dm_iio_theta (
+  iio_bind
+    (check_get_trace pi op arg)
+    (fun b -> if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
+         p h;
+        == {}
+        dm_iio_theta ((wrap pi ca) op arg) p h;
+      };
+      admit ()
+    end
+  end
+
+  
+val cast_to_dm_iio  : (i:interface) -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)
+let cast_to_dm_iio i c ca x =
+ // ctx_param i free (free_p i.pi) (wrap i.pi ca) (wrap_p i.pi ca) c;
+  let c' : ct i free = c free (wrap i.pi ca) in
+  let tree : iio i.ctx_out = c' x in
+  assume (ILang.pi_hist i.ctx_out i.pi `hist_ord` dm_iio_theta tree);
+  tree
 
 (* TODO: the wrap does not have the intended effect *)
 val backtranslate : (i:interface) -> ctx i -> acts free -> ictx i
 let backtranslate i c (ca:acts free) (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
-  let c : ct i free = c free (wrap i.pi ca) in
-  let tree : iio i.ctx_out = c (compile' i x) in
-  assume (tree `has_type` dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi)); 
-  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = tree in
+  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ctx_out i.pi) = cast_to_dm_iio i c ca (compile' i x) in
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
-
-(* Case 1: We want to backtranslate a first order context. It should be rather simple to 
-do that **)
-
-(* Case 2: We want to backtranslate a higher order context. **)
 
 (* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
 
@@ -129,7 +250,9 @@ val free_acts : acts free
 (** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
 let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
 
-assume val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
+val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
+let check_get_trace pi cmd arg = 
+  iio_bind (iio_call GetTrace ()) (fun h -> pi h cmd arg)
 (** CA: I would like this to be obtained by reifing the compilation of the IO primitives.
 A solution will be to reify IIO.Primitives.dynamic_call.
 Otherwise, we can implement it again here and show equivalence between this 
