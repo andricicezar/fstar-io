@@ -229,6 +229,17 @@ let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
 (** *** Compilation **)
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
+[@@ "opaque_to_smt"]
+let hack_compile  
+  (#i:interface)
+  (#vpi:pi_type)
+  (ip:iprog i vpi)
+  (ipi:pi_type)
+  (#_: r_vpi_ipi vpi ipi) 
+  (c:ctx i) :
+  unit -> IIOwp i.iprog_out (ILang.pi_hist vpi) = 
+  fun () -> ip (backtranslate i ipi c)
+
 let compile
   (#i:interface)
   (#vpi:pi_type)
@@ -237,7 +248,7 @@ let compile
   (#_: r_vpi_ipi vpi ipi) :
   prog i = 
   fun (c:ctx i) -> 
-    let f : unit -> IIOwp i.iprog_out (ILang.pi_hist vpi) = (fun () -> ip (backtranslate i ipi c)) in
+    let f = hack_compile ip ipi c in
     let tree : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp f in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
@@ -270,14 +281,9 @@ let reveal_monotonicity (wp:hist 'a) : Lemma (hist_wp_monotonic wp) = ()
 let reveal_wp (d:dm_iio 'a 'wp) : Lemma ('wp `hist_ord` dm_iio_theta d) = ()
 
 let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lemma (soundness i vpi ip c) = 
-  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp (fun () -> (ip (backtranslate i vpi c))) in
+  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp (hack_compile ip vpi c) in
   let rhs = fun x -> Mkmonad?.ret free (compile'' i x) in
   let p1 : hist_post i.iprog_out = (fun lt _ -> enforced_locally vpi [] lt) in
-  reveal_wp lhs;
-  assert (ILang.pi_hist vpi `hist_ord` dm_iio_theta lhs) by (assumption ()); (* wtf *)
-  // assert (ILang.pi_hist vpi p1 [] ==> dm_iio_theta lhs p1 []); (* why is this not working? *)
-  assert (ILang.pi_hist vpi p1 []);
-  assume (dm_iio_theta lhs p1 []); (* F* is silly for not proving this automatically *)
 
   calc (==>) {
     dm_iio_theta lhs p1 [];
@@ -290,8 +296,7 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
       assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> lt == []) h);
       assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> enforced_locally vpi h lt) h);
       assert (p1 `hist_post_ord` p2);
-      reveal_monotonicity (dm_iio_theta lhs);
-      _ by (tadmit ()) (* this was working before *)
+      reveal_monotonicity (dm_iio_theta lhs)
     }
     dm_iio_theta 
        lhs
@@ -302,27 +307,20 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
        [];
     == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift]; iota]) }
     hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) (fun lt _ -> enforced_locally vpi [] lt) [];
-    ==> { 
-      _ by (tadmit ())
-      // (hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x)) `hist_ord` theta cmd_wp (free_bind op s (dec_post #event) _ _ m f)) = 
-     //   DMFree.lemma_theta_is_lax_morphism_bind iio_wps lhs rhs 
-    }
+    ==> { DMFree.lemma_theta_is_lax_morphism_bind iio_wps lhs rhs }
     dm_iio_theta 
        (iio_bind lhs rhs)
        (fun lt _ -> enforced_locally vpi [] lt)
        [];
     == {}
     dm_iio_theta 
-       (iio_bind (reify_IIOwp (fun () -> (ip (backtranslate i vpi c))))
+       (iio_bind (reify_IIOwp (hack_compile ip vpi c))
                  (fun x -> Mkmonad?.ret free (compile'' i x)))
        (fun lt _ -> enforced_locally vpi [] lt)
        [];
     == { _ by (norm [delta_only [`%soundness;`%beh;`%link; `%included_in;`%compile]; iota]) }
     soundness i vpi ip c;
-  };
-  assert (dm_iio_theta lhs p1 [] ==> soundness i vpi ip c) by (assumption ());
-  assert (dm_iio_theta lhs p1 []) by (assumption ());
-  assume (soundness i vpi ip c) (* WTF! *)
+  }
 
 (* Example:
    ct free.m = alpha -> free.m beta
