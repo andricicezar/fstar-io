@@ -236,7 +236,7 @@ let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
 
 (** *** Compilation **)
 let compile
-  (i:interface)
+  (#i:interface)
   (#vpi:pi_type)
   (ip:iprog i vpi)
   (ipi:pi_type)
@@ -269,7 +269,7 @@ let respects (t:trace) (pi:pi_type) =
 (** *** Soundness *)
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
-  squash (beh (compile i ip vpi `link i` c) `included_in` vpi)
+  squash (beh (compile ip vpi `link i` c) `included_in` vpi)
 (* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
 
 (* Example:
@@ -288,10 +288,9 @@ let true_pi : pi_type = fun _ _ _ -> true
 
 let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) = admit ()
 
-let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
-  squash (forall (t:trace) ipi. 
-    beh ((compile i ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
-      beh ((compile i ip ipi #(alles ipi)) `link i` c) `produces` t)
+let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) = squash (
+  beh ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
+    beh ((compile ip ipi #(alles ipi)) `link i` c) `produces` t)
 
 (* TODO: what pis should be here *)
 
