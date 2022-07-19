@@ -204,6 +204,9 @@ let backtranslate i c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
 
+(* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
+   while in F* effects are only allowed at the right or arrows;
+   make such kleisli arrows the abstraction instead of m? *)
 
 (** *** Compilation **)
 let compile (i:interface) (ip:iprog i) (ca:(acts free){spec_free_acts ca}) : prog i = 
@@ -244,17 +247,21 @@ let soundness (i:interface) (ip:iprog i) (c:ctx i) =
 
 (** *** Transparency **)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-let transparency (i:interface) (ip:iprog i) (c:ctx i) =
-  squash (beh (compile i ip free_acts) c) 
+
+// let transparency (i:interface) (ip:iprog i) (c:ctx i) =
+//  squash (beh (compile i ip free_acts) c) 
 
 
-(* used to state transparency *)
+(* Attempt 1 *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
 (* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
+(* CA: we can not write this because p expects a `c` instrumented with `pi` *)
 
-(* new attempt -- but we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
+(* Attempt 2 *)
+(* we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
 (* forall p c pi. link p c ~> t /\ t \in pi => exists ip. link (compile ip) c ~> t *)
 
+(* Attempt 3 *)
 (* switch to my version of transparency? -- TODO needs ccompile and that's not easy because ctx has abstract mon *)
 (* forall ip ic pi. ilink ip ic ~> t [/\ t \in pi] => link (compile pi ip) (ccompile ic) ~> t *)
 (* let ccompile (ic:ictx) : ctx = fun (mon:monad) (a:acts) (x:alpha) -> (ccompile (reify (ic (backtranslate x)))) <: ct mon.m *)
@@ -264,14 +271,8 @@ let transparency (i:interface) (ip:iprog i) (c:ctx i) =
    where backtranslatable alpha and compilable beta are typeclass constraints
 *)
 
+(* Attempt 4 *)
 (* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-
-assume val alpha : Type0
-assume val beta : Type0
-(* let bt (pi:...) (f : (alpha -> free.m beta)) (a:alpha) : IIO beta pi = *)
-(*   IIO?.reflect (f a) (\* TODO: but how do he get that pi holds, if we can get actions that weren't wrapped, as done in link_no_check! *\) *)
-
-(* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
-   while in F* effects are only allowed at the right or arrows;
-   make such kleisli arrows the abstraction instead of m? *)
+(* CA: ip has as a precondtion that it wants an instrumented `c` with pi, so, we can not do this without 
+       relaxing type of `p`, thus, this has the same problem as the first attempt of transparency *)
