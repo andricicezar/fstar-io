@@ -30,14 +30,8 @@ let free = { m = iio; ret = iio_return; }
 
 let pi_type = monitorable_prop
 
-  
-// #set-options "--print_universes --detail_errors"
-
 noeq
 type interface = {
-//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
-//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
-
   (* intermediate level *)
   ictx_in : Type u#a;
   ictx_out : Type u#a;
@@ -47,11 +41,10 @@ type interface = {
   ctx_in : Type u#a;
   ctx_out : Type u#a;
   prog_out : Type u#a; 
-
-  (* props *)
-//  r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt);
 }
 
+//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
+//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
 type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 (** *** Intermediate Lang **)
@@ -149,7 +142,7 @@ let wrap pi theActs cmd arg =
 open FStar.Tactics
 
 let spec_free_acts (ca:acts free) =
-  squash (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
+  (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
 
 val wrap_p : (pi:monitorable_prop) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
 let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
@@ -210,9 +203,10 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
 val free_acts : acts free
 (** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
 let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
-  
-let lemma_free_acts () : 
-  Lemma (spec_free_acts free_acts) = admit ()
+
+let lemma_free_acts () : Lemma (spec_free_acts free_acts) = 
+  assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
+  assert (spec_free_acts free_acts) by (assumption ())
 
 (* TODO: remove passing of ca **)
 val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
@@ -285,8 +279,18 @@ let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
 
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
 let true_pi : pi_type = fun _ _ _ -> true
-
-let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) = admit ()
+      
+let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
+  let rec alles_0 (ipi:pi_type) (h lt:trace) : 
+    Lemma 
+	(requires (enforced_locally ipi h lt))
+	(ensures (enforced_locally true_pi h lt)) 
+	(decreases lt) = begin
+    match lt with
+    | [] -> ()
+    | hd::t -> alles_0 (ipi) (hd::h) t
+  end in
+  Classical.forall_intro_2 (Classical.move_requires_2 (alles_0 ipi))
 
 let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) = squash (
   beh ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
