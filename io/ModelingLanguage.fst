@@ -71,8 +71,8 @@ type pt (i:interface) (mon:monad) = mon.m i.prog_out
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) (mon:monad) = unit -> pt i mon
-let link (i:interface) (p:prog i) (c:ctx i) : whole i free = fun () -> p c
+type whole (i:interface) = unit -> pt i free
+let link (i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
 
 (* TODO: these should be replaced by typeclasses *)
 assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
@@ -265,9 +265,10 @@ let included_in (wp:hist 'a) (pi:pi_type) =
 
 (* TODO: not sure if this has the intended effect. It should be a 
    predicate that says that `t` is a possible trace of `wp` *)
-let produces d (t:trace) =
+let produces (#i:interface) (d:whole i) (t:trace) =
   forall p. (beh d) p [] ==> (exists r. p t r)
 
+(* TODO: write this using `produces`. Challange: the type of the result is different *)
 let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
   forall p. (beh (fun () -> reify_IIOwp d)) p [] ==> (exists r. p t r)
 
@@ -333,6 +334,19 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
 let rtp (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
   ((compile ip vpi) `link i` c) `produces` t ==> (exists (ic:ictx i vpi). (ip `ilink i` ic) `iproduces` t)
 
+let rtp_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) : Lemma (rtp i vpi ip c t) =
+  let ws = (compile ip vpi) `link i` c in
+  let wt = fun ic -> (ip `ilink i` ic) in
+  introduce ws `produces` t ==> (exists (ic:ictx i vpi). wt ic `iproduces` t) with s. begin
+    let ic = (backtranslate i vpi c) in
+    introduce exists (ic:ictx i vpi). wt ic `iproduces` t with ic and begin
+      assert (ws `produces` t == wt ic `iproduces` t) by (
+        norm [delta_only [`%produces;`%iproduces;`%beh;`%link;`%ilink;`%compile;`%hack_compile]; iota];
+        dump "h";
+        tadmit ()
+      )
+    end
+  end
 
 (** *** Transparency **)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
