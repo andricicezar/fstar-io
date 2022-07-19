@@ -139,8 +139,6 @@ let wrap pi theActs cmd arg =
     (check_get_trace pi cmd arg)
     (fun b -> if b then theActs cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
 
-open FStar.Tactics
-
 let spec_free_acts (ca:acts free) =
   (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
 
@@ -208,7 +206,6 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
   assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
   assert (spec_free_acts free_acts) by (assumption ())
 
-(* TODO: remove passing of ca **)
 val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
 let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   lemma_free_acts ();
@@ -295,8 +292,10 @@ let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
 let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) = squash (
   beh ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
     beh ((compile ip ipi #(alles ipi)) `link i` c) `produces` t)
-
-(* TODO: what pis should be here *)
+(* ip:iprog i true_pi = the partial program has the trivial spec, thus, it produces any trace 
+                        and accepts contexts that also produce any trace.
+   compile ip true_pi = compilation gives to the context the free_acts wrapped with trivial checks
+   compile ip ipi     = compilation gives to the context the free_acts wrapped with ipi *)
 
 (* we want to have two different pis. The one that the partial program expects, and the one that is enforced by instrumentation.
 For transparency, the partial wants the true property, and then
