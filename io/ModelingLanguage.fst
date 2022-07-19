@@ -237,9 +237,10 @@ let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
 (** *** Compilation **)
 let compile
   (i:interface)
-  (vpi ipi:pi_type)
-  (_: r_vpi_ipi vpi ipi)
-  (ip:iprog i vpi) : 
+  (#vpi:pi_type)
+  (ip:iprog i vpi)
+  (ipi:pi_type)
+  (#_: r_vpi_ipi vpi ipi) :
   prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.iprog_out (ILang.pi_hist vpi) = 
@@ -268,7 +269,7 @@ let respects (t:trace) (pi:pi_type) =
 (** *** Soundness *)
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
-  squash (beh (compile i vpi vpi () ip `link i` c) `included_in` vpi)
+  squash (beh (compile i ip vpi `link i` c) `included_in` vpi)
 (* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
 
 (* Example:
@@ -289,8 +290,8 @@ let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) = admit ()
 
 let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
   squash (forall (t:trace) ipi. 
-    beh ((compile i true_pi true_pi () ip) `link i` c) `produces` t /\ t `respects` ipi ==>
-      beh ((compile i true_pi ipi (alles ipi) ip) `link i` c) `produces` t)
+    beh ((compile i ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
+      beh ((compile i ip ipi #(alles ipi)) `link i` c) `produces` t)
 
 (* TODO: what pis should be here *)
 
