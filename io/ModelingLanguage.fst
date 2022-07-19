@@ -54,8 +54,8 @@ type iprog (i:interface) (vpi:pi_type)  = (x:i.ictx_in -> ILang.IIOpi i.ictx_out
 type iwhole (i:interface) (vpi:pi_type) = unit -> ILang.IIOpi i.iprog_out vpi
 let ilink 
   (i:interface) 
-  (vpi ipi:pi_type) 
-  (_ : r_vpi_ipi vpi ipi)
+  (#vpi #ipi:pi_type) 
+  (#_ : r_vpi_ipi vpi ipi)
   (ip:iprog i vpi) 
   (ic:ictx i ipi) : 
   iwhole i vpi = 
@@ -265,8 +265,11 @@ let included_in (wp:hist 'a) (pi:pi_type) =
 
 (* TODO: not sure if this has the intended effect. It should be a 
    predicate that says that `t` is a possible trace of `wp` *)
-let produces (wp:hist 'a) (t:trace) =
-  forall p. wp p [] ==> (exists r. p t r)
+let produces d (t:trace) =
+  forall p. (beh d) p [] ==> (exists r. p t r)
+
+let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
+  forall p. (beh (fun () -> reify_IIOwp d)) p [] ==> (exists r. p t r)
 
 let respects (t:trace) (pi:pi_type) =
   enforced_locally pi [] t
@@ -275,7 +278,6 @@ let respects (t:trace) (pi:pi_type) =
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Type0 =
   lemma_free_acts ();
   beh (compile ip vpi `link i` c) `included_in` vpi
-(* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
 
 let reveal_monotonicity (wp:hist 'a) : Lemma (hist_wp_monotonic wp) = ()
 let reveal_wp (d:dm_iio 'a 'wp) : Lemma ('wp `hist_ord` dm_iio_theta d) = ()
@@ -327,6 +329,11 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
    ictx for this = alpha -> IIO beta pi
 *)
 
+(** *** RTP **)
+let rtp (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
+  ((compile ip vpi) `link i` c) `produces` t ==> (exists (ic:ictx i vpi). (ip `ilink i` ic) `iproduces` t)
+
+
 (** *** Transparency **)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
 (* we give an interface that has the true pi on the left, and our pi on the right *)
@@ -348,9 +355,9 @@ let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
   end in
   Classical.forall_intro_2 (Classical.move_requires_2 (alles_0 ipi))
 
-let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) = squash (
+let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) =
   beh ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
-    beh ((compile ip ipi #(alles ipi)) `link i` c) `produces` t)
+    beh ((compile ip ipi #(alles ipi)) `link i` c) `produces` t
 (* ip:iprog i true_pi = the partial program has the trivial spec, thus, it produces any trace 
                         and accepts contexts that also produce any trace.
    compile ip true_pi = compilation gives to the context the free_acts wrapped with trivial checks
@@ -359,9 +366,8 @@ let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_
    partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program and all pis are stronger than the trivial pi. *)
 
-(* we want to have two different pis. The one that the partial program expects, and the one that is enforced by instrumentation.
-For transparency, the partial wants the true property, and then
-we first instrument with true on the left and then instrument with psi. *)
+let transparency_proof (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
+  admit ()
 
 
 (* Attempt 1 *)
