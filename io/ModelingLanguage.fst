@@ -1,6 +1,7 @@
 module ModelingLanguage
 
 open FStar.Classical.Sugar
+open FStar.Tactics
 
 open Free
 open IO
@@ -51,8 +52,6 @@ type interface = {
 //  r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt);
 }
 
-open FStar.Tactics
-  
 (** *** Intermediate Lang **)
 type ictx (i:interface) (ipi:pi_type)   =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
 type iprog (i:interface) (vpi:pi_type)  = (x:i.ictx_in -> ILang.IIOpi i.ictx_out vpi) -> ILang.IIOpi i.iprog_out vpi
@@ -205,19 +204,28 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
     end
   end
 
+(** **** Free Actions **)
+val free_acts : acts free
+(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
+let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
+  
+let lemma_free_acts () : 
+  Lemma (spec_free_acts free_acts) = admit ()
+
 (* TODO: remove passing of ca **)
-val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist #i.ctx_out ipi)
-let cast_to_dm_iio i ipi c ca x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
-  let c' : ct i free = c free (wrap ipi ca) in
+val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
+let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
+  lemma_free_acts ();
+  let c' : ct i free = c free (wrap ipi free_acts) in
   let tree : iio i.ctx_out = c' x in
-  ctx_param i free (free_p ipi) (wrap ipi ca) (wrap_p ipi ca) c;
+  ctx_param i free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
 (* TODO: the wrap does not have the intended effect *)
-val backtranslate : (i:interface) -> ipi:pi_type -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> ictx i ipi
-let backtranslate i ipi c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
-  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c ca (compile' i x) in
+val backtranslate : (i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
+let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
+  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c (compile' i x) in
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
 
@@ -230,23 +238,15 @@ let compile
   (i:interface)
   (vpi ipi:pi_type)
   (r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt))
-  (ip:iprog i vpi)
-  (ca:(acts free){spec_free_acts ca}) : 
+  (ip:iprog i vpi) : 
   prog i = 
   fun (c:ctx i) -> 
     let tree : dm_iio i.iprog_out (ILang.pi_hist vpi) = 
-      reify (ip (backtranslate i ipi c ca)) in
+      reify (ip (backtranslate i ipi c)) in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** ** Theorems **)
 
-(** **** Free Actions **)
-val free_acts : acts free
-(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
-let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
-  
-let lemma_free_acts () : 
-  Lemma (spec_free_acts free_acts) = admit ()
 
 (** *** Beh **)
 let beh #a x (*:whole *) = dm_iio_theta #a (x ())
@@ -260,7 +260,7 @@ let included_in (x:hist 'a) (pi:pi_type) =
 
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
-  squash (beh (compile i vpi vpi () ip free_acts `link i` c) `included_in` vpi)
+  squash (beh (compile i vpi vpi () ip `link i` c) `included_in` vpi)
 (* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
 
 (* Example:
@@ -279,8 +279,8 @@ let true_pi = fun _ _ _ -> True
 
 // let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
 //  squash (forall (t:trace). 
-//    beh ((compile i true_pi true_pi () ip free_acts) `link i` c) `produces` t /\ t `respects` ipi ==>
-//      beh ((compile i true_pi ipi () ip free_acts) `link i` c) `produces` t)
+//    beh ((compile i true_pi true_pi () ip) `link i` c) `produces` t /\ t `respects` ipi ==>
+//      beh ((compile i true_pi ipi () ip) `link i` c) `produces` t)
 
 (* TODO: what pis should be here *)
 
