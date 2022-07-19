@@ -295,7 +295,10 @@ let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_
 (* ip:iprog i true_pi = the partial program has the trivial spec, thus, it produces any trace 
                         and accepts contexts that also produce any trace.
    compile ip true_pi = compilation gives to the context the free_acts wrapped with trivial checks
-   compile ip ipi     = compilation gives to the context the free_acts wrapped with ipi *)
+   compile ip ipi     = compilation gives to the context the free_acts wrapped with ipi 
+   The trick of this statement is that we can instrument the context with any spec we want because the
+   partial program accepts all of them. This is possible because a context must be instrumented with a pi
+   stronger than the one used as spec for the partial program and all pis are stronger than the trivial pi. *)
 
 (* we want to have two different pis. The one that the partial program expects, and the one that is enforced by instrumentation.
 For transparency, the partial wants the true property, and then
