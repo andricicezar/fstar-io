@@ -274,5 +274,5 @@ let soundness (i:interface) (ip:iprog i) (c:ctx i) =
 (* Attempt 4 *)
 (* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-(* CA: ip has as a precondtion that it wants an instrumented `c` with pi, so, we can not do this without 
-       relaxing type of `p`, thus, this has the same problem as the first attempt of transparency *)
+(* CA: `ip` expects a `c` instrumented with `pi`, thus, we can not state transparency like this without 
+       relaxing the input type of `ip`, thus, this has the same problem as the first attempt of transparency *)
