@@ -104,6 +104,7 @@ type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (the
   ct_p i mon mon_p (c mon theActs)
 
 (* TODO: check with others **)
+(* Parametricity Assumption about the Context **)
 assume val ctx_param : 
   (i:interface) ->
   (mon:monad) -> (mon_p:monad_p mon) ->
@@ -203,8 +204,6 @@ let backtranslate i c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.pi =
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
 
-(* now we can better write backtranslate; TODO: but to typecheck it we need parametricity? *)
-
 
 (** *** Compilation **)
 let compile (i:interface) (ip:iprog i) (ca:(acts free){spec_free_acts ca}) : prog i = 
@@ -213,16 +212,42 @@ let compile (i:interface) (ip:iprog i) (ca:(acts free){spec_free_acts ca}) : pro
       reify (ip (backtranslate i c ca)) in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
-(** *** soundness *)
+(** ** Theorems **)
+
+(** **** Free Actions **)
+val free_acts : acts free
+(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
+let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
+  
+let lemma_free_acts () : 
+  Lemma (spec_free_acts free_acts) = admit ()
+
+(** *** Beh **)
+let beh #a x (*:whole *) = dm_iio_theta #a (x ())
+
+let included_in (x:hist 'a) (pi:pi_type) =
+  forall h. x (fun lt r -> enforced_locally pi h lt) h
+
+(** *** Soundness *)
 (* forall ip c pi. compile ip `link pi` c ~> t => t \in pi *)
+#set-options "--print_implicits"
+
+let soundness (i:interface) (ip:iprog i) (c:ctx i) =
+  lemma_free_acts ();
+  squash (beh (compile i ip free_acts `link i` c) `included_in` i.pi)
+(* TODO: to prove this, one can add a post-condition that guarantees this to compile *)
 
 (* Example:
    ct free.m = alpha -> free.m beta
    ictx for this = alpha -> IIO beta pi
 *)
 
-
 (** *** Transparency **)
+(* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
+let transparency (i:interface) (ip:iprog i) (c:ctx i) =
+  squash (beh (compile i ip free_acts) c) 
+
+
 (* used to state transparency *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
 (* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
@@ -250,24 +275,3 @@ assume val beta : Type0
 (* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
    while in F* effects are only allowed at the right or arrows;
    make such kleisli arrows the abstraction instead of m? *)
-
-
-val free_acts : acts free
-(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
-let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
-  
-let lemma_free_acts () : 
-  Lemma (spec_free_acts free_acts) = admit ()
-
-val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
-let check_get_trace pi cmd arg = 
-  iio_bind (iio_call GetTrace ()) (fun h -> pi h cmd arg)
-(** CA: I would like this to be obtained by reifing the compilation of the IO primitives.
-A solution will be to reify IIO.Primitives.dynamic_call.
-Otherwise, we can implement it again here and show equivalence between this 
-implenetation and the compilation **)
-let wrapped_acts (pi:pi_type) : acts free = 
-  fun cmd arg ->
-    iio_bind
-      (check_get_trace pi cmd arg)
-      (fun b -> if b then free_acts cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
