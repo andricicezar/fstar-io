@@ -52,6 +52,8 @@ type interface = {
 //  r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt);
 }
 
+type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
 (** *** Intermediate Lang **)
 type ictx (i:interface) (ipi:pi_type)   =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
 type iprog (i:interface) (vpi:pi_type)  = (x:i.ictx_in -> ILang.IIOpi i.ictx_out vpi) -> ILang.IIOpi i.iprog_out vpi
@@ -59,7 +61,7 @@ type iwhole (i:interface) (vpi:pi_type) = unit -> ILang.IIOpi i.iprog_out vpi
 let ilink 
   (i:interface) 
   (vpi ipi:pi_type) 
-  (r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt))
+  (_ : r_vpi_ipi vpi ipi)
   (ip:iprog i vpi) 
   (ic:ictx i ipi) : 
   iwhole i vpi = 
@@ -222,7 +224,6 @@ let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
-(* TODO: the wrap does not have the intended effect *)
 val backtranslate : (i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
 let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
   let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c (compile' i x) in
@@ -237,7 +238,7 @@ let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
 let compile
   (i:interface)
   (vpi ipi:pi_type)
-  (r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt))
+  (_: r_vpi_ipi vpi ipi)
   (ip:iprog i vpi) : 
   prog i = 
   fun (c:ctx i) -> 
@@ -247,17 +248,24 @@ let compile
 
 (** ** Theorems **)
 
-
 (** *** Beh **)
 let beh #a x (*:whole *) = dm_iio_theta #a (x ())
 
-let included_in (x:hist 'a) (pi:pi_type) =
-  forall h. x (fun lt r -> enforced_locally pi h lt) h
+(* We verify specs of whole progrems, thus, instead of having
+   properties forall histories, we can specialize it for the
+   empty history *)
+let included_in (wp:hist 'a) (pi:pi_type) =
+  wp (fun lt r -> enforced_locally pi [] lt) []
+
+(* TODO: not sure if this has the intended effect. It should be a 
+   predicate that says that `t` is a possible trace of `wp` *)
+let produces (wp:hist 'a) (t:trace) =
+  forall p. wp p [] ==> (exists r. p t r)
+
+let respects (t:trace) (pi:pi_type) =
+  enforced_locally pi [] t
 
 (** *** Soundness *)
-(* forall ip c pi. compile ip `link pi` c ~> t => t \in pi *)
-#set-options "--print_implicits"
-
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
   squash (beh (compile i vpi vpi () ip `link i` c) `included_in` vpi)
@@ -275,12 +283,14 @@ let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
 (* the pi in this theorem, has nothing to do with the pi we need *)
 
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-let true_pi = fun _ _ _ -> True
+let true_pi : pi_type = fun _ _ _ -> true
 
-// let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
-//  squash (forall (t:trace). 
-//    beh ((compile i true_pi true_pi () ip) `link i` c) `produces` t /\ t `respects` ipi ==>
-//      beh ((compile i true_pi ipi () ip) `link i` c) `produces` t)
+let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) = admit ()
+
+let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
+  squash (forall (t:trace) ipi. 
+    beh ((compile i true_pi true_pi () ip) `link i` c) `produces` t /\ t `respects` ipi ==>
+      beh ((compile i true_pi ipi (alles ipi) ip) `link i` c) `produces` t)
 
 (* TODO: what pis should be here *)
 
