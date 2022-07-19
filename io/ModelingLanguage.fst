@@ -2,6 +2,7 @@ module ModelingLanguage
 
 open FStar.Classical.Sugar
 open FStar.Tactics
+open FStar.List.Tot
 
 open Free
 open IO
@@ -260,8 +261,56 @@ let respects (t:trace) (pi:pi_type) =
 (** *** Soundness *)
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
-  squash (beh (compile ip vpi `link i` c) `included_in` vpi)
+  beh (compile ip vpi `link i` c) `included_in` vpi
 (* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
+
+let reveal_monotonicity (wp:hist 'a) : Lemma (hist_wp_monotonic wp) = ()
+
+let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lemma (soundness i vpi ip c) = 
+  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = (reify (ip (backtranslate i vpi c))) in
+  let rhs = fun x -> (Mkmonad?.ret free (compile'' i x)) in
+  let p1 : hist_post i.iprog_out = (fun lt _ -> enforced_locally vpi [] lt) in
+
+  calc (==>) {
+    dm_iio_theta lhs p1 [];
+    ==> {  
+      let p2 : hist_post i.iprog_out = 
+      	(fun lt r ->
+	   dm_iio_theta (Mkmonad?.ret free (compile'' i r))
+	     (fun lt' (_:i.prog_out) -> enforced_locally vpi [] (lt @ lt'))
+             (rev lt @ [])) in
+      assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> lt == []) h);
+      assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> enforced_locally vpi h lt) h);
+      assert (p1 `hist_post_ord` p2);
+      reveal_monotonicity (dm_iio_theta lhs)
+    }
+    dm_iio_theta 
+       lhs
+       (fun lt r ->
+         dm_iio_theta (rhs r)
+           (fun lt' _ -> enforced_locally vpi [] (lt @ lt'))
+           (List.Tot.Base.rev lt @ []))
+       [];
+    == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift]; iota]) }
+    hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) (fun lt _ -> enforced_locally vpi [] lt) [];
+    ==> { 
+      _ by (tadmit ())
+      // (hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x)) `hist_ord` theta cmd_wp (free_bind op s (dec_post #event) _ _ m f)) = 
+     //   DMFree.lemma_theta_is_lax_morphism_bind iio_wps lhs rhs 
+    }
+    dm_iio_theta 
+       (iio_bind lhs rhs)
+       (fun lt _ -> enforced_locally vpi [] lt)
+       [];
+    == {}
+    dm_iio_theta 
+       (iio_bind (reify (ip (backtranslate i vpi c)))
+                 (fun x -> Mkmonad?.ret free (compile'' i x)))
+       (fun lt _ -> enforced_locally vpi [] lt)
+       [];
+    == { _ by (norm [delta_only [`%soundness;`%beh;`%link; `%included_in;`%compile]; iota]) }
+    soundness i vpi ip c;
+  }
 
 (* Example:
    ct free.m = alpha -> free.m beta
