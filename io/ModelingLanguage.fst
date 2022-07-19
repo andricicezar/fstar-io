@@ -34,8 +34,8 @@ let pi_type = monitorable_prop
 
 noeq
 type interface = {
-  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
-  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
+//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
+//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
 
   (* intermediate level *)
   ictx_in : Type u#a;
@@ -48,16 +48,22 @@ type interface = {
   prog_out : Type u#a; 
 
   (* props *)
-  r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt);
+//  r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt);
 }
 
 open FStar.Tactics
   
 (** *** Intermediate Lang **)
-type ictx (i:interface) = x:i.ictx_in -> ILang.IIOpi i.ictx_out i.ipi
-type iprog (i:interface) = (x:i.ictx_in -> ILang.IIOpi i.ictx_out i.vpi) -> ILang.IIOpi i.iprog_out i.vpi
-type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
-let ilink (i:interface) (ip:iprog i) (ic:ictx i) : iwhole i = 
+type ictx (i:interface) (ipi:pi_type)   =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
+type iprog (i:interface) (vpi:pi_type)  = (x:i.ictx_in -> ILang.IIOpi i.ictx_out vpi) -> ILang.IIOpi i.iprog_out vpi
+type iwhole (i:interface) (vpi:pi_type) = unit -> ILang.IIOpi i.iprog_out vpi
+let ilink 
+  (i:interface) 
+  (vpi ipi:pi_type) 
+  (r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt))
+  (ip:iprog i vpi) 
+  (ic:ictx i ipi) : 
+  iwhole i vpi = 
   fun () -> ip ic
 
 (** *** Target Lang **)
@@ -200,18 +206,18 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 
 (* TODO: remove passing of ca **)
-val cast_to_dm_iio  : (i:interface) -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist #i.ctx_out i.ipi)
-let cast_to_dm_iio i c ca x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
-  let c' : ct i free = c free (wrap i.ipi ca) in
+val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist #i.ctx_out ipi)
+let cast_to_dm_iio i ipi c ca x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
+  let c' : ct i free = c free (wrap ipi ca) in
   let tree : iio i.ctx_out = c' x in
-  ctx_param i free (free_p i.ipi) (wrap i.ipi ca) (wrap_p i.ipi ca) c;
-  assert (ILang.pi_hist i.ipi `hist_ord` dm_iio_theta tree);
+  ctx_param i free (free_p ipi) (wrap ipi ca) (wrap_p ipi ca) c;
+  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
 (* TODO: the wrap does not have the intended effect *)
-val backtranslate : (i:interface) -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> ictx i
-let backtranslate i c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.ipi =
-  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist i.ipi) = cast_to_dm_iio i c ca (compile' i x) in
+val backtranslate : (i:interface) -> ipi:pi_type -> ctx i -> (ca:(acts free){spec_free_acts ca}) -> ictx i ipi
+let backtranslate i ipi c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
+  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c ca (compile' i x) in
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
 
@@ -220,10 +226,16 @@ let backtranslate i c ca (x:i.ictx_in) : ILang.IIOpi i.ictx_out i.ipi =
    make such kleisli arrows the abstraction instead of m? *)
 
 (** *** Compilation **)
-let compile (i:interface) (ip:iprog i) (ca:(acts free){spec_free_acts ca}) : prog i = 
+let compile
+  (i:interface)
+  (vpi ipi:pi_type)
+  (r_vpi_ipi : squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt))
+  (ip:iprog i vpi)
+  (ca:(acts free){spec_free_acts ca}) : 
+  prog i = 
   fun (c:ctx i) -> 
-    let tree : dm_iio i.iprog_out (ILang.pi_hist i.vpi) = 
-      reify (ip (backtranslate i c ca)) in
+    let tree : dm_iio i.iprog_out (ILang.pi_hist vpi) = 
+      reify (ip (backtranslate i ipi c ca)) in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** ** Theorems **)
@@ -246,9 +258,9 @@ let included_in (x:hist 'a) (pi:pi_type) =
 (* forall ip c pi. compile ip `link pi` c ~> t => t \in pi *)
 #set-options "--print_implicits"
 
-let soundness (i:interface) (ip:iprog i) (c:ctx i) =
+let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) =
   lemma_free_acts ();
-  squash (beh (compile i ip free_acts `link i` c) `included_in` i.vpi)
+  squash (beh (compile i vpi vpi () ip free_acts `link i` c) `included_in` vpi)
 (* TODO: to prove this, one can add to compile a post-condition that guarantees this *)
 
 (* Example:
@@ -262,28 +274,15 @@ let soundness (i:interface) (ip:iprog i) (c:ctx i) =
 (* pi is part of the interface because the partial program uses it in its type in two places: input type and output type. *)
 (* the pi in this theorem, has nothing to do with the pi we need *)
 
-let true_interface (i:interface) : interface = {
-  vpi = (fun cmd arg h -> true);
-  ipi = i.ipi;
-
-  (* intermediate level *)
-  ictx_in = i.ictx_in;
-  ictx_out = i.ictx_out;
-  iprog_out = i.iprog_out; 
-
-  (* target level *)
-  ctx_in = i.ctx_in;
-  ctx_out = i.ctx_out;
-  prog_out = i.prog_out; 
-
-  r_vpi_ipi = admit ();
-}
-
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-let transparency (i:interface) (ip:iprog (true_interface i)) (c:ctx (true_interface i)) =
-  squash (forall (t:trace). 
-    beh ((compile (true_interface i) ip free_acts) `link (true_interface i)` c) `produces` t /\ t `respects` i.ipi ==>
-      beh ((compile (true_interface i) ip free_acts) *)
+let true_pi = fun _ _ _ -> True
+
+// let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) =
+//  squash (forall (t:trace). 
+//    beh ((compile i true_pi true_pi () ip free_acts) `link i` c) `produces` t /\ t `respects` ipi ==>
+//      beh ((compile i true_pi ipi () ip free_acts) `link i` c) `produces` t)
+
+(* TODO: what pis should be here *)
 
 (* we want to have two different pis. The one that the partial program expects, and the one that is enforced by instrumentation.
 For transparency, the partial wants the true property, and then
