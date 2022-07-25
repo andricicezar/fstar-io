@@ -71,7 +71,7 @@ type pt (i:interface) (mon:monad) = mon.m i.prog_out
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) = unit -> pt i free
+type whole (i:interface) = unit -> iio i.prog_out 
 let link (i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
 
 (* TODO: these should be replaced by typeclasses *)
@@ -253,9 +253,10 @@ let compile
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** ** Theorems **)
-
-(** *** Beh **)
-let beh #a x (*:whole *) = dm_iio_theta #a (x ())
+(** *** Behaviors **)
+(* We use this definition directly because it accomodates
+   also whole and iwhole programs. **)
+let beh  #a (d:unit -> iio a) = dm_iio_theta (d ())
 
 (* We verify specs of whole progrems, thus, instead of having
    properties forall histories, we can specialize it for the
@@ -265,12 +266,11 @@ let included_in (wp:hist 'a) (pi:pi_type) =
 
 (* TODO: not sure if this has the intended effect. It should be a 
    predicate that says that `t` is a possible trace of `wp` *)
-let produces (#i:interface) (d:whole i) (t:trace) =
-  forall p. (beh d) p [] ==> (exists r. p t r)
+let produces (d:unit -> iio 'a) (t:trace) =
+  forall (p:hist_post 'a). (beh d) p [] ==> (exists r. p t r)
 
-(* TODO: write this using `produces`. Challange: the type of the result is different *)
 let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
-  forall p. (beh (fun () -> reify_IIOwp d)) p [] ==> (exists r. p t r)
+  (fun () -> reify_IIOwp d) `produces` t
 
 let respects (t:trace) (pi:pi_type) =
   enforced_locally pi [] t
@@ -340,8 +340,9 @@ let rtp_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) :
   introduce ws `produces` t ==> (exists (ic:ictx i vpi). wt ic `iproduces` t) with s. begin
     let ic = (backtranslate i vpi c) in
     introduce exists (ic:ictx i vpi). wt ic `iproduces` t with ic and begin
-      assert (ws `produces` t == wt ic `iproduces` t) by (
+      assert (ws `produces` t ==> wt ic `iproduces` t) by (
         norm [delta_only [`%produces;`%iproduces;`%beh;`%link;`%ilink;`%compile;`%hack_compile]; iota];
+        explode ();
         dump "h";
         tadmit ()
       )
