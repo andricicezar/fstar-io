@@ -10,8 +10,6 @@ open IO.Sig
 open TC.Monitorable.Hist
 open IIO
 
-(* TODO: state properties: soundness, transparency, RTP **)
-
 (* TODO : think about higher-order **)
 
 
@@ -251,8 +249,9 @@ let hack_compile
   (ipi:pi_type)
   (#_: r_vpi_ipi vpi ipi) 
   (c:ctx i) :
-  unit -> IIOwp i.iprog_out (ILang.pi_hist vpi) = 
-  fun () -> ip (backtranslate i ipi c)
+  dm_iio i.iprog_out (ILang.pi_hist vpi) = 
+  let f : unit -> IIOwp i.iprog_out (ILang.pi_hist vpi) = fun () -> ip (backtranslate i ipi c) in
+  reify_IIOwp f
 
 let compile
   (#i:interface)
@@ -262,8 +261,7 @@ let compile
   (#_: r_vpi_ipi vpi ipi) :
   prog i = 
   fun (c:ctx i) -> 
-    let f = hack_compile ip ipi c in
-    let tree : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp f in
+    let tree = hack_compile ip ipi c in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** ** Theorems **)
@@ -295,7 +293,7 @@ let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Type0 =
   beh (compile ip vpi `link i` c) `included_in` vpi
 
 let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lemma (soundness i vpi ip c) = 
-  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp (hack_compile ip vpi c) in
+  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = (hack_compile ip vpi c) in
   let rhs = fun x -> Mkmonad?.ret free (compile'' i x) in
   let p1 : hist_post i.iprog_out = (fun lt _ -> enforced_locally vpi [] lt) in
 
@@ -325,7 +323,7 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
        [];
     == {}
     dm_iio_theta 
-       (iio_bind (reify_IIOwp (hack_compile ip vpi c))
+       (iio_bind (hack_compile ip vpi c)
                  (fun x -> Mkmonad?.ret free (compile'' i x)))
        (fun lt _ -> enforced_locally vpi [] lt)
        [];
@@ -338,6 +336,14 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
    ictx for this = alpha -> IIO beta pi
 *)
 
+let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_out) (t:trace) :
+  Lemma 
+    (requires (forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==>
+               (exists (r:i.prog_out). p t r)))
+    (ensures  (forall (p':hist_post i.iprog_out). dm_iio_theta m p' [] ==> 
+               (exists (r':i.iprog_out). p' t r'))) = admit ()
+
+
 (** *** RTC **)
 let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
   ((compile ip vpi) `link i` c) `produces` t ==> 
@@ -349,11 +355,17 @@ let rtc_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) :
   introduce ws `produces` t ==> (exists (ic:ictx i vpi). wt ic `iproduces` t) with s. begin
     let ic = (backtranslate i vpi c) in
     introduce exists (ic:ictx i vpi). wt ic `iproduces` t with ic and begin
-      assert (ws `produces` t ==> wt ic `iproduces` t) by (
-        norm [delta_only [`%produces;`%iproduces;`%beh;`%link;`%ilink;`%compile;`%hack_compile]; iota];
-        explode ();
-        dump "h";
-        tadmit ()
+      let m = hack_compile ip vpi c in
+      assert (ws `produces` t);
+      assert (forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (compile'' i x))) p [] ==>
+               (exists (r:i.prog_out). p t r)) by (assumption ());
+      lemma_for_rtc m (compile'' i) t;
+      assert (wt ic `iproduces` t) by (
+        norm [delta_only [`%iproduces;`%produces;`%beh;`%link;`%ilink]; iota];
+        binder_retype (nth_binder (-1));
+          norm [delta_only [`%hack_compile];iota];
+        trefl ();
+        assumption ()
       )
     end
   end
