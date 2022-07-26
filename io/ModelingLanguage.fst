@@ -145,6 +145,7 @@ let wrap pi theActs cmd arg =
 let spec_free_acts (ca:acts free) =
   (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
 
+#set-options "--split_queries"
 val wrap_p : (pi:monitorable_prop) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
 let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
   Lemma ((free_p pi).m_p (io_sig.res op arg) (io_sig_res_p op arg) ((wrap pi ca) op arg)) = 
@@ -157,19 +158,22 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   );
   introduce forall p h. ILang.pi_hist pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with begin
     introduce ILang.pi_hist pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with _. begin
- //     assume (pi op arg h ==> io_pre op arg h);
-//      assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h);
-//      assume (dm_iio_theta (ca op arg) p h);
-//      assume (dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h);
-      (** pi must imply iio_wps **)
       calc (==>) {
         ILang.pi_hist pi p h;
-        ==> { _ by (tadmit ()) }
+        ==> {
+          assume (ILang.pi_hist pi p h ==> iio_wps op arg p h);
+          assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h)
+        }
         if pi op arg h then
           (* TODO: I only have to prove this one *)
-          dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h
+          dm_iio_theta (ca op arg) p h
         else 
           (* this branch is proved automatically *)
+          dm_iio_theta (Return (Inr Common.Contract_failure)) p h;
+        ==> {}
+        if pi op arg h then
+          dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h
+        else 
           dm_iio_theta (Return (Inr Common.Contract_failure)) (fun lt' r -> p lt' r) h;
         ==> {}
         dm_iio_theta (if pi op arg h then ca op arg
@@ -189,11 +193,17 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
           (dm_iio_theta (check_get_trace pi op arg))
           (fun b -> dm_iio_theta (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
           p h;
-        == { _ by (tadmit ()) (* monad morphism *) }
+        ==> { 
+          let m1 = (check_get_trace pi op arg) in
+          let m2 = fun b -> (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)) in 
+          DMFree.lemma_theta_is_lax_morphism_bind iio_wps m1 m2;
+          assert (hist_bind (dm_iio_theta m1) (fun b -> dm_iio_theta (m2 b)) p h ==>
+            dm_iio_theta (iio_bind m1 m2) p h)
+        }
         dm_iio_theta (
-  iio_bind
-    (check_get_trace pi op arg)
-    (fun b -> if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
+          iio_bind
+            (check_get_trace pi op arg)
+            (fun b -> if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
          p h;
         == { _ by (norm [delta_only [`%wrap]; zeta]) }
         dm_iio_theta ((wrap pi ca) op arg) p h;
