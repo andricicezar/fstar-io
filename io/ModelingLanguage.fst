@@ -342,14 +342,19 @@ let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_ou
     (ensures  ((fun () -> m) `produces` t))  =
   introduce forall p'. dm_iio_theta m p' [] ==> (exists r'. p' t r') with begin
     introduce dm_iio_theta m p' [] ==> (exists r'. p' t r') with _. begin
-      (* can not write this because f goes from i.iprog_out to i.prog_out *)
       let p : hist_post i.prog_out = (fun lt (r:i.prog_out) -> exists (r':i.iprog_out). f r' == r /\ p' lt r') in
       eliminate forall p. dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==> (exists r. p t r) with p;
       calc (==>) {
         dm_iio_theta m p' [];
-        ==> { _ by (tadmit ()) (* not sure how to do this, but probably another lemma is needed where induction on m is done *) }
+        ==> { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift]; iota]) }
+        hist_bind (dm_iio_theta m) (fun x -> dm_iio_theta (Return (f x))) (fun lt (r:i.prog_out) -> exists (r':i.iprog_out). f r' == r /\ p' lt r') [];
+        == {}
         hist_bind (dm_iio_theta m) (fun x -> dm_iio_theta (Return (f x))) p [];
-        ==> { _ by (tadmit ()) (* monad morphism *) }
+        ==> { 
+          let m1 : i.iprog_out -> iio i.prog_out = fun x -> Return (f x) in
+          DMFree.lemma_theta_is_lax_morphism_bind iio_wps m m1;
+          admit () (* not sure how to simplify the VC, but this should be trivial *)
+        }
         dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [];
         ==> {}
         exists (r:i.prog_out). p t r;
