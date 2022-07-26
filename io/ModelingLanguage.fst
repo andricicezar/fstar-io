@@ -338,11 +338,32 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
 
 let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_out) (t:trace) :
   Lemma 
-    (requires (forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==>
-               (exists (r:i.prog_out). p t r)))
-    (ensures  (forall (p':hist_post i.iprog_out). dm_iio_theta m p' [] ==> 
-               (exists (r':i.iprog_out). p' t r'))) = admit ()
-
+    (requires ((fun () -> iio_bind m (fun x -> Return (f x))) `produces` t))
+    (ensures  ((fun () -> m) `produces` t))  =
+  introduce forall p'. dm_iio_theta m p' [] ==> (exists r'. p' t r') with begin
+    introduce dm_iio_theta m p' [] ==> (exists r'. p' t r') with _. begin
+      (* can not write this because f goes from i.iprog_out to i.prog_out *)
+      let p : hist_post i.prog_out = (fun lt (r:i.prog_out) -> exists (r':i.iprog_out). f r' == r /\ p' lt r') in
+      eliminate forall p. dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==> (exists r. p t r) with p;
+      calc (==>) {
+        dm_iio_theta m p' [];
+        ==> { _ by (tadmit ()) (* not sure how to do this, but probably another lemma is needed where induction on m is done *) }
+        hist_bind (dm_iio_theta m) (fun x -> dm_iio_theta (Return (f x))) p [];
+        ==> { _ by (tadmit ()) (* monad morphism *) }
+        dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [];
+        ==> {}
+        exists (r:i.prog_out). p t r;
+        == {}
+        exists (r:i.prog_out). (fun lt (r:i.prog_out) -> exists (r':i.iprog_out). f r' == r /\ p' lt r') t r;
+        == {}
+        exists (r:i.prog_out). (exists (r':i.iprog_out). f r' == r /\ p' t r');
+        ==> {}
+        exists (r':i.iprog_out). (exists (r:i.prog_out). f r' == r /\ p' t r');
+        ==> {}
+        exists (r':i.iprog_out). p' t r';
+      }
+    end
+  end
 
 (** *** RTC **)
 let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
