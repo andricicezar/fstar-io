@@ -131,10 +131,12 @@ let free_p (pi:monitorable_prop) : monad_p free = {
 
 (** *** Backtranslate **)
 unfold val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
+[@@ "opaque_to_smt"]
 let check_get_trace pi cmd arg = 
   iio_bind (IO.Sig.Call.iio_call GetTrace ()) (fun h -> Return (pi cmd arg h))
 
 val wrap : pi_type -> acts free -> acts free
+[@@ "opaque_to_smt"]
 let wrap pi theActs cmd arg =
   iio_bind
     (check_get_trace pi cmd arg)
@@ -161,13 +163,15 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
 //      assume (dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h);
       (** pi must imply iio_wps **)
       calc (==>) {
+        ILang.pi_hist pi p h;
+        ==> { _ by (tadmit ()) }
         if pi op arg h then
           (* TODO: I only have to prove this one *)
           dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h
         else 
           (* this branch is proved automatically *)
           dm_iio_theta (Return (Inr Common.Contract_failure)) (fun lt' r -> p lt' r) h;
-        ==> { _ by (tadmit ()) (* should move theta in the if *) }
+        ==> {}
         dm_iio_theta (if pi op arg h then ca op arg
           else Return (Inr Common.Contract_failure))
         (fun lt' r -> p lt' r)
@@ -191,10 +195,9 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
     (check_get_trace pi op arg)
     (fun b -> if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
          p h;
-        == {}
+        == { _ by (norm [delta_only [`%wrap]; zeta]) }
         dm_iio_theta ((wrap pi ca) op arg) p h;
-      };
-      admit ()
+      }
     end
   end
 
@@ -280,9 +283,6 @@ let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Type0 =
   lemma_free_acts ();
   beh (compile ip vpi `link i` c) `included_in` vpi
 
-let reveal_monotonicity (wp:hist 'a) : Lemma (hist_wp_monotonic wp) = ()
-let reveal_wp (d:dm_iio 'a 'wp) : Lemma ('wp `hist_ord` dm_iio_theta d) = ()
-
 let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lemma (soundness i vpi ip c) = 
   let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = reify_IIOwp (hack_compile ip vpi c) in
   let rhs = fun x -> Mkmonad?.ret free (compile'' i x) in
@@ -296,17 +296,14 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
 	   dm_iio_theta (Mkmonad?.ret free (compile'' i r))
 	     (fun lt' (_:i.prog_out) -> enforced_locally vpi [] (lt @ lt'))
              (rev lt @ [])) in
-      assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> lt == []) h);
-      assert (forall h x. dm_iio_theta (rhs x) (fun lt _ -> enforced_locally vpi h lt) h);
-      assert (p1 `hist_post_ord` p2);
-      reveal_monotonicity (dm_iio_theta lhs)
+      assert (p1 `hist_post_ord` p2) (* using monotonicity **)
     }
     dm_iio_theta 
        lhs
        (fun lt r ->
          dm_iio_theta (rhs r)
            (fun lt' _ -> enforced_locally vpi [] (lt @ lt'))
-           (List.Tot.Base.rev lt @ []))
+           (rev lt @ []))
        [];
     == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift]; iota]) }
     hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) (fun lt _ -> enforced_locally vpi [] lt) [];
