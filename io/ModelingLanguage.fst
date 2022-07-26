@@ -338,11 +338,12 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
    ictx for this = alpha -> IIO beta pi
 *)
 
-(** *** RTP **)
-let rtp (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
-  ((compile ip vpi) `link i` c) `produces` t ==> (exists (ic:ictx i vpi). (ip `ilink i` ic) `iproduces` t)
+(** *** RTC **)
+let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
+  ((compile ip vpi) `link i` c) `produces` t ==> 
+    (exists (ic:ictx i vpi). (ip `ilink i` ic) `iproduces` t)
 
-let rtp_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) : Lemma (rtp i vpi ip c t) =
+let rtc_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) : Lemma (rtc i vpi ip c t) =
   let ws = (compile ip vpi) `link i` c in
   let wt = fun ic -> (ip `ilink i` ic) in
   introduce ws `produces` t ==> (exists (ic:ictx i vpi). wt ic `iproduces` t) with s. begin
