@@ -359,42 +359,40 @@ let rtc_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) :
   end
 
 (** *** Transparency **)
-(* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-(* we give an interface that has the true pi on the left, and our pi on the right *)
-(* pi is part of the interface because the partial program uses it in its type in two places: input type and output type. *)
-(* the pi in this theorem, has nothing to do with the pi we need *)
-
-(* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-let true_pi : pi_type = fun op arg h ->
+(* this is the smallest pi that can be used to instrument. this pi must imply io_pre *)
+let weakest_pi : pi_type = fun op arg h ->
   match op with
   | Openfile -> true
   | Read -> is_open arg h
   | Close -> is_open arg h
       
-let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
-  let rec alles_0 (ipi:pi_type) (h lt:trace) : 
+(* weakest_pi and ipi both imply io_pre. weakest_pi is the weakest possible pi
+   that implies io_pre, thus, all the other pis that imply io_pre also imply the weakest_pi 
+   since they are stronger *)
+let ipi_implies_weakest_pi (ipi:pi_type) : (r_vpi_ipi weakest_pi ipi) =
+  let rec aux (ipi:pi_type) (h lt:trace) : 
     Lemma 
 	(requires (enforced_locally ipi h lt))
-	(ensures (enforced_locally true_pi h lt)) 
+	(ensures (enforced_locally weakest_pi h lt)) 
 	(decreases lt) = begin
     match lt with
     | [] -> ()
-    | hd::t -> alles_0 (ipi) (hd::h) t
+    | hd::t -> aux (ipi) (hd::h) t
   end in
-  Classical.forall_intro_2 (Classical.move_requires_2 (alles_0 ipi))
+  Classical.forall_intro_2 (Classical.move_requires_2 (aux ipi))
 
-let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) =
-  ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
-    ((compile ip ipi #(alles ipi)) `link i` c) `produces` t
-(* ip:iprog i true_pi = the partial program has the trivial spec, thus, it produces any trace 
-                        and accepts contexts that also produce any trace.
-   compile ip true_pi = compilation gives to the context the free_acts wrapped with trivial checks
-   compile ip ipi     = compilation gives to the context the free_acts wrapped with ipi 
-   The trick of this statement is that we can instrument the context with any spec we want because the
-   partial program accepts all of them. This is possible because a context must be instrumented with a pi
-   stronger than the one used as spec for the partial program and all pis are stronger than the trivial pi. *)
+let transparency (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) =
+  ((compile ip weakest_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
+    ((compile ip ipi #(ipi_implies_weakest_pi ipi)) `link i` c) `produces` t
+(* ip:iprog i weakest_pi = the partial program has the weakest spec, thus, it produces any trace 
+                           and accepts contexts that also produce any trace that respect the weakest_pi.
+   compile ip weakest_pi = compilation gives to the context the free_acts wrapped with minimal checks
+   compile ip ipi        = compilation gives to the context the free_acts wrapped with ipi 
+   The trick of this statement is that we can instrument the context with any spec stronger than weakest_pi
+   because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
+   stronger than the one used as spec for the partial program. *)
 
-let transparency_proof (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
+let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
   admit ()
 
 
