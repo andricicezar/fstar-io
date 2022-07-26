@@ -29,7 +29,7 @@ type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op
 val free : monad
 let free = { m = iio; ret = iio_return; }
 
-let pi_type = monitorable_prop
+let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
 
 noeq
 type interface = {
@@ -124,7 +124,7 @@ assume val ctx_param :
   Lemma (ctx_p i mon mon_p theActs theActs_p c)
 
 (** **** Parametricity - instances **)
-let free_p (pi:monitorable_prop) : monad_p free = {
+let free_p (pi:pi_type) : monad_p free = {
   m_p = (fun a a_p tree -> ILang.pi_hist #a pi `hist_ord` dm_iio_theta tree);
   ret_p = (fun a a_p tree tree_p -> ());
 }
@@ -146,7 +146,7 @@ let spec_free_acts (ca:acts free) =
   (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
 
 #set-options "--split_queries"
-val wrap_p : (pi:monitorable_prop) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
+val wrap_p : (pi:pi_type) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
 let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
   Lemma ((free_p pi).m_p (io_sig.res op arg) (io_sig_res_p op arg) ((wrap pi ca) op arg)) = 
   assert (spec_free_acts ca);
@@ -161,7 +161,7 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
       calc (==>) {
         ILang.pi_hist pi p h;
         ==> {
-          assume (ILang.pi_hist pi p h ==> iio_wps op arg p h);
+          assert (pi op arg h ==> io_pre op arg h);
           assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h)
         }
         if pi op arg h then
@@ -210,6 +210,7 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
       }
     end
   end
+#reset-options
 
 (** **** Free Actions **)
 val free_acts : acts free
@@ -363,7 +364,11 @@ let rtp_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) :
 (* the pi in this theorem, has nothing to do with the pi we need *)
 
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-let true_pi : pi_type = fun _ _ _ -> true
+let true_pi : pi_type = fun op arg h ->
+  match op with
+  | Openfile -> true
+  | Read -> is_open arg h
+  | Close -> is_open arg h
       
 let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
   let rec alles_0 (ipi:pi_type) (h lt:trace) : 
@@ -378,8 +383,8 @@ let alles (ipi:pi_type) : (r_vpi_ipi true_pi ipi) =
   Classical.forall_intro_2 (Classical.move_requires_2 (alles_0 ipi))
 
 let transparency (i:interface) (ip:iprog i true_pi) (c:ctx i) (t:trace) (ipi:pi_type) =
-  beh ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
-    beh ((compile ip ipi #(alles ipi)) `link i` c) `produces` t
+  ((compile ip true_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
+    ((compile ip ipi #(alles ipi)) `link i` c) `produces` t
 (* ip:iprog i true_pi = the partial program has the trivial spec, thus, it produces any trace 
                         and accepts contexts that also produce any trace.
    compile ip true_pi = compilation gives to the context the free_acts wrapped with trivial checks
