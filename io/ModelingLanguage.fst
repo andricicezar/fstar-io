@@ -430,9 +430,33 @@ let transparency (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:
    because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program. *)
 
-let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
-  admit ()
+let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) (x:i.ctx_in) : 
+  Lemma ((fun _ -> cast_to_dm_iio i weakest_pi c x) `produces` t /\ t `respects` ipi ==>
+            (fun _ -> cast_to_dm_iio i ipi c x) `produces` t)  =
+  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i ipi c x));
+  assert (ILang.pi_hist weakest_pi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
+  ipi_implies_weakest_pi ipi;
+  assume (ILang.pi_hist #i.ctx_in ipi `hist_ord` ILang.pi_hist weakest_pi);
+  (* transitivity of hist_ord *)
+  assume (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
+  (* Goal: *)
+  assume (forall p. dm_iio_theta (cast_to_dm_iio i ipi c x) p [] ==>
+               dm_iio_theta (cast_to_dm_iio i weakest_pi c x) p [])
 
+
+let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
+  assert (produces (fun _ -> hack_compile ip weakest_pi c) t /\ respects t ipi ==>
+    produces (fun _ -> hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) t) by (
+    norm [delta_only [`%hack_compile;`%produces;`%beh]];
+    explode ();
+    dump "h"
+  );
+  admit ();
+  assert (produces (fun _ ->
+          iio_bind (hack_compile ip weakest_pi c) (fun x -> Mkmonad?.ret free (compile'' i x)))
+      t /\ respects t ipi ==>
+    produces (fun _ -> iio_bind (hack_compile ip ipi c) (fun x -> Mkmonad?.ret free (compile'' i x))
+      ) t)
 
 (* Attempt 1 *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
