@@ -296,6 +296,9 @@ unfold let included_in (t:trace) (s1:set_of_traces 'a) =
 
 let produces (d:unit -> iio 'a) (t:trace) =
   t `included_in` (beh d)
+  
+unfold let produces' (d:iio 'a) (t:trace) =
+  t `included_in` (beh (fun () -> d))
 
 let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
   (fun () -> reify_IIOwp d) `produces` t
@@ -353,15 +356,16 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
   end;
   assert (soundness i vpi ip c) by (assumption ())
 
+// i proved this before here:
+// https://github.com/andricicezar/fstar-io/blob/interop_verif_unverif_in_fs/IO.Behavior.fst#L197
 let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_out) (t:trace) :
   Lemma 
-    (requires ((fun () -> iio_bind m (fun x -> Return (f x))) `produces` t))
-    (ensures  ((fun () -> m) `produces` t))  =
-  assert ((fun () -> iio_bind m (fun x -> Return (f x))) `produces` t) by (norm [delta_only [`%produces;`%included_in;`%beh];iota];dump"H");
-  eliminate exists (r:i.prog_out). (beh (fun () -> iio_bind m (fun x -> Return (f x))) t r)
-  returns exists (r:i.iprog_out). (beh (fun () ->  m) t r) with _. begin
-//  assert ((fun () -> m) `produces` t) by (norm [delta_only [`%produces;`%included_in;`%beh];iota];dump"H");
-  admit ()
+    (requires ((iio_bind m (fun x -> Return (f x))) `produces'` t))
+    (ensures  (m `produces'` t))  =
+  eliminate exists (r:i.prog_out). forall p. dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==> p t r
+  returns exists (r':i.iprog_out). forall p'. dm_iio_theta m p' [] ==> p' t r' with _. begin
+ //   introduce exists (r':i.iprog_out). forall p'. dm_iio_theta m p' [] ==> p' t r' with (f r) and ();
+    admit ()
   (*
   introduce forall p'. dm_iio_theta m p' [] ==> (exists r'. p' t r') with begin
     introduce dm_iio_theta m p' [] ==> (exists r'. p' t r') with _. begin
@@ -392,7 +396,8 @@ let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_ou
       }
     end
   end*)
-  end
+  end;
+  assert (m `produces'` t) by (assumption ())
 
 (** *** RTC **)
 let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
@@ -453,6 +458,7 @@ let transparency (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:
    because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program. *)
 
+(* bad stuff
 let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) (x:i.ctx_in) : 
   Lemma ((fun _ -> cast_to_dm_iio i weakest_pi c x) `produces` t /\ t `respects` ipi ==>
             (fun _ -> cast_to_dm_iio i ipi c x) `produces` t)  =
@@ -480,6 +486,8 @@ let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace)
       t /\ respects t ipi ==>
     produces (fun _ -> iio_bind (hack_compile ip ipi c) (fun x -> Mkmonad?.ret free (compile'' i x))
       ) t)
+*)
+
 
 (* Attempt 1 *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
