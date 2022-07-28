@@ -266,37 +266,64 @@ let compile
 
 (** ** Theorems **)
 (** *** Behaviors **)
-(* We use this definition directly because it accomodates
-   also whole and iwhole programs. **)
-let beh  #a (d:unit -> iio a) = dm_iio_theta (d ())
+(* `hist_post a` type is a set over traces, and my intuition
+   is to use it directly instead of defining a new set of
+   traces. *)
+type set_of_traces (a:Type) = hist_post #event a
 
-(* We verify specs of whole progrems, thus, instead of having
-   properties forall histories, we can specialize it for the
-   empty history *)
-let included_in (wp:hist 'a) (pi:pi_type) =
-  wp (fun lt r -> enforced_locally pi [] lt) []
+(* theta is a weakest precondtion monad, and we need it to be
+   a post-condition. Looking at Kenji's thesis, we can apply the
+   'backward predicate transformer monad 2.3.4' and the 
+   'pre-/postcondition transformer monad 2.3.2' to obtain
+   the definition of beh. *)
+
+(* d has this type to accomodate both whole and iwhole programs. **)
+let beh  #a (d:unit -> iio a) : set_of_traces a = 
+  fun lt (r:a) -> 
+   (* We verify specs of whole programs, thus, instead of having
+      properties forall histories, we can specialize it for the
+      empty history *)
+    forall p. dm_iio_theta (d ()) p [] ==> p lt r
+
+(* TODO: the two sets have the same type, which is a limitation since:
+         1) our traces do not contain the result
+         2) the type between target and source can be different *)
+unfold let subset_of (s1:set_of_traces 'a) (s2:set_of_traces 'a) =
+  s1 `hist_post_ord` s2
 
 (* TODO: not sure if this has the intended effect. It should be a 
    predicate that says that `t` is a possible trace of `wp` *)
+(* should this be flipped? *)
+unfold let included_in (t:trace) (s1:set_of_traces 'a) =
+  exists r. s1 t r 
+
 let produces (d:unit -> iio 'a) (t:trace) =
-  forall (p:hist_post 'a). (beh d) p [] ==> (exists r. p t r)
+  t `included_in` (beh d)
+// exists r. (beh d) t r
+// exists r. forall p. dm_iio_theta (d ()) p [] ==> p t r
 
 let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
   (fun () -> reify_IIOwp d) `produces` t
 
-let respects (t:trace) (pi:pi_type) =
-  enforced_locally pi [] t
+let pi_to_set #a (pi:pi_type) : set_of_traces a = fun lt _ -> enforced_locally pi [] lt
 
 (** *** Soundness *)
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Type0 =
   lemma_free_acts ();
-  beh (compile ip vpi `link i` c) `included_in` vpi
+  beh (compile ip vpi `link i` c) `subset_of` (pi_to_set vpi)
+
+let lemma_dm_iio_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (m:iio a) (f:a -> iio b) :
+  Lemma
+    (hist_bind (dm_iio_theta m) (fun x -> dm_iio_theta (f x)) `hist_ord` dm_iio_theta (iio_bind m f)) = 
+    DMFree.lemma_theta_is_lax_morphism_bind iio_wps m f
 
 let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lemma (soundness i vpi ip c) = 
-  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = (hack_compile ip vpi c) in
-  let rhs = fun x -> Mkmonad?.ret free (compile'' i x) in
+  let lhs : dm_iio i.iprog_out (ILang.pi_hist vpi) = (hack_compile #i #vpi ip vpi #_ c) in
+  let rhs : x:i.iprog_out -> dm_iio i.prog_out (hist_return (compile'' i x))  = fun x -> Mkmonad?.ret free (compile'' i x) in
   let p1 : hist_post i.iprog_out = (fun lt _ -> enforced_locally vpi [] lt) in
+  let p1' : hist_post i.prog_out = (fun lt _ -> enforced_locally vpi [] lt) in
 
+  assert (dm_iio_theta lhs p1 []);
   calc (==>) {
     dm_iio_theta lhs p1 [];
     ==> {  
@@ -315,26 +342,21 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
            (rev lt @ []))
        [];
     == { _ by (norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift]; iota]) }
-    hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) (fun lt _ -> enforced_locally vpi [] lt) [];
-    ==> { DMFree.lemma_theta_is_lax_morphism_bind iio_wps lhs rhs }
-    dm_iio_theta 
-       (iio_bind lhs rhs)
-       (fun lt _ -> enforced_locally vpi [] lt)
-       [];
+    hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) (fun lt (_:i.prog_out) -> enforced_locally vpi [] lt) [];
     == {}
-    dm_iio_theta 
-       (iio_bind (hack_compile ip vpi c)
-                 (fun x -> Mkmonad?.ret free (compile'' i x)))
-       (fun lt _ -> enforced_locally vpi [] lt)
-       [];
-    == { _ by (norm [delta_only [`%soundness;`%beh;`%link; `%included_in;`%compile]; iota]) }
-    soundness i vpi ip c;
-  }
-
-(* Example:
-   ct free.m = alpha -> free.m beta
-   ictx for this = alpha -> IIO beta pi
-*)
+    hist_bind (dm_iio_theta lhs) (fun x -> dm_iio_theta (rhs x)) p1' [];
+    ==> { lemma_dm_iio_theta_is_lax_morphism_bind lhs rhs }
+    dm_iio_theta #i.prog_out (iio_bind lhs rhs) p1' [];
+  };
+  assert (dm_iio_theta (iio_bind lhs rhs) p1' []);
+  introduce forall lt r. (forall p. dm_iio_theta (iio_bind lhs rhs) p [] ==> p lt r) ==> enforced_locally vpi [] lt with begin
+    introduce (forall p. dm_iio_theta (iio_bind lhs rhs) p [] ==> p lt r) ==> enforced_locally vpi [] lt with q1. begin
+      eliminate forall p. dm_iio_theta (iio_bind lhs rhs) p [] ==> p lt r with p1';
+      assert (p1' lt r);
+      assert (enforced_locally vpi [] lt)
+    end
+  end;
+  assert (soundness i vpi ip c) by (assumption ())
 
 let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_out) (t:trace) :
   Lemma 
@@ -436,6 +458,7 @@ let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) 
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i ipi c x));
   assert (ILang.pi_hist weakest_pi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
   ipi_implies_weakest_pi ipi;
+  (* this is an extension of ipi_implies_weakest_pi *)
   assume (ILang.pi_hist #i.ctx_in ipi `hist_ord` ILang.pi_hist weakest_pi);
   (* transitivity of hist_ord *)
   assume (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
@@ -445,14 +468,13 @@ let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) 
 
 
 let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
+  assume (forall p. dm_iio_theta (hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) p [] ==>
+    dm_iio_theta (hack_compile ip weakest_pi c) p []);
+  (* the previous is an unfolding of the following *)
   assert (produces (fun _ -> hack_compile ip weakest_pi c) t /\ respects t ipi ==>
-    produces (fun _ -> hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) t) by (
-    norm [delta_only [`%hack_compile;`%produces;`%beh]];
-    explode ();
-    dump "h"
-  );
-  admit ();
-  assert (produces (fun _ ->
+    produces (fun _ -> hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) t);
+  (* the following is the unfolded goal and an extension to the previous assertion *)
+  assume (produces (fun _ ->
           iio_bind (hack_compile ip weakest_pi c) (fun x -> Mkmonad?.ret free (compile'' i x)))
       t /\ respects t ipi ==>
     produces (fun _ -> iio_bind (hack_compile ip ipi c) (fun x -> Mkmonad?.ret free (compile'' i x))
