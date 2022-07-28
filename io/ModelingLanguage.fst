@@ -291,16 +291,11 @@ let beh  #a (d:unit -> iio a) : set_of_traces a =
 unfold let subset_of (s1:set_of_traces 'a) (s2:set_of_traces 'a) =
   s1 `hist_post_ord` s2
 
-(* TODO: not sure if this has the intended effect. It should be a 
-   predicate that says that `t` is a possible trace of `wp` *)
-(* should this be flipped? *)
 unfold let included_in (t:trace) (s1:set_of_traces 'a) =
   exists r. s1 t r 
 
 let produces (d:unit -> iio 'a) (t:trace) =
   t `included_in` (beh d)
-// exists r. (beh d) t r
-// exists r. forall p. dm_iio_theta (d ()) p [] ==> p t r
 
 let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
   (fun () -> reify_IIOwp d) `produces` t
@@ -362,6 +357,12 @@ let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_ou
   Lemma 
     (requires ((fun () -> iio_bind m (fun x -> Return (f x))) `produces` t))
     (ensures  ((fun () -> m) `produces` t))  =
+  assert ((fun () -> iio_bind m (fun x -> Return (f x))) `produces` t) by (norm [delta_only [`%produces;`%included_in;`%beh];iota];dump"H");
+  eliminate exists (r:i.prog_out). (beh (fun () -> iio_bind m (fun x -> Return (f x))) t r)
+  returns exists (r:i.iprog_out). (beh (fun () ->  m) t r) with _. begin
+//  assert ((fun () -> m) `produces` t) by (norm [delta_only [`%produces;`%included_in;`%beh];iota];dump"H");
+  admit ()
+  (*
   introduce forall p'. dm_iio_theta m p' [] ==> (exists r'. p' t r') with begin
     introduce dm_iio_theta m p' [] ==> (exists r'. p' t r') with _. begin
       let p : hist_post i.prog_out = (fun lt (r:i.prog_out) -> exists (r':i.iprog_out). f r' == r /\ p' lt r') in
@@ -390,6 +391,7 @@ let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_ou
         exists (r':i.iprog_out). p' t r';
       }
     end
+  end*)
   end
 
 (** *** RTC **)
@@ -405,8 +407,7 @@ let rtc_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) :
     introduce exists (ic:ictx i vpi). wt ic `iproduces` t with ic and begin
       let m = hack_compile ip vpi c in
       assert (ws `produces` t);
-      assert (forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (compile'' i x))) p [] ==>
-               (exists (r:i.prog_out). p t r)) by (assumption ());
+      assert (exists (r:i.prog_out). forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (compile'' i x))) p [] ==> p t r) by (assumption ());
       lemma_for_rtc m (compile'' i) t;
       assert (wt ic `iproduces` t) by (
         norm [delta_only [`%iproduces;`%produces;`%beh;`%link;`%ilink]; iota];
@@ -442,7 +443,7 @@ let ipi_implies_weakest_pi (ipi:pi_type) : (r_vpi_ipi weakest_pi ipi) =
   Classical.forall_intro_2 (Classical.move_requires_2 (aux ipi))
 
 let transparency (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) =
-  ((compile ip weakest_pi) `link i` c) `produces` t /\ t `respects` ipi ==>
+  ((compile ip weakest_pi) `link i` c) `produces` t /\ t `included_in` (pi_to_set #i.iprog_out ipi) ==>
     ((compile ip ipi #(ipi_implies_weakest_pi ipi)) `link i` c) `produces` t
 (* ip:iprog i weakest_pi = the partial program has the weakest spec, thus, it produces any trace 
                            and accepts contexts that also produce any trace that respect the weakest_pi.
