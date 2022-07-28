@@ -266,44 +266,48 @@ let compile
 
 (** ** Theorems **)
 (** *** Behaviors **)
-(* `hist_post a` type is a set over traces, and my intuition
-   is to use it directly instead of defining a new set of
-   traces. *)
+(* `hist_post a` type is a set over traces and results, and my intuition
+   is to use it directly instead of defining a new one as in our previous work. *)
 type set_of_traces (a:Type) = hist_post #event a
 
 (* theta is a weakest precondtion monad, and we need it to be
    a post-condition. Looking at Kenji's thesis, we can apply the
    'backward predicate transformer monad 2.3.4' and the 
    'pre-/postcondition transformer monad 2.3.2' to obtain
-   the definition of beh. *)
-
-(* d has this type to accomodate both whole and iwhole programs. **)
-let beh  #a (d:unit -> iio a) : set_of_traces a = 
+   the 'set'. *)
+let _beh  #a (d:iio a) : set_of_traces a = 
   fun lt (r:a) -> 
    (* We verify specs of whole programs, thus, instead of having
       properties forall histories, we can specialize it for the
       empty history *)
-    forall p. dm_iio_theta (d ()) p [] ==> p lt r
+    forall p. dm_iio_theta d p [] ==> p lt r
 
 (* TODO: the two sets have the same type, which is a limitation since:
          1) our traces do not contain the result
          2) the type between target and source can be different *)
-unfold let subset_of (s1:set_of_traces 'a) (s2:set_of_traces 'a) =
+let subset_of (s1:set_of_traces 'a) (s2:set_of_traces 'a) =
+  (* TODO: using hist_post_ord implies that the trace and the result are part of s2.
+           maybe we can simply our life for now by having just the trace **)
   s1 `hist_post_ord` s2
 
-unfold let included_in (t:trace) (s1:set_of_traces 'a) =
+let included_in (t:trace) (s1:set_of_traces 'a) =
   exists r. s1 t r 
-
-let produces (d:unit -> iio 'a) (t:trace) =
-  t `included_in` (beh d)
   
-unfold let produces' (d:iio 'a) (t:trace) =
-  t `included_in` (beh (fun () -> d))
-
-let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
-  (fun () -> reify_IIOwp d) `produces` t
+let _produces (d:iio 'a) (t:trace) =
+  t `included_in` (_beh d)
 
 let pi_to_set #a (pi:pi_type) : set_of_traces a = fun lt _ -> enforced_locally pi [] lt
+
+(** **** Helpers **)
+(* d has this type to accomodate both whole and iwhole programs. **)
+let beh  #a (d:unit -> iio a) : set_of_traces a = 
+  _beh (d ())
+
+let produces (d:unit -> iio 'a) (t:trace) =
+  (d ()) `_produces` t
+
+let iproduces (#i:interface) (#vpi:pi_type) (d:iwhole i vpi) (t:trace) =
+  (reify_IIOwp d) `_produces` t
 
 (** *** Soundness *)
 let soundness (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Type0 =
@@ -360,8 +364,8 @@ let soundness_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) : Lem
 // https://github.com/andricicezar/fstar-io/blob/interop_verif_unverif_in_fs/IO.Behavior.fst#L197
 let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_out) (t:trace) :
   Lemma 
-    (requires ((iio_bind m (fun x -> Return (f x))) `produces'` t))
-    (ensures  (m `produces'` t))  =
+    (requires ((iio_bind m (fun x -> Return (f x))) `_produces` t))
+    (ensures  (m `_produces` t))  =
   eliminate exists (r:i.prog_out). forall p. dm_iio_theta (iio_bind m (fun x -> Return (f x))) p [] ==> p t r
   returns exists (r':i.iprog_out). forall p'. dm_iio_theta m p' [] ==> p' t r' with _. begin
  //   introduce exists (r':i.iprog_out). forall p'. dm_iio_theta m p' [] ==> p' t r' with (f r) and ();
@@ -397,7 +401,7 @@ let lemma_for_rtc (#i:interface) (m:iio i.iprog_out) (f:i.iprog_out -> i.prog_ou
     end
   end*)
   end;
-  assert (m `produces'` t) by (assumption ())
+  assert (m `_produces` t) by (assumption ())
 
 (** *** RTC **)
 let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
