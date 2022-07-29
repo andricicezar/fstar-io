@@ -462,6 +462,17 @@ let transparency (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:
    because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program. *)
 
+let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) by (
+  explode ();
+  ExtraTactics.rewrite_lemma (-2) (-1);
+  norm [delta_only [`%transparency;`%produces;`%_produces;`%included_in;`%_beh]; iota];
+  ExtraTactics.blowup ();
+  dump "H";
+  tadmit ()
+)=
+  (* the 'exists' seem to be in the way of the proof *)
+  ()
+
 (* bad stuff
 let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) (x:i.ctx_in) : 
   Lemma ((fun _ -> cast_to_dm_iio i weakest_pi c x) `produces` t /\ t `respects` ipi ==>
