@@ -42,14 +42,18 @@ type interface = {
   prog_out : Type u#a; 
 }
 
-//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
-//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
-type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 (** *** Intermediate Lang **)
 type ictx (i:interface) (ipi:pi_type)   =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
 type iprog (i:interface) (vpi:pi_type)  = (x:i.ictx_in -> ILang.IIOpi i.ictx_out vpi) -> ILang.IIOpi i.iprog_out vpi
 type iwhole (i:interface) (vpi:pi_type) = unit -> ILang.IIOpi i.iprog_out vpi
+
+//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
+//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
+type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
+(* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
+(* This small change allows us to state transparency. *)
 let ilink 
   (i:interface) 
   (#vpi #ipi:pi_type) 
@@ -272,9 +276,9 @@ type set_of_traces (a:Type) = hist_post #event a
 
 (* theta is a weakest precondtion monad, and we need it to be
    a post-condition. Looking at Kenji's thesis, we can apply the
-   'backward predicate transformer monad 2.3.4' and the 
-   'pre-/postcondition transformer monad 2.3.2' to obtain
-   the 'set'. *)
+   'backward predicate transformer 2.3.4' and the 
+   'pre-/postcondition transformer 2.3.2' to obtain
+   the 'set' of traces produces by the whole program. *)
 let _beh  #a (d:iio a) : set_of_traces a = 
   fun lt (r:a) -> 
    (* We verify specs of whole programs, thus, instead of having
