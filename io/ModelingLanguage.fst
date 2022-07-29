@@ -412,6 +412,13 @@ let rtc (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) =
   ((compile ip vpi) `link i` c) `produces` t ==> 
     (exists (ic:ictx i vpi). (ip `ilink i` ic) `iproduces` t)
 
+(* stronger criterion; for which our backtranslation should also work *)
+let rrhc (i:interface) (vpi:pi_type) (c:ctx i) =
+  (exists (ic:ictx i vpi).
+    (forall (ip:iprog i vpi) (t:trace).
+      ((compile ip vpi) `link i` c) `produces` t <==>
+         (ip `ilink i` ic) `iproduces` t))
+
 let rtc_proof (i:interface) (vpi:pi_type) (ip:iprog i vpi) (c:ctx i) (t:trace) : Lemma (rtc i vpi ip c t) =
   let ws = (compile ip vpi) `link i` c in
   let wt = fun ic -> (ip `ilink i` ic) in
