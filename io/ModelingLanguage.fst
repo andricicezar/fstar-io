@@ -270,16 +270,24 @@ let compile
 
 (** ** Theorems **)
 (** *** Behaviors **)
-(* `hist_post a` type is a set over traces and results, and my intuition
-   is to use it directly instead of defining a new one as in our previous work. *)
-type set_of_traces (a:Type) = hist_post #event a
+(* A trace property is a set of pairs between a trace and a result. 
+   The trace is a complete trace.
 
-(* theta is a weakest precondtion monad, and we need it to be
+   `hist_post a` is the type of post-condtions over the local trace and the final result.
+   Since, it has the same type as our definition of a trace property, we use 
+   hist_post a as the type for trace properties. *)
+type trace_property (a:Type) = hist_post #event a
+
+(* We define `beh` that returns the set of traces produced by a whole program.
+   Since whole programs start with the empty trace, thus, the
+   local trace that the post-condtion describes is the complete trace.
+
+   `theta` is a weakest precondtion monad, and we need it to be
    a post-condition. Looking at Kenji's thesis, we can apply the
    'backward predicate transformer 2.3.4' and the 
    'pre-/postcondition transformer 2.3.2' to obtain
    the 'set' of traces produces by the whole program. *)
-let _beh  #a (d:iio a) : set_of_traces a = 
+let _beh  #a (d:iio a) : trace_property a = 
   fun lt (r:a) -> 
    (* We verify specs of whole programs, thus, instead of having
       properties forall histories, we can specialize it for the
@@ -289,22 +297,22 @@ let _beh  #a (d:iio a) : set_of_traces a =
 (* TODO: the two sets have the same type, which is a limitation since:
          1) our traces do not contain the result
          2) the type between target and source can be different *)
-let subset_of (s1:set_of_traces 'a) (s2:set_of_traces 'a) =
+let subset_of (s1:trace_property 'a) (s2:trace_property 'a) =
   (* TODO: using hist_post_ord implies that the trace and the result are part of s2.
            maybe we can simply our life for now by having just the trace **)
   s1 `hist_post_ord` s2
 
-let included_in (t:trace) (s1:set_of_traces 'a) =
+let included_in (t:trace) (s1:trace_property 'a) =
   exists r. s1 t r 
   
 let _produces (d:iio 'a) (t:trace) =
   t `included_in` (_beh d)
 
-let pi_to_set #a (pi:pi_type) : set_of_traces a = fun lt _ -> enforced_locally pi [] lt
+let pi_to_set #a (pi:pi_type) : trace_property a = fun lt _ -> enforced_locally pi [] lt
 
 (** **** Helpers **)
 (* d has this type to accomodate both whole and iwhole programs. **)
-let beh  #a (d:unit -> iio a) : set_of_traces a = 
+let beh  #a (d:unit -> iio a) : trace_property a = 
   _beh (d ())
 
 let produces (d:unit -> iio 'a) (t:trace) =
@@ -452,10 +460,16 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
   end
 
 (** *** RrHP **)
-type hyperproperty (a:Type) = set_of_traces a -> Type0
+type hyperproperty (a:Type) = trace_property a -> Type0
 
-//let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
-//  (forall ic. (h (beh (ip `ilink i` ic)))) ==> (forall c. (h (beh (compile ip i.vpi) `link i` c)))
+let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
+  (forall ic. (h (beh (ip `ilink i` ic)))) ==> 
+    (forall c. (h (beh (compile ip i.vpi) `link i` c)))
+
+
+
+
+
 
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
