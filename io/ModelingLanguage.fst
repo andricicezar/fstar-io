@@ -451,6 +451,11 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
     end
   end
 
+(** *** RrHP **)
+type hyperproperty (a:Type) = set_of_traces a -> Type0
+
+//let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
+//  (forall ic. (h (beh (ip `ilink i` ic)))) ==> (forall c. (h (beh (compile ip i.vpi) `link i` c)))
 
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
