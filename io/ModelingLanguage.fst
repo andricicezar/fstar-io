@@ -460,6 +460,8 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
   end
 
 (** *** RrHP **)
+(* To state RrHP we need relations between the results and I am not sure if it is worth 
+   doing that since we proved RrHC *)
 type hyperproperty (a:Type) = trace_property a -> Type0
 
 //let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
@@ -473,7 +475,7 @@ type hyperproperty (a:Type) = trace_property a -> Type0
 
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
-  ((compile ip i.vpi) `link i` c) `produces` t /\ t `included_in` (pi_to_set #i.iprog_out ipi) ==>
+  ((compile ip i.vpi) `link i` c) `produces` t /\ t `included_in` (pi_to_set #i.prog_out ipi) ==>
     ((compile ip ipi #r) `link i` c) `produces` t
 (* ip:iprog i weakest_pi = the partial program has the weakest spec, thus, it produces any trace 
                            and accepts contexts that also produce any trace that respect the weakest_pi.
@@ -482,6 +484,56 @@ let transparency (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r
    The trick of this statement is that we can instrument the context with any spec stronger than weakest_pi
    because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program. *)
+
+let transparency_lem_temp (i:interface) (ip:ictx i i.vpi -> dm_iio i.iprog_out (ILang.pi_hist i.vpi)) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+  Lemma
+    (requires (dm_iio_theta (ip (backtranslate i ipi c)) p []))
+    (ensures (dm_iio_theta (ip (backtranslate i i.vpi c)) p [])) =
+  (* TODO: why is this easy? my first intuition was that it would be easy, but I can not figure out the proof *)
+  () 
+
+let transparency_lem (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+  Lemma
+    (requires (dm_iio_theta (hack_compile ip ipi c) p []))
+    (ensures (dm_iio_theta (hack_compile ip i.vpi c) p [])) by (
+    norm [delta_only [`%hack_compile];iota];
+    ExtraTactics.blowup ();
+    bump_nth 4;
+    ExtraTactics.rewrite_lemma (-4) (-2);
+    assumption ();
+    bump_nth 3;
+    assumption ()
+  )=
+  (* TODO: unexpected that I could prove this using tactics. probably unsound since reify is opaque to the SMT *)
+  transparency_lem_temp i (fun x -> reify_IIOwp (fun () -> ip x)) c ipi r p
+
+let lemma_theta_bind_of_tot (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
+  Lemma 
+    (requires (dm_iio_theta (iio_bind m (fun x -> Return (f x))) p h))
+    (ensures  (dm_iio_theta m (fun lt r -> exists r'. f r == r' /\ p lt r') h)) =
+    admit ()
+
+let lemma_theta_bind_of_tot_dual (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
+  Lemma 
+    (requires  (dm_iio_theta m (fun lt r -> exists r'. f r == r' /\ p lt r') h))
+    (ensures (dm_iio_theta (iio_bind m (fun x -> Return (f x))) p h)) =
+    admit ()
+
+let transparency_lem_1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p f :
+  Lemma
+    (requires (dm_iio_theta (iio_bind (hack_compile ip ipi c) (fun x -> Return (f x))) p []))
+    (ensures (dm_iio_theta (iio_bind (hack_compile ip i.vpi c)( fun x -> Return (f x))) p [])) =
+  let p' : hist_post i.iprog_out = (fun lt r -> exists r'. f r == r' /\ p lt r') in
+  lemma_theta_bind_of_tot (hack_compile ip ipi c) f p [];
+  transparency_lem i ip c ipi r p';
+  lemma_theta_bind_of_tot_dual (hack_compile ip i.vpi c) f p []
+  
+let transparency_lem_xas1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+  Lemma
+    (requires (dm_iio_theta (iio_bind (hack_compile ip ipi c) (fun x -> Return (compile'' i x))) p []))
+    (ensures (dm_iio_theta (iio_bind (hack_compile ip i.vpi c)( fun x -> Return (compile'' i x))) p [])) =
+  transparency_lem_1 i ip c ipi r p (compile'' i)
+  
 
 let transparency_proof (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) : Lemma (transparency i ip c t ipi r) by (
   explode ();
