@@ -55,7 +55,6 @@ type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
 type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 (* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
-(* This small change allows us to state transparency. *)
 let ilink 
   (i:interface) 
   (#ipi:pi_type) 
@@ -248,7 +247,7 @@ let backtranslate i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
 [@@ "opaque_to_smt"]
-let hack_compile  
+let compile_body  
   (#i:interface)
   (ip:iprog i)
   (ipi:pi_type)
@@ -265,7 +264,7 @@ let compile
   (#_: r_vpi_ipi i.vpi ipi) :
   prog i = 
   fun (c:ctx i) -> 
-    let tree = hack_compile ip ipi c in
+    let tree = compile_body ip ipi c in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
 (** ** Theorems **)
@@ -335,7 +334,7 @@ let lemma_dm_iio_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (m:iio a
     DMFree.lemma_theta_is_lax_morphism_bind iio_wps m f
 
 let soundness_proof (i:interface) (ip:iprog i) (c:ctx i) : Lemma (soundness i ip c) = 
-  let lhs : dm_iio i.iprog_out (ILang.pi_hist i.vpi) = (hack_compile #i ip i.vpi #_ c) in
+  let lhs : dm_iio i.iprog_out (ILang.pi_hist i.vpi) = (compile_body #i ip i.vpi #_ c) in
   let rhs : x:i.iprog_out -> dm_iio i.prog_out (hist_return (compile'' i x))  = fun x -> Mkmonad?.ret free (compile'' i x) in
   let p1 : hist_post i.iprog_out = (fun lt _ -> enforced_locally i.vpi [] lt) in
   let p1' : hist_post i.prog_out = (fun lt _ -> enforced_locally i.vpi [] lt) in
@@ -399,14 +398,14 @@ let rtc_proof (i:interface) (ip:iprog i) (c:ctx i) (t:trace) : Lemma (rtc i ip c
   introduce ws `produces` t ==> (exists (ic:ictx i i.vpi). wt ic `iproduces` t) with s. begin
     let ic = (backtranslate i i.vpi c) in
     introduce exists (ic:ictx i i.vpi). wt ic `iproduces` t with ic and begin
-      let m = hack_compile ip i.vpi c in
+      let m = compile_body ip i.vpi c in
       assert (ws `produces` t);
       assert (exists (r:i.prog_out). forall (p:hist_post i.prog_out). dm_iio_theta (iio_bind m (fun x -> Return (compile'' i x))) p [] ==> p t r) by (assumption ());
       lemma_beh_bind_of_tot m (compile'' i) t;
       assert (wt ic `iproduces` t) by (
         norm [delta_only [`%iproduces;`%produces;`%beh;`%link;`%ilink]; iota];
         binder_retype (nth_binder (-1));
-          norm [delta_only [`%hack_compile];iota];
+          norm [delta_only [`%compile_body];iota];
         trefl ();
         assumption ()
       )
@@ -447,14 +446,14 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
       begin
         let ws = (compile ip i.vpi) `link i` c in
         let wt = fun ic -> (ip `ilink i` ic) in
-        let m = hack_compile ip i.vpi c in
+        let m = compile_body ip i.vpi c in
         assert (wt ic `iproduces` t);
         assert (m `_produces` t) by (assumption ());
         lemma_beh_bind_of_tot_dual m (compile'' i) t;
         assert (ws `produces` t) by (
             norm [delta_only [`%iproduces;`%produces;`%beh;`%link;`%ilink]; iota];
             binder_retype (nth_binder (-1));
-            norm [delta_only [`%hack_compile];iota];
+            norm [delta_only [`%compile_body];iota];
             trefl ();
             assumption ()
         )
@@ -495,9 +494,9 @@ let transparency_lem_temp (i:interface) (ip:ictx i i.vpi -> dm_iio i.iprog_out (
 
 let transparency_lem (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
   Lemma
-    (requires (dm_iio_theta (hack_compile ip ipi c) p []))
-    (ensures (dm_iio_theta (hack_compile ip i.vpi c) p [])) by (
-    norm [delta_only [`%hack_compile];iota];
+    (requires (dm_iio_theta (compile_body ip ipi c) p []))
+    (ensures (dm_iio_theta (compile_body ip i.vpi c) p [])) by (
+    norm [delta_only [`%compile_body];iota];
     ExtraTactics.blowup ();
     bump_nth 4;
     ExtraTactics.rewrite_lemma (-4) (-2);
@@ -522,17 +521,17 @@ let lemma_theta_bind_of_tot_dual (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h 
 
 let transparency_lem_1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p f :
   Lemma
-    (requires (dm_iio_theta (iio_bind (hack_compile ip ipi c) (fun x -> Return (f x))) p []))
-    (ensures (dm_iio_theta (iio_bind (hack_compile ip i.vpi c)( fun x -> Return (f x))) p [])) =
+    (requires (dm_iio_theta (iio_bind (compile_body ip ipi c) (fun x -> Return (f x))) p []))
+    (ensures (dm_iio_theta (iio_bind (compile_body ip i.vpi c)( fun x -> Return (f x))) p [])) =
   let p' : hist_post i.iprog_out = (fun lt r -> exists r'. f r == r' /\ p lt r') in
-  lemma_theta_bind_of_tot (hack_compile ip ipi c) f p [];
+  lemma_theta_bind_of_tot (compile_body ip ipi c) f p [];
   transparency_lem i ip c ipi r p';
-  lemma_theta_bind_of_tot_dual (hack_compile ip i.vpi c) f p []
+  lemma_theta_bind_of_tot_dual (compile_body ip i.vpi c) f p []
   
 let transparency_lem_xas1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
   Lemma
-    (requires (dm_iio_theta (iio_bind (hack_compile ip ipi c) (fun x -> Return (compile'' i x))) p []))
-    (ensures (dm_iio_theta (iio_bind (hack_compile ip i.vpi c)( fun x -> Return (compile'' i x))) p [])) =
+    (requires (dm_iio_theta (iio_bind (compile_body ip ipi c) (fun x -> Return (compile'' i x))) p []))
+    (ensures (dm_iio_theta (iio_bind (compile_body ip i.vpi c)( fun x -> Return (compile'' i x))) p [])) =
   transparency_lem_1 i ip c ipi r p (compile'' i)
   
 
@@ -570,37 +569,6 @@ let ipi_implies_weakest_pi (ipi:pi_type) : (r_vpi_ipi weakest_pi ipi) =
   end in
   Classical.forall_intro_2 (Classical.move_requires_2 (aux ipi))
 **)
-
-(* bad stuff
-let transparency_cast_to_dm_iio (i:interface) (c:ctx i) (t:trace) (ipi:pi_type) (x:i.ctx_in) : 
-  Lemma ((fun _ -> cast_to_dm_iio i weakest_pi c x) `produces` t /\ t `respects` ipi ==>
-            (fun _ -> cast_to_dm_iio i ipi c x) `produces` t)  =
-  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i ipi c x));
-  assert (ILang.pi_hist weakest_pi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
-  ipi_implies_weakest_pi ipi;
-  (* this is an extension of ipi_implies_weakest_pi *)
-  assume (ILang.pi_hist #i.ctx_in ipi `hist_ord` ILang.pi_hist weakest_pi);
-  (* transitivity of hist_ord *)
-  assume (ILang.pi_hist ipi `hist_ord` dm_iio_theta (cast_to_dm_iio i weakest_pi c x));
-  (* Goal: *)
-  assume (forall p. dm_iio_theta (cast_to_dm_iio i ipi c x) p [] ==>
-               dm_iio_theta (cast_to_dm_iio i weakest_pi c x) p [])
-
-
-let transparency_proof (i:interface) (ip:iprog i weakest_pi) (c:ctx i) (t:trace) (ipi:pi_type) : Lemma (transparency i ip c t ipi) =
-  assume (forall p. dm_iio_theta (hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) p [] ==>
-    dm_iio_theta (hack_compile ip weakest_pi c) p []);
-  (* the previous is an unfolding of the following *)
-  assert (produces (fun _ -> hack_compile ip weakest_pi c) t /\ respects t ipi ==>
-    produces (fun _ -> hack_compile ip ipi #(ipi_implies_weakest_pi ipi) c) t);
-  (* the following is the unfolded goal and an extension to the previous assertion *)
-  assume (produces (fun _ ->
-          iio_bind (hack_compile ip weakest_pi c) (fun x -> Mkmonad?.ret free (compile'' i x)))
-      t /\ respects t ipi ==>
-    produces (fun _ -> iio_bind (hack_compile ip ipi c) (fun x -> Mkmonad?.ret free (compile'' i x))
-      ) t)
-*)
-
 
 (* Attempt 1 *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
