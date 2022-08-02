@@ -486,14 +486,14 @@ let transparency (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out) (i
    because the partial program accepts all of them. This is possible because a context must be instrumented with a pi
    stronger than the one used as spec for the partial program. *)
 
-let transparency_lem_temp (i:interface) (ip:ictx i i.vpi -> dm_iio i.iprog_out (ILang.pi_hist i.vpi)) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+let lemma_transparency_without_reify (i:interface) (ip:ictx i i.vpi -> dm_iio i.iprog_out (ILang.pi_hist i.vpi)) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) (p:hist_post i.iprog_out) :
   Lemma
     (requires (dm_iio_theta (ip (backtranslate i ipi c)) p []))
     (ensures (dm_iio_theta (ip (backtranslate i i.vpi c)) p [])) =
   (* TODO: why is this easy? my first intuition was that it would be easy, but I can not figure out the proof *)
   () 
 
-let transparency_lem (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+let lemma_transparency_without_tot (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) (p:hist_post i.iprog_out) :
   Lemma
     (requires (dm_iio_theta (compile_body ip ipi c) p []))
     (ensures (dm_iio_theta (compile_body ip i.vpi c) p [])) by (
@@ -506,45 +506,72 @@ let transparency_lem (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi
     assumption ()
   )=
   (* TODO: unexpected that I could prove this using tactics. probably unsound since reify is opaque to the SMT *)
-  transparency_lem_temp i (fun x -> reify_IIOwp (fun () -> ip x)) c ipi r p
+  lemma_transparency_without_reify i (fun x -> reify_IIOwp (fun () -> ip x)) c ipi r p
 
-let lemma_theta_bind_of_tot (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
+let lemma_iio_theta_bind_of_tot (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
   Lemma 
     (requires (dm_iio_theta (iio_bind m (fun x -> Return (f x))) p h))
     (ensures  (dm_iio_theta m (fun lt r -> exists r'. f r == r' /\ p lt r') h)) =
     admit ()
 
-let lemma_theta_bind_of_tot_dual (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
+let lemma_iio_theta_bind_of_tot_dual (m:iio 'a) (f:'a -> Tot 'b) (p:hist_post 'b) h :
   Lemma 
     (requires  (dm_iio_theta m (fun lt r -> exists r'. f r == r' /\ p lt r') h))
     (ensures (dm_iio_theta (iio_bind m (fun x -> Return (f x))) p h)) =
     admit ()
 
-let transparency_lem_1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p f :
+let lemma_transparency_tot
+  (i:interface)
+  (ip:iprog i)
+  (c:ctx i)
+  (ipi:pi_type)
+  (r:r_vpi_ipi i.vpi ipi)
+  (p:hist_post i.prog_out)
+  (f:i.iprog_out -> Tot i.prog_out) :
   Lemma
     (requires (dm_iio_theta (iio_bind (compile_body ip ipi c) (fun x -> Return (f x))) p []))
     (ensures (dm_iio_theta (iio_bind (compile_body ip i.vpi c)( fun x -> Return (f x))) p [])) =
   let p' : hist_post i.iprog_out = (fun lt r -> exists r'. f r == r' /\ p lt r') in
-  lemma_theta_bind_of_tot (compile_body ip ipi c) f p [];
-  transparency_lem i ip c ipi r p';
-  lemma_theta_bind_of_tot_dual (compile_body ip i.vpi c) f p []
+  lemma_iio_theta_bind_of_tot (compile_body ip ipi c) f p [];
+  lemma_transparency_without_tot i ip c ipi r p';
+  lemma_iio_theta_bind_of_tot_dual (compile_body ip i.vpi c) f p []
   
-let transparency_lem_xas1 (i:interface) (ip:iprog i) (c:ctx i) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) p :
+let lemma_transparency_unfolded 
+  (i:interface)
+  (ip:iprog i)
+  (c:ctx i)
+  (ipi:pi_type)
+  (r:r_vpi_ipi i.vpi ipi)
+  (p:hist_post i.prog_out) :
   Lemma
     (requires (dm_iio_theta (iio_bind (compile_body ip ipi c) (fun x -> Return (compile'' i x))) p []))
     (ensures (dm_iio_theta (iio_bind (compile_body ip i.vpi c)( fun x -> Return (compile'' i x))) p [])) =
-  transparency_lem_1 i ip c ipi r p (compile'' i)
+  lemma_transparency_tot i ip c ipi r p (compile'' i)
   
-
-  explode ();
-  ExtraTactics.rewrite_lemma (-2) (-1);
-  norm [delta_only [`%transparency;`%produces;`%_produces;`%included_in;`%_beh]; zeta; delta; iota];
-  ExtraTactics.blowup ();
-  dump "H";
-  tadmit ()
-)=
-  (* the 'exists' seem to be in the way of the proof *)
-  ()
+let transparency_proof (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) : Lemma (transparency i ip c tr ipi r) =
+  introduce ((compile ip i.vpi) `link i` c) `produces` tr /\ tr `included_in` (pi_to_set #i.prog_out ipi) ==>
+    ((compile ip ipi #r) `link i` c) `produces` tr
+  with q1. 
+  begin
+    introduce forall (p: hist_post i.prog_out).
+      dm_iio_theta (link i (compile ip ipi) c ()) p [] ==> p (fst tr) (snd tr)
+    with
+    begin
+      introduce dm_iio_theta (link i (compile ip ipi) c ()) p [] ==> 
+        p (fst tr) (snd tr)
+      with _. 
+      begin
+        eliminate dm_iio_theta (link i (compile ip i.vpi) c ()) p [] ==> 
+          p (fst tr) (snd tr)
+        with
+        begin
+          assert (dm_iio_theta (iio_bind (compile_body ip ipi c) (fun x -> Return (compile'' i x))) p []) by (assumption ());
+          lemma_transparency_unfolded i ip c ipi r p;
+          assert (dm_iio_theta (link i (compile ip i.vpi) c ()) p []) by (assumption ())
+        end
+      end
+    end
+  end
 
 (**
 (* this is the smallest pi that can be used to instrument. this pi must imply io_pre *)
