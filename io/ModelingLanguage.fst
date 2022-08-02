@@ -474,6 +474,19 @@ let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
   (forall (ic:ictx i i.vpi). (h (rel (ibeh (ip `ilink i` ic))))) ==> 
     (forall c. (h (beh ((compile ip i.vpi) `link i` c))))
 
+let rrhc_g (i:interface) = forall c. rrhc i c
+let rrhp_g (i:interface) = forall h ip. rrhp i h ip
+
+let lemma_rrhc_eq_rrhp (i:interface) : Lemma (rrhc_g i <==> rrhp_g i) = 
+  introduce rrhc_g i ==> rrhp_g i with _. begin
+    introduce forall h ip. rrhp i h ip with begin
+      admit ()
+    end
+  end;
+  introduce rrhp_g i ==> rrhc_g i with _. begin
+    admit ()
+  end
+
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
   ((compile ip i.vpi) `link i` c) `produces` tr /\ tr `included_in` (pi_to_set #i.prog_out ipi) ==>
