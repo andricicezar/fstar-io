@@ -431,7 +431,7 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
   with ic and 
   begin
     introduce forall (ip:iprog i) (tr:trace * i.prog_out). 
-      ((compile #i ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr ==> (ip `ilink #i #_ #(r_pi i.vpi)` ic) `iproduces` tr
+      ((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr ==> (ip `ilink #i #_ #(r_pi i.vpi)` ic) `iproduces` tr
     with 
     begin
       rtc_proof i ip c tr
@@ -479,9 +479,7 @@ let rrhp_g (i:interface) = forall h ip. rrhp i h ip
 
 let lemma_rrhc_eq_rrhp (i:interface) : Lemma (rrhc_g i <==> rrhp_g i) = 
   introduce rrhc_g i ==> rrhp_g i with _. begin
-    introduce forall h ip. rrhp i h ip with begin
-      admit ()
-    end
+    admit ()
   end;
   introduce rrhp_g i ==> rrhc_g i with _. begin
     admit ()
