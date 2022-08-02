@@ -311,6 +311,9 @@ let _produces (d:iio 'a) (t:trace) =
 let pi_to_set #a (pi:pi_type) : trace_property a = fun lt _ -> enforced_locally pi [] lt
 
 (** **** Helpers **)
+let ibeh (#i:interface) (d:iwhole i) : trace_property i.iprog_out = 
+  _beh (reify_IIOwp d)
+
 (* d has this type to accomodate both whole and iwhole programs. **)
 let beh  #a (d:unit -> iio a) : trace_property a = 
   _beh (d ())
@@ -464,14 +467,12 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
    doing that since we proved RrHC *)
 type hyperproperty (a:Type) = trace_property a -> Type0
 
-//let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
-//  (forall ic. (h (beh (ip `ilink i` ic)))) ==> 
-//    (forall c. (h (beh (compile ip i.vpi) `link i` c)))
-
-
-
-
-
+let test (#i:interface) (p:trace_property i.iprog_out) : trace_property i.prog_out =
+  fun t (r:i.prog_out) -> exists r'. compile'' i r' == r /\ p t r'
+  
+let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
+  (forall (ic:ictx i i.vpi). (h (test (ibeh (ip `ilink i` ic))))) ==> 
+    (forall c. (h (beh ((compile ip i.vpi) `link i` c))))
 
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (t:trace) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
