@@ -34,71 +34,48 @@ unfold let req_res (x:req_cmds) (pre:req_args x) : Type u#0 = squash pre
 let req_sig : op_sig req_cmds = { args = req_args; res = req_res; }
 **)
 
-type sometype : Type u#1 = list bool -> list bool -> Type0
+#set-options "--print_universes"
 
 noeq
-type free (op:Type0) (s:op_sig op) (dec:Type u#1) (a:Type u#a) : Type u#(max a 1) =
-| Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s dec a) -> free op s dec a
-| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a op s dec a) -> free op s dec a
-| Decorated : (d:dec) -> (#b:Type u#0) -> cont0:(free u#a op s dec (FStar.Universe.raise_t b)) ->
-                                          cont1:(b-> free u#a op s dec a) -> free op s dec a
-| Return : a -> free op s dec a
+type free (op:Type0) (s:op_sig op) (a:Type u#a) : Type u#(max 1 a)=
+| Call : (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s a) -> free op s a
+| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a op s a) -> free op s a
+| Return : a -> free op s a
 
-let free_return (op:Type) (s:op_sig op) (dec:Type) (a:Type) (x:a) : free op s dec a =
+let free_return (op:Type) (s:op_sig op) (a:Type) (x:a) : free op s a =
   Return x
 
-let rec change_universe (#gr:Type u#0) (m:free u#a 'op 's 'dec (FStar.Universe.raise_t gr)) : free u#b 'op 's 'dec (FStar.Universe.raise_t gr) =
-  match m with
-  | Return x -> Return (FStar.Universe.raise_val (FStar.Universe.downgrade_val x))
-  | Call cmd args fnc ->
-      Call cmd args (fun i ->
-        change_universe (fnc i))
-  | PartialCall pre fnc ->
-      PartialCall pre (fun _ ->
-        change_universe (fnc ()))
-  | Decorated d #b' m fnc ->
-      Decorated d (change_universe m) (fun i ->
-        change_universe (fnc i))
-
-#set-options "--print_implicits --print_universes"
 let rec free_bind
   (op:Type0)
   (s:op_sig op)
-  (dec:Type u#1)
   (a:Type u#a)
   (b:Type u#b)
-  (l : free op s dec a)
-  (k : a -> free op s dec b) :
-  free op s dec b =
+  (l : free op s a)
+  (k : a -> free op s b) :
+  free op s b =
   match l with
   | Return x -> k x
   | Call cmd args fnc ->
       Call cmd args (fun i ->
-        free_bind op s dec a b (fnc i) k)
+        free_bind op s a b (fnc i) k)
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->
-        free_bind op s dec a b (fnc ()) k)
-  | Decorated d (#b':Type u#0) m fnc -> 
-      let m = change_universe m in
-      Decorated u#b d #b' m (fun i -> 
-        free_bind op s dec a b (fnc i) k)
+        free_bind op s a b (fnc ()) k)
    
 let free_map
   (op:Type)
   (s:op_sig op)
-  (dec:Type)
   (a:Type)
   (b:Type)
-  (l : free op s dec a)
+  (l : free op s a)
   (k : a -> b) :
-  Tot (free op s dec b) =
-  free_bind op s dec a b
-    l (fun a -> free_return op s dec b (k a))
+  Tot (free op s b) =
+  free_bind op s a b
+    l (fun a -> free_return op s b (k a))
 
 let free_codomain_ordering
   (#op:Type)
   (#s:op_sig op)
-  (#dec:Type)
   (#a:Type)
-  (x:(free op s dec a){Call? x}) :
+  (x:(free op s a){Call? x}) :
   Lemma (forall r. Call?.cont x r << x) = ()

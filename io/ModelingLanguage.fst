@@ -462,9 +462,9 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
 (** *** RrHP **)
 type hyperproperty (a:Type) = trace_property a -> Type0
 
-let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
-  (forall ic. (h (beh (ip `ilink i` ic)))) ==> 
-    (forall c. (h (beh (compile ip i.vpi) `link i` c)))
+//let rrhp (i:interface) (h:hyperproperty i.prog_out) (ip:iprog i) =
+//  (forall ic. (h (beh (ip `ilink i` ic)))) ==> 
+//    (forall c. (h (beh (compile ip i.vpi) `link i` c)))
 
 
 
