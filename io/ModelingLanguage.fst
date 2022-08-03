@@ -13,6 +13,10 @@ open TC.Monitorable.Hist
 open IIO
 
 (* TODO : think about higher-order **)
+(* TODO: define type class for MLang **)
+(* TODO: refactor compile and backtranslate into instances of the TC **)
+(* TODO: replace in the interface the target types with constraints on the 
+         intermediate types **)
 
 
 (* TODO: our monad also needs a way to represent failure,
@@ -21,6 +25,10 @@ noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
 }
+
+(* TODO: things should be indexed by this too. the context needs it to bind
+         computations. unfortunately, we can not make it a part of the monad record. *)
+//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
 
 type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
@@ -77,8 +85,14 @@ class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
   ilang_inst_out : ILang.ilang (verified_arrow inst_in_in inst_in_out pi) pi;
 }
 
+instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (verified_arrow t1 t2 ipi) ipi = {
+  btrans_in = unverified_arrow d1.ct;
+  //mlang_btrans_in = d1.mlang_inst_in;
+  backtranslate = d1.instrument;
+  ilang_btrans_out = d1.ilang_inst_out;
+}
 
-//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
+(** * Model of Secure Interop *)
 
 noeq
 type interface = {
@@ -273,13 +287,6 @@ let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
-
-instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (verified_arrow t1 t2 ipi) ipi = {
-  btrans_in = unverified_arrow d1.ct;
-  //mlang_btrans_in = d1.mlang_inst_in;
-  backtranslate = d1.instrument;
-  ilang_btrans_out = d1.ilang_inst_out;
-}
 
 
 val backtranslate : (#i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
