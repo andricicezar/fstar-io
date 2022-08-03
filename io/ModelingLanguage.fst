@@ -19,6 +19,8 @@ open IIO
          intermediate types **)
 
 
+#set-options "--print_universes"
+
 (* TODO: our monad also needs a way to represent failure,
          or is it enough to have it in actions? *)
 noeq type monad = {
@@ -37,7 +39,6 @@ let free = { m = iio; ret = iio_return; }
 
 (** **** Free Actions **)
 val free_acts : acts free
-(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
 let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
 
 let spec_free_acts (ca:acts free) =
@@ -49,7 +50,61 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
 
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
 
-(** *** Type Classes **)
+(** * MLang **)
+class mlang (t:Type) = { mldummy : unit }
+
+(** *** FO instances **)
+instance mlang_unit : mlang unit = { mldummy = () }
+
+instance mlang_bool : mlang bool = { mldummy = () }
+instance mlang_int : mlang int = { mldummy = () }
+
+instance mlang_pair t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (t1 * t2) = 
+  { mldummy = () }
+instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either t1 t2) =
+  { mldummy = () }
+
+instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
+  { mldummy = () }
+
+(** TODO: is this one neeeded? *)
+instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
+  { mldummy = () }
+
+instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (t1 -> free.m t2) =
+  { mldummy = () }
+
+instance mlang_unv_arrow 
+  (#ct:(Type u#a -> Type u#(max 1 a)) -> Type) 
+  (d1:mlang (ct free.m)) :
+  mlang (mon:monad -> acts mon -> ct mon.m) =
+  { mldummy = () }
+
+// (int -> int) -> (int -> int)
+type ct (m:Type -> Type) = m int
+let d1 : mlang (ct free.m) = mlang_tree mlang_int
+type myctx = mon:monad -> acts mon -> ct mon.m
+let _ : mlang myctx = mlang_unv_arrow d1 
+
+type ct' (m:Type -> Type) = int -> m int
+let d1' : mlang (ct' free.m) = mlang_ver_arrow mlang_int mlang_int
+type myctx' = mon:monad -> acts mon -> ct' mon.m
+let _ : mlang myctx' = mlang_unv_arrow d1'
+
+type ct'' (m:Type -> Type) = (int -> m int) -> m int
+let d1'' : mlang (ct'' free.m)= 
+  mlang_ver_arrow (mlang_ver_arrow mlang_int mlang_int) mlang_int
+type myctx'' = mon:monad -> acts mon -> ct'' mon.m
+let _ : mlang myctx'' = mlang_unv_arrow d1''
+
+type ct''' (m:Type u#0 -> Type u#1) = int -> m (int -> m int)
+
+let d1''' : mlang (ct''' free)= 
+  mlang_ver_arrow mlang_int (mlang_ver_arrow mlang_int mlang_int)
+type myctx''' = mon:monad -> acts mon -> ct''' mon.m
+let _ : mlang myctx''' = mlang_unv_arrow d1'''
+
+(** * Type Classes **)
 class compilable (comp_in:Type u#a) (pi:pi_type) = {
   comp_out : Type u#b;
   compile: comp_in -> comp_out;
