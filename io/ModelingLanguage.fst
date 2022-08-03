@@ -3,7 +3,9 @@ module ModelingLanguage
 open FStar.Classical.Sugar
 open FStar.Tactics
 open FStar.List.Tot
+open FStar.Tactics.Typeclasses
 
+open Common
 open Free
 open IO
 open IO.Sig
@@ -22,24 +24,73 @@ noeq type monad = {
 
 type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
-//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
-
 val free : monad
 let free = { m = iio; ret = iio_return; }
 
+(** **** Free Actions **)
+val free_acts : acts free
+(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
+let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
+
+let spec_free_acts (ca:acts free) =
+  (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
+
+let lemma_free_acts () : Lemma (spec_free_acts free_acts) = 
+  assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
+  assert (spec_free_acts free_acts) by (assumption ())
+
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
+
+(** *** Type Classes **)
+class compilable (comp_in:Type u#a) (pi:pi_type) = {
+  comp_out : Type u#b;
+  compile: comp_in -> comp_out;
+
+  [@@@no_method]
+  ilang_comp_in : ILang.ilang comp_in pi;
+//  [@@@no_method]
+//  mlang_comp_out : mlang comp_out;
+}
+
+class backtranslateable (btrans_out:Type u#a) (pi:pi_type) = {
+  btrans_in : Type u#b;
+  backtranslate: btrans_in -> btrans_out;
+
+  [@@@no_method]
+  ilang_btrans_out : ILang.ilang btrans_out pi;
+//  [@@@no_method]
+//  mlang_btrans_in : mlang btrans_in;
+}
+
+type verified_arrow (t1 t2:Type) pi = t1 -> ILang.IIOpi (resexn t2) pi
+type unverified_arrow (ct:(Type -> Type) -> Type) = mon:monad -> acts mon -> ct mon.m
+
+class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
+  [@@@no_method]
+  ct:(Type -> Type) -> Type;
+
+  instrument: unverified_arrow ct -> Tot (verified_arrow inst_in_in inst_in_out pi); 
+
+//  [@@@no_method]
+//  mlang_inst_in : mlang (unverified_arrow inst_out_in inst_out_out pi);
+  [@@@no_method]
+  ilang_inst_out : ILang.ilang (verified_arrow inst_in_in inst_in_out pi) pi;
+}
+
+
+//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
 
 noeq
 type interface = {
   (* intermediate level *)
   ictx_in : Type u#a;
-  ictx_out : Type u#a;
-  iprog_out : Type u#a; 
+  ictx_out : Type u#b;
+  iprog_out : Type u#c; 
 
   (* target level *)
-  ctx_in : Type u#a;
-  ctx_out : Type u#a;
-  prog_out : Type u#a; 
+  ctx_in : Type u#d;
+  ctx_out : Type u#e;
+  prog_out : Type u#f; 
 
   vpi : pi_type;
 }
@@ -75,7 +126,8 @@ type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
 type whole (i:interface) = unit -> iio i.prog_out 
-let link (#i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
+let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
+  fun () -> p c
 
 (* TODO: these should be replaced by typeclasses *)
 assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
@@ -117,7 +169,7 @@ type ct_p (i:interface) (mon:monad) (mon_p:monad_p mon) (c:ct i mon) =
 type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:ctx i) =
   ct_p i mon mon_p (c mon theActs)
 
-(* TODO: check with others **)
+(* TODO: check with others -- since this is assumed, it represents a risk **)
 (* Parametricity Assumption about the Context **)
 assume val ctx_param : 
   (i:interface) ->
@@ -144,9 +196,6 @@ let wrap pi theActs cmd arg =
   iio_bind
     (check_get_trace pi cmd arg)
     (fun b -> if b then theActs cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
-
-let spec_free_acts (ca:acts free) =
-  (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
 
 #set-options "--split_queries"
 val wrap_p : (pi:pi_type) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
@@ -215,15 +264,6 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 #reset-options
 
-(** **** Free Actions **)
-val free_acts : acts free
-(** CA: I can not reify here an IO computation because there is no way to prove the pre-condition **)
-let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
-
-let lemma_free_acts () : Lemma (spec_free_acts free_acts) = 
-  assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
-  assert (spec_free_acts free_acts) by (assumption ())
-
 val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
 let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   lemma_free_acts ();
@@ -232,6 +272,15 @@ let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_
   ctx_param i free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
+
+
+instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (verified_arrow t1 t2 ipi) ipi = {
+  btrans_in = unverified_arrow d1.ct;
+  //mlang_btrans_in = d1.mlang_inst_in;
+  backtranslate = d1.instrument;
+  ilang_btrans_out = d1.ilang_inst_out;
+}
+
 
 val backtranslate : (#i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
 let backtranslate #i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
@@ -267,7 +316,29 @@ let compile
     let tree = compile_body ip ipi c in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
-(** ** Theorems **)
+
+(** *** Case Studies **)
+
+let test_i (pi:pi_type) : interface = {
+  (* intermediate level *)
+  ictx_in = int -> ILang.IIOpi int pi;
+  ictx_out = int -> ILang.IIOpi int pi;
+  iprog_out = int; 
+
+  (* target level *)
+  ctx_in = (mon:monad) -> int -> mon.m int;
+  ctx_out = (mon:monad) -> int -> mon.m int;
+  prog_out = int; 
+
+  vpi = pi;
+}
+
+
+
+
+
+
+(** ** Criterias **)
 (** *** Behaviors **)
 (* A trace property is a set of pairs between a trace and a result. 
    The trace is a complete trace. *)
@@ -583,52 +654,3 @@ let transparency_proof (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_o
       end
     end
   end
-
-(**
-(* this is the smallest pi that can be used to instrument. this pi must imply io_pre *)
-let weakest_pi : pi_type = fun op arg h ->
-  match op with
-  | Openfile -> true
-  | Read -> is_open arg h
-  | Close -> is_open arg h
-      
-(* weakest_pi and ipi both imply io_pre. weakest_pi is the weakest possible pi
-   that implies io_pre, thus, all the other pis that imply io_pre also imply the weakest_pi 
-   since they are stronger *)
-let ipi_implies_weakest_pi (ipi:pi_type) : (r_vpi_ipi weakest_pi ipi) =
-  let rec aux (ipi:pi_type) (h lt:trace) : 
-    Lemma 
-	(requires (enforced_locally ipi h lt))
-	(ensures (enforced_locally weakest_pi h lt)) 
-	(decreases lt) = begin
-    match lt with
-    | [] -> ()
-    | hd::t -> aux (ipi) (hd::h) t
-  end in
-  Classical.forall_intro_2 (Classical.move_requires_2 (aux ipi))
-**)
-
-(* Attempt 1 *)
-(* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
-(* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
-(* CA: we can not write this because p expects a `c` instrumented with `pi` *)
-
-(* Attempt 2 *)
-(* we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
-(* forall p c pi. link p c ~> t /\ t \in pi => exists ip. link (compile ip) c ~> t *)
-
-(* Attempt 3 *)
-(* switch to my version of transparency? -- TODO needs ccompile and that's not easy because ctx has abstract mon *)
-(* forall ip ic pi. ilink ip ic ~> t [/\ t \in pi] => link (compile pi ip) (ccompile ic) ~> t *)
-(* let ccompile (ic:ictx) : ctx = fun (mon:monad) (a:acts) (x:alpha) -> (ccompile (reify (ic (backtranslate x)))) <: ct mon.m *)
-(* we again need type classes, by example:
-   ct mon.m = alpha -> mon.m beta
-   ictx for this = alpha -> IIO beta pi
-   where backtranslatable alpha and compilable beta are typeclass constraints
-*)
-
-(* Attempt 4 *)
-(* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
-(* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
-(* CA: `ip` expects a `c` instrumented with `pi`, thus, we can not state transparency like this without 
-       relaxing the input type of `ip`, thus, this has the same problem as the first attempt of transparency *)

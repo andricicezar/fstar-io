@@ -40,13 +40,17 @@ let wrapped_acts (pi:pi_type) : acts free = {
 
 let link (p:prog) (c:ctx) : whole = p c
 
-(* used to state transparency *)
+(** *** Transparency **)
+(* Attempt 1 *)
 (* forall p c pi. link_no_check p c ~> t /\ t \in pi => link p c ~> t *)
 (* let link_no_check (p:prog) (c:ctx) : whole = p (c free free_acts) -- TODO: can't write this any more *)
+(* CA: we can not write this because p expects a `c` instrumented with `pi` *)
 
-(* new attempt -- but we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
+(* Attempt 2 *)
+(* we lose connection between p and ip ... so in the next attempts we take p = compile ip *)
 (* forall p c pi. link p c ~> t /\ t \in pi => exists ip. link (compile ip) c ~> t *)
 
+(* Attempt 3 *)
 (* switch to my version of transparency? -- TODO needs ccompile and that's not easy because ctx has abstract mon *)
 (* forall ip ic pi. ilink ip ic ~> t [/\ t \in pi] => link (compile pi ip) (ccompile ic) ~> t *)
 (* let ccompile (ic:ictx) : ctx = fun (mon:monad) (a:acts) (x:alpha) -> (ccompile (reify (ic (backtranslate x)))) <: ct mon.m *)
@@ -56,8 +60,11 @@ let link (p:prog) (c:ctx) : whole = p c
    where backtranslatable alpha and compilable beta are typeclass constraints
 *)
 
+(* Attempt 4 *)
 (* new idea, fixed to account for the fact that certain things checked by wrapped_acts are not in pi: *)
 (* forall ip c pi. link (compile ip free_acts) c ~> t /\ t \in pi => link (compile ip (wrapped_acts pi)) c ~> t *)
+(* CA: `ip` expects a `c` instrumented with `pi`, thus, we can not state transparency like this without 
+       relaxing the input type of `ip`, thus, this has the same problem as the first attempt of transparency *)
 
 assume val ictx : Type0
 assume val iwhole : Type0
