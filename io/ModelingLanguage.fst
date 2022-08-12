@@ -50,6 +50,7 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
 
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
 
+
 (** * MLang **)
 class mlang (t:Type) = { mldummy : unit }
 
@@ -68,18 +69,21 @@ instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
   { mldummy = () }
 
 (** TODO: is this one neeeded? *)
-instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
-  { mldummy = () }
+(* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
+  { mldummy = () } *)
+
+type unverified_marrow (ct:(Type -> Type) -> Type) = mon:monad -> acts mon -> ct mon.m
 
 instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (t1 -> free.m t2) =
   { mldummy = () }
 
 instance mlang_unv_arrow 
-  (#ct:(Type u#a -> Type u#(max 1 a)) -> Type) 
+  (#ct:(Type -> Type) -> Type) 
   (d1:mlang (ct free.m)) :
-  mlang (mon:monad -> acts mon -> ct mon.m) =
+  mlang (unverified_marrow ct) =
   { mldummy = () }
 
+  (*
 // (int -> int) -> (int -> int)
 type ct (m:Type -> Type) = m int
 let d1 : mlang (ct free.m) = mlang_tree mlang_int
@@ -96,53 +100,51 @@ let d1'' : mlang (ct'' free.m)=
   mlang_ver_arrow (mlang_ver_arrow mlang_int mlang_int) mlang_int
 type myctx'' = mon:monad -> acts mon -> ct'' mon.m
 let _ : mlang myctx'' = mlang_unv_arrow d1''
-
-type ct''' (m:Type u#0 -> Type u#1) = int -> m (int -> m int)
-
-let d1''' : mlang (ct''' free)= 
-  mlang_ver_arrow mlang_int (mlang_ver_arrow mlang_int mlang_int)
-type myctx''' = mon:monad -> acts mon -> ct''' mon.m
-let _ : mlang myctx''' = mlang_unv_arrow d1'''
+*)
 
 (** * Type Classes **)
 class compilable (comp_in:Type u#a) (pi:pi_type) = {
+  [@@@no_method]
   comp_out : Type u#b;
+
+  [@@@no_method]
   compile: comp_in -> comp_out;
 
   [@@@no_method]
   ilang_comp_in : ILang.ilang comp_in pi;
-//  [@@@no_method]
-//  mlang_comp_out : mlang comp_out;
+  [@@@no_method]
+  mlang_comp_out : mlang comp_out;
 }
 
 class backtranslateable (btrans_out:Type u#a) (pi:pi_type) = {
+  [@@@no_method]
   btrans_in : Type u#b;
+
+  [@@@no_method]
   backtranslate: btrans_in -> btrans_out;
 
   [@@@no_method]
   ilang_btrans_out : ILang.ilang btrans_out pi;
-//  [@@@no_method]
-//  mlang_btrans_in : mlang btrans_in;
+  [@@@no_method]
+  mlang_btrans_in : mlang btrans_in;
 }
-
-type verified_arrow (t1 t2:Type) pi = t1 -> ILang.IIOpi (resexn t2) pi
-type unverified_arrow (ct:(Type -> Type) -> Type) = mon:monad -> acts mon -> ct mon.m
 
 class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
   [@@@no_method]
   ct:(Type -> Type) -> Type;
 
-  instrument: unverified_arrow ct -> Tot (verified_arrow inst_in_in inst_in_out pi); 
-
-//  [@@@no_method]
-//  mlang_inst_in : mlang (unverified_arrow inst_out_in inst_out_out pi);
   [@@@no_method]
-  ilang_inst_out : ILang.ilang (verified_arrow inst_in_in inst_in_out pi) pi;
+  instrument: unverified_marrow ct -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
+
+  [@@@no_method]
+  mlang_inst_in : mlang (unverified_marrow ct);
+  [@@@no_method]
+  ilang_inst_out : ILang.ilang (ILang.ilang_arrow_typ inst_in_in inst_in_out pi) pi;
 }
 
-instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (verified_arrow t1 t2 ipi) ipi = {
-  btrans_in = unverified_arrow d1.ct;
-  //mlang_btrans_in = d1.mlang_inst_in;
+instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
+  btrans_in = unverified_marrow d1.ct;
+  mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
   ilang_btrans_out = d1.ilang_inst_out;
 }

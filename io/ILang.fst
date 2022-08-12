@@ -45,9 +45,9 @@ instance ilang_either (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ila
 instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi =
   { mldummy = () }
 
-type verified_arrow (t1 t2:Type) pi = t1 -> IIOpi (resexn t2) pi
+type ilang_arrow_typ (t1 t2:Type) pi = t1 -> IIOpi (resexn t2) pi
 
-instance ilang_arrow (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang t2 pi |} : ilang (verified_arrow t1 t2 pi) pi =
+instance ilang_arrow (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang t2 pi |} : ilang (ilang_arrow_typ t1 t2 pi) pi =
   { mldummy = () }
 
 (**instance ilang_fo_uint8 : ilang_fo UInt8.t = { fo_pred = () }
