@@ -212,62 +212,6 @@ instance instrumentable_unverified_arrow
 }
 
 
-(** * Model of Secure Interop *)
-
-noeq
-type interface = {
-  (* intermediate level *)
-  ictx_in : Type u#a;
-  ictx_out : Type u#b;
-  iprog_out : Type u#c; 
-
-  (* target level *)
-  ctx_in : Type u#d;
-  ctx_out : Type u#e;
-  prog_out : Type u#f; 
-
-  vpi : pi_type;
-}
-
-
-(** *** Intermediate Lang **)
-type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
-type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi i.iprog_out i.vpi
-type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
-
-//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
-//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
-type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
-
-(* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
-let ilink 
-  (#i:interface) 
-  (#ipi:pi_type) 
-  (#_ : r_vpi_ipi i.vpi ipi)
-  (ip:iprog i) 
-  (ic:ictx i ipi) : 
-  iwhole i = 
-  fun () -> ip ic
-
-(** *** Target Lang **)
-(* will eventually need a signature and what not;
-   I think we need to pass the abstract monad inside is we want to support higher-order types.
-   in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ct (i:interface) (mon:monad) = i.ctx_in -> mon.m i.ctx_out
-type pt (i:interface) (mon:monad) = mon.m i.prog_out 
-
-type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
-type prog (i:interface) = ctx i -> pt i free
-
-type whole (i:interface) = unit -> iio i.prog_out 
-let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
-  fun () -> p c
-
-(* TODO: these should be replaced by typeclasses *)
-assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
-assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
-assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
-
 
 (** *** Parametricity **)
 noeq
@@ -318,8 +262,8 @@ let free_p (pi:pi_type) : monad_p free = {
   ret_p = (fun a a_p tree tree_p -> ());
 }
 
-(** *** Backtranslate **)
 unfold val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
+
 [@@ "opaque_to_smt"]
 let check_get_trace pi cmd arg = 
   iio_bind (IO.Sig.Call.iio_call GetTrace ()) (fun h -> Return (pi cmd arg h))
@@ -397,6 +341,64 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
     end
   end
 #reset-options
+
+(** * Model of Secure Interop *)
+
+noeq
+type interface = {
+  (* intermediate level *)
+  ictx_in : Type u#a;
+  ictx_out : Type u#b;
+  iprog_out : Type u#c; 
+
+  (* target level *)
+  ctx_in : Type u#d;
+  ctx_out : Type u#e;
+  prog_out : Type u#f; 
+
+  vpi : pi_type;
+}
+
+
+(** *** Intermediate Lang **)
+type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
+type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi i.iprog_out i.vpi
+type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
+
+//  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
+//  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
+type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
+(* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
+let ilink 
+  (#i:interface) 
+  (#ipi:pi_type) 
+  (#_ : r_vpi_ipi i.vpi ipi)
+  (ip:iprog i) 
+  (ic:ictx i ipi) : 
+  iwhole i = 
+  fun () -> ip ic
+
+(** *** Target Lang **)
+(* will eventually need a signature and what not;
+   I think we need to pass the abstract monad inside is we want to support higher-order types.
+   in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
+type ct (i:interface) (mon:monad) = i.ctx_in -> mon.m i.ctx_out
+type pt (i:interface) (mon:monad) = mon.m i.prog_out 
+
+type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
+type prog (i:interface) = ctx i -> pt i free
+
+type whole (i:interface) = unit -> iio i.prog_out 
+let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
+  fun () -> p c
+
+(* TODO: these should be replaced by typeclasses *)
+assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
+assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
+assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
+
+(** *** Backtranslate **)
 
 val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
 let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
