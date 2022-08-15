@@ -343,6 +343,16 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 #reset-options
 
+val cast_to_dm_iio  : (#a:Type) -> (#b:Type) -> ipi:pi_type -> unverified_marrow a b -> (x:a) -> dm_iio b (ILang.pi_hist ipi)
+let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
+  lemma_free_acts ();
+  let c' : a -> free.m b = c free (wrap ipi free_acts) in
+  let tree : iio b = c' x in
+  ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
+  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
+  tree
+
+
 (** * Model of Secure Interop *)
 
 noeq
@@ -400,15 +410,6 @@ assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
 assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
 
 (** *** Backtranslate **)
-
-val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
-let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
-  lemma_free_acts ();
-  let c' : ct i free = c free (wrap ipi free_acts) in
-  let tree : iio i.ctx_out = c' x in
-  ctx_param i free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
-  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
-  tree
 
 
 
