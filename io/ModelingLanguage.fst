@@ -65,15 +65,15 @@ instance mlang_pair t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (t1 * t2) 
 instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either t1 t2) =
   { mldummy = () }
 
-instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
+instance mlang_resexn #t1 (d1:mlang t1) : mlang (resexn t1) =
   { mldummy = () }
 
 (** TODO: is this one neeeded? *)
 (* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
   { mldummy = () } *)
 
-type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m (resexn t2)
-type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m (resexn t2)
+type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
+type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
 
 (* the following two instances, imply that arrows that are in the free effect
    and that are effectful polymorphic are allowed *)
@@ -151,7 +151,7 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
   ilang_comp_in = ILang.ilang_resexn pi t #d1.ilang_comp_in;
 
   comp_out = resexn (d1.comp_out);
-  mlang_comp_out = mlang_resexn d1.comp_out #(d1.mlang_comp_out);
+  mlang_comp_out = mlang_resexn d1.mlang_comp_out;
 
   compile = (fun x ->
     match x with
@@ -166,8 +166,8 @@ instance compile_verified_arrow
   Tot (compilable (ILang.ilang_arrow_typ t1 t2 pi) pi) = {
   ilang_comp_in = ILang.ilang_arrow pi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
 
-  comp_out = verified_marrow d1.btrans_in d2.comp_out;
-  mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in d2.mlang_comp_out;
+  comp_out = verified_marrow d1.btrans_in (resexn d2.comp_out);
+  mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in (mlang_resexn d2.mlang_comp_out);
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 pi) (x:d1.btrans_in) ->
     let r : unit -> ILang.IIOpi _ pi = fun () -> compile #_ #pi #(compile_resexn pi t2 #d2) (f (d1.backtranslate x)) in
@@ -181,7 +181,7 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
   ilang_btrans_out = ILang.ilang_resexn pi t #d1.ilang_btrans_out;
 
   btrans_in = resexn (d1.btrans_in);
-  mlang_btrans_in = mlang_resexn d1.btrans_in #d1.mlang_btrans_in;
+  mlang_btrans_in = mlang_resexn d1.mlang_btrans_in;
 
   backtranslate = (fun x ->
     match x with
@@ -241,20 +241,21 @@ type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) =
   Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
 
 (* TODO: check if we need parametricity for the interface **)
-type ct_p (i:interface) (mon:monad) (mon_p:monad_p mon) (c:ct i mon) =
-  squash (forall x. mon_p.m_p i.ctx_out (fun x -> True) (c x))
+type ct_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (c:a -> mon.m b) =
+  squash (forall x. mon_p.m_p b (fun x -> True) (c x))
 
-type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:ctx i) =
-  ct_p i mon mon_p (c mon theActs)
+type ctx_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:unverified_marrow a b) =
+  ct_p a b mon mon_p (c mon theActs)
 
 (* TODO: check with others -- since this is assumed, it represents a risk **)
 (* Parametricity Assumption about the Context **)
 assume val ctx_param : 
-  (i:interface) ->
+  (a:Type) -> 
+  (b:Type) ->
   (mon:monad) -> (mon_p:monad_p mon) ->
   (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
-  (c:ctx i) -> 
-  Lemma (ctx_p i mon mon_p theActs theActs_p c)
+  (c:unverified_marrow a b) -> 
+  Lemma (ctx_p a b mon mon_p theActs theActs_p c)
 
 (** **** Parametricity - instances **)
 let free_p (pi:pi_type) : monad_p free = {
