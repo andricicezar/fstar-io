@@ -189,48 +189,6 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
     | Inr err -> Inr err)
 }
 
-let aux 
-  pi
-  (t1:Type) {| d1:compilable t1 pi |}
-  (t2:Type) {| d2:backtranslateable t2 pi |} 
-  (m:Type -> Type) :
-  Type =
-  d1.comp_out -> m (resexn d2.btrans_in)
-
-let aux2 
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |} : 
-  mlang (verified_marrow d1.comp_out d2.btrans_in) =
-  mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in
-
-assume val let123 : (Type u#0 -> Type u#1) -> Type u#a
-assume val mlver : mlang (let123 free.m)
-
-let unv_let123 : mlang (unverified_marrow let123) = 
-  mlang_unv_arrow mlver
-
-let aux1234
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |}  :
-  mlang (verified_marrow d1.comp_out d2.btrans_in) =
-  mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in
-
-let aux1234'
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |}  :
-  mlang ((aux pi t1 t2) free.m) =
-  aux1234 pi t1 #d1 t2 #d2
-
-let mlang_aux
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |} : 
-  mlang (unverified_marrow (aux pi t1 t2)) =
-  mlang_unv_arrow (aux1234' pi t1 t2)
-
 (** *** Instrumentable arrows **)
 instance instrumentable_unverified_arrow 
   pi
