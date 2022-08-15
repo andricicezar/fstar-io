@@ -83,25 +83,6 @@ instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (verified_m
 instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified_marrow t1 t2) =
   { mldummy = () }
 
-  (*
-// (int -> int) -> (int -> int)
-type ct (m:Type -> Type) = m int
-let d1 : mlang (ct free.m) = mlang_tree mlang_int
-type myctx = mon:monad -> acts mon -> ct mon.m
-let _ : mlang myctx = mlang_unv_arrow d1 
-
-type ct' (m:Type -> Type) = int -> m int
-let d1' : mlang (ct' free.m) = mlang_ver_arrow mlang_int mlang_int
-type myctx' = mon:monad -> acts mon -> ct' mon.m
-let _ : mlang myctx' = mlang_unv_arrow d1'
-
-type ct'' (m:Type -> Type) = (int -> m int) -> m int
-let d1'' : mlang (ct'' free.m)= 
-  mlang_ver_arrow (mlang_ver_arrow mlang_int mlang_int) mlang_int
-type myctx'' = mon:monad -> acts mon -> ct'' mon.m
-let _ : mlang myctx'' = mlang_unv_arrow d1''
-*)
-
 (** * Type Classes **)
 class compilable (comp_in:Type u#a) (pi:pi_type) = {
   [@@@no_method]
