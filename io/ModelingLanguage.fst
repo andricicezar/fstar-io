@@ -128,7 +128,7 @@ instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1
   ilang_btrans_out = d1.ilang_inst_out;
 }
 
-instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resexn t) pi = {
+instance compile_resexn pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
   ilang_comp_in = ILang.ilang_resexn pi t #d1.ilang_comp_in;
 
   comp_out = resexn (d1.comp_out);
@@ -142,20 +142,24 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
 
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
-instance compile_verified_arrow
-  pi
-  (t1:Type) {| d1:backtranslateable t1 pi |} 
-  (t2:Type) {| d2:compilable t2 pi |}:
-  Tot (compilable (ILang.ilang_arrow_typ t1 t2 pi) pi) = {
-  ilang_comp_in = ILang.ilang_arrow pi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
+instance compile_verified_marrow
+  vpi
+  ipi
+  (t1:Type) {| d1:backtranslateable t1 ipi |} 
+  (t2:Type) {| d2:compilable t2 vpi |}:
+  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
+  {
+  ilang_comp_in = ILang.ilang_arrow vpi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
 
   comp_out = verified_marrow d1.btrans_in (resexn d2.comp_out);
   mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in (mlang_resexn d2.mlang_comp_out);
 
-  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 pi) (x:d1.btrans_in) ->
-    let r : unit -> ILang.IIOpi _ pi = fun () ->  (f (d1.backtranslate x)) in
+  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.btrans_in) ->
+    admit ();
+    (*
+    let r : unit -> ILang.IIOpi _ vpi = fun () ->  (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (compile #_ #pi #(compile_resexn pi t2 #d2) x))
+    iio_bind tree (fun x -> free.ret (compile #_ #vpi #(compile_resexn vpi t2 #d2) x))*)
   );
 }
 
@@ -355,8 +359,8 @@ type interface = {
 
 (** *** Intermediate Lang **)
 type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
-type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi i.iprog_out i.vpi
-type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
+type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi (resexn i.iprog_out) i.vpi
+type iwhole (i:interface) = unit -> ILang.IIOpi (resexn i.iprog_out) i.vpi
 
 //  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
 //  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
@@ -404,18 +408,21 @@ let compile_body
     fun () -> ip (backtranslate ipi c) in
   reify_IIOwp f **)
 
-let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
+let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i i.vpi) ipi =
+  admit ()
+  (**
   instrumentable_is_backtranslateable (
     instrumentable_unverified_marrow
       ipi
       i.ictx_in #i.ctx_in
       i.ictx_out #i.ctx_out
-  )
+  )**)
 
-let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) =
-  compile_verified_arrow
-    i.vpi
-    (ictx ipi) #(ctx_backtranslateable i ipi)
+let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
+  compile_verified_marrow
+    i.vpi ipi
+    (ictx i i.vpi) #(ctx_backtranslateable i ipi)
+    i.iprog_out #i.prog_out
 
 let model_compile
   (#i:interface)
@@ -423,7 +430,7 @@ let model_compile
   (ipi:pi_type)
   (#_: r_vpi_ipi i.vpi ipi) :
   prog i = 
-  compile #_ #ipi #(compile_verified_arrow i.vpi )  ip
+  compile #_ #i.vpi #(prog_compilable i ipi) ip
 
 
 (** *** Case Studies **)
