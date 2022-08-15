@@ -72,14 +72,14 @@ instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
 (* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
   { mldummy = () } *)
 
-type verified_marrow (t1:Type) (t2:Type) = t1 -> free.m (resexn t2)
-type unverified_marrow (ct:(Type u#0 -> Type u#1) -> Type u#a) = mon:monad -> acts mon -> ct mon.m
+type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m (resexn t2)
+type unverified_marrow (ct:(Type -> Type) -> Type) : Type = mon:monad -> acts mon -> ct mon.m
 
 instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (verified_marrow t1 t2) =
   { mldummy = () }
 
 instance mlang_unv_arrow 
-  (#ct:(Type -> Type) -> Type) 
+  (#ct:(Type u#0 -> Type u#1) -> Type u#a) 
   (d1:mlang (ct free.m)) :
   mlang (unverified_marrow ct) =
   { mldummy = () }
@@ -129,19 +129,19 @@ class backtranslateable (btrans_out:Type u#a) (pi:pi_type) = {
 }
 
 class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
-  [@@@no_method]
-  ct:(Type u#0 -> Type u#1) -> Type u#a;
+ // [@@@no_method]
+  inst_out:(Type u#0 -> Type u#1) -> Type u#a;
 
-  instrument: unverified_marrow ct -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
+  instrument: unverified_marrow inst_out -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
 
   [@@@no_method]
-  mlang_inst_in : mlang (unverified_marrow ct);
+  mlang_inst_in : mlang (unverified_marrow inst_out);
   [@@@no_method]
   ilang_inst_out : ILang.ilang (ILang.ilang_arrow_typ inst_in_in inst_in_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  btrans_in = unverified_marrow d1.ct;
+  btrans_in = unverified_marrow d1.inst_out;
   mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
   ilang_btrans_out = d1.ilang_inst_out;
@@ -189,18 +189,65 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
     | Inr err -> Inr err)
 }
 
+let aux 
+  pi
+  (t1:Type) {| d1:compilable t1 pi |}
+  (t2:Type) {| d2:backtranslateable t2 pi |} 
+  (m:Type -> Type) :
+  Type =
+  d1.comp_out -> m (resexn d2.btrans_in)
+
+let aux2 
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |} : 
+  mlang (verified_marrow d1.comp_out d2.btrans_in) =
+  mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in
+
+assume val let123 : (Type u#0 -> Type u#1) -> Type u#a
+assume val mlver : mlang (let123 free.m)
+
+let unv_let123 : mlang (unverified_marrow let123) = 
+  mlang_unv_arrow mlver
+
+let aux1234
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |}  :
+  mlang (verified_marrow d1.comp_out d2.btrans_in) =
+  mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in
+
+let aux1234'
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |}  :
+  mlang ((aux pi t1 t2) free.m) =
+  aux1234 pi t1 #d1 t2 #d2
+
+let mlang_aux
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |} : 
+  mlang (unverified_marrow (aux pi t1 t2)) =
+  mlang_unv_arrow (aux1234' pi t1 t2)
+
 (** *** Instrumentable arrows **)
 instance instrumentable_unverified_arrow 
   pi
   t1 {| d1:compilable t1 pi |}
   t2 {| d2:backtranslateable t2 pi |} : 
   instrumentable t1 t2 pi = {
-  ct = (fun m -> (t1 -> m (resexn t2)));
+  inst_out = (fun (m:Type -> Type) -> (d1.comp_out -> m (resexn d2.btrans_in)));
 
-  mlang_inst_in = mlang_unv_arrow #ct (mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in);
-  ilang_inst_out = admit (); // ILang.ilang_arrow_typ t1 t2 pi;
+  mlang_inst_in = mlang_unv_arrow (mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in);
+  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_comp_in) t2 #(d2.ilang_btrans_out);
 
   instrument = (fun f (x:t1) -> 
+    let x' = d1.compile x in
+//    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
+//      cast_to_dm_iio pi f x' in
+//    let r : resexn t2 = IIOwp?.reflect dm_tree in
+//    d2.backtranslate r
     admit ()
   )
 }
