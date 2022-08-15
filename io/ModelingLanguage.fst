@@ -159,10 +159,12 @@ instance compile_resexn pi (t:Type) {| d1:compilable t pi |} : compilable (resex
     | Inr err -> Inr err)
 }
 
+assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
+
 instance compile_verified_arrow
   pi
   (t1:Type) {| d1:backtranslateable t1 pi |} 
-  (t2:Type) {| d2:compilable t2 pi |} :
+  (t2:Type) {| d2:compilable t2 pi |}:
   Tot (compilable (ILang.ilang_arrow_typ t1 t2 pi) pi) = {
   ilang_comp_in = ILang.ilang_arrow pi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
 
@@ -170,9 +172,9 @@ instance compile_verified_arrow
   mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in (mlang_resexn d2.mlang_comp_out);
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 pi) (x:d1.btrans_in) ->
-    let r : unit -> ILang.IIOpi _ pi = fun () -> compile #_ #pi #(compile_resexn pi t2 #d2) (f (d1.backtranslate x)) in
-    let x : dm_iio _ _ = reify (r ()) in
-    x
+    let r : unit -> ILang.IIOpi _ pi = fun () ->  (f (d1.backtranslate x)) in
+    let tree : dm_iio _ _ = reify_IIOwp r in
+    iio_bind tree (fun x -> free.ret (compile #_ #pi #(compile_resexn pi t2 #d2) x))
   );
 }
 
@@ -361,12 +363,12 @@ type interface = {
   ictx_out : Type u#b;
   iprog_out : Type u#c; 
 
-  (* target level *)
-  ctx_in : Type u#d;
-  ctx_out : Type u#e;
-  prog_out : Type u#f; 
-
   vpi : pi_type;
+
+  (* target level *)
+  ctx_in : compilable ictx_in vpi;
+  ctx_out : backtranslateable ictx_out vpi;
+  prog_out : compilable iprog_out vpi; 
 }
 
 
@@ -393,39 +395,23 @@ let ilink
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ct (i:interface) (mon:monad) = i.ctx_in -> mon.m i.ctx_out
-type pt (i:interface) (mon:monad) = mon.m i.prog_out 
+type ct (i:interface) (mon:monad) = i.ctx_in.comp_out -> mon.m i.ctx_out.btrans_in
+type pt (i:interface) (mon:monad) = mon.m i.prog_out.comp_out 
 
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) = unit -> iio i.prog_out 
+type whole (i:interface) = unit -> iio i.prog_out.comp_out 
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
   fun () -> p c
 
-(* TODO: these should be replaced by typeclasses *)
-assume val backtranslate' : (i:interface) -> i.ctx_out -> i.ictx_out
-assume val compile' : (i:interface) -> i.ictx_in -> i.ctx_in
-assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
-
 (** *** Backtranslate **)
-
-
-
-val backtranslate : (#i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
-let backtranslate #i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
-  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c (compile' i x) in
-  let r : i.ctx_out = IIOwp?.reflect dm_tree in
-  backtranslate' i r
-
 (* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
    while in F* effects are only allowed at the right or arrows;
    make such kleisli arrows the abstraction instead of m? *)
 
 (** *** Compilation **)
-assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
-
-[@@ "opaque_to_smt"]
+(**[@@ "opaque_to_smt"]
 let compile_body  
   (#i:interface)
   (ip:iprog i)
@@ -433,18 +419,30 @@ let compile_body
   (#_: r_vpi_ipi i.vpi ipi) 
   (c:ctx i) :
   dm_iio i.iprog_out (ILang.pi_hist i.vpi) = 
-  let f : unit -> IIOwp i.iprog_out (ILang.pi_hist i.vpi) = fun () -> ip (backtranslate ipi c) in
-  reify_IIOwp f
+  let f : unit -> IIOwp i.iprog_out (ILang.pi_hist i.vpi) = 
+    fun () -> ip (backtranslate ipi c) in
+  reify_IIOwp f **)
 
-let compile
+let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
+  instrumentable_is_backtranslateable (
+    instrumentable_unverified_marrow
+      ipi
+      i.ictx_in #i.ctx_in
+      i.ictx_out #i.ctx_out
+  )
+
+let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) =
+  compile_verified_arrow
+    i.vpi
+    (ictx ipi) #(ctx_backtranslateable i ipi)
+
+let model_compile
   (#i:interface)
   (ip:iprog i)
   (ipi:pi_type)
   (#_: r_vpi_ipi i.vpi ipi) :
   prog i = 
-  fun (c:ctx i) -> 
-    let tree = compile_body ip ipi c in
-    iio_bind tree (fun x -> free.ret (compile'' i x))
+  compile #_ #ipi #(compile_verified_arrow i.vpi )  ip
 
 
 (** *** Case Studies **)
