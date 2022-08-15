@@ -189,28 +189,6 @@ instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : 
     | Inr err -> Inr err)
 }
 
-(** *** Instrumentable arrows **)
-instance instrumentable_unverified_arrow 
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |} : 
-  instrumentable t1 t2 pi = {
-  inst_out_in = d1.comp_out;
-  inst_out_out = d2.btrans_in;
-
-  mlang_inst_in = mlang_unv_arrow d1.mlang_comp_out d2.mlang_btrans_in;
-  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_comp_in) t2 #(d2.ilang_btrans_out);
-
-  instrument = (fun f (x:t1) -> 
-    let x' = d1.compile x in
-//    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
-//      cast_to_dm_iio pi f x' in
-//    let r : resexn t2 = IIOwp?.reflect dm_tree in
-//    d2.backtranslate r
-    admit ()
-  )
-}
-
 
 
 (** *** Parametricity **)
@@ -351,6 +329,27 @@ let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmo
   ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
+
+(** *** Instrumentable arrows **)
+instance instrumentable_unverified_marrow 
+  pi
+  t1 {| d1:compilable t1 pi |}
+  t2 {| d2:backtranslateable t2 pi |} : 
+  instrumentable t1 t2 pi = {
+  inst_out_in = d1.comp_out;
+  inst_out_out = (resexn d2.btrans_in);
+
+  mlang_inst_in = mlang_unv_arrow d1.mlang_comp_out (mlang_resexn d2.mlang_btrans_in);
+  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_comp_in) t2 #(d2.ilang_btrans_out);
+
+  instrument = (fun f (x:t1) -> 
+    let x' = d1.compile x in
+    let dm_tree : dm_iio _ (ILang.pi_hist pi) = 
+      cast_to_dm_iio pi f x' in
+    let r : resexn d2.btrans_in = IIOwp?.reflect dm_tree in
+    backtranslate #_ #pi #(backtranslateable_resexn pi t2) r
+  )
+}
 
 
 (** * Model of Secure Interop *)
