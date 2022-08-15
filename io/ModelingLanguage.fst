@@ -73,15 +73,14 @@ instance mlang_resexn t1 {| d1:mlang t1 |} : mlang (resexn t1) =
   { mldummy = () } *)
 
 type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m (resexn t2)
-type unverified_marrow (ct:(Type -> Type) -> Type) : Type = mon:monad -> acts mon -> ct mon.m
+type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m (resexn t2)
 
+(* the following two instances, imply that arrows that are in the free effect
+   and that are effectful polymorphic are allowed *)
 instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (verified_marrow t1 t2) =
   { mldummy = () }
 
-instance mlang_unv_arrow 
-  (#ct:(Type u#0 -> Type u#1) -> Type u#a) 
-  (d1:mlang (ct free.m)) :
-  mlang (unverified_marrow ct) =
+instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified_marrow t1 t2) =
   { mldummy = () }
 
   (*
@@ -130,18 +129,19 @@ class backtranslateable (btrans_out:Type u#a) (pi:pi_type) = {
 
 class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
  // [@@@no_method]
-  inst_out:(Type u#0 -> Type u#1) -> Type u#a;
+  inst_out_in: Type;
+  inst_out_out : Type;
 
-  instrument: unverified_marrow inst_out -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
+  instrument: unverified_marrow inst_out_in inst_out_out -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
 
   [@@@no_method]
-  mlang_inst_in : mlang (unverified_marrow inst_out);
+  mlang_inst_in : mlang (unverified_marrow inst_out_in inst_out_out);
   [@@@no_method]
   ilang_inst_out : ILang.ilang (ILang.ilang_arrow_typ inst_in_in inst_in_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  btrans_in = unverified_marrow d1.inst_out;
+  btrans_in = unverified_marrow d1.inst_out_in d1.inst_out_out;
   mlang_btrans_in = d1.mlang_inst_in;
   backtranslate = d1.instrument;
   ilang_btrans_out = d1.ilang_inst_out;
@@ -195,9 +195,10 @@ instance instrumentable_unverified_arrow
   t1 {| d1:compilable t1 pi |}
   t2 {| d2:backtranslateable t2 pi |} : 
   instrumentable t1 t2 pi = {
-  inst_out = (fun (m:Type -> Type) -> (d1.comp_out -> m (resexn d2.btrans_in)));
+  inst_out_in = d1.comp_out;
+  inst_out_out = d2.btrans_in;
 
-  mlang_inst_in = mlang_unv_arrow (mlang_ver_arrow d1.mlang_comp_out d2.mlang_btrans_in);
+  mlang_inst_in = mlang_unv_arrow d1.mlang_comp_out d2.mlang_btrans_in;
   ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_comp_in) t2 #(d2.ilang_btrans_out);
 
   instrument = (fun f (x:t1) -> 
