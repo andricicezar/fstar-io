@@ -108,24 +108,24 @@ class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
   mlang_mbtrans : mlang mbtrans;
 }
 
-class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
+class instrumentable (minst_in_in minst_in_out:Type) (pi:pi_type) = {
  // [@@@no_method]
-  inst_out_in: Type;
-  inst_out_out : Type;
+  iinst_in: Type;
+  iinst_out : Type;
 
-  instrument: unverified_marrow inst_out_in inst_out_out -> Tot (ILang.ilang_arrow_typ inst_in_in inst_in_out pi); 
+  instrument: unverified_marrow iinst_in iinst_out -> Tot (ILang.ilang_arrow_typ minst_in_in minst_in_out pi); 
 
   [@@@no_method]
-  mlang_inst_in : mlang (unverified_marrow inst_out_in inst_out_out);
+  mlang_minst_in : mlang (unverified_marrow iinst_in iinst_out);
   [@@@no_method]
-  ilang_inst_out : ILang.ilang (ILang.ilang_arrow_typ inst_in_in inst_in_out pi) pi;
+  ilang_iinst : ILang.ilang (ILang.ilang_arrow_typ minst_in_in minst_in_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = unverified_marrow d1.inst_out_in d1.inst_out_out;
-  mlang_mbtrans = d1.mlang_inst_in;
+  mbtrans = unverified_marrow d1.iinst_in d1.iinst_out;
+  mlang_mbtrans = d1.mlang_minst_in;
   backtranslate = d1.instrument;
-  ilang_ibtrans = d1.ilang_inst_out;
+  ilang_ibtrans = d1.ilang_iinst;
 }
 
 instance compile_resexn #pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
@@ -321,11 +321,11 @@ instance instrumentable_unverified_marrow
   t1 {| d1:compilable t1 pi1 |}
   t2 {| d2:backtranslateable t2 pi2 |} : 
   instrumentable t1 t2 ipi = {
-  inst_out_in = d1.mcomp;
-  inst_out_out = (resexn d2.mbtrans);
+  iinst_in = d1.mcomp;
+  iinst_out = (resexn d2.mbtrans);
 
-  mlang_inst_in = mlang_unv_arrow d1.mlang_mcomp (mlang_resexn d2.mlang_mbtrans);
-  ilang_inst_out = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
+  mlang_minst_in = mlang_unv_arrow d1.mlang_mcomp (mlang_resexn d2.mlang_mbtrans);
+  ilang_iinst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
     let x' = d1.compile x in
@@ -416,10 +416,13 @@ let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.
 let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
   instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
 
+let ctx_backtranslateable' (i:interface) (ipi:pi_type) (d1:backtranslateable (ictx i ipi) ipi) : backtranslateable (ictx i i.vpi) ipi =
+  admit ()
+
 let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
   compile_verified_marrow
     i.vpi
-    (ictx i ipi) #(ctx_backtranslateable i ipi)
+    (ictx i i.vpi) #(ctx_backtranslateable' i ipi (ctx_backtranslateable i ipi))
     i.iprog_out #i.prog_out
 
 let model_compile
