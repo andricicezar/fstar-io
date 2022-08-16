@@ -143,12 +143,6 @@ instance compile_resexn #pi (#t:Type) (d1:compilable t pi) : compilable (resexn 
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
 
-type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
-
-(* Wow! Super dangerous... not even asking for a relation between vpi and ipi *)
-//let convert_arrow (#vpi #ipi:pi_type) 
-//  #t1 (d1:ILang.ilang t1 vpi) (#_:r_vpi_ipi vpi ipi) : ILang.ilang t1 ipi = { mldummy = () } 
-
 instance compile_verified_marrow
   (vpi #pi1 #pi2:pi_type)
   (t1:Type) {| d1:backtranslateable t1 pi1 |} 
@@ -369,6 +363,8 @@ type iwhole (i:interface) = unit -> ILang.IIOpi (resexn i.iprog_out) i.vpi
 //  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
 //  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
 
+type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
 (* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
 let ilink 
   (#i:interface) 
@@ -411,29 +407,19 @@ let compile_body
     fun () -> ip (backtranslate ipi c) in
   reify_IIOwp f **)
 
-let cast_compilable (#vpi #ipi:pi_type) #t1 (d1:compilable t1 vpi) : compilable t1 ipi = { 
-  mcomp = d1.mcomp;
-
-  compile = (fun f -> d1.compile f);
-  ilang_icomp = convert_arrow d1.ilang_icomp;
-  mlang_mcomp = d1.mlang_mcomp;
-} 
-
-let cast_backtranslateable (#vpi #ipi:pi_type) #t1 (d1:backtranslateable t1 vpi) : backtranslateable t1 ipi = admit () 
-
 let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.ictx_out ipi =
   instrumentable_unverified_marrow
     ipi
-    i.ictx_in #(cast_compilable i.ctx_in)
-    i.ictx_out #(cast_backtranslateable i.ctx_out)
+    i.ictx_in #(i.ctx_in)
+    i.ictx_out #(i.ctx_out)
 
 let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
   instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
 
 let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
   compile_verified_marrow
-    i.vpi ipi
-    (ictx i i.vpi) #(ctx_backtranslateable i ipi)
+    i.vpi
+    (ictx i ipi) #(ctx_backtranslateable i ipi)
     i.iprog_out #i.prog_out
 
 let model_compile
