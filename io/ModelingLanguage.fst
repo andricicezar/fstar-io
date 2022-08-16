@@ -84,28 +84,28 @@ instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified
   { mldummy = () }
 
 (** * Type Classes **)
-class compilable (comp_in:Type u#a) (pi:pi_type) = {
+class compilable (icomp:Type u#a) (pi:pi_type) = {
   [@@@no_method]
-  comp_out : Type u#b;
+  mcomp : Type u#b;
 
-  compile: comp_in -> comp_out;
+  compile: icomp -> mcomp;
 
   [@@@no_method]
-  ilang_comp_in : ILang.ilang comp_in pi;
+  ilang_icomp : ILang.ilang icomp pi;
   [@@@no_method]
-  mlang_comp_out : mlang comp_out;
+  mlang_mcomp : mlang mcomp;
 }
 
-class backtranslateable (btrans_out:Type u#a) (pi:pi_type) = {
+class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
   [@@@no_method]
-  btrans_in : Type u#b;
+  mbtrans : Type u#b;
 
-  backtranslate: btrans_in -> btrans_out;
+  backtranslate: mbtrans -> ibtrans;
 
   [@@@no_method]
-  ilang_btrans_out : ILang.ilang btrans_out pi;
+  ilang_ibtrans : ILang.ilang ibtrans pi;
   [@@@no_method]
-  mlang_btrans_in : mlang btrans_in;
+  mlang_mbtrans : mlang mbtrans;
 }
 
 class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
@@ -122,17 +122,17 @@ class instrumentable (inst_in_in inst_in_out:Type) (pi:pi_type) = {
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  btrans_in = unverified_marrow d1.inst_out_in d1.inst_out_out;
-  mlang_btrans_in = d1.mlang_inst_in;
+  mbtrans = unverified_marrow d1.inst_out_in d1.inst_out_out;
+  mlang_mbtrans = d1.mlang_inst_in;
   backtranslate = d1.instrument;
-  ilang_btrans_out = d1.ilang_inst_out;
+  ilang_ibtrans = d1.ilang_inst_out;
 }
 
 instance compile_resexn pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
-  ilang_comp_in = ILang.ilang_resexn pi t #d1.ilang_comp_in;
+  ilang_icomp = ILang.ilang_resexn pi t #d1.ilang_icomp;
 
-  comp_out = resexn (d1.comp_out);
-  mlang_comp_out = mlang_resexn d1.mlang_comp_out;
+  mcomp = resexn (d1.mcomp);
+  mlang_mcomp = mlang_resexn d1.mlang_mcomp;
 
   compile = (fun x ->
     match x with
@@ -157,12 +157,12 @@ instance compile_verified_marrow
   (t2:Type) {| d2:compilable t2 vpi |}:
   Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
   {
-  ilang_comp_in = ILang.ilang_arrow vpi t1 #(convert_arrow d1.ilang_btrans_out #r1) t2 #d2.ilang_comp_in;
+  ilang_icomp = ILang.ilang_arrow vpi t1 #(convert_arrow d1.ilang_ibtrans #r1) t2 #d2.ilang_icomp;
 
-  comp_out = verified_marrow d1.btrans_in (resexn d2.comp_out);
-  mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in (mlang_resexn d2.mlang_comp_out);
+  mcomp = verified_marrow d1.mbtrans (resexn d2.mcomp);
+  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans (mlang_resexn d2.mlang_mcomp);
 
-  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.btrans_in) ->
+  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
     iio_bind tree (fun x -> free.ret (compile #_ #vpi #(compile_resexn vpi d2) x))
@@ -171,10 +171,10 @@ instance compile_verified_marrow
 
 (** *** Backtranslate types **)
 instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : backtranslateable (resexn t) pi = {
-  ilang_btrans_out = ILang.ilang_resexn pi t #d1.ilang_btrans_out;
+  ilang_ibtrans = ILang.ilang_resexn pi t #d1.ilang_ibtrans;
 
-  btrans_in = resexn (d1.btrans_in);
-  mlang_btrans_in = mlang_resexn d1.mlang_btrans_in;
+  mbtrans = resexn (d1.mbtrans);
+  mlang_mbtrans = mlang_resexn d1.mlang_mbtrans;
 
   backtranslate = (fun x ->
     match x with
@@ -329,17 +329,17 @@ instance instrumentable_unverified_marrow
   t1 {| d1:compilable t1 pi |}
   t2 {| d2:backtranslateable t2 pi |} : 
   instrumentable t1 t2 pi = {
-  inst_out_in = d1.comp_out;
-  inst_out_out = (resexn d2.btrans_in);
+  inst_out_in = d1.mcomp;
+  inst_out_out = (resexn d2.mbtrans);
 
-  mlang_inst_in = mlang_unv_arrow d1.mlang_comp_out (mlang_resexn d2.mlang_btrans_in);
-  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_comp_in) t2 #(d2.ilang_btrans_out);
+  mlang_inst_in = mlang_unv_arrow d1.mlang_mcomp (mlang_resexn d2.mlang_mbtrans);
+  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
     let x' = d1.compile x in
     let dm_tree : dm_iio _ (ILang.pi_hist pi) = 
       cast_to_dm_iio pi f x' in
-    let r : resexn d2.btrans_in = IIOwp?.reflect dm_tree in
+    let r : resexn d2.mbtrans = IIOwp?.reflect dm_tree in
     backtranslate #_ #pi #(backtranslateable_resexn pi t2) r
   )
 }
@@ -385,13 +385,13 @@ let ilink
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ct (i:interface) (mon:monad) = i.ctx_in.comp_out -> mon.m i.ctx_out.btrans_in
-type pt (i:interface) (mon:monad) = mon.m i.prog_out.comp_out 
+type ct (i:interface) (mon:monad) = i.ctx_in.mcomp -> mon.m i.ctx_out.mbtrans
+type pt (i:interface) (mon:monad) = mon.m i.prog_out.mcomp 
 
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) = unit -> iio i.prog_out.comp_out 
+type whole (i:interface) = unit -> iio i.prog_out.mcomp 
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
   fun () -> p c
 
@@ -414,11 +414,11 @@ let compile_body
   reify_IIOwp f **)
 
 let cast_compilable (#vpi #ipi:pi_type) #t1 (d1:compilable t1 vpi) : compilable t1 ipi = { 
-  comp_out = d1.comp_out;
+  mcomp = d1.mcomp;
 
   compile = (fun f -> d1.compile f);
-  ilang_comp_in = convert_arrow d1.ilang_comp_in;
-  mlang_comp_out = d1.mlang_comp_out;
+  ilang_icomp = convert_arrow d1.ilang_icomp;
+  mlang_mcomp = d1.mlang_mcomp;
 } 
 
 let cast_backtranslateable (#vpi #ipi:pi_type) #t1 (d1:backtranslateable t1 vpi) : backtranslateable t1 ipi = admit () 
