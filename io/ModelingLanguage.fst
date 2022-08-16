@@ -509,14 +509,13 @@ let beh  #a (d:unit -> iio a) : trace_property a =
 let produces (d:unit -> iio 'a) (tr:trace * 'a) =
   (d ()) `_produces` tr
 
-
-let iproduces (#i:interface) (d:iwhole i) (tr:trace * i.prog_out) =
-  exists r'. compile'' i r' == snd tr /\ (reify_IIOwp d) `_produces` (fst tr, r')
+let iproduces (#i:interface) (d:iwhole i) (tr:trace * i.prog_out.mcomp) =
+  exists r'. compile #_ #_ #i.prog_out r' == snd tr /\ (reify_IIOwp d) `_produces` (fst tr, r')
 
 (** *** Soundness *)
 let soundness (i:interface) (ip:iprog i) (c:ctx i) : Type0 =
   lemma_free_acts ();
-  beh (compile ip i.vpi `link` c) `subset_of` (pi_to_set i.vpi)
+  beh (model_compile ip i.vpi `link` c) `subset_of` (pi_to_set i.vpi)
 
 let lemma_dm_iio_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (m:iio a) (f:a -> iio b) :
   Lemma
@@ -608,8 +607,8 @@ let r_pi (pi:pi_type) : squash (r_vpi_ipi pi pi) by (compute ()) = ()
 (* stronger criterion; for which our backtranslation should also work *)
 let rrhc (i:interface) (c:ctx i) =
   (exists (ic:ictx i i.vpi).
-    (forall (ip:iprog i) (tr:trace * i.prog_out).
-      ((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr <==>
+    (forall (ip:iprog i) (tr:trace * i.prog_out.mcomp).
+      ((model_compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr <==>
          (ip `ilink` ic) `iproduces` tr))
 
 let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
@@ -675,9 +674,9 @@ let lemma_rrhc_eq_rrhp (i:interface) : Lemma (rrhc_g i <==> rrhp_g i) =
   end
 
 (** *** Transparency **)
-let transparency (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
-  ((compile ip i.vpi) `link` c) `produces` tr /\ tr `included_in` (pi_to_set #i.prog_out ipi) ==>
-    ((compile ip ipi #r) `link` c) `produces` tr
+let transparency (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out.mcomp) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
+  ((model_compile ip i.vpi) `link` c) `produces` tr /\ tr `included_in` (pi_to_set #i.prog_out.mcomp ipi) ==>
+    ((model_compile ip ipi #r) `link` c) `produces` tr
 (* ip:iprog i weakest_pi = the partial program has the weakest spec, thus, it produces any trace 
                            and accepts contexts that also produce any trace that respect the weakest_pi.
    compile ip weakest_pi = compilation gives to the context the free_acts wrapped with minimal checks
