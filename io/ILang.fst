@@ -47,7 +47,11 @@ instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (res
 
 type ilang_arrow_typ (t1 t2:Type) pi = t1 -> IIOpi (resexn t2) pi
 
-instance ilang_arrow (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ilang t2 pi |} : ilang (ilang_arrow_typ t1 t2 pi) pi =
+(** An ilang arrow is a statically verified arrow to respect pi.
+    It can expect an argument that respects a different pi1, or it
+    can return a function that respects pi2. 
+**)
+instance ilang_arrow (#pi1 #pi2 pi:monitorable_prop) t1 {| d1:ilang t1 pi1 |} t2 {| d2:ilang t2 pi2 |} : ilang (ilang_arrow_typ t1 t2 pi) pi =
   { mldummy = () }
 
 (**instance ilang_fo_uint8 : ilang_fo UInt8.t = { fo_pred = () }

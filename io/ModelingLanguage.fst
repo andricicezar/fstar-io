@@ -128,7 +128,7 @@ instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1
   ilang_ibtrans = d1.ilang_inst_out;
 }
 
-instance compile_resexn pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
+instance compile_resexn #pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
   ilang_icomp = ILang.ilang_resexn pi t #d1.ilang_icomp;
 
   mcomp = resexn (d1.mcomp);
@@ -142,22 +142,20 @@ instance compile_resexn pi (#t:Type) (d1:compilable t pi) : compilable (resexn t
 
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
-(* Wow! Super dangerous... not even asking for a relation between vpi and ipi *)
 
 type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
-let convert_arrow (#vpi #ipi:pi_type) 
-  #t1 (d1:ILang.ilang t1 vpi) (#_:r_vpi_ipi vpi ipi) : ILang.ilang t1 ipi = { mldummy = () } 
+(* Wow! Super dangerous... not even asking for a relation between vpi and ipi *)
+//let convert_arrow (#vpi #ipi:pi_type) 
+//  #t1 (d1:ILang.ilang t1 vpi) (#_:r_vpi_ipi vpi ipi) : ILang.ilang t1 ipi = { mldummy = () } 
 
 instance compile_verified_marrow
-  vpi
-  ipi
-  (#r1:r_vpi_ipi vpi ipi)
-  (t1:Type) {| d1:backtranslateable t1 ipi |} 
-  (t2:Type) {| d2:compilable t2 vpi |}:
+  (vpi #pi1 #pi2:pi_type)
+  (t1:Type) {| d1:backtranslateable t1 pi1 |} 
+  (t2:Type) {| d2:compilable t2 pi2 |}:
   Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
   {
-  ilang_icomp = ILang.ilang_arrow vpi t1 #(convert_arrow d1.ilang_ibtrans #r1) t2 #d2.ilang_icomp;
+  ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
   mcomp = verified_marrow d1.mbtrans (resexn d2.mcomp);
   mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans (mlang_resexn d2.mlang_mcomp);
@@ -165,12 +163,12 @@ instance compile_verified_marrow
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (compile #_ #vpi #(compile_resexn vpi d2) x))
+    iio_bind tree (fun x -> free.ret (compile #_ #_ #(compile_resexn d2) x))
   );
 }
 
 (** *** Backtranslate types **)
-instance backtranslateable_resexn pi (t:Type) {| d1:backtranslateable t pi |} : backtranslateable (resexn t) pi = {
+instance backtranslateable_resexn #pi (t:Type) {| d1:backtranslateable t pi |} : backtranslateable (resexn t) pi = {
   ilang_ibtrans = ILang.ilang_resexn pi t #d1.ilang_ibtrans;
 
   mbtrans = resexn (d1.mbtrans);
@@ -325,22 +323,22 @@ let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmo
 
 (** *** Instrumentable arrows **)
 instance instrumentable_unverified_marrow 
-  pi
-  t1 {| d1:compilable t1 pi |}
-  t2 {| d2:backtranslateable t2 pi |} : 
-  instrumentable t1 t2 pi = {
+  ipi #pi1 #pi2
+  t1 {| d1:compilable t1 pi1 |}
+  t2 {| d2:backtranslateable t2 pi2 |} : 
+  instrumentable t1 t2 ipi = {
   inst_out_in = d1.mcomp;
   inst_out_out = (resexn d2.mbtrans);
 
   mlang_inst_in = mlang_unv_arrow d1.mlang_mcomp (mlang_resexn d2.mlang_mbtrans);
-  ilang_inst_out = ILang.ilang_arrow pi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
+  ilang_inst_out = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
     let x' = d1.compile x in
-    let dm_tree : dm_iio _ (ILang.pi_hist pi) = 
-      cast_to_dm_iio pi f x' in
+    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
+      cast_to_dm_iio ipi f x' in
     let r : resexn d2.mbtrans = IIOwp?.reflect dm_tree in
-    backtranslate #_ #pi #(backtranslateable_resexn pi t2) r
+    backtranslate #_ #_ #(backtranslateable_resexn t2) r
   )
 }
 
