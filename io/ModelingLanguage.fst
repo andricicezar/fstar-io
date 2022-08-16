@@ -65,9 +65,6 @@ instance mlang_pair t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (t1 * t2) 
 instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either t1 t2) =
   { mldummy = () }
 
-instance mlang_resexn #t1 (d1:mlang t1) : mlang (resexn t1) =
-  { mldummy = () }
-
 (** TODO: is this one neeeded? *)
 (* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
   { mldummy = () } *)
@@ -128,18 +125,6 @@ instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1
   ilang_ibtrans = d1.ilang_minst;
 }
 
-instance compile_resexn #pi (#t:Type) (d1:compilable t pi) : compilable (resexn t) pi = {
-  ilang_icomp = ILang.ilang_resexn pi t #d1.ilang_icomp;
-
-  mcomp = resexn (d1.mcomp);
-  mlang_mcomp = mlang_resexn d1.mlang_mcomp;
-
-  compile = (fun x ->
-    match x with
-    | Inl r -> Inl (d1.compile r)
-    | Inr err -> Inr err)
-}
-
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
 
@@ -160,21 +145,6 @@ instance compile_verified_marrow
     iio_bind tree (fun x -> free.ret (d2.compile x))
   );
 }
-
-(** *** Backtranslate types **)
-instance backtranslateable_resexn #pi (t:Type) {| d1:backtranslateable t pi |} : backtranslateable (resexn t) pi = {
-  ilang_ibtrans = ILang.ilang_resexn pi t #d1.ilang_ibtrans;
-
-  mbtrans = resexn (d1.mbtrans);
-  mlang_mbtrans = mlang_resexn d1.mlang_mbtrans;
-
-  backtranslate = (fun x ->
-    match x with
-    | Inl r -> Inl (backtranslate r)
-    | Inr err -> Inr err)
-}
-
-
 
 (** *** Parametricity **)
 noeq
