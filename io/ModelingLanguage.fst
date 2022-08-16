@@ -142,24 +142,30 @@ instance compile_resexn pi (#t:Type) (d1:compilable t pi) : compilable (resexn t
 
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
+(* Wow! Super dangerous... not even asking for a relation between vpi and ipi *)
+
+type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
+let convert_arrow (#vpi #ipi:pi_type) 
+  #t1 (d1:ILang.ilang t1 vpi) (#_:r_vpi_ipi vpi ipi) : ILang.ilang t1 ipi = { mldummy = () } 
+
 instance compile_verified_marrow
   vpi
   ipi
+  (#r1:r_vpi_ipi vpi ipi)
   (t1:Type) {| d1:backtranslateable t1 ipi |} 
   (t2:Type) {| d2:compilable t2 vpi |}:
   Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
   {
-  ilang_comp_in = ILang.ilang_arrow vpi t1 #d1.ilang_btrans_out t2 #d2.ilang_comp_in;
+  ilang_comp_in = ILang.ilang_arrow vpi t1 #(convert_arrow d1.ilang_btrans_out #r1) t2 #d2.ilang_comp_in;
 
   comp_out = verified_marrow d1.btrans_in (resexn d2.comp_out);
   mlang_comp_out = mlang_ver_arrow d1.mlang_btrans_in (mlang_resexn d2.mlang_comp_out);
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.btrans_in) ->
-    admit ();
-    (*
-    let r : unit -> ILang.IIOpi _ vpi = fun () ->  (f (d1.backtranslate x)) in
+    let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (compile #_ #vpi #(compile_resexn vpi t2 #d2) x))*)
+    iio_bind tree (fun x -> free.ret (compile #_ #vpi #(compile_resexn vpi d2) x))
   );
 }
 
@@ -358,13 +364,12 @@ type interface = {
 
 
 (** *** Intermediate Lang **)
-type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
+type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi (resexn i.ictx_out) ipi
 type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi (resexn i.iprog_out) i.vpi
 type iwhole (i:interface) = unit -> ILang.IIOpi (resexn i.iprog_out) i.vpi
 
 //  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
 //  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
-type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 (* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
 let ilink 
@@ -408,15 +413,24 @@ let compile_body
     fun () -> ip (backtranslate ipi c) in
   reify_IIOwp f **)
 
-let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i i.vpi) ipi =
-  admit ()
-  (**
-  instrumentable_is_backtranslateable (
-    instrumentable_unverified_marrow
-      ipi
-      i.ictx_in #i.ctx_in
-      i.ictx_out #i.ctx_out
-  )**)
+let cast_compilable (#vpi #ipi:pi_type) #t1 (d1:compilable t1 vpi) : compilable t1 ipi = { 
+  comp_out = d1.comp_out;
+
+  compile = (fun f -> d1.compile f);
+  ilang_comp_in = convert_arrow d1.ilang_comp_in;
+  mlang_comp_out = d1.mlang_comp_out;
+} 
+
+let cast_backtranslateable (#vpi #ipi:pi_type) #t1 (d1:backtranslateable t1 vpi) : backtranslateable t1 ipi = admit () 
+
+let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.ictx_out ipi =
+  instrumentable_unverified_marrow
+    ipi
+    i.ictx_in #(cast_compilable i.ctx_in)
+    i.ictx_out #(cast_backtranslateable i.ctx_out)
+
+let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
+  instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
 
 let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
   compile_verified_marrow
@@ -429,8 +443,14 @@ let model_compile
   (ip:iprog i)
   (ipi:pi_type)
   (#_: r_vpi_ipi i.vpi ipi) :
-  prog i = 
-  compile #_ #i.vpi #(prog_compilable i ipi) ip
+  prog i by (
+    norm [delta_only [`%ctx_backtranslateable]; iota];
+    explode ();
+    bump_nth 3;
+    dump "H"
+  )= 
+  let p : prog i = compile #_ #i.vpi #(prog_compilable i ipi) ip in
+  p
 
 
 (** *** Case Studies **)
