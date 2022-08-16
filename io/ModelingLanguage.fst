@@ -379,13 +379,13 @@ let ilink
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ct (i:interface) (mon:monad) = i.ctx_in.mcomp -> mon.m i.ctx_out.mbtrans
-type pt (i:interface) (mon:monad) = mon.m i.prog_out.mcomp 
+type ct (i:interface) (mon:monad) = i.ctx_in.mcomp -> mon.m (resexn i.ctx_out.mbtrans)
+type pt (i:interface) (mon:monad) = mon.m (resexn i.prog_out.mcomp )
 
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) = unit -> iio i.prog_out.mcomp 
+type whole (i:interface) = unit -> iio (resexn i.prog_out.mcomp)
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
   fun () -> p c
 
@@ -416,13 +416,14 @@ let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.
 let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
   instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
 
-let ctx_backtranslateable' (i:interface) (ipi:pi_type) (d1:backtranslateable (ictx i ipi) ipi) : backtranslateable (ictx i i.vpi) ipi =
-  admit ()
+let ctx_backtranslateable' (i:interface) (ipi:pi_type) : backtranslateable (ictx i i.vpi) ipi =
+  admit ();
+  ctx_backtranslateable i ipi
 
 let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
   compile_verified_marrow
     i.vpi
-    (ictx i i.vpi) #(ctx_backtranslateable' i ipi (ctx_backtranslateable i ipi))
+    (ictx i i.vpi) #(ctx_backtranslateable' i ipi)
     i.iprog_out #i.prog_out
 
 let model_compile
@@ -430,14 +431,8 @@ let model_compile
   (ip:iprog i)
   (ipi:pi_type)
   (#_: r_vpi_ipi i.vpi ipi) :
-  prog i by (
-    norm [delta_only [`%ctx_backtranslateable]; iota];
-    explode ();
-    bump_nth 3;
-    dump "H"
-  )= 
-  let p : prog i = compile #_ #i.vpi #(prog_compilable i ipi) ip in
-  p
+  prog i = 
+  compile #_ #i.vpi #(prog_compilable i ipi) ip
 
 
 (** *** Case Studies **)
