@@ -478,28 +478,30 @@ let mwhole1 = mprog1 `link` mctx1
 let _ = mwhole1 () == Return 8
 
 (** new test where ctx accepts an f from prog **)
+type icbt = ILang.ilang_arrow_typ int int thePi
+type ictxt = ILang.ilang_arrow_typ icbt int thePi
 
-let ctx_instrum : instrumentable int int pi = 
-  instrumentable_unverified_marrow pi int #(compilable_int #pi) int #(backtranslate_int #pi) 
+let icbt_comp : compilable icbt thePi = 
+  compile_verified_marrow thePi int #(backtranslate_int #thePi) int #(compilable_int #thePi)
 
-type ictxt = ILang.ilang_arrow_typ int int pi
+let ictxt_instrum : instrumentable icbt int thePi = 
+  instrumentable_unverified_marrow thePi icbt #icbt_comp int #(backtranslate_int #thePi) 
 
-let ctx_btrans : backtranslateable ictxt pi =
-  instrumentable_is_backtranslateable ctx_instrum
+let ictxt_btrans : backtranslateable ictxt thePi =
+  instrumentable_is_backtranslateable ictxt_instrum
 
-type iprogt = ictxt -> ILang.IIOpi int pi
+type iprogt = ictxt -> ILang.IIOpi int thePi
 
-let prog_comp : compilable iprogt pi =
-  compile_verified_marrow pi ictxt #ctx_btrans int #(compilable_int #pi)
-let someProg : iprogt = fun c -> (c 5) + 1
+let prog_comp : compilable iprogt thePi =
+  compile_verified_marrow thePi ictxt #ictxt_btrans int #(compilable_int #thePi)
+let someProg : iprogt = fun c -> (c (fun x -> x + 5)) + 1
 
+let mprog : prog_comp.mcomp = compile #_ #thePi #prog_comp someProg
 
-let mprog : prog_comp.mcomp = compile #_ #pi #prog_comp someProg
-
-let mwhole () : free.m int =
-  (* Fstar needs help here to make types work *)
-  let mprog' : ctx_btrans.mbtrans -> free.m int = mprog in
-  mprog' mctx
+(** TODO: problem!! f's output type should be mon.m int, not free.m. **)
+val mctx : ictxt_btrans.mbtrans
+let mctx (mon:monad) (acts:acts mon) (f:int -> free.m int) : mon.m int =
+  mon.ret 2 
 
 
 (** ** Criterias **)
