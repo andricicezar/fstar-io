@@ -472,6 +472,14 @@ val mctx : ctx_btrans.mbtrans
 let mctx (mon:monad) (acts:acts mon) (x:int) : mon.m int =
   mon.ret (x+2)
 
+let mprog : prog_comp.mcomp = compile #_ #pi #prog_comp someProg
+
+let mwhole () : free.m int =
+  (* Fstar needs help here to make types work *)
+  let mprog' : ctx_btrans.mbtrans -> free.m int = mprog in
+  mprog' mctx
+
+
 (** ** Criterias **)
 (** *** Behaviors **)
 (* A trace property is a set of pairs between a trace and a result. 
