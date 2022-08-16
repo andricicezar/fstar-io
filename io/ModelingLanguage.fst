@@ -436,8 +436,6 @@ let model_compile
 
 (** *** Case Studies **)
 
-assume val pi : pi_type
-
 instance compilable_int #pi : compilable int pi = {
   ilang_icomp = ILang.ilang_int pi;
   mcomp = int;
@@ -454,6 +452,33 @@ instance backtranslate_int #pi : backtranslateable int pi = {
   mlang_mbtrans = mlang_int;
 }
 
+assume val thePi : pi_type
+
+let test1 : interface = {
+  vpi = thePi;
+
+  (* intermediate level *)
+  ictx_in = int;
+  ictx_out = int;
+  iprog_out = int; 
+
+  ctx_in = compilable_int;
+  ctx_out = backtranslate_int;
+  prog_out = compilable_int;
+}
+
+let iprog1 : iprog test1 = fun c -> (c 5) + 1
+let mprog1 : prog test1 = compile #_ #thePi #(prog_compilable test1 thePi) iprog1 
+val mctx1 : ctx test1  
+let mctx1 (mon:monad) (acts:acts mon) (x:int) : mon.m int =
+  mon.ret (x+2)
+
+let mwhole1 = mprog1 `link` mctx1
+
+let _ = mwhole1 () == Return 8
+
+(** new test where ctx accepts an f from prog **)
+
 let ctx_instrum : instrumentable int int pi = 
   instrumentable_unverified_marrow pi int #(compilable_int #pi) int #(backtranslate_int #pi) 
 
@@ -468,9 +493,6 @@ let prog_comp : compilable iprogt pi =
   compile_verified_marrow pi ictxt #ctx_btrans int #(compilable_int #pi)
 let someProg : iprogt = fun c -> (c 5) + 1
 
-val mctx : ctx_btrans.mbtrans
-let mctx (mon:monad) (acts:acts mon) (x:int) : mon.m int =
-  mon.ret (x+2)
 
 let mprog : prog_comp.mcomp = compile #_ #pi #prog_comp someProg
 
