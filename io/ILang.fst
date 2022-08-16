@@ -45,7 +45,7 @@ instance ilang_either (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} t2 {| d2:ila
 instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi =
   { mldummy = () }
 
-type ilang_arrow_typ (t1 t2:Type) pi = t1 -> IIOpi (resexn t2) pi
+type ilang_arrow_typ (t1 t2:Type) pi = t1 -> IIOpi t2 pi
 
 (** An ilang arrow is a statically verified arrow to respect pi.
     It can expect an argument that respects a different pi1, or it

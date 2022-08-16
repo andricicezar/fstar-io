@@ -151,13 +151,13 @@ instance compile_verified_marrow
   {
   ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
-  mcomp = verified_marrow d1.mbtrans (resexn d2.mcomp);
-  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans (mlang_resexn d2.mlang_mcomp);
+  mcomp = verified_marrow d1.mbtrans d2.mcomp;
+  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (compile #_ #_ #(compile_resexn d2) x))
+    iio_bind tree (fun x -> free.ret (d2.compile x))
   );
 }
 
@@ -322,17 +322,17 @@ instance instrumentable_unverified_marrow
   t2 {| d2:backtranslateable t2 pi2 |} : 
   instrumentable t1 t2 ipi = {
   iinst_in = d1.mcomp;
-  iinst_out = (resexn d2.mbtrans);
+  iinst_out = d2.mbtrans;
 
-  mlang_minst_in = mlang_unv_arrow d1.mlang_mcomp (mlang_resexn d2.mlang_mbtrans);
+  mlang_minst_in = mlang_unv_arrow d1.mlang_mcomp d2.mlang_mbtrans;
   ilang_iinst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
     let x' = d1.compile x in
     let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
       cast_to_dm_iio ipi f x' in
-    let r : resexn d2.mbtrans = IIOwp?.reflect dm_tree in
-    backtranslate #_ #_ #(backtranslateable_resexn t2) r
+    let r : d2.mbtrans = IIOwp?.reflect dm_tree in
+    d2.backtranslate r
   )
 }
 
@@ -356,9 +356,9 @@ type interface = {
 
 
 (** *** Intermediate Lang **)
-type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi (resexn i.ictx_out) ipi
-type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi (resexn i.iprog_out) i.vpi
-type iwhole (i:interface) = unit -> ILang.IIOpi (resexn i.iprog_out) i.vpi
+type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
+type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi i.iprog_out i.vpi
+type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
 
 //  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
 //  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
@@ -379,13 +379,13 @@ let ilink
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ct (i:interface) (mon:monad) = i.ctx_in.mcomp -> mon.m (resexn i.ctx_out.mbtrans)
-type pt (i:interface) (mon:monad) = mon.m (resexn i.prog_out.mcomp )
+type ct (i:interface) (mon:monad) = i.ctx_in.mcomp -> mon.m i.ctx_out.mbtrans
+type pt (i:interface) (mon:monad) = mon.m i.prog_out.mcomp
 
 type ctx (i:interface) = mon:monad -> acts mon -> ct i mon
 type prog (i:interface) = ctx i -> pt i free
 
-type whole (i:interface) = unit -> iio (resexn i.prog_out.mcomp)
+type whole (i:interface) = unit -> iio i.prog_out.mcomp
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
   fun () -> p c
 
@@ -410,8 +410,8 @@ let compile_body
 let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.ictx_out ipi =
   instrumentable_unverified_marrow
     ipi
-    i.ictx_in #(i.ctx_in)
-    i.ictx_out #(i.ctx_out)
+    i.ictx_in #i.ctx_in
+    i.ictx_out #i.ctx_out
 
 let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
   instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
@@ -434,9 +434,9 @@ let model_compile
   prog i = 
   compile #_ #i.vpi #(prog_compilable i ipi) ip
 
-
 (** *** Case Studies **)
 
+(**
 let test_i (pi:pi_type) : interface = {
   (* intermediate level *)
   ictx_in = int -> ILang.IIOpi int pi;
@@ -449,7 +449,7 @@ let test_i (pi:pi_type) : interface = {
   prog_out = int; 
 
   vpi = pi;
-}
+}**)
 
 
 
