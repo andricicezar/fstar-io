@@ -73,57 +73,71 @@ instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either 
 type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
 type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
 
-type kleisli (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) (mon:monad) = t1 mon -> mon.m (t2 mon)
+type styp = (Type -> Type) -> Type
 
-let kleisli_fish (#mon:monad) (f:kleisli 'a 'b mon) (g:kleisli 'b 'c mon) : kleisli 'a 'c mon = 
-  fun (x:'a mon) -> mon.bind (f x) g
+type kleisli (t1:styp) (t2:styp) (m:Type->Type) = t1 m -> m (t2 m)
 
-  
-type effectpoly (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) = mon:monad -> acts mon -> kleisli t1 t2 mon 
+unfold let wstyp (a:Type) : styp = fun m -> a
+unfold let (~~) = wstyp
 
-unfold let wrp (a:Type) (mon:monad) = a
+let kleisli_fish
+  (#m:Type->Type)
+  (#m_bind:(a:Type -> b:Type -> m a -> (a -> m b) -> m b))
+  (f:kleisli 'a 'b m)
+  (g:kleisli 'b 'c m) : 
+  kleisli 'a 'c m = 
+  fun (x:'a m) -> m_bind _ _ (f x) g
+
+type effectpoly (t1:styp) (t2:styp) = mon:monad -> acts mon -> kleisli t1 t2 mon.m 
+
+(* I saw this notation in: Effects as Capabilities: Effect Handlers and Lightweight
+Effect Polymorphism 
+
+  In the mentioned paper they use this notation actually to highlight the effect of the 
+  arrow.
+  --> <> means that the arrow is in the pure effect
+  --> <exception, IO> means that the arrow is in exception/IO
+
+  Since I force myself to overload operations, I thought I can use something similar.
+  I went with --><*>. 
+  I read it as: the arrow can accept any effect.
+  I would have liked --><_>, but F* does not accept to overload that.
+**)
+let (--><*>) = effectpoly
 
 assume val test : mon:monad -> acts mon -> ((int -> mon.m int) -> mon.m int) -> mon.m int
 
-let _ = assert (has_type test (effectpoly (kleisli (kleisli (wrp int) (wrp int)) (wrp int)) (wrp int)))
+let (--->) = kleisli
 
-let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : effectpoly 'a 'c = 
-  fun (mon:monad) (acts:acts mon) (x:'a mon) -> 
+let _ = assert (has_type test ((~~int ---> ~~int ---> ~~int) --><*> ~~int))
+
+let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : ('a --><*> 'c) = 
+  fun (mon:monad) (acts:acts mon) (x:'a mon.m) -> 
     mon.bind (f mon acts x) (g mon acts)
 
 type result = either (Type) (Type * Type)
 
-type effectpoly_hack (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon 
-let effectpoly_fishy (f:effectpoly_hack 'a 'b) (g:effectpoly 'b 'c) : effectpoly_hack 'a 'c = 
-  fun mon (acts:acts mon) (x:'a mon) -> 
+type effectpoly_hack (t1:styp) (t2:styp) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon.m 
+(* if --><*> means that the arrow accepts any effect, 
+   --><> means that this arrow does not accept any effect.
+   that is not really true. this arrow accepts only the free effect. *)
+let (--><>) = effectpoly_hack
+  
+let effectpoly_fishy (f:'a --><> 'b) (g:'b --><*> 'c) : ('a --><> 'c) = 
+  fun mon (acts:acts mon) (x:'a mon.m) -> 
     mon.bind (f mon acts x) (g mon acts)
 
-let convert_free_to_effectpoly (f:'a -> free.m 'b) : effectpoly_hack (wrp 'a) (wrp 'b) =
+let convert_free_to_effectpoly (f:'a -> free.m 'b) : (~~'a --><> ~~'b) =
   fun mon acts x -> f x
 
 //type ictx = cb:(a -> IIOpi b pi) -> IIOpi c pi
 
-type mctx (a b c:Type) = mon:monad -> acts mon -> cb:kleisli (wrp a) (wrp b) mon -> mon.m c
+type mctx (a b c:styp) = (a ---> b) --><*> c
 
-let test2 (a b c:Type) (x:mctx a b c) : mon:monad{mon==free} -> acts mon -> cb:kleisli (wrp a) (wrp b) mon -> mon.m c =
+let test2 (a b c:styp) (x:mctx a b c) : ((a ---> b) --><> c) =
   fun mon acts -> x mon acts
 
 (* TODO: effectpoly and effectpoly_hack should be both possible arrows in MLang **)
-
-#set-options "--print_universes"
-
-(*
-let mk_kleisly_arr (#a:Type u#a) (#b:Type u#b) (#c:Type u#c) (#d:Type u#d) (lhs:kleisli_arr a b) (rhs:kleisli_arr c d) : Type =
-  kleisli_fish #a #b #c #d
-
-let x : kleisli_arr int int = fun mon x -> mon.ret (x+5)
-
-let x' : mk_kleisly_arr x x = admit ()
-
-fun mon f -> mon.ret (fun x -> mon.ret (x + 5))
-
-let free_comp = x free free_acts
-*)
 
 
 (* the following two instances, imply that arrows that are in the free effect
