@@ -76,6 +76,7 @@ type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 
 type styp = (Type -> Type) -> Type
 
 type kleisli (t1:styp) (t2:styp) (m:Type->Type) = t1 m -> m (t2 m)
+let (--->) = kleisli
 
 unfold let wstyp (a:Type) : styp = fun m -> a
 unfold let (~~) = wstyp
@@ -89,6 +90,7 @@ let kleisli_fish
   fun (x:'a m) -> m_bind _ _ (f x) g
 
 type effectpoly (t1:styp) (t2:styp) = mon:monad -> acts mon -> kleisli t1 t2 mon.m 
+let (--><*>) = effectpoly
 
 (* I saw this notation in: Effects as Capabilities: Effect Handlers and Lightweight
 Effect Polymorphism 
@@ -103,19 +105,14 @@ Effect Polymorphism
   I read it as: the arrow can accept any effect.
   I would have liked --><_>, but F* does not accept to overload that.
 **)
-let (--><*>) = effectpoly
 
 assume val test : mon:monad -> acts mon -> ((int -> mon.m int) -> mon.m int) -> mon.m int
-
-let (--->) = kleisli
 
 let _ = assert (has_type test ((~~int ---> ~~int ---> ~~int) --><*> ~~int))
 
 let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : ('a --><*> 'c) = 
   fun (mon:monad) (acts:acts mon) (x:'a mon.m) -> 
     mon.bind (f mon acts x) (g mon acts)
-
-type result = either (Type) (Type * Type)
 
 type effectpoly_hack (t1:styp) (t2:styp) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon.m 
 (* if --><*> means that the arrow accepts any effect, 
@@ -130,28 +127,51 @@ let effectpoly_fishy (f:'a --><> 'b) (g:'b --><*> 'c) : ('a --><> 'c) =
 let convert_free_to_effectpoly (f:'a -> free.m 'b) : (~~'a --><> ~~'b) =
   fun mon acts x -> f x
 
-//type ictx = cb:(a -> IIOpi b pi) -> IIOpi c pi
+let test2 (f:('a ---> 'b) --><*> 'c) : (('a ---> 'b) --><> 'c) =
+  fun mon acts -> f mon acts
 
-type mctx (a b c:styp) = (a ---> b) --><*> c
+(* Compilation can return either:
+* a effect polymorphic arrow. 
+    compile ( a -> IIOpi b pi -> IIOpi c psi -> IIOpi d phi)
+    then: ( a -> IIOpi b pi -> IIOpi c psi) is backtranslateable
+    and d is compilable.
 
-let test2 (a b c:styp) (x:mctx a b c) : ((a ---> b) --><> c) =
-  fun mon acts -> x mon acts
+    (a -> IIOpi b pi) is also compilable
+
+  The result of the compilation should have the type:
+  a ---> b ---> c --><> d
+
+  The levels of compilation. First, (a -> IIOpi b pi) is compiled into
+  a function of type (a --><> b).
+
+  Then the backtranslation of (a -> IIOpi b pi -> IIOpi c psi),
+  starts from type (a --> b --><> c).
+
+    let x' : a --><> b = d1.compile x in
+    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
+      cast_to_dm_iio ipi f (x'  in
+    let r : d2.mbtrans = IIOwp?.reflect dm_tree in
+    d2.backtranslate r
+  
+  
+* or any other type and we don't look at it. *)
+type result = either (Type) (Type * Type)
 
 (* TODO: effectpoly and effectpoly_hack should be both possible arrows in MLang **)
 
 
 (* the following two instances, imply that arrows that are in the free effect
    and that are effectful polymorphic are allowed *)
-instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (verified_marrow t1 t2) =
+instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
   { mldummy = () }
 
-instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (unverified_marrow t1 t2) =
+instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
   { mldummy = () }
 
 (** * Type Classes **)
 class compilable (icomp:Type u#a) (pi:pi_type) = {
   [@@@no_method]
-  mcomp : Type u#b;
+  mcomp : Type;
 
   compile: icomp -> mcomp;
 
@@ -204,8 +224,9 @@ instance compile_verified_marrow
   {
   ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
-  mcomp = verified_marrow d1.mbtrans d2.mcomp;
-  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
+  mcomp = d1.mbtrans `mk_poly_eff_arrow` d2.mcomp;
+
+  mlang_mcomp = d1.mlang_mbtrans `mk_poly_eff_arrow` d2.mlang_mcomp;
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
