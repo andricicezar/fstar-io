@@ -13,29 +13,30 @@ open TC.Monitorable.Hist
 open IIO
 
 (* TODO : think about higher-order **)
-(* TODO: define type class for MLang **)
-(* TODO: refactor compile and backtranslate into instances of the TC **)
-(* TODO: replace in the interface the target types with constraints on the 
-         intermediate types **)
 
-
-#set-options "--print_universes"
 
 (* TODO: our monad also needs a way to represent failure,
          or is it enough to have it in actions? *)
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
+  (* TODO: bind should be polymorphic in two universes *)
+  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b
 }
+
+(*
+type monad = 
+  m:(Type u#a -> Type u#(max 1 a)) & 
+  ret:(#a:Type -> a -> m a) &
+  bins:(#a:Type u#a -> #b:Type u#b -> m a -> (a -> m b) -> m b)
+*)
 
 (* TODO: things should be indexed by this too. the context needs it to bind
          computations. unfortunately, we can not make it a part of the monad record. *)
-//type mon_bind (mon:monad) = #a:Type u#a -> #b:Type u#b -> mon.m u#a a -> (a -> mon.m u#b b) -> mon.m u#b b
-
 type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
 val free : monad
-let free = { m = iio; ret = iio_return; }
+let free = { m = iio; ret = iio_return; bind = iio_bind; }
 
 (** **** Free Actions **)
 val free_acts : acts free
@@ -71,6 +72,46 @@ instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either 
 
 type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
 type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
+
+type kleisli (mon:monad) (t1:Type) (t2:Type) = t1 -> mon.m t2
+let kleisli_fish (#mon:monad) (f:kleisli mon 'a 'b) (g:kleisli mon 'b 'c) : kleisli mon 'a 'c = 
+  fun (x:'a) -> mon.bind (f x) g
+
+type effectpoly (t1:Type) (t2:Type) = mon:monad -> acts mon -> kleisli mon t1 t2 
+let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : effectpoly 'a 'c = 
+  fun (mon:monad) (acts:acts mon) (x:'a) -> 
+    mon.bind (f mon acts x) (g mon acts)
+
+type effectpoly_hack (t1:Type) (t2:Type) = mon:monad{mon == free} -> acts mon -> kleisli mon t1 t2 
+let effectpoly_fishy (f:effectpoly_hack 'a 'b) (g:effectpoly 'b 'c) : effectpoly_hack 'a 'c = 
+  fun mon (acts:acts mon) (x:'a) -> 
+    mon.bind (f mon acts x) (g mon acts)
+
+let convert_free_to_effectpoly (f:'a -> free.m 'b) : effectpoly_hack 'a 'b =
+  fun mon acts x -> f x
+
+//type ictx = cb:(a -> IIOpi b pi) -> IIOpi c pi
+
+type mctx (a b c:Type) = mon:monad -> acts mon -> cb:kleisli mon a b -> mon.m c
+
+let test (a b c:Type) (x:mctx a b c) : mon:monad{mon==free} -> acts mon -> cb:kleisli mon a b -> mon.m c =
+  fun mon acts -> x mon acts
+
+#set-options "--print_universes"
+
+(*
+let mk_kleisly_arr (#a:Type u#a) (#b:Type u#b) (#c:Type u#c) (#d:Type u#d) (lhs:kleisli_arr a b) (rhs:kleisli_arr c d) : Type =
+  kleisli_fish #a #b #c #d
+
+let x : kleisli_arr int int = fun mon x -> mon.ret (x+5)
+
+let x' : mk_kleisly_arr x x = admit ()
+
+fun mon f -> mon.ret (fun x -> mon.ret (x + 5))
+
+let free_comp = x free free_acts
+*)
+
 
 (* the following two instances, imply that arrows that are in the free effect
    and that are effectful polymorphic are allowed *)
@@ -229,10 +270,8 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
           assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h)
         }
         if pi op arg h then
-          (* TODO: I only have to prove this one *)
           dm_iio_theta (ca op arg) p h
         else 
-          (* this branch is proved automatically *)
           dm_iio_theta (Return (Inr Common.Contract_failure)) p h;
         ==> {}
         if pi op arg h then
@@ -470,8 +509,8 @@ let mprog : prog_comp.mcomp = compile #_ #thePi #prog_comp someProg
 
 (** TODO: problem!! f's output type should be mon.m int, not free.m. **)
 val mctx : ictxt_btrans.mbtrans
-let mctx (mon:monad) (acts:acts mon) (f:int -> free.m int) : mon.m int =
-  mon.ret 2 
+let mctx (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
+  mon.ret (f 2)
 
 
 (** ** Criterias **)
