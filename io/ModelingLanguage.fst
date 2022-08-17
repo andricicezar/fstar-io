@@ -73,29 +73,42 @@ instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either 
 type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
 type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
 
-type kleisli (mon:monad) (t1:Type) (t2:Type) = t1 -> mon.m t2
-let kleisli_fish (#mon:monad) (f:kleisli mon 'a 'b) (g:kleisli mon 'b 'c) : kleisli mon 'a 'c = 
-  fun (x:'a) -> mon.bind (f x) g
+type kleisli (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) (mon:monad) = t1 mon -> mon.m (t2 mon)
 
-type effectpoly (t1:Type) (t2:Type) = mon:monad -> acts mon -> kleisli mon t1 t2 
+let kleisli_fish (#mon:monad) (f:kleisli 'a 'b mon) (g:kleisli 'b 'c mon) : kleisli 'a 'c mon = 
+  fun (x:'a mon) -> mon.bind (f x) g
+
+  
+type effectpoly (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) = mon:monad -> acts mon -> kleisli t1 t2 mon 
+
+unfold let wrp (a:Type) (mon:monad) = a
+
+assume val test : mon:monad -> acts mon -> ((int -> mon.m int) -> mon.m int) -> mon.m int
+
+let _ = assert (has_type test (effectpoly (kleisli (kleisli (wrp int) (wrp int)) (wrp int)) (wrp int)))
+
 let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : effectpoly 'a 'c = 
-  fun (mon:monad) (acts:acts mon) (x:'a) -> 
+  fun (mon:monad) (acts:acts mon) (x:'a mon) -> 
     mon.bind (f mon acts x) (g mon acts)
 
-type effectpoly_hack (t1:Type) (t2:Type) = mon:monad{mon == free} -> acts mon -> kleisli mon t1 t2 
+type result = either (Type) (Type * Type)
+
+type effectpoly_hack (t1:(mon:monad -> Type)) (t2:(mon:monad -> Type)) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon 
 let effectpoly_fishy (f:effectpoly_hack 'a 'b) (g:effectpoly 'b 'c) : effectpoly_hack 'a 'c = 
-  fun mon (acts:acts mon) (x:'a) -> 
+  fun mon (acts:acts mon) (x:'a mon) -> 
     mon.bind (f mon acts x) (g mon acts)
 
-let convert_free_to_effectpoly (f:'a -> free.m 'b) : effectpoly_hack 'a 'b =
+let convert_free_to_effectpoly (f:'a -> free.m 'b) : effectpoly_hack (wrp 'a) (wrp 'b) =
   fun mon acts x -> f x
 
 //type ictx = cb:(a -> IIOpi b pi) -> IIOpi c pi
 
-type mctx (a b c:Type) = mon:monad -> acts mon -> cb:kleisli mon a b -> mon.m c
+type mctx (a b c:Type) = mon:monad -> acts mon -> cb:kleisli (wrp a) (wrp b) mon -> mon.m c
 
-let test (a b c:Type) (x:mctx a b c) : mon:monad{mon==free} -> acts mon -> cb:kleisli mon a b -> mon.m c =
+let test2 (a b c:Type) (x:mctx a b c) : mon:monad{mon==free} -> acts mon -> cb:kleisli (wrp a) (wrp b) mon -> mon.m c =
   fun mon acts -> x mon acts
+
+(* TODO: effectpoly and effectpoly_hack should be both possible arrows in MLang **)
 
 #set-options "--print_universes"
 
