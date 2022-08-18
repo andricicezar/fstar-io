@@ -160,54 +160,79 @@ instance mlang_effectpoly_hack_lhs_ho (#t1:styp) #t2 (d1:mlang (t1 free.m)) (d2:
   { mldummy = () }
 **)
 
-let test_ctx : mlang (~~int --><*> ~~int) =
+(** Manual tests of MLang. 
+    Types of programs that should be part of MLang:
+   - [v] int -> free.m int
+   - [ ] int -> free.m (int -> free.m int)
+   - [v] (int -> free.m int) -> free.m int (?)
+   - [v] mon:monad -> acts mon -> int -> mon.m int 
+   - [v] mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int 
+   - [ ] mon:monad -> acts mon -> int -> mon.m (int -> mon.m int)
+   - [v] (mon:monad -> acts mon -> int -> mon.m int) -> free.m int
+   - [v] (mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int) -> free.m int 
+
+   Types of programs that should not be part of MLang:
+   - [ ] how can I identify such cases?
+**)
+
+let test_mlang_kleisli : mlang (kleisli ~~int ~~int free.m) =
+  mlang_kleisli free.m mlang_int mlang_int
+
+(** Cannot be typed because universe problems
+let test_mlang_kleisli_rhs_ho : mlang (kleisli ~~int (kleisli ~~int ~~int) free.m) =
+  mlang_kleisli free.m mlang_int (mlang_kleisli free.m mlang_int mlang_int)
+ **)
+
+let test_mlang_kleisli_lhs_ho : mlang (kleisli (kleisli ~~int ~~int) ~~int free.m) =
+  mlang_kleisli free.m (mlang_kleisli free.m mlang_int mlang_int) mlang_int
+
+let test_mlang_fo_effectpoly : mlang (~~int --><*> ~~int) =
   mlang_effectpoly
     mlang_int
     mlang_int
 
-let test_ctx2 : mlang (~~int ---> ~~int --><*> ~~int) =
+let test_mlang_lhs_ho_effectpoly : mlang (~~int ---> ~~int --><*> ~~int) =
   mlang_effectpoly_lhs_ho
     (fun m -> mlang_kleisli m mlang_int mlang_int)
     mlang_int
 
-(** This can not be typed: 
-let test_ctx3 : mlang (~~int --><*> (~~int ---> ~~int)) = **)
+(** This can not be typed because universe problems: 
+let test_mlang_rhs_ho_effectpoly : mlang (~~int --><*> (~~int ---> ~~int)) = **)
 
-let test_prog1 : mlang (kleisli ~~(~~int --><*> ~~int) ~~int free.m) =
+let test_mlang_prog1 : mlang (kleisli ~~(~~int --><*> ~~int) ~~int free.m) =
   mlang_kleisli_lhs_ho
     free.m
     (mlang_effectpoly mlang_int mlang_int)
     mlang_int
 
-(* Teset if mlang accepts:
-   - [ ] a partial program that accepts a context
-   - [ ] a context
-   - [ ] a HO context
- *)
+let test_mlang_prog2 : mlang (kleisli ~~(~~int ---> ~~int --><*> ~~int) ~~int free.m) =
+  mlang_kleisli_lhs_ho
+    free.m
+    (mlang_effectpoly_lhs_ho
+        (fun m -> mlang_kleisli m mlang_int mlang_int)
+        mlang_int)
+    mlang_int
+
    
 
-(* Compilation can return either:
-* a effect polymorphic arrow. 
-    compile ( a -> IIOpi b pi -> IIOpi c psi -> IIOpi d phi)
-    then: ( a -> IIOpi b pi -> IIOpi c psi) is backtranslateable
-    and d is compilable.
+(* Exercise: 
+   Be prog of type: ctx:( cb:(a -> IIOpi b pi) -> IIOpi c psi) -> IIOpi d phi
+   the expected type after compilation of prog should be:
+     ctx:(cb:(a ---> b) --><*> c) ---> free.m d  
 
-    (a -> IIOpi b pi) is also compilable
+   The cb is a verified program, and even if we can compile it directly to
+   a -> free.m b, we don't want because then the ctx can not use it inside.
+   Thus, the cb should have the same monad as the ctx.
 
-  The result of the compilation should have the type:
-  a ---> b ---> c --><> d
+   However, cb only works only with the free monad. So even if it accepts the
+   monad passed by the context, it should have as pre-condition that the monad
+   should be free.
 
-  The levels of compilation. First, (a -> IIOpi b pi) is compiled into
-  a function of type (a --><> b).
+   Another thing to notice is that prog and cb should be compiled by the same
+   compilation function and from the start we expect two different outputs.
 
-  Then the backtranslation of (a -> IIOpi b pi -> IIOpi c psi),
-  starts from type (a --> b --><> c).
-
-    let x' : a --><> b = d1.compile x in
-    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
-      cast_to_dm_iio ipi f (x'  in
-    let r : d2.mbtrans = IIOwp?.reflect dm_tree in
-    d2.backtranslate r
+   Maybe we can compile prog as it is, but then when doing backtranslation to treat
+   the case when on the left is an arrow by abstracting that further.
 *)
 
 (** *** Parametricity **)
