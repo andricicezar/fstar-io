@@ -161,73 +161,6 @@ instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~
 instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
   { mldummy = () }
 
-(** * Type Classes **)
-class compilable (icomp:Type u#a) (pi:pi_type) = {
-  [@@@no_method]
-  mcomp : Type u#b;
-
-  compile: icomp -> mcomp;
-
-  [@@@no_method]
-  ilang_icomp : ILang.ilang icomp pi;
-  [@@@no_method]
-  mlang_mcomp : mlang mcomp;
-}
-
-class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
-  [@@@no_method]
-  mbtrans : Type u#b;
-
-  backtranslate: mbtrans -> ibtrans;
-
-  [@@@no_method]
-  ilang_ibtrans : ILang.ilang ibtrans pi;
-  [@@@no_method]
-  mlang_mbtrans : mlang mbtrans;
-}
-
-class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
- // [@@@no_method]
-  minst_in: Type;
-  minst_out : Type;
-
-  instrument: ~~minst_in --><*> ~~minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
-
-  [@@@no_method]
-  mlang_iinst : mlang (~~minst_in --><*> ~~minst_out);
-  [@@@no_method]
-  ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
-}
-
-instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = ~~d1.minst_in --><*> ~~d1.minst_out;
-  mlang_mbtrans = d1.mlang_iinst;
-  backtranslate = d1.instrument;
-  ilang_ibtrans = d1.ilang_minst;
-}
-
-assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
-
-
-instance compile_verified_marrow
-  (vpi #pi1 #pi2:pi_type)
-  (t1:Type) {| d1:backtranslateable t1 pi1 |} 
-  (t2:Type) {| d2:compilable t2 pi2 |}:
-  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
-  {
-  ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
-
-  mcomp = kleisli ~~d1.mbtrans ~~d2.mcomp free.m;
-
-  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
-
-  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
-    let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
-    let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (d2.compile x))
-  );
-}
-
 (** *** Parametricity **)
 noeq
 type monad_p (mon:monad) = {
@@ -364,6 +297,72 @@ let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmo
   ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
+
+(** * Type Classes **)
+class compilable (icomp:Type u#a) (pi:pi_type) = {
+  [@@@no_method]
+  mcomp : Type u#b;
+
+  compile: icomp -> mcomp;
+
+  [@@@no_method]
+  ilang_icomp : ILang.ilang icomp pi;
+  [@@@no_method]
+  mlang_mcomp : mlang mcomp;
+}
+
+class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
+  [@@@no_method]
+  mbtrans : Type u#b;
+
+  backtranslate: mbtrans -> ibtrans;
+
+  [@@@no_method]
+  ilang_ibtrans : ILang.ilang ibtrans pi;
+  [@@@no_method]
+  mlang_mbtrans : mlang mbtrans;
+}
+
+class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
+ // [@@@no_method]
+  minst_in: Type;
+  minst_out : Type;
+
+  instrument: ~~minst_in --><*> ~~minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
+
+  [@@@no_method]
+  mlang_iinst : mlang (~~minst_in --><*> ~~minst_out);
+  [@@@no_method]
+  ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
+}
+
+instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
+  mbtrans = ~~d1.minst_in --><*> ~~d1.minst_out;
+  mlang_mbtrans = d1.mlang_iinst;
+  backtranslate = d1.instrument;
+  ilang_ibtrans = d1.ilang_minst;
+}
+
+assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
+
+instance compile_verified_marrow
+  (vpi #pi1 #pi2:pi_type)
+  (t1:Type) {| d1:backtranslateable t1 pi1 |} 
+  (t2:Type) {| d2:compilable t2 pi2 |}:
+  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
+  {
+  ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
+
+  mcomp = kleisli ~~d1.mbtrans ~~d2.mcomp free.m;
+
+  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
+
+  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
+    let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
+    let tree : dm_iio _ _ = reify_IIOwp r in
+    iio_bind tree (fun x -> free.ret (d2.compile x))
+  );
+}
 
 (** *** Instrumentable arrows **)
 instance instrumentable_unverified_marrow 
