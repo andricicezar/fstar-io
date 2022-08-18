@@ -397,20 +397,20 @@ class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
 
 class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
   [@@@no_method]
-  minst_in: styp;
+  minst_in: mon:monad -> acts mon -> Type;
   [@@@no_method]
-  minst_out : styp;
+  minst_out : mon:monad -> acts mon -> Type;
 
-  instrument: minst_in --><*> minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
+  instrument: (mon:monad -> acts:acts mon -> (minst_in mon acts) -> mon.m (minst_out mon acts)) -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
 
   [@@@no_method]
-  mlang_iinst : mlang (minst_in --><*> minst_out);
+  mlang_iinst : mlang (mon:monad -> acts:acts mon -> (minst_in mon acts) -> mon.m (minst_out mon acts));
   [@@@no_method]
   ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = d1.minst_in --><*> d1.minst_out;
+  mbtrans = (mon:monad -> acts:acts mon -> (d1.minst_in mon acts) -> mon.m (d1.minst_out mon acts));
   mlang_mbtrans = d1.mlang_iinst;
   backtranslate = d1.instrument;
   ilang_ibtrans = d1.ilang_minst;
@@ -453,13 +453,11 @@ instance instrumentable_unverified_marrow
   // a --><*> b --> free.m c, it is not enough to wrap it,
   // we also have to pass inside the monad and the actions of the 
   // current function
-  minst_in = ~~d1.mcomp; 
+  minst_in = (fun mon acts -> d1.mcomp); 
   // TODO: for the ouput I want to check if mbtrans is an arrow or not. 
   // if it is an arrow, then it has the type a --><*> b.
   // I want to instantiate it with the monad and the actions
-  // that this current arrow gets.
-  // this may be difficult because I don't see how I would have acces to them
-  minst_out = ~~d2.mbtrans;
+  minst_out = (fun mon acts -> d2.mbtrans);
   // so lhs and rhs should both be effect polymorphic functions
   // that are initialized
 
