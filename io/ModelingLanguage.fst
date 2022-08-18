@@ -15,21 +15,12 @@ open IIO
 (* TODO : think about higher-order **)
 
 
-(* TODO: our monad also needs a way to represent failure,
-         or is it enough to have it in actions? *)
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
   (* TODO: bind should be polymorphic in two universes *)
   bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b
 }
-
-(*
-type monad = 
-  m:(Type u#a -> Type u#(max 1 a)) & 
-  ret:(#a:Type -> a -> m a) &
-  bins:(#a:Type u#a -> #b:Type u#b -> m a -> (a -> m b) -> m b)
-*)
 
 (* TODO: things should be indexed by this too. the context needs it to bind
          computations. unfortunately, we can not make it a part of the monad record. *)
