@@ -14,7 +14,6 @@ open IIO
 
 (* TODO : think about higher-order **)
 
-#set-options "--print_universes"
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
@@ -49,7 +48,7 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
 
 (** * MLang **)
-class mlang (t:Type) = { mldummy : unit }
+class mlang (t:Type u#a) = { mldummy : unit }
 
 (** *** FO instances **)
 instance mlang_unit : mlang unit = { mldummy = () }
@@ -155,11 +154,77 @@ let test2 (f:('a ---> 'b) --><*> 'c) : (('a ---> 'b) --><> 'c) =
   
 (* the following two instances, imply that arrows that are in the free effect
    and that are effectful polymorphic are allowed *)
-instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~~t1) (~~t2) free.m) =
+instance mlang_kleisli #t1 #t2 (m:Type->Type) (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~~t1) (~~t2) m) =
   { mldummy = () }
 
-instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
+instance mlang_kleisli_lhs_ho (#t1:styp) #t2 (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang t2) : mlang (kleisli t1 (~~t2) m) =
   { mldummy = () }
+
+instance mlang_kleisli_rhs_ho #t1 (#t2:styp) (m:Type->Type) (d1:mlang t1) (d2:mlang (t2 m)) : mlang (kleisli (~~t1) t2 m) =
+  { mldummy = () }
+
+instance mlang_kleisli_ho (#t1:styp) (#t2:styp) (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang (t2 m)) : mlang (kleisli t1 t2 m) =
+  { mldummy = () }
+
+(* TODO: how do you define this? -- this may be a red flag that I am on the wrong track
+    I read this as: a effectful polymorphic arrow is part of mlang if the input type and the output type
+    are part of mlang for all monads 
+    TODO: in practice, I don't think we need this case
+ *)
+instance mlang_effectpoly (#t1:Type) (#t2:Type) (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
+  { mldummy = () }
+
+instance mlang_effectpoly_lhs_ho (#t1:styp) (#t2:Type) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:mlang t2) : mlang (t1 --><*> ~~t2) =
+  { mldummy = () }
+  
+instance mlang_effectpoly_ho (#t1:styp) (#t2:styp) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:(m:(Type -> Type) -> mlang (t1 m))) : mlang (t1 --><*> t2) =
+  { mldummy = () }
+
+instance mlang_effectpoly_hack #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
+  { mldummy = () }
+
+(** Since the effectpolymorphic arrow here only accepts the free monad, we can instantiate the HO input and output with free **)
+instance mlang_effectpoly_hack_lhs_ho (#t1:styp) #t2 (d1:mlang (t1 free.m)) (d2:mlang t2) : mlang (t1 --><> ~~t2) =
+  { mldummy = () }
+
+let test_ctx : mlang (~~int --><*> ~~int) =
+  mlang_effectpoly
+    mlang_int
+    mlang_int
+
+let test_ctx2 : mlang (~~int ---> ~~int --><*> ~~int) =
+  mlang_effectpoly_lhs_ho
+    (fun m -> mlang_kleisli m mlang_int mlang_int)
+    mlang_int
+
+(** This can not be typed: 
+let test_ctx3 : mlang (~~int --><*> (~~int ---> ~~int)) = **)
+
+let test_prog1 : mlang (kleisli ~~(~~int --><*> ~~int) ~~int free.m) =
+  mlang_kleisli_lhs_ho
+    free.m
+    (mlang_effectpoly mlang_int mlang_int)
+    mlang_int
+
+(* TODO: I should test what kind of arrows can be written **)
+// ilang: ( a -> IIOpi b pi -> IIOpi c psi -> IIOpi d phi)
+// mlang: mon -> acts -> (a -> mon.m b -> mon.m c) -> mon.m d
+let test_mlang2 (a b c d:Type) (d1:mlang a) (d2:mlang b) (d3:mlang c) (d4:mlang d) : mlang ((~~a ---> ~~b ---> ~~c) --><> ~~d) =
+  mlang_effectpoly_hack_lhs_ho
+    (mlang_kleisli_lhs_ho free.m (mlang_kleisli free.m d1 d2) d3)
+    d4
+
+let test_mlang3 : mlang ((~~int ---> ~~int ---> ~~int) --><> ~~int) =
+  mlang_effectpoly_hack_lhs_ho
+    (mlang_kleisli_lhs_ho free.m (mlang_kleisli free.m mlang_int mlang_int) mlang_int)
+    mlang_int
+
+(* Teset if mlang accepts:
+   - [ ] a partial program that accepts a context
+   - [ ] a context
+   - [ ] a HO context
+ *)
+   
 
 (** *** Parametricity **)
 noeq
