@@ -403,6 +403,8 @@ assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a
 
 #set-options "--print_universes"
 
+let convert (t:iio 'a) (mon:monad) (acts:acts mon) : mon.m 'a = admit ()
+
 instance compile_verified_marrow
   (vpi #pi1 #pi2:pi_type)
   (t1:Type) {| d1:backtranslateable t1 pi1 |} 
@@ -411,14 +413,14 @@ instance compile_verified_marrow
   ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
   // TODO: here it should be mon.m, not free.m
-  mcomp = (fun mon acts -> kleisli d1.mbtrans (d2.mcomp mon acts) free.m);
+  mcomp = (fun mon acts -> kleisli d1.mbtrans (d2.mcomp mon acts) mon.m);
 
-  mlang_mcomp = (fun mon acts -> mlang_kleisli free.m d1.mlang_mbtrans (d2.mlang_mcomp mon acts));
+  mlang_mcomp = (fun mon acts -> mlang_kleisli mon.m d1.mlang_mbtrans (d2.mlang_mcomp mon acts));
 
   compile = (fun mon acts (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (d2.compile mon acts x))
+    convert (iio_bind tree (fun x -> free.ret (d2.compile mon acts x))) mon acts
   );
 }
 
@@ -621,7 +623,7 @@ let mprog : prog_comp.mcomp free free_acts = compile #_ #thePi #prog_comp free f
 
 (** TODO: problem!! f's output type should be mon.m int, not free.m. **)
 val mctx : ictxt_btrans.mbtrans
-let mctx (mon:monad) (acts:acts mon) (f:int -> free.m int) : mon.m int =
+let mctx (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
   mon.ret 2
 
 (** ** Criterias **)
