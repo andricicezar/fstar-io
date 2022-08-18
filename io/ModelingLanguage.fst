@@ -14,20 +14,26 @@ open IIO
 
 (* TODO : think about higher-order **)
 
-
+#set-options "--print_universes"
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
   (* TODO: bind should be polymorphic in two universes *)
-  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b
+  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b;
+  (* TODO: merge acts into monad **)
+  (* TODO: make acts more general? **)
+  // acts : op:io_cmds -> arg:io_sig.args op -> m (Universe.raise_t (io_sig.res op arg))
 }
 
-(* TODO: things should be indexed by this too. the context needs it to bind
-         computations. unfortunately, we can not make it a part of the monad record. *)
-type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
-
 val free : monad
-let free = { m = iio; ret = iio_return; bind = iio_bind; }
+let free = { 
+  m = iio; 
+  ret = iio_return; 
+  bind = iio_bind; 
+ // acts = (fun cmd arg -> iio_bind (IO.Sig.Call.iio_call cmd arg) (fun x -> Universe.raise_val x))
+}
+
+type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
 (** **** Free Actions **)
 val free_acts : acts free
@@ -41,7 +47,6 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
   assert (spec_free_acts free_acts) by (assumption ())
 
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
-
 
 (** * MLang **)
 class mlang (t:Type) = { mldummy : unit }
@@ -61,11 +66,14 @@ instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either 
 (* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
   { mldummy = () } *)
 
-type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
-type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
-
 type styp = (Type -> Type) -> Type
-
+(* I use styp here to be able to write HO types. Not sure if standard practice,
+   or if there is another way to do it. Or maybe a better name since a kleisli arrow
+   has the simpler form.
+   By using styp, I can write things like: kleisli (kleisli 'a 'b) 'c m.
+   
+   Also, from what I have read, a kleisli arrow actually has access to bind/return
+   and other monad operations. In our case, that it is not true.*)
 type kleisli (t1:styp) (t2:styp) (m:Type->Type) = t1 m -> m (t2 m)
 let (--->) = kleisli
 
@@ -143,17 +151,11 @@ let test2 (f:('a ---> 'b) --><*> 'c) : (('a ---> 'b) --><> 'c) =
       cast_to_dm_iio ipi f (x'  in
     let r : d2.mbtrans = IIOwp?.reflect dm_tree in
     d2.backtranslate r
+*)
   
-  
-* or any other type and we don't look at it. *)
-type result = either (Type) (Type * Type)
-
-(* TODO: effectpoly and effectpoly_hack should be both possible arrows in MLang **)
-
-
 (* the following two instances, imply that arrows that are in the free effect
    and that are effectful polymorphic are allowed *)
-instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
+instance mlang_ver_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~~t1) (~~t2) free.m) =
   { mldummy = () }
 
 instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
@@ -162,7 +164,7 @@ instance mlang_unv_arrow #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*
 (** * Type Classes **)
 class compilable (icomp:Type u#a) (pi:pi_type) = {
   [@@@no_method]
-  mcomp : Type;
+  mcomp : Type u#b;
 
   compile: icomp -> mcomp;
 
@@ -189,16 +191,16 @@ class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
   minst_in: Type;
   minst_out : Type;
 
-  instrument: unverified_marrow minst_in minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
+  instrument: ~~minst_in --><*> ~~minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
 
   [@@@no_method]
-  mlang_iinst : mlang (unverified_marrow minst_in minst_out);
+  mlang_iinst : mlang (~~minst_in --><*> ~~minst_out);
   [@@@no_method]
   ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = unverified_marrow d1.minst_in d1.minst_out;
+  mbtrans = ~~d1.minst_in --><*> ~~d1.minst_out;
   mlang_mbtrans = d1.mlang_iinst;
   backtranslate = d1.instrument;
   ilang_ibtrans = d1.ilang_minst;
@@ -215,9 +217,9 @@ instance compile_verified_marrow
   {
   ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
-  mcomp = d1.mbtrans `mk_poly_eff_arrow` d2.mcomp;
+  mcomp = kleisli ~~d1.mbtrans ~~d2.mcomp free.m;
 
-  mlang_mcomp = d1.mlang_mbtrans `mk_poly_eff_arrow` d2.mlang_mcomp;
+  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
@@ -257,7 +259,7 @@ type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) =
 type ct_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (c:a -> mon.m b) =
   squash (forall x. mon_p.m_p b (fun x -> True) (c x))
 
-type ctx_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:unverified_marrow a b) =
+type ctx_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:~~a --><*> ~~b) =
   ct_p a b mon mon_p (c mon theActs)
 
 (* TODO: check with others -- since this is assumed, it represents a risk **)
@@ -267,7 +269,7 @@ assume val ctx_param :
   (b:Type) ->
   (mon:monad) -> (mon_p:monad_p mon) ->
   (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
-  (c:unverified_marrow a b) -> 
+  (c:(~~a --><*> ~~b)) -> 
   Lemma (ctx_p a b mon mon_p theActs theActs_p c)
 
 (** **** Parametricity - instances **)
@@ -354,7 +356,7 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 #reset-options
 
-val cast_to_dm_iio  : (#a:Type) -> (#b:Type) -> ipi:pi_type -> unverified_marrow a b -> (x:a) -> dm_iio b (ILang.pi_hist ipi)
+val cast_to_dm_iio  : (#a:Type) -> (#b:Type) -> ipi:pi_type -> (~~a --><*> ~~b) -> (x:a) -> dm_iio b (ILang.pi_hist ipi)
 let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   lemma_free_acts ();
   let c' : a -> free.m b = c free (wrap ipi free_acts) in
