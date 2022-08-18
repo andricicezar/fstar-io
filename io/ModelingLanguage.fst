@@ -263,23 +263,6 @@ type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) =
   arg:io_sig.args op -> arg_p : (io_sig_args_p op arg) ->
   Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
 
-(* TODO: check if we need parametricity for the interface **)
-type ct_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (c:a -> mon.m b) =
-  squash (forall x. mon_p.m_p b (fun x -> True) (c x))
-
-type ctx_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:~~a --><*> ~~b) =
-  ct_p a b mon mon_p (c mon theActs)
-
-(* TODO: check with others -- since this is assumed, it represents a risk **)
-(* Parametricity Assumption about the Context **)
-assume val ctx_param : 
-  (a:Type) -> 
-  (b:Type) ->
-  (mon:monad) -> (mon_p:monad_p mon) ->
-  (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
-  (c:(~~a --><*> ~~b)) -> 
-  Lemma (ctx_p a b mon mon_p theActs theActs_p c)
-
 (** **** Parametricity - instances **)
 let free_p (pi:pi_type) : monad_p free = {
   m_p = (fun a a_p tree -> ILang.pi_hist #a pi `hist_ord` dm_iio_theta tree);
@@ -364,13 +347,36 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 #reset-options
 
+type ct_p 
+  (mon:monad) (mon_p:monad_p mon)
+  (a b:Type)
+  (c:a -> mon.m b) =
+  squash (forall x. mon_p.m_p b (fun x -> True) (c x))
+
+type ctx_p 
+  (mon:monad) (mon_p:monad_p mon) 
+  (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs)
+  (a:(mon:monad -> acts mon -> Type))
+  (b:Type) 
+  (c:(mon:monad -> acts:acts mon -> a mon acts -> mon.m b)) =
+  ct_p mon mon_p (a mon theActs) b (c mon theActs)
+
+(* TODO: check with others -- since this is assumed, it represents a risk **)
+(* Parametricity Assumption about the Context **)
+assume val ctx_param : 
+  (mon:monad) -> (mon_p:monad_p mon) ->
+  (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
+  (a:(mon:monad -> acts mon -> Type)) ->
+  (b:Type) ->
+  (c:(mon:monad -> acts:acts mon -> a mon acts -> mon.m b)) ->
+  Lemma (ctx_p mon mon_p theActs theActs_p a b c)
+
 val cast_to_dm_iio  : (#a:(mon:monad -> acts mon -> Type)) -> (#b:Type) -> ipi:pi_type -> (mon:monad -> acts:acts mon -> a mon acts -> mon.m b) -> (x:a free (wrap ipi free_acts)) -> dm_iio b (ILang.pi_hist ipi)
-let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode (); dump "H") =
+let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   lemma_free_acts ();
   let c' : (a free (wrap ipi free_acts)) -> free.m b = c free (wrap ipi free_acts) in
   let tree : iio b = c' x in
-  ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
-  admit ();
+  ctx_param free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) a b c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
@@ -467,9 +473,9 @@ instance instrumentable_unverified_marrow
   ilang_minst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
-    let x' : d1.mcomp free free_acts = d1.compile free free_acts x in
+    let x' : d1.mcomp free (wrap ipi free_acts) = d1.compile free (wrap ipi free_acts) x in
     let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
-      cast_to_dm_iio #(d1.mcomp free free_acts) ipi f x' in
+      cast_to_dm_iio ipi f x' in
     let r : d2.mbtrans = IIOwp?.reflect dm_tree in
     d2.backtranslate r
   )
