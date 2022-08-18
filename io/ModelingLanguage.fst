@@ -150,6 +150,9 @@ instance mlang_effectpoly_lhs_ho (#t1:styp) (#t2:Type) (d1:(m:(Type -> Type) -> 
   
 instance mlang_effectpoly_ho (#t1:styp) (#t2:styp) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:(m:(Type -> Type) -> mlang (t1 m))) : mlang (t1 --><*> t2) =
   { mldummy = () }
+  
+instance mlang_effectpoly_ho2 (#t1:(mon:monad)->acts mon->Type) (#t2:Type) (d1:(mon:monad -> acts:acts mon -> mlang (t1 mon acts))) (d2:mlang t2) : mlang (mon:monad -> acts:acts mon -> (t1 mon acts) -> mon.m t2) =
+  { mldummy = () }
 
 (**
 instance mlang_effectpoly_hack #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
@@ -361,26 +364,26 @@ let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p :
   end
 #reset-options
 
-val cast_to_dm_iio  : (#a:Type) -> (#b:Type) -> ipi:pi_type -> (~~a --><*> ~~b) -> (x:a) -> dm_iio b (ILang.pi_hist ipi)
-let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
+val cast_to_dm_iio  : (#a:(mon:monad -> acts mon -> Type)) -> (#b:Type) -> ipi:pi_type -> (mon:monad -> acts:acts mon -> a mon acts -> mon.m b) -> (x:a free (wrap ipi free_acts)) -> dm_iio b (ILang.pi_hist ipi)
+let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode (); dump "H") =
   lemma_free_acts ();
-  let c' : a -> free.m b = c free (wrap ipi free_acts) in
+  let c' : (a free (wrap ipi free_acts)) -> free.m b = c free (wrap ipi free_acts) in
   let tree : iio b = c' x in
   ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
+  admit ();
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
 (** * Type Classes **)
 class compilable (icomp:Type u#a) (pi:pi_type) = {
   [@@@no_method]
-  mcomp : Type u#b;
+  mcomp : mon:monad -> acts mon -> Type u#b;
 
-  compile: icomp -> mcomp;
-
+  compile: mon:monad -> acts:acts mon -> icomp -> mcomp mon acts;
   [@@@no_method]
   ilang_icomp : ILang.ilang icomp pi;
   [@@@no_method]
-  mlang_mcomp : mlang mcomp;
+  mlang_mcomp : mon:monad -> acts:acts mon -> mlang (mcomp mon acts);
 }
 
 class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
@@ -423,18 +426,17 @@ instance compile_verified_marrow
   (vpi #pi1 #pi2:pi_type)
   (t1:Type) {| d1:backtranslateable t1 pi1 |} 
   (t2:Type) {| d2:compilable t2 pi2 |}:
-  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) =
-  {
+  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) = {
   ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
 
-  mcomp = kleisli ~~d1.mbtrans ~~d2.mcomp free.m;
+  mcomp = (fun mon acts -> kleisli ~~d1.mbtrans ~~(d2.mcomp mon acts) free.m);
 
-  mlang_mcomp = mlang_kleisli free.m d1.mlang_mbtrans d2.mlang_mcomp;
+  mlang_mcomp = (fun mon acts -> mlang_kleisli free.m d1.mlang_mbtrans (d2.mlang_mcomp mon acts));
 
-  compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
+  compile = (fun mon acts (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
     let tree : dm_iio _ _ = reify_IIOwp r in
-    iio_bind tree (fun x -> free.ret (d2.compile x))
+    iio_bind tree (fun x -> free.ret (d2.compile mon acts x))
   );
 }
 
@@ -453,7 +455,7 @@ instance instrumentable_unverified_marrow
   // a --><*> b --> free.m c, it is not enough to wrap it,
   // we also have to pass inside the monad and the actions of the 
   // current function
-  minst_in = (fun mon acts -> d1.mcomp); 
+  minst_in = d1.mcomp; 
   // TODO: for the ouput I want to check if mbtrans is an arrow or not. 
   // if it is an arrow, then it has the type a --><*> b.
   // I want to instantiate it with the monad and the actions
@@ -461,13 +463,13 @@ instance instrumentable_unverified_marrow
   // so lhs and rhs should both be effect polymorphic functions
   // that are initialized
 
-  mlang_iinst = mlang_effectpoly d1.mlang_mcomp d2.mlang_mbtrans;
+  mlang_iinst = mlang_effectpoly_ho2 d1.mlang_mcomp d2.mlang_mbtrans;
   ilang_minst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
-  instrument = (fun (f:~~d1.mcomp --><*> ~~d2.mbtrans) (x:t1) -> 
-    let x' : d1.mcomp = d1.compile x in
+  instrument = (fun f (x:t1) -> 
+    let x' : d1.mcomp free free_acts = d1.compile free free_acts x in
     let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
-      cast_to_dm_iio ipi f x' in
+      cast_to_dm_iio #(d1.mcomp free free_acts) ipi f x' in
     let r : d2.mbtrans = IIOwp?.reflect dm_tree in
     d2.backtranslate r
   )
