@@ -213,8 +213,6 @@ let test_mlang_prog2 : mlang (kleisli ~~(~~int ---> ~~int --><*> ~~int) ~~int fr
         mlang_int)
     mlang_int
 
-   
-
 (* Exercise: 
    Be prog of type: ctx:( cb:(a -> IIOpi b pi) -> IIOpi c psi) -> IIOpi d phi
    the expected type after compilation of prog should be:
@@ -417,6 +415,7 @@ instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1
   ilang_ibtrans = d1.ilang_minst;
 }
 
+(** TODO: remove after a new pre-release of F* is realeased that builds this automatically **)
 assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
 
 instance compile_verified_marrow
@@ -429,7 +428,7 @@ instance compile_verified_marrow
 
   mcomp = kleisli ~~d1.mbtrans ~~d2.mcomp free.m;
 
-  mlang_mcomp = mlang_ver_arrow d1.mlang_mbtrans d2.mlang_mcomp;
+  mlang_mcomp = mlang_kleisli free.m d1.mlang_mbtrans d2.mlang_mcomp;
 
   compile = (fun (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
     let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
@@ -447,7 +446,7 @@ instance instrumentable_unverified_marrow
   minst_in = d1.mcomp;
   minst_out = d2.mbtrans;
 
-  mlang_iinst = mlang_unv_arrow d1.mlang_mcomp d2.mlang_mbtrans;
+  mlang_iinst = mlang_effectpoly d1.mlang_mcomp d2.mlang_mbtrans;
   ilang_minst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
