@@ -47,6 +47,69 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
 
 let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
 
+(** * Arrow Types **)
+type styp = (Type -> Type) -> Type
+(* I use styp here to be able to write HO types. Not sure if standard practice,
+   or if there is another way to do it. Or maybe a better name since a kleisli arrow
+   has the simpler form.
+   By using styp, I can write things like: kleisli (kleisli a b) c m. that stands
+   for (a -> m b) -> m c.
+   
+   Also, from what I have read, a kleisli arrow actually has access to bind/return
+   and other monad operations. In our case, that it is not true.*)
+type kleisli (t1:styp) (t2:styp) (m:Type->Type) = t1 m -> m (t2 m)
+let (--->) = kleisli
+
+let wstyp (a:Type) : styp = fun m -> a
+let (~~) = wstyp
+
+let kleisli_fish
+  (#m:Type->Type)
+  (#m_bind:(a:Type -> b:Type -> m a -> (a -> m b) -> m b))
+  (f:kleisli 'a 'b m)
+  (g:kleisli 'b 'c m) : 
+  kleisli 'a 'c m = 
+  fun (x:'a m) -> m_bind _ _ (f x) g
+
+(* effectpoly is the type of effect polymorphic kleisli arrows 
+   Q: I am confused if kleisli arrows are already effectful polymorphic and if the
+      names I use are correct **)
+type effectpoly (t1:styp) (t2:styp) = mon:monad -> acts mon -> kleisli t1 t2 mon.m 
+let (--><*>) = effectpoly
+let effectpoly_fish (f:'a --><*> 'b) (g:'b --><*> 'c) : ('a --><*> 'c) = 
+  fun (mon:monad) (acts:acts mon) (x:'a mon.m) -> 
+    mon.bind (f mon acts x) (g mon acts)
+
+(* About the --><*> notation:
+   I saw this notation in: Effects as Capabilities: Effect Handlers and Lightweight
+   Effect Polymorphism 
+
+  In the mentioned paper they use this notation actually to highlight the effect of the 
+  arrow.
+  --> <> means that the arrow is in the pure effect
+  --> <exception, IO> means that the arrow is in exception/IO
+
+  Since I thought it is fun to use symbols for operators, I tried to find one and
+  I thought this one looks decent.
+
+  I read `a --><*> b` as: the arrow `a --> b` can accept any effect.
+**)
+
+(* My guess is that statically verified programs have to be compiled to
+   effectful polymorphic functions. However, we don't want that. So, one idea 
+   I had was to use a refinement that only accepts the free monad. *)
+(* if --><*> means that the arrow accepts any effect, 
+   --><> means that this arrow does not accept any effect.
+   that is not really true. this arrow accepts only the free effect. *)
+type effectpoly_hack (t1:styp) (t2:styp) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon.m 
+let (--><>) = effectpoly_hack
+let effectpoly_hack_fish (f:'a --><> 'b) (g:'b --><*> 'c) : ('a --><> 'c) = 
+  fun mon (acts:acts mon) (x:'a mon.m) -> 
+    mon.bind (f mon acts x) (g mon acts)
+
+//let convert_free_to_effectpoly (f:'a -> free.m 'b) : (~~'a --><> ~~'b) =
+//  fun mon acts x -> f x
+
 (** * MLang **)
 class mlang (t:Type u#a) = { mldummy : unit }
 
@@ -64,69 +127,64 @@ instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either 
 (** TODO: is this one neeeded? *)
 (* instance mlang_tree #t1 (d1:mlang t1) : mlang (free.m t1) =
   { mldummy = () } *)
+  
+(* TODO: I am not sure if we want arrows in any effect to be part of our language. *)
+instance mlang_kleisli #t1 #t2 (m:Type->Type) (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~~t1) (~~t2) m) =
+  { mldummy = () }
 
-type styp = (Type -> Type) -> Type
-(* I use styp here to be able to write HO types. Not sure if standard practice,
-   or if there is another way to do it. Or maybe a better name since a kleisli arrow
-   has the simpler form.
-   By using styp, I can write things like: kleisli (kleisli 'a 'b) 'c m.
-   
-   Also, from what I have read, a kleisli arrow actually has access to bind/return
-   and other monad operations. In our case, that it is not true.*)
-type kleisli (t1:styp) (t2:styp) (m:Type->Type) = t1 m -> m (t2 m)
-let (--->) = kleisli
+instance mlang_kleisli_lhs_ho (#t1:styp) #t2 (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang t2) : mlang (kleisli t1 (~~t2) m) =
+  { mldummy = () }
 
-unfold let wstyp (a:Type) : styp = fun m -> a
-unfold let (~~) = wstyp
+instance mlang_kleisli_rhs_ho #t1 (#t2:styp) (m:Type->Type) (d1:mlang t1) (d2:mlang (t2 m)) : mlang (kleisli (~~t1) t2 m) =
+  { mldummy = () }
 
-let kleisli_fish
-  (#m:Type->Type)
-  (#m_bind:(a:Type -> b:Type -> m a -> (a -> m b) -> m b))
-  (f:kleisli 'a 'b m)
-  (g:kleisli 'b 'c m) : 
-  kleisli 'a 'c m = 
-  fun (x:'a m) -> m_bind _ _ (f x) g
+instance mlang_kleisli_ho (#t1:styp) (#t2:styp) (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang (t2 m)) : mlang (kleisli t1 t2 m) =
+  { mldummy = () }
 
-type effectpoly (t1:styp) (t2:styp) = mon:monad -> acts mon -> kleisli t1 t2 mon.m 
-let (--><*>) = effectpoly
+(* TODO: in practice, I don't think we need this case *)
+instance mlang_effectpoly (#t1:Type) (#t2:Type) (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
+  { mldummy = () }
 
-(* I saw this notation in: Effects as Capabilities: Effect Handlers and Lightweight
-Effect Polymorphism 
+instance mlang_effectpoly_lhs_ho (#t1:styp) (#t2:Type) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:mlang t2) : mlang (t1 --><*> ~~t2) =
+  { mldummy = () }
+  
+instance mlang_effectpoly_ho (#t1:styp) (#t2:styp) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:(m:(Type -> Type) -> mlang (t1 m))) : mlang (t1 --><*> t2) =
+  { mldummy = () }
 
-  In the mentioned paper they use this notation actually to highlight the effect of the 
-  arrow.
-  --> <> means that the arrow is in the pure effect
-  --> <exception, IO> means that the arrow is in exception/IO
+(**
+instance mlang_effectpoly_hack #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
+  { mldummy = () }
 
-  Since I force myself to overload operations, I thought I can use something similar.
-  I went with --><*>. 
-  I read it as: the arrow can accept any effect.
-  I would have liked --><_>, but F* does not accept to overload that.
+(** Since the effectpolymorphic arrow here only accepts the free monad, we can instantiate the HO input and output with free **)
+instance mlang_effectpoly_hack_lhs_ho (#t1:styp) #t2 (d1:mlang (t1 free.m)) (d2:mlang t2) : mlang (t1 --><> ~~t2) =
+  { mldummy = () }
 **)
 
-assume val test : mon:monad -> acts mon -> ((int -> mon.m int) -> mon.m int) -> mon.m int
+let test_ctx : mlang (~~int --><*> ~~int) =
+  mlang_effectpoly
+    mlang_int
+    mlang_int
 
-let _ = assert (has_type test ((~~int ---> ~~int ---> ~~int) --><*> ~~int))
+let test_ctx2 : mlang (~~int ---> ~~int --><*> ~~int) =
+  mlang_effectpoly_lhs_ho
+    (fun m -> mlang_kleisli m mlang_int mlang_int)
+    mlang_int
 
-let effectpoly_fish (f:effectpoly 'a 'b) (g:effectpoly 'b 'c) : ('a --><*> 'c) = 
-  fun (mon:monad) (acts:acts mon) (x:'a mon.m) -> 
-    mon.bind (f mon acts x) (g mon acts)
+(** This can not be typed: 
+let test_ctx3 : mlang (~~int --><*> (~~int ---> ~~int)) = **)
 
-type effectpoly_hack (t1:styp) (t2:styp) = mon:monad{mon == free} -> acts mon -> kleisli t1 t2 mon.m 
-(* if --><*> means that the arrow accepts any effect, 
-   --><> means that this arrow does not accept any effect.
-   that is not really true. this arrow accepts only the free effect. *)
-let (--><>) = effectpoly_hack
-  
-let effectpoly_fishy (f:'a --><> 'b) (g:'b --><*> 'c) : ('a --><> 'c) = 
-  fun mon (acts:acts mon) (x:'a mon.m) -> 
-    mon.bind (f mon acts x) (g mon acts)
+let test_prog1 : mlang (kleisli ~~(~~int --><*> ~~int) ~~int free.m) =
+  mlang_kleisli_lhs_ho
+    free.m
+    (mlang_effectpoly mlang_int mlang_int)
+    mlang_int
 
-let convert_free_to_effectpoly (f:'a -> free.m 'b) : (~~'a --><> ~~'b) =
-  fun mon acts x -> f x
-
-let test2 (f:('a ---> 'b) --><*> 'c) : (('a ---> 'b) --><> 'c) =
-  fun mon acts -> f mon acts
+(* Teset if mlang accepts:
+   - [ ] a partial program that accepts a context
+   - [ ] a context
+   - [ ] a HO context
+ *)
+   
 
 (* Compilation can return either:
 * a effect polymorphic arrow. 
@@ -151,80 +209,6 @@ let test2 (f:('a ---> 'b) --><*> 'c) : (('a ---> 'b) --><> 'c) =
     let r : d2.mbtrans = IIOwp?.reflect dm_tree in
     d2.backtranslate r
 *)
-  
-(* the following two instances, imply that arrows that are in the free effect
-   and that are effectful polymorphic are allowed *)
-instance mlang_kleisli #t1 #t2 (m:Type->Type) (d1:mlang t1) (d2:mlang t2) : mlang (kleisli (~~t1) (~~t2) m) =
-  { mldummy = () }
-
-instance mlang_kleisli_lhs_ho (#t1:styp) #t2 (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang t2) : mlang (kleisli t1 (~~t2) m) =
-  { mldummy = () }
-
-instance mlang_kleisli_rhs_ho #t1 (#t2:styp) (m:Type->Type) (d1:mlang t1) (d2:mlang (t2 m)) : mlang (kleisli (~~t1) t2 m) =
-  { mldummy = () }
-
-instance mlang_kleisli_ho (#t1:styp) (#t2:styp) (m:Type->Type) (d1:mlang (t1 m)) (d2:mlang (t2 m)) : mlang (kleisli t1 t2 m) =
-  { mldummy = () }
-
-(* TODO: how do you define this? -- this may be a red flag that I am on the wrong track
-    I read this as: a effectful polymorphic arrow is part of mlang if the input type and the output type
-    are part of mlang for all monads 
-    TODO: in practice, I don't think we need this case
- *)
-instance mlang_effectpoly (#t1:Type) (#t2:Type) (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><*> ~~t2) =
-  { mldummy = () }
-
-instance mlang_effectpoly_lhs_ho (#t1:styp) (#t2:Type) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:mlang t2) : mlang (t1 --><*> ~~t2) =
-  { mldummy = () }
-  
-instance mlang_effectpoly_ho (#t1:styp) (#t2:styp) (d1:(m:(Type -> Type) -> mlang (t1 m))) (d2:(m:(Type -> Type) -> mlang (t1 m))) : mlang (t1 --><*> t2) =
-  { mldummy = () }
-
-instance mlang_effectpoly_hack #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
-  { mldummy = () }
-
-(** Since the effectpolymorphic arrow here only accepts the free monad, we can instantiate the HO input and output with free **)
-instance mlang_effectpoly_hack_lhs_ho (#t1:styp) #t2 (d1:mlang (t1 free.m)) (d2:mlang t2) : mlang (t1 --><> ~~t2) =
-  { mldummy = () }
-
-let test_ctx : mlang (~~int --><*> ~~int) =
-  mlang_effectpoly
-    mlang_int
-    mlang_int
-
-let test_ctx2 : mlang (~~int ---> ~~int --><*> ~~int) =
-  mlang_effectpoly_lhs_ho
-    (fun m -> mlang_kleisli m mlang_int mlang_int)
-    mlang_int
-
-(** This can not be typed: 
-let test_ctx3 : mlang (~~int --><*> (~~int ---> ~~int)) = **)
-
-let test_prog1 : mlang (kleisli ~~(~~int --><*> ~~int) ~~int free.m) =
-  mlang_kleisli_lhs_ho
-    free.m
-    (mlang_effectpoly mlang_int mlang_int)
-    mlang_int
-
-(* TODO: I should test what kind of arrows can be written **)
-// ilang: ( a -> IIOpi b pi -> IIOpi c psi -> IIOpi d phi)
-// mlang: mon -> acts -> (a -> mon.m b -> mon.m c) -> mon.m d
-let test_mlang2 (a b c d:Type) (d1:mlang a) (d2:mlang b) (d3:mlang c) (d4:mlang d) : mlang ((~~a ---> ~~b ---> ~~c) --><> ~~d) =
-  mlang_effectpoly_hack_lhs_ho
-    (mlang_kleisli_lhs_ho free.m (mlang_kleisli free.m d1 d2) d3)
-    d4
-
-let test_mlang3 : mlang ((~~int ---> ~~int ---> ~~int) --><> ~~int) =
-  mlang_effectpoly_hack_lhs_ho
-    (mlang_kleisli_lhs_ho free.m (mlang_kleisli free.m mlang_int mlang_int) mlang_int)
-    mlang_int
-
-(* Teset if mlang accepts:
-   - [ ] a partial program that accepts a context
-   - [ ] a context
-   - [ ] a HO context
- *)
-   
 
 (** *** Parametricity **)
 noeq
