@@ -396,20 +396,21 @@ class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
 }
 
 class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
- // [@@@no_method]
-  minst_in: Type;
-  minst_out : Type;
+  [@@@no_method]
+  minst_in: styp;
+  [@@@no_method]
+  minst_out : styp;
 
-  instrument: ~~minst_in --><*> ~~minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
+  instrument: minst_in --><*> minst_out -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
 
   [@@@no_method]
-  mlang_iinst : mlang (~~minst_in --><*> ~~minst_out);
+  mlang_iinst : mlang (minst_in --><*> minst_out);
   [@@@no_method]
   ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = ~~d1.minst_in --><*> ~~d1.minst_out;
+  mbtrans = d1.minst_in --><*> d1.minst_out;
   mlang_mbtrans = d1.mlang_iinst;
   backtranslate = d1.instrument;
   ilang_ibtrans = d1.ilang_minst;
@@ -443,14 +444,30 @@ instance instrumentable_unverified_marrow
   t1 {| d1:compilable t1 pi1 |}
   t2 {| d2:backtranslateable t2 pi2 |} : 
   instrumentable t1 t2 ipi = {
-  minst_in = d1.mcomp;
-  minst_out = d2.mbtrans;
+  // TODO: for the input I want to check if mcomp is an arrow or not. 
+  // if it is an arrow, then it has the type a -> free.m b.
+  // I want to wrap the arrow in an arrow of type
+  // mon:(Type -> Type){mon == free.m} -> a -> mon b
+  // TODO: this may have a different problem. 
+  // if mcomp is the following type:
+  // a --><*> b --> free.m c, it is not enough to wrap it,
+  // we also have to pass inside the monad and the actions of the 
+  // current function
+  minst_in = ~~d1.mcomp; 
+  // TODO: for the ouput I want to check if mbtrans is an arrow or not. 
+  // if it is an arrow, then it has the type a --><*> b.
+  // I want to instantiate it with the monad and the actions
+  // that this current arrow gets.
+  // this may be difficult because I don't see how I would have acces to them
+  minst_out = ~~d2.mbtrans;
+  // so lhs and rhs should both be effect polymorphic functions
+  // that are initialized
 
   mlang_iinst = mlang_effectpoly d1.mlang_mcomp d2.mlang_mbtrans;
   ilang_minst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
-  instrument = (fun f (x:t1) -> 
-    let x' = d1.compile x in
+  instrument = (fun (f:~~d1.mcomp --><*> ~~d2.mbtrans) (x:t1) -> 
+    let x' : d1.mcomp = d1.compile x in
     let dm_tree : dm_iio _ (ILang.pi_hist ipi) = 
       cast_to_dm_iio ipi f x' in
     let r : d2.mbtrans = IIOwp?.reflect dm_tree in
