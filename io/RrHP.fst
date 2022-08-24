@@ -491,11 +491,17 @@ let rrhc_g = forall c. rrhc i c
 let rrhp_g = forall h ip. rrhp h ip
 
 
-let lemma_from_trace_to_prop (ws:iwhole i) (wt:whole i) :
+let lemma_trace_to_prop (ws:iwhole i) (wt:whole i) :
   Lemma 
     (requires (forall tr. ws `iproduces` tr <==> wt `produces` tr))
     (ensures (ibeh ws `subset_of` beh wt /\ beh wt `subset_of` ibeh ws)) = 
-    ()
+    admit ()
+
+let lemma_prop_to_trace (ws:iwhole i) (wt:whole i) :
+  Lemma
+    (requires (ibeh ws `subset_of` beh wt /\ beh wt `subset_of` ibeh ws))
+    (ensures (forall tr. ws `iproduces` tr <==> wt `produces` tr)) =
+    admit ()
 
 let lemma_prop_eqs (s1:trace_property int) (s2:trace_property int) (h:hyperproperty) : 
     Lemma 
@@ -534,7 +540,7 @@ let lemma_rrhc_eq_rrhp () : Lemma (rrhc_g <==> rrhp_g) =
 	     assert (h (ibeh ws));
 	     Classical.Sugar.forall_elim ip imp3;
 	     assert (forall tr. ws `iproduces` tr <==> wt `produces` tr);
-	     lemma_from_trace_to_prop ws wt;
+	     lemma_trace_to_prop ws wt;
 	     lemma_prop_eqs (ibeh ws) (beh wt) h;
              assert (h (beh wt))
           end
@@ -542,8 +548,41 @@ let lemma_rrhc_eq_rrhp () : Lemma (rrhc_g <==> rrhp_g) =
       end
     end
   end;
-  introduce rrhp_g ==> rrhc_g with _. begin
-    admit ()
+  introduce rrhp_g ==> 
+    rrhc_g 
+  with imp1. begin
+    introduce forall c. 
+      rrhc i c 
+    with begin
+      assert (forall h ip. rrhp h ip);
+      let ic = backtranslate i.vpi c in
+      
+      introduce exists (ic:ictx i i.vpi).
+         (forall (ip:iprog i) (tr:trace * i.prog_out).
+           ((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr <==>
+             (ip `ilink` ic) `iproduces` tr)
+      with ic and begin
+         introduce forall (ip:iprog i).
+	   (forall (tr:trace * i.prog_out). ((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr <==>
+             (ip `ilink` ic) `iproduces` tr) 
+	 with begin
+	   eliminate forall ip. (forall h. rrhp h ip) with ip;
+	   let wt = fun c -> ((compile ip i.vpi #(r_pi i.vpi)) `link` c) in
+	   let ws = fun ic -> (ip `ilink` ic) in
+	   let h : hyperproperty = fun pi -> exists ic. ibeh (ws ic) `subset_of` pi in
+	   eliminate forall h. rrhp h ip with h;
+           eliminate (forall (ic':ictx i i.vpi). (exists ic. ibeh (ws ic) `subset_of` (ibeh (ws ic')))) ==> 
+	   	  (forall c'. (exists ic. ibeh (ws ic) `subset_of` (beh (wt c'))))
+           with ();
+           eliminate forall c'. (exists ic. ibeh (ws ic) `subset_of` (beh (wt c'))) with c;
+	   introduce exists ic. ibeh (ws ic) `subset_of` (beh (wt c)) with ic and ();
+	   assert (ibeh (ws ic) `subset_of` (beh (wt c)));
+	   assume (beh (wt c) `subset_of` ibeh (ws ic)); (* RTC? *)
+           lemma_prop_to_trace (ws ic) (wt c);
+	   assert (forall tr. (wt c) `produces` tr <==> (ws ic) `iproduces` tr)
+	 end
+      end
+    end
   end
 
 (** *** Transparency **)
