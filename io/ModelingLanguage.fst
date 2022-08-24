@@ -528,14 +528,14 @@ let model_compile
 
 (** *** Case Studies **)
 
-instance compilable_int #pi : compilable int pi = {
+instance comp_int #pi : compilable int pi = {
   ilang_icomp = ILang.ilang_int pi;
   mcomp = (fun mon acts -> int);
   mlang_mcomp = (fun mon acts -> mlang_int);
   compile = (fun mon acts x -> x);
 }
 
-instance backtranslate_int #pi : backtranslateable int pi = {
+instance btrans_int #pi : backtranslateable int pi = {
   mbtrans = int;
 
   backtranslate = (fun x -> x);
@@ -554,9 +554,9 @@ let test1 : interface = {
   ictx_out = int;
   iprog_out = int; 
 
-  ctx_in = compilable_int;
-  ctx_out = backtranslate_int;
-  prog_out = compilable_int;
+  ctx_in = comp_int;
+  ctx_out = btrans_int;
+  prog_out = comp_int;
 }
 
 let iprog1 : iprog test1 = fun c -> (c 5) + 1
@@ -577,9 +577,9 @@ let test2 : interface = {
   ictx_out = int;
   iprog_out = int; 
 
-  ctx_in = compile_verified_marrow thePi int #(backtranslate_int #thePi) int #(compilable_int #thePi);
-  ctx_out = backtranslate_int;
-  prog_out = compilable_int;
+  ctx_in = compile_verified_marrow thePi int #(btrans_int #thePi) int #(comp_int #thePi);
+  ctx_out = btrans_int;
+  prog_out = comp_int;
 }
 
 let iprog2 : iprog test2 = fun c -> (c (fun x -> (x + 5) <: ILang.IIOpi int thePi)) + 1
@@ -587,8 +587,43 @@ let mprog2 : prog test2 = model_compile iprog2 thePi
 val mctx2 : ctx test2  
 let mctx2 (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
   mon.bind (f 5) (fun x -> mon.ret (x+2))
-
 let mwhole2 = mprog2 `link` mctx2
+
+let test3 : interface = {
+  vpi = thePi;
+
+  (* intermediate level *)
+  ictx_in = ILang.ilang_arrow_typ (ILang.ilang_arrow_typ int int thePi) int thePi;
+  ictx_out = int;
+  iprog_out = int; 
+
+  ctx_in = (
+    compile_verified_marrow 
+        thePi 
+        _ 
+        #(instrumentable_is_backtranslateable ( 
+            instrumentable_unverified_marrow
+                thePi
+                int #(comp_int #thePi)
+                int #(btrans_int #thePi)))
+        int
+        #(comp_int #thePi)
+  );
+  ctx_out = btrans_int;
+  prog_out = comp_int;
+}
+
+let iprog3 : iprog test3 = fun c -> iprog2 c
+let mprog3 : prog test3 = model_compile iprog3 thePi
+
+(** TODO: the type of mctx3 looks bad. there should not be a effectpolymorphic callback inside ctx **)
+val mctx3 : ctx test3  
+let mctx3 (mon:monad) (act:acts mon) (f:((mon':monad -> acts':acts mon' -> (int -> mon'.m int)) -> mon.m int)) : mon.m int =
+  mon.bind (f (fun mon' act' (x:int) -> mon'.ret x)) (fun x -> mon.ret (x+3))
+
+let _ = assert (has_type mctx3 (mon:monad -> act:acts mon -> ((f:(int `effectpoly` int) -> mon.m int) -> mon.m int)))
+
+let mwhole3 = mprog3 `link` mctx3
 
 (** ** Criterias **)
 (** *** Behaviors **)
