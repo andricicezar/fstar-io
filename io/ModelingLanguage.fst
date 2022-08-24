@@ -364,16 +364,16 @@ class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
   instrument: (minst_in --><*> minst_out) -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
 
   [@@@no_method]
-  mlang_iinst : mlang (mon:monad -> acts:acts mon -> (minst_in mon acts) -> mon.m minst_out);
+  mlang_minst : mlang (mon:monad -> acts:acts mon -> (minst_in mon acts) -> mon.m minst_out);
   [@@@no_method]
-  ilang_minst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
+  ilang_iinst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
 }
 
 instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
   mbtrans = (mon:monad -> acts:acts mon -> (d1.minst_in mon acts) -> mon.m d1.minst_out);
-  mlang_mbtrans = d1.mlang_iinst;
+  mlang_mbtrans = d1.mlang_minst;
   backtranslate = d1.instrument;
-  ilang_ibtrans = d1.ilang_minst;
+  ilang_ibtrans = d1.ilang_iinst;
 }
 
 (** TODO: remove after a new pre-release of F* is realeased that builds this automatically **)
@@ -419,8 +419,8 @@ instance instrumentable_unverified_marrow
   minst_in = d1.mcomp; 
   minst_out = d2.mbtrans;
 
-  mlang_iinst = mlang_effectpoly_ho d1.mlang_mcomp d2.mlang_mbtrans;
-  ilang_minst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
+  mlang_minst = mlang_effectpoly_ho d1.mlang_mcomp d2.mlang_mbtrans;
+  ilang_iinst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
 
   instrument = (fun f (x:t1) -> 
     let x' : d1.mcomp free (wrap ipi free_acts) = d1.compile free (wrap ipi free_acts) x in
