@@ -301,10 +301,10 @@ let subset_of (s1:trace_property 'a) (s2:trace_property 'a) =
            maybe we can simply our life for now by having just the trace **)
   s1 `hist_post_ord` s2
 
-let included_in (tr:trace * 'a) (s1:trace_property 'a) =
+let included_in (tr:trace * 'a) (s1:trace_property 'a) : Type0 =
   s1 (fst tr) (snd tr) 
   
-let _produces (d:iio 'a) (tr:trace * 'a) =
+let _produces (d:iio 'a) (tr:trace * 'a) : Type0 =
   tr `included_in` (_beh d)
 
 let pi_to_set #a (pi:pi_type) : trace_property a = fun lt _ -> enforced_locally pi [] lt
@@ -462,9 +462,89 @@ let rrhc_proof (i:interface) (c:ctx i) : Lemma (rrhc i c) =
     end
   end
 
+assume val thePi : pi_type
+
+(** *** RrHP **)
+let i : interface = {
+  ictx_in = int;
+  ictx_out = int;
+  iprog_out = int; 
+
+  (* target level *)
+  ctx_in = int;
+  ctx_out = int;
+  prog_out = int; 
+
+  vpi = thePi;
+}
+
 (* To state RrHP we need relations between the results and I am not sure if it is worth 
    doing that since we proved RrHC *)
 type hyperproperty = trace_property int -> Type0
+
+
+let rrhp (h:hyperproperty) (ip:iprog i) =
+  (forall (ic:ictx i i.vpi). (h (ibeh (ip `ilink` ic)))) ==> 
+    (forall c. (h (beh ((compile ip i.vpi) `link` c))))
+
+let rrhc_g = forall c. rrhc i c
+let rrhp_g = forall h ip. rrhp h ip
+
+
+let lemma_from_trace_to_prop (ws:iwhole i) (wt:whole i) :
+  Lemma 
+    (requires (forall tr. ws `iproduces` tr <==> wt `produces` tr))
+    (ensures (ibeh ws `subset_of` beh wt /\ beh wt `subset_of` ibeh ws)) = 
+    ()
+
+let lemma_prop_eqs (s1:trace_property int) (s2:trace_property int) (h:hyperproperty) : 
+    Lemma 
+      (requires (s1 `subset_of` s2 /\ s2 `subset_of` s1 /\ h s1))
+      (ensures (h s2)) = 
+      assert (forall lt r. s1 lt r <==> s2 lt r);
+      assume (h s2)
+      
+let lemma_rrhc_eq_rrhp () : Lemma (rrhc_g <==> rrhp_g) = 
+  introduce rrhc_g ==> 
+    rrhp_g 
+  with imp1. begin
+    assert (forall c. (exists (ic:ictx i i.vpi).
+    (forall (ip:iprog i) (tr:trace * i.prog_out).
+      ((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr <==>
+         (ip `ilink` ic) `iproduces` tr)));
+    introduce forall h ip. 
+      rrhp h ip 
+    with begin
+      introduce (forall (ic:ictx i i.vpi). (h (ibeh (ip `ilink` ic)))) ==> 
+        (forall c. (h (beh ((compile ip i.vpi) `link` c)))) 
+      with imp2. begin
+        introduce forall c. 
+          (h (beh ((compile ip i.vpi) `link` c)))
+        with begin
+          Classical.Sugar.forall_elim c imp1;
+          eliminate exists (ic:ictx i i.vpi).
+            (forall (ip:iprog i) (tr:trace * i.prog_out).
+              ((ip `ilink` ic) `iproduces` tr) <==>
+              (((compile ip i.vpi #(r_pi i.vpi)) `link` c) `produces` tr))
+          returns (h (beh ((compile ip i.vpi `link` c))))
+          with imp3. begin
+	     let wt = ((compile ip i.vpi #(r_pi i.vpi)) `link` c) in
+	     let ws = (ip `ilink` ic) in
+	     Classical.Sugar.forall_elim ic imp2;
+	     assert (h (ibeh ws));
+	     Classical.Sugar.forall_elim ip imp3;
+	     assert (forall tr. ws `iproduces` tr <==> wt `produces` tr);
+	     lemma_from_trace_to_prop ws wt;
+	     lemma_prop_eqs (ibeh ws) (beh wt) h;
+             assert (h (beh wt))
+          end
+        end
+      end
+    end
+  end;
+  introduce rrhp_g ==> rrhc_g with _. begin
+    admit ()
+  end
 
 (** *** Transparency **)
 let transparency (i:interface) (ip:iprog i) (c:ctx i) (tr:trace * i.prog_out) (ipi:pi_type) (r:r_vpi_ipi i.vpi ipi) =
