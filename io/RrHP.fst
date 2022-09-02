@@ -84,6 +84,8 @@ assume val compile'' : (i:interface) -> i.iprog_out -> i.prog_out
 
 
 (** *** Parametricity **)
+type verified_marrow (t1:Type u#a) (t2:Type u#b) = t1 -> free.m t2
+type unverified_marrow (t1:Type) (t2:Type) : Type = mon:monad -> acts mon -> t1 -> mon.m t2
 noeq
 type monad_p (mon:monad) = {
   m_p : a:Type -> a_p:(a -> Type) -> x:(mon.m a) -> Type;
@@ -111,20 +113,21 @@ type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) =
   Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
 
 (* TODO: check if we need parametricity for the interface **)
-type ct_p (i:interface) (mon:monad) (mon_p:monad_p mon) (c:ct i mon) =
-  squash (forall x. mon_p.m_p i.ctx_out (fun x -> True) (c x))
+type ct_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (c:a -> mon.m b) =
+  squash (forall x. mon_p.m_p b (fun x -> True) (c x))
 
-type ctx_p (i:interface) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:ctx i) =
-  ct_p i mon mon_p (c mon theActs)
+type ctx_p (a b:Type) (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs) (c:unverified_marrow a b) =
+  ct_p a b mon mon_p (c mon theActs)
 
 (* TODO: check with others **)
 (* Parametricity Assumption about the Context **)
 assume val ctx_param : 
-  (i:interface) ->
+  (a:Type) -> 
+  (b:Type) ->
   (mon:monad) -> (mon_p:monad_p mon) ->
   (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
-  (c:ctx i) -> 
-  Lemma (ctx_p i mon mon_p theActs theActs_p c)
+  (c:unverified_marrow a b) -> 
+  Lemma (ctx_p a b mon mon_p theActs theActs_p c)
 
 (** **** Parametricity - instances **)
 let free_p (pi:pi_type) : monad_p free = {
@@ -224,18 +227,18 @@ let lemma_free_acts () : Lemma (spec_free_acts free_acts) =
   assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
   assert (spec_free_acts free_acts) by (assumption ())
 
-val cast_to_dm_iio  : (i:interface) -> ipi:pi_type -> ctx i -> (x:i.ctx_in) -> dm_iio i.ctx_out (ILang.pi_hist ipi)
-let cast_to_dm_iio i ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
+val cast_to_dm_iio  : (#a:Type) -> (#b:Type) -> ipi:pi_type -> unverified_marrow a b -> (x:a) -> dm_iio b (ILang.pi_hist ipi)
+let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
   lemma_free_acts ();
-  let c' : ct i free = c free (wrap ipi free_acts) in
-  let tree : iio i.ctx_out = c' x in
-  ctx_param i free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
+  let c' : a -> free.m b = c free (wrap ipi free_acts) in
+  let tree : iio b = c' x in
+  ctx_param a b free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) c;
   assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
   tree
 
 val backtranslate : (#i:interface) -> ipi:pi_type -> ctx i -> ictx i ipi
 let backtranslate #i ipi c (x:i.ictx_in) : ILang.IIOpi i.ictx_out ipi =
-  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio i ipi c (compile' i x) in
+  let dm_tree : dm_iio i.ctx_out (ILang.pi_hist ipi) = cast_to_dm_iio ipi c (compile' i x) in
   let r : i.ctx_out = IIOwp?.reflect dm_tree in
   backtranslate' i r
 
@@ -267,9 +270,21 @@ let compile
     let tree = compile_body ip ipi c in
     iio_bind tree (fun x -> free.ret (compile'' i x))
 
+let compile_prog
+  (#vpi:pi_type)
+  (#ia:Type) (#ib:Type) (#ic:Type)
+  (#ma:Type) (#mb:Type) (#mc:Type)
+  (ip:(ia -> ILang.IIOpi ib vpi) -> ILang.IIOpi ic vpi)
+  (ipi:pi_type)
+  (#r: r_vpi_ipi vpi ipi) :
+  ((mon:monad -> acts mon -> ma -> mon.m mb) -> free.m mc) =
+  let i : interface =({ ictx_in = ia; ictx_out = ib; iprog_out = ic; vpi = vpi; ctx_in = ma; ctx_out = mb; prog_out = mc }) in
+  let p : prog i = compile #i ip ipi #r in
+  p
+
 (** ** Theorems **)
 (** *** Behaviors **)
-(* A trace property is a set of pairs between a trace and a result. 
+(* A trace property i:qs a set of pairs between a trace and a result. 
    The trace is a complete trace. *)
 
 (* `hist_post a` is the type of post-condtions over the local trace and the final result.
