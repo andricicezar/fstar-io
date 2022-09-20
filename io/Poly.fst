@@ -1,12 +1,14 @@
 module Poly
 
+#set-options "--print_universes"
+
 noeq type monad = {
   m    : Type u#a -> Type u#(max 1 a);
   ret  : #a:Type -> a -> m a;
   bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b;
 }
 
-assume type io_ops
+assume type io_ops : Type u#0
 
 noeq
 type op_sig (op:Type u#a) = {
@@ -14,9 +16,11 @@ type op_sig (op:Type u#a) = {
   res : (cmd:op) -> (args cmd) -> Type u#c;
 }
 
-assume val io_sig : op_sig io_ops
+(* TODO: the type of the signature in Free.fst is polymorphic just in one universe.
+   TODO: since io_ops is in univese 0 and we have to be at least in universe 1, we have to raise *)
+assume val io_sig : op_sig u#a u#a u#a (Universe.raise_t io_ops)
 
-type acts (mon:monad) = op:io_ops -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
+type acts (mon:monad) = op:(Universe.raise_t io_ops) -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
 
 assume val free : monad
 assume val free_acts : acts free
@@ -80,14 +84,14 @@ type src_ctx2 (pi:pi_type) = ct u#a (dm_mon pi).m
 type tgt_ctx2 = mon:monad -> acts mon -> ct mon.m
 
 (* TODO: looks like tgt_ctx and src_ctx must be in the same universe *)
-val backtranslate2 : pi:pi_type -> tgt_ctx2 u#a u#b -> src_ctx2 u#a pi
+val backtranslate2 : pi:pi_type -> tgt_ctx2 u#a -> src_ctx2 u#a pi
 let backtranslate2 pi tgt_ctx : src_ctx2 pi =
   tgt_ctx (dm_mon pi) (dm_acts pi)
 
 let src_prog2 (ipi:pi_type) (vpi:pi_type) : Type = src_ctx2 u#a ipi -> (dm_mon vpi).m int1
 let tgt_prog2 : Type = tgt_ctx2 -> free.m int1
 
-val compile2 : (#ipi:pi_type) -> (#vpi:pi_type) -> src_prog2 u#a ipi vpi -> tgt_prog2 u#a u#b 
+val compile2 : (#ipi:pi_type) -> (#vpi:pi_type) -> src_prog2 u#a ipi vpi -> tgt_prog2 u#a
 let compile2 #ipi src_prog tgt_ctx : free.m int1 = 
   src_prog (backtranslate2 ipi tgt_ctx)
 
