@@ -22,12 +22,9 @@ open TC.Monitorable.Hist
 **)
 
 
-  
-unfold let pi_hist (#a:Type) (pi:monitorable_prop) : Hist.hist a =
-  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
 effect IIOpi (a:Type) (pi : monitorable_prop) = 
-  IIO.IIOwp a (pi_hist #a pi)
+  IIO.IIOwp a (pi_as_hist #a pi)
 
 class ilang (t:Type u#a) (pi:monitorable_prop) = { mldummy : unit }
 
@@ -51,7 +48,7 @@ type ilang_arrow_typ (t1 t2:Type) pi = t1 -> IIOpi t2 pi
     It can expect an argument that respects a different pi1, or it
     can return a function that respects pi2. 
 **)
-instance ilang_arrow (#pi1 #pi2 pi:monitorable_prop) t1 {| d1:ilang t1 pi1 |} t2 {| d2:ilang t2 pi2 |} : ilang (ilang_arrow_typ t1 t2 pi) pi =
+instance ilang_arrow (#pi1 #pi2 pi:monitorable_prop) #t1 (d1:ilang t1 pi1) #t2 (d2:ilang t2 pi2) : ilang (ilang_arrow_typ t1 t2 pi) pi =
   { mldummy = () }
 
 (**instance ilang_fo_uint8 : ilang_fo UInt8.t = { fo_pred = () }

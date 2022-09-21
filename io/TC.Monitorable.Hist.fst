@@ -5,6 +5,7 @@ open FStar.Tactics.Typeclasses
 
 open Common
 open IO.Sig 
+open Hist
 
 type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
 
@@ -24,6 +25,12 @@ let rec enforced_locally
   | e  ::  t ->
     if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
     else false
+  
+unfold let pi_as_hist (#a:Type) (pi:monitorable_prop) : hist a =
+  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
+
+let lemma_bind_pi_implies_pi (#a #b:Type) (pi:monitorable_prop) : 
+  Lemma (pi_as_hist #b pi `hist_ord` (hist_bind (pi_as_hist #a pi) (fun (_:a) -> pi_as_hist pi))) = admit ()
 
 class monitorable_hist
   (#t1:Type)
