@@ -29,19 +29,14 @@ type int1 : Type u#1 = Universe.raise_t int
 
 type src_ctx1 = ((int1 -> free.m int1) -> free.m int1) -> free.m (int1 -> free.m int1)
 type tgt_ctx1 = mon:monad -> acts mon -> ((int1 -> mon.m int1) -> mon.m int1) -> mon.m (int1 -> mon.m int1)
-
-val backtranslate1 : tgt_ctx1 -> src_ctx1
-let backtranslate1 (tgt_ctx:tgt_ctx1) (pprog_cb:((int1 -> free.m int1) -> free.m int1)) : free.m (int1 -> free.m int1) = 
-  let src_ctx : ((int1 -> free.m int1) -> free.m int1) -> free.m (int1 -> free.m int1) = tgt_ctx free free_acts in
-  let r : free.m (int1 -> free.m int1) = src_ctx pprog_cb in 
-  r
   
 let src_prog1 : Type = src_ctx1 -> free.m int1
 let tgt_prog1 : Type = tgt_ctx1 -> free.m int1
 
 val compile1 : src_prog1 -> tgt_prog1
 let compile1 src_prog tgt_ctx : free.m int1 = 
-  src_prog (backtranslate1 tgt_ctx)
+  let src_ctx = tgt_ctx free free_acts in
+  src_prog src_ctx
 
 (* Conclusion until now, it is that we do not need to do 
    recursively compile/instrument things. It is enough to
@@ -83,19 +78,17 @@ assume type ct (m:Type u#a -> Type u#(max 1 a))
 type src_ctx2 (pi:pi_type) = ct u#a (dm_mon pi).m
 type tgt_ctx2 = mon:monad -> acts mon -> ct mon.m
 
-(* TODO: looks like tgt_ctx and src_ctx must be in the same universe *)
-val backtranslate2 : pi:pi_type -> tgt_ctx2 u#a -> src_ctx2 u#a pi
-let backtranslate2 pi tgt_ctx : src_ctx2 pi =
-  tgt_ctx (dm_mon pi) (dm_acts pi)
-
 let src_prog2 (ipi:pi_type) (vpi:pi_type) : Type = src_ctx2 u#a ipi -> (dm_mon vpi).m int1
 let tgt_prog2 : Type = tgt_ctx2 -> free.m int1
 
 val compile2 : (#ipi:pi_type) -> (#vpi:pi_type) -> src_prog2 u#a ipi vpi -> tgt_prog2 u#a
 let compile2 #ipi src_prog tgt_ctx : free.m int1 = 
-  src_prog (backtranslate2 ipi tgt_ctx)
+  let src_ctx = tgt_ctx (dm_mon ipi) (dm_acts ipi) in 
+  src_prog src_ctx
 
 (* Problem to solve: how to derive the type of the program in the target from the type in the source
    Two initial ideas: 
    1. have something that gives us the type in the source and the target (Kleisli/Code)
    2. use TypeClasses.*)
+
+(* TODO Next: do compilation from RILang to MLang *)
