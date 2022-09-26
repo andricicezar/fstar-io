@@ -38,6 +38,8 @@ assume val reify_IIOwp (#a:Type) (#wp:Hist.hist a) ($f:unit -> IIO.IIOwp a wp) :
 
 #set-options "--print_implicits"
 
+let recast_dm (w:IIO.dm_iio 'a (pi_as_hist 'p)) : rilang_dm 'p 'a = w
+
 instance reify_ilang_arrow
   pi
   (t1:Type) {| d1:is_reflectable t1 pi |} 
@@ -50,22 +52,17 @@ instance reify_ilang_arrow
     rilang_reify_out = rilang_arrow pi d1.rilang_reflect_in d2.rilang_reify_out;
 
     _reify = (fun (src_f:t1 -> IIOpi t2 pi) (tgt_x:d1.reflect_in) -> 
-    (* this is just a lot of casting *)
       let src_x : t1 = d1._reflect tgt_x in
       let src_f' : unit -> IIOpi t2 pi = (fun () -> src_f src_x) in
       let tgt_f : IIO.dm_iio t2 (pi_as_hist pi) = reify_IIOwp src_f' in
       
+      (* these are just casts *)
       let k : t2 -> IIO.dm_iio d2.reify_out (pi_as_hist pi) = (fun r -> IIO.dm_iio_return _ (d2._reify r)) in
       let wp : IO.Sig.hist d2.reify_out = Hist.hist_bind (pi_as_hist #t2 pi) (fun _ -> pi_as_hist pi) in 
       let tgt_w : IIO.dm_iio d2.reify_out wp = IIO.dm_iio_bind _ _ _ _ tgt_f k in
       lemma_bind_pi_implies_pi #t2 #d2.reify_out pi;
       let tgt_w : IIO.dm_iio d2.reify_out (pi_as_hist pi) = IIO.dm_iio_subcomp _ _ _ tgt_w in
-      let tgt_w' : IO.Sig.iio d2.reify_out = tgt_w in
-      admit (); (* this should work but F* does too many unfoldings and rewrites and the 
-                   VC is really difficult for the SMT *)
-      assert (pi_as_hist pi `Hist.hist_ord #_ #d2.reify_out` IIO.dm_iio_theta tgt_w');
-      let tgt_w : rilang_dm pi d2.reify_out = tgt_w' in
-      tgt_w
+      recast_dm tgt_w
     );
   }
 
@@ -80,11 +77,11 @@ instance reflect_ilang_arrow
   rilang_reflect_in = rilang_arrow pi d1.rilang_reify_out d2.rilang_reflect_in;
 
   _reflect = (fun tgt_f (src_x:t1) -> 
-    (* this is just a lot of casting *)
     (let tgt_x : d1.reify_out = d1._reify src_x in
     let tree_f : rilang_dm pi d2.reflect_in = tgt_f tgt_x in
     let tree_f' : IO.Sig.iio d2.reflect_in = tree_f in
-    assert (pi_as_hist pi `Hist.hist_ord` IIO.dm_iio_theta tree_f');
+
+    (* these are just casts *)
     let tree_f : IIO.dm_iio d2.reflect_in (pi_as_hist pi) = tree_f' in
     let k : d2.reflect_in -> IIO.dm_iio t2 (pi_as_hist pi) = (fun r -> IIO.dm_iio_return _ (d2._reflect r)) in
     let wp : IO.Sig.hist t2 = Hist.hist_bind (pi_as_hist #d2.reflect_in pi) (fun _ -> pi_as_hist pi) in 
