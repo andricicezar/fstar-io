@@ -1,4 +1,4 @@
-module IIO.CompileTo.ILang
+module Compile.IIO.To.ILang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses

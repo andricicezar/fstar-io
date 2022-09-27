@@ -1,4 +1,4 @@
-module ILang.CompileTo.RILang
+module Compile.ILang.To.RILang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -82,6 +82,7 @@ instance reflect_ilang_arrow
     let tree_f' : IO.Sig.iio d2.reflect_in = tree_f in
 
     (* these are just casts *)
+    assert (pi_as_hist pi `Hist.hist_ord` IIO.dm_iio_theta tree_f');
     let tree_f : IIO.dm_iio d2.reflect_in (pi_as_hist pi) = tree_f' in
     let k : d2.reflect_in -> IIO.dm_iio t2 (pi_as_hist pi) = (fun r -> IIO.dm_iio_return _ (d2._reflect r)) in
     let wp : IO.Sig.hist t2 = Hist.hist_bind (pi_as_hist #d2.reflect_in pi) (fun _ -> pi_as_hist pi) in 
