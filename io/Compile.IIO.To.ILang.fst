@@ -7,7 +7,7 @@ open Common
 open IO.Sig
 open IIO
 open TC.Monitorable.Hist
-open ILang
+open Compile.ILang
 open TC.Checkable
 open TC.Trivialize
 

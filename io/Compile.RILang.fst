@@ -1,4 +1,4 @@
-module RILang
+module Compile.RILang
 
 (** *** Reified ILang *)
 (** Reified ILang is very similar to ILang, but instead of using the IIOpi effect directly,

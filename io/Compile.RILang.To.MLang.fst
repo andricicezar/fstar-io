@@ -7,8 +7,8 @@ open FStar.Tactics.Typeclasses
 open Common
 open TC.Monitorable.Hist
 
-open RILang
-open MLang
+open Compile.RILang
+open Compile.MLang
 
 let dm_mon (pi:monitorable_prop) : monad = {
   m = rilang_dm pi;

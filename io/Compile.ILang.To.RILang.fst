@@ -6,8 +6,8 @@ open FStar.Tactics.Typeclasses
 open Common
 open TC.Monitorable.Hist
 
-open ILang
-open RILang
+open Compile.ILang
+open Compile.RILang
 
 class is_reifiable (reify_in:Type u#a) (pi:monitorable_prop) = {
   [@@@no_method]

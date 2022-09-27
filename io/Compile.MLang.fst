@@ -1,4 +1,4 @@
-module MLang
+module Compile.MLang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
