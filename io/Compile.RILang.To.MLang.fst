@@ -7,8 +7,8 @@ open FStar.Tactics.Typeclasses
 open Common
 open TC.Monitorable.Hist
 
-open Compile.RILang
-open Compile.MLang
+include Compile.RILang
+include Compile.MLang
 
 let dm_mon (pi:monitorable_prop) : monad = {
   m = rilang_dm pi;
@@ -24,6 +24,7 @@ let dm_mon (pi:monitorable_prop) : monad = {
 assume val dm_acts (pi:monitorable_prop) : acts (dm_mon pi)
 
 class compilable (comp_in:Type u#a) (pi:monitorable_prop) = {
+  [@@@no_method]
   comp_out : Type u#b;
   compile: comp_in -> comp_out;
 
@@ -33,8 +34,15 @@ class compilable (comp_in:Type u#a) (pi:monitorable_prop) = {
   mlang_comp_out : mlang comp_out;
 }
 
+instance compilable_int pi : compilable int pi = {
+  comp_out = int;
+  rilang_comp_in = rilang_int pi;
+  mlang_comp_out = mlang_int;
+  compile = (fun x -> x);
+}
+
 (** *** Compilable arrows **)
-instance compile_arrow
+instance compilable_arrow
   pi
   (ct:((Type->Type)->Type)) {| d1:rilang (ct (dm_mon pi).m) pi |} {| d1':mlang (ct free.m) |}
   (t2:Type) {| d2:compilable t2 pi |} :
@@ -52,3 +60,97 @@ instance compile_arrow
     w
   );
 }
+
+
+(** ** Manual testing *)
+(* TODO:
+  - [ ] support HO on the return type
+  - [ ] support different pi for the ctx
+*)
+noeq
+type interface = {
+  vpi : monitorable_prop;
+
+  ct:(Type->Type)->Type;
+  rilang_ct  : rilang (ct (dm_mon vpi).m) vpi;
+  mlang_ct   : mlang (ct free.m);
+
+  //pt:(Type->Type)->Type0;
+  //compilable_pt : compilable (pt (dm_mon vpi).m) vpi;
+}
+
+
+type ictx (i:interface) (ipi:monitorable_prop) = i.ct (dm_mon ipi).m
+type iprog (i:interface)  = ictx i i.vpi -> rilang_dm i.vpi int
+type iwhole (i:interface) = unit -> rilang_dm i.vpi int 
+
+type r_vpi_ipi (vpi ipi:monitorable_prop) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
+let ilink 
+  (#i:interface) 
+ // (#ipi:monitorable_prop) 
+//  (#_ : r_vpi_ipi i.vpi ipi)
+  (ip:iprog i) 
+  (ic:ictx i i.vpi) : 
+  iwhole i = 
+  fun () -> ip ic
+
+(** *** Target Lang **)
+type ctx (i:interface) = mon:monad -> acts mon -> i.ct mon.m
+type prog (i:interface) = ctx i -> free.m int 
+type whole (i:interface) = unit -> free.m int 
+let link (#i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
+
+#reset-options
+
+let prog_compilable (i:interface) : compilable (iprog i) i.vpi =
+  compilable_arrow
+    i.vpi
+    i.ct #i.rilang_ct #i.mlang_ct
+    int #(compilable_int i.vpi)
+
+let model_compile
+  (#i:interface)
+  (ip:iprog i) :
+  prog i = 
+  let p : (prog_compilable i).comp_out = (prog_compilable i).compile ip in
+  p
+
+(** *** Case Studies **)
+
+assume val thePi : monitorable_prop
+
+let test1 : interface = {
+  vpi = thePi;
+
+  ct = (fun m -> (int -> m int));
+
+  rilang_ct = rilang_arrow thePi (rilang_int thePi) (rilang_int thePi);
+  mlang_ct = mlang_free_arrow mlang_int mlang_int;
+}
+
+let iprog1 : iprog test1 = fun c -> (dm_mon thePi).bind (c 5) (fun r -> (dm_mon thePi).ret (r + 1))
+let mprog1 : prog test1 = model_compile iprog1 //thePi
+val mctx1 : ctx test1  
+let mctx1 (mon:monad) (acts:acts mon) (x:int) : mon.m int =
+  mon.ret (x+2)
+
+let mwhole1 = mprog1 `link` mctx1
+
+(** new test where ctx accepts an f from prog **)
+
+let test2 : interface = {
+  vpi = thePi;
+
+  (* intermediate level *)
+  ct = (fun m -> (int -> m int) -> m int);
+  rilang_ct = rilang_arrow thePi (rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) (rilang_int thePi);
+  mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
+}
+
+let iprog2 : iprog test2 = fun c -> (dm_mon thePi).bind (c (fun x -> (dm_mon thePi).ret (x + 5))) (fun r -> (dm_mon thePi).ret (r + 1))
+let mprog2 : prog test2 = model_compile iprog2 //thePi
+val mctx2 : ctx test2  
+let mctx2 (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
+  mon.bind (f 5) (fun x -> mon.ret (x+2))
+let mwhole2 = mprog2 `link` mctx2
