@@ -38,8 +38,6 @@ assume val reify_IIOwp (#a:Type) (#wp:Hist.hist a) ($f:unit -> IIO.IIOwp a wp) :
 
 #set-options "--print_implicits"
 
-let recast_dm (w:IIO.dm_iio 'a (pi_as_hist 'p)) : rilang_dm 'p 'a = w
-
 instance reify_ilang_arrow
   pi
   (t1:Type) {| d1:is_reflectable t1 pi |} 
@@ -62,7 +60,7 @@ instance reify_ilang_arrow
       let tgt_w : IIO.dm_iio d2.reify_out wp = IIO.dm_iio_bind _ _ _ _ tgt_f k in
       lemma_bind_pi_implies_pi #t2 #d2.reify_out pi;
       let tgt_w : IIO.dm_iio d2.reify_out (pi_as_hist pi) = IIO.dm_iio_subcomp _ _ _ tgt_w in
-      recast_dm tgt_w
+      as_rilang_dm tgt_w
     );
   }
 
