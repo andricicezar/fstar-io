@@ -77,22 +77,22 @@ instance compilable_int_arrow
 }
 
 (** *** Compilable arrows **)
+(* The pis don't have to be the same when compiling *)
 instance compilable_arrow
-  pi
-  (ct:((Type->Type)->Type)) {| d1:rilang (ct (dm_mon pi).m) pi |} {| d1':mlang (ct free.m) |}
-  (t2:Type) {| d2:compilable t2 pi |} :
-  Tot (compilable ((ct (dm_mon pi).m) -> rilang_dm pi t2) pi) = {
+  ct_pi pi pt_pi
+  (ct:((Type->Type)->Type)) {| d1:rilang (ct (dm_mon ct_pi).m) ct_pi |} {| d1':mlang (ct free.m) |}
+  (pt:Type) {| d2:compilable pt pt_pi |} :
+  Tot (compilable ((ct (dm_mon ct_pi).m) -> rilang_dm pi pt) pi) = {
   rilang_comp_in = rilang_arrow pi d1 d2.rilang_comp_in;
 
   comp_out = (mon:monad -> acts mon -> ct mon.m) -> free.m d2.comp_out;
   mlang_comp_out = mlang_free_arrow (mlang_effectpoly d1') d2.mlang_comp_out;
 
-  compile = (fun (f:((ct (dm_mon pi).m) -> rilang_dm pi t2)) (tgt_x:(mon:monad -> acts mon -> ct mon.m)) ->
-    let src_x : ct (dm_mon pi).m = tgt_x (dm_mon pi) (dm_acts pi) in
-    let r : rilang_dm pi t2 = f src_x in
+  compile = (fun (f:((ct (dm_mon ct_pi).m) -> rilang_dm pi pt)) (tgt_x:(mon:monad -> acts mon -> ct mon.m)) ->
+    let src_x : ct (dm_mon ct_pi).m = tgt_x (dm_mon ct_pi) (dm_acts ct_pi) in
+    let r : rilang_dm pi pt = f src_x in
     let r = as_iio_dm r in 
-    let w = IIO.dm_iio_bind _ _ _ (fun _ -> (pi_as_hist pi)) r (fun x -> IIO.dm_iio_return _ (d2.compile x)) in
-    w
+    IIO.dm_iio_bind _ _ _ (fun _ -> (pi_as_hist pi)) r (fun x -> IIO.dm_iio_return _ (d2.compile x))
   );
 }
 
@@ -121,8 +121,6 @@ type iwhole (i:interface) = unit -> rilang_dm i.vpi (i.pt (dm_mon i.vpi).m)
 
 let ilink 
   (#i:interface) 
- // (#ipi:monitorable_prop) 
-//  (#_ : r_vpi_ipi i.vpi ipi)
   (ip:iprog i) 
   (ic:ictx i i.vpi) : 
   iwhole i = 
@@ -138,7 +136,7 @@ let link (#i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
 
 let prog_compilable (i:interface) : compilable (iprog i) i.vpi =
   compilable_arrow
-    i.vpi
+    i.vpi i.vpi i.vpi
     i.ct #i.rilang_ct #i.mlang_ct
     (i.pt (dm_mon i.vpi).m) #i.compilable_pt
 
@@ -210,7 +208,7 @@ let test4 : interface = {
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> (int -> m int) -> m int);
-  compilable_pt = compilable_arrow thePi (fun m -> int -> m int) #(rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) #(mlang_free_arrow mlang_int mlang_int) int #(compilable_int thePi);
+  compilable_pt = compilable_arrow thePi thePi thePi (fun m -> int -> m int) #(rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) #(mlang_free_arrow mlang_int mlang_int) int #(compilable_int thePi);
 }
 
 
