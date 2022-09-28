@@ -23,6 +23,25 @@ let dm_mon (pi:monitorable_prop) : monad = {
 
 assume val dm_acts (pi:monitorable_prop) : acts (dm_mon pi)
 
+(** *** Notes **)
+(** The ctx must have the pi the pprog expects it to have. **)
+type r_vpi_ipi (vpi ipi:monitorable_prop) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+
+noeq
+type experiment_interface = {
+  vpi : monitorable_prop;
+  ct:(Type->Type)->Type;
+  subcomp_ct : (#ipi:monitorable_prop) -> (#_ : r_vpi_ipi vpi ipi) -> (ct (dm_mon ipi).m) -> (ct (dm_mon vpi).m);
+}
+
+[@@expect_failure]
+let counter_example (vpi:monitorable_prop) : experiment_interface = {
+  vpi = vpi;
+  ct = (fun m -> (int -> m int) -> m int);
+  subcomp_ct = (fun ic f -> ic f);
+}
+(** End notes *)
+
 class compilable (comp_in:Type u#a) (pi:monitorable_prop) = {
   [@@@no_method]
   comp_out : Type u#b;
