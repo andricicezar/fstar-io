@@ -69,12 +69,10 @@ instance compilable_int_arrow
   comp_out = int -> free.m d2.comp_out;
   mlang_comp_out = mlang_free_arrow mlang_int d2.mlang_comp_out;
 
-  compile = (fun (f:(int -> rilang_dm pi t2)) (tgt_x:int) ->
-    let src_x : int = tgt_x in
-    let r : rilang_dm pi t2 = f src_x in
+  compile = (fun (f:(int -> rilang_dm pi t2)) (x:int) ->
+    let r : rilang_dm pi t2 = f x in
     let r = as_iio_dm r in 
-    let w = IIO.dm_iio_bind _ _ _ (fun _ -> (pi_as_hist pi)) r (fun x -> IIO.dm_iio_return _ (d2.compile x)) in
-    w
+    IIO.dm_iio_bind _ _ _ (fun _ -> (pi_as_hist pi)) r (fun x -> IIO.dm_iio_return _ (d2.compile x))
   );
 }
 
@@ -120,8 +118,6 @@ type interface = {
 type ictx (i:interface) (ipi:monitorable_prop) = i.ct (dm_mon ipi).m
 type iprog (i:interface)  = ictx i i.vpi -> rilang_dm i.vpi (i.pt (dm_mon i.vpi).m)
 type iwhole (i:interface) = unit -> rilang_dm i.vpi (i.pt (dm_mon i.vpi).m) 
-
-type r_vpi_ipi (vpi ipi:monitorable_prop) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 let ilink 
   (#i:interface) 
