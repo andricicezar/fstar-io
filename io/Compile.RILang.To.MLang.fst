@@ -24,13 +24,31 @@ let dm_mon (pi:monitorable_prop) : monad = {
 assume val dm_acts (pi:monitorable_prop) : acts (dm_mon pi)
 
 (** *** Notes **)
-(** The ctx must have the pi the pprog expects it to have. **)
+(** In our transparency criteria, we did a trick that may not work anymore.
+
+    The trick was:
+    To a partial program that expects a context that respects the trivial pi,
+    we were passing a context that respects a stronger pi.
+
+    However, now because the ctx is effect polymorphic, when we instantiate it with
+    a `dm pi` it also changes the spec of the callbacks from the partial program.
+
+    Conclusion: The ctx must have the pi the pprog expects it to have. We need a new way
+                to write transparency.
+**)
+
+(** Proof of concept: **)
 type r_vpi_ipi (vpi ipi:monitorable_prop) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 noeq
 type experiment_interface = {
+  (* Partial Program respects vpi *)
   vpi : monitorable_prop;
+
+  (* Type of the context *)
   ct:(Type->Type)->Type;
+
+  (* Primitive that should cast the context to the weaker pi (vpi) *)
   subcomp_ct : (#ipi:monitorable_prop) -> (#_ : r_vpi_ipi vpi ipi) -> (ct (dm_mon ipi).m) -> (ct (dm_mon vpi).m);
 }
 
@@ -38,7 +56,23 @@ type experiment_interface = {
 let counter_example (vpi:monitorable_prop) : experiment_interface = {
   vpi = vpi;
   ct = (fun m -> (int -> m int) -> m int);
-  subcomp_ct = (fun ic f -> ic f);
+  subcomp_ct = (fun ic (f:int -> (dm_mon vpi).m int) -> 
+    (** ic is expecting a f that respects ipi, but f respects vpi that 
+        is weaker than ipi, so we can not cast to it
+	TODO: 
+	- was this working before? 
+	- why was this working before? 
+	Answer: 
+	  * it is hard to answer since there were so many changes lately
+	    and the complexity before was quite hard to crompehend.
+	  * in the latest version, this was admitted.
+	  * previous to that, we did not address HO.
+	  * The intuition before was that we only instrument the context, thus
+	    the specification of the partial programs should not change. However,
+	    because the type of the context is effect polymorphic at all positions (including specs),
+	    we can not weaken the type of the context at all positions. 
+	TODO: maybe we don't need to weaken at all positions? **)
+    ic f);
 }
 (** End notes *)
 
