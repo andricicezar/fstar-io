@@ -114,6 +114,17 @@ instance compilable_int_arrow
 }
 
 (** *** Compilable arrows **)
+irreducible
+let compile_body 
+  #ct_pi #pi
+  (#ct:((Type->Type)->Type))
+  (#pt:Type)
+  (f:((ct (dm_mon ct_pi).m) -> rilang_dm pi pt))
+  (tgt_c:(mon:monad -> acts mon -> ct mon.m)) : 
+  IIO.dm_iio pt (pi_as_hist pi) =
+  let src_c : ct (dm_mon ct_pi).m = tgt_c (dm_mon ct_pi) (dm_acts ct_pi) in
+  as_iio_dm (f src_c)
+
 (* The pis don't have to be the same when compiling *)
 instance compilable_arrow
   ct_pi pi pt_pi
@@ -125,11 +136,10 @@ instance compilable_arrow
   comp_out = (mon:monad -> acts mon -> ct mon.m) -> free.m d2.comp_out;
   mlang_comp_out = mlang_free_arrow (mlang_effectpoly d1') d2.mlang_comp_out;
 
-  compile = (fun (f:((ct (dm_mon ct_pi).m) -> rilang_dm pi pt)) (tgt_x:(mon:monad -> acts mon -> ct mon.m)) ->
-    let src_x : ct (dm_mon ct_pi).m = tgt_x (dm_mon ct_pi) (dm_acts ct_pi) in
-    let r : rilang_dm pi pt = f src_x in
-    let r = as_iio_dm r in 
-    IIO.dm_iio_bind _ _ _ (fun _ -> (pi_as_hist pi)) r (fun x -> IIO.dm_iio_return _ (d2.compile x))
+  compile = (fun (f:((ct (dm_mon ct_pi).m) -> rilang_dm pi pt)) (tgt_c:(mon:monad -> acts mon -> ct mon.m)) ->
+    let lhs : IIO.dm_iio pt (pi_as_hist pi) = compile_body f tgt_c in 
+    let rhs : pt -> IIO.dm_iio d2.comp_out (pi_as_hist pi) = (fun x -> IIO.dm_iio_return _ (d2.compile x)) in
+    (IIO.dm_iio_bind _ _ _ _ lhs rhs) <: free.m d2.comp_out
   );
 }
 
@@ -263,11 +273,12 @@ let _ = assert (has_type mwhole4 (unit -> free.m (test4.compilable_pt.comp_out))
 let _ = assert (test4.compilable_pt.comp_out == ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) by (compute ())
 
 let mwhole4' : (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) =
-  assert (has_type mwhole4 (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int))) by (compute ());
+  assert (has_type mwhole4 (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)));
   admit (); (* not sure why this does not work since the previous assert works *)
   mwhole4
   
 (* TODO: probably can not bind because the types are not in the same universe *)
+[@@expect_failure]
 let _ = 
   let whole4 : free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int) = mwhole4' () in
   free.bind whole4 #((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int) #int (fun (p:((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) ->
