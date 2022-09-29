@@ -34,8 +34,6 @@ class is_reflectable (reflect_out:Type u#a) (pi:monitorable_prop) = {
   rilang_reflect_in : rilang reflect_in pi;
 }
 
-assume val reify_IIOwp (#a:Type) (#wp:Hist.hist a) ($f:unit -> IIO.IIOwp a wp) : IIO.dm_iio a wp
-
 #set-options "--print_implicits"
 
 instance reify_ilang_arrow
@@ -52,7 +50,7 @@ instance reify_ilang_arrow
     _reify = (fun (src_f:t1 -> IIOpi t2 pi) (tgt_x:d1.reflect_in) -> 
       let src_x : t1 = d1._reflect tgt_x in
       let src_f' : unit -> IIOpi t2 pi = (fun () -> src_f src_x) in
-      let tgt_f : IIO.dm_iio t2 (pi_as_hist pi) = reify_IIOwp src_f' in
+      let tgt_f : IIO.dm_iio t2 (pi_as_hist pi) = IIO.__reify_IIOwp src_f' in
       
       (* these are just casts *)
       let k : t2 -> IIO.dm_iio d2.reify_out (pi_as_hist pi) = (fun r -> IIO.dm_iio_return _ (d2._reify r)) in

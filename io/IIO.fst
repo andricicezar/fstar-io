@@ -56,7 +56,6 @@ let lift_pure_dm_iio a w f = lift_pure_dm iio_cmds iio_sig event iio_wps a w f
 
 
 total
-reifiable
 reflectable
 effect {
   IIOwp (a:Type) (wp : hist a) 
@@ -68,6 +67,8 @@ effect {
      ; if_then_else = dm_iio_if_then_else
      }
 }
+
+assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) ($f:unit -> IIO.IIOwp a wp) : IIO.dm_iio a wp
 
 effect IIO
   (a:Type)
