@@ -55,9 +55,9 @@ type experiment_interface = {
 [@@expect_failure]
 let counter_example (vpi:monitorable_prop) : experiment_interface = {
   vpi = vpi;
-  ct = (fun m -> (int -> m int) -> m int);
-  subcomp_ct = (fun ic (f:int -> (dm_mon vpi).m int) -> 
-    (** ic is expecting a f that respects ipi, but f respects vpi that 
+  ct = (fun m -> f:(int -> m int) -> m int);
+  subcomp_ct = (fun #ipi (c:(int -> (dm_mon ipi).m int) -> (dm_mon ipi).m int) (f:int -> (dm_mon vpi).m int) -> 
+    (** `c` is expecting a `f` that respects ipi, but f respects vpi that 
         is weaker than ipi, so we can not cast to it
 	TODO: 
 	- was this working before? 
@@ -66,13 +66,16 @@ let counter_example (vpi:monitorable_prop) : experiment_interface = {
 	  * it is hard to answer since there were so many changes lately
 	    and the complexity before was quite hard to crompehend.
 	  * in the latest version, this was admitted.
-	  * previous to that, we did not address HO.
+	  * previous version to that, we did not address HO.
 	  * The intuition before was that we only instrument the context, thus
-	    the specification of the partial programs should not change. However,
-	    because the type of the context is effect polymorphic at all positions (including specs),
-	    we can not weaken the type of the context at all positions. 
-	TODO: maybe we don't need to weaken at all positions? **)
-    ic f);
+	    the specification of the partial programs' callbacks should not change. 
+            However, since the type of the partial programs' callbacks are part of the 
+            type of the context and the type of the context is effect polymorphic at all 
+            positions (including specs), we have to weaken/strengthen specs in the same time. 
+	TODO: maybe we don't need to weaken at all positions? 
+        CA: I don't see how this can be done without losing the nice abstractions. For now 
+            it may be better to look at how to state Transparency differently. **)
+    c f);
 }
 (** End notes *)
 
@@ -141,7 +144,7 @@ type interface = {
   vpi : monitorable_prop;
 
   ct:(Type->Type)->Type;
-  rilang_ct  : rilang (ct (dm_mon vpi).m) vpi;
+  rilang_ct  : ipi:monitorable_prop -> rilang (ct (dm_mon ipi).m) ipi;
   mlang_ct   : mlang (ct free.m);
 
   pt:(Type->Type)->Type;
@@ -171,7 +174,7 @@ let link (#i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
 let prog_compilable (i:interface) : compilable (iprog i) i.vpi =
   compilable_arrow
     i.vpi i.vpi i.vpi
-    i.ct #i.rilang_ct #i.mlang_ct
+    i.ct #(i.rilang_ct i.vpi) #i.mlang_ct
     (i.pt (dm_mon i.vpi).m) #i.compilable_pt
 
 let model_compile
@@ -188,7 +191,7 @@ let test1 : interface = {
   vpi = thePi;
 
   ct = (fun m -> (int -> m int));
-  rilang_ct = rilang_arrow thePi (rilang_int thePi) (rilang_int thePi);
+  rilang_ct = (fun ipi -> rilang_arrow ipi (rilang_int ipi) (rilang_int ipi));
   mlang_ct = mlang_free_arrow mlang_int mlang_int;
 
   pt = (fun m -> int);
@@ -209,7 +212,7 @@ let test2 : interface = {
   vpi = thePi;
 
   ct = (fun m -> (int -> m int) -> m int);
-  rilang_ct = rilang_arrow thePi (rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) (rilang_int thePi);
+  rilang_ct = (fun ipi -> rilang_arrow ipi (rilang_arrow ipi (rilang_int ipi) (rilang_int ipi)) (rilang_int ipi));
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> int);
@@ -227,7 +230,7 @@ let test3 : interface = {
   vpi = thePi;
 
   ct = (fun m -> (int -> m int) -> m int);
-  rilang_ct = rilang_arrow thePi (rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) (rilang_int thePi);
+  rilang_ct = (fun ipi -> rilang_arrow ipi (rilang_arrow ipi (rilang_int ipi) (rilang_int ipi)) (rilang_int ipi));
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> int -> m int);
@@ -238,7 +241,7 @@ let test4 : interface = {
   vpi = thePi;
 
   ct = (fun m -> (int -> m int) -> m int);
-  rilang_ct = rilang_arrow thePi (rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) (rilang_int thePi);
+  rilang_ct = (fun ipi -> rilang_arrow ipi (rilang_arrow ipi (rilang_int ipi) (rilang_int ipi)) (rilang_int ipi));
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> (int -> m int) -> m int);
@@ -261,7 +264,7 @@ let _ = assert (test4.compilable_pt.comp_out == ((mon:monad -> acts mon -> (int 
 
 let mwhole4' : (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) =
   assert (has_type mwhole4 (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int))) by (compute ());
-  admit ();
+  admit (); (* not sure why this does not work since the previous assert works *)
   mwhole4
   
 (* TODO: probably can not bind because the types are not in the same universe *)
