@@ -158,7 +158,7 @@ type interface = {
   mlang_ct   : mlang (ct free.m);
 
   pt:(Type->Type)->Type;
-  compilable_pt : compilable (pt (dm_mon vpi).m) vpi;
+  compilable_pt : pt_pi:monitorable_prop -> compilable (pt (dm_mon pt_pi).m) pt_pi;
 }
 
 
@@ -175,8 +175,8 @@ let ilink
 
 (** *** Target Lang **)
 type ctx (i:interface) = mon:monad -> acts mon -> i.ct mon.m
-type prog (i:interface) = ctx i -> free.m i.compilable_pt.comp_out
-type whole (i:interface) = unit -> free.m i.compilable_pt.comp_out 
+type prog (i:interface) = ctx i -> free.m (i.compilable_pt i.vpi).comp_out
+type whole (i:interface) = unit -> free.m (i.compilable_pt i.vpi).comp_out 
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = fun () -> p c
 
 #reset-options
@@ -185,7 +185,7 @@ let prog_compilable (i:interface) : compilable (iprog i) i.vpi =
   compilable_arrow
     i.vpi i.vpi i.vpi
     i.ct #(i.rilang_ct i.vpi) #i.mlang_ct
-    (i.pt (dm_mon i.vpi).m) #i.compilable_pt
+    (i.pt (dm_mon i.vpi).m) #(i.compilable_pt i.vpi)
 
 let model_compile
   (#i:interface)
@@ -205,7 +205,7 @@ let test1 : interface = {
   mlang_ct = mlang_free_arrow mlang_int mlang_int;
 
   pt = (fun m -> int);
-  compilable_pt = compilable_int thePi;
+  compilable_pt = (fun pt_pi -> compilable_int pt_pi);
 }
 
 let iprog1 : iprog test1 = fun c -> (dm_mon thePi).bind (c 5) (fun r -> (dm_mon thePi).ret (r + 1))
@@ -226,7 +226,7 @@ let test2 : interface = {
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> int);
-  compilable_pt = compilable_int thePi;
+  compilable_pt = (fun pt_pi -> compilable_int pt_pi);
 }
 
 let iprog2 : iprog test2 = fun c -> (dm_mon thePi).bind (c (fun x -> (dm_mon thePi).ret (x + 5))) (fun r -> (dm_mon thePi).ret (r + 1))
@@ -244,7 +244,7 @@ let test3 : interface = {
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> int -> m int);
-  compilable_pt = compilable_int_arrow thePi int #(compilable_int thePi);
+  compilable_pt = (fun pt_pi -> compilable_int_arrow pt_pi int #(compilable_int pt_pi));
 }
 
 let test4 : interface = {
@@ -255,7 +255,7 @@ let test4 : interface = {
   mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 
   pt = (fun m -> (int -> m int) -> m int);
-  compilable_pt = compilable_arrow thePi thePi thePi (fun m -> int -> m int) #(rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) #(mlang_free_arrow mlang_int mlang_int) int #(compilable_int thePi);
+  compilable_pt = (fun pt_pi -> compilable_arrow pt_pi pt_pi pt_pi (fun m -> int -> m int) #(rilang_arrow pt_pi (rilang_int pt_pi) (rilang_int pt_pi)) #(mlang_free_arrow mlang_int mlang_int) int #(compilable_int pt_pi));
 }
 
 
@@ -268,9 +268,9 @@ let mctx4 (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
 
 let mwhole4 = mprog4 `link` mctx4
 
-let _ = assert (has_type mwhole4 (unit -> free.m (test4.compilable_pt.comp_out))) by (norm [delta_only [`%Mkcompilable?.comp_out;`%Mkinterface?.compilable_pt;`%Mkmonad?.m;`%Mkinterface?.pt]; iota;zeta]; dump "H")
+let _ = assert (has_type mwhole4 (unit -> free.m ((test4.compilable_pt test4.vpi).comp_out))) by (norm [delta_only [`%Mkcompilable?.comp_out;`%Mkinterface?.compilable_pt;`%Mkmonad?.m;`%Mkinterface?.pt]; iota;zeta]; dump "H")
 
-let _ = assert (test4.compilable_pt.comp_out == ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) by (compute ())
+let _ = assert ((test4.compilable_pt test4.vpi).comp_out == ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) by (compute ())
 
 let mwhole4' : (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)) =
   assert (has_type mwhole4 (unit -> free.m ((mon:monad -> acts mon -> (int -> mon.m int)) -> free.m int)));
