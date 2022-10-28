@@ -8,464 +8,46 @@ open FStar.Tactics.Typeclasses
 open Common
 open Free
 open IO
-open IO.Sig
 open TC.Monitorable.Hist
 open IIO
 
-(* TODO : think about higher-order 
-    - [ ] write more HO cases in ilang, and think about what the mlang type should be
-    - [ ] the convert function should be defined. with the given type, it will be easy to use in the proofs 
-    - [ ] the admit from ctx_backtranslated' is problematic. the problem limits our capacity to give different
-          pis to the program and context. it should be solvable. risk of not doing this is not being able to state
-          transparency
-    - [ ] remember why we can not have HO on the right side. something related to acts being in Type0
-  TODO: refactor the criterias. There are two changes:
-        1) is that now convert function appears on the proof, but if it has this specific type, then it will
-           not be a problem to get rid of it
-        2) the fact we replaced the two functions with typeclasses does not change much,
-           but I expect F* will need more help to finish the proofs and it will be much harder to 
-           debug why F* can not prove them **)
+#set-options "--print_universes --print_implicits"
 
-noeq type monad = {
-  m    : Type u#a -> Type u#(max 1 a);
-  ret  : #a:Type -> a -> m a;
-  (* TODO: bind should be polymorphic in two universes *)
-  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b;
-  (* We don't want acts to be part of this monad because we want to provide different versions *)
-}
 
-val free : monad
-let free = { 
-  m = iio; 
-  ret = iio_return; 
-  bind = iio_bind; 
-}
-
-type acts (mon:monad) = op:io_cmds -> arg:io_sig.args op -> mon.m (io_sig.res op arg)
-
-(** **** Free Actions **)
-val free_acts : acts free
-let free_acts cmd arg = IO.Sig.Call.iio_call cmd arg
-
-let spec_free_acts (ca:acts free) =
-  (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (ca cmd arg))
-
-let lemma_free_acts () : Lemma (spec_free_acts free_acts) = 
-  assert (forall (cmd:io_cmds) (arg:io_sig.args cmd). iio_wps cmd arg `hist_ord` dm_iio_theta (free_acts cmd arg));
-  assert (spec_free_acts free_acts) by (assumption ())
-
-let pi_type = pi:monitorable_prop{forall h op arg. pi op arg h ==> io_pre op arg h}
-
-(** * Arrow Types **)
-type kleisli (t1:Type u#a) (t2:Type u#b) (m:Type u#b ->Type u#(max 1 b)) = t1 -> m t2
-type effectpoly (t1:Type) (t2:Type) = mon:monad -> acts mon -> kleisli t1 t2 mon.m 
-
-type eptyp = mon:monad -> acts mon -> Type u#a
-let (--><*>) (t1:eptyp) (t2:Type) : Type = mon:monad -> acts:acts mon -> kleisli (t1 mon acts) t2 mon.m
-(* About the `--><*>` notation:
-   I saw this notation in: Effects as Capabilities: Effect Handlers and Lightweight
-   Effect Polymorphism 
-
-  In the mentioned paper they use this notation actually to highlight the effect of the 
-  arrow.
-  --> <> means that the arrow is in the pure effect
-  --> <exception, IO> means that the arrow is in exception/IO
-
-  Since I thought it is fun to use symbols for operators, I tried to find one and
-  I thought this one looks decent.
-
-  I read `a --><*> b` as: the arrow `a --> b` can accept any effect.
-**)
-
-(** * MLang **)
-class mlang (t:Type u#a) = { mldummy : unit }
-
-(** *** FO instances **)
-instance mlang_unit : mlang unit = { mldummy = () }
-
-instance mlang_bool : mlang bool = { mldummy = () }
-instance mlang_int : mlang int = { mldummy = () }
-
-instance mlang_pair t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (t1 * t2) = 
-  { mldummy = () }
-instance mlang_either t1 t2 {| d1:mlang t1 |} {| d2:mlang t2 |} : mlang (either t1 t2) =
-  { mldummy = () }
-
-(* TODO: I am not sure if we want arrows in any effect to be part of our language. *)
-instance mlang_kleisli #t1 #t2 (m:Type->Type) (d1:mlang t1) (d2:mlang t2) : mlang (kleisli t1 t2 m) =
-  { mldummy = () }
-
-instance mlang_effectpoly (#t1:Type) (#t2:Type) (d1:mlang t1) (d2:mlang t2) : mlang (t1 `effectpoly` t2) =
-  { mldummy = () }
-
-instance mlang_effectpoly_ho (#t1:eptyp) (#t2:Type) (d1:(mon:monad -> acts:acts mon -> mlang (t1 mon acts))) (d2:mlang t2) : mlang (t1 --><*> t2) =
-  { mldummy = () }
-
-(**
-instance mlang_effectpoly_hack #t1 #t2 (d1:mlang t1) (d2:mlang t2) : mlang (~~t1 --><> ~~t2) =
-  { mldummy = () }
-
-(** Since the effectpolymorphic arrow here only accepts the free monad, we can instantiate the HO input and output with free **)
-instance mlang_effectpoly_hack_lhs_ho (#t1:styp) #t2 (d1:mlang (t1 free.m)) (d2:mlang t2) : mlang (t1 --><> ~~t2) =
-  { mldummy = () }
-**)
-
-(** Manual tests of MLang. 
-    Types of programs that should be part of MLang:
-   - [v] int -> free.m int
-   - [ ] int -> free.m (int -> free.m int)
-   - [v] (int -> free.m int) -> free.m int (?)
-   - [v] mon:monad -> acts mon -> int -> mon.m int 
-   - [v] mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int 
-   - [ ] mon:monad -> acts mon -> int -> mon.m (int -> mon.m int)
-   - [v] (mon:monad -> acts mon -> int -> mon.m int) -> free.m int
-   - [v] (mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int) -> free.m int 
-
-   Types of programs that should not be part of MLang:
-   - [ ] how can I identify such cases?
-**)
-
-let test_mlang_kleisli : mlang (int -> free.m int) =
-  mlang_kleisli free.m mlang_int mlang_int
-
-(** Cannot be typed because universe problems
-let test_mlang_kleisli_rhs_ho : mlang (int (int -> free.m int) -> free.m int) =
-  mlang_kleisli free.m mlang_int (mlang_kleisli free.m mlang_int mlang_int)
- **)
-
-let test_mlang_kleisli_lhs_ho : mlang ((int -> free.m int) -> free.m int) =
-  mlang_kleisli free.m (mlang_kleisli free.m mlang_int mlang_int) mlang_int
-
-let test_mlang_fo_effectpoly : mlang (int `effectpoly` int) =
-  mlang_effectpoly
-    mlang_int
-    mlang_int
-
-let test_mlang_lhs_ho_effectpoly : mlang (mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int) =
-  mlang_effectpoly_ho
-    (fun mon acts -> mlang_kleisli mon.m mlang_int mlang_int)
-    mlang_int
-
-(** This can not be typed because universe problems: 
-let test_mlang_rhs_ho_effectpoly : mlang (mon:monad -> acts mon -> int -> mon.m (int -> mon.m int)) = **)
-
-let test_mlang_prog1 : mlang ((int `effectpoly` int) -> free.m int) =
-  mlang_kleisli
-    free.m
-    (mlang_effectpoly mlang_int mlang_int)
-    mlang_int
-
-let test_mlang_prog2 : mlang ((mon:monad -> acts mon -> (int -> mon.m int) -> mon.m int) -> free.m int) =
-  mlang_kleisli
-    free.m
-    (mlang_effectpoly_ho
-        (fun mon acts -> mlang_kleisli mon.m mlang_int mlang_int)
-        mlang_int)
-    mlang_int
-
-
-(* Exercise: 
-   Be prog of type: ctx:( cb:(a -> IIOpi b pi) -> IIOpi c psi) -> IIOpi d phi
-   the expected type after compilation of prog should be:
-     ctx:(cb:(a ---> b) `effectpoly` c) ---> free.m d  
-
-   The cb is a verified program, and even if we can compile it directly to
-   a -> free.m b, we don't want because then the ctx can not use it inside.
-   Thus, the cb should have the same monad as the ctx.
-
-   However, cb only works only with the free monad. So even if it accepts the
-   monad passed by the context, it should have as pre-condition that the monad
-   should be free.
-
-   Another thing to notice is that prog and cb should be compiled by the same
-   compilation function and from the start we expect two different outputs.
-
-   Maybe we can compile prog as it is, but then when doing backtranslation to treat
-   the case when on the left is an arrow by abstracting that further.
-*)
-
-(** *** Parametricity **)
-noeq
-type monad_p (mon:monad) = {
-  m_p : a:Type -> a_p:(a -> Type) -> x:(mon.m a) -> Type;
-  ret_p : a:Type -> a_p:(a -> Type) -> (x:a) -> x_p:(a_p x) -> Lemma (m_p a a_p (mon.ret x));
-}
-
-(* TODO: *)
-[@@ "opaque_to_smt"]
-type io_cmds_p (cmd:io_cmds) =
-  True
-
-(* TODO: *)
-[@@ "opaque_to_smt"]
-type io_sig_args_p (op:io_cmds) (arg:io_sig.args op) =
-  True
-
-(* TODO: *)
-[@@ "opaque_to_smt"]
-type io_sig_res_p (op:io_cmds) (arg:io_sig.args op) (res:io_sig.res op arg) =
-  True
-
-type acts_p (mon:monad) (mon_p:monad_p mon) (theActs:acts mon) = 
-  op:io_cmds -> op_p : (io_cmds_p op) -> 
-  arg:io_sig.args op -> arg_p : (io_sig_args_p op arg) ->
-  Lemma (mon_p.m_p (io_sig.res op arg) (io_sig_res_p op arg) (theActs op arg))
-
-(** **** Parametricity - instances **)
-let free_p (pi:pi_type) : monad_p free = {
-  m_p = (fun a a_p tree -> ILang.pi_hist #a pi `hist_ord` dm_iio_theta tree);
-  ret_p = (fun a a_p tree tree_p -> ());
-}
-
-unfold val check_get_trace : pi_type -> cmd:io_cmds -> io_sig.args cmd -> free.m bool
-
-[@@ "opaque_to_smt"]
-let check_get_trace pi cmd arg = 
-  iio_bind (IO.Sig.Call.iio_call GetTrace ()) (fun h -> Return (pi cmd arg h))
-
-val wrap : pi_type -> acts free -> acts free
-[@@ "opaque_to_smt"]
-let wrap pi theActs cmd arg =
-  iio_bind
-    (check_get_trace pi cmd arg)
-    (fun b -> if b then theActs cmd arg else free.ret #(io_sig.res cmd arg) (Inr Common.Contract_failure))
-
-#set-options "--split_queries"
-val wrap_p : (pi:pi_type) -> (ca:(acts free){spec_free_acts ca}) -> acts_p free (free_p pi) (wrap pi ca)
-let wrap_p pi ca (op:io_cmds) op_p (arg:io_sig.args op) arg_p : 
-  Lemma ((free_p pi).m_p (io_sig.res op arg) (io_sig_res_p op arg) ((wrap pi ca) op arg)) = 
-  assert (spec_free_acts ca);
-  assert (iio_wps op arg `hist_ord` dm_iio_theta (ca op arg)) by (
-    let lem = nth_binder 9 in
-    let lem = instantiate lem (nth_binder 2) in
-    let lem = instantiate lem (nth_binder 4) in
-    assumption ()
-  );
-  introduce forall p h. ILang.pi_hist pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with begin
-    introduce ILang.pi_hist pi p h ==> dm_iio_theta ((wrap pi ca) op arg) p h with _. begin
-      calc (==>) {
-        ILang.pi_hist pi p h;
-        ==> {
-          assert (pi op arg h ==> io_pre op arg h);
-          assert (iio_wps op arg p h ==> dm_iio_theta (ca op arg) p h)
-        }
-        if pi op arg h then
-          dm_iio_theta (ca op arg) p h
-        else 
-          dm_iio_theta (Return (Inr Common.Contract_failure)) p h;
-        ==> {}
-        if pi op arg h then
-          dm_iio_theta (ca op arg) (fun lt' r -> p lt' r) h
-        else 
-          dm_iio_theta (Return (Inr Common.Contract_failure)) (fun lt' r -> p lt' r) h;
-        ==> {}
-        dm_iio_theta (if pi op arg h then ca op arg
-          else Return (Inr Common.Contract_failure))
-        (fun lt' r -> p lt' r)
-        h;
-        == { _ by (
-          norm [delta_only [`%hist_bind;`%hist_post_bind;`%hist_post_shift];zeta;iota];
-          l_to_r [`List.Tot.Properties.append_nil_l]
-        )}
-        hist_bind
-          (fun p h -> p [] (pi op arg h))
-          (fun b -> dm_iio_theta (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
-          p h;
-        == { _ by (compute ()) }
-        hist_bind
-          (dm_iio_theta (check_get_trace pi op arg))
-          (fun b -> dm_iio_theta (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
-          p h;
-        ==> { 
-          let m1 = (check_get_trace pi op arg) in
-          let m2 = fun b -> (if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)) in 
-          DMFree.lemma_theta_is_lax_morphism_bind iio_wps m1 m2;
-          assert (hist_bind (dm_iio_theta m1) (fun b -> dm_iio_theta (m2 b)) p h ==>
-            dm_iio_theta (iio_bind m1 m2) p h)
-        }
-        dm_iio_theta (
-          iio_bind
-            (check_get_trace pi op arg)
-            (fun b -> if b then ca op arg else free.ret #(io_sig.res op arg) (Inr Common.Contract_failure)))
-         p h;
-        == { _ by (norm [delta_only [`%wrap]; zeta]) }
-        dm_iio_theta ((wrap pi ca) op arg) p h;
-      }
-    end
-  end
-#reset-options
-
-type ct_p 
-  (mon:monad) (mon_p:monad_p mon)
-  (a b:Type)
-  (c:a -> mon.m b) =
-  squash (forall x. mon_p.m_p b (fun x -> True) (c x))
-
-type ctx_p 
-  (mon:monad) (mon_p:monad_p mon) 
-  (theActs:acts mon) (theActs_p:acts_p mon mon_p theActs)
-  (a:eptyp)
-  (b:Type) 
-  (c:(a --><*> b)) =
-  ct_p mon mon_p (a mon theActs) b (c mon theActs)
-
-(* TODO: check with others -- since this is assumed, it represents a risk **)
-(* Parametricity Assumption about the Context **)
-assume val ctx_param : 
-  (mon:monad) -> (mon_p:monad_p mon) ->
-  (theActs:acts mon) -> (theActs_p:acts_p mon mon_p theActs) ->
-  (a:eptyp) ->
-  (b:Type) ->
-  (c:(a --><*> b)) ->
-  Lemma (ctx_p mon mon_p theActs theActs_p a b c)
-
-val cast_to_dm_iio  : (#a:eptyp) -> (#b:Type) -> ipi:pi_type -> (a --><*> b) -> (x:a free (wrap ipi free_acts)) -> dm_iio b (ILang.pi_hist ipi)
-let cast_to_dm_iio #a #b ipi c x : _ by (norm [delta_only [`%ctx_p;`%ct_p;`%Mkmonad_p?.m_p;`%free_p]]; norm [iota]; explode ()) =
-  lemma_free_acts ();
-  let c' : (a free (wrap ipi free_acts)) -> free.m b = c free (wrap ipi free_acts) in
-  let tree : iio b = c' x in
-  ctx_param free (free_p ipi) (wrap ipi free_acts) (wrap_p ipi free_acts) a b c;
-  assert (ILang.pi_hist ipi `hist_ord` dm_iio_theta tree);
-  tree
-
-(** * Type Classes **)
-class compilable (icomp:Type u#a) (pi:pi_type) = {
-  [@@@no_method]
-  (* mcomp has to have type eptyp for the case when we compile a callback to the partial program.
-     when compiling a callback, the mlang type has to be in the same monad as the context. *)
-  mcomp : eptyp u#b;
-
-  compile: mon:monad -> acts:acts mon -> icomp -> mcomp mon acts;
-  [@@@no_method]
-  ilang_icomp : ILang.ilang icomp pi;
-  [@@@no_method]
-  mlang_mcomp : mon:monad -> acts:acts mon -> mlang (mcomp mon acts);
-}
-
-class backtranslateable (ibtrans:Type u#a) (pi:pi_type) = {
-  [@@@no_method]
-  mbtrans : Type u#b;
-
-  backtranslate: mbtrans -> ibtrans;
-
-  [@@@no_method]
-  ilang_ibtrans : ILang.ilang ibtrans pi;
-  [@@@no_method]
-  mlang_mbtrans : mlang mbtrans;
-}
-
-class instrumentable (iinst_in iinst_out:Type) (pi:pi_type) = {
-  (* since iinst_in is compiled, the mlang type of iinst_in is an eptyp *)
-  [@@@no_method]
-  minst_in: eptyp;
-  [@@@no_method]
-  minst_out : Type;
-
-  instrument: (minst_in --><*> minst_out) -> Tot (ILang.ilang_arrow_typ iinst_in iinst_out pi); 
-
-  [@@@no_method]
-  mlang_minst : mlang (mon:monad -> acts:acts mon -> (minst_in mon acts) -> mon.m minst_out);
-  [@@@no_method]
-  ilang_iinst : ILang.ilang (ILang.ilang_arrow_typ iinst_in iinst_out pi) pi;
-}
-
-instance instrumentable_is_backtranslateable #t1 #t2 #ipi (d1: instrumentable t1 t2 ipi) : backtranslateable (ILang.ilang_arrow_typ t1 t2 ipi) ipi = {
-  mbtrans = (mon:monad -> acts:acts mon -> (d1.minst_in mon acts) -> mon.m d1.minst_out);
-  mlang_mbtrans = d1.mlang_minst;
-  backtranslate = d1.instrument;
-  ilang_ibtrans = d1.ilang_iinst;
-}
-
-(** TODO: remove after a new pre-release of F* is realeased that builds this automatically **)
-assume val reify_IIOwp (#a:Type) (#wp:hist a) ($f:unit -> IIOwp a wp) : dm_iio a wp
-
-(* TODO: writing this may not be that easy *)
-let rec convert (t:free.m 'a) (mon:monad) (acts:acts mon) : r:(mon.m 'a){mon == free ==> t == r} =
-  match t with
-  | Return x -> mon.ret x
-  | Call GetTrace arg cont -> 
-    (* not sure what to do here *) admit ()
-  | Call cmd arg cont -> 
-    admit ();
-    mon.bind (acts cmd arg) (fun r -> convert (cont r) mon acts)
-  | PartialCall pre cont ->
-    assume pre; (* i can have this from where I call convert **)
-    admit ();
-    convert (cont ()) mon acts
-
-instance compile_verified_marrow
-  (vpi #pi1 #pi2:pi_type)
-  (t1:Type) {| d1:backtranslateable t1 pi1 |} 
-  (t2:Type) {| d2:compilable t2 pi2 |}:
-  Tot (compilable (ILang.ilang_arrow_typ t1 t2 vpi) vpi) = {
-  ilang_icomp = ILang.ilang_arrow vpi t1 #d1.ilang_ibtrans t2 #d2.ilang_icomp;
-
-  mcomp = (fun mon acts -> kleisli d1.mbtrans (d2.mcomp mon acts) mon.m);
-
-  mlang_mcomp = (fun mon acts -> mlang_kleisli mon.m d1.mlang_mbtrans (d2.mlang_mcomp mon acts));
-
-  compile = (fun mon acts (f:ILang.ilang_arrow_typ t1 t2 vpi) (x:d1.mbtrans) ->
-    let r : unit -> ILang.IIOpi _ vpi = fun () -> (f (d1.backtranslate x)) in
-    let tree : dm_iio _ _ = reify_IIOwp r in
-    convert (iio_bind tree (fun x -> free.ret (d2.compile mon acts x))) mon acts
-  );
-}
-
-instance instrumentable_unverified_marrow 
-  ipi #pi1 #pi2
-  t1 {| d1:compilable t1 pi1 |}
-  t2 {| d2:backtranslateable t2 pi2 |} : 
-  instrumentable t1 t2 ipi = {
-  minst_in = d1.mcomp; 
-  minst_out = d2.mbtrans;
-
-  mlang_minst = mlang_effectpoly_ho d1.mlang_mcomp d2.mlang_mbtrans;
-  ilang_iinst = ILang.ilang_arrow ipi t1 #(d1.ilang_icomp) t2 #(d2.ilang_ibtrans);
-
-  instrument = (fun f (x:t1) -> 
-    let x' : d1.mcomp free (wrap ipi free_acts) = d1.compile free (wrap ipi free_acts) x in
-    let dm_tree : dm_iio _ (ILang.pi_hist ipi) = cast_to_dm_iio ipi f x' in
-    let r : d2.mbtrans = IIOwp?.reflect dm_tree in
-    d2.backtranslate r
-  )
-}
-
-
-(** * Model of Secure Interop *)
+open Compile.RILang.To.MLang
 
 noeq
 type interface = {
-  (* intermediate level *)
-  ictx_in : Type u#a;
-  ictx_out : Type u#b;
-  iprog_out : Type u#c; 
+  vpi : monitorable_prop;
 
-  vpi : pi_type;
+  ct:(Type->Type)->Type;
+  rilang_ct  : rilang (ct (dm_mon vpi).m) vpi;
+  mlang_ct   : mlang (ct free.m);
 
-  (* target level *)
-  ctx_in : compilable u#a u#d ictx_in vpi;
-  ctx_out : backtranslateable ictx_out vpi;
-  prog_out : compilable iprog_out vpi; 
+  //pt:(Type->Type)->Type0;
+  //compilable_pt : compilable (pt (dm_mon vpi).m) vpi;
 }
 
 
 (** *** Intermediate Lang **)
-type ictx (i:interface) (ipi:pi_type) =  x:i.ictx_in -> ILang.IIOpi i.ictx_out ipi
-type iprog (i:interface)  = ictx i i.vpi -> ILang.IIOpi i.iprog_out i.vpi
-type iwhole (i:interface) = unit -> ILang.IIOpi i.iprog_out i.vpi
+type ictx (i:interface) (ipi:monitorable_prop) = i.ct (dm_mon ipi).m
+type iprog (i:interface)  = ictx i i.vpi -> rilang_dm i.vpi int
+type iwhole (i:interface) = unit -> rilang_dm i.vpi int 
+//type iprog (i:interface)  = ictx i i.vpi -> rilang_dm i.vpi (i.pt (dm_mon i.vpi).m)
+//type iwhole (i:interface) = unit -> rilang_dm i.vpi (i.pt (dm_mon i.vpi).m)
 
 //  vpi  : pi_type; (* the statically verified monitorable property (part of partial program's spec) *)
 //  ipi : pi_type;  (* the instrumented monitorable property (part of context's spec) *)
 
-type r_vpi_ipi (vpi ipi:pi_type) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
+type r_vpi_ipi (vpi ipi:monitorable_prop) = squash (forall h lt. enforced_locally ipi h lt ==> enforced_locally vpi h lt)
 
 (* The interesting thing here is that the context can have a different (stronger) pi than the partial program. *)
 let ilink 
   (#i:interface) 
-  (#ipi:pi_type) 
-  (#_ : r_vpi_ipi i.vpi ipi)
+ // (#ipi:monitorable_prop) 
+//  (#_ : r_vpi_ipi i.vpi ipi)
   (ip:iprog i) 
-  (ic:ictx i ipi) : 
+  (ic:ictx i i.vpi) : 
   iwhole i = 
   fun () -> ip ic
 
@@ -473,94 +55,44 @@ let ilink
 (* will eventually need a signature and what not;
    I think we need to pass the abstract monad inside is we want to support higher-order types.
    in this case I conflated alpha + beta = ct, and gamma + delta = pt *)
-type ctx (i:interface) = i.ctx_in.mcomp --><*> i.ctx_out.mbtrans
-type prog (i:interface) = kleisli (ctx i) (i.prog_out.mcomp free free_acts) free.m
+type ctx (i:interface) = mon:monad -> acts mon -> i.ct mon.m
+type prog (i:interface) = ctx i -> free.m int 
 
-type whole (i:interface) = unit -> iio (i.prog_out.mcomp free free_acts)
+type whole (i:interface) = unit -> free.m int 
   
 let link (#i:interface) (p:prog i) (c:ctx i) : whole i = 
   fun () -> p c
 
-(** *** Backtranslate **)
-(* Possible issue: backtranslation may be difficult if we allow m at arbitrary places,
-   while in F* effects are only allowed at the right or arrows;
-   make such kleisli arrows the abstraction instead of m? *)
+#reset-options
 
-(** *** Compilation **)
-(**[@@ "opaque_to_smt"]
-let compile_body  
-  (#i:interface)
-  (ip:iprog i)
-  (ipi:pi_type)
-  (#_: r_vpi_ipi i.vpi ipi) 
-  (c:ctx i) :
-  dm_iio i.iprog_out (ILang.pi_hist i.vpi) = 
-  let f : unit -> IIOwp i.iprog_out (ILang.pi_hist i.vpi) = 
-    fun () -> ip (backtranslate ipi c) in
-  reify_IIOwp f **)
-
-let ctx_instrumentable (i:interface) (ipi:pi_type) : instrumentable i.ictx_in i.ictx_out ipi =
-  instrumentable_unverified_marrow
-    ipi
-    i.ictx_in #i.ctx_in
-    i.ictx_out #i.ctx_out
-
-let ctx_backtranslateable (i:interface) (ipi:pi_type) : backtranslateable (ictx i ipi) ipi =
-  instrumentable_is_backtranslateable (ctx_instrumentable i ipi)
-
-let ctx_backtranslateable' (i:interface) (ipi:pi_type) : backtranslateable (ictx i i.vpi) ipi =
-  admit ();
-  ctx_backtranslateable i ipi
-
-let prog_compilable (i:interface) (ipi:pi_type) : compilable (iprog i) i.vpi =
-  compile_verified_marrow
+let prog_compilable (i:interface) : compilable (iprog i) i.vpi =
+  compilable_arrow
     i.vpi
-    (ictx i i.vpi) #(ctx_backtranslateable' i ipi)
-    i.iprog_out #i.prog_out
+    i.ct #i.rilang_ct #i.mlang_ct
+    int #(compilable_int i.vpi)
 
 let model_compile
   (#i:interface)
-  (ip:iprog i)
-  (ipi:pi_type)
-  (#_: r_vpi_ipi i.vpi ipi) :
+  (ip:iprog i) :
   prog i = 
-  compile #_ #i.vpi #(prog_compilable i ipi) free free_acts ip
+  let p : (prog_compilable i).comp_out = (prog_compilable i).compile ip in
+  p
 
 (** *** Case Studies **)
 
-instance comp_int #pi : compilable int pi = {
-  ilang_icomp = ILang.ilang_int pi;
-  mcomp = (fun mon acts -> int);
-  mlang_mcomp = (fun mon acts -> mlang_int);
-  compile = (fun mon acts x -> x);
-}
-
-instance btrans_int #pi : backtranslateable int pi = {
-  mbtrans = int;
-
-  backtranslate = (fun x -> x);
-
-  ilang_ibtrans = ILang.ilang_int pi;
-  mlang_mbtrans = mlang_int;
-}
-
-assume val thePi : pi_type
+assume val thePi : monitorable_prop
 
 let test1 : interface = {
   vpi = thePi;
 
-  (* intermediate level *)
-  ictx_in = int;
-  ictx_out = int;
-  iprog_out = int; 
+  ct = (fun m -> (int -> m int));
 
-  ctx_in = comp_int;
-  ctx_out = btrans_int;
-  prog_out = comp_int;
+  rilang_ct = rilang_arrow thePi (rilang_int thePi) (rilang_int thePi);
+  mlang_ct = mlang_free_arrow mlang_int mlang_int;
 }
 
-let iprog1 : iprog test1 = fun c -> (c 5) + 1
-let mprog1 : prog test1 = model_compile iprog1 thePi
+let iprog1 : iprog test1 = fun c -> (dm_mon thePi).bind (c 5) (fun r -> (dm_mon thePi).ret (r + 1))
+let mprog1 : prog test1 = model_compile iprog1 //thePi
 val mctx1 : ctx test1  
 let mctx1 (mon:monad) (acts:acts mon) (x:int) : mon.m int =
   mon.ret (x+2)
@@ -573,57 +105,18 @@ let test2 : interface = {
   vpi = thePi;
 
   (* intermediate level *)
-  ictx_in = ILang.ilang_arrow_typ int int thePi;
-  ictx_out = int;
-  iprog_out = int; 
-
-  ctx_in = compile_verified_marrow thePi int #(btrans_int #thePi) int #(comp_int #thePi);
-  ctx_out = btrans_int;
-  prog_out = comp_int;
+  ct = (fun m -> (int -> m int) -> m int);
+  rilang_ct = rilang_arrow thePi (rilang_arrow thePi (rilang_int thePi) (rilang_int thePi)) (rilang_int thePi);
+  mlang_ct = mlang_free_arrow (mlang_free_arrow mlang_int mlang_int) mlang_int;
 }
 
-let iprog2 : iprog test2 = fun c -> (c (fun x -> (x + 5) <: ILang.IIOpi int thePi)) + 1
-let mprog2 : prog test2 = model_compile iprog2 thePi
+let iprog2 : iprog test2 = fun c -> (dm_mon thePi).bind (c (fun x -> (dm_mon thePi).ret (x + 5))) (fun r -> (dm_mon thePi).ret (r + 1))
+let mprog2 : prog test2 = model_compile iprog2 //thePi
 val mctx2 : ctx test2  
 let mctx2 (mon:monad) (acts:acts mon) (f:int -> mon.m int) : mon.m int =
   mon.bind (f 5) (fun x -> mon.ret (x+2))
 let mwhole2 = mprog2 `link` mctx2
 
-let test3 : interface = {
-  vpi = thePi;
-
-  (* intermediate level *)
-  ictx_in = ILang.ilang_arrow_typ (ILang.ilang_arrow_typ int int thePi) int thePi;
-  ictx_out = int;
-  iprog_out = int; 
-
-  ctx_in = (
-    compile_verified_marrow 
-        thePi 
-        _ 
-        #(instrumentable_is_backtranslateable ( 
-            instrumentable_unverified_marrow
-                thePi
-                int #(comp_int #thePi)
-                int #(btrans_int #thePi)))
-        int
-        #(comp_int #thePi)
-  );
-  ctx_out = btrans_int;
-  prog_out = comp_int;
-}
-
-let iprog3 : iprog test3 = fun c -> iprog2 c
-let mprog3 : prog test3 = model_compile iprog3 thePi
-
-(** TODO: the type of mctx3 looks bad. there should not be a effectpolymorphic callback inside ctx **)
-val mctx3 : ctx test3  
-let mctx3 (mon:monad) (act:acts mon) (f:((mon':monad -> acts':acts mon' -> (int -> mon'.m int)) -> mon.m int)) : mon.m int =
-  mon.bind (f (fun mon' act' (x:int) -> mon'.ret x)) (fun x -> mon.ret (x+3))
-
-let _ = assert (has_type mctx3 (mon:monad -> act:acts mon -> ((f:(int `effectpoly` int) -> mon.m int) -> mon.m int)))
-
-let mwhole3 = mprog3 `link` mctx3
 
 (** ** Criterias **)
 (** *** Behaviors **)
