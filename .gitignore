@@ -3,5 +3,6 @@ out
 *.cmi
 *.cmx
 *.o
+.DS_store
 
 *.fst#
