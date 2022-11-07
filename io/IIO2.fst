@@ -21,7 +21,6 @@ match m with
 (** fstar does not like type bool as an index for an effect --- not sure why **)
 noeq
 type tflag = | Contains | NotContain
-let (!) (flag:tflag) = Contains? flag
 let (+) (flag1:tflag) (flag2:tflag) = 
   match flag1, flag2 with
   | NotContain, NotContain -> NotContain
@@ -32,7 +31,7 @@ let (<=) (flag1:tflag) (flag2:tflag) =
   | Contains, NotContain -> False
   | _ -> True
 
-type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){contains t ==> !flag} 
+type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){contains t ==> Contains? flag} 
   // if the tree contains GetTrace, then the flag must be true
 
 (** ** Model compilation **)
@@ -41,21 +40,18 @@ assume type pt (m:Type->Type)
 
 let gio flag (a:Type) = dm_gio a flag trivial_hist
 
-// This way prog_s can not use the GetTrace
+// This way prog_s can not use `GetTrace`.
+// even if prog_s whould check if `fl2` is true, the refinement on the tree is stronger
 type prog_s = #fl1:tflag -> #fl2:tflag{fl1 <= fl2} -> ct (gio fl1) -> pt (gio fl2)
+// I suppose ctx_s can also be parametric in the flag, but not sure if needed
 type ctx_s = ct (gio NotContain)
-
-let link_s (p:prog_s) (c:ct (gio NotContain)) = p #NotContain #NotContain c
-
-type prog_i = (#flag:tflag) -> ct (gio flag) -> pt (gio Contains)
-
-let compile_s (p:prog_s) : prog_i = fun #fl (c:ct (gio fl)) -> p #fl #Contains c
+let link_s (p:prog_s) (c:ctx_s) = p #NotContain #NotContain c
 
 type prog_t = ct (gio Contains) -> pt (gio Contains)
 type ctx_t  = m:(Type->Type) -> ct m 
 let link_t (p:prog_t) (c:ctx_t) = p (c (gio Contains))
 
-let compile_i (p:prog_i) : prog_t = fun (c:ct (gio Contains)) -> p #Contains c
+let compile_p (p:prog_s) : prog_t = fun (c:ct (gio Contains)) -> p c
 
 (** ** Defining F* Effect **)
 
