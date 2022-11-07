@@ -18,8 +18,96 @@ match m with
 | Call cmd arg k -> forall r. contains (k r)
 | PartialCall pre k -> forall r. contains (k r)
 
-type gio (flag:bool) (a:Type) = t:(dm_iio a trivial_hist){contains t ==> flag} 
+(** fstar does not like type bool as an index for an effect --- not sure why **)
+noeq
+type tflag = | Contains | NotContains
+let test (flag:tflag) = Contains? flag
+let mix (flag1:tflag) (flag2:tflag) = 
+  match flag1, flag2 with
+  | NotContains, NotContains -> NotContains
+  | _ -> Contains
+
+let imp (flag1:tflag) (flag2:tflag) =
+  match flag1, flag2 with
+  | Contains, NotContains -> False
+  | _ -> True
+
+let dm_gio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
+
+type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){contains t ==> test flag} 
   // if the tree contains GetTrace, then the flag must be true
+
+let dm_gio_return (a:Type) (x:a) : dm_gio a NotContains (hist_return x) by (compute ()) =
+  dm_iio_return a x
+
+val dm_gio_bind  : 
+  a: Type ->
+  b: Type ->
+  flag_v : tflag ->
+  flag_f : tflag ->
+  wp_v: Hist.hist a ->
+  wp_f: (_: a -> Hist.hist b) ->
+  v: dm_gio a flag_v wp_v ->
+  f: (x: a -> dm_gio b flag_f (wp_f x)) ->
+  Tot (dm_gio b (flag_v `mix` flag_f) (hist_bind wp_v wp_f))
+let dm_gio_bind a b flag_v flag_f wp_v wp_f v f : (dm_gio b (flag_v `mix` flag_f) (hist_bind wp_v wp_f)) = 
+  let r = dm_iio_bind a b wp_v wp_f v f in
+  assert (Contains? flag_v \/ Contains? flag_f ==> Contains? (mix flag_v flag_f));
+  assert (NotContains? flag_v /\ NotContains? flag_f ==> 
+        (~(contains v) /\ (forall x. ~(contains (f x))))); // ==> ~(contains r));
+  assume (~(contains v) /\ (forall x. ~(contains (f x))) ==> ~(contains r));
+  r
+
+val dm_gio_subcomp : 
+  a: Type ->
+  flag1 : tflag ->
+  flag2 : tflag ->
+  wp1: hist a ->
+  wp2: hist a ->
+  f: dm_gio a flag1 wp1 ->
+  Pure (dm_gio a flag2 wp2) ((flag1 `imp` flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
+let dm_gio_subcomp a flag1 flag2 wp1 wp2 f = 
+  dm_iio_subcomp a wp1 wp2 f
+
+let dm_gio_if_then_else a _ _ wp1 wp2 f g b = dm_if_then_else iio_cmds iio_sig event iio_wps a wp1 wp2 f g b
+
+total
+reflectable
+effect {
+  GIOwp (a:Type) (flag:tflag) (wp : hist a) 
+  with {
+       repr       = dm_gio
+     ; return     = dm_gio_return
+     ; bind       = dm_gio_bind 
+     ; subcomp    = dm_gio_subcomp
+ //    ; if_then_else = dm_gio_if_then_else
+     }
+}
+
+let lift_io_gio (a:Type) (wp:hist a) (f:dm_io a wp) :
+  Tot (dm_gio a NotContains wp) =
+  admit ();
+  lift_io_iio a wp f
+  
+sub_effect IOwp ~> GIOwp = lift_io_gio
+
+let prog (#pflag:tflag) (c:unit -> GIOwp unit pflag trivial_hist) : GIOwp unit Contains trivial_hist =
+  c ()
+
+let ctx (_:unit) : GIOwp unit NotContains trivial_hist = ()
+  
+(** TODO:
+1) is there a way to lift an HO type in IO to a GIO that has a parametric flag?
+2) GIO is a horrible name.
+3) is this good enough for a source language?
+4) it should be easy to lift from IO to GIO false
+5) it should be easy to lift from GIO false to GIO true
+6) it should be easy to lift from GIO true to IIO
+**)
+
+
+(** ** Old experiments **)
+
 
 type gio_arr (a:Type) (flag1:bool) (b:Type) (flag2:bool{flag1 ==> flag2}) = 
   #flag3:bool{flag1 ==> flag3} -> gio flag3 a -> gio (flag2 || flag3) b
