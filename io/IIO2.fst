@@ -20,24 +20,48 @@ match m with
 
 (** fstar does not like type bool as an index for an effect --- not sure why **)
 noeq
-type tflag = | Contains | NotContains
-let test (flag:tflag) = Contains? flag
-let mix (flag1:tflag) (flag2:tflag) = 
+type tflag = | Contains | NotContain
+let (!) (flag:tflag) = Contains? flag
+let (+) (flag1:tflag) (flag2:tflag) = 
   match flag1, flag2 with
-  | NotContains, NotContains -> NotContains
+  | NotContain, NotContain -> NotContain
   | _ -> Contains
 
-let imp (flag1:tflag) (flag2:tflag) =
+let (<=) (flag1:tflag) (flag2:tflag) =
   match flag1, flag2 with
-  | Contains, NotContains -> False
+  | Contains, NotContain -> False
   | _ -> True
+
+type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){contains t ==> !flag} 
+  // if the tree contains GetTrace, then the flag must be true
+
+(** ** Model compilation **)
+assume type ct (m:Type->Type)
+assume type pt (m:Type->Type)
+
+let gio flag (a:Type) = dm_gio a flag trivial_hist
+
+// This way prog_s can not use the GetTrace
+type prog_s = #fl1:tflag -> #fl2:tflag{fl1 <= fl2} -> ct (gio fl1) -> pt (gio fl2)
+type ctx_s = ct (gio NotContain)
+
+let link_s (p:prog_s) (c:ct (gio NotContain)) = p #NotContain #NotContain c
+
+type prog_i = (#flag:tflag) -> ct (gio flag) -> pt (gio Contains)
+
+let compile_s (p:prog_s) : prog_i = fun #fl (c:ct (gio fl)) -> p #fl #Contains c
+
+type prog_t = ct (gio Contains) -> pt (gio Contains)
+type ctx_t  = m:(Type->Type) -> ct m 
+let link_t (p:prog_t) (c:ctx_t) = p (c (gio Contains))
+
+let compile_i (p:prog_i) : prog_t = fun (c:ct (gio Contains)) -> p #Contains c
+
+(** ** Defining F* Effect **)
 
 let dm_gio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
 
-type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){contains t ==> test flag} 
-  // if the tree contains GetTrace, then the flag must be true
-
-let dm_gio_return (a:Type) (x:a) : dm_gio a NotContains (hist_return x) by (compute ()) =
+let dm_gio_return (a:Type) (x:a) : dm_gio a NotContain (hist_return x) by (compute ()) =
   dm_iio_return a x
 
 val dm_gio_bind  : 
@@ -49,11 +73,11 @@ val dm_gio_bind  :
   wp_f: (_: a -> Hist.hist b) ->
   v: dm_gio a flag_v wp_v ->
   f: (x: a -> dm_gio b flag_f (wp_f x)) ->
-  Tot (dm_gio b (flag_v `mix` flag_f) (hist_bind wp_v wp_f))
-let dm_gio_bind a b flag_v flag_f wp_v wp_f v f : (dm_gio b (flag_v `mix` flag_f) (hist_bind wp_v wp_f)) = 
+  Tot (dm_gio b (flag_v + flag_f) (hist_bind wp_v wp_f))
+let dm_gio_bind a b flag_v flag_f wp_v wp_f v f : (dm_gio b (flag_v + flag_f) (hist_bind wp_v wp_f)) = 
   let r = dm_iio_bind a b wp_v wp_f v f in
-  assert (Contains? flag_v \/ Contains? flag_f ==> Contains? (mix flag_v flag_f));
-  assert (NotContains? flag_v /\ NotContains? flag_f ==> 
+  assert (Contains? flag_v \/ Contains? flag_f ==> Contains? (flag_v + flag_f));
+  assert (NotContain? flag_v /\ NotContain? flag_f ==> 
         (~(contains v) /\ (forall x. ~(contains (f x))))); // ==> ~(contains r));
   assume (~(contains v) /\ (forall x. ~(contains (f x))) ==> ~(contains r));
   r
@@ -65,7 +89,7 @@ val dm_gio_subcomp :
   wp1: hist a ->
   wp2: hist a ->
   f: dm_gio a flag1 wp1 ->
-  Pure (dm_gio a flag2 wp2) ((flag1 `imp` flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
+  Pure (dm_gio a flag2 wp2) ((flag1 <= flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
 let dm_gio_subcomp a flag1 flag2 wp1 wp2 f = 
   dm_iio_subcomp a wp1 wp2 f
 
@@ -85,16 +109,23 @@ effect {
 }
 
 let lift_io_gio (a:Type) (wp:hist a) (f:dm_io a wp) :
-  Tot (dm_gio a NotContains wp) =
+  Tot (dm_gio a NotContain wp) =
   admit ();
   lift_io_iio a wp f
   
 sub_effect IOwp ~> GIOwp = lift_io_gio
 
-let prog (#pflag:tflag) (c:unit -> GIOwp unit pflag trivial_hist) : GIOwp unit Contains trivial_hist =
+let get_trace () : GIOwp trace Contains
+  (fun p h -> forall lt. lt == [] ==> p lt h) =
+  GIOwp?.reflect (iio_call GetTrace ())
+
+let prog (#fl1:tflag) (#fl2:tflag{fl1 <= fl2}) (c:unit -> GIOwp unit fl1 trivial_hist) : GIOwp unit fl2 trivial_hist =
+  //let h = get_trace () in // not possible because it does not know if fl2 is true or not
   c ()
 
-let ctx (_:unit) : GIOwp unit NotContains trivial_hist = ()
+let ctx (_:unit) : GIOwp unit NotContain trivial_hist = ()
+
+let test2 () : GIOwp unit Contains trivial_hist = prog #NotContain ctx
   
 (** TODO:
 1) is there a way to lift an HO type in IO to a GIO that has a parametric flag?
