@@ -126,7 +126,18 @@ let prog (#fl:tflag) (c:unit -> GIOwp unit fl trivial_hist) : GIOwp unit fl triv
 let ctx (_:unit) : GIOwp unit NotContain trivial_hist = ()
 
 let test2 () : GIOwp unit Contains trivial_hist = prog #NotContain ctx
+
+let performance_test (#fl:tflag) : GIOwp unit fl (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
+  let fd = static_cmd Openfile "../Makefile" in
+  let fd = static_cmd Openfile "../Makefile" in
+  let fd = static_cmd Openfile "../Makefile" in
+  let fd = static_cmd Openfile "../Makefile" in
+  let fd = static_cmd Openfile "../Makefile" in
+  let fd = static_cmd Openfile "../Makefile" in
+  if Inl? fd then let _ = static_cmd Close (Inl?.v fd) in () else 
+  ()
   
+
 (** TODO:
 1) is there a way to lift an HO type in IO to a GIO that has a parametric flag?
 2) GIO is a horrible name.
