@@ -42,10 +42,10 @@ let gio flag (a:Type) = dm_gio a flag trivial_hist
 
 // This way prog_s can not use `GetTrace`.
 // even if prog_s whould check if `fl2` is true, the refinement on the tree is stronger
-type prog_s = #fl1:tflag -> #fl2:tflag{fl1 <= fl2} -> ct (gio fl1) -> pt (gio fl2)
+type prog_s = #fl:tflag -> ct (gio fl) -> pt (gio fl)
 // I suppose ctx_s can also be parametric in the flag, but not sure if needed
 type ctx_s = ct (gio NotContain)
-let link_s (p:prog_s) (c:ctx_s) = p #NotContain #NotContain c
+let link_s (p:prog_s) (c:ctx_s) = p #NotContain c
 
 type prog_t = ct (gio Contains) -> pt (gio Contains)
 type ctx_t  = m:(Type->Type) -> ct m 
@@ -115,8 +115,12 @@ let get_trace () : GIOwp trace Contains
   (fun p h -> forall lt. lt == [] ==> p lt h) =
   GIOwp?.reflect (iio_call GetTrace ())
 
-let prog (#fl1:tflag) (#fl2:tflag{fl1 <= fl2}) (c:unit -> GIOwp unit fl1 trivial_hist) : GIOwp unit fl2 trivial_hist =
-  //let h = get_trace () in // not possible because it does not know if fl2 is true or not
+let prog (#fl:tflag) (c:unit -> GIOwp unit fl trivial_hist) : GIOwp unit fl trivial_hist =
+  (**
+  if Contains? fl then
+    let h = get_trace () in // not possible because it does not know if fl2 is true or not
+    ()
+  else **)
   c ()
 
 let ctx (_:unit) : GIOwp unit NotContain trivial_hist = ()
