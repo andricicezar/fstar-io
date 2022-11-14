@@ -3,6 +3,8 @@ module Compiler.Model
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
+open BeyondCriteria
+
 open IO.Sig
 open TC.Monitorable.Hist
   
@@ -34,7 +36,7 @@ let test_interface : iio_lang_interface = {
 type iio_lang_ctx (i:iio_lang_interface) = i.ct
 type iio_lang_prog (i:iio_lang_interface) = iio_lang_ctx i -> i.pt
 
-let iio_lang_language : BeyondCriteria.language = {
+let iio_lang_language : language = {
   interface = iio_lang_interface;
 
   ctx = iio_lang_ctx;
@@ -64,7 +66,7 @@ type ilang_interface = {
 type ilang_ctx (i:ilang_interface) = i.ct
 type ilang_prog (i:ilang_interface) = ilang_ctx i -> i.pt
 
-let ilang_language : BeyondCriteria.language = {
+let ilang_language : language = {
   interface = ilang_interface;
 
   ctx = ilang_ctx;
@@ -91,21 +93,13 @@ let compiler_pprog (#i:iio_lang_interface) (p:iio_lang_language.pprog i) : ilang
     end
     | Inr err -> Inr err
 
-let phase1 : BeyondCriteria.compiler = {
+let phase1 : compiler = {
   source = iio_lang_language;
   target = ilang_language;
 
   comp_int = comp_int;
 
-  compile_pprog = (fun #i p c -> 
-    match i.c2.import c with
-    | Inl c' -> begin 
-      let (| _, pt |) = iio_lang_language.link #i p c' in
-      (** WTF **)
-      assert False;
-      Inl (i.c1.export pt)
-    end
-    | Inr err -> Inr err);
+  compile_pprog = compiler_pprog;
 
   rel_traces = admit ();
 }

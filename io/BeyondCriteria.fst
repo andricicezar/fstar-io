@@ -68,6 +68,16 @@ type compiler = {
   compile_pprog : #i:source.interface -> source.pprog i -> target.pprog (comp_int i);
 }
 
+let chain_compilers (c1:compiler) (c2:compiler{c1.target == c2.source}) : r:compiler{c1.source == r.source /\ c2.target == r.target } = {
+  source = c1.source;
+  target = c2.target;
+  comp_int = (fun (i:c1.source.interface) -> c2.comp_int (c1.comp_int i));
+
+  rel_traces = (fun ts tt -> forall ti. c1.rel_traces ts ti <==> c2.rel_traces ti tt);
+
+  compile_pprog = (fun #i ps -> c2.compile_pprog (c1.compile_pprog ps));
+}
+
 (**
 Definition RrHC : Prop :=
   forall (Ct:ctx tgt (cint i)),
