@@ -48,7 +48,7 @@ let dm_iio_if_then_else a wp1 wp2 f g b = dm_if_then_else iio_cmds iio_sig event
 #set-options "--print_universes"
 
 val lift_pure_dm_iio :
-  a: Type u#a ->
+  a: Type ->
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (dm_iio a (wp_lift_pure_hist w))
@@ -77,6 +77,15 @@ effect IIO
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   IIOwp a (to_hist pre post) 
+
+let static_cmd
+  (cmd : io_cmds)
+  (arg : io_sig.args cmd) :
+  IIO (io_resm cmd)
+    (requires (fun h -> io_pre cmd arg h))
+    (ensures (fun h (r:io_sig.res cmd arg) lt ->
+        lt == [convert_call_to_event cmd arg r])) =
+  IIOwp?.reflect (iio_call cmd arg)
 
 let get_trace () : IIOwp trace (fun p h -> forall lt. lt == [] ==> p lt h) =
   IIOwp?.reflect (iio_call GetTrace ())

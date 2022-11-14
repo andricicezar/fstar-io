@@ -59,11 +59,11 @@ let hist_post_bind
   fun lt r ->
     kw r (hist_post_shift p lt) (List.rev lt @ h)
 
-//unfold
+unfold
 let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -> hist #event_type b) : hist #event_type b =
   fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
 
-//unfold
+unfold
 let wp_lift_pure_hist (#event_type:Type) (w : pure_wp 'a) : hist #event_type 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
