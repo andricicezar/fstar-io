@@ -2,7 +2,7 @@ module IO.Sig
 
 open FStar.List.Tot.Base
 
-open Common
+include CommonUtils
 include Free
 include Hist
 
@@ -37,8 +37,6 @@ type event =
   | EOpenfile : a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
   | ERead     : a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
   | EClose    : a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
-
-let hist = Hist.hist #event
 
 type trace = list event
 

@@ -1,11 +1,9 @@
-module Compile.IIO.To.ILang
+module CompileTest
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Common
 open IO.Sig
-open IO
 open IIO
 open TC.Monitorable.Hist
 open Compile.ILang

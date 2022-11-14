@@ -122,7 +122,7 @@ let rec lemma_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (#op:Type0)
     }
 
 // The Dijkstra Monad
-let dm (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event) (a:Type u#a) (wp:hist #event a) =
+type dm (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event) (a:Type u#a) (wp:hist #event a) =
   (m:(free op s a){wp `hist_ord` theta cmd_wp m})
 
 let dm_return (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event) (a : Type u#a) (x : a) : dm op s event cmd_wp a (hist_return #a #event x) =

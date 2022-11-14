@@ -1,12 +1,12 @@
-module IO
+module OldIO
 
 open FStar.Tactics
 open ExtraTactics
 
 open Common
-open DMFree
 open IO.Sig
 open IO.Sig.Call
+open DMFree
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
@@ -32,10 +32,10 @@ let dm_io_return (a:Type) (x:a) : dm_io a (hist_return x) =
 val dm_io_bind  : 
   a: Type u#a ->
   b: Type u#b ->
-  wp_v: Hist.hist a ->
-  wp_f: (_: a -> Prims.Tot (Hist.hist b)) ->
+  wp_v: hist a ->
+  wp_f: (_: a -> hist b) ->
   v: dm_io a wp_v ->
-  f: (x: a -> Prims.Tot (dm_io b (wp_f x))) ->
+  f: (x: a -> dm_io b (wp_f x)) ->
   Tot (dm_io b (hist_bind wp_v wp_f))
 let dm_io_bind a b wp_v wp_f v f = dm_bind io_cmds io_sig event io_wps a b wp_v wp_f v f
 

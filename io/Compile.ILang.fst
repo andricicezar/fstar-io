@@ -1,12 +1,11 @@
 module Compile.ILang
 
-open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open Common
-
+open CommonUtils
 open TC.Monitorable.Hist
-
+open IIO
+  
 (** ** ILang **)
 (** ILang is a language that acts as an intermediate language between the rich IIO effect that has
     rich types and pre- and post-conditions and an ML language as OCaml.
@@ -20,7 +19,6 @@ open TC.Monitorable.Hist
     So, ILang is weakly typed and its computation can have only as post-condition that it respects a 
     trace property. The pre-condition must be trivial.
 **)
-
 
 
 effect IIOpi (a:Type) (pi : monitorable_prop) = 

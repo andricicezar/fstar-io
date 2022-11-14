@@ -18,7 +18,7 @@ reversed and appended to the history. **)
 let hist_post (#event_type:Type) a = lt:list event_type -> r:a -> Type0
 let hist_pre (#event_type:Type) = h:list event_type -> Type0
 
-let hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_type
+type hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_type
 
 unfold
 let hist_post_ord (#event_type:Type) (p1 p2:hist_post #event_type 'a) = forall lt r. p1 lt r ==> p2 lt r
@@ -26,7 +26,7 @@ let hist_post_ord (#event_type:Type) (p1 p2:hist_post #event_type 'a) = forall l
 let hist_wp_monotonic (#event_type:Type) (wp:hist0 #event_type 'a) =
   forall p1 p2. (p1 `hist_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
 
-let hist #event_type a = wp:(hist0 #event_type a){hist_wp_monotonic wp}
+type hist #event_type a = wp:(hist0 #event_type a){hist_wp_monotonic wp}
 
 val hist_subcomp0 : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist #event_type (x:a{p1 x}) -> 
   (hist #event_type (x:a{p2 x}))
@@ -50,19 +50,20 @@ let hist_post_shift (#event_type:Type) (p:hist_post #event_type 'a) (lt:list eve
 
 unfold
 let hist_post_bind
+  (#a #b:Type)
   (#event_type:Type)
   (h:list event_type)
-  (kw : 'a -> hist #event_type 'b)
-  (p:hist_post #event_type 'b) :
-  Tot (hist_post #event_type 'a) =
+  (kw : a -> hist #event_type b)
+  (p:hist_post #event_type b) :
+  Tot (hist_post #event_type a) =
   fun lt r ->
     kw r (hist_post_shift p lt) (List.rev lt @ h)
 
-unfold
+//unfold
 let hist_bind (#event_type:Type) (#a #b:Type) (w : hist #event_type a) (kw : a -> hist #event_type b) : hist #event_type b =
   fun p h -> w (hist_post_bind #a #b #event_type h kw p) h
 
-unfold
+//unfold
 let wp_lift_pure_hist (#event_type:Type) (w : pure_wp 'a) : hist #event_type 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p _ -> w (p [])
@@ -84,8 +85,8 @@ let hist_if_then_else (wp1 wp2:hist #'event 'a) (b:bool) : hist #'event 'a =
 let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
   Lemma (
     hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) == hist_bind (hist_bind w1 w2) w3)
-  by (l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]) =
-  () 
+  by (unfold_def (`hist_bind); norm [iota]; l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]; dump "H") =
+  admit () 
 
 unfold
 let to_hist #a #event pre post : hist #event a =

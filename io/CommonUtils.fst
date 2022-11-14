@@ -1,17 +1,17 @@
-module Common
+module CommonUtils
 
 open FStar.Monotonic.Pure
 open FStar.Exn
 open FStar.Tactics
 open FStar.List.Tot
 
-include Types
+include UnixTypes
 
 exception Contract_failure
 
 type zfile_perm = int
 
-type lfds = (l:list file_descr) //{List.no_repeats_p l})
+type lfds = (list file_descr) //{List.no_repeats_p l})
 
 let list_subset_of_list (l1:lfds) (l2:lfds) : Type0 =
   (forall x. (List.memP x l2) ==>  (List.memP x l1))
@@ -41,7 +41,7 @@ let suffix_of (l1 l2: list 'a)
 : Tot Type0 (decreases l2)
 = l1 == l2 \/ l1 `strict_suffix_of` l2
 
-let rec suffix_of_length (l1 l2: list 'a)
+let suffix_of_length (l1 l2: list 'a)
 : Lemma
   (requires (suffix_of l1 l2))
   (ensures (List.length l1 <= List.length l2))
@@ -105,7 +105,7 @@ let rec lemma_suffixOf_append (l l':list 'a) :
   | [] -> ()
   | x::xs -> lemma_suffixOf_append l xs
 
-let rec lemma_rev_rev_equal (l l':list 'a) :
+let lemma_rev_rev_equal (l l':list 'a) :
   Lemma
     (requires (rev l == rev l'))
     (ensures (l == l')) 

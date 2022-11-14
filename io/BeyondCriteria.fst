@@ -6,8 +6,6 @@ open FStar.List.Tot
 open FStar.Tactics.Typeclasses
 open FStar.FunctionalExtensionality
 
-#set-options "--print_universes"
-
 (** ** Trace Model *)
 (* Inspired from
    * https://github.com/secure-compilation/exploring-robust-property-preservation/blob/master/TraceModel.v

@@ -1,4 +1,4 @@
-module Types
+module UnixTypes
 
 (** this file contains types that have a direct equivalent in OCaml **)
 
