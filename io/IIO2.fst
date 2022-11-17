@@ -46,7 +46,6 @@ let (<=) (flag1:tflag) (flag2:tflag) =
   | AllActions, _ -> False
 
 type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
-  // if the tree contains GetTrace, then the flag must be true
 
 (** ** Model compilation **)
 assume type ct (m:Type u#a -> Type u#(max 1 a))
@@ -54,12 +53,9 @@ assume type pt (m:Type u#a -> Type u#(max 1 a))
 
 type gio flag (a:Type u#a) : Type u#(max 1 a) = dm_gio a flag trivial_hist
 
-// This way prog_s can not use `GetTrace`.
-// even if prog_s whould check if `fl2` is true, the refinement on the tree is stronger
 type prog_s = #fl:tflag -> ct (gio fl) -> pt (gio (fl + IOActions))
-// I suppose ctx_s can also be parametric in the flag, but not sure if needed
 type ctx_s = #fl:tflag -> ct u#a (gio fl)
-let link_s (p:prog_s) (c:ctx_s) = p #IOActions c
+let link_s (p:prog_s) (c:ctx_s) = p #AllActions c
 
 type prog_t = ct (gio AllActions) -> pt (gio AllActions)
 type ctx_t  = m:(Type u#a ->Type u#(max 1 a)) -> ct m 
