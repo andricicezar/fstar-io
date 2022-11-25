@@ -1,4 +1,4 @@
-## Secure Compilation of F★ Programs with IO Against Linked Weakly-Typed Code
+## Securely Compiling F* Programs With IO and Then Linking Them Against Weakly-Typed Interfaces
 
 ## Prerequisites
 
