@@ -197,15 +197,15 @@ let enforce_rc rc x r = rc x r (get_trace ())
 **)
 
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
-type pck_eff_rc (fl:erased tflag) = pck:(t1:Type u#a & t2:Type u#b & rc_typ t1 t2) & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
+type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
 
 val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
-let make_rc_eff r = 
-  (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
+let make_rc_eff r = (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
 
 noeq type s_int = {
   ct: erased tflag -> Type u#a;
   (** constraint: ct type has to be effect polymorphic **)
+  (** constraint that matches the post-conditions from ct with ct_rc **)
   ct_rc : list pck_rc;
 
   pt: Type u#b;
@@ -216,9 +216,10 @@ noeq type t_int = {
   pt: Type u#b;
 }
 
-
 type typ_posts (fl:erased tflag) (i:s_int) = 
-  posts:(list (pck_eff_rc fl)){length i.ct_rc == length posts /\ (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst posts) n))}
+  posts:(list (pck_eff_rc fl)){
+    length i.ct_rc == length posts /\ 
+    (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst posts) n))}
 
 let make_all_rc_eff (i:s_int) : typ_posts AllActions i =
   let r : list (pck_eff_rc AllActions) = List.Tot.map make_rc_eff i.ct_rc in
@@ -250,100 +251,17 @@ let ex1_t : t_int = {
 }
   
 val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s -> ex1_s.ct fl
-let contract #fl c_t (pck_p1::_) () =
-  let (| r, p1 |) = pck_p1 in
+let contract c_t ((| _, p1 |)::_) () =
+  let p1' = p1 () in
   let fd = c_t () in
-  if p1 () fd then fd
+  if p1' fd then fd
   else Inr Contract_failure
 
 val compile_p : prog_s ex1_s -> prog_t ex1_t
 let compile_p (p:prog_s ex1_s) (c:ex1_t.ct AllActions) =
-  (** convert boolean checks to effectful checks **)
   let eff_rc = make_all_rc_eff ex1_s in
   p (contract #AllActions c eff_rc)
 
 val backtranslate : ctx_t ex1_t -> ctx_s ex1_s
 let backtranslate c (#fl:erased tflag) = 
   contract #fl c 
-
-(** TODO:
-1) is there a way to lift an HO type in IO to a GIO that has a parametric flag?
-2) GIO is a horrible name.
-3) is this good enough for a source language?
-4) it should be easy to lift from IO to GIO false
-5) it should be easy to lift from GIO false to GIO true
-6) it should be easy to lift from GIO true to IIO
-**)
-
-(** ** Old experiments **)
-
-
-type gio_arr (a:Type) (flag1:bool) (b:Type) (flag2:bool{flag1 ==> flag2}) = 
-  #flag3:bool{flag1 ==> flag3} -> gio flag3 a -> gio (flag2 || flag3) b
-
-(** *** Proof of Concept **)
-(** we only need prog_s to use the special arrow **)
-type prog_s = gio_arr unit false unit false
-type ctx_t = m:(Type -> Type) -> m unit
-
-(** ctx gets from the start instantiated with gio true **)
-let instrument (c:ctx_t) : gio true unit = c (gio true)
-
-let compile_prog (p:prog_s) : (gio_arr unit true unit true) =
-  fun cs -> p cs
-
-let link (p:prog_s) (c:ctx_t) = 
-  (compile_prog p) (c (gio true))
-
-let test_type : prog_s = fun c -> 
-  io_call Openfile "../asdf"
-
-
-(** *** Lift from IO to GIO *)
-let dm_io' = dm_io unit trivial_hist
-
-type prog_s = gio false -> gio false
-type prog_i = gio_arr false false
-
-val comp0 : prog_s -> prog_i
-let comp0 p #flag c = p c
-
-type prog_t = gio_arr true true 
-
-val comp1 : prog_i -> prog_t
-let comp1 p (c:gio true) =
-  gio_arr_apply p c
-
-(** TESTS **)
-let gio_arr_apply (#flag1:bool) (#flag2:bool{flag1 ==> flag2}) (f:gio_arr 'a flag1 'b flag2) (x:gio 'flag3 'a) : Pure (gio (flag2 || 'flag3) 'b)
-  (requires (flag1 ==> 'flag3)) 
-  (ensures (fun _ -> True)) =
-  f x 
-
-assume val t1 : Type
-assume val t2 : Type
-
-assume val f1 : gio_arr t1 false t2 false
-assume val f2 : gio_arr t1 false t2 true
-[@@expect_failure]
-assume val f2' : gio_arr t1 true t2 false
-assume val f3 : gio_arr t1 true t2 true
-assume val c1 : gio true t1
-assume val c2 : gio false t1
-
-[@@expect_failure]
-let test1' : gio false t2 = gio_arr_apply f1 c1
-let test1 : gio true t2 = gio_arr_apply f1 c1
-[@@expect_failure]
-let test2' : gio false t2 = gio_arr_apply f2 c1
-let test2 : gio true t2 = gio_arr_apply f2 c1
-[@@expect_failure]
-let test3' : gio false t2 = gio_arr_apply f3 c1
-let test3 : gio true t2 = gio_arr_apply f3 c1
-let test4' : gio true t2 = gio_arr_apply f1 c2
-let test4 : gio false t2 = gio_arr_apply f1 c2
-[@@expect_failure]
-let test5' : gio false t2 = gio_arr_apply f2 c2
-let test5 : gio true t2 = gio_arr_apply f2 c2
-[@@expect_failure]
-let test6 : gio true t2 = gio_arr_apply f3 c2
