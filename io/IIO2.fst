@@ -1,8 +1,10 @@
 module IIO2
 
+open FStar.List
 open FStar.Tactics
 open ExtraTactics
 open FStar.Calc
+open FStar.Ghost
 
 open DMFree
 open IO.Sig
@@ -10,9 +12,8 @@ open IO.Sig.Call
 open IO
 open IIO
 
-(** fstar does not like type bool as an index for an effect --- not sure why **)
 noeq
-type tflag = | NoActions | OnlyGetTrace | IOActions | AllActions
+type tflag = | NoActions | GetTraceActions | IOActions | AllActions
 
 let rec satisfies (m:iio 'a) (flag:tflag) =
 match flag, m with
@@ -20,8 +21,8 @@ match flag, m with
 | _,            Return x              -> True
 | _,            PartialCall pre k     -> forall r. satisfies (k r) flag
 | NoActions,    _                     -> False
-| OnlyGetTrace, Call GetTrace arg k   -> forall r. satisfies (k r) flag
-| OnlyGetTrace, Call cmd arg k        -> False
+| GetTraceActions, Call GetTrace arg k   -> forall r. satisfies (k r) flag
+| GetTraceActions, Call cmd arg k        -> False
 | IOActions,    Call GetTrace arg k   -> False
 | IOActions,    Call cmd arg k        -> forall r. satisfies (k r) flag
 
@@ -30,41 +31,22 @@ let (+) (flag1:tflag) (flag2:tflag) =
   | NoActions, NoActions -> NoActions
   | NoActions, fl -> fl
   | fl, NoActions -> fl
-  | OnlyGetTrace, OnlyGetTrace -> OnlyGetTrace
+  | GetTraceActions, GetTraceActions -> GetTraceActions
   | IOActions, IOActions -> IOActions
   | _, _ -> AllActions
 
 let (<=) (flag1:tflag) (flag2:tflag) =
   match flag1, flag2 with
   | NoActions, _ -> True
-  | OnlyGetTrace, NoActions -> False
-  | OnlyGetTrace, _ -> True
+  | GetTraceActions, NoActions -> False
+  | GetTraceActions, _ -> True
   | IOActions, NoActions -> False
-  | IOActions, OnlyGetTrace -> False
+  | IOActions, GetTraceActions -> False
   | IOActions, _ -> True
   | AllActions, AllActions -> True
   | AllActions, _ -> False
 
 type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
-
-(** ** Model compilation **)
-assume type ct (m:Type u#a -> Type u#(max 1 a))
-assume type pt (m:Type u#a -> Type u#(max 1 a))
-
-type gio flag (a:Type u#a) : Type u#(max 1 a) = dm_gio a flag trivial_hist
-
-type prog_s = #fl:tflag -> ct (gio fl) -> pt (gio (fl + IOActions))
-type ctx_s = #fl:tflag -> ct u#a (gio fl)
-let link_s (p:prog_s) (c:ctx_s) = p #AllActions c
-
-type prog_t = ct (gio AllActions) -> pt (gio AllActions)
-type ctx_t  = m:(Type u#a ->Type u#(max 1 a)) -> ct m 
-let link_t (p:prog_t) (c:ctx_t) = p (c (gio AllActions))
-
-let compile_p (p:prog_s) : prog_t = fun (c:ct (gio AllActions)) -> p c
-
-val backtranslate : ctx_t u#a -> ctx_s u#a
-let backtranslate c (#fl:tflag) = c (gio fl)
 
 (** ** Defining F* Effect **)
 
@@ -138,7 +120,7 @@ sub_effect PURE ~> GIOwp = lift_pure_dm_gio
 
 effect GIO
   (a:Type)
-  (fl:tflag)
+  (fl:erased tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   GIOwp a fl (to_hist pre post) 
@@ -152,13 +134,11 @@ let static_cmd
         lt == [convert_call_to_event cmd arg r])) =
   GIOwp?.reflect (iio_call cmd arg)
 
-let get_trace () : GIOwp trace OnlyGetTrace
+let get_trace () : GIOwp trace GetTraceActions
   (fun p h -> forall lt. lt == [] ==> p lt h) =
   GIOwp?.reflect (iio_call GetTrace ())
 
-open FStar.Ghost
-
-let bady (_:unit) : GIOwp unit OnlyGetTrace trivial_hist = ()
+let bady (_:unit) : GIOwp unit GetTraceActions trivial_hist = ()
 
 let prog (#fl:tflag) (c:unit -> GIOwp unit fl trivial_hist) : GIOwp unit fl trivial_hist 
 // by (explode (); bump_nth 7; dump "H") 
@@ -180,7 +160,61 @@ let performance_test (#fl:tflag) : GIOwp unit (fl+IOActions) (fun p h -> forall 
   let fd = static_cmd Openfile "../Makefile" in
   if Inl? fd then let _ = static_cmd Close (Inl?.v fd) in () else 
   ()
+
+(** ** Model compilation **)
+noeq type s_int = {
+  ct: erased tflag -> Type u#a;
+  (** constraint: ct type has to be effect polymorphic **)
+  p1_typ : erased tflag -> Type u#c;
+
+  pt: Type u#b;
+}
+
+noeq type t_int = {
+  ct: erased tflag -> Type u#a;
+  pt: Type u#b;
+}
+
+
+type prog_s (i:s_int) = i.ct AllActions -> i.pt
+type ctx_s  (i:s_int) = #fl:erased tflag -> i.ct fl
+
+let link_s (#i:s_int) (p:prog_s i) (c:ctx_s i) = p c
+
+type prog_t (i:t_int) = i.ct AllActions -> i.pt
+type ctx_t  (i:t_int) = #fl:erased tflag -> i.ct fl
+let link_t (#i:t_int) (p:prog_t i) (c:ctx_t i) = p c
+
+let ex1_s : s_int = {
+  ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
+  p1_typ = (fun fl -> rfd:resexn file_descr -> GIO bool fl (fun _ -> True) (fun h r lt -> lt == [] /\ (r ==> (Inl? rfd ==> is_open (Inl?.v rfd) h))));
+
+  pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
+}
+
+let ex1_t : t_int = {
+  ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun _ _ lt -> True));
+  pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
+}
+
+val post : ex1_s.p1_typ GetTraceActions
+let post rfd : GIO bool GetTraceActions (fun _ -> True) (fun h r lt -> lt == [] /\ (r ==> (Inl? rfd ==> is_open (Inl?.v rfd) h))) = 
+  if Inl? rfd then is_open (Inl?.v rfd) (get_trace ()) 
+  else false
   
+val contract : #fl:erased tflag -> ex1_t.ct fl -> p1:ex1_s.p1_typ fl -> ex1_s.ct fl
+let contract #fl c_t p1 () =
+  let fd = c_t () in
+  if p1 fd then fd
+  else Inr Contract_failure
+
+val compile_p : prog_s ex1_s -> prog_t ex1_t
+let compile_p (p:prog_s ex1_s) (c:ex1_t.ct AllActions) =
+  p ((contract #AllActions c) post)
+
+val backtranslate : ctx_t ex1_t -> ctx_s ex1_s
+let backtranslate c (#fl:erased tflag) = 
+  contract #fl c 
 
 (** TODO:
 1) is there a way to lift an HO type in IO to a GIO that has a parametric flag?
@@ -190,7 +224,6 @@ let performance_test (#fl:tflag) : GIOwp unit (fl+IOActions) (fun p h -> forall 
 5) it should be easy to lift from GIO false to GIO true
 6) it should be easy to lift from GIO true to IIO
 **)
-
 
 (** ** Old experiments **)
 
