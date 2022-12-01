@@ -162,10 +162,25 @@ let performance_test (#fl:tflag) : GIOwp unit (fl+IOActions) (fun p h -> forall 
   ()
 
 (** ** Model compilation **)
+type rc_typ (t1 t2:Type) = t1 -> t2 -> trace -> bool
+type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
+  x:t1 -> r:t2 -> GIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x r h))
+
+val enforce_rc : #t1:Type u#a -> #t2:Type u#b -> rc:rc_typ t1 t2 -> eff_rc_typ AllActions t1 t2 rc
+let enforce_rc rc x r = 
+  rc x r (get_trace ())
+
+type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
+type pck_eff_rc (fl:erased tflag) = pck:(t1:Type u#a & t2:Type u#b & rc_typ t1 t2) & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
+
+val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
+let make_rc_eff r = 
+  (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
+
 noeq type s_int = {
   ct: erased tflag -> Type u#a;
   (** constraint: ct type has to be effect polymorphic **)
-  p1_typ : erased tflag -> Type u#c;
+  ct_rc : list pck_rc;
 
   pt: Type u#b;
 }
@@ -176,10 +191,21 @@ noeq type t_int = {
 }
 
 
-type prog_s (i:s_int) = i.ct AllActions -> i.pt
-type ctx_s  (i:s_int) = #fl:erased tflag -> i.ct fl
+type typ_posts (fl:erased tflag) (i:s_int) = 
+  posts:(list (pck_eff_rc fl)){length i.ct_rc == length posts /\ (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst posts) n))}
 
-let link_s (#i:s_int) (p:prog_s i) (c:ctx_s i) = p c
+let make_all_rc_eff (i:s_int) : typ_posts AllActions i =
+  let r : list (pck_eff_rc AllActions) = List.Tot.map make_rc_eff i.ct_rc in
+  assert (length r == length i.ct_rc);
+  assume (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst r) n));
+  r
+
+type prog_s (i:s_int) = i.ct AllActions -> i.pt
+type ctx_s  (i:s_int) = #fl:erased tflag -> typ_posts fl i -> i.ct fl
+
+let link_s (#i:s_int) (p:prog_s i) (c:ctx_s i) =
+  let eff_rc = make_all_rc_eff i in
+  p (c #AllActions eff_rc)
 
 type prog_t (i:t_int) = i.ct AllActions -> i.pt
 type ctx_t  (i:t_int) = #fl:erased tflag -> i.ct fl
@@ -187,7 +213,7 @@ let link_t (#i:t_int) (p:prog_t i) (c:ctx_t i) = p c
 
 let ex1_s : s_int = {
   ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
-  p1_typ = (fun fl -> rfd:resexn file_descr -> GIO bool fl (fun _ -> True) (fun h r lt -> lt == [] /\ (r ==> (Inl? rfd ==> is_open (Inl?.v rfd) h))));
+  ct_rc = [(| unit, resexn file_descr, (fun () (rfd:resexn file_descr) h -> Inl? rfd && (is_open (Inl?.v rfd) h)) |)];
 
   pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
@@ -196,21 +222,19 @@ let ex1_t : t_int = {
   ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun _ _ lt -> True));
   pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
-
-val post : ex1_s.p1_typ GetTraceActions
-let post rfd : GIO bool GetTraceActions (fun _ -> True) (fun h r lt -> lt == [] /\ (r ==> (Inl? rfd ==> is_open (Inl?.v rfd) h))) = 
-  if Inl? rfd then is_open (Inl?.v rfd) (get_trace ()) 
-  else false
   
-val contract : #fl:erased tflag -> ex1_t.ct fl -> p1:ex1_s.p1_typ fl -> ex1_s.ct fl
-let contract #fl c_t p1 () =
+val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s -> ex1_s.ct fl
+let contract #fl c_t (pck_p1::_) () =
+  let (| r, p1 |) = pck_p1 in
   let fd = c_t () in
-  if p1 fd then fd
+  if p1 () fd then fd
   else Inr Contract_failure
 
 val compile_p : prog_s ex1_s -> prog_t ex1_t
 let compile_p (p:prog_s ex1_s) (c:ex1_t.ct AllActions) =
-  p ((contract #AllActions c) post)
+  (** convert boolean checks to effectful checks **)
+  let eff_rc = make_all_rc_eff ex1_s in
+  p (contract #AllActions c eff_rc)
 
 val backtranslate : ctx_t ex1_t -> ctx_s ex1_s
 let backtranslate c (#fl:erased tflag) = 
