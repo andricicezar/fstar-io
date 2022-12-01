@@ -1,7 +1,7 @@
 module IIO2
 
-open FStar.List
 open FStar.Tactics
+open FStar.Tactics.Typeclasses
 open ExtraTactics
 open FStar.Calc
 open FStar.Ghost
@@ -11,6 +11,8 @@ open IO.Sig
 open IO.Sig.Call
 open IO
 open IIO
+
+open FStar.List.Tot
 
 noeq
 type tflag = | NoActions | GetTraceActions | IOActions | AllActions
@@ -216,19 +218,19 @@ noeq type t_int = {
   pt: Type u#b;
 }
 
-type typ_posts (fl:erased tflag) (i:s_int) = 
+type typ_posts (fl:erased tflag) (rcs:list pck_rc) = 
   posts:(list (pck_eff_rc fl)){
-    length i.ct_rc == length posts /\ 
-    (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst posts) n))}
+    length rcs == length posts /\ 
+    (forall n. List.Tot.nth rcs n == (List.Tot.nth (List.Tot.map dfst posts) n))}
 
-let make_all_rc_eff (i:s_int) : typ_posts AllActions i =
+let make_all_rc_eff (i:s_int) : typ_posts AllActions i.ct_rc =
   let r : list (pck_eff_rc AllActions) = List.Tot.map make_rc_eff i.ct_rc in
   assert (length r == length i.ct_rc);
   assume (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst r) n));
   r
 
 type prog_s (i:s_int) = i.ct AllActions -> i.pt
-type ctx_s  (i:s_int) = #fl:erased tflag -> typ_posts fl i -> i.ct fl
+type ctx_s  (i:s_int) = #fl:erased tflag -> typ_posts fl i.ct_rc -> i.ct fl
 
 let link_s (#i:s_int) (p:prog_s i) (c:ctx_s i) =
   let eff_rc = make_all_rc_eff i in
@@ -250,9 +252,9 @@ let ex1_t : t_int = {
   pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
   
-val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s -> ex1_s.ct fl
-let contract c_t ((| _, p1 |)::_) () =
-  let p1' = p1 () in
+val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s.ct_rc -> ex1_s.ct fl
+let contract c_t ((| _, p1 |)::_) x =
+  let p1' = p1 x in
   let fd = c_t () in
   if p1' fd then fd
   else Inr Contract_failure
@@ -265,3 +267,48 @@ let compile_p (p:prog_s ex1_s) (c:ex1_t.ct AllActions) =
 val backtranslate : ctx_t ex1_t -> ctx_s ex1_s
 let backtranslate c (#fl:erased tflag) = 
   contract #fl c 
+
+
+class np_ho_contract (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+  etype : Type u#a;
+  export : typ_posts fl rcs -> t -> etype;
+}
+
+class ho_contract (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+  itype : Type u#a; 
+  import : itype -> (typ_posts fl rcs -> t);
+}
+
+let fast_convert (rcs:(list pck_rc){length rcs > 0}) (eff_rcs:typ_posts 'fl rcs) : typ_posts 'fl (tail rcs) =
+  admit ();
+  tail eff_rcs
+
+let safe_importable_arrow_pre_post
+  (fl:erased tflag)
+  (t1:Type) (t2:Type)
+  (rcs:(list pck_rc){List.length rcs > 0 /\ (Mkdtuple3?._1 (hd rcs) == t1 /\ (Mkdtuple3?._2 (hd rcs) == (resexn t2))) })
+  {| d1:np_ho_contract t1 (tail rcs) fl |}
+  {| d2:ho_contract (resexn t2) (tail rcs) fl |}
+  (pre : t1 -> trace -> Type0)
+  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b})) 
+  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (hd rcs)) x r (rev lt @ h)) ==> post x h r lt))
+  (f:d1.etype -> GIO (resexn d2.itype) fl (fun _ -> True) (fun _ _ _ -> True))
+  (eff_rcs:typ_posts fl rcs)
+  (x:t1) :
+  GIO (resexn t2) fl (pre x) (post x) =
+  assert ((forall n. List.Tot.nth rcs n == (List.Tot.nth (List.Tot.map dfst eff_rcs) n)));
+  assert ((List.Tot.nth rcs 0 == (List.Tot.nth (List.Tot.map dfst eff_rcs) 0)));
+  assert (hd rcs == hd (List.Tot.map dfst eff_rcs));
+  let rc = dfst (hd eff_rcs) in
+  let eff_rc = dsnd (hd eff_rcs) in
+  assert (rc == (hd rcs));
+  let eff_rc' = eff_rc x in
+  let lss = fast_convert rcs eff_rcs in
+  let res : resexn d2.itype = f (d1.export lss x) in
+  match res with
+  | Inr err -> (admit (); Inr err)
+  | Inl res -> begin
+    let res' : resexn t2 = d2.import res lss in
+    if eff_rc' res' then res'
+    else Inr Contract_failure
+  end
