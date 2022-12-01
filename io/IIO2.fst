@@ -166,9 +166,35 @@ type rc_typ (t1 t2:Type) = t1 -> t2 -> trace -> bool
 type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
   x:t1 -> r:t2 -> GIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x r h))
 
-val enforce_rc : #t1:Type u#a -> #t2:Type u#b -> rc:rc_typ t1 t2 -> eff_rc_typ AllActions t1 t2 rc
-let enforce_rc rc x r = 
-  rc x r (get_trace ())
+val enforce_rc : rc:rc_typ 'a 'b -> eff_rc_typ AllActions 'a 'b rc
+let enforce_rc rc x r = rc x r (get_trace ())
+
+(** TODO: The runtime check lacks expressiveness. Post-conditions are written
+  over the history and the local trace, but the runtime checks are only over the
+  entire history. 
+          
+  Catalin had the idea to take advantage of partial application s.t.
+  one calls the check once to capture the history and a second time to
+  get the local trace and to do the check. 
+
+  Pro: more expressive 
+  Cons: bigger attack surface for the context
+
+  The difficulty with this idea is with writing the post-condition. See 
+  question marks in the following definition:
+
+  type rc_typ (t1 t2:Type) = t1 -> trace -> t2 -> trace -> bool
+
+  type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
+    x:t1 -> GIO bool fl (r:t2 -> GIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x ? r ?)))
+                (fun _ -> True)
+                (fun _ _ lt -> lt == [])
+
+  val enforce_rc : rc:rc_typ 'a 'b -> eff_rc_typ AllActions 'a 'b rc
+  let enforce_rc rc x = 
+    let h = get_trace () in
+    (fun r -> rc h x r (get_local_trace h))
+**)
 
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
 type pck_eff_rc (fl:erased tflag) = pck:(t1:Type u#a & t2:Type u#b & rc_typ t1 t2) & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
