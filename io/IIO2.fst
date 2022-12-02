@@ -47,9 +47,9 @@ let (<=) (flag1:tflag) (flag2:tflag) =
   | AllActions, AllActions -> True
   | AllActions, _ -> False
 
-type dm_giio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
-
 (** ** Defining F* Effect **)
+
+type dm_giio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
 
 let dm_giio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
 
@@ -121,7 +121,7 @@ sub_effect PURE ~> IIOwp = lift_pure_dm_giio
 
 effect IIO
   (a:Type)
-  (fl:erased tflag)
+  (fl:tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   IIOwp a fl (to_hist pre post) 
@@ -139,19 +139,6 @@ let get_trace () : IIOwp trace GetTraceActions
   (fun p h -> forall lt. lt == [] ==> p lt h) =
   IIOwp?.reflect (iio_call GetTrace ())
 
-let bady (_:unit) : IIOwp unit GetTraceActions trivial_hist = ()
-
-let prog (#fl:tflag) (c:unit -> IIOwp unit fl trivial_hist) : IIOwp unit fl trivial_hist 
-// by (explode (); bump_nth 7; dump "H") 
- =
-  match fl with
-//  | AllActions -> bady ()
-  | _ -> c ()
-
-let ctx (_:unit) : IIOwp unit NoActions trivial_hist = ()
-
-let test2 () : IIOwp unit AllActions trivial_hist = prog #AllActions ctx
-
 let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
   let fd = static_cmd Openfile "../Makefile" in
   let fd = static_cmd Openfile "../Makefile" in
@@ -163,39 +150,38 @@ let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall 
   ()
 
 (** ** Model compilation **)
-type rc_typ (t1 t2:Type) = t1 -> t2 -> trace -> bool
+type rc_typ (t1 t2:Type) = t1 -> trace -> t2 -> trace -> bool
+
+type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
+  y:t2 -> IIO ((erased trace) * bool) fl (fun h -> (initial_h `suffix_of` h)) (fun h (the_lt, b) lt -> apply_changes initial_h the_lt == h /\ lt == [] /\ (b ==> rc x initial_h y the_lt))
+  
 type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
-  x:t1 -> r:t2 -> IIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x r h))
+  x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
 
-val enforce_rc : rc:rc_typ 'a 'b -> eff_rc_typ AllActions 'a 'b rc
-let enforce_rc rc x r = rc x r (get_trace ())
+let get_local_trace (h':trace) :
+  IIO trace GetTraceActions
+    (requires (fun h -> h' `suffix_of` h))
+    (ensures (fun h lt' lt ->
+      lt == [] /\
+      h == (apply_changes h' lt'))) =
+  let h = get_trace () in
+  suffix_of_length h' h;
+  let n : nat = (List.length h) - (List.length h') in
+  let (lt', ht) = List.Tot.Base.splitAt n h in
+  lemma_splitAt_equal n h;
+  lemma_splitAt_suffix h h';
+  List.Tot.Properties.rev_involutive lt';
+  assert (h == apply_changes h' (List.rev lt'));
+  List.rev lt'
 
-(** TODO: The runtime check lacks expressiveness. Post-conditions are written
-  over the history and the local trace, but the runtime checks are only over the
-  entire history. 
-          
-  Catalin had the idea to take advantage of partial application s.t.
-  one calls the check once to capture the history and a second time to
-  get the local trace and to do the check. 
-
-  Pro: more expressive 
-  Cons: bigger attack surface for the context
-
-  The difficulty with this idea is with writing the post-condition. See 
-  question marks in the following definition:
-
-  type rc_typ (t1 t2:Type) = t1 -> trace -> t2 -> trace -> bool
-
-  type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
-    x:t1 -> IIO bool fl (r:t2 -> IIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x ? r ?)))
-                (fun _ -> True)
-                (fun _ _ lt -> lt == [])
-
-  val enforce_rc : rc:rc_typ 'a 'b -> eff_rc_typ AllActions 'a 'b rc
-  let enforce_rc rc x = 
-    let h = get_trace () in
-    (fun r -> rc h x r (get_local_trace h))
-**)
+val enforce_rc : (#a:Type u#a) -> (#b:Type u#b) -> rc:rc_typ a b -> eff_rc_typ AllActions a b rc
+let enforce_rc #a #b rc x =
+  let initial_h = get_trace () in
+  let cont : eff_rc_typ_cont AllActions a b rc x (hide initial_h) = 
+    (fun y -> ( 
+      let lt = get_local_trace initial_h in 
+      (hide lt, rc x initial_h y lt))) in
+  (| hide initial_h, cont |)
 
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
 type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
@@ -241,7 +227,7 @@ let link_t (#i:t_int) (p:prog_t i) (c:ctx_t i) = p c
 
 let ex1_s : s_int = {
   ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
-  ct_rc = [(| unit, resexn file_descr, (fun () (rfd:resexn file_descr) h -> Inl? rfd && (is_open (Inl?.v rfd) h)) |)];
+  ct_rc = [(| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |)];
 
   pt = unit -> IIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
@@ -250,13 +236,16 @@ let ex1_t : t_int = {
   ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun _ _ lt -> True));
   pt = unit -> IIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
-  
+
+#push-options "--split_queries"
 val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s.ct_rc -> ex1_s.ct fl
 let contract c_t ((| _, p1 |)::_) x =
-  let p1' = p1 x in
+  let (| h, p1' |) = (p1 x) in
   let fd = c_t () in
-  if p1' fd then fd
+  Classical.forall_intro (lemma_suffixOf_append h);
+  if snd (p1' fd) then fd
   else Inr Contract_failure
+#reset-options
 
 val compile_p : prog_s ex1_s -> prog_t ex1_t
 let compile_p (p:prog_s ex1_s) (c:ex1_t.ct AllActions) =
@@ -268,12 +257,12 @@ let backtranslate c (#fl:erased tflag) =
   contract #fl c 
 
 
-class np_ho_contract (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+class exportable (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
   etype : Type u#a;
   export : typ_posts fl rcs -> t -> etype;
 }
 
-class ho_contract (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+class importable (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
   itype : Type u#a; 
   import : itype -> (typ_posts fl rcs -> t);
 }
@@ -282,15 +271,16 @@ let fast_convert (rcs:(list pck_rc){length rcs > 0}) (eff_rcs:typ_posts 'fl rcs)
   admit ();
   tail eff_rcs
 
+#push-options "--split_queries"
 let safe_importable_arrow_pre_post
   (fl:erased tflag)
   (t1:Type) (t2:Type)
   (rcs:(list pck_rc){List.length rcs > 0 /\ (Mkdtuple3?._1 (hd rcs) == t1 /\ (Mkdtuple3?._2 (hd rcs) == (resexn t2))) })
-  {| d1:np_ho_contract t1 (tail rcs) fl |}
-  {| d2:ho_contract (resexn t2) (tail rcs) fl |}
+  {| d1:exportable t1 (tail rcs) fl |}
+  {| d2:importable (resexn t2) (tail rcs) fl |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b})) 
-  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (hd rcs)) x r (rev lt @ h)) ==> post x h r lt))
+  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (hd rcs)) x h r lt) ==> post x h r lt))
   (f:d1.etype -> IIO (resexn d2.itype) fl (fun _ -> True) (fun _ _ _ -> True))
   (eff_rcs:typ_posts fl rcs)
   (x:t1) :
@@ -301,13 +291,14 @@ let safe_importable_arrow_pre_post
   let rc = dfst (hd eff_rcs) in
   let eff_rc = dsnd (hd eff_rcs) in
   assert (rc == (hd rcs));
-  let eff_rc' = eff_rc x in
+  let (| _, eff_rc' |) = (eff_rc x) in
   let lss = fast_convert rcs eff_rcs in
   let res : resexn d2.itype = f (d1.export lss x) in
   match res with
   | Inr err -> (admit (); Inr err)
   | Inl res -> begin
     let res' : resexn t2 = d2.import res lss in
-    if eff_rc' res' then res'
+    if snd (eff_rc' res') then res'
     else Inr Contract_failure
   end
+#reset-options
