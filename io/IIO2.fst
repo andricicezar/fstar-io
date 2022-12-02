@@ -72,7 +72,7 @@ let (<=) (flag1:tflag) (flag2:tflag) =
 
 (** ** Defining F* Effect **)
 
-type dm_giio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
+type dm_giio (a:Type) (flag:erased tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
 
 let dm_giio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
 
@@ -113,7 +113,7 @@ let dm_giio_if_then_else (a : Type u#a) (fl1 fl2:tflag)
 total
 reflectable
 effect {
-  IIOwp (a:Type) (flag:tflag) (wp : hist #event a) 
+  IIOwp (a:Type) (flag:erased tflag) (wp : hist #event a) 
   with {
        repr       = dm_giio
      ; return     = dm_giio_return
@@ -144,7 +144,7 @@ sub_effect PURE ~> IIOwp = lift_pure_dm_giio
 
 effect IIO
   (a:Type)
-  (fl:tflag)
+  (fl:erased tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   IIOwp a fl (to_hist pre post) 
@@ -176,7 +176,6 @@ let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall 
 type rc_typ (t1 t2:Type) = t1 -> trace -> t2 -> trace -> bool
 
 type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
-  y:t2 -> IIO ((erased trace) * bool) fl (fun h -> (initial_h `suffix_of` h)) (fun h (the_lt, b) lt -> apply_changes initial_h the_lt == h /\ lt == [] /\ (b ==> rc x initial_h y the_lt))
   
 type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
   x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
@@ -312,7 +311,6 @@ let safe_importable_arrow_pre_post
   (eff_rcs:typ_posts fl rcs)
   (x:t1) :
   IIO (resexn t2) fl (pre x) (post x) =
-  let h' : erased trace = get_trace () in
   assert (root rcs == root (map_tree eff_rcs dfst));
   let (| pck_rc, eff_rc |) = root eff_rcs in
   let (| h, eff_rc' |) = eff_rc x in
