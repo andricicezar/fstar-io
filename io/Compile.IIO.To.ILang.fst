@@ -45,6 +45,12 @@ instance ilang_is_exportable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rc
   export = (fun Leaf x -> x)
 }
 
+instance exportable_unit (#pi:monitorable_prop) (#fl:erased tflag) : exportable unit pi Leaf fl = {
+  etype = unit;
+  c_etype = ilang_unit pi;
+  export = (fun Leaf () -> ())
+}
+
 instance exportable_refinement (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
   etype = d.etype;
   c_etype = d.c_etype;
@@ -193,9 +199,15 @@ let ilang_is_safely_importable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? 
   safe_import = (fun x Leaf -> x); 
 }
 
+instance importable_unit (#pi:monitorable_prop) (#fl:erased tflag) : importable unit pi Leaf fl = {
+  itype = unit;
+  c_itype = ilang_unit pi;
+  import = (fun () Leaf -> Inl ())
+}
+
 (** *** Importable instances **)
 
-instance safe_importable_is_importable (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:safe_importable t pi rcs fl |} : importable t pi rcs fl = {
+instance safe_importable_is_importable (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) #t (d:safe_importable t pi rcs fl) : importable t pi rcs fl = {
   itype = d.sitype;
   c_itype = d.c_sitype;
   import = (fun x eff_rcs -> Inl (d.safe_import x eff_rcs))
