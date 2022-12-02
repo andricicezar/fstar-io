@@ -2,99 +2,120 @@ module Compile.IIO.To.ILang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.Ghost
 
 open IO.Sig
 open Compiler.Languages
 open TC.Checkable
-open TC.Trivialize
 open TC.Monitorable.Hist
 
-class exportable (t : Type u#a) (pi:monitorable_prop) = {
+class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+  [@@@no_method]
   etype : Type u#a;
+  [@@@no_method]
   c_etype : ilang etype pi;
-  export : t -> etype;
+  [@@@no_method]
+  export : typ_posts fl rcs -> t -> etype;
 }
 
-class safe_importable (t : Type u#a) (pi:monitorable_prop) = {
+class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+  [@@@no_method]
   sitype : Type u#a;
+  [@@@no_method]
   c_sitype : ilang sitype pi;
-  safe_import : sitype -> t; 
+  [@@@no_method]
+  safe_import : sitype -> (typ_posts fl rcs -> t); 
 }
 
 
-class importable (t : Type u#a) (pi:monitorable_prop) = {
+class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+  [@@@no_method]
   itype : Type u#a; 
+  [@@@no_method]
   c_itype : ilang itype pi;
-  import : itype -> resexn t;
+  [@@@no_method]
+  import : itype -> (typ_posts fl rcs -> resexn t);
 }
 
 (** *** Exportable instances **)
 
-let mk_exportable (#t1 t2 : Type) {| d1:ilang t2 'pi |} (exp : t1 -> t2) : exportable t1 'pi =
-  Mkexportable t2 d1 exp
+instance ilang_is_exportable (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d1: ilang t pi |} : exportable t pi rcs fl = {
+  etype = t;
+  c_etype = d1;
+  export = (fun eff_rcs x -> x)
+}
 
-instance ilang_is_exportable t {| ilang t 'pi |} : exportable t 'pi =
-  mk_exportable t (fun x -> x)
-
-instance exportable_refinement t {| d:exportable t 'pi |} (p : t -> Type0) : exportable (x:t{p x}) 'pi =
-  mk_exportable d.etype #d.c_etype export
+instance exportable_refinement (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
+  etype = d.etype;
+  c_etype = d.c_etype;
+  export = d.export
+}
 
 instance exportable_option
-  t1 {| d1:exportable t1 'pi |} :
-  Tot (exportable (option t1) 'pi) =
-  mk_exportable (option d1.etype) #(ilang_option 'pi d1.etype #d1.c_etype)
-    (fun x -> match x with | Some x' -> Some (export x') | None -> None)
+  (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
+  t1 {| d1:exportable t1 pi rcs fl |} :
+  Tot (exportable (option t1) pi rcs fl) = {
+  etype = option d1.etype;
+  c_etype = ilang_option pi d1.etype #d1.c_etype;
+  export = (fun eff_rcs x -> match x with | Some x' -> Some (d1.export eff_rcs x') | None -> None)
+}
+
 
 instance exportable_pair
-  t1 {| d1:exportable t1 'pi |} t2 {| d2:exportable t2 'pi |} :
-  Tot (exportable (t1 * t2) 'pi) =
-  mk_exportable (d1.etype * d2.etype) #(ilang_pair 'pi d1.etype #d1.c_etype d2.etype #d2.c_etype) (fun (x,y) -> (export x, export y))
+  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  t1 {| d1:exportable t1 pi (eleft rcs) fl |} t2 {| d2:exportable t2 pi (eright rcs) fl |} :
+  Tot (exportable (t1 * t2) pi rcs fl) = {
+  etype = d1.etype * d2.etype;
+  c_etype = ilang_pair pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  export = (fun eff_rcs (x, y) -> (d1.export (eleft eff_rcs) x, d2.export (eright eff_rcs) y));
+}
 
 instance exportable_either
-  t1 {| d1:exportable t1 'pi |} t2 {| d2:exportable t2 'pi |} :
-  Tot (exportable (either t1 t2) 'pi) =
-  mk_exportable
-    (either d1.etype d2.etype)
-    #(ilang_either 'pi d1.etype #d1.c_etype d2.etype #d2.c_etype) 
-    (fun x -> 
-      match x with | Inl x -> Inl (export x) | Inr x -> Inr (export x))
+  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  t1 {| d1:exportable t1 pi (eleft rcs) fl |} t2 {| d2:exportable t2 pi (eright rcs) fl |} :
+  Tot (exportable (either t1 t2) pi rcs fl) = {
+  etype = either d1.etype d2.etype;
+  c_etype = ilang_either pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  export = (fun eff_rcs x -> 
+      match x with | Inl x -> Inl (d1.export (eleft eff_rcs) x) | Inr x -> Inr (d2.export (eright eff_rcs) x))
+}
 
 instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi = { mldummy = () }
 
 (** *** Exportable arrows **)
 
 instance exportable_arrow_with_no_pre_and_no_post
-  t1 {| d1:importable t1 'pi |}
-  t2 {| d2:exportable t2 'pi |} :
-  exportable (t1 -> IIOpi (resexn t2) 'pi) 'pi =
-  mk_exportable #_
-    #(t1 -> IIOpi (resexn t2) 'pi)
-    (d1.itype -> IIOpi (resexn d2.etype) 'pi)
-    #(ilang_arrow 'pi d1.c_itype (ilang_resexn 'pi d2.etype #d2.c_etype))
-    (fun f (x:d1.itype) -> 
-      match import x with
+  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (t1:Type u#a) {| d1:importable t1 pi (eleft rcs) fl |}
+  (t2:Type u#b) {| d2:exportable t2 pi (eright rcs) fl|} :
+  exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
+    etype = d1.itype -> IIOpi (resexn d2.etype) fl pi;
+    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    export = (fun eff_rcs (f:(t1 -> IIOpi (resexn t2) fl pi)) (x:d1.itype) ->
+      match d1.import x (eleft eff_rcs) with
       | Inl x' -> begin
         match f x' with 
-        | Inl x'' -> Inl (export x'') 
+        | Inl x'' -> Inl (d2.export (eright eff_rcs) x'') 
         | Inr err -> Inr err
       end
-      | Inr err -> Inr err)
+      | Inr err -> Inr err
+    )
+  }
 
-(** This case does not talk about a post that depends on the input. **)
+(** This is a design choice for making proofs easier. One can remove the post-condition **)
 instance exportable_arrow_with_post
-  t1 {| d1:importable t1 'pi |}
-  t2 {| d2:exportable t2 'pi |}
-  post
-  {| d3: monitorable_hist (fun _ _ -> True) post 'pi |} :
-  exportable (x:t1 -> IIO.IIO (resexn t2) (fun _ -> True) (post x)) 'pi =
-  mk_exportable #_
-    #(x:t1 -> IIO.IIO (resexn t2) (fun _ -> True) (post x))
-    (d1.itype -> IIOpi (resexn d2.etype) 'pi)
-    #(ilang_arrow 'pi d1.c_itype (ilang_resexn 'pi d2.etype #d2.c_etype))
-    (fun f -> 
-      let _ = d3.post_implies_pi in
-      let f' : t1 -> IIOpi (resexn t2) 'pi = f in
-      export #_ #'pi #(exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2) f')
+  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  t1 {| d1:importable t1 pi (eleft rcs) fl |}
+  t2 {| d2:exportable t2 pi (eright rcs) fl |}
+  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
+  exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
+    etype = x:d1.itype -> IIOpi (resexn d2.etype) fl pi;
+    c_etype = ilang_arrow #fl pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x))) ->
+      let f' : t1 -> IIOpi (resexn t2) fl pi = f in
+      (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_rcs f');
+  }
 
 let trivialize_new_post_resexn
   (pre:'a -> trace -> bool)
@@ -107,39 +128,63 @@ let trivialize_new_post_resexn
 let lemma_trivialize_new_post_monitorable
   #t1
   #t2
-  pre {| d3: checkable2 pre |}
+  (pre:t1 -> trace -> bool)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
   pi
   (x:squash (forall (x:t1) (h lt:trace) r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
-  squash (forall x h lt r. (trivialize_new_post_resexn d3.check2 post) x h r lt ==> enforced_locally pi h lt) = 
+  squash (forall x h lt r. (trivialize_new_post_resexn pre post) x h r lt ==> enforced_locally pi h lt) = 
   ()
 
-let convert_hist_to_trivialize_hist
-  #t1
-  #t2
-  pre {| d3: checkable2 pre |}
-  (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
-  pi (x:monitorable_hist pre post pi) :
-  monitorable_hist (fun _ _ ->True) (trivialize_new_post_resexn d3.check2 post) pi = {
-    post_implies_pi = lemma_trivialize_new_post_monitorable pre post pi x.post_implies_pi;
-  }
+let trivialize
+  #t1 #t2
+  (#fl:erased tflag)
+  (pre : t1 -> trace -> Type0)
+  (rc : t1 -> trace -> unit -> trace -> bool)
+  (eff_rc : eff_rc_typ fl t1 unit rc) 
+  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (#c_pre : squash (forall h x. rc x h () [] ==> pre x h))
+  (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x)))
+  (x:t1) :
+  IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post_resexn (fun x h -> rc x h () []) post x) =
+  let (| h, eff_rc' |) : (initial_h:(erased trace) & eff_rc_typ_cont fl t1 unit rc x initial_h) = eff_rc x in
+  let (lt, b) = eff_rc' () in
+  assume (reveal lt == []);
+  assert (b ==> rc x h () lt);
+  if b then f x 
+  else Inr Contract_failure
 
+let fast_convert_0 (a b c d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires (a == c /\ b == d)) (ensures (fun _ -> True)) = rc
+
+assume val fast_convert : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (c:Type{c == a}) -> (d:Type{d == b}) -> (rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (fast_convert_0 a b c d rc))
+  
 instance exportable_arrow_with_pre_post
-  t1 {| d1:importable t1 'pi |}
-  t2 {| d2:exportable t2 'pi |}
-  pre {| d3:checkable2 pre |}
-  post
-  {| d4: monitorable_hist pre post 'pi |} :
-  exportable (x:t1 -> IIO.IIO (resexn t2) (pre x) (post x)) 'pi =
-  mk_exportable #_
-    #(x:t1 -> IIO (resexn t2) (pre x) (post x))
-    (d1.itype -> IIOpi (resexn d2.etype) 'pi)
-    #(ilang_arrow 'pi d1.c_itype (ilang_resexn 'pi d2.etype #d2.c_etype))
-    (fun f -> 
-      export #_ #'pi
-        #(exportable_arrow_with_post t1 #d1 t2 #d2 (trivialize_new_post_resexn d3.check2 post) #(convert_hist_to_trivialize_hist pre post 'pi d4))
-        (trivialize f)
+  t1 t2
+  (#pi:monitorable_prop) 
+  (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)})
+  (#fl:erased tflag)
+  {| d1:importable t1 pi (left rcs) fl |}
+  {| d2:exportable t2 pi (right rcs) fl |}
+  (pre : t1 -> trace -> Type0)
+  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (#c_pre : squash (forall h x. (Mkdtuple3?._3 (root rcs)) x h () [] ==> pre x h))
+  (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
+  exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
+    etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
+    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
+      assert (root rcs == root (map_tree eff_rcs dfst));
+      let (| pck_rc, eff_rc |) = root eff_rcs in
+      let rc = Mkdtuple3?._3 pck_rc in
+      let eff_rc : eff_rc_typ fl t1 unit (Mkdtuple3?._3 pck_rc) = fast_convert t1 unit _ eff_rc in
+      let f' = trivialize pre rc eff_rc post f in
+      let rc_pre = (fun x h -> rc x h () []) in
+      let new_post = trivialize_new_post_resexn rc_pre post in
+      let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let d = (exportable_arrow_with_post #_ #rcs' t1 #d1 t2 #d2 new_post #(lemma_trivialize_new_post_monitorable rc_pre post pi c1)) in
+      d.export (EmptyNode (left eff_rcs) (right eff_rcs)) f'
     )
+}
+
     
 (** *** Safe importable instances **)
 let mk_safe_importable
