@@ -9,7 +9,6 @@ open FStar.Ghost
 open DMFree
 open IO.Sig
 open IO.Sig.Call
-open IO
 open IIO
 
 open FStar.List.Tot
@@ -48,112 +47,112 @@ let (<=) (flag1:tflag) (flag2:tflag) =
   | AllActions, AllActions -> True
   | AllActions, _ -> False
 
-type dm_gio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
+type dm_giio (a:Type) (flag:tflag) (wp:hist a) = t:(dm_iio a wp){t `satisfies` flag} 
 
 (** ** Defining F* Effect **)
 
-let dm_gio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
+let dm_giio_theta #a = theta #a #iio_cmds #iio_sig #event iio_wps
 
-let dm_gio_return (a:Type) (x:a) : dm_gio a NoActions (hist_return x) by (compute ()) =
+let dm_giio_return (a:Type) (x:a) : dm_giio a NoActions (hist_return x) by (compute ()) =
   dm_iio_return a x
 
-val dm_gio_bind  : 
+val dm_giio_bind  : 
   a: Type ->
   b: Type ->
   flag_v : tflag ->
   flag_f : tflag ->
   wp_v: Hist.hist a ->
   wp_f: (_: a -> Hist.hist b) ->
-  v: dm_gio a flag_v wp_v ->
-  f: (x: a -> dm_gio b flag_f (wp_f x)) ->
-  Tot (dm_gio b (flag_v + flag_f) (hist_bind wp_v wp_f))
-let dm_gio_bind a b flag_v flag_f wp_v wp_f v f : (dm_gio b (flag_v + flag_f) (hist_bind wp_v wp_f)) = 
+  v: dm_giio a flag_v wp_v ->
+  f: (x: a -> dm_giio b flag_f (wp_f x)) ->
+  Tot (dm_giio b (flag_v + flag_f) (hist_bind wp_v wp_f))
+let dm_giio_bind a b flag_v flag_f wp_v wp_f v f : (dm_giio b (flag_v + flag_f) (hist_bind wp_v wp_f)) = 
   let r = dm_iio_bind a b wp_v wp_f v f in
   assume (v `satisfies` flag_v /\ (forall x. f x `satisfies` flag_f) ==> r `satisfies` (flag_v + flag_f));
   r
 
-val dm_gio_subcomp : 
+val dm_giio_subcomp : 
   a: Type ->
   flag1 : tflag ->
   flag2 : tflag ->
   wp1: hist a ->
   wp2: hist a ->
-  f: dm_gio a flag1 wp1 ->
-  Pure (dm_gio a flag2 wp2) ((flag1 <= flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
-let dm_gio_subcomp a flag1 flag2 wp1 wp2 f = 
+  f: dm_giio a flag1 wp1 ->
+  Pure (dm_giio a flag2 wp2) ((flag1 <= flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
+let dm_giio_subcomp a flag1 flag2 wp1 wp2 f = 
   admit ();
   dm_iio_subcomp a wp1 wp2 f
 
-let dm_gio_if_then_else (a : Type u#a) (fl1 fl2:tflag)
-  (wp1 wp2: hist a) (f : dm_gio a fl1 wp1) (g : dm_gio a fl2 wp2) (b : bool) : Type =
-  dm_gio a (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
+let dm_giio_if_then_else (a : Type u#a) (fl1 fl2:tflag)
+  (wp1 wp2: hist a) (f : dm_giio a fl1 wp1) (g : dm_giio a fl2 wp2) (b : bool) : Type =
+  dm_giio a (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
 
 total
 reflectable
 effect {
-  GIOwp (a:Type) (flag:tflag) (wp : hist #event a) 
+  IIOwp (a:Type) (flag:tflag) (wp : hist #event a) 
   with {
-       repr       = dm_gio
-     ; return     = dm_gio_return
-     ; bind       = dm_gio_bind 
-     ; subcomp    = dm_gio_subcomp
-     ; if_then_else = dm_gio_if_then_else
+       repr       = dm_giio
+     ; return     = dm_giio_return
+     ; bind       = dm_giio_bind 
+     ; subcomp    = dm_giio_subcomp
+     ; if_then_else = dm_giio_if_then_else
      }
 }
 
-let dm_gio_partial_return 
-  (pre:pure_pre) : dm_gio (squash pre) NoActions (partial_call_wp pre) by (compute ()) =
+let dm_giio_partial_return 
+  (pre:pure_pre) : dm_giio (squash pre) NoActions (partial_call_wp pre) by (compute ()) =
   dm_partial_return iio_cmds iio_sig event iio_wps pre
 
-val lift_pure_dm_gio :
+val lift_pure_dm_giio :
   a: Type ->
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
-  Tot (dm_gio a NoActions (wp_lift_pure_hist w))
-let lift_pure_dm_gio a w f = 
+  Tot (dm_giio a NoActions (wp_lift_pure_hist w))
+let lift_pure_dm_giio a w f = 
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  let lhs : dm_gio _ NoActions _ = dm_gio_partial_return (as_requires w) in
-  let rhs = (fun (pre:(squash (as_requires w))) -> dm_gio_return a (f pre)) in
-  let m = dm_gio_bind _ _ NoActions NoActions _ _ lhs rhs in
-  dm_gio_subcomp a NoActions NoActions _ _ m
+  let lhs : dm_giio _ NoActions _ = dm_giio_partial_return (as_requires w) in
+  let rhs = (fun (pre:(squash (as_requires w))) -> dm_giio_return a (f pre)) in
+  let m = dm_giio_bind _ _ NoActions NoActions _ _ lhs rhs in
+  dm_giio_subcomp a NoActions NoActions _ _ m
   
-sub_effect PURE ~> GIOwp = lift_pure_dm_gio
+sub_effect PURE ~> IIOwp = lift_pure_dm_giio
 
-effect GIO
+effect IIO
   (a:Type)
   (fl:erased tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
-  GIOwp a fl (to_hist pre post) 
+  IIOwp a fl (to_hist pre post) 
   
 let static_cmd
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
-  GIO (io_resm cmd) IOActions
+  IIO (io_resm cmd) IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
         lt == [convert_call_to_event cmd arg r])) =
-  GIOwp?.reflect (iio_call cmd arg)
+  IIOwp?.reflect (iio_call cmd arg)
 
-let get_trace () : GIOwp trace GetTraceActions
+let get_trace () : IIOwp trace GetTraceActions
   (fun p h -> forall lt. lt == [] ==> p lt h) =
-  GIOwp?.reflect (iio_call GetTrace ())
+  IIOwp?.reflect (iio_call GetTrace ())
 
-let bady (_:unit) : GIOwp unit GetTraceActions trivial_hist = ()
+let bady (_:unit) : IIOwp unit GetTraceActions trivial_hist = ()
 
-let prog (#fl:tflag) (c:unit -> GIOwp unit fl trivial_hist) : GIOwp unit fl trivial_hist 
+let prog (#fl:tflag) (c:unit -> IIOwp unit fl trivial_hist) : IIOwp unit fl trivial_hist 
 // by (explode (); bump_nth 7; dump "H") 
  =
   match fl with
 //  | AllActions -> bady ()
   | _ -> c ()
 
-let ctx (_:unit) : GIOwp unit NoActions trivial_hist = ()
+let ctx (_:unit) : IIOwp unit NoActions trivial_hist = ()
 
-let test2 () : GIOwp unit AllActions trivial_hist = prog #AllActions ctx
+let test2 () : IIOwp unit AllActions trivial_hist = prog #AllActions ctx
 
-let performance_test (#fl:tflag) : GIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
+let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
   let fd = static_cmd Openfile "../Makefile" in
   let fd = static_cmd Openfile "../Makefile" in
   let fd = static_cmd Openfile "../Makefile" in
@@ -166,7 +165,7 @@ let performance_test (#fl:tflag) : GIOwp unit (fl+IOActions) (fun p h -> forall 
 (** ** Model compilation **)
 type rc_typ (t1 t2:Type) = t1 -> t2 -> trace -> bool
 type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
-  x:t1 -> r:t2 -> GIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x r h))
+  x:t1 -> r:t2 -> IIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x r h))
 
 val enforce_rc : rc:rc_typ 'a 'b -> eff_rc_typ AllActions 'a 'b rc
 let enforce_rc rc x r = rc x r (get_trace ())
@@ -188,7 +187,7 @@ let enforce_rc rc x r = rc x r (get_trace ())
   type rc_typ (t1 t2:Type) = t1 -> trace -> t2 -> trace -> bool
 
   type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
-    x:t1 -> GIO bool fl (r:t2 -> GIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x ? r ?)))
+    x:t1 -> IIO bool fl (r:t2 -> IIO bool fl (fun _ -> True) (fun h b lt -> lt == [] /\ (b ==> rc x ? r ?)))
                 (fun _ -> True)
                 (fun _ _ lt -> lt == [])
 
@@ -241,15 +240,15 @@ type ctx_t  (i:t_int) = #fl:erased tflag -> i.ct fl
 let link_t (#i:t_int) (p:prog_t i) (c:ctx_t i) = p c
 
 let ex1_s : s_int = {
-  ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
+  ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
   ct_rc = [(| unit, resexn file_descr, (fun () (rfd:resexn file_descr) h -> Inl? rfd && (is_open (Inl?.v rfd) h)) |)];
 
-  pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
+  pt = unit -> IIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
 
 let ex1_t : t_int = {
-  ct = (fun fl -> unit -> GIO (resexn file_descr) fl (fun _ -> True) (fun _ _ lt -> True));
-  pt = unit -> GIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
+  ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun _ _ lt -> True));
+  pt = unit -> IIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
   
 val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s.ct_rc -> ex1_s.ct fl
@@ -292,10 +291,10 @@ let safe_importable_arrow_pre_post
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b})) 
   (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (hd rcs)) x r (rev lt @ h)) ==> post x h r lt))
-  (f:d1.etype -> GIO (resexn d2.itype) fl (fun _ -> True) (fun _ _ _ -> True))
+  (f:d1.etype -> IIO (resexn d2.itype) fl (fun _ -> True) (fun _ _ _ -> True))
   (eff_rcs:typ_posts fl rcs)
   (x:t1) :
-  GIO (resexn t2) fl (pre x) (post x) =
+  IIO (resexn t2) fl (pre x) (post x) =
   assert ((forall n. List.Tot.nth rcs n == (List.Tot.nth (List.Tot.map dfst eff_rcs) n)));
   assert ((List.Tot.nth rcs 0 == (List.Tot.nth (List.Tot.map dfst eff_rcs) 0)));
   assert (hd rcs == hd (List.Tot.map dfst eff_rcs));

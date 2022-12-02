@@ -45,8 +45,6 @@ let dm_iio_subcomp a wp1 wp2 f = dm_subcomp iio_cmds iio_sig event iio_wps a wp1
 
 let dm_iio_if_then_else a wp1 wp2 f g b = dm_if_then_else iio_cmds iio_sig event iio_wps a wp1 wp2 f g b
 
-#set-options "--print_universes"
-
 val lift_pure_dm_iio :
   a: Type ->
   w: pure_wp a ->
@@ -54,7 +52,7 @@ val lift_pure_dm_iio :
   Tot (dm_iio a (wp_lift_pure_hist w))
 let lift_pure_dm_iio = lift_pure_dm iio_cmds iio_sig event iio_wps
 
-
+(*
 [@@allow_informative_binders]
 total
 reifiable
@@ -69,6 +67,8 @@ effect {
      ; if_then_else = dm_iio_if_then_else
      }
 }
+
+assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) ($f:unit -> IIO.IIOwp a wp) : IIO.dm_iio a wp
 
 sub_effect PURE ~> IIOwp = lift_pure_dm_iio
 
@@ -89,3 +89,4 @@ let static_cmd
 
 let get_trace () : IIOwp trace (fun p h -> forall lt. lt == [] ==> p lt h) =
   IIOwp?.reflect (iio_call GetTrace ())
+*)
