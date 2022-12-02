@@ -18,21 +18,26 @@ open FStar.List.Tot
 (** **** Tree **)
 type tree (a: Type) =
   | Leaf : tree a
+  | EmptyNode: left: tree a -> right: tree a -> tree a
   | Node: data: a -> left: tree a -> right: tree a -> tree a
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
+let eleft (t:(tree 'a){EmptyNode? t}) = EmptyNode?.left t
+let eright (t:(tree 'a){EmptyNode? t}) = EmptyNode?.right t
 let left (t:(tree 'a){Node? t}) = Node?.left t
 let right (t:(tree 'a){Node? t}) = Node?.right t
 
 let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
   match t1, t2 with
   | Leaf, Leaf -> True
+  | EmptyNode lhs1 rhs1, EmptyNode lhs2 rhs2 -> equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
   | Node x lhs1 rhs1, Node y lhs2 rhs2 -> x == y /\ equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
   | _, _ -> False
 
 let rec map_tree (t:tree 'a) (f:'a -> 'b) : tree 'b =
   match t with
   | Leaf -> Leaf 
+  | EmptyNode lhs rhs -> EmptyNode (map_tree lhs f) (map_tree rhs f)
   | Node x lhs rhs -> Node (f x) (map_tree lhs f) (map_tree rhs f)
 
 (** **** Flag **)
