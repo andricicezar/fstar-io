@@ -13,6 +13,29 @@ open IIO
 
 open FStar.List.Tot
 
+(** ** Types **)
+
+(** **** Tree **)
+type tree (a: Type) =
+  | Leaf : tree a
+  | Node: data: a -> left: tree a -> right: tree a -> tree a
+
+let root (t:(tree 'a){Node? t}) = Node?.data t
+let left (t:(tree 'a){Node? t}) = Node?.left t
+let right (t:(tree 'a){Node? t}) = Node?.right t
+
+let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
+  match t1, t2 with
+  | Leaf, Leaf -> True
+  | Node x lhs1 rhs1, Node y lhs2 rhs2 -> x == y /\ equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
+  | _, _ -> False
+
+let rec map_tree (t:tree 'a) (f:'a -> 'b) : tree 'b =
+  match t with
+  | Leaf -> Leaf 
+  | Node x lhs rhs -> Node (f x) (map_tree lhs f) (map_tree rhs f)
+
+(** **** Flag **)
 noeq
 type tflag = | NoActions | GetTraceActions | IOActions | AllActions
 
@@ -193,7 +216,7 @@ noeq type s_int = {
   ct: erased tflag -> Type u#a;
   (** constraint: ct type has to be effect polymorphic **)
   (** constraint that matches the post-conditions from ct with ct_rc **)
-  ct_rc : list pck_rc;
+  ct_rc : tree pck_rc;
 
   pt: Type u#b;
 }
@@ -203,15 +226,13 @@ noeq type t_int = {
   pt: Type u#b;
 }
 
-type typ_posts (fl:erased tflag) (rcs:list pck_rc) = 
-  posts:(list (pck_eff_rc fl)){
-    length rcs == length posts /\ 
-    (forall n. List.Tot.nth rcs n == (List.Tot.nth (List.Tot.map dfst posts) n))}
+type typ_posts (fl:erased tflag) (rcs:tree pck_rc) = 
+  posts:(tree (pck_eff_rc fl)){
+    equal_trees rcs (map_tree posts dfst)}
 
 let make_all_rc_eff (i:s_int) : typ_posts AllActions i.ct_rc =
-  let r : list (pck_eff_rc AllActions) = List.Tot.map make_rc_eff i.ct_rc in
-  assert (length r == length i.ct_rc);
-  assume (forall n. List.Tot.nth i.ct_rc n == (List.Tot.nth (List.Tot.map dfst r) n));
+  let r : tree (pck_eff_rc AllActions) = map_tree i.ct_rc make_rc_eff in
+  assume (equal_trees i.ct_rc (map_tree r dfst));
   r
 
 type prog_s (i:s_int) = i.ct AllActions -> i.pt
@@ -227,7 +248,7 @@ let link_t (#i:t_int) (p:prog_t i) (c:ctx_t i) = p c
 
 let ex1_s : s_int = {
   ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
-  ct_rc = [(| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |)];
+  ct_rc = Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) Leaf Leaf;
 
   pt = unit -> IIO unit AllActions (fun _ -> True) (fun _ _ _ -> True);
 }
@@ -239,7 +260,7 @@ let ex1_t : t_int = {
 
 #push-options "--split_queries"
 val contract : #fl:erased tflag -> ex1_t.ct fl -> posts:typ_posts fl ex1_s.ct_rc -> ex1_s.ct fl
-let contract c_t ((| _, p1 |)::_) x =
+let contract c_t (Node (| _, p1 |) _ _) x =
   let (| h, p1' |) = (p1 x) in
   let fd = c_t () in
   Classical.forall_intro (lemma_suffixOf_append h);
@@ -257,48 +278,53 @@ let backtranslate c (#fl:erased tflag) =
   contract #fl c 
 
 
-class exportable (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+class exportable (t : Type u#a) (rcs:tree pck_rc) (fl:erased tflag) = {
   etype : Type u#a;
   export : typ_posts fl rcs -> t -> etype;
 }
 
-class importable (t : Type u#a) (rcs:list pck_rc) (fl:erased tflag) = {
+class importable (t : Type u#a) (rcs:tree pck_rc) (fl:erased tflag) = {
   itype : Type u#a; 
   import : itype -> (typ_posts fl rcs -> t);
 }
 
-let fast_convert (rcs:(list pck_rc){length rcs > 0}) (eff_rcs:typ_posts 'fl rcs) : typ_posts 'fl (tail rcs) =
-  admit ();
-  tail eff_rcs
+instance safe_importable_resexn
+  (rcs:tree pck_rc) (fl:erased tflag)
+  t1 {| d1:importable t1 rcs fl |} :
+  Tot (importable (resexn t1) rcs fl) = {
+    itype = resexn d1.itype;
+    import = (fun x rcs -> 
+      match x with
+      | Inl x' -> Inl (d1.import x' rcs)
+      | Inr y -> Inr y)
+  }
 
-#push-options "--split_queries"
 let safe_importable_arrow_pre_post
   (fl:erased tflag)
   (t1:Type) (t2:Type)
-  (rcs:(list pck_rc){List.length rcs > 0 /\ (Mkdtuple3?._1 (hd rcs) == t1 /\ (Mkdtuple3?._2 (hd rcs) == (resexn t2))) })
-  {| d1:exportable t1 (tail rcs) fl |}
-  {| d2:importable (resexn t2) (tail rcs) fl |}
+  (rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
+  {| d1:exportable t1 (left rcs) fl |}
+  {| d2:importable t2 (right rcs) fl |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b})) 
-  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (hd rcs)) x h r lt) ==> post x h r lt))
+  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt))
   (f:d1.etype -> IIO (resexn d2.itype) fl (fun _ -> True) (fun _ _ _ -> True))
   (eff_rcs:typ_posts fl rcs)
   (x:t1) :
   IIO (resexn t2) fl (pre x) (post x) =
-  assert ((forall n. List.Tot.nth rcs n == (List.Tot.nth (List.Tot.map dfst eff_rcs) n)));
-  assert ((List.Tot.nth rcs 0 == (List.Tot.nth (List.Tot.map dfst eff_rcs) 0)));
-  assert (hd rcs == hd (List.Tot.map dfst eff_rcs));
-  let rc = dfst (hd eff_rcs) in
-  let eff_rc = dsnd (hd eff_rcs) in
-  assert (rc == (hd rcs));
-  let (| _, eff_rc' |) = (eff_rc x) in
-  let lss = fast_convert rcs eff_rcs in
-  let res : resexn d2.itype = f (d1.export lss x) in
-  match res with
-  | Inr err -> (admit (); Inr err)
-  | Inl res -> begin
-    let res' : resexn t2 = d2.import res lss in
-    if snd (eff_rc' res') then res'
-    else Inr Contract_failure
-  end
-#reset-options
+  let h' : erased trace = get_trace () in
+  assert (root rcs == root (map_tree eff_rcs dfst));
+  let (| pck_rc, eff_rc |) = root eff_rcs in
+  let (| h, eff_rc' |) = eff_rc x in
+  let res : resexn d2.itype = f (d1.export (left eff_rcs) x) in
+  let y : resexn t2 = (safe_importable_resexn (right rcs) fl t2 #d2).import res (right eff_rcs) in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let eff_rc' : eff_rc_typ_cont fl t1 (resexn t2) (Mkdtuple3?._3 pck_rc) x h = eff_rc' in 
+  let (lt, b) = eff_rc' y in
+  assert (b ==> (Mkdtuple3?._3 pck_rc) x h y lt);
+  if b then (
+    assert ((Mkdtuple3?._3 pck_rc) x h y lt);
+    assert (post x h y lt);
+    admit ();
+    y 
+  ) else Inr Contract_failure
