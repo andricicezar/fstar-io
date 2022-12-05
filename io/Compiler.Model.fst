@@ -40,7 +40,7 @@ let convert_insts ipi epi () cmd_call cmd arg =
 noeq
 type iio_interface = {
   ct : erased tflag -> Type;
-  pt : Type;
+  pt : erased tflag -> Type;
 
   ct_rcs : tree pck_rc;
   //pt_rc : tree pck_rc;
@@ -60,18 +60,18 @@ let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
 
 type ctx_iio (i:iio_interface) = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.epi -> i.ct fl 
 
-type prog_iio (i:iio_interface) = i.ct AllActions -> i.pt
+type prog_iio (i:iio_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> i.pt (IOActions + fl)
 
 let iio_language : language = {
   interface = iio_interface;
 
   ctx = ctx_iio;
   pprog = prog_iio;
-  whole = (i:iio_interface & i.pt);
+  whole = (i:iio_interface & i.pt AllActions);
 
   link = (fun #i p c -> 
     let eff_rcs = make_rcs_eff i.ct_rcs in
-    (| i, p (c #AllActions eff_rcs (inst_io_cmds i.epi)) |));
+    (| i, p #AllActions (c #AllActions eff_rcs (inst_io_cmds i.epi)) |));
   event_typ = IO.Sig.event;
 
   beh = admit ()
@@ -108,7 +108,7 @@ let ilang_language : language = {
 (** ** Compile interfaces **)
 let comp_int_iio_ilang (i:iio_interface) : ilang_interface = {
  // pt = resexn i.pt_exportable.etype;
-  pt = i.pt;
+  pt = i.pt AllActions;
   ct = (fun fl -> (i.ct_importable fl).sitype);
   epi = i.epi;
 
@@ -118,14 +118,14 @@ let comp_int_iio_ilang (i:iio_interface) : ilang_interface = {
 
 
 (** ** Phases of compilation **)
-let compiler_pprog_iio_ilang (#i:iio_interface) (p_s:prog_iio i) : ilang_language.pprog (comp_int_iio_ilang i) = 
-  fun c_t -> 
-    let eff_rcs = make_rcs_eff i.ct_rcs in
-    let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
-    let p : i.pt = p_s c_s in
-    // let eff_rc = make_all_rc_eff i.pt_rc in
-    // (i.pt_exportable.export eff_rc p)
-    p
+val compiler_pprog_iio_ilang : (#i:iio_interface) -> (p_s:prog_iio i) -> ilang_language.pprog (comp_int_iio_ilang i)
+let compiler_pprog_iio_ilang #i p_s c_t = 
+  let eff_rcs = make_rcs_eff i.ct_rcs in
+  let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
+  let p : i.pt AllActions = p_s #AllActions c_s in
+  // let eff_rc = make_all_rc_eff i.pt_rc in
+  // (i.pt_exportable.export eff_rc p)
+  p
 
 let phase1 : compiler = {
   source = iio_language;
@@ -149,7 +149,7 @@ open FStar.List
 let test_interface : iio_interface = {
   epi = (fun _ _ _ -> true);
 
-  pt = unit -> IIO (resexn unit) AllActions (fun _ -> True) (fun _ _ _ -> true);
+  pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
   // pt_rc = EmptyNode Leaf Leaf;
 
   ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
@@ -161,7 +161,7 @@ let test_interface : iio_interface = {
 }
 
 val test_prog : prog_iio test_interface
-let test_prog ctx () : IIO (resexn unit) AllActions (fun _ -> True) (fun _ _ _ -> True) =
+let test_prog #fl ctx () : IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> True) =
   let _ = ctx () in
   Inl ()
 
