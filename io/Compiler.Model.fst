@@ -50,7 +50,7 @@ type iio_interface = {
 //  ipi_stronger_epi : squash (forall h cmd arg. ipi cmd arg h ==> epi cmd arg h);
 
   //pt_exportable : exportable pt ipi pt_rc AllActions;
-  ct_importable : fl:erased tflag -> importable (ct fl) epi ct_rcs fl;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) epi ct_rcs fl;
 }
 
 let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
@@ -89,7 +89,7 @@ type ilang_interface = {
   ct_ilang : fl:erased tflag -> ilang (ct fl) epi;
 }
 
-type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> i.ct fl
+type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> typ_io_cmds fl i.epi -> i.ct fl
 type prog_ilang (i:ilang_interface) = i.ct AllActions -> i.pt
 
 let ilang_language : language = {
@@ -99,7 +99,7 @@ let ilang_language : language = {
   pprog = prog_ilang;
   whole = (i:ilang_interface & i.pt);
 
-  link = (fun #i p c -> (| i, p c |));
+  link = (fun #i p c -> (| i, p (c (inst_io_cmds i.epi)) |));
   event_typ = IO.Sig.event;
 
   beh = admit ();
@@ -108,27 +108,24 @@ let ilang_language : language = {
 (** ** Compile interfaces **)
 let comp_int_iio_ilang (i:iio_interface) : ilang_interface = {
  // pt = resexn i.pt_exportable.etype;
-  pt = resexn i.pt;
-  ct = (fun fl -> (i.ct_importable fl).itype);
+  pt = i.pt;
+  ct = (fun fl -> (i.ct_importable fl).sitype);
   epi = i.epi;
 
 //  pt_ilang = ilang_resexn i.ipi i.pt_exportable.etype #i.pt_exportable.c_etype;
-  ct_ilang = (fun fl -> (i.ct_importable fl).c_itype);
+  ct_ilang = (fun fl -> (i.ct_importable fl).c_sitype);
 }
 
 
 (** ** Phases of compilation **)
 let compiler_pprog_iio_ilang (#i:iio_interface) (p_s:prog_iio i) : ilang_language.pprog (comp_int_iio_ilang i) = 
   fun c_t -> 
-    let eff_rc = make_rcs_eff i.ct_rcs in
-    match (i.ct_importable AllActions).import c_t eff_rc with
-    | Inl (c_s:i.ct AllActions) -> begin
-       let p : i.pt = p_s c_s in
-       // let eff_rc = make_all_rc_eff i.pt_rc in
-       // Inl (i.pt_exportable.export eff_rc p)
-       Inl p
-    end
-    | Inr err -> Inr err
+    let eff_rcs = make_rcs_eff i.ct_rcs in
+    let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
+    let p : i.pt = p_s c_s in
+    // let eff_rc = make_all_rc_eff i.pt_rc in
+    // (i.pt_exportable.export eff_rc p)
+    p
 
 let phase1 : compiler = {
   source = iio_language;
@@ -140,6 +137,11 @@ let phase1 : compiler = {
 
   rel_traces = (==);
 }
+
+val backtranslate : (#i:iio_interface) -> (c_t:ctx_ilang (comp_int_iio_ilang i)) -> iio_language.ctx i
+let backtranslate #i c_t #fl eff_rcs acts =
+  let c_s = (i.ct_importable fl).safe_import (c_t #fl acts) eff_rcs in
+  c_s
 
 open FStar.List
 
