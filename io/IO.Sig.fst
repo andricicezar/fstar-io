@@ -24,10 +24,10 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Read -> string
   | Close -> unit
 
-let io_resm (cmd:io_cmds) = resexn (io_res cmd)
+let io_resm (cmd:io_cmds) (arg:io_args cmd) = resexn (io_res cmd)
 
 unfold
-let io_resm' (cmd:io_cmds) (arg:io_args cmd) = io_resm cmd
+let io_resm' (cmd:io_cmds) (arg:io_args cmd) = r:(io_resm cmd arg){~(r == Inr Contract_failure)}
 
 unfold
 let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }

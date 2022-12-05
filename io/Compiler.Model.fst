@@ -1,5 +1,7 @@
 module Compiler.Model
 
+#set-options "--print_universes"
+
 open FStar.Ghost
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -15,7 +17,7 @@ open Compile.IIO.To.ILang
 type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  IIO (io_sig.res cmd arg) fl
+  IIO (io_resm cmd arg) fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       (match r with
@@ -23,9 +25,11 @@ type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
        | r' -> pi cmd arg h /\ lt == [convert_call_to_event cmd arg r'])))
 
 val inst_io_cmds : pi:monitorable_prop -> typ_io_cmds AllActions pi
-let inst_io_cmds pi cmd arg =
+let inst_io_cmds pi cmd arg = 
   let h = get_trace () in
-  if pi cmd arg h then (admit (); static_cmd cmd arg)
+  if pi cmd arg h then (
+    assume (io_pre cmd arg h);
+    static_cmd cmd arg)
   else Inr Contract_failure
 
 (**
@@ -58,7 +62,7 @@ let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
   assume (equal_trees rcs (map_tree r dfst));
   r
 
-type ctx_iio (i:iio_interface) = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.epi -> i.ct fl 
+type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.epi -> i.ct fl 
 
 type prog_iio (i:iio_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> i.pt (IOActions + fl)
 
@@ -80,8 +84,8 @@ let iio_language : language = {
 (** *** ILang interface **)
 noeq
 type ilang_interface = {
-  pt : Type;
-  ct : erased tflag -> Type;
+  ct : erased tflag -> Type u#a;
+  pt : Type u#b;
 
   epi : monitorable_prop;
   
@@ -108,8 +112,8 @@ let ilang_language : language = {
 (** ** Compile interfaces **)
 let comp_int_iio_ilang (i:iio_interface) : ilang_interface = {
  // pt = resexn i.pt_exportable.etype;
-  pt = i.pt AllActions;
   ct = (fun fl -> (i.ct_importable fl).sitype);
+  pt = i.pt AllActions;
   epi = i.epi;
 
 //  pt_ilang = ilang_resexn i.ipi i.pt_exportable.etype #i.pt_exportable.c_etype;
@@ -146,18 +150,23 @@ let backtranslate #i c_t #fl eff_rcs acts =
 open FStar.List
 
 (** Tests **)
+
+(** ** Test 1 - FO **)
 let test_interface : iio_interface = {
   epi = (fun _ _ _ -> true);
 
   pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
-  // pt_rc = EmptyNode Leaf Leaf;
 
   ct = (fun fl -> unit -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
   ct_rcs = Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) Leaf Leaf;
 
 
-  // pt_exportable = exportable_arrow_with_no_pre_and_no_post unit #importable_unit unit #exportable_unit;
-  ct_importable = admit () //safe_importable_is_importable (safe_importable_arrow_pre_post file_descr unit );
+  ct_importable = (fun fl -> 
+    let c1post : unit -> squash (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = (fun () ->
+ //     assert (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
+    admit ()) in
+ //   let c2post : squash (forall h (rfd:resexn file_descr) lt. Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)) ==> (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = () in
+    safe_importable_arrow_pre_post unit file_descr #_ #_ #fl #exportable_unit #importable_file_descr (fun _ _ -> True) (fun () h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) (c1post ()) ());
 }
 
 val test_prog : prog_iio test_interface
@@ -167,4 +176,49 @@ let test_prog #fl ctx () : IIO (resexn unit) (fl + IOActions) (fun _ -> True) (f
 
 val test_ctx : ctx_iio test_interface
 let test_ctx #fl eff_rcs io_acts () : IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+  io_acts Openfile "/etc/passwd"
+
+val test_ctx_t : ctx_ilang (comp_int_iio_ilang test_interface)
+let test_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_interface).epi = 
+  io_acts Openfile "/etc/passwd"
+  
+
+let test_ho_interface : iio_interface = {
+  epi = (fun _ _ _ -> true);
+
+  pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
+
+  ct = (fun fl -> (fd:file_descr -> IIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == [])) -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
+  ct_rcs = Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
+              (Node (| file_descr, resexn unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf)
+              Leaf;
+
+  ct_importable = admit () ;
+   (**(fun fl -> 
+    let exportable_cb = exportable_arrow_pre_post file_descr unit #_ #(Node (| file_descr, resexn unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf) #fl #importable_file_descr #exportable_unit (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) #() #() in
+
+    let c1post : unit -> squash (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = (fun () ->
+ //     assert (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
+    admit ()) in
+ //   let c2post : squash (forall h (rfd:resexn file_descr) lt. Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)) ==> (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = () in
+    safe_importable_arrow_pre_post _ file_descr #_ #_ #fl #exportable_cb #importable_file_descr (fun _ _ -> True) (fun () h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) (c1post ()) ());**)
+}
+
+
+val test_ho_prog : prog_iio test_ho_interface
+let test_ho_prog #fl ctx () : IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> True) =
+  let _ = ctx (fun fd -> Inl ()) in
+  Inl ()
+
+val test_ho_ctx : ctx_iio test_ho_interface
+let test_ho_ctx #fl eff_rcs io_acts cb : IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+  let post1 = root eff_rcs in
+  let (| _, pre1 |) = root (left eff_rcs) in 
+  let rfd = io_acts Openfile "/etc/passwd" in
+  match rfd with
+  | Inl fd -> let _ = pre1 fd in rfd
+  | _ -> rfd
+
+val test_ho_ctx_t : ctx_ilang (comp_int_iio_ilang test_ho_interface)
+let test_ho_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_ho_interface).epi = 
   io_acts Openfile "/etc/passwd"

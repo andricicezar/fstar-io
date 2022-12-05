@@ -46,20 +46,20 @@ Axiom compile_par : forall {i}, (par src i) -> (par tgt (cint i)).
 
 noeq
 type language = {
-  interface : Type u#b;
-  pprog : interface -> Type u#c;
-  ctx   : interface -> Type u#d;
-  whole : Type u#e;
+  interface : Type u#a;
+  pprog : interface -> Type u#b;
+  ctx   : interface -> Type u#c;
+  whole : Type u#d;
   link  : #i:interface -> pprog i -> ctx i -> whole;
 
-  event_typ : Type u#f;
+  event_typ : Type u#e;
   beh   : whole ^-> trace_property #event_typ;
 }
 
 noeq
 type compiler = {
   source : language u#a u#b u#c u#d u#e;
-  target : language u#a u#f u#g u#h u#i;
+  target : language u#f u#g u#h u#i u#j;
 
   comp_int   : source.interface -> target.interface;
 

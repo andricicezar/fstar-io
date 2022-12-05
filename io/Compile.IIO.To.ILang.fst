@@ -9,18 +9,18 @@ open Compiler.Languages
 open TC.Checkable
 open TC.Monitorable.Hist
 
-class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
-  etype : Type u#a;
+  etype : Type u#b;
   [@@@no_method]
   c_etype : ilang etype pi;
   [@@@no_method]
   export : typ_posts fl rcs -> t -> etype;
 }
 
-class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
-  sitype : Type u#a;
+  sitype : Type u#b;
   [@@@no_method]
   c_sitype : ilang sitype pi;
   [@@@no_method]
@@ -28,9 +28,9 @@ class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl
 }
 
 
-class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree pck_rc) (fl:erased tflag) = {
+class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
-  itype : Type u#a; 
+  itype : Type u#b; 
   [@@@no_method]
   c_itype : ilang itype pi;
   [@@@no_method]
@@ -49,6 +49,12 @@ instance exportable_unit (#pi:monitorable_prop) (#fl:erased tflag) : exportable 
   etype = unit;
   c_etype = ilang_unit pi;
   export = (fun Leaf () -> ())
+}
+
+instance exportable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
+  etype = file_descr;
+  c_etype = ilang_file_descr pi;
+  export = (fun Leaf fd -> fd)
 }
 
 instance exportable_refinement (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
@@ -92,8 +98,8 @@ instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (res
 
 instance exportable_arrow_with_no_pre_and_no_post
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  (t1:Type u#a) {| d1:importable t1 pi (eleft rcs) fl |}
-  (t2:Type u#b) {| d2:exportable t2 pi (eright rcs) fl|} :
+  (t1:Type) {| d1:importable t1 pi (eleft rcs) fl |}
+  (t2:Type) {| d2:exportable t2 pi (eright rcs) fl|} :
   exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi;
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
@@ -163,8 +169,8 @@ let fast_convert_0 (a b c d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires 
 
 assume val fast_convert : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (c:Type{c == a}) -> (d:Type{d == b}) -> (rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (fast_convert_0 a b c d rc))
   
-instance exportable_arrow_with_pre_post
-  t1 t2
+instance exportable_arrow_pre_post
+  (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
   (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)})
   (#fl:erased tflag)
@@ -203,6 +209,12 @@ instance importable_unit (#pi:monitorable_prop) (#fl:erased tflag) : importable 
   itype = unit;
   c_itype = ilang_unit pi;
   import = (fun () Leaf -> Inl ())
+}
+
+instance importable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
+  itype = file_descr;
+  c_itype = ilang_file_descr pi;
+  import = (fun fd Leaf -> Inl fd)
 }
 
 (** *** Importable instances **)
