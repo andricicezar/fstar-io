@@ -90,4 +90,4 @@ let rrhc (comp:compiler) : Type0 =
     forall (ct:comp.target.ctx (comp.comp_int i)).
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog ps `comp.target.link` ct)
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)

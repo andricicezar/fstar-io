@@ -1,15 +1,13 @@
 module Compiler.Model
 
-#set-options "--print_universes"
-
 open FStar.Ghost
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.FunctionalExtensionality
 
 open BeyondCriteria
 
 open IO.Sig
-open TC.Monitorable.Hist
   
 open Compiler.Languages
 open Compile.IIO.To.ILang
@@ -66,6 +64,8 @@ type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> t
 
 type prog_iio (i:iio_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> i.pt (IOActions + fl)
 
+assume val traces_of : #a:Type -> a ^-> trace_property #IO.Sig.event
+
 let iio_language : language = {
   interface = iio_interface;
 
@@ -74,11 +74,10 @@ let iio_language : language = {
   whole = (i:iio_interface & i.pt AllActions);
 
   link = (fun #i p c -> 
-    let eff_rcs = make_rcs_eff i.ct_rcs in
-    (| i, p #AllActions (c #AllActions eff_rcs (inst_io_cmds i.epi)) |));
+    (| i, p #AllActions (c #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.epi)) |));
   event_typ = IO.Sig.event;
 
-  beh = admit ()
+  beh = (on_domain  (i:iio_interface & i.pt AllActions) (fun (| i, w |) -> traces_of w)); 
 }
 
 (** *** ILang interface **)
@@ -106,7 +105,7 @@ let ilang_language : language = {
   link = (fun #i p c -> (| i, p (c (inst_io_cmds i.epi)) |));
   event_typ = IO.Sig.event;
 
-  beh = admit ();
+  beh = (on_domain  (i:ilang_interface & i.pt) (fun (| i, w |) -> traces_of w)); 
 }
 
 (** ** Compile interfaces **)
@@ -147,9 +146,36 @@ let backtranslate #i c_t #fl eff_rcs acts =
   let c_s = (i.ct_importable fl).safe_import (c_t #fl acts) eff_rcs in
   c_s
 
-open FStar.List
+(** ** RrHC **)
+let phase1_rrhc_2 (i:iio_interface) (ct:ctx_ilang (comp_int_iio_ilang i)) (ps:prog_iio i) : Lemma (
+  let cs : ctx_iio i = backtranslate #i ct in
+  let it = comp_int_iio_ilang i in
+  let pt : prog_ilang it = (compiler_pprog_iio_ilang #i ps) in
+  traces_of (ps #AllActions (cs #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.epi))) == 
+  traces_of (pt (ct #AllActions (inst_io_cmds it.epi)))) = ()
+  
+let phase1_rrhc_1 (i:phase1.source.interface) (ct:phase1.target.ctx (phase1.comp_int i)) (ps:phase1.source.pprog i) : Lemma (
+  let cs : phase1.source.ctx i = backtranslate #i ct in
+  phase1.source.beh (ps `phase1.source.link #i` cs) `phase1.rel_traces` phase1.target.beh (phase1.compile_pprog #i ps `phase1.target.link #(phase1.comp_int i)` ct)) =
+  phase1_rrhc_2 i ct ps
+  
+let phase1_rrhc_0 (i:phase1.source.interface) (ct:phase1.target.ctx (phase1.comp_int i)) : Lemma (
+      exists (cs:phase1.source.ctx i).
+        forall (ps:phase1.source.pprog i).
+          phase1.source.beh (ps `phase1.source.link #i` cs) `phase1.rel_traces` phase1.target.beh (phase1.compile_pprog #i ps `phase1.target.link #(phase1.comp_int i)` ct)) = 
+ introduce exists (cs:phase1.source.ctx i).
+        (forall (ps:phase1.source.pprog i).
+          phase1.source.beh (ps `phase1.source.link #i` cs) `phase1.rel_traces` phase1.target.beh (phase1.compile_pprog #i ps `phase1.target.link #(phase1.comp_int i)` ct)) 
+  with (backtranslate #i ct)
+  and Classical.forall_intro (phase1_rrhc_1 i ct)
+          
+val phase1_rrhc : unit -> Lemma (rrhc phase1)
+let phase1_rrhc () : Lemma (rrhc phase1) by (norm [delta_only [`%rrhc]]) = 
+  Classical.forall_intro_2 (phase1_rrhc_0)
 
-(** Tests **)
+
+(** ** Tests **)
+open FStar.List
 
 (** ** Test 1 - FO **)
 let test_interface : iio_interface = {
@@ -221,6 +247,8 @@ let test_ho_ctx #fl eff_rcs io_acts cb : IIO (resexn file_descr) fl (fun _ -> Tr
   | Inl fd -> let _ = pre1 fd in rfd
   | _ -> rfd
 
+(** can't type this without defining ct_importable
 val test_ho_ctx_t : ctx_ilang (comp_int_iio_ilang test_ho_interface)
 let test_ho_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_ho_interface).epi = 
   io_acts Openfile "/etc/passwd"
+**)
