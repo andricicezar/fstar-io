@@ -181,7 +181,9 @@ let test_ctx #fl eff_rcs io_acts () : IIO (resexn file_descr) fl (fun _ -> True)
 val test_ctx_t : ctx_ilang (comp_int_iio_ilang test_interface)
 let test_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_interface).epi = 
   io_acts Openfile "/etc/passwd"
-  
+
+
+(** ** Test 3 - HO 1 **)
 
 let test_ho_interface : iio_interface = {
   epi = (fun _ _ _ -> true);

@@ -7,7 +7,6 @@ open FStar.Ghost
 open IO.Sig
 open Compiler.Languages
 open TC.Checkable
-open TC.Monitorable.Hist
 
 class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
