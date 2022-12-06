@@ -18,9 +18,10 @@ type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
   IIO (io_resm cmd arg) fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
+      enforced_locally pi h lt /\
       (match r with
-       | Inr Contract_failure -> ~(pi cmd arg h) /\ lt == []
-       | r' -> pi cmd arg h /\ lt == [convert_call_to_event cmd arg r'])))
+       | Inr Contract_failure -> lt == []
+       | r' -> lt == [convert_call_to_event cmd arg r'])))
 
 val inst_io_cmds : pi:monitorable_prop -> typ_io_cmds AllActions pi
 let inst_io_cmds pi cmd arg = 
@@ -30,13 +31,10 @@ let inst_io_cmds pi cmd arg =
     static_cmd cmd arg)
   else Inr Contract_failure
 
-(**
-val convert_insts : (ipi:monitorable_prop) -> (epi:monitorable_prop) -> (_:squash (forall h cmd arg. epi cmd arg h ==> ipi cmd arg h)) ->
-  (cmd_call:typ_io_cmds AllActions ipi) -> (typ_io_cmds AllActions epi) 
-let convert_insts ipi epi () cmd_call cmd arg = 
-  assert (forall h. epi cmd arg h ==> ipi cmd arg h);
-  cmd_call cmd arg 
-**)
+val convert_insts : (inst_pi:monitorable_prop) -> (spec_pi:monitorable_prop) -> (_:squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt)) ->
+  (cmd_call:typ_io_cmds AllActions inst_pi) -> (typ_io_cmds AllActions spec_pi) 
+let convert_insts inst_pi spec_pi c1 cmd_call (cmd:io_cmds) arg = 
+  cmd_call cmd arg
 
 (** *** IIO interface **)
 noeq
@@ -47,12 +45,12 @@ type iio_interface = {
   ct_rcs : tree pck_rc;
   //pt_rc : tree pck_rc;
 
-  epi : monitorable_prop;
- // ipi : monitorable_prop;
-//  ipi_stronger_epi : squash (forall h cmd arg. ipi cmd arg h ==> epi cmd arg h);
+  spec_pi : monitorable_prop;
+  inst_pi : monitorable_prop;
+  inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
 
-  //pt_exportable : exportable pt ipi pt_rc AllActions;
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) epi ct_rcs fl;
+  //pt_exportable : exportable pt inst_pi pt_rc AllActions;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
 }
 
 let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
@@ -60,7 +58,7 @@ let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
   assume (equal_trees rcs (map_tree r dfst));
   r
 
-type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.epi -> i.ct fl 
+type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.spec_pi -> i.ct fl 
 
 type prog_iio (i:iio_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> i.pt (IOActions + fl)
 
@@ -74,7 +72,7 @@ let iio_language : language = {
   whole = (i:iio_interface & i.pt AllActions);
 
   link = (fun #i p c -> 
-    (| i, p #AllActions (c #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.epi)) |));
+    (| i, p #AllActions (c #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.inst_pi)) |));
   event_typ = IO.Sig.event;
 
   beh = (on_domain  (i:iio_interface & i.pt AllActions) (fun (| i, w |) -> traces_of w)); 
@@ -86,13 +84,15 @@ type ilang_interface = {
   ct : erased tflag -> Type u#a;
   pt : Type u#b;
 
-  epi : monitorable_prop;
+  spec_pi : monitorable_prop;
+  inst_pi : monitorable_prop;
+  inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
   
-  //pt_ilang : ilang pt ipi;
-  ct_ilang : fl:erased tflag -> ilang (ct fl) epi;
+  //pt_ilang : ilang pt inst_pi;
+  ct_ilang : fl:erased tflag -> ilang (ct fl) spec_pi;
 }
 
-type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> typ_io_cmds fl i.epi -> i.ct fl
+type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> typ_io_cmds fl i.spec_pi -> i.ct fl
 type prog_ilang (i:ilang_interface) = i.ct AllActions -> i.pt
 
 let ilang_language : language = {
@@ -102,7 +102,7 @@ let ilang_language : language = {
   pprog = prog_ilang;
   whole = (i:ilang_interface & i.pt);
 
-  link = (fun #i p c -> (| i, p (c (inst_io_cmds i.epi)) |));
+  link = (fun #i p c -> (| i, p (c (inst_io_cmds i.inst_pi)) |));
   event_typ = IO.Sig.event;
 
   beh = (on_domain  (i:ilang_interface & i.pt) (fun (| i, w |) -> traces_of w)); 
@@ -113,9 +113,11 @@ let comp_int_iio_ilang (i:iio_interface) : ilang_interface = {
  // pt = resexn i.pt_exportable.etype;
   ct = (fun fl -> (i.ct_importable fl).sitype);
   pt = i.pt AllActions;
-  epi = i.epi;
+  spec_pi = i.spec_pi;
+  inst_pi = i.inst_pi;
+  inst_pi_stronger_spec_pi = i.inst_pi_stronger_spec_pi;
 
-//  pt_ilang = ilang_resexn i.ipi i.pt_exportable.etype #i.pt_exportable.c_etype;
+//  pt_ilang = ilang_resexn i.inst_pi i.pt_exportable.etype #i.pt_exportable.c_etype;
   ct_ilang = (fun fl -> (i.ct_importable fl).c_sitype);
 }
 
@@ -151,8 +153,8 @@ let phase1_rrhc_2 (i:iio_interface) (ct:ctx_ilang (comp_int_iio_ilang i)) (ps:pr
   let cs : ctx_iio i = backtranslate #i ct in
   let it = comp_int_iio_ilang i in
   let pt : prog_ilang it = (compiler_pprog_iio_ilang #i ps) in
-  traces_of (ps #AllActions (cs #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.epi))) == 
-  traces_of (pt (ct #AllActions (inst_io_cmds it.epi)))) = ()
+  traces_of (ps #AllActions (cs #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.spec_pi))) == 
+  traces_of (pt (ct #AllActions (inst_io_cmds it.spec_pi)))) = ()
   
 let phase1_rrhc_1 (i:phase1.source.interface) (ct:phase1.target.ctx (phase1.comp_int i)) (ps:phase1.source.pprog i) : Lemma (
   let cs : phase1.source.ctx i = backtranslate #i ct in
@@ -174,12 +176,14 @@ let phase1_rrhc () : Lemma (rrhc phase1) by (norm [delta_only [`%rrhc]]) =
   Classical.forall_intro_2 (phase1_rrhc_0)
 
 
-(** ** Tests **)
+(** * Tests **)
 open FStar.List
 
 (** ** Test 1 - FO **)
 let test_interface : iio_interface = {
-  epi = (fun _ _ _ -> true);
+  spec_pi = (fun _ _ _ -> true);
+  inst_pi = (fun _ _ _ -> true);
+  inst_pi_stronger_spec_pi = ();
 
   pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
 
@@ -205,14 +209,16 @@ let test_ctx #fl eff_rcs io_acts () : IIO (resexn file_descr) fl (fun _ -> True)
   io_acts Openfile "/etc/passwd"
 
 val test_ctx_t : ctx_ilang (comp_int_iio_ilang test_interface)
-let test_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_interface).epi = 
+let test_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_interface).spec_pi = 
   io_acts Openfile "/etc/passwd"
 
 
 (** ** Test 3 - HO 1 **)
 
 let test_ho_interface : iio_interface = {
-  epi = (fun _ _ _ -> true);
+  spec_pi = (fun _ _ _ -> true);
+  inst_pi = (fun _ _ _ -> true);
+  inst_pi_stronger_spec_pi = ();
 
   pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
 
@@ -249,6 +255,6 @@ let test_ho_ctx #fl eff_rcs io_acts cb : IIO (resexn file_descr) fl (fun _ -> Tr
 
 (** can't type this without defining ct_importable
 val test_ho_ctx_t : ctx_ilang (comp_int_iio_ilang test_ho_interface)
-let test_ho_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_ho_interface).epi = 
+let test_ho_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_iio_ilang test_ho_interface).spec_pi = 
   io_acts Openfile "/etc/passwd"
 **)
