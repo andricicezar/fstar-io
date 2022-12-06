@@ -14,7 +14,7 @@ class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   c_etype : ilang etype pi;
   [@@@no_method]
-  export : typ_posts fl rcs -> t -> etype;
+  export : typ_eff_rcs fl rcs -> t -> etype;
 }
 
 class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
@@ -23,7 +23,7 @@ class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c
   [@@@no_method]
   c_sitype : ilang sitype pi;
   [@@@no_method]
-  safe_import : sitype -> (typ_posts fl rcs -> t); 
+  safe_import : sitype -> (typ_eff_rcs fl rcs -> t); 
 }
 
 
@@ -33,7 +33,7 @@ class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   c_itype : ilang itype pi;
   [@@@no_method]
-  import : itype -> (typ_posts fl rcs -> resexn t);
+  import : itype -> (typ_eff_rcs fl rcs -> resexn t);
 }
 
 (** *** Exportable instances **)

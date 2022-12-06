@@ -250,6 +250,11 @@ type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._1 pc
 val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
 let make_rc_eff r = (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
 
-type typ_posts (fl:erased tflag) (rcs:tree pck_rc) = 
-  posts:(tree (pck_eff_rc fl)){
-    equal_trees rcs (map_tree posts dfst)}
+type typ_eff_rcs (fl:erased tflag) (rcs:tree pck_rc) = 
+  eff_rcs:(tree (pck_eff_rc fl)){
+    equal_trees rcs (map_tree eff_rcs dfst)}
+
+let make_rcs_eff (rcs:tree pck_rc) : typ_eff_rcs AllActions rcs =
+  let r : tree (pck_eff_rc AllActions) = map_tree rcs make_rc_eff in
+  assume (equal_trees rcs (map_tree r dfst));
+  r
