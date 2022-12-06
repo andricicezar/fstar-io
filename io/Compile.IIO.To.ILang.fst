@@ -334,11 +334,11 @@ let enforce_post
   (#fl:erased tflag)
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0)
-  (post:t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b}))
+  (post:t1 -> (h:trace) -> (r:resexn t2) -> (lt:trace) -> (b:Type0))
   (rc : t1 -> trace -> resexn t2 -> trace -> bool)
   (eff_rc : eff_rc_typ fl t1 (resexn t2) rc) 
-  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (exists r. post x h r lt)))
-  (c2post : squash (forall x h r lt. pre x h /\ (rc x h r lt) ==> post x h r lt))
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc x h r lt) ==> post x h r lt))
   (f:t1 -> IIOpi (resexn t2) fl pi)
   (x:t1) :
   IIO (resexn t2) fl (pre x) (post x) =
@@ -349,6 +349,7 @@ let enforce_post
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   if b then r
   else (assert (post x h (Inr Contract_failure) lt); Inr Contract_failure)
+#reset-options
 
 instance safe_importable_arrow_pre_post
   (t1:Type) (t2:Type)
@@ -359,9 +360,9 @@ instance safe_importable_arrow_pre_post
   {| d2:importable t2 pi (right rcs) fl |}
   (pre : t1 -> trace -> Type0)
   (** it must be `resexn t2` because needs the ability to fail **)
-  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0{r == Inr Contract_failure ==> b})) 
-  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (exists r. post x h r lt)))
-  (c2post: squash (forall x h r lt. pre x h /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt)) :
+  (post : t1 -> (h:trace) -> (r:resexn t2) -> (lt:trace) -> (b:Type0)) 
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
+  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt)) :
   safe_importable ((x:t1) -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
   c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
