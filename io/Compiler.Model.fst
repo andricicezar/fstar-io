@@ -58,7 +58,7 @@ let make_rcs_eff (rcs:tree pck_rc) : typ_posts AllActions rcs =
   assume (equal_trees rcs (map_tree r dfst));
   r
 
-type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.spec_pi -> i.ct fl 
+type ctx_iio (i:iio_interface)  = #fl:erased tflag -> typ_posts fl i.ct_rcs -> typ_io_cmds fl i.inst_pi -> i.ct fl
 
 type prog_iio (i:iio_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> i.pt (IOActions + fl)
 
@@ -92,7 +92,7 @@ type ilang_interface = {
   ct_ilang : fl:erased tflag -> ilang (ct fl) spec_pi;
 }
 
-type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> typ_io_cmds fl i.spec_pi -> i.ct fl
+type ctx_ilang (i:ilang_interface) = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> i.ct fl
 type prog_ilang (i:ilang_interface) = i.ct AllActions -> i.pt
 
 let ilang_language : language = {
@@ -102,7 +102,7 @@ let ilang_language : language = {
   pprog = prog_ilang;
   whole = (i:ilang_interface & i.pt);
 
-  link = (fun #i p c -> (| i, p (c (inst_io_cmds i.inst_pi)) |));
+  link = (fun #i p c -> (| i, p (c #AllActions (inst_io_cmds i.inst_pi)) |));
   event_typ = IO.Sig.event;
 
   beh = (on_domain  (i:ilang_interface & i.pt) (fun (| i, w |) -> traces_of w)); 
@@ -153,9 +153,9 @@ let phase1_rrhc_2 (i:iio_interface) (ct:ctx_ilang (comp_int_iio_ilang i)) (ps:pr
   let cs : ctx_iio i = backtranslate #i ct in
   let it = comp_int_iio_ilang i in
   let pt : prog_ilang it = (compiler_pprog_iio_ilang #i ps) in
-  traces_of (ps #AllActions (cs #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.spec_pi))) == 
-  traces_of (pt (ct #AllActions (inst_io_cmds it.spec_pi)))) = ()
-  
+  traces_of (ps #AllActions (cs #AllActions (make_rcs_eff i.ct_rcs) (inst_io_cmds i.inst_pi))) ==
+  traces_of (pt (ct #AllActions (inst_io_cmds it.inst_pi)))) = ()
+
 let phase1_rrhc_1 (i:phase1.source.interface) (ct:phase1.target.ctx (phase1.comp_int i)) (ps:phase1.source.pprog i) : Lemma (
   let cs : phase1.source.ctx i = backtranslate #i ct in
   phase1.source.beh (ps `phase1.source.link #i` cs) `phase1.rel_traces` phase1.target.beh (phase1.compile_pprog #i ps `phase1.target.link #(phase1.comp_int i)` ct)) =
@@ -182,7 +182,7 @@ open FStar.List
 (** ** Test 1 - FO **)
 let ex1_ct_post = (fun () h (rfd:resexn file_descr) lt -> (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 let ex1_spec_pi : monitorable_prop = (fun cmd arg h -> match cmd, arg with | Openfile, s -> if s = "/etc/passwd" then false else true | _ -> true)
-let ex1_inst_pi : monitorable_prop = (fun cmd arg h -> match cmd with | Openfile -> false | _ -> true)
+let ex1_inst_pi : monitorable_prop = ex1_spec_pi
 let ex1_ct_rc = (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)))
 
 let rec ex1_c1post0 (h:trace) (lt:trace) : Lemma
