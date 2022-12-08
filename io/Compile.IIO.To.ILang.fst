@@ -9,21 +9,10 @@ open Compiler.Languages
 open TC.Checkable
 
 (** **** Types **)
-type rc_typ (t1:Type u#a) (t2:Type u#b) = t1 -> trace -> t2 -> trace -> bool
-
-type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
-  y:t2 -> IIO ((erased trace) * bool) fl (fun h -> (initial_h `suffix_of` h)) (fun h (the_lt, b) lt -> apply_changes initial_h the_lt == h /\ lt == [] /\ (b <==> rc x initial_h y the_lt))
-  
-type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
-  x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
-
-let get_local_trace (h':trace) :
-  IIO trace GetTraceActions
-    (requires (fun h -> h' `suffix_of` h))
-    (ensures (fun h lt' lt ->
-      lt == [] /\
-      h == (apply_changes h' lt'))) =
-  let h = get_trace () in
+let get_local_trace (h':trace) (h:trace) :
+  Pure trace
+    (requires (h' `suffix_of` h))
+    (ensures (fun lt -> h == (apply_changes h' lt))) =
   suffix_of_length h' h;
   let n : nat = (List.length h) - (List.length h') in
   let (lt', ht) = List.Tot.Base.splitAt n h in
@@ -33,13 +22,25 @@ let get_local_trace (h':trace) :
   assert (h == apply_changes h' (List.rev lt'));
   List.rev lt'
 
+type rc_typ (t1:Type u#a) (t2:Type u#b) = t1 -> trace -> t2 -> trace -> bool
+
+type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
+  y:t2 -> IIO bool fl (fun h -> (initial_h `suffix_of` h)) (fun current_h b lt -> 
+       (initial_h `suffix_of` current_h) /\
+       (let the_lt = get_local_trace initial_h current_h in
+       apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt)))
+  
+type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
+  x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
+
 val enforce_rc : (#a:Type u#a) -> (#b:Type u#b) -> rc:rc_typ a b -> eff_rc_typ AllActions a b rc
 let enforce_rc #a #b rc x =
   let initial_h = get_trace () in
   let cont : eff_rc_typ_cont AllActions a b rc x (hide initial_h) = 
     (fun y -> ( 
-      let lt = get_local_trace initial_h in 
-      (hide lt, rc x initial_h y lt))) in
+      let current_h = get_trace () in
+      let lt = get_local_trace initial_h current_h in 
+      rc x initial_h y lt)) in
   (| hide initial_h, cont |)
 
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
@@ -74,7 +75,6 @@ class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c
   [@@@no_method]
   safe_import : sitype -> (typ_eff_rcs fl rcs -> t); 
 }
-
 
 class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
@@ -196,7 +196,7 @@ let enforce_pre
   #t1 #t2
   (#fl:erased tflag)
   (pre : trace -> Type0)
-  (rc : unit -> trace -> unit -> trace -> bool)
+  (rc : rc_typ unit unit)
   (eff_rc : eff_rc_typ fl unit unit rc) 
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h. rc () h () [] ==> pre h))
@@ -204,17 +204,14 @@ let enforce_pre
   (x:t1) :
   IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post (fun x h -> rc () h () []) (fun _ -> post) ()) =
   let (| h, eff_rc' |) : (initial_h:(erased trace) & eff_rc_typ_cont fl unit unit rc () initial_h) = eff_rc () in
-  let (lt, b) = eff_rc' () in
-  assume (reveal lt == []);
-  assert (b ==> rc () h () lt);
-  if b then f x 
+  if eff_rc' () then f x 
   else Inr Contract_failure
 
 let enforce_pre_args
   #t1 #t2
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
-  (rc : t1 -> trace -> unit -> trace -> bool)
+  (rc : rc_typ t1 unit)
   (eff_rc : eff_rc_typ fl t1 unit rc) 
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h x. rc x h () [] ==> pre x h))
@@ -222,10 +219,7 @@ let enforce_pre_args
   (x:t1) :
   IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post (fun x h -> rc x h () []) post x) =
   let (| h, eff_rc' |) : (initial_h:(erased trace) & eff_rc_typ_cont fl t1 unit rc x initial_h) = eff_rc x in
-  let (lt, b) = eff_rc' () in
-  assume (reveal lt == []);
-  assert (b ==> rc x h () lt);
-  if b then f x 
+  if eff_rc' () then f x 
   else Inr Contract_failure
 
 let retype_rc (#a #b #c #d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires (a == c /\ b == d)) (ensures (fun _ -> True)) = rc
@@ -422,28 +416,25 @@ instance safe_importable_arrow
      (safe_importable_resexn t2 #d2).safe_import y (eright eff_rcs)) <: IIOpi (resexn t2) fl pi)
 }
 
-#set-options "--split_queries"
 let enforce_post_args
   (#t1 #t2:Type)
   (#fl:erased tflag)
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
-  (rc : t1 -> trace -> resexn t2 -> trace -> bool)
+  (rc : rc_typ t1 (resexn t2))
   (eff_rc : eff_rc_typ fl t1 (resexn t2) rc) 
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc x h r lt) ==> post x h r lt))
   (f:t1 -> IIOpi (resexn t2) fl pi)
   (x:t1) :
-  IIO (resexn t2) fl (pre x) (post x) =
+  IIO (resexn t2) fl (pre x) (post x) by (explode ()) =
   let (| h, eff_rc' |) = eff_rc x in
   Classical.forall_intro (lemma_suffixOf_append h);
   let r : resexn t2 = f x in
-  let (lt, b) = eff_rc' r in
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-  if b then r
-  else (assert (post x h (Inr Contract_failure) lt); Inr Contract_failure)
-#reset-options
+  if eff_rc' r then r
+  else Inr Contract_failure
   
 let enforce_post
   (#t1 #t2:Type)
@@ -457,14 +448,13 @@ let enforce_post
   (c2post : squash (forall h r lt. pre h /\ enforced_locally pi h lt /\ (rc () h r lt) ==> post h r lt))
   (f:t1 -> IIOpi (resexn t2) fl pi)
   (x:t1) :
-  IIO (resexn t2) fl pre post =
+  IIO (resexn t2) fl pre post by (explode ())=
   let (| h, eff_rc' |) = eff_rc () in
   Classical.forall_intro (lemma_suffixOf_append h);
   let r : resexn t2 = f x in
-  let (lt, b) = eff_rc' r in
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-  if b then r
-  else (assert (post h (Inr Contract_failure) lt); Inr Contract_failure)
+  if eff_rc' r then r
+  else Inr Contract_failure
 
 instance safe_importable_arrow_pre_post_args
   (t1:Type) (t2:Type)
