@@ -179,10 +179,14 @@ let enforce_pre_args
   if b then f x 
   else Inr Contract_failure
 
-let fast_convert_0 (a b c d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires (a == c /\ b == d)) (ensures (fun _ -> True)) = rc
+let retype_rc (#a #b #c #d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires (a == c /\ b == d)) (ensures (fun _ -> True)) = rc
 
-assume val fast_convert : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (c:Type{c == a}) -> (d:Type{d == b}) -> (rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (fast_convert_0 a b c d rc))
-  
+val retype_eff_rc : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (#c:Type{c == a}) -> (#d:Type{d == b}) -> (#rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (retype_rc #a #b rc))
+let retype_eff_rc #fl #a #b #c #d #rc eff_rc (x:c) = 
+    let (| initial_h, cont |) = eff_rc x in
+    let cont' : eff_rc_typ_cont fl c d (retype_rc rc) x initial_h = (fun (y:d) -> cont y) in
+    (| initial_h, cont' |)
+
 instance exportable_arrow_pre_post_args
   (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
@@ -191,23 +195,22 @@ instance exportable_arrow_pre_post_args
   {| d1:importable t1 pi (left rcs) fl |}
   {| d2:exportable t2 pi (right rcs) fl |}
   (pre : t1 -> trace -> Type0)
-  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h x. (Mkdtuple3?._3 (root rcs)) x h () [] ==> pre x h))
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
-      assert (root rcs == root (map_tree eff_rcs dfst));
-      let (| pck_rc, eff_rc |) = root eff_rcs in
-      let rc = Mkdtuple3?._3 pck_rc in
-      let eff_rc : eff_rc_typ fl t1 unit (Mkdtuple3?._3 pck_rc) = fast_convert t1 unit _ eff_rc in
+      let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
+      let eff_rc : eff_rc_typ fl t1 unit rc = retype_eff_rc eff_rc in
       let f' = enforce_pre_args pre rc eff_rc post f in
       let rc_pre = (fun x h -> rc x h () []) in
       let new_post = trivialize_new_post rc_pre post in
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
       let d = (exportable_arrow_post_args #pi #rcs' t1 #d1 t2 #d2 new_post) in
-      d.export (EmptyNode (left eff_rcs) (right eff_rcs)) f'
+      d.export eff_rcs' f'
     )
 }
 
@@ -226,16 +229,15 @@ instance exportable_arrow_pre_post
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
-      assert (root rcs == root (map_tree eff_rcs dfst));
-      let (| pck_rc, eff_rc |) = root eff_rcs in
-      let rc = Mkdtuple3?._3 pck_rc in
-      let eff_rc : eff_rc_typ fl unit unit (Mkdtuple3?._3 pck_rc) = fast_convert unit unit _ eff_rc in
+      let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
+      let eff_rc : eff_rc_typ fl unit unit rc = retype_eff_rc eff_rc in
       let f' = enforce_pre pre rc eff_rc post f in
       let rc_pre = (fun x h -> rc () h () []) in
       let new_post = trivialize_new_post rc_pre (fun _ -> post) in
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
       let d = (exportable_arrow_post_args #_ #rcs' t1 #d1 t2 #d2 new_post) in
-      d.export (EmptyNode (left eff_rcs) (right eff_rcs)) f'
+      d.export eff_rcs' f'
     )
 }
 
