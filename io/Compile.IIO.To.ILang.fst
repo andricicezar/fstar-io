@@ -479,12 +479,12 @@ instance safe_importable_arrow_pre_post_args
 }
 
 instance safe_importable_arrow_pre_post
-  (t1:Type) (t2:Type)
+  (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
   (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
-  {| d1:exportable t1 pi (left rcs) fl |}
-  {| d2:importable t2 pi (right rcs) fl |}
+  (d1:exportable t1 pi (left rcs) fl)
+  (d2:importable t2 pi (right rcs) fl)
   (pre : trace -> Type0)
   (post : trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall h lt. pre h /\ enforced_locally pi h lt ==> post h (Inr Contract_failure) lt))

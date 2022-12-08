@@ -14,6 +14,23 @@ open Compiler.Languages
 open Compile.IIO.To.ILang
 open Compiler.Model
 
+(** Examples objectives:
+1. motivating examples
+  1a. containing refinement types
+  1b. higher-order contracts are not enough
+    1b.i. one example comparing with Computational contracts
+          and Temporal Higher-order contracts papers
+  1c. Properties
+    1c.i. Trace Properties
+    1c.ii. Hyperproperties
+    1c.iii. Relational Hyperproperties
+2. testing
+  2a. FO
+  2b. HO
+**)
+
+
+
 (** ** Test 1 - FO **)
 let ex1_ct_post = (fun () h (rfd:resexn file_descr) lt -> (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 let ex1_spec_pi : monitorable_prop = (fun cmd arg h -> match cmd, arg with | Openfile, s -> if s = "/etc/passwd" then false else true | _ -> true)
@@ -56,7 +73,7 @@ let ex1_interface : src_interface = {
 
 
   ct_importable = (fun fl -> 
-    safe_importable_arrow_pre_post unit file_descr #_ #_ #fl #exportable_unit #importable_file_descr (fun _ _ -> True) ex1_ct_post ex1_c1post ex1_c2post);
+    safe_importable_arrow_pre_post_args unit _ _ _ ex1_c1post ex1_c2post);
   
   inst_pi_stronger_spec_pi = ex1_stronger_pis;
 }
@@ -76,27 +93,31 @@ let ex1_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_src_tgt ex
 
 (** ** Test 3 - HO 1 **)
 
+let ex3_pi : monitorable_prop = (fun _ _ _ -> true)
+assume val ex3_stronger_pis : squash (forall h lt. enforced_locally ex3_pi h lt ==> enforced_locally ex3_pi h lt)
+
+
+let ex3_rcs : tree pck_rc =  
+  Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
+              (Node (| file_descr, unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf)
+              Leaf
+
 let test_ho_interface : src_interface = {
-  spec_pi = (fun _ _ _ -> true);
-  inst_pi = (fun _ _ _ -> true);
-  inst_pi_stronger_spec_pi = ();
+  spec_pi = ex3_pi;
+  inst_pi = ex3_pi;
+  inst_pi_stronger_spec_pi = ex3_stronger_pis;
 
   pt = (fun fl -> (unit -> IIO (resexn unit) (fl + IOActions) (fun _ -> True) (fun _ _ _ -> true)));
 
   ct = (fun fl -> (fd:file_descr -> IIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == [])) -> IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
-  ct_rcs = Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
-              (Node (| file_descr, resexn unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf)
-              Leaf;
+  ct_rcs = ex3_rcs;
 
-  ct_importable = admit () ;
-   (**(fun fl -> 
-    let exportable_cb = exportable_arrow_pre_post file_descr unit #_ #(Node (| file_descr, resexn unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf) #fl #importable_file_descr #exportable_unit (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) #() #() in
-
+  ct_importable = (fun fl -> 
+    let exportable_cb = exportable_arrow_pre_post_args file_descr unit #ex3_pi #(left ex3_rcs) #fl (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) #() #() in
     let c1post : unit -> squash (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = (fun () ->
- //     assert (forall h lt. enforced_locally (fun _ _ _ -> true) h lt ==> (exists (rfd:resexn file_descr). Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)));
-    admit ()) in
- //   let c2post : squash (forall h (rfd:resexn file_descr) lt. Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)) ==> (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = () in
-    safe_importable_arrow_pre_post _ file_descr #_ #_ #fl #exportable_cb #importable_file_descr (fun _ _ -> True) (fun () h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) (c1post ()) ());**)
+      admit ()) in
+    let c2post : squash (forall h (rfd:resexn file_descr) lt. Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)) ==> (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))) = () in
+    safe_importable_arrow_pre_post exportable_cb importable_file_descr (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) (c1post ()) ());
 }
 
 
