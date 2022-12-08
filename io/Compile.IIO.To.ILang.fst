@@ -114,11 +114,11 @@ instance exportable_arrow_with_no_pre_and_no_post
   }
 
 (** This is a design choice for making proofs easier. One can remove the post-condition **)
-instance exportable_arrow_with_post
+instance exportable_arrow_post_args
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
   t1 {| d1:importable t1 pi (eleft rcs) fl |}
   t2 {| d2:exportable t2 pi (eright rcs) fl |}
-  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
     etype = x:d1.itype -> IIOpi (resexn d2.etype) fl pi;
@@ -128,35 +128,50 @@ instance exportable_arrow_with_post
       (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_rcs f');
   }
 
-let trivialize_new_post_resexn
-  (pre:'a -> trace -> bool)
-  (post:'a -> trace -> resexn 'b -> trace -> Type0) :
-  Tot ('a -> trace -> resexn 'b -> trace -> Type0) =
+instance exportable_arrow_post
+  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  t1 {| d1:importable t1 pi (eleft rcs) fl |}
+  t2 {| d2:exportable t2 pi (eright rcs) fl |}
+  (post : trace -> resexn t2 -> trace -> Type0) 
+  (#c1 : squash (forall h lt r. post h r lt ==> enforced_locally pi h lt)) :
+  exportable (t1 -> IIO (resexn t2) fl (fun _ -> True) post) pi rcs fl = 
+  exportable_arrow_post_args t1 t2 (fun _ -> post)
+
+let trivialize_new_post #a #b (pre: a -> trace -> bool) post :
+  Tot (a -> trace -> resexn b -> trace -> Type0) =
     fun x h r lt -> 
       (~(pre x h) ==> r == (Inr Contract_failure) /\ lt == []) /\
       (pre x h ==> post x h r lt) 
 
-let lemma_trivialize_new_post_monitorable
-  #t1
-  #t2
-  (pre:t1 -> trace -> bool)
-  (post:t1 -> trace -> resexn t2 -> trace -> Type0) 
-  pi
-  (x:squash (forall (x:t1) (h lt:trace) r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
-  squash (forall x h lt r. (trivialize_new_post_resexn pre post) x h r lt ==> enforced_locally pi h lt) = 
-  ()
-
 let enforce_pre
+  #t1 #t2
+  (#fl:erased tflag)
+  (pre : trace -> Type0)
+  (rc : unit -> trace -> unit -> trace -> bool)
+  (eff_rc : eff_rc_typ fl unit unit rc) 
+  (post : trace -> resexn t2 -> trace -> Type0) 
+  (#c_pre : squash (forall h. rc () h () [] ==> pre h))
+  (f:(t1 -> IIO (resexn t2) fl pre post))
+  (x:t1) :
+  IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post (fun x h -> rc () h () []) (fun _ -> post) ()) =
+  let (| h, eff_rc' |) : (initial_h:(erased trace) & eff_rc_typ_cont fl unit unit rc () initial_h) = eff_rc () in
+  let (lt, b) = eff_rc' () in
+  assume (reveal lt == []);
+  assert (b ==> rc () h () lt);
+  if b then f x 
+  else Inr Contract_failure
+
+let enforce_pre_args
   #t1 #t2
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (rc : t1 -> trace -> unit -> trace -> bool)
   (eff_rc : eff_rc_typ fl t1 unit rc) 
-  (post : t1 -> trace -> (r:resexn t2) -> trace -> (b:Type0)) 
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h x. rc x h () [] ==> pre x h))
   (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x)))
   (x:t1) :
-  IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post_resexn (fun x h -> rc x h () []) post x) =
+  IIO (resexn t2) fl (fun _ -> True) (trivialize_new_post (fun x h -> rc x h () []) post x) =
   let (| h, eff_rc' |) : (initial_h:(erased trace) & eff_rc_typ_cont fl t1 unit rc x initial_h) = eff_rc x in
   let (lt, b) = eff_rc' () in
   assume (reveal lt == []);
@@ -168,7 +183,7 @@ let fast_convert_0 (a b c d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires 
 
 assume val fast_convert : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (c:Type{c == a}) -> (d:Type{d == b}) -> (rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (fast_convert_0 a b c d rc))
   
-instance exportable_arrow_pre_post
+instance exportable_arrow_pre_post_args
   (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
   (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)})
@@ -187,11 +202,39 @@ instance exportable_arrow_pre_post
       let (| pck_rc, eff_rc |) = root eff_rcs in
       let rc = Mkdtuple3?._3 pck_rc in
       let eff_rc : eff_rc_typ fl t1 unit (Mkdtuple3?._3 pck_rc) = fast_convert t1 unit _ eff_rc in
-      let f' = enforce_pre pre rc eff_rc post f in
+      let f' = enforce_pre_args pre rc eff_rc post f in
       let rc_pre = (fun x h -> rc x h () []) in
-      let new_post = trivialize_new_post_resexn rc_pre post in
+      let new_post = trivialize_new_post rc_pre post in
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
-      let d = (exportable_arrow_with_post #_ #rcs' t1 #d1 t2 #d2 new_post #(lemma_trivialize_new_post_monitorable rc_pre post pi c1)) in
+      let d = (exportable_arrow_post_args #pi #rcs' t1 #d1 t2 #d2 new_post) in
+      d.export (EmptyNode (left eff_rcs) (right eff_rcs)) f'
+    )
+}
+
+instance exportable_arrow_pre_post
+  (t1:Type) (t2:Type)
+  (#pi:monitorable_prop) 
+  (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == unit)})
+  (#fl:erased tflag)
+  {| d1:importable t1 pi (left rcs) fl |}
+  {| d2:exportable t2 pi (right rcs) fl |}
+  (pre : trace -> Type0)
+  (post : trace -> resexn t2 -> trace -> Type0) 
+  (#c_pre : squash (forall h. (Mkdtuple3?._3 (root rcs)) () h () [] ==> pre h))
+  (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
+  exportable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
+    etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
+    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
+      assert (root rcs == root (map_tree eff_rcs dfst));
+      let (| pck_rc, eff_rc |) = root eff_rcs in
+      let rc = Mkdtuple3?._3 pck_rc in
+      let eff_rc : eff_rc_typ fl unit unit (Mkdtuple3?._3 pck_rc) = fast_convert unit unit _ eff_rc in
+      let f' = enforce_pre pre rc eff_rc post f in
+      let rc_pre = (fun x h -> rc () h () []) in
+      let new_post = trivialize_new_post rc_pre (fun _ -> post) in
+      let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let d = (exportable_arrow_post_args #_ #rcs' t1 #d1 t2 #d2 new_post) in
       d.export (EmptyNode (left eff_rcs) (right eff_rcs)) f'
     )
 }
