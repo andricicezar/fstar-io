@@ -8,6 +8,55 @@ open IO.Sig
 open Compiler.Languages
 open TC.Checkable
 
+(** **** Types **)
+type rc_typ (t1:Type u#a) (t2:Type u#b) = t1 -> trace -> t2 -> trace -> bool
+
+type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
+  y:t2 -> IIO ((erased trace) * bool) fl (fun h -> (initial_h `suffix_of` h)) (fun h (the_lt, b) lt -> apply_changes initial_h the_lt == h /\ lt == [] /\ (b <==> rc x initial_h y the_lt))
+  
+type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
+  x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
+
+let get_local_trace (h':trace) :
+  IIO trace GetTraceActions
+    (requires (fun h -> h' `suffix_of` h))
+    (ensures (fun h lt' lt ->
+      lt == [] /\
+      h == (apply_changes h' lt'))) =
+  let h = get_trace () in
+  suffix_of_length h' h;
+  let n : nat = (List.length h) - (List.length h') in
+  let (lt', ht) = List.Tot.Base.splitAt n h in
+  lemma_splitAt_equal n h;
+  lemma_splitAt_suffix h h';
+  List.Tot.Properties.rev_involutive lt';
+  assert (h == apply_changes h' (List.rev lt'));
+  List.rev lt'
+
+val enforce_rc : (#a:Type u#a) -> (#b:Type u#b) -> rc:rc_typ a b -> eff_rc_typ AllActions a b rc
+let enforce_rc #a #b rc x =
+  let initial_h = get_trace () in
+  let cont : eff_rc_typ_cont AllActions a b rc x (hide initial_h) = 
+    (fun y -> ( 
+      let lt = get_local_trace initial_h in 
+      (hide lt, rc x initial_h y lt))) in
+  (| hide initial_h, cont |)
+
+type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
+type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
+
+val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
+let make_rc_eff r = (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
+
+type typ_eff_rcs (fl:erased tflag) (rcs:tree pck_rc) = 
+  eff_rcs:(tree (pck_eff_rc fl)){
+    equal_trees rcs (map_tree eff_rcs dfst)}
+
+let make_rcs_eff (rcs:tree pck_rc) : typ_eff_rcs AllActions rcs =
+  let r : tree (pck_eff_rc AllActions) = map_tree rcs make_rc_eff in
+  assume (equal_trees rcs (map_tree r dfst));
+  r
+
 class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
   etype : Type u#b;
@@ -439,7 +488,7 @@ instance safe_importable_arrow_pre_post_args
     enforce_post_args pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
 }
 
-instance safe_importable_arrow_pre_post_arg
+instance safe_importable_arrow_pre_post
   (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
   (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
@@ -458,5 +507,5 @@ instance safe_importable_arrow_pre_post_arg
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
     let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
     let (| rc_pck, eff_rc |) = root eff_rcs in
-    enforce_post_args pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
+    enforce_post pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
 }
