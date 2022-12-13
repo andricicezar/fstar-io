@@ -9,6 +9,32 @@ open Compiler.Languages
 open TC.Checkable
 
 (** **** Types **)
+
+(** **** Tree **)
+type tree (a: Type) =
+  | Leaf : tree a
+  | EmptyNode: left: tree a -> right: tree a -> tree a
+  | Node: data: a -> left: tree a -> right: tree a -> tree a
+
+let root (t:(tree 'a){Node? t}) = Node?.data t
+let eleft (t:(tree 'a){EmptyNode? t}) = EmptyNode?.left t
+let eright (t:(tree 'a){EmptyNode? t}) = EmptyNode?.right t
+let left (t:(tree 'a){Node? t}) = Node?.left t
+let right (t:(tree 'a){Node? t}) = Node?.right t
+
+let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
+  match t1, t2 with
+  | Leaf, Leaf -> True
+  | EmptyNode lhs1 rhs1, EmptyNode lhs2 rhs2 -> equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
+  | Node x lhs1 rhs1, Node y lhs2 rhs2 -> x == y /\ equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
+  | _, _ -> False
+
+let rec map_tree (t:tree 'a) (f:'a -> 'b) : tree 'b =
+  match t with
+  | Leaf -> Leaf 
+  | EmptyNode lhs rhs -> EmptyNode (map_tree lhs f) (map_tree rhs f)
+  | Node x lhs rhs -> Node (f x) (map_tree lhs f) (map_tree rhs f)
+  
 let get_local_trace (h':trace) (h:trace) :
   Pure trace
     (requires (h' `suffix_of` h))
@@ -30,7 +56,7 @@ type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1
        (let the_lt = get_local_trace initial_h current_h in
        apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt)))
   
-type eff_rc_typ (fl:erased tflag) (t1 t2:Type) (rc:rc_typ t1 t2) =
+type eff_rc_typ (fl:erased tflag) (#t1 #t2:Type) (rc:rc_typ t1 t2) =
   x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
 
 val enforce_rc : (#a:Type u#a) -> (#b:Type u#b) -> rc:rc_typ a b -> eff_rc_typ AllActions a b rc
@@ -44,7 +70,7 @@ let enforce_rc #a #b rc x =
   (| hide initial_h, cont |)
 
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
-type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._1 pck) (Mkdtuple3?._2 pck) (Mkdtuple3?._3 pck)
+type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._3 pck)
 
 val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
 let make_rc_eff r = (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
@@ -197,7 +223,7 @@ let enforce_pre
   (#fl:erased tflag)
   (pre : trace -> Type0)
   (rc : rc_typ unit unit)
-  (eff_rc : eff_rc_typ fl unit unit rc) 
+  (eff_rc : eff_rc_typ fl rc) 
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h. rc () h () [] ==> pre h))
   (f:(t1 -> IIO (resexn t2) fl pre post))
@@ -212,7 +238,7 @@ let enforce_pre_args
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (rc : rc_typ t1 unit)
-  (eff_rc : eff_rc_typ fl t1 unit rc) 
+  (eff_rc : eff_rc_typ fl rc) 
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h x. rc x h () [] ==> pre x h))
   (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x)))
@@ -224,7 +250,7 @@ let enforce_pre_args
 
 let retype_rc (#a #b #c #d:Type) (rc:rc_typ a b) : Pure (rc_typ c d) (requires (a == c /\ b == d)) (ensures (fun _ -> True)) = rc
 
-val retype_eff_rc : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (#c:Type{c == a}) -> (#d:Type{d == b}) -> (#rc:rc_typ a b) -> (t : eff_rc_typ fl a b rc) -> (eff_rc_typ fl c d (retype_rc rc))
+val retype_eff_rc : (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (#c:Type{c == a}) -> (#d:Type{d == b}) -> (#rc:rc_typ a b) -> (t : eff_rc_typ fl rc) -> (eff_rc_typ fl #c #d (retype_rc rc))
 let retype_eff_rc #fl #a #b #c #d #rc eff_rc (x:c) = 
     let (| initial_h, cont |) = eff_rc x in
     let cont' : eff_rc_typ_cont fl c d (retype_rc rc) x initial_h = (fun (y:d) -> cont y) in
@@ -246,7 +272,7 @@ instance exportable_arrow_pre_post_args
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
-      let eff_rc : eff_rc_typ fl t1 unit rc = retype_eff_rc eff_rc in
+      let eff_rc : eff_rc_typ fl #t1 #unit rc = retype_eff_rc eff_rc in
       let f' = enforce_pre_args pre rc eff_rc post f in
       let rc_pre = (fun x h -> rc x h () []) in
       let new_post = trivialize_new_post rc_pre post in
@@ -273,7 +299,7 @@ instance exportable_arrow_pre_post
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
-      let eff_rc : eff_rc_typ fl unit unit rc = retype_eff_rc eff_rc in
+      let eff_rc : eff_rc_typ fl #unit #unit rc = retype_eff_rc eff_rc in
       let f' = enforce_pre pre rc eff_rc post f in
       let rc_pre = (fun x h -> rc () h () []) in
       let new_post = trivialize_new_post rc_pre (fun _ -> post) in
