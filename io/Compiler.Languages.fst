@@ -6,11 +6,10 @@ open FStar.Ghost
 
 open CommonUtils
 
-(** ** IIO **)
-open IO.Sig
+(** ** Source Language **)
 include IIO
 
-(** ** ILang **)
+(** ** Target Language **)
 (** ILang is a language that acts as an intermediate language between the rich IIO effect that has
     rich types and pre- and post-conditions and an ML language as OCaml.
 

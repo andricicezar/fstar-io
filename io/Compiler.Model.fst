@@ -7,7 +7,7 @@ open FStar.FunctionalExtensionality
 
 open BeyondCriteria
 
-open IO.Sig
+open IIO.Sig
   
 open Compiler.Languages
 open Compile.IIO.To.ILang
@@ -64,7 +64,7 @@ type tgt_interface = {
 }
   
 (** **** languages **)
-assume val beh : (list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #IO.Sig.event
+assume val beh : (list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
 
 type ctx_src (i:src_interface)  = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> argv:list string -> IIO int (IOActions + fl) (fun _ -> True) (i.p_post argv)
@@ -73,14 +73,14 @@ type whole_src = post:(list string -> trace -> int -> trace -> Type0) & (argv:li
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
   (| i.p_post, p #AllActions (c #AllActions (inst_io_cmds i.inst_pi) (make_rcs_eff i.ct_rcs)) |)
 
-val beh_src : whole_src ^-> trace_property #IO.Sig.event
+val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| _, ws |) -> beh ws)
 
 let src_language : language = {
   interface = src_interface;
   ctx = ctx_src; pprog = prog_src; whole = whole_src;
   link = link_src;
-  event_typ = IO.Sig.event;  beh = beh_src; 
+  event_typ = event;  beh = beh_src; 
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> i.ct fl
@@ -90,14 +90,14 @@ type whole_tgt = list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ ->
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   p (c #AllActions (inst_io_cmds i.inst_pi))
 
-val beh_tgt : whole_tgt ^-> trace_property #IO.Sig.event
+val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = beh 
 
 let tgt_language : language = {
   interface = tgt_interface;
   ctx = ctx_tgt; pprog = prog_tgt; whole = whole_tgt;
   link = link_tgt;
-  event_typ = IO.Sig.event; beh = beh_tgt; 
+  event_typ = event; beh = beh_tgt; 
 }
 
 (** ** Compile interfaces **)

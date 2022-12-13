@@ -8,8 +8,6 @@ open FStar.List
 
 open BeyondCriteria
 
-open IO.Sig
-  
 open Compiler.Languages
 open Compile.IIO.To.ILang
 open Compiler.Model

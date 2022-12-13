@@ -4,8 +4,8 @@ open FStar.Tactics
 open ExtraTactics
 open FStar.Ghost
 
-open IO.Sig
-open IO.Sig.Call
+include IIO.Sig
+open IIO.Sig.Call
 open DMFree
 
 (** The postcondition for an io computation is defined over the

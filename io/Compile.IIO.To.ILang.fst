@@ -4,7 +4,6 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Ghost
 
-open IO.Sig
 open Compiler.Languages
 open TC.Checkable
 

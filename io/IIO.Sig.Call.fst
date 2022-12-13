@@ -1,6 +1,6 @@
-module IO.Sig.Call
+module IIO.Sig.Call
 
-open IO.Sig
+open IIO.Sig
 
 (** This file is replaced during linking with a file that contains the real
 implementation of the commands. **)
