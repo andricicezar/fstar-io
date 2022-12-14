@@ -16,6 +16,7 @@ type tree (a: Type) =
   | Node: data: a -> left: tree a -> right: tree a -> tree a
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
+(** TODO: refactor these into two utils **)
 let eleft (t:(tree 'a){EmptyNode? t}) = EmptyNode?.left t
 let eright (t:(tree 'a){EmptyNode? t}) = EmptyNode?.right t
 let left (t:(tree 'a){Node? t}) = Node?.left t
@@ -68,6 +69,9 @@ let enforce_rc #a #b rc x =
       rc x initial_h y lt)) in
   (| hide initial_h, cont |)
 
+// todo: in HO cases, t1 or t2 should be unit since one can not write a
+// runtime check that uses an IIO arrow. thus, one idea is to make the
+// type of rc here `rc_typ (option t1) (option t2)`
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
 type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._3 pck)
 
@@ -441,14 +445,16 @@ instance safe_importable_arrow
      (safe_importable_resexn t2 #d2).safe_import y (eright eff_rcs)) <: IIOpi (resexn t2) fl pi)
 }
 
-let enforce_post_args
-  (#t1 #t2:Type)
+(** The following four should be unified **)
+let enforce_post_args_res
+  (#t1:Type u#a)
+  (#t2:Type u#b)
   (#fl:erased tflag)
   (pi:monitorable_prop)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (rc : rc_typ t1 (resexn t2))
-  (eff_rc : eff_rc_typ fl t1 (resexn t2) rc) 
+  (eff_rc : eff_rc_typ fl rc) 
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc x h r lt) ==> post x h r lt))
   (f:t1 -> IIOpi (resexn t2) fl pi)
@@ -460,20 +466,42 @@ let enforce_post_args
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   if eff_rc' r then r
   else Inr Contract_failure
-  
-let enforce_post
-  (#t1 #t2:Type)
+
+let enforce_post_args
+  (#t1:Type u#a)
+  (#t2:Type u#b)
   (#fl:erased tflag)
   (pi:monitorable_prop)
-  (pre:trace -> Type0)
-  (post:trace -> resexn t2 -> trace -> Type0)
-  (rc : unit -> trace -> resexn t2 -> trace -> bool)
-  (eff_rc : eff_rc_typ fl unit (resexn t2) rc) 
-  (c1post : squash (forall h lt. pre h /\ enforced_locally pi h lt ==> (post h (Inr Contract_failure) lt)))
-  (c2post : squash (forall h r lt. pre h /\ enforced_locally pi h lt /\ (rc () h r lt) ==> post h r lt))
+  (pre:t1 -> trace -> Type0)
+  (post:t1 -> trace -> resexn t2 -> trace -> Type0)
+  (rc : rc_typ t1 unit)
+  (eff_rc : eff_rc_typ fl rc) 
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc x h () lt) ==> post x h r lt))
   (f:t1 -> IIOpi (resexn t2) fl pi)
   (x:t1) :
-  IIO (resexn t2) fl pre post by (explode ())=
+  IIO (resexn t2) fl (pre x) (post x) by (explode ()) =
+  let (| h, eff_rc' |) = eff_rc x in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let r : resexn t2 = f x in
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+  if eff_rc' () then r
+  else Inr Contract_failure
+  
+let enforce_post_res
+  (#t1:Type u#a)
+  (#t2:Type u#b)
+  (#fl:erased tflag)
+  (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0)
+  (post:t1 -> trace -> resexn t2 -> trace -> Type0)
+  (rc : rc_typ unit (resexn t2))
+  (eff_rc : eff_rc_typ fl rc) 
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc () h r lt) ==> post x h r lt))
+  (f:t1 -> IIOpi (resexn t2) fl pi)
+  (x:t1) :
+  IIO (resexn t2) fl (pre x) (post x) by (explode ())=
   let (| h, eff_rc' |) = eff_rc () in
   Classical.forall_intro (lemma_suffixOf_append h);
   let r : resexn t2 = f x in
@@ -481,19 +509,84 @@ let enforce_post
   if eff_rc' r then r
   else Inr Contract_failure
 
-instance safe_importable_arrow_pre_post_args
-  (t1:Type) (t2:Type)
+let enforce_post
+  (#t1:Type u#a)
+  (#t2:Type u#b)
+  (#fl:erased tflag)
+  (pi:monitorable_prop)
+  (pre:t1 -> trace -> Type0)
+  (post:t1 -> trace -> resexn t2 -> trace -> Type0)
+  (rc : rc_typ unit unit)
+  (eff_rc : eff_rc_typ fl rc) 
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ (rc () h () lt) ==> post x h r lt))
+  (f:t1 -> IIOpi (resexn t2) fl pi)
+  (x:t1) :
+  IIO (resexn t2) fl (pre x) (post x) by (explode ()) =
+  let (| h, eff_rc' |) = eff_rc () in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let r : resexn t2 = f x in
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+  if eff_rc' () then r
+  else Inr Contract_failure
+
+instance safe_importable_arrow_pre_post_args_res
+  (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
   (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
-  {| d1:exportable t1 pi (left rcs) fl |}
-  {| d2:importable t2 pi (right rcs) fl |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt)) :
-  safe_importable ((x:t1) -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
-  sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt)) 
+  {| d1:exportable t1 pi (left rcs) fl |}
+  {| d2:importable t2 pi (right rcs) fl |}:
+  safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
+   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
+    let rcs' = (EmptyNode (left rcs) (right rcs)) in
+    let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
+    let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
+    let (| rc_pck, eff_rc |) = root eff_rcs in
+    enforce_post_args_res pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
+  }
+
+instance safe_importable_arrow_pre_post_res
+  (#t1:Type) (#t2:Type)
+  (#pi:monitorable_prop) 
+  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
+  (#fl:erased tflag)
+  (pre : t1 -> trace -> Type0)
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0)
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
+  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) () h r lt) ==> post x h r lt)) 
+  {| d1:exportable t1 pi (left rcs) fl |}
+  {| d2:importable t2 pi (right rcs) fl |}:
+  safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
+   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
+    let rcs' = (EmptyNode (left rcs) (right rcs)) in
+    let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
+    let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
+    let (| rc_pck, eff_rc |) = root eff_rcs in
+    enforce_post_res pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
+  }
+
+instance safe_importable_arrow_pre_post_args
+  (#t1:Type) (#t2:Type)
+  (#pi:monitorable_prop) 
+  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)) })
+  (#fl:erased tflag)
+  (pre : t1 -> trace -> Type0)
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0)
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
+  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h () lt) ==> post x h r lt)) 
+  {| d1:exportable t1 pi (left rcs) fl |}
+  {| d2:importable t2 pi (right rcs) fl |} :
+  safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
+   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
   c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
@@ -501,21 +594,21 @@ instance safe_importable_arrow_pre_post_args
     let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
     let (| rc_pck, eff_rc |) = root eff_rcs in
     enforce_post_args pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
-}
+  }
 
 instance safe_importable_arrow_pre_post
   (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == unit)) })
   (#fl:erased tflag)
-  (d1:exportable t1 pi (left rcs) fl)
-  (d2:importable t2 pi (right rcs) fl)
-  (pre : trace -> Type0)
-  (post : trace -> resexn t2 -> trace -> Type0)
-  (c1post : squash (forall h lt. pre h /\ enforced_locally pi h lt ==> post h (Inr Contract_failure) lt))
-  (c2post: squash (forall h r lt. pre h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) () h r lt) ==> post h r lt)) :
-  safe_importable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
-  sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+  (pre : t1 -> trace -> Type0)
+  (post : t1 -> trace -> resexn t2 -> trace -> Type0)
+  (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) () h () lt) ==> post x h r lt)) 
+  {| d1:exportable t1 pi (left rcs) fl |}
+  {| d2:importable t2 pi (right rcs) fl |} :
+  safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
+   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
   c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
@@ -523,4 +616,4 @@ instance safe_importable_arrow_pre_post
     let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
     let (| rc_pck, eff_rc |) = root eff_rcs in
     enforce_post pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
-}
+  }
