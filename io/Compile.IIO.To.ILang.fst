@@ -17,11 +17,16 @@ type tree (a: Type) =
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
 (** TODO: refactor these into two utils **)
-let eleft (t:(tree 'a){EmptyNode? t}) = EmptyNode?.left t
-let eright (t:(tree 'a){EmptyNode? t}) = EmptyNode?.right t
-let left (t:(tree 'a){Node? t}) = Node?.left t
-let right (t:(tree 'a){Node? t}) = Node?.right t
+let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a = 
+  match t with 
+  | Node _ lt _ -> lt
+  | EmptyNode lt _ -> lt
 
+let right (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a = 
+  match t with 
+  | Node _ _ rt -> rt
+  | EmptyNode _ rt -> rt
+  
 let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
   match t1, t2 with
   | Leaf, Leaf -> True
@@ -73,6 +78,13 @@ let enforce_rc #a #b rc x =
 // runtime check that uses an IIO arrow. thus, one idea is to make the
 // type of rc here `rc_typ (option t1) (option t2)`
 type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
+
+let arg_typ (rc:pck_rc) : Type = Mkdtuple3?._1 rc
+let ret_typ (rc:pck_rc) : Type = Mkdtuple3?._2 rc
+
+let check (rc:pck_rc) (x:arg_typ rc) (h:trace) (r:ret_typ rc) (lt:trace) : bool = 
+  Mkdtuple3?._3 rc x h r lt
+
 type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._3 pck)
 
 val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
@@ -152,21 +164,21 @@ instance exportable_option
 
 instance exportable_pair
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 {| d1:exportable t1 pi (eleft rcs) fl |} t2 {| d2:exportable t2 pi (eright rcs) fl |} :
+  t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (t1 * t2) pi rcs fl) = {
   etype = d1.etype * d2.etype;
   c_etype = ilang_pair pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
-  export = (fun eff_rcs (x, y) -> (d1.export (eleft eff_rcs) x, d2.export (eright eff_rcs) y));
+  export = (fun eff_rcs (x, y) -> (d1.export (left eff_rcs) x, d2.export (right eff_rcs) y));
 }
 
 instance exportable_either
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 {| d1:exportable t1 pi (eleft rcs) fl |} t2 {| d2:exportable t2 pi (eright rcs) fl |} :
+  t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (either t1 t2) pi rcs fl) = {
   etype = either d1.etype d2.etype;
   c_etype = ilang_either pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
   export = (fun eff_rcs x -> 
-      match x with | Inl x -> Inl (d1.export (eleft eff_rcs) x) | Inr x -> Inr (d2.export (eright eff_rcs) x))
+      match x with | Inl x -> Inl (d1.export (left eff_rcs) x) | Inr x -> Inr (d2.export (right eff_rcs) x))
 }
 
 instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi = { mldummy = () }
@@ -175,16 +187,16 @@ instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (res
 
 instance exportable_arrow_with_no_pre_and_no_post
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  (t1:Type) {| d1:importable t1 pi (eleft rcs) fl |}
-  (t2:Type) {| d2:exportable t2 pi (eright rcs) fl|} :
+  (t1:Type) {| d1:importable t1 pi (left rcs) fl |}
+  (t2:Type) {| d2:exportable t2 pi (right rcs) fl|} :
   exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi;
     c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIOpi (resexn t2) fl pi)) (x:d1.itype) ->
-      match d1.import x (eleft eff_rcs) with
+      match d1.import x (left eff_rcs) with
       | Inl x' -> begin
         match f x' with 
-        | Inl x'' -> Inl (d2.export (eright eff_rcs) x'') 
+        | Inl x'' -> Inl (d2.export (right eff_rcs) x'') 
         | Inr err -> Inr err
       end
       | Inr err -> Inr err
@@ -194,8 +206,8 @@ instance exportable_arrow_with_no_pre_and_no_post
 (** This is a design choice for making proofs easier. One can remove the post-condition **)
 instance exportable_arrow_post_args
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 {| d1:importable t1 pi (eleft rcs) fl |}
-  t2 {| d2:exportable t2 pi (eright rcs) fl |}
+  t1 {| d1:importable t1 pi (left rcs) fl |}
+  t2 {| d2:exportable t2 pi (right rcs) fl |}
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
@@ -208,8 +220,8 @@ instance exportable_arrow_post_args
 
 instance exportable_arrow_post
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 {| d1:importable t1 pi (eleft rcs) fl |}
-  t2 {| d2:exportable t2 pi (eright rcs) fl |}
+  t1 {| d1:importable t1 pi (left rcs) fl |}
+  t2 {| d2:exportable t2 pi (right rcs) fl |}
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall h lt r. post h r lt ==> enforced_locally pi h lt)) :
   exportable (t1 -> IIO (resexn t2) fl (fun _ -> True) post) pi rcs fl = 
@@ -262,13 +274,13 @@ let retype_eff_rc #fl #a #b #c #d #rc eff_rc (x:c) =
 instance exportable_arrow_pre_post_args
   (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)})
+  (#rcs:(tree pck_rc){Node? rcs /\ arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)})
   (#fl:erased tflag)
   {| d1:importable t1 pi (left rcs) fl |}
   {| d2:exportable t2 pi (right rcs) fl |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall h x. (Mkdtuple3?._3 (root rcs)) x h () [] ==> pre x h))
+  (#c_pre : squash (forall h x. check (root rcs) x h () [] ==> pre x h))
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
@@ -289,13 +301,13 @@ instance exportable_arrow_pre_post_args
 instance exportable_arrow_pre_post
   (t1:Type) (t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == unit)})
+  (#rcs:(tree pck_rc){Node? rcs /\ arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)})
   (#fl:erased tflag)
   {| d1:importable t1 pi (left rcs) fl |}
   {| d2:exportable t2 pi (right rcs) fl |}
   (pre : trace -> Type0)
   (post : trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall h. (Mkdtuple3?._3 (root rcs)) () h () [] ==> pre h))
+  (#c_pre : squash (forall h. (check (root rcs)) () h () [] ==> pre h))
   (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
   exportable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
@@ -344,14 +356,14 @@ instance safe_importable_is_importable (#pi:monitorable_prop) (#rcs:tree pck_rc)
 instance importable_refinement
   (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
   t {| d:importable t pi rcs fl |}
-  (rp : t -> Type0) {| checkable rp |} :
+  (rp : t -> Type0) {| d1:checkable rp |} :
   Tot (importable (x:t{rp x}) pi rcs fl) = {
   itype = d.itype;
   c_itype = d.c_itype;
   import = (fun (x:d.itype) eff_rcs ->
     (match d.import x eff_rcs with
     | Inl x ->
-      if check #t #rp x then Inl x 
+      if d1.check x then Inl x 
       else Inr Contract_failure
     | Inr err -> Inr err) <: resexn (x:t{rp x}))
 }
@@ -374,31 +386,31 @@ instance importable_option
 
 instance importable_pair
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 t2 {| d1:importable t1 pi (eleft rcs) fl |} {| d2:importable t2 pi (eright rcs) fl |} :
+  t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (t1 * t2) pi rcs fl) = {
   itype = d1.itype * d2.itype;
   c_itype = ilang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun (x,y) eff_rcs ->
-      match (d1.import x (eleft eff_rcs), d2.import y (eright eff_rcs)) with
+      match (d1.import x (left eff_rcs), d2.import y (right eff_rcs)) with
       | (Inl x, Inl y) -> Inl (x, y)
       | _ -> Inr Contract_failure)
 }
 
 instance importable_either
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  t1 t2 {| d1:importable t1 pi (eleft rcs) fl |} {| d2:importable t2 pi (eright rcs) fl |} :
+  t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (either t1 t2) pi rcs fl) = {
   itype = either d1.itype d2.itype;
   c_itype = ilang_either pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun x eff_rcs ->
       match x with
       | Inl x' -> begin
-        match d1.import x' (eleft eff_rcs) with
+        match d1.import x' (left eff_rcs) with
         | Inl x'' -> Inl (Inl x'')
         | Inr err -> Inr err
       end
       | Inr y -> begin
-        match d2.import y (eright eff_rcs) with
+        match d2.import y (right eff_rcs) with
         | Inl y' -> Inl (Inr y')
         | Inr err -> Inr err
       end)
@@ -407,13 +419,13 @@ instance importable_either
 instance importable_dpair_refined
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
   t1 t2 (p:t1 -> t2 -> Type0)
-  {| d1:importable t1 pi (eleft rcs) fl |} {| d2:importable t2 pi (eright rcs) fl |}
+  {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |}
   {| d3:checkable2 p |} :
   Tot (importable (x:t1 & y:t2{p x y}) pi rcs fl) = {
   itype = d1.itype & d2.itype;
   c_itype = ilang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun ((x', y')) eff_rcs ->
-      match (d1.import x' (eleft eff_rcs), d2.import y' (eright eff_rcs)) with
+      match (d1.import x' (left eff_rcs), d2.import y' (right eff_rcs)) with
        | (Inl x, Inl y) ->
             if check2 #t1 #t2 #p x y then Inl ((| x, y |) <: (x:t1 & y:t2{p x y})) else Inr Contract_failure
        | _ -> Inr Contract_failure)
@@ -434,15 +446,15 @@ instance safe_importable_resexn
     
 instance safe_importable_arrow
   (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
-  (t1:Type) {| d1:exportable t1 pi (eleft rcs) fl |}
-  (t2:Type) {| d2:importable t2 pi (eright rcs) fl |} : 
+  (t1:Type) {| d1:exportable t1 pi (left rcs) fl |}
+  (t2:Type) {| d2:importable t2 pi (right rcs) fl |} : 
   safe_importable ((x:t1) -> IIOpi (resexn t2) fl pi) pi rcs fl = {
   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
   c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:d1.etype -> IIOpi (resexn d2.itype) fl pi) eff_rcs (x:t1) -> 
-    (let x' = d1.export (eleft eff_rcs) x in 
+    (let x' = d1.export (left eff_rcs) x in 
      let y : resexn d2.itype = f x' in
-     (safe_importable_resexn t2 #d2).safe_import y (eright eff_rcs)) <: IIOpi (resexn t2) fl pi)
+     (safe_importable_resexn t2 #d2).safe_import y (right eff_rcs)) <: IIOpi (resexn t2) fl pi)
 }
 
 (** The following four should be unified **)
@@ -533,12 +545,12 @@ let enforce_post
 instance safe_importable_arrow_pre_post_args_res
   (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h r lt) ==> post x h r lt)) 
+  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root rcs) x h r lt ==> post x h r lt)) 
   {| d1:exportable t1 pi (left rcs) fl |}
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
@@ -555,7 +567,7 @@ instance safe_importable_arrow_pre_post_args_res
 instance safe_importable_arrow_pre_post_res
   (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == (resexn t2))) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
@@ -577,7 +589,7 @@ instance safe_importable_arrow_pre_post_res
 instance safe_importable_arrow_pre_post_args
   (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == t1 /\ (Mkdtuple3?._2 (root rcs) == unit)) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
@@ -599,12 +611,12 @@ instance safe_importable_arrow_pre_post_args
 instance safe_importable_arrow_pre_post
   (#t1:Type) (#t2:Type)
   (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (Mkdtuple3?._1 (root rcs) == unit /\ (Mkdtuple3?._2 (root rcs) == unit)) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) () h () lt) ==> post x h r lt)) 
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root rcs) () h () lt ==> post x h r lt)) 
   {| d1:exportable t1 pi (left rcs) fl |}
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
