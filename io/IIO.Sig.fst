@@ -60,7 +60,7 @@ let inst_args (cmd:inst_cmds) =
 
 let inst_res (cmd:inst_cmds) (arg:inst_args cmd) =
   match cmd with
-  | GetTrace -> list event
+  | GetTrace -> trace 
 
 let inst_sig : op_sig inst_cmds = {
   args = inst_args;
@@ -70,13 +70,6 @@ let inst_sig : op_sig inst_cmds = {
 let _iio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
 type iio_cmds = cmd:cmds{_iio_cmds cmd}
 let iio_sig : op_sig iio_cmds = add_sig cmds io_sig inst_sig
-
-type io a = free io_cmds io_sig a
-let io_return (x:'a) : io 'a =
-  free_return io_cmds io_sig 'a x
-
-let io_bind (#a:Type) (#b:Type) l k : io b =
-  free_bind io_cmds io_sig a b l k
 
 // THE IIO FREE MONAD
 type iio (a:Type) = free cmds iio_sig a

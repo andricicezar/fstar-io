@@ -174,6 +174,9 @@ let get_trace () : IIOwp trace GetTraceActions
   (fun p h -> forall lt. lt == [] ==> p lt h) =
   IIOwp?.reflect (iio_call GetTrace ())
 
+// There is no hope to prove anything about ctx without a meta-theorem about F* / without a formalization of F* & Ghost.
+// val ctx_s : (fl:erased tflag) -> IIO unit fl (fun _ -> True) (fun _ _ _ -> True) 
+
 private
 let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
   let fd = static_cmd Openfile "../Makefile" in

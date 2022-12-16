@@ -1,4 +1,4 @@
-module Compile.IIO.To.ILang
+module Compiler.IIO.To.TLang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -7,7 +7,23 @@ open FStar.Ghost
 open Compiler.Languages
 open TC.Checkable
 
+
 (** **** Types **)
+(** Runtime check possibilities:
+pre:
+  trace -> bool
+  'a -> trace -> bool
+
+post:
+  trace -> trace -> bool
+  'a -> trace -> trace -> bool
+  trace -> 'b -> trace -> bool
+  'a -> trace -> 'b -> trace -> bool
+
+They can all be encoded using:
+  'a -> trace -> 'b -> trace -> bool
+and do some hacks in the code.
+**)
 
 (** **** Tree **)
 type tree (a: Type) =
@@ -103,7 +119,7 @@ class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   etype : Type u#b;
   [@@@no_method]
-  c_etype : ilang etype pi;
+  c_etype : tlang etype pi;
   [@@@no_method]
   export : typ_eff_rcs fl rcs -> t -> etype;
 }
@@ -112,7 +128,7 @@ class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c
   [@@@no_method]
   sitype : Type u#b;
   [@@@no_method]
-  c_sitype : ilang sitype pi;
+  c_sitype : tlang sitype pi;
   [@@@no_method]
   safe_import : sitype -> (typ_eff_rcs fl rcs -> t); 
 }
@@ -121,14 +137,14 @@ class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   itype : Type u#b; 
   [@@@no_method]
-  c_itype : ilang itype pi;
+  c_itype : tlang itype pi;
   [@@@no_method]
   import : itype -> (typ_eff_rcs fl rcs -> resexn t);
 }
 
 (** *** Exportable instances **)
 
-instance ilang_is_exportable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) t {| d1: ilang t pi |} : exportable t pi rcs fl = {
+instance tlang_is_exportable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) t {| d1: tlang t pi |} : exportable t pi rcs fl = {
   etype = t;
   c_etype = d1;
   export = (fun Leaf x -> x)
@@ -136,13 +152,13 @@ instance ilang_is_exportable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rc
 
 instance exportable_unit (#pi:monitorable_prop) (#fl:erased tflag) : exportable unit pi Leaf fl = {
   etype = unit;
-  c_etype = ilang_unit pi;
+  c_etype = tlang_unit pi;
   export = (fun Leaf () -> ())
 }
 
 instance exportable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
   etype = file_descr;
-  c_etype = ilang_file_descr pi;
+  c_etype = tlang_file_descr pi;
   export = (fun Leaf fd -> fd)
 }
 
@@ -157,7 +173,7 @@ instance exportable_option
   t1 {| d1:exportable t1 pi rcs fl |} :
   Tot (exportable (option t1) pi rcs fl) = {
   etype = option d1.etype;
-  c_etype = ilang_option pi d1.etype #d1.c_etype;
+  c_etype = tlang_option pi d1.etype #d1.c_etype;
   export = (fun eff_rcs x -> match x with | Some x' -> Some (d1.export eff_rcs x') | None -> None)
 }
 
@@ -167,7 +183,7 @@ instance exportable_pair
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (t1 * t2) pi rcs fl) = {
   etype = d1.etype * d2.etype;
-  c_etype = ilang_pair pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  c_etype = tlang_pair pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
   export = (fun eff_rcs (x, y) -> (d1.export (left eff_rcs) x, d2.export (right eff_rcs) y));
 }
 
@@ -176,12 +192,10 @@ instance exportable_either
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (either t1 t2) pi rcs fl) = {
   etype = either d1.etype d2.etype;
-  c_etype = ilang_either pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  c_etype = tlang_either pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
   export = (fun eff_rcs x -> 
       match x with | Inl x -> Inl (d1.export (left eff_rcs) x) | Inr x -> Inr (d2.export (right eff_rcs) x))
 }
-
-instance ilang_resexn (pi:monitorable_prop) t1 {| d1:ilang t1 pi |} : ilang (resexn t1) pi = { mldummy = () }
 
 (** *** Exportable arrows **)
 
@@ -191,7 +205,7 @@ instance exportable_arrow_with_no_pre_and_no_post
   (t2:Type) {| d2:exportable t2 pi (right rcs) fl|} :
   exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi;
-    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIOpi (resexn t2) fl pi)) (x:d1.itype) ->
       match d1.import x (left eff_rcs) with
       | Inl x' -> begin
@@ -212,7 +226,7 @@ instance exportable_arrow_post_args
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
     etype = x:d1.itype -> IIOpi (resexn d2.etype) fl pi;
-    c_etype = ilang_arrow #fl pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow #fl pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x))) ->
       let f' : t1 -> IIOpi (resexn t2) fl pi = f in
       (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_rcs f');
@@ -284,7 +298,7 @@ instance exportable_arrow_pre_post_args
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
-    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #t1 #unit rc = retype_eff_rc eff_rc in
@@ -311,7 +325,7 @@ instance exportable_arrow_pre_post
   (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
   exportable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
-    c_etype = ilang_arrow pi d1.c_itype (ilang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #unit #unit rc = retype_eff_rc eff_rc in
@@ -327,7 +341,7 @@ instance exportable_arrow_pre_post
 
     
 (** *** Safe importable instances **)
-let ilang_is_safely_importable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) #t (d:ilang t pi) : safe_importable t pi rcs fl = {
+let tlang_is_safely_importable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) #t (d:tlang t pi) : safe_importable t pi rcs fl = {
   sitype = t;
   c_sitype = d;
   safe_import = (fun x Leaf -> x); 
@@ -335,13 +349,13 @@ let ilang_is_safely_importable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? 
 
 instance importable_unit (#pi:monitorable_prop) (#fl:erased tflag) : importable unit pi Leaf fl = {
   itype = unit;
-  c_itype = ilang_unit pi;
+  c_itype = tlang_unit pi;
   import = (fun () Leaf -> Inl ())
 }
 
 instance importable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
   itype = file_descr;
-  c_itype = ilang_file_descr pi;
+  c_itype = tlang_file_descr pi;
   import = (fun fd Leaf -> Inl fd)
 }
 
@@ -373,7 +387,7 @@ instance importable_option
   t {| d:importable t pi rcs fl |} :
   Tot (importable (option t) pi rcs fl) = {
   itype = option d.itype;
-  c_itype = ilang_option pi d.itype #d.c_itype;
+  c_itype = tlang_option pi d.itype #d.c_itype;
   import = (fun (x:option d.itype) eff_rcs ->
     match x with
     | Some x' -> begin
@@ -389,7 +403,7 @@ instance importable_pair
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (t1 * t2) pi rcs fl) = {
   itype = d1.itype * d2.itype;
-  c_itype = ilang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun (x,y) eff_rcs ->
       match (d1.import x (left eff_rcs), d2.import y (right eff_rcs)) with
       | (Inl x, Inl y) -> Inl (x, y)
@@ -401,7 +415,7 @@ instance importable_either
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (either t1 t2) pi rcs fl) = {
   itype = either d1.itype d2.itype;
-  c_itype = ilang_either pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_either pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun x eff_rcs ->
       match x with
       | Inl x' -> begin
@@ -423,7 +437,7 @@ instance importable_dpair_refined
   {| d3:checkable2 p |} :
   Tot (importable (x:t1 & y:t2{p x y}) pi rcs fl) = {
   itype = d1.itype & d2.itype;
-  c_itype = ilang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun ((x', y')) eff_rcs ->
       match (d1.import x' (left eff_rcs), d2.import y' (right eff_rcs)) with
        | (Inl x, Inl y) ->
@@ -437,7 +451,7 @@ instance safe_importable_resexn
   t1 {| d1:importable t1 pi rcs fl |} :
   Tot (safe_importable (resexn t1) pi rcs fl) = {
   sitype = resexn d1.itype;
-  c_sitype = ilang_resexn pi d1.itype #d1.c_itype;
+  c_sitype = tlang_resexn pi d1.itype #d1.c_itype;
   safe_import = (fun x eff_rcs ->
       match x with
       | Inl x' -> d1.import x' eff_rcs 
@@ -450,7 +464,7 @@ instance safe_importable_arrow
   (t2:Type) {| d2:importable t2 pi (right rcs) fl |} : 
   safe_importable ((x:t1) -> IIOpi (resexn t2) fl pi) pi rcs fl = {
   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:d1.etype -> IIOpi (resexn d2.itype) fl pi) eff_rcs (x:t1) -> 
     (let x' = d1.export (left eff_rcs) x in 
      let y : resexn d2.itype = f x' in
@@ -555,7 +569,7 @@ instance safe_importable_arrow_pre_post_args_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -577,7 +591,7 @@ instance safe_importable_arrow_pre_post_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -594,34 +608,39 @@ instance safe_importable_arrow_pre_post_args
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h () lt) ==> post x h r lt)) 
+  (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root rcs)) x h () lt) ==> post x h r lt))
   {| d1:exportable t1 pi (left rcs) fl |}
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
-   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
-  safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
-    let rcs' = (EmptyNode (left rcs) (right rcs)) in
-    let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
-    let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
-    let (| rc_pck, eff_rc |) = root eff_rcs in
-    enforce_post_args pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
+    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+    c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+    safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
+      let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
+      let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
+      let (| rc_pck, eff_rc |) = root eff_rcs in
+      enforce_post_args pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
   }
 
 instance safe_importable_arrow_pre_post
-  (#t1:Type) (#t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
   (#fl:erased tflag)
+
+  (#t1:Type) (#t2:Type)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
+
+  (#pi:monitorable_prop) 
+  
+  (#rcs:(pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root rcs) () h () lt ==> post x h r lt)) 
+
+  (#rcs':(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
   {| d1:exportable t1 pi (left rcs) fl |}
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = ilang_arrow pi d1.c_etype (ilang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in

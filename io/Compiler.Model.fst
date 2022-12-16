@@ -10,7 +10,7 @@ open BeyondCriteria
 open IIO.Sig
   
 open Compiler.Languages
-open Compile.IIO.To.ILang
+open Compiler.IIO.To.TLang
 
 type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
   (cmd : io_cmds) ->
@@ -39,28 +39,25 @@ let convert_insts inst_pi spec_pi c1 cmd_call (cmd:io_cmds) arg =
 (** **** interfaces **)
 noeq
 type src_interface = {
-  ct : erased tflag -> Type;
-
-  ct_rcs : tree pck_rc;
-
   spec_pi : monitorable_prop;
+  ct_rcs : tree pck_rc;
+  ct : erased tflag -> Type;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
+
   inst_pi : monitorable_prop;
   inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
-
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
 
   p_post : list string -> trace -> int -> trace -> Type0;
 }
 
 noeq
 type tgt_interface = {
-  ct : erased tflag -> Type u#a;
-
   spec_pi : monitorable_prop;
+  ct : erased tflag -> Type u#a;
+  ct_tlang : fl:erased tflag -> tlang (ct fl) spec_pi;
+
   inst_pi : monitorable_prop;
   inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
-  
-  ct_ilang : fl:erased tflag -> ilang (ct fl) spec_pi;
 }
   
 (** **** languages **)
@@ -108,7 +105,7 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
   inst_pi = i.inst_pi;
   inst_pi_stronger_spec_pi = i.inst_pi_stronger_spec_pi;
 
-  ct_ilang = (fun fl -> (i.ct_importable fl).c_sitype);
+  ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
 }
 
 (** ** Compilation **)

@@ -9,7 +9,7 @@ open FStar.List
 open BeyondCriteria
 
 open Compiler.Languages
-open Compile.IIO.To.ILang
+open Compiler.IIO.To.TLang
 open Compiler.Model
 
 (** Examples objectives:
@@ -44,7 +44,8 @@ type stronger_pis (pi1:monitorable_prop) (pi2:monitorable_prop) =
 (** ** Testing **)
 (** *** Test 1 - FO **)
 let test1_pre = (fun () h -> True)
-let test1_post = (fun () h (rfd:resexn file_descr) lt -> (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
+let test1_post = (fun () h (rfd:resexn file_descr) lt -> 
+  (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 
 type test1_ct = source_arrow unit file_descr test1_pre test1_post
 
@@ -74,8 +75,7 @@ let test1_c1post =
   Classical.forall_intro_2 (Classical.move_requires_2 aux)
 
 assume val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_rc
-
-//let test1_c2post = ()
+let test1_c2post = ()
 
 let test1_ct_importable (fl:erased tflag) : safe_importable (test1_ct fl) test1_pi test1_ct_rcs fl =
   safe_importable_arrow_pre_post_args_res _ _ test1_c1post test1_c2post #exportable_unit #importable_file_descr
