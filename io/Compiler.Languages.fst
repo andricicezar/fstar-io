@@ -23,7 +23,13 @@ include IIO
     trace property. The pre-condition must be trivial.
 **)
 
+(** monitorable_prop is the type of the runtime check that is enforced when instrumenting.
+    A monitorable_prop checks if the next operation with its arguments satisfy the property
+    over the history. **)
 type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
+
+(** TODO: show that the type of monitorable_prop is enough to enforce any monitorable property
+ (from Grigore Rosu's paper) **)
 
 unfold
 let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
@@ -32,6 +38,7 @@ let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
   | ERead arg _ -> check Read arg h
   | EClose arg _ -> check Close arg h
 
+(** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
   (check : monitorable_prop)
   (h l: trace) :

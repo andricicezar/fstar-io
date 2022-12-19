@@ -39,14 +39,34 @@ let convert_insts inst_pi spec_pi c1 cmd_call (cmd:io_cmds) arg =
 (** **** interfaces **)
 noeq
 type src_interface = {
+  (** The interface contains two pi's: spec_pi and inst_pi. 
+      inst_pi is the pi used to instrument the context.
+      One usually wants to instrument the context with a strong pi,
+      but that is not necessary the spec wanted for the context since
+      one can not write a precise pi. One
+      could limit the direct access of the context to the IO actions 
+      using inst_pi, but still want the context to have a more 
+      relaxed indirect access to IO actions. 
+      For example calling a statically verified callback, 
+      then the callback also has to respect the strong pi (otherwise 
+      the context can not call it). We found
+      that having a weaker second pi (spec_pi) used only at the
+      spec level, works well and solves the problem.
+      spec_pi is weaker than inst_pi and it represents the spec 
+      one obtains in the target language. **)
   spec_pi : monitorable_prop;
-  ct_rcs : tree pck_rc;
-  ct : erased tflag -> Type;
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
-
   inst_pi : monitorable_prop;
   inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
 
+  (** The type of the "context" --- not sure if it is the best name.
+      It is more like the type of the interface which the two share to communicate. **)
+  ct : erased tflag -> Type;
+  ct_rcs : tree pck_rc;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
+
+  (** The partial program can have a post-condition that becomes the
+      post-condition of the whole program after linking in the source.
+      This post-condition is erased during compilation **)
   p_post : list string -> trace -> int -> trace -> Type0;
 }
 
