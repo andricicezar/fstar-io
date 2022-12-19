@@ -623,28 +623,27 @@ instance safe_importable_arrow_pre_post_args
   }
 
 instance safe_importable_arrow_pre_post
-  (#fl:erased tflag)
-
   (#t1:Type) (#t2:Type)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
 
   (#pi:monitorable_prop) 
-  
-  (#rcs:(pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
+  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
+
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root rcs) () h () lt ==> post x h r lt)) 
 
-  (#rcs':(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
+  (#fl:erased tflag)
+
   {| d1:exportable t1 pi (left rcs) fl |}
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
-   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
-  safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
-    let rcs' = (EmptyNode (left rcs) (right rcs)) in
-    let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
-    let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
-    let (| rc_pck, eff_rc |) = root eff_rcs in
-    enforce_post pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
+    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
+    c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+    safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
+      let rcs' = (EmptyNode (left rcs) (right rcs)) in
+      let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
+      let f' = (safe_importable_arrow #_ #rcs' t1 #d1 t2 #d2).safe_import f eff_rcs' in
+      let (| rc_pck, eff_rc |) = root eff_rcs in
+      enforce_post pi pre post (Mkdtuple3?._3 rc_pck) (retype_eff_rc eff_rc) c1post c2post f')
   }
