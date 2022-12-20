@@ -7,10 +7,9 @@ open FStar.FunctionalExtensionality
 
 open BeyondCriteria
 
-open IIO.Sig
-  
 open Compiler.Languages
 open Compiler.IIO.To.TLang
+open IIO.Behavior
 
 type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
   (cmd : io_cmds) ->
@@ -81,8 +80,6 @@ type tgt_interface = {
 }
   
 (** **** languages **)
-assume val beh : (list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
-
 type ctx_src (i:src_interface)  = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> argv:list string -> IIO int (IOActions + fl) (fun _ -> True) (i.p_post argv)
 type whole_src = post:(list string -> trace -> int -> trace -> Type0) & (argv:list string -> IIO int AllActions (fun _ -> True) (post argv))

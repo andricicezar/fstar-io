@@ -16,12 +16,18 @@ let stream a = nat ^-> a
 
 noeq
 type trace (#event_typ:Type) =
-| Finite_trace : tr:(list event_typ) * result:int -> trace #event_typ
-| Infinite_trace : stream (option event_typ) -> trace #event_typ
+| Finite_trace : args:(list string) -> tr:(list event_typ) -> result:int -> trace #event_typ
+| Infinite_trace : args:(list string) -> stream (option event_typ) -> trace #event_typ
 
 type trace_property (#event_typ:Type) = trace #event_typ -> Type0
 
-type hyper_trace_property (#event_typ:Type) = trace_property #event_typ -> Type0
+let subset_of (#event_typ:Type) (s1:trace_property #event_typ) (s2:trace_property #event_typ) : Type0 =
+  forall tr. s1 tr ==> s2 tr
+  
+let member_of (#event_typ:Type) (s1:trace_property #event_typ) (tr:trace #event_typ) =
+  s1 tr
+
+type hyperproperty (#event_typ:Type) = trace_property #event_typ -> Type0
 
 (** ** Language Record *)
 (*
