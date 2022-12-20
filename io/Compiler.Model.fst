@@ -66,7 +66,7 @@ type src_interface = {
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
       This post-condition is erased during compilation **)
-  p_post : list string -> trace -> int -> trace -> Type0;
+  p_post : trace -> int -> trace -> Type0;
 }
 
 noeq
@@ -81,8 +81,8 @@ type tgt_interface = {
   
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> argv:list string -> IIO int (IOActions + fl) (fun _ -> True) (i.p_post argv)
-type whole_src = post:(list string -> trace -> int -> trace -> Type0) & (argv:list string -> IIO int AllActions (fun _ -> True) (post argv))
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.p_post
+type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> IIO int AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
   (| i.p_post, p #AllActions (c #AllActions (inst_io_cmds i.inst_pi) (make_rcs_eff i.ct_rcs)) |)
@@ -98,8 +98,8 @@ let src_language : language = {
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> i.ct fl
-type prog_tgt (i:tgt_interface) = i.ct AllActions -> list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt = list string -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   p (c #AllActions (inst_io_cmds i.inst_pi))

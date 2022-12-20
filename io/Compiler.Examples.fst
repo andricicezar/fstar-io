@@ -99,11 +99,11 @@ let test1 : src_interface = {
   ct_rcs = test1_ct_rcs;
 
   ct_importable = test1_ct_importable;
-  p_post = (fun _ _ _ lt -> (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)));
+  p_post = (fun _ _ lt -> (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)));
 }
 
 val test1_prog : prog_src test1
-let test1_prog #fl ctx args : IIO int (fl + IOActions) (fun _ -> True) (test1.p_post args) =
+let test1_prog #fl ctx () : IIO int (fl + IOActions) (fun _ -> True) test1.p_post =
   //let test = static_cmd Openfile "/etc/passwd" in
   let _ = ctx () in
   0 
@@ -149,11 +149,11 @@ let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) test2_
 let test2 : src_interface = {
   spec_pi = test2_pi; inst_pi = test2_pi; inst_pi_stronger_spec_pi = test2_stronger_pis;
   ct = test2_ct; ct_rcs = test2_rcs; ct_importable = test2_ct_importable; 
-  p_post = (fun _ _ _ _ -> True);
+  p_post = (fun _ _ _ -> True);
 }
 
 val test2_prog : prog_src test2
-let test2_prog #fl ctx args =
+let test2_prog #fl ctx () =
   let _ = ctx (fun fd -> Inl ()) in
   (** return exit code **) 0
 
@@ -223,11 +223,11 @@ let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) test3_
 let test3 : src_interface = {
   spec_pi = test3_pi; inst_pi = test3_pi; inst_pi_stronger_spec_pi = test3_stronger_pis;
   ct = test3_ct; ct_rcs = test3_rcs; ct_importable = test3_ct_importable; 
-  p_post = (fun _ _ _ _ -> True);
+  p_post = (fun _ _ _ -> True);
 }
 
 val test3_prog : prog_src test3
-let test3_prog #fl ctx args : IIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
+let test3_prog #fl ctx () : IIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
   match static_cmd Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with

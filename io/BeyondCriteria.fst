@@ -16,8 +16,8 @@ let stream a = nat ^-> a
 
 noeq
 type trace (#event_typ:Type) =
-| Finite_trace : args:(list string) -> tr:(list event_typ) -> result:int -> trace #event_typ
-| Infinite_trace : args:(list string) -> stream (option event_typ) -> trace #event_typ
+| Finite_trace : tr:(list event_typ) -> result:int -> trace #event_typ
+| Infinite_trace : stream (option event_typ) -> trace #event_typ
 
 type trace_property (#event_typ:Type) = trace #event_typ -> Type0
 
