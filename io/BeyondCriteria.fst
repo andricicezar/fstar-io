@@ -24,7 +24,7 @@ type trace_property (#event_typ:Type) = trace #event_typ -> Type0
 let subset_of (#event_typ:Type) (s1:trace_property #event_typ) (s2:trace_property #event_typ) : Type0 =
   forall tr. s1 tr ==> s2 tr
   
-let member_of (#event_typ:Type) (s1:trace_property #event_typ) (tr:trace #event_typ) =
+let member_of (#event_typ:Type) (tr:trace #event_typ) (s1:trace_property #event_typ) =
   s1 tr
 
 type hyperproperty (#event_typ:Type) = trace_property #event_typ -> Type0
