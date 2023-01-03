@@ -6,8 +6,8 @@ open FStar.Ghost
 open FStar.String
 
 open IIO
-open BeyondCriteria
 open IIO.Behavior
+open BeyondCriteria
 
 (** There are many difficulties on trying to state Hyperproperties
 about whole/partial source programs. **)
@@ -76,3 +76,46 @@ let hyperprop_whole1 () =
   assert (forall (tr:trace). tr `member_of` (beh whole1) ==> tr `member_of` tp1);
   hyperprop_tp1 ();
   ()
+
+(** ** partial programs **)
+
+open FStar.Tactics
+
+(* h is non-interfering for flag polymorphic ctx
+  -- should be true since a flag polymorphic ctx can not do any actions 
+  
+  the type of ctx is simplified here:
+    * unit, int should be arbitrary types
+    * it can be HO
+    * ctx should also take instrumented actions
+    * ctx should also take the contracts *)
+val gni_v1 : 
+  #pre:_ ->
+  ctx:(fl:erased tflag -> unit -> IIO int fl pre (fun _ _ _ -> True)) ->
+  #a:Type ->
+  secrets:(h:_{pre h} -> a) ->
+  Lemma (
+    let bh = beh_ctx #pre (ctx AllActions) in
+    forall t1 t2. t1 `pt_mem` bh /\ t2 `pt_mem` bh ==>
+      (exists t3. t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3))
+
+let gni_v1 #pre ctx #a secrets = 
+  let bh = beh_ctx #pre (ctx AllActions) in
+  let reified_ctx : dm_giio int AllActions (to_hist pre (fun _ _ _ -> True)) = __reify_IIOwp (ctx AllActions) in
+  introduce forall (t1 t2:prefixed_trace pre).
+  t1 `pt_mem` bh /\ t2 `pt_mem` bh 
+  ==> (exists (t3:prefixed_trace pre). t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3) 
+  with begin
+    introduce t1 `pt_mem` bh /\ t2 `pt_mem` bh
+    ==> (exists (t3:prefixed_trace pre). t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3)
+    with _. begin
+      let newH = (fst t1) in
+      let t3 : prefixed_trace pre = (newH, snd t2) in 
+      assert (t2 `pt_mem` bh); (** unfolds to: **)
+      assert ((snd t2) `member_of` beh_giio reified_ctx (fst t2)); 
+      assume ((snd t2) `member_of` beh_giio reified_ctx newH); (** folds into: **)
+      assert (t3 `pt_mem` bh);
+      assert (secrets (fst t1) == secrets (fst t3));
+      assert (snd t2 == snd t3)
+    end
+  end
