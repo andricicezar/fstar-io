@@ -50,7 +50,7 @@ let _beh ws =
   beh_giio (__reify_IIOwp ws) []
 
 (** used for whole programs **)
-irreducible
+[@@ "opaque_to_smt"]
 val beh : (unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
 let beh = on_domain _ (fun ws -> _beh ws)
 
@@ -59,6 +59,6 @@ let _beh_ctx ws h =
   beh_giio (__reify_IIOwp ws) h 
 
 (** used for contexts **)
-//irreducible
+//[@@ "opaque_to_smt"]
 val beh_ctx : #pre:(trace -> Type0) -> (unit -> IIO int AllActions pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
 let beh_ctx #pre = on_domain _ (fun ws -> _beh_ctx #pre ws)

@@ -119,3 +119,40 @@ let gni_v1 #pre ctx #a secrets =
       assert (snd t2 == snd t3)
     end
   end
+
+val pprog1 : 
+  fl:erased tflag ->
+  ctx:(unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  IIO int (fl + IOActions) (fun _ -> True) (fun _ _ _ -> True) 
+let pprog1 fl ctx =
+  let msg = read_content "secrets.txt" in  
+ // let _ = ctx () in
+  7
+
+val hyperprop_pprog1 : ctx:_ -> tr1:_ -> tr2:_ -> 
+  Lemma 
+    (requires (
+      let bh = beh (fun () -> pprog1 AllActions ctx) in (
+      tr1 `member_of` bh /\ tr2 `member_of` bh)))
+    (ensures (
+       match tr1, tr2 with
+       | Finite_trace t1 r1, Finite_trace t2 r2 -> (
+         r1 == r2
+       )
+       | _, _ -> False))
+
+let hyperprop_pprog1 ctx tr1 tr2 =
+  let bh = beh_giio (__reify_IIOwp ((fun () -> pprog1 AllActions ctx))) [] in
+ // reveal_opaque (`%beh) beh;
+ // assert (beh ws == bh); 
+  match tr1, tr2 with
+  | Finite_trace t1 r1, Finite_trace t2 r2 -> begin
+    assert (Finite_trace t1 r1 `member_of` bh ==> r1 == 7) by (
+      norm [delta_only [`%beh;`%member_of;`%beh_giio];iota];
+      //norm [delta_only [`%link1;`%pprog1];iota];
+     dump "H");
+    admit ();
+    assert (r2 == 7);
+    assert (r1 == r2)
+  end
+  | _, _ -> assume (False)
