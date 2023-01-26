@@ -60,9 +60,9 @@
    - [ ] reasoning about the partial program using reification
    - [ ] reasoning about all the source contexts
 
-5. Theorems about the context
+5. Noninterference theorems about the context
 
-   The hope is that we can prove some general theorems about the target context.
+   The hope is that we can state and prove some noninterference theorems about the context by exploiting the flag-polymorphism / parametricity.
 
 6. Refactoring - file `Compiler.IIO.To.TLang.fst`
 
