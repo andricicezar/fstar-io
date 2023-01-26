@@ -20,12 +20,46 @@
 
 
 ## Unfinished extensions
-1. Compilation
+1. Examples - file `Compiler.Examples.fst`
 
-2. WebServer
+   File broken right now since I made the target context pi-polymorphic.
+   I suspect F* has problems in proving automatically that the definitions
+   of target contexts are correct because `pi` is ghost.
 
-3. Examples
+   The examples are hard to read.
+
+   Not sure if we are satisfied with the examples from the file.
+
+2. **WebServer** - files in `old/case-studies`
+
+   The webserver case study is not on the latest version of the project.
+   Tasks:
+   - [ ] update & reverify the WebServer in the new IIO effect
+   - [ ] define the web server as a source partial program
+   - [ ] define request handlers as target contexts
+   - [ ] link them together
+   Additional tasks:
+   - [ ] extract target web server to OCaml
+
+3. **Extraction to OCaml** - extraction to OCaml was not kept updated.
+
+   Not sure if still necessary since it is not part of our secure compilation chain.
+   It may be nice for the case study, because then one can run the web server.
+
+   This has two components.
+   Tasks:
+   - [ ] there is a step that reifies the monad (old code in `old/Compile.MLang.To.Tot.fst`)
+   - [ ] F* extraction of F* to OCaml
 
 4. Proving Relation (Hyperproperties) about a source partial program
 
+   File `Hyperproperties.fst`. It is very hard to do and it may be
+   a lot of effort in proving one thing about a very small source partial program.
+
+   Challanges:
+   - [ ] reasoning about the partial program using reification
+   - [ ] reasoning about all the source contexts
+
 5. Theorems about the context
+
+   The hope is that we can prove some general theorems about the target context.
