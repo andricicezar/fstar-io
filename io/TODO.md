@@ -63,3 +63,14 @@
 5. Theorems about the context
 
    The hope is that we can prove some general theorems about the target context.
+
+6. Refactoring - file `Compiler.IIO.To.TLang.fst`
+
+   The biggest complaint of the actual implementation is that the solution proposed by me
+   to convert the additional logical assumptions (beyond pi) into runtime checks is too
+   hard to understand (with which I agree).
+   - [ ] Catalin suggested to specialized the `tree` data structure I am using to our problem,
+   such that is more obvious how it is used
+   - [ ] One has to manually instantiate the `tree` data structure when defining an interface,
+   and it was proposed to look into if we can automatize the process by using type classes.
+
