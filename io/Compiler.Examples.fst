@@ -113,7 +113,7 @@ let test1_ctx #fl io_acts eff_rcs () : IIO (resexn file_descr) fl (fun _ -> True
   io_acts Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
-let test1_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl (comp_int_src_tgt test1).spec_pi = 
+let test1_ctx_t #fl #pi io_acts () : IIOpi (resexn file_descr) fl pi = 
   io_acts Openfile "/etc/passwd"
 
 (** ** Test 2 - HO left 1 **)

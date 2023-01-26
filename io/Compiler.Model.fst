@@ -72,8 +72,9 @@ type src_interface = {
 noeq
 type tgt_interface = {
   spec_pi : monitorable_prop;
-  ct : erased tflag -> Type u#a;
-  ct_tlang : fl:erased tflag -> tlang (ct fl) spec_pi;
+
+  ct : erased tflag -> monitorable_prop -> Type u#a;
+  ct_tlang : fl:erased tflag -> tlang (ct fl spec_pi) spec_pi;
 
   inst_pi : monitorable_prop;
   inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
@@ -97,12 +98,12 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> i.ct fl
-type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased monitorable_prop -> typ_io_cmds fl pi -> i.ct fl pi
+type prog_tgt (i:tgt_interface) = i.ct AllActions i.spec_pi -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  p (c #AllActions (inst_io_cmds i.inst_pi))
+  p (c #AllActions #i.spec_pi (inst_io_cmds i.inst_pi))
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = beh 
@@ -116,19 +117,18 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  ct = (fun fl -> (i.ct_importable fl).sitype);
+  ct = (fun fl pi -> (i.ct_importable fl).sitype);
+  ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
 
   spec_pi = i.spec_pi;
   inst_pi = i.inst_pi;
   inst_pi_stronger_spec_pi = i.inst_pi_stronger_spec_pi;
-
-  ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
 }
 
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl acts eff_rcs =
-  (i.ct_importable fl).safe_import (c_t #fl acts) eff_rcs
+  (i.ct_importable fl).safe_import (c_t #fl #i.spec_pi acts) eff_rcs
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| _, ws |) = ws
@@ -137,7 +137,9 @@ val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int
 let compile_pprog #i p_s c_t = 
   let eff_rcs = make_rcs_eff i.ct_rcs in
   let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
-  p_s #AllActions c_s
+  let ws : whole_src = (| i.p_post, p_s #AllActions c_s |) in
+  let wt : whole_tgt = compile_whole ws in
+  wt
 
 let comp : compiler = {
   source = src_language;
