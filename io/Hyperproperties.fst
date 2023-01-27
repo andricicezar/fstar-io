@@ -81,6 +81,43 @@ let hyperprop_whole1 () =
 
 open FStar.Tactics
 
+(* h is non-interfering for flag polymorphic simplified ctx
+  -- should be true since this ctx cannot do any actions **)
+val gni_v0 : 
+  ctx:(fl:erased tflag -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions) in
+    forall t1 t2. t1 `pt_mem` bh /\ t2 `pt_mem` bh ==>
+      (exists t3. t3 `pt_mem` bh /\ 
+             fst t1 == fst t3 /\ // histories are equal
+             snd t2 == snd t3   // local traces are equal
+             ))
+             
+let gni_v0 ctx =
+  let bh = beh_ctx #(fun _ -> True) (ctx AllActions) in
+  let reified_ctx : dm_giio int AllActions (to_hist (fun _ -> True) (fun _ _ _ -> True)) = __reify_IIOwp (ctx AllActions) in
+  introduce forall t1 t2.
+  t1 `pt_mem` bh /\ t2 `pt_mem` bh 
+  ==> (exists t3. t3 `pt_mem` bh /\ fst t1 == fst t3 /\ snd t2 == snd t3) 
+  with begin
+    introduce t1 `pt_mem` bh /\ t2 `pt_mem` bh
+    ==> (exists t3. t3 `pt_mem` bh /\ fst t1 == fst t3 /\ snd t2 == snd t3)
+    with _. begin
+      let newH = (fst t1) in
+      let t3 = (newH, snd t2) in 
+      assert (t2 `pt_mem` bh); (** unfolds to: **)
+      //assert ((snd t2) `member_of #event` beh_giio reified_ctx (fst t2)); (* not sure why it does not work *)
+      assume ((snd t2) `member_of` beh_giio reified_ctx newH); (** folds into: **)
+      assert (t3 `pt_mem` bh) by (
+        binder_retype (nth_binder (-1)); norm [delta_only [`%member_of];iota]; trefl ();
+        norm [delta_only [`%pt_mem;`%beh_ctx;`%_beh_ctx]; iota]; 
+        // assumption (); -- not sure why it is failing
+        tadmit ());
+      assert (fst t1 == fst t3);
+      assert (snd t2 == snd t3)
+    end
+  end
+
 (* h is non-interfering for flag polymorphic ctx
   -- should be true since a flag polymorphic ctx can not do any actions 
   

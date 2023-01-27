@@ -11,7 +11,7 @@
 
 4. `Hist.fst` - admitted lemma `lemma_hist_bind_associativity` (used in `DMFree.fst`)
 
-5. `Common.fst` - a few admits (not sure if used anymore)
+5. `CommonUtils.fst` - a few admits (not sure if used anymore)
 
 6. `IIO.Behavior.fst` - reify is assumed as a ghost function
 
@@ -63,6 +63,9 @@
 5. Noninterference theorems about the context
 
    The hope is that we can state and prove some noninterference theorems about the context by exploiting the flag-polymorphism / parametricity.
+
+   I have tried to state that the history is non-interfering with the local trace for a flag-polymorphic function.
+   Code in `Hyperproperties.fst` lemma `gni_v0`.
 
 6. Refactoring - file `Compiler.IIO.To.TLang.fst`
 
