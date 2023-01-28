@@ -123,12 +123,14 @@ open FStar.List.Tot
 
 val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
 let leak_the_same h1 h2 pi rc =
-  // if there is a valid local trace for h1 that leaks information
-  // then there is a valid local trace for h2 that leaks the same information
+  // for each valid local trace of h1,
+  // there exists a valid local trace for h2
+  // that leaks the same information
   (forall lt1. enforced_locally pi h1 lt1 ==> 
     (exists lt2. enforced_locally pi h2 lt2 /\
       (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
       (forall x y. rc x h1 y lt1 == rc x h2 y lt2)))
+  (* CA: should it be the other way too? **)
 
 val gni : 
   pi : monitorable_prop ->
