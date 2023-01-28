@@ -118,6 +118,31 @@ let gni_v0 ctx =
     end
   end
 
+open Compiler.Languages
+open FStar.List.Tot
+
+val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
+let leak_the_same h1 h2 pi rc =
+  // if there is a valid local trace for h1 that leaks information
+  // then there is a valid local trace for h2 that leaks the same information
+  (forall lt1. enforced_locally pi h1 lt1 ==> 
+    (exists lt2. enforced_locally pi h2 lt2 /\
+      (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
+      (forall x y. rc x h1 y lt1 == rc x h2 y lt2)))
+
+val gni : 
+  pi : monitorable_prop ->
+  rc : ('a -> trace -> 'b -> trace -> bool) ->
+  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      leak_the_same h1 h2 pi rc
+    ==> (exists h3 lt3 r3. (h3, Finite_trace lt3 r3) `pt_mem` bh /\ 
+                      h1 == h3 /\ lt2 == lt3 /\ r2  == r3))
+
 (* h is non-interfering for flag polymorphic ctx
   -- should be true since a flag polymorphic ctx can not do any actions 
   
