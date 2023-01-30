@@ -81,8 +81,86 @@ let hyperprop_whole1 () =
 
 open FStar.Tactics
 
+open Compiler.Model
+open FStar.List.Tot
+
+let make_rc_tree (#a:Type) (#b:Type) (rc:a -> trace -> b -> trace -> bool) : tree pck_rc =
+  Node (| a, b, rc |) Leaf Leaf
+
+val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
+let leak_the_same h1 h2 pi rc =
+  // for each valid local trace of h1,
+  // there exists a valid local trace for h2
+  // both leaking the same information through pi and rc
+  (forall lt1. enforced_locally pi h1 lt1 ==> 
+    (exists lt2. enforced_locally pi h2 lt2 /\
+      (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
+      (forall arg res. rc arg h1 res lt1 == rc arg h2 res lt2)))
+
+(* Generalized Non-Interference definition took from Hyperproperties, Michael R. Clarkson and
+   Fred B. Schneider, specialized for our case. The original: 
+   
+   GNI = { T ∈ Prop | ∀t1,t2 ∈ T: (∃t3 ∈ T: evHin(t3) = evHin(t1) ∧ evL(t3) = evL(t2)) }
+
+   The traces in our case have 2 components, the history and the local trace * result.
+
+   Our notion of high events and low events is as follows:
+
+   The high events are the events that happened before calling the context (the history)
+   and we would like it to be non-interferent with the behavior of the context (local trace * result).
+   However, this is not possible since pi and the runtime checks leak information,
+   thus we had to add a relation between t1 and t2 as an assumption, that they leak
+   the same amount of information.
+
+   The low events are all the events produced by the context (local trace) and its result.
+   
+   TODO:
+   - [ ] is it the theorem we want?
+   - [ ] can we write it in a more simple way to be easier to prove in F*?
+   - [ ] prove *)
+val gni : 
+  pi : monitorable_prop ->
+  (** for any runtime check **)
+  rc : ('a -> trace -> 'b -> trace -> bool) ->
+  (** the ctx is in a first-order setting. I don't think it matters **)
+  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+    let eff_rcs = make_rcs_eff (make_rc_tree rc) in
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) eff_rcs) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      leak_the_same h1 h2 pi rc
+    ==> (exists h3 lt3 r3. (h3, Finite_trace lt3 r3) `pt_mem` bh /\ 
+                      h1 == h3 /\ lt2 == lt3 /\ r2  == r3))
+
+(**
+I thought I can make it more general by using the model directly.
+However, this cannot be typed because we don't know the argument type of ctx,
+thus ctx cannot be thunked to be reified.
+
+val gni0 :
+  i : src_interface ->
+  ctx : ctx_src i ->
+  Lemma (
+    let eff_rcs = make_rcs_eff i.ct_rcs in 
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) eff_rcs) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      leak_the_same h1 h2 pi rc
+    ==> (exists h3 lt3 r3. (h3, Finite_trace lt3 r3) `pt_mem` bh /\ 
+                      h1 == h3 /\ lt2 == lt3 /\ r2  == r3))
+**)
+
 (* h is non-interfering for flag polymorphic simplified ctx
-  -- should be true since this ctx cannot do any actions **)
+  -- should be true since this ctx cannot do any actions
+
+  the type of ctx is simplified here:
+    * unit, int should be arbitrary types
+    * it can be HO
+    * ctx should also take instrumented actions
+    * ctx should also take the contracts *)
 val gni_v0 : 
   ctx:(fl:erased tflag -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
   Lemma (
@@ -114,72 +192,6 @@ let gni_v0 ctx =
         // assumption (); -- not sure why it is failing
         tadmit ());
       assert (fst t1 == fst t3);
-      assert (snd t2 == snd t3)
-    end
-  end
-
-open Compiler.Languages
-open FStar.List.Tot
-
-val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
-let leak_the_same h1 h2 pi rc =
-  // for each valid local trace of h1,
-  // there exists a valid local trace for h2
-  // that leaks the same information
-  (forall lt1. enforced_locally pi h1 lt1 ==> 
-    (exists lt2. enforced_locally pi h2 lt2 /\
-      (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
-      (forall x y. rc x h1 y lt1 == rc x h2 y lt2)))
-  (* CA: should it be the other way too? **)
-
-val gni : 
-  pi : monitorable_prop ->
-  rc : ('a -> trace -> 'b -> trace -> bool) ->
-  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
-  Lemma (
-    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi) in
-    forall h1 lt1 r1 h2 lt2 r2. 
-      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
-      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
-      leak_the_same h1 h2 pi rc
-    ==> (exists h3 lt3 r3. (h3, Finite_trace lt3 r3) `pt_mem` bh /\ 
-                      h1 == h3 /\ lt2 == lt3 /\ r2  == r3))
-
-(* h is non-interfering for flag polymorphic ctx
-  -- should be true since a flag polymorphic ctx can not do any actions 
-  
-  the type of ctx is simplified here:
-    * unit, int should be arbitrary types
-    * it can be HO
-    * ctx should also take instrumented actions
-    * ctx should also take the contracts *)
-val gni_v1 : 
-  #pre:_ ->
-  ctx:(fl:erased tflag -> unit -> IIO int fl pre (fun _ _ _ -> True)) ->
-  #a:Type ->
-  secrets:(h:_{pre h} -> a) ->
-  Lemma (
-    let bh = beh_ctx #pre (ctx AllActions) in
-    forall t1 t2. t1 `pt_mem` bh /\ t2 `pt_mem` bh ==>
-      (exists t3. t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3))
-
-let gni_v1 #pre ctx #a secrets = 
-  let bh = beh_ctx #pre (ctx AllActions) in
-  let reified_ctx : dm_giio int AllActions (to_hist pre (fun _ _ _ -> True)) = __reify_IIOwp (ctx AllActions) in
-  introduce forall (t1 t2:prefixed_trace pre).
-  t1 `pt_mem` bh /\ t2 `pt_mem` bh 
-  ==> (exists (t3:prefixed_trace pre). t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3) 
-  with begin
-    introduce t1 `pt_mem` bh /\ t2 `pt_mem` bh
-    ==> (exists (t3:prefixed_trace pre). t3 `pt_mem` bh /\ secrets (fst t1) == secrets (fst t3) /\ snd t2 == snd t3)
-    with _. begin
-      let newH = (fst t1) in
-      let t3 : prefixed_trace pre = (newH, snd t2) in 
-      assert (t2 `pt_mem` bh); (** unfolds to: **)
-      assert ((snd t2) `member_of` beh_giio reified_ctx (fst t2)); 
-      assume ((snd t2) `member_of` beh_giio reified_ctx newH); (** folds into: **)
-      assert (t3 `pt_mem` bh);
-      assert (secrets (fst t1) == secrets (fst t3));
       assert (snd t2 == snd t3)
     end
   end

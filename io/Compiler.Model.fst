@@ -7,8 +7,8 @@ open FStar.FunctionalExtensionality
 
 open BeyondCriteria
 
-open Compiler.Languages
-open Compiler.IIO.To.TLang
+include Compiler.Languages
+include Compiler.IIO.To.TLang
 open IIO.Behavior
 
 type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =

@@ -64,8 +64,13 @@
 
    The hope is that we can state and prove some noninterference theorems about the context by exploiting the flag-polymorphism / parametricity.
 
-   I have tried to state that the history is non-interfering with the local trace for a flag-polymorphic function.
-   Code in `Hyperproperties.fst` lemma `gni_v0`.
+   I stated a non-interference theorem in `Hyperproperties.fst` lemma `gni`.
+   TODO:
+   - [ ] is it the theorem we want?
+   - [ ] can we write it in a more simple way to be easier to prove in F*?
+   - [ ] prove
+
+   There is also a simplified version (`gni_v0`).
 
 6. Refactoring - file `Compiler.IIO.To.TLang.fst`
 
