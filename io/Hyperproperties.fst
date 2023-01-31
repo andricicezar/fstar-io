@@ -97,6 +97,41 @@ let leak_the_same h1 h2 pi rc =
       (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
       (forall arg res. rc arg h1 res lt1 == rc arg h2 res lt2)))
 
+(* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
+    TINI = {b | ∀t1 t2∈b. (t1 terminating ∧ t2 terminating
+                          ∧ pub-inputs(t1)=pub-inputs(t2))
+                          ⇒ pub-events(t1)=pub-events(t2)} 
+                          
+                          
+   The traces in our case have 2 components, the history and the local trace * result.
+
+   Our notion of pub-inputs and pub-events is as follows:
+
+   pub-inputs is our leak_the_same predicate.
+   
+   pub-events = all the events produced by the context (local trace) and its result.
+   
+   TODO:
+   - [ ] is it the theorem we want?
+   - [ ] can we write it in a more simple way to be easier to prove in F*?
+   - [ ] prove *)
+val tini : 
+  pi : monitorable_prop ->
+  (** for any runtime check **)
+  rc : ('a -> trace -> 'b -> trace -> bool) ->
+  (** the ctx is in a first-order setting. I don't think it matters **)
+  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+    let eff_rcs = make_rcs_eff (make_rc_tree rc) in
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) eff_rcs) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      leak_the_same h1 h2 pi rc
+    ==> (lt1 == lt2 /\ r1  == r2))
+
+let tini pi rc ctx = admit ()
+
 (* Generalized Non-Interference definition took from Hyperproperties, Michael R. Clarkson and
    Fred B. Schneider, specialized for our case. The original: 
    
@@ -113,11 +148,10 @@ let leak_the_same h1 h2 pi rc =
    the same amount of information.
 
    The low events are all the events produced by the context (local trace) and its result.
-   
-   TODO:
-   - [ ] is it the theorem we want?
-   - [ ] can we write it in a more simple way to be easier to prove in F*?
-   - [ ] prove *)
+
+   !!!
+   We do NOT want this theorem, because this is for nondeterministic programs,
+   while our programs are determinstic, thus this is too complex! *)
 val gni : 
   pi : monitorable_prop ->
   (** for any runtime check **)
