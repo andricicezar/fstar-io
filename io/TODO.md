@@ -64,7 +64,7 @@
 
    The hope is that we can state and prove some noninterference theorems about the context by exploiting the flag-polymorphism / parametricity.
 
-   I stated a non-interference theorem in `Hyperproperties.fst` lemma `gni`.
+   I stated a non-interference theorem in `Hyperproperties.fst` lemma `tini`.
    TODO:
    - [ ] is it the theorem we want?
    - [ ] can we write it in a more simple way to be easier to prove in F*?
