@@ -122,13 +122,12 @@ val tini :
   (** the ctx is in a first-order setting. I don't think it matters **)
   ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
   Lemma (
-    let eff_rcs = make_rcs_eff (make_rc_tree rc) in
-    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) eff_rcs) in
+                                  (** one has to instantiate the ctx to be able to call beh **)
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) (make_rcs_eff (make_rc_tree rc))) in
     forall h1 lt1 r1 h2 lt2 r2. 
       (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
       (h2, Finite_trace lt2 r2) `pt_mem` bh /\
-      leak_the_same h1 h2 pi rc
-    ==> (lt1 == lt2 /\ r1  == r2))
+      leak_the_same h1 h2 pi rc ==> lt1 == lt2 /\ r1 == r2)
 
 let tini pi rc ctx = admit ()
 
