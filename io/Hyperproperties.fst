@@ -87,15 +87,36 @@ open FStar.List.Tot
 let make_rc_tree (#a:Type) (#b:Type) (rc:a -> trace -> b -> trace -> bool) : tree pck_rc =
   Node (| a, b, rc |) Leaf Leaf
 
-val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
-let leak_the_same h1 h2 pi rc =
-  // for each valid local trace of h1,
-  // there exists a valid local trace for h2
-  // both leaking the same information through pi and rc
-  (forall lt1. enforced_locally pi h1 lt1 ==> 
-    (exists lt2. enforced_locally pi h2 lt2 /\
-      (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
-      (forall arg res. rc arg h1 res lt1 == rc arg h2 res lt2)))
+let rec ni_traces (pi:monitorable_prop) (rc:('a -> trace -> 'b -> trace -> bool)) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
+  GTot Type0 (decreases lt1) =
+  match lt1, lt2 with
+  | [], [] -> r1 == r2
+  | hd1::t1, hd2::t2 -> begin
+    (forall cmd arg. pi cmd arg (rev acc_lt @ h1) == pi cmd arg (rev acc_lt @ h2)) /\
+    (forall (i:nat) x y. i < length acc_lt ==> (
+      let call1, call2 = splitAt i acc_lt in
+      rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
+  ==> (
+    let (| cmd1, arg1, res1 |) = destruct_event hd1 in
+    let (| cmd2, arg2, res2 |) = destruct_event hd2 in 
+    (cmd1 == cmd2 /\ arg1 == arg2 /\ (* output hd1 == output hd2 *)
+      (res1 == res2 (* input hd1 == input hd2 *) ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2)))
+  end
+  | _, _ -> False
+
+val ni : 
+  pi : monitorable_prop ->
+  (** for any runtime check **)
+  rc : ('a -> trace -> 'b -> trace -> bool) ->
+  (** the ctx is in a first-order setting. I don't think it matters **)
+  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+                                  (** one has to instantiate the ctx to be able to call beh **)
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) (make_rcs_eff (make_rc_tree rc))) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      ni_traces pi rc r1 r2 h1 h2 [] lt1 lt2)
 
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
     TINI = {b | ∀t1 t2∈b. (t1 terminating ∧ t2 terminating
@@ -115,6 +136,16 @@ let leak_the_same h1 h2 pi rc =
    - [ ] is it the theorem we want?
    - [ ] can we write it in a more simple way to be easier to prove in F*?
    - [ ] prove *)
+val leak_the_same : trace -> trace -> pi:monitorable_prop -> rc:('a -> trace -> 'b -> trace -> bool) -> Type0
+let leak_the_same h1 h2 pi rc =
+  // for each valid local trace of h1,
+  // there exists a valid local trace for h2
+  // both leaking the same information through pi and rc
+  (forall lt1. enforced_locally pi h1 lt1 ==> 
+    (exists lt2. enforced_locally pi h2 lt2 /\
+      (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
+      (forall arg res. rc arg h1 res lt1 == rc arg h2 res lt2)))
+
 val tini : 
   pi : monitorable_prop ->
   (** for any runtime check **)
@@ -127,7 +158,9 @@ val tini :
     forall h1 lt1 r1 h2 lt2 r2. 
       (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
       (h2, Finite_trace lt2 r2) `pt_mem` bh /\
-      leak_the_same h1 h2 pi rc ==> lt1 == lt2 /\ r1 == r2)
+      leak_the_same h1 h2 pi rc ==> 
+        (* this is not true since the results of IO actions are different *)
+        lt1 == lt2 /\ r1 == r2)
 
 let tini pi rc ctx = admit ()
 
