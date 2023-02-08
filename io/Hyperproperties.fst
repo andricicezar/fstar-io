@@ -105,18 +105,30 @@ val ni :
 // 
 
 assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
-  
-let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #'b 'rc) (m:dm_giio int AllActions trivial_hist) : GTot Type0 (decreases m) =
-  (exists r. m == Return r) \/
-  (exists cmd arg (cont:io_resm cmd arg -> dm_giio int AllActions trivial_hist).
-    (m == dm_giio_bind _ int _ _ _ _ (__reify_IIOwp (fun () -> inst_io_cmds pi cmd arg <: IIOwp (io_resm cmd arg) AllActions trivial_hist)) cont) /\
-    (forall r. only_pi_and_rc pi eff_rc (cont r))) \/
-  (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio int AllActions trivial_hist). 
-    only_pi_and_rc pi eff_rc cont1 /\
-    (forall r. only_pi_and_rc pi eff_rc (cont2 r)) /\
-    m == dm_giio_bind _ int AllActions AllActions trivial_hist (fun _ -> trivial_hist) (__reify_IIOwp (fun () -> eff_rc x)) 
-                      (fun (| _, eff_rc' |) -> dm_giio_bind _ int AllActions AllActions trivial_hist (fun _ -> trivial_hist) cont1 
-                                                         (fun y -> dm_giio_bind _ int _ _ _ _ (__reify_IIOwp (fun () -> (eff_rc' y))) cont2)))
+
+
+val bind1  : 
+  #a: Type ->
+  #b: Type ->
+  v: dm_giio a AllActions trivial_hist ->
+  f: (x: a -> dm_giio b AllActions trivial_hist) ->
+  Tot (dm_giio b AllActions trivial_hist)
+let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
+
+let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #'b 'rc) (m:dm_giio 'c AllActions trivial_hist) : GTot Type0 (decreases m) =
+  (exists r. m == Return r) 
+  \/
+  (exists cmd arg (cont:io_resm cmd arg -> dm_giio 'c AllActions trivial_hist).
+    (forall r.  (cont r) << m /\ only_pi_and_rc pi eff_rc (cont r)) ==>
+    (m == (bind1 (__reify_IIOwp (fun () -> inst_io_cmds pi cmd arg <: IIOwp (io_resm cmd arg) AllActions trivial_hist)) cont)))
+  \/
+  (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio 'c AllActions trivial_hist). 
+    ((cont1 << m /\ only_pi_and_rc pi eff_rc cont1) /\
+    (forall r. (cont2 r) << m /\ only_pi_and_rc pi eff_rc (cont2 r))) ==> 
+    m == dm_giio_bind _ _ AllActions AllActions _ _ (__reify_IIOwp (fun () -> eff_rc x <: IIOwp _ AllActions trivial_hist)) (fun (| _, eff_rc' |) -> 
+               bind1 cont1 (fun y -> 
+                 bind1 (__reify_IIOwp (fun () -> eff_rc' y)) cont2)))
+    
 
 let ni pi rc ctx = admit ()
 
