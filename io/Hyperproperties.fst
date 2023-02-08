@@ -91,10 +91,11 @@ type event_dtuple = (cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)
 val (!) : event -> event_dtuple
 let (!) = destruct_event
 
-let public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 acc_lt:trace) : Type0 =
-  (forall cmd arg. pi cmd arg (rev acc_lt @ h1) == pi cmd arg (rev acc_lt @ h2)) /\
-  (forall (i:nat) x y. i < length acc_lt ==> (
-    let call1, call2 = splitAt i acc_lt in
+(** what the histories leak can change based on what the context does **)
+let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:trace) : Type0 =
+  (forall cmd arg. pi cmd arg (rev ctx_lt @ h1) == pi cmd arg (rev ctx_lt @ h2)) /\
+  (forall (i:nat) x y. i < length ctx_lt ==> (
+    let call1, call2 = splitAt i ctx_lt in
     rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
 
 (** the call of an IO action is an output 
@@ -103,27 +104,28 @@ let output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
   let (| cmd, arg, _ |) = e in
   (| cmd, arg |)
 
-(** the result of an action is an input
+(** the result of an IO action is an input
     from the environment to the context **)
-let input (e:(cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) =
+let env_input (e:event_dtuple) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) =
   let (| cmd, arg, res |) = e in
-  res <: io_sig.res cmd arg
+  res
 
 let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
   GTot Type0 (decreases lt1) =
   match lt1, lt2 with
   | [], [] -> r1 == r2
   | hd1::t1, hd2::t2 -> begin
-    public_inputs pi rc h1 h2 acc_lt ==>
+    hist_public_inputs pi rc h1 h2 acc_lt ==>
     (output !hd1 == output !hd2 /\
-      (input !hd1 == input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
+      (** determinacy **)
+      (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
   end
   | _, _ -> False
 
 val ni : 
   pi : monitorable_prop ->
   (** for any runtime check **)
-  rc : ('a -> trace -> 'b -> trace -> bool) ->
+  rc : (rc_typ 'a 'b) ->
   (** the ctx is in a first-order setting. I don't think it matters **)
   ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
   Lemma (
