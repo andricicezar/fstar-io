@@ -105,8 +105,52 @@ val ni :
 // pi is Tot, it does not matter that it is erased
 // 
 
-assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
+// Binary parametricity for contexts, picking the trivial relation for erased.
+// It says that all contexts are parametric.
 
+// Type of contexts
+let ctx_type rc =
+  fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)
+
+assume val typ_io_cmds_r :
+  fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
+  pi0: erased monitorable_prop -> pi1: erased monitorable_prop ->
+  io0: typ_io_cmds fl0 pi0 -> io1: typ_io_cmds fl1 pi1 ->
+  Type0
+
+assume val typ_eff_rcs_r :
+  rt: _ ->
+  fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
+  t0: typ_eff_rcs fl0 rt ->
+  t1: typ_eff_rcs fl1 rt ->
+  Type0
+
+// Relation of contexts (it cannot type check because of the effect, but would the monad be enough?)
+// let ctx_type_r rc (ctx0 ctx1 : ctx_type rc) =
+//   fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
+//   pi0: erased monitorable_prop -> pi1: erased monitorable_prop ->
+//   io0: typ_io_cmds fl0 pi0 -> io1: typ_io_cmds fl1 pi1 ->
+//   ior: typ_io_cmds_r fl0 fl1 pi0 pi1 io0 io1 ->
+//   t0: typ_eff_rcs fl0 (make_rc_tree rc) ->
+//   t1: typ_eff_rcs fl1 (make_rc_tree rc) ->
+//   tr: typ_eff_rcs_r _ fl0 fl1 t0 t1 ->
+//   // ignoring unit
+//   Lemma (
+//     let r0 = ctx0 fl0 pi0 io0 t0 () in
+//     let r1 = ctx1 fl1 pi1 io1 t1 () in
+//     r0 == r1
+//   )
+
+// assume val ctx_param :
+//   rc: _ ->
+//   ctx0: ctx_type rc -> ctx1: ctx_type rc ->
+//   ctx_type_r rc ctx0 ctx1
+
+
+
+
+(*
+assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
 
 val bind1  : 
   #a: Type ->
@@ -116,7 +160,7 @@ val bind1  :
   Tot (dm_giio b AllActions trivial_hist)
 let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
 
-(*
+
 let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #'b 'rc) (m:dm_giio 'c AllActions trivial_hist) : GTot Type0 (decreases m) =
   (exists r. m == Return r) 
   \/
@@ -216,6 +260,7 @@ let hyperprop_whole1 () =
   assert (forall (tr:trace). tr `member_of` (beh whole1) ==> tr `member_of` tp1);
   hyperprop_tp1 ();
   ()
+
 
 
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
