@@ -137,10 +137,19 @@ val ni :
     let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) (make_rcs_eff (make_rc_tree rc))) in
     forall h1 lt1 r1 h2 lt2 r2. 
       (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
-      (h2, Finite_trace lt2 r2) `pt_mem` bh /\
+      (h2, Finite_trace lt2 r2) `pt_mem` bh ==> 
       ni_traces pi rc r1 r2 h1 h2 [] lt1 lt2)
 
+// parametricity ==>
+//   ctx == Return r
+//   ctx == dm_giio_bind (lift_tot_giio f) cont
+//   ctx == dm_giio_bind (inst_io_cmds pi Openfile arg) cont
+//   ctx == dm_giio_bind (eff_rc) cont
+// with that, one can do induction on the ctx to prove the non-interference
 
+// there is no axiom/law for erased
+// pi is Tot, it does not matter that it is erased
+// 
 
 
 
