@@ -115,6 +115,7 @@ val bind1  :
   Tot (dm_giio b AllActions trivial_hist)
 let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
 
+(*
 let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #'b 'rc) (m:dm_giio 'c AllActions trivial_hist) : GTot Type0 (decreases m) =
   (exists r. m == Return r) 
   \/
@@ -125,10 +126,10 @@ let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #
   (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio 'c AllActions trivial_hist). 
     ((cont1 << m /\ only_pi_and_rc pi eff_rc cont1) /\
     (forall r. (cont2 r) << m /\ only_pi_and_rc pi eff_rc (cont2 r))) ==> 
-    m == dm_giio_bind _ _ AllActions AllActions _ _ (__reify_IIOwp (fun () -> eff_rc x <: IIOwp _ AllActions trivial_hist)) (fun (| _, eff_rc' |) -> 
+    m == dm_giio_bind _ _ AllActions AllActions _ _ (__reify_IIOwp (fun () -> eff_rc x)) (fun (| _, eff_rc' |) -> 
                bind1 cont1 (fun y -> 
                  bind1 (__reify_IIOwp (fun () -> eff_rc' y)) cont2)))
-    
+*)  
 
 let ni pi rc ctx = admit ()
 
