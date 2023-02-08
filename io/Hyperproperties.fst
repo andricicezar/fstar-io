@@ -91,9 +91,13 @@ type event_dtuple = (cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)
 val (!) : event -> event_dtuple
 let (!) = destruct_event
 
-(** what the histories leak can change based on what the context does **)
+(** the context can learn more things after it does IO actions **)
 let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:trace) : Type0 =
   (forall cmd arg. pi cmd arg (rev ctx_lt @ h1) == pi cmd arg (rev ctx_lt @ h2)) /\
+  (** the runtime checks can be partially applied, so we have to
+      take in consideration when were they first partially applied
+      and when were they completely applied. The ctx has access to 
+      effectful runtime checks of type: eff_rc_typ = 'a -> 'b -> IIO bool **)
   (forall (i:nat) x y. i < length ctx_lt ==> (
     let call1, call2 = splitAt i ctx_lt in
     rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
