@@ -41,6 +41,7 @@ let (!) = destruct_event
 
 (** the context can learn more things after it does IO actions **)
 let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:trace) : Type0 =
+  (* TODO: there is no need to write forall cmds. one can restrict it for the heads of the two traces *)
   (forall cmd arg. pi cmd arg (rev ctx_lt @ h1) == pi cmd arg (rev ctx_lt @ h2)) /\
   (** the runtime checks can be partially applied, so we have to
       take in consideration when were they first partially applied
