@@ -52,7 +52,7 @@ let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:tra
 
 (** the call of an IO action is an output 
     from the context to the environment **)
-let output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
+let ctx_output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
   let (| cmd, arg, _ |) = e in
   (| cmd, arg |)
 
@@ -68,7 +68,7 @@ let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc
     match lt1, lt2 with
     | [], [] -> r1 == r2
     | hd1::t1, hd2::t2 -> begin
-        (output !hd1 == output !hd2 /\
+        (ctx_output !hd1 == ctx_output !hd2 /\
         (** determinacy **)
         (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
     end
@@ -97,16 +97,15 @@ val ni :
 
 // parametricity ==>
 //   ctx == Return r
-//   ctx == dm_giio_bind (lift_tot_giio f) cont
-//   ctx == dm_giio_bind (inst_io_cmds pi Openfile arg) cont
-//   ctx == dm_giio_bind (eff_rc) cont
+//   ctx == dm_giio_bind (inst_io_cmds pi cmd arg) cont
+//   ctx == dm_giio_bind (eff_rc x) (fun eff_rc' -> dm_giio_bind cont1 (fun y -> dm_giio_bind (eff_rc' y) cont2)
 // with that, one can do induction on the ctx to prove the non-interference
 
 // there is no axiom/law for erased
 // pi is Tot, it does not matter that it is erased
 // 
 
-
+let ni pi rc ctx = admit ()
 
 
 
