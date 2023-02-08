@@ -77,7 +77,7 @@ let hyperprop_whole1 () =
   hyperprop_tp1 ();
   ()
 
-(** ** Non-interference theorems **)
+(** ** Non-interference theorems for ctx **)
 
 open FStar.Tactics
 
@@ -116,15 +116,15 @@ let env_input (e:event_dtuple) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) 
 
 let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
   GTot Type0 (decreases lt1) =
-  match lt1, lt2 with
-  | [], [] -> r1 == r2
-  | hd1::t1, hd2::t2 -> begin
-    hist_public_inputs pi rc h1 h2 acc_lt ==>
-    (output !hd1 == output !hd2 /\
-      (** determinacy **)
-      (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
-  end
-  | _, _ -> False
+  hist_public_inputs pi rc h1 h2 acc_lt ==> (
+    match lt1, lt2 with
+    | [], [] -> r1 == r2
+    | hd1::t1, hd2::t2 -> begin
+        (output !hd1 == output !hd2 /\
+        (** determinacy **)
+        (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
+    end
+    | _, _ -> False)
 
 val ni : 
   pi : monitorable_prop ->
