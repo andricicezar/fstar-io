@@ -5,9 +5,123 @@ open ExtraTactics
 open FStar.Ghost
 open FStar.String
 
+
+open FStar.Tactics
+open FStar.List.Tot
+
 open IIO
 open IIO.Behavior
 open BeyondCriteria
+open Compiler.Model
+
+(** ** Non-interference theorems for ctx **)
+(* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
+    TINI = {b | ∀t1 t2∈b. (t1 terminating ∧ t2 terminating
+                          ∧ pub-inputs(t1)=pub-inputs(t2))
+                          ⇒ pub-events(t1)=pub-events(t2)} 
+                          
+   A trace in our case has 2 components, the history and the local trace * result.
+   The ctx is called on an existing history and it produces its own local trace and result.
+
+   The public inputs come from two dirrection:
+   1) there are the public inputs the pi and the contracts leak about the history
+   2) there are public inputs from the environment. each time the context does an IO action,
+      it gets a result from the environment.
+
+   The public events are all the events produced by the context (local trace) and its result.
+   So, if the public inputs are the same, then the local trace and the result should be equal.
+*)
+
+let make_rc_tree (#a:Type) (#b:Type) (rc:rc_typ a b) : tree pck_rc =
+  Node (| a, b, rc |) Leaf Leaf
+
+type event_dtuple = (cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)
+val (!) : event -> event_dtuple
+let (!) = destruct_event
+
+(** the context can learn more things after it does IO actions **)
+let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:trace) : Type0 =
+  (forall cmd arg. pi cmd arg (rev ctx_lt @ h1) == pi cmd arg (rev ctx_lt @ h2)) /\
+  (** the runtime checks can be partially applied, so we have to
+      take in consideration when were they first partially applied
+      and when were they completely applied. The ctx has access to 
+      effectful runtime checks of type: eff_rc_typ = 'a -> 'b -> IIO bool **)
+  (forall (i:nat) x y. i < length ctx_lt ==> (
+    let call1, call2 = splitAt i ctx_lt in
+    rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
+
+(** the call of an IO action is an output 
+    from the context to the environment **)
+let output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
+  let (| cmd, arg, _ |) = e in
+  (| cmd, arg |)
+
+(** the result of an IO action is an input
+    from the environment to the context **)
+let env_input (e:event_dtuple) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) =
+  let (| cmd, arg, res |) = e in
+  res
+
+let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
+  GTot Type0 (decreases lt1) =
+  hist_public_inputs pi rc h1 h2 acc_lt ==> (
+    match lt1, lt2 with
+    | [], [] -> r1 == r2
+    | hd1::t1, hd2::t2 -> begin
+        (output !hd1 == output !hd2 /\
+        (** determinacy **)
+        (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
+    end
+    | _, _ -> False)
+
+
+(* 
+TODO:
+- [ ] is it the theorem we want?
+- [ ] can we write it in a more simple way to be easier to prove in F*?
+- [ ] prove 
+*)
+val ni : 
+  pi : monitorable_prop ->
+  (** for any runtime check **)
+  rc : (rc_typ 'a 'b) ->
+  (** the ctx is in a first-order setting. I don't think it matters **)
+  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
+  Lemma (
+                                  (** one has to instantiate the ctx to be able to call beh **)
+    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) (make_rcs_eff (make_rc_tree rc))) in
+    forall h1 lt1 r1 h2 lt2 r2. 
+      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
+      (h2, Finite_trace lt2 r2) `pt_mem` bh ==> 
+      ni_traces pi rc r1 r2 h1 h2 [] lt1 lt2)
+
+// parametricity ==>
+//   ctx == Return r
+//   ctx == dm_giio_bind (lift_tot_giio f) cont
+//   ctx == dm_giio_bind (inst_io_cmds pi Openfile arg) cont
+//   ctx == dm_giio_bind (eff_rc) cont
+// with that, one can do induction on the ctx to prove the non-interference
+
+// there is no axiom/law for erased
+// pi is Tot, it does not matter that it is erased
+// 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*** Old **)
 
 (** There are many difficulties on trying to state Hyperproperties
 about whole/partial source programs. **)
@@ -76,97 +190,6 @@ let hyperprop_whole1 () =
   assert (forall (tr:trace). tr `member_of` (beh whole1) ==> tr `member_of` tp1);
   hyperprop_tp1 ();
   ()
-
-(** ** Non-interference theorems for ctx **)
-
-open FStar.Tactics
-
-open Compiler.Model
-open FStar.List.Tot
-
-let make_rc_tree (#a:Type) (#b:Type) (rc:rc_typ a b) : tree pck_rc =
-  Node (| a, b, rc |) Leaf Leaf
-
-type event_dtuple = (cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)
-val (!) : event -> event_dtuple
-let (!) = destruct_event
-
-(** the context can learn more things after it does IO actions **)
-let hist_public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 ctx_lt:trace) : Type0 =
-  (forall cmd arg. pi cmd arg (rev ctx_lt @ h1) == pi cmd arg (rev ctx_lt @ h2)) /\
-  (** the runtime checks can be partially applied, so we have to
-      take in consideration when were they first partially applied
-      and when were they completely applied. The ctx has access to 
-      effectful runtime checks of type: eff_rc_typ = 'a -> 'b -> IIO bool **)
-  (forall (i:nat) x y. i < length ctx_lt ==> (
-    let call1, call2 = splitAt i ctx_lt in
-    rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
-
-(** the call of an IO action is an output 
-    from the context to the environment **)
-let output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
-  let (| cmd, arg, _ |) = e in
-  (| cmd, arg |)
-
-(** the result of an IO action is an input
-    from the environment to the context **)
-let env_input (e:event_dtuple) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) =
-  let (| cmd, arg, res |) = e in
-  res
-
-let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
-  GTot Type0 (decreases lt1) =
-  hist_public_inputs pi rc h1 h2 acc_lt ==> (
-    match lt1, lt2 with
-    | [], [] -> r1 == r2
-    | hd1::t1, hd2::t2 -> begin
-        (output !hd1 == output !hd2 /\
-        (** determinacy **)
-        (env_input !hd1 == env_input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
-    end
-    | _, _ -> False)
-
-val ni : 
-  pi : monitorable_prop ->
-  (** for any runtime check **)
-  rc : (rc_typ 'a 'b) ->
-  (** the ctx is in a first-order setting. I don't think it matters **)
-  ctx: (fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)) ->
-  Lemma (
-                                  (** one has to instantiate the ctx to be able to call beh **)
-    let bh = beh_ctx #(fun _ -> True) (ctx AllActions pi (inst_io_cmds pi) (make_rcs_eff (make_rc_tree rc))) in
-    forall h1 lt1 r1 h2 lt2 r2. 
-      (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
-      (h2, Finite_trace lt2 r2) `pt_mem` bh ==> 
-      ni_traces pi rc r1 r2 h1 h2 [] lt1 lt2)
-
-// parametricity ==>
-//   ctx == Return r
-//   ctx == dm_giio_bind (lift_tot_giio f) cont
-//   ctx == dm_giio_bind (inst_io_cmds pi Openfile arg) cont
-//   ctx == dm_giio_bind (eff_rc) cont
-// with that, one can do induction on the ctx to prove the non-interference
-
-// there is no axiom/law for erased
-// pi is Tot, it does not matter that it is erased
-// 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(*** Old **)
 
 
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
