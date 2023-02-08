@@ -77,30 +77,46 @@ let hyperprop_whole1 () =
   hyperprop_tp1 ();
   ()
 
-(** ** partial programs **)
+(** ** Non-interference theorems **)
 
 open FStar.Tactics
 
 open Compiler.Model
 open FStar.List.Tot
 
-let make_rc_tree (#a:Type) (#b:Type) (rc:a -> trace -> b -> trace -> bool) : tree pck_rc =
+let make_rc_tree (#a:Type) (#b:Type) (rc:rc_typ a b) : tree pck_rc =
   Node (| a, b, rc |) Leaf Leaf
 
-let rec ni_traces (pi:monitorable_prop) (rc:('a -> trace -> 'b -> trace -> bool)) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
+type event_dtuple = (cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)
+val (!) : event -> event_dtuple
+let (!) = destruct_event
+
+let public_inputs (pi:monitorable_prop) (rc:rc_typ 'a 'b) (h1 h2 acc_lt:trace) : Type0 =
+  (forall cmd arg. pi cmd arg (rev acc_lt @ h1) == pi cmd arg (rev acc_lt @ h2)) /\
+  (forall (i:nat) x y. i < length acc_lt ==> (
+    let call1, call2 = splitAt i acc_lt in
+    rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
+
+(** the call of an IO action is an output 
+    from the context to the environment **)
+let output (e:event_dtuple) : cmd:io_cmds & io_sig.args cmd =
+  let (| cmd, arg, _ |) = e in
+  (| cmd, arg |)
+
+(** the result of an action is an input
+    from the environment to the context **)
+let input (e:(cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg)) : io_sig.res (Mkdtuple3?._1 e) (Mkdtuple3?._2 e) =
+  let (| cmd, arg, res |) = e in
+  res <: io_sig.res cmd arg
+
+let rec ni_traces (pi:monitorable_prop) (rc:rc_typ 'a 'b) (r1 r2:int) (h1 h2 acc_lt lt1 lt2:trace) : 
   GTot Type0 (decreases lt1) =
   match lt1, lt2 with
   | [], [] -> r1 == r2
   | hd1::t1, hd2::t2 -> begin
-    (forall cmd arg. pi cmd arg (rev acc_lt @ h1) == pi cmd arg (rev acc_lt @ h2)) /\
-    (forall (i:nat) x y. i < length acc_lt ==> (
-      let call1, call2 = splitAt i acc_lt in
-      rc x (rev call1 @ h1) y call2 == rc x (rev call1 @ h2) y call2))
-  ==> (
-    let (| cmd1, arg1, res1 |) = destruct_event hd1 in
-    let (| cmd2, arg2, res2 |) = destruct_event hd2 in 
-    (cmd1 == cmd2 /\ arg1 == arg2 /\ (* output hd1 == output hd2 *)
-      (res1 == res2 (* input hd1 == input hd2 *) ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2)))
+    public_inputs pi rc h1 h2 acc_lt ==>
+    (output !hd1 == output !hd2 /\
+      (input !hd1 == input !hd2 ==> ni_traces pi rc r1 r2 h1 h2 (acc_lt@[hd1]) t1 t2))
   end
   | _, _ -> False
 
@@ -117,6 +133,26 @@ val ni :
       (h1, Finite_trace lt1 r1) `pt_mem` bh /\ 
       (h2, Finite_trace lt2 r2) `pt_mem` bh /\
       ni_traces pi rc r1 r2 h1 h2 [] lt1 lt2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*** Old **)
+
 
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
     TINI = {b | ∀t1 t2∈b. (t1 terminating ∧ t2 terminating
@@ -144,6 +180,7 @@ let leak_the_same h1 h2 pi rc =
   (forall lt1. enforced_locally pi h1 lt1 ==> 
     (exists lt2. enforced_locally pi h2 lt2 /\
       (forall cmd arg. pi cmd arg (rev lt1 @ h1) == pi cmd arg (rev lt2 @ h2)) /\
+      (* not strong enough *)
       (forall arg res. rc arg h1 res lt1 == rc arg h2 res lt2)))
 
 val tini : 
