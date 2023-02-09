@@ -119,6 +119,7 @@ assume val typ_io_cmds_r :
   Type0
 // let typ_io_cmds_r fl0 fl1 pi0 pi1 io0 io1 = io0 == io1
 // We probably need something recursive that inspects io0 and io1
+// The situation is actually worse since these are also effectful things
 
 assume val typ_eff_rcs_r :
   rt: _ ->
