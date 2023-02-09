@@ -1,0 +1,5 @@
+# Do not shows diff nor try to merge hint files.
+# This just takes the latest one when there's a conflict, and
+# does not show diffs in the CLI nor GitHub.
+*.hints -diff -merge
+*.hints linguist-generated=true
