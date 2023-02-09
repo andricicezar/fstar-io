@@ -103,20 +103,22 @@ val ni :
 // with that, one can do induction on the ctx to prove the non-interference
 // there is no axiom/law for erased
 // pi is Tot, it does not matter that it is erased
-// 
+//
 
 // Binary parametricity for contexts, picking the trivial relation for erased.
 // It says that all contexts are parametric.
 
 // Type of contexts
 let ctx_type rc =
-  fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> IIO int fl (fun _ -> True) (fun _ _ _ -> True)
+  fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> dm_giio int fl (to_hist (fun _ -> True) (fun _ _ _ -> True))
 
 assume val typ_io_cmds_r :
   fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
   pi0: erased monitorable_prop -> pi1: erased monitorable_prop ->
   io0: typ_io_cmds fl0 pi0 -> io1: typ_io_cmds fl1 pi1 ->
   Type0
+// let typ_io_cmds_r fl0 fl1 pi0 pi1 io0 io1 = io0 == io1
+// We probably need something recursive that inspects io0 and io1
 
 assume val typ_eff_rcs_r :
   rt: _ ->
@@ -124,27 +126,25 @@ assume val typ_eff_rcs_r :
   t0: typ_eff_rcs fl0 rt ->
   t1: typ_eff_rcs fl1 rt ->
   Type0
+// Similar to the above
 
 // Relation of contexts (it cannot type check because of the effect, but would the monad be enough?)
-// let ctx_type_r rc (ctx0 ctx1 : ctx_type rc) =
-//   fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
-//   pi0: erased monitorable_prop -> pi1: erased monitorable_prop ->
-//   io0: typ_io_cmds fl0 pi0 -> io1: typ_io_cmds fl1 pi1 ->
-//   ior: typ_io_cmds_r fl0 fl1 pi0 pi1 io0 io1 ->
-//   t0: typ_eff_rcs fl0 (make_rc_tree rc) ->
-//   t1: typ_eff_rcs fl1 (make_rc_tree rc) ->
-//   tr: typ_eff_rcs_r _ fl0 fl1 t0 t1 ->
-//   // ignoring unit
-//   Lemma (
-//     let r0 = ctx0 fl0 pi0 io0 t0 () in
-//     let r1 = ctx1 fl1 pi1 io1 t1 () in
-//     r0 == r1
-//   )
+let ctx_type_r rc (ctx0 ctx1 : ctx_type rc) =
+  fl0: erased tflag -> fl1: erased tflag -> // erased_r is trivial
+  pi0: erased monitorable_prop -> pi1: erased monitorable_prop ->
+  io0: typ_io_cmds fl0 pi0 -> io1: typ_io_cmds fl1 pi1 ->
+  ior: typ_io_cmds_r fl0 fl1 pi0 pi1 io0 io1 ->
+  t0: typ_eff_rcs fl0 (make_rc_tree rc) ->
+  t1: typ_eff_rcs fl1 (make_rc_tree rc) ->
+  tr: typ_eff_rcs_r _ fl0 fl1 t0 t1 ->
+  // ignoring unit
+  // Assuming the relation on dm_giio is equality
+  Lemma (ctx0 fl0 pi0 io0 t0 () == ctx1 fl1 pi1 io1 t1 ())
 
-// assume val ctx_param :
-//   rc: _ ->
-//   ctx0: ctx_type rc -> ctx1: ctx_type rc ->
-//   ctx_type_r rc ctx0 ctx1
+assume val ctx_param :
+  rc: rc_typ 'a 'b ->
+  ctx0: ctx_type rc -> ctx1: ctx_type rc ->
+  ctx_type_r rc ctx0 ctx1
 
 
 
