@@ -184,12 +184,13 @@ val bind1  :
   Tot (dm_giio b AllActions trivial_hist)
 let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
 
-let wtf
+let third
   (eff_rc:giio_eff_rc_typ AllActions #'a #'b 'rc)
   (cont1:dm_giio 'b AllActions trivial_hist)
   (cont2: _ -> dm_giio 'c AllActions trivial_hist) 
   x :
   dm_giio 'c AllActions trivial_hist =
+  admit ();
   dm_giio_subcomp 'c AllActions AllActions _ trivial_hist (
     dm_giio_bind 
       (initial_h:(erased trace) & giio_eff_rc_typ_cont AllActions 'a 'b 'rc x initial_h)
@@ -197,7 +198,7 @@ let wtf
       AllActions
       AllActions
       trivial_hist
-      (fun (| initial_h, _ |) -> hist_bind trivial_hist  (fun y -> hist_bind (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist)))
+      (fun (| initial_h, _ |) -> hist_bind trivial_hist (fun y -> hist_bind (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist)))
       (eff_rc x) 
       (fun (| initial_h, eff_rc' |) -> 
         dm_giio_bind _ _ _ _ trivial_hist (fun y -> hist_bind (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist))
@@ -213,19 +214,16 @@ let rec only_pi_and_rc
   (eff_rc:giio_eff_rc_typ AllActions #'a #'b 'rc)
   (m:dm_giio 'c AllActions trivial_hist) :
   GTot Type0 (decreases m) =
-  (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio 'c AllActions trivial_hist). 
-    ((cont1 << m /\ only_pi_and_rc pi giio_cmds eff_rc cont1) /\
-    (forall r. (cont2 r) << m /\ only_pi_and_rc pi giio_cmds eff_rc (cont2 r))) ==> 
-    m == )
-	      
-  \/
   (exists r. m == Return r) 
   \/
   (exists cmd arg (cont:io_resm cmd arg -> dm_giio 'c AllActions trivial_hist).
     (forall r.  (cont r) << m /\ only_pi_and_rc pi giio_cmds eff_rc (cont r)) ==>
     (m == (bind1 (giio_cmds cmd arg) cont)))
-
-
+  \/
+  (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio 'c AllActions trivial_hist). 
+    ((cont1 << m /\ only_pi_and_rc pi giio_cmds eff_rc cont1) /\
+    (forall r. (cont2 r) << m /\ only_pi_and_rc pi giio_cmds eff_rc (cont2 r))) ==> 
+    m == third eff_rc cont1 cont2 x)
 
 (** *** Effect polymorphism *)
 noeq type monad = {
