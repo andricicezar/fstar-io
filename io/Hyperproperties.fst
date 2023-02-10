@@ -14,6 +14,9 @@ open IIO.Behavior
 open BeyondCriteria
 open Compiler.Model
 
+(** this is a second definition of reify that is in the Tot effect **)
+assume val _tot_reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
+
 (** ** Non-interference theorems for ctx **)
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
     TINI = {b | ∀t1 t2∈b. (t1 terminating ∧ t2 terminating
@@ -114,8 +117,55 @@ val ni :
 // pi is Tot, it does not matter that it is erased
 //
 
+(**** Types using the repr directly **)
+
+type giio_typ_cmds (fl:erased tflag) (pi:monitorable_prop) =
+  (cmd : io_cmds) ->
+  (arg : io_sig.args cmd) ->
+  dm_giio (io_resm cmd arg) fl
+    (to_hist 
+        (fun _ -> True)
+	(fun h r lt ->
+          enforced_locally pi h lt /\
+          (match r with
+          | Inr Contract_failure -> lt == []
+          | r' -> lt == [convert_call_to_event cmd arg r'])))
+
+val giio_inst_cmds : pi:monitorable_prop -> Tot (giio_typ_cmds AllActions pi)
+let giio_inst_cmds pi cmd arg =
+  _tot_reify_IIOwp (fun () -> inst_io_cmds pi cmd arg)
+
 // Binary parametricity for contexts, picking the trivial relation for erased.
 // It says that all contexts are parametric.
+
+type giio_eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
+  y:t2 -> (dm_giio bool fl (to_hist (fun h -> (initial_h `suffix_of` h)) (fun current_h (b:bool) lt -> 
+       (initial_h `suffix_of` current_h) /\
+       (let the_lt = get_local_trace initial_h current_h in
+       apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt)))))
+  
+type giio_eff_rc_typ (fl:erased tflag) (#t1 #t2:Type) (rc:rc_typ t1 t2) =
+  x:t1 -> (dm_giio (initial_h:(erased trace) & giio_eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (to_hist (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])))
+
+#set-options "--print_effect_args"
+
+assume val reify_eff_rc_cont : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> x:t1 -> initial_h:erased trace -> eff_rc_typ_cont fl t1 t2 rc x initial_h -> giio_eff_rc_typ_cont fl t1 t2 rc x initial_h
+(* TODO @Guido: why does this want to be in the Ghost effect? *)
+//let reify_eff_rc_cont #fl #t1 #t2 #rc x initial_h cont (y:t2) =
+//  _tot_reify_IIOwp (fun () -> cont y)
+
+assume val reify_eff_rc : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> eff_rc_typ fl rc -> giio_eff_rc_typ fl rc
+(* TODO @Guido: why does this want to be in the Ghost effect? *)
+//let reify_eff_rc #fl #t1 #t2 #rc eff_rc x =
+//  admit ();
+//  dm_giio_bind
+//    (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h)
+//    (initial_h:(erased trace) & giio_eff_rc_typ_cont fl t1 t2 rc x initial_h)
+//    fl NoActions
+//    (to_hist (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == []))
+//    (fun (| h, cont |) -> hist_return (| h, reify_eff_rc_cont x h cont |))
+//    (_tot_reify_IIOwp (fun () -> eff_rc x))
+//    (fun (| h, cont |) -> dm_giio_return _ (| h, reify_eff_rc_cont x h cont |))
 
 // Type of contexts
 let ctx_type rc =
@@ -173,7 +223,6 @@ val eff_poly : (mon:monad) -> io_act:('a -> mon.m 'b) -> rc:('c -> mon.m ('d -> 
 // let ctx_type fl pi = eff_poly (dm_giio fl pi) 
 
 (*
-assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
 
 val bind1  : 
   #a: Type ->
@@ -183,8 +232,8 @@ val bind1  :
   Tot (dm_giio b AllActions trivial_hist)
 let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
 
-
 let rec only_pi_and_rc (pi:monitorable_prop) (eff_rc:eff_rc_typ AllActions #'a #'b 'rc) (m:dm_giio 'c AllActions trivial_hist) : GTot Type0 (decreases m) =
+  
   (exists r. m == Return r) 
   \/
   (exists cmd arg (cont:io_resm cmd arg -> dm_giio 'c AllActions trivial_hist).
