@@ -30,6 +30,15 @@ open Compiler.Model
 
    The public events are all the events produced by the context (local trace) and its result.
    So, if the public inputs are the same, then the local trace and the result should be equal.
+
+Example:
+let ctx = match Openfile "asd.tx" with
+          | Inl fd -> write fd "text"; 7
+          | Inr _ -> 42
+
+pi = max 2 openfiles
+h1 = [EOpenfile]            lt1 = [EOpenfile;EWrite] r1 = 7
+h2 = [EOpenfile;Eopenfile]  lt2 = []                 r2 = 42
 *)
 
 let make_rc_tree (#a:Type) (#b:Type) (rc:rc_typ a b) : tree pck_rc =
@@ -142,13 +151,26 @@ let ctx_type_r rc (ctx0 ctx1 : ctx_type rc) =
   // Assuming the relation on dm_giio is equality
   Lemma (ctx0 fl0 pi0 io0 t0 () == ctx1 fl1 pi1 io1 t1 ())
 
+// typ_io_cmds NoAction = Inr Contract_failure
+// typ_io_cmds AllActions = let h = get_Trace () in if pi h cmd arg then io_cmds cmd arg else Inr Contract_failure
+
 assume val ctx_param :
   rc: rc_typ 'a 'b ->
   ctx0: ctx_type rc -> ctx1: ctx_type rc ->
   ctx_type_r rc ctx0 ctx1
 
+(** *** Effect polymorphism *)
+noeq type monad = {
+  m    : Type u#a -> Type u#(max 1 a);
+  ret  : #a:Type -> a -> m a;
+  (* TODO: bind should be polymorphic in two universes *)
+  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b;
+  (* We don't want acts to be part of this monad because we want to provide different versions *)
+}
 
+val eff_poly : (mon:monad) -> io_act:('a -> mon.m 'b) -> rc:('c -> mon.m ('d -> mon.m 'e)) -> mon.m int
 
+// let ctx_type fl pi = eff_poly (dm_giio fl pi) 
 
 (*
 assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
