@@ -1,0 +1,700 @@
+[
+  "ÓCÍ×D2,”N„ªa…Æüº",
+  [
+    [
+      "IIO.Sig._io_cmds",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_IIO.Sig.cmds__uu___haseq" ],
+      0,
+      "95176c77dd0b4a4ae382a2d8d500844b"
+    ],
+    [
+      "IIO.Sig.io_args",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "constructor_distinct_IIO.Sig.Close",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "constructor_distinct_IIO.Sig.Openfile",
+        "constructor_distinct_IIO.Sig.Read",
+        "constructor_distinct_IIO.Sig.Write",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.Close",
+        "disc_equation_IIO.Sig.Openfile", "disc_equation_IIO.Sig.Read",
+        "disc_equation_IIO.Sig.Write", "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "equation_IIO.Sig.io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_d3d395e02dcdc81d6f03cb245f11a9f6"
+      ],
+      0,
+      "345e1c847dcf8112b57ba7b310ae7db1"
+    ],
+    [
+      "IIO.Sig.io_res",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "constructor_distinct_IIO.Sig.Close",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "constructor_distinct_IIO.Sig.Openfile",
+        "constructor_distinct_IIO.Sig.Read",
+        "constructor_distinct_IIO.Sig.Write",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.Close",
+        "disc_equation_IIO.Sig.Openfile", "disc_equation_IIO.Sig.Read",
+        "disc_equation_IIO.Sig.Write", "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "equation_IIO.Sig.io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_d3d395e02dcdc81d6f03cb245f11a9f6"
+      ],
+      0,
+      "e7834618ce2205b16918dc549d158d54"
+    ],
+    [
+      "IIO.Sig.event",
+      1,
+      2,
+      1,
+      [
+        "@query", "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Close@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "a7a1485598c3ce3cec72e2f301a77727"
+    ],
+    [
+      "IIO.Sig.event",
+      2,
+      2,
+      1,
+      [
+        "@query", "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Read@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "7e16396abbb1903d3dd2f6ddbb476a37"
+    ],
+    [
+      "IIO.Sig.event",
+      3,
+      2,
+      1,
+      [
+        "@query", "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "81b258986507cfe3d0cba2175e1b6d24"
+    ],
+    [
+      "IIO.Sig.event",
+      4,
+      2,
+      1,
+      [
+        "@query", "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "b409aa49a94fe8dceafd314a2c9a5d13"
+    ],
+    [
+      "IIO.Sig.__proj__EOpenfile__item__isTrusted",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_abf6d1c32ee040a1e0cd57085ccb4a93"
+      ],
+      0,
+      "6aa0f5637eb68405acf3e76b70c21a2f"
+    ],
+    [
+      "IIO.Sig.__proj__EOpenfile__item__a",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Openfile@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "26570e43f2fd3f8a627a3fbc9f9c44dd"
+    ],
+    [
+      "IIO.Sig.__proj__EOpenfile__item__a",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "disc_equation_IIO.Sig.EOpenfile",
+        "equality_tok_IIO.Sig.Openfile@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_abf6d1c32ee040a1e0cd57085ccb4a93"
+      ],
+      0,
+      "0271c12a4d6e47390993a720b4ed2df2"
+    ],
+    [
+      "IIO.Sig.__proj__EOpenfile__item__r",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Openfile@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "fc1ca3ce4d221e44ac59e21942ebcaee"
+    ],
+    [
+      "IIO.Sig.__proj__EOpenfile__item__r",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "disc_equation_IIO.Sig.EOpenfile",
+        "equality_tok_IIO.Sig.Openfile@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_abf6d1c32ee040a1e0cd57085ccb4a93"
+      ],
+      0,
+      "f41e52a1eeff249b69a97f773185bf59"
+    ],
+    [
+      "IIO.Sig.__proj__ERead__item__isTrusted",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_c5984ffbab762d8a254e82f57080fbcb"
+      ],
+      0,
+      "a555fa1c362468f38b217c4b4b87f7a9"
+    ],
+    [
+      "IIO.Sig.__proj__ERead__item__a",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Read@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "b61dbbd57c7d76624fcebfaf1c3452f1"
+    ],
+    [
+      "IIO.Sig.__proj__ERead__item__a",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.ERead",
+        "equality_tok_IIO.Sig.Read@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_c5984ffbab762d8a254e82f57080fbcb"
+      ],
+      0,
+      "f7d42754a2055715042c7bee4e9ed354"
+    ],
+    [
+      "IIO.Sig.__proj__ERead__item__r",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Read@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "9ef342b4c1be02fd0e0f75564d9c3189"
+    ],
+    [
+      "IIO.Sig.__proj__ERead__item__r",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.ERead",
+        "equality_tok_IIO.Sig.Read@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_c5984ffbab762d8a254e82f57080fbcb"
+      ],
+      0,
+      "e8a56e8d3481abac57cf697494bb5cf6"
+    ],
+    [
+      "IIO.Sig.__proj__EWrite__item__isTrusted",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_390f4d42f84a410205e4491e5a05c469"
+      ],
+      0,
+      "26ed0f3557e6ef6b7b8dc546f254dc4b"
+    ],
+    [
+      "IIO.Sig.__proj__EWrite__item__a",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Write@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "36e4922fdca2d8e11fd489697050992e"
+    ],
+    [
+      "IIO.Sig.__proj__EWrite__item__a",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.EWrite",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_390f4d42f84a410205e4491e5a05c469"
+      ],
+      0,
+      "ab24291dca1aee20f3dfa5d8060adabf"
+    ],
+    [
+      "IIO.Sig.__proj__EWrite__item__r",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Write@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "f23317cbcade5d686d0127e21436a80e"
+    ],
+    [
+      "IIO.Sig.__proj__EWrite__item__r",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.EWrite",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_390f4d42f84a410205e4491e5a05c469"
+      ],
+      0,
+      "52c2734e3f5837c37aa98366c0ebf298"
+    ],
+    [
+      "IIO.Sig.__proj__EClose__item__isTrusted",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_b0e6ed355ad7d69e808b4bb2737afffe"
+      ],
+      0,
+      "6b67f87cd7563a39b82a15877cb5f198"
+    ],
+    [
+      "IIO.Sig.__proj__EClose__item__a",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Close@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "0b6f11963df96ac2347640bd6691761b"
+    ],
+    [
+      "IIO.Sig.__proj__EClose__item__a",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.EClose",
+        "equality_tok_IIO.Sig.Close@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b0e6ed355ad7d69e808b4bb2737afffe"
+      ],
+      0,
+      "a57f8c3c63ea63ad074ce75d594794d0"
+    ],
+    [
+      "IIO.Sig.__proj__EClose__item__r",
+      1,
+      2,
+      1,
+      [
+        "@query", "equality_tok_IIO.Sig.Close@tok",
+        "equation_IIO.Sig._io_cmds", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "f43e35638cb94396b856a37ea8f815aa"
+    ],
+    [
+      "IIO.Sig.__proj__EClose__item__r",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.EClose",
+        "equality_tok_IIO.Sig.Close@tok", "equation_IIO.Sig._io_cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b0e6ed355ad7d69e808b4bb2737afffe"
+      ],
+      0,
+      "bd5da273cd6a2d1ae9fa41f13c98d23a"
+    ],
+    [
+      "IIO.Sig.inst_cmds",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_IIO.Sig.cmds__uu___haseq" ],
+      0,
+      "d7e4aaaf26e6dbc13c4210888b82b680"
+    ],
+    [
+      "IIO.Sig.inst_args",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "disc_equation_IIO.Sig.GetTrace",
+        "equality_tok_IIO.Sig.GetTrace@tok", "equation_IIO.Sig.inst_cmds",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_a7846ff8dbe204fe78cd82371363aa6f"
+      ],
+      0,
+      "e836314d9e5d9882685129fe05aad123"
+    ],
+    [
+      "IIO.Sig.inst_res",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "disc_equation_IIO.Sig.GetTrace",
+        "equality_tok_IIO.Sig.GetTrace@tok", "equation_IIO.Sig.inst_cmds",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_a7846ff8dbe204fe78cd82371363aa6f"
+      ],
+      0,
+      "08d1a168b67c9279278b30ca0b4086ad"
+    ],
+    [
+      "IIO.Sig._iio_cmds",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_IIO.Sig.cmds__uu___haseq" ],
+      0,
+      "c0f2c6b2404e3e5d5a51745bff886912"
+    ],
+    [
+      "IIO.Sig.iio_sig",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_IIO.Sig.cmds__uu___haseq" ],
+      0,
+      "dd7e2adf40805fdd7bda645beca17657"
+    ],
+    [
+      "IIO.Sig.iio",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.GetTrace@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._iio_cmds",
+        "equation_IIO.Sig._io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "9fd338743576eb36a63b9dc305dfc7c9"
+    ],
+    [
+      "IIO.Sig.iio_return",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.GetTrace@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._iio_cmds",
+        "equation_IIO.Sig._io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "5cfc014324ef3ccb27d9579092d15b65"
+    ],
+    [
+      "IIO.Sig.iio_bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.GetTrace@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._iio_cmds",
+        "equation_IIO.Sig._io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "41947df672cb5b904128b8095726618e"
+    ],
+    [
+      "IIO.Sig.iio_bind",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.GetTrace@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._iio_cmds",
+        "equation_IIO.Sig._io_cmds", "fuel_guarded_inversion_IIO.Sig.cmds",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "155944133da26bf72bcd52b647489acd"
+    ],
+    [
+      "IIO.Sig.convert_call_to_event",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "bool_inversion", "constructor_distinct_IIO.Sig.Close",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "constructor_distinct_IIO.Sig.Openfile",
+        "constructor_distinct_IIO.Sig.Read",
+        "constructor_distinct_IIO.Sig.Write",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_IIO.Sig.Close",
+        "disc_equation_IIO.Sig.Openfile", "disc_equation_IIO.Sig.Read",
+        "disc_equation_IIO.Sig.Write", "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "equation_IIO.Sig.io_cmds", "equation_UnixTypes.file_descr",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
+        "fuel_guarded_inversion_IIO.Sig.cmds",
+        "interpretation_Tm_abs_525f9e75d9e8ada515fd2fd411a6c46f",
+        "interpretation_Tm_abs_e0cb1771ffc2fdab036a8a3b7fdc2be0",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "proj_equation_Free.Mkop_sig_args",
+        "proj_equation_Free.Mkop_sig_res",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Free.Mkop_sig_args",
+        "projection_inverse_Free.Mkop_sig_res",
+        "refinement_interpretation_Tm_refine_3978e281abcf5d50b167b4ca7d7c6d7f",
+        "refinement_interpretation_Tm_refine_52db4e92ed4bf791f93d1cdbe4bb6d73",
+        "refinement_interpretation_Tm_refine_5722f58c2e1c391750af141fffb89a86",
+        "refinement_interpretation_Tm_refine_a45481434de24133b91fce7d6c36b478",
+        "refinement_interpretation_Tm_refine_c48a416f5ef937e8edfbb88fcaf52be5",
+        "refinement_interpretation_Tm_refine_d3d395e02dcdc81d6f03cb245f11a9f6",
+        "token_correspondence_Free.__proj__Mkop_sig__item__args",
+        "token_correspondence_Free.__proj__Mkop_sig__item__res",
+        "typing_IIO.Sig.uu___is_Close"
+      ],
+      0,
+      "6e5f74461a20c83e37df2d7ed7176455"
+    ],
+    [
+      "IIO.Sig.destruct_event",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "bool_inversion", "data_typing_intro_IIO.Sig.Read@tok",
+        "disc_equation_IIO.Sig.EClose", "disc_equation_IIO.Sig.EOpenfile",
+        "disc_equation_IIO.Sig.ERead", "disc_equation_IIO.Sig.EWrite",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_IIO.Sig._io_cmds",
+        "fuel_guarded_inversion_IIO.Sig.event", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "typing_IIO.Sig._io_cmds", "typing_tok_IIO.Sig.Openfile@tok"
+      ],
+      0,
+      "7ac5b8e43e08b70c351a88b5862d7f3e"
+    ],
+    [
+      "IIO.Sig.is_open",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "binder_x_86d4f29e27fdf0a2175e89fdd1b707ee_0",
+        "binder_x_8fdd42ea6d65ec6e0437d76f29001597_1",
+        "constructor_distinct_IIO.Sig.Close",
+        "data_typing_intro_IIO.Sig.Read@tok", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "equality_tok_IIO.Sig.Close@tok",
+        "equation_IIO.Sig._io_cmds", "equation_IIO.Sig.io_cmds",
+        "equation_IIO.Sig.trace", "equation_Prims.eqtype",
+        "equation_Prims.op_Equals_Equals_Equals",
+        "equation_UnixTypes.file_descr", "fuel_guarded_inversion_Prims.list",
+        "function_token_typing_Prims.int", "int_inversion",
+        "interpretation_Tm_abs_525f9e75d9e8ada515fd2fd411a6c46f",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "proj_equation_Free.Mkop_sig_args",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Free.Mkop_sig_args",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "subterm_ordering_Prims.Cons",
+        "token_correspondence_Free.__proj__Mkop_sig__item__args"
+      ],
+      0,
+      "38f425dc2fa95d5b5c20214cfa07542d"
+    ],
+    [
+      "IIO.Sig.iio_wps",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "IIO.Sig_pretyping_98ca37da33a509e13bd06ca0d6d63b4d",
+        "bool_inversion", "constructor_distinct_IIO.Sig.Close",
+        "constructor_distinct_IIO.Sig.GetTrace",
+        "constructor_distinct_IIO.Sig.Openfile",
+        "constructor_distinct_IIO.Sig.Read",
+        "constructor_distinct_IIO.Sig.Write",
+        "data_typing_intro_IIO.Sig.Read@tok",
+        "data_typing_intro_Prims.Cons@tok",
+        "data_typing_intro_Prims.Nil@tok", "disc_equation_IIO.Sig.GetTrace",
+        "equality_tok_IIO.Sig.Close@tok",
+        "equality_tok_IIO.Sig.GetTrace@tok",
+        "equality_tok_IIO.Sig.Openfile@tok", "equality_tok_IIO.Sig.Read@tok",
+        "equality_tok_IIO.Sig.Write@tok", "equation_Free.add_sig",
+        "equation_Hist.hist_wp_monotonic", "equation_IIO.Sig._iio_cmds",
+        "equation_IIO.Sig._io_cmds", "equation_IIO.Sig.iio_cmds",
+        "equation_IIO.Sig.iio_sig", "equation_IIO.Sig.inst_cmds",
+        "equation_IIO.Sig.inst_res", "equation_IIO.Sig.inst_sig",
+        "equation_IIO.Sig.io_cmds", "equation_IIO.Sig.trace",
+        "equation_UnixTypes.file_descr",
+        "fuel_guarded_inversion_IIO.Sig.cmds",
+        "function_token_typing_IIO.Sig._io_cmds", "int_inversion",
+        "interpretation_Tm_abs_33eabb3fe3c6370648f0c7f11961d11a",
+        "interpretation_Tm_abs_525f9e75d9e8ada515fd2fd411a6c46f",
+        "interpretation_Tm_abs_d5ed256c943c15734e6a2d8f0b9f0dab",
+        "interpretation_Tm_abs_e0cb1771ffc2fdab036a8a3b7fdc2be0",
+        "interpretation_Tm_abs_e1fb9cc8f07cd3f016d5755823d9b304",
+        "kinding_IIO.Sig.event@tok",
+        "l_quant_interp_c5c15fd78d3d2772d69267142c4a0fac",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "proj_equation_Free.Mkop_sig_args",
+        "proj_equation_Free.Mkop_sig_res",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Free.Mkop_sig_args",
+        "projection_inverse_Free.Mkop_sig_res",
+        "refinement_interpretation_Tm_refine_38d6b85fc03e89dd699a675669dfd3eb",
+        "refinement_interpretation_Tm_refine_d3d395e02dcdc81d6f03cb245f11a9f6",
+        "string_inversion",
+        "token_correspondence_Free.__proj__Mkop_sig__item__args",
+        "token_correspondence_Free.__proj__Mkop_sig__item__res",
+        "token_correspondence_IIO.Sig.inst_res", "typing_IIO.Sig._iio_cmds",
+        "typing_IIO.Sig._io_cmds", "typing_IIO.Sig.convert_call_to_event"
+      ],
+      0,
+      "53574315c351df2a362e72cb98205c12"
+    ]
+  ]
+]

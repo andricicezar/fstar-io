@@ -1,0 +1,137 @@
+[
+  "\\@\u0003æÐ=\u0006\u0014»ÍŒ)€3ô˜",
+  [
+    [
+      "Hist.hist_subcomp0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Hist_interpretation_Tm_arrow_a1ef44e1e44d82e59ba858498924d44a",
+        "equation_Hist.hist", "equation_Hist.hist_post",
+        "equation_Hist.hist_wp_monotonic",
+        "refinement_interpretation_Tm_refine_24320fd6680943bf8bf24a74aa54ac25",
+        "refinement_interpretation_Tm_refine_9f8cb5a84b67f50c9d5f87a914037545",
+        "refinement_interpretation_Tm_refine_a5d38fca91f99b70d633445ef10334b8"
+      ],
+      0,
+      "1dd07139565933ee56d667243cf1dcd4"
+    ],
+    [
+      "Hist.hist_subcomp",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "45a2f63e33a409f03ffb037895c43ec3"
+    ],
+    [
+      "Hist.hist_return",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_typing_intro_Prims.Nil@tok",
+        "equation_Hist.hist_wp_monotonic",
+        "interpretation_Tm_abs_270f072779768276c983cf652faa0276"
+      ],
+      0,
+      "eedbd2e51e90217e9e0e30aa415162e2"
+    ],
+    [
+      "Hist.hist_bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Hist_interpretation_Tm_arrow_f4644eddaa1265c77ec5f831b6d4fa82",
+        "equation_FStar.List.Tot.Base.op_At",
+        "equation_FStar.List.Tot.Base.rev", "equation_Hist.hist",
+        "equation_Hist.hist_post", "equation_Hist.hist_wp_monotonic",
+        "fuel_guarded_inversion_Prims.list",
+        "interpretation_Tm_abs_4f789d7e8a04be186cc41f5244a14c59",
+        "interpretation_Tm_abs_d2e31b6f5e6fac8121742a5b0e4078c2",
+        "interpretation_Tm_abs_e5948773241fb3034357e18088575332",
+        "lemma_FStar.List.Tot.Properties.append_l_nil",
+        "refinement_interpretation_Tm_refine_a5d38fca91f99b70d633445ef10334b8",
+        "typing_FStar.List.Tot.Base.op_At", "typing_FStar.List.Tot.Base.rev",
+        "typing_FStar.List.Tot.Base.rev_acc",
+        "typing_Tm_abs_4f789d7e8a04be186cc41f5244a14c59",
+        "typing_Tm_abs_e5948773241fb3034357e18088575332"
+      ],
+      0,
+      "72586206f10d93b76dc8db393de3057d"
+    ],
+    [
+      "Hist.wp_lift_pure_hist",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Hist_interpretation_Tm_arrow_a1ef44e1e44d82e59ba858498924d44a",
+        "Prims_interpretation_Tm_arrow_92458cff82f9ffee1f6e26a1c0c579f3",
+        "data_typing_intro_Prims.Nil@tok", "equation_Hist.hist_post",
+        "equation_Hist.hist_wp_monotonic", "equation_Prims.l_True",
+        "equation_Prims.pure_post", "equation_Prims.pure_post_",
+        "interpretation_Tm_abs_c221ded6489450d94e15f35d3aa65a36",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "f24e83e67246897fe5438ae076537541"
+    ],
+    [
+      "Hist.lemma_wp_lift_pure_hist_implies_as_requires",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Hist_interpretation_Tm_arrow_a1ef44e1e44d82e59ba858498924d44a",
+        "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
+        "Prims_interpretation_Tm_arrow_92458cff82f9ffee1f6e26a1c0c579f3",
+        "data_typing_intro_Prims.Nil@tok", "equation_Hist.hist_post",
+        "equation_Prims.l_True", "equation_Prims.logical",
+        "equation_Prims.pure_post", "equation_Prims.pure_post_",
+        "function_token_typing_Prims.l_True",
+        "interpretation_Tm_abs_5e34897418ce4950a4effcc8c159cf53",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "true_interp", "typing_Tm_abs_5e34897418ce4950a4effcc8c159cf53",
+        "typing_Tm_abs_7714ffb8366b7121265caa1bd5da9c34"
+      ],
+      0,
+      "471fe11992ee66b31b119c813a7628bc"
+    ],
+    [
+      "Hist.hist_if_then_else",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Hist.hist",
+        "equation_Hist.hist_wp_monotonic",
+        "interpretation_Tm_abs_7cf348d57b2b6ad9dc183e94580e97aa",
+        "l_and-interp", "l_imp-interp", "l_not-interp",
+        "refinement_interpretation_Tm_refine_a5d38fca91f99b70d633445ef10334b8"
+      ],
+      0,
+      "1249035f33a8787c76b1b2dc33279841"
+    ],
+    [
+      "Hist.to_hist",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Hist.hist_wp_monotonic",
+        "interpretation_Tm_abs_058e1e6b187d15f83869d6f8afd73974",
+        "l_and-interp", "l_quant_interp_f7d5d3e980dd62cf48862a614f26800e"
+      ],
+      0,
+      "ebdfbb0ce341652d95e87a2ac70aa033"
+    ]
+  ]
+]

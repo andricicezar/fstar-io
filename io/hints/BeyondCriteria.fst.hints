@@ -1,0 +1,41 @@
+[
+  "ÚÊõ™È\u0010\bÔ¼\u000føSEÀ@#",
+  [
+    [
+      "BeyondCriteria.__proj__Finite_trace__item__tr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_86b827635e8edb8434a4638cd95e10b2"
+      ],
+      0,
+      "5c26068938b18e6e787ea8604e0ba102"
+    ],
+    [
+      "BeyondCriteria.__proj__Finite_trace__item__result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_86b827635e8edb8434a4638cd95e10b2"
+      ],
+      0,
+      "8d25c161c33ecdce66302ef23a0700e4"
+    ],
+    [
+      "BeyondCriteria.__proj__Infinite_trace__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3c045774b7e0b9452ce175650c65c222"
+      ],
+      0,
+      "38ff632f5b5140030afdcab0694b1c12"
+    ]
+  ]
+]

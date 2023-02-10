@@ -1,0 +1,147 @@
+[
+  "è®]\u001e!—o.Á≥Ëü¢ﬁá9",
+  [
+    [
+      "Free.add_sig",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_426d6c35146ab785070a8b395cb83142"
+      ],
+      0,
+      "7fd58db97f228f24188b8fd78e992620"
+    ],
+    [
+      "Free.__proj__Call__item__trusted",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_643c8fdda9d8a0f19f544ef73dc83505"
+      ],
+      0,
+      "023507308b317047dcf4d976a2abcadb"
+    ],
+    [
+      "Free.__proj__Call__item__l",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_643c8fdda9d8a0f19f544ef73dc83505"
+      ],
+      0,
+      "67fffd032ce66640ed84cab47cdb8ffa"
+    ],
+    [
+      "Free.__proj__Call__item__arg",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_643c8fdda9d8a0f19f544ef73dc83505"
+      ],
+      0,
+      "a2d7b910d5f16ad842e444245ba136e8"
+    ],
+    [
+      "Free.__proj__Call__item__cont",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_643c8fdda9d8a0f19f544ef73dc83505"
+      ],
+      0,
+      "8d078780628e50c29d6631a571b9453b"
+    ],
+    [
+      "Free.__proj__PartialCall__item__pre",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_f24ca71eef125d8f7350836861322984"
+      ],
+      0,
+      "26c402fe35bf14911eb23c3731638a93"
+    ],
+    [
+      "Free.__proj__PartialCall__item__cont",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_f24ca71eef125d8f7350836861322984"
+      ],
+      0,
+      "d414649578f3ee9f73f3ea4801fae4a5"
+    ],
+    [
+      "Free.__proj__Return__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_02e7697f8ecc77844f7c4e00227ac1ce"
+      ],
+      0,
+      "19c522337e8326556e4d058bee0c50f1"
+    ],
+    [
+      "Free.free_bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_b45517a76d2dea5711bd61171b0b2c12_3",
+        "binder_x_d075327e16f2e17e780bb0aa60d888a0_6",
+        "disc_equation_Free.Call", "disc_equation_Free.PartialCall",
+        "disc_equation_Free.Return",
+        "equation_Prims.op_Equals_Equals_Equals", "equation_Prims.squash",
+        "fuel_guarded_inversion_Free.free",
+        "fuel_guarded_inversion_Free.op_sig",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "unit_inversion", "well_founded_ordering_on_codomain_Free.Call",
+        "well_founded_ordering_on_codomain_Free.PartialCall"
+      ],
+      0,
+      "68c8036b34e2254734c3bfa20ee572c2"
+    ],
+    [
+      "Free.free_codomain_ordering",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Free_interpretation_Tm_arrow_23038a724dc79bb039c7db34ee5569bb",
+        "Free_interpretation_Tm_arrow_3a669dafb3e7f12bb38581fd5eb8a7ed",
+        "Free_pretyping_a754509e92094b478b89d15eb8ac511f",
+        "data_elim_Free.Call", "disc_equation_Free.Call",
+        "fuel_guarded_inversion_Free.free",
+        "fuel_guarded_inversion_Free.op_sig", "proj_equation_Free.Call_arg",
+        "proj_equation_Free.Call_cont", "proj_equation_Free.Call_l",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_643c8fdda9d8a0f19f544ef73dc83505",
+        "token_correspondence_Free.__proj__Call__item__cont",
+        "typing_Free.__proj__Call__item__cont",
+        "well_founded_ordering_on_codomain_Free.Call"
+      ],
+      0,
+      "aff0bdfb8cbe4ca02da5f3bc257afc2e"
+    ]
+  ]
+]
