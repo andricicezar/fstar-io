@@ -94,8 +94,8 @@ let dm_giio_return (a:Type) (x:a) : dm_giio a NoActions (hist_return x) by (comp
 val dm_giio_bind  : 
   a: Type ->
   b: Type ->
-  flag_v : tflag ->
-  flag_f : tflag ->
+  flag_v : erased tflag ->
+  flag_f : erased tflag ->
   wp_v: Hist.hist a ->
   wp_f: (_: a -> Hist.hist b) ->
   v: dm_giio a flag_v wp_v ->
@@ -108,8 +108,8 @@ let dm_giio_bind a b flag_v flag_f wp_v wp_f v f : (dm_giio b (flag_v + flag_f) 
 
 val dm_giio_subcomp : 
   a: Type ->
-  flag1 : tflag ->
-  flag2 : tflag ->
+  flag1 : erased tflag ->
+  flag2 : erased tflag ->
   wp1: hist a ->
   wp2: hist a ->
   f: dm_giio a flag1 wp1 ->
@@ -118,7 +118,7 @@ let dm_giio_subcomp a flag1 flag2 wp1 wp2 f =
   admit ();
   dm_iio_subcomp a wp1 wp2 f
 
-let dm_giio_if_then_else (a : Type u#a) (fl1 fl2:tflag)
+let dm_giio_if_then_else (a : Type u#a) (fl1 fl2:erased tflag)
   (wp1 wp2: hist a) (f : dm_giio a fl1 wp1) (g : dm_giio a fl2 wp2) (b : bool) : Type =
   dm_giio a (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
 

@@ -15,7 +15,7 @@ open BeyondCriteria
 open Compiler.Model
 
 (** this is a second definition of reify that is in the Tot effect **)
-assume val _tot_reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
+assume val _tot_reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:erased tflag) ($f:unit -> IIOwp a fl wp) : Tot (dm_giio a fl wp)
 
 (** ** Non-interference theorems for ctx **)
 (* Termination-insensitive noninterference (TINI) definition took from Beyond Full Abstraction
@@ -117,7 +117,7 @@ val ni :
 // pi is Tot, it does not matter that it is erased
 //
 
-(**** Types using the repr directly **)
+(**** Types using the giio directly **)
 
 type giio_typ_cmds (fl:erased tflag) (pi:monitorable_prop) =
   (cmd : io_cmds) ->
@@ -138,35 +138,144 @@ let giio_inst_cmds pi cmd arg =
 // Binary parametricity for contexts, picking the trivial relation for erased.
 // It says that all contexts are parametric.
 
+let giio_eff_rc_typ_cont_wp (fl:erased tflag) (#t1:Type u#a) (#t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (y:t2) (initial_h:erased trace) =
+  to_hist
+    (fun h -> initial_h `suffix_of` h)
+    (eff_rc_typ_cont_post rc initial_h x y)
+
 type giio_eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
-  y:t2 -> (dm_giio bool fl (to_hist (fun h -> (initial_h `suffix_of` h)) (fun current_h (b:bool) lt -> 
-       (initial_h `suffix_of` current_h) /\
-       (let the_lt = get_local_trace initial_h current_h in
-       apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt)))))
+  y:t2 -> (dm_giio bool fl (giio_eff_rc_typ_cont_wp fl rc x y initial_h))
   
 type giio_eff_rc_typ (fl:erased tflag) (#t1 #t2:Type) (rc:rc_typ t1 t2) =
   x:t1 -> (dm_giio (initial_h:(erased trace) & giio_eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (to_hist (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])))
 
 #set-options "--print_effect_args"
 
-assume val reify_eff_rc_cont : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> x:t1 -> initial_h:erased trace -> eff_rc_typ_cont fl t1 t2 rc x initial_h -> giio_eff_rc_typ_cont fl t1 t2 rc x initial_h
-(* TODO @Guido: why does this want to be in the Ghost effect? *)
-//let reify_eff_rc_cont #fl #t1 #t2 #rc x initial_h cont (y:t2) =
-//  _tot_reify_IIOwp (fun () -> cont y)
+val reify_eff_rc_cont : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> x:t1 -> initial_h:erased trace -> eff_rc_typ_cont fl t1 t2 rc x initial_h -> giio_eff_rc_typ_cont fl t1 t2 rc x initial_h
+let reify_eff_rc_cont #fl #t1 #t2 #rc x initial_h cont (y:t2) =
+  _tot_reify_IIOwp (fun () -> cont y)
 
-assume val reify_eff_rc : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> eff_rc_typ fl rc -> giio_eff_rc_typ fl rc
-(* TODO @Guido: why does this want to be in the Ghost effect? *)
-//let reify_eff_rc #fl #t1 #t2 #rc eff_rc x =
-//  admit ();
-//  dm_giio_bind
-//    (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h)
-//    (initial_h:(erased trace) & giio_eff_rc_typ_cont fl t1 t2 rc x initial_h)
-//    fl NoActions
-//    (to_hist (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == []))
-//    (fun (| h, cont |) -> hist_return (| h, reify_eff_rc_cont x h cont |))
-//    (_tot_reify_IIOwp (fun () -> eff_rc x))
-//    (fun (| h, cont |) -> dm_giio_return _ (| h, reify_eff_rc_cont x h cont |))
+val reify_eff_rc : #fl:erased tflag -> #t1:Type -> #t2:Type -> #rc:rc_typ t1 t2 -> eff_rc_typ fl rc -> giio_eff_rc_typ fl rc
+let reify_eff_rc #fl #t1 #t2 #rc eff_rc x =
+  admit ();
+  dm_giio_bind
+    (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h)
+    (initial_h:(erased trace) & giio_eff_rc_typ_cont fl t1 t2 rc x initial_h)
+    fl NoActions
+    (to_hist (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == []))
+    (fun (| h, cont |) -> hist_return (| h, reify_eff_rc_cont x h cont |))
+    (_tot_reify_IIOwp (fun () -> eff_rc x))
+    (fun (| h, cont |) -> dm_giio_return _ (| h, reify_eff_rc_cont x h cont |))
 
+type giio_pck_eff_rc (fl:erased tflag) = pck:pck_rc & giio_eff_rc_typ fl (Mkdtuple3?._3 pck)
+
+type giio_typ_eff_rcs (fl:erased tflag) (rcs:tree pck_rc) = 
+  eff_rcs:(tree (giio_pck_eff_rc fl)){
+    equal_trees rcs (map_tree eff_rcs dfst)}
+
+type giio_ctx (rc:rc_typ unit int) =
+  fl:erased tflag -> pi:erased monitorable_prop -> giio_typ_cmds fl pi -> giio_typ_eff_rcs fl (make_rc_tree rc) -> unit -> dm_giio int fl (to_hist (fun _ -> True) (fun _ _ _ -> True))
+
+val bind1  : 
+  #a: Type ->
+  #b: Type ->
+  v: dm_giio a AllActions trivial_hist ->
+  f: (x: a -> dm_giio b AllActions trivial_hist) ->
+  Tot (dm_giio b AllActions trivial_hist)
+let bind1 #a #b = dm_giio_bind a b AllActions AllActions trivial_hist (fun _ -> trivial_hist)
+
+let wtf
+  (eff_rc:giio_eff_rc_typ AllActions #'a #'b 'rc)
+  (cont1:dm_giio 'b AllActions trivial_hist)
+  (cont2: _ -> dm_giio 'c AllActions trivial_hist) 
+  x :
+  dm_giio 'c AllActions trivial_hist =
+  dm_giio_subcomp 'c AllActions AllActions _ trivial_hist (
+    dm_giio_bind 
+      (initial_h:(erased trace) & giio_eff_rc_typ_cont AllActions 'a 'b 'rc x initial_h)
+      'c
+      AllActions
+      AllActions
+      trivial_hist
+      (fun (| initial_h, _ |) -> hist_bind trivial_hist  (fun y -> hist_bind (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist)))
+      (eff_rc x) 
+      (fun (| initial_h, eff_rc' |) -> 
+        dm_giio_bind _ _ _ _ trivial_hist (fun y -> hist_bind (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist))
+          cont1 
+	  (fun y -> 
+	    dm_giio_bind _ _ _ _ (giio_eff_rc_typ_cont_wp AllActions 'rc x y initial_h) (fun _ -> trivial_hist)
+	      (eff_rc' y) 
+	      cont2)))
+
+let rec only_pi_and_rc
+  (pi:monitorable_prop)
+  (giio_cmds:giio_typ_cmds AllActions pi)
+  (eff_rc:giio_eff_rc_typ AllActions #'a #'b 'rc)
+  (m:dm_giio 'c AllActions trivial_hist) :
+  GTot Type0 (decreases m) =
+  (exists x (cont1:dm_giio 'b AllActions trivial_hist) (cont2: _ -> dm_giio 'c AllActions trivial_hist). 
+    ((cont1 << m /\ only_pi_and_rc pi giio_cmds eff_rc cont1) /\
+    (forall r. (cont2 r) << m /\ only_pi_and_rc pi giio_cmds eff_rc (cont2 r))) ==> 
+    m == )
+	      
+  \/
+  (exists r. m == Return r) 
+  \/
+  (exists cmd arg (cont:io_resm cmd arg -> dm_giio 'c AllActions trivial_hist).
+    (forall r.  (cont r) << m /\ only_pi_and_rc pi giio_cmds eff_rc (cont r)) ==>
+    (m == (bind1 (giio_cmds cmd arg) cont)))
+
+
+
+(** *** Effect polymorphism *)
+noeq type monad = {
+  m    : Type u#(max 1 a) -> Type u#(max 1 a);
+  ret  : #a:Type -> a -> m a;
+  (* TODO: bind should be polymorphic in two universes *)
+  bind : #a:Type -> #b:Type -> m a -> (a -> m b) -> m b;
+  (* We don't want acts to be part of this monad because we want to provide different versions *)
+}
+
+let dm_giio' (fl:erased tflag) (pi:monitorable_prop) (a:Type) = dm_giio a fl (pi_as_hist pi)
+
+let as_giio_dm (w:dm_giio' 'f 'p 'a) : dm_giio 'a 'f (pi_as_hist 'p) = 
+  let tree : iio 'a = w in
+  assert (pi_as_hist 'p `Hist.hist_ord` IIO.dm_giio_theta tree);
+  tree
+
+let as_giio_dm' (w:dm_giio 'a 'f (pi_as_hist 'p)) : dm_giio' 'f 'p 'a = w
+
+let lemma_bind_pi_implies_pi (#a #b:Type) (pi:monitorable_prop) : 
+  Lemma (pi_as_hist #b pi `hist_ord` (hist_bind (pi_as_hist #a pi) (fun (_:a) -> pi_as_hist pi))) = admit ()
+
+let dm_giio_return' (a:Type) (fl:erased tflag) (x:a) : dm_giio a fl (hist_return x) by (compute ()) =
+  dm_iio_return a x
+
+let dm_mon (fl:erased tflag) (pi:monitorable_prop) : monad = {
+  m = dm_giio' fl pi;
+  ret = (fun (x:'a) -> dm_giio_return' 'a fl x);
+  bind = (fun (m:dm_giio' fl pi 'a) (k:'a -> dm_giio' fl pi 'b) -> 
+    let wp : Hist.hist 'b = Hist.hist_bind (pi_as_hist #'a pi) (fun _ -> pi_as_hist pi) in 
+    let tr : dm_giio 'b fl wp = dm_giio_bind _ _ _ _ _ _ (as_giio_dm m) (fun x -> as_giio_dm (k x)) in
+    lemma_bind_pi_implies_pi #'a #'b pi;
+    let w = dm_giio_subcomp 'b _ _ wp (pi_as_hist pi) tr in
+    as_giio_dm' w)
+}
+
+type effpoly_rc (mon:monad) = (unit -> mon.m (int -> mon.m (Universe.raise_t (bool <: Type))))
+  
+type effpoly_ctx =
+  (mon:monad) -> io_act:(cmd:io_cmds -> arg:io_sig.args cmd -> mon.m (Universe.raise_t (io_sig.res cmd arg))) -> unit -> mon.m (Universe.raise_t (int <: Type))
+
+#set-options "--print_universes"
+
+(**
+val law : rc:rc_typ unit int -> effpoly_ctx -> giio_ctx rc
+let law rc effctx fl pi io_acts effrc =
+  effctx (dm_mon fl pi) io_acts
+**)
+
+(** *** Parametricity **)
 // Type of contexts
 let ctx_type rc =
   fl:erased tflag -> pi:erased monitorable_prop -> typ_io_cmds fl pi -> typ_eff_rcs fl (make_rc_tree rc) -> unit -> dm_giio int fl (to_hist (fun _ -> True) (fun _ _ _ -> True))
@@ -208,19 +317,6 @@ assume val ctx_param :
   rc: rc_typ 'a 'b ->
   ctx0: ctx_type rc -> ctx1: ctx_type rc ->
   ctx_type_r rc ctx0 ctx1
-
-(** *** Effect polymorphism *)
-noeq type monad = {
-  m    : Type u#a -> Type u#(max 1 a);
-  ret  : #a:Type -> a -> m a;
-  (* TODO: bind should be polymorphic in two universes *)
-  bind : #a:Type u#a -> #b:Type u#a -> m a -> (a -> m b) -> m b;
-  (* We don't want acts to be part of this monad because we want to provide different versions *)
-}
-
-val eff_poly : (mon:monad) -> io_act:('a -> mon.m 'b) -> rc:('c -> mon.m ('d -> mon.m 'e)) -> mon.m int
-
-// let ctx_type fl pi = eff_poly (dm_giio fl pi) 
 
 (*
 
