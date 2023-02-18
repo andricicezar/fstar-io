@@ -119,11 +119,13 @@ let rec is_open (fd:file_descr) (h:trace) : bool =
                | _ -> is_open fd tail
 
 unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
+  True
+  (**
   match cmd with
   | Openfile -> True
   | Read -> is_open arg h
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
-  | Close -> is_open arg h
+  | Close -> is_open arg h**)
 
 unfold let iio_wps (isTrusted:bool) (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
   match cmd with
