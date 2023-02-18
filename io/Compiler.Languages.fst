@@ -26,27 +26,27 @@ include IIO
 (** monitorable_prop is the type of the runtime check that is enforced when instrumenting.
     A monitorable_prop checks if the next operation with its arguments satisfy the property
     over the history. **)
-type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
+type monitorable_prop = (history:trace) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Tot bool
 
 (** TODO: show that the type of monitorable_prop is enough to enforce any monitorable property
  (from Grigore Rosu's paper) **)
 
 unfold
-let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
+let has_event_respected_pi (e:event) (ap:monitorable_prop) (h:trace) : bool =
   match e with
-  | EOpenfile _ arg _ -> check Openfile arg h
-  | ERead _ arg _ -> check Read arg h
-  | EClose _ arg _ -> check Close arg h
+  | EOpenfile isTrusted arg _ -> isTrusted || ap h Openfile arg
+  | ERead isTrusted arg _ -> isTrusted || ap h Read arg
+  | EClose isTrusted arg _ -> isTrusted || ap h Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
-  (check : monitorable_prop)
+  (ap : monitorable_prop)
   (h l: trace) :
   Tot bool (decreases l) =
   match l with
   | [] -> true
   | e  ::  t ->
-    if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
+    if has_event_respected_pi e ap h then enforced_locally (ap) (e::h) t
     else false  
   
 let pi_as_hist (#a:Type) (pi:monitorable_prop) : hist a =

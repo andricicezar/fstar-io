@@ -25,7 +25,7 @@ type acts (fl:erased tflag) (pi:monitorable_prop) (isTrusted:bool) =
 val inst_io_cmds : pi:monitorable_prop -> acts AllActions pi false
 let inst_io_cmds pi cmd arg = 
   let h = get_trace true in
-  if pi cmd arg h then (
+  if pi h cmd arg then (
     assume (io_pre cmd arg h);
     static_cmd false cmd arg)
   else Inr Contract_failure
