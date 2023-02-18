@@ -55,27 +55,28 @@ let pi_as_hist (#a:Type) (pi:monitorable_prop) : hist a =
 effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : monitorable_prop) = 
   IIOwp a fl (pi_as_hist #a pi)
 
-class tlang (t:Type u#a) (pi:monitorable_prop) = { [@@@no_method] mldummy : unit }
+class tlang (t:Type u#a) (fl:erased tflag) (pi:monitorable_prop) = { [@@@no_method] mldummy : unit }
 
-instance tlang_unit (pi:monitorable_prop) : tlang unit pi = { mldummy = () }
-instance tlang_file_descr (pi:monitorable_prop) : tlang file_descr pi = { mldummy = () }
+instance tlang_unit fl pi : tlang unit fl pi = { mldummy = () }
+instance tlang_file_descr fl pi : tlang file_descr fl pi = { mldummy = () }
 
-instance tlang_bool (pi:monitorable_prop) : tlang bool pi = { mldummy = () }
-instance tlang_int (pi:monitorable_prop) : tlang int pi = { mldummy = () }
-instance tlang_option (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} : tlang (option t1) pi =
+instance tlang_pair fl pi t1 {| d1:tlang t1 fl pi |} t2 {| d2:tlang t2 fl pi |} : tlang (t1 * t2) fl pi = 
   { mldummy = () }
-instance tlang_pair (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} t2 {| d2:tlang t2 pi |} : tlang (t1 * t2) pi = 
+instance tlang_either fl pi t1 {| d1:tlang t1 fl pi |} t2 {| d2:tlang t2 fl pi |} : tlang (either t1 t2) fl pi =
   { mldummy = () }
-instance tlang_either (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} t2 {| d2:tlang t2 pi |} : tlang (either t1 t2) pi =
-  { mldummy = () }
-instance tlang_resexn (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} : tlang (resexn t1) pi =
+instance tlang_resexn fl pi t1 {| d1:tlang t1 fl pi |} : tlang (resexn t1) fl pi =
   { mldummy = () }
 
-type tlang_arrow_typ (fl:erased tflag) (t1 t2:Type) pi = t1 -> IIOpi t2 fl pi
+type tlang_arrow_typ fl pi (t1 t2:Type) = t1 -> IIOpi t2 fl pi
 
 (** An tlang arrow is a statically/dynamically verified arrow to respect pi.
 **)
-instance tlang_arrow (#fl:erased tflag) (pi:monitorable_prop) #t1 (d1:tlang t1 pi) #t2 (d2:tlang t2 pi) : tlang (tlang_arrow_typ fl t1 t2 pi) pi =
+instance tlang_arrow fl pi #t1 (d1:tlang t1 fl pi) #t2 (d2:tlang t2 fl pi) : tlang (tlang_arrow_typ fl pi t1 t2) fl pi =
+  { mldummy = () }
+
+instance tlang_bool fl pi : tlang bool fl pi = { mldummy = () }
+instance tlang_int fl pi : tlang int fl pi = { mldummy = () }
+instance tlang_option fl pi t1 {| d1:tlang t1 fl pi |} : tlang (option t1) fl pi =
   { mldummy = () }
 
 (**instance tlang_fo_uint8 : tlang_fo UInt8.t = { fo_pred = () }
