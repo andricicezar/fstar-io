@@ -6,22 +6,24 @@ include CommonUtils
 include Free
 include Hist
 
-type cmds = | Openfile | Read | Close | GetTrace
+type cmds = | Openfile | Read | Close | Write | GetTrace
 
 (** the io free monad does not contain the GetTrace step **)
-let _io_cmds x : bool = x = Openfile || x = Read || x = Close
+let _io_cmds x : bool = x = Openfile || x = Read || x = Close || x = Write
 type io_cmds : Type = x:cmds{_io_cmds x}
 
 unfold let io_args (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> string
   | Read -> file_descr
+  | Write -> file_descr * string
   | Close -> file_descr
 
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
   | Openfile -> file_descr
   | Read -> string
+  | Write -> unit 
   | Close -> unit
 
 let io_resm (cmd:io_cmds) (arg:io_args cmd) = resexn (io_res cmd)
@@ -36,6 +38,7 @@ noeq
 type event =
   | EOpenfile : (isTrusted:bool) -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
   | ERead     : (isTrusted:bool) -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EWrite    : (isTrusted:bool) -> a:io_sig.args Write    -> (r:io_sig.res Write a)    -> event
   | EClose    : (isTrusted:bool) -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
 
 type trace = list event
@@ -88,6 +91,7 @@ let convert_call_to_event
   match cmd with
   | Openfile -> EOpenfile isTrusted arg r
   | Read     -> ERead isTrusted arg r
+  | Write    -> EWrite isTrusted arg r
   | Close    -> EClose isTrusted arg r
 
 // OTHER TYPES & UTILS
@@ -99,6 +103,7 @@ let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io
   match e with
   | EOpenfile isTrusted arg res -> (| isTrusted, Openfile, arg, res |)
   | ERead isTrusted arg res -> (| isTrusted, Read, arg, res |)
+  | EWrite isTrusted arg res -> (| isTrusted, Write, arg, res |)
   | EClose isTrusted arg res -> (| isTrusted, Close, arg, res |)
 
 let rec is_open (fd:file_descr) (h:trace) : bool =
@@ -117,6 +122,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   match cmd with
   | Openfile -> True
   | Read -> is_open arg h
+  | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h
 
 unfold let iio_wps (isTrusted:bool) (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->

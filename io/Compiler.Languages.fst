@@ -36,6 +36,7 @@ let has_event_respected_pi (e:event) (ap:monitorable_prop) (h:trace) : bool =
   match e with
   | EOpenfile isTrusted arg _ -> isTrusted || ap h Openfile arg
   | ERead isTrusted arg _ -> isTrusted || ap h Read arg
+  | EWrite isTrusted arg _ -> isTrusted || ap h Write arg
   | EClose isTrusted arg _ -> isTrusted || ap h Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
