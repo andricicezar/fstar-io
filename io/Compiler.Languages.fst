@@ -34,9 +34,9 @@ type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) ->
 unfold
 let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
   match e with
-  | EOpenfile arg _ -> check Openfile arg h
-  | ERead arg _ -> check Read arg h
-  | EClose arg _ -> check Close arg h
+  | EOpenfile _ arg _ -> check Openfile arg h
+  | ERead _ arg _ -> check Read arg h
+  | EClose _ arg _ -> check Close arg h
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally

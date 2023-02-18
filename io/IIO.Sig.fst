@@ -34,9 +34,9 @@ let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
-  | ERead     : a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
-  | EClose    : a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
+  | EOpenfile : (isTrusted:bool) -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
+  | ERead     : (isTrusted:bool) -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EClose    : (isTrusted:bool) -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
 
 type trace = list event
 
@@ -81,33 +81,34 @@ let iio_bind (#a:Type) (#b:Type) l k : iio b =
   free_bind cmds iio_sig a b l k
 
 let convert_call_to_event
+  (isTrusted:bool)
   (cmd:io_cmds)
   (arg:io_sig.args cmd)
   (r:io_sig.res cmd arg) =
   match cmd with
-  | Openfile -> EOpenfile arg r
-  | Read     -> ERead arg r
-  | Close    -> EClose arg r
+  | Openfile -> EOpenfile isTrusted arg r
+  | Read     -> ERead isTrusted arg r
+  | Close    -> EClose isTrusted arg r
 
 // OTHER TYPES & UTILS
 unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
-let destruct_event (e:event) : ( cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
+let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
   match e with
-  | EOpenfile arg res -> (| Openfile, arg, res |)
-  | ERead arg res -> (| Read, arg, res |)
-  | EClose arg res -> (| Close, arg, res |)
+  | EOpenfile isTrusted arg res -> (| isTrusted, Openfile, arg, res |)
+  | ERead isTrusted arg res -> (| isTrusted, Read, arg, res |)
+  | EClose isTrusted arg res -> (| isTrusted, Close, arg, res |)
 
 let rec is_open (fd:file_descr) (h:trace) : bool =
   match h with
   | [] -> false
   | h :: tail -> match h with
-               | EOpenfile _ (Inl fd') ->
+               | EOpenfile _ _ (Inl fd') ->
                    if fd = fd' then true
                    else is_open fd tail
-               | EClose fd' _ ->
+               | EClose _ fd' _ ->
                     if fd = fd' then false
                     else is_open fd tail
                | _ -> is_open fd tail
@@ -118,7 +119,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Read -> is_open arg h
   | Close -> is_open arg h
 
-unfold let iio_wps (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
+unfold let iio_wps (isTrusted:bool) (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
   match cmd with
   | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event isTrusted cmd arg r] r)

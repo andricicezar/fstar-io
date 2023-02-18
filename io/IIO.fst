@@ -57,10 +57,10 @@ match flag, m with
 | _,            Return x              -> True
 | _,            PartialCall pre k     -> forall r. satisfies (k r) flag
 | NoActions,    _                     -> False
-| GetTraceActions, Call GetTrace arg k   -> forall r. satisfies (k r) flag
-| GetTraceActions, Call cmd arg k        -> False
-| IOActions,    Call GetTrace arg k   -> False
-| IOActions,    Call cmd arg k        -> forall r. satisfies (k r) flag
+| GetTraceActions, Call _ GetTrace arg k   -> forall r. satisfies (k r) flag
+| GetTraceActions, Call _ cmd arg k        -> False
+| IOActions,    Call _ GetTrace arg k   -> False
+| IOActions,    Call _ cmd arg k        -> forall r. satisfies (k r) flag
 
 let (+) (flag1:tflag) (flag2:tflag) = 
   match flag1, flag2 with
@@ -162,28 +162,29 @@ effect IIO
   IIOwp a fl (to_hist pre post) 
   
 let static_cmd
+  (isTrusted : bool)
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
   IIO (io_sig.res cmd arg) IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        lt == [convert_call_to_event cmd arg r])) =
-  IIOwp?.reflect (iio_call cmd arg)
+        lt == [convert_call_to_event isTrusted cmd arg r])) =
+  IIOwp?.reflect (iio_call isTrusted cmd arg)
 
-let get_trace () : IIOwp trace GetTraceActions
+let get_trace (isTrusted:bool) : IIOwp trace GetTraceActions
   (fun p h -> forall lt. lt == [] ==> p lt h) =
-  IIOwp?.reflect (iio_call GetTrace ())
+  IIOwp?.reflect (iio_call isTrusted GetTrace ())
 
 // There is no hope to prove anything about ctx without a meta-theorem about F* / without a formalization of F* & Ghost.
 // val ctx_s : (fl:erased tflag) -> IIO unit fl (fun _ -> True) (fun _ _ _ -> True) 
 
 private
 let performance_test (#fl:tflag) : IIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ()) =
-  let fd = static_cmd Openfile "../Makefile" in
-  let fd = static_cmd Openfile "../Makefile" in
-  let fd = static_cmd Openfile "../Makefile" in
-  let fd = static_cmd Openfile "../Makefile" in
-  let fd = static_cmd Openfile "../Makefile" in
-  let fd = static_cmd Openfile "../Makefile" in
-  if Inl? fd then let _ = static_cmd Close (Inl?.v fd) in () else 
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  if Inl? fd then let _ = static_cmd true Close (Inl?.v fd) in () else 
   ()

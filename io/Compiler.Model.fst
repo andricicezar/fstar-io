@@ -11,7 +11,7 @@ include Compiler.Languages
 include Compiler.IIO.To.TLang
 open IIO.Behavior
 
-type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
+type acts (fl:erased tflag) (pi:monitorable_prop) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   IIO (io_resm cmd arg) fl
@@ -20,18 +20,18 @@ type typ_io_cmds (fl:erased tflag) (pi:monitorable_prop) =
       enforced_locally pi h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event cmd arg r'])))
+       | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
 
-val inst_io_cmds : pi:monitorable_prop -> typ_io_cmds AllActions pi
+val inst_io_cmds : pi:monitorable_prop -> acts AllActions pi false
 let inst_io_cmds pi cmd arg = 
-  let h = get_trace () in
+  let h = get_trace true in
   if pi cmd arg h then (
     assume (io_pre cmd arg h);
-    static_cmd cmd arg)
+    static_cmd false cmd arg)
   else Inr Contract_failure
 
 val convert_insts : (inst_pi:monitorable_prop) -> (spec_pi:monitorable_prop) -> (_:squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt)) ->
-  (cmd_call:typ_io_cmds AllActions inst_pi) -> (typ_io_cmds AllActions spec_pi) 
+  (cmd_call:acts AllActions inst_pi false) -> (acts AllActions spec_pi false) 
 let convert_insts inst_pi spec_pi c1 cmd_call (cmd:io_cmds) arg = 
   cmd_call cmd arg
 
@@ -74,14 +74,14 @@ type tgt_interface = {
   spec_pi : monitorable_prop;
 
   ct : erased tflag -> monitorable_prop -> Type u#a;
-  ct_tlang : fl:erased tflag -> tlang (ct fl spec_pi) spec_pi;
+  ct_tlang : fl:erased tflag -> tlang (ct fl spec_pi) fl spec_pi;
 
   inst_pi : monitorable_prop;
   inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> typ_io_cmds fl i.inst_pi -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
+type ctx_src (i:src_interface)  = #fl:erased tflag -> acts fl i.inst_pi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.p_post
 type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> IIO int AllActions (fun _ -> True) post)
 
@@ -98,7 +98,7 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased monitorable_prop -> typ_io_cmds fl pi -> i.ct fl pi
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased monitorable_prop -> acts fl pi false -> i.ct fl pi
 type prog_tgt (i:tgt_interface) = i.ct AllActions i.spec_pi -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
