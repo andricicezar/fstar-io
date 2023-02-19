@@ -5,6 +5,37 @@ open FStar.List.Tot.Base
 
 open Compiler.Model
 
+type access_policy = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
+
+(** TODO: show that the type of access_policy is enough to enforce any monitorable property
+ (from Grigore Rosu's paper) **)
+
+unfold
+let has_event_respected_pi (e:event) (ap:access_policy) (h:trace) : Type0 =
+  match e with
+  | EOpenfile isTrusted arg _ -> ap h isTrusted Openfile arg
+  | ERead isTrusted arg _ -> ap h isTrusted Read arg
+  | EWrite isTrusted arg _ -> ap h isTrusted Write arg
+  | EClose isTrusted arg _ -> ap h isTrusted Close arg
+
+(** `enforced_locally pi` is a prefix-closed safety trace property. **)
+let rec enforced_locally
+  (ap : access_policy)
+  (h l: trace) :
+  Tot Type0 (decreases l) =
+  match l with
+  | [] -> true
+  | e  ::  t ->
+    (has_event_respected_pi e ap h ==> enforced_locally (ap) (e::h) t) /\
+    ~(has_event_respected_pi e ap h ==> False)
+  
+let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
+  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
+
+effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
+  IIOwp a fl (pi_as_hist #a pi)
+
+
 assume val valid_http_response : string -> bool
 assume val valid_http_request : string -> bool
 
@@ -51,13 +82,14 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
 
-val pi : monitorable_prop
-let pi h cmd arg =
-  match cmd with
-  | Openfile -> 
+val pi : access_policy
+let pi h isTrusted cmd arg =
+  match isTrusted, cmd with
+  | false, Openfile -> 
     if arg = "/temp" then true else false
-  | Read -> is_opened_by_untrusted h arg
-  | Close -> is_opened_by_untrusted h arg
+  | false, Read -> is_opened_by_untrusted h arg
+  | false, Close -> is_opened_by_untrusted h arg
+  | true, Write -> true
   | _ -> false
 
 let rec lemma1 (lt h:trace) : Lemma (requires (enforced_locally pi h lt)) (ensures (handler_only_openfiles_reads_client lt)) =
@@ -111,31 +143,25 @@ assume val sendError : int -> fd:file_descr -> IIO unit IOActions
 
 open FStar.Tactics
 
-(* Stuck: enforcing the access policy on the context, gives as a 
-   trace property that talks about the events produced by the context.
-   However, one also has to talk about the events produced by the program
-   inside the context. 
-
-   Otherwise, we can not prove every_request_gets_a_response post-condition,
-   because theoretically the partial program can produce events 
-   inside the context that violate the condition.
-   
-   One can manually adnotate the post-condition of the handler to say 
-   that it includes only writes of the partial program, but then
-   we cannot enforce it with the access policy or higher-order contracts.
-   Can we find some kind of property that makes it safe to
-   ``forget"?
-
-   Another strategy would be to find a different post-condition for
-   the webserver :D.
-*)
+(* This may take a bit of effort to prove. *)
 
 let webserver (handler:request_handler) :
   IIO (resexn unit) IOActions
     (requires (fun h -> True))
-    (ensures (fun _ _ lt -> every_request_gets_a_response lt)) by
-  (explode (); bump_nth 49; 
-    rewrite_eqs_from_context (); dump "H") =
+    (ensures (fun _ _ lt -> 
+      every_request_gets_a_response lt))
+    by (
+      explode ();
+      bump_nth 49; 
+      l_to_r [`FStar.List.Tot.Properties.append_nil_l];
+      let l = instantiate (nth_binder 3) (fresh_uvar None) in
+      let l = instantiate l (nth_binder (-3)) in
+      mapply l;
+      binder_retype (nth_binder (-3));
+        l_to_r [`FStar.List.Tot.Properties.append_nil_l];
+      trefl ();
+      tadmit ();
+      dump "H") =
   let client = static_cmd true Openfile "test.txt" in
   match client with | Inr err -> Inr err | Inl client -> begin
     match get_req client with
@@ -147,7 +173,7 @@ let webserver (handler:request_handler) :
 
 type tgt_handler =
   (fl:erased tflag) ->
-  (pi:erased monitorable_prop) ->
+  (pi:erased access_policy) ->
   (io_acts:acts fl pi false) ->
   (client:file_descr) ->
   (req:string) ->
