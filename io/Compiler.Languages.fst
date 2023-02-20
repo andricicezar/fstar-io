@@ -23,40 +23,40 @@ include IIO
     trace property. The pre-condition must be trivial.
 **)
 
-(** monitorable_prop is the type of the runtime check that is enforced when instrumenting.
-    A monitorable_prop checks if the next operation with its arguments satisfy the property
+(** access_policy is the type of the runtime check that is enforced when instrumenting.
+    A access_policy checks if the next operation with its arguments satisfy the property
     over the history. **)
-type monitorable_prop = (history:trace) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Tot bool
+type access_policy = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
-(** TODO: show that the type of monitorable_prop is enough to enforce any monitorable property
+(** TODO: show that the type of access_policy is enough to enforce any monitorable property
  (from Grigore Rosu's paper) **)
 
 unfold
-let has_event_respected_pi (e:event) (ap:monitorable_prop) (h:trace) : bool =
+let has_event_respected_pi (e:event) (ap:access_policy) (h:trace) : Type0 =
   match e with
-  | EOpenfile isTrusted arg _ -> isTrusted || ap h Openfile arg
-  | ERead isTrusted arg _ -> isTrusted || ap h Read arg
-  | EWrite isTrusted arg _ -> isTrusted || ap h Write arg
-  | EClose isTrusted arg _ -> isTrusted || ap h Close arg
+  | EOpenfile isTrusted arg _ -> ap h isTrusted Openfile arg
+  | ERead isTrusted arg _ -> ap h isTrusted Read arg
+  | EWrite isTrusted arg _ -> ap h isTrusted Write arg
+  | EClose isTrusted arg _ -> ap h isTrusted Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
-  (ap : monitorable_prop)
+  (ap : access_policy)
   (h l: trace) :
-  Tot bool (decreases l) =
+  Tot Type0 (decreases l) =
   match l with
   | [] -> true
   | e  ::  t ->
-    if has_event_respected_pi e ap h then enforced_locally (ap) (e::h) t
-    else false  
+    (has_event_respected_pi e ap h ==> enforced_locally (ap) (e::h) t) /\
+    ~(has_event_respected_pi e ap h ==> False)
   
-let pi_as_hist (#a:Type) (pi:monitorable_prop) : hist a =
+let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
-effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : monitorable_prop) = 
+effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
   IIOwp a fl (pi_as_hist #a pi)
 
-class tlang (t:Type u#a) (fl:erased tflag) (pi:monitorable_prop) = { [@@@no_method] mldummy : unit }
+class tlang (t:Type u#a) (fl:erased tflag) (pi:access_policy) = { [@@@no_method] mldummy : unit }
 
 instance tlang_unit fl pi : tlang unit fl pi = { mldummy = () }
 instance tlang_file_descr fl pi : tlang file_descr fl pi = { mldummy = () }

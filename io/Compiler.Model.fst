@@ -11,7 +11,10 @@ include Compiler.Languages
 include Compiler.IIO.To.TLang
 open IIO.Behavior
 
-type acts (fl:erased tflag) (pi:monitorable_prop) (isTrusted:bool) =
+type enforced_policy (pi:access_policy) =
+  h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h false cmd arg}
+
+type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   IIO (io_resm cmd arg) fl
@@ -22,71 +25,63 @@ type acts (fl:erased tflag) (pi:monitorable_prop) (isTrusted:bool) =
        | Inr Contract_failure -> lt == []
        | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
 
-val inst_io_cmds : pi:monitorable_prop -> acts AllActions pi false
-let inst_io_cmds pi cmd arg = 
+type acts' (fl:erased tflag) (#pi:access_policy) (phi:enforced_policy pi) (isTrusted:bool) =
+  (cmd : io_cmds) ->
+  (arg : io_sig.args cmd) ->
+  IIO (io_resm cmd arg) fl
+    (requires (fun _ -> True))
+    (ensures (fun h r lt ->
+      enforced_locally pi h lt /\
+      enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
+      (match r with
+       | Inr Contract_failure -> lt == []
+       | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
+
+val inst_io_cmds : #pi:access_policy -> phi:enforced_policy pi -> acts' AllActions phi false
+let inst_io_cmds phi cmd arg = 
   let h = get_trace true in
-  if pi h cmd arg then (
-    assume (io_pre cmd arg h);
+  if phi h cmd arg then (
     static_cmd false cmd arg)
   else Inr Contract_failure
-
-val convert_insts : (inst_pi:monitorable_prop) -> (spec_pi:monitorable_prop) -> (_:squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt)) ->
-  (cmd_call:acts AllActions inst_pi false) -> (acts AllActions spec_pi false) 
-let convert_insts inst_pi spec_pi c1 cmd_call (cmd:io_cmds) arg = 
-  cmd_call cmd arg
 
 (** **** interfaces **)
 noeq
 type src_interface = {
-  (** The interface contains two pi's: spec_pi and inst_pi. 
-      inst_pi is the pi used to instrument the context.
-      One usually wants to instrument the context with a strong pi,
-      but that is not necessary the spec wanted for the context since
-      one can not write a precise pi. One
-      could limit the direct access of the context to the IO actions 
-      using inst_pi, but still want the context to have a more 
-      relaxed indirect access to IO actions. 
-      For example calling a statically verified callback, 
-      then the callback also has to respect the strong pi (otherwise 
-      the context can not call it). We found
-      that having a weaker second pi (spec_pi) used only at the
-      spec level, works well and solves the problem.
-      spec_pi is weaker than inst_pi and it represents the spec 
-      one obtains in the target language. **)
-  spec_pi : monitorable_prop;
-  inst_pi : monitorable_prop;
-  inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
+  (* pi is in Type0 and it is used at the level of the spec,
+     it describes both the events done by the partial program and the context **)
+  pi : access_policy;
+  (* phi is in bool and it is used to enforce the policy on the context,
+     it describes only the events of the context and it has to imply pi **)
+  phi : enforced_policy pi;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   ct : erased tflag -> Type;
   ct_rcs : tree pck_rc;
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) spec_pi ct_rcs fl;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_rcs fl;
 
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
       This post-condition is erased during compilation **)
-  p_post : trace -> int -> trace -> Type0;
+  psi : trace -> int -> trace -> Type0;
 }
 
 noeq
 type tgt_interface = {
-  spec_pi : monitorable_prop;
+  pi : access_policy;
+  phi : enforced_policy pi;
 
-  ct : erased tflag -> monitorable_prop -> Type u#a;
-  ct_tlang : fl:erased tflag -> tlang (ct fl spec_pi) fl spec_pi;
-
-  inst_pi : monitorable_prop;
-  inst_pi_stronger_spec_pi : squash (forall h lt. enforced_locally inst_pi h lt ==> enforced_locally spec_pi h lt);
+  ct : erased tflag -> access_policy -> Type u#a;
+  ct_tlang : fl:erased tflag -> tlang (ct fl pi) fl pi;
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> acts fl i.inst_pi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.p_post
+type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.psi
 type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> IIO int AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
-  (| i.p_post, p #AllActions (c #AllActions (inst_io_cmds i.inst_pi) (make_rcs_eff i.ct_rcs)) |)
+  (| i.psi, p #AllActions (c #AllActions (inst_io_cmds i.phi) (make_rcs_eff i.ct_rcs)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| _, ws |) -> beh ws)
@@ -98,12 +93,12 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased monitorable_prop -> acts fl pi false -> i.ct fl pi
-type prog_tgt (i:tgt_interface) = i.ct AllActions i.spec_pi -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased access_policy -> acts fl pi false -> i.ct fl pi
+type prog_tgt (i:tgt_interface) = i.ct AllActions i.pi -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  p (c #AllActions #i.spec_pi (inst_io_cmds i.inst_pi))
+  p (c #AllActions #i.pi (inst_io_cmds i.phi))
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = beh 
@@ -120,15 +115,14 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
   ct = (fun fl pi -> (i.ct_importable fl).sitype);
   ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
 
-  spec_pi = i.spec_pi;
-  inst_pi = i.inst_pi;
-  inst_pi_stronger_spec_pi = i.inst_pi_stronger_spec_pi;
+  pi = i.pi;
+  phi = i.phi;
 }
 
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl acts eff_rcs =
-  (i.ct_importable fl).safe_import (c_t #fl #i.spec_pi acts) eff_rcs
+  (i.ct_importable fl).safe_import (c_t #fl #i.pi acts) eff_rcs
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| _, ws |) = ws
@@ -137,7 +131,7 @@ val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int
 let compile_pprog #i p_s c_t = 
   let eff_rcs = make_rcs_eff i.ct_rcs in
   let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
-  let ws : whole_src = (| i.p_post, p_s #AllActions c_s |) in
+  let ws : whole_src = (| i.psi, p_s #AllActions c_s |) in
   let wt : whole_tgt = compile_whole ws in
   wt
 
