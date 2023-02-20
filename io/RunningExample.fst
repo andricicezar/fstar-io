@@ -6,40 +6,11 @@ open FStar.List.Tot.Base
 open Compiler.Model
 
 
-(** ** Temporary redefining types *)
-type access_policy = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
-
-(** TODO: show that the type of access_policy is enough to enforce any monitorable property
- (from Grigore Rosu's paper) **)
-
-unfold
-let has_event_respected_pi (e:event) (ap:access_policy) (h:trace) : Type0 =
-  match e with
-  | EOpenfile isTrusted arg _ -> ap h isTrusted Openfile arg
-  | ERead isTrusted arg _ -> ap h isTrusted Read arg
-  | EWrite isTrusted arg _ -> ap h isTrusted Write arg
-  | EClose isTrusted arg _ -> ap h isTrusted Close arg
-
-(** `enforced_locally pi` is a prefix-closed safety trace property. **)
-let rec enforced_locally
-  (ap : access_policy)
-  (h l: trace) :
-  Tot Type0 (decreases l) =
-  match l with
-  | [] -> true
-  | e  ::  t ->
-    (has_event_respected_pi e ap h ==> enforced_locally (ap) (e::h) t) /\
-    ~(has_event_respected_pi e ap h ==> False)
-  
-let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
-  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
-
-effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
-  IIOwp a fl (pi_as_hist #a pi)
-
 (** ** Type of source handler **)
 assume val valid_http_response : string -> bool
 assume val valid_http_request : string -> bool
+assume val req_res : req:string{valid_http_request req} -> res:string{valid_http_response res}
+
 
 val did_not_respond : trace -> bool
 let did_not_respond h =
@@ -93,8 +64,6 @@ type request_handler =
                                                     wrote_at_least_once_to client lt))
 
 (** ** E.g. of source handler **)
-assume val req_res : req:string{valid_http_request req} -> res:string{valid_http_response res}
-
 val source_handler : request_handler
 let source_handler client req send =
   let res = req_res req in
