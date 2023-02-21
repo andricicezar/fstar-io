@@ -52,7 +52,7 @@ let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
 
 let rec map_tree (t:tree 'a) (f:'a -> 'b) : tree 'b =
   match t with
-  | Leaf -> Leaf 
+  | Leaf -> Leaf
   | EmptyNode lhs rhs -> EmptyNode (map_tree lhs f) (map_tree rhs f)
   | Node x lhs rhs -> Node (f x) (map_tree lhs f) (map_tree rhs f)
   
@@ -69,130 +69,132 @@ let get_local_trace (h':trace) (h:trace) :
   assert (h == apply_changes h' (List.rev lt'));
   List.rev lt'
 
-type rc_typ (t1:Type u#a) (t2:Type u#b) = t1 -> trace -> t2 -> trace -> bool
+type rc_typ (argt:Type u#a) (rett:Type u#b) = argt -> trace -> rett -> trace -> bool
+
+let eff_rc_typ_cont_post (rc:rc_typ 'a 'b) (initial_h:erased trace) (x:'a) (y:'b) (current_h:trace) (b:bool) (lt:trace) : Type0 =
+  (initial_h `suffix_of` current_h) /\
+  (let the_lt = get_local_trace initial_h current_h in
+  apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt))
 
 type eff_rc_typ_cont (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (rc:rc_typ t1 t2) (x:t1) (initial_h:erased trace) =
-  y:t2 -> IIO bool fl (fun h -> (initial_h `suffix_of` h)) (fun current_h b lt -> 
-       (initial_h `suffix_of` current_h) /\
-       (let the_lt = get_local_trace initial_h current_h in
-       apply_changes initial_h the_lt == current_h /\ lt == [] /\ (b <==> rc x initial_h y the_lt)))
+  y:t2 -> IIO bool fl (fun h -> (initial_h `suffix_of` h)) (eff_rc_typ_cont_post rc initial_h x y)
   
 type eff_rc_typ (fl:erased tflag) (#t1 #t2:Type) (rc:rc_typ t1 t2) =
   x:t1 -> IIO (initial_h:(erased trace) & eff_rc_typ_cont fl t1 t2 rc x initial_h) fl (fun _ -> True) (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
 
-val enforce_rc : (#a:Type u#a) -> (#b:Type u#b) -> rc:rc_typ a b -> eff_rc_typ AllActions rc
-let enforce_rc #a #b rc x =
-  let initial_h = get_trace () in
-  let cont : eff_rc_typ_cont AllActions a b rc x (hide initial_h) = 
-    (fun y -> ( 
-      let current_h = get_trace () in
-      let lt = get_local_trace initial_h current_h in 
+val enforce_rc : (#argt:Type u#a) -> (#rett:Type u#b) -> rc:rc_typ argt rett -> eff_rc_typ AllActions rc
+let enforce_rc #argt #rett rc x =
+  let initial_h = get_trace true in
+  let cont : eff_rc_typ_cont AllActions argt rett rc x (hide initial_h) =
+    (fun y -> (
+      let current_h = get_trace true in
+      let lt = get_local_trace initial_h current_h in
       rc x initial_h y lt)) in
   (| hide initial_h, cont |)
 
 // todo: in HO cases, t1 or t2 should be unit since one can not write a
 // runtime check that uses an IIO arrow. thus, one idea is to make the
-// type of rc here `rc_typ (option t1) (option t2)`
-type pck_rc = (t1:Type u#a & t2:Type u#b & rc_typ t1 t2)
+// type of contract here `contract_typ (option t1) (option t2)`
+type contract = (argt:Type u#a & rett:Type u#b & rc_typ argt rett)
 
-let arg_typ (rc:pck_rc) : Type = Mkdtuple3?._1 rc
-let ret_typ (rc:pck_rc) : Type = Mkdtuple3?._2 rc
+let arg_typ (ctr:contract) : Type = Mkdtuple3?._1 ctr
+let ret_typ (ctr:contract) : Type = Mkdtuple3?._2 ctr
 
-let check (rc:pck_rc) (x:arg_typ rc) (h:trace) (r:ret_typ rc) (lt:trace) : bool = 
-  Mkdtuple3?._3 rc x h r lt
+let check (ctr:contract) (arg:arg_typ ctr) (h:trace) (ret:ret_typ ctr) (lt:trace) : bool =
+  Mkdtuple3?._3 ctr arg h ret lt
 
-type pck_eff_rc (fl:erased tflag) = pck:pck_rc & eff_rc_typ fl (Mkdtuple3?._3 pck)
+type eff_contract (fl:erased tflag) = ctr:contract & eff_rc_typ fl (Mkdtuple3?._3 ctr)
 
-val make_rc_eff : pck_rc u#a u#b -> pck_eff_rc u#a u#b AllActions
+val make_rc_eff : contract u#a u#b -> eff_contract u#a u#b AllActions
 let make_rc_eff r = (| r, (enforce_rc (Mkdtuple3?._3 r)) |)
 
-type typ_eff_rcs (fl:erased tflag) (rcs:tree pck_rc) = 
-  eff_rcs:(tree (pck_eff_rc fl)){
+type typ_eff_rcs (fl:erased tflag) (rcs:tree contract) =
+  eff_rcs:(tree (eff_contract fl)){
     equal_trees rcs (map_tree eff_rcs dfst)}
 
-let make_rcs_eff (rcs:tree pck_rc) : typ_eff_rcs AllActions rcs =
-  let r : tree (pck_eff_rc AllActions) = map_tree rcs make_rc_eff in
+let make_rcs_eff (rcs:tree contract) : typ_eff_rcs AllActions rcs =
+  let r : tree (eff_contract AllActions) = map_tree rcs make_rc_eff in
   assume (equal_trees rcs (map_tree r dfst));
   r
 
-class exportable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
+class exportable (t : Type u#a) (pi:access_policy) (rcs:tree (contract u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
   etype : Type u#b;
   [@@@no_method]
-  c_etype : tlang etype pi;
+  c_etype : tlang etype fl pi;
   [@@@no_method]
   export : typ_eff_rcs fl rcs -> t -> etype;
 }
 
-class safe_importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
+class safe_importable (t : Type u#a) (pi:access_policy) (rcs:tree (contract u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
   sitype : Type u#b;
   [@@@no_method]
-  c_sitype : tlang sitype pi;
+  c_sitype : tlang sitype fl pi;
   [@@@no_method]
   safe_import : sitype -> (typ_eff_rcs fl rcs -> t); 
 }
 
-class importable (t : Type u#a) (pi:monitorable_prop) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
+class importable (t : Type u#a) (pi:access_policy) (rcs:tree (contract u#c u#d)) (fl:erased tflag) = {
   [@@@no_method]
   itype : Type u#b; 
   [@@@no_method]
-  c_itype : tlang itype pi;
+  c_itype : tlang itype fl pi;
   [@@@no_method]
   import : itype -> (typ_eff_rcs fl rcs -> resexn t);
 }
 
 (** *** Exportable instances **)
 
-instance tlang_is_exportable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) t {| d1: tlang t pi |} : exportable t pi rcs fl = {
+instance tlang_is_exportable (#pi:access_policy) (#rcs:(tree contract){Leaf? rcs}) (#fl:erased tflag) t {| d1: tlang t fl pi |} : exportable t pi rcs fl = {
   etype = t;
   c_etype = d1;
   export = (fun Leaf x -> x)
 }
 
-instance exportable_unit (#pi:monitorable_prop) (#fl:erased tflag) : exportable unit pi Leaf fl = {
+instance exportable_unit (#pi:access_policy) (#fl:erased tflag) : exportable unit pi Leaf fl = {
   etype = unit;
-  c_etype = tlang_unit pi;
+  c_etype = tlang_unit fl pi;
   export = (fun Leaf () -> ())
 }
 
-instance exportable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
+instance exportable_file_descr (#pi:access_policy) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
   etype = file_descr;
-  c_etype = tlang_file_descr pi;
+  c_etype = tlang_file_descr fl pi;
   export = (fun Leaf fd -> fd)
 }
 
-instance exportable_refinement (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
+instance exportable_refinement (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
   etype = d.etype;
   c_etype = d.c_etype;
   export = d.export
 }
 
 instance exportable_option
-  (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag)
   t1 {| d1:exportable t1 pi rcs fl |} :
   Tot (exportable (option t1) pi rcs fl) = {
   etype = option d1.etype;
-  c_etype = tlang_option pi d1.etype #d1.c_etype;
+  c_etype = tlang_option fl pi d1.etype #d1.c_etype;
   export = (fun eff_rcs x -> match x with | Some x' -> Some (d1.export eff_rcs x') | None -> None)
 }
 
 
 instance exportable_pair
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (t1 * t2) pi rcs fl) = {
   etype = d1.etype * d2.etype;
-  c_etype = tlang_pair pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  c_etype = tlang_pair fl pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
   export = (fun eff_rcs (x, y) -> (d1.export (left eff_rcs) x, d2.export (right eff_rcs) y));
 }
 
 instance exportable_either
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (either t1 t2) pi rcs fl) = {
   etype = either d1.etype d2.etype;
-  c_etype = tlang_either pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
+  c_etype = tlang_either fl pi d1.etype #d1.c_etype d2.etype #d2.c_etype;
   export = (fun eff_rcs x -> 
       match x with | Inl x -> Inl (d1.export (left eff_rcs) x) | Inr x -> Inr (d2.export (right eff_rcs) x))
 }
@@ -200,12 +202,12 @@ instance exportable_either
 (** *** Exportable arrows **)
 
 instance exportable_arrow_with_no_pre_and_no_post
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   (t1:Type) {| d1:importable t1 pi (left rcs) fl |}
   (t2:Type) {| d2:exportable t2 pi (right rcs) fl|} :
   exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi;
-    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow fl pi d1.c_itype (tlang_resexn fl pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIOpi (resexn t2) fl pi)) (x:d1.itype) ->
       match d1.import x (left eff_rcs) with
       | Inl x' -> begin
@@ -219,21 +221,21 @@ instance exportable_arrow_with_no_pre_and_no_post
 
 (** This is a design choice for making proofs easier. One can remove the post-condition **)
 instance exportable_arrow_post_args
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 {| d1:importable t1 pi (left rcs) fl |}
   t2 {| d2:exportable t2 pi (right rcs) fl |}
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
     etype = x:d1.itype -> IIOpi (resexn d2.etype) fl pi;
-    c_etype = tlang_arrow #fl pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow fl pi d1.c_itype (tlang_resexn fl pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x))) ->
       let f' : t1 -> IIOpi (resexn t2) fl pi = f in
       (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_rcs f');
   }
 
 instance exportable_arrow_post
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 {| d1:importable t1 pi (left rcs) fl |}
   t2 {| d2:exportable t2 pi (right rcs) fl |}
   (post : trace -> resexn t2 -> trace -> Type0) 
@@ -287,8 +289,8 @@ let retype_eff_rc #fl #a #b #c #d #rc eff_rc (x:c) =
 
 instance exportable_arrow_pre_post_args
   (t1:Type) (t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)})
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)})
   (#fl:erased tflag)
   {| d1:importable t1 pi (left rcs) fl |}
   {| d2:exportable t2 pi (right rcs) fl |}
@@ -298,7 +300,7 @@ instance exportable_arrow_pre_post_args
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
-    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow fl pi d1.c_itype (tlang_resexn fl pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #t1 #unit rc = retype_eff_rc eff_rc in
@@ -314,8 +316,8 @@ instance exportable_arrow_pre_post_args
 
 instance exportable_arrow_pre_post
   (t1:Type) (t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)})
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)})
   (#fl:erased tflag)
   {| d1:importable t1 pi (left rcs) fl |}
   {| d2:exportable t2 pi (right rcs) fl |}
@@ -325,7 +327,7 @@ instance exportable_arrow_pre_post
   (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
   exportable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
     etype = d1.itype -> IIOpi (resexn d2.etype) fl pi; 
-    c_etype = tlang_arrow pi d1.c_itype (tlang_resexn pi d2.etype #d2.c_etype);
+    c_etype = tlang_arrow fl pi d1.c_itype (tlang_resexn fl pi d2.etype #d2.c_etype);
     export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #unit #unit rc = retype_eff_rc eff_rc in
@@ -341,34 +343,34 @@ instance exportable_arrow_pre_post
 
     
 (** *** Safe importable instances **)
-let tlang_is_safely_importable (#pi:monitorable_prop) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) #t (d:tlang t pi) : safe_importable t pi rcs fl = {
+let tlang_is_safely_importable (#pi:access_policy) (#rcs:(tree contract){Leaf? rcs}) (#fl:erased tflag) #t (d:tlang t fl pi) : safe_importable t pi rcs fl = {
   sitype = t;
   c_sitype = d;
   safe_import = (fun x Leaf -> x); 
 }
 
-instance importable_unit (#pi:monitorable_prop) (#fl:erased tflag) : importable unit pi Leaf fl = {
+instance importable_unit (#pi:access_policy) (#fl:erased tflag) : importable unit pi Leaf fl = {
   itype = unit;
-  c_itype = tlang_unit pi;
+  c_itype = tlang_unit fl pi;
   import = (fun () Leaf -> Inl ())
 }
 
-instance importable_file_descr (#pi:monitorable_prop) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
+instance importable_file_descr (#pi:access_policy) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
   itype = file_descr;
-  c_itype = tlang_file_descr pi;
+  c_itype = tlang_file_descr fl pi;
   import = (fun fd Leaf -> Inl fd)
 }
 
 (** *** Importable instances **)
 
-instance safe_importable_is_importable (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag) #t (d:safe_importable t pi rcs fl) : importable t pi rcs fl = {
+instance safe_importable_is_importable (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag) #t (d:safe_importable t pi rcs fl) : importable t pi rcs fl = {
   itype = d.sitype;
   c_itype = d.c_sitype;
   import = (fun x eff_rcs -> Inl (d.safe_import x eff_rcs))
 }
 
 instance importable_refinement
-  (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag)
   t {| d:importable t pi rcs fl |}
   (rp : t -> Type0) {| d1:checkable rp |} :
   Tot (importable (x:t{rp x}) pi rcs fl) = {
@@ -383,11 +385,11 @@ instance importable_refinement
 }
     
 instance importable_option
-  (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag)
   t {| d:importable t pi rcs fl |} :
   Tot (importable (option t) pi rcs fl) = {
   itype = option d.itype;
-  c_itype = tlang_option pi d.itype #d.c_itype;
+  c_itype = tlang_option fl pi d.itype #d.c_itype;
   import = (fun (x:option d.itype) eff_rcs ->
     match x with
     | Some x' -> begin
@@ -399,11 +401,11 @@ instance importable_option
 }
 
 instance importable_pair
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (t1 * t2) pi rcs fl) = {
   itype = d1.itype * d2.itype;
-  c_itype = tlang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_pair fl pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun (x,y) eff_rcs ->
       match (d1.import x (left eff_rcs), d2.import y (right eff_rcs)) with
       | (Inl x, Inl y) -> Inl (x, y)
@@ -411,11 +413,11 @@ instance importable_pair
 }
 
 instance importable_either
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (either t1 t2) pi rcs fl) = {
   itype = either d1.itype d2.itype;
-  c_itype = tlang_either pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_either fl pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun x eff_rcs ->
       match x with
       | Inl x' -> begin
@@ -431,13 +433,13 @@ instance importable_either
 }
 
 instance importable_dpair_refined
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   t1 t2 (p:t1 -> t2 -> Type0)
   {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |}
   {| d3:checkable2 p |} :
   Tot (importable (x:t1 & y:t2{p x y}) pi rcs fl) = {
   itype = d1.itype & d2.itype;
-  c_itype = tlang_pair pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
+  c_itype = tlang_pair fl pi d1.itype #d1.c_itype d2.itype #d2.c_itype;
   import = (fun ((x', y')) eff_rcs ->
       match (d1.import x' (left eff_rcs), d2.import y' (right eff_rcs)) with
        | (Inl x, Inl y) ->
@@ -447,11 +449,11 @@ instance importable_dpair_refined
 
 (** *** Safe importable arrows **)
 instance safe_importable_resexn
-  (#pi:monitorable_prop) (#rcs:tree pck_rc) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:tree contract) (#fl:erased tflag)
   t1 {| d1:importable t1 pi rcs fl |} :
   Tot (safe_importable (resexn t1) pi rcs fl) = {
   sitype = resexn d1.itype;
-  c_sitype = tlang_resexn pi d1.itype #d1.c_itype;
+  c_sitype = tlang_resexn fl pi d1.itype #d1.c_itype;
   safe_import = (fun x eff_rcs ->
       match x with
       | Inl x' -> d1.import x' eff_rcs 
@@ -459,12 +461,12 @@ instance safe_importable_resexn
 }
     
 instance safe_importable_arrow
-  (#pi:monitorable_prop) (#rcs:(tree pck_rc){EmptyNode? rcs}) (#fl:erased tflag)
+  (#pi:access_policy) (#rcs:(tree contract){EmptyNode? rcs}) (#fl:erased tflag)
   (t1:Type) {| d1:exportable t1 pi (left rcs) fl |}
   (t2:Type) {| d2:importable t2 pi (right rcs) fl |} : 
   safe_importable ((x:t1) -> IIOpi (resexn t2) fl pi) pi rcs fl = {
   sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow fl pi d1.c_etype (tlang_resexn fl pi d2.itype #d2.c_itype);
   safe_import = (fun (f:d1.etype -> IIOpi (resexn d2.itype) fl pi) eff_rcs (x:t1) -> 
     (let x' = d1.export (left eff_rcs) x in 
      let y : resexn d2.itype = f x' in
@@ -476,7 +478,7 @@ let enforce_post_args_res
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
-  (pi:monitorable_prop)
+  (pi:access_policy)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (rc : rc_typ t1 (resexn t2))
@@ -497,7 +499,7 @@ let enforce_post_args
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
-  (pi:monitorable_prop)
+  (pi:access_policy)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (rc : rc_typ t1 unit)
@@ -518,7 +520,7 @@ let enforce_post_res
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
-  (pi:monitorable_prop)
+  (pi:access_policy)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (rc : rc_typ unit (resexn t2))
@@ -539,7 +541,7 @@ let enforce_post
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
-  (pi:monitorable_prop)
+  (pi:access_policy)
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (rc : rc_typ unit unit)
@@ -558,8 +560,8 @@ let enforce_post
 
 instance safe_importable_arrow_pre_post_args_res
   (#t1:Type) (#t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == (resexn t2))) })
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
@@ -569,7 +571,7 @@ instance safe_importable_arrow_pre_post_args_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow fl pi d1.c_etype (tlang_resexn fl pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -580,8 +582,8 @@ instance safe_importable_arrow_pre_post_args_res
 
 instance safe_importable_arrow_pre_post_res
   (#t1:Type) (#t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == (resexn t2))) })
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == (resexn t2))) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
@@ -591,7 +593,7 @@ instance safe_importable_arrow_pre_post_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-  c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+  c_sitype = tlang_arrow fl pi d1.c_etype (tlang_resexn fl pi d2.itype #d2.c_itype);
   safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -602,8 +604,8 @@ instance safe_importable_arrow_pre_post_res
 
 instance safe_importable_arrow_pre_post_args
   (#t1:Type) (#t2:Type)
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)) })
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ (arg_typ (root rcs) == t1 /\ (ret_typ (root rcs) == unit)) })
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
@@ -613,7 +615,7 @@ instance safe_importable_arrow_pre_post_args
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-    c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+    c_sitype = tlang_arrow fl pi d1.c_etype (tlang_resexn fl pi d2.itype #d2.c_itype);
     safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
       let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -627,8 +629,8 @@ instance safe_importable_arrow_pre_post
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
 
-  (#pi:monitorable_prop) 
-  (#rcs:(tree pck_rc){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
+  (#pi:access_policy) 
+  (#rcs:(tree contract){Node? rcs /\ (arg_typ (root rcs) == unit /\ (ret_typ (root rcs) == unit)) })
 
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root rcs) () h () lt ==> post x h r lt)) 
@@ -639,7 +641,7 @@ instance safe_importable_arrow_pre_post
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     sitype = d1.etype -> IIOpi (resexn d2.itype) fl pi;
-    c_sitype = tlang_arrow pi d1.c_etype (tlang_resexn pi d2.itype #d2.c_itype);
+    c_sitype = tlang_arrow fl pi d1.c_etype (tlang_resexn fl pi d2.itype #d2.c_itype);
     safe_import = (fun (f:(d1.etype -> IIOpi (resexn d2.itype) fl pi)) eff_rcs ->
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
       let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
