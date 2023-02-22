@@ -129,17 +129,17 @@ val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
   match lt with
   | [] -> read_descrs == []
-  | ERead true fd (Inl _)::tl -> every_request_gets_a_response_acc tl (fd::read_descrs)
-  | EWrite true (fd,_) _::tl -> every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') read_descrs)
-  | _::tl -> every_request_gets_a_response_acc tl read_descrs
+  | ERead true fd (Inl _) :: tl -> every_request_gets_a_response_acc tl (fd :: read_descrs)
+  | EWrite true (fd,_) _ :: tl -> every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') read_descrs)
+  | _ :: tl -> every_request_gets_a_response_acc tl read_descrs
 
 val every_request_gets_a_response : trace -> Type0
 let every_request_gets_a_response lt =
   every_request_gets_a_response_acc lt []
 
-assume val get_req : fd:file_descr -> 
+assume val get_req : fd:file_descr ->
   IIO (io_sig.res Read fd) IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
-  
+
 assume val sendError : int -> fd:file_descr -> IIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists (msg:string) r. lt == [EWrite true (fd, msg) r])
 
@@ -147,12 +147,12 @@ open FStar.Tactics
 (* This may take a bit of effort to prove. *)
 let webserver (handler:request_handler IOActions) :
   IIO int IOActions
-    (requires (fun h -> True))
-    (ensures (fun _ _ lt -> 
-      every_request_gets_a_response lt))
+    (requires fun h -> True)
+    (ensures fun _ _ lt ->
+      every_request_gets_a_response lt)
 (**    by (
       explode ();
-      bump_nth 49; 
+      bump_nth 49;
       l_to_r [`FStar.List.Tot.Properties.append_nil_l];
       let l = instantiate (nth_binder 3) (fresh_uvar None) in
       let l = instantiate l (nth_binder (-3)) in
@@ -163,25 +163,41 @@ let webserver (handler:request_handler IOActions) :
       tadmit ();
       dump "H")**) =
 
+  assume (forall h lthandler lt lt'. enforced_locally pi h lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
+  // assume (forall h lthandler client r lt. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response lt ==> every_request_gets_a_response (lthandler @ [ ERead true client r ] @ lt)) ;
+
   let client = static_cmd true Openfile "test.txt" in
-  match client with | Inr _ -> (-1) | Inl client -> begin
-    match get_req client with
-    | Inr _ -> (-1)
-    | Inl req -> 
-        (* one Read true from the client happened *)
-        (match handler client req (fun res -> static_cmd true Write (client,res)) with 
-        (* we know from enforced_locally pi that no other Reads true happened *)
-        | Inr err -> (admit (); (* this responds to the client *) sendError 400 client)
-        | Inl client -> ((* here we know that the handler wrote to the client *) admit (); ()));
-    0
-  end
+  (* lt = [ EOpenfile ... ] *)
+  match client with
+  | Inr _ -> -1
+  | Inl client ->
+    begin match get_req client with
+    | Inr _ -> -1
+    | Inl req ->
+      (* one Read true from the client happened *)
+      (* lt = [ ERead true client req ; EOpenfile ... ] *)
+      begin match handler client req (fun res -> static_cmd true Write (client,res)) with
+      (* we know from enforced_locally pi that no other Reads true happened *)
+      | Inr err ->
+        (* lt = lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+        (* this responds to the client *)
+        sendError 400 client
+        (* lt = EWrite true (client, _) _ :: lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+      | Inl client ->
+        (* here we know that the handler wrote to the client *)
+        admit () ;
+        (* lt = lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+        ()
+      end ;
+      0
+    end
 
 (** ** Instante source interface with the example **)
 
 val phi : enforced_policy pi
 let phi h cmd arg =
   match cmd with
-  | Openfile -> 
+  | Openfile ->
     if arg = "/temp" then true else false
   | Read -> is_opened_by_untrusted h arg
   | Close -> is_opened_by_untrusted h arg
