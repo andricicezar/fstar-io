@@ -1,9 +1,6 @@
 # TODO:
 
 ## Admits
-1. `Compiler.Model.fst` - there is an assumption in `inst_io_cmds` about `pi`
-   implying the intrinsic specification of the IO actions (Cezar)
-
 2. `IIO.fst` - assumption in the definition of `dm_giio_bind`.
    should be proved using induction on `v`.
 
@@ -15,8 +12,10 @@
 
 6. `IIO.Behavior.fst` - reify is assumed as a ghost function
 
-7. `Compiler.IIO.To.ILang.fst` - assumption in definition of `make_rcs_eff`.
+7. [Wait for refactoring] `Compiler.IIO.To.ILang.fst` - assumption in definition of `make_rcs_eff`.
    proof by induction on `rcs`?
+
+8. admit in `RunningExample.fst`
 
 
 ## Unfinished extensions

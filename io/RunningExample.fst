@@ -44,6 +44,27 @@ val handler_only_openfiles_reads_client : trace -> Type0
 let handler_only_openfiles_reads_client lt =
   handler_only_openfiles_reads_client_acc lt []
 
+let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
+  match h with
+  | [] -> false
+  | EOpenfile false _ (Inl fd') :: tl -> begin
+    if fd = fd' then true
+    else is_opened_by_untrusted tl fd
+  end
+  | EClose _ fd' (Inl ()) :: tl -> if fd = fd' then false
+                             else is_opened_by_untrusted tl fd
+  | _ :: tl -> is_opened_by_untrusted tl fd
+
+val pi : access_policy
+let pi h isTrusted cmd arg =
+  match isTrusted, cmd with
+  | false, Openfile -> 
+    if arg = "/temp" then true else false
+  | false, Read -> is_opened_by_untrusted h arg
+  | false, Close -> is_opened_by_untrusted h arg
+  | true, Write -> true
+  | _ -> false
+
 val wrote_at_least_once_to : file_descr -> trace -> bool
 let rec wrote_at_least_once_to client lt =
   match lt with
@@ -60,7 +81,7 @@ type request_handler (fl:erased tflag) =
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                          wrote_at_least_once_to client lt)))) ->
   IIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
-                       (ensures (fun h r lt -> handler_only_openfiles_reads_client lt /\
+                       (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
 (** ** E.g. of source handler **)
@@ -150,26 +171,6 @@ let webserver (handler:request_handler IOActions) :
   end
 
 (** ** Instante source interface with the example **)
-let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
-  match h with
-  | [] -> false
-  | EOpenfile false _ (Inl fd') :: tl -> begin
-    if fd = fd' then true
-    else is_opened_by_untrusted tl fd
-  end
-  | EClose _ fd' (Inl ()) :: tl -> if fd = fd' then false
-                             else is_opened_by_untrusted tl fd
-  | _ :: tl -> is_opened_by_untrusted tl fd
-
-val pi : access_policy
-let pi h isTrusted cmd arg =
-  match isTrusted, cmd with
-  | false, Openfile -> 
-    if arg = "/temp" then true else false
-  | false, Read -> is_opened_by_untrusted h arg
-  | false, Close -> is_opened_by_untrusted h arg
-  | true, Write -> true
-  | _ -> false
 
 val phi : enforced_policy pi
 let phi h cmd arg =
@@ -183,12 +184,12 @@ let phi h cmd arg =
 let psi : trace -> int -> trace -> Type0 =
   (fun _ _ lt -> every_request_gets_a_response lt)
 
+  (*
 let rec lemma1 (lt h:trace) : Lemma (requires (enforced_locally pi h lt)) (ensures (handler_only_openfiles_reads_client lt)) =
   match lt with
   | [] -> ()
   | e::tl -> admit ()//  lemma1 tl (e::h)
 
-  (*
 let ct_rcs' : tree pck_rc = 
   Node 
     (| string, resexn unit, (fun msg h _ _ -> valid_http_response msg && did_not_respond h) |)
