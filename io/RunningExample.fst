@@ -164,14 +164,23 @@ let rec response_ignore_no_write_read lt e lt' rl :
   | [] -> ()
   | ERead true fd (Inl _) :: tl -> response_ignore_no_write_read tl e lt' (fd :: rl)
   | EWrite true (fd,x) y :: tl ->
-    assert (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl) ;
     assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
-    assert (every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
     response_ignore_no_write_read tl e lt' (filter (fun fd' -> fd <> fd') rl) ;
-    assert (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl)) ;
-    assert_norm (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl) ;
-    assert (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl)
+    assert_norm (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl)
   | _ :: tl -> response_ignore_no_write_read tl e lt' rl
+
+let rec response_ignore_read lt fd0 x0 lt' rl :
+  Lemma
+    (requires every_request_gets_a_response_acc (lt @ lt') rl)
+    (ensures every_request_gets_a_response_acc (lt @ (ERead true fd0 (Inl x0)) :: lt') rl)
+= match lt with
+  | [] -> admit () // rl in the precondition should be something else
+  | ERead true fd (Inl _) :: tl -> response_ignore_read tl fd0 x0 lt' (fd :: rl)
+  | EWrite true (fd,x) y :: tl ->
+    assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
+    response_ignore_read tl fd0 x0 lt' (filter (fun fd' -> fd <> fd') rl) ;
+    assert_norm (every_request_gets_a_response_acc (tl @ (ERead true fd0 (Inl x0)) :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ (ERead true fd0 (Inl x0)) :: lt') rl)
+  | _ :: tl -> response_ignore_read tl fd0 x0 lt' rl
 
 let rec pi_response_irr h lth lt lt' :
   Lemma
@@ -180,16 +189,19 @@ let rec pi_response_irr h lth lt lt' :
     (decreases lth)
 = match lth with
   | [] -> ()
-  | ERead true fd (Inl _) :: l -> admit ()
-  | EWrite true _ _ :: l -> admit ()
   | e :: l ->
     append_assoc lt [ e ] (l @ lt') ;
     assert ((lt @ [ e ]) @ l @ lt' == lt @ e :: l @ lt') ;
     assert (enforced_locally pi (e :: h) l) ;
     append_assoc lt [ e ] lt' ;
     assert (every_request_gets_a_response (lt @ lt')) ;
-    response_ignore_no_write_read lt e lt' [] ;
-    pi_response_irr (e :: h) l (lt @ [ e ]) lt'
+    begin match e with
+    | ERead true fd (Inl x) -> admit ()
+    | EWrite true _ _ -> admit ()
+    | _ ->
+      response_ignore_no_write_read lt e lt' [] ;
+      pi_response_irr (e :: h) l (lt @ [ e ]) lt'
+    end
 
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
