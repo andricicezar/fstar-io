@@ -150,6 +150,7 @@ let webserver (handler:request_handler IOActions) :
     (requires fun h -> True)
     (ensures fun _ _ lt ->
       every_request_gets_a_response lt)
+       // by (explode () ; dump "toto")
 (**    by (
       explode ();
       bump_nth 49;
@@ -164,7 +165,7 @@ let webserver (handler:request_handler IOActions) :
       dump "H")**) =
 
   assume (forall h lthandler lt lt'. enforced_locally pi h lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
-  // assume (forall h lthandler client r lt. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response lt ==> every_request_gets_a_response (lthandler @ [ ERead true client r ] @ lt)) ;
+  assume (forall h lthandler client r lt lt'. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler @ lt')) ;
 
   let client = static_cmd true Openfile "test.txt" in
   (* lt = [ EOpenfile ... ] *)
@@ -175,18 +176,17 @@ let webserver (handler:request_handler IOActions) :
     | Inr _ -> -1
     | Inl req ->
       (* one Read true from the client happened *)
-      (* lt = [ ERead true client req ; EOpenfile ... ] *)
+      (* lt = [ EOpenfile ... ; ERead true client req ] *)
       begin match handler client req (fun res -> static_cmd true Write (client,res)) with
       (* we know from enforced_locally pi that no other Reads true happened *)
       | Inr err ->
-        (* lt = lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+        (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
         (* this responds to the client *)
         sendError 400 client
-        (* lt = EWrite true (client, _) _ :: lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+        (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler @ [ EWrite true (client, _) _ ] *)
       | Inl client ->
         (* here we know that the handler wrote to the client *)
-        admit () ;
-        (* lt = lthandler @ [ ERead true client req ; EOpenfile ... ] *)
+        (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
         ()
       end ;
       0
