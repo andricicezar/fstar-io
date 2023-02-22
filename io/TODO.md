@@ -1,10 +1,10 @@
 # TODO:
 
 ## Admits
-2. `IIO.fst` - assumption in the definition of `dm_giio_bind`.
+X. `IIO.fst` - assumption in the definition of `dm_giio_bind`.
    should be proved using induction on `v`.
 
-3. `IIO.fst` - admit in definition of `dm_giio_subcomp`
+X. `IIO.fst` - admit in definition of `dm_giio_subcomp`
 
 4. `Hist.fst` - admitted lemma `lemma_hist_bind_associativity` (used in `DMFree.fst`)
 
