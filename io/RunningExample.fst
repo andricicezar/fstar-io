@@ -137,7 +137,9 @@ val every_request_gets_a_response : trace -> Type0
 let every_request_gets_a_response lt =
   every_request_gets_a_response_acc lt []
 
-assume val get_req : file_descr -> (req:string{valid_http_request req})
+assume val get_req : fd:file_descr -> 
+  IIO (io_sig.res Read fd) IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
+  
 assume val sendError : int -> fd:file_descr -> IIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists (msg:string) r. lt == [EWrite true (fd, msg) r])
 
@@ -160,14 +162,18 @@ let webserver (handler:request_handler IOActions) :
       trefl ();
       tadmit ();
       dump "H")**) =
-  admit ();
+
   let client = static_cmd true Openfile "test.txt" in
   match client with | Inr _ -> (-1) | Inl client -> begin
-  let req = get_req client in
-  (match handler client req (fun res -> static_cmd true Write (client,res)) with 
-  | Inr err -> sendError 400 client 
-  | Inl client -> ());
-  0
+    match get_req client with
+    | Inr _ -> (-1)
+    | Inl req -> 
+        (* one Read true from the client happened *)
+        (match handler client req (fun res -> static_cmd true Write (client,res)) with 
+        (* we know from enforced_locally pi that no other Reads true happened *)
+        | Inr err -> (admit (); (* this responds to the client *) sendError 400 client)
+        | Inl client -> ((* here we know that the handler wrote to the client *) admit (); ()));
+    0
   end
 
 (** ** Instante source interface with the example **)
