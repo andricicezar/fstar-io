@@ -8,7 +8,7 @@ X. `IIO.fst` - admit in definition of `dm_giio_subcomp`
 
 X. `Hist.fst` - admitted lemma `lemma_hist_bind_associativity` (used in `DMFree.fst`)
 
-5. `CommonUtils.fst` - a few admits (not sure if used anymore)
+X. `CommonUtils.fst` - a few admits (not sure if used anymore)
 
 6. `IIO.Behavior.fst` - reify is assumed as a ghost function
 
