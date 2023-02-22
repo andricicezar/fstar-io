@@ -3,6 +3,9 @@ module RunningExample
 open FStar.Ghost
 open FStar.List.Tot.Base
 
+open FStar.List.Tot.Base
+open FStar.List.Tot.Properties
+
 open Compiler.Model
 
 
@@ -142,6 +145,51 @@ assume val get_req : fd:file_descr ->
 
 assume val sendError : int -> fd:file_descr -> IIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists (msg:string) r. lt == [EWrite true (fd, msg) r])
+
+let no_write_true e =
+  match e with
+  | EWrite true _ _ -> false
+  | _ -> true
+
+let no_read_true e =
+  match e with
+  | ERead true _ (Inl _) -> false
+  | _ -> true
+
+let rec response_ignore_no_write_read lt e lt' rl :
+  Lemma
+    (requires every_request_gets_a_response_acc (lt @ lt') rl /\ no_write_true e /\ no_read_true e)
+    (ensures every_request_gets_a_response_acc (lt @ e :: lt') rl)
+= match lt with
+  | [] -> ()
+  | ERead true fd (Inl _) :: tl -> response_ignore_no_write_read tl e lt' (fd :: rl)
+  | EWrite true (fd,x) y :: tl ->
+    assert (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl) ;
+    assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
+    assert (every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
+    response_ignore_no_write_read tl e lt' (filter (fun fd' -> fd <> fd') rl) ;
+    assert (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl)) ;
+    assert_norm (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl) ;
+    assert (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl)
+  | _ :: tl -> response_ignore_no_write_read tl e lt' rl
+
+let rec pi_response_irr h lth lt lt' :
+  Lemma
+    (requires enforced_locally pi h lth /\ every_request_gets_a_response (lt @ lt'))
+    (ensures every_request_gets_a_response (lt @ lth @ lt'))
+    (decreases lth)
+= match lth with
+  | [] -> ()
+  | ERead true fd (Inl _) :: l -> admit ()
+  | EWrite true _ _ :: l -> admit ()
+  | e :: l ->
+    append_assoc lt [ e ] (l @ lt') ;
+    assert ((lt @ [ e ]) @ l @ lt' == lt @ e :: l @ lt') ;
+    assert (enforced_locally pi (e :: h) l) ;
+    append_assoc lt [ e ] lt' ;
+    assert (every_request_gets_a_response (lt @ lt')) ;
+    response_ignore_no_write_read lt e lt' [] ;
+    pi_response_irr (e :: h) l (lt @ [ e ]) lt'
 
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
