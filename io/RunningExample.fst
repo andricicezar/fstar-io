@@ -1,8 +1,8 @@
 module RunningExample
 
-open FStar.Ghost
-open FStar.List.Tot.Base
+open FStar.Tactics
 
+open FStar.Ghost
 open FStar.List.Tot.Base
 open FStar.List.Tot.Properties
 
@@ -169,12 +169,45 @@ let rec response_ignore_no_write_read lt e lt' rl :
     assert_norm (every_request_gets_a_response_acc (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ e :: lt') rl)
   | _ :: tl -> response_ignore_no_write_read tl e lt' rl
 
+let rec response_order_irr lt rl fd1 fd2 :
+  Lemma
+    (requires every_request_gets_a_response_acc lt (fd1 :: fd2 :: rl))
+    (ensures every_request_gets_a_response_acc lt (fd2 :: fd1 :: rl))
+= // if fd1 = fd2 then () else // Thought it would simplify stuff but no
+  match lt with
+  | ERead true fd (Inl _) :: tl ->
+    assert (every_request_gets_a_response_acc tl (fd :: fd1 :: fd2 :: rl)) ;
+    response_order_irr tl (fd2 :: rl) fd fd1 ;
+    assert (every_request_gets_a_response_acc tl (fd1 :: fd :: fd2 :: rl)) ;
+    // Too bad, I was too hasty, I cannot swap further
+    assume (every_request_gets_a_response_acc tl (fd :: fd2 :: fd1 :: rl))
+  | EWrite true (fd,x) y :: tl ->
+    assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl) (fd1 :: fd2 :: rl) == every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl))) ;
+    assert (every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl))) ;
+    if fd1 = fd then () else
+    if fd2 = fd then () else
+      assert (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl) == fd1 :: fd2 :: filter (fun fd' -> fd <> fd') rl) ;
+      assume (every_request_gets_a_response_acc tl (fd1 :: fd2 :: filter (fun fd' -> fd <> fd') rl)) ;
+      response_order_irr tl (filter (fun fd' -> fd <> fd') rl) fd1 fd2 ;
+      assert (every_request_gets_a_response_acc tl (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl)) ;
+      assume (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl == filter (fun fd' -> fd <> fd') (fd2 :: fd1 :: rl)) ; // uh?
+      calc (==) {
+        every_request_gets_a_response_acc tl (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl) ;
+        == {}
+        every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') (fd2 :: fd1 :: rl)) ;
+        == { _ by (compute ()) }
+        every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl) (fd2 :: fd1 :: rl) ;
+        == {}
+        every_request_gets_a_response_acc lt (fd2 :: fd1 :: rl) ;
+      }
+  | _ :: tl -> response_order_irr tl rl fd1 fd2
+
 let rec response_ignore_read lt fd0 x0 lt' rl :
   Lemma
-    (requires every_request_gets_a_response_acc (lt @ lt') rl)
+    (requires every_request_gets_a_response_acc (lt @ lt') (fd0 :: rl))
     (ensures every_request_gets_a_response_acc (lt @ (ERead true fd0 (Inl x0)) :: lt') rl)
 = match lt with
-  | [] -> admit () // rl in the precondition should be something else
+  | [] -> ()
   | ERead true fd (Inl _) :: tl -> response_ignore_read tl fd0 x0 lt' (fd :: rl)
   | EWrite true (fd,x) y :: tl ->
     assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
