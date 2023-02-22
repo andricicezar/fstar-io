@@ -6,7 +6,7 @@
 ROOTS := ExtraTactics.fst CommonUtils.fst Free.fst Hist.fst DMFree.fst		\
          IIO.Sig.fst IIO.Sig.Call.fst IIO.fst IIO.Behavior.fst TC.Checkable.fst	\
          BeyondCriteria.fst Compiler.Languages.fst Compiler.Model.fst		\
-         Compiler.Examples.fst
+         RunningExample.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints
