@@ -79,14 +79,33 @@ val hist_ord (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_
 let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
 
 unfold
+val hist_equiv (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_type a -> Type0
+let hist_equiv wp1 wp2 = forall h p. wp1 p h <==> wp2 p h
+
+unfold
 let hist_if_then_else (wp1 wp2:hist #'event 'a) (b:bool) : hist #'event 'a =
   fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
+
+let __list_assoc_l #a (l1 l2 l3 : list a) : Lemma (l1 @ (l2 @ l3) == (l1 @ l2) @ l3) = List.Tot.Properties.append_assoc l1 l2 l3
+let __helper #a (lt lt' : list a) : Lemma (rev_acc lt [] @ rev_acc lt' [] == rev_acc (lt'@lt) []) = List.Tot.Properties.rev_append lt' lt
+let __iff_refl a : Lemma (a <==> a) = ()
+
+let lemma_hist_bind_associativity #a #b #c #ev (w1:hist #ev a) (w2:a -> hist #ev b) (w3: b -> hist #ev c) :
+  Lemma (hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) `hist_equiv` hist_bind (hist_bind w1 w2) w3)
+  =
+  let lhs = hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) in
+  let rhs = hist_bind (hist_bind w1 w2) w3 in
+  let pw (p : hist_post c) (h : list ev) : Lemma (lhs p h <==> rhs p h) =
+    assert (lhs p h <==> rhs p h) by begin
+      unfold_def (`hist_bind);
+      norm [];
+      l_to_r [`__list_assoc_l];
+      l_to_r [`__helper];
+      mapply (`__iff_refl)
+    end
+  in
+  Classical.forall_intro_2 pw
   
-let lemma_hist_bind_associativity (w1:hist 'a) (w2:'a -> hist 'b) (w3: 'b -> hist 'c) :
-  Lemma (
-    hist_bind w1 (fun r1 -> hist_bind (w2 r1) w3) == hist_bind (hist_bind w1 w2) w3)
-  by (unfold_def (`hist_bind); norm [iota]; l_to_r [`List.Tot.Properties.rev_append;`List.Tot.Properties.append_assoc]; dump "H") =
-  admit () 
 
 unfold
 let to_hist #a #event pre post : hist #event a =

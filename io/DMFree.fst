@@ -72,7 +72,7 @@ let rec lemma_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (#op:Type0)
       hist_bind (theta cmd_wp (Call tr cmd arg k)) (fun x -> theta cmd_wp (f x));
       == { _ by (compute ()) } // unfold theta
       hist_bind (hist_bind (cmd_wp tr cmd arg) (fun r -> theta cmd_wp (k r))) (fun x -> theta cmd_wp (f x));
-      == { lemma_hist_bind_associativity (cmd_wp tr cmd arg) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
+      `hist_equiv` { lemma_hist_bind_associativity (cmd_wp tr cmd arg) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
       hist_bind (cmd_wp tr cmd arg) (fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)));
       `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
         let rhs1 : s.res cmd arg -> hist b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
@@ -101,7 +101,7 @@ let rec lemma_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (#op:Type0)
       hist_bind (theta cmd_wp (PartialCall pre k)) (fun x -> theta cmd_wp (f x));
       == { _ by (compute ()) } // unfold theta
       hist_bind (hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (k r))) (fun x -> theta cmd_wp (f x));
-      == { lemma_hist_bind_associativity (partial_call_wp pre) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
+      `hist_equiv` { lemma_hist_bind_associativity (partial_call_wp pre) (fun r -> theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) }
       hist_bind (partial_call_wp pre) (fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)));
       `hist_ord` { (** if we get rid of the hist_ord from the other branch, this becomes an equality **)
         let rhs1 : squash pre -> hist b = fun r -> hist_bind (theta cmd_wp (k r)) (fun x -> theta cmd_wp (f x)) in
