@@ -149,23 +149,10 @@ let webserver (handler:request_handler IOActions) :
   IIO int IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt ->
-      every_request_gets_a_response lt)
-       // by (explode () ; dump "toto")
-(**    by (
-      explode ();
-      bump_nth 49;
-      l_to_r [`FStar.List.Tot.Properties.append_nil_l];
-      let l = instantiate (nth_binder 3) (fresh_uvar None) in
-      let l = instantiate l (nth_binder (-3)) in
-      mapply l;
-      binder_retype (nth_binder (-3));
-        l_to_r [`FStar.List.Tot.Properties.append_nil_l];
-      trefl ();
-      tadmit ();
-      dump "H")**) =
+      every_request_gets_a_response lt)  =
 
   assume (forall h lthandler lt lt'. enforced_locally pi h lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
-  assume (forall h lthandler client r lt lt'. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler @ lt')) ;
+  assume (forall h lthandler client r lt. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)) ;
 
   let client = static_cmd true Openfile "test.txt" in
   (* lt = [ EOpenfile ... ] *)
