@@ -397,44 +397,43 @@ let rec ergar_pi_irr h lth lt lt' :
       ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     end
 
-let rec ergar_pi_write_aux h lth client r :
+let rec ergar_pi_write_aux h lth client :
   Lemma
     (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth)
-    (ensures every_request_gets_a_response (ERead true client r :: lth))
+    (ensures ergar lth [client])
     (decreases lth)
 = admit ()
 
 let rec ergar_trace_merge lt lt' rl rl' :
   Lemma
-    (requires ergar lt rl /\ ergar (lt @ lt') (rl @ rl'))
-    (ensures ergar lt' rl')
+    (requires ergar lt rl /\ ergar lt' rl')
+    (ensures ergar (lt @ lt') (rl @ rl'))
 = match lt with
   | [] -> ()
   | ERead true fd (Inl _) :: tl ->
     assert (ergar tl (fd :: rl)) ;
-    assert (ergar (tl @ lt') (fd :: rl @ rl')) ;
-    ergar_trace_merge tl lt' (fd :: rl) rl' ;
-    assert (ergar lt' rl')
+    ergar_trace_merge tl lt' (fd :: rl) rl'
   | EWrite true (fd,x) y :: tl ->
     cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite true (fd,x) y)) ;
 
     ergar_write_true (EWrite true (fd,x) y) tl rl ;
     assert (ergar tl (filter (fun fd' -> fd <> fd') rl)) ;
 
-    ergar_write_true (EWrite true (fd,x) y) (tl @ lt') (rl @ rl') ;
-    assert (ergar (tl @ lt') (filter (fun fd' -> fd <> fd') (rl @ rl'))) ;
+    assert (ergar lt' rl') ;
+    ergar_filter lt' rl' (fun fd' -> fd <> fd') ;
+
     filter_append (fun fd' -> fd <> fd') rl rl' ;
-
     ergar_trace_merge tl lt' (filter (fun fd' -> fd <> fd') rl) (filter (fun fd' -> fd <> fd') rl') ;
-    assert (ergar lt' (filter (fun fd' -> fd <> fd') rl')) ;
 
-    assume (ergar lt' rl') // I guess this is just wrong
+    ergar_write_true (EWrite true (fd,x) y) (tl @ lt') (rl @ rl') ;
+    assert (ergar (tl @ lt') (filter (fun fd' -> fd <> fd') (rl @ rl')))
   | _ :: tl -> ergar_trace_merge tl lt' rl rl'
 
 let ergar_pi_write h lth client r lt :
   Lemma
     (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
+    // (decreases lth)
 = // match lth with
   // | [] -> ()
   // | e :: l ->
