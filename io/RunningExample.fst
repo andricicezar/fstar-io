@@ -402,7 +402,17 @@ let rec ergar_pi_write_aux h lth client :
     (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth)
     (ensures ergar lth [client])
     (decreases lth)
-= admit ()
+= match lth with
+  | [] -> ()
+  | e :: l ->
+    assert (enforced_locally pi (e :: h) l) ;
+    begin match e with
+    | EWrite true (fd,x) y ->
+      if fd = client
+      then assume (ergar l [])
+      else ergar_pi_write_aux (e :: h) l client
+    | _ -> ergar_pi_write_aux (e :: h) l client
+  end
 
 let rec ergar_trace_merge lt lt' rl rl' :
   Lemma
@@ -432,41 +442,12 @@ let rec ergar_trace_merge lt lt' rl rl' :
 let ergar_pi_write h lth client r lt :
   Lemma
     (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
-    (ensures every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
-    // (decreases lth)
-= // match lth with
-  // | [] -> ()
-  // | e :: l ->
-  //   // append_assoc lt [ e ] (l @ lt') ;
-  //   // assert ((lt @ [ e ]) @ l @ lt' == lt @ e :: l @ lt') ;
-  //   assert (enforced_locally pi (e :: h) l) ;
-  //   // append_assoc lt [ e ] lt' ;
-  //   // assert (every_request_gets_a_response (lt @ lt')) ;
-  //   begin match e with
-  //   | EWrite true (fd,x) y ->
-  //     // ergar_write_irr lt (EWrite true (fd,x) y) lt' [] ;
-  //     // assert (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
-  //     // ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
-  //     admit ()
-  //   | _ ->
-  //     // ergar_ignore_no_write_read lt e lt' [] ;
-  //     assume (every_request_gets_a_response (lt @ [e])) ;
-  //     ergar_pi_write (e :: h) l client r (lt @ [ e ]) ;
-  //     assume (every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
-  // end
-  ergar_pi_write_aux h lth client ;
+    (ensures every_request_gets_a_response (lt @ [ ERead true client (Inl r) ] @ lth))
+= ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
-  // calc (==) {
-  //   every_request_gets_a_response (ERead true client r :: lth) ;
-  //   == {}
-  //   ergar (ERead true client r :: lth) [] ;
-  //   == { _ by (compute ()) }
-  //   ergar lth [client] ;
-  // } ;
-  // We're missing that r is Inl!
-  assume (every_request_gets_a_response (ERead true client r :: lth)) ;
-  append_assoc lt [ ERead true client r ] lth ;
-  ergar_trace_merge lt ([ ERead true client r ] @ lth) [] []
+  assert (every_request_gets_a_response (ERead true client (Inl r) :: lth)) ;
+  append_assoc lt [ ERead true client (Inl r) ] lth ;
+  ergar_trace_merge lt ([ ERead true client (Inl r) ] @ lth) [] []
 
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
