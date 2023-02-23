@@ -397,19 +397,51 @@ let rec ergar_pi_irr h lth lt lt' :
       ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     end
 
+let rec ergar_pi_write h lth client r lt :
+  Lemma
+    (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
+    (ensures every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
+    (decreases lth)
+= // match lth with
+  // | [] -> ()
+  // | e :: l ->
+  //   // append_assoc lt [ e ] (l @ lt') ;
+  //   // assert ((lt @ [ e ]) @ l @ lt' == lt @ e :: l @ lt') ;
+  //   assert (enforced_locally pi (e :: h) l) ;
+  //   // append_assoc lt [ e ] lt' ;
+  //   // assert (every_request_gets_a_response (lt @ lt')) ;
+  //   begin match e with
+  //   | EWrite true (fd,x) y ->
+  //     // ergar_write_irr lt (EWrite true (fd,x) y) lt' [] ;
+  //     // assert (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
+  //     // ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
+  //     admit ()
+  //   | _ ->
+  //     // ergar_ignore_no_write_read lt e lt' [] ;
+  //     assume (every_request_gets_a_response (lt @ [e])) ;
+  //     ergar_pi_write (e :: h) l client r (lt @ [ e ]) ;
+  //     assume (every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
+  // end
+  // It's enough to drop the lt part actually using merge
+  admit ()
+
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
 let webserver (handler:request_handler IOActions) :
   IIO int IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt -> every_request_gets_a_response lt)
-  by (explode ())
+  by (explode ()) // Otherwise it says we need to use --split
 = introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  assume (forall h lthandler client r lt. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)) ;
+  introduce forall h lthandler client r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)
+  with begin
+    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)
+    with _. ergar_pi_write h lthandler client r lt
+  end ;
 
   let client = static_cmd true Openfile "test.txt" in
   (* lt = [ EOpenfile ... ] *)
