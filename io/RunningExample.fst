@@ -358,8 +358,20 @@ let rec ergar_write_irr lt e0 lt' rl :
     ergar_filter lt' rl (fun fd' -> write_true_fd e0 <> fd') ;
     ergar_write_true e0 lt' rl ;
     assert (ergar lt' (filter (fun fd' -> write_true_fd e0 <> fd') rl))
-  | ERead true fd (Inl _) :: tl -> admit ()
-  | EWrite true (fd,x) y :: tl -> admit ()
+  | ERead true fd (Inl _) :: tl ->
+    assert (ergar (tl @ lt') (fd :: rl)) ;
+    ergar_write_irr tl e0 lt' (fd :: rl) ;
+    assert (ergar ((tl @ [ e0 ]) @ lt') (fd :: rl))
+  | EWrite true (fd,x) y :: tl ->
+    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite true (fd,x) y)) ;
+
+    ergar_write_true (EWrite true (fd,x) y) (tl @ lt') rl ;
+    assert (ergar (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
+
+    ergar_write_irr tl e0 lt' (filter (fun fd' -> fd <> fd') rl) ;
+
+    ergar_write_true (EWrite true (fd,x) y) ((tl @ [e0]) @ lt') rl ;
+    assert (ergar ((tl @ [ e0 ]) @ lt') (filter (fun fd' -> fd <> fd') rl))
   | _ :: tl -> ergar_write_irr tl e0 lt' rl
 
 let rec ergar_pi_irr h lth lt lt' :
@@ -377,7 +389,8 @@ let rec ergar_pi_irr h lth lt lt' :
     assert (every_request_gets_a_response (lt @ lt')) ;
     begin match e with
     | EWrite true (fd,x) y ->
-      assume (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
+      ergar_write_irr lt (EWrite true (fd,x) y) lt' [] ;
+      assert (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
       ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     | _ ->
       ergar_ignore_no_write_read lt e lt' [] ;
