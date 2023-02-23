@@ -132,18 +132,18 @@ let no_read_true e =
 
 let ergar = every_request_gets_a_response_acc
 
-let rec response_ignore_no_write_read lt e lt' rl :
+let rec ergar_ignore_no_write_read lt e lt' rl :
   Lemma
     (requires ergar (lt @ lt') rl /\ no_write_true e /\ no_read_true e)
     (ensures ergar (lt @ e :: lt') rl)
 = match lt with
   | [] -> ()
-  | ERead true fd (Inl _) :: tl -> response_ignore_no_write_read tl e lt' (fd :: rl)
+  | ERead true fd (Inl _) :: tl -> ergar_ignore_no_write_read tl e lt' (fd :: rl)
   | EWrite true (fd,x) y :: tl ->
     assert_norm (ergar (EWrite true (fd,x) y :: tl @ lt') rl == ergar (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
-    response_ignore_no_write_read tl e lt' (filter (fun fd' -> fd <> fd') rl) ;
+    ergar_ignore_no_write_read tl e lt' (filter (fun fd' -> fd <> fd') rl) ;
     assert_norm (ergar (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == ergar (EWrite true (fd,x) y :: tl @ e :: lt') rl)
-  | _ :: tl -> response_ignore_no_write_read tl e lt' rl
+  | _ :: tl -> ergar_ignore_no_write_read tl e lt' rl
 
 let rec response_order_irr lt rl1 rl2 :
   Lemma
@@ -348,7 +348,7 @@ let rec ergar_filter lt rl f :
     assert (ergar tl (filter (fun fd' -> fd <> fd') (filter f rl)))
   | _ :: tl -> ergar_filter tl rl f
 
-let rec response_write_irr lt e0 lt' rl :
+let rec ergar_write_irr lt e0 lt' rl :
   Lemma
     (requires ergar (lt @ lt') rl /\ is_write_true e0)
     (ensures ergar ((lt @ [ e0 ]) @ lt') rl)
@@ -360,9 +360,9 @@ let rec response_write_irr lt e0 lt' rl :
     assert (ergar lt' (filter (fun fd' -> write_true_fd e0 <> fd') rl))
   | ERead true fd (Inl _) :: tl -> admit ()
   | EWrite true (fd,x) y :: tl -> admit ()
-  | _ :: tl -> response_write_irr tl e0 lt' rl
+  | _ :: tl -> ergar_write_irr tl e0 lt' rl
 
-let rec pi_response_irr h lth lt lt' :
+let rec ergar_pi_irr h lth lt lt' :
   Lemma
     (requires enforced_locally pi h lth /\ every_request_gets_a_response (lt @ lt'))
     (ensures every_request_gets_a_response (lt @ lth @ lt'))
@@ -378,10 +378,10 @@ let rec pi_response_irr h lth lt lt' :
     begin match e with
     | EWrite true (fd,x) y ->
       assume (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
-      pi_response_irr (e :: h) l (lt @ [ e ]) lt'
+      ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     | _ ->
-      response_ignore_no_write_read lt e lt' [] ;
-      pi_response_irr (e :: h) l (lt @ [ e ]) lt'
+      ergar_ignore_no_write_read lt e lt' [] ;
+      ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     end
 
 open FStar.Tactics
