@@ -402,10 +402,13 @@ open FStar.Tactics
 let webserver (handler:request_handler IOActions) :
   IIO int IOActions
     (requires fun h -> True)
-    (ensures fun _ _ lt ->
-      every_request_gets_a_response lt)  =
-
-  assume (forall h lthandler lt lt'. enforced_locally pi h lthandler ==> every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
+    (ensures fun _ _ lt -> every_request_gets_a_response lt)
+  by (explode ())
+= introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+  with begin
+    introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+    with _. ergar_pi_irr h lthandler lt lt'
+  end ;
   assume (forall h lthandler client r lt. enforced_locally pi h lthandler ==> wrote_at_least_once_to client lthandler ==> every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)) ;
 
   let client = static_cmd true Openfile "test.txt" in
