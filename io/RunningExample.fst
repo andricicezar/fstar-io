@@ -189,18 +189,97 @@ let rec response_order_irr lt rl1 rl2 :
     admit ()
   | _ :: tl -> response_order_irr tl rl1 rl2
 
-let rec response_ignore_read lt fd0 x0 lt' rl :
+// let rec response_ignore_read lt fd0 x0 lt' rl :
+//   Lemma
+//     (requires every_request_gets_a_response_acc (lt @ lt') (fd0 :: rl))
+//     (ensures every_request_gets_a_response_acc (lt @ (ERead true fd0 (Inl x0)) :: lt') rl)
+// = match lt with
+//   | [] -> ()
+//   | ERead true fd (Inl _) :: tl -> response_ignore_read tl fd0 x0 lt' (fd :: rl)
+//   | EWrite true (fd,x) y :: tl ->
+//     assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
+//     response_ignore_read tl fd0 x0 lt' (filter (fun fd' -> fd <> fd') rl) ;
+//     assert_norm (every_request_gets_a_response_acc (tl @ (ERead true fd0 (Inl x0)) :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ (ERead true fd0 (Inl x0)) :: lt') rl)
+//   | _ :: tl -> response_ignore_read tl fd0 x0 lt' rl
+
+let is_write_true e =
+  match e with
+  | EWrite true (fd,x) y -> true
+  | _ -> false
+
+let write_true_fd e : Pure file_descr (requires is_write_true e) (ensures fun _ -> True) =
+  match e with
+  | EWrite true (fd,x) y -> fd
+
+let cong (f : 'a -> 'b) (x y : 'a) :
+  Lemma (requires x == y) (ensures f x == f y)
+= ()
+
+let ergar_write_true e l rl :
   Lemma
-    (requires every_request_gets_a_response_acc (lt @ lt') (fd0 :: rl))
-    (ensures every_request_gets_a_response_acc (lt @ (ERead true fd0 (Inl x0)) :: lt') rl)
+    (requires is_write_true e)
+    (ensures
+      every_request_gets_a_response_acc (e :: l) rl ==
+      every_request_gets_a_response_acc l (filter (fun fd' -> write_true_fd e <> fd') rl)
+    )
+= match e with
+  | EWrite true (fd,x) y ->
+    calc (==) {
+      write_true_fd e ;
+      == {}
+      write_true_fd (EWrite true (fd,x) y) ;
+      == {}
+      fd ;
+    } ;
+    // assert_norm ((fun fd' -> fd <> fd') == (fun fd' -> write_true_fd e <> fd')) ;
+    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd e) ;
+    calc (==) {
+      every_request_gets_a_response_acc (e :: l) rl ;
+      == {}
+      every_request_gets_a_response_acc (EWrite true (fd,x) y :: l) rl ;
+      == { _ by (compute ()) }
+      every_request_gets_a_response_acc l (filter (fun fd' -> fd <> fd') rl) ;
+      == {}
+      every_request_gets_a_response_acc l (filter (fun fd' -> write_true_fd e <> fd') rl) ;
+    }
+
+let rec ergar_filter lt rl f :
+  Lemma
+    (requires every_request_gets_a_response_acc lt rl)
+    (ensures every_request_gets_a_response_acc lt (filter f rl))
 = match lt with
   | [] -> ()
-  | ERead true fd (Inl _) :: tl -> response_ignore_read tl fd0 x0 lt' (fd :: rl)
+  | ERead true fd (Inl _) :: tl ->
+    assert (every_request_gets_a_response_acc tl (fd :: rl)) ;
+    ergar_filter tl (fd :: rl) f ;
+    assert (every_request_gets_a_response_acc tl (filter f (fd :: rl))) ;
+    if f fd
+    then ()
+    else begin
+      assert (every_request_gets_a_response_acc tl (fd :: rl)) ;
+      assert (every_request_gets_a_response_acc tl (filter f rl)) ;
+      // We know tl covers both fd and filter f rl so we want to mix the two
+      assume (every_request_gets_a_response_acc tl (fd :: filter f rl))
+    end
   | EWrite true (fd,x) y :: tl ->
-    assert_norm (every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ lt') rl == every_request_gets_a_response_acc (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
-    response_ignore_read tl fd0 x0 lt' (filter (fun fd' -> fd <> fd') rl) ;
-    assert_norm (every_request_gets_a_response_acc (tl @ (ERead true fd0 (Inl x0)) :: lt') (filter (fun fd' -> fd <> fd') rl) == every_request_gets_a_response_acc (EWrite true (fd,x) y :: tl @ (ERead true fd0 (Inl x0)) :: lt') rl)
-  | _ :: tl -> response_ignore_read tl fd0 x0 lt' rl
+    ergar_write_true (EWrite true (fd,x) y) tl rl ;
+    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite true (fd,x) y)) ;
+    assert (every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') rl)) ;
+    admit ()
+  | _ :: tl -> ergar_filter tl rl f
+
+let rec response_write_irr lt e0 lt' rl :
+  Lemma
+    (requires every_request_gets_a_response_acc (lt @ lt') rl /\ is_write_true e0)
+    (ensures every_request_gets_a_response_acc ((lt @ [ e0 ]) @ lt') rl)
+= match lt with
+  | [] ->
+    assert (every_request_gets_a_response_acc lt' rl) ;
+    ergar_write_true e0 lt' rl ;
+    assume (every_request_gets_a_response_acc lt' (filter (fun fd' -> write_true_fd e0 <> fd') rl))
+  | ERead true fd (Inl _) :: tl -> admit ()
+  | EWrite true (fd,x) y :: tl -> admit ()
+  | _ :: tl -> response_write_irr tl e0 lt' rl
 
 let rec pi_response_irr h lth lt lt' :
   Lemma
@@ -216,8 +295,9 @@ let rec pi_response_irr h lth lt lt' :
     append_assoc lt [ e ] lt' ;
     assert (every_request_gets_a_response (lt @ lt')) ;
     begin match e with
-    | ERead true fd (Inl x) -> admit ()
-    | EWrite true _ _ -> admit ()
+    | EWrite true (fd,x) y ->
+      assume (every_request_gets_a_response ((lt @ [ EWrite true (fd,x) y ]) @ lt')) ;
+      pi_response_irr (e :: h) l (lt @ [ e ]) lt'
     | _ ->
       response_ignore_no_write_read lt e lt' [] ;
       pi_response_irr (e :: h) l (lt @ [ e ]) lt'
