@@ -21,32 +21,6 @@ let did_not_respond h =
   | EWrite _ _ _ :: _ -> false
   | _ -> true
 
-val handler_only_openfiles_reads_client_acc : trace -> list file_descr -> Type0
-let rec handler_only_openfiles_reads_client_acc lt open_descrs =
-  match lt with
-  | [] -> true
-  | EOpenfile true  _ _ :: tl -> false
-  | ERead true  _ _ :: tl -> false
-  | EWrite true _ _ :: tl -> handler_only_openfiles_reads_client_acc tl open_descrs
-  | EClose true  _ _ :: tl -> handler_only_openfiles_reads_client_acc tl open_descrs
-  | EOpenfile false fnm res :: tl -> 
-    if fnm = "/temp" then begin
-      match res with
-      | Inl fd -> handler_only_openfiles_reads_client_acc tl (fd::open_descrs)
-      | Inr err -> handler_only_openfiles_reads_client_acc tl open_descrs
-    end else false
-  | ERead false fd _ :: tl -> 
-    if fd `mem` open_descrs then handler_only_openfiles_reads_client_acc tl open_descrs
-    else false
-  | EWrite false _ _ :: tl -> false
-  | EClose false fd _ :: tl -> 
-    if fd `mem` open_descrs then handler_only_openfiles_reads_client_acc tl (filter (fun fd' -> fd <> fd') open_descrs)
-    else false
-
-val handler_only_openfiles_reads_client : trace -> Type0
-let handler_only_openfiles_reads_client lt =
-  handler_only_openfiles_reads_client_acc lt []
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
