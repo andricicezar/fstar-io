@@ -245,17 +245,70 @@ let ergar_write_true e l rl :
 
 let ergar = every_request_gets_a_response_acc
 
-let ergar_split lt rl1 rl2 :
+let filter_append (f : 'a -> bool) l r :
+  Lemma (filter f (l @ r) == filter f l @ filter f r)
+= admit ()
+
+let rec ergar_merge lt rl0 rl1 rl2 :
+  Lemma
+    (requires ergar lt (rl0 @ rl1) /\ ergar lt (rl0 @ rl2))
+    (ensures ergar lt (rl0 @ rl1 @ rl2))
+= match lt with
+  | [] -> ()
+  | ERead true fd (Inl _) :: tl ->
+    assert (ergar tl (fd :: rl0 @ rl1)) ;
+    assert (ergar tl (fd :: rl0 @ rl2)) ;
+    ergar_merge tl (fd :: rl0) rl1 rl2
+  | EWrite true (fd,x) y :: tl ->
+    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite true (fd,x) y)) ;
+
+    ergar_write_true (EWrite true (fd,x) y) tl (rl0 @ rl1) ;
+    assert (ergar tl (filter (fun fd' -> fd <> fd') (rl0 @ rl1))) ;
+    filter_append (fun fd' -> fd <> fd') rl0 rl1 ;
+
+    ergar_write_true (EWrite true (fd,x) y) tl (rl0 @ rl2) ;
+    assert (ergar tl (filter (fun fd' -> fd <> fd') (rl0 @ rl2))) ;
+    filter_append (fun fd' -> fd <> fd') rl0 rl2 ;
+
+    ergar_merge tl (filter (fun fd' -> fd <> fd') rl0) (filter (fun fd' -> fd <> fd') rl1) (filter (fun fd' -> fd <> fd') rl2) ;
+
+    calc (==) {
+      filter (fun fd' -> fd <> fd') rl0 @ filter (fun fd' -> fd <> fd') rl1 @ filter (fun fd' -> fd <> fd') rl2 ;
+      == { filter_append (fun fd' -> fd <> fd') rl1 rl2 }
+      filter (fun fd' -> fd <> fd') rl0 @ filter (fun fd' -> fd <> fd') (rl1 @ rl2) ;
+      == { filter_append (fun fd' -> fd <> fd') rl0 (rl1 @ rl2) }
+      filter (fun fd' -> fd <> fd') (rl0 @ rl1 @ rl2) ;
+    } ;
+
+    ergar_write_true (EWrite true (fd,x) y) tl (rl0 @ rl1 @ rl2) ;
+    assert (ergar tl (filter (fun fd' -> fd <> fd') (rl0 @ rl1 @ rl2)))
+  | _ :: tl -> ergar_merge tl rl0 rl1 rl2
+
+let rec ergar_split lt rl1 rl2 :
   Lemma
     (requires ergar lt (rl1 @ rl2))
     (ensures ergar lt rl1 /\ ergar lt rl2)
-= admit ()
+= match lt with
+  | [] -> ()
+  | ERead true fd (Inl _) :: tl ->
+    assert (ergar tl (fd :: rl1 @ rl2)) ;
+    ergar_split tl (fd :: rl1) rl2 ;
+    assert (ergar tl (fd :: rl1)) ;
+    ergar_split tl [fd] rl1 ;
+    ergar_merge tl [] [fd] rl2 ;
+    assert (ergar tl (fd :: rl2))
+  | EWrite true (fd,x) y :: tl ->
+    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite true (fd,x) y)) ;
 
-let ergar_merge lt rl1 rl2 :
-  Lemma
-    (requires ergar lt rl1 /\ ergar lt rl2)
-    (ensures ergar lt (rl1 @ rl2))
-= admit ()
+    ergar_write_true (EWrite true (fd,x) y) tl (rl1 @ rl2) ;
+    assert (ergar tl (filter (fun fd' -> fd <> fd') (rl1 @ rl2))) ;
+    filter_append (fun fd' -> fd <> fd') rl1 rl2 ;
+
+    ergar_split tl (filter (fun fd' -> fd <> fd') rl1) (filter (fun fd' -> fd <> fd') rl2) ;
+
+    ergar_write_true (EWrite true (fd,x) y) tl rl1 ;
+    ergar_write_true (EWrite true (fd,x) y) tl rl2
+  | _ :: tl -> ergar_split tl rl1 rl2
 
 let filter_swap f g l :
   Lemma (filter f (filter g l) == filter g (filter f l))
@@ -277,7 +330,7 @@ let rec ergar_filter lt rl f :
       assert (every_request_gets_a_response_acc tl (fd :: rl)) ;
       assert (every_request_gets_a_response_acc tl (filter f rl)) ;
       ergar_split tl [fd] rl ;
-      ergar_merge tl [fd] (filter f rl) ;
+      ergar_merge tl [] [fd] (filter f rl) ;
       assert (every_request_gets_a_response_acc tl (fd :: filter f rl))
     end
   | EWrite true (fd,x) y :: tl ->
