@@ -454,7 +454,19 @@ let ergar_pi_write h lth client r lt :
   //     ergar_pi_write (e :: h) l client r (lt @ [ e ]) ;
   //     assume (every_request_gets_a_response (lt @ [ ERead true client r ] @ lth))
   // end
-  admit ()
+  ergar_pi_write_aux h lth client ;
+  assert (ergar lth [client]) ;
+  // calc (==) {
+  //   every_request_gets_a_response (ERead true client r :: lth) ;
+  //   == {}
+  //   ergar (ERead true client r :: lth) [] ;
+  //   == { _ by (compute ()) }
+  //   ergar lth [client] ;
+  // } ;
+  // We're missing that r is Inl!
+  assume (every_request_gets_a_response (ERead true client r :: lth)) ;
+  append_assoc lt [ ERead true client r ] lth ;
+  ergar_trace_merge lt ([ ERead true client r ] @ lth) [] []
 
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
