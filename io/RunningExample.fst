@@ -145,65 +145,6 @@ let rec ergar_ignore_no_write_read lt e lt' rl :
     assert_norm (ergar (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == ergar (EWrite true (fd,x) y :: tl @ e :: lt') rl)
   | _ :: tl -> ergar_ignore_no_write_read tl e lt' rl
 
-let rec response_order_irr lt rl1 rl2 :
-  Lemma
-    (requires ergar lt (rl1 @ rl2))
-    (ensures ergar lt (rl2 @ rl1))
-= match lt with
-  | [] -> ()
-  | ERead true fd (Inl _) :: tl ->
-    assert (ergar tl (fd :: rl1 @ rl2)) ;
-    response_order_irr tl [fd] (rl1 @ rl2) ;
-    assert (ergar tl ((rl1 @ rl2) @ [fd])) ;
-    append_assoc rl1 rl2 [fd] ;
-    assert (ergar tl (rl1 @ rl2 @ [fd])) ;
-    response_order_irr tl rl1 (rl2 @ [fd]) ;
-    assert (ergar tl ((rl2 @ [fd]) @ rl1)) ;
-    append_assoc rl2 [fd] rl1 ;
-    assert (ergar tl (rl2 @ [fd] @ rl1)) ;
-    response_order_irr tl rl1 (rl2 @ [fd]) ;
-
-    // response_order_irr tl (fd :: rl1) rl2 ;
-    // assert (ergar tl (rl2 @ fd :: rl1)) ;
-    // append_assoc rl2 [fd] rl1 ;
-    // response_order_irr tl (rl2 @ [fd]) rl1 ;
-    // assert (ergar tl (rl1 @ (rl2 @ [fd]))) ;
-    assume (ergar tl (fd :: rl2 @ rl1))
-  | EWrite true (fd,x) y :: tl ->
-    // assert_norm (ergar (EWrite true (fd,x) y :: tl) (fd1 :: fd2 :: rl) == ergar tl (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl))) ;
-    // assert (ergar tl (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl))) ;
-    // if fd1 = fd then () else
-    // if fd2 = fd then () else
-    //   assert (filter (fun fd' -> fd <> fd') (fd1 :: fd2 :: rl) == fd1 :: fd2 :: filter (fun fd' -> fd <> fd') rl) ;
-    //   assume (ergar tl (fd1 :: fd2 :: filter (fun fd' -> fd <> fd') rl)) ;
-    //   response_order_irr tl (filter (fun fd' -> fd <> fd') rl) fd1 fd2 ;
-    //   assert (ergar tl (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl)) ;
-    //   assume (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl == filter (fun fd' -> fd <> fd') (fd2 :: fd1 :: rl)) ; // uh?
-    //   calc (==) {
-    //     ergar tl (fd2 :: fd1 :: filter (fun fd' -> fd <> fd') rl) ;
-    //     == {}
-    //     ergar tl (filter (fun fd' -> fd <> fd') (fd2 :: fd1 :: rl)) ;
-    //     == { _ by (compute ()) }
-    //     ergar (EWrite true (fd,x) y :: tl) (fd2 :: fd1 :: rl) ;
-    //     == {}
-    //     ergar lt (fd2 :: fd1 :: rl) ;
-    //   }
-    admit ()
-  | _ :: tl -> response_order_irr tl rl1 rl2
-
-// let rec response_ignore_read lt fd0 x0 lt' rl :
-//   Lemma
-//     (requires ergar (lt @ lt') (fd0 :: rl))
-//     (ensures ergar (lt @ (ERead true fd0 (Inl x0)) :: lt') rl)
-// = match lt with
-//   | [] -> ()
-//   | ERead true fd (Inl _) :: tl -> response_ignore_read tl fd0 x0 lt' (fd :: rl)
-//   | EWrite true (fd,x) y :: tl ->
-//     assert_norm (ergar (EWrite true (fd,x) y :: tl @ lt') rl == ergar (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
-//     response_ignore_read tl fd0 x0 lt' (filter (fun fd' -> fd <> fd') rl) ;
-//     assert_norm (ergar (tl @ (ERead true fd0 (Inl x0)) :: lt') (filter (fun fd' -> fd <> fd') rl) == ergar (EWrite true (fd,x) y :: tl @ (ERead true fd0 (Inl x0)) :: lt') rl)
-//   | _ :: tl -> response_ignore_read tl fd0 x0 lt' rl
-
 let is_write_true e =
   match e with
   | EWrite true (fd,x) y -> true

@@ -15,7 +15,7 @@ X. `CommonUtils.fst` - a few admits (not sure if used anymore)
 7. [Wait for refactoring] `Compiler.IIO.To.ILang.fst` - assumption in definition of `make_rcs_eff`.
    proof by induction on `rcs`?
 
-8. admit in `RunningExample.fst`
+X. admit in `RunningExample.fst`
 
 
 ## Unfinished extensions
@@ -79,4 +79,3 @@ X. `CommonUtils.fst` - a few admits (not sure if used anymore)
    such that is more obvious how it is used
    - [ ] One has to manually instantiate the `tree` data structure when defining an interface,
    and it was proposed to look into if we can automatize the process by using type classes.
-
