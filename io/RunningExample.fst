@@ -245,9 +245,11 @@ let ergar_write_true e l rl :
 
 let ergar = every_request_gets_a_response_acc
 
-let filter_append (f : 'a -> bool) l r :
+let rec filter_append (f : 'a -> bool) l r :
   Lemma (filter f (l @ r) == filter f l @ filter f r)
-= admit ()
+= match l with
+  | [] -> ()
+  | x :: l -> filter_append f l r
 
 let rec ergar_merge lt rl0 rl1 rl2 :
   Lemma
@@ -310,9 +312,11 @@ let rec ergar_split lt rl1 rl2 :
     ergar_write_true (EWrite true (fd,x) y) tl rl2
   | _ :: tl -> ergar_split tl rl1 rl2
 
-let filter_swap f g l :
+let rec filter_swap f g l :
   Lemma (filter f (filter g l) == filter g (filter f l))
-= admit ()
+= match l with
+  | [] -> ()
+  | x :: l -> filter_swap f g l
 
 let rec ergar_filter lt rl f :
   Lemma
