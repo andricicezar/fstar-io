@@ -6,10 +6,6 @@ open FStar.Tactics.Typeclasses
 open FStar.FunctionalExtensionality
 open FStar.List
 
-open BeyondCriteria
-
-open Compiler.Languages
-open Compiler.IIO.To.TLang
 open Compiler.Model
 
 (** Examples objectives:

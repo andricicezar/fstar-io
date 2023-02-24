@@ -9,27 +9,10 @@ open CommonUtils
 (** ** Source Language **)
 include IIO
 
-(** ** Target Language **)
-(** Tlang is a language that acts as an intermediate language between the rich IIO effect that has
-    rich types and pre- and post-conditions and an ML language as OCaml.
-
-    The task of compiling an IIO computation is big and it implies converting rich types and pre- and
-    post-conditions to runtime checks. Therefore, this intermediate language simplifies our work.
-    By compiling to this intermediate language, we convert all of this static requirments to dynamic checks
-    but we keep the post-conditions around enough to show that the computation preserves its trace
-    properties.
-
-    So, Tlang is weakly typed and its computation can have only as post-condition that it respects a 
-    trace property. The pre-condition must be trivial.
-**)
-
 (** access_policy is the type of the runtime check that is enforced when instrumenting.
     A access_policy checks if the next operation with its arguments satisfy the property
     over the history. **)
 type access_policy = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
-
-(** TODO: show that the type of access_policy is enough to enforce any monitorable property
- (from Grigore Rosu's paper) **)
 
 unfold
 let has_event_respected_pi (e:event) (ap:access_policy) (h:trace) : Type0 =
@@ -56,38 +39,38 @@ let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
 effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
   IIOwp a fl (pi_as_hist #a pi)
 
-class tlang (t:Type u#a) (fl:erased tflag) (pi:access_policy) = { [@@@no_method] mldummy : unit }
+class weak (t:Type u#a) (fl:erased tflag) (pi:access_policy) = { [@@@no_method] mldummy : unit }
 
-instance tlang_unit fl pi : tlang unit fl pi = { mldummy = () }
-instance tlang_file_descr fl pi : tlang file_descr fl pi = { mldummy = () }
+instance weak_unit fl pi : weak unit fl pi = { mldummy = () }
+instance weak_file_descr fl pi : weak file_descr fl pi = { mldummy = () }
 
-instance tlang_pair fl pi t1 {| d1:tlang t1 fl pi |} t2 {| d2:tlang t2 fl pi |} : tlang (t1 * t2) fl pi = 
+instance weak_pair fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (t1 * t2) fl pi = 
   { mldummy = () }
-instance tlang_either fl pi t1 {| d1:tlang t1 fl pi |} t2 {| d2:tlang t2 fl pi |} : tlang (either t1 t2) fl pi =
+instance weak_either fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (either t1 t2) fl pi =
   { mldummy = () }
-instance tlang_resexn fl pi t1 {| d1:tlang t1 fl pi |} : tlang (resexn t1) fl pi =
+instance weak_resexn fl pi t1 {| d1:weak t1 fl pi |} : weak (resexn t1) fl pi =
   { mldummy = () }
 
-type tlang_arrow_typ fl pi (t1 t2:Type) = t1 -> IIOpi t2 fl pi
+type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> IIOpi t2 fl pi
 
-(** An tlang arrow is a statically/dynamically verified arrow to respect pi.
+(** An weak arrow is a statically/dynamically verified arrow to respect pi.
 **)
-instance tlang_arrow fl pi #t1 (d1:tlang t1 fl pi) #t2 (d2:tlang t2 fl pi) : tlang (tlang_arrow_typ fl pi t1 t2) fl pi =
+instance weak_arrow fl pi #t1 (d1:weak t1 fl pi) #t2 (d2:weak t2 fl pi) : weak (weak_arrow_typ fl pi t1 t2) fl pi =
   { mldummy = () }
 
-instance tlang_bool fl pi : tlang bool fl pi = { mldummy = () }
-instance tlang_int fl pi : tlang int fl pi = { mldummy = () }
-instance tlang_option fl pi t1 {| d1:tlang t1 fl pi |} : tlang (option t1) fl pi =
+instance weak_bool fl pi : weak bool fl pi = { mldummy = () }
+instance weak_int fl pi : weak int fl pi = { mldummy = () }
+instance weak_option fl pi t1 {| d1:weak t1 fl pi |} : weak (option t1) fl pi =
   { mldummy = () }
 
-(**instance tlang_fo_uint8 : tlang_fo UInt8.t = { fo_pred = () }
-instance tlang_fo_string : tlang_fo string = { fo_pred = () }
-instance tlang_fo_bytes : tlang_fo Bytes.bytes = { fo_pred = () }
-instance tlang_fo_open_flag : tlang_fo open_flag = { fo_pred = () } 
-instance tlang_fo_socket_bool_option : tlang_fo socket_bool_option = { fo_pred = () }
-instance tlang_fo_file_descr : tlang_fo file_descr = { fo_pred = () }
-instance tlang_fo_zfile_perm : tlang_fo zfile_perm = { fo_pred = () }
-instance tlang_fo_pair_2 t1 t2 t3 {| tlang_fo t1 |} {| tlang_fo t2 |} {| tlang_fo t3 |} : tlang_fo (t1 * t2 * t3) = { fo_pred = () }
-instance tlang_fo_pair_3 t1 t2 t3 t4 {| tlang_fo t1 |} {| tlang_fo t2 |} {| tlang_fo t3 |} {| tlang_fo t4 |} : tlang_fo (t1 * t2 * t3 * t4) = { fo_pred = () }
-instance tlang_fo_option t1 {| tlang_fo t1 |} : tlang_fo (option t1) = { fo_pred = () }
-instance tlang_fo_list t1 {| tlang_fo t1 |} : tlang_fo (list t1) = { fo_pred = () } **)
+(**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
+instance weak_fo_string : weak_fo string = { fo_pred = () }
+instance weak_fo_bytes : weak_fo Bytes.bytes = { fo_pred = () }
+instance weak_fo_open_flag : weak_fo open_flag = { fo_pred = () } 
+instance weak_fo_socket_bool_option : weak_fo socket_bool_option = { fo_pred = () }
+instance weak_fo_file_descr : weak_fo file_descr = { fo_pred = () }
+instance weak_fo_zfile_perm : weak_fo zfile_perm = { fo_pred = () }
+instance weak_fo_pair_2 t1 t2 t3 {| weak_fo t1 |} {| weak_fo t2 |} {| weak_fo t3 |} : weak_fo (t1 * t2 * t3) = { fo_pred = () }
+instance weak_fo_pair_3 t1 t2 t3 t4 {| weak_fo t1 |} {| weak_fo t2 |} {| weak_fo t3 |} {| weak_fo t4 |} : weak_fo (t1 * t2 * t3 * t4) = { fo_pred = () }
+instance weak_fo_option t1 {| weak_fo t1 |} : weak_fo (option t1) = { fo_pred = () }
+instance weak_fo_list t1 {| weak_fo t1 |} : weak_fo (list t1) = { fo_pred = () } **)

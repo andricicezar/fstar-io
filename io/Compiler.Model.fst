@@ -8,7 +8,7 @@ open FStar.FunctionalExtensionality
 open BeyondCriteria
 
 include Compiler.Languages
-include Compiler.IIO.To.TLang
+include Compiler.IIO.To.Weak
 open IIO.Behavior
 
 type enforced_policy (pi:access_policy) =
@@ -74,7 +74,7 @@ type tgt_interface = {
   phi : enforced_policy pi;
 
   ct : erased tflag -> access_policy -> Type u#a;
-  ct_tlang : fl:erased tflag -> tlang (ct fl pi) fl pi;
+  ct_weak : fl:erased tflag -> weak (ct fl pi) fl pi;
 }
   
 (** **** languages **)
@@ -115,7 +115,7 @@ let tgt_language : language = {
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
   ct = (fun fl pi -> (i.ct_importable fl).sitype);
-  ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
+  ct_weak = (fun fl -> (i.ct_importable fl).c_sitype);
 
   pi = i.pi;
   phi = i.phi;
