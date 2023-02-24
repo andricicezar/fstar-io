@@ -41,8 +41,10 @@ val inst_io_cmds : #pi:access_policy -> phi:enforced_policy pi -> acts' AllActio
 let inst_io_cmds phi cmd arg = 
   let h = get_trace true in
   if phi h cmd arg then (
-    static_cmd false cmd arg)
-  else Inr Contract_failure
+    // Need the letbinding here it won't typecheck... why?
+    let r : io_resm' cmd arg = static_cmd false cmd arg in
+    r
+  ) else Inr Contract_failure
 
 (** **** interfaces **)
 noeq

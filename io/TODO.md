@@ -10,7 +10,7 @@ X. `Hist.fst` - admitted lemma `lemma_hist_bind_associativity` (used in `DMFree.
 
 X. `CommonUtils.fst` - a few admits (not sure if used anymore)
 
-6. `IIO.Behavior.fst` - reify is assumed as a ghost function
+X. `IIO.Behavior.fst` - reify is assumed as a ghost function
 
 7. [Wait for refactoring] `Compiler.IIO.To.ILang.fst` - assumption in definition of `make_rcs_eff`.
    proof by induction on `rcs`?
