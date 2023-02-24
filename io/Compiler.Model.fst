@@ -59,7 +59,7 @@ type src_interface = {
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   ct : erased tflag -> Type;
-  ct_rcs : tree contract;
+  ct_rcs : tree pck_rc;
   ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_rcs fl;
 
   (** The partial program can have a post-condition that becomes the

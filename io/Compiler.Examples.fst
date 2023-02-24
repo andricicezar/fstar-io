@@ -54,7 +54,7 @@ let test1_pi : access_policy =
     | _ -> true
     
 let test1_ct_rc = (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)))
-let test1_ct_rcs : tree contract = 
+let test1_ct_rcs : tree pck_rc = 
   Node (| unit, resexn file_descr, test1_ct_rc |) 
     Leaf 
     Leaf
