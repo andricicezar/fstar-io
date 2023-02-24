@@ -31,13 +31,13 @@ open Compiler.Model
 type source_arrow (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
   x:arg -> IIO (resexn res) fl (pre x) (post x)
 
-type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:monitorable_prop) =
+type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:access_policy) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:monitorable_prop) (rc:rc_typ arg (resexn res)) =
+type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:access_policy) (rc:rc_typ arg (resexn res)) =
   squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ rc x h r lt ==> post x h r lt)
 
-type stronger_pis (pi1:monitorable_prop) (pi2:monitorable_prop) =
+type stronger_pis (pi1:access_policy) (pi2:access_policy) =
   squash (forall h lt. enforced_locally pi1 h lt ==> enforced_locally pi2 h lt)
 
 
@@ -45,12 +45,12 @@ type stronger_pis (pi1:monitorable_prop) (pi2:monitorable_prop) =
 (** *** Test 1 - FO **)
 let test1_pre = (fun () h -> True)
 let test1_post = (fun () h (rfd:resexn file_descr) lt -> 
-  (forall fd'. ~((EOpenfile "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
+  (forall fd'. ~((EOpenfile false "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 
 type test1_ct = source_arrow unit file_descr test1_pre test1_post
 
-let test1_pi : monitorable_prop = 
-  fun cmd arg h -> 
+let test1_pi : access_policy = 
+  fun h isTrusted cmd arg -> 
     match cmd, arg with 
     | Openfile, s -> 
       if s = "/etc/passwd" then false 
@@ -58,7 +58,7 @@ let test1_pi : monitorable_prop =
     | _ -> true
     
 let test1_ct_rc = (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)))
-let test1_ct_rcs : tree pck_rc = 
+let test1_ct_rcs : tree contract = 
   Node (| unit, resexn file_descr, test1_ct_rc |) 
     Leaf 
     Leaf
@@ -117,7 +117,7 @@ let test1_ctx_t #fl #pi io_acts () : IIOpi (resexn file_descr) fl pi =
   io_acts Openfile "/etc/passwd"
 
 (** ** Test 2 - HO left 1 **)
-let test2_pi : monitorable_prop = (fun _ _ _ -> true)
+let test2_pi : access_policy = (fun _ _ _ -> true)
 val test2_stronger_pis : squash (forall h lt. enforced_locally test2_pi h lt ==> enforced_locally test2_pi h lt)
 let test2_stronger_pis = ()
 
@@ -178,7 +178,7 @@ let test2_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_src_tgt 
   | _ -> rfd
 
 (** ** Test 3 - HO right 1 **)
-let test3_pi : monitorable_prop = (fun _ _ _ -> true)
+let test3_pi : access_policy = (fun _ _ _ -> true)
 val test3_stronger_pis : squash (forall h lt. enforced_locally test3_pi h lt ==> enforced_locally test3_pi h lt)
 let test3_stronger_pis = ()
 
