@@ -70,7 +70,7 @@ X. admit in `RunningExample.fst`
    - [ ] prove
 
 
-6. Refactoring - file `Compiler.IIO.To.TLang.fst`
+6. Refactoring - file `Compiler.IIO.To.Weak.fst`
 
    The biggest complaint of the actual implementation is that the solution proposed by me
    to convert the additional logical assumptions (beyond pi) into runtime checks is too
