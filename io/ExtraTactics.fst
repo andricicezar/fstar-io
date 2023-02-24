@@ -49,7 +49,7 @@ let rec innermost_sc (t:term) : Tac term =
   | _ -> t
 
 let get_match_body () : Tac term =
-  match FStar.Reflection.Formula.unsquash (cur_goal ()) with
+  match unsquash_term (cur_goal ()) with
   | None -> fail "Goal is not squashed"
   | Some t -> match inspect t with
              | Tv_Match sc _ _ -> innermost_sc sc
