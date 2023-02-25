@@ -100,9 +100,8 @@ let test1_ctx #fl io_acts eff_rcs () : IIO (resexn file_descr) fl (fun _ -> True
   io_acts Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
-(** TODO: fix this
-let test1_ctx_t #fl #pi io_acts () : IIOpi (resexn file_descr) fl pi = 
-  io_acts Openfile "/etc/passwd"**)
+let test1_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl test1_pi =
+  io_acts Openfile "/etc/passwd"
 
 (** ** Test 2 - HO left 1 **)
 let test2_pi : access_policy = (fun _ _ _ _ -> true)

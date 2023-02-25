@@ -73,8 +73,8 @@ type tgt_interface = {
   pi : access_policy;
   phi : enforced_policy pi;
 
-  ct : erased tflag -> access_policy -> Type u#a;
-  ct_weak : fl:erased tflag -> weak (ct fl pi) fl pi;
+  ct : erased tflag -> Type u#a;
+  ct_weak : fl:erased tflag -> weak (ct fl) fl pi;
 }
   
 (** **** languages **)
@@ -95,12 +95,12 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi:erased access_policy -> acts fl pi false -> i.ct fl pi
-type prog_tgt (i:tgt_interface) = i.ct AllActions i.pi -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi false -> i.ct fl
+type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  p (c #AllActions #i.pi (inst_io_cmds i.phi))
+  p (c #AllActions (inst_io_cmds i.phi))
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = beh 
@@ -114,7 +114,7 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  ct = (fun fl pi -> (i.ct_importable fl).swtyp);
+  ct = (fun fl -> (i.ct_importable fl).swtyp);
   ct_weak = (fun fl -> (i.ct_importable fl).c_swtyp);
 
   pi = i.pi;
@@ -124,7 +124,7 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl acts eff_rcs =
-  (i.ct_importable fl).safe_import (c_t #fl #i.pi acts) eff_rcs
+  (i.ct_importable fl).safe_import (c_t #fl acts) eff_rcs
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| _, ws |) = ws
