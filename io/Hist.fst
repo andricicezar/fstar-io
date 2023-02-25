@@ -23,6 +23,7 @@ type hist0 (#event_type:Type) a = hist_post #event_type a -> hist_pre #event_typ
 unfold
 let hist_post_ord (#event_type:Type) (p1 p2:hist_post #event_type 'a) = forall lt r. p1 lt r ==> p2 lt r
 
+unfold
 let hist_wp_monotonic (#event_type:Type) (wp:hist0 #event_type 'a) =
   forall p1 p2. (p1 `hist_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
 
@@ -41,6 +42,7 @@ val hist_subcomp : #event_type:Type -> #a:Type -> #p1:(a -> Type0) -> #p2:(a -> 
 let hist_subcomp #event_type #a #p1 #p2 wp = hist_subcomp0 #event_type #a #p1 #p2 #() wp
 
 
+unfold
 let hist_return (#event_type:Type) (x:'a) : hist #event_type 'a =
   fun p _ -> p [] x
 

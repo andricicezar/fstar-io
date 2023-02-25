@@ -41,6 +41,7 @@ shape of enforced_locally? *)
 //    [SMTPat (enforced_locally ap h [])]
 //  = assert_norm (enforced_locally ap h [])
 
+unfold
 let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
