@@ -392,11 +392,14 @@ let ergar_pi_write h lth client r lt :
 
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
+
+#push-options "--split_queries"
 let webserver (handler:request_handler IOActions) :
   IIO int IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt -> every_request_gets_a_response lt)
-  by (explode ()) // Otherwise it says we need to use --split
+  //by (explode ()) // Otherwise it says we need to use --split
+                    // GM: split_queries is actually better behaved :^)
 = introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
@@ -418,7 +421,8 @@ let webserver (handler:request_handler IOActions) :
     | Inl req ->
       (* one Read true from the client happened *)
       (* lt = [ EOpenfile ... ; ERead true client req ] *)
-      begin match handler client req (fun res -> static_cmd true Write (client,res)) with
+      begin match handler client req (fun res -> let r = static_cmd true Write (client,res) in r) with
+                                              (* NB: this ^ let binding just to work around F* bug *)
       (* we know from enforced_locally pi that no other Reads true happened *)
       | Inr err ->
         (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
@@ -432,6 +436,7 @@ let webserver (handler:request_handler IOActions) :
       end ;
       0
     end
+#pop-options
 
 (** ** Instante source interface with the example **)
 
