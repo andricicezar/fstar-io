@@ -26,6 +26,7 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Write -> unit 
   | Close -> unit
 
+unfold
 let io_resm (cmd:io_cmds) (arg:io_args cmd) = resexn (io_res cmd)
 
 unfold
