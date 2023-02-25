@@ -148,6 +148,16 @@ let comp : compiler = {
   rel_traces = (==);
 }
 
+(** ** Soundness **)
+let soundness (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
+  let it = comp_int_src_tgt i in
+  let cs : ctx_src i = backtranslate_ctx #i ct in
+  let pt : prog_tgt it = (compile_pprog #i ps) in
+  let wt : whole_tgt = (pt `link_tgt` ct) in
+  let ws : whole_src = (ps `link_src` cs) in
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws) 
+) = ()
+
 (** ** RrHC **)
 let syntactic_equality (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
   let it = comp_int_src_tgt i in
