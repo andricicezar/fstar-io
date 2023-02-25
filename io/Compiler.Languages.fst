@@ -28,11 +28,19 @@ let rec enforced_locally
   (h l: trace) :
   Tot Type0 (decreases l) =
   match l with
-  | [] -> true
+  | [] -> True
   | e  ::  t ->
-    (has_event_respected_pi e ap h ==> enforced_locally (ap) (e::h) t) /\
-    ~(has_event_respected_pi e ap h ==> False)
-  
+    has_event_respected_pi e ap h /\ enforced_locally (ap) (e::h) t
+
+(* Interesting regression, this is now not obvious. Is it due to the new
+shape of enforced_locally? *)
+//let enforced_locally_nil
+//  (ap : access_policy)
+//  (h : trace)
+//  : Lemma (enforced_locally ap h [])
+//    [SMTPat (enforced_locally ap h [])]
+//  = assert_norm (enforced_locally ap h [])
+
 let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
