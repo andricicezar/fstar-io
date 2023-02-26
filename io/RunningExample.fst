@@ -350,7 +350,7 @@ let rec ergar_pi_write_aux h lth client :
     begin match e with
     | EWrite true (fd,x) y ->
       if fd = client
-      then assume (ergar l [])
+      then ergar_pi_irr (e :: h) l [] []
       else ergar_pi_write_aux (e :: h) l client
     | _ -> ergar_pi_write_aux (e :: h) l client
   end
@@ -402,9 +402,9 @@ let webserver (handler:request_handler IOActions) :
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler client r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)
+  introduce forall h lthandler client r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client (Inl r) ] @ lthandler)
   with begin
-    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client r ] @ lthandler)
+    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true client (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client r lt
   end ;
 
