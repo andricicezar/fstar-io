@@ -95,7 +95,7 @@ let get_request (client:file_descr) =
   flush Stdlib.stdout;
   x
 
-let plugin (client:file_descr) : unit =
+let req_handler (client:file_descr) : unit =
   match parse_http_header (get_request client) with
   | GET "/" -> (respond client 200 "text/html" "<h1>Hello!</h1>")
   | GET query -> (

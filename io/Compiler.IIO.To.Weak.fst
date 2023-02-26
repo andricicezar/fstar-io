@@ -136,7 +136,7 @@ class safe_importable (styp : Type u#a) (pi:access_policy) (rcs:tree (pck_rc u#c
   [@@@no_method]
   c_swtyp : weak swtyp fl pi;
   [@@@no_method]
-  safe_import : swtyp -> (typ_eff_rcs fl rcs -> styp); 
+  safe_import : swtyp -> typ_eff_rcs fl rcs -> styp; 
 }
 
 class importable (styp : Type u#a) (pi:access_policy) (rcs:tree (pck_rc u#c u#d)) (fl:erased tflag) = {
@@ -166,6 +166,12 @@ instance exportable_file_descr (#pi:access_policy) (#fl:erased tflag) : exportab
   wtyp = file_descr;
   c_wtyp = weak_file_descr fl pi;
   export = (fun Leaf fd -> fd)
+}
+
+instance exportable_bytes (#pi:access_policy) (#fl:erased tflag) : exportable Bytes.bytes pi Leaf fl = {
+  wtyp = Bytes.bytes;
+  c_wtyp = weak_bytes fl pi;
+  export = (fun Leaf b -> b)
 }
 
 instance exportable_refinement (#pi:access_policy) (#rcs:tree pck_rc) (#fl:erased tflag) t {| d:exportable t pi rcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi rcs fl = {
@@ -363,6 +369,12 @@ instance importable_file_descr (#pi:access_policy) (#fl:erased tflag) : importab
   wtyp = file_descr;
   c_wtyp = weak_file_descr fl pi;
   import = (fun fd Leaf -> Inl fd)
+}
+
+instance importable_bytes (#pi:access_policy) (#fl:erased tflag) : importable Bytes.bytes pi Leaf fl = {
+  wtyp = Bytes.bytes;
+  c_wtyp = weak_bytes fl pi;
+  import = (fun b Leaf -> Inl b)
 }
 
 (** *** Importable instances **)

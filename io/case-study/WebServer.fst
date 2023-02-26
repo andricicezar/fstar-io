@@ -19,7 +19,7 @@ let static_cmd
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
-  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> True))
+  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> Bytes.length msg < 500))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                   wrote_at_least_once_to client lt)))) ->
   IIO (resexn unit) fl (requires (fun h -> True))
@@ -156,7 +156,8 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
 
 let webserver 
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) :
+  (req_handler : req_handler (IOActions + fl)) 
+  () :
   IIO int (IOActions + fl)
     (requires (fun h -> True))
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =

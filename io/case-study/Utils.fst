@@ -26,18 +26,35 @@ val pi : access_policy
 let pi h isTrusted cmd arg =
   match isTrusted, cmd with
   | false, Openfile -> 
-    if arg = "/temp" then true else false
-  | false, Read -> is_opened_by_untrusted h arg
+    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
+    if fnm = "/temp" then true else false
+  | false, Read -> 
+    let (fd, _) : file_descr * UInt8.t = arg in
+    is_opened_by_untrusted h fd
   | false, Close -> is_opened_by_untrusted h arg
   | true, Write -> true
   | _ -> false
+
+val phi : enforced_policy pi
+let phi h cmd arg =
+  match cmd with
+  | Openfile ->
+    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
+    if fnm = "/temp" then true else false
+  | Read ->
+    let (fd, _) : file_descr * UInt8.t = arg in
+    is_opened_by_untrusted h fd
+  | Close -> is_opened_by_untrusted h arg
+  | _ -> false
+
 
 val wrote_at_least_once_to : file_descr -> trace -> bool
 let rec wrote_at_least_once_to client lt =
   match lt with
   | [] -> false
-  | EWrite true arg _::tl -> let (fd, msg):file_descr*string = arg in
-                         client = fd
+  | EWrite true arg _::tl -> 
+    let (fd, msg):file_descr*Bytes.bytes = arg in
+    client = fd
   | _ :: tl -> wrote_at_least_once_to client tl 
 
 

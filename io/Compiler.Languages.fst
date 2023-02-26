@@ -58,14 +58,22 @@ type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> IIOpi t2 fl pi
 instance weak_arrow fl pi #t1 (d1:weak t1 fl pi) #t2 (d2:weak t2 fl pi) : weak (weak_arrow_typ fl pi t1 t2) fl pi =
   { mldummy = () }
 
+instance weak_arrow3 fl pi
+  t1 {| d1:weak t1 fl pi |}
+  t2 {| d2:weak t2 fl pi |}
+  t3 {| d3:weak t3 fl pi |}
+  t4 {| d4:weak t4 fl pi |}
+  : weak (t1 -> t2 -> t3 -> IIOpi t4 fl pi) fl pi =
+  { mldummy = () }
+
 instance weak_bool fl pi : weak bool fl pi = { mldummy = () }
 instance weak_int fl pi : weak int fl pi = { mldummy = () }
 instance weak_option fl pi t1 {| d1:weak t1 fl pi |} : weak (option t1) fl pi =
   { mldummy = () }
+instance weak_bytes fl pi : weak Bytes.bytes fl pi = { mldummy = () }
 
 (**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
 instance weak_fo_string : weak_fo string = { fo_pred = () }
-instance weak_fo_bytes : weak_fo Bytes.bytes = { fo_pred = () }
 instance weak_fo_open_flag : weak_fo open_flag = { fo_pred = () } 
 instance weak_fo_socket_bool_option : weak_fo socket_bool_option = { fo_pred = () }
 instance weak_fo_file_descr : weak_fo file_descr = { fo_pred = () }
