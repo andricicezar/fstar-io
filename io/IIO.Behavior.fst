@@ -6,10 +6,6 @@ open FStar.FunctionalExtensionality
 open BeyondCriteria
 open IIO
 
-(** reify is not implemented in F* *)
-(** our reify is ghost because we want to use it only when reasoning *)
-assume val __reify_IIOwp (#a:Type) (#wp:Hist.hist a) (#fl:tflag) ($f:unit -> IIOwp a fl wp) : GTot (dm_giio a fl wp)
-
 (** Confusing elements:
 1) there are two definitions of trace. one from IIO.Sig.trace and one from BeyondCriteria.trace
 2) prefixed_trace_property may be confusing 
@@ -47,7 +43,7 @@ let beh_giio ws h tr =
    we specialize it with the empty history *)
 val _beh : (unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) -> trace_property #event
 let _beh ws =
-  beh_giio (__reify_IIOwp ws) []
+  beh_giio (reify (ws ())) []
 
 (** used for whole programs **)
 [@@ "opaque_to_smt"]
@@ -56,7 +52,7 @@ let beh = on_domain _ (fun ws -> _beh ws)
 
 val _beh_ctx : #pre:(trace -> Type0) -> (unit -> IIO int AllActions pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
 let _beh_ctx ws h =
-  beh_giio (__reify_IIOwp ws) h 
+  beh_giio (reify (ws ())) h
 
 (** used for contexts **)
 //[@@ "opaque_to_smt"]

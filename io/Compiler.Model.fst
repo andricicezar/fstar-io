@@ -8,7 +8,7 @@ open FStar.FunctionalExtensionality
 open BeyondCriteria
 
 include Compiler.Languages
-include Compiler.IIO.To.TLang
+include Compiler.IIO.To.Weak
 open IIO.Behavior
 
 type enforced_policy (pi:access_policy) =
@@ -41,8 +41,10 @@ val inst_io_cmds : #pi:access_policy -> phi:enforced_policy pi -> acts' AllActio
 let inst_io_cmds phi cmd arg = 
   let h = get_trace true in
   if phi h cmd arg then (
-    static_cmd false cmd arg)
-  else Inr Contract_failure
+    // Need the letbinding here it won't typecheck... why?
+    let r : io_resm' cmd arg = static_cmd false cmd arg in
+    r
+  ) else Inr Contract_failure
 
 (** **** interfaces **)
 noeq
@@ -57,7 +59,7 @@ type src_interface = {
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   ct : erased tflag -> Type;
-  ct_rcs : tree contract;
+  ct_rcs : tree pck_rc;
   ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_rcs fl;
 
   (** The partial program can have a post-condition that becomes the
@@ -72,7 +74,7 @@ type tgt_interface = {
   phi : enforced_policy pi;
 
   ct : erased tflag -> access_policy -> Type u#a;
-  ct_tlang : fl:erased tflag -> tlang (ct fl pi) fl pi;
+  ct_weak : fl:erased tflag -> weak (ct fl pi) fl pi;
 }
   
 (** **** languages **)
@@ -112,8 +114,8 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  ct = (fun fl pi -> (i.ct_importable fl).sitype);
-  ct_tlang = (fun fl -> (i.ct_importable fl).c_sitype);
+  ct = (fun fl pi -> (i.ct_importable fl).swtyp);
+  ct_weak = (fun fl -> (i.ct_importable fl).c_swtyp);
 
   pi = i.pi;
   phi = i.phi;
@@ -145,6 +147,16 @@ let comp : compiler = {
 
   rel_traces = (==);
 }
+
+(** ** Soundness **)
+let soundness (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
+  let it = comp_int_src_tgt i in
+  let cs : ctx_src i = backtranslate_ctx #i ct in
+  let pt : prog_tgt it = (compile_pprog #i ps) in
+  let wt : whole_tgt = (pt `link_tgt` ct) in
+  let ws : whole_src = (ps `link_src` cs) in
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws) 
+) = ()
 
 (** ** RrHC **)
 let syntactic_equality (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (

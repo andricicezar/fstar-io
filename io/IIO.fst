@@ -171,6 +171,7 @@ let dm_giio_if_then_else (a : Type u#a)
   dm_giio a (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
 
 total
+reifiable
 reflectable
 effect {
   IIOwp (a:Type) (flag:erased tflag) (wp : hist #event a) 
@@ -220,7 +221,7 @@ let static_cmd
   IIOwp?.reflect (iio_call isTrusted cmd arg)
 
 let get_trace (isTrusted:bool) : IIOwp trace GetTraceActions
-  (fun p h -> forall lt. lt == [] ==> p lt h) =
+  (fun p h -> p [] h) =
   IIOwp?.reflect (iio_call isTrusted GetTrace ())
 
 // There is no hope to prove anything about ctx without a meta-theorem about F* / without a formalization of F* & Ghost.
