@@ -20,21 +20,28 @@ let static_cmd
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
-  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> did_not_respond h))
+  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> True))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                   wrote_at_least_once_to client lt)))) ->
-  IIO (resexn unit) fl (requires (fun h -> did_not_respond h))
+  IIO (resexn unit) fl (requires (fun h -> True))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
 
 (* TODO: implement *)
-assume val sendError : int -> fd:file_descr -> IIO unit IOActions
- (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r])
+let sendError400 (fd:file_descr) : IIO unit IOActions
+ (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r]) =
+  let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
+  ()
+
 
 (* TODO: implement *)
-assume val get_req : fd:file_descr ->
-  IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r'])
+let get_req (fd:file_descr) :
+  IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
+  let limit : unit -> UInt8.t = (fun () -> admit () (* I forgot how to write UInt8 values in F* *)) in
+  match static_cmd Read (fd,limit ()) with
+  | Inl (msg, _) -> Inl msg
+  | Inr err -> Inr err
 
 let process_connection
   (client : file_descr) 
@@ -53,7 +60,7 @@ let process_connection
     | Inr err ->
       (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
       (* this responds to the client *)
-      sendError 400 client
+      sendError400 client
       (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler @ [ EWrite true (client, _) _ ] *)
     | Inl client ->
       (* here we know that the handler wrote to the client *)
