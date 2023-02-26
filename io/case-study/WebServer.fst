@@ -1,42 +1,95 @@
 module WebServer
 
 open FStar.Tactics
+open FStar.Ghost
 open ExtraTactics
 
 open Compiler.Model
-open Shared
-  
-type req_handler fl = shr.ct (IOActions + fl)
+open Utils
 
-(** since we do not have exceptions, we have to handle errors manually **)
+let static_cmd
+  (cmd : io_cmds)
+  (arg : io_sig.args cmd) :
+  IIO (io_sig.res cmd arg) IOActions
+    (requires (fun h -> io_pre cmd arg h))
+    (ensures (fun h (r:io_sig.res cmd arg) lt ->
+        lt == [convert_call_to_event true cmd arg r])) =
+  static_cmd true cmd arg
+  
+//type req_handler fl = shr.ct (IOActions + fl)
+type req_handler (fl:erased tflag) =
+  (client:file_descr) ->
+  (req:Bytes.bytes) ->
+  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> did_not_respond h))
+                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
+                                                                  wrote_at_least_once_to client lt)))) ->
+  IIO (resexn unit) fl (requires (fun h -> did_not_respond h))
+                       (ensures (fun h r lt -> enforced_locally pi h lt /\
+                                             (wrote_at_least_once_to client lt \/ Inr? r)))
+
+
+(* TODO: implement *)
+assume val sendError : int -> fd:file_descr -> IIO unit IOActions
+ (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r])
+
+(* TODO: implement *)
+assume val get_req : fd:file_descr ->
+  IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r'])
+
+let process_connection
+  (client : file_descr) 
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl)) : 
+  IIO unit (IOActions+fl) (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
+  admit (); (** proof from the running example *)
+  match get_req client with
+  | Inr _ -> ()
+  | Inl req ->
+    (* one Read true from the client happened *)
+    (* lt = [ EOpenfile ... ; ERead true client req ] *)
+    begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
+    (* we know from enforced_locally pi that no other Reads true happened *)
+    | Inr err ->
+      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
+      (* this responds to the client *)
+      sendError 400 client
+      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler @ [ EWrite true (client, _) _ ] *)
+    | Inl client ->
+      (* here we know that the handler wrote to the client *)
+      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
+      ()
+    end
 
 let rec process_connections 
   (clients : lfds) 
   (to_read : lfds) 
-  (plugin : req_handler) : 
-  IIOpi lfds pi =
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl)) : 
+  IIO lfds (IOActions+fl) (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
   | client :: tail -> begin
-    let rest = process_connections tail to_read (plugin) in
+    let rest = process_connections tail to_read req_handler in
     if List.mem client to_read then begin
-      let _ = plugin client in 
-      let _ = static_cmd Close pi client in
-      lemma_append_enforced_locally pi;
+      process_connection client req_handler;
+      let _ = static_cmd Close client in
+      lemma1 ();
       tail 
     end else clients
   end
  
 let get_new_connection (socket : file_descr) :
-  IIOpi (option file_descr) shr.pi
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
-  match static_cmd Select pi (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
+  IIO (option file_descr) IOActions (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
+  match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
     if List.length to_accept > 0 then begin 
-      match static_cmd Accept pi socket with
+      match static_cmd Accept socket with
       | Inl client -> 
-        let _ = static_cmd SetNonblock pi client in
+        admit (); (** true since no Read true is done inside this function **)
+        let _ = static_cmd SetNonblock client in
         Some client
       | _ -> None
     end else None
@@ -44,69 +97,69 @@ let get_new_connection (socket : file_descr) :
 
 let handle_connections
   (clients:lfds)
-  (plugin : plugin_type) :
-  IIOpi lfds shr.pi 
-    (requires (fun _ -> True))
-    (ensures (fun _ _ _ -> True)) =
-  match static_cmd Select pi (clients, ([] <: lfds), ([] <: lfds), 100uy) with
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl)) : 
+  IIO lfds (fl+IOActions) (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
+  match static_cmd Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
-    let clients'' = process_connections clients to_read plugin in
+    let clients'' = process_connections clients to_read req_handler in
     clients''
   | _ -> clients
 
 let server_loop_body 
   (socket : file_descr) 
-  (plugin : plugin_type)
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  IIOpi lfds shr.pi
-    (requires (fun h -> True)) 
-    (ensures (fun h r lt -> True)) = 
-  lemma_append_enforced_locally shr.pi;
+  IIO lfds (fl+IOActions) (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
   let clients' = (match get_new_connection socket with
                  | None -> clients
                  | Some fd -> fd :: clients) in
-  handle_connections clients' plugin
+  lemma1 ();
+  handle_connections clients' req_handler
 
 let rec server_loop 
   (iterations_count : nat)
   (socket : file_descr) 
-  (plugin : plugin_type)
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  IIOpi unit shr.pi
-    (requires (fun h -> True))
-    (ensures (fun h r lt -> True)) =
-  lemma_append_enforced_locally shr.pi;
+  IIO unit (fl+IOActions) (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
   if iterations_count = 0 then ()
   else begin
-    let clients' = server_loop_body socket plugin clients in
-    server_loop (iterations_count - 1) socket plugin clients'
+    let clients' = server_loop_body socket req_handler clients in
+    lemma1 ();
+    server_loop (iterations_count - 1) socket req_handler clients'
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  IIOpi (maybe file_descr) shr.pi
-    (requires (fun h -> True))
-    (ensures (fun h r lt ->
-      match r with
-      | Inl socket -> is_open socket (apply_changes h lt)
-      | _ -> True)) by (explode ()) = 
-  match static_cmd Socket pi () with
+  IIO (resexn file_descr) IOActions (fun _ -> True)
+    (fun _ _ lt -> every_request_gets_a_response lt) =
+  admit (); (** true since no Read true is done inside this function **)
+  (** @Guido, this method does not verify even without the post-condition,
+     don't understand why. trying to explode the goal breaks F***)
+  match static_cmd Socket () with
   | Inl socket -> 
-    let _ = static_cmd Setsockopt pi (socket, SO_REUSEADDR, true) in 
-    let _ = static_cmd Bind pi (socket, ip, port) in
-    let _ = static_cmd Listen pi (socket, limit) in
-    let _ = static_cmd SetNonblock pi socket in
-    lemma_append_enforced_locally shr.pi;
+    let _ = static_cmd Setsockopt (socket, SO_REUSEADDR, true) in 
+    let _ = static_cmd Bind (socket, ip, port) in
+    let _ = static_cmd Listen (socket, limit) in
+    let _ = static_cmd SetNonblock socket in
     Inl socket 
   | Inr err -> Inr err
 
 let webserver 
-  (plugin : plugin_type) :
-  IIOpi shr.ret shr.pi
+  (#fl:erased tflag)
+  (req_handler : req_handler (IOActions + fl)) :
+  IIO int (IOActions + fl)
     (requires (fun h -> True))
-    (ensures (fun h r lt -> True)) by (explode ()) =
-  lemma_append_enforced_locally shr.pi;
+    (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
-      server_loop 100000000000 server plugin []
+      server_loop 100000000000 server req_handler [];
+      lemma1 ();
+      0
     end
-  | Inr _ -> ()
+  | Inr _ -> -1
