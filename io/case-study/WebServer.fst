@@ -16,7 +16,6 @@ let static_cmd
         lt == [convert_call_to_event true cmd arg r])) =
   static_cmd true cmd arg
   
-//type req_handler fl = shr.ct (IOActions + fl)
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
@@ -28,14 +27,12 @@ type req_handler (fl:erased tflag) =
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
 
-(* TODO: implement *)
 let sendError400 (fd:file_descr) : IIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r]) =
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 
-(* TODO: implement *)
 let get_req (fd:file_descr) :
   IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
   let limit : unit -> UInt8.t = (fun () -> admit () (* I forgot how to write UInt8 values in F* *)) in
