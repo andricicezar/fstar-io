@@ -77,6 +77,20 @@ type tgt_interface = {
   ct_weak : fl:erased tflag -> weak (ct fl);
 }
 
+assume val pi : access_policy
+assume val pi2 : access_policy
+
+(** example of attack:
+    context can have this type which is not flag parametric at all positions,
+    and it does not satisfy the same pi at all positions
+
+    to prevent this kind of types, we indexed the weak typeclass by the flag and the pi
+
+    something similar can happen in HO cases for importable. 
+**)
+let attack2 (fl:erased tflag) : weak (int -> IIOpi (int -> IIOpi int GetTraceActions pi) fl pi2) =
+  weak_arrow fl pi2 weak_int (weak_arrow GetTraceActions pi weak_int weak_int) 
+
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.psi
