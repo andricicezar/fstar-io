@@ -267,7 +267,6 @@ let rec ergar_write_irr lt e0 lt' rl :
     assert (ergar ((tl @ [ e0 ]) @ lt') (filter (fun fd' -> fd <> fd') rl))
   | _ :: tl -> ergar_write_irr tl e0 lt' rl
 
-(**
 let rec ergar_pi_irr h lth lt lt' :
   Lemma
     (requires enforced_locally pi h lth /\ every_request_gets_a_response (lt @ lt'))
@@ -303,7 +302,7 @@ let rec ergar_pi_write_aux h lth client :
     begin match e with
     | EWrite true (fd,x) y ->
       if fd = client
-      then assume (ergar l [])
+      then ergar_pi_irr (e :: h) l [] []
       else ergar_pi_write_aux (e :: h) l client
     | _ -> ergar_pi_write_aux (e :: h) l client
   end
@@ -314,7 +313,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
     (ensures ergar (lt @ lt') (rl @ rl'))
 = match lt with
   | [] -> ()
-  | ERead true fd (Inl _) :: tl ->
+  | ERead true (fd,limit) (Inl _) :: tl ->
     assert (ergar tl (fd :: rl)) ;
     ergar_trace_merge tl lt' (fd :: rl) rl'
   | EWrite true (fd,x) y :: tl ->
@@ -333,19 +332,18 @@ let rec ergar_trace_merge lt lt' rl rl' :
     assert (ergar (tl @ lt') (filter (fun fd' -> fd <> fd') (rl @ rl')))
   | _ :: tl -> ergar_trace_merge tl lt' rl rl'
 
-let ergar_pi_write h lth client r lt :
+let ergar_pi_write h lth client limit r lt :
   Lemma
     (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
-    (ensures every_request_gets_a_response (lt @ [ ERead true client (Inl r) ] @ lth))
+    (ensures every_request_gets_a_response (lt @ [ ERead true (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
-  assert (every_request_gets_a_response (ERead true client (Inl r) :: lth)) ;
-  append_assoc lt [ ERead true client (Inl r) ] lth ;
-  ergar_trace_merge lt ([ ERead true client (Inl r) ] @ lth) [] []
-**)
+  assert (every_request_gets_a_response (ERead true (client,limit) (Inl r) :: lth)) ;
+  append_assoc lt [ ERead true (client,limit) (Inl r) ] lth ;
+  ergar_trace_merge lt ([ ERead true (client,limit) (Inl r) ] @ lth) [] []
 
-
-let lemma1 () : Lemma (
-  forall lt1 lt2.
-  every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
-    every_request_gets_a_response (lt1@lt2)) =  admit ()
+// WHY this lemma? It's just the merge lemma above
+// let lemma1 () : Lemma (
+//   forall lt1 lt2.
+//   every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
+//     every_request_gets_a_response (lt1@lt2)) =  admit ()
