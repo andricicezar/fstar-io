@@ -60,7 +60,7 @@ type src_interface = {
       It is more like the type of the interface which the two share to communicate. **)
   ct : erased tflag -> Type;
   ct_rcs : tree pck_rc;
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_rcs fl;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) ct_rcs fl;
 
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
