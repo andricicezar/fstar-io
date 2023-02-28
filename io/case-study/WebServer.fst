@@ -38,7 +38,7 @@ let sendError400 (fd:file_descr) : IIO unit IOActions
 
 let get_req (fd:file_descr) :
   IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
-  let limit : unit -> UInt8.t = (fun () -> admit () (* I forgot how to write UInt8 values in F* *)) in
+  let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
   | Inl (msg, _) -> Inl msg
   | Inr err -> Inr err
