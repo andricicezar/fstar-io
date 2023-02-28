@@ -95,7 +95,6 @@ let get_new_connection (socket : file_descr) :
     if List.length to_accept > 0 then begin 
       match static_cmd Accept socket with
       | Inl client -> 
-        admit (); (** true since no Read true is done inside this function **)
         let _ = static_cmd SetNonblock client in
         Some client
       | _ -> None
