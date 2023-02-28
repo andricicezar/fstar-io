@@ -67,7 +67,7 @@ let process_connection
     | Inl client -> ()
     end
 
-let rec process_connections 
+let rec process_connections
   (clients : lfds) 
   (to_read : lfds) 
   (#fl:erased tflag)
@@ -76,15 +76,16 @@ let rec process_connections
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
-  | client :: tail -> begin
-    let rest = process_connections tail to_read req_handler in
-    if List.mem client to_read then begin
-      process_connection client req_handler;
-      let _ = static_cmd Close client in
-      lemma1 ();
-      tail 
-    end else clients
-  end
+  | client :: tail -> 
+    begin
+      let rest = process_connections tail to_read req_handler in
+      if List.mem client to_read then begin
+        process_connection client req_handler ;
+        let _ = static_cmd Close client in
+        every_request_gets_a_response_append () ;
+        tail 
+      end else clients
+    end
  
 let get_new_connection (socket : file_descr) :
   IIO (option file_descr) IOActions (fun _ -> True)

@@ -342,8 +342,14 @@ let ergar_pi_write h lth client limit r lt :
   append_assoc lt [ ERead true (client,limit) (Inl r) ] lth ;
   ergar_trace_merge lt ([ ERead true (client,limit) (Inl r) ] @ lth) [] []
 
-// WHY this lemma? It's just the merge lemma above
-// let lemma1 () : Lemma (
-//   forall lt1 lt2.
-//   every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
-//     every_request_gets_a_response (lt1@lt2)) =  admit ()
+let every_request_gets_a_response_append () : 
+  Lemma (
+    forall lt1 lt2.
+      every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
+      every_request_gets_a_response (lt1 @ lt2)
+  ) 
+= introduce forall lt1 lt2. ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
+  with begin
+    introduce ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
+    with _. ergar_trace_merge lt1 lt2 [] []
+  end
