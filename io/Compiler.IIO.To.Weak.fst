@@ -199,7 +199,7 @@ class exportable (styp : Type u#a) (pi:access_policy) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   wtyp : Type u#b;
   [@@@no_method]
-  c_wtyp : weak wtyp fl pi;
+  c_wtyp : weak wtyp;
   [@@@no_method]
   export : typ_eff_rcs fl rcs -> styp -> wtyp;
 }
@@ -208,7 +208,7 @@ class safe_importable (styp : Type u#a) (pi:access_policy) (rcs:tree (pck_rc u#c
   [@@@no_method]
   swtyp : Type u#b;
   [@@@no_method]
-  c_swtyp : weak swtyp fl pi;
+  c_swtyp : weak swtyp;
   [@@@no_method]
   safe_import : swtyp -> typ_eff_rcs fl rcs -> styp; 
 }
@@ -217,14 +217,14 @@ class importable (styp : Type u#a) (pi:access_policy) (rcs:tree (pck_rc u#c u#d)
   [@@@no_method]
   wtyp : Type u#b; 
   [@@@no_method]
-  c_wtyp : weak wtyp fl pi;
+  c_wtyp : weak wtyp;
   [@@@no_method]
   import : wtyp -> typ_eff_rcs fl rcs -> resexn styp;
 }
 
 (** *** Exportable instances **)
 
-instance weak_is_exportable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) t {| d1: weak t fl pi |} : exportable t pi rcs fl = {
+instance weak_is_exportable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) t {| d1: weak t |} : exportable t pi rcs fl = {
   wtyp = t;
   c_wtyp = d1;
   export = (fun Leaf x -> x)
@@ -232,19 +232,19 @@ instance weak_is_exportable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}) 
 
 instance exportable_unit (#pi:access_policy) (#fl:erased tflag) : exportable unit pi Leaf fl = {
   wtyp = unit;
-  c_wtyp = weak_unit fl pi;
+  c_wtyp = weak_unit;
   export = (fun Leaf () -> ())
 }
 
 instance exportable_file_descr (#pi:access_policy) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
   wtyp = file_descr;
-  c_wtyp = weak_file_descr fl pi;
+  c_wtyp = weak_file_descr;
   export = (fun Leaf fd -> fd)
 }
 
 instance exportable_bytes (#pi:access_policy) (#fl:erased tflag) : exportable Bytes.bytes pi Leaf fl = {
   wtyp = Bytes.bytes;
-  c_wtyp = weak_bytes fl pi;
+  c_wtyp = weak_bytes;
   export = (fun Leaf b -> b)
 }
 
@@ -259,7 +259,7 @@ instance exportable_option
   t1 {| d1:exportable t1 pi rcs fl |} :
   Tot (exportable (option t1) pi rcs fl) = {
   wtyp = option d1.wtyp;
-  c_wtyp = weak_option fl pi d1.wtyp #d1.c_wtyp;
+  c_wtyp = weak_option d1.wtyp #d1.c_wtyp;
   export = (fun eff_rcs x -> match x with | Some x' -> Some (d1.export eff_rcs x') | None -> None)
 }
 
@@ -269,7 +269,7 @@ instance exportable_pair
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (t1 * t2) pi rcs fl) = {
   wtyp = d1.wtyp * d2.wtyp;
-  c_wtyp = weak_pair fl pi d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
+  c_wtyp = weak_pair d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
   export = (fun eff_rcs (x, y) -> (d1.export (left eff_rcs) x, d2.export (right eff_rcs) y));
 }
 
@@ -278,7 +278,7 @@ instance exportable_either
   t1 {| d1:exportable t1 pi (left rcs) fl |} t2 {| d2:exportable t2 pi (right rcs) fl |} :
   Tot (exportable (either t1 t2) pi rcs fl) = {
   wtyp = either d1.wtyp d2.wtyp;
-  c_wtyp = weak_either fl pi d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
+  c_wtyp = weak_either d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
   export = (fun eff_rcs x -> 
       match x with | Inl x -> Inl (d1.export (left eff_rcs) x) | Inr x -> Inr (d2.export (right eff_rcs) x))
 }
@@ -291,7 +291,7 @@ instance exportable_arrow_with_no_pre_and_no_post
   (t2:Type) {| d2:exportable t2 pi (right rcs) fl|} :
   exportable (t1 -> IIOpi (resexn t2) fl pi) pi rcs fl = {
     wtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     export = (fun eff_rcs (f:(t1 -> IIOpi (resexn t2) fl pi)) (x:d1.wtyp) ->
       match d1.import x (left eff_rcs) with
       | Inl x' -> begin
@@ -312,7 +312,7 @@ instance exportable_arrow_post_args
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x)) pi rcs fl = {
     wtyp = x:d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (fun _ -> True) (post x))) ->
       let f' : t1 -> IIOpi (resexn t2) fl pi = f in
       (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_rcs f');
@@ -384,7 +384,7 @@ instance exportable_arrow_pre_post_args
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
   exportable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     wtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi; 
-    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     export = (fun eff_rcs (f:(x:t1 -> IIO (resexn t2) fl (pre x) (post x))) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #t1 #unit rc = rwtyp_eff_rc eff_rc in
@@ -411,7 +411,7 @@ instance exportable_arrow_pre_post
   (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
   exportable (t1 -> IIO (resexn t2) fl pre post) pi rcs fl = {
     wtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi; 
-    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_wtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     export = (fun eff_rcs (f:(t1 -> IIO (resexn t2) fl pre post)) ->
       let (| (| a, b, rc |), eff_rc |) = root eff_rcs in
       let eff_rc : eff_rc_typ fl #unit #unit rc = rwtyp_eff_rc eff_rc in
@@ -427,7 +427,7 @@ instance exportable_arrow_pre_post
 
     
 (** *** Safe importable instances **)
-let weak_is_safely_importable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) #t (d:weak t fl pi) : safe_importable t pi rcs fl = {
+let weak_is_safely_importable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}) (#fl:erased tflag) #t (d:weak t) : safe_importable t pi rcs fl = {
   swtyp = t;
   c_swtyp = d;
   safe_import = (fun x Leaf -> x); 
@@ -435,19 +435,19 @@ let weak_is_safely_importable (#pi:access_policy) (#rcs:(tree pck_rc){Leaf? rcs}
 
 instance importable_unit (#pi:access_policy) (#fl:erased tflag) : importable unit pi Leaf fl = {
   wtyp = unit;
-  c_wtyp = weak_unit fl pi;
+  c_wtyp = weak_unit;
   import = (fun () Leaf -> Inl ())
 }
 
 instance importable_file_descr (#pi:access_policy) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
   wtyp = file_descr;
-  c_wtyp = weak_file_descr fl pi;
+  c_wtyp = weak_file_descr;
   import = (fun fd Leaf -> Inl fd)
 }
 
 instance importable_bytes (#pi:access_policy) (#fl:erased tflag) : importable Bytes.bytes pi Leaf fl = {
   wtyp = Bytes.bytes;
-  c_wtyp = weak_bytes fl pi;
+  c_wtyp = weak_bytes;
   import = (fun b Leaf -> Inl b)
 }
 
@@ -479,7 +479,7 @@ instance importable_option
   t {| d:importable t pi rcs fl |} :
   Tot (importable (option t) pi rcs fl) = {
   wtyp = option d.wtyp;
-  c_wtyp = weak_option fl pi d.wtyp #d.c_wtyp;
+  c_wtyp = weak_option d.wtyp #d.c_wtyp;
   import = (fun (x:option d.wtyp) eff_rcs ->
     match x with
     | Some x' -> begin
@@ -495,7 +495,7 @@ instance importable_pair
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (t1 * t2) pi rcs fl) = {
   wtyp = d1.wtyp * d2.wtyp;
-  c_wtyp = weak_pair fl pi d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
+  c_wtyp = weak_pair d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
   import = (fun (x,y) eff_rcs ->
       match (d1.import x (left eff_rcs), d2.import y (right eff_rcs)) with
       | (Inl x, Inl y) -> Inl (x, y)
@@ -507,7 +507,7 @@ instance importable_either
   t1 t2 {| d1:importable t1 pi (left rcs) fl |} {| d2:importable t2 pi (right rcs) fl |} :
   Tot (importable (either t1 t2) pi rcs fl) = {
   wtyp = either d1.wtyp d2.wtyp;
-  c_wtyp = weak_either fl pi d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
+  c_wtyp = weak_either d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
   import = (fun x eff_rcs ->
       match x with
       | Inl x' -> begin
@@ -529,7 +529,7 @@ instance importable_dpair_refined
   {| d3:checkable2 p |} :
   Tot (importable (x:t1 & y:t2{p x y}) pi rcs fl) = {
   wtyp = d1.wtyp & d2.wtyp;
-  c_wtyp = weak_pair fl pi d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
+  c_wtyp = weak_pair d1.wtyp #d1.c_wtyp d2.wtyp #d2.c_wtyp;
   import = (fun ((x', y')) eff_rcs ->
       match (d1.import x' (left eff_rcs), d2.import y' (right eff_rcs)) with
        | (Inl x, Inl y) ->
@@ -543,7 +543,7 @@ instance safe_importable_resexn
   t1 {| d1:importable t1 pi rcs fl |} :
   Tot (safe_importable (resexn t1) pi rcs fl) = {
   swtyp = resexn d1.wtyp;
-  c_swtyp = weak_resexn fl pi d1.wtyp #d1.c_wtyp;
+  c_swtyp = weak_resexn d1.wtyp #d1.c_wtyp;
   safe_import = (fun x eff_rcs ->
       match x with
       | Inl x' -> d1.import x' eff_rcs 
@@ -556,7 +556,7 @@ instance safe_importable_arrow
   (t2:Type) {| d2:importable t2 pi (right rcs) fl |} : 
   safe_importable ((x:t1) -> IIOpi (resexn t2) fl pi) pi rcs fl = {
   swtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
   safe_import = (fun (f:d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi) eff_rcs (x:t1) -> 
     (let x' = d1.export (left eff_rcs) x in 
      let y : resexn d2.wtyp = f x' in
@@ -661,7 +661,7 @@ instance safe_importable_arrow_pre_post_args_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    swtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
   safe_import = (fun (f:(d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -683,7 +683,7 @@ instance safe_importable_arrow_pre_post_res
   {| d2:importable t2 pi (right rcs) fl |}:
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
    swtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+  c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
   safe_import = (fun (f:(d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi)) eff_rcs ->
     let rcs' = (EmptyNode (left rcs) (right rcs)) in
     let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -705,7 +705,7 @@ instance safe_importable_arrow_pre_post_args
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     swtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-    c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     safe_import = (fun (f:(d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi)) eff_rcs ->
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
       let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in
@@ -731,7 +731,7 @@ instance safe_importable_arrow_pre_post
   {| d2:importable t2 pi (right rcs) fl |} :
   safe_importable (x:t1 -> IIO (resexn t2) fl (pre x) (post x)) pi rcs fl = {
     swtyp = d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi;
-    c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn fl pi d2.wtyp #d2.c_wtyp);
+    c_swtyp = weak_arrow fl pi d1.c_wtyp (weak_resexn d2.wtyp #d2.c_wtyp);
     safe_import = (fun (f:(d1.wtyp -> IIOpi (resexn d2.wtyp) fl pi)) eff_rcs ->
       let rcs' = (EmptyNode (left rcs) (right rcs)) in
       let eff_rcs' = (EmptyNode (left eff_rcs) (right eff_rcs)) in

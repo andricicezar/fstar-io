@@ -74,9 +74,9 @@ type tgt_interface = {
   phi : enforced_policy pi;
 
   ct : erased tflag -> Type u#a;
-  ct_weak : fl:erased tflag -> weak (ct fl) fl pi;
+  ct_weak : fl:erased tflag -> weak (ct fl);
 }
-  
+
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.psi
