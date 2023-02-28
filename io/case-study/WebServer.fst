@@ -4,6 +4,9 @@ open FStar.Tactics
 open FStar.Ghost
 open ExtraTactics
 
+open FStar.List.Tot.Base
+open FStar.List.Tot.Properties
+
 open Compiler.Model
 open Utils
 
@@ -40,13 +43,15 @@ let get_req (fd:file_descr) :
   | Inl (msg, _) -> Inl msg
   | Inr err -> Inr err
 
+// #push-options "--split_queries"
 let process_connection
   (client : file_descr) 
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) : 
   IIO unit (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  admit (); (** proof from the running example *)
+  assume (forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
+  assume (forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)) ;
   match get_req client with
   | Inr _ -> ()
   | Inl req ->
@@ -64,6 +69,7 @@ let process_connection
       (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
       ()
     end
+// #pop-options
 
 let rec process_connections 
   (clients : lfds) 
