@@ -43,33 +43,29 @@ let get_req (fd:file_descr) :
   | Inl (msg, _) -> Inl msg
   | Inr err -> Inr err
 
-// #push-options "--split_queries"
 let process_connection
   (client : file_descr) 
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) : 
   IIO unit (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  assume (forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')) ;
-  assume (forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)) ;
+  introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+  with begin
+    introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+    with _. ergar_pi_irr h lthandler lt lt'
+  end ;
+  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)
+  with begin
+    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)
+    with _. ergar_pi_write h lthandler client limit r lt
+  end ;
   match get_req client with
   | Inr _ -> ()
   | Inl req ->
-    (* one Read true from the client happened *)
-    (* lt = [ EOpenfile ... ; ERead true client req ] *)
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
-    (* we know from enforced_locally pi that no other Reads true happened *)
-    | Inr err ->
-      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
-      (* this responds to the client *)
-      sendError400 client
-      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler @ [ EWrite true (client, _) _ ] *)
-    | Inl client ->
-      (* here we know that the handler wrote to the client *)
-      (* lt = [ EOpenfile ... ; ERead true client req ] @ lthandler *)
-      ()
+    | Inr err -> sendError400 client
+    | Inl client -> ()
     end
-// #pop-options
 
 let rec process_connections 
   (clients : lfds) 
