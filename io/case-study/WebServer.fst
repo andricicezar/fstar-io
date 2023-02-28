@@ -123,7 +123,7 @@ let server_loop_body
   let clients' = (match get_new_connection socket with
                  | None -> clients
                  | Some fd -> fd :: clients) in
-  lemma1 ();
+  every_request_gets_a_response_append () ;
   handle_connections clients' req_handler
 
 let rec server_loop 
@@ -137,16 +137,13 @@ let rec server_loop
   if iterations_count = 0 then ()
   else begin
     let clients' = server_loop_body socket req_handler clients in
-    lemma1 ();
+    every_request_gets_a_response_append () ;
     server_loop (iterations_count - 1) socket req_handler clients'
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
   IIO (resexn file_descr) IOActions (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  admit (); (** true since no Read true is done inside this function **)
-  (** @Guido, this method does not verify even without the post-condition,
-     don't understand why. trying to explode the goal breaks F***)
   match static_cmd Socket () with
   | Inl socket -> 
     let _ = static_cmd Setsockopt (socket, SO_REUSEADDR, true) in 
@@ -165,8 +162,8 @@ let webserver
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with
   | Inl server -> begin
-      server_loop 100000000000 server req_handler [];
-      lemma1 ();
+      server_loop 100000000000 server req_handler [] ;
+      every_request_gets_a_response_append () ;
       0
     end
   | Inr _ -> -1
