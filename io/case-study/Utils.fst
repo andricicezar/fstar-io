@@ -22,7 +22,7 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
 
-val pi : access_policy
+val pi : policy_spec
 let pi h isTrusted cmd arg =
   match isTrusted, cmd with
   | false, Openfile -> 
@@ -35,7 +35,7 @@ let pi h isTrusted cmd arg =
   | true, Write -> true
   | _ -> false
 
-val phi : enforced_policy pi
+val phi : policy pi
 let phi h cmd arg =
   match cmd with
   | Openfile ->

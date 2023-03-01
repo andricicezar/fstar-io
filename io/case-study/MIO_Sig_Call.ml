@@ -19,7 +19,7 @@ let ml_call (cmd:io_cmds) =
   | Accept -> Obj.magic (Obj.repr Unix_Star.accept)
   | Select -> Obj.magic (Obj.repr Unix_Star.select)
 
-let (mio_call : inst_cmds -> Obj.t -> Obj.t iio) =
+let (mio_call : m_cmds -> Obj.t -> Obj.t mio) =
   fun cmd -> fun argz ->
   match cmd with
   | GetTrace -> 
