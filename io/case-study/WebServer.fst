@@ -13,7 +13,7 @@ open Utils
 let static_cmd
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
-  IIO (io_sig.res cmd arg) IOActions
+  MIO (io_sig.res cmd arg) IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
         lt == [convert_call_to_event true cmd arg r])) =
@@ -22,22 +22,22 @@ let static_cmd
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
-  (send:(msg:Bytes.bytes -> IIO (resexn unit) fl (requires (fun h -> Bytes.length msg < 500))
+  (send:(msg:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> Bytes.length msg < 500))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                   wrote_at_least_once_to client lt)))) ->
-  IIO (resexn unit) fl (requires (fun h -> True))
+  MIO (resexn unit) fl (requires (fun h -> True))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
 
-let sendError400 (fd:file_descr) : IIO unit IOActions
+let sendError400 (fd:file_descr) : MIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r]) =
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 
 let get_req (fd:file_descr) :
-  IIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
+  MIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
   let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
   | Inl (msg, _) -> Inl msg
@@ -47,7 +47,7 @@ let process_connection
   (client : file_descr) 
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) : 
-  IIO unit (IOActions+fl) (fun _ -> True)
+  MIO unit (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
@@ -72,7 +72,7 @@ let rec process_connections
   (to_read : lfds) 
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) : 
-  IIO lfds (IOActions+fl) (fun _ -> True)
+  MIO lfds (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
@@ -88,7 +88,7 @@ let rec process_connections
     end
  
 let get_new_connection (socket : file_descr) :
-  IIO (option file_descr) IOActions (fun _ -> True)
+  MIO (option file_descr) IOActions (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
@@ -105,7 +105,7 @@ let handle_connections
   (clients:lfds)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) : 
-  IIO lfds (fl+IOActions) (fun _ -> True)
+  MIO lfds (fl+IOActions) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
@@ -118,7 +118,7 @@ let server_loop_body
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  IIO lfds (fl+IOActions) (fun _ -> True)
+  MIO lfds (fl+IOActions) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   let clients' = (match get_new_connection socket with
                  | None -> clients
@@ -132,7 +132,7 @@ let rec server_loop
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  IIO unit (fl+IOActions) (fun _ -> True)
+  MIO unit (fl+IOActions) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   if iterations_count = 0 then ()
   else begin
@@ -142,7 +142,7 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  IIO (resexn file_descr) IOActions (fun _ -> True)
+  MIO (resexn file_descr) IOActions (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Socket () with
   | Inl socket -> 
@@ -157,7 +157,7 @@ let webserver
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) 
   () :
-  IIO int (IOActions + fl)
+  MIO int (IOActions + fl)
     (requires (fun h -> True))
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with

@@ -1,4 +1,4 @@
-module IIO.Sig
+module MIO.Sig
 
 open FStar.List.Tot.Base
 
@@ -70,21 +70,21 @@ let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : isTrusted:bool -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
-  | ERead     : isTrusted:bool -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
-  | EWrite     : isTrusted:bool -> a:io_sig.args Write     -> (r:io_sig.res Write a)     -> event
-  | EClose    : isTrusted:bool -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
-  | ESocket     : isTrusted:bool -> a:io_sig.args Socket     -> (r:io_sig.res Socket a)     -> event
-  | ESetsockopt     : isTrusted:bool -> a:io_sig.args Setsockopt     -> (r:io_sig.res Setsockopt a)     -> event
-  | EBind     : isTrusted:bool -> a:io_sig.args Bind     -> (r:io_sig.res Bind a)     -> event
-  | ESetNonblock     : isTrusted:bool -> a:io_sig.args SetNonblock     -> (r:io_sig.res SetNonblock a)     -> event
-  | EListen     : isTrusted:bool -> a:io_sig.args Listen     -> (r:io_sig.res Listen a)     -> event
-  | EAccept     : isTrusted:bool -> a:io_sig.args Accept     -> (r:io_sig.res Accept a)     -> event
-  | ESelect     : isTrusted:bool -> a:io_sig.args Select     -> (r:io_sig.res Select a)     -> event
+  | EOpenfile : caller:bool -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
+  | ERead     : caller:bool -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EWrite     : caller:bool -> a:io_sig.args Write     -> (r:io_sig.res Write a)     -> event
+  | EClose    : caller:bool -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
+  | ESocket     : caller:bool -> a:io_sig.args Socket     -> (r:io_sig.res Socket a)     -> event
+  | ESetsockopt     : caller:bool -> a:io_sig.args Setsockopt     -> (r:io_sig.res Setsockopt a)     -> event
+  | EBind     : caller:bool -> a:io_sig.args Bind     -> (r:io_sig.res Bind a)     -> event
+  | ESetNonblock     : caller:bool -> a:io_sig.args SetNonblock     -> (r:io_sig.res SetNonblock a)     -> event
+  | EListen     : caller:bool -> a:io_sig.args Listen     -> (r:io_sig.res Listen a)     -> event
+  | EAccept     : caller:bool -> a:io_sig.args Accept     -> (r:io_sig.res Accept a)     -> event
+  | ESelect     : caller:bool -> a:io_sig.args Select     -> (r:io_sig.res Select a)     -> event
 
 type trace = list event
 
-type inst_cmds = x:cmds{x = GetTrace}
+type m_cmds = x:cmds{x = GetTrace}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
@@ -98,49 +98,49 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let inst_args (cmd:inst_cmds) =
+let m_args (cmd:m_cmds) =
   match cmd with
   | GetTrace -> unit
 
-let inst_res (cmd:inst_cmds) (arg:inst_args cmd) =
+let m_res (cmd:m_cmds) (arg:m_args cmd) =
   match cmd with
   | GetTrace -> trace 
 
-let inst_sig : op_sig inst_cmds = {
-  args = inst_args;
-  res = inst_res;
+let m_sig : op_sig m_cmds = {
+  args = m_args;
+  res = m_res;
 }
 
-let _iio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
-type iio_cmds = cmd:cmds{_iio_cmds cmd}
-let iio_sig : op_sig iio_cmds = add_sig cmds io_sig inst_sig
+let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
+type mio_cmds = cmd:cmds{_mio_cmds cmd}
+let mio_sig : op_sig mio_cmds = add_sig cmds io_sig m_sig
 
-// THE IIO FREE MONAD
-type iio (a:Type) = free cmds iio_sig a
+// THE MIO FREE MONAD
+type mio (a:Type) = free cmds mio_sig a
 
-let iio_return (x:'a) : iio 'a =
-  free_return cmds iio_sig 'a x
+let mio_return (x:'a) : mio 'a =
+  free_return cmds mio_sig 'a x
 
-let iio_bind (#a:Type) (#b:Type) l k : iio b =
-  free_bind cmds iio_sig a b l k
+let mio_bind (#a:Type) (#b:Type) l k : mio b =
+  free_bind cmds mio_sig a b l k
 
 let convert_call_to_event
-  (isTrusted:bool)
+  (caller:bool)
   (cmd:io_cmds)
   (arg:io_sig.args cmd)
   (r:io_sig.res cmd arg) =
   match cmd with
-  | Openfile -> EOpenfile isTrusted arg r
-  | Read     -> ERead isTrusted arg r
-  | Write -> EWrite isTrusted arg r
-  | Close -> EClose isTrusted arg r
-  | Socket -> ESocket isTrusted arg r
-  | Setsockopt -> ESetsockopt isTrusted arg r
-  | Bind -> EBind isTrusted arg r
-  | SetNonblock -> ESetNonblock isTrusted arg r
-  | Listen -> EListen isTrusted arg r
-  | Accept -> EAccept isTrusted arg r
-  | Select -> ESelect isTrusted arg r
+  | Openfile -> EOpenfile caller arg r
+  | Read     -> ERead caller arg r
+  | Write -> EWrite caller arg r
+  | Close -> EClose caller arg r
+  | Socket -> ESocket caller arg r
+  | Setsockopt -> ESetsockopt caller arg r
+  | Bind -> EBind caller arg r
+  | SetNonblock -> ESetNonblock caller arg r
+  | Listen -> EListen caller arg r
+  | Accept -> EAccept caller arg r
+  | Select -> ESelect caller arg r
 
 // OTHER TYPES & UTILS
 unfold
@@ -149,17 +149,17 @@ let apply_changes (history local_events:trace) : Tot trace =
 
 let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
   match e with
-  | EOpenfile isTrusted arg res -> (| isTrusted, Openfile, arg, res |)
-  | ERead isTrusted arg res -> (| isTrusted, Read, arg, res |)
-  | EWrite isTrusted arg res -> (| isTrusted, Write, arg, res |)
-  | EClose isTrusted arg res -> (| isTrusted, Close, arg, res |)
-  | ESocket isTrusted arg res -> (| isTrusted, Socket, arg, res |)
-  | ESetsockopt isTrusted arg res -> (| isTrusted, Setsockopt, arg, res |)
-  | EBind isTrusted arg res -> (| isTrusted, Bind, arg, res |)
-  | ESetNonblock isTrusted arg res -> (| isTrusted, SetNonblock, arg, res |)
-  | EListen isTrusted arg res -> (| isTrusted, Listen, arg, res |)
-  | EAccept isTrusted arg res -> (| isTrusted, Accept, arg, res |)
-  | ESelect isTrusted arg res -> (| isTrusted, Select, arg, res |)
+  | EOpenfile caller arg res -> (| caller, Openfile, arg, res |)
+  | ERead caller arg res -> (| caller, Read, arg, res |)
+  | EWrite caller arg res -> (| caller, Write, arg, res |)
+  | EClose caller arg res -> (| caller, Close, arg, res |)
+  | ESocket caller arg res -> (| caller, Socket, arg, res |)
+  | ESetsockopt caller arg res -> (| caller, Setsockopt, arg, res |)
+  | EBind caller arg res -> (| caller, Bind, arg, res |)
+  | ESetNonblock caller arg res -> (| caller, SetNonblock, arg, res |)
+  | EListen caller arg res -> (| caller, Listen, arg, res |)
+  | EAccept caller arg res -> (| caller, Accept, arg, res |)
+  | ESelect caller arg res -> (| caller, Select, arg, res |)
 let rec is_open (fd:file_descr) (h:trace) : bool =
   match h with
   | [] -> false
@@ -181,7 +181,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let iio_wps (isTrusted:bool) (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
+unfold let mio_wps (caller:bool) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
   match cmd with
   | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event isTrusted cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event caller cmd arg r] r)

@@ -1,4 +1,4 @@
-module IIO.Sig
+module MIO.Sig
 
 open FStar.List.Tot.Base
 
@@ -44,7 +44,7 @@ type event =
 
 type trace = list event
 
-type inst_cmds = x:cmds{x = GetTrace}
+type m_cmds = x:cmds{x = GetTrace}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
@@ -58,31 +58,31 @@ to the trace from the heap. **)
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let inst_args (cmd:inst_cmds) =
+let m_args (cmd:m_cmds) =
   match cmd with
   | GetTrace -> unit
 
-let inst_res (cmd:inst_cmds) (arg:inst_args cmd) =
+let m_res (cmd:m_cmds) (arg:m_args cmd) =
   match cmd with
   | GetTrace -> trace 
 
-let inst_sig : op_sig inst_cmds = {
-  args = inst_args;
-  res = inst_res;
+let m_sig : op_sig m_cmds = {
+  args = m_args;
+  res = m_res;
 }
 
-let _iio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
-type iio_cmds = cmd:cmds{_iio_cmds cmd}
-let iio_sig : op_sig iio_cmds = add_sig cmds io_sig inst_sig
+let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
+type mio_cmds = cmd:cmds{_mio_cmds cmd}
+let mio_sig : op_sig mio_cmds = add_sig cmds io_sig m_sig
 
 // THE IIO FREE MONAD
-type iio (a:Type) = free cmds iio_sig a
+type mio (a:Type) = free cmds mio_sig a
 
-let iio_return (x:'a) : iio 'a =
-  free_return cmds iio_sig 'a x
+let mio_return (x:'a) : mio 'a =
+  free_return cmds mio_sig 'a x
 
-let iio_bind (#a:Type) (#b:Type) l k : iio b =
-  free_bind cmds iio_sig a b l k
+let mio_bind (#a:Type) (#b:Type) l k : mio b =
+  free_bind cmds mio_sig a b l k
 
 let convert_call_to_event
   (isTrusted:bool)
@@ -128,7 +128,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let iio_wps (isTrusted:bool) (cmd:iio_cmds) (arg:iio_sig.args cmd) : hist (iio_sig.res cmd arg) = fun p h ->
+unfold let mio_wps (isTrusted:bool) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
   match cmd with
   | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:iio_sig.res cmd arg). p [convert_call_to_event isTrusted cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event isTrusted cmd arg r] r)

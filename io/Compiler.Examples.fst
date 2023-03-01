@@ -10,7 +10,7 @@ open Compiler.Model
 
 (** Utils **)
 type source_arrow (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
-  x:arg -> IIO (resexn res) fl (pre x) (post x)
+  x:arg -> MIO (resexn res) fl (pre x) (post x)
 
 type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:access_policy) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
@@ -90,26 +90,26 @@ let test1 : src_interface = {
 }
 
 val test1_prog : prog_src test1
-let test1_prog #fl ctx () : IIO int (fl + IOActions) (fun _ -> True) test1.psi =
+let test1_prog #fl ctx () : MIO int (fl + IOActions) (fun _ -> True) test1.psi =
   //let test = static_cmd Openfile "/etc/passwd" in
   let _ = ctx () in
   0 
 
 val test1_ctx : ctx_src test1
-let test1_ctx #fl io_acts eff_rcs () : IIO (resexn file_descr) fl (fun _ -> True) (test1_post ()) = 
+let test1_ctx #fl io_acts eff_rcs () : MIO (resexn file_descr) fl (fun _ -> True) (test1_post ()) = 
   io_acts Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
-let test1_ctx_t #fl io_acts () : IIOpi (resexn file_descr) fl test1_pi =
+let test1_ctx_t #fl io_acts () : MIOpi (resexn file_descr) fl test1_pi =
   io_acts Openfile "/etc/passwd"
 
 (** ** Test 2 - HO left 1 **)
 let test2_pi : access_policy = (fun _ _ _ _ -> true)
 let test2_phi : enforced_policy test2_pi = (fun _ _ _ -> true)
 
-let test2_cb (fl:erased tflag) = (fd:file_descr -> IIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
+let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
-let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> IIO (resexn file_descr) fl (fun _ -> True) (test2_post cb)
+let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) fl (fun _ -> True) (test2_post cb)
 
 let test2_rcs : tree pck_rc =  
   Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
@@ -144,7 +144,7 @@ let test2_prog #fl ctx () =
   (** return exit code **) 0
 
 val test2_ctx : ctx_src test2 
-let test2_ctx #fl io_acts eff_rcs cb : IIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
   let post1 = root eff_rcs in
   let (| _, pre1 |) = root (left eff_rcs) in 
   let rfd = io_acts Openfile "/etc/passwd" in
@@ -153,7 +153,7 @@ let test2_ctx #fl io_acts eff_rcs cb : IIO (resexn file_descr) fl (fun _ -> True
   | _ -> rfd
 
 val test2_ctx_t : ctx_tgt (comp_int_src_tgt test2)
-let test2_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi = 
+let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi = 
   let rfd = io_acts Openfile "/etc/passwd" in
   match rfd with
   | Inl fd -> begin
@@ -167,9 +167,9 @@ let test2_ctx_t #fl io_acts cb : IIOpi (resexn file_descr) fl (comp_int_src_tgt 
 let test3_pi : access_policy = (fun _ _ _ _ -> true)
 let test3_phi : enforced_policy test3_pi = (fun _ _ _ -> true)
 
-let test3_cb (fl:erased tflag) = (fd:file_descr -> IIO (resexn unit) fl (fun h -> True) (fun _ _ lt -> True))
+let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> True) (fun _ _ lt -> True))
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
-let test3_ct (fl:erased tflag) = x:file_descr -> IIO (resexn (test3_cb fl)) fl (fun _ -> True) (test3_post x)
+let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) fl (fun _ -> True) (test3_post x)
 
 let test3_rcs : tree pck_rc =  
   Node (| file_descr, unit, (fun x h r lt -> true) |) 
@@ -212,7 +212,7 @@ let test3 : src_interface = {
 }
 
 val test3_prog : prog_src test3
-let test3_prog #fl ctx () : IIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
+let test3_prog #fl ctx () : MIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
   match static_cmd true Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with
@@ -223,8 +223,8 @@ let test3_prog #fl ctx () : IIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ 
 
 val test3_ctx : ctx_src test3 
 let test3_ctx #fl io_acts eff_rcs fd = 
-  Inl (fun (fd:file_descr) -> Inl () <: (IIOwp (resexn unit) fl trivial_hist))
+  Inl (fun (fd:file_descr) -> Inl () <: (MIOwp (resexn unit) fl trivial_hist))
 
 val test3_ctx_t : ctx_tgt (comp_int_src_tgt test3)
-let test3_ctx_t #fl io_acts fd : IIOpi (resexn (file_descr -> IIOpi (resexn unit) fl test3_pi)) fl test3_pi = 
-  Inl (fun (fd:file_descr) -> Inl () <: (IIOpi (resexn unit) fl test3_pi))
+let test3_ctx_t #fl io_acts fd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl test3_pi)) fl test3_pi = 
+  Inl (fun (fd:file_descr) -> Inl () <: (MIOpi (resexn unit) fl test3_pi))

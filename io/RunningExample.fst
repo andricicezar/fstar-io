@@ -53,11 +53,11 @@ let rec wrote_at_least_once_to client lt =
 type request_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:string) ->
-  (send:(msg:string -> IIO (resexn unit) fl (requires (fun h -> valid_http_response msg /\
+  (send:(msg:string -> MIO (resexn unit) fl (requires (fun h -> valid_http_response msg /\
                                                                did_not_respond h))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                          wrote_at_least_once_to client lt)))) ->
-  IIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
+  MIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
@@ -71,7 +71,7 @@ let source_handler client req send =
 type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  IIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
@@ -87,8 +87,8 @@ type tgt_handler =
   (io_acts:acts fl pi false) ->
   (client:file_descr) ->
   (req:string) ->
-  (send:(msg:string -> IIOpi (resexn unit) fl pi)) ->
-  IIOpi (resexn unit) fl pi
+  (send:(msg:string -> MIOpi (resexn unit) fl pi)) ->
+  MIOpi (resexn unit) fl pi
 
 val target_handler1 : tgt_handler
 let target_handler1 fl pi io_acts client req send =
@@ -115,9 +115,9 @@ let every_request_gets_a_response lt =
   every_request_gets_a_response_acc lt []
 
 assume val get_req : fd:file_descr ->
-  IIO (io_sig.res Read fd) IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
+  MIO (io_sig.res Read fd) IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
 
-assume val sendError : int -> fd:file_descr -> IIO unit IOActions
+assume val sendError : int -> fd:file_descr -> MIO unit IOActions
  (fun _ -> True) (fun _ _ lt -> exists (msg:string) r. lt == [EWrite true (fd, msg) r])
 
 let no_write_true e =
@@ -395,7 +395,7 @@ open FStar.Tactics
 
 #push-options "--split_queries"
 let webserver (handler:request_handler IOActions) :
-  IIO int IOActions
+  MIO int IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt -> every_request_gets_a_response lt)
   //by (explode ()) // Otherwise it says we need to use --split

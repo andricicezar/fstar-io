@@ -6,9 +6,9 @@ FSTAR := fstar.exe
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
 ROOTS := ExtraTactics.fst CommonUtils.fst Free.fst Hist.fst DMFree.fst		\
-         IIO.Sig.fst IIO.Sig.Call.fst IIO.fst IIO.Behavior.fst TC.Checkable.fst	\
+         MIO.Sig.fst MIO.Sig.Call.fst MIO.fst MIO.Behavior.fst TC.Checkable.fst	\
          BeyondCriteria.fst Compiler.Languages.fst Compiler.Model.fst		\
-         RunningExample.fst Compiler.Examples.fst Compiler.IIO.To.Weak.fst
+         RunningExample.fst Compiler.Examples.fst Compiler.MIO.To.Weak.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints

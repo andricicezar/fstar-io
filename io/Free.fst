@@ -36,7 +36,7 @@ let req_sig : op_sig req_cmds = { args = req_args; res = req_res; }
 
 noeq
 type free (op:Type0) (s:op_sig op) (a:Type u#a) : Type u#(max 1 a)=
-| Call : (trusted:bool) -> (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s a) -> free op s a
+| Call : (caller:bool) -> (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s a) -> free op s a
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a op s a) -> free op s a
 | Return : a -> free op s a
 

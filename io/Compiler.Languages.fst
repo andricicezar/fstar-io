@@ -7,7 +7,7 @@ open FStar.Ghost
 open CommonUtils
 
 (** ** Source Language **)
-include IIO
+include MIO
 
 (** access_policy is the type of the runtime check that is enforced when instrumenting.
     A access_policy checks if the next operation with its arguments satisfy the property
@@ -36,8 +36,8 @@ unfold
 let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
-effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
-  IIOwp a fl (pi_as_hist #a pi)
+effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
+  MIOwp a fl (pi_as_hist #a pi)
 
 class weak (t:Type u#a) (fl:erased tflag) (pi:access_policy) = { [@@@no_method] mldummy : unit }
 
@@ -51,7 +51,7 @@ instance weak_either fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} :
 instance weak_resexn fl pi t1 {| d1:weak t1 fl pi |} : weak (resexn t1) fl pi =
   { mldummy = () }
 
-type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> IIOpi t2 fl pi
+type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> MIOpi t2 fl pi
 
 (** An weak arrow is a statically/dynamically verified arrow to respect pi.
 **)
@@ -63,7 +63,7 @@ instance weak_arrow3 fl pi
   t2 {| d2:weak t2 fl pi |}
   t3 {| d3:weak t3 fl pi |}
   t4 {| d4:weak t4 fl pi |}
-  : weak (t1 -> t2 -> t3 -> IIOpi t4 fl pi) fl pi =
+  : weak (t1 -> t2 -> t3 -> MIOpi t4 fl pi) fl pi =
   { mldummy = () }
 
 instance weak_bool fl pi : weak bool fl pi = { mldummy = () }

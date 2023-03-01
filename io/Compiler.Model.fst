@@ -8,8 +8,8 @@ open FStar.FunctionalExtensionality
 open BeyondCriteria
 
 include Compiler.Languages
-include Compiler.IIO.To.Weak
-open IIO.Behavior
+include Compiler.MIO.To.Weak
+open MIO.Behavior
 
 type enforced_policy (pi:access_policy) =
   h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h false cmd arg}
@@ -17,7 +17,7 @@ type enforced_policy (pi:access_policy) =
 type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  IIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
@@ -28,7 +28,7 @@ type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
 type acts' (fl:erased tflag) (#pi:access_policy) (phi:enforced_policy pi) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  IIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
@@ -79,8 +79,8 @@ type tgt_interface = {
   
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> IIO int (IOActions + fl) (fun _ -> True) i.psi
-type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> IIO int AllActions (fun _ -> True) post)
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int (IOActions + fl) (fun _ -> True) i.psi
+type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
   (| i.psi, p #AllActions (c #AllActions (inst_io_cmds i.phi) (make_rcs_eff i.ct_rcs)) |)
@@ -96,8 +96,8 @@ let src_language : language = {
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi false -> i.ct fl
-type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt = unit -> IIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   p (c #AllActions (inst_io_cmds i.phi))
