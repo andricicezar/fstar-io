@@ -30,6 +30,7 @@ hints:
 
 .cache/%.fst.checked: %.fst | hints
 	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build
 
 # Run your file in emacs with the same context as the batch mode.
