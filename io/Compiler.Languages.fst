@@ -9,37 +9,37 @@ open CommonUtils
 (** ** Source Language **)
 include MIO
 
-(** access_policy is the type of the runtime check that is enforced when instrumenting.
-    A access_policy checks if the next operation with its arguments satisfy the property
+(** policy_spec is the type of the runtime check that is enforced when instrumenting.
+    A policy_spec checks if the next operation with its arguments satisfy the property
     over the history. **)
-type access_policy = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
+type policy_spec = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
 unfold
-let has_event_respected_pi (e:event) (ap:access_policy) (h:trace) : Type0 =
+let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
   match e with
-  | EOpenfile isTrusted arg _ -> ap h isTrusted Openfile arg
-  | ERead isTrusted arg _ -> ap h isTrusted Read arg
-  | EWrite isTrusted arg _ -> ap h isTrusted Write arg
-  | EClose isTrusted arg _ -> ap h isTrusted Close arg
+  | EOpenfile isTrusted arg _ -> pi h isTrusted Openfile arg
+  | ERead isTrusted arg _ -> pi h isTrusted Read arg
+  | EWrite isTrusted arg _ -> pi h isTrusted Write arg
+  | EClose isTrusted arg _ -> pi h isTrusted Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
-  (ap : access_policy)
+  (pi : policy_spec)
   (h l: trace) :
   Tot Type0 (decreases l) =
   match l with
   | [] -> True
   | e  ::  t ->
-    has_event_respected_pi e ap h /\ enforced_locally (ap) (e::h) t
+    has_event_respected_pi e pi h /\ enforced_locally pi (e::h) t
 
 unfold
-let pi_as_hist (#a:Type) (pi:access_policy) : hist a =
+let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
-effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : access_policy) = 
+effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) = 
   MIOwp a fl (pi_as_hist #a pi)
 
-class weak (t:Type u#a) (fl:erased tflag) (pi:access_policy) = { [@@@no_method] mldummy : unit }
+class weak (t:Type u#a) (fl:erased tflag) (pi:policy_spec) = { [@@@no_method] mldummy : unit }
 
 instance weak_unit fl pi : weak unit fl pi = { mldummy = () }
 instance weak_file_descr fl pi : weak file_descr fl pi = { mldummy = () }

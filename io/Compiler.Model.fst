@@ -11,10 +11,10 @@ include Compiler.Languages
 include Compiler.MIO.To.Weak
 open MIO.Behavior
 
-type enforced_policy (pi:access_policy) =
+type policy (pi:policy_spec) =
   h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h false cmd arg}
 
-type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
+type acts (fl:erased tflag) (pi:policy_spec) (caller:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -23,9 +23,9 @@ type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
       enforced_locally pi h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
+       | r' -> lt == [convert_call_to_event caller cmd arg r'])))
 
-type acts' (fl:erased tflag) (#pi:access_policy) (phi:enforced_policy pi) (isTrusted:bool) =
+type acts' (fl:erased tflag) (#pi:policy_spec) (phi:policy pi) (caller:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -35,9 +35,9 @@ type acts' (fl:erased tflag) (#pi:access_policy) (phi:enforced_policy pi) (isTru
       enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
+       | r' -> lt == [convert_call_to_event caller cmd arg r'])))
 
-val inst_io_cmds : #pi:access_policy -> phi:enforced_policy pi -> acts' AllActions phi false
+val inst_io_cmds : #pi:policy_spec -> phi:policy pi -> acts' AllActions phi false
 let inst_io_cmds phi cmd arg = 
   let h = get_trace true in
   if phi h cmd arg then (
@@ -51,10 +51,10 @@ noeq
 type src_interface = {
   (* pi is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
-  pi : access_policy;
+  pi : policy_spec;
   (* phi is in bool and it is used to enforce the policy on the context,
      it describes only the events of the context and it has to imply pi **)
-  phi : enforced_policy pi;
+  phi : policy pi;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
@@ -70,8 +70,8 @@ type src_interface = {
 
 noeq
 type tgt_interface = {
-  pi : access_policy;
-  phi : enforced_policy pi;
+  pi : policy_spec;
+  phi : policy pi;
 
   ct : erased tflag -> Type u#a;
   ct_weak : fl:erased tflag -> weak (ct fl) fl pi;

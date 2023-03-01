@@ -32,7 +32,7 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
 
-val pi : access_policy
+val pi : policy_spec
 let pi h isTrusted cmd arg =
   match isTrusted, cmd with
   | false, Openfile -> 
@@ -68,7 +68,7 @@ let source_handler client req send =
   let _ = send res in 
   Inl ()
 
-type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
+type acts (fl:erased tflag) (pi:policy_spec) (isTrusted:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -83,7 +83,7 @@ type acts (fl:erased tflag) (pi:access_policy) (isTrusted:bool) =
 (** ** E.g. of target handler **)
 type tgt_handler =
   (fl:erased tflag) ->
-  (pi:erased access_policy) ->
+  (pi:erased policy_spec) ->
   (io_acts:acts fl pi false) ->
   (client:file_descr) ->
   (req:string) ->
@@ -440,7 +440,7 @@ let webserver (handler:request_handler IOActions) :
 
 (** ** Instante source interface with the example **)
 
-val phi : enforced_policy pi
+val phi : policy pi
 let phi h cmd arg =
   match cmd with
   | Openfile ->

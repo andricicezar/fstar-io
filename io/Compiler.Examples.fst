@@ -12,13 +12,13 @@ open Compiler.Model
 type source_arrow (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
   x:arg -> MIO (resexn res) fl (pre x) (post x)
 
-type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:access_policy) =
+type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:access_policy) (rc:rc_typ arg (resexn res)) =
+type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (rc:rc_typ arg (resexn res)) =
   squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ rc x h r lt ==> post x h r lt)
 
-type stronger_pis (pi1:access_policy) (pi2:access_policy) =
+type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
   squash (forall h lt. enforced_locally pi1 h lt ==> enforced_locally pi2 h lt)
 
 
@@ -30,14 +30,14 @@ let test1_post = (fun () h (rfd:resexn file_descr) lt ->
 
 type test1_ct = source_arrow unit file_descr test1_pre test1_post
 
-let test1_pi : access_policy = 
+let test1_pi : policy_spec = 
   fun h isTrusted cmd arg -> 
     isTrusted == false /\
     (match cmd with 
     | Openfile -> (arg <> "/etc/passwd")
     | _ -> True)
 
-let test1_phi : enforced_policy test1_pi =
+let test1_phi : policy test1_pi =
   fun h cmd arg -> 
     match cmd, arg with 
     | Openfile, s -> 
@@ -104,8 +104,8 @@ let test1_ctx_t #fl io_acts () : MIOpi (resexn file_descr) fl test1_pi =
   io_acts Openfile "/etc/passwd"
 
 (** ** Test 2 - HO left 1 **)
-let test2_pi : access_policy = (fun _ _ _ _ -> true)
-let test2_phi : enforced_policy test2_pi = (fun _ _ _ -> true)
+let test2_pi : policy_spec = (fun _ _ _ _ -> true)
+let test2_phi : policy test2_pi = (fun _ _ _ -> true)
 
 let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
@@ -164,8 +164,8 @@ let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt 
   | _ -> rfd
 
 (** ** Test 3 - HO right 1 **)
-let test3_pi : access_policy = (fun _ _ _ _ -> true)
-let test3_phi : enforced_policy test3_pi = (fun _ _ _ -> true)
+let test3_pi : policy_spec = (fun _ _ _ _ -> true)
+let test3_phi : policy test3_pi = (fun _ _ _ -> true)
 
 let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> True) (fun _ _ lt -> True))
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
