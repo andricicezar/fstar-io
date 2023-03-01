@@ -3,7 +3,7 @@
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := WebServer.fst
+ROOTS := WebServer.fst AdversarialExamples.fst
 
 CACHEDIR := .cache
 FLAGS  = --include .. --record_hints --use_hints --hint_dir hints
