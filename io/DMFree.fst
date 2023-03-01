@@ -7,7 +7,7 @@ open FStar.Tactics
 open Free
 open Hist
 
-type op_wp (op:Type0) (s:op_sig op) (event:Type0) = (isTrusted:bool) -> (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
+type op_wp (op:Type0) (s:op_sig op) (event:Type0) = (caller:bool) -> (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
 
 let partial_call_wp (pre:pure_pre) : hist (squash pre) = 
   let wp' : hist0 (squash pre) = fun p h -> pre /\ p [] () in
@@ -22,8 +22,8 @@ let rec theta #a #op #s #event cmd_wp m =
   | Return x -> hist_return x
   | PartialCall pre k ->
       hist_bind (partial_call_wp pre) (fun r -> theta cmd_wp (k r))
-  | Call isTrusted cmd arg k ->
-      hist_bind (cmd_wp isTrusted cmd arg) (fun r -> theta cmd_wp (k r))
+  | Call caller cmd arg k ->
+      hist_bind (cmd_wp caller cmd arg) (fun r -> theta cmd_wp (k r))
 
 let lemma_theta_is_monad_morphism_ret (#op:Type0) (#s:op_sig op) (#event:Type0) (cmd_wp:op_wp op s event) (v:'a) :
   Lemma (theta cmd_wp (free_return op s 'a v) == hist_return v) by (compute ()) = ()

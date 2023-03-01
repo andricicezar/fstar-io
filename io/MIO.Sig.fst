@@ -37,10 +37,10 @@ let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : (isTrusted:bool) -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
-  | ERead     : (isTrusted:bool) -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
-  | EWrite    : (isTrusted:bool) -> a:io_sig.args Write    -> (r:io_sig.res Write a)    -> event
-  | EClose    : (isTrusted:bool) -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
+  | EOpenfile : (caller:bool) -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
+  | ERead     : (caller:bool) -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EWrite    : (caller:bool) -> a:io_sig.args Write    -> (r:io_sig.res Write a)    -> event
+  | EClose    : (caller:bool) -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
 
 type trace = list event
 
@@ -85,15 +85,15 @@ let mio_bind (#a:Type) (#b:Type) l k : mio b =
   free_bind cmds mio_sig a b l k
 
 let convert_call_to_event
-  (isTrusted:bool)
+  (caller:bool)
   (cmd:io_cmds)
   (arg:io_sig.args cmd)
   (r:io_sig.res cmd arg) =
   match cmd with
-  | Openfile -> EOpenfile isTrusted arg r
-  | Read     -> ERead isTrusted arg r
-  | Write    -> EWrite isTrusted arg r
-  | Close    -> EClose isTrusted arg r
+  | Openfile -> EOpenfile caller arg r
+  | Read     -> ERead caller arg r
+  | Write    -> EWrite caller arg r
+  | Close    -> EClose caller arg r
 
 // OTHER TYPES & UTILS
 unfold
@@ -102,10 +102,10 @@ let apply_changes (history local_events:trace) : Tot trace =
 
 let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
   match e with
-  | EOpenfile isTrusted arg res -> (| isTrusted, Openfile, arg, res |)
-  | ERead isTrusted arg res -> (| isTrusted, Read, arg, res |)
-  | EWrite isTrusted arg res -> (| isTrusted, Write, arg, res |)
-  | EClose isTrusted arg res -> (| isTrusted, Close, arg, res |)
+  | EOpenfile caller arg res -> (| caller, Openfile, arg, res |)
+  | ERead caller arg res -> (| caller, Read, arg, res |)
+  | EWrite caller arg res -> (| caller, Write, arg, res |)
+  | EClose caller arg res -> (| caller, Close, arg, res |)
 
 let rec is_open (fd:file_descr) (h:trace) : bool =
   match h with
@@ -128,7 +128,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let mio_wps (isTrusted:bool) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
+unfold let mio_wps (caller:bool) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
   match cmd with
   | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event isTrusted cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event caller cmd arg r] r)

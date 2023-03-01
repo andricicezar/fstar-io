@@ -33,8 +33,8 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   | _ :: tl -> is_opened_by_untrusted tl fd
 
 val pi : policy_spec
-let pi h isTrusted cmd arg =
-  match isTrusted, cmd with
+let pi h caller cmd arg =
+  match caller, cmd with
   | false, Openfile -> 
     if arg = "/temp" then true else false
   | false, Read -> is_opened_by_untrusted h arg
@@ -68,7 +68,7 @@ let source_handler client req send =
   let _ = send res in 
   Inl ()
 
-type acts (fl:erased tflag) (pi:policy_spec) (isTrusted:bool) =
+type acts (fl:erased tflag) (pi:policy_spec) (caller:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -77,7 +77,7 @@ type acts (fl:erased tflag) (pi:policy_spec) (isTrusted:bool) =
       enforced_locally pi h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event isTrusted cmd arg r'])))
+       | r' -> lt == [convert_call_to_event caller cmd arg r'])))
 
 
 (** ** E.g. of target handler **)
