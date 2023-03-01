@@ -188,33 +188,28 @@ let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn
 
 
 let check_handler_post : tree pck_rc =
-  Node (| file_descr, resexn unit, (fun client _ _ lt -> Utils.wrote_at_least_once_to client lt) |)
+  Node (| file_descr, unit, (fun client _ _ lt -> Utils.wrote_at_least_once_to client lt) |)
     check_send_pre 
     Leaf
 
 (* Breaks F* *)
-instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) Utils.pi check_handler_post fl = admit ()
-(* {
-  swtyp = file_descr -> Bytes.bytes -> export_send.wtyp -> IIOpi (resexn unit) fl Utils.pi;
-  c_swtyp = weak_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.wtyp #export_send.c_wtyp(resexn unit);
-  safe_import = (fun (f:file_descr -> Bytes.bytes -> export_send.wtyp -> IIOpi (resexn unit) fl Utils.pi) eff_rcs -> 
-    let f' : req_handler fl = (fun fd req -> 
-      let f'' = f fd req in
-      (safe_importable_arrow_pre_post_res 
-        #_ #_
-        #Utils.pi
-        #check_handler_post
-        #fl
-        (fun _ _ -> True)
-        (fun _ h r lt -> enforced_locally Utils.pi h lt /\ 
-          (Utils.wrote_at_least_once_to fd lt \/ Inr? r))
-        ((fun () -> admit ()) ())
-        ((fun () -> admit ()) ())
-        #export_send).safe_import f'' eff_rcs) in
+instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) Utils.pi check_handler_post fl = {
+  swtyp = file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi;
+  c_swtyp = weak_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.wtyp #export_send.c_wtyp (resexn unit);
+  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi) eff_rcs -> 
+    let f' : req_handler fl = (fun fd req send -> 
+      let send' = export_send.export (left eff_rcs) send in
+      let (| rc_pck, eff_rc |) = root eff_rcs in
+      let (| h, eff_rc' |) = eff_rc fd in
+      Classical.forall_intro (lemma_suffixOf_append h);
+      let r : resexn unit = wf fd req send' in
+      Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+      if eff_rc' () then r
+      else Inr Contract_failure
+    ) in
     f'
   )
-}*)
-
+}
 
 let cs_int : src_interface = {
   pi = Utils.pi;
