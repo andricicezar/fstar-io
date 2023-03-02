@@ -1,4 +1,4 @@
-module AdversarialExamples
+module AdversarialHandlers
 
 open FStar.Tactics
 
@@ -16,7 +16,7 @@ let handler1 #fl io_acts client req send = Inl ()
 val handler2 : tgt_handler
 let handler2 #fl io_acts client req send = send (Bytes.create 501ul 10uy) 
 
-val handler3 : tgt_handler
+val handler3 : ctx_tgt tgt_cs_int 
 let handler3 #fl io_acts client req send =
   let _ = io_acts Openfile ("/etc/passwd",[O_RDWR],0x650) in
   Inl ()

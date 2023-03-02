@@ -18,6 +18,8 @@ let ml_call (cmd:io_cmds) =
   | Listen -> Obj.magic (Obj.repr Unix_Star.listen)
   | Accept -> Obj.magic (Obj.repr Unix_Star.accept)
   | Select -> Obj.magic (Obj.repr Unix_Star.select)
+  | Access -> Obj.magic (Obj.repr Unix_Star.access)
+  | Stat -> Obj.magic (Obj.repr Unix_Star.stat)
 
 let (mio_call : bool -> cmds -> Obj.t -> unit mio) =
   fun caller -> fun cmd -> fun argz ->

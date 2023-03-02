@@ -3,7 +3,7 @@
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := WebServer.fst AdversarialExamples.fst
+ROOTS := WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 CACHEDIR := .cache
 FLAGS  = --include .. --record_hints --use_hints --hint_dir hints
@@ -48,7 +48,7 @@ dep.pdf: dep.graph
 	dot -Tpdf $< > $@
 
 extract: out
-	fstar.exe $(FLAGS) --odir out --codegen OCaml Monitor.fst AdversarialExamples.fst
+	fstar.exe $(FLAGS) --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 _prepare_compilation: out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
@@ -58,10 +58,26 @@ _prepare_compilation: out
 	cp Execute.* out/.
 	cp Unix_Star.* out/.
 
-_compile: out
-	ocamlfind opt -package fstarlib -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/Monitor.ml out/MIO_Sig_Call.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Compiler_MIO_To_Weak.ml out/Compiler_Model.ml out/Utils.ml out/WebServer.ml out/Execute.ml out/AdversarialExamples.ml -o out/CS.exe
+_compile1: out
+	ocamlfind opt -package fstarlib -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/Monitor.ml out/MIO_Sig_Call.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Compiler_MIO_To_Weak.ml out/Compiler_Model.ml out/Utils.ml out/WebServer.ml out/Execute.ml out/AdversarialHandlers.ml -o out/CS.exe
+
+_compile2: out
+	ocamlfind opt -package fstarlib -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/Monitor.ml out/MIO_Sig_Call.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Compiler_MIO_To_Weak.ml out/Compiler_Model.ml out/Utils.ml out/WebServer.ml out/Execute.ml out/GoodHandler1.ml -o out/CS.exe
+
+_compile3: out
+	ocamlfind opt -package fstarlib -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/Monitor.ml out/MIO_Sig_Call.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Compiler_MIO_To_Weak.ml out/Compiler_Model.ml out/Utils.ml out/WebServer.ml out/Execute.ml out/GoodHandler2.ml -o out/CS.exe
 
 compile_cs1: out
 	make _prepare_compilation;
-	make _compile;
+	make _compile1;
 	mv out/CS.exe out/CS1.exe
+
+compile_cs2: out
+	make _prepare_compilation;
+	make _compile2;
+	mv out/CS.exe out/CS2.exe
+
+compile_cs3: out
+	make _prepare_compilation;
+	make _compile3;
+	mv out/CS.exe out/CS2.exe

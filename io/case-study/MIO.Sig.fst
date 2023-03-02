@@ -22,6 +22,8 @@ type cmds =
   | Listen
   | Accept
   | Select
+  | Access
+  | Stat
   (* instrumentation *)
   | GetTrace
 
@@ -29,7 +31,7 @@ type cmds =
 let _io_cmds x : bool = 
   x = Openfile || x = Read || x = Write || x = Close || 
   x = Socket || x = Setsockopt || x = Bind || x = SetNonblock ||
-  x = Listen || x = Accept || x = Select
+  x = Listen || x = Accept || x = Select || x = Access || x = Stat
 type io_cmds : Type = x:cmds{_io_cmds x}
 
 unfold let io_args (cmd:io_cmds) : Type =
@@ -45,6 +47,8 @@ unfold let io_args (cmd:io_cmds) : Type =
   | Listen -> file_descr * UInt8.t
   | Accept -> file_descr
   | Select -> lfds * lfds * lfds * UInt8.t
+  | Access -> string * list access_permission
+  | Stat -> string
 
 unfold let io_res (cmd:io_cmds) : Type =
   match cmd with
@@ -59,6 +63,8 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Listen -> unit
   | Accept -> file_descr
   | Select -> lfds * lfds * lfds 
+  | Access -> unit
+  | Stat -> stats
 
 let io_resm (cmd:io_cmds) (arg:io_args cmd) = resexn (io_res cmd)
 
@@ -81,6 +87,8 @@ type event =
   | EListen     : caller:bool -> a:io_sig.args Listen     -> (r:io_sig.res Listen a)     -> event
   | EAccept     : caller:bool -> a:io_sig.args Accept     -> (r:io_sig.res Accept a)     -> event
   | ESelect     : caller:bool -> a:io_sig.args Select     -> (r:io_sig.res Select a)     -> event
+  | EAccess     : caller:bool -> a:io_sig.args Access     -> (r:io_sig.res Access a)     -> event
+  | EStat     : caller:bool -> a:io_sig.args Stat     -> (r:io_sig.res Stat a)     -> event
 
 type trace = list event
 
@@ -141,6 +149,8 @@ let convert_call_to_event
   | Listen -> EListen caller arg r
   | Accept -> EAccept caller arg r
   | Select -> ESelect caller arg r
+  | Access -> EAccess caller arg r
+  | Stat -> EStat caller arg r
 
 // OTHER TYPES & UTILS
 unfold
@@ -160,6 +170,8 @@ let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io
   | EListen caller arg res -> (| caller, Listen, arg, res |)
   | EAccept caller arg res -> (| caller, Accept, arg, res |)
   | ESelect caller arg res -> (| caller, Select, arg, res |)
+  | EAccess caller arg res -> (| caller, Access, arg, res |)
+  | EStat caller arg res -> (| caller, Stat, arg, res |)
 
 unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   True
