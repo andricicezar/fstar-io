@@ -56,6 +56,7 @@ extract: | out
 _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
 	cp ../UnixTypes.* out/.
+	@# Override some files to work around F* extraction bugs
 	cp MIO_Sig_Call.* out/.
 	cp Compiler_MIO_To_Weak.* out/.
 	cp Execute.* out/.
