@@ -7,9 +7,6 @@ open FStar.Tactics.Typeclasses
 open FStar.FunctionalExtensionality
 
 (** ** Trace Model *)
-(* Inspired from
-   * https://github.com/secure-compilation/exploring-robust-property-preservation/blob/master/TraceModel.v
-   * https://github.com/secure-compilation/exploring-robust-property-preservation/blob/master/Properties.v *)
 
 (* F* does not have co-induction *)
 let stream a = nat ^-> a

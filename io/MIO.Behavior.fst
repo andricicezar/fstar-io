@@ -28,7 +28,7 @@ let pt_mem (#pre:trace->Type0) ((h, tr):prefixed_trace pre) (s1:prefixed_trace_p
    starting from a given history `h`.
 
    `theta` is a weakest precondtion monad, and we need it to be
-   a post-condition. Looking at Kenji's thesis, we can apply the
+   a post-condition. Looking at Kenji Maillard's thesis, we can apply the
    'backward predicate transformer 2.3.4' and the 
    'pre-/postcondition transformer 2.3.2' to obtain
    the 'set' of traces produces by the whole program. *)

@@ -398,8 +398,6 @@ let webserver (handler:request_handler IOActions) :
   MIO int IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt -> every_request_gets_a_response lt)
-  //by (explode ()) // Otherwise it says we need to use --split
-                    // GM: split_queries is actually better behaved :^)
 = introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')

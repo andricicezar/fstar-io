@@ -40,7 +40,6 @@ let accept fd : Unix.file_descr =
   let fd', _ = Unix.accept fd in
   fd'
 
-(** TODO: instead of 100.0, there should be t **)
 let select (l1, l2, l3, t) : (lfds * lfds * lfds) =
   Unix.select l1 l2 l3 (100.0 /. 1000.0)
 

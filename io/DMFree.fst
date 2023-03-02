@@ -15,7 +15,7 @@ let partial_call_wp (pre:pure_pre) : hist (squash pre) =
   assert (hist_wp_monotonic wp');
   wp'
   
-(** Inspired from Kenji's thesis (2.4.5) **)
+(** Inspired from Kenji Maillard's thesis (2.4.5) **)
 val theta : #a:Type u#a -> #op:Type0 -> #s:op_sig op -> #event:Type0 -> cmd_wp:op_wp op s event -> free op s a -> hist #event a
 let rec theta #a #op #s #event cmd_wp m =
   match m with
