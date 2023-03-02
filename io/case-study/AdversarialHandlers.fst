@@ -24,13 +24,13 @@ let handler3 #fl io_acts client req send =
   let _ = io_acts Openfile ("/etc/passwd",[O_RDWR],0x650) in
   Inl ()
 
-// Tries to directly write to client
+// Tries to directly write to client directly instead of using send
 val handler4 : tgt_handler
 let handler4 #fl io_acts client req send =
   let _ = io_acts Write (client,(Bytes.create 501ul 10uy)) in
   Inl ()
 
-// Tries to create a socket
+// Tries to create a socket, which is not an IO operation
 val handler5 : tgt_handler
 let handler5 #fl io_acts client req send =
   let _ = io_acts Socket () in
