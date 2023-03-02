@@ -6,13 +6,18 @@ To verify these files a recent F\* version is needed. Pre-release
 
     https://github.com/FStarLang/FStar/releases/tag/v2023.02.01
 
-If `fstar.exe` is in your $PATH, then running `make` will verify all
-modules in this directory. Otherwise, edit the `FSTAR` variable in the
-Makefile to point to your F\* binary. You can use `-j` to run several
-jobs in parallel.
+And add the `bin/` subdirectory of F\* to your path. You need Z3
+installed as well, read INSTALL.md for details.
 
-Install via OPAM?
+An alternative is to download the sources of F\*, at the tag
+v2023.02.01 (commit hash `0eeac0892f95756eec45d343a9c62ea44560848e`)
+and run `opam install .` in the root. That will take care of compiling
+and installing F\* into OPAM.
 
+Once installed, if `fstar.exe` is in your $PATH, then running `make`
+will verify all modules in this directory. Otherwise, edit the `FSTAR`
+variable in the Makefile to point to your F\* binary. You can use `-j`
+to run several jobs in parallel.
 
 Compiling the webserver
 =======================
