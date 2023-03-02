@@ -1,5 +1,5 @@
 open Prims
-open Common
+open CommonUtils
 open FStar_Pervasives
 open MIO_Sig
 
@@ -19,10 +19,18 @@ let ml_call (cmd:io_cmds) =
   | Accept -> Obj.magic (Obj.repr Unix_Star.accept)
   | Select -> Obj.magic (Obj.repr Unix_Star.select)
 
-let (mio_call : m_cmds -> Obj.t -> Obj.t mio) =
-  fun cmd -> fun argz ->
+let (mio_call : bool -> cmds -> Obj.t -> unit mio) =
+  fun caller -> fun cmd -> fun argz ->
   match cmd with
   | GetTrace -> 
     print_string "Getting trace...\n";
     flush stdout;
     mio_return (Obj.magic (Monitor.get_trace ()))
+  | _ ->
+  try
+    let rez = ml_call cmd argz in
+    Monitor.update_trace caller (Obj.magic cmd) (Obj.magic argz) (Obj.magic (Inl rez)); 
+    mio_return (Obj.magic (Inl rez))
+  with err ->
+    Monitor.update_trace caller (Obj.magic cmd) (Obj.magic argz) (Obj.magic (Inr err));
+    mio_return (Obj.magic (Inr err))

@@ -37,3 +37,5 @@ let main2 : comp.target.whole = comp.target.link compiled_webserver handler2
 let main3 : comp.target.whole = comp.target.link compiled_webserver handler3
 let main4 : comp.target.whole = comp.target.link compiled_webserver handler4
 let main5 : comp.target.whole = comp.target.link compiled_webserver handler5
+
+let _ = Execute.execute main5

@@ -1,6 +1,6 @@
-open Common
+open CommonUtils
 open FStar_Pervasives
-open Types
+open UnixTypes
 
 (** This file is a wrapper over the OCaml's Unix module to accomodate
     F* needs. This should be as close as possible to the Unix interface **)

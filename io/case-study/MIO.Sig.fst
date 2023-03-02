@@ -160,17 +160,6 @@ let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io
   | EListen caller arg res -> (| caller, Listen, arg, res |)
   | EAccept caller arg res -> (| caller, Accept, arg, res |)
   | ESelect caller arg res -> (| caller, Select, arg, res |)
-let rec is_open (fd:file_descr) (h:trace) : bool =
-  match h with
-  | [] -> false
-  | h :: tail -> match h with
-               | EOpenfile _ _ (Inl fd') ->
-                   if fd = fd' then true
-                   else is_open fd tail
-               | EClose _ fd' _ ->
-                    if fd = fd' then false
-                    else is_open fd tail
-               | _ -> is_open fd tail
 
 unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   True

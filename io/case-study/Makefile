@@ -46,3 +46,22 @@ dep.graph:
 
 dep.pdf: dep.graph
 	dot -Tpdf $< > $@
+
+extract: out
+	fstar.exe $(FLAGS) --odir out --codegen OCaml Monitor.fst AdversarialExamples.fst
+
+_prepare_compilation: out
+	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
+	cp ../UnixTypes.* out/.
+	cp MIO_Sig_Call.* out/.
+	cp Compiler_MIO_To_Weak.* out/.
+	cp Execute.* out/.
+	cp Unix_Star.* out/.
+
+_compile: out
+	ocamlfind opt -package fstarlib -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/Monitor.ml out/MIO_Sig_Call.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Compiler_MIO_To_Weak.ml out/Compiler_Model.ml out/Utils.ml out/WebServer.ml out/Execute.ml out/AdversarialExamples.ml -o out/CS.exe
+
+compile_cs1: out
+	make _prepare_compilation;
+	make _compile;
+	mv out/CS.exe out/CS1.exe

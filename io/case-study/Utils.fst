@@ -14,11 +14,11 @@ let did_not_respond h =
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
-  | EOpenfile false _ (Inl fd') :: tl -> begin
-    if fd = fd' then true
+  | EOpenfile false _ res :: tl -> begin
+    if Inl? res && fd = Inl?.v res then true
     else is_opened_by_untrusted tl fd
   end
-  | EClose _ fd' (Inl ()) :: tl -> if fd = fd' then false
+  | EClose _ fd' res :: tl -> if Inl? res && fd = fd' then false
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
 
@@ -76,7 +76,7 @@ let no_write_true e =
   | EWrite true _ _ -> false
   | _ -> true
 
-let no_read_true e =
+let no_read_true e : GTot bool =
   match e with
   | ERead true _ (Inl _) -> false
   | _ -> true
@@ -97,14 +97,14 @@ let rec ergar_ignore_no_write_read lt e lt' rl :
     assert_norm (ergar (tl @ e :: lt') (filter (fun fd' -> fd <> fd') rl) == ergar (EWrite true (fd,x) y :: tl @ e :: lt') rl)
   | _ :: tl -> ergar_ignore_no_write_read tl e lt' rl
 
-let is_write_true e =
+let is_write_true e : GTot bool =
   match e with
-  | EWrite true (fd,x) y -> true
+  | EWrite true _ y -> true
   | _ -> false
 
 let write_true_fd e : Pure file_descr (requires is_write_true e) (ensures fun _ -> True) =
   match e with
-  | EWrite true (fd,x) y -> fd
+  | EWrite true arg y -> fst arg
 
 let cong (f : 'a -> 'b) (x y : 'a) :
   Lemma (requires x == y) (ensures f x == f y)
