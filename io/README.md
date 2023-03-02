@@ -2,17 +2,10 @@ Supplementary materials for "Securely Compiling Verified F\* Programs with IO"
 ==============================================================================
 
 To verify these files a recent F\* version is needed. Pre-release
-2023.02.01 is known to work. It can be downloaded from here:
-
-    https://github.com/FStarLang/FStar/releases/tag/v2023.02.01
-
-And add the `bin/` subdirectory of F\* to your path. You need Z3
-installed as well, read INSTALL.md for details.
-
-An alternative is to download the sources of F\*, at the tag
-v2023.02.01 (commit hash `0eeac0892f95756eec45d343a9c62ea44560848e`)
-and run `opam install .` in the root. That will take care of compiling
-and installing F\* into OPAM.
+2023.02.01 is known to work. The easiest way to get started is
+clone the sources of F\*, at the tag v2023.02.01 (commit hash
+`0eeac0892f95756eec45d343a9c62ea44560848e`) and run `opam install .` in
+the root. That will take care of compiling and installing F\* into OPAM.
 
 Once installed, if `fstar.exe` is in your $PATH, then running `make`
 will verify all modules in this directory. Otherwise, edit the `FSTAR`
