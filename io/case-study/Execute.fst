@@ -17,7 +17,7 @@ let rec skip_partial_calls (tree: mio int { forall h. dm_mio_theta tree the_p h 
    assert pre;
    skip_partial_calls (k ())
   end
-  (** during extraction, Free.IO.Call is replaced with an actual
+  (** during extraction, MIO.Call is replaced with an actual
   implementation of the commands, therefore, the `Call` constructor
   does not exist **)
   | _ -> raise Something_went_really_bad
