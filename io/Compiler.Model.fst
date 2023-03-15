@@ -137,6 +137,18 @@ let compile_pprog #i p_s c_t =
   let wt : whole_tgt = compile_whole ws in
   wt
 
+val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
+let compile_ctx #i c_s = 
+  (** TODO: the context should be also exportable besides importable,
+      which would be a pain because one has to define a second tree of rcs. **)
+
+  (** The point of defining C↓ is to prove SCC (from Beyond Full Abstraction). 
+      Since, C↓ = export C, and P↓ = fun c -> P (import c),
+      then C↓[P↓] = P↓ (C↓) = P↓ (export C) = P (import (export C)) = P C.
+      The last step is true if we can prove that `import (export f) = f`, see
+      LawImportableExportable.fst **)
+  admit ()
+
 let comp : compiler = {
   source = src_language;
   target = tgt_language;
