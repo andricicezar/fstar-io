@@ -3,6 +3,31 @@ module LawImportableExportable
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
+assume val lemma1 : #a:Type -> #b:Type -> pre:(a -> bool) -> $f:(a -> Tot b) -> $g:(a -> Tot b) ->
+  Lemma (
+    let v1 : (x:a -> Pure b (pre x) (fun _ -> True)) = (fun x -> f x) in
+    let v2 : (x:a -> Pure b (pre x) (fun _ -> True)) = (fun x -> if pre x then f x else g x) in
+    v2 == v1)
+
+(**
+val lemma11 : #a:Type -> #b:Type -> pre:(a -> bool) -> f:(x:a -> Pure (option b) (pre x) (fun _ -> True)) -> (x:a) ->
+  Lemma (requires (pre x))
+  (ensures (((if pre x then f x else None) <: option b) == f x))
+let lemma11 #a #b pre f x = ()
+
+assume val lemma1 : #a:Type -> #b:Type -> pre:(a -> bool) -> f:(x:a -> Pure (option b) (pre x) (fun _ -> True)) ->
+  Lemma (
+    let g :(x:a -> Pure (option b) (pre x) (fun _ -> True)) = (fun (x:a) -> if pre x then f x else None) in
+    f == g)
+
+let lemma1 #a #b pre f =
+    let g :(x:a -> Pure (option b) (pre x) (fun _ -> True)) = (fun (x:a) -> if pre x then f x else None) in
+    assert (f == g) by (l_to_r [`lemma11]; smt (); dump "h")
+**)
+
+assume val lemma2 : #a:Type -> #b:Type -> post:(a -> option b -> bool) -> f:(x:a -> Pure (option b) True (fun r -> post x r)) ->
+  Lemma (f == (fun (x:a) -> let r = f x in if post x r then r else None))
+
 class exportable (styp : Type u#a) = {
   [@@@no_method]
   wtyp : Type u#a;
@@ -36,31 +61,8 @@ let _import = (fun (f:weak_test) (x:int) ->
     | Some r -> if r < x then Some r else None
     | None -> None) <: Pure (option int) (x > 5) (fun r -> match r with | Some r -> r < x | None -> True))
 
-assume val p : int -> bool
-  
-let f (x:int) : Pure int (p x) (fun _ -> True) = if p x then 0 else 1
-let g (x:int) : Pure int (p x) (fun _ -> True) = 0
-
-let lemma (x:int) : Lemma (requires (p x)) (ensures (p x == true)) = ()
-
-let _ = assert (f == g) by (norm [delta_only [`%f;`%g]]; l_to_r [`lemma]; smt (); dump "h")
-
 
 let law_test (f:strg_test) : Lemma (_import (test_exportable.export f) == f) =
-  let f' : strg_test = (fun (x:int) -> 
-      (let r : option int = if x > 5 then f x else None in
-      match r with
-      | Some r -> if r < x then Some r else None
-      | None -> None)) in
-
-  let f'' : strg_test = (fun (x:int) -> 
-      (let r : option int = f x in
-      match r with
-      | Some r -> if r < x then Some r else None
-      | None -> None)) in
-
-  assert (f' == f'');
-  
   calc (==) {
     _import (test_exportable.export f);
     == { _ by (compute ()) }
@@ -71,7 +73,7 @@ let law_test (f:strg_test) : Lemma (_import (test_exportable.export f) == f) =
       match r with
       | Some r -> if r < x then Some r else None
       | None -> None)) <: x:int -> Pure (option int) (x > 5) (fun r -> match r with | Some r -> r < x | None -> True);
-    == { (** the pre-condition x > 5 makes the if trivial **) _ by (tadmit ()) }
+    == { (** the pre-condition x > 5 makes the if trivial **) _ by (l_to_r [`(lemma1 (fun x -> x > 5))]; dump "H") }
     (fun (x:int) -> 
       (let r : option int = f x in
       match r with
