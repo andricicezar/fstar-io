@@ -36,9 +36,13 @@ let rel : #ix0:erased_ix -> #ix1:erased_ix -> erased_ix_param ix0 ix1 -> ix0.era
 let unit_param = param_of_eqtype unit
 
 (* must be constant *)
-type reveal_int = ix:erased_ix -> ix.erased int -> int
+type reveal_int_t = ix:erased_ix -> ix.erased int -> int
 
-let reveal_int_param (r0 r1 : reveal_int) : Type u#1 =
+// fails due to universes...
+//%splice[reveal_int_t_param] (paramd (`%reveal_int_t))
+
+// define by hand what would come out
+let reveal_int_t_param (r0 r1 : reveal_int_t) : Type u#1 =
   (ix0 : erased_ix) -> (ix1 : erased_ix) -> (ixR : erased_ix_param ix0 ix1) ->
   (e0 : ix0.erased int) -> (e1 : ix1.erased int) -> rel ixR e0 e1 ->
   int_param (r0 ix0 e0) (r1 ix1 e1)
@@ -50,7 +54,7 @@ let related_any (ix0 ix1 : erased_ix) : erased_ix_param ix0 ix1 =
 
 
 // easy way
-let thm (f : reveal_int) (f_param : reveal_int_param f f)
+let thm (f : reveal_int_t) (f_param : reveal_int_t_param f f)
   : Lemma (forall ix ei. f ix ei == f erased_ix_irrel ())
   = let aux (ix0 ix1 : erased_ix) (e0 : ix0.erased int) (e1 : ix1.erased int) : Lemma (f ix0 e0 == f ix1 e1) =
       f_param ix0 ix1 (related_any ix0 ix1) e0 e1 ()
@@ -66,7 +70,7 @@ let related_to_id (ix : erased_ix) : erased_ix_param ix erased_ix_id =
                     ix.hide (fun x -> x) (fun _ _ _ -> ())
 
   
-let reveal_thm (f : reveal_int) (f_param : reveal_int_param f f)
+let reveal_thm (f : reveal_int_t) (f_param : reveal_int_t_param f f)
   : Lemma (forall ix ei. f ix ei == f erased_ix_irrel ())
   = let aux (ix:erased_ix) (ei : ix.erased int) : Lemma (f ix ei == f erased_ix_irrel ()) =
       f_param ix erased_ix_irrel (related_to_irrel ix) ei () ()

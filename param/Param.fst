@@ -1,5 +1,68 @@
 module Param
 
+(** This file contains a parametricity translation tactic. It can take
+most top-level definitions and generate their parametricity principle
+by a call to the [%splice] tactics hook in F*. Usually you can just call
+it like this:
+
+  %splice[t_param] (paramd (`%t))
+
+to obtain the (binary) parametricity translation of a type [t] defined with the
+name [t_param] NB1: the t_param above is fixed, you cannot change it to get
+a different name, it just needs to be there so F* can properly do name
+resolution without running the tactic.
+
+The new [t_param] will be a relation on things of type [t].
+
+NB2: Universes are not handled very well by paramd, so sometimes you need to resort
+to calling it via preprocess_with:
+
+  let ii_t = a:Type -> a -> a
+  [@@preprocess_with param]
+  let ii_t_param = a:Type -> a -> a
+
+This is what gets generated for ii_t_param (with name cleanup):
+
+  Param.ii_t_param
+
+  Type
+    f0: (a: Type -> _: a -> a) -> f1: (a: Type -> _: a -> a) -> Type
+
+  Definition
+    let ii_t_param f0 f1 =
+      a0: Type -> a1: Type -> aR: (_: a0 -> _: a1 -> Type) -> x0: a0 -> x1: a1 -> _: aR x0 x1
+        -> aR (f0 a0 x0) (f1 a1 x1)
+
+For instance, here is a proof that (parametric) functions at the
+identity type must behave like the identity. The idea is that we choose
+the types and relation, so we choose a singleton type for the rhs and a
+relation that only accepts [x] on the left.
+
+  let ii_t_const_lem (f : ii_t) (fp : ii_t_param f f) (a:Type) (x:a) : Lemma (f a x == x) =
+    let r y () = x == y in
+    fp a unit r x () ()
+
+The translation also works for inductive types, and generates inductive
+definitions of the parametricity principle for them. We use the
+inductive style translation (instead of deductive style). See [1].
+
+We also need to be able to reuse previously defined principles,
+especially for inductives, so we can then generate the principle for,
+say, [a:Type -> list a -> a] without regenerating a new (distinct)
+inductive principle for lists. For this, we rely on the convention that
+any top-level (free) name [x] appearing in the term we are translating
+must have a parametricty principle [x_param] already defined. The name
+is searched for in order in 1) the module where [x] is defined, 2) this
+module 3) the current open module (as this file may be imported). See
+param_fv for the logic.
+
+The [paramd] translation can also translate a record, since they are
+just single-constructor inductives, but does not currently mark it as
+record nor generate projectors, etc.
+
+[1] Bernardy, Jansson, Paterson - Proofs for free. JFP 2012
+*)
+
 open FStar.List
 open FStar.Tactics
 
