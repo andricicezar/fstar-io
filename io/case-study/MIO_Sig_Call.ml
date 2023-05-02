@@ -3,6 +3,10 @@ open CommonUtils
 open FStar_Pervasives
 open MIO_Sig
 
+let print_string2 str =
+   print_string str; 
+   flush stdout; true
+
 module FdHash = Hashtbl.Make(struct
     type t = Unix.file_descr
     let equal fd1 fd2 = fd1 = fd2
@@ -64,10 +68,11 @@ let print_trace (t:trace) : unit=
   fd_hash := FdHash.create 10;
   index := Int.zero;
   print_trace0 (List.rev t);
-  print_string"]\n"
+  print_string"]\n";
+  flush stdout
 
 
-let ml_call (cmd:io_cmds) =
+let ml_call (cmd:io_cmds) : Obj.t -> Obj.t =
   match cmd with
   | Openfile -> Obj.magic (Obj.repr Unix_Star.openfile)
   | Read -> Obj.magic (Obj.repr Unix_Star.read)

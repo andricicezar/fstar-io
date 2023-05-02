@@ -5,11 +5,26 @@ open FStar.List.Tot
 open Compiler.Model
 
 
-val did_not_respond : trace -> bool
-let did_not_respond h =
+let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
-  | EWrite _ _ _ :: _ -> false
+  | EAccept _ _ r::tl -> 
+    if Inl? r then not (List.mem (Inl?.v r) fds)
+    else did_not_respond_acc tl fds
+  | EWrite _ arg _ :: tl -> 
+    let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
+  | _::tl -> did_not_respond_acc tl fds
   | _ -> true
+
+let did_not_respond (h:trace) : bool =
+  did_not_respond_acc h []
+
+let did_not_respond' (h:trace) : bool =
+  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
+  let r = did_not_respond h in
+  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
+  else MIO.Sig.Call.print_string2 "false\n") in
+  fst (r, x)
+
 
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
@@ -54,8 +69,18 @@ let rec wrote_at_least_once_to client lt =
   | [] -> false
   | EWrite true arg _::tl -> 
     let (fd, msg):file_descr*Bytes.bytes = arg in
-    client = fd
+    let fd' : file_descr = fd in
+    let client' : file_descr = client in
+    client' = fd'
   | _ :: tl -> wrote_at_least_once_to client tl 
+  
+val wrote_at_least_once_to' : file_descr -> trace -> bool
+let wrote_at_least_once_to' client lt =
+  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
+  let r = wrote_at_least_once_to client lt in
+  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
+  else MIO.Sig.Call.print_string2 "false\n") in
+  fst (r,x)
 
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0

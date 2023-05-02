@@ -18,7 +18,7 @@ let static_cmd
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
         lt == [convert_call_to_event true cmd arg r])) =
   static_cmd true cmd arg
-  
+
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
@@ -172,10 +172,10 @@ let webserver
 
 (** Compiling Web Server **)
 
-
 let check_send_pre : tree pck_rc = 
   Node 
-    (| Bytes.bytes, unit, (fun msg h _ _ -> did_not_respond h && (Bytes.length msg) < 500) |)
+    (| Bytes.bytes, unit, (fun msg h _ _ ->
+      Utils.did_not_respond' h && (Bytes.length msg) < 500) |)
     Leaf
     Leaf
 
@@ -189,11 +189,11 @@ let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn
 
 
 let check_handler_post : tree pck_rc =
-  Node (| file_descr, unit, (fun client _ _ lt -> Utils.wrote_at_least_once_to client lt) |)
+  Node (| file_descr, unit, (fun client _ _ lt -> 
+      Utils.wrote_at_least_once_to' client lt) |)
     check_send_pre 
     Leaf
 
-(* Breaks F* *)
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) Utils.pi check_handler_post fl = {
   swtyp = file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi;
   c_swtyp = weak_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.wtyp #export_send.c_wtyp (resexn unit);
