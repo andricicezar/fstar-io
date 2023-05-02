@@ -84,4 +84,4 @@ compile_cs2: | out
 compile_cs3: | out
 	make _prepare_compilation;
 	make _compile3;
-	mv out/CS.exe out/CS2.exe
+	mv out/CS.exe out/CS3.exe

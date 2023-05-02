@@ -22,10 +22,10 @@ let static_cmd
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
-  (send:(msg:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> Bytes.length msg < 500))
+  (send:(msg:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> did_not_respond h /\ Bytes.length msg < 500))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                   wrote_at_least_once_to client lt)))) ->
-  MIO (resexn unit) fl (requires (fun h -> True))
+  MIO (resexn unit) fl (requires (fun h -> did_not_respond h))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
 
@@ -49,6 +49,7 @@ let process_connection
   (req_handler : req_handler (IOActions + fl)) : 
   MIO unit (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
+  admit ();
   introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
@@ -174,14 +175,14 @@ let webserver
 
 let check_send_pre : tree pck_rc = 
   Node 
-    (| Bytes.bytes, unit, (fun msg h _ _ -> (Bytes.length msg) < 500) |)
+    (| Bytes.bytes, unit, (fun msg h _ _ -> did_not_respond h && (Bytes.length msg) < 500) |)
     Leaf
     Leaf
 
-let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn unit) fl (fun h -> Bytes.length msg < 500)
+let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn unit) fl (fun h -> did_not_respond h && Bytes.length msg < 500)
                                             (fun _ _ lt -> exists fd r. lt == [EWrite true (fd,msg) r] ))) Utils.pi check_send_pre fl =
   exportable_arrow_pre_post_args Bytes.bytes unit
-    (fun msg h ->  Bytes.length msg < 500)
+    (fun msg h -> did_not_respond h && Bytes.length msg < 500)
     (fun msg _ _ lt -> exists fd r. lt == [EWrite true (fd,msg) r])
     #()
     #()
