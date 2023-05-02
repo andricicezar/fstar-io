@@ -32,7 +32,7 @@ server with the following rules:
   - make compile_cs3: The webserver linked with a "good" handler that
     simply echoes back the HTTP request to the user.
 
-The executables are names out/CS1.exe, out/CS2.exe and out/CS3.exe.
+The executables are named `out/CS1.exe`, `out/CS2.exe` and `out/CS3.exe`.
 
 The webserver will listen on port 81, so open http://localhost:81/ on your
 browser to see the result. Note: since 81 is a privileged port, you
