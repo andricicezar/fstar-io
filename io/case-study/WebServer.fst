@@ -189,7 +189,7 @@ let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn
 
 
 let check_handler_post : tree pck_rc =
-  Node (| file_descr, unit, (fun client _ _ lt -> 
+  Node (| file_descr, unit, (fun (client:file_descr) _ _ lt -> 
       Utils.wrote_at_least_once_to' client lt) |)
     check_send_pre 
     Leaf
@@ -198,9 +198,10 @@ instance import_request_handler (fl:erased tflag) : safe_importable (req_handler
   swtyp = file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi;
   c_swtyp = weak_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.wtyp #export_send.c_wtyp (resexn unit);
   safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi) eff_rcs -> 
-    let f' : req_handler fl = (fun fd req send -> 
+    let f' : req_handler fl = (fun (fd:file_descr) req send -> 
       let send' = export_send.export (left eff_rcs) send in
       let (| rc_pck, eff_rc |) = root eff_rcs in
+      // fd here is 4
       let (| h, eff_rc' |) = eff_rc fd in
       Classical.forall_intro (lemma_suffixOf_append h);
       let r : resexn unit = wf fd req send' in
