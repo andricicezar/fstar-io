@@ -10,16 +10,16 @@ open DMFree
 
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: trace).
-The local trace represents the events that happend during the
+The local trace represents the events that happened during the
 computation. Local trace is in chronological order.
 
 We also have the history (type: trace) which represents the
 events that happend until the beggining of the io computation.
-The history is  in reverse chronology order.
+The history is in reverse chronology order.
 
 At the end of an io computation, the local trace is appended
 in reverse order to the history. **)
-let dm_mio_theta #a = theta #a #mio_cmds #mio_sig #event mio_wps
+let dm_mio_theta #mst #a = theta #a #mio_cmds #(mio_sig mst) #event mio_wps
   
 type dm_mio = dm mio_cmds mio_sig event mio_wps
 let dm_mio_return (a:Type) (x:a) : dm_mio a (hist_return x) =
