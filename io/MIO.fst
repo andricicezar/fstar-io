@@ -244,14 +244,17 @@ let get_state #mst (caller:bool) : MIOwp mst.cst mst GetTraceActions
 // val ctx_s : (fl:erased tflag) -> MIO unit fl (fun _ -> True) (fun _ _ _ -> True) 
 
 // private
-// let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
-//   by (compute ())
-// =
-//   let fd = static_cmd #mst true Openfile "../Makefile" in
-//   let fd = static_cmd true Openfile "../Makefile" in
-//   let fd = static_cmd true Openfile "../Makefile" in
-//   let fd = static_cmd true Openfile "../Makefile" in
-//   let fd = static_cmd true Openfile "../Makefile" in
-//   let fd = static_cmd true Openfile "../Makefile" in
-//   if Inl? fd then let _ = static_cmd true Close (Inl?.v fd) in () else 
-//   ()
+
+#push-options "--compat_pre_core 1"
+let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
+  by (compute ())
+=
+  let fd = static_cmd #mst true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  let fd = static_cmd true Openfile "../Makefile" in
+  if Inl? fd then let _ = static_cmd true Close (Inl?.v fd) in () else 
+  ()
+#pop-options

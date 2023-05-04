@@ -14,13 +14,6 @@ assume val valid_http_response : string -> bool
 assume val valid_http_request : string -> bool
 assume val req_res : req:string{valid_http_request req} -> res:string{valid_http_response res}
 
-
-val did_not_respond : trace -> bool
-let did_not_respond h =
-  match h with
-  | EWrite _ _ _ :: _ -> false
-  | _ -> true
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
@@ -32,6 +25,35 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
 
+val wrote_at_least_once_to : file_descr -> trace -> bool
+let rec wrote_at_least_once_to client lt =
+  match lt with
+  | [] -> false
+  | EWrite true arg _::tl -> let (fd, msg):file_descr*string = arg in
+                         client = fd
+  | _ :: tl -> wrote_at_least_once_to client tl 
+
+noeq
+type cst = {
+  opened : file_descr -> bool;
+  written : file_descr -> bool;
+}
+
+let models (c:cst) (h:trace) : Type0 =
+  (forall fd. c.opened fd <==> is_opened_by_untrusted h fd)
+  /\ (forall fd. c.written fd <==> wrote_at_least_once_to fd h)
+
+let mymst : mst = {
+  cst = cst;
+  models = models;
+}
+
+val did_not_respond : trace -> bool
+let did_not_respond h =
+  match h with
+  | EWrite _ _ _ :: _ -> false
+  | _ -> true
+
 val pi : policy_spec
 let pi h caller cmd arg =
   match caller, cmd with
@@ -42,24 +64,18 @@ let pi h caller cmd arg =
   | true, Write -> true
   | _ -> false
 
-val wrote_at_least_once_to : file_descr -> trace -> bool
-let rec wrote_at_least_once_to client lt =
-  match lt with
-  | [] -> false
-  | EWrite true arg _::tl -> let (fd, msg):file_descr*string = arg in
-                         client = fd
-  | _ :: tl -> wrote_at_least_once_to client tl 
-
 type request_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:string) ->
-  (send:(msg:string -> MIO (resexn unit) fl (requires (fun h -> valid_http_response msg /\
+  (send:(msg:string -> MIO (resexn unit) mymst fl (requires (fun h -> valid_http_response msg /\
                                                                did_not_respond h))
                                             (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
                                                                          wrote_at_least_once_to client lt)))) ->
-  MIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
+  MIO (resexn unit) mymst fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
                                              (wrote_at_least_once_to client lt \/ Inr? r)))
+
+#set-options "--compat_pre_core 1"
 
 (** ** E.g. of source handler **)
 val source_handler : request_handler IOActions
@@ -71,7 +87,7 @@ let source_handler client req send =
 type acts (fl:erased tflag) (pi:policy_spec) (caller:bool) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) mymst fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
@@ -87,8 +103,8 @@ type tgt_handler =
   (io_acts:acts fl pi false) ->
   (client:file_descr) ->
   (req:string) ->
-  (send:(msg:string -> MIOpi (resexn unit) fl pi)) ->
-  MIOpi (resexn unit) fl pi
+  (send:(msg:string -> MIOpi (resexn unit) mymst fl pi)) ->
+  MIOpi (resexn unit) mymst fl pi
 
 val target_handler1 : tgt_handler
 let target_handler1 fl pi io_acts client req send =
@@ -115,9 +131,9 @@ let every_request_gets_a_response lt =
   every_request_gets_a_response_acc lt []
 
 assume val get_req : fd:file_descr ->
-  MIO (io_sig.res Read fd) IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
+  MIO (io_sig.res Read fd) mymst IOActions (fun _ -> True) (fun h r lt -> (Inl? r ==> valid_http_request (Inl?.v r)) /\ lt == [ERead true fd r])
 
-assume val sendError : int -> fd:file_descr -> MIO unit IOActions
+assume val sendError : int -> fd:file_descr -> MIO unit mymst IOActions
  (fun _ -> True) (fun _ _ lt -> exists (msg:string) r. lt == [EWrite true (fd, msg) r])
 
 let no_write_true e =
@@ -393,9 +409,9 @@ let ergar_pi_write h lth client r lt :
 open FStar.Tactics
 (* This may take a bit of effort to prove. *)
 
-#push-options "--split_queries"
+#push-options "--split_queries always"
 let webserver (handler:request_handler IOActions) :
-  MIO int IOActions
+  MIO int mymst IOActions
     (requires fun h -> True)
     (ensures fun _ _ lt -> every_request_gets_a_response lt)
 = introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
@@ -438,13 +454,12 @@ let webserver (handler:request_handler IOActions) :
 
 (** ** Instante source interface with the example **)
 
-val phi : policy pi
-let phi h cmd arg =
+val phi : policy mymst pi
+let phi s cmd arg =
   match cmd with
-  | Openfile ->
-    if arg = "/temp" then true else false
-  | Read -> is_opened_by_untrusted h arg
-  | Close -> is_opened_by_untrusted h arg
+  | Openfile -> if arg = "/temp" then true else false
+  | Read -> s.opened arg
+  | Close -> s.opened arg
   | Write -> false
 
 let psi : trace -> int -> trace -> Type0 =
