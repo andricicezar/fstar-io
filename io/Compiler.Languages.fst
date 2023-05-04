@@ -36,41 +36,42 @@ unfold
 let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
-effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) = 
-  MIOwp a fl (pi_as_hist #a pi)
+effect MIOpi (a:Type) (mst:mst) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) = 
+  MIOwp a mst fl (pi_as_hist #a pi)
 
-class weak (t:Type u#a) (fl:erased tflag) (pi:policy_spec) = { [@@@no_method] mldummy : unit }
+// TODO: do we really need mst?
+class weak (t:Type u#a) (mst:mst) (fl:erased tflag) (pi:policy_spec) = { [@@@no_method] mldummy : unit }
 
-instance weak_unit fl pi : weak unit fl pi = { mldummy = () }
-instance weak_file_descr fl pi : weak file_descr fl pi = { mldummy = () }
+instance weak_unit mst fl pi : weak unit mst fl pi = { mldummy = () }
+instance weak_file_descr mst fl pi : weak file_descr mst fl pi = { mldummy = () }
 
-instance weak_pair fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (t1 * t2) fl pi = 
+instance weak_pair mst fl pi t1 {| d1:weak t1 mst fl pi |} t2 {| d2:weak t2 mst fl pi |} : weak (t1 * t2) mst fl pi = 
   { mldummy = () }
-instance weak_either fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (either t1 t2) fl pi =
+instance weak_either mst fl pi t1 {| d1:weak t1 mst fl pi |} t2 {| d2:weak t2 mst fl pi |} : weak (either t1 t2) mst fl pi =
   { mldummy = () }
-instance weak_resexn fl pi t1 {| d1:weak t1 fl pi |} : weak (resexn t1) fl pi =
+instance weak_resexn mst fl pi t1 {| d1:weak t1 mst fl pi |} : weak (resexn t1) mst fl pi =
   { mldummy = () }
 
-type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> MIOpi t2 fl pi
+type weak_arrow_typ mst fl pi (t1 t2:Type) = t1 -> MIOpi t2 mst fl pi
 
 (** An weak arrow is a statically/dynamically verified arrow to respect pi.
 **)
-instance weak_arrow fl pi #t1 (d1:weak t1 fl pi) #t2 (d2:weak t2 fl pi) : weak (weak_arrow_typ fl pi t1 t2) fl pi =
+instance weak_arrow mst fl pi #t1 (d1:weak t1 mst fl pi) #t2 (d2:weak t2 mst fl pi) : weak (weak_arrow_typ mst fl pi t1 t2) mst fl pi =
   { mldummy = () }
 
-instance weak_arrow3 fl pi
-  t1 {| d1:weak t1 fl pi |}
-  t2 {| d2:weak t2 fl pi |}
-  t3 {| d3:weak t3 fl pi |}
-  t4 {| d4:weak t4 fl pi |}
-  : weak (t1 -> t2 -> t3 -> MIOpi t4 fl pi) fl pi =
+instance weak_arrow3 mst fl pi
+  t1 {| d1:weak t1 mst fl pi |}
+  t2 {| d2:weak t2 mst fl pi |}
+  t3 {| d3:weak t3 mst fl pi |}
+  t4 {| d4:weak t4 mst fl pi |}
+  : weak (t1 -> t2 -> t3 -> MIOpi t4 mst fl pi) mst fl pi =
   { mldummy = () }
 
-instance weak_bool fl pi : weak bool fl pi = { mldummy = () }
-instance weak_int fl pi : weak int fl pi = { mldummy = () }
-instance weak_option fl pi t1 {| d1:weak t1 fl pi |} : weak (option t1) fl pi =
+instance weak_bool mst fl pi : weak bool mst fl pi = { mldummy = () }
+instance weak_int mst fl pi : weak int mst fl pi = { mldummy = () }
+instance weak_option mst fl pi t1 {| d1:weak t1 mst fl pi |} : weak (option t1) mst fl pi =
   { mldummy = () }
-instance weak_bytes fl pi : weak Bytes.bytes fl pi = { mldummy = () }
+instance weak_bytes mst fl pi : weak Bytes.bytes mst fl pi = { mldummy = () }
 
 (**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
 instance weak_fo_string : weak_fo string = { fo_pred = () }

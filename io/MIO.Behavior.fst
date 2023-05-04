@@ -32,7 +32,7 @@ let pt_mem (#pre:trace->Type0) ((h, tr):prefixed_trace pre) (s1:prefixed_trace_p
    'backward predicate transformer 2.3.4' and the 
    'pre-/postcondition transformer 2.3.2' to obtain
    the 'set' of traces produces by the whole program. *)
-val beh_gmio : #pre:(trace -> Type0) -> #fl:erased tflag -> dm_gmio int fl (to_hist pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
+val beh_gmio : #mst:_ -> #pre:(trace -> Type0) -> #fl:erased tflag -> dm_gmio int mst fl (to_hist pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
 let beh_gmio ws h tr =
   match tr with
   | Infinite_trace _ -> False
@@ -41,20 +41,20 @@ let beh_gmio ws h tr =
 
 (* _beh is used on whole programs, thus, 
    we specialize it with the empty history *)
-val _beh : (unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) -> trace_property #event
-let _beh ws =
+val _beh : mst:mst -> (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True)) -> trace_property #event
+let _beh mst ws =
   beh_gmio (reify (ws ())) []
 
 (** used for whole programs **)
 [@@ "opaque_to_smt"]
-val beh : (unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
-let beh = on_domain _ (fun ws -> _beh ws)
+val beh : mst:mst -> (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
+let beh mst = on_domain _ (fun ws -> _beh mst ws)
 
-val _beh_ctx : #pre:(trace -> Type0) -> (unit -> MIO int AllActions pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
-let _beh_ctx ws h =
+val _beh_ctx : mst:mst -> #pre:(trace -> Type0) -> (unit -> MIO int mst AllActions pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
+let _beh_ctx mst ws h =
   beh_gmio (reify (ws ())) h
 
 (** used for contexts **)
 //[@@ "opaque_to_smt"]
-val beh_ctx : #pre:(trace -> Type0) -> (unit -> MIO int AllActions pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
-let beh_ctx #pre = on_domain _ (fun ws -> _beh_ctx #pre ws)
+val beh_ctx : mst:mst -> #pre:(trace -> Type0) -> (unit -> MIO int mst AllActions pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
+let beh_ctx mst #pre = on_domain _ (fun ws -> _beh_ctx mst #pre ws)
