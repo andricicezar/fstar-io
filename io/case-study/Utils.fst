@@ -47,6 +47,12 @@ let pi h isTrusted cmd arg =
     let (fd, _) : file_descr * UInt8.t = arg in
     is_opened_by_untrusted h fd
   | false, Close -> is_opened_by_untrusted h arg
+  | false, Access -> 
+    let (fnm, _) : string * list access_permission = arg in
+    if fnm = "/temp" then true 
+    else false
+  | false, Stat -> 
+    if arg = "/temp" then true else false
   | true, Write -> true
   | _ -> false
 
@@ -60,6 +66,12 @@ let phi h cmd arg =
     let (fd, _) : file_descr * UInt8.t = arg in
     is_opened_by_untrusted h fd
   | Close -> is_opened_by_untrusted h arg
+  | Access -> 
+    let (fnm, _) : string * list access_permission = arg in
+    if fnm = "/temp" then true 
+    else false
+  | Stat -> 
+    if arg = "/temp" then true else false
   | _ -> false
 
 
