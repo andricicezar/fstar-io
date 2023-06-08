@@ -1,13 +1,43 @@
+(* For SCC we want ∀P. ∀C. ∀t. Beh(C↓[P↓]) ⊆ Beh(C[P])
+C↓ = fun p -> C (import p)
+P↓ = export P
+then C↓[P↓] = C↓ (P↓) = C↓ (export P) = C (import (export P))
+so in the end we want Beh(C (import (export P))) ⊆ Beh(C P) *)
+
 module LawImportableExportable
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open BeyondCriteria
+open MIO.Behavior
 
-assume val lemma1 : #a:Type -> #b:Type -> pre:(a -> bool) -> $f:(a -> Tot b) -> $g:(a -> Tot b) ->
+class exportable (styp : Type u#a) = {
+  [@@@no_method]
+  wtyp : Type u#a;
+  [@@@no_method]
+  export : styp -> wtyp;
+}
+
+class importable (styp : Type u#a) = {
+  [@@@no_method]
+  wtyp : Type u#a;
+
+  [@@@no_method]
+  import : wtyp -> styp;
+
+  c_exportable : t:(exportable styp){t.wtyp == wtyp};
+
+  law : squash (forall ctx (x:styp) t. t `member_of` beh (ctx (import (c_exportable.export x))) ==> t `member_of` beh (ctx x));
+}
+
+
+
+
+(* assume val lemma1 : #a:Type -> #b:Type -> pre:(a -> bool) -> $f:(a -> Tot b) -> $g:(a -> Tot b) ->
   Lemma (
     let v1 : (x:a -> Pure b (pre x) (fun _ -> True)) = (fun x -> f x) in
     let v2 : (x:a -> Pure b (pre x) (fun _ -> True)) = (fun x -> if pre x then f x else g x) in
-    v2 == v1)
+    v2 == v1) *)
 
 (**
 val lemma11 : #a:Type -> #b:Type -> pre:(a -> bool) -> f:(x:a -> Pure (option b) (pre x) (fun _ -> True)) -> (x:a) ->
@@ -25,27 +55,10 @@ let lemma1 #a #b pre f =
     assert (f == g) by (l_to_r [`lemma11]; smt (); dump "h")
 **)
 
-assume val lemma2 : #a:Type -> #b:Type -> post:(a -> option b -> bool) -> f:(x:a -> Pure (option b) True (fun r -> post x r)) ->
-  Lemma (f == (fun (x:a) -> let r = f x in if post x r then r else None))
+(* assume val lemma2 : #a:Type -> #b:Type -> post:(a -> option b -> bool) -> f:(x:a -> Pure (option b) True (fun r -> post x r)) ->
+  Lemma (f == (fun (x:a) -> let r = f x in if post x r then r else None)) *)
 
-class exportable (styp : Type u#a) = {
-  [@@@no_method]
-  wtyp : Type u#a;
-  [@@@no_method]
-  export : styp -> wtyp;
-}
 
-class importable (styp : Type u#a) = {
-  [@@@no_method]
-  wtyp : Type u#a; 
-
-  [@@@no_method]
-  import : wtyp -> styp;
-
-  c_exportable : t:(exportable styp){t.wtyp == wtyp};
-
-  law : squash (forall (x:styp). import (c_exportable.export x) == x);
-}
 
 type strg_test = (x:int -> Pure (option int) (x > 5) (fun r -> match r with | Some r -> r < x | None -> True))
 type weak_test = int -> Tot (option int)
@@ -62,19 +75,40 @@ let _import = (fun (f:weak_test) (x:int) ->
     | None -> None) <: Pure (option int) (x > 5) (fun r -> match r with | Some r -> r < x | None -> True))
 
 
-let law_test (f:strg_test) : Lemma (_import (test_exportable.export f) == f) =
+let law_test () : Lemma (
+  forall ctx (x : strg_test) t.
+    t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
+    t `member_of` beh (ctx x)
+)
+= introduce forall ctx (x : strg_test) t.
+    t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
+    t `member_of` beh (ctx x)
+  with begin
+    introduce
+      t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
+      t `member_of` beh (ctx x)
+    with _. begin
+      assert (beh (ctx (_import (test_exportable.export x))) t) ;
+      (* Maybe we should use beh_gmio directly. *)
+      (* It's not clear however what we can do with the ctx standing in the
+        middle. *)
+      assume (beh (ctx x) t)
+    end
+  end
+
+(* let law_test (f:strg_test) : Lemma (_import (test_exportable.export f) == f) =
   calc (==) {
     _import (test_exportable.export f);
     == { _ by (compute ()) }
     _import (fun x -> if x > 5 then f x else None);
     == { _ by (compute ()) }
-    (fun (x:int) -> 
+    (fun (x:int) ->
       (let r : option int = if x > 5 then f x else None in
       match r with
       | Some r -> if r < x then Some r else None
       | None -> None)) <: x:int -> Pure (option int) (x > 5) (fun r -> match r with | Some r -> r < x | None -> True);
     == { (** the pre-condition x > 5 makes the if trivial **) _ by (l_to_r [`(lemma1 (fun x -> x > 5))]; dump "H") }
-    (fun (x:int) -> 
+    (fun (x:int) ->
       (let r : option int = f x in
       match r with
       | Some r -> if r < x then Some r else None
@@ -83,7 +117,7 @@ let law_test (f:strg_test) : Lemma (_import (test_exportable.export f) == f) =
     (fun (x:int) -> f x);
     == { (** function extensionality may be needed **) _ by (tadmit ()) }
     f;
-  }
+  } *)
 
 instance test_importable : importable strg_test = {
   wtyp = weak_test;
@@ -93,5 +127,5 @@ instance test_importable : importable strg_test = {
     assert (weak_test == r.wtyp);
     r
   );
-  law = Classical.forall_intro law_test;
+  law = law_test ();
 }
