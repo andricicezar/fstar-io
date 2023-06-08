@@ -10,6 +10,10 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open BeyondCriteria
 open MIO.Behavior
+open MIO
+
+let beh' (f : dm_gmio int AllActions (to_hist (fun _ -> True) (fun _ _ _ -> True))) =
+  beh_gmio f []
 
 class exportable (styp : Type u#a) = {
   [@@@no_method]
@@ -27,7 +31,7 @@ class importable (styp : Type u#a) = {
 
   c_exportable : t:(exportable styp){t.wtyp == wtyp};
 
-  law : squash (forall ctx (x:styp) t. t `member_of` beh (ctx (import (c_exportable.export x))) ==> t `member_of` beh (ctx x));
+  law : squash (forall ctx (x:styp) t. t `member_of` beh' (ctx (import (c_exportable.export x))) ==> t `member_of` beh' (ctx x));
 }
 
 
@@ -77,22 +81,45 @@ let _import = (fun (f:weak_test) (x:int) ->
 
 let law_test () : Lemma (
   forall ctx (x : strg_test) t.
-    t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
-    t `member_of` beh (ctx x)
+    t `member_of` beh' (ctx (_import (test_exportable.export x))) ==>
+    t `member_of` beh' (ctx x)
 )
 = introduce forall ctx (x : strg_test) t.
-    t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
-    t `member_of` beh (ctx x)
+    t `member_of` beh' (ctx (_import (test_exportable.export x))) ==>
+    t `member_of` beh' (ctx x)
   with begin
     introduce
-      t `member_of` beh (ctx (_import (test_exportable.export x))) ==>
-      t `member_of` beh (ctx x)
+      t `member_of` beh' (ctx (_import (test_exportable.export x))) ==>
+      t `member_of` beh' (ctx x)
     with _. begin
-      assert (beh (ctx (_import (test_exportable.export x))) t) ;
-      (* Maybe we should use beh_gmio directly. *)
-      (* It's not clear however what we can do with the ctx standing in the
-        middle. *)
-      assume (beh (ctx x) t)
+      assert (beh' (ctx (_import (test_exportable.export x))) t) ;
+      begin match t with
+      | Infinite_trace _ -> ()
+      | Finite_trace lt res ->
+        assert (forall p. dm_gmio_theta (ctx (_import (test_exportable.export x))) p [] ==> p lt res) ;
+        // assume (forall p. dm_gmio_theta (ctx x) p [] ==> p lt res)
+        introduce forall p. dm_gmio_theta (ctx x) p [] ==> p lt res
+        with begin
+          introduce dm_gmio_theta (ctx x) p [] ==> p lt res
+          with _. begin
+            eliminate forall p. dm_gmio_theta (ctx (_import (test_exportable.export x))) p [] ==> p lt res
+            with p ;
+            (* Up till now the proof is generic so we could direclty ask for
+              some property about dm_gmio_theta, ie
+              dm_gmio_theta (ctx x) p [] ==>
+              dm_gmio_theta (ctx (_import (test_exportable.export x))) p []
+              The issue is how to proceed from here. Without inspecting ctx it
+              sounds difficult.
+              If it helps we can pick a different p to instantiate the
+              hypothesis but it's unclear how it would help bypass the ctx
+              thing.
+            *)
+            assume (dm_gmio_theta (ctx (_import (test_exportable.export x))) p []) ;
+            assert (p lt res)
+          end
+        end
+      end ;
+      assert (beh' (ctx x) t)
     end
   end
 
