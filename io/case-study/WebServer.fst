@@ -7,7 +7,7 @@ open ExtraTactics
 open FStar.List.Tot.Base
 open FStar.List.Tot.Properties
 
-open Compiler.Model
+open Compiler.Model1
 open Utils
 
 type req_handler (fl:erased tflag) =

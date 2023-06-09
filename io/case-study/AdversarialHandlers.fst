@@ -2,7 +2,7 @@ module AdversarialHandlers
 
 open FStar.Tactics
 
-open Compiler.Model
+open Compiler.Model1
 
 open WebServer
 

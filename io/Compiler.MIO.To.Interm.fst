@@ -1,4 +1,4 @@
-module Compiler.MIO.To.Weak
+module Compiler.MIO.To.Interm
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses

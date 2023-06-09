@@ -1,12 +1,9 @@
 module GoodHandler2
 
 open FStar.Ghost
-open Compiler.Model
-
 open FStar.Tactics
 
-open Compiler.Model
-
+open Compiler.Model1
 open WebServer
 
 let tgt_cs_int = comp.comp_int cs_int

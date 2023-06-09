@@ -1,7 +1,7 @@
 module Execute
 
 open FStar.All
-open Compiler.Model
+open Compiler.Model1
 
 let the_p #a : hist_post #event a = fun lt r -> True
 

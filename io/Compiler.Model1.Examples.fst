@@ -1,4 +1,4 @@
-module Compiler.Examples
+module Compiler.Model1.Examples
 
 open FStar.Ghost
 open FStar.Tactics
@@ -6,7 +6,7 @@ open FStar.Tactics.Typeclasses
 open FStar.FunctionalExtensionality
 open FStar.List
 
-open Compiler.Model
+open Compiler.Model1
 
 (** Utils **)
 type source_arrow (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =

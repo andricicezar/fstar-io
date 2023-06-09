@@ -8,7 +8,7 @@ open FStar.FunctionalExtensionality
 open BeyondCriteria
 
 include Compiler.Languages
-include Compiler.MIO.To.Weak
+include Compiler.MIO.To.Interm
 open MIO.Behavior
 
 type policy (pi:policy_spec) =

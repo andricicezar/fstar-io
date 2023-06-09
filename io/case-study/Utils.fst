@@ -2,7 +2,7 @@ module Utils
 
 open FStar.List.Tot
 
-open Compiler.Model
+open Compiler.Model1
 
 val valid_http_response : Bytes.bytes -> bool
 let valid_http_response res = Bytes.length res < 500
