@@ -60,7 +60,7 @@ type src_interface = {
       It is more like the type of the interface which the two share to communicate. **)
   spt : erased tflag -> Type;
   spt_dcs : tree pck_dc;
-  spt_exportable : fl:erased tflag -> exportable (spt fl) pi spt_dcs fl;
+  spt_exportable : fl:erased tflag -> exportable (spt fl) fl pi spt_dcs;
 }
 
 noeq

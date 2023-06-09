@@ -65,7 +65,7 @@ let test1_c1post =
 assume val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_rc
 //let test1_c2post = ()
 
-let test1_ct_importable (fl:erased tflag) : safe_importable (test1_ct fl) test1_pi test1_ct_rcs fl =
+let test1_ct_importable (fl:erased tflag) : safe_importable (test1_ct fl) fl test1_pi test1_ct_rcs =
   safe_importable_arrow_pre_post_args_res _ _ test1_c1post test1_c2post #exportable_unit #importable_file_descr
                                                   
 val test1_stronger_pis : stronger_pis test1_pi test1_pi
@@ -121,8 +121,8 @@ assume val test2_c1post : #a:Type -> squash (forall (x:a) h lt. enforced_locally
 val test2_c2post : #a:Type -> squash (forall (x:a) h r lt. enforced_locally test2_pi h lt /\ ((Mkdtuple3?._3 (root test2_rcs)) () h r lt) ==> test2_post x h r lt)
 let test2_c2post #a = ()
 
-let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) test2_pi test2_rcs fl = 
-  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #test2_pi #(left test2_rcs) #fl (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
+let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_pi test2_rcs = 
+  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_pi #(left test2_rcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
   safe_importable_arrow_pre_post_res
     (fun _ _ -> True)  (** pre **)
     test2_post       (** post **)
@@ -176,12 +176,12 @@ let test3_rcs : tree pck_dc =
      Leaf
      (Node (| file_descr, resexn unit, (fun fd h _ _ -> true) |) Leaf Leaf)
 
-let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) test3_pi (right test3_rcs) fl = 
+let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_pi (right test3_rcs) = 
   safe_importable_arrow_pre_post_args_res
     #file_descr #unit
+    #fl
     #test3_pi
     #(right test3_rcs)
-    #fl
     (fun fd h -> True)
     (fun fd _ _ lt -> True)
     ()
@@ -194,9 +194,9 @@ assume val test3_c1post : #a:Type -> squash (forall x h lt. enforced_locally tes
 val test3_c2post : #a:Type -> squash (forall x h (r:a) lt. enforced_locally test3_pi h lt /\ ((Mkdtuple3?._3 (root test3_rcs)) x h () lt) ==> test3_post x h r lt)
 let test3_c2post #a = ()
 
-let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) test3_pi test3_rcs fl = 
+let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_pi test3_rcs = 
   safe_importable_arrow_pre_post_args
-    #file_descr #(test3_cb fl) #test3_pi #test3_rcs #fl
+    #file_descr #(test3_cb fl) #fl #test3_pi #test3_rcs
     (fun _ _ -> True)  (** pre **)
     test3_post       (** post **)
     (test3_c1post #(test3_cb fl))

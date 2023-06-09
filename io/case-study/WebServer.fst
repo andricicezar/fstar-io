@@ -179,7 +179,7 @@ let check_send_pre : tree pck_dc =
     Leaf
 
 let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) fl (fun h -> did_not_respond h && valid_http_response res)
-                                            (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) Utils.pi check_send_pre fl =
+                                            (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) fl Utils.pi check_send_pre =
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 
@@ -189,7 +189,7 @@ let check_handler_post : tree pck_dc =
     check_send_pre 
     Leaf
 
-instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) Utils.pi check_handler_post fl = {
+instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi check_handler_post = {
   sityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi;
   c_sityp = interm_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
   safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi) eff_dcs -> 

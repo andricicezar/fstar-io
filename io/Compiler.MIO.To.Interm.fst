@@ -135,8 +135,8 @@ type eff_dc_typ (fl:erased tflag) (#t1 #t2:Type) (dc:dc_typ t1 t2) =
              (fun h (| initial_h, _ |) lt -> h == reveal initial_h /\ lt == [])
 
 (* Lifting a runtime check into an effectful check *)
-val enfodce_dc : (#argt:Type u#a) -> (#rett:Type u#b) -> dc:dc_typ argt rett -> eff_dc_typ AllActions dc
-let enfodce_dc #argt #rett dc x =
+val enforce_dc : (#argt:Type u#a) -> (#rett:Type u#b) -> dc:dc_typ argt rett -> eff_dc_typ AllActions dc
+let enforce_dc #argt #rett dc x =
   let initial_h = get_trace () in
   let cont : eff_dc_typ_cont AllActions argt rett dc x (hide initial_h) =
     (fun y -> (
@@ -159,7 +159,7 @@ let check (ctr:pck_dc) (arg:arg_typ ctr) (h:trace) (ret:ret_typ ctr) (lt:trace) 
 type eff_pck_dc (fl:erased tflag) = ctr:pck_dc & eff_dc_typ fl (Mkdtuple3?._3 ctr)
 
 val make_dc_eff : pck_dc u#a u#b -> eff_pck_dc u#a u#b AllActions
-let make_dc_eff r = (| r, (enfodce_dc (Mkdtuple3?._3 r)) |)
+let make_dc_eff r = (| r, (enforce_dc (Mkdtuple3?._3 r)) |)
 
 type typ_eff_dcs (fl:erased tflag) (dcs:tree pck_dc) =
   eff_dcs:(tree (eff_pck_dc fl)){equal_trees dcs (map_tree eff_dcs dfst)}
@@ -195,7 +195,7 @@ let make_dcs_eff (dcs:tree pck_dc) : typ_eff_dcs AllActions dcs =
   };
   r
 
-class exportable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) (fl:erased tflag) = {
+class exportable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) = {
   [@@@no_method]
   ityp : Type u#b;
   [@@@no_method]
@@ -204,7 +204,7 @@ class exportable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) 
   export : typ_eff_dcs fl dcs -> styp -> ityp;
 }
 
-class safe_importable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) (fl:erased tflag) = {
+class safe_importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) = {
   [@@@no_method]
   sityp : Type u#b;
   [@@@no_method]
@@ -213,7 +213,7 @@ class safe_importable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u
   safe_import : sityp -> typ_eff_dcs fl dcs -> styp; 
 }
 
-class importable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) (fl:erased tflag) = {
+class importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) = {
   [@@@no_method]
   ityp : Type u#b; 
   [@@@no_method]
@@ -222,46 +222,46 @@ class importable (styp : Type u#a) (pi:policy_spec) (dcs:tree (pck_dc u#c u#d)) 
   import : ityp -> typ_eff_dcs fl dcs -> resexn styp;
 }
 
-instance interm_importable_super styp pi dcs fl (d : importable styp pi dcs fl) : interm d.ityp fl pi = d.c_ityp
-instance interm_exportable_super styp pi dcs fl (d : exportable styp pi dcs fl) : interm d.ityp fl pi = d.c_ityp
-instance interm_safe_importable_super styp pi dcs fl (d : safe_importable styp pi dcs fl) : interm d.sityp fl pi = d.c_sityp
+instance interm_importable_super styp fl pi dcs (d : importable styp fl pi dcs) : interm d.ityp fl pi = d.c_ityp
+instance interm_exportable_super styp fl pi dcs (d : exportable styp fl pi dcs) : interm d.ityp fl pi = d.c_ityp
+instance interm_safe_importable_super styp fl pi dcs (d : safe_importable styp fl pi dcs) : interm d.sityp fl pi = d.c_sityp
 
 (** *** Exportable instances **)
 
-instance interm_is_exportable (#pi:policy_spec) (#dcs:(tree pck_dc){Leaf? dcs}) (#fl:erased tflag) t {| d1: interm t fl pi |} : exportable t pi dcs fl = {
+instance interm_is_exportable (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){Leaf? dcs}) t {| d1: interm t fl pi |} : exportable t fl pi dcs = {
   ityp = t;
   c_ityp = solve;
   export = (fun Leaf x -> x)
 }
 
-instance exportable_unit (#pi:policy_spec) (#fl:erased tflag) : exportable unit pi Leaf fl = {
+instance exportable_unit (#fl:erased tflag) (#pi:policy_spec) : exportable unit fl pi Leaf = {
   ityp = unit;
   c_ityp = solve;
   export = (fun Leaf () -> ())
 }
 
-instance exportable_file_descr (#pi:policy_spec) (#fl:erased tflag) : exportable file_descr pi Leaf fl = {
+instance exportable_file_descr (#fl:erased tflag) (#pi:policy_spec) : exportable file_descr fl pi Leaf = {
   ityp = file_descr;
   c_ityp = solve;
   export = (fun Leaf fd -> fd)
 }
 
-instance exportable_bytes (#pi:policy_spec) (#fl:erased tflag) : exportable Bytes.bytes pi Leaf fl = {
+instance exportable_bytes (#fl:erased tflag) (#pi:policy_spec) : exportable Bytes.bytes fl pi Leaf = {
   ityp = Bytes.bytes;
   c_ityp = solve;
   export = (fun Leaf b -> b)
 }
 
-instance exportable_refinement (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag) t {| d:exportable t pi dcs fl |} (p : t -> Type0) : exportable (x:t{p x}) pi dcs fl = {
+instance exportable_refinement (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc) t {| d:exportable t fl pi dcs |} (p : t -> Type0) : exportable (x:t{p x}) fl pi dcs = {
   ityp = d.ityp;
   c_ityp = solve;
   export = d.export
 }
 
 instance exportable_option
-  (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag)
-  t1 {| d1:exportable t1 pi dcs fl |} :
-  Tot (exportable (option t1) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc)
+  t1 {| d1:exportable t1 fl pi dcs |} :
+  Tot (exportable (option t1) fl pi dcs) = {
   ityp = option d1.ityp;
   c_ityp = solve;
   export = (fun eff_dcs x -> match x with | Some x' -> Some (d1.export eff_dcs x') | None -> None)
@@ -269,18 +269,18 @@ instance exportable_option
 
 
 instance exportable_pair
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 {| d1:exportable t1 pi (left dcs) fl |} t2 {| d2:exportable t2 pi (right dcs) fl |} :
-  Tot (exportable (t1 * t2) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 {| d1:exportable t1 fl pi (left dcs) |} t2 {| d2:exportable t2 fl pi (right dcs) |} :
+  Tot (exportable (t1 * t2) fl pi dcs) = {
   ityp = d1.ityp * d2.ityp;
   c_ityp = solve;
   export = (fun eff_dcs (x, y) -> (d1.export (left eff_dcs) x, d2.export (right eff_dcs) y));
 }
 
 instance exportable_either
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 {| d1:exportable t1 pi (left dcs) fl |} t2 {| d2:exportable t2 pi (right dcs) fl |} :
-  Tot (exportable (either t1 t2) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 {| d1:exportable t1 fl pi (left dcs) |} t2 {| d2:exportable t2 fl pi (right dcs) |} :
+  Tot (exportable (either t1 t2) fl pi dcs) = {
   ityp = either d1.ityp d2.ityp;
   c_ityp = solve;
   export = (fun eff_dcs x -> 
@@ -290,10 +290,10 @@ instance exportable_either
 (** *** Exportable arrows **)
 
 instance exportable_arrow_with_no_pre_and_no_post
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  (t1:Type) {| d1:importable t1 pi (left dcs) fl |}
-  (t2:Type) {| d2:exportable t2 pi (right dcs) fl |} :
-  exportable (t1 -> MIOpi (resexn t2) fl pi) pi dcs fl = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  (t1:Type) {| d1:importable t1 fl pi (left dcs) |}
+  (t2:Type) {| d2:exportable t2 fl pi (right dcs) |} :
+  exportable (t1 -> MIOpi (resexn t2) fl pi) fl pi dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
     c_ityp = solve;
     export = (fun eff_dcs (f:(t1 -> MIOpi (resexn t2) fl pi)) (x:d1.ityp) ->
@@ -309,12 +309,12 @@ instance exportable_arrow_with_no_pre_and_no_post
 
 (** This is a design choice for making proofs easier. One can remove the post-condition **)
 instance exportable_arrow_post_args
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 {| d1:importable t1 pi (left dcs) fl |}
-  t2 {| d2:exportable t2 pi (right dcs) fl |}
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 {| d1:importable t1 fl pi (left dcs) |}
+  t2 {| d2:exportable t2 fl pi (right dcs) |}
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
-  exportable (x:t1 -> MIO (resexn t2) fl (fun _ -> True) (post x)) pi dcs fl = {
+  exportable (x:t1 -> MIO (resexn t2) fl (fun _ -> True) (post x)) fl pi dcs = {
     ityp = x:d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
     c_ityp = solve;
     export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) fl (fun _ -> True) (post x))) ->
@@ -323,12 +323,12 @@ instance exportable_arrow_post_args
   }
 
 instance exportable_arrow_post
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 {| d1:importable t1 pi (left dcs) fl |}
-  t2 {| d2:exportable t2 pi (right dcs) fl |}
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 {| d1:importable t1 fl pi (left dcs) |}
+  t2 {| d2:exportable t2 fl pi (right dcs) |}
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall h lt r. post h r lt ==> enforced_locally pi h lt)) :
-  exportable (t1 -> MIO (resexn t2) fl (fun _ -> True) post) pi dcs fl = 
+  exportable (t1 -> MIO (resexn t2) fl (fun _ -> True) post) fl pi dcs = 
   exportable_arrow_post_args t1 t2 (fun _ -> post)
 
 let trivialize_new_post #a #b (pre: a -> trace -> bool) post :
@@ -337,7 +337,7 @@ let trivialize_new_post #a #b (pre: a -> trace -> bool) post :
       (~(pre x h) ==> r == (Inr Contract_failure) /\ lt == []) /\
       (pre x h ==> post x h r lt) 
 
-let enfodce_pre
+let enforce_pre
   #t1 #t2
   (#fl:erased tflag)
   (pre : trace -> Type0)
@@ -352,7 +352,7 @@ let enfodce_pre
   if eff_dc' () then f x 
   else Inr Contract_failure
 
-let enfodce_pre_args
+let enforce_pre_args
   #t1 #t2
   (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
@@ -377,79 +377,79 @@ let rityp_eff_dc #fl #a #b #c #d #dc eff_dc (x:c) =
 
 instance exportable_arrow_pre_post_args
   (t1:Type) (t2:Type)
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ arg_typ (root dcs) == t1 /\ (ret_typ (root dcs) == unit)})
-  (#fl:erased tflag)
-  {| d1:importable t1 pi (left dcs) fl |}
-  {| d2:exportable t2 pi (right dcs) fl |}
+  {| d1:importable t1 fl pi (left dcs) |}
+  {| d2:exportable t2 fl pi (right dcs) |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h x. check (root dcs) x h () [] ==> pre x h))
   (#c1 : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
-  exportable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) pi dcs fl = {
+  exportable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) fl pi dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi; 
     c_ityp = solve;
     export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) fl (pre x) (post x))) ->
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
       let eff_dc : eff_dc_typ fl #t1 #unit dc = rityp_eff_dc eff_dc in
-      let f' = enfodce_pre_args pre dc eff_dc post f in
+      let f' = enforce_pre_args pre dc eff_dc post f in
       let dc_pre = (fun x h -> dc x h () []) in
       let new_post = trivialize_new_post dc_pre post in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-      let d = (exportable_arrow_post_args #pi #dcs' t1 #d1 t2 #d2 new_post) in
+      let d = (exportable_arrow_post_args #fl #pi #dcs' t1 #d1 t2 #d2 new_post) in
       d.export eff_dcs' f'
     )
 }
 
 instance exportable_arrow_pre_post
   (t1:Type) (t2:Type)
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ arg_typ (root dcs) == unit /\ (ret_typ (root dcs) == unit)})
-  (#fl:erased tflag)
-  {| d1:importable t1 pi (left dcs) fl |}
-  {| d2:exportable t2 pi (right dcs) fl |}
+  {| d1:importable t1 fl pi (left dcs) |}
+  {| d2:exportable t2 fl pi (right dcs) |}
   (pre : trace -> Type0)
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c_pre : squash (forall h. (check (root dcs)) () h () [] ==> pre h))
   (#c1 : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
-  exportable (t1 -> MIO (resexn t2) fl pre post) pi dcs fl = {
+  exportable (t1 -> MIO (resexn t2) fl pre post) fl pi dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi; 
     c_ityp = solve;
     export = (fun eff_dcs (f:(t1 -> MIO (resexn t2) fl pre post)) ->
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
       let eff_dc : eff_dc_typ fl #unit #unit dc = rityp_eff_dc eff_dc in
-      let f' = enfodce_pre pre dc eff_dc post f in
+      let f' = enforce_pre pre dc eff_dc post f in
       let dc_pre = (fun x h -> dc () h () []) in
       let new_post = trivialize_new_post dc_pre (fun _ -> post) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-      let d = (exportable_arrow_post_args #_ #dcs' t1 #d1 t2 #d2 new_post) in
+      let d = (exportable_arrow_post_args #fl #pi #dcs' t1 #d1 t2 #d2 new_post) in
       d.export eff_dcs' f'
     )
 }
 
     
 (** *** Safe importable instances **)
-let interm_is_safely_importable (#pi:policy_spec) (#dcs:(tree pck_dc){Leaf? dcs}) (#fl:erased tflag) #t (d:interm t fl pi) : safe_importable t pi dcs fl = {
+let interm_is_safely_importable (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){Leaf? dcs}) #t (d:interm t fl pi) : safe_importable t fl pi dcs = {
   sityp = t;
   c_sityp = solve;
   safe_import = (fun x Leaf -> x); 
 }
 
-instance importable_unit (#pi:policy_spec) (#fl:erased tflag) : importable unit pi Leaf fl = {
+instance importable_unit (#fl:erased tflag) (#pi:policy_spec) : importable unit fl pi Leaf = {
   ityp = unit;
   c_ityp = solve;
   import = (fun () Leaf -> Inl ())
 }
 
-instance importable_file_descr (#pi:policy_spec) (#fl:erased tflag) : importable file_descr pi Leaf fl = {
+instance importable_file_descr (#fl:erased tflag) (#pi:policy_spec) : importable file_descr fl pi Leaf = {
   ityp = file_descr;
   c_ityp = solve;
   import = (fun fd Leaf -> Inl fd)
 }
 
-instance importable_bytes (#pi:policy_spec) (#fl:erased tflag) : importable Bytes.bytes pi Leaf fl = {
+instance importable_bytes (#fl:erased tflag) (#pi:policy_spec) : importable Bytes.bytes fl pi Leaf = {
   ityp = Bytes.bytes;
   c_ityp = solve;
   import = (fun b Leaf -> Inl b)
@@ -457,17 +457,17 @@ instance importable_bytes (#pi:policy_spec) (#fl:erased tflag) : importable Byte
 
 (** *** Importable instances **)
 
-instance safe_importable_is_importable (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag) #t (d:safe_importable t pi dcs fl) : importable t pi dcs fl = {
+instance safe_importable_is_importable (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc) #t (d:safe_importable t fl pi dcs) : importable t fl pi dcs = {
   ityp = d.sityp;
   c_ityp = solve;
   import = (fun x eff_dcs -> Inl (d.safe_import x eff_dcs))
 }
 
 instance importable_refinement
-  (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag)
-  t {| d:importable t pi dcs fl |}
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc)
+  t {| d:importable t fl pi dcs |}
   (rp : t -> Type0) {| d1:checkable rp |} :
-  Tot (importable (x:t{rp x}) pi dcs fl) = {
+  Tot (importable (x:t{rp x}) fl pi dcs) = {
   ityp = d.ityp;
   c_ityp = solve;
   import = (fun (x:d.ityp) eff_dcs ->
@@ -479,9 +479,9 @@ instance importable_refinement
 }
     
 instance importable_option
-  (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag)
-  t {| d:importable t pi dcs fl |} :
-  Tot (importable (option t) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc)
+  t {| d:importable t fl pi dcs |} :
+  Tot (importable (option t) fl pi dcs) = {
   ityp = option d.ityp;
   c_ityp = solve;
   import = (fun (x:option d.ityp) eff_dcs ->
@@ -495,9 +495,9 @@ instance importable_option
 }
 
 instance importable_pair
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 t2 {| d1:importable t1 pi (left dcs) fl |} {| d2:importable t2 pi (right dcs) fl |} :
-  Tot (importable (t1 * t2) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 t2 {| d1:importable t1 fl pi (left dcs) |} {| d2:importable t2 fl pi (right dcs) |} :
+  Tot (importable (t1 * t2) fl pi dcs) = {
   ityp = d1.ityp * d2.ityp;
   c_ityp = solve;
   import = (fun (x,y) eff_dcs ->
@@ -507,9 +507,9 @@ instance importable_pair
 }
 
 instance importable_either
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  t1 t2 {| d1:importable t1 pi (left dcs) fl |} {| d2:importable t2 pi (right dcs) fl |} :
-  Tot (importable (either t1 t2) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  t1 t2 {| d1:importable t1 fl pi (left dcs) |} {| d2:importable t2 fl pi (right dcs) |} :
+  Tot (importable (either t1 t2) fl pi dcs) = {
   ityp = either d1.ityp d2.ityp;
   c_ityp = solve;
   import = (fun x eff_dcs ->
@@ -527,11 +527,11 @@ instance importable_either
 }
 
 instance importable_dpair_refined
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
   t1 t2 (p:t1 -> t2 -> Type0)
-  {| d1:importable t1 pi (left dcs) fl |} {| d2:importable t2 pi (right dcs) fl |}
+  {| d1:importable t1 fl pi (left dcs) |} {| d2:importable t2 fl pi (right dcs) |}
   {| d3:checkable2 p |} :
-  Tot (importable (x:t1 & y:t2{p x y}) pi dcs fl) = {
+  Tot (importable (x:t1 & y:t2{p x y}) fl pi dcs) = {
   ityp = d1.ityp & d2.ityp;
   c_ityp = solve;
   import = (fun ((x', y')) eff_dcs ->
@@ -543,9 +543,9 @@ instance importable_dpair_refined
 
 (** *** Safe importable arrows **)
 instance safe_importable_resexn
-  (#pi:policy_spec) (#dcs:tree pck_dc) (#fl:erased tflag)
-  t1 {| d1:importable t1 pi dcs fl |} :
-  Tot (safe_importable (resexn t1) pi dcs fl) = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:tree pck_dc)
+  t1 {| d1:importable t1 fl pi dcs |} :
+  Tot (safe_importable (resexn t1) fl pi dcs) = {
   sityp = resexn d1.ityp;
   c_sityp = solve;
   safe_import = (fun x eff_dcs ->
@@ -555,10 +555,10 @@ instance safe_importable_resexn
 }
     
 instance safe_importable_arrow
-  (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs}) (#fl:erased tflag)
-  (t1:Type) {| d1:exportable t1 pi (left dcs) fl |}
-  (t2:Type) {| d2:importable t2 pi (right dcs) fl |} : 
-  safe_importable ((x:t1) -> MIOpi (resexn t2) fl pi) pi dcs fl = {
+  (#fl:erased tflag) (#pi:policy_spec) (#dcs:(tree pck_dc){EmptyNode? dcs})
+  (t1:Type) {| d1:exportable t1 fl pi (left dcs) |}
+  (t2:Type) {| d2:importable t2 fl pi (right dcs) |} : 
+  safe_importable ((x:t1) -> MIOpi (resexn t2) fl pi) fl pi dcs = {
   sityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
   c_sityp = solve;
   safe_import = (fun (f:d1.ityp -> MIOpi (resexn d2.ityp) fl pi) eff_dcs (x:t1) -> 
@@ -568,7 +568,7 @@ instance safe_importable_arrow
 }
 
 (** The following four should be unified but I had universe problems **)
-let enfodce_post_args_res
+let enforce_post_args_res
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
@@ -589,7 +589,7 @@ let enfodce_post_args_res
   if eff_dc' r then r
   else Inr Contract_failure
 
-let enfodce_post_args
+let enforce_post_args
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
@@ -610,7 +610,7 @@ let enfodce_post_args
   if eff_dc' () then r
   else Inr Contract_failure
   
-let enfodce_post_res
+let enforce_post_res
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
@@ -631,7 +631,7 @@ let enfodce_post_res
   if eff_dc' r then r
   else Inr Contract_failure
 
-let enfodce_post
+let enforce_post
   (#t1:Type u#a)
   (#t2:Type u#b)
   (#fl:erased tflag)
@@ -654,68 +654,68 @@ let enfodce_post
 
 instance safe_importable_arrow_pre_post_args_res
   (#t1:Type) (#t2:Type)
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ (arg_typ (root dcs) == t1 /\ (ret_typ (root dcs) == (resexn t2))) })
-  (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root dcs) x h r lt ==> post x h r lt)) 
-  {| d1:exportable t1 pi (left dcs) fl |}
-  {| d2:importable t2 pi (right dcs) fl |}:
-  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) pi dcs fl = {
+  {| d1:exportable t1 fl pi (left dcs) |}
+  {| d2:importable t2 fl pi (right dcs) |}:
+  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) fl pi dcs = {
    sityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
   c_sityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi)) eff_dcs ->
     let dcs' = (EmptyNode (left dcs) (right dcs)) in
     let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-    let f' = (safe_importable_arrow #_ #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
+    let f' = (safe_importable_arrow #fl #pi #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
     let (| dc_pck, eff_dc |) = root eff_dcs in
-    enfodce_post_args_res pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
+    enforce_post_args_res pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
   }
 
 instance safe_importable_arrow_pre_post_res
   (#t1:Type) (#t2:Type)
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ (arg_typ (root dcs) == unit /\ (ret_typ (root dcs) == (resexn t2))) })
-  (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post: squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root dcs)) () h r lt) ==> post x h r lt)) 
-  {| d1:exportable t1 pi (left dcs) fl |}
-  {| d2:importable t2 pi (right dcs) fl |}:
-  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) pi dcs fl = {
+  {| d1:exportable t1 fl pi (left dcs) |}
+  {| d2:importable t2 fl pi (right dcs) |}:
+  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) fl pi dcs = {
    sityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
   c_sityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi)) eff_dcs ->
     let dcs' = (EmptyNode (left dcs) (right dcs)) in
     let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-    let f' = (safe_importable_arrow #_ #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
+    let f' = (safe_importable_arrow #fl #pi #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
     let (| dc_pck, eff_dc |) = root eff_dcs in
-    enfodce_post_res pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
+    enforce_post_res pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
   }
 
 instance safe_importable_arrow_pre_post_args
   (#t1:Type) (#t2:Type)
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ (arg_typ (root dcs) == t1 /\ (ret_typ (root dcs) == unit)) })
-  (#fl:erased tflag)
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ ((Mkdtuple3?._3 (root dcs)) x h () lt) ==> post x h r lt))
-  {| d1:exportable t1 pi (left dcs) fl |}
-  {| d2:importable t2 pi (right dcs) fl |} :
-  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) pi dcs fl = {
+  {| d1:exportable t1 fl pi (left dcs) |}
+  {| d2:importable t2 fl pi (right dcs) |} :
+  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) fl pi dcs = {
     sityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
     c_sityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi)) eff_dcs ->
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-      let f' = (safe_importable_arrow #_ #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
+      let f' = (safe_importable_arrow #fl #pi #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
       let (| dc_pck, eff_dc |) = root eff_dcs in
-      enfodce_post_args pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
+      enforce_post_args pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
   }
 
 instance safe_importable_arrow_pre_post
@@ -723,23 +723,22 @@ instance safe_importable_arrow_pre_post
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
 
+  (#fl:erased tflag)
   (#pi:policy_spec) 
   (#dcs:(tree pck_dc){Node? dcs /\ (arg_typ (root dcs) == unit /\ (ret_typ (root dcs) == unit)) })
 
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
   (c2post : squash (forall x h r lt. pre x h /\ enforced_locally pi h lt /\ check (root dcs) () h () lt ==> post x h r lt)) 
 
-  (#fl:erased tflag)
-
-  {| d1:exportable t1 pi (left dcs) fl |}
-  {| d2:importable t2 pi (right dcs) fl |} :
-  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) pi dcs fl = {
+  {| d1:exportable t1 fl pi (left dcs) |}
+  {| d2:importable t2 fl pi (right dcs) |} :
+  safe_importable (x:t1 -> MIO (resexn t2) fl (pre x) (post x)) fl pi dcs = {
     sityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi;
     c_sityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi)) eff_dcs ->
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
-      let f' = (safe_importable_arrow #_ #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
+      let f' = (safe_importable_arrow #fl #pi #dcs' t1 #d1 t2 #d2).safe_import f eff_dcs' in
       let (| dc_pck, eff_dc |) = root eff_dcs in
-      enfodce_post pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
+      enforce_post pi pre post (Mkdtuple3?._3 dc_pck) (rityp_eff_dc eff_dc) c1post c2post f')
   }
