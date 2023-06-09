@@ -211,18 +211,18 @@ effect MIO
   MIOwp a fl (to_hist pre post) 
   
 let static_cmd
-  (caller : bool)
+  (c: caller)
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
   MIO (io_sig.res cmd arg) IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        lt == [convert_call_to_event caller cmd arg r])) =
-  MIOwp?.reflect (mio_call caller cmd arg)
+        lt == [convert_call_to_event c cmd arg r])) =
+  MIOwp?.reflect (mio_call c cmd arg)
 
-let get_trace (caller:bool) : MIOwp trace GetTraceActions
+let get_trace () : MIOwp trace GetTraceActions
   (fun p h -> p [] h) =
-  MIOwp?.reflect (mio_call caller GetTrace ())
+  MIOwp?.reflect (mio_call Prog GetTrace ())
 
 // There is no hope to prove anything about ctx without a meta-theorem about F* / without a formalization of F* & Ghost.
 // val ctx_s : (fl:erased tflag) -> MIO unit fl (fun _ -> True) (fun _ _ _ -> True) 
@@ -231,11 +231,11 @@ private
 let performance_test (#fl:tflag) : MIOwp unit (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
   by (compute ())
 =
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  if Inl? fd then let _ = static_cmd true Close (Inl?.v fd) in () else 
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  if Inl? fd then let _ = static_cmd Prog Close (Inl?.v fd) in () else 
   ()

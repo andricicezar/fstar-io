@@ -15,8 +15,8 @@ type source_arrow (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (pos
 type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (rc:rc_typ arg (resexn res)) =
-  squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ rc x h r lt ==> post x h r lt)
+type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (dc:dc_typ arg (resexn res)) =
+  squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ dc x h r lt ==> post x h r lt)
 
 type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
   squash (forall h lt. enforced_locally pi1 h lt ==> enforced_locally pi2 h lt)
@@ -26,13 +26,13 @@ type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
 (** *** Test 1 - FO **)
 let test1_pre = (fun () h -> True)
 let test1_post = (fun () h (rfd:resexn file_descr) lt -> 
-  (forall fd'. ~((EOpenfile false "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
+  (forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 
 type test1_ct = source_arrow unit file_descr test1_pre test1_post
 
 let test1_pi : policy_spec = 
-  fun h isTrusted cmd arg -> 
-    isTrusted == false /\
+  fun h c cmd arg -> 
+    Ctx? c /\
     (match cmd with 
     | Openfile -> (arg <> "/etc/passwd")
     | _ -> True)
@@ -46,7 +46,7 @@ let test1_phi : policy test1_pi =
     | _ -> true
     
 let test1_ct_rc = (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h)))
-let test1_ct_rcs : tree pck_rc = 
+let test1_ct_rcs : tree pck_dc = 
   Node (| unit, resexn file_descr, test1_ct_rc |) 
     Leaf 
     Leaf
@@ -83,10 +83,10 @@ let test1 : src_interface = {
   pi = test1_pi; phi = test1_phi;
 
   ct = test1_ct;
-  ct_rcs = test1_ct_rcs;
+  ct_dcs = test1_ct_rcs;
 
   ct_importable = test1_ct_importable;
-  psi = (fun _ _ lt -> (forall fd'. ~((EOpenfile false "/etc/passwd" fd') `List.memP` lt)));
+  psi = (fun _ _ lt -> (forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `List.memP` lt)));
 }
 
 val test1_prog : prog_src test1
@@ -111,7 +111,7 @@ let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
 let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) fl (fun _ -> True) (test2_post cb)
 
-let test2_rcs : tree pck_rc =  
+let test2_rcs : tree pck_dc =  
   Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
      (Node (| file_descr, unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf)
      Leaf
@@ -134,7 +134,7 @@ let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) test2_
 [@@ (postprocess_with (fun () -> norm [delta_only [`%test2_ct; `%test2_cb;`%test2_ct_importable]]; trefl ()))]
 let test2 : src_interface = {
   pi = test2_pi; phi = test2_phi; 
-  ct = test2_ct; ct_rcs = test2_rcs; ct_importable = test2_ct_importable; 
+  ct = test2_ct; ct_dcs = test2_rcs; ct_importable = test2_ct_importable; 
   psi = (fun _ _ _ -> True);
 }
 
@@ -171,7 +171,7 @@ let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
 let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) fl (fun _ -> True) (test3_post x)
 
-let test3_rcs : tree pck_rc =  
+let test3_rcs : tree pck_dc =  
   Node (| file_descr, unit, (fun x h r lt -> true) |) 
      Leaf
      (Node (| file_descr, resexn unit, (fun fd h _ _ -> true) |) Leaf Leaf)
@@ -207,13 +207,13 @@ let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) test3_
 [@@ (postprocess_with (fun () -> norm [delta_only [`%test3_ct; `%test3_cb;`%test3_ct_importable]]; trefl ()))]
 let test3 : src_interface = {
   pi = test3_pi; phi = test3_phi;
-  ct = test3_ct; ct_rcs = test3_rcs; ct_importable = test3_ct_importable; 
+  ct = test3_ct; ct_dcs = test3_rcs; ct_importable = test3_ct_importable; 
   psi = (fun _ _ _ -> True);
 }
 
 val test3_prog : prog_src test3
 let test3_prog #fl ctx () : MIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
-  match static_cmd true Openfile "test.txt" with
+  match static_cmd Prog Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with
     | Inl cb -> let _ : resexn unit = cb fd in 0

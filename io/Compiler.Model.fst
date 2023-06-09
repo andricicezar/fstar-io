@@ -12,9 +12,9 @@ include Compiler.MIO.To.Weak
 open MIO.Behavior
 
 type policy (pi:policy_spec) =
-  h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h false cmd arg}
+  h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h Ctx cmd arg}
 
-type acts (fl:erased tflag) (pi:policy_spec) (caller:bool) =
+type io_lib (fl:erased tflag) (pi:policy_spec) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -23,9 +23,9 @@ type acts (fl:erased tflag) (pi:policy_spec) (caller:bool) =
       enforced_locally pi h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event caller cmd arg r'])))
+       | r' -> lt == [convert_call_to_event c cmd arg r'])))
 
-type acts' (fl:erased tflag) (#pi:policy_spec) (phi:policy pi) (caller:bool) =
+type io_lib' (fl:erased tflag) (#pi:policy_spec) (phi:policy pi) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) fl
@@ -35,14 +35,14 @@ type acts' (fl:erased tflag) (#pi:policy_spec) (phi:policy pi) (caller:bool) =
       enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event caller cmd arg r'])))
+       | r' -> lt == [convert_call_to_event c cmd arg r'])))
 
-val inst_io_cmds : #pi:policy_spec -> phi:policy pi -> acts' AllActions phi false
+val inst_io_cmds : #pi:policy_spec -> phi:policy pi -> io_lib' AllActions phi Ctx
 let inst_io_cmds phi cmd arg = 
-  let h = get_trace true in
+  let h = get_trace () in
   if phi h cmd arg then (
     // Need the letbinding here it won't typecheck... why?
-    let r : io_resm' cmd arg = static_cmd false cmd arg in
+    let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
     r
   ) else Inr Contract_failure
 
@@ -52,15 +52,15 @@ type src_interface = {
   (* pi is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
   pi : policy_spec;
-  (* phi is in bool and it is used to enforce the policy on the context,
+  (* phi is in bool and it is used to enfodce the policy on the context,
      it describes only the events of the context and it has to imply pi **)
   phi : policy pi;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   ct : erased tflag -> Type;
-  ct_rcs : tree pck_rc;
-  ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_rcs fl;
+  ct_dcs : tree pck_dc;
+  ct_importable : fl:erased tflag -> safe_importable (ct fl) pi ct_dcs fl;
 
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
@@ -74,16 +74,16 @@ type tgt_interface = {
   phi : policy pi;
 
   ct : erased tflag -> Type u#a;
-  ct_weak : fl:erased tflag -> weak (ct fl) fl pi;
+  ct_weak : fl:erased tflag -> interm (ct fl) fl pi;
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi false -> typ_eff_rcs fl i.ct_rcs -> i.ct fl
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib' fl i.phi Ctx -> typ_eff_dcs fl i.ct_dcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int (IOActions + fl) (fun _ -> True) i.psi
 type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
-  (| i.psi, p #AllActions (c #AllActions (inst_io_cmds i.phi) (make_rcs_eff i.ct_rcs)) |)
+  (| i.psi, p #AllActions (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.ct_dcs)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| _, ws |) -> beh ws)
@@ -95,7 +95,7 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi false -> i.ct fl
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi Ctx -> i.ct fl
 type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
@@ -114,8 +114,8 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  ct = (fun fl -> (i.ct_importable fl).swtyp);
-  ct_weak = (fun fl -> (i.ct_importable fl).c_swtyp);
+  ct = (fun fl -> (i.ct_importable fl).sityp);
+  ct_weak = (fun fl -> (i.ct_importable fl).c_sityp);
 
   pi = i.pi;
   phi = i.phi;
@@ -123,16 +123,16 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
-let backtranslate_ctx #i c_t #fl acts eff_rcs =
-  (i.ct_importable fl).safe_import (c_t #fl acts) eff_rcs
+let backtranslate_ctx #i c_t #fl io_lib eff_dcs =
+  (i.ct_importable fl).safe_import (c_t #fl io_lib) eff_dcs
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| _, ws |) = ws
 
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s c_t = 
-  let eff_rcs = make_rcs_eff i.ct_rcs in
-  let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_rcs in
+  let eff_dcs = make_dcs_eff i.ct_dcs in
+  let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_dcs in
   let ws : whole_src = (| i.psi, p_s #AllActions c_s |) in
   let wt : whole_tgt = compile_whole ws in
   wt
@@ -140,7 +140,7 @@ let compile_pprog #i p_s c_t =
 val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
 let compile_ctx #i c_s = 
   (** TODO: the context should be also exportable besides importable,
-      which would be a pain because one has to define a second tree of rcs. **)
+      which would be a pain because one has to define a second tree of dcs. **)
 
   (** The point of defining C↓ is to prove SCC (from Beyond Full Abstraction). 
       Since, C↓ = export C, and P↓ = fun c -> P (import c),

@@ -37,10 +37,10 @@ let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : (caller:bool) -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
-  | ERead     : (caller:bool) -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
-  | EWrite    : (caller:bool) -> a:io_sig.args Write    -> (r:io_sig.res Write a)    -> event
-  | EClose    : (caller:bool) -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
+  | EOpenfile : caller -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
+  | ERead     : caller -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
+  | EWrite    : caller -> a:io_sig.args Write    -> (r:io_sig.res Write a)    -> event
+  | EClose    : caller -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
 
 type trace = list event
 
@@ -85,7 +85,7 @@ let mio_bind (#a:Type) (#b:Type) l k : mio b =
   free_bind cmds mio_sig a b l k
 
 let convert_call_to_event
-  (caller:bool)
+  caller
   (cmd:io_cmds)
   (arg:io_sig.args cmd)
   (r:io_sig.res cmd arg) =
@@ -100,7 +100,7 @@ unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
-let destruct_event (e:event) : ( bool & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
+let destruct_event (e:event) : ( caller & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
   match e with
   | EOpenfile caller arg res -> (| caller, Openfile, arg, res |)
   | ERead caller arg res -> (| caller, Read, arg, res |)
@@ -128,7 +128,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let mio_wps (caller:bool) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
+unfold let mio_wps (c:caller) (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
   match cmd with
   | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event caller cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event c cmd arg r] r)

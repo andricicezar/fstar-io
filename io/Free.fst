@@ -17,9 +17,11 @@ let add_sig
     res = (fun (x:op{p x || q x}) -> if p x then s1.res x else s2.res x)
  }
 
+type caller = | Prog | Ctx
+
 noeq
 type free (op:Type0) (s:op_sig op) (a:Type u#a) : Type u#(max 1 a)=
-| Call : (caller:bool) -> (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s a) -> free op s a
+| Call : caller -> (l:op) -> (arg:s.args l) -> cont:(s.res l arg -> free u#a op s a) -> free op s a
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a op s a) -> free op s a
 | Return : a -> free op s a
 
@@ -36,8 +38,8 @@ let rec free_bind
   free op s b =
   match l with
   | Return x -> k x
-  | Call tr cmd args fnc ->
-      Call tr cmd args (fun i ->
+  | Call c cmd args fnc ->
+      Call c cmd args (fun i ->
         free_bind op s a b (fnc i) k)
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->

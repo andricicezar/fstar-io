@@ -14,7 +14,7 @@ type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
   (send:(res:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
-                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,res) r] /\
+                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite Prog (client,res) r] /\
                                                                   wrote_at_least_once_to client lt)))) ->
   MIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
                        (ensures (fun h r lt -> enforced_locally pi h lt /\
@@ -26,17 +26,17 @@ let static_cmd
   MIO (io_sig.res cmd arg) IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        lt == [convert_call_to_event true cmd arg r])) =
-  static_cmd true cmd arg
+        lt == [convert_call_to_event Prog cmd arg r])) =
+  static_cmd Prog cmd arg
 
 
 let sendError400 (fd:file_descr) : MIO unit IOActions
- (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite true (fd, res) r]) =
+ (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite Prog (fd, res) r]) =
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 let get_req (fd:file_descr) :
-  MIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
+  MIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead Prog (fd, limit) r']) =
   let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
   | Inl (msg, _) -> Inl msg
@@ -54,9 +54,9 @@ let process_connection
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead true (client, limit) (Inl r) ] @ lthandler)
+    introduce enforced_locally pi h lthandler /\ wrote_at_least_once_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
   end ;
   match get_req client with
@@ -171,7 +171,7 @@ let webserver
 
 (** Compiling Web Server **)
 
-let check_send_pre : tree pck_rc = 
+let check_send_pre : tree pck_dc = 
   Node 
     (| Bytes.bytes, unit, (fun res h _ _ ->
       Utils.did_not_respond' h && valid_http_response res) |)
@@ -179,29 +179,29 @@ let check_send_pre : tree pck_rc =
     Leaf
 
 let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) fl (fun h -> did_not_respond h && valid_http_response res)
-                                            (fun _ _ lt -> exists fd r. lt == [EWrite true (fd,res) r] ))) Utils.pi check_send_pre fl =
+                                            (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) Utils.pi check_send_pre fl =
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 
-let check_handler_post : tree pck_rc =
+let check_handler_post : tree pck_dc =
   Node (| file_descr, unit, (fun (client:file_descr) _ _ lt -> 
       Utils.wrote_at_least_once_to' client lt) |)
     check_send_pre 
     Leaf
 
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) Utils.pi check_handler_post fl = {
-  swtyp = file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi;
-  c_swtyp = weak_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.wtyp #export_send.c_wtyp (resexn unit);
-  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.wtyp -> MIOpi (resexn unit) fl Utils.pi) eff_rcs -> 
+  sityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi;
+  c_sityp = interm_arrow3 fl Utils.pi file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
+  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi) eff_dcs -> 
     let f' : req_handler fl = (fun (fd:file_descr) req send -> 
-      let send' = export_send.export (left eff_rcs) send in
-      let (| rc_pck, eff_rc |) = root eff_rcs in
+      let send' = export_send.export (left eff_dcs) send in
+      let (| dc_pck, eff_dc |) = root eff_dcs in
       // fd here is 4
-      let (| h, eff_rc' |) = eff_rc fd in
+      let (| h, eff_dc' |) = eff_dc fd in
       Classical.forall_intro (lemma_suffixOf_append h);
       let r : resexn unit = wf fd req send' in
       Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-      if eff_rc' () then r
+      if eff_dc' () then r
       else Inr Contract_failure
     ) in
     f'
@@ -212,7 +212,7 @@ let cs_int : src_interface = {
   pi = Utils.pi;
   phi = Utils.phi;
   ct = req_handler;
-  ct_rcs = check_handler_post;
+  ct_dcs = check_handler_post;
   ct_importable = (fun fl -> import_request_handler fl); 
   psi = (fun _ _ lt -> Utils.every_request_gets_a_response lt);
 }

@@ -6,21 +6,20 @@ open FStar.Ghost
 
 open CommonUtils
 
-(** ** Source Language **)
 include MIO
 
 (** policy_spec is the type of the runtime check that is enforced when instrumenting.
     A policy_spec checks if the next operation with its arguments satisfy the property
     over the history. **)
-type policy_spec = (history:trace) -> (isTrusted:bool) -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
+type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
 unfold
 let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
   match e with
-  | EOpenfile isTrusted arg _ -> pi h isTrusted Openfile arg
-  | ERead isTrusted arg _ -> pi h isTrusted Read arg
-  | EWrite isTrusted arg _ -> pi h isTrusted Write arg
-  | EClose isTrusted arg _ -> pi h isTrusted Close arg
+  | EOpenfile caller arg _ -> pi h caller Openfile arg
+  | ERead caller arg _ -> pi h caller Read arg
+  | EWrite caller arg _ -> pi h caller Write arg
+  | EClose caller arg _ -> pi h caller Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
@@ -39,38 +38,38 @@ let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
 effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) = 
   MIOwp a fl (pi_as_hist #a pi)
 
-class weak (t:Type u#a) (fl:erased tflag) (pi:policy_spec) = { [@@@no_method] mldummy : unit }
+class interm (t:Type u#a) (fl:erased tflag) (pi:policy_spec) = { [@@@no_method] mldummy : unit }
 
-instance weak_unit fl pi : weak unit fl pi = { mldummy = () }
-instance weak_file_descr fl pi : weak file_descr fl pi = { mldummy = () }
+instance interm_unit fl pi : interm unit fl pi = { mldummy = () }
+instance interm_file_descr fl pi : interm file_descr fl pi = { mldummy = () }
 
-instance weak_pair fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (t1 * t2) fl pi = 
+instance interm_pair fl pi t1 {| d1:interm t1 fl pi |} t2 {| d2:interm t2 fl pi |} : interm (t1 * t2) fl pi = 
   { mldummy = () }
-instance weak_either fl pi t1 {| d1:weak t1 fl pi |} t2 {| d2:weak t2 fl pi |} : weak (either t1 t2) fl pi =
+instance interm_either fl pi t1 {| d1:interm t1 fl pi |} t2 {| d2:interm t2 fl pi |} : interm (either t1 t2) fl pi =
   { mldummy = () }
-instance weak_resexn fl pi t1 {| d1:weak t1 fl pi |} : weak (resexn t1) fl pi =
+instance interm_resexn fl pi t1 {| d1:interm t1 fl pi |} : interm (resexn t1) fl pi =
   { mldummy = () }
 
-type weak_arrow_typ fl pi (t1 t2:Type) = t1 -> MIOpi t2 fl pi
+type interm_arrow_typ fl pi (t1 t2:Type) = t1 -> MIOpi t2 fl pi
 
 (** An weak arrow is a statically/dynamically verified arrow to respect pi.
 **)
-instance weak_arrow fl pi #t1 (d1:weak t1 fl pi) #t2 (d2:weak t2 fl pi) : weak (weak_arrow_typ fl pi t1 t2) fl pi =
+instance interm_arrow fl pi #t1 (d1:interm t1 fl pi) #t2 (d2:interm t2 fl pi) : interm (interm_arrow_typ fl pi t1 t2) fl pi =
   { mldummy = () }
 
-instance weak_arrow3 fl pi
-  t1 {| d1:weak t1 fl pi |}
-  t2 {| d2:weak t2 fl pi |}
-  t3 {| d3:weak t3 fl pi |}
-  t4 {| d4:weak t4 fl pi |}
-  : weak (t1 -> t2 -> t3 -> MIOpi t4 fl pi) fl pi =
+instance interm_arrow3 fl pi
+  t1 {| d1:interm t1 fl pi |}
+  t2 {| d2:interm t2 fl pi |}
+  t3 {| d3:interm t3 fl pi |}
+  t4 {| d4:interm t4 fl pi |}
+  : interm (t1 -> t2 -> t3 -> MIOpi t4 fl pi) fl pi =
   { mldummy = () }
 
-instance weak_bool fl pi : weak bool fl pi = { mldummy = () }
-instance weak_int fl pi : weak int fl pi = { mldummy = () }
-instance weak_option fl pi t1 {| d1:weak t1 fl pi |} : weak (option t1) fl pi =
+instance interm_bool fl pi : interm bool fl pi = { mldummy = () }
+instance interm_int fl pi : interm int fl pi = { mldummy = () }
+instance interm_option fl pi t1 {| d1:interm t1 fl pi |} : interm (option t1) fl pi =
   { mldummy = () }
-instance weak_bytes fl pi : weak Bytes.bytes fl pi = { mldummy = () }
+instance interm_bytes fl pi : interm Bytes.bytes fl pi = { mldummy = () }
 
 (**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
 instance weak_fo_string : weak_fo string = { fo_pred = () }

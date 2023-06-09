@@ -8,7 +8,7 @@ FSTAR := fstar.exe
 ROOTS := ExtraTactics.fst CommonUtils.fst Free.fst Hist.fst DMFree.fst		\
          MIO.Sig.fst MIO.Sig.Call.fst MIO.fst MIO.Behavior.fst TC.Checkable.fst	\
          BeyondCriteria.fst Compiler.Languages.fst Compiler.Model.fst		\
-         RunningExample.fst Compiler.Examples.fst Compiler.MIO.To.Weak.fst
+         Compiler.Examples.fst Compiler.MIO.To.Weak.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints
