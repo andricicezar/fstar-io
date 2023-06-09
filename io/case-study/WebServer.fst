@@ -10,6 +10,16 @@ open FStar.List.Tot.Properties
 open Compiler.Model
 open Utils
 
+type req_handler (fl:erased tflag) =
+  (client:file_descr) ->
+  (req:Bytes.bytes) ->
+  (send:(res:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
+                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,res) r] /\
+                                                                  wrote_at_least_once_to client lt)))) ->
+  MIO (resexn unit) fl (requires (fun h -> valid_http_request req /\ did_not_respond h))
+                       (ensures (fun h r lt -> enforced_locally pi h lt /\
+                                             (wrote_at_least_once_to client lt \/ Inr? r)))
+
 let static_cmd
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
@@ -19,22 +29,11 @@ let static_cmd
         lt == [convert_call_to_event true cmd arg r])) =
   static_cmd true cmd arg
 
-type req_handler (fl:erased tflag) =
-  (client:file_descr) ->
-  (req:Bytes.bytes) ->
-  (send:(msg:Bytes.bytes -> MIO (resexn unit) fl (requires (fun h -> did_not_respond h /\ Bytes.length msg < 500))
-                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite true (client,msg) r] /\
-                                                                  wrote_at_least_once_to client lt)))) ->
-  MIO (resexn unit) fl (requires (fun h -> did_not_respond h))
-                       (ensures (fun h r lt -> enforced_locally pi h lt /\
-                                             (wrote_at_least_once_to client lt \/ Inr? r)))
-
 
 let sendError400 (fd:file_descr) : MIO unit IOActions
- (fun _ -> True) (fun _ _ lt -> exists msg r. lt == [EWrite true (fd, msg) r]) =
+ (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite true (fd, res) r]) =
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
-
 
 let get_req (fd:file_descr) :
   MIO (resexn Bytes.bytes) IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead true (fd, limit) r']) =
@@ -174,18 +173,14 @@ let webserver
 
 let check_send_pre : tree pck_rc = 
   Node 
-    (| Bytes.bytes, unit, (fun msg h _ _ ->
-      Utils.did_not_respond' h && (Bytes.length msg) < 500) |)
+    (| Bytes.bytes, unit, (fun res h _ _ ->
+      Utils.did_not_respond' h && valid_http_response res) |)
     Leaf
     Leaf
 
-let export_send (#fl:erased tflag) : exportable ((msg:Bytes.bytes -> MIO (resexn unit) fl (fun h -> did_not_respond h && Bytes.length msg < 500)
-                                            (fun _ _ lt -> exists fd r. lt == [EWrite true (fd,msg) r] ))) Utils.pi check_send_pre fl =
-  exportable_arrow_pre_post_args Bytes.bytes unit
-    (fun msg h -> did_not_respond h && Bytes.length msg < 500)
-    (fun msg _ _ lt -> exists fd r. lt == [EWrite true (fd,msg) r])
-    #()
-    #()
+let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) fl (fun h -> did_not_respond h && valid_http_response res)
+                                            (fun _ _ lt -> exists fd r. lt == [EWrite true (fd,res) r] ))) Utils.pi check_send_pre fl =
+  exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 
 let check_handler_post : tree pck_rc =

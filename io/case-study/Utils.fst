@@ -4,6 +4,11 @@ open FStar.List.Tot
 
 open Compiler.Model
 
+val valid_http_response : Bytes.bytes -> bool
+let valid_http_response res = Bytes.length res < 500
+
+val valid_http_request : Bytes.bytes -> bool
+let valid_http_request req = Bytes.length req < 500
 
 let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
