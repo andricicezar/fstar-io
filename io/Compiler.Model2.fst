@@ -58,9 +58,9 @@ type src_interface = {
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
-  spt : erased tflag -> Type;
-  spt_dcs : tree pck_dc;
-  spt_exportable : fl:erased tflag -> exportable (spt fl) fl pi spt_dcs;
+  pt : erased tflag -> Type;
+  pt_dcs : tree pck_dc;
+  pt_exportable : fl:erased tflag -> exportable (pt fl) fl pi pt_dcs;
 }
 
 noeq
@@ -68,17 +68,17 @@ type tgt_interface = {
   pi : policy_spec;
   phi : policy pi;
 
-  wpt : erased tflag -> Type u#a;
-  wpt_weak : fl:erased tflag -> interm (wpt fl) fl pi;
+  pt : erased tflag -> Type u#a;
+  pt_weak : fl:erased tflag -> interm (pt fl) fl pi;
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi Ctx -> typ_eff_dcs fl i.spt_dcs -> i.spt fl -> unit -> MIOpi int fl i.pi
-type prog_src (i:src_interface) = #fl:erased tflag -> i.spt (fl+IOActions)
+type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi Ctx -> typ_eff_dcs fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi
+type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
 type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
-  (| (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.spt_dcs) (p #AllActions)) |)
+  (| (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| _, ws |) -> beh ws)
@@ -90,8 +90,8 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi Ctx -> i.wpt fl -> unit -> MIOpi int fl i.pi
-type prog_tgt (i:tgt_interface) = i.wpt AllActions
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi Ctx -> i.pt fl -> unit -> MIOpi int fl i.pi
+type prog_tgt (i:tgt_interface) = i.pt AllActions
 type whole_tgt = unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
@@ -109,8 +109,8 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  wpt = (fun fl -> (i.spt_exportable fl).ityp);
-  wpt_weak = (fun fl -> (i.spt_exportable fl).c_ityp);
+  pt = (fun fl -> (i.pt_exportable fl).ityp);
+  pt_weak = (fun fl -> (i.pt_exportable fl).c_ityp);
 
   pi = i.pi;
   phi = i.phi;
@@ -119,15 +119,15 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl acts eff_dcs p_s =
-  c_t #fl acts ((i.spt_exportable fl).export eff_dcs p_s)
+  c_t #fl acts ((i.pt_exportable fl).export eff_dcs p_s)
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| _, ws |) = ws
 
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s = 
-  let eff_dcs = make_dcs_eff i.spt_dcs in
-  (i.spt_exportable AllActions).export eff_dcs (p_s #AllActions)
+  let eff_dcs = make_dcs_eff i.pt_dcs in
+  (i.pt_exportable AllActions).export eff_dcs (p_s #AllActions)
 
 val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
 let compile_ctx #i c_s =
