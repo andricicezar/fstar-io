@@ -91,9 +91,10 @@ let test1 : src_interface = {
 }
 
 val test1_prog : prog_src test1
-let test1_prog #fl (fd:file_descr) : MIO (resexn unit) (fl + IOActions) (test1_pre fd) (test1_post fd) =
-  // TODO: Why is this failing?
-  static_cmd Prog Close fd
+let test1_prog #fl fd : MIO (resexn unit) (fl+IOActions) (test1_pre fd) (test1_post fd) =
+  // weird behavior of F*
+  let r : mio_sig.res Close fd = static_cmd Ctx Close fd in
+  r <: resexn unit
 
 val test1_ctx : ctx_src test1
 let test1_ctx #fl io_acts eff_rcs prog () : MIOpi int fl test1.pi = 
