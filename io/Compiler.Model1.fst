@@ -114,8 +114,8 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
-  ct = (fun fl -> (i.ct_importable fl).sityp);
-  ct_weak = (fun fl -> (i.ct_importable fl).c_sityp);
+  ct = (fun fl -> (i.ct_importable fl).ityp);
+  ct_weak = (fun fl -> (i.ct_importable fl).c_ityp);
 
   pi = i.pi;
   phi = i.phi;
