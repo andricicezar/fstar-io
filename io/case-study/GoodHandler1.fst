@@ -1,12 +1,9 @@
 module GoodHandler1
 
-open FStar.Ghost
-open Compiler.Model
-
 open FStar.Tactics
+open FStar.Ghost
 
-open Compiler.Model
-
+open Compiler.Model1
 open WebServer
 
 let tgt_cs_int = comp.comp_int cs_int
@@ -39,26 +36,24 @@ let parse_http_header (header : Bytes.bytes) : request_type =
   | 'G' :: 'E :: 'T' :: ' ' :: tail -> GET (extract_path tail)
   | _ -> Error
 
-let rec send_file 
+let rec get_file 
   (#fl:erased tflag)
-  (io_acts:acts fl pi false)
-  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
-  (fd : file_descr) (limit : UInt8.t) :
-  MIOpi unit fl pi =
+  (call_io:io_lib fl pi Ctx)
+  (fd : file_descr) (limit : UInt8.t)
+  (i:nat) :
+  MIOpi Bytes.bytes fl pi =
       admit ();
-  match io_acts Read (fd,limit) with
+  match call_io Read (fd,limit) with
   | Inl (chunk, size) -> begin 
-    if UInt8.lt size limit then
-      let _ = send (Bytes.slice chunk 0ul (UInt32.uint_to_t (UInt8.v size))) in
-      ()
+    if UInt8.lt size limit || i = 0 then
+      Bytes.slice chunk 0ul (UInt32.uint_to_t (UInt8.v size))
     else (
-      let _ = send chunk in
-      send_file io_acts send fd limit 
+      Bytes.append chunk (get_file call_io fd limit (i-1))
     )
   end
-  | _ -> ()
+  | _ -> Bytes.utf8_encode ""
 
-let write_string 
+(**let write_string 
   (#fl:erased tflag)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (s:string) : MIOpi unit fl pi =
@@ -72,6 +67,7 @@ let write_int
   MIOpi unit fl pi =
   let (s:string) = string_of_int x in
   write_string #fl send s
+**)
 
 open FStar.Tactics
 
@@ -92,27 +88,23 @@ let lemma1 (pi:policy_spec) : Lemma (
   Classical.forall_intro_3 (Classical.move_requires_3 (lemma1_0 pi))
 
 let head 
-  (#fl:erased tflag)
-  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (status_code:int) :
-  MIOpi unit fl pi =
-  lemma1 pi;
-  write_string #fl send "HTTP/1.1 ";
-  write_int #fl send status_code;
-  write_string #fl send "\n"  
+  Tot string =
+  FStar.String.concat ""
+    ["HTTP/1.1 ";
+     string_of_int status_code;
+    "\n"]
   
 let set_headers 
-  (#fl:erased tflag)
-  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (status_code:int) (media_type:string) (content_length: int) : 
-  MIOpi unit fl pi =
-  lemma1 pi;
-  head #fl send status_code;
-  write_string #fl send "Content-Length: ";
-  write_int #fl send content_length;
-  write_string #fl send "\nContent-Type: ";
-  write_string #fl send media_type;
-  write_string #fl send "\n\n"
+  Tot string =
+  FStar.String.concat ""
+    [head status_code;
+    "Content-Length: ";
+    string_of_int content_length;
+    "\nContent-Type: ";
+    media_type;
+    "\n\n"]
 
 let respond
   (#fl:erased tflag)
@@ -120,18 +112,20 @@ let respond
   (status_code:int) (media_type:string) (content:Bytes.bytes) : 
   MIOpi unit fl pi =
   lemma1 pi;
-  set_headers #fl send status_code media_type (Bytes.length content);
-  let _ = send content in
+  admit ();
+  let hdrs = set_headers status_code media_type (Bytes.length content) in
+  let msg = (Bytes.append (Bytes.utf8_encode hdrs) content) in
+  let _ = send msg in
   ()
 
 let get_fd_stats 
   (#fl:erased tflag)
-  (io_acts:acts fl pi false)
+  (call_io:io_lib fl pi Ctx)
   (file_full_path: string) :
   MIOpi (resexn (file_descr * stats)) fl pi =
-  let _ = io_acts Access (file_full_path,[R_OK]) in
-  let file_stats = io_acts Stat file_full_path in
-  let fd = io_acts Openfile (file_full_path,[O_RDONLY],0) in
+  let _ = call_io Access (file_full_path,[R_OK]) in
+  let file_stats = call_io Stat file_full_path in
+  let fd = call_io Openfile (file_full_path,[O_RDONLY],0) in
   match fd, file_stats with
   | Inl fd, Inl file_stats -> Inl (fd, file_stats)
   | _, _ -> Inr Contract_failure
@@ -147,27 +141,27 @@ let get_media_type (file_path : string) : (media_type:string{String.maxlen media
 
 let get_query 
   (#fl:erased tflag)
-  (io_acts:acts fl pi false)
+  (call_io:io_lib fl pi Ctx)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (file_full_path : string) :
   MIOpi unit fl pi =
-  match get_fd_stats io_acts file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
+  match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
+    admit ();
     lemma1 pi;
-    set_headers #fl send 200 (get_media_type file_full_path) (UInt8.v stat.st_size);
-    send_file #fl io_acts send fd 100uy;
-   
-    let _ = io_acts Close fd in ()
+    let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
+    let file = get_file #fl call_io fd 100uy 100 in
+    let msg = (Bytes.append (Bytes.utf8_encode hdrs) file) in
+    let _ = send msg in
+    let _ = call_io Close fd in ()
   end
 
 val good_handler1 : tgt_handler
-let good_handler1 #fl  io_acts client req send =
+let good_handler1 #fl  call_io client req send =
     lemma1 pi;
   match parse_http_header req with
-  | GET "/" -> Inl (respond #fl send 200 "text/html" (Bytes.utf8_encode "<h1>Hello!</h1>"))
-  | GET query -> Inl (
-    get_query #fl io_acts send query
-  ) 
-  | _ -> Inl (head #fl send 400)
+  | GET "/" -> (respond #fl send 200 "text/html" (Bytes.utf8_encode "<h1>Hello!</h1>"); Inl ())
+  | GET query -> (get_query #fl call_io send query; Inl ())
+  | _ -> (admit (); send (Bytes.utf8_encode (head 401)))
 
 let good_main1 = link compiled_webserver good_handler1
 

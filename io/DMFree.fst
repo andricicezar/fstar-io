@@ -7,7 +7,7 @@ open FStar.Tactics
 open Free
 open Hist
 
-type op_wp (op:Type0) (s:op_sig op) (event:Type0) = (caller:bool) -> (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
+type op_wp (op:Type0) (s:op_sig op) (event:Type0) = caller -> (cmd:op) -> (arg:s.args cmd) -> hist #event (s.res cmd arg)
 
 let partial_call_wp (pre:pure_pre) : hist (squash pre) = 
   let wp' : hist0 (squash pre) = fun p h -> pre /\ p [] () in

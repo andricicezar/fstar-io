@@ -221,7 +221,7 @@ effect MIO
   
 let static_cmd
   (#mst:mst)
-  (caller : bool)
+  caller
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
   MIO (io_sig.res cmd arg) mst IOActions
@@ -230,13 +230,13 @@ let static_cmd
         lt == [convert_call_to_event caller cmd arg r])) =
   MIOwp?.reflect (mio_call caller cmd arg)
 
-let get_trace #mst (caller:bool) : MIOwp (Ghost.erased trace) mst GetTraceActions
+let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
   (fun p h -> p [] (Ghost.hide h)) =
-  MIOwp?.reflect (mio_call caller GetTrace ())
+  MIOwp?.reflect (mio_call Prog GetTrace ())
   
-let get_state #mst (caller:bool) : MIOwp mst.cst mst GetTraceActions
+let get_state #mst () : MIOwp mst.cst mst GetTraceActions
   (fun p h -> forall s. mst.models s h ==> p [] s) =
-  MIOwp?.reflect (mio_call caller GetST ())
+  MIOwp?.reflect (mio_call Prog GetST ())
 
 // | GetST -> forall (x:mst.cst). mst.models x h ==> p [] x // any concrete state modelling the trace
   
@@ -249,12 +249,12 @@ let get_state #mst (caller:bool) : MIOwp mst.cst mst GetTraceActions
 let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
   by (compute ())
 =
-  let fd = static_cmd #mst true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  let fd = static_cmd true Openfile "../Makefile" in
-  if Inl? fd then let _ = static_cmd true Close (Inl?.v fd) in () else 
+  let fd = static_cmd #mst Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  let fd = static_cmd Prog Openfile "../Makefile" in
+  if Inl? fd then let _ = static_cmd Prog Close (Inl?.v fd) in () else 
   ()
 #pop-options

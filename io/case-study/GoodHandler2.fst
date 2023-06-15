@@ -1,12 +1,9 @@
 module GoodHandler2
 
 open FStar.Ghost
-open Compiler.Model
-
 open FStar.Tactics
 
-open Compiler.Model
-
+open Compiler.Model1
 open WebServer
 
 let tgt_cs_int = comp.comp_int cs_int
@@ -14,7 +11,7 @@ let tgt_cs_int = comp.comp_int cs_int
 type tgt_handler = ctx_tgt tgt_cs_int
 
 val good_handler2 : tgt_handler
-let good_handler2 #fl io_acts client req send =
+let good_handler2 #fl call_io client req send =
   let r = send req in
   let x = (let x = MIO.Sig.Call.print_string2 "Returning result from request handler..." in
   match r, x with
