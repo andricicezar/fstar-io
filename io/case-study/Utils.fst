@@ -85,19 +85,37 @@ let no_read_true e : GTot bool =
 
 noeq
 type cst = {
-  opened : file_descr -> bool;
-  written : file_descr -> bool;
-  waiting : unit -> bool;
+  opened : list file_descr;
+  written : list file_descr;
+  waiting : bool;
 }
 
 let models (c:cst) (h:trace) : Type0 =
-  (forall fd. c.opened fd <==> is_opened_by_untrusted h fd)
-  /\ (forall fd lt. c.written fd <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
-  /\ (c.waiting () <==> did_not_respond' h)
+  (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
+  /\ (forall fd lt. fd `List.mem` c.written <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
+  /\ (c.waiting <==> did_not_respond' h)
+
+let update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
+  let opened = s0.opened in
+  let written = s0.written in
+  let waiting = s0.waiting in
+  let (| caller, cmd, arg, res |) = destruct_event e in
+  match cmd, res with
+  | Accept, Inl _ -> ({ opened = opened; written = written; waiting = true })
+  | Openfile, Inl fd -> admit ();({ opened = fd::opened; written = written; waiting = waiting })
+  | Close, Inl _ -> admit (); ({ opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = written; waiting = waiting })
+  | Write, Inl _ -> 
+    admit ();
+    let arg : file_descr * Bytes.bytes = arg in
+    ({ opened = opened; written = arg._1::written; waiting = false })
+  | _ -> admit (); s0
 
 let mymst : mst = {
   cst = cst;
   models = models;
+
+  init_cst = { opened = []; written = []; waiting = false };
+  update_cst = update_cst;
 }
 
 val pi : policy_spec
@@ -127,8 +145,8 @@ let phi s0 cmd arg =
     if fnm = "/temp" then true else false
   | Read ->
     let (fd, _) : file_descr * UInt8.t = arg in
-    s0.opened fd
-  | Close -> s0.opened arg
+    fd `List.mem` s0.opened
+  | Close -> arg `List.mem` s0.opened
   | Access -> 
     let (fnm, _) : string * list access_permission = arg in
     if fnm = "/temp" then true 

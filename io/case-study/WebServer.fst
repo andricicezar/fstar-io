@@ -175,7 +175,7 @@ let webserver
 let check_send_pre : tree (pck_dc mymst) = 
   Node 
     (| Bytes.bytes, unit, (fun res h _ _ ->
-      Utils.did_not_respond' h && valid_http_response res), (fun res s0 _ _ -> s0.waiting () && valid_http_response res && true) |)
+      Utils.did_not_respond' h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
     Leaf
     Leaf
 
@@ -189,7 +189,7 @@ let check_handler_post : tree (pck_dc mymst) =
     file_descr, 
     unit, 
     (fun client _ _ lt -> Utils.wrote_at_least_once_to' client lt),
-    (fun client s0 _ s1 -> s1.written client)
+    (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
     check_send_pre 
     Leaf

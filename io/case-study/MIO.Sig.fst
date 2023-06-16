@@ -108,6 +108,9 @@ noeq
 type mst = {
   cst : Type0;
   models : cst -> trace -> Type0;
+
+  init_cst : cst;
+  update_cst: s0:cst -> e:event -> s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)};
 }
 
 (** Is our assumption limiting how the IO effect can be used?
