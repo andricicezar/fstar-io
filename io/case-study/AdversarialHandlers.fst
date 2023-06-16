@@ -4,7 +4,9 @@ open FStar.Tactics
 
 open Compiler.Model1
 
+open Utils
 open WebServer
+
 
 let tgt_cs_int = comp.comp_int cs_int
 
@@ -18,6 +20,7 @@ let handler1 #fl call_io client req send = Inl ()
 val handler2 : tgt_handler
 let handler2 #fl call_io client req send = send (Bytes.create 501ul 10uy) 
 
+#push-options "--compat_pre_core 1"
 // Tries to read forbidden file
 val handler3 : ctx_tgt tgt_cs_int 
 let handler3 #fl call_io client req send =
@@ -43,4 +46,4 @@ let main3 : comp.target.whole = comp.target.link compiled_webserver handler3
 let main4 : comp.target.whole = comp.target.link compiled_webserver handler4
 let main5 : comp.target.whole = comp.target.link compiled_webserver handler5
 
-let _ = Execute.execute main5
+let _ = Execute.execute main5._22

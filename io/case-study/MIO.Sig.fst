@@ -1,6 +1,7 @@
 module MIO.Sig
 
 open FStar.List.Tot.Base
+open FStar.Ghost
 
 include CommonUtils
 include UnixTypes
@@ -26,6 +27,7 @@ type cmds =
   | Stat
   (* instrumentation *)
   | GetTrace
+  | GetST
 
 (** the io free monad does not contain the GetTrace step **)
 let _io_cmds x : bool = 
@@ -92,7 +94,7 @@ type event =
 
 type trace = list event
 
-type m_cmds = x:cmds{x = GetTrace}
+type m_cmds = x:cmds{x = GetTrace || x = GetST}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
@@ -100,6 +102,13 @@ should be linked with wrapped primitives that initialize a
 trace on the heap (?) and updates it with events.
 GetTrace will be linked with a function that returns the reference
 to the trace from the heap. **)
+
+(* Monitoring state. *)
+noeq
+type mst = {
+  cst : Type0;
+  models : cst -> trace -> Type0;
+}
 
 (** Is our assumption limiting how the IO effect can be used?
  What if somebody wants to use only the IO effect? Then,
@@ -109,28 +118,30 @@ suffer a performance penalty. **)
 let m_args (cmd:m_cmds) =
   match cmd with
   | GetTrace -> unit
+  | GetST -> unit
 
-let m_res (cmd:m_cmds) (arg:m_args cmd) =
+let m_res (mst:mst) (cmd:m_cmds) (arg:m_args cmd) =
   match cmd with
-  | GetTrace -> trace 
+  | GetTrace -> erased trace 
+  | GetST -> mst.cst
 
-let m_sig : op_sig m_cmds = {
+let m_sig (mst:mst) : op_sig m_cmds = {
   args = m_args;
-  res = m_res;
+  res = m_res mst;
 }
 
-let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace
+let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace || cmd = GetST
 type mio_cmds = cmd:cmds{_mio_cmds cmd}
-let mio_sig : op_sig mio_cmds = add_sig cmds io_sig m_sig
+let mio_sig (mst:mst) : op_sig mio_cmds = add_sig cmds io_sig (m_sig mst)
 
 // THE MIO FREE MONAD
-type mio (a:Type) = free cmds mio_sig a
+type mio (mst:mst) (a:Type) = free cmds (mio_sig mst) a
 
-let mio_return (x:'a) : mio 'a =
-  free_return cmds mio_sig 'a x
+let mio_return #mst (x:'a) : mio mst 'a =
+  free_return cmds (mio_sig mst) 'a x
 
-let mio_bind (#a:Type) (#b:Type) l k : mio b =
-  free_bind cmds mio_sig a b l k
+let mio_bind #mst (#a:Type) (#b:Type) l k : mio mst b =
+  free_bind cmds (mio_sig mst) a b l k
 
 let convert_call_to_event
   caller
@@ -182,7 +193,11 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let mio_wps caller (cmd:mio_cmds) (arg:mio_sig.args cmd) : hist (mio_sig.res cmd arg) = fun p h ->
+unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : hist ((mio_sig mst).res cmd arg) = 
+  fun (p : hist_post ((mio_sig mst).res cmd arg)) h ->
   match cmd with
-  | GetTrace -> p [] h
-  | _ -> io_pre cmd arg h /\ (forall (r:mio_sig.res cmd arg). p [convert_call_to_event caller cmd arg r] r)
+  | GetTrace ->
+    let p : hist_post (Ghost.erased trace) = p in // need some handholding
+    p [] (Ghost.hide h)
+  | GetST -> forall (x:mst.cst). mst.models x h ==> p [] x // any concrete state modelling the trace
+  | _ -> io_pre cmd arg h /\ (forall (r:(mio_sig mst).res cmd arg). p [convert_call_to_event caller cmd arg r] r)

@@ -30,7 +30,6 @@ let did_not_respond' (h:trace) : bool =
   else MIO.Sig.Call.print_string2 "false\n") in
   fst (r, x)
 
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
@@ -41,44 +40,6 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   | EClose _ fd' res :: tl -> if Inl? res && fd = fd' then false
                              else is_opened_by_untrusted tl fd
   | _ :: tl -> is_opened_by_untrusted tl fd
-
-val pi : policy_spec
-let pi h c cmd arg =
-  match c, cmd with
-  | Ctx, Openfile -> 
-    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
-    if fnm = "/temp" then true else false
-  | Ctx, Read -> 
-    let (fd, _) : file_descr * UInt8.t = arg in
-    is_opened_by_untrusted h fd
-  | Ctx, Close -> is_opened_by_untrusted h arg
-  | Ctx, Access -> 
-    let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true 
-    else false
-  | Ctx, Stat -> 
-    if arg = "/temp" then true else false
-  | Prog, Write -> true
-  | _ -> false
-
-val phi : policy pi
-let phi h cmd arg =
-  match cmd with
-  | Openfile ->
-    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
-    if fnm = "/temp" then true else false
-  | Read ->
-    let (fd, _) : file_descr * UInt8.t = arg in
-    is_opened_by_untrusted h fd
-  | Close -> is_opened_by_untrusted h arg
-  | Access -> 
-    let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true 
-    else false
-  | Stat -> 
-    if arg = "/temp" then true else false
-  | _ -> false
-
 
 val wrote_at_least_once_to : file_descr -> trace -> bool
 let rec wrote_at_least_once_to client lt =
@@ -98,7 +59,6 @@ let wrote_at_least_once_to' client lt =
   let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
   else MIO.Sig.Call.print_string2 "false\n") in
   fst (r,x)
-
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -122,6 +82,61 @@ let no_read_true e : GTot bool =
   match e with
   | ERead Prog _ (Inl _) -> false
   | _ -> true
+
+noeq
+type cst = {
+  opened : file_descr -> bool;
+  written : file_descr -> bool;
+  waiting : unit -> bool;
+}
+
+let models (c:cst) (h:trace) : Type0 =
+  (forall fd. c.opened fd <==> is_opened_by_untrusted h fd)
+  /\ (forall fd lt. c.written fd <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
+  /\ (c.waiting () <==> did_not_respond' h)
+
+let mymst : mst = {
+  cst = cst;
+  models = models;
+}
+
+val pi : policy_spec
+let pi h c cmd arg =
+  match c, cmd with
+  | Ctx, Openfile -> 
+    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
+    if fnm = "/temp" then true else false
+  | Ctx, Read -> 
+    let (fd, _) : file_descr * UInt8.t = arg in
+    is_opened_by_untrusted h fd
+  | Ctx, Close -> is_opened_by_untrusted h arg
+  | Ctx, Access -> 
+    let (fnm, _) : string * list access_permission = arg in
+    if fnm = "/temp" then true 
+    else false
+  | Ctx, Stat -> 
+    if arg = "/temp" then true else false
+  | Prog, Write -> true
+  | _ -> false
+
+val phi : policy mymst pi
+let phi s0 cmd arg =
+  match cmd with
+  | Openfile ->
+    let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
+    if fnm = "/temp" then true else false
+  | Read ->
+    let (fd, _) : file_descr * UInt8.t = arg in
+    s0.opened fd
+  | Close -> s0.opened arg
+  | Access -> 
+    let (fnm, _) : string * list access_permission = arg in
+    if fnm = "/temp" then true 
+    else false
+  | Stat -> 
+    if arg = "/temp" then true else false
+  | _ -> false
+
 
 let ergar = every_request_gets_a_response_acc
 
