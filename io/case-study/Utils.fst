@@ -95,7 +95,21 @@ let models (c:cst) (h:trace) : Type0 =
   /\ (forall fd lt. fd `List.mem` c.written <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
   /\ (c.waiting <==> did_not_respond' h)
 
-let update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
+let mymst : mst = {
+  cst = cst;
+  models = models;
+}
+
+effect MyMIO
+  (a:Type)
+  (fl:FStar.Ghost.erased tflag)
+  (pre : trace -> Type0)
+  (post : trace -> a -> trace -> Type0) =
+  MIO a mymst fl pre post
+
+let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
+
+let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
   let waiting = s0.waiting in
@@ -109,14 +123,6 @@ let update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `mode
     let arg : file_descr * Bytes.bytes = arg in
     ({ opened = opened; written = arg._1::written; waiting = false })
   | _ -> admit (); s0
-
-let mymst : mst = {
-  cst = cst;
-  models = models;
-
-  init_cst = { opened = []; written = []; waiting = false };
-  update_cst = update_cst;
-}
 
 val pi : policy_spec
 let pi h c cmd arg =

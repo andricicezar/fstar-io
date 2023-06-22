@@ -4,6 +4,7 @@ open FStar.Ghost
 open FStar.Tactics
 
 open Compiler.Model1
+open Utils
 open WebServer
 
 let tgt_cs_int = comp.comp_int cs_int
@@ -21,4 +22,4 @@ let good_handler2 #fl call_io client req send =
 
 let good_main2 : comp.target.whole = comp.target.link compiled_webserver good_handler2
 
-let _ = Execute.execute good_main2
+let _ = Execute.execute good_main2._2

@@ -4,6 +4,7 @@ open FStar.Tactics
 open FStar.Ghost
 
 open Compiler.Model1
+open Utils
 open WebServer
 
 let tgt_cs_int = comp.comp_int cs_int
@@ -38,11 +39,11 @@ let parse_http_header (header : Bytes.bytes) : request_type =
 
 let rec get_file 
   (#fl:erased tflag)
-  (call_io:io_lib fl pi Ctx)
+  (call_io:io_lib fl pi mymst Ctx)
   (fd : file_descr) (limit : UInt8.t)
   (i:nat) :
-  MIOpi Bytes.bytes fl pi =
-      admit ();
+  MIOpi Bytes.bytes fl pi mymst =
+    admit ();
   match call_io Read (fd,limit) with
   | Inl (chunk, size) -> begin 
     if UInt8.lt size limit || i = 0 then
@@ -108,9 +109,9 @@ let set_headers
 
 let respond
   (#fl:erased tflag)
-  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
+  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (status_code:int) (media_type:string) (content:Bytes.bytes) : 
-  MIOpi unit fl pi =
+  MIOpi unit fl pi mymst =
   lemma1 pi;
   admit ();
   let hdrs = set_headers status_code media_type (Bytes.length content) in
@@ -120,9 +121,9 @@ let respond
 
 let get_fd_stats 
   (#fl:erased tflag)
-  (call_io:io_lib fl pi Ctx)
+  (call_io:io_lib fl pi mymst Ctx)
   (file_full_path: string) :
-  MIOpi (resexn (file_descr * stats)) fl pi =
+  MIOpi (resexn (file_descr * stats)) fl pi mymst =
   let _ = call_io Access (file_full_path,[R_OK]) in
   let file_stats = call_io Stat file_full_path in
   let fd = call_io Openfile (file_full_path,[O_RDONLY],0) in
@@ -141,10 +142,10 @@ let get_media_type (file_path : string) : (media_type:string{String.maxlen media
 
 let get_query 
   (#fl:erased tflag)
-  (call_io:io_lib fl pi Ctx)
-  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
+  (call_io:io_lib fl pi mymst Ctx)
+  (send:Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (file_full_path : string) :
-  MIOpi unit fl pi =
+  MIOpi unit fl pi mymst =
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
     admit ();
     lemma1 pi;
@@ -165,4 +166,4 @@ let good_handler1 #fl  call_io client req send =
 
 let good_main1 = link compiled_webserver good_handler1
 
-let _ = Execute.execute good_main1
+let _ = Execute.execute good_main1._2

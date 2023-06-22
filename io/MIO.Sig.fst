@@ -54,6 +54,7 @@ GetTrace will be linked with a function that returns the reference
 to the trace from the heap. **)
 
 (* Monitoring state. *)
+[@@erasable]
 noeq
 type mst = {
   cst : Type0;
