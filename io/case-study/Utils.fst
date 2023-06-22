@@ -2,7 +2,7 @@ module Utils
 
 open FStar.List.Tot
 
-open Compiler.Model1
+open Compiler.Languages
 
 val valid_http_response : Bytes.bytes -> bool
 let valid_http_response res = Bytes.length res < 500
@@ -24,11 +24,12 @@ let did_not_respond (h:trace) : bool =
   did_not_respond_acc h []
 
 let did_not_respond' (h:trace) : bool =
-  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
+//  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
   let r = did_not_respond h in
-  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-  else MIO.Sig.Call.print_string2 "false\n") in
-  fst (r, x)
+  r
+//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
+// else MIO.Sig.Call.print_string2 "false\n") in
+//  fst (r, x)
 
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
@@ -54,11 +55,12 @@ let rec wrote_at_least_once_to client lt =
   
 val wrote_at_least_once_to' : file_descr -> trace -> bool
 let wrote_at_least_once_to' client lt =
-  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
+//  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
   let r = wrote_at_least_once_to client lt in
-  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-  else MIO.Sig.Call.print_string2 "false\n") in
-  fst (r,x)
+  r
+//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
+//  else MIO.Sig.Call.print_string2 "false\n") in
+//  fst (r,x)
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -121,7 +123,8 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   | Write, Inl _ -> 
     admit ();
     let arg : file_descr * Bytes.bytes = arg in
-    ({ opened = opened; written = arg._1::written; waiting = false })
+    let (fd, _) = arg in
+    ({ opened = opened; written = fd::written; waiting = false })
   | _ -> admit (); s0
 
 val pi : policy_spec
@@ -160,7 +163,6 @@ let phi s0 cmd arg =
   | Stat -> 
     if arg = "/temp" then true else false
   | _ -> false
-
 
 let ergar = every_request_gets_a_response_acc
 

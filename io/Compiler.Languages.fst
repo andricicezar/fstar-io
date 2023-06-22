@@ -13,6 +13,9 @@ include MIO
     over the history. **)
 type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
+type policy (mst:mst) (pi:policy_spec) =
+  s:mst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. mst.models s h ==> pi h Ctx cmd arg)}
+
 unfold
 let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
   match e with

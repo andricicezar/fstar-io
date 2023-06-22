@@ -1,18 +1,19 @@
 open Prims
 open CommonUtils
 open FStar_Pervasives
+open Free
 open MIO_Sig
 
 let print_string2 str =
    print_string str; 
    flush stdout; true
 
-let print_caller (caller:bool) : unit =
-   if caller then print_string " Prog "
-   else print_string " Ctx "
+let print_caller (caller:caller) : unit =
+   match caller with
+   | Prog -> print_string " Prog "
+   | Ctx -> print_string " Ctx "
 
-
-let print_call0 (caller:bool) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
+let print_call0 (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
     match cmd with
     | Openfile -> begin
        print_string "EOpenfile"; print_caller caller;
@@ -124,12 +125,12 @@ let print_call0 (caller:bool) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
        | Inr err -> print_string "(Inr _);"
     end
 
-let print_call (caller:bool) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
+let print_call (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
    print_call0 caller cmd arg res;
    flush stdout
 
 let print_event (e:event) : unit =
-   let (caller, cmd, arg, res) : (bool * io_cmds * Obj.t * Obj.t) = Obj.magic (MIO_Sig.destruct_event e) in
+   let (caller, cmd, arg, res) : (caller * io_cmds * Obj.t * Obj.t) = Obj.magic (MIO_Sig.destruct_event e) in
    print_call0 caller cmd arg res
 
 let rec print_trace0 (t:trace) : unit =
@@ -163,27 +164,26 @@ let ml_call (cmd:io_cmds) : Obj.t -> Obj.t =
   | Access -> Obj.magic (Obj.repr Unix_Star.access)
   | Stat -> Obj.magic (Obj.repr Unix_Star.stat)
 
-let (io_call : bool -> io_cmds -> Obj.t -> (Obj.t resexn) mio) =
+let (io_call : caller -> io_cmds -> Obj.t -> (unit, Obj.t resexn) mio) =
   fun caller -> fun cmd -> fun argz ->
   try
     let rez = ml_call cmd argz in
-    Monitor.update_trace caller cmd argz (Obj.magic (Inl rez)); 
+    Monitor.update_state caller cmd argz (Obj.magic (Inl rez)); 
     print_call caller cmd argz (Obj.magic (Inl rez));
-    mio_return (Inl rez)
+    mio_return () (Inl rez)
   with err ->
-    Monitor.update_trace caller cmd argz (Obj.magic (Inr err));
+    Monitor.update_state caller cmd argz (Obj.magic (Inr err));
     print_call caller cmd argz (Obj.magic (Inr err));
-    mio_return (Inr err)
+    mio_return () (Inr err)
 
 
-let (mio_call : bool -> cmds -> Obj.t -> unit mio) =
-  fun caller -> fun cmd -> fun argz ->
+let (mio_call : unit -> caller -> cmds -> Obj.t -> (unit, unit) mio) =
+  fun () -> fun caller -> fun cmd -> fun argz ->
   match cmd with
-  | GetTrace -> 
-
-    let h = Monitor.get_trace () in
-    (**  print_trace h; **)
-    print_string "\nGetTrace;\n";
+  | GetTrace -> mio_return () ()
+  | GetST -> 
+    let s0 = Monitor.get_state () in
+    print_string "\nGetST;\n";
     flush stdout;
-    mio_return (Obj.magic h)
+    mio_return () (Obj.magic s0)
   | _ -> Obj.magic (io_call caller cmd argz)
