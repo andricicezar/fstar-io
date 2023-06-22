@@ -14,6 +14,8 @@ type tgt_handler = ctx_tgt tgt_cs_int
 let link = comp.target.link #tgt_cs_int
 
 let pi = tgt_cs_int.pi
+
+#push-options "--compat_pre_core 1"
   
 let rec _extract_path (header : list Char.char) : Tot (list Char.char) =
   match header with

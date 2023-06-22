@@ -11,6 +11,7 @@ let tgt_cs_int = comp.comp_int cs_int
 
 type tgt_handler = ctx_tgt tgt_cs_int
 
+#push-options "--compat_pre_core 1"
 val good_handler2 : tgt_handler
 let good_handler2 #fl call_io client req send =
   let r = send req in
