@@ -3,7 +3,7 @@
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 CACHEDIR := .cache
 FLAGS  = --include .. --record_hints --use_hints --hint_dir hints
@@ -51,7 +51,7 @@ out:
 	mkdir $@
 
 extract: | out
-	fstar.exe $(FLAGS) --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+	fstar.exe $(FLAGS) --lax --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
