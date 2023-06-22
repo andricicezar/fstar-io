@@ -119,7 +119,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Accept, Inl _ -> ({ opened = opened; written = written; waiting = true })
   | Openfile, Inl fd -> admit ();({ opened = fd::opened; written = written; waiting = waiting })
-  | Close, Inl _ -> admit (); ({ opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = written; waiting = waiting })
+  | Close, Inl _ -> admit (); ({ opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting })
   | Write, Inl _ -> 
     admit ();
     let arg : file_descr * Bytes.bytes = arg in

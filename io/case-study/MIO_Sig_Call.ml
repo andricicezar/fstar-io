@@ -28,7 +28,7 @@ let print_call0 (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
        let (fd,size) : UnixTypes.file_descr * int = Obj.magic arg in 
        print_string "(";
        print_int (Obj.magic fd);
-       print_string "\", ";
+       print_string ", ";
        print_int (Obj.magic size);
        print_string ") ";
        let r : (bytes * int) resexn = Obj.magic res in 
@@ -183,7 +183,7 @@ let (mio_call : unit -> caller -> cmds -> Obj.t -> (unit, unit) mio) =
   | GetTrace -> mio_return () ()
   | GetST -> 
     let s0 = Monitor.get_state () in
-    print_string "\nGetST;\n";
+    print_string "GetST;";
     flush stdout;
     mio_return () (Obj.magic s0)
   | _ -> Obj.magic (io_call caller cmd argz)
