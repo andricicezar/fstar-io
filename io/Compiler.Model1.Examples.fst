@@ -170,8 +170,6 @@ let test2_prog #fl ctx () =
   let _ = ctx (fun fd -> Inl ()) in
   (** return exit code **) 0
 
-#pop-options
-
 val test2_ctx : ctx_src test2 
 let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) mst2 fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
   let post1 = root eff_rcs in
@@ -193,23 +191,29 @@ let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt 
   | _ -> rfd
 
 (** ** Test 3 - HO right 1 **)
+let mst3 : mst = {
+  cst = list file_descr;
+  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+}
+
 let test3_pi : policy_spec = (fun _ _ _ _ -> true)
-let test3_phi : policy test3_pi = (fun _ _ _ -> true)
+let test3_phi : policy mst3 test3_pi = (fun _ _ _ -> true)
 
-let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> True) (fun _ _ lt -> True))
+let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) mst3 fl (fun h -> True) (fun _ _ lt -> True))
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
-let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) fl (fun _ -> True) (test3_post x)
+let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) mst2 fl (fun _ -> True) (test3_post x)
 
-let test3_rcs : tree pck_dc =  
-  Node (| file_descr, unit, (fun x h r lt -> true) |) 
+let test3_rcs : tree (pck_dc mst3) =  
+  Node (| file_descr, unit, (fun _ _ _ _ -> true), (fun _ _ _ _ -> true) |) 
      Leaf
-     (Node (| file_descr, resexn unit, (fun fd h _ _ -> true) |) Leaf Leaf)
+     (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true), (fun _ _ _ _ -> true) |) Leaf Leaf)
 
-let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_pi (right test3_rcs) = 
+let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_pi mst3 (right test3_rcs) = 
   safe_importable_arrow_pre_post_args_res
     #file_descr #unit
     #fl
     #test3_pi
+    #mst3
     #(right test3_rcs)
     (fun fd h -> True)
     (fun fd _ _ lt -> True)
@@ -220,12 +224,12 @@ let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl tes
   
 assume val test3_c1post : #a:Type -> squash (forall x h lt. enforced_locally test3_pi h lt ==> (exists (r:a). test3_post x h r lt))
 //let test3_c1post #a = () 
-val test3_c2post : #a:Type -> squash (forall x h (r:a) lt. enforced_locally test3_pi h lt /\ ((Mkdtuple3?._3 (root test3_rcs)) x h () lt) ==> test3_post x h r lt)
+val test3_c2post : #a:Type -> squash (forall x h (r:a) lt. enforced_locally test3_pi h lt /\ ((root test3_rcs)._3 x h () lt) ==> test3_post x h r lt)
 let test3_c2post #a = ()
 
-let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_pi test3_rcs = 
+let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_pi mst3 test3_rcs = 
   safe_importable_arrow_pre_post_args
-    #file_descr #(test3_cb fl) #fl #test3_pi #test3_rcs
+    #file_descr #(test3_cb fl) #fl #test3_pi #mst3 #test3_rcs
     (fun _ _ -> True)  (** pre **)
     test3_post       (** post **)
     (test3_c1post #(test3_cb fl))
@@ -235,13 +239,14 @@ let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl tes
 
 [@@ (postprocess_with (fun () -> norm [delta_only [`%test3_ct; `%test3_cb;`%test3_ct_importable]]; trefl ()))]
 let test3 : src_interface = {
+  mst = mst3;
   pi = test3_pi; phi = test3_phi;
   ct = test3_ct; ct_dcs = test3_rcs; ct_importable = test3_ct_importable; 
   psi = (fun _ _ _ -> True);
 }
 
 val test3_prog : prog_src test3
-let test3_prog #fl ctx () : MIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
+let test3_prog #fl ctx () : MIO int mst3 (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
   match static_cmd Prog Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with
@@ -252,8 +257,8 @@ let test3_prog #fl ctx () : MIO int (IOActions + fl) (fun _ -> True) (fun _ _ _ 
 
 val test3_ctx : ctx_src test3 
 let test3_ctx #fl io_acts eff_rcs fd = 
-  Inl (fun (fd:file_descr) -> Inl () <: (MIOwp (resexn unit) fl trivial_hist))
+  Inl (fun (fd:file_descr) -> Inl () <: (MIOwp (resexn unit) mst3 fl trivial_hist))
 
 val test3_ctx_t : ctx_tgt (comp_int_src_tgt test3)
-let test3_ctx_t #fl io_acts fd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl test3_pi)) fl test3_pi = 
-  Inl (fun (fd:file_descr) -> Inl () <: (MIOpi (resexn unit) fl test3_pi))
+let test3_ctx_t #fl io_acts fd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl test3_pi mst3)) fl test3_pi mst3 = 
+  Inl (fun (fd:file_descr) -> Inl () <: (MIOpi (resexn unit) fl test3_pi mst3))
