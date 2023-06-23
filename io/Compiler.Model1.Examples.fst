@@ -20,6 +20,8 @@ type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg
 
 type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
   squash (forall h lt. enforced_locally pi1 h lt ==> enforced_locally pi2 h lt)
+  
+#push-options "--compat_pre_core 1"
 
 
 (** ** Testing **)
@@ -112,38 +114,41 @@ let test1_prog #fl ctx () : MIO int mst1 (fl + IOActions) (fun _ -> True) test1.
   0 
 
 val test1_ctx : ctx_src test1
-#push-options "--compat_pre_core 1"
 let test1_ctx #fl io_acts eff_rcs () : MIO (resexn file_descr) mst1 fl (fun _ -> True) (test1_post ()) = 
   io_acts Openfile "/etc/passwd"
-#pop-options
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
-#push-options "--compat_pre_core 1"
 let test1_ctx_t #fl io_acts () : MIOpi (resexn file_descr) fl test1_pi mst1 =
   io_acts Openfile "/etc/passwd"
-#pop-options
 
 
 (** ** Test 2 - HO left 1 **)
+let mst2 : mst = {
+  cst = list file_descr;
+  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+}
+
 let test2_pi : policy_spec = (fun _ _ _ _ -> true)
-let test2_phi : policy test2_pi = (fun _ _ _ -> true)
+let test2_phi : policy mst2 test2_pi = (fun _ _ _ -> true)
 
-let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
+let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) mst2 fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
-let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) fl (fun _ -> True) (test2_post cb)
+let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) mst2 fl (fun _ -> True) (test2_post cb)
 
-let test2_rcs : tree pck_dc =  
-  Node (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))) |) 
-     (Node (| file_descr, unit, (fun fd h _ _ -> is_open fd h) |) Leaf Leaf)
+let test2_rcs : tree (pck_dc mst2) =  
+  Node 
+     (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))),
+              (fun () _ (rfd:resexn file_descr) s1 -> Inl? rfd && (Inl?.v rfd) `List.mem` s1) |) 
+     (Node (| file_descr, unit, (fun fd h _ _ -> is_open fd h), (fun fd s0 _ _ -> fd `List.mem` s0) |) Leaf Leaf)
      Leaf
   
 assume val test2_c1post : #a:Type -> squash (forall (x:a) h lt. enforced_locally test2_pi h lt ==> (exists r. test2_post x h r lt))
 
-val test2_c2post : #a:Type -> squash (forall (x:a) h r lt. enforced_locally test2_pi h lt /\ ((Mkdtuple3?._3 (root test2_rcs)) () h r lt) ==> test2_post x h r lt)
+val test2_c2post : #a:Type -> squash (forall (x:a) h r lt. enforced_locally test2_pi h lt /\ (((root test2_rcs)._3) () h r lt) ==> test2_post x h r lt)
 let test2_c2post #a = ()
 
-let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_pi test2_rcs = 
-  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_pi #(left test2_rcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
+let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_pi mst2 test2_rcs = 
+  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_pi #mst2 #(left test2_rcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
   safe_importable_arrow_pre_post_res
     (fun _ _ -> True)  (** pre **)
     test2_post       (** post **)
@@ -154,6 +159,7 @@ let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl tes
 
 [@@ (postprocess_with (fun () -> norm [delta_only [`%test2_ct; `%test2_cb;`%test2_ct_importable]]; trefl ()))]
 let test2 : src_interface = {
+  mst = mst2;
   pi = test2_pi; phi = test2_phi; 
   ct = test2_ct; ct_dcs = test2_rcs; ct_importable = test2_ct_importable; 
   psi = (fun _ _ _ -> True);
@@ -164,8 +170,10 @@ let test2_prog #fl ctx () =
   let _ = ctx (fun fd -> Inl ()) in
   (** return exit code **) 0
 
+#pop-options
+
 val test2_ctx : ctx_src test2 
-let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) mst2 fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
   let post1 = root eff_rcs in
   let (| _, pre1 |) = root (left eff_rcs) in 
   let rfd = io_acts Openfile "/etc/passwd" in
@@ -174,7 +182,7 @@ let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) fl (fun _ -> True
   | _ -> rfd
 
 val test2_ctx_t : ctx_tgt (comp_int_src_tgt test2)
-let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi = 
+let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi mst2 = 
   let rfd = io_acts Openfile "/etc/passwd" in
   match rfd with
   | Inl fd -> begin

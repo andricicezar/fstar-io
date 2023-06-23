@@ -22,13 +22,10 @@ let static_cmd
         lt == [convert_call_to_event caller cmd arg r])) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call caller cmd arg)
 
-type policy (pi:policy_spec) =
-  h:trace -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> pi h Ctx cmd arg}
-
-type acts (fl:erased tflag) (pi:policy_spec) (c:caller) =
+type io_lib (fl:erased tflag) (pi:policy_spec) (mst:mst) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) mst fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
@@ -36,22 +33,23 @@ type acts (fl:erased tflag) (pi:policy_spec) (c:caller) =
        | Inr Contract_failure -> lt == []
        | r' -> lt == [convert_call_to_event c cmd arg r'])))
 
-type acts' (fl:erased tflag) (#pi:policy_spec) (phi:policy pi) (c:caller) =
+type io_lib' (fl:erased tflag) (#pi:policy_spec) (mst:mst) (phi:policy mst pi) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) fl
+  MIO (io_resm cmd arg) mst fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally pi h lt /\
-      enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
+      //enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
        | r' -> lt == [convert_call_to_event c cmd arg r'])))
 
-val inst_io_cmds : #pi:policy_spec -> phi:policy pi -> acts' AllActions phi Ctx
+#push-options "--compat_pre_core 1" // fixme
+val inst_io_cmds : #mst:mst -> #pi:policy_spec -> phi:policy mst pi -> io_lib' AllActions mst phi Ctx
 let inst_io_cmds phi cmd arg = 
-  let h = get_trace () in
-  if phi h cmd arg then (
+  let s0 = get_state () in
+  if phi s0 cmd arg then (
     // Need the letbinding here it won't typecheck... why?
     let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
     r
@@ -60,39 +58,41 @@ let inst_io_cmds phi cmd arg =
 (** **** interfaces **)
 noeq
 type src_interface = {
+  mst:mst;
   (* pi is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
   pi : policy_spec;
   (* phi is in bool and it is used to enfodce the policy on the context,
      it describes only the events of the context and it has to imply pi **)
-  phi : policy pi;
+  phi : policy mst pi;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   pt : erased tflag -> Type;
-  pt_dcs : tree pck_dc;
-  pt_exportable : fl:erased tflag -> exportable (pt fl) fl pi pt_dcs;
+  pt_dcs : tree (pck_dc mst);
+  pt_exportable : fl:erased tflag -> exportable (pt fl) fl pi mst pt_dcs;
 }
 
 noeq
 type tgt_interface = {
+  mst : mst;
   pi : policy_spec;
-  phi : policy pi;
+  phi : policy mst pi;
 
   pt : erased tflag -> Type u#a;
-  pt_weak : fl:erased tflag -> interm (pt fl) fl pi;
+  pt_weak : fl:erased tflag -> interm (pt fl) fl pi mst;
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> acts' fl i.phi Ctx -> typ_eff_dcs fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib' fl i.mst i.phi Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
 type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
-type whole_src = post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions (fun _ -> True) post)
+type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
-  (| (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
+  (| i.mst, (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
 
 val beh_src : whole_src ^-> trace_property #event
-let beh_src = on_domain whole_src (fun (| _, ws |) -> beh ws)
+let beh_src = on_domain whole_src (fun (| mst,  _, ws |) -> beh mst ws)
 
 let src_language : language = {
   interface = src_interface;
@@ -101,15 +101,15 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> acts fl i.pi Ctx -> i.pt fl -> unit -> MIOpi int fl i.pi
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
 type prog_tgt (i:tgt_interface) = i.pt AllActions
-type whole_tgt = unit -> MIO int AllActions (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (c #AllActions (inst_io_cmds i.phi) p)
+  (| i.mst, (c #AllActions (inst_io_cmds i.phi) p) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
-let beh_tgt = beh 
+let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
 
 let tgt_language : language = {
   interface = tgt_interface;
@@ -120,6 +120,7 @@ let tgt_language : language = {
 
 (** ** Compile interfaces **)
 let comp_int_src_tgt (i:src_interface) : tgt_interface = {
+  mst = i.mst;
   pt = (fun fl -> (i.pt_exportable fl).ityp);
   pt_weak = (fun fl -> (i.pt_exportable fl).c_ityp);
 
@@ -129,11 +130,11 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
-let backtranslate_ctx #i c_t #fl acts eff_dcs p_s =
-  c_t #fl acts ((i.pt_exportable fl).export eff_dcs p_s)
+let backtranslate_ctx #i c_t #fl io_lib eff_dcs p_s =
+  c_t #fl io_lib ((i.pt_exportable fl).export eff_dcs p_s)
 
 val compile_whole : whole_src -> whole_tgt
-let compile_whole (| _, ws |) = ws
+let compile_whole (| mst, _, ws |) = (| mst, ws |)
 
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s = 
