@@ -56,11 +56,11 @@ extract: | out
 _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
 	cp ../UnixTypes.* out/.
+	cp Unix_Star.* out/.
 	@# Override some files to work around F* extraction bugs
 	cp MIO_Sig_Call.* out/.
 	cp Compiler_MIO_To_Interm.* out/.
-	cp Execute.* out/.
-	cp Unix_Star.* out/.
+	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc fd/g' {} \;
 
 _compile1: | out
 	ocamlfind opt -package fstar.lib -w -8 -linkpkg -g -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Monitor.ml out/MIO_Sig_Call.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/AdversarialHandlers.ml -o out/CS.exe
