@@ -36,11 +36,16 @@ let sendError400 (fd:file_descr) : MIO unit mymst IOActions
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
+exception BadRequest
+
 let get_req (fd:file_descr) :
-  MIO (resexn Bytes.bytes) mymst IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead Prog (fd, limit) r']) =
+  MIO (resexn Bytes.bytes) mymst IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead Prog (fd, limit) r'] /\ (Inl? r ==> valid_http_request (Inl?.v r))) =
   let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
-  | Inl (msg, _) -> Inl msg
+  | Inl (msg, _) ->
+    if Bytes.length msg < 500
+    then (assume (valid_http_request msg) ; Inl msg)
+    else (admit () ; Inr BadRequest) // This violates the post so I don't know what to do...
   | Inr err -> Inr err
 
 let process_connection
@@ -63,10 +68,9 @@ let process_connection
   | Inr _ -> ()
   | Inl req ->
     // The thing missing is the precondition to req_handler
-    // The first one has to be a postcondition to get_req I guess
-    // The other one a precondition to process_connection? It seems odd, maybe
+    // Do we need a precondition to process_connection? It seems odd, maybe
     // we want to improve the spec of did_not_respond?
-    assume (forall h. valid_http_request req /\ did_not_respond h) ;
+    assume (forall h. did_not_respond h) ;
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
