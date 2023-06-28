@@ -44,12 +44,11 @@ let get_req (fd:file_descr) :
   | Inr err -> Inr err
 
 let process_connection
-  (client : file_descr) 
+  (client : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) : 
+  (req_handler : req_handler (IOActions + fl)) :
   MIO unit mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  admit ();
   introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
@@ -63,39 +62,44 @@ let process_connection
   match get_req client with
   | Inr _ -> ()
   | Inl req ->
+    // The thing missing is the precondition to req_handler
+    // The first one has to be a postcondition to get_req I guess
+    // The other one a precondition to process_connection? It seems odd, maybe
+    // we want to improve the spec of did_not_respond?
+    assume (forall h. valid_http_request req /\ did_not_respond h) ;
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
     end
 
 let rec process_connections
-  (clients : lfds) 
-  (to_read : lfds) 
+  (clients : lfds)
+  (to_read : lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) : 
+  (req_handler : req_handler (IOActions + fl)) :
   MIO lfds mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
-  | client :: tail -> 
+  | client :: tail ->
     begin
       let rest = process_connections tail to_read req_handler in
       if List.mem client to_read then begin
         process_connection client req_handler ;
         let _ = static_cmd Close client in
         every_request_gets_a_response_append () ;
-        tail 
+        tail
       end else clients
     end
- 
+
 let get_new_connection (socket : file_descr) :
   MIO (option file_descr) mymst IOActions (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
-    if List.length to_accept > 0 then begin 
+    if List.length to_accept > 0 then begin
       match static_cmd Accept socket with
-      | Inl client -> 
+      | Inl client ->
         let _ = static_cmd SetNonblock client in
         Some client
       | _ -> None
@@ -105,7 +109,7 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) : 
+  (req_handler : req_handler (IOActions + fl)) :
   MIO lfds mymst (fl+IOActions) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
@@ -114,8 +118,8 @@ let handle_connections
     clients''
   | _ -> clients
 
-let server_loop_body 
-  (socket : file_descr) 
+let server_loop_body
+  (socket : file_descr)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
@@ -127,9 +131,9 @@ let server_loop_body
   every_request_gets_a_response_append () ;
   handle_connections clients' req_handler
 
-let rec server_loop 
+let rec server_loop
   (iterations_count : nat)
-  (socket : file_descr) 
+  (socket : file_descr)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
@@ -146,17 +150,17 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
   MIO (resexn file_descr) mymst IOActions (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Socket () with
-  | Inl socket -> 
-    let _ = static_cmd Setsockopt (socket, SO_REUSEADDR, true) in 
+  | Inl socket ->
+    let _ = static_cmd Setsockopt (socket, SO_REUSEADDR, true) in
     let _ = static_cmd Bind (socket, ip, port) in
     let _ = static_cmd Listen (socket, limit) in
     let _ = static_cmd SetNonblock socket in
-    Inl socket 
+    Inl socket
   | Inr err -> Inr err
 
-let webserver 
+let webserver
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) 
+  (req_handler : req_handler (IOActions + fl))
   () :
   MIO int mymst (IOActions + fl)
     (requires (fun h -> True))
@@ -172,8 +176,8 @@ let webserver
 
 (** Compiling Web Server **)
 
-let check_send_pre : tree (pck_dc mymst) = 
-  Node 
+let check_send_pre : tree (pck_dc mymst) =
+  Node
     (| Bytes.bytes, unit, (fun res h _ _ ->
       Utils.did_not_respond' h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
     Leaf
@@ -185,20 +189,20 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
 
 
 let check_handler_post : tree (pck_dc mymst) =
-  Node (| 
-    file_descr, 
-    unit, 
+  Node (|
+    file_descr,
+    unit,
     (fun client _ _ lt -> Utils.wrote_at_least_once_to' client lt),
     (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
-    check_send_pre 
+    check_send_pre
     Leaf
 
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi mymst check_handler_post = {
   ityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst;
   c_ityp = interm_arrow3 fl Utils.pi mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
-  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst) eff_dcs -> 
-    let f' : req_handler fl = (fun (fd:file_descr) req send -> 
+  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst) eff_dcs ->
+    let f' : req_handler fl = (fun (fd:file_descr) req send ->
       let send' = export_send.export (left eff_dcs) send in
       let (| dc_pck, eff_dc |) = root eff_dcs in
       // fd here is 4
@@ -219,9 +223,9 @@ let cs_int : src_interface = {
   phi = Utils.phi;
   ct = req_handler;
   ct_dcs = check_handler_post;
-  ct_importable = (fun fl -> import_request_handler fl); 
+  ct_importable = (fun fl -> import_request_handler fl);
   psi = (fun _ _ lt -> Utils.every_request_gets_a_response lt);
 }
 
-let compiled_webserver = 
-  comp.compile_pprog #cs_int webserver 
+let compiled_webserver =
+  comp.compile_pprog #cs_int webserver
