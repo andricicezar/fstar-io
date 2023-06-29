@@ -27,6 +27,7 @@ let static_cmd
   MIO (io_sig.res cmd arg) mymst IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
+        io_post cmd arg r h /\
         lt == [convert_call_to_event Prog cmd arg r])) =
   static_cmd Prog cmd arg
 
@@ -36,16 +37,12 @@ let sendError400 (fd:file_descr) : MIO unit mymst IOActions
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
-exception BadRequest
-
 let get_req (fd:file_descr) :
   MIO (resexn Bytes.bytes) mymst IOActions (fun _ -> True) (fun h r lt -> exists limit r'. (Inl? r <==> Inl? r') /\ lt == [ERead Prog (fd, limit) r'] /\ (Inl? r ==> valid_http_request (Inl?.v r))) =
   let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
   | Inl (msg, _) ->
-    if Bytes.length msg < 500
-    then (assume (valid_http_request msg) ; Inl msg)
-    else (admit () ; Inr BadRequest) // This violates the post so I don't know what to do...
+    assume (Bytes.length msg < 500) ; Inl msg
   | Inr err -> Inr err
 
 let process_connection
