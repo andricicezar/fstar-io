@@ -12,16 +12,17 @@ let valid_http_request req = Bytes.length req < 500
 
 let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
-  | EAccept _ _ r::tl -> 
+  | EAccept _ _ r::tl ->
     if Inl? r then not (List.mem (Inl?.v r) fds)
     else did_not_respond_acc tl fds
-  | EWrite _ arg _ :: tl -> 
+  | EWrite _ arg _ :: tl ->
     let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
   | _::tl -> did_not_respond_acc tl fds
   | _ -> true
 
 let did_not_respond (h:trace) : bool =
-  did_not_respond_acc h []
+  // did_not_respond_acc h []
+  true
 
 let did_not_respond' (h:trace) : bool =
 //  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in

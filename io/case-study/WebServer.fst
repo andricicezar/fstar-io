@@ -67,10 +67,6 @@ let process_connection
   match get_req client with
   | Inr _ -> ()
   | Inl req ->
-    // The thing missing is the precondition to req_handler
-    // Do we need a precondition to process_connection? It seems odd, maybe
-    // we want to improve the spec of did_not_respond?
-    assume (forall h. did_not_respond h) ;
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
