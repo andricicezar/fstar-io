@@ -118,31 +118,33 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl _ -> ({ opened = opened; written = written; waiting = true })
-  | Openfile, Inl fd -> admit ();({ opened = fd::opened; written = written; waiting = waiting })
-  | Close, Inl _ -> admit (); ({ opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting })
-  | Write, Inl _ -> 
-    admit ();
+  | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
+  | Openfile, Inl fd ->
+    assume (Mkop_sig?.res io_sig Openfile arg == file_descr) ; // The issue is that it's not true
+    { opened = fd::opened; written = written; waiting = waiting }
+  | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
+  | Write, Inl _ ->
+    admit () ;
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, _) = arg in
-    ({ opened = opened; written = fd::written; waiting = false })
+    { opened = opened; written = fd::written; waiting = false }
   | _ -> admit (); s0
 
 val pi : policy_spec
 let pi h c cmd arg =
   match c, cmd with
-  | Ctx, Openfile -> 
+  | Ctx, Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
     if fnm = "/temp" then true else false
-  | Ctx, Read -> 
+  | Ctx, Read ->
     let (fd, _) : file_descr * UInt8.t = arg in
     is_opened_by_untrusted h fd
   | Ctx, Close -> is_opened_by_untrusted h arg
-  | Ctx, Access -> 
+  | Ctx, Access ->
     let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true 
+    if fnm = "/temp" then true
     else false
-  | Ctx, Stat -> 
+  | Ctx, Stat ->
     if arg = "/temp" then true else false
   | Prog, Write -> true
   | _ -> false
