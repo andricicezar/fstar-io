@@ -120,8 +120,31 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
   | Openfile, Inl fd ->
-    assume (Mkop_sig?.res io_sig Openfile arg == file_descr) ; // The issue is that it's not true
-    { opened = fd::opened; written = written; waiting = waiting }
+    assert (e == EOpenfile caller arg (Inl fd)) ;
+    let s1 = { opened = fd::opened; written = written; waiting = waiting } in
+    introduce forall h. s0 `models` h ==> s1 `models` (e :: h)
+    with begin
+      introduce s0 `models` h ==> s1 `models` (e :: h)
+      with _. begin
+        // assert (forall fd. fd `List.mem` s0.opened <==> is_opened_by_untrusted h fd) ;
+        // // assume (is_opened_by_untrusted (e :: h) fd) ;
+        // // assert_norm (Mkop_sig?.res io_sig Openfile arg == resexn file_descr) ; // That's the problem, it's not true I guess because arg we don't know
+        // let r' : resexn file_descr = res in
+        // assert_norm (r' == res) ;
+        // assert_norm (Inl fd == res) ;
+        // assert (r' == Inl fd) ;
+        // let fd' : file_descr = Inl?.v r' in
+        // // assert_norm (fd' == fd) ;
+
+
+        // assume (s1.opened == fd :: s0.opened) ;
+        // assume (forall fdx. fdx `List.mem` (fd :: s0.opened) <==> is_opened_by_untrusted (e :: h) fdx) ;
+        assume (forall fdx. fdx `List.mem` s1.opened <==> is_opened_by_untrusted (e :: h) fdx) ;
+        assert (forall fdx lt. fdx `List.mem` s1.written <==> wrote_at_least_once_to' fdx lt) ;
+        assert (s1.waiting <==> did_not_respond' (e :: h))
+      end
+    end ;
+    s1
   | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
   | Write, Inl _ ->
     admit () ;
