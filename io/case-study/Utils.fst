@@ -119,9 +119,9 @@ let is_opened_by_untrusted_openfile arg res h fd :
     (ensures is_opened_by_untrusted (EOpenfile Ctx arg res :: h) fd)
 = ()
 
-let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
-  Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile caller arg (Inl fd) :: h))
-= let e = EOpenfile caller arg (Inl fd) in
+let my_update_cst_openfile (s0 : cst) arg (fd : file_descr) :
+  Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile Ctx arg (Inl fd) :: h))
+= let e = EOpenfile Ctx arg (Inl fd) in
   let s1 = { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } in
   introduce forall h. s0 `models` h ==> s1 `models` (e :: h)
   with begin
@@ -133,11 +133,7 @@ let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
         with _. begin
           assert (fdx `List.mem` (fd :: s0.opened)) ;
           if fdx = fd
-          then begin
-            match caller with
-            | Ctx -> is_opened_by_untrusted_openfile arg (Inl fd) h fd
-            | _ -> admit ()
-          end
+          then is_opened_by_untrusted_openfile arg (Inl fd) h fd
           else ()
         end
       end
@@ -152,8 +148,10 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
   | Openfile, Inl fd ->
-    my_update_cst_openfile s0 caller arg fd ;
-    { opened = fd :: opened ; written = written ; waiting = waiting }
+    if caller = Ctx then begin
+      my_update_cst_openfile s0 arg fd ;
+      { opened = fd :: opened ; written = written ; waiting = waiting }
+    end else s0
   | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
   | Write, Inl _ ->
     admit () ;
