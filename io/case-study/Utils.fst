@@ -113,33 +113,6 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
-let is_opened_by_untrusted_openfile arg res h fd :
-  Lemma
-    (requires Inl? res && fd = Inl?.v res)
-    (ensures is_opened_by_untrusted (EOpenfile Ctx arg res :: h) fd)
-= ()
-
-let my_update_cst_openfile (s0 : cst) arg (fd : file_descr) :
-  Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile Ctx arg (Inl fd) :: h))
-= let e = EOpenfile Ctx arg (Inl fd) in
-  let s1 = { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } in
-  introduce forall h. s0 `models` h ==> s1 `models` (e :: h)
-  with begin
-    introduce s0 `models` h ==> s1 `models` (e :: h)
-    with _. begin
-      introduce forall fdx. fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
-      with begin
-        introduce fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
-        with _. begin
-          assert (fdx `List.mem` (fd :: s0.opened)) ;
-          if fdx = fd
-          then is_opened_by_untrusted_openfile arg (Inl fd) h fd
-          else ()
-        end
-      end
-    end
-  end
-
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
@@ -148,10 +121,9 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
   | Openfile, Inl fd ->
-    if caller = Ctx then begin
-      my_update_cst_openfile s0 arg fd ;
-      { opened = fd :: opened ; written = written ; waiting = waiting }
-    end else s0
+    if caller = Ctx
+    then { opened = fd :: opened ; written = written ; waiting = waiting }
+    else s0
   | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
   | Write, Inl _ ->
     admit () ;
