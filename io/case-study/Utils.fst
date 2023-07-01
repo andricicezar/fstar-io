@@ -33,28 +33,30 @@ let did_not_respond' (h:trace) : bool =
 // else MIO.Sig.Call.print_string2 "false\n") in
 //  fst (r, x)
 
-let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
-  match h with
+let rec is_opened_by_untrusted (h:trace) (fd:file_descr) :
+  Pure bool (requires True)
+    (ensures fun r -> forall caller arg h'. h == EOpenfile caller arg (Inl fd) :: h' ==> r == true)
+= match h with
   | [] -> false
-  | EOpenfile Ctx _ res :: tl -> begin
+  | EOpenfile Ctx _ res :: tl ->
     if Inl? res && fd = Inl?.v res then true
     else is_opened_by_untrusted tl fd
-  end
-  | EClose _ fd' res :: tl -> if Inl? res && fd = fd' then false
-                             else is_opened_by_untrusted tl fd
-  | _ :: tl -> is_opened_by_untrusted tl fd
+  | EClose _ fd' res :: tl ->
+    if Inl? res && fd = fd' then false
+    else is_opened_by_untrusted tl fd
+  | e :: tl -> assume (not (EOpenfile? e)) ; is_opened_by_untrusted tl fd
 
 val wrote_at_least_once_to : file_descr -> trace -> bool
 let rec wrote_at_least_once_to client lt =
   match lt with
   | [] -> false
-  | EWrite Prog arg _::tl -> 
+  | EWrite Prog arg _::tl ->
     let (fd, msg):file_descr*Bytes.bytes = arg in
     let fd' : file_descr = fd in
     let client' : file_descr = client in
     client' = fd'
-  | _ :: tl -> wrote_at_least_once_to client tl 
-  
+  | _ :: tl -> wrote_at_least_once_to client tl
+
 val wrote_at_least_once_to' : file_descr -> trace -> bool
 let wrote_at_least_once_to' client lt =
 //  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
@@ -118,9 +120,7 @@ let is_opened_by_untrusted_openfile caller arg res h fd :
   Lemma
     (requires Inl? res && fd = Inl?.v res)
     (ensures is_opened_by_untrusted (EOpenfile caller arg res :: h) fd)
-// by (explode () (* ; compute () *) ; dump "toto")
-// by (norm [ delta_only [`%is_opened_by_untrusted] ] ; explode () ; dump "hh")
-= admit ()
+= ()
 
 let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
   Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile caller arg (Inl fd) :: h))
