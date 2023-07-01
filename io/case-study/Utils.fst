@@ -175,7 +175,18 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      assume (forall fd lt. fd `List.mem` s1.written <==> wrote_at_least_once_to' fd lt) ;
+      introduce forall fd lt. fd `List.mem` s1.written <==> wrote_at_least_once_to' fd lt
+      with begin
+        introduce fd `List.mem` s1.written ==> wrote_at_least_once_to' fd lt
+        with _. begin
+          mem_filter (is_neq arg) s0.written fd
+        end ;
+        introduce wrote_at_least_once_to' fd lt ==> fd `List.mem` s1.written
+        with _. begin
+          // Hm. This seems wrong, we don't have anything here to say fd <> arg
+          admit ()
+        end
+      end ;
       assert (s1.waiting <==> did_not_respond' (e :: h))
     end
   end
