@@ -113,9 +113,11 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
+let is_neq (#a:eqtype) (x y : a) : bool = x <> y
+
 let close_upd_cst (s : cst) arg : cst = {
-  opened = List.Tot.Base.filter (fun x -> x <> arg) s.opened ;
-  written = List.Tot.Base.filter (fun x -> x <> arg) s.written ;
+  opened = List.Tot.Base.filter (is_neq arg) s.opened ;
+  written = List.Tot.Base.filter (is_neq arg) s.written ;
   waiting = s.waiting
 }
 
@@ -123,7 +125,6 @@ let close_upd_cst (s : cst) arg : cst = {
 let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
   Lemma (requires x `memP` filter f l) (ensures x `memP` l)
 = match l with
-  | [] -> ()
   | y :: tl ->
     if f y
     then begin
@@ -133,6 +134,20 @@ let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
       and _. mem_filter f tl x
     end
     else mem_filter f tl x
+
+// TODO MOVE
+let rec filter_mem (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` l /\ f x) (ensures x `memP` filter f l)
+= match l with
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` tl
+      returns x `memP` filter f l
+      with _. ()
+      and _. filter_mem f tl x
+    end
+    else filter_mem f tl x
 
 let my_update_cst_close s0 caller arg rr :
   Lemma (
@@ -150,18 +165,14 @@ let my_update_cst_close s0 caller arg rr :
       with begin
         introduce fd `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd
         with _. begin
-          assert (fd <> arg) ;
-          assert (fd `mem` s1.opened) ;
-          assume (s1.opened == filter (fun x -> x <> arg) s0.opened) ; // Annoying
-          assert (fd `mem` filter (fun x -> x <> arg) s0.opened) ;
-          mem_filter (fun x -> x <> arg) s0.opened fd ;
-          assume (fd `List.mem` s0.opened) ;
-          assert (is_opened_by_untrusted h fd) ;
-          ()
+          mem_filter (is_neq arg) s0.opened fd
         end ;
         introduce is_opened_by_untrusted (e :: h) fd ==> fd `List.mem` s1.opened
         with _. begin
-          admit ()
+          assert (arg <> fd) ;
+          assert (is_opened_by_untrusted h fd) ;
+          assert (fd `mem` s0.opened) ;
+          filter_mem (is_neq arg) s0.opened fd
         end
       end ;
       assume (forall fd lt. fd `List.mem` s1.written <==> wrote_at_least_once_to' fd lt) ;
