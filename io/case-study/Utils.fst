@@ -113,6 +113,15 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
+// Shoudln't this be trivial by definition?
+let is_opened_by_untrusted_openfile caller arg res h fd :
+  Lemma
+    (requires Inl? res && fd = Inl?.v res)
+    (ensures is_opened_by_untrusted (EOpenfile caller arg res :: h) fd)
+// by (explode () (* ; compute () *) ; dump "toto")
+// by (norm [ delta_only [`%is_opened_by_untrusted] ] ; explode () ; dump "hh")
+= admit ()
+
 let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
   Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile caller arg (Inl fd) :: h))
 = let e = EOpenfile caller arg (Inl fd) in
@@ -121,28 +130,13 @@ let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
   with begin
     introduce s0 `models` h ==> s1 `models` (e :: h)
     with _. begin
-      // assert (forall fd. fd `List.mem` s0.opened <==> is_opened_by_untrusted h fd) ;
       introduce forall fdx. fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
       with begin
         introduce fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
         with _. begin
-          assert (fdx `List.mem` s1.opened) ;
           assert (fdx `List.mem` (fd :: s0.opened)) ;
           if fdx = fd
-          then begin
-            let res : resexn file_descr = Inl fd in
-            calc (==) {
-              is_opened_by_untrusted (e :: h) fdx ;
-              == {}
-              is_opened_by_untrusted (EOpenfile caller arg (Inl fd) :: h) fd ;
-              // == { _ by (compute ()) }
-              // == { _ by (norm [delta_only [`%is_opened_by_untrusted]]) }
-              == { admit () }
-              (if Inl? res && fd = Inl?.v res then true else is_opened_by_untrusted h fd) ;
-              == {}
-              true ;
-            }
-          end
+          then is_opened_by_untrusted_openfile caller arg (Inl fd) h fd
           else ()
         end
       end
