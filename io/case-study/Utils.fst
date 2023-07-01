@@ -113,6 +113,62 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
+let close_upd_cst (s : cst) arg : cst = {
+  opened = List.Tot.Base.filter (fun x -> x <> arg) s.opened ;
+  written = List.Tot.Base.filter (fun x -> x <> arg) s.written ;
+  waiting = s.waiting
+}
+
+// TODO MOVE
+let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` filter f l) (ensures x `memP` l)
+= match l with
+  | [] -> ()
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` filter f tl
+      returns x `memP` l
+      with _. ()
+      and _. mem_filter f tl x
+    end
+    else mem_filter f tl x
+
+let my_update_cst_close s0 caller arg rr :
+  Lemma (
+    forall h.
+      s0 `models` h ==>
+      close_upd_cst s0 arg `models` (EClose caller arg (Inl rr) :: h)
+  )
+= let e = EClose caller arg (Inl rr) in
+  let s1 = close_upd_cst s0 arg in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      introduce forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e :: h) fd
+      with begin
+        introduce fd `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd
+        with _. begin
+          assert (fd <> arg) ;
+          assert (fd `mem` s1.opened) ;
+          assume (s1.opened == filter (fun x -> x <> arg) s0.opened) ; // Annoying
+          assert (fd `mem` filter (fun x -> x <> arg) s0.opened) ;
+          mem_filter (fun x -> x <> arg) s0.opened fd ;
+          assume (fd `List.mem` s0.opened) ;
+          assert (is_opened_by_untrusted h fd) ;
+          ()
+        end ;
+        introduce is_opened_by_untrusted (e :: h) fd ==> fd `List.mem` s1.opened
+        with _. begin
+          admit ()
+        end
+      end ;
+      assume (forall fd lt. fd `List.mem` s1.written <==> wrote_at_least_once_to' fd lt) ;
+      assert (s1.waiting <==> did_not_respond' (e :: h))
+    end
+  end
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
@@ -124,7 +180,9 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     if caller = Ctx
     then { opened = fd :: opened ; written = written ; waiting = waiting }
     else s0
-  | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
+  | Close, Inl rr ->
+    my_update_cst_close s0 caller arg rr ;
+    close_upd_cst s0 arg
   | Write, Inl _ ->
     admit () ;
     let arg : file_descr * Bytes.bytes = arg in
