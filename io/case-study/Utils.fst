@@ -33,10 +33,8 @@ let did_not_respond' (h:trace) : bool =
 // else MIO.Sig.Call.print_string2 "false\n") in
 //  fst (r, x)
 
-let rec is_opened_by_untrusted (h:trace) (fd:file_descr) :
-  Pure bool (requires True)
-    (ensures fun r -> forall caller arg h'. h == EOpenfile caller arg (Inl fd) :: h' ==> r == true)
-= match h with
+let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
+  match h with
   | [] -> false
   | EOpenfile Ctx _ res :: tl ->
     if Inl? res && fd = Inl?.v res then true
@@ -44,7 +42,7 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) :
   | EClose _ fd' res :: tl ->
     if Inl? res && fd = fd' then false
     else is_opened_by_untrusted tl fd
-  | e :: tl -> assume (not (EOpenfile? e)) ; is_opened_by_untrusted tl fd
+  | e :: tl -> is_opened_by_untrusted tl fd
 
 val wrote_at_least_once_to : file_descr -> trace -> bool
 let rec wrote_at_least_once_to client lt =
@@ -115,11 +113,10 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
-// Shoudln't this be trivial by definition?
-let is_opened_by_untrusted_openfile caller arg res h fd :
+let is_opened_by_untrusted_openfile arg res h fd :
   Lemma
     (requires Inl? res && fd = Inl?.v res)
-    (ensures is_opened_by_untrusted (EOpenfile caller arg res :: h) fd)
+    (ensures is_opened_by_untrusted (EOpenfile Ctx arg res :: h) fd)
 = ()
 
 let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
@@ -136,7 +133,11 @@ let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
         with _. begin
           assert (fdx `List.mem` (fd :: s0.opened)) ;
           if fdx = fd
-          then is_opened_by_untrusted_openfile caller arg (Inl fd) h fd
+          then begin
+            match caller with
+            | Ctx -> is_opened_by_untrusted_openfile arg (Inl fd) h fd
+            | _ -> admit ()
+          end
           else ()
         end
       end
@@ -159,7 +160,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, _) = arg in
     { opened = opened; written = fd::written; waiting = false }
-  | _ -> admit (); s0
+  | _ -> s0
 
 val pi : policy_spec
 let pi h c cmd arg =
