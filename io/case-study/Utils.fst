@@ -1,5 +1,6 @@
 module Utils
 
+open FStar.Tactics
 open FStar.List.Tot
 
 open Compiler.Languages
@@ -112,6 +113,42 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
+let my_update_cst_openfile (s0 : cst) caller arg (fd : file_descr) :
+  Lemma (forall h. s0 `models` h ==> { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } `models` (EOpenfile caller arg (Inl fd) :: h))
+= let e = EOpenfile caller arg (Inl fd) in
+  let s1 = { opened = fd :: s0.opened ; written = s0.written ; waiting = s0.waiting } in
+  introduce forall h. s0 `models` h ==> s1 `models` (e :: h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e :: h)
+    with _. begin
+      // assert (forall fd. fd `List.mem` s0.opened <==> is_opened_by_untrusted h fd) ;
+      introduce forall fdx. fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
+      with begin
+        introduce fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
+        with _. begin
+          assert (fdx `List.mem` s1.opened) ;
+          assert (fdx `List.mem` (fd :: s0.opened)) ;
+          if fdx = fd
+          then begin
+            let res : resexn file_descr = Inl fd in
+            calc (==) {
+              is_opened_by_untrusted (e :: h) fdx ;
+              == {}
+              is_opened_by_untrusted (EOpenfile caller arg (Inl fd) :: h) fd ;
+              // == { _ by (compute ()) }
+              // == { _ by (norm [delta_only [`%is_opened_by_untrusted]]) }
+              == { admit () }
+              (if Inl? res && fd = Inl?.v res then true else is_opened_by_untrusted h fd) ;
+              == {}
+              true ;
+            }
+          end
+          else ()
+        end
+      end
+    end
+  end
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
@@ -120,28 +157,8 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
   | Openfile, Inl fd ->
-    assert (e == EOpenfile caller arg (Inl fd)) ;
-    let s1 = { opened = fd::opened; written = written; waiting = waiting } in
-    assert (s1.opened == fd :: s0.opened) ; // Ok here, but now below??
-    introduce forall h. s0 `models` h ==> s1 `models` (e :: h)
-    with begin
-      introduce s0 `models` h ==> s1 `models` (e :: h)
-      with _. begin
-        // assert (forall fd. fd `List.mem` s0.opened <==> is_opened_by_untrusted h fd) ;
-        introduce forall fdx. fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
-        with begin
-          introduce fdx `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fdx
-          with _. begin
-            assert (fdx `List.mem` s1.opened) ;
-            // assert (s1.opened == fd::s0.opened) ; // It's no longer ok somehow?
-            // assert (fdx `List.mem` (fd :: s0.opened)) ;
-            // I want to do a case analysis to conclude but I can't
-            assume (is_opened_by_untrusted (e :: h) fdx)
-          end
-        end
-      end
-    end ;
-    s1
+    my_update_cst_openfile s0 caller arg fd ;
+    { opened = fd :: opened ; written = written ; waiting = waiting }
   | Close, Inl _ -> admit () ; { opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting }
   | Write, Inl _ ->
     admit () ;
