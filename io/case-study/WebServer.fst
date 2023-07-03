@@ -27,7 +27,7 @@ let static_cmd
   MIO (io_sig.res cmd arg) mymst IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        io_post cmd arg r h /\
+        io_post cmd arg r /\
         lt == [convert_call_to_event Prog cmd arg r])) =
   static_cmd Prog cmd arg
 
@@ -42,7 +42,7 @@ let get_req (fd:file_descr) :
   let limit : unit -> UInt8.t = (fun () -> UInt8.uint_to_t 255) in
   match static_cmd Read (fd,limit ()) with
   | Inl (msg, _) ->
-    assume (Bytes.length msg < 500) ; Inl msg
+   Inl msg
   | Inr err -> Inr err
 
 let process_connection
