@@ -11,19 +11,24 @@ let valid_http_response res = Bytes.length res < 500
 val valid_http_request : Bytes.bytes -> bool
 let valid_http_request req = Bytes.length req < 500
 
+(** The web server has to prove this predicate to call the
+    handler, which happens immediately after it reads from a client.
+    Also, the handler has to prove this predicate to call `send`,
+    which should also hold since during the execution of the handler
+    no reads by Prog can happen. **)
 let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
-  | EAccept _ _ r::tl ->
-    if Inl? r then not (List.mem (Inl?.v r) fds)
-    else did_not_respond_acc tl fds
+  (** got request **)
+  | ERead Prog arg _ :: tl ->
+    let (fd, _) = arg in 
+    not (List.mem fd fds)
   | EWrite _ arg _ :: tl ->
     let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
   | _::tl -> did_not_respond_acc tl fds
   | _ -> true
 
 let did_not_respond (h:trace) : bool =
-  // did_not_respond_acc h []
-  true
+  did_not_respond_acc h []
 
 let did_not_respond' (h:trace) : bool =
 //  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
