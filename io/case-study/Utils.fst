@@ -191,6 +191,41 @@ let my_update_cst_close s0 caller arg rr :
     end
   end
 
+let write_upd_cst (s : cst) fd : cst = {
+  opened = s.opened ;
+  written = fd :: s.written ;
+  waiting = false
+}
+
+let my_update_cst_write s0 caller fd bb rr :
+  Lemma (
+    forall h.
+      s0 `models` h ==>
+      write_upd_cst s0 fd `models` (EWrite caller (fd, bb) (Inl rr) :: h)
+  )
+= let e = EWrite caller (fd, bb) (Inl rr) in
+  let s1 = write_upd_cst s0 fd in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
+      // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
+      introduce forall fd' lt. fd' `List.mem` s1.written ==> wrote_at_least_once_to' fd' lt
+      with begin
+        introduce fd' `List.mem` s1.written ==> wrote_at_least_once_to' fd' lt
+        with _. begin
+          if fd = fd'
+          then begin
+            assume (wrote_at_least_once_to' fd lt) // Again, no way to ensure this.
+          end
+          else ()
+        end
+      end ;
+      assume (not (did_not_respond' (e :: h))) // No way to know it's true?
+    end
+  end
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
@@ -205,11 +240,11 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   | Close, Inl rr ->
     my_update_cst_close s0 caller arg rr ;
     close_upd_cst s0 arg
-  | Write, Inl _ ->
-    admit () ;
+  | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
-    let (fd, _) = arg in
-    { opened = opened; written = fd::written; waiting = false }
+    let (fd, bb) = arg in
+    my_update_cst_write s0 caller fd bb rr ;
+    write_upd_cst s0 fd
   | _ -> s0
 
 val pi : policy_spec
