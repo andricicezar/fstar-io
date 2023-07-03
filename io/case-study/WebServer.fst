@@ -14,12 +14,11 @@ type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
   (send:(res:Bytes.bytes -> MIO (resexn unit) mymst fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
-                                            (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r] /\
-                                                                  wrote_to client ((List.rev lt)@h))))) ->
+                                            (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r])))) ->
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote_to client lt \/ Inr? r)))
+                          (wrote_to client ((List.rev lt)@h) \/ Inr? r)))
 
 let static_cmd
   (cmd : io_cmds)
@@ -198,24 +197,31 @@ let check_handler_post : tree (pck_dc mymst) =
     check_send_pre
     Leaf
 
+val help_import :
+  (fl:erased tflag) ->
+  (wf:(file_descr -> Bytes.bytes -> (export_send #fl).ityp -> MIOpi (resexn unit) fl Utils.pi mymst)) ->
+  (eff_dcs:typ_eff_dcs mymst fl check_handler_post) ->
+  req_handler fl
+let help_import fl wf eff_dcs client req send :
+  MIO (resexn unit) mymst fl
+    (requires (fun h -> valid_http_request req /\ did_not_respond h))
+    (ensures (fun h r lt -> enforced_locally pi h lt /\
+                          (wrote_to client ((List.rev lt)@h) \/ Inr? r)))
+=
+  let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
+  let send' = (export_send #fl).export lfcks send in
+  let (| dc_pck, eff_dc |) = root eff_dcs in
+  let (| _, h, eff_dc' |) = eff_dc client in
+  Classical.forall_intro (lemma_suffixOf_append h);
+  let r : resexn unit = wf client req send' in
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
+  if eff_dc' () then r
+  else Inr Contract_failure
+    
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi mymst check_handler_post = {
   ityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst;
   c_ityp = interm_arrow3 fl Utils.pi mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
-  safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst) eff_dcs ->
-    let f' : req_handler fl = (fun (fd:file_descr) req send ->
-    admit (); // TODO: fixme
-      let send' = export_send.export (typ_left eff_dcs) send in
-      let (| dc_pck, eff_dc |) = root eff_dcs in
-      // fd here is 4
-      let (| _, h, eff_dc' |) = eff_dc fd in
-      Classical.forall_intro (lemma_suffixOf_append h);
-      let r : resexn unit = wf fd req send' in
-      Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-      if eff_dc' () then r
-      else Inr Contract_failure
-    ) in
-    f'
-  )
+  safe_import = help_import fl 
 }
 
 let cs_int : src_interface = {
