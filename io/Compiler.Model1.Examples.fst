@@ -114,12 +114,12 @@ let test1_prog #fl ctx () : MIO int mst1 (fl + IOActions) (fun _ -> True) test1.
   0 
 
 val test1_ctx : ctx_src test1
-let test1_ctx #fl io_acts eff_rcs () : MIO (resexn file_descr) mst1 fl (fun _ -> True) (test1_post ()) = 
-  io_acts Openfile "/etc/passwd"
+let test1_ctx #fl sec_io eff_rcs () : MIO (resexn file_descr) mst1 fl (fun _ -> True) (test1_post ()) = 
+  sec_io Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
-let test1_ctx_t #fl io_acts () : MIOpi (resexn file_descr) fl test1_pi mst1 =
-  io_acts Openfile "/etc/passwd"
+let test1_ctx_t #fl sec_io () : MIOpi (resexn file_descr) fl test1_pi mst1 =
+  sec_io Openfile "/etc/passwd"
 
 
 (** ** Test 2 - HO left 1 **)
@@ -171,20 +171,20 @@ let test2_prog #fl ctx () =
   (** return exit code **) 0
 
 val test2_ctx : ctx_src test2 
-let test2_ctx #fl io_acts eff_rcs cb : MIO (resexn file_descr) mst2 fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+let test2_ctx #fl sec_io eff_rcs cb : MIO (resexn file_descr) mst2 fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
   let post1 = root eff_rcs in
   let (| _, pre1 |) = root (left eff_rcs) in 
-  let rfd = io_acts Openfile "/etc/passwd" in
+  let rfd = sec_io Openfile "/etc/passwd" in
   match rfd with
   | Inl fd -> let _ = pre1 fd in rfd
   | _ -> rfd
 
 val test2_ctx_t : ctx_tgt (comp_int_src_tgt test2)
-let test2_ctx_t #fl io_acts cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi mst2 = 
-  let rfd = io_acts Openfile "/etc/passwd" in
+let test2_ctx_t #fl sec_io cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt test2).pi mst2 = 
+  let rfd = sec_io Openfile "/etc/passwd" in
   match rfd with
   | Inl fd -> begin
-    //let _ = io_acts Close fd in 
+    //let _ = sec_io Close fd in 
     let _ = cb fd in 
     rfd
   end
@@ -256,9 +256,9 @@ let test3_prog #fl ctx () : MIO int mst3 (IOActions + fl) (fun _ -> True) (fun _
   | Inr err -> -1
 
 val test3_ctx : ctx_src test3 
-let test3_ctx #fl io_acts eff_rcs fd = 
+let test3_ctx #fl sec_io eff_rcs fd = 
   Inl (fun (fd:file_descr) -> Inl () <: (MIOwp (resexn unit) mst3 fl trivial_hist))
 
 val test3_ctx_t : ctx_tgt (comp_int_src_tgt test3)
-let test3_ctx_t #fl io_acts fd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl test3_pi mst3)) fl test3_pi mst3 = 
+let test3_ctx_t #fl sec_io fd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl test3_pi mst3)) fl test3_pi mst3 = 
   Inl (fun (fd:file_descr) -> Inl () <: (MIOpi (resexn unit) fl test3_pi mst3))
