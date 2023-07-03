@@ -18,11 +18,8 @@ type policy (mst:mst) (pi:policy_spec) =
 
 unfold
 let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
-  match e with
-  | EOpenfile caller arg _ -> pi h caller Openfile arg
-  | ERead caller arg _ -> pi h caller Read arg
-  | EWrite caller arg _ -> pi h caller Write arg
-  | EClose caller arg _ -> pi h caller Close arg
+  let (| caller, cmd, arg, _ |) = destruct_event e in
+  pi h caller cmd arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally

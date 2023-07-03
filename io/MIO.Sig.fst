@@ -139,9 +139,7 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Close -> is_open arg h**)
 
 unfold let io_post (cmd:io_cmds) (arg:io_args cmd) (res : io_sig.res cmd arg) : Type0 =
-  match cmd with
-  | Read -> Inl? res ==> Bytes.length (fst #Bytes.bytes #UInt8.t (Inl?.v res)) < UInt8.v (snd #file_descr #UInt8.t arg)
-  | _ -> True
+  True
 
 unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : hist ((mio_sig mst).res cmd arg) =
   fun (p : hist_post ((mio_sig mst).res cmd arg)) h ->
