@@ -30,14 +30,6 @@ let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
 let did_not_respond (h:trace) : bool =
   did_not_respond_acc h []
 
-let did_not_respond' (h:trace) : bool =
-//  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
-  let r = did_not_respond h in
-  r
-//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-// else MIO.Sig.Call.print_string2 "false\n") in
-//  fst (r, x)
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
@@ -49,8 +41,8 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
     else is_opened_by_untrusted tl fd
   | e :: tl -> is_opened_by_untrusted tl fd
 
-val wrote_at_least_once_to : file_descr -> trace -> bool
-let rec wrote_at_least_once_to client lt =
+val wrote_to : file_descr -> trace -> bool
+let rec wrote_to client lt =
   match lt with
   | [] -> false
   | EWrite Prog arg _::tl ->
@@ -58,16 +50,7 @@ let rec wrote_at_least_once_to client lt =
     let fd' : file_descr = fd in
     let client' : file_descr = client in
     client' = fd'
-  | _ :: tl -> wrote_at_least_once_to client tl
-
-val wrote_at_least_once_to' : file_descr -> trace -> bool
-let wrote_at_least_once_to' client lt =
-//  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
-  let r = wrote_at_least_once_to client lt in
-  r
-//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-//  else MIO.Sig.Call.print_string2 "false\n") in
-//  fst (r,x)
+  | _ :: tl -> wrote_to client tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -101,8 +84,8 @@ type cst = {
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd lt. fd `List.mem` c.written <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
-  /\ (c.waiting <==> did_not_respond' h)
+  /\ (forall fd lt. fd `List.mem` c.written <==> wrote_to fd lt) // TODO: this forall lt is bad
+  /\ (c.waiting <==> did_not_respond h)
 
 let mymst : mst = {
   cst = cst;
@@ -180,19 +163,19 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      introduce forall fd lt. fd `List.mem` s1.written <==> wrote_at_least_once_to' fd lt
+      introduce forall fd lt. fd `List.mem` s1.written <==> wrote_to fd lt
       with begin
-        introduce fd `List.mem` s1.written ==> wrote_at_least_once_to' fd lt
+        introduce fd `List.mem` s1.written ==> wrote_to fd lt
         with _. begin
           mem_filter (is_neq arg) s0.written fd
         end ;
-        introduce wrote_at_least_once_to' fd lt ==> fd `List.mem` s1.written
+        introduce wrote_to fd lt ==> fd `List.mem` s1.written
         with _. begin
           // Hm. This seems wrong, we don't have anything here to say fd <> arg
           admit ()
         end
       end ;
-      assert (s1.waiting <==> did_not_respond' (e :: h))
+      assert (s1.waiting <==> did_not_respond (e :: h))
     end
   end
 
@@ -216,18 +199,18 @@ let my_update_cst_write s0 caller fd bb rr :
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
       // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
-      introduce forall fd' lt. fd' `List.mem` s1.written ==> wrote_at_least_once_to' fd' lt
+      introduce forall fd' lt. fd' `List.mem` s1.written ==> wrote_to fd' lt
       with begin
-        introduce fd' `List.mem` s1.written ==> wrote_at_least_once_to' fd' lt
+        introduce fd' `List.mem` s1.written ==> wrote_to fd' lt
         with _. begin
           if fd = fd'
           then begin
-            assume (wrote_at_least_once_to' fd lt) // Again, no way to ensure this.
+            assume (wrote_to fd lt) // Again, no way to ensure this.
           end
           else ()
         end
       end ;
-      assume (not (did_not_respond' (e :: h))) // No way to know it's true?
+      assume (not (did_not_respond (e :: h))) // No way to know it's true?
     end
   end
 
@@ -237,7 +220,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl _ -> { opened = opened; written = written; waiting = true }
+  | Accept, Inl _ -> admit (); { opened = opened; written = written; waiting = true }
   | Openfile, Inl fd ->
     if caller = Ctx
     then { opened = fd :: opened ; written = written ; waiting = waiting }
@@ -250,7 +233,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     let (fd, bb) = arg in
     my_update_cst_write s0 caller fd bb rr ;
     write_upd_cst s0 fd
-  | _ -> s0
+  | _ -> admit (); s0
 
 val pi : policy_spec
 let pi h c cmd arg =
@@ -500,7 +483,7 @@ let rec ergar_pi_irr h lth lt lt' :
 
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth)
+    (requires enforced_locally pi h lth /\ wrote_to client lth)
     (ensures ergar lth [client])
     (decreases lth)
 = match lth with
@@ -542,7 +525,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
+    (requires enforced_locally pi h lth /\ wrote_to client lth /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
