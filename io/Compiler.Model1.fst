@@ -108,12 +108,12 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> i.ct fl
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> pi':erased policy_spec -> io_lib fl pi' i.mst Ctx -> i.ct fl
 type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (| i.mst , p (c #AllActions (inst_io_cmds i.phi)) |)
+  (| i.mst , p (c #AllActions i.pi (inst_io_cmds i.phi)) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
@@ -138,7 +138,7 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 (** ** Compilation **)
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl io_lib eff_dcs =
-  (i.ct_importable fl).safe_import (c_t #fl io_lib) eff_dcs
+  (i.ct_importable fl).safe_import (c_t #fl i.pi io_lib) eff_dcs
 
 val compile_whole : whole_src -> whole_tgt
 let compile_whole (| mst, _, ws |) = (| mst, ws |)
