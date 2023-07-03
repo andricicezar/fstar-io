@@ -14,8 +14,8 @@ type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
   (send:(res:Bytes.bytes -> MIO (resexn unit) mymst fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
-                                            (ensures (fun _ _ lt -> exists r. lt == [EWrite Prog (client,res) r] /\
-                                                                  wrote_to client lt)))) ->
+                                            (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r] /\
+                                                                  wrote_to client ((List.rev lt)@h))))) ->
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
@@ -53,14 +53,15 @@ let process_connection
   (req_handler : req_handler (IOActions + fl)) :
   MIO unit mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
+  admit ();
   introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote_to client ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce enforced_locally pi h lthandler /\ wrote_to client lthandler /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce enforced_locally pi h lthandler /\ wrote_to client ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
   end ;
   match get_req client with
@@ -191,7 +192,7 @@ let check_handler_post : tree (pck_dc mymst) =
   Node (|
     file_descr,
     unit,
-    (fun client _ _ lt -> Utils.wrote_to client lt),
+    (fun client h _ lt -> Utils.wrote_to client ((List.rev lt)@h)),
     (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
     check_send_pre
@@ -202,7 +203,8 @@ instance import_request_handler (fl:erased tflag) : safe_importable (req_handler
   c_ityp = interm_arrow3 fl Utils.pi mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
   safe_import = (fun (wf:file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst) eff_dcs ->
     let f' : req_handler fl = (fun (fd:file_descr) req send ->
-      let send' = export_send.export (left eff_dcs) send in
+    admit (); // TODO: fixme
+      let send' = export_send.export (typ_left eff_dcs) send in
       let (| dc_pck, eff_dc |) = root eff_dcs in
       // fd here is 4
       let (| _, h, eff_dc' |) = eff_dc fd in

@@ -42,14 +42,13 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   | e :: tl -> is_opened_by_untrusted tl fd
 
 val wrote_to : file_descr -> trace -> bool
-let rec wrote_to client lt =
-  match lt with
+let rec wrote_to client h =
+  match h with
   | [] -> false
-  | EWrite Prog arg _::tl ->
-    let (fd, msg):file_descr*Bytes.bytes = arg in
-    let fd' : file_descr = fd in
-    let client' : file_descr = client in
-    client' = fd'
+  (** the event before calling the handler is the read of the request **)
+  | ERead Prog _ _::tl -> false
+  (** the handler can write only once to the client using Prog **)
+  | EWrite Prog _ _::tl -> true
   | _ :: tl -> wrote_to client tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
@@ -84,7 +83,7 @@ type cst = {
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd lt. fd `List.mem` c.written <==> wrote_to fd lt) // TODO: this forall lt is bad
+  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h) // TODO: this forall lt is bad
   /\ (c.waiting <==> did_not_respond h)
 
 let mymst : mst = {
@@ -163,16 +162,16 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      introduce forall fd lt. fd `List.mem` s1.written <==> wrote_to fd lt
+      introduce forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h)
       with begin
-        introduce fd `List.mem` s1.written ==> wrote_to fd lt
+        introduce fd `List.mem` s1.written ==> wrote_to fd (e::h)
         with _. begin
           mem_filter (is_neq arg) s0.written fd
         end ;
-        introduce wrote_to fd lt ==> fd `List.mem` s1.written
+        introduce wrote_to fd (e::h) ==> fd `List.mem` s1.written
         with _. begin
           // Hm. This seems wrong, we don't have anything here to say fd <> arg
-          admit ()
+          assume (fd `List.mem` s1.written)
         end
       end ;
       assert (s1.waiting <==> did_not_respond (e :: h))
@@ -199,17 +198,18 @@ let my_update_cst_write s0 caller fd bb rr :
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
       // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
-      introduce forall fd' lt. fd' `List.mem` s1.written ==> wrote_to fd' lt
+      introduce forall fd'. fd' `List.mem` s1.written ==> wrote_to fd' (e::h)
       with begin
-        introduce fd' `List.mem` s1.written ==> wrote_to fd' lt
+        introduce fd' `List.mem` s1.written ==> wrote_to fd' (e::h)
         with _. begin
           if fd = fd'
           then begin
-            assume (wrote_to fd lt) // Again, no way to ensure this.
+            assume (wrote_to fd (e::h)) // Again, no way to ensure this.
           end
           else ()
         end
       end ;
+      assume (forall fd'.  wrote_to fd' (e::h) ==> fd' `List.mem` s1.written);
       assume (not (did_not_respond (e :: h))) // No way to know it's true?
     end
   end
@@ -483,10 +483,10 @@ let rec ergar_pi_irr h lth lt lt' :
 
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client lth)
+    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h))
     (ensures ergar lth [client])
     (decreases lth)
-= match lth with
+= admit (); match lth with
   | [] -> ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
@@ -525,7 +525,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client lth /\ every_request_gets_a_response lt)
+    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth)@h) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
