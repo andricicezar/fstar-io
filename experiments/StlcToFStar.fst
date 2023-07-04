@@ -17,8 +17,10 @@
    limitations under the License.
 *)
 
-module StlcStrongDbParSubst
+module StlcToFStar
 
+
+open FStar.Tactics
 open FStar.Constructive
 open FStar.Classical
 open FStar.FunctionalExtensionality
@@ -138,111 +140,41 @@ noeq type typing : env -> exp -> typ -> Type =
   | TyUnit : #g:env ->
              typing g EUnit TUnit
 
-(* Progress *)
+open FStar.Ghost
+open Compiler.Languages
 
-val is_value : exp -> Tot bool
-let is_value e = ELam? e || EUnit? e
-
-val progress : #e:exp -> #t:typ -> h:typing empty e t ->
-                         Pure (cexists (fun e' -> step e e'))
-                              (requires (~ (is_value e)))
-                              (ensures (fun _ -> True)) (decreases h)
-let rec progress #e #t h =
-  match h with
-  | TyApp #g #e1 #e2 #t11 #t12 h1 h2 ->
-     match e1 with
-     | ELam t e1' -> ExIntro (subst (sub_beta e2) e1') (SBeta t e1' e2)
-     | _          -> let ExIntro e1' h1' = progress h1 in
-                     ExIntro (EApp e1' e2) (SApp1 e2 h1')
-
-module T = FStar.Tactics
-
-(* Substitution extensional - used by substitution lemma below *)
-val subst_extensional: s1:sub -> s2:sub{feq s1 s2} -> e:exp ->
-                       Lemma (requires True)
-                             (ensures (subst s1 e = subst s2 e))
-                             [SMTPat (subst s1 e); SMTPat (subst s2 e)]
-let rec subst_extensional s1 s2 e =
-  match e with
-  | EVar _ -> ()
-  | ELam t e1 ->
-    assert (subst s1 (ELam t e1) == ELam t (subst (sub_elam s1) e1))
-      by T.norm [zeta; iota; delta_only [`%subst]];
-    assert (subst s2 (ELam t e1) == ELam t (subst (sub_elam s2) e1))
-      by T.norm [zeta; iota; delta_only [`%subst]];
-    subst_extensional (sub_elam s1) (sub_elam s2) e1
-  | EApp e1 e2 -> subst_extensional s1 s2 e1; subst_extensional s1 s2 e2
-  | _ -> ()
-
-(* Typing of substitutions (very easy, actually) *)
-type subst_typing (s:sub) (g1:env) (g2:env) =
-  (x:var{Some? (g1 x)} -> Tot(typing g2 (s x) (Some?.v (g1 x))))
-
-(* Substitution preserves typing
-   Strongest possible statement; suggested by Steven Schäfer *)
-val substitution :
-      #g1:env -> #e:exp -> #t:typ -> s:sub -> #g2:env ->
-      h1:typing g1 e t ->
-      hs:subst_typing s g1 g2 ->
-      Tot (typing g2 (subst s e) t)
-      (decreases %[is_var e; is_renaming s; e])
-let rec substitution #g1 #e #t s #g2 h1 hs =
-  match h1 with
-  | TyVar x -> hs x
-  | TyApp hfun harg -> TyApp (substitution s hfun hs) (substitution s harg hs)
-  | TyLam tlam hbody ->
-     let hs'' : subst_typing (sub_inc) g2 (extend tlam g2) =
-       fun x -> TyVar (x+1) in
-     let hs' : subst_typing (sub_elam s) (extend tlam g1) (extend tlam g2) =
-       fun y -> if y = 0 then TyVar y
-             else let n:var = y - 1 in //Silly limitation of implicits and refinements
-                  substitution sub_inc (hs n) hs'' //NS: needed to instantiate the Some?.v 
-     in TyLam tlam (substitution (sub_elam s) hbody hs')
-  | TyUnit -> TyUnit
-
-(* Substitution for beta reduction
-   Now just a special case of substitution lemma *)
-val substitution_beta :
-      #e:exp -> #v:exp -> #t_x:typ -> #t:typ -> #g:env ->
-      h1:typing g v t_x ->
-      h2:typing (extend t_x g) e t ->
-      Tot (typing g (subst (sub_beta v) e) t) (decreases e)
-let rec substitution_beta #e #v #t_x #t #g h1 h2 =
-  let hs : subst_typing (sub_beta v) (extend t_x g) g =
-    fun y -> if y = 0 then h1 else TyVar (y-1) in
-  substitution (sub_beta v) h2 hs
-
-(* Type preservation *)
-val preservation : #e:exp -> #e':exp -> #g:env -> #t:typ ->
-       ht:(typing g e t) ->
-       hs:step e e' ->
-       Tot (typing g e' t) (decreases ht)
-let rec preservation #e #e' #g #t (TyApp h1 h2) hs =
-  match hs with
-  | SBeta tx e1' e2' -> substitution_beta h2 (TyLam?.hbody h1)
-  | SApp1 e2' hs1   -> TyApp (preservation h1 hs1) h2
-  | SApp2 e1' hs2   -> TyApp h1 (preservation h2 hs2)
-
-let rec typ_to_fstar (t:typ) : Type =
+let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mst) : Type =
   match t with
-  | TArr t1 t2 -> (typ_to_fstar t1) -> (typ_to_fstar t2)
-  | TUnit -> unit
+  | TArr t1 t2 -> (typ_to_fstar t1 fl pi mst) -> MIOpi (typ_to_fstar t2 fl pi mst) fl pi mst
+  | TUnit -> FStar.Universe.raise_t unit
 
-let venv (g:env) = x:var{Some? (g x)} -> typ_to_fstar (Some?.v (g x))
 
-let vextend #t (x:typ_to_fstar t) (#g:env) (ve:venv g) : venv (extend t g) =
+type venv (g:env) (fl:erased tflag) (pi:policy_spec) (mst:mst) = x:var{Some? (g x)} -> typ_to_fstar (Some?.v (g x)) fl pi mst
+
+let vextend #t (x:typ_to_fstar t 'f 'p 'm) (#g:env) (ve:venv g 'f 'p 'm) : venv (extend t g) 'f 'p 'm =
   fun y -> if y = 0 then x else ve (y-1)
 
-let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g)
-  : Tot (typ_to_fstar t) (decreases e) =
+#push-options "--compat_pre_core 1"
+
+let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
+  : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) by (explode (); dump "H") =
   match e with
-  | EUnit -> ()
+  | EUnit -> FStar.Universe.raise_val ()
   | EVar x -> ve x
   | ELam t1 e1 -> 
-       let TyLam #_ _ #_ #t2 h1 = h in
-       fun (x:typ_to_fstar t1) -> exp_to_fstar (extend t1 g) e1 t2 h1 (vextend x ve)
+       let TyLam _ #_ #t2 h1 = h in
+       assert (t == TArr t1 t2);
+       let w : typ_to_fstar t1 'f 'p 'm -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm =
+         (fun x -> exp_to_fstar (extend t1 g) e1 t2 h1 (vextend x ve)) in
+       assume (typ_to_fstar t 'f 'p 'm == (typ_to_fstar t1 'f 'p 'm -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm));
+       w
   | EApp e1 e2 ->
        let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
-       let v1 = exp_to_fstar g e1 (TArr t1 t2) h1 ve in
-       let v2 = exp_to_fstar g e2 t1 h2 ve in
-       v1 v2
+       assert ((typ_to_fstar t 'f 'p 'm) == (typ_to_fstar t2 'f 'p 'm));
+       let v1 : typ_to_fstar (TArr t1 t2) 'f 'p 'm = exp_to_fstar g e1 (TArr t1 t2) h1 ve in
+       let v2 : typ_to_fstar t1 'f 'p 'm = exp_to_fstar g e2 t1 h2 ve in
+       let w : unit -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm = (fun () -> v1 v2) in
+       let w' : unit -> MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm = (fun () -> w ()) in
+       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
+         enforced_locally 'p h (lt1@lt2));
+       w' ()
