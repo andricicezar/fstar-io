@@ -157,7 +157,7 @@ let vextend #t (x:typ_to_fstar t 'f 'p 'm) (#g:env) (ve:venv g 'f 'p 'm) : venv 
 #push-options "--compat_pre_core 1"
 
 let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
-  : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) by (explode (); dump "H") =
+  : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) =
   match e with
   | EUnit -> FStar.Universe.raise_val ()
   | EVar x -> ve x
@@ -173,8 +173,6 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        assert ((typ_to_fstar t 'f 'p 'm) == (typ_to_fstar t2 'f 'p 'm));
        let v1 : typ_to_fstar (TArr t1 t2) 'f 'p 'm = exp_to_fstar g e1 (TArr t1 t2) h1 ve in
        let v2 : typ_to_fstar t1 'f 'p 'm = exp_to_fstar g e2 t1 h2 ve in
-       let w : unit -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm = (fun () -> v1 v2) in
-       let w' : unit -> MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm = (fun () -> w ()) in
        assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
          enforced_locally 'p h (lt1@lt2));
-       w' ()
+       v1 v2
