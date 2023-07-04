@@ -7,9 +7,6 @@ open FStar.Tactics.Typeclasses
 open FStar.FunctionalExtensionality
 
 (** ** Trace Model *)
-(* Inspired from
-   * https://github.com/secure-compilation/exploring-robust-property-preservation/blob/master/TraceModel.v
-   * https://github.com/secure-compilation/exploring-robust-property-preservation/blob/master/Properties.v *)
 
 (* F* does not have co-induction *)
 let stream a = nat ^-> a
@@ -87,3 +84,10 @@ let rrhc (comp:compiler) : Type0 =
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
           comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+
+let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):trace_property #comp.target.event_typ -> trace_property #comp.source.event_typ -> Type0): Type0 =
+  forall (i:comp.source.interface).
+    forall (cs:comp.source.ctx i).
+      forall (ps:comp.source.pprog i).
+        comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` compile_ctx #i cs) ⊆ comp.source.beh (ps `comp.source.link #i` cs)
+  

@@ -6,86 +6,81 @@ open FStar.Ghost
 
 open CommonUtils
 
-(** ** Source Language **)
-include IIO
+include MIO
 
-(** ** Target Language **)
-(** Tlang is a language that acts as an intermediate language between the rich IIO effect that has
-    rich types and pre- and post-conditions and an ML language as OCaml.
-
-    The task of compiling an IIO computation is big and it implies converting rich types and pre- and
-    post-conditions to runtime checks. Therefore, this intermediate language simplifies our work.
-    By compiling to this intermediate language, we convert all of this static requirments to dynamic checks
-    but we keep the post-conditions around enough to show that the computation preserves its trace
-    properties.
-
-    So, Tlang is weakly typed and its computation can have only as post-condition that it respects a 
-    trace property. The pre-condition must be trivial.
-**)
-
-(** monitorable_prop is the type of the runtime check that is enforced when instrumenting.
-    A monitorable_prop checks if the next operation with its arguments satisfy the property
+(** policy_spec is the type of the runtime check that is enforced when instrumenting.
+    A policy_spec checks if the next operation with its arguments satisfy the property
     over the history. **)
-type monitorable_prop = (cmd:io_cmds) -> (io_sig.args cmd) -> (history:trace) -> Tot bool
+type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
-(** TODO: show that the type of monitorable_prop is enough to enforce any monitorable property
- (from Grigore Rosu's paper) **)
+type policy (mst:mst) (pi:policy_spec) =
+  s:mst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. mst.models s h ==> pi h Ctx cmd arg)}
 
 unfold
-let has_event_respected_pi (e:event) (check:monitorable_prop) (h:trace) : bool =
+let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
   match e with
-  | EOpenfile arg _ -> check Openfile arg h
-  | ERead arg _ -> check Read arg h
-  | EClose arg _ -> check Close arg h
+  | EOpenfile caller arg _ -> pi h caller Openfile arg
+  | ERead caller arg _ -> pi h caller Read arg
+  | EWrite caller arg _ -> pi h caller Write arg
+  | EClose caller arg _ -> pi h caller Close arg
 
 (** `enforced_locally pi` is a prefix-closed safety trace property. **)
 let rec enforced_locally
-  (check : monitorable_prop)
+  (pi : policy_spec)
   (h l: trace) :
-  Tot bool (decreases l) =
+  Tot Type0 (decreases l) =
   match l with
-  | [] -> true
+  | [] -> True
   | e  ::  t ->
-    if has_event_respected_pi e check h then enforced_locally (check) (e::h) t
-    else false  
-  
-let pi_as_hist (#a:Type) (pi:monitorable_prop) : hist a =
+    has_event_respected_pi e pi h /\ enforced_locally pi (e::h) t
+
+unfold
+let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
   (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
 
-effect IIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : monitorable_prop) = 
-  IIOwp a fl (pi_as_hist #a pi)
+effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) (mst:mst) = 
+  MIOwp a mst fl (pi_as_hist #a pi)
 
-class tlang (t:Type u#a) (pi:monitorable_prop) = { [@@@no_method] mldummy : unit }
+class interm (t:Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mst) = { [@@@no_method] mldummy : unit }
 
-instance tlang_unit (pi:monitorable_prop) : tlang unit pi = { mldummy = () }
-instance tlang_file_descr (pi:monitorable_prop) : tlang file_descr pi = { mldummy = () }
+instance interm_unit fl pi mst : interm unit fl pi mst = { mldummy = () }
+instance interm_file_descr fl pi mst : interm file_descr fl pi mst = { mldummy = () }
 
-instance tlang_bool (pi:monitorable_prop) : tlang bool pi = { mldummy = () }
-instance tlang_int (pi:monitorable_prop) : tlang int pi = { mldummy = () }
-instance tlang_option (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} : tlang (option t1) pi =
+instance interm_pair fl pi mst t1 {| d1:interm t1 fl pi mst |} t2 {| d2:interm t2 fl pi mst |} : interm (t1 * t2) fl pi mst = 
   { mldummy = () }
-instance tlang_pair (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} t2 {| d2:tlang t2 pi |} : tlang (t1 * t2) pi = 
+instance interm_either fl pi mst t1 {| d1:interm t1 fl pi mst |} t2 {| d2:interm t2 fl pi mst |} : interm (either t1 t2) fl pi mst =
   { mldummy = () }
-instance tlang_either (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} t2 {| d2:tlang t2 pi |} : tlang (either t1 t2) pi =
-  { mldummy = () }
-instance tlang_resexn (pi:monitorable_prop) t1 {| d1:tlang t1 pi |} : tlang (resexn t1) pi =
+instance interm_resexn fl pi mst t1 {| d1:interm t1 fl pi mst |} : interm (resexn t1) fl pi mst =
   { mldummy = () }
 
-type tlang_arrow_typ (fl:erased tflag) (t1 t2:Type) pi = t1 -> IIOpi t2 fl pi
+type interm_arrow_typ fl pi mst (t1 t2:Type) = t1 -> MIOpi t2 fl pi mst
 
-(** An tlang arrow is a statically/dynamically verified arrow to respect pi.
+(** An weak arrow is a statically/dynamically verified arrow to respect pi.
 **)
-instance tlang_arrow (#fl:erased tflag) (pi:monitorable_prop) #t1 (d1:tlang t1 pi) #t2 (d2:tlang t2 pi) : tlang (tlang_arrow_typ fl t1 t2 pi) pi =
+instance interm_arrow fl pi mst #t1 (d1:interm t1 fl pi mst) #t2 (d2:interm t2 fl pi mst) : interm (interm_arrow_typ fl pi mst t1 t2) fl pi mst =
   { mldummy = () }
 
-(**instance tlang_fo_uint8 : tlang_fo UInt8.t = { fo_pred = () }
-instance tlang_fo_string : tlang_fo string = { fo_pred = () }
-instance tlang_fo_bytes : tlang_fo Bytes.bytes = { fo_pred = () }
-instance tlang_fo_open_flag : tlang_fo open_flag = { fo_pred = () } 
-instance tlang_fo_socket_bool_option : tlang_fo socket_bool_option = { fo_pred = () }
-instance tlang_fo_file_descr : tlang_fo file_descr = { fo_pred = () }
-instance tlang_fo_zfile_perm : tlang_fo zfile_perm = { fo_pred = () }
-instance tlang_fo_pair_2 t1 t2 t3 {| tlang_fo t1 |} {| tlang_fo t2 |} {| tlang_fo t3 |} : tlang_fo (t1 * t2 * t3) = { fo_pred = () }
-instance tlang_fo_pair_3 t1 t2 t3 t4 {| tlang_fo t1 |} {| tlang_fo t2 |} {| tlang_fo t3 |} {| tlang_fo t4 |} : tlang_fo (t1 * t2 * t3 * t4) = { fo_pred = () }
-instance tlang_fo_option t1 {| tlang_fo t1 |} : tlang_fo (option t1) = { fo_pred = () }
-instance tlang_fo_list t1 {| tlang_fo t1 |} : tlang_fo (list t1) = { fo_pred = () } **)
+instance interm_arrow3 fl pi mst
+  t1 {| d1:interm t1 fl pi mst |}
+  t2 {| d2:interm t2 fl pi mst |}
+  t3 {| d3:interm t3 fl pi mst |}
+  t4 {| d4:interm t4 fl pi mst |}
+  : interm (t1 -> t2 -> t3 -> MIOpi t4 fl pi mst) fl pi mst =
+  { mldummy = () }
+
+instance interm_bool fl pi mst : interm bool fl pi mst = { mldummy = () }
+instance interm_int fl pi mst : interm int fl pi mst = { mldummy = () }
+instance interm_option fl pi mst t1 {| d1:interm t1 fl pi mst |} : interm (option t1) fl pi mst =
+  { mldummy = () }
+instance interm_bytes fl pi mst : interm Bytes.bytes fl pi mst = { mldummy = () }
+
+(**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
+instance weak_fo_string : weak_fo string = { fo_pred = () }
+instance weak_fo_open_flag : weak_fo open_flag = { fo_pred = () } 
+instance weak_fo_socket_bool_option : weak_fo socket_bool_option = { fo_pred = () }
+instance weak_fo_file_descr : weak_fo file_descr = { fo_pred = () }
+instance weak_fo_zfile_perm : weak_fo zfile_perm = { fo_pred = () }
+instance weak_fo_pair_2 t1 t2 t3 {| weak_fo t1 |} {| weak_fo t2 |} {| weak_fo t3 |} : weak_fo (t1 * t2 * t3) = { fo_pred = () }
+instance weak_fo_pair_3 t1 t2 t3 t4 {| weak_fo t1 |} {| weak_fo t2 |} {| weak_fo t3 |} {| weak_fo t4 |} : weak_fo (t1 * t2 * t3 * t4) = { fo_pred = () }
+instance weak_fo_option t1 {| weak_fo t1 |} : weak_fo (option t1) = { fo_pred = () }
+instance weak_fo_list t1 {| weak_fo t1 |} : weak_fo (list t1) = { fo_pred = () } **)

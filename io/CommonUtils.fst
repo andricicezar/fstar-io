@@ -41,12 +41,22 @@ let suffix_of (l1 l2: list 'a)
 : Tot Type0 (decreases l2)
 = l1 == l2 \/ l1 `strict_suffix_of` l2
 
+let rec strict_suffix_of_length (l1 l2 : list 'a)
+: Lemma
+  (requires (strict_suffix_of l1 l2))
+  (ensures (List.length l1 < List.length l2))
+  (decreases l2) =
+  match l2 with
+  | h::t ->
+    let aux () : Lemma (requires l1 =!= t) (ensures List.length l1 < List.length t) = strict_suffix_of_length l1 t in
+    Classical.move_requires aux ()
+
 let suffix_of_length (l1 l2: list 'a)
 : Lemma
   (requires (suffix_of l1 l2))
   (ensures (List.length l1 <= List.length l2))
-  (decreases l2) = admit ()
-
+  (decreases l2) =
+    Classical.move_requires_2 strict_suffix_of_length l1 l2
 
 val rev_nil : (a:Type) -> Lemma (List.rev #a [] == [])
 let rev_nil a = ()
@@ -61,8 +71,10 @@ let rev_head_append
   (e:'a)
   (l:list 'a) :
   Lemma
-    ((List.rev (e::l) @ h) == (List.rev l @ (e::h))) = admit ()
-  
+    ((List.rev (e::l) @ h) == (List.rev l @ (e::h))) =
+    List.Tot.Properties.rev_rev' (e::l);
+    List.Tot.Properties.rev_rev' l;
+    List.Tot.Properties.append_assoc (rev' l) [e] h
 
 let rec lemma_splitAt_equal (n:nat) (l:list 'a) :
   Lemma
@@ -78,13 +90,7 @@ let lemma_splitAt_equal_length (l l':list 'a) :
   Lemma
     (requires (l' `suffix_of` l /\ List.length l == List.length l'))
     (ensures (l == l')) =
-  assume (~(l == l'));
-  match l with
-  | [] -> ()
-  | _ :: xs -> 
-    assert (l' `suffix_of` xs);
-    suffix_of_length l' xs;
-    assert (List.length xs < List.length l')
+    Classical.move_requires_2 strict_suffix_of_length l' l
 
 let rec lemma_splitAt_suffix (l l':list 'a) :
   Lemma
@@ -109,7 +115,9 @@ let lemma_rev_rev_equal (l l':list 'a) :
   Lemma
     (requires (rev l == rev l'))
     (ensures (l == l')) 
-    (decreases l, l') = admit () 
+    (decreases l, l') =
+    List.Tot.Properties.rev_involutive l;
+    List.Tot.Properties.rev_involutive l'
 
 let lemma_append_rev_inv_tail (l l' l'':list 'a) :
   Lemma 
@@ -117,5 +125,3 @@ let lemma_append_rev_inv_tail (l l' l'':list 'a) :
     (ensures (l' == l'')) = 
   List.Tot.Properties.append_inv_tail l (rev l') (rev l'');
   lemma_rev_rev_equal l' l''
-   
-

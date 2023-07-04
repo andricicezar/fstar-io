@@ -5,10 +5,10 @@ FSTAR := fstar.exe
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := Compiler.Model1.Examples.fst Compiler.Model2.Examples.fst
+ROOTS := $(wildcard *.fst)
 
 CACHEDIR := .cache
-FLAGS  = --record_hints --use_hints --hint_dir hints
+# FLAGS  = --record_hints --use_hints --hint_dir hints
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 
