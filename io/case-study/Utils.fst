@@ -83,8 +83,8 @@ type cst = {
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (c.written <==> wrote h)
-  /\ (c.waiting <==> did_not_respond h)
+  /\ (c.written == wrote h)
+  /\ (c.waiting == did_not_respond h)
 
 let mymst : mst = {
   cst = cst;
