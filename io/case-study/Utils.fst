@@ -11,25 +11,6 @@ let valid_http_response res = Bytes.length res < 500
 val valid_http_request : Bytes.bytes -> bool
 let valid_http_request req = Bytes.length req < 500
 
-(** The web server has to prove this predicate to call the
-    handler, which happens immediately after it reads from a client.
-    Also, the handler has to prove this predicate to call `send`,
-    which should also hold since during the execution of the handler
-    no reads by Prog can happen. **)
-let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
-  match h with
-  (** got request **)
-  | ERead Prog arg _ :: tl ->
-    let (fd, _) = arg in
-    not (List.mem fd fds)
-  | EWrite Prog arg _ :: tl ->
-    let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
-  | _::tl -> did_not_respond_acc tl fds
-  | _ -> true
-
-let did_not_respond (h:trace) : bool =
-  did_not_respond_acc h []
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
@@ -40,6 +21,26 @@ let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
     if Inl? res && fd = fd' then false
     else is_opened_by_untrusted tl fd
   | e :: tl -> is_opened_by_untrusted tl fd
+
+val wrote_to : file_descr -> trace -> bool
+let rec wrote_to client h =
+  match h with
+  | [] -> false
+  (** the event before calling the handler is the read of the request **)
+  | ERead Prog _ _::tl -> false
+  (** the handler can write only once to the client using Prog **)
+  | EWrite Prog arg _::tl ->
+    let (fd, _) = arg in
+    if fd = client then true
+    else wrote_to client tl
+  | _ :: tl -> wrote_to client tl
+
+let rec did_not_respond (h:trace) : bool =
+  match h with
+  | [] -> false
+  | ERead Prog _ _::tl -> true
+  | EWrite Prog _ _::tl -> false
+  | e::tl -> did_not_respond tl
 
 val wrote : trace -> bool
 let rec wrote h =
@@ -190,9 +191,7 @@ let my_update_cst_write s0 fd bb rr :
       assert (wrote (e::h)) ;
       calc (==) {
         did_not_respond (e :: h) ;
-        == {}
-        did_not_respond_acc h [ fd ] ;
-        == { admit () } // Why would it be true? We don't even know did_not_respond h
+        == { } // Why would it be true? We don't even know did_not_respond h
         false ;
       }
     end
@@ -208,15 +207,16 @@ let my_update_cst_accept s0 caller arg rr :
   Lemma (
     forall h.
       s0 `models` h ==>
-      accept_upd_cst s0 `models` (EAccept caller arg (Inl rr) :: h)
+      accept_upd_cst s0 `models` (ERead caller arg (Inl rr) :: h)
   )
-= let e = EAccept caller arg (Inl rr) in
+= let e = ERead caller arg (Inl rr) in
   let s1 = accept_upd_cst s0 in
   introduce forall h. s0 `models` h ==> s1 `models` (e::h)
   with begin
     introduce s0 `models` h ==> s1 `models` (e::h)
     with _. begin
-      assume (did_not_respond h) // It's obviously false if s0.waiting = true
+      admit ();
+      assert (did_not_respond h) // It's obviously false if s0.waiting = true
       // So there is something wrong I guess.
     end
   end
@@ -227,7 +227,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl rr ->
+  | Read, Inl rr ->
     my_update_cst_accept s0 caller arg rr ;
     accept_upd_cst s0
   | Openfile, Inl fd ->
@@ -499,9 +499,10 @@ let rec ergar_pi_write_aux h lth client :
     (requires enforced_locally pi h lth /\ wrote ((List.rev lth) @ h))
     (ensures ergar lth [client])
     (decreases lth)
-= admit (); match lth with
+= match lth with
   | [] -> ()
   | e :: l ->
+    admit ();
     assert (enforced_locally pi (e :: h) l) ;
     begin match e with
     | EWrite Prog (fd,x) y ->
