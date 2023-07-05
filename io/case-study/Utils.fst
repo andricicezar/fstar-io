@@ -77,13 +77,13 @@ let no_read_true e : GTot bool =
 noeq
 type cst = {
   opened : list file_descr;
-  written : list file_descr;
+  written : bool;
   waiting : bool;
 }
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd. fd `List.mem` c.written <==> wrote h)
+  /\ (c.written <==> wrote h)
   /\ (c.waiting <==> did_not_respond h)
 
 let mymst : mst = {
@@ -98,13 +98,14 @@ effect MyMIO
   (post : trace -> a -> trace -> Type0) =
   MIO a mymst fl pre post
 
-let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
+let my_init_cst : mymst.cst =
+  { opened = [] ; written = false ; waiting = false }
 
 let is_neq (#a:eqtype) (x y : a) : bool = x <> y
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;
-  written = List.Tot.Base.filter (is_neq arg) s.written ;
+  written = s.written ;
   waiting = s.waiting
 }
 
@@ -162,26 +163,14 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      introduce forall fd. fd `List.mem` s1.written <==> wrote (e::h)
-      with begin
-        introduce fd `List.mem` s1.written ==> wrote (e::h)
-        with _. begin
-          mem_filter (is_neq arg) s0.written fd
-        end ;
-        introduce wrote (e::h) ==> fd `List.mem` s1.written
-        with _. begin
-          assume (fd <> arg) ; // This is what we need, but why would we have it?
-          // Maybe we should not filter?
-          filter_mem (is_neq arg) s0.written fd
-        end
-      end ;
+      assert (s1.written <==> wrote (e::h)) ;
       assert (s1.waiting <==> did_not_respond (e :: h))
     end
   end
 
 let write_upd_cst (s : cst) fd : cst = {
   opened = s.opened ;
-  written = fd :: s.written ;
+  written = true ;
   waiting = false
 }
 
@@ -199,18 +188,7 @@ let my_update_cst_write s0 caller fd bb rr :
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
       // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
-      introduce forall fd'. fd' `List.mem` s1.written ==> wrote (e::h)
-      with begin
-        introduce fd' `List.mem` s1.written ==> wrote (e::h)
-        with _. begin
-          if fd = fd'
-          then begin
-            assume (wrote (e::h)) // Again, no way to ensure this.
-          end
-          else ()
-        end
-      end ;
-      assume (forall fd'.  wrote (e::h) ==> fd' `List.mem` s1.written);
+      assume (s1.written ==> wrote (e::h)) ;
       assume (not (did_not_respond (e :: h))) // No way to know it's true?
     end
   end

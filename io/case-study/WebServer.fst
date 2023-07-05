@@ -189,7 +189,7 @@ let check_handler_post : tree (pck_dc mymst) =
     file_descr,
     unit,
     (fun client h _ lt -> Utils.wrote ((List.rev lt)@h)),
-    (fun client s0 _ s1 -> client `List.mem` s1.written)
+    (fun client s0 _ s1 -> s1.written)
     |)
     check_send_pre
     Leaf
