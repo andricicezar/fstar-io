@@ -198,13 +198,38 @@ let my_update_cst_write s0 fd bb rr :
     end
   end
 
+let accept_upd_cst (s : cst) : cst = {
+  opened = s.opened ;
+  written = s.written ;
+  waiting = true
+}
+
+let my_update_cst_accept s0 caller arg rr :
+  Lemma (
+    forall h.
+      s0 `models` h ==>
+      accept_upd_cst s0 `models` (EAccept caller arg (Inl rr) :: h)
+  )
+= let e = EAccept caller arg (Inl rr) in
+  let s1 = accept_upd_cst s0 in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      assume (did_not_respond h) // It's obviously false if s0.waiting = true
+      // So there is something wrong I guess.
+    end
+  end
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl _ -> admit (); { opened = opened; written = written; waiting = true }
+  | Accept, Inl rr ->
+    my_update_cst_accept s0 caller arg rr ;
+    accept_upd_cst s0
   | Openfile, Inl fd ->
     if caller = Ctx
     then { opened = fd :: opened ; written = written ; waiting = waiting }
