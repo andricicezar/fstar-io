@@ -169,7 +169,28 @@ unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
-let destruct_event (e:event) : ( caller & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg )  =
+unfold type event_data =
+  caller & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg
+
+let mk_event (x : event_data) : event =
+  let (| caller, e, arg, res |) = x in
+  match e with
+  | Openfile -> EOpenfile caller arg res
+  | Read -> ERead caller arg res
+  | Write -> EWrite caller arg res
+  | Close -> EClose caller arg res
+  | Socket -> ESocket caller arg res
+  | Setsockopt -> ESetsockopt caller arg res
+  | Bind -> EBind caller arg res
+  | SetNonblock -> ESetNonblock caller arg res
+  | Listen -> EListen caller arg res
+  | Accept -> EAccept caller arg res
+  | Select -> ESelect caller arg res
+  | Access -> EAccess caller arg res
+  | Stat -> EStat caller arg res
+
+
+let destruct_event (e:event) : d: event_data { e == mk_event d } =
   match e with
   | EOpenfile caller arg res -> (| caller, Openfile, arg, res |)
   | ERead caller arg res -> (| caller, Read, arg, res |)

@@ -93,7 +93,7 @@ type tgt_interface = {
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib' fl i.mst i.phi Ctx -> typ_eff_dcs i.mst fl i.ct_dcs -> i.ct fl
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> typ_eff_dcs i.mst fl i.ct_dcs -> i.ct fl
 type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int i.mst (IOActions + fl) (fun _ -> True) i.psi
 type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
 
@@ -110,6 +110,8 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
+// TODO: SMT problems with this def in AdversarialHandlers:
+//type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi':erased policy_spec -> io_lib fl pi' i.mst Ctx -> i.ct fl
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> i.ct fl
 type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))

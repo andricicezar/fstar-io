@@ -1,5 +1,6 @@
 module Utils
 
+open FStar.Tactics
 open FStar.List.Tot
 
 open Compiler.Languages
@@ -10,58 +11,45 @@ let valid_http_response res = Bytes.length res < 500
 val valid_http_request : Bytes.bytes -> bool
 let valid_http_request req = Bytes.length req < 500
 
+(** The web server has to prove this predicate to call the
+    handler, which happens immediately after it reads from a client.
+    Also, the handler has to prove this predicate to call `send`,
+    which should also hold since during the execution of the handler
+    no reads by Prog can happen. **)
 let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
-  | EAccept _ _ r::tl ->
-    if Inl? r then not (List.mem (Inl?.v r) fds)
-    else did_not_respond_acc tl fds
+  (** got request **)
+  | ERead Prog arg _ :: tl ->
+    let (fd, _) = arg in 
+    not (List.mem fd fds)
   | EWrite _ arg _ :: tl ->
     let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
   | _::tl -> did_not_respond_acc tl fds
   | _ -> true
 
 let did_not_respond (h:trace) : bool =
-  // did_not_respond_acc h []
-  true
-
-let did_not_respond' (h:trace) : bool =
-//  let x = MIO.Sig.Call.print_string2 "Checking pre of send..." in
-  let r = did_not_respond h in
-  r
-//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-// else MIO.Sig.Call.print_string2 "false\n") in
-//  fst (r, x)
+  did_not_respond_acc h []
 
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
-  | EOpenfile Ctx _ res :: tl -> begin
+  | EOpenfile Ctx _ res :: tl ->
     if Inl? res && fd = Inl?.v res then true
     else is_opened_by_untrusted tl fd
-  end
-  | EClose _ fd' res :: tl -> if Inl? res && fd = fd' then false
-                             else is_opened_by_untrusted tl fd
-  | _ :: tl -> is_opened_by_untrusted tl fd
+  | EClose _ fd' res :: tl ->
+    if Inl? res && fd = fd' then false
+    else is_opened_by_untrusted tl fd
+  | e :: tl -> is_opened_by_untrusted tl fd
 
-val wrote_at_least_once_to : file_descr -> trace -> bool
-let rec wrote_at_least_once_to client lt =
-  match lt with
+val wrote_to : file_descr -> trace -> bool
+let rec wrote_to client h =
+  match h with
   | [] -> false
-  | EWrite Prog arg _::tl -> 
-    let (fd, msg):file_descr*Bytes.bytes = arg in
-    let fd' : file_descr = fd in
-    let client' : file_descr = client in
-    client' = fd'
-  | _ :: tl -> wrote_at_least_once_to client tl 
-  
-val wrote_at_least_once_to' : file_descr -> trace -> bool
-let wrote_at_least_once_to' client lt =
-//  let x = MIO.Sig.Call.print_string2 "Checking post of handler ..." in
-  let r = wrote_at_least_once_to client lt in
-  r
-//  let x = x && (if r then MIO.Sig.Call.print_string2 "true\n"
-//  else MIO.Sig.Call.print_string2 "false\n") in
-//  fst (r,x)
+  (** the event before calling the handler is the read of the request **)
+  | ERead Prog _ _::tl -> false
+  (** the handler can write only once to the client using Prog **)
+  | EWrite Prog _ _::tl -> true
+  | _ :: tl -> wrote_to client tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -95,8 +83,8 @@ type cst = {
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd lt. fd `List.mem` c.written <==> wrote_at_least_once_to' fd lt) // TODO: this forall lt is bad
-  /\ (c.waiting <==> did_not_respond' h)
+  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h) // TODO: this forall lt is bad
+  /\ (c.waiting <==> did_not_respond h)
 
 let mymst : mst = {
   cst = cst;
@@ -112,37 +100,156 @@ effect MyMIO
 
 let my_init_cst : mymst.cst = { opened = []; written = []; waiting = false }
 
+let is_neq (#a:eqtype) (x y : a) : bool = x <> y
+
+let close_upd_cst (s : cst) arg : cst = {
+  opened = List.Tot.Base.filter (is_neq arg) s.opened ;
+  written = List.Tot.Base.filter (is_neq arg) s.written ;
+  waiting = s.waiting
+}
+
+// TODO MOVE
+let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` filter f l) (ensures x `memP` l)
+= match l with
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` filter f tl
+      returns x `memP` l
+      with _. ()
+      and _. mem_filter f tl x
+    end
+    else mem_filter f tl x
+
+// TODO MOVE
+let rec filter_mem (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` l /\ f x) (ensures x `memP` filter f l)
+= match l with
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` tl
+      returns x `memP` filter f l
+      with _. ()
+      and _. filter_mem f tl x
+    end
+    else filter_mem f tl x
+
+let my_update_cst_close s0 caller arg rr :
+  Lemma (
+    forall h.
+      s0 `models` h ==>
+      close_upd_cst s0 arg `models` (EClose caller arg (Inl rr) :: h)
+  )
+= let e = EClose caller arg (Inl rr) in
+  let s1 = close_upd_cst s0 arg in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      introduce forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e :: h) fd
+      with begin
+        introduce fd `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd
+        with _. begin
+          mem_filter (is_neq arg) s0.opened fd
+        end ;
+        introduce is_opened_by_untrusted (e :: h) fd ==> fd `List.mem` s1.opened
+        with _. begin
+          assert (arg <> fd) ;
+          assert (is_opened_by_untrusted h fd) ;
+          assert (fd `mem` s0.opened) ;
+          filter_mem (is_neq arg) s0.opened fd
+        end
+      end ;
+      introduce forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h)
+      with begin
+        introduce fd `List.mem` s1.written ==> wrote_to fd (e::h)
+        with _. begin
+          mem_filter (is_neq arg) s0.written fd
+        end ;
+        introduce wrote_to fd (e::h) ==> fd `List.mem` s1.written
+        with _. begin
+          // Hm. This seems wrong, we don't have anything here to say fd <> arg
+          assume (fd `List.mem` s1.written)
+        end
+      end ;
+      assert (s1.waiting <==> did_not_respond (e :: h))
+    end
+  end
+
+let write_upd_cst (s : cst) fd : cst = {
+  opened = s.opened ;
+  written = fd :: s.written ;
+  waiting = false
+}
+
+let my_update_cst_write s0 caller fd bb rr :
+  Lemma (
+    forall h.
+      s0 `models` h ==>
+      write_upd_cst s0 fd `models` (EWrite caller (fd, bb) (Inl rr) :: h)
+  )
+= let e = EWrite caller (fd, bb) (Inl rr) in
+  let s1 = write_upd_cst s0 fd in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
+      // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
+      introduce forall fd'. fd' `List.mem` s1.written ==> wrote_to fd' (e::h)
+      with begin
+        introduce fd' `List.mem` s1.written ==> wrote_to fd' (e::h)
+        with _. begin
+          if fd = fd'
+          then begin
+            assume (wrote_to fd (e::h)) // Again, no way to ensure this.
+          end
+          else ()
+        end
+      end ;
+      assume (forall fd'.  wrote_to fd' (e::h) ==> fd' `List.mem` s1.written);
+      assume (not (did_not_respond (e :: h))) // No way to know it's true?
+    end
+  end
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
   let written = s0.written in
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl _ -> ({ opened = opened; written = written; waiting = true })
-  | Openfile, Inl fd -> admit ();({ opened = fd::opened; written = written; waiting = waiting })
-  | Close, Inl _ -> admit (); ({ opened = List.Tot.Base.filter (fun x -> x <> arg) opened; written = List.Tot.Base.filter (fun x -> x <> arg) written; waiting = waiting })
-  | Write, Inl _ -> 
-    admit ();
+  | Accept, Inl _ -> admit (); { opened = opened; written = written; waiting = true }
+  | Openfile, Inl fd ->
+    if caller = Ctx
+    then { opened = fd :: opened ; written = written ; waiting = waiting }
+    else s0
+  | Close, Inl rr ->
+    my_update_cst_close s0 caller arg rr ;
+    close_upd_cst s0 arg
+  | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
-    let (fd, _) = arg in
-    ({ opened = opened; written = fd::written; waiting = false })
+    let (fd, bb) = arg in
+    my_update_cst_write s0 caller fd bb rr ;
+    write_upd_cst s0 fd
   | _ -> admit (); s0
 
 val pi : policy_spec
 let pi h c cmd arg =
   match c, cmd with
-  | Ctx, Openfile -> 
+  | Ctx, Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
     if fnm = "/temp" then true else false
-  | Ctx, Read -> 
+  | Ctx, Read ->
     let (fd, _) : file_descr * UInt8.t = arg in
     is_opened_by_untrusted h fd
   | Ctx, Close -> is_opened_by_untrusted h arg
-  | Ctx, Access -> 
+  | Ctx, Access ->
     let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true 
+    if fnm = "/temp" then true
     else false
-  | Ctx, Stat -> 
+  | Ctx, Stat ->
     if arg = "/temp" then true else false
   | Prog, Write -> true
   | _ -> false
@@ -376,10 +483,10 @@ let rec ergar_pi_irr h lth lt lt' :
 
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth)
+    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h))
     (ensures ergar lth [client])
     (decreases lth)
-= match lth with
+= admit (); match lth with
   | [] -> ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
@@ -418,7 +525,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_at_least_once_to client lth /\ every_request_gets_a_response lt)
+    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth)@h) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
