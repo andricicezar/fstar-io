@@ -20,9 +20,9 @@ let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
   match h with
   (** got request **)
   | ERead Prog arg _ :: tl ->
-    let (fd, _) = arg in 
+    let (fd, _) = arg in
     not (List.mem fd fds)
-  | EWrite _ arg _ :: tl ->
+  | EWrite Prog arg _ :: tl ->
     let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
   | _::tl -> did_not_respond_acc tl fds
   | _ -> true
@@ -174,22 +174,27 @@ let write_upd_cst (s : cst) fd : cst = {
   waiting = false
 }
 
-let my_update_cst_write s0 caller fd bb rr :
+let my_update_cst_write s0 fd bb rr :
   Lemma (
     forall h.
       s0 `models` h ==>
-      write_upd_cst s0 fd `models` (EWrite caller (fd, bb) (Inl rr) :: h)
+      write_upd_cst s0 fd `models` (EWrite Prog (fd, bb) (Inl rr) :: h)
   )
-= let e = EWrite caller (fd, bb) (Inl rr) in
+= let e = EWrite Prog (fd, bb) (Inl rr) in
   let s1 = write_upd_cst s0 fd in
   introduce forall h. s0 `models` h ==> s1 `models` (e::h)
   with begin
     introduce s0 `models` h ==> s1 `models` (e::h)
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
-      // assume (forall fd'. fd' `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd') ;
-      assume (s1.written ==> wrote (e::h)) ;
-      assume (not (did_not_respond (e :: h))) // No way to know it's true?
+      assert (wrote (e::h)) ;
+      calc (==) {
+        did_not_respond (e :: h) ;
+        == {}
+        did_not_respond_acc h [ fd ] ;
+        == { admit () } // Why would it be true? We don't even know did_not_respond h
+        false ;
+      }
     end
   end
 
@@ -210,9 +215,13 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
-    my_update_cst_write s0 caller fd bb rr ;
-    write_upd_cst s0 fd
-  | _ -> admit (); s0
+    if caller = Prog
+    then begin
+      my_update_cst_write s0 fd bb rr ;
+      write_upd_cst s0 fd
+    end
+    else s0
+  | _ -> admit () ; s0
 
 val pi : policy_spec
 let pi h c cmd arg =
