@@ -11,25 +11,6 @@ let valid_http_response res = Bytes.length res < 500
 val valid_http_request : Bytes.bytes -> bool
 let valid_http_request req = Bytes.length req < 500
 
-(** The web server has to prove this predicate to call the
-    handler, which happens immediately after it reads from a client.
-    Also, the handler has to prove this predicate to call `send`,
-    which should also hold since during the execution of the handler
-    no reads by Prog can happen. **)
-let rec did_not_respond_acc (h:trace) (fds:list file_descr) : bool =
-  match h with
-  (** got request **)
-  | ERead Prog arg _ :: tl ->
-    let (fd, _) = arg in
-    not (List.mem fd fds)
-  | EWrite Prog arg _ :: tl ->
-    let (fd, _) = arg in did_not_respond_acc tl (fd::fds)
-  | _::tl -> did_not_respond_acc tl fds
-  | _ -> true
-
-let did_not_respond (h:trace) : bool =
-  did_not_respond_acc h []
-
 let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
   match h with
   | [] -> false
@@ -50,6 +31,9 @@ let rec wrote h =
   (** the handler can write only once to the client using Prog **)
   | EWrite Prog _ _::tl -> true
   | _ :: tl -> wrote tl
+
+let did_not_respond (h:trace) : bool =
+  not (wrote h)
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -77,13 +61,11 @@ let no_read_true e : GTot bool =
 noeq
 type cst = {
   opened : list file_descr;
-  written : bool;
   waiting : bool;
 }
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (c.written == wrote h)
   /\ (c.waiting == did_not_respond h)
 
 let mymst : mst = {
@@ -99,13 +81,12 @@ effect MyMIO
   MIO a mymst fl pre post
 
 let my_init_cst : mymst.cst =
-  { opened = [] ; written = false ; waiting = false }
+  { opened = [] ; waiting = false }
 
 let is_neq (#a:eqtype) (x y : a) : bool = x <> y
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;
-  written = s.written ;
   waiting = s.waiting
 }
 
@@ -163,14 +144,12 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      assert (s1.written <==> wrote (e::h)) ;
       assert (s1.waiting <==> did_not_respond (e :: h))
     end
   end
 
 let write_upd_cst (s : cst) fd : cst = {
   opened = s.opened ;
-  written = true ;
   waiting = false
 }
 
@@ -190,17 +169,14 @@ let my_update_cst_write s0 fd bb rr :
       assert (wrote (e::h)) ;
       calc (==) {
         did_not_respond (e :: h) ;
-        == {}
-        did_not_respond_acc h [ fd ] ;
-        == { admit () } // Why would it be true? We don't even know did_not_respond h
+        == { } // Why would it be true? We don't even know did_not_respond h
         false ;
       }
     end
   end
 
-let accept_upd_cst (s : cst) : cst = {
+let read_upd_cst (s : cst) : cst = {
   opened = s.opened ;
-  written = s.written ;
   waiting = true
 }
 
@@ -208,31 +184,20 @@ let my_update_cst_accept s0 caller arg rr :
   Lemma (
     forall h.
       s0 `models` h ==>
-      accept_upd_cst s0 `models` (EAccept caller arg (Inl rr) :: h)
-  )
-= let e = EAccept caller arg (Inl rr) in
-  let s1 = accept_upd_cst s0 in
-  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
-  with begin
-    introduce s0 `models` h ==> s1 `models` (e::h)
-    with _. begin
-      assume (did_not_respond h) // It's obviously false if s0.waiting = true
-      // So there is something wrong I guess.
-    end
-  end
+      read_upd_cst s0 `models` (ERead Prog arg (Inl rr) :: h)
+  ) = ()
 
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
-  let written = s0.written in
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl rr ->
-    my_update_cst_accept s0 caller arg rr ;
-    accept_upd_cst s0
+  | Read, Inl rr ->
+    if Prog? caller then (my_update_cst_accept s0 caller arg rr ; read_upd_cst s0)
+    else s0
   | Openfile, Inl fd ->
     if caller = Ctx
-    then { opened = fd :: opened ; written = written ; waiting = waiting }
+    then { opened = fd :: opened ; waiting = waiting }
     else s0
   | Close, Inl rr ->
     my_update_cst_close s0 caller arg rr ;
