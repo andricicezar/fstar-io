@@ -83,7 +83,7 @@ type cst = {
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h) // TODO: this forall lt is bad
+  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h)
   /\ (c.waiting <==> did_not_respond h)
 
 let mymst : mst = {
@@ -170,8 +170,9 @@ let my_update_cst_close s0 caller arg rr :
         end ;
         introduce wrote_to fd (e::h) ==> fd `List.mem` s1.written
         with _. begin
-          // Hm. This seems wrong, we don't have anything here to say fd <> arg
-          assume (fd `List.mem` s1.written)
+          assume (fd <> arg) ; // This is what we need, but why would we have it?
+          // Maybe we should not filter?
+          filter_mem (is_neq arg) s0.written fd
         end
       end ;
       assert (s1.waiting <==> did_not_respond (e :: h))
