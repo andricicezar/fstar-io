@@ -29,9 +29,6 @@ let rec wrote_to client h =
   | EClose _ fd _::tl ->
     if fd = client then false
     else wrote_to client tl
-  (** the event before calling the handler is the read of the request **)
-  | ERead Prog _ _::tl -> false
-  (** the handler can write only once to the client using Prog **)
   | EWrite Prog arg _::tl ->
     let (fd, _) = arg in
     if fd = client then true
@@ -214,7 +211,20 @@ let my_update_cst_read s0 arg rr :
       s0 `models` h ==>
       read_upd_cst s0 `models` (ERead Prog arg (Inl rr) :: h)
   )
-= admit () 
+= let e = ERead Prog arg (Inl rr) in
+  let s1 = read_upd_cst s0 in
+  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
+  with begin
+    introduce s0 `models` h ==> s1 `models` (e::h)
+    with _. begin
+      let (fd, _) = arg in
+      assert (did_not_respond (e::h)); // It's obviously false if s0.waiting = true
+      assert (forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e::h) fd);
+      //assume (~(fd `List.mem` s0.written));
+      assert (forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h));
+      assert (s1 `models` (e::h))
+    end
+  end
 
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
