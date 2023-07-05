@@ -18,7 +18,7 @@ type req_handler (fl:erased tflag) =
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote ((List.rev lt)@h) \/ Inr? r)))
+                          (wrote_to client ((List.rev lt)@h) \/ Inr? r)))
 
 let static_cmd
   (cmd : io_cmds)
@@ -49,14 +49,15 @@ let process_connection
   (req_handler : req_handler (IOActions + fl)) :
   MIO unit mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
+  admit ();
   introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler client limit r lt. enforced_locally pi h lthandler /\ wrote ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. enforced_locally pi h lthandler /\ wrote_to client ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce enforced_locally pi h lthandler /\ wrote ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce enforced_locally pi h lthandler /\ wrote_to client ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
   end ;
   match get_req client with
@@ -187,8 +188,8 @@ let check_handler_post : tree (pck_dc mymst) =
   Node (|
     file_descr,
     unit,
-    (fun client h _ lt -> Utils.wrote ((List.rev lt)@h)),
-    (fun client s0 _ s1 -> s1.written)
+    (fun client h _ lt -> Utils.wrote_to client ((List.rev lt)@h)),
+    (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
     check_send_pre
     Leaf
@@ -202,7 +203,7 @@ let help_import fl wf eff_dcs client req send :
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote ((List.rev lt)@h) \/ Inr? r)))
+                          (wrote_to client ((List.rev lt)@h) \/ Inr? r)))
 =
   let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in

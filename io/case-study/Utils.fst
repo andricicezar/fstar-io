@@ -26,6 +26,9 @@ val wrote_to : file_descr -> trace -> bool
 let rec wrote_to client h =
   match h with
   | [] -> false
+  | EClose _ fd _::tl ->
+    if fd = client then false
+    else wrote_to client tl
   (** the event before calling the handler is the read of the request **)
   | ERead Prog _ _::tl -> false
   (** the handler can write only once to the client using Prog **)
@@ -41,16 +44,6 @@ let rec did_not_respond (h:trace) : bool =
   | ERead Prog _ _::tl -> true
   | EWrite Prog _ _::tl -> false
   | e::tl -> did_not_respond tl
-
-val wrote : trace -> bool
-let rec wrote h =
-  match h with
-  | [] -> false
-  (** the event before calling the handler is the read of the request **)
-  | ERead Prog _ _::tl -> false
-  (** the handler can write only once to the client using Prog **)
-  | EWrite Prog _ _::tl -> true
-  | _ :: tl -> wrote tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -78,13 +71,13 @@ let no_read_true e : GTot bool =
 noeq
 type cst = {
   opened : list file_descr;
-  written : bool;
+  written : list file_descr;
   waiting : bool;
 }
 
 let models (c:cst) (h:trace) : Type0 =
   (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (c.written == wrote h)
+  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h)
   /\ (c.waiting == did_not_respond h)
 
 let mymst : mst = {
@@ -100,13 +93,13 @@ effect MyMIO
   MIO a mymst fl pre post
 
 let my_init_cst : mymst.cst =
-  { opened = [] ; written = false ; waiting = false }
+  { opened = [] ; written = [] ; waiting = false }
 
 let is_neq (#a:eqtype) (x y : a) : bool = x <> y
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;
-  written = s.written ;
+  written = List.Tot.Base.filter (is_neq arg) s.written ;
   waiting = s.waiting
 }
 
@@ -164,14 +157,26 @@ let my_update_cst_close s0 caller arg rr :
           filter_mem (is_neq arg) s0.opened fd
         end
       end ;
-      assert (s1.written <==> wrote (e::h)) ;
+      introduce forall fd. fd `List.mem` s1.written <==> wrote_to fd (e :: h)
+      with begin
+        introduce fd `List.mem` s1.written ==> wrote_to fd (e :: h)
+        with _. begin
+          mem_filter (is_neq arg) s0.written fd
+        end ;
+        introduce wrote_to fd (e :: h) ==> fd `List.mem` s1.written
+        with _. begin
+          assert (arg <> fd) ;
+          assert (fd `mem` s0.written) ;
+          filter_mem (is_neq arg) s0.written fd
+        end
+      end ;
       assert (s1.waiting <==> did_not_respond (e :: h))
     end
   end
 
 let write_upd_cst (s : cst) fd : cst = {
   opened = s.opened ;
-  written = true ;
+  written = fd :: s.written ;
   waiting = false
 }
 
@@ -188,7 +193,7 @@ let my_update_cst_write s0 fd bb rr :
     introduce s0 `models` h ==> s1 `models` (e::h)
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
-      assert (wrote (e::h)) ;
+      assert (wrote_to fd (e::h)) ;
       calc (==) {
         did_not_respond (e :: h) ;
         == { } // Why would it be true? We don't even know did_not_respond h
@@ -199,7 +204,7 @@ let my_update_cst_write s0 fd bb rr :
 
 let read_upd_cst (s : cst) : cst = {
   opened = s.opened ;
-  written = false ;
+  written = s.written ;
   waiting = true
 }
 
@@ -209,7 +214,7 @@ let my_update_cst_read s0 arg rr :
       s0 `models` h ==>
       read_upd_cst s0 `models` (ERead Prog arg (Inl rr) :: h)
   )
-= () 
+= admit () 
 
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let opened = s0.opened in
@@ -219,7 +224,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   match cmd, res with
   | Read, Inl rr ->
     if caller = Prog
-    then (my_update_cst_read s0 arg rr ; read_upd_cst s0) <: cst
+    then (my_update_cst_read s0 arg rr ; read_upd_cst s0)
     else s0
   | Openfile, Inl fd ->
     if caller = Ctx
