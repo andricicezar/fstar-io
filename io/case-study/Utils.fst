@@ -26,9 +26,12 @@ val wrote_to : file_descr -> trace -> bool
 let rec wrote_to client h =
   match h with
   | [] -> false
-  | EClose _ fd _::tl ->
-    if fd = client then false
-    else wrote_to client tl
+  | EAccept _ arg (Inl fd)::tl ->
+    if fd = client then false else wrote_to client tl
+  | ERead Prog arg _::tl -> begin
+    let (fd, _) = arg in
+    if fd = client then false else wrote_to client tl
+  end
   | EWrite Prog arg _::tl ->
     let (fd, _) = arg in
     if fd = client then true
@@ -96,7 +99,7 @@ let is_neq (#a:eqtype) (x y : a) : bool = x <> y
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;
-  written = List.Tot.Base.filter (is_neq arg) s.written ;
+  written = s.written ;
   waiting = s.waiting
 }
 
@@ -158,13 +161,11 @@ let my_update_cst_close s0 caller arg rr :
       with begin
         introduce fd `List.mem` s1.written ==> wrote_to fd (e :: h)
         with _. begin
-          mem_filter (is_neq arg) s0.written fd
+          ()
         end ;
         introduce wrote_to fd (e :: h) ==> fd `List.mem` s1.written
         with _. begin
-          assert (arg <> fd) ;
-          assert (fd `mem` s0.written) ;
-          filter_mem (is_neq arg) s0.written fd
+          ()
         end
       end ;
       assert (s1.waiting <==> did_not_respond (e :: h))
@@ -220,7 +221,7 @@ let my_update_cst_read s0 arg rr :
       let (fd, _) = arg in
       assert (did_not_respond (e::h)); // It's obviously false if s0.waiting = true
       assert (forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e::h) fd);
-      //assume (~(fd `List.mem` s0.written));
+      assume (~(fd `List.mem` s0.written));
       assert (forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h));
       assert (s1 `models` (e::h))
     end
@@ -232,6 +233,9 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let waiting = s0.waiting in
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
+  | Accept, Inl fd ->
+    admit ();
+    { opened = opened ; written = filter (is_neq fd) written ; waiting = waiting }
   | Read, Inl rr ->
     if caller = Prog
     then (my_update_cst_read s0 arg rr ; read_upd_cst s0)
