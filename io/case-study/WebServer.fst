@@ -50,7 +50,7 @@ let process_connection
   MIO unit mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   admit ();
-  introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+(**  introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
@@ -59,7 +59,7 @@ let process_connection
   with begin
     introduce enforced_locally pi h lthandler /\ wrote ((List.rev lthandler)@h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
-  end ;
+  end ;**)
   match get_req client with
   | Inr _ -> sendError400 client
   | Inl req ->
@@ -189,7 +189,7 @@ let check_handler_post : tree (pck_dc mymst) =
     file_descr,
     unit,
     (fun client h _ lt -> Utils.wrote ((List.rev lt)@h)),
-    (fun client s0 _ s1 -> s1.written)
+    (fun client s0 _ s1 -> not s1.waiting)
     |)
     check_send_pre
     Leaf

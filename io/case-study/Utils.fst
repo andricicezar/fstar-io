@@ -35,28 +35,20 @@ let rec wrote h =
 let did_not_respond (h:trace) : bool =
   not (wrote h)
 
-val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
-let rec every_request_gets_a_response_acc lt read_descrs =
-  match lt with
-  | [] -> read_descrs == []
-  | ERead Prog arg (Inl _) :: tl ->
-    let (fd, _) = arg in every_request_gets_a_response_acc tl (fd :: read_descrs)
-  | EWrite Prog (fd,_) _ :: tl -> every_request_gets_a_response_acc tl (filter (fun fd' -> fd <> fd') read_descrs)
-  | _ :: tl -> every_request_gets_a_response_acc tl read_descrs
+val every_request_gets_a_response_acc : trace -> option file_descr -> Type0
+let rec every_request_gets_a_response_acc lt ofd =
+  match ofd, lt with
+  | None, []-> true
+  | Some _, [] -> false
+  | None, ERead Prog arg _ :: tl -> let (fd, _) = arg in every_request_gets_a_response_acc tl (Some fd)
+  | Some _, ERead Prog _ _ :: _ -> false
+  | Some fd, EWrite Prog (fd',_) _ :: tl -> fd == fd' /\ every_request_gets_a_response_acc tl None
+  | None, EWrite Prog _ _ :: _ -> false
+  | _, _ :: tl -> every_request_gets_a_response_acc tl ofd
 
 val every_request_gets_a_response : trace -> Type0
 let every_request_gets_a_response lt =
-  every_request_gets_a_response_acc lt []
-
-let no_write_true e =
-  match e with
-  | EWrite Prog _ _ -> false
-  | _ -> true
-
-let no_read_true e : GTot bool =
-  match e with
-  | ERead Prog _ (Inl _) -> false
-  | _ -> true
+  every_request_gets_a_response_acc lt None
 
 noeq
 type cst = {
@@ -251,6 +243,17 @@ let phi s0 cmd arg =
   | _ -> false
 
 let ergar = every_request_gets_a_response_acc
+
+  (**
+let no_write_true e =
+  match e with
+  | EWrite Prog _ _ -> false
+  | _ -> true
+
+let no_read_true e : GTot bool =
+  match e with
+  | ERead Prog _ (Inl _) -> false
+  | _ -> true
 
 let rec ergar_ignore_no_write_read lt e lt' rl :
   Lemma
@@ -478,30 +481,34 @@ let rec ergar_pi_write_aux h lth client :
     | _ -> admit () ; ergar_pi_write_aux (e :: h) l client
     end
 
-let rec ergar_trace_merge lt lt' rl rl' :
+**)
+
+let rec ergar_trace_merge lt lt' ofd :
   Lemma
-    (requires ergar lt rl /\ ergar lt' rl')
-    (ensures ergar (lt @ lt') (rl @ rl'))
+    (requires ergar lt ofd /\ ergar lt' None)
+    (ensures ergar (lt @ lt') ofd)
 = match lt with
   | [] -> ()
-  | ERead Prog (fd,limit) (Inl _) :: tl ->
-    assert (ergar tl (fd :: rl)) ;
-    ergar_trace_merge tl lt' (fd :: rl) rl'
+  | ERead Prog (fd,limit) _ :: tl ->
+    ergar_trace_merge tl lt' (Some fd)
+
   | EWrite Prog (fd,x) y :: tl ->
-    cong (fun fd -> (fun fd' -> fd <> fd')) fd (write_true_fd (EWrite Prog (fd,x) y)) ;
+    ergar_trace_merge tl lt' None 
+  | e :: tl -> ergar_trace_merge tl lt' ofd
 
-    ergar_write_true (EWrite Prog (fd,x) y) tl rl ;
-    assert (ergar tl (filter (fun fd' -> fd <> fd') rl)) ;
+let every_request_gets_a_response_append () : 
+  Lemma (
+    forall lt1 lt2.
+      every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
+      every_request_gets_a_response (lt1 @ lt2)
+  ) 
+= introduce forall lt1 lt2. ergar lt1 None /\ ergar lt2 None ==> ergar (lt1 @ lt2) None 
+  with begin
+    introduce ergar lt1 None /\ ergar lt2 None ==> ergar (lt1 @ lt2) None
+    with _. ergar_trace_merge lt1 lt2 None
+  end
 
-    assert (ergar lt' rl') ;
-    ergar_filter lt' rl' (fun fd' -> fd <> fd') ;
-
-    filter_append (fun fd' -> fd <> fd') rl rl' ;
-    ergar_trace_merge tl lt' (filter (fun fd' -> fd <> fd') rl) (filter (fun fd' -> fd <> fd') rl') ;
-
-    ergar_write_true (EWrite Prog (fd,x) y) (tl @ lt') (rl @ rl') ;
-    assert (ergar (tl @ lt') (filter (fun fd' -> fd <> fd') (rl @ rl')))
-  | _ :: tl -> ergar_trace_merge tl lt' rl rl'
+  (**
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
@@ -512,15 +519,27 @@ let ergar_pi_write h lth client limit r lt :
   assert (every_request_gets_a_response (ERead Prog (client,limit) (Inl r) :: lth)) ;
   append_assoc lt [ ERead Prog (client,limit) (Inl r) ] lth ;
   ergar_trace_merge lt ([ ERead Prog (client,limit) (Inl r) ] @ lth) [] []
-
-let every_request_gets_a_response_append () : 
-  Lemma (
-    forall lt1 lt2.
-      every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
-      every_request_gets_a_response (lt1 @ lt2)
-  ) 
-= introduce forall lt1 lt2. ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
-  with begin
-    introduce ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
-    with _. ergar_trace_merge lt1 lt2 [] []
-  end
+**)
+let rec ergar_pi_write client lt' h lt'' :
+  Lemma 
+    (requires (
+    ~(wrote ((rev lt')@h)) /\
+    enforced_locally pi (rev lt' @ h) lt'' /\ wrote ((rev lt'')@(rev lt')@h)))
+  (ensures (every_request_gets_a_response (lt' @ lt'')))
+  (decreases lt'')
+= 
+ match lt'' with
+ | [] -> assert (not (wrote ((rev lt'')@(rev lt')@h))); assert (False)
+ | EWrite Prog (fd, _) _ :: tl -> admit ()
+ | ERead Prog _ _ :: tl -> assert (False) 
+ | e :: tl -> 
+   assert (~(wrote (e::(rev lt')@h))); (** == *)
+   assume (~(wrote ((rev (lt'@[e]))@h)));
+   assert (enforced_locally pi (e::(rev lt')@h) tl);(** == *)
+   assume (enforced_locally pi (rev (lt'@[e])@h) tl);
+   assert (wrote ((rev lt'')@(rev lt')@h)); (** == *)
+   assume (wrote ((rev tl)@(rev (lt'@[e]))@h));
+   ergar_pi_write client (lt'@[e]) h tl;
+   assert (every_request_gets_a_response ((lt'@[e])@tl));
+   assert (((lt'@[e])@tl) == (lt'@([e]@tl))) by (l_to_r [`List.Tot.Properties.append_assoc]);
+   assert (every_request_gets_a_response (lt' @ lt''))
