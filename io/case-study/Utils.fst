@@ -28,10 +28,10 @@ let rec wrote_to client h =
   | [] -> false
   | EAccept _ arg (Inl fd)::tl ->
     if fd = client then false else wrote_to client tl
-  | ERead Prog arg _::tl -> begin
-    let (fd, _) = arg in
-    if fd = client then false else wrote_to client tl
-  end
+//  | ERead Prog arg _::tl -> begin
+//    let (fd, _) = arg in
+//    if fd = client then false else wrote_to client tl
+//  end
   | EWrite Prog arg _::tl ->
     let (fd, _) = arg in
     if fd = client then true
@@ -221,7 +221,7 @@ let my_update_cst_read s0 arg rr :
       let (fd, _) = arg in
       assert (did_not_respond (e::h)); // It's obviously false if s0.waiting = true
       assert (forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e::h) fd);
-      assume (~(fd `List.mem` s0.written));
+ //     assume (~(fd `List.mem` s0.written));
       assert (forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h));
       assert (s1 `models` (e::h))
     end
