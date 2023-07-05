@@ -499,19 +499,17 @@ let rec ergar_pi_write_aux h lth client :
     (requires enforced_locally pi h lth /\ wrote ((List.rev lth) @ h))
     (ensures ergar lth [client])
     (decreases lth)
-= match lth with
-  | [] ->
-    assert (wrote h) ; // We no longer have anything useful to conclude!
-    admit ()
+= admit (); match lth with
+  | [] -> ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
     begin match e with
     | EWrite Prog (fd,x) y ->
       if fd = client
       then ergar_pi_irr (e :: h) l [] []
-      else begin admit () ; ergar_pi_write_aux (e :: h) l client end
-    | _ -> admit () ; ergar_pi_write_aux (e :: h) l client
-    end
+      else ergar_pi_write_aux (e :: h) l client
+    | _ -> ergar_pi_write_aux (e :: h) l client
+  end
 
 let rec ergar_trace_merge lt lt' rl rl' :
   Lemma
