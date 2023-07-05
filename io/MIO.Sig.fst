@@ -138,6 +138,9 @@ unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
+unfold let io_post (cmd:io_cmds) (arg:io_args cmd) (res : io_sig.res cmd arg) : Type0 =
+  True
+
 unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : hist ((mio_sig mst).res cmd arg) =
   fun (p : hist_post ((mio_sig mst).res cmd arg)) h ->
   match cmd with
@@ -145,4 +148,4 @@ unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : his
     let p : hist_post (Ghost.erased trace) = p in // need some handholding
     p [] (Ghost.hide h)
   | GetST -> forall (x:mst.cst). mst.models x h ==> p [] x // any concrete state modelling the trace
-  | _ -> io_pre cmd arg h /\ (forall (r:(mio_sig mst).res cmd arg). p [convert_call_to_event caller cmd arg r] r)
+  | _ -> io_pre cmd arg h /\ (forall (r:(mio_sig mst).res cmd arg). io_post cmd arg r ==> p [convert_call_to_event caller cmd arg r] r)

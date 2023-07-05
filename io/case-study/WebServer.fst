@@ -26,6 +26,7 @@ let static_cmd
   MIO (io_sig.res cmd arg) mymst IOActions
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
+        io_post cmd arg r /\
         lt == [convert_call_to_event Prog cmd arg r])) =
   static_cmd Prog cmd arg
 
@@ -35,15 +36,11 @@ let sendError400 (fd:file_descr) : MIO unit mymst IOActions
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
-exception BadRequest
-
 let get_req (fd:file_descr) :
   MIO (resexn (r:Bytes.bytes{valid_http_request r})) mymst IOActions (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
   match static_cmd Read (fd, UInt8.uint_to_t 255) with
   | Inl (msg, _) ->
-    if valid_http_response msg
-    then Inl msg
-    else Inr BadRequest
+   Inl msg
   | Inr err -> Inr err
 
 let process_connection
