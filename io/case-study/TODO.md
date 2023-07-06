@@ -2,11 +2,11 @@
 
 The case study was finished the night before, so there can be a few improvements.
 
-- [ ] Eliminate admits.
+- [ ] Eliminate admits / assumptions (please search for admit/assume).
 
 - [ ] What the deal with the `--compat_pre_core 1` flag? Can we get rid of it?
 
-- [ ] Eliminate the idealized check
+- [x] Eliminate the idealized check
 
 - [ ] The Monitor.fst file depends on the mymst definition that is in Utils.fst (a file with definitions relevant only for the web server, where mymst is the state used for running the web server). I think that the Monitor.fst should be a standalone file that is parametric in the definitions, and somehow the compiler should pass these to it.
 
