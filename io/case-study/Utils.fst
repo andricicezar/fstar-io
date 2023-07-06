@@ -283,11 +283,11 @@ let phi s0 cmd arg =
     let (fd, _) : file_descr * UInt8.t = arg in
     fd `List.mem` s0.opened
   | Close -> arg `List.mem` s0.opened
-  | Access -> 
+  | Access ->
     let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true 
+    if fnm = "/temp" then true
     else false
-  | Stat -> 
+  | Stat ->
     if arg = "/temp" then true else false
   | _ -> false
 
@@ -299,7 +299,7 @@ let rec ergar_ignore_no_write_read lt e lt' rl :
     (ensures ergar (lt @ e :: lt') rl)
 = match lt with
   | [] -> ()
-  | ERead Prog arg (Inl _) :: tl -> 
+  | ERead Prog arg (Inl _) :: tl ->
     let (fd, _) = arg in ergar_ignore_no_write_read tl e lt' (fd :: rl)
   | EWrite Prog (fd,x) y :: tl ->
     assert_norm (ergar (EWrite Prog (fd,x) y :: tl @ lt') rl == ergar (tl @ lt') (filter (fun fd' -> fd <> fd') rl)) ;
@@ -502,18 +502,11 @@ let rec ergar_pi_irr h lth lt lt' :
 
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h))
+    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ did_not_respond h)
     (ensures ergar lth [client])
     (decreases lth)
 = match lth with
-  | [] ->
-    assert_norm (enforced_locally pi h lth == True) ;
-    assert (wrote_to client h) ;
-    assert_norm (ergar lth [client] == ([client] == [])) ; // We need to show False
-    // But why would the assumption be a contradiction?
-    // I guess before it worked because we didn't have h.
-    // Ideally we should know that the writing to client happened in lth.
-    admit ()
+  | [] -> ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
     begin match e with
@@ -551,7 +544,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h) /\ every_request_gets_a_response lt)
+    (requires did_not_respond h /\ enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
@@ -559,12 +552,12 @@ let ergar_pi_write h lth client limit r lt :
   append_assoc lt [ ERead Prog (client,limit) (Inl r) ] lth ;
   ergar_trace_merge lt ([ ERead Prog (client,limit) (Inl r) ] @ lth) [] []
 
-let every_request_gets_a_response_append () : 
+let every_request_gets_a_response_append () :
   Lemma (
     forall lt1 lt2.
       every_request_gets_a_response lt1 /\ every_request_gets_a_response lt2 ==>
       every_request_gets_a_response (lt1 @ lt2)
-  ) 
+  )
 = introduce forall lt1 lt2. ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
   with begin
     introduce ergar lt1 [] /\ ergar lt2 [] ==> ergar (lt1 @ lt2) []
