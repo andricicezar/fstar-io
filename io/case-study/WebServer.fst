@@ -174,8 +174,7 @@ let webserver
 
 let check_send_pre : tree (pck_dc mymst) =
   Node
-    (| Bytes.bytes, unit, (fun res h _ _ ->
-      Utils.did_not_respond h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
+    (| Bytes.bytes, unit, (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
     Leaf
     Leaf
 
@@ -188,7 +187,6 @@ let check_handler_post : tree (pck_dc mymst) =
   Node (|
     file_descr,
     unit,
-    (fun client h _ lt -> Utils.wrote_to client ((List.rev lt)@h)),
     (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
     check_send_pre
@@ -212,7 +210,8 @@ let help_import fl wf eff_dcs client req send :
   Classical.forall_intro (lemma_suffixOf_append h);
   let r : resexn unit = wf client req send' in
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-  if eff_dc' () then r
+  let (_, b) = eff_dc' () in
+  if b then r
   else Inr Contract_failure
     
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi mymst check_handler_post = {
