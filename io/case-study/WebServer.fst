@@ -16,9 +16,9 @@ type req_handler (fl:erased tflag) =
   (send:(res:Bytes.bytes -> MIO (resexn unit) mymst fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
                                             (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r])))) ->
   MIO (resexn unit) mymst fl
-    (requires (fun h -> valid_http_request req /\ did_not_respond h))
+    (requires (fun h -> valid_http_request req /\ did_not_respond h /\ ~ (wrote_to client h)))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote_to client (List.rev lt) \/ Inr? r)))
+                          (wrote_to client ((List.rev lt) @ h) \/ Inr? r)))
 
 let static_cmd
   (cmd : io_cmds)
@@ -54,14 +54,18 @@ let process_connection
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (List.rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ ~ (wrote_to client h) /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (List.rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
-    with _. (* ergar_pi_write h lthandler client limit r lt *) admit ()
+    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ ~ (wrote_to client h) /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    with _. begin
+      wrote_to_split client (rev lthandler) h ;
+      ergar_pi_write h lthandler client limit r lt
+    end
   end ;
   match get_req client with
   | Inr _ -> sendError400 client
   | Inl req ->
+    assume (forall h. ~ (wrote_to client h)) ; // We could hope it holds for similar reason that did_not_respond h
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
@@ -174,7 +178,7 @@ let webserver
 let check_send_pre : tree (pck_dc mymst) =
   Node
     (| Bytes.bytes, unit, (fun res h _ _ ->
-      Utils.did_not_respond h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
+      did_not_respond h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
     Leaf
     Leaf
 
@@ -182,13 +186,11 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
                                             (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) fl Utils.pi mymst check_send_pre =
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
-
 let check_handler_post : tree (pck_dc mymst) =
-  admit () ; // I don't understand
   Node (|
       file_descr,
       unit,
-      (fun client h _ lt -> Utils.wrote_to client (List.rev lt)),
+      (fun client h _ lt -> wrote_to client ((List.rev lt) @ h)),
       (fun client s0 _ s1 -> client `List.mem` s1.written)
     |)
     check_send_pre
@@ -203,7 +205,7 @@ let help_import fl wf eff_dcs client req send :
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote_to client (List.rev lt) \/ Inr? r)))
+                          (wrote_to client ((List.rev lt) @ h) \/ Inr? r)))
 =
   let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in
