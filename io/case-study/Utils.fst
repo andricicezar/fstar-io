@@ -527,21 +527,13 @@ let rec ergar_pi_write_aux h lth client :
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
     rev_append [e] l ;
+    wrote_to_split client (rev l) [e] ;
     begin match e with
     | EWrite Prog (fd,x) y ->
       if fd = client
       then ergar_pi_irr (e :: h) l [] []
-      else begin
-        assert (has_event_respected_pi e pi h /\ enforced_locally pi (e :: h) l) ;
-        assert (wrote_to client (rev (e :: l))) ;
-        assert (wrote_to client ((rev l) @ [e])) ;
-        wrote_to_split client (rev l) [e] ;
-        assert (wrote_to client (rev l)) ;
-        ergar_pi_write_aux (e :: h) l client
-      end
-    | _ ->
-      wrote_to_split client (rev l) [e] ;
-      ergar_pi_write_aux (e :: h) l client
+      else ergar_pi_write_aux (e :: h) l client
+    | _ -> ergar_pi_write_aux (e :: h) l client
   end
 
 let rec ergar_trace_merge lt lt' rl rl' :
