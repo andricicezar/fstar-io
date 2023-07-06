@@ -500,15 +500,33 @@ let rec ergar_pi_irr h lth lt lt' :
       ergar_pi_irr (e :: h) l (lt @ [ e ]) lt'
     end
 
+let rec wrote_to_split client l l' :
+  Lemma
+    (requires wrote_to client (l @ l'))
+    (ensures wrote_to client l \/ wrote_to client l')
+= match l with
+  | [] -> ()
+  | EAccept _ arg (Inl fd) :: tl ->
+    if fd = client
+    then ()
+    else wrote_to_split client tl l'
+  | EWrite Prog arg _ :: tl ->
+    let (fd, _) = arg in
+    if fd = client
+    then ()
+    else wrote_to_split client tl l'
+  | _ :: tl -> wrote_to_split client tl l'
+
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ did_not_respond h)
+    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth))
     (ensures ergar lth [client])
     (decreases lth)
 = match lth with
   | [] -> ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
+    rev_append [e] l ;
     begin match e with
     | EWrite Prog (fd,x) y ->
       if fd = client
@@ -516,13 +534,14 @@ let rec ergar_pi_write_aux h lth client :
       else begin
         assert (has_event_respected_pi e pi h /\ enforced_locally pi (e :: h) l) ;
         assert (wrote_to client (rev (e :: l))) ;
-        rev_append [e] l ;
         assert (wrote_to client ((rev l) @ [e])) ;
-        // assume (wrote_to client (List.rev l)) ;
-        assume (did_not_respond (e :: h)) ;
+        wrote_to_split client (rev l) [e] ;
+        assert (wrote_to client (rev l)) ;
         ergar_pi_write_aux (e :: h) l client
       end
-    | _ -> admit () ; ergar_pi_write_aux (e :: h) l client
+    | _ ->
+      wrote_to_split client (rev l) [e] ;
+      ergar_pi_write_aux (e :: h) l client
   end
 
 let rec ergar_trace_merge lt lt' rl rl' :
