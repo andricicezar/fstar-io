@@ -513,7 +513,15 @@ let rec ergar_pi_write_aux h lth client :
     | EWrite Prog (fd,x) y ->
       if fd = client
       then ergar_pi_irr (e :: h) l [] []
-      else begin admit () ; ergar_pi_write_aux (e :: h) l client end
+      else begin
+        assert (has_event_respected_pi e pi h /\ enforced_locally pi (e :: h) l) ;
+        assert (wrote_to client (rev (e :: l))) ;
+        rev_append [e] l ;
+        assert (wrote_to client ((rev l) @ [e])) ;
+        // assume (wrote_to client (List.rev l)) ;
+        assume (did_not_respond (e :: h)) ;
+        ergar_pi_write_aux (e :: h) l client
+      end
     | _ -> admit () ; ergar_pi_write_aux (e :: h) l client
   end
 
