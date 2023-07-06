@@ -192,11 +192,7 @@ let my_update_cst_write s0 fd bb rr :
     with _. begin
       assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
       assert (wrote_to fd (e::h)) ;
-      calc (==) {
-        did_not_respond (e :: h) ;
-        == { } // Why would it be true? We don't even know did_not_respond h
-        false ;
-      }
+      assert (did_not_respond (e :: h) == false)
     end
   end
 
@@ -509,16 +505,23 @@ let rec ergar_pi_write_aux h lth client :
     (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h))
     (ensures ergar lth [client])
     (decreases lth)
-= admit (); match lth with
-  | [] -> ()
+= match lth with
+  | [] ->
+    assert_norm (enforced_locally pi h lth == True) ;
+    assert (wrote_to client h) ;
+    assert_norm (ergar lth [client] == ([client] == [])) ; // We need to show False
+    // But why would the assumption be a contradiction?
+    // I guess before it worked because we didn't have h.
+    // Ideally we should know that the writing to client happened in lth.
+    admit ()
   | e :: l ->
     assert (enforced_locally pi (e :: h) l) ;
     begin match e with
     | EWrite Prog (fd,x) y ->
       if fd = client
       then ergar_pi_irr (e :: h) l [] []
-      else ergar_pi_write_aux (e :: h) l client
-    | _ -> ergar_pi_write_aux (e :: h) l client
+      else begin admit () ; ergar_pi_write_aux (e :: h) l client end
+    | _ -> admit () ; ergar_pi_write_aux (e :: h) l client
   end
 
 let rec ergar_trace_merge lt lt' rl rl' :
@@ -548,7 +551,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth)@h) /\ every_request_gets_a_response lt)
+    (requires enforced_locally pi h lth /\ wrote_to client ((List.rev lth) @ h) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
