@@ -182,17 +182,6 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 let check_handler_post : tree (pck_dc mymst) =
-  // introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) == wrote_to client (rev lt)
-  // with begin
-  //   if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
-  //   then wrote_to_split client (rev lt) h
-  //   else admit () // The problem is not (wrote_to client h), why would it be the case?
-  //   // I see two options:
-  //   // 1. We add more information to the model to make sure the same client can not be written to twice
-  //   // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
-  //   // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
-  //   // Another solution would be to count the number of occurrences instead of using mem and make sure there is only one.
-  // end ;
   Node (|
       file_descr,
       unit,
@@ -212,6 +201,17 @@ let help_import fl wf eff_dcs client req send :
     (ensures (fun h r lt -> enforced_locally pi h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
 =
+  introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) == wrote_to client (rev lt)
+  with begin
+    if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
+    then wrote_to_split client (rev lt) h
+    else admit () // The problem is not (wrote_to client h), why would it be the case?
+    // I see two options:
+    // 1. We add more information to the model to make sure the same client can not be written to twice
+    // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
+    // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
+    // Another solution would be to count the number of occurrences instead of using mem and make sure there is only one.
+  end ;
   let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in
   let (| dc_pck, eff_dc |) = root eff_dcs in
