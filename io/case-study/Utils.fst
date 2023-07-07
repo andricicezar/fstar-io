@@ -190,8 +190,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
   | Accept, Inl fd ->
-    // mem_filter_equiv (is_neq arg) s0.written ; // Not enough
-    admit () ;
+    mem_filter_equiv (is_neq fd) s0.written ;
     accept_cst fd s0
   | Read, _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
