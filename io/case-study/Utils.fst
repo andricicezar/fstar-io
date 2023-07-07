@@ -26,13 +26,12 @@ val wrote_to : file_descr -> trace -> bool
 let rec wrote_to client h =
   match h with
   | [] -> false
-  | EAccept _ arg (Inl fd)::tl ->
+  | EAccept _ arg (Inl fd) :: tl ->
     if fd = client then false else wrote_to client tl
-//  | ERead Prog arg _::tl -> begin
-//    let (fd, _) = arg in
-//    if fd = client then false else wrote_to client tl
-//  end
-  | EWrite Prog arg _::tl ->
+  // | ERead Prog arg _ :: tl ->
+  //   let (fd, _) = arg in
+  //   if fd = client then false else wrote_to client tl
+  | EWrite Prog arg _ :: tl ->
     let (fd, _) = arg in
     if fd = client then true
     else wrote_to client tl
@@ -41,9 +40,9 @@ let rec wrote_to client h =
 let rec did_not_respond (h:trace) : bool =
   match h with
   | [] -> false
-  | ERead Prog _ _::tl -> true
-  | EWrite Prog _ _::tl -> false
-  | e::tl -> did_not_respond tl
+  | ERead Prog _ _ :: tl -> true
+  | EWrite Prog _ _ :: tl -> false
+  | e :: tl -> did_not_respond tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -68,17 +67,50 @@ let no_read_true e : GTot bool =
   | ERead Prog _ (Inl _) -> false
   | _ -> true
 
-noeq
-type cst = {
-  opened : list file_descr;
-  written : list file_descr;
-  waiting : bool;
-}
+(** The trace should be sequences of EAccept fd; ERead fd; EWrite fd
+    so our notion of state mimics that.
+ *)
+noeq type cst =
+| Waiting
+| Accepted : file_descr -> cst
+| HasRead : file_descr -> cst
+| Wrote : file_descr -> cst
+| Failure
+
+let is_waiting (h : trace) =
+  match h with
+  | [] -> true
+  | EAccept _ arg (Inl fd) :: tl -> false
+  | ERead Prog _ _ :: tl -> false
+  | EWrite Prog _ _ :: tl -> true
+  | _ -> true
+
+let has_accepted client (h : trace) =
+  match h with
+  | EAccept _ arg (Inl fd) :: tl -> fd = client
+  | ERead Prog _ _ :: tl -> false
+  | EWrite Prog _ _ :: tl -> false
+  | _ -> false
+
+let has_read (client : file_descr) (h : trace) =
+  match h with
+  | EAccept _ arg (Inl fd) :: tl -> false
+  | ERead Prog (fd, _) _ :: tl -> fd = client
+  | EWrite Prog _ _ :: tl -> false
+  | _ -> false
+
+let has_written (client : file_descr) (h : trace) =
+  match h with
+  | EAccept _ arg (Inl fd) :: tl -> false
+  | ERead Prog _ _ :: tl -> false
+  | EWrite Prog (fd, _) _ :: tl -> fd = client
+  | _ -> false
 
 let models (c:cst) (h:trace) : Type0 =
-  (forall fd. fd `List.mem` c.opened <==> is_opened_by_untrusted h fd)
-  /\ (forall fd. fd `List.mem` c.written <==> wrote_to fd h)
-  /\ (c.waiting == did_not_respond h)
+  (c == Waiting <==> is_waiting h) /\
+  (forall client. c == Accepted client <==> has_accepted client h) /\
+  (forall client. c == HasRead client <==> has_read client h) /\
+  (forall client. c == Wrote client <==> has_written client h)
 
 let mymst : mst = {
   cst = cst;
@@ -93,9 +125,20 @@ effect MyMIO
   MIO a mymst fl pre post
 
 let my_init_cst : mymst.cst =
-  { opened = [] ; written = [] ; waiting = false }
+  Waiting
 
-let is_neq (#a:eqtype) (x y : a) : bool = x <> y
+let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
+  let (| caller, cmd, arg, res |) = destruct_event e in
+  match s0, cmd, res with
+  | Waiting, Accept, Inl fd -> Accepted fd
+  | Accepted fd, Read, Inl rr -> HasRead fd (* FIXME *)
+  | _, Openfile, Inl fd -> Failure (* FIXME *)
+  | _, Close, Inl rr -> s0
+  | HasRead fd, Write, Inl rr ->
+    let arg : file_descr * Bytes.bytes = arg in
+    let (fd, bb) = arg in
+    Waiting (* FIXME *)
+  | _ -> Failure
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;

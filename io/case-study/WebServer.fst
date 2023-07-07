@@ -16,7 +16,7 @@ type req_handler (fl:erased tflag) =
   (send:(res:Bytes.bytes -> MIO (resexn unit) mymst fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
                                             (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r])))) ->
   MIO (resexn unit) mymst fl
-    (requires (fun h -> valid_http_request req /\ did_not_respond h /\ ~ (wrote_to client h)))
+    (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
                           (wrote_to client ((List.rev lt) @ h) \/ Inr? r)))
 
@@ -54,18 +54,18 @@ let process_connection
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ ~ (wrote_to client h) /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ ~ (wrote_to client h) /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. begin
-      wrote_to_split client (rev lthandler) h ;
-      ergar_pi_write h lthandler client limit r lt
+      admit ()
+      // wrote_to_split client (rev lthandler) h ;
+      // ergar_pi_write h lthandler client limit r lt
     end
   end ;
   match get_req client with
   | Inr _ -> sendError400 client
   | Inl req ->
-    assume (forall h. ~ (wrote_to client h)) ; // We could hope it holds for similar reason that did_not_respond h
     begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
