@@ -173,8 +173,7 @@ let webserver
 
 let check_send_pre : tree (pck_dc mymst) =
   Node
-    (| Bytes.bytes, unit, (fun res h _ _ ->
-      did_not_respond h && valid_http_response res), (fun res s0 _ _ -> s0.st = DidNotRespond && valid_http_response res) |)
+    (| Bytes.bytes, unit, (fun res s0 _ _ -> s0.st = DidNotRespond && valid_http_response res) |)
     Leaf
     Leaf
 
@@ -183,21 +182,20 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 let check_handler_post : tree (pck_dc mymst) =
-  introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) == wrote_to client (rev lt)
-  with begin
-    if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
-    then wrote_to_split client (rev lt) h
-    else admit () // The problem is not (wrote_to client h), why would it be the case?
-    // I see two options:
-    // 1. We add more information to the model to make sure the same client can not be written to twice
-    // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
-    // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
-    // Another solution would be to count the number of occurrences instead of using mem and make sure there is only one.
-  end ;
+  // introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) == wrote_to client (rev lt)
+  // with begin
+  //   if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
+  //   then wrote_to_split client (rev lt) h
+  //   else admit () // The problem is not (wrote_to client h), why would it be the case?
+  //   // I see two options:
+  //   // 1. We add more information to the model to make sure the same client can not be written to twice
+  //   // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
+  //   // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
+  //   // Another solution would be to count the number of occurrences instead of using mem and make sure there is only one.
+  // end ;
   Node (|
       file_descr,
       unit,
-      (fun client h _ lt -> wrote_to client (rev lt)),
       (fun client s0 _ s1 -> not (client `mem` s0.written) && client `mem` s1.written)
     |)
     check_send_pre
