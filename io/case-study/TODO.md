@@ -12,6 +12,8 @@ The case study was finished the night before, so there can be a few improvements
 
 - [ ] Fix extraction of `Webserver.fst`. The `eff_rc fd` line is extracted as `eff_rc ()`. https://github.com/FStarLang/FStar/issues/2912
 
+- [ ] Fix extraction of `WebServer.fst`. The `help_import` extracts badly
+
 - [ ] Fix extraction of `Compiler.MIO.To.Interm.fst`, F* does not add Obj.magic in some places when extracting this file, thus I had to manually add them and then replace the extracted file with my version (Compiler_MIO_To_Interm.ml).
 
 - [x] Fix extraction of `Execute.fst`. This file uses `reify` which is not implemented, but this could be easily defined as the identity function during extraction.
