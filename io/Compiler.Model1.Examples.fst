@@ -15,8 +15,8 @@ type source_arrow (mst:mst) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> T
 type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (idc:idc_typ arg (resexn res)) =
-  squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ idc x h r lt ==> post x h r lt)
+type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #(resexn res)) =
+  squash (forall s0 s1 x h r lt . s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ dc x s0 r s1 ==> post x h r lt)
 
 type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
   squash (forall h lt. enforced_locally pi1 h lt ==> enforced_locally pi2 h lt)
@@ -52,17 +52,14 @@ let test1_phi : policy mst1 test1_pi =
       else true 
     | _ -> true
 
-let test1_ct_irc : idc_typ unit (resexn file_descr) =
-  fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))
-
-let test1_ct_rc : dc_typ mst1 test1_ct_irc =
+let test1_ct_rc : dc_typ mst1 =
   fun () s0 rfd s1 ->
     match rfd with
     | Inl fd -> List.mem fd s1
     | Inr _ -> false
 
 let test1_ct_rcs : tree (pck_dc mst1) = 
-  Node (| unit, resexn file_descr, test1_ct_irc, test1_ct_rc |) 
+  Node (| unit, resexn file_descr, test1_ct_rc |) 
     Leaf 
     Leaf
 
@@ -77,8 +74,8 @@ let test1_c1post =
     | e :: tail -> aux (e::h) tail) in
   Classical.forall_intro_2 (Classical.move_requires_2 aux)
 
-assume val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_irc
-//let test1_c2post = ()
+assume val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_rc
+// let test1_c2post = ()
 
 #set-options "--print_implicits"
 
@@ -135,25 +132,29 @@ let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) mst2 fl (fu
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
 let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) mst2 fl (fun _ -> True) (test2_post cb)
 
+let test2_rc  : dc_typ mst2 = 
+  (fun () _ (rfd:resexn file_descr) s1 -> Inl? rfd && (Inl?.v rfd) `List.mem` s1)
+
 let test2_rcs : tree (pck_dc mst2) =  
   Node 
-     (| unit, resexn file_descr, (fun () h (rfd:resexn file_descr) lt -> Inl? rfd && (is_open (Inl?.v rfd) (rev lt @ h))),
-              (fun () _ (rfd:resexn file_descr) s1 -> Inl? rfd && (Inl?.v rfd) `List.mem` s1) |) 
-     (Node (| file_descr, unit, (fun fd h _ _ -> is_open fd h), (fun fd s0 _ _ -> fd `List.mem` s0) |) Leaf Leaf)
+     (| unit, resexn file_descr, test2_rc |) 
+     (Node (| file_descr, unit, (fun fd s0 _ _ -> fd `List.mem` s0) |) Leaf Leaf)
      Leaf
   
-assume val test2_c1post : #a:Type -> squash (forall (x:a) h lt. enforced_locally test2_pi h lt ==> (exists r. test2_post x h r lt))
+val test2_c1post (a:Type) : c1typ #a #file_descr (fun _ _ -> True) test2_post test2_pi
+let test2_c1post a = ()
 
-val test2_c2post : #a:Type -> squash (forall (x:a) h r lt. enforced_locally test2_pi h lt /\ (((root test2_rcs)._3) () h r lt) ==> test2_post x h r lt)
-let test2_c2post #a = ()
+
+val test2_c2post (a:Type) : squash (forall s0 s1 (x:a) h r lt . s0 `mst2.models` h /\ s1 `mst2.models` (apply_changes h lt) /\ enforced_locally test2_pi h lt /\ test2_rc () s0 r s1 ==> test2_post x h r lt)
+let test2_c2post a = ()
 
 let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_pi mst2 test2_rcs = 
   let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_pi #mst2 #(left test2_rcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
   safe_importable_arrow_pre_post_res
     (fun _ _ -> True)  (** pre **)
     test2_post       (** post **)
-    (test2_c1post #(test2_cb fl))
-    (test2_c2post #(test2_cb fl))
+    (test2_c1post (test2_cb fl))
+    (test2_c2post (test2_cb fl))
     #exportable_cb
     #importable_file_descr
 
@@ -204,9 +205,9 @@ let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
 let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) mst2 fl (fun _ -> True) (test3_post x)
 
 let test3_rcs : tree (pck_dc mst3) =  
-  Node (| file_descr, unit, (fun _ _ _ _ -> true), (fun _ _ _ _ -> true) |) 
+  Node (| file_descr, unit, (fun _ _ _ _ -> true) |) 
      Leaf
-     (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true), (fun _ _ _ _ -> true) |) Leaf Leaf)
+     (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true) |) Leaf Leaf)
 
 let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_pi mst3 (right test3_rcs) = 
   safe_importable_arrow_pre_post_args_res
@@ -222,18 +223,20 @@ let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl tes
     #exportable_file_descr
     #importable_unit
   
-assume val test3_c1post : #a:Type -> squash (forall x h lt. enforced_locally test3_pi h lt ==> (exists (r:a). test3_post x h r lt))
-//let test3_c1post #a = () 
-val test3_c2post : #a:Type -> squash (forall x h (r:a) lt. enforced_locally test3_pi h lt /\ ((root test3_rcs)._3 x h () lt) ==> test3_post x h r lt)
-let test3_c2post #a = ()
+val test3_c1post (a:Type) : c1typ #file_descr #a (fun _ _ -> True) test3_post test3_pi 
+let test3_c1post a = ()
+  
+val test3_c2post (a:Type) : 
+  squash (forall s0 s1 x h r lt . s0 `mst3.models` h /\ s1 `mst3.models` (apply_changes h lt) /\ enforced_locally test3_pi h lt /\ (root test3_rcs)._3 x s0 r s1 ==> test3_post x h r lt)
+let test3_c2post a = ()
 
 let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_pi mst3 test3_rcs = 
   safe_importable_arrow_pre_post_args
     #file_descr #(test3_cb fl) #fl #test3_pi #mst3 #test3_rcs
     (fun _ _ -> True)  (** pre **)
     test3_post       (** post **)
-    (test3_c1post #(test3_cb fl))
-    (test3_c2post #(test3_cb fl))
+    (test3_c1post (test3_cb fl))
+    (test3_c2post (test3_cb fl))
     #exportable_file_descr
     #(safe_importable_is_importable (test3_cb_importable fl))
 

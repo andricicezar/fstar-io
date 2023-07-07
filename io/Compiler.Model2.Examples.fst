@@ -15,11 +15,11 @@ type source_arrow (mst:mst) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> T
 type c1_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (idc:idc_typ arg (resexn res)) =
-  squash (forall x h lt r. pre x h /\ enforced_locally pi h lt /\ idc x h r lt ==> post x h r lt)
+type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #(resexn res)) =
+  squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ dc x s0 r s1 ==> post x h r lt)
 
-type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (idc:idc_typ arg unit) =
-  squash (forall h x. idc x h () [] ==> pre x h)
+type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #unit) =
+  squash (forall x s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ dc x s0 () s1 ==> pre x h)
 
 type c2_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (pi:policy_spec) =
   squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)
@@ -54,9 +54,9 @@ let test1_post = (fun (fd:file_descr) h (r:resexn unit) lt -> enforced_locally t
 
 type test1_pt = source_arrow mst1 file_descr unit test1_pre test1_post
     
-let test1_pt_rc = (fun (fd:file_descr) h _ lt -> is_open fd h)
+let test1_pt_rc : dc_typ mst1 = (fun fd s0 _ _ -> fd `List.mem` s0)
 let test1_pt_rcs : tree (pck_dc mst1) = 
-  Node (| file_descr, unit, test1_pt_rc, (fun fd s0 _ _ -> fd `List.mem` s0) |) 
+  Node (| file_descr, unit, test1_pt_rc |) 
     Leaf 
     Leaf
 

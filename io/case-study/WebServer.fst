@@ -221,7 +221,8 @@ let help_import fl wf eff_dcs client req send :
   Classical.forall_intro (lemma_suffixOf_append h);
   let r : resexn unit = wf client req send' in
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
-  if eff_dc' () then r
+  let (_, b) = eff_dc' () in
+  if b then r
   else Inr Contract_failure
 
 instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi mymst check_handler_post = {
