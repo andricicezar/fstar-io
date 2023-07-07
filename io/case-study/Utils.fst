@@ -40,8 +40,8 @@ let rec wrote_to client h =
 let rec did_not_respond (h:trace) : bool =
   match h with
   | [] -> false
-  | ERead Prog _ _ :: tl -> true
-  | EWrite Prog _ _ :: tl -> false
+  | ERead Prog _ (Inl _) :: tl -> true
+  | EWrite Prog _ (Inl _) :: tl -> false
   | e :: tl -> did_not_respond tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
@@ -67,14 +67,9 @@ let no_read_true e : GTot bool =
   | ERead Prog _ (Inl _) -> false
   | _ -> true
 
-(** The trace should be sequences of EAccept fd; ERead fd; EWrite fd
-    so our notion of state mimics that.
- *)
 type status =
-| Waiting
-| Accepted : file_descr -> status
-| HasRead : file_descr -> status
-| Wrote : file_descr -> status
+| DidNotRespond
+| Responded
 
 let rec is_waiting (h : trace) =
   match h with
@@ -84,37 +79,12 @@ let rec is_waiting (h : trace) =
   | EWrite Prog _ (Inl _) :: tl -> true
   | _ :: tl -> is_waiting tl
 
-let rec has_accepted client (h : trace) =
-  match h with
-  | EAccept _ arg (Inl fd) :: tl -> fd = client
-  | ERead Prog _ (Inl _) :: tl -> false
-  | EWrite Prog _ (Inl _) :: tl -> false
-  | _ :: tl -> has_accepted client tl
-  | [] -> false
-
-let rec has_read (client : file_descr) (h : trace) =
-  match h with
-  | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog (fd, _) (Inl _) :: tl -> fd = client
-  | EWrite Prog _ (Inl _) :: tl -> false
-  | _ :: tl -> has_read client tl
-  | [] -> false
-
-let rec has_written (client : file_descr) (h : trace) =
-  match h with
-  | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog _ (Inl _) :: tl -> false
-  | EWrite Prog (fd, _) (Inl _) :: tl -> fd = client
-  | _ :: tl -> has_written client tl
-  | [] -> false
-
 let models_status (c:status) (h:trace) : bool =
   match c with
-  | Waiting -> is_waiting h
-  | Accepted client -> has_accepted client h
-  | HasRead client -> has_read client h
-  | Wrote client -> has_written client h
+  | DidNotRespond -> did_not_respond h
+  | Responded -> not (did_not_respond h)
 
+// TODO For now it doesn't track wrote_to
 noeq type cst = {
   opened : list file_descr ;
   st : status
@@ -152,12 +122,9 @@ effect MyMIO
   MIO a mymst fl pre post
 
 let my_init_cst : mymst.cst =
-  mkcst [] Waiting
+  mkcst [] DidNotRespond
 
 let is_neq (#a:eqtype) (x y : a) : bool = x <> y
-
-// let is_opened_by_untrusted_close fd :
-//   Lemma (forall h. is_opened_by_untrusted (EOpenfile :: h) fd)
 
 // TODO MOVE
 let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
@@ -200,10 +167,10 @@ let mem_filter_equiv (#a:Type) (f: (a -> Tot bool)) (l: list a) :
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl fd -> updst s0 (Accepted fd)
+  | Accept, Inl fd -> s0
   | Read, Inl _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
-    if caller = Prog then updst s0 (HasRead fd) else s0
+    if caller = Prog then updst s0 DidNotRespond else s0
   | Openfile, Inl fd -> if caller = Ctx then appcst fd s0 else s0
   | Close, Inl rr ->
     mem_filter_equiv (is_neq arg) s0.opened ;
@@ -211,7 +178,7 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
-    if caller = Prog then updst s0 Waiting else s0
+    if caller = Prog then updst s0 Responded else s0
   | _ -> s0
 
 val pi : policy_spec
