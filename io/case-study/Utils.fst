@@ -26,8 +26,11 @@ val wrote_to : file_descr -> trace -> bool
 let rec wrote_to client h =
   match h with
   | [] -> false
-  | EAccept _ arg (Inl fd) :: tl ->
-    if fd = client then false else wrote_to client tl
+  | EAccept _ arg res :: tl -> begin
+    match res with
+    | Inl fd -> if fd = client then false else wrote_to client tl
+    | _ -> wrote_to client tl
+  end
   | EWrite Prog arg _ :: tl ->
     let (fd, _) = arg in
     if fd = client then true
@@ -71,9 +74,9 @@ type status =
 let rec is_waiting (h : trace) =
   match h with
   | [] -> true
-  | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog _ (Inl _) :: tl -> false
-  | EWrite Prog _ (Inl _) :: tl -> true
+  | EAccept _ arg res :: tl -> (match res with | Inl _ -> false | Inr _ -> is_waiting tl)
+  | ERead Prog _ res :: tl -> (match res with | Inl _ -> false | Inr _ -> is_waiting tl)
+  | EWrite Prog _ res :: tl -> (match res with | Inl _ -> true | Inr _ -> is_waiting tl)
   | _ :: tl -> is_waiting tl
 
 let models_status (c:status) (h:trace) : bool =

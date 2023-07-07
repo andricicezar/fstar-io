@@ -57,79 +57,54 @@ let (get_local_trace : MIO_Sig.trace -> MIO_Sig.trace -> MIO_Sig.trace) =
         (FStar_List_Tot_Base.length h) - (FStar_List_Tot_Base.length h') in
       let uu___ = FStar_List_Tot_Base.splitAt n h in
       match uu___ with | (lt', ht) -> FStar_List_Tot_Base.rev lt'
-type ('argt, 'rett) idc_typ =
-  'argt -> MIO_Sig.trace -> 'rett -> MIO_Sig.trace -> Prims.bool
-type ('mst, 'argt, 'rett) dc_typ_0 =
+type ('mst, 'argt, 'rett) dc_typ =
   'argt -> Obj.t -> 'rett -> Obj.t -> Prims.bool
-type ('mst, 'argt, 'rett, 'idc) dc_typ = (unit, 'argt, 'rett) dc_typ_0
-type ('a, 'b, 'mst, 'idc, 'dc, 'h0, 'x, 'y, 'h1, 'b1,
-  'lt) eff_dc_typ_cont_post = unit
-type ('mst, 'fl, 't1, 't2, 'idc, 'dc, 'x, 'h0) eff_dc_typ_cont =
-  't2 -> (Prims.bool, unit, unit, unit) MIO.dm_gmio
-type ('mst, 'fl, 't1, 't2, 'idc, 'dc) eff_dc_typ =
+type ('a, 'b, 'mst, 'dc, 's0, 'x, 'y, 'h1, 'uuuuu,
+  'lt) eff_dc_typ_cont_post = Obj.t
+type ('mst, 'fl, 't1, 't2, 'dc, 'x, 's0) eff_dc_typ_cont =
+  't2 -> ((unit * Prims.bool), unit, unit, unit) MIO.dm_gmio
+type ('mst, 'fl, 't1, 't2, 'dc) eff_dc_typ =
   't1 ->
-    ((unit, unit,
-       (unit, unit, 't1, 't2, unit, unit, unit, unit) eff_dc_typ_cont)
-       FStar_Pervasives.dtuple3,
+    ((unit, (unit, unit, 't1, 't2, unit, unit, unit) eff_dc_typ_cont)
+       Prims.dtuple2,
       unit, unit, unit) MIO.dm_gmio
 let (enforce_dc :
   unit ->
     unit ->
       unit ->
-        (Obj.t, Obj.t) idc_typ ->
-          (unit, Obj.t, Obj.t, unit) dc_typ ->
-            (unit, unit, Obj.t, Obj.t, unit, unit) eff_dc_typ)
+        (unit, Obj.t, Obj.t) dc_typ ->
+          (unit, unit, Obj.t, Obj.t, unit) eff_dc_typ)
   =
-  fun uu___4 ->
-    fun uu___3 ->
-      fun uu___2 ->
-        fun uu___1 ->
-          fun uu___ ->
-            (fun mst ->
-               fun argt ->
-                 fun rett ->
-                   fun idc ->
-                     fun dc ->
-                       Obj.magic
-                         (fun x ->
-                            MIO.dm_gmio_bind () () () () () (get_trace () ())
-                              (fun h0 ->
-                                 MIO.dm_gmio_bind () () () () ()
-                                   (Obj.magic (get_state () ()))
-                                   (fun s0 ->
-                                      MIO.lift_pure_dm_gmio () ()
-                                        (fun uu___ ->
-                                           (fun uu___ ->
-                                              Obj.magic
-                                                (FStar_Pervasives.Mkdtuple3
-                                                   (s0, (),
-                                                     (Obj.magic
-                                                        (fun y ->
-                                                           MIO.dm_gmio_bind
-                                                             () () () () ()
-                                                             (get_trace () ())
-                                                             (fun h1 ->
-                                                                MIO.dm_gmio_bind
-                                                                  () () () ()
-                                                                  ()
-                                                                  (Obj.magic
-                                                                    (get_state
-                                                                    () ()))
-                                                                  (fun s1 ->
-                                                                    MIO.lift_pure_dm_gmio
-                                                                    () ()
-                                                                    (fun
-                                                                    uu___1 ->
-                                                                    dc x s0 y
-                                                                    s1))))))))
-                                             uu___))))) uu___4 uu___3 uu___2
-              uu___1 uu___
+  fun uu___3 ->
+    fun uu___2 ->
+      fun uu___1 ->
+        fun uu___ ->
+          (fun mst ->
+             fun argt ->
+               fun rett ->
+                 fun dc ->
+                   Obj.magic
+                     (fun x ->
+                        MIO.dm_gmio_bind () () () () ()
+                          (Obj.magic (get_state () ()))
+                          (fun s0 ->
+                             MIO.lift_pure_dm_gmio () ()
+                               (fun uu___ ->
+                                  Prims.Mkdtuple2
+                                    ((),
+                                      (Obj.magic
+                                         (fun y ->
+                                            MIO.dm_gmio_bind () () () () ()
+                                              (Obj.magic (get_state () ()))
+                                              (fun s1 ->
+                                                 MIO.lift_pure_dm_gmio () ()
+                                                   (fun uu___1 ->
+                                                      ((), (dc x s0 y s1)))))))))))
+            uu___3 uu___2 uu___1 uu___
 type 'mst pck_dc =
-  (unit, unit, (Obj.t, Obj.t) idc_typ, (unit, Obj.t, Obj.t, unit) dc_typ)
-    FStar_Pervasives.dtuple4
+  (unit, unit, (unit, Obj.t, Obj.t) dc_typ) FStar_Pervasives.dtuple3
 type ('mst, 'ctr) arg_typ = Obj.t
 type ('mst, 'ctr) ret_typ = Obj.t
-type ('mst, 'ctr, 'arg, 'h, 'ret, 'lt) icheck = unit
 let (check :
   unit -> unit pck_dc -> Obj.t -> Obj.t -> Obj.t -> Obj.t -> Prims.bool) =
   fun mst ->
@@ -138,10 +113,9 @@ let (check :
         fun s0 ->
           fun ret ->
             fun s1 ->
-              FStar_Pervasives.__proj__Mkdtuple4__item___4 ctr arg s0 ret s1
+              FStar_Pervasives.__proj__Mkdtuple3__item___3 ctr arg s0 ret s1
 type ('mst, 'fl) eff_pck_dc =
-  (unit pck_dc, (unit, unit, unit, unit, unit, unit) eff_dc_typ)
-    Prims.dtuple2
+  (unit pck_dc, (unit, unit, unit, unit, unit) eff_dc_typ) Prims.dtuple2
 let (make_dc_eff : unit -> unit pck_dc -> (unit, unit) eff_pck_dc) =
   fun mst ->
     fun r ->
@@ -149,8 +123,7 @@ let (make_dc_eff : unit -> unit pck_dc -> (unit, unit) eff_pck_dc) =
         (r,
           (Obj.magic
              (enforce_dc () () ()
-                (FStar_Pervasives.__proj__Mkdtuple4__item___3 r)
-                (FStar_Pervasives.__proj__Mkdtuple4__item___4 r))))
+                (FStar_Pervasives.__proj__Mkdtuple3__item___3 r))))
 type ('mst, 'fl, 'dcs) typ_eff_dcs = (unit, unit) eff_pck_dc tree
 let (typ_left :
   unit ->
@@ -691,147 +664,163 @@ let (exportable_arrow_post :
                     fun c1 ->
                       exportable_arrow_post_args () () () dcs () d1 () d2 ()
                         ()
-type ('a, 'b, 'pre, 'post, 'x, 'h, 'r, 'lt) trivialize_new_post = unit
+type ('a, 'b, 'mst, 'dc, 'post, 'x, 'h, 'r, 'lt) trivialize_new_post = unit
 let enforce_pre :
   't1 't2 .
     unit ->
       unit ->
         unit ->
-          (unit, unit) idc_typ ->
-            (unit, unit, unit, unit) dc_typ ->
-              (unit, unit, unit, unit, unit, unit) eff_dc_typ ->
+          unit ->
+            (unit, unit, unit) dc_typ ->
+              (unit, unit, unit, unit, unit) eff_dc_typ ->
                 unit ->
                   unit ->
-                    ('t1 ->
-                       ('t2 CommonUtils.resexn, unit, unit, unit) MIO.dm_gmio)
-                      ->
-                      't1 ->
-                        ('t2 CommonUtils.resexn, unit, unit, unit)
-                          MIO.dm_gmio
+                    unit ->
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___9 ->
-    fun uu___8 ->
-      fun uu___7 ->
-        fun uu___6 ->
-          fun uu___5 ->
-            fun uu___4 ->
-              fun uu___3 ->
-                fun uu___2 ->
-                  fun uu___1 ->
-                    fun uu___ ->
-                      (fun fl ->
-                         fun mst ->
-                           fun pre ->
-                             fun idc ->
-                               fun dc ->
-                                 fun eff_dc ->
-                                   fun post ->
-                                     fun c_pre ->
-                                       fun f ->
-                                         fun x ->
-                                           Obj.magic
-                                             (MIO.dm_gmio_bind () () () () ()
-                                                (Obj.magic (eff_dc ()))
-                                                (fun uu___ ->
-                                                   match Obj.magic uu___ with
-                                                   | FStar_Pervasives.Mkdtuple3
-                                                       (uu___1, uu___2,
-                                                        eff_dc')
-                                                       ->
-                                                       MIO.dm_gmio_bind () ()
-                                                         () () ()
-                                                         (Obj.magic
-                                                            (eff_dc' ()))
-                                                         (fun uu___3 ->
-                                                            (fun uu___3 ->
-                                                               if uu___3
-                                                               then
-                                                                 Obj.magic
-                                                                   (Obj.repr
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun dc ->
+                                   fun eff_dc ->
+                                     fun post ->
+                                       fun c_pre ->
+                                         fun c_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc ()))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (s0, eff_dc') ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic
+                                                                (eff_dc' ()))
+                                                             (fun uu___1 ->
+                                                                (fun uu___1
+                                                                   ->
+                                                                   match uu___1
+                                                                   with
+                                                                   | 
+                                                                   (s1, b) ->
+                                                                    if b
+                                                                    then
+                                                                    Obj.magic
+                                                                    (Obj.repr
                                                                     (f x))
-                                                               else
-                                                                 Obj.magic
-                                                                   (Obj.repr
+                                                                    else
+                                                                    Obj.magic
+                                                                    (Obj.repr
                                                                     (MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
-                                                                    uu___5 ->
+                                                                    uu___3 ->
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))
-                                                              uu___3))))
-                        uu___9 uu___8 uu___7 uu___6 uu___5 uu___4 uu___3
-                        uu___2 uu___1 uu___
+                                                                  uu___1))))
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let enforce_pre_args :
   't1 't2 .
     unit ->
       unit ->
         unit ->
-          ('t1, unit) idc_typ ->
-            (unit, 't1, unit, unit) dc_typ ->
-              (unit, unit, 't1, unit, unit, unit) eff_dc_typ ->
+          unit ->
+            (unit, 't1, unit) dc_typ ->
+              (unit, unit, 't1, unit, unit) eff_dc_typ ->
                 unit ->
                   unit ->
-                    ('t1 ->
-                       ('t2 CommonUtils.resexn, unit, unit, unit) MIO.dm_gmio)
-                      ->
-                      't1 ->
-                        ('t2 CommonUtils.resexn, unit, unit, unit)
-                          MIO.dm_gmio
+                    unit ->
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___9 ->
-    fun uu___8 ->
-      fun uu___7 ->
-        fun uu___6 ->
-          fun uu___5 ->
-            fun uu___4 ->
-              fun uu___3 ->
-                fun uu___2 ->
-                  fun uu___1 ->
-                    fun uu___ ->
-                      (fun fl ->
-                         fun mst ->
-                           fun pre ->
-                             fun idc ->
-                               fun dc ->
-                                 fun eff_dc ->
-                                   fun post ->
-                                     fun c_pre ->
-                                       fun f ->
-                                         fun x ->
-                                           Obj.magic
-                                             (MIO.dm_gmio_bind () () () () ()
-                                                (Obj.magic (eff_dc x))
-                                                (fun uu___ ->
-                                                   match Obj.magic uu___ with
-                                                   | FStar_Pervasives.Mkdtuple3
-                                                       (uu___1, uu___2,
-                                                        eff_dc')
-                                                       ->
-                                                       MIO.dm_gmio_bind () ()
-                                                         () () ()
-                                                         (Obj.magic
-                                                            (eff_dc' ()))
-                                                         (fun uu___3 ->
-                                                            (fun uu___3 ->
-                                                               if uu___3
-                                                               then
-                                                                 Obj.magic
-                                                                   (Obj.repr
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun dc ->
+                                   fun eff_dc ->
+                                     fun post ->
+                                       fun c_pre ->
+                                         fun c_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc x))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (uu___1, eff_dc')
+                                                           ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic
+                                                                (eff_dc' ()))
+                                                             (fun uu___2 ->
+                                                                (fun uu___2
+                                                                   ->
+                                                                   match uu___2
+                                                                   with
+                                                                   | 
+                                                                   (uu___3,
+                                                                    b) ->
+                                                                    if b
+                                                                    then
+                                                                    Obj.magic
+                                                                    (Obj.repr
                                                                     (f x))
-                                                               else
-                                                                 Obj.magic
-                                                                   (Obj.repr
+                                                                    else
+                                                                    Obj.magic
+                                                                    (Obj.repr
                                                                     (MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
                                                                     uu___5 ->
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))
-                                                              uu___3))))
-                        uu___9 uu___8 uu___7 uu___6 uu___5 uu___4 uu___3
-                        uu___2 uu___1 uu___
-let rityp_idc : 'a 'b 'c 'd . ('a, 'b) idc_typ -> ('c, 'd) idc_typ =
-  fun uu___ -> (fun idc -> Obj.magic idc) uu___
+                                                                  uu___2))))
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let (rityp_eff_dc :
   unit ->
     unit ->
@@ -839,51 +828,40 @@ let (rityp_eff_dc :
         unit ->
           unit ->
             unit ->
-              (Obj.t, Obj.t) idc_typ ->
-                (unit, Obj.t, Obj.t, unit) dc_typ ->
-                  (unit, unit, Obj.t, Obj.t, unit, unit) eff_dc_typ ->
-                    (unit, unit, Obj.t, Obj.t, unit, unit) eff_dc_typ)
+              (unit, Obj.t, Obj.t) dc_typ ->
+                (unit, unit, Obj.t, Obj.t, unit) eff_dc_typ ->
+                  (unit, unit, Obj.t, Obj.t, unit) eff_dc_typ)
   =
-  fun uu___8 ->
-    fun uu___7 ->
-      fun uu___6 ->
-        fun uu___5 ->
-          fun uu___4 ->
-            fun uu___3 ->
-              fun uu___2 ->
-                fun uu___1 ->
-                  fun uu___ ->
-                    (fun mst ->
-                       fun fl ->
-                         fun a ->
-                           fun b ->
-                             fun c ->
-                               fun d ->
-                                 fun idc ->
-                                   fun dc ->
-                                     fun eff_dc ->
-                                       Obj.magic
-                                         (fun x ->
-                                            MIO.dm_gmio_bind () () () () ()
-                                              (Obj.magic (eff_dc x))
-                                              (fun uu___ ->
-                                                 MIO.lift_pure_dm_gmio () ()
-                                                   (fun uu___1 ->
-                                                      (fun uu___1 ->
-                                                         match Obj.magic
-                                                                 uu___
-                                                         with
-                                                         | FStar_Pervasives.Mkdtuple3
-                                                             (s0, h0, cont)
-                                                             ->
-                                                             Obj.magic
-                                                               (FStar_Pervasives.Mkdtuple3
-                                                                  (s0, (),
-                                                                    (
-                                                                    fun y ->
-                                                                    cont y))))
-                                                        uu___1)))) uu___8
-                      uu___7 uu___6 uu___5 uu___4 uu___3 uu___2 uu___1 uu___
+  fun uu___7 ->
+    fun uu___6 ->
+      fun uu___5 ->
+        fun uu___4 ->
+          fun uu___3 ->
+            fun uu___2 ->
+              fun uu___1 ->
+                fun uu___ ->
+                  (fun mst ->
+                     fun fl ->
+                       fun a ->
+                         fun b ->
+                           fun c ->
+                             fun d ->
+                               fun dc ->
+                                 fun eff_dc ->
+                                   Obj.magic
+                                     (fun x ->
+                                        MIO.dm_gmio_bind () () () () ()
+                                          (Obj.magic (eff_dc x))
+                                          (fun uu___ ->
+                                             MIO.lift_pure_dm_gmio () ()
+                                               (fun uu___1 ->
+                                                  match uu___ with
+                                                  | Prims.Mkdtuple2
+                                                      (s0, cont) ->
+                                                      Prims.Mkdtuple2
+                                                        ((),
+                                                          ((fun y -> cont y)))))))
+                    uu___7 uu___6 uu___5 uu___4 uu___3 uu___2 uu___1 uu___
 let exportable_arrow_pre_post_args :
   't1 't2 .
     unit ->
@@ -910,7 +888,7 @@ let exportable_arrow_pre_post_args :
               fun pre ->
                 fun post ->
                   fun c_pre ->
-                    fun c1 ->
+                    fun c_post ->
                       {
                         ityp = ();
                         c_ityp =
@@ -931,37 +909,29 @@ let exportable_arrow_pre_post_args :
                                let uu___ = root eff_dcs in
                                match uu___ with
                                | Prims.Mkdtuple2
-                                   (FStar_Pervasives.Mkdtuple4
-                                    (a, b, idc, dc), eff_dc)
+                                   (FStar_Pervasives.Mkdtuple3 (a, b, dc),
+                                    eff_dc)
                                    ->
                                    let eff_dc1 =
                                      Obj.magic
                                        (rityp_eff_dc () () () () () ()
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc)))
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___4
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc)))
+                                          (FStar_Pervasives.__proj__Mkdtuple3__item___3
+                                             (FStar_Pervasives.Mkdtuple3
+                                                ((), (), dc)))
                                           (Obj.magic eff_dc)) in
-                                   let f' =
-                                     enforce_pre_args () () ()
-                                       (rityp_idc
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc))))
-                                       (Obj.magic dc) eff_dc1 () () f in
-                                   let dc_pre x h = idc x h (Obj.repr ()) [] in
                                    let dcs' =
                                      EmptyNode ((left dcs), (right dcs)) in
-                                   let eff_dcs' =
-                                     EmptyNode
-                                       ((left eff_dcs), (right eff_dcs)) in
                                    let d uu___1 =
                                      (Obj.magic
                                         (exportable_arrow_post_args () () ()
                                            dcs' () (Obj.magic d1) ()
                                            (Obj.magic d2) ())) uu___1 in
+                                   let eff_dcs' =
+                                     EmptyNode
+                                       ((left eff_dcs), (right eff_dcs)) in
+                                   let f' =
+                                     enforce_pre_args () () () ()
+                                       (Obj.magic dc) eff_dc1 () () () f in
                                    (d ()).export eff_dcs' f')
                       }
 let exportable_arrow_pre_post :
@@ -990,7 +960,7 @@ let exportable_arrow_pre_post :
               fun pre ->
                 fun post ->
                   fun c_pre ->
-                    fun c1 ->
+                    fun c_post ->
                       {
                         ityp = ();
                         c_ityp =
@@ -1011,38 +981,29 @@ let exportable_arrow_pre_post :
                                let uu___ = root eff_dcs in
                                match uu___ with
                                | Prims.Mkdtuple2
-                                   (FStar_Pervasives.Mkdtuple4
-                                    (a, b, idc, dc), eff_dc)
+                                   (FStar_Pervasives.Mkdtuple3 (a, b, dc),
+                                    eff_dc)
                                    ->
                                    let eff_dc1 =
                                      Obj.magic
                                        (rityp_eff_dc () () () () () ()
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc)))
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___4
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc)))
+                                          (FStar_Pervasives.__proj__Mkdtuple3__item___3
+                                             (FStar_Pervasives.Mkdtuple3
+                                                ((), (), dc)))
                                           (Obj.magic eff_dc)) in
-                                   let f' =
-                                     enforce_pre () () ()
-                                       (rityp_idc
-                                          (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                             (FStar_Pervasives.Mkdtuple4
-                                                ((), (), idc, dc))))
-                                       (Obj.magic dc) eff_dc1 () () f in
-                                   let dc_pre x h =
-                                     idc (Obj.repr ()) h (Obj.repr ()) [] in
                                    let dcs' =
                                      EmptyNode ((left dcs), (right dcs)) in
-                                   let eff_dcs' =
-                                     EmptyNode
-                                       ((left eff_dcs), (right eff_dcs)) in
                                    let d uu___1 =
                                      (Obj.magic
                                         (exportable_arrow_post_args () () ()
                                            dcs' () (Obj.magic d1) ()
                                            (Obj.magic d2) ())) uu___1 in
+                                   let eff_dcs' =
+                                     EmptyNode
+                                       ((left eff_dcs), (right eff_dcs)) in
+                                   let f' =
+                                     enforce_pre () () () () (Obj.magic dc)
+                                       eff_dc1 () () () f in
                                    (d ()).export eff_dcs' f')
                       }
 let (interm_is_safely_importable :
@@ -1503,87 +1464,77 @@ let enforce_post_args_res :
         unit ->
           unit ->
             unit ->
-              ('t1, 't2 CommonUtils.resexn) idc_typ ->
-                (unit, 't1, 't2 CommonUtils.resexn, unit) dc_typ ->
-                  (unit, unit, 't1, 't2 CommonUtils.resexn, unit, unit)
-                    eff_dc_typ ->
+              (unit, 't1, 't2 CommonUtils.resexn) dc_typ ->
+                (unit, unit, 't1, 't2 CommonUtils.resexn, unit) eff_dc_typ ->
+                  unit ->
                     unit ->
-                      unit ->
-                        ('t1 ->
-                           ('t2 CommonUtils.resexn, unit, unit, unit)
-                             MIO.dm_gmio)
-                          ->
-                          't1 ->
-                            ('t2 CommonUtils.resexn, unit, unit, unit)
-                              MIO.dm_gmio
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___11 ->
-    fun uu___10 ->
-      fun uu___9 ->
-        fun uu___8 ->
-          fun uu___7 ->
-            fun uu___6 ->
-              fun uu___5 ->
-                fun uu___4 ->
-                  fun uu___3 ->
-                    fun uu___2 ->
-                      fun uu___1 ->
-                        fun uu___ ->
-                          (fun fl ->
-                             fun pi ->
-                               fun mst ->
-                                 fun pre ->
-                                   fun post ->
-                                     fun idc ->
-                                       fun dc ->
-                                         fun eff_dc ->
-                                           fun c1post ->
-                                             fun c2post ->
-                                               fun f ->
-                                                 fun x ->
-                                                   Obj.magic
-                                                     (MIO.dm_gmio_bind () ()
-                                                        () () ()
-                                                        (Obj.magic (eff_dc x))
-                                                        (fun uu___ ->
-                                                           match Obj.magic
-                                                                   uu___
-                                                           with
-                                                           | FStar_Pervasives.Mkdtuple3
-                                                               (s0, h,
-                                                                eff_dc')
-                                                               ->
-                                                               MIO.dm_gmio_bind
-                                                                 () () () ()
-                                                                 ()
-                                                                 (Obj.magic
-                                                                    (
-                                                                    f x))
-                                                                 (fun r ->
-                                                                    MIO.dm_gmio_bind
-                                                                    () () ()
-                                                                    () ()
-                                                                    (Obj.magic
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun post ->
+                                   fun dc ->
+                                     fun eff_dc ->
+                                       fun c1_post ->
+                                         fun c2_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc x))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (uu___1, eff_dc')
+                                                           ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic (f x))
+                                                             (fun r ->
+                                                                MIO.dm_gmio_bind
+                                                                  () () () ()
+                                                                  ()
+                                                                  (Obj.magic
                                                                     (eff_dc'
                                                                     r))
-                                                                    (fun
-                                                                    uu___1 ->
-                                                                    if uu___1
-                                                                    then
-                                                                    MIO.lift_pure_dm_gmio
-                                                                    () ()
-                                                                    (fun
-                                                                    uu___2 ->
-                                                                    r)
-                                                                    else
+                                                                  (fun uu___2
+                                                                    ->
                                                                     MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
                                                                     uu___3 ->
+                                                                    match uu___2
+                                                                    with
+                                                                    | 
+                                                                    (uu___4,
+                                                                    b) ->
+                                                                    if b
+                                                                    then r
+                                                                    else
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))))
-                            uu___11 uu___10 uu___9 uu___8 uu___7 uu___6
-                            uu___5 uu___4 uu___3 uu___2 uu___1 uu___
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let enforce_post_args :
   't1 't2 .
     unit ->
@@ -1591,86 +1542,77 @@ let enforce_post_args :
         unit ->
           unit ->
             unit ->
-              ('t1, unit) idc_typ ->
-                (unit, 't1, unit, unit) dc_typ ->
-                  (unit, unit, 't1, unit, unit, unit) eff_dc_typ ->
+              (unit, 't1, unit) dc_typ ->
+                (unit, unit, 't1, unit, unit) eff_dc_typ ->
+                  unit ->
                     unit ->
-                      unit ->
-                        ('t1 ->
-                           ('t2 CommonUtils.resexn, unit, unit, unit)
-                             MIO.dm_gmio)
-                          ->
-                          't1 ->
-                            ('t2 CommonUtils.resexn, unit, unit, unit)
-                              MIO.dm_gmio
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___11 ->
-    fun uu___10 ->
-      fun uu___9 ->
-        fun uu___8 ->
-          fun uu___7 ->
-            fun uu___6 ->
-              fun uu___5 ->
-                fun uu___4 ->
-                  fun uu___3 ->
-                    fun uu___2 ->
-                      fun uu___1 ->
-                        fun uu___ ->
-                          (fun fl ->
-                             fun pi ->
-                               fun mst ->
-                                 fun pre ->
-                                   fun post ->
-                                     fun idc ->
-                                       fun dc ->
-                                         fun eff_dc ->
-                                           fun c1post ->
-                                             fun c2post ->
-                                               fun f ->
-                                                 fun x ->
-                                                   Obj.magic
-                                                     (MIO.dm_gmio_bind () ()
-                                                        () () ()
-                                                        (Obj.magic (eff_dc x))
-                                                        (fun uu___ ->
-                                                           match Obj.magic
-                                                                   uu___
-                                                           with
-                                                           | FStar_Pervasives.Mkdtuple3
-                                                               (uu___1, h,
-                                                                eff_dc')
-                                                               ->
-                                                               MIO.dm_gmio_bind
-                                                                 () () () ()
-                                                                 ()
-                                                                 (Obj.magic
-                                                                    (
-                                                                    f x))
-                                                                 (fun r ->
-                                                                    MIO.dm_gmio_bind
-                                                                    () () ()
-                                                                    () ()
-                                                                    (Obj.magic
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun post ->
+                                   fun dc ->
+                                     fun eff_dc ->
+                                       fun c1_post ->
+                                         fun c2_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc x))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (uu___1, eff_dc')
+                                                           ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic (f x))
+                                                             (fun r ->
+                                                                MIO.dm_gmio_bind
+                                                                  () () () ()
+                                                                  ()
+                                                                  (Obj.magic
                                                                     (eff_dc'
                                                                     ()))
-                                                                    (fun
-                                                                    uu___2 ->
-                                                                    if uu___2
-                                                                    then
+                                                                  (fun uu___2
+                                                                    ->
                                                                     MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
                                                                     uu___3 ->
-                                                                    r)
+                                                                    match uu___2
+                                                                    with
+                                                                    | 
+                                                                    (uu___4,
+                                                                    b) ->
+                                                                    if b
+                                                                    then r
                                                                     else
-                                                                    MIO.lift_pure_dm_gmio
-                                                                    () ()
-                                                                    (fun
-                                                                    uu___4 ->
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))))
-                            uu___11 uu___10 uu___9 uu___8 uu___7 uu___6
-                            uu___5 uu___4 uu___3 uu___2 uu___1 uu___
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let enforce_post_res :
   't1 't2 .
     unit ->
@@ -1678,88 +1620,78 @@ let enforce_post_res :
         unit ->
           unit ->
             unit ->
-              (unit, 't2 CommonUtils.resexn) idc_typ ->
-                (unit, unit, 't2 CommonUtils.resexn, unit) dc_typ ->
-                  (unit, unit, unit, 't2 CommonUtils.resexn, unit, unit)
-                    eff_dc_typ ->
+              (unit, unit, 't2 CommonUtils.resexn) dc_typ ->
+                (unit, unit, unit, 't2 CommonUtils.resexn, unit) eff_dc_typ
+                  ->
+                  unit ->
                     unit ->
-                      unit ->
-                        ('t1 ->
-                           ('t2 CommonUtils.resexn, unit, unit, unit)
-                             MIO.dm_gmio)
-                          ->
-                          't1 ->
-                            ('t2 CommonUtils.resexn, unit, unit, unit)
-                              MIO.dm_gmio
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___11 ->
-    fun uu___10 ->
-      fun uu___9 ->
-        fun uu___8 ->
-          fun uu___7 ->
-            fun uu___6 ->
-              fun uu___5 ->
-                fun uu___4 ->
-                  fun uu___3 ->
-                    fun uu___2 ->
-                      fun uu___1 ->
-                        fun uu___ ->
-                          (fun fl ->
-                             fun pi ->
-                               fun mst ->
-                                 fun pre ->
-                                   fun post ->
-                                     fun idc ->
-                                       fun dc ->
-                                         fun eff_dc ->
-                                           fun c1post ->
-                                             fun c2post ->
-                                               fun f ->
-                                                 fun x ->
-                                                   Obj.magic
-                                                     (MIO.dm_gmio_bind () ()
-                                                        () () ()
-                                                        (Obj.magic
-                                                           (eff_dc ()))
-                                                        (fun uu___ ->
-                                                           match Obj.magic
-                                                                   uu___
-                                                           with
-                                                           | FStar_Pervasives.Mkdtuple3
-                                                               (uu___1, h,
-                                                                eff_dc')
-                                                               ->
-                                                               MIO.dm_gmio_bind
-                                                                 () () () ()
-                                                                 ()
-                                                                 (Obj.magic
-                                                                    (
-                                                                    f x))
-                                                                 (fun r ->
-                                                                    MIO.dm_gmio_bind
-                                                                    () () ()
-                                                                    () ()
-                                                                    (Obj.magic
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun post ->
+                                   fun dc ->
+                                     fun eff_dc ->
+                                       fun c1_post ->
+                                         fun c2_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc ()))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (uu___1, eff_dc')
+                                                           ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic (f x))
+                                                             (fun r ->
+                                                                MIO.dm_gmio_bind
+                                                                  () () () ()
+                                                                  ()
+                                                                  (Obj.magic
                                                                     (eff_dc'
                                                                     r))
-                                                                    (fun
-                                                                    uu___2 ->
-                                                                    if uu___2
-                                                                    then
+                                                                  (fun uu___2
+                                                                    ->
                                                                     MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
                                                                     uu___3 ->
-                                                                    r)
+                                                                    match uu___2
+                                                                    with
+                                                                    | 
+                                                                    (uu___4,
+                                                                    b) ->
+                                                                    if b
+                                                                    then r
                                                                     else
-                                                                    MIO.lift_pure_dm_gmio
-                                                                    () ()
-                                                                    (fun
-                                                                    uu___4 ->
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))))
-                            uu___11 uu___10 uu___9 uu___8 uu___7 uu___6
-                            uu___5 uu___4 uu___3 uu___2 uu___1 uu___
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let enforce_post :
   't1 't2 .
     unit ->
@@ -1767,87 +1699,77 @@ let enforce_post :
         unit ->
           unit ->
             unit ->
-              (unit, unit) idc_typ ->
-                (unit, unit, unit, unit) dc_typ ->
-                  (unit, unit, unit, unit, unit, unit) eff_dc_typ ->
+              (unit, unit, unit) dc_typ ->
+                (unit, unit, unit, unit, unit) eff_dc_typ ->
+                  unit ->
                     unit ->
-                      unit ->
-                        ('t1 ->
-                           ('t2 CommonUtils.resexn, unit, unit, unit)
-                             MIO.dm_gmio)
-                          ->
-                          't1 ->
-                            ('t2 CommonUtils.resexn, unit, unit, unit)
-                              MIO.dm_gmio
+                      ('t1 ->
+                         ('t2 CommonUtils.resexn, unit, unit, unit)
+                           MIO.dm_gmio)
+                        ->
+                        't1 ->
+                          ('t2 CommonUtils.resexn, unit, unit, unit)
+                            MIO.dm_gmio
   =
-  fun uu___11 ->
-    fun uu___10 ->
-      fun uu___9 ->
-        fun uu___8 ->
-          fun uu___7 ->
-            fun uu___6 ->
-              fun uu___5 ->
-                fun uu___4 ->
-                  fun uu___3 ->
-                    fun uu___2 ->
-                      fun uu___1 ->
-                        fun uu___ ->
-                          (fun fl ->
-                             fun pi ->
-                               fun mst ->
-                                 fun pre ->
-                                   fun post ->
-                                     fun idc ->
-                                       fun dc ->
-                                         fun eff_dc ->
-                                           fun c1post ->
-                                             fun c2post ->
-                                               fun f ->
-                                                 fun x ->
-                                                   Obj.magic
-                                                     (MIO.dm_gmio_bind () ()
-                                                        () () ()
-                                                        (Obj.magic
-                                                           (eff_dc ()))
-                                                        (fun uu___ ->
-                                                           match Obj.magic
-                                                                   uu___
-                                                           with
-                                                           | FStar_Pervasives.Mkdtuple3
-                                                               (uu___1, h,
-                                                                eff_dc')
-                                                               ->
-                                                               MIO.dm_gmio_bind
-                                                                 () () () ()
-                                                                 ()
-                                                                 (Obj.magic
-                                                                    (
-                                                                    f x))
-                                                                 (fun r ->
-                                                                    MIO.dm_gmio_bind
-                                                                    () () ()
-                                                                    () ()
-                                                                    (Obj.magic
+  fun uu___10 ->
+    fun uu___9 ->
+      fun uu___8 ->
+        fun uu___7 ->
+          fun uu___6 ->
+            fun uu___5 ->
+              fun uu___4 ->
+                fun uu___3 ->
+                  fun uu___2 ->
+                    fun uu___1 ->
+                      fun uu___ ->
+                        (fun fl ->
+                           fun pi ->
+                             fun mst ->
+                               fun pre ->
+                                 fun post ->
+                                   fun dc ->
+                                     fun eff_dc ->
+                                       fun c1_post ->
+                                         fun c2_post ->
+                                           fun f ->
+                                             fun x ->
+                                               Obj.magic
+                                                 (MIO.dm_gmio_bind () () ()
+                                                    () ()
+                                                    (Obj.magic (eff_dc ()))
+                                                    (fun uu___ ->
+                                                       match uu___ with
+                                                       | Prims.Mkdtuple2
+                                                           (uu___1, eff_dc')
+                                                           ->
+                                                           MIO.dm_gmio_bind
+                                                             () () () () ()
+                                                             (Obj.magic (f x))
+                                                             (fun r ->
+                                                                MIO.dm_gmio_bind
+                                                                  () () () ()
+                                                                  ()
+                                                                  (Obj.magic
                                                                     (eff_dc'
                                                                     ()))
-                                                                    (fun
-                                                                    uu___2 ->
-                                                                    if uu___2
-                                                                    then
+                                                                  (fun uu___2
+                                                                    ->
                                                                     MIO.lift_pure_dm_gmio
                                                                     () ()
                                                                     (fun
                                                                     uu___3 ->
-                                                                    r)
+                                                                    match uu___2
+                                                                    with
+                                                                    | 
+                                                                    (uu___4,
+                                                                    b) ->
+                                                                    if b
+                                                                    then r
                                                                     else
-                                                                    MIO.lift_pure_dm_gmio
-                                                                    () ()
-                                                                    (fun
-                                                                    uu___4 ->
                                                                     FStar_Pervasives.Inr
                                                                     CommonUtils.Contract_failure))))))
-                            uu___11 uu___10 uu___9 uu___8 uu___7 uu___6
-                            uu___5 uu___4 uu___3 uu___2 uu___1 uu___
+                          uu___10 uu___9 uu___8 uu___7 uu___6 uu___5 uu___4
+                          uu___3 uu___2 uu___1 uu___
 let safe_importable_arrow_pre_post_args_res :
   't1 't2 .
     unit ->
@@ -1913,18 +1835,13 @@ let safe_importable_arrow_pre_post_args_res :
                                           Obj.magic
                                             (enforce_post_args_res () () ()
                                                () ()
-                                               (rityp_idc
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                     dc_pck))
                                                (Obj.magic
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                  (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                      dc_pck))
                                                (Obj.magic
                                                   (rityp_eff_dc () () () ()
                                                      () ()
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                        dc_pck)
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                     (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                         dc_pck)
                                                      (Obj.magic eff_dc))) ()
                                                () f')) uu___2 uu___1 uu___)
@@ -1993,18 +1910,13 @@ let safe_importable_arrow_pre_post_res :
                                       | Prims.Mkdtuple2 (dc_pck, eff_dc) ->
                                           Obj.magic
                                             (enforce_post_res () () () () ()
-                                               (rityp_idc
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                     dc_pck))
                                                (Obj.magic
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                  (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                      dc_pck))
                                                (Obj.magic
                                                   (rityp_eff_dc () () () ()
                                                      () ()
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                        dc_pck)
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                     (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                         dc_pck)
                                                      (Obj.magic eff_dc))) ()
                                                () f')) uu___2 uu___1 uu___)
@@ -2073,18 +1985,13 @@ let safe_importable_arrow_pre_post_args :
                                       | Prims.Mkdtuple2 (dc_pck, eff_dc) ->
                                           Obj.magic
                                             (enforce_post_args () () () () ()
-                                               (rityp_idc
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                     dc_pck))
                                                (Obj.magic
-                                                  (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                  (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                      dc_pck))
                                                (Obj.magic
                                                   (rityp_eff_dc () () () ()
                                                      () ()
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                        dc_pck)
-                                                     (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                     (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                         dc_pck)
                                                      (Obj.magic eff_dc))) ()
                                                () f')) uu___2 uu___1 uu___)
@@ -2146,17 +2053,12 @@ let safe_importable_arrow_pre_post :
                                   | Prims.Mkdtuple2 (dc_pck, eff_dc) ->
                                       Obj.magic
                                         (enforce_post () () () () ()
-                                           (rityp_idc
-                                              (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                 dc_pck))
                                            (Obj.magic
-                                              (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                              (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                  dc_pck))
                                            (Obj.magic
                                               (rityp_eff_dc () () () () () ()
-                                                 (FStar_Pervasives.__proj__Mkdtuple4__item___3
-                                                    dc_pck)
-                                                 (FStar_Pervasives.__proj__Mkdtuple4__item___4
+                                                 (FStar_Pervasives.__proj__Mkdtuple3__item___3
                                                     dc_pck)
                                                  (Obj.magic eff_dc))) () ()
                                            f')) uu___2 uu___1 uu___)

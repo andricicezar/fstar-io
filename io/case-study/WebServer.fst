@@ -43,6 +43,7 @@ let get_req (fd:file_descr) :
    Inl msg
   | Inr err -> Inr err
 
+#push-options "--split_queries always"
 let process_connection
   (client : file_descr)
   (#fl:erased tflag)
@@ -66,6 +67,7 @@ let process_connection
     | Inr err -> sendError400 client
     | Inl client -> ()
     end
+ #pop-options
 
 let rec process_connections
   (clients : lfds)
