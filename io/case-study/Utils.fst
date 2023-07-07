@@ -84,30 +84,54 @@ let models_status (c:status) (h:trace) : bool =
   | DidNotRespond -> did_not_respond h
   | Responded -> not (did_not_respond h)
 
-// TODO For now it doesn't track wrote_to
 noeq type cst = {
   opened : list file_descr ;
-  st : status
+  st : status ;
+  written : list file_descr
 }
 
-let mkcst x y = {
+let mkcst x y z = {
   opened = x ;
-  st = y
+  st = y ;
+  written = z
 }
 
 let updst (c : cst) s : cst = {
   opened = c.opened ;
-  st = s
+  st = s ;
+  written = c.written
 }
 
-let appcst (fd : file_descr) (c : cst) : cst = {
+let open_cst (fd : file_descr) (c : cst) : cst = {
   opened = fd :: c.opened ;
-  st = c.st
+  st = c.st ;
+  written = c.written
+}
+
+let write_cst (fd : file_descr) (c : cst) : cst = {
+  opened = c.opened ;
+  st = Responded ;
+  written = fd :: c.written
+}
+
+let is_neq (#a:eqtype) (x y : a) : bool = x <> y
+
+let close_cst (fd : file_descr) (c : cst) : cst = {
+  opened = filter (is_neq fd) c.opened ;
+  st = c.st ;
+  written = c.written
+}
+
+let accept_cst (fd : file_descr) (c : cst) : cst = {
+  opened = c.opened ;
+  st = c.st ;
+  written = filter (is_neq fd) c.written
 }
 
 let models (c : cst) (h : trace) : Type0 =
   c.st `models_status` h /\
-  (forall fd. fd `mem` c.opened <==> is_opened_by_untrusted h fd)
+  (forall fd. fd `mem` c.opened <==> is_opened_by_untrusted h fd) /\
+  (forall fd. fd `mem` c.written <==> wrote_to fd h)
 
 let mymst : mst = {
   cst = cst;
@@ -122,9 +146,7 @@ effect MyMIO
   MIO a mymst fl pre post
 
 let my_init_cst : mymst.cst =
-  mkcst [] DidNotRespond
-
-let is_neq (#a:eqtype) (x y : a) : bool = x <> y
+  mkcst [] DidNotRespond []
 
 // TODO MOVE
 let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
@@ -167,18 +189,21 @@ let mem_filter_equiv (#a:Type) (f: (a -> Tot bool)) (l: list a) :
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl fd -> s0
+  | Accept, Inl fd ->
+    // mem_filter_equiv (is_neq arg) s0.written ; // Not enough
+    admit () ;
+    accept_cst fd s0
   | Read, _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
     if caller = Prog then updst s0 DidNotRespond else s0
-  | Openfile, Inl fd -> if caller = Ctx then appcst fd s0 else s0
+  | Openfile, Inl fd -> if caller = Ctx then open_cst fd s0 else s0
   | Close, Inl rr ->
     mem_filter_equiv (is_neq arg) s0.opened ;
-    mkcst (filter (is_neq arg) s0.opened) s0.st
+    close_cst arg s0
   | Write, _ ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
-    if caller = Prog then updst s0 Responded else s0
+    if caller = Prog then write_cst fd s0 else s0
   | _ -> s0
 
 val pi : policy_spec
