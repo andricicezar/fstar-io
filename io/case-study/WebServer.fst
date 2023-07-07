@@ -188,6 +188,10 @@ let check_handler_post : tree (pck_dc mymst) =
     if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
     then wrote_to_split client (rev lt) h
     else admit () // The problem is not (wrote_to client h), why would it be the case?
+    // I see two options:
+    // 1. We add more information to the model to make sure the same client can not be written to twice
+    // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
+    // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
   end ;
   Node (|
       file_descr,
