@@ -206,10 +206,8 @@ let help_import fl wf eff_dcs client req send :
   let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in
   let (| dc_pck, eff_dc |) = root eff_dcs in
-  let (| _, h, eff_dc' |) = eff_dc client in
-  Classical.forall_intro (lemma_suffixOf_append h);
+  let (| _, eff_dc' |) = eff_dc client in
   let r : resexn unit = wf client req send' in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   let (_, b) = eff_dc' () in
   if b then r
   else Inr Contract_failure
