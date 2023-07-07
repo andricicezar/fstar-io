@@ -57,11 +57,7 @@ let process_connection
   introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
     introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
-    with _. begin
-      admit ()
-      // wrote_to_split client (rev lthandler) h ;
-      // ergar_pi_write h lthandler client limit r lt
-    end
+    with _. ergar_pi_write h lthandler client limit r lt
   end ;
   match get_req client with
   | Inr _ -> sendError400 client
