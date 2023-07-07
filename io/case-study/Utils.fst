@@ -80,31 +80,31 @@ let rec is_waiting (h : trace) =
   match h with
   | [] -> true
   | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog _ _ :: tl -> false
-  | EWrite Prog _ _ :: tl -> true
+  | ERead Prog _ (Inl _) :: tl -> false
+  | EWrite Prog _ (Inl _) :: tl -> true
   | _ :: tl -> is_waiting tl
 
 let rec has_accepted client (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> fd = client
-  | ERead Prog _ _ :: tl -> false
-  | EWrite Prog _ _ :: tl -> false
+  | ERead Prog _ (Inl _) :: tl -> false
+  | EWrite Prog _ (Inl _) :: tl -> false
   | _ :: tl -> has_accepted client tl
   | [] -> false
 
 let rec has_read (client : file_descr) (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog (fd, _) _ :: tl -> fd = client
-  | EWrite Prog _ _ :: tl -> false
+  | ERead Prog (fd, _) (Inl _) :: tl -> fd = client
+  | EWrite Prog _ (Inl _) :: tl -> false
   | _ :: tl -> has_read client tl
   | [] -> false
 
 let rec has_written (client : file_descr) (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> false
-  | ERead Prog _ _ :: tl -> false
-  | EWrite Prog (fd, _) _ :: tl -> fd = client
+  | ERead Prog _ (Inl _) :: tl -> false
+  | EWrite Prog (fd, _) (Inl _) :: tl -> fd = client
   | _ :: tl -> has_written client tl
   | [] -> false
 
@@ -136,173 +136,14 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   | Accept, Inl fd -> Accepted fd
   | Read, Inl _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
-    admit () ;
-    HasRead fd
+    if caller = Prog then HasRead fd else s0
   | Openfile, Inl fd -> s0
   | Close, Inl rr -> s0
   | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
-    admit () ;
-    Waiting
-  | _ -> admit () ; s0
-
-let close_upd_cst (s : cst) arg : cst = {
-  opened = List.Tot.Base.filter (is_neq arg) s.opened ;
-  written = s.written ;
-  waiting = s.waiting
-}
-
-// TODO MOVE
-let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
-  Lemma (requires x `memP` filter f l) (ensures x `memP` l)
-= match l with
-  | y :: tl ->
-    if f y
-    then begin
-      eliminate x == y \/ x `memP` filter f tl
-      returns x `memP` l
-      with _. ()
-      and _. mem_filter f tl x
-    end
-    else mem_filter f tl x
-
-// TODO MOVE
-let rec filter_mem (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
-  Lemma (requires x `memP` l /\ f x) (ensures x `memP` filter f l)
-= match l with
-  | y :: tl ->
-    if f y
-    then begin
-      eliminate x == y \/ x `memP` tl
-      returns x `memP` filter f l
-      with _. ()
-      and _. filter_mem f tl x
-    end
-    else filter_mem f tl x
-
-let my_update_cst_close s0 caller arg rr :
-  Lemma (
-    forall h.
-      s0 `models` h ==>
-      close_upd_cst s0 arg `models` (EClose caller arg (Inl rr) :: h)
-  )
-= let e = EClose caller arg (Inl rr) in
-  let s1 = close_upd_cst s0 arg in
-  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
-  with begin
-    introduce s0 `models` h ==> s1 `models` (e::h)
-    with _. begin
-      introduce forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e :: h) fd
-      with begin
-        introduce fd `List.mem` s1.opened ==> is_opened_by_untrusted (e :: h) fd
-        with _. begin
-          mem_filter (is_neq arg) s0.opened fd
-        end ;
-        introduce is_opened_by_untrusted (e :: h) fd ==> fd `List.mem` s1.opened
-        with _. begin
-          assert (arg <> fd) ;
-          assert (is_opened_by_untrusted h fd) ;
-          assert (fd `mem` s0.opened) ;
-          filter_mem (is_neq arg) s0.opened fd
-        end
-      end ;
-      introduce forall fd. fd `List.mem` s1.written <==> wrote_to fd (e :: h)
-      with begin
-        introduce fd `List.mem` s1.written ==> wrote_to fd (e :: h)
-        with _. begin
-          ()
-        end ;
-        introduce wrote_to fd (e :: h) ==> fd `List.mem` s1.written
-        with _. begin
-          ()
-        end
-      end ;
-      assert (s1.waiting <==> did_not_respond (e :: h))
-    end
-  end
-
-let write_upd_cst (s : cst) fd : cst = {
-  opened = s.opened ;
-  written = fd :: s.written ;
-  waiting = false
-}
-
-let my_update_cst_write s0 fd bb rr :
-  Lemma (
-    forall h.
-      s0 `models` h ==>
-      write_upd_cst s0 fd `models` (EWrite Prog (fd, bb) (Inl rr) :: h)
-  )
-= let e = EWrite Prog (fd, bb) (Inl rr) in
-  let s1 = write_upd_cst s0 fd in
-  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
-  with begin
-    introduce s0 `models` h ==> s1 `models` (e::h)
-    with _. begin
-      assert (forall fd'. fd' `List.mem` s0.opened ==> is_opened_by_untrusted h fd') ;
-      assert (wrote_to fd (e::h)) ;
-      assert (did_not_respond (e :: h) == false)
-    end
-  end
-
-let read_upd_cst (s : cst) : cst = {
-  opened = s.opened ;
-  written = s.written ;
-  waiting = true
-}
-
-let my_update_cst_read s0 arg rr :
-  Lemma (
-    forall h.
-      s0 `models` h ==>
-      read_upd_cst s0 `models` (ERead Prog arg (Inl rr) :: h)
-  )
-= let e = ERead Prog arg (Inl rr) in
-  let s1 = read_upd_cst s0 in
-  introduce forall h. s0 `models` h ==> s1 `models` (e::h)
-  with begin
-    introduce s0 `models` h ==> s1 `models` (e::h)
-    with _. begin
-      let (fd, _) = arg in
-      assert (did_not_respond (e::h)); // It's obviously false if s0.waiting = true
-      assert (forall fd. fd `List.mem` s1.opened <==> is_opened_by_untrusted (e::h) fd);
- //     assume (~(fd `List.mem` s0.written));
-      assert (forall fd. fd `List.mem` s1.written <==> wrote_to fd (e::h));
-      assert (s1 `models` (e::h))
-    end
-  end
-
-let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
-  let opened = s0.opened in
-  let written = s0.written in
-  let waiting = s0.waiting in
-  let (| caller, cmd, arg, res |) = destruct_event e in
-  match cmd, res with
-  | Accept, Inl fd ->
-    admit ();
-    { opened = opened ; written = filter (is_neq fd) written ; waiting = waiting }
-  | Read, Inl rr ->
-    if caller = Prog
-    then (my_update_cst_read s0 arg rr ; read_upd_cst s0)
-    else s0
-  | Openfile, Inl fd ->
-    if caller = Ctx
-    then { opened = fd :: opened ; written = written ; waiting = waiting }
-    else s0
-  | Close, Inl rr ->
-    my_update_cst_close s0 caller arg rr ;
-    close_upd_cst s0 arg
-  | Write, Inl rr ->
-    let arg : file_descr * Bytes.bytes = arg in
-    let (fd, bb) = arg in
-    if caller = Prog
-    then begin
-      my_update_cst_write s0 fd bb rr ;
-      write_upd_cst s0 fd
-    end
-    else s0
-  | _ -> admit () ; s0
+    if caller = Prog then Waiting else s0
+  | _ -> s0
 
 val pi : policy_spec
 let pi h c cmd arg =
