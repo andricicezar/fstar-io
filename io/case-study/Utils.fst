@@ -70,41 +70,44 @@ let no_read_true e : GTot bool =
 (** The trace should be sequences of EAccept fd; ERead fd; EWrite fd
     so our notion of state mimics that.
  *)
-noeq type cst =
+type cst =
 | Waiting
 | Accepted : file_descr -> cst
 | HasRead : file_descr -> cst
 | Wrote : file_descr -> cst
 | Failure
 
-let is_waiting (h : trace) =
+let rec is_waiting (h : trace) =
   match h with
   | [] -> true
   | EAccept _ arg (Inl fd) :: tl -> false
   | ERead Prog _ _ :: tl -> false
   | EWrite Prog _ _ :: tl -> true
-  | _ -> true
+  | _ :: tl -> is_waiting tl
 
-let has_accepted client (h : trace) =
+let rec has_accepted client (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> fd = client
   | ERead Prog _ _ :: tl -> false
   | EWrite Prog _ _ :: tl -> false
-  | _ -> false
+  | _ :: tl -> has_accepted client tl
+  | [] -> false
 
-let has_read (client : file_descr) (h : trace) =
+let rec has_read (client : file_descr) (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> false
   | ERead Prog (fd, _) _ :: tl -> fd = client
   | EWrite Prog _ _ :: tl -> false
-  | _ -> false
+  | _ :: tl -> has_read client tl
+  | [] -> false
 
-let has_written (client : file_descr) (h : trace) =
+let rec has_written (client : file_descr) (h : trace) =
   match h with
   | EAccept _ arg (Inl fd) :: tl -> false
   | ERead Prog _ _ :: tl -> false
   | EWrite Prog (fd, _) _ :: tl -> fd = client
-  | _ -> false
+  | _ :: tl -> has_written client tl
+  | [] -> false
 
 let models (c:cst) (h:trace) : Type0 =
   (c == Waiting <==> is_waiting h) /\
@@ -129,16 +132,20 @@ let my_init_cst : mymst.cst =
 
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let (| caller, cmd, arg, res |) = destruct_event e in
-  match s0, cmd, res with
-  | Waiting, Accept, Inl fd -> Accepted fd
-  | Accepted fd, Read, Inl rr -> HasRead fd (* FIXME *)
-  | _, Openfile, Inl fd -> Failure (* FIXME *)
-  | _, Close, Inl rr -> s0
-  | HasRead fd, Write, Inl rr ->
+  match cmd, res with
+  | Accept, Inl fd -> if s0 = Waiting then Accepted fd else (admit () ; Failure)
+  | Read, Inl _ ->
+    let (fd, _) : file_descr * UInt8.t = arg in
+    admit () ;
+    if s0 = Accepted fd then HasRead fd else Failure
+  | Openfile, Inl fd -> s0
+  | Close, Inl rr -> s0
+  | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
-    Waiting (* FIXME *)
-  | _ -> Failure
+    admit () ;
+    if s0 = HasRead fd then Waiting else Failure
+  | _ -> admit () ; s0
 
 let close_upd_cst (s : cst) arg : cst = {
   opened = List.Tot.Base.filter (is_neq arg) s.opened ;
