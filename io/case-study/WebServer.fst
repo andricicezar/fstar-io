@@ -18,7 +18,7 @@ type req_handler (fl:erased tflag) =
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote_to client ((List.rev lt) @ h) \/ Inr? r)))
+                          (wrote_to client (rev lt) \/ Inr? r)))
 
 let static_cmd
   (cmd : io_cmds)
@@ -54,9 +54,9 @@ let process_connection
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client ((rev lthandler) @ h) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. begin
       admit ()
       // wrote_to_split client (rev lthandler) h ;
@@ -83,7 +83,7 @@ let rec process_connections
   | client :: tail ->
     begin
       let rest = process_connections tail to_read req_handler in
-      if List.mem client to_read then begin
+      if mem client to_read then begin
         process_connection client req_handler ;
         let _ = static_cmd Close client in
         every_request_gets_a_response_append () ;
@@ -96,7 +96,7 @@ let get_new_connection (socket : file_descr) :
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
-    if List.length to_accept > 0 then begin
+    if length to_accept > 0 then begin
       match static_cmd Accept socket with
       | Inl client ->
         let _ = static_cmd SetNonblock client in
@@ -194,7 +194,7 @@ let check_handler_post : tree (pck_dc mymst) =
   Node (|
       file_descr,
       unit,
-      (fun client h _ lt -> wrote_to client ((List.rev lt) @ h)),
+      (fun client h _ lt -> wrote_to client (rev lt)),
       (fun client s0 _ s1 -> s1.st = Wrote client)
     |)
     check_send_pre
@@ -209,7 +209,7 @@ let help_import fl wf eff_dcs client req send :
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally pi h lt /\
-                          (wrote_to client ((List.rev lt) @ h) \/ Inr? r)))
+                          (wrote_to client (rev lt) \/ Inr? r)))
 =
   let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in
