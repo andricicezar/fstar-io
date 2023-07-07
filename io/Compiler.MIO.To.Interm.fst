@@ -122,35 +122,33 @@ type dc_typ (mst:mst) (#argt:Type u#a) (#rett:Type u#b) = argt -> mst.cst -> ret
 
 (* Postcondition for effectful dynamic check *)
 unfold
-let eff_dc_typ_cont_post (mst:mst) (dc:dc_typ mst) (s0:mst.cst) (h0:erased trace{mst.models s0 h0}) (x:'a) (y:'b) (h1:trace) ((s1,b):erased mst.cst * bool) (lt:trace) : Type0 =
+let eff_dc_typ_cont_post (mst:mst) (dc:dc_typ mst) (s0:mst.cst) (x:'a) (y:'b) (h1:trace) ((s1,b):erased mst.cst * bool) (lt:trace) : Type0 =
   s1 `mst.models` h1 /\ (b <==> dc x s0 y s1) /\ lt == []
 
 (* Effectful dynamic check for the result, given initial value and initial history *)
-type eff_dc_typ_cont (mst:mst) (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (dc:dc_typ mst #t1 #t2) (x:t1) (s0:mst.cst) (h0:erased trace{mst.models s0 h0}) =
-  y:t2 -> MIO (erased mst.cst * bool) mst fl (fun h1 -> h0 `suffix_of` h1) (eff_dc_typ_cont_post mst dc s0 h0 x y)
+type eff_dc_typ_cont (mst:mst) (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (dc:dc_typ mst #t1 #t2) (x:t1) (s0:mst.cst) =
+  y:t2 -> MIO (erased mst.cst * bool) mst fl (fun h1 -> True) (eff_dc_typ_cont_post mst dc s0 x y)
   
 (* Effectful runtime check: given an x:t1 returns an erased trace and an
 effectful function to check the result (t2) *)
 type eff_dc_typ (mst:mst) (fl:erased tflag) (#t1 #t2:Type) (dc:dc_typ mst #t1 #t2) =
-  x:t1 -> MIO (s0:erased mst.cst & h0:erased trace{mst.models s0 h0} & eff_dc_typ_cont mst fl t1 t2 dc x s0 h0)
+  x:t1 -> MIO (s0:erased mst.cst & eff_dc_typ_cont mst fl t1 t2 dc x s0)
              mst
              fl
              (fun _ -> True)
-             (fun h1 (| s0, h0, _ |) lt -> h1 == reveal h0  /\ lt == [])
+             (fun h0 (| s0, _ |) lt -> s0 `mst.models` h0 /\ lt == [])
 
 (* Lifting a runtime check into an effectful check *)
 val enforce_dc : (#mst:mst) -> (#argt:Type u#a) -> (#rett:Type u#b) -> 
   dc:dc_typ mst #argt #rett -> eff_dc_typ mst AllActions dc
 #push-options "--compat_pre_core 1" // fixme
 let enforce_dc #mst #argt #rett dc x =
-  let h0 = get_trace () in
   let s0 = get_state () in
-  assert (mst.models s0 h0);
-  let cont : eff_dc_typ_cont mst AllActions argt rett dc x s0 h0 =
+  let cont : eff_dc_typ_cont mst AllActions argt rett dc x s0 =
     (fun y -> (
       let s1 = get_state () in
       (hide s1, dc x s0 y s1))) in
-  (| hide s0, h0, cont |)
+  (| hide s0,  cont |)
 #pop-options
 
 // todo: in HO cases, t1 or t2 should be unit since one can not write a
@@ -361,8 +359,8 @@ let enforce_pre
   (f:(t1 -> MIO (resexn t2) mst fl pre post))
   (x:t1) :
   MIOpi (resexn t2) fl pi mst =
-  let (| s0, h0, eff_dc' |)  = eff_dc () in
-  let (_, b) = eff_dc' () in
+  let (| s0, eff_dc' |)  = eff_dc () in
+  let (s1, b) = eff_dc' () in
   if b then f x
   else Inr Contract_failure
   
@@ -377,7 +375,7 @@ let enforce_pre_args
   (f:(x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)))
   (x:t1) :
   MIOpi (resexn t2) fl pi mst =
-  let (| _, _, eff_dc' |) = eff_dc x in
+  let (| _, eff_dc' |) = eff_dc x in
   let (_, b) = eff_dc' () in
   if b then f x
   else Inr Contract_failure
@@ -386,9 +384,9 @@ val rityp_eff_dc : #mst:_ -> (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b
 
 #push-options "--compat_pre_core 1"
 let rityp_eff_dc #mst #fl #a #b #c #d #dc eff_dc (x:c) = 
-    let (| s0, h0, cont |) = eff_dc x in
-    let cont' : eff_dc_typ_cont mst fl c d  dc x s0 h0 = (fun (y:d) -> cont y) in
-    (| s0,h0, cont' |)
+    let (| s0, cont |) = eff_dc x in
+    let cont' : eff_dc_typ_cont mst fl c d  dc x s0 = (fun (y:d) -> cont y) in
+    (| s0, cont' |)
 #pop-options
 
 instance exportable_arrow_pre_post_args
@@ -600,11 +598,9 @@ let enforce_post_args_res
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
   MIO (resexn t2) mst fl (pre x) (post x) =
-  let (| s0, h0, eff_dc' |) = eff_dc x in
-  Classical.forall_intro (lemma_suffixOf_append h0);
+  let (| _, eff_dc' |) = eff_dc x in
   let r : resexn t2 = f x in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h0));
-  let (s1, b) = eff_dc' r in
+  let (_, b) = eff_dc' r in
   if b then r
   else Inr Contract_failure
 
@@ -623,10 +619,8 @@ let enforce_post_args
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
   MIO (resexn t2) mst fl (pre x) (post x) =
-  let (| _, h, eff_dc' |) = eff_dc x in
-  Classical.forall_intro (lemma_suffixOf_append h);
+  let (| _, eff_dc' |) = eff_dc x in
   let r : resexn t2 = f x in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   let (_, b) = eff_dc' () in
   if b then r
   else Inr Contract_failure
@@ -646,10 +640,8 @@ let enforce_post_res
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
   MIO (resexn t2) mst fl (pre x) (post x) =
-  let (| _, h, eff_dc' |) = eff_dc () in
-  Classical.forall_intro (lemma_suffixOf_append h);
+  let (| _, eff_dc' |) = eff_dc () in
   let r : resexn t2 = f x in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   let (_, b) = eff_dc' r in
   if b then r
   else Inr Contract_failure
@@ -669,10 +661,8 @@ let enforce_post
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
   MIO (resexn t2) mst fl (pre x) (post x) =
-  let (| _, h, eff_dc' |) = eff_dc () in
-  Classical.forall_intro (lemma_suffixOf_append h);
+  let (| _, eff_dc' |) = eff_dc () in
   let r : resexn t2 = f x in
-  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_append_rev_inv_tail h));
   let (_, b) = eff_dc' () in
   if b then r
   else Inr Contract_failure
