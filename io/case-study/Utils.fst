@@ -75,7 +75,6 @@ type cst =
 | Accepted : file_descr -> cst
 | HasRead : file_descr -> cst
 | Wrote : file_descr -> cst
-| Failure
 
 let rec is_waiting (h : trace) =
   match h with
@@ -110,10 +109,11 @@ let rec has_written (client : file_descr) (h : trace) =
   | [] -> false
 
 let models (c:cst) (h:trace) : Type0 =
-  (c == Waiting <==> is_waiting h) /\
-  (forall client. c == Accepted client <==> has_accepted client h) /\
-  (forall client. c == HasRead client <==> has_read client h) /\
-  (forall client. c == Wrote client <==> has_written client h)
+  match c with
+  | Waiting -> is_waiting h
+  | Accepted client -> has_accepted client h
+  | HasRead client -> has_read client h
+  | Wrote client -> has_written client h
 
 let mymst : mst = {
   cst = cst;
@@ -133,18 +133,18 @@ let my_init_cst : mymst.cst =
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
-  | Accept, Inl fd -> if s0 = Waiting then Accepted fd else (admit () ; Failure)
+  | Accept, Inl fd -> Accepted fd
   | Read, Inl _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
     admit () ;
-    if s0 = Accepted fd then HasRead fd else Failure
+    HasRead fd
   | Openfile, Inl fd -> s0
   | Close, Inl rr -> s0
   | Write, Inl rr ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
     admit () ;
-    if s0 = HasRead fd then Waiting else Failure
+    Waiting
   | _ -> admit () ; s0
 
 let close_upd_cst (s : cst) arg : cst = {
