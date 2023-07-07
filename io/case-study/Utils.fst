@@ -28,9 +28,6 @@ let rec wrote_to client h =
   | [] -> false
   | EAccept _ arg (Inl fd) :: tl ->
     if fd = client then false else wrote_to client tl
-  // | ERead Prog arg _ :: tl ->
-  //   let (fd, _) = arg in
-  //   if fd = client then false else wrote_to client tl
   | EWrite Prog arg _ :: tl ->
     let (fd, _) = arg in
     if fd = client then true
