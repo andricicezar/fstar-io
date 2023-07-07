@@ -183,12 +183,17 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 let check_handler_post : tree (pck_dc mymst) =
-  admit () ;
+  introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) == wrote_to client (rev lt)
+  with begin
+    if (not (wrote_to client h)) && wrote_to client ((rev lt) @ h)
+    then wrote_to_split client (rev lt) h
+    else admit () // The problem is not (wrote_to client h), why would it be the case?
+  end ;
   Node (|
       file_descr,
       unit,
       (fun client h _ lt -> wrote_to client (rev lt)),
-      (fun client s0 _ s1 -> false) (* TODO FIXME *)
+      (fun client s0 _ s1 -> not (client `mem` s0.written) && client `mem` s1.written)
     |)
     check_send_pre
     Leaf
