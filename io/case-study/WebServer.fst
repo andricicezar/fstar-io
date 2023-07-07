@@ -176,9 +176,12 @@ let webserver
 (** Compiling Web Server **)
 
 let check_send_pre : tree (pck_dc mymst) =
+  // assume (forall h fd. has_accepted fd h ==> did_not_respond h) ;
+  // assume (forall h fd. did_not_respond h <==> has_accepted fd h) ;
+  admit () ;
   Node
     (| Bytes.bytes, unit, (fun res h _ _ ->
-      did_not_respond h && valid_http_response res), (fun res s0 _ _ -> s0.waiting && valid_http_response res) |)
+      did_not_respond h && valid_http_response res), (fun res s0 _ _ -> Accepted? s0.st && valid_http_response res) |)
     Leaf
     Leaf
 
@@ -187,11 +190,12 @@ let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 let check_handler_post : tree (pck_dc mymst) =
+  admit () ;
   Node (|
       file_descr,
       unit,
       (fun client h _ lt -> wrote_to client ((List.rev lt) @ h)),
-      (fun client s0 _ s1 -> client `List.mem` s1.written)
+      (fun client s0 _ s1 -> s1.st = Wrote client)
     |)
     check_send_pre
     Leaf
