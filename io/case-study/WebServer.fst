@@ -54,12 +54,11 @@ let process_connection
     introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler limit r lt. did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce did_not_respond h /\ enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
   end ;
-  admit () ; // Why???
   match get_req client with
   | Inr _ -> sendError400 client
   | Inl req ->

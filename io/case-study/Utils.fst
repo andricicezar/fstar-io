@@ -40,8 +40,8 @@ let rec wrote_to client h =
 let rec did_not_respond (h:trace) : bool =
   match h with
   | [] -> false
-  | ERead Prog _ (Inl _) :: tl -> true
-  | EWrite Prog _ (Inl _) :: tl -> false
+  | ERead Prog _ _ :: tl -> true
+  | EWrite Prog _ _ :: tl -> false
   | e :: tl -> did_not_respond tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
@@ -168,14 +168,14 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
   | Accept, Inl fd -> s0
-  | Read, Inl _ ->
+  | Read, _ ->
     let (fd, _) : file_descr * UInt8.t = arg in
     if caller = Prog then updst s0 DidNotRespond else s0
   | Openfile, Inl fd -> if caller = Ctx then appcst fd s0 else s0
   | Close, Inl rr ->
     mem_filter_equiv (is_neq arg) s0.opened ;
     mkcst (filter (is_neq arg) s0.opened) s0.st
-  | Write, Inl rr ->
+  | Write, _ ->
     let arg : file_descr * Bytes.bytes = arg in
     let (fd, bb) = arg in
     if caller = Prog then updst s0 Responded else s0
@@ -490,7 +490,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires did_not_respond h /\ enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ every_request_gets_a_response lt)
+    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
