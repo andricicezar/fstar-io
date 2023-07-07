@@ -192,6 +192,7 @@ let check_handler_post : tree (pck_dc mymst) =
     // 1. We add more information to the model to make sure the same client can not be written to twice
     // 2. Maybe knowing DidNotRespond for h is enough and we add that to the constraint instead of not (client `mem` s0.written)
     // => but once again, why would wrote_to client (rev lt) imply did_not_respond h? No way
+    // Another solution would be to count the number of occurrences instead of using mem and make sure there is only one.
   end ;
   Node (|
       file_descr,
