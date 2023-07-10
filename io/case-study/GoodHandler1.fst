@@ -145,7 +145,8 @@ let get_query
   (send:UBytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (file_full_path : string) :
   MIOpi unit fl pi mymst =
-  admit () ; // Should we prove something?
+  assume (forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
+         enforced_locally pi h (lt1@lt2));
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
     let file = get_file #fl call_io fd 100uy 100 in
