@@ -16,7 +16,12 @@ let link = comp.target.link #tgt_cs_int
 let pi = tgt_cs_int.pi
 
 #push-options "--compat_pre_core 1"
-  
+
+(** We admit all querries since we want to consider this handler to be
+    unverified.
+*)
+#push-options "--admit_smt_queries true"
+
 let rec _extract_path (header : list Char.char) : Tot (list Char.char) =
   match header with
     | [] -> []
@@ -39,15 +44,14 @@ let parse_http_header (header : Bytes.bytes) : request_type =
   | 'G' :: 'E :: 'T' :: ' ' :: tail -> GET (extract_path tail)
   | _ -> Error
 
-let rec get_file 
+let rec get_file
   (#fl:erased tflag)
   (call_io:io_lib fl pi mymst Ctx)
   (fd : file_descr) (limit : UInt8.t)
   (i:nat) :
   MIOpi Bytes.bytes fl pi mymst =
-    admit ();
   match call_io Read (fd,limit) with
-  | Inl (chunk, size) -> begin 
+  | Inl (chunk, size) -> begin
     if UInt8.lt size limit || i = 0 then
       Bytes.slice chunk 0ul (UInt32.uint_to_t (UInt8.v size))
     else (
@@ -56,14 +60,14 @@ let rec get_file
   end
   | _ -> Bytes.utf8_encode ""
 
-(**let write_string 
+(**let write_string
   (#fl:erased tflag)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (s:string) : MIOpi unit fl pi =
     admit (); // because of bytes
     let _ = send (Bytes.utf8_encode s) in ()
 
-let write_int 
+let write_int
   (#fl:erased tflag)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi)
   (x:int) :
@@ -74,13 +78,12 @@ let write_int
 
 open FStar.Tactics
 
-let rec lemma1_0 (pi:policy_spec) (h lt1 lt2:trace) : Lemma 
+let rec lemma1_0 (pi:policy_spec) (h lt1 lt2:trace) : Lemma
   (requires (enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2))
   (ensures (enforced_locally pi h (lt1@lt2))) =
-  admit ();
   match lt2 with
-  | [] -> () 
-  | e::tl -> 
+  | [] -> ()
+  | e::tl ->
     assert (enforced_locally pi h (lt1@[e]));
     assert (enforced_locally pi (List.rev (lt1@[e]) @ h) tl);
     lemma1_0 pi h (lt1@[e]) tl
@@ -90,16 +93,16 @@ let lemma1 (pi:policy_spec) : Lemma (
     enforced_locally pi h (lt1@lt2)) =
   Classical.forall_intro_3 (Classical.move_requires_3 (lemma1_0 pi))
 
-let head 
+let head
   (status_code:int) :
   Tot string =
   FStar.String.concat ""
     ["HTTP/1.1 ";
      string_of_int status_code;
     "\n"]
-  
-let set_headers 
-  (status_code:int) (media_type:string) (content_length: int) : 
+
+let set_headers
+  (status_code:int) (media_type:string) (content_length: int) :
   Tot string =
   FStar.String.concat ""
     [head status_code;
@@ -112,16 +115,15 @@ let set_headers
 let respond
   (#fl:erased tflag)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
-  (status_code:int) (media_type:string) (content:Bytes.bytes) : 
+  (status_code:int) (media_type:string) (content:Bytes.bytes) :
   MIOpi unit fl pi mymst =
   lemma1 pi;
-  admit ();
   let hdrs = set_headers status_code media_type (Bytes.length content) in
   let msg = (Bytes.append (Bytes.utf8_encode hdrs) content) in
   let _ = send msg in
   ()
 
-let get_fd_stats 
+let get_fd_stats
   (#fl:erased tflag)
   (call_io:io_lib fl pi mymst Ctx)
   (file_full_path: string) :
@@ -142,14 +144,13 @@ let get_media_type (file_path : string) : (media_type:string{String.maxlen media
     | _ -> "text/plain"
   else "text/plain"
 
-let get_query 
+let get_query
   (#fl:erased tflag)
   (call_io:io_lib fl pi mymst Ctx)
   (send:Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (file_full_path : string) :
   MIOpi unit fl pi mymst =
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
-    admit ();
     lemma1 pi;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
     let file = get_file #fl call_io fd 100uy 100 in
@@ -164,8 +165,10 @@ let good_handler1 #fl  call_io client req send =
   match parse_http_header req with
   | GET "/" -> (respond #fl send 200 "text/html" (Bytes.utf8_encode "<h1>Hello!</h1>"); Inl ())
   | GET query -> (get_query #fl call_io send query; Inl ())
-  | _ -> (admit (); send (Bytes.utf8_encode (head 401)))
+  | _ -> send (Bytes.utf8_encode (head 401))
 
 let good_main1 = link compiled_webserver good_handler1
 
 let _ = Execute.execute good_main1._2
+
+#push-options "--admit_smt_queries false"
