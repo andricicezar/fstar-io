@@ -278,8 +278,13 @@ let vextend #t (x:typ_to_fstar t 'f 'p 'm) (#g:env) (ve:venv g 'f 'p 'm) : venv 
 
 #push-options "--compat_pre_core 1"
 
+let cast_TArr #t1 #t2 #f #p #m (h : (typ_to_fstar t1 f p m -> MIOpi (typ_to_fstar t2 f p m) f p m)) : typ_to_fstar (TArr t1 t2) f p m = h
+let rec enforced_locally_compose 'p : Lemma (ensures (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
+         enforced_locally 'p h (lt1@lt2))) = admit ()
+
 let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
   : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) =
+  let _ = enforced_locally_compose 'p in
   match e with
   | EUnit -> FStar.Universe.raise_val ()
   | EZero ->
@@ -295,8 +300,6 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v1 = exp_to_fstar g e1 TNat h1 ve in
        let v2 : typ_to_fstar t 'f 'p 'm = exp_to_fstar g e2 t h2 ve in
        let v3 : typ_to_fstar (TArr t t) 'f 'p 'm = exp_to_fstar g e3 (TArr t t) h3 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        let rec f (n : nat) : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm =
          if n = 0 then v2 else f (n - 1) in
        f (FStar.Universe.downgrade_val v1)
@@ -313,25 +316,21 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v1 = exp_to_fstar g e1 (TSum t1 t2) h1 ve in
        let v2 = exp_to_fstar g e2 (TArr t1 t3) h2 ve in
        let v3 = exp_to_fstar g e3 (TArr t2 t3) h3 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
   | EVar x -> ve x
   | ELam t1 e1 ->
-       let TyLam _ #_ #t2 h1 = h in
+       let TyLam t1' #_ #t2 h1 = h in
+       assert (t1' == t1);
        assert (t == TArr t1 t2);
        let w : typ_to_fstar t1 'f 'p 'm -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm =
          (fun x -> exp_to_fstar (extend t1 g) e1 t2 h1 (vextend x ve)) in
-       assume (typ_to_fstar t 'f 'p 'm == (typ_to_fstar t1 'f 'p 'm -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm));
-       w
+       cast_TArr w
   | EApp e1 e2 ->
        let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
        assert ((typ_to_fstar t 'f 'p 'm) == (typ_to_fstar t2 'f 'p 'm));
        (* Should we change the order here, first evaluate argument? *)
        let v1 : typ_to_fstar (TArr t1 t2) 'f 'p 'm = exp_to_fstar g e1 (TArr t1 t2) h1 ve in
        let v2 : typ_to_fstar t1 'f 'p 'm = exp_to_fstar g e2 t1 h2 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        v1 v2
   | EByteLit b ->
        FStar.Universe.raise_val b
@@ -340,27 +339,19 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
        let v1 : typ_to_fstar TNat 'f 'p 'm = exp_to_fstar g e1 TNat h1 ve in
        let v2 : typ_to_fstar TByte 'f 'p 'm = exp_to_fstar g e2 TByte h2 ve in
        let b : bytes = Bytes.create (convert (FStar.Universe.downgrade_val v1)) (FStar.Universe.downgrade_val v2) in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        FStar.Universe.raise_val b
   | EFst e ->
        let TyFst #_ #_ #t1 #t2 h1 = h in
        let v = exp_to_fstar g e (TPair t1 t2) h1 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        fst #(typ_to_fstar t1 'f 'p 'm) #(typ_to_fstar t2 'f 'p 'm) v
   | ESnd e ->
        let TySnd #_ #_ #t1 #t2 h1 = h in
        let v = exp_to_fstar g e (TPair t1 t2) h1 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        snd #(typ_to_fstar t1 'f 'p 'm) #(typ_to_fstar t2 'f 'p 'm) v
   | EPair e1 e2 ->
        let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
        let v1 = exp_to_fstar g e1 t1 h1 ve in
        let v2 = exp_to_fstar g e2 t2 h2 ve in
-       assume (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2));
        (v1, v2)
 
 
