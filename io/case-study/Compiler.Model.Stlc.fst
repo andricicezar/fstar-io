@@ -239,8 +239,8 @@ let test : src_interface = {
   ct_dcs = WS.cs_int.ct_dcs;
   ct_importable = (fun fl -> WS.cs_int.ct_importable fl);
 
-  wct = Stlc.TUnit;
-  _c = (fun fl -> (** probably very hard to prove *) admit ());
+  wct = Stlc.TUnit; // TODO: write the proper type here
+  _c = (fun fl -> (** TODO: probably unprovable because of the thunk *) admit ());
 
   psi = WS.cs_int.psi;
 }
