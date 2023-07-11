@@ -75,22 +75,40 @@ let write_int
 open FStar.Tactics
 open FStar.List.Tot
 
-let rec lemma1_0 (pi:policy_spec) (h lt1 lt2:trace) : Lemma
-  (requires (enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2))
-  (ensures (enforced_locally pi h (lt1@lt2)))
-  (decreases lt2)
-= match lt2 with
-  | [] -> ()
-  | e::tl ->
-    assume (enforced_locally pi h (lt1@[e])) ;
-    assume (enforced_locally pi (List.rev (lt1@[e]) @ h) tl) ;
-    lemma1_0 pi h (lt1@[e]) tl ;
-    admit ()
+let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
+  Lemma
+    (requires (
+      enforced_locally pi h lt1 /\
+      enforced_locally pi (apply_changes h lt1) lt2))
+    (ensures (
+      enforced_locally pi h (lt1 @ lt2)))
+    (decreases (List.length lt1)) =
+    match lt1 with
+    | [] -> ()
+    | e::[] -> ()
+    | e::t1 ->
+      calc (==) {
+        enforced_locally pi (apply_changes h (lt1)) lt2;
+        == {}
+        enforced_locally pi (apply_changes h (e::t1)) lt2;
+        == {}
+        enforced_locally pi (List.rev (e::t1) @ h) lt2;
+        == { _ by (l_to_r [`rev_rev'] ) }
+        enforced_locally pi ((List.rev (t1) @ [e]) @ h) lt2;
+        == { _ by (l_to_r [`append_assoc]) }
+        enforced_locally pi (List.rev (t1) @ ([e] @ h)) lt2;
+        == {}
+        enforced_locally pi (apply_changes ([e] @ h) t1) lt2;
+    };
+    assert (enforced_locally pi ([e]@h) t1);
+    lemma_append_enforced_locally_0 pi ([e] @ h) t1 lt2
 
-let lemma1 (pi:policy_spec) : Lemma (
-  forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
-    enforced_locally pi h (lt1@lt2)) =
-  Classical.forall_intro_3 (Classical.move_requires_3 (lemma1_0 pi))
+let lemma_append_enforced_locally pi:
+  Lemma (forall h lt1 lt2.
+      enforced_locally pi h lt1 /\
+      enforced_locally pi (apply_changes h lt1) lt2 ==>
+      enforced_locally pi h (lt1 @ lt2)) =
+  Classical.forall_intro_3 (Classical.move_requires_3 (lemma_append_enforced_locally_0 pi))
 
 let head
   (status_code:int) :
@@ -151,7 +169,7 @@ let get_query
   // assume (forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
   //        enforced_locally pi h (lt1@lt2));
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
-    lemma1 pi ;
+    lemma_append_enforced_locally pi ;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
     let file = get_file #fl call_io fd 100uy 100 in
     let msg = (UBytes.append (UBytes.utf8_encode hdrs) file) in
