@@ -14,7 +14,7 @@
    limitations under the License.
 *)
 (* A copy of FStar.Bytes where side conditions are removed. *)
-module UBytes
+module FStar.Bytes
 
 module S = FStar.Seq
 module U = FStar.UInt
@@ -36,10 +36,6 @@ unfold type byte = u8
     Realized in OCaml by a string *)
 val bytes : t:Type0{hasEq t}
 val len : bytes -> u32
-
-(* ADDED *)
-val from_bytes : Bytes.bytes -> bytes
-val to_bytes : bytes -> Bytes.bytes
 
 unfold let length b = FStar.UInt32.v (len b)
 
