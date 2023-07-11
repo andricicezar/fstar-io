@@ -47,7 +47,7 @@ type io_lib' (fl:erased tflag) (#pi:policy_spec) (mst:mst) (phi:policy mst pi) (
 
 #push-options "--compat_pre_core 1" // fixme
 val inst_io_cmds : #mst:mst -> #pi:policy_spec -> phi:policy mst pi -> io_lib' AllActions mst phi Ctx
-let inst_io_cmds phi cmd arg = 
+let inst_io_cmds phi cmd arg =
   let s0 = get_state () in
   if phi s0 cmd arg then (
     // Need the letbinding here it won't typecheck... why?
@@ -82,13 +82,13 @@ type tgt_interface = {
   pt : erased tflag -> Type u#a;
   pt_weak : fl:erased tflag -> interm (pt fl) fl pi mst;
 }
-  
+
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib' fl i.mst i.phi Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
 type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
 type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
 
-let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
+let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
   (| i.mst, (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
 
 val beh_src : whole_src ^-> trace_property #event
@@ -98,7 +98,7 @@ let src_language : language = {
   interface = src_interface;
   ctx = ctx_src; pprog = prog_src; whole = whole_src;
   link = link_src;
-  event_typ = event;  beh = beh_src; 
+  event_typ = event;  beh = beh_src;
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
@@ -115,7 +115,7 @@ let tgt_language : language = {
   interface = tgt_interface;
   ctx = ctx_tgt; pprog = prog_tgt; whole = whole_tgt;
   link = link_tgt;
-  event_typ = event; beh = beh_tgt; 
+  event_typ = event; beh = beh_tgt;
 }
 
 (** ** Compile interfaces **)
@@ -137,21 +137,20 @@ val compile_whole : whole_src -> whole_tgt
 let compile_whole (| mst, _, ws |) = (| mst, ws |)
 
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
-let compile_pprog #i p_s = 
+let compile_pprog #i p_s =
   let eff_dcs = make_dcs_eff i.pt_dcs in
   (i.pt_exportable AllActions).export eff_dcs (p_s #AllActions)
 
-val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
-let compile_ctx #i c_s =
-  (** TODO: the partial program should be also importable besides exportable,
-      which would be a pain because one has to define a second tree of dcs. **)
+// val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
+// let compile_ctx #i c_s =
+//   (** TODO: the partial program should be also importable besides exportable,
+//       which would be a pain because one has to define a second tree of dcs. **)
 
-  (** The point of defining C↓ is to prove SCC (from Beyond Full Abstraction). 
-      Since, C↓ = fun p -> C (import p) and P↓ = export P,
-      then C↓[P↓] = C↓ (P↓) = C↓ (export P) = C (import (export P)) = C P.
-      The last step is true if we can prove that `import (export f) = f`, see
-      LawImportableExportable.fst **)
-  admit ()
+//   (** The point of defining C↓ is to prove SCC (from Beyond Full Abstraction).
+//       Since, C↓ = fun p -> C (import p) and P↓ = export P,
+//       then C↓[P↓] = C↓ (P↓) = C↓ (export P) = C (import (export P)) = C P.
+//       The last step is true if we can prove that `import (export f) = f`, see
+//       LawImportableExportable.fst **)
 
 let comp : compiler = {
   source = src_language;
@@ -171,7 +170,7 @@ let soundness (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i
   let pt : prog_tgt it = (compile_pprog #i ps) in
   let wt : whole_tgt = (pt `link_tgt` ct) in
   let ws : whole_src = (ps `link_src` cs) in
-  tgt_language.beh (wt) `subset_of` src_language.beh (ws) 
+  tgt_language.beh (wt) `subset_of` src_language.beh (ws)
 ) = ()
 
 (** ** RrHC **)
@@ -183,31 +182,31 @@ let syntactic_equality (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:p
   let ws : whole_src = (ps `link_src` cs) in
   compile_whole ws == wt
 ) = ()
-  
+
 let comp_rrhc_2 (i:src_interface) (ct:ctx_tgt (comp_int_src_tgt i)) (ps:prog_src i) : Lemma (
   let it = comp_int_src_tgt i in
   let cs : ctx_src i = backtranslate_ctx #i ct in
   let pt : prog_tgt it = (compile_pprog #i ps) in
   let wt : whole_tgt = (pt `link_tgt` ct) in
   let ws : whole_src = (ps `link_src` cs) in
-  beh_src ws == beh_tgt wt) = 
+  beh_src ws == beh_tgt wt) =
   syntactic_equality i ct ps
 
 let comp_rrhc_1 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) (ps:comp.source.pprog i) : Lemma (
   let cs : comp.source.ctx i = backtranslate_ctx #i ct in
   comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
   comp_rrhc_2 i ct ps
-  
+
 let comp_rrhc_0 (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)) : Lemma (
       exists (cs:comp.source.ctx i).
         forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) = 
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) =
  introduce exists (cs:comp.source.ctx i).
         (forall (ps:comp.source.pprog i).
-          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)) 
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
   with (backtranslate_ctx #i ct)
   and Classical.forall_intro (comp_rrhc_1 i ct)
-          
+
 val comp_rrhc : unit -> Lemma (rrhc comp)
-let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) = 
+let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) =
   Classical.forall_intro_2 (comp_rrhc_0)
