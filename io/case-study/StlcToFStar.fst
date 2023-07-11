@@ -286,12 +286,48 @@ let vextend #t (x:typ_to_fstar t 'f 'p 'm) (#g:env) (ve:venv g 'f 'p 'm) : venv 
 #push-options "--compat_pre_core 1"
 
 let cast_TArr #t1 #t2 #f #p #m (h : (typ_to_fstar t1 f p m -> MIOpi (typ_to_fstar t2 f p m) f p m)) : typ_to_fstar (TArr t1 t2) f p m = h
-let rec enforced_locally_compose 'p : Lemma (ensures (forall h lt1 lt2. enforced_locally 'p h lt1 /\ enforced_locally 'p (List.rev lt1 @ h) lt2 ==>
-         enforced_locally 'p h (lt1@lt2))) = admit ()
+
+// Dupplicate from GoodHandler1
+open FStar.List.Tot
+
+let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
+  Lemma
+    (requires (
+      enforced_locally pi h lt1 /\
+      enforced_locally pi (apply_changes h lt1) lt2))
+    (ensures (
+      enforced_locally pi h (lt1 @ lt2)))
+    (decreases (List.length lt1)) =
+    match lt1 with
+    | [] -> ()
+    | e::[] -> ()
+    | e::t1 ->
+      calc (==) {
+        enforced_locally pi (apply_changes h (lt1)) lt2;
+        == {}
+        enforced_locally pi (apply_changes h (e::t1)) lt2;
+        == {}
+        enforced_locally pi (List.rev (e::t1) @ h) lt2;
+        == { _ by (l_to_r [`rev_rev'] ) }
+        enforced_locally pi ((List.rev (t1) @ [e]) @ h) lt2;
+        == { _ by (l_to_r [`append_assoc]) }
+        enforced_locally pi (List.rev (t1) @ ([e] @ h)) lt2;
+        == {}
+        enforced_locally pi (apply_changes ([e] @ h) t1) lt2;
+    };
+    assert (enforced_locally pi ([e]@h) t1);
+    lemma_append_enforced_locally_0 pi ([e] @ h) t1 lt2
+
+let lemma_append_enforced_locally pi:
+  Lemma (forall h lt1 lt2.
+      enforced_locally pi h lt1 /\
+      enforced_locally pi (apply_changes h lt1) lt2 ==>
+      enforced_locally pi h (lt1 @ lt2)) =
+  Classical.forall_intro_3 (Classical.move_requires_3 (lemma_append_enforced_locally_0 pi))
 
 let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
   : MIOpi (typ_to_fstar t 'f 'p 'm) 'f 'p 'm (decreases e) =
-  let _ = enforced_locally_compose 'p in
+  let _ = lemma_append_enforced_locally 'p in
   match e with
   | EUnit -> FStar.Universe.raise_val ()
   | EZero ->
