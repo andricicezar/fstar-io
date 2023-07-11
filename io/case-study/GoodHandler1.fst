@@ -72,22 +72,25 @@ let write_int
   write_string #fl send s
 **)
 
-// open FStar.Tactics
+open FStar.Tactics
+open FStar.List.Tot
 
-// let rec lemma1_0 (pi:policy_spec) (h lt1 lt2:trace) : Lemma
-//   (requires (enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2))
-//   (ensures (enforced_locally pi h (lt1@lt2))) =
-//   match lt2 with
-//   | [] -> ()
-//   | e::tl ->
-//     assert (enforced_locally pi h (lt1@[e]));
-//     assert (enforced_locally pi (List.rev (lt1@[e]) @ h) tl);
-//     lemma1_0 pi h (lt1@[e]) tl
+let rec lemma1_0 (pi:policy_spec) (h lt1 lt2:trace) : Lemma
+  (requires (enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2))
+  (ensures (enforced_locally pi h (lt1@lt2)))
+  (decreases lt2)
+= match lt2 with
+  | [] -> ()
+  | e::tl ->
+    assume (enforced_locally pi h (lt1@[e])) ;
+    assume (enforced_locally pi (List.rev (lt1@[e]) @ h) tl) ;
+    lemma1_0 pi h (lt1@[e]) tl ;
+    admit ()
 
-// let lemma1 (pi:policy_spec) : Lemma (
-//   forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
-//     enforced_locally pi h (lt1@lt2)) =
-//   Classical.forall_intro_3 (Classical.move_requires_3 (lemma1_0 pi))
+let lemma1 (pi:policy_spec) : Lemma (
+  forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
+    enforced_locally pi h (lt1@lt2)) =
+  Classical.forall_intro_3 (Classical.move_requires_3 (lemma1_0 pi))
 
 let head
   (status_code:int) :
@@ -145,9 +148,10 @@ let get_query
   (send:UBytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (file_full_path : string) :
   MIOpi unit fl pi mymst =
-  assume (forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
-         enforced_locally pi h (lt1@lt2));
+  // assume (forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
+  //        enforced_locally pi h (lt1@lt2));
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
+    lemma1 pi ;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
     let file = get_file #fl call_io fd 100uy 100 in
     let msg = (UBytes.append (UBytes.utf8_encode hdrs) file) in
