@@ -60,7 +60,6 @@ let rec get_file
   (#fl:erased tflag)
   (send:UBytes.bytes -> MIOpi (resexn unit) fl pi)
   (s:string) : MIOpi unit fl pi =
-    admit (); // because of bytes
     let _ = send (UBytes.utf8_encode s) in ()
 
 let write_int
