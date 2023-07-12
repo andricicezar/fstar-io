@@ -133,21 +133,6 @@ let models (c : cst) (h : trace) : Type0 =
   (forall fd. fd `mem` c.opened <==> is_opened_by_untrusted h fd) /\
   (forall fd. fd `mem` c.written <==> wrote_to fd h)
 
-let mymst : mst = {
-  cst = cst;
-  models = models;
-}
-
-effect MyMIO
-  (a:Type)
-  (fl:FStar.Ghost.erased tflag)
-  (pre : trace -> Type0)
-  (post : trace -> a -> trace -> Type0) =
-  MIO a mymst fl pre post
-
-let my_init_cst : mymst.cst =
-  mkcst [] DidNotRespond []
-
 // TODO MOVE
 let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
   Lemma (requires x `memP` filter f l) (ensures x `memP` l)
@@ -186,6 +171,11 @@ let mem_filter_equiv (#a:Type) (f: (a -> Tot bool)) (l: list a) :
     with _. filter_mem f l x
   end
 
+let my_init_cst : s:cst{s `models` []} =
+  // GM: Changed to Responded! Otherwise it's not true
+  // that this models the empty trace!!
+  mkcst [] Responded []
+
 let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
   let (| caller, cmd, arg, res |) = destruct_event e in
   match cmd, res with
@@ -204,6 +194,20 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     let (fd, bb) = arg in
     if caller = Prog then write_cst fd s0 else s0
   | _ -> s0
+
+let mymst : mst = {
+  cst = cst;
+  models = models;
+  initial = my_init_cst;
+  update = my_update_cst;
+}
+
+effect MyMIO
+  (a:Type)
+  (fl:FStar.Ghost.erased tflag)
+  (pre : trace -> Type0)
+  (post : trace -> a -> trace -> Type0) =
+  MIO a mymst fl pre post
 
 val pi : policy_spec
 let pi h c cmd arg =

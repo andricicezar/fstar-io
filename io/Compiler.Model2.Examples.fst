@@ -30,6 +30,8 @@ type stronger_pis (pi1:policy_spec) (pi2:policy_spec) =
 let mst1 : mst = {
   cst = list file_descr;
   models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+  initial = [];
+  update = magic(); // IOU
 }
 
 (** ** Testing **)

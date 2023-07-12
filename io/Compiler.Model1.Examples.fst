@@ -33,6 +33,8 @@ let test1_post = (fun () h (rfd:resexn file_descr) lt ->
 let mst1 : mst = {
   cst = list file_descr;
   models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+  initial = [];
+  update = magic(); // IOU
 }
 
 type test1_ct = source_arrow mst1 unit file_descr test1_pre test1_post
@@ -123,6 +125,8 @@ let test1_ctx_t #fl sec_io () : MIOpi (resexn file_descr) fl test1_pi mst1 =
 let mst2 : mst = {
   cst = list file_descr;
   models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+  initial = [];
+  update = magic(); // IOU
 }
 
 let test2_pi : policy_spec = (fun _ _ _ _ -> true)
@@ -195,6 +199,8 @@ let test2_ctx_t #fl sec_io cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt t
 let mst3 : mst = {
   cst = list file_descr;
   models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+  initial = [];
+  update = magic();
 }
 
 let test3_pi : policy_spec = (fun _ _ _ _ -> true)
