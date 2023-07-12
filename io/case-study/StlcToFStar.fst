@@ -399,6 +399,16 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
   | EStringLit s ->
        FStar.Universe.raise_val s
 
+let rec exp_to_fstar' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
+  : (typ_to_fstar t 'f 'p 'm) =
+  match e with
+  | ELam t1 e1 ->
+       let TyLam t1' #_ #t2 h1 = h in
+       assert (t1' == t1);
+       assert (t == TArr t1 t2);
+       let w : typ_to_fstar t1 'f 'p 'm -> MIOpi (typ_to_fstar t2 'f 'p 'm) 'f 'p 'm =
+         (fun x -> exp_to_fstar (extend t1 g) e1 t2 h1 (vextend x ve)) in
+       cast_TArr w
 
 open Compiler.Model1
 
@@ -423,7 +433,7 @@ let handler_env =
   (extend (TArr TBytes (TSum TUnit TExn)) (*send *) 
   (extend TBytes empty))))) (* req *)
 
-let bt_ctx (e:exp) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#pi:policy_spec) (#mst:mst) (sec_io:io_lib fl pi mst Ctx) (_:Universe.raise_t u#0 u#1 unit) : MIOpi (typ_to_fstar t fl pi mst) fl pi mst =
+let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#pi:policy_spec) (#mst:mst) (sec_io:io_lib fl pi mst Ctx) : (typ_to_fstar t fl pi mst) =
    let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl pi _ = fun fdb ->
      let fd = FStar.Universe.downgrade_val (fst fdb) in
      let b = FStar.Universe.downgrade_val (snd fdb) in
@@ -444,7 +454,7 @@ let bt_ctx (e:exp) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#pi:policy
      vextend #fl #mst #pi #(TArr TUnit (TSum TFDesc TExn)) socket (
      vextend #fl #mst #pi #(TArr (TPair TFDesc TBytes) (TSum TUnit TExn)) write (
      vempty #fl #pi #mst))) in
-   exp_to_fstar ctx_env e t h ctx_venv
+   exp_to_fstar' ctx_env e t h ctx_venv
 
 let bt_handler (e:exp) (h:typing handler_env e (TSum TUnit TExn)) : tgt_handler =
  fun #fl sec_io (client : int) (req : Bytes.bytes) (send : Bytes.bytes -> MIOpi (either unit exn) fl pi _) ->

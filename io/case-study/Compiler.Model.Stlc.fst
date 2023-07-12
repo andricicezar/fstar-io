@@ -79,7 +79,7 @@ type src_interface = {
 
 
   wct : Stlc.typ;
-  _c : fl:erased tflag -> Lemma ((ct_importable fl).ityp == (Stlc.typ_to_fstar (Stlc.TArr Stlc.TUnit wct) fl pi mst));
+  _c : fl:erased tflag -> Lemma ((ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl pi mst));
 
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
@@ -114,8 +114,8 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = e:Stlc.exp & Stlc.typing Stlc.ctx_env e i.ct
-type prog_tgt (i:tgt_interface) = (Stlc.typ_to_fstar (Stlc.TArr Stlc.TUnit i.ct) AllActions i.pi i.mst) -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
+type ctx_tgt (i:tgt_interface) = e:Stlc.exp{Stlc.ELam? e} & Stlc.typing Stlc.ctx_env e i.ct
+type prog_tgt (i:tgt_interface) = (Stlc.typ_to_fstar i.ct AllActions i.pi i.mst) -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
@@ -144,7 +144,7 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 }
 
 (** ** Compilation **)
-let convert (i:src_interface) fl (c:(Stlc.typ_to_fstar (Stlc.TArr Stlc.TUnit i.wct) fl i.pi i.mst)) : (i.ct_importable fl).ityp =
+let convert (i:src_interface) fl (c:(Stlc.typ_to_fstar i.wct fl i.pi i.mst)) : (i.ct_importable fl).ityp =
   i._c fl;
  c
 
@@ -231,6 +231,8 @@ let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) =
 
 module WS = WebServer
 
+let wct = Stlc.TArr Stlc.TFDesc (Stlc.TArr Stlc.TBytes (Stlc.TArr (Stlc.TArr Stlc.TBytes (Stlc.TSum Stlc.TUnit Stlc.TExn)) (Stlc.TSum Stlc.TUnit Stlc.TExn)))
+
 let test : src_interface = {
   mst = WS.cs_int.mst;
   pi = WS.cs_int.pi;
@@ -239,8 +241,8 @@ let test : src_interface = {
   ct_dcs = WS.cs_int.ct_dcs;
   ct_importable = (fun fl -> WS.cs_int.ct_importable fl);
 
-  wct = Stlc.TUnit; // TODO: write the proper type here
-  _c = (fun fl -> (** TODO: probably unprovable because of the thunk *) admit ());
+  wct = wct; // TODO: write the proper type here
+  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst)) // universe problems);
 
   psi = WS.cs_int.psi;
 }
