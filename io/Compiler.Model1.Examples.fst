@@ -74,8 +74,30 @@ let test1_c1post =
     | e :: tail -> aux (e::h) tail) in
   Classical.forall_intro_2 (Classical.move_requires_2 aux)
 
-assume val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_rc
-// let test1_c2post = ()
+let rec enforced_locally_test1_pi_nopass h lt fd :
+  Lemma
+    (requires enforced_locally test1_pi h lt)
+    (ensures ~((EOpenfile Ctx "/etc/passwd" fd) `memP` lt))
+    (decreases lt)
+= match lt with
+  | EOpenfile Ctx "/etc/passwd" fd' :: tl ->
+    if fd = fd'
+    then ()
+    else enforced_locally_test1_pi_nopass (EOpenfile Ctx "/etc/passwd" fd' :: h) tl fd
+  | e :: tl ->
+    enforced_locally_test1_pi_nopass (e :: h) tl fd
+  | [] -> ()
+
+val test1_c2post : c2typ test1_pre test1_post test1_pi test1_ct_rc
+let test1_c2post =
+  introduce forall s0 s1 x h r lt . s0 `mst1.models` h /\ s1 `mst1.models` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_pi h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
+  with begin
+    introduce s0 `mst1.models` h /\ s1 `mst1.models` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_pi h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
+    with _. begin
+      introduce forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `memP` lt)
+      with enforced_locally_test1_pi_nopass h lt fd'
+    end
+  end
 
 #set-options "--print_implicits"
 
