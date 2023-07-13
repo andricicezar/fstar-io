@@ -226,3 +226,23 @@ let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) =
   Classical.forall_intro_2 comp_rrhc_0
 
 
+
+(**** Instantiate Model **)
+
+module WS = WebServer
+
+let wct = Stlc.TArr Stlc.TFDesc (Stlc.TArr Stlc.TBytes (Stlc.TArr (Stlc.TArr Stlc.TBytes (Stlc.TSum Stlc.TUnit Stlc.TExn)) (Stlc.TSum Stlc.TUnit Stlc.TExn)))
+
+let test : src_interface = {
+  mst = WS.cs_int.mst;
+  pi = WS.cs_int.pi;
+  phi = WS.cs_int.phi;
+  ct = WS.cs_int.ct;
+  ct_dcs = WS.cs_int.ct_dcs;
+  ct_importable = (fun fl -> WS.cs_int.ct_importable fl);
+
+  wct = wct; // TODO: write the proper type here
+  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst)) // universe problems);
+
+  psi = WS.cs_int.psi;
+}
