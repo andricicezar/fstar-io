@@ -88,17 +88,17 @@ let inv1 (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd 
 val pre1_inv1 : (fd:file_descr) -> squash (forall h lt. pre1 fd h /\ inv1 fd lt ==> pre1 fd (rev_acc lt h))
 let pre1_inv1 fd = ()
 
-let body1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> terminates r /\ inv1 fd (_trace r))
-let loop1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> diverges r /\ repeat_inv_post (inv1 fd) r)
+let ibody1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> terminates r /\ inv1 fd (_trace r))
+let iloop1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> diverges r /\ repeat_inv_post (inv1 fd) r)
 
-let test1 (fd:file_descr) =
+let itest1 (fd:file_descr) : Lemma (i_iter (lift_body #file_descr (ibody1 fd) #unit) () `ile` (iloop1 fd)) =
   pre1_inv1 fd;
-  let body' = lift_body #file_descr (body1 fd) #unit in
+  let body' = lift_body #file_descr (ibody1 fd) #unit in
   let body_inv = repeat_body_inv #unit (fun _ -> pre1 fd) (inv1 fd) in
   assert (body' () `ile` body_inv ());
   i_iter_mono #unit body' body_inv ();
   assert ((i_iter body' ()) `ile` (i_iter body_inv ()));
   repeat_inv_proof (fun _ -> (pre1 fd)) (inv1 fd) () ;
   assert (i_iter body_inv () `ile` repeat_inv (fun _ -> (pre1 fd)) (inv1 fd) ());
-  assert (repeat_inv (fun _ -> (pre1 fd)) (inv1 fd) () `ile` (loop1 fd));
-  assert (i_iter body' () `ile` (loop1 fd))
+  assert (repeat_inv (fun _ -> (pre1 fd)) (inv1 fd) () `ile` (iloop1 fd));
+  assert (i_iter body' () `ile` (iloop1 fd))
