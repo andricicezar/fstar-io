@@ -1,4 +1,4 @@
-module TestTauIODiv
+module TauIODiv.Test
 
 open FStar.List.Tot
 open FStar.List.Tot.Properties
@@ -34,7 +34,7 @@ let close' = act_call Close
 let ho_test () :
   IODiv unit
     (requires (fun _ -> True))
-    (ensures (fun _ _ -> True)) by (explode (); dump "H") =
+    (ensures (fun _ _ -> True)) =
   (** this checks instantly -- 5 goals **)
   //let _ = open_file "test.txt" in
   (** this takes a little bit longer -- 56 goals **)
