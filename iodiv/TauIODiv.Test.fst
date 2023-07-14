@@ -141,6 +141,58 @@ let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures f
     if b && x = "" then true else false
   ) false
 
+
+
+let body (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ 
+  (exists s. ret_trace r == [ERead fd s])) =
+  let msg = read fd in
+  ()
+
+let _repeat_with_inv 
+  (#pre:trace -> Type0)
+  (#inv:(trace -> Type0){forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)})
+  (body : iodiv_dm unit (iprepost (fun hist -> pre hist) (fun hist r -> terminates r /\ inv (ret_trace r)))) :
+  iodiv_dm
+    unit
+    (iprepost
+      (fun hist -> pre hist)
+      (fun hist r -> diverges r /\ repeat_inv_post inv r)
+    )
+= _repeat_with_inv_aux pre inv (dm_bind body (fun _ -> dm_ret (Inl ())))
+
+[@"opaque_to_smt"]
+let repeat_with_inv 
+  (#pre:trace -> Type0)
+  (#inv:trace -> Type0)
+  (#c1:squash (forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)))
+  (body : unit -> IODiv unit pre (ensures fun hist r -> terminates r /\ inv (ret_trace r))) :
+  IODiv
+    unit
+    (requires fun hist -> pre hist)
+    (ensures fun hist r -> diverges r /\ repeat_inv_post inv r)
+= IODIV?.reflect (_repeat_with_inv #pre #inv (reify (body ())))
+
+[@"opaque_to_smt"]
+let myinv (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd s]
+
+[@"opaque_to_smt"]
+let mypre (fd:file_descr) : trace -> Type0 = fun h -> is_open fd h
+
+assume val yes : (fd:file_descr) -> squash (forall h lt. mypre fd h /\ myinv fd lt ==> mypre fd (rev_acc lt h))
+
+[@"opaque_to_smt"]
+let body' (fd : file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> terminates r /\ myinv fd (ret_trace r)) =
+  reveal_opaque (`%mypre) mypre;
+  reveal_opaque (`%myinv) myinv;
+  body fd
+  
+let repeat_loop_body (fd : file_descr) : IODiv unit (mypre fd) (ensures fun hist r -> diverges r /\ repeat_inv_post (myinv fd) r) =
+  admit ();
+  repeat_with_inv #(mypre fd) #(myinv fd) #(yes fd) (body' fd)
+//  repeat  (fun tr -> (exists s. tr == [ERead fd s])) body fd 
+  
+
+
 let repeat_test_aux1 (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r /\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r)
 // by (explode () ; bump_nth 12 ; dump "hh")
 = admit () ;
