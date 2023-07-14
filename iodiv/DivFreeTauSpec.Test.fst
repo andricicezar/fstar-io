@@ -1,8 +1,10 @@
 module DivFreeTauSpec.Test
 
 open FStar.Tactics
+open FStar.List.Tot
 
 open DivFreeTauSpec
+open IIOSig
 open IIOSigSpec
 
 (** 
@@ -54,3 +56,49 @@ let _ = assert (i_bind (i_open "test.txt") (fun _ -> i_ret ()) `ile` r_cv)
   
 [@expect_failure]
 let _ = assert (i_bind (i_open "test.txt") (fun _ -> i_ret ()) `ile` r_div) by (norm [delta_only [`%r_div;`%iprepost;`%i_ret;`%ishift_post;`%as_iwp;`%ishift_post;`%ret_fin_trace];zeta]; explode (); bump_nth 2; compute ();explode (); dump "H")
+
+(** *** Iter **)
+let lift_body (w:iwp 'a) (#index:Type0) : index -> iwp (either index unit) =
+  (fun i -> i_bind w (fun _ -> i_ret (Inl i)))
+
+assume val pre0 : trace -> Type0
+assume val inv0 : trace -> Type0
+assume val pre0_inv0 : unit -> Lemma (forall h lt. pre0 h /\ inv0 lt ==> pre0 (rev_acc lt h))
+
+let body0 : iwp unit = iprepost pre0 (fun h r -> terminates r /\ inv0 (_trace r))
+let loop0 = iprepost pre0 (fun h r -> diverges r /\ repeat_inv_post inv0 r)
+
+let body0' : iwp unit =
+  iprepost pre0 (fun hist r -> terminates r /\ pre0 (rev_acc (ret_trace r) hist) /\ inv0 (ret_trace r))
+
+let _ =
+  pre0_inv0 ();
+  let body' = lift_body body0 in
+  let body_inv = repeat_body_inv #unit (fun _ -> pre0) inv0 in
+  assert (body' () `ile` body_inv ());
+  i_iter_mono #unit body' body_inv ();
+  assert ((i_iter body' ()) `ile` (i_iter body_inv ()));
+  repeat_inv_proof (fun _ -> pre0) inv0 () ;
+  assert (i_iter body_inv () `ile` repeat_inv (fun _ -> pre0) inv0 ());
+  assert (repeat_inv (fun _ -> pre0) inv0 () `ile` loop0);
+  assert (i_iter body' () `ile` loop0)
+
+let pre1 (fd:file_descr) : trace -> Type0 = fun h -> is_open fd h
+let inv1 (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd s]
+val pre1_inv1 : (fd:file_descr) -> squash (forall h lt. pre1 fd h /\ inv1 fd lt ==> pre1 fd (rev_acc lt h))
+let pre1_inv1 fd = ()
+
+let body1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> terminates r /\ inv1 fd (_trace r))
+let loop1 (fd:file_descr) = iprepost (pre1 fd) (fun h r -> diverges r /\ repeat_inv_post (inv1 fd) r)
+
+let test1 (fd:file_descr) =
+  pre1_inv1 fd;
+  let body' = lift_body #file_descr (body1 fd) #unit in
+  let body_inv = repeat_body_inv #unit (fun _ -> pre1 fd) (inv1 fd) in
+  assert (body' () `ile` body_inv ());
+  i_iter_mono #unit body' body_inv ();
+  assert ((i_iter body' ()) `ile` (i_iter body_inv ()));
+  repeat_inv_proof (fun _ -> (pre1 fd)) (inv1 fd) () ;
+  assert (i_iter body_inv () `ile` repeat_inv (fun _ -> (pre1 fd)) (inv1 fd) ());
+  assert (repeat_inv (fun _ -> (pre1 fd)) (inv1 fd) () `ile` (loop1 fd));
+  assert (i_iter body' () `ile` (loop1 fd))
