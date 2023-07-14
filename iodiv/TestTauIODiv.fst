@@ -41,13 +41,13 @@ let ho_test () :
   // let _ = open_file' "test.txt" in
   (** this takes a long time -- 205 goals // It's now only 23! **)
   let _ = act_call Openfile "test.txt" in
-  ()
+  () // TODO: when exploding, a weird goal Odv? (Ocv [] ())
 
 let ho_test'
   (f : (unit -> IODiv unit (fun h -> True) (fun h r -> True))) :
   IODiv unit
     (requires (fun _ -> True))
-    (ensures (fun _ _ -> True)) by (explode (); dump "H") =
+    (ensures (fun _ _ -> True)) =
   let _ = f () in
   (** this checks instantly -- 10 goals **)
   //let _ = open_file "test.txt" in
@@ -121,8 +121,14 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
 let repeat_open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) =
   repeat_with_inv #(fun _ -> True) #(fun _ -> True) (fun _ -> open_close_test s)
 
-let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> True) =
-  repeat_with_inv #(fun hist -> True) #(fun tr -> True) t
+let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> diverges r
+  // /\ False (** does not work **)
+) =
+  repeat_with_inv #(fun hist -> True) #(fun tr -> True) (fun () -> t ());
+  (** I think the explanation of this is that this is to
+      be expected since iwp_bind just throws the continuition
+      because the current spec diverges.**)
+  assert (False)
 
 // Afterwards find an example with a real invariant
 let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r)

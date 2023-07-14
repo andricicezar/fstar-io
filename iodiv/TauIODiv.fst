@@ -41,7 +41,6 @@ let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (
 let iodiv_iter #index #a #w (f : (j : index) -> iodiv_dm (either index a) (w j)) (i : index) : iodiv_dm a (i_iter w i) =
   dm_iter f i
 
-[@@allow_informative_binders]
 reflectable reifiable total layered_effect {
   IODIV : a:Type -> w:iwp a -> Effect
   with
@@ -115,8 +114,7 @@ let _repeat #a (pre : a -> i_pre) inv (body : (x:a) -> iodiv_dm a (iprepost (fun
       (fun hist -> pre x hist)
       (fun hist r -> diverges r /\ repeat_inv_post inv r)
     )
-by (explode ())
-= _repeat_aux pre inv (fun y -> dm_subcomp (dm_bind (body y) (fun z -> dm_ret (Inl z)))) x
+= _repeat_aux pre inv (fun y -> iodiv_subcomp _ _ _ (dm_bind (body y) (fun z -> dm_ret (Inl z)))) x
 
 let repeat #a pre inv (body : (x:a) -> IODiv a (requires fun hist -> pre x hist) (ensures fun hist r -> terminates r /\ pre (result r) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (x : a) :
   IODiv
