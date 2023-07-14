@@ -373,9 +373,11 @@ let ishift_post_app #a t t' (p : i_post a) :
 
 let i_bind_post' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
-    match r with
-    | Cv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
-    | Dv st -> post (Dv st)
+    (terminates r ==> wf (result r) (ishift_post (ret_fin_trace r) post) (rev_acc (_trace r) hist)) /\
+    (diverges r ==> post (Dv (_trace r)))
+//    match r with
+//    | Cv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
+//    | Dv st -> post (Dv st)
 
 let i_bind_post #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
   introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
@@ -672,6 +674,7 @@ let inf_trace_refines_prepend_None (tr : fin_trace) (s : inf_trace) (trs : strea
   end ;
   reveal_opaque (`%inf_trace_refines) inf_trace_refines
 
+#push-options "--split_queries always"
 let inf_trace_refines_prepend (tr : fin_trace) (s : inf_trace) (trs : stream trace) :
   Lemma
     (requires s `inf_trace_refines` trs)
@@ -729,6 +732,7 @@ let inf_trace_refines_prepend (tr : fin_trace) (s : inf_trace) (trs : stream tra
     end
   end ;
   reveal_opaque (`%inf_trace_refines) inf_trace_refines
+#pop-options
 
 let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : idx) (tr : fin_trace) (trs : stream trace) (s : inf_trace) :
   Lemma
@@ -770,6 +774,7 @@ let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post
   end ;
   reveal_opaque (`%repeat_inv_post) repeat_inv_post
 
+#push-options "--split_queries always"
 let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) :
   Lemma (i_iter (repeat_body_inv pre inv) i `ile` repeat_inv pre inv i)
 = introduce forall j. iter_expand (repeat_body_inv pre inv) j (fun j -> repeat_inv pre inv j) `ile` repeat_inv pre inv j
@@ -796,7 +801,8 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
             i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
           with _. begin
             match r with
-            | Cv tr (Inl jj) ->
+            | Cv tr (Inl jj) -> ();
+            (**
               calc (==) {
                 i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r ;
                 == {}
@@ -811,7 +817,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
                 repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc [] (rev_acc (to_trace tr) hist)) ;
                 == { _ by (compute ()) }
                 repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist) ;
-              } ;
+              } ;**)
               repeat_inv_expand pre inv post hist j jj tr
           end
         end
@@ -819,6 +825,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
     end
   end ;
   i_iter_coind (repeat_body_inv pre inv) i (fun j -> repeat_inv pre inv j)
+#pop-options
 
 (** Using implications rather than match *)
 
