@@ -964,3 +964,13 @@ unfold let _i_bind = i_bind_alt
 
 // [@@ (postprocess_with (pp_unfold [ `%i_bind_alt2 ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
 // unfold let _i_bind = i_bind_alt2
+
+
+let test1 : iwp unit =
+  iprepost (fun _ -> True) (fun h r -> diverges r)
+
+let testfalse : iwp unit =
+  iprepost (fun _ -> False) (fun h r -> True)
+
+// TODO: is this surprising?
+let d = assert (test1 `ile` i_bind test1 (fun _ -> testfalse))
