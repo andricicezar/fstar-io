@@ -372,8 +372,8 @@ let i_unlift_lift #a (w : iwp a) :
     introduce forall r. post r ==> i_bind_post (fun x -> i_ret (LiftTy x)) (i_bind_post (fun x -> i_ret (unLift x)) post hist) hist r
     with begin
       match r with
-      | Ocv tr x -> ()
-      | Odv s -> ()
+      | Cv tr x -> ()
+      | Dv s -> ()
     end ;
     assert (post `i_post_le` i_bind_post (fun x -> i_ret (LiftTy x)) (i_bind_post (fun x -> i_ret (unLift x)) post hist) hist)
   end
@@ -412,7 +412,7 @@ let dm_iter #sg #w_act #index #b #w (f : (j : index) -> dm sg w_act (either inde
 unfold
 let w_lift_pure #a (w : pure_wp a) : iwp a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall () ;
-  fun post hist -> w (fun x -> post (Ocv [] x))
+  fun post hist -> w (fun x -> post (Cv [] x))
 
 let elim_pure #a #w (f : unit -> PURE a w) :
   Pure
@@ -424,9 +424,9 @@ let elim_pure #a #w (f : unit -> PURE a w) :
 
 let as_requires_w_lift_pure #a (w : pure_wp a) :
   Lemma (forall post hist. w_lift_pure w post hist ==> as_requires w)
-= assert (forall post (x : a). post (Ocv [] x) ==> True) ;
+= assert (forall post (x : a). post (Cv [] x) ==> True) ;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity w ;
-  assert (forall post. w (fun x -> post (Ocv [] x)) ==> w (fun _ -> True))
+  assert (forall post. w (fun x -> post (Cv [] x)) ==> w (fun _ -> True))
 
 let dm_lift_pure #sg #w_act (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : dm sg w_act a (w_lift_pure w) =
   as_requires_w_lift_pure w ;

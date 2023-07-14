@@ -16,47 +16,47 @@ open IIOSig
 
 (** Traces with silent steps (Tau) *)
 
-type otrace =
+type fin_trace =
   list (option event)
 
-type sotrace =
+type inf_trace =
   stream (option event)
 
-let rec to_trace (t : otrace) : trace =
+let rec to_trace (t : fin_trace) : trace =
   match t with
   | [] -> []
   | Some e :: t -> e :: to_trace t
   | None :: t -> to_trace t
 
 [@"opaque_to_smt"]
-let embeds (p q : sotrace) =
+let embeds (p q : inf_trace) =
   forall (n : nat). exists (m : nat). to_trace (stream_trunc q n) == to_trace (stream_trunc p m)
 
-let uptotau (p q : sotrace) =
+let uptotau (p q : inf_trace) =
   p `embeds` q /\ q `embeds` p
 
-let rec to_trace_append (t t' : otrace) :
+let rec to_trace_append (t t' : fin_trace) :
   Lemma (to_trace (t @ t') == to_trace t @ to_trace t')
 = match t with
   | [] -> ()
   | Some e :: t -> to_trace_append t t'
   | None :: t -> to_trace_append t t'
 
-let embeds_inst (p q : sotrace) (n : nat) :
+let embeds_inst (p q : inf_trace) (n : nat) :
   Lemma
     (requires p `embeds` q)
     (ensures exists (m : nat). to_trace (stream_trunc q n) == to_trace (stream_trunc p m))
 = reveal_opaque (`%embeds) embeds
 
-let embeds_refl (p : sotrace) :
+let embeds_refl (p : inf_trace) :
   Lemma (p `embeds` p)
 = reveal_opaque (`%embeds) embeds
 
-let uptotau_refl (p : sotrace) :
+let uptotau_refl (p : inf_trace) :
   Lemma (p `uptotau` p)
 = embeds_refl p
 
-let rec to_trace_firstn (t : otrace) (n : nat) :
+let rec to_trace_firstn (t : fin_trace) (n : nat) :
   Lemma (exists (m : nat). to_trace (firstn n t) == firstn m (to_trace t))
 = match t with
   | [] -> ()
@@ -99,7 +99,7 @@ let rec to_trace_firstn (t : otrace) (n : nat) :
       end
     end
 
-let rec firstn_to_trace (t : otrace) (n : nat) :
+let rec firstn_to_trace (t : fin_trace) (n : nat) :
   Lemma (exists (m : nat). firstn n (to_trace t) == to_trace (firstn m t))
 = match t with
   | [] -> ()
@@ -142,7 +142,7 @@ let rec firstn_to_trace (t : otrace) (n : nat) :
       end
     end
 
-let embeds_prepend (t t' : otrace) (s s' : sotrace) :
+let embeds_prepend (t t' : fin_trace) (s s' : inf_trace) :
   Lemma
     (requires to_trace t == to_trace t' /\ s `embeds` s')
     (ensures stream_prepend t s `embeds` stream_prepend t' s')
@@ -207,7 +207,7 @@ let embeds_prepend (t t' : otrace) (s s' : sotrace) :
   end ;
   reveal_opaque (`%embeds) embeds
 
-let uptotau_prepend (t t' : otrace) (s s' : sotrace) :
+let uptotau_prepend (t t' : fin_trace) (s s' : inf_trace) :
   Lemma
     (requires to_trace t == to_trace t' /\ s `uptotau` s')
     (ensures stream_prepend t s `uptotau` stream_prepend t' s')
@@ -217,15 +217,15 @@ let uptotau_prepend (t t' : otrace) (s s' : sotrace) :
 (** Converging or diverging run *)
 noeq
 type orun a =
-| Ocv : otrace -> a -> orun a
-| Odv : sotrace -> orun a
+| Cv : fin_trace -> a -> orun a
+| Dv : inf_trace -> orun a
 
 (** Equivalence up to tau *)
 
 let eutt #a (r r' : orun a) : Type0 =
   match r, r' with
-  | Ocv t x, Ocv t' x' -> to_trace t == to_trace t' /\ x == x'
-  | Odv s, Odv s' -> s `uptotau` s'
+  | Cv t x, Cv t' x' -> to_trace t == to_trace t' /\ x == x'
+  | Dv s, Dv s' -> s `uptotau` s'
   | _, _ -> False
 
 (** Specification monad *)
@@ -294,56 +294,57 @@ let as_iwp #a (w : iwp' a) : Pure (iwp a) (requires iwp_monotonic w) (ensures fu
 
 unfold
 let terminates #a : i_post a =
-  as_i_post (fun r -> Ocv? r)
+  as_i_post (fun r -> Cv? r)
 
 unfold
 let diverges #a : i_post a =
-  as_i_post (fun r -> Odv? r)
+  as_i_post (fun r -> Dv? r)
 
-let ret_otrace #a (r : orun a) : Pure otrace (requires terminates r) (ensures fun _ -> True) =
+let ret_fin_trace #a (r : orun a) : Pure fin_trace (requires terminates r) (ensures fun _ -> True) =
   match r with
-  | Ocv tr x -> tr
+  | Cv tr x -> tr
 
 let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun _ -> True) =
   match r with
-  | Ocv tr x -> to_trace tr
+  | Cv tr x -> to_trace tr
 
 let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
   match r with
-  | Ocv tr x -> x
+  | Cv tr x -> x
 
-let inf_trace #a (r : orun a) : Pure sotrace (requires diverges r) (ensures fun _ -> True) =
-  match r with
-  | Odv p -> p
+let _trace (tr : orun 'a) : (match tr with | Cv _ _ -> trace | Dv _ -> inf_trace) =
+  match tr with
+  | Cv tr _ -> to_trace tr
+  | Dv tr -> tr
 
 (** Specifications *)
 
 let i_ret #a (x : a) : iwp a =
-  as_iwp (fun post hist -> post (Ocv [] x))
+  as_iwp (fun post hist -> post (Cv [] x))
 
-let ishift_post' #a (tr : otrace) (post : i_post a) : i_post' a =
+let ishift_post' #a (tr : fin_trace) (post : i_post a) : i_post' a =
   fun r ->
-    (terminates r ==> post (Ocv (tr @ ret_otrace r) (result r))) /\
-    (diverges r ==> post (Odv (stream_prepend tr (inf_trace r))))
+    (terminates r ==> post (Cv (tr @ ret_fin_trace r) (result r))) /\
+    (diverges r ==> post (Dv (stream_prepend tr (_trace r))))
     // match r with
-    // | Ocv tr' x -> post (Ocv (tr @ tr') x)
-    // | Odv st -> post (Odv (stream_prepend tr st))
+    // | Cv tr' x -> post (Cv (tr @ tr') x)
+    // | Dv st -> post (Dv (stream_prepend tr st))
 
-let ishift_post #a (tr : otrace) (post : i_post a) : i_post a =
+let ishift_post #a (tr : fin_trace) (post : i_post a) : i_post a =
   introduce forall r r'. r `eutt` r' /\ ishift_post' tr post r ==> ishift_post' tr post r'
   with begin
     introduce r `eutt` r' /\ ishift_post' tr post r ==> ishift_post' tr post r'
     with _. begin
       match r, r' with
-      | Ocv t x, Ocv t' x' ->
+      | Cv t x, Cv t' x' ->
         to_trace_append tr t ;
         to_trace_append tr t' ;
-        assert (Ocv (tr @ t) x `eutt` Ocv (tr @ t') x') ;
-        i_post_resp_eutt post (Ocv (tr @ t) x) (Ocv (tr @ t') x')
-      | Odv s, Odv s' ->
+        assert (Cv (tr @ t) x `eutt` Cv (tr @ t') x') ;
+        i_post_resp_eutt post (Cv (tr @ t) x) (Cv (tr @ t') x')
+      | Dv s, Dv s' ->
         uptotau_prepend tr tr s s' ;
-        assert (Odv (stream_prepend tr s) `eutt #a` Odv (stream_prepend tr s')) ;
-        i_post_resp_eutt post (Odv (stream_prepend tr s)) (Odv (stream_prepend tr s'))
+        assert (Dv (stream_prepend tr s) `eutt #a` Dv (stream_prepend tr s')) ;
+        i_post_resp_eutt post (Dv (stream_prepend tr s)) (Dv (stream_prepend tr s'))
     end
   end ;
   ishift_post' tr post
@@ -353,8 +354,8 @@ let ishift_post_nil #a (post : i_post a) :
 = introduce forall r. ishift_post [] post r ==> post r
   with begin
     match r with
-    | Ocv tr x -> ()
-    | Odv s -> stream_prepend_nil s ; stream_ext (stream_prepend [] s) s
+    | Cv tr x -> ()
+    | Dv s -> stream_prepend_nil s ; stream_ext (stream_prepend [] s) s
   end
 
 let ishift_post_mono a tr :
@@ -366,15 +367,15 @@ let ishift_post_app #a t t' (p : i_post a) :
 = introduce forall r. ishift_post (t' @ t) p r ==> ishift_post t (ishift_post t' p) r
   with begin
     match r with
-    | Ocv tr x -> append_assoc t' t tr
-    | Odv st -> stream_prepend_app t' t st
+    | Cv tr x -> append_assoc t' t tr
+    | Dv st -> stream_prepend_app t' t st
   end
 
 let i_bind_post' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
     match r with
-    | Ocv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
-    | Odv st -> post (Odv st)
+    | Cv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
+    | Dv st -> post (Dv st)
 
 let i_bind_post #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
   introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
@@ -382,27 +383,27 @@ let i_bind_post #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
     introduce r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
     with _. begin
       match r, r' with
-      | Ocv t x, Ocv t' x' ->
+      | Cv t x, Cv t' x' ->
         introduce forall r. ishift_post t post r ==> ishift_post t' post r
         with begin
           introduce ishift_post t post r ==> ishift_post t' post r
           with _. begin
             match r with
-            | Ocv tr y ->
+            | Cv tr y ->
               to_trace_append t tr ;
               to_trace_append t' tr ;
-              assert (Ocv (t @ tr) y `eutt` Ocv (t' @ tr) y) ;
-              i_post_resp_eutt post (Ocv (t @ tr) y) (Ocv (t' @ tr) y)
-            | Odv s ->
+              assert (Cv (t @ tr) y `eutt` Cv (t' @ tr) y) ;
+              i_post_resp_eutt post (Cv (t @ tr) y) (Cv (t' @ tr) y)
+            | Dv s ->
               uptotau_refl s ;
               uptotau_prepend t t' s s ;
-              assert (Odv (stream_prepend t s) `eutt #a` Odv (stream_prepend t' s)) ;
-              i_post_resp_eutt post (Odv (stream_prepend t s)) (Odv (stream_prepend t' s))
+              assert (Dv (stream_prepend t s) `eutt #a` Dv (stream_prepend t' s)) ;
+              i_post_resp_eutt post (Dv (stream_prepend t s)) (Dv (stream_prepend t' s))
           end
         end ;
         iwp_monotonic_inst (wf x) (ishift_post t post) (ishift_post t' post) (rev_acc (to_trace t) hist)
-      | Odv s, Odv s' ->
-        i_post_resp_eutt post (Odv s) (Odv s')
+      | Dv s, Dv s' ->
+        i_post_resp_eutt post (Dv s) (Dv s')
     end
   end ;
   i_bind_post' wf post hist
@@ -414,11 +415,11 @@ let i_bind_post_mono #a #b (wf : a -> iwp b) p q hist :
 = introduce forall r. i_bind_post wf p hist r ==> i_bind_post wf q hist r
   with begin
     match r with
-    | Ocv tr x ->
+    | Cv tr x ->
       ishift_post_mono b tr ;
       assert (ishift_post tr p `i_post_le` ishift_post tr q) ;
       assert (wf x (ishift_post tr p) (rev_acc (to_trace tr) hist) ==> wf x (ishift_post tr q) (rev_acc (to_trace tr) hist))
-    | Odv s -> ()
+    | Dv s -> ()
   end
 
 let i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
@@ -453,11 +454,11 @@ let i_bind_assoc #a #b #c (w : iwp a) (wf : a -> iwp b) (wg : b -> iwp c) :
     introduce forall r. i_bind_post wf (i_bind_post wg post hist) hist r ==> i_bind_post (fun x -> i_bind (wf x) wg) post hist r
     with begin
       match r with
-      | Ocv tr x ->
+      | Cv tr x ->
         introduce forall r'. ishift_post tr (i_bind_post wg post hist) r' ==> i_bind_post wg (ishift_post tr post) (rev_acc (to_trace tr) hist) r'
         with begin
           match r' with
-          | Ocv tr' y ->
+          | Cv tr' y ->
             to_trace_append tr tr' ;
             rev_acc_rev' (to_trace tr @ to_trace tr') hist ; // rev_acc (to_trace tr @ to_trace tr') hist == rev' (to_trace tr @ to_trace tr') @ hist
             rev'_append (to_trace tr) (to_trace tr') ; // == (rev' (to_trace tr') @ rev' (to_trace tr)) @ hist
@@ -465,10 +466,10 @@ let i_bind_assoc #a #b #c (w : iwp a) (wf : a -> iwp b) (wg : b -> iwp c) :
             rev_acc_rev' (to_trace tr) hist ; // == rev' (to_trace tr') @ rev_acc (to_trace tr) hist
             rev_acc_rev' (to_trace tr') (rev_acc (to_trace tr) hist) ; // == rev_acc (to_trace tr') (rev_acc (to_trace tr) hist)
             ishift_post_app tr' tr post
-          | Odv st -> ()
+          | Dv st -> ()
         end ;
         assert (ishift_post tr (i_bind_post wg post hist) `i_post_le` i_bind_post wg (ishift_post tr post) (rev_acc (to_trace tr) hist))
-      | Odv st -> ()
+      | Dv st -> ()
     end ;
     assert (i_bind_post wf (i_bind_post wg post hist) hist `i_post_le` i_bind_post (fun x -> i_bind (wf x) wg) post hist)
   end
@@ -478,8 +479,8 @@ let i_bind_post_ret #a (post : i_post a) hist :
 = introduce forall r. i_bind_post i_ret post hist r <==> post r
   with begin
     match r with
-    | Ocv tr x -> ()
-    | Odv st -> ()
+    | Cv tr x -> ()
+    | Dv st -> ()
   end
 
 let i_bind_ret #a (w : iwp a) :
@@ -496,14 +497,14 @@ let i_bind_ret #a (w : iwp a) :
   end
 
 let i_req (pre : pure_pre) : iwp (squash pre) =
-  as_iwp (fun post hist -> pre /\ post (Ocv [] (Squash.get_proof pre)))
+  as_iwp (fun post hist -> pre /\ post (Cv [] (Squash.get_proof pre)))
 
 unfold
 let iwite #a (w1 w2 : iwp a) (b : bool) : iwp a =
   fun post hist -> (b ==> w1 post hist) /\ (~ b ==> w2 post hist)
 
 let i_tau : iwp unit =
-  as_iwp (fun post hist -> post (Ocv [ None ] ()))
+  as_iwp (fun post hist -> post (Cv [ None ] ()))
 
 (** Specification of iter using an impredicative encoding *)
 
@@ -622,33 +623,33 @@ let repeat_body_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : in
   iprepost (pre i) (fun hist r -> terminates r /\ Inl? (result r) /\ pre (lval (result r)) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))
 
 [@"opaque_to_smt"]
-let sotrace_refines (s : sotrace) (trs : stream trace) =
+let inf_trace_refines (s : inf_trace) (trs : stream trace) =
   forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
 
-let sotrace_refine_inst (s : sotrace) (trs : stream trace) (n : nat) :
+let inf_trace_refine_inst (s : inf_trace) (trs : stream trace) (n : nat) :
   Lemma
-    (requires s `sotrace_refines` trs)
+    (requires s `inf_trace_refines` trs)
     (ensures exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k))
-= reveal_opaque (`%sotrace_refines) sotrace_refines
+= reveal_opaque (`%inf_trace_refines) inf_trace_refines
 
 [@"opaque_to_smt"]
 let repeat_inv_post (inv : trace -> Type0) (r : orun unit { diverges r }) =
-  exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs
+  exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs
 
 let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
   iprepost (pre i) (fun hist r -> diverges r /\ repeat_inv_post inv r)
 
-let repeat_inv_inst #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) (post : i_post unit) hist (s : sotrace) (trs : stream trace) :
-  Lemma (requires repeat_inv pre inv i post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs) (ensures post (Odv s))
+let repeat_inv_inst #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) (post : i_post unit) hist (s : inf_trace) (trs : stream trace) :
+  Lemma (requires repeat_inv pre inv i post hist /\ (forall n. inv (trs n)) /\ s `inf_trace_refines` trs) (ensures post (Dv s))
 = reveal_opaque (`%repeat_inv_post) repeat_inv_post
 
-let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace) :
+let inf_trace_refines_prepend_None (tr : fin_trace) (s : inf_trace) (trs : stream trace) :
   Lemma
-    (requires to_trace tr == [] /\ s `sotrace_refines` trs)
-    (ensures stream_prepend tr s `sotrace_refines` trs)
+    (requires to_trace tr == [] /\ s `inf_trace_refines` trs)
+    (ensures stream_prepend tr s `inf_trace_refines` trs)
 = introduce forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc trs k)
   with begin
-    sotrace_refine_inst s trs n ;
+    inf_trace_refine_inst s trs n ;
     eliminate exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
     returns (exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc trs k))
     with _. begin
@@ -669,12 +670,12 @@ let sotrace_refines_prepend_None (tr : otrace) (s : sotrace) (trs : stream trace
       }
     end
   end ;
-  reveal_opaque (`%sotrace_refines) sotrace_refines
+  reveal_opaque (`%inf_trace_refines) inf_trace_refines
 
-let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
+let inf_trace_refines_prepend (tr : fin_trace) (s : inf_trace) (trs : stream trace) :
   Lemma
-    (requires s `sotrace_refines` trs)
-    (ensures stream_prepend tr s `sotrace_refines` stream_prepend [ to_trace tr ] trs)
+    (requires s `inf_trace_refines` trs)
+    (ensures stream_prepend tr s `inf_trace_refines` stream_prepend [ to_trace tr ] trs)
 = introduce forall (n : nat). exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
   with begin
     if n <= length tr
@@ -700,7 +701,7 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
     end
     else begin
       // Specialise hyp with n = n - length tr
-      sotrace_refine_inst s trs (n - length tr) ;
+      inf_trace_refine_inst s trs (n - length tr) ;
       eliminate exists (m : nat) (k : nat). n - length tr <= m /\ to_trace (stream_trunc s m) == flatten (stream_trunc trs k)
       returns exists (m : nat) (k : nat). n <= m /\ to_trace (stream_trunc (stream_prepend tr s) m) == flatten (stream_trunc (stream_prepend [ to_trace tr ] trs) k)
       with _. begin
@@ -727,12 +728,12 @@ let sotrace_refines_prepend (tr : otrace) (s : sotrace) (trs : stream trace) :
       end
     end
   end ;
-  reveal_opaque (`%sotrace_refines) sotrace_refines
+  reveal_opaque (`%inf_trace_refines) inf_trace_refines
 
-let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : idx) (tr : otrace) (trs : stream trace) (s : sotrace) :
+let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j : idx) (tr : fin_trace) (trs : stream trace) (s : inf_trace) :
   Lemma
-    (requires repeat_inv pre inv j post hist /\ (forall n. inv (trs n)) /\ s `sotrace_refines` trs /\ inv (to_trace tr))
-    (ensures post (Odv (stream_prepend tr (stream_prepend [ None ] s))))
+    (requires repeat_inv pre inv j post hist /\ (forall n. inv (trs n)) /\ s `inf_trace_refines` trs /\ inv (to_trace tr))
+    (ensures post (Dv (stream_prepend tr (stream_prepend [ None ] s))))
 = introduce forall n. inv (stream_prepend [ to_trace tr ] trs n)
   with begin
     if n = 0
@@ -744,24 +745,24 @@ let repeat_inv_expand_aux #idx (pre : idx -> i_pre) (inv : trace -> Type0) (post
     end
   end ;
 
-  sotrace_refines_prepend_None [ None ] s trs ;
-  sotrace_refines_prepend tr (stream_prepend [ None ] s) trs ;
-  assert ((stream_prepend tr (stream_prepend [ None ] s)) `sotrace_refines` (stream_prepend [ to_trace tr ] trs)) ;
+  inf_trace_refines_prepend_None [ None ] s trs ;
+  inf_trace_refines_prepend tr (stream_prepend [ None ] s) trs ;
+  assert ((stream_prepend tr (stream_prepend [ None ] s)) `inf_trace_refines` (stream_prepend [ to_trace tr ] trs)) ;
 
   repeat_inv_inst pre inv j post hist (stream_prepend tr (stream_prepend [ None ] s)) (stream_prepend [ to_trace tr ] trs)
 
-let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j jj : index) (tr : otrace) :
+let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post : i_post unit) (hist : history) (j jj : index) (tr : fin_trace) :
   Lemma
     (requires repeat_inv pre inv j post hist /\ pre jj (rev_acc (to_trace tr) hist) /\ inv (to_trace tr))
     (ensures repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist))
-= introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
+= introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
   with begin
-    introduce diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
+    introduce diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
     with _. begin
       match r with
-      | Odv s ->
-        eliminate exists (trs : stream trace). (forall n. inv (trs n)) /\ (inf_trace r) `sotrace_refines` trs
-        returns ishift_post [ None ] (ishift_post tr post) (Odv s)
+      | Dv s ->
+        eliminate exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs
+        returns ishift_post [ None ] (ishift_post tr post) (Dv s)
         with _. begin
           repeat_inv_expand_aux pre inv post hist j tr trs s
         end
@@ -795,7 +796,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
             i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r
           with _. begin
             match r with
-            | Ocv tr (Inl jj) ->
+            | Cv tr (Inl jj) ->
               calc (==) {
                 i_bind_post (iter_expand_cont (fun k -> repeat_inv pre inv k)) post hist r ;
                 == {}
@@ -805,7 +806,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
                 == { _ by (compute ()) }
                 i_tau (i_bind_post (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist)) (rev_acc (to_trace tr) hist) ;
                 == { _ by (compute ()) }
-                i_bind_post (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist) (Ocv [ None ] ()) ;
+                i_bind_post (fun _ -> repeat_inv pre inv jj) (ishift_post tr post) (rev_acc (to_trace tr) hist) (Cv [ None ] ()) ;
                 == { _ by (compute ()) }
                 repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc [] (rev_acc (to_trace tr) hist)) ;
                 == { _ by (compute ()) }
@@ -823,8 +824,8 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
 
 let i_bind_post_alt' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
-    (terminates r ==> wf (result r) (ishift_post (ret_otrace r) post) (rev_acc (ret_trace r) hist)) /\
-    (diverges r ==> post (Odv (inf_trace r)))
+    (terminates r ==> wf (result r) (ishift_post (ret_fin_trace r) post) (rev_acc (ret_trace r) hist)) /\
+    (diverges r ==> post (Dv (_trace r)))
 
 let i_bind_post_alt #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
   introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
@@ -832,27 +833,27 @@ let i_bind_post_alt #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
     introduce r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
     with _. begin
       match r, r' with
-      | Ocv t x, Ocv t' x' ->
+      | Cv t x, Cv t' x' ->
         introduce forall r. ishift_post t post r ==> ishift_post t' post r
         with begin
           introduce ishift_post t post r ==> ishift_post t' post r
           with _. begin
             match r with
-            | Ocv tr y ->
+            | Cv tr y ->
               to_trace_append t tr ;
               to_trace_append t' tr ;
-              assert (Ocv (t @ tr) y `eutt` Ocv (t' @ tr) y) ;
-              i_post_resp_eutt post (Ocv (t @ tr) y) (Ocv (t' @ tr) y)
-            | Odv s ->
+              assert (Cv (t @ tr) y `eutt` Cv (t' @ tr) y) ;
+              i_post_resp_eutt post (Cv (t @ tr) y) (Cv (t' @ tr) y)
+            | Dv s ->
               uptotau_refl s ;
               uptotau_prepend t t' s s ;
-              assert (Odv (stream_prepend t s) `eutt #a` Odv (stream_prepend t' s)) ;
-              i_post_resp_eutt post (Odv (stream_prepend t s)) (Odv (stream_prepend t' s))
+              assert (Dv (stream_prepend t s) `eutt #a` Dv (stream_prepend t' s)) ;
+              i_post_resp_eutt post (Dv (stream_prepend t s)) (Dv (stream_prepend t' s))
           end
         end ;
         iwp_monotonic_inst (wf x) (ishift_post t post) (ishift_post t' post) (rev_acc (to_trace t) hist)
-      | Odv s, Odv s' ->
-        i_post_resp_eutt post (Odv s) (Odv s')
+      | Dv s, Dv s' ->
+        i_post_resp_eutt post (Dv s) (Dv s')
     end
   end ;
   i_bind_post_alt' wf post hist
@@ -864,11 +865,11 @@ let i_bind_post_alt_mono #a #b (wf : a -> iwp b) p q hist :
 = introduce forall r. i_bind_post wf p hist r ==> i_bind_post wf q hist r
   with begin
     match r with
-    | Ocv tr x ->
+    | Cv tr x ->
       ishift_post_mono b tr ;
       assert (ishift_post tr p `i_post_le` ishift_post tr q) ;
       assert (wf x (ishift_post tr p) (rev_acc (to_trace tr) hist) ==> wf x (ishift_post tr q) (rev_acc (to_trace tr) hist))
-    | Odv s -> ()
+    | Dv s -> ()
   end
 
 let i_bind_alt (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b =
