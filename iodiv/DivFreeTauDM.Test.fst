@@ -64,7 +64,8 @@ let dm_loop1 (fd:file_descr) : iodiv_dm unit (iloop1 fd) =
 
 (** ** Test print 0 1 **)
 
-let dm_body2 : iodiv_dm unit (iprepost (fun _ -> True) (fun h r -> terminates r /\ _trace r == [EPrint "0";EPrint "1"])) = 
+(** What the actual **** **)
+let dm_body2 : iodiv_dm unit (iprepost (fun _ -> True) (fun h r -> terminates r /\ _trace r == [EPrint "0";EPrint "1"] /\ False)) = 
   (m_bind (m_call Print "0") (fun () -> m_call Print "1"))
 
 let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ False) //repeat_inv_post (fun lt -> lt == [EPrint "0"; EPrint "3:"]) r)
