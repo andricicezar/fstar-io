@@ -65,7 +65,7 @@ assume val pre0 : trace -> Type0
 assume val inv0 : trace -> Type0
 assume val pre0_inv0 : unit -> Lemma (forall h lt. pre0 h /\ inv0 lt ==> pre0 (rev_acc lt h))
 
-let body0 : iwp unit = iprepost pre0 (fun h r -> terminates r /\ inv0 (_trace r))
+let body0 : iwp unit = iprepost pre0 (fun h r -> terminates r /\ inv0 (ret_trace r))
 let loop0 = iprepost pre0 (fun h r -> diverges r /\ repeat_inv_post inv0 r)
 
 let body0' : iwp unit =
@@ -88,7 +88,7 @@ let inv1 (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd 
 val pre1_inv1 : (fd:file_descr) -> squash (forall h lt. pre1 fd h /\ inv1 fd lt ==> pre1 fd (rev_acc lt h))
 let pre1_inv1 fd = ()
 
-let ibody1 (fd:file_descr) : iwp string = iprepost (pre1 fd) (fun h r -> terminates r /\ inv1 fd (_trace r))
+let ibody1 (fd:file_descr) : iwp string = iprepost (pre1 fd) (fun h r -> terminates r /\ inv1 fd (ret_trace r))
 let iloop1 (fd:file_descr) : iwp unit = iprepost (pre1 fd) (fun h r -> diverges r /\ repeat_inv_post (inv1 fd) r)
 
 let itest1 (fd:file_descr) : Lemma (i_iter (lift_body (ibody1 fd)) () `ile` (iloop1 fd)) =

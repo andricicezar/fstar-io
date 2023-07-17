@@ -308,14 +308,13 @@ let ret_trace #a (r : orun a) : Pure trace (requires terminates r) (ensures fun 
   match r with
   | Cv tr x -> to_trace tr
 
+let ret_itrace #a (r : orun a) : Pure inf_trace (requires diverges r) (ensures fun _ -> True) =
+  match r with
+  | Dv s -> s
+
 let result #a (r : orun a) : Pure a (requires terminates r) (ensures fun _ -> True) =
   match r with
   | Cv tr x -> x
-
-let _trace (tr : orun 'a) : (match tr with | Cv _ _ -> trace | Dv _ -> inf_trace) =
-  match tr with
-  | Cv tr _ -> to_trace tr
-  | Dv tr -> tr
 
 (** Specifications *)
 
@@ -325,7 +324,7 @@ let i_ret #a (x : a) : iwp a =
 let ishift_post' #a (tr : fin_trace) (post : i_post a) : i_post' a =
   fun r ->
     (terminates r ==> post (Cv (tr @ ret_fin_trace r) (result r))) /\
-    (diverges r ==> post (Dv (stream_prepend tr (_trace r))))
+    (diverges r ==> post (Dv (stream_prepend tr (ret_itrace r))))
     // match r with
     // | Cv tr' x -> post (Cv (tr @ tr') x)
     // | Dv st -> post (Dv (stream_prepend tr st))
@@ -373,8 +372,8 @@ let ishift_post_app #a t t' (p : i_post a) :
 
 let i_bind_post' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
-    (terminates r ==> wf (result r) (ishift_post (ret_fin_trace r) post) (rev_acc (_trace r) hist)) /\
-    (diverges r ==> post (Dv (_trace r)))
+    (terminates r ==> wf (result r) (ishift_post (ret_fin_trace r) post) (rev_acc (ret_trace r) hist)) /\
+    (diverges r ==> post (Dv (ret_itrace r)))
 //    match r with
 //    | Cv tr x -> wf x (ishift_post tr post) (rev_acc (to_trace tr) hist)
 //    | Dv st -> post (Dv st)
@@ -636,7 +635,7 @@ let inf_trace_refine_inst (s : inf_trace) (trs : stream trace) (n : nat) :
 
 [@"opaque_to_smt"]
 let repeat_inv_post (inv : trace -> Type0) (r : orun unit { diverges r }) =
-  exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs
+  exists (trs : stream trace). (forall n. inv (trs n)) /\ (ret_itrace r) `inf_trace_refines` trs
 
 let repeat_inv #index (pre : index -> i_pre) (inv : trace -> Type0) (i : index) : iwp unit =
   iprepost (pre i) (fun hist r -> diverges r /\ repeat_inv_post inv r)
@@ -759,13 +758,13 @@ let repeat_inv_expand #index (pre : index -> i_pre) (inv : trace -> Type0) (post
   Lemma
     (requires repeat_inv pre inv j post hist /\ pre jj (rev_acc (to_trace tr) hist) /\ inv (to_trace tr))
     (ensures repeat_inv pre inv jj (ishift_post [ None ] (ishift_post tr post)) (rev_acc (to_trace tr) hist))
-= introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
+= introduce forall r. diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (ret_itrace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
   with begin
-    introduce diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
+    introduce diverges r /\ (exists (trs : stream trace). (forall n. inv (trs n)) /\ (ret_itrace r) `inf_trace_refines` trs) ==> ishift_post [ None ] (ishift_post tr post) r
     with _. begin
       match r with
       | Dv s ->
-        eliminate exists (trs : stream trace). (forall n. inv (trs n)) /\ (_trace r) `inf_trace_refines` trs
+        eliminate exists (trs : stream trace). (forall n. inv (trs n)) /\ (ret_itrace r) `inf_trace_refines` trs
         returns ishift_post [ None ] (ishift_post tr post) (Dv s)
         with _. begin
           repeat_inv_expand_aux pre inv post hist j tr trs s
@@ -832,7 +831,7 @@ let repeat_inv_proof #index (pre : index -> i_pre) (inv : trace -> Type0) (i : i
 let i_bind_post_alt' #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post' a =
   fun r ->
     (terminates r ==> wf (result r) (ishift_post (ret_fin_trace r) post) (rev_acc (ret_trace r) hist)) /\
-    (diverges r ==> post (Dv (_trace r)))
+    (diverges r ==> post (Dv (ret_itrace r)))
 
 let i_bind_post_alt #a #b (wf : a -> iwp b) (post : i_post b) hist : i_post a =
   introduce forall r r'. r `eutt` r' /\ i_bind_post' wf post hist r ==> i_bind_post' wf post hist r'
