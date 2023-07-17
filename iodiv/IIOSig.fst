@@ -7,6 +7,7 @@ open DivFree
 type iio_act =
 | Openfile
 | Read
+| Print
 | Close
 | GetTrace
 
@@ -23,6 +24,7 @@ noeq
 type event =
 | EOpenfile : string -> file_descr -> event
 | ERead     : file_descr -> string -> event
+| EPrint    : string -> event
 | EClose    : file_descr -> event
 
 let trace = list event
@@ -34,6 +36,7 @@ let iio_arg ac =
   | Openfile -> string
   | Read -> file_descr
   | Close -> file_descr
+  | Print -> string
   | GetTrace -> unit
 
 unfold
@@ -41,6 +44,7 @@ let iio_res #ac (x : iio_arg ac) =
   match ac with
   | Openfile -> file_descr
   | Read -> string
+  | Print -> unit
   | Close -> unit
   | GetTrace -> history
 
