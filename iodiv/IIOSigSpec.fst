@@ -24,6 +24,10 @@ let i_read (fd : file_descr) : iwp string =
   iprepost (fun hist -> is_open fd hist) (fun hist r -> terminates r /\ _trace r == [ ERead fd (result r) ])
 
 unfold
+let i_print (s : string) : iwp unit =
+  iprepost (fun hist -> True) (fun hist r -> terminates r /\ _trace r == [ EPrint s ])
+
+unfold
 let i_close (fd : file_descr) : iwp unit =
   iprepost (fun hist -> is_open fd hist) (fun hist r -> terminates r /\ _trace r == [ EClose fd ])
 
@@ -37,13 +41,12 @@ let iodiv_act : action_iwp io_sig =
     match ac with
     | Openfile -> i_open arg
     | Read -> i_read arg
+    | Print -> i_print arg
     | Close -> i_close arg
 
 unfold
 let iiodiv_act : action_iwp iio_sig =
   fun ac arg ->
     match ac with
-    | Openfile -> i_open arg
-    | Read -> i_read arg
-    | Close -> i_close arg
     | GetTrace -> i_get_trace
+    | _ -> iodiv_act ac arg
