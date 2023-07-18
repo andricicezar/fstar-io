@@ -59,7 +59,6 @@ let lem_body_to_loop
 let dm_body1 (fd:file_descr) : iodiv_dm string (iprepost (fun h -> is_open fd h) (fun h r -> terminates r /\ (exists s. (ret_trace r) == [ERead fd s]))) = 
     (m_call Read fd)
 
-#push-options "--print_implicits --print_universes"
 let dm_loop1 (fd:file_descr) : iodiv_dm unit (iprepost (fun h -> is_open fd h) (fun h r -> diverges r /\ always (fun lt -> exists s. lt == [ERead fd s]) r)) = 
   lem_body_to_loop #string #(fun h -> is_open fd h) #(fun lt -> exists s. lt == [ERead fd s]) (dm_body1 fd);
   iodiv_repeat (dm_body1 fd)
@@ -68,13 +67,17 @@ let dm_loop1 (fd:file_descr) : iodiv_dm unit (iprepost (fun h -> is_open fd h) (
 let body2 : m io_sig unit = 
   (m_bind (m_call Print "0") (fun () -> m_call Print "1"))
 
+[@@ (postprocess_with (pp_unfold [ `%iprepost ]))]
 let ibody2 : iwp unit =
   iprepost (fun _ -> True) (fun h r -> terminates r /\ ret_trace r == [EPrint "0";EPrint "1"])
 
 let dm_body2 () : iodiv_dm unit ibody2 = 
-  let d : iodiv_dm unit (i_bind_alt (iodiv_act Print "0") (fun _ -> iodiv_act Print "1")) = 
+  let d : iodiv_dm unit (i_bind_alt (i_act Print "0") (fun _ -> i_act Print "1")) = 
     (iodiv_bind _ _ _ _ (iodiv_call Print "0") (fun () -> iodiv_call Print "1")) in
-  assume ((i_bind_alt (iodiv_act Print "0") (fun _ -> iodiv_act Print "1")) `ile` ibody2);
+  assert (_i_bind (i_act Print "0") (fun _ -> i_act Print "1") `ile` ibody2) by (
+    norm [delta_only [`%_i_bind; `%i_act;`%i_print;`%ibody2];iota]; 
+    explode ()
+  );
   iodiv_subcomp _ _ _ d
 
 let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ always (fun lt -> lt == [EPrint "0"; EPrint "1"]) r)

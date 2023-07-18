@@ -955,7 +955,7 @@ let i_bind_alt2_eq #a #b (w : iwp a) (wf : a -> iwp b) :
 (** Unfolding things so that they compute better now that the proofs are done. *)
 
 let pp_unfold l () : Tac unit =
-  norm [delta_only l ; iota] ; trefl ()
+  norm [delta_only l ; iota] ; simpl (); trefl ()
 
 [@@ (postprocess_with (pp_unfold [ `%ile ; `%i_post_le ]))]
 unfold let _ile = ile
@@ -967,7 +967,7 @@ unfold let _i_ret = i_ret
 // unfold let _i_bind = i_bind
 
 [@@ (postprocess_with (pp_unfold [ `%i_bind_alt ; `%i_bind_post_alt ; `%i_bind_post_alt' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
-unfold let _i_bind = i_bind_alt
-
+unfold let _i_bind (#a : Type u#a) (#b : Type u#b) (w : iwp a) (wf : a -> iwp b) : iwp b = i_bind_alt w wf
+  
 // [@@ (postprocess_with (pp_unfold [ `%i_bind_alt2 ; `%i_bind_post ; `%i_bind_post' ; `%ishift_post ; `%ishift_post' ; `%as_iwp ]))]
 // unfold let _i_bind = i_bind_alt2

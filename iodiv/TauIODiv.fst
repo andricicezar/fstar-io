@@ -19,7 +19,7 @@ open DivFreeTauDM
 open IIOSigSpec
 
 let iodiv_dm a w =
-  dm io_sig iodiv_act a w
+  dm io_sig i_act a w
 
 let iodiv_ret a (x : a) : iodiv_dm a (_i_ret x) =
   dm_ret x
@@ -35,7 +35,7 @@ unfold
 let iodiv_if_then_else (a : Type) (w1 w2 : iwp a) (f : iodiv_dm a w1) (g : iodiv_dm a w2) (b : bool) : Type =
   dm_if_then_else a w1 w2 f g b
 
-let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (iodiv_act ac x) =
+let iodiv_call (ac : io_sig.act) (x : io_sig.arg ac) : iodiv_dm (io_sig.res x) (i_act ac x) =
   dm_call ac x
 
 let iodiv_iter #index #a #w (f : (j : index) -> iodiv_dm (either index a) (w j)) (i : index) : iodiv_dm a (i_iter w i) =
@@ -51,7 +51,7 @@ reflectable reifiable total layered_effect {
     if_then_else = iodiv_if_then_else
 }
 
-sub_effect PURE ~> IODIV = dm_lift_pure #(io_sig) #(iodiv_act)
+sub_effect PURE ~> IODIV = dm_lift_pure #(io_sig) #(i_act)
 
 effect IODiv (a : Type) (pre : history -> Type0) (post : (hist : history) -> orun a -> Pure Type0 (requires pre hist) (ensures fun _ -> True)) =
   IODIV a (iprepost pre post)
@@ -64,7 +64,7 @@ let to_trace_append_pat t t' :
 
 (** Actions *)
 
-let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (iodiv_act ac x) =
+let act_call (ac : io_sig.act) (x : io_sig.arg ac) : IODIV (io_sig.res x) (i_act ac x) =
   IODIV?.reflect (iodiv_call ac x)
 
 let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
