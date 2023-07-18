@@ -10,10 +10,10 @@ open DivFreeTauDM
 open IIOSig
 open IIOSigSpec
 
-open DivFree.Test
-open DivFreeTauSpec.Test
-
 open TauIODiv
+
+[@"paque_to_smt"]
+let always = repeat_inv_post
 
 let lift_i (w:iwp 'a) (#index:Type0) : index -> iwp (either index unit) =
   (fun i -> i_bind_alt w (fun _ -> i_ret (Inl i)))
@@ -28,10 +28,10 @@ let lem_spec_to_loop
   (pre0 : trace -> Type0)
   (inv0 : trace -> Type0)
   (pre0_inv0 : squash (forall h lt. pre0 h /\ inv0 lt ==> pre0 (rev_acc lt h))) :
-  Lemma (
+  Lemma (ensures (
     let body0 : iwp a = iprepost pre0 (fun h r -> terminates r /\ inv0 (ret_trace r)) in
-    let loop0 : iwp unit = iprepost pre0 (fun h r -> diverges r /\ repeat_inv_post inv0 r) in
-    i_iter (lift_i body0) () `ile` loop0) =
+    let loop0 : iwp unit = iprepost pre0 (fun h r -> diverges r /\ always inv0 r) in
+    i_iter (lift_i body0) () `ile` loop0)) =
   let body0 : iwp a = iprepost pre0 (fun h r -> terminates r /\ inv0 (ret_trace r)) in
   let loop0 = iprepost pre0 (fun h r -> diverges r /\ repeat_inv_post inv0 r) in
   let body' = lift_i body0 in
@@ -52,14 +52,16 @@ let lem_body_to_loop
   (f : iodiv_dm a (iprepost pre0 (fun h r -> terminates r /\ inv0 (ret_trace r)))) :
   Lemma (
     let body0 : iwp a = iprepost pre0 (fun h r -> terminates r /\ inv0 (ret_trace r)) in
-    let loop0 : iwp unit = iprepost pre0 (fun h r -> diverges r /\ repeat_inv_post inv0 r) in
+    let loop0 : iwp unit = iprepost pre0 (fun h r -> diverges r /\ always inv0 r) in
     i_iter (lift_i body0) () `ile` loop0) =
   lem_spec_to_loop a pre0 inv0 pre0_inv0
 
-let dm_body1 (fd:file_descr) : iodiv_dm string (ibody1 fd) = body1 fd
+let dm_body1 (fd:file_descr) : iodiv_dm string (iprepost (fun h -> is_open fd h) (fun h r -> terminates r /\ (exists s. (ret_trace r) == [ERead fd s]))) = 
+    (m_call Read fd)
 
-let dm_loop1 (fd:file_descr) : iodiv_dm unit (iloop1 fd) = 
-  lem_body_to_loop (dm_body1 fd);
+#push-options "--print_implicits --print_universes"
+let dm_loop1 (fd:file_descr) : iodiv_dm unit (iprepost (fun h -> is_open fd h) (fun h r -> diverges r /\ always (fun lt -> exists s. lt == [ERead fd s]) r)) = 
+  lem_body_to_loop #string #(fun h -> is_open fd h) #(fun lt -> exists s. lt == [ERead fd s]) (dm_body1 fd);
   iodiv_repeat (dm_body1 fd)
 
 (** ** Test print 0 1 **)
@@ -75,7 +77,7 @@ let dm_body2 () : iodiv_dm unit ibody2 =
   assume ((i_bind_alt (iodiv_act Print "0") (fun _ -> iodiv_act Print "1")) `ile` ibody2);
   iodiv_subcomp _ _ _ d
 
-let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ repeat_inv_post (fun lt -> lt == [EPrint "0"; EPrint "1"]) r)
+let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ always (fun lt -> lt == [EPrint "0"; EPrint "1"]) r)
 
 let dm_loop2 () : iodiv_dm unit iloop2 =
   let d : iodiv_dm unit (i_iter (lift_i ibody2) ()) = iodiv_repeat (dm_body2 ()) in
