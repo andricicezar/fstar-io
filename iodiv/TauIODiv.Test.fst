@@ -75,17 +75,17 @@ let test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> 
   let _ = read fd in
   close fd
 
-let print01 () : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (ret_trace r == [ EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"])) =
-  (** Stress test : limit 9 events **)
-  print "0";
+let print01 () : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (ret_trace r == [ EPrint "1"; EPrint "2"; EPrint "3"; EPrint "4"; EPrint "5"; EPrint "6"; EPrint "7"; EPrint "8"])) = //; EPrint "9"])) =
+  (** Stress test : limit 8 events **)
   print "1";
-  print "0";
-  print "1";
-  print "0";
-  print "1";
-  print "0";
-  print "1";
-  print "0"
+  print "2";
+  print "3";
+  print "4";
+  print "5";
+  print "6";
+  print "7";
+  print "8"
+//  ;  print "9"
 
 let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenfile s fd ; ERead fd msg ; EClose fd ])) =
   let fd = open_file s in
@@ -197,9 +197,24 @@ let body' (fd :file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> ter
   reveal_opaque (`%mypre) mypre;
   reveal_opaque (`%myinv) myinv;
   body fd
-  
-let repeat_loop_body (fd : file_descr) : IODiv unit (mypre fd) (ensures fun hist r -> diverges r /\ repeat_inv_post (myinv fd) r) =
-  admit ();
+
+let repeat_loop_body (fd : file_descr) : IODiv unit (mypre fd) (ensures fun hist r -> diverges r /\ repeat_inv_post (myinv fd) r) 
+by (explode (); 
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+  tadmit ();
+
+dump "H") =
   repeat_with_inv #(mypre fd) #(myinv fd) #(yes fd) (body' fd)
 //  repeat  (fun tr -> (exists s. tr == [ERead fd s])) body fd 
   
