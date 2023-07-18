@@ -27,6 +27,7 @@ let iodiv_ret a (x : a) : iodiv_dm a (_i_ret x) =
 let iodiv_bind a b w wf (c : iodiv_dm a w) (f : (x : a) -> iodiv_dm b (wf x)) : iodiv_dm b (_i_bind w wf) =
   dm_bind c f
 
+[@@ (postprocess_with (pp_unfold [ `%_ile ]))]
 let iodiv_subcomp a w w' (c : iodiv_dm a w) :
   Pure (iodiv_dm a w') (requires w `_ile` w') (ensures fun _ -> True)
 = dm_subcomp c

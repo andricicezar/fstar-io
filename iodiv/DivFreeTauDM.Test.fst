@@ -64,21 +64,16 @@ let dm_loop1 (fd:file_descr) : iodiv_dm unit (iprepost (fun h -> is_open fd h) (
   iodiv_repeat (dm_body1 fd)
 
 (** ** Test print 0 1 **)
-let body2 : m io_sig unit = 
-  (m_bind (m_call Print "0") (fun () -> m_call Print "1"))
-
 [@@ (postprocess_with (pp_unfold [ `%iprepost ]))]
 let ibody2 : iwp unit =
   iprepost (fun _ -> True) (fun h r -> terminates r /\ ret_trace r == [EPrint "0";EPrint "1"])
 
 let dm_body2 () : iodiv_dm unit ibody2 = 
-  let d : iodiv_dm unit (i_bind_alt (i_act Print "0") (fun _ -> i_act Print "1")) = 
+  let w : iwp unit = _i_bind (i_act Print "0") (fun _ -> i_act Print "1") in
+  let d : iodiv_dm unit w = 
     (iodiv_bind _ _ _ _ (iodiv_call Print "0") (fun () -> iodiv_call Print "1")) in
-  assert (_i_bind (i_act Print "0") (fun _ -> i_act Print "1") `ile` ibody2) by (
-    norm [delta_only [`%_i_bind; `%i_act;`%i_print;`%ibody2];iota]; 
-    explode ()
-  );
-  iodiv_subcomp _ _ _ d
+  assert (w `_ile` ibody2) by (norm [delta_only [`%_i_bind;`%_ile]]);
+  iodiv_subcomp unit w ibody2 d
 
 let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ always (fun lt -> lt == [EPrint "0"; EPrint "1"]) r)
 
