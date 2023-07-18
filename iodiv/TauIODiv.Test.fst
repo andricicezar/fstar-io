@@ -41,7 +41,7 @@ let ho_test () :
   // let _ = open_file' "test.txt" in
   (** this takes a long time -- 205 goals // It's now only 23! **)
   let _ = act_call Openfile "test.txt" in
-  () // TODO: when exploding, a weird goal Odv? (Ocv [] ())
+  ()
 
 let ho_test'
   (f : (unit -> IODiv unit (fun h -> True) (fun h r -> True))) :
@@ -74,6 +74,18 @@ let test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> 
   let fd = open_file s in
   let _ = read fd in
   close fd
+
+let print01 () : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (ret_trace r == [ EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"; EPrint "1"; EPrint "0"])) =
+  (** Stress test : limit 9 events **)
+  print "0";
+  print "1";
+  print "0";
+  print "1";
+  print "0";
+  print "1";
+  print "0";
+  print "1";
+  print "0"
 
 let test_ (s : string) : IODiv unit (requires fun _ -> True) (ensures fun hist r -> terminates r /\ (exists fd msg. ret_trace r == [ EOpenfile s fd ; ERead fd msg ; EClose fd ])) =
   let fd = open_file s in
@@ -181,7 +193,7 @@ let mypre (fd:file_descr) : trace -> Type0 = fun h -> is_open fd h
 assume val yes : (fd:file_descr) -> squash (forall h lt. mypre fd h /\ myinv fd lt ==> mypre fd (rev_acc lt h))
 
 [@"opaque_to_smt"]
-let body' (fd : file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> terminates r /\ myinv fd (ret_trace r)) =
+let body' (fd :file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> terminates r /\ myinv fd (ret_trace r)) =
   reveal_opaque (`%mypre) mypre;
   reveal_opaque (`%myinv) myinv;
   body fd
