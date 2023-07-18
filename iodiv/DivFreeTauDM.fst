@@ -430,7 +430,9 @@ let as_requires_w_lift_pure #a (w : pure_wp a) :
 
 let dm_lift_pure #sg #w_act (a : Type) (w : pure_wp a) (f:(eqtype_as_type unit -> PURE a w)) : dm sg w_act a (w_lift_pure w) =
   as_requires_w_lift_pure w ;
-  dm_bind #sg #w_act #_ #_ #(i_req (as_requires w)) #(fun _ -> w_lift_pure w) (dm_req (as_requires w)) (fun (_ : squash (as_requires w)) ->
-    let r = elim_pure #a #w f in
-    dm_ret #sg #w_act r
-  )
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  let lhs = dm_req (as_requires w) in
+  let rhs = (fun (pre:(squash (as_requires w))) -> dm_ret #sg #w_act #a (f pre)) in
+  let m = dm_bind lhs rhs in
+  dm_subcomp m
+

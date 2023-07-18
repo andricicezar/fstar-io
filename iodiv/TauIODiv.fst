@@ -77,6 +77,9 @@ let read (fd : file_descr) : IODiv string (requires fun hist -> is_open fd hist)
 let close (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ ret_trace r == [ EClose fd ]) =
   act_call Close fd
 
+let print (s:string) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EPrint s ]) =
+  act_call Print s
+
 let iter #index #a #w (f : (j : index) -> IODIV (either index a) (w j)) (i : index) : IODIV a (i_iter w i) =
   IODIV?.reflect (dm_iter (fun j -> reify (f j)) i)
 
