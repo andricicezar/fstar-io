@@ -133,33 +133,34 @@ val hist_equiv : hist 'e 'a -> hist 'e 'a -> Type0
 let hist_equiv wp1 wp2 = forall h p. wp1 p h <==> wp2 p h
 
 noeq
-type free (a:Type u#a) : Type u#(max 1 a)=
-| Return : a -> free a
-| Print : (arg:string) -> cont:(unit -> free u#a a) -> free a
-| Fork : th:(unit -> free (Universe.raise_t unit)) -> cont:(unit -> free a) -> free a
-| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a a) -> free a
+type free (a:Type u#a) (e:Type0) : Type u#(max 1 a)=
+| Return : a -> free a e
+| Print : (arg:e) -> cont:(unit -> free u#a a e) -> free a e
+| Fork : th:(unit -> free (Universe.raise_t unit) e) -> cont:(unit -> free a e) -> free a e
+| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a a e) -> free a e
 
-let free_return (a:Type) (x:a) : free a =
+let free_return (a:Type) (e:Type) (x:a) : free a e =
   Return x
 
 let rec free_bind
   (a:Type u#a)
   (b:Type u#b)
-  (l : free a)
-  (k : a -> free b) :
-  free b =
+  (e:Type)
+  (l : free a e)
+  (k : a -> free b e) :
+  free b e =
   match l with
   | Return x -> k x
   | Print str fnc ->
       Print str (fun i ->
-        free_bind a b (fnc i) k)
+        free_bind a b e (fnc i) k)
   | Fork th fnc ->
       Fork
-        (fun i -> free_bind (Universe.raise_t u#0 u#a unit) (Universe.raise_t u#0 u#b unit) (th i) (fun x -> free_return _ (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
-        (fun _ -> free_bind a b (fnc ()) k)
+        (fun i -> free_bind (Universe.raise_t u#0 u#a unit) (Universe.raise_t u#0 u#b unit) e (th i) (fun x -> free_return _ e (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
+        (fun _ -> free_bind a b e (fnc ()) k)
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->
-        free_bind a b (fnc ()) k)
+        free_bind a b e (fnc ()) k)
 
 let partial_call_wp 'e (pre:pure_pre) : hist 'e (squash pre) = 
   let wp' : hist0 'e (squash pre) = fun p h -> pre /\ p (Node (Cv () []) []) in
@@ -167,43 +168,45 @@ let partial_call_wp 'e (pre:pure_pre) : hist 'e (squash pre) =
   assert (hist_wp_monotonic wp');
   wp'
 
-let hist_print (str:string) : hist string unit =
-  fun p _ -> p (Node (Cv () [str]) [])
+let hist_print (#e:Type) (ev:e) : hist e unit =
+  fun p _ -> p (Node (Cv () [ev]) [])
 
 let hist_fork0 (#e:Type u#0) (#a:Type u#a) (hist_th:hist e (Universe.raise_t u#0 u#a unit)) : hist0 e (Universe.raise_t u#0 u#a unit) =
   fun p h -> hist_th (fun r -> p (Node (Cv (Universe.raise_val ()) []) [r])) h
 
 let hist_fork (#e:Type u#0) (#a:Type u#a) (hist_th:hist e (Universe.raise_t u#0 u#a unit)) : hist e (Universe.raise_t u#0 u#a unit) =
-  admit ();
-  hist_fork0 #e #a hist_th
+  let wp = hist_fork0 #e #a hist_th in
+  assume (hist_wp_monotonic wp);
+  wp
 
-val theta : (#a:Type u#a) -> free a -> hist string a
-let rec theta #a m =
+val theta : (#a:Type u#a) -> (#e:Type0) -> free a e -> hist e a
+let rec theta #a #e m =
   match m with
-  | Return x -> hist_return string x
+  | Return x -> hist_return e x
   | PartialCall pre k ->
-      hist_bind (partial_call_wp string pre) (fun r -> theta (k r) <: hist string a)
-  | Print str k ->
-      hist_bind (hist_print str) (fun r -> theta (k r))
-  | Fork th k ->
-      hist_bind (hist_fork #string #a (theta (th ()))) (fun _ -> theta (k ()))
+      hist_bind (partial_call_wp e pre) (fun r -> theta (k r))
+  | Print arg k ->
+      hist_bind (hist_print arg) (fun r -> theta (k r))
+  | Fork th k -> (
+    let wp = fun p h -> 
+      theta (th ()) (fun rt -> 
+        theta (k ()) (fun rt' -> 
+          let (Node (Cv x lt) thrs) = rt' in
+          p (Node (Cv x []) [rt; (Node (Cv (Universe.raise_val ()) lt) thrs) ])
+        ) h
+      ) h in
+    assume (hist_wp_monotonic wp);
+    wp
+  )
+      //hist_bind (hist_fork #string #a (theta (th ()))) (fun _ -> theta (k ()))
 
-let prog1 = Fork (fun () -> Print "0" (fun () -> Return (Universe.raise_val ()))) 
-                 (fun () -> Print "1" (fun () -> Fork (fun () -> Print "2" (fun () -> Return (Universe.raise_val ())))
+let prog1 = Fork (fun () -> Print 0 (fun () -> Return (Universe.raise_val ()))) 
+                 (fun () -> Print 1 (fun () -> Fork (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))
                                                   (fun () -> Return ())))
 
 #reset-options
 
-let _ = assert (theta prog1 (fun r -> as_trace r == [["1"; "0"; "2"]; ["1"; "2"; "0"]; ["0"; "1"; "2"]]) [])  by (norm [delta_only [`%prog1; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
+let _ = assert (theta prog1 (fun r -> as_trace r === [[1; 0; 2]; [1; 2; 0]; [0; 1; 2]]) [])  by (norm [delta_only [`%prog1; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
 
   l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
-  compute ();
-
-dump "H")
-
-
-let _ = assert (forall p. theta prog1 p []) by (norm [delta_only [`%prog1; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change];zeta;iota]; 
-
-  l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
-
-dump "H")
+  compute ())
