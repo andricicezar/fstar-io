@@ -1,0 +1,14 @@
+out
+#*
+*~
+*.cmi
+*.cmx
+*.o
+
+.depend.mk
+.cache/**
+
+dep.graph
+dep.pdf
+
+hints/
