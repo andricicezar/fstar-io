@@ -12,15 +12,6 @@ noeq
 type runtree 'e (a:Type u#a) : Type u#a =
 | Node : run 'e a -> list u#a (runtree 'e (Universe.raise_t unit)) -> runtree 'e a
 
-
-let rec inject (e:'e) (t:trace 'e) : list (trace 'e) =
-  match t with
-  | [] -> [[e]]
-  | h::tl -> [e::t]@(map (append [h]) (inject e tl))
-
-let _ =
-  assert (inject #int 0 [1;2;3] == [ [0;1;2;3]; [1;0;2;3];[1;2;0;3]; [1;2;3;0]])
-
 let rec interleave (t1:trace 'e) (t2:trace 'e) : list (trace 'e) =
   match t1, t2 with
   | [], [] -> []
@@ -200,13 +191,43 @@ let rec theta #a #e m =
   )
       //hist_bind (hist_fork #string #a (theta (th ()))) (fun _ -> theta (k ()))
 
+#reset-options
+let result (r:runtree 'e 'a) : 'a =
+  match r with
+  | Node (Cv x _) _ -> x
+  
+let prog0 =  Print 0 (fun () -> Print 1 (fun () -> Print 2 (fun () -> Return 5)))
+
+let _ = assert (theta prog0 (fun r -> result r == 5 /\ as_trace r === [[0; 1; 2]]) [])  by (norm [delta_only [`%prog0; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
+
+  l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
+  compute ())
+
 let prog1 = Fork (fun () -> Print 0 (fun () -> Return (Universe.raise_val ()))) 
                  (fun () -> Print 1 (fun () -> Fork (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))
                                                   (fun () -> Return ())))
 
-#reset-options
 
 let _ = assert (theta prog1 (fun r -> as_trace r === [[1; 0; 2]; [1; 2; 0]; [0; 1; 2]]) [])  by (norm [delta_only [`%prog1; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
+
+  l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
+  compute ())
+
+let prog2 =  Print 0 
+                 (fun () -> Print 1 (fun () -> Fork (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))
+                                                (fun () -> Return 5)))
+
+let _ = assert (theta prog2 (fun r -> result r == 5 /\ as_trace r === [[0; 1; 2]]) [])  by (norm [delta_only [`%prog2; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
+
+  l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
+  compute ())
+
+
+let prog3 = Fork (fun () -> Print 0 (fun () -> Fork (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))
+                                                 (fun () -> Return (Universe.raise_val ()))))
+                 (fun () -> Print 1 (fun () -> Return ()))
+
+let _ = assert (theta prog3 (fun r -> result r == () /\ as_trace r === [[0; 2; 1];[0;1;2];[1;0;2]]) [])  by (norm [delta_only [`%prog2; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
 
   l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
   compute ())
