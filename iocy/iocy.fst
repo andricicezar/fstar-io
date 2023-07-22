@@ -92,7 +92,7 @@ let hist_wp_monotonic (wp:hist0 'e 'a) =
 
 type hist 'e a = wp:(hist0 'e a){hist_wp_monotonic wp}
 
-let hist_return 'e (x:'a) : hist 'e 'a =
+let hist_return (#e:Type0) (x:'a) : hist e 'a =
   fun p _ -> p (Node (Cv x []) [])
 
 let hist_post_shift (p:hist_post 'e 'b) (rt:runtree 'e 'a) : hist_post 'e 'b =
@@ -128,15 +128,15 @@ type free (a:Type u#a) (e:Type0) : Type u#(max 1 a)=
 | Return : a -> free a e
 | Print : (arg:e) -> cont:(unit -> free u#a a e) -> free a e
 | Fork : th:(unit -> free (Universe.raise_t unit) e) -> cont:(unit -> free a e) -> free a e
-| PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free u#a a e) -> free a e
+| Require : (pre:pure_pre) -> cont:((squash pre) -> free u#a a e) -> free a e
 
-let free_return (a:Type) (e:Type) (x:a) : free a e =
+let free_return (#a:Type) (#e:Type) (x:a) : free a e =
   Return x
 
 let rec free_bind
-  (a:Type u#a)
-  (b:Type u#b)
-  (e:Type)
+  (#a:Type u#a)
+  (#b:Type u#b)
+  (#e:Type)
   (l : free a e)
   (k : a -> free b e) :
   free b e =
@@ -144,17 +144,17 @@ let rec free_bind
   | Return x -> k x
   | Print str fnc ->
       Print str (fun i ->
-        free_bind a b e (fnc i) k)
+        free_bind (fnc i) k)
   | Fork th fnc ->
       Fork
-        (fun i -> free_bind (Universe.raise_t u#0 u#a unit) (Universe.raise_t u#0 u#b unit) e (th i) (fun x -> free_return _ e (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
-        (fun _ -> free_bind a b e (fnc ()) k)
-  | PartialCall pre fnc ->
-      PartialCall pre (fun _ ->
-        free_bind a b e (fnc ()) k)
+        (fun i -> free_bind #(Universe.raise_t u#0 u#a unit) #(Universe.raise_t u#0 u#b unit) #e (th i) (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
+        (fun _ -> free_bind (fnc ()) k)
+  | Require pre fnc ->
+      Require pre (fun _ ->
+        free_bind (fnc ()) k)
 
-let partial_call_wp 'e (pre:pure_pre) : hist 'e (squash pre) = 
-  let wp' : hist0 'e (squash pre) = fun p h -> pre /\ p (Node (Cv () []) []) in
+let hist_require #e (pre:pure_pre) : hist e (squash pre) = 
+  let wp' : hist0 e (squash pre) = fun p h -> pre /\ p (Node (Cv () []) []) in
   assert (forall post1 post2. (hist_post_ord post1 post2 ==> (forall h. wp' post1 h ==> wp' post2 h)));
   assert (hist_wp_monotonic wp');
   wp'
@@ -170,12 +170,12 @@ let hist_fork (#e:Type u#0) (#a:Type u#a) (hist_th:hist e (Universe.raise_t u#0 
   assume (hist_wp_monotonic wp);
   wp
 
-val theta : (#a:Type u#a) -> (#e:Type0) -> free a e -> hist e a
-let rec theta #a #e m =
+val theta : free 'a 'e -> hist 'e 'a
+let rec theta m =
   match m with
-  | Return x -> hist_return e x
-  | PartialCall pre k ->
-      hist_bind (partial_call_wp e pre) (fun r -> theta (k r))
+  | Return x -> hist_return x
+  | Require pre k ->
+      hist_bind (hist_require pre) (fun r -> theta (k r))
   | Print arg k ->
       hist_bind (hist_print arg) (fun r -> theta (k r))
   | Fork th k -> (
