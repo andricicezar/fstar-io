@@ -38,7 +38,10 @@ let repeat_with_inv
   (#pre:trace -> Type0)
   (#inv:trace -> Type0)
   (#c1:squash (forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)))
-  (body : unit -> IODiv unit pre (ensures fun hist r -> terminates r /\ inv (ret_trace r))) :
+  ($body : unit -> IODiv unit pre (ensures fun hist r -> terminates r /\ inv (ret_trace r))) :
+  // ^ The dollar sign here tells F* to check for type equality in this argument,
+  // instead of just subtyping, so a call `repeat_with_inv body` can actually
+  // help the unifier find pre/inv/c1.
   IODiv
     unit
     (requires fun hist -> pre hist)
@@ -65,21 +68,7 @@ let body' (fd :file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> ter
 let repeat_with_inv' (fd:file_descr) = repeat_with_inv #(mypre fd) #(myinv fd) #(yes fd)
 
 let repeat_loop_body (fd : file_descr) : IODiv unit (mypre fd) (ensures fun hist r -> diverges r /\ repeat_inv_post (myinv fd) r) =
-  let body'' : (unit
-            -> IODiv unit (mypre fd) (fun _ r -> terminates #unit r /\ myinv fd (ret_trace #unit r))) = body' fd in
-  admit (); // TODO: why is this failing???
-  repeat_with_inv' fd body''
-  
-
-
-
-
-
-
-
-
-
-
+  repeat_with_inv' fd (body' fd)
 
 
 // let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
@@ -195,21 +184,39 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
   let x = open_file s in
   open_file s
 
-let repeat_open_close_test (s : string) : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True) =
-  repeat_with_inv #(fun _ -> True) #(fun _ -> True) (fun _ -> open_close_test s)
+// Hoisting body out of repeat_open_close_test
+let body2 (s:string) : unit -> IODiv unit (fun _ -> True) (fun hist r -> terminates r) =
+  fun _ -> open_close_test s
+
+let repeat_open_close_test (s : string)
+  : IODiv unit (requires fun _ -> True) (ensures fun _ _ -> True)
+=
+  repeat_with_inv #(fun _ -> True) #(fun _ -> True) (body2 s)
 
 let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> diverges r
   // /\ False (** does not work **)
 ) =
-  repeat_with_inv #(fun hist -> True) #(fun tr -> True) (fun () -> t ());
+  repeat_with_inv #(fun hist -> True) #(fun tr -> True) (fun () -> t () <: IODiv _ _ _);
   (** I think the explanation of this is that this is to
       be expected since iwp_bind just throws the continuition
       because the current spec diverges.**)
   assert (False)
 
+// Hoisting body out of repeat_more
+let body3 (fd:file_descr)
+  : unit -> IODiv unit (fun hist -> is_open fd hist) (fun hist r -> terminates r)
+  = fun _ -> let s = read fd in ()
+
+let inv3_pf (fd:file_descr) : squash (forall h lt. is_open fd h ==> is_open fd (rev_acc lt h)) = magic()
+// This is not true, so the program below is wrong I think? But then
+// the program still fails even when assuming this.
+
 // Afterwards find an example with a real invariant
-let repeat_more (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r)
-= repeat_with_inv #(fun hist -> is_open fd hist) #(fun tr -> True) (fun _ -> let s = read fd in ())
+let repeat_more (fd:file_descr)
+  : IODiv unit
+        (requires fun hist -> is_open fd hist)
+        (ensures fun hist r -> diverges #unit r /\ repeat_inv_post (fun _ -> True) r)
+= repeat_with_inv #_ #(fun _ -> True) #(inv3_pf fd) (body3 fd)
 
 let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> (*exists fd.*) diverges r (*/\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r*))
 = let fd = open_file s in
