@@ -113,6 +113,7 @@ let stream_prepend_trunc_left #a (l : list a) (s : stream a) (n : nat) :
   end
   else ()
 
+#push-options "--z3rlimit 20"
 let stream_prepend_trunc_right #a (l : list a) (s : stream a) (n : nat) :
   Lemma (n >= length l ==> stream_trunc (stream_prepend l s) n == l @ stream_trunc s (n - length l))
 = if n >= length l
@@ -130,6 +131,7 @@ let stream_prepend_trunc_right #a (l : list a) (s : stream a) (n : nat) :
     assert (forall i. i < n ==> index (stream_trunc (stream_prepend l s) n) i == index (l @ stream_trunc s (n - length l)) i)
   end
   else ()
+#pop-options
 
 let stream_prepend_trunc #a (l : list a) (s : stream a) (n : nat) :
   Lemma (stream_trunc (stream_prepend l s) n == (if n <= length l then firstn n l else l @ stream_trunc s (n - length l)))

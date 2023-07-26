@@ -68,12 +68,14 @@ let dm_loop1 (fd:file_descr) : iodiv_dm unit (iprepost (fun h -> is_open fd h) (
 let ibody2 : iwp unit =
   iprepost (fun _ -> True) (fun h r -> terminates r /\ ret_trace r == [EPrint "0";EPrint "1"])
 
+#push-options "--z3rlimit 20"
 let dm_body2 () : iodiv_dm unit ibody2 = 
   let w : iwp unit = _i_bind (i_act Print "0") (fun _ -> i_act Print "1") in
   let d : iodiv_dm unit w = 
     (iodiv_bind _ _ _ _ (iodiv_call Print "0") (fun () -> iodiv_call Print "1")) in
   assert (w `_ile` ibody2) by (norm [delta_only [`%_i_bind;`%_ile]]);
   iodiv_subcomp unit w ibody2 d
+#pop-options
 
 let iloop2 : iwp unit = iprepost (fun _ -> True) (fun h r -> diverges r /\ always (fun lt -> lt == [EPrint "0"; EPrint "1"]) r)
 
