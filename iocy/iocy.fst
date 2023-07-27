@@ -31,14 +31,14 @@ let _ =
 let product (xs:list 'a) (ys:list 'b) : list ('a * 'b) =
   concatMap (fun x -> map (fun y -> (x, y)) ys) xs
 
-let uncurry (f:'a -> 'b -> 'c) ((a,b):('a * 'b)) : 'c = f a b
+let uncurry2 (f:'a -> 'b -> 'c) ((a,b):('a * 'b)) : 'c = f a b
 
 let interleave_lists (#e:Type0) l1 l2 : list (trace e) = 
   match l1, l2 with
   | [], [] -> []
   | [], l2 -> l2
   | l1, [] -> l1
-  | _, _ -> concatMap (uncurry interleave) (product l1 l2)
+  | _, _ -> concatMap (uncurry2 interleave) (product l1 l2)
 
 val (===) : list 'a -> list 'a -> Type0
 let (===) l1 l2 = forall e. e `memP` l1 <==> e `memP` l2
@@ -56,12 +56,7 @@ let _ =
       [0; 5; 6; 2; 1]; [5; 0; 2; 1; 6]; [5; 0; 2; 6; 1]; [5; 0; 6; 2; 1]; [5; 6; 0; 2; 1]
     ]) by (compute ())
 
-let rec reduce (f:'a -> 'b -> 'b) (x:'b) (l:list 'a) : Tot 'b (decreases l) =
-match l with
-| [] -> x
-| h::tl -> reduce f (f h x) tl
-
-let reduce_interleave (l:list (list (trace 'e))) : list (trace 'e) = reduce (interleave_lists) [] l
+let reduce_interleave (l:list (list (trace 'e))) : list (trace 'e) = fold_left (interleave_lists) [] l
 
 let _ =
   assert (reduce_interleave ([[[2]]]) == [ [2] ]);
@@ -109,7 +104,7 @@ let _ =
       as_traces #unit #int (Node (Cv () [])
         [Node (Cv (Universe.raise_val ()) [0])
             [Node (Cv (Universe.raise_val ()) [1]) []; Node (Cv (Universe.raise_val ()) [2]) []];
-          Node (Cv (Universe.raise_val ()) [5; 6]) []]) == [
+          Node (Cv (Universe.raise_val ()) [5; 6]) []]) === [
       [5; 6; 0; 2; 1]; [5; 0; 6; 2; 1]; [5; 0; 2; 6; 1]; [5; 0; 2; 1; 6]; [0; 5; 6; 2; 1];
       [0; 5; 2; 6; 1]; [0; 5; 2; 1; 6]; [0; 2; 5; 6; 1]; [0; 2; 5; 1; 6]; [0; 2; 1; 5; 6];
       [5; 6; 0; 1; 2]; [5; 0; 6; 1; 2]; [5; 0; 1; 6; 2]; [5; 0; 1; 2; 6]; [0; 5; 6; 1; 2];
@@ -120,6 +115,7 @@ let rec univ_ch (t:runtree 'e (Universe.raise_t u#0 u#a unit)) : runtree 'e (Uni
 match t with
 | Node (Cv x tl) rts -> Node (Cv (Universe.raise_val (Universe.downgrade_val x)) tl) (univ_change rts)
 and univ_change (t:list u#a (runtree 'e (Universe.raise_t u#0 u#a unit))) : list u#b (runtree 'e (Universe.raise_t u#0 u#b unit)) =
+  (** map univ_ch t **)
   match t with
   | [] -> []
   | h :: tl -> [univ_ch h]@(univ_change tl)
@@ -244,7 +240,7 @@ let rec theta m =
     wp
   )
   | Wait id k -> let wp = (fun p thrds h ->
-    match List.Tot.Base.nth thrds id with
+    match nth thrds id with
     | None -> True 
     | Some rt ->
     (forall lt. lt `memP` as_traces rt ==>
@@ -259,10 +255,7 @@ let result (r:runtree 'e 'a) : 'a =
   
 let prog0 =  Print 0 (fun () -> Print 1 (fun () -> Print 2 (fun () -> Return 5)))
 
-let _ = assert (theta prog0 (fun r -> result r == 5 /\ as_traces r === [[0; 1; 2]]) [] [])  by (norm [delta_only [`%prog0; `%theta;`%hist_print;`%hist_bind;`%hist_fork;`%hist_fork0;`%hist_bind0;`%hist_post_bind;`%hist_return;`%hist_post_shift;`%univ_change;`%univ_ch];zeta;iota]; 
-
-  l_to_r [`List.Tot.Properties.append_l_nil;`List.Tot.Properties.append_nil_l];
-  compute ())
+let _ = assert (theta prog0 (fun r -> result r == 5 /\ as_traces r === [[0; 1; 2]]) [] [])  by (compute ())
 
 let prog1 = Fork (fun () -> Print 0 (fun () -> Return (Universe.raise_val ()))) 
                  (fun () -> Print 1 (fun () -> Fork (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))
