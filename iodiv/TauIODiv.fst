@@ -89,7 +89,11 @@ let _repeat_with_inv_aux pre inv (body : iodiv_dm (either unit unit) (repeat_bod
   i_iter_mono (fun _ -> repeat_body_inv (fun _ -> pre) inv ()) (repeat_body_inv (fun _ -> pre) inv) () ;
   dm_subcomp (dm_iter (fun _ -> body) ())
 
-let _repeat_with_inv pre inv (body : iodiv_dm unit (iprepost (fun hist -> pre hist) (fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r)))) :
+let _repeat_with_inv 
+  pre
+  inv 
+  (#c1: squash (forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)))
+  (body : iodiv_dm unit (iprepost (fun hist -> pre hist) (fun hist r -> terminates r /\ inv (ret_trace r)))) :
   iodiv_dm
     unit
     (iprepost
@@ -98,7 +102,13 @@ let _repeat_with_inv pre inv (body : iodiv_dm unit (iprepost (fun hist -> pre hi
     )
 = _repeat_with_inv_aux pre inv (dm_bind body (fun _ -> dm_ret (Inl ())))
 
-let repeat_with_inv #pre #inv (body : unit -> IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> terminates r /\ pre (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) :
+[@"opaque_to_smt"]
+let repeat_with_inv #pre #inv 
+  (#c1:squash (forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)))
+  ($body : unit -> IODiv unit (requires fun hist -> pre hist) (ensures fun hist r -> terminates r /\ inv (ret_trace r))) :
+  // ^ The dollar sign here tells F* to check for type equality in this argument,
+  // instead of just subtyping, so a call `repeat_with_inv body` can actually
+  // help the unifier find pre/inv/c1.
   IODiv
     unit
     (requires fun hist -> pre hist)
@@ -120,7 +130,14 @@ let _repeat #a (pre : a -> i_pre) inv (body : (x:a) -> iodiv_dm a (iprepost (fun
     )
 = _repeat_aux pre inv (fun y -> iodiv_subcomp _ _ _ (dm_bind (body y) (fun z -> dm_ret (Inl z)))) x
 
-let repeat #a pre inv (body : (x:a) -> IODiv a (requires fun hist -> pre x hist) (ensures fun hist r -> terminates r /\ pre (result r) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (x : a) :
+[@"opaque_to_smt"]
+let repeat #a 
+  pre 
+  inv
+  ($body : (x:a) -> IODiv a (requires fun hist -> pre x hist) (ensures fun hist r -> terminates r /\ pre (result r) (rev_acc (ret_trace r) hist) /\ inv (ret_trace r))) (x : a) :
+  // ^ The dollar sign here tells F* to check for type equality in this argument,
+  // instead of just subtyping, so a call `repeat_with_inv body` can actually
+  // help the unifier find pre/inv/c1.
   IODiv
     unit
     (requires fun hist -> pre x hist)

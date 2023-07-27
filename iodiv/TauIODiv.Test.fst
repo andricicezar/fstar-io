@@ -13,63 +13,18 @@ open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
 
-
-
 let body (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ 
   (exists s. ret_trace r == [ERead fd s])) =
   let msg = read fd in
   ()
 
-let _repeat_with_inv 
-  (#pre:trace -> Type0)
-  (#inv:(trace -> Type0){forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)})
-  (body : iodiv_dm unit (iprepost (fun hist -> pre hist) (fun hist r -> terminates r /\ inv (ret_trace r)))) :
-  iodiv_dm
-    unit
-    (iprepost
-      (fun hist -> pre hist)
-      (fun hist r -> diverges r /\ repeat_inv_post inv r)
-    )
-= _repeat_with_inv_aux pre inv (dm_bind body (fun _ -> dm_ret (Inl ())))
-
-#set-options "--print_implicits"
-
-let repeat_with_inv 
-  (#pre:trace -> Type0)
-  (#inv:trace -> Type0)
-  (#c1:squash (forall h lt. pre h /\ inv lt ==> pre (rev_acc lt h)))
-  ($body : unit -> IODiv unit pre (ensures fun hist r -> terminates r /\ inv (ret_trace r))) :
-  // ^ The dollar sign here tells F* to check for type equality in this argument,
-  // instead of just subtyping, so a call `repeat_with_inv body` can actually
-  // help the unifier find pre/inv/c1.
-  IODiv
-    unit
-    (requires fun hist -> pre hist)
-    (ensures fun hist r -> diverges r /\ repeat_inv_post inv r)
-= IODIV?.reflect (_repeat_with_inv #pre #inv (reify (body ())))
-
-[@"opaque_to_smt"]
 let myinv (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd s]
 
-[@"opaque_to_smt"]
-let mypre (fd:file_descr) : trace -> Type0 = fun h -> is_open fd h
+let repeat_with_inv' (fd:file_descr) = repeat_with_inv #(fun h -> is_open fd h) #(myinv fd) #()
 
-val yes : (fd:file_descr) -> squash (forall h lt. mypre fd h /\ myinv fd lt ==> mypre fd (rev_acc lt h))
-let yes fd = 
-  reveal_opaque (`%mypre) mypre;
-  reveal_opaque (`%myinv) myinv
-
-[@"opaque_to_smt"]
-let body' (fd :file_descr) () : IODiv unit (mypre fd) (ensures fun hist r -> terminates r /\ myinv fd (ret_trace r)) =
-  reveal_opaque (`%mypre) mypre;
-  reveal_opaque (`%myinv) myinv;
-  body fd
-
-let repeat_with_inv' (fd:file_descr) = repeat_with_inv #(mypre fd) #(myinv fd) #(yes fd)
-
-let repeat_loop_body (fd : file_descr) : IODiv unit (mypre fd) (ensures fun hist r -> diverges r /\ repeat_inv_post (myinv fd) r) =
-  repeat_with_inv' fd (body' fd)
-
+let repeat_loop_body (fd : file_descr) : IODiv unit (fun h -> is_open fd h) (ensures fun hist r -> diverges r /\ 
+  repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r) =
+  repeat_with_inv' fd (fun () -> body fd)
 
 // let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
 //   act_call Openfile s
@@ -184,6 +139,7 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
   let x = open_file s in
   open_file s
 
+(** *** Test repeat **)
 // Hoisting body out of repeat_open_close_test
 let body2 (s:string) : unit -> IODiv unit (fun _ -> True) (fun hist r -> terminates r) =
   fun _ -> open_close_test s
@@ -197,44 +153,13 @@ let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ens
   // /\ False (** does not work **)
 ) =
   repeat_with_inv #(fun hist -> True) #(fun tr -> True) (fun () -> t () <: IODiv _ _ _);
-  (** I think the explanation of this is that this is to
+  (** I think this is to
       be expected since iwp_bind just throws the continuition
       because the current spec diverges.**)
   assert (False)
 
-// Hoisting body out of repeat_more
-let body3 (fd:file_descr)
-  : unit -> IODiv unit (fun hist -> is_open fd hist) (fun hist r -> terminates r)
-  = fun _ -> let s = read fd in ()
 
-let inv3_pf (fd:file_descr) : squash (forall h lt. is_open fd h ==> is_open fd (rev_acc lt h)) = magic()
-// This is not true, so the program below is wrong I think? But then
-// the program still fails even when assuming this.
-
-// Afterwards find an example with a real invariant
-let repeat_more (fd:file_descr)
-  : IODiv unit
-        (requires fun hist -> is_open fd hist)
-        (ensures fun hist r -> diverges #unit r /\ repeat_inv_post (fun _ -> True) r)
-= repeat_with_inv #_ #(fun _ -> True) #(inv3_pf fd) (body3 fd)
-
-let repeat_test (s : string) : IODiv unit (requires fun hist -> True) (ensures fun hist r -> (*exists fd.*) diverges r (*/\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r*))
-= let fd = open_file s in
-  repeat (fun b hist -> is_open fd hist) (fun tr -> exists s. tr == [ERead fd s]) (fun b ->
-    let x = read fd in
-    if b && x = "" then true else false
-  ) false
-
-
-
-
-let repeat_test_aux1 (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> diverges r /\ repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r)
-// by (explode () ; bump_nth 12 ; dump "hh")
-= admit () ;
-  repeat (fun b hist -> is_open fd hist) (fun tr -> exists s. tr == [ERead fd s]) (fun b ->
-    let x = read fd in
-    if b && x = "" then true else false
-  ) false
+(** *** Test partiality **)
 
 let test_using_assume (fd : file_descr) : IODiv string (requires fun _ -> True) (ensures fun hist r -> terminates r) =
   assume (forall hist. is_open fd hist) ;
