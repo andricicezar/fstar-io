@@ -13,19 +13,6 @@ open DivFree
 open DivFreeTauSpec
 open DivFreeTauDM
 
-let body (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ 
-  (exists s. ret_trace r == [ERead fd s])) =
-  let msg = read fd in
-  ()
-
-let myinv (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd s]
-
-let repeat_with_inv' (fd:file_descr) = repeat_with_inv #(fun h -> is_open fd h) #(myinv fd) #()
-
-let repeat_loop_body (fd : file_descr) : IODiv unit (fun h -> is_open fd h) (ensures fun hist r -> diverges r /\ 
-  repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r) =
-  repeat_with_inv' fd (fun () -> body fd)
-
 // let open_file (s : string) : IODiv file_descr (requires fun hist -> True) (ensures fun hist r -> terminates r /\ ret_trace r == [ EOpenfile s (result r) ]) =
 //   act_call Openfile s
 
@@ -139,6 +126,54 @@ let many_open_test' (s : string) : IODiv file_descr (requires fun _ -> True) (en
   let x = open_file s in
   open_file s
 
+(** *** Test mix **)
+let always = repeat_inv_post
+  
+type cvdv = unit -> IODiv unit (fun _ -> True) (fun hist r ->
+  (terminates r ==> (ret_trace r) == [EPrint "0"]) /\
+  (diverges r ==> always (fun tr -> tr == [EPrint "0"]) r))
+
+let test1000 (f:cvdv) : IODiv unit (fun _ -> True) (fun hist r ->
+  (terminates r ==> (ret_trace r) == [EPrint "0"; EPrint "0"]) /\
+  (diverges r ==> always (fun tr -> tr == [EPrint "0"]) r))
+=
+// TODO: prove
+  admit ();
+  print "0";
+  f ()
+
+
+type policy_spec = cmd:io_sig.act -> io_sig.arg cmd -> trace -> Type0
+
+unfold
+let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
+  match e with
+  | EOpenfile arg _ -> pi Openfile arg h
+  | ERead arg _ -> pi Read arg h
+  | EPrint arg -> pi Print arg h
+  | EClose arg -> pi Close arg h
+
+let rec enforced_locally
+  (pi : policy_spec)
+  (h l: trace) :
+  Tot Type0 (decreases l) =
+  match l with
+  | [] -> True
+  | e  ::  t ->
+    has_event_respected_pi e pi h /\ enforced_locally pi (e::h) t
+
+type satisfy_policy (pi:policy_spec) = unit -> IODiv unit (fun _ -> True) (fun hist r ->
+  (terminates r ==> enforced_locally pi hist (ret_trace r)) /\
+  (diverges r ==> repeat_inv_post (fun tr -> forall tr'. enforced_locally pi hist tr' ==> enforced_locally pi (rev tr' @ hist) tr) r))
+
+// TODO: prove
+val compose : pi:policy_spec -> satisfy_policy pi -> satisfy_policy pi -> satisfy_policy pi
+let compose pi f g () =
+  admit ();
+  f ();
+  g ()
+
+
 (** *** Test repeat **)
 // Hoisting body out of repeat_open_close_test
 let body2 (s:string) : unit -> IODiv unit (fun _ -> True) (fun hist r -> terminates r) =
@@ -158,6 +193,41 @@ let repeat_pure (t : unit -> unit) : IODiv unit (requires fun hist -> True) (ens
       because the current spec diverges.**)
   assert (False)
 
+let body3 (fd : file_descr) : IODiv unit (requires fun hist -> is_open fd hist) (ensures fun hist r -> terminates r /\ 
+  (exists s. ret_trace r == [ERead fd s])) =
+  let msg = read fd in
+  ()
+
+// TODO: why is this needed?
+let myinv (fd:file_descr) : trace -> Type0 = fun tr -> exists s. tr == [ERead fd s]
+
+// TODO: why is this needed?
+let repeat_with_inv' (fd:file_descr) = repeat_with_inv #(fun h -> is_open fd h) #(myinv fd) #()
+
+let repeat_loop_body (fd : file_descr) : IODiv unit (fun h -> is_open fd h) (ensures fun hist r -> diverges r /\ 
+  repeat_inv_post (fun tr -> exists s. tr == [ERead fd s]) r) =
+  repeat_with_inv' fd (fun () -> body3 fd)
+
+(** *** Test iter **)
+
+let i_read_contents (fd:file_descr) (i:string) : iwp (either string string) =
+  iprepost
+  (fun h ->is_open fd h) (fun hist r -> terminates r /\
+  (exists msg. ret_trace r == [ERead fd msg]))
+
+val read_contents_body : fd:file_descr -> i:string -> IODIV (either string string) (i_read_contents fd i) 
+let read_contents_body fd acc =
+  let msg = read fd in
+  if msg = "" then Inr acc
+  else Inl (acc `strcat` msg )
+
+let read_contents (fd:file_descr) : IODIV string (i_iter (i_read_contents fd) "") =
+  iter #string #string #(i_read_contents fd) (read_contents_body fd) ""
+
+// TODO: can we prove this @Theo?
+let read_contents' (fd:file_descr) : IODiv string (fun h -> is_open fd h) (fun hist r -> terminates r \/ diverges r) =
+  admit ();
+  read_contents fd
 
 (** *** Test partiality **)
 
