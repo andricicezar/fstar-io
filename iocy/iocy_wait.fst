@@ -1,20 +1,24 @@
-module Iocy
+module Iocy_Wait
 
 open FStar.Tactics
 open FStar.List.Tot.Base
 
-type trace (e:Type0) = list e
+type event (e:Type0) =
+| Ev : e -> event e
+| EWait : nat -> event e
+
+type trace (e:Type0) = list (event e)
 
 type run 'e (a:Type u#a) =
 | Cv : a -> trace 'e -> run 'e a
 
 noeq
 type runtree 'e (a:Type u#a) : Type u#a =
-| Node : run 'e a -> list (runtree 'e (Universe.raise_t unit)) -> runtree 'e a
+| Node : n:nat{n >= 1} -> run 'e a -> list (runtree 'e (Universe.raise_t unit)) -> runtree 'e a
 
 let rec univ_ch (t:runtree 'e (Universe.raise_t u#0 u#a unit)) : runtree 'e (Universe.raise_t u#0 u#b unit) =
 match t with
-| Node (Cv x tl) rts -> Node (Cv (Universe.raise_val (Universe.downgrade_val x)) tl) (univ_change rts)
+| Node id (Cv x tl) rts -> Node id (Cv (Universe.raise_val (Universe.downgrade_val x)) tl) (univ_change rts)
 and univ_change (t:list u#a (runtree 'e (Universe.raise_t u#0 u#a unit))) : list u#b (runtree 'e (Universe.raise_t u#0 u#b unit)) =
   (** map univ_ch t **)
   match t with
@@ -34,12 +38,12 @@ let hist_wp_monotonic (wp:hist0 'e 'a) =
 type hist 'e 'a = wp:(hist0 'e 'a){hist_wp_monotonic wp}
 
 let hist_return (#e:Type0) (x:'a) : hist e 'a =
-  fun p _ _ -> p (Node (Cv x []) [])
+  fun p _ _ -> p (Node 1 (Cv x []) [])
 
 let hist_post_shift (p:hist_post 'e 'b) (rt:runtree 'e 'a) : hist_post 'e 'b =
   fun (rt':runtree 'e 'b) -> 
     match rt, rt' with
-    | Node (Cv x lt) trt, Node (Cv x' lt') trt' -> p (Node (Cv x' (lt@lt')) ((univ_change trt) @ trt'))
+    | Node id (Cv x lt) trt, Node id' (Cv x' lt') trt' -> p (Node id' (Cv x' (lt@lt')) ((univ_change trt) @ trt'))
 
 let hist_post_bind
   (#a:Type u#a) (#b:Type u#b)
@@ -49,7 +53,7 @@ let hist_post_bind
   (p:hist_post 'e b) :
   Tot (hist_post 'e a) =
   fun (rt:runtree 'e a) ->
-    match rt with | Node (Cv x lt) rts ->
+    match rt with | Node _ (Cv x lt) rts ->
     kw x (hist_post_shift p rt) ((univ_change rts)@ths) (List.rev lt @ h)
 
 let hist_bind (#a:Type u#a) (#b:Type u#b) (w : hist 'e a) (kw : a -> hist 'e b) : hist 'e b =
@@ -62,8 +66,8 @@ type free (a:Type u#a) (e:Type0) : Type u#(max 1 a)=
 | Require : (pre:pure_pre) -> cont:((squash pre) -> free u#a a e) -> free a e
 | Return : a -> free a e
 | Print : (arg:e) -> cont:(unit -> free u#a a e) -> free a e
-| Fork : th:(unit -> free (Universe.raise_t unit) e) -> cont:(unit -> free a e) -> free a e
-| Wait : nat -> cont:(option unit -> free a e) -> free a e
+| Fork : th:(unit -> free (Universe.raise_t unit) e) -> cont:(n:nat{n >= 1} -> free a e) -> free a e
+| Wait : n:nat{n >= 1} -> cont:(option unit -> free a e) -> free a e
 
 let free_return (#a:Type) (#e:Type) (x:a) : free a e =
   Return x
@@ -82,25 +86,30 @@ let rec free_bind
   | Fork th fnc ->
       Fork
         (fun i -> free_bind #(Universe.raise_t u#0 u#a unit) #(Universe.raise_t u#0 u#b unit) #e (th i) (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
-        (fun _ -> free_bind (fnc ()) k)
+        (fun id -> free_bind (fnc id) k)
   | Require pre fnc ->
       Require pre (fun _ -> free_bind (fnc ()) k)
   | Wait id fnc -> 
       Wait id (fun i -> free_bind (fnc i) k)
 
 let hist_require #e (pre:pure_pre) : hist e (squash pre) = 
-  let wp' : hist0 e (squash pre) = fun p _ _ -> pre /\ p (Node (Cv () []) []) in
+  let wp' : hist0 e (squash pre) = fun p _ _ -> pre /\ p (Node 1 (Cv () []) []) in
   assert (forall post1 post2. (hist_post_ord post1 post2 ==> (forall h thrs. wp' post1 thrs h ==> wp' post2 thrs h)));
   assert (hist_wp_monotonic wp');
   wp'
 
-let hist_print (#e:Type) (ev:e) : hist e unit =
-  fun p _ _ -> p (Node (Cv () [ev]) [])
+let hist_print (ev:'e) : hist 'e unit =
+  fun p _ _ -> p (Node 1 (Cv () [Ev ev]) [])
 
 let hist_fork (#e:Type u#0) (#a:Type u#a) (hist_th:hist e (Universe.raise_t u#0 u#a unit)) : hist e (Universe.raise_t u#0 u#a unit) =
-  let wp = fun p -> hist_th (fun r -> p (Node (Cv (Universe.raise_val ()) []) [r])) in
+  let wp = fun p -> hist_th (fun r -> p (Node 1 (Cv (Universe.raise_val ()) []) [r])) in
   assume (hist_wp_monotonic wp);
   wp
+
+let rec shift_ids (x:nat) (t:runtree 'e 'a) : runtree 'e 'a =
+  admit ();
+  match t with
+  | Node id r thrds -> Node (id+x) r (map (shift_ids x) thrds)
 
 val theta : (trace 'e -> runtree 'e (Universe.raise_t unit) -> Type0) -> free 'a 'e -> hist 'e 'a
 let rec theta sat m =
@@ -113,26 +122,38 @@ let rec theta sat m =
   | Fork th k -> (
     let wp = fun p thrs h -> 
       theta sat (th ()) (fun rt -> 
-        theta sat (k ()) (fun rt' -> 
-          let (Node (Cv x lt) thrs) = rt' in
-          p (Node (Cv x []) [rt; (Node (Cv (Universe.raise_val ()) lt) thrs) ])
+        let (Node kid_id _ _) = rt in
+        theta sat (k kid_id) (fun rt' -> 
+          let (Node id (Cv x lt) thrs) = shift_ids kid_id rt' in
+          p (Node id (Cv x []) [rt; (Node id (Cv (Universe.raise_val ()) lt) thrs) ])
         ) ((univ_ch rt)::thrs) h
       ) thrs h in
     assume (hist_wp_monotonic wp);
     wp
   )
   | Wait id k -> let wp = (fun p thrds h ->
-    match nth thrds id with
+    match nth thrds (id-1) with
     | None -> theta sat (k None) p thrds h 
     | Some rt ->
     (forall lt. lt `sat` (univ_ch rt) ==>
-      theta sat (k (Some ())) (fun (Node (Cv x lt') rts) -> p (Node (Cv x (** append event with id**) lt') rts)) thrds (** - rt **) (List.rev lt @ h))) in
+      theta sat (k (Some ())) (fun (Node id (Cv x lt') rts) -> p (Node id (Cv x ((EWait id)::lt')) rts)) thrds (** - rt **) (List.rev lt @ (EWait id) :: h))) in
     assume (hist_wp_monotonic wp);
     wp
 
+let prog11 () = Fork (fun () -> Print 100 (fun () -> Fork (fun () -> Print 102 (fun () -> Return (Universe.raise_val ())))
+                                                       (fun id -> Print id (fun () -> Return (Universe.raise_val ())))))
+                     (fun id -> Print id (fun () -> Fork (fun () -> Print 103 (fun () -> Return (Universe.raise_val ())))
+                                                      (fun id -> Print id (fun () -> Return (Universe.raise_val ())))))
+let prog12 (id:nat{id >= 1}) = Fork (fun () -> Print id (fun () -> Fork (fun () -> Wait 1 (fun _ -> Return (Universe.raise_val ())))
+                                                       (fun id -> Print 204 (fun () -> Return (Universe.raise_val ())))))
+                      (fun id -> Print id (fun () -> Fork (fun () -> Print 203 (fun () -> Return (Universe.raise_val ())))
+                                                       (fun id -> Print 205 (fun () -> Return ()))))
 
+let prog1 = Fork prog11 prog12
 
-let rec interleave (t1:trace 'e) (t2:trace 'e) : list (trace 'e) =
+let _ = assert (theta (fun lt r -> True) prog1 (fun r -> r == Node 1 (Cv () []) []) [] []) by (compute (); dump "H")
+
+let rec interleave (t1:list 'e) (t2:list 'e) : list (trace 'e) =
   match t1, t2 with
   | [], [] -> []
   | _, [] -> [t1]
