@@ -398,20 +398,24 @@ let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
 type qltl_formula s = quant * ltl_syntax s
 
 /// Satisfiability of a QLTL formula over sets of finite traces [trs] (non-empty)
-let qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
-  match form with
-  | (Forall, p) -> forall t. t `memP` trs ==> ltl_denote p t
-  | (Exists, p) -> exists (t:_{t `memP` trs}). ltl_denote p t
+let rec qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
+  match form, trs with
+ // | (Forall, p), [] -> True
+ // | (Forall, p), t::tl -> ltl_denote p t /\ qltl_denote (Forall, p) tl
+  | (Forall, p), _ -> forall t. t `memP` trs ==> ltl_denote p t
+  | (Exists, p), [] -> False
+  | (Exists, p), t::trs' -> ltl_denote p t \/ qltl_denote form trs'
+
+ // match form with
+ // | (Forall, p) -> forall t. t `memP` trs ==> ltl_denote p t
+ // | (Exists, p) -> exists t. t `memP` trs /\ ltl_denote p t
 
 // Some assertions, SMT is getting stuck on quantifiers I think
 let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]]) by (
   // does not work with compute, probably too much unfolding 
-  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota]
+  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota];
+  dump "h"
  )
 
 let _ = assert(qltl_denote (Forall, Always (Now (fun n -> n % 2 == 1))) [[1]; [3]]) 
-let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[1]; [2]])  by (
-  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota];
- // witness (`([1]));
-  dump "H"
- )
+let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[4]; [6]; [2]; [1]; [2]])
