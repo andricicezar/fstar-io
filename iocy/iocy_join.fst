@@ -394,18 +394,19 @@ let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
 type qltl_formula s = quant * ltl_syntax s
 
 /// Satisfiability of a QLTL formula over sets of finite traces [trs] (non-empty)
-// TODO: why is [rec] making a difference later?
-let rec qltl_denote (#t: Type0) (form: qltl_formula t) (trs: list (list t) {Cons? trs}): Type0 =
-  match form with
-  | (Forall, p) -> forall t. t `memP` trs ==> ltl_denote p t
-  | (Exists, p) -> exists t. t `memP` trs /\ ltl_denote p t
+let rec qltl_denote (form: qltl_formula 'a) (trs: list (list 'a) {Cons? trs}) : Type0 =
+  match form, trs with
+  | (Forall, p), _ -> forall t. t `memP` trs ==> ltl_denote p t
+  | (Exists, p), t::tl -> ltl_denote p t \/ qltl_denote form tl
 
 // Some assertions
 let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]])
 let _ = assert(qltl_denote (Forall, Always (Now (fun n -> n % 2 == 1))) [[1]; [3]]) 
 
 let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[4]; [6]; [2]; [1]; [2]]) 
-  by (compute(); dump "H")
+ // by (norm [delta_only [`%qltl_denote;`%ltl_denote;`%suffixes_of];zeta;iota]; dump "H")
+ by (witness (`([1])); dump "H")
 
 // Should fail
-let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 0))) [[1;3]; [1]]) by (tadmit ())
+[@expect_failure]
+let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 0))) [[1;3]; [1]])
