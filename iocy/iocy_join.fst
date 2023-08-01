@@ -385,13 +385,13 @@ let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
   | Always p -> forall (i: nat). i <= length tr -> ltl_denote p (snd (splitAt i tr))
   | And p q -> ltl_denote p tr /\ ltl_denote q tr
   | Or p q -> ltl_denote p tr /\ ltl_denote q tr
-  | Impl p q -> ltl_denote p tr -> ltl_denote q tr
+  | Impl p q -> ltl_denote p tr ==> ltl_denote q tr
 
 /// Quantified LTL formula
 type qltl_formula s = quant * ltl_syntax s
 
 /// Satisfiability of a QLTL formula over sets of finite traces [trs] (non-empty)
-let rec qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
+let qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
   match form with
   | (Forall, p) -> forall t. t `memP` trs -> ltl_denote p t
   | (Exists, p) -> exists t. t `memP` trs /\ ltl_denote p t
