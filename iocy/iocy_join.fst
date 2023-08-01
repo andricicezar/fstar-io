@@ -375,14 +375,21 @@ type ltl_syntax (s:Type0) =
 | Impl: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
 | Now: (s -> Type0) -> ltl_syntax s
 
+let rec suffixes_of (l:list 'a) : list (list 'a) =
+match l with
+| [] -> []
+| h::tl -> [l] @ (suffixes_of tl)
+
 /// Give the denotation of an ltl formula [form] given a finite trace [tr: list s]
 let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
   match form with
   | Now p -> (match tr with
             | h :: _ -> p h
             | [] -> False)
-  | Eventually p -> exists (i: nat). i <= length tr /\ ltl_denote p (snd (splitAt i tr))
-  | Always p -> forall (i: nat). i <= length tr ==> ltl_denote p (snd (splitAt i tr))
+  //| Eventually p -> exists (i: nat). i <= length tr /\ ltl_denote p (snd (splitAt i tr))
+  //| Always p -> forall (i: nat). i <= length tr ==> ltl_denote p (snd (splitAt i tr))
+  | Eventually p -> exists tl. tl `memP` suffixes_of tr /\ ltl_denote p tl
+  | Always p -> forall tl. tl `memP` suffixes_of tr ==> ltl_denote p tl
   | And p q -> ltl_denote p tr /\ ltl_denote q tr
   | Or p q -> ltl_denote p tr /\ ltl_denote q tr
   | Impl p q -> ltl_denote p tr ==> ltl_denote q tr
@@ -394,15 +401,17 @@ type qltl_formula s = quant * ltl_syntax s
 let qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
   match form with
   | (Forall, p) -> forall t. t `memP` trs ==> ltl_denote p t
-  | (Exists, p) -> exists t. t `memP` trs /\ ltl_denote p t
+  | (Exists, p) -> exists (t:_{t `memP` trs}). ltl_denote p t
 
 // Some assertions, SMT is getting stuck on quantifiers I think
-let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]]) // does not work with compute, probably too much unfolding by (compute (); explode (); dump "HH")
-
-let _ = assert(qltl_denote (Forall, Always (Now (fun n -> n % 2 == 1))) [[1]; [3]]) by (
-  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota];
-  explode (); dump "HH"
-  (** that splitAt does not work well in the VC **)
+let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]]) by (
+  // does not work with compute, probably too much unfolding 
+  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota]
  )
 
-let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[1]; [2]]) by (compute (); dump "HH")
+let _ = assert(qltl_denote (Forall, Always (Now (fun n -> n % 2 == 1))) [[1]; [3]]) 
+let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[1]; [2]])  by (
+  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota];
+ // witness (`([1]));
+  dump "H"
+ )
