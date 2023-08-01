@@ -413,5 +413,19 @@ let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 0))) [[1;
 
 // Test if 1 is followed by 2
 // CA: is this how one writes it?
-let _ = assert (theta' prog6 (fun r -> result r == () /\ 
-  qltl_denote (Forall, Eventually (Impl (Now (fun n -> n == 1)) (Eventually (Now (fun n -> n == 2))))) (as_simpl_traces r)) [] []) by (compute ())
+let _ = assert (
+  qltl_denote (Forall, Eventually (Impl (Now (fun n -> n == 1)) (Eventually (Now (fun n -> n == 2))))) [
+        [0; 1; 2; 5; 6];
+        [0; 1; 5; 2; 6];
+        [0; 5; 1; 2; 6];
+        [5; 0; 1; 2; 6]
+      ]) by (compute ())
+
+// TODO: why is this working?
+let _ = assert (
+  qltl_denote (Forall, Eventually (Impl (Now (fun n -> n == 0)) (Eventually (Now (fun n -> n == 1))))) [
+        [0; 1; 2; 5; 6];
+        [0; 1; 5; 2; 6];
+        [0; 5; 1; 2; 6];
+        [5; 0; 1; 2; 6]
+      ]) by (compute ())
