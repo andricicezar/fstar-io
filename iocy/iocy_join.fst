@@ -394,10 +394,10 @@ let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
 type qltl_formula s = quant * ltl_syntax s
 
 /// Satisfiability of a QLTL formula over sets of finite traces [trs] (non-empty)
-let rec qltl_denote (form: qltl_formula 'a) (trs: list (list 'a) {Cons? trs}) : Type0 =
-  match form, trs with
-  | (Forall, p), _ -> forall t. t `memP` trs ==> ltl_denote p t
-  | (Exists, p), t::tl -> ltl_denote p t \/ qltl_denote form tl
+let qltl_denote (form: qltl_formula 'a) (trs: list (list 'a) {Cons? trs}) : Type0 =
+  match form with
+  | (Forall, p) -> forall t. t `memP` trs ==> ltl_denote p t
+  | (Exists, p) -> exists (t:list 'a). t `memP` trs /\ ltl_denote p t
 
 // Some assertions
 let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]])
@@ -410,3 +410,8 @@ let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[4]; [6
 // Should fail
 [@expect_failure]
 let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 0))) [[1;3]; [1]])
+
+// Test if 1 is followed by 2
+// CA: is this how one writes it?
+let _ = assert (theta' prog6 (fun r -> result r == () /\ 
+  qltl_denote (Forall, Eventually (Impl (Now (fun n -> n == 1)) (Eventually (Now (fun n -> n == 2))))) (as_simpl_traces r)) [] []) by (compute ())
