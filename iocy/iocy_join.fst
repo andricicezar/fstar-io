@@ -383,13 +383,11 @@ match l with
 /// Give the denotation of an ltl formula [form] given a finite trace [tr: list s]
 let rec ltl_denote (#s: Type0)(form: ltl_syntax s)(tr: list s): Type0 =
   match form with
-  | Now p -> (match tr with
-            | h :: _ -> p h
-            | [] -> False)
+  | Now p -> ~(tr == []) /\ p (hd tr)
   //| Eventually p -> exists (i: nat). i <= length tr /\ ltl_denote p (snd (splitAt i tr))
   //| Always p -> forall (i: nat). i <= length tr ==> ltl_denote p (snd (splitAt i tr))
-  | Eventually p -> exists tl. tl `memP` suffixes_of tr /\ ltl_denote p tl
-  | Always p -> forall tl. tl `memP` suffixes_of tr ==> ltl_denote p tl
+  | Eventually p -> exists (tl:list s). tl `memP` suffixes_of tr /\ ltl_denote p tl
+  | Always p -> forall (tl:list s). tl `memP` suffixes_of tr ==> ltl_denote p tl
   | And p q -> ltl_denote p tr /\ ltl_denote q tr
   | Or p q -> ltl_denote p tr /\ ltl_denote q tr
   | Impl p q -> ltl_denote p tr ==> ltl_denote q tr
@@ -401,7 +399,7 @@ type qltl_formula s = quant * ltl_syntax s
 let rec qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0 =
   match form, trs with
  // | (Forall, p), [] -> True
- // | (Forall, p), t::tl -> ltl_denote p t /\ qltl_denote (Forall, p) tl
+ // | (Forall, p), t::tl -> ltl_denote p t /\ qltl_denote form tl
   | (Forall, p), _ -> forall t. t `memP` trs ==> ltl_denote p t
   | (Exists, p), [] -> False
   | (Exists, p), t::trs' -> ltl_denote p t \/ qltl_denote form trs'
@@ -411,11 +409,6 @@ let rec qltl_denote (#t: Type0)(form: qltl_formula t)(trs: list (list t)): Type0
  // | (Exists, p) -> exists t. t `memP` trs /\ ltl_denote p t
 
 // Some assertions, SMT is getting stuck on quantifiers I think
-let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]]) by (
-  // does not work with compute, probably too much unfolding 
-  norm [delta_only [`%qltl_denote;`%ltl_denote];zeta;iota];
-  dump "h"
- )
-
+let _ = assert(qltl_denote (Forall, Eventually (Now (fun n -> n % 2 == 1))) [[0; 1]; [3]])
 let _ = assert(qltl_denote (Forall, Always (Now (fun n -> n % 2 == 1))) [[1]; [3]]) 
 let _ = assert(qltl_denote (Exists, Always (Now (fun n -> n % 2 == 1))) [[4]; [6]; [2]; [1]; [2]])
