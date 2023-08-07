@@ -13,20 +13,26 @@ type run 'e (a:Type u#a) =
 | Cv : a -> trace 'e -> run 'e a
 
 noeq
-type runtree 'e (a:Type u#a) : Type u#a =
+type runtree 'e (a:Type u#a) : Type =
 | Node : run 'e a -> list (runtree 'e (Universe.raise_t unit)) -> runtree 'e a
 
-let rec univ_ch (t:runtree 'e (Universe.raise_t u#0 u#a unit)) : runtree 'e (Universe.raise_t u#0 u#b unit) =
+type thrd 'e = runtree 'e (Universe.raise_t unit)
+type thrds 'e = list (thrd 'e)
+
+let rec univ_ch (t:thrd u#a 'e) : thrd u#b 'e =
 match t with
 | Node (Cv x tl) rts -> Node (Cv (Universe.raise_val (Universe.downgrade_val x)) tl) (univ_change rts)
-and univ_change (t:list u#a (runtree 'e (Universe.raise_t u#0 u#a unit))) : list u#b (runtree 'e (Universe.raise_t u#0 u#b unit)) =
+and univ_change (t:thrds u#a 'e) : thrds u#b 'e =
   (** map univ_ch t **)
   match t with
   | [] -> []
   | h :: tl -> [univ_ch h]@(univ_change tl)
 
+let app_thrds (t1:thrds u#a 'e) (t2:thrds u#b 'e) : thrds u#b 'e =
+((univ_change t1) @ t2)
+
 type hist_post 'e 'a = runtree 'e 'a -> Type0
-type hist_pre 'e (a:Type u#a) = list (runtree 'e (Universe.raise_t u#0 u#a unit)) -> trace 'e -> Type0
+type hist_pre 'e (a:Type u#a) = thrds u#a 'e -> trace 'e -> Type0
 
 type hist0 'e 'a = hist_post 'e 'a -> hist_pre 'e 'a
 
@@ -43,18 +49,18 @@ let hist_return (#e:Type0) (x:'a) : hist e 'a =
 let hist_post_shift (p:hist_post 'e 'b) (rt:runtree 'e 'a) : hist_post 'e 'b =
   fun (rt':runtree 'e 'b) -> 
     match rt, rt' with
-    | Node (Cv x lt) trt, Node (Cv x' lt') trt' -> p (Node (Cv x' (lt@lt')) ((univ_change trt) @ trt'))
+    | Node (Cv x lt) trt, Node (Cv x' lt') trt' -> p (Node (Cv x' (lt@lt')) (trt `app_thrds` trt'))
 
 let hist_post_bind
   (#a:Type u#a) (#b:Type u#b)
-  (ths:list (runtree 'e (Universe.raise_t u#0 u#b unit)))
+  (ths:thrds u#b 'e)
   (h:trace 'e)
   (kw : a -> hist 'e b)
   (p:hist_post 'e b) :
   Tot (hist_post 'e a) =
   fun (rt:runtree 'e a) ->
     match rt with | Node (Cv x lt) rts ->
-    kw x (hist_post_shift p rt) ((univ_change rts)@ths) (List.rev lt @ h)
+    kw x (hist_post_shift p rt) (rts `app_thrds` ths) (List.rev lt @ h)
 
 let hist_bind (#a:Type u#a) (#b:Type u#b) (w : hist 'e a) (kw : a -> hist 'e b) : hist 'e b =
   let wp = fun p ths h -> w (hist_post_bind ths h kw p) (univ_change ths) h in
@@ -106,7 +112,7 @@ let hist_fork (#e:Type u#0) (#a:Type u#a) (hist_th:hist e (Universe.raise_t u#0 
   assume (hist_wp_monotonic wp);
   wp
 
-val theta : (trace 'e -> list (runtree 'e (Universe.raise_t unit)) -> Type0) -> free 'a 'e -> hist 'e 'a
+val theta : (trace 'e -> thrds 'e -> Type0) -> free 'a 'e -> hist 'e 'a
 let rec theta sat m =
   match m with
   | Require pre k ->
@@ -148,30 +154,6 @@ let _ =
   assert (interleave #int [1;2] [0] == [ [1;2;0]; [1;0;2]; [0;1;2] ]);
   assert (flatten (map (interleave [0]) [[]]) == [ [0] ])
 
-let filter_out_join (t:trace 'e) : trace 'e =
-  filter (fun ev -> not (EJoin? ev)) t
-  
-let rec split_trace_join (t:trace 'e) acc : Tot ((trace 'e) * (trace 'e)) (decreases t) =
-  match t with
-  | [] -> (acc, [])
-  | EJoin :: tl -> (acc, t)
-  | ev :: tl -> split_trace_join tl (acc@[ev])
-
-let interleave_traces (t1:trace 'e) (t2:trace 'e) : list (trace 'e) =
-  let t1 = filter_out_join t1 in
-  match t1, t2 with
-  | [], [] -> []
-  | _, [] -> [t1]
-  | [], _ -> [t2]
-  | _, _ -> 
-      let (t2', t2'') = split_trace_join t2 [] in
-      map (fun t -> t@t2'') (interleave t1 t2')
-
-let _ =
-  assert (interleave_traces [Ev 1;Ev 2] [Ev 3;EJoin;Ev 4] == [ [Ev 1;Ev 2;Ev 3;EJoin;Ev 4]; [Ev 1;Ev 3;Ev 2;EJoin; Ev 4]; [Ev 3;Ev 1;Ev 2;EJoin;Ev 4] ]);
-  assert (interleave_traces [EJoin;Ev 1;Ev 2] [Ev 3] == [ [Ev 1;Ev 2;Ev 3]; [Ev 1;Ev 3;Ev 2;]; [Ev 3;Ev 1;Ev 2] ]);
-  assert (interleave_traces [Ev 0] [Ev 1;Ev 2] == [ [Ev 0;Ev 1;Ev 2]; [Ev 1;Ev 0;Ev 2]; [Ev 1;Ev 2;Ev 0] ])
-
 let product (xs:list 'a) (ys:list 'b) : list ('a * 'b) =
   concatMap (fun x -> map (fun y -> (x, y)) ys) xs
 
@@ -199,6 +181,30 @@ let _ =
       [0; 2; 1; 5; 6]; [0; 2; 5; 1; 6]; [0; 2; 5; 6; 1]; [0; 5; 2; 1; 6]; [0; 5; 2; 6; 1];
       [0; 5; 6; 2; 1]; [5; 0; 2; 1; 6]; [5; 0; 2; 6; 1]; [5; 0; 6; 2; 1]; [5; 6; 0; 2; 1]
     ]) by (compute ())
+
+let filter_out_join (t:trace 'e) : trace 'e =
+  filter (fun ev -> not (EJoin? ev)) t
+  
+let rec split_trace_join (t:trace 'e) acc : Tot ((trace 'e) * (trace 'e)) (decreases t) =
+  match t with
+  | [] -> (acc, [])
+  | EJoin :: tl -> (acc, t)
+  | ev :: tl -> split_trace_join tl (acc@[ev])
+
+let interleave_traces (t1:trace 'e) (t2:trace 'e) : list (trace 'e) =
+  let t1 = filter_out_join t1 in
+  match t1, t2 with
+  | [], [] -> []
+  | _, [] -> [t1]
+  | [], _ -> [t2]
+  | _, _ -> 
+      let (t2', t2'') = split_trace_join t2 [] in
+      map (fun t -> t@t2'') (interleave t1 t2')
+
+let _ =
+  assert (interleave_traces [Ev 1;Ev 2] [Ev 3;EJoin;Ev 4] == [ [Ev 1;Ev 2;Ev 3;EJoin;Ev 4]; [Ev 1;Ev 3;Ev 2;EJoin; Ev 4]; [Ev 3;Ev 1;Ev 2;EJoin;Ev 4] ]);
+  assert (interleave_traces [EJoin;Ev 1;Ev 2] [Ev 3] == [ [Ev 1;Ev 2;Ev 3]; [Ev 1;Ev 3;Ev 2;]; [Ev 3;Ev 1;Ev 2] ]);
+  assert (interleave_traces [Ev 0] [Ev 1;Ev 2] == [ [Ev 0;Ev 1;Ev 2]; [Ev 1;Ev 0;Ev 2]; [Ev 1;Ev 2;Ev 0] ])
 
 let reduce_interleave (l:list (list (trace 'e))) : list (trace 'e) = fold_left (product_map interleave_traces) [] l
 
@@ -255,7 +261,7 @@ let _ =
       [Ev 1; Ev 2; Ev 3; Ev 4; EJoin; Ev 5];
       [Ev 1; Ev 2; Ev 4; Ev 3; EJoin; Ev 5];
       [Ev 1; Ev 4; Ev 2; Ev 3; EJoin; Ev 5]
-    ]) by (compute (); dump "H")
+    ]) by (compute ())
 
 let _ =
   assert (
@@ -312,8 +318,7 @@ let _ = assert (theta' prog3 (fun r -> result r == () /\ as_simpl_traces r === [
 let prog4 = Fork (fun () -> Print 0 (fun () -> Return (Universe.raise_val ()))) 
                  (fun () -> Print 1 (fun () -> Join (fun _ -> Print 2 (fun () -> Return ()))))
 
-let _ = assert (theta' prog4 (fun r -> result r == () /\ as_traces r == [[Ev 0; Ev 1;EJoin; Ev 2];[Ev 1;Ev 0;EJoin;Ev 2]]) [] [])  by (  compute ();
-  dump "h")
+let _ = assert (theta' prog4 (fun r -> result r == () /\ as_traces r == [[Ev 0; Ev 1;EJoin; Ev 2];[Ev 1;Ev 0;EJoin;Ev 2]]) [] [])  by (compute ())
 
 let prog5 = Fork (fun () -> Print 0 (fun () -> Fork (fun () -> Print 1 (fun () -> Return (Universe.raise_val ())))
                                                  (fun () -> Print 2 (fun () -> Return (Universe.raise_val ())))))
