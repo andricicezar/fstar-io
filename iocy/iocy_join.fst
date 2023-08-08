@@ -362,6 +362,11 @@ let prog12 () = Fork (fun () -> Print 210 (fun () -> Fork (fun () -> Print 211 (
 
 let prog7 = Print 0 (fun () -> Fork (fun () -> Print 100 prog11) (fun () -> Print 200 prog12))
 
-// let _ = assert (theta' (prog12 ()) (fun r -> as_simpl_traces r == []) [] []) by (compute (); dump "foo")
+// let _ = assert (theta' (prog12 ()) (fun r -> r == Node (Cv () []) []) [] []) by (compute (); dump "foo")
 
 
+open QLTL
+
+let _ = assert (
+  theta' prog6 (fun r ->
+    qltl_denote (Forall, Always (Impl (Now (fun n -> n == 1)) (Eventually (Now (fun n -> n == 2))))) (as_simpl_traces r)) [] []) by (compute ())
