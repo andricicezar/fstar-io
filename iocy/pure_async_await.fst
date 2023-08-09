@@ -107,7 +107,7 @@ let dm_subcomp
   (wp2:w a)
   (c:dm a wp1) :
   Pure (dm a wp2)
-    (requires (wp2 `w_ord0` wp1))
+    (requires (wp2 ⊑ wp1))
     (ensures (fun _ -> True)) =
     c 
 
@@ -215,23 +215,19 @@ let pure_lemma_test2 () : Cy unit (requires True) (ensures fun _ -> True) =
 (** *** DONE with tests of partiality **)
 
 
-let true_wp (#a:Type) : w a = fun p -> forall r. p r
-
 let raise_w (wp:w 'a) : w (Universe.raise_t 'a) =
   let wp' = (fun p -> wp (fun r -> p (Universe.raise_val r))) in
   wp'
 
-let async0 (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : dm (promise a) (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) by (
-  dump "h"
-) =
-  let f' : free a = reify (f ()) in
-  let f'' : free (Universe.raise_t a) = free_bind f' (fun x -> free_return (Universe.raise_val x)) in
-  let m : free (promise a) = Async f'' free_return in
-  admit ();
-//  let p' : w0 (promise a) = (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) in
-//  assume (w_monotonic p');
-//  assume (p' `w_ord0` theta m);
-  m //<: dm (promise a) p'
+let async00 (#a:Type) (#wp:w a) ($f:unit -> CyWP a wp) : dm (Universe.raise_t a) (raise_w wp) = 
+  let f' : dm a wp = reify (f ()) in
+  dm_bind _ _ _ _ f' (fun x -> dm_return _ (Universe.raise_val x))
+
+let async0 (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : dm (promise a) (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) =
+  let wp' : w (Universe.raise_t a) = raise_w (fun p -> pre /\ (forall r. post r ==> p r)) in
+  let f' : dm (Universe.raise_t a) wp' = async00 f in
+  let m : free (promise a) = Async f' free_return in
+  m
 
 [@"opaque_to_smt"]
 let async (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : Cy (promise a) pre (fun r -> post (Promise?.v r)) =
@@ -243,7 +239,7 @@ let await (#a:Type) (pr:promise a) : Cy a True (fun r -> reveal (Promise?.v pr) 
 
 let return (#a:Type) (x:a) () : Cy a True (fun r -> r == x) = x
 
-let test () : Cy int True (fun r -> r == 5) =
+let test () : Cy int True (fun r -> r == 6) =
   let prx = async (return 2) in
   let pry = async (return 3) in
   let x : int = await prx in
