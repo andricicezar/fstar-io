@@ -16,16 +16,24 @@ let w_monotonic (#a:Type) (wp:w0 a) =
 
 type w (a:Type) = wp:(w0 a){w_monotonic wp}
 
-let w_ord (#a:Type) (wp1:w a) (wp2:w a) = forall (p:w_post a). wp1 p ==> wp2 p
+unfold
+let w_ord0 (#a:Type) (wp1:w a) (wp2:w a) = forall (p:w_post a). wp1 p ==> wp2 p
+let w_ord = w_ord0
 unfold let (⊑) = w_ord
 
-let w_return (#a:Type) (x:a) : w a =
-  (fun p -> p x)
+unfold
+let w_return0 (#a:Type) (x:a) : w a = fun p -> p x
+let w_return = w_return0
 
-let w_bind (#a:Type u#a) (#b:Type u#b) (wp : w a) (kwp : a -> w b) : w b =
+unfold
+let w_bind0 (#a:Type u#a) (#b:Type u#b) (wp : w a) (kwp : a -> w b) : w b =
   fun (p:w_post b) -> wp (fun (x:a) -> kwp x p)
+let w_bind = w_bind0
 
-type promise (a:Type) = | Promise : v:a -> promise a
+open FStar.Ghost
+
+noeq
+type promise (a:Type) = | Promise : v:erased a -> promise a
 
 noeq
 type free (a:Type u#a) : Type u#(max 1 a) =
@@ -79,7 +87,7 @@ let theta_lax_monad_morphism_bind (m:free 'a) (km:'a -> free 'b) :
 let dm (a:Type u#a) (wp:w a) =
   m:(free a){wp ⊑ theta m}
 
-let dm_return (a:Type u#a) (x:a) : dm a (w_return x) =
+let dm_return (a:Type u#a) (x:a) : dm a (w_return0 x) =
   Return x
 
 let dm_bind
@@ -89,7 +97,7 @@ let dm_bind
   (kwp:a -> w b)
   (c:dm a wp)
   (kc:(x:a -> dm b (kwp x))) :
-  dm b (w_bind wp kwp) =
+  dm b (w_bind0 wp kwp) =
   theta_lax_monad_morphism_bind c kc;
   free_bind c kc
 
@@ -99,7 +107,7 @@ let dm_subcomp
   (wp2:w a)
   (c:dm a wp1) :
   Pure (dm a wp2)
-    (requires (wp2 ⊑ wp1))
+    (requires (wp2 `w_ord0` wp1))
     (ensures (fun _ -> True)) =
     c 
 
@@ -116,6 +124,7 @@ let dm_partial_return
   assert (w_require pre ⊑ theta m);
   m
 
+unfold
 let lift_pure_w (#a:Type) (wp : pure_wp a) : w a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   (fun (p:w_post a) -> wp (fun (r:a) -> p r))
@@ -126,7 +135,6 @@ let lift_pure_w_as_requires (wp : pure_wp 'a) :
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
     assert (forall (p:w_post 'a). wp (fun x -> p x) ==> wp (fun _ -> True))
 
-[@"opaque_to_smt"]
 let lift_pure_dm 
   (a : Type u#a) 
   (wp : pure_wp a)
@@ -211,31 +219,33 @@ let true_wp (#a:Type) : w a = fun p -> forall r. p r
 
 let raise_w (wp:w 'a) : w (Universe.raise_t 'a) =
   let wp' = (fun p -> wp (fun r -> p (Universe.raise_val r))) in
-  assume (w_monotonic wp');
   wp'
 
-let async0 (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : dm (promise a) (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) =
+let async0 (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : dm (promise a) (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) by (
+  dump "h"
+) =
   let f' : free a = reify (f ()) in
   let f'' : free (Universe.raise_t a) = free_bind f' (fun x -> free_return (Universe.raise_val x)) in
   let m : free (promise a) = Async f'' free_return in
-  assume ((fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) ⊑ theta m);
-  m
+  admit ();
+//  let p' : w0 (promise a) = (fun p -> pre /\ (forall r. post (Promise?.v r) ==> p r)) in
+//  assume (w_monotonic p');
+//  assume (p' `w_ord0` theta m);
+  m //<: dm (promise a) p'
 
 [@"opaque_to_smt"]
 let async (#a:Type) (#pre:w_pre) (#post:w_post a) ($f:unit -> Cy a pre post) : Cy (promise a) pre (fun r -> post (Promise?.v r)) =
   CyWP?.reflect (async0 f)
 
 [@"opaque_to_smt"]
-let await (#a:Type) (pr:promise a) : Cy a True (fun r -> Promise?.v pr == r) =
+let await (#a:Type) (pr:promise a) : Cy a True (fun r -> reveal (Promise?.v pr) == r) =
   CyWP?.reflect (Await pr (free_return))
 
 let return (#a:Type) (x:a) () : Cy a True (fun r -> r == x) = x
 
-let test () : Cy int True (fun r -> True) = //r == 5)=
+let test () : Cy int True (fun r -> r == 5) =
   let prx = async (return 2) in
-  assert (Promise?.v prx == 2) by (dump "H"); 
   let pry = async (return 3) in
- // assert (Promise?.v prx+ Promise?.v pry == 5) by (dump "h");
   let x : int = await prx in
   let y : int = await pry in
   x + y

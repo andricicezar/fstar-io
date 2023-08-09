@@ -22,12 +22,15 @@ let w_ord0 (#a:Type) (wp1:w a) (wp2:w a) = forall (p:w_post a). wp1 p ==> wp2 p
 let w_ord = w_ord0
 unfold let (⊑) = w_ord
 
-let w_return (#a:Type) (x:a) : w a =
-  (fun p -> p x)
+unfold
+let w_return0 (#a:Type) (x:a) : w a = fun p -> p x
+let w_return = w_return0
 
-let w_bind (#a:Type u#a) (#b:Type u#b) (wp : w a) (kwp : a -> w b) : w b =
+unfold
+let w_bind0 (#a:Type u#a) (#b:Type u#b) (wp : w a) (kwp : a -> w b) : w b =
   fun (p:w_post b) -> wp (fun (x:a) -> kwp x p)
-
+let w_bind = w_bind0
+  
 noeq
 type free (a:Type u#a) : Type u#(max 1 a) =
 | Require : (pre:pure_pre) -> k:((squash pre) -> free u#a a) -> free a
@@ -73,7 +76,7 @@ let theta_lax_monad_morphism_bind (m:free 'a) (km:'a -> free 'b) :
 let dm (a:Type u#a) (wp:w a) =
   m:(free a){wp ⊑ theta m}
 
-let dm_return (a:Type u#a) (x:a) : dm a (w_return x) =
+let dm_return (a:Type u#a) (x:a) : dm a (w_return0 x) =
   Return x
 
 let dm_bind
@@ -83,7 +86,7 @@ let dm_bind
   (kwp:a -> w b)
   (c:dm a wp)
   (kc:(x:a -> dm b (kwp x))) :
-  dm b (w_bind wp kwp) =
+  dm b (w_bind0 wp kwp) =
   theta_lax_monad_morphism_bind c kc;
   free_bind c kc
 
