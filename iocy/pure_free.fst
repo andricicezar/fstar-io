@@ -16,7 +16,10 @@ let w_monotonic (#a:Type) (wp:w0 a) =
 
 type w (a:Type) = wp:(w0 a){w_monotonic wp}
 
-let w_ord (#a:Type) (wp1:w a) (wp2:w a) = forall (p:w_post a). wp1 p ==> wp2 p
+unfold
+let w_ord0 (#a:Type) (wp1:w a) (wp2:w a) = forall (p:w_post a). wp1 p ==> wp2 p
+
+let w_ord = w_ord0
 unfold let (⊑) = w_ord
 
 let w_return (#a:Type) (x:a) : w a =
@@ -46,7 +49,7 @@ let rec free_bind
 
 let w_require (pre:pure_pre) : w (squash pre) = 
   let wp' : w0 (squash pre) = fun p -> pre /\ p () in
-  assert (forall post1 post2. (w_post_ord post1 post2 ==> (wp' post1 ==> wp' post2)));
+  assert (forall (post1 post2:w_post (squash pre)). (w_post_ord post1 post2 ==> (wp' post1 ==> wp' post2)));
   assert (w_monotonic wp');
   wp'
 
@@ -90,7 +93,7 @@ let dm_subcomp
   (wp2:w a)
   (c:dm a wp1) :
   Pure (dm a wp2)
-    (requires (wp2 ⊑ wp1))
+    (requires (wp2 `w_ord0` wp1))
     (ensures (fun _ -> True)) =
     c 
 
@@ -107,16 +110,17 @@ let dm_partial_return
   assert (w_require pre ⊑ theta m);
   m
 
+unfold
 let lift_pure_w (#a:Type) (wp : pure_wp a) : w a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   wp
   //(fun (p:w_post a) -> wp (fun (r:a) -> p r))
 
-let lift_pure_w_as_requires (wp : pure_wp 'a) :
-  Lemma (forall (p:w_post 'a) h. lift_pure_w wp p ==> as_requires wp) =
-    assert (forall (p:w_post 'a) x. p x ==> True) ;
+let lift_pure_w_as_requires (#a:Type) (wp : pure_wp a) :
+  Lemma (forall (p:w_post a) h. lift_pure_w wp p ==> as_requires wp) =
+    assert (forall (p:w_post a) x. p x ==> True) ;
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
-    assert (forall (p:w_post 'a). wp (fun x -> p x) ==> wp (fun _ -> True))
+    assert (forall (p:w_post a). wp (fun x -> p x) ==> wp (fun _ -> True))
 
 let lift_pure_dm 
   (a : Type u#a) 
@@ -147,10 +151,10 @@ effect {
 sub_effect PURE ~> FreeWP = lift_pure_dm
 
 effect Free
-  (a:Type)
+  (a:Type u#a)
   (pre : Type0)
   (post : a -> Pure Type0 (requires pre) (ensures (fun _ -> True))) =
-  FreeWP a (fun p -> pre /\ (forall r. post r ==> p r))
+  FreeWP a (fun p -> pre /\ (forall (r:a). post r ==> p r))
 
 (** *** Tests partiality of the effect **)
 let test_using_assume (fd:int) : Free int (requires True) (ensures fun r -> fd % 2 == 0) =
@@ -188,6 +192,7 @@ let pure_lemma_test () : Free unit (requires True) (ensures fun _ -> True) =
   pure_lemma () ;
   some_f ()
 
+// TODO: why is this failing?
 let pure_lemma_test2 () : Free unit (requires True) (ensures fun _ -> True) =
   pure_lemma () ;
   some_f () ;
