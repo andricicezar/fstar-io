@@ -109,7 +109,8 @@ let dm_partial_return
 
 let lift_pure_w (#a:Type) (wp : pure_wp a) : w a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  (fun (p:w_post a) -> wp (fun (r:a) -> p r))
+  wp
+  //(fun (p:w_post a) -> wp (fun (r:a) -> p r))
 
 let lift_pure_w_as_requires (wp : pure_wp 'a) :
   Lemma (forall (p:w_post 'a) h. lift_pure_w wp p ==> as_requires wp) =
@@ -117,7 +118,6 @@ let lift_pure_w_as_requires (wp : pure_wp 'a) :
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
     assert (forall (p:w_post 'a). wp (fun x -> p x) ==> wp (fun _ -> True))
 
-[@"opaque_to_smt"]
 let lift_pure_dm 
   (a : Type u#a) 
   (wp : pure_wp a)
