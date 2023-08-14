@@ -119,9 +119,9 @@ let rec theta m = fun s0 ->
   | Print arg k ->
       w_bind (w_print arg) (fun r -> theta (k r) s0)
   | Async f k -> 
-      let id = s0 + 1 in
-      w_bind (w_async id (theta f (s0+1))) (fun (sk, rf) -> 
-        theta (k (Promise id (Universe.downgrade_val rf))) sk)
+      let id = s0+1 in
+      w_bind (w_async id (theta f s0)) (fun (s1, rf) -> 
+        theta (k (Promise id (Universe.downgrade_val rf))) s1)
   | Await pr k -> 
       w_bind (w_await (Promise?.id pr)) (fun () -> theta (k (Promise?.r pr)) s0)
 
@@ -150,7 +150,7 @@ let dm_bind
   dm #e b (w_bind0 wp kwp) =
   theta_lax_monad_morphism_bind #e c kc;
   let m = free_bind c kc in
-  //assume (forall s0. w_bind0 wp kwp ⊑ theta' m s0);
+  assume (forall s0. w_bind0 wp kwp ⊑ theta' m s0);
   m
 
 let dm_subcomp
@@ -277,16 +277,49 @@ let print (e:int) : Cy unit (fun _ -> True) (fun _ () lt -> lt == return_runtree
 let raise_w (#a:Type u#a) (wp:w a) : w (Universe.raise_t u#a u#b a) =
   fun p -> wp (fun lt r -> p lt (Universe.raise_val r))
 
+[@"opaque_to_smt"]
 let async00 (#a:Type u#a) (#wp:w a) ($f:unit -> CyWP a wp) : dm (Universe.raise_t u#a u#b a) (raise_w u#a u#b wp)  = 
   let f' : dm a wp = reify (f ()) in
   dm_subcomp _ _ _ (dm_bind _ _ _ _ f' (fun x -> dm_return _ (Universe.raise_val u#a u#b x)))
+
+let some_lemma 
+  (#a:Type)
+  (pre:w_pre) (post:tracetree int -> a -> tracetree int -> Type0)
+  (f:dm (Universe.raise_t a) (fun p h -> pre h /\ (forall r lt. post h r lt ==> p lt (Universe.raise_val r)))) :
+  Lemma (
+    forall s0.
+    (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr))
+    ⊑
+    theta' (Async f free_return) s0) = admit ()
+  //assert (forall s0. wp' ⊑ theta' f' s0);
+ // let m : free (promise a) = Async f' free_return in
+//  assert (forall (s0:nat). w_bind (w_async s0 (theta f' (s0+1))) (fun (s1, rf) -> theta (free_return (Promise s0 (Universe.downgrade_val rf))) s1) ⊑ theta m s0);
+  //assert (forall (s0:nat). w_bind (w_async s0 (theta f' (s0+1))) (fun (s1, rf) -> theta (Return (Promise s0 (Universe.downgrade_val rf))) s1) ⊑ theta m s0);
+  //assert (forall (s0:nat). w_bind (w_async s0 (theta f' (s0+1))) (fun (s1, rf) -> w_return (s1, (Promise s0 (Universe.downgrade_val rf)))) ⊑ theta m s0);
+//  let wp : w0 (promise a) = (fun p h -> pre h /\ (forall id r lt. post h r lt ==> p (async_runtree id lt) (Promise (hide id) (hide r)))) in
+//  assume (w_monotonic wp);
+//  let wp : w (promise a) = wp in
+//  assert (forall (s0:nat). 
+//    wp ⊑
+//      w_bind (w_async s0 (theta f' (s0+1))) (fun (s1, rf) -> w_return (Promise s0 (Universe.downgrade_val rf)))) by (explode (); 
+
+//    norm [delta_only [`%theta;`%theta';`%w_bind;`%w_bind0;`%w_async];zeta;iota];
+      
+//      dump "H");
+//  assume (forall (s0:nat). w_bind (w_async s0 (theta f' (s0+1))) (fun (s1, rf) -> w_return (Promise s0 (Universe.downgrade_val rf))) ⊑ theta' m s0);
+  //assert (forall (s0:nat). (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (s0+1) lt) pr)) ⊑ theta' m s0);
+ // by (
+//    explode ();
+//    norm [delta_only [`%theta;`%theta';`%w_bind;`%w_bind0;`%w_async];zeta;iota];
+//    dump "H"
+//  );
 
 let async0 (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> Type0) ($f:unit -> Cy a pre post) :
   dm (promise a) (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) =
   let wp' : w (Universe.raise_t a) = raise_w (fun p h -> pre h /\ (forall lt r. post h r lt ==> p lt r)) in
   let f' : dm (Universe.raise_t a) wp' = async00 f in
   let m : free (promise a) = Async f' free_return in
-  assume (forall s0. (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) ⊑ theta' m s0);
+  some_lemma pre post f';
   m
 
 [@"opaque_to_smt"]
