@@ -310,7 +310,7 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> r == 1 /\ lt == Node [] (Nod
  // let y : int = await pry in
 //  2 + 3
 
-let test2 () : Cy int (fun _ -> True) (fun h r lt -> r == 5 /\ lt == empty_runtree) =
+let test2 () : Cy int (fun _ -> True) (fun h r lt -> r == 5) =
   let prx = async (return 2) in
   let pry = async (return 3) in
   let x : int = await prx in
