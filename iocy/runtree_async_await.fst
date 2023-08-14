@@ -7,7 +7,7 @@ open Runtree
 
 type event (e:Type0) =
 | Ev : e -> event e
-| EJoin : event e
+| EAwait : nat -> event e
 
 type tracetree 'e = runtree (event 'e)
 
@@ -33,11 +33,6 @@ unfold
 let w_return0 (#a:Type) (#e:Type) (x:a) : w #e a = 
   fun p h -> p empty_runtree x
 let w_return = w_return0
-
-unfold
-let (@@) = fun l1 l2 -> (concatMap (fun t -> map (append t) l2) l1)
-
-let (rev') = map rev
 
 unfold
 let w_post_shift (#e:Type) (p:w_post #e 'b) (lt:tracetree e) : w_post #e 'b =
@@ -71,7 +66,7 @@ type free (#e:Type u#0) (a:Type u#a) : Type u#(max 1 a) =
 | Return : a -> free #e a
 | Print : (arg:e) -> cont:(unit -> free u#a #e a) -> free #e a 
 | Async : #c:Type u#0 -> free #e (Universe.raise_t c) -> k:(promise c -> free u#a #e a) -> free #e a
-//| Await : #c:Type u#0 -> promise c -> k:(c -> free a) -> free a
+| Await : #c:Type u#0 -> promise c -> k:(c -> free u#a #e a) -> free #e a
 
 let free_return (#e:Type) (#a:Type) (x:a) : free #e a =
   Return x
@@ -93,8 +88,8 @@ let rec free_bind
       Async 
         (free_bind f (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
         (fun x -> free_bind (k x) cont)
-//  | Await pr k ->
-//      Await pr (fun x -> free_bind (k x) cont)
+  | Await pr k ->
+      Await pr (fun x -> free_bind (k x) cont)
 
 let w_require #e (pre:pure_pre) : w #e (squash pre) = 
   let wp' : w0 (squash pre) = fun p h -> pre /\ p empty_runtree () in
@@ -109,27 +104,35 @@ let w_async #e #a (id:nat) (wf:w #e a) : w #e a =
   fun p ->
     wf (fun ltf rf -> p (async_runtree ltf) rf)
 
-val theta : (#e:Type) -> (#a:Type) -> free #e a -> w #e a
-let rec theta m =
+
+let w_await #e (id:nat) : w #e unit =
+  fun p h -> p (return_runtree [EAwait id]) ()
+  
+val theta : (#e:Type) -> (#a:Type) -> free #e a -> nat -> w #e (nat * a)
+let rec theta m = fun s0 ->
   match m with
   | Require pre k ->
-      w_bind (w_require pre) (fun r -> theta (k r))
-  | Return x -> w_return x
+      w_bind (w_require pre) (fun r -> theta (k r) s0)
+  | Return x -> w_return (s0, x)
   | Print arg k ->
-      w_bind (w_print arg) (fun r -> theta (k r))
+      w_bind (w_print arg) (fun r -> theta (k r) s0)
   | Async f k -> 
-      w_bind (w_async 0 (theta f)) (fun rf -> 
-        theta (k (Promise 0 (Universe.downgrade_val rf))))
- // | Await pr k -> theta (k (Promise?.r pr))
+      let id = s0 + 1 in
+      w_bind (w_async id (theta f (s0+1))) (fun (sk, rf) -> 
+        theta (k (Promise id (Universe.downgrade_val rf))) sk)
+  | Await pr k -> 
+      w_bind (w_await (Promise?.id pr)) (fun () -> theta (k (Promise?.r pr)) s0)
 
-let theta_monad_morphism_ret (v:'a) :
-  Lemma (theta (free_return v) == w_return v) = ()
+let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
+
+let theta_monad_morphism_ret (v:'a) (s0:nat) :
+  Lemma (theta' (free_return v) s0 == w_return v) by (compute ()) = ()
 
 let theta_lax_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
-  Lemma (w_bind (theta #e m) (fun x -> theta #e (km x)) ⊑ theta #e (free_bind m km)) = admit ()
+  Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) ⊑ theta #e (free_bind m km) s0) = admit ()
 
 let dm (#e:Type) (a:Type u#a) (wp:w #e a) =
-  m:(free a){wp ⊑ theta m}
+  m:(free a){forall s0. wp ⊑ theta' m s0}
 
 let dm_return (a:Type u#a) (x:a) : dm a (w_return0 x) =
   Return x
@@ -145,7 +148,7 @@ let dm_bind
   dm #e b (w_bind0 wp kwp) =
   theta_lax_monad_morphism_bind #e c kc;
   let m = free_bind c kc in
-  assume (w_bind0 wp kwp ⊑ theta m);
+  assume (forall s0. w_bind0 wp kwp ⊑ theta' m s0);
   m
 
 let dm_subcomp
@@ -170,7 +173,7 @@ let dm_partial_return
   (#e:Type)
   (pre:pure_pre) : dm #e (squash pre) (w_require pre) =
   let m = Require pre (Return) in
-  assert (w_require pre ⊑ theta #e m) by (compute ());
+  assert (forall s0. w_require pre ⊑ theta' #e m s0) by (compute ());
   m
 
 unfold
@@ -281,7 +284,7 @@ let async0 (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> 
   let wp' : w (Universe.raise_t a) = raise_w (fun p h -> pre h /\ (forall lt r. post h r lt ==> p lt r)) in
   let f' : dm (Universe.raise_t a) wp' = async00 f in
   let m : free (promise a) = Async f' free_return in
-  assert ((fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree lt) pr)) ⊑ theta m);
+  assume (forall s0. (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree lt) pr)) ⊑ theta' m s0);
   m
 
 [@"opaque_to_smt"]
@@ -289,9 +292,9 @@ let async (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> T
   Cy (promise a) pre (fun h pr lt -> exists lt'. lt == async_runtree lt' /\ post h (Promise?.r pr) lt') =
   CyWP?.reflect (async0 f)
 
-//[@"opaque_to_smt"]
-//let await (#a:Type) (pr:promise a) : Cy a True (fun r -> reveal (Promise?.r pr) == r) =
-//  CyWP?.reflect (Await pr (free_return))
+[@"opaque_to_smt"]
+let await (#a:Type) (pr:promise a) : Cy a (fun _ -> True) (fun h r lt -> reveal (Promise?.r pr) == r /\ lt == return_runtree [EAwait (Promise?.id pr)]) =
+  CyWP?.reflect (Await pr (free_return))
 
 let return (#a:Type) (x:a) () : Cy a (fun _ -> True) (fun h r lt -> r == x /\ lt == return_runtree [Ev 0]) = print 0; x
 
@@ -306,6 +309,13 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> r == 1 /\ lt == Node [] (Nod
  // let x : int = await prx in
  // let y : int = await pry in
 //  2 + 3
+
+let test2 () : Cy int (fun _ -> True) (fun h r lt -> r == 5 /\ lt == empty_runtree) =
+  let prx = async (return 2) in
+  let pry = async (return 3) in
+  let x : int = await prx in
+  let y : int = await pry in
+  x + y
 
 
 
