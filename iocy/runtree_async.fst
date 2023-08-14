@@ -1,4 +1,4 @@
-module Runtree_Async_Await
+module Runtree_Async
 
 open FStar.Tactics
 open FStar.List.Tot.Base
