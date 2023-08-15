@@ -62,7 +62,7 @@ let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e
 let w_bind = w_bind0
 
 let __list_assoc_l l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) = 
-  lemma_append_runtree_assoc l1 l2 l3 //List.Tot.Properties.append_assoc l1 l2 l3
+  lemma_append_runtree_assoc l1 l2 l3
 let __iff_refl a : Lemma (a <==> a) = ()
 let w_law1 (x:'a) (k:'a -> w 'b) : Lemma (forall p h. w_bind (w_return x) k p h <==> k x p h) = ()
 let w_law2 (m:w 'a) : Lemma (forall p h. w_bind m w_return p h <==> m p h) = ()
