@@ -26,9 +26,6 @@ let w_monotonic (#e:Type) (#a:Type) (wp:w0 #e a) =
 
 type w (#e:Type) (a:Type) = wp:(w0 #e a){w_monotonic wp}
 
-//let w_reveal_monotonicity (wp:w 'a) : Lemma (
-//  forall (p1 p2:w_post 'a). (p1 `w_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)) = ()
-
 let w_subcomp (#e:Type) (#a:Type) (wp:w #e a) (p1 p2:w_post a) (h:tracetree e) :
   Lemma (requires (wp p1 h /\ p1 `w_post_ord` p2))
         (ensures (wp p2 h)) = ()
@@ -55,7 +52,7 @@ let w_post_bind
   (kw : a -> w #e b)
   (p:w_post #e b) :
   Tot (w_post #e a) =
-  fun lt x ->
+  fun lt (x:a) ->
     kw x (w_post_shift p lt) (h `append_runtree` lt)
 
 
@@ -64,6 +61,24 @@ let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e
   fun p h -> wp (w_post_bind h kwp p) h
 let w_bind = w_bind0
 
+let __list_assoc_l l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) = 
+  lemma_append_runtree_assoc l1 l2 l3 //List.Tot.Properties.append_assoc l1 l2 l3
+let __iff_refl a : Lemma (a <==> a) = ()
+let w_law1 (x:'a) (k:'a -> w 'b) : Lemma (forall p h. w_bind (w_return x) k p h <==> k x p h) = ()
+let w_law2 (m:w 'a) : Lemma (forall p h. w_bind m w_return p h <==> m p h) = ()
+let w_law3 (m:w 'a) (g:'a -> w 'b) (k:'b -> w 'c) : Lemma (forall p h. w_bind (w_bind m g) k p h <==> w_bind m (fun x -> w_bind (g x) k) p h) =
+  let lhs = w_bind m (fun r1 -> w_bind (g r1) k) in
+  let rhs = w_bind (w_bind m g) k in
+  let pw (p : w_post 'c) h : Lemma (lhs p h <==> rhs p h) =
+    assert (lhs p h <==> rhs p h) by begin
+      unfold_def (`w_bind);
+      norm [];
+      l_to_r [`__list_assoc_l];
+      mapply (`__iff_refl)
+    end
+  in
+  Classical.forall_intro_2 pw
+  
 open FStar.Ghost
 
 noeq
@@ -227,13 +242,7 @@ let lemma_better
         assert (theta c s0 p1' h)
       end in
 
-  calc (==>) {
-    theta c s0 p1' h;
-    ==> { _ by (norm [delta_only [`%w_bind; `%w_bind0]; iota]) }
-    w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1) (fun lt (_, x) -> p lt x) h;
-    ==> { lemma_wp_drop_state (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) p h }
-    w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h;
-  }
+      lemma_better_sub0 wp kwp c kc s0 p h
     end
   end
 

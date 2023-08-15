@@ -48,6 +48,32 @@ let rec append_runtree (x:runtree 'e) (y:runtree 'e) : Tot (runtree 'e) (decreas
   | Node ltx k1x k2x, _ ->
       Node ltx k1x (append_runtree k2x y)
 
+let rec lemma_append_runtree_assoc l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) =
+  match l1, l2, l3 with
+  | Leaf, _, _ -> ()
+  | Node ltx Leaf Leaf, Leaf, _ -> ()
+  | Node ltx Leaf Leaf, Node lty k1y k2y, Leaf -> ()
+  | Node ltx Leaf Leaf, Node lty k1y k2y, Node ltz k1z k2z ->
+      List.Tot.Properties.append_assoc ltx lty ltz
+  | Node _ _ k2x, _, _ -> lemma_append_runtree_assoc k2x l2 l3
+  
+  begin
+    match l2 with
+    | Leaf -> ()
+    | Node lty Leaf Leaf -> begin
+      match l3 with
+      | Leaf -> ()
+      | Node ltz k1z k2z ->
+        List.Tot.Properties.append_assoc ltx lty ltz
+    end
+    | Node lty k1y k2y -> begin
+      match l3 with
+      | Leaf -> ()
+      | Node ltz k1z k2z -> () 
+    end
+  end
+  | Node _ _ k2x -> lemma_append_runtree_assoc k2x l2 l3
+
 let f = Node [1;2;3] Leaf Leaf
 let async1 = Node [] (Node [4;5] Leaf Leaf) Leaf
 let k1 = Node [6;7] Leaf Leaf
