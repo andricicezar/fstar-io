@@ -38,7 +38,7 @@ let w_return = w_return0
 
 unfold
 let w_post_shift (#e:Type) (p:w_post #e 'b) (lt:tracetree e) : w_post #e 'b =
-  fun lt' r' -> p (lt `bind_runtree` lt') r'
+  fun lt' r' -> p (lt `append_runtree` lt') r'
 
 unfold
 let w_post_bind
@@ -49,7 +49,7 @@ let w_post_bind
   (p:w_post #e b) :
   Tot (w_post #e a) =
   fun lt x ->
-    kw x (w_post_shift p lt) (h `bind_runtree` lt)
+    kw x (w_post_shift p lt) (h `append_runtree` lt)
 
 
 unfold
@@ -137,16 +137,16 @@ let lemma_theta_theta' (m:free #'e 'a) : Lemma (
    introduce forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h with begin
      calc (==>) {
        theta m s0 (fun lt (s1, pr) -> p lt pr) h;
-       ==> { _ by (norm [delta_only [`%bind_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> p (lt `bind_runtree` empty_runtree) pr) h;
+       ==> { _ by (norm [delta_only [`%append_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
+       theta m s0 (fun lt (s1, pr) -> p (lt `append_runtree` empty_runtree) pr) h;
        ==> { _ by (norm [iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `bind_runtree` lt') r') empty_runtree pr) h;
+       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `append_runtree` lt') r') empty_runtree pr) h;
        ==> { _ by (norm [delta_only [`%w_post_shift]; iota]; assumption ())}
        theta m s0 (fun lt (s1, pr) -> (w_post_shift p lt) empty_runtree pr) h;
        ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `bind_runtree` lt)) h;
+       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `append_runtree` lt)) h;
        ==> { _ by (norm [iota]) }
-       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `bind_runtree` lt)) h;
+       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `append_runtree` lt)) h;
        ==> { _ by (norm [delta_only [`%w_post_bind]; iota]; assumption ())}
        theta m s0 (w_post_bind h (fun (s1, x) -> w_return x) p) h;
        ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0]; iota]; assumption ())}
@@ -162,16 +162,16 @@ let lemma_theta_theta' (m:free #'e 'a) : Lemma (
        ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0]; iota]; assumption ())}
        theta m s0 (w_post_bind h (fun (s1, x) -> w_return x) p) h;
        ==> { _ by (norm [delta_only [`%w_post_bind]; iota]; assumption ())}
-       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `bind_runtree` lt)) h;
+       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `append_runtree` lt)) h;
        ==> { _ by (norm [iota]) }
-       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `bind_runtree` lt)) h;
+       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `append_runtree` lt)) h;
        ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
        theta m s0 (fun lt (s1, pr) -> (w_post_shift p lt) empty_runtree pr) h;
        ==> { _ by (norm [delta_only [`%w_post_shift]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `bind_runtree` lt') r') empty_runtree pr) h;
+       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `append_runtree` lt') r') empty_runtree pr) h;
        ==> { _ by (norm [iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> p (lt `bind_runtree` empty_runtree) pr) h;
-       ==> { _ by (norm [delta_only [`%bind_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
+       theta m s0 (fun lt (s1, pr) -> p (lt `append_runtree` empty_runtree) pr) h;
+       ==> { _ by (norm [delta_only [`%append_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
 theta m s0 (fun lt (s1, pr) -> p lt pr) h;
     }
   end
@@ -363,12 +363,12 @@ let async_spec_implies_theta
             theta f (s0+1) (fun ltf (s1, rf) -> p (async_runtree (s0+1) ltf) (Promise (s0+1) (Universe.downgrade_val rf))) h;
             ==> { _ by (norm [delta_only [`%w_async]; zeta;iota]; assumption ()) }
             w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> p lt (Promise (s0+1) (Universe.downgrade_val rf))) h;
-            ==> { _ by (norm [delta_only [`%bind_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
+            ==> { _ by (norm [delta_only [`%append_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
             w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> 
-               p (lt `bind_runtree` empty_runtree) (Promise (s0+1) (Universe.downgrade_val rf))) h;
+               p (lt `append_runtree` empty_runtree) (Promise (s0+1) (Universe.downgrade_val rf))) h;
             ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
             w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> 
-              w_return (s1, Promise (s0+1) (Universe.downgrade_val rf)) (fun lt' (_, pr) -> p (lt `bind_runtree` lt') pr) (h `bind_runtree` lt)) h;
+              w_return (s1, Promise (s0+1) (Universe.downgrade_val rf)) (fun lt' (_, pr) -> p (lt `append_runtree` lt') pr) (h `append_runtree` lt)) h;
             ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0;`%w_post_bind;`%w_post_shift]; iota])}
             w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, rf) -> 
               w_return (s1, (Promise (s0+1) (Universe.downgrade_val rf)))) (fun lt (s1, pr) -> p lt pr) h;

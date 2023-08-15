@@ -40,20 +40,20 @@ let return_runtree (lt:list 'e) : runtree 'e = Node lt Leaf Leaf
 
 let async_runtree (l:runtree 'e) : runtree 'e = Node [] l Leaf
 
-let rec bind_runtree (x:runtree 'e) (y:runtree 'e) : Tot (runtree 'e) (decreases x) =
+let rec append_runtree (x:runtree 'e) (y:runtree 'e) : Tot (runtree 'e) (decreases x) =
   match x, y with
   | _, Leaf -> x
   | Leaf, _ -> y
   | Node ltx Leaf Leaf, Node lty k1y k2y -> Node (ltx @ lty) k1y k2y
   | Node ltx k1x k2x, _ ->
-      Node ltx k1x (bind_runtree k2x y)
+      Node ltx k1x (append_runtree k2x y)
 
 let f = Node [1;2;3] Leaf Leaf
 let async1 = Node [] (Node [4;5] Leaf Leaf) Leaf
 let k1 = Node [6;7] Leaf Leaf
 let prog1 = Node [1;2;3] (Node [4;5] Leaf Leaf) (Node [6;7] Leaf Leaf)
 
-let _ = assert (bind_runtree (bind_runtree f async1) k1 == prog1)
+let _ = assert (append_runtree (append_runtree f async1) k1 == prog1)
 
 let rec interleave (t1:list 'e) (t2:list 'e) : list (list 'e) =
   match t1, t2 with
