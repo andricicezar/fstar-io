@@ -26,6 +26,13 @@ let w_monotonic (#e:Type) (#a:Type) (wp:w0 #e a) =
 
 type w (#e:Type) (a:Type) = wp:(w0 #e a){w_monotonic wp}
 
+//let w_reveal_monotonicity (wp:w 'a) : Lemma (
+//  forall (p1 p2:w_post 'a). (p1 `w_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)) = ()
+
+let w_subcomp (#e:Type) (#a:Type) (wp:w #e a) (p1 p2:w_post a) (h:tracetree e) :
+  Lemma (requires (wp p1 h /\ p1 `w_post_ord` p2))
+        (ensures (wp p2 h)) = ()
+
 unfold
 let w_ord0 (#e:Type) (#a:Type) (wp1:w #e a) (wp2:w #e a) = forall (p:w_post a) h. wp1 p h ==> wp2 p h
 let w_ord = w_ord0
@@ -128,53 +135,16 @@ let rec theta m = fun s0 ->
 
 let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
 
-
-
-unfold let (<==) p x = x ==> p
+let lemma_wp_drop_state (wp:w #'e (nat * 'a)) p h : Lemma (
+   w_bind wp (fun (_, x) -> w_return x) p h <==> wp (fun lt (_, rf) -> p lt rf) h) = ()
+   
+let lemma_theta_theta'0 (m:free #'e 'a) s0 p h : Lemma (
+   theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
+   lemma_wp_drop_state (theta m s0) p h
 
 let lemma_theta_theta' (m:free #'e 'a) : Lemma (
    forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
-   introduce forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h with begin
-     calc (==>) {
-       theta m s0 (fun lt (s1, pr) -> p lt pr) h;
-       ==> { _ by (norm [delta_only [`%append_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> p (lt `append_runtree` empty_runtree) pr) h;
-       ==> { _ by (norm [iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `append_runtree` lt') r') empty_runtree pr) h;
-       ==> { _ by (norm [delta_only [`%w_post_shift]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> (w_post_shift p lt) empty_runtree pr) h;
-       ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `append_runtree` lt)) h;
-       ==> { _ by (norm [iota]) }
-       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `append_runtree` lt)) h;
-       ==> { _ by (norm [delta_only [`%w_post_bind]; iota]; assumption ())}
-       theta m s0 (w_post_bind h (fun (s1, x) -> w_return x) p) h;
-       ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0]; iota]; assumption ())}
-       w_bind (theta m s0) (fun (s1, x) -> w_return x) p h;
-       ==> { _ by (norm [delta_only [`%theta']; iota]; assumption ()) }
-       theta' m s0 p h;
-    };
-
-    calc (==>) {
-       theta' m s0 p h;
-       ==> { _ by (norm [delta_only [`%theta']; iota]; assumption ()) }
-       w_bind (theta m s0) (fun (s1, x) -> w_return x) p h;
-       ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0]; iota]; assumption ())}
-       theta m s0 (w_post_bind h (fun (s1, x) -> w_return x) p) h;
-       ==> { _ by (norm [delta_only [`%w_post_bind]; iota]; assumption ())}
-       theta m s0 (fun lt r -> (fun (s1, x) -> w_return x) r (w_post_shift p lt) (h `append_runtree` lt)) h;
-       ==> { _ by (norm [iota]) }
-       theta m s0 (fun lt (s1, pr) -> w_return pr (w_post_shift p lt) (h `append_runtree` lt)) h;
-       ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> (w_post_shift p lt) empty_runtree pr) h;
-       ==> { _ by (norm [delta_only [`%w_post_shift]; iota]; assumption ())}
-       theta m s0 (fun lt (s1, pr) -> (fun lt' r' -> p (lt `append_runtree` lt') r') empty_runtree pr) h;
-       ==> { _ by (norm [iota]; assumption ()) }
-       theta m s0 (fun lt (s1, pr) -> p (lt `append_runtree` empty_runtree) pr) h;
-       ==> { _ by (norm [delta_only [`%append_runtree; `%empty_runtree]; zeta; iota]; assumption ()) }
-theta m s0 (fun lt (s1, pr) -> p lt pr) h;
-    }
-  end
+   Classical.forall_intro_3 (lemma_theta_theta'0 m)
 
 let theta_monad_morphism_ret (v:'a) (s0:nat) :
   Lemma (theta' (free_return v) s0 == w_return v) by (compute ()) = ()
@@ -188,6 +158,85 @@ let dm (#e:Type) (a:Type u#a) (wp:w #e a) =
 let dm_return (a:Type u#a) (x:a) : dm a (w_return0 x) =
   Return x
 
+let lemma_better_sub0
+  (#e:Type)
+  (#a:Type u#a)
+  (#b:Type u#b)
+  (wp:w #e a)
+  (kwp:a -> w #e b)
+  (c:dm a wp)
+  (kc:(x:a -> dm b (kwp x))) 
+  (s0:nat)
+  (p:w_post #e b)
+  h : Lemma
+    (requires (
+      let p1' : w_post #e (nat * a) = (fun lt (s1, x) -> theta (kc x) s1 (w_post_shift (fun lt' (_, x') -> p lt' x') lt) (append_runtree h lt)) in
+      theta c s0 p1' h))
+    (ensures (w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h)) =
+  calc (==>) {
+    theta c s0 (fun lt (s1, x) -> theta (kc x) s1 (w_post_shift (fun lt' (_, x') -> p lt' x') lt) (append_runtree h lt)) h;
+    ==> { _ by (norm [delta_only [`%w_bind; `%w_bind0]; iota]) }
+    w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1) (fun lt (_, x) -> p lt x) h;
+    ==> { lemma_wp_drop_state (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) p h }
+    w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h;
+  }
+  
+
+let lemma_better
+  (#e:Type)
+  (#a:Type u#a)
+  (#b:Type u#b)
+  (wp:w #e a)
+  (kwp:a -> w #e b)
+  (c:dm a wp)
+  (kc:(x:a -> dm b (kwp x))) : Lemma
+    (requires ((forall s0. wp ⊑ w_bind (theta c s0) (fun (_, x) -> w_return x)) /\
+              (forall s0 x. kwp x ⊑ w_bind (theta (kc x) s0) (fun (_, x) -> w_return x))))
+    (ensures (forall s0. w_bind wp kwp ⊑ w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x))) =
+  introduce forall s0 (p:w_post b) h. w_bind wp kwp p h ==> w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h with begin
+    introduce w_bind wp kwp p h ==> w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h with _. begin
+      let p1' : w_post #e (nat * a) = (fun lt (s1, x) -> theta (kc x) s1 (w_post_shift (fun lt' (_, x') -> p lt' x') lt) (append_runtree h lt)) in
+      let _ : squash (theta c s0 p1' h) = begin
+        eliminate forall s0. wp ⊑ w_bind (theta c s0) (fun (_, x) -> w_return x) with s0;
+        assert (forall (p':w_post #e a) h. wp p' h ==> w_bind (theta c s0) (fun (_, x) -> w_return x) p' h);
+        let p0 : w_post #e a = fun lt x -> kwp x (w_post_shift p lt) (append_runtree h lt) in
+        assert (wp p0 h);
+        let p0' : w_post #e a = fun lt x -> forall s1. theta (kc x) s1 (w_post_shift (fun lt' (_, x') -> p lt' x') lt) (append_runtree h lt) in
+        introduce forall lt x. p0 lt x ==> p0' lt x with begin
+            assert (forall p h s1 x. kwp x p h ==> w_bind (theta (kc x) s1) (fun (_, x) -> w_return x) p h);
+            assert (forall p h x. kwp x p h ==> (forall s1. w_bind (theta (kc x) s1) (fun (_, x) -> w_return x) p h));
+            let p' : w_post #e b = w_post_shift p lt in
+            let h' = (append_runtree h lt) in
+            eliminate forall p h x. kwp x p h ==> (forall s1. w_bind (theta (kc x) s1) (fun (_, x) -> w_return x) p h) with p' h' x;
+            introduce p0 lt x ==> p0' lt x with _. begin
+            assert (kwp x p' h');
+            assert (forall s1. w_bind (theta (kc x) s1) (fun (_, x) -> w_return x) p' h');
+            introduce forall s1. theta (kc x) s1 (fun lt (_, x) -> p' lt x) h' with
+                lemma_theta_theta'0 (kc x) s1 p' h';
+            assert (p0' lt x)
+            end
+        end;
+        assert (wp p0' h);
+        eliminate forall (p':w_post #e a) h. wp p' h ==> w_bind (theta c s0) (fun (_, x) -> w_return x) p' h with p0' h;
+        assert (w_bind (theta c s0) (fun (_, x) -> w_return x) p0' h);
+        let p1 : w_post #e (nat * a) = (fun lt (_, x) -> p0' lt x) in
+        lemma_theta_theta'0 c s0 p0' h;
+        assert (theta c s0 p1 h);
+        assert (p1 `w_post_ord` p1');
+        w_subcomp (theta c s0) p1 p1' h;
+        assert (theta c s0 p1' h)
+      end in
+
+  calc (==>) {
+    theta c s0 p1' h;
+    ==> { _ by (norm [delta_only [`%w_bind; `%w_bind0]; iota]) }
+    w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1) (fun lt (_, x) -> p lt x) h;
+    ==> { lemma_wp_drop_state (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) p h }
+    w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h;
+  }
+    end
+  end
+
 let dm_bind
   (#e:Type)
   (a:Type u#a)
@@ -197,9 +246,11 @@ let dm_bind
   (c:dm a wp)
   (kc:(x:a -> dm b (kwp x))) :
   dm #e b (w_bind0 wp kwp) =
-  theta_lax_monad_morphism_bind #e c kc;
   let m = free_bind c kc in
-  assume (forall s0. w_bind0 wp kwp ⊑ theta' m s0);
+  lemma_better wp kwp c kc;
+  theta_lax_monad_morphism_bind c kc;
+  assert (forall s0. w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1) ⊑ theta m s0);
+  assert (forall s0. w_bind wp kwp ⊑ theta' m s0);
   m
 
 let dm_subcomp
@@ -423,7 +474,7 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1
  // let y : int = await pry in
 //  2 + 3
 
-let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync (id1+1)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait (id1+1)] Leaf Leaf))) =
+let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait id2] Leaf Leaf))) =
   let prx = async (return 2) in
   let pry = async (return 3) in
   let x : int = await prx in
