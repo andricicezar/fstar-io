@@ -423,7 +423,7 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1
  // let y : int = await pry in
 //  2 + 3
 
-let test2 () : Cy int (fun _ -> True) (fun h r lt -> r == 5) =
+let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync (id1+1)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait (id1+1)] Leaf Leaf))) =
   let prx = async (return 2) in
   let pry = async (return 3) in
   let x : int = await prx in
