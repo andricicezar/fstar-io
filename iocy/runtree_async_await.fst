@@ -89,7 +89,7 @@ type free (#e:Type u#0) (a:Type u#a) : Type u#(max 1 a) =
 | Require : (pre:pure_pre) -> k:((squash pre) -> free u#a #e a) -> free #e a
 | Return : a -> free #e a
 | Print : (arg:e) -> cont:(unit -> free u#a #e a) -> free #e a 
-| Async : #c:Type u#0 -> free #e (Universe.raise_t c) -> k:(promise c -> free u#a #e a) -> free #e a
+| Async : #c:Type u#0 -> free #e (Universe.raise_t u#0 u#a c) -> k:(promise c -> free u#a #e a) -> free #e a
 | Await : #c:Type u#0 -> promise c -> k:(c -> free u#a #e a) -> free #e a
 
 let free_return (#e:Type) (#a:Type) (x:a) : free #e a =
@@ -125,13 +125,14 @@ let w_print #e (ev:e) : w #e unit =
 
 unfold let async_runtree (id:nat) (l:tracetree 'e) : tracetree 'e = Node [EAsync id] l Leaf
   
-let w_async #e #a (id:nat) (wf:w #e a) : w #e a =
-  fun p ->
-    wf (fun ltf rf -> p (async_runtree id ltf) rf)
+unfold let w_async0 #e #a id (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * promise a) =
+  w_bind wf (fun (s1, r) -> w_return (s1, (Promise id (hide (Universe.downgrade_val r)))))
+  
+let w_async #e #a (id:nat) (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * (promise a)) =
+  fun p -> (w_async0 id wf) (fun ltf spr -> p (async_runtree id ltf) spr)
 
-
-let w_await #e (id:nat) : w #e unit =
-  fun p h -> p (return_runtree [EAwait id]) ()
+let w_await #e (pr:promise 'a) : w #e 'a =
+  fun p h -> p (return_runtree [EAwait (Promise?.id pr)]) (reveal (Promise?. r pr))
   
 val theta : (#e:Type) -> (#a:Type) -> free #e a -> nat -> w #e (nat * a)
 let rec theta m = fun s0 ->
@@ -143,10 +144,9 @@ let rec theta m = fun s0 ->
       w_bind (w_print arg) (fun r -> theta (k r) s0)
   | Async f k -> 
       let id = s0+1 in
-      w_bind (w_async id (theta f (s0+1))) (fun (s1, rf) -> 
-        theta (k (Promise id (Universe.downgrade_val rf))) s1)
+      w_bind (w_async id (theta f (s0+1))) (fun (s1, pr) -> theta (k pr) s1)
   | Await pr k -> 
-      w_bind (w_await (Promise?.id pr)) (fun () -> theta (k (Promise?.r pr)) s0)
+      w_bind (w_await pr) (fun r -> theta (k r) s0)
 
 let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
 
@@ -164,8 +164,155 @@ let lemma_theta_theta' (m:free #'e 'a) : Lemma (
 let theta_monad_morphism_ret (v:'a) (s0:nat) :
   Lemma (theta' (free_return v) s0 == w_return v) by (compute ()) = ()
 
-let theta_lax_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
-  Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) ⊑ theta #e (free_bind m km) s0) = admit ()
+let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) : 
+  Lemma 
+    (requires ((forall x p h. wp2 x p h <==> wp3 x p h)))
+    (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
+
+let rec free_bind'
+  (#e:Type)
+  (#a:Type u#a)
+  (#b:Type u#b)
+  (l : free #e a)
+  (cont : a -> free #e b) :
+  free #e b =
+  match l with
+  | Async f k ->
+      Async 
+        (free_bind f (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
+        (fun x -> free_bind (k x) cont)
+  | _ -> free_bind l cont
+
+
+let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma (forall p h.
+  w_async (s0+1) (w_bind wf (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x))))) p h
+  <==> w_async (s0+1) wf p h) by (norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0]; iota]) = ()
+
+#set-options "--split_queries always --z3rlimit 10"
+let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free a) (km:a -> free b) (s0:nat) (p:w_post (nat * b)) h :
+  Lemma (w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h <==> theta #e (free_bind m km) s0 p h) = 
+  match m with
+  | Return _ -> ()
+  | Require pre k ->
+    calc (<==>) {
+      w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (theta #e (Require pre k) s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (w_bind (w_require pre) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> { w_law3 (w_require pre) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
+      w_bind (w_require pre) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
+      <==> { 
+        let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
+        let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
+        introduce forall (x:squash pre) p h. rhs x p h <==> rhs' x p h with 
+          theta_monad_morphism_bind0 (k x) km s0 p h;
+        assert (forall x. rhs x p h <==> rhs' x p h);
+        w_bind_subcomp (w_require pre) rhs rhs';
+        assert (w_bind (w_require pre) rhs p h <==> w_bind (w_require pre) rhs' p h)
+       }
+      w_bind (w_require pre) (fun x -> theta (free_bind (k x) km) s0) p h;
+      <==> {}
+      theta #e (Require pre (fun x -> free_bind (k x) km)) s0 p h;
+      <==> {}
+      theta #e (free_bind (Require pre k) km) s0 p h;
+      <==> {}
+      theta #e (free_bind m km) s0 p h;
+    }
+  | Print arg k -> 
+    calc (<==>) {
+      w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (theta #e (Print arg k) s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (w_bind (w_print arg) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> { w_law3 (w_print arg) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
+      w_bind (w_print arg) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
+      <==> { 
+        let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
+        let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
+        introduce forall x p h. rhs x p h <==> rhs' x p h with 
+          theta_monad_morphism_bind0 (k x) km s0 p h;
+        assert (forall x. rhs x p h <==> rhs' x p h);
+        w_bind_subcomp (w_print arg) rhs rhs';
+        assert (w_bind (w_print arg) rhs p h <==> w_bind (w_print arg) rhs' p h)
+       }
+      w_bind (w_print arg) (fun x -> theta (free_bind (k x) km) s0) p h;
+      <==> {}
+      theta #e (Print arg (fun x -> free_bind (k x) km)) s0 p h;
+      <==> {}
+      theta #e (free_bind (Print arg k) km) s0 p h;
+      <==> {}
+      theta #e (free_bind m km) s0 p h;
+    }
+  | Await pr k -> 
+    calc (<==>) {
+      w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (theta #e (Await pr k) s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (w_bind (w_await pr) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> { w_law3 (w_await pr) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
+      w_bind (w_await pr) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
+      <==> { 
+        let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
+        let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
+        introduce forall x p h. rhs x p h <==> rhs' x p h with 
+          theta_monad_morphism_bind0 (k x) km s0 p h;
+        assert (forall x. rhs x p h <==> rhs' x p h);
+        w_bind_subcomp (w_await pr) rhs rhs';
+        assert (w_bind (w_await pr) rhs p h <==> w_bind (w_await pr) rhs' p h)
+       }
+      w_bind (w_await pr) (fun x -> theta (free_bind (k x) km) s0) p h;
+      <==> {}
+      theta #e (Await pr (fun x -> free_bind (k x) km)) s0 p h;
+      <==> {}
+      theta #e (free_bind (Await pr k) km) s0 p h;
+      <==> {}
+      theta #e (free_bind m km) s0 p h;
+    }
+  | Async f k ->
+    calc (<==>) {
+      w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (theta #e (Async f k) s0) (fun (s1, x) -> theta #e (km x) s1) p h;
+      <==> {}
+      w_bind (w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> theta (k x) s1)) (fun (s2, x) -> theta #e (km x) s2) p h;
+      <==> { w_law3 (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) ->  theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2) }
+      w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> w_bind (theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2)) p h;
+      <==> { 
+        let rhs = (fun (s1, x) -> w_bind (theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2)) in
+        let rhs' = (fun (s1, x) -> theta (free_bind (k x) km) s1) in
+        introduce forall x s0 p h. rhs (s0,x) p h <==> rhs' (s0,x) p h with 
+          theta_monad_morphism_bind0 (k x) km s0 p h;
+        assert (forall x. rhs x p h <==> rhs' x p h);
+        w_bind_subcomp (w_async (s0+1) (theta f (s0+1))) rhs rhs';
+        assert (w_bind (w_async (s0+1) (theta f (s0+1))) rhs p h <==> w_bind (w_async (s0+1) (theta f (s0+1))) rhs' p h)
+       }
+      w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
+      <==> { lemma_w_async (theta f (s0+1)) s0 }
+      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x)))))) 
+           (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
+      <==> { _ by (norm [delta_only [`%free_return]; iota]) }
+      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> theta (free_return (Universe.raise_val (Universe.downgrade_val x))) s1))) 
+           (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
+      <==> { 
+        let k = (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x))) in
+        introduce forall s0 p h. w_bind (theta #e f s0) (fun (s1, x) -> theta #e (k x) s1) p h <==> theta #e (free_bind f k) s0 p h with 
+          theta_monad_morphism_bind0 f k s0 p h }
+      w_bind (w_async (s0+1) (theta ((free_bind f (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x))))) (s0+1))) (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
+      <==> {}
+      theta (Async (free_bind f (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x)))) (fun x -> free_bind (k x) km)) s0 p h;
+      <==> { _ by (compute ()) }
+      theta #e (free_bind (Async f k) km) s0 p h;
+      <==> {}
+      theta #e (free_bind m km) s0 p h;
+    }
+#reset-options
+
+let theta_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
+  Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) ⊑ theta #e (free_bind m km) s0) =
+  Classical.forall_intro_3 (theta_monad_morphism_bind0 m km)
 
 let dm (#e:Type) (a:Type u#a) (wp:w #e a) =
   m:(free a){forall s0. wp ⊑ theta' m s0}
@@ -257,7 +404,7 @@ let dm_bind
   dm #e b (w_bind0 wp kwp) =
   let m = free_bind c kc in
   lemma_better wp kwp c kc;
-  theta_lax_monad_morphism_bind c kc;
+  theta_monad_morphism_bind c kc;
   assert (forall s0. w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1) ⊑ theta m s0);
   assert (forall s0. w_bind wp kwp ⊑ theta' m s0);
   m
@@ -421,26 +568,30 @@ let async_spec_implies_theta
             theta f (s0+1) (fun ltf (s1, rf) -> p' ltf rf) h;
             ==> { }
             theta f (s0+1) (fun ltf (s1, rf) -> p (async_runtree (s0+1) ltf) (Promise (s0+1) (Universe.downgrade_val rf))) h;
-            ==> { _ by (norm [delta_only [`%w_async]; zeta;iota]; assumption ()) }
-            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> p lt (Promise (s0+1) (Universe.downgrade_val rf))) h;
             ==> { _ by (norm [delta_only [`%append_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
-            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> 
-               p (lt `append_runtree` empty_runtree) (Promise (s0+1) (Universe.downgrade_val rf))) h;
+            theta f (s0+1) (fun lt (s1, rf) -> p (async_runtree (s0+1) (append_runtree lt empty_runtree)) (Promise (s0+1) (Universe.downgrade_val rf))) h;
             ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, rf) -> 
-              w_return (s1, Promise (s0+1) (Universe.downgrade_val rf)) (fun lt' (_, pr) -> p (lt `append_runtree` lt') pr) (h `append_runtree` lt)) h;
+            theta f (s0+1) (fun lt (s1, rf) -> w_return (s1, Promise (s0+1) (Universe.downgrade_val rf)) 
+                  (fun lt' (_, pr) -> p (async_runtree (s0+1) (append_runtree lt lt')) pr) (append_runtree h lt)) h;
+            ==> { _ by (norm [delta_only [`%w_async0;`%w_bind;`%w_bind0;`%w_post_bind;`%w_post_shift]; zeta;iota]) }
+            w_async0 (s0+1) (theta f (s0+1)) (fun ltf (s1, pr) -> p (async_runtree (s0+1) ltf) pr) h;
+            ==> { _ by (norm [delta_only [`%w_async]; zeta;iota]; assumption ()) }
+            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> p lt pr) h;
+            ==> { _ by (norm [delta_only [`%append_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
+            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> 
+               p (lt `append_runtree` empty_runtree) pr) h;
+            ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
+            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> 
+              w_return (s1, pr) (fun lt' (_, pr) -> p (lt `append_runtree` lt') pr) (h `append_runtree` lt)) h;
             ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0;`%w_post_bind;`%w_post_shift]; iota])}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, rf) -> 
-              w_return (s1, (Promise (s0+1) (Universe.downgrade_val rf)))) (fun lt (s1, pr) -> p lt pr) h;
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+              w_return (s1, pr)) (fun lt (s1, pr) -> p lt pr) h;
             ==> {}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, rf) -> 
-              w_return (s1, (Promise (s0+1) (Universe.downgrade_val rf)))) (fun lt (s1, pr) -> p lt pr) h;
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+              theta (Return pr) s1) (fun lt (s1, pr) -> p lt pr) h;
             ==> {}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, rf) -> 
-              theta (Return (Promise (s0+1) (Universe.downgrade_val rf))) s1) (fun lt (s1, pr) -> p lt pr) h;
-            ==> {}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, rf) -> 
-              theta (free_return (Promise (s0+1) (Universe.downgrade_val rf))) s1) (fun lt (s1, pr) -> p lt pr) h;
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+              theta (free_return pr) s1) (fun lt (s1, pr) -> p lt pr) h;
             ==> { _ by (norm [delta_only [`%theta]; zeta;iota]; assumption ()) }
             theta (Async f free_return) s0 (fun lt (s1, pr) -> p lt pr) h;
             }
