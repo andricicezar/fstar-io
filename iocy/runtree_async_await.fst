@@ -169,21 +169,6 @@ let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) :
     (requires ((forall x p h. wp2 x p h <==> wp3 x p h)))
     (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
 
-let rec free_bind'
-  (#e:Type)
-  (#a:Type u#a)
-  (#b:Type u#b)
-  (l : free #e a)
-  (cont : a -> free #e b) :
-  free #e b =
-  match l with
-  | Async f k ->
-      Async 
-        (free_bind f (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
-        (fun x -> free_bind (k x) cont)
-  | _ -> free_bind l cont
-
-
 let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma (forall p h.
   w_async (s0+1) (w_bind wf (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x))))) p h
   <==> w_async (s0+1) wf p h) by (norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0]; iota]) = ()
