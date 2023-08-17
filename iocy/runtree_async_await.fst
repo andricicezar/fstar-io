@@ -283,7 +283,7 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
 #reset-options
 
 let theta_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
-  Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) ⊑ theta #e (free_bind m km) s0) =
+  Lemma (forall s0 p h. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h <==> theta #e (free_bind m km) s0 p h) =
   Classical.forall_intro_3 (theta_monad_morphism_bind0 m km)
 
 let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
