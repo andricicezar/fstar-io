@@ -61,6 +61,11 @@ let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e
   fun p h -> wp (w_post_bind h kwp p) h
 let w_bind = w_bind0
 
+let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) : 
+  Lemma 
+    (requires ((forall x p h. wp2 x p h <==> wp3 x p h)))
+    (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
+
 let __list_assoc_l l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) = 
   lemma_append_runtree_assoc l1 l2 l3
 let __iff_refl a : Lemma (a <==> a) = ()
@@ -148,26 +153,8 @@ let rec theta m = fun s0 ->
   | Await pr k -> 
       w_bind (w_await pr) (fun r -> theta (k r) s0)
 
-let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
-
-let lemma_wp_drop_state (wp:w #'e (nat * 'a)) p h : Lemma (
-   w_bind wp (fun (_, x) -> w_return x) p h <==> wp (fun lt (_, rf) -> p lt rf) h) = ()
-   
-let lemma_theta_theta'0 (m:free #'e 'a) s0 p h : Lemma (
-   theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
-   lemma_wp_drop_state (theta m s0) p h
-
-let lemma_theta_theta' (m:free #'e 'a) : Lemma (
-   forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
-   Classical.forall_intro_3 (lemma_theta_theta'0 m)
-
 let theta_monad_morphism_ret (v:'a) (s0:nat) :
-  Lemma (theta' (free_return v) s0 == w_return v) by (compute ()) = ()
-
-let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) : 
-  Lemma 
-    (requires ((forall x p h. wp2 x p h <==> wp3 x p h)))
-    (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
+  Lemma (theta (free_return v) s0 == w_return (s0, v)) by (compute ()) = ()
 
 let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma (forall p h.
   w_async (s0+1) (w_bind wf (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x))))) p h
@@ -298,6 +285,19 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
 let theta_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
   Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) ⊑ theta #e (free_bind m km) s0) =
   Classical.forall_intro_3 (theta_monad_morphism_bind0 m km)
+
+let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
+
+let lemma_wp_drop_state (wp:w #'e (nat * 'a)) p h : Lemma (
+   w_bind wp (fun (_, x) -> w_return x) p h <==> wp (fun lt (_, rf) -> p lt rf) h) = ()
+   
+let lemma_theta_theta'0 (m:free #'e 'a) s0 p h : Lemma (
+   theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
+   lemma_wp_drop_state (theta m s0) p h
+
+let lemma_theta_theta' (m:free #'e 'a) : Lemma (
+   forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
+   Classical.forall_intro_3 (lemma_theta_theta'0 m)
 
 let dm (#e:Type) (a:Type u#a) (wp:w #e a) =
   m:(free a){forall s0. wp ⊑ theta' m s0}
