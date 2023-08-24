@@ -190,12 +190,10 @@ assume val pure_lemma (_ : unit) : Lemma p
 assume val some_f (_ : squash p) : Free unit (requires True) (ensures fun _ -> True)
 assume val some_f' : unit -> Free unit (requires p) (ensures fun _ -> p')
 
-// TODO: why is this failing?
 let pure_lemma_test () : Free unit (requires True) (ensures fun _ -> True) =
   pure_lemma () ;
   some_f ()
 
-// TODO: why is this failing?
 let pure_lemma_test2 () : Free unit (requires True) (ensures fun _ -> True) =
   pure_lemma () ;
   some_f () ;
