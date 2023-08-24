@@ -26,6 +26,10 @@ let w_monotonic (#e:Type) (#a:Type) (wp:w0 #e a) =
 
 type w (#e:Type) (a:Type) = wp:(w0 #e a){w_monotonic wp}
 
+let w_equiv (wp1:w 'a) (wp2:w 'a) =
+  forall p h. wp1 p h <==> wp2 p h
+let (≡) = w_equiv
+
 let w_subcomp (#e:Type) (#a:Type) (wp:w #e a) (p1 p2:w_post a) (h:tracetree e) :
   Lemma (requires (wp p1 h /\ p1 `w_post_ord` p2))
         (ensures (wp p2 h)) = ()
@@ -156,13 +160,14 @@ let rec theta m = fun s0 ->
 let theta_monad_morphism_ret (v:'a) (s0:nat) :
   Lemma (theta (free_return v) s0 == w_return (s0, v)) by (compute ()) = ()
 
-let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma (forall p h.
-  w_async (s0+1) (w_bind wf (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x))))) p h
-  <==> w_async (s0+1) wf p h) by (norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0]; iota]) = ()
+let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma (
+  w_async (s0+1) (w_bind wf (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x)))))
+  ≡
+  w_async (s0+1) wf) by (norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0]; iota]) = ()
 
 #set-options "--split_queries always --z3rlimit 10"
 let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free a) (km:a -> free b) (s0:nat) (p:w_post (nat * b)) h :
-  Lemma (w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h <==> theta #e (free_bind m km) s0 p h) = 
+  Lemma (w_bind (theta #e m s0) (fun (s1, x) -> theta (km x) s1) p h <==> theta (free_bind m km) s0 p h) = 
   match m with
   | Return _ -> ()
   | Require pre k ->
@@ -283,7 +288,7 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
 #reset-options
 
 let theta_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> free b) :
-  Lemma (forall s0 p h. w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h <==> theta #e (free_bind m km) s0 p h) =
+  Lemma (forall s0. w_bind (theta #e m s0) (fun (s1, x) -> theta (km x) s1) ≡ theta (free_bind m km) s0) =
   Classical.forall_intro_3 (theta_monad_morphism_bind0 m km)
 
 let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
@@ -615,9 +620,6 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1
   (if false then print 3
   else print 2);
   1
- // let x : int = await prx in
- // let y : int = await pry in
-//  2 + 3
 
 let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait id2] Leaf Leaf))) =
   let prx = async (return 2) in
@@ -627,4 +629,13 @@ let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 
   x + y
 
 
+let f () : Cy (promise unit) (fun _ -> True) (fun h pr lt -> lt == Node [EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
+  async (return ())
 
+let g () : Cy (promise unit)  (fun _ -> True) (fun h pr lt -> lt == Node [Ev 10; EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
+  print 10;
+  f ()
+
+let h () : Cy unit (fun _ -> True) (fun h r lt -> exists (id1:nat). lt == Node [Ev 10; EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; Ev 20] Leaf Leaf)) = 
+  await (g ());
+  print 20
