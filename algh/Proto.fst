@@ -167,7 +167,7 @@ type c_typ3 = cb:cb_typ3 -> mon io_sig (make_store cb) int [Inl l_c; Inr 0]
 let act (#st:store) (l:label_typ) (op:io_sig.act) (arg:io_sig.arg op) : mon io_sig st (io_sig.res arg) [Inl l] =
   Op l op arg Return
 
-let scope (#st:store) (fid:fid_typ{fid < st.n}) (arg:(st.get fid).a) : mon io_sig st (st.get fid).b [Inr fid] =
+let scope (#sig:signature) (#st:store) (fid:fid_typ{fid < st.n}) (arg:(st.get fid).a) : mon sig st (st.get fid).b [Inr fid] =
   Scope fid arg Return
 
 val prog3 : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
@@ -205,5 +205,156 @@ let prog4 c =
 
 // TODO: add ability to call/scope the callback
 val prog4' : c:c_typ4 -> mon io_sig (make_store c) unit [Inr 0]
+[@expect_failure]
 let prog4' c =
   mon_bind (scope 0 ()) (fun (cb:cb_typ4) -> cb ())
+
+(* Folding a computation tree. The folding operation `h` need only be
+defined for the operations in the tree. We also take a value case
+so this essentially has a builtin 'map' as well. *)
+val fold_with (#a #b:_) (#sig:_) (#st:_) (#d:dirt)
+  (f:mon sig st a d)
+  (v : a -> b)
+            // This may become (o:sig.act{Inl (sig,l) `memP` d}) 
+  (h  : ((l:label_typ) -> (o:sig.act{Inl l `memP` d}) -> ar:sig.arg o -> (sig.res ar -> b) -> b))
+  (hs : (fid:fid_typ{fid < st.n /\ Inr fid `memP` d} -> x:(st.get fid).a -> 
+         (c:Type & 
+         handle_fid : c &
+         combine:(c -> ((st.get fid).b -> b) -> b))
+         ))
+  : b
+
+let rec fold_with #a #b #sig #st #d f v h hs =
+  match f with
+  | Return x -> v x
+  | Scope fid x k ->
+    let f = (st.get fid).t in
+    let k' (o : (st.get fid).b) : b =
+      fold_with #_ #_ #sig #st #d (k o) v h hs in
+
+    let (| c , handle_fid, combine |) = hs fid x in
+    combine handle_fid k'
+  | Op l act x k ->
+    let k' (o : sig.res x) : b =
+       fold_with #_ #_ #sig #st #d (k o) v h hs
+    in
+    h l act x k'
+
+(* A (tree) handler for a single operation *)
+let handler_tree_op #sig #st (l:label_typ) (o:sig.act) (b:Type) (d:dirt) =
+  x:sig.arg o -> (sig.res x -> mon sig st b d) -> mon sig st b d
+
+(* A (tree) handler for an operation set *)
+let handler_tree #sig #st (d0 : dirt) (b:Type) (d1 : dirt) : Type =
+  l:label_typ -> o:sig.act{Inl l `memP` d0} -> handler_tree_op #sig #st l o b d1
+
+assume val lemma_memP_append : l1:list 'a -> l2:list 'a -> x:'a -> 
+  Lemma (requires (x `memP` (l1 @ l2))) (ensures (x `memP` l1 \/ x `memP` l2))
+  [SMTPat (x `memP` (l1@l2))]
+
+let rec lemma_satisfies (t:free 'sig 'st 'a) d : Lemma (requires (t `satisfies` (d++d))) (ensures (t `satisfies` d))
+  [SMTPat (t `satisfies` (d++d))] =
+  match t with
+  | Return _ -> ()
+  | Scope fid x k -> begin
+      introduce forall x. (k x) `satisfies` (d++d) ==> (k x) `satisfies` d with
+        lemma_satisfies (k x) d;
+      assert (Inr fid `memP` (d++d));
+      lemma_memP_append d d (Inr fid);
+      assert (Inr fid `memP` d);
+      ()
+  end
+  | Op l op arg k -> begin
+      introduce forall x. (k x) `satisfies` (d++d) ==> (k x) `satisfies` d with
+        lemma_satisfies (k x) d;
+      assert (Inl l `memP` (d++d));
+      lemma_memP_append d d (Inl l);
+      assert (Inl l `memP` d);
+      ()
+  end
+
+(* The most generic handling construct, we use it to implement bind.
+It is actually just a special case of folding. *)
+val user_handle (#a #b:_) (#sig:_) (#st:_) (#d0 #d1 : dirt) (#c1:squash (forall x. Inr x `memP` d0 ==> Inr x `memP` d1))
+           ($f : mon sig st a d0)
+           (v : a -> mon sig st b d1)
+           (h : handler_tree #sig #st d0 b d1)
+           : mon sig st b d1
+let user_handle #a #b #sig #st #d0 #d1 #c1 f v h = 
+  fold_with f v h (fun fid x ->
+      (| mon sig st (st.get fid).b d1, scope fid x, (fun (t:mon sig st (st.get fid).b d1) k -> mon_bind t k) |))
+
+
+(**
+type store_mon (sig:signature) (d:dirt) = st:store{forall (i:nat). i < st.n ==> (forall x. (st.get i).m x (st.get i).b (st.get i).d == mon sig st (st.get i).b d)}
+val handle_tree (#a #b:_) (#sig:_) (#d0 #d1 : dirt) (#st:store_mon sig d1) (#c1:squash (forall x. Inr x `memP` d0 ==> Inr x `memP` d1))
+           ($f : mon sig st a d0)
+           (v : a -> mon sig st b d0)
+           : mon sig st b d0
+
+let handle_tree #a #b #sig #d0 #d1 #st f v = 
+  fold_with #a #(mon sig st b d0) #sig #st #d0 f v
+    (fun l op arg k -> Op l op arg k)
+    (fun fid x -> admit ())
+//       (| mon sig st (st.get fid).b d0, handle_scope ((st.get fid).t x), (fun (t:mon sig st (st.get fid).b d0) k -> mon_bind t k) |))
+
+assume val run_check : (#sig:_) -> (#st:_) -> (l:label_typ) -> (op:sig.act) -> (arg:sig.arg op) -> #d:dirt -> #b:Type -> mon sig st b d
+
+and handle_scope #a #b #sig #d0 #d1 #(st:store_mon sig d0) (f:mon sig st a d1) : mon sig st a d0 =
+  fold_with #a #(mon sig st a d0) #sig #st #d0 f (fun x -> mon_return x)
+    (fun l op arg k -> mon_bind (run_check l op arg) k)
+    (fun fid x -> handle_tree (
+**)
+
+assume val l_v : label_typ
+
+type cb_typ5 = int -> mon io_sig empty_store int [Inl l_p]
+type c_typ5 = cb:cb_typ5 -> mon io_sig (make_store cb) int [Inl l_c; Inr 0]
+
+val ctx5 : c_typ5
+let ctx5 cb =
+  mon_bind (act l_c Write "Ctx") (fun () -> scope 0 5)
+
+let st5' (cb:cb_typ5) = make_store cb
+let st5 = (make_store #_ #st5' ctx5)
+
+//val handle_prog5
+//           ($f : mon io_sig st5 int [Inl l_p; Inr 0])
+//           : mon io_sig st5 int [Inl l_p]
+let handle_cb5 (cb:cb_typ5) (x:int) : mon io_sig st5 int [Inl l_p] = 
+  fold_with #_ #(mon io_sig st5 int [Inl l_p]) #io_sig #empty_store #[Inl l_p] (cb x)
+    (fun x -> mon_return x)
+    (fun l op arg k -> mon_bind (act l op arg) k)
+    (fun fid x -> match fid with)
+  
+let rec lemma_satisfies' (t:free 'sig 'st 'a) e2 e3 : Lemma (requires (t `satisfies` ([Inl e2]++[Inl e2;Inl e3]))) (ensures (t `satisfies` [Inl e2;Inl e3]))
+  [SMTPat (t `satisfies` ([Inl e2]++[Inl e2;Inl e3]))] = admit ()
+
+let handle_ctx5 (ctx:c_typ5) (cb:cb_typ5) : mon io_sig st5 int [Inl l_p; Inl l_v] =
+  fold_with #_ #(mon io_sig st5 int [Inl l_p; Inl l_v]) #io_sig #(st5' cb) #[Inl l_c; Inr 0] (ctx cb)
+    (fun x -> mon_return x)
+    (fun l op arg k -> mon_bind (act l_v op arg) k)
+    (fun fid x ->
+      let cb' : mon io_sig st5 int [Inl l_p] = handle_cb5 (((st5' cb).get fid).t) x in
+      (| mon io_sig st5 ((st5' cb).get fid).b [Inl l_p], cb', (fun t k -> mon_bind t k) |))
+
+let handle_prog5 (prog : mon io_sig st5 int [Inl l_p; Inr 0]) : mon io_sig st5 int [Inl l_p; Inl l_v] = 
+  fold_with #_ #(mon io_sig st5 int [Inl l_p; Inl l_v]) #io_sig #st5 #[Inl l_p; Inr 0] prog
+    (fun x -> mon_return x)
+    (fun l op arg k -> mon_bind (act l op arg) k)
+    (fun fid x -> (| 
+      mon io_sig st5 (st5.get fid).b [Inl l_p;Inl l_v],
+      (handle_ctx5 (st5.get fid).t x),
+      (fun t k -> mon_bind t k)
+      |) )
+
+val prog5 : c:c_typ5 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
+let prog5 c : mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0] =
+  let cb : cb_typ5 = (fun x -> mon_bind (act l_p Write "Callback") (fun () -> mon_return (x+10))) in
+  mon_bind (act l_p Write "Program") (fun () -> scope 0 cb)
+
+
+let _ = assert (handle_prog5 (prog5 ctx5) == 
+            Op l_p Write "Program" (fun _ ->
+             (Op l_v Write "Ctx" (fun _ ->
+                Op l_p Write "Callback" (fun _ -> Return 15))))) by (compute ())
