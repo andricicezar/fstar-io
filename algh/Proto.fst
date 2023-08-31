@@ -36,8 +36,6 @@ type fid_typ = nat
 type labeled_signature = label_typ
 type dirt = list (either labeled_signature fid_typ)
 
-#set-options "--print_universes"
-
 noeq
 type fnc_typ = {
   a : Type u#0; 
@@ -110,6 +108,18 @@ let rec satisfies (m:free 's 'st 'a) (d:dirt) =
 type mon s st a d =
   m:(free s st a){m `satisfies` d}
 
+let mon_bind
+  (#s:signature)
+  (#st:store)
+  (#a:Type u#a)
+  (#b:Type u#b)
+  (#d_l #d_k:dirt)
+  ($l : mon s st a d_l)
+  (k : a -> mon s st b d_k) :
+  mon s st b (d_l ++ d_k) =
+  admit ();
+  free_bind l k
+
 let lemma (#a:Type u#0) (#b:Type u#0) s st fid x k d : Lemma
   (requires (Scope fid x k `satisfies #_ #s #st` d /\ ~((Inr fid) `memP` d)))
   (ensures (False)) = ()
@@ -147,21 +157,53 @@ let prog2 c =
   let cb : cb_typ2 = (fun () -> Return ()) in
   Scope 0 cb Return
 
-type cb_typ3 = unit -> mon io_sig empty_store unit []
-type c_typ3 = cb:cb_typ3 -> mon io_sig (make_store cb) int []
-val prog3 : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inr 0]
-let prog3 c =
-  let cb : cb_typ3 = (fun () -> Return ()) in
-  Scope 0 cb Return
+assume val l_p : label_typ
+assume val l_c : label_typ
 
-let prog01 (l_p l_c:label_typ) : mon io_sig unit [Inl l_p] =
-  let cb : unit -> mon io_sig unit [Inl l_p] = (fun () -> Op l_p Write "test2" Return) in
-  Op l_p Write "test" Return 
+type cb_typ3 = unit -> mon io_sig empty_store unit [Inl l_p]
+
+type c_typ3 = cb:cb_typ3 -> mon io_sig (make_store cb) int [Inl l_c; Inr 0]
+
+let act (#st:store) (l:label_typ) (op:io_sig.act) (arg:io_sig.arg op) : mon io_sig st (io_sig.res arg) [Inl l] =
+  Op l op arg Return
+
+let scope (#st:store) (fid:fid_typ{fid < st.n}) (arg:(st.get fid).a) : mon io_sig st (st.get fid).b [Inr fid] =
+  Scope fid arg Return
+
+val prog3 : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
+let prog3 c : mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0] =
+  let cb : cb_typ3 = (fun () -> act l_p Write "Test") in
+  mon_bind (act l_p Write "Test2") (fun () -> scope 0 cb)
+
+val prog3' : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
+let prog3' c =
+  let cb : cb_typ3 = (fun () -> act l_p Write "Test") in
+  mon_bind (scope 0 cb) (fun _ -> prog3 c) 
+
+val prog3'' : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
+[@expect_failure] // c does effects labeled with l_c, but prog3'' can only have effects labeled with l_p
+let prog3'' c =
+  let cb : cb_typ3 = (fun () -> act l_p Write "Test") in
+  c cb
+
+val prog3''' : c:c_typ3 -> mon io_sig (make_store #_ #(fun cb -> make_store cb) c) int [Inl l_p; Inr 0]
+[@expect_failure] // cb does effects labeled with l_c, while its type allows only effects labeled with l_p
+let prog3''' c =
+  let cb : cb_typ3 = (fun () -> act l_c Write "Test") in
+  scope 0 cb
+
+let mon_return #st #b (x:b) : mon io_sig st b [] = Return x
 
 
-// TODO: reify /reflect
+type cb_typ4 = unit -> mon io_sig empty_store unit [Inl l_c]
+type c_typ4 = unit -> mon io_sig empty_store (cb_typ4) [Inl l_c]
 
-val prog1 : s:signature -> c:(unit -> mon s unit []) -> mon s unit [Inr (| _, downgrade_f c |)]
-let prog1 s c : mon s unit [Inr (| _, downgrade_f c |)] by ( 
-  norm [delta_only [`%satisfies]; zeta; iota]) =
-  Scope (fun () -> Return (Universe.raise_val ())) () Return
+val prog4 : c:c_typ4 -> mon io_sig (make_store c) unit [Inr 0]
+[@expect_failure]
+let prog4 c =
+  mon_bind (scope 0 ()) (fun (cb:cb_typ4) -> cb ())
+
+// TODO: add ability to call/scope the callback
+val prog4' : c:c_typ4 -> mon io_sig (make_store c) unit [Inr 0]
+let prog4' c =
+  mon_bind (scope 0 ()) (fun (cb:cb_typ4) -> cb ())
