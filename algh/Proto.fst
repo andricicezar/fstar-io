@@ -1,7 +1,5 @@
 module Proto
 
-#reset-options
-
 noeq
 type signature = {
   act : Type0 ;
@@ -9,9 +7,7 @@ type signature = {
   res : #a:act -> arg a -> Type0 ;
 }
 
-type io_act =
-| Read
-| Write
+type io_act = | Read | Write
 
 let io_arg ac =
   match ac with
@@ -23,11 +19,7 @@ let io_res #ac (x : io_arg ac) =
   | Read -> string
   | Write -> unit
 
-let io_sig : signature = {
-  act = io_act ;
-  arg = io_arg ;
-  res = io_res
-}
+let io_sig : signature = { act = io_act ; arg = io_arg ; res = io_res }
 
 assume type label_typ
 type fid_typ = nat
@@ -89,15 +81,10 @@ open FStar.List.Tot.Base
 
 let (++) (d1 d2:dirt) : dirt = append d1 d2
 
-let rec (<=) (d1 d2:dirt) : Type0 =
+let rec (<<=) (d1 d2:dirt) : Type0 =
   match d1 with
   | [] -> true
-  | h :: tl -> memP h d2 /\ tl <= d2
-
-
-(**[@"opaque_to_smt"]
-let downgrade_f (#a:Type u#0) (#b:Type u#0) (f:a -> free 's 'st b) : (a -> free 's (Universe.raise_t u#0 u#a b)) =
-  fun x -> free_bind (f x) (fun x -> Return (Universe.raise_val u#0 u#a x))**)
+  | h :: tl -> memP h d2 /\ tl <<= d2
 
 let rec satisfies (m:free 's 'st 'a) (d:dirt) =
   match m with
@@ -240,11 +227,9 @@ let rec fold_with #a #b #sig #st #d f v h hs =
     in
     h l act x k'
 
-(* A (tree) handler for a single operation *)
 let handler_tree_op #sig #st (l:label_typ) (o:sig.act) (b:Type) (d:dirt) =
   x:sig.arg o -> (sig.res x -> mon sig st b d) -> mon sig st b d
 
-(* A (tree) handler for an operation set *)
 let handler_tree #sig #st (d0 : dirt) (b:Type) (d1 : dirt) : Type =
   l:label_typ -> o:sig.act{Inl l `memP` d0} -> handler_tree_op #sig #st l o b d1
 
@@ -273,8 +258,6 @@ let rec lemma_satisfies (t:free 'sig 'st 'a) d : Lemma (requires (t `satisfies` 
       ()
   end
 
-(* The most generic handling construct, we use it to implement bind.
-It is actually just a special case of folding. *)
 val user_handle (#a #b:_) (#sig:_) (#st:_) (#d0 #d1 : dirt) (#c1:squash (forall x. Inr x `memP` d0 ==> Inr x `memP` d1))
            ($f : mon sig st a d0)
            (v : a -> mon sig st b d1)
@@ -318,16 +301,13 @@ let ctx5 cb =
 let st5' (cb:cb_typ5) = make_store cb
 let st5 = (make_store #_ #st5' ctx5)
 
-//val handle_prog5
-//           ($f : mon io_sig st5 int [Inl l_p; Inr 0])
-//           : mon io_sig st5 int [Inl l_p]
 let handle_cb5 (cb:cb_typ5) (x:int) : mon io_sig st5 int [Inl l_p] = 
   fold_with #_ #(mon io_sig st5 int [Inl l_p]) #io_sig #empty_store #[Inl l_p] (cb x)
     (fun x -> mon_return x)
     (fun l op arg k -> mon_bind (act l op arg) k)
     (fun fid x -> match fid with)
   
-let rec lemma_satisfies' (t:free 'sig 'st 'a) e2 e3 : Lemma (requires (t `satisfies` ([Inl e2]++[Inl e2;Inl e3]))) (ensures (t `satisfies` [Inl e2;Inl e3]))
+let lemma_satisfies' (t:free 'sig 'st 'a) e2 e3 : Lemma (requires (t `satisfies` ([Inl e2]++[Inl e2;Inl e3]))) (ensures (t `satisfies` [Inl e2;Inl e3]))
   [SMTPat (t `satisfies` ([Inl e2]++[Inl e2;Inl e3]))] = admit ()
 
 let handle_ctx5 (ctx:c_typ5) (cb:cb_typ5) : mon io_sig st5 int [Inl l_p; Inl l_v] =
