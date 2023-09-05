@@ -101,7 +101,7 @@ let (⊕) #a #n = add_set #a #n
 
 
 
-let __test_set1 : set int 4 = (((empty_set #int ⊕ 1) ⊕ 2) ⊕ 2) ⊕ 4
+let __test_set1 : set int 4 = (((return_set 1) ⊕ 2) ⊕ 2) ⊕ 4
 let _ = assert (El 2 2 ∈ __test_set1 4 /\ El 3 2 ∈ __test_set1 4)
 
 [@expect_failure]
@@ -187,7 +187,7 @@ type poset (a:Type) (n:nat) =
 let empty_poset (#a:Type) : poset a 0 = (| empty_set, empty_partial_order empty_set, None, None |)
 
 let return_poset (el:'e) : poset 'e 1 =
-  let s = empty_set ⊕ el in
+  let s = return_set el in
   (| s, empty_partial_order s, Some (fun st0 -> El st0 el), Some (fun st0 -> El st0 el) |)
 
 
@@ -298,7 +298,7 @@ let _ = assert (~([3;1;2] `test_membership` __test_poset))
      \ |
        4 **)
        
-let __test_set3 : set int 4 = (((empty_set ⊕ 1) ⊕ 2) ⊕ 3) ⊕ 4
+let __test_set3 : set int 4 = (((return_set 1) ⊕ 2) ⊕ 3) ⊕ 4
 let __test_po3 : partial_order __test_set3 =
   extend_partial_order 
     (extend_partial_order
@@ -361,7 +361,7 @@ let async (#n:nat) (p:poset (event_typ 'e) n) : poset (event_typ 'e) (n+2) =
 let await (#e:Type) (th_id:nat) : poset (event_typ e) 1 =
   let s : set (event_typ e) 1 = return_set None in
   let po : partial_order s = (fun st0 x y -> (x ∈ s st0 /\ y ∈ s st0) \/ (y == El st0 None /\ Some? (v x) /\ fst (Some?.v (v x)) == th_id)) in
-  (| return_set None, po, Some (fun st0 -> El st0 None), Some (fun st0 -> El st0 None) |)
+  (| s, po, Some (fun st0 -> El st0 None), Some (fun st0 -> El st0 None) |)
 
 let rec membership0 (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked) : Type0 =
   let (| s, po, bot, top |) = p in
@@ -383,12 +383,73 @@ let membership (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
               | None -> membership0 t p bot_el (mark empty_marked (id bot_el))
               | Some b' -> h == snd b' /\ membership0 tl p bot_el (mark empty_marked (id bot_el)))
 
+#reset-options
+
 let prog0 () : poset (event_typ int) 3 = async (op 2 2)
 let __test_prog0 () = 
   let (| s, po, bot, top_r |) = prog0 () in
   assert (Some? bot /\ Some?.v bot 3 == El 2 None);
-  assert (Some? bot /\ Some?.v top_r 3 == El 3 None);
-  assert (El 1 (Some (2,2)) ∈ s 3)
+  assert (Some? top_r /\ Some?.v top_r 3 == El 3 None);
+  assert (El 1 (Some (2,2)) ∈ s 3);
+  assert (El 2 None ∈ s 3);
+  assert (El 3 None ∈ s 3)
+
+let prog01 () : poset (event_typ int) 4 = op 1 1 `append_poset` async (op 2 2)
+
+let __test_prog01 () = 
+  let (| s, po, bot, top_r |) = prog01 () in
+  assert (Some? bot /\ Some?.v bot 4 == El 1 (Some (1,1)));
+  assert (Some? top_r /\ Some?.v top_r 4 == El 4 None);
+  assert (El 1 (Some (1,1)) ∈ s 4);
+  assert (El 2 (Some (2,2)) ∈ s 4);
+  assert (El 3 None ∈ s 4);
+  assert (El 4 None ∈ s 4)
+
+let prog02 () : poset (event_typ int) 4 = async (op 2 2) `append_poset` op 1 1
+
+let __test_prog02 () = 
+  let (| s, po, bot, top_r |) = prog02 () in
+  assert (Some? bot /\ Some?.v bot 4 == El 2 None);
+  assert (Some? top_r /\ Some?.v top_r 4 == El 4 (Some (1,1)));
+  assert (El 1 (Some (2,2)) ∈ s 4);
+  assert (El 2 None ∈ s 4);
+  assert (El 3 None ∈ s 4);
+  assert (El 4 (Some (1,1)) ∈ s 4)
+
+let prog03 () : poset (event_typ int) 5 = (async (op 2 2) `append_poset` op 1 1) `append_poset` op 3 1
+
+let __test_prog03 () = 
+  let (| s, po, bot, top_r |) = prog03 () in
+  assert (Some? bot /\ Some?.v bot 5 == El 2 None);
+  assert (Some? top_r /\ Some?.v top_r 5 == El 5 (Some (1,3)));
+  assert (El 1 (Some (2,2)) ∈ s 5);
+  assert (El 2 None ∈ s 5);
+  assert (El 3 None ∈ s 5);
+  assert (El 4 (Some (1,1)) ∈ s 5);
+  assert (El 5 (Some (1,3)) ∈ s 5)
+
+let prog04 () : poset (event_typ int) 5 = (op 1 1 `append_poset` async (op 2 2)) `append_poset` op 3 1
+
+let __test_prog04 () = 
+  let (| s, po, bot, top_r |) = prog04 () in
+  assert (Some? bot /\ Some?.v bot 5 == El 1 (Some (1,1)));
+  assert (Some? top_r /\ Some?.v top_r 5 == El 5 (Some (1,3)));
+  assert (El 1 (Some (1,1)) ∈ s 5);
+  assert (El 2 (Some (2,2)) ∈ s 5);
+  assert (El 3 None ∈ s 5);
+  assert (El 4 None ∈ s 5);
+  assert (El 5 (Some (1,3)) ∈ s 5)
+  
+let prog05 () : poset (event_typ int) 4 = async (op 2 2) `append_poset` await 2
+
+let __test_prog05 () = 
+  let (| s, po, bot, top_r |) = prog05 () in
+  assert (Some? bot /\ Some?.v bot 4 == El 2 None);
+  assert (Some? top_r /\ Some?.v top_r 4 == El 4 None);
+  assert (El 1 (Some (2,2)) ∈ s 4);
+  assert (El 2 None ∈ s 4);
+  assert (El 3 None ∈ s 4);
+  assert (El 4 None ∈ s 4)
 
 (** Test:
           (1,1)
@@ -409,22 +470,27 @@ let prog1 () : poset (event_typ int) 7 = (((op 1 1 `append_poset` async (op 2 2)
 let __test_prog1 () = 
   let (| s, po, bot, top_r |) = prog1 () in
   assert (Some? bot /\ Some?.v bot 7 == El 1 (Some (1,1)));
-  assert (Some? bot /\ Some?.v top_r 7 == El 7 (Some (1,4)));
- // assert (El 1 (Some (1,1)) ∈ s 7);
-  assert (El 2 None ∈ s 7);
-//  assert (El 3 None ∈ s 7);
-//  assert (El 4 (Some (2,2)) ∈ s 7);
-//  assert (El 5 (Some (1,3)) ∈ s 7);
-//  assert (El 6 None ∈ s 7);
+  assert (Some? top_r /\ Some?.v top_r 7 == El 7 (Some (1,4)));
+  assert (El 1 (Some (1,1)) ∈ s 7);
+  assert (El 5 (Some (1,3)) ∈ s 7);
+  assert (El 6 None ∈ s 7);
   assert (El 7 (Some (1,4)) ∈ s 7)
 
-#set-options "--z3rlimit 32"
+#set-options "--z3rlimit 64"
+let __test_prog1'' () = 
+  let (| s, po, bot, top_r |) = (((op 1 1 `append_poset` async (op 2 2)) `append_poset` (op 3 1)) `append_poset` await 2) `append_poset` op 4 1 in
+  assert (Some? bot /\ Some?.v bot 7 == El 1 (Some (1,1)));
+  assert (Some? top_r /\ Some?.v top_r 7 == El 7 (Some (1,4)));
+  assert (El 2 (Some (2,2)) ∈ s 7);
+  assert (El 3 None ∈ s 7);
+  assert (El 4 None ∈ s 7)
+
 let _ = assert ([1;4] `membership` prog1 ()) 
   
 let _ = assert (~([4;1] `membership` prog1 ()))
 
 #set-options "--z3rlimit 64"
-let _ = assert ([1;2] `membership` prog1 ())
+let _ = assert ([1;2;3;4] `membership` prog1 ())
 
 let _ = assert ([1;3;2;4] `membership` prog1 ())
 
