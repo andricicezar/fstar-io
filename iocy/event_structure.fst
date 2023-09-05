@@ -108,27 +108,6 @@ let extend_partial_order
   fun ofst ev1' ev2' -> ev1' ∈ s ofst /\ ev2' ∈ s ofst /\ 
     (((ev2 ofst `po ofst` ev1 ofst ==> ev1 ofst == ev2 ofst) /\ (ev1' `po ofst` ev1 ofst /\ ev2 ofst `po ofst` ev2')) \/ (ev1' `po ofst` ev2'))
 
-(**
-type partial_order (e:Type) = rel:(relation e) {
-  (forall x. x `rel` x) /\
-  (forall x y z. (x `rel` y /\ y `rel` z ==> x `rel` z)) /\
-  (forall x y. (x `rel` y /\ y `rel` x ==> x == y))
-
-let empty_partial_order (#a:Type) : partial_order a =
-  fun x y -> x == y
-
-let extend_partial_order ((<=):partial_order 'e) (ev1:(elem 'e)) (ev2:(elem 'e)) : partial_order 'e =
-  fun ev1' ev2' -> ((ev2 <= ev1 ==> ev1 == ev2) /\ (ev1' <= ev1 /\ ev2 <= ev2')) \/ (ev1' <= ev2')
-}**)
-
-  (**
-let bottom (po:partial_order 'e) : Type0 =
-  exists bot. forall ev. bot `po` ev 
-
-let union_partial_order (po1:partial_order 'e) (po2:partial_order 'e) : partial_order 'e =
-  fun ev1 ev2 -> ev1 `po1` ev2 \/ ev1 `po2` ev2 \/ ((e1 `po1` e1) /\ (exists bot. (forall ev. bot `po2` ev) ==> bot `po2` e2))
-**)
-
 type poset (a:Type) (n:nat) =
   s:set a n
   & po:partial_order s
@@ -429,6 +408,11 @@ let __test_prog1 () =
   assert (make_el 6 None ∈ s 7);
   assert (make_el 7 (Some (1,4)) ∈ s 7)
 
+// TODO: why do I have performance problems here?
+// TODO: test on a smaller case if await works:
+//        (async (op 2 2)) `append_poset` await 2) `append_poset` op 4 1
+//           assert ([2;4] `membership` _)
+//           assert (~([4;2] `membership` _)
 #set-options "--z3rlimit 64"
 let __test_prog1'' () = 
   let (| s, po, bot, top_r |) = (((op 1 1 `append_poset` async (op 2 2)) `append_poset` (op 3 1)) `append_poset` await 2) `append_poset` op 4 1 in
