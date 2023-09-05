@@ -79,10 +79,13 @@ let (∉) (#a:Type) (el:elem a) (s:base_set a) = ~(el ∈ s)
 
 type set0 a (n:nat) = st0:nat{st0 >= n} -> base_set a
 type set a (n:nat) = s:(set0 a n){
-  (forall st0 x. s st0 x ==> id x =!= 0) /\
-  (forall st0 x. s st0 x /\ st0 >= 0 ==> (st0-n) < id x /\ id x <= st0) /\
-  (forall st0 x y. s st0 x /\ s st0 y /\ x =!= y ==> id x =!= id y)
+  (forall st0 x. x ∈ s st0 ==> (st0-n) < id x /\ id x <= st0) /\
+  // (forall st0 i. (st0-n) < i /\ i <= st0 ==> (exists x. id x == i /\ x ∈ s st0)) /\
+  (forall st0 x y. x ∈ s st0 /\ y ∈ s st0 /\ x =!= y ==> id x =!= id y)
+//  (forall st0 x y. x ∈ s st0 /\ y ∈ s st0 /\ id x == id y ==> x == y)
 }
+
+let empty_set_lemma (s:set 'a 0) : Lemma (forall st0 x. x ∉ s st0) = ()
 
 let empty_set (#a:Type) : set a 0 = fun _ _ -> False
 
@@ -90,9 +93,10 @@ let eq_set (s1:set 'a 'n) (s2:set 'a 'm) : Type0 =
   'n == 'm /\ (forall st0 x. s1 st0 x <==> s2 st0 x)
 
 let return_set (#a:Type) (x:a) : set a 1 = fun st0 y -> El st0 x == y
-let extend_set (#a:Type) (#n:nat) (s0:set a n) (x:a) : set a (n+1) =
-  fun (st0:nat{st0 >= n+1}) y -> El st0 x == y \/ s0 (st0-1) y
-let (⊕) #a #n = extend_set #a #n
+
+let add_set (#a:Type) (#n:nat) (s0:set a n) (x:a) : set a (n+1) =
+  fun (st0:nat{st0 >= n+1}) y -> El st0 x == y \/ y ∈ s0 (st0-1)
+let (⊕) #a #n = add_set #a #n
 
 
 
@@ -116,7 +120,7 @@ let _ = assert (exists (id1 id2:id_typ). id1 <= id2 /\
                       El (id2+1) 4 ∈ __test_set1 4)
 
 let union_set (#a:Type) (#n #m:nat) (s0:set a n) (s1:set a m) : set a (n+m) =
-  fun (st0:nat{st0 >= n+m}) x -> s0 (st0-m) x \/ s1 (st0) x
+  fun (st0:nat{st0 >= n+m}) x -> x ∈ s0 (st0-m) \/ x ∈ s1 st0
 
 let subset_set (#a:Type) (#n #m:nat) (s0:set a n) (s1:set a m) : Type0 =
   n <= m ==> (forall x (st0:nat{st0 >= m}). x ∈ s0 st0 ==> x ∈ s1 st0)
@@ -130,6 +134,7 @@ let _ = assert (forall id v. El id v ∈ __test_set1 4 <==>
 
 type relation a = elem a -> elem a -> Type0
 
+(** non-strict partial order **)
 type partial_order (#a:Type) (#n:nat) (s:set a n) = st0:nat{st0 >= n} -> rel:(relation a){
   (forall x. x ∈ s st0 ==> x `rel` x) /\
   (forall x y z. x ∈ s st0 /\ y ∈ s st0 /\ z ∈ s st0 ==> (x `rel` y /\ y `rel` z ==> x `rel` z)) /\
@@ -137,7 +142,7 @@ type partial_order (#a:Type) (#n:nat) (s:set a n) = st0:nat{st0 >= n} -> rel:(re
 }
 
 let empty_partial_order (#a:Type) (#n:nat) (s:set a n) : partial_order s =
-  fun _ x y -> x == y
+  fun st0 x y -> x ∈ s st0 /\ x == y
 
 let extend_partial_order
   (#a:Type)
@@ -147,7 +152,7 @@ let extend_partial_order
   (ev1:(st0:nat{st0 >= n} -> elem a){forall st0. ev1 st0 ∈ s st0})
   (ev2:(st0:nat{st0 >= n} -> elem a){forall st0. ev2 st0 ∈ s st0})
   : partial_order s =
-  fun st0 ev1' ev2' -> (ev1' ∈ s st0 /\ ev2' ∈ s st0) /\ 
+  fun st0 ev1' ev2' -> ev1' ∈ s st0 /\ ev2' ∈ s st0 /\ 
     (((ev2 st0 `po st0` ev1 st0 ==> ev1 st0 == ev2 st0) /\ (ev1' `po st0` ev1 st0 /\ ev2 st0 `po st0` ev2')) \/ (ev1' `po st0` ev2'))
 
 (**
@@ -174,10 +179,10 @@ let union_partial_order (po1:partial_order 'e) (po2:partial_order 'e) : partial_
 type poset (a:Type) (n:nat) =
   s:set a n
   & po:partial_order s
-  & bot:option (st0:nat{st0 >= n} -> elem a){(None? bot <==> s `eq_set` empty_set)
-    /\ Some? bot ==> (forall st0. Some?.v bot st0 ∈ s st0 /\ (forall x. x ∈ s st0 ==> Some?.v bot st0 `po st0` x))}
-  & top_r:option (st0:nat{st0 >= n} -> elem a){(None? top_r <==> s `eq_set` empty_set) /\
-    Some? top_r ==> (forall st0. Some?.v top_r st0 ∈ s st0 /\ (forall x. x ∈ s st0 /\ x =!= Some?.v top_r st0 ==> ~(Some?.v top_r st0 `po st0` x)))}
+  & bot:option (st0:nat{st0 >= n} -> elem a){(None? bot <==> n == 0)
+    /\ (Some? bot ==> (forall st0. Some?.v bot st0 ∈ s st0 /\ (forall x. x ∈ s st0 ==> Some?.v bot st0 `po st0` x)))}
+  & top_r:option (st0:nat{st0 >= n} -> elem a){(None? top_r <==> n == 0) /\
+    (Some? top_r ==> (forall st0. Some?.v top_r st0 ∈ s st0 /\ (forall x. x ∈ s st0 /\ x =!= Some?.v top_r st0 ==> ~(Some?.v top_r st0 `po st0` x))))}
 
 let empty_poset (#a:Type) : poset a 0 = (| empty_set, empty_partial_order empty_set, None, None |)
 
@@ -192,13 +197,12 @@ let new_po0
   (po1:partial_order s1)
   (#s2:set 'e m)
   (po2:partial_order s2)
-  (bot2 : (st0:nat{st0 >= m}) -> elem 'e)
   (top_r1 : (st0:nat{st0 >= n}) -> elem 'e)
   (st0:nat{st0 >= n + m})
   : relation 'e = (fun x y ->
   (x ∈ s1 (st0-m) /\ y ∈ s1 (st0-m) /\ x `po1 (st0-m)` y) \/
   (x ∈ s2 st0 /\ y ∈ s2 st0 /\ x `po2 st0` y) \/
-  (x ∈ s1 (st0-m) /\ y ∈ s2 st0 /\ x `po1 (st0-m)` top_r1 st0 /\ bot2 st0 `po2 st0` y))
+  (x ∈ s1 (st0-m) /\ y ∈ s2 st0 /\ x `po1 (st0-m)` (top_r1 (st0-m))))
 
 let new_po
   (#n #m:nat)
@@ -206,11 +210,10 @@ let new_po
   (po1:partial_order s1)
   (#s2:set 'e m)
   (po2:partial_order s2)
-  (bot2 : (st0:nat{st0 >= m}) -> elem 'e)
   (top_r1 : (st0:nat{st0 >= n}) -> elem 'e) :
   partial_order (s1 `union_set` s2) =
   fun st0 -> 
-    let rel = new_po0 po1 po2 bot2 top_r1 st0 in
+    let rel = new_po0 po1 po2 top_r1 st0 in
     let s = s1 `union_set` s2 in
     assert (forall x. x ∈ s st0 ==> x `rel` x);
     assume (forall x y z. x ∈ s st0 /\ y ∈ s st0 /\ z ∈ s st0 ==> (x `rel` y /\ y `rel` z ==> x `rel` z));
@@ -218,25 +221,18 @@ let new_po
     rel
 
 
-let union_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : poset 'e (n+m) =
+let append_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : poset 'e (n+m) =
   let (| s1, po1, bot1, top_r1 |) = pos1 in
   let (| s2, po2, bot2, top_r2 |) = pos2 in
   match bot1, bot2 with
-  | None, None // -> (| empty_set, empty_partial_order empty_set, None, None |)
-  | None, _ -> assume (n == 0); pos2
-  | _, None -> assume (m == 0); pos1
+  | None, None
+  | None, _ -> pos2
+  | _, None -> pos1
   | _, _ -> begin
     let s = s1 `union_set` s2 in
-    assume (Some? top_r1);
-    let po : partial_order s = new_po po1 po2 (Some?.v bot2) (Some?.v top_r1) in
-    assert (Some? bot1);
-    let bot : option ((st0:nat{st0 >= n+m}) -> elem 'e) = Some (fun (st0:nat{st0 >= n+m}) -> Some?.v bot1 (st0-m)) in
-    assume (forall st0. Some?.v bot st0 ∈ s st0);
-    assume (forall st0 x. x ∈ s st0 ==> Some?.v bot st0 `po st0` x);
-    assume (Some? top_r2);
-    let top : option ((st0:nat{st0 >= n+m}) -> elem 'e) = Some (fun (st0:nat{st0 >= n+m}) -> Some?.v top_r2 st0) in
-    assume (forall st0. Some?.v top st0 ∈ s st0);
-    assume (forall st0 x. x ∈ s st0 /\ x =!= Some?.v top st0 ==> ~(Some?.v top st0 `po st0` x));
+    let po : partial_order s = new_po po1 po2 (Some?.v top_r1) in
+    let bot = Some (fun (st0:nat{st0 >= n+m}) -> Some?.v bot1 (st0-m)) in
+    let top = Some (fun (st0:nat{st0 >= n+m}) -> Some?.v top_r2 st0) in
     (| s1 `union_set` s2, po, bot , top |)
   end
 
@@ -248,20 +244,6 @@ let subset_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : Type0 =
   
 type trace 'e = list 'e
   
-let rec trace_as_poset (t:trace 'e) : poset 'e (List.length t) = 
-  match t with
-  | [] -> empty_poset
-  | h :: tl -> return_poset h `union_poset` (trace_as_poset tl) 
-
-let _ =
-  let (| s, po, bot, top |) = trace_as_poset [1;2;3;4;5] in
-  assert (Some? bot /\ Some?.v bot 5 == El 1 1);
-  assert (Some? top /\ Some?.v top 5 == El 5 5);
-  assert (El 1 1 `po 5` El 5 5);
-  assert (El 1 1 `po 5` El 2 2);
-  assert (El 1 1 `po 5` El 2 2);
-  ()
-
 type marked = id_typ -> Type0
 
 let empty_marked : marked = fun _ -> False
@@ -300,9 +282,15 @@ let _ =
   assert ([1;2] `test_membership` __test_poset);
   assert ([1;3] `test_membership` __test_poset)
 
+let _ =
+  assert (~([2;1] `test_membership` __test_poset));
+  assert (~([3;1] `test_membership` __test_poset))
+
 let _ = assert ([1;2;3] `test_membership` __test_poset)
 
 let _ = assert ([1;3;2] `test_membership` __test_poset)
+
+let _ = assert (~([3;1;2] `test_membership` __test_poset))
 
 (**  1
     | \
@@ -320,17 +308,124 @@ let __test_po3 : partial_order __test_set3 =
       (fun id -> El (id-1) 3) (fun id -> El id 4))
     (fun id -> El (id-2) 2) (fun id -> El id 4)
 
+#set-options "--z3rlimit 12"
 let __test_poset3 : poset int 4 =
   (| __test_set3, __test_po3, Some (fun (st0:nat{st0 >= 4}) -> El (st0-3) 1), Some (fun id -> El id 4) |)
 
-#set-options "--z3rlimit 10"
 let _ =
   assert ([1;2;3;4] `test_membership` __test_poset3)
 
 let _ =
   assert ([1;3;2;4] `test_membership` __test_poset3)
 
-[@expect_failure]
 let _ =
-  assert ([1;1] `test_membership` __test_poset3)
+  assert ([1] `test_membership` __test_poset3);
+  assert (~([5] `test_membership` __test_poset3));
+  assert (~([1;5] `test_membership` __test_poset3))
 
+let _ =
+  assert (~([1;1] `test_membership` __test_poset3))
+
+let _ =
+  assert (~([1;4;3;2] `test_membership` __test_poset3))
+
+type event_typ 'e = option (nat * 'e)
+
+let op (e:'e) (th_id:nat) : poset (event_typ 'e) 1 =
+  let s = return_set (Some (th_id, e)) in
+  (| s, empty_partial_order s, Some (fun st0 -> El st0 (Some (th_id, e))), Some (fun st0 -> El st0 (Some (th_id, e))) |)
+
+
+(**
+     bot st0                               El (st0-1) None        (new bot) 
+      |             async                   /        \
+      |          ---------->               /          \
+      |                                   v           v
+      v                              bot (st0-2)   El st0 None    (new top)
+     top_r st0                            |
+                                          |
+                                          v
+                                    top_r (st0-2)
+**)
+
+let async (#n:nat) (p:poset (event_typ 'e) n) : poset (event_typ 'e) (n+2) = 
+  let (| s, po, bot, top_r |) = p in
+  let s' = (s ⊕ None) ⊕ None in
+  assert (forall st0. El st0 None ∈ s' st0 /\ El (st0-1) None ∈ s' st0);
+  let po : partial_order s' = (fun st0 x y -> (x == El (st0-1) None /\ y ∈ s' st0) \/
+                                            (x == El st0 None /\ y == El st0 None) \/
+                                            (x ∈ s (st0-2) /\ y ∈ s (st0-2) /\ x `po (st0-2)` y)) in
+  (| s', po, Some (fun (st0:nat{st0 >= n+2}) -> El (st0-1) None), Some (fun st0 -> El st0 None) |)
+
+(** CA: Not very principled since the po is defined over x and y which are not part of S **)
+let await (#e:Type) (th_id:nat) : poset (event_typ e) 1 =
+  let s : set (event_typ e) 1 = return_set None in
+  let po : partial_order s = (fun st0 x y -> (x ∈ s st0 /\ y ∈ s st0) \/ (y == El st0 None /\ Some? (v x) /\ fst (Some?.v (v x)) == th_id)) in
+  (| return_set None, po, Some (fun st0 -> El st0 None), Some (fun st0 -> El st0 None) |)
+
+let rec membership0 (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked) : Type0 =
+  let (| s, po, bot, top |) = p in
+  match t with
+  | [] -> True
+  | ev :: tl -> exists id_ev id_th. 
+                      ~(marked_ids id_ev) /\ 
+                      (let el = El id_ev (Some (id_th, ev)) in
+                        (el ∈ s n) /\
+                        ((el_prev `po n` el) \/ ~(el `po n` el_prev)) /\
+                        membership0 tl p el (mark marked_ids id_ev))
+
+let membership (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
+  let (| s, po, bot, top |) = p in
+  match t with
+  | [] -> n == 0
+  | h :: tl -> Some? bot /\ (let bot_el = Some?.v bot n in
+              match v bot_el with
+              | None -> membership0 t p bot_el (mark empty_marked (id bot_el))
+              | Some b' -> h == snd b' /\ membership0 tl p bot_el (mark empty_marked (id bot_el)))
+
+let prog0 () : poset (event_typ int) 3 = async (op 2 2)
+let __test_prog0 () = 
+  let (| s, po, bot, top_r |) = prog0 () in
+  assert (Some? bot /\ Some?.v bot 3 == El 2 None);
+  assert (Some? bot /\ Some?.v top_r 3 == El 3 None);
+  assert (El 1 (Some (2,2)) ∈ s 3)
+
+(** Test:
+          (1,1)
+            |
+            *
+           /  \
+       (2,2)   *
+         |     |
+         |   (1,3)
+           \   |
+               *
+               |
+             (1,4)
+**)
+
+let prog1 () : poset (event_typ int) 7 = (((op 1 1 `append_poset` async (op 2 2)) `append_poset` (op 3 1)) `append_poset` await 2) `append_poset` op 4 1
+
+let __test_prog1 () = 
+  let (| s, po, bot, top_r |) = prog1 () in
+  assert (Some? bot /\ Some?.v bot 7 == El 1 (Some (1,1)));
+  assert (Some? bot /\ Some?.v top_r 7 == El 7 (Some (1,4)));
+ // assert (El 1 (Some (1,1)) ∈ s 7);
+  assert (El 2 None ∈ s 7);
+//  assert (El 3 None ∈ s 7);
+//  assert (El 4 (Some (2,2)) ∈ s 7);
+//  assert (El 5 (Some (1,3)) ∈ s 7);
+//  assert (El 6 None ∈ s 7);
+  assert (El 7 (Some (1,4)) ∈ s 7)
+
+#set-options "--z3rlimit 32"
+let _ = assert ([1;4] `membership` prog1 ()) 
+  
+let _ = assert (~([4;1] `membership` prog1 ()))
+
+#set-options "--z3rlimit 64"
+let _ = assert ([1;2] `membership` prog1 ())
+
+let _ = assert ([1;3;2;4] `membership` prog1 ())
+
+let _ = assert ([1;3;4;2] `membership` prog1 ()) 
