@@ -20,7 +20,10 @@ let make_el (id:id_typ) (v:'a) = El id v
     an id.
 
     The ids given to the elements are internal to the state, however to be able to do
-    unions and avoid quantifiers, I made the sets parametric. 
+    unions and avoid quantifiers, I made the sets parametric into an offset (ofst) that
+    is offseting the ids. So when setting the id of an element, the offset is used.
+
+    However, the offset is "reversed".
 **)
 
 type base_set a = elem a -> Type0
