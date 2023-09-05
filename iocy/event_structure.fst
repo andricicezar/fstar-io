@@ -5,13 +5,13 @@ open FStar.List.Tot.Base
 
 type id_typ = nat
 
-type elem (a:Type) =
-| El : id:id_typ -> v:a -> elem a
+type elem (a:Type) = id_typ * a
+//| El : id:id_typ -> v:a -> elem a
 
-let id = El?.id 
-let v = El?.v
+unfold let el_id (x:elem 'a) : id_typ = fst x
+unfold let el_v (x:elem 'a) : 'a = snd x
 
-let make_el (id:id_typ) (v:'a) = El id v
+unfold let make_el (id:id_typ) (v:'a) = (id, v)
 
 (** We need a set that allows the same value to appear multiple times and that allows
     us to distingusih between the appearances.
@@ -32,9 +32,9 @@ let (∉) (#a:Type) (el:elem a) (s:base_set a) = ~(el ∈ s)
 
 type set0 a (n:nat) = ofst:nat{ofst >= n} -> base_set a
 type set a (n:nat) = s:(set0 a n){
-  (forall ofst x. x ∈ s ofst ==> (ofst-n) < id x /\ id x <= ofst) /\
+  (forall ofst x. x ∈ s ofst ==> (ofst-n) < el_id x /\ el_id x <= ofst) /\
   // (forall ofst i. (ofst-n) < i /\ i <= ofst ==> (exists x. id x == i /\ x ∈ s ofst)) /\
-  (forall ofst x y. x ∈ s ofst /\ y ∈ s ofst /\ x =!= y ==> id x =!= id y)
+  (forall ofst x y. x ∈ s ofst /\ y ∈ s ofst /\ x =!= y ==> el_id x =!= el_id y)
 //  (forall ofst x y. x ∈ s ofst /\ y ∈ s ofst /\ id x == id y ==> x == y)
 }
 
@@ -64,7 +64,7 @@ let _ = assert (make_el 1 2 ∈ __test_set1 4)
 let _ = assert (make_el 1 2 ∉ __test_set1 4)
 
 let __test_mem (s0:nat{s0 >= 4}) =
-  assert (exists (id1 id2:id_typ). make_el id1 2 ∈ __test_set1 s0 /\ id1 <= id2 /\  El id2 2 ∈ __test_set1 s0)
+  assert (exists (id1 id2:id_typ). make_el id1 2 ∈ __test_set1 s0 /\ id1 <= id2 /\ make_el id2 2 ∈ __test_set1 s0)
 
 let _ = assert (exists (id1 id2:id_typ). id1 <= id2 /\ 
                       make_el id1 1 ∈ __test_set1 4 /\
@@ -83,7 +83,7 @@ let _ = assert (__test_set1 `subset_set` __test_set1)
 let __test_set2 = __test_set1 `union_set` __test_set1
 let _ = assert (__test_set1 `subset_set` __test_set2)
 let _ = assert (forall id v. make_el id v ∈ __test_set1 4 <==>
-                      make_el id v ∈ __test_set2 8 /\ El (id+4) v ∈ __test_set2 8)
+                      make_el id v ∈ __test_set2 8 /\ make_el (id+4) v ∈ __test_set2 8)
 
 type relation a = elem a -> elem a -> Type0
 
@@ -120,7 +120,7 @@ let empty_poset (#a:Type) : poset a 0 = (| empty_set, empty_partial_order empty_
 
 let return_poset (el:'e) : poset 'e 1 =
   let s = return_set el in
-  (| s, empty_partial_order s, Some (fun ofst -> make_el ofst el), Some (fun ofst -> El ofst el) |)
+  (| s, empty_partial_order s, Some (fun ofst -> make_el ofst el), Some (fun ofst -> make_el ofst el) |)
 
 
 let new_po0
@@ -188,7 +188,7 @@ let rec test_membership0 (t:trace int) (#n:nat) (p:poset int n) (el_prev:elem in
   | [] -> True
   | h :: tl -> exists id_h. ~(marked_ids id_h) /\ 
                       (make_el id_h h ∈ s n) /\
-                      ((el_prev `po n` make_el id_h h) \/ ~(El id_h h `po n` el_prev)) /\
+                      ((el_prev `po n` make_el id_h h) \/ ~(make_el id_h h `po n` el_prev)) /\
                       test_membership0 tl p (make_el id_h h) (mark marked_ids id_h)
 
 let test_membership (t:trace int) (#n:nat) (p:poset int n) : Type0 =
@@ -196,7 +196,7 @@ let test_membership (t:trace int) (#n:nat) (p:poset int n) : Type0 =
   match t with
   | [] -> n == 0
   | h :: tl -> Some? bot /\ (let b = Some?.v bot n in
-               h == v b /\ test_membership0 tl p b (mark empty_marked (id b)))
+               h == el_v b /\ test_membership0 tl p b (mark empty_marked (el_id b)))
 
 (**  1
     | \
@@ -204,11 +204,11 @@ let test_membership (t:trace int) (#n:nat) (p:poset int n) : Type0 =
 let __test_set : set int 3 = ((empty_set ⊕ 1) ⊕ 2) ⊕ 3
 let __test_po : partial_order __test_set =
   extend_partial_order
-    (extend_partial_order (empty_partial_order __test_set) (fun id -> make_el (id-2) 1) (fun id -> El (id-1) 2))
-    (fun id -> make_el (id-2) 1) (fun id -> El id 3)
+    (extend_partial_order (empty_partial_order __test_set) (fun id -> make_el (id-2) 1) (fun id -> make_el (id-1) 2))
+    (fun id -> make_el (id-2) 1) (fun id -> make_el id 3)
 
 let __test_poset : poset int 3 =
-  (| __test_set, __test_po, Some (fun (ofst:nat{ofst >= 3}) -> make_el (ofst-2) 1), Some (fun id -> El id 3) |)
+  (| __test_set, __test_po, Some (fun (ofst:nat{ofst >= 3}) -> make_el (ofst-2) 1), Some (fun id -> make_el id 3) |)
 
 let _ =
   assert ([1;2] `test_membership` __test_poset);
@@ -235,14 +235,14 @@ let __test_po3 : partial_order __test_set3 =
   extend_partial_order 
     (extend_partial_order
         (extend_partial_order
-        (extend_partial_order (empty_partial_order __test_set3) (fun id -> make_el (id-3) 1) (fun id -> El (id-2) 2))
-        (fun id -> make_el (id-3) 1) (fun id -> El (id-1) 3))
-      (fun id -> make_el (id-1) 3) (fun id -> El id 4))
-    (fun id -> make_el (id-2) 2) (fun id -> El id 4)
+        (extend_partial_order (empty_partial_order __test_set3) (fun id -> make_el (id-3) 1) (fun id -> make_el (id-2) 2))
+        (fun id -> make_el (id-3) 1) (fun id -> make_el (id-1) 3))
+      (fun id -> make_el (id-1) 3) (fun id -> make_el id 4))
+    (fun id -> make_el (id-2) 2) (fun id -> make_el id 4)
 
 #set-options "--z3rlimit 12"
 let __test_poset3 : poset int 4 =
-  (| __test_set3, __test_po3, Some (fun (ofst:nat{ofst >= 4}) -> make_el (ofst-3) 1), Some (fun id -> El id 4) |)
+  (| __test_set3, __test_po3, Some (fun (ofst:nat{ofst >= 4}) -> make_el (ofst-3) 1), Some (fun id -> make_el id 4) |)
 
 let _ =
   assert ([1;2;3;4] `test_membership` __test_poset3)
@@ -265,7 +265,7 @@ type event_typ 'e = option (nat * 'e)
 
 let op (e:'e) (th_id:nat) : poset (event_typ 'e) 1 =
   let s = return_set (Some (th_id, e)) in
-  (| s, empty_partial_order s, Some (fun ofst -> make_el ofst (Some (th_id, e))), Some (fun ofst -> El ofst (Some (th_id, e))) |)
+  (| s, empty_partial_order s, Some (fun ofst -> make_el ofst (Some (th_id, e))), Some (fun ofst -> make_el ofst (Some (th_id, e))) |)
 
 
 (**
@@ -283,17 +283,17 @@ let op (e:'e) (th_id:nat) : poset (event_typ 'e) 1 =
 let async (#n:nat) (p:poset (event_typ 'e) n) : poset (event_typ 'e) (n+2) = 
   let (| s, po, bot, top_r |) = p in
   let s' = (s ⊕ None) ⊕ None in
-  assert (forall ofst. make_el ofst None ∈ s' ofst /\ El (ofst-1) None ∈ s' ofst);
+  assert (forall ofst. make_el ofst None ∈ s' ofst /\ make_el (ofst-1) None ∈ s' ofst);
   let po : partial_order s' = (fun ofst x y -> (x == make_el (ofst-1) None /\ y ∈ s' ofst) \/
-                                            (x == make_el ofst None /\ y == El ofst None) \/
+                                            (x == make_el ofst None /\ y == make_el ofst None) \/
                                             (x ∈ s (ofst-2) /\ y ∈ s (ofst-2) /\ x `po (ofst-2)` y)) in
-  (| s', po, Some (fun (ofst:nat{ofst >= n+2}) -> make_el (ofst-1) None), Some (fun ofst -> El ofst None) |)
+  (| s', po, Some (fun (ofst:nat{ofst >= n+2}) -> make_el (ofst-1) None), Some (fun ofst -> make_el ofst None) |)
 
 (** CA: Not very principled since the po is defined over xs and ys which are not part of S **)
 let await (#e:Type) (th_id:nat) : poset (event_typ e) 1 =
   let s : set (event_typ e) 1 = return_set None in
-  let po : partial_order s = (fun ofst x y -> (x ∈ s ofst /\ y ∈ s ofst) \/ (y == make_el ofst None /\ Some? (v x) /\ fst (Some?.v (v x)) == th_id)) in
-  (| s, po, Some (fun ofst -> make_el ofst None), Some (fun ofst -> El ofst None) |)
+  let po : partial_order s = (fun ofst x y -> (x ∈ s ofst /\ y ∈ s ofst) \/ (y == make_el ofst None /\ Some? (el_v x) /\ fst (Some?.v (el_v x)) == th_id)) in
+  (| s, po, Some (fun ofst -> make_el ofst None), Some (fun ofst -> make_el ofst None) |)
 
 let rec membership0 (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked) : Type0 =
   let (| s, po, bot, top |) = p in
@@ -311,9 +311,9 @@ let membership (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
   match t with
   | [] -> n == 0
   | h :: tl -> Some? bot /\ (let bot_el = Some?.v bot n in
-              match v bot_el with
-              | None -> membership0 t p bot_el (mark empty_marked (id bot_el))
-              | Some b' -> h == snd b' /\ membership0 tl p bot_el (mark empty_marked (id bot_el)))
+              match el_v bot_el with
+              | None -> membership0 t p bot_el (mark empty_marked (el_id bot_el))
+              | Some b' -> h == snd b' /\ membership0 tl p bot_el (mark empty_marked (el_id bot_el)))
 
 #reset-options
 
