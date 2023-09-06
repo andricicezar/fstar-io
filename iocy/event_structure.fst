@@ -366,21 +366,20 @@ let __test_prog1 () =
   
 type trace 'e = list 'e
   
-type marked = id_typ -> Type0
+type marked (a:Type) = a -> Type0
 
-let empty_marked : marked = fun _ -> False
+let empty_marked (#a:Type) : marked a = fun _ -> False
 
-let mark (m:marked) (v:id_typ) : marked = fun v' -> v == v' \/ m v'
+let mark (m:marked 'a) (v:'a) : marked 'a = fun v' -> v == v' \/ m v'
 
-let rec sat0 (t:trace 'e) (#n:nat) (s:set (event_typ 'e) n) (rel:relation (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked) : Type0 =
+let rec sat0 (t:trace 'e) (#n:nat) (s:set (event_typ 'e) n) (rel:relation (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked (elem (event_typ 'e))) : Type0 =
   match t with
   | [] -> True
-  | ev :: tl -> exists id_ev id_th. 
-                      ~(marked_ids id_ev) /\ 
-                      (let el = make_el id_ev (Some (id_th, ev)) in
-                        (el ∈ s n) /\ //`mem_poset n` p) /\
-                        ((el_prev `rel n` el) \/ ~(el `rel n` el_prev)) /\
-                        sat0 tl s rel el (mark marked_ids id_ev))
+  | ev :: tl -> exists el. (el ∈ s n) /\
+                      ~(marked_ids el) /\ 
+                      (Some? (el_v el) /\ snd (Some?.v (el_v el)) == ev) /\
+                      ((el_prev `rel n` el) \/ ~(el `rel n` el_prev)) /\
+                      sat0 tl s rel el (mark marked_ids el)
 
 let sat (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
   let (s, rel, bot, _) = p in
@@ -388,10 +387,10 @@ let sat (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
   | [] -> n == 0
   | h :: tl -> Some? bot /\ (let bot_el = Some?.v bot n in
               match el_v bot_el with
-              | None -> sat0 t s rel bot_el (mark empty_marked (el_id bot_el))
-              | Some b' -> h == snd b' /\ sat0 tl s rel bot_el (mark empty_marked (el_id bot_el)))
+              | None -> sat0 t s rel bot_el (mark empty_marked bot_el)
+              | Some b' -> h == snd b' /\ sat0 tl s rel bot_el (mark empty_marked bot_el))
 
-let rec sat0' (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked) : Type0 =
+let rec sat0' (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked id_typ) : Type0 =
   let (_, rel, _, _) = p in
   match t with
   | [] -> True
