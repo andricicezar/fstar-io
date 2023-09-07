@@ -136,7 +136,7 @@ type poset (a:Type) (n:nat) =
     (None? bot <==> n == 0) /\
     (Some? bot ==> (forall ofst. Some?.v bot ofst ∈ s ofst /\ (forall x. x ∈ s ofst ==> Some?.v bot ofst `rel ofst` x))) /\
     (None? top_r <==> n == 0) /\
-    (Some? top_r ==> (forall ofst. Some?.v top_r ofst ∈ s ofst /\ (forall x. x ∈ s ofst /\ x =!= Some?.v top_r ofst ==> ~(Some?.v top_r ofst `rel ofst` x))))
+    (Some? top_r ==> (forall ofst. Some?.v top_r ofst ∈ s ofst)) // /\ (forall x. x ∈ s ofst /\ x =!= Some?.v top_r ofst ==> ~(Some?.v top_r ofst `rel ofst` x))))
   }
 
 let empty_poset (#a:Type) : poset a 0 = (empty_set, empty_rel empty_set, None, None)
@@ -171,23 +171,6 @@ let append_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : poset 'e (n+m
     let top = Some (fun (ofst:nat{ofst >= n+m}) -> Some?.v top_r2 ofst) in
     (s1 `union_set` s2, rel, bot , top)
   end
-
-let mem_poset (#a:Type) (#n:nat) (ofst:nat{ofst >= n}) (el:elem a) (p:poset a n)  : Type0 =
-  let (s, _, _, _) = p in el ∈ s ofst
-
-
-let lemma_mem_poset_set_rhs (#a:Type) (x:a) (#n:nat) (p1:poset a n) (#m:nat) (p2:poset a m) (id:id_typ) (ofst:nat{ofst >= n+m}) :
-  Lemma (requires (ofst-m < id))
-        (ensures (make_el id x `mem_poset ofst` (p1 `append_poset` p2)) <==>
-                 (make_el id x `mem_poset ofst` p2))
-  [SMTPat (make_el id x `mem_poset ofst` (p1 `append_poset` p2))] = ()
-  
-let lemma_mem_poset_set_lhs (#a:Type) (x:a) (#n:nat) (p1:poset a n) (#m:nat) (p2:poset a m) (id:id_typ) (ofst:nat{ofst >= n+m}) :
-  Lemma (requires (id <= ofst-m))
-        (ensures (make_el id x `mem_poset ofst` (p1 `append_poset` p2)) <==> 
-                 (make_el id x `mem_poset (ofst-m)` p1))
-  [SMTPat (make_el id x `mem_poset ofst` (p1 `append_poset` p2))] = ()
-
 
 let subset_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : Type0 =
   let (s1, rel1, bot1, top_r1) = pos1 in
@@ -233,33 +216,23 @@ let prog04 () : poset (event_typ int) 5 = (op 1 1 `append_poset` async (op 2 2))
 
 #set-options "--timing"
 let __test_prog04 () = 
-  let (s, _, bot, top_r) = prog04 () in
+  let (s, rel, bot, top_r) = prog04 () in
   assert (Some? bot /\ Some?.v bot 5 == make_el 1 (Some (1,1)));
   assert (Some? top_r /\ Some?.v top_r 5 == make_el 5 (Some (1,3)));
   assert (make_el 1 (Some (1,1)) ∈ s 5);
   assert (make_el 2 (Some (2,2)) ∈ s 5);
   assert (make_el 3 None ∈ s 5);
   assert (make_el 4 None ∈ s 5);
-  assert (make_el 5 (Some (1,3)) ∈ s 5)
-#reset-options
-  
-#set-options "--timing"
-let __test_prog04' () = 
-  let (s, _, bot, top_r) = prog04 () in
-  assert (Some? bot /\ Some?.v bot 5 == make_el 1 (Some (1,1)));
-  assert (Some? top_r /\ Some?.v top_r 5 == make_el 5 (Some (1,3)));
-  assert (make_el 1 (Some (1,1)) `mem_poset 5` prog04 ());
-  assert (make_el 2 (Some (2,2)) `mem_poset 5` prog04 ());
-  assert (make_el 3 None `mem_poset 5` prog04 ());
-  assert (make_el 4 None `mem_poset 5` prog04 ());
-  assert (make_el 5 (Some (1,3)) `mem_poset 5` prog04 ())
+  assert (make_el 5 (Some (1,3)) ∈ s 5);
+  assert (make_el 1 (Some (1,1)) `rel 5` make_el 2 (Some (2,2)));
+  assert (~(make_el 5 (Some (1,3)) `rel 5` make_el 2 (Some (2,2))))
 #reset-options
   
 let prog05 () : poset (event_typ int) 4 = async (op 2 2) `append_poset` await 2
 
 #set-options "--timing"
 let __test_prog05 () = 
-  let (s, _, bot, top_r) = prog05 () in
+  let (s, rel, bot, top_r) = prog05 () in
   assert (Some? bot /\ Some?.v bot 4 == make_el 2 None);
   assert (Some? top_r /\ Some?.v top_r 4 == make_el 4 None);
   assert (make_el 1 (Some (2,2)) ∈ s 4);
@@ -267,6 +240,10 @@ let __test_prog05 () =
   assert (make_el 3 None ∈ s 4);
   assert (make_el 4 None ∈ s 4)
 #reset-options
+
+let __test_prog05' () = 
+  let (s, rel, bot, top_r) = prog05 () in
+  assert (~(make_el 1 (Some (2,2)) `rel 4` make_el 4 None))
 
 (** Test:
           (1,1)
@@ -350,20 +327,6 @@ let _ =
   let (s, po, bot, top_r) = prog1 in
   assert (make_el 7 (Some (1,4)) ∈ s 7)
   
-let __test_prog1 () = 
-  // let (s, po, bot, top_r) = prog1 in
-  //assert (Some? bot /\ Some?.v bot 7 == make_el 1 (Some (1,1)));
-  //assert (Some? top_r /\ Some?.v top_r 7 == make_el 7 (Some (1,4)));
-  assert (make_el 1 (Some (1,1)) `mem_poset 7` prog1);
-  assert (make_el 2 (Some (2,2)) `mem_poset 7` prog1);
- //  assert (make_el 3 None `mem_poset 7` prog1)
-//  assert (make_el 4 None `mem_poset 7` prog1)
-  assert (make_el 5 (Some (1,3)) `mem_poset 7` prog1);
-  assert (make_el 6 None `mem_poset 7` prog1);
-  assert (make_el 7 (Some (1,4)) `mem_poset 7` prog1)
-
-(** mem_poset is 10x faster than ∈ **)
-  
 type trace 'e = list 'e
   
 type marked (a:Type) = a -> Type0
@@ -372,14 +335,15 @@ let empty_marked (#a:Type) : marked a = fun _ -> False
 
 let mark (m:marked 'a) (v:'a) : marked 'a = fun v' -> v == v' \/ m v'
 
-let rec sat0 (t:trace 'e) (#n:nat) (s:set (event_typ 'e) n) (rel:relation (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked (elem (event_typ 'e))) : Type0 =
+let rec sat0 (t:trace 'e) (#n:nat) (s:set (event_typ 'e) n) (rel:relation (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (used_els:marked (elem (event_typ 'e))) : Type0 =
   match t with
   | [] -> True
-  | ev :: tl -> exists el. (el ∈ s n) /\
-                      ~(marked_ids el) /\ 
-                      (Some? (el_v el) /\ snd (Some?.v (el_v el)) == ev) /\
-                      ((el_prev `rel n` el) \/ ~(el `rel n` el_prev)) /\
-                      sat0 tl s rel el (mark marked_ids el)
+  | ev :: tl -> exists el. 
+                      (~(used_els el) /\
+                      (el ∈ s n /\
+                      (((el_prev `rel n` el) \/ ~(el `rel n` el_prev)) /\
+                      ((Some? (el_v el) /\ snd (Some?.v (el_v el)) == ev) /\
+                      sat0 tl s rel el (mark used_els el)))))
 
 let sat (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
   let (s, rel, bot, _) = p in
@@ -390,36 +354,14 @@ let sat (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
               | None -> sat0 t s rel bot_el (mark empty_marked bot_el)
               | Some b' -> h == snd b' /\ sat0 tl s rel bot_el (mark empty_marked bot_el))
 
-let rec sat0' (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) (el_prev:elem (event_typ 'e)) (marked_ids:marked id_typ) : Type0 =
-  let (_, rel, _, _) = p in
-  match t with
-  | [] -> True
-  | ev :: tl -> exists id_ev id_th. 
-                      ~(marked_ids id_ev) /\ 
-                      (let el = make_el id_ev (Some (id_th, ev)) in
-                        (el `mem_poset n` p) /\
-                        ((el_prev `rel n` el) \/ ~(el `rel n` el_prev)) /\
-                        sat0' tl p el (mark marked_ids id_ev))
-
-let sat' (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
-  let (_, _, bot, _) = p in
-  match t with
-  | [] -> n == 0
-  | h :: tl -> Some? bot /\ (let bot_el = Some?.v bot n in
-              match el_v bot_el with
-              | None -> sat0' t p bot_el (mark empty_marked (el_id bot_el))
-              | Some b' -> h == snd b' /\ sat0' tl p bot_el (mark empty_marked (el_id bot_el)))
-
 #set-options "--z3rlimit 64"
 let _ = assert ([1;4] `sat` prog1) 
-// 12305ms when sat0 uses ∈
-
-let _ = assert ([1;4] `sat'` prog1) 
-// 22118ms when sat0 uses mem_poset
+// 3000-4000ms when sat0 uses ∈
 
 let _ = assert (~([4;1] `sat` prog1))
 
-let _ = assert (([1;2;3] `sat` ((((op 1 1 `append_poset` async (op 2 2)) `append_poset` (op 3 1)) `append_poset` await 2) `append_poset` op 4 1))) 
+#set-options "--z3rlimit 128"
+let _ = assert ([1;2;3] `sat` prog1) 
 
 let _ = assert (([1;2;4] `sat` prog1))
 
@@ -432,11 +374,12 @@ let _ = assert ([1;3;2;4] `sat` prog1)
 let _ = assert (~([1;3;4;2] `sat` prog1))
 
   
-let rec test_membership0 (t:trace int) (#n:nat) (p:poset int n) (el_prev:elem int) (marked_ids:marked) : Type0 =
+let rec test_membership0 (t:trace int) (#n:nat) (p:poset int n) (el_prev:elem int) (marked_ids:marked id_typ) : Type0 =
   let (s, rel, _, _) = p in
   match t with
   | [] -> True
   | h :: tl -> exists id_h. ~(marked_ids id_h) /\ 
+                      id_h <= n /\
                       (make_el id_h h ∈ s n) /\
                       ((el_prev `rel n` make_el id_h h) \/ ~(make_el id_h h `rel n` el_prev)) /\
                       test_membership0 tl p (make_el id_h h) (mark marked_ids id_h)
@@ -480,7 +423,7 @@ let __test_128 () = assert (~([3;1;2] `test_membership` __test_poset))
      \ |
        4 **)
        
-let __test_set3 : set int 4 = (((return_set 1) ⊕ 2) ⊕ 3) ⊕ 4
+let __test_set3 : set int 4 = return_set 1 `union_set` return_set 2 `union_set` return_set 3 `union_set` return_set 4
 let __test_po3 : relation int 4 =
   extend_rel __test_set3
     (extend_rel __test_set3
