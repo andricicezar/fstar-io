@@ -1,4 +1,4 @@
-module Event_Structure
+module Poset
 
 open FStar.Tactics
 open FStar.List.Tot.Base
