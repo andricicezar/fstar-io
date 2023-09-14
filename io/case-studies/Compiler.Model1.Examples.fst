@@ -35,6 +35,34 @@ let mst1 : mstate = {
   abstracts = (fun s h -> forall fd. memP fd s <==> is_open fd h);
 }
 
+let rec remove (#a:eqtype) (x:a) (l : list a) : list a =
+  match l with
+  | [] -> []
+  | y::yy ->
+    if x = y
+    then remove x yy
+    else y :: remove x yy
+
+let rec lemma_remove_mem (#a:eqtype) (x:a) (y : a) (l:list a)
+  : Lemma (ensures memP x (remove y l) <==> x <> y /\ memP x l)
+          (decreases l)
+          [SMTPat (memP x (remove y l))]
+  = match l with
+    | [] -> ()
+    | _::tl -> lemma_remove_mem x y tl
+
+let mst1_impl : mst_impl mst1 = {
+  init = [];
+  update = (fun s0 e h ->
+    let s1 : list file_descr =
+      match e with
+      | EOpenfile _ f (Inl fd) -> fd :: s0
+      | EClose _ fd' _ -> remove fd' s0
+      | _ -> s0
+    in s1
+  );
+}
+
 type test1_ct = source_arrow mst1 unit file_descr test1_pre test1_post
 
 let test1_sgm : policy_spec = 

@@ -166,6 +166,21 @@ let ml_call (cmd:io_cmds) : Obj.t -> Obj.t =
 
 let (io_call : caller -> io_cmds -> Obj.t -> (unit, Obj.t resexn) mio) =
   fun caller -> fun cmd -> fun argz ->
+    match ml_call cmd argz with
+    | exception err ->
+      (* error case: *)
+      Monitor.update_state caller cmd argz (Obj.magic (Inr err));
+      print_call caller cmd argz (Obj.magic (Inr err));
+      mio_return () (Inr err)
+    | rez ->
+      (* success: *)
+      Monitor.update_state caller cmd argz (Obj.magic (Inl rez));
+      print_call caller cmd argz (Obj.magic (Inl rez));
+      mio_return () (Inl rez)
+
+(* old version: if for whatever reason print_call raises an exception
+   in the successful case we will get two events logged.
+
   try
     let rez = ml_call cmd argz in
     Monitor.update_state caller cmd argz (Obj.magic (Inl rez)); 
@@ -175,7 +190,7 @@ let (io_call : caller -> io_cmds -> Obj.t -> (unit, Obj.t resexn) mio) =
     Monitor.update_state caller cmd argz (Obj.magic (Inr err));
     print_call caller cmd argz (Obj.magic (Inr err));
     mio_return () (Inr err)
-
+*)
 
 let (mio_call : unit -> caller -> cmds -> Obj.t -> (unit, unit) mio) =
   fun () -> fun caller -> fun cmd -> fun argz ->

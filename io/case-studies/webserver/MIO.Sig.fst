@@ -111,6 +111,18 @@ type mstate = {
   abstracts : typ -> trace -> Type0;
 }
 
+type mst_updater (mst:mstate) : Type0 =
+  s0:mst.typ -> e:event -> h : Ghost.erased trace ->
+  Pure mst.typ
+       (requires mst.abstracts s0 h)
+       (ensures fun s1 -> mst.abstracts s1 (e::h))
+
+noeq
+type mst_impl (mst:mstate) = {
+  init : (init : mst.typ{mst.abstracts init []});
+  update : mst_updater mst;
+}
+
 (** Is our assumption limiting how the IO effect can be used?
  What if somebody wants to use only the IO effect? Then,
 at extraction, they have to be careful to link it directly with the
