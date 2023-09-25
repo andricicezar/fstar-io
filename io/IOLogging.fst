@@ -60,10 +60,10 @@ let pi h c cmd arg =
   | Ctx, _ ->
     h =!= []
     /\ List.Tot.hd h == EWrite Prog (stdout, to_string cmd) (Inl ())
-  | Prog , Write -> True
+  | Prog, Write ->
     (* The verified program can write when: 1) nothing was written
     or 2) the last write was by the context. *)
-//    Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
+    Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
   | _ -> False
 
 val phi0 : s:mymst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool
@@ -77,7 +77,7 @@ val phi : policy mymst pi
 let phi s0 cmd arg = 
   phi0 s0 cmd arg
 
-let log_pre = (fun (op:io_cmds) (h:trace) -> True)
+let log_pre = (fun (op:io_cmds) (h:trace) -> h == [] \/ get_caller (List.Tot.hd h) == Ctx)
 let log_post = (fun (op:io_cmds) h (r:resexn unit) lt -> r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r])
 
 type log_pt = source_arrow mymst io_cmds unit log_pre log_post
@@ -92,10 +92,7 @@ val log_c1_pre : c1_pre log_pre log_post pi log_pt_rc
 let log_c1_pre = ()
 
 val log_c2_pre : c2_pre log_pre log_post pi
-let log_c2_pre = 
-  assert (forall op h lt r. r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r] ==> enforced_locally pi h lt);
-  assert (forall x h lt r. log_post x h r lt ==> enforced_locally pi h lt);
-  assert (forall x h lt r. log_pre x h /\ log_post x h r lt ==> enforced_locally pi h lt)
+let log_c2_pre = ()
 
 instance interm_io_cmds fl pi mst : interm io_cmds fl pi mst = { mldummy = () }
 instance importable_io_cmds (#fl:erased tflag) (#pi:policy_spec) #mst : importable io_cmds fl pi mst Leaf = {
@@ -133,29 +130,12 @@ let log_stronger_pis =
    pt_exportable = log_pt_exportable;
 }
 
-val prog : op:io_cmds -> arg:io_sig.args op ->
-  MIO (resexn unit) mymst AllActions
-   (fun h -> h == [] \/ get_caller (List.Tot.hd h) == Ctx)
-   (fun _ res lt -> res =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) res])
-
-#push-options "--compat_pre_core 2"
-
-let prog op arg =
-  let r : (mio_sig mymst).res Write (stdout, to_string op) = static_cmd Prog Write (stdout, to_string op) in
-  r <: resexn unit
-
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
 let test1_prog #fl op : MIO (resexn unit) mymst (fl+IOActions) (log_pre op) (log_post op) =
   // weird behavior of F*
   let r : (mio_sig mymst).res Write (stdout, to_string op) = static_cmd Prog Write (stdout, to_string op) in
   r <: resexn unit
-
-val test1_ctx : ctx_src test1
-let test1_ctx #fl io_acts eff_rcs prog () : MIOpi int fl test1.pi mymst = 
-  let _ = prog Openfile in
-  let fd = io_acts Openfile "/etc/passwd" in
-  0
 
 assume val lemma_append_enforced_locally : pi:_ ->
   Lemma (forall h lt1 lt2.
@@ -169,3 +149,13 @@ let test1_ctx_t #fl io_acts prog () : MIOpi int fl test1.pi mymst =
   let _ = prog Openfile in
   let fd = io_acts Openfile "/etc/passwd" in
   0
+
+val test1_ctx : ctx_src test1
+let test1_ctx #fl io_acts eff_rcs log () = 
+  let (| _, eff_ck |) : eff_pck_dc mymst fl = root eff_rcs in
+  let (| _, pre |) = eff_ck Openfile in
+  if snd (pre ()) then
+    let _ = log Openfile in
+    let fd = io_acts Openfile "/etc/passwd" in
+    0
+  else -1
