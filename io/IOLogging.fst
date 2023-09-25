@@ -57,14 +57,14 @@ let to_string o =
 val pi : policy_spec
 let pi h c cmd arg =
   match c, cmd with
-  | Ctx, Write ->
+  | Ctx, _ ->
     h =!= []
-    /\ List.Tot.hd h == EWrite Prog (stdout, to_string Write) (Inl ())
-  | Prog , Write ->
+    /\ List.Tot.hd h == EWrite Prog (stdout, to_string cmd) (Inl ())
+  | Prog , Write -> True
     (* The verified program can write when: 1) nothing was written
     or 2) the last write was by the context. *)
-    Nil? h || (get_caller (List.Tot.hd h) = Ctx)
-  | _ -> false
+//    Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
+  | _ -> False
 
 val phi0 : s:mymst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool
 let phi0 (s0:option event) cmd arg =
@@ -75,10 +75,9 @@ let phi0 (s0:option event) cmd arg =
 
 val phi : policy mymst pi
 let phi s0 cmd arg = 
-  assume (phi0 s0 cmd arg ==> (forall h. mymst.models s0 h ==> pi h Ctx cmd arg));
   phi0 s0 cmd arg
 
-let log_pre = (fun (op:io_cmds) (h:trace) -> h == [] \/ get_caller (List.Tot.hd h) == Ctx)
+let log_pre = (fun (op:io_cmds) (h:trace) -> True)
 let log_post = (fun (op:io_cmds) h (r:resexn unit) lt -> r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r])
 
 type log_pt = source_arrow mymst io_cmds unit log_pre log_post
@@ -93,7 +92,10 @@ val log_c1_pre : c1_pre log_pre log_post pi log_pt_rc
 let log_c1_pre = ()
 
 val log_c2_pre : c2_pre log_pre log_post pi
-let log_c2_pre = ()
+let log_c2_pre = 
+  assert (forall op h lt r. r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r] ==> enforced_locally pi h lt);
+  assert (forall x h lt r. log_post x h r lt ==> enforced_locally pi h lt);
+  assert (forall x h lt r. log_pre x h /\ log_post x h r lt ==> enforced_locally pi h lt)
 
 instance interm_io_cmds fl pi mst : interm io_cmds fl pi mst = { mldummy = () }
 instance importable_io_cmds (#fl:erased tflag) (#pi:policy_spec) #mst : importable io_cmds fl pi mst Leaf = {
@@ -151,16 +153,19 @@ let test1_prog #fl op : MIO (resexn unit) mymst (fl+IOActions) (log_pre op) (log
 
 val test1_ctx : ctx_src test1
 let test1_ctx #fl io_acts eff_rcs prog () : MIOpi int fl test1.pi mymst = 
+  let _ = prog Openfile in
   let fd = io_acts Openfile "/etc/passwd" in
-  (match fd with
-  | Inl fd -> let _ = prog fd in ()
-  | Inr err -> ());
   0
 
+assume val lemma_append_enforced_locally : pi:_ ->
+  Lemma (forall h lt1 lt2.
+      enforced_locally pi h lt1 /\
+      enforced_locally pi (apply_changes h lt1) lt2 ==>
+      enforced_locally pi h (lt1 @ lt2))
+  
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
 let test1_ctx_t #fl io_acts prog () : MIOpi int fl test1.pi mymst =
+  lemma_append_enforced_locally test1.pi;
+  let _ = prog Openfile in
   let fd = io_acts Openfile "/etc/passwd" in
-  (match fd with
-  | Inl fd -> let _ = prog fd in ()
-  | Inr err -> ());
   0
