@@ -15,37 +15,37 @@ open MIO.Behavior
 noeq
 type src_interface = {
   mst:mst;
-  (* pi is in Type0 and it is used at the level of the spec,
+  (* sgm is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
-  pi : policy_spec;
-  (* phi is in bool and it is used to enfodce the policy on the context,
-     it describes only the events of the context and it has to imply pi **)
-  phi : policy mst pi;
+  sgm : policy_spec;
+  (* pi is in bool and it is used to enfodce the policy on the context,
+     it describes only the events of the context and it has to imply sgm **)
+  pi : policy mst sgm;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
   pt : erased tflag -> Type;
   pt_dcs : tree (pck_dc mst);
-  pt_exportable : fl:erased tflag -> exportable (pt fl) fl pi mst pt_dcs;
+  pt_exportable : fl:erased tflag -> exportable (pt fl) fl sgm mst pt_dcs;
 }
 
 noeq
 type tgt_interface = {
   mst : mst;
-  pi : policy_spec;
-  phi : policy mst pi;
+  sgm : policy_spec;
+  pi : policy mst sgm;
 
   pt : erased tflag -> Type u#a;
-  pt_weak : fl:erased tflag -> interm (pt fl) fl pi mst;
+  pt_weak : fl:erased tflag -> interm (pt fl) fl sgm mst;
 }
 
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
 type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
 type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
-  (| i.mst, (fun h _ lt -> enforced_locally i.pi h lt), (c #AllActions (inst_io_cmds i.phi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
+  (| i.mst, (fun h _ lt -> enforced_locally i.sgm h lt), (c #AllActions (inst_io_cmds i.pi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| mst,  _, ws |) -> beh mst ws)
@@ -57,12 +57,12 @@ let src_language : language = {
   event_typ = event;  beh = beh_src;
 }
 
-type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
+type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
 type prog_tgt (i:tgt_interface) = i.pt AllActions
 type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (| i.mst, (c #AllActions (inst_io_cmds i.phi) p) |)
+  (| i.mst, (c #AllActions (inst_io_cmds i.pi) p) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
@@ -80,8 +80,8 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
   pt = (fun fl -> (i.pt_exportable fl).ityp);
   pt_weak = (fun fl -> (i.pt_exportable fl).c_ityp);
 
+  sgm = i.sgm;
   pi = i.pi;
-  phi = i.phi;
 }
 
 (** ** Compilation **)

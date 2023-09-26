@@ -17,7 +17,7 @@ type req_handler (fl:erased tflag) =
                                             (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r])))) ->
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
-    (ensures (fun h r lt -> enforced_locally pi h lt /\
+    (ensures (fun h r lt -> enforced_locally sgm h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
 
 let static_cmd
@@ -50,14 +50,14 @@ let process_connection
   (req_handler : req_handler (IOActions + fl)) :
   MIO unit mymst (IOActions+fl) (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  introduce forall h lthandler lt lt'. enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+  introduce forall h lthandler lt lt'. enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
-    introduce enforced_locally pi h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
+    introduce enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
     with _. ergar_pi_irr h lthandler lt lt'
   end ;
-  introduce forall h lthandler limit r lt. enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+  introduce forall h lthandler limit r lt. enforced_locally sgm h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
   with begin
-    introduce enforced_locally pi h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
+    introduce enforced_locally sgm h lthandler /\ wrote_to client (rev lthandler) /\ every_request_gets_a_response lt ==> every_request_gets_a_response (lt @ [ ERead Prog (client, limit) (Inl r) ] @ lthandler)
     with _. ergar_pi_write h lthandler client limit r lt
   end ;
   match get_req client with
@@ -180,7 +180,7 @@ let check_send_pre : tree (pck_dc mymst) =
     Leaf
 
 let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) mymst fl (fun h -> did_not_respond h && valid_http_response res)
-                                            (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) fl Utils.pi mymst check_send_pre =
+                                            (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) fl Utils.sgm mymst check_send_pre =
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
 let check_handler_post : tree (pck_dc mymst) =
@@ -194,13 +194,13 @@ let check_handler_post : tree (pck_dc mymst) =
 
 val help_import :
   (fl:erased tflag) ->
-  (wf:(file_descr -> Bytes.bytes -> (export_send #fl).ityp -> MIOpi (resexn unit) fl Utils.pi mymst)) ->
+  (wf:(file_descr -> Bytes.bytes -> (export_send #fl).ityp -> MIOpi (resexn unit) fl Utils.sgm mymst)) ->
   (eff_dcs:typ_eff_dcs mymst fl check_handler_post) ->
   req_handler fl
 let help_import fl wf eff_dcs client req send :
   MIO (resexn unit) mymst fl
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
-    (ensures (fun h r lt -> enforced_locally pi h lt /\
+    (ensures (fun h r lt -> enforced_locally sgm h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
 =
   introduce forall h lt client. ((not (wrote_to client h)) && wrote_to client ((rev lt) @ h)) ==> wrote_to client (rev lt)
@@ -218,16 +218,16 @@ let help_import fl wf eff_dcs client req send :
   if b then r
   else Inr Contract_failure
 
-instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.pi mymst check_handler_post = {
-  ityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.pi mymst;
-  c_ityp = interm_arrow3 fl Utils.pi mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
+instance import_request_handler (fl:erased tflag) : safe_importable (req_handler fl) fl Utils.sgm mymst check_handler_post = {
+  ityp = file_descr -> Bytes.bytes -> export_send.ityp -> MIOpi (resexn unit) fl Utils.sgm mymst;
+  c_ityp = interm_arrow3 fl Utils.sgm mymst file_descr Bytes.bytes export_send.ityp #export_send.c_ityp (resexn unit);
   safe_import = help_import fl
 }
 
 let cs_int : src_interface = {
   mst = mymst;
+  sgm = Utils.sgm;
   pi = Utils.pi;
-  phi = Utils.phi;
   ct = req_handler;
   ct_dcs = check_handler_post;
   ct_importable = (fun fl -> import_request_handler fl);

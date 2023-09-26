@@ -14,48 +14,48 @@ include MIO
     over the history. **)
 type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
-type policy (mst:mst) (pi:policy_spec) =
-  s:mst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. mst.models s h ==> pi h Ctx cmd arg)}
+type policy (mst:mst) (sgm:policy_spec) =
+  s:mst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. mst.models s h ==> sgm h Ctx cmd arg)}
 
 unfold
-let has_event_respected_pi (e:event) (pi:policy_spec) (h:trace) : Type0 =
+let has_event_respected_sgm (e:event) (sgm:policy_spec) (h:trace) : Type0 =
   let (| caller, cmd, arg, _ |) = destruct_event e in
-  pi h caller cmd arg
+  sgm h caller cmd arg
 
-(** `enforced_locally pi` is a prefix-closed safety trace property. **)
+(** `enforced_locally sgm` is a prefix-closed safety trace property. **)
 let rec enforced_locally
-  (pi : policy_spec)
+  (sgm : policy_spec)
   (h l: trace) :
   Tot Type0 (decreases l) =
   match l with
   | [] -> True
   | e  ::  t ->
-    has_event_respected_pi e pi h /\ enforced_locally pi (e::h) t
+    has_event_respected_sgm e sgm h /\ enforced_locally sgm (e::h) t
 
 unfold
-let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
-  (fun p h -> forall r lt. enforced_locally pi h lt ==> p lt r)
+let sgm_as_hist (#a:Type) (sgm:policy_spec) : hist a =
+  (fun p h -> forall r lt. enforced_locally sgm h lt ==> p lt r)
 
-effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) (mst:mst) = 
-  MIOwp a mst fl (pi_as_hist #a pi)
+effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (sgm : policy_spec) (mst:mst) = 
+  MIOwp a mst fl (sgm_as_hist #a sgm)
 
 
-type io_lib (fl:erased tflag) (pi:policy_spec) (mst:mst) (c:caller) =
+type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mst) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
   MIO (io_resm cmd arg) mst fl
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
-      enforced_locally pi h lt /\
+      enforced_locally sgm h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
        | r' -> io_post cmd arg r' /\ lt == [convert_call_to_event c cmd arg r'])))
 
 #push-options "--compat_pre_core 1" // fixme
-val inst_io_cmds : #mst:mst -> #pi:policy_spec -> phi:policy mst pi -> io_lib AllActions pi mst Ctx
-let inst_io_cmds phi cmd arg =
+val inst_io_cmds : #mst:mst -> #sgm:policy_spec -> pi:policy mst sgm -> io_lib AllActions sgm mst Ctx
+let inst_io_cmds pi cmd arg =
   let s0 = get_state () in
-  if phi s0 cmd arg then (
+  if pi s0 cmd arg then (
     let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
     r
   ) else Inr Contract_failure
@@ -63,38 +63,38 @@ let inst_io_cmds phi cmd arg =
 
 
 
-class interm (t:Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mst) = { [@@@no_method] mldummy : unit }
+class interm (t:Type u#a) (fl:erased tflag) (sgm:policy_spec) (mst:mst) = { [@@@no_method] mldummy : unit }
 
-instance interm_unit fl pi mst : interm unit fl pi mst = { mldummy = () }
-instance interm_file_descr fl pi mst : interm file_descr fl pi mst = { mldummy = () }
+instance interm_unit fl sgm mst : interm unit fl sgm mst = { mldummy = () }
+instance interm_file_descr fl sgm mst : interm file_descr fl sgm mst = { mldummy = () }
 
-instance interm_pair fl pi mst t1 {| d1:interm t1 fl pi mst |} t2 {| d2:interm t2 fl pi mst |} : interm (t1 * t2) fl pi mst = 
+instance interm_pair fl sgm mst t1 {| d1:interm t1 fl sgm mst |} t2 {| d2:interm t2 fl sgm mst |} : interm (t1 * t2) fl sgm mst = 
   { mldummy = () }
-instance interm_either fl pi mst t1 {| d1:interm t1 fl pi mst |} t2 {| d2:interm t2 fl pi mst |} : interm (either t1 t2) fl pi mst =
+instance interm_either fl sgm mst t1 {| d1:interm t1 fl sgm mst |} t2 {| d2:interm t2 fl sgm mst |} : interm (either t1 t2) fl sgm mst =
   { mldummy = () }
-instance interm_resexn fl pi mst t1 {| d1:interm t1 fl pi mst |} : interm (resexn t1) fl pi mst =
+instance interm_resexn fl sgm mst t1 {| d1:interm t1 fl sgm mst |} : interm (resexn t1) fl sgm mst =
   { mldummy = () }
 
-type interm_arrow_typ fl pi mst (t1 t2:Type) = t1 -> MIOpi t2 fl pi mst
+type interm_arrow_typ fl sgm mst (t1 t2:Type) = t1 -> MIOpi t2 fl sgm mst
 
-(** An weak arrow is a statically/dynamically verified arrow to respect pi.
+(** An weak arrow is a statically/dynamically verified arrow to respect sgm.
 **)
-instance interm_arrow fl pi mst #t1 (d1:interm t1 fl pi mst) #t2 (d2:interm t2 fl pi mst) : interm (interm_arrow_typ fl pi mst t1 t2) fl pi mst =
+instance interm_arrow fl sgm mst #t1 (d1:interm t1 fl sgm mst) #t2 (d2:interm t2 fl sgm mst) : interm (interm_arrow_typ fl sgm mst t1 t2) fl sgm mst =
   { mldummy = () }
 
-instance interm_arrow3 fl pi mst
-  t1 {| d1:interm t1 fl pi mst |}
-  t2 {| d2:interm t2 fl pi mst |}
-  t3 {| d3:interm t3 fl pi mst |}
-  t4 {| d4:interm t4 fl pi mst |}
-  : interm (t1 -> t2 -> t3 -> MIOpi t4 fl pi mst) fl pi mst =
+instance interm_arrow3 fl sgm mst
+  t1 {| d1:interm t1 fl sgm mst |}
+  t2 {| d2:interm t2 fl sgm mst |}
+  t3 {| d3:interm t3 fl sgm mst |}
+  t4 {| d4:interm t4 fl sgm mst |}
+  : interm (t1 -> t2 -> t3 -> MIOpi t4 fl sgm mst) fl sgm mst =
   { mldummy = () }
 
-instance interm_bool fl pi mst : interm bool fl pi mst = { mldummy = () }
-instance interm_int fl pi mst : interm int fl pi mst = { mldummy = () }
-instance interm_option fl pi mst t1 {| d1:interm t1 fl pi mst |} : interm (option t1) fl pi mst =
+instance interm_bool fl sgm mst : interm bool fl sgm mst = { mldummy = () }
+instance interm_int fl sgm mst : interm int fl sgm mst = { mldummy = () }
+instance interm_option fl sgm mst t1 {| d1:interm t1 fl sgm mst |} : interm (option t1) fl sgm mst =
   { mldummy = () }
-instance interm_bytes fl pi mst : interm Bytes.bytes fl pi mst = { mldummy = () }
+instance interm_bytes fl sgm mst : interm Bytes.bytes fl sgm mst = { mldummy = () }
 
 (**instance weak_fo_uint8 : weak_fo UInt8.t = { fo_pred = () }
 instance weak_fo_string : weak_fo string = { fo_pred = () }

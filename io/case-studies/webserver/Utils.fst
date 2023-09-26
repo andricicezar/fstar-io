@@ -205,8 +205,8 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     if caller = Prog then write_cst fd s0 else s0
   | _ -> s0
 
-val pi : policy_spec
-let pi h c cmd arg =
+val sgm : policy_spec
+let sgm h c cmd arg =
   match c, cmd with
   | Ctx, Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
@@ -224,8 +224,8 @@ let pi h c cmd arg =
   | Prog, Write -> true
   | _ -> false
 
-val phi : policy mymst pi
-let phi s0 cmd arg =
+val pi : policy mymst sgm
+let pi s0 cmd arg =
   match cmd with
   | Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
@@ -430,7 +430,7 @@ let rec ergar_write_irr lt e0 lt' rl :
 
 let rec ergar_pi_irr h lth lt lt' :
   Lemma
-    (requires enforced_locally pi h lth /\ every_request_gets_a_response (lt @ lt'))
+    (requires enforced_locally sgm h lth /\ every_request_gets_a_response (lt @ lt'))
     (ensures every_request_gets_a_response (lt @ lth @ lt'))
     (decreases lth)
 = match lth with
@@ -438,7 +438,7 @@ let rec ergar_pi_irr h lth lt lt' :
   | e :: l ->
     append_assoc lt [ e ] (l @ lt') ;
     assert ((lt @ [ e ]) @ l @ lt' == lt @ e :: l @ lt') ;
-    assert (enforced_locally pi (e :: h) l) ;
+    assert (enforced_locally sgm (e :: h) l) ;
     append_assoc lt [ e ] lt' ;
     assert (every_request_gets_a_response (lt @ lt')) ;
     begin match e with
@@ -470,13 +470,13 @@ let rec wrote_to_split client l l' :
 
 let rec ergar_pi_write_aux h lth client :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth))
+    (requires enforced_locally sgm h lth /\ wrote_to client (List.rev lth))
     (ensures ergar lth [client])
     (decreases lth)
 = match lth with
   | [] -> ()
   | e :: l ->
-    assert (enforced_locally pi (e :: h) l) ;
+    assert (enforced_locally sgm (e :: h) l) ;
     rev_append [e] l ;
     wrote_to_split client (rev l) [e] ;
     begin match e with
@@ -514,7 +514,7 @@ let rec ergar_trace_merge lt lt' rl rl' :
 
 let ergar_pi_write h lth client limit r lt :
   Lemma
-    (requires enforced_locally pi h lth /\ wrote_to client (List.rev lth) /\ every_request_gets_a_response lt)
+    (requires enforced_locally sgm h lth /\ wrote_to client (List.rev lth) /\ every_request_gets_a_response lt)
     (ensures every_request_gets_a_response (lt @ [ ERead Prog (client,limit) (Inl r) ] @ lth))
 = ergar_pi_write_aux h lth client ;
   assert (ergar lth [client]) ;
