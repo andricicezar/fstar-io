@@ -1,4 +1,4 @@
-module PSWP
+module PolyEffect
 
 open FStar.Tactics
 open FStar.Universe

@@ -1,4 +1,4 @@
-module Proto
+module ScopedAlgEff
 
 noeq
 type signature = {

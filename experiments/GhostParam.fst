@@ -1,4 +1,4 @@
-module PP
+module GhostParam
 
 open FStar.Ghost
 open FStar.Classical
