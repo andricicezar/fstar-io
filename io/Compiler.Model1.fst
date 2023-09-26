@@ -50,7 +50,7 @@ type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> u
 type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
-  (| i.mst, i.psi,  p #AllActions (c #AllActions (inst_io_cmds i.pi) (make_dcs_eff i.ct_dcs)) |)
+  (| i.mst, i.psi,  p #AllActions (c #AllActions (inst_io_lib i.pi) (make_dcs_eff i.ct_dcs)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| mst, _, ws |) -> beh mst ws)
@@ -69,7 +69,7 @@ type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int AllActions 
 type whole_tgt = mst:mstate & (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (| i.mst , p (c #AllActions (inst_io_cmds i.pi)) |)
+  (| i.mst , p (c #AllActions (inst_io_lib i.pi)) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)

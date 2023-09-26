@@ -19,11 +19,11 @@ The history is in reverse chronology order.
 
 At the end of an io computation, the local trace is appended
 in reverse order to the history. **)
-let dm_mio_theta #mst #a = theta #a #mio_cmds #(mio_sig mst) #event mio_wps
+let dm_mio_theta #mst #a = theta #a #mio_ops #(mio_sig mst) #event mio_wps
   
-type dm_mio mst = dm mio_cmds (mio_sig mst) event mio_wps
+type dm_mio mst = dm mio_ops (mio_sig mst) event mio_wps
 let dm_mio_return (a:Type) (mst:mstate) (x:a) : dm_mio mst a (hist_return x) =
-  dm_return mio_cmds (mio_sig mst) event mio_wps a x
+  dm_return mio_ops (mio_sig mst) event mio_wps a x
 
 val dm_mio_bind  : 
   a: Type ->
@@ -34,7 +34,7 @@ val dm_mio_bind  :
   v: dm_mio mst a wp_v ->
   f: (x: a -> dm_mio mst b (wp_f x)) ->
   Tot (dm_mio mst b (hist_bind wp_v wp_f))
-let dm_mio_bind a b mst wp_v wp_f v f = dm_bind mio_cmds (mio_sig mst) event mio_wps a b wp_v wp_f v f
+let dm_mio_bind a b mst wp_v wp_f v f = dm_bind mio_ops (mio_sig mst) event mio_wps a b wp_v wp_f v f
 
 val dm_mio_subcomp : 
   a: Type ->
@@ -43,7 +43,7 @@ val dm_mio_subcomp :
   wp2: hist a ->
   f: dm_mio mst a wp1 ->
   Pure (dm_mio mst a wp2) (hist_ord wp2 wp1) (fun _ -> True)
-let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_cmds (mio_sig mst) event mio_wps a wp1 wp2 f
+let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_ops (mio_sig mst) event mio_wps a wp1 wp2 f
 
 (** * The MIO effect indexed by actions **)
 
@@ -61,10 +61,10 @@ match flag, m with
 | NoActions,    _                     -> False
 | GetTraceActions, Call _ GetTrace arg k   -> forall r. satisfies (k r) flag
 | GetTraceActions, Call _ GetST arg k   -> forall r. satisfies (k r) flag
-| GetTraceActions, Call _ cmd arg k        -> False
+| GetTraceActions, Call _ op arg k        -> False
 | IOActions,    Call _ GetTrace arg k   -> False
 | IOActions,    Call _ GetST    arg k   -> False
-| IOActions,    Call _ cmd arg k        -> forall r. satisfies (k r) flag
+| IOActions,    Call _ op arg k        -> forall r. satisfies (k r) flag
 
 let (+) (flag1:tflag) (flag2:tflag) = 
   match flag1, flag2 with
@@ -134,7 +134,7 @@ let sat_bind_add mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
 
 type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist a) = t:(dm_mio mst a wp){t `satisfies` flag} 
 
-let dm_gmio_theta #a #mst = theta #a #mio_cmds #(mio_sig mst) #event mio_wps
+let dm_gmio_theta #a #mst = theta #a #mio_ops #(mio_sig mst) #event mio_wps
 
 let dm_gmio_return (a:Type) (x:a) mst : dm_gmio a mst NoActions (hist_return x) by (compute ()) =
   dm_mio_return a mst x
@@ -198,7 +198,7 @@ effect {
 
 let dm_gmio_partial_return 
   mst (pre:pure_pre) : dm_gmio (squash pre) mst NoActions (partial_call_wp pre) by (compute ()) =
-  dm_partial_return mio_cmds (mio_sig mst) event mio_wps pre
+  dm_partial_return mio_ops (mio_sig mst) event mio_wps pre
 
 val lift_pure_dm_gmio :
   a: Type ->
@@ -224,17 +224,17 @@ effect MIO
   (post : trace -> a -> trace -> Type0) =
   MIOwp a mst fl (to_hist pre post) 
 
-let static_cmd
+let static_op
   (#mst:mstate)
   caller
-  (cmd : io_cmds)
-  (arg : io_sig.args cmd) :
-  MIO (io_sig.res cmd arg) IOActions mst
-    (requires (fun h -> io_pre cmd arg h))
-    (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        io_post cmd arg r /\
-        lt == [convert_call_to_event caller cmd arg r])) =
-  MIOwp?.reflect (MIO.Sig.Call.mio_call caller cmd arg)
+  (op : io_ops)
+  (arg : io_sig.args op) :
+  MIO (io_sig.res op arg) IOActions mst
+    (requires (fun h -> io_pre op arg h))
+    (ensures (fun h (r:io_sig.res op arg) lt ->
+        io_post op arg r /\
+        lt == [convert_call_to_event caller op arg r])) =
+  MIOwp?.reflect (MIO.Sig.Call.mio_call caller op arg)
 
 let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
   (fun p h -> p [] (Ghost.hide h)) =
@@ -249,12 +249,12 @@ let get_state #mst () : MIOwp mst.typ mst GetTraceActions
 let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
   by (compute ())
 =
-  let fd = static_cmd #mst Prog Openfile "../Makefile" in
-  let fd = static_cmd Prog Openfile "../Makefile" in
-  let fd = static_cmd Prog Openfile "../Makefile" in
-  let fd = static_cmd Prog Openfile "../Makefile" in
-  let fd = static_cmd Prog Openfile "../Makefile" in
-  let fd = static_cmd Prog Openfile "../Makefile" in
-  if Inl? fd then let _ = static_cmd Prog Close (Inl?.v fd) in () else 
+  let fd = static_op #mst Prog Openfile "../Makefile" in
+  let fd = static_op Prog Openfile "../Makefile" in
+  let fd = static_op Prog Openfile "../Makefile" in
+  let fd = static_op Prog Openfile "../Makefile" in
+  let fd = static_op Prog Openfile "../Makefile" in
+  let fd = static_op Prog Openfile "../Makefile" in
+  if Inl? fd then let _ = static_op Prog Close (Inl?.v fd) in () else 
   ()
 #pop-options

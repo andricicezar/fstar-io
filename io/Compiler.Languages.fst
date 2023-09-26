@@ -12,15 +12,15 @@ include MIO
 (** policy_spec is the type of the runtime check that is enforced when instrumenting.
     A policy_spec checks if the next operation with its arguments satisfy the property
     over the history. **)
-type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
+type policy_spec = (history:trace) -> caller -> (op:io_ops) -> (io_sig.args op) -> Type0
 
 type policy (sgm:policy_spec) (mst:mstate) =
-  s:mst.typ -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. s `mst.abstracts` h ==> sgm h Ctx cmd arg)}
+  s:mst.typ -> op:io_ops -> arg:io_sig.args op -> r:bool{r ==> (forall h. s `mst.abstracts` h ==> sgm h Ctx op arg)}
 
 unfold
 let has_event_respected_sgm (e:event) (sgm:policy_spec) (h:trace) : Type0 =
-  let (| caller, cmd, arg, _ |) = destruct_event e in
-  sgm h caller cmd arg
+  let (| caller, op, arg, _ |) = destruct_event e in
+  sgm h caller op arg
 
 (** `enforced_locally sgm` is a prefix-closed safety trace property. **)
 let rec enforced_locally
@@ -41,22 +41,22 @@ effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (sgm : policy_spec) (mst:mst
 
 
 type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mstate) (c:caller) =
-  (cmd : io_cmds) ->
-  (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) fl mst
+  (op : io_ops) ->
+  (arg : io_sig.args op) ->
+  MIO (io_resm op arg) fl mst
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally sgm h lt /\
       (match r with
        | Inr Contract_failure -> lt == []
-       | r' -> io_post cmd arg r' /\ lt == [convert_call_to_event c cmd arg r'])))
+       | r' -> io_post op arg r' /\ lt == [convert_call_to_event c op arg r'])))
 
 #push-options "--compat_pre_core 1" // fixme
-val inst_io_cmds : #mst:mstate -> #sgm:policy_spec -> pi:policy sgm mst -> io_lib AllActions sgm mst Ctx
-let inst_io_cmds pi cmd arg =
+val inst_io_lib : #mst:mstate -> #sgm:policy_spec -> pi:policy sgm mst -> io_lib AllActions sgm mst Ctx
+let inst_io_lib pi op arg =
   let s0 = get_state () in
-  if pi s0 cmd arg then (
-    let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
+  if pi s0 op arg then (
+    let r : io_resm' op arg = static_op Ctx op arg in
     r
   ) else Inr Contract_failure
 #pop-options

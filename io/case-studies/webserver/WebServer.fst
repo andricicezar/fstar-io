@@ -20,25 +20,25 @@ type req_handler (fl:erased tflag) =
     (ensures (fun h r lt -> enforced_locally sgm h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
 
-let static_cmd
-  (cmd : io_cmds)
-  (arg : io_sig.args cmd) :
-  MIO (io_sig.res cmd arg) IOActions mymst
-    (requires (fun h -> io_pre cmd arg h))
-    (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        io_post cmd arg r /\
-        lt == [convert_call_to_event Prog cmd arg r])) =
-  static_cmd Prog cmd arg
+let static_op
+  (op : io_ops)
+  (arg : io_sig.args op) :
+  MIO (io_sig.res op arg) IOActions mymst
+    (requires (fun h -> io_pre op arg h))
+    (ensures (fun h (r:io_sig.res op arg) lt ->
+        io_post op arg r /\
+        lt == [convert_call_to_event Prog op arg r])) =
+  static_op Prog op arg
 
 #push-options "--compat_pre_core 1"
 let sendError400 (fd:file_descr) : MIO unit IOActions mymst
  (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite Prog (fd, res) r]) =
-  let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
+  let _ = static_op Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 let get_req (fd:file_descr) :
   MIO (resexn (r:Bytes.bytes{valid_http_request r})) IOActions mymst (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
-  match static_cmd Read (fd, UInt8.uint_to_t 255) with
+  match static_op Read (fd, UInt8.uint_to_t 255) with
   | Inl (msg, _) ->
    Inl msg
   | Inr err -> Inr err
@@ -63,7 +63,7 @@ let process_connection
   match get_req client with
   | Inr _ -> sendError400 client
   | Inl req ->
-    begin match req_handler client req (fun res -> let _ = static_cmd Write (client,res) in Inl ()) with
+    begin match req_handler client req (fun res -> let _ = static_op Write (client,res) in Inl ()) with
     | Inr err -> sendError400 client
     | Inl client -> ()
     end
@@ -83,7 +83,7 @@ let rec process_connections
       let rest = process_connections tail to_read req_handler in
       if mem client to_read then begin
         process_connection client req_handler ;
-        let _ = static_cmd Close client in
+        let _ = static_op Close client in
         every_request_gets_a_response_append () ;
         tail
       end else clients
@@ -92,12 +92,12 @@ let rec process_connections
 let get_new_connection (socket : file_descr) :
   MIO (option file_descr) IOActions mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
+  match static_op Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
     if length to_accept > 0 then begin
-      match static_cmd Accept socket with
+      match static_op Accept socket with
       | Inl client ->
-        let _ = static_cmd SetNonblock client in
+        let _ = static_op SetNonblock client in
         Some client
       | _ -> None
     end else None
@@ -109,7 +109,7 @@ let handle_connections
   (req_handler : req_handler (IOActions + fl)) :
   MIO lfds (fl+IOActions) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  match static_cmd Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
+  match static_op Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
     let clients'' = process_connections clients to_read req_handler in
     clients''
@@ -146,12 +146,12 @@ let rec server_loop
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
   MIO (resexn file_descr) IOActions mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
-  match static_cmd Socket () with
+  match static_op Socket () with
   | Inl socket ->
-    let _ = static_cmd Setsockopt (socket, SO_REUSEADDR, true) in
-    let _ = static_cmd Bind (socket, ip, port) in
-    let _ = static_cmd Listen (socket, limit) in
-    let _ = static_cmd SetNonblock socket in
+    let _ = static_op Setsockopt (socket, SO_REUSEADDR, true) in
+    let _ = static_op Bind (socket, ip, port) in
+    let _ = static_op Listen (socket, limit) in
+    let _ = static_op SetNonblock socket in
     Inl socket
   | Inr err -> Inr err
 

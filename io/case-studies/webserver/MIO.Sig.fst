@@ -8,7 +8,7 @@ include UnixTypes
 include Free
 include Hist
 
-type cmds =
+type mio_ops =
   (* files *)
   | Openfile 
   (* file descriptors *)
@@ -30,14 +30,14 @@ type cmds =
   | GetST
 
 (** the io free monad does not contain the GetTrace step **)
-let _io_cmds x : bool = 
+let _io_ops x : bool = 
   x = Openfile || x = Read || x = Write || x = Close || 
   x = Socket || x = Setsockopt || x = Bind || x = SetNonblock ||
   x = Listen || x = Accept || x = Select || x = Access || x = Stat
-type io_cmds : Type = x:cmds{_io_cmds x}
+type io_ops : Type = x:mio_ops{_io_ops x}
 
-unfold let io_args (cmd:io_cmds) : Type =
-  match cmd with
+unfold let io_args (op:io_ops) : Type =
+  match op with
   | Openfile -> string * (list open_flag) * zfile_perm
   | Read -> file_descr * UInt8.t
   | Write -> file_descr * Bytes.bytes
@@ -52,8 +52,8 @@ unfold let io_args (cmd:io_cmds) : Type =
   | Access -> string * list access_permission
   | Stat -> string
 
-unfold let io_res (cmd:io_cmds) : Type =
-  match cmd with
+unfold let io_res (op:io_ops) : Type =
+  match op with
   | Openfile -> file_descr
   | Read -> Bytes.bytes * UInt8.t
   | Write -> unit
@@ -68,13 +68,13 @@ unfold let io_res (cmd:io_cmds) : Type =
   | Access -> unit
   | Stat -> stats
 
-let io_resm (cmd:io_cmds) (arg:io_args cmd) = resexn (io_res cmd)
+let io_resm (op:io_ops) (arg:io_args op) = resexn (io_res op)
 
 unfold
-let io_resm' (cmd:io_cmds) (arg:io_args cmd) = r:(io_resm cmd arg){~(r == Inr Contract_failure)}
+let io_resm' (op:io_ops) (arg:io_args op) = r:(io_resm op arg){~(r == Inr Contract_failure)}
 
 unfold
-let io_sig : op_sig io_cmds = { args = io_args; res = io_resm'; }
+let io_sig : op_sig io_ops = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
@@ -94,7 +94,7 @@ type event =
 
 type trace = list event
 
-type m_cmds = x:cmds{x = GetTrace || x = GetST}
+type m_ops = x:mio_ops{x = GetTrace || x = GetST}
 
 (** We only need GetTrace because we assume that our actions are
 updating the trace for us. Therefore, at extraction, our actions
@@ -116,40 +116,38 @@ type mstate = {
 at extraction, they have to be careful to link it directly with the
 primitives, and not with the wrapped version, otherwise, they will
 suffer a performance penalty. **)
-let m_args (cmd:m_cmds) =
-  match cmd with
+let m_args (op:m_ops) =
+  match op with
   | GetTrace -> unit
   | GetST -> unit
 
-let m_res (mst:mstate) (cmd:m_cmds) (arg:m_args cmd) =
-  match cmd with
+let m_res (mst:mstate) (op:m_ops) (arg:m_args op) =
+  match op with
   | GetTrace -> erased trace 
   | GetST -> mst.typ
 
-let m_sig (mst:mstate) : op_sig m_cmds = {
+let m_sig (mst:mstate) : op_sig m_ops = {
   args = m_args;
   res = m_res mst;
 }
 
-let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace || cmd = GetST
-type mio_cmds = cmd:cmds{_mio_cmds cmd}
-let mio_sig (mst:mstate) : op_sig mio_cmds = add_sig cmds io_sig (m_sig mst)
+let mio_sig (mst:mstate) : op_sig mio_ops = add_sig mio_ops io_sig (m_sig mst)
 
 // THE MIO FREE MONAD
-type mio (mst:mstate) (a:Type) = free cmds (mio_sig mst) a
+type mio (mst:mstate) (a:Type) = free mio_ops (mio_sig mst) a
 
 let mio_return #mst (x:'a) : mio mst 'a =
-  free_return cmds (mio_sig mst) 'a x
+  free_return mio_ops (mio_sig mst) 'a x
 
 let mio_bind #mst (#a:Type) (#b:Type) l k : mio mst b =
-  free_bind cmds (mio_sig mst) a b l k
+  free_bind mio_ops (mio_sig mst) a b l k
 
 let convert_call_to_event
   caller
-  (cmd:io_cmds)
-  (arg:io_sig.args cmd)
-  (r:io_sig.res cmd arg) =
-  match cmd with
+  (op:io_ops)
+  (arg:io_sig.args op)
+  (r:io_sig.res op arg) =
+  match op with
   | Openfile -> EOpenfile caller arg r
   | Read     -> ERead caller arg r
   | Write -> EWrite caller arg r
@@ -170,7 +168,7 @@ let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
 unfold type event_data =
-  caller & cmd:io_cmds & (arg:io_sig.args cmd) & io_sig.res cmd arg
+  caller & op:io_ops & (arg:io_sig.args op) & io_sig.res op arg
 
 let mk_event (x : event_data) : event =
   let (| caller, e, arg, res |) = x in
@@ -206,25 +204,25 @@ let destruct_event (e:event) : d: event_data { e == mk_event d } =
   | EAccess caller arg res -> (| caller, Access, arg, res |)
   | EStat caller arg res -> (| caller, Stat, arg, res |)
 
-unfold let io_pre (cmd:io_cmds) (arg:io_args cmd) (h:trace) : Type0 =
+unfold let io_pre (op:io_ops) (arg:io_args op) (h:trace) : Type0 =
   True
   (**
-  match cmd with
+  match op with
   | Openfile -> True
   | Read -> is_open arg h
   | Write -> let (fd, _):(file_descr*string) = arg in is_open fd h
   | Close -> is_open arg h**)
 
-unfold let io_post (cmd:io_cmds) (arg:io_args cmd) (res : io_sig.res cmd arg) : Type0 =
-  match cmd with
+unfold let io_post (op:io_ops) (arg:io_args op) (res : io_sig.res op arg) : Type0 =
+  match op with
   | Read -> Inl? res ==> Bytes.length (fst #Bytes.bytes #UInt8.t (Inl?.v res)) < UInt8.v (snd #file_descr #UInt8.t arg)
   | _ -> True
 
-unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : hist ((mio_sig mst).res cmd arg) =
-  fun (p : hist_post ((mio_sig mst).res cmd arg)) h ->
-  match cmd with
+unfold let mio_wps #mst caller (op:mio_ops) (arg:(mio_sig mst).args op) : hist ((mio_sig mst).res op arg) =
+  fun (p : hist_post ((mio_sig mst).res op arg)) h ->
+  match op with
   | GetTrace ->
     let p : hist_post (Ghost.erased trace) = p in // need some handholding
     p [] (Ghost.hide h)
   | GetST -> forall (s:mst.typ). s `mst.abstracts` h ==> p [] s // any concrete state modelling the trace
-  | _ -> io_pre cmd arg h /\ (forall (r:(mio_sig mst).res cmd arg). io_post cmd arg r ==> p [convert_call_to_event caller cmd arg r] r)
+  | _ -> io_pre op arg h /\ (forall (r:(mio_sig mst).res op arg). io_post op arg r ==> p [convert_call_to_event caller op arg r] r)
