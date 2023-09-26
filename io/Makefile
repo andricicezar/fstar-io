@@ -5,7 +5,7 @@ FSTAR := fstar.exe
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst
+ROOTS := Compiler.Model1.fst Compiler.Model2.fst # Compiler.ModelStlc.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints

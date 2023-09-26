@@ -177,6 +177,11 @@ let dm_gmio_if_then_else (a : Type u#a) (mst:mst)
   (f : dm_gmio a mst fl1 wp1) (g : dm_gmio a mst fl2 wp2) (b : bool) : Type =
   dm_gmio a mst (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
 
+
+(** TODO: Look into https://github.com/FStarLang/FStar/wiki/Indexed-effects to make
+    * lift substitutive
+    * use primitive_extraction **)
+
 total
 reifiable
 reflectable
