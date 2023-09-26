@@ -23,7 +23,7 @@ type req_handler (fl:erased tflag) =
 let static_op
   (op : io_ops)
   (arg : io_sig.args op) :
-  MIO (io_sig.res op arg) IOActions mymst
+  MIO (io_sig.res op arg) IOOps mymst
     (requires (fun h -> io_pre op arg h))
     (ensures (fun h (r:io_sig.res op arg) lt ->
         io_post op arg r /\
@@ -31,13 +31,13 @@ let static_op
   static_op Prog op arg
 
 #push-options "--compat_pre_core 1"
-let sendError400 (fd:file_descr) : MIO unit IOActions mymst
+let sendError400 (fd:file_descr) : MIO unit IOOps mymst
  (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite Prog (fd, res) r]) =
   let _ = static_op Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 let get_req (fd:file_descr) :
-  MIO (resexn (r:Bytes.bytes{valid_http_request r})) IOActions mymst (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
+  MIO (resexn (r:Bytes.bytes{valid_http_request r})) IOOps mymst (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
   match static_op Read (fd, UInt8.uint_to_t 255) with
   | Inl (msg, _) ->
    Inl msg
@@ -47,8 +47,8 @@ let get_req (fd:file_descr) :
 let process_connection
   (client : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) :
-  MIO unit (IOActions+fl) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps + fl)) :
+  MIO unit (IOOps+fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   introduce forall h lthandler lt lt'. enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
@@ -73,8 +73,8 @@ let rec process_connections
   (clients : lfds)
   (to_read : lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) :
-  MIO lfds (IOActions+fl) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps + fl)) :
+  MIO lfds (IOOps+fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
@@ -90,7 +90,7 @@ let rec process_connections
     end
 
 let get_new_connection (socket : file_descr) :
-  MIO (option file_descr) IOActions mymst (fun _ -> True)
+  MIO (option file_descr) IOOps mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_op Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
@@ -106,8 +106,8 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl)) :
-  MIO lfds (fl+IOActions) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps + fl)) :
+  MIO lfds (fl+IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_op Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
@@ -118,9 +118,9 @@ let handle_connections
 let server_loop_body
   (socket : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl))
+  (req_handler : req_handler (IOOps + fl))
   (clients : lfds) :
-  MIO lfds (fl+IOActions) mymst (fun _ -> True)
+  MIO lfds (fl+IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   let clients' = (match get_new_connection socket with
                  | None -> clients
@@ -132,9 +132,9 @@ let rec server_loop
   (iterations_count : nat)
   (socket : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl))
+  (req_handler : req_handler (IOOps + fl))
   (clients : lfds) :
-  MIO unit (fl+IOActions) mymst (fun _ -> True)
+  MIO unit (fl+IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   if iterations_count = 0 then ()
   else begin
@@ -144,7 +144,7 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  MIO (resexn file_descr) IOActions mymst (fun _ -> True)
+  MIO (resexn file_descr) IOOps mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_op Socket () with
   | Inl socket ->
@@ -157,9 +157,9 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
 
 let webserver
   (#fl:erased tflag)
-  (req_handler : req_handler (IOActions + fl))
+  (req_handler : req_handler (IOOps + fl))
   () :
-  MIO int (IOActions + fl) mymst
+  MIO int (IOOps + fl) mymst
     (requires (fun h -> True))
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with

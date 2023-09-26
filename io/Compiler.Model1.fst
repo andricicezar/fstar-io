@@ -46,11 +46,11 @@ type tgt_interface = {
 
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs fl i.mst i.ct_dcs -> i.ct fl
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int (IOActions + fl) i.mst (fun _ -> True) i.psi
-type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions mst (fun _ -> True) post)
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOOps + fl) -> unit -> MIO int (IOOps + fl) i.mst (fun _ -> True) i.psi
+type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllOps mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
-  (| i.mst, i.psi,  p #AllActions (c #AllActions (inst_io_lib i.pi) (make_dcs_eff i.ct_dcs)) |)
+  (| i.mst, i.psi,  p #AllOps (c #AllOps (inst_io_lib i.pi) (make_dcs_eff i.ct_dcs)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| mst, _, ws |) -> beh mst ws)
@@ -65,11 +65,11 @@ let src_language : language = {
 // TODO: SMT problems with this def in AdversarialHandlers:
 //type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi':erased policy_spec -> io_lib fl sgm' i.mst Ctx -> i.ct fl
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> i.ct fl
-type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int AllActions i.mst (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt = mst:mstate & (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True))
+type prog_tgt (i:tgt_interface) = i.ct AllOps -> unit -> MIO int AllOps i.mst (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = mst:mstate & (unit -> MIO int AllOps mst (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (| i.mst , p (c #AllActions (inst_io_lib i.pi)) |)
+  (| i.mst , p (c #AllOps (inst_io_lib i.pi)) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
@@ -102,8 +102,8 @@ let compile_whole (| mst, _, ws |) = (| mst, ws |)
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s c_t =
   let eff_dcs = make_dcs_eff i.ct_dcs in
-  let c_s : i.ct AllActions = (i.ct_importable AllActions).safe_import c_t eff_dcs in
-  let ws : whole_src = (| i.mst, i.psi, p_s #AllActions c_s |) in
+  let c_s : i.ct AllOps = (i.ct_importable AllOps).safe_import c_t eff_dcs in
+  let ws : whole_src = (| i.mst, i.psi, p_s #AllOps c_s |) in
   let (| _, pt |) : whole_tgt = compile_whole ws in
   pt
 

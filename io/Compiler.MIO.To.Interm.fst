@@ -132,11 +132,11 @@ type eff_dc_typ (fl:erased tflag) (mst:mstate) (#t1 #t2:Type) (dc:dc_typ mst #t1
 
 (* Lifting a runtime check into an effectful check *)
 val enforce_dc : (#mst:mstate) -> (#argt:Type u#a) -> (#rett:Type u#b) -> 
-  dc:dc_typ mst #argt #rett -> eff_dc_typ AllActions mst dc
+  dc:dc_typ mst #argt #rett -> eff_dc_typ AllOps mst dc
 #push-options "--compat_pre_core 1" // fixme
 let enforce_dc #mst #argt #rett dc x =
   let s0 = get_state () in
-  let cont : eff_dc_typ_cont AllActions mst dc x s0 =
+  let cont : eff_dc_typ_cont AllOps mst dc x s0 =
     (fun y -> (
       let s1 = get_state () in
       (hide s1, dc x s0 y s1))) in
@@ -157,7 +157,7 @@ let check #mst (ctr:pck_dc mst) (arg:arg_typ ctr) (s0:mst.typ) (ret:ret_typ ctr)
 
 type eff_pck_dc (fl:erased tflag) mst = ctr:pck_dc mst & eff_dc_typ fl mst ctr._3
 
-val make_dc_eff : mst:mstate -> pck_dc u#a u#b mst -> eff_pck_dc u#a u#b AllActions mst 
+val make_dc_eff : mst:mstate -> pck_dc u#a u#b mst -> eff_pck_dc u#a u#b AllOps mst 
 let make_dc_eff mst r = (| r, (enforce_dc #mst r._3) |)
 
 type typ_eff_dcs (fl:erased tflag) mst (dcs:tree (pck_dc mst)) =
@@ -176,8 +176,8 @@ let typ_right (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst))
   
 let cong (#t1 #t2 : tree 'a) (f : 'a -> 'b) (_ : squash (t1 == t2)) : squash (map_tree t1 f == map_tree t2 f) = ()
 
-let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs AllActions mst dcs =
-  let r : tree (eff_pck_dc AllActions mst) = map_tree dcs (make_dc_eff mst) in
+let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs AllOps mst dcs =
+  let r : tree (eff_pck_dc AllOps mst) = map_tree dcs (make_dc_eff mst) in
   let r_def : squash (r == map_tree dcs (make_dc_eff mst)) = () in
   let comp x = dfst (make_dc_eff mst x) in
   (* sigh, F* not being very helpful here *)
@@ -185,7 +185,7 @@ let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs AllActions mst dcs =
     map_tree r dfst;
     == { cong dfst r_def }
     map_tree (map_tree #(pck_dc mst) dcs (make_dc_eff mst)) dfst;
-    == { map_fuse #_ #(eff_pck_dc AllActions mst) #_ dcs (make_dc_eff mst) dfst }
+    == { map_fuse #_ #(eff_pck_dc AllOps mst) #_ dcs (make_dc_eff mst) dfst }
     map_tree dcs comp;
     == { map_ext dcs (fun x -> dfst (make_dc_eff mst x)) (fun x -> x) }
     map_tree dcs (fun x -> x);

@@ -51,41 +51,41 @@ let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_ops (mio_sig mst) event mio_
 
 (** **** Flag **)
 noeq
-type tflag = | NoActions | GetTraceActions | IOActions | AllActions
+type tflag = | NoOps | GetMStateOps | IOOps | AllOps
 
 let rec satisfies #mst (m:mio mst 'a) (flag:tflag) =
 match flag, m with
-| AllActions,   _                     -> True
+| AllOps,   _                     -> True
 | _,            Return x              -> True
 | _,            PartialCall pre k     -> forall r. satisfies (k r) flag
-| NoActions,    _                     -> False
-| GetTraceActions, Call _ GetTrace arg k   -> forall r. satisfies (k r) flag
-| GetTraceActions, Call _ GetST arg k   -> forall r. satisfies (k r) flag
-| GetTraceActions, Call _ op arg k        -> False
-| IOActions,    Call _ GetTrace arg k   -> False
-| IOActions,    Call _ GetST    arg k   -> False
-| IOActions,    Call _ op arg k        -> forall r. satisfies (k r) flag
+| NoOps,    _                     -> False
+| GetMStateOps, Call _ GetTrace arg k   -> forall r. satisfies (k r) flag
+| GetMStateOps, Call _ GetST arg k   -> forall r. satisfies (k r) flag
+| GetMStateOps, Call _ op arg k        -> False
+| IOOps,    Call _ GetTrace arg k   -> False
+| IOOps,    Call _ GetST    arg k   -> False
+| IOOps,    Call _ op arg k        -> forall r. satisfies (k r) flag
 
 let (+) (flag1:tflag) (flag2:tflag) = 
   match flag1, flag2 with
-  | NoActions, NoActions -> NoActions
-  | NoActions, fl -> fl
-  | fl, NoActions -> fl
-  | GetTraceActions, GetTraceActions -> GetTraceActions
-  | IOActions, IOActions -> IOActions
-  | _, _ -> AllActions
+  | NoOps, NoOps -> NoOps
+  | NoOps, fl -> fl
+  | fl, NoOps -> fl
+  | GetMStateOps, GetMStateOps -> GetMStateOps
+  | IOOps, IOOps -> IOOps
+  | _, _ -> AllOps
 
 let (<=) (flag1:tflag) (flag2:tflag) =
   match flag1, flag2 with
-  | NoActions, _ -> True
-  | GetTraceActions, NoActions -> False
-  | GetTraceActions, IOActions -> False
-  | GetTraceActions, _ -> True
-  | IOActions, NoActions -> False
-  | IOActions, GetTraceActions -> False
-  | IOActions, _ -> True
-  | AllActions, AllActions -> True
-  | AllActions, _ -> False
+  | NoOps, _ -> True
+  | GetMStateOps, NoOps -> False
+  | GetMStateOps, IOOps -> False
+  | GetMStateOps, _ -> True
+  | IOOps, NoOps -> False
+  | IOOps, GetMStateOps -> False
+  | IOOps, _ -> True
+  | AllOps, AllOps -> True
+  | AllOps, _ -> False
 
 let plus_compat_le (f1 f2 : tflag) : Lemma (f1 <= f1+f2) = ()
 let plus_comm      (f1 f2 : tflag) : Lemma (f1+f2 == f2+f1) = ()
@@ -136,7 +136,7 @@ type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist a) = t:(dm_mio m
 
 let dm_gmio_theta #a #mst = theta #a #mio_ops #(mio_sig mst) #event mio_wps
 
-let dm_gmio_return (a:Type) (x:a) mst : dm_gmio a mst NoActions (hist_return x) by (compute ()) =
+let dm_gmio_return (a:Type) (x:a) mst : dm_gmio a mst NoOps (hist_return x) by (compute ()) =
   dm_mio_return a mst x
 
 val dm_gmio_bind  : 
@@ -197,7 +197,7 @@ effect {
 }
 
 let dm_gmio_partial_return 
-  mst (pre:pure_pre) : dm_gmio (squash pre) mst NoActions (partial_call_wp pre) by (compute ()) =
+  mst (pre:pure_pre) : dm_gmio (squash pre) mst NoOps (partial_call_wp pre) by (compute ()) =
   dm_partial_return mio_ops (mio_sig mst) event mio_wps pre
 
 val lift_pure_dm_gmio :
@@ -205,14 +205,14 @@ val lift_pure_dm_gmio :
   [@@@effect_param](mst: mstate)-> // syntax ok?
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
-  Tot (dm_gmio a mst NoActions (wp_lift_pure_hist w))
+  Tot (dm_gmio a mst NoOps (wp_lift_pure_hist w))
 let lift_pure_dm_gmio a mst w f = 
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  let lhs : dm_gmio _ mst NoActions _ = dm_gmio_partial_return mst (as_requires w) in
+  let lhs : dm_gmio _ mst NoOps _ = dm_gmio_partial_return mst (as_requires w) in
   let rhs = (fun (pre:(squash (as_requires w))) -> dm_gmio_return a (f pre) mst) in
-  let m = dm_gmio_bind _ _ mst NoActions _ NoActions _ lhs rhs in
-  dm_gmio_subcomp a mst NoActions _ NoActions _ m
+  let m = dm_gmio_bind _ _ mst NoOps _ NoOps _ lhs rhs in
+  dm_gmio_subcomp a mst NoOps _ NoOps _ m
   
 sub_effect PURE ~> MIOwp = lift_pure_dm_gmio
 
@@ -229,24 +229,24 @@ let static_op
   caller
   (op : io_ops)
   (arg : io_sig.args op) :
-  MIO (io_sig.res op arg) IOActions mst
+  MIO (io_sig.res op arg) IOOps mst
     (requires (fun h -> io_pre op arg h))
     (ensures (fun h (r:io_sig.res op arg) lt ->
         io_post op arg r /\
         lt == [convert_call_to_event caller op arg r])) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call caller op arg)
 
-let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
+let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetMStateOps
   (fun p h -> p [] (Ghost.hide h)) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetTrace ())
   
-let get_state #mst () : MIOwp mst.typ mst GetTraceActions
+let get_state #mst () : MIOwp mst.typ mst GetMStateOps
   (fun p h -> forall s. s `mst.abstracts` h ==> p [] s) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetST ())
 
 (**
 #push-options "--compat_pre_core 1"
-let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
+let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOOps) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
   by (compute ())
 =
   let fd = static_op #mst Prog Openfile "../Makefile" in

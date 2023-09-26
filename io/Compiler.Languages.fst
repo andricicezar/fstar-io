@@ -52,7 +52,7 @@ type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mstate) (c:caller) =
        | r' -> io_post op arg r' /\ lt == [convert_call_to_event c op arg r'])))
 
 #push-options "--compat_pre_core 1" // fixme
-val inst_io_lib : #mst:mstate -> #sgm:policy_spec -> pi:policy sgm mst -> io_lib AllActions sgm mst Ctx
+val inst_io_lib : #mst:mstate -> #sgm:policy_spec -> pi:policy sgm mst -> io_lib AllOps sgm mst Ctx
 let inst_io_lib pi op arg =
   let s0 = get_state () in
   if pi s0 op arg then (

@@ -127,7 +127,7 @@ let test1 : src_interface = {
 }
 
 val test1_prog : prog_src test1
-let test1_prog #fl ctx () : MIO int (fl + IOActions) mst1 (fun _ -> True) test1.psi =
+let test1_prog #fl ctx () : MIO int (fl + IOOps) mst1 (fun _ -> True) test1.psi =
   //let test = static_cmd Openfile "/etc/passwd" in
   let _ = ctx () in
   0 
@@ -271,8 +271,8 @@ let test3 : src_interface = {
 }
 
 val test3_prog : prog_src test3
-let test3_prog #fl ctx () : MIO int (IOActions + fl) mst3 (fun _ -> True) (fun _ _ _ -> True) =
-  match static_cmd Prog Openfile "test.txt" with
+let test3_prog #fl ctx () : MIO int (IOOps + fl) mst3 (fun _ -> True) (fun _ _ _ -> True) =
+  match static_op Prog Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with
     | Inl cb -> let _ : resexn unit = cb fd in 0

@@ -28,8 +28,8 @@ open FStar.Tactics
 let cast_mio (wp : hist 'a) (t : dm_mio mymst 'a wp) : (x : mio mymst 'a { wp `hist_ord` dm_mio_theta x }) =
   t
 
-let execute (w:unit -> MIO int AllActions mymst (fun _ -> True) (fun _ _ _ -> True)) : ML int by (compute ()) =
-  let dm_tree : dm_gmio int mymst AllActions trivial_hist = reify (w ()) in
+let execute (w:unit -> MIO int AllOps mymst (fun _ -> True) (fun _ _ _ -> True)) : ML int by (compute ()) =
+  let dm_tree : dm_gmio int mymst AllOps trivial_hist = reify (w ()) in
   let dm_tree' : dm_mio mymst int trivial_hist = dm_tree in
   let dm_tree2 : (x : mio mymst int { trivial_hist `hist_ord` dm_mio_theta x }) = cast_mio trivial_hist dm_tree' in
   skip_partial_calls dm_tree2

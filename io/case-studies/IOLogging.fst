@@ -46,7 +46,7 @@ let get_caller = function
 
 assume val stdout : file_descr
 
-val to_string : cmd:io_cmds -> string
+val to_string : op:io_ops -> string
 let to_string o =
   match o with
   | Openfile -> "Openfile ..."
@@ -55,36 +55,36 @@ let to_string o =
   | Close -> "Close ..."
 
 val sgm : policy_spec
-let sgm h c cmd arg =
-  match c, cmd with
+let sgm h c op arg =
+  match c, op with
   | Ctx, _ ->
     h =!= []
-    /\ List.Tot.hd h == EWrite Prog (stdout, to_string cmd) (Inl ())
+    /\ List.Tot.hd h == EWrite Prog (stdout, to_string op) (Inl ())
   | Prog, Write ->
     (* The verified program can write when: 1) nothing was written
     or 2) the last write was by the context. *)
     Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
   | _ -> False
 
-val pi0 : s:mymst.typ -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool
-let pi0 (s0:option event) cmd arg =
+val pi0 : s:mymst.typ -> op:io_ops -> arg:io_sig.args op -> r:bool
+let pi0 (s0:option event) op arg =
   match s0 with
   | Some (EWrite Prog (fd, inp) (Inl ())) ->
-    fd = stdout && inp = to_string cmd
+    fd = stdout && inp = to_string op
   | _ -> false
 
 val pi : policy sgm mymst
-let pi s0 cmd arg = 
-  pi0 s0 cmd arg
+let pi s0 op arg = 
+  pi0 s0 op arg
 
-let log_pre = (fun (op:io_cmds) (h:trace) -> h == [] \/ get_caller (List.Tot.hd h) == Ctx)
-let log_post = (fun (op:io_cmds) h (r:resexn unit) lt -> r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r])
+let log_pre = (fun (op:io_ops) (h:trace) -> h == [] \/ get_caller (List.Tot.hd h) == Ctx)
+let log_post = (fun (op:io_ops) h (r:resexn unit) lt -> r =!= Inr Contract_failure /\ lt == [EWrite Prog (stdout, to_string op) r])
 
-type log_pt = source_arrow mymst io_cmds unit log_pre log_post
+type log_pt = source_arrow mymst io_ops unit log_pre log_post
 
 let log_pt_rc : dc_typ mymst = (fun op s0 _ _ -> None? s0 || (get_caller (Some?.v s0) = Ctx))
 let log_pt_rcs : tree (pck_dc mymst) =
-   Node (| io_cmds, unit, log_pt_rc |)
+   Node (| io_ops, unit, log_pt_rc |)
      Leaf
      Leaf
 
@@ -94,9 +94,9 @@ let log_c1_pre = ()
 val log_c2_pre : c2_pre log_pre log_post sgm
 let log_c2_pre = ()
 
-instance interm_io_cmds fl sgm mst : interm io_cmds fl sgm mst = { mldummy = () }
-instance importable_io_cmds (#fl:erased tflag) (#sgm:policy_spec) #mst : importable io_cmds fl sgm mst Leaf = {
-  ityp = io_cmds;
+instance interm_io_ops fl sgm mst : interm io_ops fl sgm mst = { mldummy = () }
+instance importable_io_ops (#fl:erased tflag) (#sgm:policy_spec) #mst : importable io_ops fl sgm mst Leaf = {
+  ityp = io_ops;
   c_ityp = solve;
   import = (fun x Leaf -> Inl x)
 }
@@ -132,9 +132,9 @@ let log_stronger_sgms =
 
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
-let test1_prog #fl op : MIO (resexn unit) (fl+IOActions) mymst (log_pre op) (log_post op) =
+let test1_prog #fl op : MIO (resexn unit) (fl+IOOps) mymst (log_pre op) (log_post op) =
   // weird behavior of F*
-  let r : (mio_sig mymst).res Write (stdout, to_string op) = static_cmd Prog Write (stdout, to_string op) in
+  let r : (mio_sig mymst).res Write (stdout, to_string op) = static_op Prog Write (stdout, to_string op) in
   r <: resexn unit
 
 assume val lemma_append_enforced_locally : sgm:_ ->

@@ -41,11 +41,11 @@ type tgt_interface = {
 
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs fl i.mst i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
-type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
-type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions mst (fun _ -> True) post)
+type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOOps)
+type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllOps mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
-  (| i.mst, (fun h _ lt -> enforced_locally i.sgm h lt), (c #AllActions (inst_io_lib i.pi) (make_dcs_eff i.pt_dcs) (p #AllActions)) |)
+  (| i.mst, (fun h _ lt -> enforced_locally i.sgm h lt), (c #AllOps (inst_io_lib i.pi) (make_dcs_eff i.pt_dcs) (p #AllOps)) |)
 
 val beh_src : whole_src ^-> trace_property #event
 let beh_src = on_domain whole_src (fun (| mst,  _, ws |) -> beh mst ws)
@@ -58,11 +58,11 @@ let src_language : language = {
 }
 
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
-type prog_tgt (i:tgt_interface) = i.pt AllActions
-type whole_tgt = mst:mstate & (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True))
+type prog_tgt (i:tgt_interface) = i.pt AllOps
+type whole_tgt = mst:mstate & (unit -> MIO int AllOps mst (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
-  (| i.mst, (c #AllActions (inst_io_lib i.pi) p) |)
+  (| i.mst, (c #AllOps (inst_io_lib i.pi) p) |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
 let beh_tgt = on_domain whole_tgt (fun (| mst, wt |) -> beh mst wt)
@@ -95,7 +95,7 @@ let compile_whole (| mst, _, ws |) = (| mst, ws |)
 val compile_pprog : (#i:src_interface) -> (p_s:prog_src i) -> prog_tgt (comp_int_src_tgt i)
 let compile_pprog #i p_s =
   let eff_dcs = make_dcs_eff i.pt_dcs in
-  (i.pt_exportable AllActions).export eff_dcs (p_s #AllActions)
+  (i.pt_exportable AllOps).export eff_dcs (p_s #AllOps)
 
 // val compile_ctx : (#i:src_interface) -> (c_s:ctx_src i) -> ctx_tgt (comp_int_src_tgt i)
 // let compile_ctx #i c_s =
