@@ -6,7 +6,7 @@
 ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 CACHEDIR := .cache
-FLAGS  = --include .. --record_hints --use_hints --hint_dir hints
+FLAGS  = --include ../.. --record_hints --use_hints --hint_dir hints
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 

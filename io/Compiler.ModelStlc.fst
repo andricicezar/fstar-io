@@ -242,7 +242,7 @@ let test : src_interface = {
   ct_importable = (fun fl -> WS.cs_int.ct_importable fl);
 
   wct = wct; // TODO: write the proper type here
-  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst)) // universe problems);
+  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst))) // universe problems);
 
   psi = WS.cs_int.psi;
 }
