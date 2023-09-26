@@ -382,7 +382,7 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (ve:venv g 'f 'p '
   | EStringLit s ->
        FStar.Universe.raise_val s
 
-let rec exp_to_fstar' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
+let exp_to_fstar' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g 'f 'p 'm)
   : (typ_to_fstar t 'f 'p 'm) =
   match e with
   | ELam t1 e1 ->

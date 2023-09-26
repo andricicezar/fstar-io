@@ -4,5 +4,5 @@ out
 *.cmx
 *.o
 .DS_store
-
 *.fst#
+.#*

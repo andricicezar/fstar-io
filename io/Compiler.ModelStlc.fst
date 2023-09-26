@@ -11,7 +11,7 @@ include Compiler.Languages
 include Compiler.MIO.To.Interm
 open MIO.Behavior
 
-module Stlc = Compiler.StlcToFStar
+open Compiler.StlcToFStar
 
 let static_cmd
   (#mst:mst)
@@ -60,6 +60,34 @@ let inst_io_cmds phi cmd arg =
   ) else Inr Contract_failure
 #pop-options
 
+
+let ctx_env =
+  extend (TArr TString (TSum TFDesc TExn)) (* openfile *)
+ // (extend (TArr TUnit (TSum TFDesc TExn)) (* socket *)
+  (extend (TArr (TPair TFDesc TString) (TSum TUnit TExn)) (* write *)
+          empty)
+
+#push-options "--compat_pre_core 1"
+let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#pi:policy_spec) (#mst:mst) (sec_io:io_lib fl pi mst Ctx) : (typ_to_fstar t fl pi mst) =
+   let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl pi _ = fun fdb ->
+     let fd = FStar.Universe.downgrade_val (fst fdb) in
+     let b = FStar.Universe.downgrade_val (snd fdb) in
+     match sec_io Write (fd, b) with
+     | Inl unit -> Inl (FStar.Universe.raise_val unit)
+     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
+   let openfile : FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl pi _ = fun s ->
+     let s = FStar.Universe.downgrade_val s in
+     match sec_io Openfile s with
+     | Inl fd -> Inl (FStar.Universe.raise_val fd)
+     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
+   let ctx_venv = 
+     vextend #fl #mst #pi #(TArr TString (TSum TFDesc TExn)) openfile (
+     vextend #fl #mst #pi #(TArr (TPair TFDesc TString) (TSum TUnit TExn)) write (
+     vempty #fl #pi #mst)) in
+   exp_to_fstar' ctx_env e t h ctx_venv
+#pop-options
+
+
 (** **** interfaces **)
 noeq
 type src_interface = {
@@ -78,8 +106,8 @@ type src_interface = {
   ct_importable : fl:erased tflag -> safe_importable (ct fl) fl pi mst ct_dcs;
 
 
-  wct : Stlc.typ;
-  _c : fl:erased tflag -> Lemma ((ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl pi mst));
+  wct : typ;
+  _c : fl:erased tflag -> Lemma ((ct_importable fl).ityp == (typ_to_fstar wct fl pi mst));
 
   (** The partial program can have a post-condition that becomes the
       post-condition of the whole program after linking in the source.
@@ -93,7 +121,7 @@ type tgt_interface = {
   pi : policy_spec;
   phi : policy mst pi;
 
-  ct : Stlc.typ;
+  ct : typ;
 }
   
 (** **** languages **)
@@ -114,14 +142,14 @@ let src_language : language = {
   event_typ = event;  beh = beh_src; 
 }
 
-type ctx_tgt (i:tgt_interface) = e:Stlc.exp{Stlc.ELam? e} & Stlc.typing Stlc.ctx_env e i.ct
-type prog_tgt (i:tgt_interface) = (Stlc.typ_to_fstar i.ct AllActions i.pi i.mst) -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
+type ctx_tgt (i:tgt_interface) = e:exp{ELam? e} & typing ctx_env e i.ct
+type prog_tgt (i:tgt_interface) = (typ_to_fstar i.ct AllActions i.pi i.mst) -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   let (| e, h |) = c in
   let sec_io = inst_io_cmds i.phi in
-  let c' = Stlc.bt_ctx e i.ct h #AllActions #i.pi #i.mst sec_io in
+  let c' = bt_ctx e i.ct h #AllActions #i.pi #i.mst sec_io in
   (| i.mst , p c' |)
 
 val beh_tgt : whole_tgt ^-> trace_property #event
@@ -144,14 +172,14 @@ let comp_int_src_tgt (i:src_interface) : tgt_interface = {
 }
 
 (** ** Compilation **)
-let convert (i:src_interface) fl (c:(Stlc.typ_to_fstar i.wct fl i.pi i.mst)) : (i.ct_importable fl).ityp =
+let convert (i:src_interface) fl (c:(typ_to_fstar i.wct fl i.pi i.mst)) : (i.ct_importable fl).ityp =
   i._c fl;
  c
 
 val backtranslate_ctx : (#i:src_interface) -> (c_t:ctx_tgt (comp_int_src_tgt i)) -> src_language.ctx i
 let backtranslate_ctx #i c_t #fl io_lib eff_dcs =
   let (| e, h |) = c_t in
-  let c' = Stlc.bt_ctx e i.wct h #fl #i.pi #i.mst io_lib in
+  let c' = bt_ctx e i.wct h #fl #i.pi #i.mst io_lib in
   (i.ct_importable fl).safe_import (convert i fl c') eff_dcs
 
 val compile_whole : whole_src -> whole_tgt
@@ -227,11 +255,11 @@ let comp_rrhc () : Lemma (rrhc comp) by (norm [delta_only [`%rrhc]]) =
 
 
 
-(**** Instantiate Model **)
+(** Instantiate Model
 
 module WS = WebServer
 
-let wct = Stlc.TArr Stlc.TFDesc (Stlc.TArr Stlc.TBytes (Stlc.TArr (Stlc.TArr Stlc.TBytes (Stlc.TSum Stlc.TUnit Stlc.TExn)) (Stlc.TSum Stlc.TUnit Stlc.TExn)))
+let wct = TArr TFDesc (TArr TBytes (TArr (TArr TBytes (TSum TUnit TExn)) (TSum TUnit TExn)))
 
 let test : src_interface = {
   mst = WS.cs_int.mst;
@@ -242,7 +270,8 @@ let test : src_interface = {
   ct_importable = (fun fl -> WS.cs_int.ct_importable fl);
 
   wct = wct; // TODO: write the proper type here
-  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (Stlc.typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst))) // universe problems);
+  _c = (fun fl -> assert ((WS.cs_int.ct_importable fl).ityp == (typ_to_fstar wct fl WS.cs_int.pi WS.cs_int.mst))); // universe problems);
 
   psi = WS.cs_int.psi;
 }
+ **)

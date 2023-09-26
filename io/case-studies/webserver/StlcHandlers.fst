@@ -21,12 +21,6 @@ open WebServer
 let tgt_cs_int = comp.comp_int cs_int
 type tgt_handler = ctx_tgt tgt_cs_int
 
-let ctx_env =
-  extend (TArr TString (TSum TFDesc TExn)) (* openfile *)
-  (extend (TArr TUnit (TSum TFDesc TExn)) (* socket *)
-  (extend (TArr (TPair TFDesc TBytes) (TSum TUnit TExn)) (* write *)
-          empty)) 
-
 let handler_env =
   extend (TArr TString (TSum TFDesc TExn)) (* openfile *)
   (extend (TArr TUnit (TSum TFDesc TExn)) (* socket *)
@@ -34,29 +28,6 @@ let handler_env =
   (extend TFDesc (* client *)
   (extend (TArr TBytes (TSum TUnit TExn)) (*send *) 
   (extend TBytes empty))))) (* req *)
-
-let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#pi:policy_spec) (#mst:mst) (sec_io:io_lib fl pi mst Ctx) : (typ_to_fstar t fl pi mst) =
-   let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t bytes -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl pi _ = fun fdb ->
-     let fd = FStar.Universe.downgrade_val (fst fdb) in
-     let b = FStar.Universe.downgrade_val (snd fdb) in
-     match sec_io Write (fd, b) with
-     | Inl unit -> Inl (FStar.Universe.raise_val unit)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let socket : FStar.Universe.raise_t unit -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl pi _ = fun _u ->
-     match sec_io Socket () with
-     | Inl fd -> Inl (FStar.Universe.raise_val fd)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let openfile : FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t file_descr) (FStar.Universe.raise_t exn)) fl pi _ = fun s ->
-     let s = FStar.Universe.downgrade_val s in
-     match sec_io Openfile (s, [O_RDWR], 0x650) with
-     | Inl fd -> Inl (FStar.Universe.raise_val fd)
-     | Inr ex -> Inr (FStar.Universe.raise_val ex) in
-   let ctx_venv = 
-     vextend #fl #mst #pi #(TArr TString (TSum TFDesc TExn)) openfile (
-     vextend #fl #mst #pi #(TArr TUnit (TSum TFDesc TExn)) socket (
-     vextend #fl #mst #pi #(TArr (TPair TFDesc TBytes) (TSum TUnit TExn)) write (
-     vempty #fl #pi #mst))) in
-   exp_to_fstar' ctx_env e t h ctx_venv
 
 let bt_handler (e:exp) (h:typing handler_env e (TSum TUnit TExn)) : tgt_handler =
  fun #fl sec_io (client : int) (req : Bytes.bytes) (send : Bytes.bytes -> MIOpi (either unit exn) fl pi _) ->
