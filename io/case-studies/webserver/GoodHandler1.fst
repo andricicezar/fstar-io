@@ -164,8 +164,6 @@ let get_query
   (send:FStar.Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
   (file_full_path : string) :
   MIOpi unit fl pi mymst =
-  // assume (forall h lt1 lt2. enforced_locally pi h lt1 /\ enforced_locally pi (List.rev lt1 @ h) lt2 ==>
-  //        enforced_locally pi h (lt1@lt2));
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
     lemma_append_enforced_locally pi ;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in

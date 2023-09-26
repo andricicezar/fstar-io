@@ -8,6 +8,7 @@ open CommonUtils
 
 include MIO
 
+  
 (** policy_spec is the type of the runtime check that is enforced when instrumenting.
     A policy_spec checks if the next operation with its arguments satisfy the property
     over the history. **)
@@ -37,6 +38,30 @@ let pi_as_hist (#a:Type) (pi:policy_spec) : hist a =
 
 effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (pi : policy_spec) (mst:mst) = 
   MIOwp a mst fl (pi_as_hist #a pi)
+
+
+type io_lib (fl:erased tflag) (pi:policy_spec) (mst:mst) (c:caller) =
+  (cmd : io_cmds) ->
+  (arg : io_sig.args cmd) ->
+  MIO (io_resm cmd arg) mst fl
+    (requires (fun _ -> True))
+    (ensures (fun h r lt ->
+      enforced_locally pi h lt /\
+      (match r with
+       | Inr Contract_failure -> lt == []
+       | r' -> io_post cmd arg r' /\ lt == [convert_call_to_event c cmd arg r'])))
+
+#push-options "--compat_pre_core 1" // fixme
+val inst_io_cmds : #mst:mst -> #pi:policy_spec -> phi:policy mst pi -> io_lib AllActions pi mst Ctx
+let inst_io_cmds phi cmd arg =
+  let s0 = get_state () in
+  if phi s0 cmd arg then (
+    let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
+    r
+  ) else Inr Contract_failure
+#pop-options
+
+
 
 class interm (t:Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mst) = { [@@@no_method] mldummy : unit }
 

@@ -224,16 +224,27 @@ effect MIO
   (post : trace -> a -> trace -> Type0) =
   MIOwp a mst fl (to_hist pre post) 
 
-(**
+let static_cmd
+  (#mst:mst)
+  caller
+  (cmd : io_cmds)
+  (arg : io_sig.args cmd) :
+  MIO (io_sig.res cmd arg) mst IOActions
+    (requires (fun h -> io_pre cmd arg h))
+    (ensures (fun h (r:io_sig.res cmd arg) lt ->
+        io_post cmd arg r /\
+        lt == [convert_call_to_event caller cmd arg r])) =
+  MIOwp?.reflect (MIO.Sig.Call.mio_call caller cmd arg)
 
-
-// | GetST -> forall (x:mst.cst). mst.models x h ==> p [] x // any concrete state modelling the trace
+let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
+  (fun p h -> p [] (Ghost.hide h)) =
+  MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetTrace ())
   
-// There is no hope to prove anything about ctx without a meta-theorem about F* / without a formalization of F* & Ghost.
-// val ctx_s : (fl:erased tflag) -> MIO unit fl (fun _ -> True) (fun _ _ _ -> True) 
+let get_state #mst () : MIOwp mst.cst mst GetTraceActions
+  (fun p h -> forall s. mst.models s h ==> p [] s) =
+  MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetST ())
 
-// private
-
+(**
 #push-options "--compat_pre_core 1"
 let performance_test (#fl:tflag) (#mst:mst) : MIOwp unit mst (fl+IOActions) (fun p h -> forall lt. (List.length lt == 6) \/ (List.length lt == 7) ==> p lt ())
   by (compute ())

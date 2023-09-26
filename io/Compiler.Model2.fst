@@ -11,50 +11,6 @@ include Compiler.Languages
 include Compiler.MIO.To.Interm
 open MIO.Behavior
 
-let static_cmd
-  (#mst:mst)
-  caller
-  (cmd : io_cmds)
-  (arg : io_sig.args cmd) :
-  MIO (io_sig.res cmd arg) mst IOActions
-    (requires (fun h -> io_pre cmd arg h))
-    (ensures (fun h (r:io_sig.res cmd arg) lt ->
-        lt == [convert_call_to_event caller cmd arg r])) =
-  MIOwp?.reflect (MIO.Sig.Call.mio_call caller cmd arg)
-
-type io_lib (fl:erased tflag) (pi:policy_spec) (mst:mst) (c:caller) =
-  (cmd : io_cmds) ->
-  (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) mst fl
-    (requires (fun _ -> True))
-    (ensures (fun h r lt ->
-      enforced_locally pi h lt /\
-      (match r with
-       | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event c cmd arg r'])))
-
-type io_lib' (fl:erased tflag) (#pi:policy_spec) (mst:mst) (phi:policy mst pi) (c:caller) =
-  (cmd : io_cmds) ->
-  (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) mst fl
-    (requires (fun _ -> True))
-    (ensures (fun h r lt ->
-      enforced_locally pi h lt /\
-      //enforced_locally (fun h _ cmd arg -> phi h cmd arg) h lt /\
-      (match r with
-       | Inr Contract_failure -> lt == []
-       | r' -> lt == [convert_call_to_event c cmd arg r'])))
-
-#push-options "--compat_pre_core 1" // fixme
-val inst_io_cmds : #mst:mst -> #pi:policy_spec -> phi:policy mst pi -> io_lib' AllActions mst phi Ctx
-let inst_io_cmds phi cmd arg =
-  let s0 = get_state () in
-  if phi s0 cmd arg then (
-    // Need the letbinding here it won't typecheck... why?
-    let r : io_resm' cmd arg = static_cmd Ctx cmd arg in
-    r
-  ) else Inr Contract_failure
-
 (** **** interfaces **)
 noeq
 type src_interface = {
@@ -84,7 +40,7 @@ type tgt_interface = {
 }
 
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib' fl i.mst i.phi Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.pi i.mst Ctx -> typ_eff_dcs i.mst fl i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.pi i.mst
 type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOActions)
 type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
 

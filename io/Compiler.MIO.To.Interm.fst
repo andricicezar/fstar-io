@@ -7,14 +7,6 @@ open FStar.Ghost
 open Compiler.Languages
 open TC.Checkable
 
-let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
-  (fun p h -> p [] (Ghost.hide h)) =
-  MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetTrace ())
-  
-let get_state #mst () : MIOwp mst.cst mst GetTraceActions
-  (fun p h -> forall s. mst.models s h ==> p [] s) =
-  MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetST ())
-
 (** **** Types **)
 (** Dynamic check possibilities:
 pre:
