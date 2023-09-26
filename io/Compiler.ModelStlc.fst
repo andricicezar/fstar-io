@@ -1,4 +1,4 @@
-module Compiler.Model.Stlc
+module Compiler.ModelStlc
 
 open FStar.Ghost
 open FStar.Tactics
@@ -11,7 +11,7 @@ include Compiler.Languages
 include Compiler.MIO.To.Interm
 open MIO.Behavior
 
-module Stlc = StlcToFStar
+module Stlc = Compiler.StlcToFStar
 
 let static_cmd
   (#mst:mst)
