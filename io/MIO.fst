@@ -42,7 +42,7 @@ val dm_mio_subcomp :
   wp1: hist a ->
   wp2: hist a ->
   f: dm_mio mst a wp1 ->
-  Pure (dm_mio mst a wp2) (hist_ord wp2 wp1) (fun _ -> True)
+  Pure (dm_mio mst a wp2) (wp1 ⊑ wp2) (fun _ -> True)
 let dm_mio_subcomp a mst wp1 wp2 f = dm_subcomp mio_ops (mio_sig mst) event mio_wps a wp1 wp2 f
 
 (** * The MIO effect indexed by actions **)
@@ -166,7 +166,7 @@ val dm_gmio_subcomp :
   flag2 : erased tflag ->
   wp2: hist a ->
   f: dm_gmio a mst flag1 wp1 ->
-  Pure (dm_gmio a mst flag2 wp2) ((flag1 <= flag2) /\ hist_ord wp2 wp1) (fun _ -> True)
+  Pure (dm_gmio a mst flag2 wp2) ((flag1 <= flag2) /\ wp1 ⊑ wp2) (fun _ -> True)
 let dm_gmio_subcomp a mst flag1 wp1 flag2 wp2 f =
   sat_le flag1 flag2 f;
   dm_mio_subcomp a mst wp1 wp2 f

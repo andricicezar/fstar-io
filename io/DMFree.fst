@@ -28,22 +28,21 @@ let rec theta #a #op #s #event cmd_wp m =
 let lemma_theta_is_monad_morphism_ret (#op:Type0) (#s:op_sig op) (#event:Type0) (cmd_wp:op_wp op s event) (v:'a) :
   Lemma (theta cmd_wp (free_return op s 'a v) == hist_return v) by (compute ()) = ()
 
-let _hist_bind = hist_bind
-let _hist_ord = hist_ord
-
 let another_lemma (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) p h : 
   Lemma 
-    (requires ((forall x. (wp2 x) `_hist_ord` (wp3 x)) /\ _hist_bind wp1 wp2 p h))
-    (ensures (_hist_bind wp1 wp3 p h)) = ()
+    (requires ((forall x. (wp3 x) ⊑ (wp2 x)) /\ hist_bind wp1 wp2 p h))
+    (ensures (hist_bind wp1 wp3 p h)) = ()
 
 let another_lemma' (wp1:hist 'a) (wp2:'a -> hist 'b) (wp3:'a -> hist 'b) : 
   Lemma 
-    (requires ((forall x. (wp2 x) `_hist_ord` (wp3 x))))
-    (ensures (_hist_bind wp1 wp2 `_hist_ord` _hist_bind wp1 wp3)) = ()
+    (requires ((forall x. (wp3 x) ⊑ (wp2 x))))
+    (ensures (hist_bind wp1 wp3 ⊑ hist_bind wp1 wp2)) = ()
+
+private let hist_ord wp1 wp2 = wp2 ⊑ wp1
 
 let rec lemma_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (#op:Type0) (#s:op_sig op) (#event:Type0) (cmd_wp:op_wp op s event) (m:free op s a) (f:a -> free op s b) :
   Lemma
-    (hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x)) `hist_ord` theta cmd_wp (free_bind op s _ _ m f)) = 
+    (theta cmd_wp (free_bind op s _ _ m f) ⊑ hist_bind (theta cmd_wp m) (fun x -> theta cmd_wp (f x))) = 
   match m with
   | Return x ->
     calc (hist_ord) {
@@ -123,7 +122,7 @@ let rec lemma_theta_is_lax_morphism_bind (#a:Type u#a) (#b:Type u#b) (#op:Type0)
 
 // The Dijkstra Monad
 type dm (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event) (a:Type u#a) (wp:hist #event a) =
-  (m:(free op s a){wp `hist_ord` theta cmd_wp m})
+  (m:(free op s a){theta cmd_wp m ⊑ wp})
 
 let dm_return (op:Type0) (s:op_sig op) (event:Type0) (cmd_wp:op_wp op s event) (a : Type u#a) (x : a) : dm op s event cmd_wp a (hist_return #a #event x) =
   free_return op s a x

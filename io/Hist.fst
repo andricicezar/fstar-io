@@ -77,8 +77,8 @@ let lemma_wp_lift_pure_hist_implies_as_requires #a #event_type w :
     assert (forall (p:hist_post #event_type a). w (fun x -> p [] x) ==> w (fun _ -> True))
 
 unfold
-val hist_ord (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_type a -> Type0
-let hist_ord wp1 wp2 = forall h p. wp1 p h ==> wp2 p h
+val (⊑) (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_type a -> Type0
+let (⊑) wp1 wp2 = forall h p. wp2 p h ==> wp1 p h
 
 unfold
 val hist_equiv (#event_type:Type) (#a : Type) : hist #event_type a -> hist #event_type a -> Type0
