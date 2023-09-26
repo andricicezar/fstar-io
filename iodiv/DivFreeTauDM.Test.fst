@@ -83,3 +83,19 @@ let dm_loop2 () : iodiv_dm unit iloop2 =
   let d : iodiv_dm unit (i_iter (lift_i ibody2) ()) = iodiv_repeat (dm_body2 ()) in
   lem_body_to_loop #_ #(fun _ -> True) #(fun lt -> lt == [EPrint "0"; EPrint "1"]) (dm_body2 ());
   iodiv_subcomp _ _ _ d
+
+(** ** Test print 0 1 0 1**)
+[@@ (postprocess_with (pp_unfold [ `%iprepost ]))]
+let ibody3 : iwp unit =
+  iprepost (fun _ -> True) (fun h r -> terminates r /\ ret_trace r == [EPrint "0";EPrint "1";EPrint "0";EPrint "1"])
+
+let dm_body3 () : iodiv_dm unit ibody3 = 
+  let w : iwp unit = _i_bind (i_act Print "0") (fun _ -> _i_bind (i_act Print "1") (fun _ -> _i_bind (i_act Print "0") (fun _ -> (i_act Print "1")))) in
+  let d : iodiv_dm unit w = 
+    (iodiv_bind _ _ _ _ (iodiv_call Print "0") (fun () -> 
+      iodiv_bind _ _ _ _ (iodiv_call Print "1") (fun () -> 
+        iodiv_bind _ _ _ _ (iodiv_call Print "0") (fun () -> 
+          (iodiv_call Print "1"))))) in
+  assume (w `_ile` ibody3);// by (norm [delta_only [`%_i_bind;`%_ile]]);
+//  assert (w `_ile` ibody3) by (norm [delta_only [`%_i_bind;`%_ile]]);
+  iodiv_subcomp unit w ibody3 d

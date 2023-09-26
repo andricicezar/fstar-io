@@ -133,12 +133,22 @@ type cvdv = unit -> IODiv unit (fun _ -> True) (fun hist r ->
   (terminates r ==> (ret_trace r) == [EPrint "0"]) /\
   (diverges r ==> always (fun tr -> tr == [EPrint "0"]) r))
 
+
+let lemma inv lt s :
+  Lemma (Cv? lt /\ Dv? s /\ inv (ret_trace lt) /\ always inv s ==> always inv (Dv (stream_prepend (ret_fin_trace lt) (ret_itrace s)))) [SMTPat (always inv (Dv (stream_prepend (ret_fin_trace lt) (ret_itrace s))))] =
+  introduce Cv? lt /\ Dv? s /\ inv (ret_trace lt) /\ always inv s ==> always inv (Dv (stream_prepend (ret_fin_trace lt) (ret_itrace s))) with impl. begin
+    assert (always inv (Dv (stream_prepend (ret_fin_trace lt) (ret_itrace s)))) by (
+      norm [delta_only [`%stream_prepend]; iota];
+      tadmit ();
+      dump "H"
+    )
+  end
+
 let test1000 (f:cvdv) : IODiv unit (fun _ -> True) (fun hist r ->
   (terminates r ==> (ret_trace r) == [EPrint "0"; EPrint "0"]) /\
   (diverges r ==> always (fun tr -> tr == [EPrint "0"]) r))
 =
 // TODO: prove
-  admit ();
   print "0";
   f ()
 
