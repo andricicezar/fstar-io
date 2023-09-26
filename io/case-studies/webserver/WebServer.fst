@@ -13,9 +13,9 @@ open Utils
 type req_handler (fl:erased tflag) =
   (client:file_descr) ->
   (req:Bytes.bytes) ->
-  (send:(res:Bytes.bytes -> MIO (resexn unit) mymst fl (requires (fun h -> did_not_respond h /\ valid_http_response res))
+  (send:(res:Bytes.bytes -> MIO (resexn unit) fl mymst (requires (fun h -> did_not_respond h /\ valid_http_response res))
                                             (ensures (fun h _ lt -> exists r. lt == [EWrite Prog (client,res) r])))) ->
-  MIO (resexn unit) mymst fl
+  MIO (resexn unit) fl mymst
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally sgm h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
@@ -23,7 +23,7 @@ type req_handler (fl:erased tflag) =
 let static_cmd
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
-  MIO (io_sig.res cmd arg) mymst IOActions
+  MIO (io_sig.res cmd arg) IOActions mymst
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
         io_post cmd arg r /\
@@ -31,13 +31,13 @@ let static_cmd
   static_cmd Prog cmd arg
 
 #push-options "--compat_pre_core 1"
-let sendError400 (fd:file_descr) : MIO unit mymst IOActions
+let sendError400 (fd:file_descr) : MIO unit IOActions mymst
  (fun _ -> True) (fun _ _ lt -> exists res r. lt == [EWrite Prog (fd, res) r]) =
   let _ = static_cmd Write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) in
   ()
 
 let get_req (fd:file_descr) :
-  MIO (resexn (r:Bytes.bytes{valid_http_request r})) mymst IOActions (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
+  MIO (resexn (r:Bytes.bytes{valid_http_request r})) IOActions mymst (fun _ -> True) (fun _ _ lt -> exists r'. lt == [ERead Prog (fd, (UInt8.uint_to_t 255)) r']) =
   match static_cmd Read (fd, UInt8.uint_to_t 255) with
   | Inl (msg, _) ->
    Inl msg
@@ -48,7 +48,7 @@ let process_connection
   (client : file_descr)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) :
-  MIO unit mymst (IOActions+fl) (fun _ -> True)
+  MIO unit (IOActions+fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   introduce forall h lthandler lt lt'. enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
@@ -74,7 +74,7 @@ let rec process_connections
   (to_read : lfds)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) :
-  MIO lfds mymst (IOActions+fl) (fun _ -> True)
+  MIO lfds (IOActions+fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
@@ -90,7 +90,7 @@ let rec process_connections
     end
 
 let get_new_connection (socket : file_descr) :
-  MIO (option file_descr) mymst IOActions (fun _ -> True)
+  MIO (option file_descr) IOActions mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (([socket] <: lfds), ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_accept, _, _) ->
@@ -107,7 +107,7 @@ let handle_connections
   (clients:lfds)
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl)) :
-  MIO lfds mymst (fl+IOActions) (fun _ -> True)
+  MIO lfds (fl+IOActions) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
@@ -120,7 +120,7 @@ let server_loop_body
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  MIO lfds mymst (fl+IOActions) (fun _ -> True)
+  MIO lfds (fl+IOActions) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   let clients' = (match get_new_connection socket with
                  | None -> clients
@@ -134,7 +134,7 @@ let rec server_loop
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   (clients : lfds) :
-  MIO unit mymst (fl+IOActions) (fun _ -> True)
+  MIO unit (fl+IOActions) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   if iterations_count = 0 then ()
   else begin
@@ -144,7 +144,7 @@ let rec server_loop
   end
 
 let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
-  MIO (resexn file_descr) mymst IOActions (fun _ -> True)
+  MIO (resexn file_descr) IOActions mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_cmd Socket () with
   | Inl socket ->
@@ -159,7 +159,7 @@ let webserver
   (#fl:erased tflag)
   (req_handler : req_handler (IOActions + fl))
   () :
-  MIO int mymst (IOActions + fl)
+  MIO int (IOActions + fl) mymst
     (requires (fun h -> True))
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with
@@ -179,7 +179,7 @@ let check_send_pre : tree (pck_dc mymst) =
     Leaf
     Leaf
 
-let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) mymst fl (fun h -> did_not_respond h && valid_http_response res)
+let export_send (#fl:erased tflag) : exportable ((res:Bytes.bytes -> MIO (resexn unit) fl mymst (fun h -> did_not_respond h && valid_http_response res)
                                             (fun _ _ lt -> exists fd r. lt == [EWrite Prog (fd,res) r] ))) fl Utils.sgm mymst check_send_pre =
   exportable_arrow_pre_post_args Bytes.bytes unit _ _ #() #()
 
@@ -195,10 +195,10 @@ let check_handler_post : tree (pck_dc mymst) =
 val help_import :
   (fl:erased tflag) ->
   (wf:(file_descr -> Bytes.bytes -> (export_send #fl).ityp -> MIOpi (resexn unit) fl Utils.sgm mymst)) ->
-  (eff_dcs:typ_eff_dcs mymst fl check_handler_post) ->
+  (eff_dcs:typ_eff_dcs fl mymst check_handler_post) ->
   req_handler fl
 let help_import fl wf eff_dcs client req send :
-  MIO (resexn unit) mymst fl
+  MIO (resexn unit) fl mymst
     (requires (fun h -> valid_http_request req /\ did_not_respond h))
     (ensures (fun h r lt -> enforced_locally sgm h lt /\
                           (wrote_to client (rev lt) \/ Inr? r)))
@@ -209,7 +209,7 @@ let help_import fl wf eff_dcs client req send :
     then wrote_to_split client (rev lt) h
     else ()
   end ;
-  let lfcks : typ_eff_dcs mymst fl check_send_pre = typ_left eff_dcs in
+  let lfcks : typ_eff_dcs fl mymst check_send_pre = typ_left eff_dcs in
   let send' = (export_send #fl).export lfcks send in
   let (| dc_pck, eff_dc |) = root eff_dcs in
   let (| _, eff_dc' |) = eff_dc client in

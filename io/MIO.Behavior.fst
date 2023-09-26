@@ -41,20 +41,20 @@ let beh_gmio ws h tr =
 
 (* _beh is used on whole programs, thus, 
    we specialize it with the empty history *)
-val _beh : mst:mst -> (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True)) -> trace_property #event
+val _beh : mst:mstate -> (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True)) -> trace_property #event
 let _beh mst ws =
   beh_gmio (reify (ws ())) []
 
 (** used for whole programs **)
 [@@ "opaque_to_smt"]
-val beh : mst:mst -> (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
+val beh : mst:mstate -> (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True)) ^-> trace_property #event
 let beh mst = on_domain _ (fun ws -> _beh mst ws)
 
-val _beh_ctx : mst:mst -> #pre:(trace -> Type0) -> (unit -> MIO int mst AllActions pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
+val _beh_ctx : mst:mstate -> #pre:(trace -> Type0) -> (unit -> MIO int AllActions mst pre (fun _ _ _ -> True)) -> prefixed_trace_property pre 
 let _beh_ctx mst ws h =
   beh_gmio (reify (ws ())) h
 
 (** used for contexts **)
 //[@@ "opaque_to_smt"]
-val beh_ctx : mst:mst -> #pre:(trace -> Type0) -> (unit -> MIO int mst AllActions pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
+val beh_ctx : mst:mstate -> #pre:(trace -> Type0) -> (unit -> MIO int AllActions mst pre (fun _ _ _ -> True)) ^-> prefixed_trace_property pre 
 let beh_ctx mst #pre = on_domain _ (fun ws -> _beh_ctx mst #pre ws)

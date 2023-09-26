@@ -9,14 +9,14 @@ open FStar.List
 open Compiler.Model1
 
 (** Utils **)
-type source_arrow (mst:mst) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
-  x:arg -> MIO (resexn res) mst fl (pre x) (post x)
+type source_arrow (mst:mstate) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
+  x:arg -> MIO (resexn res) fl mst (pre x) (post x)
 
 type c1typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally sgm h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #(resexn res)) =
-  squash (forall s0 s1 x h r lt . s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
+type c2typ (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mstate) (dc:dc_typ mst #arg #(resexn res)) =
+  squash (forall s0 s1 x h r lt . s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
 
 type stronger_sgms (sgm1:policy_spec) (sgm2:policy_spec) =
   squash (forall h lt. enforced_locally sgm1 h lt ==> enforced_locally sgm2 h lt)
@@ -30,9 +30,9 @@ let test1_pre = (fun () h -> True)
 let test1_post = (fun () h (rfd:resexn file_descr) lt -> 
   (forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `List.memP` lt)) /\ (Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)))
 
-let mst1 : mst = {
-  cst = list file_descr;
-  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+let mst1 : mstate = {
+  typ = list file_descr;
+  abstracts = (fun s h -> forall fd. memP fd s <==> is_open fd h);
 }
 
 type test1_ct = source_arrow mst1 unit file_descr test1_pre test1_post
@@ -44,7 +44,7 @@ let test1_sgm : policy_spec =
     | Openfile -> (arg <> "/etc/passwd")
     | _ -> True)
 
-let test1_pi : policy mst1 test1_sgm =
+let test1_pi : policy test1_sgm mst1 =
   fun h cmd arg -> 
     match cmd, arg with 
     | Openfile, s ->
@@ -90,9 +90,9 @@ let rec enforced_locally_test1_sgm_nopass h lt fd :
 
 val test1_c2post : c2typ test1_pre test1_post test1_sgm test1_ct_rc
 let test1_c2post =
-  introduce forall s0 s1 x h r lt . s0 `mst1.models` h /\ s1 `mst1.models` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_sgm h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
+  introduce forall s0 s1 x h r lt . s0 `mst1.abstracts` h /\ s1 `mst1.abstracts` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_sgm h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
   with begin
-    introduce s0 `mst1.models` h /\ s1 `mst1.models` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_sgm h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
+    introduce s0 `mst1.abstracts` h /\ s1 `mst1.abstracts` (apply_changes h lt) /\ test1_pre x h /\ enforced_locally test1_sgm h lt /\ test1_ct_rc x s0 r s1 ==> test1_post x h r lt
     with _. begin
       introduce forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `memP` lt)
       with enforced_locally_test1_sgm_nopass h lt fd'
@@ -127,13 +127,13 @@ let test1 : src_interface = {
 }
 
 val test1_prog : prog_src test1
-let test1_prog #fl ctx () : MIO int mst1 (fl + IOActions) (fun _ -> True) test1.psi =
+let test1_prog #fl ctx () : MIO int (fl + IOActions) mst1 (fun _ -> True) test1.psi =
   //let test = static_cmd Openfile "/etc/passwd" in
   let _ = ctx () in
   0 
 
 val test1_ctx : ctx_src test1
-let test1_ctx #fl sec_io eff_rcs () : MIO (resexn file_descr) mst1 fl (fun _ -> True) (test1_post ()) = 
+let test1_ctx #fl sec_io eff_rcs () : MIO (resexn file_descr) fl mst1 (fun _ -> True) (test1_post ()) = 
   sec_io Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
@@ -142,17 +142,17 @@ let test1_ctx_t #fl sec_io () : MIOpi (resexn file_descr) fl test1_sgm mst1 =
 
 
 (** ** Test 2 - HO left 1 **)
-let mst2 : mst = {
-  cst = list file_descr;
-  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+let mst2 : mstate = {
+  typ = list file_descr;
+  abstracts = (fun s h -> forall fd. memP fd s <==> is_open fd h);
 }
 
 let test2_sgm : policy_spec = (fun _ _ _ _ -> true)
-let test2_pi : policy mst2 test2_sgm = (fun _ _ _ -> true)
+let test2_pi : policy test2_sgm mst2 = (fun _ _ _ -> true)
 
-let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) mst2 fl (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
+let test2_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl mst2 (fun h -> is_open fd h) (fun _ _ lt -> lt == []))
 let test2_post = (fun _ h (rfd:resexn file_descr) lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h))
-let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) mst2 fl (fun _ -> True) (test2_post cb)
+let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) fl mst2 (fun _ -> True) (test2_post cb)
 
 let test2_rc  : dc_typ mst2 = 
   (fun () _ (rfd:resexn file_descr) s1 -> Inl? rfd && (Inl?.v rfd) `List.mem` s1)
@@ -167,7 +167,7 @@ val test2_c1post (a:Type) : c1typ #a #file_descr (fun _ _ -> True) test2_post te
 let test2_c1post a = ()
 
 
-val test2_c2post (a:Type) : squash (forall s0 s1 (x:a) h r lt . s0 `mst2.models` h /\ s1 `mst2.models` (apply_changes h lt) /\ enforced_locally test2_sgm h lt /\ test2_rc () s0 r s1 ==> test2_post x h r lt)
+val test2_c2post (a:Type) : squash (forall s0 s1 (x:a) h r lt . s0 `mst2.abstracts` h /\ s1 `mst2.abstracts` (apply_changes h lt) /\ enforced_locally test2_sgm h lt /\ test2_rc () s0 r s1 ==> test2_post x h r lt)
 let test2_c2post a = ()
 
 let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_sgm mst2 test2_rcs = 
@@ -194,7 +194,7 @@ let test2_prog #fl ctx () =
   (** return exit code **) 0
 
 val test2_ctx : ctx_src test2 
-let test2_ctx #fl sec_io eff_rcs cb : MIO (resexn file_descr) mst2 fl (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+let test2_ctx #fl sec_io eff_rcs cb : MIO (resexn file_descr) fl mst2 (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
   let post1 = root eff_rcs in
   let (| _, pre1 |) = root (left eff_rcs) in 
   let rfd = sec_io Openfile "/etc/passwd" in
@@ -214,17 +214,17 @@ let test2_ctx_t #fl sec_io cb : MIOpi (resexn file_descr) fl (comp_int_src_tgt t
   | _ -> rfd
 
 (** ** Test 3 - HO right 1 **)
-let mst3 : mst = {
-  cst = list file_descr;
-  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+let mst3 : mstate = {
+  typ = list file_descr;
+  abstracts = (fun s h -> forall fd. memP fd s <==> is_open fd h);
 }
 
 let test3_sgm : policy_spec = (fun _ _ _ _ -> true)
-let test3_pi : policy mst3 test3_sgm = (fun _ _ _ -> true)
+let test3_pi : policy test3_sgm mst3 = (fun _ _ _ -> true)
 
-let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) mst3 fl (fun h -> True) (fun _ _ lt -> True))
+let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl mst3 (fun h -> True) (fun _ _ lt -> True))
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
-let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) mst2 fl (fun _ -> True) (test3_post x)
+let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) fl mst2 (fun _ -> True) (test3_post x)
 
 let test3_rcs : tree (pck_dc mst3) =  
   Node (| file_descr, unit, (fun _ _ _ _ -> true) |) 
@@ -249,7 +249,7 @@ val test3_c1post (a:Type) : c1typ #file_descr #a (fun _ _ -> True) test3_post te
 let test3_c1post a = ()
   
 val test3_c2post (a:Type) : 
-  squash (forall s0 s1 x h r lt . s0 `mst3.models` h /\ s1 `mst3.models` (apply_changes h lt) /\ enforced_locally test3_sgm h lt /\ (root test3_rcs)._3 x s0 r s1 ==> test3_post x h r lt)
+  squash (forall s0 s1 x h r lt . s0 `mst3.abstracts` h /\ s1 `mst3.abstracts` (apply_changes h lt) /\ enforced_locally test3_sgm h lt /\ (root test3_rcs)._3 x s0 r s1 ==> test3_post x h r lt)
 let test3_c2post a = ()
 
 let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_sgm mst3 test3_rcs = 
@@ -271,7 +271,7 @@ let test3 : src_interface = {
 }
 
 val test3_prog : prog_src test3
-let test3_prog #fl ctx () : MIO int mst3 (IOActions + fl) (fun _ -> True) (fun _ _ _ -> True) =
+let test3_prog #fl ctx () : MIO int (IOActions + fl) mst3 (fun _ -> True) (fun _ _ _ -> True) =
   match static_cmd Prog Openfile "test.txt" with
   | Inl fd -> begin
     match ctx fd with

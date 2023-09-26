@@ -9,17 +9,17 @@ open FStar.List
 open Compiler.Model2
 
 (** Utils **)
-type source_arrow (mst:mst) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
-  x:arg -> MIO (resexn res) mst fl (pre x) (post x)
+type source_arrow (mst:mstate) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
+  x:arg -> MIO (resexn res) fl mst (pre x) (post x)
 
 type c1_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally sgm h lt ==> post x h (Inr Contract_failure) lt)
   
-type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #(resexn res)) =
-  squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
+type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mstate) (dc:dc_typ mst #arg #(resexn res)) =
+  squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
 
-type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #unit) =
-  squash (forall x s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ dc x s0 () s1 ==> pre x h)
+type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mstate) (dc:dc_typ mst #arg #unit) =
+  squash (forall x s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ dc x s0 () s1 ==> pre x h)
 
 type c2_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) =
   squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally sgm h lt)
@@ -27,9 +27,9 @@ type c2_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:ar
 type stronger_sgms (sgm1:policy_spec) (sgm2:policy_spec) =
   squash (forall h lt. enforced_locally sgm1 h lt ==> enforced_locally sgm2 h lt)
 
-let mst1 : mst = {
-  cst = list file_descr;
-  models = (fun s h -> forall fd. memP fd s <==> is_open fd h);
+let mst1 : mstate = {
+  typ = list file_descr;
+  abstracts = (fun s h -> forall fd. memP fd s <==> is_open fd h);
 }
 
 (** ** Testing **)
@@ -41,7 +41,7 @@ let test1_sgm : policy_spec =
     | Openfile -> (arg <> "/etc/passwd")
     | _ -> True)
 
-let test1_pi : policy mst1 test1_sgm =
+let test1_pi : policy test1_sgm mst1 =
   fun h cmd arg -> 
     match cmd, arg with 
     | Openfile, s -> 
@@ -97,7 +97,7 @@ let test1 : src_interface = {
 
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
-let test1_prog #fl fd : MIO (resexn unit) mst1 (fl+IOActions) (test1_pre fd) (test1_post fd) =
+let test1_prog #fl fd : MIO (resexn unit) (fl+IOActions) mst1 (test1_pre fd) (test1_post fd) =
   // weird behavior of F*
   let r : (mio_sig mst1).res Close fd = static_cmd Ctx Close fd in
   r <: resexn unit

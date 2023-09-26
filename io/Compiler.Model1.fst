@@ -14,13 +14,13 @@ open MIO.Behavior
 (** **** interfaces **)
 noeq
 type src_interface = {
-  mst : mst;
+  mst : mstate;
   (* sgm is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
   sgm : policy_spec;
   (* pi is in bool and it is used to enfodce the policy on the context,
      it describes only the events of the context and it has to imply sgm **)
-  pi : policy mst sgm;
+  pi : policy sgm mst;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
@@ -36,18 +36,18 @@ type src_interface = {
 
 noeq
 type tgt_interface = {
-  mst : mst;
+  mst : mstate;
   sgm : policy_spec;
-  pi : policy mst sgm;
+  pi : policy sgm mst;
 
   ct : erased tflag -> Type u#a;
   ct_weak : fl:erased tflag -> interm (ct fl) fl sgm mst;
 }
 
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs i.mst fl i.ct_dcs -> i.ct fl
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int i.mst (IOActions + fl) (fun _ -> True) i.psi
-type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs fl i.mst i.ct_dcs -> i.ct fl
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (IOActions + fl) -> unit -> MIO int (IOActions + fl) i.mst (fun _ -> True) i.psi
+type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =
   (| i.mst, i.psi,  p #AllActions (c #AllActions (inst_io_cmds i.pi) (make_dcs_eff i.ct_dcs)) |)
@@ -65,8 +65,8 @@ let src_language : language = {
 // TODO: SMT problems with this def in AdversarialHandlers:
 //type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> #pi':erased policy_spec -> io_lib fl sgm' i.mst Ctx -> i.ct fl
 type ctx_tgt (i:tgt_interface) = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> i.ct fl
-type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
+type prog_tgt (i:tgt_interface) = i.ct AllActions -> unit -> MIO int AllActions i.mst (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = mst:mstate & (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   (| i.mst , p (c #AllActions (inst_io_cmds i.pi)) |)

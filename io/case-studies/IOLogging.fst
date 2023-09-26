@@ -9,17 +9,17 @@ open FStar.List
 open Compiler.Model2
 
 (** Utils **)
-type source_arrow (mst:mst) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
-  x:arg -> MIO (resexn res) mst fl (pre x) (post x)
+type source_arrow (mst:mstate) (arg:Type u#a) (res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (fl:erased tflag) =
+  x:arg -> MIO (resexn res) fl mst (pre x) (post x)
 
 type c1_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) =
   squash (forall x h lt. pre x h /\ enforced_locally sgm h lt ==> post x h (Inr Contract_failure) lt)
 
-type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #(resexn res)) =
-  squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
+type c2_post (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mstate) (dc:dc_typ mst #arg #(resexn res)) =
+  squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally sgm h lt /\ dc x s0 r s1 ==> post x h r lt)
 
-type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mst) (dc:dc_typ mst #arg #unit) =
-  squash (forall x s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ dc x s0 () s1 ==> pre x h)
+type c1_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) (#mst:mstate) (dc:dc_typ mst #arg #unit) =
+  squash (forall x s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ dc x s0 () s1 ==> pre x h)
 
 type c2_pre (#arg:Type u#a) (#res:Type u#b) (pre:arg -> trace -> Type0) (post:arg -> trace -> resexn res -> trace -> Type0) (sgm:policy_spec) =
   squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally sgm h lt)
@@ -29,9 +29,9 @@ type stronger_sgms (sgm1:policy_spec) (sgm2:policy_spec) =
 
 
 
-let mymst : mst = {
-  cst = option event;
-  models = (fun s h ->
+let mymst : mstate = {
+  typ = option event;
+  abstracts = (fun s h ->
     (h == [] /\ s == None)
     \/ (exists e es. h == e::es /\ s == Some e));
 }
@@ -66,14 +66,14 @@ let sgm h c cmd arg =
     Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
   | _ -> False
 
-val pi0 : s:mymst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool
+val pi0 : s:mymst.typ -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool
 let pi0 (s0:option event) cmd arg =
   match s0 with
   | Some (EWrite Prog (fd, inp) (Inl ())) ->
     fd = stdout && inp = to_string cmd
   | _ -> false
 
-val pi : policy mymst sgm
+val pi : policy sgm mymst
 let pi s0 cmd arg = 
   pi0 s0 cmd arg
 
@@ -132,7 +132,7 @@ let log_stronger_sgms =
 
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
-let test1_prog #fl op : MIO (resexn unit) mymst (fl+IOActions) (log_pre op) (log_post op) =
+let test1_prog #fl op : MIO (resexn unit) (fl+IOActions) mymst (log_pre op) (log_post op) =
   // weird behavior of F*
   let r : (mio_sig mymst).res Write (stdout, to_string op) = static_cmd Prog Write (stdout, to_string op) in
   r <: resexn unit
@@ -152,7 +152,7 @@ let test1_ctx_t #fl io_acts prog () : MIOpi int fl test1.sgm mymst =
 
 val test1_ctx : ctx_src test1
 let test1_ctx #fl io_acts eff_rcs log () = 
-  let (| _, eff_ck |) : eff_pck_dc mymst fl = root eff_rcs in
+  let (| _, eff_ck |) : eff_pck_dc fl mymst = root eff_rcs in
   let (| _, pre |) = eff_ck Openfile in
   if snd (pre ()) then
     let _ = log Openfile in

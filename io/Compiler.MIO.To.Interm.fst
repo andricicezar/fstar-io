@@ -110,33 +110,33 @@ let get_local_trace (h':trace) (h:trace) :
   List.rev lt'
 
 (* Dynamic check typ *)
-type dc_typ (mst:mst) (#argt:Type u#a) (#rett:Type u#b) = argt -> mst.cst -> rett -> mst.cst -> bool
+type dc_typ (mst:mstate) (#argt:Type u#a) (#rett:Type u#b) = argt -> mst.typ -> rett -> mst.typ -> bool
 
 (* Postcondition for effectful dynamic check *)
 unfold
-let eff_dc_typ_cont_post (mst:mst) (dc:dc_typ mst) (s0:mst.cst) (x:'a) (y:'b) (h1:trace) ((s1,b):erased mst.cst * bool) (lt:trace) : Type0 =
-  s1 `mst.models` h1 /\ (b <==> dc x s0 y s1) /\ lt == []
+let eff_dc_typ_cont_post (mst:mstate) (dc:dc_typ mst) (s0:mst.typ) (x:'a) (y:'b) (h1:trace) ((s1,b):erased mst.typ * bool) (lt:trace) : Type0 =
+  s1 `mst.abstracts` h1 /\ (b <==> dc x s0 y s1) /\ lt == []
 
 (* Effectful dynamic check for the result, given initial value and initial history *)
-type eff_dc_typ_cont (mst:mst) (fl:erased tflag) (t1:Type u#a) (t2:Type u#b) (dc:dc_typ mst #t1 #t2) (x:t1) (s0:mst.cst) =
-  y:t2 -> MIO (erased mst.cst * bool) mst fl (fun h1 -> True) (eff_dc_typ_cont_post mst dc s0 x y)
+type eff_dc_typ_cont (fl:erased tflag) (mst:mstate) (#t1:Type u#a) (#t2:Type u#b) (dc:dc_typ mst #t1 #t2) (x:t1) (s0:mst.typ) =
+  y:t2 -> MIO (erased mst.typ * bool) fl mst (fun h1 -> True) (eff_dc_typ_cont_post mst dc s0 x y)
   
 (* Effectful runtime check: given an x:t1 returns an erased trace and an
 effectful function to check the result (t2) *)
-type eff_dc_typ (mst:mst) (fl:erased tflag) (#t1 #t2:Type) (dc:dc_typ mst #t1 #t2) =
-  x:t1 -> MIO (s0:erased mst.cst & eff_dc_typ_cont mst fl t1 t2 dc x s0)
-             mst
+type eff_dc_typ (fl:erased tflag) (mst:mstate) (#t1 #t2:Type) (dc:dc_typ mst #t1 #t2) =
+  x:t1 -> MIO (s0:erased mst.typ & eff_dc_typ_cont fl mst dc x s0)
              fl
+             mst
              (fun _ -> True)
-             (fun h0 (| s0, _ |) lt -> s0 `mst.models` h0 /\ lt == [])
+             (fun h0 (| s0, _ |) lt -> s0 `mst.abstracts` h0 /\ lt == [])
 
 (* Lifting a runtime check into an effectful check *)
-val enforce_dc : (#mst:mst) -> (#argt:Type u#a) -> (#rett:Type u#b) -> 
-  dc:dc_typ mst #argt #rett -> eff_dc_typ mst AllActions dc
+val enforce_dc : (#mst:mstate) -> (#argt:Type u#a) -> (#rett:Type u#b) -> 
+  dc:dc_typ mst #argt #rett -> eff_dc_typ AllActions mst dc
 #push-options "--compat_pre_core 1" // fixme
 let enforce_dc #mst #argt #rett dc x =
   let s0 = get_state () in
-  let cont : eff_dc_typ_cont mst AllActions argt rett dc x s0 =
+  let cont : eff_dc_typ_cont AllActions mst dc x s0 =
     (fun y -> (
       let s1 = get_state () in
       (hide s1, dc x s0 y s1))) in
@@ -151,33 +151,33 @@ type pck_dc mst = (argt:Type u#a & rett:Type u#b & dc_typ mst #argt #rett)
 let arg_typ #mst (ctr:pck_dc mst) : Type = ctr._1
 let ret_typ #mst (ctr:pck_dc mst) : Type = ctr._2
 
-let check #mst (ctr:pck_dc mst) (arg:arg_typ ctr) (s0:mst.cst) (ret:ret_typ ctr) (s1:mst.cst) : bool =
+let check #mst (ctr:pck_dc mst) (arg:arg_typ ctr) (s0:mst.typ) (ret:ret_typ ctr) (s1:mst.typ) : bool =
   ctr._3 arg s0 ret s1
 
 
-type eff_pck_dc mst (fl:erased tflag) = ctr:pck_dc mst & eff_dc_typ mst fl ctr._3
+type eff_pck_dc (fl:erased tflag) mst = ctr:pck_dc mst & eff_dc_typ fl mst ctr._3
 
-val make_dc_eff : mst:mst -> pck_dc u#a u#b mst -> eff_pck_dc u#a u#b mst AllActions
+val make_dc_eff : mst:mstate -> pck_dc u#a u#b mst -> eff_pck_dc u#a u#b AllActions mst 
 let make_dc_eff mst r = (| r, (enforce_dc #mst r._3) |)
 
-type typ_eff_dcs mst (fl:erased tflag) (dcs:tree (pck_dc mst)) =
-  eff_dcs:(tree (eff_pck_dc mst fl)){equal_trees dcs (map_tree eff_dcs dfst)}
+type typ_eff_dcs (fl:erased tflag) mst (dcs:tree (pck_dc mst)) =
+  eff_dcs:(tree (eff_pck_dc fl mst)){equal_trees dcs (map_tree eff_dcs dfst)}
 
 (* Two helpers, to guide F* *)
-let typ_left #mst (#fl:erased tflag) (#dcs:tree (pck_dc mst))
-  ($t : typ_eff_dcs mst fl dcs{Node? t \/ EmptyNode? t})
-  : typ_eff_dcs mst fl (left dcs)
+let typ_left (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst))
+  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t})
+  : typ_eff_dcs fl mst (left dcs)
   = left t
 
-let typ_right #mst (#fl:erased tflag) (#dcs:tree (pck_dc mst))
-  ($t : typ_eff_dcs mst fl dcs{Node? t \/ EmptyNode? t})
-  : typ_eff_dcs mst fl (right dcs)
+let typ_right (#fl:erased tflag) #mst (#dcs:tree (pck_dc mst))
+  ($t : typ_eff_dcs fl mst dcs{Node? t \/ EmptyNode? t})
+  : typ_eff_dcs fl mst (right dcs)
   = right t
   
 let cong (#t1 #t2 : tree 'a) (f : 'a -> 'b) (_ : squash (t1 == t2)) : squash (map_tree t1 f == map_tree t2 f) = ()
 
-let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs mst AllActions dcs =
-  let r : tree (eff_pck_dc mst AllActions) = map_tree dcs (make_dc_eff mst) in
+let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs AllActions mst dcs =
+  let r : tree (eff_pck_dc AllActions mst) = map_tree dcs (make_dc_eff mst) in
   let r_def : squash (r == map_tree dcs (make_dc_eff mst)) = () in
   let comp x = dfst (make_dc_eff mst x) in
   (* sigh, F* not being very helpful here *)
@@ -185,7 +185,7 @@ let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs mst AllActions dcs =
     map_tree r dfst;
     == { cong dfst r_def }
     map_tree (map_tree #(pck_dc mst) dcs (make_dc_eff mst)) dfst;
-    == { map_fuse #_ #(eff_pck_dc mst AllActions) #_ dcs (make_dc_eff mst) dfst }
+    == { map_fuse #_ #(eff_pck_dc AllActions mst) #_ dcs (make_dc_eff mst) dfst }
     map_tree dcs comp;
     == { map_ext dcs (fun x -> dfst (make_dc_eff mst x)) (fun x -> x) }
     map_tree dcs (fun x -> x);
@@ -194,31 +194,31 @@ let make_dcs_eff #mst (dcs:tree (pck_dc mst)) : typ_eff_dcs mst AllActions dcs =
   };
   r
 
-class exportable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mst) (dcs:tree (pck_dc u#c u#d mst)) = {
+class exportable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mstate) (dcs:tree (pck_dc u#c u#d mst)) = {
   [@@@no_method]
   ityp : Type u#b;
   [@@@no_method]
   c_ityp : interm ityp fl pi mst;
   [@@@no_method]
-  export : typ_eff_dcs mst fl dcs -> styp -> ityp;
+  export : typ_eff_dcs fl mst dcs -> styp -> ityp;
 }
 
-class safe_importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mst) (dcs:tree (pck_dc u#c u#d mst)) = {
+class safe_importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec) (mst:mstate) (dcs:tree (pck_dc u#c u#d mst)) = {
   [@@@no_method]
   ityp : Type u#b;
   [@@@no_method]
   c_ityp : interm ityp fl pi mst;
   [@@@no_method]
-  safe_import : ityp -> typ_eff_dcs mst fl dcs -> styp; 
+  safe_import : ityp -> typ_eff_dcs fl mst dcs -> styp; 
 }
 
-class importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec)  (mst:mst) (dcs:tree (pck_dc u#c u#d mst)) = {
+class importable (styp : Type u#a) (fl:erased tflag) (pi:policy_spec)  (mst:mstate) (dcs:tree (pck_dc u#c u#d mst)) = {
   [@@@no_method]
   ityp : Type u#b; 
   [@@@no_method]
   c_ityp : interm ityp fl pi mst;
   [@@@no_method]
-  import : ityp -> typ_eff_dcs mst fl dcs -> resexn styp;
+  import : ityp -> typ_eff_dcs fl mst dcs -> resexn styp;
 }
 
 instance interm_importable_super styp fl pi mst dcs (d : importable styp fl pi mst dcs) : interm d.ityp fl pi mst = d.c_ityp
@@ -317,10 +317,10 @@ instance exportable_arrow_post_args
   t2 {| d2:exportable t2 fl pi mst (right dcs) |}
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall x h lt r. post x h r lt ==> enforced_locally pi h lt)) :
-  exportable (x:t1 -> MIO (resexn t2) mst fl (fun _ -> True) (post x)) fl pi mst dcs = {
+  exportable (x:t1 -> MIO (resexn t2) fl mst  (fun _ -> True) (post x)) fl pi mst dcs = {
     ityp = x:d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
-    export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) mst fl (fun _ -> True) (post x))) ->
+    export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) fl mst (fun _ -> True) (post x))) ->
       let f' : t1 -> MIOpi (resexn t2) fl pi mst = f in
       (exportable_arrow_with_no_pre_and_no_post t1 #d1 t2 #d2).export eff_dcs f');
   }
@@ -331,12 +331,12 @@ instance exportable_arrow_post
   t2 {| d2:exportable t2 fl pi mst (right dcs) |}
   (post : trace -> resexn t2 -> trace -> Type0) 
   (#c1 : squash (forall h lt r. post h r lt ==> enforced_locally pi h lt)) :
-  exportable (t1 -> MIO (resexn t2) mst fl (fun _ -> True) post) fl pi mst dcs = 
+  exportable (t1 -> MIO (resexn t2) fl mst (fun _ -> True) post) fl pi mst dcs = 
   exportable_arrow_post_args t1 t2 (fun _ -> post)
 
 let trivialize_new_post #a #b #mst (dc:dc_typ mst #a #unit) post :
   Tot (a -> trace -> resexn b -> trace -> Type0) =
-    fun x h r lt -> exists s0. s0 `mst.models` h ==>
+    fun x h r lt -> exists s0. s0 `mst.abstracts` h ==>
       (~(dc x s0 () s0) ==> r == (Inr Contract_failure) /\ lt == []) /\
       (dc x s0 () s0 ==> post x h r lt) 
 
@@ -344,11 +344,11 @@ let enforce_pre
   #t1 #t2 #fl pi #mst
   (pre : trace -> Type0)
   (dc : dc_typ mst #unit #unit)
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (post : trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ dc () s0 () s1 ==> pre h))
+  (#c_pre : squash (forall s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ dc () s0 () s1 ==> pre h))
   (#c_post : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt))
-  (f:(t1 -> MIO (resexn t2) mst fl pre post))
+  (f:(t1 -> MIO (resexn t2) fl mst pre post))
   (x:t1) :
   MIOpi (resexn t2) fl pi mst =
   let (| s0, eff_dc' |)  = eff_dc () in
@@ -360,11 +360,11 @@ let enforce_pre_args
   #t1 #t2 #fl pi #mst
   (pre : t1 -> trace -> Type0)
   (dc : dc_typ mst #t1 #unit)
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall x s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ dc x s0 () s1 ==> pre x h))
+  (#c_pre : squash (forall x s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ dc x s0 () s1 ==> pre x h))
   (#c_post : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt))
-  (f:(x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)))
+  (f:(x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)))
   (x:t1) :
   MIOpi (resexn t2) fl pi mst =
   let (| _, eff_dc' |) = eff_dc x in
@@ -372,12 +372,12 @@ let enforce_pre_args
   if b then f x
   else Inr Contract_failure
 
-val rityp_eff_dc : #mst:_ -> (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (#c:Type{c == a}) -> (#d:Type{d == b}) -> (#dc:dc_typ mst #a #b) -> (t : eff_dc_typ mst fl dc) -> (eff_dc_typ mst fl #c #d dc)
+val rityp_eff_dc : #mst:_ -> (#fl:erased tflag) -> (#a:Type u#a) -> (#b:Type u#b) -> (#c:Type{c == a}) -> (#d:Type{d == b}) -> (#dc:dc_typ mst #a #b) -> (t : eff_dc_typ fl mst dc) -> (eff_dc_typ fl mst #c #d dc)
 
 #push-options "--compat_pre_core 1"
 let rityp_eff_dc #mst #fl #a #b #c #d #dc eff_dc (x:c) = 
     let (| s0, cont |) = eff_dc x in
-    let cont' : eff_dc_typ_cont mst fl c d  dc x s0 = (fun (y:d) -> cont y) in
+    let cont' : eff_dc_typ_cont fl mst dc x s0 = (fun (y:d) -> cont y) in
     (| s0, cont' |)
 #pop-options
 
@@ -391,14 +391,14 @@ instance exportable_arrow_pre_post_args
   {| d2:exportable t2 fl pi mst (right dcs) |}
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall x s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ check (root dcs) x s0 () s1 ==> pre x h))
+  (#c_pre : squash (forall x s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ check (root dcs) x s0 () s1 ==> pre x h))
   (#c_post : squash (forall x h lt r. pre x h /\ post x h r lt ==> enforced_locally pi h lt)) :
-  exportable (x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)) fl pi mst dcs = {
+  exportable (x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)) fl pi mst dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst; 
     c_ityp = solve;
-    export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) mst fl (pre x) (post x))) ->
+    export = (fun eff_dcs (f:(x:t1 -> MIO (resexn t2) fl mst (pre x) (post x))) ->
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
-      let eff_dc : eff_dc_typ mst fl #t1 #unit dc = rityp_eff_dc eff_dc in
+      let eff_dc : eff_dc_typ fl mst #t1 #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
@@ -416,14 +416,14 @@ instance exportable_arrow_pre_post
   {| d2:exportable t2 fl pi mst (right dcs) |}
   (pre : trace -> Type0)
   (post : trace -> resexn t2 -> trace -> Type0) 
-  (#c_pre : squash (forall s0 s1 h. s0 `mst.models` h /\ s1 `mst.models` h /\ check (root dcs) () s0 () s1 ==> pre h))
+  (#c_pre : squash (forall s0 s1 h. s0 `mst.abstracts` h /\ s1 `mst.abstracts` h /\ check (root dcs) () s0 () s1 ==> pre h))
   (#c_post : squash (forall h lt r. pre h /\ post h r lt ==> enforced_locally pi h lt)) :
-  exportable (t1 -> MIO (resexn t2) mst fl pre post) fl pi mst dcs = {
+  exportable (t1 -> MIO (resexn t2) fl mst pre post) fl pi mst dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst; 
     c_ityp = solve;
-    export = (fun eff_dcs (f:(t1 -> MIO (resexn t2) mst fl pre post)) ->
+    export = (fun eff_dcs (f:(t1 -> MIO (resexn t2) fl mst pre post)) ->
       let (| (| a, b, dc |), eff_dc |) = root eff_dcs in
-      let eff_dc : eff_dc_typ mst fl #unit #unit dc = rityp_eff_dc eff_dc in
+      let eff_dc : eff_dc_typ fl mst #unit #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
       let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
@@ -584,12 +584,12 @@ let enforce_post_args_res
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (dc : dc_typ mst #t1 #(resexn t2))
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (c1_post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
-  (c2_post : squash (forall s0 s1 x h r lt . s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ dc x s0 r s1 ==> post x h r lt))
+  (c2_post : squash (forall s0 s1 x h r lt . s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ dc x s0 r s1 ==> post x h r lt))
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
-  MIO (resexn t2) mst fl (pre x) (post x) =
+  MIO (resexn t2) fl mst (pre x) (post x) =
   let (| _, eff_dc' |) = eff_dc x in
   let r : resexn t2 = f x in
   let (_, b) = eff_dc' r in
@@ -605,12 +605,12 @@ let enforce_post_args
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (dc : dc_typ mst #t1 #unit)
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (c1_post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
-  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc x s0 () s1) ==> post x h r lt))
+  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc x s0 () s1) ==> post x h r lt))
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
-  MIO (resexn t2) mst fl (pre x) (post x) =
+  MIO (resexn t2) fl mst (pre x) (post x) =
   let (| _, eff_dc' |) = eff_dc x in
   let r : resexn t2 = f x in
   let (_, b) = eff_dc' () in
@@ -626,12 +626,12 @@ let enforce_post_res
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (dc : dc_typ mst #unit #(resexn t2))
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (c1_post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
-  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc () s0 r s1) ==> post x h r lt))
+  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc () s0 r s1) ==> post x h r lt))
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
-  MIO (resexn t2) mst fl (pre x) (post x) =
+  MIO (resexn t2) fl mst (pre x) (post x) =
   let (| _, eff_dc' |) = eff_dc () in
   let r : resexn t2 = f x in
   let (_, b) = eff_dc' r in
@@ -647,12 +647,12 @@ let enforce_post
   (pre:t1 -> trace -> Type0)
   (post:t1 -> trace -> resexn t2 -> trace -> Type0)
   (dc : dc_typ mst #unit #unit)
-  (eff_dc : eff_dc_typ mst fl dc) 
+  (eff_dc : eff_dc_typ fl mst dc) 
   (c1_post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> (post x h (Inr Contract_failure) lt)))
-  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc () s0 () s1) ==> post x h r lt))
+  (c2_post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ (dc () s0 () s1) ==> post x h r lt))
   (f:t1 -> MIOpi (resexn t2) fl pi mst)
   (x:t1) :
-  MIO (resexn t2) mst fl (pre x) (post x) =
+  MIO (resexn t2) fl mst (pre x) (post x) =
   let (| _, eff_dc' |) = eff_dc () in
   let r : resexn t2 = f x in
   let (_, b) = eff_dc' () in
@@ -668,10 +668,10 @@ instance safe_importable_arrow_pre_post_args_res
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post: squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ check (root dcs) x s0 r s1 ==> post x h r lt)) 
+  (c2post: squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ check (root dcs) x s0 r s1 ==> post x h r lt)) 
   {| d1:exportable t1 fl pi mst (left dcs) |}
   {| d2:importable t2 fl pi mst (right dcs) |}:
-  safe_importable (x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)) fl pi mst dcs = {
+  safe_importable (x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)) fl pi mst dcs = {
    ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
   c_ityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
@@ -692,10 +692,10 @@ instance safe_importable_arrow_pre_post_res
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ ((check (root dcs)) () s0 r s1) ==> post x h r lt)) 
+  (c2post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ ((check (root dcs)) () s0 r s1) ==> post x h r lt)) 
   {| d1:exportable t1 fl pi mst (left dcs) |}
   {| d2:importable t2 fl pi mst (right dcs) |}:
-  safe_importable (x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)) fl pi mst dcs = {
+  safe_importable (x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)) fl pi mst dcs = {
    ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
   c_ityp = solve;
   safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
@@ -716,10 +716,10 @@ instance safe_importable_arrow_pre_post_args
   (pre : t1 -> trace -> Type0)
   (post : t1 -> trace -> resexn t2 -> trace -> Type0)
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ ((check (root dcs)) x s0 () s1) ==> post x h r lt))
+  (c2post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ ((check (root dcs)) x s0 () s1) ==> post x h r lt))
   {| d1:exportable t1 fl pi mst (left dcs) |}
   {| d2:importable t2 fl pi mst (right dcs) |} :
-  safe_importable (x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)) fl pi mst dcs = {
+  safe_importable (x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)) fl pi mst dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->
@@ -742,11 +742,11 @@ instance safe_importable_arrow_pre_post
   (#dcs:(tree (pck_dc mst)){Node? dcs /\ (arg_typ (root dcs) == unit /\ (ret_typ (root dcs) == unit)) })
 
   (c1post : squash (forall x h lt. pre x h /\ enforced_locally pi h lt ==> post x h (Inr Contract_failure) lt))
-  (c2post : squash (forall x h r lt s0 s1. s0 `mst.models` h /\ s1 `mst.models` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ check (root dcs) () s0 () s1 ==> post x h r lt)) 
+  (c2post : squash (forall x h r lt s0 s1. s0 `mst.abstracts` h /\ s1 `mst.abstracts` (apply_changes h lt) /\ pre x h /\ enforced_locally pi h lt /\ check (root dcs) () s0 () s1 ==> post x h r lt)) 
 
   {| d1:exportable t1 fl pi mst (left dcs) |}
   {| d2:importable t2 fl pi mst (right dcs) |} :
-  safe_importable (x:t1 -> MIO (resexn t2) mst fl (pre x) (post x)) fl pi mst dcs = {
+  safe_importable (x:t1 -> MIO (resexn t2) fl mst (pre x) (post x)) fl pi mst dcs = {
     ityp = d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst;
     c_ityp = solve;
     safe_import = (fun (f:(d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) eff_dcs ->

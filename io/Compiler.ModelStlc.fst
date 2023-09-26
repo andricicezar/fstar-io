@@ -20,7 +20,7 @@ let ctx_env =
           empty)
 
 #push-options "--compat_pre_core 1"
-let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#sgm:policy_spec) (#mst:mst) (sec_io:io_lib fl sgm mst Ctx) : (typ_to_fstar t fl sgm mst) =
+let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#sgm:policy_spec) (#mst:mstate) (sec_io:io_lib fl sgm mst Ctx) : (typ_to_fstar t fl sgm mst) =
    let write : FStar.Universe.raise_t file_descr * FStar.Universe.raise_t string -> MIOpi (either (FStar.Universe.raise_t unit) (FStar.Universe.raise_t exn)) fl sgm _ = fun fdb ->
      let fd = FStar.Universe.downgrade_val (fst fdb) in
      let b = FStar.Universe.downgrade_val (snd fdb) in
@@ -43,13 +43,13 @@ let bt_ctx (e:exp{ELam? e}) (t:typ) (h:typing ctx_env e t) (#fl:erased tflag) (#
 (** **** interfaces **)
 noeq
 type src_interface = {
-  mst : mst;
+  mst : mstate;
   (* sgm is in Type0 and it is used at the level of the spec,
      it describes both the events done by the partial program and the context **)
   sgm : policy_spec;
   (* pi is in bool and it is used to enfodce the policy on the context,
      it describes only the events of the context and it has to imply sgm **)
-  pi : policy mst sgm;
+  pi : policy sgm mst;
 
   (** The type of the "context" --- not sure if it is the best name.
       It is more like the type of the interface which the two share to communicate. **)
@@ -69,17 +69,17 @@ type src_interface = {
 
 noeq
 type tgt_interface = {
-  mst : mst;
+  mst : mstate;
   sgm : policy_spec;
-  pi : policy mst sgm;
+  pi : policy sgm mst;
 
   ct : typ;
 }
   
 (** **** languages **)
-type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs i.mst fl i.ct_dcs -> i.ct fl 
-type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (fl+IOActions) -> unit -> MIO int i.mst (IOActions + fl) (fun _ -> True) i.psi
-type whole_src = mst:mst & post:(trace -> int -> trace -> Type0) & (unit -> MIO int mst AllActions (fun _ -> True) post)
+type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs fl i.mst i.ct_dcs -> i.ct fl 
+type prog_src (i:src_interface) = #fl:erased tflag -> i.ct (fl+IOActions) -> unit -> MIO int (IOActions + fl) i.mst (fun _ -> True) i.psi
+type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllActions mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src = 
   (| i.mst, i.psi,  p #AllActions (c #AllActions (inst_io_cmds i.pi) (make_dcs_eff i.ct_dcs)) |)
@@ -95,8 +95,8 @@ let src_language : language = {
 }
 
 type ctx_tgt (i:tgt_interface) = e:exp{ELam? e} & typing ctx_env e i.ct
-type prog_tgt (i:tgt_interface) = (typ_to_fstar i.ct AllActions i.sgm i.mst) -> unit -> MIO int i.mst AllActions (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt = mst:mst & (unit -> MIO int mst AllActions (fun _ -> True) (fun _ _ _ -> True))
+type prog_tgt (i:tgt_interface) = (typ_to_fstar i.ct AllActions i.sgm i.mst) -> unit -> MIO int AllActions i.mst (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt = mst:mstate & (unit -> MIO int AllActions mst (fun _ -> True) (fun _ _ _ -> True))
 
 let link_tgt (#i:tgt_interface) (p:prog_tgt i) (c:ctx_tgt i) : whole_tgt =
   let (| e, h |) = c in

@@ -245,7 +245,7 @@ let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
 
 open Compiler.Languages
 
-let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mst) : Type =
+let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mstate) : Type =
   match t with
   | TArr t1 t2 -> (typ_to_fstar t1 fl pi mst) -> MIOpi (typ_to_fstar t2 fl pi mst) fl pi mst
   | TUnit -> FStar.Universe.raise_t unit
@@ -259,7 +259,7 @@ let rec typ_to_fstar (t:typ) (fl:erased tflag) (pi:policy_spec) (mst:mst) : Type
   | TString -> FStar.Universe.raise_t string
 
 
-type venv (g:env) (fl:erased tflag) (pi:policy_spec) (mst:mst) = x:var{Some? (g x)} -> typ_to_fstar (Some?.v (g x)) fl pi mst
+type venv (g:env) (fl:erased tflag) (pi:policy_spec) (mst:mstate) = x:var{Some? (g x)} -> typ_to_fstar (Some?.v (g x)) fl pi mst
 
 let vempty #f #p #m : venv empty f p m = fun _ -> assert false
 

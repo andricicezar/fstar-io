@@ -3,7 +3,7 @@
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst
 
 CACHEDIR := .cache
 FLAGS  = --include ../.. --record_hints --use_hints --hint_dir hints

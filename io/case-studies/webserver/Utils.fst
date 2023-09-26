@@ -133,9 +133,9 @@ let models (c : cst) (h : trace) : Type0 =
   (forall fd. fd `mem` c.opened <==> is_opened_by_untrusted h fd) /\
   (forall fd. fd `mem` c.written <==> wrote_to fd h)
 
-let mymst : mst = {
-  cst = cst;
-  models = models;
+let mymst : mstate = {
+  typ = cst;
+  abstracts = models;
 }
 
 effect MyMIO
@@ -143,9 +143,9 @@ effect MyMIO
   (fl:FStar.Ghost.erased tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
-  MIO a mymst fl pre post
+  MIO a fl mymst pre post
 
-let my_init_cst : mymst.cst =
+let my_init_cst : mymst.typ =
   mkcst [] DidNotRespond []
 
 // TODO MOVE
@@ -224,7 +224,7 @@ let sgm h c cmd arg =
   | Prog, Write -> true
   | _ -> false
 
-val pi : policy mymst sgm
+val pi : policy sgm mymst
 let pi s0 cmd arg =
   match cmd with
   | Openfile ->

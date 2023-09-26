@@ -14,8 +14,8 @@ include MIO
     over the history. **)
 type policy_spec = (history:trace) -> caller -> (cmd:io_cmds) -> (io_sig.args cmd) -> Type0
 
-type policy (mst:mst) (sgm:policy_spec) =
-  s:mst.cst -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. mst.models s h ==> sgm h Ctx cmd arg)}
+type policy (sgm:policy_spec) (mst:mstate) =
+  s:mst.typ -> cmd:io_cmds -> arg:io_sig.args cmd -> r:bool{r ==> (forall h. s `mst.abstracts` h ==> sgm h Ctx cmd arg)}
 
 unfold
 let has_event_respected_sgm (e:event) (sgm:policy_spec) (h:trace) : Type0 =
@@ -36,14 +36,14 @@ unfold
 let sgm_as_hist (#a:Type) (sgm:policy_spec) : hist a =
   (fun p h -> forall r lt. enforced_locally sgm h lt ==> p lt r)
 
-effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (sgm : policy_spec) (mst:mst) = 
+effect MIOpi (a:Type) (fl:FStar.Ghost.erased tflag) (sgm : policy_spec) (mst:mstate) = 
   MIOwp a mst fl (sgm_as_hist #a sgm)
 
 
-type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mst) (c:caller) =
+type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mstate) (c:caller) =
   (cmd : io_cmds) ->
   (arg : io_sig.args cmd) ->
-  MIO (io_resm cmd arg) mst fl
+  MIO (io_resm cmd arg) fl mst
     (requires (fun _ -> True))
     (ensures (fun h r lt ->
       enforced_locally sgm h lt /\
@@ -52,7 +52,7 @@ type io_lib (fl:erased tflag) (sgm:policy_spec) (mst:mst) (c:caller) =
        | r' -> io_post cmd arg r' /\ lt == [convert_call_to_event c cmd arg r'])))
 
 #push-options "--compat_pre_core 1" // fixme
-val inst_io_cmds : #mst:mst -> #sgm:policy_spec -> pi:policy mst sgm -> io_lib AllActions sgm mst Ctx
+val inst_io_cmds : #mst:mstate -> #sgm:policy_spec -> pi:policy sgm mst -> io_lib AllActions sgm mst Ctx
 let inst_io_cmds pi cmd arg =
   let s0 = get_state () in
   if pi s0 cmd arg then (
@@ -63,7 +63,7 @@ let inst_io_cmds pi cmd arg =
 
 
 
-class interm (t:Type u#a) (fl:erased tflag) (sgm:policy_spec) (mst:mst) = { [@@@no_method] mldummy : unit }
+class interm (t:Type u#a) (fl:erased tflag) (sgm:policy_spec) (mst:mstate) = { [@@@no_method] mldummy : unit }
 
 instance interm_unit fl sgm mst : interm unit fl sgm mst = { mldummy = () }
 instance interm_file_descr fl sgm mst : interm file_descr fl sgm mst = { mldummy = () }

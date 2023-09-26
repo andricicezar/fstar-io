@@ -22,13 +22,13 @@ in reverse order to the history. **)
 let dm_mio_theta #mst #a = theta #a #mio_cmds #(mio_sig mst) #event mio_wps
   
 type dm_mio mst = dm mio_cmds (mio_sig mst) event mio_wps
-let dm_mio_return (a:Type) (mst:mst) (x:a) : dm_mio mst a (hist_return x) =
+let dm_mio_return (a:Type) (mst:mstate) (x:a) : dm_mio mst a (hist_return x) =
   dm_return mio_cmds (mio_sig mst) event mio_wps a x
 
 val dm_mio_bind  : 
   a: Type ->
   b: Type ->
-  mst : mst ->
+  mst : mstate ->
   wp_v: hist a ->
   wp_f: (_: a -> hist b) ->
   v: dm_mio mst a wp_v ->
@@ -38,7 +38,7 @@ let dm_mio_bind a b mst wp_v wp_f v f = dm_bind mio_cmds (mio_sig mst) event mio
 
 val dm_mio_subcomp : 
   a: Type ->
-  mst:mst ->
+  mst:mstate ->
   wp1: hist a ->
   wp2: hist a ->
   f: dm_mio mst a wp1 ->
@@ -132,7 +132,7 @@ let sat_bind_add mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
 
 (** ** Defining F* Effect **)
 
-type dm_gmio (a:Type) (mst:mst) (flag:erased tflag) (wp:hist a) = t:(dm_mio mst a wp){t `satisfies` flag} 
+type dm_gmio (a:Type) (mst:mstate) (flag:erased tflag) (wp:hist a) = t:(dm_mio mst a wp){t `satisfies` flag} 
 
 let dm_gmio_theta #a #mst = theta #a #mio_cmds #(mio_sig mst) #event mio_wps
 
@@ -142,7 +142,7 @@ let dm_gmio_return (a:Type) (x:a) mst : dm_gmio a mst NoActions (hist_return x) 
 val dm_gmio_bind  : 
   a: Type ->
   b: Type ->
-  mst: mst ->
+  mst: mstate ->
   flag_v : erased tflag ->
   wp_v: Hist.hist a ->
   flag_f : erased tflag ->
@@ -160,7 +160,7 @@ let dm_gmio_bind a b mst flag_v wp_v flag_f wp_f v f : (dm_gmio b mst (flag_v + 
 
 val dm_gmio_subcomp : 
   a: Type ->
-  mst:mst ->
+  mst:mstate ->
   flag1 : erased tflag ->
   wp1: hist a ->
   flag2 : erased tflag ->
@@ -171,7 +171,7 @@ let dm_gmio_subcomp a mst flag1 wp1 flag2 wp2 f =
   sat_le flag1 flag2 f;
   dm_mio_subcomp a mst wp1 wp2 f
 
-let dm_gmio_if_then_else (a : Type u#a) (mst:mst)
+let dm_gmio_if_then_else (a : Type u#a) (mst:mstate)
   (fl1 : erased tflag) (wp1 : hist a)
   (fl2 : erased tflag) (wp2 : hist a)
   (f : dm_gmio a mst fl1 wp1) (g : dm_gmio a mst fl2 wp2) (b : bool) : Type =
@@ -186,7 +186,7 @@ total
 reifiable
 reflectable
 effect {
-  MIOwp (a:Type) ([@@@effect_param] mst:mst) (flag:erased tflag) (wp : hist #event a)
+  MIOwp (a:Type) ([@@@effect_param] mst:mstate) (flag:erased tflag) (wp : hist #event a)
   with {
        repr       = dm_gmio
      ; return     = dm_gmio_return
@@ -202,7 +202,7 @@ let dm_gmio_partial_return
 
 val lift_pure_dm_gmio :
   a: Type ->
-  [@@@effect_param](mst: mst)-> // syntax ok?
+  [@@@effect_param](mst: mstate)-> // syntax ok?
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
   Tot (dm_gmio a mst NoActions (wp_lift_pure_hist w))
@@ -218,18 +218,18 @@ sub_effect PURE ~> MIOwp = lift_pure_dm_gmio
 
 effect MIO
   (a:Type)
-  (mst:mst)
   (fl:erased tflag)
+  (mst:mstate)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   MIOwp a mst fl (to_hist pre post) 
 
 let static_cmd
-  (#mst:mst)
+  (#mst:mstate)
   caller
   (cmd : io_cmds)
   (arg : io_sig.args cmd) :
-  MIO (io_sig.res cmd arg) mst IOActions
+  MIO (io_sig.res cmd arg) IOActions mst
     (requires (fun h -> io_pre cmd arg h))
     (ensures (fun h (r:io_sig.res cmd arg) lt ->
         io_post cmd arg r /\
@@ -240,8 +240,8 @@ let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetTraceActions
   (fun p h -> p [] (Ghost.hide h)) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetTrace ())
   
-let get_state #mst () : MIOwp mst.cst mst GetTraceActions
-  (fun p h -> forall s. mst.models s h ==> p [] s) =
+let get_state #mst () : MIOwp mst.typ mst GetTraceActions
+  (fun p h -> forall s. s `mst.abstracts` h ==> p [] s) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call Prog GetST ())
 
 (**

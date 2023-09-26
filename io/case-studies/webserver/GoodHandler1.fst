@@ -41,10 +41,10 @@ let parse_http_header (header : FStar.Bytes.bytes) : request_type =
 
 let rec get_file
   (#fl:erased tflag)
-  (call_io:io_lib fl pi mymst Ctx)
+  (call_io:io_lib fl sgm mymst Ctx)
   (fd : file_descr) (limit : UInt8.t)
   (i:nat) :
-  MIOpi FStar.Bytes.bytes fl pi mymst =
+  MIOpi FStar.Bytes.bytes fl sgm mymst =
   match call_io Read (fd,limit) with
   | Inl (chunk, size) -> begin
     if UInt8.lt size limit || i = 0 then
@@ -129,9 +129,9 @@ let set_headers
 
 let respond
   (#fl:erased tflag)
-  (send:FStar.Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
+  (send:FStar.Bytes.bytes -> MIOpi (resexn unit) fl sgm mymst)
   (status_code:int) (media_type:string) (content:FStar.Bytes.bytes) :
-  MIOpi unit fl pi mymst =
+  MIOpi unit fl sgm mymst =
   let hdrs = set_headers status_code media_type (FStar.Bytes.length content) in
   let msg = (FStar.Bytes.append (FStar.Bytes.utf8_encode hdrs) content) in
   let _ = send msg in
@@ -139,9 +139,9 @@ let respond
 
 let get_fd_stats
   (#fl:erased tflag)
-  (call_io:io_lib fl pi mymst Ctx)
+  (call_io:io_lib fl sgm mymst Ctx)
   (file_full_path: string) :
-  MIOpi (resexn (file_descr * stats)) fl pi mymst =
+  MIOpi (resexn (file_descr * stats)) fl sgm mymst =
   let _ = call_io Access (file_full_path,[R_OK]) in
   let file_stats = call_io Stat file_full_path in
   let fd = call_io Openfile (file_full_path,[O_RDONLY],0) in
@@ -160,12 +160,12 @@ let get_media_type (file_path : string) : (media_type:string{String.maxlen media
 
 let get_query
   (#fl:erased tflag)
-  (call_io:io_lib fl pi mymst Ctx)
-  (send:FStar.Bytes.bytes -> MIOpi (resexn unit) fl pi mymst)
+  (call_io:io_lib fl sgm mymst Ctx)
+  (send:FStar.Bytes.bytes -> MIOpi (resexn unit) fl sgm mymst)
   (file_full_path : string) :
-  MIOpi unit fl pi mymst =
+  MIOpi unit fl sgm mymst =
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
-    lemma_append_enforced_locally pi ;
+    lemma_append_enforced_locally sgm;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
     let file = get_file #fl call_io fd 100uy 100 in
     let msg = (FStar.Bytes.append (FStar.Bytes.utf8_encode hdrs) file) in

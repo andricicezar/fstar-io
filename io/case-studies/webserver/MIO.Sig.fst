@@ -106,9 +106,9 @@ to the trace from the heap. **)
 (* Monitoring state. *)
 [@@erasable]
 noeq
-type mst = {
-  cst : Type0;
-  models : cst -> trace -> Type0;
+type mstate = {
+  typ : Type0;
+  abstracts : typ -> trace -> Type0;
 }
 
 (** Is our assumption limiting how the IO effect can be used?
@@ -121,22 +121,22 @@ let m_args (cmd:m_cmds) =
   | GetTrace -> unit
   | GetST -> unit
 
-let m_res (mst:mst) (cmd:m_cmds) (arg:m_args cmd) =
+let m_res (mst:mstate) (cmd:m_cmds) (arg:m_args cmd) =
   match cmd with
   | GetTrace -> erased trace 
-  | GetST -> mst.cst
+  | GetST -> mst.typ
 
-let m_sig (mst:mst) : op_sig m_cmds = {
+let m_sig (mst:mstate) : op_sig m_cmds = {
   args = m_args;
   res = m_res mst;
 }
 
 let _mio_cmds (cmd:cmds) : bool = _io_cmds cmd || cmd = GetTrace || cmd = GetST
 type mio_cmds = cmd:cmds{_mio_cmds cmd}
-let mio_sig (mst:mst) : op_sig mio_cmds = add_sig cmds io_sig (m_sig mst)
+let mio_sig (mst:mstate) : op_sig mio_cmds = add_sig cmds io_sig (m_sig mst)
 
 // THE MIO FREE MONAD
-type mio (mst:mst) (a:Type) = free cmds (mio_sig mst) a
+type mio (mst:mstate) (a:Type) = free cmds (mio_sig mst) a
 
 let mio_return #mst (x:'a) : mio mst 'a =
   free_return cmds (mio_sig mst) 'a x
@@ -226,5 +226,5 @@ unfold let mio_wps #mst caller (cmd:mio_cmds) (arg:(mio_sig mst).args cmd) : his
   | GetTrace ->
     let p : hist_post (Ghost.erased trace) = p in // need some handholding
     p [] (Ghost.hide h)
-  | GetST -> forall (x:mst.cst). mst.models x h ==> p [] x // any concrete state modelling the trace
+  | GetST -> forall (s:mst.typ). s `mst.abstracts` h ==> p [] s // any concrete state modelling the trace
   | _ -> io_pre cmd arg h /\ (forall (r:(mio_sig mst).res cmd arg). io_post cmd arg r ==> p [convert_call_to_event caller cmd arg r] r)

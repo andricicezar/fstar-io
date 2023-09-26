@@ -5,10 +5,10 @@ open MIO.Sig
 open Utils
 
 private
-val monitor_state : ref mymst.cst
+val monitor_state : ref mymst.typ
 let monitor_state = ST.alloc my_init_cst
 
-let get_state () : St mymst.cst = !monitor_state
+let get_state () : St mymst.typ = !monitor_state
 
 let update_state (c:caller) (cmd:io_cmds) (argz:io_sig.args cmd) (rez:io_sig.res cmd argz) : St unit =
   let s0 = get_state () in
