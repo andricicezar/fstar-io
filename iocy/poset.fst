@@ -4,6 +4,7 @@ open FStar.Tactics
 open FStar.List.Tot.Base
 
 type id_typ = nat
+type th_id_typ = nat
 
 type elem (a:Type) = id_typ * a
 //| El : id:id_typ -> v:a -> elem a
@@ -26,11 +27,11 @@ let make_el (id:id_typ) (v:'a) : elem 'a = (id, v)
     However, the offset is "reversed".
 **)
 
-type base_set a = elem a -> Type0
-let (∈) (#a:Type) (el:elem a) (s:base_set a) = s el
-let (∉) (#a:Type) (el:elem a) (s:base_set a) = ~(el ∈ s)
+type base_set a = a -> bool
+let (∈) (#a:Type) (el:a) (s:base_set a) = s el
+let (∉) (#a:Type) (el:a) (s:base_set a) = ~(el ∈ s)
 
-type set0 a (n:nat) = ofst:nat{ofst >= n} -> base_set a
+type set0 a (n:nat) = ofst:nat{ofst >= n} -> base_set (elem a)
 type set a (n:nat) = s:(set0 a n){
   (forall ofst x. x ∈ s ofst ==> (ofst-n) < el_id x /\ el_id x <= ofst) /\
   // (forall ofst i. (ofst-n) < i /\ i <= ofst ==> (exists x. id x == i /\ x ∈ s ofst)) /\
@@ -123,27 +124,35 @@ type poset0 (a:Type) (n:nat) =
   *
   relation a n
   *
-  option (ofst:nat{ofst >= n} -> elem a)
+  th_id_typ (** the thread id of the bot event **)
   *
-  option (ofst:nat{ofst >= n} -> elem a)
+  option (ofst:nat{ofst >= n} -> elem a) (** the bot event **)
+  *
+  (th_id_typ -> option (ofst:nat{ofst >= n} -> elem a))
 
 type poset (a:Type) (n:nat) =
   p:(poset0 a n){
-    let (s, rel, bot, top_r) = p in
+    let (s, rel, bot_th_id, bot, get_top) = p in
     (forall ofst x. x ∈ s ofst ==> x `rel ofst` x) /\
     (forall ofst x y z. x ∈ s ofst /\ y ∈ s ofst /\ z ∈ s ofst ==> (x `rel ofst` y /\ y `rel ofst` z ==> x `rel ofst` z)) /\
     (forall ofst x y. x ∈ s ofst /\ y ∈ s ofst ==> (x `rel ofst` y /\ y `rel ofst` x ==> x == y)) /\
     (None? bot <==> n == 0) /\
     (Some? bot ==> (forall ofst. Some?.v bot ofst ∈ s ofst /\ (forall x. x ∈ s ofst ==> Some?.v bot ofst `rel ofst` x))) /\
-    (None? top_r <==> n == 0) /\
-    (Some? top_r ==> (forall ofst. Some?.v top_r ofst ∈ s ofst)) // /\ (forall x. x ∈ s ofst /\ x =!= Some?.v top_r ofst ==> ~(Some?.v top_r ofst `rel ofst` x))))
+    (n > 0 <==> Some? (get_top 0)) /\
+    (forall th_id. Some? (get_top th_id) ==> (forall ofst. Some?.v (get_top th_id) ofst ∈ s ofst))
+ //   (None? top_r <==> n == 0) /\
+//    (Some? top_r ==> (forall ofst. Some?.v top_r ofst ∈ s ofst)) // /\ (forall x. x ∈ s ofst /\ x =!= Some?.v top_r ofst ==> ~(Some?.v top_r ofst `rel ofst` x))))
   }
 
-let empty_poset (#a:Type) : poset a 0 = (empty_set, empty_rel empty_set, None, None)
+let empty_poset (#a:Type) : poset a 0 = (empty_set, empty_rel empty_set, 0, None, (fun _ -> None))
 
 let return_poset (el:'e) : poset 'e 1 =
   let s = return_set el in
-  (s, empty_rel s, Some (fun ofst -> make_el ofst el), Some (fun ofst -> make_el ofst el))
+  (s, 
+   empty_rel s, 
+   0,
+   Some (fun ofst -> make_el ofst el),
+   (fun id -> if id = 0 then Some (fun (ofst:nat{ofst >= 1}) -> make_el ofst el) else None))
 
 let new_po
   (#n #m:nat)
@@ -158,23 +167,31 @@ let new_po
   (x ∈ s1 (ofst-m) /\ y ∈ s2 ofst /\ x `rel1 (ofst-m)` (top_r1 (ofst-m))))
 
 let append_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : poset 'e (n+m) =
-  let (s1, rel1, bot1, top_r1)  = pos1 in
-  let (s2, rel2, bot2, top_r2) = pos2 in
+  let (s1, rel1, id1, bot1, get_top1)  = pos1 in
+  let (s2, rel2, id2, bot2, get_top2) = pos2 in
   match bot1, bot2 with
   | None, None
   | None, _ -> pos2
   | _, None -> pos1
   | _, _ -> begin
     let s = s1 `union_set` s2 in
+    let top_r1 = get_top1 0 in
+    assert (Some? top_r1);
     let rel : relation 'e (n+m) = new_po s1 rel1 s2 rel2 (Some?.v top_r1) in
+    extend_rel rel (get_top1 ) bot2
+    let top_r2 = get_top1 id2 in 
     let bot = Some (fun (ofst:nat{ofst >= n+m}) -> Some?.v bot1 (ofst-m)) in
-    let top = Some (fun (ofst:nat{ofst >= n+m}) -> Some?.v top_r2 ofst) in
-    (s1 `union_set` s2, rel, bot , top)
+    (s1 `union_set` s2, rel, id1, bot, (fun th_id -> 
+      if th_id = id2 then (match get_top2 0 with | Some el -> Some el)
+      else (
+      match get_top1 th_id with
+      | Some el -> Some (fun (ofst:nat{ofst >= n+m}) -> el (ofst-m))
+      | None -> (match get_top2 th_id with | None -> None | Some el -> Some el))))
   end
 
 let subset_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : Type0 =
-  let (s1, rel1, bot1, top_r1) = pos1 in
-  let (s2, rel2, bot2, top_r2) = pos2 in
+  let (s1, rel1, _, bot1, top_r1) = pos1 in
+  let (s2, rel2, _, bot2, top_r2) = pos2 in
   s1 `subset_set` s2 /\
   (forall ofst x y. x ∈ s1 ofst /\ y ∈ s1 ofst /\ x `rel1 ofst` y ==> x `rel2 ofst` y)
 
@@ -182,7 +199,7 @@ type event_typ 'e = option (nat * 'e)
 
 let op (e:'e) (th_id:nat) : poset (event_typ 'e) 1 =
   let s = return_set (Some (th_id, e)) in
-  (s, empty_rel s, Some (fun ofst -> make_el ofst (Some (th_id, e))), Some (fun ofst -> make_el ofst (Some (th_id, e))))
+  (s, empty_rel s, 0, Some (fun ofst -> make_el ofst (Some (th_id, e))), Some (fun ofst -> make_el ofst (Some (th_id, e))))
 
 
 (**
@@ -198,25 +215,25 @@ let op (e:'e) (th_id:nat) : poset (event_typ 'e) 1 =
 **)
 
 let async (#n:nat) (p:poset (event_typ 'e) n) : poset (event_typ 'e) (n+2) = 
-  let (s, rel, bot, top_r) = p in
+  let (s, rel, id1, bot, top_r) = p in
   let s' = s `union_set` (return_set None `union_set` return_set None) in
   assert (forall ofst. make_el ofst None ∈ s' ofst /\ make_el (ofst-1) None ∈ s' ofst);
   let rel' : relation (event_typ 'e) (n+2) = (fun ofst x y -> (x == make_el (ofst-1) None /\ y ∈ s' ofst) \/
                                             (x == make_el ofst None /\ y == make_el ofst None) \/
                                             (x ∈ s (ofst-2) /\ y ∈ s (ofst-2) /\ x `rel (ofst-2)` y)) in
-  (s', rel', Some (fun (ofst:nat{ofst >= n+2}) -> make_el (ofst-1) None), Some (fun ofst -> make_el ofst None))
+  (s', rel', id1, Some (fun (ofst:nat{ofst >= n+2}) -> make_el (ofst-1) None), Some (fun ofst -> make_el ofst None))
 
 (** CA: Not very principled since the po is defined over xs and ys which are not part of S **)
 let await (#e:Type) (th_id:nat) : poset (event_typ e) 1 =
   let s : set (event_typ e) 1 = return_set None in
   let rel = (fun ofst x y -> (x ∈ s ofst /\ y ∈ s ofst) \/ (y == make_el ofst None /\ Some? (el_v x) /\ fst (Some?.v (el_v x)) == th_id)) in
-  (s, rel, Some (fun ofst -> make_el ofst None), Some (fun ofst -> make_el ofst None))
+  (s, rel, th_id, Some (fun ofst -> make_el ofst None), Some (fun ofst -> make_el ofst None))
 
 let prog04 () : poset (event_typ int) 5 = (op 1 1 `append_poset` async (op 2 2)) `append_poset` op 3 1
 
 #set-options "--timing"
 let __test_prog04 () = 
-  let (s, rel, bot, top_r) = prog04 () in
+  let (s, rel, _, bot, top_r) = prog04 () in
   assert (Some? bot /\ Some?.v bot 5 == make_el 1 (Some (1,1)));
   assert (Some? top_r /\ Some?.v top_r 5 == make_el 5 (Some (1,3)));
   assert (make_el 1 (Some (1,1)) ∈ s 5);
@@ -232,7 +249,7 @@ let prog05 () : poset (event_typ int) 4 = async (op 2 2) `append_poset` await 2
 
 #set-options "--timing"
 let __test_prog05 () = 
-  let (s, rel, bot, top_r) = prog05 () in
+  let (s, rel, _, bot, top_r) = prog05 () in
   assert (Some? bot /\ Some?.v bot 4 == make_el 2 None);
   assert (Some? top_r /\ Some?.v top_r 4 == make_el 4 None);
   assert (make_el 1 (Some (2,2)) ∈ s 4);
@@ -242,7 +259,7 @@ let __test_prog05 () =
 #reset-options
 
 let __test_prog05' () = 
-  let (s, rel, bot, top_r) = prog05 () in
+  let (s, rel, _, bot, top_r) = prog05 () in
   assert (~(make_el 1 (Some (2,2)) `rel 4` make_el 4 None))
 
 (** Test:
@@ -270,7 +287,7 @@ let prog1 : poset (event_typ int) 7 =
 
 
 let __test_prog1' () = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 1 (Some (1,1)) ∈ s 7)
  
 let lemma_mem_union_set_lhs' (#a:Type) (x:a) (id:id_typ) (#n:nat) (s1:set a n) (#m:nat) (s2:set a m) (#r:nat) (s3:set a r) (ofst:nat{ofst >= n+m+r}) :
@@ -300,31 +317,31 @@ let lemma_mem_union_set_lhs''' (#a:Type) (x:a) (id:id_typ) (#n:nat) (s1:set a n)
 #set-options "--timing --z3rlimit 24"
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 1 (Some (1,1)) ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 2 (Some (2,2)) ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 3 None ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 4 None ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 5 (Some (1,3)) ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 6 None ∈ s 7)
 
 let _ = 
-  let (s, po, bot, top_r) = prog1 in
+  let (s, po, _, bot, top_r) = prog1 in
   assert (make_el 7 (Some (1,4)) ∈ s 7)
   
 type trace 'e = list 'e
@@ -346,7 +363,7 @@ let rec sat0 (t:trace 'e) (#n:nat) (s:set (event_typ 'e) n) (rel:relation (event
                       sat0 tl s rel el (mark used_els el)))))
 
 let sat (t:trace 'e) (#n:nat) (p:poset (event_typ 'e) n) : Type0 =
-  let (s, rel, bot, _) = p in
+  let (s, rel, _, bot, _) = p in
   match t with
   | [] -> n == 0
   | h :: tl -> Some? bot /\ (let bot_el = Some?.v bot n in
