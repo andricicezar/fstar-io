@@ -146,7 +146,7 @@ effect MyMIO
   MIO a fl mymst pre post
 
 let my_init_cst : mymst.typ =
-  mkcst [] DidNotRespond []
+  mkcst [] Responded []
 
 // TODO MOVE
 let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
@@ -204,6 +204,11 @@ let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `m
     let (fd, bb) = arg in
     if caller = Prog then write_cst fd s0 else s0
   | _ -> s0
+
+let mymst_impl : mst_impl mymst = {
+  init = my_init_cst;
+  update = (fun s e h -> my_update_cst s e);
+}
 
 val sgm : policy_spec
 let sgm h c cmd arg =
