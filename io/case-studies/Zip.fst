@@ -30,7 +30,8 @@ let sgm h c cmd arg =
   | Ctx, Write ->
     let (fd, _) : file_descr * string = arg in
     is_opened_by_prog h fd
-  | _ -> false
+  | Ctx, _ -> false
+  | Prog, _ -> true
 
 val pi : policy sgm mymst
 let pi h cmd arg =
@@ -55,34 +56,35 @@ let zip_rcs : tree (pck_dc mymst) =
      (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true) |) Leaf Leaf)
 
 let zip_cb_importable (fl:erased tflag) : safe_importable (zip_cb fl) fl sgm mymst (right zip_rcs) = 
-  safe_importable_arrow_pre_post_args_res _ _ () () #exportable_file_descr #importable_unit
+  safe_importable_arrow_pre_post_args_res _ _ () () #exportable_file_descr #solve
 
 let zip_importable (fl:erased tflag) : safe_importable (zip fl) fl sgm mymst zip_rcs = 
-  safe_importable_arrow_pre_post_args _ _ () ()
-    #exportable_file_descr
-    #(safe_importable_is_importable (zip_cb_importable fl))
+  safe_importable_arrow_pre_post_args _ _ () () #solve #(safe_importable_is_importable (zip_cb_importable fl))
 
 [@@ (postprocess_with (fun () -> norm [delta_only [`%zip; `%zip_cb;`%zip_importable]]; trefl ()))]
 let zip_int : src_interface = {
   mst = mymst;
   sgm = sgm; pi = pi;
   ct = zip; ct_dcs = zip_rcs; ct_importable = zip_importable; 
-  psi = (fun _ _ _ -> True);
+  psi = (fun h _ lt -> enforced_locally sgm h lt);
 }
 
 #push-options "--compat_pre_core 1"
 
 val prog : prog_src zip_int
-let prog #fl ctx () : MIO int (IOOps + fl) mymst (fun _ -> True) (fun _ _ _ -> True) =
-  match static_op Prog Openfile "test.txt" with
-  | Inl fd -> begin
-    match ctx fd with
-    | Inl cb -> 
-      assume (forall h. is_open fd h);
-      let _ : resexn unit = cb fd in 0
-    | Inr err -> -1
+let prog #fl ctx () : MIO int (IOOps + fl) mymst (fun _ -> True) (fun h _ lt -> enforced_locally sgm h lt) =
+  lemma_append_enforced_locally sgm;
+  match static_op Prog Openfile "archive.zipfst" with
+  | Inl afd -> begin
+    match ctx afd with
+    | Inl cb -> begin
+      match static_op Prog Openfile "somefile.txt" with
+      | Inl fd -> let _ = cb fd in 0
+      | _ -> -1
     end
-  | Inr err -> -1
+    | _ -> -2
+    end
+  | _ -> -3
 
 val ctx_t : ctx_tgt (comp_int_src_tgt zip_int)
 let ctx_t #fl sec_io afd : MIOpi (resexn (file_descr -> MIOpi (resexn unit) fl sgm mymst)) fl sgm mymst = 

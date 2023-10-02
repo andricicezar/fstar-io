@@ -136,12 +136,6 @@ let test1_prog #fl op : MIO (resexn unit) (fl+IOOps) mymst (log_pre op) (log_pos
   // weird behavior of F*
   let r : (mio_sig mymst).res Write (stdout, to_string op) = static_op Prog Write (stdout, to_string op) in
   r <: resexn unit
-
-assume val lemma_append_enforced_locally : sgm:_ ->
-  Lemma (forall h lt1 lt2.
-      enforced_locally sgm h lt1 /\
-      enforced_locally sgm (apply_changes h lt1) lt2 ==>
-      enforced_locally sgm h (lt1 @ lt2))
   
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
 let test1_ctx_t #fl io_acts prog () : MIOpi int fl test1.sgm mymst =
