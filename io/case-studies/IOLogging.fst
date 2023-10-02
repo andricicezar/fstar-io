@@ -83,7 +83,7 @@ let log_post = (fun (op:io_ops) h (r:resexn unit) lt -> r =!= Inr Contract_failu
 type log_pt = source_arrow mymst io_ops unit log_pre log_post
 
 let log_pt_rc : dc_typ mymst = (fun op s0 _ _ -> None? s0 || (get_caller (Some?.v s0) = Ctx))
-let log_pt_rcs : tree (pck_dc mymst) =
+let log_pt_dcs : tree (pck_dc mymst) =
    Node (| io_ops, unit, log_pt_rc |)
      Leaf
      Leaf
@@ -101,7 +101,7 @@ instance importable_io_ops (#fl:erased tflag) (#sgm:policy_spec) #mst : importab
   import = (fun x Leaf -> Inl x)
 }
 
-let log_pt_exportable (fl:erased tflag) : exportable (log_pt fl) fl sgm mymst log_pt_rcs =
+let log_pt_exportable (fl:erased tflag) : exportable (log_pt fl) fl sgm mymst log_pt_dcs =
    exportable_arrow_pre_post_args
      _ _
      log_pre
@@ -125,7 +125,7 @@ let log_stronger_sgms =
    sgm = sgm; pi = pi;
 
    pt = log_pt;
-   pt_dcs = log_pt_rcs;
+   pt_dcs = log_pt_dcs;
 
    pt_exportable = log_pt_exportable;
 }
@@ -145,8 +145,8 @@ let test1_ctx_t #fl io_acts prog () : MIOpi int fl test1.sgm mymst =
   0
 
 val test1_ctx : ctx_src test1
-let test1_ctx #fl io_acts eff_rcs log () = 
-  let (| _, eff_ck |) : eff_pck_dc fl mymst = root eff_rcs in
+let test1_ctx #fl io_acts eff_dcs log () = 
+  let (| _, eff_ck |) : eff_pck_dc fl mymst = root eff_dcs in
   let (| _, pre |) = eff_ck Openfile in
   if snd (pre ()) then
     let _ = log Openfile in

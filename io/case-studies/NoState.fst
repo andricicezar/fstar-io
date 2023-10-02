@@ -39,7 +39,7 @@ let pi : policy sgm mst1 =
       else true 
     | _ -> true
 
-let ct_rcs : tree (pck_dc mst1) = 
+let ct_dcs : tree (pck_dc mst1) = 
   Node (| unit, resexn file_descr, (fun _ _ _ _ -> true) |) 
     Leaf 
     Leaf
@@ -71,7 +71,7 @@ let rec enforced_locally__sgm_nopass h lt fd :
 
 #set-options "--print_implicits"
 
-let ct_importable (fl:erased tflag) : safe_importable (ct fl) fl sgm mst1 ct_rcs =
+let ct_importable (fl:erased tflag) : safe_importable (ct fl) fl sgm mst1 ct_dcs =
   safe_importable_arrow_pre_post_args_res _ _ c1post () #solve #solve
 
 [@@ (postprocess_with (fun () -> norm [delta_only [`%ct; `%ct_importable]]; trefl ()))]
@@ -80,7 +80,7 @@ let nostate : src_interface = {
   sgm = sgm; pi = pi;
 
   ct = ct;
-  ct_dcs = ct_rcs;
+  ct_dcs = ct_dcs;
 
   ct_importable = ct_importable;
   psi = (fun _ _ lt -> (forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `List.memP` lt)));

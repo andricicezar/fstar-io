@@ -50,22 +50,22 @@ type zip_cb (fl:erased tflag) =
 type zip (fl:erased tflag) =
   afd:file_descr -> MIO (resexn (zip_cb fl)) fl mymst (fun h -> is_open afd h) (fun h _ lt -> enforced_locally sgm h lt)
 
-let zip_rcs : tree (pck_dc mymst) =  
+let zip_dcs : tree (pck_dc mymst) =  
   Node (| file_descr, unit, (fun _ _ _ _ -> true) |) 
      Leaf
      (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true) |) Leaf Leaf)
 
-let zip_cb_importable (fl:erased tflag) : safe_importable (zip_cb fl) fl sgm mymst (right zip_rcs) = 
+let zip_cb_importable (fl:erased tflag) : safe_importable (zip_cb fl) fl sgm mymst (right zip_dcs) = 
   safe_importable_arrow_pre_post_args_res _ _ () () #exportable_file_descr #solve
 
-let zip_importable (fl:erased tflag) : safe_importable (zip fl) fl sgm mymst zip_rcs = 
+let zip_importable (fl:erased tflag) : safe_importable (zip fl) fl sgm mymst zip_dcs = 
   safe_importable_arrow_pre_post_args _ _ () () #solve #(safe_importable_is_importable (zip_cb_importable fl))
 
 [@@ (postprocess_with (fun () -> norm [delta_only [`%zip; `%zip_cb;`%zip_importable]]; trefl ()))]
 let zip_int : src_interface = {
   mst = mymst;
   sgm = sgm; pi = pi;
-  ct = zip; ct_dcs = zip_rcs; ct_importable = zip_importable; 
+  ct = zip; ct_dcs = zip_dcs; ct_importable = zip_importable; 
   psi = (fun h _ lt -> enforced_locally sgm h lt);
 }
 

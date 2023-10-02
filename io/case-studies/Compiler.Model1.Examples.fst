@@ -86,7 +86,7 @@ let test1_ct_rc : dc_typ mst1 =
     | Inl fd -> List.mem fd s1
     | Inr _ -> false
 
-let test1_ct_rcs : tree (pck_dc mst1) = 
+let test1_ct_dcs : tree (pck_dc mst1) = 
   Node (| unit, resexn file_descr, test1_ct_rc |) 
     Leaf 
     Leaf
@@ -129,7 +129,7 @@ let test1_c2post =
 
 #set-options "--print_implicits"
 
-let test1_ct_importable (fl:erased tflag) : safe_importable (test1_ct fl) fl test1_sgm mst1 test1_ct_rcs =
+let test1_ct_importable (fl:erased tflag) : safe_importable (test1_ct fl) fl test1_sgm mst1 test1_ct_dcs =
   safe_importable_arrow_pre_post_args_res _ _ test1_c1post test1_c2post #exportable_unit #importable_file_descr
 
 val test1_stronger_sgms : stronger_sgms test1_sgm test1_sgm
@@ -148,7 +148,7 @@ let test1 : src_interface = {
   sgm = test1_sgm; pi = test1_pi;
 
   ct = test1_ct;
-  ct_dcs = test1_ct_rcs;
+  ct_dcs = test1_ct_dcs;
 
   ct_importable = test1_ct_importable;
   psi = (fun _ _ lt -> (forall fd'. ~((EOpenfile Ctx "/etc/passwd" fd') `List.memP` lt)));
@@ -161,7 +161,7 @@ let test1_prog #fl ctx () : MIO int (fl + IOOps) mst1 (fun _ -> True) test1.psi 
   0 
 
 val test1_ctx : ctx_src test1
-let test1_ctx #fl sec_io eff_rcs () : MIO (resexn file_descr) fl mst1 (fun _ -> True) (test1_post ()) = 
+let test1_ctx #fl sec_io eff_dcs () : MIO (resexn file_descr) fl mst1 (fun _ -> True) (test1_post ()) = 
   sec_io Openfile "/etc/passwd"
 
 val test1_ctx_t : ctx_tgt (comp_int_src_tgt test1)
@@ -185,7 +185,7 @@ let test2_ct (fl:erased tflag) = (cb:test2_cb fl) -> MIO (resexn file_descr) fl 
 let test2_rc  : dc_typ mst2 = 
   (fun () _ (rfd:resexn file_descr) s1 -> Inl? rfd && (Inl?.v rfd) `List.mem` s1)
 
-let test2_rcs : tree (pck_dc mst2) =  
+let test2_dcs : tree (pck_dc mst2) =  
   Node 
      (| unit, resexn file_descr, test2_rc |) 
      (Node (| file_descr, unit, (fun fd s0 _ _ -> fd `List.mem` s0) |) Leaf Leaf)
@@ -198,8 +198,8 @@ let test2_c1post a = ()
 val test2_c2post (a:Type) : squash (forall s0 s1 (x:a) h r lt . s0 `mst2.abstracts` h /\ s1 `mst2.abstracts` (apply_changes h lt) /\ enforced_locally test2_sgm h lt /\ test2_rc () s0 r s1 ==> test2_post x h r lt)
 let test2_c2post a = ()
 
-let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_sgm mst2 test2_rcs = 
-  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_sgm #mst2 #(left test2_rcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
+let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl test2_sgm mst2 test2_dcs = 
+  let exportable_cb = exportable_arrow_pre_post_args file_descr unit #fl #test2_sgm #mst2 #(left test2_dcs) (fun fd h -> is_open fd h) (fun fd _ _ lt -> lt == []) in
   safe_importable_arrow_pre_post_res
     (fun _ _ -> True)  (** pre **)
     test2_post       (** post **)
@@ -212,7 +212,7 @@ let test2_ct_importable (fl:erased tflag) : safe_importable (test2_ct fl) fl tes
 let test2 : src_interface = {
   mst = mst2;
   sgm = test2_sgm; pi = test2_pi; 
-  ct = test2_ct; ct_dcs = test2_rcs; ct_importable = test2_ct_importable; 
+  ct = test2_ct; ct_dcs = test2_dcs; ct_importable = test2_ct_importable; 
   psi = (fun _ _ _ -> True);
 }
 
@@ -222,9 +222,9 @@ let test2_prog #fl ctx () =
   (** return exit code **) 0
 
 val test2_ctx : ctx_src test2 
-let test2_ctx #fl sec_io eff_rcs cb : MIO (resexn file_descr) fl mst2 (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
-  let post1 = root eff_rcs in
-  let (| _, pre1 |) = root (left eff_rcs) in 
+let test2_ctx #fl sec_io eff_dcs cb : MIO (resexn file_descr) fl mst2 (fun _ -> True) (fun h rfd lt -> Inl? rfd ==> is_open (Inl?.v rfd) (rev lt @ h)) = 
+  let post1 = root eff_dcs in
+  let (| _, pre1 |) = root (left eff_dcs) in 
   let rfd = sec_io Openfile "/etc/passwd" in
   match rfd with
   | Inl fd -> let _ = pre1 fd in rfd
@@ -254,18 +254,18 @@ let test3_cb (fl:erased tflag) = (fd:file_descr -> MIO (resexn unit) fl mst3 (fu
 let test3_post #a = (fun (x:file_descr) h (r:a) lt -> True)
 let test3_ct (fl:erased tflag) = x:file_descr -> MIO (resexn (test3_cb fl)) fl mst2 (fun _ -> True) (test3_post x)
 
-let test3_rcs : tree (pck_dc mst3) =  
+let test3_dcs : tree (pck_dc mst3) =  
   Node (| file_descr, unit, (fun _ _ _ _ -> true) |) 
      Leaf
      (Node (| file_descr, resexn unit, (fun _ _ _ _ -> true) |) Leaf Leaf)
 
-let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_sgm mst3 (right test3_rcs) = 
+let test3_cb_importable (fl:erased tflag) : safe_importable (test3_cb fl) fl test3_sgm mst3 (right test3_dcs) = 
   safe_importable_arrow_pre_post_args_res
     #file_descr #unit
     #fl
     #test3_sgm
     #mst3
-    #(right test3_rcs)
+    #(right test3_dcs)
     (fun fd h -> True)
     (fun fd _ _ lt -> True)
     ()
@@ -277,12 +277,12 @@ val test3_c1post (a:Type) : c1typ #file_descr #a (fun _ _ -> True) test3_post te
 let test3_c1post a = ()
   
 val test3_c2post (a:Type) : 
-  squash (forall s0 s1 x h r lt . s0 `mst3.abstracts` h /\ s1 `mst3.abstracts` (apply_changes h lt) /\ enforced_locally test3_sgm h lt /\ (root test3_rcs)._3 x s0 r s1 ==> test3_post x h r lt)
+  squash (forall s0 s1 x h r lt . s0 `mst3.abstracts` h /\ s1 `mst3.abstracts` (apply_changes h lt) /\ enforced_locally test3_sgm h lt /\ (root test3_dcs)._3 x s0 r s1 ==> test3_post x h r lt)
 let test3_c2post a = ()
 
-let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_sgm mst3 test3_rcs = 
+let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl test3_sgm mst3 test3_dcs = 
   safe_importable_arrow_pre_post_args
-    #file_descr #(test3_cb fl) #fl #test3_sgm #mst3 #test3_rcs
+    #file_descr #(test3_cb fl) #fl #test3_sgm #mst3 #test3_dcs
     (fun _ _ -> True)  (** pre **)
     test3_post       (** post **)
     (test3_c1post (test3_cb fl))
@@ -294,7 +294,7 @@ let test3_ct_importable (fl:erased tflag) : safe_importable (test3_ct fl) fl tes
 let test3 : src_interface = {
   mst = mst3;
   sgm = test3_sgm; pi = test3_pi;
-  ct = test3_ct; ct_dcs = test3_rcs; ct_importable = test3_ct_importable; 
+  ct = test3_ct; ct_dcs = test3_dcs; ct_importable = test3_ct_importable; 
   psi = (fun _ _ _ -> True);
 }
 
@@ -309,7 +309,7 @@ let test3_prog #fl ctx () : MIO int (IOOps + fl) mst3 (fun _ -> True) (fun _ _ _
   | Inr err -> -1
 
 val test3_ctx : ctx_src test3 
-let test3_ctx #fl sec_io eff_rcs fd = 
+let test3_ctx #fl sec_io eff_dcs fd = 
   Inl (fun (fd:file_descr) -> Inl () <: (MIOwp (resexn unit) mst3 fl trivial_hist))
 
 val test3_ctx_t : ctx_tgt (comp_int_src_tgt test3)
