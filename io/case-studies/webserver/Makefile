@@ -62,6 +62,9 @@ _prepare_compilation: | out
 	cp Compiler_MIO_To_Interm.* out/.
 	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc client/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/uu___2 uu___1 uu___/uu___2 (Obj.magic uu___1) uu___/g' {} \;
+	find out/WebServer.ml -type f -exec sed -i 's/ fun client ->/ Obj.magic (fun client ->/g' {} \;
+	find out/WebServer.ml -type f -exec sed -i 's/CommonUtils.Contract_failure)))))))))$$/CommonUtils.Contract_failure))))))))))/g' {} \;
+
 
           
 _compile1: | out
