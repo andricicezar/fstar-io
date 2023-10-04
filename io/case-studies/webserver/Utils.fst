@@ -5,44 +5,13 @@ open FStar.List.Tot
 
 open Compiler.Languages
 
+include MonitorParam
+
 val valid_http_response : Bytes.bytes -> bool
 let valid_http_response res = Bytes.length res < 500
 
 val valid_http_request : Bytes.bytes -> bool
 let valid_http_request req = Bytes.length req < 500
-
-let rec is_opened_by_untrusted (h:trace) (fd:file_descr) : bool =
-  match h with
-  | [] -> false
-  | EOpenfile Ctx _ res :: tl ->
-    if Inl? res && fd = Inl?.v res then true
-    else is_opened_by_untrusted tl fd
-  | EClose _ fd' res :: tl ->
-    if Inl? res && fd = fd' then false
-    else is_opened_by_untrusted tl fd
-  | e :: tl -> is_opened_by_untrusted tl fd
-
-val wrote_to : file_descr -> trace -> bool
-let rec wrote_to client h =
-  match h with
-  | [] -> false
-  | EAccept _ arg res :: tl -> begin
-    match res with
-    | Inl fd -> if fd = client then false else wrote_to client tl
-    | _ -> wrote_to client tl
-  end
-  | EWrite Prog arg _ :: tl ->
-    let (fd, _) = arg in
-    if fd = client then true
-    else wrote_to client tl
-  | _ :: tl -> wrote_to client tl
-
-let rec did_not_respond (h:trace) : bool =
-  match h with
-  | [] -> false
-  | ERead Prog _ _ :: tl -> true
-  | EWrite Prog _ _ :: tl -> false
-  | e :: tl -> did_not_respond tl
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -67,10 +36,6 @@ let no_read_true e : GTot bool =
   | ERead Prog _ (Inl _) -> false
   | _ -> true
 
-type status =
-| DidNotRespond
-| Responded
-
 let rec is_waiting (h : trace) =
   match h with
   | [] -> true
@@ -79,136 +44,12 @@ let rec is_waiting (h : trace) =
   | EWrite Prog _ res :: tl -> (match res with | Inl _ -> true | Inr _ -> is_waiting tl)
   | _ :: tl -> is_waiting tl
 
-let models_status (c:status) (h:trace) : bool =
-  match c with
-  | DidNotRespond -> did_not_respond h
-  | Responded -> not (did_not_respond h)
-
-noeq type cst = {
-  opened : list file_descr ;
-  st : status ;
-  written : list file_descr
-}
-
-let mkcst x y z = {
-  opened = x ;
-  st = y ;
-  written = z
-}
-
-let updst (c : cst) s : cst = {
-  opened = c.opened ;
-  st = s ;
-  written = c.written
-}
-
-let open_cst (fd : file_descr) (c : cst) : cst = {
-  opened = fd :: c.opened ;
-  st = c.st ;
-  written = c.written
-}
-
-let write_cst (fd : file_descr) (c : cst) : cst = {
-  opened = c.opened ;
-  st = Responded ;
-  written = fd :: c.written
-}
-
-let is_neq (#a:eqtype) (x y : a) : bool = x <> y
-
-let close_cst (fd : file_descr) (c : cst) : cst = {
-  opened = filter (is_neq fd) c.opened ;
-  st = c.st ;
-  written = c.written
-}
-
-let accept_cst (fd : file_descr) (c : cst) : cst = {
-  opened = c.opened ;
-  st = c.st ;
-  written = filter (is_neq fd) c.written
-}
-
-let models (c : cst) (h : trace) : Type0 =
-  c.st `models_status` h /\
-  (forall fd. fd `mem` c.opened <==> is_opened_by_untrusted h fd) /\
-  (forall fd. fd `mem` c.written <==> wrote_to fd h)
-
-let mymst : mstate = {
-  typ = cst;
-  abstracts = models;
-}
-
 effect MyMIO
   (a:Type)
   (fl:FStar.Ghost.erased tflag)
   (pre : trace -> Type0)
   (post : trace -> a -> trace -> Type0) =
   MIO a fl mymst pre post
-
-let my_init_cst : mymst.typ =
-  mkcst [] Responded []
-
-// TODO MOVE
-let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
-  Lemma (requires x `memP` filter f l) (ensures x `memP` l)
-= match l with
-  | y :: tl ->
-    if f y
-    then begin
-      eliminate x == y \/ x `memP` filter f tl
-      returns x `memP` l
-      with _. ()
-      and _. mem_filter f tl x
-    end
-    else mem_filter f tl x
-
-// TODO MOVE
-let rec filter_mem (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
-  Lemma (requires x `memP` l /\ f x) (ensures x `memP` filter f l)
-= match l with
-  | y :: tl ->
-    if f y
-    then begin
-      eliminate x == y \/ x `memP` tl
-      returns x `memP` filter f l
-      with _. ()
-      and _. filter_mem f tl x
-    end
-    else filter_mem f tl x
-
-let mem_filter_equiv (#a:Type) (f: (a -> Tot bool)) (l: list a) :
-  Lemma (forall x. x `memP` filter f l <==> (x `memP` l /\ f x))
-= introduce forall x. x `memP` filter f l <==> (x `memP` l /\ f x)
-  with begin
-    introduce x `memP` filter f l ==> (x `memP` l /\ f x)
-    with _. mem_filter f l x ;
-    introduce (x `memP` l /\ f x) ==> x `memP` filter f l
-    with _. filter_mem f l x
-  end
-
-let my_update_cst (s0:cst) (e:event) : (s1:cst{forall h. s0 `models` h ==> s1 `models` (e::h)}) =
-  let (| caller, cmd, arg, res |) = destruct_event e in
-  match cmd, res with
-  | Accept, Inl fd ->
-    mem_filter_equiv (is_neq fd) s0.written ;
-    accept_cst fd s0
-  | Read, _ ->
-    let (fd, _) : file_descr * UInt8.t = arg in
-    if caller = Prog then updst s0 DidNotRespond else s0
-  | Openfile, Inl fd -> if caller = Ctx then open_cst fd s0 else s0
-  | Close, Inl rr ->
-    mem_filter_equiv (is_neq arg) s0.opened ;
-    close_cst arg s0
-  | Write, _ ->
-    let arg : file_descr * Bytes.bytes = arg in
-    let (fd, bb) = arg in
-    if caller = Prog then write_cst fd s0 else s0
-  | _ -> s0
-
-let mymst_impl : mst_impl mymst = {
-  init = my_init_cst;
-  update = (fun s e h -> my_update_cst s e);
-}
 
 val sgm : policy_spec
 let sgm h c cmd arg =

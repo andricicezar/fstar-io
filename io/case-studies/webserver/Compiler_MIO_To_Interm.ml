@@ -1,12 +1,4 @@
 open Prims
-let (get_trace : unit -> unit -> (unit, unit, unit, Obj.t) MIO.dm_gmio) =
-  fun mst ->
-    fun uu___ ->
-      MIO_Sig_Call.mio_call () Free.Prog MIO_Sig.GetTrace (Obj.repr ())
-let (get_state : unit -> unit -> (unit, unit, unit, unit) MIO.dm_gmio) =
-  fun mst ->
-    fun uu___ ->
-      MIO_Sig_Call.mio_call () Free.Prog MIO_Sig.GetST (Obj.repr ())
 type 'a tree =
   | Leaf 
   | EmptyNode of 'a tree * 'a tree 
@@ -61,9 +53,9 @@ type ('mst, 'argt, 'rett) dc_typ =
   'argt -> Obj.t -> 'rett -> Obj.t -> Prims.bool
 type ('a, 'b, 'mst, 'dc, 's0, 'x, 'y, 'h1, 'uuuuu,
   'lt) eff_dc_typ_cont_post = Obj.t
-type ('mst, 'fl, 't1, 't2, 'dc, 'x, 's0) eff_dc_typ_cont =
+type ('fl, 'mst, 't1, 't2, 'dc, 'x, 's0) eff_dc_typ_cont =
   't2 -> ((unit * Prims.bool), unit, unit, unit) MIO.dm_gmio
-type ('mst, 'fl, 't1, 't2, 'dc) eff_dc_typ =
+type ('fl, 'mst, 't1, 't2, 'dc) eff_dc_typ =
   't1 ->
     ((unit, (unit, unit, 't1, 't2, unit, unit, unit) eff_dc_typ_cont)
        Prims.dtuple2,
@@ -83,19 +75,20 @@ let (enforce_dc :
              fun argt ->
                fun rett ->
                  fun dc ->
-                   Obj.magic
-                     (fun x ->
-                        MIO.dm_gmio_bind () () () () ()
-                          (Obj.magic (get_state () ()))
+                   fun x ->
+                     Obj.magic
+                       (MIO.dm_gmio_bind () () () () ()
+                          (Obj.magic (MIO.get_state () ()))
                           (fun s0 ->
                              MIO.lift_pure_dm_gmio () ()
                                (fun uu___ ->
                                   Prims.Mkdtuple2
                                     ((),
-                                      (Obj.magic
-                                         (fun y ->
-                                            MIO.dm_gmio_bind () () () () ()
-                                              (Obj.magic (get_state () ()))
+                                      (fun y ->
+                                         Obj.magic
+                                           (MIO.dm_gmio_bind () () () () ()
+                                              (Obj.magic
+                                                 (MIO.get_state () ()))
                                               (fun s1 ->
                                                  MIO.lift_pure_dm_gmio () ()
                                                    (fun uu___1 ->
@@ -114,7 +107,7 @@ let (check :
           fun ret ->
             fun s1 ->
               FStar_Pervasives.__proj__Mkdtuple3__item___3 ctr arg s0 ret s1
-type ('mst, 'fl) eff_pck_dc =
+type ('fl, 'mst) eff_pck_dc =
   (unit pck_dc, (unit, unit, unit, unit, unit) eff_dc_typ) Prims.dtuple2
 let (make_dc_eff : unit -> unit pck_dc -> (unit, unit) eff_pck_dc) =
   fun mst ->
@@ -124,19 +117,19 @@ let (make_dc_eff : unit -> unit pck_dc -> (unit, unit) eff_pck_dc) =
           (Obj.magic
              (enforce_dc () () ()
                 (FStar_Pervasives.__proj__Mkdtuple3__item___3 r))))
-type ('mst, 'fl, 'dcs) typ_eff_dcs = (unit, unit) eff_pck_dc tree
+type ('fl, 'mst, 'dcs) typ_eff_dcs = (unit, unit) eff_pck_dc tree
 let (typ_left :
   unit ->
     unit ->
       unit pck_dc tree ->
         (unit, unit, unit) typ_eff_dcs -> (unit, unit, unit) typ_eff_dcs)
-  = fun mst -> fun fl -> fun dcs -> fun t -> left t
+  = fun fl -> fun mst -> fun dcs -> fun t -> left t
 let (typ_right :
   unit ->
     unit ->
       unit pck_dc tree ->
         (unit, unit, unit) typ_eff_dcs -> (unit, unit, unit) typ_eff_dcs)
-  = fun mst -> fun fl -> fun dcs -> fun t -> right t
+  = fun fl -> fun mst -> fun dcs -> fun t -> right t
 let (make_dcs_eff :
   unit -> unit pck_dc tree -> (unit, unit, unit) typ_eff_dcs) =
   fun mst ->
@@ -848,9 +841,9 @@ let (rityp_eff_dc :
                              fun d ->
                                fun dc ->
                                  fun eff_dc ->
-                                   Obj.magic
-                                     (fun x ->
-                                        MIO.dm_gmio_bind () () () () ()
+                                   fun x ->
+                                     Obj.magic
+                                       (MIO.dm_gmio_bind () () () () ()
                                           (Obj.magic (eff_dc x))
                                           (fun uu___ ->
                                              MIO.lift_pure_dm_gmio () ()

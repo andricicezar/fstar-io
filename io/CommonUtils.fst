@@ -125,3 +125,39 @@ let lemma_append_rev_inv_tail (l l' l'':list 'a) :
     (ensures (l' == l'')) = 
   List.Tot.Properties.append_inv_tail l (rev l') (rev l'');
   lemma_rev_rev_equal l' l''
+
+let rec mem_filter (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` filter f l) (ensures x `memP` l)
+= match l with
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` filter f tl
+      returns x `memP` l
+      with _. ()
+      and _. mem_filter f tl x
+    end
+    else mem_filter f tl x
+
+let rec filter_mem (#a:Type) (f: (a -> Tot bool)) (l: list a) (x: a) :
+  Lemma (requires x `memP` l /\ f x) (ensures x `memP` filter f l)
+= match l with
+  | y :: tl ->
+    if f y
+    then begin
+      eliminate x == y \/ x `memP` tl
+      returns x `memP` filter f l
+      with _. ()
+      and _. filter_mem f tl x
+    end
+    else filter_mem f tl x
+
+let mem_filter_equiv (#a:Type) (f: (a -> Tot bool)) (l: list a) :
+  Lemma (forall x. x `memP` filter f l <==> (x `memP` l /\ f x))
+= introduce forall x. x `memP` filter f l <==> (x `memP` l /\ f x)
+  with begin
+    introduce x `memP` filter f l ==> (x `memP` l /\ f x)
+    with _. mem_filter f l x ;
+    introduce (x `memP` l /\ f x) ==> x `memP` filter f l
+    with _. filter_mem f l x
+  end

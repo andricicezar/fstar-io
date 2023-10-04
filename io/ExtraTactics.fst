@@ -154,7 +154,7 @@ let rec blowup_binder (x:term) (x':binder) : Tac unit =
 let rec blowup () : Tac unit =
   let goal = cur_goal () in
   match term_as_formula goal with
-  | Forall _ _ -> ignore (forall_intro ()); blowup ()
+  | Forall _ _ _ -> ignore (forall_intro ()); blowup ()
   | And _ _ ->
       focus (fun () -> split (); iterAll blowup)
   | Implies x _ ->

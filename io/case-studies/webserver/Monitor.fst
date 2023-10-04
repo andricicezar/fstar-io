@@ -2,17 +2,16 @@ module Monitor
 
 open FStar.ST
 open MIO.Sig
-open Utils
 
 (* This module is essentially parametric over these, but we must fix them here
 in order to allocate the reference at module initialization time. An alternative
 would be to parametrize the functions by it and pass the reference around. *)
 
-let mst = mymst
-let mi = mymst_impl
+let mst = MonitorParam.mymst
+let mi = MonitorParam.mymst_impl
 
 private
-val monitor_state : ref mymst.typ
+val monitor_state : ref mst.typ
 let monitor_state = ST.alloc mi.init
 
 let get_state () : St mst.typ = !monitor_state

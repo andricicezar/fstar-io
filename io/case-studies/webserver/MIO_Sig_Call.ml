@@ -13,8 +13,8 @@ let print_caller (caller:caller) : unit =
    | Prog -> print_string " Prog "
    | Ctx -> print_string " Ctx "
 
-let print_call0 (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
-    match cmd with
+let print_call0 (caller:caller) (op:mio_ops) (arg:Obj.t) (res:Obj.t) : unit =
+    match op with
     | Openfile -> begin
        print_string "EOpenfile"; print_caller caller;
        print_string "_ ";
@@ -125,13 +125,13 @@ let print_call0 (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
        | Inr err -> print_string "(Inr _);"
     end
 
-let print_call (caller:caller) (cmd:io_cmds) (arg:Obj.t) (res:Obj.t) : unit =
-   print_call0 caller cmd arg res;
+let print_call (caller:caller) (op:io_ops) (arg:Obj.t) (res:Obj.t) : unit =
+   print_call0 caller op arg res;
    flush stdout
 
 let print_event (e:event) : unit =
-   let (caller, cmd, arg, res) : (caller * io_cmds * Obj.t * Obj.t) = Obj.magic (MIO_Sig.destruct_event e) in
-   print_call0 caller cmd arg res
+   let (caller, op, arg, res) : (caller * io_ops * Obj.t * Obj.t) = Obj.magic (MIO_Sig.destruct_event e) in
+   print_call0 caller op arg res
 
 let rec print_trace0 (t:trace) : unit =
   match t with
@@ -146,8 +146,8 @@ let print_trace (t:trace) : unit=
   flush stdout
 
 
-let ml_call (cmd:io_cmds) : Obj.t -> Obj.t =
-  match cmd with
+let ml_call (op:io_ops) : Obj.t -> Obj.t =
+  match op with
   | Openfile -> Obj.magic (Obj.repr Unix_Star.openfile)
   | Read -> Obj.magic (Obj.repr Unix_Star.read)
   | Write -> Obj.magic (Obj.repr Unix_Star.write)
@@ -164,41 +164,43 @@ let ml_call (cmd:io_cmds) : Obj.t -> Obj.t =
   | Access -> Obj.magic (Obj.repr Unix_Star.access)
   | Stat -> Obj.magic (Obj.repr Unix_Star.stat)
 
-let (io_call : caller -> io_cmds -> Obj.t -> (unit, Obj.t resexn) mio) =
-  fun caller -> fun cmd -> fun argz ->
-    match ml_call cmd argz with
+let (io_call : caller -> io_ops -> Obj.t -> (unit, Obj.t resexn) mio) =
+  fun caller -> fun op -> fun argz ->
+    match ml_call op argz with
     | exception err ->
       (* error case: *)
-      Monitor.update_state caller cmd argz (Obj.magic (Inr err));
-      print_call caller cmd argz (Obj.magic (Inr err));
+      Monitor.update_state caller op argz (Obj.magic (Inr err)) ();
+      print_call caller op argz (Obj.magic (Inr err));
       mio_return () (Inr err)
     | rez ->
       (* success: *)
-      Monitor.update_state caller cmd argz (Obj.magic (Inl rez));
-      print_call caller cmd argz (Obj.magic (Inl rez));
+      Monitor.update_state caller op argz (Obj.magic (Inl rez)) ();
+      print_call caller op argz (Obj.magic (Inl rez));
       mio_return () (Inl rez)
 
 (* old version: if for whatever reason print_call raises an exception
    in the successful case we will get two events logged.
 
   try
-    let rez = ml_call cmd argz in
-    Monitor.update_state caller cmd argz (Obj.magic (Inl rez)); 
-    print_call caller cmd argz (Obj.magic (Inl rez));
+    let rez = ml_call op argz in
+    Monitor.update_state caller op argz (Obj.magic (Inl rez)); 
+    print_call caller op argz (Obj.magic (Inl rez));
     mio_return () (Inl rez)
   with err ->
-    Monitor.update_state caller cmd argz (Obj.magic (Inr err));
-    print_call caller cmd argz (Obj.magic (Inr err));
+    Monitor.update_state caller op argz (Obj.magic (Inr err));
+    print_call caller op argz (Obj.magic (Inr err));
     mio_return () (Inr err)
 *)
 
-let (mio_call : unit -> caller -> cmds -> Obj.t -> (unit, unit) mio) =
-  fun () -> fun caller -> fun cmd -> fun argz ->
-  match cmd with
+let (mio_call :
+  unit -> caller -> mio_ops -> Obj.t -> (unit, unit) mio)
+  =
+  fun () -> fun caller -> fun op -> fun argz ->
+  match op with
   | GetTrace -> mio_return () ()
   | GetST -> 
     let s0 = Monitor.get_state () in
     print_string "GetST;";
     flush stdout;
     mio_return () (Obj.magic s0)
-  | _ -> Obj.magic (io_call caller cmd argz)
+  | _ -> Obj.magic (io_call caller op argz)
