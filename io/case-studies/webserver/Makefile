@@ -57,8 +57,9 @@ _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
 	cp ../../UnixTypes.* out/.
 	cp Unix_Star.* out/.
-	@# Override some files to work around F* extraction bugs
+	@# Replacing the calling of monad constructors with calls to the Unix library
 	cp MIO_Sig_Call.* out/.
+	@# Override some files to work around F* extraction bugs
 	cp Compiler_MIO_To_Interm.* out/.
 	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc client/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/uu___2 uu___1 uu___/uu___2 (Obj.magic uu___1) uu___/g' {} \;
@@ -79,14 +80,20 @@ _compile3: | out
 compile_cs1: | out
 	make _prepare_compilation;
 	make _compile1;
-	mv out/CS.exe out/CS1.exe
+	mv out/CS.exe out/ws_adversarial.exe
 
 compile_cs2: | out
 	make _prepare_compilation;
 	make _compile2;
-	mv out/CS.exe out/CS2.exe
+	mv out/CS.exe out/ws_serve_file.exe
 
 compile_cs3: | out
 	make _prepare_compilation;
 	make _compile3;
-	mv out/CS.exe out/CS3.exe
+	mv out/CS.exe out/ws_echo.exe
+
+build: | out
+	make extract;
+	make compile_cs1;
+	make compile_cs2;
+	make compile_cs3
