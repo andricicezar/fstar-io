@@ -187,20 +187,35 @@ $ docker exec -it sciostar curl http://localhost:81/
 $ docker exec -it sciostar curl -I http://localhost:81/etc/passwd
 HTTP/1.1 401
 
-$ docker exec -it sciostar curl --output - http://localhost:81/home/opam/sciostar/MIO.Sig.Call.fst
+$ docker exec -it sciostar curl --output - http://localhost:81/home/opam/sciostar/MIO.Sig.fst
 
 <the contents of the file>
 ```
 
-You can write any text and when pressing `Enter`, you should get the message back.
+This web server should be able to serve files excepts when asked for `/etc/passwd`
+because the access control policy prevents opening that file.
+
+### Run the Adversarial example
+
+In this variant, the web server writes always back `HTTP/1.1 400` because it is linked
+against an adversarial handler that tries to break the specification. To start the web
+server, run:
+```bash
+sciostar/case-studies/webserver$ ./out/ws_adversarial.exe
+```
+
+To connect to the web server, in a different terminal, run the following command.
+```bash
+$ docker exec -it sciostar telnet localhost 81
+```
+
+You can write any text and when pressing `Enter`, you should get `HTTP/1.1 400` back.
 Like this:
 ```bash
 Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
 Echo!
-Echo!
+HTTP/1.1 400
 Connection closed by foreign host.
 ```
-
-### Run the Adversarial example
