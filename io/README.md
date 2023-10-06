@@ -29,6 +29,8 @@ the web server case study at the end.
 | The `interm` type class | `Compiler.Languages.fst` |
 | The `exportable` and `importable` type classes, together with instances for importing and exporting functions | `Compiler.MIO.To.Interm.fst` |
 | **Section 5** | |
+| `mstate` type | `MIO.Sig.fst` | 
+| The types of effectful checks | `eff_ck_typ` in  `Compiler.MIO.To.Interm.fst` |
 | **Section 6** | |
 | Figure 4 | `Compiler.Model1.fst` |
 | Soundness Theorem | `Compiler.Model1.fst`, definition `soundness` |
@@ -38,6 +40,7 @@ the web server case study at the end.
 | **Case study - web server** | in folder `case-studies/webserver` |
 | Figure 2 | `WebServer.fst` |
 | The adversarial handlers | `AdversarialHandlers.fst` |
+| The Σ and Π | `Utils.fst` as `sgm` and `pi` |
 | Web Server's state (section 5.2) | `MonitorParam.fst` |
 
 ## Download and Installation
