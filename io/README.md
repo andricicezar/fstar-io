@@ -2,7 +2,7 @@
 
 This subdirectory contains the artifact associated with the POPL 2024 submission with the name:
 "[Securing Verified IO Programs Against Unverified Code in F*](https://arxiv.org/abs/2303.01350)".
-The artifact is packaged as a docker image using a Dockerfile.
+The artifact is packaged using [Docker](https://www.docker.com/).
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
