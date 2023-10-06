@@ -28,7 +28,7 @@ The artifact contains:
 * the verified web server case study;
 * other examples.
 
-We present in the following list where all the definitions and
+We list where the definitions and
 theorems of the paper are. We start the list with section 3 and present
 the web server case study at the end.
 
@@ -49,8 +49,8 @@ the web server case study at the end.
 | **Section 6** | |
 | Figure 4 | `Compiler.Model1.fst` |
 | Soundness Theorem | `Compiler.Model1.fst`, definition `soundness` |
-|  Robust Relational Hyperproperty Preservation (RrHP) | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
-| Dual Setting | `Compiler.Model2.fst` | 
+|  Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
+| Dual Setting, together with the Soundness-Dual Theorem | `Compiler.Model2.fst` | 
 | Syntactic representation of target contexts | `Compiler.ModelStlc.fst` |
 | **Case study - web server** | in folder `case-studies/webserver` |
 | Figure 2 | `WebServer.fst` |
