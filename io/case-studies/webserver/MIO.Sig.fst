@@ -78,19 +78,19 @@ let io_sig : op_sig io_ops = { args = io_args; res = io_resm'; }
 
 noeq
 type event =
-  | EOpenfile : caller -> a:io_sig.args Openfile -> (r:io_sig.res Openfile a) -> event
-  | ERead     : caller -> a:io_sig.args Read     -> (r:io_sig.res Read a)     -> event
-  | EWrite     : caller -> a:io_sig.args Write     -> (r:io_sig.res Write a)     -> event
-  | EClose    : caller -> a:io_sig.args Close    -> (r:io_sig.res Close a)    -> event
-  | ESocket     : caller -> a:io_sig.args Socket     -> (r:io_sig.res Socket a)     -> event
-  | ESetsockopt     : caller -> a:io_sig.args Setsockopt     -> (r:io_sig.res Setsockopt a)     -> event
-  | EBind     : caller -> a:io_sig.args Bind     -> (r:io_sig.res Bind a)     -> event
-  | ESetNonblock     : caller -> a:io_sig.args SetNonblock     -> (r:io_sig.res SetNonblock a)     -> event
-  | EListen     : caller -> a:io_sig.args Listen     -> (r:io_sig.res Listen a)     -> event
-  | EAccept     : caller -> a:io_sig.args Accept     -> (r:io_sig.res Accept a)     -> event
-  | ESelect     : caller -> a:io_sig.args Select     -> (r:io_sig.res Select a)     -> event
-  | EAccess     : caller -> a:io_sig.args Access     -> (r:io_sig.res Access a)     -> event
-  | EStat     : caller -> a:io_sig.args Stat     -> (r:io_sig.res Stat a)     -> event
+  | EOpenfile      : caller -> a:io_sig.args Openfile      -> (r:io_sig.res Openfile a)     -> event
+  | ERead          : caller -> a:io_sig.args Read          -> (r:io_sig.res Read a)         -> event
+  | EWrite         : caller -> a:io_sig.args Write         -> (r:io_sig.res Write a)        -> event
+  | EClose         : caller -> a:io_sig.args Close         -> (r:io_sig.res Close a)        -> event
+  | ESocket        : caller -> a:io_sig.args Socket        -> (r:io_sig.res Socket a)       -> event
+  | ESetsockopt    : caller -> a:io_sig.args Setsockopt    -> (r:io_sig.res Setsockopt a)   -> event
+  | EBind          : caller -> a:io_sig.args Bind          -> (r:io_sig.res Bind a)         -> event
+  | ESetNonblock   : caller -> a:io_sig.args SetNonblock   -> (r:io_sig.res SetNonblock a)  -> event
+  | EListen        : caller -> a:io_sig.args Listen        -> (r:io_sig.res Listen a)       -> event
+  | EAccept        : caller -> a:io_sig.args Accept        -> (r:io_sig.res Accept a)       -> event
+  | ESelect        : caller -> a:io_sig.args Select        -> (r:io_sig.res Select a)       -> event
+  | EAccess        : caller -> a:io_sig.args Access        -> (r:io_sig.res Access a)       -> event
+  | EStat          : caller -> a:io_sig.args Stat          -> (r:io_sig.res Stat a)         -> event
 
 type trace = list event
 

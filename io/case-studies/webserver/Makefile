@@ -59,8 +59,8 @@ _prepare_compilation: | out
 	cp Unix_Star.* out/.
 	@# Replacing the calling of monad constructors with calls to the Unix library
 	cp MIO_Sig_Call.* out/.
-	@# Override some files to work around F* extraction bugs
-	cp Compiler_MIO_To_Interm.* out/.
+	@# Workarounds for F* extraction bugs: https://github.com/FStarLang/FStar/issues/2912
+	find out/Compiler_MIO_To_Interm.ml -type f -exec sed -i 's/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d ->/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d -> Obj.magic/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc client/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/uu___2 uu___1 uu___/uu___2 (Obj.magic uu___1) uu___/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/ fun client ->/ Obj.magic (fun client ->/g' {} \;
@@ -96,4 +96,6 @@ build: | out
 	make extract;
 	make compile_cs1;
 	make compile_cs2;
-	make compile_cs3
+	make compile_cs3;
+	@echo "===============================";
+	@echo "Successfully built the binaries out/ws_adversarial.exe, out/ws_serve_file.exe and out/ws_echo.exe"

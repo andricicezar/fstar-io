@@ -44,8 +44,6 @@ let get_caller = function
   | EClose    c _ _
   -> c
 
-assume val stdout : file_descr
-
 val to_string : op:io_ops -> string
 let to_string o =
   match o with
@@ -66,7 +64,7 @@ let sgm h c op arg =
     Nil? h \/ (get_caller (List.Tot.hd h) == Ctx)
   | _ -> False
 
-val pi0 : s:mymst.typ -> op:io_ops -> arg:io_sig.args op -> r:bool
+val pi0 : s:mymst.typ -> op:io_ops -> arg:io_sig.args op -> bool
 let pi0 (s0:option event) op arg =
   match s0 with
   | Some (EWrite Prog (fd, inp) (Inl ())) ->

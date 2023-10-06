@@ -3,6 +3,7 @@ module Compiler.Languages
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Ghost
+open FStar.List
 
 open CommonUtils
 
@@ -39,7 +40,7 @@ let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
       enforced_locally pi (apply_changes h lt1) lt2))
     (ensures (
       enforced_locally pi h (lt1 @ lt2)))
-    (decreases (List.length lt1)) =
+    (decreases (length lt1)) =
     match lt1 with
     | [] -> ()
     | e::[] -> ()
@@ -49,11 +50,11 @@ let rec lemma_append_enforced_locally_0 pi h lt1 lt2:
         == {}
         enforced_locally pi (apply_changes h (e::t1)) lt2;
         == {}
-        enforced_locally pi (List.rev (e::t1) @ h) lt2;
-        == { _ by (l_to_r [`List.Tot.rev_rev'] ) }
-        enforced_locally pi ((List.rev (t1) @ [e]) @ h) lt2;
-        == { _ by (l_to_r [`List.Tot.append_assoc]) }
-        enforced_locally pi (List.rev (t1) @ ([e] @ h)) lt2;
+        enforced_locally pi (rev (e::t1) @ h) lt2;
+        == { _ by (l_to_r [`rev_rev'] ) }
+        enforced_locally pi ((rev (t1) @ [e]) @ h) lt2;
+        == { _ by (l_to_r [`append_assoc]) }
+        enforced_locally pi (rev (t1) @ ([e] @ h)) lt2;
         == {}
         enforced_locally pi (apply_changes ([e] @ h) t1) lt2;
     };

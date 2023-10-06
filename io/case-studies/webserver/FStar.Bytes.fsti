@@ -128,8 +128,8 @@ val slice:
     b:bytes
   -> s:u32
   -> e:u32
-  -> r:bytes
-let slice_ b (s:nat) (e:nat) = slice b (U32.uint_to_t s) (U32.uint_to_t e)
+  -> bytes
+// let slice_ b (s:nat) (e:nat) = slice b (U32.uint_to_t s) (U32.uint_to_t e)
 
 val sub:
     b:bytes
@@ -257,7 +257,7 @@ val xor_idempotent:
 
 val utf8_encode:
     s:string
-  -> b:bytes
+  -> bytes
 
 val iutf8_opt:
     m:bytes

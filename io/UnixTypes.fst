@@ -4,6 +4,8 @@ module UnixTypes
 
 type file_descr = int
 
+assume val stdout : file_descr
+
 type error = 
   | EAGAIN
   | ENOENT

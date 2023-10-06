@@ -26,7 +26,7 @@ for the installation instructions.
 $ docker build -t sciostar .
 
 # Run Image
-$ docker run --rm -it sciostar
+$ docker run --rm -it --name sciostar sciostar
 ```
 
 ### Download and Installation without Docker
@@ -47,8 +47,10 @@ See more details about [how to install F\* here](https://github.com/FStarLang/FS
 
 ### Verify SCIO\* 
 **Expected time:** around 4 minutes
+
 **Script for this step:**
-```
+
+```bash
 ~/sciostar$ make verify
 ```
 
@@ -70,9 +72,12 @@ All verification conditions discharged successfully
 ```
 
 ### Verify the Web Server
+
 **Expected time:** around 2 minutes
+
 **Script for this step:**
-```
+
+```bash
 ~/sciostar/case-studies/webserver$ make verify
 ```
 
@@ -81,7 +86,8 @@ subdirectory. This command verifies the web server and all the handlers.
 
 **Expected outbout** should be a long list of files verified by F\*. A
   few blue warnings appear which can be ignored.
-```
+
+```bash
 fstar.exe --include ../.. --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  MIO.Sig.fst
 FStar.Bytes.fsti(0,0-0,0): (Warning 241) Unable to load /home/opam/.opam/4.12/bin/../lib/fstar/.cache/FStar.Bytes.fsti.checked since checked file /home/opam/.opam/4.12/bin/../lib/fstar/.cache/FStar.Bytes.fsti.checked is stale (digest mismatch for FStar.Bytes.fsti); will recheck FStar.Bytes.fsti (suppressing this warning for further modules)
 ...
@@ -91,9 +97,12 @@ All verification conditions discharged successfully
 ```
 
 ### Compiling the Web Server
+
 **Expected time:** less than 1 minute
+
 **Script for this step:**
-```
+
+```bash
 ~/sciostar/case-studies/webserver$ make build
 ```
 
@@ -114,7 +123,8 @@ web server:
 
 **Expected outbout** should look like this. Code produced by F\*
   native extraction produces many Warnings which can be ignored.
-```
+
+```bash
 fstar.exe --include ../.. --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  --dep full --warn_error -321 Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst >.depend.mk
 make extract;
 make[1]: Entering directory '/home/opam/sciostar/case-studies/webserver'
@@ -128,13 +138,28 @@ Extracted module FStar.List.Tot.Properties
 Extracted module FStar.List.Tot
 ...
 make[2]: Leaving directory '/home/opam/sciostar/case-studies/webserver'
-mv out/CS.exe out/CS3.exe
+mv out/CS.exe out/ws_echo.exe
 make[1]: Leaving directory '/home/opam/sciostar/case-studies/webserver'
+===============================
+Successfully built the binaries out/ws_adversarial.exe, out/ws_serve_file.exe and out/ws_echo.exe
 ```
 
 ### Run the Adversarial Handler
 
 ### Run the Echo Handler
+
+```bash
+$ docker exec -it sciostar telnet localhost 81
+```
+
+```bash
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+Echo!
+Echo!
+Connection closed by foreign host.
+```
 
 ### Run the File Serving Handler
 
