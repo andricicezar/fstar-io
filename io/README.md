@@ -5,6 +5,19 @@ This subdirectory is the artifact associated with the POPL 24 submission with th
 The artifact is packaged as a docker image using a Dockerfile.
 
 ## Table of Contents
+* [List of Claims](#list-of-claims)
+* [Download and Installation](#download-and-installation)
+   * [Hardware Requirements](#hardware-requirements)
+   * [Download and Installation using Docker](#download-and-installation-using-docker)
+   * [Download and Installation without Docker](#download-and-installation-without-docker)
+* [Evaluation Instructions](#evaluation-instructions)
+   * [Verify SCIO\*](#verify-scio)
+   * [Verify the Web Server](#verify-the-web-server)
+   * [Compiling the Web Server](#compiling-the-web-server)
+   * [Run the Echo variant](#run-the-echo-variant)
+   * [Run the File Serving variant](#run-the-file-serving-variant)
+   * [Run the Adversarial variant](#run-the-adversarial-variant)
+* [License](#license)
 
 ## List of Claims
 
@@ -42,6 +55,7 @@ the web server case study at the end.
 | The adversarial handlers | `AdversarialHandlers.fst` |
 | The Σ and Π | `Utils.fst` as `sgm` and `pi` |
 | Web Server's state (section 5.2) | `MonitorParam.fst` |
+| **More examples** | In the `case-studies` folder | 
 
 ## Download and Installation
 
@@ -206,7 +220,7 @@ Echo!
 Connection closed by foreign host.
 ```
 
-### Run the File Serving example
+### Run the File Serving variant
 
 In this variant, the web server responds to GET HTTP Requests. To start the web
 server, run:
@@ -231,7 +245,7 @@ $ docker exec -it sciostar curl --output - http://localhost:81/home/opam/sciosta
 This web server should be able to serve files excepts when asked for `/etc/passwd`
 because the access control policy prevents opening that file.
 
-### Run the Adversarial example
+### Run the Adversarial variant
 
 In this variant, the web server writes always back `HTTP/1.1 400` because it is linked
 against an adversarial handler that tries to break the specification. To start the web
