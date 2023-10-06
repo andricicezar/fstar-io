@@ -153,7 +153,7 @@ server, run:
 sciostar/case-studies/webserver$ ./out/ws_echo.exe
 ```
 
-To connect to the web server, in a different terminal, run the following command.
+To connect to the web server, in a different terminal run the following command.
 One can open 5 different connections at the same time.
 ```bash
 $ docker exec -it sciostar telnet localhost 81
@@ -178,7 +178,7 @@ server, run:
 sciostar/case-studies/webserver$ ./out/ws_serve_file.exe
 ```
 
-To connect to the web server, in a different terminal, run the following command.
+To connect to the web server, in a different terminal run the following command.
 One can open 5 different connections at the same time.
 ```bash
 $ docker exec -it sciostar curl http://localhost:81/
@@ -204,7 +204,7 @@ server, run:
 sciostar/case-studies/webserver$ ./out/ws_adversarial.exe
 ```
 
-To connect to the web server, in a different terminal, run the following command.
+To connect to the web server, in a different terminal run the following command.
 ```bash
 $ docker exec -it sciostar telnet localhost 81
 ```
