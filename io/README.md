@@ -8,6 +8,22 @@ The artifact is packaged as a docker image using a Dockerfile.
 
 ## List of Claims
 
+The artifact contains a formalization of the contributions above. The
+artifact contains the SCIO* framework, the mechanized proofs of sound
+enforcement of a global trace property and of RrHP, as well as the
+verified web server case study.
+
+We present in the following list where are all the definitions and
+theorems of the paper by starting with section 3. We discuss the web
+server case study last.
+
+| From the paper | In the artifact |
+| --------- | --------------- |
+| **Section 3** | | | contains the definition of the Dijkstra Monad.
+| The computational monad `m` | `Free.fst` as the type constructor `free` |
+| The specification monad** `w` |  `Hist.fst` as the type constructor `hist` |
+
+
 ## Download and Installation
 
 ### Hardware Requirements
