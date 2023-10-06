@@ -275,7 +275,7 @@ Connection closed by foreign host.
 ## Reusability
 
 One can use this artifact in many ways:
-* one can use SCIO\* to verify and compile a program by taking advantage of SMT automation;
+* to verify and compile a program by taking advantage of SMT automation;
 * our `MIO` effect is parametric into the signature of the operations, so one could initialize the effect with a different signature;
 * to prove theorems about our compiler, we used the formalization from
   [Journey Beyond Full Abstraction](https://browse.arxiv.org/pdf/1807.04603.pdf), thus one can state other criteria and try to
