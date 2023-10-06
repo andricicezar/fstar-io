@@ -19,9 +19,23 @@ server case study last.
 
 | From the paper | In the artifact |
 | --------- | --------------- |
-| **Section 3** | | | contains the definition of the Dijkstra Monad.
+| **Section 3**  contains the definition of the Dijkstra Monad. | |
 | The computational monad `m` | `Free.fst` as the type constructor `free` |
-| The specification monad** `w` |  `Hist.fst` as the type constructor `hist` |
+| The specification monad `w` with `⊑` |  `Hist.fst` as the type constructor `hist` |
+| The monad morphism and the Dijkstra Monad `dm` | `DMFree.fst` as `theta` and `dm` |
+| The type `event` and `trace` | `MIO.Sig.fst` as `event` and `trace` |
+| The layered effect | `MIO.fst` |
+| **Section 4** | |
+| The `interm` type class | |
+| The `exportable` and `importable` type classes, together with instances for importing and exporting functions | |
+| **Section 5** | |
+| **Section 6** | |
+| Figure 4 | |
+| Soundness Theorem | |
+|  Robust Relational Hyperproperty Preservation (RrHP) | |
+| Dual Setting | | 
+| Syntactic representation of target contexts | |
+| **Case study - web server** | |
 
 
 ## Download and Installation
