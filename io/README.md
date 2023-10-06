@@ -8,14 +8,14 @@ The artifact is packaged as a docker image using a Dockerfile.
 
 ## List of Claims
 
-The artifact contains a formalization of the contributions above. The
+The artifact contains a formalization of the contributions from the paper. The
 artifact contains the SCIO* framework, the mechanized proofs of sound
 enforcement of a global trace property and of RrHP, as well as the
 verified web server case study.
 
-We present in the following list where are all the definitions and
-theorems of the paper by starting with section 3. We discuss the web
-server case study last.
+We present in the following list where all the definitions and
+theorems of the paper are. We start the list with section 3 and present
+the web server case study at the end.
 
 | From the paper | In the artifact |
 | --------- | --------------- |
@@ -26,17 +26,19 @@ server case study last.
 | The type `event` and `trace` | `MIO.Sig.fst` as `event` and `trace` |
 | The layered effect | `MIO.fst` |
 | **Section 4** | |
-| The `interm` type class | |
-| The `exportable` and `importable` type classes, together with instances for importing and exporting functions | |
+| The `interm` type class | `Compiler.Languages.fst` |
+| The `exportable` and `importable` type classes, together with instances for importing and exporting functions | `Compiler.MIO.To.Interm.fst` |
 | **Section 5** | |
 | **Section 6** | |
-| Figure 4 | |
-| Soundness Theorem | |
-|  Robust Relational Hyperproperty Preservation (RrHP) | |
-| Dual Setting | | 
-| Syntactic representation of target contexts | |
-| **Case study - web server** | |
-
+| Figure 4 | `Compiler.Model1.fst` |
+| Soundness Theorem | `Compiler.Model1.fst`, definition `soundness` |
+|  Robust Relational Hyperproperty Preservation (RrHP) | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
+| Dual Setting | `Compiler.Model2.fst` | 
+| Syntactic representation of target contexts | `Compiler.ModelStlc.fst` |
+| **Case study - web server** | in folder `case-studies/webserver` |
+| Figure 2 | `WebServer.fst` |
+| The adversarial handlers | `AdversarialHandlers.fst` |
+| Web Server's state (section 5.2) | `MonitorParam.fst` |
 
 ## Download and Installation
 
