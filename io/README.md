@@ -17,14 +17,16 @@ The artifact is packaged as a docker image using a Dockerfile.
    * [Run the Echo variant](#run-the-echo-variant)
    * [Run the File Serving variant](#run-the-file-serving-variant)
    * [Run the Adversarial variant](#run-the-adversarial-variant)
+* [Reusability](#reusability)
 * [License](#license)
 
 ## List of Claims
 
-The artifact contains a formalization of the contributions from the paper. The
-artifact contains the SCIO* framework, the mechanized proofs of sound
-enforcement of a global trace property and of RrHP, as well as the
-verified web server case study.
+The artifact contains:
+* a formalization of the contributions from the paper;
+* the mechanized proofs of sound enforcement of a global trace property and of RrHP;
+* the verified web server case study;
+* other examples.
 
 We present in the following list where all the definitions and
 theorems of the paper are. We start the list with section 3 and present
@@ -269,6 +271,15 @@ Echo!
 HTTP/1.1 400
 Connection closed by foreign host.
 ```
+
+## Reusability
+
+One can use this artifact in many ways:
+* one can use SCIO\* to verify and compile a program by taking advantage of SMT automation;
+* our `MIO` effect is parametric into the signature of the operations, so one could initialize the effect with a different signature;
+* to prove theorems about our compiler, we used the formalization from
+  [Journey Beyond Full Abstraction](https://browse.arxiv.org/pdf/1807.04603.pdf), thus one can state other criteria and try to
+  prove them.
 
 ## License
 This work is licensed under a
