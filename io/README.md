@@ -159,8 +159,8 @@ One can open 5 different connections at the same time.
 $ docker exec -it sciostar telnet localhost 81
 ```
 
-You can write any text and when pressing `Enter`, you should get the message back.
-Like this:
+You can write any text and when pressing `Enter`, you should get the message back,
+like this:
 ```bash
 Trying 127.0.0.1...
 Connected to localhost.
@@ -209,8 +209,8 @@ To connect to the web server, in a different terminal run the following command.
 $ docker exec -it sciostar telnet localhost 81
 ```
 
-You can write any text and when pressing `Enter`, you should get `HTTP/1.1 400` back.
-Like this:
+You can write any text and when pressing `Enter`, you should get `HTTP/1.1 400` back,
+like this:
 ```bash
 Trying 127.0.0.1...
 Connected to localhost.
