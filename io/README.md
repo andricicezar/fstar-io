@@ -21,6 +21,7 @@ See
 [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 for the installation instructions.
 
+Building the image takes 10 minutes.
 ```bash
 # Build the image
 $ docker build -t sciostar .
@@ -144,14 +145,22 @@ make[1]: Leaving directory '/home/opam/sciostar/case-studies/webserver'
 Successfully built the binaries out/ws_adversarial.exe, out/ws_serve_file.exe and out/ws_echo.exe
 ```
 
-### Run the Adversarial Handler
+### Run the Echo variant
 
-### Run the Echo Handler
+In this variant, the web server writes back the message got from the client. To start the web
+server, run:
+```bash
+sciostar/case-studies/webserver$ ./out/ws_echo.exe
+```
 
+To connect to the web server, in a different terminal, run the following command.
+One can open 5 different connections at the same time.
 ```bash
 $ docker exec -it sciostar telnet localhost 81
 ```
 
+You can write any text and when pressing `Enter`, you should get the message back.
+Like this:
 ```bash
 Trying 127.0.0.1...
 Connected to localhost.
@@ -161,7 +170,9 @@ Echo!
 Connection closed by foreign host.
 ```
 
-### Run the File Serving Handler
+### Run the Adversarial example
+
+### Run the File Serving example
 
 The web server listens on port 81, so open http://localhost:81/ on your
 browser to see the result. Note: since 81 is a privileged port, you
