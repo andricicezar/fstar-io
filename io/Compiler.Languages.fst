@@ -113,7 +113,7 @@ instance interm_resexn fl sgm mst t1 {| d1:interm t1 fl sgm mst |} : interm (res
 
 type interm_arrow_typ fl sgm mst (t1 t2:Type) = t1 -> MIOpi t2 fl sgm mst
 
-(** An weak arrow is a statically/dynamically verified arrow to respect sgm.
+(** An interm arrow is a statically/dynamically verified arrow to respect sgm.
 **)
 instance interm_arrow fl sgm mst #t1 (d1:interm t1 fl sgm mst) #t2 (d2:interm t2 fl sgm mst) : interm (interm_arrow_typ fl sgm mst t1 t2) fl sgm mst =
   { mldummy = () }

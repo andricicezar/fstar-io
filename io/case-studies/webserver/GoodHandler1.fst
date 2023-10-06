@@ -48,7 +48,7 @@ let rec get_file
   match call_io Read (fd,limit) with
   | Inl (chunk, size) -> begin
     if UInt8.lt size limit || i = 0 then
-      FStar.Bytes.slice chunk 0ul (UInt32.add 1ul (UInt32.uint_to_t (UInt8.v size)))
+      FStar.Bytes.sub chunk 0ul (UInt32.uint_to_t (UInt8.v size))
     else (
       FStar.Bytes.append chunk (get_file call_io fd limit (i-1))
     )

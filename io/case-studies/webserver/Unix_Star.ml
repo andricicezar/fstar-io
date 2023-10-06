@@ -9,9 +9,10 @@ let openfile (file_name, flags, perm) : file_descr =
   Unix.openfile file_name flags (Z.to_int perm)
 
 let read (fd, limit) : (FStar_Bytes.bytes * int) =
-  let buff = Bytes.make 256 '\000' in
-  let c = Unix.read fd buff 0 limit in
-  ((Bytes.to_string buff), c)
+  let buff = Bytes.make limit '\000' in
+  let c = Unix.read fd buff 0 (Bytes.length buff) in
+  let s = Bytes.to_string buff in
+   (String.sub s 0 c, c)
 
 let write (fd, message) : unit =
   let _ = Unix.write_substring fd message 0 (String.length message) in
