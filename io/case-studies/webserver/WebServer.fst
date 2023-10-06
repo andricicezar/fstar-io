@@ -47,8 +47,8 @@ let get_req (fd:file_descr) :
 let process_connection
   (client : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl)) :
-  MIO unit (IOOps+fl) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps ⊕ fl)) :
+  MIO unit (IOOps⊕fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   introduce forall h lthandler lt lt'. enforced_locally sgm h lthandler /\ every_request_gets_a_response (lt @ lt') ==> every_request_gets_a_response (lt @ lthandler @ lt')
   with begin
@@ -73,8 +73,8 @@ let rec process_connections
   (clients : lfds)
   (to_read : lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl)) :
-  MIO lfds (IOOps+fl) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps ⊕ fl)) :
+  MIO lfds (IOOps⊕fl) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match clients with
   | [] -> []
@@ -106,8 +106,8 @@ let get_new_connection (socket : file_descr) :
 let handle_connections
   (clients:lfds)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl)) :
-  MIO lfds (fl+IOOps) mymst (fun _ -> True)
+  (req_handler : req_handler (IOOps ⊕ fl)) :
+  MIO lfds (fl⊕IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   match static_op Select (clients, ([] <: lfds), ([] <: lfds), 100uy) with
   | Inl (to_read, _, _) ->
@@ -118,9 +118,9 @@ let handle_connections
 let server_loop_body
   (socket : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl))
+  (req_handler : req_handler (IOOps ⊕ fl))
   (clients : lfds) :
-  MIO lfds (fl+IOOps) mymst (fun _ -> True)
+  MIO lfds (fl⊕IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   let clients' = (match get_new_connection socket with
                  | None -> clients
@@ -132,9 +132,9 @@ let rec server_loop
   (iterations_count : nat)
   (socket : file_descr)
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl))
+  (req_handler : req_handler (IOOps ⊕ fl))
   (clients : lfds) :
-  MIO unit (fl+IOOps) mymst (fun _ -> True)
+  MIO unit (fl⊕IOOps) mymst (fun _ -> True)
     (fun _ _ lt -> every_request_gets_a_response lt) =
   if iterations_count = 0 then ()
   else begin
@@ -157,9 +157,9 @@ let create_basic_server (ip:string) (port:UInt8.t) (limit:UInt8.t) :
 
 let webserver
   (#fl:erased tflag)
-  (req_handler : req_handler (IOOps + fl))
+  (req_handler : req_handler (IOOps ⊕ fl))
   () :
-  MIO int (IOOps + fl) mymst
+  MIO int (IOOps ⊕ fl) mymst
     (requires (fun h -> True))
     (ensures (fun h r lt -> every_request_gets_a_response lt)) =
   match create_basic_server "0.0.0.0" 81uy 5uy with

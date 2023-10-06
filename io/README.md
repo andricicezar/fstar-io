@@ -170,10 +170,37 @@ Echo!
 Connection closed by foreign host.
 ```
 
-### Run the Adversarial example
-
 ### Run the File Serving example
 
-The web server listens on port 81, so open http://localhost:81/ on your
-browser to see the result. Note: since 81 is a privileged port, you
-need to run the server as root (or change the port).
+In this variant, the web server responds to GET HTTP Requests. To start the web
+server, run:
+```bash
+sciostar/case-studies/webserver$ ./out/ws_serve_file.exe
+```
+
+To connect to the web server, in a different terminal, run the following command.
+One can open 5 different connections at the same time.
+```bash
+$ docker exec -it sciostar curl http://localhost:81/
+<h1>Hello!</h1>
+
+$ docker exec -it sciostar curl -I http://localhost:81/etc/passwd
+HTTP/1.1 401
+
+$ docker exec -it sciostar curl --output - http://localhost:81/home/opam/sciostar/MIO.Sig.Call.fst
+
+<the contents of the file>
+```
+
+You can write any text and when pressing `Enter`, you should get the message back.
+Like this:
+```bash
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+Echo!
+Echo!
+Connection closed by foreign host.
+```
+
+### Run the Adversarial example

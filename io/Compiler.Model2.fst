@@ -41,7 +41,7 @@ type tgt_interface = {
 
 (** **** languages **)
 type ctx_src (i:src_interface)  = #fl:erased tflag -> io_lib fl i.sgm i.mst Ctx -> typ_eff_dcs fl i.mst i.pt_dcs -> i.pt fl -> unit -> MIOpi int fl i.sgm i.mst
-type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl+IOOps)
+type prog_src (i:src_interface) = #fl:erased tflag -> i.pt (fl⊕IOOps)
 type whole_src = mst:mstate & post:(trace -> int -> trace -> Type0) & (unit -> MIO int AllOps mst (fun _ -> True) post)
 
 let link_src (#i:src_interface) (p:prog_src i) (c:ctx_src i) : whole_src =

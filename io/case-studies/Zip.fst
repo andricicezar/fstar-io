@@ -72,7 +72,7 @@ let zip_int : src_interface = {
 #push-options "--compat_pre_core 1"
 
 val prog : prog_src zip_int
-let prog #fl ctx () : MIO int (IOOps + fl) mymst (fun _ -> True) (fun h _ lt -> enforced_locally sgm h lt) =
+let prog #fl ctx () : MIO int (IOOps ⊕ fl) mymst (fun _ -> True) (fun h _ lt -> enforced_locally sgm h lt) =
   lemma_append_enforced_locally sgm;
   match static_op Prog Openfile "archive.zipfst" with
   | Inl afd -> begin

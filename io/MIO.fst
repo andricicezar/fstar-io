@@ -66,7 +66,7 @@ match flag, m with
 | IOOps,    Call _ GetST    arg k   -> False
 | IOOps,    Call _ op arg k        -> forall r. satisfies (k r) flag
 
-let (+) (flag1:tflag) (flag2:tflag) = 
+let (⊕) (flag1:tflag) (flag2:tflag) : tflag = 
   match flag1, flag2 with
   | NoOps, NoOps -> NoOps
   | NoOps, fl -> fl
@@ -75,7 +75,7 @@ let (+) (flag1:tflag) (flag2:tflag) =
   | IOOps, IOOps -> IOOps
   | _, _ -> AllOps
 
-let (<=) (flag1:tflag) (flag2:tflag) =
+let (≼) (flag1:tflag) (flag2:tflag) : Type0 =
   match flag1, flag2 with
   | NoOps, _ -> True
   | GetMStateOps, NoOps -> False
@@ -87,10 +87,10 @@ let (<=) (flag1:tflag) (flag2:tflag) =
   | AllOps, AllOps -> True
   | AllOps, _ -> False
 
-let plus_compat_le (f1 f2 : tflag) : Lemma (f1 <= f1+f2) = ()
-let plus_comm      (f1 f2 : tflag) : Lemma (f1+f2 == f2+f1) = ()
+let plus_compat_le (f1 f2 : tflag) : Lemma (f1 ≼ (f1⊕f2)) = ()
+let plus_comm      (f1 f2 : tflag) : Lemma (f1⊕f2 == f2⊕f1) = ()
 
-let rec sat_le #mst (f1:tflag) (f2:tflag{f1 <= f2}) (m : mio mst 'a) :
+let rec sat_le #mst (f1:tflag) (f2:tflag{f1 ≼ f2}) (m : mio mst 'a) :
   Lemma (satisfies m f1 ==> satisfies m f2) =
   match m with
   | Return _ -> ()
@@ -121,14 +121,14 @@ let dm_mio_bind_is_free_bind a b mst wp_v wp_f v f
   assert (r == free_bind _ _ _ _ v f)
 
 let sat_bind_add mst (fl_v fl_f:tflag) (v : mio mst 'a) (f : 'a -> mio mst 'b)
-  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind _ _ _ _ v f `satisfies` (fl_v + fl_f))
+  : Lemma (v `satisfies` fl_v /\ (forall x. f x `satisfies` fl_f) ==> free_bind _ _ _ _ v f `satisfies` (fl_v ⊕ fl_f))
   =
-  sat_le fl_v (fl_v + fl_f) v;
-  let aux x : Lemma (f x `satisfies` fl_f ==> f x `satisfies` (fl_v + fl_f)) =
-    sat_le fl_f (fl_v + fl_f) (f x)
+  sat_le fl_v (fl_v ⊕ fl_f) v;
+  let aux x : Lemma (f x `satisfies` fl_f ==> f x `satisfies` (fl_v ⊕ fl_f)) =
+    sat_le fl_f (fl_v ⊕ fl_f) (f x)
   in
   Classical.forall_intro aux;
-  sat_bind (fl_v + fl_f) v f
+  sat_bind (fl_v ⊕ fl_f) v f
 
 (** ** Defining F* Effect **)
 
@@ -149,13 +149,13 @@ val dm_gmio_bind  :
   wp_f: (a -> Hist.hist b) ->
   v: dm_gmio a mst flag_v wp_v ->
   f: (x: a -> dm_gmio b mst flag_f (wp_f x)) ->
-  Tot (dm_gmio b mst (flag_v + flag_f) (hist_bind wp_v wp_f))
+  Tot (dm_gmio b mst (flag_v ⊕ flag_f) (hist_bind wp_v wp_f))
 
-let dm_gmio_bind a b mst flag_v wp_v flag_f wp_f v f : (dm_gmio b mst (flag_v + flag_f) (hist_bind wp_v wp_f)) =
+let dm_gmio_bind a b mst flag_v wp_v flag_f wp_f v f : (dm_gmio b mst (flag_v ⊕ flag_f) (hist_bind wp_v wp_f)) =
   let r = dm_mio_bind a b mst wp_v wp_f v f in
   sat_bind_add mst flag_v flag_f v f;
   dm_mio_bind_is_free_bind a b mst wp_v wp_f v f;
-  assert (free_bind _ _ _ _ v f `satisfies` (flag_v + flag_f));
+  assert (free_bind _ _ _ _ v f `satisfies` (flag_v ⊕ flag_f));
   r
 
 val dm_gmio_subcomp : 
@@ -166,7 +166,7 @@ val dm_gmio_subcomp :
   flag2 : erased tflag ->
   wp2: hist a ->
   f: dm_gmio a mst flag1 wp1 ->
-  Pure (dm_gmio a mst flag2 wp2) ((flag1 <= flag2) /\ wp1 ⊑ wp2) (fun _ -> True)
+  Pure (dm_gmio a mst flag2 wp2) ((flag1 ≼ flag2) /\ wp1 ⊑ wp2) (fun _ -> True)
 let dm_gmio_subcomp a mst flag1 wp1 flag2 wp2 f =
   sat_le flag1 flag2 f;
   dm_mio_subcomp a mst wp1 wp2 f
@@ -175,7 +175,7 @@ let dm_gmio_if_then_else (a : Type u#a) (mst:mstate)
   (fl1 : erased tflag) (wp1 : hist a)
   (fl2 : erased tflag) (wp2 : hist a)
   (f : dm_gmio a mst fl1 wp1) (g : dm_gmio a mst fl2 wp2) (b : bool) : Type =
-  dm_gmio a mst (fl1 + fl2) (hist_if_then_else wp1 wp2 b)
+  dm_gmio a mst (fl1 ⊕ fl2) (hist_if_then_else wp1 wp2 b)
 
 
 (** TODO: Look into https://github.com/FStarLang/FStar/wiki/Indexed-effects to make

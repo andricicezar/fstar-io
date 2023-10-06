@@ -97,7 +97,7 @@ let test1 : src_interface = {
 
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
-let test1_prog #fl fd : MIO (resexn unit) (fl+IOOps) mst1 (test1_pre fd) (test1_post fd) =
+let test1_prog #fl fd : MIO (resexn unit) (fl⊕IOOps) mst1 (test1_pre fd) (test1_post fd) =
   // weird behavior of F*
   let r : (mio_sig mst1).res Close fd = static_op Ctx Close fd in
   r <: resexn unit

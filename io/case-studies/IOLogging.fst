@@ -130,7 +130,7 @@ let log_stronger_sgms =
 
 #push-options "--compat_pre_core 1"
 val test1_prog : prog_src test1
-let test1_prog #fl op : MIO (resexn unit) (fl+IOOps) mymst (log_pre op) (log_post op) =
+let test1_prog #fl op : MIO (resexn unit) (fl⊕IOOps) mymst (log_pre op) (log_post op) =
   // weird behavior of F*
   let r : (mio_sig mymst).res Write (stdout, to_string op) = static_op Prog Write (stdout, to_string op) in
   r <: resexn unit

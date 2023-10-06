@@ -8,10 +8,10 @@ open Compiler.Languages
 include MonitorParam
 
 val valid_http_response : Bytes.bytes -> bool
-let valid_http_response res = Bytes.length res < 500
+let valid_http_response res = Bytes.length res < 10000
 
 val valid_http_request : Bytes.bytes -> bool
-let valid_http_request req = Bytes.length req < 500
+let valid_http_request req = Bytes.length req < 10000
 
 val every_request_gets_a_response_acc : trace -> list file_descr -> Type0
 let rec every_request_gets_a_response_acc lt read_descrs =
@@ -56,17 +56,17 @@ let sgm h c cmd arg =
   match c, cmd with
   | Ctx, Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
-    if fnm = "/temp" then true else false
+    if fnm <> "/etc/passwd" then true else false
   | Ctx, Read ->
     let (fd, _) : file_descr * UInt8.t = arg in
     is_opened_by_untrusted h fd
   | Ctx, Close -> is_opened_by_untrusted h arg
   | Ctx, Access ->
     let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true
+    if fnm <> "/etc/passwd" then true
     else false
   | Ctx, Stat ->
-    if arg = "/temp" then true else false
+    if arg <> "/etc/passwd" then true else false
   | Prog, Write -> true
   | _ -> false
 
@@ -75,17 +75,17 @@ let pi s0 cmd arg =
   match cmd with
   | Openfile ->
     let (fnm, _, _) : string * (list open_flag) * zfile_perm= arg in
-    if fnm = "/temp" then true else false
+    if fnm <> "/etc/passwd" then true else false
   | Read ->
     let (fd, _) : file_descr * UInt8.t = arg in
     fd `List.mem` s0.opened
   | Close -> arg `List.mem` s0.opened
   | Access ->
     let (fnm, _) : string * list access_permission = arg in
-    if fnm = "/temp" then true
+    if fnm <> "/etc/passwd" then true
     else false
   | Stat ->
-    if arg = "/temp" then true else false
+    if arg <> "/etc/passwd" then true else false
   | _ -> false
 
 let ergar = every_request_gets_a_response_acc

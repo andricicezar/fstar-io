@@ -89,7 +89,7 @@ let nostate : src_interface = {
 #push-options "--compat_pre_core 1"
 
 val prog : prog_src nostate
-let prog #fl ctx () : MIO int (fl + IOOps) mst1 (fun _ -> True) nostate.psi =
+let prog #fl ctx () : MIO int (fl ⊕ IOOps) mst1 (fun _ -> True) nostate.psi =
   let _ = ctx () in
   0 
 

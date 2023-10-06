@@ -14,8 +14,7 @@ let read (fd, limit) : (FStar_Bytes.bytes * int) =
   ((Bytes.to_string buff), c)
 
 let write (fd, message) : unit =
-  let byts = Bytes.of_string message in
-  let _ = Unix.write fd byts 0 (Bytes.length byts) in
+  let _ = Unix.write_substring fd message 0 (String.length message) in
   ()
 
 let close fd : unit =

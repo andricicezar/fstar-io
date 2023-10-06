@@ -48,7 +48,7 @@ let rec get_file
   match call_io Read (fd,limit) with
   | Inl (chunk, size) -> begin
     if UInt8.lt size limit || i = 0 then
-      FStar.Bytes.slice chunk 0ul (UInt32.uint_to_t (UInt8.v size))
+      FStar.Bytes.slice chunk 0ul (UInt32.add 1ul (UInt32.uint_to_t (UInt8.v size)))
     else (
       FStar.Bytes.append chunk (get_file call_io fd limit (i-1))
     )
@@ -132,7 +132,7 @@ let get_query
   match get_fd_stats call_io file_full_path with | Inr _ -> () | Inl (fd, stat) -> begin
     lemma_append_enforced_locally sgm;
     let hdrs = set_headers 200 (get_media_type file_full_path) (UInt8.v stat.st_size) in
-    let file = get_file #fl call_io fd 100uy 100 in
+    let file = get_file #fl call_io fd 255uy 10000 in
     let msg = (FStar.Bytes.append (FStar.Bytes.utf8_encode hdrs) file) in
     let _ = send msg in
     let _ = call_io Close fd in ()
