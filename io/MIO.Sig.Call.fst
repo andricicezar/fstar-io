@@ -2,6 +2,7 @@ module MIO.Sig.Call
 
 open MIO.Sig
 
+(** This is used only for debugging code when running it **)
 assume val print_string2 : string -> Tot bool
 
 (** This file is replaced during linking with a file that contains the real

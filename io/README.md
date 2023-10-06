@@ -11,8 +11,8 @@ The artifact is packaged as a docker image using a Dockerfile.
 
 ### Hardware Requirements
 
-To use this artifact, you will need a x86-64 machine capable of running Docker or
-an ARM-based system such as Apple M1.
+To use this artifact, you will need a x86-64 machine capable of running Docker.
+If your machine is not x86-64, use a x86-64 Virtual Machine with Docker.
 
 ### Download and Installation using Docker
 
