@@ -206,6 +206,10 @@ server, run:
 sciostar/case-studies/webserver$ ./out/ws_echo.exe
 ```
 
+Note! If you run the web server outside of the Docker container, the
+web server listens on port 81, which is a privileged port, thus you
+need to run the server as root (or change the port).
+
 To connect to the web server, in a different terminal run the following command.
 One can open 5 different connections at the same time.
 ```bash
