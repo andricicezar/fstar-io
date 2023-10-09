@@ -285,10 +285,4 @@ One can use this artifact in many ways:
 * our `MIO` effect is parametric into the signature of the operations, so one could instantiate the effect with a different signature;
 
 ## License
-This work is licensed under a
-[Creative Commons Attribution 4.0 International License][cc-by].
-
-[![CC BY 4.0][cc-by-image]][cc-by]
-
-[cc-by]: http://creativecommons.org/licenses/by/4.0/
-[cc-by-image]: https://i.creativecommons.org/l/by/4.0/88x31.png
+This work is released under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
