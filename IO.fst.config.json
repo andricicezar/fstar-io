@@ -1,5 +1,5 @@
 {
   "fstar_exe": "fstar.exe",
   "options": [],
-  "include_dirs": ["io", "io/case-studies", "io/case-studies/webserver"]
+  "include_dirs": ["sciostar", "sciostar/case-studies", "sciostar/case-studies/webserver"]
 }
