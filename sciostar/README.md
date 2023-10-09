@@ -1,6 +1,6 @@
 # Artifact for "Securing Verified IO Programs Against Unverified Code in F*"
 
-This subdirectory contains the artifact associated with the POPL 2024 submission with the name:
+This directory contains the artifact associated with the POPL 2024 submission with the name:
 "[Securing Verified IO Programs Against Unverified Code in F*](https://arxiv.org/abs/2303.01350)".
 The artifact is packaged using [Docker](https://www.docker.com/).
 
@@ -23,30 +23,30 @@ The artifact is packaged using [Docker](https://www.docker.com/).
 ## List of Claims
 
 The artifact contains:
-* a formalization of the contributions from the paper;
+* a formalization of the contributions of the paper;
 * the mechanized proofs of sound enforcement of a global trace property and of RrHP;
 * the verified web server case study;
 * other examples.
 
-We list where the definitions and
-theorems of the paper are. We start the list with section 3 and present
-the web server case study at the end.
+We list where the definitions and theorems of the paper are.
+We go in dependency order, starting with section 3 and
+presenting the web server case study at the end.
 
 | From the paper | In the artifact |
 | --------- | --------------- |
-| **Section 3**  contains the definition of the Dijkstra Monad. | |
+| **Section 3: the `MIO` monadic effect** | |
 | The computational monad `m` | `Free.fst` as the type constructor `free` |
 | The specification monad `w` with `⊑` |  `Hist.fst` as the type constructor `hist` |
 | The monad morphism and the Dijkstra Monad `dm` | `DMFree.fst` as `theta` and `dm` |
 | The type `event` and `trace` | `MIO.Sig.fst` as `event` and `trace` |
-| The layered effect | `MIO.fst` |
-| **Section 4** | |
+| The `MIO` layered effect | `MIO.fst` |
+| **Section 4: higher-order contracts** | |
 | The `interm` type class | `Compiler.Languages.fst` |
 | The `exportable` and `importable` type classes, together with instances for importing and exporting functions | `Compiler.MIO.To.Interm.fst` |
-| **Section 5** | |
+| **Section 5: monitor state** | |
 | `mstate` type | `MIO.Sig.fst` | 
 | The types of effectful checks | `eff_ck_typ` in  `Compiler.MIO.To.Interm.fst` |
-| **Section 6** | |
+| **Section 6: SCIO\* formally secure compilation framework** | |
 | Figure 4 | `Compiler.Model1.fst` |
 | Soundness Theorem | `Compiler.Model1.fst`, definition `soundness` |
 |  Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.Model1.fst` as `comp_rrhc` |
@@ -55,7 +55,7 @@ the web server case study at the end.
 | **Case study - web server** | in folder `case-studies/webserver` |
 | Figure 2 | `WebServer.fst` |
 | The adversarial handlers | `AdversarialHandlers.fst` |
-| The Σ and Π | `Utils.fst` as `sgm` and `pi` |
+| The access control policy (Π) and its spec (Σ)  | `Utils.fst` as `sgm` and `pi` |
 | Web Server's state (section 5.2) | `MonitorParam.fst` |
 | **More examples** | In the `case-studies` folder | 
 
