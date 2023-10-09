@@ -84,10 +84,11 @@ $ docker run --rm -it --name sciostar sciostar
 
 ### Download and Installation without Docker
 
-You can clone the [sources of F\*](https://github.com/FStarLang/FStar),
+As a fallback that doesn't require Docker,
+you can clone the [sources of F\*](https://github.com/FStarLang/FStar),
 at the tag v2023.09.03 (commit hash `7363057dc7dceb13e39d5afb2b1dd46161314f25`)
 and run `opam install .` in the root.
-That will take care of compiling and installing F\* into OPAM.
+This should take care of compiling and installing F\* and its dependencies into OPAM.
 
 Once installed, if `fstar.exe` is in your $PATH, then running `make`
 will verify all modules in this directory. Otherwise, edit the `FSTAR`
