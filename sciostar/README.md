@@ -110,7 +110,7 @@ See more details about [how to install F\* here](https://github.com/FStarLang/FS
 This command verifies everything in the root folder and the files in
 the `case-studies` folder, except the web server.
 
-**Expected outbout** should be a long list of files verified by F\*. A
+**Expected output** should be a long list of files verified by F\*. A
   few blue warnings appear which can be ignored.
 
 ```
@@ -137,7 +137,7 @@ All verification conditions discharged successfully
 The sources for the web server and the handlers are in the `case-studies/webserver`
 subdirectory. This command verifies the web server and all the handlers.
 
-**Expected outbout** should be a long list of files verified by F\*. A
+**Expected output** should be a long list of files verified by F\*. A
   few blue warnings appear which can be ignored.
 
 ```bash
@@ -174,7 +174,7 @@ web server:
   - `out/ws_echo.exe`: The webserver linked with a "good" handler that
     simply echoes back the HTTP request to the user.
 
-**Expected outbout** should look like this. Code produced by F\*
+**Expected output** should look like this. Code produced by F\*
   native extraction produces many Warnings which can be ignored.
 
 ```bash
