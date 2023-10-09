@@ -134,8 +134,8 @@ val slice:
 val sub:
     b:bytes
   -> s:u32
-  -> l:u32{U32.v s + U32.v l <= length b}
-  -> r:bytes{reveal r == Seq.slice (reveal b) (U32.v s) (U32.v s + U32.v l)}
+  -> l:u32
+  -> bytes
 
 val split:
     b:bytes
