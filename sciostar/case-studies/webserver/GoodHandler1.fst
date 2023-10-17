@@ -141,7 +141,7 @@ let get_query
 val good_handler1 : tgt_handler
 let good_handler1 #fl  call_io client req send =
   match parse_http_header req with
-  | GET "/" -> (respond #fl send 200 "text/html" (FStar.Bytes.utf8_encode "<h1>Hello!</h1>"); Inl ())
+  | GET "/" -> (respond #fl send 200 "text/html" (FStar.Bytes.utf8_encode "<h1>Hello!</h1>\n"); Inl ())
   | GET query -> (get_query #fl call_io send query; Inl ())
   | _ -> send (FStar.Bytes.utf8_encode (head 401))
 
