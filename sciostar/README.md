@@ -84,10 +84,11 @@ $ docker run --rm -it --name sciostar sciostar
 
 ### Download and Installation without Docker
 
-You can clone the [sources of F\*](https://github.com/FStarLang/FStar),
+As a fallback that doesn't require Docker,
+you can clone the [sources of F\*](https://github.com/FStarLang/FStar),
 at the tag v2023.09.03 (commit hash `7363057dc7dceb13e39d5afb2b1dd46161314f25`)
 and run `opam install .` in the root.
-That will take care of compiling and installing F\* into OPAM.
+This should take care of compiling and installing F\* and its dependencies into OPAM.
 
 Once installed, if `fstar.exe` is in your $PATH, then running `make`
 will verify all modules in this directory. Otherwise, edit the `FSTAR`
@@ -205,6 +206,10 @@ server, run:
 sciostar/case-studies/webserver$ ./out/ws_echo.exe
 ```
 
+Note! If you run the web server outside of the Docker container, the
+web server listens on port 81, which is a privileged port, thus you
+need to run the server as root (or change the port).
+
 To connect to the web server, in a different terminal run the following command.
 One can open 5 different connections at the same time.
 ```bash
@@ -275,17 +280,9 @@ Connection closed by foreign host.
 ## Reusability
 
 One can use this artifact in many ways:
-* to verify and compile a program by taking advantage of SMT automation;
-* our `MIO` effect is parametric into the signature of the operations, so one could initialize the effect with a different signature;
-* to prove theorems about our compiler, we used the formalization from
-  [Journey Beyond Full Abstraction](https://browse.arxiv.org/pdf/1807.04603.pdf), thus one can state other criteria and try to
-  prove them.
+* to verify IO programs by taking advantage of SMT automation;
+* to securely compile IO programs;
+* our `MIO` effect is parametric into the signature of the operations, so one could instantiate the effect with a different signature;
 
 ## License
-This work is licensed under a
-[Creative Commons Attribution 4.0 International License][cc-by].
-
-[![CC BY 4.0][cc-by-image]][cc-by]
-
-[cc-by]: http://creativecommons.org/licenses/by/4.0/
-[cc-by-image]: https://i.creativecommons.org/l/by/4.0/88x31.png
+This work is released under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
