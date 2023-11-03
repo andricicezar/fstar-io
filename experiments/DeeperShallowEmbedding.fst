@@ -5,6 +5,9 @@ open FStar.Universe
 
 #set-options "--print_universes"
 
+(** File based on the paper "Deeper Shallow Embeddings"
+    https://lemonidas.github.io/pdf/DeeperShallowEmbeddings.pdf **)
+
 (** Shallow Embedding of DTT in F* - Figure 2 *)
 
 val ctx : Type u#(a+1)
