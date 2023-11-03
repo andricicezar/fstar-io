@@ -98,9 +98,8 @@ type dterm : #cs:ctx u#4 -> dcs:dctx cs -> t:typ cs -> term cs t -> Type u#5 =
 | U0     : #cs:ctx -> #dcs:dctx cs -> dterm dcs (lift2 u1) (vlift1 u0)
 | U1     : #cs:ctx -> #dcs:dctx cs -> dterm dcs (lift3 u2) (vlift2 u1)
 
-
-val identity : dterm Empty (dt (lift1 u0) (lift1 u0)) (lambda (lookup same))
-let identity = Lambda (Var Same)
+val identityU : dterm Empty (dt (lift1 u0) (lift1 u0)) (lambda (lookup same))
+let identityU = Lambda (Var Same)
 
 val extract : #cs:ctx -> #dcs:dctx cs -> #at:typ cs -> #a:term cs at -> dterm dcs at a -> term cs at
 let extract #cs #dcs #at #a e = a
