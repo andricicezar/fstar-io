@@ -71,6 +71,9 @@ let u0 c = Type u#0
 val u1 : #cs:ctx u#4 -> typ2 cs
 let u1 c = Type u#1
 
+val u2 : #cs:ctx u#4 -> typ3 cs
+let u2 c = Type u#2
+
 let lift0 (#cs:ctx u#4) (x:typ0 cs) : typ cs = fun c -> raise_t (x c)
 let lift1 (#cs:ctx u#4) (x:typ1 cs) : typ cs = fun c -> raise_t u#1 u#4 (x c)
 let lift2 (#cs:ctx u#4) (x:typ2 cs) : typ cs = fun c -> raise_t u#2 u#4 (x c)
@@ -78,6 +81,7 @@ let lift3 (#cs:ctx u#4) (x:typ3 cs) : typ cs = fun c -> raise_t u#3 u#4 (x c)
 
 let vlift0 (#cs:ctx u#4) (x:typ0 cs) : term cs (lift1 u0) = fun c -> raise_val (x c)
 let vlift1 (#cs:ctx u#4) (x:typ1 cs) : term cs (lift2 u1) = fun c -> raise_val (x c)
+let vlift2 (#cs:ctx u#4) (x:typ2 cs) : term cs (lift3 u2) = fun c -> raise_val (x c)
   
 val dt0 : #cs:ctx u#4 -> at:(typ0 cs) -> bt:(typ0 (cons cs (lift0 at))) -> typ0 cs
 let dt0 #cs at bt = fun (c:cs) -> ((a : at c) -> bt (| c, raise_val a |))
@@ -93,3 +97,4 @@ type dterm : #cs:ctx u#4 -> dcs:dctx cs -> t:typ cs -> term cs t -> Type u#5 =
 | Dt0 : #cs:ctx -> #dcs:dctx cs -> #at:typ0 cs -> #bt:_ -> dterm dcs (lift1 u0) (vlift0 at) -> dterm (Extend dcs (lift0 at)) (lift1 u0) (vlift0 bt) -> dterm dcs (lift1 u0) (vlift0 (dt0 at bt))
 | Dt1 : #cs:ctx -> #dcs:dctx cs -> #at:typ1 cs -> #bt:_ -> dterm dcs (lift2 u1) (vlift1 at) -> dterm (Extend dcs (lift1 at)) (lift2 u1) (vlift1 bt) -> dterm dcs (lift2 u1) (vlift1 (dt1 at bt))
 | U0 : #cs:ctx -> #dcs:dctx cs -> dterm dcs (lift2 u1) (vlift1 u0)
+| U1 : #cs:ctx -> #dcs:dctx cs -> dterm dcs (lift3 u2) (vlift2 u1)
