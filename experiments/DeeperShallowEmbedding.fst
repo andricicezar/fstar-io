@@ -8,7 +8,13 @@ open FStar.Universe
 (** File based on the paper "Deeper Shallow Embeddings"
     https://lemonidas.github.io/pdf/DeeperShallowEmbeddings.pdf **)
 
-(** Shallow Embedding of DTT in F* - Figure 2 *)
+(** Things to try next:
+    - [ ] write a function that gets a few arguments that are dependent on each other
+    - [ ] use the Pure effect instead of Tot for lambdas and extend with Pre and Posts
+**)
+
+
+(** *** Shallow Embedding of DTT in F* - Figure 2 *)
 
 val ctx : Type u#(a+1)
 let ctx = Type u#a
@@ -51,7 +57,7 @@ val app : #cs:ctx -> #at:(typ cs) -> #bt:(typ (cons cs at)) -> term cs (dt at bt
 let app e1 e2 = fun c -> (e1 c) (e2 c)
 
 
-(** Deeper shallow embedding - Figure 3 **)
+(** *** Deeper shallow embedding - Figure 3 **)
 let typ0 (cs:ctx u#4) : Type u#4 = cs -> Type u#0
 let typ1 (cs:ctx u#4) : Type u#4 = cs -> Type u#1
 let typ2 (cs:ctx u#4) : Type u#4 = cs -> Type u#2
