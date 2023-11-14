@@ -65,7 +65,9 @@ presenting the web server case study at the end.
 
 You can download the artifact from the following sources:
 1. Digital Library, Zenodo: https://doi.org/10.5281/zenodo.10125015
+  * Download the artifact and extract the archive `sciostar.tar.gz`.
 2. Version Repository, Github: https://github.com/andricicezar/fstar-io/tree/popl24/sciostar
+  * Download the repo and switch to folder `sciostar`.
 
 ### Hardware Requirements
 
@@ -81,7 +83,7 @@ See
 [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 for the installation instructions.
 
-Building the image takes 10 minutes.
+In the `sciostar` folder, build the image by running the following commands (takes 10 minutes):
 ```bash
 # Build the image
 $ docker build -t sciostar .
