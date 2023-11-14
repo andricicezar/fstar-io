@@ -64,9 +64,16 @@ presenting the web server case study at the end.
 ### Hardware Requirements
 
 To use this artifact, you will need a x86-64 machine capable of running Docker.
-If your machine is not x86-64, use a x86-64 Virtual Machine with Docker.
+If your machine is not x86-64, try setting `DOCKER_DEFAULT_PLATFORM` to `linux/amd64`;
+if that does not work, use a x86-64 Virtual Machine with Docker.
 
-### Download and Installation using Docker
+### Download
+
+You can download the artifact from the following sources:
+1. Digital Library, Zenodo: https://doi.org/10.5281/zenodo.10125015
+2. Version Repository, Github: https://github.com/andricicezar/fstar-io/tree/popl24/sciostar
+
+### Installation using Docker
 
 To use this artifact, you will need to install Docker on your machine.
 See
