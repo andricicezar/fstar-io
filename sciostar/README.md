@@ -1,8 +1,7 @@
 # Artifact for "Securing Verified IO Programs Against Unverified Code in F*"
 
 This directory contains the artifact associated with the POPL 2024 submission with the name:
-"[Securing Verified IO Programs Against Unverified Code in F*](https://arxiv.org/abs/2303.01350)".
-The artifact is packaged using [Docker](https://www.docker.com/).
+**Securing Verified IO Programs Against Unverified Code in F\*** ([doi](https://doi.org/10.1145/3632916) [arxiv](https://arxiv.org/abs/2303.01350)).
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
@@ -75,7 +74,8 @@ You can download the artifact from the following sources:
 
 ### Installation using Docker
 
-To use this artifact, you will need to install Docker on your machine.
+The artifact is packaged using [Docker](https://www.docker.com/),
+thus, the easiest way to install and run it is by installing Docker on your machine.
 See
 [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 for the installation instructions.
@@ -89,7 +89,7 @@ $ docker build -t sciostar .
 $ docker run --rm -it --name sciostar sciostar
 ```
 
-### Download and Installation without Docker
+### Installation without Docker
 
 As a fallback that doesn't require Docker,
 you can clone the [sources of F\*](https://github.com/FStarLang/FStar),
