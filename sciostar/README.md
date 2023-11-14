@@ -1,14 +1,15 @@
 # Artifact for "Securing Verified IO Programs Against Unverified Code in F*"
 
-This directory contains the artifact associated with the POPL 2024 submission with the name:
+This directory contains the artifact associated with the paper:
 **Securing Verified IO Programs Against Unverified Code in F\*** ([doi](https://doi.org/10.1145/3632916) [arxiv](https://arxiv.org/abs/2303.01350)).
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
 * [Download and Installation](#download-and-installation)
+   * [Download](#download)
    * [Hardware Requirements](#hardware-requirements)
-   * [Download and Installation using Docker](#download-and-installation-using-docker)
-   * [Download and Installation without Docker](#download-and-installation-without-docker)
+   * [Installation using Docker](#installation-using-docker)
+   * [Installation without Docker](#installation-without-docker)
 * [Evaluation Instructions](#evaluation-instructions)
    * [Verify SCIO\*](#verify-scio)
    * [Verify the Web Server](#verify-the-web-server)
@@ -60,17 +61,17 @@ presenting the web server case study at the end.
 
 ## Download and Installation
 
-### Hardware Requirements
-
-To use this artifact, you will need a x86-64 machine capable of running Docker.
-If your machine is not x86-64, try setting `DOCKER_DEFAULT_PLATFORM` to `linux/amd64`;
-if that does not work, use a x86-64 Virtual Machine with Docker.
-
 ### Download
 
 You can download the artifact from the following sources:
 1. Digital Library, Zenodo: https://doi.org/10.5281/zenodo.10125015
 2. Version Repository, Github: https://github.com/andricicezar/fstar-io/tree/popl24/sciostar
+
+### Hardware Requirements
+
+To use this artifact, you will need a x86-64 machine capable of running Docker.
+If your machine is not x86-64, try setting `DOCKER_DEFAULT_PLATFORM` to `linux/amd64`;
+if that does not work, use a x86-64 Virtual Machine with Docker.
 
 ### Installation using Docker
 
