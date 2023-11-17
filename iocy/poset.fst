@@ -3,6 +3,7 @@ module Poset
 open FStar.Tactics
 open FStar.List.Tot.Base
 
+(** *** The set **)
 type id_typ = nat
 
 type elem (a:Type) = id_typ * a
@@ -119,13 +120,13 @@ let extend_rel
     (((ev2 ofst `po ofst` ev1 ofst ==> ev1 ofst == ev2 ofst) /\ (ev1' `po ofst` ev1 ofst /\ ev2 ofst `po ofst` ev2')) \/ (ev1' `po ofst` ev2'))
 
 type poset0 (a:Type) (n:nat) =
-  set a n
+  set a n                               (** set of events **)
   *
-  relation a n
+  relation a n                          (** partial order between events **) 
   *
-  option (ofst:nat{ofst >= n} -> elem a)
+  option (ofst:nat{ofst >= n} -> elem a)  (** the bot event **)
   *
-  option (ofst:nat{ofst >= n} -> elem a)
+  option (ofst:nat{ofst >= n} -> elem a)  (** the top event of the main thread **)
 
 type poset (a:Type) (n:nat) =
   p:(poset0 a n){
