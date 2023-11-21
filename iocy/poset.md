@@ -47,7 +47,7 @@ let main () =
 ```
 Visually represented like this:
 ```
-(1,ε) ⟶ (1,ε)                <-- current thread
+(1,ε)                         <-- current thread
      ↘                    
       (tid,"a")               <-- new thread
 ```
@@ -76,7 +76,7 @@ let main () =
 ```
 is represented like:
 ```
-(1,"a") ⟶ (1,ε) ⟶ (1,ε) ⟶ (1,"d")    
+(1,"a") ⟶ (1,ε) ⟶ (1,"d")    
               ↘                    
                 (tid,"b") ⟶ (tid,"c")
 ```
@@ -91,7 +91,7 @@ let main () =
 ```
 is represented like:
 ```
-(1,"a") ⟶ (1,ε) ⟶  (1,ε)   ⟶  (1,"d")  ⟶ (1,ε) ⟶ (1,"e")
+(1,"a") ⟶ (1,ε)            ⟶              (1,"d")  ⟶ (1,ε) ⟶ (1,"e")
                  ↘                         ↗ 
                    (tid,"b")  ⟶ (tid,"c")
 ```
