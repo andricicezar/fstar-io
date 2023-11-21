@@ -49,7 +49,7 @@ Visually represented like this:
 ```
 (1,ε) ⟶ (1,ε)                <-- current thread
      ↘                    
-      (tid,"a")                 <-- new thread
+      (tid,"a")               <-- new thread
 ```
 
 #### Await
@@ -113,20 +113,19 @@ is represented like:
 
 We define our data structure as the tuple `(s, ≼, least, maxs, urel)`, where:
 1) `s : set elem` represents the set of elements.
-2) `≼ : elem → elem → prop` is the partial order between elements
+2) `≼ : elem → elem → prop` is the partial order between elements.
 3) `least : option elem` is the least element. If `s` is empty, then there is no least element.
-4) `maxs : th_id → option elem` is a map of all thread ids.
-5) `urel : set (th_id * elem)` is the set of unrealized relations. These are produced by awaits when a relation cannot be defined because in `s` there is no element of thread `tid`.
+4) `maxs : th_id → option elem` is a map from a thread id to the last element produced by it.
+5) `urel : list (th_id * elem)` is the list of unrealized relations. These are produced by awaits when a relation cannot be defined because in `s` there is no element of thread `tid`.
 
 We define the following properties of our data structure:
 1) `≼` is reflexive, antisymmetric, and transitive on `s`
 2) `least` is the least element of poset `(s,≼)`
 3) For all thread ids `tid`, if `maxs tid` exists, then `maxs tid` in `s` and `tid = fst (maxs tid)` 
-4) For all `m`, if `m` is a maximal element of poset `(s,≼)`, then `maxs (fst m) = m`
-5) Exists `maxs (fst least)` (aka, the current thread has a maximal element TODO: study this by looking at some examples)
-6) For all `u`, if `u` in `urel`, then `maxs (fst u)` does not exist and `snd u` is in `s`
+4) For all `m`, if `m` in `s` and there is no `n` in `s` so that `fst m = fst n` and `m ≼ n`, then `maxs (fst m) = m`
+5) For all `u`, if `u` in `urel`, then `maxs (fst u)` does not exist and `snd u` is in `s`
 
-
+NOTE: `least` and `maxs` can be defined as functions over the poset `(s,≼)`.
 
 We define concatenation for our data structure. I think the following assumtions are true when concatenation is used:
 * the main threads of the two sets have the same id.
@@ -139,16 +138,14 @@ We define concatenation for our data structure. I think the following assumtions
     (x ∈ s₀ ∧ y ∈ s₀ ∧ x ≼₀ y) ∨
     (x ∈ s₁ ∧ y ∈ s₁ ∧ x ≼₁ y) ∨
     (x ∈ s₀ ∧ y ∈ s₁ ∧ x ≼₀ maxs₀ (fst least₀)) ∨
-    (x ∈ s₀ ∧ y ∈ s₁ ∧ (∃ u. u ∈ urel₁ ∧ Some? maxs₀ (fst u) ∧
-                                x ≼₀ maxs₀ (fst u) ∧ (snd u) ≼₁ y))
+    (x ∈ s₀ ∧ y ∈ s₁ ∧ (∃ u. u ∈ urel₁ ∧ Some? (maxs₀ (fst u)) ∧
+                             x ≼₀ maxs₀ (fst u) ∧ (snd u) ≼₁ y))
   ),
   least₀,
-  (λ tid → 
-    if tid = fst least₀ then maxs₁ tid
-    else if (tid,_) ∈ urel₁ && Some? (maxs₀ tid) then None
-    else maxs₀ tid ;; maxs₁ tid),
-  urel₀ ∪ (urel₁ - { (tid,_) ∈ urel₁ | Some? maxs₀ tid })
+  (λ tid → maxs₁ tid ;; maxs₀ tid),
+  urel₀ ∪ (filter (λ (tid,_) → !(Some? (maxs₀ tid))) urel₁)
 )
 ```
+From property 4, we can prove that all exists `maxs (fst least)` if the set is nonempty.
 
-Problem: two threads cannot wait both on the same thread because a maximal element may be removed after composition.
+TODO: how do we represent threads that wait on themselves? how do we represent a child thread waiting on its parent?
