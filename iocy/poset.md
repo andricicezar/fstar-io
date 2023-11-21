@@ -1,59 +1,33 @@
-# Specialized partial-ordered set to verify trace properties of concurrent programs
+# Specialized partial-ordered set for compositional verification of concurrent programs using trace properties
 
 We try to represent terminating stateless programs that can call the operations `print`, `async` and `await`.
 The representation has to:
-1) have a associative concatenation function;
+1) have an associative concatenation function;
 2) support programs that await on free thread ids;
 3) have a clear representation of what events run in parallel and which run sequentially
 
-The informal specifications of print, async and await are:
-* `print "x"` - produces an event `(1, "x")`, where on the first position is
-    the id of the current thread (assumed here to be 1).
+We're working under the assumptions that the semantic function is providing the ids of the threads.
+
+The informal semantics are:
+* `print "x"` - produces events containing the printed string.
     
 * `async (fun () -> ...)` - spawns a new thread where it executes the lambda.
      it returns the id of the new thread.
 
-* `await tid` - waits for the thread with the id `tid` to end, but because the operation
-    is ran on an current thread, it does not know anything about the thread with id `tid`.
+* `await tid` - blocks the current thread and waits for the thread with the id `tid` to end.
+    Note: because we look at compositional verification, we have to represent `await tid` without knowing anything about the thread with id `tid`.
 
-In this file, we try to do that using a partial-order set,
-where the elements of the set are either events or empty `ε`. Empty elements are necessary to preserve the properties of our posets when representing the async and await operations.
+In this file, we try to find a data structure by building on top of a partial-order set (poset), where an element is of type `elem` (synonym for `th_id * event`), a pair between a thread id (of type `th_id`) and an event (of type `event`). An event is represented using an option type (`option string`): it can be "empty" (denoted using `ε`) or it can be a string printed by `print`. We need empty events later when we represent the async/await operations to preserve the properties of our data structure.
 
-We define our posets as the triple `(s, ≼, urel)`, where:
-1) `s : set (option a)` represents the set of elements where events are of type `a`.
-2) `≼ : a → a → prop` is the partial order between elements
-3) `urel : set (tid:int * (option a))` is the set of unrealized relations. These are produced by awaits when a relation cannot be defined because in `s` there is no element of thread `tid`.
+Note: we do not discuss here how we distinguish between the same events that happen multiple times.
 
-Our partial-order sets have the following properties:
+For now, I believe that we only have to deal with posets that have the following properties:
 * it has a least element.
+* the current thread corresponds to the thread of the least element.
+* only the current thread's representation progresses, all the other threads have their complete representation.
 * it has a maximal element for each thread that was not awaited.
 
-
-We define concatenation between two posets, under the assumptions that the first one is not empty and that the sets are distinct, as:
-```
-(s₀,≼₀,urel₀) ∙ (s₁,≼₁,urel₁) = (
-  s₀ ∪ s₁,
-  (λ x y →
-    (x ∈ s₀ ∧ y ∈ s₀ ∧ x ≼₀ y) ∨
-    (x ∈ s₁ ∧ y ∈ s₁ ∧ x ≼₁ y) ∨
-    (x ∈ s₀ ∧ y ∈ s₁ ∧ (∃ top. top ∈ s₀ ∧
-                                max (s₀,≼₀) (th_id (least (s₀,≼₀))) = Some top ∧
-                                x ≼₀ top)) ∨
-    (x ∈ s₀ ∧ y ∈ s₁ ∧ (∃ top z. top ∈ s₀ ∧ z ∈ s₁ ∧
-                                  (th_id top, z) ∈ urel₁ ∧
-                                  max (s₀,≼₀) (th_id top) = Some top ∧
-                                  x ≼₀ top ∧
-                                  z ≼₁ y))
-
-  ),
-  urel₀ ∪ (urel₁ - { (tid,_) ∈ urel₁ | ∃ x. x ∈ s₀ ∧ th_id x = tid })
-)
-```
-where `max (s,≼) tid` is a partial function that returns the maximal element corresponding to the thread `tid`, and `least (s,≼)` is a function that returns the least element of the poset.
-
 ## Visual representation
-
-We explain how it works by representing things visually:
 
 #### Synchronous program
 ```fstar
@@ -68,14 +42,14 @@ is represented like:
 #### Async:
 ```fstar
 let main () =
-  let _ = async (fun () -> print "a") in
+  let tid = async (fun () -> print "a") in
   ()
 ```
-Visually we represent it like this:
+Visually represented like this:
 ```
-ε ⟶ ε                <-- current thread
-  ↘                    
-   (2,"a")            <-- new thread
+(1,ε) ⟶ (1,ε)                <-- current thread
+     ↘                    
+      (tid,"a")                 <-- new thread
 ```
 
 #### Await
@@ -86,39 +60,40 @@ let f pr =
 ```
 Visually we represent it like this:
 ```
-             ε         <-- current thread
-           ↗ 
-(th_id, ?)             <-- thread with id `th_id`
+          (1,ε)     <-- current thread
+        ↗ 
+(tid,?)             <-- thread with id `th_id`
 ```
-TODO: this visual representation is misleading because no node is created.
+TODO: this visual representation is misleading because no element is created,
+  we only have to keep track of this unrealized relation.
 
 #### Program with async
 ```fstar
 let main () =
   print "a";
-  let _ = async (fun () -> print "b"; print "c") in
+  let tid = async (fun () -> print "b"; print "c") in
   print "d"
 ```
 is represented like:
 ```
-(1, "a") ⟶ ε ⟶ ε ⟶ (1, "d")    
+(1,"a") ⟶ (1,ε) ⟶ (1,ε) ⟶ (1,"d")    
               ↘                    
-               (2, "b") ⟶ (2, "c")
+                (tid,"b") ⟶ (tid,"c")
 ```
 #### Complete program with async and await
 ```fstar
 let main () =
   print "a";
-  let th_id = async (fun () -> print "b"; print "c") in
+  let tid = async (fun () -> print "b"; print "c") in
   print "d";
-  let _ = await th_id in
+  let _ = await tid in
   print "e"
 ```
 is represented like:
 ```
-(1, "a") ⟶ ε ⟶  ε ⟶ (1, "d") ⟶  ε  ⟶ (1, "e")
-             ↘                     ↗ 
-              (2, "b") ⟶ (2, "c")
+(1,"a") ⟶ (1,ε) ⟶  (1,ε)   ⟶  (1,"d")  ⟶ (1,ε) ⟶ (1,"e")
+                 ↘                         ↗ 
+                   (tid,"b")  ⟶ (tid,"c")
 ```
 #### Program with a free thread id
 ```fstar
@@ -129,7 +104,51 @@ let f tid =
 ```
 is represented like:
 ```
-(1, "a") ⟶ ε ⟶ (1, "b")
-           ↗ 
-   (tid, ?)
+(1,"a") ⟶ (1,ε) ⟶ (1,"b")
+          ↗ 
+  (tid, ?)
 ```
+
+## Data Structure
+
+We define our data structure as the tuple `(s, ≼, least, maxs, urel)`, where:
+1) `s : set elem` represents the set of elements.
+2) `≼ : elem → elem → prop` is the partial order between elements
+3) `least : option elem` is the least element. If `s` is empty, then there is no least element.
+4) `maxs : th_id → option elem` is a map of all thread ids.
+5) `urel : set (th_id * elem)` is the set of unrealized relations. These are produced by awaits when a relation cannot be defined because in `s` there is no element of thread `tid`.
+
+We define the following properties of our data structure:
+1) `≼` is reflexive, antisymmetric, and transitive on `s`
+2) `least` is the least element of poset `(s,≼)`
+3) For all thread ids `tid`, if `maxs tid` exists, then `maxs tid` in `s` and `tid = fst (maxs tid)` 
+4) For all `m`, if `m` is a maximal element of poset `(s,≼)`, then `maxs (fst m) = m`
+5) Exists `maxs (fst least)` (aka, the current thread has a maximal element TODO: study this by looking at some examples)
+6) For all `u`, if `u` in `urel`, then `maxs (fst u)` does not exist and `snd u` is in `s`
+
+
+
+We define concatenation for our data structure. I think the following assumtions are true when concatenation is used:
+* the main threads of the two sets have the same id.
+* one cannot find in the second set a thread represented in the first set (and vice versa).
+
+```
+(s₀,≼₀,least₀,maxs₀,urel₀) ∙ (s₁,≼₁,least₁,maxs₁,urel₁) = (
+  s₀ ∪ s₁,
+  (λ x y →
+    (x ∈ s₀ ∧ y ∈ s₀ ∧ x ≼₀ y) ∨
+    (x ∈ s₁ ∧ y ∈ s₁ ∧ x ≼₁ y) ∨
+    (x ∈ s₀ ∧ y ∈ s₁ ∧ x ≼₀ maxs₀ (fst least₀)) ∨
+    (x ∈ s₀ ∧ y ∈ s₁ ∧ (∃ u. u ∈ urel₁ ∧ Some? maxs₀ (fst u) ∧
+                                x ≼₀ maxs₀ (fst u) ∧ (snd u) ≼₁ y))
+  ),
+  least₀,
+  (λ tid → 
+    if tid = fst least₀ then maxs₁ tid
+    else if (tid,_) ∈ urel₁ && Some? (maxs₀ tid) then None
+    else maxs₀ tid ;; maxs₁ tid),
+  urel₀ ∪ (urel₁ - { (tid,_) ∈ urel₁ | Some? maxs₀ tid })
+)
+```
+
+Problem: two threads cannot wait both on the same thread because a maximal element may be removed after composition.
