@@ -77,8 +77,8 @@ let main () =
 is represented like:
 ```
 (1,"a") ⟶ (1,ε) ⟶ (1,"d")    
-              ↘                    
-                (tid,"b") ⟶ (tid,"c")
+                 ↘                    
+                  (tid,"b") ⟶ (tid,"c")
 ```
 #### Complete program with async and await
 ```fstar

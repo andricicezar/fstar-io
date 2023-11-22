@@ -128,6 +128,12 @@ type event a = option a
 type elem0 (a:Type) = th_id * event a
 type elem (a:Type) (n:nat) = set_elem (elem0 a) n
 
+unfold let lshift_elem (#n:nat) (#m:nat) (x:elem 'a n) : elem 'a (n+m) =
+  fun (ofst:nat{ofst >= n+m}) -> x (ofst-m)
+
+unfold let rshift_elem (#n:nat) (#m:nat) (x:elem 'a m) : elem 'a (n+m) =
+  fun (ofst:nat{ofst >= n+m}) -> x ofst
+
 let get_id (x:elem 'a 'n) (ofst:nat{ofst >= 'n}) : th_id = fst (snd (x ofst))
 
 let make_elem (#a:Type) (v:elem0 a) (n:nat) : elem a n = fun ofst -> make_uniq_val ofst v
@@ -198,19 +204,19 @@ let new_po
                                              x `rel1 (ofst-m)` (Some?.v (maxs1 (fst u)) (ofst-m)) /\ snd u ofst `rel2 ofst` y))
   )
 
+unfold let (let?) (x: option 'a) (f: 'a -> option 'b): option 'b
+  = match x with
+  | Some x -> f x
+  | None   -> None
+
 let new_maxs 
   (#n #m:nat)
   (maxs1 : th_id -> option (elem 'e n))
   (maxs2 : th_id -> option (elem 'e m))
   : th_id -> option (elem 'e (n+m)) = 
   (fun tid -> 
-    match maxs2 tid with
-    | Some x -> Some (fun (ofst:nat{ofst >= n+m}) -> x ofst)
-    | None -> begin
-           match maxs1 tid with
-           | None -> None
-           | Some x -> Some (fun (ofst:nat{ofst >= n+m}) -> x (ofst-m))
-    end)
+    let x = (
+      let? x = maxs2 tid in Some (rshift_elem x)) in
 
 let new_urel
   (#n #m:nat)
@@ -218,9 +224,9 @@ let new_urel
   (urel1 : list (th_id * elem 'e n))
   (urel2 : list (th_id * elem 'e m))
   : list (th_id * elem 'e (n+m)) =
-  List.Tot.filter (fun (tid,_) -> not (Some? (maxs1 tid))) (
-    (List.Tot.map #(th_id * elem 'e n) #(th_id * elem 'e (n+m)) (fun (tid, el) -> (tid, (fun (ofst:nat{ofst >= n+m}) -> el (ofst-m)))) urel1) @
-    (List.Tot.map #(th_id * elem 'e m) #(th_id * elem 'e (n+m)) (fun (tid, el) -> (tid, (fun (ofst:nat{ofst >= n+m}) -> el ofst))) urel2))
+  filter (fun (tid,_) -> not (Some? (maxs1 tid))) (
+    (map (fun (tid, el) -> (tid, lshift_elem el)) urel1) @
+    (map (fun (tid, el) -> (tid, rshift_elem el)) urel2))
 
 let lemma_new_urel
   (#n #m:nat)
@@ -243,7 +249,7 @@ let concat_poset (#n #m:nat) (pos1:poset 'e n) (pos2:poset 'e m) : poset 'e (n+m
   | _, _ -> begin
     let s = s1 `union_set` s2 in
     let rel : relation (elem0 'e) (n+m) = new_po s1 rel1 s2 rel2 least1 maxs1 urel2 () in
-    let least : option (elem 'e (n+m)) = Some (fun (ofst:nat{ofst >= n+m}) -> Some?.v least1 (ofst-m)) in
+    let least : option (elem 'e (n+m)) = Some (lshift_elem (Some?.v least1)) in
     let maxs = new_maxs maxs1 maxs2 in
     let urel = new_urel maxs1 urel1 urel2 in
     let p : poset0 'e (n+m) = (s, rel, least, maxs, urel) in
@@ -283,15 +289,15 @@ let op (tid:th_id) (e:'e) : poset 'e 1 =
   return_poset (tid, Some e)
 
 (**
-     least ofst                               make_uniq_val (ofst-1) None        (new least) 
-      |             async                   /        \
-      |          ---------->               /          \
-      |                                   v           v
-      v                              least (ofst-2)   make_uniq_val ofst None    (new max_r)
-     max_r ofst                            |
+     least                                   make_uniq_val (tid, None)        (new least) 
+      |             async                   /        
+      |          ---------->               /          
+      |                                   v           
+      v                                 least
+     max_r                                |
                                           |
                                           v
-                                    max_r (ofst-2)
+                                        max_r
 **)
 
 (** here tid is the id of the current thread, 
@@ -305,6 +311,7 @@ let async (#n:nat) (tid:th_id) (p:poset 'e n) :
   let urel' = if Some? least then (tid, Some?.v least)::urel else urel in
   let p' : poset 'e n = (s, rel, least, maxs, urel') in
   cp `concat_poset` p'
+
 
 let await (#e:Type) (tid:th_id) (wid:th_id{wid <> tid}) : poset e 1 =
   let (s, rel, least, maxs, urel) = return_poset (tid, None) in
@@ -331,7 +338,7 @@ let __test_prog01 () =
 
 let prog04 () : poset int 4 = (op 1 1 `concat_poset` async 1 (op 2 2)) `concat_poset` op 1 3
 
-#set-options "--timing"
+#set-options "--timing --z3rlimit 64 --fuel 32 --ifuel 32"
 let __test_prog04 () = 
   let (s, rel, least, maxs, urel) = prog04 () in
   assert (Some? least /\ Some?.v least 4 == make_uniq_val 1 (1, Some 1));
@@ -341,24 +348,29 @@ let __test_prog04 () =
   assert (make_uniq_val 3 (2, Some 2) ∈ s 4);
   assert (make_uniq_val 4 (1, Some 3) ∈ s 4);
   assert (make_uniq_val 1 (1, Some 1) `rel 4` make_uniq_val 3 (2, Some 2));
+  assert (make_uniq_val 1 (1, Some 1) `rel 4` make_uniq_val 4 (1, Some 3));
   assert (~(make_uniq_val 4 (1, Some 3) `rel 4` make_uniq_val 3 (2, (Some 2))));
+  assert (~(make_uniq_val 3 (2, Some 2) `rel 4` make_uniq_val 4 (1, (Some 3))));
   ()
 #reset-options
   
 let prog05 () : poset int 3 = async 1 (op 2 2) `concat_poset` await 1 2
 
-#set-options "--timing"
+#set-options "--timing --z3rlimit 64 --fuel 32 --ifuel 32"
 let __test_prog05 () : Tot unit by (
-  norm [delta_only [`%async;`%await;`%op;`%concat_poset;`%return_poset;`%new_po];zeta;iota];
-  dump "H") = 
+  norm [delta_only [`%async;`%await;`%op;`%concat_poset;`%return_poset;`%new_po];zeta;iota]) = 
   let (s, rel, least, maxs, urel) = async 1 (op 2 2) `concat_poset` await 1 2 in //prog05 () in
   assert (Some? least /\ Some?.v least 3 == make_uniq_val 1 (1, None));
   // assert (Some? max_r /\ Some?.v max_r 4 == make_uniq_val 4 None);
   assert (make_uniq_val 1 (1, None) ∈ s 3);
   assert (make_uniq_val 2 (2, Some 2) ∈ s 3);
   assert (make_uniq_val 3 (1, None) ∈ s 3);
+  assert (make_uniq_val 1 (1, None) `rel 3` make_uniq_val 3 (1, None));
+  assert (make_uniq_val 1 (1, None) `rel 3` make_uniq_val 2 (2, Some 2));
   assert (make_uniq_val 2 (2, Some 2) `rel 3` make_uniq_val 3 (1, None));
   assert (~(make_uniq_val 3 (1, None) `rel 3` make_uniq_val 2 (2, Some 2)));
+  assert (~(make_uniq_val 2 (2, Some 2) `rel 3` make_uniq_val 1 (1, None)));
+  assert (~(make_uniq_val 3 (1, None) `rel 3` make_uniq_val 1 (1, None)));
   ()
 #reset-options
  
@@ -475,6 +487,8 @@ let _ = assert ([1;4] `sat` prog1)
 
 let _ = assert (~([4;1] `sat` prog1))
 
+(** ** From here it does not verify **)
+
 //#set-options "--z3rlimit 128"
 let _ = assert ([1;2;3] `sat` prog1) 
 
@@ -487,6 +501,18 @@ let _ = assert (([1;2;3;4] `sat` prog1))
 let _ = assert ([1;3;2;4] `sat` prog1)
 
 let _ = assert (~([1;3;4;2] `sat` prog1))
+
+
+
+
+
+
+
+
+
+
+
+(*** Old tests **)
 
   
 let rec test_membership0 (t:trace int) (#n:nat) (p:poset int n) (el_prev:elem int) (marked_ids:marked id_typ) : Type0 =
