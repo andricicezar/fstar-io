@@ -8,10 +8,9 @@ open FStar.List.Tot.Base
 (** We need a set that allows the same value to appear multiple times and that allows
     us to distingusih between the appearances.
     
-    To do that, we box the values into a constructor that associates to each value
-    an id.
+    To do that, we associate to each value an id.
 
-    The ids given to the elements are internal to the state, however to be able to do
+    The ids given to the elements are internal to the set, however to be able to do
     unions and avoid quantifiers, I made the sets parametric into an offset (ofst) that
     is offseting the ids. So when setting the id of an element, the offset is used.
 
