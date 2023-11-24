@@ -149,3 +149,10 @@ We define concatenation for our data structure. I think the following assumtions
 From property 4, we can prove that all exists `maxs (fst least)` if the set is nonempty.
 
 TODO: how do we represent threads that wait on themselves? how do we represent a child thread waiting on its parent?
+
+
+## Implementations
+
+I did a complete implementation using sets as predicates ([`poset.fst`](poset.fst)), but it has bad
+SMT performance (I did not spend too much time trying to optimize it). One alternative would be to try to implement
+the poset using inductive types: I started working on it in [`poset_comp.fst`](poset_comp.fst). 
