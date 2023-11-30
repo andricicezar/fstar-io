@@ -26,40 +26,30 @@ let lemma_theta_morphism (m:st 'a) (f:'a -> st 'b) : Lemma (
 
 (** Relational State Monad **)
 
-let wstrel_post0 a = a*state -> a*state -> Type0
-let wstrel_post a = p:(wstrel_post0 a)
-//{
- // (forall r1 r2. p r1 r2 <==> p r2 r1) /\
- // (forall r1 r2 r3. p r1 r2 /\ p r2 r3 ==> p r1 r3)}
-let wstrel_pre = s1:state -> s2:state -> Type0
+let wstrel_post a = a * state -> a * state -> Type0
+let wstrel_pre = state -> state -> Type0
 
 type wstrel0 a = wstrel_post a -> wstrel_pre
-unfold let w_monotonic (wp:wstrel0 'a) = (forall (p1 p2:wstrel_post 'a). (forall r1 r2. p1 r1 r2 ==> p2 r1 r2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1))
-type wstrel a = wp:(wstrel0 a){w_monotonic wp}
+unfold let wstrel_monotonic (wp:wstrel0 'a) =
+  forall (p1 p2:wstrel_post 'a). (forall r1 r2. p1 r1 r2 ==> p2 r1 r2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1)
+type wstrel a = wp:(wstrel0 a){wstrel_monotonic wp}
+
+val wstrel_deterministic : (#a:Type) -> (wm : wstrel a) -> (s:state) -> Lemma (wm (==) s s)
 
 (** Unary return and bind with unary continuation **)
 unfold let ret_wstrel (x:'a) : wstrel 'a =
   fun p s0 s1 -> p (x,s0) (x,s1) 
 
-unfold val seq_cont0 : #a:Type -> #b:Type -> (a -> wstrel b) -> (p:wstrel_post b) -> wstrel_post0 a
-let seq_cont0 (#a #b:Type) (wf : a -> wstrel b) (p:wstrel_post b) ((x1,s1):a*state) ((x2,s2):a*state) = 
+unfold val seq_cont : #a:Type -> #b:Type -> (a -> wstrel b) -> (p:wstrel_post b) -> wstrel_post a
+let seq_cont (#a #b:Type) (wf : a -> wstrel b) (p:wstrel_post b) ((x1,s1):a*state) ((x2,s2):a*state) = 
    wf x1 (fun r11 r12 -> (** since we do not have any source of non-determinism, these are equal *)
        wf x2 (fun r21 r22 -> (** same **)
          p r11 r21
        ) s2 s2
      ) s1 s1
 
-unfold val seq_cont : #a:Type -> #b:Type -> (a -> wstrel b) -> (p:wstrel_post b) -> wstrel_post a
-let seq_cont (#a #b:Type) (wf : a -> wstrel b) (p:wstrel_post b) = 
-  let p' = seq_cont0 wf p in
- // assert (forall r1 r2. p' r1 r2 /\ p' r2 r1);
- // assert (forall r1 r2 r3. p' r1 r2 /\ p' r2 r3 ==> p' r1 r3);
-  p'
-
 unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
-  let wp = fun p -> wm (seq_cont wf p) in
- // assert (w_monotonic wp);
-  wp
+  fun p -> wm (seq_cont wf p)
 
 let (====) #a (w1:wstrel a) (w2:wstrel a) =
   forall p s1 s2 . w1 p s1 s2 <==> w2 p s1 s2
@@ -79,7 +69,7 @@ let wstrel_lemma_3 (#a #b #c:Type) (wm:wstrel a) (wf:a -> wstrel b) (wg:b -> wst
   bind_wstrel (bind_wstrel wm wf) wg ==== bind_wstrel wm (fun r -> bind_wstrel (wf r) wg)
 ) = admit ()
 
-unfold let (<=) (wp1 wp2: wstrel 'a): Type0 =
+unfold let (⊑) (wp1 wp2: wstrel 'a): Type0 =
   forall p s0 s1. wp2 p s0 s1 ==> wp1 p s0 s1
 
 val theta_rel : st 'a -> wstrel 'a
@@ -87,7 +77,7 @@ let theta_rel m =
   fun p s0 s1 -> theta m (fun r1 -> theta m (fun r2 -> p r1 r2) s1) s0
 
 type dm (a:Type) (w:wstrel a) =
-  m:(st a){theta_rel m <= w}
+  m:(st a){theta_rel m ⊑ w}
 
 let ret_dm (a:Type) (x:a) : dm a (ret_wstrel x) = ret_st x
 
@@ -99,7 +89,7 @@ let bind_dm (a:Type) (b:Type)
   assume (forall p s0 s1. (bind_wstrel wm wf) p s0 s1 ==> theta_rel (bind_st m f) p s0 s1);
   bind_st m f
 
-let subcomp_dm (a:Type) (wp1 wp2:wstrel a) (m : dm a wp1) : Pure (dm a wp2) (requires (wp1 <= wp2)) (ensures (fun _ -> True)) = m
+let subcomp_dm (a:Type) (wp1 wp2:wstrel a) (m : dm a wp1) : Pure (dm a wp2) (requires (wp1  ⊑ wp2)) (ensures (fun _ -> True)) = m
 
 unfold
 let hist_if_then_else (wp1 wp2:wstrel 'a) (b:bool) : wstrel 'a =
@@ -126,7 +116,7 @@ effect {
 effect StRel
   (a:Type)
   (pre : state -> state -> Type0)
-  (post : state -> state -> a*state -> a*state -> Type0) =
+  (post : state -> state -> a * state -> a * state -> Type0) =
   StRelWp a (fun p s0 s1 -> pre s0 s1 /\ (forall r1 r2. post s0 s1 r1 r2 ==> p r1 r2)) 
 
 unfold
