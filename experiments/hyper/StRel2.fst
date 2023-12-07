@@ -1,4 +1,4 @@
-module StRel
+module StRel2
 
 open FStar.Tactics
 open FStar.Classical.Sugar
@@ -21,17 +21,17 @@ let st_monad_law3 (#a #b #c:Type) (m:st a) (f:a -> st b) (g:b -> st c) : Lemma (
 ) = ()
 
 (** *** specification state monad **)
-type wst0 (a:Type) = (a * state -> Type0) -> (state -> Type0)
-unfold let wst_monotonic (wp:wst0 'a) = (forall p1 p2. (forall r. p1 r ==> p2 r) ==> (forall s0. wp p1 s0 ==> wp p2 s0))
+type wst0 (a:Type) = (a -> state -> Type0) -> (state -> Type0)
+unfold let wst_monotonic (wp:wst0 'a) = (forall p1 p2. (forall x s. p1 x s ==> p2 x s) ==> (forall s0. wp p1 s0 ==> wp p2 s0))
 type wst (a:Type) = wp:(wst0 a){wst_monotonic wp}
-unfold let ret_wst (x:'a) : wst 'a = fun p s0 -> p (x,s0)
-unfold let bind_wst (m:wst 'a) (f:'a -> wst 'b) : wst 'b = fun p s0 -> m (fun (x,s1) -> f x p s1) s0
+unfold let ret_wst (x:'a) : wst 'a = fun p s0 -> p x s0
+unfold let bind_wst (m:wst 'a) (f:'a -> wst 'b) : wst 'b = fun p s0 -> m (fun x s1 -> f x p s1) s0
 
 let get_wst l : wst int = 
-  fun p s0 -> p (s0 l, s0)
+  fun p s0 -> p (s0 l) s0
 
 let put_wst l v : wst unit =
-  fun p s0 -> p ((), st_upd s0 l v)
+  fun p s0 -> p () (st_upd s0 l v)
 
 let wst_leq (wp1:wst 'a) (wp2:wst 'a) : Type0 =
   forall p s0. wp2 p s0 ==> wp1 p s0
@@ -41,56 +41,53 @@ let wst_if_then_else (wp1 wp2:wst 'a) (b:bool) : wst 'a =
   fun p s0 -> (b ==> wp1 p s0) /\ ((~b) ==> wp2 p s0)
 
 val theta_st : st 'a -> wst 'a
-let theta_st m = fun p s0 -> p (m s0)
+let theta_st m = fun p s0 -> let (x,s) = m s0 in p x s
 
 let lemma_theta_morphism (m:st 'a) (f:'a -> st 'b) : Lemma (
   forall s0 p. theta_st (bind_st m f) p s0 <==> bind_wst (theta_st m) (fun x -> theta_st (f x)) p s0
 ) = ()
 
 (** ** Relational Specification State Monad **)
-let wstrel_post a = a * state -> a * state -> Type0
+let wstrel_post a = a -> state -> a -> state -> Type0
 let wstrel_pre = state -> state -> Type0
 type wstrel0 a = wstrel_post a -> wstrel_pre
 
 unfold let wstrel_monotonic (wp:wstrel0 'a) =
-  forall (p1 p2:wstrel_post 'a). (forall r1 r2. p1 r1 r2 ==> p2 r1 r2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1)
+  forall (p1 p2:wstrel_post 'a). (forall x1 s1 x2 s2. p1 x1 s1 x2 s2 ==> p2 x1 s1 x2 s2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1)
 type wstrel a = wp:(wstrel0 a){wstrel_monotonic wp}
 
 (** *** Relative monad **)
-unfold let bret_wstrel (x:'a) (y:'a) : wstrel 'a = fun p s0 s1 -> p (x,s0) (y,s1) 
+unfold let bret_wstrel (x:'a) (y:'a) : wstrel 'a = fun p s0 s1 -> p x s0 y s1
 unfold let bbind_wstrel (wm:wstrel 'a) (wf:'a -> 'a -> wstrel 'b) : wstrel 'b =
-  fun p -> wm (fun (x0,s0') (x1,s1') -> wf x0 x1 p s0' s1')
+  fun p -> wm (fun x0 s0' x1 s1' -> wf x0 x1 p s0' s1')
 
 val btheta_wstrel : st 'a -> st 'a -> wstrel 'a
-let btheta_wstrel m1 m2 = fun p s1 s2 -> p (m1 s1) (m2 s2)
+let btheta_wstrel m1 m2 = fun p s1 s2 -> let (x1,s1') = m1 s1 in let (x2, s2') = m2 s2 in p x1 s1' x2 s2'
 let theta_wstrel m = btheta_wstrel m m
   
 (** *** Conventional monad **)
 unfold let (⊗) (wx:wst 'a) (wy:wst 'a) : wstrel 'a =
-  fun p s0 s1 -> wx (fun rx -> wy (p rx) s1) s0
+  fun p s0 s1 -> wx (fun x0 s0' -> wy (p x0 s0') s1) s0
 
 unfold let lift_rel (wm:wst 'a) : wstrel 'a = wm ⊗ wm
 
-(**let deterministic (wm:wstrel 'a) : Type0 = forall s. wm (==) s s
-let is_pure (wm:wstrel 'a) : Type0 = forall s1 s2. wm (fun (x, _) (y, _) -> x == y) s1 s2**)
+//let deterministic (wm:wstrel 'a) : Type0 = forall s. wm (fun x1 s1 x2 s2 -> x1 == x2 /\ s1 == s2) s s
+//let is_pure (wm:wstrel 'a) : Type0 = forall s1 s2. wm (fun x _ y _ -> x == y) s1 s2
 
 unfold let elim_rel (wm:wstrel 'a) : wst 'a = //Pure (wst 'a) (requires (deterministic wm)) (ensures (fun _ -> True)) =
-  fun p s -> wm (fun _ -> p) s s
+  fun p s -> wm (fun _ _ -> p) s s
 
 unfold let ret_wstrel (x:'a) : wstrel 'a = bret_wstrel x x
 unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
-  bbind_wstrel wm (fun x0 x1 -> elim_rel (wf x0) ⊗ elim_rel (wf x1))
-(**
-unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
   bbind_wstrel wm (fun x0 x1 p s0 s1 ->
     (x0 == x1 ==> wf x0 p s0 s1) /\
-    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))**)
+    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))
 
 let get_wstrel l : wstrel int = 
-  fun p s0 s1 -> p (s0 l, s0) (s1 l, s1)
+  fun p s0 s1 -> p (s0 l) s0 (s1 l) s1
 
 let put_wstrel l v : wstrel unit =
-  fun p s0 s1 -> p ((), st_upd s0 l v) ((), st_upd s1 l v)
+  fun p s0 s1 -> p () (st_upd s0 l v) () (st_upd s1 l v)
 
 let (====) #a (w1:wstrel a) (w2:wstrel a) =
   forall p s1 s2 . w1 p s1 s2 <==> w2 p s1 s2
@@ -101,7 +98,7 @@ let wstrel_monad_law1 #a (w:wstrel a) : Lemma
 
 let wstrel_monad_law2 #a #b (wf:a -> wstrel b) (x:a) : Lemma
   (bind_wstrel (ret_wstrel x) wf ==== wf x) by (compute ()) =
-  admit ()
+  ()
   
 let wstrel_monad_law3 (#a #b #c:Type) (wm:wstrel a) (wf:a -> wstrel b) (wg:b -> wstrel c) : Lemma (
   bind_wstrel (bind_wstrel wm wf) wg ==== bind_wstrel wm (fun r -> bind_wstrel (wf r) wg)
@@ -173,8 +170,8 @@ effect {
 effect StRel
   (a:Type)
   (pre : state -> state -> Type0)
-  (post : state -> state -> a * state -> a * state -> Type0) =
-  StRelWp a (fun p s0 s1 -> pre s0 s1 /\ (forall r1 r2. post s0 s1 r1 r2 ==> p r1 r2)) 
+  (post : state -> state -> a -> state -> a -> state -> Type0) =
+  StRelWp a (fun p s0 s1 -> pre s0 s1 /\ (forall x0 s0' x1 s1'. post s0 s1 x0 s0' x1 s1' ==> p x0 s0' x1 s1')) 
 
 unfold
 let wp_lift_pure (w : pure_wp 'a) : wstrel 'a =
@@ -189,17 +186,17 @@ assume val lift_pure_dm :
 
 sub_effect PURE ~> StRelWp = lift_pure_dm
 
-let get l : StRel int (fun _ _ -> True) (fun is0 is1 (x0,s0) (x1,s1) -> is0 == s0 /\ is1 == s1 /\ x0 == s0 l /\ x1 == s1 l) =
+let get l : StRel int (fun _ _ -> True) (fun is0 is1 x0 s0 x1 s1 -> is0 == s0 /\ is1 == s1 /\ x0 == s0 l /\ x1 == s1 l) =
   StRelWp?.reflect (st_get l)
 
-let put l v : StRel unit (fun _ _ -> True) (fun is0 is1 (_,s0) (_,s1) -> s0 == st_upd is0 l v /\ s1 == st_upd is1 l v) =
+let put l v : StRel unit (fun _ _ -> True) (fun is0 is1 _ s0 _ s1 -> s0 == st_upd is0 l v /\ s1 == st_upd is1 l v) =
   StRelWp?.reflect (st_put l v)
 
-let test () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == s1 false) =
+let test () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ _ s0 _ s1 -> s0 false == s1 false) =
   let x = get true in
   if x = 1 then put false x else put false 1
 
-let test3 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
+let test3 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ _ s0 _ s1 -> s0 false == 1 /\ s1 false == 2) =
   let x = get true in
   if x = 1 then put false x else put false 2
 
