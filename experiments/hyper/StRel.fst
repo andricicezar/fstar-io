@@ -4,6 +4,7 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.Calc
 
+(** *** computational state monad **)
 type state = bool -> int (** high and low locations **)
 
 type st (a:Type) = state -> a * state
@@ -19,6 +20,7 @@ let st_monad_law3 (#a #b #c:Type) (m:st a) (f:a -> st b) (g:b -> st c) : Lemma (
   forall s. bind_st (bind_st m f) g s == bind_st m (fun r -> bind_st (f r) g) s
 ) = ()
 
+(** *** specification state monad **)
 type wst0 (a:Type) = (a * state -> Type0) -> (state -> Type0)
 unfold let wst_monotonic (wp:wst0 'a) = (forall p1 p2. (forall r. p1 r ==> p2 r) ==> (forall s0. wp p1 s0 ==> wp p2 s0))
 type wst (a:Type) = wp:(wst0 a){wst_monotonic wp}
@@ -45,31 +47,44 @@ let lemma_theta_morphism (m:st 'a) (f:'a -> st 'b) : Lemma (
   forall s0 p. theta_st (bind_st m f) p s0 <==> bind_wst (theta_st m) (fun x -> theta_st (f x)) p s0
 ) = ()
 
-(** Relational State Monad **)
-
+(** ** Relational Specification State Monad **)
 let wstrel_post a = a * state -> a * state -> Type0
 let wstrel_pre = state -> state -> Type0
-
 type wstrel0 a = wstrel_post a -> wstrel_pre
 
 unfold let wstrel_monotonic (wp:wstrel0 'a) =
   forall (p1 p2:wstrel_post 'a). (forall r1 r2. p1 r1 r2 ==> p2 r1 r2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1)
-  
 type wstrel a = wp:(wstrel0 a){wstrel_monotonic wp}
 
-(** Unary return and bind with unary continuation **)
-unfold let ret_wstrel (x:'a) : wstrel 'a = fun p s0 s1 -> p (x,s0) (x,s1) 
+(** *** Relative monad **)
+unfold let bret_wstrel (x:'a) (y:'a) : wstrel 'a = fun p s0 s1 -> p (x,s0) (y,s1) 
+unfold let bbind_wstrel (wm:wstrel 'a) (wf:'a -> 'a -> wstrel 'b) : wstrel 'b =
+  fun p -> wm (fun (x0,s0') (x1,s1') -> wf x0 x1 p s0' s1')
 
-unfold val seq_cont : #a:Type -> #b:Type -> (a -> wstrel b) -> (p:wstrel_post b) -> wstrel_post a
-let seq_cont (#a #b:Type) (wf : a -> wstrel b) (p:wstrel_post b) ((x1,s1):a*state) ((x2,s2):a*state) = 
-   wf x1 (fun r11 r12 -> (** since we do not have any source of non-determinism, these are equal *)
-       wf x2 (fun r21 r22 -> (** same **)
-         p r11 r21
-       ) s2 s2
-     ) s1 s1
+val btheta_wstrel : st 'a -> st 'a -> wstrel 'a
+let btheta_wstrel m1 m2 = fun p s1 s2 -> p (m1 s1) (m2 s2)
+let theta_wstrel m = btheta_wstrel m m
+  
+(** *** Conventional monad **)
+unfold let (⊗) (wx:wst 'a) (wy:wst 'a) : wstrel 'a =
+  fun p s0 s1 -> wx (fun rx -> wy (p rx) s1) s0
 
+unfold let lift_rel (wm:wst 'a) : wstrel 'a = wm ⊗ wm
+
+(**let deterministic (wm:wstrel 'a) : Type0 = forall s. wm (==) s s
+let is_pure (wm:wstrel 'a) : Type0 = forall s1 s2. wm (fun (x, _) (y, _) -> x == y) s1 s2**)
+
+unfold let elim_rel (wm:wstrel 'a) : wst 'a = //Pure (wst 'a) (requires (deterministic wm)) (ensures (fun _ -> True)) =
+  fun p s -> wm (fun _ -> p) s s
+
+unfold let ret_wstrel (x:'a) : wstrel 'a = bret_wstrel x x
 unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
-  fun p -> wm (seq_cont wf p)
+  bbind_wstrel wm (fun x0 x1 -> elim_rel (wf x0) ⊗ elim_rel (wf x1))
+(**
+unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
+  bbind_wstrel wm (fun x0 x1 p s0 s1 ->
+    (x0 == x1 ==> wf x0 p s0 s1) /\
+    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))**)
 
 let get_wstrel l : wstrel int = 
   fun p s0 s1 -> p (s0 l, s0) (s1 l, s1)
@@ -84,16 +99,10 @@ let (====) #a (w1:wstrel a) (w2:wstrel a) =
 let wstrel_monad_law1 #a (w:wstrel a) : Lemma
   (bind_wstrel w ret_wstrel ==== w) = ()
 
-let wstrel_lemma_2 (#a #b:Type) (wf : a -> wstrel b) (x:a) (p:wstrel_post b) s0 s1 : Lemma (
-  seq_cont wf p (x,s0) (x,s1) <==> wf x p s0 s1
-) = 
-  assume (seq_cont wf p (x,s0) (x,s1) ==> wf x p s0 s1);
-  assume (wf x p s0 s1 ==> seq_cont wf p (x,s0) (x,s1)) 
-
 let wstrel_monad_law2 #a #b (wf:a -> wstrel b) (x:a) : Lemma
-  (bind_wstrel (ret_wstrel x) wf ==== wf x) =
-  Classical.forall_intro_3 (wstrel_lemma_2 wf x)
-
+  (bind_wstrel (ret_wstrel x) wf ==== wf x) by (compute ()) =
+  admit ()
+  
 let wstrel_monad_law3 (#a #b #c:Type) (wm:wstrel a) (wf:a -> wstrel b) (wg:b -> wstrel c) : Lemma (
   bind_wstrel (bind_wstrel wm wf) wg ==== bind_wstrel wm (fun r -> bind_wstrel (wf r) wg)
 ) = admit ()
@@ -101,26 +110,22 @@ let wstrel_monad_law3 (#a #b #c:Type) (wm:wstrel a) (wf:a -> wstrel b) (wg:b -> 
 unfold let (⊑) (wp1 wp2: wstrel 'a): Type0 =
   forall p s0 s1. wp2 p s0 s1 ==> wp1 p s0 s1
 
-val theta_strel : st 'a -> wstrel 'a
-let theta_strel m =
-  fun p s0 s1 -> theta_st m (fun r1 -> theta_st m (p r1) s1) s0
-
 let lemma_theta_rel_morphism #a #b (m:st a) (f:a -> st b) : Lemma (
-  forall p s0 s1. theta_strel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_strel m) (fun x -> theta_strel (f x)) p s0 s1
+  forall p s0 s1. theta_wstrel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x)) p s0 s1
 ) =
-  introduce forall p s0 s1. (theta_strel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_strel m) (fun x -> theta_strel (f x)) p s0 s1)
+  introduce forall p s0 s1. (theta_wstrel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x)) p s0 s1)
 with begin
      calc (<==>) {
-       theta_strel (bind_st m f) p s0 s1;
+       theta_wstrel (bind_st m f) p s0 s1;
        <==> { _ by (
-         norm [delta_only [`%theta_strel];zeta];
+         norm [delta_only [`%theta_wstrel];zeta];
          compute ()) }
-       bind_wstrel (theta_strel m) (fun x -> theta_strel (f x)) p s0 s1;
+       bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x)) p s0 s1;
      }
   end
 
 type dm (a:Type) (w:wstrel a) =
-  m:(st a){theta_strel m ⊑ w}
+  m:(st a){theta_wstrel m ⊑ w}
 
 let ret_dm (a:Type) (x:a) : dm a (ret_wstrel x) = ret_st x
 
@@ -128,14 +133,20 @@ let bind_dm (a:Type) (b:Type)
             (wm:wstrel a) (wf:a -> wstrel b)
             (m:dm a wm) (f:(x:a -> dm b (wf x))) :
             dm b (bind_wstrel wm wf) =
-  lemma_theta_rel_morphism m f;
-  assert (theta_strel (bind_st m f) ⊑ bind_wstrel (theta_strel m) (fun x -> theta_strel (f x)));
-  assert (theta_strel m ⊑ wm);
-  assert (bind_wstrel (theta_strel m) (fun x -> theta_strel (f x)) ⊑ bind_wstrel wm wf);
-  assert (theta_strel (bind_st m f) ⊑ bind_wstrel wm wf);
+  calc (⊑) {
+    theta_wstrel (bind_st m f);
+    ⊑ { lemma_theta_rel_morphism m f } 
+    bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x));
+    ⊑ {
+      assert (theta_wstrel m ⊑ wm)
+    }
+    bind_wstrel wm (fun x -> theta_wstrel (f x));
+    ⊑ {}
+    bind_wstrel wm wf;
+  };
   bind_st m f
 
-let subcomp_dm (a:Type) (wp1 wp2:wstrel a) (m : dm a wp1) : Pure (dm a wp2) (requires (wp1  ⊑ wp2)) (ensures (fun _ -> True)) = m
+let subcomp_dm (a:Type) (wp1 wp2:wstrel a) (m : dm a wp1) : Pure (dm a wp2) (requires (wp1 ⊑ wp2)) (ensures (fun _ -> True)) = m
 
 unfold
 let wstrel_if_then_else (wp1 wp2:wstrel 'a) (b:bool) : wstrel 'a =
