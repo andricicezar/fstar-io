@@ -199,11 +199,23 @@ let test () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ (_,s0)
   let x = get true in
   if x = 1 then put false x else put false 1
 
+[@expect_failure]
+let test' () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false =!= s1 false) =
+  let x = get true in
+  if x = 1 then put false x else put false 1
+
+[@expect_failure]
+let test'' () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == s1 false) =
+  let x = get true in
+  if x = 1 then put false x else put false 2
+
 let test3 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
   let x = get true in
   if x = 1 then put false x else put false 2
 
-[@expect_failure]
-let test2 () : StRel unit (fun is0 is1 -> is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false <> s1 false) =
+#set-options "--log_queries --timing"
+let test4 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
   let x = get true in
-  if x = 1 then put false x else put false 1
+  let x = get true in
+  let x = get true in
+  if x = 1 then put false x else put false 2
