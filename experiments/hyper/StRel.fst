@@ -56,6 +56,20 @@ unfold let wstrel_monotonic (wp:wstrel0 'a) =
   forall (p1 p2:wstrel_post 'a). (forall r1 r2. p1 r1 r2 ==> p2 r1 r2) ==> (forall s0 s1. wp p1 s0 s1 ==> wp p2 s0 s1)
 type wstrel a = wp:(wstrel0 a){wstrel_monotonic wp}
 
+(**
+let lemma (wp:wstrel 'a) p1 p2 s0 s1: Lemma
+  (requires (wp p1 s0 s1 /\ wp p2 s0 s1))
+  (ensures (wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1)) = 
+  assert (wstrel_monotonic wp);
+  ()
+**)
+
+unfold let (⊑) (wp1 wp2: wstrel 'a): Type0 =
+  forall p s0 s1. wp2 p s0 s1 ==> wp1 p s0 s1
+
+let (====) #a (w1:wstrel a) (w2:wstrel a) =
+  forall p s1 s2 . w1 p s1 s2 <==> w2 p s1 s2
+
 (** *** Relative monad **)
 unfold let bret_wstrel (x:'a) (y:'a) : wstrel 'a = fun p s0 s1 -> p (x,s0) (y,s1) 
 unfold let bbind_wstrel (wm:wstrel 'a) (wf:'a -> 'a -> wstrel 'b) : wstrel 'b =
@@ -80,20 +94,98 @@ unfold let elim_rel (wm:wstrel 'a) : wst 'a = //Pure (wst 'a) (requires (determi
 unfold let ret_wstrel (x:'a) : wstrel 'a = bret_wstrel x x
 unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
   bbind_wstrel wm (fun x0 x1 -> elim_rel (wf x0) ⊗ elim_rel (wf x1))
-(**
-unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstrel b =
-  bbind_wstrel wm (fun x0 x1 p s0 s1 ->
-    (x0 == x1 ==> wf x0 p s0 s1) /\
-    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))**)
+//  bbind_wstrel wm (fun x0 x1 p s0 s1 ->
+//    (x0 == x1 ==> wf x0 p s0 s1) /\
+//    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))
+
+// forall s0 s1 s2 wm. wm (fun r0 _ -> wm (fun r1 _ -> r0 == r1) s0 s2) s0 s1
+// forall s0 s1 s2 wm. wm (fun _ r0 -> wm (fun _ r1 -> r0 == r1) s2 s0) s1 s0
+
+let what_wf1
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) :
+  Lemma (forall x s. wf x x (fun r0 r1 -> r0 == r1) s s) = 
+  assert (forall x1 x2 p s0 s1. wf x1 x2 p s0 s1 ==> btheta_wstrel (f x1) (f x2) p s0 s1);
+  (** Reductio ad absurdum **)
+  assume (exists x s. wf x x (fun r0 r1 -> ~(r0 == r1)) s s);
+  assert (exists x s. btheta_wstrel (f x) (f x) (fun r0 r1 -> ~(r0 == r1)) s s);
+  (** r0 == r1 **)
+  assert False
+
+let what_wf11
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2))
+  (pr:'b*state -> Type0) : 
+  Lemma (forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s) = 
+  introduce forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s with begin
+    assume (forall (wp:wstrel 'b) p1 p2 s0 s1. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1);
+    introduce wf x x (fun r0 _ -> pr r0) s s ==> wf x x (fun _ r1 -> pr r1) s s with _. begin
+      assert (wf x x (fun r0 _ -> pr r0) s s);
+      what_wf1 f wf ();
+      assert (wf x x (fun r0 r1 -> r0 == r1) s s);
+      eliminate forall (wp:wstrel 'b) s0 s1 p1 p2. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1 with (wf x x) s s (fun r0 _ -> pr r0) (fun r0 r1 -> r0 == r1);
+      assert (wf x x (fun r0 r1 -> pr r0 /\ r0 == r1) s s)
+    end;
+    introduce wf x x (fun _ r1 -> pr r1) s s ==> wf x x (fun r0 _ -> pr r0) s s with _. begin
+      assert (wf x x (fun _ r1 -> pr r1) s s);
+      what_wf1 f wf ();
+      assert (wf x x (fun r0 r1 -> r0 == r1) s s);
+      eliminate forall (wp:wstrel 'b) s0 s1 p1 p2. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1 with (wf x x) s s (fun _ r1 -> pr r1) (fun r0 r1 -> r0 == r1);
+      assert (wf x x (fun r0 r1 -> pr r1 /\ r0 == r1) s s)
+    end
+  end;
+  ()
+
+let what_wf2
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) : 
+  Lemma (forall x0 x1 x2 s0' s1' s2'. wf x0 x1 (fun r0 _ -> wf x0 x2 (fun r1 _ -> r0 == r1) s0' s2') s0' s1') = 
+  (** Reductio ad absurdum **)
+  assume (exists x0 x1 x2 s0' s1' s2'. wf x0 x1 (fun r0 _ -> wf x0 x2 (fun r1 _ -> ~(r0 == r1)) s0' s2') s0' s1');
+  assert False
+
+let what_wf3
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) : 
+  Lemma (forall x0 x1 x2 s0' s1' s2'. wf x1 x0 (fun _ r0 -> wf x2 x0 (fun _ r1 -> r0 == r1) s2' s0') s1' s0') = 
+  (** Reductio ad absurdum **)
+  assume (exists x0 x1 x2 s0' s1' s2'. wf x1 x0 (fun _ r0 -> wf x2 x0 (fun _ r1 -> ~(r0 == r1)) s2' s0') s1' s0');
+  assert False
+
+let soundness_bind 
+  (m:st 'a) (wm:wstrel 'a) 
+  (_:squash (btheta_wstrel m m ⊑ wm))
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) : 
+  Lemma (bbind_wstrel wm wf ==== bind_wstrel wm (fun x -> wf x x)) =
+  introduce forall p s0 s1. bbind_wstrel wm wf p s0 s1 <==> bind_wstrel wm (fun x -> wf x x) p s0 s1 with begin
+    let p1 : wstrel_post 'a = (fun (x0,s0') (x1,s1') -> wf x0 x0 (fun _ r0 -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0') in
+    let p2 : wstrel_post 'a = (fun (x0,s0') (x1,s1') -> wf x0 x1 p s0' s1') in
+    introduce forall x0 x1 s0' s1'. p1 (x0, s0') (x1, s1') <==> p2 (x0,s0') (x1,s1') with begin
+      calc (<==>) {
+        wf x0 x1 p s0' s1';
+        (<==>) {}
+        wf x0 x1 (fun r1 r2 -> p r1 r2) s0' s1';
+        (<==>) { admit () }
+        wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1';
+        (<==>) { admit () }
+        wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1';
+        (<==>) { admit () }
+        wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0';
+        (<==>) { 
+          let pr = (fun r0 -> wf x1 x1 (fun _ -> p r0) s1' s1') in
+          what_wf11 f wf () pr
+        }
+        wf x0 x0 (fun _ r0 -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0';
+      }
+    end
+  end
 
 let get_wstrel l : wstrel int = 
   fun p s0 s1 -> p (s0 l, s0) (s1 l, s1)
 
 let put_wstrel l v : wstrel unit =
   fun p s0 s1 -> p ((), st_upd s0 l v) ((), st_upd s1 l v)
-
-let (====) #a (w1:wstrel a) (w2:wstrel a) =
-  forall p s1 s2 . w1 p s1 s2 <==> w2 p s1 s2
 
 (** Not needed in proving the monad morphism? **)
 let wstrel_monad_law1 #a (w:wstrel a) : Lemma
@@ -107,11 +199,8 @@ let wstrel_monad_law3 (#a #b #c:Type) (wm:wstrel a) (wf:a -> wstrel b) (wg:b -> 
   bind_wstrel (bind_wstrel wm wf) wg ==== bind_wstrel wm (fun r -> bind_wstrel (wf r) wg)
 ) = admit ()
 
-unfold let (⊑) (wp1 wp2: wstrel 'a): Type0 =
-  forall p s0 s1. wp2 p s0 s1 ==> wp1 p s0 s1
-
 let lemma_theta_rel_morphism #a #b (m:st a) (f:a -> st b) : Lemma (
-  forall p s0 s1. theta_wstrel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x)) p s0 s1
+  theta_wstrel (bind_st m f) ==== bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x))
 ) =
   introduce forall p s0 s1. (theta_wstrel (bind_st m f) p s0 s1 <==> bind_wstrel (theta_wstrel m) (fun x -> theta_wstrel (f x)) p s0 s1)
 with begin
@@ -141,7 +230,11 @@ let bind_dm (a:Type) (b:Type)
       assert (theta_wstrel m ⊑ wm)
     }
     bind_wstrel wm (fun x -> theta_wstrel (f x));
-    ⊑ {}
+    ⊑ { 
+      assert (forall x. theta_wstrel (f x) ⊑ wf x)
+    }
+    bind_wstrel wm (fun x -> wf x);
+    ⊑ { }
     bind_wstrel wm wf;
   };
   bind_st m f
@@ -213,8 +306,14 @@ let test3 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0
   let x = get true in
   if x = 1 then put false x else put false 2
 
-#set-options "--log_queries --timing"
+//[@@ (preprocess_with wow)]
+#set-options "--log_queries"
 let test4 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
+  let x = get true in
+  let x = get true in
+  if x = 1 then put false x else put false 2
+  
+let test5 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
   let x = get true in
   let x = get true in
   let x = get true in
