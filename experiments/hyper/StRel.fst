@@ -62,6 +62,11 @@ let lemma (wp:wstrel 'a) p1 p2 s0 s1: Lemma
   (ensures (wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1)) = 
   assert (wstrel_monotonic wp);
   ()
+
+let another_lemma (wp:wstrel 'a) p s0 s1: Lemma
+  (requires (~(wp p s0 s1)))
+  (ensures (wp (fun r0 r1 -> ~(p r0 r1)) s0 s1)) =
+  ()
 **)
 
 unfold let (⊑) (wp1 wp2: wstrel 'a): Type0 =
@@ -98,60 +103,144 @@ unfold let bind_wstrel (#a #b:Type) (wm : wstrel a) (wf : a -> wstrel b) : wstre
 //    (x0 == x1 ==> wf x0 p s0 s1) /\
 //    (x0 =!= x1 ==> (elim_rel (wf x0) ⊗ elim_rel (wf x1)) p s0 s1))
 
-// forall s0 s1 s2 wm. wm (fun r0 _ -> wm (fun r1 _ -> r0 == r1) s0 s2) s0 s1
-// forall s0 s1 s2 wm. wm (fun _ r0 -> wm (fun _ r1 -> r0 == r1) s2 s0) s1 s0
-
-let what_wf1
-  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
-  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) :
-  Lemma (forall x s. wf x x (fun r0 r1 -> r0 == r1) s s) = 
-  assert (forall x1 x2 p s0 s1. wf x1 x2 p s0 s1 ==> btheta_wstrel (f x1) (f x2) p s0 s1);
-  (** Reductio ad absurdum **)
-  assume (exists x s. wf x x (fun r0 r1 -> ~(r0 == r1)) s s);
-  assert (exists x s. btheta_wstrel (f x) (f x) (fun r0 r1 -> ~(r0 == r1)) s s);
-  (** r0 == r1 **)
-  assert False
-
+let lemma_1234 
+  (m:st 'b) (wf:wstrel 'b)
+  (_:squash (btheta_wstrel m m ⊑ wf)) : 
+  Lemma (forall p s0 s1. ~(wf p s0 s1) <==> wf (fun r1 r2 -> ~(p r1 r2)) s0 s1) = 
+  introduce forall p s0 s1. ~(wf p s0 s1) ==> wf (fun r1 r2 -> ~(p r1 r2)) s0 s1 with begin
+    introduce ~(wf p s0 s1) ==> wf (fun r1 r2 -> ~(p r1 r2)) s0 s1 with _. begin
+      let b = FStar.StrongExcludedMiddle.strong_excluded_middle (wf p s0 s1) in
+      assert (b == false);
+      assert (~(wf p s0 s1));
+      assert (wf (fun r1 r2 -> ~(p r1 r2)) s0 s1 ==> btheta_wstrel m m (fun r1 r2 -> ~(p r1 r2)) s0 s1);
+      assert (~(btheta_wstrel m m p s0 s1));
+      admit ()
+      // wf (fun r1 r2 -> ~(p r1 r2)) s0 s1
+      //let b = FStar.StrongExcludedMiddle.strong_excluded_middle (wf (fun r1 r2 -> ~(p r1 r2)) s0 s1) in
+    end
+  end;
+  admit ()
+  
 let what_wf11
   (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
   (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2))
   (pr:'b*state -> Type0) : 
   Lemma (forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s) = 
-  introduce forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s with begin
-    assume (forall (wp:wstrel 'b) p1 p2 s0 s1. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1);
-    introduce wf x x (fun r0 _ -> pr r0) s s ==> wf x x (fun _ r1 -> pr r1) s s with _. begin
-      assert (wf x x (fun r0 _ -> pr r0) s s);
-      what_wf1 f wf ();
-      assert (wf x x (fun r0 r1 -> r0 == r1) s s);
-      eliminate forall (wp:wstrel 'b) s0 s1 p1 p2. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1 with (wf x x) s s (fun r0 _ -> pr r0) (fun r0 r1 -> r0 == r1);
-      assert (wf x x (fun r0 r1 -> pr r0 /\ r0 == r1) s s)
-    end;
-    introduce wf x x (fun _ r1 -> pr r1) s s ==> wf x x (fun r0 _ -> pr r0) s s with _. begin
-      assert (wf x x (fun _ r1 -> pr r1) s s);
-      what_wf1 f wf ();
-      assert (wf x x (fun r0 r1 -> r0 == r1) s s);
-      eliminate forall (wp:wstrel 'b) s0 s1 p1 p2. wp p1 s0 s1 /\ wp p2 s0 s1 ==> wp (fun r0 r1 -> p1 r0 r1 /\ p2 r0 r1) s0 s1 with (wf x x) s s (fun _ r1 -> pr r1) (fun r0 r1 -> r0 == r1);
-      assert (wf x x (fun r0 r1 -> pr r1 /\ r0 == r1) s s)
-    end
-  end;
+  (** Attempt at something that does not use assumes: 
+  let b = FStar.StrongExcludedMiddle.strong_excluded_middle (forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s) in
+  if b = false then begin
+    calc (<==>) {
+      ~(forall x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s);
+      (<==>) {}
+      exists x s. ~(wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> pr r1) s s);
+      <==> {}
+      exists x s. wf x x (fun r0 _ -> pr r0) s s <==> ~(wf x x (fun _ r1 -> pr r1) s s);
+      <==> { _ by (tadmit ()) }
+      exists x s. wf x x (fun r0 _ -> pr r0) s s <==> wf x x (fun _ r1 -> ~(pr r1)) s s;
+      <==> {}
+      exists x s. (~(wf x x (fun _ r1 -> ~(pr r1)) s s) \/ wf x x (fun r0 _ -> pr r0) s s) /\ (~(wf x x (fun r0 _ -> pr r0) s s) \/ wf x x (fun _ r1 -> ~(pr r1)) s s);
+      <==> { _ by (tadmit ()) }
+      exists x s. (wf x x (fun _ r1 -> pr r1) s s \/ wf x x (fun r0 _ -> pr r0) s s) /\ (wf x x (fun r0 _ -> ~(pr r0)) s s \/ wf x x (fun _ r1 -> ~(pr r1)) s s);
+      <==> {}
+      False;
+    }
+  end**)
+
+  let aux1 : unit -> Lemma (forall x s. wf x x (fun r0 _ -> pr r0) s s ==> wf x x (fun _ r1 -> pr r1) s s) = fun () -> begin
+    assume (exists x s. wf x x (fun r0 _ -> pr r0) s s /\
+                   wf x x (fun _ r1 -> ~(pr r1)) s s);
+    assert False
+  end in
+  let aux2 : unit -> Lemma (forall x s. wf x x (fun _ r1 -> pr r1) s s ==> wf x x (fun r0 _ -> pr r0) s s) = fun () -> begin
+    assume (exists x s. wf x x (fun _ r1 -> pr r1) s s/\
+                   wf x x (fun r0 _ -> ~(pr r0)) s s);
+    assert False
+  end in
+  aux1 ();
+  aux2 ()
+
+let what_wf21
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) 
+  (p:wstrel_post 'b)
+  : 
+  Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 p s0' s1') s0' s1' <==>
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1') = 
+  (** Proof by contradiction **)
+  let aux1 : unit -> Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 p s0' s1') s0' s1' ==> 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1') = fun () -> begin
+    assume (exists x0 x1 s0' s1'. wf x0 x1 (fun r0 _ -> wf x0 x1 (fun r0' r1' -> p r0' r1') s0' s1') s0' s1' /\
+                           wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ r1' -> ~(p r0 r1')) s0' s1') s0' s1');
+    assert False
+  end in
+  let aux2 : unit -> Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1' ==>
+    wf x0 x1 (fun r0 _ -> wf x0 x1 p s0' s1') s0' s1') = fun () -> begin
+    assume (exists x0 x1 s0' s1'. wf x0 x1 (fun r0 _ -> wf x0 x1 (fun r0' r1' -> ~(p r0' r1')) s0' s1') s0' s1' /\
+                            wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ r1' -> p r0 r1') s0' s1') s0' s1');
+    assert False
+  end in
+  aux1 (); aux2 ()
+  
+let what_wf222 
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) 
+  (p:wstrel_post 'b) :
+  Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1' ==>
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1') =
+    assume (exists x0 x1 s0' s1'. wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1' /\
+                             wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ r1 -> ~(p r0 r1)) s0' s1') s0' s1');
+    assert False
+
+let what_wf22
+  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) 
+  (p:wstrel_post 'b)
+  : 
+  Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1' <==>
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1') = 
+  let aux1 : unit -> Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1' ==>
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1') = fun () -> begin
+    assume (exists x0 x1 s0' s1'. wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1' /\
+                             wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ r1 -> ~(p r0 r1)) s1' s1') s0' s1');
+    assert False
+  end in
+  aux1 (); 
+  what_wf222 f wf () p;
   ()
 
-let what_wf2
+let what_wf23
   (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
-  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) : 
-  Lemma (forall x0 x1 x2 s0' s1' s2'. wf x0 x1 (fun r0 _ -> wf x0 x2 (fun r1 _ -> r0 == r1) s0' s2') s0' s1') = 
-  (** Reductio ad absurdum **)
-  assume (exists x0 x1 x2 s0' s1' s2'. wf x0 x1 (fun r0 _ -> wf x0 x2 (fun r1 _ -> ~(r0 == r1)) s0' s2') s0' s1');
-  assert False
-
-let what_wf3
-  (f:'a -> st 'b) (wf:'a -> 'a -> wstrel 'b)
-  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) : 
-  Lemma (forall x0 x1 x2 s0' s1' s2'. wf x1 x0 (fun _ r0 -> wf x2 x0 (fun _ r1 -> r0 == r1) s2' s0') s1' s0') = 
-  (** Reductio ad absurdum **)
-  assume (exists x0 x1 x2 s0' s1' s2'. wf x1 x0 (fun _ r0 -> wf x2 x0 (fun _ r1 -> ~(r0 == r1)) s2' s0') s1' s0');
-  assert False
-
+  (_:squash (forall x1 x2 . btheta_wstrel (f x1) (f x2) ⊑ wf x1 x2)) 
+  (p:wstrel_post 'b)
+  : 
+  Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1' <==>
+    wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0') = 
+  let aux1 : unit -> Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0' ==>
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1') = fun () -> begin
+    assume (exists x0 x1 s0' s1'. wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0' /\
+                             wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ r1 -> ~(p r0 r1)) s1' s1') s0' s1');
+    assert False
+  end in
+  let aux2 : unit -> Lemma (forall x0 x1 s0' s1'. 
+    wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1' ==>
+    wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0') = fun () -> begin
+    assume (exists x0 x1 s0' s1'. wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1' /\
+                             wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ r1 -> ~(p r0 r1)) s1' s1') s0' s0');
+    assert False
+  end in
+  aux1 (); 
+  aux2 ();
+  ()
+  
+  
 let soundness_bind 
   (m:st 'a) (wm:wstrel 'a) 
   (_:squash (btheta_wstrel m m ⊑ wm))
@@ -166,11 +255,13 @@ let soundness_bind
         wf x0 x1 p s0' s1';
         (<==>) {}
         wf x0 x1 (fun r1 r2 -> p r1 r2) s0' s1';
-        (<==>) { admit () }
+        (<==>) { }
+        wf x0 x1 (fun r0 _ -> wf x0 x1 p s0' s1') s0' s1';
+        (<==>) { what_wf21 f wf () p }
         wf x0 x1 (fun r0 _ -> wf x0 x1 (fun _ -> p r0) s0' s1') s0' s1';
-        (<==>) { admit () }
+        (<==>) { what_wf22 f wf () p }
         wf x0 x1 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s1';
-        (<==>) { admit () }
+        (<==>) { what_wf23 f wf () p }
         wf x0 x0 (fun r0 _ -> wf x1 x1 (fun _ -> p r0) s1' s1') s0' s0';
         (<==>) { 
           let pr = (fun r0 -> wf x1 x1 (fun _ -> p r0) s1' s1') in
@@ -307,7 +398,6 @@ let test3 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0
   if x = 1 then put false x else put false 2
 
 //[@@ (preprocess_with wow)]
-#set-options "--log_queries"
 let test4 () : StRel unit (fun is0 is1 -> is0 true == 1 /\ is1 true =!= 1 /\ is0 false == is1 false) (fun _ _ (_,s0) (_,s1) -> s0 false == 1 /\ s1 false == 2) =
   let x = get true in
   let x = get true in
