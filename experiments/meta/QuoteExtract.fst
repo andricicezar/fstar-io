@@ -16,13 +16,13 @@ type linkS (ps:progS) (cs:ctxS) : wholeS = fun () -> ps cs
 type linkT (pt:progT) (ct:ctxT) : wholeT = Tv_App pt (ct, Q_Explicit)
 
 (** *** Looking at soundness **)
-assume val beh_t : wholeT -> (int -> Type0)
+assume val behT : wholeT -> (int -> Type0)
 
 (** Fails because quote is in the Tac effect **)
 [@expect_failure]
 let soudness_ideal : Type0 =
   forall (ps:progS) (ct:ctxT).
-     forall res. beh_t (linkT (quote ps) ct) res ==> res == 0
+     forall res. behT (linkT (quote ps) ct) res ==> res == 0
 (** res == 0 is the post-condition of progS **)
 
 (** Assuming that compilation gives us a refinement on the result that
@@ -39,9 +39,9 @@ let soudness (rel:progS -> progT -> Type0) : Type0 =
         We need a proof that for a source program, there is at least a target program
         in relation with it. **)
     forall (pt:progT). ps `rel` pt ==>
-      (forall res. beh_t (linkT pt ct) res ==> res == 0)
+      (forall res. behT (linkT pt ct) res ==> res == 0)
 
-(** beh_t should pick up the spec of ps **)
+(** behT should pick up the spec of ps **)
 (** One could define rel, using the `validity` predicate from 
     FStar.Reflection.Typing, that allows us to reason about terms
     at the value level. However, validity needs an environment.
@@ -53,15 +53,15 @@ let soudness (rel:progS -> progT -> Type0) : Type0 =
       rel (g:env) _ pt = validity g (has_type pt progS)
 **)
 
-assume val beh_s : wholeS -> (int -> Type0)
+assume val behS : wholeS -> (int -> Type0)
 
 let wcc (rel:wholeS -> wholeT -> Type0) : Type0 =
   forall (ws:wholeS).
     forall (wt:wholeT). ws `rel` wt ==>
-      (forall res. beh_s ws res <==> beh_t wt res)
+      (forall res. behS ws res <==> behT wt res)
 
-(** for wcc ^, one cannot use any hacks in defining beh_t.
-    Also, beh_s unfolds to `beh_s0 (reify ws)`, so 
+(** for wcc ^, one cannot use any hacks in defining behT.
+    Also, behS unfolds to `behS0 (reify ws)`, so 
     this is very hard to prove.
 **)
 
