@@ -3,7 +3,7 @@ module QuoteExtract
 open FStar.Tactics.V2
 
 type progS = int -> Pure int True (fun r -> r == 0)
-type progT = term
+type progT = term // term is just syntax...
 
 type ctxS = int
 type ctxT = term
@@ -16,7 +16,7 @@ type linkS (ps:progS) (cs:ctxS) : wholeS = fun () -> ps cs
 type linkT (pt:progT) (ct:ctxT) : wholeT = Tv_App pt (ct, Q_Explicit)
 
 (** *** Looking at soundness **)
-assume val beh_t : term -> (int -> Type0)
+assume val beh_t : wholeT -> (int -> Type0)
 
 (** Fails because quote is in the Tac effect **)
 [@expect_failure]
@@ -30,7 +30,15 @@ let soudness_ideal : Type0 =
     like this: **)
 let soudness (rel:progS -> progT -> Type0) : Type0 =
   forall (ps:progS) (ct:ctxT).
-    exists (pt:progT). ps `rel` pt /\
+    (** CA: I think quantifying pt with a forall is the correct thing to do,
+        since quote is partial (because of Tac). Also, if it is an exists, then
+        one cannot provide a witness by using quote (again, because of Tac).
+        
+        However, because of the forall, we have to show that the assumption is not 
+        a contradiction, which will make the entire theorem trivial.
+        We need a proof that for a source program, there is at least a target program
+        in relation with it. **)
+    forall (pt:progT). ps `rel` pt ==>
       (forall res. beh_t (linkT pt ct) res ==> res == 0)
 
 (** beh_t should pick up the spec of ps **)
@@ -43,6 +51,18 @@ let soudness (rel:progS -> progT -> Type0) : Type0 =
       
     Funny enough, one could not look at ps and still prove soundness:
       rel (g:env) _ pt = validity g (has_type pt progS)
+**)
+
+assume val beh_s : wholeS -> (int -> Type0)
+
+let wcc (rel:wholeS -> wholeT -> Type0) : Type0 =
+  forall (ws:wholeS).
+    forall (wt:wholeT). ws `rel` wt ==>
+      (forall res. beh_s ws res <==> beh_t wt res)
+
+(** for wcc ^, one cannot use any hacks in defining beh_t.
+    Also, beh_s unfolds to `beh_s0 (reify ws)`, so 
+    this is very hard to prove.
 **)
 
 (** *** Playing with tactics **)
