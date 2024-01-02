@@ -5,34 +5,44 @@ open FStar.Tactics.V2
 type progS = int -> Pure int True (fun r -> r == 0)
 type progT = term
 
+type ctxS = int
+type ctxT = term
+
+type wholeS = unit -> Pure int True (fun r -> r == 0)
+type wholeT = term
+
+
+type linkS (ps:progS) (cs:ctxS) : wholeS = fun () -> ps cs
+type linkT (pt:progT) (ct:ctxT) : wholeT = Tv_App pt (ct, Q_Explicit)
+
 (** *** Looking at soundness **)
 assume val beh_t : term -> (int -> Type0)
 
 (** Fails because quote is in the Tac effect **)
 [@expect_failure]
 let soudness_ideal : Type0 =
-  forall (ps:progS) (cs:term).
-     forall res. beh_t (Tv_App (quote ps) (cs, Q_Explicit)) res ==> res == 0
+  forall (ps:progS) (ct:ctxT).
+     forall res. beh_t (linkT (quote ps) ct) res ==> res == 0
 (** res == 0 is the post-condition of progS **)
 
 (** Assuming that compilation gives us a refinement on the result that
     relates the source and target program, then we can state soundness
     like this: **)
 let soudness (rel:progS -> progT -> Type0) : Type0 =
-  forall (ps:progS) (cs:term).
+  forall (ps:progS) (ct:ctxT).
     exists (pt:progT). ps `rel` pt /\
-      (forall res. beh_t (Tv_App pt (cs, Q_Explicit)) res ==> res == 0)
+      (forall res. beh_t (linkT pt ct) res ==> res == 0)
 
-(** beh_t should pick up the spec of pt **)
+(** beh_t should pick up the spec of ps **)
 (** One could define rel, using the `validity` predicate from 
     FStar.Reflection.Typing, that allows us to reason about terms
-    at the value level. However, this depends on the environment.
+    at the value level. However, validity needs an environment.
 
     A strong rel would be:
       rel (g:env) ps pt = validity g (eq2 ps pt)
       
-    Funny enough, one could write one that does not look at ps and still prove soundness:
-      rel (g:env) ps pt = validity g (has_type pt progS)
+    Funny enough, one could not look at ps and still prove soundness:
+      rel (g:env) _ pt = validity g (has_type pt progS)
 **)
 
 (** *** Playing with tactics **)
