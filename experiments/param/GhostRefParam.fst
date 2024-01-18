@@ -63,6 +63,9 @@ let rec free_param_noa1
   
   | _ -> ()
 
+let thm1 (t : tt int) : Lemma (noa1 (t false)) =
+  ()
+  
 let thm2 (t : tt int) (ft : tt_param int int int_param t t) : Lemma (noa1 (t true)) =
   assert (noa1 (t false));
   free_param_noa1 int int int_param (t false) (t true) (ft false true ());

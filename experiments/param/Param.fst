@@ -1,5 +1,7 @@
 module Param
 
+// NOTE: THIS IS WORKING FOR F* RELEASE v2023.02.01
+
 (** This file contains a parametricity translation tactic. It can take
 most top-level definitions and generate their parametricity principle
 by a call to the [%splice] tactics hook in F*. Usually you can just call
@@ -140,7 +142,7 @@ let replace_var (s:param_state) (b:bool) (t:term) : Tac term =
   | Tv_Var bv ->
     begin try
       let (x, y, _) = lookup s bv in
-      let bv = if b then (inspect_binder y).binder_bv else (inspect_binder x).binder_bv in
+      let bv = if b then fst (inspect_binder y) else fst (inspect_binder x) in
       pack (Tv_Var bv)
     with
     (* Maybe we traversed a binder and there are variables not in the state.
@@ -176,7 +178,7 @@ let rec param' (s:param_state) (t:term) : Tac term =
   let r =
   match inspect t with
   | Tv_Type _u -> // t = Type
-    `(fun (s t : (`#t)) -> s -> t -> Type)
+    `(fun (s t : _) -> s -> t -> Type)
 
   | Tv_Var bv ->
     let (_, _, b) = lookup s bv in
@@ -186,7 +188,7 @@ let rec param' (s:param_state) (t:term) : Tac term =
     begin match inspect_comp c with
     | C_Total t2 ->
       let (s', (bx0, bx1, bxR)) = push_binder b s in
-      let q = (inspect_binder b).binder_qual in
+      let q = fst (snd ((inspect_binder b))) in
 
       let bf0 = fresh_binder_named "f0" (replace_by s false t) in
       let bf1 = fresh_binder_named "f1" (replace_by s true t) in
@@ -323,11 +325,11 @@ and param_br (s:param_state) (br : branch) : Tac branch =
   (pat', param' s' t)
 
 and push_binder (b:binder) (s:param_state) : Tac (param_state & (binder & binder & binder)) =
-  let bv = (inspect_binder b).binder_bv in
-  let q = (inspect_binder b).binder_qual in
+  let bv = fst (inspect_binder b) in
+  let q = fst (snd ((inspect_binder b))) in
   let typ = (inspect_bv bv).bv_sort in
   let name = (inspect_bv bv).bv_ppname in
-  let decor (s : sealed string) (t : string) : Tac string = (unseal s ^ t) in
+  let decor (s : string) (t : string) : Tac string = (s ^ t) in
   let bx0 = fresh_binder_named (decor name "0") (replace_by s false typ) in
   let bx1 = fresh_binder_named (decor name "1") (replace_by s true typ) in
   let bxr = fresh_binder_named (decor name "R") (`(`#(param' s typ)) (`#bx0) (`#bx1)) in
@@ -490,7 +492,6 @@ let safetail_param_manual
   | Cons_param _ _ _ _ _ r -> r
 
 %splice[safetail_param] (paramd (`%safetail))
-
 
 (***** Misc *)
 
