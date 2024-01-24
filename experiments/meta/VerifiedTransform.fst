@@ -16,12 +16,12 @@ let mk_squash (phi:term) : Tot term = pack (Tv_App (`squash) (phi, Q_Explicit))
 let t_unit = `()
 
 let valid (g:env) (phi:term) : prop =
-  squash (typing g t_unit (E_Total, mk_squash phi))
+  squash (tot_typing g t_unit (mk_squash phi))
 
 let valid_wtf (g:env) (phi:term) 
   : Lemma (requires valid g phi)
-          (ensures squash (typing g t_unit (E_Total, mk_squash phi)))
-  = let goal = squash (typing g t_unit (E_Total, mk_squash phi)) in
+          (ensures squash (tot_typing g t_unit (mk_squash phi)))
+  = let goal = squash (tot_typing g t_unit (mk_squash phi)) in
     assert (valid g phi ==> goal) by (compute ()); /// WHY????
     () // ????
 
@@ -38,7 +38,7 @@ val norm_term_env :
   ty:typ ->
   g:env ->
   list norm_step ->
-  t0:term{typing g t0 (E_Total, ty)} ->
+  t0:term{tot_typing g t0 ty} ->
   Tac (t1:term{same_typing t0 t1 /\ valid g (mk_eq2 ty t0 t1)})
 let norm_term_env ty g steps t0 =
   let t1 = norm_term_env g steps t0 in
@@ -57,10 +57,10 @@ let object_eq2_refl (x:'a) : Lemma (x == x) = ()
 
 let eq2_refl (g:env) (ty:term) (t:term)
   : TacP unit
-         (requires squash (typing g t (E_Total, ty)))
+         (requires squash (tot_typing g t ty))
          (ensures fun _ -> valid g (mk_eq2 ty t t))
   = (* currently this just calls the typechecker/solver, but it could
-    be done dstatically from the type of Refl *)
+    be done statically from the type of Refl *)
     let goal = mk_squash (mk_eq2 ty t t) in
     let tok = must <| core_check_term g (`()) goal E_Total in
     let _ : valid g (mk_eq2 ty t t) = 
@@ -74,11 +74,11 @@ let eq2_trans (g:env) (ty:term) (t0 t1 t2:term)
          (ensures fun _ -> valid g (mk_eq2 ty t0 t2))
 = admit() // could prove, it's a lift of the eq2_trans object-level lemma
 
-let recheck (#g #ty #t : _) () : Tac (typing g t (E_Total, ty)) =
+let recheck (#g #ty #t : _) () : Tac (tot_typing g t ty) =
   let tok = must <| core_check_term g t ty E_Total in
   T_Token _ _ _ (Squash.return_squash tok)
 
-let c_int_typing (g:env) (x : int) : Tac (typing g (pack (Tv_Const (C_Int x))) (E_Total, `int)) =
+let c_int_typing (g:env) (x : int) : Tac (tot_typing g (pack (Tv_Const (C_Int x))) (`int)) =
   recheck ()
 
 let fold_addition_lemma
@@ -89,19 +89,19 @@ let fold_addition_lemma
                              (Tv_App (Tv_App (`Prims.op_Addition) (pack (Tv_Const (C_Int n)), Q_Explicit))
                                           (pack (Tv_Const (C_Int m)), Q_Explicit)))
                            (pack (Tv_Const (C_Int (n+m))))))
-  = admit() // unsure if we can prove, but oculd just call norm_term_env
+  = admit() // unsure if we can prove it statically, but could just call norm_term_env
 
 let rec cfold (g:env) (t0:term) (ty:term)
-  : TacP term (requires squash (typing g t0 (E_Total, ty)))
-              (ensures fun t1 -> typing g t1 (E_Total, ty) /\ valid g (mk_eq2 ty t0 t1))
+  : TacP term (requires squash (tot_typing g t0 ty))
+              (ensures fun t1 -> tot_typing g t1 ty /\ valid g (mk_eq2 ty t0 t1))
 = 
   let fallback ()
     : TacP term
         (requires True)
-        (ensures fun t1 -> typing g t1 (E_Total, ty) /\ valid g (mk_eq2 ty t0 t1))
+        (ensures fun t1 -> tot_typing g t1 ty /\ valid g (mk_eq2 ty t0 t1))
   =
     let _ = eq2_refl g ty t0 in
-    assert (typing g t0 (E_Total, ty));
+    assert (tot_typing g t0 ty);
     assert (valid g (mk_eq2 ty t0 t0));
     t0
   in
@@ -111,7 +111,7 @@ let rec cfold (g:env) (t0:term) (ty:term)
     (* unfold *)
     let t1 = norm_term_env ty g [delta] t0 in
     let t2 = cfold g t1 ty in
-    assert (typing g t2 (E_Total, ty));
+    assert (tot_typing g t2 ty);
     eq2_trans g ty t0 t1 t2;
     t2
     
@@ -127,10 +127,10 @@ let rec cfold (g:env) (t0:term) (ty:term)
             | Tv_Const (C_Int n), Tv_Const (C_Int m) ->
               assume (ty == `int); // need inversion lemma
               let res = pack (Tv_Const (C_Int (n+m))) in
-              let d : typing g res (E_Total, `int) = c_int_typing g (n+m) in
+              let d : tot_typing g res (`int) = c_int_typing g (n+m) in
               Squash.return_squash d;
               fold_addition_lemma g n m;
-              assert (typing g res (E_Total, `int));
+              assert (tot_typing g res (`int));
               // stupid assume, need to call pack/inspect lemma
               assume (t0 == (pack
                              (Tv_App (Tv_App (`Prims.op_Addition) (pack (Tv_Const (C_Int n)), Q_Explicit))
