@@ -30,18 +30,18 @@ let _ = assert (is_nat_pred src1 (is_nat_ctrct src1))
         valid g (Tv_App is_nat_ctrct src1) (mk_is_nat_pred src1 (is_nat_ctrct src1))
 **)
 
-// let mk_forall_pred (p:term) : term = pack_ln (Tv_App (`forall_pred) (p, Q_Explicit))
-
-let mk_arrow (dom:term) (codom:term) : term =
+let mk_arrow (dom:term) (codom:term) : typ =
   pack_ln (Tv_Arrow (binder_of_t_q dom Q_Explicit) (pack_comp (C_Total codom)))
 
-let mk_forall_ex_pred (f_t:term) (p_t:term) : term =
+// let mk_forall_pred (p:term) : term = pack_ln (Tv_App (`forall_pred) (p, Q_Explicit))
+
+let mk_forall_ex_pred (f_t:term) (p_t:term) : typ =
   pack_ln (
     Tv_App
         (pack_ln (Tv_App (`forall_ex_pred) (f_t, Q_Explicit)))
         (p_t, Q_Explicit))
 
-let mk_wit_ex_pred (p_t:term) (x_t:term) (y_t:term) : term =
+let mk_wit_ex_pred (p_t:term) (x_t:term) (y_t:term) : typ =
   pack_ln
     (Tv_App
       (pack_ln (Tv_App p_t (x_t, Q_Explicit)))
@@ -69,8 +69,6 @@ let t_app_lemma
     tot_typing g (pack_ln (Tv_App f_t (x_t, Q_Explicit))) (open_with codom x_t))
   = FStar.Squash.return_squash (
       T_App g f_t x_t (binder_of_t_q dom Q_Explicit) codom E_Total f_tyj x_tyj)
-
-  //T_App g f_t x_t (binder_of_t_q ty_a Q_Explicit) _ E_Total f_tyj x_tyj;
 
 (** syntactic application, but proving that extrinsic properties are preserved **)
 let syntactic_app #ty_a #ty_b (g:env) (f_t:term) (p_t:term) (x_t:term)
@@ -146,8 +144,30 @@ let apply_step_1 (g:env) (e0:term)
 // TODO: instantiate apply_step_1 and get the result + proof
 
 
-let tes () : Tac unit =
-  let g = top_env () in
-  // TODO: why is this not working
-  assert (tot_typing (top_env ()) (`is_nat_ctrct) (mk_arrow (`int) (`option nat)));
-  ()
+let compile (nm':string) (e0:term) : dsl_tac_t = fun g ->
+  // TODO: why is this not working. why does it have to be dynamic?
+  //    assert (tot_typing g e0 (`int));
+  // basically the following 4 lines are preconditions
+  let typ0 : tot_typing g e0 (`int) = dyn_typing () in
+  // TODO: fails to check that is_nat_ctrct is an arrow
+  let typ1 : tot_typing g (`is_nat_ctrct) (mk_arrow (`int) (`option nat)) = dyn_typing () in
+  dump "H";
+  let typ2 : tot_typing g (`is_nat_pred) (mk_arrow (`int) (mk_arrow (`option nat) (`Type0))) = dyn_typing () in
+  let typ3 : tot_typing g t_unit (mk_squash (mk_forall_ex_pred (`is_nat_ctrct) (`is_nat_pred))) = dyn_typing () in
+  FStar.Squash.return_squash typ0;
+  FStar.Squash.return_squash typ1;
+  FStar.Squash.return_squash typ2;
+  FStar.Squash.return_squash typ3;
+  let e1 = apply_step_1 g e0 in
+  let phi = mk_wit_ex_pred (`is_nat_pred) e0 e1 in
+  valid_wtf g phi;
+  [
+   mk_checked_let g nm' e1 (open_with (`option nat) e0);
+   mk_checked_let g (nm'^"_pf")
+                    (`())
+                    (mk_squash phi);
+  ]
+
+%splice_t[tgt1; tgt1_pf] (compile "tgt1" (`src1))
+
+

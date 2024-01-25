@@ -74,12 +74,12 @@ let eq2_trans (g:env) (ty:term) (t0 t1 t2:term)
          (ensures fun _ -> valid g (mk_eq2 ty t0 t2))
 = admit() // could prove, it's a lift of the eq2_trans object-level lemma
 
-let recheck (#g #ty #t : _) () : Tac (tot_typing g t ty) =
+let dyn_typing (#g #ty #t : _) () : Tac (tot_typing g t ty) =
   let tok = must <| core_check_term g t ty E_Total in
   T_Token _ _ _ (Squash.return_squash tok)
 
 let c_int_typing (g:env) (x : int) : Tac (tot_typing g (pack (Tv_Const (C_Int x))) (`int)) =
-  recheck ()
+  dyn_typing ()
 
 let fold_addition_lemma
   (g:env)
@@ -160,7 +160,7 @@ let specialize (nm':string) (t0:term) : dsl_tac_t = fun g ->
    mk_checked_let g nm' t1 ty;
    mk_checked_let g (nm'^"_pf")
                     (`())
-                    (mk_squash (mk_eq2 ty t0 t1));
+                    (mk_squash phi);
   ]
   
 let src1 : int = 1 + 2
