@@ -23,19 +23,19 @@ val behS : wholeS -> set_prop
 let behS (| _, ws |) = behS0 (reify' ws)
 
 (** Target **)
-assume type ast
 assume type ast_typ
+assume type ast_exp
 assume type ast_env
-assume type ast_typing (g:ast_env) (a:ast) (t:ast_typ)
+assume type ast_typing (g:ast_env) (a:ast_exp) (t:ast_typ)
 
 noeq type intT = { ct : ast_typ; g : ast_env; }
 
 assume val comp_int : intS u#a -> ast_env -> intT
 
 // TODO: g does not appear hear
-type progT (i:intT) = pt:ast//{ast_typing i.g pt ...}
-type ctxT (i:intT) = ct:ast//{ast_typing i.g ct ...}
-type wholeT = wt:ast_typ//{ast_typing i.g wt ...}
+type progT (i:intT) = pt:ast_exp//{ast_typing i.g pt ...}
+type ctxT (i:intT) = ct:ast_exp//{ast_typing i.g ct ...}
+type wholeT = wt:ast_exp//{ast_typing i.g wt ...}
 
 assume val linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT
 
@@ -75,9 +75,9 @@ let rhc (#i:intS) (#g_ast:ast_env) (ps:progS i) (pt:progT (comp_int i g_ast)) =
   forall (ct:ctxT (comp_int i g_ast)).
     exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct)
 
-val compile_prog_soundness :
+val compile_prog :
   (g:env) ->
-  #i:term{tot_typing g i (`intS)} ->
+  i:term{tot_typing g i (`intS)} ->
   ps:term{tot_typing g ps (`progS (`#i))} ->
   (g_ast : term{tot_typing g g_ast (`ast_env)}) ->
   Tac (pt:term{
@@ -89,3 +89,15 @@ val compile_prog_soundness :
     (** RHC **)
     valid g (`(rhc (`#ps) (`#pt)))
   })
+
+  // Example of usage:
+  // let i : intS = ...
+  // let ps : progS i = ...
+  // let g_ast : ast_env = ...
+
+  //  %splice_t [pt;pt_sound;ps_pt_rhc] (compile_prog (`i) (`ps) (`g_ast))
+  // // adds in environment the following:
+
+  // let pt : progT (comp_int i g_ast) = ...
+  // let pt_sound : squash (soundness pt) = ...
+  // let ps_pt_rhc : squash (rhc ps pt) = ...
