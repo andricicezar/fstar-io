@@ -1,4 +1,4 @@
-module Criteria2
+module CriteriaStatic
 
 (** *** Intrinsic criteria, static quoting/unquoting  **)
 

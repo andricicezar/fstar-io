@@ -1,4 +1,4 @@
-module Criteria
+module CriteriaDynamic
 
 open FStar.Tactics.V2
 
