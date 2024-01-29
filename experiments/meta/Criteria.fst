@@ -4,7 +4,7 @@ open FStar.Tactics.V2
 
 type set_prop = int -> Type0
 let (⊆) (s0 s1:set_prop) : Type0 = forall res. s0 res ==> s1 res
-let (≍) (s0 s1:set_prop) : Type0 = forall res. s0 res <==> s1 res
+let (≡) (s0 s1:set_prop) : Type0 = forall res. s0 res <==> s1 res
 
 noeq type intS = { ct : Type u#a; p_post : set_prop }
 noeq type intT = { ct : Type u#a }
@@ -35,7 +35,7 @@ assume val behS0 : pure_repr -> set_prop
 val behS : wholeS -> set_prop 
 let behS (| _, ws |) = behS0 (reify' ws)
 
-(** *** Looking at stating criteria extrinsically **)
+(** *** Extrinsic criteria  **)
 (** Fails because quote is in the Tac effect **)
 [@expect_failure]
 let soudness_ideal : Type0 =
@@ -73,35 +73,38 @@ let soudness (rel:(#i:intS -> progS i -> progT (comp_int i) -> Type0)) : Type0 =
 let wcc (rel:wholeS -> wholeT -> Type0) : Type0 =
   forall (ws:wholeS).
     forall (wt:wholeT). ws `rel` wt ==>
-      behS ws ≍ behT wt
+      behS ws ≡ behT wt
 
 (** for wcc ^, one cannot use any hacks in defining behT.
     Also, behS unfolds to `behS0 (reify ws)`, so 
     this is very hard to prove.
 **)
 
-(** *** Looking at stating criteria intrinsically **)
-val compile_whole : (ws:wholeS) -> Tac (wt:wholeT{
+(** *** Intrinsic criteria, dynamic quoting/unquoting  **)
+val compile_whole_dyn : (ws:wholeS) -> Tac (wt:wholeT{
   (** compiler correctness **)
-  behS ws ≍ behT wt 
+  behS ws ≡ behT wt 
 })
+  // problems:
+  // - need to use dynamic quoting to get the term of ws
 
 val compile_prog_soundness : #i:intS -> ps:progS i -> Tac (pt:(progT (comp_int i)){
   (** soundness **)
   forall (ct:ctxT (comp_int i)). behT (linkT pt ct) ⊆ i.p_post 
   })
+  // problems:
+  // - need to use dynamic quoting to get the term of ps
 
 val compile_prog_rrhp :
   #i:intS ->
   ps:progS i ->
-  rel:(ctxT (comp_int i) -> ctxS i -> Type0) ->
   Tac (pt:(progT (comp_int i)){
     (** TODO: the order of quantifiers changed **)
     forall (ct:ctxT (comp_int i)).
         exists (cs:ctxS i). 
-        behT (linkT pt ct) ≍ behS (linkS ps cs) 
+        behT (linkT pt ct) ≡ behS (linkS ps cs) 
   })
-  (** can one provide a witness for cs? **)
+(** can one provide a witness for cs? **)
 
 (** Problem: unqoute is in the Tac effect **)
 [@expect_failure]
@@ -109,5 +112,5 @@ val compile_prog_rrhp : #i:intS -> ps:progS i -> Tac (pt:(progT (comp_int i)){
   (** RrHP **)
   forall (ct:ctxT (comp_int i)). 
     let cs : ctxS i = FStar.Tactics.V2.Builtins.unquote ct in
-    behT (linkT pt ct) ≍ behS (linkS ps cs) 
+    behT (linkT pt ct) ≡ behS (linkS ps cs) 
   })
