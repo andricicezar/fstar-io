@@ -59,8 +59,7 @@ val compile_whole_stat :
   Tac (wt:term{
     tot_typing g wt (`wholeT) /\
     (** compiler correctness **)
-    valid g (`(behS (`#ws) ≡ behT (`#wt)))
-
+    valid g (`(behS (`#ws) ≡ behT (`#wt))) (** behS unfolds to `behS0 (reify ws)` **)
     (** soundness **)
     // in this PoC, we cannot type this because whole programs do not have an interface
     // valid g (`(behT (`#wt) ⊆ i.p_post))
@@ -73,7 +72,7 @@ let soundness (#i:intS) (#g_ast:ast_env) (pt:progT (comp_int i g_ast)) =
 (** TODO: why cannot we change the order of the quantifiers to have RrHC **)
 let rhc (#i:intS) (#g_ast:ast_env) (ps:progS i) (pt:progT (comp_int i g_ast)) =
   forall (ct:ctxT (comp_int i g_ast)).
-    exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct)
+    exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) (** behS unfolds to `behS0 (reify (linkS ps cs))` **)
 
 val compile_prog :
   (g:env) ->
