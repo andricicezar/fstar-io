@@ -26,13 +26,12 @@ let behS (| _, ws |) = behS0 (_reify ws)
 assume type ast_typ
 assume type ast_exp
 assume type ast_env
-assume type ast_typing (g:ast_env) (a:ast_exp) (t:ast_typ)
+assume type ast_typing (g:ast_env) (e:ast_exp) (t:ast_typ)
 
 noeq type intT = { ct : ast_typ; g : ast_env; }
 
 assume val comp_int : intS u#a -> ast_env -> intT
 
-// TODO: g does not appear hear
 type progT (i:intT) = pt:ast_exp//{ast_typing i.g pt ...}
 type ctxT (i:intT) = ct:ast_exp//{ast_typing i.g ct ...}
 type wholeT = wt:ast_exp//{ast_typing i.g wt ...}
