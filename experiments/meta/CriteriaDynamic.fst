@@ -29,11 +29,11 @@ type linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
 assume val behT : wholeT -> set_prop 
 
 assume type pure_repr
-assume val reify' : (unit -> Pure int True (fun _ -> True)) -> pure_repr
+assume val _reify : (unit -> Pure int True (fun _ -> True)) -> pure_repr
 assume val behS0 : pure_repr -> set_prop
 
 val behS : wholeS -> set_prop 
-let behS (| _, ws |) = behS0 (reify' ws)
+let behS (| _, ws |) = behS0 (_reify ws)
 
 (** *** Extrinsic criteria  **)
 (** Fails because quote is in the Tac effect **)

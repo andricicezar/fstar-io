@@ -16,11 +16,11 @@ let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (| i.p_post, (fun () -> ps cs) |)
 
 assume type pure_repr
-assume val reify' : (unit -> Pure int True (fun _ -> True)) -> pure_repr
+assume val _reify : (unit -> Pure int True (fun _ -> True)) -> pure_repr
 assume val behS0 : pure_repr -> set_prop
 
 val behS : wholeS -> set_prop 
-let behS (| _, ws |) = behS0 (reify' ws)
+let behS (| _, ws |) = behS0 (_reify ws)
 
 (** Target **)
 assume type ast_typ
