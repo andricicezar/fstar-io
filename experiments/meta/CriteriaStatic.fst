@@ -50,7 +50,6 @@ let t_unit = `()
 let valid (g:env) (phi:term) : prop =
   squash (tot_typing g t_unit (mk_squash phi))
 
-// TODO: (`wholeS) elaborates to FVar, so we need to unfold that to get the type
 val compile_whole_stat : 
   (g:env) ->
   (ws:term{tot_typing g ws (`wholeS)}) ->
@@ -63,12 +62,22 @@ val compile_whole_stat :
     // in this PoC, we cannot type this because whole programs do not have an interface
     // valid g (`(behT (`#wt) ⊆ i.p_post))
   })
+(** 
+  If behT is an operational semantics, it has to be small-step because we have external non-determinism.
+  Defining a denotational semantics for STLC is a challenge.
+
+  behS is a denotational semantics.
+
+  Relating the two will be a challenge. Usually, it is really hard to relate denotational and operational semantics
+  of the same language. In this case, we have two different languages, one that it is shallowly embedded and one
+  that is deeply embedded.
+**)
+
 
 let soundness (#i:intS) (#g_ast:ast_env) (pt:progT (comp_int i g_ast)) =
   forall (ct:ctxT (comp_int i g_ast)). behT (linkT pt ct) ⊆ i.p_post
 
 (** The order of the quantifiers makes this RHC (Robust Hyperproperty Preservation) **)
-(** TODO: why cannot we change the order of the quantifiers to have RrHC **)
 let rhc (#i:intS) (#g_ast:ast_env) (ps:progS i) (pt:progT (comp_int i g_ast)) =
   forall (ct:ctxT (comp_int i g_ast)).
     exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) (** behS unfolds to `behS0 (reify (linkS ps cs))` **)
