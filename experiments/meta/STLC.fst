@@ -39,7 +39,7 @@ type exp =
   | EInr         : v:exp -> exp
   | ECase        : exp -> exp -> exp -> exp
   | EByteLit     : byte -> exp
-  | EBytesCreate : exp -> exp -> exp
+  | EBytesCreate : n:exp -> v:exp -> exp
   | EFst         : exp -> exp
   | ESnd         : exp -> exp
   | EPair        : fst:exp -> snd:exp -> exp
@@ -230,6 +230,25 @@ type step : exp -> exp -> Type =
              #e':exp ->
             $hst:step e e' ->
                  step (ESucc e) (ESucc e')
+  | SNRecV :  #e1:exp ->
+             #e1':exp ->
+               e2:exp ->
+               e3:exp ->
+             $hst:step e1 e1' ->
+                 step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
+//   | SNRecX :   e1:exp ->
+//                e2:exp ->
+//              #e2':exp ->
+//                e3:exp ->
+//              $hst:step e2 e2' ->
+//                  step (ENRec e1 e2 e3) (ENRec e1 e2' e3)                 
+  | SNRec0 : e2:exp ->
+             e3:exp ->
+                 step (ENRec EZero e2 e3) e2
+  | SNRecIter :  v:exp ->
+                e2:exp ->
+                e3:exp ->
+                step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
   | SInl  :    e:exp ->
              #e':exp ->
             $hst:step e e' ->
@@ -238,6 +257,138 @@ type step : exp -> exp -> Type =
              #e':exp ->
             $hst:step e e' ->
                  step (EInr e) (EInr e')
+  | SCase :  #e1:exp ->
+            #e1':exp ->
+              e2:exp ->
+              e3:exp ->
+            $hst:step e1 e1' ->
+                 step (ECase e1 e2 e3) (ECase e1' e2 e3)
+  | SCaseInl :  v:exp ->
+               e2:exp ->
+               e3:exp ->
+                 step (ECase (EInl v) e2 e3) (EApp e2 v)
+  | SCaseInr :  v:exp ->
+               e2:exp ->
+               e3:exp ->
+                 step (ECase (EInr v) e2 e3) (EApp e3 v)
+  | SFst0 :    #e:exp ->
+              #e':exp ->
+             $hst:step e e' ->
+                 step (EFst e) (EFst e')
+  | SFst :  e1:exp ->
+            e2:exp ->
+               step (EFst (EPair e1 e2)) e1
+  | SSnd0 :    #e:exp ->
+              #e':exp ->
+             $hst:step e e' ->
+                 step (ESnd e) (ESnd e')
+  | SSnd :  e1:exp ->
+            e2:exp ->
+               step (ESnd (EPair e1 e2)) e2
+  | SPair1  : #e1:exp ->
+             #e1':exp ->
+             $hst:step e1 e1' ->
+               e2:exp ->
+                 step (EPair e1 e2) (EPair e1' e2)
+  | SPair2  :  e1:exp ->
+              #e2:exp ->
+             #e2':exp ->
+             $hst:step e2 e2' ->
+                 step (EPair e1 e2) (EPair e1 e2')
+  | SBytesCreateN : #e1:exp ->
+                   #e1':exp ->
+                   e2:exp ->
+                   $hst:step e1 e1' ->
+                   step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
+  | SBytesCreateV : e1:exp ->
+                   #e2:exp ->
+                   #e2':exp ->
+                   $hst:step e2 e2' ->
+                   step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
+
+
+let rec is_value (e:exp) : bool = 
+     ELam? e || 
+     EUnit? e || 
+     EZero? e || 
+     (ESucc? e && is_value (ESucc?.v e)) || 
+     (EInl? e && is_value (EInl?.v e)) ||
+     (EInr? e && is_value (EInr?.v e)) || 
+     EByteLit? e || 
+     (EPair? e && is_value (EPair?.fst e) && is_value (EPair?.snd e) ) || 
+     (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
+     EStringLit? e
+
+let rec progress (#e:exp { ~(is_value e) })
+                 (#t:typ)
+                 (h:typing empty e t)
+  : (e':exp & step e e')
+  = 
+     match h with
+     | TyApp #g #e1 #e2 #t11 #t12 h1 h2 -> 
+     begin
+          match e1 with
+          | ELam t e1' -> (| subst (sub_beta e2) e1', SBeta t e1' e2 |)
+          | _          -> let (| e1', h1' |) = progress h1 in
+                              (| EApp e1' e2, SApp1 e2 h1'|)
+     end
+     | TySucc #g #e h1 ->
+          let (| e', h1' |) = progress h1 in
+          (| ESucc e', SSucc e h1'|)
+     | TyNRec #g #e1 #e2 #e3 #t1 h1 h2 h3 -> begin
+          match e1 with
+          | EZero -> (| e2, SNRec0 e2 e3 |)
+          | ESucc v -> (| ENRec v (EApp e3 e2) e3, SNRecIter v e2 e3 |)
+          | _ -> let (| e1', h1' |) = progress h1 in
+                 (| ENRec e1' e2 e3, SNRecV e2 e3 h1' |)
+     end
+     | TyInl #g #e #t1 #t2 h1 -> 
+          let (| e', h1' |) = progress h1 in
+          (| EInl e', SInl e h1'|)
+     | TyInr #g #e #t1 #t2 h1 -> 
+          let (| e', h1' |) = progress h1 in
+          (| EInr e', SInr e h1'|)
+     | TyCase #g #e1 #e2 #e3 #t1 #t2 #t3 h1 h2 h3 -> begin
+          match e1 with
+          | EInl v -> (| EApp e2 v, SCaseInl v e2 e3 |)
+          | EInr v -> (| EApp e3 v, SCaseInr v e2 e3 |)
+          | _ ->
+               let (| e1', h1' |) = progress h1 in
+               (| ECase e1' e2 e3, SCase e2 e3 h1' |)
+     end
+     | TyFst #g #e #t1 #t2 h1 -> begin
+          match e with
+          | EPair e1 e2 -> (| e1, SFst e1 e2 |)
+          | _ -> let (| e', h1' |) = progress h1 in
+                 (| EFst e', SFst0 h1' |)
+     end
+     | TySnd #g #e #t1 #t2 h1 -> begin
+          match e with
+          | EPair e1 e2 -> (| e2, SSnd e1 e2 |)
+          | _ -> let (| e', h1' |) = progress h1 in
+                 (| ESnd e', SSnd0 h1' |)
+     end
+     | TyPair #g #e1 #e2 #t1 #t2 h1 h2 -> 
+          if is_value e1 then
+               let (| e2', h2' |) = progress h2 in
+               (| EPair e1 e2', SPair2 e1 h2' |)
+          else 
+               let (| e1', h1' |) = progress h1 in
+               (| EPair e1' e2, SPair1 h1' e2 |)
+     | TyBytesCreate #g #e1 #e2 h1 h2 -> begin
+          if is_value e1 then
+               let (| e2', h2' |) = progress h2 in
+               (| EBytesCreate e1 e2', SBytesCreateV e1 h2' |)
+          else 
+               let (| e1', h1' |) = progress h1 in
+               (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
+     end
+
+
+
+
+(** *** Elaboration of types and expressions to F* *)
+
 open FStar.Ghost
 open FStar.UInt32
 let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
