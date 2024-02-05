@@ -221,27 +221,29 @@ type step : exp -> exp -> Type =
             #e1':exp ->
             $hst:step e1 e1' ->
                  step (EApp e1 e2) (EApp e1' e2)
-  | SApp2 :  e1:exp ->
-            #e2:exp ->
+  | SApp2 :   e1:exp ->
+             #e2:exp ->
             #e2':exp ->
             $hst:step e2 e2' ->
                  step (EApp e1 e2) (EApp e1 e2')
-  | SSucc :  e:exp ->
-            #e':exp ->
+  | SSucc :    e:exp ->
+             #e':exp ->
             $hst:step e e' ->
                  step (ESucc e) (ESucc e')
-  | SInl  :  e:exp ->
-            #e':exp ->
+  | SInl  :    e:exp ->
+             #e':exp ->
             $hst:step e e' ->
                  step (EInl e) (EInl e')
-  | SInr  :  e:exp ->
-            #e':exp ->
+  | SInr  :    e:exp ->
+             #e':exp ->
             $hst:step e e' ->
                  step (EInr e) (EInr e')
 open FStar.Ghost
 open FStar.UInt32
 let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
+
 type file_descr = int
+
 let rec elab_typ (t:typ) : Type =
   match t with
   | TArr t1 t2 -> (elab_typ t1) -> Tot (elab_typ t2)
