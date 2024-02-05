@@ -33,107 +33,17 @@ type exp =
   | ELam         : typ -> exp -> exp
   | EUnit        : exp
   | EZero        : exp
-  | ESucc        : exp -> exp
+  | ESucc        : v:exp -> exp
   | ENRec        : exp -> exp -> exp -> exp
-  | EInl         : exp -> exp
-  | EInr         : exp -> exp
+  | EInl         : v:exp -> exp
+  | EInr         : v:exp -> exp
   | ECase        : exp -> exp -> exp -> exp
   | EByteLit     : byte -> exp
   | EBytesCreate : exp -> exp -> exp
   | EFst         : exp -> exp
   | ESnd         : exp -> exp
-  | EPair        : exp -> exp -> exp
-  | EStringLit   : string -> exp
-
-(* Parallel substitution operation `subst` *)
-
-(* The termination argument uses a lexicographic ordering composed of:
-   0) a bit saying whether the expression is a variable or not;
-   1) an _undecidable_ well-founded order on substitutions that
-      equates all renamings, equates all non-renamings, and makes
-      renamings strictly smaller than non-renamings; we write down a
-      non-constructive function is_renaming mapping substitutions
-      (infinite objects) to 0 (renaming) or 1 (non-renaming)
-   2) the structure of the expression e *)
-
-type sub = var -> Tot exp
-
-type renaming (s:sub) = (forall (x:var). EVar? (s x))
-
-val is_renaming : s:sub -> GTot (n:int{  (renaming s  ==> n=0) /\
-                                       (~(renaming s) ==> n=1)})
-let is_renaming s = (if strong_excluded_middle (renaming s) then 0 else 1)
-
-
-val sub_inc : var -> Tot exp
-let sub_inc y = EVar (y+1)
-
-val renaming_sub_inc : unit -> Lemma (renaming (sub_inc))
-let renaming_sub_inc _ = ()
-
-let is_var (e:exp) : int = if EVar? e then 0 else 1
-
-val sub_elam: s:sub -> var -> Tot (e:exp{renaming s ==> EVar? e})
-                                (decreases %[1;is_renaming s; 0; EVar 0])
-val subst : s:sub -> e:exp -> Pure exp (requires True)
-     (ensures (fun e' -> (renaming s /\ EVar? e) ==> EVar? e'))
-     (decreases %[is_var e; is_renaming s; 1; e])
-let rec subst s e =
-  match e with
-  | EVar x -> s x
-  | ELam t e1 -> ELam t (subst (sub_elam s) e1)
-  | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
-  | EUnit -> EUnit
-  | EZero -> EZero
-  | ESucc e -> ESucc (subst s e)
-  | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
-  | EInl e -> EInl e
-  | EInr e -> EInr e
-  | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
-  | EByteLit b -> EByteLit b
-  | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
-  | EFst e -> EFst (subst s e)
-  | ESnd e -> ESnd (subst s e)
-  | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-  | EStringLit s -> EStringLit s
-
-and sub_elam s y = if y=0 then EVar y
-                   else subst sub_inc (s (y-1))
-
-val sub_beta : exp -> Tot sub
-let sub_beta v = fun y -> if y = 0 then v      (* substitute *)
-                          else (EVar (y-1))    (* shift -1 *)
-
-(* Small-step operational semantics; strong / full-beta reduction is
-   non-deterministic, so necessarily as inductive relation *)
-
-type step : exp -> exp -> Type =
-  | SBeta : t:typ ->
-            e1:exp ->
-            e2:exp ->
-            step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
-  | SApp1 : #e1:exp ->
-             e2:exp ->
-            #e1':exp ->
-            $hst:step e1 e1' ->
-                 step (EApp e1 e2) (EApp e1' e2)
-  | SApp2 :  e1:exp ->
-            #e2:exp ->
-            #e2':exp ->
-            $hst:step e2 e2' ->
-                 step (EApp e1 e2) (EApp e1 e2')
-  | SSucc :  e:exp ->
-            #e':exp ->
-            $hst:step e e' ->
-                 step (ESucc e) (ESucc e')
-  | SInl  :  e:exp ->
-            #e':exp ->
-            $hst:step e e' ->
-                 step (EInl e) (EInl e')
-  | SInr  :  e:exp ->
-            #e':exp ->
-            $hst:step e e' ->
-                 step (EInr e) (EInr e')
+  | EPair        : fst:exp -> snd:exp -> exp
+  | EStringLit   : v:string -> exp
 
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
@@ -239,6 +149,95 @@ noeq type typing : env -> exp -> typ -> Type =
                     #s:string ->
                        typing g (EStringLit s) TString
 
+(* Parallel substitution operation `subst` *)
+
+(* The termination argument uses a lexicographic ordering composed of:
+   0) a bit saying whether the expression is a variable or not;
+   1) an _undecidable_ well-founded order on substitutions that
+      equates all renamings, equates all non-renamings, and makes
+      renamings strictly smaller than non-renamings; we write down a
+      non-constructive function is_renaming mapping substitutions
+      (infinite objects) to 0 (renaming) or 1 (non-renaming)
+   2) the structure of the expression e *)
+
+type sub = var -> Tot exp
+
+type renaming (s:sub) = (forall (x:var). EVar? (s x))
+
+val is_renaming : s:sub -> GTot (n:int{  (renaming s  ==> n=0) /\
+                                       (~(renaming s) ==> n=1)})
+let is_renaming s = (if strong_excluded_middle (renaming s) then 0 else 1)
+
+
+val sub_inc : var -> Tot exp
+let sub_inc y = EVar (y+1)
+
+val renaming_sub_inc : unit -> Lemma (renaming (sub_inc))
+let renaming_sub_inc _ = ()
+
+let is_var (e:exp) : int = if EVar? e then 0 else 1
+
+val sub_elam: s:sub -> var -> Tot (e:exp{renaming s ==> EVar? e})
+                                (decreases %[1;is_renaming s; 0; EVar 0])
+val subst : s:sub -> e:exp -> Pure exp (requires True)
+     (ensures (fun e' -> (renaming s /\ EVar? e) ==> EVar? e'))
+     (decreases %[is_var e; is_renaming s; 1; e])
+let rec subst s e =
+  match e with
+  | EVar x -> s x
+  | ELam t e1 -> ELam t (subst (sub_elam s) e1)
+  | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
+  | EUnit -> EUnit
+  | EZero -> EZero
+  | ESucc e -> ESucc (subst s e)
+  | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
+  | EInl e -> EInl e
+  | EInr e -> EInr e
+  | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
+  | EByteLit b -> EByteLit b
+  | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
+  | EFst e -> EFst (subst s e)
+  | ESnd e -> ESnd (subst s e)
+  | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
+  | EStringLit s -> EStringLit s
+
+and sub_elam s y = if y=0 then EVar y
+                   else subst sub_inc (s (y-1))
+
+val sub_beta : exp -> Tot sub
+let sub_beta v = fun y -> if y = 0 then v      (* substitute *)
+                          else (EVar (y-1))    (* shift -1 *)
+
+(* Small-step operational semantics; strong / full-beta reduction is
+   non-deterministic, so necessarily as inductive relation *)
+
+type step : exp -> exp -> Type =
+  | SBeta : t:typ ->
+            e1:exp ->
+            e2:exp ->
+            step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
+  | SApp1 : #e1:exp ->
+             e2:exp ->
+            #e1':exp ->
+            $hst:step e1 e1' ->
+                 step (EApp e1 e2) (EApp e1' e2)
+  | SApp2 :  e1:exp ->
+            #e2:exp ->
+            #e2':exp ->
+            $hst:step e2 e2' ->
+                 step (EApp e1 e2) (EApp e1 e2')
+  | SSucc :  e:exp ->
+            #e':exp ->
+            $hst:step e e' ->
+                 step (ESucc e) (ESucc e')
+  | SInl  :  e:exp ->
+            #e':exp ->
+            $hst:step e e' ->
+                 step (EInl e) (EInl e')
+  | SInr  :  e:exp ->
+            #e':exp ->
+            $hst:step e e' ->
+                 step (EInr e) (EInr e')
 open FStar.Ghost
 open FStar.UInt32
 let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
