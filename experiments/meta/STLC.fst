@@ -354,7 +354,7 @@ let rec progress (#e:exp { ~(is_value e) })
           match e1 with
           | ELam t e1' -> (| subst (sub_beta e2) e1', SBeta t e1' e2 |)
           | _          -> let (| e1', h1' |) = progress h1 in
-                              (| EApp e1' e2, SApp1 e2 h1'|)
+                              (| EApp e1' e2, SApp1 e2 h1'|) (** TODO: call-by-name **)
      end
      | TySucc #g #e h1 ->
           let (| e', h1' |) = progress h1 in
@@ -468,6 +468,77 @@ let substitution_beta #e #v #t_x #t #g
     substitution (sub_beta v) h2 hs
 
 
+(* Type preservation *)
+let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e') 
+  : typing g e' t
+  =  match hs with
+     | SBeta tx e1' e2' -> 
+          let TyApp h1 h2 = ht in
+          substitution_beta h2 (TyLam?.hbody h1)
+     | SApp1 e2' hs1   -> 
+          let TyApp h1 h2 = ht in
+          TyApp (preservation_step h1 hs1) h2
+     | SApp2 e1' hs2   -> 
+          let TyApp h1 h2 = ht in
+          TyApp h1 (preservation_step h2 hs2)
+     | SSucc e' hs1    -> 
+          let TySucc h1 = ht in
+          TySucc (preservation_step h1 hs1)
+     | SNRecV _ _ hs1 ->
+          let TyNRec h1 h2 h3 = ht in
+          TyNRec (preservation_step h1 hs1) h2 h3
+     | SNRec0 _ _ ->
+          let TyNRec h1 h2 h3 = ht in
+          h2
+     | SNRecIter _ _ _ ->
+          // assert (e == ENRec (ESucc v) e2' e3');
+          // assert (e' == ENRec v (EApp e3' e2') e3');
+          let TyNRec h1 h2 h3 = ht in
+          let TySucc h1' = h1 in
+          TyNRec h1' (TyApp h3 h2) h3
+     | SInl _ hs1     -> 
+          let TyInl t2 h1 = ht in
+          TyInl t2 (preservation_step h1 hs1)
+     | SInr _ hs1     -> 
+          let TyInr t1 h1 = ht in
+          TyInr t1 (preservation_step h1 hs1)
+     | SCase _ _ hs1 -> 
+          let TyCase h1 h2 h3 = ht in
+          TyCase (preservation_step h1 hs1) h2 h3
+     | SCaseInl _ _ _ -> 
+          let TyCase h1 h2 h3 = ht in
+          let TyInl _ h1' = h1 in
+          TyApp h2 h1'
+     | SCaseInr _ _ _ -> 
+          let TyCase h1 h2 h3 = ht in
+          let TyInr _ h1' = h1 in
+          TyApp h3 h1'
+     | SFst0 hs1 -> 
+          let TyFst h1 = ht in
+          TyFst (preservation_step h1 hs1)
+     | SFst _ _ -> 
+          let TyFst h1 = ht in
+          let TyPair h1' _ = h1 in
+          h1'
+     | SSnd0 hs1 -> 
+          let TySnd h1 = ht in
+          TySnd (preservation_step h1 hs1)
+     | SSnd _ _ -> 
+          let TySnd h1 = ht in
+          let TyPair _ h1' = h1 in
+          h1'
+     | SPair1 hs1 _ ->
+          let TyPair h1 h2 = ht in
+          TyPair (preservation_step h1 hs1) h2
+     | SPair2 _ hs2 ->
+          let TyPair h1 h2 = ht in
+          TyPair h1 (preservation_step h2 hs2)
+     | SBytesCreateN _ hs1 ->
+          let TyBytesCreate h1 h2 = ht in
+          TyBytesCreate (preservation_step h1 hs1) h2
+     | SBytesCreateV _ hs2 ->
+          let TyBytesCreate h1 h2 = ht in
+          TyBytesCreate h1 (preservation_step h2 hs2)
 
 (** *** Elaboration of types and expressions to F* *)
 
