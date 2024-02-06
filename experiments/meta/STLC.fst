@@ -95,12 +95,12 @@ noeq type typing : env -> exp -> typ -> Type =
   | TyInl  : #g:env ->
              #e:exp ->
              #t1:typ ->
-             #t2:typ ->
+             t2:typ ->
              $h1:typing g e t1 ->
                  typing g (EInl e) (TSum t1 t2)
   | TyInr  : #g:env ->
              #e:exp ->
-             #t1:typ ->
+             t1:typ ->
              #t2:typ ->
              $h1:typing g e t2 ->
                  typing g (EInr e) (TSum t1 t2)
@@ -116,7 +116,7 @@ noeq type typing : env -> exp -> typ -> Type =
              $h3:typing g e3 (TArr t2 t3) ->
                  typing g (ECase e1 e2 e3) t3
   | TyByteLit : #g:env ->
-                #b:byte ->
+                b:byte ->
                    typing g (EByteLit b) TByte
   | TyBytesCreate : #g:env ->
                     #e1:exp ->
@@ -145,7 +145,7 @@ noeq type typing : env -> exp -> typ -> Type =
                     $h2:typing g e2 t2 ->
                         typing g (EPair e1 e2) (TPair t1 t2)
   | TyStringLit   : #g:env ->
-                    #s:string ->
+                    s:string ->
                        typing g (EStringLit s) TString
 
 (* Parallel substitution operation `subst` *)
@@ -187,8 +187,8 @@ let rec subst (#r:bool)
   | EZero -> EZero
   | ESucc e -> ESucc (subst s e)
   | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
-  | EInl e -> EInl e
-  | EInr e -> EInr e
+  | EInl e -> EInl (subst s e)
+  | EInr e -> EInr (subst s e)
   | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
   | EByteLit b -> EByteLit b
   | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
@@ -408,6 +408,64 @@ let rec progress (#e:exp { ~(is_value e) })
                (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
      end
 
+
+(* Typing of substitutions (very easy, actually) *)
+let subst_typing #r (s:sub r) (g1:env) (g2:env) =
+    x:var{Some? (g1 x)} -> typing g2 (s x) (Some?.v (g1 x))
+
+(* Substitution preserves typing
+   Strongest possible statement; suggested by Steven Schäfer *)
+let rec substitution (#g1:env) 
+                     (#e:exp)
+                     (#t:typ)
+                     (#r:bool)
+                     (s:sub r)
+                     (#g2:env)
+                     (h1:typing g1 e t)
+                     (hs:subst_typing s g1 g2)
+   : Tot (typing g2 (subst s e) t)
+         (decreases %[bool_order (EVar? e); bool_order r; e])
+   = match h1 with
+   | TyVar x -> hs x
+   | TyLam tlam hbody ->
+     let hs'' : subst_typing (sub_inc) g2 (extend tlam g2) =
+       fun x -> TyVar (x+1) in
+     let hs' : subst_typing (sub_elam s) (extend tlam g1) (extend tlam g2) =
+       fun y -> if y = 0 then TyVar y
+             else substitution sub_inc (hs (y - 1)) hs''
+     in TyLam tlam (substitution (sub_elam s) hbody hs')
+      | TyApp hfun harg -> TyApp (substitution s hfun hs) (substitution s harg hs)
+   | TyUnit -> TyUnit
+   | TyZero -> TyZero
+   | TySucc h1 -> TySucc (substitution s h1 hs)
+   | TyNRec h1 h2 h3 -> TyNRec (substitution s h1 hs) (substitution s h2 hs) (substitution s h3 hs)
+   | TyInl t2 h1 -> 
+     let EInl e' = e in
+     let hs' : typing g2 (EInl (subst s e')) t = TyInl t2 (substitution s h1 hs) in
+     assert (subst s e == EInl (subst s e'));
+     hs'
+   | TyInr t1 h1 -> 
+     let EInr e' = e in
+     let hs' : typing g2 (EInr (subst s e')) t = TyInr t1 (substitution s h1 hs) in
+     assert (subst s e == EInr (subst s e'));
+     hs'
+   | TyCase h1 h2 h3 -> TyCase (substitution s h1 hs) (substitution s h2 hs) (substitution s h3 hs)
+   | TyByteLit b -> TyByteLit b
+   | TyBytesCreate h1 h2 -> TyBytesCreate (substitution s h1 hs) (substitution s h2 hs)
+   | TyFst h1 -> TyFst (substitution s h1 hs)
+   | TySnd h1 -> TySnd (substitution s h1 hs)
+   | TyPair h1 h2 -> TyPair (substitution s h1 hs) (substitution s h2 hs)
+   | TyStringLit s -> TyStringLit s
+
+(* Substitution for beta reduction
+   Now just a special case of substitution lemma *)
+let substitution_beta #e #v #t_x #t #g 
+                      (h1:typing g v t_x)
+                      (h2:typing (extend t_x g) e t)
+  : typing g (subst (sub_beta v) e) t
+  = let hs : subst_typing (sub_beta v) (extend t_x g) g =
+        fun y -> if y = 0 then h1 else TyVar (y-1) in
+    substitution (sub_beta v) h2 hs
 
 
 
