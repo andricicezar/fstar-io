@@ -6,7 +6,6 @@ open FStar.Tactics
 open FStar.Constructive
 open FStar.Classical
 open FStar.FunctionalExtensionality
-open FStar.StrongExcludedMiddle
 
 (* Constructive-style progress and preservation proof for STLC with
    strong reduction, using deBruijn indices and parallel substitution. *)
@@ -160,30 +159,27 @@ noeq type typing : env -> exp -> typ -> Type =
       (infinite objects) to 0 (renaming) or 1 (non-renaming)
    2) the structure of the expression e *)
 
-type sub = var -> Tot exp
+(* Parallel substitution operation `subst` *)
+let sub (renaming:bool) = 
+    f:(var -> exp){ renaming <==> (forall x. EVar? (f x)) }
 
-type renaming (s:sub) = (forall (x:var). EVar? (s x))
+let bool_order (b:bool) = if b then 0 else 1
 
-val is_renaming : s:sub -> GTot (n:int{  (renaming s  ==> n=0) /\
-                                       (~(renaming s) ==> n=1)})
-let is_renaming s = (if strong_excluded_middle (renaming s) then 0 else 1)
-
-
-val sub_inc : var -> Tot exp
-let sub_inc y = EVar (y+1)
-
-val renaming_sub_inc : unit -> Lemma (renaming (sub_inc))
-let renaming_sub_inc _ = ()
+let sub_inc 
+  : sub true
+  = fun y -> EVar (y+1)
 
 let is_var (e:exp) : int = if EVar? e then 0 else 1
 
-val sub_elam: s:sub -> var -> Tot (e:exp{renaming s ==> EVar? e})
-                                (decreases %[1;is_renaming s; 0; EVar 0])
-val subst : s:sub -> e:exp -> Pure exp (requires True)
-     (ensures (fun e' -> (renaming s /\ EVar? e) ==> EVar? e'))
-     (decreases %[is_var e; is_renaming s; 1; e])
-let rec subst s e =
-  match e with
+let rec subst (#r:bool)
+              (s:sub r)
+              (e:exp)
+  : Tot (e':exp { r ==> (EVar? e <==> EVar? e') })
+        (decreases %[bool_order (EVar? e); 
+                     bool_order r;
+                     1;
+                     e])
+  = match e with
   | EVar x -> s x
   | ELam t e1 -> ELam t (subst (sub_elam s) e1)
   | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
@@ -201,12 +197,40 @@ let rec subst s e =
   | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
   | EStringLit s -> EStringLit s
 
-and sub_elam s y = if y=0 then EVar y
-                   else subst sub_inc (s (y-1))
+and sub_elam (#r:bool) (s:sub r) 
+  : Tot (sub r)
+        (decreases %[1;
+                     bool_order r;
+                     0;
+                     EVar 0])
+  = let f : var -> exp = 
+      fun y ->
+        if y=0
+        then EVar y
+        else subst sub_inc (s (y - 1))
+    in
+    introduce not r ==> (exists x. ~ (EVar? (f x)))
+    with not_r. 
+      eliminate exists y. ~ (EVar? (s y))
+      returns (exists x. ~ (EVar? (f x)))
+      with (not_evar_sy:squash (~(EVar? (s y)))). 
+        introduce exists x. ~(EVar? (f x))
+        with (y + 1)
+        and ()
+    ;
+    f
 
-val sub_beta : exp -> Tot sub
-let sub_beta v = fun y -> if y = 0 then v      (* substitute *)
-                          else (EVar (y-1))    (* shift -1 *)
+let sub_beta (e:exp)
+  : sub (EVar? e)
+  = let f = 
+      fun (y:var) ->
+        if y = 0 then e      (* substitute *)
+        else (EVar (y-1))    (* shift -1 *)
+    in
+    if not (EVar? e)
+    then introduce exists (x:var). ~(EVar? (f x))
+         with 0 and ();
+    f
 
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
