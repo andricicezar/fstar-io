@@ -540,6 +540,14 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
           let TyBytesCreate h1 h2 = ht in
           TyBytesCreate h1 (preservation_step h2 hs2)
 
+let strong_progress #e #e' #t 
+              (ht:typing empty e t) 
+  : either (squash (is_value e))
+           (e':exp & step e e' & typing empty e' t)
+  = if is_value e then Inl ()
+    else let (| e', s |) = progress ht in
+         let ht' = preservation_step ht s in
+         Inr (| e', s, ht' |)
 (** *** Elaboration of types and expressions to F* *)
 
 open FStar.Ghost
