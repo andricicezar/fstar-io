@@ -253,7 +253,7 @@ type step : exp -> exp -> Type =
   | SSucc :    e:exp ->
              #e':exp ->
             $hst:step e e' ->
-                 step (ESucc e) (ESucc e')
+                 step (ESucc e) (ESucc e')     
   | SNRecV :  #e1:exp ->
              #e1':exp ->
                e2:exp ->
@@ -346,9 +346,8 @@ let rec is_value (e:exp) : bool =
 let rec progress (#e:exp { ~(is_value e) })
                  (#t:typ)
                  (h:typing empty e t)
-  : (e':exp & step e e')
-  = 
-     match h with
+  : e':exp & step e e'
+  =  match h with
      | TyApp #g #e1 #e2 #t11 #t12 h1 h2 -> 
      begin
           match e1 with
