@@ -16,11 +16,11 @@ type typ =
   | TPair   : typ -> typ -> typ
   | TUnit   : typ
   | TNat    : typ
-  | TByte   : typ
-  | TBytes  : typ
-  | TExn    : typ
-  | TFDesc  : typ
-  | TString : typ
+//   | TByte   : typ
+//   | TBytes  : typ
+//   | TExn    : typ
+//   | TFDesc  : typ
+//   | TString : typ
 
 type var = nat
 
@@ -37,12 +37,12 @@ type exp =
   | EInl         : v:exp -> exp
   | EInr         : v:exp -> exp
   | ECase        : exp -> exp -> exp -> exp
-  | EByteLit     : byte -> exp
-  | EBytesCreate : n:exp -> v:exp -> exp
+//   | EByteLit     : byte -> exp
+//   | EBytesCreate : n:exp -> v:exp -> exp
   | EFst         : exp -> exp
   | ESnd         : exp -> exp
   | EPair        : fst:exp -> snd:exp -> exp
-  | EStringLit   : v:string -> exp
+//   | EStringLit   : v:string -> exp
 
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
@@ -115,15 +115,15 @@ noeq type typing : env -> exp -> typ -> Type =
              $h2:typing g e2 (TArr t1 t3) ->
              $h3:typing g e3 (TArr t2 t3) ->
                  typing g (ECase e1 e2 e3) t3
-  | TyByteLit : #g:env ->
-                b:byte ->
-                   typing g (EByteLit b) TByte
-  | TyBytesCreate : #g:env ->
-                    #e1:exp ->
-                    #e2:exp ->
-                    $h1:typing g e1 TNat ->
-                    $h2:typing g e2 TByte ->
-                        typing g (EBytesCreate e1 e2) TBytes
+//   | TyByteLit : #g:env ->
+//                 b:byte ->
+//                    typing g (EByteLit b) TByte
+//   | TyBytesCreate : #g:env ->
+//                     #e1:exp ->
+//                     #e2:exp ->
+//                     $h1:typing g e1 TNat ->
+//                     $h2:typing g e2 TByte ->
+//                         typing g (EBytesCreate e1 e2) TBytes
   | TyFst         : #g:env ->
                     #e:exp ->
                     #t1:typ ->
@@ -144,9 +144,9 @@ noeq type typing : env -> exp -> typ -> Type =
                     $h1:typing g e1 t1 ->
                     $h2:typing g e2 t2 ->
                         typing g (EPair e1 e2) (TPair t1 t2)
-  | TyStringLit   : #g:env ->
-                    s:string ->
-                       typing g (EStringLit s) TString
+//   | TyStringLit   : #g:env ->
+//                     s:string ->
+//                        typing g (EStringLit s) TString
 
 (* Parallel substitution operation `subst` *)
 
@@ -190,12 +190,12 @@ let rec subst (#r:bool)
   | EInl e -> EInl (subst s e)
   | EInr e -> EInr (subst s e)
   | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
-  | EByteLit b -> EByteLit b
-  | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
+//   | EByteLit b -> EByteLit b
+//   | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
   | EFst e -> EFst (subst s e)
   | ESnd e -> ESnd (subst s e)
   | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-  | EStringLit s -> EStringLit s
+//   | EStringLit s -> EStringLit s
 
 and sub_elam (#r:bool) (s:sub r) 
   : Tot (sub r)
@@ -319,16 +319,16 @@ type step : exp -> exp -> Type =
              #e2':exp ->
              $hst:step e2 e2' ->
                  step (EPair e1 e2) (EPair e1 e2')
-  | SBytesCreateN : #e1:exp ->
-                   #e1':exp ->
-                   e2:exp ->
-                   $hst:step e1 e1' ->
-                   step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
-  | SBytesCreateV : e1:exp ->
-                   #e2:exp ->
-                   #e2':exp ->
-                   $hst:step e2 e2' ->
-                   step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
+//   | SBytesCreateN : #e1:exp ->
+//                    #e1':exp ->
+//                    e2:exp ->
+//                    $hst:step e1 e1' ->
+//                    step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
+//   | SBytesCreateV : e1:exp ->
+//                    #e2:exp ->
+//                    #e2':exp ->
+//                    $hst:step e2 e2' ->
+//                    step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
 
 
 let rec is_value (e:exp) : bool = 
@@ -338,10 +338,10 @@ let rec is_value (e:exp) : bool =
      (ESucc? e && is_value (ESucc?.v e)) || 
      (EInl? e && is_value (EInl?.v e)) ||
      (EInr? e && is_value (EInr?.v e)) || 
-     EByteLit? e || 
-     (EPair? e && is_value (EPair?.fst e) && is_value (EPair?.snd e) ) || 
-     (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
-     EStringLit? e
+     (EPair? e && is_value (EPair?.fst e) && is_value (EPair?.snd e) )
+     // EByteLit? e || 
+     // (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
+     // EStringLit? e
 
 let rec progress (#e:exp { ~(is_value e) })
                  (#t:typ)
@@ -398,14 +398,14 @@ let rec progress (#e:exp { ~(is_value e) })
           else 
                let (| e1', h1' |) = progress h1 in
                (| EPair e1' e2, SPair1 h1' e2 |)
-     | TyBytesCreate #g #e1 #e2 h1 h2 -> begin
-          if is_value e1 then
-               let (| e2', h2' |) = progress h2 in
-               (| EBytesCreate e1 e2', SBytesCreateV e1 h2' |)
-          else 
-               let (| e1', h1' |) = progress h1 in
-               (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
-     end
+     // | TyBytesCreate #g #e1 #e2 h1 h2 -> begin
+     //      if is_value e1 then
+     //           let (| e2', h2' |) = progress h2 in
+     //           (| EBytesCreate e1 e2', SBytesCreateV e1 h2' |)
+     //      else 
+     //           let (| e1', h1' |) = progress h1 in
+     //           (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
+     // end
 
 
 (* Typing of substitutions (very easy, actually) *)
@@ -449,12 +449,12 @@ let rec substitution (#g1:env)
      assert (subst s e == EInr (subst s e'));
      hs'
    | TyCase h1 h2 h3 -> TyCase (substitution s h1 hs) (substitution s h2 hs) (substitution s h3 hs)
-   | TyByteLit b -> TyByteLit b
-   | TyBytesCreate h1 h2 -> TyBytesCreate (substitution s h1 hs) (substitution s h2 hs)
    | TyFst h1 -> TyFst (substitution s h1 hs)
    | TySnd h1 -> TySnd (substitution s h1 hs)
    | TyPair h1 h2 -> TyPair (substitution s h1 hs) (substitution s h2 hs)
-   | TyStringLit s -> TyStringLit s
+//    | TyByteLit b -> TyByteLit b
+//    | TyBytesCreate h1 h2 -> TyBytesCreate (substitution s h1 hs) (substitution s h2 hs)
+//    | TyStringLit s -> TyStringLit s
 
 (* Substitution for beta reduction
    Now just a special case of substitution lemma *)
@@ -532,12 +532,12 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      | SPair2 _ hs2 ->
           let TyPair h1 h2 = ht in
           TyPair h1 (preservation_step h2 hs2)
-     | SBytesCreateN _ hs1 ->
-          let TyBytesCreate h1 h2 = ht in
-          TyBytesCreate (preservation_step h1 hs1) h2
-     | SBytesCreateV _ hs2 ->
-          let TyBytesCreate h1 h2 = ht in
-          TyBytesCreate h1 (preservation_step h2 hs2)
+     // | SBytesCreateN _ hs1 ->
+     //      let TyBytesCreate h1 h2 = ht in
+     //      TyBytesCreate (preservation_step h1 hs1) h2
+     // | SBytesCreateV _ hs2 ->
+     //      let TyBytesCreate h1 h2 = ht in
+     //      TyBytesCreate h1 (preservation_step h2 hs2)
 
 let strong_progress #e #e' #t 
               (ht:typing empty e t) 
@@ -573,11 +573,11 @@ let rec elab_typ (t:typ) : Type =
   | TNat -> nat
   | TSum t1 t2 -> either (elab_typ t1) (elab_typ t2)
   | TPair t1 t2 -> (elab_typ t1) * (elab_typ t2)
-  | TByte -> byte
-  | TBytes -> bytes
-  | TExn -> exn
-  | TFDesc -> file_descr
-  | TString -> string
+//   | TByte -> byte
+//   | TBytes -> bytes
+//   | TExn -> exn
+//   | TFDesc -> file_descr
+//   | TString -> string
 
 
 type venv (g:env) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
@@ -640,13 +640,6 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
        let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
        let v2 : elab_typ t1 = elab_exp h2 ve in
        v1 v2
-  | EByteLit b -> b
-  | EBytesCreate e1 e2 ->
-       let TyBytesCreate h1 h2 = h in
-       let v1 : elab_typ TNat = elab_exp h1 ve in
-       let v2 : elab_typ TByte = elab_exp h2 ve in
-       let b : bytes = Bytes.create (convert v1) v2 in
-       b
   | EFst e ->
        let TyFst #_ #_ #t1 #t2 h1 = h in
        let v = elab_exp h1 ve in
@@ -660,7 +653,14 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
        let v1 = elab_exp h1 ve in
        let v2 = elab_exp h2 ve in
        (v1, v2)
-  | EStringLit s -> s
+//   | EStringLit s -> s
+//   | EByteLit b -> b
+//   | EBytesCreate e1 e2 ->
+//        let TyBytesCreate h1 h2 = h in
+//        let v1 : elab_typ TNat = elab_exp h1 ve in
+//        let v2 : elab_typ TByte = elab_exp h2 ve in
+//        let b : bytes = Bytes.create (convert v1) v2 in
+//        b
 
 let elab_exp' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g)
   : (elab_typ t) =
