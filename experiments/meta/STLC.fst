@@ -550,14 +550,15 @@ let strong_progress #e #e' #t
          Inr (| e', s, ht' |)
 (** Phil Wadler: Progress + Preservation = Evaluation. **)
 let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
-  : Pure exp 
+  : Pure (e':exp & typing empty e' t)
      (requires True)
-     (ensures (fun e' -> typing empty e' t /\ is_value e'))
-  =  if is_value e then e
+     (ensures (fun (| e', _ |) -> is_value e'))
+  =  if is_value e then (| e, ht |)
      else let (| e', st |) = progress ht in
           let ht' : typing empty e' t = preservation_step ht st in
           assume (e' << e); (** TODO: proof of termination required **)
           eval ht'
+
 (** *** Elaboration of types and expressions to F* *)
 
 open FStar.Ghost
@@ -672,3 +673,8 @@ let elab_exp' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g)
        let w : elab_typ t1 -> Tot (elab_typ t2) =
          (fun x -> elab_exp h1 (vextend x ve)) in
        cast_TArr w
+
+(** ** Semantics **)
+let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
+     let (| e', hte' |) = eval hte in
+     elab_exp hte' vempty
