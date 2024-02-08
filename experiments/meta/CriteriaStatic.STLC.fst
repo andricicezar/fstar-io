@@ -83,6 +83,12 @@ let rhc (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
   forall (ct:ctxT (comp_int i)).
     exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) 
 
+val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+let backtranslate_ctx ct = STLC.elab_exp (dsnd ct) STLC.vempty
+
+let rhc_1 (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
+  forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct) 
+
 val compile_prog :
   (g:env) ->
   i:term{tot_typing g i (`intS)} ->
