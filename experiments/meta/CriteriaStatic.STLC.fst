@@ -118,3 +118,18 @@ val compile_prog :
   // let pt_sound : squash (soundness pt) = ...
   // let ps_pt_rhc : squash (rhc ps pt) = ...
 
+type rel = 
+  #ty:STLC.typ -> 
+  STLC.elab_typ ty ->             (** F* value **)
+  #e:STLC.exp ->                  (** STLC value **)
+  STLC.typing STLC.empty e ty -> 
+  Type0
+
+(** we want to instantiate this with the result of the compiler,
+    which should give as a ws and a wt and a proof of ws `r` wt,
+    thus no need for equivalence **)
+let rel_whole (r:rel) (ws:wholeS) (wt:wholeT) : Type0 =
+  ws `r` (dsnd wt) ==> cc ws wt
+
+let rel_pprog (r:rel) i ps pt : Type0 =
+  ps `r` (dsnd pt) ==> rhc_1 #i ps pt
