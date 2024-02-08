@@ -30,15 +30,15 @@ let comp_int i = { ct = i.ct_stlc }
 
 type progT (i:intT) = pt:STLC.exp & STLC.typing STLC.empty pt (STLC.TArr i.ct STLC.TNat)
 type ctxT (i:intT) = ct:STLC.exp & STLC.typing STLC.empty ct i.ct
-type wholeT = wt:STLC.exp & STLC.typing STLC.empty wt (STLC.TNat)
+type wholeT = wt:STLC.exp & STLC.typing STLC.empty wt (STLC.TArr STLC.TUnit STLC.TNat)
 
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT = 
-  let (| ep, htp |) = pt in
-  let (| ec, htc |) = ct in
-  (| STLC.EApp ep ec, STLC.TyApp htp htc |)
+  let (| _, htp |) = pt in
+  let (| _, htc |) = ct in
+  STLC.thunk_exp (STLC.TyApp htp htc)
 
 val behT : wt:wholeT -> set_prop 
-let behT (| ew, htw |) = fun x -> STLC.sem htw == x
+let behT (| ew, htw |) = fun x -> STLC.sem (STLC.TyApp htw STLC.TyUnit) == x
 
 (** Compiler correctness **)
 

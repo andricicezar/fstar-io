@@ -673,6 +673,10 @@ let elab_exp' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g)
          (fun x -> elab_exp h1 (vextend x ve)) in
        cast_TArr w
 
+let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
+     admit ();
+     (| ELam TUnit e, TyLam TUnit ht |)
+
 (** ** Semantics **)
 let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
      let (| e', hte' |) = eval hte in
