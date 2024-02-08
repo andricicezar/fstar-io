@@ -133,3 +133,28 @@ let rel_whole (r:rel) (ws:wholeS) (wt:wholeT) : Type0 =
 
 let rel_pprog (r:rel) i ps pt : Type0 =
   ps `r` (dsnd pt) ==> rhc_1 #i ps pt
+
+val naive_rel : rel
+let rec naive_rel #ty fst_e hte =
+  (** TODO: is it ok to use eval in here? **)
+  let (| stlc_e, hte |) = STLC.eval hte in
+  match hte with
+  | STLC.TyLam tv #_ #t' _ -> 
+    let fst_f : STLC.elab_typ tv -> STLC.elab_typ t' = fst_e in
+    forall (v:STLC.exp) (htv:STLC.typing STLC.empty v tv). 
+      let fst_v : STLC.elab_typ tv = STLC.elab_exp htv STLC.vempty in
+      let happ : STLC.typing STLC.empty (STLC.EApp stlc_e v) t' = STLC.TyApp hte htv in
+      (fst_v `naive_rel` htv) <==> ((fst_f fst_v) `naive_rel` happ)
+  | STLC.TyUnit -> fst_e == ()
+  | STLC.TyZero -> fst_e == 0
+  | STLC.TySucc hte' -> fst_e > 0 /\ (fst_e-1) `naive_rel` hte'
+  | STLC.TyInl #_ #_ #t1 t2 ht1 ->
+    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
+    Inl? fst_sum /\ (Inl?.v fst_sum `naive_rel` ht1)
+  | STLC.TyInr #_ #_ t1 #t2 ht2 ->
+    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
+    Inr? fst_sum /\ (Inr?.v fst_sum `naive_rel` ht2)
+  | STLC.TyPair #_ #_ #_ #t1 #t2 ht1 ht2 ->
+    let fst_pair : (STLC.elab_typ t1 * STLC.elab_typ t2) = fst_e in
+    let (fst_fst, fst_snd) = fst_pair in
+    (fst_fst `naive_rel` ht1) /\ (fst_snd `naive_rel` ht2)
