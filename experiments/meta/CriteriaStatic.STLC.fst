@@ -52,13 +52,16 @@ let t_unit = `()
 let valid (g:env) (phi:term) : prop =
   squash (tot_typing g t_unit (mk_squash phi))
 
+let cc (ws:wholeS) (wt:wholeT) =
+  behS ws ≡ behT wt
+
 val compile_whole_stat : 
   (g:env) ->
   (ws:term{tot_typing g ws (`wholeS)}) ->
   Tac (wt:term{
     tot_typing g wt (`wholeT) /\
     (** compiler correctness **)
-    valid g (`(behS (`#ws) ≡ behT (`#wt)))
+    valid g (`(cc (`#ws) (`#wt)))
     (** soundness **)
     // in this PoC, we cannot type this because whole programs do not have an interface
     // valid g (`(behT (`#wt) ⊆ i.p_post))
