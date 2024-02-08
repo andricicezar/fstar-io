@@ -7,7 +7,8 @@ let (⊆) (s0 s1:set_prop) : Type0 = forall res. s0 res ==> s1 res
 let (≡) (s0 s1:set_prop) : Type0 = forall res. s0 res <==> s1 res
 
 noeq type intS = { 
-  ct_stlc : STLC.typ
+  ct_stlc : STLC.typ;
+  // p_post : set_prop
 }
 
 type progS (i:intS) = STLC.elab_typ i.ct_stlc -> Tot nat
@@ -57,7 +58,7 @@ val compile_whole_stat :
   Tac (wt:term{
     tot_typing g wt (`wholeT) /\
     (** compiler correctness **)
-    valid g (`(behS (`#ws) ≡ behT (`#wt))) (** behS unfolds to `behS0 (reify ws)` **)
+    valid g (`(behS (`#ws) ≡ behT (`#wt)))
     (** soundness **)
     // in this PoC, we cannot type this because whole programs do not have an interface
     // valid g (`(behT (`#wt) ⊆ i.p_post))
@@ -80,7 +81,7 @@ val compile_whole_stat :
 (** The order of the quantifiers makes this RHC (Robust Hyperproperty Preservation) **)
 let rhc (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
   forall (ct:ctxT (comp_int i)).
-    exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) (** behS unfolds to `behS0 (reify (linkS ps cs))` **)
+    exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) 
 
 val compile_prog :
   (g:env) ->

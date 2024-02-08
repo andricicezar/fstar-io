@@ -84,8 +84,8 @@ type ast_typ =
   | TInt    : ast_typ
 
 type ast_exp =
-  | EC_Int : int -> ast_exp
-  | EAdd  : e1:ast_exp -> e2:ast_exp -> ast_exp
+  | EC_Int : int -> ast_exp                        // TODO: OCaml ints are not the same as F* ints
+  | EAdd  : e1:ast_exp -> e2:ast_exp -> ast_exp    // TODO: OCaml addition is not the same as F* addition
 
 (** we do not have free variables yet, so we do not need an env **)
 // assume type ast_env
@@ -93,7 +93,7 @@ type ast_exp =
 (** we only have one type, so probably this is not very useful **)
 type ast_typing : (e:ast_exp) -> (t:ast_typ) -> Type =
   | C_IntTyping : x:int -> ast_typing (EC_Int x) TInt
-  | AddTyping   : e1:ast_exp -> e2:ast_exp -> ast_typing e1 TInt -> ast_typing e2 TInt -> ast_typing (EAdd e1 e2) TInt
+  | AddTyping   : #e1:ast_exp -> #e2:ast_exp -> ast_typing e1 TInt -> ast_typing e2 TInt -> ast_typing (EAdd e1 e2) TInt
 
 let t : ast_exp = EAdd (EC_Int 2) (EC_Int 1)
 
@@ -146,7 +146,7 @@ let rec compile_to_ast (g:env) (t0:term{tot_typing g t0 (`int)})
 = 
   match inspect t0 with
   | Tv_FVar _ ->
-    (* unfold *)
+    (* inline the top-level definition *)
     let t1 = norm_term_env (`int) g [delta] t0 in
     let t2 = compile_to_ast g t1 in
     eq2_trans g (`int) t0 t1 (`(sem (`#t2)));
@@ -158,17 +158,17 @@ let rec compile_to_ast (g:env) (t0:term{tot_typing g t0 (`int)})
     t1
 
   (* detect ((op_Plus a) b) *)
-  | Tv_App hd (a1, Q_Explicit) ->
+  | Tv_App hd (a2, Q_Explicit) ->
     begin match inspect hd with
-      | Tv_App op (a2, Q_Explicit) ->
+      | Tv_App op (a1, Q_Explicit) ->
         begin match inspect op with
         | Tv_FVar fv ->
           if inspect_fv fv = ["Prims"; "op_Addition"]
           then begin
             assume (tot_typing g a1 (`int)); // need inversion lemma
             assume (tot_typing g a2 (`int)); // need inversion lemma
-            let rhs = compile_to_ast g a1 in
-            let lhs = compile_to_ast g a2 in
+            let lhs = compile_to_ast g a1 in
+            let rhs = compile_to_ast g a2 in
             let t1 = mk_eapp g lhs rhs in
             // TODO:quotations and anti quotations are not stable
             //  refactor this to use other techniques
@@ -180,7 +180,7 @@ let rec compile_to_ast (g:env) (t0:term{tot_typing g t0 (`int)})
             assume (valid g (mk_eq2 (`int) t0 (`((`#a1)+(`#a2)))));
             //assert (valid g (mk_eq2 (`int) (`((`#a1)+(`#a2))) (`(sem (`#t1)))));
             admit (); //TODO: calling this lemma fails, which is weird. 
-            eq2_trans g (`int) t0 (`((`#a1)+(`#a2))) (`(sem (`#t1)));          
+            eq2_trans g (`int) t0 (`((`#a1)+(`#a2))) (`(sem (`#t1)));
             assert (valid g (mk_eq2 (`int) t0 (`(sem (`#t1)))));
             t1
           end else fail ("not implemented")
