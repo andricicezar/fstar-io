@@ -332,13 +332,15 @@ type step : exp -> exp -> Type =
 
 
 let rec is_value (e:exp) : bool = 
-     ELam? e || 
-     EUnit? e || 
-     EZero? e || 
-     (ESucc? e && is_value (ESucc?.v e)) || 
-     (EInl? e && is_value (EInl?.v e)) ||
-     (EInr? e && is_value (EInr?.v e)) || 
-     (EPair? e && is_value (EPair?.fst e) && is_value (EPair?.snd e) )
+     match e with
+     | ELam _  _
+     | EUnit 
+     | EZero -> true
+     | ESucc e -> is_value e
+     | EInl e -> is_value e
+     | EInr e -> is_value e 
+     | EPair e1 e2 -> is_value e1 && is_value e2
+     | _ -> false
      // EByteLit? e || 
      // (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
      // EStringLit? e
@@ -539,7 +541,7 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      //      let TyBytesCreate h1 h2 = ht in
      //      TyBytesCreate h1 (preservation_step h2 hs2)
 
-let strong_progress #e #e' #t 
+let strong_progress #e #t 
               (ht:typing empty e t) 
   : either (squash (is_value e))
            (e':exp & step e e' & typing empty e' t)
@@ -551,12 +553,32 @@ let strong_progress #e #e' #t
 let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
   : Pure (e':exp & typing empty e' t)
      (requires True)
-     (ensures (fun (| e', _ |) -> is_value e'))
-  =  if is_value e then (| e, ht |)
-     else let (| e', st |) = progress ht in
-          let ht' : typing empty e' t = preservation_step ht st in
-          assume (e' << e); (** TODO: proof of termination required **)
+     (ensures (fun (| e', ht' |) -> is_value e'))
+  = match strong_progress ht with
+    | Inl _ -> (| e, ht |)
+    | Inr (| _, _, ht' |) -> 
+          admit (); (** TODO: proof of termination required **)
           eval ht'
+         
+let lemma_12344 (wt:(wt:exp{ELam? wt} & typing empty wt (TArr TUnit TNat)
+)) : Lemma (
+  eval (TyApp (dsnd wt) TyUnit) == eval (TyApp (dsnd (eval (dsnd wt))) TyUnit)
+) = 
+     calc (==) {
+          eval (TyApp (dsnd wt) TyUnit);
+          == { _ by (norm [delta_only [`%eval;`%strong_progress;`%is_value];zeta;iota]) }
+          (let (| e', s |) = progress (TyApp (dsnd wt) TyUnit) in
+          eval (preservation_step (TyApp (dsnd wt) TyUnit) s));
+          == { assert (ELam? (dfst wt));
+               _ by (norm [delta_only [`%progress]; zeta; iota]) }
+          (match dfst wt with
+          | ELam t e1' ->
+               eval (preservation_step (TyApp (dsnd wt) TyUnit) (SBeta t e1' EUnit)));
+          == {} // unfold preservation_step
+          eval (substitution_beta TyUnit (TyLam?.hbody (dsnd wt)));
+          == {} // F* can finish the proof
+          eval (TyApp (dsnd (eval (dsnd wt))) TyUnit);
+     }
 
 (** *** Elaboration of types and expressions to F* *)
 
@@ -602,7 +624,7 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
        let TySucc h1 = h in
        assert (t == TNat);
        let v = elab_exp h1 ve in
-       v
+       v+1
   | ENRec e1 e2 e3 ->
        let TyNRec h1 h2 h3 = h in
        let v1 = elab_exp h1 ve in
@@ -679,5 +701,4 @@ let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUni
 
 (** ** Semantics **)
 let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
-     let (| e', hte' |) = eval hte in
-     elab_exp hte' vempty
+     elab_exp (dsnd (eval hte)) vempty
