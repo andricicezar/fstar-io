@@ -134,27 +134,37 @@ let rel_whole (r:rel) (ws:wholeS) (wt:wholeT) : Type0 =
 let rel_pprog (r:rel) i ps pt : Type0 =
   ps `r` (dsnd pt) ==> rhc_1 #i ps pt
 
-val naive_rel : rel
-let rec naive_rel #ty fst_e hte =
-  (** TODO: is it ok to use eval in here? **)
-  let (| stlc_e, hte |) = STLC.eval hte in
+// unfold val naive_rel : rel
+val (≍) : rel
+let rec (≍) #ty fst_e hte =
+  (** First, we make sure that stlc_e contains a value. (fst_e is already a value)**)
+  let (| stlc_e, hte |) = STLC.eval hte in (** TODO: is it ok to use eval in here? **)
+  assert (STLC.is_value stlc_e);
   match hte with
+  | STLC.TyUnit -> fst_e == STLC.elab_exp hte STLC.vempty // == ()
+  | STLC.TyZero -> fst_e == STLC.elab_exp hte STLC.vempty // == 0
+  | STLC.TySucc _ -> fst_e == STLC.elab_exp hte STLC.vempty
+  | STLC.TyInl #_ #_ #t1 t2 ht1 ->
+    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
+    Inl? fst_sum /\ (Inl?.v fst_sum ≍ ht1)
+  | STLC.TyInr #_ #_ t1 #t2 ht2 ->
+    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
+    Inr? fst_sum /\ (Inr?.v fst_sum ≍ ht2)
+  | STLC.TyPair #_ #_ #_ #t1 #t2 ht1 ht2 ->
+    let (fst_fst, fst_snd) : (STLC.elab_typ t1 * STLC.elab_typ t2) = fst_e in
+    (fst_fst ≍ ht1) /\ (fst_snd ≍ ht2)
   | STLC.TyLam tv #_ #t' _ -> 
     let fst_f : STLC.elab_typ tv -> STLC.elab_typ t' = fst_e in
     forall (v:STLC.exp) (htv:STLC.typing STLC.empty v tv). 
       let fst_v : STLC.elab_typ tv = STLC.elab_exp htv STLC.vempty in
       let happ : STLC.typing STLC.empty (STLC.EApp stlc_e v) t' = STLC.TyApp hte htv in
-      (fst_v `naive_rel` htv) <==> ((fst_f fst_v) `naive_rel` happ)
-  | STLC.TyUnit -> fst_e == ()
-  | STLC.TyZero -> fst_e == 0
-  | STLC.TySucc hte' -> fst_e > 0 /\ (fst_e-1) `naive_rel` hte'
-  | STLC.TyInl #_ #_ #t1 t2 ht1 ->
-    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
-    Inl? fst_sum /\ (Inl?.v fst_sum `naive_rel` ht1)
-  | STLC.TyInr #_ #_ t1 #t2 ht2 ->
-    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
-    Inr? fst_sum /\ (Inr?.v fst_sum `naive_rel` ht2)
-  | STLC.TyPair #_ #_ #_ #t1 #t2 ht1 ht2 ->
-    let fst_pair : (STLC.elab_typ t1 * STLC.elab_typ t2) = fst_e in
-    let (fst_fst, fst_snd) = fst_pair in
-    (fst_fst `naive_rel` ht1) /\ (fst_snd `naive_rel` ht2)
+      (fst_v ≍ htv) <==> ((fst_f fst_v) ≍ happ)
+
+let x1 : STLC.exp =
+    STLC.ELam STLC.TNat (STLC.EVar 0)
+let x1ty : STLC.typing STLC.empty x1 (STLC.TArr STLC.TNat STLC.TNat) =
+    STLC.TyLam STLC.TNat (STLC.TyVar 0)
+
+let test123 =
+  assert ((fun (x:nat) -> x) ≍ x1ty) by (compute ())
+
