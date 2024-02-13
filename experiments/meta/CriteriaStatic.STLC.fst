@@ -2,9 +2,9 @@ module CriteriaStatic.STLC
 module STLC = STLC
 
 (** *** Intrinsic criteria, static quoting/unquoting  **)
-type set_prop = nat -> Type0
-let (⊆) (s0 s1:set_prop) : Type0 = forall res. s0 res ==> s1 res
-let (≡) (s0 s1:set_prop) : Type0 = forall res. s0 res <==> s1 res
+type set_prop = nat
+let (⊆) (s0 s1:set_prop) : Type0 = False
+let (≡) (s0 s1:set_prop) : Type0 = s0 == s1
 
 noeq type intS = { 
   ct_stlc : STLC.typ;
@@ -19,7 +19,7 @@ let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (fun () -> ps cs)
 
 val behS : wholeS -> set_prop
-let behS ws = fun x -> ws () == x
+let behS ws = ws ()
 
 (** Target **)
 
@@ -38,7 +38,7 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
   STLC.thunk_exp (STLC.TyApp htp htc)
 
 val behT : wt:wholeT -> set_prop 
-let behT (| ew, htw |) = fun x -> STLC.sem (STLC.TyApp htw STLC.TyUnit) == x
+let behT (| ew, htw |) = STLC.sem (STLC.TyApp htw STLC.TyUnit)
 
 (** Compiler correctness **)
 
