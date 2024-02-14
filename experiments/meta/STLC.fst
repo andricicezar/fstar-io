@@ -559,26 +559,6 @@ let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
     | Inr (| _, _, ht' |) -> 
           admit (); (** TODO: proof of termination required **)
           eval ht'
-         
-let lemma_12344 (wt:(wt:exp{ELam? wt} & typing empty wt (TArr TUnit TNat)
-)) : Lemma (
-  eval (TyApp (dsnd wt) TyUnit) == eval (TyApp (dsnd (eval (dsnd wt))) TyUnit)
-) = 
-     calc (==) {
-          eval (TyApp (dsnd wt) TyUnit);
-          == { _ by (norm [delta_only [`%eval;`%strong_progress;`%is_value];zeta;iota]) }
-          (let (| e', s |) = progress (TyApp (dsnd wt) TyUnit) in
-          eval (preservation_step (TyApp (dsnd wt) TyUnit) s));
-          == { assert (ELam? (dfst wt));
-               _ by (norm [delta_only [`%progress]; zeta; iota]) }
-          (match dfst wt with
-          | ELam t e1' ->
-               eval (preservation_step (TyApp (dsnd wt) TyUnit) (SBeta t e1' EUnit)));
-          == {} // unfold preservation_step
-          eval (substitution_beta TyUnit (TyLam?.hbody (dsnd wt)));
-          == {} // F* can finish the proof
-          eval (TyApp (dsnd (eval (dsnd wt))) TyUnit);
-     }
 
 (** *** Elaboration of types and expressions to F* *)
 
