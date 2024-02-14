@@ -175,3 +175,39 @@ let x1ty : STLC.typing STLC.empty x1 (STLC.TArr STLC.TNat STLC.TNat) =
 let test123 =
   assert ((fun (x:nat) -> x) ≍ x1ty) by (compute ())
 
+
+let progress_preserves_beh (wt:wholeT)
+  : Lemma (
+      match STLC.strong_progress (dsnd wt) with
+      | Inl () -> True
+      | Inr (| ewt', s, htwet' |) -> behT wt ≡ behT (| ewt', htwet' |))
+  = ()
+
+
+let rec eval_preserves_beh (wt:wholeT)
+  : Lemma
+      (ensures (behT wt ≡ behT (STLC.eval (dsnd wt))))
+      (decreases (dfst wt))
+  = match STLC.strong_progress (dsnd wt) with
+    | Inl () -> ()
+    | Inr (| ewt', s, htwet' |) -> begin
+      assume (ewt' << dfst wt); (** TODO: proof of termination **)
+      eval_preserves_beh (| ewt', htwet' |)
+    end 
+
+let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
+  let (| ew, htw |) = wt in
+  introduce 
+    ws ≍ (dsnd wt)
+  ==> 
+    behS ws ≡ behT wt
+  with _. begin
+    assert (ws ≍ htw);
+    // unfolding ≍
+    let (| ewt', htwt' |) = STLC.eval htw in
+    assert (ws ≍ htwt'); // wt' is a value (Lam) and returns a nat
+    assert (behS ws ≡ behT (| ewt', htwt' |));
+    eval_preserves_beh wt;
+    assert (behT (| ewt', htwt' |) ≡ behT wt);
+    assert (behS ws ≡ behT wt)
+  end
