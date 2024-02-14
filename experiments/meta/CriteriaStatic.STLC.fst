@@ -137,14 +137,17 @@ let rel_pprog (r:rel) i ps pt : Type0 =
 // unfold val naive_rel : rel
 val (≍) : rel
 let rec (≍) #ty fst_e hte =
+  // forall stlc_e', hte', ss:steps stlc_e stlc_e'. is_value stlc_e' ==>
   (** First, we make sure that stlc_e contains a value. (fst_e is already a value)**)
   let (| stlc_e, hte |) = STLC.eval hte in (** TODO: is it ok to use eval in here? **)
   // assert (STLC.is_value stlc_e);
   match hte with
-  // base types (** One can avoid using elab_exp, but using it simplifies proofs later **)
-  | STLC.TyUnit -> fst_e == STLC.elab_exp hte STLC.vempty // == ()
-  | STLC.TyZero -> fst_e == STLC.elab_exp hte STLC.vempty // == 0
-  | STLC.TySucc _ -> fst_e == STLC.elab_exp hte STLC.vempty
+  // base types
+  | STLC.TyUnit
+  | STLC.TyZero
+  | STLC.TySucc _ ->
+    (** One can avoid using elab_exp, but using it simplifies proofs later **)
+    fst_e == STLC.elab_exp hte STLC.vempty
   
   // polymorphic types
   | STLC.TyInl #_ #_ #t1 t2 ht1 ->
