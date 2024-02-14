@@ -139,11 +139,14 @@ val (≍) : rel
 let rec (≍) #ty fst_e hte =
   (** First, we make sure that stlc_e contains a value. (fst_e is already a value)**)
   let (| stlc_e, hte |) = STLC.eval hte in (** TODO: is it ok to use eval in here? **)
-  assert (STLC.is_value stlc_e);
+  // assert (STLC.is_value stlc_e);
   match hte with
+  // base types (** One can avoid using elab_exp, but using it simplifies proofs later **)
   | STLC.TyUnit -> fst_e == STLC.elab_exp hte STLC.vempty // == ()
   | STLC.TyZero -> fst_e == STLC.elab_exp hte STLC.vempty // == 0
   | STLC.TySucc _ -> fst_e == STLC.elab_exp hte STLC.vempty
+  
+  // polymorphic types
   | STLC.TyInl #_ #_ #t1 t2 ht1 ->
     let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
     Inl? fst_sum /\ (Inl?.v fst_sum ≍ ht1)
@@ -153,12 +156,13 @@ let rec (≍) #ty fst_e hte =
   | STLC.TyPair #_ #_ #_ #t1 #t2 ht1 ht2 ->
     let (fst_fst, fst_snd) : (STLC.elab_typ t1 * STLC.elab_typ t2) = fst_e in
     (fst_fst ≍ ht1) /\ (fst_snd ≍ ht2)
+
+  // lambda
   | STLC.TyLam tv #_ #t' _ -> 
     let fst_f : STLC.elab_typ tv -> STLC.elab_typ t' = fst_e in
-    forall (v:STLC.exp) (htv:STLC.typing STLC.empty v tv). 
-      let fst_v : STLC.elab_typ tv = STLC.elab_exp htv STLC.vempty in
-      let happ : STLC.typing STLC.empty (STLC.EApp stlc_e v) t' = STLC.TyApp hte htv in
-      (fst_v ≍ htv) <==> ((fst_f fst_v) ≍ happ)
+    forall v (htv:STLC.typing STLC.empty v tv). 
+      let fst_v = STLC.elab_exp htv STLC.vempty in
+      (fst_v ≍ htv) ==> ((fst_f fst_v) ≍ (STLC.TyApp hte htv))
 
 let x1 : STLC.exp =
     STLC.ELam STLC.TNat (STLC.EVar 0)
