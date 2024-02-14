@@ -183,7 +183,7 @@ let progress_preserves_beh (wt:wholeT)
       | Inr (| ewt', s, htwet' |) -> behT wt ≡ behT (| ewt', htwet' |))
   = ()
 
-
+(** This is very awkward **)
 let rec eval_preserves_beh (wt:wholeT)
   : Lemma
       (ensures (behT wt ≡ behT (STLC.eval (dsnd wt))))
@@ -210,4 +210,34 @@ let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) =
     eval_preserves_beh wt;
     assert (behT (| ewt', htwt' |) ≡ behT wt);
     assert (behS ws ≡ behT wt)
+  end
+
+let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) = 
+  introduce 
+    ps ≍ (dsnd pt)
+  ==> 
+    (forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct) )
+  with _. begin
+    introduce 
+      forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct)
+    with begin
+      // unfolding ≍
+      let (| ept', htpt' |) = STLC.eval (dsnd pt) in
+      // ps ≍ (dsnd pt) implies:
+      assert (ps ≍ htpt');
+      
+      let cs = backtranslate_ctx ct in
+      assume (cs ≍ dsnd ct);
+
+      let htbody = STLC.TyApp htpt' (dsnd ct) in
+      assert (ps cs ≍ htbody);
+
+      let (| ewt, htwt |) = STLC.thunk_exp htbody in
+      let htwtapp = STLC.TyApp htwt STLC.TyUnit in
+      assume (ps cs ≍ htwtapp);
+
+      assert (behS (linkS ps cs) ≡ behT (linkT (| ept', htpt' |) ct));
+      assume (behT (linkT (| ept', htpt' |) ct) ≡ behT (linkT pt ct));
+      assert (behS (linkS ps cs) ≡ behT (linkT pt ct))
+    end
   end
