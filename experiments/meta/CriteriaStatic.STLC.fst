@@ -42,7 +42,7 @@ val behT : wt:wholeT -> set_prop
 let behT (| ew, htw |) = STLC.sem (STLC.TyApp htw STLC.TyUnit)
 
 (** We can replace the refinement that pt, wt and ct are values,
-    with a refinement that pt, ct and wt can be stepped to a value,
+    with a refinement that pt, ct and wt can be stepped purely to a value,
     and then we will need the following lemmas:
 
 assume val pure_step_preserves_behT_wt (wt:wholeT)
