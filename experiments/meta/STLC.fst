@@ -235,101 +235,122 @@ let sub_beta (e:exp)
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-type step : exp -> exp -> Type =
+type pure_step : exp -> exp -> Type =
   | SBeta : t:typ ->
             e1:exp ->
             e2:exp ->
-            step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
+            pure_step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
   | SApp1 : #e1:exp ->
              e2:exp ->
             #e1':exp ->
-            $hst:step e1 e1' ->
-                 step (EApp e1 e2) (EApp e1' e2)
+            $hst:pure_step e1 e1' ->
+                 pure_step (EApp e1 e2) (EApp e1' e2)
   | SApp2 :   e1:exp ->
              #e2:exp ->
             #e2':exp ->
-            $hst:step e2 e2' ->
-                 step (EApp e1 e2) (EApp e1 e2')
+            $hst:pure_step e2 e2' ->
+                 pure_step (EApp e1 e2) (EApp e1 e2')
   | SSucc :    e:exp ->
              #e':exp ->
-            $hst:step e e' ->
-                 step (ESucc e) (ESucc e')     
+            $hst:pure_step e e' ->
+                 pure_step (ESucc e) (ESucc e')     
   | SNRecV :  #e1:exp ->
              #e1':exp ->
                e2:exp ->
                e3:exp ->
-             $hst:step e1 e1' ->
-                 step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
+             $hst:pure_step e1 e1' ->
+                 pure_step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
 //   | SNRecX :   e1:exp ->
 //                e2:exp ->
 //              #e2':exp ->
 //                e3:exp ->
-//              $hst:step e2 e2' ->
-//                  step (ENRec e1 e2 e3) (ENRec e1 e2' e3)                 
+//              $hst:pure_step e2 e2' ->
+//                  pure_step (ENRec e1 e2 e3) (ENRec e1 e2' e3)                 
   | SNRec0 : e2:exp ->
              e3:exp ->
-                 step (ENRec EZero e2 e3) e2
+                 pure_step (ENRec EZero e2 e3) e2
   | SNRecIter :  v:exp ->
                 e2:exp ->
                 e3:exp ->
-                step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
+                pure_step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
   | SInl  :    e:exp ->
              #e':exp ->
-            $hst:step e e' ->
-                 step (EInl e) (EInl e')
+            $hst:pure_step e e' ->
+                 pure_step (EInl e) (EInl e')
   | SInr  :    e:exp ->
              #e':exp ->
-            $hst:step e e' ->
-                 step (EInr e) (EInr e')
+            $hst:pure_step e e' ->
+                 pure_step (EInr e) (EInr e')
   | SCase :  #e1:exp ->
             #e1':exp ->
               e2:exp ->
               e3:exp ->
-            $hst:step e1 e1' ->
-                 step (ECase e1 e2 e3) (ECase e1' e2 e3)
+            $hst:pure_step e1 e1' ->
+                 pure_step (ECase e1 e2 e3) (ECase e1' e2 e3)
   | SCaseInl :  v:exp ->
                e2:exp ->
                e3:exp ->
-                 step (ECase (EInl v) e2 e3) (EApp e2 v)
+                 pure_step (ECase (EInl v) e2 e3) (EApp e2 v)
   | SCaseInr :  v:exp ->
                e2:exp ->
                e3:exp ->
-                 step (ECase (EInr v) e2 e3) (EApp e3 v)
+                 pure_step (ECase (EInr v) e2 e3) (EApp e3 v)
   | SFst0 :    #e:exp ->
               #e':exp ->
-             $hst:step e e' ->
-                 step (EFst e) (EFst e')
+             $hst:pure_step e e' ->
+                 pure_step (EFst e) (EFst e')
   | SFst :  e1:exp ->
             e2:exp ->
-               step (EFst (EPair e1 e2)) e1
+               pure_step (EFst (EPair e1 e2)) e1
   | SSnd0 :    #e:exp ->
               #e':exp ->
-             $hst:step e e' ->
-                 step (ESnd e) (ESnd e')
+             $hst:pure_step e e' ->
+                 pure_step (ESnd e) (ESnd e')
   | SSnd :  e1:exp ->
             e2:exp ->
-               step (ESnd (EPair e1 e2)) e2
+               pure_step (ESnd (EPair e1 e2)) e2
   | SPair1  : #e1:exp ->
              #e1':exp ->
-             $hst:step e1 e1' ->
+             $hst:pure_step e1 e1' ->
                e2:exp ->
-                 step (EPair e1 e2) (EPair e1' e2)
+                 pure_step (EPair e1 e2) (EPair e1' e2)
   | SPair2  :  e1:exp ->
               #e2:exp ->
              #e2':exp ->
-             $hst:step e2 e2' ->
-                 step (EPair e1 e2) (EPair e1 e2')
+             $hst:pure_step e2 e2' ->
+                 pure_step (EPair e1 e2) (EPair e1 e2')
 //   | SBytesCreateN : #e1:exp ->
 //                    #e1':exp ->
 //                    e2:exp ->
-//                    $hst:step e1 e1' ->
-//                    step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
+//                    $hst:pure_step e1 e1' ->
+//                    pure_step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
 //   | SBytesCreateV : e1:exp ->
 //                    #e2:exp ->
 //                    #e2':exp ->
-//                    $hst:step e2 e2' ->
-//                    step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
+//                    $hst:pure_step e2 e2' ->
+//                    pure_step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
 
+type step = pure_step
+
+type pure_steps : exp -> exp -> Type =
+  | PSrefl   : e:exp ->
+               pure_steps e e
+  | PSMany   : #e1:exp ->
+               #e2:exp ->
+               #e3:exp ->
+               $hst:pure_step e1 e2 ->
+               $hsts:pure_steps e2 e3 ->
+               pure_steps e1 e3
+
+type steps : exp -> exp -> Type =
+  | Srefl  : e:exp ->
+             steps e e
+  | SMany   : #e1:exp ->
+              #e2:exp ->
+              #e3:exp ->
+              $hst:step e1 e2 ->
+              $hsts:steps e2 e3 ->
+              steps e1 e3
 
 let rec is_value (e:exp) : bool = 
      match e with
