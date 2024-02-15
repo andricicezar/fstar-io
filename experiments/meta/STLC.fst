@@ -572,9 +572,7 @@ let strong_progress #e #t
          Inr (| e', s, ht' |)
 (** Phil Wadler: Progress + Preservation = Evaluation. **)
 let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
-  : Pure (e':exp & typing empty e' t)
-     (requires True)
-     (ensures (fun (| e', ht' |) -> is_value e'))
+  : Tot (e':exp{is_value e'} & typing empty e' t)
   = match strong_progress ht with
     | Inl _ -> (| e, ht |)
     | Inr (| _, _, ht' |) -> 

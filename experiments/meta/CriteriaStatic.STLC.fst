@@ -28,17 +28,45 @@ noeq type intT = { ct : STLC.typ }
 val comp_int : intS -> intT
 let comp_int i = { ct = i.ct_stlc }
 
-type progT (i:intT) = pt:STLC.exp & STLC.typing STLC.empty pt (STLC.TArr i.ct STLC.TNat)
-type ctxT (i:intT) = ct:STLC.exp & STLC.typing STLC.empty ct i.ct
-type wholeT = wt:STLC.exp & STLC.typing STLC.empty wt (STLC.TArr STLC.TUnit STLC.TNat)
+type progT (i:intT) = pt:STLC.exp{STLC.is_value pt} & STLC.typing STLC.empty pt (STLC.TArr i.ct STLC.TNat)
+type ctxT (i:intT) = ct:STLC.exp{STLC.is_value ct} & STLC.typing STLC.empty ct i.ct
+type wholeT = wt:STLC.exp{STLC.is_value wt} & STLC.typing STLC.empty wt (STLC.TArr STLC.TUnit STLC.TNat)
 
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT = 
   let (| _, htp |) = pt in
   let (| _, htc |) = ct in
-  STLC.thunk_exp (STLC.TyApp htp htc)
+  let (| ewt, htwt |) = STLC.thunk_exp (STLC.TyApp htp htc) in
+  (| ewt, htwt |)
 
 val behT : wt:wholeT -> set_prop 
 let behT (| ew, htw |) = STLC.sem (STLC.TyApp htw STLC.TyUnit)
+
+(** We can replace the refinement that pt, wt and ct are values,
+    with a refinement that pt, ct and wt can be stepped to a value,
+    and then we will need the following lemmas:
+
+assume val pure_step_preserves_behT_wt (wt:wholeT)
+ : Lemma (ensures (
+    ~(STLC.is_value (dfst wt)) /\
+    (forall (wt':wholeT). STLC.pure_step (dfst wt) (dfst wt') ==> 
+      behT wt ≡ behT wt')))
+
+assume val pure_step_preserves_behT_pt #i (pt:progT i) (ct:ctxT i)
+ : Lemma (ensures (
+    ~(STLC.is_value (dfst pt)) /\
+    (forall (pt':progT i). STLC.pure_step (dfst pt) (dfst pt') ==> 
+      behT (linkT pt ct) ≡ behT (linkT pt' ct))))
+
+assume val pure_steps_preserves_behT_wt (wt:wholeT)
+ : Lemma (ensures (
+    forall (wt':wholeT). STLC.pure_steps (dfst wt) (dfst wt') ==> 
+      behT wt ≡ behT wt'))
+
+assume val pure_steps_preserves_behT_pt #i (pt:progT i) (ct:ctxT i)
+ : Lemma (ensures (
+    forall (pt':progT i). STLC.pure_steps (dfst pt) (dfst pt') ==> 
+      behT (linkT pt ct) ≡ behT (linkT pt' ct)))
+**) 
 
 (** Compiler correctness **)
 
@@ -176,24 +204,11 @@ let test123 =
   assert ((fun (x:nat) -> x) ≍ x1ty) by (compute ())
 
 
-let progress_preserves_beh (wt:wholeT)
-  : Lemma (
-      match STLC.strong_progress (dsnd wt) with
-      | Inl () -> True
-      | Inr (| ewt', s, htwet' |) -> behT wt ≡ behT (| ewt', htwet' |))
-  = ()
-
-(** This is very awkward **)
-let rec eval_preserves_beh (wt:wholeT)
-  : Lemma
-      (ensures (behT wt ≡ behT (STLC.eval (dsnd wt))))
-      (decreases (dfst wt))
-  = match STLC.strong_progress (dsnd wt) with
-    | Inl () -> ()
-    | Inr (| ewt', s, htwet' |) -> begin
-      assume (ewt' << dfst wt); (** TODO: proof of termination **)
-      eval_preserves_beh (| ewt', htwet' |)
-    end 
+(** we don't really need this since F* can figure it out by itself, but
+    it is useful to keep track where it is used. If we change the refinement
+    on pt, ct and wt, then we will need to replace it. **)
+let eval_value_is_id (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
+  : Lemma (STLC.is_value e ==> STLC.eval ht == (| e, ht |)) = ()
 
 let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
   let (| ew, htw |) = wt in
@@ -205,10 +220,10 @@ let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) =
     assert (ws ≍ htw);
     // unfolding ≍
     let (| ewt', htwt' |) = STLC.eval htw in
+    eval_value_is_id htw;
+    assert (behT (| ewt', htwt' |) ≡ behT wt);
     assert (ws ≍ htwt'); // wt' is a value (Lam) and returns a nat
     assert (behS ws ≡ behT (| ewt', htwt' |));
-    eval_preserves_beh wt;
-    assert (behT (| ewt', htwt' |) ≡ behT wt);
     assert (behS ws ≡ behT wt)
   end
 
@@ -223,6 +238,9 @@ let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
     with begin
       // unfolding ≍
       let (| ept', htpt' |) = STLC.eval (dsnd pt) in
+      eval_value_is_id (dsnd pt);
+      assert (behT (linkT pt ct) ≡ behT (linkT (| ept', htpt' |) ct));
+
       // ps ≍ (dsnd pt) implies:
       assert (ps ≍ htpt');
       
@@ -237,7 +255,6 @@ let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       assume (ps cs ≍ htwtapp);
 
       assert (behS (linkS ps cs) ≡ behT (linkT (| ept', htpt' |) ct));
-      assume (behT (linkT (| ept', htpt' |) ct) ≡ behT (linkT pt ct));
       assert (behS (linkS ps cs) ≡ behT (linkT pt ct))
     end
   end
