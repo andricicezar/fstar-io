@@ -668,16 +668,6 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
 //        let b : bytes = Bytes.create (convert v1) v2 in
 //        b
 
-let elab_exp' (g:env) (e:exp{ELam? e}) (t:typ) (h:typing g e t) (ve:venv g)
-  : (elab_typ t) =
-  match e with
-  | ELam t1 e1 ->
-       let TyLam t1' #_ #t2 h1 = h in
-       assert (t1' == t1);
-       assert (t == TArr t1 t2);
-       let w : elab_typ t1 -> Tot (elab_typ t2) =
-         (fun x -> elab_exp h1 (vextend x ve)) in
-       cast_TArr w
 
 let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
      admit ();
