@@ -608,8 +608,6 @@ let vempty : venv empty = fun _ -> assert false
 let vextend #t (x:elab_typ t) (#g:env) (ve:venv g) : venv (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
-#push-options "--compat_pre_core 1"
-
 let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
 open FStar.List.Tot
