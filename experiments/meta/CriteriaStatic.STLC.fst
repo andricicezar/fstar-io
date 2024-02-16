@@ -210,6 +210,16 @@ let test123 =
 let eval_value_is_id (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
   : Lemma (STLC.is_value e ==> STLC.eval ht == (| e, ht |)) = ()
 
+val elab_naive_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
+  : Lemma (STLC.elab_exp ht STLC.vempty ≍ ht)
+let rec elab_naive_rel #e #t ht =
+  match ht with
+  | STLC.TyUnit -> ()
+  | STLC.TyZero -> ()
+  | STLC.TySucc _ -> STLC.elab_eq_elab_eval ht
+  | STLC.TyApp h1 h2 -> admit ()
+  | _ -> admit ()
+
 let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
   let (| ew, htw |) = wt in
   introduce 
@@ -245,14 +255,15 @@ let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       assert (ps ≍ htpt');
       
       let cs = backtranslate_ctx ct in
-      assume (cs ≍ dsnd ct);
+      elab_naive_rel (dsnd ct);
+      assert (cs ≍ dsnd ct);
 
       let htbody = STLC.TyApp htpt' (dsnd ct) in
       assert (ps cs ≍ htbody);
 
       let (| ewt, htwt |) = STLC.thunk_exp htbody in
       let htwtapp = STLC.TyApp htwt STLC.TyUnit in
-      assume (ps cs ≍ htwtapp);
+      assume (ps cs ≍ htwtapp); // this should be simple to prove
 
       assert (behS (linkS ps cs) ≡ behT (linkT (| ept', htpt' |) ct));
       assert (behS (linkS ps cs) ≡ behT (linkT pt ct))
