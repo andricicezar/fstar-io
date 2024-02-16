@@ -675,4 +675,46 @@ let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUni
 
 (** ** Semantics **)
 let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
-     elab_exp (dsnd (eval hte)) vempty
+
+(** ** Properties of eval elab **)
+
+let rec eval_esucc_commute (#e:exp) (ht:typing empty e TNat)
+  : Lemma (ensures (
+    let ht : typing empty e TNat = ht in
+    let (| e', ht' |) = eval ht in
+    let (| e'', ht'' |) = eval (TySucc ht) in
+    ESucc e' == e'' /\
+    TySucc ht' == ht''
+  )) (decreases ht) =
+  if is_value e then ()
+  else begin
+    calc (==) {
+      eval #(ESucc e) (TySucc ht);
+      == {}
+      (let (| e', s |) = progress ht in
+      eval #(ESucc e') (TySucc (preservation_step ht s)));
+    };
+    let (| e', s |) = progress ht in
+    let ht' = preservation_step ht s in
+    assume (ht' << ht); (** TODO: proof of termination **)
+    eval_esucc_commute ht'
+  end
+
+let rec elab_eq_elab_eval #e #t (ht:typing empty e t)
+  : Lemma (elab_exp ht vempty == elab_exp (dsnd (eval ht)) vempty) =
+  match ht with
+  | TyUnit -> ()
+  | TyZero -> ()
+  | TySucc hts ->
+      calc (==) {
+        elab_exp (TySucc hts) vempty;
+        == { }
+        1 + elab_exp hts vempty;
+        == {  elab_eq_elab_eval hts }
+        1 + elab_exp (dsnd (eval hts)) vempty;
+        == { } 
+        elab_exp (TySucc (dsnd (eval hts))) vempty;
+        == { eval_esucc_commute hts }
+        elab_exp (dsnd (eval (TySucc hts))) vempty;
+      }
+  | _ -> admit ()
