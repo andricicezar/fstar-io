@@ -668,13 +668,13 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
 //        let b : bytes = Bytes.create (convert v1) v2 in
 //        b
 
-
 let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
      admit ();
      (| ELam TUnit e, TyLam TUnit ht |)
 
 (** ** Semantics **)
 let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
+     elab_exp (dsnd (eval hte)) vempty
 
 (** ** Properties of eval elab **)
 
