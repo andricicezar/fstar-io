@@ -162,7 +162,6 @@ let rel_whole (r:rel) (ws:wholeS) (wt:wholeT) : Type0 =
 let rel_pprog (r:rel) i ps pt : Type0 =
   ps `r` (dsnd pt) ==> rhc_1 #i ps pt
 
-// unfold val naive_rel : rel
 val (≍) : rel
 let rec (≍) #ty fst_e hte =
   // forall stlc_e', hte', ss:steps stlc_e stlc_e'. is_value stlc_e' ==>
@@ -210,9 +209,9 @@ let test123 =
 let eval_value_is_id (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
   : Lemma (STLC.is_value e ==> STLC.eval ht == (| e, ht |)) = ()
 
-val elab_naive_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
+val elab_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
   : Lemma (STLC.elab_exp ht STLC.vempty ≍ ht)
-let rec elab_naive_rel #e #t ht =
+let rec elab_rel #e #t ht =
   match ht with
   | STLC.TyUnit -> ()
   | STLC.TyZero -> ()
@@ -220,7 +219,7 @@ let rec elab_naive_rel #e #t ht =
   | STLC.TyApp h1 h2 -> admit ()
   | _ -> admit ()
 
-let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
+let rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
   let (| ew, htw |) = wt in
   introduce 
     ws ≍ (dsnd wt)
@@ -237,7 +236,7 @@ let naive_rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) =
     assert (behS ws ≡ behT wt)
   end
 
-let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) = 
+let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) = 
   introduce 
     ps ≍ (dsnd pt)
   ==> 
@@ -255,7 +254,7 @@ let naive_rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       assert (ps ≍ htpt');
       
       let cs = backtranslate_ctx ct in
-      elab_naive_rel (dsnd ct);
+      elab_rel (dsnd ct);
       assert (cs ≍ dsnd ct);
 
       let htbody = STLC.TyApp htpt' (dsnd ct) in
