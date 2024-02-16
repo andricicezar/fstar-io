@@ -614,70 +614,57 @@ let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr 
 
 open FStar.List.Tot
 
+let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
+     if n = 0 then acc else fnrec (n-1) (iter acc) iter
+
 let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
   : Tot (elab_typ t) (decreases e) =
-  match e with
-  | EUnit -> ()
-  | EZero -> 0
-  | ESucc e ->
-       let TySucc h1 = h in
-       assert (t == TNat);
-       let v = elab_exp h1 ve in
-       v+1
-  | ENRec e1 e2 e3 ->
-       let TyNRec h1 h2 h3 = h in
+  match h with
+  | TyUnit -> ()
+  | TyZero -> 0
+  | TySucc hs ->
+       1 + (elab_exp hs ve)
+  | TyNRec h1 h2 h3 ->
        let v1 = elab_exp h1 ve in
        let v2 : elab_typ t = elab_exp h2 ve in
        let v3 : elab_typ (TArr t t) = elab_exp h3 ve in
-       let rec f (n : nat) : Tot (elab_typ t) =
-         if n = 0 then v2 else f (n - 1) in
-       f v1
-  | EInl e ->
-       let TyInl #_ #_ #t1 #t2 h1 = h in
+       fnrec #(elab_typ t) v1 v2 v3
+  | TyInl #_ #_ #t1 #t2 h1 ->
        let v = elab_exp h1 ve in
        Inl #(elab_typ t1) #(elab_typ t2) v
-  | EInr e ->
-       let TyInr #_ #_ #t1 #t2 h1 = h in
+  | TyInr #_ #_ #t1 #t2 h1 ->
        let v = elab_exp h1 ve in
        Inr #(elab_typ t1) #(elab_typ t2) v
-  | ECase e1 e2 e3 ->
-       let TyCase #_ #_ #_ #_ #t1 #t2 #t3 h1 h2 h3 = h in
+  | TyCase #_ #_ #_ #_ #t1 #t2 #t3 h1 h2 h3 ->
        let v1 = elab_exp h1 ve in
        let v2 = elab_exp h2 ve in
        let v3 = elab_exp h3 ve in
        (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
-  | EVar x -> ve x
-  | ELam t1 e1 ->
-       let TyLam t1' #_ #t2 h1 = h in
-       assert (t1' == t1);
+  | TyVar x -> ve x
+  | TyLam t1 #_ #t2 h1 ->
        assert (t == TArr t1 t2);
        let w : elab_typ t1 -> Tot (elab_typ t2) =
          (fun x -> elab_exp h1 (vextend x ve)) in
        cast_TArr w
-  | EApp e1 e2 ->
-       let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
+  | TyApp #_ #_ #_ #t1 #t2 h1 h2 ->
        assert ((elab_typ t) == (elab_typ t2));
        (* TODO: Should we change the order here, first evaluate argument? *)
        let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
        let v2 : elab_typ t1 = elab_exp h2 ve in
        v1 v2
-  | EFst e ->
-       let TyFst #_ #_ #t1 #t2 h1 = h in
+  | TyFst #_ #_ #t1 #t2 h1 ->
        let v = elab_exp h1 ve in
        fst #(elab_typ t1) #(elab_typ t2) v
-  | ESnd e ->
-       let TySnd #_ #_ #t1 #t2 h1 = h in
+  | TySnd #_ #_ #t1 #t2 h1 ->
        let v = elab_exp h1 ve in
        snd #(elab_typ t1) #(elab_typ t2) v
-  | EPair e1 e2 ->
-       let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
+  | TyPair #_ #_ #_ #t1 #t2 h1 h2 ->
        let v1 = elab_exp h1 ve in
        let v2 = elab_exp h2 ve in
        (v1, v2)
-//   | EStringLit s -> s
-//   | EByteLit b -> b
-//   | EBytesCreate e1 e2 ->
-//        let TyBytesCreate h1 h2 = h in
+//   | TyStringLit s -> s
+//   | TyByteLit b -> b
+//   | TyBytesCreate h1 h2 ->
 //        let v1 : elab_typ TNat = elab_exp h1 ve in
 //        let v2 : elab_typ TByte = elab_exp h2 ve in
 //        let b : bytes = Bytes.create (convert v1) v2 in
