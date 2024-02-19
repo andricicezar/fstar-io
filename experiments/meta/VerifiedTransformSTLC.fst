@@ -76,28 +76,32 @@ let eq2_trans (g:env) (ty:term) (t0 t1 t2:term)
 let mk_rel (stlc_ty fs_exp stlc_exp stlc_ht : term) : Tot term =
   mk_app (`CriteriaStatic.STLC.op_u8781) [(stlc_ty, Q_Implicit); (fs_exp, Q_Explicit); (stlc_exp, Q_Implicit); (stlc_ht, Q_Explicit)]	
 
-let rel_subst (g:env) (fs_exp fs_exp' stlc_exp:term) stlc_ht
+let rel_subst (g:env) stlc_ty (fs_exp fs_exp' stlc_exp:term) stlc_ht
   : TacP unit
-         (requires valid g (mk_eq2 (`nat) fs_exp fs_exp') /\ 
-                   valid g (mk_rel (`STLC.TNat) fs_exp' stlc_exp stlc_ht))
-         (ensures fun _ -> valid g (mk_rel (`STLC.TNat) fs_exp stlc_exp stlc_ht))
+         (requires valid g (mk_eq2 (`(STLC.elab_typ (`#stlc_ty))) fs_exp fs_exp') /\ 
+                   valid g (mk_rel stlc_ty fs_exp' stlc_exp stlc_ht))
+         (ensures fun _ -> valid g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht))
 = admit()
 
-let rec compile_to_stlc (g:env) (fs_exp:term{tot_typing g fs_exp (`nat)})
+let rec compile_to_stlc
+  (g:env)
+  (stlc_ty:term)
+  (fs_exp:term)
   : TacP (term * term)
-      (requires True)
+      (requires tot_typing g stlc_ty (`STLC.typ) /\
+                tot_typing g fs_exp (`(STLC.elab_typ (`#stlc_ty))))
       (ensures fun (stlc_exp, stlc_ht) -> 
-        tot_typing g stlc_exp (`STLC.exp) /\                                  // STLC exp
-        tot_typing g stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) STLC.TNat)) /\  // well typed STLC exp
-        valid g (mk_rel (`STLC.TNat) fs_exp stlc_exp stlc_ht))                    // equivalent semantics
+        tot_typing g stlc_exp (`STLC.exp) /\                                         // STLC exp
+        tot_typing g stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) (`#stlc_ty))) /\ // well typed STLC exp
+        valid g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht))                       // equivalent semantics
 = 
   match inspect fs_exp with
   | Tv_FVar _ ->
     (* inline the top-level definition *)
-    let fs_exp' = norm_term_env (`nat) g [delta] fs_exp in
-    let (stlc_exp, stlc_ht) = compile_to_stlc g fs_exp' in
-    rel_subst g fs_exp fs_exp' stlc_exp stlc_ht;
-    assert (valid g (mk_rel (`STLC.TNat) fs_exp stlc_exp stlc_ht));
+    let fs_exp' = norm_term_env (`(STLC.elab_typ (`#stlc_ty))) g [delta] fs_exp in
+    let (stlc_exp, stlc_ht) = compile_to_stlc g stlc_ty fs_exp' in
+    rel_subst g stlc_ty fs_exp fs_exp' stlc_exp stlc_ht;
+    assert (valid g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht));
     (stlc_exp, stlc_ht)
   
   // | Tv_Const (C_Int x) ->
@@ -115,11 +119,13 @@ let valid_wtf (g:env) (phi:term)
     assert (valid g phi ==> goal) by (compute ()); /// WHY????
     () // ????
 
-let specialize (nm':string) (fs_exp:term) : dsl_tac_t = fun g ->
-  let fs_ht : tot_typing g fs_exp (`nat) = dyn_typing () in
+let specialize (nm':string) (stlc_ty:term) (fs_exp:term) : dsl_tac_t = fun g ->
+  let stlc_ty_ht : tot_typing g stlc_ty (`STLC.typ) = dyn_typing () in
+  FStar.Squash.return_squash stlc_ty_ht;
+  let fs_ht : tot_typing g fs_exp (`(STLC.elab_typ (`#stlc_ty))) = dyn_typing () in
   FStar.Squash.return_squash fs_ht;
-  let (stlc_exp, stlc_ht) = compile_to_stlc g fs_exp in
-  let phi = mk_rel (`STLC.TNat) fs_exp stlc_exp stlc_ht in
+  let (stlc_exp, stlc_ht) = compile_to_stlc g stlc_ty fs_exp in
+  let phi = mk_rel stlc_ty fs_exp stlc_exp stlc_ht in
   valid_wtf g phi;
   [
    mk_checked_let g nm' stlc_exp (`STLC.exp);
@@ -130,4 +136,5 @@ let specialize (nm':string) (fs_exp:term) : dsl_tac_t = fun g ->
   
 let src1 : nat = 4
 
-%splice_t[tgt1;tgt1_pf] (specialize "tgt1" (`src1))
+%splice_t[tgt1;tgt1_pf] (specialize "tgt1" (`STLC.TNat) (`src1))
+
