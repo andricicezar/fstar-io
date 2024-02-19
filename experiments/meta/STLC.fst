@@ -700,7 +700,7 @@ let rec eval_esucc_commute (#e:exp) (ht:typing empty e TNat)
     eval_esucc_commute ht'
   end
 
-let rec elab_eq_elab_eval #e #t (ht:typing empty e t)
+let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
   : Lemma (elab_exp ht vempty == elab_exp (dsnd (eval ht)) vempty) =
   match ht with
   | TyUnit -> ()
@@ -710,7 +710,7 @@ let rec elab_eq_elab_eval #e #t (ht:typing empty e t)
         elab_exp (TySucc hts) vempty;
         == { }
         1 + elab_exp hts vempty;
-        == {  elab_eq_elab_eval hts }
+        == {  elab_invariant_to_eval hts }
         1 + elab_exp (dsnd (eval hts)) vempty;
         == { } 
         elab_exp (TySucc (dsnd (eval hts))) vempty;
