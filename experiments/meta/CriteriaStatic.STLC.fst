@@ -209,16 +209,6 @@ let test123 =
 let eval_value_is_id (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
   : Lemma (STLC.is_value e ==> STLC.eval ht == (| e, ht |)) = ()
 
-val elab_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
-  : Lemma (STLC.elab_exp ht STLC.vempty ≍ ht)
-let rec elab_rel #e #t ht =
-  match ht with
-  | STLC.TyUnit -> ()
-  | STLC.TyZero -> ()
-  | STLC.TySucc _ -> STLC.elab_eq_elab_eval ht
-  | STLC.TyApp h1 h2 -> admit ()
-  | _ -> admit ()
-
 let rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) = 
   let (| ew, htw |) = wt in
   introduce 
@@ -235,6 +225,16 @@ let rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) =
     assert (behS ws ≡ behT (| ewt', htwt' |));
     assert (behS ws ≡ behT wt)
   end
+
+val elab_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
+  : Lemma (STLC.elab_exp ht STLC.vempty ≍ ht)
+let rec elab_rel #e #t ht =
+  match ht with
+  | STLC.TyUnit -> ()
+  | STLC.TyZero -> ()
+  | STLC.TySucc _ -> STLC.elab_invariant_to_eval ht
+  | STLC.TyApp h1 h2 -> admit ()
+  | _ -> admit ()
 
 let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) = 
   introduce 
