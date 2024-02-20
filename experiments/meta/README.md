@@ -1,7 +1,7 @@
 TODOs
 - [x] Define Deep Embedding of STLC ([`STLC.fst`](./STLC.fst))
     - [x] Var, App, Lam, Unit, Zero, Succ, NRec, Inl, Inr, Case, Fst, Snd, Pair
-- [x] Define Operational Semantics using Progress and Preservation ([`eval`](./STLC.fst))
+- [x] Define Evaluation using Progress and Preservation ([`eval`](./STLC.fst))
     - [x] Prove Progress and Preservation
     - [ ] Prove termination of `eval`. One can build on top of the [proof that normalization halts](https://softwarefoundations.cis.upenn.edu/plf-current/Norm.html) from Software Foundations, which uses a logical predicate.
 - [x] Define elaboration of STLC expressions into F* ([`elab_exp`](./STLC.fst))
