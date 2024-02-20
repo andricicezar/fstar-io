@@ -1,9 +1,11 @@
 TODOs
 - [x] Define Deep Embedding of STLC ([`STLC.fst`](./STLC.fst))
+    - [x] Var, App, Lam, Unit, Zero, Succ, NRec, Inl, Inr, Case, Fst, Snd, Pair
 - [x] Define Operational Semantics using Progress and Preservation ([`eval`](./STLC.fst))
-    - [ ] Prove termination of `eval`. One can build on top of the [proof that normalization halts](https://softwarefoundations.cis.upenn.edu/plf-current/Norm.html) from Software Foundations.
+    - [x] Prove Progress and Preservation
+    - [ ] Prove termination of `eval`. One can build on top of the [proof that normalization halts](https://softwarefoundations.cis.upenn.edu/plf-current/Norm.html) from Software Foundations, which uses a logical predicate.
 - [x] Define elaboration of STLC expressions into F* ([`elab_exp`](./STLC.fst))
-- [x] Define a relation between F* values and STLC expressions ([`≍`](./CriteriaStatic.STLC.fst))
+- [x] Define a Cross-Language Logical Relation between F* values and STLC expressions ([`≍`](./CriteriaStatic.STLC.fst))
 - [x] Prove that relation `≍` implies compiler correctness of whole programs ([`rel_implies_cc`](./CriteriaStatic.STLC.fst)).
 - [x] Prove that relation `≍` implies RHC 
     - [ ] Prove that a STLC expression (representing contexts) is in rel `≍` with its elaboration ([`elab_rel`](./CriteriaStatic.STLC.fst)). 
