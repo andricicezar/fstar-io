@@ -562,6 +562,7 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      //      let TyBytesCreate h1 h2 = ht in
      //      TyBytesCreate h1 (preservation_step h2 hs2)
 
+(** TODO: rename. strong progress means smth else see Software Foundations **)
 let strong_progress #e #t 
               (ht:typing empty e t) 
   : either (squash (is_value e))
