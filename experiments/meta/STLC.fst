@@ -674,6 +674,7 @@ let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUni
 
 (** ** Semantics **)
 let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
+     (** TODO: replace elab_exp with something more simple. here we deal only with nats. **)
      elab_exp (dsnd (eval hte)) vempty
 
 (** ** Properties of eval elab **)

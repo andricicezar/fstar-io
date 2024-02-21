@@ -83,16 +83,13 @@ let valid (g:env) (phi:term) : prop =
 let cc (ws:wholeS) (wt:wholeT) =
   behS ws ≡ behT wt
 
-val compile_whole_stat : 
+val compile_whole : 
   (g:env) ->
   (ws:term{tot_typing g ws (`wholeS)}) ->
   Tac (wt:term{
     tot_typing g wt (`wholeT) /\
     (** compiler correctness **)
     valid g (`(cc (`#ws) (`#wt)))
-    (** soundness **)
-    // in this PoC, we cannot type this because whole programs do not have an interface
-    // valid g (`(behT (`#wt) ⊆ i.p_post))
   })
 (** 
   If behT is an operational semantics, it has to be small-step because we have external non-determinism.
@@ -117,6 +114,7 @@ let rhc (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx ct = STLC.elab_exp (dsnd ct) STLC.vempty
 
+(** TODO: can we prove RrHP from this since we got rid off the exists? **)
 let rhc_1 (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
   forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct) 
 
@@ -149,50 +147,54 @@ val compile_prog :
 type rel = 
   #ty:STLC.typ -> 
   STLC.elab_typ ty ->             (** F* value **)
-  #e:STLC.exp ->                  (** STLC value **)
+  #e:STLC.exp ->                  (** STLC expression **)
   STLC.typing STLC.empty e ty -> 
   Type0
 
 (** we want to instantiate this with the result of the compiler,
-    which should give as a ws and a wt and a proof of ws `r` wt,
-    thus no need for equivalence **)
+    which should give for a ws a wt and a proof of ws `r` wt **)
 let rel_whole (r:rel) (ws:wholeS) (wt:wholeT) : Type0 =
   ws `r` (dsnd wt) ==> cc ws wt
 
 let rel_pprog (r:rel) i ps pt : Type0 =
   ps `r` (dsnd pt) ==> rhc_1 #i ps pt
 
+(** Cross-language logical relation,
+    the logical relation is asymmetric because it relates always F* values with STLC's values and expressions *)
+(** TODO: usually, this is split into a relation on target values and on target expressions **)
 val (≍) : rel
-let rec (≍) #ty fst_e hte =
+let rec (≍) #ty fs_v stlc_ht' =
   // forall stlc_e', hte', ss:steps stlc_e stlc_e'. is_value stlc_e' ==>
   (** First, we make sure that stlc_e contains a value. (fst_e is already a value)**)
-  let (| stlc_e, hte |) = STLC.eval hte in (** TODO: is it ok to use eval in here? **)
+  let (| stlc_e, stlc_ht |) = STLC.eval stlc_ht' in (** it is ok to use eval when it means a big-step operational semantics
+                                                       and not an interpreter (in the longer run) **)
   // assert (STLC.is_value stlc_e);
-  match hte with
+  match stlc_ht with
   // base types
   | STLC.TyUnit
   | STLC.TyZero
   | STLC.TySucc _ ->
     (** One can avoid using elab_exp, but using it simplifies proofs later **)
-    fst_e == STLC.elab_exp hte STLC.vempty
+    fs_v == STLC.elab_exp stlc_ht STLC.vempty
   
   // polymorphic types
   | STLC.TyInl #_ #_ #t1 t2 ht1 ->
-    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
-    Inl? fst_sum /\ (Inl?.v fst_sum ≍ ht1)
+    let fst_inl : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fs_v in
+    Inl? fst_inl /\ (Inl?.v fst_inl ≍ ht1)
   | STLC.TyInr #_ #_ t1 #t2 ht2 ->
-    let fst_sum : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fst_e in
-    Inr? fst_sum /\ (Inr?.v fst_sum ≍ ht2)
-  | STLC.TyPair #_ #_ #_ #t1 #t2 ht1 ht2 ->
-    let (fst_fst, fst_snd) : (STLC.elab_typ t1 * STLC.elab_typ t2) = fst_e in
-    (fst_fst ≍ ht1) /\ (fst_snd ≍ ht2)
+    let fs_inr : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fs_v in
+    Inr? fs_inr /\ (Inr?.v fs_inr ≍ ht2)
+  | STLC.TyPair #_ #_ #_ #t1 #t2 ht_fst ht_snd ->
+    let (fs_fst, fs_snd) : (STLC.elab_typ t1 * STLC.elab_typ t2) = fs_v in
+    (fs_fst ≍ ht_fst) /\ (fs_snd ≍ ht_snd)
 
   // lambda
   | STLC.TyLam tv #_ #t' _ -> 
-    let fst_f : STLC.elab_typ tv -> STLC.elab_typ t' = fst_e in
-    forall v (htv:STLC.typing STLC.empty v tv). 
-      let fst_v = STLC.elab_exp htv STLC.vempty in
-      (fst_v ≍ htv) ==> ((fst_f fst_v) ≍ (STLC.TyApp hte htv))
+    let fs_f : STLC.elab_typ tv -> STLC.elab_typ t' = fs_v in
+    forall stlc_x (ht_x:STLC.typing STLC.empty stlc_x tv). (** all values possible in STLC **)
+      forall fs_x.
+      // let fst_v = STLC.elab_exp htv STLC.vempty in (** this is non-standard, and it may produce problems in HO cases **)
+        (fs_x ≍ ht_x) ==> ((fs_f fs_x) ≍ (STLC.TyApp stlc_ht ht_x))
 
 let x1 : STLC.exp =
     STLC.ELam STLC.TNat (STLC.EVar 0)
