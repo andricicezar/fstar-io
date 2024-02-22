@@ -572,8 +572,8 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      //      let TyBytesCreate h1 h2 = ht in
      //      TyBytesCreate h1 (preservation_step h2 hs2)
 
-(** TODO: rename. strong progress means smth else see Software Foundations **)
-let strong_progress #e #t 
+(** Phil Wadler: Progress + Preservation = Evaluation. **)
+let eval_step #e #t 
               (ht:typing empty e t) 
   : either (squash (is_value e))
            (e':exp & step e e' & typing empty e' t)
@@ -581,10 +581,10 @@ let strong_progress #e #t
     else let (| e', s |) = progress ht in
          let ht' = preservation_step ht s in
          Inr (| e', s, ht' |)
-(** Phil Wadler: Progress + Preservation = Evaluation. **)
+
 let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
   : Tot (e':exp{is_value e'} & typing empty e' t)
-  = match strong_progress ht with
+  = match eval_step ht with
     | Inl _ -> (| e, ht |)
     | Inr (| _, _, ht' |) -> 
           admit (); (** TODO: proof of termination required **)
