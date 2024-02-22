@@ -22,6 +22,16 @@ type typ =
 //   | TFDesc  : typ
 //   | TString : typ
 
+let rec is_fo_typ (t:typ) =
+  match t with
+  | TUnit -> True
+  | TNat -> True
+  | TPair t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
+  | TSum t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
+  | TArr _ _ -> False
+
+type fo_typ = t:typ{is_fo_typ t}
+
 type var = nat
 
 open FStar.Bytes
@@ -672,11 +682,6 @@ let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
 let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
      admit ();
      (| ELam TUnit e, TyLam TUnit ht |)
-
-(** ** Semantics **)
-let sem #t (#e:exp) (hte:typing empty e t) : elab_typ t = 
-     (** TODO: replace elab_exp with something more simple. here we deal only with nats. **)
-     elab_exp (dsnd (eval hte)) vempty
 
 (** ** Properties of eval elab **)
 

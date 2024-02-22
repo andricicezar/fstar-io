@@ -1,10 +1,30 @@
 module CriteriaStatic.STLC
 module STLC = STLC
 
+(** Relation between First Order Values of F* and STLC **)
+let rec (∽) (#t:STLC.fo_typ) (fs_v:STLC.elab_typ t) (#e:STLC.exp{STLC.is_value e}) (stlc_ht:STLC.typing STLC.empty e t) : Type0 =
+  match stlc_ht with
+  | STLC.TyUnit -> fs_v == ()
+  | STLC.TyZero -> fs_v == 0
+  | STLC.TySucc ht -> fs_v > 0 /\ (fs_v-1) ∽ ht
+  
+  | STLC.TyInl #_ #_ #t1 t2 ht1 ->
+    let fst_inl : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fs_v in
+    Inl? fst_inl /\ (Inl?.v fst_inl ∽ ht1)
+  | STLC.TyInr #_ #_ t1 #t2 ht2 ->
+    let fs_inr : either (STLC.elab_typ t1) (STLC.elab_typ t2) = fs_v in
+    Inr? fs_inr /\ (Inr?.v fs_inr ∽ ht2)
+  | STLC.TyPair #_ #_ #_ #t1 #t2 ht_fst ht_snd ->
+    let (fs_fst, fs_snd) : (STLC.elab_typ t1 * STLC.elab_typ t2) = fs_v in
+    (fs_fst ∽ ht_fst) /\ (fs_snd ∽ ht_snd)
+
 (** *** Intrinsic criteria, static quoting/unquoting  **)
-type set_prop = nat
-let (⊆) (s0 s1:set_prop) : Type0 = False
-let (≡) (s0 s1:set_prop) : Type0 = s0 == s1
+type propS (t:STLC.fo_typ) = STLC.elab_typ t
+type propT (t:STLC.fo_typ) = e:STLC.exp{STLC.is_value e} & STLC.typing STLC.empty e t (** first order STLC value **)
+
+// let (⊆) (s0 s1:set_prop) : Type0 = False
+let (≌) (#t:STLC.fo_typ) (ss:propS t) (st:propT t) : Type0 =
+  ss ∽ (dsnd st)
 
 noeq type intS = { 
   ct_stlc : STLC.typ;
@@ -18,7 +38,7 @@ type wholeS = (unit -> Tot nat)
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (fun () -> ps cs)
 
-val behS : wholeS -> set_prop
+val behS : wholeS -> propS (STLC.TNat)
 let behS ws = ws ()
 
 (** Target **)
@@ -38,8 +58,8 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
   let (| ewt, htwt |) = STLC.thunk_exp (STLC.TyApp htp htc) in
   (| ewt, htwt |)
 
-val behT : wt:wholeT -> set_prop 
-let behT (| ew, htw |) = STLC.sem (STLC.TyApp htw STLC.TyUnit)
+val behT : wt:wholeT -> propT (STLC.TNat)
+let behT (| ew, htw |) = STLC.eval (STLC.TyApp htw STLC.TyUnit)
 
 (** We can replace the refinement that pt, wt and ct are values,
     with a refinement that pt, ct and wt can be stepped purely to a value,
@@ -49,23 +69,23 @@ assume val pure_step_preserves_behT_wt (wt:wholeT)
  : Lemma (ensures (
     ~(STLC.is_value (dfst wt)) /\
     (forall (wt':wholeT). STLC.pure_step (dfst wt) (dfst wt') ==> 
-      behT wt ≡ behT wt')))
+      behT wt ≌ behT wt')))
 
 assume val pure_step_preserves_behT_pt #i (pt:progT i) (ct:ctxT i)
  : Lemma (ensures (
     ~(STLC.is_value (dfst pt)) /\
     (forall (pt':progT i). STLC.pure_step (dfst pt) (dfst pt') ==> 
-      behT (linkT pt ct) ≡ behT (linkT pt' ct))))
+      behT (linkT pt ct) ≌ behT (linkT pt' ct))))
 
 assume val pure_steps_preserves_behT_wt (wt:wholeT)
  : Lemma (ensures (
     forall (wt':wholeT). STLC.pure_steps (dfst wt) (dfst wt') ==> 
-      behT wt ≡ behT wt'))
+      behT wt ≌ behT wt'))
 
 assume val pure_steps_preserves_behT_pt #i (pt:progT i) (ct:ctxT i)
  : Lemma (ensures (
     forall (pt':progT i). STLC.pure_steps (dfst pt) (dfst pt') ==> 
-      behT (linkT pt ct) ≡ behT (linkT pt' ct)))
+      behT (linkT pt ct) ≌ behT (linkT pt' ct)))
 **) 
 
 (** Compiler correctness **)
@@ -81,7 +101,7 @@ let valid (g:env) (phi:term) : prop =
   squash (tot_typing g t_unit (mk_squash phi))
 
 let cc (ws:wholeS) (wt:wholeT) =
-  behS ws ≡ behT wt
+  behS ws ≌ behT wt
 
 val compile_whole : 
   (g:env) ->
@@ -109,14 +129,14 @@ val compile_whole :
 (** The order of the quantifiers makes this RHC (Robust Hyperproperty Preservation) **)
 let rhc (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
   forall (ct:ctxT (comp_int i)).
-    exists (cs:ctxS i). behS (linkS ps cs) ≡ behT (linkT pt ct) 
+    exists (cs:ctxS i). behS (linkS ps cs) ≌ behT (linkT pt ct) 
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx ct = STLC.elab_exp (dsnd ct) STLC.vempty
 
 (** TODO: can we prove RrHP from this since we got rid off the exists? **)
 let rhc_1 (#i:intS) (ps:progS i) (pt:progT (comp_int i)) =
-  forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct) 
+  forall ct. behS (linkS ps (backtranslate_ctx ct)) ≌ behT (linkT pt ct) 
 
 val compile_prog :
   (g:env) ->
@@ -175,7 +195,7 @@ let rec (≍) #ty fs_v stlc_ht' =
   | STLC.TyZero
   | STLC.TySucc _ ->
     (** One can avoid using elab_exp, but using it simplifies proofs later **)
-    fs_v == STLC.elab_exp stlc_ht STLC.vempty
+    fs_v ∽ stlc_ht
   
   // polymorphic types
   | STLC.TyInl #_ #_ #t1 t2 ht1 ->
@@ -216,16 +236,16 @@ let rel_implies_cc ws wt : Lemma (rel_whole (≍) ws wt) =
   introduce 
     ws ≍ (dsnd wt)
   ==> 
-    behS ws ≡ behT wt
+    behS ws ≌ behT wt
   with _. begin
     assert (ws ≍ htw);
     // unfolding ≍
     let (| ewt', htwt' |) = STLC.eval htw in
-    eval_value_is_id htw;
-    assert (behT (| ewt', htwt' |) ≡ behT wt);
     assert (ws ≍ htwt'); // wt' is a value (Lam) and returns a nat
-    assert (behS ws ≡ behT (| ewt', htwt' |));
-    assert (behS ws ≡ behT wt)
+    assert (behS ws ≌ behT (| ewt', htwt' |));
+    eval_value_is_id htw;
+    assert (behT (| ewt', htwt' |) == behT wt);
+    assert (behS ws ≌ behT wt)
   end
 
 val elab_rel (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t)
@@ -234,7 +254,7 @@ let rec elab_rel #e #t ht =
   match ht with
   | STLC.TyUnit -> ()
   | STLC.TyZero -> ()
-  | STLC.TySucc _ -> STLC.elab_invariant_to_eval ht
+  | STLC.TySucc _ -> admit ()
   | STLC.TyApp h1 h2 -> admit ()
   | _ -> admit ()
 
@@ -242,15 +262,15 @@ let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
   introduce 
     ps ≍ (dsnd pt)
   ==> 
-    (forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct) )
+    (forall ct. behS (linkS ps (backtranslate_ctx ct)) ≌ behT (linkT pt ct) )
   with _. begin
     introduce 
-      forall ct. behS (linkS ps (backtranslate_ctx ct)) ≡ behT (linkT pt ct)
+      forall ct. behS (linkS ps (backtranslate_ctx ct)) ≌ behT (linkT pt ct)
     with begin
       // unfolding ≍
       let (| ept', htpt' |) = STLC.eval (dsnd pt) in
       eval_value_is_id (dsnd pt);
-      assert (behT (linkT pt ct) ≡ behT (linkT (| ept', htpt' |) ct));
+      assert (behT (linkT pt ct) == behT (linkT (| ept', htpt' |) ct));
 
       // ps ≍ (dsnd pt) implies:
       assert (ps ≍ htpt');
@@ -266,7 +286,7 @@ let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       let htwtapp = STLC.TyApp htwt STLC.TyUnit in
       assume (ps cs ≍ htwtapp); // this should be simple to prove
 
-      assert (behS (linkS ps cs) ≡ behT (linkT (| ept', htpt' |) ct));
-      assert (behS (linkS ps cs) ≡ behT (linkT pt ct))
+      assert (behS (linkS ps cs) ≌ behT (linkT (| ept', htpt' |) ct));
+      assert (behS (linkS ps cs) ≌ behT (linkT pt ct))
     end
   end
