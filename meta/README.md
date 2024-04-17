@@ -11,15 +11,15 @@ TODOs
           between when the program is stuck and when it loops. For now sticking with small step.
 - [x] Define elaboration of STLC expressions into F* ([`elab_exp`](./STLC.fst))
     * In POPL'24, `elab` is effectful, `elab_exp : exp -> MIO (elab_typ _)`
-- [x] Define a Cross-Language Logical Relation between F* values and STLC expressions ([`≍`](./CriteriaStatic.STLC.fst))
+- [x] Define a Cross-Language Logical Relation between F* values and STLC expressions ([`≍`](./Criteria.fst))
     - Keep in mind a different way to define the logical relation:
 ```fstar
 val (≍) : rel
 let rec (≍) #ty fst_v stlc_ht =
     fst_v R STLC.elab_exp stlc_ht STLC.vempty (** where R = logical relation between F* values **)
 ```
-- [x] Prove that relation `≍` implies compiler correctness of whole programs ([`rel_implies_cc`](./CriteriaStatic.STLC.fst)).
+- [x] Prove that relation `≍` implies compiler correctness of whole programs ([`rel_implies_cc`](./Criteria.fst)).
 - [x] Prove that relation `≍` implies RHC 
-    - [ ] Prove that a STLC expression (representing contexts) is in rel `≍` with its elaboration ([`elab_rel`](./CriteriaStatic.STLC.fst)). 
+    - [ ] Prove that a STLC expression (representing contexts) is in rel `≍` with its elaboration ([`elab_rel`](./Criteria.fst)). 
         - [ ] Prove that the elaboration (`elab_exp`) is invariant to stepping the expression ([`elab_invariant_to_eval`](./STLC.fst)).
 - [ ] Prove that compilation returns an STLC expression in rel `≍` with the initial F* value

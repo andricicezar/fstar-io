@@ -572,103 +572,7 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      //      let TyBytesCreate h1 h2 = ht in
      //      TyBytesCreate h1 (preservation_step h2 hs2)
 
-// let (+*) (x:int) (y:int) : int = Prims.op_Multiply x y
-// let rec (^) (x:nat) (y:nat) : Tot (r:nat{x > 0 ==> r > 0}) (decreases y)=
-//      if y = 0 then 1 else x +* (x ^ (y-1))
 
-// (** ** Evaluation *)
-// let rec weight (e:exp) : (r:nat{r > 0}) =
-//      match e with
-//      | EVar x -> 1
-//      | EApp e1 e2 -> weight e1 +* weight e2
-//      | ELam _ e1 -> 1 + weight e1
-//      | EUnit -> 1
-//      | EZero -> 1
-//      | ESucc e -> 1 + weight e
-//      | ENRec e1 e2 e3 -> (1 + weight e2) +* ((weight e3) ^ weight e1)
-//      | EInl e -> 1 + weight e
-//      | EInr e -> 1 + weight e
-//      | ECase e1 e2 e3 -> 1 + weight e1 + weight e2 + weight e3
-//      | EByteLit _ -> 1
-//      | EBytesCreate e1 e2 -> 1 + weight e1 + weight e2
-//      | EFst e -> 1 + weight e
-//      | ESnd e -> 1 + weight e
-//      | EPair e1 e2 -> 1 + weight e1 + weight e2
-//      | EStringLit _ -> 1
-
-// #set-options "--print_implicits"
-
-// let distribute_multiply x y z : Lemma ((x + y) +* z = x +* z + (y +* z)) = ()
-// let fold_multiply_power x n : Lemma (x +* (x^n) == x^(n+1)) = ()
-// let rec power_less (x:nat{x > 1}) (n:nat) : Lemma ((x^(n+1)) > x^n) =
-//      match n with
-//      | 0 -> ()
-//      | _ -> power_less (x) (n-1)
-
-// let rec step_decreases_weight #g (#e:exp) (#e':exp) #t (ht:typing g e t) (hs:step e e')
-//   : Lemma (weight e' < weight e) 
-//   =  assume (forall x y z. x < y ==> x +* z < y +* z);
-//      assume (forall x z. z +* x == x +* z);
-//      match hs with
-//      | SBeta t e1 e2 -> admit ()
-//           // assert (e == (EApp (ELam t e1) e2));
-//           // assert (e' == subst (sub_beta e2) e1);
-//           // assume (weight (subst (sub_beta e2) e1) < weight e)
-//     | SApp1 #e1 e2 #e1' hs1 -> 
-//           let TyApp ht1 _ = ht in
-//           step_decreases_weight ht1 hs1
-//      | SApp2 e1 #e2 #e2' hs2 -> 
-//           let TyApp _ ht2 = ht in
-//           step_decreases_weight ht2 hs2
-//      | SSucc e1 #e' hs1 ->
-//           let TySucc ht1 = ht in
-//           step_decreases_weight ht1 hs1
-// //      | SNRecV #e1 #e1' e2 e3 hs1 ->
-// //           let TyNRec ht1 ht2 ht3 = ht in
-// //           step_decreases_weight ht1 hs1
-// //      | SNRec0 e2 e3 -> admit ()
-//           // let TyNRec ht1 ht2 ht3 = ht in
-//           // let TyLam _ _ : typing g e3 (TArr _ _) = ht3 in
-//           // assert (ELam? e3);
-//           // assert (weight e3 > 1);
-//           // ()
-//        | SNRecIter v e2 e3 ->
-//           let TyNRec htv ht2 ht3 = ht in
-//           // let TyLam _ _ : typing g e3 (TArr _ _) = ht3 in
-//           assume (ELam? e3); // inversion lemma needed
-//           assert (weight e3 > 1);
-//           calc (>) {
-//                weight e <: int;
-//                == {}
-//                weight (ENRec (ESucc v) e2 e3) <: int;
-//                == {}
-//                (1 + weight e2) +* ((weight e3) ^ weight (ESucc v));
-//                == {}
-//                (1 + weight e2) +* ((weight e3) ^ (weight v + 1));
-//                == { distribute_multiply 1 (weight e2) ((weight e3) ^ (weight v + 1)) }
-//                ((weight e3) ^ (weight v + 1)) + (weight e2 +* ((weight e3) ^ (weight v + 1)));
-//                > { power_less (weight e3) (weight v) }
-//                ((weight e3) ^ weight v) + (weight e2 +* ((weight e3) ^ (weight v + 1)));
-//                == { fold_multiply_power (weight e3) (weight v) } // fold x * x^n to x^(n+1)
-//                ((weight e3) ^ weight v) + (weight e2 +* (weight e3 +* ((weight e3) ^ weight v)));
-//                == { _ by (tadmit ()) (** assoc **) } // reorder multiplication
-//                ((weight e3) ^ weight v) + ((weight e3 +* weight e2) +* ((weight e3) ^ weight v));
-//                == { distribute_multiply 1 (weight e3 +* weight e2) ((weight e3) ^ weight v) }
-//                (1 + (weight e3 +* weight e2)) +* ((weight e3) ^ weight v);
-//                == {} // unfold weight EApp
-//                (1 + (weight (EApp e3 e2))) +* ((weight e3) ^ weight v);
-//                == {} // unfold weight once
-//                weight (ENRec v (EApp e3 e2) e3) <: int;
-//                == {}
-//                weight e' <: int;
-//           }
-//      | _ -> admit ()
-
-// using from Software Foundations, the proof that norm halts using a logical relation,
-// we can make eval return the steps
-// and then define a size to count the number of steps,
-// and then prove that the size decreases in each step:
-//   t --> t' => size (eval t) > size (eval t')  !!! Problem: recursive definition
 
 (** Phil Wadler: Progress + Preservation = Evaluation. **)
 let eval_step #e #t 
@@ -685,7 +589,7 @@ let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
   = match eval_step ht with
     | Inl _ -> (| e, ht |)
     | Inr (| _, _, ht' |) -> 
-          admit (); (** TODO: proof of termination required **)
+          admit (); (** TODO: proof of termination required, see Software Foundations - the proof that norm halts using a logical relation **)
           eval ht'
 
 (** *** Elaboration of types and expressions to F* *)

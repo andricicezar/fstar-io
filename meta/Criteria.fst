@@ -301,11 +301,3 @@ let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       assert (behS (linkS ps cs) ≌ behT (linkT pt ct))
     end
   end
-
-
-    //  (EInl? e && is_value (EInl?.v e)) ||
-    //  (EInr? e && is_value (EInr?.v e)) || 
-    //  EByteLit? e || 
-    //  (EPair? e && is_value (EPair?.fst e) && is_value (EPair?.snd e) ) || 
-    //  (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
-    //  EStringLit? e

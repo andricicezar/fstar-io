@@ -181,7 +181,7 @@ let rel_pprog (r:rel) i ps pt : Type0 =
 
 (** Cross-language logical relation,
     the logical relation is asymmetric because it relates always F* values with STLC's values and expressions *)
-(** TODO: usually, this is split into a relation on target values and on target expressions **)
+(** Note: usually, this is split into a relation on target values and on target expressions **)
 val (≍) : rel
 let rec (≍) #ty fs_v stlc_ht' =
   // forall stlc_e', hte', ss:steps stlc_e stlc_e'. is_value stlc_e' ==>
