@@ -130,13 +130,13 @@ let evaluate_fv (g:env) (fv:string) (e0:term) (ty:term)
 let apply_step_1 (g:env) (e0:term)
   : TacP term
       (requires tot_typing g e0 (`int) /\
-                tot_typing g (`is_nat_ctrct) (mk_arrow (`int) (`option nat)) /\
-                tot_typing g (`is_nat_pred) (mk_arrow (`int) (mk_arrow (`option nat) (`Type0))) /\
+                tot_typing g (`is_nat_ctrct) (mk_arrow (`int) (`option u#0 nat)) /\
+                tot_typing g (`is_nat_pred) (mk_arrow (`int) (mk_arrow (`option u#0 nat) (`Type0))) /\
                 valid g (mk_forall_ex_pred (`is_nat_ctrct) (`is_nat_pred)))
-      (ensures fun e1 -> tot_typing g e1 (open_with (`option nat) e0) /\ // TODO: can the open_with be unfolded?
+      (ensures fun e1 -> tot_typing g e1 (open_with (`option u#0 nat) e0) /\ // TODO: can the open_with be unfolded?
                          valid g (mk_wit_ex_pred (`is_nat_pred) e0 e1))
 = 
-  let e1, e1_ty = syntactic_app #(`int) #(`option nat) g (`is_nat_ctrct) (`is_nat_pred) e0 in
+  let e1, e1_ty = syntactic_app #(`int) #(`option u#0 nat) g (`is_nat_ctrct) (`is_nat_pred) e0 in
   assert (valid g (mk_wit_ex_pred (`is_nat_pred) e0 e1));
   let e1' = evaluate_fv g (`%is_nat_ctrct) e1 e1_ty in
   e1
@@ -149,11 +149,12 @@ let compile (nm':string) (e0:term) : dsl_tac_t = fun g ->
   //    assert (tot_typing g e0 (`int));
   // basically the following 4 lines are preconditions
   let typ0 : tot_typing g e0 (`int) = dyn_typing () in
-  // TODO: fails to check that is_nat_ctrct is an arrow
-  let typ1 : tot_typing g (`is_nat_ctrct) (mk_arrow (`int) (`option nat)) = dyn_typing () in
-  dump "H";
-  let typ2 : tot_typing g (`is_nat_pred) (mk_arrow (`int) (mk_arrow (`option nat) (`Type0))) = dyn_typing () in
+  let typ1 : tot_typing g (`is_nat_ctrct) (mk_arrow (`int) (`option u#0 nat)) = dyn_typing () in
+  let typ2 : tot_typing g (`is_nat_pred) (mk_arrow (`int) (mk_arrow (`option u#0 nat) (`Type0))) = dyn_typing () in
+  
+  assert (forall_ex_pred is_nat_ctrct is_nat_pred);
   let typ3 : tot_typing g t_unit (mk_squash (mk_forall_ex_pred (`is_nat_ctrct) (`is_nat_pred))) = dyn_typing () in
+  dump "H";
   FStar.Squash.return_squash typ0;
   FStar.Squash.return_squash typ1;
   FStar.Squash.return_squash typ2;
@@ -162,7 +163,7 @@ let compile (nm':string) (e0:term) : dsl_tac_t = fun g ->
   let phi = mk_wit_ex_pred (`is_nat_pred) e0 e1 in
   valid_wtf g phi;
   [
-   mk_checked_let g nm' e1 (open_with (`option nat) e0);
+   mk_checked_let g nm' e1 (open_with (`option u#0 nat) e0);
    mk_checked_let g (nm'^"_pf")
                     (`())
                     (mk_squash phi);

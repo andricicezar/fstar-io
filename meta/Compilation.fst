@@ -1,4 +1,4 @@
-module VerifiedTransformSTLC
+module Compilation
 
 open FStar.Tactics.V2
 open FStar.Reflection.Typing
@@ -83,11 +83,11 @@ let eq2_trans (g:env) (ty:term) (t0 t1 t2:term)
 
 
 let mk_rel (stlc_ty fs_exp stlc_exp stlc_ht : term) : Tot term =
-  mk_app (`CriteriaStatic.STLC.op_u8781) [(stlc_ty, Q_Implicit); (fs_exp, Q_Explicit); (stlc_exp, Q_Implicit); (stlc_ht, Q_Explicit)]	
+  mk_app (`Criteria.op_u8781) [(stlc_ty, Q_Implicit); (fs_exp, Q_Explicit); (stlc_exp, Q_Implicit); (stlc_ht, Q_Explicit)]	
 
 let rel_subst (g:env) stlc_ty (fs_exp fs_exp' stlc_exp:term) stlc_ht
   : TacP unit
-         (requires valid g (mk_eq2 (`(STLC.elab_typ (`#stlc_ty))) fs_exp fs_exp') /\ 
+         (requires valid g (mk_eq2 (`(STLC.elab_typ (`#stlc_ty))) fs_exp fs_exp') /\
                    valid g (mk_rel stlc_ty fs_exp' stlc_exp stlc_ht))
          (ensures fun _ -> valid g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht))
 = admit()
