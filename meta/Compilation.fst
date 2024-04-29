@@ -1,63 +1,6 @@
 module Compilation
 
-open FStar.Tactics.V2
-open FStar.Reflection.Typing
-
-let must (x : ret_t 'a) : Tac 'a =
-  match x with
-  | Some v, _ -> v
-  | None, [] ->
-    fail ("must failed, no issues?")
-  | None, i::_ ->
-    fail ("must failed: " ^ FStar.Issue.render_issue i)
-
-let mk_squash (phi:term) : Tot term = pack (Tv_App (`squash) (phi, Q_Explicit))
-
-let t_unit = `()
-
-let valid (g:env) (phi:term) : prop =
-  squash (tot_typing g t_unit (mk_squash phi))
-
-let dyn_typing (#g #ty #t : _) () : Tac (tot_typing g t ty) =
-  let tok = must <| core_check_term g t ty E_Total in
-  T_Token _ _ _ (Squash.return_squash tok)
-
-let same_typing (t0 t1 : term) : prop =
-  forall g c typ. typing g t0 (c, typ) ==> typing g t1 (c, typ)
-
-let same_valid (t0 t1 : term) : prop =
-  forall g. valid g t0 ==> valid g t1
-
-let mk_eq2 (ty t1 t2 : term) : Tot term =
-  mk_app (`Prims.eq2) [(ty, Q_Implicit); (t1, Q_Explicit); (t2, Q_Explicit)]	
-
-val norm_term_env :
-  ty:typ ->
-  g:env ->
-  list norm_step ->
-  t0:term{tot_typing g t0 ty} ->
-  Tac (t1:term{same_typing t0 t1 /\ valid g (mk_eq2 ty t0 t1)})
-let norm_term_env ty g steps t0 =
-  let t1 = norm_term_env g steps t0 in
-  admit(); // can't prove this, we should strengthen norm_term_env in F* library
-  t1
-
-(* Metaprograms with partial correctness *)
-effect TacP (a:Type) (pre:prop) (post : a -> prop) =
-  TacH a (requires (fun _ -> pre))
-         (ensures (fun _ps r ->
-           match r with
-           | FStar.Stubs.Tactics.Result.Success v ps -> post v
-           | _ -> True))
-
-
-let type_dynamically g ty t : TacP unit (requires True) (ensures fun _ -> squash (tot_typing g ty t)) =
-  let ht : tot_typing g ty t = dyn_typing () in
-  Squash.return_squash ht
-
-let assert_dynamically g phi : TacP unit (requires True) (ensures fun _ -> squash (valid g phi)) =
-  let ht : tot_typing g t_unit (mk_squash phi) = dyn_typing () in
-  Squash.return_squash ht
+open HelperTactics
 
 let object_eq2_refl (x:'a) : Lemma (x == x) = ()
 
@@ -79,8 +22,6 @@ let eq2_trans (g:env) (ty:term) (t0 t1 t2:term)
          (requires valid g (mk_eq2 ty t0 t1) /\ valid g (mk_eq2 ty t1 t2))
          (ensures fun _ -> valid g (mk_eq2 ty t0 t2))
 = admit() // could prove, it's a lift of the eq2_trans object-level lemma
-
-
 
 let mk_rel (stlc_ty fs_exp stlc_exp stlc_ht : term) : Tot term =
   mk_app (`Criteria.op_u8781) [(stlc_ty, Q_Implicit); (fs_exp, Q_Explicit); (stlc_exp, Q_Implicit); (stlc_ht, Q_Explicit)]	
@@ -110,6 +51,7 @@ let rec make_stlc_nat (g:env) (n:nat)
   end
   | _ -> begin
     assert (n > 0);
+    admit ();
     let (stlc_exp, stlc_ht) = make_stlc_nat g (n-1) in
     let stlc_exp' = (`STLC.ESucc (`#stlc_exp)) in
     type_dynamically g stlc_exp' (`STLC.exp);
@@ -119,60 +61,53 @@ let rec make_stlc_nat (g:env) (n:nat)
     (stlc_exp', stlc_ht')
   end
 
-let rec compile_to_stlc
+let rec term_translation
   (g:env)
-  (stlc_ty:term)
-  (fs_exp:term)
+  (qty:term) (** Quoted STLC type **)
+  (qfs:term)
   : TacP (term * term)
-      (requires tot_typing g stlc_ty (`STLC.typ) /\
-                tot_typing g fs_exp (`(STLC.elab_typ (`#stlc_ty))))   // this is just a typecheck, not a judgement
-                                                                      // also, we cannot match on tot_typing becaut it can be a Token, aka typed by using the SMT
-      (ensures fun (stlc_exp, stlc_ht) -> 
-        tot_typing g stlc_exp (`STLC.exp) /\                                         // STLC exp
-        tot_typing g stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) (`#stlc_ty))) /\ // well typed STLC exp
-        valid g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht))                            // equivalent semantics
+      (requires tot_typing g qty (`STLC.typ) /\
+                tot_typing g qfs (`(STLC.elab_typ (`#qty))))   // this is just a typecheck, not a judgement.
+                                                               // we cannot match on tot_typing because it can be a Token, aka typed by using the SMT
+      (ensures fun (qstlc, qstlc_tyj) -> 
+        tot_typing g qstlc (`STLC.exp) /\                                         // STLC exp
+        tot_typing g qstlc_tyj (`(STLC.typing STLC.empty (`#qstlc) (`#qty))) /\ // well typed STLC exp
+        valid g (mk_rel qty qfs qstlc qstlc_tyj))                            // equivalent semantics
 = 
-  match inspect fs_exp with
+  match inspect qfs with
   | Tv_FVar _ ->
     (* inline the top-level definition *)
-    let fs_exp' = norm_term_env (`(STLC.elab_typ (`#stlc_ty))) g [delta] fs_exp in
-    let (stlc_exp, stlc_ht) = compile_to_stlc g stlc_ty fs_exp' in
-    rel_subst g stlc_ty fs_exp fs_exp' stlc_exp stlc_ht;
+    let fs_exp' = typed_norm_term_env (`(STLC.elab_typ (`#qty))) g [delta] qfs in
+    let (stlc_exp, stlc_ht) = term_translation g qty fs_exp' in
+    rel_subst g qty qfs fs_exp' stlc_exp stlc_ht;
     (stlc_exp, stlc_ht)
   
   | Tv_Const (C_Int x) ->
     if (x < 0) then fail ("not supporting ints, only nats") else
-    type_dynamically g fs_exp (`nat); // inversion law
-    assert_dynamically g (mk_eq2 (`STLC.typ) (`STLC.TNat) stlc_ty); // should follow from above and pre
-    let (stlc_exp, stlc_ht) = make_stlc_nat g x in
+    type_dynamically g qfs (`nat); // inversion law
+    assert_dynamically g (mk_eq2 (`STLC.typ) (`STLC.TNat) qty); // should follow from above and pre
+    let (qstlc, qstlc_tyj) = make_stlc_nat g x in
     // from the post of make_stlc_nat we have:
     //   tot_typing g stlc_exp (`STLC.exp) /\
     //   tot_typing g stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) STLC.TNat)) /\
     //   valid g (mk_rel (`STLC.TNat) (pack (Tv_Const (C_Int x))) stlc_exp stlc_ht)
-    type_dynamically g stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) (`#stlc_ty))); // in previous assumption substititute STLC.TNat for stlc_ty
-    assert_dynamically g (mk_rel stlc_ty fs_exp stlc_exp stlc_ht); // in previous assumption substititute (pack ...) for fs_exp
-    (stlc_exp, stlc_ht)
+    type_dynamically g qstlc_tyj (`(STLC.typing STLC.empty (`#qstlc) (`#qty))); // in previous assumption substititute STLC.TNat for stlc_ty
+    assert_dynamically g (mk_rel qty qfs qstlc qstlc_tyj); // in previous assumption substititute (pack ...) for fs_exp
+    (qstlc, qstlc_tyj)
   | _ -> fail ("not implemented")
 
 
-let valid_wtf (g:env) (phi:term) 
-  : Lemma (requires valid g phi)
-          (ensures squash (tot_typing g t_unit (mk_squash phi)))
-  = let goal = squash (tot_typing g t_unit (mk_squash phi)) in
-    assert (valid g phi ==> goal) by (compute ()); /// WHY????
-    () // ????
-
-let specialize (nm':string) (stlc_ty:term) (fs_exp:term) : dsl_tac_t = fun g ->
-  let stlc_ty_ht : tot_typing g stlc_ty (`STLC.typ) = dyn_typing () in
-  FStar.Squash.return_squash stlc_ty_ht;
-  let fs_ht : tot_typing g fs_exp (`(STLC.elab_typ (`#stlc_ty))) = dyn_typing () in
-  FStar.Squash.return_squash fs_ht;
-  let (stlc_exp, stlc_ht) = compile_to_stlc g stlc_ty fs_exp in
-  let phi = mk_rel stlc_ty fs_exp stlc_exp stlc_ht in
+let specialize (nm':string) (qstlc_ty:term) (qfs:term) : dsl_tac_t = fun g ->
+  let qstlc_ty_tyj : tot_typing g qstlc_ty (`STLC.typ) = dyn_typing () in
+  FStar.Squash.return_squash qstlc_ty_tyj;
+  let qfs_tyj : tot_typing g qfs (`(STLC.elab_typ (`#qstlc_ty))) = dyn_typing () in
+  FStar.Squash.return_squash qfs_tyj;
+  let (qstlc, qstlc_tyj) = term_translation g qstlc_ty qfs in
+  let phi = mk_rel qstlc_ty qfs qstlc qstlc_tyj in
   valid_wtf g phi;
   [
-   mk_checked_let g nm' stlc_exp (`STLC.exp);
-   mk_checked_let g (nm'^"_ht") stlc_ht (`(STLC.typing STLC.empty (`#stlc_exp) (`#stlc_ty)));
+   mk_checked_let g nm' qstlc (`STLC.exp);
+   mk_checked_let g (nm'^"_ht") qstlc_tyj (`(STLC.typing STLC.empty (`#qstlc) (`#qstlc_ty)));
    mk_checked_let g (nm'^"_pf")
                     (`())
                     (mk_squash phi);
@@ -185,6 +120,10 @@ let crep () = specialize "tgt1" (`STLC.TNat) (`src1)
 
 %splice_t[tgt1;tgt1_ht;tgt1_pf] (specialize "tgt1" (`STLC.TNat) (`src1))
 
+let stlc_sem (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t) : STLC.elab_typ t = 
+  let (| _, ht' |) = STLC.eval ht in
+  STLC.elab_exp ht' STLC.vempty
+
 let _ = 
   assert (tgt1 == STLC.ESucc (STLC.ESucc (STLC.ESucc (STLC.ESucc STLC.EZero))));
-  assert (STLC.sem tgt1_ht == src1)
+  assert (stlc_sem tgt1_ht == src1)
