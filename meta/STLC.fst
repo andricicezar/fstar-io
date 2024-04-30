@@ -67,7 +67,7 @@ val extend : typ -> env -> Tot env
 let extend t g y = if y = 0 then Some t
                    else g (y-1)
 
-noeq type typing : env -> exp -> typ -> Type =
+noeq type typing : env -> exp -> typ -> Type0 =
   | TyVar : #g:env ->
              x:var{Some? (g x)} ->
              typing g (EVar x) (Some?.v (g x))

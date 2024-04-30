@@ -79,3 +79,28 @@ let fv_to_string (fv:fv) : string =
   | [] -> ""
   | h::[] -> h
   | h::tl -> fold_left (fun x y -> x ^ "." ^ y) h tl
+
+let rec print_nat (n:nat) : string =
+  match n with
+  | 0 -> "0"
+  | 1 -> "1"
+  | 2 -> "2"
+  | 3 -> "3"
+  | 4 -> "4"
+  | 5 -> "5"
+  | 6 -> "6"
+  | 7 -> "7"
+  | 8 -> "8"
+  | 9 -> "9"
+  | _ -> print_nat (n/10) ^ print_nat (n % 10)
+
+let print_vconst (c:vconst) : string =
+  match c with
+  | C_Unit -> "C_Unit"
+  | C_Int _ -> "C_Int"
+  | C_True -> "C_True"
+  | C_False -> "C_False"
+  | C_String s -> "C_String" ^ s
+  | C_Range r -> "C_Range"
+  | C_Reify -> "C_Reify"
+  | C_Reflect nm -> "C_Reflect"

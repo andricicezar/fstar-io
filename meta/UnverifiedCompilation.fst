@@ -8,39 +8,12 @@ type open_stlc_term (g:STLC.env) =
 type open_stlc_term' (g:STLC.env) (t:STLC.typ) =
   (e:STLC.exp & STLC.typing g e t)
 
-
 let rec make_stlc_nat #g (n:nat) : open_stlc_term' g STLC.TNat = 
   match n with
   | 0 -> (| _, STLC.TyZero |)
   | _ -> 
     let (|_, tyj |) = make_stlc_nat (n-1) in
     (| _, STLC.TySucc tyj |)
-
-let rec print_nat (n:nat) : string =
-  match n with
-  | 0 -> "0"
-  | 1 -> "1"
-  | 2 -> "2"
-  | 3 -> "3"
-  | 4 -> "4"
-  | 5 -> "5"
-  | 6 -> "6"
-  | 7 -> "7"
-  | 8 -> "8"
-  | 9 -> "9"
-  | _ -> print_nat (n/10) ^ print_nat (n % 10)
-
-let print_vconst (c:vconst) : string =
-  match c with
-  | C_Unit -> "C_Unit"
-  | C_Int _ -> "C_Int"
-  | C_True -> "C_True"
-  | C_False -> "C_False"
-  | C_String s -> "C_String" ^ s
-  | C_Range r -> "C_Range"
-  | C_Reify -> "C_Reify"
-  | C_Reflect nm -> "C_Reflect"
-
 
 let rec unverified_typ_translation
   (gfs:env)
@@ -98,52 +71,73 @@ let _ = assert (typ2 == STLC.TNat)
 %splice_t[typ3] (comp_typ "typ3" (`(nat -> nat)))
 let _ = assert (typ3 == STLC.TArr STLC.TNat STLC.TNat)
 
+let recover_type_of_arrow (gfs:env) (qfs:term) (t:term) : 
+  TacP (option binder)
+    (requires True) // (exists t'. tot_typing gfs hd (Tv_Arrow t' t)));
+    (ensures fun _ -> True) // Some? r ==> tot_typing gfs hd (Tv_Arrow (Some?.v r) t)))
+  = 
+  match inspect qfs with
+  | Tv_Abs b c -> Some b
+  | _ -> None
+
+noeq
+type fs_var =
+| FVar : fv -> fs_var
+| Var  : namedv -> fs_var
+| Bv   : bv -> fs_var
+
+(* CA: keeping track of the type of the term is important for the logical relation *)
 let rec unverified_exp_translation
   (gfs:env)
   (gstlc:STLC.env)
-  (mapping_fv:fv -> option (x:STLC.var{Some? (gstlc x)}))
-  (mapping_v:namedv -> option (x:STLC.var{Some? (gstlc x)}))
+  (vars_mapping:fs_var -> nat -> option (x:STLC.var{Some? (gstlc x)}))
   (qfs:term)
   : TacP (open_stlc_term gstlc)
       (requires True)
       (ensures fun _ -> True) =
   match inspect qfs with
   | Tv_FVar fv -> begin
-    match mapping_fv fv with
+    match vars_mapping (FVar fv) 0 with
     | Some v -> (| _, _, STLC.TyVar #gstlc v |)
     | None -> fail (fv_to_string fv ^ " not defined")
   end
 
   | Tv_Var v -> begin
-    match mapping_v v with
-    | Some v -> (| _, _, STLC.TyVar #gstlc v |)
+    match vars_mapping (Var v) 0 with
+    | Some dbi -> (| STLC.EVar dbi, Some?.v (gstlc dbi), STLC.TyVar #gstlc dbi |)
     | None -> fail (print_nat v.uniq ^ " not defined in STLC env")
   end
 
-  | Tv_App hd (a, _) -> begin
+  | Tv_App hd (a, q) -> begin
     (** TODO: it seems like we cannot get the type of `hd` or `a` here because
               we don't have the typing judgment of `qfs`.
               Even if we would ask for the F* typing judgement of `qfs`,
               it could be just a token---not helpful.
+              Maybe there is a way to recover by normalizing a bit `hd`?
           QA: How would this work with the logical relation? **) 
-    let (| _, a_t, a_tyj |) = unverified_exp_translation gfs gstlc mapping_fv mapping_v a in
-    let (| _, hd_t, hd_tyj |) = unverified_exp_translation gfs gstlc mapping_fv mapping_v hd in
-    match hd_t with
+    // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
+    //           (exists t'. tot_typing gfs a t' /\ tot_typing gfs hd (Tv_Arrow t' qty)));
+    // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
+    //           (forall t'. tot_typing gfs hd (Tv_Arrow t' qty) ==> tot_typing gfs a t'));
+    let (| _, sa_ty, sa_tyj |) = unverified_exp_translation gfs gstlc vars_mapping a in
+    let (| _, shd_ty, shd_tyj |) = unverified_exp_translation gfs gstlc vars_mapping hd in
+    match shd_ty with
     | STLC.TArr arg res -> 
-      if arg = a_t then (| _, res, STLC.TyApp hd_tyj a_tyj |)
+      if arg = sa_ty then (| _, res, STLC.TyApp shd_tyj sa_tyj |)
       else fail ("argument type mismatch")
     | _ -> fail ("hd is not an arrow type")
-  end
+    end
 
   | Tv_Abs b c -> begin
+    let b_ty : STLC.typ = unverified_typ_translation gfs b.sort in
+    let gstlc' = STLC.extend b_ty gstlc in
+    let vars_mapping': fs_var -> int -> option (x:STLC.var{Some? (gstlc' x)}) =
+      (fun x n -> match x with 
+          | Var v -> if v.uniq = b.uniq then (admit (); Some n) else (admit (); vars_mapping x (n+1))
+          | _ -> (admit (); vars_mapping x (n+1))) in
     let gfs' = extend_env gfs b.uniq b.sort in
-    (match inspect b.sort with
-    | Tv_Refine b' ref -> dump (tag_of ref)
-    | _ -> fail ("not a refinement type"));
-    (** TODO: 
-        * convert b.sort into a STLC type
-        * extend gstlc and mapping **)
-    unverified_exp_translation gfs' gstlc mapping_fv mapping_v c
+    let (| c_e, c_ty, c_tyj |) = unverified_exp_translation gfs' gstlc' vars_mapping' c in
+    (| _, _, STLC.TyLam #gstlc b_ty c_tyj |) 
   end
 
   | Tv_Const (C_Int x) ->
@@ -156,21 +150,26 @@ let rec unverified_exp_translation
 
   | _ -> dump (tag_of qfs); fail ("not implemented")
 
+let mk_stlc_typing (g qexp qtyp:term) =
+  mk_app (`STLC.typing) [(g, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
+
 let comp_exp (nm:string) (qfs:term) : dsl_tac_t = fun g ->
   let qfs = norm_term_env g [delta] qfs in
-  let (| exp, typ, tyj |) = unverified_exp_translation g STLC.empty (fun _ -> None) (fun _ -> None) qfs in
-  
+  let (| exp, typ, tyj |) : open_stlc_term STLC.empty =
+    unverified_exp_translation g STLC.empty (fun _ _ -> None) qfs in
   let qexp = quote exp in
   type_dynamically g qexp (`STLC.exp);
   let qtyp = quote typ in
   type_dynamically g qtyp (`STLC.typ);
   let qtyj = quote tyj in
-  type_dynamically g qtyj (`STLC.typing STLC.empty (`#qexp) (`#qtyp));
-
+  let qtyj_ty = mk_stlc_typing (`STLC.empty) qexp qtyp in
+  assert (has_type tyj (STLC.typing STLC.empty exp typ));
+  // type_dynamically g qtyj qtyj_ty;
+  assume (tot_typing g qtyj qtyj_ty);
   [
    mk_checked_let g nm qexp (`STLC.exp);
    mk_checked_let g (nm^"_typ") qtyp (`STLC.typ);
-   mk_checked_let g (nm^"_tyj") qtyj (`STLC.typing STLC.empty (`#qexp) (`#qtyp));
+   mk_checked_let g (nm^"_tyj") qtyj qtyj_ty;
   ]
 
 
@@ -191,6 +190,10 @@ let _ =
 // let _ = 
 //   assert (tgt2 == STLC.EZero)
 
-let src3 : nat -> nat = fun x -> x
+let src3 : nat -> nat -> nat = fun x y -> x
 %splice_t[tgt3;tgt3_typ;tgt3_tyj] (comp_exp "tgt3" (`src3))
 
+let test () =
+  assert (tgt3_typ == STLC.TArr STLC.TNat (STLC.TArr STLC.TNat STLC.TNat));
+  assert (tgt3 == STLC.ELam STLC.TNat (STLC.ELam STLC.TNat (STLC.EVar 1)));
+  assert (forall x y. (stlc_sem tgt3_tyj) x y == src3 x y)
