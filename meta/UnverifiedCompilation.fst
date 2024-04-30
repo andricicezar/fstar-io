@@ -86,11 +86,27 @@ type fs_var =
 | Var  : namedv -> fs_var
 | Bv   : bv -> fs_var
 
+type mapping (g:STLC.env) =
+  fs_var -> depth:nat -> option (x:STLC.var{Some? (g x)})
+
+let extend_env_mapping
+  (gstlc:STLC.env)
+  (vars_mapping:mapping gstlc) 
+  (b:binder)
+  (b_ty:STLC.typ):
+  (gstlc':STLC.env & mapping gstlc') =
+  let gstlc' = STLC.extend b_ty gstlc in
+  let vars_mapping': mapping gstlc' =
+    (fun x n -> match x with 
+        | Var v -> if v.uniq = b.uniq then (admit (); Some n) else (admit (); vars_mapping x (n+1))
+        | _ -> (admit (); vars_mapping x (n+1))) in
+  (| gstlc', vars_mapping' |)
+
 (* CA: keeping track of the type of the term is important for the logical relation *)
 let rec unverified_exp_translation
   (gfs:env)
   (gstlc:STLC.env)
-  (vars_mapping:fs_var -> nat -> option (x:STLC.var{Some? (gstlc x)}))
+  (vars_mapping:mapping gstlc)
   (qfs:term)
   : TacP (open_stlc_term gstlc)
       (requires True)
@@ -128,16 +144,12 @@ let rec unverified_exp_translation
     | _ -> fail ("hd is not an arrow type")
     end
 
-  | Tv_Abs b c -> begin
-    let b_ty : STLC.typ = unverified_typ_translation gfs b.sort in
-    let gstlc' = STLC.extend b_ty gstlc in
-    let vars_mapping': fs_var -> int -> option (x:STLC.var{Some? (gstlc' x)}) =
-      (fun x n -> match x with 
-          | Var v -> if v.uniq = b.uniq then (admit (); Some n) else (admit (); vars_mapping x (n+1))
-          | _ -> (admit (); vars_mapping x (n+1))) in
-    let gfs' = extend_env gfs b.uniq b.sort in
-    let (| c_e, c_ty, c_tyj |) = unverified_exp_translation gfs' gstlc' vars_mapping' c in
-    (| _, _, STLC.TyLam #gstlc b_ty c_tyj |) 
+  | Tv_Abs bin body -> begin
+    let gfs' = extend_env gfs bin.uniq bin.sort in
+    let bin_ty : STLC.typ = unverified_typ_translation gfs bin.sort in
+    let (| gstlc', vars_mapping' |) = extend_env_mapping gstlc vars_mapping bin bin_ty in
+    let (| _, _, body_tyj |) = unverified_exp_translation gfs' gstlc' vars_mapping' body in
+    (| _, _, STLC.TyLam #gstlc bin_ty body_tyj |) 
   end
 
   | Tv_Const (C_Int x) ->
@@ -196,4 +208,4 @@ let src3 : nat -> nat -> nat = fun x y -> x
 let test () =
   assert (tgt3_typ == STLC.TArr STLC.TNat (STLC.TArr STLC.TNat STLC.TNat));
   assert (tgt3 == STLC.ELam STLC.TNat (STLC.ELam STLC.TNat (STLC.EVar 1)));
-  assert (forall x y. (stlc_sem tgt3_tyj) x y == src3 x y)
+  assert (forall x y. (stlc_sem tgt3_tyj) x y == x /\ (stlc_sem tgt3_tyj) x y == src3 x y)
