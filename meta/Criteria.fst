@@ -164,6 +164,12 @@ val compile_prog :
   // let pt_sound : squash (soundness pt) = ...
   // let ps_pt_rhc : squash (rhc ps pt) = ...
 
+(** CA: If we will target Gradual Typing,
+  then the type of the following relation will not work because
+  it will not be able to elaborate a dynamic type to the static type of F*.
+  aka, how would one define `elab_typ any = ?`
+**)
+
 type rel = 
   #ty:STLC.typ -> 
   STLC.elab_typ ty ->             (** F* value **)
