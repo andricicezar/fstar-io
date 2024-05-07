@@ -786,3 +786,14 @@ let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
         elab_exp (dsnd (eval (TySucc hts))) vempty;
       }
   | _ -> admit ()
+
+
+let neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
+let neg_typ : typing empty neg (TArr TBool TBool) = TyLam TBool (TyIf (TyVar 0) TyFalse TyTrue)
+
+let op_and : exp = ELam TBool (ELam TBool (EIf (EVar 1) (EVar 0) EFalse))
+let op_and_typ : typing empty op_and (TArr TBool (TArr TBool TBool)) = TyLam TBool (TyLam TBool (TyIf (TyVar 1) (TyVar 0) TyFalse))
+
+let op_or : exp = ELam TBool (ELam TBool (EIf (EVar 1) ETrue (EVar 0)))
+let op_or_typ : typing empty op_or (TArr TBool (TArr TBool TBool)) = TyLam TBool (TyLam TBool (TyIf (TyVar 1) TyTrue (TyVar 0)))
+
