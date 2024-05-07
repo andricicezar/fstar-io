@@ -16,6 +16,7 @@ type typ =
   | TPair   : typ -> typ -> typ
   | TUnit   : typ
   | TNat    : typ
+  | TBool   : typ
 //   | TByte   : typ
 //   | TBytes  : typ
 //   | TExn    : typ
@@ -26,6 +27,7 @@ let rec is_fo_typ (t:typ) =
   match t with
   | TUnit -> True
   | TNat -> True
+  | TBool -> True
   | TPair t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
   | TSum t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
   | TArr _ _ -> False
@@ -49,11 +51,13 @@ type exp =
   | ECase        : exp -> exp -> exp -> exp
 //   | EByteLit     : byte -> exp
 //   | EBytesCreate : n:exp -> v:exp -> exp
+//   | EStringLit   : v:string -> exp
   | EFst         : exp -> exp
   | ESnd         : exp -> exp
   | EPair        : fst:exp -> snd:exp -> exp
-//   | EStringLit   : v:string -> exp
-
+  | ETrue        : exp
+  | EFalse       : exp
+  | EIf          : c:exp -> t:exp -> f:exp -> exp
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
@@ -154,6 +158,19 @@ noeq type typing : context -> exp -> typ -> Type0 =
                     $h1:typing g e1 t1 ->
                     $h2:typing g e2 t2 ->
                         typing g (EPair e1 e2) (TPair t1 t2)
+  | TyTrue        : #g:context ->    
+                        typing g ETrue TBool
+  | TyFalse       : #g:context ->    
+                        typing g EFalse TBool
+  | TyIf          : #g:context ->
+                    #c:exp ->
+                    #t:exp ->
+                    #f:exp ->
+                    #ty:typ ->
+                    $h1:typing g c TBool ->
+                    $h2:typing g t ty ->
+                    $h3:typing g f ty ->
+                        typing g (EIf c t f) ty
 //   | TyStringLit   : #g:context ->
 //                     s:string ->
 //                        typing g (EStringLit s) TString
@@ -206,6 +223,9 @@ let rec subst (#r:bool)
   | ESnd e -> ESnd (subst s e)
   | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
 //   | EStringLit s -> EStringLit s
+  | ETrue -> ETrue
+  | EFalse -> EFalse
+  | EIf c t f -> EIf (subst s c) (subst s t) (subst s f)
 
 and sub_elam (#r:bool) (s:sub r) 
   : Tot (sub r)
@@ -339,6 +359,18 @@ type pure_step : exp -> exp -> Type =
 //                    #e2':exp ->
 //                    $hst:pure_step e2 e2' ->
 //                    pure_step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
+  | SIfCond : #c:exp ->
+           t:exp ->
+           f:exp ->
+           #c':exp ->
+           $hst:pure_step c c' ->
+           pure_step (EIf c t f) (EIf c' t f)
+  | SIfTrue :  t:exp ->
+               f:exp ->
+                 pure_step (EIf ETrue t f) t
+  | SIfFalse : t:exp ->
+               f:exp ->
+               pure_step (EIf EFalse t f) f
 
 type step = pure_step
 
@@ -366,6 +398,8 @@ let rec is_value (e:exp) : bool =
      match e with
      | ELam _  _
      | EUnit 
+     | ETrue
+     | EFalse
      | EZero -> true
      | ESucc e -> is_value e
      | EInl e -> is_value e
@@ -439,6 +473,13 @@ let rec progress (#e:exp { ~(is_value e) })
      //           let (| e1', h1' |) = progress h1 in
      //           (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
      // end
+     | TyIf #g #c #t #f #ty hc ht hf -> begin
+          match c with
+          | ETrue -> (| t, SIfTrue t f |)
+          | EFalse -> (| f, SIfFalse t f |)
+          | _ -> let (| c', stp |) = progress hc in
+                 (| EIf c' t f, SIfCond t f stp |)
+     end
 
 
 (* Typing of substitutions (very easy, actually) *)
@@ -485,6 +526,9 @@ let rec substitution (#g1:context)
    | TyFst h1 -> TyFst (substitution s h1 hs)
    | TySnd h1 -> TySnd (substitution s h1 hs)
    | TyPair h1 h2 -> TyPair (substitution s h1 hs) (substitution s h2 hs)
+   | TyTrue -> TyTrue
+   | TyFalse -> TyFalse
+   | TyIf hc ht hf -> TyIf (substitution s hc hs) (substitution s ht hs) (substitution s hf hs)
 //    | TyByteLit b -> TyByteLit b
 //    | TyBytesCreate h1 h2 -> TyBytesCreate (substitution s h1 hs) (substitution s h2 hs)
 //    | TyStringLit s -> TyStringLit s
@@ -565,6 +609,15 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      | SPair2 _ hs2 ->
           let TyPair h1 h2 = ht in
           TyPair h1 (preservation_step h2 hs2)
+     | SIfCond _ _ step_c -> 
+          let TyIf hc ht hf = ht in
+          TyIf (preservation_step hc step_c) ht hf
+     | SIfTrue _ _ ->
+          let TyIf _ ht _ = ht in
+          ht
+     | SIfFalse _ _ ->
+          let TyIf _ _ hf = ht in
+          hf
      // | SBytesCreateN _ hs1 ->
      //      let TyBytesCreate h1 h2 = ht in
      //      TyBytesCreate (preservation_step h1 hs1) h2
@@ -607,6 +660,7 @@ let rec elab_typ (t:typ) : Type =
   | TNat -> nat
   | TSum t1 t2 -> either (elab_typ t1) (elab_typ t2)
   | TPair t1 t2 -> (elab_typ t1) * (elab_typ t2)
+  | TBool -> bool
 //   | TByte -> byte
 //   | TBytes -> bytes
 //   | TExn -> exn
@@ -669,10 +723,15 @@ let rec elab_exp (#g:context) (#e:exp) (#t:typ) (h:typing g e t) (ve:vcontext g)
   | TySnd #_ #_ #t1 #t2 h1 ->
        let v = elab_exp h1 ve in
        snd #(elab_typ t1) #(elab_typ t2) v
-  | TyPair #_ #_ #_ #t1 #t2 h1 h2 ->
+  | TyPair h1 h2 ->
        let v1 = elab_exp h1 ve in
        let v2 = elab_exp h2 ve in
        (v1, v2)
+  | TyTrue -> true
+  | TyFalse -> false
+  | TyIf hc ht hf ->
+     let c = elab_exp hc ve in
+     if c then elab_exp ht ve else elab_exp hf ve
 //   | TyStringLit s -> s
 //   | TyByteLit b -> b
 //   | TyBytesCreate h1 h2 ->
