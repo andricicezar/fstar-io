@@ -11,26 +11,21 @@ open FStar.FunctionalExtensionality
    strong reduction, using deBruijn indices and parallel substitution. *)
 
 type typ =
-  | TArr    : typ -> typ -> typ
-  | TSum    : typ -> typ -> typ
-  | TPair   : typ -> typ -> typ
-  | TUnit   : typ
-  | TNat    : typ
-  | TBool   : typ
-//   | TByte   : typ
-//   | TBytes  : typ
-//   | TExn    : typ
-//   | TFDesc  : typ
-//   | TString : typ
+| TArr    : typ -> typ -> typ
+| TSum    : typ -> typ -> typ
+| TPair   : typ -> typ -> typ
+| TUnit   : typ
+| TNat    : typ
+| TBool   : typ
 
 let rec is_fo_typ (t:typ) =
-  match t with
-  | TUnit -> True
-  | TNat -> True
-  | TBool -> True
-  | TPair t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
-  | TSum t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
-  | TArr _ _ -> False
+     match t with
+     | TUnit -> True
+     | TNat -> True
+     | TBool -> True
+     | TPair t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
+     | TSum t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
+     | TArr _ _ -> False
 
 type fo_typ = t:typ{is_fo_typ t}
 
@@ -39,25 +34,25 @@ type var = nat
 open FStar.Bytes
 
 type exp =
-  | EVar         : var -> exp
-  | EApp         : exp -> exp -> exp
-  | ELam         : typ -> exp -> exp
-  | EUnit        : exp
-  | EZero        : exp
-  | ESucc        : v:exp -> exp
-  | ENRec        : exp -> exp -> exp -> exp
-  | EInl         : v:exp -> exp
-  | EInr         : v:exp -> exp
-  | ECase        : exp -> exp -> exp -> exp
+| EVar         : var -> exp
+| EApp         : exp -> exp -> exp
+| ELam         : typ -> exp -> exp
+| EUnit        : exp
+| EZero        : exp
+| ESucc        : v:exp -> exp
+| ENRec        : exp -> exp -> exp -> exp
+| EInl         : v:exp -> exp
+| EInr         : v:exp -> exp
+| ECase        : exp -> exp -> exp -> exp
 //   | EByteLit     : byte -> exp
 //   | EBytesCreate : n:exp -> v:exp -> exp
 //   | EStringLit   : v:string -> exp
-  | EFst         : exp -> exp
-  | ESnd         : exp -> exp
-  | EPair        : fst:exp -> snd:exp -> exp
-  | ETrue        : exp
-  | EFalse       : exp
-  | EIf          : c:exp -> t:exp -> f:exp -> exp
+| EFst         : exp -> exp
+| ESnd         : exp -> exp
+| EPair        : fst:exp -> snd:exp -> exp
+| ETrue        : exp
+| EFalse       : exp
+| EIf          : c:exp -> t:exp -> f:exp -> exp
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
@@ -72,108 +67,98 @@ let extend t g y = if y = 0 then Some t
                    else g (y-1)
 
 noeq type typing : context -> exp -> typ -> Type0 =
-  | TyVar : #g:context ->
-             x:var{Some? (g x)} ->
-             typing g (EVar x) (Some?.v (g x))
-  | TyLam : #g :context ->
-             t :typ ->
-            #e1:exp ->
-            #t':typ ->
-            $hbody:typing (extend t g) e1 t' ->
-                   typing g (ELam t e1) (TArr t t')
-  | TyApp : #g:context ->
-            #e1:exp ->
-            #e2:exp ->
-            #t1:typ ->
-            #t2:typ ->
-            $h1:typing g e1 (TArr t1 t2) ->
-            $h2:typing g e2 t1 ->
-                typing g (EApp e1 e2) t2
-  | TyUnit : #g:context ->
-             typing g EUnit TUnit
-  | TyZero : #g:context ->
-             typing g EZero TNat
-  | TySucc : #g:context ->
-             #e:exp ->
-             $h1:typing g e TNat ->
-                 typing g (ESucc e) TNat
-  | TyNRec : #g:context ->
-             #e1:exp ->
-             #e2:exp ->
-             #e3:exp ->
-             #t1:typ ->
-             $h1:typing g e1 TNat ->
-             $h2:typing g e2 t1 ->
-             $h3:typing g e3 (TArr t1 t1) ->
-                 typing g (ENRec e1 e2 e3) t1
-  | TyInl  : #g:context ->
-             #e:exp ->
-             #t1:typ ->
-             t2:typ ->
-             $h1:typing g e t1 ->
-                 typing g (EInl e) (TSum t1 t2)
-  | TyInr  : #g:context ->
-             #e:exp ->
-             t1:typ ->
-             #t2:typ ->
-             $h1:typing g e t2 ->
-                 typing g (EInr e) (TSum t1 t2)
-  | TyCase : #g:context ->
-             #e1:exp ->
-             #e2:exp ->
-             #e3:exp ->
-             #t1:typ ->
-             #t2:typ ->
-             #t3:typ ->
-             $h1:typing g e1 (TSum t1 t2) ->
-             $h2:typing g e2 (TArr t1 t3) ->
-             $h3:typing g e3 (TArr t2 t3) ->
-                 typing g (ECase e1 e2 e3) t3
-//   | TyByteLit : #g:context ->
-//                 b:byte ->
-//                    typing g (EByteLit b) TByte
-//   | TyBytesCreate : #g:context ->
-//                     #e1:exp ->
-//                     #e2:exp ->
-//                     $h1:typing g e1 TNat ->
-//                     $h2:typing g e2 TByte ->
-//                         typing g (EBytesCreate e1 e2) TBytes
-  | TyFst         : #g:context ->
-                    #e:exp ->
-                    #t1:typ ->
-                    #t2:typ ->
-                    $h1:typing g e (TPair t1 t2) ->
-                        typing g (EFst e) t1
-  | TySnd         : #g:context ->
-                    #e:exp ->
-                    #t1:typ ->
-                    #t2:typ ->
-                    $h1:typing g e (TPair t1 t2) ->
-                        typing g (ESnd e) t2
-  | TyPair        : #g:context ->
-                    #e1:exp ->
-                    #e2:exp ->
-                    #t1:typ ->
-                    #t2:typ ->
-                    $h1:typing g e1 t1 ->
-                    $h2:typing g e2 t2 ->
-                        typing g (EPair e1 e2) (TPair t1 t2)
-  | TyTrue        : #g:context ->    
-                        typing g ETrue TBool
-  | TyFalse       : #g:context ->    
-                        typing g EFalse TBool
-  | TyIf          : #g:context ->
-                    #c:exp ->
-                    #t:exp ->
-                    #f:exp ->
-                    #ty:typ ->
-                    $h1:typing g c TBool ->
-                    $h2:typing g t ty ->
-                    $h3:typing g f ty ->
-                        typing g (EIf c t f) ty
-//   | TyStringLit   : #g:context ->
-//                     s:string ->
-//                        typing g (EStringLit s) TString
+| TyVar : #g:context ->
+          x:var{Some? (g x)} ->
+          typing g (EVar x) (Some?.v (g x))
+| TyLam : #g :context ->
+          t :typ ->
+          #e1:exp ->
+          #t':typ ->
+          $hbody:typing (extend t g) e1 t' ->
+               typing g (ELam t e1) (TArr t t')
+| TyApp : #g:context ->
+          #e1:exp ->
+          #e2:exp ->
+          #ty1:typ ->
+          #ty2:typ ->
+          $tyj1:typing g e1 (TArr ty1 ty2) ->
+          $tyj2:typing g e2 ty1 ->
+               typing g (EApp e1 e2) ty2
+| TyUnit : #g:context ->
+          typing g EUnit TUnit
+| TyZero : #g:context ->
+          typing g EZero TNat
+| TySucc : #g:context ->
+          #e:exp ->
+          $h1:typing g e TNat ->
+               typing g (ESucc e) TNat
+| TyNRec :#g:context ->
+          #e1:exp ->
+          #e2:exp ->
+          #e3:exp ->
+          #t1:typ ->
+          $h1:typing g e1 TNat ->
+          $h2:typing g e2 t1 ->
+          $h3:typing g e3 (TArr t1 t1) ->
+               typing g (ENRec e1 e2 e3) t1
+| TyInl : #g:context ->
+          #e:exp ->
+          #t1:typ ->
+          t2:typ ->
+          $h1:typing g e t1 ->
+               typing g (EInl e) (TSum t1 t2)
+| TyInr : #g:context ->
+          #e:exp ->
+          t1:typ ->
+          #t2:typ ->
+          $h1:typing g e t2 ->
+               typing g (EInr e) (TSum t1 t2)
+| TyCase : #g:context ->
+          #e1:exp ->
+          #e2:exp ->
+          #e3:exp ->
+          #t1:typ ->
+          #t2:typ ->
+          #t3:typ ->
+          $h1:typing g e1 (TSum t1 t2) ->
+          $h2:typing g e2 (TArr t1 t3) ->
+          $h3:typing g e3 (TArr t2 t3) ->
+               typing g (ECase e1 e2 e3) t3
+
+| TyFst : #g:context ->
+          #e:exp ->
+          #t1:typ ->
+          #t2:typ ->
+          $h1:typing g e (TPair t1 t2) ->
+               typing g (EFst e) t1
+| TySnd : #g:context ->
+          #e:exp ->
+          #t1:typ ->
+          #t2:typ ->
+          $h1:typing g e (TPair t1 t2) ->
+               typing g (ESnd e) t2
+| TyPair :#g:context ->
+          #e1:exp ->
+          #e2:exp ->
+          #t1:typ ->
+          #t2:typ ->
+          $h1:typing g e1 t1 ->
+          $h2:typing g e2 t2 ->
+               typing g (EPair e1 e2) (TPair t1 t2)
+| TyTrue  : #g:context ->    
+               typing g ETrue TBool
+| TyFalse : #g:context ->    
+               typing g EFalse TBool
+| TyIf  : #g:context ->
+          #c:exp ->
+          #t:exp ->
+          #f:exp ->
+          #ty:typ ->
+          $h1:typing g c TBool ->
+          $h2:typing g t ty ->
+          $h3:typing g f ty ->
+               typing g (EIf c t f) ty
+
 
 (* Parallel substitution operation `subst` *)
 
@@ -205,27 +190,24 @@ let rec subst (#r:bool)
         (decreases %[bool_order (EVar? e); 
                      bool_order r;
                      1;
-                     e])
-  = match e with
-  | EVar x -> s x
-  | ELam t e1 -> ELam t (subst (sub_elam s) e1)
-  | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
-  | EUnit -> EUnit
-  | EZero -> EZero
-  | ESucc e -> ESucc (subst s e)
-  | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
-  | EInl e -> EInl (subst s e)
-  | EInr e -> EInr (subst s e)
-  | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
-//   | EByteLit b -> EByteLit b
-//   | EBytesCreate e1 e2 -> EBytesCreate (subst s e1) (subst s e2)
-  | EFst e -> EFst (subst s e)
-  | ESnd e -> ESnd (subst s e)
-  | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-//   | EStringLit s -> EStringLit s
-  | ETrue -> ETrue
-  | EFalse -> EFalse
-  | EIf c t f -> EIf (subst s c) (subst s t) (subst s f)
+                     e]) = 
+     match e with
+     | EVar x -> s x
+     | ELam t e1 -> ELam t (subst (sub_elam s) e1)
+     | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
+     | EUnit -> EUnit
+     | EZero -> EZero
+     | ESucc e -> ESucc (subst s e)
+     | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
+     | EInl e -> EInl (subst s e)
+     | EInr e -> EInr (subst s e)
+     | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
+     | EFst e -> EFst (subst s e)
+     | ESnd e -> ESnd (subst s e)
+     | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
+     | ETrue -> ETrue
+     | EFalse -> EFalse
+     | EIf c t f -> EIf (subst s c) (subst s t) (subst s f)
 
 and sub_elam (#r:bool) (s:sub r) 
   : Tot (sub r)
@@ -266,133 +248,123 @@ let sub_beta (e:exp)
    non-deterministic, so necessarily as inductive relation *)
 
 type pure_step : exp -> exp -> Type =
-  | SBeta : t:typ ->
-            e1:exp ->
-            e2:exp ->
-            pure_step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
-  | SApp1 : #e1:exp ->
-             e2:exp ->
-            #e1':exp ->
-            $hst:pure_step e1 e1' ->
-                 pure_step (EApp e1 e2) (EApp e1' e2)
-  | SApp2 :   e1:exp ->
-             #e2:exp ->
-            #e2':exp ->
-            $hst:pure_step e2 e2' ->
-                 pure_step (EApp e1 e2) (EApp e1 e2')
-  | SSucc :    e:exp ->
-             #e':exp ->
-            $hst:pure_step e e' ->
-                 pure_step (ESucc e) (ESucc e')     
-  | SNRecV :  #e1:exp ->
-             #e1':exp ->
-               e2:exp ->
-               e3:exp ->
-             $hst:pure_step e1 e1' ->
-                 pure_step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
+| SBeta : t:typ ->
+          e1:exp ->
+          e2:exp ->
+          pure_step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
+| SApp1 : #e1:exp ->
+          e2:exp ->
+          #e1':exp ->
+          $hst:pure_step e1 e1' ->
+               pure_step (EApp e1 e2) (EApp e1' e2)
+| SApp2 :   e1:exp ->
+          #e2:exp ->
+          #e2':exp ->
+          $hst:pure_step e2 e2' ->
+               pure_step (EApp e1 e2) (EApp e1 e2')
+| SSucc :    e:exp ->
+          #e':exp ->
+          $hst:pure_step e e' ->
+               pure_step (ESucc e) (ESucc e')
+| SNRecV :#e1:exp ->
+          #e1':exp ->
+          e2:exp ->
+          e3:exp ->
+          $hst:pure_step e1 e1' ->
+               pure_step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
 //   | SNRecX :   e1:exp ->
 //                e2:exp ->
 //              #e2':exp ->
 //                e3:exp ->
 //              $hst:pure_step e2 e2' ->
 //                  pure_step (ENRec e1 e2 e3) (ENRec e1 e2' e3)                 
-  | SNRec0 : e2:exp ->
-             e3:exp ->
-                 pure_step (ENRec EZero e2 e3) e2
-  | SNRecIter :  v:exp ->
-                e2:exp ->
-                e3:exp ->
-                pure_step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
-  | SInl  :    e:exp ->
-             #e':exp ->
-            $hst:pure_step e e' ->
-                 pure_step (EInl e) (EInl e')
-  | SInr  :    e:exp ->
-             #e':exp ->
-            $hst:pure_step e e' ->
-                 pure_step (EInr e) (EInr e')
-  | SCase :  #e1:exp ->
-            #e1':exp ->
-              e2:exp ->
-              e3:exp ->
-            $hst:pure_step e1 e1' ->
-                 pure_step (ECase e1 e2 e3) (ECase e1' e2 e3)
-  | SCaseInl :  v:exp ->
+| SNRec0 : e2:exp ->
+          e3:exp ->
+               pure_step (ENRec EZero e2 e3) e2
+| SNRecIter :  v:exp ->
                e2:exp ->
                e3:exp ->
-                 pure_step (ECase (EInl v) e2 e3) (EApp e2 v)
-  | SCaseInr :  v:exp ->
+               pure_step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
+| SInl  : e:exp ->
+          #e':exp ->
+          $hst:pure_step e e' ->
+               pure_step (EInl e) (EInl e')
+| SInr  : e:exp ->
+          #e':exp ->
+          $hst:pure_step e e' ->
+               pure_step (EInr e) (EInr e')
+| SCase : #e1:exp ->
+          #e1':exp ->
+          e2:exp ->
+          e3:exp ->
+          $hst:pure_step e1 e1' ->
+               pure_step (ECase e1 e2 e3) (ECase e1' e2 e3)
+| SCaseInl :   v:exp ->
                e2:exp ->
                e3:exp ->
-                 pure_step (ECase (EInr v) e2 e3) (EApp e3 v)
-  | SFst0 :    #e:exp ->
-              #e':exp ->
-             $hst:pure_step e e' ->
-                 pure_step (EFst e) (EFst e')
-  | SFst :  e1:exp ->
-            e2:exp ->
-               pure_step (EFst (EPair e1 e2)) e1
-  | SSnd0 :    #e:exp ->
-              #e':exp ->
-             $hst:pure_step e e' ->
-                 pure_step (ESnd e) (ESnd e')
-  | SSnd :  e1:exp ->
-            e2:exp ->
-               pure_step (ESnd (EPair e1 e2)) e2
-  | SPair1  : #e1:exp ->
-             #e1':exp ->
-             $hst:pure_step e1 e1' ->
+                    pure_step (ECase (EInl v) e2 e3) (EApp e2 v)
+| SCaseInr :   v:exp ->
                e2:exp ->
-                 pure_step (EPair e1 e2) (EPair e1' e2)
-  | SPair2  :  e1:exp ->
-              #e2:exp ->
-             #e2':exp ->
-             $hst:pure_step e2 e2' ->
-                 pure_step (EPair e1 e2) (EPair e1 e2')
-//   | SBytesCreateN : #e1:exp ->
-//                    #e1':exp ->
-//                    e2:exp ->
-//                    $hst:pure_step e1 e1' ->
-//                    pure_step (EBytesCreate e1 e2) (EBytesCreate e1' e2)
-//   | SBytesCreateV : e1:exp ->
-//                    #e2:exp ->
-//                    #e2':exp ->
-//                    $hst:pure_step e2 e2' ->
-//                    pure_step (EBytesCreate e1 e2) (EBytesCreate e1 e2')
-  | SIfCond : #c:exp ->
-           t:exp ->
-           f:exp ->
-           #c':exp ->
-           $hst:pure_step c c' ->
-           pure_step (EIf c t f) (EIf c' t f)
-  | SIfTrue :  t:exp ->
+               e3:exp ->
+                    pure_step (ECase (EInr v) e2 e3) (EApp e3 v)
+| SFst0 : #e:exp ->
+          #e':exp ->
+          $hst:pure_step e e' ->
+               pure_step (EFst e) (EFst e')
+| SFst :  e1:exp ->
+          e2:exp ->
+          pure_step (EFst (EPair e1 e2)) e1
+| SSnd0 : #e:exp ->
+          #e':exp ->
+          $hst:pure_step e e' ->
+               pure_step (ESnd e) (ESnd e')
+| SSnd :  e1:exp ->
+          e2:exp ->
+          pure_step (ESnd (EPair e1 e2)) e2
+| SPair1 :#e1:exp ->
+          #e1':exp ->
+          $hst:pure_step e1 e1' ->
+          e2:exp ->
+               pure_step (EPair e1 e2) (EPair e1' e2)
+| SPair2 : e1:exp ->
+          #e2:exp ->
+          #e2':exp ->
+          $hst:pure_step e2 e2' ->
+               pure_step (EPair e1 e2) (EPair e1 e2')
+| SIfCond : #c:exp ->
+          t:exp ->
+          f:exp ->
+          #c':exp ->
+          $hst:pure_step c c' ->
+               pure_step (EIf c t f) (EIf c' t f)
+| SIfTrue :    t:exp ->
                f:exp ->
-                 pure_step (EIf ETrue t f) t
-  | SIfFalse : t:exp ->
+                    pure_step (EIf ETrue t f) t
+| SIfFalse :   t:exp ->
                f:exp ->
-               pure_step (EIf EFalse t f) f
+                    pure_step (EIf EFalse t f) f
 
 type step = pure_step
 
 type pure_steps : exp -> exp -> Type =
-  | PSrefl   : e:exp ->
-               pure_steps e e
-  | PSMany   : #e1:exp ->
-               #e2:exp ->
-               #e3:exp ->
-               $hst:pure_step e1 e2 ->
-               $hsts:pure_steps e2 e3 ->
-               pure_steps e1 e3
+| PSrefl: e:exp ->
+          pure_steps e e
+| PSMany: #e1:exp ->
+          #e2:exp ->
+          #e3:exp ->
+          $hst:pure_step e1 e2 ->
+          $hsts:pure_steps e2 e3 ->
+          pure_steps e1 e3
 
 type steps : exp -> exp -> Type =
-  | Srefl  : e:exp ->
-             steps e e
-  | SMany   : #e1:exp ->
-              #e2:exp ->
-              #e3:exp ->
-              $hst:step e1 e2 ->
-              $hsts:steps e2 e3 ->
-              steps e1 e3
+| Srefl : e:exp ->
+          steps e e
+| SMany : #e1:exp ->
+          #e2:exp ->
+          #e3:exp ->
+          $hst:step e1 e2 ->
+          $hsts:steps e2 e3 ->
+          steps e1 e3
 
 let rec is_value (e:exp) : bool = 
      match e with
@@ -406,9 +378,7 @@ let rec is_value (e:exp) : bool =
      | EInr e -> is_value e 
      | EPair e1 e2 -> is_value e1 && is_value e2
      | _ -> false
-     // EByteLit? e || 
-     // (EBytesCreate? e && is_value (EBytesCreate?.v e) && is_value (EBytesCreate?.n e)) || (* TODO: this is kind of weird, but we don't have enough syntax to interpret this *)
-     // EStringLit? e
+
 
 let rec progress (#e:exp { ~(is_value e) })
                  (#t:typ)
@@ -465,14 +435,6 @@ let rec progress (#e:exp { ~(is_value e) })
           else 
                let (| e1', h1' |) = progress h1 in
                (| EPair e1' e2, SPair1 h1' e2 |)
-     // | TyBytesCreate #g #e1 #e2 h1 h2 -> begin
-     //      if is_value e1 then
-     //           let (| e2', h2' |) = progress h2 in
-     //           (| EBytesCreate e1 e2', SBytesCreateV e1 h2' |)
-     //      else 
-     //           let (| e1', h1' |) = progress h1 in
-     //           (| EBytesCreate e1' e2, SBytesCreateN e2 h1' |)
-     // end
      | TyIf #g #c #t #f #ty hc ht hf -> begin
           match c with
           | ETrue -> (| t, SIfTrue t f |)
@@ -529,9 +491,7 @@ let rec substitution (#g1:context)
    | TyTrue -> TyTrue
    | TyFalse -> TyFalse
    | TyIf hc ht hf -> TyIf (substitution s hc hs) (substitution s ht hs) (substitution s hf hs)
-//    | TyByteLit b -> TyByteLit b
-//    | TyBytesCreate h1 h2 -> TyBytesCreate (substitution s h1 hs) (substitution s h2 hs)
-//    | TyStringLit s -> TyStringLit s
+
 
 (* Substitution for beta reduction
    Now just a special case of substitution lemma *)
@@ -661,11 +621,6 @@ let rec elab_typ (t:typ) : Type =
   | TSum t1 t2 -> either (elab_typ t1) (elab_typ t2)
   | TPair t1 t2 -> (elab_typ t1) * (elab_typ t2)
   | TBool -> bool
-//   | TByte -> byte
-//   | TBytes -> bytes
-//   | TExn -> exn
-//   | TFDesc -> file_descr
-//   | TString -> string
 
 
 type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
@@ -684,61 +639,55 @@ let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
 
 let rec elab_exp (#g:context) (#e:exp) (#t:typ) (h:typing g e t) (ve:vcontext g)
   : Tot (elab_typ t) (decreases e) =
-  match h with
-  | TyUnit -> ()
-  | TyZero -> 0
-  | TySucc hs ->
-       1 + (elab_exp hs ve)
-  | TyNRec h1 h2 h3 ->
-       let v1 = elab_exp h1 ve in
-       let v2 : elab_typ t = elab_exp h2 ve in
-       let v3 : elab_typ (TArr t t) = elab_exp h3 ve in
-       fnrec #(elab_typ t) v1 v2 v3
-  | TyInl #_ #_ #t1 #t2 h1 ->
-       let v = elab_exp h1 ve in
-       Inl #(elab_typ t1) #(elab_typ t2) v
-  | TyInr #_ #_ #t1 #t2 h1 ->
-       let v = elab_exp h1 ve in
-       Inr #(elab_typ t1) #(elab_typ t2) v
-  | TyCase #_ #_ #_ #_ #t1 #t2 #t3 h1 h2 h3 ->
-       let v1 = elab_exp h1 ve in
-       let v2 = elab_exp h2 ve in
-       let v3 = elab_exp h3 ve in
-       (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
-  | TyVar x -> ve x
-  | TyLam t1 #_ #t2 h1 ->
-       assert (t == TArr t1 t2);
-       let w : elab_typ t1 -> Tot (elab_typ t2) =
-         (fun x -> elab_exp h1 (vextend x ve)) in
-       cast_TArr w
-  | TyApp #_ #_ #_ #t1 #t2 h1 h2 ->
-       assert ((elab_typ t) == (elab_typ t2));
-       (* TODO: Should we change the order here, first evaluate argument? *)
-       let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
-       let v2 : elab_typ t1 = elab_exp h2 ve in
-       v1 v2
-  | TyFst #_ #_ #t1 #t2 h1 ->
-       let v = elab_exp h1 ve in
-       fst #(elab_typ t1) #(elab_typ t2) v
-  | TySnd #_ #_ #t1 #t2 h1 ->
-       let v = elab_exp h1 ve in
-       snd #(elab_typ t1) #(elab_typ t2) v
-  | TyPair h1 h2 ->
-       let v1 = elab_exp h1 ve in
-       let v2 = elab_exp h2 ve in
-       (v1, v2)
-  | TyTrue -> true
-  | TyFalse -> false
-  | TyIf hc ht hf ->
+     match h with
+     | TyUnit -> ()
+     | TyZero -> 0
+     | TySucc hs ->
+          1 + (elab_exp hs ve)
+     | TyNRec h1 h2 h3 ->
+          let v1 = elab_exp h1 ve in
+          let v2 : elab_typ t = elab_exp h2 ve in
+          let v3 : elab_typ (TArr t t) = elab_exp h3 ve in
+          fnrec #(elab_typ t) v1 v2 v3
+     | TyInl #_ #_ #t1 #t2 h1 ->
+          let v = elab_exp h1 ve in
+          Inl #(elab_typ t1) #(elab_typ t2) v
+     | TyInr #_ #_ #t1 #t2 h1 ->
+          let v = elab_exp h1 ve in
+          Inr #(elab_typ t1) #(elab_typ t2) v
+     | TyCase #_ #_ #_ #_ #t1 #t2 #t3 h1 h2 h3 ->
+          let v1 = elab_exp h1 ve in
+          let v2 = elab_exp h2 ve in
+          let v3 = elab_exp h3 ve in
+          (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
+     | TyVar x -> ve x
+     | TyLam t1 #_ #t2 h1 ->
+          assert (t == TArr t1 t2);
+          let w : elab_typ t1 -> Tot (elab_typ t2) =
+          (fun x -> elab_exp h1 (vextend x ve)) in
+          cast_TArr w
+     | TyApp #_ #_ #_ #t1 #t2 h1 h2 ->
+          assert ((elab_typ t) == (elab_typ t2));
+          (* TODO: Should we change the order here, first evaluate argument? *)
+          let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
+          let v2 : elab_typ t1 = elab_exp h2 ve in
+          v1 v2
+     | TyFst #_ #_ #t1 #t2 h1 ->
+          let v = elab_exp h1 ve in
+          fst #(elab_typ t1) #(elab_typ t2) v
+     | TySnd #_ #_ #t1 #t2 h1 ->
+          let v = elab_exp h1 ve in
+          snd #(elab_typ t1) #(elab_typ t2) v
+     | TyPair h1 h2 ->
+          let v1 = elab_exp h1 ve in
+          let v2 = elab_exp h2 ve in
+          (v1, v2)
+     | TyTrue -> true
+     | TyFalse -> false
+     | TyIf hc ht hf ->
      let c = elab_exp hc ve in
      if c then elab_exp ht ve else elab_exp hf ve
-//   | TyStringLit s -> s
-//   | TyByteLit b -> b
-//   | TyBytesCreate h1 h2 ->
-//        let v1 : elab_typ TNat = elab_exp h1 ve in
-//        let v2 : elab_typ TByte = elab_exp h2 ve in
-//        let b : bytes = Bytes.create (convert v1) v2 in
-//        b
+
 
 let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
      admit ();
@@ -754,38 +703,38 @@ let rec eval_esucc_commute (#e:exp) (ht:typing empty e TNat)
     ESucc e' == e'' /\
     TySucc ht' == ht''
   )) (decreases ht) =
-  if is_value e then ()
-  else begin
-    calc (==) {
-      eval #(ESucc e) (TySucc ht);
-      == {}
-      (let (| e', s |) = progress ht in
-      eval #(ESucc e') (TySucc (preservation_step ht s)));
-    };
-    let (| e', s |) = progress ht in
-    let ht' = preservation_step ht s in
-    assume (ht' << ht); (** TODO: proof of termination **)
-    eval_esucc_commute ht'
-  end
+     if is_value e then ()
+     else begin
+          calc (==) {
+               eval #(ESucc e) (TySucc ht);
+               == {}
+               (let (| e', s |) = progress ht in
+               eval #(ESucc e') (TySucc (preservation_step ht s)));
+          };
+     let (| e', s |) = progress ht in
+     let ht' = preservation_step ht s in
+     assume (ht' << ht); (** TODO: proof of termination **)
+     eval_esucc_commute ht'
+     end
 
 let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
   : Lemma (elab_exp ht vempty == elab_exp (dsnd (eval ht)) vempty) =
-  match ht with
-  | TyUnit -> ()
-  | TyZero -> ()
-  | TySucc hts ->
-      calc (==) {
-        elab_exp (TySucc hts) vempty;
-        == { }
-        1 + elab_exp hts vempty;
-        == {  elab_invariant_to_eval hts }
-        1 + elab_exp (dsnd (eval hts)) vempty;
-        == { } 
-        elab_exp (TySucc (dsnd (eval hts))) vempty;
-        == { eval_esucc_commute hts }
-        elab_exp (dsnd (eval (TySucc hts))) vempty;
-      }
-  | _ -> admit ()
+     match ht with
+     | TyUnit -> ()
+     | TyZero -> ()
+     | TySucc hts ->
+          calc (==) {
+          elab_exp (TySucc hts) vempty;
+          == { }
+          1 + elab_exp hts vempty;
+          == {  elab_invariant_to_eval hts }
+          1 + elab_exp (dsnd (eval hts)) vempty;
+          == { } 
+          elab_exp (TySucc (dsnd (eval hts))) vempty;
+          == { eval_esucc_commute hts }
+          elab_exp (dsnd (eval (TySucc hts))) vempty;
+          }
+     | _ -> admit ()
 
 
 let neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
@@ -821,4 +770,5 @@ let mul_typ' : typing empty mul' (TArr TNat (TArr TNat TNat)) =
 let elab_mult : nat -> nat -> nat = stlc_sem mul_typ'
 let test1 () = 
      assert (elab_mult 0 3 == 0) by (compute ());
-     assert (elab_mult 3 4 == 12) by (compute ())
+     assert (elab_mult 3 4 == 12) by (compute ());
+     assert (elab_mult 5 5 == 25) by (compute ())
