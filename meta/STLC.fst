@@ -797,3 +797,28 @@ let op_and_typ : typing empty op_and (TArr TBool (TArr TBool TBool)) = TyLam TBo
 let op_or : exp = ELam TBool (ELam TBool (EIf (EVar 1) ETrue (EVar 0)))
 let op_or_typ : typing empty op_or (TArr TBool (TArr TBool TBool)) = TyLam TBool (TyLam TBool (TyIf (TyVar 1) TyTrue (TyVar 0)))
 
+let add : exp = ELam TNat (ELam TNat (ENRec (EVar 1) (EVar 0) (ELam TNat (ESucc (EVar 0)))))
+let add_typ : typing empty add (TArr TNat (TArr TNat TNat)) = 
+     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) (TyVar 0) (TyLam TNat (TySucc (TyVar 0)))))
+
+let stlc_sem (#e:exp) (#t:typ) (ht:typing empty e t) : elab_typ t = 
+  let (| _, ht' |) = eval ht in
+  elab_exp ht' vempty
+
+let elab_add = stlc_sem add_typ
+let _ = 
+     assert (elab_add 3 5 == 8)
+
+let mul : exp = ELam TNat (ELam TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
+let mul_typ : typing (fun x -> if x = 0 then Some (TArr TNat (TArr TNat TNat)) else None) mul (TArr TNat (TArr TNat TNat)) = 
+     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
+
+let mul' : exp = EApp (ELam (TArr TNat (TArr TNat TNat)) mul) add
+let mul_typ' : typing empty mul' (TArr TNat (TArr TNat TNat)) =
+     TyApp (TyLam (TArr TNat (TArr TNat TNat)) mul_typ) add_typ
+
+
+let elab_mult : nat -> nat -> nat = stlc_sem mul_typ'
+let test1 () = 
+     assert (elab_mult 0 3 == 0) by (compute ());
+     assert (elab_mult 3 4 == 12) by (compute ())
