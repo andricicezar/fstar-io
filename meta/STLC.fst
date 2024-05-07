@@ -57,43 +57,43 @@ type exp =
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
-type env = var -> Tot (option typ)
+type context = var -> Tot (option typ)
 
-val empty : env
+val empty : context
 let empty _ = None
 
 (* we only need extend at 0 *)
-val extend : typ -> env -> Tot env
+val extend : typ -> context -> Tot context
 let extend t g y = if y = 0 then Some t
                    else g (y-1)
 
-noeq type typing : env -> exp -> typ -> Type0 =
-  | TyVar : #g:env ->
+noeq type typing : context -> exp -> typ -> Type0 =
+  | TyVar : #g:context ->
              x:var{Some? (g x)} ->
              typing g (EVar x) (Some?.v (g x))
-  | TyLam : #g :env ->
+  | TyLam : #g :context ->
              t :typ ->
             #e1:exp ->
             #t':typ ->
             $hbody:typing (extend t g) e1 t' ->
                    typing g (ELam t e1) (TArr t t')
-  | TyApp : #g:env ->
+  | TyApp : #g:context ->
             #e1:exp ->
             #e2:exp ->
-            #t11:typ ->
-            #t12:typ ->
-            $h1:typing g e1 (TArr t11 t12) ->
-            $h2:typing g e2 t11 ->
-                typing g (EApp e1 e2) t12
-  | TyUnit : #g:env ->
+            #t1:typ ->
+            #t2:typ ->
+            $h1:typing g e1 (TArr t1 t2) ->
+            $h2:typing g e2 t1 ->
+                typing g (EApp e1 e2) t2
+  | TyUnit : #g:context ->
              typing g EUnit TUnit
-  | TyZero : #g:env ->
+  | TyZero : #g:context ->
              typing g EZero TNat
-  | TySucc : #g:env ->
+  | TySucc : #g:context ->
              #e:exp ->
              $h1:typing g e TNat ->
                  typing g (ESucc e) TNat
-  | TyNRec : #g:env ->
+  | TyNRec : #g:context ->
              #e1:exp ->
              #e2:exp ->
              #e3:exp ->
@@ -102,19 +102,19 @@ noeq type typing : env -> exp -> typ -> Type0 =
              $h2:typing g e2 t1 ->
              $h3:typing g e3 (TArr t1 t1) ->
                  typing g (ENRec e1 e2 e3) t1
-  | TyInl  : #g:env ->
+  | TyInl  : #g:context ->
              #e:exp ->
              #t1:typ ->
              t2:typ ->
              $h1:typing g e t1 ->
                  typing g (EInl e) (TSum t1 t2)
-  | TyInr  : #g:env ->
+  | TyInr  : #g:context ->
              #e:exp ->
              t1:typ ->
              #t2:typ ->
              $h1:typing g e t2 ->
                  typing g (EInr e) (TSum t1 t2)
-  | TyCase : #g:env ->
+  | TyCase : #g:context ->
              #e1:exp ->
              #e2:exp ->
              #e3:exp ->
@@ -125,28 +125,28 @@ noeq type typing : env -> exp -> typ -> Type0 =
              $h2:typing g e2 (TArr t1 t3) ->
              $h3:typing g e3 (TArr t2 t3) ->
                  typing g (ECase e1 e2 e3) t3
-//   | TyByteLit : #g:env ->
+//   | TyByteLit : #g:context ->
 //                 b:byte ->
 //                    typing g (EByteLit b) TByte
-//   | TyBytesCreate : #g:env ->
+//   | TyBytesCreate : #g:context ->
 //                     #e1:exp ->
 //                     #e2:exp ->
 //                     $h1:typing g e1 TNat ->
 //                     $h2:typing g e2 TByte ->
 //                         typing g (EBytesCreate e1 e2) TBytes
-  | TyFst         : #g:env ->
+  | TyFst         : #g:context ->
                     #e:exp ->
                     #t1:typ ->
                     #t2:typ ->
                     $h1:typing g e (TPair t1 t2) ->
                         typing g (EFst e) t1
-  | TySnd         : #g:env ->
+  | TySnd         : #g:context ->
                     #e:exp ->
                     #t1:typ ->
                     #t2:typ ->
                     $h1:typing g e (TPair t1 t2) ->
                         typing g (ESnd e) t2
-  | TyPair        : #g:env ->
+  | TyPair        : #g:context ->
                     #e1:exp ->
                     #e2:exp ->
                     #t1:typ ->
@@ -154,7 +154,7 @@ noeq type typing : env -> exp -> typ -> Type0 =
                     $h1:typing g e1 t1 ->
                     $h2:typing g e2 t2 ->
                         typing g (EPair e1 e2) (TPair t1 t2)
-//   | TyStringLit   : #g:env ->
+//   | TyStringLit   : #g:context ->
 //                     s:string ->
 //                        typing g (EStringLit s) TString
 
@@ -442,17 +442,17 @@ let rec progress (#e:exp { ~(is_value e) })
 
 
 (* Typing of substitutions (very easy, actually) *)
-let subst_typing #r (s:sub r) (g1:env) (g2:env) =
+let subst_typing #r (s:sub r) (g1:context) (g2:context) =
     x:var{Some? (g1 x)} -> typing g2 (s x) (Some?.v (g1 x))
 
 (* Substitution preserves typing
    Strongest possible statement; suggested by Steven Schäfer *)
-let rec substitution (#g1:env) 
+let rec substitution (#g1:context) 
                      (#e:exp)
                      (#t:typ)
                      (#r:bool)
                      (s:sub r)
-                     (#g2:env)
+                     (#g2:context)
                      (h1:typing g1 e t)
                      (hs:subst_typing s g1 g2)
    : Tot (typing g2 (subst s e) t)
@@ -614,11 +614,11 @@ let rec elab_typ (t:typ) : Type =
 //   | TString -> string
 
 
-type venv (g:env) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
+type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
 
-let vempty : venv empty = fun _ -> assert false
+let vempty : vcontext empty = fun _ -> assert false
 
-let vextend #t (x:elab_typ t) (#g:env) (ve:venv g) : venv (extend t g) =
+let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
 let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
@@ -628,7 +628,7 @@ open FStar.List.Tot
 let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
      if n = 0 then acc else fnrec (n-1) (iter acc) iter
 
-let rec elab_exp (#g:env) (#e:exp) (#t:typ) (h:typing g e t) (ve:venv g)
+let rec elab_exp (#g:context) (#e:exp) (#t:typ) (h:typing g e t) (ve:vcontext g)
   : Tot (elab_typ t) (decreases e) =
   match h with
   | TyUnit -> ()
