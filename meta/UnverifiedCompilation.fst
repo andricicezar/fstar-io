@@ -2,6 +2,62 @@ module UnverifiedCompilation
 
 open HelperTactics
 
+noeq
+type fs_var =
+| FVar : fv -> fs_var
+| Var  : namedv -> fs_var
+| Bv   : bv -> fs_var
+
+type mapping (g:STLC.context) =
+  fs_var -> option (x:STLC.var{Some? (g x)})
+
+let incr_option (#g:STLC.context) (#b_ty:STLC.typ) (x:option (y:STLC.var{Some? (g y)})) : 
+  option (y:STLC.var{Some? (STLC.extend b_ty g y)}) =
+  match x with
+  | Some n -> Some (n+1)
+  | None -> None
+
+let extend_mapping_binder
+  (#gstlc:STLC.context)
+  (vars_mapping:mapping gstlc) 
+  (b:binder)
+  (b_ty:STLC.typ)
+  : mapping (STLC.extend b_ty gstlc) =
+  (fun x -> match x with 
+      | Var v -> if v.uniq = b.uniq then Some 0 else (incr_option (vars_mapping x))
+      | _ -> (incr_option (vars_mapping x)))
+
+let extend_mapping_fvar
+  (#gstlc:STLC.context)
+  (vars_mapping:mapping gstlc) 
+  (b:string)
+  (b_ty:STLC.typ)
+  : mapping (STLC.extend b_ty gstlc) =
+  (fun x -> match x with 
+      | FVar v -> if fv_to_string v = b then Some 0 else (incr_option (vars_mapping x))
+      | _ -> (incr_option (vars_mapping x)))
+
+let rec extend_mapping_with_env
+  (g:STLC.context)
+  (vars_mapping:mapping g)
+  (e:STLC.env) :
+  mapping (STLC.extend_context_with_env g e) =
+  match e with
+  | [] -> vars_mapping
+  | (| fnm, _, ty, _ |)::tl -> extend_mapping_with_env (STLC.extend ty g) (extend_mapping_fvar vars_mapping fnm ty) tl
+
+
+let raw_mapping : STLC.env = [
+  (| "Prims.op_Addition", STLC.op_add, STLC.op_add_ty, STLC.op_add_tyj |);
+  (| "Prims.op_Multiply", STLC.op_mul, STLC.op_mul_ty, STLC.op_mul_tyj |);
+  (| "Prims.op_Negation", STLC.op_neg, STLC.op_neg_ty, STLC.op_neg_tyj |);
+  (| "Prims.op_AmpAmp", STLC.op_and, STLC.op_and_ty, STLC.op_and_tyj |);
+  (| "Prims.op_BarBar", STLC.op_or, STLC.op_or_ty, STLC.op_or_tyj |)
+]
+
+type closed_stlc_term =
+  (e:STLC.exp & t:STLC.typ & STLC.typing STLC.empty e t)
+
 type open_stlc_term (g:STLC.context) =
   (e:STLC.exp & t:STLC.typ & STLC.typing g e t)
 
@@ -80,28 +136,6 @@ let recover_type_of_arrow (gfs:env) (qfs:term) (t:term) :
   | Tv_Abs b c -> Some b
   | _ -> None
 
-noeq
-type fs_var =
-| FVar : fv -> fs_var
-| Var  : namedv -> fs_var
-| Bv   : bv -> fs_var
-
-type mapping (g:STLC.context) =
-  fs_var -> depth:nat -> option (x:STLC.var{Some? (g x)})
-
-let extend_env_mapping
-  (gstlc:STLC.context)
-  (vars_mapping:mapping gstlc) 
-  (b:binder)
-  (b_ty:STLC.typ):
-  (gstlc':STLC.context & mapping gstlc') =
-  let gstlc' = STLC.extend b_ty gstlc in
-  let vars_mapping': mapping gstlc' =
-    (fun x n -> match x with 
-        | Var v -> if v.uniq = b.uniq then (admit (); Some n) else (admit (); vars_mapping x (n+1))
-        | _ -> (admit (); vars_mapping x (n+1))) in
-  (| gstlc', vars_mapping' |)
-
 (* CA: keeping track of the type of the term is important for the logical relation *)
 let rec exp_translation
   (gfs:env)
@@ -113,13 +147,13 @@ let rec exp_translation
       (ensures fun _ -> True) =
   match inspect qfs with
   | Tv_FVar fv -> begin
-    match vars_mapping (FVar fv) 0 with
+    match vars_mapping (FVar fv) with
     | Some v -> (| _, _, STLC.TyVar #gstlc v |)
     | None -> fail (fv_to_string fv ^ " not defined")
   end
 
   | Tv_Var v -> begin
-    match vars_mapping (Var v) 0 with
+    match vars_mapping (Var v) with
     | Some dbi -> (| STLC.EVar dbi, Some?.v (gstlc dbi), STLC.TyVar #gstlc dbi |)
     | None -> fail (print_nat v.uniq ^ " not defined in STLC env")
   end
@@ -147,8 +181,9 @@ let rec exp_translation
   | Tv_Abs bin body -> begin
     let gfs' = extend_env gfs bin.uniq bin.sort in
     let bin_ty : STLC.typ = typ_translation gfs bin.sort in
-    (* TODO: don't I have to prove termination here? is it hidden in extend_env_mapping? *)
-    let (| gstlc', vars_mapping' |) = extend_env_mapping gstlc vars_mapping bin bin_ty in
+    (* TODO: don't I have to prove termination here? is it hidden in extend_mapping_binder? *)
+    let gstlc' = STLC.extend bin_ty gstlc in
+    let vars_mapping' = extend_mapping_binder vars_mapping bin bin_ty in
     let (| _, _, body_tyj |) = exp_translation gfs' gstlc' vars_mapping' body in
     (| _, _, STLC.TyLam #gstlc bin_ty body_tyj |) 
   end
@@ -164,7 +199,7 @@ let rec exp_translation
   //   let bin_ty : STLC.typ = typ_translation gfs bin.sort in
   //   let (| _, def_ty, def_tyj |) = exp_translation gfs gstlc vars_mapping def in
   //   if def_ty <> bin_ty then fail ("converting let failed because definition type mismatch") else
-  //   let (| gstlc', vars_mapping' |) = extend_env_mapping gstlc vars_mapping bin bin_ty in
+  //   let (| gstlc', vars_mapping' |) = extend_mapping_binder gstlc vars_mapping bin bin_ty in
   //   let (| _, body_ty, body_tyj |) = exp_translation gfs' gstlc' vars_mapping' body in
   //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyLam #gstlc bin_ty body_tyj) def_tyj |)
   // end
@@ -177,17 +212,20 @@ let rec exp_translation
 let mk_stlc_typing (g qexp qtyp:term) =
   mk_app (`STLC.typing) [(g, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
 
+let global_gstlc = STLC.extend_context_with_env STLC.empty raw_mapping
+let global_vars_mapping : mapping global_gstlc = extend_mapping_with_env STLC.empty (fun x -> None) raw_mapping
+
 let def_translation (nm:string) (qfs:term) : dsl_tac_t = fun g ->
   let qfs = norm_term_env g [delta] qfs in
-  let (| exp, typ, tyj |) : open_stlc_term STLC.empty =
-    exp_translation g STLC.empty (fun _ _ -> None) qfs in
+  let (| exp, typ, tyj |) =
+    exp_translation g global_gstlc global_vars_mapping qfs in
   let qexp = quote exp in
   type_dynamically g qexp (`STLC.exp);
   let qtyp = quote typ in
   type_dynamically g qtyp (`STLC.typ);
   let qtyj = quote tyj in
-  let qtyj_ty = mk_stlc_typing (`STLC.empty) qexp qtyp in
-  assert (has_type tyj (STLC.typing STLC.empty exp typ));
+  let qtyj_ty = mk_stlc_typing (`global_gstlc) qexp qtyp in
+  assert (has_type tyj (STLC.typing global_gstlc exp typ));
   // type_dynamically g qtyj qtyj_ty;
   assume (tot_typing g qtyj qtyj_ty);
   [
@@ -195,7 +233,6 @@ let def_translation (nm:string) (qfs:term) : dsl_tac_t = fun g ->
    mk_checked_let g (nm^"_typ") qtyp (`STLC.typ);
    mk_checked_let g (nm^"_tyj") qtyj qtyj_ty;
   ]
-
 
 
 let stlc_sem (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t) : STLC.elab_typ t = 

@@ -44,9 +44,6 @@ type exp =
 | EInl         : v:exp -> exp
 | EInr         : v:exp -> exp
 | ECase        : exp -> exp -> exp -> exp
-//   | EByteLit     : byte -> exp
-//   | EBytesCreate : n:exp -> v:exp -> exp
-//   | EStringLit   : v:string -> exp
 | EFst         : exp -> exp
 | ESnd         : exp -> exp
 | EPair        : fst:exp -> snd:exp -> exp
@@ -578,13 +575,6 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      | SIfFalse _ _ ->
           let TyIf _ _ hf = ht in
           hf
-     // | SBytesCreateN _ hs1 ->
-     //      let TyBytesCreate h1 h2 = ht in
-     //      TyBytesCreate (preservation_step h1 hs1) h2
-     // | SBytesCreateV _ hs2 ->
-     //      let TyBytesCreate h1 h2 = ht in
-     //      TyBytesCreate h1 (preservation_step h2 hs2)
-
 
 
 (** Phil Wadler: Progress + Preservation = Evaluation. **)
@@ -606,13 +596,6 @@ let rec eval (#e:exp) (#t:typ) (ht:typing empty e t)
           eval ht'
 
 (** *** Elaboration of types and expressions to F* *)
-
-open FStar.Ghost
-open FStar.UInt32
-let convert (n : nat) : u32 = if n < 65535 then (uint_to_t n <: u32) else 0ul
-
-type file_descr = int
-
 let rec elab_typ (t:typ) : Type =
   match t with
   | TArr t1 t2 -> (elab_typ t1) -> Tot (elab_typ t2)
@@ -736,38 +719,75 @@ let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
           }
      | _ -> admit ()
 
+(** ** Env **)
+type op_mapping = string & e:STLC.exp{~(STLC.EVar? e)} & ty:STLC.typ & STLC.typing STLC.empty e ty
+type env = list op_mapping
 
-let neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
-let neg_typ : typing empty neg (TArr TBool TBool) = TyLam TBool (TyIf (TyVar 0) TyFalse TyTrue)
+let rec extend_context_with_env
+  (g:context)
+  (e:env) :
+  context =
+  match e with
+  | [] -> g
+  | (| _, _, ty, _ |)::tl -> extend_context_with_env (extend ty g) tl
+
+
+#set-options "--fuel 32 --z3rlimit 500"
+val env_to_sub : e:env{List.length e > 0} -> sub false
+let rec env_to_sub l (x:var) =
+  match l with
+  | (| _, op_e, _, _ |)::[] ->
+    assert (~(EVar? op_e));
+    if x = 0 then op_e
+    else STLC.EVar x
+  | (| _, op_e, _, _ |)::tl ->
+    assert (~(EVar? op_e));
+    let s = env_to_sub tl in
+    if x = 0 then op_e else s (x-1)
+#reset-options
+
+
+let op_neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
+let op_neg_ty : STLC.typ = TArr TBool TBool
+let op_neg_tyj : typing empty op_neg op_neg_ty = TyLam TBool (TyIf (TyVar 0) TyFalse TyTrue)
 
 let op_and : exp = ELam TBool (ELam TBool (EIf (EVar 1) (EVar 0) EFalse))
-let op_and_typ : typing empty op_and (TArr TBool (TArr TBool TBool)) = TyLam TBool (TyLam TBool (TyIf (TyVar 1) (TyVar 0) TyFalse))
+let op_and_ty : STLC.typ = TArr TBool (TArr TBool TBool)
+let op_and_tyj : typing empty op_and op_and_ty = TyLam TBool (TyLam TBool (TyIf (TyVar 1) (TyVar 0) TyFalse))
 
 let op_or : exp = ELam TBool (ELam TBool (EIf (EVar 1) ETrue (EVar 0)))
-let op_or_typ : typing empty op_or (TArr TBool (TArr TBool TBool)) = TyLam TBool (TyLam TBool (TyIf (TyVar 1) TyTrue (TyVar 0)))
+let op_or_ty : STLC.typ = TArr TBool (TArr TBool TBool)
+let op_or_tyj : typing empty op_or op_or_ty = TyLam TBool (TyLam TBool (TyIf (TyVar 1) TyTrue (TyVar 0)))
 
-let add : exp = ELam TNat (ELam TNat (ENRec (EVar 1) (EVar 0) (ELam TNat (ESucc (EVar 0)))))
-let add_typ : typing empty add (TArr TNat (TArr TNat TNat)) = 
+let op_add : exp = ELam TNat (ELam TNat (ENRec (EVar 1) (EVar 0) (ELam TNat (ESucc (EVar 0)))))
+let op_add_ty : STLC.typ = TArr TNat (TArr TNat TNat)
+let op_add_tyj : typing empty op_add op_add_ty = 
      TyLam TNat (TyLam TNat (TyNRec (TyVar 1) (TyVar 0) (TyLam TNat (TySucc (TyVar 0)))))
 
+let op_mul' : exp = ELam TNat (ELam TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
+let op_mul_ty' : STLC.typ = TArr TNat (TArr TNat TNat)
+let op_mul_tyj' : typing (fun x -> if x = 0 then Some op_add_ty else None) op_mul' op_mul_ty' = 
+     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
+
+let helper_substitution_beta #e #v #t_x #t #g 
+                      (h1:typing g v t_x)
+                      (h2:typing (extend t_x g) e t)
+  : (e':exp & t':typ & typing g e' t')
+  = (| _, _, substitution_beta h1 h2 |)
+
+let op_mul_dtriple = helper_substitution_beta op_add_tyj op_mul_tyj'
+let op_mul = Mkdtuple3?._1 op_mul_dtriple
+let op_mul_ty = Mkdtuple3?._2 op_mul_dtriple
+let op_mul_tyj = Mkdtuple3?._3 op_mul_dtriple
 let stlc_sem (#e:exp) (#t:typ) (ht:typing empty e t) : elab_typ t = 
   let (| _, ht' |) = eval ht in
   elab_exp ht' vempty
 
-let elab_add = stlc_sem add_typ
+let elab_add = stlc_sem op_add_tyj
 let _ = 
      assert (elab_add 3 5 == 8)
 
-let mul : exp = ELam TNat (ELam TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
-let mul_typ : typing (fun x -> if x = 0 then Some (TArr TNat (TArr TNat TNat)) else None) mul (TArr TNat (TArr TNat TNat)) = 
-     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
-
-let mul' : exp = EApp (ELam (TArr TNat (TArr TNat TNat)) mul) add
-let mul_typ' : typing empty mul' (TArr TNat (TArr TNat TNat)) =
-     TyApp (TyLam (TArr TNat (TArr TNat TNat)) mul_typ) add_typ
-
-
-let elab_mult : nat -> nat -> nat = stlc_sem mul_typ'
+let elab_mult : nat -> nat -> nat = stlc_sem op_mul_tyj
 let test1 () = 
      assert (elab_mult 0 3 == 0) by (compute ());
      assert (elab_mult 3 4 == 12) by (compute ());
