@@ -37,29 +37,14 @@ let extend_mapping_fvar
       | FVar v -> if fv_to_string v = b then Some 0 else (incr_option (vars_mapping x))
       | _ -> (incr_option (vars_mapping x)))
 
-let rec extend_mapping_with_env
-  (g:STLC.context)
-  (vars_mapping:mapping g)
-  (e:STLC.env) :
-  mapping (STLC.extend_context_with_env g e) =
-  match e with
-  | [] -> vars_mapping
-  | (| fnm, _, ty, _ |)::tl -> extend_mapping_with_env (STLC.extend ty g) (extend_mapping_fvar vars_mapping fnm ty) tl
-
-
-let raw_mapping : STLC.env = [
+type axiom_ty = string & e:STLC.exp{~(STLC.EVar? e)} & ty:STLC.typ & STLC.typing STLC.empty e ty
+let axioms_mapping : list axiom_ty = [
   (| "Prims.op_Addition", STLC.op_add, STLC.op_add_ty, STLC.op_add_tyj |);
   (| "Prims.op_Multiply", STLC.op_mul, STLC.op_mul_ty, STLC.op_mul_tyj |);
   (| "Prims.op_Negation", STLC.op_neg, STLC.op_neg_ty, STLC.op_neg_tyj |);
   (| "Prims.op_AmpAmp", STLC.op_and, STLC.op_and_ty, STLC.op_and_tyj |);
   (| "Prims.op_BarBar", STLC.op_or, STLC.op_or_ty, STLC.op_or_tyj |)
 ]
-
-type closed_stlc_term =
-  (e:STLC.exp & t:STLC.typ & STLC.typing STLC.empty e t)
-
-type open_stlc_term (g:STLC.context) =
-  (e:STLC.exp & t:STLC.typ & STLC.typing g e t)
 
 type open_stlc_term' (g:STLC.context) (t:STLC.typ) =
   (e:STLC.exp & STLC.typing g e t)
@@ -142,7 +127,7 @@ let rec exp_translation
   (gstlc:STLC.context)
   (vars_mapping:mapping gstlc)
   (qfs:term)
-  : TacP (open_stlc_term gstlc)
+  : TacP (STLC.open_term gstlc)
       (requires True)
       (ensures fun _ -> True) =
   match inspect qfs with
@@ -181,7 +166,7 @@ let rec exp_translation
   | Tv_Abs bin body -> begin
     let gfs' = extend_env gfs bin.uniq bin.sort in
     let bin_ty : STLC.typ = typ_translation gfs bin.sort in
-    (* TODO: don't I have to prove termination here? is it hidden in extend_mapping_binder? *)
+    (* TODO: don't I have to prove termination here? *)
     let gstlc' = STLC.extend bin_ty gstlc in
     let vars_mapping' = extend_mapping_binder vars_mapping bin bin_ty in
     let (| _, _, body_tyj |) = exp_translation gfs' gstlc' vars_mapping' body in
@@ -212,20 +197,50 @@ let rec exp_translation
 let mk_stlc_typing (g qexp qtyp:term) =
   mk_app (`STLC.typing) [(g, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
 
-let global_gstlc = STLC.extend_context_with_env STLC.empty raw_mapping
-let global_vars_mapping : mapping global_gstlc = extend_mapping_with_env STLC.empty (fun x -> None) raw_mapping
+let rec def_translation g gstlc fvars_mapping (qfs:term) : Tac (string * STLC.open_term gstlc) =
+  match inspect qfs with
+  | Tv_FVar fv -> begin
+    let qfs' = norm_term_env g [delta] qfs in
+    match inspect qfs' with
+    | Tv_FVar fv' ->
+      if fv_to_string fv = fv_to_string fv' then fail (fv_to_string fv ^ " does not unfold!")
+      else def_translation g gstlc fvars_mapping qfs'
+    | _ -> (fv_to_string fv, exp_translation g gstlc fvars_mapping qfs')
+  end
+  | _ -> fail ("not top-level definition")
 
-let def_translation (nm:string) (qfs:term) : dsl_tac_t = fun g ->
-  let qfs = norm_term_env g [delta] qfs in
-  let (| exp, typ, tyj |) =
-    exp_translation g global_gstlc global_vars_mapping qfs in
+let rec prog_translation g gstlc fvars_mapping (qfss:(list term){List.length qfss > 0}) : Tac (STLC.open_term gstlc) =
+  match qfss with
+ | qfs::[] -> snd (def_translation g gstlc fvars_mapping qfs)
+ | qfs::tl ->
+    let (def_name, def) = def_translation g gstlc fvars_mapping qfs in
+    let gstlc' = STLC.extend (Mkdtuple3?._2 def) gstlc in
+    let fvars_mapping' = extend_mapping_fvar fvars_mapping def_name (Mkdtuple3?._2 def) in
+    let prog = prog_translation g gstlc' fvars_mapping' tl in
+    STLC.instantiate_newest_binder def prog
+
+let rec translation g gstlc fvars_mapping (qfss:(list term){List.length qfss > 0}) (axioms:list axiom_ty) : Tac (STLC.open_term gstlc) =
+  match axioms with
+  | [] -> prog_translation g gstlc fvars_mapping qfss
+  | (| def_name, def, def_ty, def_tyj |)::tl ->
+    let gstlc' = STLC.extend def_ty gstlc in
+    let fvars_mapping' = extend_mapping_fvar fvars_mapping def_name def_ty in
+    let prog = translation g gstlc' fvars_mapping' qfss tl in
+    admit ();
+    STLC.instantiate_newest_binder (| def, def_ty, def_tyj |) prog
+
+let fs_translation g (qfss:(list term){List.length qfss > 0}) : Tac STLC.closed_term =
+  translation g STLC.empty (fun _ -> None) qfss axioms_mapping
+
+let meta_translation (nm:string) (qfss:(list term){List.length qfss > 0}) : dsl_tac_t = fun g ->
+  let (| exp, typ, tyj |) = fs_translation g qfss in
   let qexp = quote exp in
   type_dynamically g qexp (`STLC.exp);
   let qtyp = quote typ in
   type_dynamically g qtyp (`STLC.typ);
   let qtyj = quote tyj in
-  let qtyj_ty = mk_stlc_typing (`global_gstlc) qexp qtyp in
-  assert (has_type tyj (STLC.typing global_gstlc exp typ));
+  let qtyj_ty = mk_stlc_typing (`STLC.empty) qexp qtyp in
+  assert (has_type tyj (STLC.typing STLC.empty exp typ));
   // type_dynamically g qtyj qtyj_ty;
   assume (tot_typing g qtyj qtyj_ty);
   [
@@ -234,36 +249,43 @@ let def_translation (nm:string) (qfs:term) : dsl_tac_t = fun g ->
    mk_checked_let g (nm^"_tyj") qtyj qtyj_ty;
   ]
 
-
 let stlc_sem (#e:STLC.exp) (#t:STLC.typ) (ht:STLC.typing STLC.empty e t) : STLC.elab_typ t = 
   let (| _, ht' |) = STLC.eval ht in
   STLC.elab_exp ht' STLC.vempty
 
-let src1 : nat = 4
-%splice_t[tgt1;tgt1_typ;tgt1_tyj] (def_translation "tgt1" (`src1))
+let src1 : nat = 4+5
+%splice_t[tgt1;tgt1_typ;tgt1_tyj] (meta_translation "tgt1" [`src1])
 let _ = 
-  assert (tgt1 == STLC.ESucc (STLC.ESucc (STLC.ESucc (STLC.ESucc STLC.EZero))));
-  assert (stlc_sem tgt1_tyj == src1)
+  assert (stlc_sem tgt1_tyj == src1) by (compute ())
 
-// let src2 : nat = 4+5
-// %splice_t[tgt2;tgt2_typ;tgt2_tyj] (comp_exp "tgt2" (`src2))
+let src2 : nat -> nat = fun x -> x + 5
+%splice_t[tgt2;tgt2_typ;tgt2_tyj] (meta_translation "tgt2" [`src2])
 
-// let _ = 
-//   assert (tgt2 == STLC.EZero)
+let _ = 
+  assert (stlc_sem tgt2_tyj 3 == 8) by (compute ())
 
 let src3 : nat -> nat -> nat = fun x y -> x
-%splice_t[tgt3;tgt3_typ;tgt3_tyj] (def_translation "tgt3" (`src3))
+%splice_t[tgt3;tgt3_typ;tgt3_tyj] (meta_translation "tgt3" [`src3])
 
 let test3 () =
   assert (tgt3_typ == STLC.TArr STLC.TNat (STLC.TArr STLC.TNat STLC.TNat));
-  assert (tgt3 == STLC.ELam STLC.TNat (STLC.ELam STLC.TNat (STLC.EVar 1)));
-  assert (forall x y. (stlc_sem tgt3_tyj) x y == x /\ (stlc_sem tgt3_tyj) x y == src3 x y)
+  // assert (tgt3 == STLC.ELam STLC.TNat (STLC.ELam STLC.TNat (STLC.EVar 1)));
+  assert (forall x y. (stlc_sem tgt3_tyj) x y == x /\ (stlc_sem tgt3_tyj) x y == src3 x y) by (compute ())
 
 let src4 : nat -> (nat -> nat) -> nat = fun x f -> let y = f x in y
-%splice_t[tgt4;tgt4_typ;tgt4_tyj] (def_translation "tgt4" (`src4))
+%splice_t[tgt4;tgt4_typ;tgt4_tyj] (meta_translation "tgt4" [`src4])
 
 let test4 () =
   assert (tgt4_typ == STLC.TArr STLC.TNat (STLC.TArr (STLC.TArr STLC.TNat STLC.TNat) STLC.TNat));
-  assert (tgt4 == STLC.ELam STLC.TNat
-                   (STLC.ELam (STLC.TArr STLC.TNat STLC.TNat) (STLC.EApp (STLC.EVar 0) (STLC.EVar 1))))
-  // assert (forall x. (stlc_sem tgt4_tyj) x == x /\ (stlc_sem tgt4_tyj) x == src4 x)
+  assert (stlc_sem (STLC.TyApp (STLC.TyApp tgt4_tyj tgt1_tyj) tgt2_tyj) == src4 src1 src2) by (compute ())
+  // assert (tgt4 == STLC.ELam STLC.TNat
+  //                  (STLC.ELam (STLC.TArr STLC.TNat STLC.TNat) (STLC.EApp (STLC.EVar 0) (STLC.EVar 1))))
+  // assert (forall x. (stlc_sem tgt4_tyj) x == x /\ (stlc_sem tgt4_tyj) x == src4 x) by (compute ())
+
+let src5 (x:nat) : nat = x + (src4 src1 src2)
+
+%splice_t[tgt5;tgt5_typ;tgt5_tyj] (meta_translation "tgt5" [`src1; `src2])
+
+let test5 () =
+  assert (tgt5_typ == STLC.TArr STLC.TNat STLC.TNat);
+  assert (stlc_sem tgt5_tyj 3 == 3 + src4 src1 src2) by (compute ())

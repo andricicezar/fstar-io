@@ -719,32 +719,23 @@ let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
           }
      | _ -> admit ()
 
-(** ** Env **)
-type op_mapping = string & e:STLC.exp{~(STLC.EVar? e)} & ty:STLC.typ & STLC.typing STLC.empty e ty
-type env = list op_mapping
+(** ** Helpers **)
 
-let rec extend_context_with_env
-  (g:context)
-  (e:env) :
-  context =
-  match e with
-  | [] -> g
-  | (| _, _, ty, _ |)::tl -> extend_context_with_env (extend ty g) tl
+type closed_term =
+  (e:exp & t:typ & typing empty e t)
 
+type open_term (g:context) =
+  (e:exp & t:typ & typing g e t)
 
-#set-options "--fuel 32 --z3rlimit 500"
-val env_to_sub : e:env{List.length e > 0} -> sub false
-let rec env_to_sub l (x:var) =
-  match l with
-  | (| _, op_e, _, _ |)::[] ->
-    assert (~(EVar? op_e));
-    if x = 0 then op_e
-    else STLC.EVar x
-  | (| _, op_e, _, _ |)::tl ->
-    assert (~(EVar? op_e));
-    let s = env_to_sub tl in
-    if x = 0 then op_e else s (x-1)
-#reset-options
+val instantiate_newest_binder :
+  (#g:context) ->
+  s:open_term g ->
+  open_term (extend (Mkdtuple3?._2 s) g) ->
+  open_term g
+let instantiate_newest_binder s t =
+  let (| _, _, s_tyj |) = s in
+  let (| _, _, t_tyj |) = t in
+  (| _, _, TyApp (TyLam _ t_tyj) s_tyj |)
 
 
 let op_neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
@@ -779,16 +770,3 @@ let op_mul_dtriple = helper_substitution_beta op_add_tyj op_mul_tyj'
 let op_mul = Mkdtuple3?._1 op_mul_dtriple
 let op_mul_ty = Mkdtuple3?._2 op_mul_dtriple
 let op_mul_tyj = Mkdtuple3?._3 op_mul_dtriple
-let stlc_sem (#e:exp) (#t:typ) (ht:typing empty e t) : elab_typ t = 
-  let (| _, ht' |) = eval ht in
-  elab_exp ht' vempty
-
-let elab_add = stlc_sem op_add_tyj
-let _ = 
-     assert (elab_add 3 5 == 8)
-
-let elab_mult : nat -> nat -> nat = stlc_sem op_mul_tyj
-let test1 () = 
-     assert (elab_mult 0 3 == 0) by (compute ());
-     assert (elab_mult 3 4 == 12) by (compute ());
-     assert (elab_mult 5 5 == 25) by (compute ())
