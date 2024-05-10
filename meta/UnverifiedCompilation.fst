@@ -56,12 +56,7 @@ let rec make_stlc_nat #g (n:nat) : open_stlc_term' g STLC.TNat =
     let (|_, tyj |) = make_stlc_nat (n-1) in
     (| _, STLC.TySucc tyj |)
 
-let rec typ_translation
-  (gfs:env)
-  (qfs:term)
-  : TacP STLC.typ
-      (requires True)
-      (ensures fun _ -> True) =    
+let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ = 
   match inspect qfs with
   | Tv_FVar fv -> begin
     match fv_to_string fv with
@@ -127,9 +122,7 @@ let rec exp_translation
   (gstlc:STLC.context)
   (gmap:mapping gstlc)
   (qfs:term)
-  : TacP (STLC.open_term gstlc)
-      (requires True)
-      (ensures fun _ -> True) =
+  : Tac (STLC.open_term gstlc) =
   match inspect qfs with
   | Tv_FVar fv -> begin
     match gmap (FVar fv) with
@@ -194,43 +187,43 @@ let rec exp_translation
 
   | _ -> dump (tag_of qfs); fail ("not implemented")
 
-let mk_stlc_typing (g qexp qtyp:term) =
-  mk_app (`STLC.typing) [(g, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
+let mk_stlc_typing (gfs qexp qtyp:term) =
+  mk_app (`STLC.typing) [(gfs, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
 
-let rec def_translation g gstlc gmap (qdef:term) : Tac (string * STLC.open_term gstlc) =
+let rec def_translation gfs gstlc gmap (qdef:term) : Tac (string * STLC.open_term gstlc) =
   match inspect qdef with
   | Tv_FVar fv -> begin
-    let qdef' = norm_term_env g [delta_only [fv_to_string fv]] qdef in
+    let qdef' = norm_term_env gfs [delta_only [fv_to_string fv]] qdef in
     match inspect qdef' with
     | Tv_FVar fv' ->
       if fv_to_string fv = fv_to_string fv' then fail (fv_to_string fv ^ " does not unfold!")
-      else def_translation g gstlc gmap qdef'
-    | _ -> (fv_to_string fv, exp_translation g gstlc gmap qdef')
+      else def_translation gfs gstlc gmap qdef'
+    | _ -> (fv_to_string fv, exp_translation gfs gstlc gmap qdef')
   end
   | _ -> fail ("not top-level definition")
 
-let rec prog_translation g gstlc gmap (qdefs:(list term){List.length qdefs > 0}) : Tac (STLC.open_term gstlc) =
+let rec prog_translation gfs gstlc gmap (qdefs:(list term){List.length qdefs > 0}) : Tac (STLC.open_term gstlc) =
   match qdefs with
- | qdef::[] -> snd (def_translation g gstlc gmap qdef)
+ | qdef::[] -> snd (def_translation gfs gstlc gmap qdef)
  | qdef::tl ->
-    let (def_name, def) = def_translation g gstlc gmap qdef in
+    let (def_name, def) = def_translation gfs gstlc gmap qdef in
     let gstlc' = STLC.extend (Mkdtuple3?._2 def) gstlc in
     let gmap' = extend_gmap gmap def_name (Mkdtuple3?._2 def) in
-    let prog = prog_translation g gstlc' gmap' tl in
+    let prog = prog_translation gfs gstlc' gmap' tl in
     STLC.instantiate_newest_binder def prog
 
-let rec translation g gstlc gmap qdefs (axioms:list axiom_ty) : Tac (STLC.open_term gstlc) =
+let rec translation gfs gstlc gmap qdefs (axioms:list axiom_ty) : Tac (STLC.open_term gstlc) =
   match axioms with
-  | [] -> prog_translation g gstlc gmap qdefs
+  | [] -> prog_translation gfs gstlc gmap qdefs
   | (| axiom_name, axiom, axiom_ty, axiom_tyj |)::tl ->
     let gstlc' = STLC.extend axiom_ty gstlc in
     let gmap' = extend_gmap gmap axiom_name axiom_ty in
-    let prog = translation g gstlc' gmap' qdefs tl in
+    let prog = translation gfs gstlc' gmap' qdefs tl in
     admit ();
     STLC.instantiate_newest_binder (| axiom, axiom_ty, axiom_tyj |) prog
 
-let fs_translation g (qdefs:(list term){List.length qdefs > 0}) : Tac STLC.closed_term =
-  translation g STLC.empty (fun _ -> None) qdefs axioms_mapping
+let fs_translation gfs (qdefs:(list term){List.length qdefs > 0}) : Tac STLC.closed_term =
+  translation gfs STLC.empty (fun _ -> None) qdefs axioms_mapping
 
 let meta_translation (nm:string) (qdefs:(list term){List.length qdefs > 0}) : dsl_tac_t = fun g ->
   let (| exp, typ, tyj |) = fs_translation g qdefs in
