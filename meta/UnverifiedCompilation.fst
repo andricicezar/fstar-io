@@ -17,7 +17,7 @@ let incr_option (#g:STLC.context) (#b_ty:STLC.typ) (x:option (y:STLC.var{Some? (
   | Some n -> Some (n+1)
   | None -> None
 
-let extend_mapping_binder
+let extend_gmap_binder
   (#gstlc:STLC.context)
   (gmap:mapping gstlc) 
   (b:binder)
@@ -163,7 +163,7 @@ let rec exp_translation
     let bin_ty : STLC.typ = typ_translation gfs bin.sort in
     (* TODO: don't I have to prove termination here? *)
     let gstlc' = STLC.extend bin_ty gstlc in
-    let gmap' = extend_mapping_binder gmap bin bin_ty in
+    let gmap' = extend_gmap_binder gmap bin bin_ty in
     let (| _, _, body_tyj |) = exp_translation gfs' gstlc' gmap' body in
     (| _, _, STLC.TyLam #gstlc bin_ty body_tyj |) 
   end
@@ -179,7 +179,7 @@ let rec exp_translation
   //   let bin_ty : STLC.typ = typ_translation gfs bin.sort in
   //   let (| _, def_ty, def_tyj |) = exp_translation gfs gstlc gmap def in
   //   if def_ty <> bin_ty then fail ("converting let failed because definition type mismatch") else
-  //   let (| gstlc', gmap' |) = extend_mapping_binder gstlc gmap bin bin_ty in
+  //   let (| gstlc', gmap' |) = extend_gmap_binder gstlc gmap bin bin_ty in
   //   let (| _, body_ty, body_tyj |) = exp_translation gfs' gstlc' gmap' body in
   //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyLam #gstlc bin_ty body_tyj) def_tyj |)
   // end
