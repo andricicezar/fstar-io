@@ -89,7 +89,7 @@ let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ =
   | _ -> fail ("not implemented")
 
 let comp_typ (nm:string) (qfs:term) : dsl_tac_t = fun g ->
-  let typ= typ_translation g qfs in
+  let typ = typ_translation g qfs in
 
   let qtyp = quote typ in
   type_dynamically g qtyp (`STLC.typ);
@@ -123,8 +123,10 @@ let rec exp_translation
   (gmap:mapping gstlc)
   (qfs:term)
   : Tac (STLC.open_term gstlc) =
+  print ("      in exp translation: " ^ tag_of qfs);
   match inspect qfs with
   | Tv_FVar fv -> begin
+    print ("        looking for fvar: " ^ fv_to_string fv);
     match gmap (FVar fv) with
     | Some v -> (| _, _, STLC.TyVar #gstlc v |)
     | None -> fail (fv_to_string fv ^ " not defined")
@@ -147,8 +149,8 @@ let rec exp_translation
     //           (exists t'. tot_typing gfs a t' /\ tot_typing gfs hd (Tv_Arrow t' qty)));
     // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
     //           (forall t'. tot_typing gfs hd (Tv_Arrow t' qty) ==> tot_typing gfs a t'));
-    let (| _, sa_ty, sa_tyj |) = exp_translation gfs gstlc gmap a in
     let (| _, shd_ty, shd_tyj |) = exp_translation gfs gstlc gmap hd in
+    let (| _, sa_ty, sa_tyj |) = exp_translation gfs gstlc gmap a in
     match shd_ty with
     | STLC.TArr arg res -> 
       if arg = sa_ty then (| _, res, STLC.TyApp shd_tyj sa_tyj |)
@@ -191,18 +193,22 @@ let mk_stlc_typing (gfs qexp qtyp:term) =
   mk_app (`STLC.typing) [(gfs, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
 
 let rec def_translation gfs gstlc gmap (qdef:term) : Tac (string * STLC.open_term gstlc) =
+  print "  in def translation\n";
   match inspect qdef with
   | Tv_FVar fv -> begin
-    let qdef' = norm_term_env gfs [delta_only [fv_to_string fv]] qdef in
+    let fnm = fv_to_string fv in
+    print ("    def: " ^ fnm ^ "\n");
+    let qdef' = norm_term_env gfs [delta_only [fnm]] qdef in
     match inspect qdef' with
     | Tv_FVar fv' ->
-      if fv_to_string fv = fv_to_string fv' then fail (fv_to_string fv ^ " does not unfold!")
+      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
       else def_translation gfs gstlc gmap qdef'
-    | _ -> (fv_to_string fv, exp_translation gfs gstlc gmap qdef')
+    | _ -> (fnm, exp_translation gfs gstlc gmap qdef')
   end
   | _ -> fail ("not top-level definition")
 
 let rec prog_translation gfs gstlc gmap (qdefs:(list term){List.length qdefs > 0}) : Tac (STLC.open_term gstlc) =
+  print "in prog translation\n";
   match qdefs with
  | qdef::[] -> snd (def_translation gfs gstlc gmap qdef)
  | qdef::tl ->
@@ -213,9 +219,11 @@ let rec prog_translation gfs gstlc gmap (qdefs:(list term){List.length qdefs > 0
     STLC.instantiate_newest_binder def prog
 
 let rec translation gfs gstlc gmap qdefs (axioms:list axiom_ty) : Tac (STLC.open_term gstlc) =
+  print "in translation\n";
   match axioms with
   | [] -> prog_translation gfs gstlc gmap qdefs
   | (| axiom_name, axiom, axiom_ty, axiom_tyj |)::tl ->
+    print ("  axiom: " ^ axiom_name ^ "\n");
     let gstlc' = STLC.extend axiom_ty gstlc in
     let gmap' = extend_gmap gmap axiom_name axiom_ty in
     let prog = translation gfs gstlc' gmap' qdefs tl in
@@ -223,6 +231,7 @@ let rec translation gfs gstlc gmap qdefs (axioms:list axiom_ty) : Tac (STLC.open
     STLC.instantiate_newest_binder (| axiom, axiom_ty, axiom_tyj |) prog
 
 let fs_translation gfs (qdefs:(list term){List.length qdefs > 0}) : Tac STLC.closed_term =
+  print "\n\n\n================New Translation\n";
   translation gfs STLC.empty (fun _ -> None) qdefs axioms_mapping
 
 let meta_translation (nm:string) (qdefs:(list term){List.length qdefs > 0}) : dsl_tac_t = fun g ->
@@ -285,6 +294,7 @@ let test5 () =
 
 let src6 : nat = (src4 src1 src2)
 
+(** CA: this takes long and multiple runs have different logs ??? **)
 %splice_t[tgt6;tgt6_typ;tgt6_tyj] (meta_translation "tgt6" [`src1; `src2; `src4; `src6])
 
 let test6 () =
