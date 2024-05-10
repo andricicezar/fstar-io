@@ -184,6 +184,8 @@ let rec exp_translation
   //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyLam #gstlc bin_ty body_tyj) def_tyj |)
   // end
 
+  | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gstlc gmap t
+
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
 
@@ -266,6 +268,13 @@ let src2 : nat -> nat = fun x -> x + 5
 let _ = 
   assert (stlc_sem tgt2_tyj 4 == src2 4) by (compute ());
   assert (stlc_sem tgt2_tyj 0 == src2 0) by (compute ())
+
+let src2' (x:nat) : nat = x + 5
+%splice_t[tgt2p;tgt2p_typ;tgt2p_tyj] (meta_translation "tgt2p" [`src2'])
+
+let _ = 
+  assert (stlc_sem tgt2p_tyj 4 == src2' 4) by (compute ());
+  assert (stlc_sem tgt2p_tyj 0 == src2' 0) by (compute ())
 
 let src3 : nat -> nat -> nat = fun x y -> x
 %splice_t[tgt3;tgt3_typ;tgt3_tyj] (meta_translation "tgt3" [`src3])
