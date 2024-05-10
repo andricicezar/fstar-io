@@ -86,7 +86,7 @@ let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ =
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
 
-  | _ -> fail ("not implemented")
+  | _ -> fail ("not implemented: " ^ tag_of qfs)
 
 let comp_typ (nm:string) (qfs:term) : dsl_tac_t = fun g ->
   let typ = typ_translation g qfs in
@@ -189,7 +189,7 @@ let rec exp_translation
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
 
-  | _ -> dump (tag_of qfs); fail ("not implemented")
+  | _ -> fail ("not implemented: " ^ tag_of qfs)
 
 let mk_stlc_typing (gfs qexp qtyp:term) =
   mk_app (`STLC.typing) [(gfs, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
@@ -276,6 +276,8 @@ let _ =
   assert (stlc_sem tgt2p_tyj 4 == src2' 4) by (compute ());
   assert (stlc_sem tgt2p_tyj 0 == src2' 0) by (compute ())
 
+let src_if (x:nat) : nat = 
+  if x <= 5 then 0 else 1
 let src3 : nat -> nat -> nat = fun x y -> x
 %splice_t[tgt3;tgt3_typ;tgt3_tyj] (meta_translation "tgt3" [`src3])
 
