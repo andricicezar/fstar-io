@@ -165,7 +165,7 @@ let rec exp_translation
     let gstlc' = STLC.extend bin_ty gstlc in
     let gmap' = extend_gmap_binder gmap bin bin_ty in
     let (| _, _, body_tyj |) = exp_translation gfs' gstlc' gmap' body in
-    (| _, _, STLC.TyLam #gstlc bin_ty body_tyj |) 
+    (| _, _, STLC.TyAbs #gstlc bin_ty body_tyj |) 
   end
 
   | Tv_Const (C_Int x) ->
@@ -181,7 +181,7 @@ let rec exp_translation
   //   if def_ty <> bin_ty then fail ("converting let failed because definition type mismatch") else
   //   let (| gstlc', gmap' |) = extend_gmap_binder gstlc gmap bin bin_ty in
   //   let (| _, body_ty, body_tyj |) = exp_translation gfs' gstlc' gmap' body in
-  //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyLam #gstlc bin_ty body_tyj) def_tyj |)
+  //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyAbs #gstlc bin_ty body_tyj) def_tyj |)
   // end
 
   | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gstlc gmap t
@@ -278,6 +278,13 @@ let _ =
 
 let src_if (x:nat) : nat = 
   if x <= 5 then 0 else 1
+%splice_t[tgt_if;tgt_if_typ;tgt_if_tyj] (meta_translation "tgt_if" [`src_if])
+
+
+let rec src_sum (x:nat) =
+  if x = 0 then 0 else x + src_sum (x-1)
+  
+
 let src3 : nat -> nat -> nat = fun x y -> x
 %splice_t[tgt3;tgt3_typ;tgt3_tyj] (meta_translation "tgt3" [`src3])
 

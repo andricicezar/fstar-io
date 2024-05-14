@@ -16,13 +16,11 @@ type typ =
 | TPair   : typ -> typ -> typ
 | TUnit   : typ
 | TNat    : typ
-| TBool   : typ
 
 let rec is_fo_typ (t:typ) =
      match t with
      | TUnit -> True
      | TNat -> True
-     | TBool -> True
      | TPair t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
      | TSum t1 t2 -> is_fo_typ t1 /\ is_fo_typ t2
      | TArr _ _ -> False
@@ -47,9 +45,6 @@ type exp =
 | EFst         : exp -> exp
 | ESnd         : exp -> exp
 | EPair        : fst:exp -> snd:exp -> exp
-| ETrue        : exp
-| EFalse       : exp
-| EIf          : c:exp -> t:exp -> f:exp -> exp
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
@@ -67,7 +62,7 @@ noeq type typing : context -> exp -> typ -> Type0 =
 | TyVar : #g:context ->
           x:var{Some? (g x)} ->
           typing g (EVar x) (Some?.v (g x))
-| TyLam : #g :context ->
+| TyAbs : #g :context ->
           t :typ ->
           #e1:exp ->
           #t':typ ->
@@ -142,19 +137,6 @@ noeq type typing : context -> exp -> typ -> Type0 =
           $h1:typing g e1 t1 ->
           $h2:typing g e2 t2 ->
                typing g (EPair e1 e2) (TPair t1 t2)
-| TyTrue  : #g:context ->    
-               typing g ETrue TBool
-| TyFalse : #g:context ->    
-               typing g EFalse TBool
-| TyIf  : #g:context ->
-          #c:exp ->
-          #t:exp ->
-          #f:exp ->
-          #ty:typ ->
-          $h1:typing g c TBool ->
-          $h2:typing g t ty ->
-          $h3:typing g f ty ->
-               typing g (EIf c t f) ty
 
 
 (* Parallel substitution operation `subst` *)
@@ -202,9 +184,6 @@ let rec subst (#r:bool)
      | EFst e -> EFst (subst s e)
      | ESnd e -> ESnd (subst s e)
      | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-     | ETrue -> ETrue
-     | EFalse -> EFalse
-     | EIf c t f -> EIf (subst s c) (subst s t) (subst s f)
 
 and sub_elam (#r:bool) (s:sub r) 
   : Tot (sub r)
@@ -328,18 +307,6 @@ type pure_step : exp -> exp -> Type =
           #e2':exp ->
           $hst:pure_step e2 e2' ->
                pure_step (EPair e1 e2) (EPair e1 e2')
-| SIfCond : #c:exp ->
-          t:exp ->
-          f:exp ->
-          #c':exp ->
-          $hst:pure_step c c' ->
-               pure_step (EIf c t f) (EIf c' t f)
-| SIfTrue :    t:exp ->
-               f:exp ->
-                    pure_step (EIf ETrue t f) t
-| SIfFalse :   t:exp ->
-               f:exp ->
-                    pure_step (EIf EFalse t f) f
 
 type step = pure_step
 
@@ -366,9 +333,7 @@ type steps : exp -> exp -> Type =
 let rec is_value (e:exp) : bool = 
      match e with
      | ELam _  _
-     | EUnit 
-     | ETrue
-     | EFalse
+     | EUnit
      | EZero -> true
      | ESucc e -> is_value e
      | EInl e -> is_value e
@@ -425,19 +390,13 @@ let rec progress (#e:exp { ~(is_value e) })
           | _ -> let (| e', h1' |) = progress h1 in
                  (| ESnd e', SSnd0 h1' |)
      end
-     | TyPair #g #e1 #e2 #t1 #t2 h1 h2 -> 
+     | TyPair #g #e1 #e2 #t1 #t2 h1 h2 -> begin
           if is_value e1 then
                let (| e2', h2' |) = progress h2 in
                (| EPair e1 e2', SPair2 e1 h2' |)
           else 
                let (| e1', h1' |) = progress h1 in
                (| EPair e1' e2, SPair1 h1' e2 |)
-     | TyIf #g #c #t #f #ty hc ht hf -> begin
-          match c with
-          | ETrue -> (| t, SIfTrue t f |)
-          | EFalse -> (| f, SIfFalse t f |)
-          | _ -> let (| c', stp |) = progress hc in
-                 (| EIf c' t f, SIfCond t f stp |)
      end
 
 
@@ -459,13 +418,13 @@ let rec substitution (#g1:context)
          (decreases %[bool_order (EVar? e); bool_order r; e])
    = match h1 with
    | TyVar x -> hs x
-   | TyLam tlam hbody ->
+   | TyAbs tlam hbody ->
      let hs'' : subst_typing (sub_inc) g2 (extend tlam g2) =
        fun x -> TyVar (x+1) in
      let hs' : subst_typing (sub_elam s) (extend tlam g1) (extend tlam g2) =
        fun y -> if y = 0 then TyVar y
              else substitution sub_inc (hs (y - 1)) hs''
-     in TyLam tlam (substitution (sub_elam s) hbody hs')
+     in TyAbs tlam (substitution (sub_elam s) hbody hs')
       | TyApp hfun harg -> TyApp (substitution s hfun hs) (substitution s harg hs)
    | TyUnit -> TyUnit
    | TyZero -> TyZero
@@ -485,9 +444,6 @@ let rec substitution (#g1:context)
    | TyFst h1 -> TyFst (substitution s h1 hs)
    | TySnd h1 -> TySnd (substitution s h1 hs)
    | TyPair h1 h2 -> TyPair (substitution s h1 hs) (substitution s h2 hs)
-   | TyTrue -> TyTrue
-   | TyFalse -> TyFalse
-   | TyIf hc ht hf -> TyIf (substitution s hc hs) (substitution s ht hs) (substitution s hf hs)
 
 
 (* Substitution for beta reduction
@@ -507,7 +463,7 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
   =  match hs with
      | SBeta tx e1' e2' -> 
           let TyApp h1 h2 = ht in
-          substitution_beta h2 (TyLam?.hbody h1)
+          substitution_beta h2 (TyAbs?.hbody h1)
      | SApp1 e2' hs1   -> 
           let TyApp h1 h2 = ht in
           TyApp (preservation_step h1 hs1) h2
@@ -566,15 +522,6 @@ let rec preservation_step #e #e' #g #t (ht:typing g e t) (hs:step e e')
      | SPair2 _ hs2 ->
           let TyPair h1 h2 = ht in
           TyPair h1 (preservation_step h2 hs2)
-     | SIfCond _ _ step_c -> 
-          let TyIf hc ht hf = ht in
-          TyIf (preservation_step hc step_c) ht hf
-     | SIfTrue _ _ ->
-          let TyIf _ ht _ = ht in
-          ht
-     | SIfFalse _ _ ->
-          let TyIf _ _ hf = ht in
-          hf
 
 
 (** Phil Wadler: Progress + Preservation = Evaluation. **)
@@ -603,7 +550,6 @@ let rec elab_typ (t:typ) : Type =
   | TNat -> nat
   | TSum t1 t2 -> either (elab_typ t1) (elab_typ t2)
   | TPair t1 t2 -> (elab_typ t1) * (elab_typ t2)
-  | TBool -> bool
 
 
 type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
@@ -644,7 +590,7 @@ let rec elab_exp (#g:context) (#e:exp) (#t:typ) (h:typing g e t) (ve:vcontext g)
           let v3 = elab_exp h3 ve in
           (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
      | TyVar x -> ve x
-     | TyLam t1 #_ #t2 h1 ->
+     | TyAbs t1 #_ #t2 h1 ->
           assert (t == TArr t1 t2);
           let w : elab_typ t1 -> Tot (elab_typ t2) =
           (fun x -> elab_exp h1 (vextend x ve)) in
@@ -665,16 +611,6 @@ let rec elab_exp (#g:context) (#e:exp) (#t:typ) (h:typing g e t) (ve:vcontext g)
           let v1 = elab_exp h1 ve in
           let v2 = elab_exp h2 ve in
           (v1, v2)
-     | TyTrue -> true
-     | TyFalse -> false
-     | TyIf hc ht hf ->
-     let c = elab_exp hc ve in
-     if c then elab_exp ht ve else elab_exp hf ve
-
-
-let thunk_exp #e #t (ht:typing empty e t) : e':exp & (typing empty e' (TArr TUnit t)) =
-     admit ();
-     (| ELam TUnit e, TyLam TUnit ht |)
 
 (** ** Properties of eval elab **)
 
@@ -720,6 +656,10 @@ let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
      | _ -> admit ()
 
 (** ** Helpers **)
+let thunk #g #e #t (ht:typing g e t) : (typing g (ELam TUnit (subst sub_inc e)) (TArr TUnit t)) =
+     let st : subst_typing (sub_inc) g (extend TUnit g) = fun x -> TyVar (x+1) in
+     let ht' : typing (extend TUnit g) _ t = substitution sub_inc ht st in
+     TyAbs TUnit ht'
 
 type closed_term =
   (e:exp & t:typ & typing empty e t)
@@ -735,30 +675,40 @@ val instantiate_newest_binder :
 let instantiate_newest_binder s t =
   let (| _, _, s_tyj |) = s in
   let (| _, _, t_tyj |) = t in
-  (| _, _, TyApp (TyLam _ t_tyj) s_tyj |)
+  (| _, _, TyApp (TyAbs _ t_tyj) s_tyj |)
 
+let tbool = TSum TUnit TUnit
+let etrue = EInl EUnit
+let efalse = EInr EUnit
+let tyjtrue #g : typing g etrue tbool = TyInl TUnit TyUnit
+let tyjfalse #g : typing g efalse tbool = TyInr TUnit TyUnit
 
-let op_neg : exp = ELam TBool (EIf (EVar 0) EFalse ETrue)
-let op_neg_ty : STLC.typ = TArr TBool TBool
-let op_neg_tyj : typing empty op_neg op_neg_ty = TyLam TBool (TyIf (TyVar 0) TyFalse TyTrue)
+let eif c ift iff = ECase c (ELam TUnit (subst sub_inc ift)) (ELam TUnit (subst sub_inc iff))
+let tyjif #g #c #ift #iff #t (tyjc:typing g c tbool) (tyjift:typing g ift t) (tyjiff:typing g iff t) : typing g (eif c ift iff) t =
+     TyCase tyjc (thunk tyjift) (thunk tyjiff)
 
-let op_and : exp = ELam TBool (ELam TBool (EIf (EVar 1) (EVar 0) EFalse))
-let op_and_ty : STLC.typ = TArr TBool (TArr TBool TBool)
-let op_and_tyj : typing empty op_and op_and_ty = TyLam TBool (TyLam TBool (TyIf (TyVar 1) (TyVar 0) TyFalse))
+// let op_neg : exp = ELam tbool (eif (EVar 0) efalse etrue)
+let op_neg_ty : STLC.typ = TArr tbool tbool
+let op_neg_tyj : typing empty _ op_neg_ty = 
+     TyAbs (TSum TUnit TUnit) (tyjif (TyVar 0) tyjfalse tyjtrue)
 
-let op_or : exp = ELam TBool (ELam TBool (EIf (EVar 1) ETrue (EVar 0)))
-let op_or_ty : STLC.typ = TArr TBool (TArr TBool TBool)
-let op_or_tyj : typing empty op_or op_or_ty = TyLam TBool (TyLam TBool (TyIf (TyVar 1) TyTrue (TyVar 0)))
+// let op_and : exp = ELam tbool (ELam tbool (eif (EVar 1) (EVar 0) efalse))
+let op_and_ty : STLC.typ = TArr tbool (TArr tbool tbool)
+let op_and_tyj : typing empty _ op_and_ty = TyAbs tbool (TyAbs tbool (tyjif (TyVar 1) (TyVar 0) tyjfalse))
+
+// let op_or : exp = ELam TBool (ELam TBool (EIf (EVar 1) ETrue (EVar 0)))
+let op_or_ty : STLC.typ = TArr tbool (TArr tbool tbool)
+let op_or_tyj : typing empty _ op_or_ty = TyAbs tbool (TyAbs tbool (tyjif (TyVar 1) tyjtrue (TyVar 0)))
 
 let op_add : exp = ELam TNat (ELam TNat (ENRec (EVar 1) (EVar 0) (ELam TNat (ESucc (EVar 0)))))
 let op_add_ty : STLC.typ = TArr TNat (TArr TNat TNat)
 let op_add_tyj : typing empty op_add op_add_ty = 
-     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) (TyVar 0) (TyLam TNat (TySucc (TyVar 0)))))
+     TyAbs TNat (TyAbs TNat (TyNRec (TyVar 1) (TyVar 0) (TyAbs TNat (TySucc (TyVar 0)))))
 
 let op_mul' : exp = ELam TNat (ELam TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
 let op_mul_ty' : STLC.typ = TArr TNat (TArr TNat TNat)
 let op_mul_tyj' : typing (fun x -> if x = 0 then Some op_add_ty else None) op_mul' op_mul_ty' = 
-     TyLam TNat (TyLam TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
+     TyAbs TNat (TyAbs TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
 
 let helper_substitution_beta #e #v #t_x #t #g 
                       (h1:typing g v t_x)

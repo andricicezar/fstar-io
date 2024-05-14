@@ -55,8 +55,8 @@ type wholeT = wt:STLC.exp{STLC.is_value wt} & STLC.typing STLC.empty wt (STLC.TA
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT = 
   let (| _, htp |) = pt in
   let (| _, htc |) = ct in
-  let (| ewt, htwt |) = STLC.thunk_exp (STLC.TyApp htp htc) in
-  (| ewt, htwt |)
+  let htwt = STLC.thunk (STLC.TyApp htp htc) in
+  (| _, htwt |)
 
 val behT : wt:wholeT -> propT (STLC.TNat)
 let behT (| ew, htw |) = STLC.eval (STLC.TyApp htw STLC.TyUnit)
@@ -215,7 +215,7 @@ let rec (≍) #ty fs_v stlc_ht' =
     (fs_fst ≍ ht_fst) /\ (fs_snd ≍ ht_snd)
 
   // lambda
-  | STLC.TyLam tv #_ #t' _ -> 
+  | STLC.TyAbs tv #_ #t' _ -> 
     let fs_f : STLC.elab_typ tv -> STLC.elab_typ t' = fs_v in
     forall stlc_x (ht_x:STLC.typing STLC.empty stlc_x tv). (** all values possible in STLC **)
       forall fs_x.
@@ -225,7 +225,7 @@ let rec (≍) #ty fs_v stlc_ht' =
 let x1 : STLC.exp =
     STLC.ELam STLC.TNat (STLC.EVar 0)
 let x1ty : STLC.typing STLC.empty x1 (STLC.TArr STLC.TNat STLC.TNat) =
-    STLC.TyLam STLC.TNat (STLC.TyVar 0)
+    STLC.TyAbs STLC.TNat (STLC.TyVar 0)
 
 let test123 =
   assert ((fun (x:nat) -> x) ≍ x1ty) by (compute ())
@@ -233,7 +233,7 @@ let test123 =
 // let x2 : STLC.exp =
 //     STLC.ELam STLC.TNat (STLC.ELam STLC.TUnit (STLC.EVar 1))
 // let x2ty : STLC.typing STLC.empty x2 (STLC.TArr STLC.TNat (STLC.TArr STLC.TUnit STLC.TNat)) =
-//     STLC.TyLam STLC.TNat (STLC.TyLam STLC.TUnit (STLC.TyVar 1))
+//     STLC.TyAbs STLC.TNat (STLC.TyAbs STLC.TUnit (STLC.TyVar 1))
 
 // let test1234 =
 //   assert ((fun (x:nat) -> (fun () -> x)) ≍ x2ty) by (
@@ -299,7 +299,7 @@ let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
       let htbody = STLC.TyApp htpt' (dsnd ct) in
       assert (ps cs ≍ htbody);
 
-      let (| ewt, htwt |) = STLC.thunk_exp htbody in
+      let htwt = STLC.thunk htbody in
       let htwtapp = STLC.TyApp htwt STLC.TyUnit in
       assume (ps cs ≍ htwtapp); // this should be simple to prove
 
