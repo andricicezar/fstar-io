@@ -39,7 +39,8 @@ let extend_gmap
 
 type axiom_ty = string & e:STLC.exp{~(STLC.EVar? e)} & ty:STLC.typ & STLC.typing STLC.empty e ty
 let axioms_mapping : list axiom_ty = [
-  (| "Prims.op_Addition", STLC.op_add, STLC.op_add_ty, STLC.op_add_tyj |)
+  (| "Prims.op_Addition", _, _, STLC.op_add_tyj |);
+  (| "Prims.op_LessThanOrEqual", _, _, STLC.op_lte_tyj |)
 //  (| "Prims.op_Multiply", STLC.op_mul, STLC.op_mul_ty, STLC.op_mul_tyj |);
 //  (| "Prims.op_Negation", STLC.op_neg, STLC.op_neg_ty, STLC.op_neg_tyj |);
 //  (| "Prims.op_AmpAmp", STLC.op_and, STLC.op_and_ty, STLC.op_and_tyj |);
@@ -116,6 +117,13 @@ let recover_type_of_arrow (gfs:env) (qfs:term) (t:term) :
   | Tv_Abs b c -> Some b
   | _ -> None
 
+let pattern_tag (t:pattern) : string =
+  match t with
+  | Pat_Var _ -> "Pat_Var"
+  | Pat_Constant _ -> "Pat_Constant"
+  | Pat_Cons _ -> "Pat_Cons"
+  | Pat_Dot_Term _ -> "Pat_Dot_Term"
+
 (* CA: keeping track of the type of the term is important for the logical relation *)
 let rec exp_translation
   (gfs:env)
@@ -172,6 +180,9 @@ let rec exp_translation
     if (x < 0) then fail ("not supporting ints, only nats") else
     let (| e, tyj |) = make_stlc_nat x in
     (| e, STLC.TNat, tyj |)
+  
+  | Tv_Const C_True -> (| _, _, STLC.tyjtrue |)
+  | Tv_Const C_False -> (| _, _, STLC.tyjfalse |)
 
   // | Tv_Let    : recf:bool -> attrs:(list term) -> b:simple_binder -> def:term -> body:term -> named_term_view
   // | Tv_Let recf attr bin def body -> begin
@@ -184,6 +195,18 @@ let rec exp_translation
   //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyAbs #gstlc bin_ty body_tyj) def_tyj |)
   // end
 
+
+  | Tv_Match sc ret brs ->
+    let cond = exp_translation gfs gstlc gmap sc in
+    if not (STLC.TSum? (Mkdtuple3?._2 cond)) then fail ("only supporting match on sum types") else
+    if List.length brs <> 2 then fail ("only supporting match with 2 branches") else
+    let (pt1, br1)::(pt2, br2)::[] = brs in
+    let case1 = exp_translation gfs gstlc gmap br1 in
+    let case2 = exp_translation gfs gstlc gmap br2 in
+    if (Mkdtuple3?._2 case1) <> (Mkdtuple3?._2 case2) then fail ("branches have different types") else
+
+
+    fail (pattern_tag pt1 ^ " " ^ pattern_tag pt2)
   | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gstlc gmap t
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
