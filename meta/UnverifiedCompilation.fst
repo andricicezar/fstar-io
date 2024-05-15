@@ -124,10 +124,12 @@ let pattern_tag (t:pattern) : string =
   | Pat_Cons _ -> "Pat_Cons"
   | Pat_Dot_Term _ -> "Pat_Dot_Term"
 
+let ptyp #g (s:STLC.open_term g) : STLC.typ = Mkdtuple3?._2 s
+
 (* CA: keeping track of the type of the term is important for the logical relation *)
 let rec exp_translation
   (gfs:env)              (** TODO: I don't use this anywhere **)
-  (gstlc:STLC.context)
+  (#gstlc:STLC.context)
   (gmap:mapping gstlc)
   (qfs:term)
   : Tac (STLC.open_term gstlc) =
@@ -142,7 +144,7 @@ let rec exp_translation
 
   | Tv_Var v -> begin
     match gmap (Var v) with
-    | Some dbi -> (| STLC.EVar dbi, Some?.v (gstlc dbi), STLC.TyVar #gstlc dbi |)
+    | Some dbi -> (| _, _, STLC.TyVar #gstlc dbi |)
     | None -> fail (print_nat v.uniq ^ " not defined in STLC env")
   end
 
@@ -157,8 +159,8 @@ let rec exp_translation
     //           (exists t'. tot_typing gfs a t' /\ tot_typing gfs hd (Tv_Arrow t' qty)));
     // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
     //           (forall t'. tot_typing gfs hd (Tv_Arrow t' qty) ==> tot_typing gfs a t'));
-    let (| _, shd_ty, shd_tyj |) = exp_translation gfs gstlc gmap hd in
-    let (| _, sa_ty, sa_tyj |) = exp_translation gfs gstlc gmap a in
+    let (| _, shd_ty, shd_tyj |) = exp_translation gfs gmap hd in
+    let (| _, sa_ty, sa_tyj |) = exp_translation gfs gmap a in
     match shd_ty with
     | STLC.TArr arg res -> 
       if arg = sa_ty then (| _, res, STLC.TyApp shd_tyj sa_tyj |)
@@ -170,9 +172,8 @@ let rec exp_translation
     let gfs' = extend_env gfs bin.uniq bin.sort in
     let bin_ty : STLC.typ = typ_translation gfs bin.sort in
     (* TODO: don't I have to prove termination here? *)
-    let gstlc' = STLC.extend bin_ty gstlc in
     let gmap' = extend_gmap_binder gmap bin bin_ty in
-    let (| _, _, body_tyj |) = exp_translation gfs' gstlc' gmap' body in
+    let (| _, _, body_tyj |) = exp_translation gfs' gmap' body in
     (| _, _, STLC.TyAbs #gstlc bin_ty body_tyj |) 
   end
 
@@ -196,18 +197,26 @@ let rec exp_translation
   // end
 
 
-  | Tv_Match sc ret brs ->
-    let cond = exp_translation gfs gstlc gmap sc in
-    if not (STLC.TSum? (Mkdtuple3?._2 cond)) then fail ("only supporting match on sum types") else
-    if List.length brs <> 2 then fail ("only supporting match with 2 branches") else
-    let (pt1, br1)::(pt2, br2)::[] = brs in
-    let case1 = exp_translation gfs gstlc gmap br1 in
-    let case2 = exp_translation gfs gstlc gmap br2 in
-    if (Mkdtuple3?._2 case1) <> (Mkdtuple3?._2 case2) then fail ("branches have different types") else
-
-
-    fail (pattern_tag pt1 ^ " " ^ pattern_tag pt2)
-  | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gstlc gmap t
+  | Tv_Match qsc ret brs -> begin
+    (** TODO: as in the App branch, we do not have the type of `sc`. It is a bit more difficult here
+              to recover it. **)
+    let sc = exp_translation gfs gmap qsc in
+    if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else
+    match ptyp sc with
+    | STLC.TSum t1 t2 -> begin
+      let (pt1, qbr1)::(pt2, qbr2)::[] = brs in
+      (** TODO: hack. not even looking at patterns to make sure they are in correct order **)
+      let br1 = STLC.abstract_term (exp_translation gfs (extend_gmap gmap "" t1) qbr1) in
+      let br2 = STLC.abstract_term (exp_translation gfs (extend_gmap gmap "" t2) qbr2) in
+      if ptyp br1 <> ptyp br2 then fail ("branches have different types") else
+      if STLC.TArr? (ptyp br1) && t1 = STLC.TArr?.int (ptyp br1) &&
+         STLC.TArr? (ptyp br2) && t2 = STLC.TArr?.int (ptyp br2) then
+        STLC.term_case_sum sc br1 br2
+      else fail ("branches have different types")
+    end
+    | _ -> fail ("only supporting match on sum types")
+  end
+  | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gmap t
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
@@ -228,7 +237,7 @@ let rec def_translation gfs gstlc gmap (qdef:term) : Tac (string * STLC.open_ter
     | Tv_FVar fv' ->
       if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
       else def_translation gfs gstlc gmap qdef'
-    | _ -> (fnm, exp_translation gfs gstlc gmap qdef')
+    | _ -> (fnm, exp_translation gfs gmap qdef')
   end
   | _ -> fail ("not top-level definition")
 
@@ -303,6 +312,10 @@ let src_if (x:nat) : nat =
   if x <= 5 then 0 else 1
 %splice_t[tgt_if;tgt_if_typ;tgt_if_tyj] (meta_translation "tgt_if" [`src_if])
 
+let _ = 
+  assert (stlc_sem tgt_if_tyj 2 == src_if 2) by (compute ());
+  assert (stlc_sem tgt_if_tyj 5 == src_if 5) by (compute ());
+  assert (stlc_sem tgt_if_tyj 6 == src_if 6) by (compute ())
 
 let rec src_sum (x:nat) =
   if x = 0 then 0 else x + src_sum (x-1)

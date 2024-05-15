@@ -721,6 +721,15 @@ type closed_term =
 type open_term (g:context) =
   (e:exp & t:typ & typing g e t)
 
+val abstract_term :
+  (#g:context) ->
+  (#t:typ) ->
+  open_term (extend t g) ->
+  open_term g
+let abstract_term s =
+  let (| _, _, s_tyj |) = s in
+  (| _, _, TyAbs _ s_tyj |)
+
 val instantiate_newest_binder :
   (#g:context) ->
   s:open_term g ->
