@@ -29,12 +29,28 @@ type fo_typ = t:typ{is_fo_typ t}
 
 type var = nat
 
-open FStar.Bytes
+// type pat =
+// | P_ : pat 
+// | PUnit : pat
+// | PZero : pat
+// | PSucc : pat
+// | PInl : pat -> pat           // handles nested 
+// | PInr : pat -> pat
+// | PPair : pat -> pat -> pat
+
+// type pattern_matches : typ -> pat -> Type0 =
+// | PM_ : #t:typ -> pattern_matches t P_
+// | PMUnit : pattern_matches TUnit PUnit
+// | PMZero : pattern_matches TNat PZero
+// | PMSucc : pattern_matches TNat PSucc
+// | PMInl : #lt:typ -> #rt:typ -> #p:pat -> $h:pattern_matches lt p -> pattern_matches (TSum lt rt) (PInl p)
+// | PMInr : #lt:typ -> #rt:typ -> #p:pat -> $h:pattern_matches rt p -> pattern_matches (TSum lt rt) (PInr p)
+// | PMPair : #t1:typ -> #t2:typ -> #p1:pat -> #p2:pat -> $h1:pattern_matches t1 p1 -> $h2:pattern_matches t2 p2 -> pattern_matches (TPair t1 t2) (PPair p1 p2)
 
 type exp =
 | EVar         : var -> exp
 | EApp         : exp -> exp -> exp
-| ELam         : typ -> exp -> exp
+| EAbs         : typ -> exp -> exp
 | EUnit        : exp
 | EZero        : exp
 | ESucc        : v:exp -> exp
@@ -67,7 +83,7 @@ noeq type typing : context -> exp -> typ -> Type0 =
           #e1:exp ->
           #t':typ ->
           $hbody:typing (extend t g) e1 t' ->
-               typing g (ELam t e1) (TArr t t')
+               typing g (EAbs t e1) (TArr t t')
 | TyApp : #g:context ->
           #e1:exp ->
           #e2:exp ->
@@ -181,7 +197,7 @@ let rec subst (#r:bool)
                      e]) = 
      match e with
      | EVar x -> s x
-     | ELam t e1 -> ELam t (subst (sub_elam s) e1)
+     | EAbs t e1 -> EAbs t (subst (sub_EAbs s) e1)
      | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
      | EUnit -> EUnit
      | EZero -> EZero
@@ -194,7 +210,7 @@ let rec subst (#r:bool)
      | ESnd e -> ESnd (subst s e)
      | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
 
-and sub_elam (#r:bool) (s:sub r) 
+and sub_EAbs (#r:bool) (s:sub r) 
   : Tot (sub r)
         (decreases %[1;
                      bool_order r;
@@ -236,7 +252,7 @@ type pure_step : exp -> exp -> Type =
 | SBeta : t:typ ->
           e1:exp ->
           e2:exp ->
-          pure_step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
+          pure_step (EApp (EAbs t e1) e2) (subst (sub_beta e2) e1)
 | SApp1 : #e1:exp ->
           e2:exp ->
           #e1':exp ->
@@ -348,7 +364,7 @@ type steps : exp -> exp -> Type =
 
 let rec is_value (e:exp) : bool = 
      match e with
-     | ELam _  _
+     | EAbs _  _
      | EUnit
      | EZero -> true
      | ESucc e -> is_value e
@@ -366,7 +382,7 @@ let rec progress (#e:exp { ~(is_value e) })
      | TyApp #g #e1 #e2 #t11 #t12 h1 h2 -> 
      begin
           match e1 with
-          | ELam t e1' -> (| subst (sub_beta e2) e1', SBeta t e1' e2 |)
+          | EAbs t e1' -> (| subst (sub_beta e2) e1', SBeta t e1' e2 |)
           | _          -> let (| e1', h1' |) = progress h1 in
                               (| EApp e1' e2, SApp1 e2 h1'|) (** TODO: call-by-name **)
      end
@@ -444,10 +460,10 @@ let rec substitution (#g1:context)
    | TyAbs tlam hbody ->
      let hs'' : subst_typing (sub_inc) g2 (extend tlam g2) =
        fun x -> TyVar (x+1) in
-     let hs' : subst_typing (sub_elam s) (extend tlam g1) (extend tlam g2) =
+     let hs' : subst_typing (sub_EAbs s) (extend tlam g1) (extend tlam g2) =
        fun y -> if y = 0 then TyVar y
              else substitution sub_inc (hs (y - 1)) hs''
-     in TyAbs tlam (substitution (sub_elam s) hbody hs')
+     in TyAbs tlam (substitution (sub_EAbs s) hbody hs')
       | TyApp hfun harg -> TyApp (substitution s hfun hs) (substitution s harg hs)
    | TyUnit -> TyUnit
    | TyZero -> TyZero
@@ -694,7 +710,7 @@ let rec elab_invariant_to_eval #e #t (ht:typing empty e t)
      | _ -> admit ()
 
 (** ** Helpers **)
-let thunk #g #e #t #t' (ht:typing g e t) : (typing g (ELam t' (subst sub_inc e)) (TArr t' t)) =
+let thunk #g #e #t #t' (ht:typing g e t) : (typing g (EAbs t' (subst sub_inc e)) (TArr t' t)) =
      let st : subst_typing (sub_inc) g (extend t' g) = fun x -> TyVar (x+1) in
      let ht' : typing (extend t' g) _ t = substitution sub_inc ht st in
      TyAbs t' ht'
@@ -739,29 +755,29 @@ let efalse = EInr EUnit
 let tyjtrue #g : typing g etrue tbool = TyInl TUnit TyUnit
 let tyjfalse #g : typing g efalse tbool = TyInr TUnit TyUnit
 
-let eif c ift iff = ECase c (ELam TUnit (subst sub_inc ift)) (ELam TUnit (subst sub_inc iff))
+let eif c ift iff = ECase c (EAbs TUnit (subst sub_inc ift)) (EAbs TUnit (subst sub_inc iff))
 let tyjif #g #c #ift #iff #t (tyjc:typing g c tbool) (tyjift:typing g ift t) (tyjiff:typing g iff t) : typing g (eif c ift iff) t =
      TyCaseSum tyjc (thunk tyjift) (thunk tyjiff)
 
-let op_neg : exp = ELam tbool (eif (EVar 0) efalse etrue)
+let op_neg : exp = EAbs tbool (eif (EVar 0) efalse etrue)
 let op_neg_ty : STLC.typ = TArr tbool tbool
 let op_neg_tyj : typing empty op_neg op_neg_ty = 
      TyAbs (TSum TUnit TUnit) (tyjif (TyVar 0) tyjfalse tyjtrue)
 
-let op_and : exp = ELam tbool (ELam tbool (eif (EVar 1) (EVar 0) efalse))
+let op_and : exp = EAbs tbool (EAbs tbool (eif (EVar 1) (EVar 0) efalse))
 let op_and_ty : STLC.typ = TArr tbool (TArr tbool tbool)
 let op_and_tyj : typing empty op_and op_and_ty = TyAbs tbool (TyAbs tbool (tyjif (TyVar 1) (TyVar 0) tyjfalse))
 
-let op_or : exp = ELam tbool (ELam tbool (eif (EVar 1) etrue (EVar 0)))
+let op_or : exp = EAbs tbool (EAbs tbool (eif (EVar 1) etrue (EVar 0)))
 let op_or_ty : STLC.typ = TArr tbool (TArr tbool tbool)
 let op_or_tyj : typing empty op_or op_or_ty = TyAbs tbool (TyAbs tbool (tyjif (TyVar 1) tyjtrue (TyVar 0)))
 
-let op_add : exp = ELam TNat (ELam TNat (ENRec (EVar 1) (EVar 0) (ELam TNat (ESucc (EVar 0)))))
+let op_add : exp = EAbs TNat (EAbs TNat (ENRec (EVar 1) (EVar 0) (EAbs TNat (ESucc (EVar 0)))))
 let op_add_ty : STLC.typ = TArr TNat (TArr TNat TNat)
 let op_add_tyj : typing empty op_add op_add_ty = 
      TyAbs TNat (TyAbs TNat (TyNRec (TyVar 1) (TyVar 0) (TyAbs TNat (TySucc (TyVar 0)))))
 
-let op_mul' : exp = ELam TNat (ELam TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
+let op_mul' : exp = EAbs TNat (EAbs TNat (ENRec (EVar 1) EZero (EApp (EVar 2) (EVar 0))))
 let op_mul_ty' : STLC.typ = TArr TNat (TArr TNat TNat)
 let op_mul_tyj' : typing (fun x -> if x = 0 then Some op_add_ty else None) op_mul' op_mul_ty' = 
      TyAbs TNat (TyAbs TNat (TyNRec (TyVar 1) TyZero (TyApp (TyVar 2) (TyVar 0))))
@@ -777,12 +793,12 @@ let op_mul = Mkdtuple3?._1 op_mul_dtriple
 let op_mul_ty = Mkdtuple3?._2 op_mul_dtriple
 let op_mul_tyj = Mkdtuple3?._3 op_mul_dtriple
 
-let op_sub : exp = ELam TNat (ELam TNat (ENRec (EVar 0) (EVar 1) (ELam TNat (ECase (EVar 0) (ELam TUnit EZero) (ELam TNat (EVar 0))))))
+let op_sub : exp = EAbs TNat (EAbs TNat (ENRec (EVar 0) (EVar 1) (EAbs TNat (ECase (EVar 0) (EAbs TUnit EZero) (EAbs TNat (EVar 0))))))
 let op_sub_ty : STLC.typ = TArr TNat (TArr TNat TNat)
 let op_sub_tyj : typing empty op_sub op_sub_ty = 
      TyAbs TNat (TyAbs TNat (TyNRec (TyVar 0) (TyVar 1) (TyAbs TNat (TyCaseNat (TyVar 0) (TyAbs TUnit TyZero) (TyAbs TNat (TyVar 0))))))
 
-let op_lte' : exp = ELam TNat (ELam TNat (ECase (EApp (EApp (EVar 2) (EVar 1)) (EVar 0)) (ELam TUnit etrue) (ELam TNat efalse)))
+let op_lte' : exp = EAbs TNat (EAbs TNat (ECase (EApp (EApp (EVar 2) (EVar 1)) (EVar 0)) (EAbs TUnit etrue) (EAbs TNat efalse)))
 let op_lte_ty' : STLC.typ = TArr TNat (TArr TNat tbool)
 let op_lte_tyj' : typing (fun x -> if x = 0 then Some op_sub_ty else None) op_lte' op_lte_ty' = 
      TyAbs TNat (TyAbs TNat (TyCaseNat (TyApp (TyApp (TyVar 2) (TyVar 1)) (TyVar 0)) (thunk tyjtrue) (thunk tyjfalse)))

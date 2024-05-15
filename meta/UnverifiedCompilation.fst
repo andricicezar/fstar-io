@@ -64,7 +64,7 @@ let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ =
     | "Prims.int" -> STLC.TNat
     | _ ->
       let qfs' = norm_term_env gfs [delta] qfs in
-      (* avoid infinite loop by checking if axiom *)
+      (* check if it unfolded to avoid looping *)
       if tag_of qfs' <> "Tv_FVar" then typ_translation gfs qfs'
       else fail (fv_to_string fv ^ " not defined")
   end
@@ -126,7 +126,7 @@ let pattern_tag (t:pattern) : string =
 
 (* CA: keeping track of the type of the term is important for the logical relation *)
 let rec exp_translation
-  (gfs:env)
+  (gfs:env)              (** TODO: I don't use this anywhere **)
   (gstlc:STLC.context)
   (gmap:mapping gstlc)
   (qfs:term)
