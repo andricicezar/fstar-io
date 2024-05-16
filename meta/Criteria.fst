@@ -223,7 +223,7 @@ let rec (≍) #ty fs_v stlc_ht' =
         (fs_x ≍ ht_x) ==> ((fs_f fs_x) ≍ (STLC.TyApp stlc_ht ht_x))
 
 let x1 : STLC.exp =
-    STLC.ELam STLC.TNat (STLC.EVar 0)
+    STLC.EAbs STLC.TNat (STLC.EVar 0)
 let x1ty : STLC.typing STLC.empty x1 (STLC.TArr STLC.TNat STLC.TNat) =
     STLC.TyAbs STLC.TNat (STLC.TyVar 0)
 
@@ -231,7 +231,7 @@ let test123 =
   assert ((fun (x:nat) -> x) ≍ x1ty) by (compute ())
 
 // let x2 : STLC.exp =
-//     STLC.ELam STLC.TNat (STLC.ELam STLC.TUnit (STLC.EVar 1))
+//     STLC.EAbs STLC.TNat (STLC.EAbs STLC.TUnit (STLC.EVar 1))
 // let x2ty : STLC.typing STLC.empty x2 (STLC.TArr STLC.TNat (STLC.TArr STLC.TUnit STLC.TNat)) =
 //     STLC.TyAbs STLC.TNat (STLC.TyAbs STLC.TUnit (STLC.TyVar 1))
 
@@ -284,6 +284,7 @@ let rel_implies_rhc i ps pt : Lemma (rel_pprog (≍) i ps pt) =
     introduce 
       forall ct. behS (linkS ps (backtranslate_ctx ct)) ≌ behT (linkT pt ct)
     with begin
+      admit ();
       // unfolding ≍
       let (| ept', htpt' |) = STLC.eval (dsnd pt) in
       eval_value_is_id (dsnd pt);

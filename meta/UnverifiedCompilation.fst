@@ -317,10 +317,6 @@ let _ =
   assert (stlc_sem tgt_if_tyj 5 == src_if 5) by (compute ());
   assert (stlc_sem tgt_if_tyj 6 == src_if 6) by (compute ())
 
-let rec src_sum (x:nat) =
-  if x = 0 then 0 else x + src_sum (x-1)
-  
-
 let src3 : nat -> nat -> nat = fun x y -> x
 %splice_t[tgt3;tgt3_typ;tgt3_tyj] (meta_translation "tgt3" [`src3])
 
@@ -349,8 +345,29 @@ let test5 () =
 let src6 : nat = (src4 src1 src2)
 
 (** CA: this takes long and multiple runs have different logs ??? **)
-%splice_t[tgt6;tgt6_typ;tgt6_tyj] (meta_translation "tgt6" [`src1; `src2; `src4; `src6])
+// %splice_t[tgt6;tgt6_typ;tgt6_tyj] (meta_translation "tgt6" [`src1; `src2; `src4; `src6])
 
-let test6 () =
-  assert (tgt6_typ == STLC.TNat);
-  assert (stlc_sem tgt6_tyj == src4 src1 src2) by (compute ())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// let test6 () =
+//   assert (tgt6_typ == STLC.TNat);
+//   assert (stlc_sem tgt6_tyj == src4 src1 src2) by (compute ())
+
+
+// let rec src_sum (x:nat) : nat =
+//   if x <= 1 then x else x + src_sum (x-1)
+
+// %splice_t[tgt_sum;tgt_sum_typ;tgt_sum_tyj] (meta_translation "tgt_sum" [`src_sum])

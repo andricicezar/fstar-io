@@ -3,7 +3,7 @@
 
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
-ROOTS := QuoteExtract.fst
+ROOTS := UnverifiedCompilation.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints
@@ -51,7 +51,7 @@ out:
 	mkdir $@
 
 extract: | out
-	fstar.exe $(FLAGS) --lax --odir out --codegen OCaml QuoteExtract.fst
+	fstar.exe $(FLAGS) --lax --odir out --codegen OCaml $(ROOTS)
 
 _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o;
@@ -59,4 +59,4 @@ _prepare_compilation: | out
 
           
 compile: | out extract
-	ocamlfind opt -package fstar.lib -w -8 -linkpkg -g -I out out/QuoteExtract.ml -o out/CS.exe
+	ocamlfind opt -package fstar.lib -w -8 -linkpkg -g -I out out/UC.ml -o out/CS.exe
