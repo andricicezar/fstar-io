@@ -117,7 +117,7 @@ let ptyp #g (s:STLC.open_term g) : STLC.typ = Mkdtuple3?._2 s
   However, because we lack a proper typing judgement for the F* term, sometimes we don't have
   the type of a subterm (e.g., hd in App and sc in Match branches). 
   However, Guido pointed out that we need this for the logical relation, which is spec, so we
-  can make the type and the typing erased and use inversion lemmas **)
+  can make the type and the typing erased and use inversion lemmas to get a witness **)
 let rec exp_translation
   (#gstlc:STLC.context)
   (gmap:mapping gstlc)
