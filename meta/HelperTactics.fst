@@ -1,7 +1,7 @@
 module HelperTactics
 
-include FStar.Tactics.V2
-include FStar.Reflection.Typing
+open FStar.Tactics.V2
+open FStar.Reflection.Typing
 
 let must (x : ret_t 'a) : Tac 'a =
   match x with

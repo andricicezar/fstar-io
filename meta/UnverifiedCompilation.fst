@@ -2,11 +2,15 @@ module UnverifiedCompilation
 
 open HelperTactics
 
+open FStar.Tactics.V2
+open FStar.Reflection.Typing
+open FStar.Stubs.Reflection.V2.Builtins
+open FStar.Stubs.Reflection.V2.Data
+
 noeq
 type fs_var =
 | FVar : fv -> fs_var
-| Var  : namedv -> fs_var
-| Bv   : bv -> fs_var
+| BVar : var -> fs_var
 
 type mapping (g:STLC.context) =
   fs_var -> option (x:STLC.var{Some? (g x)})
@@ -20,12 +24,11 @@ let incr_option (#g:STLC.context) (#b_ty:STLC.typ) (x:option (y:STLC.var{Some? (
 let extend_gmap_binder
   (#gstlc:STLC.context)
   (gmap:mapping gstlc) 
-  (b:binder)
   (b_ty:STLC.typ)
   : mapping (STLC.extend b_ty gstlc) =
   (fun x -> match x with 
-      | Var v -> if v.uniq = b.uniq then Some 0 else (incr_option (gmap x))
-      | _ -> (incr_option (gmap x)))
+      | BVar v -> if v = 0 then Some 0 else incr_option (gmap (BVar (v-1))) //Some v
+      | _ -> incr_option (gmap x))
 
 let extend_gmap
   (#gstlc:STLC.context)
@@ -57,32 +60,27 @@ let rec make_stlc_nat #g (n:nat) : open_stlc_term' g STLC.TNat =
     let (|_, tyj |) = make_stlc_nat (n-1) in
     (| _, STLC.TySucc tyj |)
 
-let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ = 
-  match inspect qfs with
+let rec typ_translation (qfs:term) : Tac STLC.typ = 
+  match inspect_ln qfs with
   | Tv_FVar fv -> begin
     match fv_to_string fv with
-    | "Prims.int" -> STLC.TNat
-    | _ ->
-      let qfs' = norm_term_env gfs [delta] qfs in
-      (* check if it unfolded to avoid looping *)
-      if tag_of qfs' <> "Tv_FVar" then typ_translation gfs qfs'
-      else fail (fv_to_string fv ^ " not defined")
+    | "Prims.nat" -> STLC.TNat
+    | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
 
   | Tv_Arrow b c ->  begin
-    let tbv = typ_translation gfs b.sort in
-    match c with
+    let tbv = typ_translation (binder_sort b) in
+    match inspect_comp c with
     | C_Total ret -> 
-      let tc = typ_translation gfs ret in
+      let tc = typ_translation ret in
       STLC.TArr tbv tc
     | _ -> fail ("not a total function type")
   end
-  | Tv_Var v -> fail "fvar"
 
   (** erase refinement **)
-  | Tv_Refine b _ -> typ_translation gfs b.sort
-
-  | Tv_Const c -> fail (print_vconst c)
+  | Tv_Refine b _ -> 
+    let b = inspect_binder b in
+    typ_translation b.sort
 
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
@@ -90,7 +88,7 @@ let rec typ_translation (gfs:env) (qfs:term) : Tac STLC.typ =
   | _ -> fail ("not implemented: " ^ tag_of qfs)
 
 let comp_typ (nm:string) (qfs:term) : dsl_tac_t = fun g ->
-  let typ = typ_translation g qfs in
+  let typ = typ_translation qfs in
 
   let qtyp = quote typ in
   type_dynamically g qtyp (`STLC.typ);
@@ -99,42 +97,34 @@ let comp_typ (nm:string) (qfs:term) : dsl_tac_t = fun g ->
    mk_checked_let g nm qtyp (`STLC.typ);
   ]  
 
-%splice_t[typ1] (comp_typ "typ1" (`(int)))
-let _ = assert (typ1 == STLC.TNat)
-
 %splice_t[typ2] (comp_typ "typ2" (`(nat)))
 let _ = assert (typ2 == STLC.TNat)
 
 %splice_t[typ3] (comp_typ "typ3" (`(nat -> nat)))
 let _ = assert (typ3 == STLC.TArr STLC.TNat STLC.TNat)
 
-let recover_type_of_arrow (gfs:env) (qfs:term) (t:term) : 
-  TacP (option binder)
-    (requires True) // (exists t'. tot_typing gfs hd (Tv_Arrow t' t)));
-    (ensures fun _ -> True) // Some? r ==> tot_typing gfs hd (Tv_Arrow (Some?.v r) t)))
-  = 
-  match inspect qfs with
-  | Tv_Abs b c -> Some b
-  | _ -> None
-
 let pattern_tag (t:pattern) : string =
   match t with
-  | Pat_Var _ -> "Pat_Var"
+  | Pat_Var _ _ -> "Pat_Var"
   | Pat_Constant _ -> "Pat_Constant"
-  | Pat_Cons _ -> "Pat_Cons"
+  | Pat_Cons _ _ _-> "Pat_Cons"
   | Pat_Dot_Term _ -> "Pat_Dot_Term"
 
 let ptyp #g (s:STLC.open_term g) : STLC.typ = Mkdtuple3?._2 s
 
-(* CA: keeping track of the type of the term is important for the logical relation *)
+
+(* CA: keeping track of the type of the term is important for the logical relation.
+  However, because we lack a proper typing judgement for the F* term, sometimes we don't have
+  the type of a subterm (e.g., hd in App and sc in Match branches). 
+  However, Guido pointed out that we need this for the logical relation, which is spec, so we
+  can make the type and the typing erased and use inversion lemmas **)
 let rec exp_translation
-  (gfs:env)              (** TODO: I don't use this anywhere **)
   (#gstlc:STLC.context)
   (gmap:mapping gstlc)
   (qfs:term)
   : Tac (STLC.open_term gstlc) =
   print ("      in exp translation: " ^ tag_of qfs);
-  match inspect qfs with
+  match inspect_ln qfs with
   | Tv_FVar fv -> begin
     print ("        looking for fvar: " ^ fv_to_string fv);
     match gmap (FVar fv) with
@@ -142,25 +132,23 @@ let rec exp_translation
     | None -> fail (fv_to_string fv ^ " not defined")
   end
 
-  | Tv_Var v -> begin
-    match gmap (Var v) with
-    | Some dbi -> (| _, _, STLC.TyVar #gstlc dbi |)
-    | None -> fail (print_nat v.uniq ^ " not defined in STLC env")
+  | Tv_BVar v -> begin
+    let i = (inspect_bv v).index in
+    match gmap (BVar i) with
+    | Some i' -> (| _, _, STLC.TyVar #gstlc i' |)
+    | None -> fail (print_nat i ^ " not defined")
   end
 
+  // | Tv_Var v -> begin
+  //   let v = inspect_namedv v in
+  //   match gmap (Var v) with
+  //   | Some dbi -> (| _, _, STLC.TyVar #gstlc dbi |)
+  //   | None -> fail (print_nat v.uniq ^ " not defined in STLC env")
+  // end
+
   | Tv_App hd (a, q) -> begin
-    (** TODO: it seems like we cannot get the type of `hd` or `a` here because
-              we don't have the typing judgment of `qfs`.
-              Even if we would ask for the F* typing judgement of `qfs`,
-              it could be just a token---not helpful.
-              Maybe there is a way to recover by normalizing a bit `hd`? See: recover_type_of_arrow
-          QA: How would this work with the logical relation? **) 
-    // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
-    //           (exists t'. tot_typing gfs a t' /\ tot_typing gfs hd (Tv_Arrow t' qty)));
-    // assert (forall t. tot_typing gfs (Tv_App hd (a, _)) qty ==> 
-    //           (forall t'. tot_typing gfs hd (Tv_Arrow t' qty) ==> tot_typing gfs a t'));
-    let (| _, shd_ty, shd_tyj |) = exp_translation gfs gmap hd in
-    let (| _, sa_ty, sa_tyj |) = exp_translation gfs gmap a in
+    let (| _, shd_ty, shd_tyj |) = exp_translation gmap hd in
+    let (| _, sa_ty, sa_tyj |) = exp_translation gmap a in
     match shd_ty with
     | STLC.TArr arg res -> 
       if arg = sa_ty then (| _, res, STLC.TyApp shd_tyj sa_tyj |)
@@ -169,11 +157,10 @@ let rec exp_translation
     end
 
   | Tv_Abs bin body -> begin
-    let gfs' = extend_env gfs bin.uniq bin.sort in
-    let bin_ty : STLC.typ = typ_translation gfs bin.sort in
-    (* TODO: don't I have to prove termination here? *)
-    let gmap' = extend_gmap_binder gmap bin bin_ty in
-    let (| _, _, body_tyj |) = exp_translation gfs' gmap' body in
+    let bin : binder_view = inspect_binder bin in
+    let bin_ty : STLC.typ = typ_translation bin.sort in
+    let gmap' = extend_gmap_binder gmap bin_ty in
+    let (| _, _, body_tyj |) = exp_translation gmap' body in
     (| _, _, STLC.TyAbs #gstlc bin_ty body_tyj |) 
   end
 
@@ -196,18 +183,15 @@ let rec exp_translation
   //   (| _, body_ty, STLC.TyApp #gstlc #_ #_ #bin_ty #body_ty (STLC.TyAbs #gstlc bin_ty body_tyj) def_tyj |)
   // end
 
-
   | Tv_Match qsc ret brs -> begin
-    (** TODO: as in the App branch, we do not have the type of `sc`. It is a bit more difficult here
-              to recover it. **)
-    let sc = exp_translation gfs gmap qsc in
+    let sc = exp_translation gmap qsc in
     if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else
     match ptyp sc with
     | STLC.TSum t1 t2 -> begin
       let (pt1, qbr1)::(pt2, qbr2)::[] = brs in
       (** TODO: hack. not even looking at patterns to make sure they are in correct order **)
-      let br1 = STLC.abstract_term (exp_translation gfs (extend_gmap gmap "" t1) qbr1) in
-      let br2 = STLC.abstract_term (exp_translation gfs (extend_gmap gmap "" t2) qbr2) in
+      let br1 = STLC.abstract_term (exp_translation (extend_gmap_binder gmap t1) qbr1) in
+      let br2 = STLC.abstract_term (exp_translation (extend_gmap_binder gmap t2) qbr2) in
       if ptyp br1 <> ptyp br2 then fail ("branches have different types") else
       if STLC.TArr? (ptyp br1) && t1 = STLC.TArr?.int (ptyp br1) &&
          STLC.TArr? (ptyp br2) && t2 = STLC.TArr?.int (ptyp br2) then
@@ -216,28 +200,36 @@ let rec exp_translation
     end
     | _ -> fail ("only supporting match on sum types")
   end
-  | Tv_AscribedC t (C_Total _) _ _ -> exp_translation gfs gmap t
 
-  | Tv_Unknown -> fail ("an underscore was found in the term")
-  | Tv_Unsupp -> fail ("unsupported by F* terms")
+  | Tv_AscribedC t c _ _ -> begin
+    match inspect_comp c with
+    | C_Total _ -> exp_translation gmap t
+    | _ -> fail ("not a total function type")
+  end
 
   | _ -> fail ("not implemented: " ^ tag_of qfs)
+// and branch_translation (gfs:env) (gstlc:STLC.context) (gmap:mapping gstlc) (pt:pattern) (qbr:term) : Tac (STLC.open_term gstlc) =
+//   let gfs' = gfs in
+//   let gstlc' = extend ? gstlc in
+//   let gmap' = gmap in
+//   let case = exp_translation gfs' gstlc' gmap' qbr in
+//   (| _, _, TyAbs )
 
 let mk_stlc_typing (gfs qexp qtyp:term) =
   mk_app (`STLC.typing) [(gfs, Q_Explicit); (qexp, Q_Explicit); (qtyp, Q_Explicit)]	
 
 let rec def_translation gfs gstlc gmap (qdef:term) : Tac (string * STLC.open_term gstlc) =
   print "  in def translation\n";
-  match inspect qdef with
+  match inspect_ln qdef with
   | Tv_FVar fv -> begin
     let fnm = fv_to_string fv in
     print ("    def: " ^ fnm ^ "\n");
-    let qdef' = norm_term_env gfs [delta_only [fnm]] qdef in
-    match inspect qdef' with
+    let qdef' = norm_term_env gfs [delta_only [fnm]; zeta] qdef in
+    match inspect_ln qdef' with
     | Tv_FVar fv' ->
       if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
       else def_translation gfs gstlc gmap qdef'
-    | _ -> (fnm, exp_translation gfs gmap qdef')
+    | _ -> (fnm, exp_translation gmap qdef')
   end
   | _ -> fail ("not top-level definition")
 
@@ -308,6 +300,9 @@ let _ =
   assert (stlc_sem tgt2p_tyj 4 == src2' 4) by (compute ());
   assert (stlc_sem tgt2p_tyj 0 == src2' 0) by (compute ())
 
+let src_let (x:nat) : nat = let y = src2 x in src2 y
+%splice_t[tgt_let;tgt_let_typ;tgt_let_tyj] (meta_translation "tgt_let" [`src2; `src_let])
+
 let src_if (x:nat) : nat = 
   if x <= 5 then 0 else 1
 %splice_t[tgt_if;tgt_if_typ;tgt_if_tyj] (meta_translation "tgt_if" [`src_if])
@@ -342,7 +337,7 @@ let test5 () =
   assert (tgt5_typ == STLC.TNat);
   assert (stlc_sem tgt5_tyj == src2 src1) by (compute ())
 
-let src6 : nat = (src4 src1 src2)
+// let src6 : nat = (src4 src1 src2)
 
 (** CA: this takes long and multiple runs have different logs ??? **)
 // %splice_t[tgt6;tgt6_typ;tgt6_tyj] (meta_translation "tgt6" [`src1; `src2; `src4; `src6])
