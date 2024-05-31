@@ -5,7 +5,8 @@ open FStar.Ref
 assume val trp : Type // Type of the reference of the program (not shared)
 assume val trs : Type // Type of the reference *shared* between program and context
                       // <- for now let's assume this is not refined
-assume val t1 : Type  // Type not allowed to contain references, because otherwise the program can share `rp` to the context.
+assume val t1 : Type  // Type not allowed to contain references,
+                      // since otherwise the program can share `rp` to the context.
 assume val t2 : Type
 
 // Simple target types
