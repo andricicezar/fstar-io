@@ -52,9 +52,6 @@ assume val pre_ctx : ref trs -> targ -> heap -> Type0
 assume val post_ctx : ref trs -> targ -> heap -> tres -> heap -> bool
 // dynamically enforced when the context returns control back to the program
 // (so for now going directly to bool)
-// TODO: Cezar worried that enforcing this is difficult.
-//       In FStar.ST.fst we do have a way to get the heap (gst_get),
-//       but this will cause extraction problems later on
 // - Saner longer term alternative :
 //   look only at value of rs in initial and final heap?
 
