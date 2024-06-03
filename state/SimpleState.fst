@@ -97,10 +97,13 @@ let compile (s_p:s_tp) : t_tp =
                           (ensures (fun h0 res h1 -> sep rp rs h1
                           /\ post_ctx rs arg h0 res h1
                           /\ sel h0 rp == sel h1 rp)) =
-      let h0 = gst_get() in
+      let h0 = gst_get () in
+      assert (h0 `contains` rp /\ h0 `contains` rs);
       let res = t_c arg in
-      let h1 = gst_get() in
-      assume (sep rp rs h1); // TODO: seems hard
+      let h1 = gst_get () in 
+      recall rp; // monotonicity of the heap
+      recall rs; // monotonicity of the heap
+      assert (sep rp rs h1);
       assume (sel h0 rp == sel h1 rp); // TODO: seems hard
       if post_ctx rs arg h0 res h1
       then res
