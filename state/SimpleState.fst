@@ -54,6 +54,7 @@ assume val pre_ctx : ref trs -> targ -> heap -> Type0
 assume val post_ctx : ref trs -> targ -> heap -> tres -> heap -> bool
 // dynamically enforced when the context returns control back to the program
 // (so for now going directly to bool)
+// - The use of gst_get in a non-ghost context will cause extraction problems later
 // - Saner longer term alternative :
 //   look only at value of rs in initial and final heap?
 
