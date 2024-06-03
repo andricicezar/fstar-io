@@ -54,9 +54,6 @@ assume val pre_ctx : ref trs -> targ -> heap -> Type0
 assume val post_ctx : ref trs -> targ -> heap -> tres -> heap -> bool
 // dynamically enforced when the context returns control back to the program
 // (so for now going directly to bool)
-// TODO: Cezar worried that enforcing this is difficult.
-//       In FStar.ST.fst we do have a way to get the heap (gst_get),
-//       but this will cause extraction problems later on
 // - Saner longer term alternative :
 //   look only at value of rs in initial and final heap?
 
@@ -102,10 +99,13 @@ let compile (s_p:s_tp) : t_tp =
                           (ensures (fun h0 res h1 -> sep rp rs h1
                           /\ post_ctx rs arg h0 res h1
                           /\ sel h0 rp == sel h1 rp)) =
-      let h0 = gst_get() in
+      let h0 = gst_get () in
+      assert (h0 `contains` rp /\ h0 `contains` rs);
       let res = t_c arg in
-      let h1 = gst_get() in
-      assume (sep rp rs h1); // TODO: seems hard
+      let h1 = gst_get () in 
+      recall rp; // monotonicity of the heap
+      recall rs; // monotonicity of the heap
+      assert (sep rp rs h1);
       assume (sel h0 rp == sel h1 rp); // TODO: seems hard
       if post_ctx rs arg h0 res h1
       then res
