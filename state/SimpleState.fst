@@ -2,13 +2,15 @@ module SimpleState
 
 open FStar.Ref
 
-assume val trp : Type // Type of the reference of the program (not shared)
-assume val trs : Type // Type of the reference *shared* between program and context
-                      // <- for now let's assume this is not refined
-                      // (assumed for all the types here, since they are used in target)
-assume val targ : Type// Type not allowed to contain references,
-                      // since otherwise the program can share `rp` to the context.
-assume val tres : Type
+assume val trp : Type0  // Type of the reference of the program (not shared)
+assume val init_rp : trp
+assume val trs : Type0  // Type of the reference *shared* between program and context
+                        // <- for now let's assume this is not refined
+                        // (assumed for all the types here, since they are used in target)
+assume val init_rs : trs
+assume val targ : Type0 // Type not allowed to contain references,
+                        // since otherwise the program can share `rp` to the context.
+assume val tres : Type0
 
 // Simple target types
 
@@ -112,3 +114,17 @@ let compile (s_p:s_tp) : t_tp =
     let h0 = gst_get() in
     assume (sep rp rs h0); // TODO: where would one get initial separation from?
     s_p rp rs s_c
+
+// Cezar: I suppose the initial separation will come from linking, where one
+// allocates the two references. However, this involves adding a pre-condition to t_tp.
+
+// refined t_tp
+let t_rtp : Type = rp:ref trp -> rs:ref trs -> (targ -> St tres) ->
+  ST int (requires (fun h0 -> sep rp rs h0))
+         (ensures (fun _ _ _ -> True))
+
+let t_alloc_and_link (t_p:t_rtp) (t_c:t_tc) : unit -> St int =
+  fun () ->
+    let rp : ref trp = alloc init_rp in
+    let rs : ref trs = alloc init_rs in
+      t_p rp rs (t_c rs) (* <-- rp is not passed to the context *)
