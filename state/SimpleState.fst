@@ -57,6 +57,19 @@ assume val post_ctx : ref trs -> targ -> heap -> tres -> heap -> bool
 // - The use of gst_get in a non-ghost context will cause extraction problems later
 // - Saner longer term alternative :
 //   look only at value of rs in initial and final heap?
+open FStar.Ghost
+(** Cezar: This is similar to what we have in POPL'24 as contracts (section 4.3) **)
+assume val ck_post_ctx : rs:ref trs -> arg:targ -> ST 
+  (h0:(erased heap) & (res:tres -> ST bool (requires (fun _ -> True)) (ensures (fun h0' b h1 -> h0' == h1 /\ (b <==> post_ctx rs arg h0 res h1)))))
+  (requires (fun _ -> True)) (requires (fun h0 (| h0', _ |) h1 -> h0 == h1 /\ h0 == reveal h0'))
+(** Cezar: the current spec says that the contract does not modify the heap (in other words, it only reads from the heap) .
+           Is this spec strong enough? Are there cases where we would like a weaker spec?
+    Here is an example on how to check if rs is unchanged: 
+      fun rs arg -> 
+        let saved_rs = !rs in
+        let h0 = hide (gst_get ()) in
+        (| h0, (fun res -> saved_rs = !rs) |)
+**)
 
 let s_tc (rp:ref trp) : Type = rs:ref trs -> arg:targ ->
   ST tres (requires (fun h0 -> sep rp rs h0 /\ pre_ctx rs arg h0))
@@ -94,25 +107,29 @@ let se_link (s_p:s_tp) (s_c:se_tc) : s_tw =
   fun (rp:ref trp) (rs:ref trs) ->
     s_p rp rs (s_c rp rs) (* rp passed to the context, but only as `erased` argument *)
 
+val gst_get' : unit    -> GST (erased heap) (fun p h0 -> p h0 (reveal h0))
+let gst_get' () = let h = gst_get () in hide h
+
 let compile (s_p:s_tp) : t_tp =
   fun rp rs t_c -> 
     let s_c arg : ST tres (requires (fun h0 -> sep rp rs h0 /\ pre_ctx rs arg h0))
                           (ensures (fun h0 res h1 -> sep rp rs h1
                           /\ post_ctx rs arg h0 res h1
                           /\ sel h0 rp == sel h1 rp)) =
-      let h0 = gst_get () in
+      let h0 = gst_get' () in
       assert (h0 `contains` rp /\ h0 `contains` rs);
+      let (| _, ck |) = ck_post_ctx rs arg in
       let res = t_c arg in
-      let h1 = gst_get () in 
+      let h1 = gst_get' () in 
       recall rp; // monotonicity of the heap
       recall rs; // monotonicity of the heap
       assert (sep rp rs h1);
       assume (sel h0 rp == sel h1 rp); // TODO: seems hard
-      if post_ctx rs arg h0 res h1
+      if ck res
       then res
       else admit() // TODO: signal error :)
     in
-    let h0 = gst_get() in
+    let h0 = gst_get' () in
     assume (sep rp rs h0); // TODO: where would one get initial separation from?
     s_p rp rs s_c
 
