@@ -102,6 +102,7 @@ let se_tc : Type = erp:erased (ref trp) -> rs:ref trs -> arg:targ ->
           (ensures (fun h0 res h1 -> sep erp rs h1 // <- necessarily preserved by context
             /\ post_ctx rs arg h0 res h1 // <- dynamically enforced
             /\ sel h0 erp == sel h1 erp)) // <- enforced by state separation
+                                          // TODO: very specific, e.g. for ref int
 
 let se_link (s_p:s_tp) (s_c:se_tc) : s_tw =
   fun (rp:ref trp) (rs:ref trs) ->
