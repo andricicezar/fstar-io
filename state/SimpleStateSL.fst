@@ -54,10 +54,12 @@ type s_tc (rp:ref trp) (rs:ref trs) = targ ->
     (vptr rp `star` vptr rs) (fun _ -> vptr rp `star` vptr rs)
     (requires (fun _ -> True))
     (ensures (fun s0 _ s1 -> sel rp s0 == sel rp s1))  (** this post is a "selector predicate", i.e. it can state things only about the things in the frame **)
+
 (** Source Contexts are statically verified.
     The post states that at the end of the execution, the state is equal to the original state.
-    This is not a proper way to state integrity since in a HO setting the context could change rp, call a callback, and then rollback the changes.
-    Also, not clear how to state confidentiality: the context could read the value of rp, and leak it through some other effect.
+    0) The equality between `sel`s is shallow, i.e. it does not work for a linked list
+    1) This is not a proper way to state integrity since in a HO setting the context could change rp, call a callback, and then rollback the changes.
+    2) Also, not clear how to state confidentiality: the context could read the value of rp, and leak it through some other effect.
     So passing `rp` to the source context is silly. It is here just to show that we can define `strengthen` later. **)
 // Example of violating integrity in HO case.
 // let ctx cb =
