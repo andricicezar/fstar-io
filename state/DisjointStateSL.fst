@@ -37,12 +37,12 @@ type s_tc (rp:ref trp) = targ ->
   Steel tres
     (vptr rp) (fun _ -> vptr rp)
     (requires (fun _ -> True))
-    (ensures (fun s0 _ s1 -> sel rp s0 == sel rp s1))  (** this post is a "selector predicate", i.e. it can state things only about the thing in the frame **)
+    (ensures (fun s0 _ s1 -> sel rp s0 == sel rp s1))  (** this post is a "selector predicate", i.e. it can state things only about the things in the frame **)
 (** Source Contexts are statically verified.
     The post states that at the end of the execution, the state is equal to the original state.
-    However, in a HO setting, this is not enough. The context could change rp, call a callback, and then rollback the changes.
-    Moreover, the context can read the value of rp, and do smth else with it (leak it through some other effect).
-    So passing `rp` to the source context is silly. It is here just to show that we can define strengthen later. **)
+    This is not a proper way to state integrity since in a HO setting the context could change rp, call a callback, and then rollback the changes.
+    Also, not clear how to state confidentiality: the context could read the value of rp, and leak it through some other effect.
+    So passing `rp` to the source context is silly. It is here just to show that we can define `strengthen` later. **)
 
 // putting together the types + specs above
 let s_tp : Type = rp:ref trp ->
