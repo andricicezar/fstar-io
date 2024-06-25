@@ -116,7 +116,7 @@ val prog' :
       rp_content == G.reveal r)
     (ensures fun _ _ _ -> True)
 let prog' rp r rs ctx =
-  write rp rs;
+  write rp rs; // <-- the program considers the shared state as its internal state
   ctx ();
   let rp' = read rp in
   change_equal_slprop (vptr rs) (vptr rp');
@@ -157,7 +157,7 @@ val prog :
       rs' == G.reveal r)
     (ensures fun _ _ _ -> True)
 let prog rp rs r ctx =
-  write rs rp;
+  write rs rp; // <-- the program puts a reference to its internal state in the shared state
   ctx rp;
   return (read rp)
 
