@@ -1,14 +1,16 @@
 module SimpleStateModifies
 
 open FStar.Ref
+open FStar.Ghost
+open FStar.Tactics
 
 assume val trp : Type0  // Type of the reference of the program (not shared)
 assume val init_rp : trp
-assume val fp_rp : ref trp -> Set.set nat
+assume val fp_rp : ref trp -> heap -> GTot (Set.set nat)
 assume val trs : Type0  // Type of the reference *shared* between program and context
                         // <- for now let's assume this is not refined
                         // (assumed for all the types here, since they are used in target)
-assume val fp_rs : ref trs -> Set.set nat
+assume val fp_rs : ref trs -> heap -> GTot (Set.set nat)
 assume val init_rs : trs
 assume val targ : Type0 // Type not allowed to contain references,
                         // since otherwise the program can share `rp` to the context.
@@ -16,15 +18,15 @@ assume val tres : Type0
 
 // This separation invariant used for both program and context
 let sep (rp:ref trp) (rs:ref trs) (h:heap) : Type0 = // TODO: does this have to depend on the heap?
-  Set.disjoint (fp_rp rp) (fp_rs rs) 
+  Set.disjoint (fp_rp rp h) (fp_rs rs h)
 
 // Simple target types
 
-// Target type of whole program
+// Target type of whole program (now includes sep as precondition)
 let t_tw : Type = rp:ref trp -> rs:ref trs -> ST int (fun h0 -> sep rp rs h0) (fun _ _ _ -> True)
 
 // Target type of context
-type t_tc' (rs:ref trs) = targ -> ST tres (fun _ -> True) (fun h0 _ h1 -> modifies (fp_rs rs) h0 h1)
+type t_tc' (rs:ref trs) = targ -> ST tres (fun _ -> True) (fun h0 _ h1 -> modifies (fp_rs rs h0) h0 h1)
 type t_tc = rs:ref trs -> t_tc' rs
 
 // Target type of program -- has initial control, calls context
@@ -67,8 +69,9 @@ assume val ck_post_ctx : rs:ref trs -> arg:targ -> ST
 **)
 type s_tc' (rs:ref trs) = arg:targ ->
   ST tres (requires (fun h0 -> pre_ctx rs arg h0))
-          (ensures (fun h0 res h1 -> 
-            modifies (fp_rs rs) h0 h1 /\
+          (ensures (fun h0 res h1 ->
+            (* TODO: add back `sep rp rs h1`, which also needs erased rp -> *)
+            modifies (fp_rs rs h0) h0 h1 /\
             post_ctx rs arg h0 res h1)) 
 
 type s_tc = rs:ref trs -> s_tc' rs
@@ -78,39 +81,23 @@ type s_tp = rp:ref trp -> rs:ref trs ->s_tc' rs ->
   ST int (requires (fun h0 -> sep rp rs h0))
         (ensures (fun h0 res h1 -> post_prog rp rs h0 res h1))
 
-// Problem: had to change order of arguments to use rp in context type
-//          (so this doesn't return a s_tw)
-let s_link (s_p:s_tp) (rp:ref trp) (s_c:s_tc) (rs:ref trs) :
+val s_link : s_tp -> s_tc -> s_tw
+let s_link (s_p:s_tp) (s_c:s_tc) (rp:ref trp) (rs:ref trs) :
   ST int (requires (fun h0 -> sep rp rs h0))
          (ensures (fun h0 res h1 -> post_prog rp rs h0 res h1)) =
   s_p rp rs (s_c rs)
 
-// Solution using erased references
-
-open FStar.Ghost
-
-type se_tc = rs:ref trs -> arg:targ ->
-  ST tres (requires (fun h0 -> pre_ctx rs arg h0))
-          (ensures (fun h0 res h1 ->
-            modifies (fp_rs rs) h0 h1 /\
-            post_ctx rs arg h0 res h1)) // <- enforced by state separation
-
-let se_link (s_p:s_tp) (s_c:se_tc) : s_tw =
-  fun (rp:ref trp) (rs:ref trs) ->
-    s_p rp rs (s_c rs) (* rp passed to the context, but only as `erased` argument *)
-
-open FStar.Tactics
-  
-val strengthen : rp:ref trp -> rs:(ref trs) -> t_tc' rs ->  ST (s_tc' rs) (requires (fun h -> sep rp rs h)) (ensures (fun h0 r h1 -> True))
+val strengthen : rp:ref trp -> rs:(ref trs) -> t_tc' rs ->  ST (s_tc' rs) 
+  (requires (fun h -> sep rp rs h)) (ensures (fun h0 r h1 -> sep rp rs h1))
 let strengthen rp rs t_c arg :
   ST tres (requires (fun h0 -> pre_ctx rs arg h0))
           (ensures (fun h0 res h1 ->
-            modifies (fp_rs rs) h0 h1 /\
+            modifies (fp_rs rs h0) h0 h1 /\
             post_ctx rs arg h0 res h1)) =
   let (| _, ck |) = ck_post_ctx rs arg in
   let res = t_c arg in
   let h = gst_get () in
-  assert (sep rp rs h);
+  (* assert (sep rp rs h); -- doesn't hold now once sep ... rs h depends on h *)
   if ck res
   then res
   else admit() // TODO: signal error :) 
@@ -118,7 +105,6 @@ let strengthen rp rs t_c arg :
 val compile : s_tp -> t_tp
 let compile (s_p:s_tp) rp rs t_c =
     let s_c = strengthen rp rs t_c in
- //   assume (sep rp rs h0); // TODO: where would one get initial separation from?
     s_p rp rs s_c
 
 // Cezar: I suppose the initial separation will come from linking, where one
