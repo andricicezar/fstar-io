@@ -1,0 +1,15 @@
+{
+  "fstar_exe": "${FSTAR_HOME}/bin/fstar.exe",
+  "options": [
+    "--load_cmxs",
+    "steel",
+    "--warn_error",
+    "-249"
+  ],
+  "include_dirs": [
+    "steel/lib/steel",
+    "steel/lib/steel/pulse",
+    "steel/share/steel/examples/pulse/lib",
+    "tutorial"
+  ]
+}
