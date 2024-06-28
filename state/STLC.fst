@@ -392,7 +392,7 @@ type pure_step : exp -> exp -> Type =
 
 let store = loc -> option (e:exp{is_closed_value e})
 let empty_store : store = fun _ -> None
-let alloc (s:store) (l:loc) (v:exp{is_closed_value v}) : store = 
+let salloc (s:store) (l:loc) (v:exp{is_closed_value v}) : store = 
      fun l' -> if l' = l then Some v else s l'
 
 noeq
@@ -407,7 +407,7 @@ type step  : store -> exp -> store -> exp -> Type =
           squash (s l = None) ->
           #v:exp ->
           squash (is_closed_value v) ->
-          step s (EAlloc v) (alloc s l v) (ELoc l)
+          step s (EAlloc v) (salloc s l v) (ELoc l)
 | SReadRef :s:store ->
           #l:loc ->
           squash (Some? (s l)) ->
@@ -417,7 +417,7 @@ type step  : store -> exp -> store -> exp -> Type =
           squash (Some? (s l)) ->
           #v:exp ->
           squash (is_closed_value v) ->
-          step s (EUpdateRef (ELoc l) v) (alloc s l v) EUnit
+          step s (EUpdateRef (ELoc l) v) (salloc s l v) EUnit
 
 
 noeq
