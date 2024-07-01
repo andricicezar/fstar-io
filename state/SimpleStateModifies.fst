@@ -191,11 +191,22 @@ val modifies_preserves_sep'' (rs: ref (ref int)) (rp: ref int) (h0 h1: heap):
     (requires (
       let fp_rs_h1 = ((only rs) `Set.union` (only (sel h1 rs))) in 
       let fp_rs_h0 = ((only rs) `Set.union` (only (sel h0 rs))) in 
-      let fp_rp = only rp in
       (sep'' rp rs h0 /\ modifies fp_rs_h0 h0 h1) /\
       (forall x. x `Set.mem` fp_rs_h1 ==> (addr_unused_in x h0 \/ x `Set.mem` fp_rs_h0)) /\
       (h1 `contains` (sel h1 rs))
     ))
     (ensures (sep'' rp rs h1))
-  let modifies_preserves_sep'' rs rp h0 h1 = 
-  ()
+  let modifies_preserves_sep'' rs rp h0 h1 = ()
+
+  let ctx'' (rs:ref (ref int)) () : 
+  ST unit 
+    (requires (fun h0 -> h0 `contains` rs /\ h0 `contains` (sel h0 rs))) 
+    (ensures (fun h0 _ h1 -> 
+      let fp_rs_h1 = ((only rs) `Set.union` (only (sel h1 rs))) in 
+      let fp_rs_h0 = ((only rs) `Set.union` (only (sel h0 rs))) in 
+      modifies fp_rs_h0 h0 h1
+       /\
+      (forall x. x `Set.mem` fp_rs_h1 ==> (addr_unused_in x h0 \/ x `Set.mem` fp_rs_h0)) /\
+      (h1 `contains` (sel h1 rs)))) =
+  let rs' = !rs in
+  rs' := !rs' + 1
