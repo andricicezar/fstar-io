@@ -1,8 +1,9 @@
 module SimpleStateModifies
 
-open FStar.Ref
 open FStar.Ghost
 open FStar.Tactics
+
+open FStar.Ref
 
 open FStar.ST
 
@@ -125,6 +126,7 @@ let t_alloc_and_link t_p t_c () : St int =
   assume (sep rp rs h);
   t_p rp rs (t_c rs)
 
+// Example 1: rp: ref ref int, rs: ref int
 val ctx : rs:ref int -> unit -> ST unit (requires (fun _ -> True)) 
                                         (ensures (fun h0 _ h1 -> modifies (only rs) h0 h1)) 
 let ctx rs () = rs := !rs + 1
@@ -174,3 +176,26 @@ let whole () =
 //   assert (x == 2) by (norm [delta_only [`%whole;`%progr;`%ctx];zeta;iota]; dump "h")
 
 // val ctx': 
+
+// Example 2: rs: ref ref int, rp: ref int
+val sep'': ref int -> ref (ref int) -> heap -> Type0
+let sep'' rp rs h =
+  let fp_rs = ((only rs) `Set.union` (only (sel h rs))) in 
+  let fp_rp = only rp in
+  (h `contains` rs /\ h `contains` (sel h rs)) /\
+  (h `contains` rp) /\
+  Set.disjoint fp_rp fp_rs
+
+val modifies_preserves_sep'' (rs: ref (ref int)) (rp: ref int) (h0 h1: heap): 
+  Lemma
+    (requires (
+      let fp_rs_h1 = ((only rs) `Set.union` (only (sel h1 rs))) in 
+      let fp_rs_h0 = ((only rs) `Set.union` (only (sel h0 rs))) in 
+      let fp_rp = only rp in
+      (sep'' rp rs h0 /\ modifies fp_rs_h0 h0 h1) /\
+      (forall x. x `Set.mem` fp_rs_h1 ==> (addr_unused_in x h0 \/ x `Set.mem` fp_rs_h0)) /\
+      (h1 `contains` (sel h1 rs))
+    ))
+    (ensures (sep'' rp rs h1))
+  let modifies_preserves_sep'' rs rp h0 h1 = 
+  ()
