@@ -36,9 +36,9 @@ type exp =
 | EFst         : exp -> exp
 | ESnd         : exp -> exp
 | EPair        : fst:exp -> snd:exp -> exp
-| EAlloc       : exp -> exp
+// | EAlloc       : exp -> exp
 | EReadRef     : exp -> exp
-| EUpdateRef   : exp -> exp -> exp
+| EWriteRef   : exp -> exp -> exp
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 type context = var -> Tot (option typ)
@@ -139,23 +139,23 @@ noeq type typing : context -> exp -> typ -> Type0 =
           $h1:typing g e1 t1 ->
           $h2:typing g e2 t2 ->
                typing g (EPair e1 e2) (TPair t1 t2)
-| TyAllocRef  :#g:context ->
-               #e:exp ->
-               #t:typ ->
-               $h1:typing g e t ->
-                    typing g (EAlloc e) (TRef t)
+// | TyAllocRef  :#g:context ->
+//                #e:exp ->
+//                #t:typ ->
+//                $h1:typing g e t ->
+//                     typing g (EAlloc e) (TRef t)
 | TyReadRef :#g:context ->
              #e:exp ->
              #t:typ ->
              $h1:typing g e (TRef t) ->
                typing g (EReadRef e) t
-| TyUpdateRef :#g:context ->
+| TyWriteRef :#g:context ->
                #e1:exp ->
                #e2:exp ->
                #t:typ ->
                $h1:typing g e1 (TRef t) ->
                $h2:typing g e2 t ->
-                 typing g (EUpdateRef e1 e2) TUnit
+                 typing g (EWriteRef e1 e2) TUnit
 
 (* Parallel substitution operation `subst` *)
 
@@ -203,9 +203,9 @@ let rec subst (#r:bool)
      | EFst e -> EFst (subst s e)
      | ESnd e -> ESnd (subst s e)
      | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-     | EAlloc e -> EAlloc (subst s e)
+     // | EAlloc e -> EAlloc (subst s e)
      | EReadRef e -> EReadRef (subst s e)
-     | EUpdateRef e1 e2 -> EUpdateRef (subst s e1) (subst s e2)
+     | EWriteRef e1 e2 -> EWriteRef (subst s e1) (subst s e2)
 
 and sub_EAbs (#r:bool) (s:sub r) 
   : Tot (sub r)
@@ -256,9 +256,9 @@ let rec is_closed_exp (e:exp) (g:context) : bool =
      | EFst e -> is_closed_exp e g
      | ESnd e -> is_closed_exp e g
      | EPair e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
-     | EAlloc e1 -> is_closed_exp e1 g
+     // | EAlloc e1 -> is_closed_exp e1 g
      | EReadRef e1 -> is_closed_exp e1 g
-     | EUpdateRef e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
+     | EWriteRef e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
      | EUnit
      | EZero -> true
      | ELoc _ -> false // TODO: is this ok?
@@ -267,8 +267,8 @@ let rec is_closed_value (e:exp) : bool =
      match e with
      | EUnit
      | EZero -> true
-     | ELoc _ -> false
      | ESucc e -> is_closed_value e
+     | ELoc _ -> false
      | EInl e -> is_closed_value e
      | EInr e -> is_closed_value e 
      | EPair e1 e2 -> is_closed_value e1 && is_closed_value e2
@@ -371,10 +371,10 @@ type pure_step : exp -> exp -> Type =
           #e2':exp ->
           $hst:pure_step e2 e2' ->
                pure_step (EPair e1 e2) (EPair e1 e2')
-| SAllocPure : #e:exp ->
-               #e':exp ->
-               $hst:pure_step e e' ->
-                    pure_step (EAlloc e) (EAlloc e')
+// | SAllocPure : #e:exp ->
+//                #e':exp ->
+//                $hst:pure_step e e' ->
+//                     pure_step (EAlloc e) (EAlloc e')
 | SReadRefPure : #e:exp ->
                #e':exp ->
                $hst:pure_step e e' ->
@@ -383,12 +383,12 @@ type pure_step : exp -> exp -> Type =
                #e1':exp ->
                $hst:pure_step e1 e1' ->
                e2:exp ->
-                    pure_step (EUpdateRef e1 e2) (EUpdateRef e1' e2)
+                    pure_step (EWriteRef e1 e2) (EWriteRef e1' e2)
 | SUpdateRefPure1 : e1:exp ->
                #e2:exp ->
                #e2':exp ->
                $hst:pure_step e2 e2' ->
-                    pure_step (EUpdateRef e1 e2) (EUpdateRef e1 e2')
+                    pure_step (EWriteRef e1 e2) (EWriteRef e1 e2')
 
 let store = loc -> option (e:exp{is_closed_value e})
 let empty_store : store = fun _ -> None
@@ -402,12 +402,12 @@ type step  : store -> exp -> store -> exp -> Type =
           #e2:exp ->
           $hst:pure_step e1 e2 ->
           step s e1 s e2
-| SAlloc :s:store ->
-          #l:loc ->
-          squash (s l = None) ->
-          #v:exp ->
-          squash (is_closed_value v) ->
-          step s (EAlloc v) (salloc s l v) (ELoc l)
+// | SAlloc :s:store ->
+//           #l:loc ->
+//           squash (s l = None) ->
+//           #v:exp ->
+//           squash (is_closed_value v) ->
+//           step s (EAlloc v) (salloc s l v) (ELoc l)
 | SReadRef :s:store ->
           #l:loc ->
           squash (Some? (s l)) ->
@@ -417,7 +417,7 @@ type step  : store -> exp -> store -> exp -> Type =
           squash (Some? (s l)) ->
           #v:exp ->
           squash (is_closed_value v) ->
-          step s (EUpdateRef (ELoc l) v) (salloc s l v) EUnit
+          step s (EWriteRef (ELoc l) v) (salloc s l v) EUnit
 
 
 noeq
@@ -436,17 +436,17 @@ type steps : store -> exp -> store -> exp -> Type =
           steps s1 e1 s3 e3
 
 (** A few programs that use references and are typed **)
-let e:exp = EAlloc (EAlloc EZero)
-let tyj:typing empty e (TRef (TRef TNat)) = TyAllocRef (TyAllocRef TyZero)
+// let e:exp = EAlloc (EAlloc EZero)
+// let tyj:typing empty e (TRef (TRef TNat)) = TyAllocRef (TyAllocRef TyZero)
 
-let e':exp = EReadRef (EAlloc EZero)
-let tyj':typing empty e' TNat = TyReadRef (TyAllocRef TyZero)
+// let e':exp = EReadRef (EAlloc EZero)
+// let tyj':typing empty e' TNat = TyReadRef (TyAllocRef TyZero)
 
-let e'':exp = EUpdateRef (EAlloc EZero) (ESucc EZero)
-let tyj'':typing empty e'' TUnit = TyUpdateRef (TyAllocRef TyZero) (TySucc TyZero)
+// let e'':exp = EWriteRef (EAlloc EZero) (ESucc EZero)
+// let tyj'':typing empty e'' TUnit = TyWriteRef (TyAllocRef TyZero) (TySucc TyZero)
 
-let e''':exp = EAbs (TRef TNat) (EUpdateRef (EVar 0) (ESucc (EReadRef (EVar 0))))
-let tyj''':typing empty e''' (TArr (TRef TNat) TUnit) = TyAbs (TRef TNat) (TyUpdateRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))
+let e''':exp = EAbs (TRef TNat) (EWriteRef (EVar 0) (ESucc (EReadRef (EVar 0))))
+let tyj''':typing empty e''' (TArr (TRef TNat) TUnit) = TyAbs (TRef TNat) (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))
 
 (** ** Type Safety **)
 let type_safety (e:exp) (s:store) : Type0 =

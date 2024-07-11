@@ -52,8 +52,10 @@ let mk_tgt_arrow
      (requires (fun _ -> True))
      (ensures (fun h0 r h1 -> 
         let fp0 = (target_lang_pair tscope t1).footprint (scope, x) h0 in
-     //    let fp1 = (target_lang_pair tscope t1).footprint (scope, x) h1 in
-        (modifies fp0 h0 h1)
+        let fp1 = (target_lang_pair tscope t1).footprint (scope, x) h1 in
+        (modifies fp0 h0 h1) /\
+        ((c2 x).footprint r h1 `Set.subset` fp0) /\
+        (fp1 `Set.subset` fp0)
      //    (exists fp1' fp1''. Set.disjoint fp1' fp1'' /\ Set.equal fp1 (Set.union fp1' fp1'') /\
      //                        fp1' `Set.subset` fp0 /\ (forall ad. ad `Set.mem` fp1'' ==> addr_unused_in ad h0))
          ///\
@@ -105,16 +107,16 @@ let elab_typ (t:typ) : Type =
 let elab_typ_footprint (t:typ) =
   dsnd (elab_typ' t () target_lang_unit)
 
-val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
-let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
-  let ix = !x in
-  ix := !ix + 1;
-  x := y;
-  y := !y + 5;
-  ()
+// val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
+// let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
+//   let ix = !x in
+//   ix := !ix + 1;
+//   x := y;
+//   y := !y + 5;
+//   ()
 
-val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
-let elab_typ_test2 () = alloc 0
+// val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
+// let elab_typ_test2 () = alloc 0
   
 val elab_typ_test2' : elab_typ (TArr (TRef TNat) (TRef TNat))
 let elab_typ_test2' x = x
@@ -137,10 +139,38 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t 
 
 //let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
+
+let no_freshness (h0 h1:heap) : Type0 =
+     (forall (a:Type) (r:ref a).{:pattern (r `unused_in` h1)} r `unused_in` h0 ==> r `unused_in` h1)
+
+let fptrans (#t:Type) {| tfp:target_lang t |} (x:t) (h0 h1 h2:heap) : Lemma (
+     let fp0 = tfp.footprint x h0 in
+     let fp1 = tfp.footprint x h1 in
+     let fp2 = tfp.footprint x h2 in
+     modifies fp0 h0 h1 /\ no_freshness h0 h1 /\ fp1 `Set.subset` fp0 /\
+     modifies fp1 h1 h2 /\ no_freshness h1 h2 /\ fp2 `Set.subset` fp1
+          ==> modifies fp0 h0 h2
+) = ()
+
+     //    (exists fp1' fp1''. Set.disjoint fp1' fp1'' /\ Set.equal fp1 (Set.union fp1' fp1'') /\
+     //                        fp1' `Set.subset` fp0 /\ (forall ad. ad `Set.mem` fp1'' ==> addr_unused_in ad h0))
+
 open FStar.List.Tot
 
 // let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
 //      if n = 0 then acc else fnrec (n-1) (iter acc) iter
+
+// let testg () : 
+//      ST (unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> modifies Set.empty h0 h1))
+//           (requires (fun _ -> True))
+//           (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1)) =
+//      let g = alloc 0 in
+//      (fun () -> g := !g + 1)
+
+let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
+  (requires (s0 `Set.subset` s1 /\ s1 `Set.subset` s2))
+  (ensures (s0 `Set.subset` s2)) = ()
+
 
 let rec elab_exp 
      (#g:context)
@@ -156,34 +186,44 @@ let rec elab_exp
      (ensures (fun h0 r h1 ->
           let fp0 = sfp.footprint scope h0 in
           let fp1 = sfp.footprint scope h1 in
-          (modifies fp0 h0 h1)))
-     (decreases e) = // <-- TODO: ST is divergent, can we state that this terminates?
-     // let h0 = gst_get () in
-     // let fp = sfp.footprint scope h0 in
+          modifies fp0 h0 h1 /\ 
+          no_freshness h0 h1 /\
+          ((elab_typ_footprint t).footprint r h1 `Set.subset` fp0) /\
+          fp1 `Set.subset` fp0
+          ))
+     (decreases e) =
+     let h0 = gst_get () in
+     let fp0 = sfp.footprint scope h0 in
      match tyj with
      | TyUnit -> ()
      | TyZero -> 0
-     | TyAllocRef #_ #_ #t tyj_e -> begin
-          let v : elab_typ t = elab_exp tyj_e ve scope #sfp in
-          alloc v // <-- either this modifies the footprint or not
-     end
+     // | TyAllocRef #_ #_ #t tyj_e -> begin
+     //      let v : elab_typ t = elab_exp tyj_e ve scope #sfp in
+     //      let r = alloc v in
+     //      r
+     // end
      | TyReadRef #_ #_ #t tyj_e -> begin
-          let v : ref (elab_typ t) = elab_exp tyj_e ve scope #sfp in
-          read v
+          let r : ref (elab_typ t) = elab_exp tyj_e ve scope #sfp in
+          read r
      end
      | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-               let h0 = gst_get () in
-               let fp0 = sfp.footprint scope h0 in
           let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
                let h1 = gst_get () in
+               assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
+               assert (modifies fp0 h0 h1);
+               let fp1 = sfp.footprint scope h1 in
           let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
                let h2 = gst_get () in
-               assume (modifies fp0 h0 h2);
+               assert (modifies fp1 h1 h2);
+               fptrans scope h0 h1 h2;
+               assert (modifies fp0 h0 h2);
+               let fp2 = sfp.footprint scope h2 in
           write r v;
                let h3 = gst_get () in
+               let fp3 = sfp.footprint scope h3 in
+               assume (fp3 `Set.subset` fp0);
                assert (modifies (only r) h2 h3);
-               assume (Set.subset (only r) fp0);
-               assert (modifies fp0 h0 h3);
+               assert (Set.subset (only r) fp0);
           ()
      end
      | _ -> admit ()
