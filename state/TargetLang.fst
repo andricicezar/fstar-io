@@ -172,6 +172,38 @@ let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
   (ensures (s0 `Set.subset` s2)) = ()
 
 
+let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
+  Set.intersect s1 (Set.complement s2)
+
+let addr_in a h =
+  ~(addr_unused_in a h)
+
+// to fix this
+let disjoint_fp_lemma (#a:Type) (s: Set.set nat) (v: ref (ref int)) {| target_lang a |} (h1 h2: heap): 
+     Lemma
+     (requires (modifies s h1 h2 /\ (s `Set.disjoint` footprint v h1) /\ (FStar.Ref.contains h1 v)))
+               // (forall ad. ad `Set.mem` footprint v h1 ==> addr_in ad h1)))
+     (ensures footprint v h1 `Set.equal` footprint v h2) 
+     =
+     // assert (footprint v h1 `Set.equal` ((only v) `Set.union` (only (sel h1 v))));
+     // assert (footprint v h2 `Set.equal` ((only v) `Set.union` (only (sel h2 v))));
+     // assert (~(Set.mem (addr_of v) s));
+     // assert (sel h1 v == sel h2 v);
+
+     // assert (only (sel h1 v) `Set.equal` (only (sel h2 v)));
+     
+     ()
+     // assume (footprint v h2 `Set.subset` footprint v h1);
+     // introduce forall x. Set.mem x (footprint v h1) ==> Set.mem x (footprint v h2) with begin
+     //   introduce Set.mem x (footprint v h1) ==> Set.mem x (footprint v h2) with _. begin
+     //     assert (s `Set.disjoint` footprint v h1);
+     //     assert (~(Set.mem x s));
+     //     assert (Set.mem x (footprint v h2))
+     //   end
+     // end
+
+
+
 let rec elab_exp 
      (#g:context)
      (#e:exp) 
@@ -183,13 +215,13 @@ let rec elab_exp
      {| sfp:target_lang tscope |}       
   : ST (elab_typ t) 
      (requires (fun _ -> True))
-     (ensures (fun h0 r h1 ->
+     (ensures (fun h0 r hf ->
           let fp0 = sfp.footprint scope h0 in
-          let fp1 = sfp.footprint scope h1 in
-          modifies fp0 h0 h1 /\ 
-          no_freshness h0 h1 /\
-          ((elab_typ_footprint t).footprint r h1 `Set.subset` fp0) /\
-          fp1 `Set.subset` fp0
+          let fpf = sfp.footprint scope hf in
+          modifies fp0 h0 hf /\ 
+          no_freshness h0 hf /\
+          ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
+          fpf `Set.subset` fp0
           ))
      (decreases e) =
      let h0 = gst_get () in
@@ -210,20 +242,37 @@ let rec elab_exp
           let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
                let h1 = gst_get () in
                assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
-               assert (modifies fp0 h0 h1);
+               // assert (modifies fp0 h0 h1);
                let fp1 = sfp.footprint scope h1 in
           let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
                let h2 = gst_get () in
-               assert (modifies fp1 h1 h2);
-               fptrans scope h0 h1 h2;
-               assert (modifies fp0 h0 h2);
+//               assert ((elab_typ_footprint (TRef t)).footprint r h2 `Set.subset` fp0);
+
+               assert ((elab_typ_footprint t).footprint v h2 `Set.subset` fp0);
+               
+               // assert (modifies fp1 h1 h2);
+               // fptrans scope h0 h1 h2;
+               // assert (modifies fp0 h0 h2);
                let fp2 = sfp.footprint scope h2 in
           write r v;
+          // To do: can the OCaml type system prevent cycles? (r points to v and v points to rs)
                let h3 = gst_get () in
                let fp3 = sfp.footprint scope h3 in
-               assume (fp3 `Set.subset` fp0);
+               let fp_r = (elab_typ_footprint (TRef t)).footprint r in
+               let fp_v = (elab_typ_footprint t).footprint v in
+               assume (fp3 `Set.subset` ((fp2 `subtract` fp_r h2) `Set.union` fp_r h3));
+               assert (fp_r h3 `Set.equal` ((only r) `Set.union` fp_v h3));
+               assert (only r `Set.subset` fp0);
                assert (modifies (only r) h2 h3);
-               assert (Set.subset (only r) fp0);
+               assert (sel h3 r == v);
+               assert (no_freshness h2 h3);
+               // assert (~(only r `Set.subset` fp_v h2) ==> fp_v h3 `Set.subset` fp_v h2 );
+               assert (modifies !{r} h2 h3);
+               // assert (((only r) `Set.intersect` fp_v h2) `Set.equal` Set.empty);
+               assume (fp_v h3 `Set.subset` fp_v h2 );
+               assert (fp_v h2 `Set.subset` fp0);
+
+               assert (fp3 `Set.subset` fp0);
           ()
      end
      | _ -> admit ()
