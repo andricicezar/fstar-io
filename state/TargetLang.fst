@@ -35,11 +35,12 @@ class target_lang (t:Type) = {
           h1:heap -> 
           h2:heap -> 
           Lemma
-               (requires (modifies s h1 h2 /\ 
-                         ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
-                         (dcontains v h1) /\
-                         (stays_in v h2 ((footprint v h1) `Set.union` acc)) /\
-                         equal_dom h1 h2))
+               (requires (
+                    modifies s h1 h2 /\ 
+                    ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
+                    (dcontains v h1) /\
+                    (stays_in v h2 ((footprint v h1) `Set.union` acc)) /\
+                    equal_dom h1 h2))
                (ensures footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc)) 
 }
 
@@ -121,6 +122,7 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
           let acc' = only v `Set.union` acc in 
           assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s1 `Set.union` (s2 `Set.union` s3));
           assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s2 `Set.union` (s1 `Set.union` s3));
+          admit ();
           assert (
                stays_in
                     (sel h1 v) 
@@ -161,7 +163,9 @@ instance target_lang_arrow
     target_lang (mk_tgt_arrow t1 t2 scope) = {
     footprint = (fun _ _ -> Set.empty); // <-- TODO: why no footprint for functions?
      dcontains = (fun _ _ -> True);
-     law1 = (fun _ _ _ _ -> ());         
+     law1 = (fun _ _ _ _ -> ());
+     stays_in = (fun _ _ _ -> True);
+     law2 = (fun _ _ _ _ _ -> ());  
 }
 
 open STLC
@@ -259,6 +263,17 @@ let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
 let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
   Set.intersect s1 (Set.complement s2)
 
+let cycle_stays_in #t (r:ref t) (v:t) {| target_lang t |} (h1:heap) (h2:heap) : Lemma
+  (requires (equal_dom h1 h2 /\
+             h1 `FStar.Ref.contains` r /\
+             dcontains v h1 /\
+             modifies (only r) h1 h2 /\
+             only r `Set.subset` (footprint v h1) /\
+             sel h1 r == v // this creates a cycle between r and v
+             )) 
+  (ensures stays_in v h2 (footprint v h1)) = 
+  admit ()
+
 let rec elab_exp 
      (#g:context)
      (#e:exp) 
@@ -269,14 +284,16 @@ let rec elab_exp
      (scope:tscope)
      {| sfp:target_lang tscope |}       
   : ST (elab_typ t) 
-     (requires (fun _ -> True))
+     (requires (fun h0 -> sfp.dcontains scope h0))
      (ensures (fun h0 r hf ->
           let fp0 = sfp.footprint scope h0 in
           let fpf = sfp.footprint scope hf in
           modifies fp0 h0 hf /\ 
           equal_dom h0 hf /\
           ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
-          fpf `Set.subset` fp0
+          fpf `Set.subset` fp0 /\ 
+          sfp.dcontains scope hf /\
+          (elab_typ_footprint t).dcontains r hf
           ))
      (decreases e) =
      let h0 = gst_get () in
@@ -297,37 +314,36 @@ let rec elab_exp
           let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
                let h1 = gst_get () in
                assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
-               // assert (modifies fp0 h0 h1);
                let fp1 = sfp.footprint scope h1 in
           let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
                let h2 = gst_get () in
-//               assert ((elab_typ_footprint (TRef t)).footprint r h2 `Set.subset` fp0);
-
                assert ((elab_typ_footprint t).footprint v h2 `Set.subset` fp0);
-               
-               // assert (modifies fp1 h1 h2);
-               // fptrans scope h0 h1 h2;
-               // assert (modifies fp0 h0 h2);
                let fp2 = sfp.footprint scope h2 in
           write r v;
-          // To do: can the OCaml type system prevent cycles? (r points to v and v points to rs)
+
                let h3 = gst_get () in
                let fp3 = sfp.footprint scope h3 in
                let fp_r = (elab_typ_footprint (TRef t)).footprint r in
-               let fp_v = (elab_typ_footprint t).footprint v in
+               let tgv = elab_typ_footprint t in
+               let fp_v = tgv.footprint v in
                assume (fp3 `Set.subset` ((fp2 `subtract` fp_r h2) `Set.union` fp_r h3));
                assert (fp_r h3 `Set.equal` ((only r) `Set.union` fp_v h3));
                assert (only r `Set.subset` fp0);
                assert (modifies (only r) h2 h3);
                assert (sel h3 r == v);
                assert (equal_dom h2 h3);
-               // assert (~(only r `Set.subset` fp_v h2) ==> fp_v h3 `Set.subset` fp_v h2 );
-               assert (modifies !{r} h2 h3);
-               // assert (((only r) `Set.intersect` fp_v h2) `Set.equal` Set.empty);
-               assume (fp_v h3 `Set.subset` fp_v h2 );
+               assert (modifies (only r) h2 h3);
+     
+               assert (((only r) `Set.intersect` fp_v h2) `Set.subset` (only r));
+               assert (tgv.dcontains v h2);
+               assume (tgv.stays_in v h3 ((fp_v h2) `Set.union` Set.empty)); // unfold union and empty?
+               tgv.law2 (only r) Set.empty v h2 h3;
+               assert (fp_v h3 `Set.subset` fp_v h2 );
                assert (fp_v h2 `Set.subset` fp0);
 
+               // post
                assert (fp3 `Set.subset` fp0);
+               assume (sfp.dcontains scope h3); // the heap is monotonic, so just recall?
           ()
      end
      | _ -> admit ()
