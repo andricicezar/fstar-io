@@ -5,38 +5,129 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Ref
 
+let (@) = FStar.List.Tot.append
+
 type tfootprint = Set.set nat
+
+let rec toSet (l:list (a:Type & ref a)) : GTot tfootprint =
+  match l with
+  | [] -> Set.empty
+  | (| _, r |)::tl -> (only r) `Set.union` (toSet tl)
 
 (** target_lang is a shallow embedding of STLC **)
 class target_lang (t:Type) = {
-    footprint : t -> heap -> (erased tfootprint)
+     footprint : t -> heap -> (erased tfootprint);
+
+     dcontains : t -> heap -> Type0;
+
+     stays_in : t -> heap -> tfootprint -> Type0;
+
+     law1 : (s: Set.set nat) -> (v:t) -> h1:heap -> h2:heap -> Lemma
+          (requires (modifies s h1 h2 /\ 
+                    (s `Set.disjoint` footprint v h1) /\ 
+                    (dcontains v h1)))
+          (ensures footprint v h1 `Set.equal` footprint v h2);
+
+     law2 : 
+          (s: Set.set nat) -> 
+          (acc:Set.set nat) -> 
+          (v:t) -> 
+          h1:heap -> 
+          h2:heap -> 
+          Lemma
+               (requires (modifies s h1 h2 /\ 
+                         ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
+                         (dcontains v h1) /\
+                         (stays_in v h2 ((footprint v h1) `Set.union` acc)) /\
+                         equal_dom h1 h2))
+               (ensures footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc)) 
 }
 
 instance target_lang_unit : target_lang unit = {
-    footprint = fun _ _ -> Set.empty
+     footprint = (fun _ _ -> Set.empty);
+     dcontains = (fun _ _ -> True);
+     stays_in = (fun _ _ _ -> True);
+     law1 = (fun _ _ _ _ -> ());
+     law2 = (fun _ _ _ _  _ -> ());
 }
 
 instance target_lang_int : target_lang int = {
-    footprint = fun _ _ -> Set.empty
+     footprint = (fun _ _ -> Set.empty);
+     dcontains = (fun _ _ -> True);
+     stays_in = (fun _ _ _ -> True);
+     law1 = (fun _ _ _ _ -> ());
+     law2 = (fun _ _ _ _ _ -> ());
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
-    footprint = fun (x1, x2) h -> 
+     footprint = (fun (x1, x2) h -> 
         (c1.footprint x1 h) `Set.union` 
-        (c2.footprint x2 h)
+        (c2.footprint x2 h));
+     dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
+     stays_in = (fun (x1, x2) h fp -> 
+        c1.stays_in x1 h fp /\
+        c2.stays_in x2 h fp);
+     law1 = (fun s (x1, x2) h1 h2 -> 
+       c1.law1 s x1 h1 h2;
+       c2.law1 s x2 h1 h2
+     );
+     law2 = (fun s acc (x1, x2) h1 h2 ->
+       let acc' = ((c1.footprint x1 h1) `Set.union` 
+                   (c2.footprint x2 h1) `Set.union` acc) in
+       assert (c1.stays_in x1 h2 acc' /\ c2.stays_in x2 h2 acc');
+       let acc_x1 = (c2.footprint x2 h1) `Set.union` acc in
+       let acc_x2 = (c1.footprint x1 h1) `Set.union` acc in
+       assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s1 `Set.union` (s2 `Set.union` s3));
+       c1.law2 s acc_x1 x1 h1 h2;
+       assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s2 `Set.union` (s1 `Set.union` s3));
+       c2.law2 s acc_x2 x2 h1 h2)
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
-    footprint = fun x h -> 
+    footprint = (fun x h -> 
         match x with
         | Inl x1 -> c1.footprint x1 h
-        | Inr x2 -> c2.footprint x2 h
+        | Inr x2 -> c2.footprint x2 h);
+     dcontains = (fun x h ->
+            match x with
+            | Inl x1 -> c1.dcontains x1 h
+            | Inr x2 -> c2.dcontains x2 h);
+     stays_in = (fun x h fp -> 
+            match x with
+            | Inl x1 -> c1.stays_in x1 h fp
+            | Inr x2 -> c2.stays_in x2 h fp);
+     law1 = (fun s x h1 h2 ->
+            match x with
+            | Inl x1 -> c1.law1 s x1 h1 h2
+            | Inr x2 -> c2.law1 s x2 h1 h2
+       );
+     law2 = (fun s acc x h1 h2 ->
+            match x with
+            | Inl x1 -> c1.law2 s acc x1 h1 h2
+            | Inr x2 -> c2.law2 s acc x2 h1 h2
+       )
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
-    footprint = fun x h -> 
+     footprint = (fun x h -> 
         (only x) `Set.union`
-        (c.footprint (sel h x) h) // <--- following x in h
+        (c.footprint (sel h x) h)); // <--- following x in h
+     stays_in = (fun x h fp -> 
+          (only x) `Set.subset` fp /\
+          c.stays_in (sel h x) h fp);
+     dcontains = (fun x h -> h `FStar.Ref.contains` x /\ c.dcontains (sel h x) h);
+     law1 = (fun s v h1 h2 -> c.law1 s (sel h1 v) h1 h2);
+     law2 = (fun s acc (v:ref t) h1 h2 ->
+          let acc' = only v `Set.union` acc in 
+          assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s1 `Set.union` (s2 `Set.union` s3));
+          assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s2 `Set.union` (s1 `Set.union` s3));
+          assert (
+               stays_in
+                    (sel h1 v) 
+                    h2
+                    ((footprint (sel h1 v) h1) `Set.union` (only v `Set.union` acc)));
+          c.law2 s acc' (sel h1 v) h1 h2
+     )
 }
 
 let mk_tgt_arrow  
@@ -56,10 +147,6 @@ let mk_tgt_arrow
         (modifies fp0 h0 h1) /\
         ((c2 x).footprint r h1 `Set.subset` fp0) /\
         (fp1 `Set.subset` fp0)
-     //    (exists fp1' fp1''. Set.disjoint fp1' fp1'' /\ Set.equal fp1 (Set.union fp1' fp1'') /\
-     //                        fp1' `Set.subset` fp0 /\ (forall ad. ad `Set.mem` fp1'' ==> addr_unused_in ad h0))
-         ///\
-     //    (forall z. Set.mem z ((c2 x).footprint r h1) ==> Set.mem z fp \/ addr_unused_in z h0) // <-- returned references either are already in scope or are fresh
  ))
 
 instance target_lang_arrow 
@@ -72,7 +159,9 @@ instance target_lang_arrow
     {| (x:t1 -> target_lang (t2 x)) |}
     : 
     target_lang (mk_tgt_arrow t1 t2 scope) = {
-    footprint = fun _ _ -> Set.empty           // <-- TODO: why no footprint for functions?
+    footprint = (fun _ _ -> Set.empty); // <-- TODO: why no footprint for functions?
+     dcontains = (fun _ _ -> True);
+     law1 = (fun _ _ _ _ -> ());         
 }
 
 open STLC
@@ -127,7 +216,6 @@ let elab_typ_test2' x = x
 //   x := !x + 1;
 //   ()
 
-(*** NOT UPDATED FROM HERE **)
 (** *** Elaboration of expressions to F* *)
 type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
 
@@ -139,16 +227,12 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t 
 
 //let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
-
-let no_freshness (h0 h1:heap) : Type0 =
-     (forall (a:Type) (r:ref a).{:pattern (r `unused_in` h1)} r `unused_in` h0 ==> r `unused_in` h1)
-
 let fptrans (#t:Type) {| tfp:target_lang t |} (x:t) (h0 h1 h2:heap) : Lemma (
      let fp0 = tfp.footprint x h0 in
      let fp1 = tfp.footprint x h1 in
      let fp2 = tfp.footprint x h2 in
-     modifies fp0 h0 h1 /\ no_freshness h0 h1 /\ fp1 `Set.subset` fp0 /\
-     modifies fp1 h1 h2 /\ no_freshness h1 h2 /\ fp2 `Set.subset` fp1
+     modifies fp0 h0 h1 /\ equal_dom h0 h1 /\ fp1 `Set.subset` fp0 /\
+     modifies fp1 h1 h2 /\ equal_dom h1 h2 /\ fp2 `Set.subset` fp1
           ==> modifies fp0 h0 h2
 ) = ()
 
@@ -175,35 +259,6 @@ let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
 let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
   Set.intersect s1 (Set.complement s2)
 
-let addr_in a h =
-  ~(addr_unused_in a h)
-
-// to fix this
-let disjoint_fp_lemma (#a:Type) (s: Set.set nat) (v: ref (ref int)) {| target_lang a |} (h1 h2: heap): 
-     Lemma
-     (requires (modifies s h1 h2 /\ (s `Set.disjoint` footprint v h1) /\ (FStar.Ref.contains h1 v)))
-               // (forall ad. ad `Set.mem` footprint v h1 ==> addr_in ad h1)))
-     (ensures footprint v h1 `Set.equal` footprint v h2) 
-     =
-     // assert (footprint v h1 `Set.equal` ((only v) `Set.union` (only (sel h1 v))));
-     // assert (footprint v h2 `Set.equal` ((only v) `Set.union` (only (sel h2 v))));
-     // assert (~(Set.mem (addr_of v) s));
-     // assert (sel h1 v == sel h2 v);
-
-     // assert (only (sel h1 v) `Set.equal` (only (sel h2 v)));
-     
-     ()
-     // assume (footprint v h2 `Set.subset` footprint v h1);
-     // introduce forall x. Set.mem x (footprint v h1) ==> Set.mem x (footprint v h2) with begin
-     //   introduce Set.mem x (footprint v h1) ==> Set.mem x (footprint v h2) with _. begin
-     //     assert (s `Set.disjoint` footprint v h1);
-     //     assert (~(Set.mem x s));
-     //     assert (Set.mem x (footprint v h2))
-     //   end
-     // end
-
-
-
 let rec elab_exp 
      (#g:context)
      (#e:exp) 
@@ -219,7 +274,7 @@ let rec elab_exp
           let fp0 = sfp.footprint scope h0 in
           let fpf = sfp.footprint scope hf in
           modifies fp0 h0 hf /\ 
-          no_freshness h0 hf /\
+          equal_dom h0 hf /\
           ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
           fpf `Set.subset` fp0
           ))
@@ -265,7 +320,7 @@ let rec elab_exp
                assert (only r `Set.subset` fp0);
                assert (modifies (only r) h2 h3);
                assert (sel h3 r == v);
-               assert (no_freshness h2 h3);
+               assert (equal_dom h2 h3);
                // assert (~(only r `Set.subset` fp_v h2) ==> fp_v h3 `Set.subset` fp_v h2 );
                assert (modifies !{r} h2 h3);
                // assert (((only r) `Set.intersect` fp_v h2) `Set.equal` Set.empty);
