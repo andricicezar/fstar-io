@@ -16,120 +16,104 @@ let rec toSet (l:list (a:Type & ref a)) : GTot tfootprint =
 
 (** target_lang is a shallow embedding of STLC **)
 class target_lang (t:Type) = {
-     footprint : t -> heap -> (erased tfootprint);
+  footprint : t -> heap -> (erased tfootprint); // TODO: if there is a cycle, this would diverge
+                     // I suppose it is not a problem because we are in GTot?
 
-     dcontains : t -> heap -> Type0;
+  dcontains : t -> heap -> Type0;
 
-     stays_in : t -> heap -> tfootprint -> Type0;
+  law1 : (s: Set.set nat) -> (v:t) -> h1:heap -> h2:heap -> 
+    Lemma
+      (requires (modifies s h1 h2 /\ 
+        (s `Set.disjoint` footprint v h1) /\ 
+        (dcontains v h1)))
+      (ensures footprint v h1 `Set.equal` footprint v h2);
 
-     law1 : (s: Set.set nat) -> (v:t) -> h1:heap -> h2:heap -> Lemma
-          (requires (modifies s h1 h2 /\ 
-                    (s `Set.disjoint` footprint v h1) /\ 
-                    (dcontains v h1)))
-          (ensures footprint v h1 `Set.equal` footprint v h2);
-
-     law2 : 
-          (s: Set.set nat) -> 
-          (acc:Set.set nat) -> 
-          (v:t) -> 
-          h1:heap -> 
-          h2:heap -> 
-          Lemma
-               (requires (
-                    modifies s h1 h2 /\ 
-                    ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
-                    (dcontains v h1) /\
-                    (stays_in v h2 ((footprint v h1) `Set.union` acc)) /\
-                    equal_dom h1 h2))
-               (ensures footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc)) 
+  law2 : 
+    (s: Set.set nat) -> 
+    (acc:Set.set nat) -> 
+    (v:t) -> 
+    h1:heap -> 
+    h2:heap -> 
+    Lemma
+      (requires (
+        modifies s h1 h2 /\ 
+        ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
+        (dcontains v h1) /\
+        equal_dom h1 h2))
+      (ensures (footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc))) 
 }
 
 instance target_lang_unit : target_lang unit = {
-     footprint = (fun _ _ -> Set.empty);
-     dcontains = (fun _ _ -> True);
-     stays_in = (fun _ _ _ -> True);
-     law1 = (fun _ _ _ _ -> ());
-     law2 = (fun _ _ _ _  _ -> ());
+  footprint = (fun _ _ -> Set.empty);
+  dcontains = (fun _ _ -> True);
+  law1 = (fun _ _ _ _ -> ());
+  law2 = (fun _ _ _ _  _ -> ());
 }
 
 instance target_lang_int : target_lang int = {
-     footprint = (fun _ _ -> Set.empty);
-     dcontains = (fun _ _ -> True);
-     stays_in = (fun _ _ _ -> True);
-     law1 = (fun _ _ _ _ -> ());
-     law2 = (fun _ _ _ _ _ -> ());
+  footprint = (fun _ _ -> Set.empty);
+  dcontains = (fun _ _ -> True);
+  law1 = (fun _ _ _ _ -> ());
+  law2 = (fun _ _ _ _ _ -> ());
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
-     footprint = (fun (x1, x2) h -> 
-        (c1.footprint x1 h) `Set.union` 
-        (c2.footprint x2 h));
-     dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
-     stays_in = (fun (x1, x2) h fp -> 
-        c1.stays_in x1 h fp /\
-        c2.stays_in x2 h fp);
-     law1 = (fun s (x1, x2) h1 h2 -> 
-       c1.law1 s x1 h1 h2;
-       c2.law1 s x2 h1 h2
-     );
-     law2 = (fun s acc (x1, x2) h1 h2 ->
-       let acc' = ((c1.footprint x1 h1) `Set.union` 
-                   (c2.footprint x2 h1) `Set.union` acc) in
-       assert (c1.stays_in x1 h2 acc' /\ c2.stays_in x2 h2 acc');
-       let acc_x1 = (c2.footprint x2 h1) `Set.union` acc in
-       let acc_x2 = (c1.footprint x1 h1) `Set.union` acc in
-       assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s1 `Set.union` (s2 `Set.union` s3));
-       c1.law2 s acc_x1 x1 h1 h2;
-       assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s2 `Set.union` (s1 `Set.union` s3));
-       c2.law2 s acc_x2 x2 h1 h2)
+  footprint = (fun (x1, x2) h -> 
+      (c1.footprint x1 h) `Set.union` 
+      (c2.footprint x2 h));
+  dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
+  law1 = (fun s (x1, x2) h1 h2 -> 
+    c1.law1 s x1 h1 h2;
+    c2.law1 s x2 h1 h2
+  );
+  law2 = (fun s acc (x1, x2) h1 h2 ->
+    let acc' = ((c1.footprint x1 h1) `Set.union` 
+               (c2.footprint x2 h1) `Set.union` acc) in
+    let acc_x1 = (c2.footprint x2 h1) `Set.union` acc in
+    let acc_x2 = (c1.footprint x1 h1) `Set.union` acc in
+    c1.law2 s acc_x1 x1 h1 h2;
+    c2.law2 s acc_x2 x2 h1 h2)
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
-    footprint = (fun x h -> 
-        match x with
-        | Inl x1 -> c1.footprint x1 h
-        | Inr x2 -> c2.footprint x2 h);
-     dcontains = (fun x h ->
-            match x with
-            | Inl x1 -> c1.dcontains x1 h
-            | Inr x2 -> c2.dcontains x2 h);
-     stays_in = (fun x h fp -> 
-            match x with
-            | Inl x1 -> c1.stays_in x1 h fp
-            | Inr x2 -> c2.stays_in x2 h fp);
-     law1 = (fun s x h1 h2 ->
-            match x with
-            | Inl x1 -> c1.law1 s x1 h1 h2
-            | Inr x2 -> c2.law1 s x2 h1 h2
-       );
-     law2 = (fun s acc x h1 h2 ->
-            match x with
-            | Inl x1 -> c1.law2 s acc x1 h1 h2
-            | Inr x2 -> c2.law2 s acc x2 h1 h2
-       )
+  footprint = (fun x h -> 
+     match x with
+     | Inl x1 -> c1.footprint x1 h
+     | Inr x2 -> c2.footprint x2 h);
+  dcontains = (fun x h ->
+    match x with
+    | Inl x1 -> c1.dcontains x1 h
+    | Inr x2 -> c2.dcontains x2 h);
+  law1 = (fun s x h1 h2 ->
+    match x with
+    | Inl x1 -> c1.law1 s x1 h1 h2
+    | Inr x2 -> c2.law1 s x2 h1 h2
+  );
+  law2 = (fun s acc x h1 h2 ->
+    match x with
+    | Inl x1 -> c1.law2 s acc x1 h1 h2
+    | Inr x2 -> c2.law2 s acc x2 h1 h2
+  )
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
-     footprint = (fun x h -> 
-        (only x) `Set.union`
-        (c.footprint (sel h x) h)); // <--- following x in h
-     stays_in = (fun x h fp -> 
-          (only x) `Set.subset` fp /\
-          c.stays_in (sel h x) h fp);
-     dcontains = (fun x h -> h `FStar.Ref.contains` x /\ c.dcontains (sel h x) h);
-     law1 = (fun s v h1 h2 -> c.law1 s (sel h1 v) h1 h2);
-     law2 = (fun s acc (v:ref t) h1 h2 ->
-          let acc' = only v `Set.union` acc in 
-          assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s1 `Set.union` (s2 `Set.union` s3));
-          assume (forall (s1 s2 s3:set nat). (s1 `Set.union` s2) `Set.union` s3 == s2 `Set.union` (s1 `Set.union` s3));
-          admit ();
-          assert (
-               stays_in
-                    (sel h1 v) 
-                    h2
-                    ((footprint (sel h1 v) h1) `Set.union` (only v `Set.union` acc)));
-          c.law2 s acc' (sel h1 v) h1 h2
-     )
+  footprint = (fun x h -> 
+    (only x) `Set.union`
+    (c.footprint (sel h x) h)); // <--- following x in h
+  dcontains = (fun x h -> h `FStar.Ref.contains` x /\ c.dcontains (sel h x) h);
+  law1 = (fun s v h1 h2 -> c.law1 s (sel h1 v) h1 h2);
+  law2 = (fun s acc (v:ref t) h1 h2 ->
+    let acc' = only v `Set.union` acc in 
+    c.law2 s acc' (sel h1 v) h1 h2;
+    assert (Set.subset (c.footprint (sel h1 v) h2)
+                       (Set.union (c.footprint (sel h1 v) h1) acc'));
+    introduce sel h1 v == sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
+              (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin () end;
+    introduce sel h1 v =!= sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
+              (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin 
+      admit () 
+    end
+  )
 }
 
 let mk_tgt_arrow  
@@ -138,67 +122,67 @@ let mk_tgt_arrow
   (t2:t1 -> Type) 
   (#tscope:Type)
   (scope:tscope)
-  {| target_lang tscope |}
+  {| sfp:target_lang tscope |}
   {| c2 : (x:t1 -> target_lang (t2 x)) |}
-=
-  x:t1 -> ST (t2 x) 
-     (requires (fun _ -> True))
-     (ensures (fun h0 r h1 -> 
-        let fp0 = (target_lang_pair tscope t1).footprint (scope, x) h0 in
-        let fp1 = (target_lang_pair tscope t1).footprint (scope, x) h1 in
-        (modifies fp0 h0 h1) /\
-        ((c2 x).footprint r h1 `Set.subset` fp0) /\
-        (fp1 `Set.subset` fp0)
- ))
+= x:t1 -> ST (t2 x) 
+    (requires (fun h0 -> sfp.dcontains scope h0))
+    (ensures (fun h0 r hf -> 
+      let fp0 = sfp.footprint scope h0 in
+      let fpf = sfp.footprint scope hf in
+      modifies fp0 h0 hf /\ 
+      equal_dom h0 hf /\
+      ((c2 x).footprint r hf `Set.subset` fp0) /\
+      fpf `Set.subset` fp0 /\ 
+      sfp.dcontains scope hf /\
+      (c2 x).dcontains r hf
+    ))
 
 instance target_lang_arrow 
-    (t1:Type)
-    {| target_lang t1 |}
-    (t2:t1 -> Type) 
-    (#tscope:Type)
-    (scope:tscope)
-    {| target_lang tscope |}
-    {| (x:t1 -> target_lang (t2 x)) |}
-    : 
-    target_lang (mk_tgt_arrow t1 t2 scope) = {
+  (t1:Type)
+  {| target_lang t1 |}
+  (t2:t1 -> Type) 
+  (#tscope:Type)
+  (scope:tscope)
+  {| target_lang tscope |}
+  {| (x:t1 -> target_lang (t2 x)) |}
+  : target_lang (mk_tgt_arrow t1 t2 scope) = {
     footprint = (fun _ _ -> Set.empty); // <-- TODO: why no footprint for functions?
-     dcontains = (fun _ _ -> True);
-     law1 = (fun _ _ _ _ -> ());
-     stays_in = (fun _ _ _ -> True);
-     law2 = (fun _ _ _ _ _ -> ());  
-}
+    dcontains = (fun _ _ -> True);
+    law1 = (fun _ _ _ _ -> ());
+    law2 = (fun _ _ _ _ _ -> ());  
+  }
 
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec elab_typ' (t:typ) (#tscope:Type) (scope:tscope) (c_scope:target_lang tscope) : tt:Type & target_lang tt =
+let rec elab_typ' (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
-     let (| tt1, c_tt1 |) = elab_typ' t1 scope c_scope in
-     let tt2 (x:tt1) = elab_typ' t2 (scope, x) (target_lang_pair tscope tt1 #c_scope #c_tt1) in
-     (| mk_tgt_arrow      tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
-        target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
-     |)
+    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
+    let tt2 (x:tt1) = elab_typ' t2 (scope, x) #(target_lang_pair tscope tt1 #c_scope #c_tt1) in
+    (| mk_tgt_arrow   tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
+      target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
+    |)
   end 
   | TUnit -> (| unit, target_lang_unit |)
   | TNat -> (| int, target_lang_int |)
   | TSum t1 t2 ->
-     let (| tt1, c_tt1 |) = elab_typ' t1 scope c_scope in
-     let (| tt2, c_tt2 |) = elab_typ' t2 scope c_scope in
-     (| either tt1 tt2, target_lang_sum tt1 tt2 #c_tt1 #c_tt2 |)
+    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
+    let (| tt2, c_tt2 |) = elab_typ' t2 scope #c_scope in
+    (| either tt1 tt2, target_lang_sum tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
-     let (| tt1, c_tt1 |) = elab_typ' t1 scope c_scope in
-     let (| tt2, c_tt2 |) = elab_typ' t2 scope c_scope in
-     (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
+    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
+    let (| tt2, c_tt2 |) = elab_typ' t2 scope #c_scope in
+    (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef t ->
-     let (| tt, c_tt |) = elab_typ' t scope c_scope in
-     (| ref tt, target_lang_ref tt #c_tt |)
+    let (| tt, c_tt |) = elab_typ' t scope #c_scope in
+    (| ref tt, target_lang_ref tt #c_tt |)
 
 let elab_typ (t:typ) : Type =
-  dfst (elab_typ' t () target_lang_unit)
+  dfst (elab_typ' t ())
 
 let elab_typ_footprint (t:typ) =
-  dsnd (elab_typ' t () target_lang_unit)
+  dsnd (elab_typ' t ())
 
 // val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 // let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
@@ -211,14 +195,33 @@ let elab_typ_footprint (t:typ) =
 // val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
 // let elab_typ_test2 () = alloc 0
   
-val elab_typ_test2' : elab_typ (TArr (TRef TNat) (TRef TNat))
-let elab_typ_test2' x = x
+// val elab_typ_test2' : elab_typ (TArr (TRef TNat) (TRef TNat))
+// let elab_typ_test2' x = x
 
 // val elab_typ_test3 : elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 // let elab_typ_test3 f =
 //   let x:ref int = f () in
 //   x := !x + 1;
 //   ()
+
+val sep : ref int -> ref (ref int) -> heap -> Type0
+let sep rp rs h =
+  let fp_rs = ((only rs) `Set.union` (only (sel h rs))) in 
+  let fp_rp = only rp in
+  (h `contains` rs /\ h `contains` (sel h rs)) /\
+  (h `contains` rp) /\
+  Set.disjoint fp_rp fp_rs
+
+val progr: 
+  rp: ref int -> 
+  rs: ref (ref int) -> 
+  ctx:(dfst (elab_typ' (TArr TUnit TUnit) rs)) -> 
+  ST int (requires (fun h0 -> sep rp rs h0))
+      (ensures (fun _ _ h1 -> sep rp rs h1))
+         
+let progr rp rs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
+  f ();
+  !rp
 
 (** *** Elaboration of expressions to F* *)
 type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
@@ -232,166 +235,144 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t 
 //let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
 let fptrans (#t:Type) {| tfp:target_lang t |} (x:t) (h0 h1 h2:heap) : Lemma (
-     let fp0 = tfp.footprint x h0 in
-     let fp1 = tfp.footprint x h1 in
-     let fp2 = tfp.footprint x h2 in
-     modifies fp0 h0 h1 /\ equal_dom h0 h1 /\ fp1 `Set.subset` fp0 /\
-     modifies fp1 h1 h2 /\ equal_dom h1 h2 /\ fp2 `Set.subset` fp1
-          ==> modifies fp0 h0 h2
+  let fp0 = tfp.footprint x h0 in
+  let fp1 = tfp.footprint x h1 in
+  let fp2 = tfp.footprint x h2 in
+  modifies fp0 h0 h1 /\ equal_dom h0 h1 /\ fp1 `Set.subset` fp0 /\
+  modifies fp1 h1 h2 /\ equal_dom h1 h2 /\ fp2 `Set.subset` fp1
+    ==> modifies fp0 h0 h2
 ) = ()
-
-     //    (exists fp1' fp1''. Set.disjoint fp1' fp1'' /\ Set.equal fp1 (Set.union fp1' fp1'') /\
-     //                        fp1' `Set.subset` fp0 /\ (forall ad. ad `Set.mem` fp1'' ==> addr_unused_in ad h0))
 
 open FStar.List.Tot
 
 // let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
-//      if n = 0 then acc else fnrec (n-1) (iter acc) iter
-
-// let testg () : 
-//      ST (unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> modifies Set.empty h0 h1))
-//           (requires (fun _ -> True))
-//           (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1)) =
-//      let g = alloc 0 in
-//      (fun () -> g := !g + 1)
+//   if n = 0 then acc else fnrec (n-1) (iter acc) iter
 
 let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
   (requires (s0 `Set.subset` s1 /\ s1 `Set.subset` s2))
   (ensures (s0 `Set.subset` s2)) = ()
 
-
 let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
   Set.intersect s1 (Set.complement s2)
 
-let cycle_stays_in #t (r:ref t) (v:t) {| target_lang t |} (h1:heap) (h2:heap) : Lemma
-  (requires (equal_dom h1 h2 /\
-             h1 `FStar.Ref.contains` r /\
-             dcontains v h1 /\
-             modifies (only r) h1 h2 /\
-             only r `Set.subset` (footprint v h1) /\
-             sel h1 r == v // this creates a cycle between r and v
-             )) 
-  (ensures stays_in v h2 (footprint v h1)) = 
-  admit ()
-
 let rec elab_exp 
-     (#g:context)
-     (#e:exp) 
-     (#t:typ)
-     (tyj:typing g e t)
-     (ve:vcontext g)
-     (#tscope:Type)
-     (scope:tscope)
-     {| sfp:target_lang tscope |}       
+  (#g:context)
+  (#e:exp) 
+  (#t:typ)
+  (tyj:typing g e t)
+  (ve:vcontext g)
+  (#tscope:Type)
+  (scope:tscope)
+  {| sfp:target_lang tscope |}    
   : ST (elab_typ t) 
      (requires (fun h0 -> sfp.dcontains scope h0))
      (ensures (fun h0 r hf ->
-          let fp0 = sfp.footprint scope h0 in
-          let fpf = sfp.footprint scope hf in
-          modifies fp0 h0 hf /\ 
-          equal_dom h0 hf /\
-          ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
-          fpf `Set.subset` fp0 /\ 
-          sfp.dcontains scope hf /\
-          (elab_typ_footprint t).dcontains r hf
-          ))
+        let fp0 = sfp.footprint scope h0 in
+        let fpf = sfp.footprint scope hf in
+        modifies fp0 h0 hf /\ 
+        equal_dom h0 hf /\
+        ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
+        fpf `Set.subset` fp0 /\ 
+        sfp.dcontains scope hf /\
+        (elab_typ_footprint t).dcontains r hf
+        ))
      (decreases e) =
-     let h0 = gst_get () in
-     let fp0 = sfp.footprint scope h0 in
-     match tyj with
-     | TyUnit -> ()
-     | TyZero -> 0
-     // | TyAllocRef #_ #_ #t tyj_e -> begin
-     //      let v : elab_typ t = elab_exp tyj_e ve scope #sfp in
-     //      let r = alloc v in
-     //      r
-     // end
-     | TyReadRef #_ #_ #t tyj_e -> begin
-          let r : ref (elab_typ t) = elab_exp tyj_e ve scope #sfp in
-          read r
-     end
-     | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-          let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
-               let h1 = gst_get () in
-               assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
-               let fp1 = sfp.footprint scope h1 in
-          let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
-               let h2 = gst_get () in
-               assert ((elab_typ_footprint t).footprint v h2 `Set.subset` fp0);
-               let fp2 = sfp.footprint scope h2 in
-          write r v;
+  let h0 = gst_get () in
+  let fp0 = sfp.footprint scope h0 in
+  match tyj with
+  | TyUnit -> ()
+  | TyZero -> 0
+  | TyReadRef #_ #_ #t tyj_e -> begin
+    let r : ref (elab_typ t) = elab_exp tyj_e ve scope #sfp in
+    read r
+  end
+  | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
+    let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
+      let h1 = gst_get () in
+      assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
+      
+    let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
+      let h2 = gst_get () in
+      assert ((elab_typ_footprint t).footprint v h2 `Set.subset` fp0);
+      let fp2 = sfp.footprint scope h2 in
 
-               let h3 = gst_get () in
-               let fp3 = sfp.footprint scope h3 in
-               let fp_r = (elab_typ_footprint (TRef t)).footprint r in
-               let tgv = elab_typ_footprint t in
-               let fp_v = tgv.footprint v in
-               assume (fp3 `Set.subset` ((fp2 `subtract` fp_r h2) `Set.union` fp_r h3));
-               assert (fp_r h3 `Set.equal` ((only r) `Set.union` fp_v h3));
-               assert (only r `Set.subset` fp0);
-               assert (modifies (only r) h2 h3);
-               assert (sel h3 r == v);
-               assert (equal_dom h2 h3);
-               assert (modifies (only r) h2 h3);
-     
-               assert (((only r) `Set.intersect` fp_v h2) `Set.subset` (only r));
-               assert (tgv.dcontains v h2);
-               assume (tgv.stays_in v h3 ((fp_v h2) `Set.union` Set.empty)); // unfold union and empty?
-               tgv.law2 (only r) Set.empty v h2 h3;
-               assert (fp_v h3 `Set.subset` fp_v h2 );
-               assert (fp_v h2 `Set.subset` fp0);
+    write r v;
+      let h3 = gst_get () in
+      let fp3 = sfp.footprint scope h3 in
+      let fp_r = (elab_typ_footprint (TRef t)).footprint r in
+      let tgv = elab_typ_footprint t in
+      let fp_v = tgv.footprint v in
+      assume (fp3 `Set.subset` ((fp2 `subtract` fp_r h2) `Set.union` fp_r h3));
+      assert (fp_r h3 `Set.equal` ((only r) `Set.union` fp_v h3));
+      assert (only r `Set.subset` fp0);
+      assert (modifies (only r) h2 h3);
+      assert (sel h3 r == v);
+      assert (equal_dom h2 h3);
+      assert (modifies (only r) h2 h3);
+  
+      assert (((only r) `Set.intersect` fp_v h2) `Set.subset` (only r));
+      assert (tgv.dcontains v h2);
+      tgv.law2 (only r) Set.empty v h2 h3;
+      assert (fp_v h3 `Set.subset` fp_v h2 );
+      assert (fp_v h2 `Set.subset` fp0);
 
-               // post
-               assert (fp3 `Set.subset` fp0);
-               assume (sfp.dcontains scope h3); // the heap is monotonic, so just recall?
-          ()
-     end
-     | _ -> admit ()
+      // post
+      assert (fp3 `Set.subset` fp0);
+      assume (sfp.dcontains scope h3); // the heap is monotonic, so just recall?
+    ()
+  end
+  | _ -> admit ()
 
-     (**
-     | TySucc hs ->
-          1 + (elab_exp hs ve)
-     | TyNRec h1 h2 h3 -> admit ()
-          // let v1 = elab_exp h1 ve in
-          // let v2 : elab_typ t = elab_exp h2 ve in
-          // let v3 : elab_typ (TArr t t) = elab_exp h3 ve in
-          // fnrec #(elab_typ t) v1 v2 v3
-     | TyInl #_ #_ #t1 #t2 h1 ->
-          let v = elab_exp h1 ve in
-          Inl #(elab_typ t1) #(elab_typ t2) v
-     | TyInr #_ #_ #t1 #t2 h1 ->
-          let v = elab_exp h1 ve in
-          Inr #(elab_typ t1) #(elab_typ t2) v
-     | TyCaseSum h1 h2 h3 ->
-          let v1 = elab_exp h1 ve in
-          let v2 = elab_exp h2 ve in
-          let v3 = elab_exp h3 ve in
-          (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
-     | TyCaseNat h1 h2 h3 ->
-          let v1 = elab_exp h1 ve in
-          let v2 = elab_exp h2 ve in
-          let v3 = elab_exp h3 ve in
-          (match v1 with | 0 -> v2 () | _ -> v3 (v1-1))
-     | TyVar x -> ve x
-     | TyAbs t1 #_ #t2 h1 -> admit ()
-          // assert (t == TArr t1 t2);
-          // let w : elab_typ t1 -> Tot (elab_typ t2) =
-          // (fun x -> elab_exp h1 (vextend x ve)) in
-          // cast_TArr w
-     | TyApp #_ #_ #_ #t1 #t2 h1 h2 ->
-          assert ((elab_typ t) == (elab_typ t2));
-          (* TODO: Should we change the order here, first evaluate argument? *)
-          let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
-          let v2 : elab_typ t1 = elab_exp h2 ve in
-          v1 v2
-     | TyFst #_ #_ #t1 #t2 h1 ->
-          let v = elab_exp h1 ve in
-          fst #(elab_typ t1) #(elab_typ t2) v
-     | TySnd #_ #_ #t1 #t2 h1 ->
-          let v = elab_exp h1 ve in
-          snd #(elab_typ t1) #(elab_typ t2) v
-     | TyPair h1 h2 ->
-          let v1 = elab_exp h1 ve in
-          let v2 = elab_exp h2 ve in
-          (v1, v2)
+  // | TyAllocRef #_ #_ #t tyj_e -> begin
+  //   let v : elab_typ t = elab_exp tyj_e ve scope #sfp in
+  //   let r = alloc v in
+  //   r
+  // end
+
+  (**
+  | TySucc hs ->
+    1 + (elab_exp hs ve)
+  | TyNRec h1 h2 h3 -> admit ()
+    // let v1 = elab_exp h1 ve in
+    // let v2 : elab_typ t = elab_exp h2 ve in
+    // let v3 : elab_typ (TArr t t) = elab_exp h3 ve in
+    // fnrec #(elab_typ t) v1 v2 v3
+  | TyInl #_ #_ #t1 #t2 h1 ->
+    let v = elab_exp h1 ve in
+    Inl #(elab_typ t1) #(elab_typ t2) v
+  | TyInr #_ #_ #t1 #t2 h1 ->
+    let v = elab_exp h1 ve in
+    Inr #(elab_typ t1) #(elab_typ t2) v
+  | TyCaseSum h1 h2 h3 ->
+    let v1 = elab_exp h1 ve in
+    let v2 = elab_exp h2 ve in
+    let v3 = elab_exp h3 ve in
+    (match v1 with | Inl x -> v2 x | Inr y -> v3 y)
+  | TyCaseNat h1 h2 h3 ->
+    let v1 = elab_exp h1 ve in
+    let v2 = elab_exp h2 ve in
+    let v3 = elab_exp h3 ve in
+    (match v1 with | 0 -> v2 () | _ -> v3 (v1-1))
+  | TyVar x -> ve x
+  | TyAbs t1 #_ #t2 h1 -> admit ()
+    // assert (t == TArr t1 t2);
+    // let w : elab_typ t1 -> Tot (elab_typ t2) =
+    // (fun x -> elab_exp h1 (vextend x ve)) in
+    // cast_TArr w
+  | TyApp #_ #_ #_ #t1 #t2 h1 h2 ->
+    assert ((elab_typ t) == (elab_typ t2));
+    (* TODO: Should we change the order here, first evaluate argument? *)
+    let v1 : elab_typ (TArr t1 t2) = elab_exp h1 ve in
+    let v2 : elab_typ t1 = elab_exp h2 ve in
+    v1 v2
+  | TyFst #_ #_ #t1 #t2 h1 ->
+    let v = elab_exp h1 ve in
+    fst #(elab_typ t1) #(elab_typ t2) v
+  | TySnd #_ #_ #t1 #t2 h1 ->
+    let v = elab_exp h1 ve in
+    snd #(elab_typ t1) #(elab_typ t2) v
+  | TyPair h1 h2 ->
+    let v1 = elab_exp h1 ve in
+    let v2 = elab_exp h2 ve in
+    (v1, v2)
 **)
