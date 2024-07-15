@@ -29,17 +29,18 @@ class target_lang (t:Type) = {
       (ensures footprint v h1 `Set.equal` footprint v h2);
 
   law2 : 
-    (s: Set.set nat) -> 
+    (#a:Type) ->
+    (r:ref a) ->
     (acc:Set.set nat) -> 
     (v:t) -> 
     h1:heap -> 
     h2:heap -> 
     Lemma
       (requires (
-        modifies s h1 h2 /\ 
-        ((s  `Set.intersect` footprint v h1) `Set.subset` s) /\
+        modifies (only r) h1 h2 /\ 
+        (((only r)  `Set.intersect` footprint v h1) `Set.subset` (only r)) /\
         (dcontains v h1) /\
-        equal_dom h1 h2))
+        ))
       (ensures (footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc))) 
 }
 
@@ -102,15 +103,16 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
     (c.footprint (sel h x) h)); // <--- following x in h
   dcontains = (fun x h -> h `FStar.Ref.contains` x /\ c.dcontains (sel h x) h);
   law1 = (fun s v h1 h2 -> c.law1 s (sel h1 v) h1 h2);
-  law2 = (fun s acc (v:ref t) h1 h2 ->
+  law2 = (fun r acc (v:ref t) h1 h2 ->
     let acc' = only v `Set.union` acc in 
-    c.law2 s acc' (sel h1 v) h1 h2;
+    c.law2 r acc' (sel h1 v) h1 h2;
     assert (Set.subset (c.footprint (sel h1 v) h2)
                        (Set.union (c.footprint (sel h1 v) h1) acc'));
     introduce sel h1 v == sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
               (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin () end;
     introduce sel h1 v =!= sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
               (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin 
+      assert (Set.equal (only v) (only r));
       admit () 
     end
   )
@@ -312,7 +314,7 @@ let rec elab_exp
   
       assert (((only r) `Set.intersect` fp_v h2) `Set.subset` (only r));
       assert (tgv.dcontains v h2);
-      tgv.law2 (only r) Set.empty v h2 h3;
+      tgv.law2 r Set.empty v h2 h3;
       assert (fp_v h3 `Set.subset` fp_v h2 );
       assert (fp_v h2 `Set.subset` fp0);
 
