@@ -281,6 +281,34 @@ let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h2 h3:heap
     admit ()
   end
 
+let footprint_r_after_write 
+  (#tscope:Type) {| target_lang tscope |} (scope:tscope)
+  (#t:Type) {| target_lang t |} (r:ref t) (v:t)
+  (fp0:Set.set nat)
+  (h2 h3:heap)
+  : Lemma
+  (requires (
+    equal_dom h2 h3 /\
+    dcontains scope h2 /\
+    dcontains r h2 /\
+    modifies !{r} h2 h3 /\
+    sel h3 r == v /\
+    footprint scope h2 ⊆ fp0 /\
+
+    !{r} ⊆ fp0 /\
+    footprint v h2 ⊆ fp0
+  ))
+  (ensures (footprint scope h3 ⊆ (fp0 ⊎ footprint r h3)))
+  = 
+  introduce !{r} `Set.disjoint` footprint scope h2 ==> footprint scope h3 ⊆ (fp0 ⊎ footprint r h3)
+  with _. begin
+    law1 !{r} scope h2 h3
+  end;
+  introduce !{r} ⊆ footprint scope h2 ==> footprint scope h3 ⊆ (fp0 ⊎ footprint r h3)
+  with _. begin
+    ()
+  end
+
 let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h1 h2:heap) : Lemma
   (requires (equal_dom h1 h2 /\ dcontains x h1))
   (ensures (dcontains x h2)) = admit ()
@@ -319,35 +347,35 @@ let rec elab_exp
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
     let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
       let h1 = gst_get () in
+      let fp1 = sfp.footprint scope h1 in
       let tgr = elab_typ_footprint (TRef t) in
-      assert (tgr.footprint r h1 ⊆ fp0);
+      
       assert (tgr.dcontains r h1);
       
     let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
       let h2 = gst_get () in
-      
-      let tgv = elab_typ_footprint t in
-      assert (tgv.footprint v h2 ⊆ fp0);
-      equal_dom_preserves_dcontains r h1 h2;
-      assert (tgr.dcontains r h2);
       let fp2 = sfp.footprint scope h2 in
+      let tgv = elab_typ_footprint t in
 
+      assert (fp2 ⊆ fp0);
     write r v;
       let h3 = gst_get () in
       let fp3 = sfp.footprint scope h3 in
       let fp_r = tgr.footprint r in
       let fp_v = tgv.footprint v in
-      assume (fp3 ⊆ (fp2 `subtract` fp_r h2) ⊎ fp_r h3);
+      assert (tgv.footprint v h2 ⊆ fp1);
+      
+      // assert (fp2 ⊆ fp1 ⊆ fp0);
+      assert (tgr.footprint r h1 ⊆ fp0);
+      equal_dom_preserves_dcontains r h1 h2;
+      equal_dom_preserves_dcontains scope h1 h2;
+      footprint_r_after_write scope r v fp0 h2 h3;
+      assert (fp3 ⊆ fp0 ⊎ fp_r h3);
+      // assert ((fp2 `subtract` fp_r h2) ⊆ fp0);
       assert (fp_r h3 `Set.equal` !{r} ⊎ fp_v h3);
-      assert (!{r} ⊆ fp0);
-      // assert (sel h3 r == v);
-      // assert (equal_dom h2 h3);
-      // assert (modifies !{r} h2 h3);
-      // assert (dcontains r h2);
-      // assert (tgv.dcontains v h2);
       stable_footprint_v #_ #tgv r v h2 h3;
-      assert (fp_v h3 ⊆ fp_v h2 );
-      assert (fp_v h2 ⊆ fp0);
+      assert (fp_v h3 ⊆ fp_v h2);
+      assert (!{r} ⊆ fp0 /\ fp_v h2 ⊆ fp0 /\ fp_r h3 ⊆ fp0);
 
       // post
       assert (fp3 ⊆ fp0);
