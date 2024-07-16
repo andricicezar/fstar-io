@@ -6,13 +6,13 @@ open FStar.Tactics.Typeclasses
 open FStar.Ref
 
 let (@) = FStar.List.Tot.append
+let (⊆) = Set.subset
+let (⊎) = Set.union
+let (∩) = Set.intersect
+let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
+  Set.intersect s1 (Set.complement s2)
 
 type tfootprint = Set.set nat
-
-let rec toSet (l:list (a:Type & ref a)) : GTot tfootprint =
-  match l with
-  | [] -> Set.empty
-  | (| _, r |)::tl -> (only r) `Set.union` (toSet tl)
 
 (** target_lang is a shallow embedding of STLC **)
 class target_lang (t:Type) = {
@@ -23,9 +23,10 @@ class target_lang (t:Type) = {
 
   law1 : (s: Set.set nat) -> (v:t) -> h1:heap -> h2:heap -> 
     Lemma
-      (requires (modifies s h1 h2 /\ 
+      (requires (
+        modifies s h1 h2 /\ 
         (s `Set.disjoint` footprint v h1) /\ 
-        (dcontains v h1)))
+        dcontains v h1))
       (ensures footprint v h1 `Set.equal` footprint v h2);
 
   law2 : 
@@ -37,11 +38,12 @@ class target_lang (t:Type) = {
     h2:heap -> 
     Lemma
       (requires (
-        modifies (only r) h1 h2 /\ 
-        (((only r)  `Set.intersect` footprint v h1) `Set.subset` (only r)) /\
-        (dcontains v h1) /\
-        ))
-      (ensures (footprint v h2 `Set.subset` (footprint v h1 `Set.union` acc))) 
+        modifies !{r} h1 h2 /\ 
+        (!{r} ∩ footprint v h1) ⊆ !{r} /\
+        dcontains v h1 /\
+        equal_dom h1 h2
+      ))
+      (ensures (footprint v h2 ⊆ (footprint v h1 ⊎ acc))) 
 }
 
 instance target_lang_unit : target_lang unit = {
@@ -60,18 +62,16 @@ instance target_lang_int : target_lang int = {
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
   footprint = (fun (x1, x2) h -> 
-      (c1.footprint x1 h) `Set.union` 
-      (c2.footprint x2 h));
+      (c1.footprint x1 h) ⊎ (c2.footprint x2 h));
   dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
   law1 = (fun s (x1, x2) h1 h2 -> 
     c1.law1 s x1 h1 h2;
     c2.law1 s x2 h1 h2
   );
   law2 = (fun s acc (x1, x2) h1 h2 ->
-    let acc' = ((c1.footprint x1 h1) `Set.union` 
-               (c2.footprint x2 h1) `Set.union` acc) in
-    let acc_x1 = (c2.footprint x2 h1) `Set.union` acc in
-    let acc_x2 = (c1.footprint x1 h1) `Set.union` acc in
+    let acc' = (c1.footprint x1 h1) ⊎ (c2.footprint x2 h1) ⊎ acc in
+    let acc_x1 = (c2.footprint x2 h1) ⊎ acc in
+    let acc_x2 = (c1.footprint x1 h1) ⊎ acc in
     c1.law2 s acc_x1 x1 h1 h2;
     c2.law2 s acc_x2 x2 h1 h2)
 }
@@ -99,20 +99,24 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
   footprint = (fun x h -> 
-    (only x) `Set.union`
-    (c.footprint (sel h x) h)); // <--- following x in h
-  dcontains = (fun x h -> h `FStar.Ref.contains` x /\ c.dcontains (sel h x) h);
+    !{x} ⊎ (c.footprint (sel h x) h)); // <--- following x in h
+  dcontains = (fun x h -> h `contains` x /\ c.dcontains (sel h x) h);
   law1 = (fun s v h1 h2 -> c.law1 s (sel h1 v) h1 h2);
   law2 = (fun r acc (v:ref t) h1 h2 ->
-    let acc' = only v `Set.union` acc in 
+    let acc' = !{v} ⊎ acc in 
     c.law2 r acc' (sel h1 v) h1 h2;
     assert (Set.subset (c.footprint (sel h1 v) h2)
                        (Set.union (c.footprint (sel h1 v) h1) acc'));
-    introduce sel h1 v == sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
-              (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin () end;
-    introduce sel h1 v =!= sel h2 v ==> Set.subset (c.footprint (sel h2 v) h2)
-              (Set.union (c.footprint (sel h1 v) h1) acc') with _. begin 
-      assert (Set.equal (only v) (only r));
+    introduce sel h1 v == sel h2 v ==> 
+              (c.footprint (sel h2 v) h2) ⊆
+                ((c.footprint (sel h1 v) h1) ⊎ acc') 
+    with _. begin () end;
+    
+    introduce sel h1 v =!= sel h2 v ==> 
+              (c.footprint (sel h2 v) h2) ⊆
+                ((c.footprint (sel h1 v) h1) ⊎ acc') 
+    with _. begin 
+      assert (!{v} `Set.equal` !{r});
       admit () 
     end
   )
@@ -133,8 +137,8 @@ let mk_tgt_arrow
       let fpf = sfp.footprint scope hf in
       modifies fp0 h0 hf /\ 
       equal_dom h0 hf /\
-      ((c2 x).footprint r hf `Set.subset` fp0) /\
-      fpf `Set.subset` fp0 /\ 
+      ((c2 x).footprint r hf ⊆ fp0) /\
+      fpf ⊆ fp0 /\ 
       sfp.dcontains scope hf /\
       (c2 x).dcontains r hf
     ))
@@ -162,8 +166,8 @@ let rec elab_typ' (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang t
   | TArr t1 t2 -> begin
     let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
     let tt2 (x:tt1) = elab_typ' t2 (scope, x) #(target_lang_pair tscope tt1 #c_scope #c_tt1) in
-    (| mk_tgt_arrow   tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
-      target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
+    (| mk_tgt_arrow      tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
+       target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
     |)
   end 
   | TUnit -> (| unit, target_lang_unit |)
@@ -208,8 +212,8 @@ let elab_typ_footprint (t:typ) =
 
 val sep : ref int -> ref (ref int) -> heap -> Type0
 let sep rp rs h =
-  let fp_rs = ((only rs) `Set.union` (only (sel h rs))) in 
-  let fp_rp = only rp in
+  let fp_rs = !{rs} ⊎ !{sel h rs} in 
+  let fp_rp = !{rp} in
   (h `contains` rs /\ h `contains` (sel h rs)) /\
   (h `contains` rp) /\
   Set.disjoint fp_rp fp_rs
@@ -240,8 +244,8 @@ let fptrans (#t:Type) {| tfp:target_lang t |} (x:t) (h0 h1 h2:heap) : Lemma (
   let fp0 = tfp.footprint x h0 in
   let fp1 = tfp.footprint x h1 in
   let fp2 = tfp.footprint x h2 in
-  modifies fp0 h0 h1 /\ equal_dom h0 h1 /\ fp1 `Set.subset` fp0 /\
-  modifies fp1 h1 h2 /\ equal_dom h1 h2 /\ fp2 `Set.subset` fp1
+  modifies fp0 h0 h1 /\ equal_dom h0 h1 /\ fp1 ⊆ fp0 /\
+  modifies fp1 h1 h2 /\ equal_dom h1 h2 /\ fp2 ⊆ fp1
     ==> modifies fp0 h0 h2
 ) = ()
 
@@ -251,11 +255,8 @@ open FStar.List.Tot
 //   if n = 0 then acc else fnrec (n-1) (iter acc) iter
 
 let set_subset_trans (s0 s1 s2:Set.set 'a) : Lemma
-  (requires (s0 `Set.subset` s1 /\ s1 `Set.subset` s2))
-  (ensures (s0 `Set.subset` s2)) = ()
-
-let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
-  Set.intersect s1 (Set.complement s2)
+  (requires (s0 ⊆ s1 /\ s1 ⊆ s2))
+  (ensures (s0 ⊆ s2)) = ()
 
 let rec elab_exp 
   (#g:context)
@@ -273,8 +274,8 @@ let rec elab_exp
         let fpf = sfp.footprint scope hf in
         modifies fp0 h0 hf /\ 
         equal_dom h0 hf /\
-        ((elab_typ_footprint t).footprint r hf `Set.subset` fp0) /\
-        fpf `Set.subset` fp0 /\ 
+        ((elab_typ_footprint t).footprint r hf ⊆ fp0) /\
+        fpf ⊆ fp0 /\ 
         sfp.dcontains scope hf /\
         (elab_typ_footprint t).dcontains r hf
         ))
@@ -291,11 +292,11 @@ let rec elab_exp
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
     let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
       let h1 = gst_get () in
-      assert ((elab_typ_footprint (TRef t)).footprint r h1 `Set.subset` fp0);
+      assert ((elab_typ_footprint (TRef t)).footprint r h1 ⊆ fp0);
       
     let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
       let h2 = gst_get () in
-      assert ((elab_typ_footprint t).footprint v h2 `Set.subset` fp0);
+      assert ((elab_typ_footprint t).footprint v h2 ⊆ fp0);
       let fp2 = sfp.footprint scope h2 in
 
     write r v;
@@ -304,22 +305,21 @@ let rec elab_exp
       let fp_r = (elab_typ_footprint (TRef t)).footprint r in
       let tgv = elab_typ_footprint t in
       let fp_v = tgv.footprint v in
-      assume (fp3 `Set.subset` ((fp2 `subtract` fp_r h2) `Set.union` fp_r h3));
-      assert (fp_r h3 `Set.equal` ((only r) `Set.union` fp_v h3));
-      assert (only r `Set.subset` fp0);
-      assert (modifies (only r) h2 h3);
+      assume (fp3 ⊆ (fp2 `subtract` fp_r h2) ⊎ fp_r h3);
+      assert (fp_r h3 `Set.equal` !{r} ⊎ fp_v h3);
+      assert (!{r} ⊆ fp0);
       assert (sel h3 r == v);
       assert (equal_dom h2 h3);
-      assert (modifies (only r) h2 h3);
+      assert (modifies !{r} h2 h3);
   
-      assert (((only r) `Set.intersect` fp_v h2) `Set.subset` (only r));
+      assert ((!{r} ∩ fp_v h2) ⊆ !{r});
       assert (tgv.dcontains v h2);
       tgv.law2 r Set.empty v h2 h3;
-      assert (fp_v h3 `Set.subset` fp_v h2 );
-      assert (fp_v h2 `Set.subset` fp0);
+      assert (fp_v h3 ⊆ fp_v h2 );
+      assert (fp_v h2 ⊆ fp0);
 
       // post
-      assert (fp3 `Set.subset` fp0);
+      assert (fp3 ⊆ fp0);
       assume (sfp.dcontains scope h3); // the heap is monotonic, so just recall?
     ()
   end
