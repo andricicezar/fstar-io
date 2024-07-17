@@ -136,13 +136,10 @@ instance target_lang_arrow
   }
 
 
-(** ** Lemmas on tartget lang **)
-let footprint_footprint_after_write
-  (#t:Type) {| c:target_lang t |} (r:ref t)
-  (#a:Type) {| target_lang a |} (v:a)
-  (h0 h1:heap) (fp_r:tfootprint):
-  Lemma
-    (requires (
+(** ** Lemmas on target lang **)
+class target_lang_rels (a:Type) {| target_lang a |} (b:Type) {| target_lang b |} = {
+  footprint_footprint_after_write : r:ref a -> v:b -> h0:heap -> h1:heap -> fp_r:tfootprint -> 
+    Lemma (requires (
       dcontains r h0 /\
       dcontains v h0 /\
       equal_dom h0 h1 /\
@@ -150,9 +147,83 @@ let footprint_footprint_after_write
       footprint r h1 ⊆ fp_r
     ))
     (ensures (footprint v h1 ⊆ footprint_after_write v h0 r fp_r))
-  = admit ()
+}
 
-let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h0 h1:heap) :
+instance target_lang_rels_unit (a:Type) {| target_lang a |} : target_lang_rels a unit = {
+  footprint_footprint_after_write = (fun _ _ _ _ _ -> ())
+}
+
+instance target_lang_rels_int (a:Type) {| target_lang a |} : target_lang_rels a int = {
+  footprint_footprint_after_write = (fun _ _ _ _ _ -> ())
+}
+
+instance target_lang_rels_pair
+  (a:Type) {| target_lang a |}
+  (b1:Type) {| target_lang b1 |}
+  (b2:Type) {| target_lang b2 |} 
+  {| target_lang_rels a b1 |}
+  {| target_lang_rels a b2 |}
+  : target_lang_rels a (b1 * b2) = {
+  footprint_footprint_after_write = (fun r (v1, v2) h0 h1 fp_r ->
+    footprint_footprint_after_write r v1 h0 h1 fp_r;
+    footprint_footprint_after_write r v2 h0 h1 fp_r
+  )
+}
+
+instance target_lang_rels_sums
+  (a:Type) {| target_lang a |}
+  (b1:Type) {| target_lang b1 |}
+  (b2:Type) {| target_lang b2 |} 
+  {| target_lang_rels a b1 |}
+  {| target_lang_rels a b2 |}
+  : target_lang_rels a (either b1 b2) = {
+  footprint_footprint_after_write = (fun r v h0 h1 fp_r ->
+    match v with
+    | Inl v1 -> footprint_footprint_after_write r v1 h0 h1 fp_r
+    | Inr v2 -> footprint_footprint_after_write r v2 h0 h1 fp_r
+  )
+}
+
+instance target_lang_rels_refs (a:Type) (b:Type) (#_:squash (a =!= b)) {| target_lang a |} {| target_lang b |} {| c1:target_lang_rels a b |}  : target_lang_rels a (ref b) = {
+  footprint_footprint_after_write = (fun r (v:ref b) h0 h1 fp_r ->
+    lemma_distinct_addrs_distinct_types h0 r v;
+    c1.footprint_footprint_after_write r (sel h0 v) h0 h1 fp_r;
+    assert ((!{v} ⊎ (footprint (sel h1 v) h1)) ⊆ !{v} ⊎ footprint_after_write (sel h0 v) h0 r fp_r);
+    lemma_modifies_and_equal_dom_sel_diff_addr !{r} h0 h1 v;
+    assert (sel h0 v == sel h1 v);
+    assert (footprint v h1 ⊆ footprint_after_write v h0 r fp_r)
+  )
+}
+
+instance target_lang_rels_refs' (a:Type) {| target_lang a |} {| c1:target_lang_rels a a |} : target_lang_rels a (ref a) = {
+  footprint_footprint_after_write = (fun r (v:ref a) h0 h1 fp_r ->
+    if compare_addrs v r then begin
+      lemma_sel_same_addr h0 v r;
+      assert ((!{v} ⊎ (footprint (sel h1 v) h1)) ⊆ (!{v} ⊎ fp_r));
+      assert (footprint r h1 ⊆ fp_r);
+      assert (footprint v h1 ⊆ footprint_after_write v h0 r fp_r)
+    end else begin
+      c1.footprint_footprint_after_write r (sel h0 v) h0 h1 fp_r;
+      assert ((!{v} ⊎ (footprint (sel h1 v) h1)) ⊆ !{v} ⊎ footprint_after_write (sel h0 v) h0 r fp_r);
+      lemma_modifies_and_equal_dom_sel_diff_addr !{r} h0 h1 v;
+      assert (sel h0 v == sel h1 v);
+      assert (footprint v h1 ⊆ footprint_after_write v h0 r fp_r)
+    end
+  )
+}
+
+instance target_lang_rels_arrow
+  (a:Type) {| target_lang a |}
+  (t1:Type) {| target_lang t1 |}
+  (t2:t1 -> Type) {| (x:t1 -> target_lang (t2 x)) |}
+  (#tscope:Type)
+  (scope:tscope)
+  {| target_lang tscope |} :
+  target_lang_rels a (mk_tgt_arrow t1 t2 scope) = {
+    footprint_footprint_after_write = (fun _ _ _ _ _ -> ())
+  }
+
+let stable_footprint_v (#t:Type) {| target_lang t |} (* {| target_lang_rels t t |} *) (r:ref t) (v:t) (h0 h1:heap) :
   Lemma
     (requires (
       dcontains r h0 /\
@@ -164,18 +235,20 @@ let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h0 h1:heap
     ))
     (ensures (footprint v h1 ⊆ footprint v h0))
 = // assume (!{r} `Set.disjoint` footprint v h0);
-  assume (!{r} ⊆ footprint v h0);
+  assume (!{r} ⊆ footprint v h0); // TODO: regression here after removing law1.
   let fpr = !{r} ⊎ (footprint v h0) in
   footprint_after_write_law v h0 r fpr;
   assert (footprint_after_write v h0 r fpr ⊆ fpr ⊎ fpr);
   assert (footprint_after_write v h0 r fpr ⊆ fpr);
   assume (footprint r h1 ⊆ fpr);
-  footprint_footprint_after_write r v h0 h1 fpr;
+  admit ();
+  // footprint_footprint_after_write r v h0 h1 fpr;
   assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
 
 let footprint_r_after_write 
   (#tscope:Type) {| target_lang tscope |} (scope:tscope)
-  (#t:Type) {| target_lang t |} (r:ref t) (v:t)
+  (#t:Type) {| target_lang t |} (* {| target_lang_rels t tscope |}*)
+  (r:ref t) (v:t)
   (fp:Set.set nat)
   (h0 h1:heap)
   : Lemma
@@ -194,17 +267,13 @@ let footprint_r_after_write
 = footprint_after_write_law scope h0 r (footprint r h1);
   assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
   assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
-  footprint_footprint_after_write r scope h0 h1 (footprint r h1);
+  admit ();
+  // footprint_footprint_after_write r scope h0 h1 (footprint r h1);
   assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
 
 let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:heap) : Lemma
   (requires (equal_dom h0 h1 /\ dcontains x h0))
   (ensures (dcontains x h1)) = admit ()
-
-
-
-
-
 
 
 
