@@ -282,11 +282,11 @@ let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:hea
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec elab_typ' (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : tt:Type & target_lang tt =
+let rec _elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
-    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
-    let tt2 (x:tt1) = elab_typ' t2 (scope, x) #(target_lang_pair tscope tt1 #c_scope #c_tt1) in
+    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
+    let tt2 (x:tt1) = _elab_typ t2 (scope, x) #(target_lang_pair tscope tt1 #c_scope #c_tt1) in
     (| mk_tgt_arrow      tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
        target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
     |)
@@ -294,22 +294,22 @@ let rec elab_typ' (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang t
   | TUnit -> (| unit, target_lang_unit |)
   | TNat -> (| int, target_lang_int |)
   | TSum t1 t2 ->
-    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
-    let (| tt2, c_tt2 |) = elab_typ' t2 scope #c_scope in
+    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
+    let (| tt2, c_tt2 |) = _elab_typ t2 scope #c_scope in
     (| either tt1 tt2, target_lang_sum tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
-    let (| tt1, c_tt1 |) = elab_typ' t1 scope #c_scope in
-    let (| tt2, c_tt2 |) = elab_typ' t2 scope #c_scope in
+    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
+    let (| tt2, c_tt2 |) = _elab_typ t2 scope #c_scope in
     (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef t ->
-    let (| tt, c_tt |) = elab_typ' t scope #c_scope in
+    let (| tt, c_tt |) = _elab_typ t scope #c_scope in
     (| ref tt, target_lang_ref tt #c_tt |)
 
-let elab_typ (t:typ) : Type =
-  dfst (elab_typ' t ())
+let elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : Type =
+  dfst (_elab_typ t #tscope scope #c_scope)
 
-let elab_typ_footprint (t:typ) =
-  dsnd (elab_typ' t ())
+let elab_typ_tgt (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} =
+  dsnd (_elab_typ t #tscope scope #c_scope)
 
 // val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 // let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
@@ -342,7 +342,7 @@ let sep rp rs h =
 val progr: 
   rp: ref int -> 
   rs: ref (ref int) -> 
-  ctx:(dfst (elab_typ' (TArr TUnit TUnit) rs)) -> 
+  ctx:(elab_typ (TArr TUnit TUnit) rs) -> 
   ST int (requires (fun h0 -> sep rp rs h0))
       (ensures (fun _ _ h1 -> sep rp rs h1))
          
@@ -350,14 +350,14 @@ let progr rp rs f = (** If this test fails, it means that the spec of f does not
   f ();
   !rp
 
+
 (** *** Elaboration of expressions to F* *)
-type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
+// type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
 
-let vempty : vcontext empty = fun _ -> assert false
+// let vempty : vcontext empty = fun _ -> assert false
 
-let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
-  fun y -> if y = 0 then x else ve (y-1)
-
+// let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
+//   fun y -> if y = 0 then x else ve (y-1)
 
 //let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
@@ -368,50 +368,39 @@ let rec elab_exp
   (#e:exp) 
   (#t:typ)
   (tyj:typing g e t)
-  (ve:vcontext g)
+  // (ve:vcontext g)
   (#tscope:Type)
   (scope:tscope)
-  {| sfp:target_lang tscope |}    
-  : ST (elab_typ t) 
+  {| tgt_scope: target_lang tscope |}
+  : ST (elab_typ t scope) 
      (requires (pre_tgt_arrow scope ()))
-     (ensures (post_tgt_arrow scope () #_ #(fun _ -> elab_typ t) #(fun _ -> elab_typ_footprint t)))
-    //  (ensures (fun h0 r hf ->
-    //     let fp0 = sfp.footprint scope h0 in
-    //     let fpf = sfp.footprint scope hf in
-    //     modifies fp0 h0 hf /\ 
-    //     equal_dom h0 hf /\
-    //     ((elab_typ_footprint t).footprint r hf ⊆ fp0) /\
-    //     fpf ⊆ fp0 /\ 
-    //     sfp.dcontains scope hf /\
-    //     (elab_typ_footprint t).dcontains r hf
-    //     ))
+     (ensures (post_tgt_arrow scope () #_ #(fun _ -> elab_typ t scope) #(fun _ -> elab_typ_tgt t scope)))
      (decreases e) =
   let h0 = gst_get () in
-  let fp0 = sfp.footprint scope h0 in
+  let fp0 = footprint scope h0 in
   match tyj with
   | TyUnit -> ()
   | TyZero -> 0
   | TyReadRef #_ #_ #t tyj_e -> begin
-    let r : ref (elab_typ t) = elab_exp tyj_e ve scope #sfp in
+    let r : ref _ = elab_exp tyj_e scope #tgt_scope in
     read r
   end
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-    let r : ref (elab_typ t) = elab_exp tyj_ref ve scope #sfp in // <-- this is effectful and modifies fp
+    let r : ref _ = elab_exp tyj_ref scope #tgt_scope in // <-- this is effectful and modifies fp
       let h1 = gst_get () in
-      let fp1 = sfp.footprint scope h1 in
-      let tgr = elab_typ_footprint (TRef t) in
+      let fp1 = footprint scope h1 in
+      let tgr = elab_typ_tgt (TRef t) scope in
       
       assert (tgr.dcontains r h1);
       
-    let v : elab_typ t = elab_exp tyj_v ve scope #sfp in // this is effectul and modifies fp
+    let v = elab_exp tyj_v scope #tgt_scope in // this is effectul and modifies fp
       let h2 = gst_get () in
-      let fp2 = sfp.footprint scope h2 in
-      let tgv = elab_typ_footprint t in
+      let fp2 = footprint scope h2 in
+      let tgv = elab_typ_tgt t scope in
 
-      assert (fp2 ⊆ fp0);
     write r v;
       let h3 = gst_get () in
-      let fp3 = sfp.footprint scope h3 in
+      let fp3 = footprint scope h3 in
       let fp_r = tgr.footprint r in
       let fp_v = tgv.footprint v in
       assert (tgv.footprint v h2 ⊆ fp1);
@@ -424,14 +413,14 @@ let rec elab_exp
       assert (fp3 ⊆ fp0 ⊎ fp_r h3);
       // assert ((fp2 `subtract` fp_r h2) ⊆ fp0);
       assert (fp_r h3 `Set.equal` !{r} ⊎ fp_v h3);
-      stable_footprint_v #_ #tgv r v h2 h3;
+      stable_footprint_v r v h2 h3;
       assert (fp_v h3 ⊆ fp_v h2);
       assert (!{r} ⊆ fp0 /\ fp_v h2 ⊆ fp0 /\ fp_r h3 ⊆ fp0);
 
       // post
       assert (fp3 ⊆ fp0);
       equal_dom_preserves_dcontains scope h2 h3;
-      assert (sfp.dcontains scope h3);
+      assert (dcontains scope h3);
     ()
   end
   | _ -> admit ()
