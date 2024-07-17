@@ -135,6 +135,81 @@ instance target_lang_arrow
     dcontains = (fun _ _ -> True);
   }
 
+
+(** ** Lemmas on tartget lang **)
+let footprint_footprint_after_write
+  (#t:Type) {| c:target_lang t |} (r:ref t)
+  (#a:Type) {| target_lang a |} (v:a)
+  (h0 h1:heap) (fp_r:tfootprint):
+  Lemma
+    (requires (
+      dcontains r h0 /\
+      dcontains v h0 /\
+      equal_dom h0 h1 /\
+      modifies !{r} h0 h1 /\
+      footprint r h1 ⊆ fp_r
+    ))
+    (ensures (footprint v h1 ⊆ footprint_after_write v h0 r fp_r))
+  = admit ()
+
+let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h0 h1:heap) :
+  Lemma
+    (requires (
+      dcontains r h0 /\
+      dcontains v h0 /\
+      equal_dom h0 h1 /\
+
+      modifies !{r} h0 h1 /\
+      sel h1 r == v 
+    ))
+    (ensures (footprint v h1 ⊆ footprint v h0))
+= // assume (!{r} `Set.disjoint` footprint v h0);
+  assume (!{r} ⊆ footprint v h0);
+  let fpr = !{r} ⊎ (footprint v h0) in
+  footprint_after_write_law v h0 r fpr;
+  assert (footprint_after_write v h0 r fpr ⊆ fpr ⊎ fpr);
+  assert (footprint_after_write v h0 r fpr ⊆ fpr);
+  assume (footprint r h1 ⊆ fpr);
+  footprint_footprint_after_write r v h0 h1 fpr;
+  assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
+
+let footprint_r_after_write 
+  (#tscope:Type) {| target_lang tscope |} (scope:tscope)
+  (#t:Type) {| target_lang t |} (r:ref t) (v:t)
+  (fp:Set.set nat)
+  (h0 h1:heap)
+  : Lemma
+  (requires (
+    equal_dom h0 h1 /\
+    dcontains scope h0 /\
+    dcontains r h0 /\
+    modifies !{r} h0 h1 /\
+    sel h1 r == v /\
+    footprint scope h0 ⊆ fp /\
+
+    !{r} ⊆ fp /\
+    footprint v h0 ⊆ fp
+  ))
+  (ensures (footprint scope h1 ⊆ (fp ⊎ footprint r h1)))
+= footprint_after_write_law scope h0 r (footprint r h1);
+  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
+  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
+  footprint_footprint_after_write r scope h0 h1 (footprint r h1);
+  assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
+
+let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:heap) : Lemma
+  (requires (equal_dom h0 h1 /\ dcontains x h0))
+  (ensures (dcontains x h1)) = admit ()
+
+
+
+
+
+
+
+
+
+
 open STLC
 
 (** *** Elaboration of types to F* *)
@@ -219,72 +294,6 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t 
 
 // let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
 //   if n = 0 then acc else fnrec (n-1) (iter acc) iter
-
-let footprint_footprint_after_write
-  (#t:Type) {| c:target_lang t |} (r:ref t)
-  (#a:Type) {| target_lang a |} (v:a)
-  (h0 h1:heap) (fp_r:tfootprint):
-  Lemma
-    (requires (
-      dcontains r h0 /\
-      dcontains v h0 /\
-      equal_dom h0 h1 /\
-      modifies !{r} h0 h1 /\
-      footprint r h1 ⊆ fp_r
-    ))
-    (ensures (footprint v h1 ⊆ footprint_after_write v h0 r fp_r))
-  = admit ()
-
-let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h0 h1:heap) :
-  Lemma
-    (requires (
-      dcontains r h0 /\
-      dcontains v h0 /\
-      equal_dom h0 h1 /\
-
-      modifies !{r} h0 h1 /\
-      sel h1 r == v 
-    ))
-    (ensures (footprint v h1 ⊆ footprint v h0))
-= // assume (!{r} `Set.disjoint` footprint v h0);
-  assume (!{r} ⊆ footprint v h0);
-  let fpr = !{r} ⊎ (footprint v h0) in
-  footprint_after_write_law v h0 r fpr;
-  assert (footprint_after_write v h0 r fpr ⊆ fpr ⊎ fpr);
-  assert (footprint_after_write v h0 r fpr ⊆ fpr);
-  assume (footprint r h1 ⊆ fpr);
-  footprint_footprint_after_write r v h0 h1 fpr;
-  assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
-
-let footprint_r_after_write 
-  (#tscope:Type) {| target_lang tscope |} (scope:tscope)
-  (#t:Type) {| target_lang t |} (r:ref t) (v:t)
-  (fp:Set.set nat)
-  (h0 h1:heap)
-  : Lemma
-  (requires (
-    equal_dom h0 h1 /\
-    dcontains scope h0 /\
-    dcontains r h0 /\
-    modifies !{r} h0 h1 /\
-    sel h1 r == v /\
-    footprint scope h0 ⊆ fp /\
-
-    !{r} ⊆ fp /\
-    footprint v h0 ⊆ fp
-  ))
-  (ensures (footprint scope h1 ⊆ (fp ⊎ footprint r h1)))
-= footprint_after_write_law scope h0 r (footprint r h1);
-  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
-  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
-  footprint_footprint_after_write r scope h0 h1 (footprint r h1);
-  assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
-
-
-let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:heap) : Lemma
-  (requires (equal_dom h0 h1 /\ dcontains x h0))
-  (ensures (dcontains x h1)) = admit ()
-
 let rec elab_exp 
   (#g:context)
   (#e:exp) 
