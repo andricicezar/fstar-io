@@ -26,23 +26,6 @@ class target_lang (t:Type) = {
   footprint_after_write_law : v:t -> h0:heap -> #a:Type -> r:(ref a) -> fp_r:tfootprint ->
     Lemma (
       footprint_after_write v h0 r fp_r ⊆ footprint v h0 ⊎ fp_r);
-
-  // footprint_after_write_law3 : v:t -> h0:heap -> h1:heap -> #a:Type -> r:(ref a) -> fp_r:erased tfootprint ->
-  //   Lemma 
-  //     (requires (
-  //       modifies !{r} h0 h1 /\ 
-  //       // footprint r h1 ⊆ fp_r /\
-  //       dcontains v h0 /\ 
-  //       h0 `contains` r))
-  //     (ensures (footprint v h1 ⊆ footprint_after_write v h0 r fp_r));
-
-  law1 : (s: Set.set nat) -> (v:t) -> h0:heap -> h1:heap -> 
-    Lemma
-      (requires (
-        modifies s h0 h1 /\ 
-        (s `Set.disjoint` footprint v h0) /\ 
-        dcontains v h0))
-      (ensures footprint v h0 `Set.equal` footprint v h1);
 }
 
 instance target_lang_unit : target_lang unit = {
@@ -50,7 +33,6 @@ instance target_lang_unit : target_lang unit = {
   footprint_after_write = (fun _ _ _ _ -> Set.empty);
   footprint_after_write_law = (fun _ _ _ _ -> ());
   dcontains = (fun _ _ -> True);
-  law1 = (fun _ _ _ _ -> ());
 }
 
 instance target_lang_int : target_lang int = {
@@ -58,7 +40,6 @@ instance target_lang_int : target_lang int = {
   footprint_after_write = (fun _ _ _ _ -> Set.empty);
   footprint_after_write_law = (fun _ _ _ _ -> ());
   dcontains = (fun _ _ -> True);
-  law1 = (fun _ _ _ _ -> ());
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
@@ -71,10 +52,6 @@ instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targ
     c2.footprint_after_write_law x2 h r fp_r
   );
   dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
-  law1 = (fun s (x1, x2) h0 h1 -> 
-    c1.law1 s x1 h0 h1;
-    c2.law1 s x2 h0 h1
-  );
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
@@ -95,11 +72,6 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
     match x with
     | Inl x1 -> c1.dcontains x1 h
     | Inr x2 -> c2.dcontains x2 h);
-  law1 = (fun s x h0 h1 ->
-    match x with
-    | Inl x1 -> c1.law1 s x1 h0 h1
-    | Inr x2 -> c2.law1 s x2 h0 h1
-  );
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
@@ -114,7 +86,6 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
     c.footprint_after_write_law (sel h v) h r fp_r);
   
   dcontains = (fun x h -> h `contains` x /\ c.dcontains (sel h x) h);
-  law1 = (fun s v h0 h1 -> c.law1 s (sel h0 v) h0 h1);
 }
 
 let pre_tgt_arrow
@@ -162,7 +133,6 @@ instance target_lang_arrow
     footprint_after_write = (fun _ _ _ _ -> Set.empty);
     footprint_after_write_law = (fun _ _ _ _ -> ());
     dcontains = (fun _ _ -> True);
-    law1 = (fun _ _ _ _ -> ());
   }
 
 open STLC
@@ -276,21 +246,15 @@ let stable_footprint_v (#t:Type) {| target_lang t |} (r:ref t) (v:t) (h0 h1:heap
       sel h1 r == v 
     ))
     (ensures (footprint v h1 ⊆ footprint v h0))
-  =
-  introduce !{r} `Set.disjoint` footprint v h0 ==> footprint v h1 ⊆ footprint v h0
-  with _. begin
-    law1 !{r} v h0 h1
-  end;
-  introduce !{r} ⊆ footprint v h0 ==> footprint v h1 ⊆ footprint v h0
-  with _. begin
-    let fpr = !{r} ⊎ (footprint v h0) in
-    footprint_after_write_law v h0 r fpr;
-    assert (footprint_after_write v h0 r fpr ⊆ fpr ⊎ fpr);
-    assert (footprint_after_write v h0 r fpr ⊆ fpr);
-    assume (footprint r h1 ⊆ fpr);
-    footprint_footprint_after_write r v h0 h1 fpr;
-    assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
-  end
+= // assume (!{r} `Set.disjoint` footprint v h0);
+  assume (!{r} ⊆ footprint v h0);
+  let fpr = !{r} ⊎ (footprint v h0) in
+  footprint_after_write_law v h0 r fpr;
+  assert (footprint_after_write v h0 r fpr ⊆ fpr ⊎ fpr);
+  assert (footprint_after_write v h0 r fpr ⊆ fpr);
+  assume (footprint r h1 ⊆ fpr);
+  footprint_footprint_after_write r v h0 h1 fpr;
+  assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
 
 let footprint_r_after_write 
   (#tscope:Type) {| target_lang tscope |} (scope:tscope)
@@ -310,19 +274,12 @@ let footprint_r_after_write
     footprint v h0 ⊆ fp
   ))
   (ensures (footprint scope h1 ⊆ (fp ⊎ footprint r h1)))
-  = 
-  introduce !{r} `Set.disjoint` footprint scope h0 ==> footprint scope h1 ⊆ (fp ⊎ footprint r h1)
-  with _. begin
-    law1 !{r} scope h0 h1
-  end;
-  introduce !{r} ⊆ footprint scope h0 ==> footprint scope h1 ⊆ footprint scope h0 ⊎ footprint r h1
-  with _. begin
-    footprint_after_write_law scope h0 r (footprint r h1);
-    assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
-    assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
-    footprint_footprint_after_write r scope h0 h1 (footprint r h1);
-    assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
-  end
+= footprint_after_write_law scope h0 r (footprint r h1);
+  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
+  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
+  footprint_footprint_after_write r scope h0 h1 (footprint r h1);
+  assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
+
 
 let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:heap) : Lemma
   (requires (equal_dom h0 h1 /\ dcontains x h0))
