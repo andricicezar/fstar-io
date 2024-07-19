@@ -404,18 +404,18 @@ let rec elab_exp
   | TyUnit -> ()
   | TyZero -> 0
   | TyReadRef #_ #_ #t tyj_e -> begin
-    let r : ref (elab_typ' t scope) = elab_exp tyj_e scope in
+    let r : ref (elab_typ' t scope) = elab_exp tyj_e ve scope in
     read r
   end
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-    let r : ref (elab_typ' t scope) = elab_exp tyj_ref scope in // <-- this is effectful and modifies fp
+    let r : ref (elab_typ' t scope) = elab_exp tyj_ref ve scope in // <-- this is effectful and modifies fp
       let h1 = gst_get () in
       let fp1 = tgt_scope.footprint scope h1 in
       let tgt_r = elab_typ_tgt' (TRef t) scope in
       
       assert (tgt_r.dcontains r h1);
       
-    let v : elab_typ' t scope = elab_exp tyj_v scope in // this is effectul and modifies fp
+    let v : elab_typ' t scope = elab_exp tyj_v ve scope in // this is effectul and modifies fp
       let h2 = gst_get () in
       let fp2 = tgt_scope.footprint scope h2 in
       let tgt_v = elab_typ_tgt' t scope in
