@@ -89,37 +89,38 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
   dcontains = (fun x h -> h `contains` x /\ c.dcontains (sel h x) h);
 }
 
-let pre_tgt_arrow
+let sep
   (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
   (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
-  (mfprs:tfootprint)
+  h =
+  dcontains rp h /\ dcontains rs h /\                       (* required to instantiate the properties of modifies *)
+  footprint rp h `Set.disjoint` footprint rs h              (* separation *)
+
+unfold let pre_tgt_arrow
+  (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
+  (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:heap) =
-  dcontains rp h0 /\ dcontains rs h0 /\                                 (* required to instantiate the properties of modifies *)
-  (tgt_rp.footprint rp h0) `Set.disjoint` mfprs /\                      (* our property *)
-
-  tgt_rs.footprint rs h0 `Set.subset` mfprs /\                          (* rs cannot exists beyond mfprs *)
+  sep rp rs h0 /\                                                       (* our property *)
 
   dcontains x h0 /\                                                     (* being pedantic *)
-  tgtx.footprint x h0 `Set.subset` mfprs                                (* allowing the computation to modify x *)
+  tgtx.footprint x h0 ⊆ (Set.complement (tgt_rp.footprint rp h0))       (* allowing the computation to modify x *)
 
 
 let post_tgt_arrow
   (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
   (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
-  (mfprs:tfootprint)
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:t1 -> Type) {| tgtr : (x:t1 -> target_lang (t2 x)) |}
   (h0:heap) (r:t2 x) (h1:heap) =
-  dcontains rp h1 /\ dcontains rs h1 /\                                 (* invariant, as in pre *)
-  (tgt_rp.footprint rp h1) `Set.disjoint` (tgt_rs.footprint rs h1) /\   (* invariant, as in pre *)
-  (tgt_rs.footprint rs h1) `Set.subset` (tgt_rs.footprint rs h0) /\     (* rs and rp cannot expand, just contract (does it follow from the fact there is no dynamic allocation?s) *)
-
-  modifies mfprs h0 h1 /\                                               (* allowing the computation to modify rs *)
+  sep rp rs h1 /\                                                       (* invariant, as in pre *)
+  
+  modifies (Set.complement (tgt_rp.footprint rp h0)) h0 h1 /\          (* allowing the computation to modify anything that is not in rp *)
+  tgt_rp.footprint rp h0 == tgt_rp.footprint rp h1 /\                  (* pedantic, should follow from modifies? *)
 
   equal_dom h0 h1 /\                                                    (* no dynamic allocation *)
 
-  ((tgtr x).footprint r h1) `Set.subset` (tgt_rs.footprint rs h1) /\    (* returned values must be in rs and allocated *)
+  ((tgtr x).footprint r h1) ⊆ (Set.complement (tgt_rp.footprint rp h0)) /\  (* returned values must be in rs and allocated *)
   ((tgtr x).dcontains r h1)
 
 unfold let mk_tgt_arrow  
@@ -185,7 +186,7 @@ let rec _elab_typ (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#t
 let elab_typ (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |} : Type =
   dfst (_elab_typ t rp rs)
 
-let elab_typ_tgt (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}  : target_lang (elab_typ t rp rs)=
+let elab_typ_tgt (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}: target_lang (elab_typ t rp rs)=
   dsnd (_elab_typ t rp rs)
 
 // let elab_typ' (t:typ) (#tprotected:typ) (protected:dfst (_elab_typ tprotected ())) : Type =
@@ -209,8 +210,10 @@ val elab_typ_test1 :
   #rp:ref int ->
   #rs:ref (ref int) ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rp rs
-let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
+let elab_typ_test1 #rp #rs (x:ref (ref int)) (y:ref int) =
   assume (int =!= ref int);
+  let h0 = gst_get () in
+  assume (footprint x h0 ⊆ Set.complement (footprint rp h0)); (** weird, this is a pre *)
   let ix = !x in
   ix := !ix + 1;
   x := y;
@@ -224,7 +227,12 @@ val elab_typ_test1' :
 let elab_typ_test1' rp rs () =
   let (rs', rs'') = !rs in
   rs := (rs', rs');
-  (fun () -> rs := (rs', rs''))
+  (fun () ->
+    let h0 = gst_get () in
+    assume (sep rs' rp h0); (* TODO: we know nothing of rs' and rs'' *)
+    assume (sep rs'' rp h0);
+    rs := (rs', rs'')
+  )
 
 // val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
 // let elab_typ_test2 () = alloc 0
