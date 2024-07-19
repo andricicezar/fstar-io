@@ -89,46 +89,46 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
 }
 
 let pre_tgt_arrow
-  (#tscope:Type) (scope:tscope) {| tgts:target_lang tscope |} 
+  (#tleaked:Type) (leaked:tleaked) {| tgts:target_lang tleaked |} 
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:heap) =
-  dcontains (scope, x) h0
+  dcontains (leaked, x) h0
 
 let post_tgt_arrow
-  (#tscope:Type) (scope:tscope) {| tgts:target_lang tscope |} 
+  (#tleaked:Type) (leaked:tleaked) {| tgts:target_lang tleaked |} 
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:t1 -> Type) {| tgtr : (x:t1 -> target_lang (t2 x)) |}
   (h0:heap) (r:t2 x) (hf:heap) =
-  let fp0 = tgts.footprint scope h0 in
-  let fpf = tgts.footprint scope hf in
+  let fp0 = tgts.footprint leaked h0 in
+  let fpf = tgts.footprint leaked hf in
   modifies fp0 h0 hf /\ 
   equal_dom h0 hf /\ 
   ((tgtr x).footprint r hf) ⊆ fp0 /\ 
   fpf ⊆ fp0 /\ 
-  tgts.dcontains scope hf /\ 
+  tgts.dcontains leaked hf /\ 
   ((tgtr x).dcontains r hf)
 
 unfold let mk_tgt_arrow  
   (t1:Type)
   {| tgt_t1: target_lang t1 |}
   (t2:t1 -> Type) 
-  (#tscope:Type)
-  (scope:tscope)
-  {| tgt_scope:target_lang tscope |}
+  (#tleaked:Type)
+  (leaked:tleaked)
+  {| tgt_leaked:target_lang tleaked |}
   {| c2 : (x:t1 -> target_lang (t2 x)) |}
 = x:t1 -> ST (t2 x) 
-    (requires (pre_tgt_arrow scope #tgt_scope x #tgt_t1))
-    (ensures (post_tgt_arrow scope #tgt_scope x #tgt_t1 #t2 #c2))
+    (requires (pre_tgt_arrow leaked #tgt_leaked x #tgt_t1))
+    (ensures (post_tgt_arrow leaked #tgt_leaked x #tgt_t1 #t2 #c2))
 
 instance target_lang_arrow 
   (t1:Type)
   {| target_lang t1 |}
   (t2:t1 -> Type) 
-  (#tscope:Type)
-  (scope:tscope)
-  {| target_lang tscope |}
+  (#tleaked:Type)
+  (leaked:tleaked)
+  {| target_lang tleaked |}
   {| (x:t1 -> target_lang (t2 x)) |}
-  : target_lang (mk_tgt_arrow t1 t2 scope) = {
+  : target_lang (mk_tgt_arrow t1 t2 leaked) = {
     footprint = (fun _ _ -> Set.empty); // <-- TODO: why no footprint for functions?
     footprint_after_write = (fun _ _ _ _ -> Set.empty);
     footprint_after_write_law = (fun _ _ _ _ -> ());
@@ -216,10 +216,10 @@ instance target_lang_rels_arrow
   (a:Type) {| target_lang a |}
   (t1:Type) {| target_lang t1 |}
   (t2:t1 -> Type) {| (x:t1 -> target_lang (t2 x)) |}
-  (#tscope:Type)
-  (scope:tscope)
-  {| target_lang tscope |} :
-  target_lang_rels a (mk_tgt_arrow t1 t2 scope) = {
+  (#tleaked:Type)
+  (leaked:tleaked)
+  {| target_lang tleaked |} :
+  target_lang_rels a (mk_tgt_arrow t1 t2 leaked) = {
     footprint_footprint_after_write = (fun _ _ _ _ _ -> ())
   }
 
@@ -246,30 +246,30 @@ let stable_footprint_v (#t:Type) {| target_lang t |} (* {| target_lang_rels t t 
   assert (footprint v h1 ⊆ footprint_after_write v h0 r fpr)
 
 let footprint_r_after_write 
-  (#tscope:Type) {| target_lang tscope |} (scope:tscope)
-  (#t:Type) {| target_lang t |} (* {| target_lang_rels t tscope |}*)
+  (#tleaked:Type) {| target_lang tleaked |} (leaked:tleaked)
+  (#t:Type) {| target_lang t |} (* {| target_lang_rels t tleaked |}*)
   (r:ref t) (v:t)
   (fp:Set.set nat)
   (h0 h1:heap)
   : Lemma
   (requires (
     equal_dom h0 h1 /\
-    dcontains scope h0 /\
+    dcontains leaked h0 /\
     dcontains r h0 /\
     modifies !{r} h0 h1 /\
     sel h1 r == v /\
-    footprint scope h0 ⊆ fp /\
+    footprint leaked h0 ⊆ fp /\
 
     !{r} ⊆ fp /\
     footprint v h0 ⊆ fp
   ))
-  (ensures (footprint scope h1 ⊆ (fp ⊎ footprint r h1)))
-= footprint_after_write_law scope h0 r (footprint r h1);
-  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ footprint scope h0 ⊎ footprint r h1);
-  assert (footprint_after_write scope h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
+  (ensures (footprint leaked h1 ⊆ (fp ⊎ footprint r h1)))
+= footprint_after_write_law leaked h0 r (footprint r h1);
+  assert (footprint_after_write leaked h0 r (footprint r h1) ⊆ footprint leaked h0 ⊎ footprint r h1);
+  assert (footprint_after_write leaked h0 r (footprint r h1) ⊆ fp ⊎ footprint r h1);
   admit ();
-  // footprint_footprint_after_write r scope h0 h1 (footprint r h1);
-  assert (footprint scope h1 ⊆ footprint_after_write scope h0 r (footprint r h1))
+  // footprint_footprint_after_write r leaked h0 h1 (footprint r h1);
+  assert (footprint leaked h1 ⊆ footprint_after_write leaked h0 r (footprint r h1))
 
 let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:heap) : Lemma
   (requires (equal_dom h0 h1 /\ dcontains x h0))
@@ -282,42 +282,42 @@ let equal_dom_preserves_dcontains (#t:Type) {| target_lang t |} (x:t) (h0 h1:hea
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec _elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : tt:Type & target_lang tt =
+let rec _elab_typ (t:typ) (#tleaked:Type) (leaked:tleaked) {| c_leaked:target_lang tleaked |} : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
-    let tt1 = _elab_typ t1 #tscope scope #c_scope in
-    let tt2 (x:dfst tt1) = _elab_typ t2 #(tscope * dfst tt1) (scope, x) #(target_lang_pair tscope (dfst tt1) #c_scope #(dsnd tt1)) in
-    (| mk_tgt_arrow      (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
-       target_lang_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
+    let tt1 = _elab_typ t1 #tleaked leaked #c_leaked in
+    let tt2 (x:dfst tt1) = _elab_typ t2 #(tleaked * dfst tt1) (leaked, x) #(target_lang_pair tleaked (dfst tt1) #c_leaked #(dsnd tt1)) in
+    (| mk_tgt_arrow      (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) leaked #c_leaked #(fun x -> dsnd (tt2 x)),
+       target_lang_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) leaked #c_leaked #(fun x -> dsnd (tt2 x))
     |)
   end 
   | TUnit -> (| unit, target_lang_unit |)
   | TNat -> (| int, target_lang_int |)
   | TSum t1 t2 ->
-    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
-    let (| tt2, c_tt2 |) = _elab_typ t2 scope #c_scope in
+    let (| tt1, c_tt1 |) = _elab_typ t1 leaked #c_leaked in
+    let (| tt2, c_tt2 |) = _elab_typ t2 leaked #c_leaked in
     (| either tt1 tt2, target_lang_sum tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
-    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
-    let (| tt2, c_tt2 |) = _elab_typ t2 scope #c_scope in
+    let (| tt1, c_tt1 |) = _elab_typ t1 leaked #c_leaked in
+    let (| tt2, c_tt2 |) = _elab_typ t2 leaked #c_leaked in
     (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef t ->
-    let (| tt, c_tt |) = _elab_typ t scope #c_scope in
+    let (| tt, c_tt |) = _elab_typ t leaked #c_leaked in
     (| ref tt, target_lang_ref tt #c_tt |)
 
-let elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope : target_lang tscope |} : Type =
-  dfst (_elab_typ t scope #c_scope)
+let elab_typ (t:typ) (#tleaked:Type) (leaked:tleaked) {| c_leaked : target_lang tleaked |} : Type =
+  dfst (_elab_typ t leaked #c_leaked)
 
-let elab_typ_tgt (t:typ) (#tscope:Type) (scope:tscope) {| c_scope : target_lang tscope |} : target_lang (elab_typ t scope)=
-  dsnd (_elab_typ t scope #c_scope)
+let elab_typ_tgt (t:typ) (#tleaked:Type) (leaked:tleaked) {| c_leaked : target_lang tleaked |} : target_lang (elab_typ t leaked)=
+  dsnd (_elab_typ t leaked #c_leaked)
 
-let elab_typ' (t:typ) (#tscope:typ) (scope:dfst (_elab_typ tscope ())) : Type =
-  let (| ty, c_scope |) = _elab_typ tscope () in
-  elab_typ t #ty scope #c_scope
+let elab_typ' (t:typ) (#tleaked:typ) (leaked:dfst (_elab_typ tleaked ())) : Type =
+  let (| ty, c_leaked |) = _elab_typ tleaked () in
+  elab_typ t #ty leaked #c_leaked
 
-let elab_typ_tgt' (t:typ) (#tscope:typ) (scope:dfst (_elab_typ tscope ())) : target_lang (elab_typ' t scope)=
-  let (| ty, c_scope |) = _elab_typ tscope () in
-  elab_typ_tgt t #ty scope #c_scope
+let elab_typ_tgt' (t:typ) (#tleaked:typ) (leaked:dfst (_elab_typ tleaked ())) : target_lang (elab_typ' t leaked)=
+  let (| ty, c_leaked |) = _elab_typ tleaked () in
+  elab_typ_tgt t #ty leaked #c_leaked
 
 // val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 // let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
@@ -376,14 +376,14 @@ let vextend #t (x:elab_typ t ()) (#g:context) (ve:vcontext g) : vcontext (extend
 val elab_apply_arrow :
   t1:typ ->
   t2:typ ->
-  #tscope:Type ->
-  scope:tscope ->
-  {| c_scope: target_lang tscope |} -> 
-  f:elab_typ (TArr t1 t2) scope #c_scope ->
-  (let tt1 = _elab_typ t1 scope #c_scope in
-   let tt2 (x:(dfst tt1)) = _elab_typ t2 (scope, x) #(target_lang_pair tscope (dfst tt1) #c_scope #(dsnd tt1)) in
-   mk_tgt_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)))
-let elab_apply_arrow t1 t2 #tscope scope #c_scope f x = f x
+  #tleaked:Type ->
+  leaked:tleaked ->
+  {| c_leaked: target_lang tleaked |} -> 
+  f:elab_typ (TArr t1 t2) leaked #c_leaked ->
+  (let tt1 = _elab_typ t1 leaked #c_leaked in
+   let tt2 (x:(dfst tt1)) = _elab_typ t2 (leaked, x) #(target_lang_pair tleaked (dfst tt1) #c_leaked #(dsnd tt1)) in
+   mk_tgt_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) leaked #c_leaked #(fun x -> dsnd (tt2 x)))
+let elab_apply_arrow t1 t2 #tleaked leaked #c_leaked f x = f x
 
 let rec elab_exp 
   (#g:context)
@@ -391,38 +391,38 @@ let rec elab_exp
   (#t:typ)
   (tyj:typing g e t)
   (ve:vcontext g)
-  (#tscope:typ)
-  (scope:elab_typ tscope ())
-  : ST (elab_typ' t scope) 
-     (requires (pre_tgt_arrow scope #(elab_typ_tgt tscope ()) ()))
-     (ensures (post_tgt_arrow scope #(elab_typ_tgt tscope ()) () #_ #(fun _ -> elab_typ' t scope) #(fun _ -> elab_typ_tgt' t scope)))
+  (#tleaked:typ)
+  (leaked:elab_typ tleaked ())
+  : ST (elab_typ' t leaked) 
+     (requires (pre_tgt_arrow leaked #(elab_typ_tgt tleaked ()) ()))
+     (ensures (post_tgt_arrow leaked #(elab_typ_tgt tleaked ()) () #_ #(fun _ -> elab_typ' t leaked) #(fun _ -> elab_typ_tgt' t leaked)))
      (decreases e) =
-  let tgt_scope = elab_typ_tgt tscope () in
+  let tgt_leaked = elab_typ_tgt tleaked () in
   let h0 = gst_get () in
-  let fp0 = tgt_scope.footprint scope h0 in
+  let fp0 = tgt_leaked.footprint leaked h0 in
   match tyj with
   | TyUnit -> ()
   | TyZero -> 0
   | TyReadRef #_ #_ #t tyj_e -> begin
-    let r : ref (elab_typ' t scope) = elab_exp tyj_e ve scope in
+    let r : ref (elab_typ' t leaked) = elab_exp tyj_e ve leaked in
     read r
   end
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-    let r : ref (elab_typ' t scope) = elab_exp tyj_ref ve scope in // <-- this is effectful and modifies fp
+    let r : ref (elab_typ' t leaked) = elab_exp tyj_ref ve leaked in // <-- this is effectful and modifies fp
       let h1 = gst_get () in
-      let fp1 = tgt_scope.footprint scope h1 in
-      let tgt_r = elab_typ_tgt' (TRef t) scope in
+      let fp1 = tgt_leaked.footprint leaked h1 in
+      let tgt_r = elab_typ_tgt' (TRef t) leaked in
       
       assert (tgt_r.dcontains r h1);
       
-    let v : elab_typ' t scope = elab_exp tyj_v ve scope in // this is effectul and modifies fp
+    let v : elab_typ' t leaked = elab_exp tyj_v ve leaked in // this is effectul and modifies fp
       let h2 = gst_get () in
-      let fp2 = tgt_scope.footprint scope h2 in
-      let tgt_v = elab_typ_tgt' t scope in
+      let fp2 = tgt_leaked.footprint leaked h2 in
+      let tgt_v = elab_typ_tgt' t leaked in
 
     write r v;
       let h3 = gst_get () in
-      let fp3 = tgt_scope.footprint scope h3 in
+      let fp3 = tgt_leaked.footprint leaked h3 in
       let fp_r = tgt_r.footprint r in
       let fp_v = tgt_v.footprint v in
       assert (tgt_v.footprint v h2 ⊆ fp1);
@@ -430,8 +430,8 @@ let rec elab_exp
       // assert (fp2 ⊆ fp1 ⊆ fp0);
       assert (tgt_r.footprint r h1 ⊆ fp0);
       equal_dom_preserves_dcontains r h1 h2;
-      equal_dom_preserves_dcontains scope h1 h2;
-      footprint_r_after_write scope r v fp0 h2 h3;
+      equal_dom_preserves_dcontains leaked h1 h2;
+      footprint_r_after_write leaked r v fp0 h2 h3;
       assert (fp3 ⊆ fp0 ⊎ fp_r h3);
       // assert ((fp2 `subtract` fp_r h2) ⊆ fp0);
       assert (fp_r h3 `Set.equal` !{r} ⊎ fp_v h3);
@@ -441,14 +441,14 @@ let rec elab_exp
 
       // post
       assert (fp3 ⊆ fp0);
-      equal_dom_preserves_dcontains scope h2 h3;
-      assert (tgt_scope.dcontains scope h3);
+      equal_dom_preserves_dcontains leaked h2 h3;
+      assert (tgt_leaked.dcontains leaked h3);
     ()
   end
   | _ -> admit ()
 
   // | TyAllocRef #_ #_ #t tyj_e -> begin
-  //   let v : elab_typ t = elab_exp tyj_e ve scope #sfp in
+  //   let v : elab_typ t = elab_exp tyj_e ve leaked #sfp in
   //   let r = alloc v in
   //   r
   // end
