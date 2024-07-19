@@ -108,17 +108,17 @@ let post_tgt_arrow
   tgts.dcontains scope hf /\ 
   ((tgtr x).dcontains r hf)
 
-let mk_tgt_arrow  
+unfold let mk_tgt_arrow  
   (t1:Type)
-  {| target_lang t1 |}
+  {| tgt_t1: target_lang t1 |}
   (t2:t1 -> Type) 
   (#tscope:Type)
   (scope:tscope)
-  {| sfp:target_lang tscope |}
+  {| tgt_scope:target_lang tscope |}
   {| c2 : (x:t1 -> target_lang (t2 x)) |}
 = x:t1 -> ST (t2 x) 
-    (requires (pre_tgt_arrow scope x))
-    (ensures (post_tgt_arrow scope x))
+    (requires (pre_tgt_arrow scope #tgt_scope x #tgt_t1))
+    (ensures (post_tgt_arrow scope #tgt_scope x #tgt_t1 #t2 #c2))
 
 instance target_lang_arrow 
   (t1:Type)
@@ -285,10 +285,10 @@ open STLC
 let rec _elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang tscope |} : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
-    let (| tt1, c_tt1 |) = _elab_typ t1 scope #c_scope in
-    let tt2 (x:tt1) = _elab_typ t2 (scope, x) #(target_lang_pair tscope tt1 #c_scope #c_tt1) in
-    (| mk_tgt_arrow      tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
-       target_lang_arrow tt1 #c_tt1 (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
+    let tt1 = _elab_typ t1 #tscope scope #c_scope in
+    let tt2 (x:dfst tt1) = _elab_typ t2 #(tscope * dfst tt1) (scope, x) #(target_lang_pair tscope (dfst tt1) #c_scope #(dsnd tt1)) in
+    (| mk_tgt_arrow      (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)),
+       target_lang_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x))
     |)
   end 
   | TUnit -> (| unit, target_lang_unit |)
@@ -305,19 +305,19 @@ let rec _elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope:target_lang t
     let (| tt, c_tt |) = _elab_typ t scope #c_scope in
     (| ref tt, target_lang_ref tt #c_tt |)
 
-let elab_typ (t:typ) (#tscope:Type) {| c_scope : target_lang tscope |} (scope:tscope) : Type =
+let elab_typ (t:typ) (#tscope:Type) (scope:tscope) {| c_scope : target_lang tscope |} : Type =
   dfst (_elab_typ t scope #c_scope)
 
-let elab_typ_tgt (t:typ) (#tscope:Type) {| c_scope : target_lang tscope |} (scope:tscope) : target_lang (elab_typ t scope)=
+let elab_typ_tgt (t:typ) (#tscope:Type) (scope:tscope) {| c_scope : target_lang tscope |} : target_lang (elab_typ t scope)=
   dsnd (_elab_typ t scope #c_scope)
 
 let elab_typ' (t:typ) (#tscope:typ) (scope:dfst (_elab_typ tscope ())) : Type =
   let (| ty, c_scope |) = _elab_typ tscope () in
-  elab_typ t #ty #c_scope scope
+  elab_typ t #ty scope #c_scope
 
 let elab_typ_tgt' (t:typ) (#tscope:typ) (scope:dfst (_elab_typ tscope ())) : target_lang (elab_typ' t scope)=
   let (| ty, c_scope |) = _elab_typ tscope () in
-  elab_typ_tgt t #ty #c_scope scope
+  elab_typ_tgt t #ty scope #c_scope
 
 // val elab_typ_test1 : elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 // let elab_typ_test1 (x:ref (ref int)) (y:ref int) =
@@ -360,23 +360,37 @@ let progr rp rs f = (** If this test fails, it means that the spec of f does not
 
 
 (** *** Elaboration of expressions to F* *)
-// type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x))
+type vcontext (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x)) ()
 
-// let vempty : vcontext empty = fun _ -> assert false
+let vempty : vcontext empty = fun _ -> assert false
 
-// let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
-//   fun y -> if y = 0 then x else ve (y-1)
+let vextend #t (x:elab_typ t ()) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
+  fun y -> if y = 0 then x else ve (y-1)
 
 //let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
 
 // let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
 //   if n = 0 then acc else fnrec (n-1) (iter acc) iter
 
+
+val elab_apply_arrow :
+  t1:typ ->
+  t2:typ ->
+  #tscope:Type ->
+  scope:tscope ->
+  {| c_scope: target_lang tscope |} -> 
+  f:elab_typ (TArr t1 t2) scope #c_scope ->
+  (let tt1 = _elab_typ t1 scope #c_scope in
+   let tt2 (x:(dfst tt1)) = _elab_typ t2 (scope, x) #(target_lang_pair tscope (dfst tt1) #c_scope #(dsnd tt1)) in
+   mk_tgt_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) scope #c_scope #(fun x -> dsnd (tt2 x)))
+let elab_apply_arrow t1 t2 #tscope scope #c_scope f x = f x
+
 let rec elab_exp 
   (#g:context)
   (#e:exp) 
   (#t:typ)
   (tyj:typing g e t)
+  (ve:vcontext g)
   (#tscope:typ)
   (scope:elab_typ tscope ())
   : ST (elab_typ' t scope) 
