@@ -19,39 +19,22 @@ type tfootprint = Set.set nat
 class target_lang (t:Type) = {
   footprint : t -> heap -> (erased tfootprint); // TODO: if there is a cycle, this would diverge
                      // I suppose it is not a problem because we are in GTot?
-
-  footprint_after_write : t -> heap -> #a:Type -> ref a -> tfootprint -> erased tfootprint;
-
   dcontains : t -> heap -> Type0;
-
-  footprint_after_write_law : v:t -> h0:heap -> #a:Type -> r:(ref a) -> fp_r:tfootprint ->
-    Lemma (
-      footprint_after_write v h0 r fp_r ⊆ footprint v h0 ⊎ fp_r);
 }
 
 instance target_lang_unit : target_lang unit = {
   footprint = (fun _ _ -> Set.empty);
-  footprint_after_write = (fun _ _ _ _ -> Set.empty);
-  footprint_after_write_law = (fun _ _ _ _ -> ());
   dcontains = (fun _ _ -> True);
 }
 
 instance target_lang_int : target_lang int = {
   footprint = (fun _ _ -> Set.empty);
-  footprint_after_write = (fun _ _ _ _ -> Set.empty);
-  footprint_after_write_law = (fun _ _ _ _ -> ());
   dcontains = (fun _ _ -> True);
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
   footprint = (fun (x1, x2) h -> 
     (c1.footprint x1 h) ⊎ (c2.footprint x2 h));
-  footprint_after_write = (fun (x1, x2) h r fp_r -> 
-    (c1.footprint_after_write x1 h r fp_r) ⊎ (c2.footprint_after_write x2 h r fp_r));
-  footprint_after_write_law = (fun (x1,x2) h r fp_r ->
-    c1.footprint_after_write_law x1 h r fp_r;
-    c2.footprint_after_write_law x2 h r fp_r
-  );
   dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
 }
 
@@ -60,15 +43,6 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
      match x with
      | Inl x1 -> c1.footprint x1 h
      | Inr x2 -> c2.footprint x2 h);
-  footprint_after_write = (fun x h r fp_r ->
-    match x with
-    | Inl x1 -> c1.footprint_after_write x1 h r fp_r
-    | Inr x2 -> c2.footprint_after_write x2 h r fp_r);
-  footprint_after_write_law = (fun x h r fp_r ->
-    match x with
-    | Inl x1 -> c1.footprint_after_write_law x1 h r fp_r
-    | Inr x2 -> c2.footprint_after_write_law x2 h r fp_r
-  );
   dcontains = (fun x h ->
     match x with
     | Inl x1 -> c1.dcontains x1 h
@@ -78,14 +52,6 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
   footprint = (fun x h -> 
     !{x} ⊎ (c.footprint (sel h x) h)); // <--- following x in h
-  
-  footprint_after_write = (fun x h r fp_r ->
-    if addr_of x = addr_of r then !{x} ⊎ fp_r
-    else !{x} ⊎ c.footprint_after_write (sel h x) h r fp_r);
-  
-  footprint_after_write_law = (fun v h r fp_r ->
-    c.footprint_after_write_law (sel h v) h r fp_r);
-  
   dcontains = (fun x h -> h `contains` x /\ c.dcontains (sel h x) h);
 }
 
@@ -143,8 +109,6 @@ instance target_lang_arrow
   {| (x:t1 -> target_lang (t2 x)) |}
   : target_lang (mk_tgt_arrow rp rs t1 t2) = {
     footprint = (fun _ _ -> Set.empty); // <-- TODO: why no footprint for functions?
-    footprint_after_write = (fun _ _ _ _ -> Set.empty);
-    footprint_after_write_law = (fun _ _ _ _ -> ());
     dcontains = (fun _ _ -> True);
   }
 
@@ -189,14 +153,6 @@ let elab_typ (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#trs:Ty
 let elab_typ_tgt (t:typ) (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |} (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}: target_lang (elab_typ t rp rs)=
   dsnd (_elab_typ t rp rs)
 
-// let elab_typ' (t:typ) (#tprotected:typ) (protected:dfst (_elab_typ tprotected ())) : Type =
-//   let (| ty, c_protected |) = _elab_typ tprotected () in
-//   elab_typ t #ty protected
-
-// let elab_typ_tgt' (t:typ) (#tprotected:typ) (protected:dfst (_elab_typ tprotected ())) : target_lang (elab_typ' t protected)=
-//   let (| ty, c_protected |) = _elab_typ tprotected () in
-//   elab_typ_tgt t #ty protected #c_protected
-
 val elab_typ_test0 : 
   #rp:ref int ->
   #rs:ref (ref int) ->
@@ -213,29 +169,28 @@ val elab_typ_test1 :
 let elab_typ_test1 #rp #rs (x:ref (ref int)) (y:ref int) =
   assume (int =!= ref int);
   let h0 = gst_get () in
-  assume (footprint x h0 ⊆ Set.complement (footprint rp h0)); (** weird, this is a pre *)
+  assume (footprint x h0 ⊆ Set.complement (footprint rp h0)); (** TODO: this is a pre of partially applying x,
+                                                                        but not when applying y *)
   let ix = !x in
   ix := !ix + 1;
   x := y;
   y := !y + 5;
   ()
 
-val elab_typ_test1' : 
-  rp:ref int ->
-  rs:ref (ref int * ref int) ->
-  elab_typ (TArr TUnit (TArr TUnit TUnit)) rp rs
-let elab_typ_test1' rp rs () =
-  let (rs', rs'') = !rs in
-  rs := (rs', rs');
+val elab_typ_test1' :
+  #rp:ref int ->
+  #rs:ref (ref int * ref int) -> 
+  elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rp rs
+let elab_typ_test1' #rp #rs (xs:(ref ((ref int) * ref int))) =
+  let (x', x'') = !xs in
+  xs := (x', x');
   (fun () ->
-    let h0 = gst_get () in
-    assume (sep rs' rp h0); (* TODO: we know nothing of rs' and rs'' *)
-    assume (sep rs'' rp h0);
-    rs := (rs', rs'')
+    let h0 = get () in
+    assume (dcontains xs h0); (* TODO: we know nothing of xs, x' and x'' *)
+    assume (sep x' rp h0);
+    assume (sep x'' rp h0);
+    xs := (x', x'')
   )
-
-// val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
-// let elab_typ_test2 () = alloc 0
   
 val elab_typ_test2' : 
   #rp:ref int ->
@@ -253,11 +208,6 @@ let elab_typ_test3 f =
   x := !x + 1;
   ()
 
-val sep : ref int -> ref (ref int) -> heap -> Type0
-let sep rp rs h =
-  dcontains rp h /\ dcontains rs h /\
-  footprint rp h `Set.disjoint` footprint rs h
-
 val progr: 
   rp: ref int -> 
   rs: ref (ref int) ->
@@ -268,40 +218,3 @@ val progr:
 let progr rp rs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
   !rp
-
-
-(** *** Elaboration of expressions to F* *)
-type vcontext 
-  (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
-  (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
-  (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x)) rp rs
-
-let vempty 
-  (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
-  (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |} 
-  : vcontext rp rs empty = fun _ -> assert false
-
-let vextend 
-  (#trp:Type) (#rp:trp) {| tgt_rp: target_lang trp |}
-  (#trs:Type) (#rs:trs) {| tgt_rs: target_lang trs |} 
-  #t (x:elab_typ t rp rs) (#g:context) (ve:vcontext rp rs g) : vcontext rp rs (extend t g) =
-  fun y -> if y = 0 then x else ve (y-1)
-
-//let cast_TArr #t1 #t2 (h : (elab_typ t1 -> Tot (elab_typ t2))) : elab_typ (TArr t1 t2) = h
-
-// let rec fnrec (#a:Type) (n:nat) (acc:a) (iter:a -> a): Tot a =
-//   if n = 0 then acc else fnrec (n-1) (iter acc) iter
-
-// let rec elab_exp 
-//   (#g:context)
-//   (#e:exp) 
-//   (#t:typ)
-//   (tyj:typing g e t)
-//   (ve:vcontext g)
-//   (#tprotected:typ)
-//   (protected:elab_typ tprotected ())
-//   : ST (elab_typ' t protected) 
-//      (requires (pre_tgt_arrow protected #(elab_typ_tgt tprotected ()) ()))
-//      (ensures (post_tgt_arrow protected #(elab_typ_tgt tprotected ()) () #_ #(fun _ -> elab_typ' t protected) #(fun _ -> elab_typ_tgt' t protected)))
-//      (decreases e) =
-//   admit ()
