@@ -74,8 +74,7 @@ let post_tgt_arrow
   modifies (Set.singleton rs) h0 h1 /\                                  (* allow region rs to be modified *)
 
   // equal_dom h0 h1 /\                                                  (* no dynamic allocation *)
-  // (forall a (c:target_lang (reference a)) (r:reference a). 
-  //   frameOf r == rs ==> c.dcontains r h1 /\ c.regional r h1 rs) /\
+  // self_contained_region_inv rs h0
 
   ((tgtr x).regional r h1 rs) /\
   ((tgtr x).dcontains r h1)
@@ -154,8 +153,7 @@ val elab_typ_test1 :
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rs
 let elab_typ_test1 #rs (x:reference (reference int)) (y:reference int) =
   let h0 = get () in
-  assume (x `dcontains` h0); // (ah, it is not the pre of the second function)
-  assume (regional x h0 rs);
+  assert ((elab_typ_tgt (TRef (TRef TNat)) rs).dcontains x h0); // (this is from a previous pre, and we have to recall)
   let ix = !x in
   ix := !ix + 1;
   x := y;
@@ -207,10 +205,11 @@ val progr:
   #rrs:rid ->
   #rrp:rid ->
   ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
-  ST unit (requires (fun h0 -> 
-        self_contained_region_inv rrs h0 /\
-        sep rp rrp rs rrs h0))
-      (ensures (fun _ _ h1 -> sep rp rrp rs rrs h1))
+  ST unit 
+    (requires (fun h0 -> 
+      self_contained_region_inv rrs h0 /\
+      sep rp rrp rs rrs h0))
+    (ensures (fun _ _ h1 -> sep rp rrp rs rrs h1))
          
 let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
