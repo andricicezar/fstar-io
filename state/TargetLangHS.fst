@@ -306,13 +306,6 @@ let progr2 #_ #rs #rrs #rrp ctx =
   ()
 
 // Test with program passing callback
-val cb: rrs: rid -> secret: rref int -> elab_typ (TArr TUnit TUnit) rrs 
-let cb rrs secret () =
-  assume (frameOf secret == rrs);
-  let h0 = get() in
-  assume (h0 `contains` secret);
-   write' secret (!secret + 1)
-
 val progr3: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
@@ -327,14 +320,13 @@ val progr3:
     (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
                              sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 
-// mini to do: the callback of the program should be able to modify rp
-
+// TODO: the callback of the program should be able to modify rp
 let progr3 #_ #rs #rrs #rrp f =
   let secret: rref int = ralloc' rrs 0 in
-  let cb: elab_typ (TArr TUnit TUnit) rrs = cb rrs secret in
+  let cb: elab_typ (TArr TUnit TUnit) rrs = (fun () -> write' secret (!secret + 1))in
   f cb;
-  let h1 = get () in
   recall rs;
+  let h1 = get () in
   eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
     c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
