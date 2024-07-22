@@ -64,7 +64,8 @@ unfold let pre_tgt_arrow
   (h0:mem) =
   regional x h0 rrs /\                                                     (* x is in region rs *)
   dcontains x h0 /\                                                       (* required to instantiate the properties of modifies *)
-  self_contained_region_inv rrs h0
+  self_contained_region_inv rrs h0 /\
+  is_eternal_region rrs                                                    (* required for using ralloc *)
 
 let post_tgt_arrow
   (rrs:rid)
@@ -155,12 +156,23 @@ let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
   assume (forall a (c:target_lang (reference a)) (r':reference a). 
     frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
 
+
+val ralloc' (#a:Type) {| c:target_lang a |} (i:rid) (init:a)
+  :ST (reference a) (requires (fun m -> is_eternal_region i /\ c.regional init m i))
+                    (ensures (fun h0 r h1 -> ralloc_post i init h0 r h1 /\ 
+                      regional r h1 i /\
+                      (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1)
+                    ))
+let ralloc' i v = 
+  let r = ralloc i v in
+  admit();
+  r
+
 val elab_typ_test0 : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) TUnit) rrs
 let elab_typ_test0 (y:reference int) =
   write' y (!y + 5);
-  // y := !y + 5;
   ()
 
 val elab_typ_test1 : 
@@ -205,6 +217,35 @@ let elab_typ_test3 f =
   write' x (!x + 1);
   ()
 
+val elab_typ_test4 :
+  #rrs:rid ->
+  elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
+let elab_typ_test4 #rrs (x y: reference (reference int)) =
+  let h0 = get () in
+  assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0);
+  let z = !x in
+  let t = !y in
+  write' x t;
+  write' y z;
+  let h1 = get () in 
+  assert (regional y h0 rrs);
+  ()
+
+val elab_typ_test5 :
+   #rrs:rid ->
+   elab_typ (TArr TUnit (TRef TNat)) rrs
+let elab_typ_test5 #rrs () = 
+  let v = ralloc' rrs 0 in 
+  v
+
+val elab_typ_test6 :
+  #rrs:rid ->
+  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
+let elab_typ_test6 #rrs f =
+  let x:reference int = f () in
+  let y: reference int = ralloc' rrs (!x + 1) in
+  ()
+
 let sep
   (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
   (rrp:rid)
@@ -225,12 +266,95 @@ val progr:
   ST unit 
     (requires (fun h0 -> 
       self_contained_region_inv rrs h0 /\
-      sep rp rrp rs rrs h0))
-    (ensures (fun _ _ h1 -> sep rp rrp rs rrs h1))
+      sep rp rrp rs rrs h0 /\
+      is_eternal_region rrs))
+    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
+                            sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
          
 let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
   let h1 = get () in
   eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
     c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  ()
+
+val progr2: 
+  #rp: reference int -> 
+  #rs: reference (reference int) ->
+  #rrs:rid ->
+  #rrp:rid ->
+  ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
+  ST unit 
+    (requires (fun h0 -> 
+      self_contained_region_inv rrs h0 /\
+      sep rp rrp rs rrs h0 /\
+      is_eternal_region rrs /\
+      is_eternal_region rrp))
+    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
+                             sel h0 rp == sel h1 rp))
+         
+let progr2 #_ #rs #rrs #rrp ctx = 
+  let secret: reference int = ralloc' rrp 0 in
+  ctx ();
+  let v = !secret in
+  assert (v == 0);
+  let h1 = get () in
+  eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
+    c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  ()
+
+// Test with program passing callback
+val cb: rrs: rid -> secret: reference int -> elab_typ (TArr TUnit TUnit) rrs 
+let cb rrs secret () =
+  assume (frameOf secret == rrs);
+  let h0 = get() in
+  assume (h0 `contains` secret);
+   write' secret (!secret + 1)
+
+val progr3: 
+  #rp: reference int -> 
+  #rs: reference (reference int) ->
+  #rrs:rid ->
+  #rrp:rid ->
+  ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit) rrs) ->
+  ST unit 
+    (requires (fun h0 -> 
+      self_contained_region_inv rrs h0 /\
+      sep rp rrp rs rrs h0 /\
+      is_eternal_region rrs))
+    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
+                             sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
+
+// mini to do: the callback of the program should be able to modify rp
+
+let progr3 #_ #rs #rrs #rrp f =
+  let secret: reference int = ralloc' rrs 0 in
+  let cb: elab_typ (TArr TUnit TUnit) rrs = cb rrs secret in
+  f cb;
+  let h1 = get () in
+    eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
+     c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  ()
+
+// Test with program getting a callback
+val progr4: 
+  #rp: reference int -> 
+  #rs: reference (reference int) ->
+  #rrs:rid ->
+  #rrp:rid ->
+  ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs) ->
+  ST unit 
+    (requires (fun h0 -> 
+      self_contained_region_inv rrs h0 /\
+      sep rp rrp rs rrs h0 /\
+      is_eternal_region rrs))
+    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
+                             sel h0 rp == sel h1 rp))
+
+let progr4 #_ #rs #rrs #rrp f =
+  let cb = f () in
+  cb ();
+  let h1 = get () in
+     eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
+      c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
   ()
