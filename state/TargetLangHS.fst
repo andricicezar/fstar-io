@@ -35,7 +35,7 @@ instance target_lang_int : target_lang int = {
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
   dcontains = (fun (x1, x2) h -> c1.dcontains x1 h /\ c2.dcontains x2 h);
-  regional = (fun (x1, x2) h r -> c1.regional x1 h r /\ c2.regional x2 h r);
+  regional = (fun (x1, x2) h rr -> c1.regional x1 h rr /\ c2.regional x2 h rr);
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
@@ -43,59 +43,61 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
     match x with
     | Inl x1 -> c1.dcontains x1 h
     | Inr x2 -> c2.dcontains x2 h);
-  regional = (fun x h r ->
+  regional = (fun x h rr ->
     match x with
-    | Inl x1 -> c1.regional x1 h r
-    | Inr x2 -> c2.regional x2 h r);
+    | Inl x1 -> c1.regional x1 h rr
+    | Inr x2 -> c2.regional x2 h rr);
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (reference t) = {
   dcontains = (fun (x:reference t) h -> h `contains` x /\ c.dcontains (sel h x) h);
-  regional = (fun (x:reference t) h r -> frameOf x == r /\ c.regional (sel h x) h r);  
+  regional = (fun (x:reference t) h rr -> frameOf x == rr /\ c.regional (sel h x) h rr);  
 }
 
-let self_contained_region_inv (rs:rid) (h:mem) : Type0 =
-  forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rs ==> 
-    c.dcontains r h /\ c.regional r h rs
+let self_contained_region_inv (rr:rid) (h:mem) : Type0 =
+  forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rr ==> 
+    c.dcontains r h /\ c.regional r h rr
 
 unfold let pre_tgt_arrow
-  (rs:rid)
+  (rrs:rid)
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:mem) =
-  regional x h0 rs /\                                                     (* x is in region rs *)
+  regional x h0 rrs /\                                                     (* x is in region rs *)
   dcontains x h0 /\                                                       (* required to instantiate the properties of modifies *)
-  self_contained_region_inv rs h0
+  self_contained_region_inv rrs h0
 
 let post_tgt_arrow
-  (rs:rid)
+  (rrs:rid)
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:t1 -> Type) {| tgtr : (x:t1 -> target_lang (t2 x)) |}
   (h0:mem) (r:t2 x) (h1:mem) =
-  modifies (Set.singleton rs) h0 h1 /\                                  (* allow region rs to be modified *)
+  modifies (Set.singleton rrs) h0 h1 /\                                  (* allow region rs to be modified *)
 
   // equal_dom h0 h1 /\                                                  (* no dynamic allocation *)
-  self_contained_region_inv rs h1 /\
+  self_contained_region_inv rrs h1 /\
 
-  ((tgtr x).regional r h1 rs) /\
+  ((tgtr x).regional r h1 rrs) /\
   ((tgtr x).dcontains r h1)
+(* TODO: what prevents the computation to allocate things in rp? *)
+
 
 unfold let mk_tgt_arrow  
-  (rs:rid)
+  (rrs:rid)
   (t1:Type)
   {| tgt_t1: target_lang t1 |}
   (t2:t1 -> Type) 
   {| c2 : (x:t1 -> target_lang (t2 x)) |}
 = x:t1 -> ST (t2 x) 
-    (requires (pre_tgt_arrow rs x #tgt_t1))
-    (ensures (post_tgt_arrow rs x #tgt_t1 #t2 #c2))
+    (requires (pre_tgt_arrow rrs x #tgt_t1))
+    (ensures (post_tgt_arrow rrs x #tgt_t1 #t2 #c2))
 
 instance target_lang_arrow 
-  (rs:rid)
+  (rrs:rid)
   (t1:Type)
   {| target_lang t1 |}
   (t2:t1 -> Type)
   {| (x:t1 -> target_lang (t2 x)) |}
-  : target_lang (mk_tgt_arrow rs t1 t2) = {
+  : target_lang (mk_tgt_arrow rrs t1 t2) = {
     dcontains = (fun _ _ -> True);
     regional = (fun _ _ _ -> True);
   }
@@ -103,34 +105,34 @@ instance target_lang_arrow
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec _elab_typ (t:typ) (rs:rid) : tt:Type & target_lang tt =
+let rec _elab_typ (t:typ) (rrs:rid) : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
-    let tt1 = _elab_typ t1 rs in
-    let tt2 (x:dfst tt1) = _elab_typ t2 rs in
-    (| mk_tgt_arrow      rs (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x)),
-       target_lang_arrow rs (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x))
+    let tt1 = _elab_typ t1 rrs in
+    let tt2 (x:dfst tt1) = _elab_typ t2 rrs in
+    (| mk_tgt_arrow      rrs (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x)),
+       target_lang_arrow rrs (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x))
     |)
   end 
   | TUnit -> (| unit, target_lang_unit |)
   | TNat -> (| int, target_lang_int |)
   | TSum t1 t2 ->
-    let (| tt1, c_tt1 |) = _elab_typ t1 rs in
-    let (| tt2, c_tt2 |) = _elab_typ t2 rs in
+    let (| tt1, c_tt1 |) = _elab_typ t1 rrs in
+    let (| tt2, c_tt2 |) = _elab_typ t2 rrs in
     (| either tt1 tt2, target_lang_sum tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
-    let (| tt1, c_tt1 |) = _elab_typ t1 rs in
-    let (| tt2, c_tt2 |) = _elab_typ t2 rs in
+    let (| tt1, c_tt1 |) = _elab_typ t1 rrs in
+    let (| tt2, c_tt2 |) = _elab_typ t2 rrs in
     (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef t ->
-    let (| tt, c_tt |) = _elab_typ t rs in
+    let (| tt, c_tt |) = _elab_typ t rrs in
     (| reference tt, target_lang_ref tt #c_tt |)
 
-let elab_typ (t:typ) (rs:rid) : Type =
-  dfst (_elab_typ t rs)
+let elab_typ (t:typ) (rrs:rid) : Type =
+  dfst (_elab_typ t rrs)
 
-let elab_typ_tgt (t:typ) (rs:rid): target_lang (elab_typ t rs)=
-  dsnd (_elab_typ t rs)
+let elab_typ_tgt (t:typ) (rrs:rid): target_lang (elab_typ t rrs)=
+  dsnd (_elab_typ t rrs)
 
 let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
   (requires (fun h0 -> 
@@ -154,19 +156,19 @@ let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
     frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
 
 val elab_typ_test0 : 
-  #rs:rid ->
-  elab_typ (TArr (TRef TNat) TUnit) rs
-let elab_typ_test0 #rs (y:reference int) =
+  #rrs:rid ->
+  elab_typ (TArr (TRef TNat) TUnit) rrs
+let elab_typ_test0 (y:reference int) =
   write' y (!y + 5);
   // y := !y + 5;
   ()
 
 val elab_typ_test1 : 
-  #rs:rid ->
-  elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rs
-let elab_typ_test1 #rs (x:reference (reference int)) (y:reference int) =
+  #rrs:rid ->
+  elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
+let elab_typ_test1 #rrs (x:reference (reference int)) (y:reference int) =
   let h0 = get () in
-  assert ((elab_typ_tgt (TRef (TRef TNat)) rs).dcontains x h0); // (this is from a previous pre, and we have to recall)
+  assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0); // (this is from a previous pre, and we have to recall)
   let ix = !x in
   write' ix (!ix + 1);
   write' x y;
@@ -174,15 +176,15 @@ let elab_typ_test1 #rs (x:reference (reference int)) (y:reference int) =
   ()
 
 val elab_typ_test1' : 
-  #rs:rid ->
-  elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rs
-let elab_typ_test1' #rs (xs:reference ((reference int) * reference int)) =
+  #rrs:rid ->
+  elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rrs
+let elab_typ_test1' #rrs (xs:reference ((reference int) * reference int)) =
   let (x', x'') = !xs in
   write' xs (x', x');
   // xs := (x', x');
   (fun () ->
     let h0 = get () in
-    assert ((elab_typ_tgt (TRef (TPair (TRef TNat) (TRef TNat))) rs).dcontains xs h0);
+    assert ((elab_typ_tgt (TRef (TPair (TRef TNat) (TRef TNat))) rrs).dcontains xs h0);
     (** why do I have to give the specific instance here? *)
     write' xs (x', x'')
   )
@@ -191,13 +193,13 @@ let elab_typ_test1' #rs (xs:reference ((reference int) * reference int)) =
 // let elab_typ_test2 () = alloc 0
   
 val elab_typ_test2' : 
-  #rs:rid ->
-  elab_typ (TArr (TRef TNat) (TRef TNat)) rs
+  #rrs:rid ->
+  elab_typ (TArr (TRef TNat) (TRef TNat)) rrs
 let elab_typ_test2' x = x
 
 val elab_typ_test3 : 
-  #rs:rid ->
-  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rs
+  #rrs:rid ->
+  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let elab_typ_test3 f =
   let x:reference int = f () in
   write' x (!x + 1);
@@ -211,6 +213,7 @@ let sep
   h =
   dcontains rp h /\ dcontains rs h /\                       (* required to instantiate the properties of modifies *)
   rrp <> rrs /\                                             (* separation *)
+                  (* TODO: this is not enough, because one could be a child of the other. *)
   regional rp h rrp /\ regional rs h rrs
 
 val progr: 
