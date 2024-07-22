@@ -7,15 +7,7 @@ open FStar.Tactics.Typeclasses
 open FStar.HyperStack
 open FStar.HyperStack.ST 
 
-let (@) = FStar.List.Tot.append
-let (⊆) = Set.subset
-let (⊎) = Set.union
-let (∩) = Set.intersect
-
-let subtract (#a:eqtype) (s1:Set.set a) (s2:Set.set a) : Set.set a =
-  Set.intersect s1 (Set.complement s2)
-
-type tfootprint = Set.set nat
+type rref (t:Type) = r:(reference t){not (is_mm r)} (* type of unfreeable heap references allocated in regions *)
 
 (** target_lang is a shallow embedding of STLC **)
 class target_lang (t:Type) = {
@@ -49,13 +41,13 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
     | Inr x2 -> c2.regional x2 h rr);
 }
 
-instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (reference t) = {
-  dcontains = (fun (x:reference t) h -> h `contains` x /\ c.dcontains (sel h x) h);
-  regional = (fun (x:reference t) h rr -> frameOf x == rr /\ c.regional (sel h x) h rr);  
+instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (rref t) = {
+  dcontains = (fun (x:rref t) h -> h `contains` x /\ c.dcontains (sel h x) h);
+  regional = (fun (x:rref t) h rr -> frameOf x == rr /\ c.regional (sel h x) h rr);  
 }
 
 let self_contained_region_inv (rr:rid) (h:mem) : Type0 =
-  forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rr ==> 
+  forall a (c:target_lang (rref a)) (r:rref a). h `contains` r /\ frameOf r == rr ==> 
     c.dcontains r h /\ c.regional r h rr
 
 unfold let pre_tgt_arrow
@@ -127,7 +119,7 @@ let rec _elab_typ (t:typ) (rrs:rid) : tt:Type & target_lang tt =
     (| (tt1 * tt2), target_lang_pair tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef t ->
     let (| tt, c_tt |) = _elab_typ t rrs in
-    (| reference tt, target_lang_ref tt #c_tt |)
+    (| rref tt, target_lang_ref tt #c_tt |)
 
 let elab_typ (t:typ) (rrs:rid) : Type =
   dfst (_elab_typ t rrs)
@@ -135,7 +127,7 @@ let elab_typ (t:typ) (rrs:rid) : Type =
 let elab_typ_tgt (t:typ) (rrs:rid): target_lang (elab_typ t rrs)=
   dsnd (_elab_typ t rrs)
 
-let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
+let write' (#t:Type) {| c:target_lang t |} (r:rref t) (v:t) : ST unit
   (requires (fun h0 -> 
     dcontains r h0 /\ c.dcontains v h0 /\
     regional r h0 (frameOf r) /\ c.regional v h0 (frameOf r) /\
@@ -147,38 +139,42 @@ let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
     self_contained_region_inv (frameOf r) h1))
 = 
   let h0 = get () in
-  assert (forall a (c:target_lang (reference a)) (r':reference a). frameOf r' == frameOf r ==> 
+  assert (forall a (c:target_lang (rref a)) (r':rref a). h0 `contains` r' /\ frameOf r' == frameOf r ==> 
     c.dcontains r' h0 /\ c.regional r' h0 (frameOf r));
   r := v;
   let h1 = get () in
   assume (dcontains r h1);
   assume (regional r h1 (frameOf r));
-  assume (forall a (c:target_lang (reference a)) (r':reference a). 
-    frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
+  assume (forall a (c:target_lang (rref a)) (r':rref a). 
+    h1 `contains` r' /\ frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
 
 
 val ralloc' (#a:Type) {| c:target_lang a |} (i:rid) (init:a)
-  :ST (reference a) (requires (fun m -> is_eternal_region i /\ c.regional init m i))
+  :ST (rref a) (requires (fun m -> is_eternal_region i /\ c.regional init m i))
                     (ensures (fun h0 r h1 -> ralloc_post i init h0 r h1 /\ 
                       regional r h1 i /\
                       (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1)
                     ))
-let ralloc' i v = 
+let ralloc' #_ #c i v = 
+  let h0 = get () in
   let r = ralloc i v in
-  admit();
+  let h1 = get () in
+  assume ((target_lang_ref _ #c).regional r h1 i);
+  assume (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1);
   r
 
 val elab_typ_test0 : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) TUnit) rrs
-let elab_typ_test0 (y:reference int) =
+let elab_typ_test0 (y:rref int) =
   write' y (!y + 5);
   ()
 
 val elab_typ_test1 : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
-let elab_typ_test1 #rrs (x:reference (reference int)) (y:reference int) =
+let elab_typ_test1 #rrs (x:rref (rref int)) (y:rref int) =
+  recall x; (* Fstar forgets that x is contained **)
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0); // (this is from a previous pre, and we have to recall)
   let ix = !x in
@@ -190,11 +186,14 @@ let elab_typ_test1 #rrs (x:reference (reference int)) (y:reference int) =
 val elab_typ_test1' : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rrs
-let elab_typ_test1' #rrs (xs:reference ((reference int) * reference int)) =
+let elab_typ_test1' #rrs (xs:rref ((rref int) * rref int)) =
   let (x', x'') = !xs in
   write' xs (x', x');
   // xs := (x', x');
   (fun () ->
+    recall xs;
+    recall x';
+    recall x'';
     let h0 = get () in
     assert ((elab_typ_tgt (TRef (TPair (TRef TNat) (TRef TNat))) rrs).dcontains xs h0);
     (** why do I have to give the specific instance here? *)
@@ -213,14 +212,15 @@ val elab_typ_test3 :
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let elab_typ_test3 f =
-  let x:reference int = f () in
+  let x:rref int = f () in
   write' x (!x + 1);
   ()
 
 val elab_typ_test4 :
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
-let elab_typ_test4 #rrs (x y: reference (reference int)) =
+let elab_typ_test4 #rrs (x y: rref (rref int)) =
+  recall x;
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0);
   let z = !x in
@@ -242,8 +242,8 @@ val elab_typ_test6 :
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let elab_typ_test6 #rrs f =
-  let x:reference int = f () in
-  let y: reference int = ralloc' rrs (!x + 1) in
+  let x:rref int = f () in
+  let y: rref int = ralloc' rrs (!x + 1) in
   ()
 
 let sep
@@ -258,8 +258,8 @@ let sep
   regional rp h rrp /\ regional rs h rrs
 
 val progr: 
-  #rp: reference int -> 
-  #rs: reference (reference int) ->
+  #rp: rref int -> 
+  #rs: rref (rref int) ->
   #rrs:rid ->
   #rrp:rid ->
   ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
@@ -273,14 +273,15 @@ val progr:
          
 let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
+  recall rs;
   let h1 = get () in
-  eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
+    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
 val progr2: 
-  #rp: reference int -> 
-  #rs: reference (reference int) ->
+  #rp: rref int -> 
+  #rs: rref (rref int) ->
   #rrs:rid ->
   #rrp:rid ->
   ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
@@ -294,17 +295,18 @@ val progr2:
                              sel h0 rp == sel h1 rp))
          
 let progr2 #_ #rs #rrs #rrp ctx = 
-  let secret: reference int = ralloc' rrp 0 in
+  let secret: rref int = ralloc' rrp 0 in
   ctx ();
   let v = !secret in
   assert (v == 0);
   let h1 = get () in
-  eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  recall rs;
+  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
+    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
 // Test with program passing callback
-val cb: rrs: rid -> secret: reference int -> elab_typ (TArr TUnit TUnit) rrs 
+val cb: rrs: rid -> secret: rref int -> elab_typ (TArr TUnit TUnit) rrs 
 let cb rrs secret () =
   assume (frameOf secret == rrs);
   let h0 = get() in
@@ -312,8 +314,8 @@ let cb rrs secret () =
    write' secret (!secret + 1)
 
 val progr3: 
-  #rp: reference int -> 
-  #rs: reference (reference int) ->
+  #rp: rref int -> 
+  #rs: rref (rref int) ->
   #rrs:rid ->
   #rrp:rid ->
   ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit) rrs) ->
@@ -328,18 +330,19 @@ val progr3:
 // mini to do: the callback of the program should be able to modify rp
 
 let progr3 #_ #rs #rrs #rrp f =
-  let secret: reference int = ralloc' rrs 0 in
+  let secret: rref int = ralloc' rrs 0 in
   let cb: elab_typ (TArr TUnit TUnit) rrs = cb rrs secret in
   f cb;
   let h1 = get () in
-    eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
-     c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  recall rs;
+  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
+    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
 // Test with program getting a callback
 val progr4: 
-  #rp: reference int -> 
-  #rs: reference (reference int) ->
+  #rp: rref int -> 
+  #rs: rref (rref int) ->
   #rrs:rid ->
   #rrp:rid ->
   ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs) ->
@@ -355,6 +358,7 @@ let progr4 #_ #rs #rrs #rrp f =
   let cb = f () in
   cb ();
   let h1 = get () in
-     eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
-      c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
+  recall rs;
+  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
+    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
