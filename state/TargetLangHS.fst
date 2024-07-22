@@ -74,7 +74,7 @@ let post_tgt_arrow
   modifies (Set.singleton rs) h0 h1 /\                                  (* allow region rs to be modified *)
 
   // equal_dom h0 h1 /\                                                  (* no dynamic allocation *)
-  // self_contained_region_inv rs h0
+  self_contained_region_inv rs h1 /\
 
   ((tgtr x).regional r h1 rs) /\
   ((tgtr x).dcontains r h1)
@@ -101,15 +101,6 @@ instance target_lang_arrow
   }
 
 open STLC
-
-(** TODO:
-  let f : x:ref t   -> unit -> unit
-                    ^       ^
-                    |       |
-                    |       here x can have a different footprint, thus it is protected again. 
-                    |       also, anything that was in x, could have a different footprint, thus it is protected.
-                    the entire footprint of x is protected
-**)
 
 (** *** Elaboration of types to F* *)
 let rec _elab_typ (t:typ) (rs:rid) : tt:Type & target_lang tt =
@@ -141,11 +132,33 @@ let elab_typ (t:typ) (rs:rid) : Type =
 let elab_typ_tgt (t:typ) (rs:rid): target_lang (elab_typ t rs)=
   dsnd (_elab_typ t rs)
 
+let write' (#t:Type) {| c:target_lang t |} (r:reference t) (v:t) : ST unit
+  (requires (fun h0 -> 
+    dcontains r h0 /\ c.dcontains v h0 /\
+    regional r h0 (frameOf r) /\ c.regional v h0 (frameOf r) /\
+    self_contained_region_inv (frameOf r) h0))
+  (ensures (fun h0 u h1 -> 
+    assign_post r v h0 u h1 /\
+    dcontains r h1 /\
+    regional r h1 (frameOf r) /\
+    self_contained_region_inv (frameOf r) h1))
+= 
+  let h0 = get () in
+  assert (forall a (c:target_lang (reference a)) (r':reference a). frameOf r' == frameOf r ==> 
+    c.dcontains r' h0 /\ c.regional r' h0 (frameOf r));
+  r := v;
+  let h1 = get () in
+  assume (dcontains r h1);
+  assume (regional r h1 (frameOf r));
+  assume (forall a (c:target_lang (reference a)) (r':reference a). 
+    frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
+
 val elab_typ_test0 : 
   #rs:rid ->
   elab_typ (TArr (TRef TNat) TUnit) rs
-let elab_typ_test0 (y:reference int) =
-  y := !y + 5;
+let elab_typ_test0 #rs (y:reference int) =
+  write' y (!y + 5);
+  // y := !y + 5;
   ()
 
 val elab_typ_test1 : 
@@ -155,9 +168,9 @@ let elab_typ_test1 #rs (x:reference (reference int)) (y:reference int) =
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rs).dcontains x h0); // (this is from a previous pre, and we have to recall)
   let ix = !x in
-  ix := !ix + 1;
-  x := y;
-  y := !y + 5;
+  write' ix (!ix + 1);
+  write' x y;
+  write' y (!y + 5);
   ()
 
 val elab_typ_test1' : 
@@ -165,12 +178,13 @@ val elab_typ_test1' :
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rs
 let elab_typ_test1' #rs (xs:reference ((reference int) * reference int)) =
   let (x', x'') = !xs in
-  xs := (x', x');
+  write' xs (x', x');
+  // xs := (x', x');
   (fun () ->
     let h0 = get () in
     assert ((elab_typ_tgt (TRef (TPair (TRef TNat) (TRef TNat))) rs).dcontains xs h0);
     (** why do I have to give the specific instance here? *)
-    xs := (x', x'')
+    write' xs (x', x'')
   )
 
 // val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
@@ -186,7 +200,7 @@ val elab_typ_test3 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rs
 let elab_typ_test3 f =
   let x:reference int = f () in
-  x := !x + 1;
+  write' x (!x + 1);
   ()
 
 let sep
@@ -214,7 +228,6 @@ val progr:
 let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
   let h1 = get () in
-  assume (self_contained_region_inv rrs h1); // this should be a post of f
   eliminate forall a (c:target_lang (reference a)) (r:reference a). frameOf r == rrs ==> 
     c.dcontains r h1 /\ c.regional r h1 rrs with (reference int) (solve) rs;
   ()
