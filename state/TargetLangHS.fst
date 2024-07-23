@@ -354,3 +354,92 @@ let progr4 #_ #rs #rrs #rrp f =
   eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
     c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
+
+(** *** Elaboration of expressions to F* *)
+type vcontext (rs:rid) (g:context) = x:var{Some? (g x)} -> elab_typ (Some?.v (g x)) rs
+
+let vempty (rs:rid) : vcontext rs empty = fun _ -> assert false
+
+let vextend #t #rs (x:elab_typ t rs) (#g:context) (ve:vcontext rs g) : vcontext rs (extend t g) =
+  fun y -> if y = 0 then x else ve (y-1)
+
+val elab_apply_arrow :
+  rrs:rid ->
+  t1:typ ->
+  t2:typ ->
+  f:elab_typ (TArr t1 t2) rrs ->
+  (let tt1 = _elab_typ t1 rrs in
+   let tt2 (x:(dfst tt1)) = _elab_typ t2 rrs in
+   mk_tgt_arrow rrs (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x)))
+let elab_apply_arrow rs t1 t2 f x = f x
+
+unfold let elab_typ' rrs t = elab_typ t rrs
+unfold let elab_typ_tgt' rrs t = elab_typ_tgt t rrs
+
+#set-options "--split_queries always"
+let rec elab_exp 
+  (rrs:rid)
+  (#g:context)
+  (#e:exp) 
+  (#t:typ)
+  (tyj:typing g e t)
+  (ve:vcontext rrs g)
+  : ST (elab_typ t rrs) 
+     (requires (pre_tgt_arrow rrs () #target_lang_unit))
+     (ensures (post_tgt_arrow rrs () #_ #(fun _ -> elab_typ t rrs) #(fun _ -> elab_typ_tgt t rrs)))
+     (decreases e) =
+  let elab_exp #g #e #t = elab_exp rrs #g #e #t in
+  let elab_typ = elab_typ' rrs in
+  let elab_typ_tgt = elab_typ_tgt' rrs in
+  let h0 = get () in
+  match tyj with
+  | TyUnit -> ()
+  | TyZero -> 0
+  | TySucc tyj_s -> 
+    1 + (elab_exp tyj_s ve)
+  | TyReadRef #_ #_ #t tyj_e -> begin
+    let r : ref (elab_typ t) = elab_exp tyj_e ve in
+    !r
+  end
+  | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
+      let r : ref (elab_typ t) = elab_exp tyj_ref ve in // <-- this is effectful and modifies fp
+      let v : elab_typ t = elab_exp tyj_v ve in // this is effectul and modifies fp
+      recall r;
+      write' #_ #(elab_typ_tgt t) r v
+  end
+  | TyInl #_ #_ #t1 #t2 tyj_1 ->
+    let v1 : elab_typ t1 = elab_exp tyj_1 ve in
+    Inl #_ #(elab_typ t2) v1
+  | TyInr #_ #_ #t1 #t2 tyj_2 ->
+    let v2 : elab_typ t2 = elab_exp tyj_2 ve in
+    Inr #(elab_typ t1) v2
+  | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
+    let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
+    match vc with 
+    | Inl x -> 
+        let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
+        let h1 = get () in
+        assume ((elab_typ_tgt tl).dcontains x h1); (* TODO: we need to recall x here *)
+        assume ((elab_typ_tgt tl).regional x h1 rrs);
+        elab_apply_arrow rrs tl tres f x
+    | Inr y ->
+        let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
+        let h1 = get () in
+        assume ((elab_typ_tgt tr).dcontains y h1); (* TODO: recall y *)
+        assume ((elab_typ_tgt tr).regional y h1 rrs);
+        elab_apply_arrow rrs tr tres f y
+  end
+  | TyFst #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    fst #(elab_typ tf) #(elab_typ ts) v
+  | TySnd #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    snd #(elab_typ tf) #(elab_typ ts) v
+  | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
+    let vf : elab_typ tf = elab_exp tyj_f ve in
+    let vs : elab_typ ts = elab_exp tyj_s ve in
+    let h1 = get () in
+    assume ((elab_typ_tgt tf).dcontains vf h1); (* TODO: recall vf *)
+    assume ((elab_typ_tgt tf).regional vf h1 rrs);
+    (vf, vs)
+  | _ -> admit ()
