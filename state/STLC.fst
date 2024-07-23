@@ -35,7 +35,7 @@ type exp =
 | EFst         : exp -> exp
 | ESnd         : exp -> exp
 | EPair        : fst:exp -> snd:exp -> exp
-// | EAlloc       : exp -> exp
+| EAlloc       : exp -> exp
 | EReadRef     : exp -> exp
 | EWriteRef   : exp -> exp -> exp
 
@@ -129,11 +129,11 @@ noeq type typing : context -> exp -> typ -> Type0 =
           $h1:typing g e1 t1 ->
           $h2:typing g e2 t2 ->
                typing g (EPair e1 e2) (TPair t1 t2)
-// | TyAllocRef  :#g:context ->
-//                #e:exp ->
-//                #t:typ ->
-//                $h1:typing g e t ->
-//                     typing g (EAlloc e) (TRef t)
+| TyAllocRef  :#g:context ->
+               #e:exp ->
+               #t:typ ->
+               $h1:typing g e t ->
+                    typing g (EAlloc e) (TRef t)
 | TyReadRef :#g:context ->
              #e:exp ->
              #t:typ ->
@@ -192,7 +192,7 @@ let rec subst (#r:bool)
      | EFst e -> EFst (subst s e)
      | ESnd e -> ESnd (subst s e)
      | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
-     // | EAlloc e -> EAlloc (subst s e)
+     | EAlloc e -> EAlloc (subst s e)
      | EReadRef e -> EReadRef (subst s e)
      | EWriteRef e1 e2 -> EWriteRef (subst s e1) (subst s e2)
 
@@ -244,7 +244,7 @@ let rec is_closed_exp (e:exp) (g:context) : bool =
      | EFst e -> is_closed_exp e g
      | ESnd e -> is_closed_exp e g
      | EPair e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
-     // | EAlloc e1 -> is_closed_exp e1 g
+     | EAlloc e1 -> is_closed_exp e1 g
      | EReadRef e1 -> is_closed_exp e1 g
      | EWriteRef e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
      | EUnit
@@ -339,10 +339,10 @@ type pure_step : exp -> exp -> Type =
           #e2':exp ->
           $hst:pure_step e2 e2' ->
                pure_step (EPair e1 e2) (EPair e1 e2')
-// | SAllocPure : #e:exp ->
-//                #e':exp ->
-//                $hst:pure_step e e' ->
-//                     pure_step (EAlloc e) (EAlloc e')
+| SAllocPure : #e:exp ->
+               #e':exp ->
+               $hst:pure_step e e' ->
+                    pure_step (EAlloc e) (EAlloc e')
 | SReadRefPure : #e:exp ->
                #e':exp ->
                $hst:pure_step e e' ->
@@ -370,12 +370,12 @@ type step  : store -> exp -> store -> exp -> Type =
           #e2:exp ->
           $hst:pure_step e1 e2 ->
           step s e1 s e2
-// | SAlloc :s:store ->
-//           #l:loc ->
-//           squash (s l = None) ->
-//           #v:exp ->
-//           squash (is_closed_value v) ->
-//           step s (EAlloc v) (salloc s l v) (ELoc l)
+| SAlloc :s:store ->
+          #l:loc ->
+          squash (s l = None) ->
+          #v:exp ->
+          squash (is_closed_value v) ->
+          step s (EAlloc v) (salloc s l v) (ELoc l)
 | SReadRef :s:store ->
           #l:loc ->
           squash (Some? (s l)) ->

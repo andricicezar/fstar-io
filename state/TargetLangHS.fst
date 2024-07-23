@@ -465,7 +465,7 @@ let vextend #t rrs (x:(elab_typ t rrs){(elab_typ_tgt t rrs).has_frame x rrs}) (#
 
 #push-options "--split_queries always"
 let rec elab_exp 
-  (rrs:rid)
+  (rrs:rid{is_eternal_region rrs})
   (#g:context)
   (#e:exp) 
   (#t:typ)
@@ -485,11 +485,15 @@ let rec elab_exp
   | TySucc tyj_s -> 
     1 + (elab_exp tyj_s ve)
 
+  | TyAllocRef #_ #_ #t tyj_e -> begin
+    let v : elab_typ t = elab_exp tyj_e ve in
+    let r = ralloc' #_ #(elab_typ_tgt t) rrs v in
+    r
+  end
   | TyReadRef #_ #_ #t tyj_e -> begin
     let r : ref (elab_typ t) = elab_exp tyj_e ve in
     !r
   end
-
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
       let r : ref (elab_typ t) = elab_exp tyj_ref ve in
       let v : elab_typ t = elab_exp tyj_v ve in
