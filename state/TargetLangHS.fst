@@ -397,6 +397,7 @@ let rec elab_exp
   | TyZero -> 0
   | TySucc tyj_s -> 
     1 + (elab_exp tyj_s ve)
+
   | TyReadRef #_ #_ #t tyj_e -> begin
     let r : ref (elab_typ t) = elab_exp tyj_e ve in
     !r
@@ -407,6 +408,16 @@ let rec elab_exp
       recall r;
       write' #_ #(elab_typ_tgt t) r v
   end
+  
+  | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
+    assert ((elab_typ t) == (elab_typ tres));
+    let x : elab_typ tx = elab_exp tyj_x ve in
+    let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
+    let h1 = get () in
+    assume ((elab_typ_tgt tx).dcontains x h1); (* TODO: we need to recall x here *)
+    assume ((elab_typ_tgt tx).regional x h1 rrs);
+    elab_apply_arrow rrs tx tres f x
+
   | TyInl #_ #_ #t1 #t2 tyj_1 ->
     let v1 : elab_typ t1 = elab_exp tyj_1 ve in
     Inl #_ #(elab_typ t2) v1
@@ -429,6 +440,7 @@ let rec elab_exp
         assume ((elab_typ_tgt tr).regional y h1 rrs);
         elab_apply_arrow rrs tr tres f y
   end
+
   | TyFst #_ #_ #tf #ts tyj_e ->
     let v = elab_exp tyj_e ve in
     fst #(elab_typ tf) #(elab_typ ts) v
@@ -442,4 +454,5 @@ let rec elab_exp
     assume ((elab_typ_tgt tf).dcontains vf h1); (* TODO: recall vf *)
     assume ((elab_typ_tgt tf).regional vf h1 rrs);
     (vf, vs)
+
   | _ -> admit ()
