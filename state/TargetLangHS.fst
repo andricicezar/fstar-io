@@ -155,6 +155,7 @@ let elab_typ (t:typ) (rrs:rid) : Type =
 let elab_typ_tgt (t:typ) (rrs:rid): target_lang (elab_typ t rrs)=
   dsnd (_elab_typ t rrs)
 
+(** ** Examples **) 
 let write' (#t:Type) {| c:target_lang t |} (r:rref t) (v:t) : ST unit
   (requires (fun h0 -> 
     dcontains r h0 /\ c.dcontains v h0 /\
@@ -191,17 +192,17 @@ let ralloc' #_ #c i v =
   assume (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1);
   r
 
-val elab_typ_test0 : 
+val ctx1 : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) TUnit) rrs
-let elab_typ_test0 (y:rref int) =
+let ctx1 (y:rref int) =
   write' y (!y + 5);
   ()
 
-val elab_typ_test1 : 
+val ctx2 : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
-let elab_typ_test1 #rrs (x:rref (rref int)) (y:rref int) =
+let ctx2 #rrs (x:rref (rref int)) (y:rref int) =
   recall x; (* Fstar forgets that x is contained **)
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0); // (this is from a previous pre, and we have to recall)
@@ -211,10 +212,10 @@ let elab_typ_test1 #rrs (x:rref (rref int)) (y:rref int) =
   write' y (!y + 5);
   ()
 
-val elab_typ_test1' : 
+val ctx3 : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rrs
-let elab_typ_test1' #rrs (xs:rref ((rref int) * rref int)) =
+let ctx3 #rrs (xs:rref ((rref int) * rref int)) =
   let (x', x'') = !xs in
   write' xs (x', x');
   // xs := (x', x');
@@ -227,27 +228,24 @@ let elab_typ_test1' #rrs (xs:rref ((rref int) * rref int)) =
     (** why do I have to give the specific instance here? *)
     write' xs (x', x'')
   )
-
-// val elab_typ_test2 : elab_typ (TArr TUnit (TRef TNat))
-// let elab_typ_test2 () = alloc 0
   
-val elab_typ_test2' : 
+val ctx4 : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) (TRef TNat)) rrs
-let elab_typ_test2' x = x
+let ctx4 x = x
 
-val elab_typ_test3 : 
+val ctx5:
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
-let elab_typ_test3 f =
+let ctx5 f =
   let x:rref int = f () in
   write' x (!x + 1);
   ()
 
-val elab_typ_test4 :
+val ctx6 :
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
-let elab_typ_test4 #rrs (x y: rref (rref int)) =
+let ctx6 #rrs (x y: rref (rref int)) =
   recall x;
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0);
@@ -259,17 +257,17 @@ let elab_typ_test4 #rrs (x y: rref (rref int)) =
   assert (regional y h0 rrs);
   ()
 
-val elab_typ_test5 :
+val ctx7 :
    #rrs:rid ->
    elab_typ (TArr TUnit (TRef TNat)) rrs
-let elab_typ_test5 #rrs () = 
+let ctx7 #rrs () = 
   let v = ralloc' rrs 0 in 
   v
 
-val elab_typ_test6 :
+val ctx8 :
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
-let elab_typ_test6 #rrs f =
+let ctx8 #rrs f =
   let x:rref int = f () in
   let y: rref int = ralloc' rrs (!x + 1) in
   ()
