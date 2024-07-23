@@ -29,7 +29,6 @@ type exp =
 | ELoc         : loc -> exp
 | EApp         : exp -> exp -> exp
 | EAbs         : typ -> exp -> exp
-| ENRec        : exp -> exp -> exp -> exp
 | EInl         : v:exp -> exp
 | EInr         : v:exp -> exp
 | ECase        : exp -> exp -> exp -> exp
@@ -77,15 +76,6 @@ noeq type typing : context -> exp -> typ -> Type0 =
           #e:exp ->
           $h1:typing g e TNat ->
                typing g (ESucc e) TNat
-| TyNRec :#g:context ->
-          #e1:exp ->
-          #e2:exp ->
-          #e3:exp ->
-          #t1:typ ->
-          $h1:typing g e1 TNat ->
-          $h2:typing g e2 t1 ->
-          $h3:typing g e3 (TArr t1 t1) ->
-               typing g (ENRec e1 e2 e3) t1
 | TyInl : #g:context ->
           #e:exp ->
           #t1:typ ->
@@ -109,15 +99,15 @@ noeq type typing : context -> exp -> typ -> Type0 =
           $h2:typing g e2 (TArr t1 t3) ->
           $h3:typing g e3 (TArr t2 t3) ->
                typing g (ECase e1 e2 e3) t3
-| TyCaseNat : #g:context ->
-          #e1:exp ->
-          #e2:exp ->
-          #e3:exp ->
-          #t:typ ->
-          $h1:typing g e1 TNat ->
-          $h2:typing g e2 (TArr TUnit t) ->
-          $h3:typing g e3 (TArr TNat t) ->
-               typing g (ECase e1 e2 e3) t
+// | TyCaseNat : #g:context ->
+//           #e1:exp ->
+//           #e2:exp ->
+//           #e3:exp ->
+//           #t:typ ->
+//           $h1:typing g e1 TNat ->
+//           $h2:typing g e2 (TArr TUnit t) ->
+//           $h3:typing g e3 (TArr TNat t) ->
+//                typing g (ECase e1 e2 e3) t
 
 | TyFst : #g:context ->
           #e:exp ->
@@ -196,7 +186,6 @@ let rec subst (#r:bool)
      | EUnit -> EUnit
      | EZero -> EZero
      | ESucc e -> ESucc (subst s e)
-     | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
      | EInl e -> EInl (subst s e)
      | EInr e -> EInr (subst s e)
      | ECase e1 e2 e3 -> ECase (subst s e1) (subst s e2) (subst s e3)
@@ -249,7 +238,6 @@ let rec is_closed_exp (e:exp) (g:context) : bool =
      | EAbs t e1 -> is_closed_exp e1 (extend t g)
      | EApp e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
      | ESucc e -> is_closed_exp e g
-     | ENRec e1 e2 e3 -> is_closed_exp e1 g && is_closed_exp e2 g && is_closed_exp e3 g
      | EInl e -> is_closed_exp e g
      | EInr e -> is_closed_exp e g
      | ECase e1 e2 e3 -> is_closed_exp e1 g && is_closed_exp e2 g && is_closed_exp e3 g
@@ -273,7 +261,6 @@ let rec is_closed_value (e:exp) : bool =
      | EInr e -> is_closed_value e 
      | EPair e1 e2 -> is_closed_value e1 && is_closed_value e2
      | EAbs t _ -> is_closed_exp e (extend t empty)
-     | ENRec e1 e2 e3 -> is_closed_value e1 && is_closed_value e2 && is_closed_value e3
      | _ -> false
 
 
@@ -299,25 +286,6 @@ type pure_step : exp -> exp -> Type =
           #e':exp ->
           $hst:pure_step e e' ->
                pure_step (ESucc e) (ESucc e')
-| SNRecV :#e1:exp ->
-          #e1':exp ->
-          e2:exp ->
-          e3:exp ->
-          $hst:pure_step e1 e1' ->
-               pure_step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
-| SNRecX :   e1:exp ->
-             e2:exp ->
-            #e2':exp ->
-             e3:exp ->
-            $hst:pure_step e2 e2' ->
-                pure_step (ENRec e1 e2 e3) (ENRec e1 e2' e3)                 
-| SNRec0 : e2:exp ->
-          e3:exp ->
-               pure_step (ENRec EZero e2 e3) e2
-| SNRecIter :  v:exp ->
-               e2:exp ->
-               e3:exp ->
-               pure_step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
 | SInl  : e:exp ->
           #e':exp ->
           $hst:pure_step e e' ->

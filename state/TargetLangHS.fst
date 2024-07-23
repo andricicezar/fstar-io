@@ -100,11 +100,11 @@ let post_tgt_arrow
 (* TODO: what prevents the computation to allocate things in rp? *)
 
 
-unfold let mk_tgt_arrow  
+let mk_tgt_arrow  
   (rrs:rid)
   (t1:Type)
   {| tgt_t1: target_lang t1 |}
-  (t2:t1 -> Type) 
+  (t2:t1 -> Type) (* TODO: this dependency is not needed anymore *)
   {| c2 : (x:t1 -> target_lang (t2 x)) |}
 = x:t1 -> ST (t2 x) 
     (requires (pre_tgt_arrow rrs x #tgt_t1))
@@ -453,15 +453,17 @@ let elab_apply_arrow rs t1 t2 f x = f x
 unfold let elab_typ' rrs t = elab_typ t rrs
 unfold let elab_typ_tgt' rrs t = elab_typ_tgt t rrs
 
-type vcontext (rs:rid) (g:context) = 
-  vx:var{Some? (g vx)} -> x:(elab_typ (Some?.v (g vx)) rs){(elab_typ_tgt (Some?.v (g vx)) rs).has_frame x rs}
+let cast_TArr #t1 #t2 #rrs (f : elab_typ (TArr t1 t2) rrs) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ t rrs = f
 
-let vempty (rs:rid) : vcontext rs empty = fun _ -> assert false
+type vcontext (rrs:rid) (g:context) = 
+  vx:var{Some? (g vx)} -> x:(elab_typ (Some?.v (g vx)) rrs){(elab_typ_tgt (Some?.v (g vx)) rrs).has_frame x rrs}
 
-let vextend #t #rs (x:(elab_typ t rs){(elab_typ_tgt t rs).has_frame x rs}) (#g:context) (ve:vcontext rs g) : vcontext rs (extend t g) =
+let vempty (rrs:rid) : vcontext rrs empty = fun _ -> assert false
+
+let vextend #t rrs (x:(elab_typ t rrs){(elab_typ_tgt t rrs).has_frame x rrs}) (#g:context) (ve:vcontext rrs g) : vcontext rrs (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
-#push-options "--split_queries always --z3rlimit 100"
+#push-options "--split_queries always"
 let rec elab_exp 
   (rrs:rid)
   (#g:context)
@@ -489,12 +491,20 @@ let rec elab_exp
   end
 
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-      let r : ref (elab_typ t) = elab_exp tyj_ref ve in // <-- this is effectful and modifies fp
-      let v : elab_typ t = elab_exp tyj_v ve in // this is effectul and modifies fp
+      let r : ref (elab_typ t) = elab_exp tyj_ref ve in
+      let v : elab_typ t = elab_exp tyj_v ve in
       recall r;
       write' #_ #(elab_typ_tgt t) r v
   end
 
+  | TyAbs tx #_ #tres tyj_body ->
+    let w : mk_tgt_arrow rrs (elab_typ tx) #(elab_typ_tgt tx) (fun x -> elab_typ tres) #(fun x -> elab_typ_tgt tres) = 
+      (fun (x:elab_typ tx) -> 
+        regional_implies_has_frame #rrs #tx x; 
+        elab_exp tyj_body (vextend #tx rrs x ve))
+    in
+    assert (t == TArr tx tres);
+    cast_TArr #tx #tres #rrs w t
   | TyVar vx -> 
     let Some tx = g vx in
     let x : elab_typ tx = ve vx in
@@ -546,6 +556,4 @@ let rec elab_exp
     (elab_typ_tgt tf).deep_recall vf;
     deep_recall_implies_regional #rrs #tf vf;
     (vf, vs)
-
-  | _ -> admit ()
   #pop-options
