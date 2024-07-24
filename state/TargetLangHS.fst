@@ -251,6 +251,25 @@ let ctx_HO_test3 #rrs f =
   let y: rref int = ralloc' rrs (!x + 1) in
   ()
 
+val ctx_returns_callback_test :
+  #rrs:rid ->
+  elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs
+let ctx_returns_callback_test #rrs () =
+  let x: rref int = ralloc' rrs 13 in
+   let cb : elab_typ (TArr TUnit TUnit) rrs = (fun() ->
+     recall x;
+     write' x (!x % 5)
+   ) in
+cb
+
+val ctx_HO_test4 :
+   #rrs:rid ->
+   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
+let ctx_HO_test4 #rrs f =
+  let x:rref int = f () in
+  let y: rref (rref int) = ralloc' rrs x in
+  ()
+
 val progr_sep_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
