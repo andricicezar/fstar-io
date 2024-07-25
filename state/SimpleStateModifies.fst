@@ -19,6 +19,7 @@ assume val targ : Type0 // Type not allowed to contain references,
                         // since otherwise the program can share `rp` to the context.
 assume val tres : Type0
 
+
 // This separation invariant used for both program and context
 let sep (rp:ref trp) (rs:ref trs) (h:heap) : Type0 = // TODO: does this have to depend on the heap?
   Set.disjoint (fp_rp rp h) (fp_rs rs h)
@@ -29,7 +30,9 @@ let sep (rp:ref trp) (rs:ref trs) (h:heap) : Type0 = // TODO: does this have to 
 let t_tw : Type = rp:ref trp -> rs:ref trs -> ST int (fun h0 -> sep rp rs h0) (fun _ _ _ -> True)
 
 // Target type of context
-type t_tc' (rs:ref trs) = targ -> ST tres (fun _ -> True) (fun h0 _ h1 -> modifies (fp_rs rs h0) h0 h1)
+type t_tc' (rs:ref trs) = targ -> ST tres (fun _ -> True) (fun h0 _ h1 -> 
+  modifies (fp_rs rs h0) h0 h1 /\
+  equal_dom h0 h1)
 type t_tc = rs:ref trs -> t_tc' rs
 
 // Target type of program -- has initial control, calls context
@@ -75,6 +78,7 @@ type s_tc' (rs:ref trs) = arg:targ ->
           (ensures (fun h0 res h1 ->
             (* TODO: add back `sep rp rs h1`, which also needs erased rp -> *)
             modifies (fp_rs rs h0) h0 h1 /\
+            equal_dom h0 h1 /\
             post_ctx rs arg h0 res h1)) 
 
 type s_tc = rs:ref trs -> s_tc' rs
@@ -96,6 +100,7 @@ let strengthen rp rs t_c arg :
   ST tres (requires (fun h0 -> pre_ctx rs arg h0))
           (ensures (fun h0 res h1 ->
             modifies (fp_rs rs h0) h0 h1 /\
+            equal_dom h0 h1 /\
             post_ctx rs arg h0 res h1)) =
   let (| _, ck |) = ck_post_ctx rs arg in
   let res = t_c arg in
@@ -142,7 +147,8 @@ let sep' rp rs h =
 
 val progr: rp: ref (ref int) -> rs: ref int -> 
           (unit -> ST unit (requires (fun _ -> True)) 
-                            (ensures (fun h0 _ h1 -> modifies (only rs) h0 h1)))  -> 
+                            (ensures (fun h0 _ h1 -> 
+                            modifies (only rs) h0 h1)))  -> 
            ST int (requires (fun h0 -> sep' rp rs h0))
                   (ensures (fun _ _ _ -> True))
                   
@@ -192,21 +198,59 @@ val modifies_preserves_sep'' (rs: ref (ref int)) (rp: ref int) (h0 h1: heap):
       let fp_rs_h1 = ((only rs) `Set.union` (only (sel h1 rs))) in 
       let fp_rs_h0 = ((only rs) `Set.union` (only (sel h0 rs))) in 
       (sep'' rp rs h0 /\ modifies fp_rs_h0 h0 h1) /\
-      (forall x. x `Set.mem` fp_rs_h1 ==> (addr_unused_in x h0 \/ x `Set.mem` fp_rs_h0)) /\
+      equal_dom h0 h1 /\
       (h1 `contains` (sel h1 rs))
     ))
     (ensures (sep'' rp rs h1))
-  let modifies_preserves_sep'' rs rp h0 h1 = ()
+  let modifies_preserves_sep'' rs rp h0 h1 =
+   ()
 
-  let ctx'' (rs:ref (ref int)) () : 
+val progr'': rp: ref int -> rs: ref (ref int) -> 
+          (unit -> ST unit (requires (fun h0 ->  (h0 `contains` rs /\ h0 `contains` (sel h0 rs)))) 
+                            (ensures (fun h0 _ h1 -> 
+                            sep'' rp rs h1 /\
+                            modifies ((only rs) `Set.union` (only (sel h0 rs))) h0 h1 /\
+                            equal_dom h0 h1 /\ 
+                            (h1 `contains` rs /\ h1 `contains` (sel h1 rs))
+                            )))  -> 
+           ST unit (requires (fun h0 -> sep'' rp rs h0))
+                  (ensures (fun _ _ h1 -> sep'' rp rs h1))
+                  
+let progr'' rp rs f = 
+  f ();
+  let h1 = gst_get () in
+  assume ((ref int) =!= int);
+  let fp_rs = ((only rs) `Set.union` (only (sel h1 rs))) in 
+  let fp_rp = only rp in
+  // assert (sel h1 rs =!= rp);
+  assert (Set.disjoint fp_rp fp_rs);
+  ()
+
+let ctx'' (rs:ref (ref int)) () : 
   ST unit 
     (requires (fun h0 -> h0 `contains` rs /\ h0 `contains` (sel h0 rs))) 
     (ensures (fun h0 _ h1 -> 
       let fp_rs_h1 = ((only rs) `Set.union` (only (sel h1 rs))) in 
       let fp_rs_h0 = ((only rs) `Set.union` (only (sel h0 rs))) in 
-      modifies fp_rs_h0 h0 h1
-       /\
-      (forall x. x `Set.mem` fp_rs_h1 ==> (addr_unused_in x h0 \/ x `Set.mem` fp_rs_h0)) /\
+      modifies fp_rs_h0 h0 h1 /\
+      equal_dom h0 h1 /\
+      (h1 `contains` rs) /\
       (h1 `contains` (sel h1 rs)))) =
   let rs' = !rs in
-  rs' := !rs' + 1
+  
+  let v = !rs' + 1 in
+  let h0 = gst_get () in
+  write rs' v;
+  let h1 = gst_get () in
+  
+  assume ((ref int) =!= int);
+  lemma_distinct_addrs_distinct_types #(ref int) #int h0 rs rs';
+  assert (!{sel h0 rs} `Set.disjoint` !{rs});
+  assert (equal_dom h0 h1);
+  lemma_modifies_and_equal_dom_sel_diff_addr !{sel h0 rs} h0 h1 rs;
+  assert (sel h0 rs == sel h1 rs);
+  assert (h0 `contains` (sel h0 rs));
+  lemma_upd_contains h0 rs' v;
+
+
+  assert (h1 `contains` (sel h1 rs))
