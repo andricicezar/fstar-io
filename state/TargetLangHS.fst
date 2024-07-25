@@ -7,6 +7,8 @@ open FStar.Tactics.Typeclasses
 open FStar.HyperStack
 open FStar.HyperStack.ST 
 
+type erid = r:erid{is_eternal_region r}
+
 type rref (t:Type) = r:(reference t){
     not (is_mm r) /\
     is_eternal_region (frameOf r)} (* type of unfreeable heap references allocated in regions *)
@@ -72,12 +74,12 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (rref t) =
   )
 }
 
-let self_contained_region_inv (rr:rid) (h:mem) : Type0 =
+let self_contained_region_inv (rr:erid) (h:mem) : Type0 =
   forall a (c:target_lang (rref a)) (r:rref a). h `contains` r /\ frameOf r == rr ==> 
     c.dcontains r h /\ c.regional r h rr
 
 unfold let pre_tgt_arrow
-  (rrs:rid)
+  (rrs:erid)
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:mem) =
   regional x h0 rrs /\                                                    (* x is deeply in region rs *)
@@ -86,7 +88,7 @@ unfold let pre_tgt_arrow
   is_eternal_region rrs                                                   (* required for using ralloc *)
 
 let post_tgt_arrow
-  (rrs:rid)
+  (rrs:erid)
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:t1 -> Type) {| tgtr : (x:t1 -> target_lang (t2 x)) |}
   (h0:mem) (r:t2 x) (h1:mem) =
@@ -101,7 +103,7 @@ let post_tgt_arrow
 
 
 let mk_tgt_arrow  
-  (rrs:rid)
+  (rrs:erid)
   (t1:Type)
   {| tgt_t1: target_lang t1 |}
   (t2:t1 -> Type) (* TODO: this dependency is not needed anymore *)
@@ -111,7 +113,7 @@ let mk_tgt_arrow
     (ensures (post_tgt_arrow rrs x #tgt_t1 #t2 #c2))
 
 instance target_lang_arrow 
-  (rrs:rid)
+  (rrs:erid)
   (t1:Type)
   {| target_lang t1 |}
   (t2:t1 -> Type)
@@ -126,7 +128,7 @@ instance target_lang_arrow
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec _elab_typ (t:typ) (rrs:rid) : tt:Type & target_lang tt =
+let rec _elab_typ (t:typ) (rrs:erid) : tt:Type & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 rrs in
@@ -149,10 +151,10 @@ let rec _elab_typ (t:typ) (rrs:rid) : tt:Type & target_lang tt =
     let (| tt, c_tt |) = _elab_typ t rrs in
     (| rref tt, target_lang_ref tt #c_tt |)
 
-let elab_typ (t:typ) (rrs:rid) : Type =
+let elab_typ (t:typ) (rrs:erid) : Type =
   dfst (_elab_typ t rrs)
 
-let elab_typ_tgt (t:typ) (rrs:rid): target_lang (elab_typ t rrs)=
+let elab_typ_tgt (t:typ) (rrs:erid): target_lang (elab_typ t rrs)=
   dsnd (_elab_typ t rrs)
 
 (** ** Helper lemmas **)
@@ -204,7 +206,7 @@ let rec deep_recall_implies_regional #rrs #t (x:elab_typ t rrs)
       | Inr x2 -> deep_recall_implies_regional x2
   end
   | TPair t1 t2 -> begin
-      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs)= x in
+      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
       deep_recall_implies_regional x1;
       deep_recall_implies_regional x2
   end
@@ -238,39 +240,39 @@ let write' (#t:Type) {| c:target_lang t |} (r:rref t) (v:t) : ST unit
     h1 `contains` r' /\ frameOf r' == frameOf r ==> c.dcontains r' h1 /\ c.regional r' h1 (frameOf r))
 
 
-val ralloc' (#a:Type) {| c:target_lang a |} (i:rid) (init:a)
+val ralloc' (#a:Type) {| c:target_lang a |} (i:erid) (init:a)
   :ST (rref a) (requires (fun m -> is_eternal_region i /\ c.regional init m i))
                     (ensures (fun h0 r h1 -> ralloc_post i init h0 r h1 /\ 
                       regional r h1 i /\
-                      (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1)
+                      (forall (r:erid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1)
                     ))
 let ralloc' #_ #c i v = 
   let h0 = get () in
   let r = ralloc i v in
   let h1 = get () in
   assume ((target_lang_ref _ #c).regional r h1 i);
-  assume (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1);
+  assume (forall (r:erid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1);
   r
 
 let sep
   (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
-  (rrp:rid)
+  (rrp:erid)
   (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
-  (rrs:rid)
+  (rrs:erid)
   h =
   dcontains rp h /\ dcontains rs h /\                       (* required to instantiate the properties of modifies *)                                            (* separation *)
   disjoint rrp rrs /\                                       (* ensures disjointness of regions *)
   regional rp h rrp /\ regional rs h rrs 
 
 val ctx_update_ref_test : 
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TRef TNat) TUnit) rrs
 let ctx_update_ref_test (y:rref int) =
   write' y (!y + 5);
   ()
 
 val ctx_update_multiple_refs_test : 
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
 let ctx_update_multiple_refs_test #rrs (x:rref (rref int)) (y:rref int) =
   recall x; (* Fstar forgets that x is contained **)
@@ -283,7 +285,7 @@ let ctx_update_multiple_refs_test #rrs (x:rref (rref int)) (y:rref int) =
   ()
 
 val ctx_HO_test1 : 
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rrs
 let ctx_HO_test1 #rrs (xs:rref ((rref int) * rref int)) =
   let (x', x'') = !xs in
@@ -299,12 +301,12 @@ let ctx_HO_test1 #rrs (xs:rref ((rref int) * rref int)) =
   )
   
 val ctx_identity : 
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TRef TNat) (TRef TNat)) rrs
 let ctx_identity x = x
 
 val ctx_HO_test2 : 
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let ctx_HO_test2 f =
   let x:rref int = f () in
@@ -312,7 +314,7 @@ let ctx_HO_test2 f =
   ()
 
 val ctx_swap_ref_test :
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
 let ctx_swap_ref_test #rrs (x y: rref (rref int)) =
   recall x;
@@ -327,14 +329,14 @@ let ctx_swap_ref_test #rrs (x y: rref (rref int)) =
   ()
 
 val ctx_dynamic_alloc_test :
-   #rrs:rid ->
+   #rrs:erid ->
    elab_typ (TArr TUnit (TRef TNat)) rrs
 let ctx_dynamic_alloc_test #rrs () = 
   let v = ralloc' rrs 0 in 
   v
 
 val ctx_HO_test3 :
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let ctx_HO_test3 #rrs f =
   let x:rref int = f () in
@@ -342,7 +344,7 @@ let ctx_HO_test3 #rrs f =
   ()
 
 val ctx_returns_callback_test :
-  #rrs:rid ->
+  #rrs:erid ->
   elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs
 let ctx_returns_callback_test #rrs () =
   let x: rref int = ralloc' rrs 13 in
@@ -353,7 +355,7 @@ let ctx_returns_callback_test #rrs () =
 cb
 
 val ctx_HO_test4 :
-   #rrs:rid ->
+   #rrs:erid ->
    elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
 let ctx_HO_test4 #rrs f =
   let x:rref int = f () in
@@ -363,8 +365,8 @@ let ctx_HO_test4 #rrs f =
 val progr_sep_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
-  #rrs:rid ->
-  #rrp:rid ->
+  #rrs:erid ->
+  #rrp:erid ->
   ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
   ST unit 
     (requires (fun h0 -> 
@@ -376,15 +378,14 @@ val progr_sep_test:
          
 let progr_sep_test #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
-  let h1 = get () in
   deep_recall rs;
   ()
 
 val progr_secret_unchanged_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
-  #rrs:rid ->
-  #rrp:rid ->
+  #rrs:erid ->
+  #rrp:erid ->
   ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
   ST unit 
     (requires (fun h0 -> 
@@ -406,8 +407,8 @@ let progr_secret_unchanged_test #_ #rs #rrs #rrp ctx =
 val progr_passing_callback_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
-  #rrs:rid ->
-  #rrp:rid ->
+  #rrs:erid ->
+  #rrp:erid ->
   ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit) rrs) ->
   ST unit 
     (requires (fun h0 -> 
@@ -428,8 +429,8 @@ let progr_passing_callback_test #_ #rs #rrs #rrp f =
 val progr_getting_callback_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
-  #rrs:rid ->
-  #rrp:rid ->
+  #rrs:erid ->
+  #rrp:erid ->
   ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs) ->
   ST unit 
     (requires (fun h0 -> 
@@ -447,7 +448,7 @@ let progr_getting_callback_test #_ #rs #rrs #rrp f =
 
 (** *** Elaboration of expressions to F* *)
 val elab_apply_arrow :
-  rrs:rid ->
+  rrs:erid ->
   t1:typ ->
   t2:typ ->
   f:elab_typ (TArr t1 t2) rrs ->
@@ -461,17 +462,17 @@ unfold let elab_typ_tgt' rrs t = elab_typ_tgt t rrs
 
 let cast_TArr #t1 #t2 #rrs (f : elab_typ (TArr t1 t2) rrs) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ t rrs = f
 
-type vcontext (rrs:rid) (g:context) = 
+type vcontext (rrs:erid) (g:context) = 
   vx:var{Some? (g vx)} -> x:(elab_typ (Some?.v (g vx)) rrs){(elab_typ_tgt (Some?.v (g vx)) rrs).has_frame x rrs}
 
-let vempty (rrs:rid) : vcontext rrs empty = fun _ -> assert false
+let vempty (rrs:erid) : vcontext rrs empty = fun _ -> assert false
 
 let vextend #t rrs (x:(elab_typ t rrs){(elab_typ_tgt t rrs).has_frame x rrs}) (#g:context) (ve:vcontext rrs g) : vcontext rrs (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
 #push-options "--split_queries always"
 let rec elab_exp 
-  (rrs:rid{is_eternal_region rrs})
+  (rrs:erid)
   (#g:context)
   (#e:exp) 
   (#t:typ)
