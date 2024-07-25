@@ -155,6 +155,66 @@ let elab_typ (t:typ) (rrs:rid) : Type =
 let elab_typ_tgt (t:typ) (rrs:rid): target_lang (elab_typ t rrs)=
   dsnd (_elab_typ t rrs)
 
+(** ** Helper lemmas **)
+let rec regional_implies_has_frame #rrs #t (x:elab_typ t rrs)
+: Stack unit
+    (requires (fun h0 ->
+      (elab_typ_tgt t rrs).regional x h0 rrs))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\
+      (elab_typ_tgt t rrs).has_frame x rrs))
+= match t with
+  | TArr t1 t2 -> ()
+  | TUnit -> ()
+  | TNat -> ()
+  | TSum t1 t2 -> begin
+      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
+      match x with 
+      | Inl x1 -> regional_implies_has_frame x1
+      | Inr x2 -> regional_implies_has_frame x2
+  end
+  | TPair t1 t2 -> begin
+      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
+      regional_implies_has_frame x1;
+      regional_implies_has_frame x2
+  end
+  | TRef t -> begin
+      let x : rref (elab_typ t rrs) = x in
+      ()
+  end
+
+
+
+let rec deep_recall_implies_regional #rrs #t (x:elab_typ t rrs)
+: Stack unit
+    (requires (fun h0 ->
+      (elab_typ_tgt t rrs).has_frame x rrs
+      /\ (elab_typ_tgt t rrs).dcontains x h0
+      /\ self_contained_region_inv rrs h0
+      ))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\
+      (elab_typ_tgt t rrs).regional x h1 rrs))
+= match t with
+  | TArr t1 t2 -> ()
+  | TUnit -> ()
+  | TNat -> ()
+  | TSum t1 t2 -> begin
+      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
+      match x with 
+      | Inl x1 -> deep_recall_implies_regional x1
+      | Inr x2 -> deep_recall_implies_regional x2
+  end
+  | TPair t1 t2 -> begin
+      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs)= x in
+      deep_recall_implies_regional x1;
+      deep_recall_implies_regional x2
+  end
+  | TRef t -> begin
+      let x : rref (elab_typ t rrs) = x in
+      ()
+  end
+
+
+
 (** ** Examples **) 
 let write' (#t:Type) {| c:target_lang t |} (r:rref t) (v:t) : ST unit
   (requires (fun h0 -> 
@@ -316,10 +376,8 @@ val progr_sep_test:
          
 let progr_sep_test #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
-  recall rs;
   let h1 = get () in
-  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
+  deep_recall rs;
   ()
 
 val progr_secret_unchanged_test: 
@@ -342,10 +400,7 @@ let progr_secret_unchanged_test #_ #rs #rrs #rrp ctx =
   ctx ();
   let v = !secret in
   assert (v == 0);
-  let h1 = get () in
-  recall rs;
-  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
+  deep_recall rs;
   ()
 
 val progr_passing_callback_test: 
@@ -367,10 +422,7 @@ let progr_passing_callback_test #_ #rs #rrs #rrp f =
   let secret: rref int = ralloc' rrs 0 in
   let cb: elab_typ (TArr TUnit TUnit) rrs = (fun () -> write' secret (!secret + 1)) in
   f cb;
-  recall rs;
-  let h1 = get () in
-  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
+  deep_recall rs;
   ()
 
 val progr_getting_callback_test: 
@@ -390,69 +442,10 @@ val progr_getting_callback_test:
 let progr_getting_callback_test #_ #rs #rrs #rrp f =
   let cb = f () in
   cb ();
-  let h1 = get () in
-  recall rs;
-  eliminate forall a (c:target_lang (rref a)) (r:rref a). h1 `contains` r /\ frameOf r == rrs ==> 
-    c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
+  deep_recall rs;
   ()
 
 (** *** Elaboration of expressions to F* *)
-let rec regional_implies_has_frame #rrs #t (x:elab_typ t rrs)
-: Stack unit
-    (requires (fun h0 ->
-      (elab_typ_tgt t rrs).regional x h0 rrs))
-    (ensures (fun h0 _ h1 -> h0 == h1 /\
-      (elab_typ_tgt t rrs).has_frame x rrs))
-= match t with
-  | TArr t1 t2 -> ()
-  | TUnit -> ()
-  | TNat -> ()
-  | TSum t1 t2 -> begin
-      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
-      match x with 
-      | Inl x1 -> regional_implies_has_frame x1
-      | Inr x2 -> regional_implies_has_frame x2
-  end
-  | TPair t1 t2 -> begin
-      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
-      regional_implies_has_frame x1;
-      regional_implies_has_frame x2
-  end
-  | TRef t -> begin
-      let x : rref (elab_typ t rrs) = x in
-      ()
-  end
-
-
-
-let rec deep_recall_implies_regional #rrs #t (x:elab_typ t rrs)
-: Stack unit
-    (requires (fun h0 ->
-      (elab_typ_tgt t rrs).has_frame x rrs /\
-      (elab_typ_tgt t rrs).dcontains x h0 /\
-      self_contained_region_inv rrs h0))
-    (ensures (fun h0 _ h1 -> h0 == h1 /\
-      (elab_typ_tgt t rrs).regional x h1 rrs))
-= match t with
-  | TArr t1 t2 -> ()
-  | TUnit -> ()
-  | TNat -> ()
-  | TSum t1 t2 -> begin
-      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
-      match x with 
-      | Inl x1 -> deep_recall_implies_regional x1
-      | Inr x2 -> deep_recall_implies_regional x2
-  end
-  | TPair t1 t2 -> begin
-      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs)= x in
-      deep_recall_implies_regional x1;
-      deep_recall_implies_regional x2
-  end
-  | TRef t -> begin
-      let x : rref (elab_typ t rrs) = x in
-      ()
-  end
-
 val elab_apply_arrow :
   rrs:rid ->
   t1:typ ->
