@@ -192,17 +192,27 @@ let ralloc' #_ #c i v =
   assume (forall (r:rid) . self_contained_region_inv r h0 ==> self_contained_region_inv r h1);
   r
 
-val ctx1 : 
+let sep
+  (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
+  (rrp:rid)
+  (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
+  (rrs:rid)
+  h =
+  dcontains rp h /\ dcontains rs h /\                       (* required to instantiate the properties of modifies *)                                            (* separation *)
+  disjoint rrp rrs /\                                       (* ensures disjointness of regions *)
+  regional rp h rrp /\ regional rs h rrs 
+
+val ctx_update_ref_test : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) TUnit) rrs
-let ctx1 (y:rref int) =
+let ctx_update_ref_test (y:rref int) =
   write' y (!y + 5);
   ()
 
-val ctx2 : 
+val ctx_update_multiple_refs_test : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
-let ctx2 #rrs (x:rref (rref int)) (y:rref int) =
+let ctx_update_multiple_refs_test #rrs (x:rref (rref int)) (y:rref int) =
   recall x; (* Fstar forgets that x is contained **)
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0); // (this is from a previous pre, and we have to recall)
@@ -212,13 +222,12 @@ let ctx2 #rrs (x:rref (rref int)) (y:rref int) =
   write' y (!y + 5);
   ()
 
-val ctx3 : 
+val ctx_HO_test1 : 
   #rrs:rid ->
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit)) rrs
-let ctx3 #rrs (xs:rref ((rref int) * rref int)) =
+let ctx_HO_test1 #rrs (xs:rref ((rref int) * rref int)) =
   let (x', x'') = !xs in
-  write' xs (x', x');
-  // xs := (x', x');
+  write' xs (x', x');  // xs := (x', x');
   (fun () ->
     recall xs;
     recall x';
@@ -229,23 +238,23 @@ let ctx3 #rrs (xs:rref ((rref int) * rref int)) =
     write' xs (x', x'')
   )
   
-val ctx4 : 
+val ctx_identity : 
   #rrs:rid ->
   elab_typ (TArr (TRef TNat) (TRef TNat)) rrs
-let ctx4 x = x
+let ctx_identity x = x
 
-val ctx5:
+val ctx_HO_test2 : 
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
-let ctx5 f =
+let ctx_HO_test2 f =
   let x:rref int = f () in
   write' x (!x + 1);
   ()
 
-val ctx6 :
+val ctx_swap_ref_test :
   #rrs:rid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
-let ctx6 #rrs (x y: rref (rref int)) =
+let ctx_swap_ref_test #rrs (x y: rref (rref int)) =
   recall x;
   let h0 = get () in
   assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0);
@@ -257,33 +266,41 @@ let ctx6 #rrs (x y: rref (rref int)) =
   assert (regional y h0 rrs);
   ()
 
-val ctx7 :
+val ctx_dynamic_alloc_test :
    #rrs:rid ->
    elab_typ (TArr TUnit (TRef TNat)) rrs
-let ctx7 #rrs () = 
+let ctx_dynamic_alloc_test #rrs () = 
   let v = ralloc' rrs 0 in 
   v
 
-val ctx8 :
+val ctx_HO_test3 :
   #rrs:rid ->
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
-let ctx8 #rrs f =
+let ctx_HO_test3 #rrs f =
   let x:rref int = f () in
   let y: rref int = ralloc' rrs (!x + 1) in
   ()
 
-let sep
-  (#trp:Type) (rp:trp) {| tgt_rp: target_lang trp |}
-  (rrp:rid)
-  (#trs:Type) (rs:trs) {| tgt_rs: target_lang trs |}
-  (rrs:rid)
-  h =
-  dcontains rp h /\ dcontains rs h /\                       (* required to instantiate the properties of modifies *)
-  rrp <> rrs /\                                             (* separation *)
-                  (* TODO: this is not enough, because one could be a child of the other. *)
-  regional rp h rrp /\ regional rs h rrs
+val ctx_returns_callback_test :
+  #rrs:rid ->
+  elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs
+let ctx_returns_callback_test #rrs () =
+  let x: rref int = ralloc' rrs 13 in
+   let cb : elab_typ (TArr TUnit TUnit) rrs = (fun() ->
+     recall x;
+     write' x (!x % 5)
+   ) in
+cb
 
-val progr: 
+val ctx_HO_test4 :
+   #rrs:rid ->
+   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit) rrs
+let ctx_HO_test4 #rrs f =
+  let x:rref int = f () in
+  let y: rref (rref int) = ralloc' rrs x in
+  ()
+
+val progr_sep_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
   #rrs:rid ->
@@ -297,7 +314,7 @@ val progr:
     (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
                             sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
          
-let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
+let progr_sep_test #_ #rs #rrs f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ();
   recall rs;
   let h1 = get () in
@@ -305,7 +322,7 @@ let progr #_ #rs #rrs f = (** If this test fails, it means that the spec of f do
     c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
-val progr2: 
+val progr_secret_unchanged_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
   #rrs:rid ->
@@ -320,7 +337,7 @@ val progr2:
     (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
                              sel h0 rp == sel h1 rp))
          
-let progr2 #_ #rs #rrs #rrp ctx = 
+let progr_secret_unchanged_test #_ #rs #rrs #rrp ctx = 
   let secret: rref int = ralloc' rrp 0 in
   ctx ();
   let v = !secret in
@@ -331,8 +348,7 @@ let progr2 #_ #rs #rrs #rrp ctx =
     c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
-// Test with program passing callback
-val progr3: 
+val progr_passing_callback_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
   #rrs:rid ->
@@ -347,9 +363,9 @@ val progr3:
                              sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 
 // TODO: the callback of the program should be able to modify rp
-let progr3 #_ #rs #rrs #rrp f =
+let progr_passing_callback_test #_ #rs #rrs #rrp f =
   let secret: rref int = ralloc' rrs 0 in
-  let cb: elab_typ (TArr TUnit TUnit) rrs = (fun () -> write' secret (!secret + 1))in
+  let cb: elab_typ (TArr TUnit TUnit) rrs = (fun () -> write' secret (!secret + 1)) in
   f cb;
   recall rs;
   let h1 = get () in
@@ -357,8 +373,7 @@ let progr3 #_ #rs #rrs #rrp f =
     c.dcontains r h1 /\ c.regional r h1 rrs with (rref int) (solve) rs;
   ()
 
-// Test with program getting a callback
-val progr4: 
+val progr_getting_callback_test: 
   #rp: rref int -> 
   #rs: rref (rref int) ->
   #rrs:rid ->
@@ -372,7 +387,7 @@ val progr4:
     (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
                              sel h0 rp == sel h1 rp))
 
-let progr4 #_ #rs #rrs #rrp f =
+let progr_getting_callback_test #_ #rs #rrs #rrp f =
   let cb = f () in
   cb ();
   let h1 = get () in
