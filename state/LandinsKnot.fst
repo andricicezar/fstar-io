@@ -37,6 +37,6 @@ let ty_landins_knot : typing empty landins_knot TUnit =
            (TyAllocRef (TyAbs TUnit (TyVar 0)))
 
 
-let landins_knot3 () : St unit =
+let bt_landins_knot () : St unit =
   let rrs = new_region root in
   elab_exp rrs ty_landins_knot (vempty rrs)
