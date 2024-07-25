@@ -94,13 +94,14 @@ let post_tgt_arrow
   (h0:mem) (r:t2 x) (h1:mem) =
   modifies (Set.singleton rrs) h0 h1 /\                                  (* allow region rs to be modified *)
 
-  // equal_dom h0 h1 /\                                                  (* no dynamic allocation *)
   self_contained_region_inv rrs h1 /\
 
   ((tgtr x).regional r h1 rrs) /\                                        (* x is deeply in region rs *)
   ((tgtr x).dcontains r h1)
-(* TODO: what prevents the computation to allocate things in rp? *)
-
+(* TODO: what prevents the computation to allocate things in rp?
+    If necessary, we can dissable it by adding the following postcondition:
+      forall rrp. disjoint rrp rrs ==> equal_heap_dom rrp h0 h1 -- disables allocation in other regions
+ *)
 
 let mk_tgt_arrow  
   (rrs:erid)
@@ -156,64 +157,6 @@ let elab_typ (t:typ) (rrs:erid) : Type =
 
 let elab_typ_tgt (t:typ) (rrs:erid): target_lang (elab_typ t rrs)=
   dsnd (_elab_typ t rrs)
-
-(** ** Helper lemmas **)
-let rec regional_implies_has_frame #rrs #t (x:elab_typ t rrs)
-: Stack unit
-    (requires (fun h0 ->
-      (elab_typ_tgt t rrs).regional x h0 rrs))
-    (ensures (fun h0 _ h1 -> h0 == h1 /\
-      (elab_typ_tgt t rrs).has_frame x rrs))
-= match t with
-  | TArr t1 t2 -> ()
-  | TUnit -> ()
-  | TNat -> ()
-  | TSum t1 t2 -> begin
-      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
-      match x with 
-      | Inl x1 -> regional_implies_has_frame x1
-      | Inr x2 -> regional_implies_has_frame x2
-  end
-  | TPair t1 t2 -> begin
-      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
-      regional_implies_has_frame x1;
-      regional_implies_has_frame x2
-  end
-  | TRef t -> begin
-      let x : rref (elab_typ t rrs) = x in
-      ()
-  end
-
-
-
-let rec deep_recall_implies_regional #rrs #t (x:elab_typ t rrs)
-: Stack unit
-    (requires (fun h0 ->
-      (elab_typ_tgt t rrs).has_frame x rrs
-      /\ (elab_typ_tgt t rrs).dcontains x h0
-      /\ self_contained_region_inv rrs h0
-      ))
-    (ensures (fun h0 _ h1 -> h0 == h1 /\
-      (elab_typ_tgt t rrs).regional x h1 rrs))
-= match t with
-  | TArr t1 t2 -> ()
-  | TUnit -> ()
-  | TNat -> ()
-  | TSum t1 t2 -> begin
-      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
-      match x with 
-      | Inl x1 -> deep_recall_implies_regional x1
-      | Inr x2 -> deep_recall_implies_regional x2
-  end
-  | TPair t1 t2 -> begin
-      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
-      deep_recall_implies_regional x1;
-      deep_recall_implies_regional x2
-  end
-  | TRef t -> begin
-      let x : rref (elab_typ t rrs) = x in
-      ()
-  end
 
 
 
@@ -275,9 +218,7 @@ val ctx_update_multiple_refs_test :
   #rrs:erid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) rrs
 let ctx_update_multiple_refs_test #rrs (x:rref (rref int)) (y:rref int) =
-  recall x; (* Fstar forgets that x is contained **)
-  let h0 = get () in
-  assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0); // (this is from a previous pre, and we have to recall)
+  deep_recall x; (* Fstar forgets that x is contained **)
   let ix = !x in
   write' ix (!ix + 1);
   write' x y;
@@ -291,12 +232,9 @@ let ctx_HO_test1 #rrs (xs:rref ((rref int) * rref int)) =
   let (x', x'') = !xs in
   write' xs (x', x');  // xs := (x', x');
   (fun () ->
-    recall xs;
+    deep_recall xs;
     recall x';
     recall x'';
-    let h0 = get () in
-    assert ((elab_typ_tgt (TRef (TPair (TRef TNat) (TRef TNat))) rrs).dcontains xs h0);
-    (** why do I have to give the specific instance here? *)
     write' xs (x', x'')
   )
   
@@ -317,15 +255,11 @@ val ctx_swap_ref_test :
   #rrs:erid ->
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit)) rrs
 let ctx_swap_ref_test #rrs (x y: rref (rref int)) =
-  recall x;
-  let h0 = get () in
-  assert ((elab_typ_tgt (TRef (TRef TNat)) rrs).dcontains x h0);
+  deep_recall x;
   let z = !x in
   let t = !y in
   write' x t;
   write' y z;
-  let h1 = get () in 
-  assert (regional y h0 rrs);
   ()
 
 val ctx_dynamic_alloc_test :
@@ -446,7 +380,62 @@ let progr_getting_callback_test #_ #rs #rrs #rrp f =
   deep_recall rs;
   ()
 
-(** *** Elaboration of expressions to F* *)
+(** ** Elaboration of expressions to F* *)
+let rec regional_implies_has_frame #rrs #t (x:elab_typ t rrs)
+: Stack unit
+    (requires (fun h0 ->
+      (elab_typ_tgt t rrs).regional x h0 rrs))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\
+      (elab_typ_tgt t rrs).has_frame x rrs))
+= match t with
+  | TArr t1 t2 -> ()
+  | TUnit -> ()
+  | TNat -> ()
+  | TSum t1 t2 -> begin
+      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
+      match x with 
+      | Inl x1 -> regional_implies_has_frame x1
+      | Inr x2 -> regional_implies_has_frame x2
+  end
+  | TPair t1 t2 -> begin
+      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
+      regional_implies_has_frame x1;
+      regional_implies_has_frame x2
+  end
+  | TRef t -> begin
+      let x : rref (elab_typ t rrs) = x in
+      ()
+  end
+
+let rec dcontais_in_self_contained_implies_regional #rrs #t (x:elab_typ t rrs)
+: Stack unit
+    (requires (fun h0 ->
+      (elab_typ_tgt t rrs).has_frame x rrs
+      /\ (elab_typ_tgt t rrs).dcontains x h0
+      /\ self_contained_region_inv rrs h0
+      ))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\
+      (elab_typ_tgt t rrs).regional x h1 rrs))
+= match t with
+  | TArr t1 t2 -> ()
+  | TUnit -> ()
+  | TNat -> ()
+  | TSum t1 t2 -> begin
+      let x : either (elab_typ t1 rrs) (elab_typ t2 rrs) = x in
+      match x with 
+      | Inl x1 -> dcontais_in_self_contained_implies_regional x1
+      | Inr x2 -> dcontais_in_self_contained_implies_regional x2
+  end
+  | TPair t1 t2 -> begin
+      let (x1, x2) : (elab_typ t1 rrs * elab_typ t2 rrs) = x in
+      dcontais_in_self_contained_implies_regional x1;
+      dcontais_in_self_contained_implies_regional x2
+  end
+  | TRef t -> begin
+      let x : rref (elab_typ t rrs) = x in
+      ()
+  end
+
 val elab_apply_arrow :
   rrs:erid ->
   t1:typ ->
@@ -520,7 +509,7 @@ let rec elab_exp
     let Some tx = g vx in
     let x : elab_typ tx = ve vx in
     (elab_typ_tgt tx).deep_recall x;
-    deep_recall_implies_regional #rrs #tx x;
+    dcontais_in_self_contained_implies_regional #rrs #tx x;
     x
   | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
     assert ((elab_typ t) == (elab_typ tres));
@@ -528,7 +517,7 @@ let rec elab_exp
     regional_implies_has_frame #rrs #tx x;
     let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
     (elab_typ_tgt tx).deep_recall x;
-    deep_recall_implies_regional #rrs #tx x;
+    dcontais_in_self_contained_implies_regional #rrs #tx x;
     elab_apply_arrow rrs tx tres f x
 
   | TyInl #_ #_ #t1 #t2 tyj_1 ->
@@ -544,13 +533,13 @@ let rec elab_exp
       regional_implies_has_frame #rrs #tl x;
       let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
       (elab_typ_tgt tl).deep_recall x;
-      deep_recall_implies_regional #rrs #tl x;
+      dcontais_in_self_contained_implies_regional #rrs #tl x;
       elab_apply_arrow rrs tl tres f x
     | Inr y ->
       regional_implies_has_frame #rrs #tr y;
       let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
       (elab_typ_tgt tr).deep_recall y;
-      deep_recall_implies_regional #rrs #tr y;
+      dcontais_in_self_contained_implies_regional #rrs #tr y;
       elab_apply_arrow rrs tr tres f y
   end
 
@@ -565,6 +554,6 @@ let rec elab_exp
     regional_implies_has_frame #rrs #tf vf;
     let vs : elab_typ ts = elab_exp tyj_s ve in
     (elab_typ_tgt tf).deep_recall vf;
-    deep_recall_implies_regional #rrs #tf vf;
+    dcontais_in_self_contained_implies_regional #rrs #tf vf;
     (vf, vs)
   #pop-options
