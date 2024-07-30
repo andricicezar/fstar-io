@@ -130,12 +130,9 @@ let alloc #a rel (h, ll) x mm =
 let declassify_map addr l ll =
   F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
 
-let declassify #a #rel ((h, ll):lheap) (r:mref a rel) l =
-  if (ll r.addr) `lattice_gte` l then
-    Some (h, declassify_map r.addr l ll)
-  else
-    None
-
+let declassify_tot #a #rel ((h, ll):lheap) l (r:mref a rel) =
+  (h, declassify_map r.addr l ll)
+  
 (*
  * update of a well-typed mreference
  *)
@@ -252,4 +249,4 @@ let lemma_next_addr_alloc #_ _ _ _ _ = ()
 let lemma_next_addr_free_mm #_ #_ _ _ = ()
 let lemma_next_addr_contained_refs_addr #_ #_ _ _ = ()
 
-let lemma_declassify_gte #a #rel hll r l = ()
+// let lemma_declassify_gte #a #rel hll r l = ()

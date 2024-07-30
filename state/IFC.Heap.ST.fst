@@ -116,8 +116,7 @@ let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
   =
     let h0 = gst_get () in
     gst_recall (contains_pred r);
-    lemma_declassify_gte h0 r l;
-    let Some h1 = declassify #a #rel h0 r l in
+    let h1 = declassify_tot #a #rel h0 l r in
     assume (lheap_rel h0 h1);
     assume (equal_dom h0 h1);
     assume (modifies_none h0 h1);

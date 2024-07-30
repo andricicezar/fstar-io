@@ -84,7 +84,7 @@ val upd: #a:Type0 -> #rel:preorder a -> h:lheap -> r:mref a rel -> x:a -> GTot l
 
 val alloc: #a:Type0 -> rel:preorder a -> lheap -> a -> mm:bool -> Tot (mref a rel * lheap)
 
-val declassify : #a:Type0 -> #rel:preorder a -> lheap -> mref a rel -> label -> Tot (option lheap)
+val declassify_tot : #a:Type0 -> #rel:preorder a -> h:lheap -> l:label -> r:mref a rel{h `contains` r /\ (label_of r h) `lattice_gte` l} -> Tot lheap
 
 let modifies_t (s:tset nat) (h0:lheap) (h1:lheap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
@@ -246,8 +246,8 @@ val lemma_next_addr_contained_refs_addr
   (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (h `contains` r ==> addr_of r < next_addr h)
 
-val lemma_declassify_gte
-  (#a:Type0) (#rel:preorder a) (hll:lheap) (r:mref a rel) (l:label)
-  :Lemma (requires (label_of r hll `lattice_gte` l))
-         (ensures  (Some? (declassify hll r l)))
-   [SMTPat (declassify hll r l)]
+// val lemma_declassify_gte
+//   (#a:Type0) (#rel:preorder a) (hll:lheap) (l:label) (r:mref a rel)
+//   :Lemma (requires (label_of r hll `lattice_gte` l))
+//          (ensures  ((declassify_tot hll l r)))
+//    [SMTPat (declassify_tot hll r l)]
