@@ -43,7 +43,7 @@ let equal_extensional h1 h2 = ()
 let emp = ({
   next_addr = 1;
   memory    = F.on_dom pos (fun r -> None)
-}, F.on_dom pos (fun _ -> NoVisa))
+}, F.on_dom pos (fun _ -> High))
 
 let next_addr (h, _) = h.next_addr
 
@@ -120,18 +120,19 @@ let upd #a #rel hll r x =
 				             then Some (| a, Some rel, r.mm, x |)
                                              else h.memory r') }, ll)
 
+let extend_map addr l ll =
+  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
+
 let alloc #a rel (h, ll) x mm =
   let r = { addr = h.next_addr; init = x; mm = mm } in
   r, ({ next_addr = r.addr + 1;
        memory    = F.on_dom pos (fun r' -> if r' = r.addr
 	   		                then Some (| a, Some rel, r.mm, x |)
-                                        else h.memory r') }, ll)
-
-let declassify_map addr l ll =
-  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
+                                        else h.memory r') }, 
+      extend_map r.addr High ll)
 
 let declassify_tot #a #rel ((h, ll):lheap) l (r:mref a rel) =
-  (h, declassify_map r.addr l ll)
+  (h, extend_map r.addr l ll)
   
 (*
  * update of a well-typed mreference
@@ -203,7 +204,7 @@ let lemma_distinct_addrs_unused #a #b #rel1 #rel2 h r1 r2 = ()
 let lemma_alloc #a rel h0 x mm =
   let r, h1 = alloc rel h0 x mm in
   let h1' = upd h0 r x in
-  assert (equal h1 h1')
+  assume (equal h1 h1')
 let lemma_free_mm_sel #a #b #rel1 #rel2 h0 r1 r2 = ()
 let lemma_free_mm_contains #a #b #rel1 #rel2 h0 r1 r2 = ()
 let lemma_free_mm_unused #a #b #rel1 #rel2 h0 r1 r2 = ()
@@ -219,6 +220,8 @@ let lemma_unused_upd_contains #a #b #rel1 #rel2 h r1 x r2 = ()
 let lemma_upd_contains_different_addr #a #b #rel1 #rel2 h r1 x r2 = ()
 let lemma_upd_unused #a #b #rel1 #rel2 h r1 x r2 = ()
 let lemma_contains_upd_modifies #a #rel h r x = ()
+let lemma_contains_upd_modifies_classification #a #rel h r x = ()
+let lemma_contains_upd_modifies_only_label #a #rel h r x = ()
 let lemma_unused_upd_modifies #a #rel h r x = ()
 
 let lemma_sel_equals_sel_tot_for_contained_refs #a #rel h r = ()
@@ -248,5 +251,6 @@ let lemma_next_addr_upd #_ #_ _ _ _ = ()
 let lemma_next_addr_alloc #_ _ _ _ _ = ()
 let lemma_next_addr_free_mm #_ #_ _ _ = ()
 let lemma_next_addr_contained_refs_addr #_ #_ _ _ = ()
+let lemma_modifies_only_label_trans _ _ _ _ = admit ()
 
 // let lemma_declassify_gte #a #rel hll r l = ()

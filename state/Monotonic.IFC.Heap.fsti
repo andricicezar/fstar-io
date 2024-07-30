@@ -10,19 +10,15 @@ let set  = Set.set
 let tset = TSet.set
 
 type label =
-  | NoVisa
-  | Diplomatic
-  | Tourist
+  | High
+  | Medium
+  | Low
 
-(**
-         NoVisa
-        /      \
-Diplomatic    Tourist
-**)
 
-let lattice_gte (l1:label) (l2:label) : bool =
+let label_gte (l1:label) (l2:label) : bool =
   match l1, l2 with
-  | NoVisa, _ -> true
+  | High, _ -> true
+  | Medium, _ -> true
   | _ -> l1 = l2
 
 val map_addr_label : Type u#0
@@ -84,19 +80,31 @@ val upd: #a:Type0 -> #rel:preorder a -> h:lheap -> r:mref a rel -> x:a -> GTot l
 
 val alloc: #a:Type0 -> rel:preorder a -> lheap -> a -> mm:bool -> Tot (mref a rel * lheap)
 
-val declassify_tot : #a:Type0 -> #rel:preorder a -> h:lheap -> l:label -> r:mref a rel{h `contains` r /\ (label_of r h) `lattice_gte` l} -> Tot lheap
+val declassify_tot : #a:Type0 -> #rel:preorder a -> h:lheap -> l:label -> r:mref a rel{h `contains` r /\ (label_of r h) `label_gte` l} -> Tot lheap
 
-let modifies_t (s:tset nat) (h0:lheap) (h1:lheap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
-                               ((~ (TS.mem (addr_of r) s)) /\ h0 `contains` r) ==> sel h1 r == sel h0 r) /\
+unfold let unmodified_common (h0:lheap) (h1:lheap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}
                                h0 `contains` r ==> h1 `contains` r) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)}
                                r `unused_in` h1 ==> r `unused_in` h0) /\
   (forall (n: nat) . {:pattern (n `addr_unused_in` h0) }
-    n `addr_unused_in` h1 ==> n `addr_unused_in` h0
-  )
+    n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
 
+let modifies_only_label (l:label) (h0:lheap) (h1:lheap) : Type0 =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} h0 `contains` r /\ ~(label_of r h0 == l) ==>
+          sel h0 r == sel h1 r) /\
+  unmodified_common h0 h1
+
+let modifies_t (s:tset nat) (h0:lheap) (h1:lheap) =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
+                               ((~ (TS.mem (addr_of r) s)) /\ h0 `contains` r) ==> sel h1 r == sel h0 r) /\
+  unmodified_common h0 h1
+
+let modifies_classification_t (s:tset nat) (h0:lheap) (h1:lheap) =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (label_of r h1)}
+    ((~ (TS.mem (addr_of r) s)) /\ h0 `contains` r) ==> label_of r h1 == label_of r h0)
+
+let modifies_classification (s:set nat) (h0:lheap) (h1:lheap) = modifies_classification_t (TS.tset_of_set s) h0 h1
 
 let modifies (s:set nat) (h0:lheap) (h1:lheap) = modifies_t (TS.tset_of_set s) h0 h1
 
@@ -209,6 +217,16 @@ val lemma_contains_upd_modifies (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a
          (ensures  (modifies (S.singleton (addr_of r)) h (upd h r x)))
          [SMTPat (upd h r x)]
 
+val lemma_contains_upd_modifies_classification (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel) (x:a)
+  :Lemma (requires (h `contains` r))
+         (ensures  (modifies_classification Set.empty h (upd h r x)))
+         [SMTPat (upd h r x)]
+
+val lemma_contains_upd_modifies_only_label (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel) (x:a)
+  :Lemma (requires (h `contains` r))
+         (ensures  (modifies_only_label (label_of r h) h (upd h r x)))
+         [SMTPat (upd h r x)]
+
 val lemma_unused_upd_modifies (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel) (x:a)
   :Lemma (requires (r `unused_in` h))
          (ensures  (modifies (Set.singleton (addr_of r)) h (upd h r x)))
@@ -245,6 +263,13 @@ val lemma_next_addr_alloc
 val lemma_next_addr_contained_refs_addr
   (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (h `contains` r ==> addr_of r < next_addr h)
+
+val lemma_modifies_only_label_trans
+  (l:label) (h0 h1 h2:lheap)
+  : Lemma (
+    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2 ==>
+      modifies_only_label l h0 h2)
+  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
 
 // val lemma_declassify_gte
 //   (#a:Type0) (#rel:preorder a) (hll:lheap) (l:label) (r:mref a rel)

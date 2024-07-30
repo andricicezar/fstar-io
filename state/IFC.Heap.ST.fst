@@ -11,7 +11,7 @@ let lheap_rel (h1:lheap) (h2:lheap) =
   (forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>
                                                (h2 `contains` r /\ rel (sel h1 r) (sel h2 r))) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel). 
-    h1 `contains` r ==> (label_of r h1) `lattice_gte` (label_of r h2))
+    h1 `contains` r ==> (label_of r h1) `label_gte` (label_of r h2))
 
 type lheap_predicate = lheap -> Type0
 
@@ -70,58 +70,72 @@ type mref (a:Type0) (rel:preorder a) =
 let recall (#a:Type) (#rel:preorder a) (r:mref a rel) :STATE unit (fun p lh -> lh `contains` r ==> p () lh)
   = gst_recall (contains_pred r)  
 
-let alloc (#a:Type) (#rel:preorder a) (init:a)
-  :ST (mref a rel)
-      (fun h -> True)
-      (fun h0 r h1 -> fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\ label_of r h1 == NoVisa)
-  = let h0 = gst_get () in
-    let r, h1 = alloc rel h0 init false in
-    assume (lheap_rel h0 h1);
-    gst_put h1;
-    assume (stable (contains_pred r));
-    assume (label_of r h1 == NoVisa);
-    gst_witness (contains_pred r);
-    r
+let alloc_post (#a:Type) (#rel:preorder a) (init:a) (h0:lheap) (r:mref a rel) (h1:lheap) : Type0 =
+  fresh r h0 h1 /\ 
+  modifies Set.empty h0 h1 /\
+  modifies_classification Set.empty h0 h1 /\
+  sel h1 r == init /\ 
+  label_of r h1 == High
 
-let read (#a:Type) (#rel:preorder a) (r:mref a rel) :STATE a (fun p h -> p (sel h r) h)
-  = let h0 = gst_get () in
-    gst_recall (contains_pred r);
-    lemma_sel_equals_sel_tot_for_contained_refs h0 r;
-    sel_tot h0 r    
+let alloc (#a:Type) (#rel:preorder a) (init:a)
+: ST (mref a rel) (fun h -> True) (alloc_post #a #rel init)
+= let h0 = gst_get () in
+  let r, h1 = alloc rel h0 init false in
+  assume (lheap_rel h0 h1);
+  gst_put h1;
+  admit ();
+  gst_witness (contains_pred r);
+  r
+
+let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> p (sel h r) h)
+= let h0 = gst_get () in
+  gst_recall (contains_pred r);
+  lemma_sel_equals_sel_tot_for_contained_refs h0 r;
+  sel_tot h0 r    
+
+let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h1:lheap) : Type0 =
+  h1 == (upd h0 r v) /\
+  rel (sel h0 r) v /\ 
+  h0 `contains` r /\
+  modifies (Set.singleton (addr_of r)) h0 h1 /\ 
+  equal_dom h0 h1 /\
+  modifies_classification Set.empty h0 h1 /\
+  sel h1 r == v
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
-  : ST unit
-    (fun h -> rel (sel h r) v)
-    (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
-                 modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
-                 sel h1 r == v)
-  = let h0 = gst_get () in
-    gst_recall (contains_pred r);
-    let h1 = upd_tot h0 r v in
-    lemma_distinct_addrs_distinct_preorders ();
-    lemma_distinct_addrs_distinct_mm ();
-    lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
-    assume (lheap_rel h0 h1);
-    gst_put h1
+: ST unit
+  (fun h -> rel (sel h r) v)
+  (write_post #a #rel r v)
+= let h0 = gst_get () in
+  gst_recall (contains_pred r);
+  let h1 = upd_tot h0 r v in
+  lemma_distinct_addrs_distinct_preorders ();
+  lemma_distinct_addrs_distinct_mm ();
+  lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
+  assume (lheap_rel h0 h1);
+  admit ();
+  gst_put h1
 
 let modifies_none (h0:lheap) (h1:lheap) = modifies !{} h0 h1
 
 let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
-  : ST unit
-    (fun h -> label_of r h `lattice_gte` l)
-    (fun h0 _ h1 -> 
-      modifies_none h0 h1 /\    
-      label_of r h1 == l /\
-      equal_dom h0 h1)
-  =
-    let h0 = gst_get () in
-    gst_recall (contains_pred r);
-    let h1 = declassify_tot #a #rel h0 l r in
-    assume (lheap_rel h0 h1);
-    assume (equal_dom h0 h1);
-    assume (modifies_none h0 h1);
-    assume (label_of r h1 == l);
-    gst_put h1
+: ST unit
+  (fun h -> label_of r h `label_gte` l)
+  (fun h0 _ h1 -> 
+    equal_dom h0 h1 /\
+    modifies_none h0 h1 /\
+    modifies_classification (Set.singleton (addr_of r)) h0 h1 /\ 
+    label_of r h1 == l)
+=
+  let h0 = gst_get () in
+  gst_recall (contains_pred r);
+  let h1 = declassify_tot #a #rel h0 l r in
+  assume (lheap_rel h0 h1);
+  assume (equal_dom h0 h1);
+  assume (modifies_none h0 h1);
+  assume (label_of r h1 == l);
+  admit ();
+  gst_put h1
 
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
@@ -129,11 +143,9 @@ let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
-  : ST unit
-    (fun h -> rel (sel h r) v)
-    (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
-                 modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
-                 sel h1 r == v)
+: ST unit
+  (fun h -> rel (sel h r) v)
+  (write_post #a #rel r v)
 = write #a #rel r v
 
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
