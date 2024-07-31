@@ -14,7 +14,7 @@ type label =
   | Medium
   | Low
 
-
+(* TODO: Cezar thinks this has to be total, is that right? *)
 let label_gte (l1:label) (l2:label) : bool =
   match l1, l2 with
   | High, _ -> true
@@ -91,8 +91,8 @@ unfold let unmodified_common (h0:lheap) (h1:lheap) : Type0 =
     n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
 
 let modifies_only_label (l:label) (h0:lheap) (h1:lheap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} h0 `contains` r /\ ~(label_of r h0 == l) ==>
-          sel h0 r == sel h1 r) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
+    h0 `contains` r /\ ~(label_of r h0 == l) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let modifies_t (s:tset nat) (h0:lheap) (h1:lheap) =
@@ -263,16 +263,3 @@ val lemma_next_addr_alloc
 val lemma_next_addr_contained_refs_addr
   (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (h `contains` r ==> addr_of r < next_addr h)
-
-val lemma_modifies_only_label_trans
-  (l:label) (h0 h1 h2:lheap)
-  : Lemma (
-    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2 ==>
-      modifies_only_label l h0 h2)
-  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
-
-// val lemma_declassify_gte
-//   (#a:Type0) (#rel:preorder a) (hll:lheap) (l:label) (r:mref a rel)
-//   :Lemma (requires (label_of r hll `lattice_gte` l))
-//          (ensures  ((declassify_tot hll l r)))
-//    [SMTPat (declassify_tot hll r l)]

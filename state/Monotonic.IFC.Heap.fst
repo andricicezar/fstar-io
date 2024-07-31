@@ -257,6 +257,3 @@ let lemma_next_addr_upd #_ #_ _ _ _ = ()
 let lemma_next_addr_alloc #_ _ _ _ _ = ()
 let lemma_next_addr_free_mm #_ #_ _ _ = ()
 let lemma_next_addr_contained_refs_addr #_ #_ _ _ = ()
-let lemma_modifies_only_label_trans _ _ _ _ = admit ()
-
-// let lemma_declassify_gte #a #rel hll r l = ()
