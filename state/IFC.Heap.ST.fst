@@ -131,6 +131,7 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 let modifies_none (h0:lheap) (h1:lheap) = modifies Set.empty h0 h1
 
 let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lheap) () (h1:lheap) : Type0 =
+  h1 `contains` r /\
   equal_dom h0 h1 /\ (* TODO: define equal_heaps *)
   modifies_none h0 h1 /\
   modifies_classification (Set.singleton (addr_of r)) h0 h1 /\ 
@@ -163,21 +164,13 @@ type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 let get (u:unit) :ST (FStar.Ghost.erased lheap) (fun h -> True) (fun h0 h h1 -> h0==h1 /\ (FStar.Ghost.reveal h)==h1) =
   gst_get ()
 
-let is_low_pred (#a:Type0) (r:ref a) = fun lh -> label_of r lh == Low
+let is_low_pred (#a:Type0) (r:ref a) = fun lh -> lh `contains` r /\ label_of r lh == Low
 
-let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r)) = 
-  let p = is_low_pred r in
-  introduce forall (h1:lheap) (h2:lheap). (p h1 /\ lheap_rel h1 h2) ==> p h2 with begin
-    introduce (p h1 /\ lheap_rel h1 h2) ==> p h2 with _. begin
-      assert (p h1);
-      assert (lheap_rel h1 h2);
-      // assert (forall (a:Type0) (rel:preorder a) (r:Monotonic.Heap.IFC.mref a rel). 
-        // h1 `contains` r ==> (h2 `contains` r /\ rel (sel h1 r) (sel h2 r)));
-      assert (forall (a:Type) (rel:preorder a) (r:mref a rel). 
-        h1 `contains` r ==> (label_of r h1) `label_gte` (label_of r h2));
-      assert (p h2)
-    end
-  end
+let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r))
+  [SMTPat (is_low_pred r)] =  
+  assert (stable (is_low_pred r)) by (
+    norm [delta_only [`%stable;`%lheap_rel]; iota]
+  )
 
 type lref (a:Type0) = 
   r:(ref a){witnessed (is_low_pred r)}
@@ -188,7 +181,6 @@ let declassify_low (#a:Type) (r:ref a)
   (fun h0 _ h1 -> declassify_post r Low h0 () h1)
 =
   declassify r Low;
-  is_low_pred_stable r;
   gst_witness (is_low_pred r);
   r
 
