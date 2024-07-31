@@ -95,7 +95,6 @@ let alloc (#a:Type) (#rel:preorder a) (init:a)
 : ST (mref a rel) (fun h -> True) (alloc_post #a #rel init)
 = let h0 = gst_get () in
   let r, h1 = alloc rel h0 init false in
-  lemma_alloc_props #a #rel h0 init false;
   assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1;
   gst_witness (contains_pred r);

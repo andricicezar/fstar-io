@@ -151,7 +151,11 @@ val lemma_distinct_addrs_unused
 val lemma_alloc (#a:Type0) (rel:preorder a) (h0:lheap) (x:a) (mm:bool)
   :Lemma (requires True)
          (ensures  (let r, h1 = alloc rel h0 x mm in
-                    fresh r h0 h1 /\ h1 == upd h0 r x /\ is_mm r = mm /\ addr_of r == next_addr h0))
+                    fresh r h0 h1 /\ h1 == upd h0 r x /\ is_mm r = mm /\ addr_of r == next_addr h0 /\
+                    label_of r h1 == High /\
+                    modifies_classification Set.empty h0 h1 /\
+                    (forall (a:Type0) (rel:preorder a) (r:mref a rel). 
+                      h0 `contains` r ==> label_of r h0 `label_gte` label_of r h1)))
 	 [SMTPat (alloc rel h0 x mm)]
 
 val lemma_sel_same_addr (#a:Type0) (#rel:preorder a) (h:lheap) (r1:mref a rel) (r2:mref a rel)
@@ -263,12 +267,3 @@ val lemma_next_addr_alloc
 val lemma_next_addr_contained_refs_addr
   (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (h `contains` r ==> addr_of r < next_addr h)
-
-val lemma_alloc_props
-  (#a:Type0) (#rel:preorder a) (h0:lheap) (x:a) (mm:bool)
-  :Lemma (
-    let rh1 = alloc rel h0 x mm in 
-    label_of (fst rh1) (snd rh1) == High /\
-    modifies_classification Set.empty h0 (snd rh1) /\
-    (forall (a:Type0) (rel:preorder a) (r:mref a rel). 
-      h0 `contains` r ==> label_of r h0 `label_gte` label_of r (snd rh1)))
