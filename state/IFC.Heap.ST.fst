@@ -144,11 +144,7 @@ let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
   let h0 = gst_get () in
   gst_recall (contains_pred r);
   let h1 = declassify_tot #a #rel h0 l r in
-  assume (lheap_rel h0 h1);
-  assume (equal_dom h0 h1);
-  assume (modifies_none h0 h1);
-  assume (modifies_classification (Set.singleton (addr_of r)) h0 h1 );
-  assume (label_of r h1 == l);
+  assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1
 
 

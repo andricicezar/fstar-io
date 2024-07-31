@@ -116,6 +116,11 @@ let equal_dom (h1:lheap) (h2:lheap) :GTot Type0 =
      {:pattern (r `unused_in` h1) \/ (r `unused_in` h2)}
      r `unused_in` h1 <==> r `unused_in` h2)
 
+let equal_ll (h1:lheap) (h2:lheap) :GTot Type0 =
+  (forall (a:Type0) (rel:preorder a) (r:mref a rel).
+     {:pattern (label_of r h1 == label_of r h2) \/ (label_of r h1 `label_gte` label_of r h2)}
+     h1 `contains` r ==> label_of r h1 == label_of r h2)
+
 val lemma_ref_unused_iff_addr_unused (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (requires True)
          (ensures  (r `unused_in` h <==> addr_of r `addr_unused_in` h))
@@ -154,8 +159,7 @@ val lemma_alloc (#a:Type0) (rel:preorder a) (h0:lheap) (x:a) (mm:bool)
                     fresh r h0 h1 /\ h1 == upd h0 r x /\ is_mm r = mm /\ addr_of r == next_addr h0 /\
                     label_of r h1 == High /\
                     modifies_classification Set.empty h0 h1 /\
-                    (forall (a:Type0) (rel:preorder a) (r:mref a rel). 
-                      h0 `contains` r ==> label_of r h0 `label_gte` label_of r h1)))
+                    equal_ll h0 h1))
 	 [SMTPat (alloc rel h0 x mm)]
 
 val lemma_sel_same_addr (#a:Type0) (#rel:preorder a) (h:lheap) (r1:mref a rel) (r2:mref a rel)
@@ -267,3 +271,15 @@ val lemma_next_addr_alloc
 val lemma_next_addr_contained_refs_addr
   (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (h `contains` r ==> addr_of r < next_addr h)
+
+val lemma_declassify_tot
+  (#a:Type0) (#rel:preorder a) (h0:lheap) (l:label) (r:mref a rel)
+  :Lemma (requires h0 `contains` r /\ label_of r h0 `label_gte` l)
+         (ensures  (
+            let h1 = declassify_tot h0 l r in
+            equal_dom h0 h1 /\
+            modifies Set.empty h0 h1 /\
+            modifies_classification (S.singleton (addr_of r)) h0 h1 /\
+            label_of r h1 == l /\
+            equal_ll h0 h1))
+   [SMTPat (declassify_tot h0 l r)]
