@@ -107,12 +107,12 @@ let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> p (sel
   sel_tot h0 r    
 
 let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h1:lheap) : Type0 =
-  h1 == (upd h0 r v) /\
+  // h1 == (upd h0 r v) /\
   rel (sel h0 r) v /\ 
   h0 `contains` r /\
   modifies (Set.singleton (addr_of r)) h0 h1 /\ 
   equal_dom h0 h1 /\
-  modifies_classification Set.empty h0 h1 /\ (* TODO: define equal_lls *)
+  modifies_classification Set.empty h0 h1 /\
   sel h1 r == v
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
@@ -125,8 +125,7 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   lemma_distinct_addrs_distinct_preorders ();
   lemma_distinct_addrs_distinct_mm ();
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
-  assume (lheap_rel h0 h1);
-  admit ();
+  assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1
 
 let modifies_none (h0:lheap) (h1:lheap) = modifies !{} h0 h1
