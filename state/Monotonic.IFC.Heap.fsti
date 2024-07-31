@@ -18,6 +18,7 @@ type label =
 let label_gte (l1:label) (l2:label) : bool =
   match l1, l2 with
   | High, _ -> true
+  | Medium, High -> false
   | Medium, _ -> true
   | _ -> l1 = l2
 
