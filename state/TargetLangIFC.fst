@@ -66,14 +66,9 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (lref t) =
 
 open FStar.Preorder
 
-let objects_deeply_labeled (h:lheap) : Type0 =
-  forall a (c:target_lang (ref a)) (r:ref a). h `contains` r /\ label_of r h == Low ==> (* These are properties that can be recalled *)
-    h `c.deep_contains` r /\ c.deeply_labeled_with_low r h 
-
 unfold let pre_tgt_arrow
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:lheap) =
-  objects_deeply_labeled h0 /\                                           (* all objects are deeply labeled *)
   h0 `deep_contains` x /\                                                (* required to instantiate the properties of modifies *)
   deeply_labeled_with_low x h0                                           (* x is Low *)
 
@@ -81,9 +76,8 @@ let post_tgt_arrow
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:t1 -> Type) {| tgtr : (x:t1 -> target_lang (t2 x)) |}
   (h0:lheap) (r:t2 x) (h1:lheap) =
-  modifies_only_label Low h0 h1 /\                                       (* allow region rs to be modified *)
-
-  objects_deeply_labeled h1 /\
+  modifies_only_label Low h0 h1 /\                                       (* allows low references to be modified *)
+  modifies_classification Set.empty h0 h1 /\                             (* no modifications of the classification *)
 
   (h1 `(tgtr x).deep_contains` r) /\
   ((tgtr x).deeply_labeled_with_low r h1)                                (* r is deeply labeled with Low *)
@@ -120,9 +114,6 @@ let prog () =
   let r1 : ref int = alloc 0 in
   declassify r1 Medium;
   ()
-
-(* TODO: during back-tarnslation, one needs to know that everything in env is deeply labeled with Low.
-    previously, similar information (e.g., region) was on the reference *)
 
 open STLC
 
@@ -165,40 +156,35 @@ let write' (#t:Type) {| c:target_lang t |} (r:lref t) (v:t)
     h0 `deep_contains` r /\ 
     h0 `c.deep_contains` v /\
     label_of r h0 == Low /\ 
-    c.deeply_labeled_with_low v h0 /\
-    objects_deeply_labeled h0))
+    c.deeply_labeled_with_low v h0))
   (ensures (fun h0 () h1 ->
     write_post r v h0 () h1 /\
     modifies_only_label Low h0 h1 /\
-    deeply_labeled_with_low r h1 /\
-    objects_deeply_labeled h1
-    ))
+    deeply_labeled_with_low r h1))
 = let h0 = get () in
   r := v;
   let h1 = get () in
   assume (deeply_labeled_with_low r h1);
-  assume (objects_deeply_labeled h1);
   ()
 
 
 val alloc' (#a:Type) {| c:target_lang a |} (init:a)
 : ST (lref a)
   (requires (fun h0 ->
-    c.deeply_labeled_with_low init h0 /\ 
-    objects_deeply_labeled h0))
+    c.deeply_labeled_with_low init h0
+    ))
   (ensures (fun h0 r h1 -> 
     fresh r h0 h1 /\ 
     modifies Set.empty h0 h1 /\
     modifies_classification Set.empty h0 h1 /\
     sel h1 r == init /\ 
-    deeply_labeled_with_low r h1 /\ 
-    objects_deeply_labeled h1))
+    deeply_labeled_with_low r h1
+    ))
 let alloc' #_ #c init = 
   let r = alloc init in
   let r' = declassify_low r in
   let h1 = get () in
   assume (deeply_labeled_with_low r' h1);
-  assume (objects_deeply_labeled h1);
   r'
 
 val ctx_update_ref_test : 
@@ -292,87 +278,72 @@ let ctx_HO_test4 f =
 
 val progr_sep_test: 
   #rp: ref int -> 
-  #rs: ref (ref int) ->
   ctx:(elab_typ (TArr TUnit TUnit)) ->
   ST unit
     (requires (fun h0 -> 
-      label_of rp h0 == High /\
-      objects_deeply_labeled h0))
+      h0 `contains` rp /\
+      label_of rp h0 == High))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
          
 let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
-  let h0 = get () in
-  assert (label_of rp h0 == High);
-  f ();
-  let h1 = get () in
-  // assert (label_of rp h1 == High);
-  assert (modifies_only_label Low h0 h1);
-  admit (); (** TODO: Figure out how to make this automatic *)
-  assert (sel h0 rp == sel h1 rp);
-  ()
+  f ()
 
 val progr_secret_unchanged_test: 
-  #rp: rref int -> 
-  #rs: rref (rref int) ->
-  #rrs:erid ->
-  #rrp:erid ->
-  ctx:(elab_typ (TArr TUnit TUnit) rrs) ->
+  #rp: ref int -> 
+  #rs: lref (lref int) ->
+  ctx:(elab_typ (TArr TUnit TUnit)) ->
   ST unit 
     (requires (fun h0 -> 
-      self_contained_region_inv rrs h0 /\
-      sep rp rrp rs rrs h0 /\
-      is_eternal_region rrs /\
-      is_eternal_region rrp))
-    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
-                             sel h0 rp == sel h1 rp))
+      h0 `contains` rp /\
+      h0 `deep_contains` rs /\
+      label_of rp h0 == High /\
+      deeply_labeled_with_low rs h0))
+    (ensures (fun h0 _ h1 -> 
+      sel h0 rp == sel h1 rp))
          
-let progr_secret_unchanged_test #_ #rs #rrs #rrp ctx = 
-  let secret: rref int = ralloc' rrp 0 in
+let progr_secret_unchanged_test #_ #rs ctx = 
+  let secret: ref int = alloc 0 in
   ctx ();
   let v = !secret in
   assert (v == 0);
-  deep_recall rs;
   ()
 
 val progr_passing_callback_test: 
-  #rp: rref int -> 
-  #rs: rref (rref int) ->
-  #rrs:erid ->
-  #rrp:erid ->
-  ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit) rrs) ->
+  #rp: ref int -> 
+  #rs: lref (lref int) ->
+  ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit)) ->
   ST unit 
     (requires (fun h0 -> 
-      self_contained_region_inv rrs h0 /\
-      sep rp rrp rs rrs h0 /\
-      is_eternal_region rrs))
-    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
-                             sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
+      h0 `contains` rp /\
+      h0 `deep_contains` rs /\
+      label_of rp h0 == High /\
+      deeply_labeled_with_low rs h0))
+    (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 
 // TODO: the callback of the program should be able to modify rp
-let progr_passing_callback_test #_ #rs #rrs #rrp f =
-  let secret: rref int = ralloc' rrs 0 in
-  let cb: elab_typ (TArr TUnit TUnit) rrs = (fun () -> write' secret (!secret + 1)) in
+let progr_passing_callback_test #_ #rs f =
+  let secret: lref int = alloc' 0 in
+  let cb: elab_typ (TArr TUnit TUnit) = (fun () -> deep_recall secret; write' secret (!secret + 1)) in
   f cb;
-  deep_recall rs;
   ()
 
 val progr_getting_callback_test: 
-  #rp: rref int -> 
-  #rs: rref (rref int) ->
-  #rrs:erid ->
-  #rrp:erid ->
-  ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit)) rrs) ->
+  #rp: ref int -> 
+  #rs: lref (lref int) ->
+  ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit))) ->
   ST unit 
     (requires (fun h0 -> 
-      self_contained_region_inv rrs h0 /\
-      sep rp rrp rs rrs h0 /\
-      is_eternal_region rrs))
-    (ensures (fun h0 _ h1 -> sep rp rrp rs rrs h1 /\
-                             sel h0 rp == sel h1 rp))
+      h0 `contains` rp /\
+      h0 `deep_contains` rs /\
+      label_of rp h0 == High /\
+      deeply_labeled_with_low rs h0))
+    (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
 
-let progr_getting_callback_test #_ #rs #rrs #rrp f =
+let progr_getting_callback_test #_ #rs f =
+  let h0 = get () in
   let cb = f () in
   cb ();
-  deep_recall rs;
+  let h2 = get () in
+  assume (modifies_only_label Low h0 h2);
   ()

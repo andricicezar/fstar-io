@@ -260,3 +260,4 @@ let lemma_next_addr_free_mm #_ #_ _ _ = ()
 let lemma_next_addr_contained_refs_addr #_ #_ _ _ = ()
 
 let lemma_declassify_tot #a #rel h0 l r = ()
+let lemma_modifies_only_other_label #a #rel h0 h1 r = ()

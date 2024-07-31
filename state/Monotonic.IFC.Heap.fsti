@@ -287,3 +287,9 @@ val lemma_declassify_tot
               h0 `contains` r ==> (label_of r h0) `label_gte` (label_of r h1))
             ))
    [SMTPat (declassify_tot h0 l r)]
+
+// val lemma_modifies_only_other_label
+//   (#a:Type0) (#rel:preorder a) (h0:lheap) (h1:lheap) (r:mref a rel)
+//   :Lemma (requires (h0 `contains` r /\ label_of r h0 == High /\ modifies_only_label Low h0 h1))
+//          (ensures  (sel h1 r == sel h0 r))
+//    [SMTPat (sel h1 r); SMTPat (sel h0 r); SMTPat (label_of r h0)]
