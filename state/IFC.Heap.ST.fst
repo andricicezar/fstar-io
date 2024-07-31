@@ -1,5 +1,6 @@
 module IFC.Heap.ST
 
+open FStar.Tactics
 open FStar.Set
 open FStar.Preorder
 open Monotonic.IFC.Heap
@@ -8,8 +9,13 @@ module W = FStar.Monotonic.Witnessed
 
 val lheap_rel : preorder lheap
 let lheap_rel (h1:lheap) (h2:lheap) =
-  (forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>
-                                               (h2 `contains` r /\ rel (sel h1 r) (sel h2 r))) /\
+  (* classic heap monotonicity: references cannot be deallocated *)
+  (forall (a:Type0) (rel:preorder a) (r:mref a rel). 
+    h1 `contains` r ==> (h2 `contains` r /\ rel (sel h1 r) (sel h2 r))) 
+  
+  /\
+
+  (* references can only be declassified *)
   (forall (a:Type) (rel:preorder a) (r:mref a rel). 
     h1 `contains` r ==> (label_of r h1) `label_gte` (label_of r h2))
 
@@ -64,8 +70,15 @@ effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
 
 let contains_pred (#a:Type0) (#rel:preorder a) (r:mref a rel) = fun lh -> lh `contains` r
 
+let contains_stable (#a:Type0) (#rel:preorder a) (r:mref a rel) : Lemma (stable (contains_pred r)) 
+  [SMTPat (contains_pred r)]=
+  assert (stable (contains_pred r)) by (
+    norm [delta_only [`%stable;`%lheap_rel]; iota]
+  )
+
 type mref (a:Type0) (rel:preorder a) = 
-  r:mref a rel{is_mm r = false /\ witnessed (contains_pred r)}
+  r:(mref a rel){is_mm r = false /\ witnessed (contains_pred r)}
+  (** ^ we could define our own ref type that contains that they are low *)
 
 let recall (#a:Type) (#rel:preorder a) (r:mref a rel) :STATE unit (fun p lh -> lh `contains` r ==> p () lh)
   = gst_recall (contains_pred r)  
@@ -77,13 +90,14 @@ let alloc_post (#a:Type) (#rel:preorder a) (init:a) (h0:lheap) (r:mref a rel) (h
   sel h1 r == init /\ 
   label_of r h1 == High
 
+
 let alloc (#a:Type) (#rel:preorder a) (init:a)
 : ST (mref a rel) (fun h -> True) (alloc_post #a #rel init)
 = let h0 = gst_get () in
   let r, h1 = alloc rel h0 init false in
-  assume (lheap_rel h0 h1);
+  lemma_alloc_props #a #rel h0 init false;
+  assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1;
-  admit ();
   gst_witness (contains_pred r);
   r
 
@@ -99,7 +113,7 @@ let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h
   h0 `contains` r /\
   modifies (Set.singleton (addr_of r)) h0 h1 /\ 
   equal_dom h0 h1 /\
-  modifies_classification Set.empty h0 h1 /\
+  modifies_classification Set.empty h0 h1 /\ (* TODO: define equal_lls *)
   sel h1 r == v
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
@@ -118,14 +132,16 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 
 let modifies_none (h0:lheap) (h1:lheap) = modifies !{} h0 h1
 
+let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lheap) () (h1:lheap) : Type0 =
+  equal_dom h0 h1 /\ (* TODO: define equal_heaps *)
+  modifies_none h0 h1 /\
+  modifies_classification (Set.singleton (addr_of r)) h0 h1 /\ 
+  label_of r h1 == l
+
 let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
 : ST unit
   (fun h -> label_of r h `label_gte` l)
-  (fun h0 _ h1 -> 
-    equal_dom h0 h1 /\
-    modifies_none h0 h1 /\
-    modifies_classification (Set.singleton (addr_of r)) h0 h1 /\ 
-    label_of r h1 == l)
+  (declassify_post #a #rel r l)
 =
   let h0 = gst_get () in
   gst_recall (contains_pred r);
@@ -133,8 +149,8 @@ let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
   assume (lheap_rel h0 h1);
   assume (equal_dom h0 h1);
   assume (modifies_none h0 h1);
+  assume (modifies_classification (Set.singleton (addr_of r)) h0 h1 );
   assume (label_of r h1 == l);
-  admit ();
   gst_put h1
 
 
@@ -152,3 +168,34 @@ type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 
 let get (u:unit) :ST (FStar.Ghost.erased lheap) (fun h -> True) (fun h0 h h1 -> h0==h1 /\ (FStar.Ghost.reveal h)==h1) =
   gst_get ()
+
+let is_low_pred (#a:Type0) (r:ref a) = fun lh -> label_of r lh == Low
+
+let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r)) = 
+  assert (stable (is_low_pred r)) by (
+    norm [delta_only [`%stable;`%lheap_rel]; iota];
+    tadmit ()
+  )
+
+
+val lemma_modifies_only_label_trans
+  (l:label) (h0 h1 h2:lheap)
+  : Lemma (
+    (lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
+    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
+      modifies_only_label l h0 h2)
+  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
+let lemma_modifies_only_label_trans _ _ _ _ = admit ()
+
+type lref (a:Type0) = 
+  r:(ref a){witnessed (is_low_pred r)}
+
+let declassify_low (#a:Type) (r:ref a)
+: ST (lref a)
+  (fun h -> label_of r h `label_gte` Low)
+  (fun h0 _ h1 -> declassify_post r Low h0 () h1)
+=
+  declassify r Low;
+  is_low_pred_stable r;
+  gst_witness (is_low_pred r);
+  r
