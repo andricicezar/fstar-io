@@ -187,11 +187,11 @@ let declassify_low (#a:Type) (r:ref a)
   gst_witness (is_low_pred r);
   r
 
-// val lemma_modifies_only_label_trans
-//   (l:label) (h0 h1 h2:lheap)
-//   : Lemma (
-//     (lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
-//     modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
-//       modifies_only_label l h0 h2)
-//   [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
-// let lemma_modifies_only_label_trans _ _ _ _ = admit ()
+val lemma_modifies_only_label_trans
+  (l:label) (h0 h1 h2:lheap)
+  : Lemma (
+    (lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
+    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
+      modifies_only_label l h0 h2)
+  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
+let lemma_modifies_only_label_trans _ _ _ _ = admit ()

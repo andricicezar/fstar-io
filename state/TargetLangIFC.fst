@@ -153,9 +153,10 @@ let elab_typ_tgt (t:typ) : target_lang (elab_typ t)=
 let write' (#t:Type) {| c:target_lang t |} (r:lref t) (v:t) 
 : ST unit
   (requires (fun h0 -> 
-    h0 `deep_contains` r /\ 
-    h0 `c.deep_contains` v /\
+    h0 `contains` r /\ 
     label_of r h0 == Low /\ 
+
+    h0 `c.deep_contains` v /\
     c.deeply_labeled_with_low v h0))
   (ensures (fun h0 () h1 ->
     write_post r v h0 () h1 /\
@@ -226,13 +227,14 @@ let ctx_HO_test2 f =
   let h0 = get () in
   let x:lref int = f () in
   let h1 = get () in
-  // assert (lheap_rel h0 h1);
+  // assume (lheap_rel h0 h1);
   // assert (modifies_only_label Low h0 h1);
   write' x (!x + 1);
   let h2 = get () in
+  // assume (lheap_rel h1 h2);
   // assert (modifies_only_label Low h1 h2);
   // assert (objects_deeply_labeled h2);
-  assume (modifies_only_label Low h0 h2);
+  assert (modifies_only_label Low h0 h2);
   ()
 
 val ctx_swap_ref_test :
@@ -345,5 +347,109 @@ let progr_getting_callback_test #_ #rs f =
   let cb = f () in
   cb ();
   let h2 = get () in
-  assume (modifies_only_label Low h0 h2);
+  assert (modifies_only_label Low h0 h2);
   ()
+
+(** ** Elaboration of expressions to F* *)
+val elab_apply_arrow :
+  t1:typ ->
+  t2:typ ->
+  f:elab_typ (TArr t1 t2) ->
+  (let tt1 = _elab_typ t1 in
+   let tt2 (x:(dfst tt1)) = _elab_typ t2 in
+   mk_tgt_arrow (dfst tt1) #(dsnd tt1) (fun x -> dfst (tt2 x)) #(fun x -> dsnd (tt2 x)))
+let elab_apply_arrow t1 t2 f x = f x
+
+let cast_TArr #t1 #t2 (f : elab_typ (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ t = f
+
+type vcontext (g:context) = 
+  vx:var{Some? (g vx)} -> elab_typ (Some?.v (g vx))
+
+let vempty : vcontext empty = fun _ -> assert false
+
+let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
+  fun y -> if y = 0 then x else ve (y-1)
+
+#push-options "--split_queries always"
+let rec elab_exp 
+  (#g:context)
+  (#e:exp) 
+  (#t:typ)
+  (tyj:typing g e t)
+  (ve:vcontext g)
+  : ST (elab_typ t) 
+     (requires (pre_tgt_arrow () #target_lang_unit))
+     (ensures (post_tgt_arrow () #_ #(fun _ -> elab_typ t) #(fun _ -> elab_typ_tgt t))) =
+  let h0 = get () in
+  match tyj with
+  | TyUnit -> ()
+  | TyZero -> 0
+  | TySucc tyj_s -> 
+    1 + (elab_exp tyj_s ve)
+
+  | TyAllocRef #_ #_ #t tyj_e -> begin
+    let v : elab_typ t = elab_exp tyj_e ve in
+    let r : lref (elab_typ t) = alloc' #_ #(elab_typ_tgt t) v in
+    (elab_typ_tgt (TRef t)).deep_recall r;
+    r
+  end
+  | TyReadRef #_ #_ #t tyj_e -> begin
+    let r : lref (elab_typ t) = elab_exp tyj_e ve in
+    !r
+  end
+  | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
+      let r : lref (elab_typ t) = elab_exp tyj_ref ve in
+      let v : elab_typ t = elab_exp tyj_v ve in
+      write' #_ #(elab_typ_tgt t) r v
+  end
+
+  | TyAbs tx #_ #tres tyj_body ->
+    let w : mk_tgt_arrow (elab_typ tx) #(elab_typ_tgt tx) (fun x -> elab_typ tres) #(fun x -> elab_typ_tgt tres) = 
+      (fun (x:elab_typ tx) -> 
+        elab_exp tyj_body (vextend #tx x ve))
+    in
+    assert (t == TArr tx tres);
+    cast_TArr #tx #tres w t
+  | TyVar vx -> 
+    let Some tx = g vx in
+    let x : elab_typ tx = ve vx in
+    (elab_typ_tgt tx).deep_recall x;
+    x
+  | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
+    assert ((elab_typ t) == (elab_typ tres));
+    let x : elab_typ tx = elab_exp tyj_x ve in
+    let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
+    (elab_typ_tgt tx).deep_recall x;
+    elab_apply_arrow tx tres f x
+
+  | TyInl #_ #_ #t1 #t2 tyj_1 ->
+    let v1 : elab_typ t1 = elab_exp tyj_1 ve in
+    Inl #_ #(elab_typ t2) v1
+  | TyInr #_ #_ #t1 #t2 tyj_2 ->
+    let v2 : elab_typ t2 = elab_exp tyj_2 ve in
+    Inr #(elab_typ t1) v2
+  | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
+    let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
+    match vc with 
+    | Inl x -> 
+      let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
+      (elab_typ_tgt tl).deep_recall x;
+      elab_apply_arrow tl tres f x
+    | Inr y ->
+      let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
+      (elab_typ_tgt tr).deep_recall y;
+      elab_apply_arrow tr tres f y
+  end
+
+  | TyFst #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    fst #(elab_typ tf) #(elab_typ ts) v
+  | TySnd #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    snd #(elab_typ tf) #(elab_typ ts) v
+  | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
+    let vf : elab_typ tf = elab_exp tyj_f ve in
+    let vs : elab_typ ts = elab_exp tyj_s ve in
+    (elab_typ_tgt tf).deep_recall vf;
+    (vf, vs)
+  #pop-options
