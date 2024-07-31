@@ -128,7 +128,7 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1
 
-let modifies_none (h0:lheap) (h1:lheap) = modifies !{} h0 h1
+let modifies_none (h0:lheap) (h1:lheap) = modifies Set.empty h0 h1
 
 let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lheap) () (h1:lheap) : Type0 =
   equal_dom h0 h1 /\ (* TODO: define equal_heaps *)
@@ -166,20 +166,18 @@ let get (u:unit) :ST (FStar.Ghost.erased lheap) (fun h -> True) (fun h0 h h1 -> 
 let is_low_pred (#a:Type0) (r:ref a) = fun lh -> label_of r lh == Low
 
 let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r)) = 
-  assert (stable (is_low_pred r)) by (
-    norm [delta_only [`%stable;`%lheap_rel]; iota];
-    tadmit ()
-  )
-
-
-val lemma_modifies_only_label_trans
-  (l:label) (h0 h1 h2:lheap)
-  : Lemma (
-    (lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
-    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
-      modifies_only_label l h0 h2)
-  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
-let lemma_modifies_only_label_trans _ _ _ _ = admit ()
+  let p = is_low_pred r in
+  introduce forall (h1:lheap) (h2:lheap). (p h1 /\ lheap_rel h1 h2) ==> p h2 with begin
+    introduce (p h1 /\ lheap_rel h1 h2) ==> p h2 with _. begin
+      assert (p h1);
+      assert (lheap_rel h1 h2);
+      // assert (forall (a:Type0) (rel:preorder a) (r:Monotonic.Heap.IFC.mref a rel). 
+        // h1 `contains` r ==> (h2 `contains` r /\ rel (sel h1 r) (sel h2 r)));
+      assert (forall (a:Type) (rel:preorder a) (r:mref a rel). 
+        h1 `contains` r ==> (label_of r h1) `label_gte` (label_of r h2));
+      assert (p h2)
+    end
+  end
 
 type lref (a:Type0) = 
   r:(ref a){witnessed (is_low_pred r)}
@@ -193,3 +191,12 @@ let declassify_low (#a:Type) (r:ref a)
   is_low_pred_stable r;
   gst_witness (is_low_pred r);
   r
+
+val lemma_modifies_only_label_trans
+  (l:label) (h0 h1 h2:lheap)
+  : Lemma (
+    (lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
+    modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
+      modifies_only_label l h0 h2)
+  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
+let lemma_modifies_only_label_trans _ _ _ _ = admit ()

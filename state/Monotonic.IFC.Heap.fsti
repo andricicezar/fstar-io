@@ -156,10 +156,12 @@ val lemma_distinct_addrs_unused
 val lemma_alloc (#a:Type0) (rel:preorder a) (h0:lheap) (x:a) (mm:bool)
   :Lemma (requires True)
          (ensures  (let r, h1 = alloc rel h0 x mm in
-                    fresh r h0 h1 /\ h1 == upd h0 r x /\ is_mm r = mm /\ addr_of r == next_addr h0 /\
+                    fresh r h0 h1 /\ 
+                    h1 == upd h0 r x /\ 
+                    is_mm r = mm /\ 
+                    addr_of r == next_addr h0 /\
                     label_of r h1 == High /\
-                    modifies_classification Set.empty h0 h1 /\
-                    equal_ll h0 h1))
+                    modifies_classification Set.empty h0 h1))
 	 [SMTPat (alloc rel h0 x mm)]
 
 val lemma_sel_same_addr (#a:Type0) (#rel:preorder a) (h:lheap) (r1:mref a rel) (r2:mref a rel)
@@ -280,6 +282,8 @@ val lemma_declassify_tot
             equal_dom h0 h1 /\
             modifies Set.empty h0 h1 /\
             modifies_classification (S.singleton (addr_of r)) h0 h1 /\
-            label_of r h1 == l /\
-            equal_ll h0 h1))
+            label_of r h1 == l /\ 
+            (forall (a:Type) (rel:preorder a) (r:mref a rel). 
+              h0 `contains` r ==> (label_of r h0) `label_gte` (label_of r h1))
+            ))
    [SMTPat (declassify_tot h0 l r)]
