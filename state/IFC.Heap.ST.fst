@@ -111,6 +111,7 @@ let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h
   rel (sel h0 r) v /\ 
   h0 `contains` r /\
   modifies (Set.singleton (addr_of r)) h0 h1 /\ 
+  modifies_only_label (label_of r h0) h0 h1 /\
   equal_dom h0 h1 /\
   modifies_classification Set.empty h0 h1 /\
   sel h1 r == v
@@ -178,7 +179,9 @@ type lref (a:Type0) =
 let declassify_low (#a:Type) (r:ref a)
 : ST (lref a)
   (fun h -> label_of r h `label_gte` Low)
-  (fun h0 _ h1 -> declassify_post r Low h0 () h1)
+  (fun h0 r' h1 -> 
+    r == r' /\
+    declassify_post r' Low h0 () h1)
 =
   declassify r Low;
   gst_witness (is_low_pred r);
@@ -191,4 +194,4 @@ let declassify_low (#a:Type) (r:ref a)
 //     modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2) ==>
 //       modifies_only_label l h0 h2)
 //   [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
-// let lemma_modifies_only_label_trans _ _ _ _ = ()
+// let lemma_modifies_only_label_trans _ _ _ _ = admit ()

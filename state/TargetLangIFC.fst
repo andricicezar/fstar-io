@@ -162,38 +162,43 @@ let elab_typ_tgt (t:typ) : target_lang (elab_typ t)=
 let write' (#t:Type) {| c:target_lang t |} (r:lref t) (v:t) 
 : ST unit
   (requires (fun h0 -> 
-    h0 `deep_contains` r /\ h0 `c.deep_contains` v /\
-    label_of r h0 == Low /\ c.deeply_labeled_with_low v h0 /\
+    h0 `deep_contains` r /\ 
+    h0 `c.deep_contains` v /\
+    label_of r h0 == Low /\ 
+    c.deeply_labeled_with_low v h0 /\
     objects_deeply_labeled h0))
   (ensures (fun h0 () h1 ->
     write_post r v h0 () h1 /\
+    modifies_only_label Low h0 h1 /\
     deeply_labeled_with_low r h1 /\
-    objects_deeply_labeled h1 /\
-    modifies_only_label Low h0 h1))
-= r := v;
+    objects_deeply_labeled h1
+    ))
+= let h0 = get () in
+  r := v;
   let h1 = get () in
   assume (deeply_labeled_with_low r h1);
   assume (objects_deeply_labeled h1);
-  admit ();
   ()
 
 
 val alloc' (#a:Type) {| c:target_lang a |} (init:a)
 : ST (lref a)
   (requires (fun h0 ->
-    objects_deeply_labeled h0 /\
-    c.deeply_labeled_with_low init h0))
+    c.deeply_labeled_with_low init h0 /\ 
+    objects_deeply_labeled h0))
   (ensures (fun h0 r h1 -> 
-    alloc_post init h0 r h1 /\
+    fresh r h0 h1 /\ 
+    modifies Set.empty h0 h1 /\
+    modifies_classification Set.empty h0 h1 /\
+    sel h1 r == init /\ 
     deeply_labeled_with_low r h1 /\ 
     objects_deeply_labeled h1))
-let alloc' #_ #c v = 
-  let r = alloc v in
+let alloc' #_ #c init = 
+  let r = alloc init in
   let r' = declassify_low r in
   let h1 = get () in
   assume (deeply_labeled_with_low r' h1);
   assume (objects_deeply_labeled h1);
-  admit ();
   r'
 
 val ctx_update_ref_test : 
@@ -233,7 +238,7 @@ val ctx_HO_test2 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test2 f =
   let h0 = get () in
-  let x:ref int = f () in
+  let x:lref int = f () in
   let h1 = get () in
   // assert (lheap_rel h0 h1);
   // assert (modifies_only_label Low h0 h1);
@@ -241,15 +246,13 @@ let ctx_HO_test2 f =
   let h2 = get () in
   // assert (modifies_only_label Low h1 h2);
   // assert (objects_deeply_labeled h2);
-  // assert (modifies_only_label Low h0 h2);
+  assume (modifies_only_label Low h0 h2);
   ()
 
 val ctx_swap_ref_test :
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
-let ctx_swap_ref_test (x y: ref (ref int)) =
+let ctx_swap_ref_test (x y: lref (lref int)) =
   deep_recall x;
-  let h0 = get () in
-  assume (label_of x h0 == Low);
   let z = !x in
   let t = !y in
   write' x t;
@@ -265,18 +268,17 @@ let ctx_dynamic_alloc_test () =
 val ctx_HO_test3 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test3 f =
-  let x:ref int = f () in
-  let y:ref int = alloc' (!x + 1) in
+  let x:lref int = f () in
+  let y:lref int = alloc' (!x + 1) in
   ()
 
 val ctx_returns_callback_test :
   elab_typ (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test () =
-  let x: ref int = alloc' 13 in
+  let x: lref int = alloc' 13 in
   let cb : elab_typ (TArr TUnit TUnit) = (fun() ->
-    recall x;
+    deep_recall x;
     let h0 = get () in
-    assume (label_of x h0 == Low);
     write' x (!x % 5)
   ) in
   cb
@@ -284,8 +286,8 @@ let ctx_returns_callback_test () =
 val ctx_HO_test4 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test4 f =
-  let x:ref int = f () in
-  let y:ref (ref int) = alloc' x in
+  let x:lref int = f () in
+  let y:lref (lref int) = alloc' x in
   ()
 
 val progr_sep_test: 
