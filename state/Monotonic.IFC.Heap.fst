@@ -104,6 +104,9 @@ let upd_tot' (#a: Type0) (#rel: preorder a) (h: heap) (r: mref a rel) (x: a) =
 
 let upd_tot #a #rel (h,ll) r x = (upd_tot' h r x, ll)
 
+let extend_map addr l ll =
+  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
+
 let upd #a #rel hll r x =
   if hll `contains_bool` r
   then upd_tot hll r x
@@ -114,22 +117,24 @@ let upd #a #rel hll r x =
       ({ next_addr = r.addr + 1;
         memory    = F.on_dom pos (fun r' -> if r' = r.addr
 	   		                 then Some (| a, Some rel, r.mm, x |)
-                                         else h.memory r') }, ll)
+                                         else h.memory r') }, 
+        extend_map r.addr High ll)
     else
       ({ h with memory = F.on_dom pos (fun r' -> if r' = r.addr
 				             then Some (| a, Some rel, r.mm, x |)
                                              else h.memory r') }, ll)
 
-let extend_map addr l ll =
-  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
-
-let alloc #a rel (h, ll) x mm =
+val alloc_heap: #a:Type0 -> rel:preorder a -> heap -> a -> mm:bool -> Tot (mref a rel * heap)
+let alloc_heap #a rel h x mm =
   let r = { addr = h.next_addr; init = x; mm = mm } in
-  r, ({ next_addr = r.addr + 1;
+  r, { next_addr = r.addr + 1;
        memory    = F.on_dom pos (fun r' -> if r' = r.addr
 	   		                then Some (| a, Some rel, r.mm, x |)
-                                        else h.memory r') }, 
-      extend_map r.addr High ll)
+                                        else h.memory r') }
+
+let alloc #a rel (h, ll) x mm =
+  let r, h' = alloc_heap #a rel h x mm in
+  (r, (h', extend_map r.addr High ll)) (* We have to extend ll because we don't know that the new address was not used before in ll. *)
 
 let declassify_tot #a #rel ((h, ll):lheap) l (r:mref a rel) =
   (h, extend_map r.addr l ll)
@@ -204,7 +209,8 @@ let lemma_distinct_addrs_unused #a #b #rel1 #rel2 h r1 r2 = ()
 let lemma_alloc #a rel h0 x mm =
   let r, h1 = alloc rel h0 x mm in
   let h1' = upd h0 r x in
-  assume (equal h1 h1')
+  assert (equal h1 h1')
+
 let lemma_free_mm_sel #a #b #rel1 #rel2 h0 r1 r2 = ()
 let lemma_free_mm_contains #a #b #rel1 #rel2 h0 r1 r2 = ()
 let lemma_free_mm_unused #a #b #rel1 #rel2 h0 r1 r2 = ()
