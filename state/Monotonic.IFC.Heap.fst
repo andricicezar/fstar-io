@@ -105,7 +105,7 @@ let upd_tot' (#a: Type0) (#rel: preorder a) (h: heap) (r: mref a rel) (x: a) =
 let upd_tot #a #rel (h,ll) r x = (upd_tot' h r x, ll)
 
 let extend_map addr l ll =
-  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr)
+  F.on_dom pos (fun addr' -> if addr = addr' then l else ll addr')
 
 let upd #a #rel hll r x =
   if hll `contains_bool` r
@@ -206,11 +206,11 @@ let lemma_distinct_addrs_distinct_types #a #b #rel1 #rel2 h r1 r2 = ()
 let lemma_distinct_addrs_distinct_preorders u = ()
 let lemma_distinct_addrs_distinct_mm u = ()
 let lemma_distinct_addrs_unused #a #b #rel1 #rel2 h r1 r2 = ()
-let lemma_alloc #a rel h0 x mm =
-  let r, h1 = alloc rel h0 x mm in
-  let h1' = upd h0 r x in
-  assume (modifies_classification Set.empty h0 h1);
-  assert (equal h1 h1')
+
+let lemma_alloc #a rel lh0 x mm =
+  let r, lh1 = alloc rel lh0 x mm in
+  let lh1' = upd lh0 r x in
+  assert (equal lh1 lh1')
 
 let lemma_free_mm_sel #a #b #rel1 #rel2 h0 r1 r2 = ()
 let lemma_free_mm_contains #a #b #rel1 #rel2 h0 r1 r2 = ()
@@ -259,6 +259,4 @@ let lemma_next_addr_alloc #_ _ _ _ _ = ()
 let lemma_next_addr_free_mm #_ #_ _ _ = ()
 let lemma_next_addr_contained_refs_addr #_ #_ _ _ = ()
 
-let lemma_declassify_tot #a #rel h0 l r = 
-  let h1 = declassify_tot h0 l r in
-  assume (modifies_classification (S.singleton (addr_of r)) h0 h1)
+let lemma_declassify_tot #a #rel h0 l r = ()
