@@ -309,8 +309,6 @@ val progr_secret_unchanged_test:
 let progr_secret_unchanged_test rp rs ctx = 
   recall rp; (* This has to be very precisely here! *)
   let secret: ref int = alloc 0 in
-  let h0 = get () in
-  assume (inv_low_points_to_low h0);
   ctx ();
   let v = !secret in
   assert (v == 0);
@@ -331,9 +329,6 @@ let progr_passing_callback_test rp rs f =
   recall rp;
   let secret: ref int = alloc 0 in
   declassify secret Low; gst_witness (is_low_pred secret);
-  let h0 = get () in
-  assume (inv_low_points_to_low h0);
-
   let cb: elab_typ (TArr TUnit TUnit) = (fun () -> 
     gst_recall (is_low_pred secret);
     write' secret (!secret + 1)) in
