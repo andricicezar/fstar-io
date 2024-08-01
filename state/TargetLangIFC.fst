@@ -291,6 +291,32 @@ val progr_sep_test:
 let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ()
 
+val progr_sep_test_alloc:
+  #rp: ref int -> 
+  ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
+  ST unit
+    (requires (fun h0 -> 
+      h0 `contains` rp /\
+      label_of rp h0 == High))
+    (ensures (fun h0 _ h1 -> True))
+let progr_sep_test_alloc #rp f =
+  f (declassify_low rp)
+
+val progr_sep_test_nested:
+  #rp: ref (ref int) -> 
+  ctx:(elab_typ (TArr (TRef (TRef TNat)) TUnit)) ->
+  ST unit
+    (requires (fun h0 -> 
+      h0 `contains` rp /\
+      label_of rp h0 == High))
+    (ensures (fun h0 _ h1 -> True))
+let progr_sep_test_nested #rp f =
+  declassify rp Low; gst_witness (is_low_pred rp);
+  let p = !rp in
+  declassify p Low; gst_witness (is_low_pred p);
+  let r = alloc' (!rp) in (* <-- needed a copy here! *) 
+  f r
+
 val progr_secret_unchanged_test: 
   #rp: ref int -> 
   #rs: lref (lref int) ->
