@@ -93,7 +93,7 @@ unfold let unmodified_common (h0:lheap) (h1:lheap) : Type0 =
 
 let modifies_only_label (l:label) (h0:lheap) (h1:lheap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
-    h0 `contains` r /\ ~(label_of r h0 == l) ==> sel h0 r == sel h1 r) /\
+    (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let modifies_t (s:tset nat) (h0:lheap) (h1:lheap) =
