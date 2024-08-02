@@ -8,13 +8,14 @@ open Monotonic.IFC.Heap
 module W = FStar.Monotonic.Witnessed
 
 val lheap_rel : preorder lheap
-let lheap_rel (h1:lheap) (h2:lheap) =
+let lheap_rel (h1:lheap) (h2:lheap) = 
   (* classic heap monotonicity: references cannot be deallocated *)
   (forall (a:Type0) (rel:preorder a) (r:mref a rel). 
     h1 `contains` r ==> (h2 `contains` r /\ rel (sel h1 r) (sel h2 r))) 
   
   /\
 
+  (* TODO: can this part of the relation be moved at the reference level? do we need all references to be labeled? *)
   (* references can only be declassified *)
   (forall (a:Type) (rel:preorder a) (r:mref a rel). 
     h1 `contains` r ==> (label_of r h1) `label_gte` (label_of r h2))
