@@ -188,7 +188,6 @@ let declassify_low (#a:Type) (r:ref a)
   r
 
 
-// no need for both lemmas - should delete one of them after we make them work 
 val lemma_modifies_only_label_trans
    (l:label) (h0 h1 h2:lheap)
    : Lemma

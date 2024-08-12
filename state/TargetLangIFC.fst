@@ -266,7 +266,7 @@ let ctx_HO_test4 f =
 val progr_sep_test: 
   #rp: ref int -> 
   ctx:(elab_typ (TArr TUnit TUnit)) ->
-  ST unit
+  IST unit
     (requires (fun h0 -> 
       witnessed (contains_pred rp) /\
       inv_low_points_to_low h0 /\
