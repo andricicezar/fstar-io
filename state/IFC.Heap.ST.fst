@@ -78,18 +78,15 @@ let contains_stable (#a:Type0) (#rel:preorder a) (r:mref a rel) : Lemma (stable 
   )
 
 type mref (a:Type0) (rel:preorder a) = 
-  r:(mref a rel){is_mm r = false /\ witnessed (contains_pred r)}
-  (** ^ we could define our own ref type that contains that they are low *)
-
-let recall (#a:Type) (#rel:preorder a) (r:mref a rel) :STATE unit (fun p lh -> lh `contains` r ==> p () lh)
-  = gst_recall (contains_pred r)  
+  mref a rel
 
 let alloc_post (#a:Type) (#rel:preorder a) (init:a) (h0:lheap) (r:mref a rel) (h1:lheap) : Type0 =
   fresh r h0 h1 /\ 
   modifies Set.empty h0 h1 /\
   modifies_classification Set.empty h0 h1 /\
   sel h1 r == init /\ 
-  label_of r h1 == High
+  label_of r h1 == High /\
+  is_mm r == false
 
 
 let alloc (#a:Type) (#rel:preorder a) (init:a)
@@ -101,7 +98,7 @@ let alloc (#a:Type) (#rel:preorder a) (init:a)
   gst_witness (contains_pred r);
   r
 
-let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> p (sel h r) h)
+let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> witnessed (contains_pred r) /\ p (sel h r) h)
 = let h0 = gst_get () in
   gst_recall (contains_pred r);
   lemma_sel_equals_sel_tot_for_contained_refs h0 r;
@@ -119,7 +116,7 @@ let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 : ST unit
-  (fun h -> rel (sel h r) v)
+  (fun h -> witnessed (contains_pred r) /\ rel (sel h r) v)
   (write_post #a #rel r v)
 = let h0 = gst_get () in
   gst_recall (contains_pred r);
@@ -141,7 +138,7 @@ let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lhe
 
 let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
 : ST unit
-  (fun h -> label_of r h `label_gte` l)
+  (fun h -> witnessed (contains_pred r) /\ label_of r h `label_gte` l)
   (declassify_post #a #rel r l)
 =
   let h0 = gst_get () in
@@ -152,12 +149,12 @@ let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
 
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
-  : STATE a (fun p h -> p (sel h r) h)
+  : STATE a (fun p h -> witnessed (contains_pred r) /\ p (sel h r) h)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 : ST unit
-  (fun h -> rel (sel h r) v)
+  (fun h -> witnessed (contains_pred r) /\ rel (sel h r) v)
   (write_post #a #rel r v)
 = write #a #rel r v
 
@@ -174,14 +171,16 @@ let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r))
     norm [delta_only [`%stable;`%lheap_rel]; iota]
   )
 
-type lref (a:Type0) = 
-  r:(ref a){witnessed (is_low_pred r)}
+// type lref (a:Type0) = 
+//   r:(ref a){witnessed (is_low_pred r)}
 
 let declassify_low (#a:Type) (r:ref a)
-: ST (lref a)
-  (fun h -> label_of r h `label_gte` Low)
+: ST (ref a)
+  (fun h -> witnessed (contains_pred r) /\ label_of r h `label_gte` Low)
   (fun h0 r' h1 -> 
     r == r' /\
+    witnessed (contains_pred r') /\
+    witnessed (is_low_pred r') /\
     declassify_post r' Low h0 () h1)
 =
   declassify r Low;
@@ -207,7 +206,7 @@ let lemma_modifies_only_label_trans l h0 h1 h2 =
     ()
 
 let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
-   (forall (a:Type) (r:lref a).{:pattern (sel h1 r)} 
+   (forall (a:Type) (r:ref a).{:pattern (sel h1 r)} 
      (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
    unmodified_common h0 h1
 
@@ -221,10 +220,10 @@ val lemma_modifies_only_Low_trans
    [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
 let lemma_modifies_only_Low_trans l h0 h1 h2 = 
     assert (unmodified_common h0 h1);
-    assert (forall (a:Type) (rel:preorder a) (r:lref a). 
+    assert (forall (a:Type) (rel:preorder a) (r:ref a). 
     (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
     assert (unmodified_common h0 h2);
-    assume (forall (a:Type) (rel:preorder a) (r:lref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
+    assume (forall (a:Type) (rel:preorder a) (r:ref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
     // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
     // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
     // (forall_intro .. )
