@@ -237,8 +237,8 @@ let ctx_dynamic_alloc_test () =
 val ctx_HO_test3 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test3 f =
-  let x:lref int = f () in
-  let y:lref int = alloc' (!x + 1) in
+  let x:ref int = f () in
+  let y:ref int = alloc' (!x + 1) in
   ()
 
 val ctx_returns_callback_test :
@@ -260,7 +260,7 @@ let ctx_HO_test4 f =
 val progr_sep_test: 
   #rp: ref int -> 
   ctx:(elab_typ (TArr TUnit TUnit)) ->
-  ST unit
+  IST unit
     (requires (fun h0 -> 
       inv_low_points_to_low h0 /\
       label_of rp h0 == High))

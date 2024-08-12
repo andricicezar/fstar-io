@@ -189,7 +189,6 @@ let declassify_low (#a:Type) (r:ref a)
   r
 
 
-// no need for both lemmas - should delete one of them after we make them work 
 val lemma_modifies_only_label_trans
    (l:label) (h0 h1 h2:lheap)
    : Lemma
@@ -206,28 +205,28 @@ let lemma_modifies_only_label_trans l h0 h1 h2 =
      (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r);
     ()
 
-let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
-   (forall (a:Type) (r:lref a).{:pattern (sel h1 r)} 
-     (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
-   unmodified_common h0 h1
+// let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
+//    (forall (a:Type) (r:lref a).{:pattern (sel h1 r)} 
+//      (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
+//    unmodified_common h0 h1
 
-val lemma_modifies_only_Low_trans
-   (l:label) (h0 h1 h2:lheap)
-   : Lemma
-    // the first precondition means no declassification between h0 and h1
-     (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
-     modifies_only_Low l h0 h1 /\ modifies_only_Low l h1 h2)
-     (ensures modifies_only_Low l h0 h2)
-   [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
-let lemma_modifies_only_Low_trans l h0 h1 h2 = 
-    assert (unmodified_common h0 h1);
-    assert (forall (a:Type) (rel:preorder a) (r:lref a). 
-    (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
-    assert (unmodified_common h0 h2);
-    assume (forall (a:Type) (rel:preorder a) (r:lref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
-    // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
-    // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
-    // (forall_intro .. )
-    // assert(False);
-    admit();
-    ()
+// val lemma_modifies_only_Low_trans
+//    (l:label) (h0 h1 h2:lheap)
+//    : Lemma
+//     // the first precondition means no declassification between h0 and h1
+//      (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
+//      modifies_only_Low l h0 h1 /\ modifies_only_Low l h1 h2)
+//      (ensures modifies_only_Low l h0 h2)
+//    [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
+// let lemma_modifies_only_Low_trans l h0 h1 h2 = 
+//     assert (unmodified_common h0 h1);
+//     assert (forall (a:Type) (rel:preorder a) (r:lref a). 
+//     (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
+//     assert (unmodified_common h0 h2);
+//     assume (forall (a:Type) (rel:preorder a) (r:lref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
+//     // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
+//     // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
+//     // (forall_intro .. )
+//     // assert(False);
+//     admit();
+//     ()
