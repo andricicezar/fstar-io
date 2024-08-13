@@ -110,12 +110,27 @@ let nat_heap = {
   rel = (fun x y -> x <= y == true);
 }
 
-(* TODO: why is this failing?
-let test () : mst nat_heap unit (fun p h0 -> forall h1. p () h1) =
-  mst_subcomp #_ #_ #_ #_ (
-  mst_bind #nat_heap #nat #unit #_ #_ (get ())
-    (fun h0 -> 
-      let h1 = h0 + 1 in 
-      put h1))
-*)
+assume val div : #heap:mheap -> x:int -> y:int -> mst heap int (fun p h -> y <> 0 /\ p (x/y) h)
+
+
 // put(get() + 1); witness (fun s -> s > 0); let f () = recall (fun s -> s > 0); 1 / get() in f () 0
+
+let f () : mst nat_heap int (fun p h0 -> W.witnessed nat_heap.rel (fun s -> s > 0) /\ (forall r. p r h0)) =
+  (get ())
+  `mst_bind`
+  (fun h -> 
+    (recall (fun s -> s > 0))
+    `mst_bind`
+    (fun () ->
+      (1 `div` h)))
+
+let test () : mst nat_heap int (fun p h0 -> forall r. p r (h0+1)) =
+  (get ())
+  `mst_bind`
+  (fun h0 -> 
+    (put (h0+ 1))
+    `mst_bind`
+    (fun () -> 
+      witness (fun s -> s > 0)
+      `mst_bind`
+      f))
