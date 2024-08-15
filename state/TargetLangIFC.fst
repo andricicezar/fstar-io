@@ -24,40 +24,48 @@ let prog () =
 
 (** target_lang is a shallow embedding of STLC **)
 class target_lang (t:Type) = {
-  shallowly_witnessed : t -> Type0;
+  shallowly_witnessed_contains : t -> Type0;
+  shallowly_witnessed_is_low : t -> Type0;
 }
   
 instance target_lang_unit : target_lang unit = {
-  shallowly_witnessed = (fun _ -> True);
+  shallowly_witnessed_contains = (fun _ -> True);
+  shallowly_witnessed_is_low = (fun _ -> True);
 }
 
 instance target_lang_int : target_lang int = {
-  shallowly_witnessed = (fun _ -> True);
+  shallowly_witnessed_contains = (fun _ -> True);
+  shallowly_witnessed_is_low = (fun _ -> True);
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
-  shallowly_witnessed = (fun (x1, x2) -> c1.shallowly_witnessed x1 /\ c2.shallowly_witnessed x2);
+  shallowly_witnessed_contains = (fun (x1, x2) -> c1.shallowly_witnessed_contains x1 /\ c2.shallowly_witnessed_contains x2);
+  shallowly_witnessed_is_low = (fun (x1, x2) -> c1.shallowly_witnessed_is_low x1 /\ c2.shallowly_witnessed_is_low x2);
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
-  shallowly_witnessed = (fun x ->
+  shallowly_witnessed_contains = (fun x ->
     match x with
-    | Inl x1 -> c1.shallowly_witnessed x1
-    | Inr x2 -> c2.shallowly_witnessed x2);
+    | Inl x1 -> c1.shallowly_witnessed_contains x1
+    | Inr x2 -> c2.shallowly_witnessed_contains x2);
+  shallowly_witnessed_is_low = (fun x ->
+    match x with
+    | Inl x1 -> c1.shallowly_witnessed_is_low x1
+    | Inr x2 -> c2.shallowly_witnessed_is_low x2);
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
-  shallowly_witnessed = (fun (x:ref t) -> 
+  shallowly_witnessed_contains = (fun (x:ref t) -> 
     is_mm x = false /\
-    witnessed (contains_pred x) /\
-    witnessed (is_low_pred x));
+    witnessed (contains_pred x));
+  shallowly_witnessed_is_low = (fun (x:ref t) -> witnessed (is_low_pred x));
 }
 
 open FStar.Preorder
 
 let inv_low_points_to_low (h:lheap) =
   forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
-    c.shallowly_witnessed (sel h r)
+    (c.shallowly_witnessed_contains (sel h r) /\ c.shallowly_witnessed_is_low (sel h r))
 
 effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
   ST a 
@@ -68,7 +76,7 @@ effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
       inv_low_points_to_low h1 /\
       post h0 r h1))
 
-let alloc (#a:Type) (#rel:preorder a) (init:a)
+let _alloc (#a:Type) (#rel:preorder a) (init:a)
 : IST (mref a rel) (fun h -> True) (alloc_post #a #rel init)
 =
   let r = alloc init in
@@ -79,7 +87,7 @@ let alloc (#a:Type) (#rel:preorder a) (init:a)
 unfold let pre_tgt_arrow
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (h0:lheap) =
-  shallowly_witnessed x                                           (* x is Low *)
+  shallowly_witnessed_contains x /\ shallowly_witnessed_is_low x         (* x is Low *)
 
 let post_tgt_arrow
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
@@ -87,8 +95,8 @@ let post_tgt_arrow
   (h0:lheap) (r:t2 x) (h1:lheap) =
   modifies_only_label Low h0 h1 /\                                       (* allows low references to be modified *)
   modifies_classification Set.empty h0 h1 /\                             (* no modifications of the classification *)
-
-  ((tgtr x).shallowly_witnessed r)                                (* r is deeply labeled with Low *)
+  (tgtr x).shallowly_witnessed_contains r /\ 
+  (tgtr x).shallowly_witnessed_is_low r                                  (* r is deeply labeled with Low *)
 
 let mk_tgt_arrow 
   (t1:Type)
@@ -105,7 +113,8 @@ instance target_lang_arrow
   (t2:t1 -> Type)
   {| (x:t1 -> target_lang (t2 x)) |}
   : target_lang (mk_tgt_arrow t1 t2) = {
-    shallowly_witnessed = (fun _ -> True);
+    shallowly_witnessed_contains = (fun _ -> True);
+    shallowly_witnessed_is_low = (fun _ -> True);
   }
 
 
@@ -147,12 +156,12 @@ let elab_typ_tgt (t:typ) : target_lang (elab_typ t)=
 let write' (#t:Type) {| c:target_lang t |} (r:ref t) (v:t) 
 : IST unit
   (requires (fun h0 -> 
-    shallowly_witnessed r /\
-    c.shallowly_witnessed v))
+    shallowly_witnessed_contains r /\ shallowly_witnessed_is_low r /\
+    c.shallowly_witnessed_contains v /\ c.shallowly_witnessed_is_low v))
   (ensures (fun h0 () h1 ->
     write_post r v h0 () h1 /\
     modifies_only_label Low h0 h1 /\
-    shallowly_witnessed r))
+    shallowly_witnessed_contains r /\ shallowly_witnessed_is_low r))
 = let h0 = get () in
   gst_recall (is_low_pred r);
   gst_recall (contains_pred r);
@@ -165,15 +174,17 @@ let write' (#t:Type) {| c:target_lang t |} (r:ref t) (v:t)
 val alloc' (#a:Type) {| c:target_lang a |} (init:a)
 : IST (ref a)
   (requires (fun h0 -> 
-    c.shallowly_witnessed init))
+    c.shallowly_witnessed_contains init /\
+    c.shallowly_witnessed_is_low init))
   (ensures (fun h0 r h1 -> 
     fresh r h0 h1 /\ 
     modifies Set.empty h0 h1 /\
     modifies_classification Set.empty h0 h1 /\
     sel h1 r == init /\ 
-    shallowly_witnessed r))
+    shallowly_witnessed_contains r /\
+    shallowly_witnessed_is_low r))
 let alloc' #_ #c init = 
-  let r = alloc init in
+  let r = _alloc init in
   gst_witness (contains_pred r);
   declassify r Low;
   gst_witness (is_low_pred r);
@@ -191,7 +202,7 @@ let ctx_update_multiple_refs_test (x:ref (ref int)) (y:ref int) =
   let ix : ref int = !x in
   let h0 = get () in
   eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
-    c.shallowly_witnessed (sel h0 r) with (ref int) (solve) x;
+    c.shallowly_witnessed_is_low (sel h0 r) with (ref int) (solve) x;
   write' ix (!ix + 1);
   write' x y;
   write' y (!y + 5);
@@ -203,7 +214,7 @@ let ctx_HO_test1 (xs:ref ((ref int) * ref int)) =
   let (x', x'') = !xs in
   let h0 = get () in
   eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
-    c.shallowly_witnessed (sel h0 r) with ((ref int) * (ref int)) (solve) xs;
+    c.shallowly_witnessed_is_low (sel h0 r) with ((ref int) * (ref int)) (solve) xs;
   write' xs (x', x');  // xs := (x', x');
   (fun () -> write' xs (x', x''))
   
@@ -227,7 +238,7 @@ val ctx_swap_ref_test :
 let ctx_swap_ref_test (x y: ref (ref int)) =
   let h0 = get () in
   eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
-    c.shallowly_witnessed (sel h0 r) with (ref int) (solve) x;
+    c.shallowly_witnessed_is_low (sel h0 r) with (ref int) (solve) x;
   let z = !x in
   let t = !y in
   write' x t;
@@ -324,7 +335,7 @@ val progr_secret_unchanged_test:
          
 let progr_secret_unchanged_test rp rs ctx = 
   gst_recall (contains_pred rp); (* This has to be very precisely here! *)
-  let secret: ref int = alloc 0 in
+  let secret: ref int = _alloc 0 in
   gst_witness (contains_pred secret);
   ctx ();
   let v = !secret in
@@ -346,7 +357,7 @@ val progr_passing_callback_test:
 // TODO: the callback of the program should be able to modify rp
 let progr_passing_callback_test rp rs f =
   gst_recall (contains_pred rp);
-  let secret: ref int = alloc 0 in
+  let secret: ref int = _alloc 0 in
   gst_witness (contains_pred secret);
   declassify secret Low; gst_witness (is_low_pred secret);
   let cb: elab_typ (TArr TUnit TUnit) = (fun () -> 
@@ -388,11 +399,13 @@ let elab_apply_arrow t1 t2 f x = f x
 let cast_TArr #t1 #t2 (f : elab_typ (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ t = f
 
 type vcontext (g:context) = 
-  vx:var{Some? (g vx)} -> x:(elab_typ (Some?.v (g vx))){(elab_typ_tgt (Some?.v (g vx))).shallowly_witnessed x}
+  vx:var{Some? (g vx)} -> x:(elab_typ (Some?.v (g vx))){(elab_typ_tgt (Some?.v (g vx))).shallowly_witnessed_contains x /\
+  (elab_typ_tgt (Some?.v (g vx))).shallowly_witnessed_is_low x}
 
 let vempty : vcontext empty = fun _ -> assert false
 
-let vextend #t (x:(elab_typ t){(elab_typ_tgt t).shallowly_witnessed x}) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
+let vextend #t (x:(elab_typ t){(elab_typ_tgt t).shallowly_witnessed_contains x /\
+  (elab_typ_tgt t).shallowly_witnessed_is_low x}) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
 #push-options "--split_queries always"
