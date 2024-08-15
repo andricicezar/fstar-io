@@ -12,8 +12,6 @@ noeq type linkedList (a: Type0) : Type0 =
     | Nil
     | Cons of a * ref (linkedList a)
 
-// TODO: separate the current invariant into two invariants (and shallowly_witnessed into two parts accordingly)
-
 instance target_lang_linkedList (t1:Type) {| c1:target_lang t1 |} : target_lang (linkedList t1) = {
   shallowly_witnessed_contains = (fun x ->
     match x with
@@ -25,6 +23,13 @@ instance target_lang_linkedList (t1:Type) {| c1:target_lang t1 |} : target_lang 
     | Cons (h, tl) -> c1.shallowly_witnessed_is_low h /\ witnessed (is_low_pred tl));
 }
 
+let head (a: Type0) (l:linkedList a) {| c1:target_lang a |} : IST (option a)
+  (requires (fun h -> shallowly_witnessed_contains l))
+    (ensures fun _ _ _ -> True) = 
+      match l with
+      | Nil -> None
+      | Cons (h, tl) -> Some h
+
 let tail (a: Type0) (l: linkedList a) {| c1:target_lang a |} : IST (linkedList a)
     (requires (fun h -> shallowly_witnessed_contains l))
     (ensures fun _ _ _ -> True) = 
@@ -32,11 +37,26 @@ let tail (a: Type0) (l: linkedList a) {| c1:target_lang a |} : IST (linkedList a
       | Nil -> Nil
       | Cons (h, tl) -> !tl
 
-let append (a: Type0) (l: linkedList a) (v: a) {| c:target_lang a |}: ST (linkedList a)
+let insert_front (a: Type0) (l: linkedList a) (v: a) {| c:target_lang a |}: ST (linkedList a)
     (requires (fun _ -> True))
     (ensures fun _ _ _ -> True) = 
     let r: ref (linkedList a) = alloc l in 
     Cons (v, r)
+
+// TODO: fix this
+// let rec append (a: Type0) (l: linkedList a) (v: a) {| c:target_lang a |}: IST (linkedList a)
+//     (requires (fun h -> shallowly_witnessed_contains l /\ shallowly_witnessed_is_low l))
+//     (ensures fun _ _ _ -> True) =
+//     let h0 = get() in
+//     match l with 
+//     | Nil -> 
+//       let r = alloc Nil in 
+//       Cons (v, r)
+//     | Cons (v, r) -> 
+//       let tl = !r in
+//         eliminate forall (a:Type) (c:target_lang a) (r':ref a). witnessed (is_low_pred r') ==>
+//         c.shallowly_witnessed_is_low (sel h0 r') with (linkedList a) (solve) r;
+//         append a tl v #c
 
 let rec length (a: Type0) (l: linkedList a) {| c:target_lang a |} : IST nat 
        (requires (fun h -> shallowly_witnessed_contains l /\ shallowly_witnessed_is_low l))
@@ -46,13 +66,9 @@ let rec length (a: Type0) (l: linkedList a) {| c:target_lang a |} : IST nat
          | Nil -> 0
          | Cons (h, tlref) -> 
            let tl = !tlref in
-             eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
+            eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
             c.shallowly_witnessed_is_low (sel h0 r) with (linkedList a) (solve) tlref;
-           1 + length a tl #c
-
-
-// val insert (a: Type0) {| c:target_lang a |} : linkedList a -> ref (linkedList a) -> v: a -> St (linkedList a)
-// let insert a l r v = 
+            1 + length a tl #c
 
 // examples
 
@@ -75,3 +91,5 @@ let cycle_length3 () : ST (linkedList nat) (requires fun _ -> True) (ensures fun
     gst_witness (contains_pred x);
     write x (Cons(2, z));
     Cons (2, z)
+
+//TODO: adapt declassify for cycles
