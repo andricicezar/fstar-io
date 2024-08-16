@@ -1,4 +1,4 @@
-module MST
+module TOTAL_MST
 
 open WMonad
 
