@@ -95,12 +95,10 @@ let alloc (#a:Type) (#rel:preorder a) (init:a)
   let r, h1 = alloc rel h0 init false in
   assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1;
-  gst_witness (contains_pred r);
   r
 
-let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> witnessed (contains_pred r) /\ p (sel h r) h)
+let read (#a:Type) (#rel:preorder a) (r:mref a rel) : STATE a (fun p h -> contains_pred r h /\ p (sel h r) h)
 = let h0 = gst_get () in
-  gst_recall (contains_pred r);
   lemma_sel_equals_sel_tot_for_contained_refs h0 r;
   sel_tot h0 r    
 
@@ -116,10 +114,9 @@ let write_post (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) (h0:lheap) () (h
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 : ST unit
-  (fun h -> witnessed (contains_pred r) /\ rel (sel h r) v)
+  (fun h -> contains_pred r h /\ rel (sel h r) v)
   (write_post #a #rel r v)
 = let h0 = gst_get () in
-  gst_recall (contains_pred r);
   let h1 = upd_tot h0 r v in
   lemma_distinct_addrs_distinct_preorders ();
   lemma_distinct_addrs_distinct_mm ();
@@ -138,23 +135,22 @@ let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lhe
 
 let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)
 : ST unit
-  (fun h -> witnessed (contains_pred r) /\ label_of r h `label_gte` l)
+  (fun h -> contains_pred r h /\ label_of r h `label_gte` l)
   (declassify_post #a #rel r l)
 =
   let h0 = gst_get () in
-  gst_recall (contains_pred r);
   let h1 = declassify_tot #a #rel h0 l r in
   assert (lheap_rel h0 h1) by (norm [delta_only [`%lheap_rel]; iota]);
   gst_put h1
 
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
-  : STATE a (fun p h -> witnessed (contains_pred r) /\ p (sel h r) h)
+  : STATE a (fun p h -> contains_pred r h /\ p (sel h r) h)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 : ST unit
-  (fun h -> witnessed (contains_pred r) /\ rel (sel h r) v)
+  (fun h -> contains_pred r h /\ rel (sel h r) v)
   (write_post #a #rel r v)
 = write #a #rel r v
 
@@ -171,20 +167,16 @@ let is_low_pred_stable (#a:Type0) (r:ref a) : Lemma (stable (is_low_pred r))
     norm [delta_only [`%stable;`%lheap_rel]; iota]
   )
 
-// type lref (a:Type0) = 
-//   r:(ref a){witnessed (is_low_pred r)}
-
 let declassify_low (#a:Type) (r:ref a)
 : ST (ref a)
-  (fun h -> witnessed (contains_pred r) /\ label_of r h `label_gte` Low)
+  (fun h -> contains_pred r h /\ label_of r h `label_gte` Low)
   (fun h0 r' h1 -> 
     r == r' /\
-    witnessed (contains_pred r') /\
-    witnessed (is_low_pred r') /\
+    contains_pred r' h1 /\
+    is_low_pred r' h1 /\
     declassify_post r' Low h0 () h1)
 =
   declassify r Low;
-  gst_witness (is_low_pred r);
   r
 
 
@@ -209,23 +201,23 @@ let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
      (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
    unmodified_common h0 h1
 
-val lemma_modifies_only_Low_trans
-   (l:label) (h0 h1 h2:lheap)
-   : Lemma
-    // the first precondition means no declassification between h0 and h1
-     (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
-     modifies_only_Low l h0 h1 /\ modifies_only_Low l h1 h2)
-     (ensures modifies_only_Low l h0 h2)
-   [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
-let lemma_modifies_only_Low_trans l h0 h1 h2 = 
-    assert (unmodified_common h0 h1);
-    assert (forall (a:Type) (rel:preorder a) (r:ref a). 
-    (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
-    assert (unmodified_common h0 h2);
-    assume (forall (a:Type) (rel:preorder a) (r:ref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
-    // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
-    // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
-    // (forall_intro .. )
-    // assert(False);
-    admit();
-    ()
+// val lemma_modifies_only_Low_trans
+//    (l:label) (h0 h1 h2:lheap)
+//    : Lemma
+//     // the first precondition means no declassification between h0 and h1
+//      (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
+//      modifies_only_Low l h0 h1 /\ modifies_only_Low l h1 h2)
+//      (ensures modifies_only_Low l h0 h2)
+//    [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
+// let lemma_modifies_only_Low_trans l h0 h1 h2 = 
+//     assert (unmodified_common h0 h1);
+//     assert (forall (a:Type) (rel:preorder a) (r:ref a). 
+//     (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
+//     assert (unmodified_common h0 h2);
+//     assume (forall (a:Type) (rel:preorder a) (r:ref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
+//     // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
+//     // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
+//     // (forall_intro .. )
+//     // assert(False);
+//     admit();
+//     ()
