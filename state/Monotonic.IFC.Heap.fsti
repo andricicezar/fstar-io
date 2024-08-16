@@ -165,6 +165,14 @@ val lemma_alloc (#a:Type0) (rel:preorder a) (h0:lheap) (x:a) (mm:bool)
                     modifies_classification Set.empty h0 h1))
 	 [SMTPat (alloc rel h0 x mm)]
 
+val lemma_sel_same_addr' (#a:Type0) (#b:Type0) (#rela:preorder a) (#relb:preorder b) (h:lheap) (r1:mref a rela) (r2:mref b relb)
+  :Lemma (requires (h `contains` r1 /\ h `contains` r2 /\ addr_of r1 = addr_of r2 /\ is_mm r1 == is_mm r2))
+         (ensures  (
+            a == b /\
+            rela == relb /\
+            sel h r1 == sel h r2))
+
+
 val lemma_sel_same_addr (#a:Type0) (#rel:preorder a) (h:lheap) (r1:mref a rel) (r2:mref a rel)
   :Lemma (requires (h `contains` r1 /\ addr_of r1 = addr_of r2 /\ is_mm r1 == is_mm r2))
          (ensures  (h `contains` r2 /\ sel h r1 == sel h r2))

@@ -133,7 +133,7 @@ let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lhe
   h1 `contains` r /\
   equal_dom h0 h1 /\ (* TODO: define equal_heaps *)
   modifies_none h0 h1 /\
-  modifies_classification (Set.singleton (addr_of r)) h0 h1 /\ 
+  modifies_classification (only r) h0 h1 /\ 
   label_of r h1 == l
 
 let declassify (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label)

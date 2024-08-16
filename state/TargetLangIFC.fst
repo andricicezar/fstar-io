@@ -64,16 +64,23 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
 open FStar.Preorder
 
 let inv_low_points_to_low (h:lheap) =
-  forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
-    (c.shallowly_witnessed_contains (sel h r) /\ c.shallowly_witnessed_is_low (sel h r))
+  (forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
+    c.shallowly_witnessed_is_low (sel h r))
+  
+let inv_contains_points_to_contains (h:lheap) =
+  (forall (a:Type) (c:target_lang a) (r:ref a). witnessed (contains_pred r) ==>
+    c.shallowly_witnessed_contains (sel h r))
+
+let inv_low_contains (h:lheap) = inv_low_points_to_low h /\ inv_contains_points_to_contains h
+
 
 effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
   ST a 
     (requires (fun h0 -> 
-      inv_low_points_to_low h0 /\
+      inv_low_contains h0 /\
       pre h0))
     (ensures (fun h0 r h1 ->
-      inv_low_points_to_low h1 /\
+      inv_low_contains h1 /\
       post h0 r h1))
 
 let _alloc (#a:Type) (#rel:preorder a) (init:a)
@@ -81,7 +88,7 @@ let _alloc (#a:Type) (#rel:preorder a) (init:a)
 =
   let r = alloc init in
   let h1 = get () in
-  assume (inv_low_points_to_low h1);
+  assume (inv_low_contains h1);
   r
 
 unfold let pre_tgt_arrow
@@ -167,7 +174,7 @@ let write' (#t:Type) {| c:target_lang t |} (r:ref t) (v:t)
   gst_recall (contains_pred r);
   r := v;
   let h1 = get () in
-  assume (inv_low_points_to_low h1);
+  assume (inv_low_contains h1);
   ()
 
 
@@ -203,6 +210,8 @@ let ctx_update_multiple_refs_test (x:ref (ref int)) (y:ref int) =
   let h0 = get () in
   eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
     c.shallowly_witnessed_is_low (sel h0 r) with (ref int) (solve) x;
+  eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (contains_pred r) ==>
+    c.shallowly_witnessed_contains (sel h0 r) with (ref int) (solve) x;
   write' ix (!ix + 1);
   write' x y;
   write' y (!y + 5);
@@ -215,6 +224,8 @@ let ctx_HO_test1 (xs:ref ((ref int) * ref int)) =
   let h0 = get () in
   eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (is_low_pred r) ==>
     c.shallowly_witnessed_is_low (sel h0 r) with ((ref int) * (ref int)) (solve) xs;
+  eliminate forall (a:Type) (c:target_lang a) (r:ref a). witnessed (contains_pred r) ==>
+    c.shallowly_witnessed_contains (sel h0 r) with ((ref int) * (ref int)) (solve) xs;
   write' xs (x', x');  // xs := (x', x');
   (fun () -> write' xs (x', x''))
   
