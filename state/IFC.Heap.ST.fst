@@ -66,7 +66,7 @@ sub_effect GST ~> STATE = lift_gst_state
 effect State (a:Type) (wp:st_wp a) = STATE a wp
 
 effect ST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
-  STATE a (fun (p:st_post a) (h:lheap) -> pre h /\ (forall a h1. post h a h1 ==> p a h1))
+  STATE a (fun (p:st_post a) (h:lheap) -> pre h /\ (forall a h1. h `lheap_rel` h1 /\ post h a h1 ==> p a h1))
 effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
 
 let contains_pred (#a:Type0) (#rel:preorder a) (r:mref a rel) = fun lh -> lh `contains` r
@@ -186,7 +186,7 @@ val lemma_modifies_only_label_trans
      (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
      modifies_only_label l h0 h1 /\ modifies_only_label l h1 h2)
      (ensures modifies_only_label l h0 h2)
-   [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
+ //  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
 let lemma_modifies_only_label_trans l h0 h1 h2 = 
     assert (unmodified_common h0 h1);
     assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
@@ -196,10 +196,10 @@ let lemma_modifies_only_label_trans l h0 h1 h2 =
      (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r);
     ()
 
-let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
-   (forall (a:Type) (r:ref a).{:pattern (sel h1 r)} 
-     (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
-   unmodified_common h0 h1
+// let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
+//    (forall (a:Type) (r:ref a).{:pattern (sel h1 r)} 
+//      (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
+//    unmodified_common h0 h1
 
 // val lemma_modifies_only_Low_trans
 //    (l:label) (h0 h1 h2:lheap)

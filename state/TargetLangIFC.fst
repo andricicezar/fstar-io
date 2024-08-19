@@ -59,7 +59,7 @@ let inv_low_contains (h:lheap) =
   inv_contains_points_to_contains h /\
   inv_low_points_to_low h
 
-let shallowly_contained_low (#a:Type) {| c:target_lang a |} (v:a) (h:lheap) =
+unfold let shallowly_contained_low (#a:Type) {| c:target_lang a |} (v:a) (h:lheap) =
   c.shallowly_contained v h /\ c.shallowly_low v h
 
 effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
@@ -76,7 +76,7 @@ unfold let pre_tgt_arrow
   (h0:lheap) =
   shallowly_contained_low #t1 #tgtx x h0
 
-let post_tgt_arrow
+unfold let post_tgt_arrow
   (#t1:Type) (x:t1) {| tgtx:target_lang t1 |}
   (#t2:Type) {| tgtr : target_lang t2 |}
   (h0:lheap) (r:t2) (h1:lheap) =
@@ -87,7 +87,7 @@ let post_tgt_arrow
 let mk_tgt_arrow 
   (t1:Type)
   {| tgt_t1: target_lang t1 |}
-  (t2:Type) (* TODO: this dependency is not needed anymore *)
+  (t2:Type)
   {| c2 : target_lang t2 |}
 = x:t1 -> IST t2 
     (requires (pre_tgt_arrow x #tgt_t1))
@@ -184,11 +184,10 @@ let alloc' #_ #c init =
 
 
 let declassify_low' (#a:Type) {| c:target_lang a |} (r:ref a) : ST unit
-  (fun h -> contains_pred r h /\ inv_contains_points_to_contains h)
+  (fun h -> shallowly_contained r h /\ inv_contains_points_to_contains h)
   (fun h0 () h1 -> 
     inv_contains_points_to_contains h1 /\
-    contains_pred r h1 /\
-    shallowly_low r h1 /\
+    shallowly_contained_low r h1 /\
     declassify_post r Low h0 () h1)
 =
   declassify r Low;
@@ -208,21 +207,28 @@ val ctx_update_multiple_refs_test :
 let ctx_update_multiple_refs_test (x:ref (ref int)) =
   gst_witness (contains_pred x);
   gst_witness (is_low_pred x);
-  admit ();
-  fun (y:ref int) ->
-    gst_recall (contains_pred x);
-    let ix : ref int = !x in
+  let cb : elab_typ (TArr (TRef TNat) TUnit) = (fun (y:ref int) -> 
     let h0 = get () in
     gst_recall (contains_pred x);
+    let ix : ref int = !x in
     eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_contained r h0 ==>
       c.shallowly_contained (sel h0 r) h0 with (ref int) (solve) x;
     gst_recall (is_low_pred x);    
     eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_low r h0 ==>
       c.shallowly_low (sel h0 r) h0 with (ref int) (solve) x;
     write' ix (!ix + 1);
+    let h1 = get () in
     write' x y;
+    let h2 = get () in
     write' y (!y + 5);
-    ()
+    let h3 = get () in
+
+    lemma_modifies_only_label_trans Low h0 h1 h2;
+    lemma_modifies_only_label_trans Low h0 h2 h3;
+    assert (modifies_only_label Low h0 h3); // we have an SMT Pat for this, but it does not kick in
+    ()  
+  ) in
+  cb
 
 val ctx_HO_test1 : 
   elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit))
@@ -260,21 +266,30 @@ let ctx_HO_test2 f =
 
 val ctx_swap_ref_test :
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
-let ctx_swap_ref_test (x y: ref (ref int)) =
-  let h0 = get () in
-  admit ();
-  // gst_recall (contains_pred x);
-  // eliminate forall (a:Type) (c:target_lang a) (r:ref a). contains_pred r h0 ==>
-  //   c.shallowly_contained (sel h0 r) with (ref int) (solve) x;
+let ctx_swap_ref_test (x:ref (ref int)) =
+  gst_witness (contains_pred x);
+  gst_witness (is_low_pred x);
 
-  let z = !x in
-  let t = !y in
-  // gst_recall (is_low_pred x);
-  // eliminate forall (a:Type) (c:target_lang a) (r:ref a). is_low_pred r h0 ==>
-  //   c.shallowly_low (sel h0 r) with (ref int) (solve) x;
-  write' x t;
-  write' y z;
-  ()
+  let cb : elab_typ (TArr (TRef (TRef TNat)) TUnit) = (fun (y: ref (ref int)) ->
+    let h0 = get () in
+    gst_recall (contains_pred x);
+    eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_contained r h0 ==>
+      c.shallowly_contained (sel h0 r) h0 with (ref int) (solve) x;
+    gst_recall (is_low_pred x);
+    eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_low r h0 ==>
+      c.shallowly_low (sel h0 r) h0 with (ref int) (solve) x;
+
+    let z = !x in
+    let t = !y in
+    write' x t;
+    let h1 = get () in
+    write' y z;
+    let h2 = get () in
+    lemma_modifies_only_label_trans Low h0 h1 h2;
+    assert (modifies_only_label Low h0 h2); // we have an SMT Pat for this, but it does not kick in
+    assert (modifies_classification Set.empty h0 h2);
+    ()) in
+  cb
 
 val ctx_dynamic_alloc_test :
    elab_typ (TArr TUnit (TRef TNat))
@@ -410,8 +425,10 @@ val progr_getting_callback_test:
 let progr_getting_callback_test rp rs f =
   let h0 = get () in
   let cb = f () in
+  let h1 = get () in
   cb ();
   let h2 = get () in
+  lemma_modifies_only_label_trans Low h0 h1 h2;
   assert (modifies_only_label Low h0 h2);
   ()
 
@@ -435,7 +452,7 @@ let vempty : vcontext empty = fun _ -> assert false
 let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
-#push-options "--split_queries always"
+// #push-options "--split_queries always"
 let rec elab_exp 
   (#g:context)
   (#e:exp) 
@@ -451,25 +468,28 @@ let rec elab_exp
       (post_tgt_arrow () #_ #(elab_typ t) #(elab_typ_tgt t) h0 r h1))) =
   let h0 = get () in
   match tyj with
-  | TyUnit -> ()
-  | TyZero -> 0
-  | TySucc tyj_s -> 
-    1 + (elab_exp tyj_s ve)
+  // | TyUnit -> ()
+  // | TyZero -> 0
+  // | TySucc tyj_s -> 
+  //   1 + (elab_exp tyj_s ve)
 
   // | TyAllocRef #_ #_ #t tyj_e -> begin
   //   let v : elab_typ t = elab_exp tyj_e ve in
   //   let r : ref (elab_typ t) = alloc' #_ #(elab_typ_tgt t) v in
   //   r
   // end
-  | TyReadRef #_ #_ #t tyj_e -> begin
-    let r : ref (elab_typ t) = elab_exp tyj_e ve in
-    !r
-  end
-  // | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
-  //     let r : ref (elab_typ t) = elab_exp tyj_ref ve in
-  //     let v : elab_typ t = elab_exp tyj_v ve in
-  //     write' #_ #(elab_typ_tgt t) r v
+  // | TyReadRef #_ #_ #t tyj_e -> begin
+  //   let r : ref (elab_typ t) = elab_exp tyj_e ve in
+  //   !r
   // end
+  | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
+      let r : ref (elab_typ t) = elab_exp tyj_ref ve in
+      gst_witness (contains_pred r); gst_witness (is_low_pred r);
+      let v : elab_typ t = elab_exp tyj_v ve in
+      gst_recall (contains_pred r); gst_recall (is_low_pred r);
+      write' #_ #(elab_typ_tgt t) r v;
+      admit ()
+  end
 
   // | TyAbs tx #_ #tres tyj_body ->
   //   let w : mk_tgt_arrow (elab_typ tx) #(elab_typ_tgt tx) (elab_typ tres) #(elab_typ_tgt tres) = 
@@ -488,12 +508,12 @@ let rec elab_exp
   //   let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
   //   elab_apply_arrow tx tres f x
 
-  | TyInl #_ #_ #t1 #t2 tyj_1 ->
-    let v1 : elab_typ t1 = elab_exp tyj_1 ve in
-    Inl #_ #(elab_typ t2) v1
-  | TyInr #_ #_ #t1 #t2 tyj_2 ->
-    let v2 : elab_typ t2 = elab_exp tyj_2 ve in
-    Inr #(elab_typ t1) v2
+  // | TyInl #_ #_ #t1 #t2 tyj_1 ->
+  //   let v1 : elab_typ t1 = elab_exp tyj_1 ve in
+  //   Inl #_ #(elab_typ t2) v1
+  // | TyInr #_ #_ #t1 #t2 tyj_2 ->
+  //   let v2 : elab_typ t2 = elab_exp tyj_2 ve in
+  //   Inr #(elab_typ t1) v2
   // | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
   //   let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
   //   match vc with 
@@ -505,12 +525,12 @@ let rec elab_exp
   //     elab_apply_arrow tr tres f y
   // end
 
-  | TyFst #_ #_ #tf #ts tyj_e ->
-    let v = elab_exp tyj_e ve in
-    fst #(elab_typ tf) #(elab_typ ts) v
-  | TySnd #_ #_ #tf #ts tyj_e ->
-    let v = elab_exp tyj_e ve in
-    snd #(elab_typ tf) #(elab_typ ts) v
+  // | TyFst #_ #_ #tf #ts tyj_e ->
+  //   let v = elab_exp tyj_e ve in
+  //   fst #(elab_typ tf) #(elab_typ ts) v
+  // | TySnd #_ #_ #tf #ts tyj_e ->
+  //   let v = elab_exp tyj_e ve in
+  //   snd #(elab_typ tf) #(elab_typ ts) v
   // | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
   //   let vf : elab_typ tf = elab_exp tyj_f ve in
   //   let vs : elab_typ ts = elab_exp tyj_s ve in
