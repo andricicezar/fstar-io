@@ -11,21 +11,31 @@ open IFC.Heap.ST
 class target_lang (t:Type) = {
   shallowly_contained : t -> lheap -> Type0;
   shallowly_low : t -> lheap -> Type0;
+
+  shallowly_witness : x:t -> ST (recall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ shallowly_contained x h1 /\ shallowly_low x h1)))
+    (requires (fun h0 -> shallowly_contained x h0 /\ shallowly_low x h0))
+    (ensures (fun h0 _ h1 -> h0 == h1))
 }
   
 instance target_lang_unit : target_lang unit = {
   shallowly_contained = (fun _ _ -> True);
   shallowly_low = (fun _ _ -> True);
+  shallowly_witness = (fun _ -> (fun () -> ()));
 }
 
 instance target_lang_int : target_lang int = {
   shallowly_contained = (fun _ _ -> True);
   shallowly_low = (fun _ _ -> True);
+  shallowly_witness = (fun _ -> (fun () -> ()));
 }
 
 instance target_lang_pair (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (t1 * t2) = {
   shallowly_contained = (fun (x1, x2) h -> c1.shallowly_contained x1 h /\ c2.shallowly_contained x2 h);
   shallowly_low = (fun (x1, x2) h -> c1.shallowly_low x1 h /\ c2.shallowly_low x2 h);
+  shallowly_witness = (fun (x1,x2) -> 
+    let w1 = c1.shallowly_witness x1 in
+    let w2 = c2.shallowly_witness x2 in
+    (fun () -> w1 (); w2 ()))
 }
 
 instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:target_lang t2 |} : target_lang (either t1 t2) = {
@@ -37,12 +47,22 @@ instance target_lang_sum (t1:Type) (t2:Type) {| c1:target_lang t1 |} {| c2:targe
     match x with
     | Inl x1 -> c1.shallowly_low x1 h
     | Inr x2 -> c2.shallowly_low x2 h);
+  shallowly_witness = (fun x -> 
+    match x with 
+    | Inl x1 -> (let w = c1.shallowly_witness x1 in (fun () -> w ()))
+    | Inr x2 -> (let w = c2.shallowly_witness x2 in (fun () -> w ())))
 }
 
 instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = {
   shallowly_contained = (fun (x:ref t) h -> 
     is_mm x == false /\ contains_pred x h);
   shallowly_low = (fun (x:ref t) h -> is_low_pred x h);
+  shallowly_witness = (fun x -> 
+    gst_witness (contains_pred x);
+    gst_witness (is_low_pred x);
+    (fun () -> 
+      gst_recall (contains_pred x);
+      gst_recall (is_low_pred x)))
 }
 
 open FStar.Preorder
@@ -101,6 +121,7 @@ instance target_lang_arrow
   : target_lang (mk_tgt_arrow t1 t2) = {
     shallowly_contained = (fun _ _ -> True);
     shallowly_low = (fun _ _ -> True);
+    shallowly_witness = (fun _ -> (fun () -> ()));
   }
 
 
@@ -359,13 +380,17 @@ val progr_sep_test_nested:
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
 let progr_sep_test_nested rp f =
+  let h0 = get () in
+  assert (inv_low_points_to_low h0);
   declassify_low' rp;
+  let h1 = get () in
+  // assert (inv_low_points_to_low h1);
   let p = !rp in
   declassify_low' p;
-  let h0 = get () in
-  assert (shallowly_contained rp h0);
-  assume (shallowly_low rp h0);
-  assume (inv_low_points_to_low h0);
+  let h2 = get () in
+  assert (shallowly_contained rp h2);
+  assert (shallowly_low rp h2);
+  assume (inv_low_points_to_low h2);
   // let r = alloc' (!rp) in (* <-- needed a copy here! *) 
   f rp
 
@@ -403,8 +428,10 @@ val progr_passing_callback_test:
 let progr_passing_callback_test rp rs f =
   let secret: ref int = _alloc 0 in
   declassify_low' secret;
+  gst_witness (contains_pred secret);
   gst_witness (is_low_pred secret);
   let cb: elab_typ (TArr TUnit TUnit) = (fun () -> 
+    gst_recall (contains_pred secret);
     gst_recall (is_low_pred secret);
     write' secret (!secret + 1)) in
   let h1 = get () in
@@ -445,14 +472,22 @@ let elab_apply_arrow t1 t2 f x = f x
 let cast_TArr #t1 #t2 (f : elab_typ (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ t = f
 
 type vcontext (g:context) = 
-  vx:var{Some? (g vx)} -> elab_typ (Some?.v (g vx))
+  vx:var{Some? (g vx)} -> 
+    ST (elab_typ (Some?.v (g vx)))
+      (fun h -> True)
+      (fun h0 x h1 -> h0 == h1 /\ shallowly_contained_low #_ #(elab_typ_tgt (Some?.v (g vx))) x h1)
 
 let vempty : vcontext empty = fun _ -> assert false
 
-let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
-  fun y -> if y = 0 then x else ve (y-1)
+let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) : 
+  ST (vcontext (extend t g))
+    (requires (fun h0 -> shallowly_contained_low #_ #(elab_typ_tgt t) x h0))
+    (ensures (fun h0 r h1 -> h0 == h1)) =
+  let w = (elab_typ_tgt t).shallowly_witness x in
+  fun y -> 
+    if y = 0 then (w (); x) else ve (y-1)
 
-// #push-options "--split_queries always"
+#push-options "--split_queries always"
 let rec elab_exp 
   (#g:context)
   (#e:exp) 
@@ -460,81 +495,80 @@ let rec elab_exp
   (tyj:typing g e t)
   (ve:vcontext g)
   : IST (elab_typ t) 
-     (requires (fun h0 -> 
-      (forall (vx:var). Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tgt (Some?.v (g vx))) (ve vx) h0) /\
-      (pre_tgt_arrow () #target_lang_unit h0)))
-     (ensures (fun h0 r h1 -> 
-      (forall (vx:var). Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tgt (Some?.v (g vx))) (ve vx) h1) /\
-      (post_tgt_arrow () #_ #(elab_typ t) #(elab_typ_tgt t) h0 r h1))) =
+     (requires (pre_tgt_arrow () #target_lang_unit))
+     (ensures (post_tgt_arrow () #_ #(elab_typ t) #(elab_typ_tgt t))) =
   let h0 = get () in
   match tyj with
-  // | TyUnit -> ()
-  // | TyZero -> 0
-  // | TySucc tyj_s -> 
-  //   1 + (elab_exp tyj_s ve)
+  | TyUnit -> ()
+  | TyZero -> 0
+  | TySucc tyj_s -> 
+    1 + (elab_exp tyj_s ve)
 
-  // | TyAllocRef #_ #_ #t tyj_e -> begin
-  //   let v : elab_typ t = elab_exp tyj_e ve in
-  //   let r : ref (elab_typ t) = alloc' #_ #(elab_typ_tgt t) v in
-  //   r
-  // end
-  // | TyReadRef #_ #_ #t tyj_e -> begin
-  //   let r : ref (elab_typ t) = elab_exp tyj_e ve in
-  //   !r
-  // end
+  | TyAllocRef #_ #_ #t tyj_e -> begin
+    let v : elab_typ t = elab_exp tyj_e ve in
+    let r : ref (elab_typ t) = alloc' #_ #(elab_typ_tgt t) v in
+    r
+  end
+  | TyReadRef #_ #_ #t tyj_e -> begin
+    let r : ref (elab_typ t) = elab_exp tyj_e ve in
+    !r
+  end
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
       let r : ref (elab_typ t) = elab_exp tyj_ref ve in
-      gst_witness (contains_pred r); gst_witness (is_low_pred r);
       let v : elab_typ t = elab_exp tyj_v ve in
-      gst_recall (contains_pred r); gst_recall (is_low_pred r);
-      write' #_ #(elab_typ_tgt t) r v;
-      admit ()
+      write' #_ #(elab_typ_tgt t) r v
   end
 
-  // | TyAbs tx #_ #tres tyj_body ->
-  //   let w : mk_tgt_arrow (elab_typ tx) #(elab_typ_tgt tx) (elab_typ tres) #(elab_typ_tgt tres) = 
-  //     (fun (x:elab_typ tx) -> 
-  //       elab_exp tyj_body (vextend #tx x ve))
-  //   in
-  //   assert (t == TArr tx tres);
-  //   cast_TArr #tx #tres w t
-  // | TyVar vx -> 
-  //   let Some tx = g vx in
-  //   let x : elab_typ tx = ve vx in
-  //   x
-  // | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
-  //   assert ((elab_typ t) == (elab_typ tres));
-  //   let x : elab_typ tx = elab_exp tyj_x ve in
-  //   let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
-  //   elab_apply_arrow tx tres f x
+  | TyAbs tx #_ #tres tyj_body ->
+    let w : mk_tgt_arrow (elab_typ tx) #(elab_typ_tgt tx) (elab_typ tres) #(elab_typ_tgt tres) = 
+      (fun (x:elab_typ tx) -> 
+        elab_exp tyj_body (vextend #tx x ve))
+    in
+    assert (t == TArr tx tres);
+    cast_TArr #tx #tres w t
+  | TyVar vx -> 
+    let Some tx = g vx in
+    let x : elab_typ tx = ve vx in
+    x
+  | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
+    assert ((elab_typ t) == (elab_typ tres));
+    let x : elab_typ tx = elab_exp tyj_x ve in
+    let wx = (elab_typ_tgt tx).shallowly_witness x in
+    let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
+    wx ();
+    elab_apply_arrow tx tres f x
 
-  // | TyInl #_ #_ #t1 #t2 tyj_1 ->
-  //   let v1 : elab_typ t1 = elab_exp tyj_1 ve in
-  //   Inl #_ #(elab_typ t2) v1
-  // | TyInr #_ #_ #t1 #t2 tyj_2 ->
-  //   let v2 : elab_typ t2 = elab_exp tyj_2 ve in
-  //   Inr #(elab_typ t1) v2
-  // | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
-  //   let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
-  //   match vc with 
-  //   | Inl x -> 
-  //     let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
-  //     elab_apply_arrow tl tres f x
-  //   | Inr y ->
-  //     let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
-  //     elab_apply_arrow tr tres f y
-  // end
+  | TyInl #_ #_ #t1 #t2 tyj_1 ->
+    let v1 : elab_typ t1 = elab_exp tyj_1 ve in
+    Inl #_ #(elab_typ t2) v1
+  | TyInr #_ #_ #t1 #t2 tyj_2 ->
+    let v2 : elab_typ t2 = elab_exp tyj_2 ve in
+    Inr #(elab_typ t1) v2
+  | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
+    let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
+    match vc with 
+    | Inl x -> 
+      let wx = (elab_typ_tgt tl).shallowly_witness x in
+      let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
+      wx ();
+      elab_apply_arrow tl tres f x
+    | Inr y ->
+      let wy = (elab_typ_tgt tr).shallowly_witness y in
+      let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
+      wy ();
+      elab_apply_arrow tr tres f y
+  end
 
-  // | TyFst #_ #_ #tf #ts tyj_e ->
-  //   let v = elab_exp tyj_e ve in
-  //   fst #(elab_typ tf) #(elab_typ ts) v
-  // | TySnd #_ #_ #tf #ts tyj_e ->
-  //   let v = elab_exp tyj_e ve in
-  //   snd #(elab_typ tf) #(elab_typ ts) v
-  // | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
-  //   let vf : elab_typ tf = elab_exp tyj_f ve in
-  //   let vs : elab_typ ts = elab_exp tyj_s ve in
-  //   (vf, vs)
-  
-  | _ -> admit ()
+  | TyFst #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    fst #(elab_typ tf) #(elab_typ ts) v
+  | TySnd #_ #_ #tf #ts tyj_e ->
+    let v = elab_exp tyj_e ve in
+    snd #(elab_typ tf) #(elab_typ ts) v
+  | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
+    let vf : elab_typ tf = elab_exp tyj_f ve in
+    let wvf = (elab_typ_tgt tf).shallowly_witness vf in
+    let vs : elab_typ ts = elab_exp tyj_s ve in
+    wvf ();
+    (vf, vs)
 #pop-options
