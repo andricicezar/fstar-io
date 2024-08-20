@@ -134,6 +134,9 @@ let test () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
       witness (fun s -> s > 0)
       `mst_bind`
       (fun () -> 
-        put (h0+1) // TODO: can I revert the state to h0?
-        `mst_bind`
-        (fun () -> f ()))))
+        (Put (h0+1) (fun _ -> f ())) <: mst nat_state int (fun p h -> h `nat_state.rel` (h0+1) /\ 
+                                                                      W.witnessed nat_state.rel (fun s -> s > 0) /\
+                                                                      (forall r. p r (h0+1))))))
+        // put (h0+1) // TODO: can I revert the state to h0?
+        // `mst_bind`
+        // (fun () -> f ()))))

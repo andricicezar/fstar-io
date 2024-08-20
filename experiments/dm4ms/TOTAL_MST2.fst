@@ -36,7 +36,7 @@ let partial_call_wp (state:Type0) (pre:pure_pre) : st_wp_h state (squash pre) =
 
 val theta : #a:Type u#a -> #state:tstate -> m state a -> st_wp_h state.t a
 let rec theta #a #state m =
-  fun p h0 -> exists h1 v. h0 `state.rel` h1 /\ m h0 == (h1, v) /\ p v h1
+  fun p h0 -> forall h1 v. h0 `state.rel` h1 /\ m h0 == (h1, v) ==> p v h1
 
 let mst (state:tstate) (a:Type) (wp:st_wp_h state.t a)=
   mm:(m state a){theta mm ⊑ wp}
@@ -98,7 +98,7 @@ let f () : mst nat_state int (fun p h0 -> W.witnessed nat_state.rel (fun s -> s 
     (fun () ->
       (1 `div` h)))
 
-let test () : mst nat_state int (fun p h0 -> forall r. p r (h0+1)) =
+let test () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
   (get ())
   `mst_bind`
   (fun h0 -> 
@@ -109,5 +109,6 @@ let test () : mst nat_state int (fun p h0 -> forall r. p r (h0+1)) =
       `mst_bind`
       (fun () ->
         (fun hi -> (** here I directly use the state monad *)
-          let (_, r) = f () 0 in (** I can call f with state 0 *)
+          let (_, r) = f () 0 in (** I can call f with state 0.
+               ^ we cannot return this state because it is not greater than h0 *)
           (hi, r)) <: mst nat_state int (fun p h -> (forall r. p r h)))))
