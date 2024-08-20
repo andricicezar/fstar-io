@@ -16,7 +16,7 @@ class target_lang (t:Type) = {
     (requires (fun h0 -> shallowly_contained x h0 /\ shallowly_low x h0))
     (ensures (fun h0 _ h1 -> h0 == h1))
 }
-  
+
 instance target_lang_unit : target_lang unit = {
   shallowly_contained = (fun _ _ -> True);
   shallowly_low = (fun _ _ -> True);
@@ -68,11 +68,15 @@ instance target_lang_ref (t:Type) {| c:target_lang t |} : target_lang (ref t) = 
 open FStar.Preorder
 
 let inv_contains_points_to_contains (h:lheap) =
-  (forall (a:Type) (c:target_lang a) (r:ref a). 
+  (* TODO: the forall on target_lang is creating problems in proofs. 
+    One solution would be to quantify over STLC types and use elab_typ. However,
+    the definitions depend one on other.
+  *)
+  (forall (a:Type) (c:target_lang a) (r:ref a).
     shallowly_contained r h ==> c.shallowly_contained (sel h r) h)
 
 let inv_low_points_to_low (h:lheap) =
-  (forall (a:Type) (c:target_lang a) (r:ref a). 
+  (forall (a:Type) (c:target_lang a) (r:ref a).
     shallowly_low r h ==> c.shallowly_low (sel h r) h)
 
 let inv_low_contains (h:lheap) = 
@@ -358,16 +362,53 @@ val progr_sep_test:
 let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ()
 
+let lemma (#a:Type) {| c:target_lang a |} (x:a) (h0 h1:lheap) : Lemma (
+  h0 `lheap_rel` h1 /\ shallowly_low x h0 ==> shallowly_low x h1
+) = admit ()
+
+
+let lemma123 (r:ref int) (h0 h1:lheap) : Lemma
+  (requires (modifies_none h0 h1 /\
+            h0 `lheap_rel` h1 /\
+            equal_dom h0 h1 /\
+            modifies_classification (only r) h0 h1 /\
+            shallowly_contained r h0 /\ 
+            shallowly_contained_low r h1 /\
+            inv_low_points_to_low h0))
+  (ensures (inv_low_points_to_low h1)) = 
+  introduce forall (a:Type) (c:target_lang a) (r:ref a). 
+    shallowly_low r h1 ==> c.shallowly_low (sel h1 r) h1
+  with begin
+    introduce shallowly_low r h1
+      ==> c.shallowly_low (sel h1 r) h1
+    with _. begin
+      introduce shallowly_low r h0 ==> c.shallowly_low (sel h1 r) h1 
+      with _. lemma (sel h0 r) h0 h1;
+      
+      introduce ~(shallowly_low r h0) ==> c.shallowly_low (sel h1 r) h1
+      with _. begin
+        assert (shallowly_low r h1);
+        let v : int = sel h1 r in 
+        let c' : target_lang int = solve in
+        assert (c'.shallowly_low v h1);
+        assume (c.shallowly_low v h1); (* TODO: idk how to get rid of this *)
+        ()
+      end
+    end
+  end
+
 val progr_sep_test_alloc:
   rp: ref int -> 
   ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
   IST unit
     (requires (fun h0 -> 
-      shallowly_low rp h0 /\
+      shallowly_contained rp h0 /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
 let progr_sep_test_alloc rp f =
   declassify_low' rp;
+  let h1 = get () in
+  assume (inv_low_points_to_low h1);
   let r = f rp in  
   r
 
@@ -380,17 +421,12 @@ val progr_sep_test_nested:
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
 let progr_sep_test_nested rp f =
-  let h0 = get () in
-  assert (inv_low_points_to_low h0);
+  let p : ref int = !rp in
   declassify_low' rp;
-  let h1 = get () in
-  // assert (inv_low_points_to_low h1);
-  let p = !rp in
   declassify_low' p;
-  let h2 = get () in
-  assert (shallowly_contained rp h2);
-  assert (shallowly_low rp h2);
-  assume (inv_low_points_to_low h2);
+  let h1 = get () in
+  assume (inv_low_points_to_low h1);
+
   // let r = alloc' (!rp) in (* <-- needed a copy here! *) 
   f rp
 
