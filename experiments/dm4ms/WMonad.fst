@@ -20,13 +20,14 @@ let st_wp_h (heap a: Type) = st_post_h heap a -> Tot (st_pre_h heap)
 
 (** Returning a value does not transform the state *)
 unfold
-let st_return (heap a: Type) (x: a) (p: st_post_h heap a) = p x
+let st_return (heap:Type u#b) (a: Type u#a) (x: a) (p: st_post_h heap a) = p x
 
 (** Sequential composition of stateful WPs *)
 unfold
 let st_bind_wp
-      (heap: Type)
-      (a b: Type)
+      (heap: Type u#c)
+      (a:Type u#a)
+      (b: Type u#b)
       (wp1: st_wp_h heap a)
       (wp2: (a -> GTot (st_wp_h heap b)))
       (p: st_post_h heap b)
