@@ -15,7 +15,7 @@ let stable (#state) (pred:state.t -> Type0) =
   forall h1 h2. (pred h1 /\ h1 `state.rel` h2) ==> pred h2
 
 noeq
-type free (state:tstate u#b) (a:Type u#a) : Type u#(max 1 a b) =
+type free (state:tstate u#s) (a:Type u#a) : Type u#(max 1 a s) =
 | Get : cont:(state.t -> free state a) -> free state a
 | Put : state.t -> cont:(unit -> free state a) -> free state a
 | Witness : p:(state.t -> Type0) -> cont:(unit -> free state a) -> free state a
@@ -24,11 +24,11 @@ type free (state:tstate u#b) (a:Type u#a) : Type u#(max 1 a b) =
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free state a) -> free state a
 | Return : a -> free state a
 
-let free_return (state:tstate u#a) (a:Type u#b) (x:a) : free state a =
+let free_return (state:tstate u#s) (a:Type u#b) (x:a) : free state a =
   Return x
 
 let rec free_bind
-  (state:tstate u#c)
+  (state:tstate u#s)
   (a:Type u#a)
   (b:Type u#b)
   (l : free state a)
@@ -47,7 +47,7 @@ let rec free_bind
 let partial_call_wp (state:tstate) (pre:pure_pre) : st_wp_h state.t (squash pre) = 
   fun p h0 -> pre /\ p () h0
 
-val theta : #a:Type u#a -> #state:tstate u#c -> free state a -> st_wp_h state.t a
+val theta : #a:Type u#a -> #state:tstate u#s -> free state a -> st_wp_h state.t a
 let rec theta #a #state m =
   match m with
   | Return x -> st_return state.t _ x
@@ -71,7 +71,7 @@ let mst_return (#state:tstate) (#a:Type) (x:a) : mst state a (st_return state.t 
 
 
 let mst_bind
-  (#state:tstate u#c)
+  (#state:tstate u#s)
   (#a : Type u#a)
   (#b : Type u#b)
   (#wp_v : st_wp_h state.t a)
@@ -83,7 +83,7 @@ let mst_bind
   free_bind state a b v f
 
 let mst_subcomp
-  (#state:tstate u#c)
+  (#state:tstate u#s)
   (#a : Type u#a)
   (#wp1 : st_wp_h state.t a)
   (#wp2 : st_wp_h state.t a)
