@@ -189,6 +189,17 @@ let _alloc (#a:Type) (#rel:preorder a) (init:a)
   assume (inv_contains_points_to_contains h1);
   r
 
+let declassify_low' (#a:Type) {| c:target_lang a |} (r:ref a) : ST unit
+  (fun h -> shallowly_contained r h /\ inv_contains_points_to_contains h)
+  (fun h0 () h1 -> 
+    inv_contains_points_to_contains h1 /\
+    shallowly_contained_low r h1 /\
+    declassify_post r Low h0 () h1)
+=
+  declassify r Low;
+  let h1 = get () in
+  assume (inv_contains_points_to_contains h1)
+
 val alloc' (#a:Type) {| c:target_lang a |} (init:a)
 : IST (ref a)
   (requires (fun h0 ->
@@ -201,25 +212,12 @@ val alloc' (#a:Type) {| c:target_lang a |} (init:a)
     shallowly_contained_low r h1))
 let alloc' #_ #c init = 
   let r = _alloc init in
-  declassify r Low;
+  declassify_low' r;
   let h1 = get () in
   assume (inv_low_points_to_low h1);
-  assume (inv_contains_points_to_contains h1);
   r
 
-
-let declassify_low' (#a:Type) {| c:target_lang a |} (r:ref a) : ST unit
-  (fun h -> shallowly_contained r h /\ inv_contains_points_to_contains h)
-  (fun h0 () h1 -> 
-    inv_contains_points_to_contains h1 /\
-    shallowly_contained_low r h1 /\
-    declassify_post r Low h0 () h1)
-=
-  declassify r Low;
-  let h1 = get () in
-  assume (inv_contains_points_to_contains h1)
-
-
+let _ = assert False
 
 val ctx_update_ref_test : 
   elab_typ (TArr (TRef TNat) TUnit)
