@@ -112,6 +112,14 @@ let rec ll_eq (#a: Type0) (fuel: nat) (l1: linkedList a) (l2: linkedList a) (h: 
       let ys = sel h ysref in  
       x == y /\ ll_eq (fuel - 1) xs ys h
 
+noeq
+type ll_constant_ind (#a: Type0) (h1 h2: lheap) : linkedList a -> Type0 =
+| LLC_Nil : ll_constant_ind h1 h2 (Nil #a)
+| LLC_Cons_Cons_Cons : v:a ->
+    xsref:ref (linkedList a){sel h1 xsref == sel h2 xsref} ->
+    ll_constant_ind h1 h2 (sel h1 xsref) ->
+    ll_constant_ind h1 h2 (Cons (v,xsref))
+
 let rec ll_constant (#a: Type0) (fuel: nat) (l: linkedList a) (h1 h2: lheap) : Type0 =
   if fuel = 0 then True
   else

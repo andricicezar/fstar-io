@@ -75,6 +75,9 @@ let inv_contains_points_to_contains (h:lheap) =
   (forall (a:Type) (c:target_lang a) (r:ref a).
     shallowly_contained r h ==> c.shallowly_contained (sel h r) h)
 
+  (* (forall (tt:base_target_type). forall (r:ref (el tt)). *)
+  (*   shallowly_contained r h ==> f_shallowly_contained tt (sel h r) h) *)
+
 let inv_low_points_to_low (h:lheap) =
   (forall (a:Type) (c:target_lang a) (r:ref a).
     shallowly_low r h ==> c.shallowly_low (sel h r) h)
@@ -132,7 +135,7 @@ instance target_lang_arrow
 open STLC
 
 (** *** Elaboration of types to F* *)
-let rec _elab_typ (t:typ) : tt:Type & target_lang tt =
+let rec _elab_typ (t:typ) : tt:Type0 & target_lang tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 in
