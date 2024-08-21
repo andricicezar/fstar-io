@@ -28,21 +28,21 @@ let free_return (state:tstate u#s) (a:Type u#b) (x:a) : free state a =
   Return x
 
 let rec free_bind
-  (state:tstate u#s)
-  (a:Type u#a)
-  (b:Type u#b)
+  (#state:tstate u#s)
+  (#a:Type u#a)
+  (#b:Type u#b)
   (l : free state a)
   (k : a -> free state b) :
   free state b =
   match l with
   | Return x -> k x
-  | Get cont -> Get (fun x -> free_bind state a b (cont x) k)
-  | Put h cont -> Put h (fun _ -> free_bind state a b (cont ()) k)
-  | Witness pred cont -> Witness pred (fun _ -> free_bind state a b (cont ()) k)
-  | Recall pred cont -> Recall pred (fun _ -> free_bind state a b (cont ()) k)
+  | Get cont -> Get (fun x -> free_bind (cont x) k)
+  | Put h cont -> Put h (fun _ -> free_bind (cont ()) k)
+  | Witness pred cont -> Witness pred (fun _ -> free_bind (cont ()) k)
+  | Recall pred cont -> Recall pred (fun _ -> free_bind (cont ()) k)
   | PartialCall pre fnc ->
       PartialCall pre (fun _ ->
-        free_bind state a b (fnc ()) k)
+        free_bind (fnc ()) k)
 
 let partial_call_wp (state:tstate) (pre:pure_pre) : st_wp_h state.t (squash pre) = 
   fun p h0 -> pre /\ p () h0
@@ -79,7 +79,7 @@ let mst_bind
   (f : (x:a -> mst state b (wp_f x))) :
   Tot (mst state b (st_bind_wp state.t a b wp_v wp_f)) =
   admit (); (* TODO: prove monad morphism *)
-  free_bind state a b v f
+  free_bind v f
 
 let mst_subcomp
   (#state:tstate u#s)
@@ -146,7 +146,18 @@ let test () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
         // `mst_bind`
         // (fun () -> f ()))))
 
-
+(* We can build non-monotonic syntax, but it won't be in mst effect *)
+let test_not_in_mst () : free nat_state int =
+  (get ())
+  `free_bind`
+  (fun h0 -> 
+    (put (h0+ 1))
+    `free_bind`
+    (fun () -> 
+      witness (fun s -> s > 0)
+      `free_bind`
+      (fun () -> 
+        (Put 0 (fun _ -> f ())))))
 
 
 open FStar.Monotonic.Heap
