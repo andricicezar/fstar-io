@@ -299,3 +299,7 @@ let landins_knot_fs () : St nat =
   let f : nat -> St nat = (fun x -> !r x) in
   r := f;
   f 0
+
+val landins_knot_fs' : unit -> Dv (_mst nat (fun p _ -> forall r h1. p r h1))
+let landins_knot_fs' () = 
+  reify (landins_knot_fs ())
