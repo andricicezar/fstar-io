@@ -283,7 +283,8 @@ type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 let landins_knot_fs () : St nat =
   let id : nat -> St nat = fun x -> x in
   let r : ref (nat -> St nat) = alloc id in (** if total, there are universe problems because of pre-conditionality and `put h`,
-                                                e.g., arrows are the same universe as the heap *)
+                                                e.g., arrows are the same universe as the heap 
+                                                This is a known problem. Check DM4Free: Forbidding recursion through the store*)
   let f : nat -> St nat = (fun x -> !r x) in
   r := f;
   f 0

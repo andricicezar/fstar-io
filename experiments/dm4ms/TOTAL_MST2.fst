@@ -17,10 +17,12 @@ let stable (#state) (pred:state.t -> Type0) =
 type m (state:tstate u#s) (a:Type u#a) : Type u#(max a s) =
   state.t -> state.t * a
 
-(* TODO:
+(* 
   Heap has to be one universe higher than the things it stores, 
   and it seems like the monad has to be at least in the universe of the heap.
   So, can one store monadic arrows in the heap while being total? 
+
+  This was already aknowledged in DM4Free: Forbidding recursion through the store
   *)
 
 private noeq type heap_rec : Type u#(1+a) = {
