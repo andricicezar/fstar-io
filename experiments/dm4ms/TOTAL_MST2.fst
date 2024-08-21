@@ -7,21 +7,36 @@ open FStar.Tactics
 module W = FStar.Monotonic.Witnessed
 
 noeq type tstate = {
-  t: Type0;
+  t: Type u#s;
   rel: FStar.Preorder.preorder t;
 }
 
 let stable (#state) (pred:state.t -> Type0) =
   forall h1 h2. (pred h1 /\ h1 `state.rel` h2) ==> pred h2
 
-type m (state:tstate) (a:Type u#a) =
+type m (state:tstate u#s) (a:Type u#a) : Type u#(max a s) =
   state.t -> state.t * a
+
+(* TODO:
+  Heap has to be one universe higher than the things it stores, 
+  and it seems like the monad has to be at least in the universe of the heap.
+  So, can one store monadic arrows in the heap while being total? 
+  *)
+
+private noeq type heap_rec : Type u#(1+a) = {
+  next_addr: pos;
+  memory   : FStar.FunctionalExtensionality.restricted_t pos (fun (x:pos) 
+             -> option (a:Type u#a & rel:(option (FStar.Preorder.preorder a)) & b:bool & a)) 
+                      //type, preorder, mm flag, and value
+  }
+  
+  
 
 let m_return (state:tstate) (a:Type) (x:a) : m state a =
   fun h -> (h, x)
 
 let m_bind
-  (state:tstate)
+  (state:tstate u#s)
   (a:Type u#a)
   (b:Type u#b)
   (l : m state a)
@@ -75,8 +90,8 @@ let get #state () : mst state state.t (fun p h0 -> p h0 h0) =
 let put #state (h1:state.t) : mst state unit (fun p h0 -> (h0 `state.rel` h1) /\ p () h1) =
   fun _ -> (h1, ())
 
+(* CA: There is no way to have an implementation for witness and recall because FStar.Monotonic.Witnessed does not provide any way to create a `witnessed`. *)
 assume val witness #state (pred:state.t -> Type0) : mst state unit (fun p h -> pred h /\ stable pred /\ (W.witnessed state.rel pred ==> p () h))
-
 assume val recall #state (pred:state.t -> Type0) : mst state unit (fun p h -> W.witnessed state.rel pred /\ (pred h ==> p () h)) 
 
 let nat_state = {

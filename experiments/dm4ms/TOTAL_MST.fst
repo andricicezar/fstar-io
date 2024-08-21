@@ -285,7 +285,7 @@ type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 
 let landins_knot_fs () : St nat = 
   let id : nat -> St nat = fun x -> x in
-  let r : ref (nat -> St nat) = alloc id in (** because of pre-conditionality, we cannot even put arrows in the heap *)
+  let r : ref (nat -> St nat) = alloc id in (** because of pre-conditionality and the heap, we cannot put arrows in the heap *)
   // let f : nat -> St nat = (fun x -> !r x) in
   // r := f;
   f 0
