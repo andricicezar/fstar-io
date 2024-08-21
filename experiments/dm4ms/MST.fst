@@ -1,4 +1,4 @@
-module TOTAL_MST
+module MST
 
 open WMonad
 
@@ -125,39 +125,22 @@ let f () : mst nat_state int (fun p h0 -> W.witnessed nat_state.rel (fun s -> s 
     (fun () ->
       (1 `div` h)))
 
-[@@expect_failure]
-let test () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
-  (get ())
-  `mst_bind`
-  (fun h0 -> 
-    (put (h0+ 1))
-    `mst_bind`
-    (fun () -> 
-      witness (fun s -> s > 0)
-      `mst_bind`
-      (fun () -> 
-        (Put 0 (fun _ -> f ())) <: mst nat_state int (fun p h -> //h `nat_state.rel` 0 /\ 
-                                                                 W.witnessed nat_state.rel (fun s -> s > 0) /\
-                                                                 (forall r h'. p r h')))))
-        // (Put (h0+1) (fun _ -> f ())) <: mst nat_state int (fun p h -> h `nat_state.rel` (h0+1) /\ 
-        //                                                               W.witnessed nat_state.rel (fun s -> s > 0) /\
-        //                                                               (forall r h'. p r h')))))
-        // put (h0+1) // TODO: can I revert the state to h0?
-        // `mst_bind`
-        // (fun () -> f ()))))
-
 (* We can build non-monotonic syntax, but it won't be in mst effect *)
 let test_not_in_mst () : free nat_state int =
   (get ())
   `free_bind`
   (fun h0 -> 
-    (put (h0+ 1))
+    (put (h0 + 1))
     `free_bind`
     (fun () -> 
       witness (fun s -> s > 0)
       `free_bind`
       (fun () -> 
         (Put 0 (fun _ -> f ())))))
+
+[@expect_failure]
+let test_not_in_mst' () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
+  test_not_in_mst ()
 
 
 open FStar.Monotonic.Heap
