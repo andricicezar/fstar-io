@@ -217,7 +217,7 @@ let alloc' #_ #c init =
   assume (inv_low_points_to_low h1);
   r
 
-let _ = assert False
+// let _ = assert False
 
 val ctx_update_ref_test : 
   elab_typ (TArr (TRef TNat) TUnit)
