@@ -55,6 +55,7 @@ unfold
 let st_stronger (heap a: Type) (wp1 wp2: st_wp_h heap a) =
   (forall (p: st_post_h heap a) (h: heap). wp1 p h ==> wp2 p h)
 
+unfold
 let (⊑) #heap #a wp1 wp2 = st_stronger heap a wp2 wp1
 
 (** Closing the scope of a binder within a stateful WP *)

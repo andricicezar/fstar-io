@@ -65,7 +65,6 @@ let rec theta #a #state m =
 let mst (state:tstate) (a:Type) (wp:st_wp_h state.t a)=
   m:(free state a){theta m ⊑ wp}
 
-#set-options "--print_universes"
 let mst_return (#state:tstate) (#a:Type) (x:a) : mst state a (st_return state.t _ x) =
   free_return state a x
 
@@ -154,7 +153,7 @@ open FStar.Monotonic.Heap
 
 let heap_state : tstate = { t = heap; rel = FStar.ST.heap_rel }
 
-let _stable (pred:heap_state.t -> Type0) = stable #heap_state pred
+unfold let _stable (pred:heap_state.t -> Type0) = stable #heap_state pred
 
 let _mst a wp = mst heap_state a wp
 let _mst_bind a b wp_v wp_f v f = mst_bind #heap_state #a #b #wp_v #wp_f v f
@@ -170,7 +169,7 @@ let mst_if_then_else (a : Type u#a)
   _mst a (st_if_then_else heap_state.t a b wp1 wp2)
 
 
-total
+// total
 reifiable
 reflectable
 effect {
@@ -248,7 +247,6 @@ let alloc (#a:Type) (#rel:FStar.Preorder.preorder a) (init:a)
 
 let read (#a:Type) (#rel:FStar.Preorder.preorder a) (r:mref a rel) :STATEwp a (fun p h -> p (sel h r) h)
   = let h0 = _get () in
-    assert (_stable (contains_pred r));
     _recall (contains_pred r);
     Heap.lemma_sel_equals_sel_tot_for_contained_refs h0 r;
     sel_tot h0 r
@@ -260,7 +258,6 @@ let write (#a:Type) (#rel:FStar.Preorder.preorder a) (r:mref a rel) (v:a)
                  modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
                  sel h1 r == v)
   = let h0 = _get () in
-    assert (_stable (contains_pred r));
     _recall (contains_pred r);
     let h1 = upd_tot h0 r v in
     Heap.lemma_distinct_addrs_distinct_preorders ();
@@ -283,9 +280,10 @@ let op_Colon_Equals (#a:Type) (#rel:FStar.Preorder.preorder a) (r:mref a rel) (v
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 (** *** END SECTION --- COPY PASTE FROM FStar.ST **)
 
-let landins_knot_fs () : St nat = 
+let landins_knot_fs () : St nat =
   let id : nat -> St nat = fun x -> x in
-  let r : ref (nat -> St nat) = alloc id in (** because of pre-conditionality and the heap, we cannot put arrows in the heap *)
-  // let f : nat -> St nat = (fun x -> !r x) in
-  // r := f;
+  let r : ref (nat -> St nat) = alloc id in (** if total, there are universe problems because of pre-conditionality and `put h`,
+                                                e.g., arrows are the same universe as the heap *)
+  let f : nat -> St nat = (fun x -> !r x) in
+  r := f;
   f 0
