@@ -7,39 +7,38 @@ open FStar.Tactics.Typeclasses
 open Monotonic.IFC.Heap
 open IFC.Heap.ST
 
-(** witnessable is a shallow embedding of STLC **)
-class witnessable (t:Type) = {
-  // map : t -> lheap -> (#a:Type -> ref a -> Type0) -> Type0; maybe this can be generalized
-  shallowly_contained : t -> lheap -> Type0;
-  shallowly_low : t -> lheap -> Type0;
+type ref_lheap_pred =
+  pred:(#a:Type -> #rel:_ -> mref a rel -> lheap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `lheap_rel` h1 ==> pred x h1}
 
-  witness : x:t -> ST (recall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ shallowly_contained x h1 /\ shallowly_low x h1)))
-    (requires (fun h0 -> shallowly_contained x h0 /\ shallowly_low x h0))
-    (ensures (fun h0 _ h1 -> h0 == h1))
+class witnessable (t:Type) = {
+  satisfy : t -> lheap -> ref_lheap_pred -> Type0;
+
+  satisfy_monotonic : x:t -> pred:ref_lheap_pred -> h0:lheap -> h1:lheap -> Lemma (
+    h0 `lheap_rel` h1 /\ satisfy x h0 pred ==> satisfy x h1 pred);
+
+  witness : x:t -> pred:ref_lheap_pred -> ST (recall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy x h1 pred)))
+    (requires (fun h0 -> satisfy x h0 pred))
+    (ensures (fun h0 _ h1 -> h0 == h1));
 }
 
 instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = {
-  shallowly_contained = (fun (x:ref t) h -> 
-    is_mm x == false /\ contains_pred x h);
-  shallowly_low = (fun (x:ref t) h -> is_low_pred x h);
-  witness = (fun x -> 
-    gst_witness (contains_pred x);
-    gst_witness (is_low_pred x);
-    (fun () -> 
-      gst_recall (contains_pred x);
-      gst_recall (is_low_pred x)))
+  satisfy = (fun x h pred -> pred x h);
+  satisfy_monotonic = (fun x pred h0 h1 -> ());
+  witness = (fun x pred ->
+    gst_witness (pred x);
+    (fun () -> gst_recall (pred x)))
 }
 
 instance witnessable_unit : witnessable unit = {
-  shallowly_contained = (fun _ _ -> True);
-  shallowly_low = (fun _ _ -> True);
-  witness = (fun _ -> (fun () -> ()));
+  satisfy = (fun _ _ _ -> True);
+  satisfy_monotonic = (fun _ _ _ _ -> ());
+  witness = (fun _ _ -> (fun () -> ()));
 }
 
 instance witnessable_int : witnessable int = {
-  shallowly_contained = (fun _ _ -> True);
-  shallowly_low = (fun _ _ -> True);
-  witness = (fun _ -> (fun () -> ()));
+  satisfy = (fun _ _ _ -> True);
+  satisfy_monotonic = (fun _ _ _ _ -> ());
+  witness = (fun _ _ -> (fun () -> ()));
 }
 
 instance witnessable_arrow 
@@ -47,39 +46,41 @@ instance witnessable_arrow
   (pre:t1 -> lheap -> Type0)
   (post:t1 -> lheap -> t2 -> lheap -> Type0) // TODO: one cannot have pre-post depending on outside things.
 : witnessable (x:t1 -> ST t2 (pre x) (post x)) = {
-  shallowly_contained = (fun _ _ -> True);
-  shallowly_low = (fun _ _ -> True);
-  witness = (fun _ -> (fun () -> ()));
+  satisfy = (fun _ _ _ -> True);
+  satisfy_monotonic = (fun _ _ _ _ -> ());
+  witness = (fun _ _ -> (fun () -> ()));
 }
 
 instance witnessable_pair (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (t1 * t2) = {
-  shallowly_contained = (fun (x1, x2) h -> c1.shallowly_contained x1 h /\ c2.shallowly_contained x2 h);
-  shallowly_low = (fun (x1, x2) h -> c1.shallowly_low x1 h /\ c2.shallowly_low x2 h);
-  witness = (fun (x1, x2) -> 
-    let w1 = c1.witness x1 in
-    let w2 = c2.witness x2 in
+  satisfy = (fun (x1, x2) h pred -> c1.satisfy x1 h pred /\ c2.satisfy x2 h pred);
+  satisfy_monotonic = (fun (x1, x2) pred h0 h1 -> 
+    c1.satisfy_monotonic x1 pred h0 h1;
+    c2.satisfy_monotonic x2 pred h0 h1);
+  witness = (fun (x1, x2) pred -> 
+    let w1 = c1.witness x1 pred in
+    let w2 = c2.witness x2 pred in
     (fun () -> w1 (); w2 ()))
 }
 
 instance witnessable_sum (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (either t1 t2) = {
-  shallowly_contained = (fun x h ->
+  satisfy = (fun x h pred ->
     match x with
-    | Inl x1 -> c1.shallowly_contained x1 h
-    | Inr x2 -> c2.shallowly_contained x2 h);
-  shallowly_low = (fun x h ->
+    | Inl x1 -> c1.satisfy x1 h pred
+    | Inr x2 -> c2.satisfy x2 h pred);
+  satisfy_monotonic = (fun x pred h0 h1 ->
     match x with
-    | Inl x1 -> c1.shallowly_low x1 h
-    | Inr x2 -> c2.shallowly_low x2 h);
-  witness = (fun x -> 
+    | Inl x1 -> c1.satisfy_monotonic x1 pred h0 h1
+    | Inr x2 -> c2.satisfy_monotonic x2 pred h0 h1);
+  witness = (fun x pred -> 
     match x with 
-    | Inl x1 -> (let w = c1.witness x1 in (fun () -> w ()))
-    | Inr x2 -> (let w = c2.witness x2 in (fun () -> w ())))
+    | Inl x1 -> (let w = c1.witness x1 pred in (fun () -> w ()))
+    | Inr x2 -> (let w = c2.witness x2 pred in (fun () -> w ())))
 }
 
 (** *** Elaboration of types to F* *)
 
 unfold let shallowly_contained_low (#a:Type) {| c:witnessable a |} (v:a) (h:lheap) =
-  c.shallowly_contained v h /\ c.shallowly_low v h
+  c.satisfy v h contains_pred /\ c.satisfy v h is_low_pred
 
 unfold let pre_tgt_arrow
   (#t1:Type) {| c1 : witnessable t1 |}
@@ -135,15 +136,15 @@ let inv_contains_points_to_contains (h:lheap) =
   (forall (a:typ) (inv:lheap -> Type0).
     let tt = _elab_typ a inv in
     forall (r:ref (dfst tt)).
-      (witnessable_ref (dfst tt) #(dsnd tt)).shallowly_contained r h ==> 
-        (dsnd tt).shallowly_contained (sel h r) h)
+      (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h contains_pred ==> 
+        (dsnd tt).satisfy (sel h r) h contains_pred)
 
 let inv_low_points_to_low (h:lheap) =
   (forall (a:typ) (inv:lheap -> Type0).
     let tt = _elab_typ a inv in
     forall (r:ref (dfst tt)).
-      (witnessable_ref (dfst tt) #(dsnd tt)).shallowly_low r h ==> 
-        (dsnd tt).shallowly_low (sel h r) h)
+      (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h is_low_pred ==> 
+        (dsnd tt).satisfy (sel h r) h is_low_pred)
 
 let inv_low_contains (h:lheap) = 
   inv_contains_points_to_contains h /\
@@ -159,16 +160,16 @@ let eliminate_inv_low (h:lheap) (a:typ) (r:ref (elab_typ a)) :
   Lemma
     (requires (inv_low_points_to_low h))
     (ensures (
-        (witnessable_ref (elab_typ a) #(elab_typ_tgt a)).shallowly_low r h ==> 
-          (elab_typ_tgt a).shallowly_low (sel h r) h
+        (witnessable_ref (elab_typ a) #(elab_typ_tgt a)).satisfy r h is_low_pred ==> 
+          (elab_typ_tgt a).satisfy (sel h r) h is_low_pred
     )) = ()
 
 let eliminate_inv_contains (h:lheap) (a:typ) (r:ref (elab_typ a)) :
   Lemma
     (requires (inv_contains_points_to_contains h))
     (ensures (
-        (witnessable_ref (elab_typ a) #(elab_typ_tgt a)).shallowly_contained r h ==> 
-          (elab_typ_tgt a).shallowly_contained (sel h r) h
+        (witnessable_ref (elab_typ a) #(elab_typ_tgt a)).satisfy r h contains_pred ==> 
+          (elab_typ_tgt a).satisfy (sel h r) h contains_pred
     )) = ()
 
 (** ** Examples **) 
@@ -207,7 +208,7 @@ let _alloc (#a:Type) (init:a)
   r
 
 let declassify_low' (#a:Type) {| c:witnessable a |} (r:ref a) : ST unit
-  (fun h -> shallowly_contained r h /\ inv_contains_points_to_contains h)
+  (fun h -> satisfy r h contains_pred /\ inv_contains_points_to_contains h)
   (fun h0 () h1 -> 
     inv_contains_points_to_contains h1 /\
     shallowly_contained_low r h1 /\
@@ -362,17 +363,13 @@ val progr_sep_test:
   ctx:(elab_typ (TArr TUnit TUnit)) ->
   IST unit
     (requires (fun h0 -> 
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
          
 let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ()
-
-let lemma (#a:Type) {| c:witnessable a |} (x:a) (h0 h1:lheap) : Lemma (
-  h0 `lheap_rel` h1 /\ shallowly_low x h0 ==> shallowly_low x h1
-) = admit ()
 
 open FStar.Calc
 
@@ -421,7 +418,7 @@ let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) 
             h0 `lheap_rel` h1 /\
             equal_dom h0 h1 /\
             modifies_classification (only x) h0 h1 /\
-            (elab_typ_tgt (TRef xa)).shallowly_contained x h0 /\ 
+            (elab_typ_tgt (TRef xa)).satisfy x h0 contains_pred /\ 
             shallowly_contained_low #(elab_typ xa) #(elab_typ_tgt xa) (sel h0 x) h0 /\
             shallowly_contained_low #(ref (elab_typ xa)) #(elab_typ_tgt (TRef xa)) x h1 /\
             inv_low_points_to_low h0))
@@ -429,22 +426,22 @@ let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) 
   introduce forall (a:typ) (inv:lheap -> Type0).
     let tt = _elab_typ a inv in
     forall (r:ref (dfst tt)).
-      (witnessable_ref (dfst tt) #(dsnd tt)).shallowly_low r h1 ==> 
-        (dsnd tt).shallowly_low (sel h1 r) h1
+      (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
+        (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
   with begin
     let tt = _elab_typ a inv in
     let refw = witnessable_ref (dfst tt) #(dsnd tt) in
     introduce forall (r:ref (dfst tt)).
-      refw.shallowly_low r h1 ==> 
-        (dsnd tt).shallowly_low (sel h1 r) h1
+      refw.satisfy r h1 is_low_pred ==> 
+        (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
     with begin
-      introduce refw.shallowly_low r h1 ==> 
-          (dsnd tt).shallowly_low (sel h1 r) h1
+      introduce refw.satisfy r h1 is_low_pred ==> 
+          (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
       with _. begin
-        introduce refw.shallowly_low r h0 ==> (dsnd tt).shallowly_low (sel h1 r) h1 
-        with _. lemma #(dfst tt) #(dsnd tt) (sel h0 r) h0 h1;
+        introduce refw.satisfy r h0 is_low_pred ==> (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
+        with _. (dsnd tt).satisfy_monotonic (sel h0 r) is_low_pred h0 h1;
         
-        introduce ~(refw.shallowly_low r h0) ==> (dsnd tt).shallowly_low (sel h1 r) h1
+        introduce ~(refw.satisfy r h0 is_low_pred) ==> (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
         with _. begin
           assert (addr_of r == addr_of x);
           lemma_sel_same_addr' h1 x r;
@@ -452,11 +449,11 @@ let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) 
           inversion a inv xa;
           assert (dsnd tt == elab_typ_tgt xa);
 
-          assert ((elab_typ_tgt xa).shallowly_low (sel h0 x) h0);
-          lemma #(elab_typ xa) #(elab_typ_tgt xa) (sel h0 x) h0 h1;
+          assert ((elab_typ_tgt xa).satisfy (sel h0 x) h0 is_low_pred);
+          (elab_typ_tgt xa).satisfy_monotonic (sel h0 x) is_low_pred h0 h1;
           assert (sel h0 x == sel h1 x);
-          assert ((elab_typ_tgt xa).shallowly_low (sel h1 x) h1);
-          assert ((dsnd tt).shallowly_low (sel h1 r) h1)
+          assert ((elab_typ_tgt xa).satisfy (sel h1 x) h1 is_low_pred);
+          assert ((dsnd tt).satisfy (sel h1 r) h1 is_low_pred)
         end
       end
     end
@@ -467,7 +464,7 @@ val progr_sep_test_alloc:
   ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
   IST unit
     (requires (fun h0 -> 
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
 let progr_sep_test_alloc rp f =
@@ -483,7 +480,7 @@ val progr_sep_test_nested:
   ctx:(elab_typ (TArr (TRef (TRef TNat)) TUnit)) ->
   IST unit
     (requires (fun h0 -> 
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
 let progr_sep_test_nested rp f =
@@ -506,9 +503,9 @@ val progr_secret_unchanged_test:
   ctx:(elab_typ (TArr TUnit TUnit)) ->
   IST unit 
     (requires (fun h0 -> 
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High /\
-      shallowly_low rs h0))
+      satisfy rs h0 is_low_pred))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
          
@@ -525,9 +522,9 @@ val progr_passing_callback_test:
   ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit)) ->
   IST unit 
     (requires (fun h0 ->
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High /\
-      shallowly_low rs h0))
+      satisfy rs h0 is_low_pred))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 
 // TODO: the callback of the program should be able to modify rp
@@ -552,9 +549,9 @@ val progr_getting_callback_test:
   ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit))) ->
   IST unit 
     (requires (fun h0 ->
-      shallowly_contained rp h0 /\
+      satisfy rp h0 contains_pred /\
       label_of rp h0 == High /\
-      shallowly_low rs h0))
+      satisfy rs h0 is_low_pred))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
 let progr_getting_callback_test rp rs f =
   let h0 = get () in
@@ -590,9 +587,12 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) :
   ST (vcontext (extend t g))
     (requires (fun h0 -> shallowly_contained_low #_ #(elab_typ_tgt t) x h0))
     (ensures (fun h0 r h1 -> h0 == h1)) =
-  let w = (elab_typ_tgt t).witness x in
+  let w1 = (elab_typ_tgt t).witness x contains_pred in
+  let w2 = (elab_typ_tgt t).witness x is_low_pred in
   fun y -> 
-    if y = 0 then (w (); x) else ve (y-1)
+    if y = 0 then (w1 (); w2 (); x) else ve (y-1)
+
+let _ = assert False
 
 #push-options "--split_queries always"
 let rec elab_exp 
@@ -640,9 +640,10 @@ let rec elab_exp
   | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
     assert ((elab_typ t) == (elab_typ tres));
     let x : elab_typ tx = elab_exp tyj_x ve in
-    let wx = (elab_typ_tgt tx).witness x in
+    let wx1 = (elab_typ_tgt tx).witness x contains_pred in
+    let wx2 = (elab_typ_tgt tx).witness x is_low_pred in
     let f : elab_typ (TArr tx tres) = elab_exp tyj_f ve in
-    wx ();
+    wx1 (); wx2 ();
     elab_apply_arrow tx tres f x
 
   | TyInl #_ #_ #t1 #t2 tyj_1 ->
@@ -655,14 +656,16 @@ let rec elab_exp
     let vc : either (elab_typ tl) (elab_typ tr) = elab_exp tyj_c ve in
     match vc with 
     | Inl x -> 
-      let wx = (elab_typ_tgt tl).witness x in
+      let wx1 = (elab_typ_tgt tl).witness x contains_pred in
+      let wx2 = (elab_typ_tgt tl).witness x is_low_pred in
       let f : elab_typ (TArr tl tres) = elab_exp tyj_l ve in
-      wx ();
+      wx1 (); wx2 ();
       elab_apply_arrow tl tres f x
     | Inr y ->
-      let wy = (elab_typ_tgt tr).witness y in
+      let wy1 = (elab_typ_tgt tr).witness y contains_pred in
+      let wy2 = (elab_typ_tgt tr).witness y is_low_pred in
       let f : elab_typ (TArr tr tres) = elab_exp tyj_r ve in
-      wy ();
+      wy1 (); wy2 ();
       elab_apply_arrow tr tres f y
   end
 
@@ -674,8 +677,9 @@ let rec elab_exp
     snd #(elab_typ tf) #(elab_typ ts) v
   | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
     let vf : elab_typ tf = elab_exp tyj_f ve in
-    let wvf = (elab_typ_tgt tf).witness vf in
+    let wvf1 = (elab_typ_tgt tf).witness vf contains_pred in
+    let wvf2 = (elab_typ_tgt tf).witness vf is_low_pred in
     let vs : elab_typ ts = elab_exp tyj_s ve in
-    wvf ();
+    wvf1 (); wvf2 ();
     (vf, vs)
 #pop-options
