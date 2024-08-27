@@ -19,8 +19,6 @@ class witnessable (t:Type) = {
   witness : x:t -> pred:ref_lheap_pred -> ST (recall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy x h1 pred)))
     (requires (fun h0 -> satisfy x h0 pred))
     (ensures (fun h0 _ h1 -> h0 == h1));
-
-  footprint : gas:nat -> x:t -> lheap -> Tot (erased (Set.set nat)); (* This is needed in examples to do separation between fancy data structures (e.g., linked list) *)
 }
 
 instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = {
@@ -28,22 +26,19 @@ instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = 
   satisfy_monotonic = (fun x pred h0 h1 -> ());
   witness = (fun x pred ->
     gst_witness (pred x);
-    (fun () -> gst_recall (pred x)));
-  footprint = (fun gas x h -> Set.singleton (addr_of x) `Set.union` c.footprint gas (sel h x) h);
+    (fun () -> gst_recall (pred x)))
 }
 
 instance witnessable_unit : witnessable unit = {
   satisfy = (fun _ _ _ -> True);
   satisfy_monotonic = (fun _ _ _ _ -> ());
   witness = (fun _ _ -> (fun () -> ()));
-  footprint = (fun _ _ _ -> Set.empty);
 }
 
 instance witnessable_int : witnessable int = {
   satisfy = (fun _ _ _ -> True);
   satisfy_monotonic = (fun _ _ _ _ -> ());
   witness = (fun _ _ -> (fun () -> ()));
-  footprint = (fun _ _ _ -> Set.empty);
 }
 
 instance witnessable_arrow 
@@ -54,7 +49,6 @@ instance witnessable_arrow
   satisfy = (fun _ _ _ -> True);
   satisfy_monotonic = (fun _ _ _ _ -> ());
   witness = (fun _ _ -> (fun () -> ()));
-  footprint = (fun _ _ _ -> Set.empty);
 }
 
 instance witnessable_pair (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (t1 * t2) = {
@@ -65,8 +59,7 @@ instance witnessable_pair (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witn
   witness = (fun (x1, x2) pred -> 
     let w1 = c1.witness x1 pred in
     let w2 = c2.witness x2 pred in
-    (fun () -> w1 (); w2 ()));
-  footprint = (fun gas (x1, x2) h -> c1.footprint gas x1 h `Set.union` c2.footprint gas x2 h);
+    (fun () -> w1 (); w2 ()))
 }
 
 instance witnessable_sum (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (either t1 t2) = {
@@ -81,11 +74,7 @@ instance witnessable_sum (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witne
   witness = (fun x pred -> 
     match x with 
     | Inl x1 -> (let w = c1.witness x1 pred in (fun () -> w ()))
-    | Inr x2 -> (let w = c2.witness x2 pred in (fun () -> w ())));
-  footprint = (fun gas x h ->
-    match x with
-    | Inl x1 -> c1.footprint gas x1 h
-    | Inr x2 -> c2.footprint gas x2 h);
+    | Inr x2 -> (let w = c2.witness x2 pred in (fun () -> w ())))
 }
 
 (** *** Elaboration of types to F* *)
