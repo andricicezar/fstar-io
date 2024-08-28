@@ -6,9 +6,7 @@ open FStar.Monotonic.Heap
 
 module W = FStar.Monotonic.Witnessed
 
-(* Total State effect 
-    this means that the heap is first-order
-*)
+(* Total State effect --- this means that the heap is first-order *)
 
 let heap_rel (h1:heap) (h2:heap) =
   forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>
