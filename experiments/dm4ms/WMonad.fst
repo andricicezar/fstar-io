@@ -15,8 +15,19 @@ let st_post_h' (heap a pre: Type) = a -> _: heap{pre} -> GTot Type0
 (** Postconditions without refinements *)
 let st_post_h (heap a: Type) = st_post_h' heap a True
 
+unfold
+let st_post_ord (#heap:Type) (p1 p2:st_post_h heap 'a) =
+  forall r h. p1 r h ==> p2 r h
+
 (** The type of the main WP-transformer for stateful computations *)
-let st_wp_h (heap a: Type) = st_post_h heap a -> Tot (st_pre_h heap)
+let st_wp_h0 (heap a: Type) = st_post_h heap a -> Tot (st_pre_h heap)
+
+unfold
+let st_wp_monotonic (heap:Type) (wp:st_wp_h0 heap 'a) =
+  forall p1 p2. (p1 `st_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
+
+(** !!! The main difference with the standard state spec is that this one is monotonic *)
+let st_wp_h (heap a: Type) = wp:(st_wp_h0 heap a){st_wp_monotonic heap wp}
 
 (** Returning a value does not transform the state *)
 unfold

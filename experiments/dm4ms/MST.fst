@@ -45,7 +45,9 @@ let rec free_bind
         free_bind (fnc ()) k)
 
 let partial_call_wp (state:tstate) (pre:pure_pre) : st_wp_h state.t (squash pre) = 
-  fun p h0 -> pre /\ p () h0
+  let wp' : st_wp_h0 state.t (squash pre) = fun p h0 -> pre /\ p () h0 in
+  assert (st_wp_monotonic state.t wp');
+  wp'
 
 val theta : #a:Type u#a -> #state:tstate u#s -> free state a -> st_wp_h state.t a
 let rec theta #a #state m =
@@ -62,12 +64,113 @@ let rec theta #a #state m =
   | Recall pred k ->
       st_bind_wp state.t _ _ (fun p h -> W.witnessed state.rel pred /\ (pred h ==> p () h)) (fun r -> theta (k r))
 
+let lemma_theta_is_monad_morphism_ret (#state:tstate) (v:'a) :
+  Lemma (theta (free_return state 'a v) == st_return state.t 'a v) by (compute ()) = ()
+
+open FStar.Calc
+
+let rec lemma_theta_is_lax_morphism_bind
+  (#a:Type u#a) (#b:Type u#b) (#state:tstate u#s) (m:free state a) (f:a -> free state b) :
+  Lemma
+    (theta (free_bind m f) ⊑ st_bind_wp state.t a b (theta m) (fun x -> theta (f x))) = 
+  match m with
+  | Return x -> ()
+  | Get k -> begin
+    calc (⊑) {
+      theta (free_bind (Get k) f);
+      ⊑ {}
+      st_bind_wp state.t state.t b (fun p h -> p h h) (fun r -> theta (free_bind (k r) f));
+      ⊑ { 
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
+          introduce forall r. lhs r ⊑ rhs r with begin
+            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
+          end
+          }
+      st_bind_wp state.t state.t b (fun p h -> p h h) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
+      ⊑ {}
+      st_bind_wp state.t a b (theta (Get k)) (fun x -> theta (f x));
+    }
+  end
+  | Put h1 k -> begin
+    calc (⊑) {
+      theta (free_bind (Put h1 k) f);
+      ⊑ {}
+      st_bind_wp state.t unit b (fun p h0 -> h0 `state.rel` h1 /\ p () h1) (fun r -> theta (free_bind (k r) f));
+      ⊑ { 
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
+          introduce forall r. lhs r ⊑ rhs r with begin
+            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
+          end
+          }
+      st_bind_wp state.t unit b (fun p h0 -> h0 `state.rel` h1 /\ p () h1) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
+      ⊑ {}
+      st_bind_wp state.t a b (theta (Put h1 k)) (fun x -> theta (f x));
+    }
+  end
+  | Witness pred k -> begin
+    calc (⊑) {
+      theta (free_bind (Witness pred k) f);
+      ⊑ {}
+      st_bind_wp state.t unit b (fun p h -> pred h /\ stable pred /\ (W.witnessed state.rel pred ==> p () h)) (fun r -> theta (free_bind (k r) f));
+      ⊑ { 
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
+          introduce forall r. lhs r ⊑ rhs r with begin
+            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
+          end
+          }
+      st_bind_wp state.t unit b (fun p h -> pred h /\ stable pred /\ (W.witnessed state.rel pred ==> p () h)) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
+      ⊑ {}
+      st_bind_wp state.t a b (theta (Witness pred k)) (fun x -> theta (f x));
+    }
+  end  
+  | Recall pred k -> begin
+    calc (⊑) {
+      theta (free_bind (Recall pred k) f);
+      ⊑ {}
+      st_bind_wp state.t unit b (fun p h -> W.witnessed state.rel pred /\ (pred h ==> p () h)) (fun r -> theta (free_bind (k r) f));
+      ⊑ { 
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
+          introduce forall r. lhs r ⊑ rhs r with begin
+            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
+          end
+          }
+      st_bind_wp state.t unit b (fun p h -> W.witnessed state.rel pred /\ (pred h ==> p () h)) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
+      ⊑ {}
+      st_bind_wp state.t a b (theta (Recall pred k)) (fun x -> theta (f x));
+    }
+  end  
+  | PartialCall pre k -> begin
+    calc (⊑) {
+      theta (free_bind (PartialCall pre k) f);
+      ⊑ {}
+      theta (PartialCall pre (fun r -> free_bind (k r) f));
+      ⊑ {}
+      st_bind_wp state.t (squash pre) b (partial_call_wp state pre) (fun r -> theta (free_bind (k r) f));
+      ⊑ { 
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
+          introduce forall (r:squash pre). lhs r ⊑ rhs r with begin
+            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
+          end
+          }
+      st_bind_wp state.t (squash pre) b (partial_call_wp state pre) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
+      ⊑ {}
+      st_bind_wp state.t a b (st_bind_wp state.t (squash pre) a (partial_call_wp state pre) (fun r -> theta (k r))) (fun x -> theta (f x));
+      ⊑ {}
+      st_bind_wp state.t a b (theta (PartialCall pre k)) (fun x -> theta (f x));
+    }
+  end
+
+
 let mst (state:tstate) (a:Type) (wp:st_wp_h state.t a)=
   m:(free state a){theta m ⊑ wp}
 
 let mst_return (#state:tstate) (#a:Type) (x:a) : mst state a (st_return state.t _ x) =
   free_return state a x
-
 
 let mst_bind
   (#state:tstate u#s)
@@ -78,9 +181,9 @@ let mst_bind
   (v : mst state a wp_v)
   (f : (x:a -> mst state b (wp_f x))) :
   Tot (mst state b (st_bind_wp state.t a b wp_v wp_f)) =
-  admit (); (* TODO: prove monad morphism *)
+  lemma_theta_is_lax_morphism_bind v f;
   free_bind v f
-
+  
 let mst_subcomp
   (#state:tstate u#s)
   (#a : Type u#a)
@@ -179,6 +282,7 @@ effect {
 
 unfold
 let wp_lift_pure_st (w : pure_wp 'a) : st_wp_h heap_state.t 'a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p h -> w (fun r -> p r h)
 
 val lift_pure_mst :
