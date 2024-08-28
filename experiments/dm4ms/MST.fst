@@ -100,9 +100,6 @@ noeq type tstate = {
   rel: FStar.Preorder.preorder t;
 }
 
-let stable (#state) (pred:state.t -> Type0) =
-  forall h1 h2. (pred h1 /\ h1 `state.rel` h2) ==> pred h2
-
 noeq
 type free (state:tstate u#s) (a:Type u#a) : Type u#(max 1 a s) =
 | Get : cont:(state.t -> free state a) -> free state a
@@ -151,7 +148,7 @@ let put_wp (#state:tstate) (h1:state.t) : st_wp_h state.t unit =
 
 unfold
 let witness_wp (#state:tstate) (pred:state.t -> Type0) : st_wp_h state.t unit =
-  fun p h -> pred h /\ stable pred /\ (W.witnessed state.rel pred ==> p () h)
+  fun p h -> pred h /\ FStar.Preorder.stable pred state.rel /\ (W.witnessed state.rel pred ==> p () h)
 
 unfold
 let recall_wp (#state:tstate) (pred:state.t -> Type0) : st_wp_h state.t unit =
