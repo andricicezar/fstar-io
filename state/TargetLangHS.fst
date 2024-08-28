@@ -7,8 +7,6 @@ open FStar.Tactics.Typeclasses
 open FStar.HyperStack
 open FStar.HyperStack.ST 
 
-type erid = r:erid{is_eternal_region r}
-
 type rref (t:Type) = r:(reference t){
     not (is_mm r) /\
     is_eternal_region (frameOf r)} (* type of unfreeable heap references allocated in regions *)
