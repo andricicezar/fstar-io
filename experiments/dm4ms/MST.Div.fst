@@ -18,13 +18,13 @@ let _mst a wp = mst heap_state a wp
 let _mst_bind a b wp_v wp_f v f = mst_bind #heap_state #a #b #wp_v #wp_f v f
 let _mst_return a x = mst_return #heap_state #a x
 
-let _mst_subcomp a wp1 wp2 v:
+let _mst_subcomp a (wp1:st_wp heap_state.t a) (wp2:st_wp heap_state.t a) v:
   Pure (_mst a wp2) (requires (wp1 ⊑ wp2)) (ensures (fun _ -> True)) = 
   mst_subcomp #heap_state #a #wp1 #wp2 v
 
 let _mst_if_then_else (a : Type u#a)
-  (#wp1 : st_wp_h heap_state.t a)
-  (#wp2 : st_wp_h heap_state.t a)
+  (#wp1 : st_wp heap_state.t a)
+  (#wp2 : st_wp heap_state.t a)
   (f : _mst a wp1) (g : _mst a wp2) (b : bool) : Type =
   _mst a (st_if_then_else heap_state.t a b wp1 wp2)
 
@@ -32,7 +32,7 @@ let _mst_if_then_else (a : Type u#a)
 reifiable
 reflectable
 effect {
-  STATEwp (a:Type) (wp : st_wp_h heap_state.t a)
+  STATEwp (a:Type) (wp : st_wp heap_state.t a)
   with {
        repr       = _mst
      ; return     = _mst_return
@@ -43,7 +43,7 @@ effect {
 }
 
 unfold
-let wp_lift_pure_st (w : pure_wp 'a) : st_wp_h heap_state.t 'a =
+let wp_lift_pure_st (w : pure_wp 'a) : st_wp heap_state.t 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p h -> w (fun r -> p r h)
 
