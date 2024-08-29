@@ -121,11 +121,6 @@ let equal_dom (h1:lheap) (h2:lheap) :GTot Type0 =
      {:pattern (r `unused_in` h1) \/ (r `unused_in` h2)}
      r `unused_in` h1 <==> r `unused_in` h2)
 
-let equal_ll (h1:lheap) (h2:lheap) :GTot Type0 =
-  (forall (a:Type0) (rel:preorder a) (r:mref a rel).
-     {:pattern (label_of r h1 == label_of r h2) \/ (label_of r h1 `label_gte` label_of r h2)}
-     h1 `contains` r ==> label_of r h1 == label_of r h2)
-
 val lemma_ref_unused_iff_addr_unused (#a:Type0) (#rel:preorder a) (h:lheap) (r:mref a rel)
   :Lemma (requires True)
          (ensures  (r `unused_in` h <==> addr_of r `addr_unused_in` h))

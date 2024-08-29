@@ -25,8 +25,8 @@ instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = 
   satisfy = (fun x h pred -> pred x h);
   satisfy_monotonic = (fun x pred h0 h1 -> ());
   witness = (fun x pred ->
-    gst_witness (pred x);
-    (fun () -> gst_recall (pred x)))
+    mst_witness (pred x);
+    (fun () -> mst_recall (pred x)))
 }
 
 instance witnessable_unit : witnessable unit = {
@@ -246,13 +246,13 @@ let ctx_update_ref_test (y:ref int) =
 val ctx_update_multiple_refs_test : 
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 let ctx_update_multiple_refs_test (x:ref (ref int)) =
-  gst_witness (contains_pred x);
-  gst_witness (is_low_pred x);
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
   let cb : elab_typ (TArr (TRef TNat) TUnit) = (fun (y:ref int) ->
     let h0 = get () in
-    gst_recall (contains_pred x);
+    mst_recall (contains_pred x);
     let ix : ref int = !x in
-    gst_recall (is_low_pred x);    
+    mst_recall (is_low_pred x);    
     write' ix (!ix + 1);
     let h1 = get () in
     write' x y;
@@ -275,13 +275,13 @@ let ctx_HO_test1 (xs:ref ((ref int) * ref int)) =
   eliminate_inv_contains h0 (TPair (TRef TNat) (TRef TNat)) xs;
   eliminate_inv_low h0 (TPair (TRef TNat) (TRef TNat)) xs;
   write' xs (x', x');
-  gst_witness (is_low_pred xs);
-  gst_witness (is_low_pred x');
-  gst_witness (is_low_pred x'');
+  mst_witness (is_low_pred xs);
+  mst_witness (is_low_pred x');
+  mst_witness (is_low_pred x'');
   (fun () -> 
-    gst_recall (is_low_pred xs);
-    gst_recall (is_low_pred x');
-    gst_recall (is_low_pred x'');
+    mst_recall (is_low_pred xs);
+    mst_recall (is_low_pred x');
+    mst_recall (is_low_pred x'');
     write' xs (x', x''))
   
 val ctx_identity :
@@ -302,27 +302,31 @@ let ctx_HO_test2 f =
 val ctx_swap_ref_test :
   elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
 let ctx_swap_ref_test (x:ref (ref int)) =
-  gst_witness (contains_pred x);
-  gst_witness (is_low_pred x);
-
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
   let cb : elab_typ (TArr (TRef (TRef TNat)) TUnit) = (fun (y: ref (ref int)) ->
     let h0 = get () in
-    gst_recall (contains_pred x);
-    gst_recall (is_low_pred x);
+    mst_recall (contains_pred x);
+    mst_recall (is_low_pred x);
     eliminate_inv_contains h0 (TRef TNat) x;
     eliminate_inv_low h0 (TRef TNat) x;
     
     let z = !x in
     let t = !y in
     write' x t;
+  
     let h1 = get () in
     write' y z;
     let h2 = get () in
 
+    assert (modifies_classification Set.empty h0 h1);
     lemma_modifies_only_label_trans Low h0 h1 h2;
     assert (modifies_only_label Low h0 h2); // we have an SMT Pat for this, but it does not kick in
     assert (modifies_classification Set.empty h0 h2);
-    ()) in
+    assert (inv_low_contains h2);
+    let r = () in
+    assert (shallowly_contained_low r h2);
+    r) in
   cb
 
 val ctx_dynamic_alloc_test :
@@ -342,11 +346,11 @@ val ctx_returns_callback_test :
   elab_typ (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test () =
   let x: ref int = alloc' 13 in
-  gst_witness (contains_pred x);
-  gst_witness (is_low_pred x);
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
   let cb : elab_typ (TArr TUnit TUnit) = (fun() ->
-    gst_recall (contains_pred x);
-    gst_recall (is_low_pred x);
+    mst_recall (contains_pred x);
+    mst_recall (is_low_pred x);
     write' x (!x % 5)
   ) in
   cb
@@ -534,11 +538,11 @@ let progr_passing_callback_test rp rs f =
   declassify_low' secret;
   let h1 = get () in
   lemma_declassify_preserves_inv TNat secret h0 h1;
-  gst_witness (contains_pred secret);
-  gst_witness (is_low_pred secret);
+  mst_witness (contains_pred secret);
+  mst_witness (is_low_pred secret);
   let cb: elab_typ (TArr TUnit TUnit) = (fun () -> 
-    gst_recall (contains_pred secret);
-    gst_recall (is_low_pred secret);
+    mst_recall (contains_pred secret);
+    mst_recall (is_low_pred secret);
     write' secret (!secret + 1)) in
   f cb;
   ()
@@ -591,8 +595,6 @@ let vextend #t (x:elab_typ t) (#g:context) (ve:vcontext g) :
   let w2 = (elab_typ_tgt t).witness x is_low_pred in
   fun y -> 
     if y = 0 then (w1 (); w2 (); x) else ve (y-1)
-
-let _ = assert False
 
 #push-options "--split_queries always"
 let rec elab_exp 
