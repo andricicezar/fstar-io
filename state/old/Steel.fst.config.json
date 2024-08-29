@@ -7,8 +7,8 @@
     "-249"
   ],
   "include_dirs": [
-    "../steel/lib/steel",
-    "../steel/lib/steel/pulse",
-    "../steel/share/steel/examples/pulse/lib"
+    "../../steel/lib/steel",
+    "../../steel/lib/steel/pulse",
+    "../../steel/share/steel/examples/pulse/lib"
   ]
 }
