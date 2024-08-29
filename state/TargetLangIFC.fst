@@ -131,6 +131,9 @@ let rec _elab_typ (t:typ) (inv:lheap -> Type0): tt:Type0 & witnessable tt =
   | TRef t ->
     let (| tt, c_tt |) = _elab_typ t inv in
     (| ref tt, witnessable_ref tt #c_tt |)
+  | TLList t -> admit ()
+    // let (| tt, c_tt |) = _elab_typ t inv in
+    // (| list tt, witnessable_llist tt #c_tt |)
 
 let inv_contains_points_to_contains (h:lheap) =
   (forall (a:typ) (inv:lheap -> Type0).

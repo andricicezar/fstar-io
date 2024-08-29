@@ -17,6 +17,7 @@ type typ =
 | TSum    : lt:typ -> rt:typ -> typ
 | TPair   : typ -> typ -> typ
 | TRef    : typ -> typ
+| TLList : typ -> typ
 
 type var = nat
 type loc = nat
