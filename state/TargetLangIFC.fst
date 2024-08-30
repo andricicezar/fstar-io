@@ -446,6 +446,9 @@ let rec inversion (a:typ) (inv:lheap -> Type0) (xa:typ) :
       assume (dfst (_elab_typ y inv) == elab_typ y');
       inversion y inv y';
       assume (inv == inv_low_contains)
+    | TLList a, TLList b ->
+      assume (dfst (_elab_typ a inv) == elab_typ b);
+      inversion a inv b
     | _, _ -> admit () (* TODO: other cases are impossible because of the pre-condition*)
 
 let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) : Lemma
