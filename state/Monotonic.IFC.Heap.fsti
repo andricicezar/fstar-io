@@ -15,7 +15,7 @@ type label =
   | Medium
   | Low
 
-(* TODO: Cezar thinks this has to be total, is that right? *)
+(* TODO: Cezar thinks this has to be total lattice, is that right? *)
 let label_gte (l1:label) (l2:label) : bool =
   match l1, l2 with
   | High, _ -> true

@@ -18,6 +18,8 @@ type typ =
 | TPair   : typ -> typ -> typ
 | TRef    : typ -> typ
 | TLList  : typ -> typ
+(** TODO: extend expressions and typing with linked lists 
+    TODO: write some of the examples, especially of ctxs, in STLC *)
 
 type var = nat
 type loc = nat

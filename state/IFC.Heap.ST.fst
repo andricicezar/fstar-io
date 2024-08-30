@@ -169,7 +169,7 @@ let modifies_none (h0:lheap) (h1:lheap) = modifies Set.empty h0 h1
 
 let declassify_post (#a:Type) (#rel:preorder a) (r:mref a rel) (l:label) (h0:lheap) () (h1:lheap) : Type0 =
   h1 `contains` r /\
-  equal_dom h0 h1 /\ (* TODO: define equal_heaps *)
+  equal_dom h0 h1 /\
   modifies_none h0 h1 /\
   modifies_classification (only r) h0 h1 /\ 
   label_of r h1 == l
@@ -234,32 +234,7 @@ let lemma_modifies_only_label_trans l h0 h1 h2 =
     assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
     (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h1 r);
     assert (unmodified_common h0 h2);
+    // TODO: prove this using the same technique we used until now
     assume (forall (a:Type) (rel:preorder a) (r:Monotonic.IFC.Heap.mref a rel).{:pattern (sel h2 r)} 
      (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r);
     ()
-
-// let modifies_only_Low (l:label) (h0:lheap) (h1:lheap) : Type0 =
-//    (forall (a:Type) (r:ref a).{:pattern (sel h1 r)} 
-//      (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h1 r) /\
-//    unmodified_common h0 h1
-
-// val lemma_modifies_only_Low_trans
-//    (l:label) (h0 h1 h2:lheap)
-//    : Lemma
-//     // the first precondition means no declassification between h0 and h1
-//      (requires equal_ll h0 h1 /\ lheap_rel h0 h1 /\ lheap_rel h1 h2 /\
-//      modifies_only_Low l h0 h1 /\ modifies_only_Low l h1 h2)
-//      (ensures modifies_only_Low l h0 h2)
-//    [SMTPat (modifies_only_Low l h0 h1); SMTPat (modifies_only_Low l h1 h2)]
-// let lemma_modifies_only_Low_trans l h0 h1 h2 = 
-//     assert (unmodified_common h0 h1);
-//     assert (forall (a:Type) (rel:preorder a) (r:ref a). 
-//     (h0 `contains` r /\ (label_of r h0 <> Low)) ==> sel h0 r == sel h1 r);
-//     assert (unmodified_common h0 h2);
-//     assume (forall (a:Type) (rel:preorder a) (r:ref a). (h0 `contains` r /\ label_of r h0 <> Low) ==> sel h0 r == sel h2 r);
-//     // assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h2 r)} 
-//     // (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r) by
-//     // (forall_intro .. )
-//     // assert(False);
-//     admit();
-//     ()

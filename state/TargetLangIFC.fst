@@ -11,8 +11,8 @@ type ref_lheap_pred =
   pred:(#a:Type -> #rel:_ -> mref a rel -> lheap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `lheap_rel` h1 ==> pred x h1}
 
 noeq type linkedList (a: Type0) : Type0 =
-    | Nil
-    | Cons of a * ref (linkedList a)
+| Nil : linkedList a
+| Cons : v:a -> next:ref (linkedList a) -> linkedList a
 
 class witnessable (t:Type) = {
   satisfy : t -> lheap -> ref_lheap_pred -> Type0;
@@ -85,23 +85,22 @@ instance witnessable_llist (t:Type) {| c:witnessable t |} : witnessable (linkedL
   satisfy = (fun l h pred -> 
     match l with
     | Nil -> True
-    | Cons (x, xsref) -> c.satisfy x h pred /\ pred xsref h
+    | Cons x xsref -> c.satisfy x h pred /\ pred xsref h
   );
 
   satisfy_monotonic = (fun l pred h0 h1 ->
     match l with 
     | Nil -> ()
-    | Cons (x, xsref) -> c.satisfy_monotonic x pred h0 h1
+    | Cons x xsref -> c.satisfy_monotonic x pred h0 h1
   );
 
   witness = (fun l pred ->
     match l with
     | Nil -> (fun () -> ())
-    | Cons (x, xsref) ->
+    | Cons x xsref ->
       let w = c.witness x pred in
       mst_witness (pred xsref);
-      (fun () -> w ();
-      mst_recall (pred xsref))
+      (fun () -> w (); mst_recall (pred xsref))
   );
 }
 
@@ -416,6 +415,8 @@ let unwrap_div (x:wrap_div 'a) : 'a = match x with | WrapDiv y -> y
 
 let _ = assert (int =!= wrap_div (int -> Dv int))
 I.e., use a fresh inductive type to wrap each effecftul function type? So, you'd have wrap_div, wrap_st etc?
+
+Catalin's question: can't we use tactics to prove this?
 *)
 let rec inversion (a:typ) (inv:lheap -> Type0) (xa:typ) :
   Lemma
