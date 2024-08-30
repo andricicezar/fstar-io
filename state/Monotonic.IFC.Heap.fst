@@ -76,7 +76,7 @@ module FSet = FStar.FiniteSet.Base
 
 let get_hdom h =
   FSet.all_finite_set_facts_lemma ();
-  let rec aux (n:nat) : res:(FSet.set pos){forall i. 0 < i && i <= n ==> i `FSet.mem` res} =
+  let rec aux (n:nat) : res:(FSet.set nat){forall i. 0 < i && i <= n ==> i `FSet.mem` res} =
     if n = 0 then FSet.emptyset else FSet.singleton n `FSet.union` (aux (n-1)) in
   aux ((fst h).next_addr-1)
 

@@ -73,7 +73,7 @@ let op_Plus_Plus_Hat (#a:Type0) (#rel:preorder a) (s:set nat) (r:mref a rel) :GT
 let op_Hat_Plus_Hat (#a:Type0) (#b:Type0) (#rel1:preorder a) (#rel2:preorder b) (r1:mref a rel1) (r2:mref b rel2)
   :GTot (set nat) = S.union (only r1) (only r2)
 
-val get_hdom : h:lheap -> hdom:(FStar.Ghost.erased (FSet.set pos)) {forall (a:Type) (rel:_) (r:core_mref a). h `contains #a #rel` r ==> addr_of #a #rel r `FSet.mem` hdom}
+val get_hdom : h:lheap -> hdom:(FStar.Ghost.erased (FSet.set nat)) {forall (a:Type) (rel:_) (r:core_mref a). h `contains #a #rel` r ==> addr_of #a #rel r `FSet.mem` hdom}
 
 val sel_tot: #a:Type0 -> #rel:preorder a -> h:lheap -> r:mref a rel{h `contains` r} -> Tot a
 

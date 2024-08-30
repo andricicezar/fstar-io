@@ -498,7 +498,7 @@ let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) 
     end
   end
 
-val progr_sep_test_alloc:
+val progr_declassify :
   rp: ref int -> 
   ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
   IST unit
@@ -506,7 +506,7 @@ val progr_sep_test_alloc:
       satisfy rp h0 contains_pred /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
-let progr_sep_test_alloc rp f =
+let progr_declassify rp f =
   let h0 = get () in
   declassify_low' rp;
   let h1 = get () in
@@ -514,7 +514,7 @@ let progr_sep_test_alloc rp f =
   let r = f rp in  
   r
 
-val progr_sep_test_nested:
+val progr_declassify_nested:
   rp: ref (ref int) -> 
   ctx:(elab_typ (TArr (TRef (TRef TNat)) TUnit)) ->
   IST unit
@@ -522,7 +522,7 @@ val progr_sep_test_nested:
       satisfy rp h0 contains_pred /\
       label_of rp h0 == High))
     (ensures (fun h0 _ h1 -> True))
-let progr_sep_test_nested rp f =
+let progr_declassify_nested rp f =
   let h0 = get () in
   eliminate_inv_contains h0 (TRef TNat) rp;
 

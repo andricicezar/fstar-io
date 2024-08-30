@@ -11,8 +11,30 @@ open TargetLangIFC
 
 module FSet = FStar.FiniteSet.Base
 
-let rec ll_eq (#a: Type0) (step: nat) (l1: linkedList a) (l2: linkedList a) (h: lheap) : Type0 =
-  if step = 0 then True
+(* Examples of linked lists *)
+
+let empty_ll: linkedList nat = Nil
+
+let ll1 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
+  let r: ref (linkedList nat) = _alloc Nil in 
+  Cons 13 r
+
+let ll2 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
+  let x = _alloc Nil in 
+  let y = _alloc (Cons 31 x) in
+  let z = _alloc (Cons 23 y) in
+  Cons 23 z
+
+let cycle_length3 () : ST (linkedList int) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
+  let x = alloc Nil in 
+  let y = alloc (Cons 7 x) in
+  let z = alloc (Cons 5 y) in 
+  write x (Cons 2 z);
+  Cons 2 z
+
+
+let rec ll_eq (#a: Type0) (fuel: nat) (l1: linkedList a) (l2: linkedList a) (h: lheap) : Type0 =
+  if fuel = 0 then False
   else
     match (l1, l2) with
     | (Nil, Nil) -> true
@@ -21,13 +43,13 @@ let rec ll_eq (#a: Type0) (step: nat) (l1: linkedList a) (l2: linkedList a) (h: 
     | Cons x xsref, Cons y ysref ->
       let xs = sel h xsref in
       let ys = sel h ysref in  
-      x == y /\ ll_eq (step - 1) xs ys h
+      x == y /\ ll_eq (fuel - 1) xs ys h
 
 let head_tot (#a: Type0) (l: linkedList a{l =!= Nil}) (h: lheap) : a =
   let Cons x xsref = l in
   x
 
-let head (#a: Type0) (l:linkedList a) {| c:witnessable a |} : IST (option a)
+let head (#a: Type0) (l:linkedList a) : IST (option a)
   (requires fun h -> l =!= Nil)
   (ensures fun h0 head h1 -> h0 == h1 /\ head == Some (head_tot l h1)) =
       match l with
@@ -140,6 +162,21 @@ let rec append (#t: typ) (l: elab_typ (TLList t)) (v: elab_typ t) :
 //             //   c.shallowly_contained (sel h0 r) h0 with (linkedList a) (solve) xsref;
 //             1 + length a xs h #c 
 
+let rec no_cycels_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
+  if fuel = 0 then False
+  else
+    match l with
+    | Nil -> True
+    | Cons x xsref -> no_cycels_ll (fuel - 1) (sel h xsref) h
+
+let rec deep_contains_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
+  if fuel = 0 then False
+  else
+    match l with
+    | Nil -> True
+    | Cons x xsref -> 
+      h `contains` xsref /\ deep_contains_ll (fuel - 1) (sel h xsref) h
+
 let rec deep_high_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
   if fuel = 0 then False
   else
@@ -177,15 +214,67 @@ let rec ll_constant (#a: Type0) (fuel: nat) (l: linkedList a) (h1 h2: lheap) : T
         x == y /\ xsref == ysref /\ ll_constant (fuel - 1) xs1 h1 h2
     end
 
+let rec lemma_list_unchanged_modif_none0 (#a: Type0) (fuel:nat) (ll: linkedList a) (h0 h1: lheap): Lemma
+  (requires modifies_none h0 h1 /\ deep_contains_ll fuel ll h0)
+  (ensures ll_constant fuel ll h0 h1)
+  (decreases fuel) = 
+  match ll with
+  | Nil -> ()
+  | Cons x xsref -> 
+    let xs1 = sel h0 xsref in
+    let xs2 = sel h1 xsref in
+    assert (modifies Set.empty h0 h1);
+    assert (h0 `contains` xsref);
+    assert (xs1 == xs2);
+    lemma_list_unchanged_modif_none0 (fuel-1) xs1 h0 h1;
+    ()
+
+let ll_constant_trans (#a: Type0) (ll: linkedList a) (h0 h1 h2: lheap) : Lemma
+  (requires (exists fuel. ll_constant fuel ll h0 h1) /\ (exists fuel. ll_constant fuel ll h1 h2))
+  (ensures (exists fuel. ll_constant fuel ll h0 h2)) = admit ()
+
+let lemma_list_unchanged_modif_none (#a: Type0) (ll: linkedList a) (h0 h1: lheap): Lemma
+  (requires modifies_none h0 h1 /\ (exists fuel. deep_contains_ll fuel ll h0))
+  (ensures exists fuel. ll_constant fuel ll h0 h1)
+  = 
+  eliminate exists (fuel: nat). 
+        deep_contains_ll fuel ll h0
+    returns (exists fuel. ll_constant fuel ll h0 h1) with _. begin
+    lemma_list_unchanged_modif_none0 fuel ll h0 h1 
+  end
+
+let rec lemma_list_unchanged_when_high0 (#a: Type0) (ll: linkedList a) (h0 h1: lheap) (fuel:nat) : Lemma
+  (requires (deep_contains_ll fuel ll h0 /\ deep_high_ll fuel ll h0) /\ modifies_only_label Low h0 h1)
+  (ensures ll_constant fuel ll h0 h1)
+  (decreases fuel) = 
+  match ll with
+  | Nil -> ()
+  | Cons x xsref -> 
+    let xs1 = sel h0 xsref in
+    let xs2 = sel h1 xsref in
+    lemma_list_unchanged_when_high0 xs1 h0 h1 (fuel-1);
+    ()
+
+let lemma_list_unchanged_when_high (#a: Type0) (ll: linkedList a) (h0 h1: lheap) : Lemma
+  (requires (
+    modifies_only_label Low h0 h1 /\
+    (exists fuel. deep_contains_ll fuel ll h0 /\ deep_high_ll fuel ll h0)))
+  (ensures (exists fuel. ll_constant fuel ll h0 h1)) = 
+  eliminate exists (fuel: nat). 
+        deep_contains_ll fuel ll h0 /\ 
+        deep_high_ll fuel ll h0
+    returns (exists fuel. ll_constant fuel ll h0 h1) with _. begin
+    lemma_list_unchanged_when_high0 ll h0 h1 fuel
+  end
 
 #push-options "--split_queries always"
 let rec footprint_acc
   (#a: Type)
   (l: linkedList a) 
   (h:lheap) 
-  (hdom:(erased (FSet.set pos)){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
-  (acc:(erased (FSet.set pos)){acc `FSet.subset` hdom}) : 
-  Tot (erased (FSet.set pos)) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
+  (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
+  (acc:(FSet.set nat){acc `FSet.subset` hdom}) : 
+  GTot (FSet.set nat) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
   match l with 
   | Nil -> acc
   | Cons x xsref -> 
@@ -205,58 +294,54 @@ let rec footprint_acc
     end
 #pop-options
 
-let footprint (#a: Type) (l: linkedList a) (h:lheap) =
+let footprint (#a: Type) (l: linkedList a) (h:lheap) : GTot (Set.set nat) =
   let hdom = get_hdom h in
   FSet.all_finite_set_facts_lemma ();
   assert (FSet.emptyset `FSet.subset` hdom);
-  footprint_acc l h hdom FSet.emptyset
+  let fp : FSet.set nat = footprint_acc l h hdom FSet.emptyset in
+  Set.as_set (FSet.set_as_list fp)
+
+let footprint_modifies_none (l:linkedList int) (h0 h1: lheap) : 
+  Lemma
+    (requires modifies_none h0 h1 /\ satisfy l h0 contains_pred /\ inv_contains_points_to_contains h0)
+    (ensures footprint l h0 `Set.equal` footprint l h1) =
+  admit ()
+
+let footprint_cons (l:linkedList int) (h0 h1: lheap) :
+  Lemma
+    (requires (Cons? l /\ satisfy l h0 contains_pred))
+    (ensures (
+        footprint l h0 `Set.equal` 
+        (Set.singleton (addr_of (Cons?.next l)) `Set.union` footprint (sel h0 (Cons?.next l)) h0))) =
+  admit ()
+    
 
 let separated (#a: Type) (l1 l2: linkedList a) (h: lheap): Type0 = 
-  (footprint l1 h `FSet.intersection` footprint l2 h) == FSet.emptyset
+  (footprint l1 h `Set.disjoint` footprint l2 h)
 
-(* Examples of linked lists *)
-
-let empty_ll: linkedList nat = Nil
-
-let ll1 () : ST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-  let r: ref (linkedList nat) = alloc Nil in 
-  Cons 13 r
-
-let ll2 () : ST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-  let x = alloc Nil in 
-  let y = alloc (Cons 31 x) in
-  let z = alloc (Cons 23 y) in
-  Cons 23 z
-
-let cycle_length3 () : ST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-    let x = alloc Nil in 
-    let y = alloc (Cons 7 x) in
-    let z = alloc (Cons 5 y) in 
-    // gst_witness (contains_pred x);
-    write x (Cons 2 z);
-    Cons 2 z
-
-
-// TODO: clean up
+// TODO: this version loops on cycles.
+//  should we add a pre-condition or make it work for cycles?
 let rec deep_declassify (l: linkedList int) : IST unit 
   (requires fun h -> 
     satisfy l h contains_pred)
   (ensures fun h0 x h1 ->
     modifies Set.empty h0 h1 /\
-    (* TODO: modifies_classification (footprint l) h0 h1 *)
+    modifies_classification (footprint l h0) h0 h1 /\
     satisfy l h1 is_low_pred) =
   let h0 = get() in
   match l with 
   | Nil -> ()
   | Cons h tlref ->
-      let tl = !tlref in 
-      eliminate_inv_contains h0 (TLList TNat) tlref;
-      deep_declassify tl;
-      let h1 = get () in
-      declassify_low' tlref;
-      let h2 = get () in
-      lemma_declassify_preserves_inv (TLList TNat) tlref h1 h2;
-      ()
+    let tl = !tlref in 
+    eliminate_inv_contains h0 (TLList TNat) tlref;
+    deep_declassify tl;
+    let h1 = get () in
+    declassify_low' tlref;
+    let h2 = get () in
+    lemma_declassify_preserves_inv (TLList TNat) tlref h1 h2;
+    footprint_modifies_none l h0 h2;
+    footprint_cons l h0 h2;
+    ()
 
 let test_declassify (l: linkedList int) : IST unit 
   (ensures fun h -> satisfy l h contains_pred) 
@@ -264,7 +349,7 @@ let test_declassify (l: linkedList int) : IST unit
   deep_declassify l;
   ()
 
-val progr_linked_list_unchanged: 
+val progr_llist_declassify: 
   ll: (linkedList int) -> 
   ctx:(elab_typ (TArr (TLList TNat) TUnit)) ->
   IST unit 
@@ -272,242 +357,58 @@ val progr_linked_list_unchanged:
     (ensures (fun h0 _ h1 -> True))
   
 [@expect_failure]
-let progr_linked_list_unchanged ll ctx =
+let progr_llist_declassify ll ctx =
   ctx ll (* call should fail because it does not know that ll is low *)
 
-let progr_linked_list_unchanged ll ctx =
+let progr_llist_declassify ll ctx =
   deep_declassify ll;
   ctx ll
 
-// #push-options "--split_queries always"
-// let rec deep_declassify (l: linkedList int) : ST unit 
-//   (requires fun h -> satisfy l h contains_pred /\ inv_contains_points_to_contains h)
-//   (ensures fun h0 x h1 ->
-//     inv_contains_points_to_contains h1 /\
-//     modifies Set.empty h0 h1 /\
-//     (* TODO: modifies_classification (footprint l) h0 h1 *)
-//     satisfy l h1 is_low_pred /\
-//     (forall (t:typ) (r:ref (elab_typ t)). 
-//       (~((elab_typ_tgt (TRef t)).satisfy r h0 is_low_pred) /\ 
-//        (elab_typ_tgt (TRef t)).satisfy r h1 is_low_pred) ==> 
-//          (elab_typ_tgt t).satisfy (sel h1 r) h1 is_low_pred)
-//     ) =
-//   let h0 = get() in
-//   match l with 
-//   | Nil -> ()
-//   | Cons h tlref ->
-//       let tl = !tlref in 
-//       declassify_low' tlref;
-//       eliminate_inv_contains h0 (TLList TNat) tlref;
-//       let h1 = get () in
-//       deep_declassify tl;
-//       let h2 = get () in
-//       introduce forall (t:typ) (r:ref (elab_typ t)). 
-//         (~((elab_typ_tgt (TRef t)).satisfy r h0 is_low_pred) /\ 
-//           (elab_typ_tgt (TRef t)).satisfy r h2 is_low_pred) ==> 
-//             (elab_typ_tgt t).satisfy (sel h2 r) h2 is_low_pred
-//       with begin
-//         let wr = elab_typ_tgt t in
-//         introduce (~(satisfy r h0 is_low_pred) /\ satisfy r h2 is_low_pred) 
-//           ==> wr.satisfy (sel h2 r) h2 is_low_pred
-//         with _. begin
-//           introduce ~(satisfy r h1 is_low_pred) ==> wr.satisfy (sel h2 r) h2 is_low_pred with _. ();
-//           introduce satisfy r h1 is_low_pred ==> wr.satisfy (sel h2 r) h2 is_low_pred with _. begin
-//             assert (addr_of r = addr_of tlref);
-//             lemma_sel_same_addr' h2 r tlref;
-//             // assert (shallowly_low (sel h2 tlref) h2);
-//             // assert (sel h2 tlref == sel h2 r);
-//             assert ((witnessable_llist int).satisfy (sel h2 tlref) h2 is_low_pred);
-//             assert (wr.satisfy (sel h2 tlref) h2 is_low_pred);
-//             ()
-//           end
-//         end 
-//       end;
-//       ()
-// #pop-options
+val progr_high_ll_unchanged :
+  ll: linkedList int -> 
+  ctx:(elab_typ (TArr TUnit TUnit)) ->
+  IST unit
+    (requires (fun h0 -> 
+      satisfy ll h0 contains_pred /\
+      (exists (fuel: nat).
+        deep_contains_ll fuel ll h0 /\ 
+        deep_high_ll fuel ll h0)
+    ))
+    (ensures (fun h0 _ h1 -> exists (fuel: nat). ll_constant fuel ll h0 h1))
+let progr_high_ll_unchanged ll ctx =
+  let h0 = get () in
+  ctx ();
+  let h1 = get() in
+  lemma_list_unchanged_when_high ll h0 h1;
+  ()
 
 
-// (* Tests *)
-
-// // TODO: Review this
-// let test_declassify (l: linkedList int) : IST unit 
-//   (ensures fun h -> satisfy l h contains_pred) 
-//   (requires fun _ _ _ -> True) =
-//   let h0 = get() in
-//   deep_declassify l;
-//   let h1 = get() in
-
-//   introduce forall (t:typ) inv.
-//     let tt = _elab_typ t inv in
-//     forall (r:ref (dfst tt)).
-//       (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
-//         (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
-//   with begin
-//     let tt = _elab_typ t inv in
-//     let refw = witnessable_ref (dfst tt) #(dsnd tt) in
-//     introduce forall (r:ref (dfst tt)).
-//       refw.satisfy r h1 is_low_pred ==> 
-//         (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
-//     with begin
-//       let wr = dsnd tt in
-//       introduce satisfy r h1 is_low_pred ==> wr.satisfy (sel h1 r) h1 is_low_pred with _. begin
-//         introduce satisfy r h0 is_low_pred ==> wr.satisfy (sel h1 r) h1 is_low_pred with _. begin
-//           assert (h0 `contains` r);
-//           assert (modifies_none h0 h1);
-//           assert (sel h1 r == sel h0 r);
-//           assert (satisfy r h0 is_low_pred ==> wr.satisfy (sel h0 r) h0 is_low_pred);
-
-//           wr.satisfy_monotonic (sel h1 r) is_low_pred h0 h1;
-//           // assume (shallowly_low (sel h1 r) h0 ==> shallowly_low (sel h1 r) h1);
-//           ()
-//         end;
-//         introduce ~(satisfy r h0 is_low_pred) ==> wr.satisfy (sel h1 r) h1 is_low_pred with _. begin
-//           assert
-//             ((~(satisfy r h0 is_low_pred) /\ satisfy r h1 is_low_pred) ==> 
-//               wr.satisfy (sel h1 r) h1 is_low_pred);
-//           assert (~(satisfy r h0 is_low_pred));
-//           assert (satisfy r h1 is_low_pred);
-//           ()
-//         end
-//       end
-//     end
-//   end;
-
-//   assert (inv_low_points_to_low h1);
-//   ()
-
-// let test2_declassify (l1 l2: linkedList int) : IST unit 
-//   (ensures fun h -> shallowly_contained l1 h /\ shallowly_contained l2 h /\ deep_high_ll l2 h) 
-//   (requires fun _ _ h1 -> deep_high_ll l2 h1) =
-//   deep_declassify l1;
-
-
-// // val progr_linked_list_unchanged: 
-// //   rp: ref (linkedList int) -> 
-// //   rs: ref int ->
-// //   ctx:(elab_typ (TArr TUnit TUnit)) ->
-// //   IST unit 
-// //     (requires (fun h0 -> 
-// //       shallowly_contained rp h0 /\
-// //       label_of rp h0 == High /\
-// //       shallowly_low rs h0))
-// //     (ensures (fun h0 _ h1 ->
-// //       sel h0 rp == sel h1 rp))
-         
-// // let progr_secret_unchanged_test rp rs ctx = 
-// //   let x = alloc Nil in 
-// //   let y = alloc (Cons (31, x)) in
-// //   let secret_ll = Cons(23, y) in
-// //   ctx ();
-// //   let h = get() in
-// //   assert (head int secret_ll h == 31);
-// //   // assert (head int (tail int secret_ll) == 23);
-// //   ()
-
-// // val ctx_HO :
-// //   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
-// // let ctx_HO f =
-// //   let h0 = get () in
-// //   let x:ref int = f () in
-// //   let y = alloc Nil in
-// //   let z = Cons(!x, y) in
-// //   let t = insert_front int z 13 in
-// //   let h2 = get () in
-// //   assert (modifies_only_label Low h0 h2);
-// //   ()
-
-// // test with program getting callback?
-
-// // val progr_sep:
-// //   rp: linkedList int -> 
-// //   ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
-// //   IST unit
-// //     (requires (fun h0 -> 
-// //       shallowly_contained rp h0 /\
-// //       label_of (last rp) h0 == High)
-// //     )
-// //     (ensures (fun h0 _ h1 -> True))
-// // let progr_sep rp f =
-// //   deep_declassify rp;
-// //   let h1 = get () in
-// //   assume (inv_low_points_to_low h1);
-// //   let r = f rp in  
-// //   r
-
-// // add precond of not cycles
-// let rec lemma_list_unchanged_modif_none (#a: Type0) (rp: linkedList a) (h0 h1: lheap): Lemma
-//   (requires modifies_none h0 h1)
-//   (ensures exists (gas:nat) . ll_constant gas rp h0 h1)
-//   (decreases rp) = 
-//   match rp with
-//   | Nil ->
-//     assert (ll_constant 1 rp h0 h1);
-//     ()
-//   | Cons (x, xsref) -> 
-//     let xs1 = sel h0 xsref in
-//     let xs2 = sel h1 xsref in
-//     assert (modifies Set.empty h0 h1);
-//     assume (h0 `contains` xsref);
-//     assert (xs1 == xs2);
-//     admit();
-//     lemma_list_unchanged_modif_none xs1 h0 h1;
-//     ()
-
-// let lemma_list_unchanged_when_high (#a: Type0) (rp: linkedList a) (h0 h1: lheap): Lemma
-//   (requires (exists (gas: nat). deep_high_ll gas rp h0 /\ modifies_only_label Low h0 h1))
-//   (ensures exists (gas: nat). ll_constant gas rp h0 h1)
-//   (decreases rp) = 
-//   match rp with
-//   | Nil ->
-//     assert (ll_constant 1 rp h0 h1);
-//     ()
-//   | Cons (x, xsref) -> 
-//     let xs1 = sel h0 xsref in
-//     let xs2 = sel h1 xsref in
-//     // assert (modifies Set.empty h0 h1);
-//     // assume (h0 `contains` xsref);
-//     // assert (xs1 == xs2);
-//     admit();
-//     // lemma_list_unchanged_modif_none xs1 h0 h1;
-//     ()
-
-// val progr_ll_unchanged':
-//   rp: linkedList int -> 
-//   ctx:(elab_typ (TArr TUnit TUnit)) ->
-//   IST unit
-//     (requires (fun h0 -> 
-//       exists (gas: nat) . deep_high_ll gas rp h0 /\
-//       shallowly_contained rp h0
-//     ))
-//     (ensures (fun h0 _ h1 -> exists (gas: nat). ll_constant gas rp h0 h1))
-// let progr_ll_unchanged' rp f =
-//   let h0 = get () in
-//   f ();
-//   let h1 = get() in
-//   lemma_list_unchanged_when_high rp h0 h1;
-//   ()
-
-// // val ctx_alloc_ll: int -> St linked // take pre/post from elab_typ
-// // elab_typ (TArr TNat (TPair TNat (TRef TNat)))
-// // let ctx_alloc_ll v =
-// //   let r = alloc Nil in 
-// //   let rs = Cons(v, r) in
-// //   rs
-
-// // val progr_passes_cb:
-// //   rp: linkedList int ->
-// //   ctx: (elab_typ (TArr (TArr TUnit TUnit) TUnit)) ->
-// //   IST unit 
-// //     (requires fun h0 -> 
-// //       shallowly_contained rp h0 /\ 
-// //       (exists (gas: nat) . deep_high_ll gas rp h0))
-// //     (ensures fun _ _  h1 -> inv_low_points_to_low h1)
-// // let progr_getting_callback_test rp ctx = 
-// //   declassify_low' (last_ref rp); // this shouldn't be necessary (the cb of the program should be able to modify High things)
-// //   let cb: elab_typ (TArr TUnit TUnit) = 
-// //     (fun () -> 
-// //       let last_of_ll = last rp in
-// //       write' last_of_ll (!last_of_ll + 1)) in
-// //   ctx cb;
-// //   ()
-    
+val progr_high_ll_unchanged_separation : 
+  ll: linkedList int -> 
+  sll: linkedList int ->
+  ctx:(elab_typ (TArr (TLList TNat) TUnit)) ->
+  IST unit 
+    (requires (fun h0 -> 
+      satisfy ll h0 contains_pred /\
+      (exists (fuel: nat).
+        deep_contains_ll fuel ll h0 /\ 
+        deep_high_ll fuel ll h0) /\
+      satisfy sll h0 contains_pred /\
+      separated ll sll h0))
+    (ensures (fun h0 _ h1 ->
+      exists (fuel: nat). 
+        // deep_high_ll fuel ll h1 /\
+        ll_constant fuel ll h0 h1))
+let progr_high_ll_unchanged_separation ll sll ctx =
+  let h0 = get () in
+  deep_declassify sll;
+  let h1 = get () in
+  lemma_list_unchanged_modif_none ll h0 h1;
+  assume (exists fuel. deep_contains_ll fuel ll h1 /\ 
+                           deep_high_ll fuel ll h1);
+  ctx sll;
+  let h2 = get() in
+  assert (modifies_only_label Low h1 h2);
+  lemma_list_unchanged_when_high ll h1 h2;
+  ll_constant_trans ll h0 h1 h2;
+  ()
