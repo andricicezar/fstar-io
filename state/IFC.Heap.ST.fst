@@ -228,13 +228,18 @@ val lemma_modifies_only_label_trans
       modifies_only_label l h0 h1 /\ 
       modifies_only_label l h1 h2)
      (ensures modifies_only_label l h0 h2)
- //  [SMTPat (modifies_only_label l h0 h1); SMTPat (modifies_only_label l h1 h2)]
 let lemma_modifies_only_label_trans l h0 h1 h2 = 
-    assert (unmodified_common h0 h1);
-    assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
-    (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h1 r);
-    assert (unmodified_common h0 h2);
-    // TODO: prove this using the same technique we used until now
-    assume (forall (a:Type) (rel:preorder a) (r:Monotonic.IFC.Heap.mref a rel).{:pattern (sel h2 r)} 
-     (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r);
-    ()
+  assert (unmodified_common h0 h1);
+  assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
+  (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h1 r);
+  assert (unmodified_common h0 h2);
+  introduce forall (a:Type) (rel:preorder a) (r:Monotonic.IFC.Heap.mref a rel).
+    (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r
+  with begin
+    introduce (h0 `contains` r /\ ~(label_of r h0 == l)) 
+      ==> sel h0 r == sel h2 r
+    with _. begin
+      ()
+    end
+  end;
+  ()
