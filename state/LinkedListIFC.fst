@@ -80,7 +80,6 @@ let tail (a: Type0) (l: linkedList a) {| c:witnessable a |} :
 // let rec ll_has_length (#a: Type0) (h: lheap) (l: linkedList a) (len:nat) : Type0 =
 //   l == Nil \/ (ll_has_length h (Cons?.next l) (len - 1))
 
-
 let rec last_elem (t:typ) (l: elab_typ (TLList t)) : 
   IST (option (elab_typ t * ref (elab_typ (TLList t))))
     (requires (fun h -> (elab_typ_tgt (TLList t)).satisfy l h contains_pred))
@@ -293,8 +292,54 @@ let footprint_modifies_none (l:linkedList int) (h0 h1: lheap) :
   Lemma
     (requires modifies_none h0 h1 /\ satisfy l h0 contains_pred /\ inv_contains_points_to_contains h0)
     (ensures footprint l h0 `Set.equal` footprint l h1) =
-  // assert
-  admit() 
+  match l with
+    | Nil -> ()
+    | Cons x xsref -> 
+      admit();
+      ()
+
+let footprint_acc_cons 
+  (l: linkedList int) 
+  (h: lheap)
+  (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
+  (acc:(FSet.set nat){acc `FSet.subset` hdom}):
+Lemma
+  (requires Cons? l /\ satisfy l h contains_pred)
+  (ensures (
+    let next = Cons?.next l in
+    FSet.all_finite_set_facts_lemma ();
+    let acc' = acc `FSet.union` FSet.singleton (addr_of next) in
+    footprint_acc l h hdom acc `FSet.equal`
+    (FSet.singleton (addr_of next) `FSet.union` 
+    footprint_acc (sel h next) h hdom acc')
+  )) =
+  admit (); 
+  ()
+
+let footprint_cons'
+  (l: linkedList int) 
+  (h: lheap): Lemma
+  (requires Cons? l /\ satisfy l h contains_pred)
+  (ensures (
+    let next = Cons?.next l in
+    let hdom = get_hdom h in
+    FSet.all_finite_set_facts_lemma ();
+    let acc = FSet.singleton (addr_of next) in
+    footprint_acc l h hdom FSet.emptyset `FSet.equal`
+    (FSet.singleton (addr_of next) `FSet.union` 
+    footprint_acc (sel h next) h hdom acc)
+  )) =
+  FSet.all_finite_set_facts_lemma ();
+  let acc = FSet.singleton (addr_of (Cons?.next l)) in
+  let hdom = get_hdom h in
+  assert ((FSet.emptyset `FSet.union` acc) `FSet.equal` acc);
+  footprint_acc_cons l h hdom FSet.emptyset;
+  admit();
+  ()
+
+// TODO: this might not be true (footprint starts with the empty set as the acc, but we need 
+// to know that the first reference has been visited (and thus that it's in the acc) when 
+// writing footprint (sel h0 (Cons?.next l)) h0)) 
 
 let footprint_cons (l:linkedList int) (h0 h1: lheap) :
   Lemma
@@ -306,26 +351,17 @@ let footprint_cons (l:linkedList int) (h0 h1: lheap) :
   let hdom = get_hdom h0 in
   FSet.all_finite_set_facts_lemma (); // gives us that FSet.emptyset `FSet.subset` hdom 
   let fp_l = footprint_acc l h0 hdom FSet.emptyset in
-  
   let acc = FSet.singleton (addr_of next) in
   let fp_next = footprint_acc (sel h0 next) h0 hdom acc in
-  FSet.all_finite_set_facts_lemma ();
-  // assert (fp_next `FSet.subset` fp_l);
-  // assume (fp_l `FSet.equal` (acc `FSet.union` fp_next));
-  
-  // assert ((acc' `FSet.union` fp_next) `FSet.subset` fp_l);
-  // assert (fp_l `FSet.subset` (acc' `FSet.union` fp_next));
-  // assume (fp_l `FSet.equal` (acc' `FSet.union` fp_next));
-  
-  // assert (Set.as_set (FSet.set_as_list fp_l) `Set.equal`
-  //         (Set.singleton (addr_of next) `Set.union` Set.as_set (FSet.set_as_list fp_next)));
-  
-  // assume (footprint l h0 `FSet.equal` Set.as_set (FSet.set_as_list fp_l));
-  
+  footprint_acc_cons l h0 hdom FSet.emptyset;
+  assert ((FSet.emptyset `FSet.union` acc) `FSet.equal` acc);
+  assert (fp_l `FSet.equal` (acc `FSet.union` fp_next));
+
+  assert (footprint l h0 `Set.equal` Set.as_set (FSet.set_as_list fp_l));
+  // assert (footprint (sel h0 (Cons?.next l)) h0 `Set.equal` Set.as_set (FSet.set_as_list fp_next));
   admit ();
   ()
   
-    
 
 let separated (#a: Type) (l1 l2: linkedList a) (h: lheap): Type0 = 
   (footprint l1 h `Set.disjoint` footprint l2 h)
