@@ -30,6 +30,8 @@ let cycle_length3 () : ST (linkedList int) (requires fun _ -> True) (ensures fun
   let y = alloc (Cons 7 x) in
   let z = alloc (Cons 5 y) in 
   write x (Cons 2 z);
+  // let h1 = get() in
+  // assume (inv_low_contains h1);
   Cons 2 z
 
 
@@ -78,16 +80,9 @@ let tail (a: Type0) (l: linkedList a) {| c:witnessable a |} :
 // let rec ll_has_length (#a: Type0) (h: lheap) (l: linkedList a) (len:nat) : Type0 =
 //   l == Nil \/ (ll_has_length h (Cons?.next l) (len - 1))
 
-// let rec last_ref (#a: Type0) (l:linkedList a{l =!= Nil}) (h: lheap) : option (linkedList a) =
-//   let Cons x xsref = l in
-//   assume (h `contains` xsref);
-//   let xs = sel_tot h xsref in
-//   match xs with
-//   | Nil -> Some l
-//   | Cons _ _ -> last_ref #a xs h
 
 let rec last_elem (t:typ) (l: elab_typ (TLList t)) : 
-  IST (option (elab_typ t))
+  IST (option (elab_typ t * ref (elab_typ (TLList t))))
     (requires (fun h -> (elab_typ_tgt (TLList t)).satisfy l h contains_pred))
     (ensures fun h0 _ h1 -> h0 == h1) = 
   let h0 = get () in
@@ -97,20 +92,18 @@ let rec last_elem (t:typ) (l: elab_typ (TLList t)) :
   | Cons x xsref ->
     let xs = !xsref in
     match xs with
-    | Nil -> Some x
+    | Nil -> Some (x, xsref)
     | Cons _ _ -> 
       eliminate_inv_contains h0 (TLList t) xsref;
       last_elem t xs
 
-
 let insert_front (#a: Type0) (l: linkedList a) (v: a) : 
-  ST (linkedList a)
+  IST (linkedList a)
     (requires (fun _ -> True))
     (ensures fun h0 _ h1 -> True) = 
-  let r: ref (linkedList a) = alloc l in 
+  let r: ref (linkedList a) = _alloc l in 
   Cons v r
 
-// TODO: fix this
 let rec append (#t: typ) (l: elab_typ (TLList t)) (v: elab_typ t) :
   ST (elab_typ (TLList t))
     (requires (fun h -> 
@@ -134,40 +127,26 @@ let rec append (#t: typ) (l: elab_typ (TLList t)) (v: elab_typ t) :
       eliminate_inv_contains h0 (TLList t) r;
       append tl v
 
-// let rec length_IST (a: Type0) (l: linkedList a) {| c:witnessable a |} : IST nat 
-//        (requires (fun h -> shallowly_contained_low l h))
-//        (ensures fun _ _ _ -> True) =
-//        let h0 = get() in
-//         match l with 
-//          | Nil -> 0
-//          | Cons (x, xsref) -> 
-//            let xs = !xsref in
-//             eliminate forall (a:Type) (c:witnessable a) (r:ref a). satisfy r h0 is_low_pred ==>
-//               c.satisfy (sel h0 r) h0 is_low_pred with (linkedList a) (solve) xsref;
-//             eliminate forall (a:Type) (c:witnessable a) (r:ref a). satisfy r h0 contains_pred ==>
-//               c.satisfy (sel h0 r) h0 contains_pred with (linkedList a) (solve) xsref;
-//             1 + length_IST a xs #c
+let rec length_IST (t: typ) (l: elab_typ (TLList t)) : IST int 
+    (requires (fun h -> 
+      (elab_typ_tgt (TLList t)).satisfy l h contains_pred /\
+      inv_contains_points_to_contains h))
+    (ensures fun _ _ _ -> True) =
+  let h0 = get () in
+  let l : linkedList (elab_typ t) = l in
+  match l with 
+    | Nil -> 0
+    | Cons x xsref -> 
+      let xs = !xsref in
+      eliminate_inv_contains h0 (TLList t) xsref;
+      1 + length_IST t xs
 
-//  let rec length (a: Type0) (l: linkedList a) (h: lheap) {| c:target_lang a |} : nat 
-//        // (requires (fun h -> shallowly_contained l h /\ shallowly_low l h))
-//        =
-//        // let h0 = get() in
-//         match l with 
-//          | Nil -> 0
-//          | Cons (x, xsref) -> 
-//            let xs = sel h xsref in
-//             // eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_low r h0 ==>
-//             //   c.shallowly_low (sel h0 r) h0 with (linkedList a) (solve) xsref;
-//             // eliminate forall (a:Type) (c:target_lang a) (r:ref a). shallowly_contained r h0 ==>
-//             //   c.shallowly_contained (sel h0 r) h0 with (linkedList a) (solve) xsref;
-//             1 + length a xs h #c 
-
-let rec no_cycels_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
+let rec no_cycles_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
   if fuel = 0 then False
   else
     match l with
     | Nil -> True
-    | Cons x xsref -> no_cycels_ll (fuel - 1) (sel h xsref) h
+    | Cons x xsref -> no_cycles_ll (fuel - 1) (sel h xsref) h
 
 let rec deep_contains_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
   if fuel = 0 then False
@@ -213,6 +192,15 @@ let rec ll_constant (#a: Type0) (fuel: nat) (l: linkedList a) (h1 h2: lheap) : T
       | (Cons x xsref, Cons y ysref) ->
         x == y /\ xsref == ysref /\ ll_constant (fuel - 1) xs1 h1 h2
     end
+
+let rec ll_same_labels (#a: Type0) (fuel: nat) (l: linkedList a) (h1 h2: lheap) : Type0 =
+  if fuel = 0 then False
+  else
+    match l with
+    | Nil -> True
+    | Cons _ xsref ->
+      let xs = sel h1 xsref in
+      label_of xsref h1 == label_of xsref h2 /\ ll_same_labels (fuel - 1) xs h1 h2
 
 let rec lemma_list_unchanged_modif_none0 (#a: Type0) (fuel:nat) (ll: linkedList a) (h0 h1: lheap): Lemma
   (requires modifies_none h0 h1 /\ deep_contains_ll fuel ll h0)
@@ -305,7 +293,8 @@ let footprint_modifies_none (l:linkedList int) (h0 h1: lheap) :
   Lemma
     (requires modifies_none h0 h1 /\ satisfy l h0 contains_pred /\ inv_contains_points_to_contains h0)
     (ensures footprint l h0 `Set.equal` footprint l h1) =
-  admit ()
+  // assert
+  admit() 
 
 let footprint_cons (l:linkedList int) (h0 h1: lheap) :
   Lemma
@@ -313,7 +302,29 @@ let footprint_cons (l:linkedList int) (h0 h1: lheap) :
     (ensures (
         footprint l h0 `Set.equal` 
         (Set.singleton (addr_of (Cons?.next l)) `Set.union` footprint (sel h0 (Cons?.next l)) h0))) =
-  admit ()
+  let next  = Cons?.next l in
+  let hdom = get_hdom h0 in
+  FSet.all_finite_set_facts_lemma (); // gives us that FSet.emptyset `FSet.subset` hdom 
+  let fp_l = footprint_acc l h0 hdom FSet.emptyset in
+  
+  let acc = FSet.singleton (addr_of next) in
+  let fp_next = footprint_acc (sel h0 next) h0 hdom acc in
+  FSet.all_finite_set_facts_lemma ();
+  // assert (fp_next `FSet.subset` fp_l);
+  // assume (fp_l `FSet.equal` (acc `FSet.union` fp_next));
+  
+  // assert ((acc' `FSet.union` fp_next) `FSet.subset` fp_l);
+  // assert (fp_l `FSet.subset` (acc' `FSet.union` fp_next));
+  // assume (fp_l `FSet.equal` (acc' `FSet.union` fp_next));
+  
+  // assert (Set.as_set (FSet.set_as_list fp_l) `Set.equal`
+  //         (Set.singleton (addr_of next) `Set.union` Set.as_set (FSet.set_as_list fp_next)));
+  
+  // assume (footprint l h0 `FSet.equal` Set.as_set (FSet.set_as_list fp_l));
+  
+  admit ();
+  ()
+  
     
 
 let separated (#a: Type) (l1 l2: linkedList a) (h: lheap): Type0 = 
@@ -382,7 +393,6 @@ let progr_high_ll_unchanged ll ctx =
   lemma_list_unchanged_when_high ll h0 h1;
   ()
 
-
 val progr_high_ll_unchanged_separation : 
   ll: linkedList int -> 
   sll: linkedList int ->
@@ -403,6 +413,11 @@ let progr_high_ll_unchanged_separation ll sll ctx =
   let h0 = get () in
   deep_declassify sll;
   let h1 = get () in
+  assert (exists (fuel: nat).
+        deep_contains_ll fuel ll h0 /\ 
+        deep_high_ll fuel ll h0);
+  assert (separated ll sll h0);
+  assume (exists (fuel: nat). ll_same_labels fuel ll h0 h1);
   lemma_list_unchanged_modif_none ll h0 h1;
   assume (exists fuel. deep_contains_ll fuel ll h1 /\ 
                            deep_high_ll fuel ll h1);
