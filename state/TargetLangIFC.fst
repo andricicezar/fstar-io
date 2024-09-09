@@ -212,6 +212,18 @@ effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
       inv_low_contains h1 /\
       post h0 r h1))
 
+// let lemma_write_preserves_inv (xa:typ) (x:ref (elab_typ xa)) (h0 h1:lheap) : Lemma
+//   (requires (modifies_none h0 h1 /\
+//             h0 `lheap_rel` h1 /\
+//             equal_dom h0 h1 /\
+//             modifies_classification (only x) h0 h1 /\
+//             (elab_typ_tgt (TRef xa)).satisfy x h0 contains_pred /\ 
+//             shallowly_contained_low #(elab_typ xa) #(elab_typ_tgt xa) (sel h0 x) h0 /\
+//             shallowly_contained_low #(ref (elab_typ xa)) #(elab_typ_tgt (TRef xa)) x h1 /\
+//             inv_low_points_to_low h0))
+//   (ensures (inv_low_points_to_low h1)) = 
+// ()
+
 let write' (#t:Type) {| c:witnessable t |} (r:ref t) (v:t) 
 : IST unit
   (requires (fun h0 -> 
@@ -224,32 +236,30 @@ let write' (#t:Type) {| c:witnessable t |} (r:ref t) (v:t)
 = let h0 = get () in
   write r v;
   let h1 = get () in
-  introduce 
-  forall (a:typ) (inv:lheap -> Type0).
-    let tt = _elab_typ a inv in
-    forall (r:ref (dfst tt)).
-      (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
-        (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
-  with begin
-    let tt = _elab_typ a inv in
-    introduce forall (r:ref (dfst tt)).
-      (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
-        (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
-    with begin
-      introduce (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred 
-        ==> (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
-      with _. begin
-        introduce (dsnd tt).satisfy (sel h0 r) h0 is_low_pred ==> 
-          (dsnd tt).satisfy (sel h1 r) h1 is_low_pred with _. eliminate_inv_low h0 a #inv r;
-        admit ()
-      end
-    end
-  end;
-  assert (inv_low_points_to_low h1);
+  // introduce 
+  // forall (a:typ) (inv:lheap -> Type0).
+  //   let tt = _elab_typ a inv in
+  //   forall (r:ref (dfst tt)).
+  //     (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
+  //       (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
+  // with begin
+  //   let tt = _elab_typ a inv in
+  //   introduce forall (r:ref (dfst tt)).
+  //     (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred ==> 
+  //       (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
+  //   with begin
+  //     introduce (witnessable_ref (dfst tt) #(dsnd tt)).satisfy r h1 is_low_pred 
+  //       ==> (dsnd tt).satisfy (sel h1 r) h1 is_low_pred
+  //     with _. begin
+  //       introduce (dsnd tt).satisfy (sel h0 r) h0 is_low_pred ==> 
+  //         (dsnd tt).satisfy (sel h1 r) h1 is_low_pred with _. eliminate_inv_low h0 a #inv r;
+  //       admit ()
+  //     end
+  //   end
+  // end;
+  assume (inv_low_points_to_low h1);
   assume (inv_contains_points_to_contains h1);
   ()
-
-let _ = assert False
 
 let _alloc (#a:Type) (init:a)
 : IST (ref a) (fun h -> True) (alloc_post #a init)
