@@ -186,12 +186,12 @@ let elab_typ (t:typ) : Type =
 let elab_typ_tgt (t:typ) : witnessable (elab_typ t)=
   dsnd (_elab_typ t inv_low_contains)
 
-let eliminate_inv_low (h:lheap) (a:typ) #inv (r:ref (dfst (_elab_typ a inv))) :
+let eliminate_inv_low (h:lheap) (a:typ) (r:ref (elab_typ a)) :
   Lemma
     (requires (inv_low_points_to_low h))
     (ensures (
-        (witnessable_ref (dfst (_elab_typ a inv)) #(dsnd (_elab_typ a inv))).satisfy r h is_low_pred ==> 
-          (dsnd (_elab_typ a inv)).satisfy (sel h r) h is_low_pred
+        (witnessable_ref (elab_typ a) #(elab_typ_tgt a)).satisfy r h is_low_pred ==> 
+          (elab_typ_tgt a).satisfy (sel h r) h is_low_pred
     )) = ()
 
 let eliminate_inv_contains (h:lheap) (a:typ) (r:ref (elab_typ a)) :
