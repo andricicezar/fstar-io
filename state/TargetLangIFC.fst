@@ -752,4 +752,8 @@ let rec elab_exp
     let vs : elab_typ ts = elab_exp tyj_s ve in
     wvf1 (); wvf2 ();
     (vf, vs)
+  (*
+  | TyNil
+  | TyCons
+  *)
 #pop-options

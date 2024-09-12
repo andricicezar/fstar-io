@@ -230,6 +230,11 @@ let lemma_list_unchanged_modif_none (#a: Type0) (ll: linkedList a) (h0 h1: lheap
     lemma_list_unchanged_modif_none0 fuel ll h0 h1 
   end
 
+let lemma_ll_contains_high_preserved (#a: Type0) (l: linkedList a) (h0 h1: lheap): Lemma
+  (requires (exists fuel . ll_same_labels fuel l h0 h1) /\ modifies_none h0 h1 /\
+            (exists fuel . deep_contains_ll fuel l h0 /\ deep_high_ll fuel l h0))
+  (ensures (exists fuel . deep_contains_ll fuel l h1 /\ deep_high_ll fuel l h1)) = admit ()
+
 let rec lemma_list_unchanged_when_high0 (#a: Type0) (ll: linkedList a) (h0 h1: lheap) (fuel:nat) : Lemma
   (requires (deep_contains_ll fuel ll h0 /\ deep_high_ll fuel ll h0) /\ modifies_only_label Low h0 h1)
   (ensures ll_constant fuel ll h0 h1)
@@ -261,7 +266,8 @@ let rec footprint_acc
   (h:lheap) 
   (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
   (acc:(FSet.set nat){acc `FSet.subset` hdom}) : 
-  GTot (FSet.set nat) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
+  GTot (r:(FSet.set nat){acc `FSet.subset` r}) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
+  FSet.all_finite_set_facts_lemma ();
   match l with 
   | Nil -> acc
   | Cons x xsref -> 
@@ -269,7 +275,6 @@ let rec footprint_acc
     else begin
       assume (h `contains` xsref);
       let acc' = (acc `FSet.union` FSet.singleton (addr_of xsref)) in
-      FSet.all_finite_set_facts_lemma ();
       assert (acc' `FSet.subset` hdom);
       assert ((hdom `FSet.difference` acc') `FSet.subset`
               (hdom `FSet.difference` acc));
@@ -287,6 +292,18 @@ let footprint (#a: Type) (l: linkedList a) (h:lheap) : GTot (Set.set nat) =
   assert (FSet.emptyset `FSet.subset` hdom);
   let fp : FSet.set nat = footprint_acc l h hdom FSet.emptyset in
   Set.as_set (FSet.set_as_list fp)
+
+let lemma_mem_fset_set (fp:FSet.set nat) : Lemma
+  (forall x. x `FSet.mem` fp <==> x `Set.mem` (Set.as_set (FSet.set_as_list fp))) =
+  admit ();
+  introduce forall x. x `FSet.mem` fp ==> x `Set.mem` (Set.as_set (FSet.set_as_list fp)) with begin
+    introduce x `FSet.mem` fp ==> x `Set.mem` (Set.as_set (FSet.set_as_list fp)) with _. begin
+      let l = FSet.set_as_list fp in
+      assert (x `List.Tot.Base.mem` l);
+      let s = Set.as_set l in
+      assume (x `Set.mem` s) (* by induction on l *)
+    end
+  end
 
 let footprint_modifies_none (l:linkedList int) (h0 h1: lheap) : 
   Lemma
@@ -318,28 +335,31 @@ Lemma
 
 let footprint_cons'
   (l: linkedList int) 
-  (h: lheap): Lemma
+  (h: lheap)
+  (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
+: Lemma
   (requires Cons? l /\ satisfy l h contains_pred)
   (ensures (
-    let next = Cons?.next l in
-    let hdom = get_hdom h in
-    FSet.all_finite_set_facts_lemma ();
-    let acc = FSet.singleton (addr_of next) in
     footprint_acc l h hdom FSet.emptyset `FSet.equal`
-    (FSet.singleton (addr_of next) `FSet.union` 
-    footprint_acc (sel h next) h hdom acc)
+    (FSet.singleton (addr_of (Cons?.next l)) `FSet.union` 
+    footprint_acc (sel h (Cons?.next l)) h hdom FSet.emptyset)
   )) =
+  
   FSet.all_finite_set_facts_lemma ();
-  let acc = FSet.singleton (addr_of (Cons?.next l)) in
-  let hdom = get_hdom h in
-  assert ((FSet.emptyset `FSet.union` acc) `FSet.equal` acc);
-  footprint_acc_cons l h hdom FSet.emptyset;
-  admit();
+  let next = Cons?.next l in
+  let fp_hd = FSet.singleton (addr_of next) in
+  let hdom = get_hdom h in 
+  let fp_next = footprint_acc (sel h next) h hdom FSet.emptyset in
+  let post = footprint_acc l h hdom FSet.emptyset `FSet.equal`
+    (FSet.singleton (addr_of (Cons?.next l)) `FSet.union` 
+    footprint_acc (sel h (Cons?.next l)) h hdom FSet.emptyset) in
+  // footprint_acc_cons l h hdom FSet.emptyset;
+  // assert (addr_of next `FSet.mem` footprint_acc l h hdom FSet.emptyset);
+  // assert (FSet.singleton(addr_of next) `FSet.subset` footprint_acc l h hdom FSet.emptyset);
+  // assert (footprint_acc (sel h next) h hdom acc `FSet.subset` footprint_acc l h hdom FSet.emptyset);
+  introduce addr_of next `FSet.mem` fp_next ==> post with _. admit ();
+  introduce ~(addr_of next `FSet.mem` fp_next) ==> post with _. ();
   ()
-
-// TODO: this might not be true (footprint starts with the empty set as the acc, but we need 
-// to know that the first reference has been visited (and thus that it's in the acc) when 
-// writing footprint (sel h0 (Cons?.next l)) h0)) 
 
 let footprint_cons (l:linkedList int) (h0 h1: lheap) :
   Lemma
@@ -351,17 +371,24 @@ let footprint_cons (l:linkedList int) (h0 h1: lheap) :
   let hdom = get_hdom h0 in
   FSet.all_finite_set_facts_lemma (); // gives us that FSet.emptyset `FSet.subset` hdom 
   let fp_l = footprint_acc l h0 hdom FSet.emptyset in
-  let acc = FSet.singleton (addr_of next) in
-  let fp_next = footprint_acc (sel h0 next) h0 hdom acc in
-  footprint_acc_cons l h0 hdom FSet.emptyset;
-  assert ((FSet.emptyset `FSet.union` acc) `FSet.equal` acc);
-  assert (fp_l `FSet.equal` (acc `FSet.union` fp_next));
-
-  assert (footprint l h0 `Set.equal` Set.as_set (FSet.set_as_list fp_l));
-  // assert (footprint (sel h0 (Cons?.next l)) h0 `Set.equal` Set.as_set (FSet.set_as_list fp_next));
-  admit ();
+  let fp_hd = FSet.singleton (addr_of next) in
+  let fp_next = footprint_acc (sel h0 next) h0 hdom FSet.emptyset in
+  footprint_cons' l h0 hdom;
+  assert (fp_l `FSet.equal` (fp_hd `FSet.union` fp_next));
+  lemma_mem_fset_set fp_l;
+  assert (Set.as_set (FSet.set_as_list fp_l) `Set.equal` footprint l h0);
+  lemma_mem_fset_set fp_hd;
+  assert (Set.as_set (FSet.set_as_list fp_hd) `Set.equal` Set.singleton (addr_of next));
+  lemma_mem_fset_set fp_next;
+  assert ((Set.as_set (FSet.set_as_list fp_next)) `Set.equal` footprint (sel h0 next) h0) by (norm [delta_only [`%footprint]; iota]); 
+  assert (Set.as_set (FSet.set_as_list fp_l) `Set.equal` 
+    ((Set.as_set (FSet.set_as_list fp_hd)) `Set.union` (Set.as_set (FSet.set_as_list fp_next))));
+  assert (footprint l h0 `Set.equal` 
+        (Set.singleton (addr_of next) `Set.union` 
+        footprint (sel h0 next) h0));
   ()
   
+let _ = assert False
 
 let separated (#a: Type) (l1 l2: linkedList a) (h: lheap): Type0 = 
   (footprint l1 h `Set.disjoint` footprint l2 h)
@@ -453,9 +480,10 @@ let progr_high_ll_unchanged_separation ll sll ctx =
         deep_contains_ll fuel ll h0 /\ 
         deep_high_ll fuel ll h0);
   assert (separated ll sll h0);
-  assume (exists (fuel: nat). ll_same_labels fuel ll h0 h1);
+  assert (modifies_none h0 h1);
   lemma_list_unchanged_modif_none ll h0 h1;
-  assume (exists fuel. deep_contains_ll fuel ll h1 /\ 
+  lemma_ll_contains_high_preserved ll h0 h1;
+  assert (exists fuel. deep_contains_ll fuel ll h1 /\ 
                            deep_high_ll fuel ll h1);
   ctx sll;
   let h2 = get() in
