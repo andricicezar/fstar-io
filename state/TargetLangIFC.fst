@@ -224,7 +224,7 @@ effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
 //   (ensures (inv_low_points_to_low h1)) = 
 // ()
 
-let write' (#t:Type) {| c:witnessable t |} (r:ref t) (v:t) 
+let elab_write (#t:Type) {| c:witnessable t |} (r:ref t) (v:t) 
 : IST unit
   (requires (fun h0 -> 
     shallowly_contained_low r h0 /\
@@ -281,7 +281,7 @@ let declassify_low' (#a:Type) {| c:witnessable a |} (r:ref a) : ST unit
   let h1 = get () in
   assume (inv_contains_points_to_contains h1)
 
-val alloc' (#a:Type) {| c:witnessable a |} (init:a)
+val elab_alloc (#a:Type) {| c:witnessable a |} (init:a)
 : IST (ref a)
   (requires (fun h0 ->
     shallowly_contained_low init h0))
@@ -291,7 +291,7 @@ val alloc' (#a:Type) {| c:witnessable a |} (init:a)
     modifies_classification Set.empty h0 h1 /\
     sel h1 r == init /\
     shallowly_contained_low r h1))
-let alloc' #_ #c init = 
+let elab_alloc #_ #c init = 
   let r = _alloc init in
   declassify_low' r;
   let h1 = get () in
@@ -303,7 +303,7 @@ let alloc' #_ #c init =
 val ctx_update_ref_test : 
   elab_typ (TArr (TRef TNat) TUnit)
 let ctx_update_ref_test (y:ref int) =
-  write' y (!y + 5);
+  elab_write y (!y + 5);
   ()
 
 val ctx_update_multiple_refs_test : 
@@ -316,11 +316,11 @@ let ctx_update_multiple_refs_test (x:ref (ref int)) =
     mst_recall (contains_pred x);
     let ix : ref int = !x in
     mst_recall (is_low_pred x);    
-    write' ix (!ix + 1);
+    elab_write ix (!ix + 1);
     let h1 = get () in
-    write' x y;
+    elab_write x y;
     let h2 = get () in
-    write' y (!y + 5);
+    elab_write y (!y + 5);
     let h3 = get () in
 
     lemma_modifies_only_label_trans Low h0 h1 h2;
@@ -337,7 +337,7 @@ let ctx_HO_test1 (xs:ref ((ref int) * ref int)) =
   let h0 = get () in
   eliminate_inv_contains h0 (TPair (TRef TNat) (TRef TNat)) xs;
   eliminate_inv_low h0 (TPair (TRef TNat) (TRef TNat)) xs;
-  write' xs (x', x');
+  elab_write xs (x', x');
   mst_witness (is_low_pred xs);
   mst_witness (is_low_pred x');
   mst_witness (is_low_pred x'');
@@ -345,7 +345,7 @@ let ctx_HO_test1 (xs:ref ((ref int) * ref int)) =
     mst_recall (is_low_pred xs);
     mst_recall (is_low_pred x');
     mst_recall (is_low_pred x'');
-    write' xs (x', x''))
+    elab_write xs (x', x''))
   
 val ctx_identity :
   elab_typ (TArr (TRef TNat) (TRef TNat))
@@ -357,7 +357,7 @@ let ctx_HO_test2 f =
   let h0 = get () in
   let x:ref int = f () in
   let h1 = get () in
-  write' x (!x + 1);
+  elab_write x (!x + 1);
   let h2 = get () in
   assert (modifies_only_label Low h0 h2);
   ()
@@ -376,10 +376,10 @@ let ctx_swap_ref_test (x:ref (ref int)) =
     
     let z = !x in
     let t = !y in
-    write' x t;
+    elab_write x t;
   
     let h1 = get () in
-    write' y z;
+    elab_write y z;
     let h2 = get () in
 
     assert (modifies_classification Set.empty h0 h1);
@@ -395,26 +395,26 @@ let ctx_swap_ref_test (x:ref (ref int)) =
 val ctx_dynamic_alloc_test :
    elab_typ (TArr TUnit (TRef TNat))
 let ctx_dynamic_alloc_test () = 
-  let v = alloc' 0 in 
+  let v = elab_alloc 0 in 
   v
 
 val ctx_HO_test3 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test3 f =
   let x:ref int = f () in
-  let y:ref int = alloc' (!x + 1) in
+  let y:ref int = elab_alloc (!x + 1) in
   ()
 
 val ctx_returns_callback_test :
   elab_typ (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test () =
-  let x: ref int = alloc' 13 in
+  let x: ref int = elab_alloc 13 in
   mst_witness (contains_pred x);
   mst_witness (is_low_pred x);
   let cb : elab_typ (TArr TUnit TUnit) = (fun() ->
     mst_recall (contains_pred x);
     mst_recall (is_low_pred x);
-    write' x (!x % 5)
+    elab_write x (!x % 5)
   ) in
   cb
 
@@ -422,7 +422,7 @@ val ctx_HO_test4 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test4 f =
   let x:ref int = f () in
-  let y:ref (ref int) = alloc' x in
+  let y:ref (ref int) = elab_alloc x in
   ()
 
 val progr_sep_test: 
@@ -566,7 +566,7 @@ let progr_declassify_nested rp f =
   declassify_low' rp;
   let h2 = get () in
   lemma_declassify_preserves_inv (TRef TNat) rp h1 h2;
-  // let r = alloc' (!rp) in (* <-- needed a copy here! *) 
+  // let r = elab_alloc (!rp) in (* <-- needed a copy here! *) 
   f rp
 
 val progr_secret_unchanged_test: 
@@ -611,7 +611,7 @@ let progr_passing_callback_test rp rs f =
   let cb: elab_typ (TArr TUnit TUnit) = (fun () -> 
     mst_recall (contains_pred secret);
     mst_recall (is_low_pred secret);
-    write' secret (!secret + 1)) in
+    elab_write secret (!secret + 1)) in
   f cb;
   ()
 
@@ -683,7 +683,7 @@ let rec elab_exp
 
   | TyAllocRef #_ #_ #t tyj_e -> begin
     let v : elab_typ t = elab_exp tyj_e ve in
-    let r : ref (elab_typ t) = alloc' #_ #(elab_typ_tgt t) v in
+    let r : ref (elab_typ t) = elab_alloc #_ #(elab_typ_tgt t) v in
     r
   end
   | TyReadRef #_ #_ #t tyj_e -> begin
@@ -693,7 +693,7 @@ let rec elab_exp
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
       let r : ref (elab_typ t) = elab_exp tyj_ref ve in
       let v : elab_typ t = elab_exp tyj_v ve in
-      write' #_ #(elab_typ_tgt t) r v
+      elab_write #_ #(elab_typ_tgt t) r v
   end
 
   | TyAbs tx #_ #tres tyj_body ->
