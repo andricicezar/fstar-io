@@ -539,20 +539,20 @@ let ctx_swap_ref_test (x:ref (ref int)) =
 val ctx_dynamic_alloc_test :
    elab_typ' (TArr TUnit (TRef TNat))
 let ctx_dynamic_alloc_test () = 
-  let v = elab_alloc 0 in 
+  let v = elab_alloc #TNat 0 in 
   v
 
 val ctx_HO_test3 :
   elab_typ' (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test3 f =
   let x:ref int = f () in
-  let y:ref int = elab_alloc (!x + 1) in
+  let y:ref int = elab_alloc #TNat (!x + 1) in
   ()
 
 val ctx_returns_callback_test :
   elab_typ' (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test () =
-  let x: ref int = elab_alloc 13 in
+  let x: ref int = elab_alloc #TNat 13 in
   mst_witness (contains_pred x);
   mst_witness (is_low_pred x);
   let cb : elab_typ' (TArr TUnit TUnit) = (fun() ->
@@ -566,7 +566,7 @@ val ctx_HO_test4 :
   elab_typ' (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test4 f =
   let x:ref int = f () in
-  let y:ref (ref int) = elab_alloc x in
+  let y:ref (ref int) = elab_alloc #(TRef TNat) x in
   ()
 
 val progr_sep_test: 
@@ -592,7 +592,7 @@ val progr_declassify :
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
   let h0 = get () in
-  declassify_low' rp;
+  declassify_low' #TNat rp;
   let h1 = get () in
   lemma_declassify_preserves_inv TNat rp h0 h1;
   let r = f rp in  
@@ -611,10 +611,10 @@ let progr_declassify_nested rp f =
   eliminate_inv_contains' h0 (TRef TNat) rp;
 
   let p : ref int = !rp in
-  declassify_low' p;
+  declassify_low' #TNat p;
   let h1 = get () in
   lemma_declassify_preserves_inv TNat p h0 h1;
-  declassify_low' rp;
+  declassify_low' #(TRef TNat) rp;
   let h2 = get () in
   lemma_declassify_preserves_inv (TRef TNat) rp h1 h2;
   // let r = elab_alloc (!rp) in (* <-- needed a copy here! *) 
@@ -654,7 +654,7 @@ val progr_passing_callback_test:
 let progr_passing_callback_test rp rs f =
   let secret: ref int = ist_alloc 0 in
   let h0 = get () in
-  declassify_low' secret;
+  declassify_low' #TNat secret;
   let h1 = get () in
   lemma_declassify_preserves_inv TNat secret h0 h1;
   mst_witness (contains_pred secret);
@@ -734,7 +734,7 @@ let rec elab_exp
 
   | TyAllocRef #_ #_ #t tyj_e -> begin
     let v : elab_typ' t = elab_exp tyj_e ve in
-    let r : ref (elab_typ' t) = elab_alloc #_ #(elab_typ_tc' t) v in
+    let r : ref (elab_typ' t) = elab_alloc #t v in
     r
   end
   | TyReadRef #_ #_ #t tyj_e -> begin
