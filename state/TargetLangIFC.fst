@@ -359,7 +359,7 @@ let elab_write (#t:typ) (r:ref (elab_typ' t)) (v:elab_typ' t)
   lemma_write_preserves_contains t r v h0 h1;
   ()
 
-let _alloc (#a:Type) (init:a)
+let ist_alloc (#a:Type) (init:a)
 : IST (ref a) (fun h -> True) (alloc_post #a init)
 =
   let r = alloc init in
@@ -368,35 +368,74 @@ let _alloc (#a:Type) (init:a)
   assume (inv_points_to h1 contains_pred);
   r
 
-let declassify_low' (#a:Type) {| c:witnessable a |} (r:ref a) : ST unit
-  (fun h -> satisfy r h contains_pred /\ inv_points_to h contains_pred)
+let declassify_low' (#t:typ) (r:ref (elab_typ' t)) : ST unit
+  (fun h -> (elab_typ_tc' (TRef t)).satisfy r h contains_pred /\ inv_points_to h contains_pred)
   (fun h0 () h1 -> 
     inv_points_to h1 contains_pred /\
-    shallowly_contained_low r h1 /\
+    shallowly_contained_low #_ #(elab_typ_tc' (TRef t)) r h1 /\
     declassify_post r Low h0 () h1)
 =
   declassify r Low;
   let h1 = get () in
   assume (inv_points_to h1 contains_pred)
 
-val elab_alloc (#a:Type) {| c:witnessable a |} (init:a)
-: IST (ref a)
+let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
+  (requires (modifies_none h0 h1 /\
+            h0 `lheap_rel` h1 /\
+            equal_dom h0 h1 /\
+            modifies_classification (only x) h0 h1 /\
+            (elab_typ_tc' (TRef xa)).satisfy x h0 contains_pred /\ 
+            shallowly_contained_low #_ #(elab_typ_tc' xa) (sel h0 x) h0 /\
+            shallowly_contained_low #_ #(elab_typ_tc' (TRef xa)) x h1 /\
+            inv_points_to h0 is_low_pred))
+  (ensures (inv_points_to h1 is_low_pred)) =
+  introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).
+      (witnessable_ref _ #(elab_typ_tc a inv)).satisfy r h1 is_low_pred ==> 
+        (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
+  with begin
+    let refw = witnessable_ref _ #(elab_typ_tc a inv) in
+    introduce refw.satisfy r h1 is_low_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
+    with _. begin
+      introduce refw.satisfy r h0 is_low_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
+      with _. (elab_typ_tc a inv).satisfy_monotonic (sel h0 r) is_low_pred h0 h1;
+      
+      introduce ~(refw.satisfy r h0 is_low_pred) ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
+      with _. begin
+        assert (addr_of r == addr_of x);
+        lemma_sel_same_addr' h1 x r;
+        assert (elab_typ a inv == elab_typ' xa);
+        inversion a inv xa;
+        assert (elab_typ_tc a inv == elab_typ_tc' xa);
+
+        assert ((elab_typ_tc' xa).satisfy (sel h0 x) h0 is_low_pred);
+        (elab_typ_tc' xa).satisfy_monotonic (sel h0 x) is_low_pred h0 h1;
+        assert (sel h0 x == sel h1 x);
+        assert ((elab_typ_tc' xa).satisfy (sel h1 x) h1 is_low_pred);
+        assert ((elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred)
+      end
+    end
+  end
+
+val elab_alloc (#t:typ) (init:elab_typ' t)
+: IST (ref (elab_typ' t))
   (requires (fun h0 ->
-    shallowly_contained_low init h0))
+    shallowly_contained_low #_ #(elab_typ_tc' t) init h0))
   (ensures (fun h0 r h1 -> 
     fresh r h0 h1 /\ 
     modifies Set.empty h0 h1 /\
     modifies_classification Set.empty h0 h1 /\
     sel h1 r == init /\
-    shallowly_contained_low r h1))
-let elab_alloc #_ #c init = 
-  let r = _alloc init in
-  declassify_low' r;
+    shallowly_contained_low #_ #(elab_typ_tc' (TRef t)) r h1))
+let elab_alloc #t init = 
+  let h0 = get () in
+  let r : ref (elab_typ' t) = ist_alloc init in
   let h1 = get () in
-  assume (inv_points_to h1 is_low_pred);
+  declassify_low' r;
+  let h2 = get () in
+  (elab_typ_tc' t).satisfy_monotonic init is_low_pred h0 h1;
+  lemma_declassify_preserves_inv t r h1 h2;
+  assert (inv_points_to h2 is_low_pred);
   r
-
-// let _ = assert False
 
 (** ** Examples **) 
 
@@ -543,45 +582,6 @@ val progr_sep_test:
 let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
   f ()
 
-open FStar.Calc
-
-let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
-  (requires (modifies_none h0 h1 /\
-            h0 `lheap_rel` h1 /\
-            equal_dom h0 h1 /\
-            modifies_classification (only x) h0 h1 /\
-            (elab_typ_tc' (TRef xa)).satisfy x h0 contains_pred /\ 
-            shallowly_contained_low #(elab_typ' xa) #(elab_typ_tc' xa) (sel h0 x) h0 /\
-            shallowly_contained_low #(ref (elab_typ' xa)) #(elab_typ_tc' (TRef xa)) x h1 /\
-            inv_points_to h0 is_low_pred))
-  (ensures (inv_points_to h1 is_low_pred)) = 
-  introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).
-      (witnessable_ref _ #(elab_typ_tc a inv)).satisfy r h1 is_low_pred ==> 
-        (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
-  with begin
-    let refw = witnessable_ref _ #(elab_typ_tc a inv) in
-    introduce refw.satisfy r h1 is_low_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
-    with _. begin
-      introduce refw.satisfy r h0 is_low_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
-      with _. (elab_typ_tc a inv).satisfy_monotonic (sel h0 r) is_low_pred h0 h1;
-      
-      introduce ~(refw.satisfy r h0 is_low_pred) ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred
-      with _. begin
-        assert (addr_of r == addr_of x);
-        lemma_sel_same_addr' h1 x r;
-        assert (elab_typ a inv == elab_typ' xa);
-        inversion a inv xa;
-        assert (elab_typ_tc a inv == elab_typ_tc' xa);
-
-        assert ((elab_typ_tc' xa).satisfy (sel h0 x) h0 is_low_pred);
-        (elab_typ_tc' xa).satisfy_monotonic (sel h0 x) is_low_pred h0 h1;
-        assert (sel h0 x == sel h1 x);
-        assert ((elab_typ_tc' xa).satisfy (sel h1 x) h1 is_low_pred);
-        assert ((elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred)
-      end
-    end
-  end
-
 val progr_declassify :
   rp: ref int -> 
   ctx:(elab_typ' (TArr (TRef TNat) TUnit)) ->
@@ -633,7 +633,7 @@ val progr_secret_unchanged_test:
       sel h0 rp == sel h1 rp))
          
 let progr_secret_unchanged_test rp rs ctx = 
-  let secret: ref int = _alloc 0 in
+  let secret: ref int = ist_alloc 0 in
   ctx ();
   let v = !secret in
   assert (v == 0);
@@ -652,7 +652,7 @@ val progr_passing_callback_test:
 
 // TODO: the callback of the program should be able to modify rp
 let progr_passing_callback_test rp rs f =
-  let secret: ref int = _alloc 0 in
+  let secret: ref int = ist_alloc 0 in
   let h0 = get () in
   declassify_low' secret;
   let h1 = get () in
