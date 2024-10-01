@@ -187,7 +187,8 @@ let lemma_declassify_preserves_is_low (t:typ) (x:ref (elab_typ' t)) (h0 h1:lheap
     h0 `lheap_rel` h1 /\
     equal_dom h0 h1 /\
     modifies_classification (only x) h0 h1 /\
-    (elab_typ_tc' (TRef t)).satisfy x h0 is_low_pred /\
+    (elab_typ_tc' (TRef t)).satisfy x h1 is_low_pred /\
+    (elab_typ_tc' t).satisfy (sel h0 x) h0 is_low_pred /\
     inv_points_to h0 is_low_pred))
   (ensures (inv_points_to h1 is_low_pred)) =
   introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).

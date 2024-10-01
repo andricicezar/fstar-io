@@ -1,4 +1,4 @@
-module LinkedListIFC
+module LinkedList
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
@@ -9,21 +9,22 @@ open FStar.Ghost
 open Witnessable
 open STLC
 open TargetLang
+open Translation
 
 module FSet = FStar.FiniteSet.Base
 
 (* Examples of linked lists *)
 
-let empty_ll: linkedList nat = Nil
+let empty_ll: linkedList int = Nil
 
-let ll1 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-  let r: ref (linkedList nat) = ist_alloc Nil in 
+let ll1 () : IST (linkedList int) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
+  let r: ref (linkedList int) = ist_alloc #(TLList TNat) Nil in 
   Cons 13 r
 
-let ll2 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-  let x = _alloc Nil in 
-  let y = _alloc (Cons 31 x) in
-  let z = _alloc (Cons 23 y) in
+let ll2 () : IST (linkedList int) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
+  let x = ist_alloc #(TLList TNat) Nil in 
+  let y = ist_alloc #(TLList TNat) (Cons 31 x) in
+  let z = ist_alloc #(TLList TNat) (Cons 23 y) in
   Cons 23 z
 
 let cycle_length3 () : ST (linkedList int) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
@@ -81,12 +82,12 @@ let tail (a: Type0) (l: linkedList a) {| c:witnessable a |} :
 // let rec ll_has_length (#a: Type0) (h: lheap) (l: linkedList a) (len:nat) : Type0 =
 //   l == Nil \/ (ll_has_length h (Cons?.next l) (len - 1))
 
-let rec last_elem (t:typ) (l: elab_typ (TLList t)) : 
-  IST (option (elab_typ t * ref (elab_typ (TLList t))))
-    (requires (fun h -> (elab_typ_tgt (TLList t)).satisfy l h contains_pred))
+let rec last_elem (t:typ) (l: elab_typ' (TLList t)) : 
+  IST (option (elab_typ' t * ref (elab_typ' (TLList t))))
+    (requires (fun h -> (elab_typ_tc' (TLList t)).satisfy l h contains_pred))
     (ensures fun h0 _ h1 -> h0 == h1) = 
   let h0 = get () in
-  let l : linkedList (elab_typ t) = l in
+  let l : linkedList (elab_typ' t) = l in
   match l with 
   | Nil -> None
   | Cons x xsref ->
@@ -94,24 +95,24 @@ let rec last_elem (t:typ) (l: elab_typ (TLList t)) :
     match xs with
     | Nil -> Some (x, xsref)
     | Cons _ _ -> 
-      eliminate_inv_contains h0 (TLList t) xsref;
+      eliminate_inv_contains' h0 (TLList t) xsref;
       last_elem t xs
 
-let insert_front (#a: Type0) (l: linkedList a) (v: a) : 
-  IST (linkedList a)
-    (requires (fun _ -> True))
-    (ensures fun h0 _ h1 -> True) = 
-  let r: ref (linkedList a) = _alloc l in 
-  Cons v r
+// let insert_front (#a: Type0) (l: linkedList a) (v: a) : 
+//   IST (linkedList a)
+//     (requires (fun _ -> True))
+//     (ensures fun h0 _ h1 -> True) = 
+//   let r: ref (linkedList a) = ist_alloc #(TLList TNat) l in 
+//   Cons v r
 
-let rec append (#t: typ) (l: elab_typ (TLList t)) (v: elab_typ t) :
-  ST (elab_typ (TLList t))
+let rec append (#t: typ) (l: elab_typ' (TLList t)) (v: elab_typ' t) :
+  ST (elab_typ' (TLList t))
     (requires (fun h -> 
-      (elab_typ_tgt (TLList t)).satisfy l h contains_pred /\ 
-      inv_contains_points_to_contains h))
+      (elab_typ_tc' (TLList t)).satisfy l h contains_pred /\ 
+      inv_points_to h contains_pred))
     (ensures fun _ _ _ -> True) =
   let h0 = get () in
-  let l : linkedList (elab_typ t) = l in
+  let l : linkedList (elab_typ' t) = l in
   match l with
   | Nil -> 
     let r = alloc Nil in 
@@ -124,21 +125,21 @@ let rec append (#t: typ) (l: elab_typ (TLList t)) (v: elab_typ t) :
       write r (Cons v newr);
       l
     | Cons _ _ -> 
-      eliminate_inv_contains h0 (TLList t) r;
+      eliminate_inv_contains' h0 (TLList t) r;
       append tl v
 
-let rec length_IST (t: typ) (l: elab_typ (TLList t)) : IST int 
+let rec length_IST (t: typ) (l: elab_typ' (TLList t)) : IST int 
     (requires (fun h -> 
-      (elab_typ_tgt (TLList t)).satisfy l h contains_pred /\
-      inv_contains_points_to_contains h))
+      (elab_typ_tc' (TLList t)).satisfy l h contains_pred /\
+      inv_points_to h contains_pred))
     (ensures fun _ _ _ -> True) =
   let h0 = get () in
-  let l : linkedList (elab_typ t) = l in
+  let l : linkedList (elab_typ' t) = l in
   match l with 
     | Nil -> 0
     | Cons x xsref -> 
       let xs = !xsref in
-      eliminate_inv_contains h0 (TLList t) xsref;
+      eliminate_inv_contains' h0 (TLList t) xsref;
       1 + length_IST t xs
 
 let rec no_cycles_ll (#a: Type0) (fuel: nat) (l: linkedList a) (h: lheap): Type0 =
@@ -291,7 +292,7 @@ let footprint (#a: Type) (l: linkedList a) (h:lheap) : GTot (Set.set nat) =
 
 let footprint_modifies_none (l:linkedList int) (h0 h1: lheap) : 
   Lemma
-    (requires modifies_none h0 h1 /\ satisfy l h0 contains_pred /\ inv_contains_points_to_contains h0)
+    (requires modifies_none h0 h1 /\ satisfy l h0 contains_pred /\ inv_points_to h0 contains_pred)
     (ensures footprint l h0 `Set.equal` footprint l h1) =
   match l with
     | Nil -> ()
@@ -381,12 +382,12 @@ let rec deep_declassify (l: linkedList int) : IST unit
   | Nil -> ()
   | Cons h tlref ->
     let tl = !tlref in 
-    eliminate_inv_contains h0 (TLList TNat) tlref;
+    eliminate_inv_contains' h0 (TLList TNat) tlref;
     deep_declassify tl;
     let h1 = get () in
-    declassify_low' tlref;
+    declassify_low' #(TLList TNat) tlref;
     let h2 = get () in
-    lemma_declassify_preserves_inv (TLList TNat) tlref h1 h2;
+    lemma_declassify_preserves_is_low (TLList TNat) tlref h1 h2;
     footprint_modifies_none l h0 h2;
     footprint_cons l h0 h2;
     ()
@@ -399,7 +400,7 @@ let test_declassify (l: linkedList int) : IST unit
 
 val progr_llist_declassify: 
   ll: (linkedList int) -> 
-  ctx:(elab_typ (TArr (TLList TNat) TUnit)) ->
+  ctx:(elab_typ' (TArr (TLList TNat) TUnit)) ->
   IST unit 
     (requires (fun h0 -> satisfy ll h0 contains_pred))
     (ensures (fun h0 _ h1 -> True))
@@ -414,7 +415,7 @@ let progr_llist_declassify ll ctx =
 
 val progr_high_ll_unchanged :
   ll: linkedList int -> 
-  ctx:(elab_typ (TArr TUnit TUnit)) ->
+  ctx:(elab_typ' (TArr TUnit TUnit)) ->
   IST unit
     (requires (fun h0 -> 
       satisfy ll h0 contains_pred /\
@@ -433,7 +434,7 @@ let progr_high_ll_unchanged ll ctx =
 val progr_high_ll_unchanged_separation : 
   ll: linkedList int -> 
   sll: linkedList int ->
-  ctx:(elab_typ (TArr (TLList TNat) TUnit)) ->
+  ctx:(elab_typ' (TArr (TLList TNat) TUnit)) ->
   IST unit 
     (requires (fun h0 -> 
       satisfy ll h0 contains_pred /\
