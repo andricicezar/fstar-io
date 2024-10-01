@@ -2,12 +2,13 @@ module LinkedListIFC
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
-open Monotonic.IFC.Heap
-open IFC.Heap.ST
+open Labeled.Monotonic.Heap
+open Labeled.MST
 open FStar.Ghost
 
+open Witnessable
 open STLC
-open TargetLangIFC
+open TargetLang
 
 module FSet = FStar.FiniteSet.Base
 
@@ -16,7 +17,7 @@ module FSet = FStar.FiniteSet.Base
 let empty_ll: linkedList nat = Nil
 
 let ll1 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =
-  let r: ref (linkedList nat) = _alloc Nil in 
+  let r: ref (linkedList nat) = ist_alloc Nil in 
   Cons 13 r
 
 let ll2 () : IST (linkedList nat) (requires fun _ -> True) (ensures fun _ _ _ -> True) =

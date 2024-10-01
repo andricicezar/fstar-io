@@ -1,9 +1,9 @@
-module IFC.Heap.ST
+module Labeled.MST
 
 open FStar.Tactics
 open FStar.Set
 open FStar.Preorder
-open Monotonic.IFC.Heap
+open Labeled.Monotonic.Heap
 open MST
 
 module W = FStar.Monotonic.Witnessed
@@ -233,7 +233,7 @@ let lemma_modifies_only_label_trans l h0 h1 h2 =
   assert (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
   (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h1 r);
   assert (unmodified_common h0 h2);
-  introduce forall (a:Type) (rel:preorder a) (r:Monotonic.IFC.Heap.mref a rel).
+  introduce forall (a:Type) (rel:preorder a) (r:Labeled.Monotonic.Heap.mref a rel).
     (h0 `contains` r /\ ~(label_of r h0 == l)) ==> sel h0 r == sel h2 r
   with begin
     introduce (h0 `contains` r /\ ~(label_of r h0 == l)) 

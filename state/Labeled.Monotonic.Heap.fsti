@@ -1,4 +1,4 @@
-module Monotonic.IFC.Heap
+module Labeled.Monotonic.Heap
 
 
 module S  = FStar.Set
