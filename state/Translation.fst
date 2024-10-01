@@ -144,14 +144,14 @@ let lemma_write_preserves_contains (t:typ) (x:ref (elab_typ' t)) (v:elab_typ' t)
   end
 
 
-let lemma_declassify_preserves_contains (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
+let lemma_declassify_preserves_contains (t:typ) (x:ref (elab_typ' t)) (h0 h1:lheap) : Lemma
   (requires (
     modifies_none h0 h1 /\
     h0 `lheap_rel` h1 /\
     equal_dom h0 h1 /\
     modifies_classification (only x) h0 h1 /\
-    (elab_typ_tc' (TRef xa)).satisfy x h0 contains_pred /\ 
-    (elab_typ_tc' xa).satisfy (sel h0 x) h0 contains_pred /\
+    (elab_typ_tc' (TRef t)).satisfy x h0 contains_pred /\ 
+    (elab_typ_tc' t).satisfy (sel h0 x) h0 contains_pred /\
     inv_points_to h0 contains_pred))
   (ensures (inv_points_to h1 contains_pred)) =
   introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).
@@ -168,28 +168,27 @@ let lemma_declassify_preserves_contains (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:l
       with _. begin
         assert (addr_of r == addr_of x);
         lemma_sel_same_addr' h1 x r;
-        assert (elab_typ a inv == elab_typ' xa);
-        inversion a inv xa;
-        assert (elab_typ_tc a inv == elab_typ_tc' xa);
+        assert (elab_typ a inv == elab_typ' t);
+        inversion a inv t;
+        assert (elab_typ_tc a inv == elab_typ_tc' t);
 
-        assert ((elab_typ_tc' xa).satisfy (sel h0 x) h0 contains_pred);
-        (elab_typ_tc' xa).satisfy_monotonic (sel h0 x) contains_pred h0 h1;
+        assert ((elab_typ_tc' t).satisfy (sel h0 x) h0 contains_pred);
+        (elab_typ_tc' t).satisfy_monotonic (sel h0 x) contains_pred h0 h1;
         assert (sel h0 x == sel h1 x);
-        assert ((elab_typ_tc' xa).satisfy (sel h1 x) h1 contains_pred);
+        assert ((elab_typ_tc' t).satisfy (sel h1 x) h1 contains_pred);
         assert ((elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred)
       end
     end
   end
 
-let lemma_declassify_preserves_is_low (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
-  (requires (modifies_none h0 h1 /\
-            h0 `lheap_rel` h1 /\
-            equal_dom h0 h1 /\
-            modifies_classification (only x) h0 h1 /\
-            (elab_typ_tc' (TRef xa)).satisfy x h0 contains_pred /\ 
-            shallowly_contained_low #_ #(elab_typ_tc' xa) (sel h0 x) h0 /\
-            shallowly_contained_low #_ #(elab_typ_tc' (TRef xa)) x h1 /\
-            inv_points_to h0 is_low_pred))
+let lemma_declassify_preserves_is_low (t:typ) (x:ref (elab_typ' t)) (h0 h1:lheap) : Lemma
+  (requires (
+    modifies_none h0 h1 /\
+    h0 `lheap_rel` h1 /\
+    equal_dom h0 h1 /\
+    modifies_classification (only x) h0 h1 /\
+    (elab_typ_tc' (TRef t)).satisfy x h0 is_low_pred /\
+    inv_points_to h0 is_low_pred))
   (ensures (inv_points_to h1 is_low_pred)) =
   introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).
       (witnessable_ref _ #(elab_typ_tc a inv)).satisfy r h1 is_low_pred ==> 
@@ -205,15 +204,8 @@ let lemma_declassify_preserves_is_low (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lhe
       with _. begin
         assert (addr_of r == addr_of x);
         lemma_sel_same_addr' h1 x r;
-        assert (elab_typ a inv == elab_typ' xa);
-        inversion a inv xa;
-        assert (elab_typ_tc a inv == elab_typ_tc' xa);
-
-        assert ((elab_typ_tc' xa).satisfy (sel h0 x) h0 is_low_pred);
-        (elab_typ_tc' xa).satisfy_monotonic (sel h0 x) is_low_pred h0 h1;
-        assert (sel h0 x == sel h1 x);
-        assert ((elab_typ_tc' xa).satisfy (sel h1 x) h1 is_low_pred);
-        assert ((elab_typ_tc a inv).satisfy (sel h1 r) h1 is_low_pred)
+        inversion a inv t;
+        (elab_typ_tc' t).satisfy_monotonic (sel h0 x) is_low_pred h0 h1
       end
     end
   end
@@ -242,16 +234,13 @@ let lemma_ist_alloc_preserves_contains (t:typ) (x:ref (elab_typ' t)) (v:elab_typ
       introduce addr_of r =!= addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred with _. begin
         eliminate_inv_points_to h0 a hinv r contains_pred;
         assert (h0 `contains` r);
-        (elab_typ_tc a hinv).satisfy_monotonic (sel h0 r) contains_pred h0 h1;
-        assert ((elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred)
+        (elab_typ_tc a hinv).satisfy_monotonic (sel h0 r) contains_pred h0 h1
       end;
       introduce addr_of r == addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred with _. begin
         assert (sel h1 x == v);
         lemma_sel_same_addr' h1 x r;
         inversion a hinv t;
-        assert ((elab_typ_tc' t).satisfy v h0 contains_pred);
-        (elab_typ_tc' t).satisfy_monotonic v contains_pred h0 h1;
-        assert ((elab_typ_tc' t).satisfy v h1 contains_pred)
+        (elab_typ_tc' t).satisfy_monotonic v contains_pred h0 h1
       end
     end
   end
@@ -355,8 +344,6 @@ let elab_alloc #t init =
   lemma_declassify_preserves_is_low t r h1 h2;
   assert (inv_points_to h2 is_low_pred);
   r
-
-assert _ = False
 
 (** ** Examples **) 
 
