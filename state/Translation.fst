@@ -181,6 +181,81 @@ let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap)
     end
   end
 
+let lemma_ist_alloc_preserves_contains (t:typ) (x:ref (elab_typ' t)) (v:elab_typ' t) (h0 h1:lheap) : Lemma
+  (requires (
+    h0 `lheap_rel` h1 /\
+    h1 == upd h0 x v /\ 
+    fresh x h0 h1 /\ 
+    modifies Set.empty h0 h1 /\
+    modifies_classification Set.empty h0 h1 /\
+    sel h1 x == v /\ 
+    label_of x h1 == High /\
+    is_mm x == false /\
+    (elab_typ_tc' t).satisfy v h0 contains_pred /\
+    inv_points_to h0 contains_pred))
+  (ensures (
+    inv_points_to h1 contains_pred)) = 
+  introduce forall (a:typ) (hinv:lheap -> Type0) (r:ref (elab_typ a hinv)).
+      (witnessable_ref (elab_typ a hinv) #(elab_typ_tc a hinv)).satisfy r h1 contains_pred ==> 
+        (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred
+  with begin
+    introduce (witnessable_ref (elab_typ a hinv) #(elab_typ_tc a hinv)).satisfy r h1 contains_pred 
+      ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred
+    with _. begin
+      introduce addr_of r =!= addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred with _. begin
+        eliminate_inv_points_to h0 a hinv r contains_pred;
+        assert (h0 `contains` r);
+        (elab_typ_tc a hinv).satisfy_monotonic (sel h0 r) contains_pred h0 h1;
+        assert ((elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred)
+      end;
+      introduce addr_of r == addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 contains_pred with _. begin
+        assert (sel h1 x == v);
+        lemma_sel_same_addr' h1 x r;
+        inversion a hinv t;
+        assert ((elab_typ_tc' t).satisfy v h0 contains_pred);
+        (elab_typ_tc' t).satisfy_monotonic v contains_pred h0 h1;
+        assert ((elab_typ_tc' t).satisfy v h1 contains_pred)
+      end
+    end
+  end
+
+let lemma_ist_alloc_preserves_is_low (t:typ) (x:ref (elab_typ' t)) (v:elab_typ' t) (h0 h1:lheap) : Lemma
+  (requires (
+    h0 `lheap_rel` h1 /\
+    h1 == upd h0 x v /\ 
+    fresh x h0 h1 /\ 
+    modifies Set.empty h0 h1 /\
+    modifies_classification Set.empty h0 h1 /\
+    sel h1 x == v /\ 
+    label_of x h1 == High /\
+    is_mm x == false /\
+    (elab_typ_tc' t).satisfy v h0 contains_pred /\
+    inv_points_to h0 is_low_pred))
+  (ensures (
+    inv_points_to h1 is_low_pred)) = 
+  introduce forall (a:typ) (hinv:lheap -> Type0) (r:ref (elab_typ a hinv)).
+      (witnessable_ref (elab_typ a hinv) #(elab_typ_tc a hinv)).satisfy r h1 is_low_pred ==> 
+        (elab_typ_tc a hinv).satisfy (sel h1 r) h1 is_low_pred
+  with begin
+    introduce (witnessable_ref (elab_typ a hinv) #(elab_typ_tc a hinv)).satisfy r h1 is_low_pred 
+      ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 is_low_pred
+    with _. begin
+      introduce addr_of r =!= addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 is_low_pred with _. begin
+        eliminate_inv_points_to h0 a hinv r is_low_pred;
+        assert (h0 `contains` r);
+        (elab_typ_tc a hinv).satisfy_monotonic (sel h0 r) is_low_pred h0 h1;
+        assert ((elab_typ_tc a hinv).satisfy (sel h1 r) h1 is_low_pred)
+      end;
+      introduce addr_of r == addr_of x ==> (elab_typ_tc a hinv).satisfy (sel h1 r) h1 is_low_pred with _. begin
+        assert (sel h1 x == v);
+        lemma_sel_same_addr' h1 x r;
+        assert (label_of r h1 == Low);
+        assert (label_of x h1 == High);
+        assert False
+      end
+    end
+  end
+
 let elab_write (#t:typ) (r:ref (elab_typ' t)) (v:elab_typ' t) 
 : IST unit
   (requires (fun h0 -> 
@@ -197,13 +272,17 @@ let elab_write (#t:typ) (r:ref (elab_typ' t)) (v:elab_typ' t)
   lemma_write_preserves_contains t r v h0 h1;
   ()
 
-let ist_alloc (#a:Type) (init:a)
-: IST (ref a) (fun h -> True) (alloc_post #a init)
+let ist_alloc (#t:typ) (init:elab_typ' t)
+: IST (ref (elab_typ' t))
+    (fun h -> 
+      (elab_typ_tc' t).satisfy init h contains_pred)
+    (alloc_post #(elab_typ' t) init)
 =
+  let h0 = get () in
   let r = alloc init in
   let h1 = get () in
-  assume (inv_points_to h1 is_low_pred);
-  assume (inv_points_to h1 contains_pred);
+  lemma_ist_alloc_preserves_contains t r init h0 h1;
+  lemma_ist_alloc_preserves_is_low t r init h0 h1;
   r
 
 let declassify_low' (#t:typ) (r:ref (elab_typ' t)) : ST unit
@@ -434,7 +513,7 @@ val progr_secret_unchanged_test:
       sel h0 rp == sel h1 rp))
          
 let progr_secret_unchanged_test rp rs ctx = 
-  let secret: ref int = ist_alloc 0 in
+  let secret: ref int = ist_alloc #TNat 0 in
   ctx ();
   let v = !secret in
   assert (v == 0);
@@ -453,7 +532,7 @@ val progr_passing_callback_test:
 
 // TODO: the callback of the program should be able to modify rp
 let progr_passing_callback_test rp rs f =
-  let secret: ref int = ist_alloc 0 in
+  let secret: ref int = ist_alloc #TNat 0 in
   let h0 = get () in
   declassify_low' #TNat secret;
   let h1 = get () in

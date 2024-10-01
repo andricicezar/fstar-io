@@ -169,7 +169,8 @@ val lemma_sel_same_addr' (#a:Type0) (#b:Type0) (#rela:preorder a) (#relb:preorde
          (ensures  (
             a == b /\
             rela == relb /\
-            sel h r1 == sel h r2))
+            sel h r1 == sel h r2 /\
+            label_of r1 h == label_of r2 h))
 
 
 val lemma_sel_same_addr (#a:Type0) (#rel:preorder a) (h:lheap) (r1:mref a rel) (r2:mref a rel)

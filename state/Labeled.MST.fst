@@ -123,6 +123,7 @@ type mref (a:Type0) (rel:preorder a) =
 
 let alloc_post (#a:Type) (#rel:preorder a) (init:a) (h0:lheap) (r:mref a rel) (h1:lheap) : Type0 =
   fresh r h0 h1 /\ 
+  h1 == upd h0 r init /\ 
   modifies Set.empty h0 h1 /\
   modifies_classification Set.empty h0 h1 /\
   sel h1 r == init /\ 
