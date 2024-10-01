@@ -144,7 +144,44 @@ let lemma_write_preserves_contains (t:typ) (x:ref (elab_typ' t)) (v:elab_typ' t)
   end
 
 
-let lemma_declassify_preserves_inv (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
+let lemma_declassify_preserves_contains (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
+  (requires (
+    modifies_none h0 h1 /\
+    h0 `lheap_rel` h1 /\
+    equal_dom h0 h1 /\
+    modifies_classification (only x) h0 h1 /\
+    (elab_typ_tc' (TRef xa)).satisfy x h0 contains_pred /\ 
+    (elab_typ_tc' xa).satisfy (sel h0 x) h0 contains_pred /\
+    inv_points_to h0 contains_pred))
+  (ensures (inv_points_to h1 contains_pred)) =
+  introduce forall (a:typ) (inv:lheap -> Type0) (r:ref (elab_typ a inv)).
+      (witnessable_ref _ #(elab_typ_tc a inv)).satisfy r h1 contains_pred ==> 
+        (elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred
+  with begin
+    let refw = witnessable_ref _ #(elab_typ_tc a inv) in
+    introduce refw.satisfy r h1 contains_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred
+    with _. begin
+      introduce refw.satisfy r h0 contains_pred ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred
+      with _. (elab_typ_tc a inv).satisfy_monotonic (sel h0 r) contains_pred h0 h1;
+      
+      introduce ~(refw.satisfy r h0 contains_pred) ==> (elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred
+      with _. begin
+        assert (addr_of r == addr_of x);
+        lemma_sel_same_addr' h1 x r;
+        assert (elab_typ a inv == elab_typ' xa);
+        inversion a inv xa;
+        assert (elab_typ_tc a inv == elab_typ_tc' xa);
+
+        assert ((elab_typ_tc' xa).satisfy (sel h0 x) h0 contains_pred);
+        (elab_typ_tc' xa).satisfy_monotonic (sel h0 x) contains_pred h0 h1;
+        assert (sel h0 x == sel h1 x);
+        assert ((elab_typ_tc' xa).satisfy (sel h1 x) h1 contains_pred);
+        assert ((elab_typ_tc a inv).satisfy (sel h1 r) h1 contains_pred)
+      end
+    end
+  end
+
+let lemma_declassify_preserves_is_low (xa:typ) (x:ref (elab_typ' xa)) (h0 h1:lheap) : Lemma
   (requires (modifies_none h0 h1 /\
             h0 `lheap_rel` h1 /\
             equal_dom h0 h1 /\
@@ -272,6 +309,7 @@ let elab_write (#t:typ) (r:ref (elab_typ' t)) (v:elab_typ' t)
   lemma_write_preserves_contains t r v h0 h1;
   ()
 
+
 let ist_alloc (#t:typ) (init:elab_typ' t)
 : IST (ref (elab_typ' t))
     (fun h -> 
@@ -292,9 +330,10 @@ let declassify_low' (#t:typ) (r:ref (elab_typ' t)) : ST unit
     shallowly_contained_low #_ #(elab_typ_tc' (TRef t)) r h1 /\
     declassify_post r Low h0 () h1)
 =
+  let h0 = get () in
   declassify r Low;
   let h1 = get () in
-  assume (inv_points_to h1 contains_pred)
+  lemma_declassify_preserves_contains t r h0 h1
 
 val elab_alloc (#t:typ) (init:elab_typ' t)
 : IST (ref (elab_typ' t))
@@ -313,9 +352,11 @@ let elab_alloc #t init =
   declassify_low' r;
   let h2 = get () in
   (elab_typ_tc' t).satisfy_monotonic init is_low_pred h0 h1;
-  lemma_declassify_preserves_inv t r h1 h2;
+  lemma_declassify_preserves_is_low t r h1 h2;
   assert (inv_points_to h2 is_low_pred);
   r
+
+assert _ = False
 
 (** ** Examples **) 
 
@@ -474,7 +515,7 @@ let progr_declassify rp f =
   let h0 = get () in
   declassify_low' #TNat rp;
   let h1 = get () in
-  lemma_declassify_preserves_inv TNat rp h0 h1;
+  lemma_declassify_preserves_is_low TNat rp h0 h1;
   let r = f rp in  
   r
 
@@ -493,10 +534,10 @@ let progr_declassify_nested rp f =
   let p : ref int = !rp in
   declassify_low' #TNat p;
   let h1 = get () in
-  lemma_declassify_preserves_inv TNat p h0 h1;
+  lemma_declassify_preserves_is_low TNat p h0 h1;
   declassify_low' #(TRef TNat) rp;
   let h2 = get () in
-  lemma_declassify_preserves_inv (TRef TNat) rp h1 h2;
+  lemma_declassify_preserves_is_low (TRef TNat) rp h1 h2;
   // let r = elab_alloc (!rp) in (* <-- needed a copy here! *) 
   f rp
 
@@ -536,7 +577,7 @@ let progr_passing_callback_test rp rs f =
   let h0 = get () in
   declassify_low' #TNat secret;
   let h1 = get () in
-  lemma_declassify_preserves_inv TNat secret h0 h1;
+  lemma_declassify_preserves_is_low TNat secret h0 h1;
   mst_witness (contains_pred secret);
   mst_witness (is_low_pred secret);
   let cb: elab_typ' (TArr TUnit TUnit) = (fun () -> 
