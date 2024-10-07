@@ -2,6 +2,7 @@ module TargetLang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.Universe
 
 open Labeled.Monotonic.Heap
 open Labeled.MST
@@ -39,7 +40,37 @@ let mk_tgt_arrow
     we need it to write our invariants **)
 open STLC
 
-let rec _elab_typ (t:typ) (inv:lheap -> Type0): tt:Type0 & witnessable tt =
+let rec is_base_typ (t:typ) =
+  match t with
+  | TUnit -> True
+  | TNat -> True
+  | TSum t1 t2 -> is_base_typ t1 /\ is_base_typ t2
+  | TPair t1 t2 -> is_base_typ t1 /\ is_base_typ t2
+  | TRef t -> is_base_typ t
+  | TLList t -> is_base_typ t
+  | TArr _ _ -> False
+
+type base_typ = t:typ{is_base_typ t}
+
+let rec elab_typ_base (t:base_typ) : Type u#0 = 
+  match t with
+  | TUnit -> unit
+  | TNat -> int
+  | TSum t1 t2 -> either (elab_typ_base t1) (elab_typ_base t2)
+  | TPair t1 t2 -> (elab_typ_base t1) * (elab_typ_base t2)
+  | TRef t -> ref (elab_typ_base t)
+  | TLList t -> linkedList (elab_typ_base t)
+
+let rec elab_typ_base_tc (t:base_typ) : witnessable (elab_typ_base t) =
+  match t with
+  | TUnit -> witnessable_unit
+  | TNat -> witnessable_int
+  | TSum t1 t2 -> witnessable_sum (elab_typ_base t1) (elab_typ_base t2) #(elab_typ_base_tc t1) #(elab_typ_base_tc t2)
+  | TPair t1 t2 -> witnessable_pair (elab_typ_base t1) (elab_typ_base t2) #(elab_typ_base_tc t1) #(elab_typ_base_tc t2)
+  | TRef t -> witnessable_ref (elab_typ_base t) #(elab_typ_base_tc t)
+  | TLList t -> witnessable_llist (elab_typ_base t) #(elab_typ_base_tc t)
+
+let rec _elab_typ (t:typ) (inv:lheap -> Type0): tt:Type u#1 & witnessable tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 inv in
@@ -48,22 +79,25 @@ let rec _elab_typ (t:typ) (inv:lheap -> Type0): tt:Type0 & witnessable tt =
        witnessable_arrow (dfst tt1) (dfst tt2) pre_tgt_arrow post_tgt_arrow
     |)
   end 
-  | TUnit -> (| unit, witnessable_unit |)
-  | TNat -> (| int, witnessable_int |)
+  | TUnit -> (| raise_t unit, solve |)
+  | TNat -> (| raise_t int, solve |)
   | TSum t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 inv in
     let (| tt2, c_tt2 |) = _elab_typ t2 inv in
-    (| either tt1 tt2, witnessable_sum tt1 tt2 #c_tt1 #c_tt2 |)
+    (| raise_t (either tt1 tt2), witnessable_univ_raise _ #(witnessable_sum tt1 tt2 #c_tt1 #c_tt2) |)
   | TPair t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 inv in
     let (| tt2, c_tt2 |) = _elab_typ t2 inv in
-    (| (tt1 * tt2), witnessable_pair tt1 tt2 #c_tt1 #c_tt2 |)
-  | TRef t ->
-    let (| tt, c_tt |) = _elab_typ t inv in
-    (| ref tt, witnessable_ref tt #c_tt |)
-  | TLList t ->
-    let (| tt, c_tt |) = _elab_typ t inv in
-    (| linkedList tt, witnessable_llist tt #c_tt |)
+    (| raise_t (tt1 * tt2), witnessable_univ_raise _ #(witnessable_pair tt1 tt2 #c_tt1 #c_tt2) |)
+  | TRef _ ->
+    let tt = elab_typ_base t in
+    let c_tt = elab_typ_base_tc t in
+    (| Universe.raise_t tt, witnessable_univ_raise _ #c_tt |)
+  | _ -> admit ()
+  
+  // | TLList t ->
+  //   let (| tt, c_tt |) = _elab_typ t inv in
+  //   (| linkedList tt, witnessable_llist tt #c_tt |)
 
 let elab_typ (t:typ) (hinv:lheap -> Type0) : Type =
   dfst (_elab_typ t hinv)

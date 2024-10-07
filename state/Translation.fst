@@ -666,7 +666,7 @@ let rec elab_exp
   | TyVar vx -> 
     let Some tx = g vx in
     let x : elab_typ' tx = ve vx in
-    x
+    ()
   | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
     assert ((elab_typ t) == (elab_typ tres));
     let x : elab_typ' tx = elab_exp tyj_x ve in

@@ -2,6 +2,7 @@ module Witnessable
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.Universe
 
 open Labeled.Monotonic.Heap
 open Labeled.MST
@@ -102,4 +103,10 @@ instance witnessable_llist (t:Type) {| c:witnessable t |} : witnessable (linkedL
       mst_witness (pred xsref);
       (fun () -> w (); mst_recall (pred xsref))
   );
+}
+
+instance witnessable_univ_raise (t:Type u#a) {| c:witnessable t |} : witnessable (raise_t u#a u#b t) = {
+  satisfy = (fun x -> c.satisfy (downgrade_val x));
+  satisfy_monotonic = (fun x -> c.satisfy_monotonic (downgrade_val x));
+  witness = (fun x -> c.witness (downgrade_val x));
 }

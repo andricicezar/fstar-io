@@ -41,7 +41,7 @@ let _mst_if_then_else (a : Type u#a)
   (f : _mst a wp1) (g : _mst a wp2) (b : bool) : Type =
   _mst a (st_if_then_else heap_state.t a b wp1 wp2)
 
-
+total
 reifiable
 reflectable
 effect {
