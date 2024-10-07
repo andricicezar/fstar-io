@@ -683,11 +683,8 @@ let rec elab_exp
     x
   | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
     assert ((elab_typ t) == (elab_typ tres));
-    let x : elab_typ' tx = elab_exp tyj_x ve in
-    let wx1 = (elab_typ_tc' tx).witness x contains_pred in
-    let wx2 = (elab_typ_tc' tx).witness x is_low_pred in
     let f : elab_typ' (TArr tx tres) = elab_exp tyj_f ve in
-    wx1 (); wx2 ();
+    let x : elab_typ' tx = elab_exp tyj_x ve in
     elab_apply_arrow tx tres f x
 
   | TyInl #_ #_ #t1 #t2 tyj_1 ->
