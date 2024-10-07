@@ -608,21 +608,29 @@ let elab_apply_arrow t1 t2 f x = f x
 let cast_TArr #t1 #t2 (f : elab_typ' (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ' t = f
 
 type vcontext (g:context) = 
-  vx:var{Some? (g vx)} -> 
-    ST (elab_typ' (Some?.v (g vx)))
-      (fun h -> True)
-      (fun h0 x h1 -> h0 == h1 /\ shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) x h1)
+  vx:var{Some? (g vx)} -> elab_typ' (Some?.v (g vx))
 
 let vempty : vcontext empty = fun _ -> assert false
 
-let vextend #t (x:elab_typ' t) (#g:context) (ve:vcontext g) : 
-  ST (vcontext (extend t g))
-    (requires (fun h0 -> shallowly_contained_low #_ #(elab_typ_tc' t) x h0))
-    (ensures (fun h0 r h1 -> h0 == h1)) =
-  let w1 = (elab_typ_tc' t).witness x contains_pred in
-  let w2 = (elab_typ_tc' t).witness x is_low_pred in
-  fun y -> 
-    if y = 0 then (w1 (); w2 (); x) else ve (y-1)
+let vextend #t (x:elab_typ' t) (#g:context) (ve:vcontext g) : vcontext (extend t g) =
+  fun y -> if y = 0 then x else ve (y-1)
+
+let all_refs_contained_and_low (#g:context) (ve:vcontext g) (h:lheap) : Type0 =
+  forall vx. Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) (ve vx) h
+
+let stable_refs_contained_and_low (#g:context) (ve:vcontext g) : Lemma (stable (all_refs_contained_and_low ve)) [SMTPat (all_refs_contained_and_low ve)] = 
+  introduce forall h0 h1. (h0 `lheap_rel` h1 /\ all_refs_contained_and_low ve h0) ==> all_refs_contained_and_low ve h1 with begin
+    introduce (h0 `lheap_rel` h1 /\ all_refs_contained_and_low ve h0) ==> all_refs_contained_and_low ve h1 with _. begin      
+      introduce forall vx. Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) (ve vx) h1 with begin
+        introduce Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) (ve vx) h1 with hyp0. begin
+          eliminate forall vx. Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) (ve vx) h0 with vx;
+          eliminate Some? (g vx) ==> shallowly_contained_low #_ #(elab_typ_tc' (Some?.v (g vx))) (ve vx) h0 with hyp0;
+          (elab_typ_tc' (Some?.v (g vx))).satisfy_monotonic (ve vx) contains_pred h0 h1;
+          (elab_typ_tc' (Some?.v (g vx))).satisfy_monotonic (ve vx) is_low_pred h0 h1
+        end
+      end
+    end  
+  end
 
 #push-options "--split_queries always"
 let rec elab_exp 
@@ -632,9 +640,13 @@ let rec elab_exp
   (tyj:typing g e t)
   (ve:vcontext g)
   : IST (elab_typ' t) 
-     (requires (pre_tgt_arrow #unit #witnessable_unit #inv_low_contains ()))
-     (ensures (post_tgt_arrow #_ #_ #(elab_typ' t) #(elab_typ_tc' t) #inv_low_contains ())) =
+      (requires (fun h0 -> 
+        all_refs_contained_and_low ve h0 /\
+        pre_tgt_arrow #unit #witnessable_unit #inv_low_contains () h0))
+      (ensures (fun h0 r h1 ->
+        post_tgt_arrow #_ #_ #(elab_typ' t) #(elab_typ_tc' t) #inv_low_contains () h0 r h1)) =
   let h0 = get () in
+  mst_witness (all_refs_contained_and_low ve);
   match tyj with
   | TyUnit -> ()
   | TyZero -> 0
@@ -659,7 +671,9 @@ let rec elab_exp
   | TyAbs tx #_ #tres tyj_body ->
     let w : mk_tgt_arrow inv_low_contains (elab_typ' tx) #(elab_typ_tc' tx) (elab_typ' tres) #(elab_typ_tc' tres) = 
       (fun (x:elab_typ' tx) -> 
-        elab_exp tyj_body (vextend #tx x ve))
+        mst_recall (all_refs_contained_and_low ve);
+        let ve' = vextend #tx x ve in
+        elab_exp tyj_body ve')
     in
     assert (t == TArr tx tres);
     cast_TArr #tx #tres w t
@@ -713,3 +727,5 @@ let rec elab_exp
     wvf1 (); wvf2 ();
     (vf, vs)
 #pop-options
+
+
