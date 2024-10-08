@@ -10,16 +10,52 @@ open FStar.FunctionalExtensionality
 (* Constructive-style progress and preservation proof for STLC with
    strong reduction, using deBruijn indices and parallel substitution. *)
 
-type typ =
-| TUnit   : typ
-| TNat    : typ
-| TArr    : int:typ -> out:typ -> typ
-| TSum    : lt:typ -> rt:typ -> typ
-| TPair   : typ -> typ -> typ
-| TRef    : typ -> typ
-| TLList  : typ -> typ
-(** TODO: extend expressions and typing with linked lists 
-    TODO: write some of the examples, especially of ctxs, in STLC *)
+type unsafe_typ =
+| TUnit   : unsafe_typ
+| TNat    : unsafe_typ
+| TArr    : int:unsafe_typ -> out:unsafe_typ -> unsafe_typ (* TArr is in universe 1 *)
+| TSum    : lt:unsafe_typ -> rt:unsafe_typ -> unsafe_typ
+| TPair   : unsafe_typ -> unsafe_typ -> unsafe_typ
+| TRef    : unsafe_typ -> unsafe_typ                (* TRef is in universe 0 *)
+| TLList  : unsafe_typ -> unsafe_typ                (* TLList uses TRef, so also in universe 0 *)
+
+let rec is_univ0 t =
+     match t with
+     | TUnit -> True
+     | TNat -> True
+     | TSum t1 t2 -> is_univ0 t1 /\ is_univ0 t2
+     | TPair t1 t2 -> is_univ0 t1 /\ is_univ0 t2
+     | TRef t -> is_univ0 t
+     | TLList t -> is_univ0 t
+     | TArr _ _ -> False
+
+type typ0 = t:unsafe_typ{is_univ0 t}
+
+let rec good_univs t =
+     match t with
+     | TUnit -> True
+     | TNat -> True
+     | TSum t1 t2 -> good_univs t1 /\ good_univs t2
+     | TPair t1 t2 -> good_univs t1 /\ good_univs t2
+     | TRef t -> is_univ0 t
+     | TLList t -> is_univ0 t
+     | TArr t1 t2 -> good_univs t1 /\ good_univs t2
+
+type typ = t:unsafe_typ{good_univs t}
+
+let rec lemma_typ0_is_typ (t:typ0) :
+     Lemma
+          (requires True)
+          (ensures (good_univs t)) 
+          [SMTPat (good_univs t)]
+= match t with
+               | TUnit -> ()
+               | TNat -> ()
+               | TSum t1 t2 -> (lemma_typ0_is_typ t1; lemma_typ0_is_typ t2)
+               | TPair t1 t2 -> (lemma_typ0_is_typ t1; lemma_typ0_is_typ t2)
+               | TRef t -> ()
+               | TLList t -> ()
+               | TArr t1 t2 -> ()
 
 type var = nat
 type loc = nat
@@ -134,18 +170,18 @@ noeq type typing : context -> exp -> typ -> Type0 =
                typing g (EPair e1 e2) (TPair t1 t2)
 | TyAllocRef  :#g:context ->
                #e:exp ->
-               #t:typ ->
+               #t:typ{is_univ0 t} ->
                $h1:typing g e t ->
                     typing g (EAlloc e) (TRef t)
 | TyReadRef :#g:context ->
              #e:exp ->
-             #t:typ ->
+             #t:typ{is_univ0 t} ->
              $h1:typing g e (TRef t) ->
                typing g (EReadRef e) t
 | TyWriteRef :#g:context ->
                #e1:exp ->
                #e2:exp ->
-               #t:typ ->
+               #t:typ{is_univ0 t} ->
                $h1:typing g e1 (TRef t) ->
                $h2:typing g e2 t ->
                  typing g (EWriteRef e1 e2) TUnit
@@ -406,19 +442,35 @@ type steps : store -> exp -> store -> exp -> Type =
           $hsts:steps s2 e2 s3 e3 ->
           steps s1 e1 s3 e3
 
-(** A few programs that use references and are typed **)
-// let e:exp = EAlloc (EAlloc EZero)
-// let tyj:typing empty e (TRef (TRef TNat)) = TyAllocRef (TyAllocRef TyZero)
+(** Examples **)
+let e:exp = EAlloc (EAlloc EZero)
+let tyj:typing empty e (TRef (TRef TNat)) = TyAllocRef (TyAllocRef TyZero)
 
-// let e':exp = EReadRef (EAlloc EZero)
-// let tyj':typing empty e' TNat = TyReadRef (TyAllocRef TyZero)
+let e':exp = EReadRef (EAlloc EZero)
+let tyj':typing empty e' TNat = TyReadRef (TyAllocRef TyZero)
 
-// let e'':exp = EWriteRef (EAlloc EZero) (ESucc EZero)
-// let tyj'':typing empty e'' TUnit = TyWriteRef (TyAllocRef TyZero) (TySucc TyZero)
+let e'':exp = EWriteRef (EAlloc EZero) (ESucc EZero)
+let tyj'':typing empty e'' TUnit = TyWriteRef (TyAllocRef TyZero) (TySucc TyZero)
 
 let e''':exp = EAbs (TRef TNat) (EWriteRef (EVar 0) (ESucc (EReadRef (EVar 0))))
 let tyj''':typing empty e''' (TArr (TRef TNat) TUnit) = TyAbs (TRef TNat) (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))
 
-(** ** Type Safety **)
-let type_safety (e:exp) (s:store) : Type0 =
-     forall e' s'. steps s e s' e' ==> is_closed_value e' \/ (exists s'' e''. step s' e' s'' e'')
+let ctx_update_ref_test : typing empty _ (TArr (TRef TNat) TUnit) =
+     TyAbs (TRef TNat) (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))
+
+let ctx_update_multiple_refs_test : typing empty _ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) =
+     TyAbs (TRef (TRef TNat)) 
+          (TyAbs (TRef TNat) (
+               TyApp (TyAbs TUnit (TyWriteRef (TyVar 2) (TyVar 1)))
+                     (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))))
+
+let ctx_identity : typing empty _ (TArr (TRef TNat) (TRef TNat)) =
+     TyAbs (TRef TNat) (TyVar 0)
+
+let ctx_dynamic_alloc_test : typing empty _ (TArr TNat (TRef TNat)) =
+     TyAbs TNat (TyAllocRef (TyVar 0))
+
+let ctx_returns_callback_test : typing empty _ (TArr TUnit (TArr TUnit TUnit)) =
+     TyAbs TUnit 
+          (TyApp (TyAbs (TRef TNat) (TyAbs TUnit (TyWriteRef (TyVar 1) (TySucc (TyReadRef (TyVar 1))))))
+                 (TyAllocRef TyZero))
