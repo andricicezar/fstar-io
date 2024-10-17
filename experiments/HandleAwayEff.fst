@@ -92,17 +92,35 @@ instance target_pair (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : targe
 instance target_arrow (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : target (x:t1 -> free t2) = { _empty = () }
 
 (** *** Semantics **)
-let behS (m:dm 'a 'wp) = theta m
-let rec behT (m:free 'a) : pure_wp 'a = 
+type sem 'a = 'a -> Type0
+
+let behS (m:dm 'a 'wp) : sem 'a = fun r -> forall p. theta m p ==> p r
+let rec behT (m:free 'a) : sem 'a = 
   match m with
-  | Ret x -> pure_return x
-  | Call k ->
-    pure_bind (fun p -> forall x. p x) (fun x -> behT (k x))
+  | Ret x -> fun r -> r == x
+  | Call k -> fun r -> (exists x. behT (k x) r)
 
-let eq_beh (rel:'a -> 'b -> Type0) (w1:pure_wp 'a) (w2:pure_wp 'b): Type0 =
-  forall p1 p2. (forall r1 r2. r1 `rel` r2 ==> (p1 r1 <==> p2 r2)) ==> (w1 p1 <==> w2 p2)
-// TODO: figure out how to define this equivalence
+let eq_beh (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (w1:sem a) (w2:sem b): Type0 =
+  forall r1 r2. r1 `rel` r2 ==> (w1 r1 <==> w2 r2)
 
+let eq_beh_reflexivity (#a:Type u#a) (w:sem a) : 
+  Lemma (w `eq_beh (==)` w) by (norm [delta_only [`%eq_beh]]) = ()
+
+let eq_beh_under_bind (#a:Type u#a) (#b:Type u#b) (m:sem a) (k:a -> sem b) (k':a -> sem b) : 
+  Lemma 
+    (requires (forall x. (k x) `eq_beh (==)` (k' x)))
+    (ensures ((fun r -> exists x. k x r) `eq_beh (==)` (fun r' -> exists x'. k' x' r'))) = ()
+
+let behS_pre (m:dm 'a (fun p -> forall r. p r)) (pre:Type0) (_:squash pre) :
+  Lemma ( (fun r -> forall p. pre /\ theta m p ==> p r)
+          `eq_beh (==)`
+          (fun r -> forall p. theta m p ==> p r)) = ()
+
+let eq_behs_under_bind (#a:Type u#a) (#b:Type u#b) (m:pure_wp a) (k:a -> pure_wp b) (k':a -> pure_wp b) : 
+  Lemma 
+    (requires (forall x. (fun r -> forall p. (k x) p ==> p r) `eq_beh (==)` (fun r -> forall p. (k' x) p ==> p r)))
+    (ensures ((fun r -> forall p. pure_bind m k p ==> p r) `eq_beh (==)` (fun r -> forall p. pure_bind m k' p ==> p r)))  = 
+    admit ()
 
 let rec lift_m (m:free 'a) : dm 'a (fun p -> forall r. p r) =
   match m with
@@ -119,6 +137,78 @@ let rec handle_m (m:dm 'a (fun p -> forall r. p r)) : free 'a =
   end
   | Op k -> Call (fun x -> handle_m (k x))
 
+open FStar.Calc
+
+let rec lemma_handle_inverse_lift_syntactic (m:free 'a) :
+  Lemma (handle_m (lift_m m) == m) =
+  match m with
+  | Ret x -> ()
+  | Call k -> 
+
+    calc (==) {
+      handle_m (lift_m (Call k));
+      == { _ by (norm [delta_only [`%lift_m]; zeta; iota]) }
+      handle_m (Op (fun x -> lift_m (k x)));
+      == { _ by (norm [delta_only [`%handle_m]; zeta; iota]) }
+      Call (fun x -> handle_m (lift_m (k x)));
+      == {
+        introduce forall x. handle_m (lift_m (k x)) == k x with begin
+          lemma_handle_inverse_lift_syntactic (k x)
+        end;
+        admit ()
+      }
+      Call (fun x -> k x);
+      == {
+        (** function extensionality **)
+        admit ()
+      }
+      Call k;
+    }
+
+let rec lemma_handle_inverse_lift_semantic (m:free 'a) :
+  Lemma (behT (handle_m (lift_m m)) `eq_beh (==)` behT m) =
+  match m with
+  | Ret x -> assert (behT (handle_m (lift_m (Ret x))) `eq_beh (==)` behT (Ret x)) by (compute ())
+  | Call k -> begin
+(**    calc (==) {
+      behT (handle_m (lift_m (Call k)));
+      == { _ by (norm [delta_only [`%lift_m]; zeta; iota]) }
+      behT (handle_m (Op (fun x -> lift_m (k x))));
+      == { _ by (norm [delta_only [`%handle_m]; zeta; iota]) }
+      behT (Call (fun x -> handle_m (lift_m (k x))));
+    };**)
+    let myeq = eq_beh #'a (==) in
+    introduce forall x. (behT (handle_m (lift_m (k x))) `eq_beh (==)` behT (k x)) with begin
+      lemma_handle_inverse_lift_semantic (k x)
+    end
+(**    assert (behT (Call (fun x -> handle_m (lift_m (k x)))) `myeq` behT (Call (fun x -> k x)));
+    assert (behT (Call (fun x -> k x)) `myeq` behT (Call k)) by (
+      norm [delta_only [`%behT]; zeta; iota];
+      apply_lemma (`eq_beh_reflexivity));
+    assert (behT (handle_m (lift_m m)) `myeq` behT m)**)
+  end
+
+let rec lemma_lift_inverse_handle_semantic (m:dm 'a (fun p -> forall r. p r)) :
+  Lemma (behS (lift_m (handle_m m)) `eq_beh (==)` behS m) =
+  match m with
+  | Return x -> assert (behS (lift_m (handle_m m)) `eq_beh (==)` behS m) by (compute ())
+  | Require pre k -> begin
+    assert (theta m (fun r -> True));
+    lemma_lift_inverse_handle_semantic (k ())
+  end
+  | Op k -> 
+    introduce forall x. (behS (lift_m (handle_m (k x))) `eq_beh (==)` (behS #'a #(fun p -> forall r. p r) (k x))) with begin
+      lemma_lift_inverse_handle_semantic (k x)
+    end;
+    assert (behS #_ #(fun p -> forall r. p r) (Op (fun x -> lift_m (handle_m (k x)))) `eq_beh (==)` behS #_ #(fun p -> forall r. p r) (Op k)) by (
+        norm [delta_only [`%behS;`%theta];zeta;iota];
+        apply_lemma (`eq_behs_under_bind);
+        norm [iota];
+        assumption ()
+    );
+    assert (behS (lift_m (handle_m (Op k))) `eq_beh (==)` behS #_ #(fun p -> forall r. p r) (Op (fun x -> lift_m (handle_m (k x))))) by (compute ());
+    ()
+
 (** *** Type class: Lift **)
 class liftable (t:Type u#a) = {
   [@@@no_method]
@@ -129,8 +219,6 @@ class liftable (t:Type u#a) = {
   s_tc : source s;
 
   lift : t -> s;
-
-  lem1 : w:free t -> rel:(t -> s -> Type0) -> Lemma ((behT w) `eq_beh rel` (behS (dm_bind (lift_m w) (fun r -> dm_return (lift r)))))
 }
 
 class handleable (t:Type u#a) = {
@@ -151,7 +239,6 @@ instance liftable_int : liftable int = {
   s_tc = solve;
 
   lift = (fun x -> x);
-  lem1 = (fun x rel -> admit ())
 }
 
 instance liftable_pair (t1 t2:Type) {| c1:liftable t1 |} {| c2:liftable t2 |} : liftable (t1 * t2) = {
@@ -160,7 +247,6 @@ instance liftable_pair (t1 t2:Type) {| c1:liftable t1 |} {| c2:liftable t2 |} : 
   s_tc = source_pair c1.s #c1.s_tc c2.s #c2.s_tc;
 
   lift = (fun (x, y) -> (lift x, lift y));
-  lem1 = (fun x rel -> admit ())
 }
 
 instance liftable_arrow (t1 t2:Type) {| c1:handleable t1 |} {| c2:liftable t2 |} : liftable (t1 -> free t2) = {
@@ -171,7 +257,6 @@ instance liftable_arrow (t1 t2:Type) {| c1:handleable t1 |} {| c2:liftable t2 |}
   lift = (fun (f:t1 -> free t2) (x:c1.s) -> 
     dm_bind (lift_m #t2 (f (handle x))) (fun (r:t2) -> dm_return (c2.lift r))
   );
-  lem1 = (fun x rel -> admit ())
 }
 
 instance handleable_int : handleable int = {
@@ -207,7 +292,8 @@ let sc_proof ps ct : Lemma (sc ps ct)
     explode ();
     dump "H";
     tadmit ();
-    tadmit ()
+    tadmit ();
+    ()
   )
   = ()
 
@@ -218,10 +304,12 @@ let sc' (ct:(int -> free int) -> free int) (ps:int -> dm int (fun p -> forall r.
 let sc_proof' ps ct : Lemma (sc' ct ps)
   by (
     explode ();
-    let x = nth_binder (-3) in
+    let x = nth_binder (-2) in
     let x = instantiate x (fresh_uvar None) in
     mapply x;
     norm [delta_only [`%sc']];
-    assumption ()
+    dump "h";
+    tadmit ()
+    // assumption ()
   )
-  = lem1 (ct (handle ps)) (==)
+  = ()// lem1 (ct (handle ps)) (==)
