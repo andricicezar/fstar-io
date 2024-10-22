@@ -151,7 +151,34 @@ let eq_behs_under_bind (#a:Type u#a) (#b:Type u#b) (m:pure_wp a) (k:a -> pure_wp
   Lemma 
     (requires (forall x. (fun r -> forall p. (k x) p ==> p r) `eq_beh (==)` (fun r -> forall p. (k' x) p ==> p r)))
     (ensures ((fun r -> forall p. pure_bind m k p ==> p r) `eq_beh (==)` (fun r -> forall p. pure_bind m k' p ==> p r)))  = 
-    admit ()
+  assert (forall r x. (forall p. (k x) p ==> p r) <==> (forall p. (k' x) p ==> p r)) by (
+          binder_retype (nth_binder (-1)); norm [delta_only [`%eq_beh]; zeta;iota]; trefl ());
+  introduce forall r1 r2. r1 == r2 ==> ((forall p. pure_bind m k p ==> p r1) <==> (forall p. pure_bind m k' p ==> p r2)) with begin
+    introduce r1 == r2 ==> ((forall p. pure_bind m k p ==> p r1) <==> (forall p. pure_bind m k' p ==> p r2)) with _. begin
+      let r = r1 in
+      assert (forall x. (forall p. (k x) p ==> p r) <==> (forall p. (k' x) p ==> p r));
+      introduce (forall p. pure_bind m k p ==> p r) ==> (forall p. pure_bind m k' p ==> p r) with _. begin
+        introduce forall p. pure_bind m k' p ==> p r with begin
+          assert (pure_bind m k p ==> p r);
+          introduce pure_bind m k' p ==> p r with _. begin
+            assert (pure_wp_monotonic0 _ m);
+            let lhs : pure_post a = fun xx -> k' xx p in
+            let rhs : pure_post a = fun xx -> k xx p in
+            introduce forall xx. lhs xx ==> rhs xx with begin
+              introduce lhs xx ==> rhs xx with _. begin
+                assert (k' xx p);
+                assert ((forall p. (k xx) p ==> p r) <==> (forall p. (k' xx) p ==> p r));
+                assume (k xx p);
+              end
+            end;
+            assert (pure_bind m k' p ==> pure_bind m k p);
+            eliminate pure_bind m k p ==> p r with ()
+          end
+        end
+      end;
+      admit ()
+    end
+  end
 
 let rec lift_m (m:free 'a) : dm 'a fixed_wp =
   match m with
