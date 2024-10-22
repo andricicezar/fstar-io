@@ -95,6 +95,12 @@ let rec free_bind (m:free 'a) (k:'a -> free 'b) : free 'b =
   | Ret x -> k x
   | Call cont -> Call (fun b -> free_bind (cont b) k)
 
+let rec theta_free (m:free 'a) : pure_wp 'a =
+  match m with
+  | Ret x -> pure_return x
+  | Call k ->
+    pure_bind (fun p -> forall x. p x) (fun x -> theta_free (k x))
+
 class target (t:Type) = { [@@@no_method] _empty : unit }
 
 instance target_int : target int = { _empty = () }
@@ -106,14 +112,27 @@ instance target_arrow (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : targ
 (** *** Semantics **)
 type sem 'a = 'a -> Type0
 
+let eq_beh (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (w1:sem a) (w2:sem b): Type0 =
+  forall r1 r2. r1 `rel` r2 ==> (w1 r1 <==> w2 r2)
+
+let test1234 #a #b (k k':b -> sem a) (r:a) :
+  Lemma (requires (forall x. (k x r <==> k' x r)))
+        (ensures ((forall x. k x r) <==> (forall x. k' x r))) = ()
+
 let behS (m:dm 'a 'wp) : sem 'a = fun r -> forall p. theta m p ==> p r
+let behT (m:free 'a) : sem 'a = fun r -> forall p. theta_free m p ==> p r
+(** forall r. (forall x. behS (k x) r) <==> (forall x. behT (k x) r) **)
+
+(**
+CA: I tried this simpler definition, but in proving that handle preserves the behavior,
+one has to prove:
+  forall r. (forall x. behS (k x) r) <==> (exists x. behT (k x) r)
+which I did not know how to prove.
 let rec behT (m:free 'a) : sem 'a = 
   match m with
   | Ret x -> fun r -> r == x
   | Call k -> fun r -> (exists x. behT (k x) r)
-
-let eq_beh (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (w1:sem a) (w2:sem b): Type0 =
-  forall r1 r2. r1 `rel` r2 ==> (w1 r1 <==> w2 r2)
+**)
 
 let eq_beh_reflexivity (#a:Type u#a) (w:sem a) : 
   Lemma (w `eq_beh (==)` w) by (norm [delta_only [`%eq_beh]]) = ()
@@ -177,27 +196,72 @@ let rec lemma_handle_inverse_lift_syntactic (m:free 'a) :
       Call k;
     }
 
+let rec handle_preserves_beh (w:dm 'a fixed_wp) :
+  Lemma (behS w `eq_beh (==)` behT (handle_m w)) = 
+  match w with 
+  | Return x -> ()
+  | Require pre k ->
+    assert (theta w (fun r -> True));
+    handle_preserves_beh (k ())
+  | Op k ->
+    introduce forall r1 r2. r1 == r2 ==> ((behS w r1) <==> (behT (handle_m w) r2)) with begin
+      introduce r1 == r2 ==> ((behS w r1) <==> (behT (handle_m w) r2)) with _. begin
+        let r = r1 in
+        assert (behS #_ #fixed_wp (Op k) r <==> (forall p. (forall x. theta (k x) p) ==> p r));
+        assert (behT (handle_m (Op k)) r <==> (forall p. (forall x. theta_free (handle_m (k x)) p) ==> p r)) by (
+          norm [delta_only [`%behT;`%handle_m;`%theta_free];zeta;iota]);
+        introduce forall x. behS #_ #fixed_wp (k x) r <==> behT (handle_m (k x)) r with begin
+          handle_preserves_beh (k x);
+          assert (behS #_ #fixed_wp (k x) `eq_beh (==)` behT (handle_m (k x)));
+          assert (forall r1 r2. r1 == r2 ==> (behS #_ #fixed_wp (k x) r1 <==> behT (handle_m (k x)) r2)) by (
+            binder_retype (nth_binder (-5)); norm [delta_only [`%eq_beh]; zeta;iota]; trefl ();
+            assumption ()
+          )
+        end;
+        // having:
+        assert ((forall p x. (theta (k x) p ==> p r)) <==> (forall p x. theta_free (handle_m (k x)) p ==> p r));
+        // needing: 
+        assume ((forall p. (forall x. theta (k x) p) ==> p r) <==> (forall p. (forall x. theta_free (handle_m (k x)) p) ==> p r))
+        (**introduce (forall p. (forall x. theta (k x) p) ==> p r) ==> (forall p. (forall x. theta_free (handle_m (k x)) p) ==> p r) with h1. begin
+          introduce forall p. (forall x. theta_free (handle_m (k x)) p) ==> p r with begin
+            eliminate forall p. (forall x. theta (k x) p) ==> p r with p;
+            introduce (forall x. theta_free (handle_m (k x)) p) ==> p r with h2. begin
+              test1234 #'a #beta (fun x -> behS #'a #fixed_wp (k x)) (fun x -> behT (handle_m (k x))) r;
+              assert ((forall p x. (theta (k x) p ==> p r)) ==> (forall p x. theta_free (handle_m (k x)) p ==> p r));
+              assert ((forall p x. theta_free (handle_m (k x)) p ==> p r) ==> (forall p x. (theta (k x) p ==> p r)));
+              eliminate (forall x. theta (k x) p) ==> p r with begin
+                introduce forall x. theta (k x) p with begin
+                  assert (forall x. theta_free (handle_m (k x)) p);
+ //                 assert (forall p. theta_free (handle_m (k x)) p ==> p r);
+                  assume (theta (k x) p)
+                end
+              end
+            end
+          end
+        end;**)
+      end
+    end
+    
+    
+
+let lift_preserves_beh (w:free 'a) :
+  Lemma (behT w `eq_beh (==)` behS (lift_m w)) = admit ()
+
 let rec lemma_handle_inverse_lift_semantic (m:free 'a) :
   Lemma (behT (handle_m (lift_m m)) `eq_beh (==)` behT m) =
   match m with
   | Ret x -> assert (behT (handle_m (lift_m (Ret x))) `eq_beh (==)` behT (Ret x)) by (compute ())
   | Call k -> begin
-(**    calc (==) {
-      behT (handle_m (lift_m (Call k)));
-      == { _ by (norm [delta_only [`%lift_m]; zeta; iota]) }
-      behT (handle_m (Op (fun x -> lift_m (k x))));
-      == { _ by (norm [delta_only [`%handle_m]; zeta; iota]) }
-      behT (Call (fun x -> handle_m (lift_m (k x))));
-    };**)
-    let myeq = eq_beh #'a (==) in
     introduce forall x. (behT (handle_m (lift_m (k x))) `eq_beh (==)` behT (k x)) with begin
       lemma_handle_inverse_lift_semantic (k x)
-    end
-(**    assert (behT (Call (fun x -> handle_m (lift_m (k x)))) `myeq` behT (Call (fun x -> k x)));
-    assert (behT (Call (fun x -> k x)) `myeq` behT (Call k)) by (
-      norm [delta_only [`%behT]; zeta; iota];
-      apply_lemma (`eq_beh_reflexivity));
-    assert (behT (handle_m (lift_m m)) `myeq` behT m)**)
+    end;
+    assert (behT (Call (fun x -> handle_m (lift_m (k x)))) `eq_beh (==)` behT (Call k)) by (
+        norm [delta_only [`%behT;`%theta_free];zeta;iota];
+        apply_lemma (`eq_behs_under_bind);
+        norm [iota];
+        assumption ()
+    );
+    assert (behT (handle_m (lift_m (Call k))) `eq_beh (==)` behT (Call (fun x -> handle_m (lift_m (k x))))) by (compute ())
   end
 
 let rec lemma_lift_inverse_handle_semantic (m:dm 'a fixed_wp) :
@@ -230,7 +294,6 @@ class liftable (t:Type u#a) = {
   [@@@no_method]
   s_tc : source s;
 
-  [@@@no_method]
   lift : t -> s;
 }
 
@@ -243,7 +306,6 @@ class handleable (s:Type u#a) = {
   [@@@no_method]
   t_tc : target t;
 
-  [@@@no_method]
   handle : s -> t;
 }
 
@@ -291,9 +353,6 @@ instance handleable_arrow (t1 s2:Type) {| c1:liftable t1 |} {| c2:handleable s2 
   )
 }
 
-let handle_preserves_beh (w:dm 'a fixed_wp) :
-  Lemma (behS w `eq_beh (==)` behT (handle_m w)) = admit ()
-
 let handle_result_preserves_beh (w:free 'a) {| c1:handleable 'a |} :
   Lemma (behT w `eq_beh (fun (x:'a) (y:c1.t) -> y == c1.handle x)` behT (free_bind w (fun r -> free_return (c1.handle r)))) = admit ()
 
@@ -330,9 +389,6 @@ let sc_proof ps ct : Lemma (sc ps ct)
 let sc' (ct:(int -> free int) -> free int) (ps:int -> dm int fixed_wp) : Type0 =
   behT (ct ((handleable_arrow int int).handle ps)) `eq_beh (fun x y -> y == x)`
   behS (((liftable_arrow (int -> dm int fixed_wp) int #(handleable_arrow int int #liftable_int #handleable_int)).lift ct) ps)
-
-let lift_preserves_beh (w:free 'a) :
-  Lemma (behT w `eq_beh (==)` behS (lift_m w)) = admit ()
 
 let lift_result_preserves_beh (w:dm 'a (fun p -> forall r. p r)) {| c1:liftable 'a |} :
   Lemma (behS w `eq_beh (fun (x:'a) (y:c1.s) -> y == c1.lift x)` behS (dm_bind w (fun r -> dm_return (c1.lift r)))) = admit ()
