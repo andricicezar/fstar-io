@@ -116,7 +116,7 @@ instance target_pair (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : targe
 
 instance target_arrow (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : target (x:t1 -> free t2) = { _empty = () }
 
-(** *** Relating the sthetas **)
+(** *** Handlers: lift, erase **)
 let rec lift_handler (m:free 'a) : dm 'a fixed_wp =
   match m with
   | Ret x -> Return x
@@ -132,17 +132,61 @@ let rec erase_handler (m:dm 'a fixed_wp) : free 'a =
   end
   | Op k -> Call (fun x -> erase_handler (k x))
 
-let lemma_stheta_stronger_ttheta_erase (#a:Type0) (m:dm a fixed_wp) :
-  Lemma (stheta m ⊑ ttheta (erase_handler m)) = admit ()
+let rec lemma_stheta_stronger_ttheta_erase (#a:Type0) (m:dm a fixed_wp) :
+  Lemma (stheta m ⊑ ttheta (erase_handler m)) =
+  match m with
+  | Return x ->  ()
+  | Require pre k -> begin
+    assert (stheta m (fun r -> True));
+    lemma_stheta_stronger_ttheta_erase (k ())
+  end
+  | Op k -> begin
+    assert (stheta m == (fun p -> forall x. stheta (k x) p)) by (rewrite_eqs_from_context (); compute ());
+    assert (ttheta (erase_handler m) == (fun p -> forall x. ttheta (erase_handler (k x)) p)) by (rewrite_eqs_from_context (); compute ());
+    introduce forall x. stheta (k x) ⊑ ttheta (erase_handler (k x)) with begin
+      lemma_stheta_stronger_ttheta_erase (k x)
+    end
+  end
 
-let lemma_ttheta_erase_stronger_stheta (#a:Type0) (m:dm a fixed_wp) :
-  Lemma (ttheta (erase_handler m) ⊑ stheta m) = admit ()
+let rec lemma_ttheta_erase_stronger_stheta (#a:Type0) (m:dm a fixed_wp) :
+  Lemma (ttheta (erase_handler m) ⊑ stheta m) = 
+  match m with
+  | Return x ->  ()
+  | Require pre k -> begin
+    assert (stheta m (fun r -> True));
+    lemma_ttheta_erase_stronger_stheta (k ())
+  end
+  | Op k -> begin
+    assert (stheta m == (fun p -> forall x. stheta (k x) p)) by (rewrite_eqs_from_context (); compute ());
+    assert (ttheta (erase_handler m) == (fun p -> forall x. ttheta (erase_handler (k x)) p)) by (rewrite_eqs_from_context (); compute ());
+    introduce forall x. ttheta (erase_handler (k x)) ⊑ stheta (k x) with begin
+      lemma_ttheta_erase_stronger_stheta (k x)
+    end
+  end
 
-let lemma_ttheta_stronger_stheta_lift (#a:Type0) (m:free a) :
-  Lemma (ttheta m ⊑ stheta (lift_handler m)) = admit ()
+let rec lemma_ttheta_stronger_stheta_lift (#a:Type0) (m:free a) :
+  Lemma (ttheta m ⊑ stheta (lift_handler m)) = 
+  match m with
+  | Ret x -> ()
+  | Call k -> begin
+    assert (ttheta m == (fun p -> forall x. ttheta (k x) p)) by (rewrite_eqs_from_context (); compute ());
+    assert (stheta (lift_handler m) == (fun p -> forall x. stheta (lift_handler (k x)) p)) by (rewrite_eqs_from_context (); compute ());
+    introduce forall x. ttheta (k x) ⊑ stheta (lift_handler (k x)) with begin
+      lemma_ttheta_stronger_stheta_lift (k x)
+    end
+  end
 
-let lemma_stheta_lift_stronger_ttheta (#a:Type0) (m:free a) :
-  Lemma (stheta (lift_handler m) ⊑ ttheta m) = admit ()
+let rec lemma_stheta_lift_stronger_ttheta (#a:Type0) (m:free a) :
+  Lemma (stheta (lift_handler m) ⊑ ttheta m) =
+  match m with
+  | Ret x -> ()
+  | Call k -> begin
+    assert (ttheta m == (fun p -> forall x. ttheta (k x) p)) by (rewrite_eqs_from_context (); compute ());
+    assert (stheta (lift_handler m) == (fun p -> forall x. stheta (lift_handler (k x)) p)) by (rewrite_eqs_from_context (); compute ());
+    introduce forall x. stheta (lift_handler (k x)) ⊑ ttheta (k x)  with begin
+      lemma_stheta_lift_stronger_ttheta (k x)
+    end
+  end
 
 (** *** Semantics **)
 type sem 'a = 'a -> Type0
@@ -150,27 +194,10 @@ type sem 'a = 'a -> Type0
 let eq_beh (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (w1:sem a) (w2:sem b): Type0 =
   forall r1 r2. r1 `rel` r2 ==> (w1 r1 <==> w2 r2)
 
-let test1234 #a #b (k k':b -> sem a) (r:a) :
-  Lemma (requires (forall x. (k x r <==> k' x r)))
-        (ensures ((forall x. k x r) <==> (forall x. k' x r))) = ()
-
 let behS (m:dm 'a 'wp) : sem 'a =
   pure_predicate_transformer (stheta m)
 let behT (m:free 'a) : sem 'a = 
   pure_predicate_transformer (ttheta m)
-
-(** forall r. (forall x. behS (k x) r) <==> (forall x. behT (k x) r) **)
-
-(**
-CA: I tried this simpler definition, but in proving that erase preserves the behavior,
-one has to prove:
-  forall r. (forall x. behS (k x) r) <==> (exists x. behT (k x) r)
-which I did not know how to prove.
-let rec behT (m:free 'a) : sem 'a = 
-  match m with
-  | Ret x -> fun r -> r == x
-  | Call k -> fun r -> (exists x. behT (k x) r)
-**)
 
 let eq_beh_reflexivity (#a:Type u#a) (w:sem a) : 
   Lemma (w `eq_beh (==)` w) by (norm [delta_only [`%eq_beh]]) = ()
@@ -184,39 +211,6 @@ let behS_pre (m:dm 'a (fun p -> forall r. p r)) (pre:Type0) (_:squash pre) :
   Lemma ( (fun r -> forall p. pre /\ stheta m p ==> p r)
           `eq_beh (==)`
           (fun r -> forall p. stheta m p ==> p r)) = ()
-
-let eq_behs_under_bind (#a:Type u#a) (#b:Type u#b) (m:pure_wp a) (k:a -> pure_wp b) (k':a -> pure_wp b) : 
-  Lemma 
-    (requires (forall x. (fun r -> forall p. (k x) p ==> p r) `eq_beh (==)` (fun r -> forall p. (k' x) p ==> p r)))
-    (ensures ((fun r -> forall p. pure_bind m k p ==> p r) `eq_beh (==)` (fun r -> forall p. pure_bind m k' p ==> p r)))  = 
-  assert (forall r x. (forall p. (k x) p ==> p r) <==> (forall p. (k' x) p ==> p r)) by (
-          binder_retype (nth_binder (-1)); norm [delta_only [`%eq_beh]; zeta;iota]; trefl ());
-  introduce forall r1 r2. r1 == r2 ==> ((forall p. pure_bind m k p ==> p r1) <==> (forall p. pure_bind m k' p ==> p r2)) with begin
-    introduce r1 == r2 ==> ((forall p. pure_bind m k p ==> p r1) <==> (forall p. pure_bind m k' p ==> p r2)) with _. begin
-      let r = r1 in
-      assert (forall x. (forall p. (k x) p ==> p r) <==> (forall p. (k' x) p ==> p r));
-      introduce (forall p. pure_bind m k p ==> p r) ==> (forall p. pure_bind m k' p ==> p r) with _. begin
-        introduce forall p. pure_bind m k' p ==> p r with begin
-          assert (pure_bind m k p ==> p r);
-          introduce pure_bind m k' p ==> p r with _. begin
-            assert (pure_wp_monotonic0 _ m);
-            let lhs : pure_post a = fun xx -> k' xx p in
-            let rhs : pure_post a = fun xx -> k xx p in
-            introduce forall xx. lhs xx ==> rhs xx with begin
-              introduce lhs xx ==> rhs xx with _. begin
-                assert (k' xx p);
-                assert ((forall p. (k xx) p ==> p r) <==> (forall p. (k' xx) p ==> p r));
-                assume (k xx p) //by (dump "H")
-              end
-            end;
-            assert (pure_bind m k' p ==> pure_bind m k p);
-            eliminate pure_bind m k p ==> p r with ()
-          end
-        end
-      end;
-      admit ()
-    end
-  end
 
 open FStar.Calc
 
@@ -246,95 +240,25 @@ let rec lemma_erase_inverse_lift_syntactic (m:free 'a) :
       Call k;
     }
 
-let rec erase_preserves_beh (w:dm 'a fixed_wp) :
-  Lemma (behS w `eq_beh (==)` behT (erase_handler w)) = admit ()
-  (**
-  match w with 
-  | Return x -> ()
-  | Require pre k ->
-    assert (stheta w (fun r -> True));
-    erase_preserves_beh (k ())
-  | Op k ->
-    introduce forall r1 r2. r1 == r2 ==> ((behS w r1) <==> (behT (erase_handler w) r2)) with begin
-      introduce r1 == r2 ==> ((behS w r1) <==> (behT (erase_handler w) r2)) with _. begin
-        let r = r1 in
-        assert (behS #_ #fixed_wp (Op k) r <==> (forall p. (forall x. stheta (k x) p) ==> p r));
-        assert (behT (erase_handler (Op k)) r <==> (forall p. (forall x. ttheta (erase_handler (k x)) p) ==> p r)) by (
-          norm [delta_only [`%behT;`%erase_handler;`%ttheta];zeta;iota]);
-        introduce forall x. behS #_ #fixed_wp (k x) r <==> behT (erase_handler (k x)) r with begin
-          erase_preserves_beh (k x);
-          assert (behS #_ #fixed_wp (k x) `eq_beh (==)` behT (erase_handler (k x)));
-          assert (forall r1 r2. r1 == r2 ==> (behS #_ #fixed_wp (k x) r1 <==> behT (erase_handler (k x)) r2)) by (
-            binder_retype (nth_binder (-5)); norm [delta_only [`%eq_beh]; zeta;iota]; trefl ();
-            assumption ()
-          )
-        end;
-        // having:
-        assert ((forall p x. (stheta (k x) p ==> p r)) <==> (forall p x. ttheta (erase_handler (k x)) p ==> p r));
-        // needing: 
-        assume ((forall p. (forall x. stheta (k x) p) ==> p r) <==> (forall p. (forall x. ttheta (erase_handler (k x)) p) ==> p r))
-        (**introduce (forall p. (forall x. stheta (k x) p) ==> p r) ==> (forall p. (forall x. ttheta (erase_handler (k x)) p) ==> p r) with h1. begin
-          introduce forall p. (forall x. ttheta (erase_handler (k x)) p) ==> p r with begin
-            eliminate forall p. (forall x. stheta (k x) p) ==> p r with p;
-            introduce (forall x. ttheta (erase_handler (k x)) p) ==> p r with h2. begin
-              test1234 #'a #beta (fun x -> behS #'a #fixed_wp (k x)) (fun x -> behT (erase_handler (k x))) r;
-              assert ((forall p x. (stheta (k x) p ==> p r)) ==> (forall p x. ttheta (erase_handler (k x)) p ==> p r));
-              assert ((forall p x. ttheta (erase_handler (k x)) p ==> p r) ==> (forall p x. (stheta (k x) p ==> p r)));
-              eliminate (forall x. stheta (k x) p) ==> p r with begin
-                introduce forall x. stheta (k x) p with begin
-                  assert (forall x. ttheta (erase_handler (k x)) p);
- //                 assert (forall p. ttheta (erase_handler (k x)) p ==> p r);
-                  assume (stheta (k x) p)
-                end
-              end
-            end
-          end
-        end;**)
-      end
-    end
-    
-    *)
+let erase_preserves_beh (w:dm 'a fixed_wp) :
+  Lemma (behS w `eq_beh (==)` behT (erase_handler w)) =
+  lemma_ttheta_erase_stronger_stheta w;
+  lemma_stheta_stronger_ttheta_erase w
 
 let lift_preserves_beh (w:free 'a) :
-  Lemma (behT w `eq_beh (==)` behS (lift_handler w)) = admit ()
+  Lemma (behT w `eq_beh (==)` behS (lift_handler w)) =
+  lemma_stheta_lift_stronger_ttheta w;
+  lemma_ttheta_stronger_stheta_lift w
 
-let rec lemma_erase_inverse_lift_semantic (m:free 'a) :
+let lemma_erase_inverse_lift_semantic (m:free 'a) :
   Lemma (behT (erase_handler (lift_handler m)) `eq_beh (==)` behT m) =
-  match m with
-  | Ret x -> assert (behT (erase_handler (lift_handler (Ret x))) `eq_beh (==)` behT (Ret x)) by (compute ())
-  | Call k -> begin
-    introduce forall x. (behT (erase_handler (lift_handler (k x))) `eq_beh (==)` behT (k x)) with begin
-      lemma_erase_inverse_lift_semantic (k x)
-    end;
-    assert (behT (Call (fun x -> erase_handler (lift_handler (k x)))) `eq_beh (==)` behT (Call k)) by (
-        norm [delta_only [`%behT;`%ttheta];zeta;iota];
-        apply_lemma (`eq_behs_under_bind);
-        norm [iota];
-        assumption ()
-    );
-    assert (behT (erase_handler (lift_handler (Call k))) `eq_beh (==)` behT (Call (fun x -> erase_handler (lift_handler (k x))))) by (compute ())
-  end
+  lift_preserves_beh m;
+  erase_preserves_beh (lift_handler m)
 
-let rec lemma_lift_inverse_erase_semantic (m:dm 'a fixed_wp) :
+let lemma_lift_inverse_erase_semantic (m:dm 'a fixed_wp) :
   Lemma (behS (lift_handler (erase_handler m)) `eq_beh (==)` behS m) =
-  match m with
-  | Return x -> assert (behS (lift_handler (erase_handler m)) `eq_beh (==)` behS m) by (compute ())
-  | Require pre k -> begin
-    assert (stheta m (fun r -> True));
-    lemma_lift_inverse_erase_semantic (k ())
-  end
-  | Op k -> 
-    introduce forall x. (behS (lift_handler (erase_handler (k x))) `eq_beh (==)` (behS #'a #fixed_wp (k x))) with begin
-      lemma_lift_inverse_erase_semantic (k x)
-    end;
-    assert (behS #_ #fixed_wp (Op (fun x -> lift_handler (erase_handler (k x)))) `eq_beh (==)` behS #_ #(fun p -> forall r. p r) (Op k)) by (
-        norm [delta_only [`%behS;`%stheta];zeta;iota];
-        apply_lemma (`eq_behs_under_bind);
-        norm [iota];
-        assumption ()
-    );
-    assert (behS (lift_handler (erase_handler (Op k))) `eq_beh (==)` behS #_ #fixed_wp (Op (fun x -> lift_handler (erase_handler (k x))))) by (compute ());
-    ()
+  erase_preserves_beh m;
+  lift_preserves_beh (erase_handler m)
 
 (** *** Type class: Lift **)
 class liftable (t:Type u#a) = {
