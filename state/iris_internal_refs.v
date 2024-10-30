@@ -23,7 +23,7 @@ Definition lib : val :=
   let: "g" := ref #0 in
   (λ: <>, "g" <- !"g" + #1).
 
-Lemma lib_spec_lib :
+Lemma lib_spec_lib : (** to call the lib, one would need to know r' in advance **)
   ∀ (r r' : loc) (v : val),
   {{{ r ↦ #r' ∗ r' ↦ v }}}
     lib #r
