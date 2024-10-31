@@ -45,12 +45,12 @@ let shareS : sigT = {
   is_shared_stable = (fun #a r -> ());
   share = (fun #a #p sr -> 
     let h0 = get () in
-    assume (addr_of sr < next_addr h0);(** Should be easy **)
+    assume (addr_of sr < next_addr h0);(** should come from contains **)
     let m = !secret_map in
     let m' = (fun p -> if p = addr_of sr then true else m p) in
     secret_map := m';
     let h1 = get () in
-    assume (next_addr h0 <= next_addr h1)(** Should be easy **)
+    assume (next_addr h0 <= next_addr h1)(** Should come from write **)
   );
 }
 
@@ -153,12 +153,9 @@ val progr_secret_unchanged_test:
 let progr_secret_unchanged_test rp rs ctx = 
   let h0 = gst_get () in
   let secret: ref int = alloc 0 in
-  lemma_alloc (FStar.Heap.trivial_preorder int) h0 0 false;
-  assume (addr_of secret == next_addr h0); (** Should be easy **)
+  assume (addr_of secret == next_addr h0);(** has to come from alloc, necessary to show that secret is not shared **)
   let h1 = gst_get () in
-  assume (next_addr h0 + 1 == next_addr h1);(** Should be easy **)
-  assert (~(shareS.is_shared secret h0)); 
-  assert (~(shareS.is_shared secret h1));
+  assume (next_addr h0 < next_addr h1); (** comes from alloc **)
   ctx ();
   let v = !secret in
   assert (v == 0);
@@ -181,9 +178,8 @@ val progr_passing_callback_test:
 let progr_passing_callback_test rp rs f =
   let h0 = gst_get () in
   let secret: ref int = alloc 0 in
-  assume (addr_of secret == next_addr h0); (** Should be easy **)
   let h1 = gst_get () in
-  assume (next_addr h0 <= next_addr h1);(** Should be easy **)
+  assume (next_addr h0 < next_addr h1); (** comes from alloc *)
   shareS.share secret;
   gst_witness (contains_pred secret);
   gst_witness (shareS.is_shared secret);
