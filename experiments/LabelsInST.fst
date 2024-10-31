@@ -7,12 +7,12 @@ open FStar.Monotonic.Heap
 open FStar.ST
 open FStar.Ghost
 
-type map_sharedT = mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> (forall p. m0 p ==> m1 p))
+type map_sharedT = mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> (forall p. m0 p ==> m1 p)) (** pre-order necessary to show that the predicate `is_shared` is stable **)
 
 noeq
 type sigT = {
   map_shared : erased map_sharedT;
-  is_shared : #a:Type0 -> #p:preorder a -> mref a p -> h:heap -> Type0;  // {h `contains` map_shared}
+  is_shared : #a:Type0 -> #p:preorder a -> mref a p -> h:heap -> Type0;
   is_shared_stable : #a:Type0 -> r:ref a -> Lemma (stable (is_shared r)) [SMTPat (is_shared r)];
   share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
     ST unit 
@@ -28,13 +28,14 @@ type sigT = {
         (forall b (r:ref b). is_shared r h0 ==> is_shared r h1) /\
         (forall b (r:ref b). ~(is_shared r h0) /\ addr_of r =!= addr_of sr ==> ~(is_shared r h1)) /\
         (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
-        is_shared sr h1
-))
+        is_shared sr h1))
 }
 
 private
 let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
   alloc (fun _ -> false)
+
+(** In practice, one hides secret_map from the verified program and only exposes `shareS`. **)
 
 let shareS : sigT = {
   map_shared = secret_map;
