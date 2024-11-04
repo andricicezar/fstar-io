@@ -1,4 +1,4 @@
-module HandleAwayEff
+module HandleAwayEff2
 
 open FStar.Monotonic.Pure
 
@@ -41,23 +41,6 @@ let eq_post_f (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (p1:pure_post a)
 let lemma_eq_wp_f #a #b (w:pure_wp a) (f:a -> b) :
   Lemma
     (ensures (w `eq_wp_f f` (pure_bind w (fun x -> pure_return (f x))))) = () (** REFL **)
-
-let lemma_eq_post_f #a #b (w:pure_wp a) (f:a -> b) :
-  Lemma
-    (ensures (pure_wp_as_post w `eq_post_f (fun x y -> y == f x)` pure_wp_as_post (pure_bind w (fun x -> pure_return (f x))))) =
-  let w'  = pure_bind w (fun x -> pure_return (f x)) in
-
-  introduce forall (x:a) (p:a->Type0). w p /\ (forall (p': (_: b -> Type0)). w (fun r -> p' (f r)) ==> p' (f x)) ==> p x with begin
-    introduce w p /\ (forall (p': (_: b -> Type0)). w (fun r -> p' (f r)) ==> p' (f x)) ==> p x with h1. begin
-      let p' = (fun (x:b) -> forall r. f r == x ==> p r) in
-      eliminate forall (p': (_: b -> Type0)). w (fun r -> p' (f r)) ==> p' (f x) with p';
-      assert (w p);
-      assume (forall x y. f x == f y ==> x == y); (** To have injectivity here, I need function extensionality of the effectful arrows, which is a no go **)
-      assert (forall x. p x ==> (fun r -> p' (f r)) x);
-      assert (p x);
-      ()
-    end
-  end
 
 (** *** Source monad : a Dijkstra Monad **)
 noeq
@@ -251,28 +234,23 @@ let rec lemma_stheta_lift_stronger_ttheta (#a:Type0) (m:free a) :
   end
 
 (** *** Semantics **)
-type sem 'a = 'a -> Type0
+type sem 'a = pure_wp 'a
 
-let eq_beh (#a:Type u#a) (#b:Type u#b) (rel:a -> b -> Type0) (w1:sem a) (w2:sem b): Type0 =
-  eq_post_f rel w1 w2
+let eq_beh (#a:Type u#a) (#b:Type u#b) (f:a -> b) (w1:sem a) (w2:sem b): Type0 =
+  eq_wp_f f w1 w2
 
 let behS (m:dm 'a 'wp) : sem 'a =
-  pure_wp_as_post (stheta m)
+  stheta m
 let behT (m:free 'a) : sem 'a = 
-  pure_wp_as_post (ttheta m)
+  ttheta m
 
 let eq_beh_reflexivity (#a:Type u#a) (w:sem a) : 
-  Lemma (w `eq_beh (==)` w) by (norm [delta_only [`%eq_beh]]) = ()
+  Lemma (w `eq_beh (id)` w) by (compute ()) = ()
 
 let eq_beh_under_bind (#a:Type u#a) (#b:Type u#b) (m:sem a) (k:a -> sem b) (k':a -> sem b) : 
   Lemma 
-    (requires (forall x. (k x) `eq_beh (==)` (k' x)))
-    (ensures ((fun r -> exists x. k x r) `eq_beh (==)` (fun r' -> exists x'. k' x' r'))) = ()
-
-let behS_pre (m:dm 'a (fun p -> forall r. p r)) (pre:Type0) (_:squash pre) :
-  Lemma ( (fun r -> forall p. pre /\ stheta m p ==> p r)
-          `eq_beh (==)`
-          (fun r -> forall p. stheta m p ==> p r)) = ()
+    (requires (forall x. (k x) `eq_beh (id)` (k' x)))
+    (ensures ((fun r -> exists x. k x r) `eq_beh (id)` (fun r' -> exists x'. k' x' r'))) = ()
 
 open FStar.Calc
 
@@ -300,22 +278,22 @@ let rec lemma_erase_inverse_lift_syntactic (m:free 'a) :
     }
 
 let erase_preserves_beh (w:dm 'a fixed_wp) :
-  Lemma (behS w `eq_beh (==)` behT (erase_handler w)) =
+  Lemma (behS w `eq_beh id` behT (erase_handler w)) =
   lemma_ttheta_erase_stronger_stheta w;
   lemma_stheta_stronger_ttheta_erase w
 
 let lift_preserves_beh (w:free 'a) :
-  Lemma (behT w `eq_beh (==)` behS (lift_handler w)) =
+  Lemma (behT w `eq_beh id` behS (lift_handler w)) =
   lemma_stheta_lift_stronger_ttheta w;
   lemma_ttheta_stronger_stheta_lift w
 
 let lemma_erase_inverse_lift_semantic (m:free 'a) :
-  Lemma (behT (erase_handler (lift_handler m)) `eq_beh (==)` behT m) =
+  Lemma (behT (erase_handler (lift_handler m)) `eq_beh id` behT m) =
   lift_preserves_beh m;
   erase_preserves_beh (lift_handler m)
 
 let lemma_lift_inverse_erase_semantic (m:dm 'a fixed_wp) :
-  Lemma (behS (lift_handler (erase_handler m)) `eq_beh (==)` behS m) =
+  Lemma (behS (lift_handler (erase_handler m)) `eq_beh id` behS m) =
   erase_preserves_beh m;
   lift_preserves_beh (erase_handler m)
 
@@ -359,14 +337,6 @@ instance liftable_pair (t1 t2:Type) {| c1:liftable t1 |} {| c2:liftable t2 |} : 
   lift = (fun (x, y) -> (c1.lift x, c2.lift y));
 }
 
-(**
-let lemma_eq_f_g (f g:'a -> 'b) : Lemma (requires (f == g)) (ensures (forall x. f x == g x)) = ()
-
-let lemma_dm_bind_inject (m d:dm 'a 'w) (k:'a -> dm 'b 'c) : Lemma
-  (requires (dm_bind m k == dm_bind d k))
-  (ensures (m == d)) = admit ()
-**)
-
 instance liftable_arrow (s1 t2:Type) {| c1:eraseable s1 |} {| c2:liftable t2 |} : liftable (c1.t -> free t2) = {
   t_tc = target_arrow c1.t #c1.t_tc t2 #c2.t_tc;
   s = s1 -> dm c2.s fixed_wp;
@@ -375,56 +345,6 @@ instance liftable_arrow (s1 t2:Type) {| c1:eraseable s1 |} {| c2:liftable t2 |} 
   lift = (fun (f:c1.t -> free t2) (x:s1) -> 
     dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler #t2 (f (c1.erase x))) (fun (r:t2) -> dm_return (c2.lift r)))
   );
-  
-(**  lift_injective = (fun () -> 
-    let lift = (fun (f:c1.t -> free t2) (x:s1) -> 
-    dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler #t2 (f (c1.erase x))) (fun (r:t2) -> dm_return (c2.lift r)))
-    ) in
-    introduce forall (f g:(c1.t -> free t2)). lift f == lift g ==> f == g with begin
-      calc (==>) {
-        lift f == lift g;
-        ==> {}
-        (fun x ->
-          dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler (f (c1.erase x))) (fun r -> dm_return (c2.lift r)))) ==
-        (fun x ->
-          dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler (g (c1.erase x))) (fun r -> dm_return (c2.lift r))));
-        ==> { lemma_eq_f_g (lift f) (lift g) }
-        (forall x. 
-          dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler (f (c1.erase x))) (fun r -> dm_return (c2.lift r))) ==
-          dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler (g (c1.erase x))) (fun r -> dm_return (c2.lift r))));
-        ==> {}
-        (forall x.
-          dm_bind (lift_handler (f (c1.erase x))) (fun r -> dm_return (c2.lift r)) ==
-          dm_bind (lift_handler (g (c1.erase x))) (fun r -> dm_return (c2.lift r)));
-        ==> { 
-          admit ()
-//          introduce forall x. lift_handler (f (c1.erase x)) == lift_handler (g (c1.erase x)) with begin
-  //          lemma_dm_bind_inject #c1.t #t2 #fixed_wp #fixed_wp (lift_handler (f (c1.erase x))) (lift_handler (g (c1.erase x))) (fun r -> dm_return (c2.lift r))
-    //      end
-    }
-        (forall x.
-          (lift_handler (f (c1.erase x))) ==
-          (lift_handler (g (c1.erase x))));
-        ==> {  assume (forall a (x y:free a). lift_handler x == lift_handler y ==> x == y) }
-        (forall x.
-          (f (c1.erase x)) ==
-          (g (c1.erase x)));
-        ==> { admit () }
-        (forall x.
-          (f x) ==
-          (g x));
-        ==> {}
-        f == g;
-      };
-      admit ()
-    end;
-    admit ();
-    assume (forall x y. c1.erase x == c1.erase y ==> x == y);
-    assume (forall a (x y:free a). lift_handler x == lift_handler y ==> x == y);
-    assume (forall a b w1 w2 (x y:dm a w1) (f:a -> dm b w2). dm_bind x f == dm_bind y f ==> x == y);
-    assert (forall (f g:(c1.t -> free t2)). lift f == lift g ==> f == g)  by (norm [iota]; dump "H")
-  )
-**)
 }
 
 instance eraseable_int : eraseable int = {
@@ -446,35 +366,33 @@ instance eraseable_arrow (t1 s2:Type) {| c1:liftable t1 |} {| c2:eraseable s2 |}
 }
 
 let erase_result_preserves_beh (w:free 'a) (f:'a -> 'b) :
-  Lemma (behT w `eq_beh (fun (x:'a) (y:'b) -> y == f x)` behT (free_bind w (fun r -> free_return (f r)))) = 
+  Lemma (behT w `eq_beh f` behT (free_bind w (fun r -> free_return (f r)))) = 
   lemma_ttheta_bind_pure w f;
   let lhs = ttheta w in
   let rhs = ttheta (free_bind w (fun x -> free_return (f x))) in
   assert (lhs `eq_wp_f f` rhs);
-  lemma_eq_post_f lhs f;
-  assert (pure_wp_as_post lhs `eq_beh (fun (x:'a) (y:'b) -> y == f x)` pure_wp_as_post rhs)
+  lemma_eq_wp_f lhs f
 
 let lift_result_preserves_beh (w:dm 'a (fun p -> forall r. p r)) (f:'a -> 'b) :
-  Lemma (behS w `eq_beh (fun (x:'a) (y:'b) -> y == f x)` behS (dm_bind w (fun r -> dm_return (f r)))) =
+  Lemma (behS w `eq_beh f` behS (dm_bind w (fun r -> dm_return (f r)))) =
   lemma_stheta_bind_pure w f;
   let lhs = stheta w in
   let rhs = stheta (dm_bind w (fun x -> dm_return (f x))) in
   assert (lhs `eq_wp_f f` rhs);
-  lemma_eq_post_f lhs f;
-  assert (pure_wp_as_post lhs `eq_beh (fun (x:'a) (y:'b) -> y == f x)` pure_wp_as_post rhs)
+  lemma_eq_wp_f lhs f
 
 let sem_transitivity (w1 w2:sem 'a) (w3:sem 'b) (f:'a -> 'b) :
-  Lemma (requires (w1 `eq_beh (==)` w2 /\ w2 `eq_beh (fun x y -> y == f x)` w3))
-        (ensures (w1 `eq_beh (fun x y -> y == f x)` w3)) = admit ()
+  Lemma (requires (w1 `eq_beh id` w2 /\ w2 `eq_beh f` w3))
+        (ensures (w1 `eq_beh f` w3)) = ()
 
 let cc_whole (w:dm 'a fixed_wp) {| c1:eraseable 'a |} :
-  Lemma (behS w `eq_beh (fun (x:'a) (y:c1.t) -> y == c1.erase x)` behT (free_bind (erase_handler w) (fun r -> free_return (c1.erase r)))) =
+  Lemma (behS w `eq_beh c1.erase` behT (free_bind (erase_handler w) (fun r -> free_return (c1.erase r)))) =
   erase_preserves_beh w;
   erase_result_preserves_beh (erase_handler w) c1.erase;
   sem_transitivity #'a (behS w) (behT (erase_handler w)) (behT (free_bind (erase_handler w) (fun r -> free_return (c1.erase r)))) c1.erase
   
 let sc (ps:(int -> dm int fixed_wp) -> dm int fixed_wp) (ct:int -> free int) : Type0 =
-  behS (ps ((liftable_arrow int int).lift ct)) `eq_beh (fun x y -> y == x)` behT (((eraseable_arrow (int -> free int) _ #(liftable_arrow int int)).erase ps) ct)
+  behS (ps ((liftable_arrow int int).lift ct)) `eq_beh id` behT (((eraseable_arrow (int -> free int) _ #(liftable_arrow int int)).erase ps) ct)
 
 open FStar.Tactics
 
@@ -494,11 +412,11 @@ let sc_proof ps ct : Lemma (sc ps ct)
   = cc_whole (ps ((liftable_arrow int int).lift ct)) #eraseable_int
 
 let sc' (ct:(int -> free int) -> free int) (ps:int -> dm int fixed_wp) : Type0 =
-  behT (ct ((eraseable_arrow int int).erase ps)) `eq_beh (fun x y -> y == x)`
+  behT (ct ((eraseable_arrow int int).erase ps)) `eq_beh id`
   behS (((liftable_arrow (int -> dm int fixed_wp) int #(eraseable_arrow int int #liftable_int #eraseable_int)).lift ct) ps)
 
 let btc_whole (w:free 'a) {| c1:liftable 'a |} :
-  Lemma (behT w `eq_beh (fun (x:'a) (y:c1.s) -> y == c1.lift x)` behS (dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler w) (fun r -> dm_return (c1.lift r))))) =
+  Lemma (behT w `eq_beh c1.lift` behS (dm_subcomp #_ #_ #fixed_wp (dm_bind (lift_handler w) (fun r -> dm_return (c1.lift r))))) =
   lift_preserves_beh w;
   lift_result_preserves_beh (lift_handler w) c1.lift;
   sem_transitivity #'a (behT w) (behS (lift_handler w)) (behS (dm_bind (lift_handler w) (fun r -> dm_return (c1.lift r)))) c1.lift
