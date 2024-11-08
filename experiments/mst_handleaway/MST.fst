@@ -25,7 +25,7 @@ unfold
 let st_wp_monotonic (heap:Type) (wp:st_wp_h heap 'a) =
   forall p1 p2. (p1 `st_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
 
-let st_wp (heap a: Type) = wp:(st_wp_h heap a){st_wp_monotonic heap wp}
+let st_mwp_h (heap a: Type) = wp:(st_wp_h heap a){st_wp_monotonic heap wp}
 
 unfold
 let (⊑) #heap #a wp1 wp2 = st_stronger heap a wp2 wp1
@@ -72,28 +72,28 @@ let rec free_bind
 
 (** ** START Section 3: theta **)
 unfold
-let partial_call_wp (#state:tstate) (pre:pure_pre) : st_wp state.t (squash pre) = 
+let partial_call_wp (#state:tstate) (pre:pure_pre) : st_mwp_h state.t (squash pre) = 
   let wp' : st_wp_h state.t (squash pre) = fun p h0 -> pre /\ p () h0 in
   assert (st_wp_monotonic state.t wp');
   wp'
 
 unfold
-let get_wp (#state:tstate) : st_wp state.t state.t =
+let get_wp (#state:tstate) : st_mwp_h state.t state.t =
   fun p h0 -> p h0 h0
 
 unfold
-let put_wp (#state:tstate) (h1:state.t) : st_wp state.t unit =
+let put_wp (#state:tstate) (h1:state.t) : st_mwp_h state.t unit =
   fun p h0 -> (h0 `state.rel` h1) /\ p () h1
 
 unfold
-let witness_wp (#state:tstate) (pred:state.t -> Type0) : st_wp state.t unit =
+let witness_wp (#state:tstate) (pred:state.t -> Type0) : st_mwp_h state.t unit =
   fun p h -> pred h /\ FStar.Preorder.stable pred state.rel /\ (W.witnessed state.rel pred ==> p () h)
 
 unfold
-let recall_wp (#state:tstate) (pred:state.t -> Type0) : st_wp state.t unit =
+let recall_wp (#state:tstate) (pred:state.t -> Type0) : st_mwp_h state.t unit =
   fun p h -> W.witnessed state.rel pred /\ (pred h ==> p () h)
 
-val theta : #a:Type u#a -> #state:tstate u#s -> free state a -> st_wp state.t a
+val theta : #a:Type u#a -> #state:tstate u#s -> free state a -> st_mwp_h state.t a
 let rec theta #a #state m =
   match m with
   | Return x -> st_return state.t _ x
@@ -208,7 +208,7 @@ let rec lemma_theta_is_lax_morphism_bind
 (** ** END Section 3: theta **)
 
 (** ** START Section 4: Dijkstra Monad **)
-let mst (state:tstate) (a:Type) (wp:st_wp state.t a)=
+let mst (state:tstate) (a:Type) (wp:st_mwp_h state.t a)=
   m:(free state a){theta m ⊑ wp}
 
 let mst_return (#state:tstate) (#a:Type) (x:a) : mst state a (st_return state.t _ x) =
@@ -218,8 +218,8 @@ let mst_bind
   (#state:tstate u#s)
   (#a : Type u#a)
   (#b : Type u#b)
-  (#wp_v : st_wp state.t a)
-  (#wp_f: a -> st_wp state.t b)
+  (#wp_v : st_mwp_h state.t a)
+  (#wp_f: a -> st_mwp_h state.t b)
   (v : mst state a wp_v)
   (f : (x:a -> mst state b (wp_f x))) :
   Tot (mst state b (st_bind_wp state.t a b wp_v wp_f)) =
@@ -229,8 +229,8 @@ let mst_bind
 let mst_subcomp
   (#state:tstate u#s)
   (#a : Type u#a)
-  (#wp1 : st_wp state.t a)
-  (#wp2 : st_wp state.t a)
+  (#wp1 : st_mwp_h state.t a)
+  (#wp2 : st_mwp_h state.t a)
   (v : mst state a wp1)
   :
   Pure (mst state a wp2) (requires (wp1 ⊑ wp2)) (ensures (fun _ -> True)) =
