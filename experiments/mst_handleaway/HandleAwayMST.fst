@@ -1,10 +1,10 @@
 module HandleAwayMST
 
-open MST
-open MST.Tot
-
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+
+open MST
+open MST.Tot
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1
@@ -29,8 +29,8 @@ let lemma_eq_wp_f #a #b (w:st_wp a) (f:a -> b) :
   Lemma
     (ensures (w `eq_wp_f f` (st_bind_wp _ _ _ w (fun x -> st_return _ _ (f x))))) = () (** REFL **)
 
-let rec lemma_stheta_bind_pure (m:_mst 'a 'w) (f:'a -> 'b) :
-  Lemma (ensures (theta m `eq_wp_f f` theta (_mst_bind _ _ _ _ m (fun x -> _mst_return _ (f x))))) (decreases m) =
+let rec lemma_stheta_bind_pure (m:mheap 'a 'w) (f:'a -> 'b) :
+  Lemma (ensures (theta m `eq_wp_f f` theta (mheap_bind _ _ _ _ m (fun x -> mheap_return _ (f x))))) (decreases m) =
   admit ()
   
 class source (t:Type) = { [@@@no_method] _empty : unit }
@@ -43,53 +43,49 @@ instance source_arrow
   (t1:Type) {| source t1 |}
   (t2:t1 -> Type) {| (x:t1) -> source (t2 x) |}
   (wp:(x:t1) -> st_wp (t2 x)) : 
-  source (x:t1 -> _mst (t2 x) (wp x)) = { _empty = () }
-
-let test0 : source (x:int -> dm int (as_pure_wp (fun p -> x > 5 /\ (forall r. p r)))) =
-  source_arrow int (fun _ -> int) (fun x -> (as_pure_wp (fun p -> x > 5 /\ (forall r. p r))))
-
-let test1 : source (x:int -> dm (y:int -> dm int (fun p -> x == y /\ (forall r. p r))) (fun p -> x > 5 /\ (forall r. p r))) =
-  source_arrow
-    int _ #(fun x -> source_arrow int (fun _ -> int)
-    (fun y -> as_pure_wp (fun p -> x == y /\ (forall r. p r))))
-    (fun x -> as_pure_wp (fun p -> x > 5 /\ (forall r. p r)))
-
-let test2 : source ((y:int -> dm int (fun p -> y > 2 /\ (forall r. p r))) -> dm int (fun p -> (forall r. p r))) =
-  source_arrow
-    _ #(source_arrow int (fun _ -> int) (fun y p -> y > 2 /\ (forall r. p r)))
-    (fun _ -> int)
-    (fun _ p -> (forall r. p r))
+  source (x:t1 -> mheap (t2 x) (wp x)) = { _empty = () }
 
 (** *** Source language has a fixed wp **)
-let fixed_wp (#a:Type) : pure_wp a = fun p -> forall r. p r
+let fixed_wp (#a:Type) : st_wp a = fun p h0 -> forall r h1. h0 `heap_state.rel` h1 ==> p r h1
 
 (** *** Target monad : a Free Monad with less constructors **)
 noeq
-type free (a:Type u#a) : Type u#a =
-| Call : (beta -> free a) -> free a
-| Ret : a -> free a
+type tfree (a:Type u#a) : Type u#(max 1 a) = (* because of the heap *)
+| GetT : cont:(heap_state.t -> tfree a) -> tfree a
+| PutT : heap_state.t -> cont:(unit -> tfree a) -> tfree a
+| ReturnT : a -> tfree a
 
-let free_return (x:'a) : free 'a = Ret x
+let tfree_return (x:'a) : tfree 'a = ReturnT x
 
-let rec free_bind (m:free 'a) (k:'a -> free 'b) : free 'b =
+let rec tfree_bind (m:tfree 'a) (k:'a -> tfree 'b) : tfree 'b =
   match m with
-  | Ret x -> k x
-  | Call cont -> Call (fun b -> free_bind (cont b) k)
+  | ReturnT x -> k x
+  | GetT cont -> GetT (fun x -> tfree_bind (cont x) k)
+  | PutT h cont -> PutT h (fun x -> tfree_bind (cont ()) k)
 
-let rec ttheta (m:free 'a) : pure_wp 'a =
+let rec ttheta (m:tfree 'a) : st_wp 'a =
   match m with
-  | Ret x -> pure_return x
-  | Call k ->
-    pure_bind (fun p -> forall x. p x) (fun x -> ttheta (k x))
+  | ReturnT x -> st_return heap_state.t _ x
+  | GetT k ->
+      st_bind_wp heap_state.t heap_state.t 'a get_wp (fun r -> ttheta (k r))
+  | PutT h1 k ->
+      st_bind_wp heap_state.t _ _ (put_wp h1) (fun r -> ttheta (k r))
 
-let rec lemma_ttheta_bind_pure (m:free 'a) (f:'a -> 'b) :
-  Lemma (ensures (ttheta m `eq_wp_f f` ttheta (free_bind m (fun x -> free_return (f x))))) (decreases m) =
+let rec lemma_ttheta_bind_pure (m:tfree 'a) (f:'a -> 'b) :
+  Lemma (ensures (ttheta m `eq_wp_f f` ttheta (tfree_bind m (fun x -> tfree_return (f x)))))
+        (decreases m) =
   match m with
-  | Ret _ -> ()
-  | Call k ->
-    introduce forall x. ttheta (k x) `eq_wp_f f` ttheta (free_bind (k x) (fun x -> free_return (f x))) with begin
+  | ReturnT _ -> ()
+  | GetT k ->
+    introduce forall x. ttheta (k x) `eq_wp_f f` ttheta (tfree_bind (k x) (fun x -> tfree_return (f x))) with begin
       lemma_ttheta_bind_pure (k x) f
-    end
+    end;
+    assert (ttheta (GetT k) `eq_wp` (fun p h0 -> ttheta (k h0) p h0))
+  | PutT h k -> 
+    introduce forall x. ttheta (k x) `eq_wp_f f` ttheta (tfree_bind (k x) (fun x -> tfree_return (f x))) with begin
+      lemma_ttheta_bind_pure (k x) f
+    end;
+    assert (ttheta (PutT h k) `eq_wp` (fun p h0 -> (h0 `heap_state.rel` h) /\ ttheta (k ()) p h))
 
 class target (t:Type) = { [@@@no_method] _empty : unit }
 
@@ -97,13 +93,14 @@ instance target_int : target int = { _empty = () }
 
 instance target_pair (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : target (t1 * t2) = { _empty = () }
 
-instance target_arrow (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : target (x:t1 -> free t2) = { _empty = () }
+instance target_arrow (t1:Type) {| target t1 |} (t2:Type) {| target t2 |} : target (x:t1 -> tfree t2) = { _empty = () }
 
 (** *** Handlers: lift, erase **)
-let rec lift_handler (m:free 'a) : dm 'a fixed_wp =
+let rec lift_handler (m:tfree 'a) : mheap 'a fixed_wp =
   match m with
-  | Ret x -> Return x
-  | Call k -> Op (fun x -> lift_handler (k x))
+  | ReturnT x -> Return x
+  | GetT k -> Get (fun x -> lift_handler (k x))
+  | PutT h k -> Put h (fun x -> lift_handler (k x))
 
 let rec erase_handler (m:dm 'a fixed_wp) : free 'a =
   match m with
