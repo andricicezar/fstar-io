@@ -7,7 +7,7 @@ open FStar.Monotonic.Heap
 open FStar.ST
 open FStar.Ghost
 
-type map_sharedT = mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> (forall p. m0 p ==> m1 p)) (** pre-order necessary to show that the predicate `is_shared` is stable **)
+type map_sharedT = mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> forall p. m0 p ==> m1 p) (** pre-order necessary to show that the predicate `is_shared` is stable **)
 
 noeq
 type sigT = {
