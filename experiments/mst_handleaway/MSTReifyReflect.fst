@@ -173,13 +173,15 @@ open BeyondCriteria
 open FStar.FunctionalExtensionality
 
 
-let fixed_wp #a : st_wp a =
+let fixed_wp #a : st_wp a = (** TODO: probably this can be generalized *)
   fun p h0 -> forall r h1. p r h1
 
 noeq
 type src_interface1 = {
   ct : Type;
   ct_reflectable : my_reflectable ct;
+
+  prog_wp : ct_reflectable.s -> st_wp int;
 }
   
 type ctx_src1 (i:src_interface1)  = i.ct_reflectable.s
