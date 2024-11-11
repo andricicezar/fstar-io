@@ -160,169 +160,215 @@ instance my_reifiable_arrow
     reify (helper_reifiable_arrow' t1 #c1 s2 #c2 wp f x));
 }
 
-let fixed_wp #a : st_wp a =
-  fun p h0 -> forall r h1. p r h1
-  
-let behT (f:(unit -> mheap int fixed_wp)) : st_wp int =
-  theta (f ())
-
-let behS (f:(unit -> STATEwp int fixed_wp)) : st_wp int =
-  theta (reify (f ()))
-
-let linkT
-  (pt:((int -> mheap int fixed_wp) -> mheap int fixed_wp))
-  (ct:(int -> mheap int fixed_wp)) :
-  (unit -> mheap int fixed_wp)
-  =
-  fun () -> pt ct
-
-let linkS
-  (ps:((int -> STATEwp int fixed_wp) -> STATEwp int fixed_wp))
-  (cs:(int -> STATEwp int fixed_wp)) :
-  (unit -> STATEwp int fixed_wp)
-  =
-  fun () -> ps cs
-
-val compile :
-  ((int -> STATEwp int fixed_wp) -> STATEwp int fixed_wp) ->
-  ((int -> mheap int fixed_wp) -> mheap int fixed_wp)
-
-let compile ps = 
-  (my_reifiable_arrow
-    (int -> mheap int fixed_wp)
-    #(my_reflectable_arrow int #my_reifiable_int (fun _ -> int) (fun _ -> fixed_wp))
-    (fun _ -> int) 
-    #(solve)
-    (fun _ -> fixed_wp)).my_reify ps
-
-val backtranslate : 
-  (int -> mheap int fixed_wp) ->
-  (int -> STATEwp int fixed_wp)
-let backtranslate ct =
-  (my_reflectable_arrow 
-    int #my_reifiable_int 
-    (fun _ -> int) 
-    (fun _ -> fixed_wp)).my_reflect ct
-
-type sc
-  (ps:((int -> STATEwp int fixed_wp) -> STATEwp int fixed_wp))
-  (ct:(int -> mheap int fixed_wp))
-  =
-  behS (linkS ps (backtranslate ct)) `eq_wp` behT (linkT (compile ps) ct) (* syntactic equality between behaviors *)
-
 (** TODO: Why does this work? **)
 let reify_lemma (#a:Type) (#b:Type) (#wp:a -> st_wp b) (f:(x:a -> STATEwp b (wp x))) (x:a) : 
   Lemma (
     (theta (reify (let y = f x in y))) `eq_wp`
     (theta (reify (f x)))) = ()
 
-let lemma_sc ps ct : Lemma (sc ps ct) by (
-(**  norm [delta_only [
-                   `%sc;`%behS;`%behT;`%compile;`%backtranslate;`%linkS;`%linkT;
-                   `%my_reflectable_arrow;`%my_reifiable_arrow;
-                   `%lang_repr_arrow;`%lang_effect_arrow;`%my_reflectable_int;
-                   `%my_reifiable_int;`%lang_repr_int;`%lang_effect_int;
-                   `%Mkmy_reflectable?.my_reflect;`%Mkmy_reflectable?.s;
-                   `%Mkmy_reifiable?.my_reify;`%Mkmy_reifiable?.t;
-                   `%helper_reifiable_arrow';`%helper_reifiable_arrow;
-                   `%helper_reifiable_arrow_wp;
-       ];zeta;iota];**)
-  compute ()
-)= 
-  ()
-
-(** ** The other setting **)
-
-let linkT'
-  (pt:(int -> mheap int fixed_wp))
-  (ct:((int -> mheap int fixed_wp) -> mheap int fixed_wp)) :
-  (unit -> mheap int fixed_wp)
-  =
-  fun () -> ct pt
-
-let linkS'
-  (ps:(int -> STATEwp int fixed_wp))
-  (cs:((int -> STATEwp int fixed_wp) -> STATEwp int fixed_wp)) :
-  (unit -> STATEwp int fixed_wp)
-  =
-  fun () -> cs ps
-
-val compile' :
-  (int -> STATEwp int fixed_wp) ->
-  (int -> mheap int fixed_wp)
-let compile' ps = 
-  (my_reifiable_arrow
-    int
-    #solve
-    (fun _ -> int) 
-    #(solve)
-    (fun _ -> fixed_wp)).my_reify ps
-
-val backtranslate' : 
-  ((int -> mheap int fixed_wp) -> mheap int fixed_wp) ->
-  ((int -> STATEwp int fixed_wp) -> STATEwp int fixed_wp)
-let backtranslate' ct =
-  (my_reflectable_arrow 
-    (int -> STATEwp int fixed_wp)
-    #(my_reifiable_arrow int #my_reflectable_int (fun _ -> int) #(fun _ -> my_reifiable_int) (fun _ -> fixed_wp))
-    (fun _ -> int) 
-    (fun _ -> fixed_wp)).my_reflect ct
-
-type sc'
-  (ps:(int -> STATEwp int fixed_wp))
-  (ct:((int -> mheap int fixed_wp) -> mheap int fixed_wp))
-  =
-  behS (linkS' ps (backtranslate' ct)) `eq_wp` behT (linkT' (compile' ps) ct) (* syntactic equality between behaviors *)
-
 let lemma_reify_reflect (f:mheap int 'w) :
   Lemma (theta (reify (STATEwp?.reflect f)) `eq_wp` theta f) = admit ()
 
-let lemma_sc' ps ct : Lemma (sc' ps ct) = 
+open BeyondCriteria
+open FStar.FunctionalExtensionality
+
+
+let fixed_wp #a : st_wp a =
+  fun p h0 -> forall r h1. p r h1
+
+noeq
+type src_interface1 = {
+  ct : Type;
+  ct_reflectable : my_reflectable ct;
+}
+  
+type ctx_src1 (i:src_interface1)  = i.ct_reflectable.s
+type prog_src1 (i:src_interface1) = i.ct_reflectable.s -> STATEwp int fixed_wp
+type whole_src1 = unit -> STATEwp int fixed_wp
+
+let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
+  fun () -> p c
+
+
+val beh_src1 : whole_src1 ^-> st_mwp_h heap_state.t int
+let beh_src1 = on_domain whole_src1 (fun ws -> theta (reify (ws ())))
+
+let src_language1 : language (st_wp int) = {
+  interface = src_interface1;
+  ctx = ctx_src1; pprog = prog_src1; whole = whole_src1;
+  link = link_src1;
+  beh = beh_src1;
+}
+
+noeq
+type tgt_interface1 = {
+  ct : Type;
+}
+
+type ctx_tgt1 (i:tgt_interface1) = i.ct
+type prog_tgt1 (i:tgt_interface1) = i.ct -> mheap int fixed_wp
+type whole_tgt1 = (unit -> mheap int fixed_wp)
+
+let link_tgt1 (#i:tgt_interface1) (p:prog_tgt1 i) (c:ctx_tgt1 i) : whole_tgt1 =
+  fun () -> p c 
+
+val beh_tgt1 : whole_tgt1 ^-> st_mwp_h heap_state.t int
+let beh_tgt1 = on_domain whole_tgt1 (fun wt -> theta (wt ()))
+
+let tgt_language1 : language (st_wp int) = {
+  interface = tgt_interface1;
+  ctx = ctx_tgt1; pprog = prog_tgt1; whole = whole_tgt1;
+  link = link_tgt1;
+  beh = beh_tgt1;
+}
+
+let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
+  ct = i.ct;
+}
+
+val backtranslate1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
+let backtranslate1 #i ct = i.ct_reflectable.my_reflect ct
+
+val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
+let compile_pprog1 #i ps =
+  (my_reifiable_arrow i.ct #i.ct_reflectable (fun _ -> int) (fun _ -> fixed_wp)).my_reify ps
+
+let comp1 : compiler = {
+  src_sem = st_wp int;
+  tgt_sem = st_wp int;
+  source = src_language1;
+  target = tgt_language1;
+
+  comp_int = comp_int_src_tgt1;
+
+  compile_pprog = compile_pprog1;
+
+  rel_sem = eq_wp;
+}
+
+val comp1_rrhc : unit -> Lemma (rrhc comp1)
+let comp1_rrhc () : Lemma (rrhc comp1) =
+  assert (rrhc comp1) by (
+    norm [delta_only [`%rrhc]]; 
+    let i = forall_intro () in
+    let ct = forall_intro () in
+    FStar.Tactics.witness (`(backtranslate1 #(`#i) (`#ct)));
+    compute ())
+
+let exempe1 : src_interface1 = {
+  ct = int -> mheap int fixed_wp;
+  ct_reflectable = my_reflectable_arrow int #my_reifiable_int (fun _ -> int) (fun _ -> fixed_wp);
+}
+
+(** ** The other setting **)
+noeq
+type src_interface2 = {
+  pt : Type;
+  pt_reifiable : my_reifiable pt;
+}
+  
+type ctx_src2 (i:src_interface2)  = i.pt -> STATEwp int fixed_wp
+type prog_src2 (i:src_interface2) = i.pt
+type whole_src2 = unit -> STATEwp int fixed_wp
+
+let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
+  fun () -> c p
+
+
+val beh_src2 : whole_src2 ^-> st_mwp_h heap_state.t int
+let beh_src2 = on_domain whole_src2 (fun ws -> theta (reify (ws ())))
+
+let src_language2 : language (st_wp int) = {
+  interface = src_interface2;
+  ctx = ctx_src2; pprog = prog_src2; whole = whole_src2;
+  link = link_src2;
+  beh = beh_src2;
+}
+
+noeq
+type tgt_interface2 = {
+  pt : Type;
+}
+
+type ctx_tgt2 (i:tgt_interface2) = i.pt -> mheap int fixed_wp
+type prog_tgt2 (i:tgt_interface2) = i.pt
+type whole_tgt2 = (unit -> mheap int fixed_wp)
+
+let link_tgt2 (#i:tgt_interface2) (p:prog_tgt2 i) (c:ctx_tgt2 i) : whole_tgt2 =
+  fun () -> c p
+
+val beh_tgt2 : whole_tgt2 ^-> st_mwp_h heap_state.t int
+let beh_tgt2 = on_domain whole_tgt2 (fun wt -> theta (wt ()))
+
+let tgt_language2 : language (st_wp int) = {
+  interface = tgt_interface2;
+  ctx = ctx_tgt2; pprog = prog_tgt2; whole = whole_tgt2;
+  link = link_tgt2;
+  beh = beh_tgt2;
+}
+
+let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
+  pt = i.pt_reifiable.t;
+}
+
+val backtranslate2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
+let backtranslate2 #i ct = 
+  (my_reflectable_arrow i.pt #i.pt_reifiable (fun _ -> int) (fun _ -> fixed_wp)).my_reflect ct
+
+val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
+let compile_pprog2 #i ps =
+  i.pt_reifiable.my_reify ps
+
+let comp2 : compiler = {
+  src_sem = st_wp int;
+  tgt_sem = st_wp int;
+  source = src_language2;
+  target = tgt_language2;
+
+  comp_int = comp_int_src_tgt2;
+
+  compile_pprog = compile_pprog2;
+
+  rel_sem = eq_wp;
+}
+
+let exemple2 : src_interface2 = {
+  pt = int -> STATEwp int fixed_wp;
+  pt_reifiable = my_reifiable_arrow int #my_reflectable_int (fun _ -> int) (fun _ -> fixed_wp);
+}
+
+(** ** RrHC **)
+
+let comp2_rrhc0 i ct ps : Lemma (
+  comp2.rel_sem 
+    (comp2.source.beh (comp2.source.link #i ps (backtranslate2 ct)))
+    (comp2.target.beh (comp2.target.link #(comp_int_src_tgt2 i) (comp2.compile_pprog ps) ct))) =
   calc (eq_wp) {
-    behS (linkS' ps (backtranslate' ct));
-    `eq_wp` { 
-      _ by (
-        norm [delta_only [
-                    `%sc';`%behS;`%backtranslate';`%linkS';
-                    `%my_reflectable_arrow;`%my_reifiable_arrow;
-                    `%lang_repr_arrow;`%lang_effect_arrow;`%my_reflectable_int;
-                    `%my_reifiable_int;`%lang_repr_int;`%lang_effect_int;
-                    `%Mkmy_reflectable?.my_reflect;`%Mkmy_reflectable?.s;
-                    `%Mkmy_reifiable?.my_reify;`%Mkmy_reifiable?.t;
-                    `%helper_reifiable_arrow';`%helper_reifiable_arrow;
-                    `%helper_reifiable_arrow_wp;
-        ];zeta;iota]
-     )} 
-    theta (reify (STATEwp?.reflect (mheap_bind int int
-                            fixed_wp
-                            (fun r -> st_return heap_state.t int r)
-                            (ct (fun x -> reify (((let xxx = ps x in xxx)))))
-                            (fun r -> mheap_return int r))));
-    `eq_wp` { lemma_reify_reflect (mheap_bind int int
-                            fixed_wp
-                            (fun r -> st_return heap_state.t int r)
-                            (ct (fun x -> reify (((let xxx = ps x in xxx)))))
-                            (fun r -> mheap_return int r))}
-    theta (mheap_bind int int
-                            fixed_wp
-                            (fun r -> st_return heap_state.t int r)
-                            (ct (fun x -> reify (((let xxx = ps x in xxx)))))
-                            (fun r -> mheap_return int r));
-    `eq_wp` { 
-      lemma_theta_bind_id (ct (fun x -> reify (((let xxx = ps x in xxx))))) }
-    theta (ct (fun x -> reify (((let xxx = ps x in xxx)))));
-    `eq_wp` { 
-      _ by (
-        norm [delta_only [
-                    `%sc';`%behT;`%compile';`%linkT';
-                    `%my_reflectable_arrow;`%my_reifiable_arrow;
-                    `%lang_repr_arrow;`%lang_effect_arrow;`%my_reflectable_int;
-                    `%my_reifiable_int;`%lang_repr_int;`%lang_effect_int;
-                    `%Mkmy_reflectable?.my_reflect;`%Mkmy_reflectable?.s;
-                    `%Mkmy_reifiable?.my_reify;`%Mkmy_reifiable?.t;
-                    `%helper_reifiable_arrow';`%helper_reifiable_arrow;
-                    `%helper_reifiable_arrow_wp;
-        ];zeta;iota]
-     )} 
-    behT (linkT' (compile' ps) ct);
+    beh_src2 (link_src2 #i ps (backtranslate2 ct));
+    `eq_wp` { _ by (compute ()) } 
+    theta (reify (STATEwp?.reflect (mheap_bind int int fixed_wp (fun r -> st_return heap_state.t int r)
+                      (ct (i.pt_reifiable.my_reify ps))
+                      (fun r -> mheap_return int r))));
+    `eq_wp` {
+      lemma_reify_reflect #fixed_wp (mheap_bind int int fixed_wp (fun r -> st_return heap_state.t int r)
+                      (ct (i.pt_reifiable.my_reify ps))
+                      (fun r -> mheap_return int r))
+    }
+    theta (mheap_bind int int fixed_wp (fun r -> st_return heap_state.t int r)
+                      (ct (i.pt_reifiable.my_reify ps))
+                      (fun r -> mheap_return int r));
+    `eq_wp` { lemma_theta_bind_id (ct (i.pt_reifiable.my_reify ps)) }
+    theta (ct (i.pt_reifiable.my_reify ps));
+    `eq_wp` { _ by (compute ()) } 
+    beh_tgt2 (link_tgt2 #(comp_int_src_tgt2 i) (compile_pprog2 #i ps) ct);
   }
+
+val comp2_rrhc : unit -> Lemma (rrhc comp2)
+let comp2_rrhc () : Lemma (rrhc comp2) =
+  assert (rrhc comp2) by (
+    norm [delta_only [`%rrhc]]; 
+    let i = forall_intro () in
+    let ct = forall_intro () in
+    FStar.Tactics.witness (`(backtranslate2 #(`#i) (`#ct)));
+    let ps = forall_intro () in
+    mapply (`comp2_rrhc0))
