@@ -137,26 +137,26 @@ let rec lift_subcomp_lemma #ref heap #a (ig:icontext ref) (m:free ref a) : Lemma
   match m with
   | Return x -> ()
   | Alloc b v k -> 
-      closed_alloc_cont ig b v k;
-      introduce forall r. closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a) with begin
-        introduce closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a)  with _. begin
-          lift_subcomp_lemma heap (extend_icontext ig #b r) (k r)
-        end
-      end;
-      assert (theta heap (Alloc b v k) ⊑ (fun p h0 -> let r, h1 = heap.alloc h0 v in theta heap (k r) p h1));
-      assert (theta heap (Alloc b v k) ⊑ fixed_wp ig heap a)
+    closed_alloc_cont ig b v k;
+    introduce forall r. closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a) with begin
+      introduce closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a)  with _. begin
+        lift_subcomp_lemma heap (extend_icontext ig #b r) (k r)
+      end
+    end;
+    assert (theta heap (Alloc b v k) ⊑ (fun p h0 -> let r, h1 = heap.alloc h0 v in theta heap (k r) p h1));
+    assert (theta heap (Alloc b v k) ⊑ fixed_wp ig heap a)
   | Read b r k ->
-      introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
-        introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
-          lift_subcomp_lemma heap ig (k x)
-        end
+    introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
+      introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
+        lift_subcomp_lemma heap ig (k x)
       end
+    end
   | Write b r v k ->
-      introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
-        introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
-          lift_subcomp_lemma heap ig (k x)
-        end
+    introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
+      introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
+        lift_subcomp_lemma heap ig (k x)
       end
+    end
 
 val lift_subcomp #ref heap #a ig (m:free ref a) (#_:squash (closed_free ig m)) : dm ref heap a (fixed_wp ig heap a)
 let lift_subcomp #ref heap ig m #_ =
@@ -164,7 +164,8 @@ let lift_subcomp #ref heap ig m #_ =
   lift_subcomp_lemma heap ig m;
   dm_subcomp #ref #heap m'
 
-// assume val lift_to_dm' #ref #heap #a (m:free ref a) : dm ref heap a (trivial_wp heap a)
+
+
 
 type tgt_ctx0 (ref:Type0 -> Type0) (t t':Type)= t -> free ref t'
 type src_ctx0 (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = t -> dm ref heap t' (trivial_wp heap t')
