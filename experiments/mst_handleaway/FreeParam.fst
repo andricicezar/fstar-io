@@ -21,7 +21,7 @@ let rec free_bind #ref (m:free ref 'a) (k:'a -> free ref 'b) : free ref 'b =
 
 noeq
 type heap_t (ref:Type0 -> Type0) = {
-  t:Type0;
+  t:Type u#1;
 
   contains : #a:Type0 -> t -> ref a -> Type0;
 
@@ -34,37 +34,47 @@ type heap_t (ref:Type0 -> Type0) = {
     h1 `contains` r /\ select h1 r == v);
 }
 
-let rec theta 
-  (#ref:Type0 -> Type0)
-  (heap:heap_t ref)
-  (m:free ref 'a) : st_wp_h heap.t 'a =
+type cref a = FStar.Monotonic.Heap.mref a (fun _ _ -> True)
+type heap : heap_t cref = {
+  t = FStar.Monotonic.Heap.heap;
+
+  contains = (fun h r -> FStar.Monotonic.Heap.contains h r);
+
+  alloc = (fun h v -> admit ());
+  select = (fun h r -> admit ());
+  update = (fun h r v -> admit ());
+}
+
+
+let rec theta
+  (m:free cref 'a) : st_wp_h heap.t 'a =
   match m with
   | Return x -> st_return heap.t _ x
   | Alloc b x k ->
-      st_bind_wp heap.t (ref b) 'a (fun p h0 -> let rh1 = heap.alloc h0 x in p (fst rh1) (snd rh1)) (fun r -> theta heap (k r))
+      st_bind_wp heap.t (cref b) 'a (fun p h0 -> let rh1 = heap.alloc h0 x in p (fst rh1) (snd rh1)) (fun r -> theta (k r))
   | Read b r k ->
-      st_bind_wp heap.t b 'a (fun p h0 -> h0 `heap.contains` r /\ p (heap.select h0 r) h0) (fun r -> theta heap (k r))
+      st_bind_wp heap.t b 'a (fun p h0 -> h0 `heap.contains` r /\ p (heap.select h0 r) h0) (fun r -> theta (k r))
   | Write b r v k ->
-      st_bind_wp heap.t unit 'a (fun p h0 -> h0 `heap.contains` r /\ p () (heap.update h0 r v)) (fun r -> theta heap (k r))
+      st_bind_wp heap.t unit 'a (fun p h0 -> h0 `heap.contains` r /\ p () (heap.update h0 r v)) (fun r -> theta (k r))
 
 unfold
 let (⊑) #heap #a wp1 wp2 = st_stronger heap a wp2 wp1
 
-type dm (ref:Type0 -> Type0) (heap:heap_t ref) (a:Type) (wp:st_wp_h heap.t a) =
-  m:(free ref a){theta heap m ⊑ wp}
+type dm (a:Type) (wp:st_wp_h heap.t a) =
+  m:(free cref a){theta m ⊑ wp}
 
-let dm_return #ref #heap #a (x:a) : dm ref heap a (st_return heap.t a x) = Return x
-let dm_bind #ref #heap #a #b #wpm #wpk (m:dm ref heap a wpm) (k:(x:a -> dm ref heap b (wpk x))) : dm ref heap b (st_bind_wp _ _ _ wpm wpk) = 
+let dm_return #a (x:a) : dm a (st_return heap.t a x) = Return x
+let dm_bind #a #b #wpm #wpk (m:dm a wpm) (k:(x:a -> dm b (wpk x))) : dm b (st_bind_wp _ _ _ wpm wpk) = 
   let m' = free_bind m k in
-  assume (theta heap m' ⊑ st_bind_wp heap.t a b wpm wpk);
+  assume (theta m' ⊑ st_bind_wp heap.t a b wpm wpk);
   m'
 
-let dm_subcomp #ref #heap #a #wpm #wpk (m:dm ref heap a wpm) : Pure (dm ref heap a wpk) (requires (wpm ⊑ wpk)) (ensures (fun _ -> True)) =
+let dm_subcomp #a #wpm #wpk (m:dm a wpm) : Pure (dm a wpk) (requires (wpm ⊑ wpk)) (ensures (fun _ -> True)) =
   m
 
 
-let unit_test_return ref heap : dm ref heap int (fun p h0 -> p 1 h0) = Return 1
-let unit_test_alloc ref heap : dm ref heap (ref int) (fun p _ -> forall r h1. p r h1) = Alloc int 5 Return
+let unit_test_return : dm int (fun p h0 -> p 1 h0) = Return 1
+let unit_test_alloc  : dm (cref int) (fun p _ -> forall r h1. p r h1) = Alloc int 5 Return
 
 unfold
 let st_post_ord (#heap:Type) (p1 p2:st_post_h heap 'a) =
@@ -121,129 +131,144 @@ let closed_alloc_cont #ref #a (ig:icontext ref) (b:Type0) (v:b) (k:ref b -> free
     (requires (closed_free ig (Alloc b v k)))
     (ensures (forall r. closed_free (extend_icontext ig #b r) (k r))) = ()
 
-let trivial_wp #ref (heap:heap_t ref) a : st_wp_h heap.t a = fun p _ -> forall r h1. p r h1
+let trivial_wp a : st_wp_h heap.t a = fun p _ -> forall r h1. p r h1
 
-let fixed_wp #ref (ig:icontext ref) (heap:heap_t ref) a : st_wp_h heap.t a =
+let fixed_wp (ig:icontext cref) a : st_wp_h heap.t a =
   fun p h0 -> 
-    (forall b (r:ref b). ig r ==> h0 `heap.contains` r) /\ (** pre-cond **)
+    (forall b (r:cref b). ig r ==> h0 `heap.contains` r) /\ (** pre-cond **)
     (forall res h1. p res h1) (** post-cond **)
 
-val lift_to_dm #ref heap #a (m:free ref a) : dm ref heap a (theta heap m)
-let lift_to_dm heap m = m
+val lift_to_dm #a (m:free cref a) : dm a (theta m)
+let lift_to_dm m = m
 
-let rec lift_subcomp_lemma #ref heap #a (ig:icontext ref) (m:free ref a) : Lemma
+let rec lift_subcomp_lemma #a (ig:icontext cref) (m:free cref a) : Lemma
   (requires (closed_free ig m))
-  (ensures (theta heap m ⊑ fixed_wp ig heap a)) =
+  (ensures (theta m ⊑ fixed_wp ig a)) =
   match m with
   | Return x -> ()
   | Alloc b v k -> 
     closed_alloc_cont ig b v k;
-    introduce forall r. closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a) with begin
-      introduce closed_free (extend_icontext ig #b r) (k r) ==> (theta heap (k r) ⊑ fixed_wp (extend_icontext ig #b r) heap a)  with _. begin
-        lift_subcomp_lemma heap (extend_icontext ig #b r) (k r)
+    introduce forall r. closed_free (extend_icontext ig #b r) (k r) ==> (theta (k r) ⊑ fixed_wp (extend_icontext ig #b r) a) with begin
+      introduce closed_free (extend_icontext ig #b r) (k r) ==> (theta (k r) ⊑ fixed_wp (extend_icontext ig #b r) a)  with _. begin
+        lift_subcomp_lemma (extend_icontext ig #b r) (k r)
       end
     end;
-    assert (theta heap (Alloc b v k) ⊑ (fun p h0 -> let r, h1 = heap.alloc h0 v in theta heap (k r) p h1));
-    assert (theta heap (Alloc b v k) ⊑ fixed_wp ig heap a)
+    assert (theta (Alloc b v k) ⊑ (fun p h0 -> let r, h1 = heap.alloc h0 v in theta (k r) p h1));
+    assert (theta (Alloc b v k) ⊑ fixed_wp ig a)
   | Read b r k ->
-    introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
-      introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
-        lift_subcomp_lemma heap ig (k x)
+    introduce forall x. closed_free ig (k x) ==> (theta (k x) ⊑ fixed_wp ig a) with begin
+      introduce closed_free ig (k x) ==> (theta (k x) ⊑ fixed_wp ig a)  with _. begin
+        lift_subcomp_lemma ig (k x)
       end
     end
   | Write b r v k ->
-    introduce forall x. closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a) with begin
-      introduce closed_free ig (k x) ==> (theta heap (k x) ⊑ fixed_wp ig heap a)  with _. begin
-        lift_subcomp_lemma heap ig (k x)
+    introduce forall x. closed_free ig (k x) ==> (theta (k x) ⊑ fixed_wp ig a) with begin
+      introduce closed_free ig (k x) ==> (theta (k x) ⊑ fixed_wp ig a)  with _. begin
+        lift_subcomp_lemma ig (k x)
       end
     end
 
-val lift_subcomp #ref heap #a ig (m:free ref a) (#_:squash (closed_free ig m)) : dm ref heap a (fixed_wp ig heap a)
-let lift_subcomp #ref heap ig m #_ =
-  let m' = lift_to_dm heap m in
-  lift_subcomp_lemma heap ig m;
-  dm_subcomp #ref #heap m'
+val lift_subcomp #a ig (m:free cref a) (#_:squash (closed_free ig m)) : dm a (fixed_wp ig a)
+let lift_subcomp ig m #_ =
+  let m' = lift_to_dm m in
+  lift_subcomp_lemma ig m;
+  dm_subcomp m'
 
 
 
 
-type tgt_ctx0 (ref:Type0 -> Type0) (t t':Type)= t -> free ref t'
-type src_ctx0 (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = t -> dm ref heap t' (trivial_wp heap t')
-let bt0 #ref #heap #t #t' (ct:tgt_ctx0 ref t t') : src_ctx0 ref heap t t' =
+type tgt_ctx0 (t t':Type)= ref:(Type0 -> Type0) -> t -> free ref t'
+type src_ctx0 (t t':Type) = t -> dm t' (trivial_wp t')
+let bt0 #t #t' (ct:tgt_ctx0 t t') : src_ctx0 t t' =
   fun x ->
-    let c = ct x in
-    assume (closed_free (icontext_empty ref) c);
-    lift_subcomp heap (icontext_empty ref) c
+    let c = ct cref x in
+    assume (closed_free (icontext_empty cref) c);
+    lift_subcomp (icontext_empty cref) c
 
-type tgt_ctx0' (ref:Type0 -> Type0) (t t':Type)= ref t -> free ref t'
-type src_ctx0' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = r:ref t -> dm ref heap t' (fun p h0 -> h0 `heap.contains` r /\ (forall r' h1. p r' h1))
-let bt0' #ref #heap #t #t' (ct:tgt_ctx0' ref t t') : src_ctx0' ref heap t t' =
+type tgt_ctx0' (t t':Type)= ref:(Type0 -> Type0) -> ref t -> free ref t'
+type src_ctx0' (t t':Type) = r:cref t -> dm t' (fun p h0 -> h0 `heap.contains` r /\ (forall r' h1. p r' h1))
+let bt0' #ref #heap #t #t' (ct:tgt_ctx0' t t') : src_ctx0' t t' =
   fun r -> 
-    let c = ct r in
-    assume (closed_free (extend_icontext (icontext_empty ref) r) c);
-    lift_subcomp heap (extend_icontext (icontext_empty ref) r) c
+    let c = ct cref r in
+    assume (closed_free (extend_icontext (icontext_empty cref) r) c);
+    lift_subcomp (extend_icontext (icontext_empty cref) r) c
 
-type tgt_ctx0'' (ref:Type0 -> Type0) (t t':Type)= t -> free ref (ref t')
-type src_ctx0'' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = t -> dm ref heap (ref t') (fun p h0 -> (forall r h1. h1 `heap.contains` r ==> p r h1))
-let bt0'' #ref #heap #t #t' (ct:tgt_ctx0'' ref t t') : src_ctx0'' ref heap t t' =
+type tgt_ctx0'' (t t':Type)= ref:(Type0 -> Type0) -> t -> free ref (ref t')
+type src_ctx0'' (t t':Type) = t -> dm (cref t') (fun p h0 -> (forall r h1. h1 `heap.contains` r ==> p r h1))
+let bt0'' #t #t' (ct:tgt_ctx0'' t t') : src_ctx0'' t t' =
   fun x -> 
-    let c = ct x in
-    assume (closed_free (icontext_empty ref) c);
-    let comp = lift_subcomp heap (icontext_empty ref) c in
+    let c = ct cref x in
+    assume (closed_free (icontext_empty cref) c);
+    let comp = lift_subcomp (icontext_empty cref) c in
     admit (); (* TODO: this admit can be removed by strengthening the spec lift_to_dm lifts to *)
     comp
 
-type tgt_ctx1 (ref:Type0 -> Type0) (t t':Type) = (t -> free ref t') -> free ref unit
-type src_ctx1 (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = (t -> dm ref heap t' (trivial_wp heap t')) -> dm ref heap unit (trivial_wp heap unit)
-let bt1 #ref #heap #t #t' (ct:tgt_ctx1 ref t t') : src_ctx1 ref heap t t' =
+type tgt_ctx1 (t t':Type) = ref:(Type0 -> Type0) -> (t -> free ref t') -> free ref unit
+type src_ctx1 (t t':Type) = (t -> dm t' (trivial_wp t')) -> dm unit (trivial_wp unit)
+let bt1 #ref #heap #t #t' (ct:tgt_ctx1 t t') : src_ctx1 t t' =
   fun cb -> 
-    let c = ct cb in
-    assume (closed_free (icontext_empty ref) c);
-    lift_subcomp heap (icontext_empty ref) c
+    let c = ct cref cb in
+    assume (closed_free (icontext_empty cref) c);
+    lift_subcomp (icontext_empty cref) c
 
-type tgt_ctx1' (ref:Type0 -> Type0) (t t':Type) = (ref t -> free ref t') -> free ref unit
-type src_ctx1' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = 
-  (r:(ref t) -> dm ref heap t' (fun p h0 -> h0 `heap.contains` r /\ forall r' h1. p r' h1)) -> dm ref heap unit (trivial_wp heap unit)
-let bt1' #ref #heap #t #t' (ct:tgt_ctx1' ref t t') : src_ctx1' ref heap t t' =
+type tgt_ctx1' (t t':Type) = ref:(Type0 -> Type0) -> (ref t -> free ref t') -> free ref unit
+type src_ctx1' (t t':Type) = 
+  (r:(cref t) -> dm t' (fun p h0 -> h0 `heap.contains` r /\ forall r' h1. p r' h1)) -> dm unit (trivial_wp unit)
+let bt1' #t #t' (ct:tgt_ctx1' t t') : src_ctx1' t t' =
   fun cb ->
-    let c = ct cb in
-    assume (closed_free (icontext_empty ref) c);
-    lift_subcomp heap (icontext_empty ref) c
+    let c = ct cref cb in
+    assume (closed_free (icontext_empty cref) c);
+    lift_subcomp (icontext_empty cref) c
 
-type tgt_ctx1'' (ref:Type0 -> Type0) (t t':Type) = (t -> free ref (ref t')) -> free ref unit
-type src_ctx1'' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = 
-  (t -> dm ref heap (ref t') (fun p _ -> forall r h1. h1 `heap.contains` r ==> p r h1)) -> dm ref heap unit (trivial_wp heap unit)
-let bt1'' #ref #heap #t #t' (ct:tgt_ctx1'' ref t t') : src_ctx1'' ref heap t t' =
+type tgt_ctx1'' (t t':Type) = ref:(Type0 -> Type0) -> (t -> free ref (ref t')) -> free ref unit
+type src_ctx1'' (t t':Type) = 
+  (t -> dm (cref t') (fun p _ -> forall r h1. h1 `heap.contains` r ==> p r h1)) -> dm unit (trivial_wp unit)
+let bt1'' #t #t' (ct:tgt_ctx1'' t t') : src_ctx1'' t t' =
   fun cb ->
-    let c = ct cb in
-    assume (closed_free (icontext_empty ref) c);
-    lift_subcomp heap (icontext_empty ref) c
+    let c = ct cref cb in
+    assume (closed_free (icontext_empty cref) c);
+    lift_subcomp (icontext_empty cref) c
 
-type tgt_ctx6 (ref:Type0 -> Type0) (t t':Type) = unit -> free ref (t -> free ref t')
-type src_ctx6 (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) = unit -> dm ref heap (t -> dm ref heap t' (trivial_wp heap t')) (trivial_wp heap _)
-let bt6 #ref #heap #t #t' (ct:tgt_ctx6 ref t t') : src_ctx6 ref heap t t' =
+type tgt_ctx6 (t t':Type) = ref:(Type0 -> Type0) -> unit -> free ref (t -> free ref t')
+type src_ctx6 (t t':Type) = unit -> dm (t -> dm t' (trivial_wp t')) (trivial_wp _)
+let bt6 #t #t' (ct:tgt_ctx6 t t') : src_ctx6 t t' =
   fun () -> 
-    let c = ct () in
-    assume (closed_free (icontext_empty ref) c);
-    dm_subcomp (dm_bind (lift_subcomp heap (icontext_empty ref) c) (fun (cb:t -> free ref t') -> dm_return #ref #heap (bt0 cb)))
+    let c = ct cref () in
+    assume (closed_free (icontext_empty cref) c);
+    admit ();
+    dm_subcomp #_ #_ #(trivial_wp _) (
+      dm_bind 
+        (lift_subcomp (icontext_empty cref) c) 
+        (fun (cb:t -> free cref t') -> 
+          dm_return cb)) // <-- one has to lift this two, but under which assumption
 
-type tgt_ctx6' (ref:Type0 -> Type0) (t t':Type) = unit -> free ref (ref t -> free ref t')
-type src_ctx6' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) =
-  unit -> dm ref heap (r:(ref t) -> dm ref heap t' (fun p h0 -> h0 `heap.contains` r /\ forall r' h1. p r' h1)) (trivial_wp heap _)
-let bt6' #ref #heap #t #t' (ct:tgt_ctx6' ref t t') : src_ctx6' ref heap t t' =
+type tgt_ctx6' (t t':Type) = ref:(Type0 -> Type0) -> unit -> free ref (ref t -> free ref t')
+type src_ctx6' (t t':Type) =
+  unit -> dm (r:(cref t) -> dm t' (fun p h0 -> h0 `heap.contains` r /\ forall r' h1. p r' h1)) (trivial_wp _)
+let bt6' #t #t' (ct:tgt_ctx6' t t') : src_ctx6' t t' =
   fun () -> 
-    let c = ct () in
-    assume (closed_free (icontext_empty ref) c);
-    dm_subcomp (dm_bind (lift_subcomp heap (icontext_empty ref) (ct ())) (fun (cb:ref t -> free ref t') -> dm_return #ref #heap (bt0' cb)))
+    let c = ct cref () in
+    assume (closed_free (icontext_empty cref) c);
+    admit ();
+    dm_subcomp #_ #_ #(trivial_wp _) (
+      dm_bind 
+        (lift_subcomp (icontext_empty cref) c) 
+        (fun (cb:cref t -> free cref t') ->
+          dm_return cb)) // <-- one has to lift this two, but under which assumption
 
-type tgt_ctx6'' (ref:Type0 -> Type0) (t t':Type) = unit -> free ref (t -> free ref (ref t'))
-type src_ctx6'' (ref:Type0 -> Type0) (heap:heap_t ref) (t t':Type) =
-  unit -> dm ref heap (t -> dm ref heap (ref t') (fun p h0 -> forall r h1. h1 `heap.contains` r ==> p r h1)) (trivial_wp heap _)
-let bt6'' #ref #heap #t #t' (ct:tgt_ctx6'' ref t t') : src_ctx6'' ref heap t t' =
+type tgt_ctx6'' (t t':Type) = ref:(Type0 -> Type0) -> unit -> free ref (t -> free ref (ref t'))
+type src_ctx6'' (t t':Type) =
+  unit -> dm (t -> dm (cref t') (fun p h0 -> forall r h1. h1 `heap.contains` r ==> p r h1)) (trivial_wp _)
+let bt6'' #t #t' (ct:tgt_ctx6'' t t') : src_ctx6'' t t' =
   fun () -> 
-    let c = ct () in
-    assume (closed_free (icontext_empty ref) c);
-    dm_subcomp (dm_bind (lift_subcomp heap (icontext_empty ref) (ct ())) (fun (cb:t -> free ref (ref t')) -> dm_return #ref #heap (bt0'' cb)))
+    let c = ct cref () in
+    assume (closed_free (icontext_empty cref) c);
+    admit ();
+    dm_subcomp #_ #_ #(trivial_wp _) (
+        dm_bind 
+          (lift_subcomp (icontext_empty cref) c) 
+          (fun (cb:t -> free cref (cref t')) -> 
+            dm_return cb)) // <-- one has to lift this two, but under which assumption
 
 (** TODO:
   - [ ] Figure out if parametricity would be enough.
