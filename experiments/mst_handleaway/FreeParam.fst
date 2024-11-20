@@ -100,7 +100,7 @@ let rec closed_free #ref #a (ig:icontext ref) (m:free ref a) : Type0 =
   match m with
   | Return x -> True
   | Alloc b v k -> forall r. closed_free (extend_icontext ig #b r) (k r)
-  | Read b r k -> ig r /\ (forall r. closed_free ig (k r))
+  | Read b r k -> ig r /\ (forall x. closed_free ig (k x))
   | Write b r v k -> ig r /\ (closed_free ig (k ()))
 
 type cfree ref a = m:(free ref a){closed_free (icontext_empty ref) m}
@@ -241,7 +241,7 @@ let bt6 #t #t' (ct:tgt_ctx6 t t') : src_ctx6 t t' =
       dm_bind 
         (lift_subcomp (icontext_empty cref) c) 
         (fun (cb:t -> free cref t') -> 
-          dm_return cb)) // <-- one has to lift this two, but under which assumption
+          dm_return cb)) // <-- one has to lift this too, but under which assumption
 
 type tgt_ctx6' (t t':Type) = ref:(Type0 -> Type0) -> unit -> free ref (ref t -> free ref t')
 type src_ctx6' (t t':Type) =
@@ -255,7 +255,7 @@ let bt6' #t #t' (ct:tgt_ctx6' t t') : src_ctx6' t t' =
       dm_bind 
         (lift_subcomp (icontext_empty cref) c) 
         (fun (cb:cref t -> free cref t') ->
-          dm_return cb)) // <-- one has to lift this two, but under which assumption
+          dm_return cb)) // <-- one has to lift this too, but under which assumption
 
 type tgt_ctx6'' (t t':Type) = ref:(Type0 -> Type0) -> unit -> free ref (t -> free ref (ref t'))
 type src_ctx6'' (t t':Type) =
@@ -269,7 +269,7 @@ let bt6'' #t #t' (ct:tgt_ctx6'' t t') : src_ctx6'' t t' =
         dm_bind 
           (lift_subcomp (icontext_empty cref) c) 
           (fun (cb:t -> free cref (cref t')) -> 
-            dm_return cb)) // <-- one has to lift this two, but under which assumption
+            dm_return cb)) // <-- one has to lift this too, but under which assumption
 
 (** TODO:
   - [ ] Figure out if parametricity would be enough.
