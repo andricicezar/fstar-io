@@ -35,15 +35,16 @@ type heap_t (ref:Type0 -> Type0) = {
 }
 
 type cref a = FStar.Monotonic.Heap.mref a (fun _ _ -> True)
-type heap : heap_t cref = {
-  t = FStar.Monotonic.Heap.heap;
+assume val heap : heap_t cref
+// type heap : heap_t cref = {
+//   t = FStar.Monotonic.Heap.heap;
 
-  contains = (fun h r -> FStar.Monotonic.Heap.contains h r);
+//   contains = (fun h r -> FStar.Monotonic.Heap.contains h r);
 
-  alloc = (fun h v -> admit ());
-  select = (fun h r -> admit ());
-  update = (fun h r v -> admit ());
-}
+//   alloc = (fun h v -> admit ());
+//   select = (fun h r -> admit ());
+//   update = (fun h r v -> admit ());
+// }
 
 
 let rec theta
