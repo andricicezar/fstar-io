@@ -4,10 +4,10 @@
 
 We have three different implementations of Labeled References:
 1. Extending Monotonic State by extending the definition of the heap. (current folder, [The definition of the heap](./Labeled.Monotonic.Heap.fsti), and [the effect](./Labeled.MST.fst))
-2. [Encoding in MST](./experiments/LabelsInST.fst) (missing invariants for now)
+2. [Encoding in MST](./experiments/LabelsInST.fst) (missing invariants for now, no technical reason)
 3. [Attempt at encoding in Pulse](./experiments/shared_in_pulse/SharedInPulse.fst)
 
-You can find many examples of how shared references work in [Translation.fst](./Translation.fst) (search for Examples).
+You can find many examples of how shared references work in [TargetLang.fst](./TargetLang.fst) (search for Examples).
 The examples are written using a total effect, so one has to deal with universe problems.
 
 ### Secure Compilation Diagram

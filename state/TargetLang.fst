@@ -380,3 +380,364 @@ let mk_tgt_arrow
 = x:t1 -> ST t2 
     (requires (pre_tgt_arrow #t1 #c1 x ))
     (ensures (post_tgt_arrow #t1 #c1 #t2 #c2 x))
+
+open FStar.Universe
+
+let rec _elab_typ (t:typ) : tt:Type u#1 & witnessable tt =
+  match t with
+  | TArr t1 t2 -> begin
+    let tt1 = _elab_typ t1 in
+    let tt2 = _elab_typ t2 in
+    (| mk_tgt_arrow (dfst tt1) #(dsnd tt1) (dfst tt2) #(dsnd tt2),
+       witnessable_arrow (dfst tt1) (dfst tt2) pre_tgt_arrow post_tgt_arrow
+    |)
+  end 
+  | TUnit -> (| raise_t unit, solve |)
+  | TNat -> (| raise_t int, solve |)
+  | TSum t1 t2 ->
+    let (| tt1, c_tt1 |) = _elab_typ t1 in
+    let (| tt2, c_tt2 |) = _elab_typ t2 in
+    (| either tt1 tt2, witnessable_sum tt1 tt2 #c_tt1 #c_tt2 |)
+  | TPair t1 t2 ->
+    let (| tt1, c_tt1 |) = _elab_typ t1 in
+    let (| tt2, c_tt2 |) = _elab_typ t2 in
+    (| tt1 * tt2, witnessable_pair tt1 tt2 #c_tt1 #c_tt2 |)
+  | TRef _ ->
+    let tt = elab_typ0 t in
+    let c_tt = elab_typ0_tc t in
+    (| raise_t tt, witnessable_univ_raise _ #c_tt |)
+  | TLList t ->
+    let tt = elab_typ0 t in
+    let c_tt = elab_typ0_tc t in
+    (| raise_t (linkedList tt), witnessable_univ_raise _ #(witnessable_llist tt #c_tt) |)
+
+let elab_typ (t:typ) : Type =
+  dfst (_elab_typ t)
+
+let elab_typ_tc (t:typ) : witnessable (elab_typ t) =
+  dsnd (_elab_typ t)
+
+let eliminate_inv_low' h (a:typ0) (r:ref (elab_typ0 a)) :
+  Lemma
+    (requires (inv_points_to h is_low_pred))
+    (ensures (
+      (witnessable_ref _ #(elab_typ0_tc a)).satisfy r h is_low_pred ==> 
+        (elab_typ0_tc a).satisfy (sel h r) h is_low_pred
+    )) = eliminate_inv_low h (to_inv_typ a) r
+
+let eliminate_inv_contains' (h:lheap) (a:typ0) (r:ref (elab_typ0 a)) :
+  Lemma
+    (requires (inv_points_to h contains_pred))
+    (ensures (
+      (witnessable_ref _ #(elab_typ0_tc a)).satisfy r h contains_pred ==> 
+        (elab_typ0_tc a).satisfy (sel h r) h contains_pred
+    )) = eliminate_inv_contains h (to_inv_typ a) inv_low_contains r
+
+(** ** Elaboration of the operations **) 
+
+let elab_write (#t:typ0) (r:ref (elab_typ0 t)) (v:elab_typ0 t) 
+: IST unit
+  (requires (fun h0 -> 
+    shallowly_contained_low r #(elab_typ0_tc (TRef t)) h0 /\
+    shallowly_contained_low v #(elab_typ0_tc t) h0))
+  (ensures (fun h0 () h1 ->
+    write_post r v h0 () h1 /\
+    modifies_only_label Low h0 h1 /\
+    shallowly_contained_low r #(elab_typ0_tc (TRef t)) h1))
+= let h0 = get () in
+  write r v;
+  let h1 = get () in
+  lemma_write_preserves_is_low (to_inv_typ t) r v h0 h1;
+  lemma_write_preserves_contains (to_inv_typ t) r v h0 h1;
+  ()
+
+let declassify_low' (#t:typ0) (r:ref (elab_typ0 t)) : ST unit
+  (fun h -> (elab_typ0_tc (TRef t)).satisfy r h contains_pred /\ inv_points_to h contains_pred)
+  (fun h0 () h1 -> 
+    inv_points_to h1 contains_pred /\
+    shallowly_contained_low r #(elab_typ0_tc (TRef t)) h1 /\
+    declassify_post r Low h0 () h1)
+=
+  let h0 = get () in
+  declassify r Low;
+  let h1 = get () in
+  lemma_declassify_preserves_contains (to_inv_typ t) r h0 h1
+
+val elab_alloc (#t:typ0) (init:elab_typ0 t)
+: IST (ref (elab_typ0 t))
+  (requires (fun h0 ->
+    shallowly_contained_low init #(elab_typ0_tc t) h0))
+  (ensures (fun h0 r h1 -> 
+    fresh r h0 h1 /\ 
+    modifies Set.empty h0 h1 /\
+    modifies_classification Set.empty h0 h1 /\
+    sel h1 r == init /\
+    shallowly_contained_low r #(elab_typ0_tc (TRef t)) h1))
+let elab_alloc #t init = 
+  let h0 = get () in
+  let r : ref (elab_typ0 t) = ist_alloc init in
+  let h1 = get () in
+  declassify_low' r;
+  let h2 = get () in
+  (elab_typ0_tc t).satisfy_monotonic init is_low_pred h0 h1;
+  lemma_declassify_preserves_is_low (to_inv_typ t) r h1 h2;
+  assert (inv_points_to h2 is_low_pred);
+  r
+
+(** ** Examples **) 
+
+val ctx_update_ref_test : 
+  elab_typ (TArr (TRef TNat) TUnit)
+let ctx_update_ref_test y =
+  let y : ref int = downgrade_val y in
+  elab_write #TNat y (!y + 1);
+  raise_val ()
+
+val ctx_update_multiple_refs_test : 
+  elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
+let ctx_update_multiple_refs_test x =
+  let x : ref (ref int) = downgrade_val x in
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
+  let cb : elab_typ (TArr (TRef TNat) TUnit) = (fun y ->
+    let y : ref int = downgrade_val y in
+    let h0 = get () in
+    mst_recall (contains_pred x);
+    let ix : ref int = !x in
+    mst_recall (is_low_pred x);   
+    eliminate_inv_contains' h0 (TRef TNat) x;
+    elab_write #TNat ix (!ix + 1);
+    let h1 = get () in
+    elab_write #(TRef TNat) x y;
+    let h2 = get () in
+    elab_write #TNat y (!y + 5);
+    let h3 = get () in
+    eliminate_inv_low' h0 (TRef TNat) x;
+    lemma_modifies_only_label_trans Low h0 h1 h2;
+    lemma_modifies_only_label_trans Low h0 h2 h3;
+    assert (modifies_only_label Low h0 h3);
+    let r = raise_val () in
+    assert (shallowly_contained_low r h3);
+    assert (inv_low_contains h3);
+    assert (modifies_classification Set.empty h0 h3);
+    r
+  ) in
+  cb
+
+val ctx_HO_test1 : 
+  elab_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit))
+let ctx_HO_test1 xs =
+  let xs : ref ((ref int) * ref int) = downgrade_val xs in
+  let (x', x'') = !xs in
+  let h0 = get () in
+  eliminate_inv_contains' h0 (TPair (TRef TNat) (TRef TNat)) xs;
+  eliminate_inv_low' h0 (TPair (TRef TNat) (TRef TNat)) xs;
+  elab_write #(TPair (TRef TNat) (TRef TNat)) xs (x', x');
+  mst_witness (is_low_pred xs);
+  mst_witness (is_low_pred x');
+  mst_witness (is_low_pred x'');
+  (fun _ -> 
+    mst_recall (is_low_pred xs);
+    mst_recall (is_low_pred x');
+    mst_recall (is_low_pred x'');
+    elab_write #(TPair (TRef TNat) (TRef TNat)) xs (x', x'');
+    raise_val ())
+  
+val ctx_identity :
+  elab_typ (TArr (TRef TNat) (TRef TNat))
+let ctx_identity x = x
+
+val ctx_HO_test2 :
+  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
+let ctx_HO_test2 f =
+  let h0 = get () in
+  let x:ref int = downgrade_val (f (raise_val ())) in
+  let h1 = get () in
+  elab_write #TNat x (!x + 1);
+  let h2 = get () in
+  assert (modifies_only_label Low h0 h2);
+  raise_val ()
+
+val ctx_swap_ref_test :
+  elab_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
+let ctx_swap_ref_test x =
+  let x : ref (ref int) = downgrade_val x in
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
+  let cb : elab_typ (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
+    let y : ref (ref int) = downgrade_val y in
+    let h0 = get () in
+    mst_recall (contains_pred x);
+    mst_recall (is_low_pred x);
+    eliminate_inv_contains' h0 (TRef TNat) x;
+    eliminate_inv_low' h0 (TRef TNat) x;
+    
+    let z = !x in
+    let t = !y in
+    elab_write #(TRef TNat) x t;
+  
+    let h1 = get () in
+    elab_write #(TRef TNat) y z;
+    let h2 = get () in
+
+    assert (modifies_classification Set.empty h0 h1);
+    lemma_modifies_only_label_trans Low h0 h1 h2;
+    assert (modifies_only_label Low h0 h2); // we have an SMT Pat for this, but it does not kick in
+    assert (modifies_classification Set.empty h0 h2);
+    assert (inv_low_contains h2);
+    let r = raise_val () in
+    assert (shallowly_contained_low r h2);
+    r) in
+  cb
+
+val ctx_dynamic_alloc_test :
+   elab_typ (TArr TUnit (TRef TNat))
+let ctx_dynamic_alloc_test _ = 
+  let v = elab_alloc #TNat 0 in 
+  raise_val v
+
+val ctx_HO_test3 :
+  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
+let ctx_HO_test3 f =
+  let x:ref int = downgrade_val (f (raise_val ())) in
+  let y:ref int = elab_alloc #TNat (!x + 1) in
+  raise_val ()
+
+val ctx_returns_callback_test :
+  elab_typ (TArr TUnit (TArr TUnit TUnit))
+let ctx_returns_callback_test _ =
+  let x: ref int = elab_alloc #TNat 13 in
+  mst_witness (contains_pred x);
+  mst_witness (is_low_pred x);
+  let cb : elab_typ (TArr TUnit TUnit) = (fun _ ->
+    mst_recall (contains_pred x);
+    mst_recall (is_low_pred x);
+    elab_write #TNat x (!x % 5);
+    raise_val ()
+  ) in
+  cb
+
+val ctx_HO_test4 :
+  elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
+let ctx_HO_test4 f =
+  let x:ref int = downgrade_val (f (raise_val ())) in
+  let y:ref (ref int) = elab_alloc #(TRef TNat) x in
+  raise_val ()
+
+val progr_sep_test: 
+  #rp: ref int -> 
+  ctx:(elab_typ (TArr TUnit TUnit)) ->
+  IST unit
+    (requires (fun h0 -> 
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High))
+    (ensures (fun h0 _ h1 ->
+      sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
+         
+let progr_sep_test #rp f = (** If this test fails, it means that the spec of f does not give [automatically] separation  **)
+  downgrade_val (f (raise_val ()))
+
+val progr_declassify :
+  rp: ref int -> 
+  ctx:(elab_typ (TArr (TRef TNat) TUnit)) ->
+  IST unit
+    (requires (fun h0 -> 
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High))
+    (ensures (fun h0 _ h1 -> True))
+let progr_declassify rp f =
+  let h0 = get () in
+  declassify_low' #TNat rp;
+  let h1 = get () in
+  lemma_declassify_preserves_is_low InvT_Nat rp h0 h1;
+  let r = downgrade_val (f (raise_val rp)) in  
+  r
+
+val progr_declassify_nested:
+  rp: ref (ref int) -> 
+  ctx:(elab_typ (TArr (TRef (TRef TNat)) TUnit)) ->
+  IST unit
+    (requires (fun h0 -> 
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High))
+    (ensures (fun h0 _ h1 -> True))
+let progr_declassify_nested rp f =
+  let h0 = get () in
+  eliminate_inv_contains' h0 (TRef TNat) rp;
+
+  let p : ref int = !rp in
+  declassify_low' #TNat p;
+  let h1 = get () in
+  lemma_declassify_preserves_is_low InvT_Nat p h0 h1;
+  declassify_low' #(TRef TNat) rp;
+  let h2 = get () in
+  lemma_declassify_preserves_is_low (InvT_Ref InvT_Nat) rp h1 h2;
+  // let r = elab_alloc (!rp) in (* <-- needed a copy here! *) 
+  downgrade_val (f (raise_val rp))
+
+val progr_secret_unchanged_test: 
+  rp: ref int -> 
+  rs: ref (ref int) ->
+  ctx:(elab_typ (TArr TUnit TUnit)) ->
+  IST unit 
+    (requires (fun h0 -> 
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High /\
+      satisfy rs h0 is_low_pred))
+    (ensures (fun h0 _ h1 ->
+      sel h0 rp == sel h1 rp))
+         
+let progr_secret_unchanged_test rp rs ctx = 
+  let secret: ref int = ist_alloc #InvT_Nat 0 in
+  downgrade_val (ctx (raise_val ()));
+  let v = !secret in
+  assert (v == 0);
+  ()
+
+val progr_passing_callback_test: 
+  rp: ref int -> 
+  rs: ref (ref int) ->
+  ctx:(elab_typ (TArr (TArr TUnit TUnit) TUnit)) ->
+  IST unit 
+    (requires (fun h0 ->
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High /\
+      satisfy rs h0 is_low_pred))
+    (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
+
+// TODO: the callback of the program should be able to modify rp
+let progr_passing_callback_test rp rs f =
+  let secret: ref int = ist_alloc #InvT_Nat 0 in
+  let h0 = get () in
+  declassify_low' #TNat secret;
+  let h1 = get () in
+  lemma_declassify_preserves_is_low InvT_Nat secret h0 h1;
+  mst_witness (contains_pred secret);
+  mst_witness (is_low_pred secret);
+  let cb: elab_typ (TArr TUnit TUnit) = (fun _ -> 
+    mst_recall (contains_pred secret);
+    mst_recall (is_low_pred secret);
+    elab_write #TNat secret (!secret + 1);
+    raise_val ()) in
+  downgrade_val (f cb);
+  ()
+
+val progr_getting_callback_test: 
+  rp: ref int -> 
+  rs: ref (ref int) ->
+  ctx:(elab_typ (TArr TUnit (TArr TUnit TUnit))) ->
+  IST unit 
+    (requires (fun h0 ->
+      satisfy rp h0 contains_pred /\
+      label_of rp h0 == High /\
+      satisfy rs h0 is_low_pred))
+    (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
+let progr_getting_callback_test rp rs f =
+  let h0 = get () in
+  let cb = f (raise_val ()) in
+  let h1 = get () in
+  downgrade_val (cb (raise_val ()));
+  let h2 = get () in
+  lemma_modifies_only_label_trans Low h0 h1 h2;
+  assert (modifies_only_label Low h0 h2);
+  ()
