@@ -9,13 +9,12 @@ We have three different implementations of Labeled References:
 
 You can find many examples of how shared references work in [TargetLang.fst](./TargetLang.fst) (search for Examples).
 The examples are written using a total effect, so one has to deal with universe problems.
+The specification of unverified contexts can be found in [`mk_tgt_arrow` in TargetLang.fst](./TargetLang.fst).
 
 ### Secure Compilation Diagram
 
-The specification of unverified contexts can be found in [`mk_tgt_arrow` in TargetLang.fst](./TargetLang.fst).
-
 The compilations steps:
-1. Higher-order contracts, we did not start yet.
+1. Higher-order contracts, we did not start to implement them yet.
 2. Reify/Reflect. [There is a PoC here](./experiments/mst_reifyreflect/MSTReifyReflect.fst).
 3. DM <-> Free. [There is an attempt here](./experiments/mst_handleaway/FreeParam.fst)
 
