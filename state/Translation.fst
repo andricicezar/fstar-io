@@ -10,48 +10,6 @@ open Witnessable
 open TargetLang
 open STLC
 
-let rec to_inv_typ (t:typ0) : inv_typ =
-  match t with
-  | TUnit -> InvT_Unit
-  | TNat -> InvT_Nat
-  | TSum t1 t2 -> InvT_Sum (to_inv_typ t1) (to_inv_typ t2)
-  | TPair t1 t2 -> InvT_Pair (to_inv_typ t1) (to_inv_typ t2)
-  | TRef t -> InvT_Ref (to_inv_typ t)
-  | TLList t -> InvT_LList (to_inv_typ t)
-
-unfold
-let elab_typ0 (t:typ0) : Type u#0 = 
-  to_Type (to_inv_typ t)
-
-unfold
-let elab_typ0_tc (t:typ0) : witnessable (elab_typ0 t) =
-  to_Type_solve (to_inv_typ t)
-
-unfold let shallowly_contained_low (#a:Type) (v:a) {| c:witnessable a |} (h:lheap) =
-  c.satisfy v h contains_pred /\ c.satisfy v h is_low_pred
-
-unfold let pre_tgt_arrow
-  (#t1:Type) {| c1 : witnessable t1 |}
-  (x:t1) (h0:lheap) =
-  inv_low_contains h0 /\
-  shallowly_contained_low x #c1 h0
-
-unfold let post_tgt_arrow
-  (#t1:Type) {| c1 : witnessable t1 |}
-  (#t2:Type) {| c2 : witnessable t2 |}
-  (x:t1) (h0:lheap) (r:t2) (h1:lheap) =
-  inv_low_contains h1 /\
-  modifies_only_label Low h0 h1 /\                       (* allows low references to be modified *)
-  modifies_classification Set.empty h0 h1 /\             (* no modifications of the classification *)
-  shallowly_contained_low r #c2 h1
-
-let mk_tgt_arrow
-  (t1:Type) {| c1 : witnessable t1 |}
-  (t2:Type) {| c2 : witnessable t2 |}
-= x:t1 -> ST t2 
-    (requires (pre_tgt_arrow #t1 #c1 x ))
-    (ensures (post_tgt_arrow #t1 #c1 #t2 #c2 x))
-
 let rec _elab_typ (t:typ) : tt:Type u#1 & witnessable tt =
   match t with
   | TArr t1 t2 -> begin

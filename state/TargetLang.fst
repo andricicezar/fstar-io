@@ -7,8 +7,6 @@ open Labeled.Monotonic.Heap
 open Labeled.MST
 open Witnessable
 
-(** _elab_typ should be in translation file, but it is here because 
-    we need it to write our invariants **)
 type inv_typ =
   | InvT_Unit
   | InvT_Nat
@@ -75,11 +73,6 @@ let eliminate_inv_contains h a (hinv:lheap -> Type0) (r:ref (to_Type a)) :
       (witnessable_ref (to_Type a) #(to_Type_solve a)).satisfy r h contains_pred ==> 
         (to_Type_solve a).satisfy (sel h r) h contains_pred
     )) = ()
-
-effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
-  ST a 
-    (requires (fun h0      -> inv_low_contains h0 /\ pre h0))
-    (ensures  (fun h0 r h1 -> inv_low_contains h1 /\ post h0 r h1))
 
 let rec inversion (a:inv_typ) (xa:inv_typ) :
   Lemma
@@ -321,6 +314,12 @@ let lemma_ist_alloc_preserves_is_low t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:
   end
 
 
+effect IST (a:Type) (pre:st_pre) (post: (h:lheap -> Tot (st_post' a (pre h)))) =
+  ST a 
+    (requires (fun h0      -> inv_low_contains h0 /\ pre h0))
+    (ensures  (fun h0 r h1 -> inv_low_contains h1 /\ post h0 r h1))
+
+
 let ist_alloc (#t:inv_typ) (init:to_Type t)
 : IST (ref (to_Type t))
     (fun h -> 
@@ -333,3 +332,51 @@ let ist_alloc (#t:inv_typ) (init:to_Type t)
   lemma_ist_alloc_preserves_contains t r init h0 h1;
   lemma_ist_alloc_preserves_is_low t r init h0 h1;
   r
+
+
+open STLC
+
+let rec to_inv_typ (t:typ0) : inv_typ =
+  match t with
+  | TUnit -> InvT_Unit
+  | TNat -> InvT_Nat
+  | TSum t1 t2 -> InvT_Sum (to_inv_typ t1) (to_inv_typ t2)
+  | TPair t1 t2 -> InvT_Pair (to_inv_typ t1) (to_inv_typ t2)
+  | TRef t -> InvT_Ref (to_inv_typ t)
+  | TLList t -> InvT_LList (to_inv_typ t)
+
+(** elab_typ0 should be in translation file, but it is here because 
+    we need it to write our invariants **)
+
+unfold
+let elab_typ0 (t:typ0) : Type u#0 = 
+  to_Type (to_inv_typ t)
+
+unfold
+let elab_typ0_tc (t:typ0) : witnessable (elab_typ0 t) =
+  to_Type_solve (to_inv_typ t)
+
+unfold let shallowly_contained_low (#a:Type) (v:a) {| c:witnessable a |} (h:lheap) =
+  c.satisfy v h contains_pred /\ c.satisfy v h is_low_pred
+
+unfold let pre_tgt_arrow
+  (#t1:Type) {| c1 : witnessable t1 |}
+  (x:t1) (h0:lheap) =
+  inv_low_contains h0 /\
+  shallowly_contained_low x #c1 h0
+
+unfold let post_tgt_arrow
+  (#t1:Type) {| c1 : witnessable t1 |}
+  (#t2:Type) {| c2 : witnessable t2 |}
+  (x:t1) (h0:lheap) (r:t2) (h1:lheap) =
+  inv_low_contains h1 /\
+  modifies_only_label Low h0 h1 /\                       (* allows low references to be modified *)
+  modifies_classification Set.empty h0 h1 /\             (* no modifications of the classification *)
+  shallowly_contained_low r #c2 h1
+
+let mk_tgt_arrow
+  (t1:Type) {| c1 : witnessable t1 |}
+  (t2:Type) {| c2 : witnessable t2 |}
+= x:t1 -> ST t2 
+    (requires (pre_tgt_arrow #t1 #c1 x ))
+    (ensures (post_tgt_arrow #t1 #c1 #t2 #c2 x))

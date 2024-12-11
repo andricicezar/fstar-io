@@ -96,18 +96,18 @@ let icontext_empty ref r = False
 let extend_icontext #ref (ig:icontext ref) #b (r:ref b) : icontext ref =
   fun #b' r' -> (b == b' /\ r == r' ==> True) /\ (b =!= b' \/ r =!= r' ==> ig r')
 
-let rec closed_free #ref #a (ig:icontext ref) (m:free ref a) : Type0 =
+let rec closed_free #a (ig:icontext cref) (m:free cref a) : Type0 =
   match m with
   | Return x -> True
   | Alloc b v k -> forall r. closed_free (extend_icontext ig #b r) (k r)
   | Read b r k -> ig r /\ (forall x. closed_free ig (k x))
   | Write b r v k -> ig r /\ (closed_free ig (k ()))
 
-type cfree ref a = m:(free ref a){closed_free (icontext_empty ref) m}
+type cfree a = m:(free cref a){closed_free (icontext_empty cref) m}
 
-let test1 #ref : cfree ref unit = Return ()
-let test2 #ref : cfree ref (ref int) = Alloc int 5 Return
-let test3 #ref : cfree ref unit = 
+let test1  : cfree unit = Return ()
+let test2  : cfree (cref int) = Alloc int 5 Return
+let test3  : cfree unit = 
   Alloc int 5 (fun r -> 
     Read int r (fun x -> 
       Write int r (x + 1) Return))
@@ -117,7 +117,7 @@ let test4 (#ref:Type0 -> Type0) (r:ref int) : cfree ref unit =
   Read int r (fun x -> 
     Write int r (x + 1) Return)
 
-let test4' (#ref:Type0 -> Type0) (r:ref int) : m:(free ref unit){closed_free (extend_icontext (icontext_empty ref) r) m} = 
+let test4' (r:cref int) : m:(free cref unit){closed_free (extend_icontext (icontext_empty cref) r) m} = 
   Read int r (fun x -> 
     Write int r (x + 1) Return)
 
@@ -127,7 +127,7 @@ let test5 (#ref:Type0 -> Type0) (f:unit -> cfree ref (ref int)) : cfree ref unit
     Read int r (fun x -> 
       Write int r (x + 1) Return))
 
-let closed_alloc_cont #ref #a (ig:icontext ref) (b:Type0) (v:b) (k:ref b -> free ref a) :
+let closed_alloc_cont #a (ig:icontext cref) (b:Type0) (v:b) (k:cref b -> free cref a) :
   Lemma
     (requires (closed_free ig (Alloc b v k)))
     (ensures (forall r. closed_free (extend_icontext ig #b r) (k r))) = ()

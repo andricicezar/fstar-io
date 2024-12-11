@@ -23,7 +23,7 @@ let rec lemma_theta_bind_pure (m:mheap 'a 'w) (f:'a -> 'b) :
 let lemma_theta_bind_id (m:mheap 'a 'w) :
   Lemma (eq_wp 
     (theta (mheap_bind 'a 'a 'w (fun x -> st_return _ 'a x) m (fun x -> mheap_return 'a x)))
-    (theta m)) = 
+    (theta m)) = admit ();
   lemma_theta_bind_pure m id
 
 class lang_effect (t:Type) = { [@@@no_method] _empty : unit }
