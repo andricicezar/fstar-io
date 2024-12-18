@@ -2,7 +2,7 @@ module MST.Tot
 
 
 open FStar.Tactics
-open MST
+open MST.Repr
 open FStar.Preorder
 open FStar.Monotonic.Heap
 
