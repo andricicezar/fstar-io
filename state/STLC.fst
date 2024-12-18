@@ -7,8 +7,8 @@ open FStar.Constructive
 open FStar.Classical
 open FStar.FunctionalExtensionality
 
-(* Constructive-style progress and preservation proof for STLC with
-   strong reduction, using deBruijn indices and parallel substitution. *)
+(** STLC+Refs (+Linked Lists).
+     The type system prevents storing functions on the heap. **)
 
 type unsafe_typ =
 | TUnit   : unsafe_typ
