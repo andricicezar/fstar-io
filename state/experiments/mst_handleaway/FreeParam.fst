@@ -273,8 +273,6 @@ let bt6'' #t #t' (ct:tgt_ctx6'' t t') : src_ctx6'' t t' =
 
 (** TODO:
   - [ ] Figure out if parametricity would be enough.
-  - [ ] Doing Secure Compilation would not work because the source context has to be also parametic in the heap,
-        which would not be possible with the effect system
 
 
 **)
