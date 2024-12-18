@@ -4,7 +4,7 @@ open FStar.Tactics
 open FStar.Set
 open FStar.Preorder
 open Labeled.Monotonic.Heap
-open MST
+open MST.Repr
 
 module W = FStar.Monotonic.Witnessed
 
