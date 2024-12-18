@@ -474,3 +474,35 @@ let ctx_returns_callback_test : typing empty _ (TArr TUnit (TArr TUnit TUnit)) =
      TyAbs TUnit 
           (TyApp (TyAbs (TRef TNat) (TyAbs TUnit (TyWriteRef (TyVar 1) (TySucc (TyReadRef (TyVar 1))))))
                  (TyAllocRef TyZero))
+
+(** Cezar: landins knot should not be possible to type check in the current system **)
+(**
+let landins_knot : exp =
+     EApp
+          (EAbs (TRef (TArr TUnit TUnit)) (* r *)
+               (EApp
+                 (EAbs (TArr TUnit TUnit) (* f *)
+                    (EApp
+                         (EAbs TUnit (EApp (EVar 1) EUnit)) (* f () *)  
+                         (EWriteRef (EVar 1) (EVar 0)) (* r := f *)
+                    ))
+                 (EAbs TUnit (EApp (EReadRef (EVar 1)) EUnit)))) (* f = fun () -> r () *)
+          (EAlloc (EAbs TUnit (EVar 0))) (* alloc r (fun () -> ()) *)
+
+let ty_landins_knot : typing empty landins_knot TUnit =
+     TyApp (TyAbs (TRef (TArr TUnit TUnit))
+                  (TyApp (TyAbs (TArr TUnit TUnit) 
+                               (TyApp (TyAbs TUnit (TyApp (TyVar 1) TyUnit))
+                                       (TyWriteRef (TyVar 1) (TyVar 0))))
+                         (TyAbs TUnit (TyApp (TyReadRef (TyVar 1)) TyUnit))))
+           (TyAllocRef (TyAbs TUnit (TyVar 0)))
+**)
+
+open FStar.ST 
+
+let landins_knot_fs () : St nat = 
+  let id : nat -> St nat = fun x -> x in
+  let r : ref (nat -> St nat) = alloc id in
+  let f : nat -> St nat = (fun x -> !r x) in
+  r := f;
+  f 0
