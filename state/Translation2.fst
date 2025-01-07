@@ -2,11 +2,9 @@ module Translation2
 
 open FStar.Universe
 
-#push-options "--__no_positivity" (** because of ref . Tried to use: [@@@ strictly_positive] **)
-noeq type linkedList (ref:Type0 -> Type0) (a: Type0) : Type0 =
+noeq type linkedList (ref: (([@@@ strictly_positive] _:Type0 -> Type0))) (a: Type0) : Type0 =
 | Nil : linkedList ref a
 | Cons : v:a -> next:ref (linkedList ref a) -> linkedList ref a
-#pop-options
 
 noeq
 type free (ref:Type0 -> Type0) (a:Type u#a) : Type u#(max 1 a) = (* because of the references *)
@@ -26,7 +24,7 @@ let rec free_bind #ref (m:free ref 'a) (k:'a -> free ref 'b) : free ref 'b =
 
 open STLC
 
-let rec elab_typ0 (t:typ0) (ref:Type0 -> Type0) : Type u#0 = 
+let rec elab_typ0 (t:typ0) (ref: (([@@@ strictly_positive] _:Type0 -> Type0))) : Type u#0 = 
   match t with
   | TUnit -> unit
   | TNat -> int
@@ -35,7 +33,7 @@ let rec elab_typ0 (t:typ0) (ref:Type0 -> Type0) : Type u#0 =
   | TRef t -> ref (elab_typ0 t ref)
   | TLList t -> linkedList ref (elab_typ0 t ref)
 
-let rec elab_typ (t:typ) ref : Type u#1 =
+let rec elab_typ (t:typ) (ref: (([@@@ strictly_positive] _:Type0 -> Type0))) : Type u#1 =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = elab_typ t1 ref in
@@ -82,7 +80,7 @@ let rec downgrade_typ (#t:typ0) #ref (x:elab_typ t ref) : elab_typ0 t ref =
   end
   | _ -> downgrade_val x
 
-let downgrade (#t:typ0) #ref (m:free ref (elab_typ t ref)) : free ref (elab_typ0 t ref) =
+let downgrade (#t:typ0) (#ref: (([@@@ strictly_positive] _:Type0 -> Type0))) (m:free ref (elab_typ t ref)) : free ref (elab_typ0 t ref) =
   free_bind m (fun (x:elab_typ t ref) -> 
     free_return (downgrade_typ x))
 
@@ -101,7 +99,7 @@ let rec raise_typ #t #ref (x:elab_typ0 t ref) : elab_typ t ref =
   end
   | _ -> raise_val x
 
-let raise (#t:typ0) #ref (m:free ref (elab_typ0 t ref)) : free ref (elab_typ t ref) =
+let raise (#t:typ0) (#ref: (([@@@ strictly_positive] _:Type0 -> Type0))) (m:free ref (elab_typ0 t ref)) : free ref (elab_typ t ref) =
   free_bind m (fun (x:elab_typ0 t ref) -> 
     free_return (raise_typ x))
 
