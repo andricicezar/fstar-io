@@ -1,4 +1,4 @@
-module MST
+module MST.Repr
 
 
 open FStar.Tactics
@@ -36,13 +36,36 @@ let (⊑) #heap #a wp1 wp2 = st_stronger heap a wp2 wp1
 (** ** START Section 2: free monad **)
 noeq type tstate = {
   t: Type u#a;
+  ref : Type0 -> Type0;
+
   rel: FStar.Preorder.preorder t;
+
+  contains : #a:Type0 -> t -> ref a -> Type0;
+
+  alloc : #a:Type0 -> h0:t -> a ->
+    Pure (ref a * t) 
+      (requires True)
+      (ensures fun rh1 -> 
+        ~(h0 `contains` (fst rh1)) /\ (snd rh1) `contains` (fst rh1) /\
+        (forall b (r':ref b). h0 `contains` r' ==> (snd rh1) `contains` r'));
+  select : #a:Type0 -> h0:t -> r:ref a -> 
+    Pure a 
+      (requires h0 `contains` r) 
+      (ensures fun _ -> True);
+  update : #a:Type0 -> h0:t -> r:ref a -> v:a -> 
+    Pure t 
+      (requires h0 `contains` r)
+      (ensures fun h1 -> 
+        h0 `rel` h1 /\ (** enforcing monotonicity. is this enough? **)
+        (forall b (r':ref b). h0 `contains` r' ==> h1 `contains` r') /\
+        h1 `contains` r /\ select h1 r == v);
 }
 
 noeq
 type free (state:tstate u#s) (a:Type u#a) : Type u#(max 1 a s) =
-| Get : cont:(state.t -> free state a) -> free state a
-| Put : state.t -> cont:(unit -> free state a) -> free state a
+| Alloc : #b:Type0 -> b -> (state.ref b -> free state a) -> free state a
+| Read : #b:Type0 -> state.ref b -> (b -> free state a) -> free state a
+| Write : #b:Type0 -> state.ref b -> b -> (unit -> free state a) -> free state a
 | Witness : p:(state.t -> Type0) -> cont:(unit -> free state a) -> free state a
 | Recall : p:(state.t -> Type0) -> cont:(unit -> free state a) -> free state a
 
@@ -61,8 +84,9 @@ let rec free_bind
   free state b =
   match l with
   | Return x -> k x
-  | Get cont -> Get (fun x -> free_bind (cont x) k)
-  | Put h cont -> Put h (fun _ -> free_bind (cont ()) k)
+  | Read r cont -> Read r (fun v -> free_bind (cont v) k)
+  | Write r v cont -> Write r v (fun _ -> free_bind (cont ()) k)
+  | Alloc v cont -> Alloc v (fun r -> free_bind (cont r) k)
   | Witness pred cont -> Witness pred (fun _ -> free_bind (cont ()) k)
   | Recall pred cont -> Recall pred (fun _ -> free_bind (cont ()) k)
   | PartialCall pre fnc ->
@@ -78,12 +102,16 @@ let partial_call_wp (#state:tstate) (pre:pure_pre) : st_mwp_h state.t (squash pr
   wp'
 
 unfold
-let get_wp (#state:tstate) : st_mwp_h state.t state.t =
-  fun p h0 -> p h0 h0
+let alloc_wp (#state:tstate) #a (v:a) : st_mwp_h state.t (state.ref a) =
+  fun p h0 -> let (r, h1) = state.alloc h0 v in p r h1
 
 unfold
-let put_wp (#state:tstate) (h1:state.t) : st_mwp_h state.t unit =
-  fun p h0 -> (h0 `state.rel` h1) /\ p () h1
+let read_wp (#state:tstate) #a (r:state.ref a) : st_mwp_h state.t a =
+  fun p h0 -> h0 `state.contains` r /\ p (state.select h0 r) h0
+
+unfold
+let write_wp (#state:tstate) #a (r:state.ref a) (v:a) : st_mwp_h state.t unit =
+  fun p h0 -> h0 `state.contains` r /\ p () (state.update h0 r v)
 
 unfold
 let witness_wp (#state:tstate) (pred:state.t -> Type0) : st_mwp_h state.t unit =
@@ -99,10 +127,12 @@ let rec theta #a #state m =
   | Return x -> st_return state.t _ x
   | PartialCall pre k ->
       st_bind_wp state.t _ _ (partial_call_wp pre) (fun r -> theta (k r))
-  | Get k ->
-      st_bind_wp state.t state.t a get_wp (fun r -> theta (k r))
-  | Put h1 k ->
-      st_bind_wp state.t _ _ (put_wp h1) (fun r -> theta (k r))
+  | Alloc v k ->
+      st_bind_wp state.t _ a (alloc_wp v) (fun r -> theta (k r))
+  | Read r k ->
+      st_bind_wp state.t _ a (read_wp r) (fun v -> theta (k v))
+  | Write r v k ->
+      st_bind_wp state.t _ _ (write_wp r v) (fun _ -> theta (k ()))
   | Witness pred k ->
       st_bind_wp state.t _ _ (witness_wp pred) (fun r -> theta (k r))
   | Recall pred k ->
@@ -119,40 +149,6 @@ let rec lemma_theta_is_lax_morphism_bind
     (theta (free_bind m f) ⊑ st_bind_wp state.t a b (theta m) (fun x -> theta (f x))) = 
   match m with
   | Return x -> ()
-  | Get k -> begin
-    calc (⊑) {
-      theta (free_bind (Get k) f);
-      ⊑ {}
-      st_bind_wp state.t state.t b get_wp (fun (h:state.t) -> theta (free_bind (k h) f));
-      ⊑ { 
-          let lhs = fun r -> theta (free_bind (k r) f) in
-          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
-          introduce forall r. lhs r ⊑ rhs r with begin
-            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
-          end
-          }
-      st_bind_wp state.t state.t b get_wp (fun (h:state.t) -> st_bind_wp state.t a b (theta (k h)) (fun x -> theta (f x)));
-      ⊑ {}
-      st_bind_wp state.t a b (theta (Get k)) (fun x -> theta (f x));
-    }
-  end
-  | Put h1 k -> begin
-    calc (⊑) {
-      theta (free_bind (Put h1 k) f);
-      ⊑ {}
-      st_bind_wp state.t unit b (put_wp h1) (fun r -> theta (free_bind (k r) f));
-      ⊑ { 
-          let lhs = fun r -> theta (free_bind (k r) f) in
-          let rhs = fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)) in
-          introduce forall r. lhs r ⊑ rhs r with begin
-            lemma_theta_is_lax_morphism_bind #a #b #state (k r) f
-          end
-          }
-      st_bind_wp state.t unit b (put_wp h1) (fun r -> st_bind_wp state.t a b (theta (k r)) (fun x -> theta (f x)));
-      ⊑ {}
-      st_bind_wp state.t a b (theta (Put h1 k)) (fun x -> theta (f x));
-    }
-  end
   | Witness pred k -> begin
     calc (⊑) {
       theta (free_bind (Witness pred k) f);
@@ -204,6 +200,7 @@ let rec lemma_theta_is_lax_morphism_bind
       st_bind_wp state.t a b (theta (PartialCall pre k)) (fun x -> theta (f x));
     }
   end
+  | _ -> admit ()
 #pop-options
 (** ** END Section 3: theta **)
 
@@ -236,14 +233,17 @@ let mst_subcomp
   Pure (mst state a wp2) (requires (wp1 ⊑ wp2)) (ensures (fun _ -> True)) =
   v
 
-let partial_return state (pre:pure_pre) : mst state (squash pre) (partial_call_wp pre) =
+let mst_require #state (pre:pure_pre) : mst state (squash pre) (partial_call_wp pre) =
   PartialCall pre (Return)
 
-let mst_get #state () : mst state state.t get_wp =
-  Get Return
+let mst_alloc #state #a (v:a) : mst state (state.ref a) (alloc_wp v) =
+  Alloc v Return
 
-let mst_put #state (h1:state.t) : mst state unit (put_wp h1) =
-  Put h1 Return
+let mst_read #state #a (r:state.ref a) : mst state a (read_wp r) =
+  Read r Return
+
+let mst_write #state #a (r:state.ref a) (v:a) : mst state unit (write_wp r v) =
+  Write r v Return
 
 let mst_witness #state (pred:state.t -> Type0) : mst state unit (witness_wp pred) =
   Witness pred Return
@@ -251,40 +251,3 @@ let mst_witness #state (pred:state.t -> Type0) : mst state unit (witness_wp pred
 let mst_recall #state (pred:state.t -> Type0) : mst state unit (recall_wp pred) =
   Recall pred Return
 (** ** END Section 4: Dijkstra Monad **)
-
-(** ** START Some test **)
-let nat_state = {
-  t = nat;
-  rel = (fun x y -> x <= y == true);
-}
-
-assume val div : #state:tstate -> x:int -> y:int -> mst state int (fun p h -> y <> 0 /\ p (x/y) h)
-
-
-// put(get() + 1); witness (fun s -> s > 0); let f () = recall (fun s -> s > 0); 1 / get() in f () 0
-
-let f () : mst nat_state int (fun p h0 -> W.witnessed nat_state.rel (fun s -> s > 0) /\ (forall r. p r h0)) =
-  (mst_get ())
-  `mst_bind`
-  (fun h -> 
-    (mst_recall (fun s -> s > 0))
-    `mst_bind`
-    (fun () ->
-      (1 `div` h)))
-
-(* We can build non-monotonic syntax, but it won't be in mst effect *)
-let test_not_in_mst () : free nat_state int =
-  (mst_get ())
-  `free_bind`
-  (fun h0 -> 
-    (mst_put (h0 + 1))
-    `free_bind`
-    (fun () -> 
-      mst_witness (fun s -> s > 0)
-      `free_bind`
-      (fun () -> 
-        (Put 0 (fun _ -> f ())))))
-
-[@expect_failure]
-let test_not_in_mst' () : mst nat_state int (fun p h0 -> forall r h1. p r h1) =
-  test_not_in_mst ()
