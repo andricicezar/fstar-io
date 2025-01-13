@@ -9,7 +9,7 @@ type myref a =
 type fo_ctx =
   // fl:erased tflag -> (** we don't have flag yets for ST **)
   #inv:(heap -> Type0) -> (** invariant on the heap **)
-  #prref:((#a:Type0) -> myref a -> Type0) -> (** predicate that refines references **)
+  #prref:((#a:Type0) -> ref a -> Type0) -> (** predicate that refines references **)
   read : ((#a:Type0) -> x:ref a -> ST a (fun h0 -> inv h0 /\ prref x) (fun _ _ h1 -> inv h1)) ->
   write : ((#a:Type0) -> x:ref a -> v:a -> ST unit (fun h0 -> inv h0 /\ prref x) (fun _ _ h1 -> inv h1)) ->
   alloc : ((#a:Type0) -> init:a -> ST (ref a) (fun h0 -> inv h0) (fun _ r h1 -> inv h1 /\ prref r)) ->
