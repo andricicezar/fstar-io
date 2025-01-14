@@ -9,24 +9,25 @@ open STLC
 (** for the very general idea, look into experiments/FlagBasedEffPoly.fst **)
 
 type fo_ctx =
-  // fl:erased tflag -> (** we don't have flag yets for ST **)
+  // fl:erased tflag -> (** we don't have flag yets for ST **) 
   #inv:(lheap -> Type0) -> (** invariant on the heap **)
   #prref: (#a:Type -> #rel:_ -> mref a rel -> Type0) ->
+  #hrel:(FStar.Preorder.preorder lheap) -> (** because of the hrel, we may not need the flag because even if the context uses operations directly, it cannot prove that it preserves the hrel**)
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  read :  ((#t:typ0) -> x:ref (elab_typ0 t) -> 
+  read :  ((#t:typ0) -> r:ref (elab_typ0 t) -> 
             ST (elab_typ0 t) 
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref))
-              (ensures  (fun h0 r h1 -> h0 == h1 /\ sel h1 x == r /\ (elab_typ0_tc t).satisfy_refinement r prref))) ->
-  write : ((#t:typ0) -> x:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
+              (requires (fun h0 -> inv h0 /\ prref r))
+              (ensures  (fun h0 v h1 -> h0 == h1 /\ sel h1 r == v /\ (elab_typ0_tc t).satisfy_refinement v prref /\ h0 `hrel` h1))) ->
+  write : ((#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
             ST unit
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref /\ (elab_typ0_tc t).satisfy_refinement v prref))
-              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 x == v /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc t).satisfy_refinement v prref))
+              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 r == v /\ h0 `hrel` h1))) ->
   alloc : ((#t:typ0) -> init:(elab_typ0 t) -> 
             ST (ref (elab_typ0 t)) 
               (requires (fun h0 -> inv h0 /\ (elab_typ0_tc t).satisfy_refinement init prref))
-              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ (elab_typ0_tc (TRef t)).satisfy_refinement r prref /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ prref r /\ h0 `hrel` h1))) ->
   (** type of the context: *)
-  unit -> ST unit (inv) (fun h0 _ h1 -> inv h1 /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1)
+  unit -> ST unit (inv) (fun h0 _ h1 -> inv h1 /\ h0 `hrel` h1)
 
 (** Checking if there exists read, write, alloc so that we can instantiate the polymorphic context **)
 
@@ -40,6 +41,7 @@ let check_instantiating_the_context (ctx:fo_ctx) =
   ctx
     #(fun h -> inv_low_contains h)
     #(fun r -> witnessed (contains_pred r) /\ witnessed (is_low_pred' r)) 
+    #(fun h0 h1 -> modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1)
     (fun #t r -> (* READ *)
       let h0 = get () in
       mst_recall (contains_pred r); 
@@ -53,10 +55,12 @@ let check_instantiating_the_context (ctx:fo_ctx) =
       mst_recall (contains_pred r); 
       mst_recall (is_low_pred r); 
       let h0 = get () in
+      assert ((elab_typ0_tc t).satisfy_refinement v (fun r' -> witnessed (contains_pred r') /\ witnessed (is_low_pred' r')));
       assume (shallowly_contained_low v #(elab_typ0_tc t) h0); (** one has to recall on v. a method on witnessable, that given a `witnessed pred`, returns a `satisfy pred`. **)
       elab_write r v)
     (fun #t init -> (* ALLOC *)
       let h0 = get () in
+      assert ((elab_typ0_tc t).satisfy_refinement init (fun r' -> witnessed (contains_pred r') /\ witnessed (is_low_pred' r')));
       assume (shallowly_contained_low init #(elab_typ0_tc t) h0); (** one has to recall on init **)
       let r = elab_alloc init in 
       mst_witness (contains_pred r); mst_witness (is_low_pred r);
@@ -73,25 +77,25 @@ let ctx_update_ref_test my_read my_write my_alloc () =
   ()
 
 type ho_ctx1 = (** only the type of the context is different **)
-  // fl:erased tflag ->
   #inv:(lheap -> Type0) -> (** invariant on the heap **)
   #prref: (#a:Type -> #rel:_ -> mref a rel -> Type0) ->
-  read :  ((#t:typ0) -> x:ref (elab_typ0 t) -> 
+  #hrel:(FStar.Preorder.preorder lheap) ->
+  read :  ((#t:typ0) -> r:ref (elab_typ0 t) -> 
             ST (elab_typ0 t) 
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref))
-              (ensures  (fun h0 r h1 -> h0 == h1 /\ sel h1 x == r /\ (elab_typ0_tc t).satisfy_refinement r prref))) ->
-  write : ((#t:typ0) -> x:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
+              (requires (fun h0 -> inv h0 /\ prref r))
+              (ensures  (fun h0 v h1 -> h0 == h1 /\ sel h1 r == v /\ (elab_typ0_tc t).satisfy_refinement v prref /\ h0 `hrel` h1))) ->
+  write : ((#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
             ST unit
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref /\ (elab_typ0_tc t).satisfy_refinement v prref))
-              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 x == v /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc t).satisfy_refinement v prref))
+              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 r == v /\ h0 `hrel` h1))) ->
   alloc : ((#t:typ0) -> init:(elab_typ0 t) -> 
             ST (ref (elab_typ0 t)) 
               (requires (fun h0 -> inv h0 /\ (elab_typ0_tc t).satisfy_refinement init prref))
-              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ (elab_typ0_tc (TRef t)).satisfy_refinement r prref /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ prref r /\ h0 `hrel` h1))) ->
   (** type of the context: *)
-  rr:ref (ref int) -> ST (r:ref int -> ST unit (fun h0 -> inv h0 /\ satisfy_refinement r prref) (fun h0 _ h1 -> inv h1 /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))
-    (requires (fun h0 -> inv h0 /\ satisfy_refinement rr prref))
-    (ensures  (fun h0 _ h1 -> inv h1 /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))
+  rr:ref (ref int) -> ST (r:ref int -> ST unit (fun h0 -> inv h0 /\ prref r) (fun h0 _ h1 -> inv h1 /\ hrel h0 h1))
+    (requires (fun h0 -> inv h0 /\ prref rr))
+    (ensures  (fun h0 _ h1 -> inv h1 /\ hrel h0 h1))
 
 val ctx_update_multiple_refs_test : ho_ctx1
 let ctx_update_multiple_refs_test my_read my_write my_alloc x y =
@@ -102,25 +106,26 @@ let ctx_update_multiple_refs_test my_read my_write my_alloc x y =
 
 
 type ho_ctx2 =
-  // fl:erased tflag ->
   #inv:(lheap -> Type0) -> (** invariant on the heap **)
   #prref: (#a:Type -> #rel:_ -> mref a rel -> Type0) ->
-  read :  ((#t:typ0) -> x:ref (elab_typ0 t) -> 
+  #hrel:(FStar.Preorder.preorder lheap) -> (** because of the hrel, we may not need the flag because even if the context uses operations directly, it cannot prove that it preserves the hrel**)
+  (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
+  read :  ((#t:typ0) -> r:ref (elab_typ0 t) -> 
             ST (elab_typ0 t) 
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref))
-              (ensures  (fun h0 r h1 -> h0 == h1 /\ sel h1 x == r /\ (elab_typ0_tc t).satisfy_refinement r prref))) ->
-  write : ((#t:typ0) -> x:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
+              (requires (fun h0 -> inv h0 /\ prref r))
+              (ensures  (fun h0 v h1 -> h0 == h1 /\ sel h1 r == v /\ (elab_typ0_tc t).satisfy_refinement v prref /\ h0 `hrel` h1))) ->
+  write : ((#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) -> 
             ST unit
-              (requires (fun h0 -> inv h0 /\ (elab_typ0_tc (TRef t)).satisfy_refinement x prref /\ (elab_typ0_tc t).satisfy_refinement v prref))
-              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 x == v /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc t).satisfy_refinement v prref))
+              (ensures  (fun h0 _ h1 -> inv h1 /\ sel h1 r == v /\ h0 `hrel` h1))) ->
   alloc : ((#t:typ0) -> init:(elab_typ0 t) -> 
             ST (ref (elab_typ0 t)) 
               (requires (fun h0 -> inv h0 /\ (elab_typ0_tc t).satisfy_refinement init prref))
-              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ (elab_typ0_tc (TRef t)).satisfy_refinement r prref /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))) ->
+              (ensures  (fun h0 r h1 -> inv h1 /\ sel h1 r == init /\ prref r /\ h0 `hrel` h1))) ->
   (** type of the context: *)
-  rr:ref ((ref int) * (ref int)) -> ST (unit -> ST unit (fun h0 -> inv h0) (fun h0 _ h1 -> inv h1 /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))
-    (requires (fun h0 -> inv h0 /\ satisfy_refinement rr prref))
-    (ensures  (fun h0 _ h1 -> inv h1 /\ modifies_only_label Low h0 h1 /\ modifies_classification Set.empty h0 h1))
+  rr:ref ((ref int) * (ref int)) -> ST (unit -> ST unit (fun h0 -> inv h0) (fun h0 _ h1 -> inv h1 /\ h0 `hrel` h1))
+    (requires (fun h0 -> inv h0 /\ prref rr))
+    (ensures  (fun h0 _ h1 -> inv h1 /\ h0 `hrel` h1))
 
 val ctx_HO_test1 : ho_ctx2
 let ctx_HO_test1 #inv #prref my_read my_write my_alloc rr =
