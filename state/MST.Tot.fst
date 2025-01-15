@@ -69,6 +69,10 @@ effect {
      }
 }
 
+effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
+  STATEwp a (fun (p:st_post a) (h:heap) -> pre h /\ (forall a h1. post h a h1 ==> p a h1))
+effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
+
 unfold
 let wp_lift_pure_st (w : pure_wp 'a) : st_wp 'a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
@@ -95,51 +99,52 @@ let put (h1:heap) : STATEwp unit (put_wp #heap_state h1) =
   STATEwp?.reflect (mst_put h1)
 
 type heap_predicate = heap -> Type0
+type heap_predicate_stable = pred:heap_predicate{stable pred}
 
 [@@"opaque_to_smt"]
-let witnessed (pred:heap_predicate{stable pred}) : Type0 = W.witnessed heap_state.rel pred
-
-let witness (pred:heap_predicate) : STATEwp unit (fun p h -> pred h /\ stable pred /\ (witnessed pred ==> p () h)) = 
-  STATEwp?.reflect (mst_witness pred)
-
-let recall (pred:heap_predicate{stable pred}) : STATEwp unit (fun p h -> witnessed pred /\ (pred h ==> p () h)) = 
-  STATEwp?.reflect (mst_recall pred)
-
-(** *** From here it is mostly a COPY-PASTE from FStar.ST **)
-effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
-  STATEwp a (fun (p:st_post a) (h:heap) -> pre h /\ (forall a h1. post h a h1 ==> p a h1))
-effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
-
+let witnessed (pred:heap_predicate_stable) : Type0 = W.witnessed heap_state.rel pred
 
 let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) = fun h -> h `contains` r
 
 type mref (a:Type0) (rel:preorder a) =
-  r:Heap.mref a rel{is_mm r = false /\ witnessed (contains_pred r)}
+  r:Heap.mref a rel{is_mm r = false}
+
+let witness (pred:heap_predicate) : STATEwp unit (fun p h -> pred h /\ stable pred /\ (witnessed pred ==> p () h)) = 
+  STATEwp?.reflect (mst_witness pred)
+
+let recall (pred:heap_predicate_stable) : STATEwp unit (fun p h -> witnessed pred /\ (pred h ==> p () h)) = 
+  STATEwp?.reflect (mst_recall pred)
+
+let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
+  h0 `heap_rel` h1 /\
+  fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\
+  h1 == upd h0 r init /\ is_mm r == false /\
+  addr_of r == next_addr h0 /\
+  next_addr h1 > next_addr h0
 
 let alloc (#a:Type) (#rel:preorder a) (init:a) :
   ST (mref a rel)
       (fun h -> True)
-      (fun h0 r h1 -> fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init)
+      (alloc_post init)
   = let h0 = get () in
     let r, h1 = alloc rel h0 init false in
+    assume (next_addr h0 < next_addr h1);
     put h1;
     witness (contains_pred r);
     r
 
-let read (#a:Type) (#rel:preorder a) (r:mref a rel) :STATEwp a (fun p h -> p (sel h r) h)
+let read (#a:Type) (#rel:preorder a) (r:mref a rel) :STATEwp a (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
   = let h0 = get () in
-    recall (contains_pred r);
     Heap.lemma_sel_equals_sel_tot_for_contained_refs h0 r;
     sel_tot h0 r
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
-    (fun h -> rel (sel h r) v)
+    (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
                  modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
                  sel h1 r == v)
   = let h0 = get () in
-    recall (contains_pred r);
     let h1 = upd_tot h0 r v in
     Heap.lemma_distinct_addrs_distinct_preorders ();
     Heap.lemma_distinct_addrs_distinct_mm ();
@@ -147,15 +152,19 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
     put h1
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
-  : STATEwp a (fun p h -> p (sel h r) h)
+  : STATEwp a (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
-    (fun h -> rel (sel h r) v)
+    (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
                  modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
                  sel h1 r == v)
 = write #a #rel r v
 
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
+
+noeq type linkedList (a: Type0) : Type0 =
+| LLNil : linkedList a
+| LLCons : v:a -> next:ref (linkedList a) -> linkedList a

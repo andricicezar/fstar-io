@@ -1,24 +1,31 @@
 module SharedRefs
 
-open FStar.Tactics
-
-open FStar.Preorder
-open FStar.Monotonic.Heap
-open FStar.Ghost
-open MST.Tot
-
-private
+private (** TODO: is this necessary? **)
 let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
   alloc (fun _ -> false)
 
-(** In practice, one hides secret_map from the verified program and only exposes `shareS`. **)
+private
+let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
+    h `contains` secret_map /\ (** this contains is necessary to show that is_shared is a stable predicate **)
+    (sel h secret_map) (addr_of r)) 
+
+private
+let unmodified_map_implies_same_shared_status (ms:Set.set nat) (h0 h1:heap) : 
+    Lemma (h0 `contains` secret_map /\ h0 `heap_rel` h1 /\ ~(addr_of secret_map `Set.mem` ms) /\ modifies ms h0 h1 ==> 
+      (forall #a #rel (r:mref a rel). is_shared r h0 <==> is_shared r h1)) = 
+    introduce h0 `contains` secret_map /\ h0 `heap_rel` h1 /\ ~(addr_of secret_map `Set.mem` ms) /\ modifies ms h0 h1 ==> (forall #a #rel (r:mref a rel). is_shared r h0 <==> is_shared r h1) with _. begin
+      introduce forall a rel (r:mref a rel). is_shared r h0 <==> is_shared r h1 with begin
+        introduce is_shared r h0 ==> is_shared r h1 with _. ();
+        introduce is_shared r h1 ==> is_shared r h0 with _. ()
+      end
+    end  
 
 let shareS : sigT = {
   map_shared = secret_map;
-  // is_shared = (fun #a #p r h -> addr_of r < next_addr h /\ (sel h secret_map) (addr_of r));
-  is_shared = (fun #a #p r h -> h `contains` secret_map /\ (** this contains is necessary to show that is_shared is a stable predicate **)
-                             (sel h secret_map) (addr_of r));
-  is_shared_stable = (fun #a r -> ());
+  is_shared = is_shared;
+  fresh_ref_not_shared = (fun #a #rel r h -> ());
+  unmodified_map_implies_same_shared_status = unmodified_map_implies_same_shared_status;
+  same_addr_same_sharing_status = (fun ra rb h -> ());
   share = (fun #a #p sr -> 
     let h0 = get () in
     assume (addr_of sr < next_addr h0);(** should come from contains **)
@@ -46,31 +53,7 @@ let is_shared_stable #a r : Lemma (stable (shareS.is_shared r)) [SMTPat (shareS.
     compute ();
     binder_retype (nth_binder 6); compute (); trefl ();
     dump "H"
-  )**)**)
-
-unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}
-                               h0 `contains` r ==> h1 `contains` r) /\
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)}
-                               r `unused_in` h1 ==> r `unused_in` h0) /\
-  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) }
-    n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
-let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
-    (h0 `contains` r /\ ~(shareS.is_shared r h0)) ==> sel h0 r == sel h1 r) /\
-  unmodified_common h0 h1
-
-effect IST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
-  ST a 
-    (requires (fun h0      -> 
-      h0 `contains` shareS.map_shared /\ 
-      ~(shareS.is_shared (shareS.map_shared) h0) /\ (* the map stays unshared *)
-      (forall p. p >= next_addr h0 ==> ~(sel h0 shareS.map_shared p)) /\
-      pre h0))
-    (ensures  (fun h0 r h1 -> 
-      ~(shareS.is_shared (shareS.map_shared) h1) /\
-      (forall p. p >= next_addr h1 ==> ~(sel h1 shareS.map_shared p)) /\
-      post h0 r h1))
+  )**)
 
 val progr_sep_test: 
   #rp: ref int -> 
@@ -188,3 +171,4 @@ let progr_getting_callback_test rp rs f =
   let cb = f () in
   cb ();
   ()
+**)
