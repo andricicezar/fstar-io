@@ -70,7 +70,7 @@ effect {
 }
 
 effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
-  STATEwp a (fun (p:st_post a) (h:heap) -> pre h /\ (forall a h1. post h a h1 ==> p a h1))
+  STATEwp a (fun (p:st_post a) (h0:heap) -> pre h0 /\ (forall a h1. h0 `heap_rel` h1 /\ post h0 a h1 ==> p a h1))
 effect St (a:Type) = ST a (fun h -> True) (fun h0 r h1 -> True)
 
 unfold
@@ -116,7 +116,6 @@ let recall (pred:heap_predicate_stable) : STATEwp unit (fun p h -> witnessed pre
   STATEwp?.reflect (mst_recall pred)
 
 let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
-  h0 `heap_rel` h1 /\
   fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\
   h1 == upd h0 r init /\ is_mm r == false /\
   addr_of r == next_addr h0 /\
