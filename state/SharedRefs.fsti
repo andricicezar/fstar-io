@@ -168,21 +168,10 @@ effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
       (forall p. p >= next_addr h1 ==> ~(sel h1 shareS.map_shared p)) /\
       post h0 r h1))
 
-let eliminate_ctrans_ref_pred (h:heap) a (r:ref (to_Type a)) (pred:ref_heap_stable_pred) :
+let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:ref_heap_stable_pred) :
   Lemma
-    (requires (ctrans_ref_pred h pred))
-    (ensures (h `contains` r /\ pred r h ==> forallRefsHeap pred h (sel h r)
-    )) = ()
-
-let eliminate_ctrans_ref_shared h #t (r:ref (to_Type t)) :
-  Lemma
-    (requires (ctrans_ref_pred h shareS.is_shared /\ h `contains` r /\ shareS.is_shared r h))
-    (ensures (forallRefsHeap shareS.is_shared h (sel h r))) = ()
-
-let eliminate_ctrans_ref_contains h #t (r:ref (to_Type t)) :
-  Lemma
-    (requires (ctrans_ref_pred h contains_pred))
-    (ensures (contains_pred r h ==> forallRefsHeap contains_pred h (sel h r))) = ()
+    (requires (ctrans_ref_pred h pred /\ h `contains` r /\ pred r h))
+    (ensures (forallRefsHeap pred h (sel h r))) = ()
 
 let rec inversion (a:sharable_typ) (xa:sharable_typ) :
   Lemma
@@ -291,7 +280,7 @@ let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
     introduce contains_pred r h1 ==> forallRefsHeap contains_pred h1 (sel h1 r)
     with _. begin
       introduce addr_of r =!= addr_of shareS.map_shared ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_pred h0 a r contains_pred;
+        eliminate_ctrans_ref_pred h0 r contains_pred;
         assert (h0 `contains` r);
         forallRefsHeap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
@@ -321,7 +310,7 @@ let lemma_sst_share_preserves_shared t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
   with begin
     introduce h1 `contains` r /\ shareS.is_shared r h1 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
       introduce shareS.is_shared r h0 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_shared h0 r;
+        eliminate_ctrans_ref_pred h0 r (shareS.is_shared);
         forallRefsHeap_monotonic shareS.is_shared h0 h1 (sel h0 r);
         assert (forallRefsHeap shareS.is_shared h1 (sel h0 r));
         assert (addr_of r =!= addr_of shareS.map_shared);
