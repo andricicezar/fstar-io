@@ -207,7 +207,7 @@ let lemma_sst_alloc_preserves_contains t (x:ref (to_Type t)) (v:to_Type t) (h0 h
     introduce contains_pred r h1 ==> forallRefsHeap contains_pred h1 (sel h1 r)
     with _. begin
       introduce addr_of r =!= addr_of x ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_pred h0 a r contains_pred;
+        eliminate_ctrans_ref_pred h0 r contains_pred;
         assert (h0 `contains` r);
         forallRefsHeap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
@@ -239,7 +239,7 @@ let lemma_sst_alloc_preserves_shared t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:
         shareS.unmodified_map_implies_same_shared_status Set.empty h0 h1;
         eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
         lemma_unused_upd_contains h0 x v r;
-        eliminate_ctrans_ref_pred h0 a r shareS.is_shared;
+        eliminate_ctrans_ref_pred h0 r shareS.is_shared;
         forallRefsHeap_monotonic shareS.is_shared h0 h1 (sel h0 r)
       end;
       introduce addr_of x == addr_of r ==> False with _. begin
@@ -346,6 +346,7 @@ let sst_share (#t:sharable_typ) (r:ref (to_Type t))
   lemma_sst_share_preserves_shared t r h0 h1;
   assert (ctrans_ref_pred h1 shareS.is_shared)
 
+#push-options "--split_queries always"
 let sst_alloc_shared (#t:sharable_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forallRefsHeap contains_pred h0 init /\ forallRefsHeap shareS.is_shared h0 init)
@@ -353,10 +354,12 @@ let sst_alloc_shared (#t:sharable_typ) (init:to_Type t)
       fresh r h0 h1 /\ 
       sel h1 r == init /\
       is_mm r == false /\
-      addr_of r == next_addr h0 /\
-      next_addr h1 > next_addr h0 /\
+ //     addr_of r == next_addr h0 /\
+ //     next_addr h1 > next_addr h0 /\
       modifies !{shareS.map_shared} h0 h1 /\
-      (forall b (r':ref b). h0 `contains` r' ==> (shareS.is_shared r' h0 <==> shareS.is_shared r' h1)) /\
+
+      (forall b (r':ref b). shareS.is_shared r' h0 ==> shareS.is_shared r' h1) /\
+      (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1)) /\
       shareS.is_shared r h1
       )
 =
@@ -364,9 +367,19 @@ let sst_alloc_shared (#t:sharable_typ) (init:to_Type t)
   let r = sst_alloc init in
   let h1 = get () in
   forallRefsHeap_monotonic shareS.is_shared h0 h1 init;
+  shareS.unmodified_map_implies_same_shared_status Set.empty h0 h1;
   sst_share r;
-  admit ();
+  let h2 = get () in
+  assert (fresh r h0 h2);
+  assert (addr_of r =!= addr_of shareS.map_shared);
+  assert (sel h2 r == init);
+  assert (is_mm r == false);
+  assert (modifies !{shareS.map_shared} h0 h2);
+  assert (shareS.is_shared r h2);
+  assert (forall b (r':ref b). shareS.is_shared r' h0 ==> shareS.is_shared r' h1);
+  assert (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1));
   r
+#pop-options
 
 let _ = () 
 
