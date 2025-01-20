@@ -28,12 +28,12 @@ let shareS : sigT = {
   same_addr_same_sharing_status = (fun ra rb h -> ());
   share = (fun #a #p sr -> 
     let h0 = get () in
-    assume (addr_of sr < next_addr h0);(** should come from contains **)
+    lemma_next_addr_contained_refs_addr h0 sr;
     let m = !secret_map in
     let m' = (fun p -> if p = addr_of sr then true else m p) in
     secret_map := m';
     let h1 = get () in
-    assume (next_addr h0 <= next_addr h1)(** Should come from write **)
+    lemma_next_addr_upd_tot h0 secret_map m'
   );
 }
 

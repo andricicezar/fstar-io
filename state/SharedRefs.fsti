@@ -272,6 +272,71 @@ let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
     end
   end
 
+let lemma_sst_write_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
+  (requires (
+    h0 `heap_rel` h1 /\
+    write_post x v h0 () h1 /\
+    h0 `contains` x /\
+    forallRefsHeap contains_pred h0 v /\
+    ctrans_ref_pred h0 contains_pred))
+  (ensures (
+    ctrans_ref_pred h1 contains_pred)) =
+  introduce forall a (r:ref (to_Type a)). h1 `contains` r ==> forallRefsHeap contains_pred h1 (sel h1 r)
+  with begin
+    introduce h1 `contains` r ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
+      assert (equal_dom h0 h1);
+      introduce addr_of r =!= addr_of x ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
+        eliminate_ctrans_ref_pred h0 r contains_pred; 
+        forallRefsHeap_monotonic contains_pred h0 h1 (sel h0 r)
+      end;
+      introduce addr_of r == addr_of x ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
+        lemma_sel_same_addr h1 r x;
+        inversion t a;
+        assert (sel h1 r == sel h1 x);
+        forallRefsHeap_monotonic contains_pred h0 h1 v
+      end
+    end
+  end
+
+#push-options "--split_queries always"
+let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
+  (requires (
+    h0 `contains` shareS.map_shared /\
+    addr_of x =!= addr_of shareS.map_shared /\
+    h0 `heap_rel` h1 /\
+    write_post x v h0 () h1 /\
+    h0 `contains` x /\
+    (shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v) /\
+    ctrans_ref_pred h0 shareS.is_shared))
+  (ensures (
+    ctrans_ref_pred h1 shareS.is_shared)) =
+  introduce forall a (r:ref (to_Type a)). h1 `contains` r /\ shareS.is_shared r h1 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r)
+  with begin
+    introduce h1 `contains` r /\ shareS.is_shared r h1 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
+      assert (equal_dom h0 h1);
+      introduce addr_of r =!= addr_of x ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
+        shareS.unmodified_map_implies_same_shared_status !{x} h0 h1;
+        eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
+        assert (shareS.is_shared r h0);
+        eliminate_ctrans_ref_pred h0 r shareS.is_shared; 
+        forallRefsHeap_monotonic shareS.is_shared h0 h1 (sel h0 r)
+      end;
+      introduce addr_of r == addr_of x ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
+        lemma_sel_same_addr h1 r x;
+        inversion t a;
+        assert (sel h1 r == sel h1 x);
+        shareS.unmodified_map_implies_same_shared_status !{x} h0 h1;
+        eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
+        shareS.same_addr_same_sharing_status r x h0; 
+        assert (shareS.is_shared r h0);
+        assert (shareS.is_shared x h0);
+        eliminate shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v with _;
+        forallRefsHeap_monotonic shareS.is_shared h0 h1 v
+      end
+    end
+  end
+#pop-options
+
 #push-options "--split_queries always"
 let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
   (requires (
@@ -355,15 +420,11 @@ let sst_alloc_shared (#t:sharable_typ) (init:to_Type t)
       fresh r h0 h1 /\ 
       sel h1 r == init /\
       is_mm r == false /\
- //     addr_of r == next_addr h0 /\
- //     next_addr h1 > next_addr h0 /\
       modifies !{shareS.map_shared} h0 h1 /\
 
       (forall b (r':ref b). shareS.is_shared r' h0 ==> shareS.is_shared r' h1) /\
       (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1)) /\
-      shareS.is_shared r h1
-      )
-=
+      shareS.is_shared r h1) =
   let h0 = get () in
   let r = sst_alloc init in
   let h1 = get () in
@@ -381,72 +442,6 @@ let sst_alloc_shared (#t:sharable_typ) (init:to_Type t)
   assert (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1));
   r
 #pop-options
-
-let lemma_sst_write_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
-  (requires (
-    h0 `heap_rel` h1 /\
-    write_post x v h0 () h1 /\
-    h0 `contains` x /\
-    forallRefsHeap contains_pred h0 v /\
-    ctrans_ref_pred h0 contains_pred))
-  (ensures (
-    ctrans_ref_pred h1 contains_pred)) =
-  introduce forall a (r:ref (to_Type a)). h1 `contains` r ==> forallRefsHeap contains_pred h1 (sel h1 r)
-  with begin
-    introduce h1 `contains` r ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
-      assert (equal_dom h0 h1);
-      introduce addr_of r =!= addr_of x ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_pred h0 r contains_pred; 
-        forallRefsHeap_monotonic contains_pred h0 h1 (sel h0 r)
-      end;
-      introduce addr_of r == addr_of x ==> forallRefsHeap contains_pred h1 (sel h1 r) with _. begin
-        lemma_sel_same_addr h1 r x;
-        inversion t a;
-        assert (sel h1 r == sel h1 x);
-        forallRefsHeap_monotonic contains_pred h0 h1 v
-      end
-    end
-  end
-
-#push-options "--split_queries always"
-let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
-  (requires (
-    h0 `contains` shareS.map_shared /\
-    addr_of x =!= addr_of shareS.map_shared /\
-    h0 `heap_rel` h1 /\
-    write_post x v h0 () h1 /\
-    h0 `contains` x /\
-    (shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v) /\
-    ctrans_ref_pred h0 shareS.is_shared))
-  (ensures (
-    ctrans_ref_pred h1 shareS.is_shared)) =
-  introduce forall a (r:ref (to_Type a)). h1 `contains` r /\ shareS.is_shared r h1 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r)
-  with begin
-    introduce h1 `contains` r /\ shareS.is_shared r h1 ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
-      assert (equal_dom h0 h1);
-      introduce addr_of r =!= addr_of x ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
-        shareS.unmodified_map_implies_same_shared_status !{x} h0 h1;
-        eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
-        assert (shareS.is_shared r h0);
-        eliminate_ctrans_ref_pred h0 r shareS.is_shared; 
-        forallRefsHeap_monotonic shareS.is_shared h0 h1 (sel h0 r)
-      end;
-      introduce addr_of r == addr_of x ==> forallRefsHeap shareS.is_shared h1 (sel h1 r) with _. begin
-        lemma_sel_same_addr h1 r x;
-        inversion t a;
-        assert (sel h1 r == sel h1 x);
-        shareS.unmodified_map_implies_same_shared_status !{x} h0 h1;
-        eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
-        shareS.same_addr_same_sharing_status r x h0; 
-        assert (shareS.is_shared r h0);
-        assert (shareS.is_shared x h0);
-        eliminate shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v with _;
-        forallRefsHeap_monotonic shareS.is_shared h0 h1 v
-      end
-    end
-  end
-#pop-options
-
 
 #push-options "--split_queries always"
 let sst_write (#t:sharable_typ) (r:ref (to_Type t)) (v:to_Type t)

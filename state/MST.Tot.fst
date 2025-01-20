@@ -162,9 +162,7 @@ let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
-    (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
-                 modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
-                 sel h1 r == v)
+    (write_post r v)
 = write #a #rel r v
 
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
