@@ -416,9 +416,7 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
     h0 `heap_rel` h1 /\
     write_post x v h0 () h1 /\
     h0 `contains` x /\
-    shareS.is_shared x h0 /\
-    shareS.is_shared x h1 /\
-    forallRefsHeap shareS.is_shared h0 v /\
+    (shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v) /\
     ctrans_ref_pred h0 shareS.is_shared))
   (ensures (
     ctrans_ref_pred h1 shareS.is_shared)) =
@@ -437,6 +435,12 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
         lemma_sel_same_addr h1 r x;
         inversion t a;
         assert (sel h1 r == sel h1 x);
+        shareS.unmodified_map_implies_same_shared_status !{x} h0 h1;
+        eliminate forall a rel (r:mref a rel). shareS.is_shared r h0 <==> shareS.is_shared r h1 with _ _ r;
+        shareS.same_addr_same_sharing_status r x h0; 
+        assert (shareS.is_shared r h0);
+        assert (shareS.is_shared x h0);
+        eliminate shareS.is_shared x h0 ==> forallRefsHeap shareS.is_shared h0 v with _;
         forallRefsHeap_monotonic shareS.is_shared h0 h1 v
       end
     end
@@ -448,15 +452,12 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
 let sst_write (#t:sharable_typ) (r:ref (to_Type t)) (v:to_Type t)
 : SST unit
   (requires (fun h0 -> 
-    h0 `contains` r /\ shareS.is_shared r h0 /\ 
-    forallRefsHeap contains_pred h0 v /\ forallRefsHeap shareS.is_shared h0 v))
-  (ensures (fun h0 () h1 ->
-    write_post r v h0 () h1 /\
-    shareS.is_shared r h1)) =
+    h0 `contains` r /\ forallRefsHeap contains_pred h0 v /\ 
+    (shareS.is_shared r h0 ==> forallRefsHeap shareS.is_shared h0 v)))
+  (ensures (write_post r v)) =
   let h0 = get () in
   write r v;
   let h1 = get () in
-  assert (shareS.is_shared r h1);
   assert (write_post r v h0 () h1);
   lemma_sst_write_preserves_contains r v h0 h1;
   lemma_sst_write_preserves_shared r v h0 h1;
