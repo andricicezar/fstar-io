@@ -137,12 +137,17 @@ let read (#a:Type) (#rel:preorder a) (r:mref a rel) :STATEwp a (fun p h0 -> h0 `
     Heap.lemma_sel_equals_sel_tot_for_contained_refs h0 r;
     sel_tot h0 r
 
+let write_post #a #rel (r:mref a rel) (v:a) h0 () h1 : Type0 =
+  h0 `contains` r /\
+  h1 == upd_tot h0 r v /\
+  rel (sel h0 r) v /\
+  modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
+  sel h1 r == v
+
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
-    (fun h0 x h1 -> rel (sel h0 r) v /\ h0 `contains` r /\
-                 modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
-                 sel h1 r == v)
+    (write_post #a #rel r v)
   = let h0 = get () in
     let h1 = upd_tot h0 r v in
     Heap.lemma_distinct_addrs_distinct_preorders ();
