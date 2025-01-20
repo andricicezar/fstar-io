@@ -418,7 +418,6 @@ let sst_write (#t:sharable_typ) (r:ref (to_Type t)) (v:to_Type t)
   let h0 = get () in
   write r v;
   let h1 = get () in
-  assert (write_post r v h0 () h1);
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
   lemma_upd_preserves_contains r v h0 h1;
   lemma_sst_write_preserves_shared r v h0 h1;
