@@ -182,12 +182,6 @@ let rec inversion (a:sharable_typ) (xa:sharable_typ) :
   | SNat -> ()
   | _ -> admit ()
 
-let read (#t:sharable_typ) (r:ref (to_Type t)) 
-  : SST (to_Type t) 
-        (requires (fun h0 -> h0 `contains` r))
-        (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
-  MST.Tot.read r
-  
 let lemma_sst_alloc_preserves_contains t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
@@ -250,20 +244,6 @@ let lemma_sst_alloc_preserves_shared t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:
     end
   end
 #pop-options
-
-let sst_alloc (#t:sharable_typ) (init:to_Type t)
-: SST (ref (to_Type t))
-    (fun h0 -> forallRefsHeap contains_pred h0 init)
-    (fun h0 r h1 -> alloc_post #(to_Type t) init h0 r h1 /\  ~(shareS.is_shared r h1))
-=
-  let h0 = get () in
-  let r = alloc init in
-  let h1 = get () in
-  shareS.fresh_ref_not_shared r h0;
-  shareS.unmodified_map_implies_same_shared_status Set.empty h0 h1;
-  lemma_sst_alloc_preserves_contains t r init h0 h1;
-  lemma_sst_alloc_preserves_shared t r init h0 h1;
-  r
   
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
@@ -331,6 +311,26 @@ let lemma_sst_share_preserves_shared t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
   end
 #pop-options
 
+let sst_read (#t:sharable_typ) (r:ref (to_Type t)) 
+  : SST (to_Type t) 
+        (requires (fun h0 -> h0 `contains` r))
+        (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
+  MST.Tot.read r
+
+let sst_alloc (#t:sharable_typ) (init:to_Type t)
+: SST (ref (to_Type t))
+    (fun h0 -> forallRefsHeap contains_pred h0 init)
+    (fun h0 r h1 -> alloc_post #(to_Type t) init h0 r h1 /\  ~(shareS.is_shared r h1))
+=
+  let h0 = get () in
+  let r = alloc init in
+  let h1 = get () in
+  shareS.fresh_ref_not_shared r h0;
+  shareS.unmodified_map_implies_same_shared_status Set.empty h0 h1;
+  lemma_sst_alloc_preserves_contains t r init h0 h1;
+  lemma_sst_alloc_preserves_shared t r init h0 h1;
+  r
+  
 
 let sst_share (#t:sharable_typ) (r:ref (to_Type t)) 
 : SST unit
@@ -411,25 +411,4 @@ let declassify_low' (#t:typ0) (r:ref (elab_typ0 t)) : ST unit
   declassify r Low;
   let h1 = get () in
   lemma_declassify_preserves_contains (to_sharable_typ t) r h0 h1
-
-val elab_alloc (#t:typ0) (init:elab_typ0 t)
-: SST (ref (elab_typ0 t))
-  (requires (fun h0 ->
-    shallowly_contained_low init #(elab_typ0_tc t) h0))
-  (ensures (fun h0 r h1 -> 
-    fresh r h0 h1 /\ 
-    modifies Set.empty h0 h1 /\
-    modifies_classification Set.empty h0 h1 /\
-    sel h1 r == init /\
-    shallowly_contained_low r #(elab_typ0_tc (TRef t)) h1))
-let elab_alloc #t init = 
-  let h0 = get () in
-  let r : ref (elab_typ0 t) = ist_alloc init in
-  let h1 = get () in
-  declassify_low' r;
-  let h2 = get () in
-  (elab_typ0_tc t).satisfy_monotonic init is_low_pred h0 h1;
-  lemma_declassify_preserves_is_low (to_sharable_typ t) r h1 h2;
-  assert (inv_points_to h2 is_low_pred);
-  r
 **)
