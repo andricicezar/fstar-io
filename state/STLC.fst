@@ -13,7 +13,7 @@ open FStar.FunctionalExtensionality
 type unsafe_typ =
 | TUnit   : unsafe_typ
 | TNat    : unsafe_typ
-| TArr    : int:unsafe_typ -> out:unsafe_typ -> unsafe_typ (* TArr is in universe 1 *)
+| TArr    : _in:unsafe_typ -> _out:unsafe_typ -> unsafe_typ (* TArr is in universe 1 *)
 | TSum    : lt:unsafe_typ -> rt:unsafe_typ -> unsafe_typ
 | TPair   : unsafe_typ -> unsafe_typ -> unsafe_typ
 | TRef    : unsafe_typ -> unsafe_typ                (* TRef is in universe 0 *)
