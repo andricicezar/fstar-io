@@ -28,15 +28,17 @@ let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel
 noeq
 type sigT = {
   map_shared : erased map_sharedT;
-  is_shared : pred:ref_heap_stable_pred;
+  is_shared : ref_heap_stable_pred;
  // is_shared_implies_contained : #a:_ -> #rel:_ -> r:mref a rel -> h:heap -> Lemma (is_shared r h ==> h `contains` r);
-  fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap -> Lemma (
-    (forall p. p >= next_addr h ==> ~((sel h map_shared) p)) /\ (addr_of r >= next_addr h) ==> ~(is_shared r h));
+  fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap -> 
+    Lemma (requires (forall p. p >= next_addr h ==> ~((sel h map_shared) p)) /\ (addr_of r >= next_addr h))
+          (ensures (~(is_shared r h)));
   unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -> h1:heap -> 
     Lemma (requires (h0 `contains` map_shared /\ h0 `heap_rel` h1 /\ ~(addr_of map_shared `Set.mem` s) /\ modifies s h0 h1))
           (ensures (forall #a #rel (r:mref a rel). is_shared r h0 <==> is_shared r h1));
   same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ -> ra:mref aa rela -> rb:mref b relb -> h:heap ->
-    Lemma (addr_of ra == addr_of rb ==> (is_shared ra h <==> is_shared rb h));
+    Lemma (requires (addr_of ra == addr_of rb))
+          (ensures (is_shared ra h <==> is_shared rb h));
   share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
     ST unit 
       (requires (fun h0 -> 
