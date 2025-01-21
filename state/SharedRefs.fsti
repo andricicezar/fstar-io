@@ -52,29 +52,24 @@ type sigT = {
 val shareS : sigT
 
 unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}  (** CA: why is this here? this is from heap_rel **)
                                h0 `contains` r ==> h1 `contains` r) /\
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)}
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)} (** CA: probably this can be proven from heap_rel too *)
                                r `unused_in` h1 ==> r `unused_in` h0) /\
-  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) }
+  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) } (** CA: ditto **)
     n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
 
 let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
-    (h0 `contains` r /\ addr_of r =!= addr_of shareS.map_shared /\ ~(shareS.is_shared r h0)) ==> sel h0 r == sel h1 r /\ ~(shareS.is_shared r h1)) /\
+    (h0 `contains` r /\ ~(compare_addrs r shareS.map_shared) /\ ~(shareS.is_shared r h0)) ==> sel h0 r == sel h1 r) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (shareS.is_shared r h1)} 
+    (h0 `contains` r /\ ~(shareS.is_shared r h0)) ==> ~(shareS.is_shared r h1)) /\
   unmodified_common h0 h1
 
-let lemma_trans_modofies_only_shared (h0:heap) (h1:heap) (h2:heap) :
+let lemma_trans_modifies_only_shared (h0:heap) (h1:heap) (h2:heap) :
   Lemma
     (requires (h0 `heap_rel` h1 /\ h1 `heap_rel` h2 /\ modifies_only_shared h0 h1 /\ modifies_only_shared h1 h2))
-    (ensures (modifies_only_shared h0 h2)) = 
-  assert (unmodified_common h0 h2);
-  introduce forall (a:Type) (rel:preorder a) (r:mref a rel). 
-    (h0 `contains` r /\ addr_of r =!= addr_of shareS.map_shared /\ ~(shareS.is_shared r h0)) ==> sel h0 r == sel h2 r with begin
-      introduce h0 `contains` r /\ addr_of r =!= addr_of shareS.map_shared /\ ~(shareS.is_shared r h0) ==> sel h0 r == sel h2 r with _. begin
-      ()
-    end
-  end
+    (ensures (modifies_only_shared h0 h2)) = ()
 
 type shareable_typ =
   | SUnit
@@ -429,6 +424,7 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
   assert (modifies !{shareS.map_shared} h0 h2);
   assert (shareS.is_shared r h2);
   assert (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1));
+  assert (unmodified_common h0 h2);
   assume (modifies_only_shared h0 h2);
   r
 #pop-options
@@ -454,6 +450,16 @@ let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
   lemma_next_addr_upd_tot h0 r v;
   assert (next_addr h0 == next_addr h1);
   assert (forall p. p >= next_addr h1 ==> ~(sel h1 shareS.map_shared p));
-  assume (shareS.is_shared r h0 ==> modifies_only_shared h0 h1);
+  introduce shareS.is_shared r h0 ==> modifies_only_shared h0 h1 with _. begin
+    introduce forall (a:Type) (rel:preorder a) (r':mref a rel).
+    (h0 `contains` r' /\ ~(compare_addrs r' shareS.map_shared) /\ ~(shareS.is_shared r' h0)) ==> sel h0 r' == sel h1 r' with begin
+      introduce _ ==> _ with _. begin
+        introduce addr_of r == addr_of r' ==> False with _. shareS.same_addr_same_sharing_status r r' h0;
+        introduce addr_of r =!= addr_of r' ==> sel h0 r' == sel h1 r' with _. assert (modifies !{r} h0 h1);
+        assert (sel h0 r' == sel h1 r')
+      end
+    end;
+    ()
+  end;
   ()
 #pop-options
