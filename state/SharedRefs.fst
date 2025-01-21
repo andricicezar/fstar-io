@@ -1,8 +1,12 @@
 module SharedRefs
 
+(**
 private (** TODO: is this necessary? **)
 let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
   alloc (fun _ -> false)
+**)
+(** Popular vote for this, instead of the top-level effectful call **)
+assume val secret_map : map_sharedT
 
 private
 let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
