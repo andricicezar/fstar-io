@@ -20,7 +20,7 @@ let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
     ~(is_shared (map_shared) h1) /\
-    (forall b (r:ref b). ~(is_shared r h0) /\ ~(compare_addrs r sr) ==> ~(is_shared r h1)) /\
+    (forall b rel (r:mref b rel). ~(is_shared r h0) /\ ~(compare_addrs r sr) ==> ~(is_shared r h1)) /\
     (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
     is_shared sr h1
 
@@ -45,13 +45,7 @@ type sigT = {
         ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
         ~(is_shared map_shared h0) /\
         (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p)))) (** necessary to prove that freshly allocated references are not shared **)
-      (ensures (fun h0 () h1 -> 
-        equal_dom h0 h1 /\
-        modifies !{map_shared} h0 h1 /\
-        ~(is_shared (map_shared) h1) /\
-        (forall b (r:ref b). ~(is_shared r h0) /\ ~(compare_addrs r sr) ==> ~(is_shared r h1)) /\
-        (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
-        is_shared sr h1))
+      (ensures (share_post map_shared is_shared #a #p sr))
       
  //     share_post map_shared is_shared #a #p sr))
 }
@@ -337,8 +331,7 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
     h0 `contains` x /\
     forallRefsHeap shareS.is_shared h0 (sel h0 x) /\
     shareS.is_shared x h1 /\
-    (forall b (r:ref b). shareS.is_shared r h0 ==> shareS.is_shared r h1) /\
-    (forall b (r:ref b). ~(shareS.is_shared r h0) /\ ~(compare_addrs r x) ==> ~(shareS.is_shared r h1)) /\
+    (forall b rel (r:mref b rel). ~(shareS.is_shared r h0) /\ ~(compare_addrs r x) ==> ~(shareS.is_shared r h1)) /\
     (forall p. p >= next_addr h1 ==> ~(sel h1 shareS.map_shared p)) /\
     ctrans_ref_pred h0 shareS.is_shared))
   (ensures (
@@ -380,7 +373,7 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
     (fun h0 r h1 -> 
       alloc_post #(to_Type t) init h0 r h1 /\ 
       ~(shareS.is_shared r h1) /\
-      (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ h0 `contains` r' ==> ~(shareS.is_shared r' h1)))
+      (forall b rel (r':mref b rel). ~(shareS.is_shared r' h0) /\ h0 `contains` r' ==> ~(shareS.is_shared r' h1)))
 =
   let h0 = get () in
   let r = alloc init in
@@ -414,7 +407,7 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
       sel h1 r == init /\
       is_mm r == false /\
       modifies !{shareS.map_shared} h0 h1 /\
-      (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1)) /\
+      (forall b rel (r':mref b rel). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1)) /\
       modifies_only_shared h0 h1 /\
       shareS.is_shared r h1) =
   let h0 = get () in
@@ -430,25 +423,12 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
   assert (is_mm r == false);
   assert (modifies !{shareS.map_shared} h0 h2);
   assert (shareS.is_shared r h2);
-  assert (forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1));
+  assert (forall b rel (r':mref b rel). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h1));
   assert (unmodified_common h0 h2);
   assert (forall (a:Type) (rel:preorder a) (r:mref a rel). 
     (h0 `contains` r /\ ~(compare_addrs r shareS.map_shared) /\ ~(shareS.is_shared r h0)) ==> sel h0 r == sel h2 r);
-  introduce forall (a:Type) (rel:preorder a) (r':mref a rel). 
-    (h0 `contains` r' /\ ~(shareS.is_shared r' h0)) ==> ~(shareS.is_shared r' h2) with begin
-    introduce (h0 `contains` r' /\ ~(shareS.is_shared r' h0)) ==> _ with _. begin
-      introduce compare_addrs r' r ==> False with _. assert (fresh r h0 h2);
-      introduce ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h2) with _. begin
-        // I think the problem is the relation
-        admit ();
-        eliminate forall b (r':ref b). ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h2) with a r';
-        eliminate ~(shareS.is_shared r' h0) /\ ~(compare_addrs r' r) ==> ~(shareS.is_shared r' h2) with (
-          assert (~(shareS.is_shared r' h0));
-          assert (~(compare_addrs r' r))
-        )
-      end
-    end
-  end;
+  assert (forall (a:Type) (rel:preorder a) (r':mref a rel). 
+    (h0 `contains` r' /\ ~(shareS.is_shared r' h0)) ==> ~(shareS.is_shared r' h2));
   r
 #pop-options
 
