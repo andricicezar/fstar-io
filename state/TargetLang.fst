@@ -42,8 +42,8 @@ unfold let post_tgt_arrow
   (#t2:Type) {| c2 : witnessable t2 |}
   (x:t1) =
   sst_post t2 (pre_tgt_arrow #t1 #c1 x) (fun h0 r h1 -> 
-    modifies_only_shared h0 h1 /\     (* allows shared references to be modified and to alloc new reference and share them *)
     gets_shared Set.empty h0 h1 /\
+    modifies_only_shared h0 h1 /\     (* allows shared references to be modified and to alloc new reference and share them *)
     c2.satisfy r h1 contains_pred /\
     c2.satisfy r h1 is_shared)
 
@@ -55,7 +55,7 @@ let mk_tgt_arrow
     (ensures (post_tgt_arrow #t1 #c1 #t2 #c2 x))
 
 let rec lemma_123 (#t:typ0) (v:elab_typ0 t) h pred :
-  Lemma ((elab_typ0_tc t).satisfy v h pred <==> forallRefsHeap pred h #(to_shareable_typ t) v) 
+  Lemma ((elab_typ0_tc t).satisfy v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v) 
   // [SMTPat ((elab_typ0_tc t).satisfy v h pred); SMTPat (forallRefsHeap pred h #(to_shareable_typ t) v)]
   by (compute ()) =
   match t with
@@ -71,12 +71,12 @@ let rec lemma_123 (#t:typ0) (v:elab_typ0 t) h pred :
      let v : (elab_typ0 t1) * (elab_typ0 t2) = v in
      lemma_123 (fst v) h pred;
      lemma_123 (snd v) h pred;
-     assert ((elab_typ0_tc t).satisfy v h pred <==> forallRefsHeap pred h #(to_shareable_typ t) v)
+     assert ((elab_typ0_tc t).satisfy v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v)
   end
   | TRef t' -> 
     let aux (#t':typ0) (v:elab_typ0 (TRef t')) : ref (elab_typ0 t') = v in
     let v : ref (elab_typ0 t') = aux v in
-    assert ((elab_typ0_tc t).satisfy v h pred <==> forallRefsHeap pred h #(to_shareable_typ t) v) by (compute ())
+    assert ((elab_typ0_tc t).satisfy v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v) by (compute ())
   | TLList t' -> begin
     let aux (#t':typ0) (v:elab_typ0 (TLList t')) : linkedList (elab_typ0 t') = v in
     let v : linkedList (elab_typ0 t') = aux v in
@@ -85,7 +85,7 @@ let rec lemma_123 (#t:typ0) (v:elab_typ0 t) h pred :
     | LLCons v' xsref -> (
       lemma_123 v' h pred;
       let xsref : ref (linkedList (elab_typ0 t')) = xsref in
-      assert ((elab_typ0_tc t).satisfy v h pred <==> forallRefsHeap pred h #(to_shareable_typ t) v))
+      assert ((elab_typ0_tc t).satisfy v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v))
   end
 
 open FStar.Universe
@@ -130,7 +130,7 @@ val ctx_update_ref_test :
   elab_typ (TArr (TRef TNat) TUnit)
 let ctx_update_ref_test y =
   let y : ref int = downgrade_val y in
-  sst_write #SNat y (sst_read y + 1);
+  sst_write y (sst_read y + 1);
   raise_val ()
 
 val ctx_update_multiple_refs_test : 
@@ -175,7 +175,6 @@ val ctx_HO_test2 :
 let ctx_HO_test2 f =
   let x:ref int = downgrade_val (f (raise_val ())) in
   sst_write #SNat x (!x + 1);
-  admit ();
   raise_val ()
 
 val ctx_swap_ref_test :
