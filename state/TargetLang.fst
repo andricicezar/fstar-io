@@ -43,6 +43,7 @@ unfold let post_tgt_arrow
   (x:t1) =
   sst_post t2 (pre_tgt_arrow #t1 #c1 x) (fun h0 r h1 -> 
     modifies_only_shared h0 h1 /\     (* allows shared references to be modified and to alloc new reference and share them *)
+    gets_shared Set.empty h0 h1 /\
     c2.satisfy r h1 contains_pred /\
     c2.satisfy r h1 is_shared)
 
@@ -172,9 +173,9 @@ let ctx_identity x = x
 val ctx_HO_test2 :
   elab_typ (TArr (TArr TUnit (TRef TNat)) TUnit)
 let ctx_HO_test2 f =
-  let h0 = get () in
   let x:ref int = downgrade_val (f (raise_val ())) in
   sst_write #SNat x (!x + 1);
+  admit ();
   raise_val ()
 
 val ctx_swap_ref_test :

@@ -8,7 +8,7 @@ let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `
 (** Popular vote for this, instead of the top-level effectful call **)
 assume val secret_map : map_sharedT
 
-let map_shared = FStar.Ghost.hide secret_map (** CA: this is also effectful **)
+let map_shared = FStar.Ghost.hide secret_map
 
 let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` secret_map /\ (** this contains is necessary to show that is_shared is a stable predicate **)
