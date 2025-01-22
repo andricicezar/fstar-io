@@ -531,9 +531,8 @@ let sst_write' #a (r:ref a) (v:a)
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
   introduce (exists t. to_Type t == a) ==> trans_shared_contains h1 with _. begin
     eliminate exists t. to_Type t == a returns _ with _. begin
-        to_Type_injective ();
-        lemma_upd_preserves_contains #t r v h0 h1;
-        lemma_sst_write_preserves_shared #t r v h0 h1
+      lemma_upd_preserves_contains #t r v h0 h1;
+      lemma_sst_write_preserves_shared #t r v h0 h1
     end
   end;
   introduce (forall t. ~(to_Type t == a)) ==> trans_shared_contains h1 with _. begin
