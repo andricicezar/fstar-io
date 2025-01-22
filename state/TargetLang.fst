@@ -35,7 +35,7 @@ unfold let pre_tgt_arrow
   (x:t1) =
   sst_pre (fun h0 ->
     c1.satisfy x h0 contains_pred /\
-    c1.satisfy x h0 shareS.is_shared)
+    c1.satisfy x h0 is_shared)
 
 unfold let post_tgt_arrow
   (#t1:Type) {| c1 : witnessable t1 |}
@@ -44,7 +44,7 @@ unfold let post_tgt_arrow
   sst_post t2 (pre_tgt_arrow #t1 #c1 x) (fun h0 r h1 -> 
     modifies_only_shared h0 h1 /\     (* allows shared references to be modified and to alloc new reference and share them *)
     c2.satisfy r h1 contains_pred /\
-    c2.satisfy r h1 shareS.is_shared)
+    c2.satisfy r h1 is_shared)
 
 let mk_tgt_arrow
   (t1:Type) {| c1 : witnessable t1 |}
@@ -137,12 +137,12 @@ val ctx_update_multiple_refs_test :
 let ctx_update_multiple_refs_test x =
   let x : ref (ref int) = downgrade_val x in
   witness (contains_pred x);
-  witness (shareS.is_shared x);
+  witness (is_shared x);
   let cb : elab_typ (TArr (TRef TNat) TUnit) = (fun y ->
     let y : ref int = downgrade_val y in
     recall (contains_pred x);
     let ix : ref int = sst_read #(SRef SNat) x in
-    recall (shareS.is_shared x);   
+    recall (is_shared x);   
     sst_write #SNat ix (sst_read ix + 1);
     sst_write #(SRef SNat) x y;
     sst_write #SNat y (sst_read y + 5);
@@ -158,10 +158,10 @@ let ctx_HO_test1 xs =
   let (x', x'') : (ref int) * ref int = sst_read #(SPair (SRef SNat) (SRef SNat)) xs in
   sst_write #(SPair (SRef SNat) (SRef SNat)) xs (x', x');
   witness (contains_pred xs); witness (contains_pred x'); witness (contains_pred x'');
-  witness (shareS.is_shared xs); witness (shareS.is_shared x'); witness (shareS.is_shared x'');
+  witness (is_shared xs); witness (is_shared x'); witness (is_shared x'');
   (fun _ -> 
     recall (contains_pred xs); recall (contains_pred x'); recall (contains_pred x'');
-    recall (shareS.is_shared xs); recall (shareS.is_shared x'); recall (shareS.is_shared x'');
+    recall (is_shared xs); recall (is_shared x'); recall (is_shared x'');
     sst_write #(SPair (SRef SNat) (SRef SNat)) xs (x', x'');
     raise_val ())
   
@@ -182,11 +182,11 @@ val ctx_swap_ref_test :
 let ctx_swap_ref_test x =
   let x : ref (ref int) = downgrade_val x in
   witness (contains_pred x);
-  witness (shareS.is_shared x);
+  witness (is_shared x);
   let cb : elab_typ (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
     let y : ref (ref int) = downgrade_val y in
     recall (contains_pred x);
-    recall (shareS.is_shared x);
+    recall (is_shared x);
     
     let z = sst_read x in
     let t = sst_read y in
@@ -215,10 +215,10 @@ val ctx_returns_callback_test :
 let ctx_returns_callback_test _ =
   let x: ref int = sst_alloc_shared #SNat 13 in
   witness (contains_pred x);
-  witness (shareS.is_shared x);
+  witness (is_shared x);
   let cb : elab_typ (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred x);
-    recall (shareS.is_shared x);
+    recall (is_shared x);
     sst_write #SNat x (sst_read x % 5);
     raise_val ()
   ) in
@@ -238,7 +238,7 @@ val progr_sep_test:
   SST unit
     (requires (fun h0 -> 
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0)))
+      ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
          
@@ -251,7 +251,7 @@ val progr_declassify :
   SST unit
     (requires (fun h0 -> 
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0)))
+      ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
   let h0 = get () in
@@ -266,7 +266,7 @@ val progr_declassify_nested:
   SST unit
     (requires (fun h0 -> 
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0)))
+      ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
   let p : ref int = sst_read #(SRef SNat) rp in
@@ -282,8 +282,8 @@ val progr_secret_unchanged_test:
   SST unit 
     (requires (fun h0 -> 
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0) /\
-      satisfy rs h0 shareS.is_shared))
+      ~(is_shared rp h0) /\
+      satisfy rs h0 is_shared))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
          
@@ -302,8 +302,8 @@ val progr_passing_callback_test:
   SST unit 
     (requires (fun h0 ->
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0) /\
-      satisfy rs h0 shareS.is_shared))
+      ~(is_shared rp h0) /\
+      satisfy rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 
 // TODO: the callback of the program should be able to modify rp
@@ -311,10 +311,10 @@ let progr_passing_callback_test rp rs f =
   let secret: ref int = sst_alloc #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret);
-  witness (shareS.is_shared secret);
+  witness (is_shared secret);
   let cb: elab_typ (TArr TUnit TUnit) = (fun _ -> 
     recall (contains_pred secret);
-    recall (shareS.is_shared secret);
+    recall (is_shared secret);
     sst_write #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
@@ -327,8 +327,8 @@ val progr_getting_callback_test:
   SST unit 
     (requires (fun h0 ->
       satisfy rp h0 contains_pred /\
-      ~(shareS.is_shared rp h0) /\
-      satisfy rs h0 shareS.is_shared))
+      ~(is_shared rp h0) /\
+      satisfy rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
 let progr_getting_callback_test rp rs f =
   let cb = f (raise_val ()) in
