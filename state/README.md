@@ -22,16 +22,16 @@ Back-translations:
 
 ### Assumptions
 
-- [ ] Inverison Lemma in [TargetLang.fst](./TargetLang.fst).
-- [ ] Strict Positivity in translation from STLC to Free ([here](./Translation2.fst)). 
-- [ ] The behavior of the computation remains unchanged after applying reflect and reify. ([Lemma `lemma_reify_reflect`](./experiments/mst_reifyreflect/MSTReifyReflect.fst))
+- [ ] Inverison Lemma in [SharedRefs.fsti](./SharedRefs.fsti).
+~~- [ ] Strict Positivity in translation from STLC to Free ([here](./Translation2.fst)).~~
+~~- [ ] The behavior of the computation remains unchanged after applying reflect and reify. ([Lemma `lemma_reify_reflect`](./experiments/mst_reifyreflect/MSTReifyReflect.fst))~~
 
 ### TODOs
 
-- [ ] Refactor code to use encoding at the user-level
+- [x] Refactor code to use encoding at the user-level
     - [ ] Optional: Try to do an encoding of shared references in Separation Logic (e.g., Pulse)
 - [ ] Optional: generalize MST to use PCMs, and then MST is a specialization of that
-- [ ] Refactor target contexts to use polymorphic specs
+- [x] Refactor target contexts to use polymorphic specs
     - [ ] Optional: Use parametricity to show that it only uses the read/write/alloc functions passed as argument
 - [ ] Figure out how to erase the ghost reference
     - [ ] CA: the most basic idea is to have a Free Monad with Read, Write, and implement a handler than removes those nodes that write to the top-level reference
