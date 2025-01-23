@@ -10,10 +10,6 @@ assume val secret_map : map_sharedT
 
 let map_shared = FStar.Ghost.hide secret_map
 
-let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
-    h `contains` secret_map /\ (** this contains is necessary to show that is_shared is a stable predicate **)
-    (sel h secret_map) (addr_of r)) 
-
 let share = (fun #a #p sr -> 
     let h0 = get () in
     lemma_next_addr_contained_refs_addr h0 sr;

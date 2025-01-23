@@ -16,10 +16,6 @@ type ref_heap_stable_pred =
 type map_sharedT = 
   mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> forall p. m0 p ==> m1 p) (** pre-order necessary to show that the predicate `is_shared` is stable **)
 
-unfold
-let forall_mref (pred:ref_pred) =
-  forall a rel (r:mref a rel). pred #a #rel r
-
 val map_shared : erased map_sharedT
 
 let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
