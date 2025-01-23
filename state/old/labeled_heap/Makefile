@@ -3,10 +3,10 @@
 
 FSTAR := fstar.exe
 
-ROOTS := SharedRefs.fst Backtranslation.STLCToTargetLang.fst
+ROOTS := Translation.fst
 
 CACHEDIR := .cache
-FLAGS  = --record_hints --use_hints --hint_dir hints --z3version 4.13.3
+FLAGS  = --record_hints --use_hints --hint_dir hints
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 
