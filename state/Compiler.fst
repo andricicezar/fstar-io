@@ -69,11 +69,7 @@ type ctx_tgt1 (i:tgt_interface1) =
 type prog_tgt1 (i:tgt_interface1) = i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) -> SST int (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-unfold
-let is_shared' #a #rel (r:mref a rel) : pred:heap_predicate{stable pred} = (* F* being silly. There is an SMTPat on is_low_pred_stable **)
-  let pred = is_shared r in
-  pred
-
+#push-options "--split_queries always"
 val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let instantiate_ctx_tgt1 c =
   let c' = c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) in
@@ -84,26 +80,37 @@ let instantiate_ctx_tgt1 c =
       let v = read r in
       assert (forall_refs_heap contains_pred h0 v);
       assert (forall_refs_heap is_shared h0 v);
-      assume (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared' r')) v); (** one can create witnesses using the previous assertions **)
+      lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
+      lemma_forall_refs_heap_forall_refs_witnessed v is_shared;
+      lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
       v) 
     (fun #t r v -> (* WRITE *)
       recall (contains_pred r);
       recall (is_shared r);
       let h0 = get () in
-      assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared' r')) v);
-      assume (forall_refs_heap contains_pred h0 v); (** one has to recall on v. a method on witnessable, that given a `witnessed pred`, returns a `satisfy pred`. **)
-      assume (forall_refs_heap is_shared h0 v);
-      sst_write r v)
+      lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+      lemma_forall_refs_witnessed_forall_refs_heap v contains_pred;
+      lemma_forall_refs_witnessed_forall_refs_heap v is_shared;
+      sst_write r v;
+      let h1 = get () in
+      assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
+
+      assert (trans_shared_contains h1);
+      assert (h1 `contains` map_shared);
+      assert (~(is_shared (map_shared) h1));
+      assert ((forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)))
+      )
     (fun #t init -> (* ALLOC *)
       let h0 = get () in
-      assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared' r')) init);
-      assume (forall_refs_heap contains_pred h0 init); (** one has to recall on init **)
-      assume (forall_refs_heap is_shared h0 init);
+      assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
+      lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+      lemma_forall_refs_witnessed_forall_refs_heap init contains_pred;
+      lemma_forall_refs_witnessed_forall_refs_heap init is_shared;
       let r = sst_alloc_shared init in 
       witness (contains_pred r); witness (is_shared r);
       r) in
   c''
-
+#pop-options
 
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
 let link_tgt1 p c =

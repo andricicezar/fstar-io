@@ -104,7 +104,8 @@ type heap_predicate_stable = pred:heap_predicate{stable pred}
 [@@"opaque_to_smt"]
 let witnessed (pred:heap_predicate_stable) : Type0 = W.witnessed heap_state.rel pred
 
-let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) = fun h -> h `contains` r
+let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) : heap_predicate_stable = 
+  fun h -> h `contains` r
 
 type mref (a:Type0) (rel:preorder a) =
   r:Heap.mref a rel{is_mm r = false}

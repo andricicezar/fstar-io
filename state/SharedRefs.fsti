@@ -11,7 +11,7 @@ type ref_pred =
   #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
 
 type ref_heap_stable_pred =
-  pred:(#a:Type -> #rel:_ -> mref a rel -> heap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
+  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}
 
 type map_sharedT = 
   mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> forall p. m0 p ==> m1 p) (** pre-order necessary to show that the predicate `is_shared` is stable **)
@@ -56,6 +56,8 @@ val lemma_unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -
 val lemma_same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ -> ra:mref aa rela -> rb:mref b relb -> h:heap ->
     Lemma (requires (addr_of ra == addr_of rb))
           (ensures (is_shared ra h <==> is_shared rb h))
+
+(** ** From now on, we're building on top of previous definitions **)
 
 unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}  (** CA: why is this here? this is from heap_rel **)
@@ -144,6 +146,116 @@ let rec forall_refs_heap_monotonic (pred:ref_heap_stable_pred) (h0 h1:heap) (#t:
     | LLCons v xsref -> 
       forall_refs_heap_monotonic pred h0 h1 v 
    end 
+
+let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:ref_heap_stable_pred) :
+  ST unit 
+    (requires (fun h0 -> forall_refs_heap pred h0 v))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs (fun r -> witnessed (pred r)) v)) =
+  match t with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let v : either (to_Type t1) (to_Type t2) = v in
+    match v with
+    | Inl v' -> lemma_forall_refs_heap_forall_refs_witnessed v' pred
+    | Inr v' -> lemma_forall_refs_heap_forall_refs_witnessed v' pred
+  end
+  | SPair t1 t2 -> 
+    let v : (to_Type t1) * (to_Type t2) = v in
+    lemma_forall_refs_heap_forall_refs_witnessed (fst v) pred;
+    lemma_forall_refs_heap_forall_refs_witnessed (snd v) pred
+  | SRef t' ->
+    let v : ref (to_Type t') = v in 
+    witness (pred v);
+    ()
+  | SLList t' -> begin
+    let v : linkedList (to_Type t') = v in
+    match v with
+    | LLNil -> ()
+    | LLCons v xsref ->
+      lemma_forall_refs_heap_forall_refs_witnessed v pred;
+      witness (pred xsref)
+  end
+
+let rec lemma_forall_refs_witnessed_forall_refs_heap #t (v:to_Type t) (pred:ref_heap_stable_pred) :
+  ST unit 
+    (requires (fun _ -> forall_refs (fun r -> witnessed (pred r)) v))
+    (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs_heap pred h1 v)) =
+  match t with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let v : either (to_Type t1) (to_Type t2) = v in
+    match v with
+    | Inl v' -> lemma_forall_refs_witnessed_forall_refs_heap v' pred
+    | Inr v' -> lemma_forall_refs_witnessed_forall_refs_heap v' pred
+  end
+  | SPair t1 t2 -> 
+    let v : (to_Type t1) * (to_Type t2) = v in
+    lemma_forall_refs_witnessed_forall_refs_heap (fst v) pred;
+    lemma_forall_refs_witnessed_forall_refs_heap (snd v) pred
+  | SRef t' ->
+    let v : ref (to_Type t') = v in 
+    recall (pred v);
+    ()
+  | SLList t' -> begin
+    let v : linkedList (to_Type t') = v in
+    match v with
+    | LLNil -> ()
+    | LLCons v xsref ->
+      lemma_forall_refs_witnessed_forall_refs_heap v pred;
+      recall (pred xsref)
+  end
+
+let rec lemma_forall_refs_join #t (v:to_Type t) (pred1 pred2:ref_pred) :
+  Lemma (requires (forall_refs pred1 v /\ forall_refs pred2 v))
+        (ensures (forall_refs (fun r -> pred1 r /\ pred2 r) v)) =
+  match t with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let v : either (to_Type t1) (to_Type t2) = v in
+    match v with
+    | Inl v' -> lemma_forall_refs_join v' pred1 pred2
+    | Inr v' -> lemma_forall_refs_join v' pred1 pred2
+  end
+  | SPair t1 t2 -> 
+    let v : (to_Type t1) * (to_Type t2) = v in
+    lemma_forall_refs_join (fst v) pred1 pred2;
+    lemma_forall_refs_join (snd v) pred1 pred2
+  | SRef t' -> ()
+  | SLList t' -> begin
+    let v : linkedList (to_Type t') = v in
+    match v with
+    | LLNil -> ()
+    | LLCons v xsref ->
+      lemma_forall_refs_join v pred1 pred2
+  end
+
+let rec lemma_forall_refs_split #t (v:to_Type t) (pred1 pred2:ref_pred) :
+  Lemma (requires (forall_refs (fun r -> pred1 r /\ pred2 r) v))
+        (ensures (forall_refs pred1 v /\ forall_refs pred2 v)) =
+  match t with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let v : either (to_Type t1) (to_Type t2) = v in
+    match v with
+    | Inl v' -> lemma_forall_refs_split v' pred1 pred2
+    | Inr v' -> lemma_forall_refs_split v' pred1 pred2
+  end
+  | SPair t1 t2 -> 
+    let v : (to_Type t1) * (to_Type t2) = v in
+    lemma_forall_refs_split (fst v) pred1 pred2;
+    lemma_forall_refs_split (snd v) pred1 pred2
+  | SRef t' -> ()
+  | SLList t' -> begin
+    let v : linkedList (to_Type t') = v in
+    match v with
+    | LLNil -> ()
+    | LLCons v xsref ->
+      lemma_forall_refs_split v pred1 pred2
+  end
 
 let ctrans_ref_pred (h:heap) (pred:ref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
@@ -271,6 +383,10 @@ let lemma_sst_alloc_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
   with begin
     introduce h1 `contains` r /\ is_shared r h1 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
       introduce addr_of x =!= addr_of r ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
+        assert (h0 `contains` map_shared);
+        assert (h0 `heap_rel` h1);
+        assert (~(addr_of map_shared `Set.mem` Set.empty));
+        assert (modifies Set.empty h0 h1);
         lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
         eliminate forall (a:Type) (rel:preorder a) (r:mref a rel).
           ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1) with _ _ r;
@@ -302,6 +418,10 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
   with begin
     introduce h1 `contains` r /\ is_shared r h1 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
       assert (equal_dom h0 h1);
+      assert (h0 `contains` map_shared);
+      assert (h0 `heap_rel` h1);
+      assert (~(addr_of map_shared `Set.mem` !{x}));
+      assert (modifies !{x} h0 h1);
       lemma_unmodified_map_implies_same_shared_status !{x} h0 h1;
       eliminate forall (a:Type) (rel:preorder a) (r:mref a rel).
         ((~ (Set.mem (addr_of r) !{x})) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1) with _ _ r;
