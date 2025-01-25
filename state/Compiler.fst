@@ -145,3 +145,14 @@ let comp1 : compiler = {
 
   rel_sem = eq_wp;
 }
+
+open FStar.Tactics
+
+val comp1_rrhc : unit -> Lemma (rrhc comp1)
+let comp1_rrhc () : Lemma (rrhc comp1) =
+  assert (rrhc comp1) by (
+    norm [delta_only [`%rrhc]]; 
+    let i = forall_intro () in
+    let ct = forall_intro () in
+    FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
+    compute ())
