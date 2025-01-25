@@ -9,6 +9,14 @@ open Witnessable
 type targetlang_pspec = 
   (inv:heap -> Type0) * (prref:ref_pred) * (hrel:FStar.Preorder.preorder heap)
 
+unfold
+let mk_targetlang_pspec  
+  (inv  : heap -> Type0) 
+  (prref: ref_pred)
+  (hrel : FStar.Preorder.preorder heap) 
+  : targetlang_pspec =
+  (inv, (prref <: (#a:Type0 -> #rel:FStar.Preorder.preorder a -> mref a rel -> Type0)), hrel)
+
 class targetlang (spec:targetlang_pspec) (t:Type) = 
   { wt : witnessable t }
 

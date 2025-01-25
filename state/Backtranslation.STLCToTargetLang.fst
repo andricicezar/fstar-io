@@ -102,15 +102,6 @@ let elab_typ (pspec:targetlang_pspec) (t:typ) : Type =
 let elab_typ_tc #pspec (t:typ) : targetlang pspec (elab_typ pspec t) =
   dsnd (_elab_typ #pspec t)
 
-unfold
-let mk_targetlang_pspec  
-  (inv  : heap -> Type0) 
-  (prref: ref_pred)
-  (hrel : FStar.Preorder.preorder heap) 
-  : targetlang_pspec =
-  (inv, (prref <: (#a:Type0 -> #rel:FStar.Preorder.preorder a -> mref a rel -> Type0)), hrel)
-  
-
 let elab_poly_typ (t:typ) =
   #inv  : (heap -> Type0) -> 
   #prref: ref_pred ->
