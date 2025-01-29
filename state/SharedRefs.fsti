@@ -13,63 +13,6 @@ type ref_pred =
 type ref_heap_stable_pred =
   pred:(#a:Type -> #rel:_ -> mref a rel -> heap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
 
-type map_sharedT = 
-  mref (pos -> GTot bool) (fun (m0 m1:pos -> GTot bool) -> forall p. m0 p ==> m1 p) (** pre-order necessary to show that the predicate `is_shared` is stable **)
-
-val map_shared : erased map_sharedT
-
-let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
-    h `contains` map_shared /\ (** this contains is necessary to show that is_shared is a stable predicate **)
-    (sel h map_shared) (addr_of r)) 
-
-let gets_shared (s:set nat) (h0:heap) (h1:heap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1)) /\
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
-    ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
-
-let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
-    equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
-    ~(is_shared (map_shared) h1) /\
-    (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
-    gets_shared !{sr} h0 h1
-
-val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
-    ST unit 
-      (requires (fun h0 -> 
-        h0 `contains` sr /\
-        h0 `contains` map_shared /\
-        ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
-        ~(is_shared map_shared h0) /\
-        (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p)))) (** necessary to prove that freshly allocated references are not shared **)
-      (ensures (share_post map_shared is_shared #a #p sr))
-      
-val lemma_fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap -> 
-    Lemma (requires (forall p. p >= next_addr h ==> ~((sel h map_shared) p)) /\ (addr_of r >= next_addr h))
-          (ensures (~(is_shared r h)))
-    
-val lemma_unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -> h1:heap -> 
-    Lemma (requires (h0 `contains` map_shared /\ h0 `heap_rel` h1 /\ ~(addr_of map_shared `Set.mem` s) /\ modifies s h0 h1))
-          (ensures (gets_shared Set.empty h0 h1))
-
-val lemma_same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ -> ra:mref aa rela -> rb:mref b relb -> h:heap ->
-    Lemma (requires (addr_of ra == addr_of rb))
-          (ensures (is_shared ra h <==> is_shared rb h))
-
-unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}  (** CA: why is this here? this is from heap_rel **)
-                               h0 `contains` r ==> h1 `contains` r) /\
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)} (** CA: probably this can be proven from heap_rel too *)
-                               r `unused_in` h1 ==> r `unused_in` h0) /\
-  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) } (** CA: ditto **)
-    n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
-
-let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
-    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h1 r) /\
-  unmodified_common h0 h1
-
 type shareable_typ =
   | SUnit
   | SNat
@@ -145,6 +88,69 @@ let rec forall_refs_heap_monotonic (pred:ref_heap_stable_pred) (h0 h1:heap) (#t:
       forall_refs_heap_monotonic pred h0 h1 v 
    end 
 
+type map_sharedT = 
+  mref 
+    (pos -> GTot (option shareable_typ)) 
+    (fun (m0 m1:(pos -> GTot (option shareable_typ))) -> 
+      forall p. Some? (m0 p) ==> Some? (m1 p) /\ Some?.v (m0 p) == Some?.v (m1 p)) 
+  (** pre-order necessary to show that the predicate `is_shared` is stable **)
+
+val map_shared : erased map_sharedT
+
+let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
+    h `contains` map_shared /\ (** this contains is necessary to show that is_shared is a stable predicate **)
+    (let sh = (sel h map_shared) (addr_of r) in
+    Some? sh /\ (to_Type (Some?.v sh) == a)))
+
+let gets_shared (s:set nat) (h0:heap) (h1:heap) =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1)) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
+    ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
+
+let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
+    equal_dom h0 h1 /\
+    modifies !{map_shared} h0 h1 /\
+    ~(is_shared (map_shared) h1) /\
+    (forall p. p >= next_addr h1 ==>  None? (sel h1 map_shared p)) /\
+    gets_shared !{sr} h0 h1
+
+val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
+    ST unit 
+      (requires (fun h0 -> 
+        h0 `contains` sr /\
+        h0 `contains` map_shared /\
+        ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
+        ~(is_shared map_shared h0) /\
+        (forall p. p >= next_addr h0 ==> None? (sel h0 map_shared p)))) (** necessary to prove that freshly allocated references are not shared **)
+      (ensures (share_post map_shared is_shared #a #p sr))
+      
+val lemma_fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap -> 
+    Lemma (requires (forall p. p >= next_addr h ==> None? ((sel h map_shared) p)) /\ (addr_of r >= next_addr h))
+          (ensures (~(is_shared r h)))
+    
+val lemma_unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -> h1:heap -> 
+    Lemma (requires (h0 `contains` map_shared /\ h0 `heap_rel` h1 /\ ~(addr_of map_shared `Set.mem` s) /\ modifies s h0 h1))
+          (ensures (gets_shared Set.empty h0 h1))
+
+val lemma_same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ -> ra:mref aa rela -> rb:mref b relb -> h:heap ->
+    Lemma (requires (addr_of ra == addr_of rb))
+          (ensures (is_shared ra h <==> is_shared rb h))
+
+unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}  (** CA: why is this here? this is from heap_rel **)
+                               h0 `contains` r ==> h1 `contains` r) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)} (** CA: probably this can be proven from heap_rel too *)
+                               r `unused_in` h1 ==> r `unused_in` h0) /\
+  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) } (** CA: ditto **)
+    n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
+
+let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)} 
+    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h1 r) /\
+  unmodified_common h0 h1
+
+
 let ctrans_ref_pred (h:heap) (pred:ref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
   (forall (t:shareable_typ) (r:ref (to_Type t)).
@@ -167,7 +173,7 @@ let sst_pre (pre:st_pre) : st_pre =
     trans_shared_contains h0 /\
     h0 `contains` map_shared /\ 
     ~(is_shared (map_shared) h0) /\ (* the map stays unshared *)
-    (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p)) /\
+    (forall p. p >= next_addr h0 ==> None? (sel h0 map_shared p)) /\
     pre h0
 
 unfold
@@ -179,7 +185,7 @@ let sst_post
   fun h0 r h1 -> 
     trans_shared_contains h1 /\
     ~(is_shared (map_shared) h1) /\
-    (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
+    (forall p. p >= next_addr h1 ==> None? (sel h1 map_shared p)) /\
     post h0 r h1
 
 effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
@@ -206,13 +212,43 @@ let to_Type_injective () : Lemma (forall t1 t2. to_Type t1 == to_Type t2 ==> t1 
     introduce _ ==> _ with _.
       inversion t1 t2
 
+let lemma_cast (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
+
+let rec lemma_forall_refs_heap_casting pred (h:heap) #a (x:to_Type a) :
+  Lemma
+    (requires (
+        forall_refs_heap pred h #a x))
+    (ensures (forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x))) =
+  match a with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let x : either (to_Type t1) (to_Type t2) = x in
+    match x  with
+    | Inl x' -> lemma_forall_refs_heap_casting pred h x' 
+    | Inr x' -> lemma_forall_refs_heap_casting pred h x' 
+  end
+  | SPair t1 t2 ->
+    let x : (to_Type t1) * (to_Type t2) = x in
+    lemma_forall_refs_heap_casting pred h (fst x);
+    lemma_forall_refs_heap_casting pred h (snd x) 
+  | SRef t' -> ()
+  | SLList t' -> begin
+    let x : linkedList (to_Type t') = x in
+    match x with
+    | LLNil -> ()
+    | LLCons v xsref -> 
+      lemma_forall_refs_heap_casting pred h v 
+   end 
+
+
+#set-options "--print_implicits"
 let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
     h1 == upd h0 x v /\ (** SMTPat kicks in **)
-    sel h1 x == v /\
-    forall_refs_heap contains_pred h0 v /\
+    forall_refs_heap contains_pred h0 #t v /\
     ctrans_ref_pred h0 contains_pred))
   (ensures (
     ctrans_ref_pred h1 contains_pred)) =
@@ -224,9 +260,13 @@ let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:hea
         forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
       introduce addr_of r == addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-        inversion t a;
-        assert (sel h1 r == sel h1 x);
-        forall_refs_heap_monotonic contains_pred h0 h1 v
+        lemma_eq_addrs_eq_types_rels r x h1;
+        assert (to_Type a == to_Type t);
+        forall_refs_heap_monotonic contains_pred h0 h1 v;
+        assert (forall_refs_heap contains_pred h1 #t v);
+        assert (sel h1 r == lemma_cast v);
+        assert (forall_refs_heap contains_pred h1 #a (lemma_cast v));
+        assert (forall_refs_heap contains_pred h1 #a r)
       end
     end
   end
