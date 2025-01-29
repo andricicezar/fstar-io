@@ -214,10 +214,15 @@ let to_Type_injective () : Lemma (forall t1 t2. to_Type t1 == to_Type t2 ==> t1 
 
 let lemma_cast (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
 
-let rec lemma_forall_refs_heap_casting pred (h:heap) #a (x:to_Type a) :
+let rec lemma_forall_refs_heap_casting_refs (pred:ref_heap_stable_pred) (h:heap) #a (x:ref (to_Type a)) :
   Lemma
-    (requires (
-        forall_refs_heap pred h #a x))
+    (requires (pred #(to_Type a) x h))
+    (ensures (forall b. to_Type b == to_Type a ==>  pred #(to_Type b) #(FStar.Heap.trivial_preorder _) (lemma_cast x) h)) = ()
+
+#set-options "--print_implicits"
+let rec lemma_forall_refs_heap_casting (pred:ref_heap_stable_pred) (h:heap) #a (x:to_Type a) :
+  Lemma
+    (requires (forall_refs_heap pred h #a x))
     (ensures (forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x))) =
   match a with
   | SUnit -> ()
@@ -225,24 +230,68 @@ let rec lemma_forall_refs_heap_casting pred (h:heap) #a (x:to_Type a) :
   | SSum t1 t2 -> begin
     let x : either (to_Type t1) (to_Type t2) = x in
     match x  with
-    | Inl x' -> lemma_forall_refs_heap_casting pred h x' 
-    | Inr x' -> lemma_forall_refs_heap_casting pred h x' 
+    | Inl x' -> begin 
+      lemma_forall_refs_heap_casting pred h x';
+      assert (forall b1. to_Type b1 == to_Type t1 ==> forall_refs_heap pred h #b1 (lemma_cast x'));
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+        introduce _ ==> _ with _. begin
+          assert (forall_refs_heap pred h #a x);
+          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+        end
+      end
+    end
+    | Inr x' -> begin
+      lemma_forall_refs_heap_casting pred h x';
+      assert (forall b1. to_Type b1 == to_Type t2 ==> forall_refs_heap pred h #b1 (lemma_cast x'));
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+        introduce _ ==> _ with _. begin
+          assert (forall_refs_heap pred h #a x);
+          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+        end
+      end
+    end
+  end
+  | SRef t' -> begin
+    let x : ref (to_Type t') = x in
+    (** no recursive call, because we don't have any type contructor **)
+    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+      introduce _ ==> _ with _. begin
+        let SRef t'' = b in
+        assert (forall_refs_heap pred h #a x);
+        assert (pred #(to_Type t') #(FStar.Heap.trivial_preorder _) x h);
+        lemma_forall_refs_heap_casting_refs pred h #t' x;
+        assert (to_Type (SRef t'') == to_Type (SRef t'));
+        assert (ref (to_Type t'') == ref (to_Type t'));
+        assume (to_Type t'' == to_Type t'); (** would work if ref is injective **)
+        assert (pred #(to_Type t'') #(FStar.Heap.trivial_preorder _) x h);
+        assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+      end
+    end
   end
   | SPair t1 t2 ->
     let x : (to_Type t1) * (to_Type t2) = x in
     lemma_forall_refs_heap_casting pred h (fst x);
-    lemma_forall_refs_heap_casting pred h (snd x) 
-  | SRef t' -> ()
+    lemma_forall_refs_heap_casting pred h (snd x);
+    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+      introduce _ ==> _ with _. begin
+        assert (forall_refs_heap pred h #a x);
+        assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+      end
+    end
   | SLList t' -> begin
     let x : linkedList (to_Type t') = x in
     match x with
     | LLNil -> ()
     | LLCons v xsref -> 
-      lemma_forall_refs_heap_casting pred h v 
-   end 
+      lemma_forall_refs_heap_casting pred h v;
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+        introduce _ ==> _ with _. begin
+          assert (forall_refs_heap pred h #a x);
+          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+        end
+      end
+   end
 
-
-#set-options "--print_implicits"
 let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
@@ -265,8 +314,9 @@ let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:hea
         forall_refs_heap_monotonic contains_pred h0 h1 v;
         assert (forall_refs_heap contains_pred h1 #t v);
         assert (sel h1 r == lemma_cast v);
+        lemma_forall_refs_heap_casting contains_pred h1 #t v;
         assert (forall_refs_heap contains_pred h1 #a (lemma_cast v));
-        assert (forall_refs_heap contains_pred h1 #a r)
+        assert (forall_refs_heap contains_pred h1 #a (sel h1 r))
       end
     end
   end
