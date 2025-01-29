@@ -90,17 +90,16 @@ let rec forall_refs_heap_monotonic (pred:ref_heap_stable_pred) (h0 h1:heap) (#t:
 
 type map_sharedT = 
   mref 
-    (pos -> GTot (option shareable_typ)) 
-    (fun (m0 m1:(pos -> GTot (option shareable_typ))) -> 
-      forall p. Some? (m0 p) ==> Some? (m1 p) /\ Some?.v (m0 p) == Some?.v (m1 p)) 
+    (pos -> GTot bool) 
+    (fun (m0 m1:(pos -> GTot bool)) -> 
+      forall p. (m0 p) ==>  (m1 p)) 
   (** pre-order necessary to show that the predicate `is_shared` is stable **)
 
 val map_shared : erased map_sharedT
 
 let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` map_shared /\ (** this contains is necessary to show that is_shared is a stable predicate **)
-    (let sh = (sel h map_shared) (addr_of r) in
-    Some? sh /\ (to_Type (Some?.v sh) == a)))
+    (sel h map_shared) (addr_of r))
 
 let gets_shared (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
@@ -112,7 +111,7 @@ let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
     ~(is_shared (map_shared) h1) /\
-    (forall p. p >= next_addr h1 ==>  None? (sel h1 map_shared p)) /\
+    (forall p. p >= next_addr h1 ==>  ~(sel h1 map_shared p)) /\
     gets_shared !{sr} h0 h1
 
 val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
@@ -122,11 +121,11 @@ val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
         h0 `contains` map_shared /\
         ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
         ~(is_shared map_shared h0) /\
-        (forall p. p >= next_addr h0 ==> None? (sel h0 map_shared p)))) (** necessary to prove that freshly allocated references are not shared **)
+        (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p)))) (** necessary to prove that freshly allocated references are not shared **)
       (ensures (share_post map_shared is_shared #a #p sr))
       
 val lemma_fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap -> 
-    Lemma (requires (forall p. p >= next_addr h ==> None? ((sel h map_shared) p)) /\ (addr_of r >= next_addr h))
+    Lemma (requires (forall p. p >= next_addr h ==> ~((sel h map_shared) p)) /\ (addr_of r >= next_addr h))
           (ensures (~(is_shared r h)))
     
 val lemma_unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -> h1:heap -> 
@@ -173,7 +172,7 @@ let sst_pre (pre:st_pre) : st_pre =
     trans_shared_contains h0 /\
     h0 `contains` map_shared /\ 
     ~(is_shared (map_shared) h0) /\ (* the map stays unshared *)
-    (forall p. p >= next_addr h0 ==> None? (sel h0 map_shared p)) /\
+    (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p)) /\
     pre h0
 
 unfold
@@ -185,7 +184,7 @@ let sst_post
   fun h0 r h1 -> 
     trans_shared_contains h1 /\
     ~(is_shared (map_shared) h1) /\
-    (forall p. p >= next_addr h1 ==> None? (sel h1 map_shared p)) /\
+    (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)) /\
     post h0 r h1
 
 effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
