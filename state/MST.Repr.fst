@@ -108,6 +108,32 @@ let rec theta #a #state m =
   | Recall pred k ->
       st_bind_wp state.t _ _ (recall_wp pred) (fun r -> theta (k r))
 
+val interp : #a:Type u#a -> #state:tstate u#s -> free state a -> (s0:state.t -> a * s1:state.t)
+let rec interp #a #state m s0 =
+  match m with
+  | Return x -> (x, s0)
+  | PartialCall pre k -> admit ()
+  | Get k -> interp (k s0) s0
+  | Put s1 k -> interp (k ()) s1
+  | Witness pred k -> interp (k ()) s0
+  | Recall pred k -> interp (k ()) s0
+
+let rec my_lemma #a #state (m:free state a) wp :
+  Lemma (requires (theta m ⊑ wp))
+        (ensures (forall p s0. wp p s0 ==> (let (r, s1) = interp m s0 in p r s1))) = 
+  match m with
+  | Return x -> ()
+  | Witness pred k -> begin
+    my_lemma (k ()) (theta (k ()));
+    assert (theta (k ()) ⊑ st_bind_wp state.t unit a (witness_wp pred) (fun r -> theta (k ()))) by (
+      norm [delta_only [`%st_bind_wp;`%witness_wp]];
+      explode ();
+      dump "H"
+    );
+    admit ()
+  end
+  | _ -> admit ()
+
 let lemma_theta_is_monad_morphism_ret (#state:tstate) (v:'a) :
   Lemma (theta (free_return state 'a v) == st_return state.t 'a v) by (compute ()) = ()
 
