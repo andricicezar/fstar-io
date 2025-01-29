@@ -7,6 +7,12 @@ include FStar.Monotonic.Heap
 open FStar.Ghost
 include MST.Tot
 
+(** UNCOMMENT THIS:
+assume val lemma_eq_addrs_eq_types_rels #ta #rela #tb #relb (a:mref ta rela) (b:mref tb relb) (h:heap) : Lemma
+  (requires (h `contains` a /\ h `contains` b /\ addr_of a == addr_of b))
+  (ensures (ta == tb /\ rela == relb /\ is_mm a == is_mm b /\ sel h a == sel h b))
+**)
+
 type ref_pred =
   #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
 
@@ -197,32 +203,19 @@ let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:ref_heap_sta
     (requires (ctrans_ref_pred h pred /\ h `contains` r /\ pred r h))
     (ensures (forall_refs_heap pred h (sel h r))) = ()
 
-let rec inversion (a:shareable_typ) (xa:shareable_typ) :
-  Lemma
-    (requires (to_Type a == to_Type xa))
-    (ensures (a == xa)) =
-  match a with
-  | SUnit -> ()
-  | SNat -> ()
-  | _ -> admit ()
+unfold
+let force_retype (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
 
-let to_Type_injective () : Lemma (forall t1 t2. to_Type t1 == to_Type t2 ==> t1 == t2) = 
-  introduce forall t1 t2. to_Type t1 == to_Type t2 ==> t1 == t2 with
-    introduce _ ==> _ with _.
-      inversion t1 t2
-
-let lemma_cast (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
-
-let rec lemma_forall_refs_heap_casting_refs (pred:ref_heap_stable_pred) (h:heap) #a (x:ref (to_Type a)) :
+let lemma_forall_refs_heap_force_retype_refs (pred:ref_heap_stable_pred) (h:heap) #a (x:ref (to_Type a)) :
   Lemma
     (requires (pred #(to_Type a) x h))
-    (ensures (forall b. to_Type b == to_Type a ==>  pred #(to_Type b) #(FStar.Heap.trivial_preorder _) (lemma_cast x) h)) = ()
+    (ensures (forall b. to_Type b == to_Type a ==>  pred #(to_Type b) #(FStar.Heap.trivial_preorder _) (force_retype x) h)) = ()
 
 #set-options "--print_implicits"
-let rec lemma_forall_refs_heap_casting (pred:ref_heap_stable_pred) (h:heap) #a (x:to_Type a) :
+let rec lemma_forall_refs_heap_force_retype (pred:ref_heap_stable_pred) (h:heap) #a (x:to_Type a) :
   Lemma
     (requires (forall_refs_heap pred h #a x))
-    (ensures (forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x))) =
+    (ensures (forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x))) =
   match a with
   | SUnit -> ()
   | SNat -> ()
@@ -230,22 +223,22 @@ let rec lemma_forall_refs_heap_casting (pred:ref_heap_stable_pred) (h:heap) #a (
     let x : either (to_Type t1) (to_Type t2) = x in
     match x  with
     | Inl x' -> begin 
-      lemma_forall_refs_heap_casting pred h x';
-      assert (forall b1. to_Type b1 == to_Type t1 ==> forall_refs_heap pred h #b1 (lemma_cast x'));
-      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+      lemma_forall_refs_heap_force_retype pred h x';
+      assert (forall b1. to_Type b1 == to_Type t1 ==> forall_refs_heap pred h #b1 (force_retype x'));
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x) with begin
         introduce _ ==> _ with _. begin
           assert (forall_refs_heap pred h #a x);
-          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+          assert (forall_refs_heap pred h #b (force_retype x))
         end
       end
     end
     | Inr x' -> begin
-      lemma_forall_refs_heap_casting pred h x';
-      assert (forall b1. to_Type b1 == to_Type t2 ==> forall_refs_heap pred h #b1 (lemma_cast x'));
-      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+      lemma_forall_refs_heap_force_retype pred h x';
+      assert (forall b1. to_Type b1 == to_Type t2 ==> forall_refs_heap pred h #b1 (force_retype x'));
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x) with begin
         introduce _ ==> _ with _. begin
           assert (forall_refs_heap pred h #a x);
-          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+          assert (forall_refs_heap pred h #b (force_retype x)) by (norm [delta_only [`%force_retype];iota])
         end
       end
     end
@@ -253,28 +246,28 @@ let rec lemma_forall_refs_heap_casting (pred:ref_heap_stable_pred) (h:heap) #a (
   | SRef t' -> begin
     let x : ref (to_Type t') = x in
     (** no recursive call, because we don't have any type contructor **)
-    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x) with begin
       introduce _ ==> _ with _. begin
         let SRef t'' = b in
         assert (forall_refs_heap pred h #a x);
         assert (pred #(to_Type t') #(FStar.Heap.trivial_preorder _) x h);
-        lemma_forall_refs_heap_casting_refs pred h #t' x;
+        lemma_forall_refs_heap_force_retype_refs pred h #t' x;
         assert (to_Type (SRef t'') == to_Type (SRef t'));
         assert (ref (to_Type t'') == ref (to_Type t'));
         assume (to_Type t'' == to_Type t'); (** would work if ref is injective **)
         assert (pred #(to_Type t'') #(FStar.Heap.trivial_preorder _) x h);
-        assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+        assert (forall_refs_heap pred h #b (force_retype x))
       end
     end
   end
   | SPair t1 t2 ->
     let x : (to_Type t1) * (to_Type t2) = x in
-    lemma_forall_refs_heap_casting pred h (fst x);
-    lemma_forall_refs_heap_casting pred h (snd x);
-    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+    lemma_forall_refs_heap_force_retype pred h (fst x);
+    lemma_forall_refs_heap_force_retype pred h (snd x);
+    introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x) with begin
       introduce _ ==> _ with _. begin
         assert (forall_refs_heap pred h #a x);
-        assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+        assert (forall_refs_heap pred h #b (force_retype x))
       end
     end
   | SLList t' -> begin
@@ -282,11 +275,11 @@ let rec lemma_forall_refs_heap_casting (pred:ref_heap_stable_pred) (h:heap) #a (
     match x with
     | LLNil -> ()
     | LLCons v xsref -> 
-      lemma_forall_refs_heap_casting pred h v;
-      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (lemma_cast x) with begin
+      lemma_forall_refs_heap_force_retype pred h v;
+      introduce forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x) with begin
         introduce _ ==> _ with _. begin
           assert (forall_refs_heap pred h #a x);
-          assert (forall_refs_heap pred h #b (lemma_cast x)) by (norm [delta_only [`%lemma_cast];iota])
+          assert (forall_refs_heap pred h #b (force_retype x))
         end
       end
    end
@@ -312,9 +305,9 @@ let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:hea
         assert (to_Type a == to_Type t);
         forall_refs_heap_monotonic contains_pred h0 h1 v;
         assert (forall_refs_heap contains_pred h1 #t v);
-        assert (sel h1 r == lemma_cast v);
-        lemma_forall_refs_heap_casting contains_pred h1 #t v;
-        assert (forall_refs_heap contains_pred h1 #a (lemma_cast v));
+        assert (sel h1 r == force_retype v);
+        lemma_forall_refs_heap_force_retype contains_pred h1 #t v;
+        assert (forall_refs_heap contains_pred h1 #a (force_retype v));
         assert (forall_refs_heap contains_pred h1 #a (sel h1 r))
       end
     end
@@ -400,13 +393,11 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
         forall_refs_heap_monotonic is_shared h0 h1 (sel h0 r)
       end;
       introduce addr_of r == addr_of x ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
-        lemma_sel_same_addr h1 r x;
-        inversion t a;
-        assert (sel h1 r == sel h1 x);
+        lemma_eq_addrs_eq_types_rels r x h1;
         lemma_same_addr_same_sharing_status r x h0; 
-        assert (is_shared x h0);
         eliminate is_shared x h0 ==> forall_refs_heap is_shared h0 v with _;
-        forall_refs_heap_monotonic is_shared h0 h1 v
+        forall_refs_heap_monotonic is_shared h0 h1 v;
+        lemma_forall_refs_heap_force_retype is_shared h1 #t v
       end
     end
   end
@@ -438,14 +429,10 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
       end;
       introduce ~(is_shared r h0) ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
         assert (addr_of x =!= addr_of map_shared);
-        forall_refs_heap_monotonic is_shared h0 h1 (sel h0 x);
-        assert (sel h0 x == sel h1 x);
-        assert (forall_refs_heap is_shared h1 (sel h1 x));
         assert (addr_of r == addr_of x);
-        lemma_sel_same_addr h1 r x;
-        inversion a t;
-        assert (sel h1 r == sel h1 x);
-        assert (forall_refs_heap is_shared h1 (sel h1 r))
+        lemma_eq_addrs_eq_types_rels r x h1;
+        forall_refs_heap_monotonic is_shared h0 h1 (sel h0 x);
+        lemma_forall_refs_heap_force_retype is_shared h1 #t (sel h1 x)
       end
     end
   end
