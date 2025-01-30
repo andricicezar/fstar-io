@@ -14,13 +14,13 @@ assume val lemma_eq_addrs_eq_types_rels #ta #rela #tb #relb (a:mref ta rela) (b:
 **)
 
 (** DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
-val lemma_eq_addrs_eq_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
+val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
   : Lemma (requires (mref a rela == mref b relb))
           (ensures  (a == b))
 
 (** DA: In my FStar.Monotonic.Heap.fst **)
 (*
-let lemma_eq_addrs_eq_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
+let lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
   : Lemma (requires (mref a rela == mref b relb))
           (ensures  (a == b)) =
   ()
@@ -268,7 +268,7 @@ let rec lemma_forall_refs_heap_force_retype (pred:ref_heap_stable_pred) (h:heap)
         lemma_forall_refs_heap_force_retype_refs pred h #t' x;
         assert (to_Type (SRef t'') == to_Type (SRef t'));
         assert (ref (to_Type t'') == ref (to_Type t'));
-        lemma_eq_addrs_eq_types #(to_Type t') #(to_Type t'') #(FStar.Heap.trivial_preorder _) #(FStar.Heap.trivial_preorder _) x;
+        lemma_eq_ref_types_eq_value_types #(to_Type t') #(to_Type t'') #(FStar.Heap.trivial_preorder _) #(FStar.Heap.trivial_preorder _) x;
         assert (to_Type t'' == to_Type t'); (** would work if ref is injective **)
         assert (pred #(to_Type t'') #(FStar.Heap.trivial_preorder _) x h);
         assert (forall_refs_heap pred h #b (force_retype x))
