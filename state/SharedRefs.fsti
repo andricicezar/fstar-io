@@ -7,11 +7,14 @@ include FStar.Monotonic.Heap
 open FStar.Ghost
 include MST.Tot
 
-(** UNCOMMENT THIS:
-assume val lemma_eq_addrs_eq_types_rels #ta #rela #tb #relb (a:mref ta rela) (b:mref tb relb) (h:heap) : Lemma
-  (requires (h `contains` a /\ h `contains` b /\ addr_of a == addr_of b))
-  (ensures (ta == tb /\ rela == relb /\ is_mm a == is_mm b /\ sel h a == sel h b))
-**)
+(** CA&DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
+val lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h:heap) : Lemma
+  (requires (h `contains` r1 /\ h `contains` r2 /\ addr_of r1 == addr_of r2))
+  (ensures (a == b /\ rela == relb /\ is_mm r1 == is_mm r2 /\ sel h r1 == sel h r2))
+(** DA: In my FStar.Monotonic.Heap.fst **)
+(*
+let lemma_eq_addrs_eq_all _ _ _ = ()
+*)
 
 (** DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
 val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
@@ -20,10 +23,7 @@ val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder
 
 (** DA: In my FStar.Monotonic.Heap.fst **)
 (*
-let lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
-  : Lemma (requires (mref a rela == mref b relb))
-          (ensures  (a == b)) =
-  ()
+let lemma_eq_ref_types_eq_value_types _ = ()
 *)
 
 
@@ -316,7 +316,7 @@ let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:hea
         forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
       introduce addr_of r == addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-        lemma_eq_addrs_eq_types_rels r x h1;
+        lemma_eq_addrs_eq_all r x h1;
         assert (to_Type a == to_Type t);
         forall_refs_heap_monotonic contains_pred h0 h1 v;
         assert (forall_refs_heap contains_pred h1 #t v);
@@ -408,7 +408,7 @@ let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
         forall_refs_heap_monotonic is_shared h0 h1 (sel h0 r)
       end;
       introduce addr_of r == addr_of x ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
-        lemma_eq_addrs_eq_types_rels r x h1;
+        lemma_eq_addrs_eq_all r x h1;
         lemma_same_addr_same_sharing_status r x h0; 
         eliminate is_shared x h0 ==> forall_refs_heap is_shared h0 v with _;
         forall_refs_heap_monotonic is_shared h0 h1 v;
@@ -445,7 +445,7 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
       introduce ~(is_shared r h0) ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
         assert (addr_of x =!= addr_of map_shared);
         assert (addr_of r == addr_of x);
-        lemma_eq_addrs_eq_types_rels r x h1;
+        lemma_eq_addrs_eq_all r x h1;
         forall_refs_heap_monotonic is_shared h0 h1 (sel h0 x);
         lemma_forall_refs_heap_force_retype is_shared h1 #t (sel h1 x)
       end
