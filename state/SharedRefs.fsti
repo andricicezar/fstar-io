@@ -20,7 +20,6 @@ let lemma_eq_addrs_eq_all _ _ _ = ()
 val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela) 
   : Lemma (requires (mref a rela == mref b relb))
           (ensures  (a == b))
-
 (** DA: In my FStar.Monotonic.Heap.fst **)
 (*
 let lemma_eq_ref_types_eq_value_types _ = ()
@@ -299,7 +298,7 @@ let rec lemma_forall_refs_heap_force_retype (pred:ref_heap_stable_pred) (h:heap)
       end
    end
 
-let lemma_upd_preserves_contains #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
+let lemma_upd_preserves_contains #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -385,7 +384,7 @@ let lemma_sst_alloc_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1
 #pop-options
 
 #push-options "--split_queries always"
-let lemma_sst_write_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
+let lemma_sst_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -547,7 +546,7 @@ let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
   ()
 #pop-options
 
-let lemma_upd_preserves_contains' #a (x:ref a) (v:a) (h0 h1:heap) : Lemma
+let lemma_upd_preserves_contains' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -568,7 +567,7 @@ let lemma_upd_preserves_contains' #a (x:ref a) (v:a) (h0 h1:heap) : Lemma
     end
   end
 
-let lemma_sst_write_preserves_shared' #a (x:ref a) (v:a) (h0 h1:heap) : Lemma
+let lemma_sst_write_preserves_shared' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -618,8 +617,42 @@ let sst_write' #a (r:ref a) (v:a)
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
   introduce (exists t. to_Type t == a) ==> trans_shared_contains h1 with _. begin
     eliminate exists t. to_Type t == a returns _ with _. begin
-      lemma_upd_preserves_contains #t r v h0 h1;
-      lemma_sst_write_preserves_shared #t r v h0 h1
+      lemma_upd_preserves_contains #t #(FStar.Heap.trivial_preorder _) r v h0 h1;
+      lemma_sst_write_preserves_shared #t #(FStar.Heap.trivial_preorder _) r v h0 h1
+    end
+  end;
+  introduce (forall t. ~(to_Type t == a)) ==> trans_shared_contains h1 with _. begin
+    lemma_upd_preserves_contains' r v h0 h1;
+    lemma_sst_write_preserves_shared' r v h0 h1
+  end;
+  ()
+
+let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
+: SST unit
+  (requires (fun h0 -> 
+    h0 `contains` r /\
+    rel (sel h0 r) v /\
+    ~(compare_addrs r map_shared) /\
+    (forall t. to_Type t == a ==>
+      forall_refs_heap contains_pred h0 #t v /\ 
+      (is_shared r h0 ==> forall_refs_heap is_shared h0 #t v))))
+  (ensures (fun h0 () h1 ->
+    write_post r v h0 () h1 /\ 
+    gets_shared Set.empty h0 h1 /\
+    (is_shared r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
+  let h0 = get () in
+  write r v;
+  let h1 = get () in
+  assert (~(is_shared (map_shared) h1));
+  lemma_next_addr_upd_tot h0 r v;
+  assert (next_addr h0 == next_addr h1);
+  assert (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p));
+  lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
+  lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
+  introduce (exists t. to_Type t == a) ==> trans_shared_contains h1 with _. begin
+    eliminate exists t. to_Type t == a returns _ with _. begin
+      lemma_upd_preserves_contains #t #rel r v h0 h1;
+      lemma_sst_write_preserves_shared #t #rel r v h0 h1
     end
   end;
   introduce (forall t. ~(to_Type t == a)) ==> trans_shared_contains h1 with _. begin
