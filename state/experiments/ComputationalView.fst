@@ -1,5 +1,7 @@
 module ComputationalView
 
+open FStar.Tactics
+
 noeq
 type freePure (a:Type) =
 | Return : a -> freePure a 
@@ -63,3 +65,39 @@ let rec freeState_to_state #a (m:freeState a) (wp:(state_wp a){freeState_theta m
   | ReturnST x -> (x, s0)
   | GetST k ->  freeState_to_state (k s0) (freeState_theta (k s0)) post s0
   | PutST s1 k -> freeState_to_state (k ()) (freeState_theta (k ())) post s1
+
+noeq
+type freeMST (a:Type) =
+| ReturnMST : a -> freeMST a 
+| GetMST : (state_t -> freeMST a) -> freeMST a
+| PutMST : state_t -> (unit -> freeMST a) -> freeMST a
+| WitnessMST : pred:(state_t -> Type0) -> (unit -> freeMST a) -> freeMST a
+| RecallMST : pred:(state_t -> Type0) -> (unit -> freeMST a) -> freeMST a
+  
+let rec freeMST_theta (witnessed:(state_t -> Type0) -> Type0) (m:freeMST 'a) : state_wp 'a =
+  match m with
+  | ReturnMST x -> state_wp_return x
+  | GetMST k -> state_wp_bind (fun p s0 -> p s0 s0) (fun r -> freeMST_theta witnessed (k r))
+  | PutMST s1 k -> state_wp_bind (fun p s0 -> s0 `state_rel` s1 /\ p () s1) (fun r -> freeMST_theta witnessed (k r))
+  | WitnessMST pred k -> state_wp_bind (fun p s0 -> pred s0 /\ (witnessed pred ==> p () s0)) (fun r -> freeMST_theta witnessed (k r))
+  | RecallMST pred k -> state_wp_bind (fun p s0 -> witnessed pred /\ (pred s0 ==> p () s0)) (fun r -> freeMST_theta witnessed (k r))
+ 
+assume val witnessed : (state_t -> Type0) -> Type0
+//let witnessed = fun pred -> exists s0. pred s0
+
+let rec freeMST_to_state #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnessed m `state_wp_stronger` wp}) (post:(a -> state_t -> Type0)) (s0:state_t{wp post s0}) :
+  Tot (r:(a * state_t){post (fst r) (snd r)}) =
+  match m with
+  | ReturnMST x -> (x, s0)
+  | GetMST k ->  freeMST_to_state (k s0) (freeMST_theta witnessed (k s0)) post s0
+  | PutMST s1 k -> freeMST_to_state (k ()) (freeMST_theta witnessed (k ())) post s1
+  | WitnessMST pred k -> 
+    assert (pred s0);
+    assert (witnessed pred ==> freeMST_theta witnessed (k ()) post s0);
+    assume (witnessed pred); (** CA: how to fold witnessed here? **)
+    freeMST_to_state (k ()) (freeMST_theta witnessed (k ())) post s0
+  | RecallMST pred k -> 
+    assert (witnessed pred);
+    assume (pred s0); (** CA: how to unfold witnessed here? **)
+    freeMST_to_state (k ()) (freeMST_theta witnessed (k ())) post s0
+
