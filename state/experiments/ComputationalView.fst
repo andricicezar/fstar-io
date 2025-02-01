@@ -55,7 +55,7 @@ let rec freeState_theta (m:freeState 'a) : state_wp 'a =
   match m with
   | ReturnST x -> state_wp_return x
   | GetST k -> state_wp_bind (fun p s0 -> p s0 s0) (fun r -> freeState_theta (k r))
-  | PutST s1 k -> state_wp_bind (fun p s0 -> s0 `state_rel` s1 /\ p () s1) (fun r -> freeState_theta (k r))
+  | PutST s1 k -> state_wp_bind (fun p s0 -> s0 `state_rel` s1 /\ p () s1) (fun r -> freeState_theta (k r)) (** This enforces monotonicity **)
 
 let state a = state_t -> a * state_t
 
@@ -85,6 +85,7 @@ let rec freeMST_theta (witnessed:(state_t -> Type0) -> Type0) (m:freeMST 'a) : s
 assume val witnessed : (state_t -> Type0) -> Type0
 //let witnessed = fun pred -> exists s0. pred s0
 
+(** Theorem 5.4 in recalling a witness **)
 let rec freeMST_to_state #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnessed m `state_wp_stronger` wp}) (post:(a -> state_t -> Type0)) (s0:state_t{wp post s0}) :
   Tot (r:(a * state_t){post (fst r) (snd r)}) =
   match m with
