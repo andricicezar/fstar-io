@@ -20,6 +20,7 @@ let rec freePure_theta (m:freePure 'a) : pure_wp 'a =
 
 let pureId (a:Type) = a
 
+(** Not Tot **)
 let rec freePure_to_pureId #a (m:freePure a) (wp:pure_wp a) (post:a -> Type0) :
   Pure (pureId a)
     (requires (freePure_theta m `pure_wp_stronger` wp /\ wp post))
