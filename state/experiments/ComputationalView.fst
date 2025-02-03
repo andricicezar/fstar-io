@@ -102,3 +102,44 @@ let rec freeMST_to_state #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witness
     assume (pred s0); (** CA: how to unfold witnessed here? **)
     freeMST_to_state (k ()) (freeMST_theta witnessed (k ())) post s0
 
+
+(** ** Attempt at collecting predicates **)
+
+type stable_pred =
+  pred:(state_t -> Type0){forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1}
+
+type statepreds =
+  sp:(state_t * list stable_pred){forall (pred:stable_pred). pred `List.Tot.memP` (snd sp) ==> pred (fst sp)}
+  
+val witnessed' : (state_t -> Type0) -> Type0
+let witnessed' pred = True // i don't have access to the heap
+
+let rec freeMST_to_state' #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnessed' m `state_wp_stronger` wp}) (post:(a -> state_t -> Type0)) (s0:statepreds{wp post (fst s0)}) :
+  Tot (r:(a * statepreds){post (fst r) (fst (snd r))}) =
+  match m with
+  | ReturnMST x -> (x, s0)
+  | GetMST k ->  freeMST_to_state' (k (fst s0)) (freeMST_theta witnessed' (k (fst s0))) post s0
+  | PutMST s1 k -> freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post (s1, snd s0)
+  | WitnessMST pred k -> 
+    assert (pred (fst s0));
+    assert (witnessed' pred ==> freeMST_theta witnessed' (k ()) post (fst s0));
+    assume (forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1); // one has to strengthen the type of witness/recall
+    assert (witnessed' pred);
+    let lp = snd s0 @ [pred] in
+    assume (forall (pred:stable_pred). pred `List.Tot.memP` lp ==> pred (fst s0)); // probably easy to prove by induction;
+    freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post (fst s0, lp)
+  | RecallMST pred k -> 
+    assert (witnessed' pred);
+    assume (forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1); // one has to strengthen the type of witness/recall
+    assume (pred `List.Tot.memP` (snd s0));
+    assert (pred (fst s0)); (** 
+      CA: i need to know here that pred is in the list of predicates.
+      In pulse, they have an index that tells them that the predicate is contained **)
+    freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post s0
+
+
+
+
+
+
+
