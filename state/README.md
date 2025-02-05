@@ -1,12 +1,12 @@
 ## Labeled References
 
 ### TODOs
-- [ ] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
+- [X] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
 - [ ] Refactor effect to have an extra index for the flag @Theo
     - [ ] Refactor target contexts to be polymorphic in the flag
 - [ ] Extend sst_alloc to support monotonic references @Danel
     - [ ] Test sst_write and sst_alloc with monotonic references
-- [ ] Higher-order Contracts: Figure out, Implement, prove RrHP 
+- [ ] Higher-order Contracts: Figure out, Implement, prove RrHP
 - [ ] Instantiate compiler model with target contexts written in STLC
 - [ ] Make the effect extractable and executable in OCaml @Guido
     - [ ] Skip nodes that write to the top-level interface that keeps track of the shared references
