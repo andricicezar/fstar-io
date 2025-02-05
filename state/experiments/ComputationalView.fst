@@ -37,6 +37,8 @@ let rec freePure_to_pureId #a (m:freePure a) (wp:pure_wp a) (post:a -> Type0) :
 
 assume val state_t:Type0
 assume val state_rel : FStar.Preorder.preorder state_t
+type stable_pred =
+  pred:(state_t -> Type0){forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1}
 
 noeq
 type freeState (a:Type) =
@@ -71,8 +73,8 @@ type freeMST (a:Type) =
 | ReturnMST : a -> freeMST a 
 | GetMST : (state_t -> freeMST a) -> freeMST a
 | PutMST : state_t -> (unit -> freeMST a) -> freeMST a
-| WitnessMST : pred:(state_t -> Type0) -> (unit -> freeMST a) -> freeMST a
-| RecallMST : pred:(state_t -> Type0) -> (unit -> freeMST a) -> freeMST a
+| WitnessMST : pred:stable_pred -> (unit -> freeMST a) -> freeMST a
+| RecallMST : pred:stable_pred -> (unit -> freeMST a) -> freeMST a
   
 let rec freeMST_theta (witnessed:(state_t -> Type0) -> Type0) (m:freeMST 'a) : state_wp 'a =
   match m with
@@ -105,9 +107,6 @@ let rec freeMST_to_state #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witness
 
 (** ** Attempt at collecting predicates **)
 
-type stable_pred =
-  pred:(state_t -> Type0){forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1}
-
 module S = FStar.TSet
 
 type statepreds =
@@ -116,7 +115,15 @@ type statepreds =
 val witnessed' : (state_t -> Type0) -> Type0
 let witnessed' pred = True // i don't have access to the heap
 
-let rec freeMST_to_state' #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnessed' m `state_wp_stronger` wp}) (post:(a -> state_t -> Type0)) (s0:statepreds{wp post (fst s0)}) :
+let rec closed_preds #a (m:freeMST a) (over:S.set stable_pred) : Type0 =
+  match m with
+  | ReturnMST _ -> True
+  | GetMST k -> forall s. closed_preds (k s) over
+  | PutMST s1 k -> closed_preds (k ()) over
+  | WitnessMST pred k -> closed_preds (k ()) (S.union over (S.singleton pred))
+  | RecallMST pred k -> pred `S.mem` over /\ closed_preds (k ()) over
+
+let rec freeMST_to_state' #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnessed' m `state_wp_stronger` wp}) (post:(a -> state_t -> Type0)) (s0:statepreds{wp post (fst s0) /\ closed_preds m (snd s0)}) :
   Tot (r:(a * statepreds){post (fst r) (fst (snd r))}) =
   match m with
   | ReturnMST x -> (x, s0)
@@ -125,23 +132,33 @@ let rec freeMST_to_state' #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnes
   | WitnessMST pred k -> 
     assert (pred (fst s0));
     assert (witnessed' pred ==> freeMST_theta witnessed' (k ()) post (fst s0));
-    assume (forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1); // one has to strengthen the type of witness/recall
     assert (witnessed' pred);
     let lp = S.union (snd s0) (S.singleton pred) in
     assume (forall (pred:stable_pred). pred `S.mem` lp ==> pred (fst s0)); // probably easy to prove by induction;
     freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post (fst s0, lp)
   | RecallMST pred k -> 
     assert (witnessed' pred);
-    assume (forall h0 h1. pred h0 /\ h0 `state_rel` h1 ==> pred h1); // one has to strengthen the type of witness/recall
-    assume (pred `S.mem` (snd s0));
     assert (pred (fst s0)); (** 
       CA: i need to know here that pred is in the list of predicates.
       In pulse, they have an index that tells them that the predicate is contained **)
     freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post s0
 
+let theorem_5_4 #a (m:freeMST a) (wp:state_wp a) :
+  Lemma
+    (requires (freeMST_theta witnessed' m `state_wp_stronger` wp /\ closed_preds m S.empty)) // the second conjuct requires that witnessed is not used in the pre-condition
+    (ensures (forall post s0. wp post s0 ==> (let (r,s1p) = freeMST_to_state' m wp post (s0, S.empty) in post r (fst s1p)))) =
+    () 
 
+let _ = theorem_5_4 (ReturnMST 5) (state_wp_return 5) 
+let _ = theorem_5_4 (WitnessMST (fun _ -> 6 == 6) ReturnMST) (state_wp_return ())
+let _ = theorem_5_4 (WitnessMST (fun _ -> 6 == 6) (fun () -> RecallMST (fun _ -> 6 == 6) ReturnMST)) (state_wp_return ())
+[@expect_failure]
+let _ = theorem_5_4 (RecallMST (fun _ -> 6 == 6) ReturnMST) (state_wp_return ())
 
+let test x y = theorem_5_4 (WitnessMST (fun _ -> x < y) (fun () -> RecallMST (fun _ -> x < y) ReturnMST)) (fun p s0 -> x < y /\ p () s0)
 
-
-
-
+[@expect_failure]
+let test2 x y = theorem_5_4 (WitnessMST (fun _ -> x < y) (fun () -> RecallMST (fun _ -> x > 5) ReturnMST)) (fun p s0 -> x < y /\ p () s0)
+[@expect_failure]
+let test2' x y = assert (closed_preds (WitnessMST (fun _ -> x < y) (fun () -> RecallMST (fun _ -> x > 5) ReturnMST)) S.empty)
+let test2'' x y = assert (closed_preds (WitnessMST (fun _ -> x < y) (fun () -> RecallMST (fun _ -> x > 5) ReturnMST)) (S.singleton #stable_pred (fun _ -> x > 5)))
