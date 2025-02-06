@@ -95,31 +95,16 @@ let recall (pred:heap_predicate_stable) : STATEwp unit (fun p h -> witnessed pre
 let alloc (#a:Type) (#rel:preorder a) (init:a) :
   ST (mref a rel) (fun h -> True) (alloc_post init)
 = STATEwp?.reflect (mst_alloc init)
-  // let h0 = get () in
-  // let r, h1 = alloc rel h0 init false in
-  // assume (next_addr h0 < next_addr h1);
-  // put h1;
-  // witness (contains_pred r);
-  // r
 
 let read (#a:Type) (#rel:preorder a) (r:mref a rel) :
   STATEwp a (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = STATEwp?.reflect (mst_read r)
-  // let h0 = get () in
-  // Heap.lemma_sel_equals_sel_tot_for_contained_refs h0 r;
-  // sel_tot h0 r
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) :
   ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post #a #rel r v)
 = STATEwp?.reflect (mst_write r v)
-  // let h0 = get () in
-  // let h1 = upd_tot h0 r v in
-  // Heap.lemma_distinct_addrs_distinct_preorders ();
-  // Heap.lemma_distinct_addrs_distinct_mm ();
-  // Heap.lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
-  // put h1
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
   : STATEwp a (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
