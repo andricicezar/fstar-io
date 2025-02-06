@@ -1,5 +1,8 @@
 module SharedRefs
 
+let lemma_eq_addrs_eq_all _ _ _ = admit ()
+let lemma_eq_ref_types_eq_value_types _ = admit ()
+
 (**
 private (** TODO: is this necessary? **)
 let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
