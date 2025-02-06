@@ -113,7 +113,9 @@ type statepreds =
   sp:(state_t * S.set stable_pred){forall (pred:stable_pred). pred `S.mem` (snd sp) ==> pred (fst sp)}
   
 val witnessed' : (state_t -> Type0) -> Type0
-let witnessed' pred = True // i don't have access to the heap
+let witnessed' pred = True // i don't have access to the heap // DA: this looks very fishy
+                                                           //     with this definition witnessed plays no real role below
+                                                           //     the proof below just relies on recursively calculating which predicates have to hold for recalls to be "typeable" 
 
 let rec closed_preds #a (m:freeMST a) (over:S.set stable_pred) : Type0 =
   match m with
@@ -134,7 +136,7 @@ let rec freeMST_to_state' #a (m:freeMST a) (wp:(state_wp a){freeMST_theta witnes
     assert (witnessed' pred ==> freeMST_theta witnessed' (k ()) post (fst s0));
     assert (witnessed' pred);
     let lp = S.union (snd s0) (S.singleton pred) in
-    assume (forall (pred:stable_pred). pred `S.mem` lp ==> pred (fst s0)); // probably easy to prove by induction;
+    assert (forall (pred:stable_pred). pred `S.mem` lp ==> pred (fst s0)); // DA: this just holds by assert;
     freeMST_to_state' (k ()) (freeMST_theta witnessed' (k ())) post (fst s0, lp)
   | RecallMST pred k -> 
     assert (witnessed' pred);
