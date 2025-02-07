@@ -1,9 +1,8 @@
 {
-  "name": "Steel devcontainer",
-  "image": "mtzguido/steel-devcontainer:latest",
-  // "build": {
-  //   "dockerfile": "minimal.Dockerfile"
-  // },
+  "name": "F* devcontainer",
+  "build": {
+    "dockerfile": "minimal.Dockerfile"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -11,12 +10,11 @@
       ]
     }
   },
-  "remoteEnv": {
-  },
+  "remoteEnv": {},
   // Runs only once when container is prepared
   "onCreateCommand": "",
   // Runs periodically and/or when content of repo changes
-  "updateContentCommand": "ln -s ~/steel steel",
+  "updateContentCommand": "",
   // These run only when the container is assigned to a user
   "postCreateCommand": "",
 }
