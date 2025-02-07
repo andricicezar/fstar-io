@@ -5,11 +5,12 @@ open FStar.Tactics.Typeclasses
 open FStar.Universe
 
 open FStar.Monotonic.Heap
+open MST.Repr
 open MST.Tot
 
 type ref_heap_pred =
   #a:Type -> #rel:FStar.Preorder.preorder a -> mref a rel -> heap -> Type0
-  
+
 type ref_heap_pred_stable =
   pred:ref_heap_pred{forall (a:Type) rel (x:mref a rel) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
 
@@ -17,7 +18,7 @@ class witnessable (t:Type) = {
   satisfy : t -> (#a:_ -> #rel:_ -> mref a rel -> Type0) -> Type0;
   satisfy_on_heap : t -> heap -> ref_heap_pred -> Type0;
 
-  satisfy_on_heap_monotonic : x:t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap -> 
+  satisfy_on_heap_monotonic : x:t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap ->
     Lemma (requires (h0 `heap_rel` h1 /\ satisfy_on_heap x h0 pred))
           (ensures (satisfy_on_heap x h1 pred));
 
@@ -49,7 +50,7 @@ instance witnessable_int : witnessable int = {
   pwitness = (fun _ _ -> (fun () -> ()));
 }
 
-instance witnessable_arrow 
+instance witnessable_arrow
   (t1:Type) (t2:Type)
   (pre:t1 -> st_pre)
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) // TODO: one cannot have pre-post depending on outside things.
@@ -63,10 +64,10 @@ instance witnessable_arrow
 instance witnessable_pair (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (t1 * t2) = {
   satisfy = (fun (x1, x2) pred -> c1.satisfy x1 pred /\ c2.satisfy x2 pred);
   satisfy_on_heap = (fun (x1, x2) h pred -> c1.satisfy_on_heap x1 h pred /\ c2.satisfy_on_heap x2 h pred);
-  satisfy_on_heap_monotonic = (fun (x1, x2) pred h0 h1 -> 
+  satisfy_on_heap_monotonic = (fun (x1, x2) pred h0 h1 ->
     c1.satisfy_on_heap_monotonic x1 pred h0 h1;
     c2.satisfy_on_heap_monotonic x2 pred h0 h1);
-  pwitness = (fun (x1, x2) pred -> 
+  pwitness = (fun (x1, x2) pred ->
     let w1 = c1.pwitness x1 pred in
     let w2 = c2.pwitness x2 pred in
     (fun () -> w1 (); w2 ()))
@@ -85,8 +86,8 @@ instance witnessable_sum (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witne
     match x with
     | Inl x1 -> c1.satisfy_on_heap_monotonic x1 pred h0 h1
     | Inr x2 -> c2.satisfy_on_heap_monotonic x2 pred h0 h1);
-  pwitness = (fun x pred -> 
-    match x with 
+  pwitness = (fun x pred ->
+    match x with
     | Inl x1 -> (let w = c1.pwitness x1 pred in (fun () -> w ()))
     | Inr x2 -> (let w = c2.pwitness x2 pred in (fun () -> w ())))
 }
@@ -96,20 +97,20 @@ let rec forall_in_list (l:list 'a) (pred:'a -> Type0) : Type0 =
   | [] -> True
   | hd::tl -> pred hd /\ forall_in_list tl pred
 
-val list_satisfy_on_heap_monotonic : #t:_ -> {| c:witnessable t |} -> l:list t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap -> 
+val list_satisfy_on_heap_monotonic : #t:_ -> {| c:witnessable t |} -> l:list t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap ->
   Lemma (requires (h0 `heap_rel` h1 /\ forall_in_list l (fun x -> c.satisfy_on_heap x h0 pred)))
-        (ensures (forall_in_list l (fun x -> c.satisfy_on_heap x h1 pred))) 
+        (ensures (forall_in_list l (fun x -> c.satisfy_on_heap x h1 pred)))
 let rec list_satisfy_on_heap_monotonic #_ #c l pred h0 h1 =
   match l with
   | Nil -> ()
-  | Cons hd tl -> 
+  | Cons hd tl ->
     c.satisfy_on_heap_monotonic hd pred h0 h1;
     list_satisfy_on_heap_monotonic tl pred h0 h1
 
 instance witnessable_list (t:Type) {| c:witnessable t |} : witnessable (list t) = {
   satisfy = (fun l pred ->
     forall_in_list l (fun x -> c.satisfy x pred));
-  satisfy_on_heap = (fun l h pred -> 
+  satisfy_on_heap = (fun l h pred ->
     forall_in_list l (fun x -> c.satisfy_on_heap x h pred));
 
   satisfy_on_heap_monotonic = (fun l pred h0 h1 ->
@@ -124,14 +125,14 @@ instance witnessable_llist (t:Type) {| c:witnessable t |} : witnessable (linkedL
     match l with
     | LLNil -> True
     | LLCons x xsref -> c.satisfy x pred /\ pred xsref);
-  satisfy_on_heap = (fun l h pred -> 
+  satisfy_on_heap = (fun l h pred ->
     match l with
     | LLNil -> True
     | LLCons x xsref -> c.satisfy_on_heap x h pred /\ pred xsref h
   );
 
   satisfy_on_heap_monotonic = (fun l pred h0 h1 ->
-    match l with 
+    match l with
     | LLNil -> ()
     | LLCons x xsref -> c.satisfy_on_heap_monotonic x pred h0 h1
   );
