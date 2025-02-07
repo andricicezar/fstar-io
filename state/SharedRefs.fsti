@@ -467,14 +467,14 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
       ~(is_shared r h1) /\
       gets_shared Set.empty h0 h1)
 =
-  // let h0 = get () in
+  let h0 = get_heap () in
   let r = alloc init in
-  // let h1 = get () in
-  // lemma_fresh_ref_not_shared r h0;
-  // lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
-  // lemma_upd_preserves_contains r init h0 h1;
-  // assert (~(is_shared r h1));
-  // lemma_sst_alloc_preserves_shared r init h0 h1;
+  let h1 = get_heap () in
+  lemma_fresh_ref_not_shared r h0;
+  lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
+  lemma_upd_preserves_contains r init h0 h1;
+  assert (~(is_shared r h1));
+  lemma_sst_alloc_preserves_shared r init h0 h1;
   r
 
 let sst_share (#t:shareable_typ) (r:ref (to_Type t))
@@ -483,9 +483,9 @@ let sst_share (#t:shareable_typ) (r:ref (to_Type t))
          forall_refs_heap is_shared h0 (sel h0 r))
   (share_post map_shared is_shared r)
 =
-  let h0 = get () in
+  let h0 = get_heap () in
   share r;
-  let h1 = get () in
+  let h1 = get_heap () in
   lemma_sst_share_preserves_contains h0 h1;
   assert (ctrans_ref_pred h1 contains_pred);
   lemma_sst_share_preserves_shared r h0 h1;
@@ -503,13 +503,13 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
       gets_shared Set.empty h0 h1 /\
       is_shared r h1 /\
       modifies_only_shared h0 h1 (** here to help **)) =
-  let h0 = get () in
+  let h0 = get_heap () in
   let r = sst_alloc init in
-  let h1 = get () in
+  let h1 = get_heap () in
   forall_refs_heap_monotonic is_shared h0 h1 init;
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
   sst_share r;
-  let h2 = get () in
+  let h2 = get_heap () in
   assert (fresh r h0 h2);
   assert (addr_of r =!= addr_of map_shared);
   assert (sel h2 r == init);
@@ -531,9 +531,9 @@ let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
     write_post r v h0 () h1 /\
     gets_shared Set.empty h0 h1 /\
     (is_shared r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
-  let h0 = get () in
+  let h0 = get_heap () in
   write r v;
-  let h1 = get () in
+  let h1 = get_heap () in
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
   lemma_upd_preserves_contains r v h0 h1;
   lemma_sst_write_preserves_shared r v h0 h1;
@@ -607,9 +607,9 @@ let sst_write' #a (r:ref a) (v:a)
     write_post r v h0 () h1 /\
     gets_shared Set.empty h0 h1 /\
     (is_shared r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
-  let h0 = get () in
+  let h0 = get_heap () in
   write r v;
-  let h1 = get () in
+  let h1 = get_heap () in
   assert (~(is_shared (map_shared) h1));
   lemma_next_addr_upd_tot h0 r v;
   assert (next_addr h0 == next_addr h1);
@@ -641,9 +641,9 @@ let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
     write_post r v h0 () h1 /\
     gets_shared Set.empty h0 h1 /\
     (is_shared r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
-  let h0 = get () in
+  let h0 = get_heap () in
   write r v;
-  let h1 = get () in
+  let h1 = get_heap () in
   assert (~(is_shared (map_shared) h1));
   lemma_next_addr_upd_tot h0 r v;
   assert (next_addr h0 == next_addr h1);
