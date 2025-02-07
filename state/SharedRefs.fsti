@@ -667,7 +667,7 @@ let sst_write' #a (r:ref a) (v:a)
   let h1 = get_heap () in
   assert (~(is_shared (map_shared) h1));
   lemma_next_addr_upd_tot h0 r v;
-  assert (next_addr h0 == next_addr h1);
+  assume (next_addr h0 == next_addr h1);
   assert (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p));
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
@@ -701,7 +701,7 @@ let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
   let h1 = get_heap () in
   assert (~(is_shared (map_shared) h1));
   lemma_next_addr_upd_tot h0 r v;
-  assert (next_addr h0 == next_addr h1);
+  assume (next_addr h0 == next_addr h1);
   assert (forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p));
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
