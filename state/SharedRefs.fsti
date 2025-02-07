@@ -327,7 +327,7 @@ let lemma_upd_preserves_contains #t (#rel:preorder (to_Type t)) (x:mref (to_Type
     end
   end
 
-(* DA: previous lemma is a special case of this one, they should be merged and the lemmas below made work with this one *)
+(* DA: is the previous lemma should be a special case of this one? can we merge them? can we make sst_alloc work with this one? *)
 let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\

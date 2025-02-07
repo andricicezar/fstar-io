@@ -4,7 +4,7 @@
 - [ ] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
 - [ ] Refactor effect to have an extra index for the flag @Theo
     - [ ] Refactor target contexts to be polymorphic in the flag
-- [ ] Extend sst_alloc to support monotonic references @Danel
+- [x] Extend sst_alloc to support monotonic references @Danel
     - [ ] Test sst_write and sst_alloc with monotonic references
 - [ ] Higher-order Contracts: Figure out, Implement, prove RrHP 
 - [ ] Instantiate compiler model with target contexts written in STLC
