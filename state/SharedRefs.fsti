@@ -326,6 +326,36 @@ let lemma_upd_preserves_contains #t (#rel:preorder (to_Type t)) (x:mref (to_Type
       end
     end
   end
+
+(* DA: previous lemma is a special case of this one, they should be merged and the lemmas below made work with this one *)
+let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+  (requires (
+    h0 `heap_rel` h1 /\
+    (h0 `contains` x \/ fresh x h0 h1) /\
+    h1 == upd h0 x v /\ (** SMTPat kicks in **)
+    (forall t . to_Type t == a ==> forall_refs_heap contains_pred h0 #t v) /\
+    ctrans_ref_pred h0 contains_pred))
+  (ensures (
+    ctrans_ref_pred h1 contains_pred)) =
+  introduce forall t (r:ref (to_Type t)). h1 `contains` r ==> forall_refs_heap contains_pred h1 (sel h1 r)
+  with begin
+    introduce h1 `contains` r ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
+      introduce addr_of r =!= addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
+        eliminate_ctrans_ref_pred h0 r contains_pred; 
+        forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
+      end;
+      introduce addr_of r == addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
+        lemma_eq_addrs_eq_all r x h1;
+        assert (a == to_Type t);
+        forall_refs_heap_monotonic contains_pred h0 h1 #t v;
+        assert (forall_refs_heap contains_pred h1 #t v);
+        assert (sel h1 r == force_retype v);
+        lemma_forall_refs_heap_force_retype contains_pred h1 #t v;
+        assert (forall_refs_heap contains_pred h1 #t (force_retype v));
+        assert (forall_refs_heap contains_pred h1 #t (sel h1 r))
+      end
+    end
+  end
   
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
@@ -353,7 +383,7 @@ let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   end
 
 #push-options "--split_queries always"
-let lemma_sst_alloc_preserves_shared #t (x:ref (to_Type t)) (v:to_Type t) (h0 h1:heap) : Lemma
+let lemma_sst_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -474,6 +504,31 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
   lemma_upd_preserves_contains r init h0 h1;
   assert (~(is_shared r h1));
   lemma_sst_alloc_preserves_shared r init h0 h1;
+  r
+
+let sst_alloc' #a (#rel:preorder a) (init:a)
+: SST (mref a rel)
+    (fun h0 -> 
+      (forall t . to_Type t == a ==> 
+        forall_refs_heap contains_pred h0 #t init))
+    (fun h0 r h1 -> 
+      alloc_post #a init h0 r h1 /\ 
+      ~(is_shared r h1) /\
+      gets_shared Set.empty h0 h1)
+=
+  let h0 = get () in
+  let r = alloc #a #rel init in
+  let h1 = get () in
+  lemma_fresh_ref_not_shared r h0;
+  lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
+  assert (gets_shared Set.empty h0 h1);
+  assert (~(is_shared r h1));
+  assert (alloc_post #a init h0 r h1);
+  assert (ctrans_ref_pred h0 contains_pred);
+  lemma_upd_preserves_contains_alloc' r init h0 h1;
+  lemma_sst_alloc_preserves_shared r init h0 h1;
+  assert (ctrans_ref_pred h1 contains_pred);
+  assert (ctrans_ref_pred h1 is_shared);
   r
 
 let sst_share (#t:shareable_typ) (r:ref (to_Type t)) 
