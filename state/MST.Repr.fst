@@ -5,6 +5,7 @@ open FStar.Tactics
 open FStar.Calc
 open FStar.Preorder
 open FStar.Monotonic.Heap
+open FStar.Ghost
 
 module W = FStar.Monotonic.Witnessed
 
@@ -66,6 +67,8 @@ type free (a:Type u#a) : Type u#(max 1 a) =
 | Witness : p:heap_predicate_stable -> cont:(unit -> free a) -> free a
 | Recall : p:heap_predicate_stable -> cont:(unit -> free a) -> free a
 
+| GetHeap : cont:(erased heap -> free a) -> free a
+
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free a) -> free a
 | Return : a -> free a
 
@@ -86,6 +89,7 @@ let rec free_bind
   | Witness pred cont -> Witness pred (fun _ -> free_bind (cont ()) k)
   | Recall pred cont -> Recall pred (fun _ -> free_bind (cont ()) k)
   | PartialCall pre fnc -> PartialCall pre (fun _ -> free_bind (fnc ()) k)
+  | GetHeap cont -> GetHeap (fun h -> free_bind (cont h) k)
 
 (** ** END Section 2: free monad **)
 
@@ -134,12 +138,18 @@ unfold
 let recall_wp (pred:heap_predicate_stable) : st_mwp_h heap unit =
   fun p h -> witnessed pred /\ (pred h ==> p () h)
 
+unfold
+let get_heap_wp : st_mwp_h heap (erased heap) =
+  fun p h0 -> p (hide h0) h0
+
 val theta : #a:Type u#a -> free a -> st_mwp_h heap a
 let rec theta #a m =
   match m with
   | Return x -> st_return heap _ x
   | PartialCall pre k ->
       st_bind_wp heap _ _ (partial_call_wp pre) (fun r -> theta (k r))
+  | GetHeap k ->
+      st_bind_wp heap _ _ get_heap_wp (fun r -> theta (k r))
   | Read r k ->
       st_bind_wp heap _ _ (read_wp r) (fun r -> theta (k r))
   | Write r v k ->
@@ -261,6 +271,24 @@ let rec lemma_theta_is_lax_morphism_bind
       st_bind_wp heap a b (theta (PartialCall pre k)) (fun x -> theta (f x));
     }
   end
+  | GetHeap k ->
+    begin
+      calc (⊑) {
+        theta (free_bind (GetHeap k) f) ;
+        ⊑ {}
+        st_bind_wp heap _ _ get_heap_wp (fun r -> theta (free_bind (k r) f)) ;
+        ⊑ {
+          let lhs = fun r -> theta (free_bind (k r) f) in
+          let rhs = fun x -> st_bind_wp heap _ _ (theta (k x)) (fun x -> theta (f x)) in
+          introduce forall x. lhs x ⊑ rhs x with begin
+            lemma_theta_is_lax_morphism_bind (k x) f
+          end
+        }
+        st_bind_wp heap _ _ get_heap_wp (fun x -> st_bind_wp heap _ _ (theta (k x)) (fun x -> theta (f x))) ;
+        ⊑ {}
+        st_bind_wp heap a b (theta (GetHeap k)) (fun x -> theta (f x)) ;
+      }
+    end
 #pop-options
 
 (** ** END Section 3: theta **)
@@ -310,5 +338,8 @@ let mst_witness (pred:heap_predicate_stable) : mst unit (witness_wp pred) =
 
 let mst_recall (pred:heap_predicate_stable) : mst unit (recall_wp pred) =
   Recall pred Return
+
+let mst_get_heap : mst (erased heap) get_heap_wp =
+  GetHeap Return
 
 (** ** END Section 4: Dijkstra Monad **)

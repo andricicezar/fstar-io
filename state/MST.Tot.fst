@@ -4,6 +4,7 @@ module MST.Tot
 open FStar.Tactics
 open FStar.Preorder
 open FStar.Monotonic.Heap
+open FStar.Ghost
 open MST.Repr
 
 module W = FStar.Monotonic.Witnessed
@@ -116,33 +117,11 @@ let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
     (write_post r v)
 = write #a #rel r v
 
+let get_heap () : ST (erased heap) (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
+  STATEwp?.reflect (mst_get_heap)
+
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 
 noeq type linkedList (a: Type0) : Type0 =
 | LLNil : linkedList a
 | LLCons : v:a -> next:ref (linkedList a) -> linkedList a
-
-(* Useful lemma to prove specs with materialised initial and final heaps *)
-let mst_prove_spec #a #pre' #post' #pre #post (v : unit -> ST a pre post)
-  ($fpre : (h0:heap) -> Lemma (requires pre' h0) (ensures pre h0))
-  ($fpost: (h0:heap) -> (h1:heap) ->
-    Lemma
-      (requires pre' h0 /\ pre h0)
-      (ensures (forall r. post h0 r h1 ==> post' h0 r h1))
-  )
-: ST a pre' post' =
-  let wp1 = (fun (p:st_post a) (h0:heap) -> pre h0 /\ (forall a h1. h0 `heap_rel` h1 /\ post h0 a h1 ==> p a h1)) in
-  let wp2 = (fun (p:st_post a) (h0:heap) -> pre' h0 /\ (forall a h1. h0 `heap_rel` h1 /\ post' h0 a h1 ==> p a h1)) in
-  introduce forall (p: st_post_h heap a) (h0: heap). wp2 p h0 ==> wp1 p h0 with
-  begin
-    introduce wp2 p h0 ==> wp1 p h0 with _.
-    begin
-      fpre h0 ;
-      introduce forall a h1. h0 `heap_rel` h1 /\ post h0 a h1 ==> p a h1 with
-      begin
-        fpost h0 h1
-      end
-    end
-  end ;
-  assert (wp1 ⊑ wp2) ;
-  v ()
