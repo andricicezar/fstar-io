@@ -13,6 +13,26 @@ assume val secret_map : map_sharedT
 
 let map_shared = FStar.Ghost.hide secret_map
 
+// let share = (fun #a #p sr ->
+//   mst_prove_spec #_ #(fun h0 ->
+//         h0 `contains` sr /\
+//         h0 `contains` map_shared /\
+//         ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
+//         ~(is_shared map_shared h0) /\
+//         (forall p. p >= next_addr h0 ==> ~(sel h0 map_shared p))) #(share_post map_shared is_shared #a #p sr)
+//     (fun _ ->
+//       let m = !secret_map in
+//       let m' = (fun p -> if p = addr_of sr then true else m p) in
+//       secret_map := m'
+//     )
+//     (fun h0 -> ())
+//     (fun h0 h1 ->
+//       lemma_next_addr_contained_refs_addr h0 sr ;
+//       (* lemma_next_addr_upd_tot h0 secret_map m' *)
+//       admit ()
+//     )
+// )
+
 let share = (fun #a #p sr ->
     // let h0 = get () in
     FStar.Classical.forall_intro_2 #heap #(fun _ -> Heap.mref a p) (lemma_next_addr_contained_refs_addr) (* h0 sr *);
@@ -21,7 +41,7 @@ let share = (fun #a #p sr ->
     secret_map := m';
     // let h1 = get () in
     FStar.Classical.forall_intro_3 #heap #(fun h0 -> r: Heap.mref a p { h0 `contains` r }) (lemma_next_addr_upd_tot) (* h0 secret_map m' *) ;
-    admit ()
+    assume (share_post map_shared is_shared #a #p sr)
   )
 
 let lemma_fresh_ref_not_shared = (fun #a #rel r h -> ())
