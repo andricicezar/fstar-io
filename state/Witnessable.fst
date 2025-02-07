@@ -7,23 +7,26 @@ open FStar.Universe
 open FStar.Monotonic.Heap
 open MST.Tot
 
-
-type ref_lheap_pred =
-  pred:(#a:Type -> #rel:_ -> mref a rel -> heap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
+type ref_heap_pred =
+  #a:Type -> #rel:FStar.Preorder.preorder a -> mref a rel -> heap -> Type0
+  
+type ref_heap_pred_stable =
+  pred:ref_heap_pred{forall (a:Type) rel (x:mref a rel) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
 
 class witnessable (t:Type) = {
   satisfy : t -> (#a:_ -> #rel:_ -> mref a rel -> Type0) -> Type0;
-  satisfy_on_heap : t -> heap -> ref_lheap_pred -> Type0;
+  satisfy_on_heap : t -> heap -> ref_heap_pred -> Type0;
 
-  satisfy_on_heap_monotonic : x:t -> pred:ref_lheap_pred -> h0:heap -> h1:heap -> Lemma (
-    h0 `heap_rel` h1 /\ satisfy_on_heap x h0 pred ==> satisfy_on_heap x h1 pred);
+  satisfy_on_heap_monotonic : x:t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap -> 
+    Lemma (requires (h0 `heap_rel` h1 /\ satisfy_on_heap x h0 pred))
+          (ensures (satisfy_on_heap x h1 pred));
 
-  pwitness : x:t -> pred:ref_lheap_pred -> ST (precall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred)))
+  pwitness : x:t -> pred:ref_heap_pred_stable -> ST (precall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred)))
     (requires (fun h0 -> satisfy_on_heap x h0 pred))
     (ensures (fun h0 _ h1 -> h0 == h1));
 }
 
-instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = {
+instance witnessable_mref (t:Type) (rel:FStar.Preorder.preorder t) {| c:witnessable t |} : witnessable (mref t rel) = {
   satisfy = (fun x pred -> pred x);
   satisfy_on_heap = (fun x h pred -> pred x h);
   satisfy_on_heap_monotonic = (fun x pred h0 h1 -> ());
@@ -87,6 +90,34 @@ instance witnessable_sum (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witne
     | Inl x1 -> (let w = c1.pwitness x1 pred in (fun () -> w ()))
     | Inr x2 -> (let w = c2.pwitness x2 pred in (fun () -> w ())))
 }
+
+let rec forall_in_list (l:list 'a) (pred:'a -> Type0) : Type0 =
+  match l with
+  | [] -> True
+  | hd::tl -> pred hd /\ forall_in_list tl pred
+
+val list_satisfy_on_heap_monotonic : #t:_ -> {| c:witnessable t |} -> l:list t -> pred:ref_heap_pred_stable -> h0:heap -> h1:heap -> 
+  Lemma (requires (h0 `heap_rel` h1 /\ forall_in_list l (fun x -> c.satisfy_on_heap x h0 pred)))
+        (ensures (forall_in_list l (fun x -> c.satisfy_on_heap x h1 pred))) 
+let rec list_satisfy_on_heap_monotonic #_ #c l pred h0 h1 =
+  match l with
+  | Nil -> ()
+  | Cons hd tl -> 
+    c.satisfy_on_heap_monotonic hd pred h0 h1;
+    list_satisfy_on_heap_monotonic tl pred h0 h1
+
+instance witnessable_list (t:Type) {| c:witnessable t |} : witnessable (list t) = {
+  satisfy = (fun l pred ->
+    forall_in_list l (fun x -> c.satisfy x pred));
+  satisfy_on_heap = (fun l h pred -> 
+    forall_in_list l (fun x -> c.satisfy_on_heap x h pred));
+
+  satisfy_on_heap_monotonic = (fun l pred h0 h1 ->
+    list_satisfy_on_heap_monotonic l pred h0 h1);
+
+  pwitness = (fun l pred -> admit ());
+}
+
 
 instance witnessable_llist (t:Type) {| c:witnessable t |} : witnessable (linkedList t) = {
   satisfy = (fun l pred ->
