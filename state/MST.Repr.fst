@@ -103,7 +103,7 @@ let read_wp (#a:Type) (#rel:preorder a) (r:mref a rel) : st_mwp_h heap a =
 
 let write_post #a #rel (r:mref a rel) (v:a) h0 () h1 : Type0 =
   h0 `contains` r /\
-  h1 == upd_tot h0 r v /\
+  h1 == upd h0 r v /\
   rel (sel h0 r) v /\
   modifies (Set.singleton (addr_of r)) h0 h1 /\ equal_dom h0 h1 /\
   sel h1 r == v
@@ -113,7 +113,7 @@ let write_wp (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : st_mwp_h heap unit =
   fun p h0 ->
     h0 `contains` r /\ rel (sel h0 r) v /\
-    (forall a h1. h0 `heap_rel` h1 /\ write_post r v h0 a h1 ==> p a h1)
+    (forall a. h0 `heap_rel` (upd h0 r v) /\ write_post r v h0 a (upd h0 r v) ==> p a (upd h0 r v))
 
 let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
   fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\
@@ -124,7 +124,7 @@ let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
 unfold
 let alloc_wp (#a:Type) (#rel:preorder a) (init:a) : st_mwp_h heap (mref a rel) =
   fun p h0 ->
-    (forall a h1. h0 `heap_rel` h1 /\ alloc_post init h0 a h1 ==> p a h1)
+    (forall r. h0 `heap_rel` (upd h0 r init) /\ alloc_post init h0 r (upd h0 r init) ==> p r (upd h0 r init))
 
 unfold
 let witness_wp (pred:heap_predicate) : st_mwp_h heap unit =
