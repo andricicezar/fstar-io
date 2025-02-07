@@ -1,6 +1,6 @@
 {
-  "name": "Steel devcontainer",
-  "image": "mtzguido/steel-devcontainer:latest",
+  "name": "F* devcontainer",
+  "image": "cezarandrici/fstar_codespaces:2025.02.06",
   // "build": {
   //   "dockerfile": "minimal.Dockerfile"
   // },
@@ -11,12 +11,11 @@
       ]
     }
   },
-  "remoteEnv": {
-  },
+  "remoteEnv": {},
   // Runs only once when container is prepared
   "onCreateCommand": "",
   // Runs periodically and/or when content of repo changes
-  "updateContentCommand": "ln -s ~/steel steel",
+  "updateContentCommand": "",
   // These run only when the container is assigned to a user
   "postCreateCommand": "",
 }
