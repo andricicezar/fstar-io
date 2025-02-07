@@ -17,6 +17,8 @@ RUN apt-get update \
       python-is-python3 \
     && apt-get clean -y
 
+USER opam
+
 RUN opam update -y && opam pin -y fstar --dev-repo && opam install z3 -y && opam clean -y -a -c -s --logs
 
 # ENV FSTAR_HOME $HOME/FStar
