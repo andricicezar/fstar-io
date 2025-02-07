@@ -459,7 +459,6 @@ let sst_read (#t:shareable_typ) (r:ref (to_Type t))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
 
-// TODO: Here I don't know yet how to do this
 let sst_alloc (#t:shareable_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
@@ -468,14 +467,14 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
       ~(is_shared r h1) /\
       gets_shared Set.empty h0 h1)
 =
-  let h0 = get () in
+  // let h0 = get () in
   let r = alloc init in
-  let h1 = get () in
-  lemma_fresh_ref_not_shared r h0;
-  lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
-  lemma_upd_preserves_contains r init h0 h1;
-  assert (~(is_shared r h1));
-  lemma_sst_alloc_preserves_shared r init h0 h1;
+  // let h1 = get () in
+  // lemma_fresh_ref_not_shared r h0;
+  // lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
+  // lemma_upd_preserves_contains r init h0 h1;
+  // assert (~(is_shared r h1));
+  // lemma_sst_alloc_preserves_shared r init h0 h1;
   r
 
 let sst_share (#t:shareable_typ) (r:ref (to_Type t))

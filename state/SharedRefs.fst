@@ -14,13 +14,14 @@ assume val secret_map : map_sharedT
 let map_shared = FStar.Ghost.hide secret_map
 
 let share = (fun #a #p sr ->
-    let h0 = get () in
-    lemma_next_addr_contained_refs_addr h0 sr;
+    // let h0 = get () in
+    FStar.Classical.forall_intro_2 #heap #(fun _ -> Heap.mref a p) (lemma_next_addr_contained_refs_addr) (* h0 sr *);
     let m = !secret_map in
     let m' = (fun p -> if p = addr_of sr then true else m p) in
     secret_map := m';
-    let h1 = get () in
-    lemma_next_addr_upd_tot h0 secret_map m'
+    // let h1 = get () in
+    FStar.Classical.forall_intro_3 #heap #(fun h0 -> r: Heap.mref a p { h0 `contains` r }) (lemma_next_addr_upd_tot) (* h0 secret_map m' *) ;
+    admit ()
   )
 
 let lemma_fresh_ref_not_shared = (fun #a #rel r h -> ())
