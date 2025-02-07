@@ -63,7 +63,7 @@ type free (a:Type u#a) : Type u#(max 1 a) =
 | Read : #b:Type0 -> #rel: preorder b -> r: mref b rel -> cont:(b -> free a) -> free a
 | Write : #b:Type0 -> #rel: preorder b -> r: mref b rel -> v:b -> cont:free a -> free a
 | Alloc : #b:Type0 -> #rel: preorder b -> init: b -> cont:(mref b rel -> free a) -> free a
-| Witness : p:heap_predicate -> cont:(unit -> free a) -> free a
+| Witness : p:heap_predicate_stable -> cont:(unit -> free a) -> free a
 | Recall : p:heap_predicate_stable -> cont:(unit -> free a) -> free a
 
 | PartialCall : (pre:pure_pre) -> cont:((squash pre) -> free a) -> free a
@@ -305,7 +305,7 @@ let mst_write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : mst unit (write
 let mst_alloc (#a:Type) (#rel:preorder a) (init:a) : mst (mref a rel) (alloc_wp init) =
   Alloc init Return
 
-let mst_witness (pred:heap_predicate) : mst unit (witness_wp pred) =
+let mst_witness (pred:heap_predicate_stable) : mst unit (witness_wp pred) =
   Witness pred Return
 
 let mst_recall (pred:heap_predicate_stable) : mst unit (recall_wp pred) =
