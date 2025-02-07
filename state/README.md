@@ -1,7 +1,7 @@
 ## Labeled References
 
 ### TODOs
-- [ ] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
+- [X] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
 - [ ] Refactor effect to have an extra index for the flag @Theo
     - [ ] Refactor target contexts to be polymorphic in the flag
 - [x] Extend sst_alloc to support monotonic references @Danel
