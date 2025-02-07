@@ -342,7 +342,7 @@ let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a
   with begin
     introduce h1 `contains` r ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
       introduce addr_of r =!= addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_pred h0 r contains_pred; 
+        eliminate_ctrans_ref_pred h0 r contains_pred;
         forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
       introduce addr_of r == addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
@@ -357,7 +357,7 @@ let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a
       end
     end
   end
-  
+
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
@@ -509,17 +509,17 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
 
 let sst_alloc' #a (#rel:preorder a) (init:a)
 : SST (mref a rel)
-    (fun h0 -> 
-      (forall t . to_Type t == a ==> 
+    (fun h0 ->
+      (forall t . to_Type t == a ==>
         forall_refs_heap contains_pred h0 #t init))
-    (fun h0 r h1 -> 
-      alloc_post #a init h0 r h1 /\ 
+    (fun h0 r h1 ->
+      alloc_post #a init h0 r h1 /\
       ~(is_shared r h1) /\
       gets_shared Set.empty h0 h1)
 =
-  let h0 = get () in
+  let h0 = get_heap () in
   let r = alloc #a #rel init in
-  let h1 = get () in
+  let h1 = get_heap () in
   lemma_fresh_ref_not_shared r h0;
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
   assert (gets_shared Set.empty h0 h1);
@@ -532,7 +532,7 @@ let sst_alloc' #a (#rel:preorder a) (init:a)
   assert (ctrans_ref_pred h1 is_shared);
   r
 
-let sst_share (#t:shareable_typ) (r:ref (to_Type t)) 
+let sst_share (#t:shareable_typ) (r:ref (to_Type t))
 : SST unit
   (fun h0 -> h0 `contains` r /\
          forall_refs_heap is_shared h0 (sel h0 r))
