@@ -7,4 +7,16 @@
 
 FROM ocaml/opam:debian-11-ocaml-4.14
 
-RUN /bin/bash --login -o pipefail -c opam update -y && opam pin -y fstar z3 --dev-repo && opam clean -y -a -c -s --logs && eval $(opam env)
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      libgmp-dev \
+      pkg-config \
+      python3 \
+      python-is-python3 \
+    && apt-get clean -y
+
+RUN opam update -y && opam pin -y fstar --dev-repo && opam install z3 -y && opam clean -y -a -c -s --logs
+
+# ENV FSTAR_HOME $HOME/FStar
