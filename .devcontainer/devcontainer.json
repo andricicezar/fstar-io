@@ -1,8 +1,9 @@
 {
   "name": "F* devcontainer",
-  "build": {
-    "dockerfile": "minimal.Dockerfile"
-  },
+  "image": "cezarandrici/fstar_codespaces:2025.02.06",
+  // "build": {
+  //   "dockerfile": "minimal.Dockerfile"
+  // },
   "customizations": {
     "vscode": {
       "extensions": [
