@@ -8,7 +8,8 @@
     - [ ] Test sst_write and sst_alloc with monotonic references
 - [ ] Extend Shared References to also have label "encapsulated"
 - [ ] Higher-order Contracts: Figure out, Implement, prove RrHP 
-- [ ] Instantiate compiler model with target contexts written in STLC
+- [x] Create compiler model for STLC
+- [ ] Create compiler models also for when context has initial control
 - [ ] Make the effect extractable and executable in OCaml @Guido
     - [ ] Skip nodes that write to the top-level interface that keeps track of the shared references
 - [ ] Examples for key ideas @Ruxandra
@@ -16,6 +17,7 @@
     - [ ] Implement, verify and run auto grader
     - [ ] Implement, verify and run guess example
     - [ ] Implement some contexts (good and attackers) in STLC
+    - [ ] Instantiate compiler models
 - [ ] Find, Implement and run in OCaml a Case Study @Exe
 - [ ] Add Linked Lists to STLC and to the BackTranslation
 - [ ] Improve stability of proofs in SharedRefs.fsti

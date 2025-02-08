@@ -1,4 +1,4 @@
-module Compiler
+module Compiler.STLC
 
 open FStar.FunctionalExtensionality
 open FStar.Tactics
@@ -7,12 +7,18 @@ open MST.Repr
 open MST.Tot
 open SharedRefs
 open TargetLang
+open STLC
+open Backtranslation.STLCToTargetLang
+
 open BeyondCriteria
 
 noeq
 type src_interface1 = {
   ct : Type;
   ct_targetlang : targetlang default_spec ct;
+
+  tct : typ;
+  _c : unit -> Lemma (elab_typ default_spec tct == ct); (** can one even prove this? **)
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
@@ -34,39 +40,30 @@ let src_language1 : language (st_wp int) = {
 
 noeq
 type tgt_interface1 = {
-  ct : inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  ct_targetlang : targetlang default_spec (ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  ct : typ;
 }
 
 type ctx_tgt1 (i:tgt_interface1) = 
-  inv  : (heap -> Type0) -> 
-  prref: mref_pred ->
-  (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  hrel : FStar.Preorder.preorder heap ->
-  read :  ((#t:shareable_typ) -> r:ref (to_Type t) -> 
-            ST (to_Type t) 
-              (requires (fun h0 -> inv h0 /\ prref r))
-              (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))) -> 
-  write : ((#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) -> 
-            ST unit
-              (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
-              (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))) ->
-  alloc : ((#t:shareable_typ) -> init:(to_Type t) -> 
-            ST (ref (to_Type t)) 
-              (requires (fun h0 -> inv h0 /\ forall_refs prref init))
-              (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))) ->
-  i.ct inv prref hrel
+  e:exp{EAbs? e} & typing empty e i.ct
   
-type prog_tgt1 (i:tgt_interface1) = i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) -> SST int (fun _ -> True) (fun _ _ _ -> True)
+type prog_tgt1 (i:tgt_interface1) = elab_typ default_spec i.ct -> SST int (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> elab_typ default_spec i.ct 
 let instantiate_ctx_tgt1 c =
-  c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) tl_read tl_write tl_alloc
+  backtranslate_eabs
+    #(Mktuple3?._1 default_spec) 
+    #(Mktuple3?._2 default_spec) 
+    #(Mktuple3?._3 default_spec) 
+    bt_read
+    bt_write
+    bt_alloc
+    (dsnd c)
+    (vempty default_spec)
+
 
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
-let link_tgt1 p c =
-  fun () -> p (instantiate_ctx_tgt1 c)
+let link_tgt1 #i p c () = p (instantiate_ctx_tgt1 c)
 
 val beh_tgt1 : whole_tgt1 ^-> st_mwp_h heap int
 let beh_tgt1 = on_domain whole_tgt1 (fun wt -> theta (reify (wt ())))
@@ -79,15 +76,17 @@ let tgt_language1 : language (st_wp int) = {
 }
 
 let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
-  ct = (fun _ _ _ -> i.ct);
-  ct_targetlang = i.ct_targetlang;
+  ct = i.tct;
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
-let backtranslate_ctx1 ct = instantiate_ctx_tgt1 ct
+let backtranslate_ctx1 #i ct = 
+  i._c ();
+  instantiate_ctx_tgt1 ct
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
-let compile_pprog1 #i ps = ps
+let compile_pprog1 #i ps = 
+  (fun c -> i._c (); ps c)
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1

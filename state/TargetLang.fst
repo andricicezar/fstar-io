@@ -67,3 +67,61 @@ let default_spec : targetlang_pspec = (
     (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
     (fun h0 h1 -> modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)
 )
+
+type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) = 
+  (#t:shareable_typ) -> r:ref (to_Type t) -> 
+    ST (to_Type t) 
+      (requires (fun h0 -> inv h0 /\ prref r))
+      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
+
+type ttl_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =  
+  (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) -> 
+    ST unit
+      (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
+      (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
+
+type ttl_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =  
+  (#t:shareable_typ) -> init:(to_Type t) -> 
+    ST (ref (to_Type t)) 
+      (requires (fun h0 -> inv h0 /\ forall_refs prref init))
+      (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
+
+val tl_read : ttl_read (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+let tl_read #t r =
+  let h0 = get_heap () in
+  recall (contains_pred r); 
+  recall (is_shared r);
+  let v = read r in
+  assert (forall_refs_heap contains_pred h0 v);
+  assert (forall_refs_heap is_shared h0 v);
+  lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
+  lemma_forall_refs_heap_forall_refs_witnessed v is_shared;
+  lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  v 
+
+val tl_write : ttl_write (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+let tl_write #t r v =
+  recall (contains_pred r);
+  recall (is_shared r);
+  let h0 = get_heap () in
+  lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  lemma_forall_refs_witnessed_forall_refs_heap v contains_pred;
+  lemma_forall_refs_witnessed_forall_refs_heap v is_shared;
+  sst_write r v;
+  let h1 = get_heap () in
+  assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
+
+  assert (trans_shared_contains h1);
+  assert (h1 `contains` map_shared);
+  assert (~(is_shared (map_shared) h1));
+  assert ((forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)))
+
+val tl_alloc : ttl_alloc (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+let tl_alloc #t init =
+  assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
+  lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  lemma_forall_refs_witnessed_forall_refs_heap init contains_pred;
+  lemma_forall_refs_witnessed_forall_refs_heap init is_shared;
+  let r = sst_alloc_shared init in 
+  witness (contains_pred r); witness (is_shared r);
+  r

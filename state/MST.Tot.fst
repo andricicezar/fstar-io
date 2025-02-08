@@ -128,5 +128,8 @@ noeq type linkedList (a: Type0) : Type0 =
 type mref_pred =
   #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
 
+type mref_heap_pred =
+  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0)
+
 type mref_heap_stable_pred =
   #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}
