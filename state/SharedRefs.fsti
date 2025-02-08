@@ -7,6 +7,7 @@ include FStar.Monotonic.Heap
 open FStar.Ghost
 open MST.Repr
 include MST.Tot
+include ShareableType
 
 (** CA&DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
 val lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h:heap) : Lemma
@@ -26,88 +27,6 @@ val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder
 let lemma_eq_ref_types_eq_value_types _ = ()
 *)
 
-
-type ref_pred =
-  #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
-
-type ref_heap_stable_pred =
-  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}
-
-type shareable_typ =
-  | SUnit
-  | SNat
-  | SSum : shareable_typ -> shareable_typ -> shareable_typ
-  | SPair : shareable_typ -> shareable_typ -> shareable_typ
-  | SRef : shareable_typ -> shareable_typ
-  | SLList : shareable_typ -> shareable_typ
-
-let rec to_Type (t:shareable_typ) : Type u#0 =
-  match t with
-  | SUnit -> unit
-  | SNat -> int
-  | SSum t1 t2 -> either (to_Type t1) (to_Type t2)
-  | SPair t1 t2 -> (to_Type t1) * (to_Type t2)
-  | SRef t -> ref (to_Type t)
-  | SLList t -> linkedList (to_Type t)
-
-let rec forall_refs (pred:ref_pred) (#t:shareable_typ) (x:to_Type t) : Type0 =
-  let rcall #t x = forall_refs pred #t x in
-  match t with
-  | SUnit -> True
-  | SNat -> True
-  | SSum t1 t2 -> begin
-    let x : either (to_Type t1) (to_Type t2) = x in
-    match x with
-    | Inl x' -> rcall x'
-    | Inr x' -> rcall x'
-  end
-  | SPair t1 t2 ->
-    let x : (to_Type t1) * (to_Type t2) = x in
-    rcall (fst x) /\ rcall (snd x)
-  | SRef t' ->
-    let x : ref (to_Type t') = x in
-    pred #(to_Type t') #(fun _ _ -> True) x
-  | SLList t' -> begin
-    let x : linkedList (to_Type t') = x in
-    match x with
-    | LLNil -> True
-    | LLCons v xsref ->
-      rcall v /\ pred xsref
-   end
-
-let forall_refs_heap (pred:ref_heap_stable_pred) (h:heap) (#t:shareable_typ) (x:to_Type t) : Type0 =
-  forall_refs (fun r -> pred r h) x
-
-let lemma_forall_refs (t:shareable_typ) (x:to_Type (SRef t)) (pred:ref_pred) :
-  Lemma (forall_refs pred x == pred #_ #(FStar.Heap.trivial_rel _) x) [SMTPat (forall_refs pred x)] by (compute ()) = ()
-
-let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:ref_heap_stable_pred) (h:heap) :
-  Lemma (forall_refs_heap pred h x == pred #_ #(FStar.Heap.trivial_rel _) x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
-
-let rec forall_refs_heap_monotonic (pred:ref_heap_stable_pred) (h0 h1:heap) (#t:shareable_typ) (x:to_Type t) :
-  Lemma (requires (h0 `heap_rel` h1 /\ forall_refs_heap pred h0 x)) (ensures (forall_refs_heap pred h1 x)) =
-  match t with
-  | SUnit -> ()
-  | SNat -> ()
-  | SSum t1 t2 -> begin
-    let x : either (to_Type t1) (to_Type t2) = x in
-    match x  with
-    | Inl x' -> forall_refs_heap_monotonic pred h0 h1 x'
-    | Inr x' -> forall_refs_heap_monotonic pred h0 h1 x'
-  end
-  | SPair t1 t2 ->
-    let x : (to_Type t1) * (to_Type t2) = x in
-    forall_refs_heap_monotonic pred h0 h1 (fst x);
-    forall_refs_heap_monotonic pred h0 h1 (snd x)
-  | SRef t' -> ()
-  | SLList t' -> begin
-    let x : linkedList (to_Type t') = x in
-    match x with
-    | LLNil -> ()
-    | LLCons v xsref ->
-      forall_refs_heap_monotonic pred h0 h1 v
-   end
-
 type map_sharedT =
   mref
     (pos -> GTot bool)
@@ -117,7 +36,7 @@ type map_sharedT =
 
 val map_shared : erased map_sharedT
 
-let is_shared : ref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
+let is_shared : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` map_shared /\ (** this contains is necessary to show that is_shared is a stable predicate **)
     (sel h map_shared) (addr_of r))
 
@@ -127,7 +46,7 @@ let gets_shared (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
 
-let share_post (map_shared:map_sharedT) (is_shared:ref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
+let share_post (map_shared:map_sharedT) (is_shared:mref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
     ~(is_shared (map_shared) h1) /\
@@ -170,7 +89,7 @@ let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
   unmodified_common h0 h1
 
 
-let ctrans_ref_pred (h:heap) (pred:ref_heap_stable_pred) =
+let ctrans_ref_pred (h:heap) (pred:mref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
   (forall (t:shareable_typ) (r:ref (to_Type t)).
     h `contains` r /\ pred r h ==> forall_refs_heap pred h (sel h r)) (** cannot select without being contained **)
@@ -212,7 +131,7 @@ effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre
     (requires (sst_pre pre))
     (ensures  (sst_post a pre post))
 
-let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:ref_heap_stable_pred) :
+let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:mref_heap_stable_pred) :
   Lemma
     (requires (ctrans_ref_pred h pred /\ h `contains` r /\ pred r h))
     (ensures (forall_refs_heap pred h (sel h r))) = ()
@@ -220,13 +139,13 @@ let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:ref_heap_sta
 unfold
 let force_retype (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
 
-let lemma_forall_refs_heap_force_retype_refs (pred:ref_heap_stable_pred) (h:heap) #a (x:ref (to_Type a)) :
+let lemma_forall_refs_heap_force_retype_refs (pred:mref_heap_stable_pred) (h:heap) #a (x:ref (to_Type a)) :
   Lemma
     (requires (pred #(to_Type a) x h))
     (ensures (forall b. to_Type b == to_Type a ==>  pred #(to_Type b) #(FStar.Heap.trivial_preorder _) (force_retype x) h)) = ()
 
 #set-options "--print_implicits"
-let rec lemma_forall_refs_heap_force_retype (pred:ref_heap_stable_pred) (h:heap) #a (x:to_Type a) :
+let rec lemma_forall_refs_heap_force_retype (pred:mref_heap_stable_pred) (h:heap) #a (x:to_Type a) :
   Lemma
     (requires (forall_refs_heap pred h #a x))
     (ensures (forall b. to_Type b == to_Type a ==> forall_refs_heap pred h #b (force_retype x))) =

@@ -7,7 +7,7 @@ open SharedRefs
 open Witnessable
 
 type targetlang_pspec = 
-  (inv:heap -> Type0) * (prref:ref_pred) * (hrel:FStar.Preorder.preorder heap)
+  (inv:heap -> Type0) * (prref:mref_pred) * (hrel:FStar.Preorder.preorder heap)
 
 class targetlang (spec:targetlang_pspec) (t:Type) = 
   { wt : witnessable t }
@@ -32,14 +32,14 @@ instance targetlang_llist pspec t1 {| c1:targetlang pspec t1 |}
 
 unfold let pre_targetlang_arrow
   (inv:heap -> Type0)
-  (prref:ref_pred)
+  (prref:mref_pred)
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =
   inv h0 /\ c1.satisfy x prref
 
 unfold let post_targetlang_arrow
   (inv:heap -> Type0)
-  (prref:ref_pred)
+  (prref:mref_pred)
   (hrel:FStar.Preorder.preorder heap)
   (#t1:Type) {| c1 : witnessable t1 |}
   (#t2:Type) {| c2 : witnessable t2 |}

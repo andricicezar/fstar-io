@@ -3,7 +3,7 @@
 
 FSTAR := fstar.exe
 
-ROOTS := SharedRefs.fst Backtranslation.STLCToTargetLang.fst
+ROOTS := Backtranslation.STLCToTargetLang.fst Compiler.fst
 
 CACHEDIR := .cache
 FLAGS  = --record_hints --use_hints --hint_dir hints --z3version 4.13.3

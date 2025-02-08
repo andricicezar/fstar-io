@@ -105,7 +105,7 @@ let elab_typ_tc #pspec (t:typ) : targetlang pspec (elab_typ pspec t) =
 unfold
 let mk_targetlang_pspec  
   (inv  : heap -> Type0) 
-  (prref: ref_pred)
+  (prref: mref_pred)
   (hrel : FStar.Preorder.preorder heap) 
   : targetlang_pspec =
   (inv, (prref <: (#a:Type0 -> #rel:FStar.Preorder.preorder a -> mref a rel -> Type0)), hrel)
@@ -113,7 +113,7 @@ let mk_targetlang_pspec
 
 let elab_poly_typ (t:typ) =
   #inv  : (heap -> Type0) -> 
-  #prref: ref_pred ->
+  #prref: mref_pred ->
   #hrel : FStar.Preorder.preorder heap ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   read :  ((#t:typ0) -> r:ref (elab_typ0 t) -> 
@@ -426,7 +426,7 @@ let raise #pspec (#t:typ0) (x:elab_typ0 t) :
 
 let rec backtranslate
   (#inv  : (heap -> Type0))
-  (#prref: ref_pred)
+  (#prref: mref_pred)
   (#hrel : FStar.Preorder.preorder heap)
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   (my_read :  ((#t:typ0) -> r:ref (elab_typ0 t) -> 

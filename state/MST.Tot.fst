@@ -124,3 +124,9 @@ type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 noeq type linkedList (a: Type0) : Type0 =
 | LLNil : linkedList a
 | LLCons : v:a -> next:ref (linkedList a) -> linkedList a
+
+type mref_pred =
+  #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
+
+type mref_heap_stable_pred =
+  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}
