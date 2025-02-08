@@ -31,7 +31,7 @@ type ref_pred =
   #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
 
 type ref_heap_stable_pred =
-  pred:(#a:Type -> #rel:_ -> mref a rel -> heap -> Type0){forall (a:Type) (x:ref a) h0 h1. pred x h0 /\ h0 `heap_rel` h1 ==> pred x h1}
+  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}
 
 type shareable_typ =
   | SUnit
