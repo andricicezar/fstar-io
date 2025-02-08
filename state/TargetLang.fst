@@ -25,7 +25,7 @@ instance targetlang_sum pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlan
   = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
 instance targetlang_ref pspec t1 {| c1:targetlang pspec t1 |} 
   : targetlang pspec (ref t1)
-  = { wt = witnessable_ref t1 #c1.wt }
+  = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #c1.wt }
 instance targetlang_llist pspec t1 {| c1:targetlang pspec t1 |} 
   : targetlang pspec (linkedList t1)
   = { wt = witnessable_llist t1 #c1.wt }
@@ -57,3 +57,13 @@ let mk_targetlang_arrow
 instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
+
+let default_spec : targetlang_pspec = (
+    (fun h -> 
+        trans_shared_contains h /\
+        h `contains` map_shared /\ 
+        ~(is_shared (map_shared) h) /\
+        (forall p. p >= next_addr h ==> ~(sel h map_shared p))),
+    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
+    (fun h0 h1 -> modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)
+)

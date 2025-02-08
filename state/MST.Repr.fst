@@ -20,8 +20,9 @@ module W = FStar.Monotonic.Witnessed
 
 (** ** START Section 0: heaps and references **)
 
+(**
 type mref (a:Type0) (rel:preorder a) =
-  r:Heap.mref a rel {is_mm r = false}
+  r:Heap.mref a rel {is_mm r = false}**)
 
 let heap_rel (h1:heap) (h2:heap) =
   forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>

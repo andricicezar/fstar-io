@@ -5,9 +5,7 @@ open FStar.Tactics
 open FStar.Preorder
 open FStar.Monotonic.Heap
 open FStar.Ghost
-open MST.Repr
-
-module W = FStar.Monotonic.Witnessed
+include MST.Repr (** just for witnessed **)
 
 (* Total state effect --- the heap is first-order *)
 
@@ -87,7 +85,7 @@ sub_effect PURE ~> STATEwp = lift_pure_mst
 
 let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) = fun h -> h `contains` r
 
-let witness (pred:heap_predicate_stable) : STATEwp unit (fun p h -> pred h /\ stable pred /\ (witnessed pred ==> p () h)) =
+let witness (pred:heap_predicate_stable) : STATEwp unit (fun p h -> pred h /\ (witnessed pred ==> p () h)) =
   STATEwp?.reflect (mst_witness pred)
 
 let recall (pred:heap_predicate_stable) : STATEwp unit (fun p h -> witnessed pred /\ (pred h ==> p () h)) =

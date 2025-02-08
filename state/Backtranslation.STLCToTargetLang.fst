@@ -157,7 +157,6 @@ let ctx_update_multiple_refs_test #inv #prref #hrel my_read my_write _ x =
 val ctx_HO_test1 : 
   elab_poly_typ (TArr (TRef (TPair (TRef TNat) (TRef TNat))) (TArr TUnit TUnit))
 let ctx_HO_test1 my_read my_write _ xs =
-  let h0 = get () in
   let xs : ref ((ref int) * ref int) = downgrade_val xs in
   let (x', x'') : (ref int) * ref int = my_read #(TPair (TRef TNat) (TRef TNat)) xs in
   my_write #(TPair (TRef TNat) (TRef TNat)) xs (x', x');
@@ -221,17 +220,6 @@ let ctx_HO_test4 _ _ my_alloc f =
   let y:ref (ref int) = my_alloc #(TRef TNat) x in
   raise_val ()
 
-let default_spec : targetlang_pspec = (
-    (fun h -> 
-        trans_shared_contains h /\
-        h `contains` map_shared /\ 
-        ~(is_shared (map_shared) h) /\
-        (forall p. p >= next_addr h ==> ~(sel h map_shared p))),
-    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
-    (fun h0 h1 -> modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)
-)
-
-
 val progr_sep_test: 
   #rp: ref int -> 
   ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
@@ -253,9 +241,7 @@ val progr_declassify :
       ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
-  let h0 = get () in
   sst_share #SNat rp;
-  let h1 = get () in
   witness (contains_pred rp); witness (is_shared rp);
   let r = downgrade_val (f (raise_val rp)) in  
   r
@@ -288,9 +274,7 @@ val progr_secret_unchanged_test:
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
 let progr_secret_unchanged_test rp rs ctx = 
-  let h0 = get () in
   let secret: ref int = sst_alloc #SNat 0 in
-  let h1 = get () in
   downgrade_val (ctx (raise_val ()));
   let v = sst_read #SNat secret in
   ()

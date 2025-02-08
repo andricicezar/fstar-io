@@ -79,10 +79,10 @@ let forall_refs_heap (pred:ref_heap_stable_pred) (h:heap) (#t:shareable_typ) (x:
   forall_refs (fun r -> pred r h) x
 
 let lemma_forall_refs (t:shareable_typ) (x:to_Type (SRef t)) (pred:ref_pred) :
-  Lemma (forall_refs pred x == pred x) [SMTPat (forall_refs pred x)] by (compute ()) = ()
+  Lemma (forall_refs pred x == pred #_ #(FStar.Heap.trivial_rel _) x) [SMTPat (forall_refs pred x)] by (compute ()) = ()
 
 let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:ref_heap_stable_pred) (h:heap) :
-  Lemma (forall_refs_heap pred h x == pred x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
+  Lemma (forall_refs_heap pred h x == pred #_ #(FStar.Heap.trivial_rel _) x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
 
 let rec forall_refs_heap_monotonic (pred:ref_heap_stable_pred) (h0 h1:heap) (#t:shareable_typ) (x:to_Type t) :
   Lemma (requires (h0 `heap_rel` h1 /\ forall_refs_heap pred h0 x)) (ensures (forall_refs_heap pred h1 x)) =
