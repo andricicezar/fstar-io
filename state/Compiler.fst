@@ -43,18 +43,9 @@ type ctx_tgt1 (i:tgt_interface1) =
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ((#t:shareable_typ) -> r:ref (to_Type t) -> 
-            ST (to_Type t) 
-              (requires (fun h0 -> inv h0 /\ prref r))
-              (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))) -> 
-  write : ((#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) -> 
-            ST unit
-              (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
-              (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))) ->
-  alloc : ((#t:shareable_typ) -> init:(to_Type t) -> 
-            ST (ref (to_Type t)) 
-              (requires (fun h0 -> inv h0 /\ forall_refs prref init))
-              (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))) ->
+  read :  ttl_read inv prref hrel -> 
+  write : ttl_write inv prref hrel ->
+  alloc : ttl_alloc inv prref hrel  ->
   i.ct inv prref hrel
   
 type prog_tgt1 (i:tgt_interface1) = i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) -> SST int (fun _ -> True) (fun _ _ _ -> True)
@@ -112,4 +103,99 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
     let i = forall_intro () in
     let ct = forall_intro () in
     FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
+    compute ())
+
+noeq
+type src_interface2 = {
+  pt : Type;
+  pt_targetlang : targetlang default_spec pt;
+}
+
+type ctx_src2 (i:src_interface2) = i.pt -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
+type prog_src2 (i:src_interface2) = i.pt
+type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
+
+let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
+  fun () -> c p
+
+val beh_src2 : whole_src2 ^-> st_mwp_h heap int
+let beh_src2 = on_domain whole_src2 (fun ws -> theta (reify (ws ()))) (** what happens with the pre-condition? **)
+
+let src_language2 : language (st_wp int) = {
+  interface = src_interface2;
+  ctx = ctx_src2; pprog = prog_src2; whole = whole_src2;
+  link = link_src2;
+  beh = beh_src2;
+}
+
+noeq
+type tgt_interface2 = {
+  pt : inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
+  pt_targetlang : targetlang default_spec (pt (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+}
+
+type ctx_tgt2 (i:tgt_interface2) = 
+  inv  : (heap -> Type0) ->
+  prref: mref_pred ->
+  (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
+  hrel : FStar.Preorder.preorder heap ->
+  read :  ttl_read inv prref hrel ->
+  write : ttl_write inv prref hrel ->
+  alloc : ttl_alloc inv prref hrel  ->
+  p:i.pt inv prref hrel ->
+  ST int (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+  
+type prog_tgt2 (i:tgt_interface2) = i.pt (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1))
+
+val link_tgt2 : #i:tgt_interface2 -> prog_tgt2 i -> ctx_tgt2 i -> whole_tgt2
+let link_tgt2 p c =
+  fun () -> 
+    c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+      tl_read tl_write tl_alloc
+      p
+
+val beh_tgt2 : whole_tgt2 ^-> st_mwp_h heap int
+let beh_tgt2 = on_domain whole_tgt2 (fun wt -> theta (reify (wt ())))
+
+let tgt_language2 : language (st_wp int) = {
+  interface = tgt_interface2;
+  ctx = ctx_tgt2; pprog = prog_tgt2; whole = whole_tgt2;
+  link = link_tgt2;
+  beh = beh_tgt2;
+}
+
+let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
+  pt = (fun _ _ _ -> i.pt);
+  pt_targetlang = i.pt_targetlang;
+}
+
+val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
+let backtranslate_ctx2 ct ps = 
+  ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+      tl_read tl_write tl_alloc ps
+
+val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
+let compile_pprog2 #i ps = ps
+
+let comp2 : compiler = {
+  src_sem = st_wp int;
+  tgt_sem = st_wp int;
+  source = src_language2;
+  target = tgt_language2;
+
+  comp_int = comp_int_src_tgt2;
+
+  compile_pprog = compile_pprog2;
+
+  rel_sem = eq_wp;
+}
+
+val comp2_rrhc : unit -> Lemma (rrhc comp2)
+let comp2_rrhc () : Lemma (rrhc comp2) =
+  assert (rrhc comp2) by (
+    norm [delta_only [`%rrhc]]; 
+    let i = forall_intro () in
+    let ct = forall_intro () in
+    FStar.Tactics.witness (`(backtranslate_ctx2 #(`#i) (`#ct)));
     compute ())

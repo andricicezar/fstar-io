@@ -9,7 +9,7 @@
 - [ ] Extend Shared References to also have label "encapsulated"
 - [ ] Higher-order Contracts: Figure out, Implement, prove RrHP 
 - [x] Create compiler model for STLC
-- [ ] Create compiler models also for when context has initial control
+- [x] Create compiler models also for when context has initial control
 - [ ] Make the effect extractable and executable in OCaml @Guido
     - [ ] Skip nodes that write to the top-level interface that keeps track of the shared references
 - [ ] Examples for key ideas @Ruxandra
