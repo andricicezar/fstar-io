@@ -54,7 +54,7 @@ let share_post (map_shared:map_sharedT) (is_shared:mref_heap_stable_pred) #a #re
     gets_shared !{sr} h0 h1
 
 val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
-    ST unit
+    ST unit All
       (requires (fun h0 ->
         h0 `contains` sr /\
         h0 `contains` map_shared /\
@@ -127,7 +127,7 @@ let sst_post
     post h0 r h1
 
 effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
-  ST a
+  ST a All
     (requires (sst_pre pre))
     (ensures  (sst_post a pre post))
 

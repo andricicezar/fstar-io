@@ -83,7 +83,7 @@ let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t
    end
 
 let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:mref_heap_stable_pred) :
-  ST unit 
+  ST unit All
     (requires (fun h0 -> forall_refs_heap pred h0 v))
     (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs (fun r -> witnessed (pred r)) v)) =
   match t with
@@ -95,12 +95,12 @@ let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:mref
     | Inl v' -> lemma_forall_refs_heap_forall_refs_witnessed v' pred
     | Inr v' -> lemma_forall_refs_heap_forall_refs_witnessed v' pred
   end
-  | SPair t1 t2 -> 
+  | SPair t1 t2 ->
     let v : (to_Type t1) * (to_Type t2) = v in
     lemma_forall_refs_heap_forall_refs_witnessed (fst v) pred;
     lemma_forall_refs_heap_forall_refs_witnessed (snd v) pred
   | SRef t' ->
-    let v : ref (to_Type t') = v in 
+    let v : ref (to_Type t') = v in
     witness (pred v);
     ()
   | SLList t' -> begin
@@ -113,7 +113,7 @@ let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:mref
   end
 
 let rec lemma_forall_refs_witnessed_forall_refs_heap #t (v:to_Type t) (pred:mref_heap_stable_pred) :
-  ST unit 
+  ST unit All
     (requires (fun _ -> forall_refs (fun r -> witnessed (pred r)) v))
     (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs_heap pred h1 v)) =
   match t with
@@ -125,12 +125,12 @@ let rec lemma_forall_refs_witnessed_forall_refs_heap #t (v:to_Type t) (pred:mref
     | Inl v' -> lemma_forall_refs_witnessed_forall_refs_heap v' pred
     | Inr v' -> lemma_forall_refs_witnessed_forall_refs_heap v' pred
   end
-  | SPair t1 t2 -> 
+  | SPair t1 t2 ->
     let v : (to_Type t1) * (to_Type t2) = v in
     lemma_forall_refs_witnessed_forall_refs_heap (fst v) pred;
     lemma_forall_refs_witnessed_forall_refs_heap (snd v) pred
   | SRef t' ->
-    let v : ref (to_Type t') = v in 
+    let v : ref (to_Type t') = v in
     recall (pred v);
     ()
   | SLList t' -> begin
@@ -154,7 +154,7 @@ let rec lemma_forall_refs_join #t (v:to_Type t) (pred1 pred2:mref_pred) :
     | Inl v' -> lemma_forall_refs_join v' pred1 pred2
     | Inr v' -> lemma_forall_refs_join v' pred1 pred2
   end
-  | SPair t1 t2 -> 
+  | SPair t1 t2 ->
     let v : (to_Type t1) * (to_Type t2) = v in
     lemma_forall_refs_join (fst v) pred1 pred2;
     lemma_forall_refs_join (snd v) pred1 pred2
@@ -179,7 +179,7 @@ let rec lemma_forall_refs_split #t (v:to_Type t) (pred1 pred2:mref_pred) :
     | Inl v' -> lemma_forall_refs_split v' pred1 pred2
     | Inr v' -> lemma_forall_refs_split v' pred1 pred2
   end
-  | SPair t1 t2 -> 
+  | SPair t1 t2 ->
     let v : (to_Type t1) * (to_Type t2) = v in
     lemma_forall_refs_split (fst v) pred1 pred2;
     lemma_forall_refs_split (snd v) pred1 pred2

@@ -38,16 +38,16 @@ type tgt_interface1 = {
   ct_targetlang : targetlang default_spec (ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
-type ctx_tgt1 (i:tgt_interface1) = 
-  inv  : (heap -> Type0) -> 
+type ctx_tgt1 (i:tgt_interface1) =
+  inv  : (heap -> Type0) ->
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read inv prref hrel -> 
+  read :  ttl_read inv prref hrel ->
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
   i.ct inv prref hrel
-  
+
 type prog_tgt1 (i:tgt_interface1) = i.ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) -> SST int (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
@@ -99,7 +99,7 @@ let comp1 : compiler = {
 val comp1_rrhc : unit -> Lemma (rrhc comp1)
 let comp1_rrhc () : Lemma (rrhc comp1) =
   assert (rrhc comp1) by (
-    norm [delta_only [`%rrhc]]; 
+    norm [delta_only [`%rrhc]];
     let i = forall_intro () in
     let ct = forall_intro () in
     FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
@@ -134,7 +134,7 @@ type tgt_interface2 = {
   pt_targetlang : targetlang default_spec (pt (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
-type ctx_tgt2 (i:tgt_interface2) = 
+type ctx_tgt2 (i:tgt_interface2) =
   inv  : (heap -> Type0) ->
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
@@ -143,15 +143,15 @@ type ctx_tgt2 (i:tgt_interface2) =
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
   p:i.pt inv prref hrel ->
-  ST int (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
-  
+  ST int All (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+
 type prog_tgt2 (i:tgt_interface2) = i.pt (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1))
 
 val link_tgt2 : #i:tgt_interface2 -> prog_tgt2 i -> ctx_tgt2 i -> whole_tgt2
 let link_tgt2 p c =
-  fun () -> 
-    c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+  fun () ->
+    c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
       tl_read tl_write tl_alloc
       p
 
@@ -171,8 +171,8 @@ let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
 }
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
-let backtranslate_ctx2 ct ps = 
-  ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+let backtranslate_ctx2 ct ps =
+  ct (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
       tl_read tl_write tl_alloc ps
 
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
@@ -194,7 +194,7 @@ let comp2 : compiler = {
 val comp2_rrhc : unit -> Lemma (rrhc comp2)
 let comp2_rrhc () : Lemma (rrhc comp2) =
   assert (rrhc comp2) by (
-    norm [delta_only [`%rrhc]]; 
+    norm [delta_only [`%rrhc]];
     let i = forall_intro () in
     let ct = forall_intro () in
     FStar.Tactics.witness (`(backtranslate_ctx2 #(`#i) (`#ct)));
