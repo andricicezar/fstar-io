@@ -19,13 +19,13 @@ let rec satisfies #a (t : free a) (f : tflag) =
   | None ->
     begin match t with
     | Return x -> True
-    | Read r cont -> False
-    | Write r v cont -> False
-    | Alloc init cont -> False
-    | Witness pred cont -> cont () `satisfies` f
-    | Recall pred cont -> cont () `satisfies` f
     | PartialCall pre fnc -> forall r. fnc r  `satisfies` f
-    | GetHeap cont -> False
+    | Read _ _
+    | Write _ _ _
+    | Alloc _ _
+    | Witness _ _
+    | Recall _ _
+    | GetHeap _ -> False
     end
 
 let (⊕) (flag1:tflag) (flag2:tflag) : tflag =
