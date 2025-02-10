@@ -408,6 +408,12 @@ let sst_read (#t:shareable_typ) (r:ref (to_Type t))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
 
+let sst_read' #a (#rel:preorder a) (r:mref a rel)
+  : SST a
+        (requires (fun h0 -> h0 `contains` r))
+        (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
+  MST.Tot.read r
+
 let sst_alloc (#t:shareable_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
