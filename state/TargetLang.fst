@@ -56,7 +56,7 @@ let mk_targetlang_arrow
 
 instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
-  = { wt = witnessable_arrow t1 t2 _ _ }
+  = { wt = witnessable_arrow t1 t2 _ _ _ }
 
 let default_spec : targetlang_pspec = (
     (fun h ->
