@@ -2,38 +2,39 @@ module TargetLang
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.Ghost
 
 open SharedRefs
 open Witnessable
 
-type targetlang_pspec = 
+type targetlang_pspec =
   (inv:heap -> Type0) * (prref:mref_pred) * (hrel:FStar.Preorder.preorder heap)
 
-class targetlang (spec:targetlang_pspec) (t:Type) = 
-  { wt : witnessable t }
+class targetlang (fl : erased tflag) (spec:targetlang_pspec) (t:Type) =
+  { wt : witnessable fl t }
 
-instance targetlang_unit pspec : targetlang pspec unit = { wt = witnessable_unit }
-instance targetlang_int  pspec : targetlang pspec int = { wt = witnessable_int }
-instance targetlang_pair pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |} 
-  : targetlang pspec (t1 * t2)
+instance targetlang_unit pspec : targetlang All pspec unit = { wt = witnessable_unit }
+instance targetlang_int  pspec : targetlang All pspec int = { wt = witnessable_int }
+instance targetlang_pair pspec t1 t2 {| c1:targetlang All pspec t1 |} {| c2:targetlang All pspec t2 |}
+  : targetlang All pspec (t1 * t2)
   = { wt = witnessable_pair t1 t2 #c1.wt #c2.wt }
-instance targetlang_univ_raise pspec (t1:Type u#a) {| c1:targetlang pspec t1 |} 
-  : targetlang pspec (FStar.Universe.raise_t u#a u#b t1)
+instance targetlang_univ_raise pspec (t1:Type u#a) {| c1:targetlang All pspec t1 |}
+  : targetlang All pspec (FStar.Universe.raise_t u#a u#b t1)
   = { wt = witnessable_univ_raise t1 #c1.wt }
-instance targetlang_sum pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |} 
-  : targetlang pspec (either t1 t2)
+instance targetlang_sum pspec t1 t2 {| c1:targetlang All pspec t1 |} {| c2:targetlang All pspec t2 |}
+  : targetlang All pspec (either t1 t2)
   = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
-instance targetlang_ref pspec t1 {| c1:targetlang pspec t1 |} 
-  : targetlang pspec (ref t1)
+instance targetlang_ref pspec t1 {| c1:targetlang All pspec t1 |}
+  : targetlang All pspec (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #c1.wt }
-instance targetlang_llist pspec t1 {| c1:targetlang pspec t1 |} 
-  : targetlang pspec (linkedList t1)
+instance targetlang_llist pspec t1 {| c1:targetlang All pspec t1 |}
+  : targetlang All pspec (linkedList t1)
   = { wt = witnessable_llist t1 #c1.wt }
 
 unfold let pre_targetlang_arrow
   (inv:heap -> Type0)
   (prref:mref_pred)
-  (#t1:Type) {| c1 : witnessable t1 |}
+  (#t1:Type) {| c1 : witnessable All t1 |}
   (x:t1) (h0:heap) =
   inv h0 /\ c1.satisfy x prref
 
@@ -41,55 +42,55 @@ unfold let post_targetlang_arrow
   (inv:heap -> Type0)
   (prref:mref_pred)
   (hrel:FStar.Preorder.preorder heap)
-  (#t1:Type) {| c1 : witnessable t1 |}
-  (#t2:Type) {| c2 : witnessable t2 |}
+  (#t1:Type) {| c1 : witnessable All t1 |}
+  (#t2:Type) {| c2 : witnessable All t2 |}
   (x:t1) (h0:heap) (r:t2) (h1:heap) =
   inv h1 /\ h0 `hrel` h1 /\ c2.satisfy r prref
 
 let mk_targetlang_arrow
   (pspec:targetlang_pspec)
-  (t1:Type) {| c1 : witnessable t1 |}
-  (t2:Type) {| c2 : witnessable t2 |}
-= x:t1 -> ST t2 
+  (t1:Type) {| c1 : witnessable All t1 |}
+  (t2:Type) {| c2 : witnessable All t2 |}
+= x:t1 -> ST t2 All
     (requires (fun h0 -> (Mktuple3?._1 pspec) h0 /\ c1.satisfy x (Mktuple3?._2 pspec))) (** CA: super stupid that one has to use projectors **)
     (ensures (fun h0 r h1 -> (Mktuple3?._1 pspec) h1 /\ h0 `(Mktuple3?._3 pspec)` h1 /\ c2.satisfy r (Mktuple3?._2 pspec)))
 
-instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
-  : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
-  = { wt = witnessable_arrow t1 t2 _ _ }
+instance targetlang_arrow pspec t1 t2 {| c1:targetlang All pspec t1 |} {| c2:targetlang All pspec t2 |}
+  : targetlang All pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
+  = { wt = witnessable_arrow t1 t2 _ _ _ }
 
 let default_spec : targetlang_pspec = (
-    (fun h -> 
+    (fun h ->
         trans_shared_contains h /\
-        h `contains` map_shared /\ 
+        h `contains` map_shared /\
         ~(is_shared (map_shared) h) /\
         (forall p. p >= next_addr h ==> ~(sel h map_shared p))),
     (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
     (fun h0 h1 -> modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)
 )
 
-type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) = 
-  (#t:shareable_typ) -> r:ref (to_Type t) -> 
-    ST (to_Type t) 
+type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+  (#t:shareable_typ) -> r:ref (to_Type t) ->
+    ST (to_Type t) fl
       (requires (fun h0 -> inv h0 /\ prref r))
       (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
 
-type ttl_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =  
-  (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) -> 
-    ST unit
+type ttl_write (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+  (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
+    ST unit fl
       (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
-type ttl_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =  
-  (#t:shareable_typ) -> init:(to_Type t) -> 
-    ST (ref (to_Type t)) 
+type ttl_alloc (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+  (#t:shareable_typ) -> init:(to_Type t) ->
+    ST (ref (to_Type t)) fl
       (requires (fun h0 -> inv h0 /\ forall_refs prref init))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
-val tl_read : ttl_read (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+val tl_read : ttl_read All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_read #t r =
   let h0 = get_heap () in
-  recall (contains_pred r); 
+  recall (contains_pred r);
   recall (is_shared r);
   let v = read r in
   assert (forall_refs_heap contains_pred h0 v);
@@ -97,9 +98,9 @@ let tl_read #t r =
   lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
   lemma_forall_refs_heap_forall_refs_witnessed v is_shared;
   lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
-  v 
+  v
 
-val tl_write : ttl_write (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+val tl_write : ttl_write All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_write #t r v =
   recall (contains_pred r);
   recall (is_shared r);
@@ -116,12 +117,12 @@ let tl_write #t r v =
   assert (~(is_shared (map_shared) h1));
   assert ((forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)))
 
-val tl_alloc : ttl_alloc (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) 
+val tl_alloc : ttl_alloc All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   lemma_forall_refs_witnessed_forall_refs_heap init contains_pred;
   lemma_forall_refs_witnessed_forall_refs_heap init is_shared;
-  let r = sst_alloc_shared init in 
+  let r = sst_alloc_shared init in
   witness (contains_pred r); witness (is_shared r);
   r
