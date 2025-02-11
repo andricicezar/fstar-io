@@ -13,14 +13,14 @@ open BeyondCriteria
 noeq
 type src_interface1 = {
   ct : Type;
-  ct_targetlang : targetlang All default_spec ct;
+  ct_targetlang : targetlang default_spec ct;
 }
 
-type ctx_src1 fl (i:src_interface1)  = i.ct
-type prog_src1 fl (i:src_interface1) = i.ct -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
+type ctx_src1 (i:src_interface1)  = i.ct
+type prog_src1 (i:src_interface1) = i.ct -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
 type whole_src1 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
 
-let link_src1 (#i:src_interface1) (p:prog_src1 All i) (c:ctx_src1 All i) : whole_src1 =
+let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
   fun () -> p c
 
 val beh_src1 : whole_src1 ^-> st_mwp_h heap int
@@ -28,7 +28,7 @@ let beh_src1 = on_domain whole_src1 (fun ws -> theta (reify (ws ()))) (** what h
 
 let src_language1 : language (st_wp int) = {
   interface = src_interface1;
-  ctx = ctx_src1 All; pprog = prog_src1 All; whole = whole_src1;
+  ctx = ctx_src1; pprog = prog_src1; whole = whole_src1;
   link = link_src1;
   beh = beh_src1;
 }
@@ -36,7 +36,7 @@ let src_language1 : language (st_wp int) = {
 noeq
 type tgt_interface1 = {
   ct : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  ct_targetlang : targetlang All default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  ct_targetlang : targetlang default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -82,7 +82,7 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
 let backtranslate_ctx1 ct = instantiate_ctx_tgt1 ct
 
-val compile_pprog1 : (#i:src_interface1) -> prog_src1 All i -> prog_tgt1 (comp_int_src_tgt1 i)
+val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps = ps
 
 unfold
@@ -113,7 +113,7 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 noeq
 type src_interface2 = {
   pt : Type;
-  pt_targetlang : targetlang All default_spec pt;
+  pt_targetlang : targetlang default_spec pt;
 }
 
 type ctx_src2 (i:src_interface2) =
@@ -139,7 +139,7 @@ let src_language2 : language (st_wp int) = {
 noeq
 type tgt_interface2 = {
   pt : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  pt_targetlang : targetlang All default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  pt_targetlang : targetlang default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -183,7 +183,6 @@ let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
 let backtranslate_ctx2 #i ct ps =
-  // Currently wrong, because tl_read and co uses All instead of fl
   ct #All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
       tl_read tl_write tl_alloc ps
 

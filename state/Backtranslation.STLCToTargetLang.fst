@@ -22,7 +22,7 @@ unfold
 let elab_typ0 (t:typ0) : Type u#0 =
   to_Type (to_shareable_typ t)
 
-let rec elab_typ0_tc #pspec (t:typ0) : targetlang All pspec (elab_typ0 t) =
+let rec elab_typ0_tc #pspec (t:typ0) : targetlang pspec (elab_typ0 t) =
   match t with
   | TUnit -> targetlang_unit pspec
   | TNat -> targetlang_int pspec
@@ -31,7 +31,7 @@ let rec elab_typ0_tc #pspec (t:typ0) : targetlang All pspec (elab_typ0 t) =
   | TRef t -> targetlang_ref pspec _ #(elab_typ0_tc t)
   | TLList t -> targetlang_llist pspec _ #(elab_typ0_tc t)
 
-let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang All pspec tt =
+let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang pspec tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 in
@@ -62,7 +62,7 @@ let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang A
 let elab_typ (pspec:targetlang_pspec) (t:typ) : Type =
   dfst (_elab_typ #pspec t)
 
-let elab_typ_tc #pspec (t:typ) : targetlang All pspec (elab_typ pspec t) =
+let elab_typ_tc #pspec (t:typ) : targetlang pspec (elab_typ pspec t) =
   dsnd (_elab_typ #pspec t)
 
 unfold
@@ -196,7 +196,7 @@ val progr_sep_test:
   ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
@@ -208,7 +208,7 @@ val progr_declassify :
   ctx:(elab_typ default_spec (TArr (TRef TNat) TUnit)) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
@@ -222,7 +222,7 @@ val progr_declassify_nested:
   ctx:(elab_typ default_spec (TArr (TRef (TRef TNat)) TUnit)) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0)))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
@@ -239,9 +239,9 @@ val progr_secret_unchanged_test:
   ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0) /\
-      satisfy_on_heap #All rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
 let progr_secret_unchanged_test rp rs ctx =
@@ -256,9 +256,9 @@ val progr_passing_callback_test:
   ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0) /\
-      satisfy_on_heap #All rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 // TODO: the callback of the program should be able to modify rp
 let progr_passing_callback_test rp rs f =
@@ -278,9 +278,9 @@ val progr_getting_callback_test:
   ctx:(elab_typ default_spec (TArr TUnit (TArr TUnit TUnit))) ->
   SST unit
     (requires (fun h0 ->
-      satisfy_on_heap #All rp h0 contains_pred /\
+      satisfy_on_heap rp h0 contains_pred /\
       ~(is_shared rp h0) /\
-      satisfy_on_heap #All rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
 let progr_getting_callback_test rp rs f =
   let cb = f (raise_val ()) in
