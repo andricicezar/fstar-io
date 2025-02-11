@@ -5,9 +5,9 @@
 - [X] Refactor effect to have an extra index for the flag @Theo
     - [X] Refactor target contexts to be polymorphic in the flag
 - [x] Extend sst_alloc to support monotonic references @Danel
-    - [ ] Test sst_write and sst_alloc with monotonic references
-- [ ] Extend Shared References to also have label "encapsulated"
-- [ ] Higher-order Contracts: Figure out, Implement, prove RrHP
+    - [x] Test sst_write and sst_alloc with monotonic references
+- [ ] Extend Shared References to also have label "encapsulated" @Danel
+- [ ] Higher-order Contracts: Figure out, Implement, prove RrHP @Theo
 - [x] Create compiler model for STLC
 - [x] Create compiler models also for when context has initial control
 - [ ] Make the effect extractable and executable in OCaml @Guido
