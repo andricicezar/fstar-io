@@ -32,32 +32,28 @@ instance targetlang_llist pspec t1 {| c1:targetlang pspec t1 |}
   = { wt = witnessable_llist t1 #c1.wt }
 
 unfold let pre_targetlang_arrow
-  (inv:heap -> Type0)
-  (prref:mref_pred)
+  (pspec:targetlang_pspec)
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =
-  inv h0 /\ c1.satisfy x prref
+  (Mktuple3?._1 pspec) h0 /\ c1.satisfy x (Mktuple3?._2 pspec)
 
 unfold let post_targetlang_arrow
-  (inv:heap -> Type0)
-  (prref:mref_pred)
-  (hrel:FStar.Preorder.preorder heap)
-  (#t1:Type) {| c1 : witnessable t1 |}
+  (pspec:targetlang_pspec)
   (#t2:Type) {| c2 : witnessable t2 |}
-  (x:t1) (h0:heap) (r:t2) (h1:heap) =
-  inv h1 /\ h0 `hrel` h1 /\ c2.satisfy r prref
+  (h0:heap) (r:t2) (h1:heap) =
+  (Mktuple3?._1 pspec) h1 /\ h0 `(Mktuple3?._3 pspec)` h1 /\ c2.satisfy r (Mktuple3?._2 pspec)
 
 let mk_targetlang_arrow
   (pspec:targetlang_pspec)
   (t1:Type) {| c1 : witnessable t1 |}
   (t2:Type) {| c2 : witnessable t2 |}
 = x:t1 -> ST t2 All
-    (requires (fun h0 -> (Mktuple3?._1 pspec) h0 /\ c1.satisfy x (Mktuple3?._2 pspec))) (** CA: super stupid that one has to use projectors **)
-    (ensures (fun h0 r h1 -> (Mktuple3?._1 pspec) h1 /\ h0 `(Mktuple3?._3 pspec)` h1 /\ c2.satisfy r (Mktuple3?._2 pspec)))
+    (pre_targetlang_arrow pspec x)
+    (post_targetlang_arrow pspec)
 
 instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
-  = { wt = witnessable_arrow t1 t2 _ _ _ }
+  = { wt = witnessable_arrow t1 t2 _ _ }
 
 let default_spec : targetlang_pspec = (
     (fun h ->

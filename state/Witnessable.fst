@@ -47,10 +47,9 @@ instance witnessable_int : witnessable int = {
 
 instance witnessable_arrow
   (t1:Type) (t2:Type)
-  (fl : tflag)
   (pre:t1 -> st_pre)
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) // TODO: one cannot have pre-post depending on outside things.
-: witnessable (x:t1 -> ST t2 fl (pre x) (post x)) = {
+: witnessable (x:t1 -> ST t2 All (pre x) (post x)) = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
   satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
