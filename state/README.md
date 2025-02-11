@@ -3,7 +3,7 @@
 ### TODOs
 - [X] Refactor effect to have Read/Write/Alloc operations instead of Get/Put @Theo
 - [X] Refactor effect to have an extra index for the flag @Theo
-    - [ ] Refactor target contexts to be polymorphic in the flag
+    - [X] Refactor target contexts to be polymorphic in the flag
 - [x] Extend sst_alloc to support monotonic references @Danel
     - [ ] Test sst_write and sst_alloc with monotonic references
 - [ ] Extend Shared References to also have label "encapsulated"
