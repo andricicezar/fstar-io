@@ -12,12 +12,12 @@ open BeyondCriteria
 
 noeq
 type src_interface1 = {
-  ct : erased tflag -> Type;
-  ct_targetlang : (fl : erased tflag) -> targetlang fl default_spec (ct fl);
+  ct : Type;
+  ct_targetlang : targetlang All default_spec ct;
 }
 
-type ctx_src1 fl (i:src_interface1)  = i.ct fl
-type prog_src1 fl (i:src_interface1) = i.ct fl -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
+type ctx_src1 fl (i:src_interface1)  = i.ct
+type prog_src1 fl (i:src_interface1) = i.ct -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
 type whole_src1 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 All i) (c:ctx_src1 All i) : whole_src1 =
@@ -36,7 +36,7 @@ let src_language1 : language (st_wp int) = {
 noeq
 type tgt_interface1 = {
   ct : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  ct_targetlang : fl:_ -> targetlang fl default_spec (ct fl (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  ct_targetlang : targetlang All default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -75,7 +75,7 @@ let tgt_language1 : language (st_wp int) = {
 }
 
 let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
-  ct = (fun fl _ _ _ -> i.ct fl);
+  ct = (fun _ _ _ _ -> i.ct);
   ct_targetlang = i.ct_targetlang;
 }
 
@@ -112,19 +112,18 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 
 noeq
 type src_interface2 = {
-  pt : fl:_ -> Type;
-  pt_targetlang : fl:_ -> targetlang fl default_spec (pt fl);
+  pt : Type;
+  pt_targetlang : targetlang All default_spec pt;
 }
 
 type ctx_src2 (i:src_interface2) =
-  #fl: _ ->
-  i.pt fl ->
+  i.pt ->
   SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
 
-type prog_src2 fl (i:src_interface2) = i.pt fl
+type prog_src2 (i:src_interface2) = i.pt 
 type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
 
-let link_src2 (#i:src_interface2) (p:prog_src2 All i) (c:ctx_src2 i) : whole_src2 =
+let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
   fun () -> c p
 
 val beh_src2 : whole_src2 ^-> st_mwp_h heap int
@@ -132,7 +131,7 @@ let beh_src2 = on_domain whole_src2 (fun ws -> theta (reify (ws ()))) (** what h
 
 let src_language2 : language (st_wp int) = {
   interface = src_interface2;
-  ctx = ctx_src2; pprog = prog_src2 All; whole = whole_src2;
+  ctx = ctx_src2; pprog = prog_src2; whole = whole_src2;
   link = link_src2;
   beh = beh_src2;
 }
@@ -140,7 +139,7 @@ let src_language2 : language (st_wp int) = {
 noeq
 type tgt_interface2 = {
   pt : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  pt_targetlang : fl:_ -> targetlang fl default_spec (pt fl (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  pt_targetlang : targetlang All default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -178,18 +177,17 @@ let tgt_language2 : language (st_wp int) = {
 }
 
 let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
-  pt = (fun fl _ _ _ -> i.pt fl);
+  pt = (fun _ _ _ _ -> i.pt);
   pt_targetlang = i.pt_targetlang;
 }
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
-let backtranslate_ctx2 #i ct #fl ps =
-  admit () ;
+let backtranslate_ctx2 #i ct ps =
   // Currently wrong, because tl_read and co uses All instead of fl
-  ct #fl (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+  ct #All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
       tl_read tl_write tl_alloc ps
 
-val compile_pprog2 : (#i:src_interface2) -> prog_src2 All i -> prog_tgt2 (comp_int_src_tgt2 i)
+val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
 let compile_pprog2 #i ps = ps
 
 let comp2 : compiler = {
