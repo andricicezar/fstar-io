@@ -17,7 +17,7 @@ let share = (fun #a #p sr ->
     let h0 = get_heap () in
     lemma_next_addr_contained_refs_addr h0 sr ;
     let m = !secret_map in
-    let m' = (fun p -> if p = addr_of sr then true else m p) in
+    let m' = (fun p -> if p = addr_of sr then Shared else m p) in
     secret_map := m';
     let h1 = get_heap () in
     lemma_next_addr_upd h0 secret_map m'
@@ -34,5 +34,5 @@ let lemma_unmodified_map_implies_same_shared_status (ms:Set.set nat) (h0 h1:heap
         introduce is_shared r h1 ==> is_shared r h0 with _. ()
       end
     end
-
+    
 let lemma_same_addr_same_sharing_status = (fun ra rb h -> ())
