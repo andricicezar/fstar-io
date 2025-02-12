@@ -663,11 +663,9 @@ let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
   end;
   ()
 
-(* *************** *)
-
 let gets_encapsulated (s:set nat) (h0:heap) (h1:heap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_encapsulated r h1)}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (is_encapsulated r h0 <==> is_encapsulated r h1)) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r)) /\ //(is_encapsulated r h0 <==> is_encapsulated r h1)) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_encapsulated r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_encapsulated r h1)
 
@@ -692,10 +690,6 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
     ctrans_ref_pred h0 is_shared))
   (ensures (
     ctrans_ref_pred h1 is_shared)) =
-  admit ()
-#pop-options
-
-(*
   introduce forall a (r:ref (to_Type a)). h1 `contains` r /\ is_shared r h1 ==> forall_refs_heap is_shared h1 (sel h1 r)
   with begin
     introduce h1 `contains` r /\ is_shared r h1 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
@@ -708,15 +702,17 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
       end;
       introduce ~(is_shared r h0) ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
         assert (addr_of x =!= addr_of map_shared);
-        //assert (addr_of r == addr_of x);
-        admit ()
-        //lemma_eq_addrs_eq_all r x h1;
-        //forall_refs_heap_monotonic is_shared h0 h1 (sel h0 x);
-        //lemma_forall_refs_heap_force_retype is_shared h1 #t (sel h1 x)
+        assert (is_private r h0 \/ is_encapsulated r h0);
+        introduce is_private r h0 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
+          introduce addr_of x = addr_of r ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
+            assert (is_encapsulated r h1);
+            assert (is_shared r h1)            // r is both encapsulated and shared in the final state
+          end
+        end
       end
     end
   end
-*)
+#pop-options
   
 val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
     ST unit All
