@@ -46,7 +46,7 @@ type typ = t:unsafe_typ{good_univs t}
 let rec lemma_typ0_is_typ (t:typ0) :
      Lemma
           (requires True)
-          (ensures (good_univs t)) 
+          (ensures (good_univs t))
           [SMTPat (good_univs t)]
 = match t with
                | TUnit -> ()
@@ -198,12 +198,12 @@ noeq type typing : context -> exp -> typ -> Type0 =
    2) the structure of the expression e *)
 
 (* Parallel substitution operation `subst` *)
-let sub (renaming:bool) = 
+let sub (renaming:bool) =
     f:(var -> exp){ renaming <==> (forall x. EVar? (f x)) }
 
 let bool_order (b:bool) = if b then 0 else 1
 
-let sub_inc 
+let sub_inc
   : sub true
   = fun y -> EVar (y+1)
 
@@ -213,10 +213,10 @@ let rec subst (#r:bool)
               (s:sub r)
               (e:exp)
   : Tot (e':exp { r ==> (EVar? e <==> EVar? e') })
-        (decreases %[bool_order (EVar? e); 
+        (decreases %[bool_order (EVar? e);
                      bool_order r;
                      1;
-                     e]) = 
+                     e]) =
      match e with
      | EVar x -> s x
      | ELoc l -> ELoc l
@@ -235,23 +235,23 @@ let rec subst (#r:bool)
      | EReadRef e -> EReadRef (subst s e)
      | EWriteRef e1 e2 -> EWriteRef (subst s e1) (subst s e2)
 
-and sub_EAbs (#r:bool) (s:sub r) 
+and sub_EAbs (#r:bool) (s:sub r)
   : Tot (sub r)
         (decreases %[1;
                      bool_order r;
                      0;
                      EVar 0])
-  = let f : var -> exp = 
+  = let f : var -> exp =
       fun y ->
         if y=0
         then EVar y
         else subst sub_inc (s (y - 1))
     in
     introduce not r ==> (exists x. ~ (EVar? (f x)))
-    with not_r. 
+    with not_r.
       eliminate exists y. ~ (EVar? (s y))
       returns (exists x. ~ (EVar? (f x)))
-      with (not_evar_sy:squash (~(EVar? (s y)))). 
+      with (not_evar_sy:squash (~(EVar? (s y)))).
         introduce exists x. ~(EVar? (f x))
         with (y + 1)
         and ()
@@ -260,7 +260,7 @@ and sub_EAbs (#r:bool) (s:sub r)
 
 let sub_beta (e:exp)
   : sub (EVar? e)
-  = let f = 
+  = let f =
       fun (y:var) ->
         if y = 0 then e      (* substitute *)
         else (EVar (y-1))    (* shift -1 *)
@@ -290,14 +290,14 @@ let rec is_closed_exp (e:exp) (g:context) : bool =
      | EZero -> true
      | ELoc _ -> false // TODO: is this ok?
 
-let rec is_closed_value (e:exp) : bool = 
+let rec is_closed_value (e:exp) : bool =
      match e with
      | EUnit
      | EZero -> true
      | ESucc e -> is_closed_value e
      | ELoc _ -> false
      | EInl e -> is_closed_value e
-     | EInr e -> is_closed_value e 
+     | EInr e -> is_closed_value e
      | EPair e1 e2 -> is_closed_value e1 && is_closed_value e2
      | EAbs t _ -> is_closed_exp e (extend t empty)
      | _ -> false
@@ -399,7 +399,7 @@ type pure_step : exp -> exp -> Type =
 
 let store = loc -> option (e:exp{is_closed_value e})
 let empty_store : store = fun _ -> None
-let salloc (s:store) (l:loc) (v:exp{is_closed_value v}) : store = 
+let salloc (s:store) (l:loc) (v:exp{is_closed_value v}) : store =
      fun l' -> if l' = l then Some v else s l'
 
 noeq
@@ -459,7 +459,7 @@ let ctx_update_ref_test : typing empty _ (TArr (TRef TNat) TUnit) =
      TyAbs (TRef TNat) (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))
 
 let ctx_update_multiple_refs_test : typing empty _ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit)) =
-     TyAbs (TRef (TRef TNat)) 
+     TyAbs (TRef (TRef TNat))
           (TyAbs (TRef TNat) (
                TyApp (TyAbs TUnit (TyWriteRef (TyVar 2) (TyVar 1)))
                      (TyWriteRef (TyVar 0) (TySucc (TyReadRef (TyVar 0))))))
@@ -471,7 +471,7 @@ let ctx_dynamic_alloc_test : typing empty _ (TArr TNat (TRef TNat)) =
      TyAbs TNat (TyAllocRef (TyVar 0))
 
 let ctx_returns_callback_test : typing empty _ (TArr TUnit (TArr TUnit TUnit)) =
-     TyAbs TUnit 
+     TyAbs TUnit
           (TyApp (TyAbs (TRef TNat) (TyAbs TUnit (TyWriteRef (TyVar 1) (TySucc (TyReadRef (TyVar 1))))))
                  (TyAllocRef TyZero))
 
@@ -483,7 +483,7 @@ let landins_knot : exp =
                (EApp
                  (EAbs (TArr TUnit TUnit) (* f *)
                     (EApp
-                         (EAbs TUnit (EApp (EVar 1) EUnit)) (* f () *)  
+                         (EAbs TUnit (EApp (EVar 1) EUnit)) (* f () *)
                          (EWriteRef (EVar 1) (EVar 0)) (* r := f *)
                     ))
                  (EAbs TUnit (EApp (EReadRef (EVar 1)) EUnit)))) (* f = fun () -> r () *)
@@ -491,16 +491,16 @@ let landins_knot : exp =
 
 let ty_landins_knot : typing empty landins_knot TUnit =
      TyApp (TyAbs (TRef (TArr TUnit TUnit))
-                  (TyApp (TyAbs (TArr TUnit TUnit) 
+                  (TyApp (TyAbs (TArr TUnit TUnit)
                                (TyApp (TyAbs TUnit (TyApp (TyVar 1) TyUnit))
                                        (TyWriteRef (TyVar 1) (TyVar 0))))
                          (TyAbs TUnit (TyApp (TyReadRef (TyVar 1)) TyUnit))))
            (TyAllocRef (TyAbs TUnit (TyVar 0)))
 **)
 
-open FStar.ST 
+open FStar.ST
 
-let landins_knot_fs () : St nat = 
+let landins_knot_fs () : St nat =
   let id : nat -> St nat = fun x -> x in
   let r : ref (nat -> St nat) = alloc id in
   let f : nat -> St nat = (fun x -> !r x) in

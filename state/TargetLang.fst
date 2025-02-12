@@ -50,7 +50,7 @@ let mk_targetlang_arrow
   (pspec:targetlang_pspec)
   (t1:Type) {| c1 : witnessable t1 |}
   (t2:Type) {| c2 : witnessable t2 |}
-= x:t1 -> ST t2 All
+= x:t1 -> ST t2
     (pre_targetlang_arrow pspec x)
     (post_targetlang_arrow pspec)
 
@@ -70,23 +70,23 @@ let default_spec : targetlang_pspec = (
 
 type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) ->
-    ST (to_Type t) fl
+    STFlag (to_Type t) fl
       (requires (fun h0 -> inv h0 /\ prref r))
       (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
 
 type ttl_write (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
-    ST unit fl
+    STFlag unit fl
       (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
 type ttl_alloc (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> init:(to_Type t) ->
-    ST (ref (to_Type t)) fl
+    STFlag (ref (to_Type t)) fl
       (requires (fun h0 -> inv h0 /\ forall_refs prref init))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
-val tl_read : ttl_read All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val tl_read : ttl_read AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
@@ -99,7 +99,7 @@ let tl_read #t r =
   lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   v
 
-val tl_write : ttl_write All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val tl_write : ttl_write AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_write #t r v =
   recall (contains_pred r);
   recall (is_shared r);
@@ -116,7 +116,7 @@ let tl_write #t r v =
   assert (~(is_shared (map_shared) h1));
   assert ((forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)))
 
-val tl_alloc : ttl_alloc All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val tl_alloc : ttl_alloc AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
