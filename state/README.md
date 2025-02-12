@@ -7,7 +7,8 @@
 - [x] Extend sst_alloc to support monotonic references @Danel
     - [x] Test sst_write and sst_alloc with monotonic references
 - [ ] Extend Shared References to also have label "encapsulated" @Danel
-- [ ] Higher-order Contracts: Figure out, Implement, prove RrHP @Theo
+- [x] Higher-order Contracts: Figure out, Implement, prove RrHP
+    - [ ] Introduce instances for better automation @Theo
 - [x] Create compiler model for STLC
 - [x] Create compiler models also for when context has initial control
 - [ ] Make the effect extractable and executable in OCaml @Guido

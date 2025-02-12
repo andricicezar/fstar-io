@@ -11,14 +11,15 @@ open STLC
 open Backtranslation.STLCToTargetLang
 
 open BeyondCriteria
+open HigherOrderContracts
 
 noeq
 type src_interface1 = {
   ct : Type;
-  ct_targetlang : targetlang default_spec ct;
+  c_ct : safe_importable_to ct;
 
   tct : typ;
-  _c : unit -> Lemma (elab_typ default_spec tct == ct); (** can one even prove this? **)
+  c_tct : unit -> Lemma (elab_typ default_spec tct == c_ct.ityp); (** can one even prove this? **)
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
@@ -81,12 +82,13 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
 let backtranslate_ctx1 #i ct =
-  i._c ();
-  instantiate_ctx_tgt1 ct
+  i.c_tct ();
+  i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
-let compile_pprog1 #i ps =
-  (fun c -> i._c (); ps c)
+let compile_pprog1 #i ps ct =
+  i.c_tct (); 
+  ps (i.c_ct.safe_import ct)
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1

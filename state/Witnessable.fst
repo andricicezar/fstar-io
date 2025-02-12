@@ -45,6 +45,13 @@ instance witnessable_int : witnessable int = {
   pwitness = (fun _ _ -> (fun () -> ()));
 }
 
+instance witnessable_refinement (t:Type) {| c:witnessable t |} (p:t -> Type0) : witnessable (x:t{p x}) = {
+  satisfy = (fun (x:t{p x}) pred -> c.satisfy x pred);
+  satisfy_on_heap = (fun (x:t{p x}) h pred -> c.satisfy_on_heap x h pred);
+  satisfy_on_heap_monotonic = (fun (x:t{p x}) pred h0 h1 -> c.satisfy_on_heap_monotonic x pred h0 h1);
+  pwitness = (fun (x:t{p x}) pred -> c.pwitness x pred)
+}
+
 instance witnessable_arrow
   (t1:Type) (t2:Type)
   (pre:t1 -> st_pre)
@@ -54,6 +61,26 @@ instance witnessable_arrow
   satisfy_on_heap = (fun _ _ _ -> True);
   satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
   pwitness = (fun _ _ -> (fun () -> ()));
+}
+
+instance witnessable_option (t:Type) {| c:witnessable t |} : witnessable (option t) = {
+  satisfy = (fun x pred ->
+    match x with
+    | FStar.Pervasives.Native.None -> True
+    | Some x' -> c.satisfy x' pred);
+  satisfy_on_heap = (fun x h pred ->
+    match x with
+    | FStar.Pervasives.Native.None -> True
+    | Some x' -> c.satisfy_on_heap x' h pred);
+  satisfy_on_heap_monotonic = (fun x pred h0 h1 ->
+    match x with
+    | FStar.Pervasives.Native.None -> ()
+    | Some x' -> c.satisfy_on_heap_monotonic x' pred h0 h1);
+  pwitness = (fun x pred ->
+    match x with
+    | FStar.Pervasives.Native.None -> (fun () -> ())
+    | Some x' -> 
+      let w = c.pwitness x' pred in (fun () -> w ()))
 }
 
 instance witnessable_pair (t1:Type) (t2:Type) {| c1:witnessable t1 |} {| c2:witnessable t2 |} : witnessable (t1 * t2) = {

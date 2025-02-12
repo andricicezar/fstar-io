@@ -10,10 +10,12 @@ open SharedRefs
 open TargetLang
 open BeyondCriteria
 
+open HigherOrderContracts
+
 noeq
 type src_interface1 = {
   ct : Type;
-  ct_targetlang : targetlang default_spec ct;
+  c_ct : safe_importable_to ct;
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
@@ -36,7 +38,7 @@ let src_language1 : language (st_wp int) = {
 noeq
 type tgt_interface1 = {
   ct : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  ct_targetlang : targetlang default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  c_ct : targetlang default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -75,15 +77,16 @@ let tgt_language1 : language (st_wp int) = {
 }
 
 let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
-  ct = (fun _ _ _ _ -> i.ct);
-  ct_targetlang = i.ct_targetlang;
+  ct = (fun _ _ _ _ -> i.c_ct.ityp);
+  c_ct = i.c_ct.c_ityp;
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
-let backtranslate_ctx1 ct = instantiate_ctx_tgt1 ct
+let backtranslate_ctx1 #i ct = i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
-let compile_pprog1 #i ps = ps
+let compile_pprog1 #i ps =
+  fun c -> ps (i.c_ct.safe_import c)
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1
@@ -113,7 +116,7 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 noeq
 type src_interface2 = {
   pt : Type;
-  pt_targetlang : targetlang default_spec pt;
+  c_pt : exportable_from pt;
 }
 
 type ctx_src2 (i:src_interface2) =
@@ -139,7 +142,7 @@ let src_language2 : language (st_wp int) = {
 noeq
 type tgt_interface2 = {
   pt : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  pt_targetlang : targetlang default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  c_pt : targetlang default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -177,17 +180,17 @@ let tgt_language2 : language (st_wp int) = {
 }
 
 let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
-  pt = (fun _ _ _ _ -> i.pt);
-  pt_targetlang = i.pt_targetlang;
+  pt = (fun _ _ _ _ -> i.c_pt.ityp);
+  c_pt = i.c_pt.c_ityp;
 }
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
 let backtranslate_ctx2 #i ct ps =
   ct #All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
-      tl_read tl_write tl_alloc ps
+      tl_read tl_write tl_alloc (i.c_pt.export ps)
 
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
-let compile_pprog2 #i ps = ps
+let compile_pprog2 #i ps = i.c_pt.export ps
 
 let comp2 : compiler = {
   src_sem = st_wp int;

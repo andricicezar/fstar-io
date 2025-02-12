@@ -24,6 +24,9 @@ instance targetlang_univ_raise pspec (t1:Type u#a) {| c1:targetlang pspec t1 |}
 instance targetlang_sum pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
   : targetlang pspec (either t1 t2)
   = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
+instance targetlang_option pspec t1 {| c1:targetlang pspec t1 |}
+  : targetlang pspec (option t1)
+  = { wt = witnessable_option t1 #c1.wt }
 instance targetlang_ref pspec t1 {| c1:targetlang pspec t1 |}
   : targetlang pspec (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #c1.wt }
