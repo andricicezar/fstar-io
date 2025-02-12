@@ -36,3 +36,13 @@ let lemma_unmodified_map_implies_same_shared_status (ms:Set.set nat) (h0 h1:heap
     end
     
 let lemma_same_addr_same_sharing_status = (fun ra rb h -> ())
+
+let encapsulate = (fun #a #p r ->
+    let h0 = get_heap () in
+    lemma_next_addr_contained_refs_addr h0 r ;
+    let m = !secret_map in
+    let m' = (fun p -> if p = addr_of r then Encapsulated else m p) in
+    secret_map := m';
+    let h1 = get_heap () in
+    lemma_next_addr_upd h0 secret_map m'
+  )
