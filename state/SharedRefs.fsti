@@ -62,8 +62,8 @@ let is_encapsulated : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     Encapsulated? ((sel h map_shared) (addr_of r)))
 
 let gets_shared (s:set nat) (h0:heap) (h1:heap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1)) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r))) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
 
@@ -665,7 +665,7 @@ let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
 
 let gets_encapsulated (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r)) /\ //(is_encapsulated r h0 <==> is_encapsulated r h1)) /\
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r)) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_encapsulated r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_encapsulated r h1)
 
@@ -704,9 +704,9 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
         assert (addr_of x =!= addr_of map_shared);
         assert (is_private r h0 \/ is_encapsulated r h0);
         introduce is_private r h0 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
-          introduce addr_of x = addr_of r ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
+          introduce addr_of x = addr_of r ==> False with _. begin
             assert (is_encapsulated r h1);
-            assert (is_shared r h1)            // r is both encapsulated and shared in the final state
+            assert (is_shared r h1)
           end
         end
       end
