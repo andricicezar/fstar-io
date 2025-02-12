@@ -83,7 +83,7 @@ let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t
    end
 
 let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:mref_heap_stable_pred) :
-  ST unit AllOps
+  ST unit
     (requires (fun h0 -> forall_refs_heap pred h0 v))
     (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs (fun r -> witnessed (pred r)) v)) =
   match t with
@@ -113,7 +113,7 @@ let rec lemma_forall_refs_heap_forall_refs_witnessed #t (v:to_Type t) (pred:mref
   end
 
 let rec lemma_forall_refs_witnessed_forall_refs_heap #t (v:to_Type t) (pred:mref_heap_stable_pred) :
-  ST unit AllOps
+  ST unit
     (requires (fun _ -> forall_refs (fun r -> witnessed (pred r)) v))
     (ensures (fun h0 _ h1 -> h0 == h1 /\ forall_refs_heap pred h1 v)) =
   match t with

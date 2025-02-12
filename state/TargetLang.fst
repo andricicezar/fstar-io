@@ -50,7 +50,7 @@ let mk_targetlang_arrow
   (pspec:targetlang_pspec)
   (t1:Type) {| c1 : witnessable t1 |}
   (t2:Type) {| c2 : witnessable t2 |}
-= x:t1 -> ST t2 AllOps
+= x:t1 -> ST t2
     (pre_targetlang_arrow pspec x)
     (post_targetlang_arrow pspec)
 
@@ -70,19 +70,19 @@ let default_spec : targetlang_pspec = (
 
 type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) ->
-    ST (to_Type t) fl
+    STFlag (to_Type t) fl
       (requires (fun h0 -> inv h0 /\ prref r))
       (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
 
 type ttl_write (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
-    ST unit fl
+    STFlag unit fl
       (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
 type ttl_alloc (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> init:(to_Type t) ->
-    ST (ref (to_Type t)) fl
+    STFlag (ref (to_Type t)) fl
       (requires (fun h0 -> inv h0 /\ forall_refs prref init))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 

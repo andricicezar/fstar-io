@@ -138,14 +138,14 @@ instance exportable_arrow
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   (_:squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow default_spec #(resexn t2) #(witnessable_sum t2 err #c2.c_styp) h0 r h1))
-  (check:(x:t1 -> ST (either unit err) AllOps (pre_targetlang_arrow default_spec #_ #c1.c_styp x) (fun h0 r h1 -> h0==h1 /\ (Inl? r ==> pre x h0))))
+  (check:(x:t1 -> ST (either unit err) (pre_targetlang_arrow default_spec #_ #c1.c_styp x) (fun h0 r h1 -> h0==h1 /\ (Inl? r ==> pre x h0))))
                              (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                                  e.g., the invariant on the heap **)
-  : exportable_from (x:t1 -> ST (resexn t2) AllOps (pre x) (post x)) = {
+  : exportable_from (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow default_spec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
   c_ityp = targetlang_arrow default_spec c1.ityp (resexn c2.ityp) #_ #(targetlang_sum default_spec c2.ityp err) ;
-  export = (fun (f:(x:t1 -> ST (resexn t2) AllOps (pre x) (post x))) (x:c1.ityp) ->
+  export = (fun (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
     match c1.import x with
     | Inl x' -> begin
       c1.lemma_import_preserves_prref x;
@@ -280,7 +280,7 @@ type cb_capture_check (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   (x:t1)
   (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-  (r:t2 -> ST (resexn unit) AllOps (fun h1 -> post_targetlang_arrow default_spec eh0 r h1) (fun h1 rck h1' ->
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_targetlang_arrow default_spec eh0 r h1) (fun h1 rck h1' ->
     h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
 
 type capture_check
@@ -289,7 +289,7 @@ type capture_check
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
   x:t1 -> ST (
     eh0:FStar.Ghost.erased heap{pre x eh0} & cb_capture_check t1 t2 #c2 pre post x eh0
-  ) AllOps (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
+  ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
 
 instance safe_importable_arrow
   (t1:Type) (t2:Type)
@@ -300,7 +300,7 @@ instance safe_importable_arrow
   (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow default_spec #_ #c1.c_styp x h0))
   (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_targetlang_arrow default_spec #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
   (capture_check:capture_check t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
-  : safe_importable_to (x:t1 -> ST (resexn t2) AllOps (pre x) (post x)) = {
+  : safe_importable_to (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow default_spec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
   c_ityp = targetlang_arrow default_spec c1.ityp (resexn c2.ityp) #_ #(targetlang_sum default_spec c2.ityp err #c2.c_ityp);

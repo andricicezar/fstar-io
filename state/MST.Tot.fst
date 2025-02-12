@@ -152,9 +152,11 @@ effect {
   }
 }
 
-effect ST (a:Type) (fl:tflag) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
+effect STFlag (a:Type) (fl:tflag) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
   STATEwp a fl (fun (p:st_post a) (h0:heap) -> pre h0 /\ (forall a h1. h0 `heap_rel` h1 /\ post h0 a h1 ==> p a h1))
-effect St (a:Type) = ST a NoOps (fun h -> True) (fun h0 r h1 -> True)
+effect ST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
+  STFlag a AllOps pre post
+effect St (a:Type) = STFlag a NoOps (fun h -> True) (fun h0 r h1 -> True)
 
 unfold
 let wp_lift_pure_st (w : pure_wp 'a) : st_wp 'a =
@@ -185,7 +187,7 @@ let recall (pred:heap_predicate_stable) : STATEwp unit AllOps (fun p h -> witnes
   STATEwp?.reflect (mst_recall pred)
 
 let alloc (#a:Type) (#rel:preorder a) (init:a) :
-  ST (mref a rel) AllOps (fun h -> True) (alloc_post init)
+  ST (mref a rel) (fun h -> True) (alloc_post init)
 = STATEwp?.reflect (mst_alloc init)
 
 let read (#a:Type) (#rel:preorder a) (r:mref a rel) :
@@ -193,7 +195,7 @@ let read (#a:Type) (#rel:preorder a) (r:mref a rel) :
 = STATEwp?.reflect (mst_read r)
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) :
-  ST unit AllOps
+  ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post #a #rel r v)
 = STATEwp?.reflect (mst_write r v)
@@ -203,12 +205,12 @@ let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
-  : ST unit AllOps
+  : ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post r v)
 = write #a #rel r v
 
-let get_heap () : ST (erased heap) AllOps (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
+let get_heap () : ST (erased heap) (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
   STATEwp?.reflect (mst_get_heap)
 
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)

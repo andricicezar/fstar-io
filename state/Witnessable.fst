@@ -17,7 +17,7 @@ class witnessable (t:Type) = {
     Lemma (requires (h0 `heap_rel` h1 /\ satisfy_on_heap x h0 pred))
           (ensures (satisfy_on_heap x h1 pred));
 
-  pwitness : x:t -> pred:mref_heap_stable_pred -> ST (precall:(unit -> ST unit AllOps (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred))) AllOps
+  pwitness : x:t -> pred:mref_heap_stable_pred -> ST (precall:(unit -> ST unit (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred)))
     (requires (fun h0 -> satisfy_on_heap x h0 pred))
     (ensures (fun h0 _ h1 -> h0 == h1));
 }
@@ -56,7 +56,7 @@ instance witnessable_arrow
   (t1:Type) (t2:Type)
   (pre:t1 -> st_pre)
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) // TODO: one cannot have pre-post depending on outside things.
-: witnessable (x:t1 -> ST t2 AllOps (pre x) (post x)) = {
+: witnessable (x:t1 -> ST t2 (pre x) (post x)) = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
   satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
