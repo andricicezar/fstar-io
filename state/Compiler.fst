@@ -38,7 +38,7 @@ let src_language1 : language (st_wp int) = {
 noeq
 type tgt_interface1 = {
   ct : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  c_ct : targetlang default_spec (ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  c_ct : targetlang default_spec (ct AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -53,12 +53,12 @@ type ctx_tgt1 (i:tgt_interface1) =
   i.ct fl inv prref hrel
 
 type prog_tgt1 (i:tgt_interface1) =
-  i.ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) ->
+  i.ct AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) ->
   SST int (fun _ -> True) (fun _ _ _ -> True)
 
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let instantiate_ctx_tgt1 c =
   c (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec) tl_read tl_write tl_alloc
 
@@ -123,7 +123,7 @@ type ctx_src2 (i:src_interface2) =
   i.pt ->
   SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
 
-type prog_src2 (i:src_interface2) = i.pt 
+type prog_src2 (i:src_interface2) = i.pt
 type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1)
 
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
@@ -142,7 +142,7 @@ let src_language2 : language (st_wp int) = {
 noeq
 type tgt_interface2 = {
   pt : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  c_pt : targetlang default_spec (pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
+  c_pt : targetlang default_spec (pt AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec));
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -158,7 +158,7 @@ type ctx_tgt2 (i:tgt_interface2) =
   ST int fl (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 
 type prog_tgt2 (i:tgt_interface2) =
-  i.pt All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+  i.pt AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 
 type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3 default_spec) h0 h1))
 
@@ -186,7 +186,7 @@ let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
 let backtranslate_ctx2 #i ct ps =
-  ct #All (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+  ct #AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
       tl_read tl_write tl_alloc (i.c_pt.export ps)
 
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)

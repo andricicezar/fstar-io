@@ -3,8 +3,8 @@ module Examples
 open FStar.Preorder
 open SharedRefs
 open Witnessable
-  
-type grade = 
+
+type grade =
 | NotGraded
 | MaxGrade
 | MinGrade
@@ -26,11 +26,11 @@ let sorted (ll:linkedList int) (h:heap) = admit ()
 let same_elements (ll:linkedList int) (h0 h1:heap) = admit ()
 
 type student_solution =
-  ll:linkedList int -> SST (option unit) 
-    (requires (fun h0 -> 
+  ll:linkedList int -> SST (option unit)
+    (requires (fun h0 ->
       no_cycles ll h0 /\
       forall_refs_heap contains_pred h0 #(SLList SNat) ll /\ forall_refs_heap is_shared h0 #(SLList SNat) ll))
-    (ensures (fun h0 r h1 -> 
+    (ensures (fun h0 r h1 ->
       (Some? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1) /\
       modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
 
@@ -44,10 +44,10 @@ let rec grading_done (sts: list (mref grade grade_preorder * student_solution)) 
 let generate_llist (l:list int) : SST (linkedList int) (fun h0 -> True) (fun h0 r h1 -> True) = admit () (** not sure what specs are needed here **)
 let share_llist (l:linkedList int) : SST unit (fun h0 -> True) (fun h0 r h1 -> True) = admit () (** not sure what specs are needed here **)
 
-let rec auto_grader 
+let rec auto_grader
   (l:list int)
   (sts: list (mref grade grade_preorder * student_solution))
-  : SST unit 
+  : SST unit
     (requires (fun h0 -> wss.satisfy_on_heap sts h0 (fun r h0 -> ~(is_shared r h0))))
     (ensures (fun h0 () h1 ->
       wss.satisfy_on_heap sts h1 (fun r h0 -> ~(is_shared r h0)) /\
@@ -61,6 +61,6 @@ let rec auto_grader
     admit ();
     (match hw ll with
     | Some _ -> sst_write'' gr MaxGrade
-    | None -> sst_write'' gr MinGrade);
+    | NoOps -> sst_write'' gr MinGrade);
     auto_grader l tl
   end

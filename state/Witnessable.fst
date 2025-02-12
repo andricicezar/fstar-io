@@ -17,7 +17,7 @@ class witnessable (t:Type) = {
     Lemma (requires (h0 `heap_rel` h1 /\ satisfy_on_heap x h0 pred))
           (ensures (satisfy_on_heap x h1 pred));
 
-  pwitness : x:t -> pred:mref_heap_stable_pred -> ST (precall:(unit -> ST unit All (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred))) All
+  pwitness : x:t -> pred:mref_heap_stable_pred -> ST (precall:(unit -> ST unit AllOps (fun _ -> True) (fun h0 _ h1 -> h0 == h1 /\ satisfy_on_heap x h1 pred))) AllOps
     (requires (fun h0 -> satisfy_on_heap x h0 pred))
     (ensures (fun h0 _ h1 -> h0 == h1));
 }
@@ -56,7 +56,7 @@ instance witnessable_arrow
   (t1:Type) (t2:Type)
   (pre:t1 -> st_pre)
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) // TODO: one cannot have pre-post depending on outside things.
-: witnessable (x:t1 -> ST t2 All (pre x) (post x)) = {
+: witnessable (x:t1 -> ST t2 AllOps (pre x) (post x)) = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
   satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
@@ -66,20 +66,20 @@ instance witnessable_arrow
 instance witnessable_option (t:Type) {| c:witnessable t |} : witnessable (option t) = {
   satisfy = (fun x pred ->
     match x with
-    | FStar.Pervasives.Native.None -> True
+    | None -> True
     | Some x' -> c.satisfy x' pred);
   satisfy_on_heap = (fun x h pred ->
     match x with
-    | FStar.Pervasives.Native.None -> True
+    | None -> True
     | Some x' -> c.satisfy_on_heap x' h pred);
   satisfy_on_heap_monotonic = (fun x pred h0 h1 ->
     match x with
-    | FStar.Pervasives.Native.None -> ()
+    | None -> ()
     | Some x' -> c.satisfy_on_heap_monotonic x' pred h0 h1);
   pwitness = (fun x pred ->
     match x with
-    | FStar.Pervasives.Native.None -> (fun () -> ())
-    | Some x' -> 
+    | None -> (fun () -> ())
+    | Some x' ->
       let w = c.pwitness x' pred in (fun () -> w ()))
 }
 

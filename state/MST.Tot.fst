@@ -10,13 +10,13 @@ include MST.Repr (** just for witnessed **)
 (** Flag-based effect polymorphsim **)
 
 type tflag =
-| All
-| None
+| AllOps
+| NoOps
 
 let rec satisfies #a (t : free a) (f : tflag) =
   match f with
-  | All -> True
-  | None ->
+  | AllOps -> True
+  | NoOps ->
     begin match t with
     | Return x -> True
     | PartialCall pre fnc -> forall r. fnc r  `satisfies` f
@@ -30,16 +30,16 @@ let rec satisfies #a (t : free a) (f : tflag) =
 
 let (⊕) (flag1:tflag) (flag2:tflag) : tflag =
   match flag1, flag2 with
-  | None, None -> None
-  | None, fl -> fl
-  | fl, None -> fl
-  | _, _ -> All
+  | NoOps, NoOps -> NoOps
+  | NoOps, fl -> fl
+  | fl, NoOps -> fl
+  | _, _ -> AllOps
 
 let (≼) (flag1:tflag) (flag2:tflag) : Type0 =
   match flag1, flag2 with
-  | None, _ -> True
-  | All, All -> True
-  | All, _ -> False
+  | NoOps, _ -> True
+  | AllOps, AllOps -> True
+  | AllOps, _ -> False
 
 let plus_compat_le (f1 f2 : tflag) : Lemma (f1 ≼ (f1⊕f2)) = ()
 let plus_comm      (f1 f2 : tflag) : Lemma (f1⊕f2 == f2⊕f1) = ()
@@ -113,7 +113,7 @@ let mheap_bind a b ff wp_v fv wp_f v f =
   mst_bind #a #b #wp_v #wp_f v f
 
 let mheap_return (a : Type) (x : a) :
-  mheap a None (st_return heap a x) by (compute ())
+  mheap a NoOps (st_return heap a x) by (compute ())
 = mst_return x
 
 
@@ -154,7 +154,7 @@ effect {
 
 effect ST (a:Type) (fl:tflag) (pre:st_pre) (post: (h:heap -> Tot (st_post' a (pre h)))) =
   STATEwp a fl (fun (p:st_post a) (h0:heap) -> pre h0 /\ (forall a h1. h0 `heap_rel` h1 /\ post h0 a h1 ==> p a h1))
-effect St (a:Type) = ST a None (fun h -> True) (fun h0 r h1 -> True)
+effect St (a:Type) = ST a NoOps (fun h -> True) (fun h0 r h1 -> True)
 
 unfold
 let wp_lift_pure_st (w : pure_wp 'a) : st_wp 'a =
@@ -165,12 +165,12 @@ val lift_pure_mst :
   a: Type u#a ->
   w: pure_wp a ->
   f: (eqtype_as_type unit -> PURE a w) ->
-  Tot (mheap a None (wp_lift_pure_st w))
+  Tot (mheap a NoOps (wp_lift_pure_st w))
 let lift_pure_mst a w f =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   let lhs = partial_return (as_requires w) in
   let rhs = (fun (pre:(squash (as_requires w))) -> mheap_return a (f pre)) in
-  let m = mheap_bind _ _ None _ _ _ lhs rhs in
+  let m = mheap_bind _ _ NoOps _ _ _ lhs rhs in
   mheap_subcomp _ _ _ _ _ m
 
 sub_effect PURE ~> STATEwp = lift_pure_mst
@@ -178,37 +178,37 @@ sub_effect PURE ~> STATEwp = lift_pure_mst
 let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) : heap_predicate_stable =
   fun h -> h `contains` r
 
-let witness (pred:heap_predicate_stable) : STATEwp unit All (fun p h -> pred h /\ (witnessed pred ==> p () h)) =
+let witness (pred:heap_predicate_stable) : STATEwp unit AllOps (fun p h -> pred h /\ (witnessed pred ==> p () h)) =
   STATEwp?.reflect (mst_witness pred)
 
-let recall (pred:heap_predicate_stable) : STATEwp unit All (fun p h -> witnessed pred /\ (pred h ==> p () h)) =
+let recall (pred:heap_predicate_stable) : STATEwp unit AllOps (fun p h -> witnessed pred /\ (pred h ==> p () h)) =
   STATEwp?.reflect (mst_recall pred)
 
 let alloc (#a:Type) (#rel:preorder a) (init:a) :
-  ST (mref a rel) All (fun h -> True) (alloc_post init)
+  ST (mref a rel) AllOps (fun h -> True) (alloc_post init)
 = STATEwp?.reflect (mst_alloc init)
 
 let read (#a:Type) (#rel:preorder a) (r:mref a rel) :
-  STATEwp a All (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
+  STATEwp a AllOps (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = STATEwp?.reflect (mst_read r)
 
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) :
-  ST unit All
+  ST unit AllOps
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post #a #rel r v)
 = STATEwp?.reflect (mst_write r v)
 
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
-  : STATEwp a All (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
+  : STATEwp a AllOps (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = read #a #rel r
 
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
-  : ST unit All
+  : ST unit AllOps
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post r v)
 = write #a #rel r v
 
-let get_heap () : ST (erased heap) All (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
+let get_heap () : ST (erased heap) AllOps (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
   STATEwp?.reflect (mst_get_heap)
 
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)

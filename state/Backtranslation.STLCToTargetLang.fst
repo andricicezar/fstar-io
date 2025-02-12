@@ -75,19 +75,19 @@ let mk_targetlang_pspec
 
 type tbt_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) ->
-    ST (elab_typ0 t) All
+    ST (elab_typ0 t) AllOps
       (requires (fun h0 -> inv h0 /\ prref r))
       (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy v prref))
 
 type tbt_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) ->
-    ST unit All
+    ST unit AllOps
       (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy v prref))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
 type tbt_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> init:(elab_typ0 t) ->
-    ST (ref (elab_typ0 t)) All
+    ST (ref (elab_typ0 t)) AllOps
       (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy init prref))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
@@ -408,7 +408,7 @@ let rec backtranslate
   (#t:typ)
   (tyj:typing g e t)
   (ve:(vcontext (mk_targetlang_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
-  ST (elab_typ (mk_targetlang_pspec inv prref hrel) t) All
+  ST (elab_typ (mk_targetlang_pspec inv prref hrel) t) AllOps
     (fun h0 -> inv h0)
     (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy r prref)
     (decreases %[e;1])
