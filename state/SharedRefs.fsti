@@ -441,7 +441,7 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
     (fun h0 -> forall_refs_heap contains_pred h0 init)
     (fun h0 r h1 ->
       alloc_post #(to_Type t) init h0 r h1 /\
-      ~(is_shared r h1) /\
+      is_private r h1 /\
       gets_shared Set.empty h0 h1)
 =
   let h0 = get_heap () in
@@ -450,7 +450,7 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
   lemma_fresh_ref_not_shared r h0;
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
   lemma_upd_preserves_contains r init h0 h1;
-  assert (~(is_shared r h1));
+  assert (is_private r h1);
   lemma_sst_alloc_preserves_shared r init h0 h1;
   r
 
@@ -461,7 +461,7 @@ let sst_alloc' #a (#rel:preorder a) (init:a)
         forall_refs_heap contains_pred h0 #t init))
     (fun h0 r h1 ->
       alloc_post #a init h0 r h1 /\
-      ~(is_shared r h1) /\
+      is_private r h1 /\
       gets_shared Set.empty h0 h1)
 =
   let h0 = get_heap () in
@@ -470,7 +470,7 @@ let sst_alloc' #a (#rel:preorder a) (init:a)
   lemma_fresh_ref_not_shared r h0;
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
   assert (gets_shared Set.empty h0 h1);
-  assert (~(is_shared r h1));
+  assert (is_private r h1);
   assert (alloc_post #a init h0 r h1);
   assert (ctrans_ref_pred h0 contains_pred);
   lemma_upd_preserves_contains_alloc' r init h0 h1;
@@ -715,7 +715,7 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
 #pop-options
   
 val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
-    ST unit All
+    ST unit 
       (requires (fun h0 ->
         h0 `contains` r /\
         h0 `contains` map_shared /\
