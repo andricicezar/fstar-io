@@ -209,7 +209,7 @@ val progr_declassify :
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
-      ~(is_shared rp h0)))
+      is_private rp h0))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
   sst_share #SNat rp;
@@ -223,7 +223,8 @@ val progr_declassify_nested:
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
-      ~(is_shared rp h0)))
+      is_private rp h0 /\
+      is_private (sel h0 rp) h0))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
   let p : ref int = sst_read #(SRef SNat) rp in

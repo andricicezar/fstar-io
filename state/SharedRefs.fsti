@@ -64,7 +64,7 @@ let is_encapsulated : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
 let gets_shared (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
     ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
-                                                        h0 `contains` map_shared <==> h1 `contains` map_shared)) /\
+                                                        h0 `contains` map_shared <==> h1 `contains` map_shared)) /\   // DA: should abstract this into a separate "not_changed" relation
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
 
