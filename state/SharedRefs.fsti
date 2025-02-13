@@ -111,6 +111,11 @@ let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
     (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
+let modifies_only_shared_and_encapsulated (h0:heap) (h1:heap) : Type0 =
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
+    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h1 r) /\
+  unmodified_common h0 h1
+
 let ctrans_ref_pred (h:heap) (pred:mref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
   (forall (t:shareable_typ) (r:ref (to_Type t)).

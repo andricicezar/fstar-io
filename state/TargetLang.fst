@@ -60,7 +60,7 @@ instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetl
 
 unfold
 let default_spec_rel (h0:heap) (h1:heap) = 
-  modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1
+  modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
 
 let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap) 
 : Lemma (requires (default_spec_rel h0 h1 /\ default_spec_rel h1 h2)) 
@@ -68,9 +68,9 @@ let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
         [SMTPat (default_spec_rel h0 h1); SMTPat (default_spec_rel h1 h2)]
 = 
   introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
-                                    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h2 r with
+                                    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h2 r with
   begin
-    introduce  (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h2 r with _.
+    introduce  (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h2 r with _.
     begin
       introduce ~(h0 `contains` map_shared) ==> ~(h1 `contains` map_shared) with _.
       begin
