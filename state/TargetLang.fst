@@ -58,14 +58,36 @@ instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetl
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
+unfold
+let default_spec_rel (h0:heap) (h1:heap) = 
+  modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1
+
+let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap) 
+: Lemma (requires (default_spec_rel h0 h1 /\ default_spec_rel h1 h2)) 
+        (ensures  (default_spec_rel h0 h2))
+        [SMTPat (default_spec_rel h0 h1); SMTPat (default_spec_rel h1 h2)]
+= 
+  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
+                                    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h2 r with
+  begin
+    introduce  (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0)) ==> sel h0 r == sel h2 r with _.
+    begin
+      introduce ~(h0 `contains` map_shared) ==> ~(h1 `contains` map_shared) with _.
+      begin
+        assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\ 
+                h0 `contains` map_shared <==> h1 `contains` map_shared)
+      end
+    end
+  end
+
 let default_spec : targetlang_pspec = (
     (fun h ->
         trans_shared_contains h /\
         h `contains` map_shared /\
-        ~(is_shared (map_shared) h) /\
-        (forall p. p >= next_addr h ==> ~(sel h map_shared p))),
+        is_private (map_shared) h /\
+        (forall p. p >= next_addr h ==> is_private_addr p h)),
     (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
-    (fun h0 h1 -> modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)
+    (fun h0 h1 -> default_spec_rel h0 h1)
 )
 
 type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
@@ -113,8 +135,8 @@ let tl_write #t r v =
 
   assert (trans_shared_contains h1);
   assert (h1 `contains` map_shared);
-  assert (~(is_shared (map_shared) h1));
-  assert ((forall p. p >= next_addr h1 ==> ~(sel h1 map_shared p)))
+  assert (is_private (map_shared) h1);
+  assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
 val tl_alloc : ttl_alloc AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_alloc #t init =
