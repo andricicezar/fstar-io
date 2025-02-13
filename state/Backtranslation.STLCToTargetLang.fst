@@ -251,7 +251,7 @@ let progr_secret_unchanged_test rp rs ctx =
   let v = sst_read #SNat secret in
   ()
 
-val progr_passing_callback_test:
+val progr_passing_shared_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
@@ -261,8 +261,8 @@ val progr_passing_callback_test:
       is_private rp h0 /\
       satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
-// TODO: the callback of the program should be able to modify rp
-let progr_passing_callback_test rp rs f =
+// TODO: the callback of the program should be able to modify rp (DA: now the callbacks can modify encapsulated, not private references)
+let progr_passing_shared_to_callback_test rp rs f =
   let secret: ref int = sst_alloc #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret); witness (is_shared secret);
@@ -273,7 +273,7 @@ let progr_passing_callback_test rp rs f =
   downgrade_val (f cb);
   ()
 
-val progr_passing_callback_test':
+val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
@@ -283,8 +283,7 @@ val progr_passing_callback_test':
       is_private rp h0 /\
       satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
-// TODO: the callback of the program should be able to modify rp
-let progr_passing_callback_test' rp rs f =
+let progr_passing_encapsulated_to_callback_test rp rs f =
   let secret: ref int = sst_alloc #SNat 0 in
   sst_encapsulate secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
