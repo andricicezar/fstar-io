@@ -67,16 +67,16 @@ let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
         (ensures  (default_spec_rel h0 h2))
         [SMTPat (default_spec_rel h0 h1); SMTPat (default_spec_rel h1 h2)]
 = 
-  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
-                                    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h2 r with
+  assert (modifies_only_shared_and_encapsulated h0 h2);
+  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel). 
+    ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with
   begin
-    introduce  (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h2 r with _.
+    introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
     begin
-      introduce ~(h0 `contains` map_shared) ==> ~(h1 `contains` map_shared) with _.
-      begin
-        assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\ 
-                h0 `contains` map_shared <==> h1 `contains` map_shared)
-      end
+      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\ 
+                h0 `contains` map_shared <==> h1 `contains` map_shared);
+      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\ 
+                h1 `contains` map_shared <==> h2 `contains` map_shared)
     end
   end
 

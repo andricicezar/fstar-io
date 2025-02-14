@@ -61,10 +61,13 @@ let is_encapsulated : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` map_shared /\ (** this contains is necessary to show that is_encapsulated is a stable predicate **)
     Encapsulated? ((sel h map_shared) (addr_of r)))
 
+let kind_not_modified #a #rel (r:mref a rel) (h0:heap) (h1:heap) =
+  (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
+  h0 `contains` map_shared <==> h1 `contains` map_shared
+
 let gets_shared (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
-                                                        h0 `contains` map_shared <==> h1 `contains` map_shared)) /\   // DA: should abstract this into a separate "not_changed" relation
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> kind_not_modified r h0 h1) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
 
@@ -274,7 +277,8 @@ let lemma_upd_preserves_contains #t (#rel:preorder (to_Type t)) (x:mref (to_Type
     end
   end
 
-(* DA: is the previous lemma should be a special case of this one? can we merge them? can we make sst_alloc work with this one? *)
+(** DA: is the previous lemma should be a special case of this one? can we merge them? can we make sst_alloc work with this one? *)
+(** DA: perhaps not, as it would require injectivity of to_Type *)
 let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
@@ -304,7 +308,6 @@ let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a
     end
   end
 
-// DA: should maybe be renamed; more precise name would be modifies_map_shared_preserves_contains
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
@@ -492,6 +495,7 @@ let sst_share (#t:shareable_typ) (r:ref (to_Type t))
          forall_refs_heap is_shared h0 (sel h0 r))
   (share_post map_shared is_shared r)
 =
+  assert (~(compare_addrs r map_shared));
   let h0 = get_heap () in
   share r;
   let h1 = get_heap () in
@@ -690,7 +694,7 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
     h0 `contains` x /\
-    ~(compare_addrs x map_shared) /\  // DA: could we infer it from some other conditions, like in the case of sst_share?
+    ~(compare_addrs x map_shared) /\  (** in contrast to sst_share, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
     gets_encapsulated !{x} h0 h1 /\
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     ctrans_ref_pred h0 is_shared))
@@ -734,7 +738,7 @@ val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
 let sst_encapsulate  #a (#rel:preorder a) (r:mref a rel)
 : SST unit
   (fun h0 -> h0 `contains` r /\
-         ~(compare_addrs r map_shared) /\  // DA: could we infer it from some other conditions, like in the case of sst_share?
+         ~(compare_addrs r map_shared) /\  (** in contrast to sst_share, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
          is_private r h0)
   (encapsulate_post r)
 =
