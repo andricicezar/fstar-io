@@ -354,10 +354,10 @@ let lemma_sst_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (
   with begin
     introduce h1 `contains` r /\ is_shared r h1 ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
       introduce addr_of x =!= addr_of r ==> forall_refs_heap is_shared h1 (sel h1 r) with _. begin
-        assert (h0 `contains` map_shared);
-        assert (h0 `heap_rel` h1);
-        assert (~(addr_of map_shared `Set.mem` Set.empty));
-        assert (modifies Set.empty h0 h1);
+        //assert (h0 `contains` map_shared);
+        //assert (h0 `heap_rel` h1);
+        //assert (~(addr_of map_shared `Set.mem` Set.empty));
+        //assert (modifies Set.empty h0 h1);
         lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
         eliminate forall (a:Type) (rel:preorder a) (r:mref a rel).
           ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> (is_shared r h0 <==> is_shared r h1) with _ _ r;
