@@ -107,12 +107,27 @@ let rec generate_llist (l:list int)
   | [] -> LLNil
   | hd::tl -> LLCons hd (sst_alloc #(SLList SNat) (generate_llist tl)) (* sst_alloc or sst_alloc'? *)
 
+let rec deep_contains_ll (fuel: nat) (l: linkedList int) (h: heap): Type0 =
+  if fuel = 0 then False
+  else
+    match l with
+    | LLNil -> True
+    | LLCons x xsref -> 
+      h `contains` xsref /\ deep_contains_ll (fuel - 1) (sel h xsref) h  
 
-let share_llist (l:linkedList int)
-  : SST unit
-    (fun h0 -> True)
-    (fun h0 r h1 -> True) =
-  admit () (** not sure what specs are needed here **)
+let rec share_llist (l:linkedList int) 
+  : SST unit 
+    (requires (fun h0 -> (exists fuel . deep_contains_ll fuel l h0)))
+    (fun h0 r h1 -> True) = 
+  match l with
+  | LLNil -> ()
+  | LLCons x next -> 
+    let h0 = get_heap() in 
+    assert (h0 `contains` next);
+    sst_share #(SRef (SLList SNat)) next;
+    (* let h = get_heap() in *)
+    let tl = read next in
+    share_llist tl
 
 let rec auto_grader
   (l:list int)
