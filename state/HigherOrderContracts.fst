@@ -123,7 +123,7 @@ instance exportable_ref t {| c:targetlang default_spec t |} : exportable_from (r
 
 instance exportable_llist t {| c:exportable_from t |} : exportable_from (linkedList t) = admit ()
 
-instance exportable_refinement t {| c:exportable_from t |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): exportable_from (x:t{p x}) = {
+instance exportable_refinement t {| c:exportable_from t |} (p:t->Type0) : exportable_from (x:t{p x}) = {
   c_styp = witnessable_refinement t #c.c_styp p;
   ityp = c.ityp;
   c_ityp = c.c_ityp;
@@ -344,7 +344,12 @@ let unsafe_f x =
 
 let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f
 
-type f_xeq5 = x:ref int -> SST (resexn int) (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (Mktuple3?._2 default_spec))) (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((Mktuple3?._3 default_spec) h0 h1)))
+// x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
+//                                                   ^---^---cannot depend on x
+
+type f_xeq5 = x:ref int -> SST (resexn int)
+  (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (Mktuple3?._2 default_spec)))
+  (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((Mktuple3?._3 default_spec) h0 h1)))
 
 let f_xeq5_is_exportable : exportable_from f_xeq5 =
   exportable_arrow
