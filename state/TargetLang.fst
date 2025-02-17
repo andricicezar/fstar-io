@@ -132,12 +132,12 @@ let tl_write #t r v =
   sst_write r v;
   let h1 = get_heap () in
   assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
-
   assert (trans_shared_contains h1);
   assert (h1 `contains` map_shared);
   assert (is_private (map_shared) h1);
   assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
+#push-options "--split_queries always"
 val tl_alloc : ttl_alloc AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
@@ -147,3 +147,4 @@ let tl_alloc #t init =
   let r = sst_alloc_shared init in
   witness (contains_pred r); witness (is_shared r);
   r
+#pop-options
