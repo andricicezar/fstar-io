@@ -2,7 +2,7 @@ module Examples
 
 open FStar.Preorder
 open FStar.Tactics.Typeclasses
-(* open FStar.FiniteSet.Base *)
+open FStar.FiniteSet.Base
 open SharedRefs
 open Witnessable
 
@@ -31,19 +31,19 @@ let grade_preorder : preorder grade = fun g1 g2 ->
 let no_cycles (ll: linkedList int) (h: heap) : Type0 = admit()
 let sorted (ll: linkedList int) (h: heap) : Type0 = admit()
 
-let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 = 
+let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
   else
     match ll with
     | LLNil -> True
     | LLCons x xsref -> no_cycles_fuel (fuel - 1) (sel h xsref) h
 
-let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 = 
+let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
   else
     match ll with
     | LLNil -> True
-    | LLCons x next -> 
+    | LLCons x next ->
       let tl = sel h next in
       match tl with
       | LLNil -> True
@@ -52,14 +52,14 @@ let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
 (* #push-options "--split_queries always"
 let rec footprint_acc
   (#a: Type)
-  (l: linkedList a) 
-  (h:heap) 
+  (l: linkedList a)
+  (h:heap)
   (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
-  (acc:(FSet.set nat){acc `FSet.subset` hdom}) : 
+  (acc:(FSet.set nat){acc `FSet.subset` hdom}) :
   GTot (FSet.set nat) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
-  match l with 
+  match l with
   | Nil -> acc
-  | Cons x xsref -> 
+  | Cons x xsref ->
     if addr_of xsref `FSet.mem` acc then acc
     else begin
       assume (h `contains` xsref);
@@ -69,10 +69,10 @@ let rec footprint_acc
       assert ((hdom `FSet.difference` acc') `FSet.subset`
               (hdom `FSet.difference` acc));
       assert (~((hdom `FSet.difference` acc') `FSet.equal`
-              (hdom `FSet.difference` acc))); 
-      assert (FSet.cardinality (hdom `FSet.difference` acc') < 
+              (hdom `FSet.difference` acc)));
+      assert (FSet.cardinality (hdom `FSet.difference` acc') <
               FSet.cardinality (hdom `FSet.difference` acc));
-      footprint_acc (sel h xsref) h hdom acc' 
+      footprint_acc (sel h xsref) h hdom acc'
     end
 #pop-options *)
 
@@ -99,19 +99,19 @@ let rec grading_done (sts: list (mref grade grade_preorder * student_solution)) 
   | hd::tl -> sel h (fst hd) =!= NotGraded /\ grading_done tl h
 
 (* TODO: add specs (one postcond should be no cycles) *)
-let rec generate_llist (l:list int) 
-  : SST (linkedList int) 
+let rec generate_llist (l:list int)
+  : SST (linkedList int)
     (requires (fun h0 -> True))
-    (ensures (fun h0 r h1 -> True)) =
+    (ensures (fun h0 r h1 -> satisfy_on_heap r h1 contains_pred)) =
   match l with
   | [] -> LLNil
   | hd::tl -> LLCons hd (sst_alloc #(SLList SNat) (generate_llist tl)) (* sst_alloc or sst_alloc'? *)
-  
 
-let share_llist (l:linkedList int) 
-  : SST unit 
-    (fun h0 -> True) 
-    (fun h0 r h1 -> True) = 
+
+let share_llist (l:linkedList int)
+  : SST unit
+    (fun h0 -> True)
+    (fun h0 r h1 -> True) =
   admit () (** not sure what specs are needed here **)
 
 let rec auto_grader
