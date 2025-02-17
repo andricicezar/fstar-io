@@ -70,7 +70,7 @@ let gets_shared (s:set nat) (h0:heap) (h1:heap) =
     ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> kind_not_modified r h0 h1) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shared r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shared r h1)
-    
+
 let share_post (map_shared:map_sharedT) (is_shared:mref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
@@ -142,13 +142,15 @@ let trans_shared_contains (h:heap) =
   ctrans_ref_pred h contains_pred /\ ctrans_ref_pred h is_shared
 
 unfold
+let sst_inv h =
+  trans_shared_contains h /\
+  h `contains` map_shared /\
+  is_private (map_shared) h /\ (* the map stays unshared *)
+  (forall p. p >= next_addr h ==> is_private_addr p h)
+
+unfold
 let sst_pre (pre:st_pre) : st_pre =
-  fun h0 ->
-    trans_shared_contains h0 /\
-    h0 `contains` map_shared /\
-    is_private (map_shared) h0 /\ (* the map stays unshared *)
-    (forall p. p >= next_addr h0 ==> is_private_addr p h0) /\
-    pre h0
+  fun h0 -> sst_inv h0 /\ pre h0
 
 unfold
 let sst_post
@@ -156,11 +158,7 @@ let sst_post
   (pre:st_pre)
   (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h))))
   : (h:heap -> Tot (st_post' a ((sst_pre pre) h))) =
-  fun h0 r h1 ->
-    trans_shared_contains h1 /\
-    is_private (map_shared) h1 /\
-    (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
-    post h0 r h1
+  fun h0 r h1 -> sst_inv h1 /\ post h0 r h1
 
 effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
   ST a
@@ -739,9 +737,9 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
     end
   end
 #pop-options
-  
+
 val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
-    ST unit 
+    ST unit
       (requires (fun h0 ->
         h0 `contains` r /\
         h0 `contains` map_shared /\
