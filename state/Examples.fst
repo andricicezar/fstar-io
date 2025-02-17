@@ -1,8 +1,13 @@
 module Examples
 
 open FStar.Preorder
+open FStar.Tactics.Typeclasses
+(* open FStar.FiniteSet.Base *)
 open SharedRefs
 open Witnessable
+
+open FStar.Tactics
+open FStar.Ghost
 
 type grade =
 | NotGraded
@@ -21,9 +26,60 @@ let grade_preorder : preorder grade = fun g1 g2 ->
   | NotGraded -> True
   | _ -> g1 == g2
 
-let no_cycles (ll:linkedList int) (h:heap) = admit ()
-let sorted (ll:linkedList int) (h:heap) = admit ()
-let same_elements (ll:linkedList int) (h0 h1:heap) = admit ()
+(* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
+
+let no_cycles (ll: linkedList int) (h: heap) : Type0 = admit()
+let sorted (ll: linkedList int) (h: heap) : Type0 = admit()
+
+let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 = 
+  if fuel = 0 then False
+  else
+    match ll with
+    | LLNil -> True
+    | LLCons x xsref -> no_cycles_fuel (fuel - 1) (sel h xsref) h
+
+let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 = 
+  if fuel = 0 then False
+  else
+    match ll with
+    | LLNil -> True
+    | LLCons x next -> 
+      let tl = sel h next in
+      match tl with
+      | LLNil -> True
+      | LLCons y next -> x <= y /\ sorted_fuel (fuel - 1) tl h
+
+(* #push-options "--split_queries always"
+let rec footprint_acc
+  (#a: Type)
+  (l: linkedList a) 
+  (h:heap) 
+  (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
+  (acc:(FSet.set nat){acc `FSet.subset` hdom}) : 
+  GTot (FSet.set nat) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
+  match l with 
+  | Nil -> acc
+  | Cons x xsref -> 
+    if addr_of xsref `FSet.mem` acc then acc
+    else begin
+      assume (h `contains` xsref);
+      let acc' = (acc `FSet.union` FSet.singleton (addr_of xsref)) in
+      FSet.all_finite_set_facts_lemma ();
+      assert (acc' `FSet.subset` hdom);
+      assert ((hdom `FSet.difference` acc') `FSet.subset`
+              (hdom `FSet.difference` acc));
+      assert (~((hdom `FSet.difference` acc') `FSet.equal`
+              (hdom `FSet.difference` acc))); 
+      assert (FSet.cardinality (hdom `FSet.difference` acc') < 
+              FSet.cardinality (hdom `FSet.difference` acc));
+      footprint_acc (sel h xsref) h hdom acc' 
+    end
+#pop-options *)
+
+let elements_of_ll (ll:linkedList int) (h:heap) : Set.set int = admit()
+(* elements_of_ll_acc ll h Set.empty *)
+
+let same_elements (ll:linkedList int) (h0 h1:heap) = elements_of_ll ll h0 == elements_of_ll ll h1
 
 type student_solution =
   ll:linkedList int -> SST (option unit)
@@ -35,14 +91,28 @@ type student_solution =
       modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
 
 let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
+(*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
 
 let rec grading_done (sts: list (mref grade grade_preorder * student_solution)) h =
   match sts with
   | [] -> True
   | hd::tl -> sel h (fst hd) =!= NotGraded /\ grading_done tl h
 
-let generate_llist (l:list int) : SST (linkedList int) (fun h0 -> True) (fun h0 r h1 -> True) = admit () (** not sure what specs are needed here **)
-let share_llist (l:linkedList int) : SST unit (fun h0 -> True) (fun h0 r h1 -> True) = admit () (** not sure what specs are needed here **)
+(* TODO: add specs (one postcond should be no cycles) *)
+let rec generate_llist (l:list int) 
+  : SST (linkedList int) 
+    (requires (fun h0 -> True))
+    (ensures (fun h0 r h1 -> True)) =
+  match l with
+  | [] -> LLNil
+  | hd::tl -> LLCons hd (sst_alloc #(SLList SNat) (generate_llist tl)) (* sst_alloc or sst_alloc'? *)
+  
+
+let share_llist (l:linkedList int) 
+  : SST unit 
+    (fun h0 -> True) 
+    (fun h0 r h1 -> True) = 
+  admit () (** not sure what specs are needed here **)
 
 let rec auto_grader
   (l:list int)
@@ -61,6 +131,6 @@ let rec auto_grader
     admit ();
     (match hw ll with
     | Some _ -> sst_write'' gr MaxGrade
-    | NoOps -> sst_write'' gr MinGrade);
+    | None -> sst_write'' gr MinGrade);
     auto_grader l tl
   end
