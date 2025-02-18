@@ -28,19 +28,29 @@ let grade_preorder : preorder grade = fun g1 g2 ->
   | NotGraded -> True
   | _ -> g1 == g2
 
-(* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
-
 let max_length = pow2 32 - 1
 
 let no_cycles (ll: linkedList int) (h: heap) : Type0 = admit()
 let sorted (ll: linkedList int) (h: heap) : Type0 = admit()
 
+(* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
 let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
   else
     match ll with
     | LLNil -> True
     | LLCons x xsref -> no_cycles_fuel (fuel - 1) (sel h xsref) h
+
+(* let rec no_cycles' (ll: linkedList int): ST Type0
+  (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
+  (ensures fun h0 r h1 -> True) =
+  match ll with
+    | LLNil -> True
+    | LLCons x xsref -> 
+      let h0 = get_heap() in
+      assert (h0 `contains` xsref);
+      let tail = sst_read #(SLList SNat) xsref in
+      no_cycles' tail *)
 
 let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
@@ -52,15 +62,6 @@ let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
       match tl with
       | LLNil -> True
       | LLCons y next -> x <= y /\ sorted_fuel (fuel - 1) tl h
-
-(*TODO: replace these with deep_predicate *)
-let rec deep_contains_ll (fuel: nat) (l: linkedList int) (h: heap): Type0 =
-  if fuel = 0 then False
-  else
-    match l with
-    | LLNil -> True
-    | LLCons x xsref -> 
-      h `contains` xsref /\ deep_contains_ll (fuel - 1) (sel h xsref) h
 
 (* Probably remove this *)
 let rec footprint_acc
@@ -138,32 +139,26 @@ let rec grading_done (sts: list (mref grade grade_preorder * student_solution)) 
 let rec generate_llist (l:list int)
   : SST (linkedList int)
     (requires (fun h0 -> True))
-    (ensures (fun h0 r h1 -> satisfy_on_heap r h1 contains_pred)) =
+    (ensures (fun h0 r h1 -> satisfy_on_heap r h1 contains_pred
+                  (* /\ exists fuel . no_cycles_fuel fuel r h1 *))) =
   match l with
   | [] -> LLNil
   | hd::tl -> LLCons hd (sst_alloc_shareable #(SLList SNat) (generate_llist tl))
 
-let rec deep_private_ll (fuel: nat) (l: linkedList int) (h: heap): Type0 =
-  if fuel = 0 then False
-  else
-    match l with
-    | LLNil -> True
-    | LLCons x xsref -> 
-      is_private xsref h /\ deep_private_ll (fuel - 1) (sel h xsref) h   
-
 let rec share_llist (l:linkedList int) 
   : SST unit 
-    (requires (fun h0 -> (exists fuel . deep_contains_ll fuel l h0) /\ 
-                         (exists fuel . deep_private_ll fuel l h0)))
-    (fun h0 r h1 -> True) = 
+    (requires (fun h0 -> satisfy_on_heap l h0 contains_pred /\ 
+                         satisfy_on_heap l h0 is_private))
+    (fun h0 r h1 -> satisfy_on_heap r h1 is_shared) = 
   match l with
   | LLNil -> ()
   | LLCons x next -> 
     let h0 = get_heap() in 
     assert (h0 `contains` next);
     assert (is_private next h0);
+    (* assert(forall_refs_heap is_shared h0 #(SLList SNat) (sel h0 next)); *)
     admit();
-    sst_share #(SLList SNat) next;
+    sst_share #(SLList SNat) next; (* need to share ref starting from the end of the list? *)
     assert (is_shared next h0);
     (* let h = get_heap() in *)
     let tl = read next in
@@ -182,8 +177,8 @@ let rec auto_grader
   | [] -> ()
   | (gr, hw)::tl -> begin
     let ll = generate_llist l in
+    admit ();
     share_llist ll;
-    (* admit (); *)
     (match hw ll with
     | Some _ -> sst_write gr MaxGrade
     | None -> sst_write gr MinGrade);
