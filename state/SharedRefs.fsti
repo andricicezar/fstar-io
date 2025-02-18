@@ -647,6 +647,7 @@ let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
       end
     end
   end;
+  assert (~(compare_addrs r map_shared));
   sst_write'' #(to_Type t) #(FStar.Heap.trivial_preorder _) r v 
 #pop-options
 
