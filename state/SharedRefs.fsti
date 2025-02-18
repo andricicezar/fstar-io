@@ -252,38 +252,7 @@ let rec lemma_forall_refs_heap_force_retype (pred:mref_heap_stable_pred) (h:heap
       end
    end
 
-let lemma_upd_preserves_contains #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
-  (requires (
-    h0 `heap_rel` h1 /\
-    (h0 `contains` x \/ fresh x h0 h1) /\
-    h1 == upd h0 x v /\ (** SMTPat kicks in **)
-    forall_refs_heap contains_pred h0 #t v /\
-    ctrans_ref_pred h0 contains_pred))
-  (ensures (
-    ctrans_ref_pred h1 contains_pred)) =
-  introduce forall a (r:ref (to_Type a)). h1 `contains` r ==> forall_refs_heap contains_pred h1 (sel h1 r)
-  with begin
-    introduce h1 `contains` r ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-      introduce addr_of r =!= addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-        eliminate_ctrans_ref_pred h0 r contains_pred;
-        forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
-      end;
-      introduce addr_of r == addr_of x ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
-        lemma_eq_addrs_eq_all r x h1;
-        assert (to_Type a == to_Type t);
-        forall_refs_heap_monotonic contains_pred h0 h1 v;
-        assert (forall_refs_heap contains_pred h1 #t v);
-        assert (sel h1 r == force_retype v);
-        lemma_forall_refs_heap_force_retype contains_pred h1 #t v;
-        assert (forall_refs_heap contains_pred h1 #a (force_retype v));
-        assert (forall_refs_heap contains_pred h1 #a (sel h1 r))
-      end
-    end
-  end
-
-(** DA: is the previous lemma should be a special case of this one? can we merge them? can we make sst_alloc work with this one? *)
-(** DA: perhaps not, as it would require injectivity of to_Type *)
-let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_sst_write_or_alloc_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -312,6 +281,24 @@ let lemma_upd_preserves_contains_alloc' #a (#rel:preorder a) (x:mref a rel) (v:a
     end
   end
 
+let lemma_sst_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
+  (requires (
+    h0 `heap_rel` h1 /\
+    (h0 `contains` x \/ fresh x h0 h1) /\
+    h1 == upd h0 x v /\ (** SMTPat kicks in **)
+    forall_refs_heap contains_pred h0 #t v /\
+    ctrans_ref_pred h0 contains_pred))
+  (ensures (
+    ctrans_ref_pred h1 contains_pred)) =
+  introduce forall t' . to_Type t' == to_Type t ==> forall_refs_heap contains_pred h0 #t' (force_retype #_ #(to_Type t') v) with
+  begin
+    introduce to_Type t' == to_Type t ==> forall_refs_heap contains_pred h0 #t' (force_retype #_ #(to_Type t') v) with _.
+    begin
+      lemma_forall_refs_heap_force_retype contains_pred h0 v
+    end
+  end;
+  lemma_sst_write_or_alloc_preserves_contains x v h0 h1
+  
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
@@ -469,7 +456,7 @@ let sst_alloc #a (#rel:preorder a) (init:a)
   assert (is_private r h1);
   assert (alloc_post #a init h0 r h1);
   assert (ctrans_ref_pred h0 contains_pred);
-  lemma_upd_preserves_contains_alloc' r init h0 h1;
+  lemma_sst_write_or_alloc_preserves_contains r init h0 h1;
   lemma_sst_alloc_preserves_shared r init h0 h1;
   assert (ctrans_ref_pred h1 contains_pred);
   assert (ctrans_ref_pred h1 is_shared);
@@ -540,7 +527,7 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
   r
 #pop-options
 
-let lemma_upd_preserves_contains' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_sst_write_non_shareable_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -561,7 +548,7 @@ let lemma_upd_preserves_contains' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 
     end
   end
 
-let lemma_sst_write_preserves_shared' #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_sst_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -611,13 +598,13 @@ let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
   introduce (exists t. to_Type t == a) ==> trans_shared_contains h1 with _. begin
     eliminate exists t. to_Type t == a returns _ with _. begin
-      lemma_upd_preserves_contains #t #rel r v h0 h1;
+      lemma_sst_write_or_alloc_preserves_contains_shareable #t #rel r v h0 h1;
       lemma_sst_write_preserves_shared #t #rel r v h0 h1
     end
   end;
   introduce (forall t. ~(to_Type t == a)) ==> trans_shared_contains h1 with _. begin
-    lemma_upd_preserves_contains' r v h0 h1;
-    lemma_sst_write_preserves_shared' r v h0 h1
+    lemma_sst_write_non_shareable_preserves_contains r v h0 h1;
+    lemma_sst_write_non_shareable_preserves_shared r v h0 h1
   end;
   ()
 
