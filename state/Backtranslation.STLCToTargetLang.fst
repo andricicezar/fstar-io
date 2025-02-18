@@ -249,7 +249,7 @@ val progr_secret_unchanged_test:
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
 let progr_secret_unchanged_test rp rs ctx =
-  let secret: ref int = sst_alloc #SNat 0 in
+  let secret: ref int = sst_alloc_shareable #SNat 0 in
   downgrade_val (ctx (raise_val ()));
   let v = sst_read #SNat secret in
   ()
@@ -266,12 +266,12 @@ val progr_passing_shared_to_callback_test:
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 // TODO: the callback of the program should be able to modify rp (DA: now the callbacks can modify encapsulated, not private references)
 let progr_passing_shared_to_callback_test rp rs f =
-  let secret: ref int = sst_alloc #SNat 0 in
+  let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret); witness (is_shared secret);
   let cb: elab_typ default_spec (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_shared secret);
-    sst_write #SNat secret (!secret + 1);
+    sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()
@@ -287,12 +287,12 @@ val progr_passing_encapsulated_to_callback_test:
       satisfy_on_heap rs h0 is_shared))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 let progr_passing_encapsulated_to_callback_test rp rs f =
-  let secret: ref int = sst_alloc #SNat 0 in
+  let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_encapsulate secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
   let cb: elab_typ default_spec (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_encapsulated secret);
-    sst_write #SNat secret (!secret + 1);
+    sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()
@@ -312,7 +312,7 @@ let progr_passing_private_to_callback_test f =
     recall (contains_pred secret);
     // let h0 = get_heap () in
     // assume (is_shared secret h0);
-    sst_write #SNat secret (!secret + 1);
+    sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()
@@ -441,6 +441,7 @@ let raise #pspec (#t:typ0) (x:elab_typ0 t) :
     lemma_raise_typ pspec t x;
     raise_typ t x
 
+#push-options "--split_queries always"
 let rec backtranslate
   (#inv  : (heap -> Type0))
   (#prref: mref_pred)
@@ -549,7 +550,7 @@ and backtranslate_eabs
     in
     assert (t == TArr tx tres);
     cast_TArr inv prref hrel #tx #tres w t
-
+#pop-options
 
 let rec lemma_satisfy_on_heap_eqv_forall_refs_heap pspec (#t:typ0) (v:elab_typ0 t) h (pred:mref_heap_stable_pred) :
   Lemma ((elab_typ0_tc #pspec t).wt.satisfy_on_heap v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v) =

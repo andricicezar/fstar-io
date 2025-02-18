@@ -129,7 +129,7 @@ let tl_write #t r v =
   lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   lemma_forall_refs_witnessed_forall_refs_heap v contains_pred;
   lemma_forall_refs_witnessed_forall_refs_heap v is_shared;
-  sst_write r v;
+  sst_write_shareable r v;
   let h1 = get_heap () in
   assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
   assert (trans_shared_contains h1);

@@ -450,7 +450,7 @@ let sst_read' #a (#rel:preorder a) (r:mref a rel)
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
 
-let sst_alloc' #a (#rel:preorder a) (init:a)
+let sst_alloc #a (#rel:preorder a) (init:a)
 : SST (mref a rel)
     (fun h0 ->
       (forall t . to_Type t == a ==>
@@ -475,7 +475,7 @@ let sst_alloc' #a (#rel:preorder a) (init:a)
   assert (ctrans_ref_pred h1 is_shared);
   r
 
-let sst_alloc (#t:shareable_typ) (init:to_Type t)
+let sst_alloc_shareable (#t:shareable_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
     (fun h0 r h1 ->
@@ -488,7 +488,7 @@ let sst_alloc (#t:shareable_typ) (init:to_Type t)
   begin
     lemma_forall_refs_heap_force_retype contains_pred h0 init
   end;
-  sst_alloc' #(to_Type t) #(FStar.Heap.trivial_preorder _) init
+  sst_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
 
 let sst_share (#t:shareable_typ) (r:ref (to_Type t))
 : SST unit
@@ -519,7 +519,7 @@ let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
       is_shared r h1 /\
       modifies_only_shared h0 h1 (** here to help **)) =
   let h0 = get_heap () in
-  let r = sst_alloc init in
+  let r = sst_alloc_shareable init in
   let h1 = get_heap () in
   forall_refs_heap_monotonic is_shared h0 h1 init;
   assert (~(addr_of map_shared `Set.mem` Set.empty));
@@ -588,7 +588,7 @@ let lemma_sst_write_preserves_shared' #a (#rel:preorder a) (x:mref a rel) (v:a) 
     end
   end
 
-let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
+let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
 : SST unit
   (requires (fun h0 ->
     h0 `contains` r /\
@@ -622,7 +622,7 @@ let sst_write'' #a (#rel:preorder a) (r:mref a rel) (v:a)
   ()
 
 #push-options "--split_queries always"
-let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
+let sst_write_shareable (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
 : SST unit
   (requires (fun h0 ->
     h0 `contains` r /\ forall_refs_heap contains_pred h0 v /\
@@ -648,10 +648,10 @@ let sst_write (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
     end
   end;
   assert (~(compare_addrs r map_shared));
-  sst_write'' #(to_Type t) #(FStar.Heap.trivial_preorder _) r v 
+  sst_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v 
 #pop-options
 
-let sst_write' #a (r:ref a) (v:a)
+let sst_write_ref #a (r:ref a) (v:a)
 : SST unit
   (requires (fun h0 ->
     h0 `contains` r /\
@@ -663,7 +663,7 @@ let sst_write' #a (r:ref a) (v:a)
     write_post r v h0 () h1 /\
     gets_shared Set.empty h0 h1 /\
     (is_shared r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
-  sst_write'' r v
+  sst_write r v
 
 let gets_encapsulated (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
