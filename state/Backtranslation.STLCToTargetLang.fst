@@ -217,6 +217,7 @@ let progr_declassify rp f =
   let r = downgrade_val (f (raise_val rp)) in
   r
 
+#push-options "--split_queries always"
 val progr_declassify_nested:
   rp: ref (ref int) ->
   ctx:(elab_typ default_spec (TArr (TRef (TRef TNat)) TUnit)) ->
@@ -230,9 +231,11 @@ let progr_declassify_nested rp f =
   let p : ref int = sst_read #(SRef SNat) rp in
   sst_share #SNat p;
   sst_share #(SRef SNat) rp;
-  witness (contains_pred rp); witness (is_shared rp);
-  // let r = elab_alloc (!rp) in (* <-- needed a copy here! *)
+  let h0 = get_heap () in
+  witness (contains_pred rp);
+  witness (is_shared rp);
   downgrade_val (f (raise_val rp))
+#pop-options
 
 val progr_secret_unchanged_test:
   rp: ref int ->

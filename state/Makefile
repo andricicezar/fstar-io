@@ -8,6 +8,8 @@ ROOTS := Compiler.fst Compiler.STLC.fst
 CACHEDIR := .cache
 FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
+# DA: (temporary) fix to my checked files issues
+FLAGS += --include $(FSTAR_LIB)/../stage2/ulib.checked
 FLAGS += $(OTHERFLAGS)
 
 verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
@@ -28,8 +30,17 @@ hints:
 	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build
 
-# Run your file in emacs with the same context as the batch mode.
+.cache/%.fsti.checked: %.fsti | hints
+	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+	@$(if $(IDE_HACK),false) # Make it stop the build
+
+# Run your fst file in emacs with the same context as the batch mode.
 %.fst.emacs: %.fst
+	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
+
+# Run your fsti file in emacs with the same context as the batch mode.
+%.fsti.emacs: %.fsti
 	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
 
 include .depend.mk
