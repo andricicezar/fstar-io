@@ -8,8 +8,6 @@ ROOTS := Compiler.fst Compiler.STLC.fst
 CACHEDIR := .cache
 FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
-# DA: (temporary) fix to my checked files issues
-FLAGS += --include $(FSTAR_LIB)/../stage2/ulib.checked
 FLAGS += $(OTHERFLAGS)
 
 verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
