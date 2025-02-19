@@ -6,6 +6,8 @@ open FStar.FiniteSet.Base
 open SharedRefs
 open Witnessable
 
+open FStar.Monotonic.Heap (* Remove if we don't use footprint *)
+
 open FStar.Tactics
 open FStar.Ghost
 
@@ -28,10 +30,7 @@ let grade_preorder : preorder grade = fun g1 g2 ->
   | NotGraded -> True
   | _ -> g1 == g2
 
-let max_length = pow2 32 - 1
-
-let no_cycles (ll: linkedList int) (h: heap) : Type0 = admit()
-let sorted (ll: linkedList int) (h: heap) : Type0 = admit()
+(* let max_length = pow2 32 - 1 *)
 
 (* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
 let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
@@ -41,16 +40,19 @@ let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
     | LLNil -> True
     | LLCons x xsref -> no_cycles_fuel (fuel - 1) (sel h xsref) h
 
-(* let rec no_cycles' (ll: linkedList int): ST Type0
+let rec no_cycles_ST (fuel: nat) (ll: linkedList int): ST Type0
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
   (ensures fun h0 r h1 -> True) =
-  match ll with
-    | LLNil -> True
-    | LLCons x xsref -> 
-      let h0 = get_heap() in
-      assert (h0 `contains` xsref);
-      let tail = sst_read #(SLList SNat) xsref in
-      no_cycles' tail *)
+  if fuel = 0 then False
+  else
+    match ll with
+      | LLNil -> True
+      | LLCons x xsref -> 
+        let h0 = get_heap() in
+        assert (h0 `contains` xsref);
+        admit(); (* To fix: postcond of read fails *)
+        let tail : linkedList int = sst_read' xsref in
+        no_cycles_ST (fuel - 1) tail
 
 let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
@@ -63,11 +65,9 @@ let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
       | LLNil -> True
       | LLCons y next -> x <= y /\ sorted_fuel (fuel - 1) tl h
 
-(* Probably remove this *)
 let rec footprint_acc
-  (#a: Type)
-  (l: linkedList a) 
-  (h:heap) 
+  (l: linkedList int) 
+  (h:heap)
   (hdom:(FSet.set nat){forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom})
   (acc:(FSet.set nat){acc `FSet.subset` hdom}) : 
   GTot (FSet.set nat) (decreases (FSet.cardinality (hdom `FSet.difference` acc))) =
@@ -76,32 +76,38 @@ let rec footprint_acc
   | LLCons x xsref -> 
     if addr_of xsref `FSet.mem` acc then acc
     else begin
-      assume (h `contains` xsref);
+      assume (h `contains` xsref); (* Turn this into a type refinement? *)
       let acc' = (acc `FSet.union` FSet.singleton (addr_of xsref)) in
       FSet.all_finite_set_facts_lemma ();
-      (* assert (acc' `FSet.subset` hdom);
-      assert ((hdom `FSet.difference` acc') `FSet.subset`
-              (hdom `FSet.difference` acc));
-      assert (~((hdom `FSet.difference` acc') `FSet.equal`
-              (hdom `FSet.difference` acc))); 
-      assert (FSet.cardinality (hdom `FSet.difference` acc') < 
-              FSet.cardinality (hdom `FSet.difference` acc)); *)
       footprint_acc (sel h xsref) h hdom acc' 
     end
 
-(* let get_hdom h =
+let get_heap_domain h =
   FSet.all_finite_set_facts_lemma ();
   let rec aux (n:nat) : res:(FSet.set nat){forall i. 0 < i && i <= n ==> i `FSet.mem` res} =
-    if n = 0 then FSet.emptyset 
-    else FSet.singleton n `FSet.union` (aux (n-1)) in
-  aux ((fst h).next - 1) *)
+    if n = 0 then FSet.emptyset else FSet.singleton n `FSet.union` (aux (n-1)) in
+  aux (next_addr h - 1)
 
-(* let footprint (#a: Type) (l: linkedList a) (h:heap) : GTot (Set.set nat) =
-  let hdom = get_hdom h in
+let footprint (l: linkedList int) (h:heap) : (GTot (FSet.set nat)) =
+  let hdom = get_heap_domain h in
   FSet.all_finite_set_facts_lemma ();
   assert (FSet.emptyset `FSet.subset` hdom);
-  let fp : FSet.set nat = footprint_acc l h hdom FSet.emptyset in
-  Set.as_set (FSet.set_as_list fp) *)
+  assume (forall (a:Type) (rel:_) (r:mref a rel). h `contains` r ==> addr_of r `FSet.mem` hdom);
+  footprint_acc l h hdom FSet.emptyset
+
+let no_cycles (ll:linkedList int) (h:heap): Type0 =
+  let fp = footprint ll h in 
+  let necess_fuel = FSet.cardinality fp + 1 in
+  no_cycles_fuel necess_fuel ll h
+
+let sorted (ll: linkedList int) (h:heap): Type0 = 
+  let fp = footprint ll h in 
+  let necess_fuel = FSet.cardinality fp + 1 in
+  sorted_fuel necess_fuel ll h
+
+let element_of_ll' (ll: linkedList int) (h: heap): GTot (Set.set int) = 
+  let fp = set_as_list (footprint ll h) in
+  Set.empty
 
 let rec elements_of_ll_acc (fuel:nat) (ll:linkedList int) (h:heap) (acc: FSet.set int) : GTot (FSet.set int) =
   if fuel = 0 then acc
@@ -113,10 +119,19 @@ let rec elements_of_ll_acc (fuel:nat) (ll:linkedList int) (h:heap) (acc: FSet.se
       let tail = sel h next in 
       elements_of_ll_acc (fuel - 1) tail h acc'
 
-let elements_of_ll (ll:linkedList int) (h:heap) (acc: FSet.set int) : GTot (FSet.set int) = 
-  elements_of_ll_acc max_length ll h FSet.emptyset
+(* let elements_of_ll (fuel: nat) (ll:linkedList int) (h:heap) (acc: FSet.set int) : GTot (FSet.set int) = 
+  elements_of_ll_acc fuel ll h FSet.emptyset *) (* Previously: fuel = max_length *)
 
-let same_elements (ll:linkedList int) (h0 h1:heap) = elements_of_ll ll h0 == elements_of_ll ll h1
+let same_elements (ll:linkedList int) (h0 h1:heap): Type0 = 
+  let fp_h0 = footprint ll h0 in
+  let fp_h1 = footprint ll h1 in 
+  let length_fp_h0 = cardinality fp_h0 in
+  let length_fp_h1 = cardinality fp_h1 in
+  if length_fp_h0 <> length_fp_h1 then False
+  else 
+    let fuel_0 = length_fp_h0 + 1 in
+    let fuel_1 = length_fp_h1 + 1 in
+    elements_of_ll_acc fuel_0 ll h0 FSet.emptyset == elements_of_ll_acc fuel_0 ll h0 FSet.emptyset
 
 type student_solution =
   ll:linkedList int -> SST (option unit)
@@ -145,11 +160,21 @@ let rec generate_llist (l:list int)
   | [] -> LLNil
   | hd::tl -> LLCons hd (sst_alloc_shareable #(SLList SNat) (generate_llist tl))
 
+(* val list_length: fuel:nat -> ll:linkedList int -> Tot nat (decreases fuel) *)
+let rec list_length (fuel: nat) (ll: linkedList int) (h: heap): GTot int =
+  if fuel = 0 then 0
+  else 
+    match ll with
+    | LLNil -> 0
+    | LLCons _ next -> 1 + list_length (fuel - 1) (sel h next) h
+
 let rec share_llist (l:linkedList int) 
   : SST unit 
     (requires (fun h0 -> satisfy_on_heap l h0 contains_pred /\ 
-                         satisfy_on_heap l h0 is_private))
-    (fun h0 r h1 -> satisfy_on_heap r h1 is_shared) = 
+                         satisfy_on_heap l h0 is_private /\
+                         no_cycles l h0))
+    (fun h0 r h1 -> satisfy_on_heap r h1 is_shared) 
+    (decreases l) = 
   match l with
   | LLNil -> ()
   | LLCons x next -> 
@@ -157,11 +182,14 @@ let rec share_llist (l:linkedList int)
     assert (h0 `contains` next);
     assert (is_private next h0);
     (* assert(forall_refs_heap is_shared h0 #(SLList SNat) (sel h0 next)); *)
-    admit();
-    sst_share #(SLList SNat) next; (* need to share ref starting from the end of the list? *)
-    assert (is_shared next h0);
+    share next; (* need to share ref starting from the end of the list? *)
+    let h1 = get_heap() in
+    assert (is_shared next h1);
     (* let h = get_heap() in *)
     let tl = read next in
+    (* assert(exists fuel . no_cycles_fuel fuel l h0);
+    assert(exists fuel . no_cycles_fuel fuel tl h0); *)
+    admit();
     share_llist tl
 
 let rec auto_grader
