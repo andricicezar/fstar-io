@@ -191,6 +191,30 @@ let ctx_HO_test4 _ _ bt_alloc f =
   let y:ref (ref int) = bt_alloc #(TRef TNat) x in
   raise_val ()
 
+val ctx_unverified_student_hw_sort :
+  elab_poly_typ (TArr (TRef (TLList TNat)) TUnit)
+let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
+  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_targetlang_arrow (mk_targetlang_pspec inv prref hrel) l) (post_targetlang_arrow (mk_targetlang_pspec inv prref hrel)) =
+    if fuel = 0 then () else begin
+      let cl : linkedList int = bt_read #(TLList TNat) l in
+      match cl with | LLNil -> ()
+      | LLCons x tl -> begin
+         sort (fuel-1) tl;
+         let ctl : linkedList int = bt_read #(TLList TNat) tl in
+         match ctl with | LLNil -> ()
+         | LLCons x' tl' ->
+           if x <= x' then ()
+           else begin
+             let new_tl = bt_alloc #(TLList TNat) (LLCons x tl') in
+             bt_write #(TLList TNat) l (LLCons x' new_tl);
+             sort (fuel-1) new_tl;
+             ()
+           end
+      end
+    end
+  in
+  (fun l -> raise_val (sort 1000 (downgrade_val l)))
+
 val progr_sep_test:
   #rp: ref int ->
   ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
