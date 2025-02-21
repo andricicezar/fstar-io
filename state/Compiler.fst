@@ -84,9 +84,12 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
 let backtranslate_ctx1 #i ct = i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
 
+let pre' = sst_pre (fun _ -> True)
+
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps =
-  fun c -> ps (i.c_ct.safe_import c)
+ // The program has a stronger post-condition that the context
+ //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1
