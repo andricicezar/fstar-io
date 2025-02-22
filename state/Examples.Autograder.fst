@@ -111,9 +111,9 @@ let same_elements (ll:linkedList int) (h0 h1:heap): Type0 =
     let necess_fuel = length_h0 + 1 in
     elements_of_ll_acc necess_fuel ll h0 FSet.emptyset == elements_of_ll_acc necess_fuel ll h0 FSet.emptyset
 
-let rec no_cycles_ST (fuel: nat) (ll: linkedList int): SST bool
+let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> h0 == h1 /\ (r ==> no_cycles ll h1)) =
+  (ensures fun h0 r h1 -> h0 == h1 /\ (r ==> no_cycles ll h0)) = (* shouldn't it be <==> instead of ==>?) *)
   if fuel = 0 then false
   else
     match ll with
@@ -124,32 +124,34 @@ let rec no_cycles_ST (fuel: nat) (ll: linkedList int): SST bool
         let tail : linkedList int = sst_read' xsref in
         let h1 = get_heap() in 
         assert (h0 == h1);
+        assume (satisfy_on_heap (sel h0 xsref) h0 contains_pred); (* add lemma for this *)
         admit();
-        no_cycles_ST (fuel - 1) tail
+        no_cycles_SST (fuel - 1) tail
 
-let sorted_ST (ll: linkedList int): SST bool 
+let sorted_SST (ll: linkedList int): SST bool 
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> sorted ll h1) 
+  (ensures fun h0 r h1 -> r <==> sorted ll h0) 
   = admit()
 
-let same_elements_ST (ll: linkedList int): SST bool 
+let same_elements_SST (ll: linkedList int): SST bool 
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> same_elements ll h0 == same_elements ll h1) 
+  (ensures fun h0 r h1 -> r <==> same_elements ll h0 h1) 
   = admit()
 
 type student_solution =
-  ll:linkedList int -> SST (option unit)
+  ll_ref:ref(linkedList int) -> SST (option unit)
     (requires (fun h0 ->
-      no_cycles ll h0 /\
-      forall_refs_heap contains_pred h0 #(SLList SNat) ll /\ forall_refs_heap is_shared h0 #(SLList SNat) ll))
+      no_cycles (sel h0 ll_ref) h0 /\
+      forall_refs_heap contains_pred h0 #(SRef (SLList SNat)) ll_ref /\ 
+      forall_refs_heap is_shared h0 #(SRef (SLList SNat)) ll_ref))
     (ensures (fun h0 r h1 ->
-      (Some? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1) /\
+      (Some? r ==> no_cycles (sel h1 ll_ref) h1 /\ sorted (sel h1 ll_ref) h1 /\ same_elements (sel h1 ll_ref) h0 h1) /\
       modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
 
 let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
 (*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
 
-let rec grading_done (gr: mref grade grade_preorder) h = sel h gr =!= NotGraded
+let grading_done (gr: mref grade grade_preorder) h = sel h gr =!= NotGraded
 
 (* TODO: add specs (one postcond should be no cycles) *)
 let rec generate_llist (l:list int)
@@ -197,8 +199,10 @@ let rec auto_grader
                 h0 `contains` r ==> kind_not_modified r h0 h1) /\ 
                 modifies !{gr} h0 h1)) =
     let ll = generate_llist test in
-    admit ();
+    let ref_ll = sst_alloc_shareable #(SLList SNat) ll in 
+    share ref_ll;
+    admit();
     share_llist ll;
-    (match hw ll with
+    (match hw ref_ll with
     | Some _ -> sst_write gr MaxGrade
     | None -> sst_write gr MinGrade)

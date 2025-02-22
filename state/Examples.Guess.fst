@@ -7,6 +7,7 @@ open FStar.Preorder
 open FStar.Tactics.Typeclasses
 
 open SharedRefs
+open TargetLang
 open Witnessable
 
 type r = 
@@ -14,23 +15,22 @@ type r =
   | GT 
   | EQ
 
-(*TODO: check second postcond & update the name here/ in the paper to match *)
-let post_cond = fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 
-              /\ (forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel) . 
-                  h0 `contains` r ==> kind_not_modified r h0 h1)
+let post_cond = TargetLang.default_spec_rel
 
 type player_type =
-  l: int -> r: int -> (guess: int -> SST int (requires fun _ -> True) (ensures post_cond)) ->
-  SST int (requires (fun _ -> l < r)) (ensures post_cond)
+  l: int -> 
+  r: int -> 
+  (guess: int -> SST int (requires fun _ -> True) (ensures fun h0 r h1 -> post_cond h0 h1)) ->
+  SST int (requires (fun _ -> l < r)) (ensures fun h0 r h1 -> post_cond h0 h1)
 
 let play_guess (l pick r: int) (player: player_type) : 
   SST (bool * int)
   (requires fun _ -> l < pick /\ pick < r) 
-  (ensures post_cond) =
-  (* let counter = alloc 0 (fun v' v'' -> v' <= v'') in
-  encapsulate counter;
+  (ensures fun h0 r h1 -> post_cond h0 h1) =
+  (* let counter = sst_alloc #_  #(fun v' v'' -> v' <= v'') 0 in
+  sst_encapsulate counter;
   let final_guess = 
-    player (fun x -> counter := counter + 1;
+    player (fun x -> counter := !counter + 1;
             if pick = x then EQ
             else if pick < x then GT else LT) in
   if pick = final_guess then (true, !counter)
