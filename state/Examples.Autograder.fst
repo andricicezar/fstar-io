@@ -113,7 +113,7 @@ let same_elements (ll:linkedList int) (h0 h1:heap): Type0 =
 
 let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> h0 == h1 /\ (r ==> no_cycles ll h0)) = (* shouldn't it be <==> instead of ==>?) *)
+  (ensures fun h0 r h1 -> h0 == h1 /\ (r ==> no_cycles ll h0)) = (* ==> instead of <==> because this version uses fuel *)
   if fuel = 0 then false
   else
     match ll with
@@ -125,17 +125,17 @@ let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
         let h1 = get_heap() in 
         assert (h0 == h1);
         assume (satisfy_on_heap (sel h0 xsref) h0 contains_pred); (* add lemma for this *)
-        admit();
+        admit(); (* second postcond fails *)
         no_cycles_SST (fuel - 1) tail
 
 let sorted_SST (ll: linkedList int): SST bool 
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> r <==> sorted ll h0) 
+  (ensures fun h0 r h1 -> r ==> sorted ll h0) 
   = admit()
 
 let same_elements_SST (ll: linkedList int): SST bool 
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> r <==> same_elements ll h0 h1) 
+  (ensures fun h0 r h1 -> r ==> same_elements ll h0 h1) 
   = admit()
 
 type student_solution =
