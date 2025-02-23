@@ -17,16 +17,6 @@ let rec lemma_update_eq_length (#a:Type) (l:list a) (i:nat{i < length l}) (x:a) 
   else
     lemma_update_eq_length (tl l) (i - 1) x
 
-open SharedRefs
-
-noeq
-type atree (r : ref int) (a:Type0) =
-  | Return : a -> atree r a
-  | Yield : continuation r a -> atree r a
-and continuation (r : ref int) a =
-  unit -> SST (atree r a) (fun h0 -> h0 `contains` r /\ is_shared r h0) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
-
-let fairness (l : list int) (n : int) = True
 
 let rec strict_prefix_of #a (s l : list a) :
   Pure Type0 (requires True) (ensures fun _ -> True) (decreases l)
@@ -69,13 +59,95 @@ let prefix_of_append #a (s l : list a) :
 
 let prefix_of_trans #a :
   Lemma (ensures FStar.Preorder.transitive #(list a) prefix_of)
-= admit ()
+= introduce forall (x:list a) (y:list a) (z:list a). (prefix_of x y /\ prefix_of y z) ==> prefix_of x z with
+    introduce (prefix_of x y /\ prefix_of y z) ==> prefix_of x z with pq.
+      eliminate x == y \/ x `strict_prefix_of` y
+      returns _
+      with _ . ()
+      and _ . eliminate y == z \/ y `strict_prefix_of` z
+              returns _
+              with _ . ()
+              and _ . strict_prefix_of_trans x y z
 
 let prefix_of_reflexive #a :
   Lemma (ensures FStar.Preorder.reflexive #(list a) prefix_of)
 = ()
 
-type counter (k : int) = (hist:(list int) & next:int & inactive:int{fairness hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k})
+open SharedRefs
+
+noeq
+type atree (r : ref int) (a:Type0) =
+  | Return : a -> atree r a
+  | Yield : continuation r a -> atree r a
+and continuation (r : ref int) a =
+  unit -> SST (atree r a)
+              (fun h0 -> h0 `contains` r /\ is_shared r h0)
+              (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+
+let rec get_number_of_steps (tid : int) (hist : list int) =
+  match hist with
+  | [] -> 0
+  | h :: t -> if (h = tid) then 1 + get_number_of_steps tid t else get_number_of_steps tid t
+
+let rec lemma_get_number_of_steps_append_tid (tid : int) (hist : list int) :
+  Lemma (ensures get_number_of_steps tid (hist @ [tid]) = get_number_of_steps tid hist + 1) =
+  match hist with
+  | [] -> ()
+  | h :: t -> lemma_get_number_of_steps_append_tid tid t
+
+let rec lemma_get_number_of_steps_append_tid_other (tid : int) (tid' : int) (hist : list int) :
+  Lemma (requires ~ (tid == tid')) (ensures get_number_of_steps tid' (hist @ [tid]) == get_number_of_steps tid' hist) =
+  match hist with
+  | [] -> ()
+  | h :: t -> lemma_get_number_of_steps_append_tid_other tid tid' t
+
+let fairness_ticks (limit : int) (ticks : nat) (l : list int) (n : int) =
+      (forall (j:int{0 <= j /\ j < n /\ j < limit}). get_number_of_steps j l = ticks + 1)
+    /\ (forall (j:int{0 <= j /\ j >= n /\ j < limit}). get_number_of_steps j l = ticks)
+
+let fairness (limit : int) (l : list int) (n : int) =
+  exists (ticks : nat) . fairness_ticks limit ticks l n
+
+let mm_fairness (k : int) (l : list int) (tid : int) :
+  Lemma (requires (fairness k l tid /\ 0 <= tid /\ tid < k))
+        (ensures (fairness k (l @ [tid]) (incr #k tid)))
+=
+  eliminate exists (ticks : nat) . fairness_ticks k ticks l tid
+  returns fairness k (l @ [tid]) (incr #k tid)
+  with _ .
+    if (tid = k - 1)
+    then
+      introduce exists (ticks' : nat) . fairness_ticks k ticks' (l @ [tid]) (incr #k tid)
+      with (ticks + 1)
+      and begin
+        introduce forall (j:int{0 <= j /\ j < (incr #k tid)}). get_number_of_steps j (l @ [tid]) = (ticks + 1) + 1 with
+          ();
+        assert (forall (j:int{0 <= j /\ j < tid}). get_number_of_steps j l = ticks + 1);
+        assert (forall (j:int{0 <= j /\ j >= tid /\ j < k}). get_number_of_steps j l = ticks);
+        introduce forall (j:int{0 <= j /\ j >= (incr #k tid) /\ j < k}). get_number_of_steps j (l @ [tid]) = ticks + 1 with begin
+          eliminate (j = tid) \/ ~(j = tid)
+          returns (get_number_of_steps j (l @ [tid]) = ticks + 1)
+          with _ .
+            lemma_get_number_of_steps_append_tid tid l
+          and _.
+            lemma_get_number_of_steps_append_tid_other tid j l
+        end
+      end
+    else
+      introduce exists (ticks' : nat) . fairness_ticks k ticks' (l @ [tid]) (incr #k tid)
+      with ticks
+      and begin
+        admit ()
+        // introduce forall (j:int{0 <= j /\ j < (incr #k tid)}). get_number_of_steps j (l @ [tid]) = ticks + 1 with
+        //   assert (j <= tid);
+        //   eliminate (j = tid) \/ (j < tid)
+        //   returns get_number_of_steps j (l @ [tid]) = ticks + 1
+        //   with _.
+        //     lemma_get_number_of_steps_append tid l
+        //   and _. admit ()
+      end
+
+type counter (k : int) = (hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k})
 
 let counter_preorder k : FStar.Preorder.preorder (counter k) =
   let order = fun (v : counter k) (v' : counter k) -> prefix_of v._1 v'._1 in
@@ -112,6 +184,7 @@ let rec scheduler
   let inactive' = sst_read tmp in
   let tasks' = update tasks i k' in
   lemma_update_eq_length tasks i k';
+  mm_fairness (length tasks) hist i;
   let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
   prefix_of_append hist [i];
   assert (prefix_of hist (hist @ [i]));
@@ -121,8 +194,21 @@ let rec scheduler
   end
 #pop-options
 
+let lemma_get_number_of_steps_empty (tid : int) : Lemma (ensures get_number_of_steps tid [] = 0) = ()
+
+let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
+  introduce forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = 0 + 1 with
+  ();
+  introduce forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = 0 with
+  ();
+  introduce exists (ticks : nat) . (forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = ticks + 1) /\ (forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = ticks)
+  with 0
+  and ();
+  ()
+
 let run (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
   SST unit (requires (fun h0 -> True)) (ensures (fun _ _ _ -> True)) =
+  fairness_init (length tasks);
   let counter_init : counter (length tasks) = (| [], 0, 0 |) in
   let counter_mref = sst_alloc #_ #(counter_preorder (length tasks)) counter_init in
   let s = sst_alloc_shared 42 in
