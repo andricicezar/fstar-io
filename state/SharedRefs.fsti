@@ -34,9 +34,7 @@ type ref_kind =
 
 let ref_kind_rel : preorder ref_kind = fun k k' ->
   match k , k' with
-  | Private , _ -> True
-  | Shared , Shared -> True
-  | Encapsulated , Encapsulated -> True
+  | Private , _ | Shared , Shared | Encapsulated , Encapsulated -> True
   | _ , _ -> False
 
 type map_sharedT =
