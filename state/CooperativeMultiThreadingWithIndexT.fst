@@ -53,10 +53,6 @@ let rec strict_prefix_or_eq_append #a (s l : list a) :
   | [] -> ()
   | y :: s -> strict_prefix_or_eq_append s l
 
-let prefix_of_append #a (s l : list a) :
-  Lemma (s `prefix_of` (s @ l))
-= strict_prefix_or_eq_append s l
-
 let prefix_of_trans #a :
   Lemma (ensures FStar.Preorder.transitive #(list a) prefix_of)
 = introduce forall (x:list a) (y:list a) (z:list a). (prefix_of x y /\ prefix_of y z) ==> prefix_of x z with
@@ -73,6 +69,10 @@ let prefix_of_reflexive #a :
   Lemma (ensures FStar.Preorder.reflexive #(list a) prefix_of)
 = ()
 
+let lemma_prefix_of_append #a (s l : list a) :
+  Lemma (s `prefix_of` (s @ l))
+= strict_prefix_or_eq_append s l
+
 open SharedRefs
 
 noeq
@@ -81,8 +81,8 @@ type atree (r : ref int) (a:Type0) =
   | Yield : continuation r a -> atree r a
 and continuation (r : ref int) a =
   unit -> SST (atree r a)
-              (fun h0 -> h0 `contains` r /\ is_shared r h0)
-              (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+              (requires (fun h0 -> h0 `contains` r /\ is_shared r h0))
+              (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
 
 let rec get_number_of_steps (tid : int) (hist : list int) =
   match hist with
@@ -108,7 +108,7 @@ let fairness_ticks (limit : int) (ticks : nat) (l : list int) (n : int) =
 let fairness (limit : int) (l : list int) (n : int) =
   exists (ticks : nat) . fairness_ticks limit ticks l n
 
-let mm_fairness (k : int) (l : list int) (tid : int) :
+let lemma_fairness_step (k : int) (l : list int) (tid : int) :
   Lemma (requires (fairness k l tid /\ 0 <= tid /\ tid < k))
         (ensures (fairness k (l @ [tid]) (incr #k tid)))
 =
@@ -137,14 +137,19 @@ let mm_fairness (k : int) (l : list int) (tid : int) :
       introduce exists (ticks' : nat) . fairness_ticks k ticks' (l @ [tid]) (incr #k tid)
       with ticks
       and begin
-        admit ()
-        // introduce forall (j:int{0 <= j /\ j < (incr #k tid)}). get_number_of_steps j (l @ [tid]) = ticks + 1 with
-        //   assert (j <= tid);
-        //   eliminate (j = tid) \/ (j < tid)
-        //   returns get_number_of_steps j (l @ [tid]) = ticks + 1
-        //   with _.
-        //     lemma_get_number_of_steps_append tid l
-        //   and _. admit ()
+        introduce forall (j:int{0 <= j /\ j < (incr #k tid)}). get_number_of_steps j (l @ [tid]) = ticks + 1 with begin
+          assert (j <= tid);
+          eliminate (j = tid) \/ (j < tid)
+          returns get_number_of_steps j (l @ [tid]) = ticks + 1
+          with _.
+            lemma_get_number_of_steps_append_tid tid l
+          and _.
+            lemma_get_number_of_steps_append_tid_other tid j l
+        end;
+        introduce forall (j:int{0 <= j /\ j >= (incr #k tid) /\ j < k}). get_number_of_steps j (l @ [tid]) = ticks with begin
+          assert (j > tid);
+          lemma_get_number_of_steps_append_tid_other tid j l
+        end
       end
 
 type counter (k : int) = (hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k})
@@ -155,6 +160,20 @@ let counter_preorder k : FStar.Preorder.preorder (counter k) =
   prefix_of_reflexive #int;
   order
 
+let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
+  introduce forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = 0 + 1 with
+  ();
+  introduce forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = 0 with
+  ();
+  introduce exists (ticks : nat) . (forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = ticks + 1) /\ (forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = ticks)
+  with 0
+  and ();
+  ()
+
+val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (counter_mref : mref (counter (length tasks)) (counter_preorder (length tasks)))
+  : SST unit
+    (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
+    (ensures (fun h0 _ h1 -> gets_shared Set.empty h0 h1))
 #push-options "--split_queries always"
 let rec scheduler
   (fuel:nat)
@@ -170,50 +189,39 @@ let rec scheduler
   let inactive = counter_st._3 in
   if fuel = 0 || inactive >= length tasks then ()
   else begin
-  let tmp = sst_alloc #int #(FStar.Heap.trivial_preorder _) inactive in
-  let k = index tasks i () in
-  let k' : unit -> SST (atree r unit) (fun h0 -> h0 `contains` r /\ is_shared r h0) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
-    match k with
-    | Return x ->
-      let () = sst_write_ref tmp (inactive + 1) in
-      fun () -> Return x
-    | Yield k ->
-      let () = sst_write_ref tmp 0 in
-      k
-  in
-  let inactive' = sst_read tmp in
-  let tasks' = update tasks i k' in
-  lemma_update_eq_length tasks i k';
-  mm_fairness (length tasks) hist i;
-  let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
-  prefix_of_append hist [i];
-  assert (prefix_of hist (hist @ [i]));
-  assert (counter_preorder _ counter_st counter_st');
-  let () = sst_write counter_mref counter_st' in
-  scheduler (fuel-1) r tasks' counter_mref
+  match index tasks i () with
+  | Return x ->
+    let inactive' = inactive + 1 in
+    let k' : unit -> SST (atree r unit) (fun h0 -> h0 `contains` r /\ is_shared r h0) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+      fun () -> Return x in
+    let tasks' = update tasks i k' in
+    lemma_update_eq_length tasks i k';
+    lemma_fairness_step (length tasks) hist i;
+    lemma_prefix_of_append hist [i];
+    let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
+    let () = sst_write counter_mref counter_st' in
+    scheduler (fuel-1) r tasks' counter_mref
+  | Yield k' ->
+    let inactive' = 0 in
+    let tasks' = update tasks i k' in
+    lemma_update_eq_length tasks i k';
+    lemma_fairness_step (length tasks) hist i;
+    lemma_prefix_of_append hist [i];
+    let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
+    let () = sst_write counter_mref counter_st' in
+    scheduler (fuel-1) r tasks' counter_mref
   end
 #pop-options
 
-let lemma_get_number_of_steps_empty (tid : int) : Lemma (ensures get_number_of_steps tid [] = 0) = ()
+let counter_init (k : nat{k > 0}) : counter k = fairness_init k; (| [], 0, 0 |)
 
-let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
-  introduce forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = 0 + 1 with
-  ();
-  introduce forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = 0 with
-  ();
-  introduce exists (ticks : nat) . (forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = ticks + 1) /\ (forall (j:int{0 <= j /\ j >= 0}). get_number_of_steps j [] = ticks)
-  with 0
-  and ();
-  ()
-
-let run (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
-  SST unit (requires (fun h0 -> True)) (ensures (fun _ _ _ -> True)) =
-  fairness_init (length tasks);
-  let counter_init : counter (length tasks) = (| [], 0, 0 |) in
-  let counter_mref = sst_alloc #_ #(counter_preorder (length tasks)) counter_init in
-  let s = sst_alloc_shared 42 in
+let run (fuel : nat) (init : int) (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
+  SST int (requires (fun h0 -> True)) (ensures (fun _ _ _ -> True)) =
+  let counter_mref = sst_alloc #_ #(counter_preorder (length tasks)) (counter_init (length tasks)) in
+  let s = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref int) -> continuation r unit) -> f s) tasks in
-  scheduler 5000 s tasks counter_mref
+  let () = scheduler 5000 s tasks counter_mref in
+  sst_read s
 
 let res_a (r : ref int) : continuation r unit = fun () ->
   let () = sst_write_ref r 42 in
@@ -224,4 +232,4 @@ let res_b (r : ref int) : continuation r unit = fun () ->
   let m = sst_alloc #int #(FStar.Heap.trivial_preorder _) 42 in
   Yield (fun () -> let () = sst_write r j in Return ())
 
-let mm () : SST unit (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run [res_a; res_b]
+let mm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]
