@@ -28,7 +28,7 @@ let grade_preorder : preorder grade = fun g1 g2 ->
   | NotGraded -> True
   | _ -> g1 == g2
 
-(* let max_length = pow2 32 - 1 *)
+let max_fuel = pow2 32 - 1
 
 (* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
 let rec no_cycles_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
@@ -90,14 +90,30 @@ let sorted (ll: linkedList int) (h:heap): Type0 =
   let necess_fuel = ll_length ll h + 1 in
   sorted_fuel necess_fuel ll h
 
-let rec elements_of_ll_acc (fuel:nat) (ll:linkedList int) (h:heap) (acc: FSet.set int) : GTot (FSet.set int) =
+(* Probably there are built in functions for these in ulib? *)
+let rec search_elem_with_first_comp (v: int) (l: list (int * int)): option (int * int) = 
+  match l with 
+  | [] -> None
+  | hd::tl ->
+    if fst hd = v then Some hd
+    else search_elem_with_first_comp v tl
+
+let rec elements_of_ll_acc 
+  (fuel:nat) 
+  (ll:linkedList int) 
+  (h:heap) 
+  (acc: FSet.set (int * int)) : GTot (FSet.set (int * int)) =
   if fuel = 0 then acc
   else 
     match ll with 
     | LLNil -> acc
     | LLCons v next -> 
-      let acc' = acc `union` singleton(v) in 
-      let tail = sel h next in 
+        let w = search_elem_with_first_comp v (set_as_list acc) in
+        let acc' = 
+        match w with 
+        | None -> acc `union` FSet.singleton(v, 0)
+        | Some (v, m) -> ((v, m) `remove` acc) `union` singleton(v, m+1)
+        in let tail = sel h next in 
       elements_of_ll_acc (fuel - 1) tail h acc'
 
 (* let elements_of_ll (fuel: nat) (ll:linkedList int) (h:heap) (acc: FSet.set int) : GTot (FSet.set int) = 
