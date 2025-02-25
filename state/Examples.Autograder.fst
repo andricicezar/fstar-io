@@ -111,7 +111,7 @@ let rec elements_of_ll_acc
         let w = search_elem_with_first_comp v (set_as_list acc) in
         let acc' = 
         match w with 
-        | None -> acc `union` FSet.singleton(v, 0)
+        | None -> acc `union` FSet.singleton(v, 1)
         | Some (v, m) -> ((v, m) `remove` acc) `union` singleton(v, m+1)
         in let tail = sel h next in 
       elements_of_ll_acc (fuel - 1) tail h acc'
