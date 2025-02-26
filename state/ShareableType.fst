@@ -226,3 +226,12 @@ instance tc_shareable_type_ref t {| c:tc_shareable_type t |} : tc_shareable_type
 instance tc_shareable_type_llist t {| c:tc_shareable_type t |} : tc_shareable_type (linkedList t) = {
   __t = SLList c.__t;
 }
+
+let rec shareable_typ_to_tc (t:shareable_typ) : tc_shareable_type (to_Type t) =
+  match t with
+  | SUnit -> tc_shareable_type_unit
+  | SNat -> tc_shareable_type_nat
+  | SSum t1 t2 -> tc_shareable_type_sum _ _ #(shareable_typ_to_tc t1) #(shareable_typ_to_tc t2)
+  | SPair t1 t2 -> tc_shareable_type_pair _ _ #(shareable_typ_to_tc t1) #(shareable_typ_to_tc t2)
+  | SRef t' -> tc_shareable_type_ref _ #(shareable_typ_to_tc t')
+  | SLList t' -> tc_shareable_type_llist _ #(shareable_typ_to_tc t')

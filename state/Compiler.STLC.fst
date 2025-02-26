@@ -19,7 +19,7 @@ type src_interface1 = {
   c_ct : safe_importable_to ct;
 
   tct : typ;
-  c_tct : unit -> Lemma (elab_typ default_spec tct == c_ct.ityp); (** can one even prove this? **)
+  c_tct : unit -> Lemma (elab_typ concrete_spec tct == c_ct.ityp); (** can one even prove this? **)
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
@@ -47,20 +47,20 @@ type tgt_interface1 = {
 type ctx_tgt1 (i:tgt_interface1) =
   e:exp{EAbs? e} & typing empty e i.ct
 
-type prog_tgt1 (i:tgt_interface1) = elab_typ default_spec i.ct -> SST int (fun _ -> True) (fun _ _ _ -> True)
+type prog_tgt1 (i:tgt_interface1) = elab_typ concrete_spec i.ct -> SST int (fun _ -> True) (fun _ _ _ -> True)
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> elab_typ default_spec i.ct
+val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> elab_typ concrete_spec i.ct
 let instantiate_ctx_tgt1 c =
   backtranslate_eabs
-    #(Mktuple3?._1 default_spec)
-    #(Mktuple3?._2 default_spec)
-    #(Mktuple3?._3 default_spec)
+    #(inv_c)
+    #(prref_c)
+    #(hrel_c)
     bt_read
     bt_write
     bt_alloc
     (dsnd c)
-    (vempty default_spec)
+    (vempty concrete_spec)
 
 
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1

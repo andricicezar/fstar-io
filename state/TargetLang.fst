@@ -3,6 +3,7 @@ module TargetLang
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Ghost
+open FStar.Preorder
 
 open SharedRefs
 open Witnessable
@@ -12,7 +13,7 @@ instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witne
 }
 
 type targetlang_pspec =
-  (inv:heap -> Type0) * (prref:mref_pred) * (hrel:FStar.Preorder.preorder heap)
+  (inv:heap -> Type0) * (prref:mref_pred) * (hrel:preorder heap)
 
 class targetlang (spec:targetlang_pspec) (t:Type) =
   { wt : witnessable t }
@@ -66,38 +67,6 @@ instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetl
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
-unfold
-let default_spec_rel (h0:heap) (h1:heap) =
-  modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
-
-let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
-: Lemma (requires (default_spec_rel h0 h1 /\ default_spec_rel h1 h2))
-        (ensures  (default_spec_rel h0 h2))
-        [SMTPat (default_spec_rel h0 h1); SMTPat (default_spec_rel h1 h2)]
-=
-  assert (modifies_only_shared_and_encapsulated h0 h2);
-  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
-    ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with
-  begin
-    introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
-    begin
-      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
-                h0 `contains` map_shared <==> h1 `contains` map_shared);
-      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\
-                h1 `contains` map_shared <==> h2 `contains` map_shared)
-    end
-  end
-
-let default_spec : targetlang_pspec = (
-    (fun h ->
-        trans_shared_contains h /\
-        h `contains` map_shared /\
-        is_private (map_shared) h /\
-        (forall p. p >= next_addr h ==> is_private_addr p h)),
-    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
-    (fun h0 h1 -> default_spec_rel h0 h1)
-)
-
 type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) ->
     STFlag (to_Type t) fl
@@ -116,12 +85,69 @@ type ttl_alloc (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:F
       (requires (fun h0 -> inv h0 /\ forall_refs prref init))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
-val tl_read : ttl_read AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+(** ** interm language **)
+
+unfold
+let concrete_spec_rel (h0:heap) (h1:heap) =
+  modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
+
+let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
+: Lemma (requires (concrete_spec_rel h0 h1 /\ concrete_spec_rel h1 h2))
+        (ensures  (concrete_spec_rel h0 h2))
+        [SMTPat (concrete_spec_rel h0 h1); SMTPat (concrete_spec_rel h1 h2)]
+=
+  assert (modifies_only_shared_and_encapsulated h0 h2);
+  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
+    ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with
+  begin
+    introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
+    begin
+      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
+                h0 `contains` map_shared <==> h1 `contains` map_shared);
+      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\
+                h1 `contains` map_shared <==> h2 `contains` map_shared)
+    end
+  end
+
+let concrete_spec : targetlang_pspec = (
+    (fun h ->
+        trans_shared_contains h /\
+        h `contains` map_shared /\
+        is_private (map_shared) h /\
+        (forall p. p >= next_addr h ==> is_private_addr p h)),
+    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
+    (fun h0 h1 -> concrete_spec_rel h0 h1)
+)
+
+let inv_c : heap -> Type0 = Mktuple3?._1 concrete_spec
+let prref_c : mref_pred = Mktuple3?._2 concrete_spec
+let hrel_c : preorder heap = Mktuple3?._3 concrete_spec
+
+let interm (l:Type) = targetlang concrete_spec l
+unfold let pre_interm_arrow
+  (#t1:Type) {| c1 : witnessable t1 |}
+  (x:t1) (h0:heap) =
+  inv_c h0 /\ c1.satisfy x prref_c
+
+unfold let post_interm_arrow
+  (#t2:Type) {| c2 : witnessable t2 |}
+  (h0:heap) (r:t2) (h1:heap) =
+  inv_c h1 /\ h0 `hrel_c` h1 /\ c2.satisfy r prref_c
+
+let mk_interm_arrow
+  (t1:Type) {| c1 : witnessable t1 |}
+  (t2:Type) {| c2 : witnessable t2 |}
+= x:t1 -> ST t2
+    (pre_interm_arrow x)
+    (post_interm_arrow)
+
+
+val tl_read : ttl_read AllOps (inv_c) (prref_c) (hrel_c)
 let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
   recall (is_shared r);
-  let v = read r in
+  let v = sst_read r in
   assert (forall_refs_heap contains_pred h0 v);
   assert (forall_refs_heap is_shared h0 v);
   lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
@@ -129,7 +155,7 @@ let tl_read #t r =
   lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   v
 
-val tl_write : ttl_write AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val tl_write : ttl_write AllOps (inv_c) (prref_c) (hrel_c)
 let tl_write #t r v =
   recall (contains_pred r);
   recall (is_shared r);
@@ -146,7 +172,7 @@ let tl_write #t r v =
   assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
 #push-options "--split_queries always"
-val tl_alloc : ttl_alloc AllOps (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val tl_alloc : ttl_alloc AllOps (inv_c) (prref_c) (hrel_c)
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
