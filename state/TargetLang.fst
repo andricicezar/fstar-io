@@ -12,6 +12,62 @@ instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witne
   satisfy = (fun x pred -> forall_refs pred #c.__t x);
 }
 
+let rec super_lemma (t:shareable_typ) pred x h : Lemma
+  (ensures ((forall_refs_heap pred h #t x) <==> (satisfy_on_heap #(to_Type t) #(witnessable_shareable_type (to_Type t) #(shareable_typ_to_tc t)) x h pred)))
+  [SMTPat (forall_refs_heap pred h #t x)]=
+  match t with
+  | SUnit -> ()
+  | SNat -> ()
+  | SSum t1 t2 -> begin
+    let x : either (to_Type t1) (to_Type t2) = x in
+    match x with
+    | Inl x' -> super_lemma t1 pred x' h
+    | Inr x' -> super_lemma t2 pred x' h
+  end
+  | SRef t' -> begin
+    let x : ref (to_Type t') = x in
+    ()
+  end
+  | SPair t1 t2 -> begin
+    let x : (to_Type t1) * (to_Type t2) = x in
+    super_lemma t1 pred (fst x) h;
+    super_lemma t2 pred (snd x) h
+  end
+  | SLList t' -> begin
+    let x : linkedList (to_Type t') = x in
+    match x with
+    | LLNil -> ()
+    | LLCons v xsref -> super_lemma t' pred v h
+  end
+
+(**
+inline_for_extraction
+let sst_alloc #a (#rel:preorder a) (init:a)
+: SST (mref a rel)
+    (fun h0 ->
+      (forall t . to_Type t == a ==>
+        satisfy_on_heap #a #(witnessable_shareable_type a #(shareable_typ_to_tc t)) init h0 contains_pred))
+    (fun h0 r h1 ->
+      alloc_post #a init h0 r h1 /\
+      is_private r h1 /\
+      gets_shared Set.empty h0 h1)
+=
+  let h0 = get_heap () in
+  let r = alloc #a #rel init in
+  let h1 = get_heap () in
+  lemma_fresh_ref_not_shared r h0;
+  lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
+  assert (gets_shared Set.empty h0 h1);
+  assert (is_private r h1);
+  assert (alloc_post #a init h0 r h1);
+  assert (ctrans_ref_pred h0 contains_pred);
+  lemma_sst_write_or_alloc_preserves_contains r init h0 h1;
+  lemma_sst_alloc_preserves_shared r init h0 h1;
+  assert (ctrans_ref_pred h1 contains_pred);
+  assert (ctrans_ref_pred h1 is_shared);
+  r
+**)
+
 type targetlang_pspec =
   (inv:heap -> Type0) * (prref:mref_pred) * (hrel:preorder heap)
 
