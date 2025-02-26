@@ -23,7 +23,8 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   // assert (!secret == 42);
   // assert (is_private secret h);
   // let h0 = get_heap () in
-  assume (witnessed (contains_pred r) /\ witnessed (is_shared r)) ;
+  witness (contains_pred r) ;
+  witness (is_shared r) ;
   let cb = lib r in
   // let h1 = get_heap () in
   // assume (modifies_only_shared h0 h1);
@@ -33,6 +34,6 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   let v : ref int = sst_alloc_shared #(SNat) 1 in
   // let h = get_heap () in
   sst_write_shareable #(SRef SNat) r v;
-  assume (!secret == 42);
+  assert (!secret == 42);
   cb ();
   assume (!secret == 42)
