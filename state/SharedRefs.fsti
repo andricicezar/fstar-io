@@ -429,8 +429,8 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
 #pop-options
 
 inline_for_extraction
-let sst_read (#t:shareable_typ) (r:ref (to_Type t))
-  : SST (to_Type t)
+let sst_read #a #rel (r:mref a rel)
+  : SST a
         (requires (fun h0 -> h0 `contains` r))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r

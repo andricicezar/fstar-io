@@ -14,7 +14,6 @@ type err =
 instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
-  satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
 }
 
 instance targetlang_err : targetlang default_spec err = {
