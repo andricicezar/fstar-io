@@ -33,3 +33,25 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   cb ();
   assert (!secret == 42)
 #pop-options
+
+(* iter on linked lists *)
+let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: linkedList a) :
+  SST unit (fun _ -> True) (fun _ _ _ -> True)
+= match l with
+  | LLNil -> ()
+  | _ -> ()
+
+(* Adversarial library TODO WRONG SPEC *)
+#push-options "--z3rlimit 10000"
+val adv_lib : lib_type
+let adv_lib r =
+  let g : ref (linkedList (ref int)) = sst_alloc_shared #(SLList (SRef SNat)) LLNil in
+  (fun () ->
+    recall (contains_pred r) ;
+    let v = sst_read #(SRef SNat) r in
+    // sst_write_shareable #(SLList (SRef SNat)) g (LLCons v g) ;
+    // ll_iter (fun r' -> sst_write_shareable #SNat r' 0) !g;
+    // sst_write_shareable #SNat r (sst_alloc_shared #SNat 0)
+    ()
+  )
+#pop-options
