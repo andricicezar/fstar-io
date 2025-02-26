@@ -22,6 +22,7 @@ type lib_type =
   r:ref (ref int) -> SST callback (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 // #push-options "--split_queries always"
+#push-options "--z3rlimit 10000"
 let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   // let h = get_heap () in
@@ -47,11 +48,11 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   cb ();
   let h1 = get_heap () in
   assert (modifies_only_shared_and_encapsulated h0 h1);
-  assume (~ (is_shared secret h0)) ;
+  assert (~ (is_shared secret h0)) ;
   assert (h0 `contains` secret);
   assert (~(compare_addrs secret map_shared));
   // lemma_modifies_only_shared_and_encapsulated h0 h1 secret ;
-  assume (sel h0 secret == sel h1 secret);
+  assert (sel h0 secret == sel h1 secret);
   // assert (sel h1 secret == 42) ;
   assert (!secret == 42)
 // #pop-options
