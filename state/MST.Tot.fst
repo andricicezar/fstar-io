@@ -200,10 +200,12 @@ let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) :
     (write_post #a #rel r v)
 = STATEwp?.reflect (mst_write r v)
 
+inline_for_extraction
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
   : STATEwp a AllOps (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = read #a #rel r
 
+inline_for_extraction
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
