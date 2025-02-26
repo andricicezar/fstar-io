@@ -88,6 +88,10 @@ let sorted (ll: linkedList int) (h:heap): Type0 =
   let necess_fuel = ll_length ll h + 1 in
   sorted_fuel necess_fuel ll h
 
+let heap_contains_all_refs_of_ll (l: linkedList int) (h: heap): Lemma
+  (requires satisfy_on_heap l h contains_pred)
+  (ensures l == LLNil \/ satisfy_on_heap (sel h (LLCons?.next l)) h contains_pred) = admit()
+
 (* Probably there are built in functions for these in ulib? *)
 let rec search_elem_with_first_comp (v: int) (l: list (int * int)): option (int * int) =
   match l with
@@ -142,10 +146,25 @@ let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
         admit(); (* second postcond fails *)
         no_cycles_SST (fuel - 1) tail
 
-// let sorted_SST (ll: linkedList int): SST bool
-//   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-//   (ensures fun h0 r h1 -> r ==> sorted ll h0)
-//   = admit()
+let rec sorted_SST (fuel: nat) (ll: linkedList int): SST bool
+  (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
+  (ensures fun h0 r h1 -> r ==> sorted ll h0) =   
+  if fuel = 0 then false
+  else
+    match ll with
+    | LLNil -> true
+    | LLCons x next ->
+      let tl = sst_read next in
+      match tl with
+      | LLNil -> true
+      | LLCons y next -> 
+        if x > y then false
+        else begin
+          let h = get_heap() in
+          heap_contains_all_refs_of_ll ll h;
+          admit();
+          sorted_SST (fuel - 1) tl
+        end
 
 // let same_elements_SST (ll: linkedList int): SST bool
 //   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
