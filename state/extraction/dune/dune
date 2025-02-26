@@ -1,0 +1,12 @@
+(include_subdirs unqualified)
+(library
+ (name secref_extr)
+ (public_name secref_extr)
+ (libraries
+    fstar.lib
+    fstar.pluginlib
+ )
+ (modes native)
+ (wrapped false)
+ (flags (:standard -w -A))
+)
