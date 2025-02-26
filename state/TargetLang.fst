@@ -12,9 +12,10 @@ instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witne
   satisfy = (fun x pred -> forall_refs pred #c.__t x);
 }
 
+(**
 let rec super_lemma (t:shareable_typ) pred x h : Lemma
   (ensures ((forall_refs_heap pred h #t x) <==> (satisfy_on_heap #(to_Type t) #(witnessable_shareable_type (to_Type t) #(shareable_typ_to_tc t)) x h pred)))
-  [SMTPat (forall_refs_heap pred h #t x)]=
+  [SMTPat (forall_refs_heap pred h #t x); SMTPat (satisfy_on_heap #(to_Type t) #(witnessable_shareable_type (to_Type t) #(shareable_typ_to_tc t)) x h pred)]=
   match t with
   | SUnit -> ()
   | SNat -> ()
@@ -40,7 +41,6 @@ let rec super_lemma (t:shareable_typ) pred x h : Lemma
     | LLCons v xsref -> super_lemma t' pred v h
   end
 
-(**
 inline_for_extraction
 let sst_alloc #a (#rel:preorder a) (init:a)
 : SST (mref a rel)
