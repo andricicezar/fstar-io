@@ -301,7 +301,7 @@ let lemma_sst_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_
     end
   end;
   lemma_sst_write_or_alloc_preserves_contains x v h0 h1
-  
+
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
@@ -431,13 +431,6 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
 inline_for_extraction
 let sst_read (#t:shareable_typ) (r:ref (to_Type t))
   : SST (to_Type t)
-        (requires (fun h0 -> h0 `contains` r))
-        (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
-  MST.Tot.read r
-
-inline_for_extraction
-let sst_read' #a (#rel:preorder a) (r:mref a rel)
-  : SST a
         (requires (fun h0 -> h0 `contains` r))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
@@ -642,7 +635,7 @@ let sst_write_shareable (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
     end
   end;
   assert (~(compare_addrs r map_shared));
-  sst_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v 
+  sst_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v
 #pop-options
 
 let sst_write_ref #a (r:ref a) (v:a)

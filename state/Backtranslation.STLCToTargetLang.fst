@@ -22,14 +22,18 @@ unfold
 let elab_typ0 (t:typ0) : Type u#0 =
   to_Type (to_shareable_typ t)
 
+instance tc_shareable_type_typ0 (t:typ0) : tc_shareable_type (elab_typ0 t) = {
+  __t = to_shareable_typ t;
+}
+
 let rec elab_typ0_tc #pspec (t:typ0) : targetlang pspec (elab_typ0 t) =
   match t with
   | TUnit -> targetlang_unit pspec
   | TNat -> targetlang_int pspec
   | TSum t1 t2 -> targetlang_sum pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
   | TPair t1 t2 -> targetlang_pair pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TRef t -> targetlang_ref pspec _ #(elab_typ0_tc t)
-  | TLList t -> targetlang_llist pspec _ #(elab_typ0_tc t)
+  | TRef t -> targetlang_ref pspec (elab_typ0 t) #solve
+  | TLList t -> targetlang_llist pspec (elab_typ0 t) #solve
 
 let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang pspec tt =
   match t with
@@ -56,8 +60,7 @@ let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang p
     (| raise_t tt, targetlang_univ_raise pspec _ #c_tt |)
   | TLList t ->
     let tt = elab_typ0 t in
-    let c_tt = elab_typ0_tc t in
-    (| raise_t (linkedList tt), targetlang_univ_raise pspec _ #(targetlang_llist pspec tt #c_tt) |)
+    (| raise_t (linkedList tt), targetlang_univ_raise pspec _ #(targetlang_llist pspec tt #(tc_shareable_type_typ0 t)) |)
 
 let elab_typ (pspec:targetlang_pspec) (t:typ) : Type =
   dfst (_elab_typ #pspec t)
@@ -252,7 +255,7 @@ val progr_declassify_nested:
       is_private (sel h0 rp) h0))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
-  let p : ref int = sst_read #(SRef SNat) rp in
+  let p : ref int = sst_read rp in
   sst_share #SNat p;
   sst_share #(SRef SNat) rp;
   let h0 = get_heap () in
@@ -275,7 +278,7 @@ val progr_secret_unchanged_test:
 let progr_secret_unchanged_test rp rs ctx =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   downgrade_val (ctx (raise_val ()));
-  let v = sst_read #SNat secret in
+  let v = sst_read secret in
   ()
 
 val progr_passing_shared_to_callback_test:
@@ -300,6 +303,7 @@ let progr_passing_shared_to_callback_test rp rs f =
   downgrade_val (f cb);
   ()
 
+#push-options "--split_queries always --z3rlimit 10000"
 val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
@@ -320,6 +324,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
     raise_val ()) in
   downgrade_val (f cb);
   ()
+#pop-options
 
 (*
 (** DA: make fails without an assume on this val because of [@expect_failure] *)

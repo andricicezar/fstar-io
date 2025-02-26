@@ -12,23 +12,36 @@ open BeyondCriteria
 
 open HigherOrderContracts
 
+type sem_state = heap -> int -> heap -> Type0
+
+unfold
+let subset_of (s1 s2:sem_state) =
+  forall h0 r h1. s1 h0 r h1 ==>  s2 h0 r h1
+
+unfold
+let eq_sem (s1 s2:sem_state) =
+  s1 `subset_of` s2 /\ s2 `subset_of` s1
+
+let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==> p r h1
+
 noeq
 type src_interface1 = {
   ct : Type;
   c_ct : safe_importable_to ct;
+  psi : heap -> int -> heap -> Type0;
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
-type prog_src1 (i:src_interface1) = i.ct -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
-type whole_src1 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
+type prog_src1 (i:src_interface1) = i.ct -> SST int (fun h0 -> True) i.psi
+type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> SST int (fun h0 -> True) psi)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
-  fun () -> p c
+  (| i.psi, fun () -> p c <: SST int (fun _ -> True) i.psi|)
 
-val beh_src1 : whole_src1 ^-> st_mwp_h heap int
-let beh_src1 = on_domain whole_src1 (fun ws -> theta (reify (ws ()))) (** what happens with the pre-condition? **)
+val beh_src1 : whole_src1 ^-> sem_state
+let beh_src1 = on_domain whole_src1 (fun ws -> beh_sem (reify ((dsnd ws) ()))) (** what happens with the pre-condition? **)
 
-let src_language1 : language (st_wp int) = {
+let src_language1 : language sem_state = {
   interface = src_interface1;
   ctx = ctx_src1; pprog = prog_src1; whole = whole_src1;
   link = link_src1;
@@ -66,10 +79,10 @@ val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
 let link_tgt1 p c =
   fun () -> p (instantiate_ctx_tgt1 c)
 
-val beh_tgt1 : whole_tgt1 ^-> st_mwp_h heap int
-let beh_tgt1 = on_domain whole_tgt1 (fun wt -> theta (reify (wt ())))
+val beh_tgt1 : whole_tgt1 ^-> sem_state
+let beh_tgt1 = on_domain whole_tgt1 (fun wt -> beh_sem (reify (wt ())))
 
-let tgt_language1 : language (st_wp int) = {
+let tgt_language1 : language sem_state = {
   interface = tgt_interface1;
   ctx = ctx_tgt1; pprog = prog_tgt1; whole = whole_tgt1;
   link = link_tgt1;
@@ -81,22 +94,20 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
   c_ct = i.c_ct.c_ityp;
 }
 
-val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
+val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> ctx_src1 i
 let backtranslate_ctx1 #i ct = i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
 
 let pre' = sst_pre (fun _ -> True)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
-let compile_pprog1 #i ps = admit()
+let compile_pprog1 #i ps =
+    fun c -> ps (i.c_ct.safe_import c)
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
-unfold
-let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1
-
 let comp1 : compiler = {
-  src_sem = st_wp int;
-  tgt_sem = st_wp int;
+  src_sem = sem_state;
+  tgt_sem = sem_state;
   source = src_language1;
   target = tgt_language1;
 
@@ -104,8 +115,32 @@ let comp1 : compiler = {
 
   compile_pprog = compile_pprog1;
 
-  rel_sem = eq_wp;
+  rel_sem = eq_sem;
 }
+
+(**
+let soundness1 (ws:whole_src1) : Lemma (beh_src1 ws `subset_of` (dfst ws)) by (
+  norm [delta_only [`%beh_src1;`%subset_of;`%beh_sem];iota]; explode (); dump "H") = ()
+
+let soundness1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
+  let it = comp_int_src_tgt1 i in
+  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
+  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
+  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
+  beh_tgt1 wt `subset_of` i.psi)
+by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%beh_src1;`%beh_tgt1];iota]; dump "H") = ()
+**)
+
+(**
+let syntactic_equality1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
+  let it = comp_int_src_tgt1 i in
+  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
+  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
+  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
+  let ws : whole_src1 = (ps `link_src1` cs) in
+  dsnd ws == wt
+) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1];iota]) = ()
+**)
 
 val comp1_rrhc : unit -> Lemma (rrhc comp1)
 let comp1_rrhc () : Lemma (rrhc comp1) =
@@ -132,10 +167,10 @@ type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (Mktuple3?._3
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
   fun () -> c p
 
-val beh_src2 : whole_src2 ^-> st_mwp_h heap int
-let beh_src2 = on_domain whole_src2 (fun ws -> theta (reify (ws ()))) (** what happens with the pre-condition? **)
+val beh_src2 : whole_src2 ^-> sem_state
+let beh_src2 = on_domain whole_src2 (fun ws -> beh_sem (reify (ws ()))) (** what happens with the pre-condition? **)
 
-let src_language2 : language (st_wp int) = {
+let src_language2 : language sem_state = {
   interface = src_interface2;
   ctx = ctx_src2; pprog = prog_src2; whole = whole_src2;
   link = link_src2;
@@ -172,10 +207,10 @@ let link_tgt2 p c =
       tl_read tl_write tl_alloc
       p
 
-val beh_tgt2 : whole_tgt2 ^-> st_mwp_h heap int
-let beh_tgt2 = on_domain whole_tgt2 (fun wt -> theta (reify (wt ())))
+val beh_tgt2 : whole_tgt2 ^-> sem_state
+let beh_tgt2 = on_domain whole_tgt2 (fun wt -> beh_sem (reify (wt ())))
 
-let tgt_language2 : language (st_wp int) = {
+let tgt_language2 : language sem_state = {
   interface = tgt_interface2;
   ctx = ctx_tgt2; pprog = prog_tgt2; whole = whole_tgt2;
   link = link_tgt2;
@@ -196,8 +231,8 @@ val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_s
 let compile_pprog2 #i ps = i.c_pt.export ps
 
 let comp2 : compiler = {
-  src_sem = st_wp int;
-  tgt_sem = st_wp int;
+  src_sem = sem_state;
+  tgt_sem = sem_state;
   source = src_language2;
   target = tgt_language2;
 
@@ -205,7 +240,7 @@ let comp2 : compiler = {
 
   compile_pprog = compile_pprog2;
 
-  rel_sem = eq_wp;
+  rel_sem = eq_sem;
 }
 
 val comp2_rrhc : unit -> Lemma (rrhc comp2)

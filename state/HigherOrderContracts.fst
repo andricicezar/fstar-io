@@ -15,7 +15,6 @@ instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
   satisfy_on_heap_monotonic = (fun _ _ _ _ -> ());
-  pwitness = (fun _ _ -> (fun () -> ()));
 }
 
 instance targetlang_err : targetlang default_spec err = {
@@ -113,8 +112,8 @@ instance exportable_pair t1 t2 {| c1:exportable_from t1 |} {| c2:exportable_from
   lemma_export_preserves_prref = (fun (x1, x2) -> c1.lemma_export_preserves_prref x1; c2.lemma_export_preserves_prref x2)
 }
 
-instance exportable_ref t {| c:targetlang default_spec t |} : exportable_from (ref t) = {
-  c_styp = witnessable_mref t _ #c.wt;
+instance exportable_ref t {| c:tc_shareable_type t |} : exportable_from (ref t) = {
+  c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
   c_ityp = solve;
   export = (fun x -> x);
@@ -235,8 +234,8 @@ instance importable_sum t1 t2 {| c1:importable_to t1 |} {| c2:importable_to t2 |
     | Inr x -> c2.lemma_import_preserves_prref x)
 }
 
-instance safe_importable_ref t {| c:targetlang default_spec t |} : safe_importable_to (ref t) = {
-  c_styp = witnessable_mref t _ #c.wt;
+instance safe_importable_ref t {| c:tc_shareable_type t |} : safe_importable_to (ref t) = {
+  c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
   c_ityp = solve;
   safe_import = (fun x -> x);
@@ -329,7 +328,7 @@ let f_eqx_is_safe_importable : safe_importable_to f_eqx =
     ()
     (fun (rx:ref int) ->
       recall (contains_pred rx);
-      let x = sst_read' rx in
+      let x = sst_read rx in
       let eh0 = get_heap () in
       let check : cb_capture_check (ref int) (resexn unit) _ _ rx eh0 =
         (fun res -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
@@ -365,7 +364,7 @@ let f_xeq5_is_exportable : exportable_from f_xeq5 =
 val f_with_pre : f_xeq5
 let f_with_pre x =
   recall (contains_pred x);
-  let v = sst_read' x in
+  let v = sst_read x in
   assert (v == 5);
   Inl (10 / v)
 

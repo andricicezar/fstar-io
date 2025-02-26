@@ -7,11 +7,21 @@ open FStar.Ghost
 open SharedRefs
 open Witnessable
 
+instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witnessable t = {
+  satisfy = (fun x pred -> forall_refs pred #c.__t x);
+  satisfy_on_heap = (fun x h pred -> forall_refs_heap pred h #c.__t x);
+  satisfy_on_heap_monotonic = (fun x pred h0 h1 -> forall_refs_heap_monotonic pred h0 h1 #c.__t x);
+}
+
 type targetlang_pspec =
   (inv:heap -> Type0) * (prref:mref_pred) * (hrel:FStar.Preorder.preorder heap)
 
 class targetlang (spec:targetlang_pspec) (t:Type) =
   { wt : witnessable t }
+
+instance targetlang_shareable_type pspec (t:Type) {| c:tc_shareable_type t |} : targetlang pspec t = {
+  wt = witnessable_shareable_type t #c;
+}
 
 instance targetlang_unit pspec : targetlang pspec unit = { wt = witnessable_unit }
 instance targetlang_int  pspec : targetlang pspec int = { wt = witnessable_int }
@@ -27,12 +37,12 @@ instance targetlang_sum pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlan
 instance targetlang_option pspec t1 {| c1:targetlang pspec t1 |}
   : targetlang pspec (option t1)
   = { wt = witnessable_option t1 #c1.wt }
-instance targetlang_ref pspec t1 {| c1:targetlang pspec t1 |}
+instance targetlang_ref pspec t1 {| c1:tc_shareable_type t1 |}
   : targetlang pspec (ref t1)
-  = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #c1.wt }
-instance targetlang_llist pspec t1 {| c1:targetlang pspec t1 |}
+  = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #solve }
+instance targetlang_llist pspec t1 {| c1:tc_shareable_type t1 |}
   : targetlang pspec (linkedList t1)
-  = { wt = witnessable_llist t1 #c1.wt }
+  = { wt = witnessable_llist t1 #solve }
 
 unfold let pre_targetlang_arrow
   (pspec:targetlang_pspec)
@@ -59,23 +69,23 @@ instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetl
   = { wt = witnessable_arrow t1 t2 _ _ }
 
 unfold
-let default_spec_rel (h0:heap) (h1:heap) = 
+let default_spec_rel (h0:heap) (h1:heap) =
   modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
 
-let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap) 
-: Lemma (requires (default_spec_rel h0 h1 /\ default_spec_rel h1 h2)) 
+let default_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
+: Lemma (requires (default_spec_rel h0 h1 /\ default_spec_rel h1 h2))
         (ensures  (default_spec_rel h0 h2))
         [SMTPat (default_spec_rel h0 h1); SMTPat (default_spec_rel h1 h2)]
-= 
+=
   assert (modifies_only_shared_and_encapsulated h0 h2);
-  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel). 
+  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
     ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with
   begin
     introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
     begin
-      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\ 
+      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
                 h0 `contains` map_shared <==> h1 `contains` map_shared);
-      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\ 
+      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\
                 h1 `contains` map_shared <==> h2 `contains` map_shared)
     end
   end

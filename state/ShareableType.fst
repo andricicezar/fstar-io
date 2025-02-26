@@ -49,13 +49,13 @@ let rec forall_refs (pred:mref_pred) (#t:shareable_typ) (x:to_Type t) : Type0 =
       rcall v /\ pred xsref
    end
 
-let forall_refs_heap (pred:mref_heap_stable_pred) (h:heap) (#t:shareable_typ) (x:to_Type t) : Type0 =
+let forall_refs_heap (pred:mref_heap_pred) (h:heap) (#t:shareable_typ) (x:to_Type t) : Type0 =
   forall_refs (fun r -> pred r h) x
 
 let lemma_forall_refs (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_pred) :
   Lemma (forall_refs pred x == pred #_ #(FStar.Heap.trivial_rel _) x) [SMTPat (forall_refs pred x)] by (compute ()) = ()
 
-let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_heap_stable_pred) (h:heap) :
+let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_heap_pred) (h:heap) :
   Lemma (forall_refs_heap pred h x == pred #_ #(FStar.Heap.trivial_rel _) x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
 
 let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t:shareable_typ) (x:to_Type t) :
@@ -192,3 +192,37 @@ let rec lemma_forall_refs_split #t (v:to_Type t) (pred1 pred2:mref_pred) :
       lemma_forall_refs_split v pred1 pred2
   end
 
+class tc_shareable_type (t:Type) = {
+  __t : __t:shareable_typ{t == to_Type __t};
+}
+
+(**
+let every_ref #t {| c:tc_shareable t |} (pred:mref_pred) (x:t) =
+  forall_refs pred #c.__t x
+**)
+instance tc_shareable_type_unit : tc_shareable_type unit = {
+  __t = SUnit;
+}
+
+instance tc_shareable_type_nat : tc_shareable_type int = {
+  __t = SNat;
+}
+
+instance tc_shareable_type_sum t1 t2 {| c1:tc_shareable_type t1 |} {| c2:tc_shareable_type t2 |} : tc_shareable_type (either t1 t2) = {
+  __t = SSum c1.__t c2.__t;
+}
+
+instance tc_shareable_type_pair t1 t2 {| c1:tc_shareable_type t1 |} {| c2:tc_shareable_type t2 |} : tc_shareable_type (t1 * t2) = {
+  __t = SPair c1.__t c2.__t;
+}
+
+(*** WTF **)
+// let _ = assert (mref int (fun x y ->  b2t(x <= y)) == ref int)
+
+instance tc_shareable_type_ref t {| c:tc_shareable_type t |} : tc_shareable_type (ref t) = {
+  __t = SRef c.__t;
+}
+
+instance tc_shareable_type_llist t {| c:tc_shareable_type t |} : tc_shareable_type (linkedList t) = {
+  __t = SLList c.__t;
+}
