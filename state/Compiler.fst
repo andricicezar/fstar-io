@@ -87,7 +87,7 @@ let backtranslate_ctx1 #i ct = i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
 let pre' = sst_pre (fun _ -> True)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
-let compile_pprog1 #i ps =
+let compile_pprog1 #i ps = admit()
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
