@@ -180,7 +180,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
 val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (counter_mref : mref (counter (length tasks)) (counter_preorder (length tasks)))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
-    (ensures (fun h0 _ h1 -> gets_shared Set.empty h0 h1))
+    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter_mref)) /\ gets_shared Set.empty h0 h1))
 #push-options "--split_queries always"
 let rec scheduler
   (fuel:nat)
@@ -189,7 +189,7 @@ let rec scheduler
   (counter_mref : mref (counter (length tasks)) (counter_preorder (length tasks)))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
-    (ensures (fun h0 _ h1 -> gets_shared Set.empty h0 h1)) =
+    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter_mref)) /\ gets_shared Set.empty h0 h1)) =
   witness (contains_pred r);
   witness (is_shared r);
   let counter_st = sst_read' counter_mref in
