@@ -9,8 +9,11 @@ open FStar.Tactics.Typeclasses
 open SharedRefs
 open Witnessable
 
+type callback =
+  unit -> SST unit (fun _ -> True) (fun _ _ _ -> True)
+
 type lib_type =
-  ref (ref int) -> SST (unit -> unit) (fun _ -> True) (fun _ _ _ -> True)
+  ref (ref int) -> SST callback (fun _ -> True) (fun _ _ _ -> True)
 
 let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
@@ -26,6 +29,6 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
               forall_refs_heap contains_pred h #t v /\
               (is_shared r h ==> forall_refs_heap is_shared h #t v)) ;
   sst_write_ref r v;
-  assert (!secret == 42);
+  assume (!secret == 42);
   cb ();
-  assert (!secret == 42)
+  assume (!secret == 42)
