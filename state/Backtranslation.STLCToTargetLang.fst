@@ -220,7 +220,7 @@ let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
 
 val progr_sep_test:
   #rp: ref int ->
-  ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -232,7 +232,7 @@ let progr_sep_test #rp f = (** If this test fails, it means that the spec of f d
 
 val progr_declassify :
   rp: ref int ->
-  ctx:(elab_typ default_spec (TArr (TRef TNat) TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr (TRef TNat) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -247,7 +247,7 @@ let progr_declassify rp f =
 #push-options "--split_queries always"
 val progr_declassify_nested:
   rp: ref (ref int) ->
-  ctx:(elab_typ default_spec (TArr (TRef (TRef TNat)) TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr (TRef (TRef TNat)) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -258,7 +258,6 @@ let progr_declassify_nested rp f =
   let p : ref int = sst_read rp in
   sst_share #SNat p;
   sst_share #(SRef SNat) rp;
-  let h0 = get_heap () in
   witness (contains_pred rp);
   witness (is_shared rp);
   downgrade_val (f (raise_val rp))
@@ -267,7 +266,7 @@ let progr_declassify_nested rp f =
 val progr_secret_unchanged_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ default_spec (TArr TUnit TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -284,7 +283,7 @@ let progr_secret_unchanged_test rp rs ctx =
 val progr_passing_shared_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -296,7 +295,7 @@ let progr_passing_shared_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret); witness (is_shared secret);
-  let cb: elab_typ default_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_shared secret);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
@@ -307,7 +306,7 @@ let progr_passing_shared_to_callback_test rp rs f =
 val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -318,7 +317,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_encapsulate secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
-  let cb: elab_typ default_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_encapsulated secret);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
@@ -329,7 +328,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
 (*
 (** DA: make fails without an assume on this val because of [@expect_failure] *)
 val progr_passing_private_to_callback_test:
-  ctx:(elab_typ default_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 -> True))
     (ensures (fun h0 _ h1 -> True))
@@ -337,7 +336,7 @@ val progr_passing_private_to_callback_test:
 let progr_passing_private_to_callback_test f =
   let secret: ref int = sst_alloc #SNat 0 in
   witness (contains_pred secret);
-  let cb: elab_typ default_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret);
     // let h0 = get_heap () in
     // assume (is_shared secret h0);
@@ -350,7 +349,7 @@ let progr_passing_private_to_callback_test f =
 val progr_getting_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ default_spec (TArr TUnit (TArr TUnit TUnit))) ->
+  ctx:(elab_typ concrete_spec (TArr TUnit (TArr TUnit TUnit))) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -613,22 +612,22 @@ let rec lemma_satisfy_eqv_forall_refs pspec (#t:typ0) (v:elab_typ0 t) (pred:mref
       assert ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v))
   end
 
-val bt_read : tbt_read (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val bt_read : tbt_read (inv_c) (prref_c) (hrel_c)
 let bt_read #t r =
-  lemma_satisfy_eqv_forall_refs default_spec #(TRef t) r (Mktuple3?._2 default_spec);
+  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
   let v = tl_read #(to_shareable_typ t) r in
-  lemma_satisfy_eqv_forall_refs default_spec #t v (Mktuple3?._2 default_spec);
+  lemma_satisfy_eqv_forall_refs concrete_spec #t v (prref_c);
   v
 
-val bt_write : tbt_write (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val bt_write : tbt_write (inv_c) (prref_c) (hrel_c)
 let bt_write #t r v =
-  lemma_satisfy_eqv_forall_refs default_spec #(TRef t) r (Mktuple3?._2 default_spec);
-  lemma_satisfy_eqv_forall_refs default_spec #t v (Mktuple3?._2 default_spec);
+  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
+  lemma_satisfy_eqv_forall_refs concrete_spec #t v (prref_c);
   tl_write #(to_shareable_typ t) r v
 
-val bt_alloc : tbt_alloc (Mktuple3?._1 default_spec) (Mktuple3?._2 default_spec) (Mktuple3?._3 default_spec)
+val bt_alloc : tbt_alloc (inv_c) (prref_c) (hrel_c)
 let bt_alloc #t init =
-  lemma_satisfy_eqv_forall_refs default_spec #t init (Mktuple3?._2 default_spec);
+  lemma_satisfy_eqv_forall_refs concrete_spec #t init (prref_c);
   let r = tl_alloc #(to_shareable_typ t) init in
-  lemma_satisfy_eqv_forall_refs default_spec #(TRef t) r (Mktuple3?._2 default_spec);
+  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
   r
