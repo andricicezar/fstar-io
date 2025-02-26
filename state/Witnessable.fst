@@ -9,8 +9,12 @@ open FStar.Monotonic.Heap
 open MST.Repr
 open MST.Tot
 
+open ShareableType
+
 class witnessable (t:Type) = {
-  satisfy : t -> (#a:_ -> #rel:_ -> mref a rel -> Type0) -> Type0;
+  satisfy : (
+      x:t -> pred:(#a:_ -> #rel:_ -> mref a rel -> Type0) -> sat:Type0{
+          forall __t. to_Type __t == t ==> (sat <==> forall_refs pred #__t x)});
 }
 
 let satisfy_on_heap #t {| c:witnessable t |} x h (pred:mref_heap_pred) =
