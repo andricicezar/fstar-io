@@ -3,7 +3,7 @@
 
 FSTAR := fstar.exe
 
-ROOTS := Compiler.fst Compiler.STLC.fst
+ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fsti)
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
@@ -43,11 +43,20 @@ $(PLUG).cmxs:
 .PHONY: plugin
 plugin: $(PLUG).cmxs
 
-%.ml: | plugin
-	$(FSTAR) $(FLAGS) --load_cmxs $(PLUG) --codegen OCaml $< -o $@
-
-%.exe: .cache/%.ml Test_%.ml
-	$(FSTAR) --ocamlopt -I .cache -w -26 $^ -o $@
+build-%: M=$*
+build-%: D=$*.bld
+build-%: .cache/%.fst.checked | plugin
+	mkdir -p $(D)
+	$(FSTAR) $(FLAGS) --load_cmxs $(PLUG) \
+		--codegen OCaml --extract '*,-Prims,-FStar' \
+		--odir $(D) \
+		$<
+	cp misc/dune $D/
+	cp misc/dune-project $D/
+	cp Test_$M.ml $D/main.ml
+	$(FSTAR) --ocamlenv dune build --root=$D
+	$(FSTAR) --ocamlenv dune install --root=$D --prefix=.
+	./$D/bin/main
 
 # Run your fst file in emacs with the same context as the batch mode.
 %.fst.emacs: %.fst
@@ -60,7 +69,7 @@ plugin: $(PLUG).cmxs
 include .depend.mk
 
 .depend.mk: $(ROOTS)
-	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ >$@
+	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ -o $@
 
 # Make a dependency graph of the modules.
 dep.graph:
