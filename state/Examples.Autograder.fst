@@ -16,6 +16,7 @@ type grade =
 | MaxGrade
 | MinGrade
 
+noextract
 instance witnessable_grade : witnessable grade = {
   satisfy = (fun _ _ -> True);
   satisfy_on_heap = (fun _ _ _ -> True);
@@ -144,15 +145,15 @@ let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
         admit(); (* second postcond fails *)
         no_cycles_SST (fuel - 1) tail
 
-let sorted_SST (ll: linkedList int): SST bool 
-  (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> r ==> sorted ll h0) 
-  = admit()
+// let sorted_SST (ll: linkedList int): SST bool
+//   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
+//   (ensures fun h0 r h1 -> r ==> sorted ll h0)
+//   = admit()
 
-let same_elements_SST (ll: linkedList int): SST bool 
-  (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> r ==> same_elements ll h0 h1) 
-  = admit()
+// let same_elements_SST (ll: linkedList int): SST bool
+//   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
+//   (ensures fun h0 r h1 -> r ==> same_elements ll h0 h1)
+//   = admit()
 
 type student_solution =
   ll_ref:ref(linkedList int) -> SST (option unit)
@@ -164,7 +165,7 @@ type student_solution =
       (Some? r ==> no_cycles (sel h1 ll_ref) h1 /\ sorted (sel h1 ll_ref) h1 /\ same_elements (sel h1 ll_ref) h0 h1) /\
       modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
 
-let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
+// let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
 (*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
 
 let grading_done (gr: mref grade grade_preorder) h = sel h gr =!= NotGraded
@@ -222,3 +223,10 @@ let rec auto_grader
     (match hw ref_ll with
     | Some _ -> sst_write gr MaxGrade
     | None -> sst_write gr MinGrade)
+
+let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
+  let test = [1;23;4;2;1] in
+  let hw : student_solution = fun ll_ref -> None in
+  let gr = alloc (NotGraded) in
+  auto_grader test hw gr;
+  !gr

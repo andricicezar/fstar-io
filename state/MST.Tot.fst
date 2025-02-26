@@ -215,6 +215,7 @@ let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
 let get_heap () : ST (erased heap) (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
   STATEwp?.reflect (mst_get_heap)
 
+inline_for_extraction noextract
 type ref (a:Type0) = mref a (FStar.Heap.trivial_preorder a)
 
 noeq type linkedList (a: Type0) : Type0 =
