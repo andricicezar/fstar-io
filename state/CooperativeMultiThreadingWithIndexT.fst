@@ -81,8 +81,15 @@ type atree (r : ref int) (a:Type0) =
   | Yield : continuation r a -> atree r a
 and continuation (r : ref int) a =
   unit -> SST (atree r a)
-              (requires (fun h0 -> h0 `contains` r /\ is_shared r h0))
+              (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)))
               (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
+
+noeq
+type mm (i : heap -> Type0) (r : ref int) (a : Type0) =
+  | MReturn : a -> mm i r a
+  | MYield : mmcont i r a -> mm i r a
+and mmcont (i : heap -> Type0) (r : ref int) a =
+  unit -> SST (mm i r a) (requires (fun h0 -> i h0)) (ensures (fun h0 _ h1 -> True))
 
 let rec get_number_of_steps (tid : int) (hist : list int) =
   match hist with
@@ -152,7 +159,7 @@ let lemma_fairness_step (k : int) (l : list int) (tid : int) :
         end
       end
 
-type counter (k : int) = (hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k})
+type counter (k : int) = hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k}
 
 let counter_preorder k : FStar.Preorder.preorder (counter k) =
   let order = fun (v : counter k) (v' : counter k) -> prefix_of v._1 v'._1 in
@@ -183,6 +190,8 @@ let rec scheduler
   : SST unit
     (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
     (ensures (fun h0 _ h1 -> gets_shared Set.empty h0 h1)) =
+  witness (contains_pred r);
+  witness (is_shared r);
   let counter_st = sst_read' counter_mref in
   let hist = counter_st._1 in
   let i = counter_st._2 in
@@ -192,7 +201,7 @@ let rec scheduler
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree r unit) (fun h0 -> h0 `contains` r /\ is_shared r h0) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> SST (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -216,20 +225,29 @@ let rec scheduler
 let counter_init (k : nat{k > 0}) : counter k = fairness_init k; (| [], 0, 0 |)
 
 let run (fuel : nat) (init : int) (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
-  SST int (requires (fun h0 -> True)) (ensures (fun _ _ _ -> True)) =
-  let counter_mref = sst_alloc #_ #(counter_preorder (length tasks)) (counter_init (length tasks)) in
+  SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> True)) =
+  let counter_mref = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref int) -> continuation r unit) -> f s) tasks in
-  let () = scheduler 5000 s tasks counter_mref in
-  sst_read s
+  let () = scheduler fuel s tasks counter_mref in
+  let final_value = sst_read s in
+  final_value
 
 let res_a (r : ref int) : continuation r unit = fun () ->
+  recall (contains_pred r);
+  recall (is_shared r);
   let () = sst_write_ref r 42 in
   Return ()
 
 let res_b (r : ref int) : continuation r unit = fun () ->
+  recall (contains_pred r);
+  recall (is_shared r);
   let j = sst_read r in
   let m = sst_alloc #int #(FStar.Heap.trivial_preorder _) 42 in
-  Yield (fun () -> let () = sst_write r j in Return ())
+  Yield (fun () ->
+    recall (contains_pred r);
+    recall (is_shared r);
+    let () = sst_write r j in
+    Return ())
 
-let mm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]
+let nmm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]
