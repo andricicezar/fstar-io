@@ -175,8 +175,11 @@ let concrete_spec : targetlang_pspec = (
     (fun h0 h1 -> concrete_spec_rel h0 h1)
 )
 
+unfold
 let inv_c : heap -> Type0 = Mktuple3?._1 concrete_spec
+unfold
 let prref_c : mref_pred = Mktuple3?._2 concrete_spec
+unfold
 let hrel_c : preorder heap = Mktuple3?._3 concrete_spec
 
 let interm (l:Type) = targetlang concrete_spec l
