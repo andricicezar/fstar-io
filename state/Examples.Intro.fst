@@ -24,11 +24,7 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   // r := sst_alloc_shared #(SNat) 1;
   let v : ref int = sst_alloc_shared #(SNat) 1 in
   let h = get_heap () in
-  assume (forall (t: shareable_typ).
-              to_Type t == ref int ==>
-              forall_refs_heap contains_pred h #t v /\
-              (is_shared r h ==> forall_refs_heap is_shared h #t v)) ;
-  sst_write_ref r v;
-  assume (!secret == 42);
+  sst_write_shareable #(SRef SNat) r v;
+  assert (!secret == 42);
   cb ();
   assume (!secret == 42)
