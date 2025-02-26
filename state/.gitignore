@@ -18,3 +18,6 @@ hints/
 **/.depend.mk
 **/.cache/**
 **/hints
+
+
+*.exe

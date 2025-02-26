@@ -6,8 +6,10 @@ FSTAR := fstar.exe
 ROOTS := Compiler.fst Compiler.STLC.fst
 
 CACHEDIR := .cache
+ODIR := $(CACHEDIR)
 FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
+FLAGS += --odir $(ODIR)
 FLAGS += $(OTHERFLAGS)
 
 verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
@@ -32,6 +34,20 @@ hints:
 	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build
+
+PLUG=extraction/dune/_build/install/default/lib/secref_extr/secref_extr
+
+$(PLUG).cmxs:
+	$(MAKE) -C extraction
+
+.PHONY: plugin
+plugin: $(PLUG).cmxs
+
+%.ml: | plugin
+	$(FSTAR) $(FLAGS) --load_cmxs $(PLUG) --codegen OCaml $< -o $@
+
+%.exe: .cache/%.ml Test_%.ml
+	$(FSTAR) --ocamlopt -I .cache -w -26 $^ -o $@
 
 # Run your fst file in emacs with the same context as the batch mode.
 %.fst.emacs: %.fst
