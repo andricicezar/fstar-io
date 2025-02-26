@@ -6,6 +6,9 @@ open FStar.Monotonic.Heap
 open FStar.Preorder
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.Universe
+open STLC
+open Backtranslation.STLCToTargetLang
 open SharedRefs
 open Witnessable
 
@@ -34,6 +37,31 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
   assert (!secret == 42)
 #pop-options
 
+(* Unverified libraries *)
+
+let ucb_ty = TArr TUnit TUnit
+let ulib_ty = TArr (TRef TNat) ucb_ty
+
+(* Trivial library *)
+
+val triv_cb : elab_poly_typ ucb_ty
+let triv_cb _ _ _ _ =
+  raise_val ()
+
+val triv_lib : elab_poly_typ ulib_ty
+let triv_lib read write alloc r =
+  triv_cb read write alloc
+
+(* Adversarial library *)
+
+#push-options "--z3rlimit 10000"
+val adv_cb : ref (ref int) -> ref (linkedList (ref int)) -> elab_poly_typ ucb_ty
+let adv_cb r g #inv #prref #hrel bt_read bt_write bt_alloc _ =
+  assume (forall h0. inv h0 /\ prref r) ; // Why??
+  let v = bt_read #(TRef TNat) r in
+  // bt_write #(TLList (TRef TNat)) g (LLCons v g); // This fails too, not great for unverified code
+  raise_val ()
+
 (* iter on linked lists *)
 let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: linkedList a) :
   SST unit (fun _ -> True) (fun _ _ _ -> True)
@@ -41,7 +69,7 @@ let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: l
   | LLNil -> ()
   | _ -> ()
 
-(* Adversarial library TODO WRONG SPEC *)
+(* WRONG approach below *)
 #push-options "--z3rlimit 10000"
 val adv_lib : lib_type
 let adv_lib r =
@@ -54,4 +82,3 @@ let adv_lib r =
     // sst_write_shareable #SNat r (sst_alloc_shared #SNat 0)
     ()
   )
-#pop-options
