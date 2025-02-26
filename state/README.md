@@ -25,6 +25,7 @@
 - [ ] Add the two lemmas in Sharedefs.fsti to the F*'s library Monotonic.Heap
 - [ ] Stretch: Try to do an encoding of shared references in Separation Logic (e.g., Pulse)[Attempt](./experiments/shared_in_pulse/SharedInPulse.fst)
 - [ ] Stretch: Prove correctness of DM @Danel (see [Zulip](https://fstar.zulipchat.com/#narrow/channel/214975-fstar-ml-interop/topic/Correctness.20Dijkstra.20Monad))
+- [ ] Rename `SNat` to `SInt`
 
 You can find many examples of how shared references work in [Backtranslation.STLCToTargetLang.fst](./Backtranslation.STLCToTargetLang.fst) (search for Examples).
 The examples are written using a total effect, so one has to deal with universe problems.
