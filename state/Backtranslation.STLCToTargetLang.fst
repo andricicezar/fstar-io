@@ -581,38 +581,6 @@ and backtranslate_eabs
     cast_TArr inv prref hrel #tx #tres w t
 #pop-options
 
-let rec lemma_satisfy_on_heap_eqv_forall_refs_heap pspec (#t:typ0) (v:elab_typ0 t) h (pred:mref_heap_stable_pred) :
-  Lemma ((elab_typ0_tc #pspec t).wt.satisfy_on_heap v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v) =
-  match t with
-  | TUnit -> ()
-  | TNat -> ()
-  | TSum t1 t2 -> begin
-    let v : either (elab_typ0 t1) (elab_typ0 t2) = v in
-    match v with
-    | Inl lv -> lemma_satisfy_on_heap_eqv_forall_refs_heap pspec lv h pred
-    | Inr rv -> lemma_satisfy_on_heap_eqv_forall_refs_heap pspec rv h pred
-  end
-  | TPair t1 t2 -> begin
-     let v : (elab_typ0 t1) * (elab_typ0 t2) = v in
-     lemma_satisfy_on_heap_eqv_forall_refs_heap pspec (fst v) h pred;
-     lemma_satisfy_on_heap_eqv_forall_refs_heap pspec (snd v) h pred;
-     assert ((elab_typ0_tc #pspec t).wt.satisfy_on_heap v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v)
-  end
-  | TRef t' ->
-    let aux (#t':typ0) (v:elab_typ0 (TRef t')) : ref (elab_typ0 t') = v in
-    let v : ref (elab_typ0 t') = aux v in
-    assert ((elab_typ0_tc #pspec t).wt.satisfy_on_heap v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v) by (compute ())
-  | TLList t' -> begin
-    let aux (#t':typ0) (v:elab_typ0 (TLList t')) : linkedList (elab_typ0 t') = v in
-    let v : linkedList (elab_typ0 t') = aux v in
-    match v with
-    | LLNil -> ()
-    | LLCons v' xsref -> (
-      lemma_satisfy_on_heap_eqv_forall_refs_heap pspec v' h pred;
-      let xsref : ref (linkedList (elab_typ0 t')) = xsref in
-      assert ((elab_typ0_tc #pspec t).wt.satisfy_on_heap v h pred <==> forall_refs_heap pred h #(to_shareable_typ t) v))
-  end
-
 let rec lemma_satisfy_eqv_forall_refs pspec (#t:typ0) (v:elab_typ0 t) (pred:mref_pred) :
   Lemma ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) =
   match t with

@@ -19,7 +19,6 @@ type grade =
 noextract
 instance witnessable_grade : witnessable grade = {
   satisfy = (fun _ _ -> True);
-  satisfy_on_heap = (fun _ _ _ -> True);
 }
 
 let grade_preorder : preorder grade = fun g1 g2 ->

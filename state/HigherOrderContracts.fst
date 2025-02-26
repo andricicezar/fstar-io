@@ -13,7 +13,6 @@ type err =
 
 instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
-  satisfy_on_heap = (fun _ _ _ -> True);
 }
 
 instance targetlang_err : targetlang default_spec err = {

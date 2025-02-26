@@ -9,7 +9,6 @@ open Witnessable
 
 instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witnessable t = {
   satisfy = (fun x pred -> forall_refs pred #c.__t x);
-  satisfy_on_heap = (fun x h pred -> forall_refs_heap pred h #c.__t x);
 }
 
 type targetlang_pspec =
