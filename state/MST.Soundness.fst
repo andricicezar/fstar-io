@@ -2,26 +2,7 @@ module MST.Soundness
 
 open FStar.Preorder
 open FStar.Monotonic.Heap
-
-(** CA&DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
-assume
-val lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h:heap) : Lemma
-  (requires (h `contains` r1 /\ h `contains` r2 /\ addr_of r1 == addr_of r2))
-  (ensures (a == b /\ rela == relb /\ is_mm r1 == is_mm r2 /\ sel h r1 == sel h r2))
-(** DA: In my FStar.Monotonic.Heap.fst **)
-(*
-let lemma_eq_addrs_eq_all _ _ _ = ()
-*)
-
-(** DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
-assume
-val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela)
-  : Lemma (requires (mref a rela == mref b relb))
-          (ensures  (a == b))
-(** DA: In my FStar.Monotonic.Heap.fst **)
-(*
-let lemma_eq_ref_types_eq_value_types _ = ()
-*)
+open SharedRefs { lemma_eq_addrs_eq_all, lemma_eq_ref_types_eq_value_types }
 
 let heap_rel (h1:heap) (h2:heap) =
   forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>

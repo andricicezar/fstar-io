@@ -1,7 +1,9 @@
 module SharedRefs
 
-let lemma_eq_addrs_eq_all _ _ _ = admit ()
-let lemma_eq_ref_types_eq_value_types _ = admit ()
+friend FStar.Monotonic.Heap
+
+let lemma_eq_addrs_eq_all _ _ _ = ()
+let lemma_eq_ref_types_eq_value_types _ = ()
 
 (**
 private (** TODO: is this necessary? **)
