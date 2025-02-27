@@ -84,7 +84,16 @@ let adv_lib_t =
   read :  ttl_read fl inv prref hrel ->
   write : ttl_write fl inv prref hrel ->
   alloc : ttl_alloc fl inv prref hrel  ->
-  mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (ref (ref int)) (mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (raise_t unit) unit)
+  mk_targetlang_arrow
+    (mk_targetlang_pspec inv prref hrel)
+    (ref (ref int))
+    (mk_targetlang_arrow
+       (mk_targetlang_pspec inv prref hrel)
+       unit
+       unit) #(witnessable_arrow u#0 u#_ _ _ _ _)
+             (* ^ F* wrongly infers that first universe as 1 instead
+                of zero, which is wrong. Work around it. *)
+
 val adv_lib : adv_lib_t
 
 let adv_lib #fl inv prref hrel read write alloc r =
