@@ -69,7 +69,7 @@ build-%: .cache/%.fst.checked | plugin
 include .depend.mk
 
 .depend.mk: $(ROOTS)
-	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ -o $@
+	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ --output_deps_to $@
 
 # Make a dependency graph of the modules.
 dep.graph:
