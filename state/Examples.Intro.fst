@@ -52,13 +52,6 @@ val triv_lib : elab_poly_typ ulib_ty
 let triv_lib read write alloc r =
   triv_cb read write alloc
 
-(* iter on linked lists *)
-let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: linkedList a) :
-  SST unit (fun _ -> True) (fun _ _ _ -> True)
-= match l with
-  | LLNil -> ()
-  | _ -> ()
-
 (* Adversarial library *)
 
 #push-options "--z3rlimit 10000"
@@ -66,11 +59,22 @@ val adv_lib : elab_poly_typ ulib_ty
 let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
   let r : ref (ref int) = downgrade_val r in
   let g : ref (linkedList (ref int)) = bt_alloc #(TLList (TRef TNat)) LLNil in
+  (* iter *)
+  let pspec = mk_targetlang_pspec inv prref hrel in
+  let rec ll_iter (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+    match l with
+    | LLNil -> ()
+    | LLCons r' r ->
+      bt_write #TNat r' 0 ;
+      // let l' = bt_read r in
+      // ll_iter l'
+      ()
+  in
   (fun _ ->
     let v = bt_read #(TRef TNat) r in
     bt_write #(TLList (TRef TNat)) g (LLCons v g);
     let l = bt_read #(TLList (TRef TNat)) g in
-    // ll_iter (fun r' -> bt_write #TNat r' 0) l;
+    ll_iter l;
     let r0 : ref int = bt_alloc #TNat 0 in
     bt_write #(TRef TNat) r r0;
     raise_val ()
