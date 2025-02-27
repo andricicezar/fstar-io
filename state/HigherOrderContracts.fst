@@ -21,6 +21,23 @@ instance targetlang_err pspec : targetlang pspec err = {
 
 type resexn a = either a err
 
+type cb_check pspec (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  (x:t1)
+  (eh0:FStar.Ghost.erased heap{pre x eh0}) =
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_targetlang_arrow pspec eh0 r h1) (fun h1 rck h1' ->
+    h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
+
+type select_check
+  pspec
+  (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
+  x:t1 -> ST (
+    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_check pspec t1 t2 #c2 pre post x eh0
+  ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
+
 class exportable_from pspec (styp: Type u#a) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
@@ -136,9 +153,10 @@ instance exportable_arrow
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   (_:squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #(resexn t2) #(witnessable_sum t2 err #c2.c_styp) h0 r h1))
-  (check:(x:t1 -> ST (either unit err) (pre_targetlang_arrow pspec #_ #c1.c_styp x) (fun h0 r h1 -> h0==h1 /\ (Inl? r ==> pre x h0))))
-                             (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
-                                 e.g., the invariant on the heap **)
+  (check:select_check pspec t1 unit (pre_targetlang_arrow pspec #_ #c1.c_styp)
+    (fun x h0 () h1 -> h0 == h1 /\ pre x h1))
+                (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
+                      e.g., the invariant on the heap **)
   : exportable_from pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
@@ -147,7 +165,8 @@ instance exportable_arrow
     match c1.import x with
     | Inl x' -> begin
       c1.lemma_import_preserves_prref x (Mktuple3?._2 pspec);
-      match check x' with
+      let (| _, cb_check |) = check x' in
+      match cb_check () with
       | Inl _ -> begin
         let res = f x' in
         (exportable_resexn pspec t2).lemma_export_preserves_prref res (Mktuple3?._2 pspec);
@@ -273,23 +292,6 @@ instance safe_importable_resexn pspec t {| c:importable_to pspec t |} : safe_imp
     | Inr err -> ())
 }
 
-type cb_capture_check pspec (t1:Type) (t2:Type) {| c2: witnessable t2 |}
-  (pre:(t1 -> st_pre))
-  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
-  (x:t1)
-  (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-  (r:t2 -> ST (resexn unit) (fun h1 -> post_targetlang_arrow pspec eh0 r h1) (fun h1 rck h1' ->
-    h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
-
-type capture_check
-  pspec
-  (t1:Type) (t2:Type) {| c2: witnessable t2 |}
-  (pre:(t1 -> st_pre))
-  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
-  x:t1 -> ST (
-    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_capture_check pspec t1 t2 #c2 pre post x eh0
-  ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
-
 instance safe_importable_arrow
   pspec
   (t1:Type) (t2:Type)
@@ -299,7 +301,7 @@ instance safe_importable_arrow
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
   (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
-  (capture_check:capture_check pspec t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
+  (capture_check:select_check pspec t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
   : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
@@ -355,7 +357,7 @@ let f_eqx_is_safe_importable : safe_importable_to concrete_spec f_eqx =
       recall (contains_pred rx);
       let x = sst_read rx in
       let eh0 = get_heap () in
-      let check : cb_capture_check concrete_spec (ref int) (resexn unit) _ _ rx eh0 =
+      let check : cb_check concrete_spec (ref int) (resexn unit) _ _ rx eh0 =
         (fun res -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
 
