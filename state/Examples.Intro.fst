@@ -11,12 +11,7 @@ open STLC
 open Backtranslation.STLCToTargetLang
 open SharedRefs
 open Witnessable
-
-let lemma_modifies_only_shared_and_encapsulated h0 h1 #a #rel (r : mref a rel) :
-  Lemma
-    (requires modifies_only_shared_and_encapsulated h0 h1 /\ h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shared r h0 \/ is_encapsulated r h0))
-    (ensures sel h0 r == sel h1 r)
-= ()
+open Compiler
 
 type callback =
   unit -> SST unit (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
@@ -25,16 +20,17 @@ type lib_type =
   r:ref (ref int) -> SST callback (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 #push-options "--z3rlimit 10000"
-let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
+let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
   witness (contains_pred r) ;
   witness (is_shared r) ;
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
-  sst_write_shareable #(SRef SNat) r v;
+  sst_write r v;
   cb ();
-  assert (!secret == 42)
+  assert (!secret == 42);
+  0
 #pop-options
 
 (* Unverified libraries *)
@@ -78,3 +74,14 @@ let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
     bt_write #(TRef TNat) r r0;
     raise_val ()
   )
+
+(* Calling SecRef* on it *)
+
+let sit : src_interface1 = {
+  ct = lib_type ;
+  c_ct = admit () ;
+  psi = fun _ _ _ -> True
+}
+
+let compiled_prog =
+  compile_pprog1 #sit prog
