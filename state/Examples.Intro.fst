@@ -11,13 +11,14 @@ open STLC
 open Backtranslation.STLCToTargetLang
 open SharedRefs
 open Witnessable
+open HigherOrderContracts
 open Compiler
 
 type callback =
-  unit -> SST unit (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  unit -> SST (resexn unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 type lib_type =
-  r:ref (ref int) -> SST callback (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  r:ref (ref int) -> SST (resexn callback) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 #push-options "--z3rlimit 10000"
 let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
@@ -26,11 +27,15 @@ let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ 
   witness (contains_pred r) ;
   witness (is_shared r) ;
   let cb = lib r in
+  if Inr? cb then 1 else
+  let cb = Inl?.v cb in
   let v : ref int = sst_alloc_shared 1 in
   sst_write r v;
-  cb ();
-  assert (!secret == 42);
-  0
+  let cbr = cb () in
+  if Inr? cbr then 1 else begin
+    assert (!secret == 42);
+    0
+  end
 #pop-options
 
 (* Unverified libraries *)
@@ -77,11 +82,36 @@ let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
 
 (* Calling SecRef* on it *)
 
+instance imp_cb : safe_importable_to callback =
+  safe_importable_arrow
+    unit _
+    _ _ () ()
+    (fun () ->
+      let eh0 = get_heap () in
+      let check : cb_capture_check _ _ _ _ _ eh0 =
+        (fun res -> Inl ()) in
+      (| eh0, check |)
+    )
+
+instance imp_lib : safe_importable_to lib_type =
+  safe_importable_arrow
+    (ref (ref int)) _
+    _ _ () ()
+    (fun _ ->
+      let eh0 = get_heap () in
+      let check : cb_capture_check _ _ _ _ _ eh0 =
+        (fun res -> Inl ()) in
+      (| eh0, check |)
+    )
+
 let sit : src_interface1 = {
   ct = lib_type ;
-  c_ct = admit () ;
+  c_ct = solve ;
   psi = fun _ _ _ -> True
 }
 
 let compiled_prog =
   compile_pprog1 #sit prog
+
+// let whole_triv : whole_tgt1 =
+//   link_tgt1 compiled_prog triv_lib
