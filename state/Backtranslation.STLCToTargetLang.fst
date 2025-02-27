@@ -68,14 +68,6 @@ let elab_typ (pspec:targetlang_pspec) (t:typ) : Type =
 let elab_typ_tc #pspec (t:typ) : targetlang pspec (elab_typ pspec t) =
   dsnd (_elab_typ #pspec t)
 
-unfold
-let mk_targetlang_pspec
-  (inv  : heap -> Type0)
-  (prref: mref_pred)
-  (hrel : FStar.Preorder.preorder heap)
-  : targetlang_pspec =
-  (inv, (prref <: (#a:Type0 -> #rel:FStar.Preorder.preorder a -> mref a rel -> Type0)), hrel)
-
 type tbt_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) ->
     ST (elab_typ0 t)
@@ -280,6 +272,7 @@ let progr_secret_unchanged_test rp rs ctx =
   let v = sst_read secret in
   ()
 
+#push-options "--split_queries always --z3rlimit 10000"
 val progr_passing_shared_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
@@ -302,7 +295,6 @@ let progr_passing_shared_to_callback_test rp rs f =
   downgrade_val (f cb);
   ()
 
-#push-options "--split_queries always --z3rlimit 10000"
 val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->

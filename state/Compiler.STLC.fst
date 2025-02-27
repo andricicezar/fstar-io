@@ -16,7 +16,7 @@ open HigherOrderContracts
 noeq
 type src_interface1 = {
   ct : Type;
-  c_ct : safe_importable_to ct;
+  c_ct : safe_importable_to concrete_spec ct;
 
   tct : typ;
   c_tct : unit -> Lemma (elab_typ concrete_spec tct == c_ct.ityp); (** can one even prove this? **)
@@ -87,7 +87,7 @@ let backtranslate_ctx1 #i ct =
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps ct =
-  i.c_tct (); 
+  i.c_tct ();
   ps (i.c_ct.safe_import ct)
 
 unfold

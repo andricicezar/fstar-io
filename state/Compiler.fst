@@ -26,13 +26,13 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 
 noeq
 type src_interface1 = {
-  ct : Type;
-  c_ct : safe_importable_to ct;
+  ct : targetlang_pspec -> Type;
+  c_ct : pspec:targetlang_pspec -> safe_importable_to pspec (ct pspec);
   psi : heap -> int -> heap -> Type0;
 }
 
-type ctx_src1 (i:src_interface1)  = i.ct
-type prog_src1 (i:src_interface1) = i.ct -> SST int (fun h0 -> True) i.psi
+type ctx_src1 (i:src_interface1)  = i.ct concrete_spec
+type prog_src1 (i:src_interface1) = i.ct concrete_spec -> SST int (fun h0 -> True) i.psi
 type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> SST int (fun h0 -> True) psi)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
@@ -50,29 +50,29 @@ let src_language1 : language sem_state = {
 
 noeq
 type tgt_interface1 = {
-  ct : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  c_ct : targetlang concrete_spec (ct AllOps (inv_c) (prref_c) (hrel_c));
+  ct : targetlang_pspec -> Type u#a;
+  c_ct : pspec:targetlang_pspec -> targetlang pspec (ct pspec);
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
-  #fl: erased tflag ->
   inv  : (heap -> Type0) ->
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read fl inv prref hrel ->
-  write : ttl_write fl inv prref hrel ->
-  alloc : ttl_alloc fl inv prref hrel  ->
-  i.ct fl inv prref hrel
+  read :  ttl_read AllOps inv prref hrel ->
+  write : ttl_write AllOps inv prref hrel ->
+  alloc : ttl_alloc AllOps inv prref hrel  ->
+  i.ct (mk_targetlang_pspec inv prref hrel)
 
 type prog_tgt1 (i:tgt_interface1) =
-  i.ct AllOps (inv_c) (prref_c) (hrel_c) ->
+  i.ct concrete_spec ->
   SST int (fun _ -> True) (fun _ _ _ -> True)
+
 
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct AllOps (inv_c) (prref_c) (hrel_c)
-let instantiate_ctx_tgt1 c =
+val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct concrete_spec
+let instantiate_ctx_tgt1 #i c =
   c (inv_c) (prref_c) (hrel_c) tl_read tl_write tl_alloc
 
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
@@ -90,18 +90,18 @@ let tgt_language1 : language sem_state = {
 }
 
 let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
-  ct = (fun _ _ _ _ -> i.c_ct.ityp);
-  c_ct = i.c_ct.c_ityp;
+  ct = (fun pspec -> (i.c_ct pspec).ityp);
+  c_ct = (fun pspec -> (i.c_ct pspec).c_ityp);
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> ctx_src1 i
-let backtranslate_ctx1 #i ct = i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
+let backtranslate_ctx1 #i ct = (i.c_ct concrete_spec).safe_import (instantiate_ctx_tgt1 ct)
 
 let pre' = sst_pre (fun _ -> True)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps =
-    fun c -> ps (i.c_ct.safe_import c)
+    fun c -> ps ((i.c_ct concrete_spec).safe_import c)
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
@@ -151,6 +151,7 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
     FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
     compute ())
 
+  (**
 noeq
 type src_interface2 = {
   pt : Type;
@@ -251,3 +252,4 @@ let comp2_rrhc () : Lemma (rrhc comp2) =
     let ct = forall_intro () in
     FStar.Tactics.witness (`(backtranslate_ctx2 #(`#i) (`#ct)));
     compute ())
+**)

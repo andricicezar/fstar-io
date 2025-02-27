@@ -21,71 +21,71 @@ instance targetlang_err pspec : targetlang pspec err = {
 
 type resexn a = either a err
 
-class exportable_from (styp: Type u#a) = {
+class exportable_from pspec (styp: Type u#a) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
-  [@@@no_method] c_ityp : interm ityp;
+  [@@@no_method] c_ityp : targetlang pspec ityp;
   [@@@no_method] export : styp -> ityp;
-  [@@@no_method] lemma_export_preserves_prref : x:styp -> Lemma (requires (c_styp.satisfy x (prref_c))) (ensures (c_ityp.wt.satisfy (export x) (prref_c)))
+  [@@@no_method] lemma_export_preserves_prref : x:styp -> prref:mref_pred -> Lemma (requires (c_styp.satisfy x prref)) (ensures (c_ityp.wt.satisfy (export x) (prref)))
 }
 
-class safe_importable_to (styp: Type u#a) = {
+class safe_importable_to pspec (styp: Type u#a) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
-  [@@@no_method] c_ityp : interm ityp;
+  [@@@no_method] c_ityp : targetlang pspec ityp;
   [@@@no_method] safe_import : ityp -> styp;
-  [@@@no_method] lemma_safe_import_preserves_prref : x:ityp -> Lemma (requires (c_ityp.wt.satisfy x (prref_c))) (ensures (c_styp.satisfy (safe_import x) (prref_c)))
+  [@@@no_method] lemma_safe_import_preserves_prref : x:ityp -> prref:mref_pred -> Lemma (requires (c_ityp.wt.satisfy x (prref))) (ensures (c_styp.satisfy (safe_import x) (prref)))
 }
 
-class importable_to (styp: Type u#a) = {
+class importable_to pspec (styp: Type u#a) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
-  [@@@no_method] c_ityp : interm ityp;
+  [@@@no_method] c_ityp : targetlang pspec ityp;
   [@@@no_method] import : ityp -> resexn styp;
-  [@@@no_method] lemma_import_preserves_prref : x:ityp -> Lemma (requires (c_ityp.wt.satisfy x (prref_c))) (ensures ((witnessable_sum styp err).satisfy (import x) (prref_c)))
+  [@@@no_method] lemma_import_preserves_prref : x:ityp -> prref:mref_pred -> Lemma (requires (c_ityp.wt.satisfy x prref)) (ensures ((witnessable_sum styp err).satisfy (import x) prref))
 }
 
 (** Exportable instances **)
-instance targetlang_is_exportable t {| c1:interm t |} : exportable_from t = {
+instance targetlang_is_exportable t pspec {| c1:targetlang pspec t |} : exportable_from pspec t = {
   c_styp = c1.wt;
   ityp = t;
   c_ityp = solve;
   export = (fun x -> x);
-  lemma_export_preserves_prref = (fun _ -> ()) }
+  lemma_export_preserves_prref = (fun _ _ -> ()) }
 
-instance exportable_unit : exportable_from unit = {
+instance exportable_unit pspec : exportable_from pspec unit = {
   c_styp = witnessable_unit;
   ityp = unit;
   c_ityp = targetlang_unit _;
   export = (fun x -> x);
-  lemma_export_preserves_prref = (fun _ -> ())
+  lemma_export_preserves_prref = (fun _ _ -> ())
 }
 
-instance exportable_err : exportable_from err = {
+instance exportable_err pspec : exportable_from pspec err = {
   c_styp = witnessable_err;
   ityp = err;
   c_ityp = targetlang_err _;
   export = (fun x -> x);
-  lemma_export_preserves_prref = (fun _ -> ())
+  lemma_export_preserves_prref = (fun _ _ -> ())
 }
 
-instance exportable_int : exportable_from int = {
+instance exportable_int pspec : exportable_from pspec int = {
   c_styp = witnessable_int;
   ityp = int;
   c_ityp = targetlang_int _;
   export = (fun x -> x);
-  lemma_export_preserves_prref = (fun _ -> ())
+  lemma_export_preserves_prref = (fun _ _ -> ())
 }
 
-instance exportable_option t {| c:exportable_from t |} : exportable_from (option t) = {
+instance exportable_option pspec t {| c:exportable_from pspec t |} : exportable_from pspec (option t) = {
   c_styp = witnessable_option t #c.c_styp;
   ityp = option c.ityp;
   c_ityp = targetlang_option _ c.ityp #c.c_ityp;
   export = (fun x -> match x with | Some x -> Some (c.export x) | None -> None);
-  lemma_export_preserves_prref = (fun x -> match x with | Some x -> c.lemma_export_preserves_prref x | None -> ())
+  lemma_export_preserves_prref = (fun x p -> match x with | Some x -> c.lemma_export_preserves_prref x p | None -> ())
 }
 
-instance exportable_sum t1 t2 {| c1:exportable_from t1 |} {| c2:exportable_from t2 |} : exportable_from (either t1 t2) = {
+instance exportable_sum pspec t1 t2 {| c1:exportable_from pspec t1 |} {| c2:exportable_from pspec t2 |} : exportable_from pspec (either t1 t2) = {
   c_styp = witnessable_sum t1 t2 #c1.c_styp #c2.c_styp;
   ityp = either c1.ityp c2.ityp;
   c_ityp = targetlang_sum _ _ _ #c1.c_ityp #c2.c_ityp;
@@ -94,33 +94,33 @@ instance exportable_sum t1 t2 {| c1:exportable_from t1 |} {| c2:exportable_from 
     match x with | Inl x -> c1.lemma_export_preserves_prref x | Inr x -> c2.lemma_export_preserves_prref x)
 }
 
-instance exportable_resexn t {| c:exportable_from t |} : exportable_from (resexn t) = {
+instance exportable_resexn pspec t {| c:exportable_from pspec t |} : exportable_from pspec (resexn t) = {
   c_styp = witnessable_sum t err #c.c_styp;
   ityp = resexn c.ityp;
   c_ityp = targetlang_sum _ c.ityp err #c.c_ityp;
   export = (fun x -> match x with | Inl x -> Inl (c.export x) | Inr err -> Inr err);
-  lemma_export_preserves_prref = (fun x -> match x with | Inl x -> c.lemma_export_preserves_prref x | Inr err -> ())
+  lemma_export_preserves_prref = (fun x p -> match x with | Inl x -> c.lemma_export_preserves_prref x p | Inr err -> ())
 }
 
-instance exportable_pair t1 t2 {| c1:exportable_from t1 |} {| c2:exportable_from t2 |} : exportable_from (t1 * t2) = {
+instance exportable_pair pspec t1 t2 {| c1:exportable_from pspec t1 |} {| c2:exportable_from pspec t2 |} : exportable_from pspec (t1 * t2) = {
   c_styp = witnessable_pair t1 t2 #c1.c_styp #c2.c_styp;
   ityp = c1.ityp * c2.ityp;
   c_ityp = targetlang_pair _ _ _ #c1.c_ityp #c2.c_ityp;
   export = (fun (x1, x2) -> (c1.export x1, c2.export x2));
-  lemma_export_preserves_prref = (fun (x1, x2) -> c1.lemma_export_preserves_prref x1; c2.lemma_export_preserves_prref x2)
+  lemma_export_preserves_prref = (fun (x1, x2) p -> c1.lemma_export_preserves_prref x1 p; c2.lemma_export_preserves_prref x2 p)
 }
 
-instance exportable_ref t {| c:tc_shareable_type t |} : exportable_from (ref t) = {
+instance exportable_ref pspec t {| c:tc_shareable_type t |} : exportable_from pspec (ref t) = {
   c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
   c_ityp = targetlang_ref _ t #c;
   export = (fun x -> x);
-  lemma_export_preserves_prref = (fun _ -> ());
+  lemma_export_preserves_prref = (fun _ _ -> ());
 }
 
-instance exportable_llist t {| c:exportable_from t |} : exportable_from (linkedList t) = admit ()
+instance exportable_llist pspec t {| c:exportable_from pspec t |} : exportable_from pspec (linkedList t) = admit ()
 
-instance exportable_refinement t {| c:exportable_from t |} (p:t->Type0) : exportable_from (x:t{p x}) = {
+instance exportable_refinement pspec t {| c:exportable_from pspec t |} (p:t->Type0) : exportable_from pspec (x:t{p x}) = {
   c_styp = witnessable_refinement t #c.c_styp p;
   ityp = c.ityp;
   c_ityp = c.c_ityp;
@@ -129,46 +129,47 @@ instance exportable_refinement t {| c:exportable_from t |} (p:t->Type0) : export
 }
 
 instance exportable_arrow
+  pspec
   (t1:Type) (t2:Type)
-  {| c1:importable_to t1 |}
-  {| c2:exportable_from t2 |}
+  {| c1:importable_to pspec t1 |}
+  {| c2:exportable_from pspec t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
-  (_:squash (forall x h0 r h1. post x h0 r h1 ==> post_interm_arrow #(resexn t2) #(witnessable_sum t2 err #c2.c_styp) h0 r h1))
-  (check:(x:t1 -> ST (either unit err) (pre_interm_arrow #_ #c1.c_styp x) (fun h0 r h1 -> h0==h1 /\ (Inl? r ==> pre x h0))))
+  (_:squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #(resexn t2) #(witnessable_sum t2 err #c2.c_styp) h0 r h1))
+  (check:(x:t1 -> ST (either unit err) (pre_targetlang_arrow pspec #_ #c1.c_styp x) (fun h0 r h1 -> h0==h1 /\ (Inl? r ==> pre x h0))))
                              (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                                  e.g., the invariant on the heap **)
-  : exportable_from (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
+  : exportable_from pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
-  ityp = mk_interm_arrow c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
-  c_ityp = targetlang_arrow _ c1.ityp (resexn c2.ityp) #_ #(targetlang_sum _ c2.ityp err) ;
+  ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
+  c_ityp = targetlang_arrow pspec c1.ityp (resexn c2.ityp) #c1.c_ityp #(targetlang_sum pspec c2.ityp err #c2.c_ityp) ;
   export = (fun (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
     match c1.import x with
     | Inl x' -> begin
-      c1.lemma_import_preserves_prref x;
+      c1.lemma_import_preserves_prref x (Mktuple3?._2 pspec);
       match check x' with
       | Inl _ -> begin
         let res = f x' in
-        (exportable_resexn t2).lemma_export_preserves_prref res;
-        (exportable_resexn t2).export res
+        (exportable_resexn pspec t2).lemma_export_preserves_prref res (Mktuple3?._2 pspec);
+        (exportable_resexn pspec t2).export res
       end
       | Inr err -> Inr err
     end
     | Inr err -> Inr err
   );
-  lemma_export_preserves_prref = (fun _  -> ());
+  lemma_export_preserves_prref = (fun _ _ -> ());
 }
 
 (** Importable instances **)
-instance targetlang_is_safely_importable t {| c1:interm t |} : safe_importable_to t = {
+instance targetlang_is_safely_importable pspec t {| c1:targetlang pspec t |} : safe_importable_to pspec t = {
   c_styp = c1.wt;
   ityp = t;
   c_ityp = solve;
   safe_import = (fun x -> x);
-  lemma_safe_import_preserves_prref = (fun _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
-instance safe_importable_is_importable t {| c1:safe_importable_to t |} : importable_to t = {
+instance safe_importable_is_importable pspec t {| c1:safe_importable_to pspec t |} : importable_to pspec t = {
   c_styp = c1.c_styp;
   ityp = c1.ityp;
   c_ityp = c1.c_ityp;
@@ -176,23 +177,23 @@ instance safe_importable_is_importable t {| c1:safe_importable_to t |} : importa
   lemma_import_preserves_prref = (fun x -> c1.lemma_safe_import_preserves_prref x);
 }
 
-instance safe_importable_unit : safe_importable_to unit = {
+instance safe_importable_unit pspec : safe_importable_to pspec unit = {
   c_styp = witnessable_unit;
   ityp = unit;
   c_ityp = targetlang_unit _;
   safe_import = (fun x -> x);
-  lemma_safe_import_preserves_prref = (fun _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
-instance safe_importable_err : safe_importable_to err = {
+instance safe_importable_err pspec : safe_importable_to pspec err = {
   c_styp = witnessable_err;
   ityp = err;
   c_ityp = targetlang_err _;
   safe_import = (fun x -> x);
-  lemma_safe_import_preserves_prref = (fun _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
-instance importable_option t {| c:importable_to t |} : importable_to (option t) = {
+instance importable_option pspec t {| c:importable_to pspec t |} : importable_to pspec (option t) = {
   c_styp = witnessable_option t #c.c_styp;
   ityp = option c.ityp;
   c_ityp = targetlang_option _ c.ityp #c.c_ityp;
@@ -204,13 +205,13 @@ instance importable_option t {| c:importable_to t |} : importable_to (option t) 
       | Inr err -> Inr err
     end
     | None -> Inl None);
-  lemma_import_preserves_prref = (fun x ->
+  lemma_import_preserves_prref = (fun x p ->
     match x with
-    | Some x -> c.lemma_import_preserves_prref x
+    | Some x -> c.lemma_import_preserves_prref x p
     | None -> ())
 }
 
-instance importable_sum t1 t2 {| c1:importable_to t1 |} {| c2:importable_to t2 |} : importable_to (either t1 t2) = {
+instance importable_sum pspec t1 t2 {| c1:importable_to pspec t1 |} {| c2:importable_to pspec t2 |} : importable_to pspec (either t1 t2) = {
   c_styp = witnessable_sum t1 t2 #c1.c_styp #c2.c_styp;
   ityp = either c1.ityp c2.ityp;
   c_ityp = targetlang_sum _ _ _ #c1.c_ityp #c2.c_ityp;
@@ -226,23 +227,23 @@ instance importable_sum t1 t2 {| c1:importable_to t1 |} {| c2:importable_to t2 |
       | Inl x -> Inl (Inr x)
       | Inr err -> Inr err
     end);
-  lemma_import_preserves_prref = (fun x ->
+  lemma_import_preserves_prref = (fun x p ->
     match x with
-    | Inl x -> c1.lemma_import_preserves_prref x
-    | Inr x -> c2.lemma_import_preserves_prref x)
+    | Inl x -> c1.lemma_import_preserves_prref x p
+    | Inr x -> c2.lemma_import_preserves_prref x p)
 }
 
-instance safe_importable_ref t {| c:tc_shareable_type t |} : safe_importable_to (ref t) = {
+instance safe_importable_ref pspec t {| c:tc_shareable_type t |} : safe_importable_to pspec (ref t) = {
   c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
   c_ityp = targetlang_ref _ t;
   safe_import = (fun x -> x);
-  lemma_safe_import_preserves_prref = (fun _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
-instance importable_llits t {| c:importable_to t |} : importable_to (linkedList t) = admit ()
+instance importable_llits pspec t {| c:importable_to pspec t |} : importable_to pspec (linkedList t) = admit ()
 
-instance import_refinement t {| c:importable_to t |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): importable_to (x:t{p x}) = {
+instance import_refinement pspec t {| c:importable_to pspec t |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): importable_to pspec (x:t{p x}) = {
   c_styp = witnessable_refinement t #c.c_styp p;
   ityp = c.ityp;
   c_ityp = c.c_ityp;
@@ -253,7 +254,7 @@ instance import_refinement t {| c:importable_to t |} (p:t->Type0) (check:(x:t ->
   lemma_import_preserves_prref = (fun x -> c.lemma_import_preserves_prref x);
 }
 
-instance safe_importable_resexn t {| c:importable_to t |} : safe_importable_to (resexn t) = {
+instance safe_importable_resexn pspec t {| c:importable_to pspec t |} : safe_importable_to pspec (resexn t) = {
   c_styp = witnessable_sum t err #c.c_styp;
   ityp = resexn c.ityp;
   c_ityp = targetlang_sum _ c.ityp err #c.c_ityp;
@@ -266,59 +267,85 @@ instance safe_importable_resexn t {| c:importable_to t |} : safe_importable_to (
     end
     | Inr err -> Inr err
     );
-  lemma_safe_import_preserves_prref = (fun x ->
+  lemma_safe_import_preserves_prref = (fun x p ->
     match x with
-    | Inl x -> c.lemma_import_preserves_prref x
+    | Inl x -> c.lemma_import_preserves_prref x p
     | Inr err -> ())
 }
 
-type cb_capture_check (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+type cb_capture_check pspec (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   (x:t1)
   (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-  (r:t2 -> ST (resexn unit) (fun h1 -> post_interm_arrow eh0 r h1) (fun h1 rck h1' ->
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_targetlang_arrow pspec eh0 r h1) (fun h1 rck h1' ->
     h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
 
 type capture_check
+  pspec
   (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
   x:t1 -> ST (
-    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_capture_check t1 t2 #c2 pre post x eh0
+    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_capture_check pspec t1 t2 #c2 pre post x eh0
   ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
 
 instance safe_importable_arrow
+  pspec
   (t1:Type) (t2:Type)
-  {| c1:exportable_from t1 |}
-  {| c2:importable_to t2 |}
+  {| c1:exportable_from pspec t1 |}
+  {| c2:importable_to pspec t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
-  (_:squash (forall (x:t1) h0. pre x h0 ==> pre_interm_arrow #_ #c1.c_styp x h0))
-  (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_interm_arrow #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
-  (capture_check:capture_check t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
-  : safe_importable_to (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
+  (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
+  (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
+  (capture_check:capture_check pspec t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
+  : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
-  ityp = mk_interm_arrow c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
+  ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt);
   c_ityp = targetlang_arrow _ c1.ityp (resexn c2.ityp) #_ #(targetlang_sum _ c2.ityp err #c2.c_ityp);
-  safe_import = (fun (f:mk_interm_arrow c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (x:t1) ->
-    c1.lemma_export_preserves_prref x;
+  safe_import = (fun (f:mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (x:t1) ->
+    c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec);
     let (| _, check |) = capture_check x in
     let x' = c1.export x in
     let res : resexn c2.ityp = f x' in
-    let fres = (safe_importable_resexn t2).safe_import res in
-    (safe_importable_resexn t2).lemma_safe_import_preserves_prref res;
+    let fres = (safe_importable_resexn pspec t2).safe_import res in
+    (safe_importable_resexn pspec t2).lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec);
     match check fres with
     | Inl _ -> fres
     | Inr err -> Inr err
   );
-  lemma_safe_import_preserves_prref = (fun _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
+}
+
+instance safe_importable_arrow_safe
+  pspec
+  (t1:Type) (t2:Type)
+  {| c1:exportable_from pspec t1 |}
+  {| c2:safe_importable_to pspec t2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
+  (_:squash (forall (x:t1) h0 r h1. pre x h0 /\ post_targetlang_arrow pspec #_ #c2.c_styp h0 r h1 ==> post x h0 r h1))
+  : safe_importable_to pspec (x:t1 -> ST t2 (pre x) (post x)) = {
+  c_styp = witnessable_arrow t1 t2 pre post;
+  ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
+  c_ityp = targetlang_arrow _ c1.ityp c2.ityp #_ #c2.c_ityp;
+  safe_import = (fun (f:mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt) (x:t1) ->
+    c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec);
+    let x' = c1.export x in
+    let res : c2.ityp = f x' in
+    let fres = c2.safe_import res in
+    c2.lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec);
+    fres
+  );
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
 type f_eqx = x:ref int -> SST (resexn unit) (requires (fun h0 -> satisfy x (prref_c))) (ensures (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
 
-let f_eqx_is_safe_importable : safe_importable_to f_eqx =
-  safe_importable_arrow
+let f_eqx_is_safe_importable : safe_importable_to concrete_spec f_eqx =
+  safe_importable_arrow concrete_spec
     (ref int) unit
     (fun x -> sst_pre (fun h0 -> satisfy x (prref_c)))
     (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
@@ -328,7 +355,7 @@ let f_eqx_is_safe_importable : safe_importable_to f_eqx =
       recall (contains_pred rx);
       let x = sst_read rx in
       let eh0 = get_heap () in
-      let check : cb_capture_check (ref int) (resexn unit) _ _ rx eh0 =
+      let check : cb_capture_check concrete_spec (ref int) (resexn unit) _ _ rx eh0 =
         (fun res -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
 
@@ -348,8 +375,8 @@ type f_xeq5 = x:ref int -> SST (resexn int)
   (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
   (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
 
-let f_xeq5_is_exportable : exportable_from f_xeq5 =
-  exportable_arrow
+let f_xeq5_is_exportable : exportable_from concrete_spec f_xeq5 =
+  exportable_arrow concrete_spec
     (ref int) int
     (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
     (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
