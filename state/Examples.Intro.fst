@@ -40,7 +40,7 @@ let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _
 (* Unverified libraries *)
 
 let ucb_ty = TArr TUnit TUnit
-let ulib_ty = TArr (TRef TNat) ucb_ty
+let ulib_ty = TArr (TRef (TRef TNat)) ucb_ty
 
 (* Trivial library *)
 
@@ -52,16 +52,6 @@ val triv_lib : elab_poly_typ ulib_ty
 let triv_lib read write alloc r =
   triv_cb read write alloc
 
-(* Adversarial library *)
-
-#push-options "--z3rlimit 10000"
-val adv_cb : ref (ref int) -> ref (linkedList (ref int)) -> elab_poly_typ ucb_ty
-let adv_cb r g #inv #prref #hrel bt_read bt_write bt_alloc _ =
-  assume (forall h0. inv h0 /\ prref r) ; // Why??
-  let v = bt_read #(TRef TNat) r in
-  // bt_write #(TLList (TRef TNat)) g (LLCons v g); // This fails too, not great for unverified code
-  raise_val ()
-
 (* iter on linked lists *)
 let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: linkedList a) :
   SST unit (fun _ -> True) (fun _ _ _ -> True)
@@ -69,16 +59,19 @@ let rec ll_iter #a (f : a -> SST unit (fun _ -> True) (fun _ _ _ -> True)) (l: l
   | LLNil -> ()
   | _ -> ()
 
-(* WRONG approach below *)
+(* Adversarial library *)
+
 #push-options "--z3rlimit 10000"
-val adv_lib : lib_type
-let adv_lib r =
-  let g : ref (linkedList (ref int)) = sst_alloc_shared #(SLList (SRef SNat)) LLNil in
-  (fun () ->
-    recall (contains_pred r) ;
-    let v = sst_read #(SRef SNat) r in
-    // sst_write_shareable #(SLList (SRef SNat)) g (LLCons v g) ;
-    // ll_iter (fun r' -> sst_write_shareable #SNat r' 0) !g;
-    // sst_write_shareable #SNat r (sst_alloc_shared #SNat 0)
-    ()
+val adv_lib : elab_poly_typ ulib_ty
+let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
+  let r : ref (ref int) = downgrade_val r in
+  let g : ref (linkedList (ref int)) = bt_alloc #(TLList (TRef TNat)) LLNil in
+  (fun _ ->
+    let v = bt_read #(TRef TNat) r in
+    bt_write #(TLList (TRef TNat)) g (LLCons v g);
+    let l = bt_read #(TLList (TRef TNat)) g in
+    // ll_iter (fun r' -> bt_write #TNat r' 0) l;
+    let r0 : ref int = bt_alloc #TNat 0 in
+    bt_write #(TRef TNat) r r0;
+    raise_val ()
   )
