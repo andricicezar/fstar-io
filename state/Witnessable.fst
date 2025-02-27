@@ -20,8 +20,32 @@ class witnessable (t:Type) = {
 let satisfy_on_heap #t {| c:witnessable t |} x h (pred:mref_heap_pred) =
   c.satisfy x (fun #a #rel r -> pred r h)
 
+#set-options "--print_implicits"
+
+unfold
+let force_retype (#a #b:Type0) (x:a) : Pure b (requires (a == b)) (ensures (fun _ -> True)) = x
+
+let lemma_forall_refs_heap_force_retype_refs (pred:mref_pred) #a #rel (x:mref a rel) b:
+  Lemma
+    (requires (pred #a x /\ a == b))
+    (ensures (pred #b #rel (force_retype x))) = ()
+
 instance witnessable_mref (t:Type) (rel:FStar.Preorder.preorder t) {| c:witnessable t |} : witnessable (mref t rel) = {
-  satisfy = (fun x pred -> pred x);
+  satisfy = (fun (x:mref t rel) pred ->
+    introduce forall __t. to_Type (SRef __t) == mref t rel ==> (pred x <==> forall_refs pred #(SRef __t) (force_retype x)) with begin
+      introduce to_Type (SRef __t) == mref t rel ==> (pred x <==> forall_refs pred #(SRef __t) (force_retype x)) with _. begin
+        introduce pred x ==>  forall_refs pred #(SRef __t) (force_retype x) with _. (
+          admit ();
+          lemma_forall_refs_heap_force_retype_refs pred #t #rel x (to_Type __t);
+          assert (forall_refs pred #(SRef __t) (force_retype x)) by (norm [delta_only [`%forall_refs];zeta;iota]; dump "H"));
+        introduce forall_refs pred #(SRef __t) (force_retype x) ==> pred x with _. (
+          admit ();
+          lemma_forall_refs_heap_force_retype_refs pred #(to_Type (SRef __t)) #rel x t)
+      end
+    end;
+    //by (norm [delta_only [`%forall_refs];zeta;iota];
+
+    pred x);
 }
 
 instance witnessable_ref (t:Type) {| c:witnessable t |} : witnessable (ref t) = {
