@@ -27,11 +27,11 @@ type lib_type =
 #push-options "--z3rlimit 10000"
 let prog (lib : lib_type) : SST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
-  let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared #(SNat) 0) in
+  let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
   witness (contains_pred r) ;
   witness (is_shared r) ;
   let cb = lib r in
-  let v : ref int = sst_alloc_shared #(SNat) 1 in
+  let v : ref int = sst_alloc_shared 1 in
   sst_write_shareable #(SRef SNat) r v;
   cb ();
   assert (!secret == 42)
@@ -58,7 +58,7 @@ val adv_lib : elab_poly_typ ulib_ty
 let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
   let r : ref (ref int) = downgrade_val r in
   let g : ref (linkedList (ref int)) = bt_alloc #(TLList (TRef TNat)) LLNil in
-  (* iter *)
+  (* iteration on linked list, using fuel to ensure termination *)
   let pspec = mk_targetlang_pspec inv prref hrel in
   let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
     if n = 0 then () else
