@@ -35,48 +35,6 @@ let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ 
   0
 #pop-options
 
-(* Unverified libraries *)
-
-let ucb_ty = TArr TUnit TUnit
-let ulib_ty = TArr (TRef (TRef TNat)) ucb_ty
-
-(* Trivial library *)
-
-val triv_cb : elab_poly_typ ucb_ty
-let triv_cb _ _ _ _ =
-  raise_val ()
-
-val triv_lib : elab_poly_typ ulib_ty
-let triv_lib read write alloc r =
-  triv_cb read write alloc
-
-(* Adversarial library *)
-
-val adv_lib : elab_poly_typ ulib_ty
-let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
-  let r : ref (ref int) = downgrade_val r in
-  let g : ref (linkedList (ref int)) = bt_alloc #(TLList (TRef TNat)) LLNil in
-  (* iteration on linked list, using fuel to ensure termination *)
-  let pspec = mk_targetlang_pspec inv prref hrel in
-  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
-    if n = 0 then () else
-    match l with
-    | LLNil -> ()
-    | LLCons r' r ->
-      bt_write #TNat r' 0 ;
-      let l' = bt_read #(TLList (TRef TNat)) r in
-      ll_iter (n-1) l'
-  in
-  (fun _ ->
-    let v = bt_read #(TRef TNat) r in
-    bt_write #(TLList (TRef TNat)) g (LLCons v g);
-    let l = bt_read #(TLList (TRef TNat)) g in
-    ll_iter 1000 l;
-    let r0 : ref int = bt_alloc #TNat 0 in
-    bt_write #(TRef TNat) r r0;
-    raise_val ()
-  )
-
 (* Calling SecRef* on it *)
 
 instance imp_cb : safe_importable_to callback = {
@@ -104,5 +62,43 @@ let sit : src_interface1 = {
 let compiled_prog =
   compile_pprog1 #sit prog
 
-// let whole_triv : whole_tgt1 =
-//   link_tgt1 compiled_prog triv_lib
+(* Unverified libraries (context) *)
+
+(* Trivial library *)
+
+val triv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
+let triv_lib #fl inv prref hrel read write alloc r =
+  (fun () -> ())
+
+let whole_triv : whole_tgt1 =
+  link_tgt1 compiled_prog triv_lib
+
+(* Adversarial library *)
+
+// #push-options "--z3rlimit 10000"
+val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
+let adv_lib #fl inv prref hrel read write alloc r =
+  // let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
+  (* iteration on linked list, using fuel to ensure termination *)
+  // let pspec = mk_targetlang_pspec inv prref hrel in
+  // let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+  //   if n = 0 then () else
+  //   match l with
+  //   | LLNil -> ()
+  //   | LLCons r' r ->
+  //     write #SNat r' 0 ;
+  //     let l' = read #(SLList (SRef SNat)) r in
+  //     ll_iter (n-1) l'
+  // in
+  (fun _ ->
+    // let v = read #(SRef SNat) r in
+    // write #(SLList (SRef SNat)) g (LLCons v g);
+    // let l = read #(SLList (SRef SNat)) g in
+    // ll_iter 1000 l;
+    // let r0 : ref int = alloc #SNat 0 in
+    // write #(SRef SNat) r r0;
+    ()
+  )
+
+let whole_adv : whole_tgt1 =
+  link_tgt1 compiled_prog adv_lib
