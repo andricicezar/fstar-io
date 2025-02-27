@@ -54,27 +54,26 @@ let triv_lib read write alloc r =
 
 (* Adversarial library *)
 
-#push-options "--z3rlimit 10000"
 val adv_lib : elab_poly_typ ulib_ty
 let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
   let r : ref (ref int) = downgrade_val r in
   let g : ref (linkedList (ref int)) = bt_alloc #(TLList (TRef TNat)) LLNil in
   (* iter *)
   let pspec = mk_targetlang_pspec inv prref hrel in
-  let rec ll_iter (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+    if n = 0 then () else
     match l with
     | LLNil -> ()
     | LLCons r' r ->
       bt_write #TNat r' 0 ;
-      // let l' = bt_read r in
-      // ll_iter l'
-      ()
+      let l' = bt_read #(TLList (TRef TNat)) r in
+      ll_iter (n-1) l'
   in
   (fun _ ->
     let v = bt_read #(TRef TNat) r in
     bt_write #(TLList (TRef TNat)) g (LLCons v g);
     let l = bt_read #(TLList (TRef TNat)) g in
-    ll_iter l;
+    ll_iter 1000 l;
     let r0 : ref int = bt_alloc #TNat 0 in
     bt_write #(TRef TNat) r r0;
     raise_val ()
