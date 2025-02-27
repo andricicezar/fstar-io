@@ -11,6 +11,10 @@ type err =
 
 type resexn a = either a err
 
+instance witnessable_err : witnessable err = {
+  satisfy = (fun _ _ -> True);
+}
+
 (** **** Tree **)
 type tree (a: Type) =
   | Leaf : tree a
@@ -97,6 +101,17 @@ type select_check
 
 noeq
 type pck_hoc pspec =
+| TrivialPre :
+    argt:Type u#a ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    c_pre:squash (forall x h0. pre_targetlang_arrow pspec #argt #wt_argt x h0 ==> pre x h0) ->
+    rett:Type u#b ->
+    wt_rett:witnessable rett ->
+    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
+    c_post:(squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #rett #wt_rett h0 r h1))
+    -> pck_hoc pspec
+
 | EnforcePre :
     argt:Type u#a ->
     wt_argt:witnessable argt ->
@@ -110,7 +125,30 @@ type pck_hoc pspec =
     c_post:(squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #rett #wt_rett h0 r h1))
     -> pck_hoc pspec
 
-let test : pck_hoc concrete_spec =
+| TrivialPost :
+    argt:Type u#a ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    c_pre:squash (forall x h0. pre x h0 ==> pre_targetlang_arrow pspec #argt #wt_argt x h0) ->
+    rett:Type u#b ->
+    wt_rett:witnessable rett ->
+    post:(x:argt -> h0:heap -> st_post' rett (pre x h0)) ->
+    c_post:(squash (forall x h0 r h1. post_targetlang_arrow pspec #rett #wt_rett h0 r h1 ==> post x h0 r h1))
+    -> pck_hoc pspec
+
+| EnforcePost :
+    argt:Type u#a ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    c_pre:squash (forall x h0. pre x h0 ==> pre_targetlang_arrow pspec #argt #wt_argt x h0) ->
+    rett:Type u#b ->
+    wt_rett:witnessable rett ->
+    post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0)) ->
+    c_post:(squash (forall x h0 e h1. post x h0 (Inr e) h1 ==> post_targetlang_arrow pspec #(resexn rett) #(witnessable_sum rett err #wt_rett) h0 (Inr e) h1)) ->
+    check:(select_check pspec argt (resexn rett) pre post)
+    -> pck_hoc pspec
+
+let test_pre : pck_hoc concrete_spec =
   EnforcePre
     (ref int)
     (witnessable_ref int)
@@ -129,3 +167,24 @@ let test : pck_hoc concrete_spec =
     (witnessable_unit)
     (fun x h0 r h1 -> post_targetlang_arrow concrete_spec h0 r h1)
     ()
+
+let test_post : pck_hoc concrete_spec =
+  EnforcePost
+    (ref int)
+    (witnessable_ref int)
+    (pre_targetlang_arrow concrete_spec #(ref int) #(witnessable_ref int))
+    ()
+    unit
+    (witnessable_unit)
+    (fun x h0 r h1 -> sel h1 x > 5 /\ post_targetlang_arrow concrete_spec h0 r h1)
+    ()
+    (fun x ->
+      let eh0 = get_heap () in
+      let check : cb_check concrete_spec (ref int) (resexn unit) _ _ x eh0 = (
+        fun _ ->
+          assert (witnessed (contains_pred x));
+          recall (contains_pred x);
+          if read x > 5 then Inl ()
+          else Inr (Contract_failure "less than 5")
+      ) in
+      (| eh0, check |))
