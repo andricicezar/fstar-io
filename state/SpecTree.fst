@@ -1,0 +1,131 @@
+module SpecTree
+
+open FStar.Ghost
+open FStar.Monotonic.Heap
+open MST.Tot
+open Witnessable
+open TargetLang
+
+type err =
+| Contract_failure : string -> err
+
+type resexn a = either a err
+
+(** **** Tree **)
+type tree (a: Type) =
+  | Leaf : tree a
+  | EmptyNode: left: tree a -> right: tree a -> tree a
+  | Node: data: a -> left: tree a -> right: tree a -> tree a
+
+let root (t:(tree 'a){Node? t}) = Node?.data t
+(** TODO: refactor these into two utils **)
+let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
+  match t with
+  | Node _ lt _ -> lt
+  | EmptyNode lt _ -> lt
+
+let right (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
+  match t with
+  | Node _ _ rt -> rt
+  | EmptyNode _ rt -> rt
+
+let rec equal_trees (t1:tree 'a) (t2:tree 'a) =
+  match t1, t2 with
+  | Leaf, Leaf -> True
+  | EmptyNode lhs1 rhs1, EmptyNode lhs2 rhs2 -> equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
+  | Node x lhs1 rhs1, Node y lhs2 rhs2 -> x == y /\ equal_trees lhs1 lhs2 /\ equal_trees rhs1 rhs2
+  | _, _ -> False
+
+(* The function above is really just propositional equality. See this proof. *)
+let rec equal_trees_prop (t1 t2 : tree 'a) : Lemma (equal_trees t1 t2 <==> t1 == t2)
+  [SMTPat (equal_trees t1 t2)]
+  =
+  match t1, t2 with
+  | Leaf,            Leaf -> ()
+  | EmptyNode l1 r1, EmptyNode l2 r2
+  | Node _ l1 r1,    Node _ l2 r2 -> equal_trees_prop l1 l2; equal_trees_prop r1 r2
+  | _ -> ()
+
+let rec map_tree (t:tree 'a) (f:'a -> 'b) : tree 'b =
+  match t with
+  | Leaf -> Leaf
+  | EmptyNode lhs rhs -> EmptyNode (map_tree lhs f) (map_tree rhs f)
+  | Node x lhs rhs -> Node (f x) (map_tree lhs f) (map_tree rhs f)
+
+let rec map_fuse (t:tree 'a) (f:'a -> 'b) (g : 'b -> 'c)
+  : Lemma (map_tree (map_tree t f) g == map_tree t (fun x -> g (f x)))
+  =
+  match t with
+  | Leaf -> ()
+  | EmptyNode lhs rhs -> map_fuse lhs f g; map_fuse rhs f g
+  | Node x lhs rhs -> map_fuse lhs f g; map_fuse rhs f g
+
+let rec map_id (t:tree 'a)
+  : Lemma (map_tree t (fun x -> x) == t)
+  =
+  match t with
+  | Leaf -> ()
+  | EmptyNode lhs rhs -> map_id lhs; map_id rhs
+  | Node x lhs rhs -> map_id lhs; map_id rhs
+
+let rec map_ext (t:tree 'a) (f:'a -> 'b) (g : 'a -> 'b)
+  : Lemma (requires (forall x. f x == g x))
+          (ensures (map_tree t f == map_tree t g))
+  =
+  match t with
+  | Leaf -> ()
+  | EmptyNode lhs rhs -> map_ext lhs f g; map_ext rhs f g
+  | Node x lhs rhs -> map_ext lhs f g; map_ext rhs f g
+
+
+type cb_check pspec (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  (x:t1)
+  (eh0:FStar.Ghost.erased heap{pre x eh0}) =
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_targetlang_arrow pspec eh0 r h1) (fun h1 rck h1' ->
+    h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
+
+type select_check
+  pspec
+  (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
+  x:t1 -> ST (
+    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_check pspec t1 t2 #c2 pre post x eh0
+  ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
+
+noeq
+type pck_hoc pspec =
+| EnforcePre :
+    argt:Type u#a ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    check:(select_check pspec argt unit
+                        (pre_targetlang_arrow pspec #argt #wt_argt)
+                        (fun x _ _ h1 -> pre x h1)) ->
+    rett:Type u#b ->
+    wt_rett:witnessable rett ->
+    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
+    c_post:(squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #rett #wt_rett h0 r h1))
+    -> pck_hoc pspec
+
+let test : pck_hoc concrete_spec =
+  EnforcePre
+    (ref int)
+    (witnessable_ref int)
+    (fun x h -> sel h x > 5)
+    (fun x ->
+      let eh0 = get_heap () in
+      let check : cb_check concrete_spec (ref int) unit _ _ x eh0 = (
+        fun () ->
+          assert (witnessed (contains_pred x));
+          recall (contains_pred x);
+          if read x > 5 then Inl ()
+          else Inr (Contract_failure "less than 5")
+      ) in
+      (| eh0, check |))
+    unit
+    (witnessable_unit)
+    (fun x h0 r h1 -> post_targetlang_arrow concrete_spec h0 r h1)
+    ()

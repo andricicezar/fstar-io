@@ -154,7 +154,7 @@ instance exportable_arrow
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   (_:squash (forall x h0 r h1. post x h0 r h1 ==> post_targetlang_arrow pspec #(resexn t2) #(witnessable_sum t2 err #c2.c_styp) h0 r h1))
   (check:select_check pspec t1 unit (pre_targetlang_arrow pspec #_ #c1.c_styp)
-    (fun x h0 () h1 -> h0 == h1 /\ pre x h1))
+    (fun x _ _ h1 -> pre x h1))
                 (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                       e.g., the invariant on the heap **)
   : exportable_from pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) = {
@@ -384,9 +384,9 @@ let f_xeq5_is_exportable : exportable_from concrete_spec f_xeq5 =
     (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
     ()
     (fun x ->
-      recall (contains_pred x);
+      (| get_heap (), fun () -> recall (contains_pred x);
       if sst_read x = 5 then Inl ()
-      else Inr (Contract_failure "x is not equal to 5"))
+      else Inr (Contract_failure "x is not equal to 5") |))
 
 val f_with_pre : f_xeq5
 let f_with_pre x =
