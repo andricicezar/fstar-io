@@ -59,7 +59,7 @@ let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_hea
   Lemma (forall_refs_heap pred h x == pred #_ #(FStar.Heap.trivial_rel _) x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
 
 let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t:shareable_typ) (x:to_Type t) :
-  Lemma (requires (h0 `heap_rel` h1 /\ forall_refs_heap pred h0 x)) (ensures (forall_refs_heap pred h1 x)) =
+  Lemma (requires (h0 `heap_rel` h1 /\ forall_refs_heap pred h0 x)) (ensures (forall_refs_heap pred h1 x)) [SMTPat (forall_refs_heap pred h0 x); SMTPat (forall_refs_heap pred h1 x)] =
   match t with
   | SUnit -> ()
   | SNat -> ()

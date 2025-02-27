@@ -226,11 +226,7 @@ let run (fuel : nat) (#t:shareable_typ) (init:to_Type t) (tasks:list (r:ref (to_
       forall_refs_heap contains_pred h0 init /\ 
       forall_refs_heap is_shared h0 init)) 
     (ensures (fun h0 _ h1 -> True)) =
-  let h0 = get_heap () in
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
-  let h1 = get_heap () in
-  forall_refs_heap_monotonic contains_pred h0 h1 init;
-  forall_refs_heap_monotonic is_shared h0 h1 init;
   let s : ref (to_Type t) = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref (to_Type t)) -> continuation r unit) -> f s) tasks in
   let () = scheduler fuel s tasks counter in
