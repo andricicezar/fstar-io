@@ -74,31 +74,43 @@ let whole_triv : whole_tgt1 =
   link_tgt1 compiled_prog triv_lib
 
 (* Adversarial library *)
+#push-options "--z3rlimit 10000"
+// val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
+val adv_lib :
+  #fl: erased tflag ->
+  inv  : (heap -> Type0) ->
+  prref: mref_pred ->
+  hrel : FStar.Preorder.preorder heap ->
+  read :  ttl_read fl inv prref hrel ->
+  write : ttl_write fl inv prref hrel ->
+  alloc : ttl_alloc fl inv prref hrel  ->
+  mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (ref (ref int)) (mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (raise_t unit) unit)
 
-// #push-options "--z3rlimit 10000"
-val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
 let adv_lib #fl inv prref hrel read write alloc r =
-  // let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
+  let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
   (* iteration on linked list, using fuel to ensure termination *)
-  // let pspec = mk_targetlang_pspec inv prref hrel in
-  // let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
-  //   if n = 0 then () else
-  //   match l with
-  //   | LLNil -> ()
-  //   | LLCons r' r ->
-  //     write #SNat r' 0 ;
-  //     let l' = read #(SLList (SRef SNat)) r in
-  //     ll_iter (n-1) l'
-  // in
+  let pspec = mk_targetlang_pspec inv prref hrel in
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+    if n = 0 then () else
+    match l with
+    | LLNil -> ()
+    | LLCons r' r ->
+      write #SNat r' 0 ;
+      let l' = read #(SLList (SRef SNat)) r in
+      ll_iter (n-1) l'
+  in
   (fun _ ->
-    // let v = read #(SRef SNat) r in
-    // write #(SLList (SRef SNat)) g (LLCons v g);
-    // let l = read #(SLList (SRef SNat)) g in
-    // ll_iter 1000 l;
-    // let r0 : ref int = alloc #SNat 0 in
-    // write #(SRef SNat) r r0;
+    let v = read #(SRef SNat) r in
+    write #(SLList (SRef SNat)) g (LLCons v g);
+    let l = read #(SLList (SRef SNat)) g in
+    ll_iter 1000 l;
+    let r0 : ref int = alloc #SNat 0 in
+    write #(SRef SNat) r r0;
     ()
   )
 
+// #push-options "--ugly"
 let whole_adv : whole_tgt1 =
-  link_tgt1 compiled_prog adv_lib
+  let f : ctx_tgt1 ((Pervasives.norm [delta_only [`%comp_int_src_tgt1; `%Mktgt_interface1?.ct; `%sit]; iota ; Pervasives.unascribe] comp_int_src_tgt1) sit) = fun #fl -> adv_lib #fl in
+  admit ()
+  // link_tgt1 compiled_prog adv_lib
