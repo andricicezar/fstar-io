@@ -12,13 +12,14 @@ open Backtranslation.STLCToTargetLang
 open SharedRefs
 open Witnessable
 open HigherOrderContracts
+open TargetLang
 open Compiler
 
 type callback =
-  unit -> SST (resexn unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  unit -> SST unit (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 type lib_type =
-  r:ref (ref int) -> SST (resexn callback) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  r:ref (ref int) -> SST callback (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 #push-options "--z3rlimit 10000"
 let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
@@ -27,15 +28,11 @@ let prog (lib : lib_type) : SST int (requires fun h0 -> True) (ensures fun h0 _ 
   witness (contains_pred r) ;
   witness (is_shared r) ;
   let cb = lib r in
-  if Inr? cb then 1 else
-  let cb = Inl?.v cb in
   let v : ref int = sst_alloc_shared 1 in
   sst_write r v;
-  let cbr = cb () in
-  if Inr? cbr then 1 else begin
-    assert (!secret == 42);
-    0
-  end
+  cb ();
+  assert (!secret == 42);
+  0
 #pop-options
 
 (* Unverified libraries *)
@@ -82,27 +79,21 @@ let adv_lib #inv #prref #hrel bt_read bt_write bt_alloc r =
 
 (* Calling SecRef* on it *)
 
-instance imp_cb : safe_importable_to callback =
-  safe_importable_arrow
-    unit _
-    _ _ () ()
-    (fun () ->
-      let eh0 = get_heap () in
-      let check : cb_capture_check _ _ _ _ _ eh0 =
-        (fun res -> Inl ()) in
-      (| eh0, check |)
-    )
+instance imp_cb : safe_importable_to callback = {
+  c_styp = witnessable_arrow unit unit _ _ ;
+  ityp = mk_interm_arrow unit unit ;
+  c_ityp = targetlang_arrow _ unit unit ;
+  safe_import = (fun f x -> f x) ;
+  lemma_safe_import_preserves_prref = (fun x -> ())
+}
 
-instance imp_lib : safe_importable_to lib_type =
-  safe_importable_arrow
-    (ref (ref int)) _
-    _ _ () ()
-    (fun _ ->
-      let eh0 = get_heap () in
-      let check : cb_capture_check _ _ _ _ _ eh0 =
-        (fun res -> Inl ()) in
-      (| eh0, check |)
-    )
+instance imp_lib : safe_importable_to lib_type = {
+  c_styp = witnessable_arrow (ref (ref int)) callback _ _ ;
+  ityp = mk_interm_arrow (ref (ref int)) imp_cb.ityp ;
+  c_ityp = targetlang_arrow _ (ref (ref int)) imp_cb.ityp ;
+  safe_import = (fun f r -> imp_cb.safe_import (f r)) ;
+  lemma_safe_import_preserves_prref = (fun f -> ())
+}
 
 let sit : src_interface1 = {
   ct = lib_type ;
