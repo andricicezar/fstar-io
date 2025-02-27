@@ -159,13 +159,15 @@ let lemma_fairness_step (k : int) (l : list int) (tid : int) :
         end
       end
 
-type counter (k : int) = hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k}
+type counter_state (k : int) = hist:(list int) & next:int & inactive:int{fairness k hist next /\ 0 <= next /\ next < k /\ 0 <= inactive /\ inactive <= k}
 
-let counter_preorder k : FStar.Preorder.preorder (counter k) =
-  let order = fun (v : counter k) (v' : counter k) -> prefix_of v._1 v'._1 in
+let counter_preorder k : FStar.Preorder.preorder (counter_state k) =
+  let order = fun (v : counter_state k) (v' : counter_state k) -> prefix_of v._1 v'._1 in
   prefix_of_trans #int;
   prefix_of_reflexive #int;
   order
+
+let counter_t k = mref (counter_state k) (counter_preorder k)
 
 let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   introduce forall (j:int{0 <= j /\ j < 0}). get_number_of_steps j [] = 0 + 1 with
@@ -177,22 +179,22 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   and ();
   ()
 
-val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (counter_mref : mref (counter (length tasks)) (counter_preorder (length tasks)))
+val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
   : SST unit
-    (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
-    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter_mref)) /\ gets_shared Set.empty h0 h1))
+    (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
+    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1))
 #push-options "--split_queries always"
 let rec scheduler
   (fuel:nat)
   (r : ref int)
   (tasks:list (continuation r unit))
-  (counter_mref : mref (counter (length tasks)) (counter_preorder (length tasks)))
+  (counter:counter_t (length tasks))
   : SST unit
-    (requires (fun h0 -> h0 `contains` counter_mref /\ is_private counter_mref h0 /\ h0 `contains` r /\ is_shared r h0))
-    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter_mref)) /\ gets_shared Set.empty h0 h1)) =
+    (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
+    (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) =
   witness (contains_pred r);
   witness (is_shared r);
-  let counter_st = sst_read' counter_mref in
+  let counter_st = sst_read counter in
   let hist = counter_st._1 in
   let i = counter_st._2 in
   let inactive = counter_st._3 in
@@ -207,29 +209,29 @@ let rec scheduler
     lemma_update_eq_length tasks i k';
     lemma_fairness_step (length tasks) hist i;
     lemma_prefix_of_append hist [i];
-    let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
-    let () = sst_write counter_mref counter_st' in
-    scheduler (fuel-1) r tasks' counter_mref
+    let counter_st' : counter_state (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
+    let () = sst_write counter counter_st' in
+    scheduler (fuel-1) r tasks' counter
   | Yield k' ->
     let inactive' = 0 in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
     lemma_fairness_step (length tasks) hist i;
     lemma_prefix_of_append hist [i];
-    let counter_st' : counter (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
-    let () = sst_write counter_mref counter_st' in
-    scheduler (fuel-1) r tasks' counter_mref
+    let counter_st' : counter_state (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
+    let () = sst_write counter counter_st' in
+    scheduler (fuel-1) r tasks' counter
   end
 #pop-options
 
-let counter_init (k : nat{k > 0}) : counter k = fairness_init k; (| [], 0, 0 |)
+let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
 let run (fuel : nat) (init : int) (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
   SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> True)) =
-  let counter_mref = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
+  let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref int) -> continuation r unit) -> f s) tasks in
-  let () = scheduler fuel s tasks counter_mref in
+  let () = scheduler fuel s tasks counter in
   let final_value = sst_read s in
   final_value
 
