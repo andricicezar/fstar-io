@@ -76,7 +76,7 @@ let whole_triv : whole_tgt1 =
 (* Adversarial library *)
 #push-options "--z3rlimit 10000"
 // val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
-val adv_lib :
+let adv_lib_t =
   #fl: erased tflag ->
   inv  : (heap -> Type0) ->
   prref: mref_pred ->
@@ -85,6 +85,7 @@ val adv_lib :
   write : ttl_write fl inv prref hrel ->
   alloc : ttl_alloc fl inv prref hrel  ->
   mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (ref (ref int)) (mk_targetlang_arrow (mk_targetlang_pspec inv prref hrel) (raise_t unit) unit)
+val adv_lib : adv_lib_t
 
 let adv_lib #fl inv prref hrel read write alloc r =
   let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
@@ -109,8 +110,17 @@ let adv_lib #fl inv prref hrel read write alloc r =
     ()
   )
 
+let pf : squash (adv_lib_t == ctx_tgt1 (comp_int_src_tgt1 sit)) =
+  assert (adv_lib_t == ctx_tgt1 (comp_int_src_tgt1 sit)) by begin
+    norm [delta_only [`%comp_int_src_tgt1; `%Mktgt_interface1?.ct; `%sit; `%adv_lib_t; `%ctx_tgt1];
+          delta_only [`%mk_targetlang_arrow; `%Mksrc_interface1?.c_ct; `%imp_lib; `%Mksafe_importable_to?.ityp];
+          delta_only [`%mk_interm_arrow; `%imp_cb];
+          iota ; Prelude.unascribe];
+    dump "";
+    tadmit()
+  end
+
 // #push-options "--ugly"
 let whole_adv : whole_tgt1 =
-  let f : ctx_tgt1 ((Pervasives.norm [delta_only [`%comp_int_src_tgt1; `%Mktgt_interface1?.ct; `%sit]; iota ; Pervasives.unascribe] comp_int_src_tgt1) sit) = fun #fl -> adv_lib #fl in
-  admit ()
-  // link_tgt1 compiled_prog adv_lib
+  let _ = pf in
+  link_tgt1 compiled_prog (coerce_eq () (adv_lib <: adv_lib_t))
