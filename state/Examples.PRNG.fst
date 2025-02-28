@@ -82,8 +82,8 @@ let some_ctx inv prref hrel read write alloc prng =
 let whole : whole_tgt2 =
   link_tgt2 compiled_prog some_ctx
 
-let r = whole_prog ()
+let r = whole ()
 let _ =
   match r with
   | 8 -> FStar.IO.print_string "Success"
-  | _ -> FStar.IO.print_string "Smething went wrong!"
+  | _ -> FStar.IO.print_string "Something went wrong!"
