@@ -137,7 +137,7 @@ let mheap_if_then_else (a : Type u#a)
   (f : mheap a flag1 wp1) (g : mheap a flag2 wp2) (b : bool) : Type =
   mheap a (flag1 ⊕ flag2) (st_if_then_else heap a b wp1 wp2)
 
-[@@ top_level_effect]
+[@@ top_level_effect; primitive_extraction]
 total
 reifiable
 reflectable
@@ -180,38 +180,44 @@ sub_effect PURE ~> STATEwp = lift_pure_mst
 let contains_pred (#a:Type) (#rel:preorder a) (r:mref a rel) : heap_predicate_stable =
   fun h -> h `contains` r
 
+noextract
 let witness (pred:heap_predicate_stable) : STATEwp unit AllOps (fun p h -> pred h /\ (witnessed pred ==> p () h)) =
   STATEwp?.reflect (mst_witness pred)
 
+noextract
 let recall (pred:heap_predicate_stable) : STATEwp unit AllOps (fun p h -> witnessed pred /\ (pred h ==> p () h)) =
   STATEwp?.reflect (mst_recall pred)
 
+noextract
 let alloc (#a:Type) (#rel:preorder a) (init:a) :
   ST (mref a rel) (fun h -> True) (alloc_post init)
 = STATEwp?.reflect (mst_alloc init)
 
+noextract
 let read (#a:Type) (#rel:preorder a) (r:mref a rel) :
   STATEwp a AllOps (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = STATEwp?.reflect (mst_read r)
 
+noextract
 let write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) :
   ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post #a #rel r v)
 = STATEwp?.reflect (mst_write r v)
 
-inline_for_extraction
+inline_for_extraction noextract
 let op_Bang (#a:Type) (#rel:preorder a) (r:mref a rel)
   : STATEwp a AllOps (fun p h0 -> h0 `contains` r /\ p (sel h0 r) h0)
 = read #a #rel r
 
-inline_for_extraction
+inline_for_extraction noextract
 let op_Colon_Equals (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
   : ST unit
     (fun h0 -> h0 `contains` r /\ rel (sel h0 r) v)
     (write_post r v)
 = write #a #rel r v
 
+noextract
 let get_heap () : ST (erased heap) (fun h0 -> True) (fun h0 r h1 -> h0 == h1 /\ reveal r == h0) =
   STATEwp?.reflect (mst_get_heap)
 

@@ -108,7 +108,14 @@ instance exportable_ref pspec t {| c:tc_shareable_type t |} : exportable_from ps
   lemma_export_preserves_prref = (fun _ _ _ -> ());
 }
 
-instance exportable_llist pspec t {| c:tc_shareable_type t |} : exportable_from pspec (linkedList t) Leaf = admit ()
+instance exportable_llist pspec t {| c:tc_shareable_type t |} :
+  exportable_from pspec (linkedList t) Leaf = {
+  c_styp = solve ;
+  ityp = linkedList t ;
+  c_ityp = solve ;
+  export = (fun Leaf x -> x) ;
+  lemma_export_preserves_prref = (fun _ _ _ -> ())
+}
 
 instance exportable_refinement pspec t spec {| c:exportable_from pspec t spec |} (p:t->Type0) : exportable_from pspec (x:t{p x}) spec = {
   c_styp = witnessable_refinement t #c.c_styp p;
@@ -400,10 +407,6 @@ let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
 
 let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
 
-let _ =
-  let x = sst_alloc_shared 0 in
-  safe_f x
-
 // x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
 //                                                   ^---^---cannot depend on x
 
@@ -448,3 +451,16 @@ let f_with_pre x =
   Inl (10 / v)
 
 let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
+
+let gggtest =
+  let x = sst_alloc_shared 0 in
+  safe_f x
+
+let _ =
+  match gggtest with
+  | Inl () ->
+    IO.print_string "ok!\n"
+  | Inr (Contract_failure s) ->
+    IO.print_string ("Contract failure: " ^ s)
+  | Inr e ->
+    IO.print_string "another exn?!?!"
