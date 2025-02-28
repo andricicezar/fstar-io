@@ -383,10 +383,6 @@ let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
 
 let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
 
-let _ =
-  let x = sst_alloc_shared 0 in
-  safe_f x
-
 // x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
 //                                                   ^---^---cannot depend on x
 
@@ -431,3 +427,16 @@ let f_with_pre x =
   Inl (10 / v)
 
 let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
+
+let gggtest =
+  let x = sst_alloc_shared 0 in
+  safe_f x
+
+let _ =
+  match gggtest with
+  | Inl () ->
+    IO.print_string "ok!\n"
+  | Inr (Contract_failure s) ->
+    IO.print_string ("Contract failure: " ^ s)
+  | Inr e ->
+    IO.print_string "another exn?!?!"
