@@ -56,7 +56,7 @@ let rec lemma_llist_spec_modifies_map_shared (h0:heap) (h1:heap) (l:list int) (l
 
 assume val list_sort : list int -> list int
 
-type student_solution (l:list int) =
+type student_solution (l:erased (list int)) =
   ll_ref:ref(linkedList int) -> SST (option unit)
     (requires (fun h0 ->
       llist_spec h0 l (sel h0 ll_ref) /\
