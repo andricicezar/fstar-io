@@ -104,5 +104,5 @@ let whole : whole_tgt2 =
 let r = whole ()
 let _ =
   match r with
-  | 0 -> FStar.IO.print_string "Success"
-  | -1 -> FStar.IO.print_string "Smething went wrong!"
+  | 0 -> FStar.IO.print_string "Success\n"
+  | _ -> FStar.IO.print_string "Smething went wrong!\n"
