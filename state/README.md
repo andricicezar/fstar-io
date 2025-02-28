@@ -45,6 +45,9 @@ fstar-vscode-assistant extension.
 Note: some of the examples have parts of them admitted due to difficulties
 working with F* and fleshing out the proofs. We are confident we can soon
 fully verify everything. Do note, the framework itself is admit-free.
+The example from the intro, the pseudo-number generator and another
+small example (`Examples.HO.fst`), verify admit-free, are compiled using
+SecRef★, extract and can be run in OCaml.
 
 
 ## Running the examples
