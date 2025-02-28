@@ -217,8 +217,11 @@ let auto_grader
                       NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> grading_done gr h1 /\
                modifies_shared_and h0 h1 !{gr})) =
+    let h00 = get_heap () in
     let ll = generate_llist test in
+    let h01 = get_heap () in
     let ref_ll = sst_alloc_shareable #(SLList SNat) ll in
+    let h02 = get_heap () in
     sst_share ref_ll;
     let h0 = get_heap () in
     (match hw ref_ll with
@@ -229,8 +232,10 @@ let auto_grader
         assume ((forall t. to_Type t == grade ==>
           forall_refs_heap contains_pred h1 #t MaxGrade /\
           (is_shared gr h1 ==> forall_refs_heap is_shared h1 #t MaxGrade)));
-        admit ();
-        sst_write gr MaxGrade (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
+        sst_write gr MaxGrade; (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
+        let h2 = get_heap () in
+        assert (modifies_shared_and h02 h2 !{gr});
+        assume (modifies_shared_and h00 h2 !{gr})
     | None ->
         admit ();
         sst_write gr MinGrade)
