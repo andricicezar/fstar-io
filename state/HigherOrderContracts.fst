@@ -262,8 +262,6 @@ instance safe_importable_ref pspec t {| c:tc_shareable_type t |} : safe_importab
   lemma_safe_import_preserves_prref = (fun _ _ _ -> ())
 }
 
-instance importable_llits pspec t {| c:tc_shareable_type t |} : importable_to pspec (linkedList t) Leaf = admit ()
-
 instance import_refinement pspec t spec {| c:importable_to pspec t spec |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): importable_to pspec (x:t{p x}) spec = {
   c_styp = witnessable_refinement t #c.c_styp p;
   ityp = c.ityp;
