@@ -49,6 +49,15 @@ let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ens
   witness (is_shared r) ;
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
+  let h = get_heap () in
+  (* Sad, but these asserts seem to help. They are really just the precondition
+  of sst_write. *)
+  assert (h `contains` r);
+  assert (~(compare_addrs r map_shared));
+  assert (
+    (forall t. to_Type t == int ==>
+      forall_refs_heap contains_pred h #t 1 /\
+      (is_shared r h ==> forall_refs_heap is_shared h #t 1)));
   sst_write r v;
   cb ();
   let v = !secret in
