@@ -1,4 +1,5 @@
-# This makefile is not great and will repeat some work by checking ulib modules.
+# This makefile is copied from an F* makefile, and flatenning
+# all includes to make it self contained.
 
 FSTAR_EXE ?= fstar.exe
 
