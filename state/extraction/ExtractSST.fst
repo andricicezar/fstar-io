@@ -37,21 +37,46 @@ let hua (t:term) : option (S.fv & list S.universe & S.args) =
   | Tm_uinst ({ n = Tm_fvar fv }, us) -> Some (fv, us, args)
   | _ -> None
 
+let reif (t:term) : option term =
+  let t = U.unmeta t in
+  let hd, args = U.head_and_args_full t in
+  let hd = U.unmeta hd in
+  match (SS.compress hd).n, args with
+  | Tm_constant (Const_reify _), [(t, None)] -> Some t
+  | _ -> None
+
+(* binder is open *)
+let funbody (t:term) : option (binder & term) =
+  let bs, t', rc_opt = U.abs_formals t in
+  match bs with
+  | [] -> None
+  | b::bs ->
+    Some (b, U.abs bs t' rc_opt)
+
 let tr_typ (g:uenv) (t:term) : mlty =
   let cb = FStarC.Extraction.ML.Term.term_as_mlty in
-  let hua = hua t in
-  if None? hua then
+  let ohua = hua t in
+  if None? ohua then
     nop ();
-  let Some (fv, us, args) = hua in
-  if !dbg then BU.print1 "GGG checking typ %s\n" (show hua);
+  let Some (fv, us, args) = ohua in
+  if !dbg then BU.print1 "!!! checking typ %s\n" (show ohua);
+
+  (* handle a ref type *)
+  let h_ref (t:term) : mlty =
+    (* t is probably `to_Type SNat` or similar, normalize it. *)
+    let open FStarC.TypeChecker.Normalize in
+    let open FStarC.TypeChecker.Env in
+    let t = normalize [UnfoldUntil S.delta_constant; EraseUniverses; Iota; Zeta; ForExtraction] (tcenv_of_uenv g) t in
+    MLTY_Named ([cb g t], ([], "ref"))
+  in
+
   match fv, us, args with
   | _, _, [(t, _)] when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.ref") ->
-    MLTY_Named ([cb g t], ([], "ref"))
+    h_ref t
   | _, _, [(t, _); _] when S.fv_eq_lid fv (Ident.lid_of_str "FStar.Monotonic.Heap.mref") ->
-    MLTY_Named ([cb g t], ([], "ref"))
-
-  | _, _, [(t, _); _; _] when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.mheap") ->
-    cb g t
+    h_ref t
+  | _, _, [(t, _)] when S.fv_eq_lid fv (Ident.lid_of_str "FStar.Monotonic.Heap.core_mref") ->
+    h_ref t
 
   | _, _, []
     when S.fv_eq_lid fv (Ident.lid_of_str "FStar.SizeT.t")
@@ -60,57 +85,83 @@ let tr_typ (g:uenv) (t:term) : mlty =
     ->
     MLTY_Named ([], ([], "int"))
 
-  | _ -> nop ()
+  | _ ->
+    let bs, typ = U.arrow_formals t in
+    match hua typ with
+    | Some (_, _, [(t, _); _; _])
+      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.mheap") ->
+      List.fold_right (fun b mlty ->
+        MLTY_Fun (cb g b.binder_bv.sort, E_IMPURE, mlty)
+      ) bs (cb g t)
+    | _ -> nop ()
+
 
 let tr_expr (g:uenv) (t:term) : mlexpr & e_tag & mlty =
+  let t = SS.compress t in
+  if !dbg then
+    BU.print2 "!!! tr_expr (%s) (tag = %s)\n" (show t) (FStarC.Class.Tagged.tag_of t);
   (* Only enabled with an extension flag *)
   let cb = FStarC.Extraction.ML.Term.term_as_mlexpr in
+  match reif t with
+  | Some v -> cb g v
+  | None ->
+
   let hua = hua t in
-  if None? hua then
-    nop ();
+  if None? hua then (
+    if !dbg then
+      BU.print1 "!!! no hua for expr %s\n" (show t);
+    nop ()
+  );
   let Some (fv, us, args) = hua in
-  if !dbg then BU.print2 "GGG checking expr %s; nargs = %s\n" (show hua) (show (List.length args));
+  if !dbg then
+    BU.print2 "!!! checking expr %s ; nargs = %s\n" (show hua) (show (List.length args));
   match fv, us, args with
 
   (* bind *)
   | _, _, [(ta, _); (tb, _); _flagv; _wpv; _flagf; _wpf; (v, None); (f, None)]
-      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.mheap_bind") ->
-    let v, _, _ = cb g v in
-    let f, _, _ = cb g f in
+      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.mheap_bind") -> begin
+    let v =
+      match reif v with | None -> v | Some v -> v
+    in
+    match funbody f with | None -> nop () | Some (b, body) ->
+
+    let body =
+      match reif body with | None -> body | Some body -> body
+    in
+
     let mlta = term_as_mlty g ta in
     let mltb = term_as_mlty g tb in
+    let v, _, _ = cb g v in
+    let gb, bid, _ = extend_bv g b.binder_bv ([], mlta) false false in
+    let body, _, _ = cb gb body in
     let e =
-      match f.expr with
-      | MLE_Fun ([b], body) ->
-        let lb : mllb = {
-          mllb_name = b.mlbinder_name;
-          mllb_tysc = Some ([], mlta);
-          mllb_add_unit = false;
-          mllb_def = v;
-          mllb_attrs = [];
-          mllb_meta = [];
-          print_typ = false;
-        }
-        in
-        MLE_Let ((NonRec, [lb]), body)
-
-      | _ -> MLE_App (f, [v])
+      let lb : mllb = {
+        mllb_name = bid;
+        mllb_tysc = Some ([], mlta);
+        mllb_add_unit = false;
+        mllb_def = v;
+        mllb_attrs = [];
+        mllb_meta = [];
+        print_typ = false;
+      }
+      in
+      MLE_Let ((NonRec, [lb]), body)
     in
     let e = with_ty mlta e in
-    BU.print1 "GG e = %s\n" (show e);
     e, E_IMPURE, mltb
+  end
 
   | _, _, [(ta, _); _wp; (f, None)]
       when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.lift_pure_mst") ->
+    let f =
+      (* unthunk f *)
+      match funbody f with
+      | Some (_, body) -> body
+      | _ -> failwith "ExtractSST: lifted pure is not a lambda."
+    in
     let f, _, _ = cb g f in
     let mlta = term_as_mlty g ta in
-    let e =
-      (* unthunk f *)
-      match f.expr with
-      | MLE_Fun ([b], body) -> body
-      | _ -> with_ty mlta <| MLE_App (f, [ml_unit])
-    in
-    e, E_IMPURE, mlta
+    f, E_IMPURE, mlta
 
   | _, _, [(t, _); _rel; (v0, None)]
       when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.alloc") ->
@@ -133,11 +184,24 @@ let tr_expr (g:uenv) (t:term) : mlexpr & e_tag & mlty =
     let e = with_ty mlty <| MLE_App (bang, [(cb g r)._1; (cb g x)._1]) in
     e, E_IMPURE, mlty
 
-  (* Can we avoid this? Would be nice to have all primitives
-  in a single module. *)
+  | _, _, [(x, None)]
+      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.get_heap") ->
+    ml_unit, E_PURE, ml_unit_ty
+  | _, _, [(x, None)]
+      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.witness") ->
+    ml_unit, E_PURE, ml_unit_ty
+  | _, _, [(x, None)]
+      when S.fv_eq_lid fv (Ident.lid_of_str "MST.Tot.recall") ->
+    ml_unit, E_PURE, ml_unit_ty
+
+  (* Even with --cmi, this isn't inlined automatically? Handle
+  specially (extract as no-ops). *)
   | _, _, [_t; _rel; (r, None)]
       when S.fv_eq_lid fv (Ident.lid_of_str "SharedRefs.share") ->
-    cb g r
+    ml_unit, E_PURE, ml_unit_ty
+  | _, _, [_t; _rel; (r, None)]
+      when S.fv_eq_lid fv (Ident.lid_of_str "SharedRefs.encapsulate") ->
+    ml_unit, E_PURE, ml_unit_ty
 
   | _ -> nop ()
 
