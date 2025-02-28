@@ -40,7 +40,7 @@ let sit : src_interface1 = {
   psi = fun _ _ _ -> True
 }
 
-#push-options "--z3rlimit 50" (* very flaky for some reason. *)
+#push-options "--z3rlimit 10000" (* very flaky for some reason. *)
 #restart-solver
 let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
@@ -52,8 +52,8 @@ let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ens
   sst_write r v;
   cb ();
   let v = !secret in
-  assert (v == 42);
-  0
+  assert (v == 42); (* we know statically that the secret has not changed. *)
+  v (* return it, the ocaml code prints it out *)
 #pop-options
 
 let compiled_prog =

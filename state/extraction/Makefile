@@ -239,4 +239,4 @@ extract: $(ALL_ML_FILES)
 
 build: extract
 	$(FSTAR_EXE) --ocamlenv dune build --root=dune
-	dune install --root=dune
+	dune install --root=dune --prefix=$(CURDIR)
