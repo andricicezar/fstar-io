@@ -226,8 +226,9 @@ let rec scheduler
 
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
-let run (fuel : nat) (init : int) (tasks: list (r:ref int -> continuation r unit){length tasks > 0}) :
+let run (args : nat * int * (tasks: list (r:ref int -> continuation r unit){length tasks > 0})) :
   SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> True)) =
+  let (fuel, init, tasks) = args in
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref int) -> continuation r unit) -> f s) tasks in
@@ -252,4 +253,4 @@ let res_b (r : ref int) : continuation r unit = fun () ->
     let () = sst_write r j in
     Return ())
 
-let nmm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]
+let nmm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run (5000,0,[res_a; res_b])
