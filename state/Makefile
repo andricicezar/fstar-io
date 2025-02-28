@@ -67,3 +67,9 @@ dep.graph:
 
 dep.pdf: dep.graph
 	dot -Tpdf $< > $@
+
+# Package this directory (from Git)
+.PHONY: package
+package:
+	git archive --prefix secref-artifact/ -o artifact.tar HEAD .
+	gzip -9 artifact.tar
