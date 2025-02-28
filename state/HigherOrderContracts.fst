@@ -272,7 +272,7 @@ instance safe_importable_resexn pspec t s {| c:importable_to pspec t s |} : safe
 
 instance safe_importable_arrow
   pspec
-  (t1:Type u#a) (t2:Type u#b)
+  (t1:Type) (t2:Type)
   s1 s2
   {| c1:exportable_from pspec t1 s1 |}
   {| c2:importable_to pspec t2 s2 |}
@@ -401,13 +401,27 @@ let f_xeq5_is_exportable : exportable_from concrete_spec f_xeq5 _ =
     (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
     (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
 
+let f_xeq5_spec : pck_spec concrete_spec =
+  SpecErr true (ref ℤ) (safe_importable_is_importable concrete_spec (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
+(exportable_refinement concrete_spec ℤ Leaf (λ _ → l_True)).c_styp (λ x → sst_post (resexn ℤ) (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c) (λ h0 r h1 → (Inr? r ∨ (Inl? r ∧ Inl?.v r == 2)) ∧ hrel_c h0 h1))
 
-  (**
-    ()
-    (fun x ->
-      (| get_heap (), fun () -> recall (contains_pred x);
-      if sst_read x = 5 then Inl ()
-      else Inr (Contract_failure "x is not equal to 5") |))
+let f_xeq5_hoc : hoc concrete_spec f_xeq5_spec =
+  EnforcePre
+    (fun rx ->
+      let rx :ref int = rx in
+      let eh0 = get_heap () in
+      let check : cb_check concrete_spec (ref int) _ (pre_targetlang_arrow concrete_spec #(SpecErr?.argt f_xeq5_spec) #(SpecErr?.wt_argt f_xeq5_spec)) (fun x _ _ h1 -> (SpecErr?.pre f_xeq5_spec) x h1) rx eh0 =
+        (fun _ ->
+          recall (contains_pred rx);
+          if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+      (| eh0, check |))
+    (fun x r -> admit ())
+
+let f_xeq5_pkhoc : pck_hoc concrete_spec =
+  (| f_xeq5_spec, f_xeq5_hoc |)
+
+let f_xeq5_tree : hoc_tree (Node f_xeq5_spec Leaf Leaf) =
+  Node f_xeq5_pkhoc Leaf Leaf
 
 val f_with_pre : f_xeq5
 let f_with_pre x =
@@ -416,5 +430,4 @@ let f_with_pre x =
   assert (v == 5);
   Inl (10 / v)
 
-let f_with_dc = f_xeq5_is_exportable.export f_with_pre
-**)
+let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
