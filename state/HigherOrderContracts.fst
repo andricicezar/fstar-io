@@ -230,6 +230,23 @@ instance importable_sum pspec t1 t2 s1 s2 {| c1:importable_to pspec t1 s1 |} {| 
     | Inr x -> c2.lemma_import_preserves_prref x p (right hocs))
 }
 
+instance importable_pair pspec t1 t2 s1 s2 {| c1:importable_to pspec t1 s1 |} {| c2:importable_to pspec t2 s2 |} : importable_to pspec (t1 * t2) (EmptyNode s1 s2) = {
+  c_styp = witnessable_pair t1 t2 #c1.c_styp #c2.c_styp;
+  ityp = c1.ityp * c2.ityp;
+  c_ityp = targetlang_pair _ _ _ #c1.c_ityp #c2.c_ityp;
+  import = (fun (x, x') hocs ->
+    match c1.import x (left hocs) with
+    | Inl x -> begin
+      match c2.import x' (right hocs) with
+      | Inl x' -> Inl (x,x')
+      | Inr err -> Inr err
+    end
+    | Inr err -> Inr err);
+  lemma_import_preserves_prref = (fun x p hocs ->
+    c1.lemma_import_preserves_prref (fst x) p (left hocs);
+    c2.lemma_import_preserves_prref (snd x) p (right hocs))
+}
+
 instance safe_importable_ref pspec t {| c:tc_shareable_type t |} : safe_importable_to pspec (ref t) Leaf = {
   c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
