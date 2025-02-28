@@ -42,13 +42,19 @@ all the F* files in it, including our formalization and examples. You
 can also inspect the files interactively in VS Code by installing the
 fstar-vscode-assistant extension.
 
+Note: some of the examples have parts of them admitted due to difficulties
+working with F* and fleshing out the proofs. We are confident we can soon
+fully verify everything. Do note, the framework itself is admit-free.
+
+
 ## Running the examples
 
 The examples can be built by using the extraction plugin to extract them
 into native OCaml, and then building them with dune. This is process
-is a bit complicated so there is a rule in the Makefile to automate it.
-Simply run `make build-Examples.Intro` to verify, extract, build, and run
-`Examples.Intro.fst`. Other files can be run by replacing `Examples.Intro` for something else.
+is a bit complicated so there is a rule in the Makefile to automate
+it. Simply run `make build-Examples.Intro` to verify, extract, build,
+and run `Examples.Intro.fst`. Other files can be run by replacing
+`Examples.Intro` for something else.
 
 ## Mapping from sections to files:
 
