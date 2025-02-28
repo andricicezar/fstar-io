@@ -68,7 +68,8 @@ dep.graph:
 dep.pdf: dep.graph
 	dot -Tpdf $< > $@
 
-# Package this directory (from Git)
+# Package this directory (from Git). Note: git archive apparently
+# already removes user and host names (good!)
 .PHONY: package
 package:
 	git archive --prefix secref-artifact/ -o artifact.tar HEAD .
