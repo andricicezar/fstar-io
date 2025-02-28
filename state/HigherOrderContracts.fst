@@ -375,11 +375,17 @@ EnforcePost
         (fun kres -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
 
+let f_pkhoc : pck_hoc concrete_spec =
+  (| f_spec, f_hoc |)
+
 let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
-  admit (); (** <--- is this provable? **)
-  Node (| f_spec, f_hoc |) Leaf Leaf
+  Node f_pkhoc Leaf Leaf
 
 let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
+
+let _ =
+  let x = sst_alloc_shared 0 in
+  safe_f x
 
 // x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
 //                                                   ^---^---cannot depend on x

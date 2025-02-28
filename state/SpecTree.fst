@@ -102,12 +102,15 @@ type select_check
     eh0:FStar.Ghost.erased heap{pre x eh0} & cb_check pspec t1 t2 #c2 pre post x eh0
   ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
 
+open FStar.Tactics.Typeclasses
+
 noeq
 type pck_spec (pspec:targetlang_pspec) =
 | SpecErr :
     bit:bool ->
     argt:Type u#a ->
     wt_argt:witnessable argt ->
+    // #[tcresolve ()]wt_argt : witnessable argt ->
     pre:(argt -> st_pre) ->
     rett:Type u#b ->
     wt_rett:witnessable rett ->
