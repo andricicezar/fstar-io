@@ -174,12 +174,13 @@ let rec sorted_SST (fuel: nat) (ll: linkedList int): SST bool
 type student_solution =
   ll_ref:ref(linkedList int) -> SST (option unit)
     (requires (fun h0 ->
-      no_cycles (sel h0 ll_ref) h0 /\
+      //no_cycles (sel h0 ll_ref) h0 /\
       forall_refs_heap contains_pred h0 #(SRef (SLList SNat)) ll_ref /\
       forall_refs_heap is_shared h0 #(SRef (SLList SNat)) ll_ref))
     (ensures (fun h0 r h1 ->
       (Some? r ==> no_cycles (sel h1 ll_ref) h1 /\ sorted (sel h1 ll_ref) h1 /\ same_elements (sel h1 ll_ref) h0 h1) /\
-      modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
+      modifies_only_shared h0 h1 /\
+      gets_shared Set.empty h0 h1))
 
 // let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
 (*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
@@ -190,125 +191,50 @@ let grading_done (gr: mref grade grade_preorder) h = sel h gr =!= NotGraded
 let rec generate_llist (l:list int)
   : SST (linkedList int)
     (requires (fun h0 -> True))
-    (ensures (fun h0 r h1 -> satisfy_on_heap r h1 contains_pred
-                          /\ satisfy_on_heap r h1 is_private
-                          /\ no_cycles_fuel (List.Tot.length l + 1) r h1
-                  (* /\ exists fuel . no_cycles_fuel fuel r h1 *))) =
+    (ensures (fun h0 r h1 -> forall_refs_heap contains_pred h1 #(SLList SNat) r /\
+                          forall_refs_heap is_shared h1 #(SLList SNat) r /\
+                          modifies !{map_shared} h0 h1
+                  (* /\ exists fuel . no_cycles_fuel fuel r h1 *)
+                  )) =
   match l with
   | [] -> LLNil
   | hd::tl ->
-    admit();
-    LLCons hd (sst_alloc_shareable #(SLList SNat) (generate_llist tl))
-
-
-let rec share_llist (l:linkedList int)
-  : SST unit
-    (requires (fun h0 -> satisfy_on_heap l h0 contains_pred /\
-                         satisfy_on_heap l h0 is_private /\
-                         no_cycles l h0))
-    (fun h0 r h1 -> satisfy_on_heap r h1 is_shared)
-    (decreases ll_length l) =
-  match l with
-  | LLNil -> ()
-  | LLCons x next ->
-    let h0 = get_heap() in
-    assert (h0 `contains` next);
-    assert (is_private next h0);
-    (* assert(forall_refs_heap is_shared h0 #(SLList SNat) (sel h0 next)); *)
-    share next; (* need to share ref starting from the end of the list? *)
-    let h1 = get_heap() in
-    assert (is_shared next h1);
-    (* let h = get_heap() in *)
-    let tl = read next in
-    (* assert(exists fuel . no_cycles_fuel fuel l h0);
-    assert(exists fuel . no_cycles_fuel fuel tl h0); *)
-    admit();
-    share_llist tl
+      let ll = generate_llist tl in
+      let ll_ref = sst_alloc_shareable #(SLList SNat) ll in
+      sst_share ll_ref;
+      LLCons hd ll_ref
 
 #push-options "--z3rlimit 10000"
-let rec auto_grader
+let auto_grader
   (test:list int)
   (hw: student_solution)
   (gr: mref grade grade_preorder)
   : SST unit
-    (requires (fun h0 -> ~(grading_done gr h0) /\ is_private gr h0 /\ NotGraded? (sel h0 gr)))
+    (requires (fun h0 -> ~(grading_done gr h0) /\
+                      ~(compare_addrs gr map_shared) /\
+                      is_private gr h0 /\
+                      h0 `contains` gr /\
+                      NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> grading_done gr h1 /\
-              (forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel) .
-                h0 `contains` r ==> kind_not_modified r h0 h1) /\
-                modifies !{gr} h0 h1)) =
+               modifies_shared_and h0 h1 !{gr})) =
     let ll = generate_llist test in
     let ref_ll = sst_alloc_shareable #(SLList SNat) ll in
-    share ref_ll;
-    // assume (forall h0.
-    //       satisfy_on_heap ll h0 contains_pred /\ satisfy_on_heap ll h0 is_private /\ no_cycles ll h0) ;
-    let h1 = get_heap() in
-    assume (sst_inv h1);
-    assert (satisfy_on_heap ll h1 contains_pred);
-    assert (satisfy_on_heap ll h1 is_private);
-    assert (no_cycles ll h1);
-    share_llist ll;
-    admit();
+    sst_share ref_ll;
+    let h0 = get_heap () in
     (match hw ref_ll with
-    | Some _ -> sst_write gr MaxGrade
-    | None -> sst_write gr MinGrade)
-
-(* Needed for below. So we can read the tail and call solution again. *)
-let no_cycles_tl (h : heap) (x tl : _) : Lemma
-  (requires no_cycles (LLCons x tl) h)
-  (ensures  no_cycles (sel h tl) h)
-  [SMTPat (no_cycles (LLCons x tl) h)]
-= assume (ll_length (LLCons x tl) h == ll_length (sel h tl) h + 1);
-  calc (==>) {
-    no_cycles (LLCons x tl) h;
-    ==> {}
-    no_cycles_fuel (ll_length (LLCons x tl) h + 1) (LLCons x tl) h;
-    ==> {}
-    no_cycles_fuel (ll_length (sel h tl) h + 2) (LLCons x tl) h;
-    ==> {}
-    no_cycles_fuel (ll_length (sel h tl) h + 1) (sel h tl) h;
-    ==> {}
-    no_cycles (sel h tl) h;
-  }
-
-[@@admit_termination]
-let rec solution (ll_ref : ref(linkedList int)) : SST (option unit)
-    (requires (fun h0 ->
-      no_cycles (sel h0 ll_ref) h0 /\
-      forall_refs_heap contains_pred h0 #(SRef (SLList SNat)) ll_ref /\
-      forall_refs_heap is_shared h0 #(SRef (SLList SNat)) ll_ref))
-    (ensures (fun h0 r h1 ->
-      (Some? r ==> no_cycles (sel h1 ll_ref) h1 /\ sorted (sel h1 ll_ref) h1 /\ same_elements (sel h1 ll_ref) h0 h1) /\
-      modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
-=
-  let h0 = get_heap () in
-  assert (no_cycles (sel h0 ll_ref) h0);
-  match sst_read ll_ref with
-  | LLNil -> Some ()
-  | LLCons x tl ->
-    let h1 = get_heap () in
-    assert (no_cycles (sel h1 ll_ref) h1);
-    match solution tl with
-    | None -> None
-    | Some () ->
-      let h2 = get_heap () in
-      assume (sel h2 ll_ref == sel h1 ll_ref);
-      assume (no_cycles (sel h2 ll_ref) h2);
-      assume (same_elements (sel h2 ll_ref) h0 h2);
-      match sst_read tl with
-      | LLNil ->
-        assert (sorted (sel h2 ll_ref) h2);
-        assert (modifies_only_shared h0 h2);
-        assert (gets_shared Set.empty h0 h2);
-        Some ()
-      | LLCons y tl ->
-        if x > y
-        then None
-        else (
-          assume (sorted (sel h2 ll_ref) h2);
-          assert (modifies_only_shared h0 h2);
-          assert (gets_shared Set.empty h0 h2);
-          Some ()
-        )
+    | Some _ ->
+        let h1 = get_heap () in
+        assume (NotGraded? (sel h1 gr));
+        assume (h1 `contains` gr);
+        assume ((forall t. to_Type t == grade ==>
+          forall_refs_heap contains_pred h1 #t MaxGrade /\
+          (is_shared gr h1 ==> forall_refs_heap is_shared h1 #t MaxGrade)));
+        //admit ();
+        sst_write gr MaxGrade (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
+    | None ->
+        admit ();
+        sst_write gr MinGrade)
+#pop-options
 
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
   let test = [1;3;4;2;1] in
