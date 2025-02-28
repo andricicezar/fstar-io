@@ -193,7 +193,8 @@ let rec generate_llist (l:list int)
     (requires (fun h0 -> True))
     (ensures (fun h0 r h1 -> forall_refs_heap contains_pred h1 #(SLList SNat) r /\
                           forall_refs_heap is_shared h1 #(SLList SNat) r /\
-                          modifies !{map_shared} h0 h1
+                          modifies !{map_shared} h0 h1 /\
+                          gets_shared Set.empty h0 h1
                   (* /\ exists fuel . no_cycles_fuel fuel r h1 *)
                   )) =
   match l with
@@ -216,28 +217,14 @@ let auto_grader
                       h0 `contains` gr /\
                       NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> grading_done gr h1 /\
-               modifies_shared_and h0 h1 !{gr})) =
-    let h00 = get_heap () in
+                           modifies_shared_and_encapsulated_and h0 h1 !{gr})) =
     let ll = generate_llist test in
-    let h01 = get_heap () in
     let ref_ll = sst_alloc_shareable #(SLList SNat) ll in
-    let h02 = get_heap () in
     sst_share ref_ll;
-    let h0 = get_heap () in
     (match hw ref_ll with
     | Some _ ->
-        let h1 = get_heap () in
-        assume (NotGraded? (sel h1 gr));
-        assume (h1 `contains` gr);
-        assume ((forall t. to_Type t == grade ==>
-          forall_refs_heap contains_pred h1 #t MaxGrade /\
-          (is_shared gr h1 ==> forall_refs_heap is_shared h1 #t MaxGrade)));
-        sst_write gr MaxGrade; (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
-        let h2 = get_heap () in
-        assert (modifies_shared_and h02 h2 !{gr});
-        assume (modifies_shared_and h00 h2 !{gr})
+        sst_write gr MaxGrade
     | None ->
-        admit ();
         sst_write gr MinGrade)
 #pop-options
     
