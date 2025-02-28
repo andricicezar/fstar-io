@@ -1,5 +1,4 @@
 From: anon <anon>
-Date: Fri, 28 Feb 2025 00:11:49 -0800
 Subject: [PATCH 2/3] Allow native extraction of reifiable effects.
 
 ---

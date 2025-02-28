@@ -1,5 +1,4 @@
 From: anon <anon>
-Date: Fri, 28 Feb 2025 01:41:42 -0800
 Subject: [PATCH 3/3] Norm: unfold before checking is_type
 
 ---
