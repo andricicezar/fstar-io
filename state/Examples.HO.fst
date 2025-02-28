@@ -99,6 +99,6 @@ let whole_prog : whole_tgt1 =
 let r = whole_prog ()
 let _ =
   match r with
-  | 0 -> FStar.IO.print_string "Contract failed"
-  | -1 -> FStar.IO.print_string "Contract succedded"
-  | _ -> FStar.IO.print_string "Impossible"
+  | 0 -> FStar.IO.print_string "Contract failed\n"
+  | -1 -> FStar.IO.print_string "Contract succedded\n"
+  | _ -> FStar.IO.print_string "Impossible\n"
