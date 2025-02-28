@@ -153,18 +153,19 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
     FStar.Tactics.witness (`(backtranslate_ctx1 #(`#i) (`#ct)));
     compute ())
 
-  (**
 noeq
 type src_interface2 = {
-  pt : Type;
-  c_pt : exportable_from pt;
+  specs: pspec:targetlang_pspec -> spec_tree pspec;
+  hocs : hoc_tree (specs concrete_spec);
+  pt : targetlang_pspec -> Type;
+  c_pt : pspec:targetlang_pspec -> exportable_from pspec (pt pspec) (specs pspec);
 }
 
 type ctx_src2 (i:src_interface2) =
-  i.pt ->
+  i.pt concrete_spec ->
   SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
-type prog_src2 (i:src_interface2) = i.pt
+type prog_src2 (i:src_interface2) = i.pt concrete_spec
 type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
@@ -182,24 +183,23 @@ let src_language2 : language sem_state = {
 
 noeq
 type tgt_interface2 = {
-  pt : fl:_ -> inv : (heap -> Type0) -> prref: mref_pred -> hrel : FStar.Preorder.preorder heap -> Type u#a;
-  c_pt : targetlang concrete_spec (pt AllOps (inv_c) (prref_c) (hrel_c));
+  pt : pspec:targetlang_pspec -> Type u#a;
+  c_pt : pspec:targetlang_pspec -> targetlang pspec (pt pspec);
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
-  #fl: _ ->
   inv  : (heap -> Type0) ->
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read fl inv prref hrel ->
-  write : ttl_write fl inv prref hrel ->
-  alloc : ttl_alloc fl inv prref hrel  ->
-  p:i.pt fl inv prref hrel ->
-  STFlag int fl (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+  read :  ttl_read AllOps inv prref hrel ->
+  write : ttl_write AllOps inv prref hrel ->
+  alloc : ttl_alloc AllOps inv prref hrel  ->
+  p:i.pt (mk_targetlang_pspec inv prref hrel) ->
+  ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 
 type prog_tgt2 (i:tgt_interface2) =
-  i.pt AllOps (inv_c) (prref_c) (hrel_c)
+  i.pt concrete_spec
 
 type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1))
 
@@ -221,17 +221,17 @@ let tgt_language2 : language sem_state = {
 }
 
 let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
-  pt = (fun _ _ _ _ -> i.c_pt.ityp);
-  c_pt = i.c_pt.c_ityp;
+  pt = (fun pspec -> (i.c_pt pspec).ityp);
+  c_pt = (fun pspec -> (i.c_pt pspec).c_ityp);
 }
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
 let backtranslate_ctx2 #i ct ps =
-  ct #AllOps (inv_c) (prref_c) (hrel_c)
-      tl_read tl_write tl_alloc (i.c_pt.export ps)
+  ct (inv_c) (prref_c) (hrel_c)
+      tl_read tl_write tl_alloc ((i.c_pt concrete_spec).export i.hocs ps)
 
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
-let compile_pprog2 #i ps = i.c_pt.export ps
+let compile_pprog2 #i ps = (i.c_pt concrete_spec).export i.hocs ps
 
 let comp2 : compiler = {
   src_sem = sem_state;
@@ -254,4 +254,3 @@ let comp2_rrhc () : Lemma (rrhc comp2) =
     let ct = forall_intro () in
     FStar.Tactics.witness (`(backtranslate_ctx2 #(`#i) (`#ct)));
     compute ())
-**)
