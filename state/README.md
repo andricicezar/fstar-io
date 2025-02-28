@@ -1,10 +1,10 @@
-## SecRef★: Securely Sharing Mutable References Between Verified and Unverified Code in F★
+# SecRef★: Securely Sharing Mutable References Between Verified and Unverified Code in F★
 
-This directory contains the artifact for SecRef★. The layour is as
+This directory contains the artifact for SecRef★. The layout is as
 follows:
-- MST.Tot
-- MST.Repr
-- Examples.*
+- MST.Repr: Free monad representation
+- MST.Tot: MST Effect definition
+- Examples.*: Various examples
 - misc/: dune configuration files for examples
 
 - fstar-patches/: a set of patches needed for F*, to enable primitive
@@ -20,7 +20,7 @@ A way to get set up is:
 
   git clone https://github.com/FStarLang/FStar
   cd FStar
-  git co v2025.02.17
+  git checkout v2025.02.17
   git am /path/to/artifact/fstar-patches/*.patch
   opam install --deps-only .
   make -j$(nproc) ADMIT=1
@@ -34,3 +34,18 @@ The script in `FStar/.scripts/get_fstar_z3.sh` can be used to automatically set 
   ./FStar/.scripts/get_fstar_z3.sh ~/bin
 
 Should install z3-4.13.3 into your ~/bin (and Z3 4.8.5, though we do not use it).
+
+## Verifying
+
+After setting up F*, running `make` in this repository should verify
+all the F* files in it, including our formalization and examples. You
+can also inspect the files interactively in VS Code by installing the
+fstar-vscode-assistant extension.
+
+## Running the examples
+
+The examples can be built by using the extraction plugin to extract them
+into native OCaml, and then building them with dune. This is process
+is a bit complicated so there is a rule in the Makefile to automate it.
+Simply run `make build-Examples.Intro` to verify, extract, build, and run
+`Examples.Intro.fst`. Other files can be run by replacing `Examples.Intro` for something else.
