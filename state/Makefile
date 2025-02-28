@@ -73,4 +73,4 @@ dep.pdf: dep.graph
 .PHONY: package
 package:
 	git archive --prefix secref-artifact/ -o artifact.tar HEAD .
-	gzip -9 artifact.tar
+	gzip -f -9 artifact.tar
