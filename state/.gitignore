@@ -22,3 +22,6 @@ hints/
 
 *.exe
 *.bld
+
+artifact.tar
+artifact.tar.gz
