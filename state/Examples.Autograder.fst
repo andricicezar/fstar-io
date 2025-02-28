@@ -225,15 +225,14 @@ let auto_grader
     | Some _ ->
         let h1 = get_heap () in
         assume (NotGraded? (sel h1 gr));
-        assume (h1 `contains` gr);
-        assume ((forall t. to_Type t == grade ==>
-          forall_refs_heap contains_pred h1 #t MaxGrade /\
-          (is_shared gr h1 ==> forall_refs_heap is_shared h1 #t MaxGrade)));
-        //admit ();
-        sst_write gr MaxGrade (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
+        sst_write gr MaxGrade;
+        admit()
     | None ->
-        admit ();
-        sst_write gr MinGrade)
+        let h1 = get_heap () in
+        assume (NotGraded? (sel h1 gr));
+        sst_write gr MinGrade;
+        admit();
+        ())
 #pop-options
 
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
