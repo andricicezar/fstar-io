@@ -229,16 +229,75 @@ let auto_grader
         assume ((forall t. to_Type t == grade ==>
           forall_refs_heap contains_pred h1 #t MaxGrade /\
           (is_shared gr h1 ==> forall_refs_heap is_shared h1 #t MaxGrade)));
-        //admit ();
+        admit ();
         sst_write gr MaxGrade (** DA: Puzzled. All the pre-conditions of sst_write are assumed here, but still fails. *)
     | None ->
         admit ();
         sst_write gr MinGrade)
 #pop-options
     
+(* Needed for below. So we can read the tail and call solution again. *)
+let no_cycles_tl (h : heap) (x tl : _) : Lemma
+  (requires no_cycles (LLCons x tl) h)
+  (ensures  no_cycles (sel h tl) h)
+  [SMTPat (no_cycles (LLCons x tl) h)]
+= assume (ll_length (LLCons x tl) h == ll_length (sel h tl) h + 1);
+  calc (==>) {
+    no_cycles (LLCons x tl) h;
+    ==> {}
+    no_cycles_fuel (ll_length (LLCons x tl) h + 1) (LLCons x tl) h;
+    ==> {}
+    no_cycles_fuel (ll_length (sel h tl) h + 2) (LLCons x tl) h;
+    ==> {}
+    no_cycles_fuel (ll_length (sel h tl) h + 1) (sel h tl) h;
+    ==> {}
+    no_cycles (sel h tl) h;
+  }
+
+[@@admit_termination]
+let rec solution (ll_ref : ref(linkedList int)) : SST (option unit)
+    (requires (fun h0 ->
+      no_cycles (sel h0 ll_ref) h0 /\
+      forall_refs_heap contains_pred h0 #(SRef (SLList SNat)) ll_ref /\
+      forall_refs_heap is_shared h0 #(SRef (SLList SNat)) ll_ref))
+    (ensures (fun h0 r h1 ->
+      (Some? r ==> no_cycles (sel h1 ll_ref) h1 /\ sorted (sel h1 ll_ref) h1 /\ same_elements (sel h1 ll_ref) h0 h1) /\
+      modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1))
+=
+  let h0 = get_heap () in
+  assert (no_cycles (sel h0 ll_ref) h0);
+  match sst_read ll_ref with
+  | LLNil -> Some ()
+  | LLCons x tl ->
+    let h1 = get_heap () in
+    assert (no_cycles (sel h1 ll_ref) h1);
+    match solution tl with
+    | None -> None
+    | Some () ->
+      let h2 = get_heap () in
+      assume (sel h2 ll_ref == sel h1 ll_ref);
+      assume (no_cycles (sel h2 ll_ref) h2);
+      assume (same_elements (sel h2 ll_ref) h0 h2);
+      match sst_read tl with
+      | LLNil ->
+        assert (sorted (sel h2 ll_ref) h2);
+        assert (modifies_only_shared h0 h2);
+        assert (gets_shared Set.empty h0 h2);
+        Some ()
+      | LLCons y tl ->
+        if x > y
+        then None
+        else (
+          assume (sorted (sel h2 ll_ref) h2);
+          assert (modifies_only_shared h0 h2);
+          assert (gets_shared Set.empty h0 h2);
+          Some ()
+        )
+
+
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
   let test = [1;23;4;2;1] in
-  let hw : student_solution = fun ll_ref -> None in
   let gr = alloc (NotGraded) in
-  auto_grader test hw gr;
+  let blah = auto_grader test (solution <: student_solution) gr in
   !gr
+

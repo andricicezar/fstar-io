@@ -76,6 +76,7 @@ let share_post (map_shared:map_sharedT) (is_shared:mref_heap_stable_pred) #a #re
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     gets_shared !{sr} h0 h1
 
+inline_for_extraction
 val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
     ST unit
       (requires (fun h0 ->
@@ -482,6 +483,7 @@ let sst_alloc_shareable (#t:shareable_typ) (init:to_Type t)
   end;
   sst_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
 
+inline_for_extraction
 let sst_share (#t:shareable_typ) (r:ref (to_Type t))
 : SST unit
   (fun h0 -> h0 `contains` r /\
@@ -499,6 +501,7 @@ let sst_share (#t:shareable_typ) (r:ref (to_Type t))
   assert (ctrans_ref_pred h1 is_shared)
 
 #push-options "--split_queries always"
+inline_for_extraction
 let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init /\ forall_refs_heap is_shared h0 init)
@@ -580,6 +583,7 @@ let lemma_sst_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref 
     end
   end
 
+inline_for_extraction
 let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
 : SST unit
   (requires (fun h0 ->
@@ -614,6 +618,7 @@ let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
   ()
 
 #push-options "--split_queries always"
+inline_for_extraction
 let sst_write_shareable (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
 : SST unit
   (requires (fun h0 ->
@@ -643,6 +648,7 @@ let sst_write_shareable (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
   sst_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v
 #pop-options
 
+inline_for_extraction
 let sst_write_ref #a (r:ref a) (v:a)
 : SST unit
   (requires (fun h0 ->
@@ -708,6 +714,7 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
   end
 #pop-options
 
+inline_for_extraction
 val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
     ST unit
       (requires (fun h0 ->
@@ -719,6 +726,7 @@ val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
         (forall p. p >= next_addr h0 ==> is_private_addr p h0))) (** necessary to prove that freshly allocated references are not encapsulated **)
       (ensures (encapsulate_post #a #p r))
 
+inline_for_extraction
 let sst_encapsulate  #a (#rel:preorder a) (r:mref a rel)
 : SST unit
   (fun h0 -> h0 `contains` r /\

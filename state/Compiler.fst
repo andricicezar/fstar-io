@@ -107,6 +107,9 @@ let compile_pprog1 #i ps =
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
+val compile_whole1 : whole_src1 -> whole_tgt1
+let compile_whole1 (| _, ws |) = ws
+
 let comp1 : compiler = {
   src_sem = sem_state;
   tgt_sem = sem_state;
@@ -117,32 +120,26 @@ let comp1 : compiler = {
 
   compile_pprog = compile_pprog1;
 
-  rel_sem = eq_sem;
+  rel_sem = (eq_sem);
 }
 
-(**
-let soundness1 (ws:whole_src1) : Lemma (beh_src1 ws `subset_of` (dfst ws)) by (
-  norm [delta_only [`%beh_src1;`%subset_of;`%beh_sem];iota]; explode (); dump "H") = ()
-
-let soundness1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
-  let it = comp_int_src_tgt1 i in
-  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
-  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
-  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
-  beh_tgt1 wt `subset_of` i.psi)
-by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%beh_src1;`%beh_tgt1];iota]; dump "H") = ()
-**)
-
-(**
 let syntactic_equality1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
   let it = comp_int_src_tgt1 i in
   let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
   let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
   let wt : whole_tgt1 = (pt `link_tgt1` ct) in
   let ws : whole_src1 = (ps `link_src1` cs) in
-  dsnd ws == wt
-) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1];iota]) = ()
-**)
+  compile_whole1 ws == wt
+) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%compile_whole1];iota]) = ()
+
+let soundness1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
+  let it = comp_int_src_tgt1 i in
+  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
+  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
+  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
+  let ws : whole_src1 = (ps `link_src1` cs) in
+  beh_tgt1 (wt) `subset_of` beh_src1 (ws)
+) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%compile_whole1;`%beh_tgt1;`%beh_src1];iota]) = ()
 
 val comp1_rrhc : unit -> Lemma (rrhc comp1)
 let comp1_rrhc () : Lemma (rrhc comp1) =
@@ -233,6 +230,9 @@ let backtranslate_ctx2 #i ct ps =
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
 let compile_pprog2 #i ps = (i.c_pt concrete_spec).export i.hocs ps
 
+val compile_whole2 : whole_src2 -> whole_tgt2
+let compile_whole2 ws = ws
+
 let comp2 : compiler = {
   src_sem = sem_state;
   tgt_sem = sem_state;
@@ -245,6 +245,25 @@ let comp2 : compiler = {
 
   rel_sem = eq_sem;
 }
+
+let syntactic_equality2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (ps:prog_src2 i) : Lemma (
+  let it = comp_int_src_tgt2 i in
+  let cs : ctx_src2 i = backtranslate_ctx2 #i ct in
+  let pt : prog_tgt2 it = (compile_pprog2 #i ps) in
+  let wt : whole_tgt2 = (pt `link_tgt2` ct) in
+  let ws : whole_src2 = (ps `link_src2` cs) in
+  compile_whole2 ws == wt
+) by (norm[delta_only [`%link_tgt2;`%link_src2;`%backtranslate_ctx2;`%compile_pprog2;`%compile_whole2];iota]) = ()
+
+let soundness2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (ps:prog_src2 i) : Lemma (
+  let it = comp_int_src_tgt2 i in
+  let cs : ctx_src2 i = backtranslate_ctx2 #i ct in
+  let pt : prog_tgt2 it = (compile_pprog2 #i ps) in
+  let wt : whole_tgt2 = (pt `link_tgt2` ct) in
+  let ws : whole_src2 = (ps `link_src2` cs) in
+  beh_tgt2 (wt) `subset_of` beh_src2 (ws)
+) by (norm[delta_only [`%link_tgt2;`%link_src2;`%backtranslate_ctx2;`%compile_pprog2;`%compile_whole2;`%beh_tgt2;`%beh_src2];iota]) = ()
+
 
 val comp2_rrhc : unit -> Lemma (rrhc comp2)
 let comp2_rrhc () : Lemma (rrhc comp2) =

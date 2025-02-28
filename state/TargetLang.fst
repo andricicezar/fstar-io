@@ -48,6 +48,9 @@ instance targetlang_option pspec t1 {| c1:targetlang pspec t1 |}
 instance targetlang_ref pspec t1 {| c1:tc_shareable_type t1 |}
   : targetlang pspec (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #solve }
+instance targetlang_list pspec t1 {| c1:targetlang pspec t1 |}
+  : targetlang pspec (list t1)
+  = { wt = witnessable_list t1 #c1.wt }
 instance targetlang_llist pspec t1 {| c1:tc_shareable_type t1 |}
   : targetlang pspec (linkedList t1)
   = { wt = witnessable_llist t1 #solve }

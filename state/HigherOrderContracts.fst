@@ -108,7 +108,14 @@ instance exportable_ref pspec t {| c:tc_shareable_type t |} : exportable_from ps
   lemma_export_preserves_prref = (fun _ _ _ -> ());
 }
 
-instance exportable_llist pspec t {| c:tc_shareable_type t |} : exportable_from pspec (linkedList t) Leaf = admit ()
+instance exportable_llist pspec t {| c:tc_shareable_type t |} :
+  exportable_from pspec (linkedList t) Leaf = {
+  c_styp = solve ;
+  ityp = linkedList t ;
+  c_ityp = solve ;
+  export = (fun Leaf x -> x) ;
+  lemma_export_preserves_prref = (fun _ _ _ -> ())
+}
 
 instance exportable_refinement pspec t spec {| c:exportable_from pspec t spec |} (p:t->Type0) : exportable_from pspec (x:t{p x}) spec = {
   c_styp = witnessable_refinement t #c.c_styp p;
@@ -228,6 +235,23 @@ instance importable_sum pspec t1 t2 s1 s2 {| c1:importable_to pspec t1 s1 |} {| 
     match x with
     | Inl x -> c1.lemma_import_preserves_prref x p (left hocs)
     | Inr x -> c2.lemma_import_preserves_prref x p (right hocs))
+}
+
+instance importable_pair pspec t1 t2 s1 s2 {| c1:importable_to pspec t1 s1 |} {| c2:importable_to pspec t2 s2 |} : importable_to pspec (t1 * t2) (EmptyNode s1 s2) = {
+  c_styp = witnessable_pair t1 t2 #c1.c_styp #c2.c_styp;
+  ityp = c1.ityp * c2.ityp;
+  c_ityp = targetlang_pair _ _ _ #c1.c_ityp #c2.c_ityp;
+  import = (fun (x, x') hocs ->
+    match c1.import x (left hocs) with
+    | Inl x -> begin
+      match c2.import x' (right hocs) with
+      | Inl x' -> Inl (x,x')
+      | Inr err -> Inr err
+    end
+    | Inr err -> Inr err);
+  lemma_import_preserves_prref = (fun x p hocs ->
+    c1.lemma_import_preserves_prref (fst x) p (left hocs);
+    c2.lemma_import_preserves_prref (snd x) p (right hocs))
 }
 
 instance safe_importable_ref pspec t {| c:tc_shareable_type t |} : safe_importable_to pspec (ref t) Leaf = {
@@ -383,10 +407,6 @@ let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
 
 let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
 
-let _ =
-  let x = sst_alloc_shared 0 in
-  safe_f x
-
 // x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
 //                                                   ^---^---cannot depend on x
 
@@ -431,3 +451,16 @@ let f_with_pre x =
   Inl (10 / v)
 
 let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
+
+let gggtest =
+  let x = sst_alloc_shared 0 in
+  safe_f x
+
+let _ =
+  match gggtest with
+  | Inl () ->
+    IO.print_string "ok!\n"
+  | Inr (Contract_failure s) ->
+    IO.print_string ("Contract failure: " ^ s)
+  | Inr e ->
+    IO.print_string "another exn?!?!"

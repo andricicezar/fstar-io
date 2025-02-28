@@ -16,14 +16,19 @@ open SpecTree
 #set-options "--print_universes"
 
 type callback pspec =
-  mk_targetlang_arrow pspec (raise_t unit) unit (** TODO: why is this raise_t necessary here? **)
+  mk_targetlang_arrow pspec unit unit
 
 type lib_type pspec =
-  mk_targetlang_arrow pspec (ref (ref int)) (callback pspec)
+  mk_targetlang_arrow
+    pspec
+    (ref (ref int))
+    (callback pspec) #(witnessable_arrow u#0 u#_ _ _ _ _)
+                      (* ^ F* wrongly infers that first universe as 1 instead
+                         of zero, which is wrong. Work around it. *)
 
 instance safe_importable_lib_type pspec : safe_importable_to pspec (lib_type pspec) Leaf =
   targetlang_is_safely_importable pspec (lib_type pspec)
-    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec (raise_t unit) unit))
+    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec unit unit))
 
 (* Calling SecRef* on it *)
 
@@ -35,7 +40,8 @@ let sit : src_interface1 = {
   psi = fun _ _ _ -> True
 }
 
-#push-options "--z3rlimit 10000"
+#push-options "--z3rlimit 10000" (* very flaky for some reason. *)
+#restart-solver
 let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
@@ -44,9 +50,10 @@ let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ens
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
   sst_write r v;
-  cb (raise_val ());
-  assert (!secret == 42);
-  0
+  cb ();
+  let v = !secret in
+  assert (v == 42); (* we know statically that the secret has not changed. *)
+  v (* return it, the ocaml code prints it out *)
 #pop-options
 
 let compiled_prog =
