@@ -148,7 +148,7 @@ let rec no_cycles_SST (fuel: nat) (ll: linkedList int): SST bool
 
 let rec sorted_SST (fuel: nat) (ll: linkedList int): SST bool
   (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
-  (ensures fun h0 r h1 -> r ==> sorted ll h0) =   
+  (ensures fun h0 r h1 -> r ==> sorted ll h0) =
   if fuel = 0 then false
   else
     match ll with
@@ -157,7 +157,7 @@ let rec sorted_SST (fuel: nat) (ll: linkedList int): SST bool
       let tl = sst_read next in
       match tl with
       | LLNil -> true
-      | LLCons y next -> 
+      | LLCons y next ->
         if x > y then false
         else begin
           let h = get_heap() in
@@ -221,12 +221,13 @@ let rec share_llist (l:linkedList int)
     admit();
     share_llist tl
 
+#push-options "--z3rlimit 10000"
 let rec auto_grader
   (test:list int)
   (hw: student_solution)
   (gr: mref grade grade_preorder)
   : SST unit
-    (requires (fun h0 -> ~(grading_done gr h0))) (*TODO: add precond from paper *)
+    (requires (fun h0 -> ~(grading_done gr h0) /\ is_private gr h0 /\ NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> grading_done gr h1 /\
               (forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel) .
                 h0 `contains` r ==> kind_not_modified r h0 h1) /\
@@ -235,6 +236,8 @@ let rec auto_grader
     let ref_ll = sst_alloc_shareable #(SLList SNat) ll in
     share ref_ll;
     admit();
+    // assume (forall h0.
+    //       satisfy_on_heap ll h0 contains_pred /\ satisfy_on_heap ll h0 is_private /\ no_cycles ll h0) ;
     share_llist ll;
     (match hw ref_ll with
     | Some _ -> sst_write gr MaxGrade
