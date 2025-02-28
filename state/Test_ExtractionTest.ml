@@ -1,4 +1,0 @@
-
-let _ =
-  ExtractionTest.gggcall ()
-  

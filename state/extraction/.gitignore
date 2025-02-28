@@ -1,2 +1,4 @@
 _cache
 dune/generated
+bin/
+lib/

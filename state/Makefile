@@ -1,6 +1,3 @@
-# export PATH := ../z3/bin:$(PATH);
-# export PATH := ../FStar/bin:$(PATH);
-
 FSTAR := fstar.exe
 
 ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fsti)
@@ -14,28 +11,15 @@ FLAGS += $(OTHERFLAGS)
 
 verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
 
-# A hack! After a run of `make` failed in a given file, run `make ide`
-# to open that exact file in the interactive with the exact same flags.
-# Make sure the first file that make attempts to verify actually fails,
-# and do NOT use -j.
-ide:
-	+$(MAKE) IDE_HACK="emacs -f fstar-debug-invocation" verify
-
-# work around F* bug
-hints:
-	mkdir $@
-
-.cache/%.fst.checked: %.fst | hints
-	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
+.cache/%.fst.checked: %.fst
+	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
-	@$(if $(IDE_HACK),false) # Make it stop the build
 
-.cache/%.fsti.checked: %.fsti | hints
-	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
+.cache/%.fsti.checked: %.fsti
+	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
-	@$(if $(IDE_HACK),false) # Make it stop the build
 
-PLUG=extraction/dune/_build/install/default/lib/secref_extr/secref_extr
+PLUG=extraction/lib/secref_extr/secref_extr
 
 $(PLUG).cmxs:
 	$(MAKE) -C extraction
@@ -43,6 +27,8 @@ $(PLUG).cmxs:
 .PHONY: plugin
 plugin: $(PLUG).cmxs
 
+# Run `make build-Examples.Intro` to build and run the Examples.Intro module,
+# and etc.
 build-%: M=$*
 build-%: D=$*.bld
 build-%: .cache/%.fst.checked | plugin
