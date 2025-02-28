@@ -19,7 +19,7 @@ instance witnessable_resexn #t {| witnessable t |} : witnessable (resexn t) =
   witnessable_sum t err
 
 (** **** Tree **)
-type tree (a: Type) =
+type tree (a: Type u#a) =
   | Leaf : tree a
   | EmptyNode: left: tree a -> right: tree a -> tree a
   | Node: data: a -> left: tree a -> right: tree a -> tree a
@@ -104,8 +104,10 @@ type select_check
 
 open FStar.Tactics.Typeclasses
 
+#set-options "--print_implicits --print_universes"
+
 noeq
-type pck_spec (pspec:targetlang_pspec) =
+type pck_spec (pspec:targetlang_pspec) : Type u#(1 + (max a b)) =
 | SpecErr :
     bit:bool ->
     argt:Type u#a ->
@@ -156,7 +158,7 @@ type hoc pspec : (s:pck_spec pspec) -> Type =
     check:(select_check pspec (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
     -> hoc pspec s
 
-type pck_hoc pspec =
+type pck_hoc pspec : Type u#(1+(max a b))=
   s:pck_spec pspec & (hoc pspec s)
 
 private
@@ -214,6 +216,7 @@ let test_post : hoc concrete_spec myspec' =
       ) in
       (| eh0, check |))
 
-let spec_tree pspec = tree (pck_spec pspec)
-let hoc_tree #pspec (st:spec_tree pspec) =
+type spec_tree pspec : Type u#(1 + (max a b)) = tree (pck_spec pspec)
+
+let hoc_tree #pspec (st:spec_tree pspec) : Type u#(1 + (max a b)) =
   hocs:(tree (pck_hoc pspec)){equal_trees st (map_tree hocs dfst)}

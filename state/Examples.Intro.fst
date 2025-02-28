@@ -11,12 +11,29 @@ open HigherOrderContracts
 open TargetLang
 open Compiler
 open Witnessable
+open SpecTree
+
+#set-options "--print_universes"
 
 type callback pspec =
   mk_targetlang_arrow pspec (raise_t unit) unit (** TODO: why is this raise_t necessary here? **)
 
 type lib_type pspec =
   mk_targetlang_arrow pspec (ref (ref int)) (callback pspec)
+
+instance safe_importable_lib_type pspec : safe_importable_to pspec (lib_type pspec) Leaf =
+  targetlang_is_safely_importable pspec (lib_type pspec)
+    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec (raise_t unit) unit))
+
+(* Calling SecRef* on it *)
+
+let sit : src_interface1 = {
+  specs = (fun pspec -> Leaf);
+  hocs = Leaf;
+  ct = lib_type;
+  c_ct = safe_importable_lib_type;
+  psi = fun _ _ _ -> True
+}
 
 #push-options "--z3rlimit 10000"
 let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
@@ -31,24 +48,6 @@ let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ens
   assert (!secret == 42);
   0
 #pop-options
-
-(* Calling SecRef* on it *)
-
-let sit : src_interface1 = {
-  ct = lib_type;
-  c_ct = (fun pspec ->
-    safe_importable_arrow_safe
-      pspec
-      (ref (ref int))
-      (callback pspec)
-      #solve
-      #(safe_importable_arrow_safe pspec (raise_t unit) unit _ _ () ())
-      _
-      _
-      ()
-      ());
-  psi = fun _ _ _ -> True
-}
 
 let compiled_prog =
   compile_pprog1 #sit prog

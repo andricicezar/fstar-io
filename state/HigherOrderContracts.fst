@@ -272,7 +272,7 @@ instance safe_importable_resexn pspec t s {| c:importable_to pspec t s |} : safe
 
 instance safe_importable_arrow
   pspec
-  (t1:Type) (t2:Type)
+  (t1:Type u#a) (t2:Type u#b)
   s1 s2
   {| c1:exportable_from pspec t1 s1 |}
   {| c2:importable_to pspec t2 s2 |}
@@ -310,8 +310,8 @@ instance safe_importable_arrow_safe
   {| c2:safe_importable_to pspec t2 s2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
-  (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
-  (_:squash (forall (x:t1) h0 r h1. pre x h0 /\ post_targetlang_arrow pspec #_ #c2.c_styp h0 r h1 ==> post x h0 r h1))
+ // (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
+//  (_:squash (forall (x:t1) h0 r h1. pre x h0 /\ post_targetlang_arrow pspec #_ #c2.c_styp h0 r h1 ==> post x h0 r h1))
   : safe_importable_to pspec (x:t1 -> ST t2 (pre x) (post x)) (Node (Spec false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 t2 pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;

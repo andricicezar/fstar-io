@@ -9,7 +9,7 @@ open MST.Tot
 open SharedRefs
 open TargetLang
 open BeyondCriteria
-
+open SpecTree
 open HigherOrderContracts
 
 type sem_state = heap -> int -> heap -> Type0
@@ -26,8 +26,10 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 
 noeq
 type src_interface1 = {
+  specs : pspec:targetlang_pspec -> spec_tree pspec;
+  hocs : hoc_tree (specs concrete_spec);
   ct : targetlang_pspec -> Type;
-  c_ct : pspec:targetlang_pspec -> safe_importable_to pspec (ct pspec);
+  c_ct : pspec:targetlang_pspec -> safe_importable_to pspec (ct pspec) (specs pspec);
   psi : heap -> int -> heap -> Type0;
 }
 
@@ -95,13 +97,13 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> ctx_src1 i
-let backtranslate_ctx1 #i ct = (i.c_ct concrete_spec).safe_import (instantiate_ctx_tgt1 ct)
+let backtranslate_ctx1 #i ct = (i.c_ct concrete_spec).safe_import (instantiate_ctx_tgt1 ct) i.hocs
 
 let pre' = sst_pre (fun _ -> True)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps =
-    fun c -> ps ((i.c_ct concrete_spec).safe_import c)
+    fun c -> ps ((i.c_ct concrete_spec).safe_import c i.hocs)
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 

@@ -4,6 +4,7 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Ghost
 open FStar.Preorder
+open FStar.Universe
 
 open SharedRefs
 open Witnessable
