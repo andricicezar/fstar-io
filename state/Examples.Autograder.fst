@@ -311,7 +311,7 @@ let rec solution (ll_ref : ref(linkedList int)) : SST (option unit)
         )
 
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
-  let test = [1;23;4;2;1] in
+  let test = [1;3;4;2;1] in
   let gr = alloc (NotGraded) in
-  let blah = auto_grader test (solution <: student_solution) gr in
+  auto_grader test solution gr;
   !gr
