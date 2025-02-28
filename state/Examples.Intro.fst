@@ -16,14 +16,19 @@ open SpecTree
 #set-options "--print_universes"
 
 type callback pspec =
-  mk_targetlang_arrow pspec (raise_t unit) unit (** TODO: why is this raise_t necessary here? **)
+  mk_targetlang_arrow pspec unit unit
 
 type lib_type pspec =
-  mk_targetlang_arrow pspec (ref (ref int)) (callback pspec)
+  mk_targetlang_arrow
+    pspec
+    (ref (ref int))
+    (callback pspec) #(witnessable_arrow u#0 u#_ _ _ _ _)
+                      (* ^ F* wrongly infers that first universe as 1 instead
+                         of zero, which is wrong. Work around it. *)
 
 instance safe_importable_lib_type pspec : safe_importable_to pspec (lib_type pspec) Leaf =
   targetlang_is_safely_importable pspec (lib_type pspec)
-    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec (raise_t unit) unit))
+    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec unit unit))
 
 (* Calling SecRef* on it *)
 
@@ -44,7 +49,7 @@ let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ens
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
   sst_write r v;
-  cb (raise_val ());
+  cb ();
   assert (!secret == 42);
   0
 #pop-options
