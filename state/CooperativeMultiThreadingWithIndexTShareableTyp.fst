@@ -221,10 +221,9 @@ let run (fuel : nat) (#t:shareable_typ) (init:to_Type t) (tasks:list (r:ref (to_
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s : ref (to_Type t) = sst_alloc_shared init in
   let tasks = map (fun (f : (r:ref (to_Type t)) -> continuation r unit) -> f s) tasks in
-  let () = scheduler fuel s tasks counter in
-  let final_value = sst_read s in
-  final_value
-
+  scheduler fuel s tasks counter;
+  sst_read s
+  
 let res_a (r : ref int) : continuation r unit = fun () ->
   recall (contains_pred r);
   recall (is_shared r);
