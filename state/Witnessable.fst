@@ -9,7 +9,7 @@ open FStar.Monotonic.Heap
 open MST.Repr
 open MST.Tot
 
-class witnessable (t:Type) = {
+class witnessable (t:Type u#a) = {
   satisfy : t -> (#a:_ -> #rel:_ -> mref a rel -> Type0) -> Type0;
 }
 

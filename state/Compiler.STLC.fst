@@ -9,14 +9,16 @@ open SharedRefs
 open TargetLang
 open STLC
 open Backtranslation.STLCToTargetLang
-
+open SpecTree
 open BeyondCriteria
 open HigherOrderContracts
 
 noeq
 type src_interface1 = {
+  specs:spec_tree concrete_spec;
+  hocs:hoc_tree specs;
   ct : Type;
-  c_ct : safe_importable_to ct;
+  c_ct : safe_importable_to concrete_spec ct specs;
 
   tct : typ;
   c_tct : unit -> Lemma (elab_typ concrete_spec tct == c_ct.ityp); (** can one even prove this? **)
@@ -83,12 +85,12 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> src_language1.ctx i
 let backtranslate_ctx1 #i ct =
   i.c_tct ();
-  i.c_ct.safe_import (instantiate_ctx_tgt1 ct)
+  i.c_ct.safe_import (instantiate_ctx_tgt1 ct) i.hocs
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps ct =
-  i.c_tct (); 
-  ps (i.c_ct.safe_import ct)
+  i.c_tct ();
+  ps (i.c_ct.safe_import ct i.hocs)
 
 unfold
 let eq_wp wp1 wp2 = wp1 ⊑ wp2 /\ wp2 ⊑ wp1
