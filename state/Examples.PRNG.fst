@@ -12,6 +12,8 @@ open Backtranslation.STLCToTargetLang
 open SharedRefs
 open Witnessable
 open Compiler
+open HigherOrderContracts
+open TargetLang
 
 assume val generate_nr : seed:int -> count:int -> int
 
@@ -45,16 +47,26 @@ let single_use_caller #inv #prref #hrel bt_read bt_write bt_alloc r =
 
 (* Calling SecRef* on it *)
 
+instance targetlang_arrow_helper pspec
+  : targetlang pspec (raise_t unit -> SST int (fun _ -> True) post)
+  = { wt = witnessable_arrow (raise_t unit) int _ _ }
+
+instance imp_prog : exportable_from prog_type = {
+  c_styp  = witnessable_arrow int  (unit -> SST int (fun _ -> True) post) _ _ ;
+  ityp = mk_interm_arrow int (raise_t unit -> SST int (fun _ -> True) post) ;
+  c_ityp = targetlang_arrow _ int (raise_t unit -> SST int (fun _ -> True) post) ;
+  export = (fun f z x -> f z (downgrade_val x)) ;
+  lemma_export_preserves_prref = (fun x -> ()) ;
+}
+
 let sit : src_interface2 = {
   pt = prog_type ;
-  c_pt = admit () ;
+  c_pt = solve ;
 }
+
 
 let compiled_prog =
   compile_pprog2 #sit prng
 
 let tmp = ctx_tgt2 (comp_int_src_tgt2 sit)
-
 // let mm = link_tgt2 compiled_prog single_use_caller
-
-// let compiled_pp : prog_tgt2 (comp_int_src_tgt2 sit) = compiled_prog
