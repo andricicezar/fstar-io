@@ -132,6 +132,15 @@ let syntactic_equality1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (
   compile_whole1 ws == wt
 ) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%compile_whole1];iota]) = ()
 
+let soundness1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
+  let it = comp_int_src_tgt1 i in
+  let cs : ctx_src1 i = backtranslate_ctx1 #i ct in
+  let pt : prog_tgt1 it = (compile_pprog1 #i ps) in
+  let wt : whole_tgt1 = (pt `link_tgt1` ct) in
+  let ws : whole_src1 = (ps `link_src1` cs) in
+  beh_tgt1 (wt) `subset_of` beh_src1 (ws)
+) by (norm[delta_only [`%link_tgt1;`%link_src1;`%backtranslate_ctx1;`%compile_pprog1;`%compile_whole1;`%beh_tgt1;`%beh_src1];iota]) = ()
+
 val comp1_rrhc : unit -> Lemma (rrhc comp1)
 let comp1_rrhc () : Lemma (rrhc comp1) =
   assert (rrhc comp1) by (
@@ -245,6 +254,16 @@ let syntactic_equality2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (
   let ws : whole_src2 = (ps `link_src2` cs) in
   compile_whole2 ws == wt
 ) by (norm[delta_only [`%link_tgt2;`%link_src2;`%backtranslate_ctx2;`%compile_pprog2;`%compile_whole2];iota]) = ()
+
+let soundness2 (i:src_interface2) (ct:ctx_tgt2 (comp_int_src_tgt2 i)) (ps:prog_src2 i) : Lemma (
+  let it = comp_int_src_tgt2 i in
+  let cs : ctx_src2 i = backtranslate_ctx2 #i ct in
+  let pt : prog_tgt2 it = (compile_pprog2 #i ps) in
+  let wt : whole_tgt2 = (pt `link_tgt2` ct) in
+  let ws : whole_src2 = (ps `link_src2` cs) in
+  beh_tgt2 (wt) `subset_of` beh_src2 (ws)
+) by (norm[delta_only [`%link_tgt2;`%link_src2;`%backtranslate_ctx2;`%compile_pprog2;`%compile_whole2;`%beh_tgt2;`%beh_src2];iota]) = ()
+
 
 val comp2_rrhc : unit -> Lemma (rrhc comp2)
 let comp2_rrhc () : Lemma (rrhc comp2) =
