@@ -64,7 +64,7 @@ type student_solution (l:list int) =
       forall_refs_heap is_shared h0 #(SRef (SLList SNat)) ll_ref))
     (ensures (fun h0 r h1 ->
       (Some? r ==> llist_spec h1 (list_sort l) (sel h1 ll_ref)) /\
-      modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)) // no cycles, sorted, same elements --- all via spec list l
+      modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1)) // sorted, same elements --- both via spec list l
 
 let rec generate_llist (l:list int)
   : SST (linkedList int)
@@ -73,7 +73,7 @@ let rec generate_llist (l:list int)
                            forall_refs_heap is_shared h1 #(SLList SNat) ll /\
                            modifies !{map_shared} h0 h1 /\
                            gets_shared Set.empty h0 h1 /\
-                           llist_spec h1 l ll              // i.e., no cycles via l
+                           llist_spec h1 l ll
                   )) =
   match l with
   | [] -> LLNil
