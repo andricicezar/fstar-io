@@ -49,3 +49,13 @@ into native OCaml, and then building them with dune. This is process
 is a bit complicated so there is a rule in the Makefile to automate it.
 Simply run `make build-Examples.Intro` to verify, extract, build, and run
 `Examples.Intro.fst`. Other files can be run by replacing `Examples.Intro` for something else.
+
+## Mapping from sections to files:
+
+- Section 1: `Examples.Intro.fst`
+- Section 2: `Examples.Autograder.fst`, `Examples.PRNG.fst`
+- Section 3: `MST.Repr.fst`, `MST.Soundness.fst`
+- Section 4: `SharedRefs.fsti` (`LR` under the name `SST`), `ShareableType.fst` (`full_ground_typ` under the name `shareable_typ`)
+- Section 5: `HigherOrderContracts.fst`
+- Section 6: `Compiler.fst`
+- Section 7: `CooperativeMultiThreadingWithIndexT.fst`
