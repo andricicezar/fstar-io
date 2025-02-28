@@ -108,7 +108,14 @@ instance exportable_ref pspec t {| c:tc_shareable_type t |} : exportable_from ps
   lemma_export_preserves_prref = (fun _ _ _ -> ());
 }
 
-instance exportable_llist pspec t {| c:tc_shareable_type t |} : exportable_from pspec (linkedList t) Leaf = admit ()
+instance exportable_llist pspec t {| c:tc_shareable_type t |} :
+  exportable_from pspec (linkedList t) Leaf = {
+  c_styp = solve ;
+  ityp = linkedList t ;
+  c_ityp = solve ;
+  export = (fun Leaf x -> x) ;
+  lemma_export_preserves_prref = (fun _ _ _ -> ())
+}
 
 instance exportable_refinement pspec t spec {| c:exportable_from pspec t spec |} (p:t->Type0) : exportable_from pspec (x:t{p x}) spec = {
   c_styp = witnessable_refinement t #c.c_styp p;
