@@ -132,7 +132,7 @@ instance exportable_arrow
                 (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                       e.g., the invariant on the heap **)
   : exportable_from pspec (x:t1 -> ST (resexn t2) (pre x) (post x))
-    (Node (Spec true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+    (Node (SpecErr true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
   c_ityp = targetlang_arrow pspec c1.ityp (resexn c2.ityp) #c1.c_ityp #(targetlang_sum pspec c2.ityp err #c2.c_ityp) ;
@@ -281,7 +281,7 @@ instance safe_importable_arrow
  // (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
 //  (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
 //  (capture_check:select_check pspec t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
-  : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (Spec false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+  : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (SpecErr false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
   c_ityp = targetlang_arrow _ c1.ityp (resexn c2.ityp) #_ #(targetlang_sum _ c2.ityp err #c2.c_ityp);
@@ -305,43 +305,55 @@ instance safe_importable_arrow
 instance safe_importable_arrow_safe
   pspec
   (t1:Type) (t2:Type)
-  {| c1:exportable_from pspec t1 |}
-  {| c2:safe_importable_to pspec t2 |}
+  s1 s2
+  {| c1:exportable_from pspec t1 s1 |}
+  {| c2:safe_importable_to pspec t2 s2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
   (_:squash (forall (x:t1) h0 r h1. pre x h0 /\ post_targetlang_arrow pspec #_ #c2.c_styp h0 r h1 ==> post x h0 r h1))
-  : safe_importable_to pspec (x:t1 -> ST t2 (pre x) (post x)) = {
+  : safe_importable_to pspec (x:t1 -> ST t2 (pre x) (post x)) (Node (Spec false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 t2 pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
   c_ityp = targetlang_arrow _ c1.ityp c2.ityp #_ #c2.c_ityp;
-  safe_import = (fun (f:mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt) (x:t1) ->
-    c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec);
-    let x' = c1.export x in
+  safe_import = (fun (f:mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt) hocs (x:t1) ->
+    let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
+    let TrivialPost c_pre c_post = myhoc in
+    c_pre x;
+    c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec) lhs;
+    let x' = c1.export lhs x in
     let res : c2.ityp = f x' in
-    let fres = c2.safe_import res in
-    c2.lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec);
+    let fres = c2.safe_import res rhs in
+    c_post x fres;
+    c2.lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec) rhs;
     fres
   );
-  lemma_safe_import_preserves_prref = (fun _ _ -> ())
+  lemma_safe_import_preserves_prref = (fun _ _ _ -> ())
 }
 
 type f_eqx = x:ref int -> SST (resexn unit) (requires (fun h0 -> satisfy x (prref_c))) (ensures (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
 
-let f_eqx_is_safe_importable : safe_importable_to concrete_spec f_eqx =
+let f_spec : pck_spec concrete_spec =
+(SpecErr false (ref int) (exportable_refinement concrete_spec
+                  (ref int)
+                  Leaf
+                  (fun _ -> l_True))
+                .c_styp
+              (fun x -> sst_pre (fun _ -> satisfy x prref_c))
+              unit
+              (safe_importable_is_importable concrete_spec unit Leaf).c_styp
+              (fun x ->
+                  sst_post (either unit err)
+                    (fun _ -> satisfy x prref_c)
+                    (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)))
+
+let f_eqx_is_safe_importable : safe_importable_to concrete_spec f_eqx (Node f_spec Leaf Leaf) =
   safe_importable_arrow concrete_spec
     (ref int) unit
+    Leaf Leaf
     (fun x -> sst_pre (fun h0 -> satisfy x (prref_c)))
     (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
-    ()
-    ()
-    (fun (rx:ref int) ->
-      recall (contains_pred rx);
-      let x = sst_read rx in
-      let eh0 = get_heap () in
-      let check : cb_check concrete_spec (ref int) (resexn unit) _ _ rx eh0 =
-        (fun res -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
-      (| eh0, check |))
+
 
 val unsafe_f : mk_interm_arrow (ref int) (resexn unit)
 let unsafe_f x =
@@ -350,7 +362,24 @@ let unsafe_f x =
   sst_write x 0;
   Inl ()
 
-let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f
+let f_hoc : hoc concrete_spec f_spec =
+EnforcePost
+    (fun _ -> ())
+    (fun _ _ -> ())
+    (fun rx ->
+      let rx :ref int = rx in
+      recall (contains_pred rx);
+      let x = sst_read rx in
+      let eh0 = get_heap () in
+      let check : cb_check concrete_spec (ref int) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c))) (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)) rx eh0 =
+        (fun kres -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+      (| eh0, check |))
+
+let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
+  admit (); (** <--- is this provable? **)
+  Node (| f_spec, f_hoc |) Leaf Leaf
+
+let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
 
 // x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
 //                                                   ^---^---cannot depend on x
@@ -359,11 +388,15 @@ type f_xeq5 = x:ref int -> SST (resexn int)
   (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
   (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
 
-let f_xeq5_is_exportable : exportable_from concrete_spec f_xeq5 =
+let f_xeq5_is_exportable : exportable_from concrete_spec f_xeq5 _ =
   exportable_arrow concrete_spec
     (ref int) int
+    Leaf Leaf
     (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
     (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
+
+
+  (**
     ()
     (fun x ->
       (| get_heap (), fun () -> recall (contains_pred x);
@@ -378,3 +411,4 @@ let f_with_pre x =
   Inl (10 / v)
 
 let f_with_dc = f_xeq5_is_exportable.export f_with_pre
+**)

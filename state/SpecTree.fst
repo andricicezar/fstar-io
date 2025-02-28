@@ -104,7 +104,7 @@ type select_check
 
 noeq
 type pck_spec (pspec:targetlang_pspec) =
-| Spec :
+| SpecErr :
     bit:bool ->
     argt:Type u#a ->
     wt_argt:witnessable argt ->
@@ -113,23 +113,44 @@ type pck_spec (pspec:targetlang_pspec) =
     wt_rett:witnessable rett ->
     (post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0)))
     -> pck_spec pspec
+| Spec :
+    bit:bool ->
+    argt:Type u#a ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    rett:Type u#b ->
+    wt_rett:witnessable rett ->
+    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0)))
+    -> pck_spec pspec
 
 
 noeq
 type hoc pspec : (s:pck_spec pspec) -> Type =
+| TrivialPre :
+    #s:(pck_spec pspec){Spec? s /\ Spec?.bit s == true} ->
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_targetlang_arrow pspec #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
+    -> hoc pspec s
+
+| TrivialPost :
+    #s:(pck_spec pspec){Spec? s /\ Spec?.bit s == false} ->
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_targetlang_arrow pspec #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
+    -> hoc pspec s
+
 | EnforcePre :
-    #s:(pck_spec pspec){Spec?.bit s == true} ->
-    check:(select_check pspec (Spec?.argt s) unit
-                        (pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s))
-                        (fun x _ _ h1 -> (Spec?.pre s) x h1)) ->
-    c_post:(x:(Spec?.argt s) -> r:(resexn (Spec?.rett s)) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_targetlang_arrow pspec #(resexn (Spec?.rett s)) #(witnessable_resexn #_ #(Spec?.wt_rett s)) h0 r h1))
+    #s:(pck_spec pspec){SpecErr? s /\ SpecErr?.bit s == true} ->
+    check:(select_check pspec (SpecErr?.argt s) unit
+                        (pre_targetlang_arrow pspec #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
+                        (fun x _ _ h1 -> (SpecErr?.pre s) x h1)) ->
+    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_targetlang_arrow pspec #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
     -> hoc pspec s
 
 | EnforcePost :
-    #s:(pck_spec pspec){Spec?.bit s == false} ->
-    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
-    c_post:(x:(Spec?.argt s) -> e:err -> Lemma (forall h0 h1. (Spec?.pre s) x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_resexn #_ #(Spec?.wt_rett s)) h0 (Inr e) h1 ==> (Spec?.post s) x h0 (Inr e) h1)) ->
-    check:(select_check pspec (Spec?.argt s) (resexn (Spec?.rett s)) #(witnessable_resexn #_ #(Spec?.wt_rett s)) (Spec?.pre s) (Spec?.post s))
+    #s:(pck_spec pspec){SpecErr? s /\ SpecErr?.bit s == false} ->
+    c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_targetlang_arrow pspec #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
+    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
+    check:(select_check pspec (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
     -> hoc pspec s
 
 type pck_hoc pspec =
@@ -137,7 +158,7 @@ type pck_hoc pspec =
 
 private
 let myspec : pck_spec concrete_spec =
-  Spec
+  SpecErr
     true
     (ref int)
     (witnessable_ref int)
@@ -149,10 +170,10 @@ let myspec : pck_spec concrete_spec =
 private
 let test_pre : hoc concrete_spec myspec =
   EnforcePre
-    (fun (x:(Spec?.argt myspec)) ->
+    (fun (x:(SpecErr?.argt myspec)) ->
       let x : ref int = x in
       let eh0 = get_heap () in
-      let check : cb_check concrete_spec (ref int) unit (pre_targetlang_arrow concrete_spec #(Spec?.argt myspec) #(Spec?.wt_argt myspec)) (fun x _ _ h1 -> (Spec?.pre myspec) x h1) x eh0 = (
+      let check : cb_check concrete_spec (ref int) unit (pre_targetlang_arrow concrete_spec #(SpecErr?.argt myspec) #(SpecErr?.wt_argt myspec)) (fun x _ _ h1 -> (SpecErr?.pre myspec) x h1) x eh0 = (
         fun _ ->
           assert (witnessed (contains_pred x));
           recall (contains_pred x);
@@ -164,7 +185,7 @@ let test_pre : hoc concrete_spec myspec =
 
 private
 let myspec' : pck_spec concrete_spec =
-  Spec
+  SpecErr
     false
     (ref int)
     (witnessable_ref int)
@@ -181,7 +202,7 @@ let test_post : hoc concrete_spec myspec' =
     (fun x ->
       let x : ref int = x in
       let eh0 = get_heap () in
-      let check : cb_check concrete_spec (ref int) (resexn unit) #(witnessable_resexn #_ #(Spec?.wt_rett myspec')) (Spec?.pre myspec') (Spec?.post myspec') x eh0 = (
+      let check : cb_check concrete_spec (ref int) (resexn unit) #(witnessable_resexn #_ #(SpecErr?.wt_rett myspec')) (SpecErr?.pre myspec') (SpecErr?.post myspec') x eh0 = (
         fun _ ->
           assert (witnessed (contains_pred x));
           recall (contains_pred x);
