@@ -132,30 +132,27 @@ instance exportable_arrow
                 (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                       e.g., the invariant on the heap **)
   : exportable_from pspec (x:t1 -> ST (resexn t2) (pre x) (post x))
-    (Node (Spec t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+    (Node (Spec true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
   c_ityp = targetlang_arrow pspec c1.ityp (resexn c2.ityp) #c1.c_ityp #(targetlang_sum pspec c2.ityp err #c2.c_ityp) ;
   export = (fun (hocs:hoc_tree _) (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
     let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
-    match myhoc with
-    | EnforcePre check c_post -> begin
-      match c1.import x lhs with
-      | Inl x' -> begin
-        c1.lemma_import_preserves_prref x (Mktuple3?._2 pspec) lhs;
-        let (| _, cb_check |) = check x' in
-        match cb_check () with
-        | Inl _ -> begin
-          let res : resexn t2 = f x' in
-          c_post x' res;
-          (exportable_resexn pspec t2 s2).lemma_export_preserves_prref res (Mktuple3?._2 pspec) (EmptyNode rhs Leaf);
-          (exportable_resexn pspec t2 s2).export (EmptyNode rhs Leaf) res
-        end
-        | Inr err -> Inr err
+    let EnforcePre check c_post = myhoc in
+    match c1.import x lhs with
+    | Inl x' -> begin
+      c1.lemma_import_preserves_prref x (Mktuple3?._2 pspec) lhs;
+      let (| _, cb_check |) = check x' in
+      match cb_check () with
+      | Inl _ -> begin
+        let res : resexn t2 = f x' in
+        c_post x' res;
+        (exportable_resexn pspec t2 s2).lemma_export_preserves_prref res (Mktuple3?._2 pspec) (EmptyNode rhs Leaf);
+        (exportable_resexn pspec t2 s2).export (EmptyNode rhs Leaf) res
       end
       | Inr err -> Inr err
     end
-    | EnforcePost _ _ _ -> Inr (Contract_failure "Wrong contract") (** TODO: get rid off! **)
+    | Inr err -> Inr err
   );
   lemma_export_preserves_prref = (fun _ _ _ -> ());
 }
@@ -284,26 +281,23 @@ instance safe_importable_arrow
  // (_:squash (forall (x:t1) h0. pre x h0 ==> pre_targetlang_arrow pspec #_ #c1.c_styp x h0))
 //  (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
 //  (capture_check:select_check pspec t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
-  : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (Spec t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+  : safe_importable_to pspec (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (Spec false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
   c_ityp = targetlang_arrow _ c1.ityp (resexn c2.ityp) #_ #(targetlang_sum _ c2.ityp err #c2.c_ityp);
   safe_import = (fun (f:mk_targetlang_arrow pspec c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (hocs:hoc_tree _) (x:t1) ->
     let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
-    match myhoc with
-    | EnforcePost c_pre c_post check -> begin
-      c_pre x;
-      c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec) lhs;
-      let (| _, cb_check |) = check x in
-      let x' = c1.export lhs x in
-      let res : resexn c2.ityp = f x' in
-      let fres = (safe_importable_resexn pspec t2 s2).safe_import res (EmptyNode rhs Leaf) in
-      (safe_importable_resexn pspec t2 s2).lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec) (EmptyNode rhs Leaf);
-      match cb_check fres with
-      | Inl _ -> fres
-      | Inr err -> (c_post x err; (Inr err))
-    end
-    | EnforcePre _ _ -> (admit (); (** no c_post? **) Inr (Contract_failure "Wrong contract!")) (** TODO: get rid off! **)
+    let EnforcePost c_pre c_post check = myhoc in
+    c_pre x;
+    c1.lemma_export_preserves_prref x (Mktuple3?._2 pspec) lhs;
+    let (| _, cb_check |) = check x in
+    let x' = c1.export lhs x in
+    let res : resexn c2.ityp = f x' in
+    let fres = (safe_importable_resexn pspec t2 s2).safe_import res (EmptyNode rhs Leaf) in
+    (safe_importable_resexn pspec t2 s2).lemma_safe_import_preserves_prref res (Mktuple3?._2 pspec) (EmptyNode rhs Leaf);
+    match cb_check fres with
+    | Inl _ -> fres
+    | Inr err -> (c_post x err; (Inr err))
   );
   lemma_safe_import_preserves_prref = (fun _ _ _ -> ())
 }

@@ -105,6 +105,7 @@ type select_check
 noeq
 type pck_spec (pspec:targetlang_pspec) =
 | Spec :
+    bit:bool ->
     argt:Type u#a ->
     wt_argt:witnessable argt ->
     pre:(argt -> st_pre) ->
@@ -115,8 +116,9 @@ type pck_spec (pspec:targetlang_pspec) =
 
 
 noeq
-type hoc pspec (s:pck_spec pspec) =
+type hoc pspec : (s:pck_spec pspec) -> Type =
 | EnforcePre :
+    #s:(pck_spec pspec){Spec?.bit s == true} ->
     check:(select_check pspec (Spec?.argt s) unit
                         (pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s))
                         (fun x _ _ h1 -> (Spec?.pre s) x h1)) ->
@@ -124,6 +126,7 @@ type hoc pspec (s:pck_spec pspec) =
     -> hoc pspec s
 
 | EnforcePost :
+    #s:(pck_spec pspec){Spec?.bit s == false} ->
     c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_targetlang_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
     c_post:(x:(Spec?.argt s) -> e:err -> Lemma (forall h0 h1. (Spec?.pre s) x h0 /\ post_targetlang_arrow pspec #_ #(witnessable_resexn #_ #(Spec?.wt_rett s)) h0 (Inr e) h1 ==> (Spec?.post s) x h0 (Inr e) h1)) ->
     check:(select_check pspec (Spec?.argt s) (resexn (Spec?.rett s)) #(witnessable_resexn #_ #(Spec?.wt_rett s)) (Spec?.pre s) (Spec?.post s))
@@ -135,6 +138,7 @@ type pck_hoc pspec =
 private
 let myspec : pck_spec concrete_spec =
   Spec
+    true
     (ref int)
     (witnessable_ref int)
     (fun x h -> sel h x > 5)
@@ -161,6 +165,7 @@ let test_pre : hoc concrete_spec myspec =
 private
 let myspec' : pck_spec concrete_spec =
   Spec
+    false
     (ref int)
     (witnessable_ref int)
     (pre_targetlang_arrow concrete_spec)
