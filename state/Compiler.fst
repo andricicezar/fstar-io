@@ -193,7 +193,7 @@ type ctx_tgt2 (i:tgt_interface2) =
   write : ttl_write AllOps inv prref hrel ->
   alloc : ttl_alloc AllOps inv prref hrel  ->
   p:i.pt (mk_targetlang_pspec inv prref hrel) ->
-  ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+  ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1)
 
 type prog_tgt2 (i:tgt_interface2) =
   i.pt concrete_spec

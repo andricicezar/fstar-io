@@ -25,7 +25,6 @@ type tree (a: Type u#a) =
   | Node: data: a -> left: tree a -> right: tree a -> tree a
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
-(** TODO: refactor these into two utils **)
 let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
   match t with
   | Node _ lt _ -> lt

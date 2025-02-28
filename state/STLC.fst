@@ -288,7 +288,7 @@ let rec is_closed_exp (e:exp) (g:context) : bool =
      | EWriteRef e1 e2 -> is_closed_exp e1 g && is_closed_exp e2 g
      | EUnit
      | EZero -> true
-     | ELoc _ -> false // TODO: is this ok?
+     | ELoc _ -> false
 
 let rec is_closed_value (e:exp) : bool =
      match e with

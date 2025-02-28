@@ -5,11 +5,6 @@ friend FStar.Monotonic.Heap
 let lemma_eq_addrs_eq_all _ _ _ = ()
 let lemma_eq_ref_types_eq_value_types _ = ()
 
-(**
-private (** TODO: is this necessary? **)
-let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
-  alloc (fun _ -> false)
-**)
 (** Popular vote for this, instead of the top-level effectful call **)
 assume val secret_map : map_sharedT
 
@@ -37,7 +32,7 @@ let lemma_unmodified_map_implies_same_shared_status (ms:Set.set nat) (h0 h1:heap
         introduce is_shared r h1 ==> is_shared r h0 with _. ()
       end
     end
-    
+
 let lemma_same_addr_same_sharing_status = (fun ra rb h -> ())
 
 
