@@ -137,7 +137,7 @@ let mheap_if_then_else (a : Type u#a)
   (f : mheap a flag1 wp1) (g : mheap a flag2 wp2) (b : bool) : Type =
   mheap a (flag1 ⊕ flag2) (st_if_then_else heap a b wp1 wp2)
 
-[@@ top_level_effect; primitive_extraction]
+[@@ top_level_effect] //; primitive_extraction]
 total
 reifiable
 reflectable
