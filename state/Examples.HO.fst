@@ -8,7 +8,7 @@ open FStar.Tactics.Typeclasses
 open FStar.Universe
 open SharedRefs
 open HigherOrderContracts
-open TargetLang
+open PolyIface
 open Compiler
 open Witnessable
 open SpecTree

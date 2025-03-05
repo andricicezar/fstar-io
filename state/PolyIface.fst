@@ -1,4 +1,4 @@
-module TargetLang
+module PolyIface
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses

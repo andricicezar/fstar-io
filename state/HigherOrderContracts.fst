@@ -6,7 +6,7 @@ open FStar.Tactics.Typeclasses
 open SharedRefs
 
 open Witnessable
-open TargetLang
+open PolyIface
 open SpecTree
 
 instance targetlang_err pspec : targetlang pspec err = {

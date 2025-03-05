@@ -1,11 +1,11 @@
-module Backtranslation.STLCToTargetLang
+module Backtranslation.STLCToPolyIface
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open SharedRefs
 open Witnessable
-open TargetLang
+open PolyIface
 open STLC
 open FStar.Universe
 

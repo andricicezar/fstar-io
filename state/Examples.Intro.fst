@@ -8,7 +8,7 @@ open FStar.Tactics.Typeclasses
 open FStar.Universe
 open SharedRefs
 open HigherOrderContracts
-open TargetLang
+open PolyIface
 open Compiler
 open Witnessable
 open SpecTree
@@ -86,7 +86,7 @@ let adv_lib inv prref hrel read write alloc r =
   let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
   (* iteration on linked list, using fuel to ensure termination *)
   let pspec = mk_targetlang_pspec inv prref hrel in
-  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (TargetLang.pre_targetlang_arrow pspec l) (TargetLang.post_targetlang_arrow pspec) =
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_targetlang_arrow pspec l) (post_targetlang_arrow pspec) =
     if n = 0 then () else
     match l with
     | LLNil -> ()

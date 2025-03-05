@@ -4,7 +4,7 @@ open FStar.Ghost
 open FStar.Monotonic.Heap
 open MST.Tot
 open Witnessable
-open TargetLang
+open PolyIface
 
 type err =
 | Contract_failure : string -> err

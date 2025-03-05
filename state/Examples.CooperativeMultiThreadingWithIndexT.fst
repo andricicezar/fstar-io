@@ -5,9 +5,8 @@ open FStar.Tactics.Typeclasses
 
 open SharedRefs
 open Witnessable
-open TargetLang
+open PolyIface
 open SpecTree
-open TargetLang
 open HigherOrderContracts
 open Compiler
 open CooperativeMultiThreadingWithIndexT

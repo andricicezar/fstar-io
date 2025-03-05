@@ -8,12 +8,12 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Universe
 open STLC
-open Backtranslation.STLCToTargetLang
+open Backtranslation.STLCToPolyIface
 open SharedRefs
 open Witnessable
 open Compiler
 open HigherOrderContracts
-open TargetLang
+open PolyIface
 open SpecTree
 
 val generate_nr : seed:int -> count:int -> int

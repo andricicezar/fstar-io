@@ -6,9 +6,9 @@ open FStar.Tactics
 open MST.Repr
 open MST.Tot
 open SharedRefs
-open TargetLang
+open PolyIface
 open STLC
-open Backtranslation.STLCToTargetLang
+open Backtranslation.STLCToPolyIface
 open SpecTree
 open BeyondCriteria
 open HigherOrderContracts

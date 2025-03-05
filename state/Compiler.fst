@@ -7,7 +7,7 @@ open FStar.Ghost
 open MST.Repr
 open MST.Tot
 open SharedRefs
-open TargetLang
+open PolyIface
 open BeyondCriteria
 open SpecTree
 open HigherOrderContracts
