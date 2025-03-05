@@ -26,10 +26,10 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 
 noeq
 type src_interface1 = {
-  specs : pspec:poly_iface_pspec -> spec_tree pspec;
+  specs : a3p:threep -> spec_tree a3p;
   hocs : hoc_tree (specs concrete_spec);
-  ct : poly_iface_pspec -> Type;
-  c_ct : pspec:poly_iface_pspec -> safe_importable_to pspec (ct pspec) (specs pspec);
+  ct : threep -> Type;
+  c_ct : a3p:threep -> safe_importable_to a3p (ct a3p) (specs a3p);
   psi : heap -> int -> heap -> Type0;
 }
 
@@ -52,8 +52,8 @@ let src_language1 : language sem_state = {
 
 noeq
 type tgt_interface1 = {
-  ct : poly_iface_pspec -> Type u#a;
-  c_ct : pspec:poly_iface_pspec -> poly_iface pspec (ct pspec);
+  ct : threep -> Type u#a;
+  c_ct : a3p:threep -> poly_iface a3p (ct a3p);
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -64,7 +64,7 @@ type ctx_tgt1 (i:tgt_interface1) =
   read :  ttl_read inv prref hrel ->
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
-  i.ct (mk_poly_iface_pspec inv prref hrel)
+  i.ct (mk_threep inv prref hrel)
 
 type prog_tgt1 (i:tgt_interface1) =
   i.ct concrete_spec ->
@@ -92,8 +92,8 @@ let tgt_language1 : language sem_state = {
 }
 
 let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
-  ct = (fun pspec -> (i.c_ct pspec).ityp);
-  c_ct = (fun pspec -> (i.c_ct pspec).c_ityp);
+  ct = (fun a3p -> (i.c_ct a3p).ityp);
+  c_ct = (fun a3p -> (i.c_ct a3p).c_ityp);
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> ctx_src1 i
@@ -152,10 +152,10 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 
 noeq
 type src_interface2 = {
-  specs: pspec:poly_iface_pspec -> spec_tree pspec;
+  specs: a3p:threep -> spec_tree a3p;
   hocs : hoc_tree (specs concrete_spec);
-  pt : poly_iface_pspec -> Type;
-  c_pt : pspec:poly_iface_pspec -> exportable_from pspec (pt pspec) (specs pspec);
+  pt : threep -> Type;
+  c_pt : a3p:threep -> exportable_from a3p (pt a3p) (specs a3p);
 }
 
 type ctx_src2 (i:src_interface2) =
@@ -180,8 +180,8 @@ let src_language2 : language sem_state = {
 
 noeq
 type tgt_interface2 = {
-  pt : pspec:poly_iface_pspec -> Type u#a;
-  c_pt : pspec:poly_iface_pspec -> poly_iface pspec (pt pspec);
+  pt : a3p:threep -> Type u#a;
+  c_pt : a3p:threep -> poly_iface a3p (pt a3p);
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -192,7 +192,7 @@ type ctx_tgt2 (i:tgt_interface2) =
   read :  ttl_read inv prref hrel ->
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
-  p:i.pt (mk_poly_iface_pspec inv prref hrel) ->
+  p:i.pt (mk_threep inv prref hrel) ->
   ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 
 type prog_tgt2 (i:tgt_interface2) =
@@ -218,8 +218,8 @@ let tgt_language2 : language sem_state = {
 }
 
 let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
-  pt = (fun pspec -> (i.c_pt pspec).ityp);
-  c_pt = (fun pspec -> (i.c_pt pspec).c_ityp);
+  pt = (fun a3p -> (i.c_pt a3p).ityp);
+  c_pt = (fun a3p -> (i.c_pt a3p).c_ityp);
 }
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i

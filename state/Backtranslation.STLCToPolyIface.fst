@@ -26,22 +26,22 @@ instance tc_shareable_type_typ0 (t:typ0) : tc_shareable_type (elab_typ0 t) = {
   __t = to_shareable_typ t;
 }
 
-let rec elab_typ0_tc #pspec (t:typ0) : poly_iface pspec (elab_typ0 t) =
+let rec elab_typ0_tc #a3p (t:typ0) : poly_iface a3p (elab_typ0 t) =
   match t with
-  | TUnit -> poly_iface_unit pspec
-  | TNat -> poly_iface_int pspec
-  | TSum t1 t2 -> poly_iface_sum pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TPair t1 t2 -> poly_iface_pair pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TRef t -> poly_iface_ref pspec (elab_typ0 t) #solve
-  | TLList t -> poly_iface_llist pspec (elab_typ0 t) #solve
+  | TUnit -> poly_iface_unit a3p
+  | TNat -> poly_iface_int a3p
+  | TSum t1 t2 -> poly_iface_sum a3p _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
+  | TPair t1 t2 -> poly_iface_pair a3p _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
+  | TRef t -> poly_iface_ref a3p (elab_typ0 t) #solve
+  | TLList t -> poly_iface_llist a3p (elab_typ0 t) #solve
 
-let rec _elab_typ (#pspec:poly_iface_pspec) (t:typ) : tt:Type u#1 & poly_iface pspec tt =
+let rec _elab_typ (#a3p:threep) (t:typ) : tt:Type u#1 & poly_iface a3p tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 in
     let tt2 = _elab_typ t2 in
-    (| mk_poly_iface_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
-       poly_iface_arrow pspec (dfst tt1) (dfst tt2)
+    (| mk_poly_iface_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
+       poly_iface_arrow a3p (dfst tt1) (dfst tt2)
     |)
   end
   | TUnit -> (| raise_t unit, solve |)
@@ -49,41 +49,41 @@ let rec _elab_typ (#pspec:poly_iface_pspec) (t:typ) : tt:Type u#1 & poly_iface p
   | TSum t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| either tt1 tt2, poly_iface_sum pspec tt1 tt2 #c_tt1 #c_tt2 |)
+    (| either tt1 tt2, poly_iface_sum a3p tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| tt1 * tt2, poly_iface_pair pspec tt1 tt2 #c_tt1 #c_tt2 |)
+    (| tt1 * tt2, poly_iface_pair a3p tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef _ ->
     let tt = elab_typ0 t in
     let c_tt = elab_typ0_tc t in
-    (| raise_t tt, poly_iface_univ_raise pspec _ #c_tt |)
+    (| raise_t tt, poly_iface_univ_raise a3p _ #c_tt |)
   | TLList t ->
     let tt = elab_typ0 t in
-    (| raise_t (linkedList tt), poly_iface_univ_raise pspec _ #(poly_iface_llist pspec tt #(tc_shareable_type_typ0 t)) |)
+    (| raise_t (linkedList tt), poly_iface_univ_raise a3p _ #(poly_iface_llist a3p tt #(tc_shareable_type_typ0 t)) |)
 
-let elab_typ (pspec:poly_iface_pspec) (t:typ) : Type =
-  dfst (_elab_typ #pspec t)
+let elab_typ (a3p:threep) (t:typ) : Type =
+  dfst (_elab_typ #a3p t)
 
-let elab_typ_tc #pspec (t:typ) : poly_iface pspec (elab_typ pspec t) =
-  dsnd (_elab_typ #pspec t)
+let elab_typ_tc #a3p (t:typ) : poly_iface a3p (elab_typ a3p t) =
+  dsnd (_elab_typ #a3p t)
 
 type tbt_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) ->
     ST (elab_typ0 t)
       (requires (fun h0 -> inv h0 /\ prref r))
-      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy v prref))
+      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy v prref))
 
 type tbt_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) ->
     ST unit
-      (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy v prref))
+      (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy v prref))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
 type tbt_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> init:(elab_typ0 t) ->
     ST (ref (elab_typ0 t))
-      (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy init prref))
+      (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy init prref))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
 let elab_poly_typ (t:typ) =
@@ -95,7 +95,7 @@ let elab_poly_typ (t:typ) =
   write : tbt_write inv prref hrel ->
   alloc : tbt_alloc inv prref hrel ->
   (** type of the context: *)
-  elab_typ (mk_poly_iface_pspec inv prref hrel) t
+  elab_typ (mk_threep inv prref hrel) t
 
 (** ** Examples **)
 
@@ -110,7 +110,7 @@ val ctx_update_multiple_refs_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 let ctx_update_multiple_refs_test #inv #prref #hrel bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr (TRef TNat) TUnit) = (fun y ->
+  let cb : elab_typ (mk_threep inv prref hrel) (TArr (TRef TNat) TUnit) = (fun y ->
     let y : ref int = downgrade_val y in
     let ix : ref int = bt_read #(TRef TNat) x in
     bt_write #TNat ix (bt_read #TNat ix + 1);
@@ -145,7 +145,7 @@ val ctx_swap_ref_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
 let ctx_swap_ref_test #inv #prref #hrel bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
+  let cb : elab_typ (mk_threep inv prref hrel) (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
     let y : ref (ref int) = downgrade_val y in
 
     let z = bt_read #(TRef TNat) x in
@@ -173,7 +173,7 @@ val ctx_returns_callback_test :
   elab_poly_typ (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test #inv #prref #hrel bt_read bt_write bt_alloc _ =
   let x: ref int = bt_alloc #TNat 13 in
-  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr TUnit TUnit) = (fun _ ->
+  let cb : elab_typ (mk_threep inv prref hrel) (TArr TUnit TUnit) = (fun _ ->
     bt_write #TNat x (bt_read #TNat x % 5);
     raise_val ()
   ) in
@@ -189,7 +189,7 @@ let ctx_HO_test4 _ _ bt_alloc f =
 val ctx_unverified_student_hw_sort :
   elab_poly_typ (TArr (TRef (TLList TNat)) TUnit)
 let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
-  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_iface_arrow (mk_poly_iface_pspec inv prref hrel) l) (post_poly_iface_arrow (mk_poly_iface_pspec inv prref hrel)) =
+  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_iface_arrow (mk_threep inv prref hrel) l) (post_poly_iface_arrow (mk_threep inv prref hrel)) =
     if fuel = 0 then () else begin
       let cl : linkedList int = bt_read #(TLList TNat) l in
       match cl with | LLNil -> ()
@@ -356,109 +356,109 @@ let progr_getting_callback_test rp rs f =
 (** ** Backtranslation **)
 
 val elab_apply_arrow :
-  #pspec : poly_iface_pspec ->
+  #a3p : threep ->
   t1:typ ->
   t2:typ ->
-  f:elab_typ pspec (TArr t1 t2) ->
-  (let tt1 = _elab_typ #pspec t1 in
-   let tt2 = _elab_typ #pspec t2 in
-   mk_poly_iface_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
+  f:elab_typ a3p (TArr t1 t2) ->
+  (let tt1 = _elab_typ #a3p t1 in
+   let tt2 = _elab_typ #a3p t2 in
+   mk_poly_iface_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
 let elab_apply_arrow t1 t2 f x = f x
 
-let cast_TArr inv prref hrel (#t1 #t2:typ) (f : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ (mk_poly_iface_pspec inv prref hrel) t = f
+let cast_TArr inv prref hrel (#t1 #t2:typ) (f : elab_typ (mk_threep inv prref hrel) (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ (mk_threep inv prref hrel) t = f
 
-type vcontext pspec (g:context) =
-  vx:var{Some? (g vx)} -> elab_typ pspec (Some?.v (g vx))
+type vcontext a3p (g:context) =
+  vx:var{Some? (g vx)} -> elab_typ a3p (Some?.v (g vx))
 
-let vempty pspec : vcontext pspec empty = fun _ -> assert false
+let vempty a3p : vcontext a3p empty = fun _ -> assert false
 
-let vextend #pspec #t (x:elab_typ pspec t) (#g:context) (ve:vcontext pspec g) : vcontext pspec (extend t g) =
+let vextend #a3p #t (x:elab_typ a3p t) (#g:context) (ve:vcontext a3p g) : vcontext a3p (extend t g) =
   fun y -> if y = 0 then x else ve (y-1)
 
-let all_refs_contained_and_low (#pspec) (#g:context) (ve:vcontext pspec g) : Type0 =
+let all_refs_contained_and_low (#a3p) (#g:context) (ve:vcontext a3p g) : Type0 =
   forall vx. Some? (g vx) ==>
-    (elab_typ_tc #pspec (Some?.v (g vx))).wt.satisfy (ve vx) (Mktuple3?._2 pspec)
+    (elab_typ_tc #a3p (Some?.v (g vx))).wt.satisfy (ve vx) (Mktuple3?._2 a3p)
 
-let rec downgrade_typ #pspec (t:typ0) (x:elab_typ pspec t) : elab_typ0 t =
+let rec downgrade_typ #a3p (t:typ0) (x:elab_typ a3p t) : elab_typ0 t =
   match t with
   | TSum t1 t2 -> begin
-    let x : either (elab_typ pspec t1) (elab_typ pspec t2) = x in
+    let x : either (elab_typ a3p t1) (elab_typ a3p t2) = x in
     (match x with
     | Inl v -> Inl (downgrade_typ t1 v)
     | Inr v -> Inr (downgrade_typ t2 v)) <: either (elab_typ0 t1) (elab_typ0 t2)
     end
   | TPair t1 t2 -> begin
-    let x : elab_typ pspec t1 * elab_typ pspec t2 = x in
+    let x : elab_typ a3p t1 * elab_typ a3p t2 = x in
     let (v1, v2) = x in
     (downgrade_typ t1 v1, downgrade_typ t2 v2)
   end
   | _ -> downgrade_val x
 
-let rec raise_typ #pspec (t:typ0) (x:elab_typ0 t) : elab_typ pspec t =
+let rec raise_typ #a3p (t:typ0) (x:elab_typ0 t) : elab_typ a3p t =
   match t with
   | TSum t1 t2 -> begin
     let x : either (elab_typ0 t1) (elab_typ0 t2) = x in
     (match x with
     | Inl v -> Inl (raise_typ t1 v)
-    | Inr v -> Inr (raise_typ t2 v)) <: either (elab_typ pspec t1) (elab_typ pspec t2)
+    | Inr v -> Inr (raise_typ t2 v)) <: either (elab_typ a3p t1) (elab_typ a3p t2)
     end
   | TPair t1 t2 -> begin
     let x : elab_typ0 t1 * elab_typ0 t2 = x in
     let (v1, v2) = x in
-    (raise_typ #pspec t1 v1, raise_typ #pspec t2 v2)
+    (raise_typ #a3p t1 v1, raise_typ #a3p t2 v2)
   end
   | _ -> raise_val x
 
-let rec lemma_downgrade_typ #pspec (t:typ0) (x:elab_typ pspec t) :
+let rec lemma_downgrade_typ #a3p (t:typ0) (x:elab_typ a3p t) :
   Pure unit
-    (requires ((elab_typ_tc #pspec t).wt.satisfy x (Mktuple3?._2 pspec)))
-    (ensures (fun r -> (elab_typ0_tc #pspec t).wt.satisfy (downgrade_typ t x) (Mktuple3?._2 pspec))) =
+    (requires ((elab_typ_tc #a3p t).wt.satisfy x (Mktuple3?._2 a3p)))
+    (ensures (fun r -> (elab_typ0_tc #a3p t).wt.satisfy (downgrade_typ t x) (Mktuple3?._2 a3p))) =
   match t with
   | TSum t1 t2 -> begin
-    let x : either (elab_typ pspec t1) (elab_typ pspec t2) = x in
+    let x : either (elab_typ a3p t1) (elab_typ a3p t2) = x in
     (match x with
     | Inl v -> lemma_downgrade_typ t1 v
     | Inr v -> lemma_downgrade_typ t2 v)
   end
   | TPair t1 t2 -> begin
-    let x : elab_typ pspec t1 * elab_typ pspec t2 = x in
+    let x : elab_typ a3p t1 * elab_typ a3p t2 = x in
     let (v1, v2) = x in
     lemma_downgrade_typ t1 v1;
     lemma_downgrade_typ t2 v2
   end
   | _ -> ()
 
-let rec lemma_raise_typ pspec (t:typ0) (x:elab_typ0 t) :
+let rec lemma_raise_typ a3p (t:typ0) (x:elab_typ0 t) :
   Pure unit
-    (requires ((elab_typ0_tc #pspec t).wt.satisfy x (Mktuple3?._2 pspec)))
-    (ensures (fun r -> (elab_typ_tc #pspec t).wt.satisfy (raise_typ #pspec t x) (Mktuple3?._2 pspec))) =
+    (requires ((elab_typ0_tc #a3p t).wt.satisfy x (Mktuple3?._2 a3p)))
+    (ensures (fun r -> (elab_typ_tc #a3p t).wt.satisfy (raise_typ #a3p t x) (Mktuple3?._2 a3p))) =
   match t with
   | TSum t1 t2 -> begin
     let x : either (elab_typ0 t1) (elab_typ0 t2) = x in
     (match x with
-    | Inl v -> lemma_raise_typ pspec t1 v
-    | Inr v -> lemma_raise_typ pspec t2 v)
+    | Inl v -> lemma_raise_typ a3p t1 v
+    | Inr v -> lemma_raise_typ a3p t2 v)
   end
   | TPair t1 t2 -> begin
     let x : elab_typ0 t1 * elab_typ0 t2 = x in
     let (v1, v2) = x in
-    lemma_raise_typ pspec t1 v1;
-    lemma_raise_typ pspec t2 v2
+    lemma_raise_typ a3p t1 v1;
+    lemma_raise_typ a3p t2 v2
   end
   | _ -> ()
 
-let downgrade #pspec (#t:typ0) (x:elab_typ pspec t) :
+let downgrade #a3p (#t:typ0) (x:elab_typ a3p t) :
   Pure (elab_typ0 t)
-    (requires ((elab_typ_tc t).wt.satisfy x (Mktuple3?._2 pspec)))
-    (ensures (fun r -> r == downgrade_typ t x /\ (elab_typ0_tc #pspec t).wt.satisfy r (Mktuple3?._2 pspec))) =
+    (requires ((elab_typ_tc t).wt.satisfy x (Mktuple3?._2 a3p)))
+    (ensures (fun r -> r == downgrade_typ t x /\ (elab_typ0_tc #a3p t).wt.satisfy r (Mktuple3?._2 a3p))) =
     lemma_downgrade_typ t x;
     downgrade_typ t x
 
-let raise #pspec (#t:typ0) (x:elab_typ0 t) :
-  Pure (elab_typ pspec t)
-    (requires ((elab_typ0_tc #pspec t).wt.satisfy x (Mktuple3?._2 pspec)))
-    (ensures (fun r -> r == raise_typ t x /\ (elab_typ_tc t).wt.satisfy r (Mktuple3?._2 pspec))) =
-    lemma_raise_typ pspec t x;
+let raise #a3p (#t:typ0) (x:elab_typ0 t) :
+  Pure (elab_typ a3p t)
+    (requires ((elab_typ0_tc #a3p t).wt.satisfy x (Mktuple3?._2 a3p)))
+    (ensures (fun r -> r == raise_typ t x /\ (elab_typ_tc t).wt.satisfy r (Mktuple3?._2 a3p))) =
+    lemma_raise_typ a3p t x;
     raise_typ t x
 
 #push-options "--split_queries always"
@@ -474,14 +474,14 @@ let rec backtranslate
   (#e:exp)
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_poly_iface_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
-  ST (elab_typ (mk_poly_iface_pspec inv prref hrel) t)
+  (ve:(vcontext (mk_threep inv prref hrel) g){all_refs_contained_and_low ve}) :
+  ST (elab_typ (mk_threep inv prref hrel) t)
     (fun h0 -> inv h0)
-    (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy r prref)
+    (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_threep inv prref hrel) t).wt.satisfy r prref)
     (decreases %[e;1])
 =
   let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
-  let pspec = mk_poly_iface_pspec inv prref hrel in
+  let a3p = mk_threep inv prref hrel in
 
   match tyj with
   | TyUnit -> raise_val ()
@@ -490,13 +490,13 @@ let rec backtranslate
     raise_val (1 + (downgrade_val (rcall tyj_s ve)))
 
   | TyAllocRef #_ #_ #t tyj_e -> begin
-    let v : elab_typ0 t = downgrade #pspec (rcall tyj_e ve) in
+    let v : elab_typ0 t = downgrade #a3p (rcall tyj_e ve) in
     let r : ref (elab_typ0 t) = bt_alloc #t v in
     raise_val r
   end
   | TyReadRef #_ #_ #t tyj_e -> begin
     let r' : ref (elab_typ0 t) = downgrade (rcall tyj_e ve) in
-    raise #pspec #t (bt_read r')
+    raise #a3p #t (bt_read r')
   end
   | TyWriteRef #_ #_ #_ #t tyj_ref tyj_v -> begin
     let r : ref (elab_typ0 t) = downgrade (rcall tyj_ref ve) in
@@ -509,40 +509,40 @@ let rec backtranslate
     backtranslate_eabs #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t tyj ve
   | TyVar vx ->
     let Some tx = g vx in
-    let x : elab_typ pspec tx = ve vx in
+    let x : elab_typ a3p tx = ve vx in
     x
   | TyApp #_ #_ #_ #tx #tres tyj_f tyj_x ->
-    assert ((elab_typ pspec t) == (elab_typ pspec tres));
-    let f : elab_typ pspec (TArr tx tres) = rcall tyj_f ve in
-    let x : elab_typ pspec tx = rcall tyj_x ve in
+    assert ((elab_typ a3p t) == (elab_typ a3p tres));
+    let f : elab_typ a3p (TArr tx tres) = rcall tyj_f ve in
+    let x : elab_typ a3p tx = rcall tyj_x ve in
     elab_apply_arrow tx tres f x
 
   | TyInl #_ #_ #t1 #t2 tyj_1 ->
-    let v1 : elab_typ pspec t1 = rcall tyj_1 ve in
-    Inl #_ #(elab_typ pspec t2) v1
+    let v1 : elab_typ a3p t1 = rcall tyj_1 ve in
+    Inl #_ #(elab_typ a3p t2) v1
   | TyInr #_ #_ #t1 #t2 tyj_2 ->
-    let v2 : elab_typ pspec t2 = rcall tyj_2 ve in
-    Inr #(elab_typ pspec t1) v2
+    let v2 : elab_typ a3p t2 = rcall tyj_2 ve in
+    Inr #(elab_typ a3p t1) v2
   | TyCaseSum #_ #_ #_ #_ #tl #tr #tres tyj_c tyj_l tyj_r -> begin
-    let vc : either (elab_typ pspec tl) (elab_typ pspec tr) = rcall tyj_c ve in
+    let vc : either (elab_typ a3p tl) (elab_typ a3p tr) = rcall tyj_c ve in
     match vc with
     | Inl x ->
-      let f : elab_typ pspec (TArr tl tres) = rcall tyj_l ve in
+      let f : elab_typ a3p (TArr tl tres) = rcall tyj_l ve in
       elab_apply_arrow tl tres f x
     | Inr y ->
-      let f : elab_typ pspec (TArr tr tres) = rcall tyj_r ve in
+      let f : elab_typ a3p (TArr tr tres) = rcall tyj_r ve in
       elab_apply_arrow tr tres f y
   end
 
   | TyFst #_ #_ #tf #ts tyj_e ->
     let v = rcall tyj_e ve in
-    fst #(elab_typ pspec tf) #(elab_typ pspec ts) v
+    fst #(elab_typ a3p tf) #(elab_typ a3p ts) v
   | TySnd #_ #_ #tf #ts tyj_e ->
     let v = rcall tyj_e ve in
-    snd #(elab_typ pspec tf) #(elab_typ pspec ts) v
+    snd #(elab_typ a3p tf) #(elab_typ a3p ts) v
   | TyPair #_ #_ #_ #tf #ts tyj_f tyj_s->
-    let vf : elab_typ pspec tf = rcall tyj_f ve in
-    let vs : elab_typ pspec ts = rcall tyj_s ve in
+    let vf : elab_typ a3p tf = rcall tyj_f ve in
+    let vs : elab_typ a3p ts = rcall tyj_s ve in
     (vf, vs)
 and backtranslate_eabs
   (#inv  : (heap -> Type0))
@@ -556,52 +556,52 @@ and backtranslate_eabs
   (#e:exp{EAbs? e})
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_poly_iface_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
-  Tot (elab_typ (mk_poly_iface_pspec inv prref hrel) t) (decreases %[e;0]) =
-  let pspec = mk_poly_iface_pspec inv prref hrel in
+  (ve:(vcontext (mk_threep inv prref hrel) g){all_refs_contained_and_low ve}) :
+  Tot (elab_typ (mk_threep inv prref hrel) t) (decreases %[e;0]) =
+  let a3p = mk_threep inv prref hrel in
   let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
   match e with
   | EAbs t1 e1 ->
     let TyAbs tx #_ #tres tyj_body = tyj in
-    let w : mk_poly_iface_arrow pspec (elab_typ pspec tx) #(elab_typ_tc #pspec tx).wt (elab_typ pspec tres) #(elab_typ_tc #pspec tres).wt =
-      (fun (x:elab_typ pspec tx) ->
-        let ve' = vextend #pspec #tx x #g ve in
+    let w : mk_poly_iface_arrow a3p (elab_typ a3p tx) #(elab_typ_tc #a3p tx).wt (elab_typ a3p tres) #(elab_typ_tc #a3p tres).wt =
+      (fun (x:elab_typ a3p tx) ->
+        let ve' = vextend #a3p #tx x #g ve in
         rcall tyj_body ve')
     in
     assert (t == TArr tx tres);
     cast_TArr inv prref hrel #tx #tres w t
 #pop-options
 
-let rec lemma_satisfy_eqv_forall_refs pspec (#t:typ0) (v:elab_typ0 t) (pred:mref_pred) :
-  Lemma ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) =
+let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_pred) :
+  Lemma ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) =
   match t with
   | TUnit -> ()
   | TNat -> ()
   | TSum t1 t2 -> begin
     let v : either (elab_typ0 t1) (elab_typ0 t2) = v in
     match v with
-    | Inl lv -> lemma_satisfy_eqv_forall_refs pspec lv pred
-    | Inr rv -> lemma_satisfy_eqv_forall_refs pspec rv pred
+    | Inl lv -> lemma_satisfy_eqv_forall_refs a3p lv pred
+    | Inr rv -> lemma_satisfy_eqv_forall_refs a3p rv pred
   end
   | TPair t1 t2 -> begin
      let v : (elab_typ0 t1) * (elab_typ0 t2) = v in
-     lemma_satisfy_eqv_forall_refs pspec (fst v) pred;
-     lemma_satisfy_eqv_forall_refs pspec (snd v) pred;
-     assert ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v)
+     lemma_satisfy_eqv_forall_refs a3p (fst v) pred;
+     lemma_satisfy_eqv_forall_refs a3p (snd v) pred;
+     assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v)
   end
   | TRef t' ->
     let aux (#t':typ0) (v:elab_typ0 (TRef t')) : ref (elab_typ0 t') = v in
     let v : ref (elab_typ0 t') = aux v in
-    assert ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) by (compute ())
+    assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) by (compute ())
   | TLList t' -> begin
     let aux (#t':typ0) (v:elab_typ0 (TLList t')) : linkedList (elab_typ0 t') = v in
     let v : linkedList (elab_typ0 t') = aux v in
     match v with
     | LLNil -> ()
     | LLCons v' xsref -> (
-      lemma_satisfy_eqv_forall_refs pspec v' pred;
+      lemma_satisfy_eqv_forall_refs a3p v' pred;
       let xsref : ref (linkedList (elab_typ0 t')) = xsref in
-      assert ((elab_typ0_tc #pspec t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v))
+      assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v))
   end
 
 val bt_read : tbt_read (inv_c) (prref_c) (hrel_c)

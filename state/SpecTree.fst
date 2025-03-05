@@ -85,21 +85,21 @@ let rec map_ext (t:tree 'a) (f:'a -> 'b) (g : 'a -> 'b)
   | Node x lhs rhs -> map_ext lhs f g; map_ext rhs f g
 
 
-type cb_check pspec (t1:Type) (t2:Type) {| c2: witnessable t2 |}
+type cb_check a3p (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   (x:t1)
   (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-  (r:t2 -> ST (resexn unit) (fun h1 -> post_poly_iface_arrow pspec eh0 r h1) (fun h1 rck h1' ->
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_poly_iface_arrow a3p eh0 r h1) (fun h1 rck h1' ->
     h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
 
 type select_check
-  pspec
+  a3p
   (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) =
   x:t1 -> ST (
-    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_check pspec t1 t2 #c2 pre post x eh0
+    eh0:FStar.Ghost.erased heap{pre x eh0} & cb_check a3p t1 t2 #c2 pre post x eh0
   ) (pre x) (fun h0 r h1 -> FStar.Ghost.reveal (dfst r) == h0 /\ h0 == h1)
 
 open FStar.Tactics.Typeclasses
@@ -107,7 +107,7 @@ open FStar.Tactics.Typeclasses
 #set-options "--print_implicits --print_universes"
 
 noeq
-type pck_spec (pspec:poly_iface_pspec) : Type u#(1 + (max a b)) =
+type pck_spec (a3p:threep) : Type u#(1 + (max a b)) =
 | SpecErr :
     bit:bool ->
     argt:Type u#a ->
@@ -117,7 +117,7 @@ type pck_spec (pspec:poly_iface_pspec) : Type u#(1 + (max a b)) =
     rett:Type u#b ->
     wt_rett:witnessable rett ->
     (post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0)))
-    -> pck_spec pspec
+    -> pck_spec a3p
 | Spec :
     bit:bool ->
     argt:Type u#a ->
@@ -126,40 +126,40 @@ type pck_spec (pspec:poly_iface_pspec) : Type u#(1 + (max a b)) =
     rett:Type u#b ->
     wt_rett:witnessable rett ->
     (post:(x:argt -> h0:heap -> st_post' rett (pre x h0)))
-    -> pck_spec pspec
+    -> pck_spec a3p
 
 
 noeq
-type hoc pspec : (s:pck_spec pspec) -> Type =
+type hoc a3p : (s:pck_spec a3p) -> Type =
 | TrivialPre :
-    #s:(pck_spec pspec){Spec? s /\ Spec?.bit s == true} ->
-    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_poly_iface_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
-    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_poly_iface_arrow pspec #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
-    -> hoc pspec s
+    #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == true} ->
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_poly_iface_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_poly_iface_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
+    -> hoc a3p s
 
 | TrivialPost :
-    #s:(pck_spec pspec){Spec? s /\ Spec?.bit s == false} ->
-    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_poly_iface_arrow pspec #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
-    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_poly_iface_arrow pspec #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
-    -> hoc pspec s
+    #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == false} ->
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_poly_iface_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_poly_iface_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
+    -> hoc a3p s
 
 | EnforcePre :
-    #s:(pck_spec pspec){SpecErr? s /\ SpecErr?.bit s == true} ->
-    check:(select_check pspec (SpecErr?.argt s) unit
-                        (pre_poly_iface_arrow pspec #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
+    #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == true} ->
+    check:(select_check a3p (SpecErr?.argt s) unit
+                        (pre_poly_iface_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
                         (fun x _ _ h1 -> (SpecErr?.pre s) x h1)) ->
-    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_iface_arrow pspec #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
-    -> hoc pspec s
+    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_iface_arrow a3p #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
+    -> hoc a3p s
 
 | EnforcePost :
-    #s:(pck_spec pspec){SpecErr? s /\ SpecErr?.bit s == false} ->
-    c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_iface_arrow pspec #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
-    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_iface_arrow pspec #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
-    check:(select_check pspec (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
-    -> hoc pspec s
+    #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == false} ->
+    c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_iface_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
+    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_iface_arrow a3p #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
+    check:(select_check a3p (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
+    -> hoc a3p s
 
-type pck_hoc pspec : Type u#(1+(max a b))=
-  s:pck_spec pspec & (hoc pspec s)
+type pck_hoc a3p : Type u#(1+(max a b))=
+  s:pck_spec a3p & (hoc a3p s)
 
 private
 let myspec : pck_spec concrete_spec =
@@ -216,7 +216,7 @@ let test_post : hoc concrete_spec myspec' =
       ) in
       (| eh0, check |))
 
-type spec_tree pspec : Type u#(1 + (max a b)) = tree (pck_spec pspec)
+type spec_tree a3p : Type u#(1 + (max a b)) = tree (pck_spec a3p)
 
-let hoc_tree #pspec (st:spec_tree pspec) : Type u#(1 + (max a b)) =
-  hocs:(tree (pck_hoc pspec)){equal_trees st (map_tree hocs dfst)}
+let hoc_tree #a3p (st:spec_tree a3p) : Type u#(1 + (max a b)) =
+  hocs:(tree (pck_hoc a3p)){equal_trees st (map_tree hocs dfst)}

@@ -15,25 +15,25 @@ open SpecTree
 
 #set-options "--print_universes"
 
-type callback pspec =
-  mk_poly_iface_arrow pspec unit unit
+type callback a3p =
+  mk_poly_iface_arrow a3p unit unit
 
-type lib_type pspec =
+type lib_type a3p =
   mk_poly_iface_arrow
-    pspec
+    a3p
     (ref (ref int))
-    (callback pspec) #(witnessable_arrow u#0 u#_ _ _ _ _)
+    (callback a3p) #(witnessable_arrow u#0 u#_ _ _ _ _)
                       (* ^ F* wrongly infers that first universe as 1 instead
                          of zero, which is wrong. Work around it. *)
 
-instance safe_importable_lib_type pspec : safe_importable_to pspec (lib_type pspec) Leaf =
-  poly_iface_is_safely_importable pspec (lib_type pspec)
-    #(poly_iface_arrow pspec (ref (ref int)) (callback pspec) #solve #(poly_iface_arrow pspec unit unit))
+instance safe_importable_lib_type a3p : safe_importable_to a3p (lib_type a3p) Leaf =
+  poly_iface_is_safely_importable a3p (lib_type a3p)
+    #(poly_iface_arrow a3p (ref (ref int)) (callback a3p) #solve #(poly_iface_arrow a3p unit unit))
 
 (* Calling SecRef* on it *)
 
 let sit : src_interface1 = {
-  specs = (fun pspec -> Leaf);
+  specs = (fun a3p -> Leaf);
   hocs = Leaf;
   ct = lib_type;
   c_ct = safe_importable_lib_type;
@@ -85,8 +85,8 @@ val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
 let adv_lib inv prref hrel read write alloc r =
   let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
   (* iteration on linked list, using fuel to ensure termination *)
-  let pspec = mk_poly_iface_pspec inv prref hrel in
-  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_poly_iface_arrow pspec l) (post_poly_iface_arrow pspec) =
+  let a3p = mk_threep inv prref hrel in
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_poly_iface_arrow a3p l) (post_poly_iface_arrow a3p) =
     if n = 0 then () else
     match l with
     | LLNil -> ()

@@ -26,40 +26,40 @@ instance witnessable_rcontinuation t {| c:witnessable t |} : witnessable (r:ref 
   satisfy = (fun _ pred -> True);
 }
 
-instance poly_iface_atree pspec (r:ref int) t {| c:poly_iface pspec t |} : poly_iface pspec (atree r t) = {
+instance poly_iface_atree a3p (r:ref int) t {| c:poly_iface a3p t |} : poly_iface a3p (atree r t) = {
   wt = witnessable_atree r t #c.wt;
 }
 
-instance poly_iface_continuation pspec (r:ref int) t {| c:poly_iface pspec t |} : poly_iface pspec (continuation r t) = {
+instance poly_iface_continuation a3p (r:ref int) t {| c:poly_iface a3p t |} : poly_iface a3p (continuation r t) = {
   wt = witnessable_continuation r t #c.wt;
 }
 
-instance poly_iface_rcontinuation pspec t {| c:poly_iface pspec t |} : poly_iface pspec (r:ref int -> continuation r t) = {
+instance poly_iface_rcontinuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (r:ref int -> continuation r t) = {
   wt = witnessable_rcontinuation t #c.wt;
 }
 
-let tgt_typ_run pspec =
-  mk_poly_iface_arrow pspec ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
+let tgt_typ_run a3p =
+  mk_poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
 
-instance poly_iface_run pspec
-  : poly_iface pspec (tgt_typ_run pspec) =
-  poly_iface_arrow pspec ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
-    #(poly_iface_pair pspec (int * int) (list (r:(ref int) -> (continuation r unit)))
+instance poly_iface_run a3p
+  : poly_iface a3p (tgt_typ_run a3p) =
+  poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
+    #(poly_iface_pair a3p (int * int) (list (r:(ref int) -> (continuation r unit)))
       #solve
-      #(poly_iface_list pspec (r:(ref int) -> (continuation r unit)) #solve))
-    #(poly_iface_sum pspec int err #solve #(poly_iface_err pspec))
+      #(poly_iface_list a3p (r:(ref int) -> (continuation r unit)) #solve))
+    #(poly_iface_sum a3p int err #solve #(poly_iface_err a3p))
 
-let src_run_type (pspec:poly_iface_pspec) =
-  (mk_poly_iface_arrow pspec ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
+let src_run_type (a3p:threep) =
+  (mk_poly_iface_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
     #(witnessable_pair (nat * int) (l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
       #(witnessable_pair nat int #(witnessable_refinement int (fun x -> x >= 0))) #solve)
     (resexn int) #solve)
 
-let exportable_run_type (pspec) : exportable_from pspec (src_run_type pspec) Leaf = {
+let exportable_run_type (a3p) : exportable_from a3p (src_run_type a3p) Leaf = {
   c_styp = solve;
-  ityp = tgt_typ_run pspec;
-  c_ityp = poly_iface_run pspec;
-  export = (fun _ (f:src_run_type pspec) ((fuel, init), tasks) ->
+  ityp = tgt_typ_run a3p;
+  c_ityp = poly_iface_run a3p;
+  export = (fun _ (f:src_run_type a3p) ((fuel, init), tasks) ->
     if fuel >= 0 && List.Tot.Base.length tasks > 0 then
       (f ((fuel, init), tasks))
     else Inr (Contract_failure "fuel, or tasks not good")
@@ -70,8 +70,8 @@ let exportable_run_type (pspec) : exportable_from pspec (src_run_type pspec) Lea
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);
   hocs = Leaf;
-  pt = (fun pspec -> src_run_type pspec);
-  c_pt = (fun pspec -> exportable_run_type pspec);
+  pt = (fun a3p -> src_run_type a3p);
+  c_pt = (fun a3p -> exportable_run_type a3p);
 }
 
 val run' : prog_src2 sit
@@ -81,7 +81,7 @@ let compiled_prog = compile_pprog2 #sit run'
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
 let some_ctx inv prref hrel read write alloc run =
-  admit (); (* TODO: continuation has to be refactored to be polymorphic in pspec *)
+  admit (); (* TODO: continuation has to be refactored to be polymorphic in a3p *)
   let res_a (r : ref int) : continuation r unit = (fun () ->
     let () = write r 42 in
     Return ()) in

@@ -50,18 +50,18 @@ let single_use_caller #inv #prref #hrel bt_read bt_write bt_alloc r =
 
 (* Calling SecRef* on it *)
 
-instance poly_iface_arrow_helper pspec
-  : poly_iface pspec (raise_t unit -> SST int (fun _ -> True) post)
+instance poly_iface_arrow_helper a3p
+  : poly_iface a3p (raise_t unit -> SST int (fun _ -> True) post)
   = { wt = witnessable_arrow (raise_t unit) int _ _ }
 
-instance exportable_prog pspec : exportable_from pspec (mk_poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int)) Leaf =
-  poly_iface_is_exportable _ pspec #(poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int) #_ #(poly_iface_arrow pspec (raise_t unit) int))
+instance exportable_prog a3p : exportable_from a3p (mk_poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int)) Leaf =
+  poly_iface_is_exportable _ a3p #(poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int) #_ #(poly_iface_arrow a3p (raise_t unit) int))
 
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);
   hocs = Leaf;
-  pt = (fun pspec -> mk_poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int));
-  c_pt = (fun pspec -> exportable_prog pspec);
+  pt = (fun a3p -> mk_poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int));
+  c_pt = (fun a3p -> exportable_prog a3p);
 }
 
 val prng' : prog_src2 sit

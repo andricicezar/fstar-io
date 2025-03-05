@@ -13,70 +13,70 @@ instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witne
   satisfy = (fun x pred -> forall_refs pred #c.__t x);
 }
 
-type poly_iface_pspec =
+type threep =
   (inv:heap -> Type0) * (prref:mref_pred) * (hrel:preorder heap)
 
 unfold
-let mk_poly_iface_pspec
+let mk_threep
   (inv  : heap -> Type0)
   (prref: mref_pred)
   (hrel : preorder heap)
-  : poly_iface_pspec =
+  : threep =
   (inv, (prref <: (#a:Type0 -> #rel:preorder a -> mref a rel -> Type0)), hrel)
 
-class poly_iface (spec:poly_iface_pspec) (t:Type u#a) =
+class poly_iface (a3p:threep) (t:Type u#a) =
   { wt : witnessable t }
 
-instance poly_iface_shareable_type pspec (t:Type) {| c:tc_shareable_type t |} : poly_iface pspec t = {
+instance poly_iface_shareable_type a3p (t:Type) {| c:tc_shareable_type t |} : poly_iface a3p t = {
   wt = witnessable_shareable_type t #c;
 }
 
-instance poly_iface_unit pspec : poly_iface pspec unit = { wt = witnessable_unit }
-instance poly_iface_int  pspec : poly_iface pspec int = { wt = witnessable_int }
-instance poly_iface_pair pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
-  : poly_iface pspec (t1 * t2)
+instance poly_iface_unit a3p : poly_iface a3p unit = { wt = witnessable_unit }
+instance poly_iface_int  a3p : poly_iface a3p int = { wt = witnessable_int }
+instance poly_iface_pair a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+  : poly_iface a3p (t1 * t2)
   = { wt = witnessable_pair t1 t2 #c1.wt #c2.wt }
-instance poly_iface_univ_raise pspec (t1:Type u#a) {| c1:poly_iface pspec t1 |}
-  : poly_iface pspec (FStar.Universe.raise_t u#a u#b t1)
+instance poly_iface_univ_raise a3p (t1:Type u#a) {| c1:poly_iface a3p t1 |}
+  : poly_iface a3p (FStar.Universe.raise_t u#a u#b t1)
   = { wt = witnessable_univ_raise t1 #c1.wt }
-instance poly_iface_sum pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
-  : poly_iface pspec (either t1 t2)
+instance poly_iface_sum a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+  : poly_iface a3p (either t1 t2)
   = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
-instance poly_iface_option pspec t1 {| c1:poly_iface pspec t1 |}
-  : poly_iface pspec (option t1)
+instance poly_iface_option a3p t1 {| c1:poly_iface a3p t1 |}
+  : poly_iface a3p (option t1)
   = { wt = witnessable_option t1 #c1.wt }
-instance poly_iface_ref pspec t1 {| c1:tc_shareable_type t1 |}
-  : poly_iface pspec (ref t1)
+instance poly_iface_ref a3p t1 {| c1:tc_shareable_type t1 |}
+  : poly_iface a3p (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #solve }
-instance poly_iface_list pspec t1 {| c1:poly_iface pspec t1 |}
-  : poly_iface pspec (list t1)
+instance poly_iface_list a3p t1 {| c1:poly_iface a3p t1 |}
+  : poly_iface a3p (list t1)
   = { wt = witnessable_list t1 #c1.wt }
-instance poly_iface_llist pspec t1 {| c1:tc_shareable_type t1 |}
-  : poly_iface pspec (linkedList t1)
+instance poly_iface_llist a3p t1 {| c1:tc_shareable_type t1 |}
+  : poly_iface a3p (linkedList t1)
   = { wt = witnessable_llist t1 #solve }
 
 unfold let pre_poly_iface_arrow
-  (pspec:poly_iface_pspec)
+  (a3p:threep)
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =
-  (Mktuple3?._1 pspec) h0 /\ c1.satisfy x (Mktuple3?._2 pspec)
+  (Mktuple3?._1 a3p) h0 /\ c1.satisfy x (Mktuple3?._2 a3p)
 
 unfold let post_poly_iface_arrow
-  (pspec:poly_iface_pspec)
+  (a3p:threep)
   (#t2:Type) {| c2 : witnessable t2 |}
   (h0:heap) (r:t2) (h1:heap) =
-  (Mktuple3?._1 pspec) h1 /\ h0 `(Mktuple3?._3 pspec)` h1 /\ c2.satisfy r (Mktuple3?._2 pspec)
+  (Mktuple3?._1 a3p) h1 /\ h0 `(Mktuple3?._3 a3p)` h1 /\ c2.satisfy r (Mktuple3?._2 a3p)
 
 let mk_poly_iface_arrow
-  (pspec:poly_iface_pspec)
+  (a3p:threep)
   (t1:Type u#a) {| c1 : witnessable t1 |}
   (t2:Type u#b) {| c2 : witnessable t2 |}
 = x:t1 -> ST t2
-    (pre_poly_iface_arrow pspec x)
-    (post_poly_iface_arrow pspec)
+    (pre_poly_iface_arrow a3p x)
+    (post_poly_iface_arrow a3p)
 
-instance poly_iface_arrow pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
-  : poly_iface pspec (mk_poly_iface_arrow pspec t1 #c1.wt t2 #c2.wt)
+instance poly_iface_arrow a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+  : poly_iface a3p (mk_poly_iface_arrow a3p t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
 type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
@@ -121,7 +121,7 @@ let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
     end
   end
 
-let concrete_spec : poly_iface_pspec = (
+let concrete_spec : threep = (
     (fun h ->
         trans_shared_contains h /\
         h `contains` map_shared /\
