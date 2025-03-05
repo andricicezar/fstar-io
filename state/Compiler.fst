@@ -61,9 +61,9 @@ type ctx_tgt1 (i:tgt_interface1) =
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read AllOps inv prref hrel ->
-  write : ttl_write AllOps inv prref hrel ->
-  alloc : ttl_alloc AllOps inv prref hrel  ->
+  read :  ttl_read inv prref hrel ->
+  write : ttl_write inv prref hrel ->
+  alloc : ttl_alloc inv prref hrel  ->
   i.ct (mk_targetlang_pspec inv prref hrel)
 
 type prog_tgt1 (i:tgt_interface1) =
@@ -189,9 +189,9 @@ type ctx_tgt2 (i:tgt_interface2) =
   prref: mref_pred ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
   hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read AllOps inv prref hrel ->
-  write : ttl_write AllOps inv prref hrel ->
-  alloc : ttl_alloc AllOps inv prref hrel  ->
+  read :  ttl_read inv prref hrel ->
+  write : ttl_write inv prref hrel ->
+  alloc : ttl_alloc inv prref hrel  ->
   p:i.pt (mk_targetlang_pspec inv prref hrel) ->
   ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 

@@ -79,21 +79,21 @@ instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetl
   : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
-type ttl_read (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) ->
-    STFlag (to_Type t) fl
+    ST (to_Type t)
       (requires (fun h0 -> inv h0 /\ prref r))
       (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
 
-type ttl_write (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type ttl_write (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
   (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
-    STFlag unit fl
+    ST unit
       (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
-type ttl_alloc (fl : erased tflag) (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type ttl_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
   (#t:shareable_typ) -> init:(to_Type t) ->
-    STFlag (ref (to_Type t)) fl
+    ST (ref (to_Type t))
       (requires (fun h0 -> inv h0 /\ forall_refs prref init))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
@@ -109,7 +109,7 @@ let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
         [SMTPat (concrete_spec_rel h0 h1); SMTPat (concrete_spec_rel h1 h2)]
 =
   assert (modifies_only_shared_and_encapsulated h0 h2);
-  introduce forall (a:Type) (rel:FStar.Preorder.preorder a) (r:mref a rel).
+  introduce forall (a:Type) (rel:preorder a) (r:mref a rel).
     ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with
   begin
     introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
@@ -159,7 +159,7 @@ let mk_interm_arrow
     (post_interm_arrow)
 
 
-val tl_read : ttl_read AllOps (inv_c) (prref_c) (hrel_c)
+val tl_read : ttl_read (inv_c) (prref_c) (hrel_c)
 let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
@@ -172,7 +172,7 @@ let tl_read #t r =
   lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   v
 
-val tl_write : ttl_write AllOps (inv_c) (prref_c) (hrel_c)
+val tl_write : ttl_write (inv_c) (prref_c) (hrel_c)
 let tl_write #t r v =
   recall (contains_pred r);
   recall (is_shared r);
@@ -189,7 +189,7 @@ let tl_write #t r v =
   assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
 #push-options "--split_queries always"
-val tl_alloc : ttl_alloc AllOps (inv_c) (prref_c) (hrel_c)
+val tl_alloc : ttl_alloc (inv_c) (prref_c) (hrel_c)
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
