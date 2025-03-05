@@ -13,31 +13,31 @@ instance poly_iface_err a3p : poly_iface a3p err = {
   wt = witnessable_err
 }
 
-class exportable_from a3p (styp: Type u#a) (st:spec_tree a3p) = {
+class exportable_from a3p (styp: Type u#a) (st:spec_tree) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
   [@@@no_method] c_ityp : poly_iface a3p ityp;
-  [@@@no_method] export : hoc_tree st -> styp -> ityp;
+  [@@@no_method] export : hoc_tree a3p st -> styp -> ityp;
   [@@@no_method] lemma_export_preserves_prref :
-    x:styp -> prref:mref_pred -> hocs:hoc_tree st -> Lemma (requires (c_styp.satisfy x prref)) (ensures (c_ityp.wt.satisfy (export hocs x) (prref)))
+    x:styp -> prref:mref_pred -> hocs:hoc_tree a3p st -> Lemma (requires (c_styp.satisfy x prref)) (ensures (c_ityp.wt.satisfy (export hocs x) (prref)))
 }
 
-class safe_importable_to a3p (styp: Type u#a) (st:spec_tree a3p) = {
+class safe_importable_to a3p (styp: Type u#a) (st:spec_tree) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
   [@@@no_method] c_ityp : poly_iface a3p ityp;
-  [@@@no_method] safe_import : ityp -> hoc_tree st -> styp;
+  [@@@no_method] safe_import : ityp -> hoc_tree a3p st -> styp;
   [@@@no_method] lemma_safe_import_preserves_prref :
-    x:ityp -> prref:mref_pred -> hocs:hoc_tree st -> Lemma (requires (c_ityp.wt.satisfy x (prref))) (ensures (c_styp.satisfy (safe_import x hocs) (prref)))
+    x:ityp -> prref:mref_pred -> hocs:hoc_tree a3p st -> Lemma (requires (c_ityp.wt.satisfy x (prref))) (ensures (c_styp.satisfy (safe_import x hocs) (prref)))
 }
 
-class importable_to a3p (styp: Type u#a) (st:spec_tree a3p) = {
+class importable_to a3p (styp: Type u#a) (st:spec_tree) = {
   [@@@no_method] c_styp : witnessable styp;
   [@@@no_method] ityp : Type u#b;
   [@@@no_method] c_ityp : poly_iface a3p ityp;
-  [@@@no_method] import : ityp -> hoc_tree st -> resexn styp;
+  [@@@no_method] import : ityp -> hoc_tree a3p st -> resexn styp;
   [@@@no_method] lemma_import_preserves_prref :
-    x:ityp -> prref:mref_pred -> hocs:hoc_tree st -> Lemma (requires (c_ityp.wt.satisfy x prref)) (ensures ((witnessable_sum styp err).satisfy (import x hocs) prref))
+    x:ityp -> prref:mref_pred -> hocs:hoc_tree a3p st -> Lemma (requires (c_ityp.wt.satisfy x prref)) (ensures ((witnessable_sum styp err).satisfy (import x hocs) prref))
 }
 
 (** Exportable instances **)
@@ -138,13 +138,13 @@ instance exportable_arrow
  //   (fun x _ _ h1 -> pre x h1))
                 (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                       e.g., the invariant on the heap **)
-  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x))
+  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) //u#(max 1 a b) u#(max 1 a b) 
     (Node (SpecErr true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow a3p c1.ityp (resexn c2.ityp) #c1.c_ityp #(poly_iface_sum a3p c2.ityp err #c2.c_ityp) ;
-  export = (fun (hocs:hoc_tree _) (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
-    let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
+  export = (fun (hocs:hoc_tree a3p _) (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
+    let Node (| _, myhoc |) lhs rhs : hoc_tree a3p _ = hocs in
     let EnforcePre check c_post = myhoc in
     match c1.import x lhs with
     | Inl x' -> begin
@@ -307,8 +307,8 @@ instance safe_importable_arrow
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow _ c1.ityp (resexn c2.ityp) #_ #(poly_iface_sum _ c2.ityp err #c2.c_ityp);
-  safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (hocs:hoc_tree _) (x:t1) ->
-    let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
+  safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (hocs:hoc_tree a3p _) (x:t1) ->
+    let Node (| _, myhoc |) lhs rhs : hoc_tree a3p _ = hocs in
     let EnforcePost c_pre c_post check = myhoc in
     c_pre x;
     c1.lemma_export_preserves_prref x (Mktuple3?._2 a3p) lhs;
@@ -339,7 +339,7 @@ instance safe_importable_arrow_safe
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
   c_ityp = poly_iface_arrow _ c1.ityp c2.ityp #_ #c2.c_ityp;
   safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt) hocs (x:t1) ->
-    let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
+    let Node (| _, myhoc |) lhs rhs : hoc_tree a3p _ = hocs in
     let TrivialPost c_pre c_post = myhoc in
     c_pre x;
     c1.lemma_export_preserves_prref x (Mktuple3?._2 a3p) lhs;
@@ -352,113 +352,3 @@ instance safe_importable_arrow_safe
   );
   lemma_safe_import_preserves_prref = (fun _ _ _ -> ())
 }
-
-type f_eqx = x:ref int -> SST (resexn unit) (requires (fun h0 -> satisfy x (prref_c))) (ensures (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
-
-let f_spec : pck_spec c3p =
-(SpecErr false (ref int) (exportable_refinement c3p
-                  (ref int)
-                  Leaf
-                  (fun _ -> l_True))
-                .c_styp
-              (fun x -> sst_pre (fun _ -> satisfy x prref_c))
-              unit
-              (safe_importable_is_importable c3p unit Leaf).c_styp
-              (fun x ->
-                  sst_post (either unit err)
-                    (fun _ -> satisfy x prref_c)
-                    (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)))
-
-let f_eqx_is_safe_importable : safe_importable_to c3p f_eqx (Node f_spec Leaf Leaf) =
-  safe_importable_arrow c3p
-    (ref int) unit
-    Leaf Leaf
-    (fun x -> sst_pre (fun h0 -> satisfy x (prref_c)))
-    (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x))
-
-
-val unsafe_f : mk_interm_arrow (ref int) (resexn unit)
-let unsafe_f x =
-  recall (contains_pred x);
-  recall (is_shared x);
-  sst_write x 0;
-  Inl ()
-
-let f_hoc : hoc c3p f_spec =
-EnforcePost
-    (fun _ -> ())
-    (fun _ _ -> ())
-    (fun rx ->
-      let rx :ref int = rx in
-      recall (contains_pred rx);
-      let x = sst_read rx in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c))) (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)) rx eh0 =
-        (fun kres -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
-      (| eh0, check |))
-
-let f_pkhoc : pck_hoc c3p =
-  (| f_spec, f_hoc |)
-
-let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
-  Node f_pkhoc Leaf Leaf
-
-let safe_f = f_eqx_is_safe_importable.safe_import unsafe_f f_tree
-
-// x:ref int -> SST (y:ref int -> SST (resexn int) pre' post') pre post
-//                                                   ^---^---cannot depend on x
-
-type f_xeq5 = x:ref int -> SST (resexn int)
-  (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
-  (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
-
-let f_xeq5_is_exportable : exportable_from c3p f_xeq5 _ =
-  exportable_arrow c3p
-    (ref int) int
-    Leaf Leaf
-    (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
-    (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
-
-let f_xeq5_spec : pck_spec c3p =
-  SpecErr true (ref ℤ) (safe_importable_is_importable c3p (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
-(exportable_refinement c3p ℤ Leaf (λ _ → l_True)).c_styp (λ x → sst_post (resexn ℤ) (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c) (λ h0 r h1 → (Inr? r ∨ (Inl? r ∧ Inl?.v r == 2)) ∧ hrel_c h0 h1))
-
-let f_xeq5_hoc : hoc c3p f_xeq5_spec =
-  EnforcePre
-    (fun rx ->
-      let rx :ref int = rx in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(SpecErr?.argt f_xeq5_spec) #(SpecErr?.wt_argt f_xeq5_spec)) (fun x _ _ h1 -> (SpecErr?.pre f_xeq5_spec) x h1) rx eh0 =
-        (fun _ ->
-          recall (contains_pred rx);
-          if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
-      (| eh0, check |))
-    (fun x r -> admit ())
-
-let f_xeq5_pkhoc : pck_hoc c3p =
-  (| f_xeq5_spec, f_xeq5_hoc |)
-
-let f_xeq5_tree : hoc_tree (Node f_xeq5_spec Leaf Leaf) =
-  Node f_xeq5_pkhoc Leaf Leaf
-
-val f_with_pre : f_xeq5
-let f_with_pre x =
-  recall (contains_pred x);
-  let v = sst_read x in
-  assert (v == 5);
-  Inl (10 / v)
-
-let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
-
-let gggtest =
-  let x = sst_alloc_shared 0 in
-  safe_f x
-
-let _ =
-  match gggtest with
-  | Inl () ->
-    IO.print_string "ok!\n"
-  | Inr (Contract_failure s) ->
-    IO.print_string ("Contract failure: " ^ s)
-  | Inr e ->
-    IO.print_string "another exn?!?!"

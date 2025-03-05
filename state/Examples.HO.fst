@@ -15,32 +15,28 @@ open SpecTree
 
 #set-options "--print_universes"
 
-type f_eqx (a3p:threep) = x:ref int -> ST (resexn unit) (requires (fun h0 -> (Mktuple3?._1 a3p) h0 /\ satisfy x (prref_c))) (ensures (fun h0 r h1 -> (Mktuple3?._1 a3p) h1 /\ (Mktuple3?._3 a3p) h0 h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
+type f_eqx (a3p:threep) = x:ref int -> ST (resexn unit) (requires (fun h0 -> inv a3p h0 /\ satisfy x (prref a3p))) (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
-let f_a3p a3p : pck_spec a3p =
- (SpecErr false (ref int) (exportable_refinement a3p
-                  (ref int)
-                  Leaf
-                  (fun _ -> l_True))
-                .c_styp
-              (fun x h0 -> (Mktuple3?._1 a3p) h0 /\ satisfy x (prref_c))
-              unit
-              (safe_importable_is_importable a3p unit Leaf).c_styp
-              (fun x h0 r h1 -> (Mktuple3?._1 a3p) h1 /\ (Mktuple3?._3 a3p) h0 h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
+let f_a3p (a3p:threep) : pck_spec =
+ (SpecErr false (ref int) (witnessable_ref int)
+    (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
+    unit
+    witnessable_unit
+    (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
-let f_spec : pck_spec c3p = f_a3p c3p
+let f_spec : pck_spec = f_a3p c3p
 
 let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (f_a3p a3p) Leaf Leaf) =
-  solve
-(**
   safe_importable_arrow a3p
     (ref int) unit
     Leaf Leaf
-    (fun x h0 -> (Mktuple3?._1 a3p) h0 /\ satisfy x (prref_c))
-    (fun x h0 r h1 -> (Mktuple3?._1 a3p) h1 /\ (Mktuple3?._3 a3p) h0 h1 /\ (Inr? r \/ sel h0 x == sel h1 x))**)
+    #(exportable_ref a3p int)
+    #(safe_importable_is_importable a3p unit Leaf #(safe_importable_unit a3p))
+    (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
+    (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x))
 
 let f_hoc : hoc c3p f_spec =
-EnforcePost
+  EnforcePost
     (fun _ -> ())
     (fun _ _ -> ())
     (fun rx ->
@@ -55,7 +51,7 @@ EnforcePost
 let f_pkhoc : pck_hoc c3p =
   (| f_spec, f_hoc |)
 
-let f_tree : hoc_tree (Node f_spec Leaf Leaf) =
+let f_tree : hoc_tree c3p (Node f_spec Leaf Leaf) =
   Node f_pkhoc Leaf Leaf
 
 let sit : src_interface1 = {
@@ -102,3 +98,55 @@ let _ =
   | 0 -> FStar.IO.print_string "Contract failed\n"
   | -1 -> FStar.IO.print_string "Contract succedded\n"
   | _ -> FStar.IO.print_string "Impossible\n"
+
+
+
+
+
+
+
+
+
+
+type f_xeq5 = x:ref int -> SST (resexn int)
+  (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
+  (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
+
+let f_xeq5_is_exportable : exportable_from c3p f_xeq5 _ =
+  exportable_arrow c3p
+    (ref int) int
+    Leaf Leaf
+    (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
+    (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
+
+let f_xeq5_spec : pck_spec =
+  SpecErr true (ref ℤ) (safe_importable_is_importable c3p (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
+(exportable_refinement c3p ℤ Leaf (λ _ → l_True)).c_styp (λ x → sst_post (resexn ℤ) (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c) (λ h0 r h1 → (Inr? r ∨ (Inl? r ∧ Inl?.v r == 2)) ∧ hrel_c h0 h1))
+
+let f_xeq5_hoc : hoc c3p f_xeq5_spec =
+  EnforcePre
+    (fun rx ->
+      let rx :ref int = rx in
+      let eh0 = get_heap () in
+      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(SpecErr?.argt f_xeq5_spec) #(SpecErr?.wt_argt f_xeq5_spec)) (fun x _ _ h1 -> (SpecErr?.pre f_xeq5_spec) x h1) rx eh0 =
+        (fun _ ->
+          recall (contains_pred rx);
+          if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+      (| eh0, check |))
+    (fun x r -> admit ())
+
+let f_xeq5_pkhoc : pck_hoc c3p =
+  (| f_xeq5_spec, f_xeq5_hoc |)
+
+let f_xeq5_tree : hoc_tree c3p (Node f_xeq5_spec Leaf Leaf) =
+  Node f_xeq5_pkhoc Leaf Leaf
+
+val f_with_pre : f_xeq5
+let f_with_pre x =
+  recall (contains_pred x);
+  let v = sst_read x in
+  assert (v == 5);
+  Inl (10 / v)
+
+let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
+

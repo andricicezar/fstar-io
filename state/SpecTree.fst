@@ -9,7 +9,7 @@ open PolyIface
 type err =
 | Contract_failure : string -> err
 
-type resexn a = either a err
+type resexn (a:Type u#a) : Type u#a = either a err
 
 instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
@@ -107,17 +107,16 @@ open FStar.Tactics.Typeclasses
 #set-options "--print_implicits --print_universes"
 
 noeq
-type pck_spec (a3p:threep) : Type u#(1 + (max a b)) =
+type pck_spec : Type u#(1 + (max a b)) =
 | SpecErr :
     bit:bool ->
     argt:Type u#a ->
     wt_argt:witnessable argt ->
-    // #[tcresolve ()]wt_argt : witnessable argt ->
     pre:(argt -> st_pre) ->
     rett:Type u#b ->
     wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0)))
-    -> pck_spec a3p
+    (post:(x:argt -> h0:heap -> st_post' u#b u#0 (resexn rett) (pre x h0))) ->
+    pck_spec
 | Spec :
     bit:bool ->
     argt:Type u#a ->
@@ -125,26 +124,25 @@ type pck_spec (a3p:threep) : Type u#(1 + (max a b)) =
     pre:(argt -> st_pre) ->
     rett:Type u#b ->
     wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0)))
-    -> pck_spec a3p
-
+    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
+    pck_spec
 
 noeq
-type hoc a3p : (s:pck_spec a3p) -> Type =
+type hoc a3p : (s:pck_spec) -> Type =
 | TrivialPre :
-    #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == true} ->
+    #s:pck_spec{Spec? s /\ Spec?.bit s == true} ->
     c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_poly_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
     c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_poly_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
     -> hoc a3p s
 
 | TrivialPost :
-    #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == false} ->
+    #s:pck_spec{Spec? s /\ Spec?.bit s == false} ->
     c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_poly_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
     c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_poly_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
     -> hoc a3p s
 
 | EnforcePre :
-    #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == true} ->
+    #s:pck_spec{SpecErr? s /\ SpecErr?.bit s == true} ->
     check:(select_check a3p (SpecErr?.argt s) unit
                         (pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
                         (fun x _ _ h1 -> (SpecErr?.pre s) x h1)) ->
@@ -152,17 +150,17 @@ type hoc a3p : (s:pck_spec a3p) -> Type =
     -> hoc a3p s
 
 | EnforcePost :
-    #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == false} ->
+    #s:pck_spec{SpecErr? s /\ SpecErr?.bit s == false} ->
     c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
     c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn _ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
     check:(select_check a3p (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn _ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
     -> hoc a3p s
 
 type pck_hoc a3p : Type u#(1+(max a b))=
-  s:pck_spec a3p & (hoc a3p s)
+  s:pck_spec & (hoc a3p s)
 
 private
-let myspec : pck_spec c3p =
+let myspec : pck_spec =
   SpecErr
     true
     (ref int)
@@ -189,7 +187,7 @@ let test_pre : hoc c3p myspec =
     (fun _ _ -> ())
 
 private
-let myspec' : pck_spec c3p =
+let myspec' : pck_spec =
   SpecErr
     false
     (ref int)
@@ -216,7 +214,7 @@ let test_post : hoc c3p myspec' =
       ) in
       (| eh0, check |))
 
-type spec_tree a3p : Type u#(1 + (max a b)) = tree (pck_spec a3p)
+type spec_tree : Type u#(1 + (max a b)) = tree pck_spec
 
-let hoc_tree #a3p (st:spec_tree a3p) : Type u#(1 + (max a b)) =
+let hoc_tree a3p (st:spec_tree) : Type u#(1 + (max a b)) =
   hocs:(tree (pck_hoc a3p)){equal_trees st (map_tree hocs dfst)}

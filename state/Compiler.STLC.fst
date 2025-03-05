@@ -15,8 +15,8 @@ open HigherOrderContracts
 
 noeq
 type src_interface1 = {
-  specs:spec_tree c3p;
-  hocs:hoc_tree specs;
+  specs:spec_tree;
+  hocs:hoc_tree c3p specs;
   ct : Type;
   c_ct : safe_importable_to c3p ct specs;
 

@@ -26,8 +26,8 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 
 noeq
 type src_interface1 = {
-  specs : a3p:threep -> spec_tree a3p;
-  hocs : hoc_tree (specs c3p);
+  specs : a3p:threep -> spec_tree;
+  hocs : hoc_tree c3p (specs c3p);
   ct : threep -> Type;
   c_ct : a3p:threep -> safe_importable_to a3p (ct a3p) (specs a3p);
   psi : heap -> int -> heap -> Type0;
@@ -149,8 +149,8 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 
 noeq
 type src_interface2 = {
-  specs: a3p:threep -> spec_tree a3p;
-  hocs : hoc_tree (specs c3p);
+  specs: a3p:threep -> spec_tree;
+  hocs : hoc_tree c3p (specs c3p);
   pt : threep -> Type;
   c_pt : a3p:threep -> exportable_from a3p (pt a3p) (specs a3p);
 }
