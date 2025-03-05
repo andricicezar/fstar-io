@@ -50,17 +50,17 @@ let single_use_caller #inv #prref #hrel bt_read bt_write bt_alloc r =
 
 (* Calling SecRef* on it *)
 
-instance targetlang_arrow_helper pspec
-  : targetlang pspec (raise_t unit -> SST int (fun _ -> True) post)
+instance poly_iface_arrow_helper pspec
+  : poly_iface pspec (raise_t unit -> SST int (fun _ -> True) post)
   = { wt = witnessable_arrow (raise_t unit) int _ _ }
 
-instance exportable_prog pspec : exportable_from pspec (mk_targetlang_arrow pspec int (mk_targetlang_arrow pspec (raise_t unit) int)) Leaf =
-  targetlang_is_exportable _ pspec #(targetlang_arrow pspec int (mk_targetlang_arrow pspec (raise_t unit) int) #_ #(targetlang_arrow pspec (raise_t unit) int))
+instance exportable_prog pspec : exportable_from pspec (mk_poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int)) Leaf =
+  poly_iface_is_exportable _ pspec #(poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int) #_ #(poly_iface_arrow pspec (raise_t unit) int))
 
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);
   hocs = Leaf;
-  pt = (fun pspec -> mk_targetlang_arrow pspec int (mk_targetlang_arrow pspec (raise_t unit) int));
+  pt = (fun pspec -> mk_poly_iface_arrow pspec int (mk_poly_iface_arrow pspec (raise_t unit) int));
   c_pt = (fun pspec -> exportable_prog pspec);
 }
 

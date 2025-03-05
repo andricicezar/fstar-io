@@ -15,7 +15,7 @@ open SpecTree
 
 #set-options "--print_universes"
 
-type f_eqx (pspec:targetlang_pspec) = x:ref int -> ST (resexn unit) (requires (fun h0 -> (Mktuple3?._1 pspec) h0 /\ satisfy x (prref_c))) (ensures (fun h0 r h1 -> (Mktuple3?._1 pspec) h1 /\ (Mktuple3?._3 pspec) h0 h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
+type f_eqx (pspec:poly_iface_pspec) = x:ref int -> ST (resexn unit) (requires (fun h0 -> (Mktuple3?._1 pspec) h0 /\ satisfy x (prref_c))) (ensures (fun h0 r h1 -> (Mktuple3?._1 pspec) h1 /\ (Mktuple3?._3 pspec) h0 h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
 let f_pspec pspec : pck_spec pspec =
  (SpecErr false (ref int) (exportable_refinement pspec

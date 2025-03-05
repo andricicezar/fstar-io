@@ -13,70 +13,70 @@ instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witne
   satisfy = (fun x pred -> forall_refs pred #c.__t x);
 }
 
-type targetlang_pspec =
+type poly_iface_pspec =
   (inv:heap -> Type0) * (prref:mref_pred) * (hrel:preorder heap)
 
 unfold
-let mk_targetlang_pspec
+let mk_poly_iface_pspec
   (inv  : heap -> Type0)
   (prref: mref_pred)
   (hrel : preorder heap)
-  : targetlang_pspec =
+  : poly_iface_pspec =
   (inv, (prref <: (#a:Type0 -> #rel:preorder a -> mref a rel -> Type0)), hrel)
 
-class targetlang (spec:targetlang_pspec) (t:Type u#a) =
+class poly_iface (spec:poly_iface_pspec) (t:Type u#a) =
   { wt : witnessable t }
 
-instance targetlang_shareable_type pspec (t:Type) {| c:tc_shareable_type t |} : targetlang pspec t = {
+instance poly_iface_shareable_type pspec (t:Type) {| c:tc_shareable_type t |} : poly_iface pspec t = {
   wt = witnessable_shareable_type t #c;
 }
 
-instance targetlang_unit pspec : targetlang pspec unit = { wt = witnessable_unit }
-instance targetlang_int  pspec : targetlang pspec int = { wt = witnessable_int }
-instance targetlang_pair pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
-  : targetlang pspec (t1 * t2)
+instance poly_iface_unit pspec : poly_iface pspec unit = { wt = witnessable_unit }
+instance poly_iface_int  pspec : poly_iface pspec int = { wt = witnessable_int }
+instance poly_iface_pair pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
+  : poly_iface pspec (t1 * t2)
   = { wt = witnessable_pair t1 t2 #c1.wt #c2.wt }
-instance targetlang_univ_raise pspec (t1:Type u#a) {| c1:targetlang pspec t1 |}
-  : targetlang pspec (FStar.Universe.raise_t u#a u#b t1)
+instance poly_iface_univ_raise pspec (t1:Type u#a) {| c1:poly_iface pspec t1 |}
+  : poly_iface pspec (FStar.Universe.raise_t u#a u#b t1)
   = { wt = witnessable_univ_raise t1 #c1.wt }
-instance targetlang_sum pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
-  : targetlang pspec (either t1 t2)
+instance poly_iface_sum pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
+  : poly_iface pspec (either t1 t2)
   = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
-instance targetlang_option pspec t1 {| c1:targetlang pspec t1 |}
-  : targetlang pspec (option t1)
+instance poly_iface_option pspec t1 {| c1:poly_iface pspec t1 |}
+  : poly_iface pspec (option t1)
   = { wt = witnessable_option t1 #c1.wt }
-instance targetlang_ref pspec t1 {| c1:tc_shareable_type t1 |}
-  : targetlang pspec (ref t1)
+instance poly_iface_ref pspec t1 {| c1:tc_shareable_type t1 |}
+  : poly_iface pspec (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #solve }
-instance targetlang_list pspec t1 {| c1:targetlang pspec t1 |}
-  : targetlang pspec (list t1)
+instance poly_iface_list pspec t1 {| c1:poly_iface pspec t1 |}
+  : poly_iface pspec (list t1)
   = { wt = witnessable_list t1 #c1.wt }
-instance targetlang_llist pspec t1 {| c1:tc_shareable_type t1 |}
-  : targetlang pspec (linkedList t1)
+instance poly_iface_llist pspec t1 {| c1:tc_shareable_type t1 |}
+  : poly_iface pspec (linkedList t1)
   = { wt = witnessable_llist t1 #solve }
 
-unfold let pre_targetlang_arrow
-  (pspec:targetlang_pspec)
+unfold let pre_poly_iface_arrow
+  (pspec:poly_iface_pspec)
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =
   (Mktuple3?._1 pspec) h0 /\ c1.satisfy x (Mktuple3?._2 pspec)
 
-unfold let post_targetlang_arrow
-  (pspec:targetlang_pspec)
+unfold let post_poly_iface_arrow
+  (pspec:poly_iface_pspec)
   (#t2:Type) {| c2 : witnessable t2 |}
   (h0:heap) (r:t2) (h1:heap) =
   (Mktuple3?._1 pspec) h1 /\ h0 `(Mktuple3?._3 pspec)` h1 /\ c2.satisfy r (Mktuple3?._2 pspec)
 
-let mk_targetlang_arrow
-  (pspec:targetlang_pspec)
+let mk_poly_iface_arrow
+  (pspec:poly_iface_pspec)
   (t1:Type u#a) {| c1 : witnessable t1 |}
   (t2:Type u#b) {| c2 : witnessable t2 |}
 = x:t1 -> ST t2
-    (pre_targetlang_arrow pspec x)
-    (post_targetlang_arrow pspec)
+    (pre_poly_iface_arrow pspec x)
+    (post_poly_iface_arrow pspec)
 
-instance targetlang_arrow pspec t1 t2 {| c1:targetlang pspec t1 |} {| c2:targetlang pspec t2 |}
-  : targetlang pspec (mk_targetlang_arrow pspec t1 #c1.wt t2 #c2.wt)
+instance poly_iface_arrow pspec t1 t2 {| c1:poly_iface pspec t1 |} {| c2:poly_iface pspec t2 |}
+  : poly_iface pspec (mk_poly_iface_arrow pspec t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
 type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
@@ -121,7 +121,7 @@ let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
     end
   end
 
-let concrete_spec : targetlang_pspec = (
+let concrete_spec : poly_iface_pspec = (
     (fun h ->
         trans_shared_contains h /\
         h `contains` map_shared /\
@@ -138,7 +138,7 @@ let prref_c : mref_pred = Mktuple3?._2 concrete_spec
 unfold
 let hrel_c : preorder heap = Mktuple3?._3 concrete_spec
 
-let interm (l:Type) = targetlang concrete_spec l
+let interm (l:Type) = poly_iface concrete_spec l
 unfold let pre_interm_arrow
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =

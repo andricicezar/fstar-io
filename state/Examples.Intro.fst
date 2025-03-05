@@ -16,10 +16,10 @@ open SpecTree
 #set-options "--print_universes"
 
 type callback pspec =
-  mk_targetlang_arrow pspec unit unit
+  mk_poly_iface_arrow pspec unit unit
 
 type lib_type pspec =
-  mk_targetlang_arrow
+  mk_poly_iface_arrow
     pspec
     (ref (ref int))
     (callback pspec) #(witnessable_arrow u#0 u#_ _ _ _ _)
@@ -27,8 +27,8 @@ type lib_type pspec =
                          of zero, which is wrong. Work around it. *)
 
 instance safe_importable_lib_type pspec : safe_importable_to pspec (lib_type pspec) Leaf =
-  targetlang_is_safely_importable pspec (lib_type pspec)
-    #(targetlang_arrow pspec (ref (ref int)) (callback pspec) #solve #(targetlang_arrow pspec unit unit))
+  poly_iface_is_safely_importable pspec (lib_type pspec)
+    #(poly_iface_arrow pspec (ref (ref int)) (callback pspec) #solve #(poly_iface_arrow pspec unit unit))
 
 (* Calling SecRef* on it *)
 
@@ -85,8 +85,8 @@ val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
 let adv_lib inv prref hrel read write alloc r =
   let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
   (* iteration on linked list, using fuel to ensure termination *)
-  let pspec = mk_targetlang_pspec inv prref hrel in
-  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_targetlang_arrow pspec l) (post_targetlang_arrow pspec) =
+  let pspec = mk_poly_iface_pspec inv prref hrel in
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_poly_iface_arrow pspec l) (post_poly_iface_arrow pspec) =
     if n = 0 then () else
     match l with
     | LLNil -> ()

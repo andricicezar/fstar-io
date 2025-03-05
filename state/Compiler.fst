@@ -26,10 +26,10 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 
 noeq
 type src_interface1 = {
-  specs : pspec:targetlang_pspec -> spec_tree pspec;
+  specs : pspec:poly_iface_pspec -> spec_tree pspec;
   hocs : hoc_tree (specs concrete_spec);
-  ct : targetlang_pspec -> Type;
-  c_ct : pspec:targetlang_pspec -> safe_importable_to pspec (ct pspec) (specs pspec);
+  ct : poly_iface_pspec -> Type;
+  c_ct : pspec:poly_iface_pspec -> safe_importable_to pspec (ct pspec) (specs pspec);
   psi : heap -> int -> heap -> Type0;
 }
 
@@ -52,8 +52,8 @@ let src_language1 : language sem_state = {
 
 noeq
 type tgt_interface1 = {
-  ct : targetlang_pspec -> Type u#a;
-  c_ct : pspec:targetlang_pspec -> targetlang pspec (ct pspec);
+  ct : poly_iface_pspec -> Type u#a;
+  c_ct : pspec:poly_iface_pspec -> poly_iface pspec (ct pspec);
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
@@ -64,7 +64,7 @@ type ctx_tgt1 (i:tgt_interface1) =
   read :  ttl_read inv prref hrel ->
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
-  i.ct (mk_targetlang_pspec inv prref hrel)
+  i.ct (mk_poly_iface_pspec inv prref hrel)
 
 type prog_tgt1 (i:tgt_interface1) =
   i.ct concrete_spec ->
@@ -152,10 +152,10 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 
 noeq
 type src_interface2 = {
-  specs: pspec:targetlang_pspec -> spec_tree pspec;
+  specs: pspec:poly_iface_pspec -> spec_tree pspec;
   hocs : hoc_tree (specs concrete_spec);
-  pt : targetlang_pspec -> Type;
-  c_pt : pspec:targetlang_pspec -> exportable_from pspec (pt pspec) (specs pspec);
+  pt : poly_iface_pspec -> Type;
+  c_pt : pspec:poly_iface_pspec -> exportable_from pspec (pt pspec) (specs pspec);
 }
 
 type ctx_src2 (i:src_interface2) =
@@ -180,8 +180,8 @@ let src_language2 : language sem_state = {
 
 noeq
 type tgt_interface2 = {
-  pt : pspec:targetlang_pspec -> Type u#a;
-  c_pt : pspec:targetlang_pspec -> targetlang pspec (pt pspec);
+  pt : pspec:poly_iface_pspec -> Type u#a;
+  c_pt : pspec:poly_iface_pspec -> poly_iface pspec (pt pspec);
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
@@ -192,7 +192,7 @@ type ctx_tgt2 (i:tgt_interface2) =
   read :  ttl_read inv prref hrel ->
   write : ttl_write inv prref hrel ->
   alloc : ttl_alloc inv prref hrel  ->
-  p:i.pt (mk_targetlang_pspec inv prref hrel) ->
+  p:i.pt (mk_poly_iface_pspec inv prref hrel) ->
   ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 
 type prog_tgt2 (i:tgt_interface2) =

@@ -26,22 +26,22 @@ instance tc_shareable_type_typ0 (t:typ0) : tc_shareable_type (elab_typ0 t) = {
   __t = to_shareable_typ t;
 }
 
-let rec elab_typ0_tc #pspec (t:typ0) : targetlang pspec (elab_typ0 t) =
+let rec elab_typ0_tc #pspec (t:typ0) : poly_iface pspec (elab_typ0 t) =
   match t with
-  | TUnit -> targetlang_unit pspec
-  | TNat -> targetlang_int pspec
-  | TSum t1 t2 -> targetlang_sum pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TPair t1 t2 -> targetlang_pair pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TRef t -> targetlang_ref pspec (elab_typ0 t) #solve
-  | TLList t -> targetlang_llist pspec (elab_typ0 t) #solve
+  | TUnit -> poly_iface_unit pspec
+  | TNat -> poly_iface_int pspec
+  | TSum t1 t2 -> poly_iface_sum pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
+  | TPair t1 t2 -> poly_iface_pair pspec _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
+  | TRef t -> poly_iface_ref pspec (elab_typ0 t) #solve
+  | TLList t -> poly_iface_llist pspec (elab_typ0 t) #solve
 
-let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang pspec tt =
+let rec _elab_typ (#pspec:poly_iface_pspec) (t:typ) : tt:Type u#1 & poly_iface pspec tt =
   match t with
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 in
     let tt2 = _elab_typ t2 in
-    (| mk_targetlang_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
-       targetlang_arrow pspec (dfst tt1) (dfst tt2)
+    (| mk_poly_iface_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
+       poly_iface_arrow pspec (dfst tt1) (dfst tt2)
     |)
   end
   | TUnit -> (| raise_t unit, solve |)
@@ -49,41 +49,41 @@ let rec _elab_typ (#pspec:targetlang_pspec) (t:typ) : tt:Type u#1 & targetlang p
   | TSum t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| either tt1 tt2, targetlang_sum pspec tt1 tt2 #c_tt1 #c_tt2 |)
+    (| either tt1 tt2, poly_iface_sum pspec tt1 tt2 #c_tt1 #c_tt2 |)
   | TPair t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| tt1 * tt2, targetlang_pair pspec tt1 tt2 #c_tt1 #c_tt2 |)
+    (| tt1 * tt2, poly_iface_pair pspec tt1 tt2 #c_tt1 #c_tt2 |)
   | TRef _ ->
     let tt = elab_typ0 t in
     let c_tt = elab_typ0_tc t in
-    (| raise_t tt, targetlang_univ_raise pspec _ #c_tt |)
+    (| raise_t tt, poly_iface_univ_raise pspec _ #c_tt |)
   | TLList t ->
     let tt = elab_typ0 t in
-    (| raise_t (linkedList tt), targetlang_univ_raise pspec _ #(targetlang_llist pspec tt #(tc_shareable_type_typ0 t)) |)
+    (| raise_t (linkedList tt), poly_iface_univ_raise pspec _ #(poly_iface_llist pspec tt #(tc_shareable_type_typ0 t)) |)
 
-let elab_typ (pspec:targetlang_pspec) (t:typ) : Type =
+let elab_typ (pspec:poly_iface_pspec) (t:typ) : Type =
   dfst (_elab_typ #pspec t)
 
-let elab_typ_tc #pspec (t:typ) : targetlang pspec (elab_typ pspec t) =
+let elab_typ_tc #pspec (t:typ) : poly_iface pspec (elab_typ pspec t) =
   dsnd (_elab_typ #pspec t)
 
 type tbt_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) ->
     ST (elab_typ0 t)
       (requires (fun h0 -> inv h0 /\ prref r))
-      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy v prref))
+      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy v prref))
 
 type tbt_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) ->
     ST unit
-      (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy v prref))
+      (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy v prref))
       (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
 
 type tbt_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
   (#t:typ0) -> init:(elab_typ0 t) ->
     ST (ref (elab_typ0 t))
-      (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy init prref))
+      (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy init prref))
       (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
 
 let elab_poly_typ (t:typ) =
@@ -95,7 +95,7 @@ let elab_poly_typ (t:typ) =
   write : tbt_write inv prref hrel ->
   alloc : tbt_alloc inv prref hrel ->
   (** type of the context: *)
-  elab_typ (mk_targetlang_pspec inv prref hrel) t
+  elab_typ (mk_poly_iface_pspec inv prref hrel) t
 
 (** ** Examples **)
 
@@ -110,7 +110,7 @@ val ctx_update_multiple_refs_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
 let ctx_update_multiple_refs_test #inv #prref #hrel bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_targetlang_pspec inv prref hrel) (TArr (TRef TNat) TUnit) = (fun y ->
+  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr (TRef TNat) TUnit) = (fun y ->
     let y : ref int = downgrade_val y in
     let ix : ref int = bt_read #(TRef TNat) x in
     bt_write #TNat ix (bt_read #TNat ix + 1);
@@ -145,7 +145,7 @@ val ctx_swap_ref_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
 let ctx_swap_ref_test #inv #prref #hrel bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_targetlang_pspec inv prref hrel) (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
+  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
     let y : ref (ref int) = downgrade_val y in
 
     let z = bt_read #(TRef TNat) x in
@@ -173,7 +173,7 @@ val ctx_returns_callback_test :
   elab_poly_typ (TArr TUnit (TArr TUnit TUnit))
 let ctx_returns_callback_test #inv #prref #hrel bt_read bt_write bt_alloc _ =
   let x: ref int = bt_alloc #TNat 13 in
-  let cb : elab_typ (mk_targetlang_pspec inv prref hrel) (TArr TUnit TUnit) = (fun _ ->
+  let cb : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr TUnit TUnit) = (fun _ ->
     bt_write #TNat x (bt_read #TNat x % 5);
     raise_val ()
   ) in
@@ -189,7 +189,7 @@ let ctx_HO_test4 _ _ bt_alloc f =
 val ctx_unverified_student_hw_sort :
   elab_poly_typ (TArr (TRef (TLList TNat)) TUnit)
 let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
-  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_targetlang_arrow (mk_targetlang_pspec inv prref hrel) l) (post_targetlang_arrow (mk_targetlang_pspec inv prref hrel)) =
+  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_iface_arrow (mk_poly_iface_pspec inv prref hrel) l) (post_poly_iface_arrow (mk_poly_iface_pspec inv prref hrel)) =
     if fuel = 0 then () else begin
       let cl : linkedList int = bt_read #(TLList TNat) l in
       match cl with | LLNil -> ()
@@ -356,16 +356,16 @@ let progr_getting_callback_test rp rs f =
 (** ** Backtranslation **)
 
 val elab_apply_arrow :
-  #pspec : targetlang_pspec ->
+  #pspec : poly_iface_pspec ->
   t1:typ ->
   t2:typ ->
   f:elab_typ pspec (TArr t1 t2) ->
   (let tt1 = _elab_typ #pspec t1 in
    let tt2 = _elab_typ #pspec t2 in
-   mk_targetlang_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
+   mk_poly_iface_arrow pspec (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
 let elab_apply_arrow t1 t2 f x = f x
 
-let cast_TArr inv prref hrel (#t1 #t2:typ) (f : elab_typ (mk_targetlang_pspec inv prref hrel) (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ (mk_targetlang_pspec inv prref hrel) t = f
+let cast_TArr inv prref hrel (#t1 #t2:typ) (f : elab_typ (mk_poly_iface_pspec inv prref hrel) (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ (mk_poly_iface_pspec inv prref hrel) t = f
 
 type vcontext pspec (g:context) =
   vx:var{Some? (g vx)} -> elab_typ pspec (Some?.v (g vx))
@@ -474,14 +474,14 @@ let rec backtranslate
   (#e:exp)
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_targetlang_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
-  ST (elab_typ (mk_targetlang_pspec inv prref hrel) t)
+  (ve:(vcontext (mk_poly_iface_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
+  ST (elab_typ (mk_poly_iface_pspec inv prref hrel) t)
     (fun h0 -> inv h0)
-    (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_targetlang_pspec inv prref hrel) t).wt.satisfy r prref)
+    (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_poly_iface_pspec inv prref hrel) t).wt.satisfy r prref)
     (decreases %[e;1])
 =
   let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
-  let pspec = mk_targetlang_pspec inv prref hrel in
+  let pspec = mk_poly_iface_pspec inv prref hrel in
 
   match tyj with
   | TyUnit -> raise_val ()
@@ -556,14 +556,14 @@ and backtranslate_eabs
   (#e:exp{EAbs? e})
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_targetlang_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
-  Tot (elab_typ (mk_targetlang_pspec inv prref hrel) t) (decreases %[e;0]) =
-  let pspec = mk_targetlang_pspec inv prref hrel in
+  (ve:(vcontext (mk_poly_iface_pspec inv prref hrel) g){all_refs_contained_and_low ve}) :
+  Tot (elab_typ (mk_poly_iface_pspec inv prref hrel) t) (decreases %[e;0]) =
+  let pspec = mk_poly_iface_pspec inv prref hrel in
   let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
   match e with
   | EAbs t1 e1 ->
     let TyAbs tx #_ #tres tyj_body = tyj in
-    let w : mk_targetlang_arrow pspec (elab_typ pspec tx) #(elab_typ_tc #pspec tx).wt (elab_typ pspec tres) #(elab_typ_tc #pspec tres).wt =
+    let w : mk_poly_iface_arrow pspec (elab_typ pspec tx) #(elab_typ_tc #pspec tx).wt (elab_typ pspec tres) #(elab_typ_tc #pspec tres).wt =
       (fun (x:elab_typ pspec tx) ->
         let ve' = vextend #pspec #tx x #g ve in
         rcall tyj_body ve')
