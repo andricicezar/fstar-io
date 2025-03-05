@@ -141,7 +141,7 @@ instance exportable_arrow
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x))
     (Node (SpecErr true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
-  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
+  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow a3p c1.ityp (resexn c2.ityp) #c1.c_ityp #(poly_iface_sum a3p c2.ityp err #c2.c_ityp) ;
   export = (fun (hocs:hoc_tree _) (f:(x:t1 -> ST (resexn t2) (pre x) (post x))) (x:c1.ityp) ->
     let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in
@@ -305,7 +305,7 @@ instance safe_importable_arrow
 //  (capture_check:select_check a3p t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
   : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (SpecErr false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
-  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn #c2.ityp #c2.c_ityp.wt);
+  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow _ c1.ityp (resexn c2.ityp) #_ #(poly_iface_sum _ c2.ityp err #c2.c_ityp);
   safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (hocs:hoc_tree _) (x:t1) ->
     let Node (| _, myhoc |) lhs rhs : hoc_tree _ = hocs in

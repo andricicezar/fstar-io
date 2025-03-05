@@ -1,68 +1,43 @@
 module Examples.Guess
 
-open FStar.Preorder
 open SharedRefs
+open Witnessable
+open Compiler
+open HigherOrderContracts
+open PolyIface
+open SpecTree
 
-type cmp = 
-  | LT 
-  | GT 
-  | EQ
+type cmp = | LT | GT | EQ
+
+instance witnessable_cmp : witnessable cmp = { satisfy = (fun _ _ -> True) }
+instance poly_iface_cmp a3p : poly_iface a3p cmp = { wt = witnessable_cmp }
 
 let post_cond = PolyIface.c3p_hrel
 
-let mono_incr : preorder int = fun v' v'' -> b2t (v' <= v'')
-
 type player_type =
-  l: int -> 
-  r: int -> 
-  (guess: int -> SST cmp (requires fun _ -> True) (ensures fun h0 r h1 -> post_cond h0 h1)) ->
-  SST int (requires (fun _ -> l < r)) (ensures fun h0 r h1 -> post_cond h0 h1)
+  args:((int & int) & (guess: int -> SST cmp (fun _ -> True) (fun h0 r h1 -> post_cond h0 h1))) ->
+  SST int (requires (fun _ -> fst (fst args) < snd (fst args))) (ensures fun h0 r h1 -> post_cond h0 h1)
 
-let ctrans_ref_update1nat (h0 h1 : heap) (r: mref (to_Type SNat) mono_incr) (pred : mref_heap_stable_pred)
-  : Lemma (requires modifies !{r} h0 h1 /\ ctrans_ref_pred h0 pred)
-          (ensures  ctrans_ref_pred h1 pred)
-          [SMTPat (modifies !{r} h0 h1); SMTPat (ctrans_ref_pred h0 pred)]
-  = assume (forall (t : shareable_typ) (r' : ref (to_Type t)).
-              r' === r \/ contains h0 r' <==> contains h1 r');
-    assume (forall_refs_heap pred h0 (sel h0 r) ==> 
-            forall_refs_heap pred h1 (sel h1 r));
-    admit()
-
-let guess_f
-      (pick : int)
-      (counter : mref (to_Type SNat) mono_incr{witnessed (contains_pred counter) /\ witnessed (is_encapsulated counter)})
-      (guess : int)
-  : SST cmp (requires fun h0 -> True)
-            (ensures fun h0 r h1 -> post_cond h0 h1)
-  = let h0 = get_heap () in
-    recall (is_encapsulated counter);
-    recall (contains_pred counter);
-    let v = !counter in
-    counter := v + 1;
-    let r =
-      if pick = guess then EQ
-      else if pick < guess then GT
-      else LT
-    in
-    assert (~(is_private counter h0));
-    assert (~(is_shared counter h0));
-    let h1 = get_heap () in
-    assert (ctrans_ref_pred h0 contains_pred);
-    assert (ctrans_ref_pred h0 is_shared);
-    ctrans_ref_update1nat h0 h1 counter is_shared;
-    ctrans_ref_update1nat h0 h1 counter contains_pred;
-    FStar.Monotonic.Heap.lemma_next_addr_upd h0 counter (v+1);
-    assert (next_addr h1 >= next_addr h0);
-    r
-
-let play_guess (l pick r: int) (player: player_type) : 
-  SST (bool * int)
-  (requires fun _ -> l < pick /\ pick < r) 
+let play_guess (args:player_type & (int & (int & int))) : 
+  SST (bool & int)
+  (requires fun _ -> fst (snd (snd args)) < fst (snd args) /\ fst (snd args) < snd (snd (snd args))) 
   (ensures fun h0 r h1 -> post_cond h0 h1) =
-  let counter = sst_alloc #_  #mono_incr 0 in
+  let player, (pick, (l, r)) = args in
+  let counter : mref int (fun v' v'' -> b2t (v' <= v'')) = sst_alloc 0 in
   sst_encapsulate counter;
-  witness (contains_pred counter);
-  witness (is_encapsulated counter);
-  let final_guess = player l r (fun g -> guess_f pick counter g) in
+  witness (contains_pred counter);witness (is_encapsulated counter);
+  let cb (g:int) : SST cmp (fun _ -> True) (fun h0 r h1 -> post_cond h0 h1) = (
+    recall (contains_pred counter);recall (is_encapsulated counter);
+    sst_write counter ((sst_read counter) + 1);
+    if g = pick then EQ else if pick < g then LT else GT) in
+  let final_guess = player ((l,r),cb) in
   if pick = final_guess then (true, !counter)
   else (false, !counter)
+
+instance importable_player a3p : safe_importable_to a3p (mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int cmp)) int) Leaf =
+  poly_iface_is_safely_importable a3p _ #(poly_iface_arrow a3p ((int & int) & (mk_poly_arrow a3p int cmp)) int #(
+    poly_iface_pair a3p (int & int) (mk_poly_arrow a3p int cmp) #_ #(poly_iface_arrow a3p int cmp)
+  ) #_)
+
+// instance exportable_guess a3p : exportable_from a3p (mk_poly_arrow a3p (player_type & (int & (int & int))) (resexn (bool & int)) #(witnessable_resexn (bool & int) #(witnessable_pair bool int))) _ =
+//   exportable_arrow a3p _ _ Leaf Leaf _ _

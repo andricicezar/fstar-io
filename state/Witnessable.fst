@@ -32,6 +32,10 @@ instance witnessable_int : witnessable int = {
   satisfy = (fun _ _ -> True);
 }
 
+instance witnessable_bool : witnessable bool = {
+  satisfy = (fun _ _ -> True);
+}
+
 instance witnessable_refinement (t:Type) {| c:witnessable t |} (p:t -> Type0) : witnessable (x:t{p x}) = {
   satisfy = (fun (x:t{p x}) pred -> c.satisfy x pred);
 }

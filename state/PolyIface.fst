@@ -60,6 +60,7 @@ instance poly_iface_shareable_type a3p (t:Type) {| c:tc_shareable_type t |} : po
 
 instance poly_iface_unit a3p : poly_iface a3p unit = { wt = witnessable_unit }
 instance poly_iface_int  a3p : poly_iface a3p int = { wt = witnessable_int }
+instance poly_iface_bool  a3p : poly_iface a3p bool = { wt = witnessable_bool }
 instance poly_iface_pair a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (t1 * t2)
   = { wt = witnessable_pair t1 t2 #c1.wt #c2.wt }

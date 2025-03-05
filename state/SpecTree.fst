@@ -15,7 +15,7 @@ instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
 }
 
-instance witnessable_resexn #t {| witnessable t |} : witnessable (resexn t) =
+instance witnessable_resexn t {| witnessable t |} : witnessable (resexn t) =
   witnessable_sum t err
 
 (** **** Tree **)
@@ -148,14 +148,14 @@ type hoc a3p : (s:pck_spec a3p) -> Type =
     check:(select_check a3p (SpecErr?.argt s) unit
                         (pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
                         (fun x _ _ h1 -> (SpecErr?.pre s) x h1)) ->
-    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
+    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (SpecErr?.rett s)) #(witnessable_resexn _ #(SpecErr?.wt_rett s)) h0 r h1))
     -> hoc a3p s
 
 | EnforcePost :
     #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == false} ->
     c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
-    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
-    check:(select_check a3p (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
+    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn _ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
+    check:(select_check a3p (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn _ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
     -> hoc a3p s
 
 type pck_hoc a3p : Type u#(1+(max a b))=
@@ -207,7 +207,7 @@ let test_post : hoc c3p myspec' =
     (fun x ->
       let x : ref int = x in
       let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) (resexn unit) #(witnessable_resexn #_ #(SpecErr?.wt_rett myspec')) (SpecErr?.pre myspec') (SpecErr?.post myspec') x eh0 = (
+      let check : cb_check c3p (ref int) (resexn unit) #(witnessable_resexn _ #(SpecErr?.wt_rett myspec')) (SpecErr?.pre myspec') (SpecErr?.post myspec') x eh0 = (
         fun _ ->
           assert (witnessed (contains_pred x));
           recall (contains_pred x);
