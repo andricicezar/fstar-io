@@ -106,3 +106,9 @@ let adv_lib #a3p read write alloc r =
 
 let whole_adv : whole_tgt1 =
   link_tgt1 compiled_prog adv_lib
+
+let secret_is = whole_adv ()
+let _ =
+  match secret_is with
+  | 42 -> FStar.IO.print_string "Secret is 42! Correct!"
+  | _ -> FStar.IO.print_string "Impossible! Secret is NOT 42! Something went wrong!"
