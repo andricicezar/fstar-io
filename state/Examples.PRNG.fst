@@ -1,14 +1,5 @@
 module Examples.PRNG
 
-open FStar.FiniteSet.Base
-open FStar.Ghost
-open FStar.Monotonic.Heap
-open FStar.Preorder
-open FStar.Tactics
-open FStar.Tactics.Typeclasses
-open FStar.Universe
-open STLC
-open Backtranslation.STLCToPolyIface
 open SharedRefs
 open Witnessable
 open Compiler
@@ -22,62 +13,42 @@ let generate_nr seed count = seed+count
 let post = fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
 
 type prog_type =
-  seed:int -> SST (raise_t unit -> SST int (fun _ -> True) post) (fun _ -> True) post
-
-val prng : prog_type
-let prng (seed:int) =
-  let counter : ref int = sst_alloc_shared 0 in
-  witness (contains_pred counter) ;
-  witness (is_shared counter) ;
-  fun _ -> recall (contains_pred counter);
-          recall (is_shared counter);
-          let ccounter = sst_read counter in
-          sst_write_shareable counter (ccounter + 1);
-          generate_nr seed (ccounter + 1)
-
-let vcall_ty = TArr TNat (TArr TUnit TNat)
-let ucaller_ty = TArr vcall_ty TNat
-
-val triv_caller : elab_poly_typ ucaller_ty
-let triv_caller read write alloc r =
-  raise_val 42
-
-val single_use_caller : elab_poly_typ ucaller_ty
-let single_use_caller bt_read bt_write bt_alloc r =
-  let seed = 5 in
-  let rnd = downgrade_val #int (r (raise_val seed) (raise_val ())) in
-  raise_val rnd
+  seed:int -> SST (unit -> SST int (fun _ -> True) post) (fun _ -> True) post
 
 (* Calling SecRef* on it *)
 
-instance poly_iface_arrow_helper a3p
-  : poly_iface a3p (raise_t unit -> SST int (fun _ -> True) post)
-  = { wt = witnessable_arrow (raise_t unit) int _ _ }
-
-instance exportable_prog a3p : exportable_from a3p (mk_poly_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int)) Leaf =
-  poly_iface_is_exportable _ a3p #(poly_iface_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int) #_ #(poly_iface_arrow a3p (raise_t unit) int))
+instance exportable_prog a3p : exportable_from a3p (mk_poly_arrow a3p int (mk_poly_arrow a3p unit int) #(witnessable_arrow u#0 u#_ _ _ _ _)) Leaf =
+  poly_iface_is_exportable _ a3p #(poly_iface_arrow a3p int (mk_poly_arrow a3p unit int) #_ #(poly_iface_arrow a3p unit int))
 
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);
   hocs = Leaf;
-  pt = (fun a3p -> mk_poly_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int));
+  pt = (fun a3p -> mk_poly_arrow a3p int (mk_poly_arrow a3p unit int));
   c_pt = (fun a3p -> exportable_prog a3p);
 }
 
-val prng' : prog_src2 sit
-let prng' seed =
-  let cb = prng seed in
-  (fun _ -> cb (raise_val ()))
+val prng : prog_src2 sit
+let prng (seed:int) =
+  let counter : mref int (fun v v' -> b2t(v <= v')) = sst_alloc 0 in
+  encapsulate counter;
+  witness (contains_pred counter) ;
+  witness (is_encapsulated counter) ;
+  fun _ -> 
+    recall (contains_pred counter);
+    recall (is_encapsulated counter);
+    let ccounter = sst_read counter in
+    sst_write counter (ccounter + 1);
+    generate_nr seed (ccounter + 1)
 
 let compiled_prog =
-  compile_pprog2 #sit prng'
+  compile_pprog2 #sit prng
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
-let some_ctx read write alloc prng =
+let some_ctx _ _ _ prng =
   let cb = prng 5 in
-  let _ = cb (raise_val ()) in
-  let _ = cb (raise_val ()) in
-  cb (raise_val ())
+  let _ = cb () in
+  let _ = cb () in
+  cb ()
 
 let whole : whole_tgt2 =
   link_tgt2 compiled_prog some_ctx
@@ -85,5 +56,5 @@ let whole : whole_tgt2 =
 let r = whole ()
 let _ =
   match r with
-  | 8 -> FStar.IO.print_string "Success"
-  | _ -> FStar.IO.print_string "Something went wrong!"
+  | 8 -> FStar.IO.print_string "Success!\n"
+  | _ -> FStar.IO.print_string "Something went wrong!\n"
