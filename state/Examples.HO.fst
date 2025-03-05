@@ -70,8 +70,8 @@ let unsafe_f x =
   sst_write x 0;
   Inl ()**)
 
-val tgt_f : ctx_tgt1 (comp_int_src_tgt1 sit)
-let tgt_f read write alloc x =
+val some_ctx : ctx_tgt1 (comp_int_src_tgt1 sit)
+let some_ctx read write alloc x =
   write x 0;
   Inl ()
 
@@ -90,13 +90,13 @@ let compiled_prog =
   compile_pprog1 #sit prog
 
 let whole_prog : whole_tgt1 =
-  link_tgt1 compiled_prog tgt_f
+  link_tgt1 compiled_prog some_ctx
 
 let r = whole_prog ()
 let _ =
   match r with
-  | 0 -> FStar.IO.print_string "Contract failed\n"
-  | -1 -> FStar.IO.print_string "Contract succedded\n"
+  | 0 -> FStar.IO.print_string "Success!\n"
+  | -1 -> FStar.IO.print_string "Error!\n"
   | _ -> FStar.IO.print_string "Impossible\n"
 
 
@@ -107,46 +107,76 @@ let _ =
 
 
 
+type f_xeq5 (a3p:threep) =
+  x:ref int -> ST (resexn int) 
+    (requires (fun h0 -> sel h0 x == 5 /\ inv a3p h0 /\ satisfy x (prref a3p))) 
+    (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ (Inl? r /\ Inl?.v r == 2))))
 
-type f_xeq5 = x:ref int -> SST (resexn int)
-  (requires (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
-  (ensures (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
+let f_xeq5_spec (a3p:threep) : pck_spec =
+  SpecErr00 true 
+    (ref ℤ) (witnessable_ref int)
+    (fun x h0 -> sel h0 x == 5 /\ inv a3p h0 /\ satisfy x (prref a3p))
+    ℤ witnessable_int
+    (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ (Inl? r /\ Inl?.v r == 2)))
 
-let f_xeq5_is_exportable : exportable_from c3p f_xeq5 _ =
-  exportable_arrow c3p
+let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (f_xeq5_spec a3p) Leaf Leaf) =
+  exportable_arrow a3p
     (ref int) int
     Leaf Leaf
-    (fun x -> sst_pre (fun h0 -> sel h0 x == 5 /\ satisfy x (prref_c)))
-    (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
+    #(safe_importable_is_importable a3p _ Leaf #(safe_importable_ref a3p int))
+    #(exportable_int a3p)
+    _
+    _
 
-let f_xeq5_spec : pck_spec =
-  SpecErr00 true (ref ℤ) (safe_importable_is_importable c3p (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
-(exportable_refinement c3p ℤ Leaf (λ _ → l_True)).c_styp (λ x → sst_post (resexn ℤ) (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c) (λ h0 r h1 → (Inr? r ∨ (Inl? r ∧ Inl?.v r == 2)) ∧ hrel_c h0 h1))
-
-let f_xeq5_hoc : hoc c3p f_xeq5_spec =
-  EnforcePre
+let f_xeq5_hoc : hoc c3p (f_xeq5_spec c3p) =
+  EnforcePre00
     (fun rx ->
       let rx :ref int = rx in
       let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(argt0 f_xeq5_spec) #(wt_argt0 f_xeq5_spec)) (fun x _ _ h1 -> (pre0 f_xeq5_spec) x h1) rx eh0 =
+      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(argt0 (f_xeq5_spec c3p)) #(wt_argt0 (f_xeq5_spec c3p))) (fun x _ _ h1 -> (pre0 (f_xeq5_spec c3p)) x h1) rx eh0 =
         (fun _ ->
           recall (contains_pred rx);
           if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
-    (fun x r -> admit ())
+    (fun x r -> ())
 
 let f_xeq5_pkhoc : pck_hoc c3p =
-  (| f_xeq5_spec, f_xeq5_hoc |)
+  (| f_xeq5_spec c3p, f_xeq5_hoc |)
 
-let f_xeq5_tree : hoc_tree c3p (Node f_xeq5_spec Leaf Leaf) =
+let f_xeq5_tree : hoc_tree c3p (Node (f_xeq5_spec c3p) Leaf Leaf) =
   Node f_xeq5_pkhoc Leaf Leaf
 
-val f_with_pre : f_xeq5
-let f_with_pre x =
+let sit2 : src_interface2 = {
+  specs = (fun preds -> Node (f_xeq5_spec preds) Leaf Leaf);
+  hocs = f_xeq5_tree;
+  pt = f_xeq5;
+  c_pt = f_xeq5_is_exportable;
+}
+
+val prog2 : prog_src2 sit2
+let prog2 x =
   recall (contains_pred x);
   let v = sst_read x in
   assert (v == 5);
   Inl (10 / v)
 
-let f_with_dc = f_xeq5_is_exportable.export f_xeq5_tree f_with_pre
+let compiled_prog2 =
+  compile_pprog2 #sit2 prog2
+
+val some_ctx2 : ctx_tgt2 (comp_int_src_tgt2 sit2)
+let some_ctx2 _ _ alloc prog =
+  let x : ref int = alloc 0 in
+  match prog x with
+  | Inr _ -> 0
+  | Inl _ -> -1
+
+let whole_prog2 : whole_tgt2 =
+  link_tgt2 compiled_prog2 some_ctx2
+
+let r2 = whole_prog2 ()
+let _ =
+  match r2 with
+  | 0 -> FStar.IO.print_string "Success 2!\n"
+  | -1 -> FStar.IO.print_string "Error 2!\n"
+  | _ -> FStar.IO.print_string "Impossible 2!\n"
 
