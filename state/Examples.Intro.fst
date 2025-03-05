@@ -1,11 +1,7 @@
 module Examples.Intro
 
-open FStar.Ghost
-open FStar.Monotonic.Heap
-open FStar.Preorder
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
-open FStar.Universe
 open SharedRefs
 open HigherOrderContracts
 open PolyIface
@@ -45,8 +41,8 @@ let sit : src_interface1 = {
 let prog (lib : lib_type c3p) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
-  witness (contains_pred r) ;
-  witness (is_shared r) ;
+  witness (contains_pred r);
+  witness (is_shared r);
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
   let h = get_heap () in
@@ -110,5 +106,5 @@ let whole_adv : whole_tgt1 =
 let secret_is = whole_adv ()
 let _ =
   match secret_is with
-  | 42 -> FStar.IO.print_string "Secret is 42! Correct!"
-  | _ -> FStar.IO.print_string "Impossible! Secret is NOT 42! Something went wrong!"
+  | 42 -> FStar.IO.print_string "Secret is 42! Correct!\n"
+  | _ -> FStar.IO.print_string "Impossible! Secret is NOT 42! Something went wrong!\n"
