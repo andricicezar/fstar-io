@@ -39,7 +39,7 @@ instance poly_iface_rcontinuation a3p t {| c:poly_iface a3p t |} : poly_iface a3
 }
 
 let tgt_typ_run a3p =
-  mk_poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
+  mk_poly_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
 
 instance poly_iface_run a3p
   : poly_iface a3p (tgt_typ_run a3p) =
@@ -50,7 +50,7 @@ instance poly_iface_run a3p
     #(poly_iface_sum a3p int err #solve #(poly_iface_err a3p))
 
 let src_run_type (a3p:threep) =
-  (mk_poly_iface_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
+  (mk_poly_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
     #(witnessable_pair (nat * int) (l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
       #(witnessable_pair nat int #(witnessable_refinement int (fun x -> x >= 0))) #solve)
     (resexn int) #solve)
@@ -80,7 +80,7 @@ let run' args = Inl (run args)
 let compiled_prog = compile_pprog2 #sit run'
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
-let some_ctx inv prref hrel read write alloc run =
+let some_ctx read write alloc run =
   admit (); (* TODO: continuation has to be refactored to be polymorphic in a3p *)
   let res_a (r : ref int) : continuation r unit = (fun () ->
     let () = write r 42 in

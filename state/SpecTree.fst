@@ -90,7 +90,7 @@ type cb_check a3p (t1:Type) (t2:Type) {| c2: witnessable t2 |}
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   (x:t1)
   (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-  (r:t2 -> ST (resexn unit) (fun h1 -> post_poly_iface_arrow a3p eh0 r h1) (fun h1 rck h1' ->
+  (r:t2 -> ST (resexn unit) (fun h1 -> post_poly_arrow a3p eh0 r h1) (fun h1 rck h1' ->
     h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
 
 type select_check
@@ -133,28 +133,28 @@ noeq
 type hoc a3p : (s:pck_spec a3p) -> Type =
 | TrivialPre :
     #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == true} ->
-    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_poly_iface_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
-    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_poly_iface_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. pre_poly_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0 ==> (Spec?.pre s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. (Spec?.post s) x h0 r h1 ==> post_poly_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1))
     -> hoc a3p s
 
 | TrivialPost :
     #s:(pck_spec a3p){Spec? s /\ Spec?.bit s == false} ->
-    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_poly_iface_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
-    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_poly_iface_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
+    c_pre:(x:(Spec?.argt s) -> Lemma (forall h0. (Spec?.pre s) x h0 ==> pre_poly_arrow a3p #(Spec?.argt s) #(Spec?.wt_argt s) x h0)) ->
+    c_post:(x:(Spec?.argt s) -> r:(Spec?.rett s) -> Lemma (forall h0 h1. post_poly_arrow a3p #(Spec?.rett s) #(Spec?.wt_rett s) h0 r h1 ==> (Spec?.post s) x h0 r h1))
     -> hoc a3p s
 
 | EnforcePre :
     #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == true} ->
     check:(select_check a3p (SpecErr?.argt s) unit
-                        (pre_poly_iface_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
+                        (pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s))
                         (fun x _ _ h1 -> (SpecErr?.pre s) x h1)) ->
-    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_iface_arrow a3p #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
+    c_post:(x:(SpecErr?.argt s) -> r:(resexn (SpecErr?.rett s)) -> Lemma (forall h0 h1. (SpecErr?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 r h1))
     -> hoc a3p s
 
 | EnforcePost :
     #s:(pck_spec a3p){SpecErr? s /\ SpecErr?.bit s == false} ->
-    c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_iface_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
-    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_iface_arrow a3p #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
+    c_pre:(x:(SpecErr?.argt s) -> Lemma (forall h0. (SpecErr?.pre s) x h0 ==> pre_poly_arrow a3p #(SpecErr?.argt s) #(SpecErr?.wt_argt s) x h0)) ->
+    c_post:(x:(SpecErr?.argt s) -> e:err -> Lemma (forall h0 h1. (SpecErr?.pre s) x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) h0 (Inr e) h1 ==> (SpecErr?.post s) x h0 (Inr e) h1)) ->
     check:(select_check a3p (SpecErr?.argt s) (resexn (SpecErr?.rett s)) #(witnessable_resexn #_ #(SpecErr?.wt_rett s)) (SpecErr?.pre s) (SpecErr?.post s))
     -> hoc a3p s
 
@@ -162,7 +162,7 @@ type pck_hoc a3p : Type u#(1+(max a b))=
   s:pck_spec a3p & (hoc a3p s)
 
 private
-let myspec : pck_spec concrete_spec =
+let myspec : pck_spec c3p =
   SpecErr
     true
     (ref int)
@@ -170,15 +170,15 @@ let myspec : pck_spec concrete_spec =
     (fun x h -> sel h x > 5)
     unit
     witnessable_unit
-    (fun _ -> post_poly_iface_arrow concrete_spec)
+    (fun _ -> post_poly_arrow c3p)
 
 private
-let test_pre : hoc concrete_spec myspec =
+let test_pre : hoc c3p myspec =
   EnforcePre
     (fun (x:(SpecErr?.argt myspec)) ->
       let x : ref int = x in
       let eh0 = get_heap () in
-      let check : cb_check concrete_spec (ref int) unit (pre_poly_iface_arrow concrete_spec #(SpecErr?.argt myspec) #(SpecErr?.wt_argt myspec)) (fun x _ _ h1 -> (SpecErr?.pre myspec) x h1) x eh0 = (
+      let check : cb_check c3p (ref int) unit (pre_poly_arrow c3p #(SpecErr?.argt myspec) #(SpecErr?.wt_argt myspec)) (fun x _ _ h1 -> (SpecErr?.pre myspec) x h1) x eh0 = (
         fun _ ->
           assert (witnessed (contains_pred x));
           recall (contains_pred x);
@@ -189,25 +189,25 @@ let test_pre : hoc concrete_spec myspec =
     (fun _ _ -> ())
 
 private
-let myspec' : pck_spec concrete_spec =
+let myspec' : pck_spec c3p =
   SpecErr
     false
     (ref int)
     (witnessable_ref int)
-    (pre_poly_iface_arrow concrete_spec)
+    (pre_poly_arrow c3p)
     unit
     witnessable_unit
-    (fun x h0 r h1 -> (Inr? r \/ sel h1 x > 5) /\ post_poly_iface_arrow concrete_spec h0 r h1)
+    (fun x h0 r h1 -> (Inr? r \/ sel h1 x > 5) /\ post_poly_arrow c3p h0 r h1)
 
 private
-let test_post : hoc concrete_spec myspec' =
+let test_post : hoc c3p myspec' =
   EnforcePost
     (fun _ -> ())
     (fun _ _ -> ())
     (fun x ->
       let x : ref int = x in
       let eh0 = get_heap () in
-      let check : cb_check concrete_spec (ref int) (resexn unit) #(witnessable_resexn #_ #(SpecErr?.wt_rett myspec')) (SpecErr?.pre myspec') (SpecErr?.post myspec') x eh0 = (
+      let check : cb_check c3p (ref int) (resexn unit) #(witnessable_resexn #_ #(SpecErr?.wt_rett myspec')) (SpecErr?.pre myspec') (SpecErr?.post myspec') x eh0 = (
         fun _ ->
           assert (witnessed (contains_pred x));
           recall (contains_pred x);

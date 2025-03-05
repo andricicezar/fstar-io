@@ -27,14 +27,14 @@ let beh_sem (m:free int) : sem_state = fun h0 r h1 -> forall p. theta m p h0 ==>
 noeq
 type src_interface1 = {
   specs : a3p:threep -> spec_tree a3p;
-  hocs : hoc_tree (specs concrete_spec);
+  hocs : hoc_tree (specs c3p);
   ct : threep -> Type;
   c_ct : a3p:threep -> safe_importable_to a3p (ct a3p) (specs a3p);
   psi : heap -> int -> heap -> Type0;
 }
 
-type ctx_src1 (i:src_interface1)  = i.ct concrete_spec
-type prog_src1 (i:src_interface1) = i.ct concrete_spec -> SST int (fun h0 -> True) i.psi
+type ctx_src1 (i:src_interface1)  = i.ct c3p
+type prog_src1 (i:src_interface1) = i.ct c3p -> SST int (fun h0 -> True) i.psi
 type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> SST int (fun h0 -> True) psi)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
@@ -57,25 +57,22 @@ type tgt_interface1 = {
 }
 
 type ctx_tgt1 (i:tgt_interface1) =
-  inv  : (heap -> Type0) ->
-  prref: mref_pred ->
-  (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read inv prref hrel ->
-  write : ttl_write inv prref hrel ->
-  alloc : ttl_alloc inv prref hrel  ->
-  i.ct (mk_threep inv prref hrel)
+  #a3p : threep ->
+  read :  ttl_read a3p ->
+  write : ttl_write a3p ->
+  alloc : ttl_alloc a3p  ->
+  i.ct a3p
 
 type prog_tgt1 (i:tgt_interface1) =
-  i.ct concrete_spec ->
+  i.ct c3p ->
   SST int (fun _ -> True) (fun _ _ _ -> True)
 
 
 type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
 
-val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct concrete_spec
+val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct c3p
 let instantiate_ctx_tgt1 #i c =
-  c (inv_c) (prref_c) (hrel_c) tl_read tl_write tl_alloc
+  c tl_read tl_write tl_alloc
 
 val link_tgt1 : #i:tgt_interface1 -> prog_tgt1 i -> ctx_tgt1 i -> whole_tgt1
 let link_tgt1 p c =
@@ -97,13 +94,13 @@ let comp_int_src_tgt1 (i:src_interface1) : tgt_interface1 = {
 }
 
 val backtranslate_ctx1 : (#i:src_interface1) -> ctx_tgt1 (comp_int_src_tgt1 i) -> ctx_src1 i
-let backtranslate_ctx1 #i ct = (i.c_ct concrete_spec).safe_import (instantiate_ctx_tgt1 ct) i.hocs
+let backtranslate_ctx1 #i ct = (i.c_ct c3p).safe_import (instantiate_ctx_tgt1 ct) i.hocs
 
 let pre' = sst_pre (fun _ -> True)
 
 val compile_pprog1 : (#i:src_interface1) -> prog_src1 i -> prog_tgt1 (comp_int_src_tgt1 i)
 let compile_pprog1 #i ps =
-    fun c -> ps ((i.c_ct concrete_spec).safe_import c i.hocs)
+    fun c -> ps ((i.c_ct c3p).safe_import c i.hocs)
  // The program has a stronger post-condition that the context
  //   (safe_exportable_arrow i.ct int #i.c_ct (fun _ -> sst_post _ pre' (fun _ _ _ -> True)) ()).export ps
 
@@ -153,16 +150,16 @@ let comp1_rrhc () : Lemma (rrhc comp1) =
 noeq
 type src_interface2 = {
   specs: a3p:threep -> spec_tree a3p;
-  hocs : hoc_tree (specs concrete_spec);
+  hocs : hoc_tree (specs c3p);
   pt : threep -> Type;
   c_pt : a3p:threep -> exportable_from a3p (pt a3p) (specs a3p);
 }
 
 type ctx_src2 (i:src_interface2) =
-  i.pt concrete_spec ->
+  i.pt c3p ->
   SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
-type prog_src2 (i:src_interface2) = i.pt concrete_spec
+type prog_src2 (i:src_interface2) = i.pt c3p
 type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
@@ -185,27 +182,22 @@ type tgt_interface2 = {
 }
 
 type ctx_tgt2 (i:tgt_interface2) =
-  inv  : (heap -> Type0) ->
-  prref: mref_pred ->
-  (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  hrel : FStar.Preorder.preorder heap ->
-  read :  ttl_read inv prref hrel ->
-  write : ttl_write inv prref hrel ->
-  alloc : ttl_alloc inv prref hrel  ->
-  p:i.pt (mk_threep inv prref hrel) ->
-  ST int  (fun h0 -> inv h0) (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+  #a3p : threep ->
+  read :  ttl_read a3p ->
+  write : ttl_write a3p ->
+  alloc : ttl_alloc a3p  ->
+  p:i.pt a3p ->
+  ST int  (fun h0 -> inv a3p h0) (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
 
 type prog_tgt2 (i:tgt_interface2) =
-  i.pt concrete_spec
+  i.pt c3p
 
 type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1))
 
 val link_tgt2 : #i:tgt_interface2 -> prog_tgt2 i -> ctx_tgt2 i -> whole_tgt2
 let link_tgt2 p c =
   fun () ->
-    c (inv_c) (prref_c) (hrel_c)
-      tl_read tl_write tl_alloc
-      p
+    c tl_read tl_write tl_alloc p
 
 val beh_tgt2 : whole_tgt2 ^-> sem_state
 let beh_tgt2 = on_domain whole_tgt2 (fun wt -> beh_sem (reify (wt ())))
@@ -224,11 +216,10 @@ let comp_int_src_tgt2 (i:src_interface2) : tgt_interface2 = {
 
 val backtranslate_ctx2 : (#i:src_interface2) -> ctx_tgt2 (comp_int_src_tgt2 i) -> src_language2.ctx i
 let backtranslate_ctx2 #i ct ps =
-  ct (inv_c) (prref_c) (hrel_c)
-      tl_read tl_write tl_alloc ((i.c_pt concrete_spec).export i.hocs ps)
+  ct tl_read tl_write tl_alloc ((i.c_pt c3p).export i.hocs ps)
 
 val compile_pprog2 : (#i:src_interface2) -> prog_src2 i -> prog_tgt2 (comp_int_src_tgt2 i)
-let compile_pprog2 #i ps = (i.c_pt concrete_spec).export i.hocs ps
+let compile_pprog2 #i ps = (i.c_pt c3p).export i.hocs ps
 
 val compile_whole2 : whole_src2 -> whole_tgt2
 let compile_whole2 ws = ws

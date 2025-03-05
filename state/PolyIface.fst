@@ -9,13 +9,12 @@ open FStar.Universe
 open SharedRefs
 open Witnessable
 
-instance witnessable_shareable_type (t:Type) {| c:tc_shareable_type t |} : witnessable t = {
-  satisfy = (fun x pred -> forall_refs pred #c.__t x);
-}
+(** *** Type to carry the three predicates around *)
 
 type threep =
-  (inv:heap -> Type0) * (prref:mref_pred) * (hrel:preorder heap)
-
+  inv:(heap -> Type0) * prref:mref_pred * hrel:(preorder heap)
+  (**                   ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
+  
 unfold
 let mk_threep
   (inv  : heap -> Type0)
@@ -23,6 +22,34 @@ let mk_threep
   (hrel : preorder heap)
   : threep =
   (inv, (prref <: (#a:Type0 -> #rel:preorder a -> mref a rel -> Type0)), hrel)
+
+let inv = Mktuple3?._1
+let prref = Mktuple3?._2
+let hrel = Mktuple3?._3
+
+(** *** Helper function to make an arrow polymorphic in the three predicates *)
+
+unfold let pre_poly_arrow
+  (a3p:threep)
+  (#t1:Type) {| c1 : witnessable t1 |}
+  (x:t1) (h0:heap) =
+  inv a3p h0 /\ c1.satisfy x (prref a3p)
+
+unfold let post_poly_arrow
+  (a3p:threep)
+  (#t2:Type) {| c2 : witnessable t2 |}
+  (h0:heap) (r:t2) (h1:heap) =
+  inv a3p h1 /\ h0 `hrel a3p` h1 /\ c2.satisfy r (prref a3p)
+
+let mk_poly_arrow
+  (a3p:threep)
+  (t1:Type u#a) {| c1 : witnessable t1 |}
+  (t2:Type u#b) {| c2 : witnessable t2 |}
+= x:t1 -> ST t2
+    (pre_poly_arrow a3p x)
+    (post_poly_arrow a3p)
+
+(** *** Type class that defines polymorphic interfaces *)
 
 class poly_iface (a3p:threep) (t:Type u#a) =
   { wt : witnessable t }
@@ -55,58 +82,38 @@ instance poly_iface_llist a3p t1 {| c1:tc_shareable_type t1 |}
   : poly_iface a3p (linkedList t1)
   = { wt = witnessable_llist t1 #solve }
 
-unfold let pre_poly_iface_arrow
-  (a3p:threep)
-  (#t1:Type) {| c1 : witnessable t1 |}
-  (x:t1) (h0:heap) =
-  (Mktuple3?._1 a3p) h0 /\ c1.satisfy x (Mktuple3?._2 a3p)
-
-unfold let post_poly_iface_arrow
-  (a3p:threep)
-  (#t2:Type) {| c2 : witnessable t2 |}
-  (h0:heap) (r:t2) (h1:heap) =
-  (Mktuple3?._1 a3p) h1 /\ h0 `(Mktuple3?._3 a3p)` h1 /\ c2.satisfy r (Mktuple3?._2 a3p)
-
-let mk_poly_iface_arrow
-  (a3p:threep)
-  (t1:Type u#a) {| c1 : witnessable t1 |}
-  (t2:Type u#b) {| c2 : witnessable t2 |}
-= x:t1 -> ST t2
-    (pre_poly_iface_arrow a3p x)
-    (post_poly_iface_arrow a3p)
-
 instance poly_iface_arrow a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
-  : poly_iface a3p (mk_poly_iface_arrow a3p t1 #c1.wt t2 #c2.wt)
+  : poly_iface a3p (mk_poly_arrow a3p t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 
-type ttl_read (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
+type ttl_read (a3p:threep) =
   (#t:shareable_typ) -> r:ref (to_Type t) ->
     ST (to_Type t)
-      (requires (fun h0 -> inv h0 /\ prref r))
-      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ forall_refs prref v))
+      (requires (fun h0 -> inv a3p h0 /\ prref a3p r))
+      (ensures  (fun h0 v h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ forall_refs (prref a3p) v))
 
-type ttl_write (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
+type ttl_write (a3p:threep) =
   (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
     ST unit
-      (requires (fun h0 -> inv h0 /\ prref r /\ forall_refs prref v))
-      (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
+      (requires (fun h0 -> inv a3p h0 /\ prref a3p r /\ forall_refs (prref a3p) v))
+      (ensures  (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1))
 
-type ttl_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:preorder heap) =
+type ttl_alloc (a3p:threep) =
   (#t:shareable_typ) -> init:(to_Type t) ->
     ST (ref (to_Type t))
-      (requires (fun h0 -> inv h0 /\ forall_refs prref init))
-      (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
+      (requires (fun h0 -> inv a3p h0 /\ forall_refs (prref a3p) init))
+      (ensures  (fun h0 r h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ prref a3p r))
 
-(** ** interm language **)
+(** ** The concrete predicates **)
 
 unfold
-let concrete_spec_rel (h0:heap) (h1:heap) =
+let c3p_hrel (h0:heap) (h1:heap) =
   modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
 
-let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
-: Lemma (requires (concrete_spec_rel h0 h1 /\ concrete_spec_rel h1 h2))
-        (ensures  (concrete_spec_rel h0 h2))
-        [SMTPat (concrete_spec_rel h0 h1); SMTPat (concrete_spec_rel h1 h2)]
+let c3p_hrel_trans (h0:heap) (h1:heap) (h2:heap)
+: Lemma (requires (c3p_hrel h0 h1 /\ c3p_hrel h1 h2))
+        (ensures  (c3p_hrel h0 h2))
+        [SMTPat (c3p_hrel h0 h1); SMTPat (c3p_hrel h1 h2)]
 =
   assert (modifies_only_shared_and_encapsulated h0 h2);
   introduce forall (a:Type) (rel:preorder a) (r:mref a rel).
@@ -121,24 +128,24 @@ let concrete_spec_rel_trans (h0:heap) (h1:heap) (h2:heap)
     end
   end
 
-let concrete_spec : threep = (
+let c3p : threep = (
     (fun h ->
         trans_shared_contains h /\
         h `contains` map_shared /\
         is_private (map_shared) h /\
         (forall p. p >= next_addr h ==> is_private_addr p h)),
     (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
-    (fun h0 h1 -> concrete_spec_rel h0 h1)
+    (fun h0 h1 -> c3p_hrel h0 h1)
 )
 
 unfold
-let inv_c : heap -> Type0 = Mktuple3?._1 concrete_spec
+let inv_c : heap -> Type0 = Mktuple3?._1 c3p
 unfold
-let prref_c : mref_pred = Mktuple3?._2 concrete_spec
+let prref_c : mref_pred = Mktuple3?._2 c3p
 unfold
-let hrel_c : preorder heap = Mktuple3?._3 concrete_spec
+let hrel_c : preorder heap = Mktuple3?._3 c3p
 
-let interm (l:Type) = poly_iface concrete_spec l
+let interm (l:Type) = poly_iface c3p l
 unfold let pre_interm_arrow
   (#t1:Type) {| c1 : witnessable t1 |}
   (x:t1) (h0:heap) =
@@ -159,7 +166,7 @@ let mk_interm_arrow
     (post_interm_arrow)
 
 
-val tl_read : ttl_read (inv_c) (prref_c) (hrel_c)
+val tl_read : ttl_read c3p
 let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
@@ -172,7 +179,7 @@ let tl_read #t r =
   lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
   v
 
-val tl_write : ttl_write (inv_c) (prref_c) (hrel_c)
+val tl_write : ttl_write c3p
 let tl_write #t r v =
   recall (contains_pred r);
   recall (is_shared r);
@@ -189,7 +196,7 @@ let tl_write #t r v =
   assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
 #push-options "--split_queries always"
-val tl_alloc : ttl_alloc (inv_c) (prref_c) (hrel_c)
+val tl_alloc : ttl_alloc c3p
 let tl_alloc #t init =
   assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));

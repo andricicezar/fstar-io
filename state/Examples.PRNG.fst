@@ -43,7 +43,7 @@ let triv_caller read write alloc r =
   raise_val 42
 
 val single_use_caller : elab_poly_typ ucaller_ty
-let single_use_caller #inv #prref #hrel bt_read bt_write bt_alloc r =
+let single_use_caller bt_read bt_write bt_alloc r =
   let seed = 5 in
   let rnd = downgrade_val #int (r (raise_val seed) (raise_val ())) in
   raise_val rnd
@@ -54,13 +54,13 @@ instance poly_iface_arrow_helper a3p
   : poly_iface a3p (raise_t unit -> SST int (fun _ -> True) post)
   = { wt = witnessable_arrow (raise_t unit) int _ _ }
 
-instance exportable_prog a3p : exportable_from a3p (mk_poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int)) Leaf =
-  poly_iface_is_exportable _ a3p #(poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int) #_ #(poly_iface_arrow a3p (raise_t unit) int))
+instance exportable_prog a3p : exportable_from a3p (mk_poly_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int)) Leaf =
+  poly_iface_is_exportable _ a3p #(poly_iface_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int) #_ #(poly_iface_arrow a3p (raise_t unit) int))
 
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);
   hocs = Leaf;
-  pt = (fun a3p -> mk_poly_iface_arrow a3p int (mk_poly_iface_arrow a3p (raise_t unit) int));
+  pt = (fun a3p -> mk_poly_arrow a3p int (mk_poly_arrow a3p (raise_t unit) int));
   c_pt = (fun a3p -> exportable_prog a3p);
 }
 
@@ -73,7 +73,7 @@ let compiled_prog =
   compile_pprog2 #sit prng'
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
-let some_ctx inv prref hrel read write alloc prng =
+let some_ctx read write alloc prng =
   let cb = prng 5 in
   let _ = cb (raise_val ()) in
   let _ = cb (raise_val ()) in

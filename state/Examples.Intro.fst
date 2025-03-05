@@ -16,10 +16,10 @@ open SpecTree
 #set-options "--print_universes"
 
 type callback a3p =
-  mk_poly_iface_arrow a3p unit unit
+  mk_poly_arrow a3p unit unit
 
 type lib_type a3p =
-  mk_poly_iface_arrow
+  mk_poly_arrow
     a3p
     (ref (ref int))
     (callback a3p) #(witnessable_arrow u#0 u#_ _ _ _ _)
@@ -42,7 +42,7 @@ let sit : src_interface1 = {
 
 #push-options "--z3rlimit 10000" (* very flaky for some reason. *)
 #restart-solver
-let prog (lib : lib_type concrete_spec) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
+let prog (lib : lib_type c3p) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
   witness (contains_pred r) ;
@@ -73,7 +73,7 @@ let compiled_prog =
 (* Trivial library *)
 
 val triv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
-let triv_lib inv prref hrel read write alloc r =
+let triv_lib read write alloc r =
   (fun _ -> ())
 
 let whole_triv : whole_tgt1 =
@@ -82,11 +82,10 @@ let whole_triv : whole_tgt1 =
 (* Adversarial library *)
 #push-options "--z3rlimit 10000"
 val adv_lib : ctx_tgt1 (comp_int_src_tgt1 sit)
-let adv_lib inv prref hrel read write alloc r =
+let adv_lib #a3p read write alloc r =
   let g : ref (linkedList (ref int)) = alloc #(SLList (SRef SNat)) LLNil in
   (* iteration on linked list, using fuel to ensure termination *)
-  let a3p = mk_threep inv prref hrel in
-  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_poly_iface_arrow a3p l) (post_poly_iface_arrow a3p) =
+  let rec ll_iter (n:nat) (l : linkedList (ref int)) : ST unit (pre_poly_arrow a3p l) (post_poly_arrow a3p) =
     if n = 0 then () else
     match l with
     | LLNil -> ()

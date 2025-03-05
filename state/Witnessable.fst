@@ -82,3 +82,7 @@ instance witnessable_llist (t:Type) {| c:witnessable t |} : witnessable (linkedL
 instance witnessable_univ_raise (t:Type u#a) {| c:witnessable t |} : witnessable (raise_t u#a u#b t) = {
   satisfy = (fun x -> c.satisfy (downgrade_val x));
 }
+
+instance witnessable_shareable_type (t:Type) {| c:ShareableType.tc_shareable_type t |} : witnessable t = {
+  satisfy = (fun x pred -> ShareableType.forall_refs pred #c.__t x);
+}

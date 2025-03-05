@@ -8,7 +8,7 @@ type cmp =
   | GT 
   | EQ
 
-let post_cond = PolyIface.concrete_spec_rel
+let post_cond = PolyIface.c3p_hrel
 
 let mono_incr : preorder int = fun v' v'' -> b2t (v' <= v'')
 

@@ -40,7 +40,7 @@ let rec _elab_typ (#a3p:threep) (t:typ) : tt:Type u#1 & poly_iface a3p tt =
   | TArr t1 t2 -> begin
     let tt1 = _elab_typ t1 in
     let tt2 = _elab_typ t2 in
-    (| mk_poly_iface_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
+    (| mk_poly_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt,
        poly_iface_arrow a3p (dfst tt1) (dfst tt2)
     |)
   end
@@ -68,34 +68,32 @@ let elab_typ (a3p:threep) (t:typ) : Type =
 let elab_typ_tc #a3p (t:typ) : poly_iface a3p (elab_typ a3p t) =
   dsnd (_elab_typ #a3p t)
 
-type tbt_read (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type tbt_read (a3p:threep) =
   (#t:typ0) -> r:ref (elab_typ0 t) ->
     ST (elab_typ0 t)
-      (requires (fun h0 -> inv h0 /\ prref r))
-      (ensures  (fun h0 v h1 -> h0 `hrel` h1 /\ inv h1 /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy v prref))
+      (requires (fun h0 -> inv a3p h0 /\ prref a3p r))
+      (ensures  (fun h0 v h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ (elab_typ0_tc #a3p t).wt.satisfy v (prref a3p)))
 
-type tbt_write (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type tbt_write (a3p:threep) =
   (#t:typ0) -> r:ref (elab_typ0 t) -> v:(elab_typ0 t) ->
     ST unit
-      (requires (fun h0 -> inv h0 /\ prref r /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy v prref))
-      (ensures  (fun h0 _ h1 -> h0 `hrel` h1 /\ inv h1))
+      (requires (fun h0 -> inv a3p h0 /\ prref a3p r /\ (elab_typ0_tc #a3p t).wt.satisfy v (prref a3p)))
+      (ensures  (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1))
 
-type tbt_alloc (inv:heap -> Type0) (prref:mref_pred) (hrel:FStar.Preorder.preorder heap) =
+type tbt_alloc (a3p:threep) =
   (#t:typ0) -> init:(elab_typ0 t) ->
     ST (ref (elab_typ0 t))
-      (requires (fun h0 -> inv h0 /\ (elab_typ0_tc #(mk_threep inv prref hrel) t).wt.satisfy init prref))
-      (ensures  (fun h0 r h1 -> h0 `hrel` h1 /\ inv h1 /\ prref r))
+      (requires (fun h0 -> inv a3p h0 /\ (elab_typ0_tc #a3p t).wt.satisfy init (prref a3p)))
+      (ensures  (fun h0 r h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ prref a3p r))
 
 let elab_poly_typ (t:typ) =
-  #inv  : (heap -> Type0) ->
-  #prref: mref_pred ->
-  #hrel : FStar.Preorder.preorder heap ->
+  #a3p:threep ->
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  read :  tbt_read inv prref hrel ->
-  write : tbt_write inv prref hrel ->
-  alloc : tbt_alloc inv prref hrel ->
+  read :  tbt_read a3p ->
+  write : tbt_write a3p ->
+  alloc : tbt_alloc a3p ->
   (** type of the context: *)
-  elab_typ (mk_threep inv prref hrel) t
+  elab_typ a3p t
 
 (** ** Examples **)
 
@@ -108,9 +106,9 @@ let ctx_update_ref_test bt_read bt_write _ y =
 
 val ctx_update_multiple_refs_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef TNat) TUnit))
-let ctx_update_multiple_refs_test #inv #prref #hrel bt_read bt_write _ x =
+let ctx_update_multiple_refs_test #a3p bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_threep inv prref hrel) (TArr (TRef TNat) TUnit) = (fun y ->
+  let cb : elab_typ a3p (TArr (TRef TNat) TUnit) = (fun y ->
     let y : ref int = downgrade_val y in
     let ix : ref int = bt_read #(TRef TNat) x in
     bt_write #TNat ix (bt_read #TNat ix + 1);
@@ -143,9 +141,9 @@ let ctx_HO_test2 bt_read bt_write _ f =
 
 val ctx_swap_ref_test :
   elab_poly_typ (TArr (TRef (TRef TNat)) (TArr (TRef (TRef TNat)) TUnit))
-let ctx_swap_ref_test #inv #prref #hrel bt_read bt_write _ x =
+let ctx_swap_ref_test #a3p bt_read bt_write _ x =
   let x : ref (ref int) = downgrade_val x in
-  let cb : elab_typ (mk_threep inv prref hrel) (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
+  let cb : elab_typ a3p (TArr (TRef (TRef TNat)) TUnit) = (fun y ->
     let y : ref (ref int) = downgrade_val y in
 
     let z = bt_read #(TRef TNat) x in
@@ -171,9 +169,9 @@ let ctx_HO_test3 bt_read _ bt_alloc f =
 
 val ctx_returns_callback_test :
   elab_poly_typ (TArr TUnit (TArr TUnit TUnit))
-let ctx_returns_callback_test #inv #prref #hrel bt_read bt_write bt_alloc _ =
+let ctx_returns_callback_test #a3p bt_read bt_write bt_alloc _ =
   let x: ref int = bt_alloc #TNat 13 in
-  let cb : elab_typ (mk_threep inv prref hrel) (TArr TUnit TUnit) = (fun _ ->
+  let cb : elab_typ a3p (TArr TUnit TUnit) = (fun _ ->
     bt_write #TNat x (bt_read #TNat x % 5);
     raise_val ()
   ) in
@@ -188,8 +186,8 @@ let ctx_HO_test4 _ _ bt_alloc f =
 
 val ctx_unverified_student_hw_sort :
   elab_poly_typ (TArr (TRef (TLList TNat)) TUnit)
-let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
-  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_iface_arrow (mk_threep inv prref hrel) l) (post_poly_iface_arrow (mk_threep inv prref hrel)) =
+let ctx_unverified_student_hw_sort #a3p bt_read bt_write bt_alloc =
+  let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_arrow a3p l) (post_poly_arrow a3p) =
     if fuel = 0 then () else begin
       let cl : linkedList int = bt_read #(TLList TNat) l in
       match cl with | LLNil -> ()
@@ -212,7 +210,7 @@ let ctx_unverified_student_hw_sort #inv #prref #hrel bt_read bt_write bt_alloc =
 
 val progr_sep_test:
   #rp: ref int ->
-  ctx:(elab_typ concrete_spec (TArr TUnit TUnit)) ->
+  ctx:(elab_typ c3p (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -224,7 +222,7 @@ let progr_sep_test #rp f = (** If this test fails, it means that the spec of f d
 
 val progr_declassify :
   rp: ref int ->
-  ctx:(elab_typ concrete_spec (TArr (TRef TNat) TUnit)) ->
+  ctx:(elab_typ c3p (TArr (TRef TNat) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -239,7 +237,7 @@ let progr_declassify rp f =
 #push-options "--split_queries always"
 val progr_declassify_nested:
   rp: ref (ref int) ->
-  ctx:(elab_typ concrete_spec (TArr (TRef (TRef TNat)) TUnit)) ->
+  ctx:(elab_typ c3p (TArr (TRef (TRef TNat)) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -258,7 +256,7 @@ let progr_declassify_nested rp f =
 val progr_secret_unchanged_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ concrete_spec (TArr TUnit TUnit)) ->
+  ctx:(elab_typ c3p (TArr TUnit TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -276,7 +274,7 @@ let progr_secret_unchanged_test rp rs ctx =
 val progr_passing_shared_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -288,7 +286,7 @@ let progr_passing_shared_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret); witness (is_shared secret);
-  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_shared secret);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
@@ -298,7 +296,7 @@ let progr_passing_shared_to_callback_test rp rs f =
 val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -309,7 +307,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_encapsulate secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
-  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_encapsulated secret);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
@@ -320,7 +318,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
 (*
 (** DA: make fails without an assume on this val because of [@expect_failure] *)
 val progr_passing_private_to_callback_test:
-  ctx:(elab_typ concrete_spec (TArr (TArr TUnit TUnit) TUnit)) ->
+  ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
   SST unit
     (requires (fun h0 -> True))
     (ensures (fun h0 _ h1 -> True))
@@ -328,7 +326,7 @@ val progr_passing_private_to_callback_test:
 let progr_passing_private_to_callback_test f =
   let secret: ref int = sst_alloc #SNat 0 in
   witness (contains_pred secret);
-  let cb: elab_typ concrete_spec (TArr TUnit TUnit) = (fun _ ->
+  let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret);
     // let h0 = get_heap () in
     // assume (is_shared secret h0);
@@ -341,7 +339,7 @@ let progr_passing_private_to_callback_test f =
 val progr_getting_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
-  ctx:(elab_typ concrete_spec (TArr TUnit (TArr TUnit TUnit))) ->
+  ctx:(elab_typ c3p (TArr TUnit (TArr TUnit TUnit))) ->
   SST unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
@@ -362,10 +360,10 @@ val elab_apply_arrow :
   f:elab_typ a3p (TArr t1 t2) ->
   (let tt1 = _elab_typ #a3p t1 in
    let tt2 = _elab_typ #a3p t2 in
-   mk_poly_iface_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
+   mk_poly_arrow a3p (dfst tt1) #(dsnd tt1).wt (dfst tt2) #(dsnd tt2).wt)
 let elab_apply_arrow t1 t2 f x = f x
 
-let cast_TArr inv prref hrel (#t1 #t2:typ) (f : elab_typ (mk_threep inv prref hrel) (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ (mk_threep inv prref hrel) t = f
+let cast_TArr #a3p (#t1 #t2:typ) (f : elab_typ a3p (TArr t1 t2)) (t:typ) (#_:squash (t == TArr t1 t2)) : elab_typ a3p t = f
 
 type vcontext a3p (g:context) =
   vx:var{Some? (g vx)} -> elab_typ a3p (Some?.v (g vx))
@@ -463,25 +461,22 @@ let raise #a3p (#t:typ0) (x:elab_typ0 t) :
 
 #push-options "--split_queries always"
 let rec backtranslate
-  (#inv  : (heap -> Type0))
-  (#prref: mref_pred)
-  (#hrel : FStar.Preorder.preorder heap)
+  (#a3p:threep)
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  (bt_read :  tbt_read inv prref hrel)
-  (bt_write : tbt_write inv prref hrel)
-  (bt_alloc : tbt_alloc inv prref hrel)
+  (bt_read :  tbt_read a3p)
+  (bt_write : tbt_write a3p)
+  (bt_alloc : tbt_alloc a3p)
   (#g:context)
   (#e:exp)
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_threep inv prref hrel) g){all_refs_contained_and_low ve}) :
-  ST (elab_typ (mk_threep inv prref hrel) t)
-    (fun h0 -> inv h0)
-    (fun h0 r h1 -> inv h1 /\ h0 `hrel` h1 /\ (elab_typ_tc #(mk_threep inv prref hrel) t).wt.satisfy r prref)
+  (ve:(vcontext a3p g){all_refs_contained_and_low ve}) :
+  ST (elab_typ a3p t)
+    (fun h0 -> inv a3p h0)
+    (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (elab_typ_tc #a3p t).wt.satisfy r (prref a3p))
     (decreases %[e;1])
 =
-  let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
-  let a3p = mk_threep inv prref hrel in
+  let rcall #g #e (#t:typ) = backtranslate #a3p bt_read bt_write bt_alloc #g #e #t in
 
   match tyj with
   | TyUnit -> raise_val ()
@@ -506,7 +501,7 @@ let rec backtranslate
   end
 
   | TyAbs _ _ ->
-    backtranslate_eabs #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t tyj ve
+    backtranslate_eabs #a3p bt_read bt_write bt_alloc #g #e #t tyj ve
   | TyVar vx ->
     let Some tx = g vx in
     let x : elab_typ a3p tx = ve vx in
@@ -545,31 +540,28 @@ let rec backtranslate
     let vs : elab_typ a3p ts = rcall tyj_s ve in
     (vf, vs)
 and backtranslate_eabs
-  (#inv  : (heap -> Type0))
-  (#prref: mref_pred)
-  (#hrel : FStar.Preorder.preorder heap)
+  (#a3p:threep)
   (** ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  (bt_read :  tbt_read inv prref hrel)
-  (bt_write : tbt_write inv prref hrel)
-  (bt_alloc : tbt_alloc inv prref hrel)
+  (bt_read :  tbt_read a3p)
+  (bt_write : tbt_write a3p)
+  (bt_alloc : tbt_alloc a3p)
   (#g:context)
   (#e:exp{EAbs? e})
   (#t:typ)
   (tyj:typing g e t)
-  (ve:(vcontext (mk_threep inv prref hrel) g){all_refs_contained_and_low ve}) :
-  Tot (elab_typ (mk_threep inv prref hrel) t) (decreases %[e;0]) =
-  let a3p = mk_threep inv prref hrel in
-  let rcall #g #e (#t:typ) = backtranslate #inv #prref #hrel bt_read bt_write bt_alloc #g #e #t in
+  (ve:(vcontext a3p g){all_refs_contained_and_low ve}) :
+  Tot (elab_typ a3p t) (decreases %[e;0]) =
+  let rcall #g #e (#t:typ) = backtranslate #a3p bt_read bt_write bt_alloc #g #e #t in
   match e with
   | EAbs t1 e1 ->
     let TyAbs tx #_ #tres tyj_body = tyj in
-    let w : mk_poly_iface_arrow a3p (elab_typ a3p tx) #(elab_typ_tc #a3p tx).wt (elab_typ a3p tres) #(elab_typ_tc #a3p tres).wt =
+    let w : mk_poly_arrow a3p (elab_typ a3p tx) #(elab_typ_tc #a3p tx).wt (elab_typ a3p tres) #(elab_typ_tc #a3p tres).wt =
       (fun (x:elab_typ a3p tx) ->
         let ve' = vextend #a3p #tx x #g ve in
         rcall tyj_body ve')
     in
     assert (t == TArr tx tres);
-    cast_TArr inv prref hrel #tx #tres w t
+    cast_TArr #a3p #tx #tres w t
 #pop-options
 
 let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_pred) :
@@ -604,22 +596,22 @@ let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_p
       assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v))
   end
 
-val bt_read : tbt_read (inv_c) (prref_c) (hrel_c)
+val bt_read : tbt_read c3p
 let bt_read #t r =
-  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
   let v : elab_typ0 t = tl_read #(to_shareable_typ t) r in
-  lemma_satisfy_eqv_forall_refs concrete_spec #t v (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #t v (prref_c);
   v
 
-val bt_write : tbt_write (inv_c) (prref_c) (hrel_c)
+val bt_write : tbt_write c3p
 let bt_write #t r v =
-  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
-  lemma_satisfy_eqv_forall_refs concrete_spec #t v (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #t v (prref_c);
   tl_write #(to_shareable_typ t) r v
 
-val bt_alloc : tbt_alloc (inv_c) (prref_c) (hrel_c)
+val bt_alloc : tbt_alloc c3p
 let bt_alloc #t init =
-  lemma_satisfy_eqv_forall_refs concrete_spec #t init (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #t init (prref_c);
   let r = tl_alloc #(to_shareable_typ t) init in
-  lemma_satisfy_eqv_forall_refs concrete_spec #(TRef t) r (prref_c);
+  lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
   r
