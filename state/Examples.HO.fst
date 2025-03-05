@@ -18,7 +18,7 @@ open SpecTree
 type f_eqx (a3p:threep) = x:ref int -> ST (resexn unit) (requires (fun h0 -> inv a3p h0 /\ satisfy x (prref a3p))) (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
 let f_a3p (a3p:threep) : pck_spec =
- (SpecErr false (ref int) (witnessable_ref int)
+ (SpecErr00 false (ref int) (witnessable_ref int)
     (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
     unit
     witnessable_unit
@@ -120,7 +120,7 @@ let f_xeq5_is_exportable : exportable_from c3p f_xeq5 _ =
     (fun x -> sst_post (resexn int) _ (fun h0 r h1 -> (Inr? r \/ (Inl? r /\ Inl?.v r == 2)) /\ ((hrel_c) h0 h1)))
 
 let f_xeq5_spec : pck_spec =
-  SpecErr true (ref ℤ) (safe_importable_is_importable c3p (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
+  SpecErr00 true (ref ℤ) (safe_importable_is_importable c3p (ref ℤ) Leaf).c_styp (λ x → sst_pre (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c)) ℤ
 (exportable_refinement c3p ℤ Leaf (λ _ → l_True)).c_styp (λ x → sst_post (resexn ℤ) (λ h0 → sel h0 x == 5 ∧ satisfy x prref_c) (λ h0 r h1 → (Inr? r ∨ (Inl? r ∧ Inl?.v r == 2)) ∧ hrel_c h0 h1))
 
 let f_xeq5_hoc : hoc c3p f_xeq5_spec =
@@ -128,7 +128,7 @@ let f_xeq5_hoc : hoc c3p f_xeq5_spec =
     (fun rx ->
       let rx :ref int = rx in
       let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(SpecErr?.argt f_xeq5_spec) #(SpecErr?.wt_argt f_xeq5_spec)) (fun x _ _ h1 -> (SpecErr?.pre f_xeq5_spec) x h1) rx eh0 =
+      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(argt0 f_xeq5_spec) #(wt_argt0 f_xeq5_spec)) (fun x _ _ h1 -> (pre0 f_xeq5_spec) x h1) rx eh0 =
         (fun _ ->
           recall (contains_pred rx);
           if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in

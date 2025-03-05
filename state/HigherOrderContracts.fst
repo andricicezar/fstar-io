@@ -139,7 +139,7 @@ instance exportable_arrow
                 (** ^ the fact that the check has a pre-condition means that the check does not have to enforce it
                       e.g., the invariant on the heap **)
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) //u#(max 1 a b) u#(max 1 a b) 
-    (Node (SpecErr true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+    (Node (SpecErr00 true t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow a3p c1.ityp (resexn c2.ityp) #c1.c_ityp #(poly_iface_sum a3p c2.ityp err #c2.c_ityp) ;
@@ -303,7 +303,7 @@ instance safe_importable_arrow
  // (_:squash (forall (x:t1) h0. pre x h0 ==> pre_poly_arrow a3p #_ #c1.c_styp x h0))
 //  (_:squash (forall (x:t1) h0 e h1. pre x h0 /\ post_poly_arrow a3p #_ #(witnessable_sum t2 err #c2.c_styp) h0 (Inr e) h1 ==> post x h0 (Inr e) h1))
 //  (capture_check:select_check a3p t1 (resexn t2) #(witnessable_sum _ err #c2.c_styp) pre post)
-  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (SpecErr false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (SpecErr00 false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow _ c1.ityp (resexn c2.ityp) #_ #(poly_iface_sum _ c2.ityp err #c2.c_ityp);
@@ -334,7 +334,7 @@ instance safe_importable_arrow_safe
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
  // (_:squash (forall (x:t1) h0. pre x h0 ==> pre_poly_arrow a3p #_ #c1.c_styp x h0))
 //  (_:squash (forall (x:t1) h0 r h1. pre x h0 /\ post_poly_arrow a3p #_ #c2.c_styp h0 r h1 ==> post x h0 r h1))
-  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (Spec false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
+  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (Spec00 false t1 c1.c_styp pre t2 c2.c_styp post) s1 s2) = {
   c_styp = witnessable_arrow t1 t2 pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
   c_ityp = poly_iface_arrow _ c1.ityp c2.ityp #_ #c2.c_ityp;
