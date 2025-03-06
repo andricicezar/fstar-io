@@ -64,7 +64,7 @@ let player_hoc : hoc c3p (player_spec c3p) =
   TrivialPost10 (fun _ -> ()) (fun _ _ -> ())
 
 instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (player_spec a3p) Leaf Leaf) =
-  safe_importable_arrow_safe10 
+  safe_importable_arrow10 
     a3p _ _
     #(poly_iface_is_exportable a3p _ #(poly_iface_pair a3p _ #(poly_iface_pair a3p int int) _ #(poly_iface_arrow a3p _ #(poly_iface_int a3p) _ #(poly_iface_cmp a3p))))
     _ _ #(poly_iface_is_safely_importable a3p int #(poly_iface_int a3p))
@@ -94,7 +94,7 @@ let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
     (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (rett0 (play_guess_spec c3p))) #(witnessable_resexn _ #(wt_rett0 (play_guess_spec c3p))) h0 r h1))
 
 instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (play_guess_spec a3p) _ _) =
-  exportable_arrow10 a3p 
+  exportable_arrow_err10 a3p 
     _ _
     #(args_importable a3p)
     _ _
