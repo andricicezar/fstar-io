@@ -40,6 +40,22 @@ class importable_to a3p (styp: Type u#a) (st:spec_tree) = {
     x:ityp -> hocs:hoc_tree a3p st -> Lemma (requires (c_ityp.wt.satisfy x (prref a3p))) (ensures ((witnessable_sum styp err).satisfy (import hocs x) (prref a3p)))
 }
 
+let mk_exportable #styp c_styp #ityp #a3p c_ityp #st export lemma : exportable_from a3p styp st = {
+  c_styp = c_styp;
+  ityp = ityp;
+  c_ityp = c_ityp;
+  export = export;
+  lemma_export_preserves_prref = lemma
+}
+
+let mk_safe_importable #styp c_styp #ityp #a3p c_ityp #st safe_import lemma : safe_importable_to a3p styp st = {
+  c_styp = c_styp;
+  ityp = ityp;
+  c_ityp = c_ityp;
+  safe_import = safe_import;
+  lemma_safe_import_preserves_prref = lemma
+}
+
 (** Exportable instances **)
 instance poly_iface_is_exportable a3p t {| c1:poly_iface a3p t |} : exportable_from a3p t Leaf = {
   c_styp = c1.wt;
@@ -47,20 +63,6 @@ instance poly_iface_is_exportable a3p t {| c1:poly_iface a3p t |} : exportable_f
   c_ityp = solve;
   export = (fun Leaf x -> x);
   lemma_export_preserves_prref = (fun _ _ -> ()) }
-
-let mk_exportable 
-  #styp (c_styp:witnessable styp) 
-  #ityp #a3p (c_ityp:poly_iface a3p ityp) 
-  #st 
-  (export:hoc_tree a3p st -> styp -> ityp) 
-  (lemma: (x:styp -> hocs:hoc_tree a3p st -> Lemma (requires (c_styp.satisfy x (prref a3p))) (ensures (c_ityp.wt.satisfy (export hocs x) (prref a3p)))))
-  : exportable_from a3p styp st = {
-  c_styp = c_styp;
-  ityp = ityp;
-  c_ityp = c_ityp;
-  export = export;
-  lemma_export_preserves_prref = lemma
-}
 
 instance exportable_unit a3p : exportable_from a3p unit Leaf =
   mk_exportable 
@@ -137,97 +139,143 @@ instance exportable_refinement a3p t st {| c:exportable_from a3p t st |} (p:t->T
   lemma_export_preserves_prref = (fun x -> c.lemma_export_preserves_prref x);
 }
 
-instance exportable_arrow_err00
-  a3p
-  (t1:Type u#0) 
-  st1
-  {| c1:importable_to a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:exportable_from a3p t2 st2 |}
+let mk_export_arrow_err a3p
+  (t1:Type) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0))) :
+  (export:hoc a3p (Spec true true t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST (resexn t2) (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_resexn c2.ityp #c2.c_ityp.wt))) =
+  fun (EnforcePre check c_post) lhs rhs f (x:c1.ityp) ->
+    match c1.import lhs x with
+    | Inr err -> Inr err
+    | Inl x' -> begin
+      c1.lemma_import_preserves_prref x lhs;
+      let (| _, cb_check |) = check x' in
+      match cb_check () with
+      | Inr err -> Inr err
+      | Inl _ -> begin
+        let res : resexn t2 = f x' in
+        c_post x' res;
+        (exportable_resexn a3p t2 st2).lemma_export_preserves_prref res (EmptyNode rhs Leaf);
+        (exportable_resexn a3p t2 st2).export (EmptyNode rhs Leaf) res
+      end
+    end
+
+instance exportable_arrow_err00 a3p
+  (t1:Type u#0) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U00 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) = 
   mk_exportable
     (witnessable_arrow t1 (resexn t2) pre post)
     (poly_iface_arrow a3p _ #c1.c_ityp _ #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
-    (fun hocs f (x:c1.ityp) ->
-      let Node (| _, U00hoc (EnforcePre check c_post) |) lhs rhs = hocs in
-      match c1.import lhs x with
-      | Inr err -> Inr err
-      | Inl x' -> begin
-        c1.lemma_import_preserves_prref x lhs;
-        let (| _, cb_check |) = check x' in
-        match cb_check () with
-        | Inr err -> Inr err
-        | Inl _ -> begin
-          let res : resexn t2 = f x' in
-          c_post x' res;
-          (exportable_resexn a3p t2 st2).lemma_export_preserves_prref res (EmptyNode rhs Leaf);
-          (exportable_resexn a3p t2 st2).export (EmptyNode rhs Leaf) res
-        end
-      end)
+    (fun (Node (| _, U00hoc s |) lhs rhs) -> mk_export_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
     (fun _ _ -> ())
 
-instance exportable_arrow_err10
-  a3p
-  (t1:Type u#1) 
-  st1
-  {| c1:importable_to a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:exportable_from a3p t2 st2 |}
+instance exportable_arrow_err10 a3p
+  (t1:Type u#1) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U10 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
   mk_exportable
     (witnessable_arrow t1 (resexn t2) pre post)
     (poly_iface_arrow a3p _ #c1.c_ityp _ #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
-    (fun hocs f (x:c1.ityp) ->
-      let Node (| _, U10hoc (EnforcePre check c_post) |) lhs rhs = hocs in
-      match c1.import lhs x with
-      | Inr err -> Inr err
-      | Inl x' -> begin
-        c1.lemma_import_preserves_prref x lhs;
-        let (| _, cb_check |) = check x' in
-        match cb_check () with
-        | Inr err -> Inr err
-        | Inl _ -> begin
-          let res : resexn t2 = f x' in
-          c_post x' res;
-          (exportable_resexn a3p t2 st2).lemma_export_preserves_prref res (EmptyNode rhs Leaf);
-          (exportable_resexn a3p t2 st2).export (EmptyNode rhs Leaf) res
-        end
-      end)
+    (fun (Node (| _, U10hoc s |) lhs rhs) -> mk_export_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
     (fun _ _ -> ())
 
-instance exportable_arrow00
-  a3p
-  (t1:Type u#0) 
-  st1
-  {| c1:safe_importable_to a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:exportable_from a3p t2 st2 |}
+instance exportable_arrow_err01 a3p
+  (t1:Type u#0) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U01 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_exportable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p _ #c1.c_ityp _ #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U01hoc s |) lhs rhs) -> mk_export_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance exportable_arrow_err11 a3p
+  (t1:Type u#1) st1 {| c1:importable_to a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U11 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_exportable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p _ #c1.c_ityp _ #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U11hoc s |) lhs rhs) -> mk_export_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+let mk_export_arrow a3p
+  (t1:Type) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) :
+  (export:hoc a3p (Spec true false t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST t2 (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _#c2.c_ityp.wt)) =
+  fun (TrivialPre c_pre c_post) lhs rhs f (x:c1.ityp) ->
+    let x' = c1.safe_import lhs x in
+    c_pre x';
+    c1.lemma_safe_import_preserves_prref x lhs;
+    let res : t2 = f x' in
+    c_post x' res;
+    assert (forall h0 h1. post x' h0 res h1 ==> post_poly_arrow a3p #t2 #c2.c_styp h0 res h1) by (()); (** weird **)
+    c2.lemma_export_preserves_prref res rhs;
+    c2.export rhs res
+
+instance exportable_arrow00 a3p
+  (t1:Type u#0) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
   : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U00 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
   mk_exportable
     (witnessable_arrow t1 t2 pre post)
     (poly_iface_arrow a3p _ #c1.c_ityp _ #c2.c_ityp)
-    (fun hocs f (x:c1.ityp) ->
-      let Node (| _, U00hoc (TrivialPre c_pre c_post) |) lhs rhs = hocs in
-      let x' = c1.safe_import lhs x in
-      c_pre x';
-      c1.lemma_safe_import_preserves_prref x lhs;
-      let res : t2 = f x' in
-      c_post x' res;
-      assert (forall h0 h1. post x' h0 res h1 ==> post_poly_arrow a3p #t2 #c2.c_styp h0 res h1) by (()); (** weird **)
-      c2.lemma_export_preserves_prref res rhs;
-      c2.export rhs res
-    )
+    (fun (Node (| _, U00hoc s |) lhs rhs) ->
+      mk_export_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
     (fun _ _ -> ())
 
+instance exportable_arrow01 a3p
+  (t1:Type u#0) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U01 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_exportable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p _ #c1.c_ityp _ #c2.c_ityp)
+    (fun (Node (| _, U01hoc s |) lhs rhs) ->
+      mk_export_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance exportable_arrow10 a3p
+  (t1:Type u#1) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U10 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_exportable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p _ #c1.c_ityp _ #c2.c_ityp)
+    (fun (Node (| _, U10hoc s |) lhs rhs) ->
+      mk_export_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance exportable_arrow11 a3p
+  (t1:Type u#1) st1 {| c1:safe_importable_to a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:exportable_from a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : exportable_from a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U11 (Spec true false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_exportable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p _ #c1.c_ityp _ #c2.c_ityp)
+    (fun (Node (| _, U11hoc s |) lhs rhs) ->
+      mk_export_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
 
 (** Importable instances **)
 instance poly_iface_is_safely_importable a3p t {| c1:poly_iface a3p t |} : safe_importable_to a3p t Leaf = {
@@ -357,22 +405,13 @@ instance safe_importable_resexn a3p t st {| c:importable_to a3p t st |} : safe_i
     | Inr err -> ())
 }
 
-instance safe_importable_arrow_err00
-  a3p
-  (t1:Type u#0)
-  st1
-  {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:importable_to a3p t2 st2 |}
+let mk_safe_import_arrow_err a3p
+  (t1:Type) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type) st2 {| c2:importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
-  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U00 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) = {
-  c_styp = witnessable_arrow t1 (resexn t2) pre post;
-  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
-  c_ityp = poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp);
-  safe_import = (fun hocs (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (x:t1) ->
-    let Node (| _, U00hoc (EnforcePost c_pre c_post check) |) lhs rhs = hocs in
+  : (hoc a3p (Spec false true t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) -> (x:t1 -> ST (resexn t2) (pre x) (post x))) =
+  fun (EnforcePost c_pre c_post check) lhs rhs (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (x:t1) ->
     c_pre x;
     c1.lemma_export_preserves_prref x lhs;
     let (| _, cb_check |) = check x in
@@ -383,26 +422,62 @@ instance safe_importable_arrow_err00
     match cb_check fres with
     | Inl _ -> fres
     | Inr err -> (c_post x err; (Inr err))
-  );
-  lemma_safe_import_preserves_prref = (fun _ _ -> ())
-}
 
-instance safe_importable_arrow00
-  a3p
-  (t1:Type u#0)
-  st1
-  {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:safe_importable_to a3p t2 st2 |}
+instance safe_importable_arrow_err00 a3p
+  (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U00 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U00hoc s |) lhs rhs) -> mk_safe_import_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow_err01 a3p
+  (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U01 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U01hoc s |) lhs rhs) -> mk_safe_import_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow_err10 a3p
+  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U10 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U10hoc s |) lhs rhs) -> mk_safe_import_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow_err11 a3p
+  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U11 (Spec false true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 (resexn t2) pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
+    (fun (Node (| _, U11hoc s |) lhs rhs) -> mk_safe_import_arrow_err a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+let mk_safe_import_arrow a3p
+  (t1:Type) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type) st2 {| c2:safe_importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
-  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U00 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) = {
-  c_styp = witnessable_arrow t1 t2 pre post;
-  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
-  c_ityp = poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp;
-  safe_import = (fun hocs f (x:t1) ->
-    let Node (| _, U00hoc (TrivialPost c_pre c_post) |) lhs rhs = hocs in
+  : (hoc a3p (Spec false false t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #c2.c_ityp.wt) -> (x:t1 -> ST t2 (pre x) (post x))) =
+  fun (TrivialPost c_pre c_post) lhs rhs (f:mk_poly_arrow a3p _ #c1.c_ityp.wt _ #c2.c_ityp.wt) (x:t1) ->
     c_pre x;
     c1.lemma_export_preserves_prref x lhs;
     let x' = c1.export lhs x in
@@ -411,34 +486,55 @@ instance safe_importable_arrow00
     c_post x fres;
     c2.lemma_safe_import_preserves_prref res rhs;
     fres
-  );
-  lemma_safe_import_preserves_prref = (fun _ _ -> ())
-}
 
-instance safe_importable_arrow10
-  a3p
-  (t1:Type u#1) 
-  st1
-  {| c1:exportable_from a3p t1 st1 |}
-  (t2:Type u#0)
-  st2
-  {| c2:safe_importable_to a3p t2 st2 |}
+instance safe_importable_arrow00 a3p
+  (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:safe_importable_to a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
-  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U10 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) = {
-  c_styp = witnessable_arrow t1 t2 pre post;
-  ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt c2.ityp #c2.c_ityp.wt;
-  c_ityp = poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp;
-  safe_import = (fun hocs f (x:t1) ->
-    let Node (| _, U10hoc (TrivialPost c_pre c_post) |) lhs rhs = hocs in
-    c_pre x;
-    c1.lemma_export_preserves_prref x lhs;
-    let x' = c1.export lhs x in
-    let res : c2.ityp = f x' in
-    let fres = c2.safe_import rhs res in
-    c_post x fres;
-    c2.lemma_safe_import_preserves_prref res rhs;
-    fres
-  );
-  lemma_safe_import_preserves_prref = (fun _ _ -> ())
-}
+  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U00 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp)
+    (fun (Node (| _, U00hoc s |) lhs rhs) ->
+      mk_safe_import_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow01 a3p
+  (t1:Type u#0) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:safe_importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U01 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp)
+    (fun (Node (| _, U01hoc s |) lhs rhs) ->
+      mk_safe_import_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow10 a3p
+  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#0) st2 {| c2:safe_importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U10 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp)
+    (fun (Node (| _, U10hoc s |) lhs rhs) ->
+      mk_safe_import_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())
+
+instance safe_importable_arrow11 a3p
+  (t1:Type u#1) st1 {| c1:exportable_from a3p t1 st1 |}
+  (t2:Type u#1) st2 {| c2:safe_importable_to a3p t2 st2 |}
+  (pre:(t1 -> st_pre))
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : safe_importable_to a3p (x:t1 -> ST t2 (pre x) (post x)) (Node (U11 (Spec false false t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
+  mk_safe_importable
+    (witnessable_arrow t1 t2 pre post)
+    (poly_iface_arrow a3p c1.ityp #c1.c_ityp c2.ityp #c2.c_ityp)
+    (fun (Node (| _, U11hoc s |) lhs rhs) ->
+      mk_safe_import_arrow a3p t1 st1 #c1 t2 st2 #c2 pre post s lhs rhs)
+    (fun _ _ -> ())

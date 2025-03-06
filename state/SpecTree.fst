@@ -131,12 +131,6 @@ type uspec =
 | U10 : v:spec u#1 u#0 -> uspec
 | U11 : v:spec u#1 u#1 -> uspec
 
-let test : spec =
-  Spec true false (FStar.Universe.raise_t u#0 u#5 int) solve (fun x h0 -> True) (FStar.Universe.raise_t u#0 u#8 int) solve (fun x h0 _ _ -> True)
-
-type pre_c_pre a3p (#a:Type) (c:witnessable a) (pre:a -> st_pre) =
-  x:a -> Lemma (forall h0. pre_poly_arrow a3p #a #c x h0 ==> pre x h0)
-
 type pre_c_post a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
   x:a -> r:b -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)
 
@@ -147,7 +141,7 @@ noeq
 type hoc a3p : (s:spec) -> Type =
 | TrivialPre :
     #s:spec{s.err == false /\ s.bit == true} ->
-    c_pre:pre_c_pre a3p s.wt_argt s.pre -> 
+    c_pre:(x:s.argt -> Lemma (forall h0. pre_poly_arrow a3p #s.argt #s.wt_argt x h0 ==> s.pre x h0)) -> 
     c_post:pre_c_post a3p s.wt_rett s.pre s.post
     -> hoc a3p s
 
