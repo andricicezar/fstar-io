@@ -135,6 +135,15 @@ type pck_spec =
     wt_rett:witnessable rett ->
     (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
     pck_spec
+| Spec10 :
+    bit:bool ->
+    argt:Type u#1 ->
+    wt_argt:witnessable argt ->
+    pre:(argt -> st_pre) ->
+    rett:Type u#0 ->
+    wt_rett:witnessable rett ->
+    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
+    pck_spec
 
 let argt0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : Type u#0 =
   match p with
@@ -146,32 +155,46 @@ let wt_argt0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : witnessable (argt0 p) =
   | SpecErr00 _ _ wt _ _ _ _ -> wt
   | Spec00 _ _ wt _ _ _ _ -> wt
 
-let argt1 (p:pck_spec{SpecErr10? p}) : Type u#1 =
+let argt1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : Type u#1 =
   match p with
   | SpecErr10 _ argt _ _ _ _ _ -> argt  
+  | Spec10 _ argt _ _ _ _ _ -> argt
+
+let wt_argt1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : witnessable (argt1 p) =
+  match p with
+  | SpecErr10 _ _ wt _ _ _ _ -> wt
+  | Spec10 _ _ wt _ _ _ _ -> wt
 
 let rett0 (p:pck_spec) : Type u#0 =
   match p with
   | SpecErr00 _ _ _ _ rett _ _ -> rett
-  | Spec00 _ _ _ _ rett _ _ -> rett
   | SpecErr10 _ _ _ _ rett _ _ -> rett
+  | Spec00 _ _ _ _ rett _ _ -> rett
+  | Spec10 _ _ _ _ rett _ _ -> rett
 
 let wt_rett0 (p:pck_spec) : witnessable (rett0 p) =
   match p with
   | SpecErr00 _ _ _ _ _ wt _ -> wt
-  | Spec00 _ _ _ _ _ wt _ -> wt
   | SpecErr10 _ _ _ _ _ wt _ -> wt
+  | Spec00 _ _ _ _ _ wt _ -> wt
+  | Spec10 _ _ _ _ _ wt _ -> wt
 
 let bit (p:pck_spec) : bool =
   match p with
   | SpecErr00 b _ _ _ _ _ _ -> b
   | SpecErr10 b _ _ _ _ _ _ -> b
   | Spec00 b _ _ _ _ _ _ -> b
+  | Spec10 b _ _ _ _ _ _ -> b
 
 let pre0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : argt0 p -> st_pre =
   match p with
   | SpecErr00 _ _ _ pre _ _ _ -> pre
   | Spec00 _ _ _ pre _ _ _ -> pre
+
+let pre1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : argt1 p -> st_pre =
+  match p with
+  | SpecErr10 _ _ _ pre _ _ _ -> pre
+  | Spec10 _ _ _ pre _ _ _ -> pre
 
 noeq
 type hoc a3p : (s:pck_spec) -> Type =
@@ -183,7 +206,7 @@ type hoc a3p : (s:pck_spec) -> Type =
         Lemma (forall h0 h1. (Spec00?.post s) x h0 r h1 ==> post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1))
     -> hoc a3p s
 
-| TrivialPost :
+| TrivialPost00 :
     #s:pck_spec{Spec00? s /\ bit s == false} ->
     c_pre:(x:(argt0 s) ->
         Lemma (forall h0. (pre0 s) x h0 ==> pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s) x h0)) ->
@@ -191,13 +214,30 @@ type hoc a3p : (s:pck_spec) -> Type =
         Lemma (forall h0 h1. post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1 ==> (Spec00?.post s) x h0 r h1))
     -> hoc a3p s
 
-| EnforcePre :
+| TrivialPost10 :
+    #s:pck_spec{Spec10? s /\ bit s == false} ->
+    c_pre:(x:(argt1 s) ->
+        Lemma (forall h0. (pre1 s) x h0 ==> pre_poly_arrow a3p #(argt1 s) #(wt_argt1 s) x h0)) ->
+    c_post:(x:(argt1 s) -> r:(rett0 s) -> 
+        Lemma (forall h0 h1. post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1 ==> (Spec10?.post s) x h0 r h1))
+    -> hoc a3p s
+
+| EnforcePre00 :
     #s:pck_spec{SpecErr00? s /\ bit s == true} ->
     check:(select_check a3p (argt0 s) unit
                         (pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s))
                         (fun x _ _ h1 -> (pre0 s) x h1)) ->
     c_post:(x:(argt0 s) -> r:(resexn (rett0 s)) -> 
         Lemma (forall h0 h1. (SpecErr00?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (rett0 s)) #(witnessable_resexn _ #(wt_rett0 s)) h0 r h1))
+    -> hoc a3p s
+
+| EnforcePre10 :
+    #s:pck_spec{SpecErr10? s /\ bit s == true} ->
+    check:(select_check a3p (argt1 s) unit
+                        (pre_poly_arrow a3p #(argt1 s) #(wt_argt1 s))
+                        (fun x _ _ h1 -> (pre1 s) x h1)) ->
+    c_post:(x:(argt1 s) -> r:(resexn (rett0 s)) -> 
+        Lemma (forall h0 h1. (SpecErr10?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (rett0 s)) #(witnessable_resexn _ #(wt_rett0 s)) h0 r h1))
     -> hoc a3p s
 
 | EnforcePost :
@@ -225,7 +265,7 @@ let myspec : pck_spec =
 
 private
 let test_pre : hoc c3p myspec =
-  EnforcePre
+  EnforcePre00
     (fun (x:(argt0 myspec)) ->
       let x : ref int = x in
       let eh0 = get_heap () in

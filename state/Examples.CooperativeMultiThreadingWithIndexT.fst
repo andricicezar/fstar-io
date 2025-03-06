@@ -64,7 +64,7 @@ let exportable_run_type (a3p) : exportable_from a3p (src_run_type a3p) Leaf = {
       (f ((fuel, init), tasks))
     else Inr (Contract_failure "fuel, or tasks not good")
   );
-  lemma_export_preserves_prref = (fun _ _ _ -> ())
+  lemma_export_preserves_prref = (fun _ _ -> ())
 }
 
 let sit : src_interface2 = {

@@ -120,7 +120,7 @@ let f_xeq5_spec (a3p:threep) : pck_spec =
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ (Inl? r /\ Inl?.v r == 2)))
 
 let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (f_xeq5_spec a3p) Leaf Leaf) =
-  exportable_arrow a3p
+  exportable_arrow00 a3p
     (ref int) int
     Leaf Leaf
     #(safe_importable_is_importable a3p _ Leaf #(safe_importable_ref a3p int))
