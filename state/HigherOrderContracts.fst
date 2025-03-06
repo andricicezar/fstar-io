@@ -143,8 +143,8 @@ let mk_export_arrow_err a3p
   (t1:Type) st1 {| c1:importable_to a3p t1 st1 |}
   (t2:Type) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
-  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0))) :
-  (export:hoc a3p (Spec true true t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST (resexn t2) (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_resexn c2.ityp #c2.c_ityp.wt))) =
+  (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
+  : (hoc a3p (Spec true true t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST (resexn t2) (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_resexn c2.ityp #c2.c_ityp.wt))) =
   fun (EnforcePre check c_post) lhs rhs f (x:c1.ityp) ->
     match c1.import lhs x with
     | Inr err -> Inr err
@@ -213,8 +213,8 @@ let mk_export_arrow a3p
   (t1:Type) st1 {| c1:safe_importable_to a3p t1 st1 |}
   (t2:Type) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
-  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) :
-  (export:hoc a3p (Spec true false t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST t2 (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _#c2.c_ityp.wt)) =
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
+  : (hoc a3p (Spec true false t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (x:t1 -> ST t2 (pre x) (post x)) -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _#c2.c_ityp.wt)) =
   fun (TrivialPre c_pre c_post) lhs rhs f (x:c1.ityp) ->
     let x' = c1.safe_import lhs x in
     c_pre x';
@@ -380,7 +380,7 @@ instance import_refinement a3p t st {| c:importable_to a3p t st |} (p:t->Type0) 
   ityp = c.ityp;
   c_ityp = c.c_ityp;
   import = (fun hocs x ->
-    match (c.import hocs x) with
+    match c.import hocs x with
     | Inl x -> if check x then Inl x else Inr (Contract_failure "check of refinement failed")
     | Inr err -> Inr err);
   lemma_import_preserves_prref = (fun x -> c.lemma_import_preserves_prref x);
@@ -411,7 +411,7 @@ let mk_safe_import_arrow_err a3p
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
   : (hoc a3p (Spec false true t1 c1.c_styp pre t2 c2.c_styp post) -> hoc_tree a3p st1 -> hoc_tree a3p st2 -> (mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) -> (x:t1 -> ST (resexn t2) (pre x) (post x))) =
-  fun (EnforcePost c_pre c_post check) lhs rhs (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (x:t1) ->
+  fun (EnforcePost c_pre c_post check) lhs rhs (f:mk_poly_arrow a3p _ #c1.c_ityp.wt _ #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (x:t1) ->
     c_pre x;
     c1.lemma_export_preserves_prref x lhs;
     let (| _, cb_check |) = check x in
