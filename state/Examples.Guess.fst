@@ -40,7 +40,7 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 instance player_args a3p : poly_iface a3p ((int & int) & (mk_poly_arrow a3p int cmp)) =
-  poly_iface_pair a3p (int & int) (mk_poly_arrow a3p int cmp) #_ #(poly_iface_arrow a3p int cmp)
+  poly_iface_pair a3p (int & int) (mk_poly_arrow a3p int cmp) #(poly_iface_arrow a3p int cmp)
 
 let cb_spec (a3p:threep) : pck_spec =
   Spec00 true
@@ -66,7 +66,7 @@ let player_hoc : hoc c3p (player_spec c3p) =
 instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (player_spec a3p) Leaf Leaf) =
   safe_importable_arrow_safe10 
     a3p _ _
-    #(poly_iface_is_exportable a3p _ #(poly_iface_pair a3p _ _ #(poly_iface_pair a3p int int) #(poly_iface_arrow a3p _ _ #(poly_iface_int a3p) #(poly_iface_cmp a3p))))
+    #(poly_iface_is_exportable a3p _ #(poly_iface_pair a3p _ #(poly_iface_pair a3p int int) _ #(poly_iface_arrow a3p _ #(poly_iface_int a3p) _ #(poly_iface_cmp a3p))))
     _ _ #(poly_iface_is_safely_importable a3p int #(poly_iface_int a3p))
     (fun x h0 -> inv a3p h0 /\ fst (fst x) < snd (fst x))
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)

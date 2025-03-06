@@ -14,10 +14,15 @@ type resexn (a:Type u#a) : Type u#a = either a err
 instance witnessable_err : witnessable err = {
   satisfy = (fun _ _ -> True);
 }
-
+instance poly_iface_err a3p : poly_iface a3p err = {
+  wt = witnessable_err;
+}
+ 
 instance witnessable_resexn t {| witnessable t |} : witnessable (resexn t) =
   witnessable_sum t err
-
+instance poly_iface_resexn a3p t1 {| c1:poly_iface a3p t1 |} : poly_iface a3p (resexn t1) =
+  poly_iface_sum a3p t1 #c1 err
+ 
 (** **** Tree **)
 type tree (a: Type u#a) =
   | Leaf : tree a

@@ -24,7 +24,7 @@ type lib_type a3p =
 
 instance safe_importable_lib_type a3p : safe_importable_to a3p (lib_type a3p) Leaf =
   poly_iface_is_safely_importable a3p (lib_type a3p)
-    #(poly_iface_arrow a3p (ref (ref int)) (callback a3p) #solve #(poly_iface_arrow a3p unit unit))
+    #(poly_iface_arrow a3p (ref (ref int)) (callback a3p) #(poly_iface_arrow a3p unit unit))
 
 (* Calling SecRef* on it *)
 

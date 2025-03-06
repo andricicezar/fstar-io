@@ -61,13 +61,13 @@ instance poly_iface_shareable_type a3p (t:Type) {| c:tc_shareable_type t |} : po
 instance poly_iface_unit a3p : poly_iface a3p unit = { wt = witnessable_unit }
 instance poly_iface_int  a3p : poly_iface a3p int = { wt = witnessable_int }
 instance poly_iface_bool  a3p : poly_iface a3p bool = { wt = witnessable_bool }
-instance poly_iface_pair a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+instance poly_iface_pair a3p t1 {| c1:poly_iface a3p t1 |}  t2 {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (t1 * t2)
   = { wt = witnessable_pair t1 #c1.wt t2 #c2.wt }
 instance poly_iface_univ_raise a3p (t1:Type u#a) {| c1:poly_iface a3p t1 |}
   : poly_iface a3p (FStar.Universe.raise_t u#a u#b t1)
   = { wt = witnessable_univ_raise t1 #c1.wt }
-instance poly_iface_sum a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+instance poly_iface_sum a3p t1 {| c1:poly_iface a3p t1 |} t2 {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (either t1 t2)
   = { wt = witnessable_sum t1 #c1.wt t2 #c2.wt }
 instance poly_iface_option a3p t1 {| c1:poly_iface a3p t1 |}
@@ -83,7 +83,7 @@ instance poly_iface_llist a3p t1 {| c1:tc_shareable_type t1 |}
   : poly_iface a3p (linkedList t1)
   = { wt = witnessable_llist t1 #solve }
 
-instance poly_iface_arrow a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
+instance poly_iface_arrow a3p t1 {| c1:poly_iface a3p t1 |} t2 {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (mk_poly_arrow a3p t1 #c1.wt t2 #c2.wt)
   = { wt = witnessable_arrow t1 t2 _ _ }
 

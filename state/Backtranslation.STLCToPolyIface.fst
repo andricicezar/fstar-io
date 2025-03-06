@@ -30,8 +30,8 @@ let rec elab_typ0_tc #a3p (t:typ0) : poly_iface a3p (elab_typ0 t) =
   match t with
   | TUnit -> poly_iface_unit a3p
   | TNat -> poly_iface_int a3p
-  | TSum t1 t2 -> poly_iface_sum a3p _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
-  | TPair t1 t2 -> poly_iface_pair a3p _ _ #(elab_typ0_tc t1) #(elab_typ0_tc t2)
+  | TSum t1 t2 -> poly_iface_sum a3p _ #(elab_typ0_tc t1) _ #(elab_typ0_tc t2)
+  | TPair t1 t2 -> poly_iface_pair a3p _ #(elab_typ0_tc t1) _ #(elab_typ0_tc t2)
   | TRef t -> poly_iface_ref a3p (elab_typ0 t) #solve
   | TLList t -> poly_iface_llist a3p (elab_typ0 t) #solve
 
@@ -49,11 +49,11 @@ let rec _elab_typ (#a3p:threep) (t:typ) : tt:Type u#1 & poly_iface a3p tt =
   | TSum t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| either tt1 tt2, poly_iface_sum a3p tt1 tt2 #c_tt1 #c_tt2 |)
+    (| either tt1 tt2, poly_iface_sum a3p tt1 #c_tt1 tt2 #c_tt2 |)
   | TPair t1 t2 ->
     let (| tt1, c_tt1 |) = _elab_typ t1 in
     let (| tt2, c_tt2 |) = _elab_typ t2 in
-    (| tt1 * tt2, poly_iface_pair a3p tt1 tt2 #c_tt1 #c_tt2 |)
+    (| tt1 * tt2, poly_iface_pair a3p tt1 #c_tt1 tt2 #c_tt2 |)
   | TRef _ ->
     let tt = elab_typ0 t in
     let c_tt = elab_typ0_tc t in

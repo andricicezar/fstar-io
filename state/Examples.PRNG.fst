@@ -18,7 +18,7 @@ type prog_type =
 (* Calling SecRef* on it *)
 
 instance exportable_prog a3p : exportable_from a3p (mk_poly_arrow a3p int (mk_poly_arrow a3p unit int) #(witnessable_arrow u#0 u#_ _ _ _ _)) Leaf =
-  poly_iface_is_exportable a3p _ #(poly_iface_arrow a3p int (mk_poly_arrow a3p unit int) #_ #(poly_iface_arrow a3p unit int))
+  poly_iface_is_exportable a3p _ #(poly_iface_arrow a3p int (mk_poly_arrow a3p unit int) #(poly_iface_arrow a3p unit int))
 
 let sit : src_interface2 = {
   specs = (fun _ -> Leaf);

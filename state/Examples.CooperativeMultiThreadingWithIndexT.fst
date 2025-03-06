@@ -43,11 +43,13 @@ let tgt_typ_run a3p =
 
 instance poly_iface_run a3p
   : poly_iface a3p (tgt_typ_run a3p) =
-  poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
-    #(poly_iface_pair a3p (int * int) (list (r:(ref int) -> (continuation r unit)))
-      #solve
+  poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) 
+    #(poly_iface_pair a3p 
+      (int * int) #solve
+      (list (r:(ref int) -> (continuation r unit)))
       #(poly_iface_list a3p (r:(ref int) -> (continuation r unit)) #solve))
-    #(poly_iface_sum a3p int err #solve #(poly_iface_err a3p))
+    (resexn int)
+    #(poly_iface_resexn a3p int #solve)
 
 let src_run_type (a3p:threep) =
   (mk_poly_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
