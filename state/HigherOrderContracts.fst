@@ -216,7 +216,7 @@ instance exportable_arrow00
     (witnessable_arrow t1 t2 pre post)
     (poly_iface_arrow a3p _ #c1.c_ityp _ #c2.c_ityp)
     (fun hocs f (x:c1.ityp) ->
-      let Node (| _, TrivialPre c_pre c_post |) lhs rhs = hocs in
+      let Node (| _, TrivialPre00 c_pre c_post |) lhs rhs = hocs in
       let x' = c1.safe_import lhs x in
       c_pre x';
       c1.lemma_safe_import_preserves_prref x lhs;
@@ -372,7 +372,7 @@ instance safe_importable_arrow_err00
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow a3p c1.ityp #c1.c_ityp (resexn c2.ityp) #(poly_iface_resexn a3p c2.ityp #c2.c_ityp);
   safe_import = (fun hocs (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (x:t1) ->
-    let Node (| _, EnforcePost c_pre c_post check |) lhs rhs = hocs in
+    let Node (| _, EnforcePost00 c_pre c_post check |) lhs rhs = hocs in
     c_pre x;
     c1.lemma_export_preserves_prref x lhs;
     let (| _, cb_check |) = check x in

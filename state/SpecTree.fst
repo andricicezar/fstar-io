@@ -201,14 +201,36 @@ let pre1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : argt1 p -> st_pre =
   | SpecErr10 _ _ _ pre _ _ _ -> pre
   | Spec10 _ _ _ pre _ _ _ -> pre
 
+type pre_c_pre a3p (#a:Type) (c:witnessable a) (pre:a -> st_pre) =
+  x:a -> Lemma (forall h0. pre_poly_arrow a3p #a #c x h0 ==> pre x h0)
+
+type pre_c_post a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
+  x:a -> r:b -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)
+
+// type pre_c_post_err a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
+//   x:a -> r:(resexn b) -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)
+
+type pre_check a3p a {| c:witnessable a |} (pre:a -> st_pre)=
+  select_check a3p a unit (pre_poly_arrow a3p #a #c) (fun x _ _ h1 -> pre x h1)
+
 noeq
 type hoc a3p : (s:pck_spec) -> Type =
-| TrivialPre :
+| TrivialPre00 :
     #s:pck_spec{Spec00? s /\ bit s == true} ->
-    c_pre:(x:(argt0 s) -> 
-        Lemma (forall h0. pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s) x h0 ==> (pre0 s) x h0)) ->
-    c_post:(x:(argt0 s) -> r:(rett0 s) -> 
-        Lemma (forall h0 h1. (Spec00?.post s) x h0 r h1 ==> post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1))
+    c_pre:pre_c_pre a3p (wt_argt0 s) (pre0 s) -> 
+    c_post:pre_c_post a3p (wt_rett0 s) (pre0 s) (Spec00?.post s)
+    -> hoc a3p s
+
+| EnforcePre00 :
+    #s:pck_spec{SpecErr00? s /\ bit s == true} ->
+    check:pre_check a3p (argt0 s) #(wt_argt0 s) (pre0 s) ->
+    c_post:pre_c_post a3p (witnessable_resexn _ #(wt_rett0 s)) (pre0 s) (SpecErr00?.post s)
+    -> hoc a3p s
+
+| EnforcePre10 :
+    #s:pck_spec{SpecErr10? s /\ bit s == true} ->
+    check:pre_check a3p (argt1 s) #(wt_argt1 s) (pre1 s) ->
+    c_post:pre_c_post a3p (witnessable_resexn _ #(wt_rett0 s)) (pre1 s) (SpecErr10?.post s)
     -> hoc a3p s
 
 | TrivialPost00 :
@@ -227,25 +249,7 @@ type hoc a3p : (s:pck_spec) -> Type =
         Lemma (forall h0 h1. post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1 ==> (Spec10?.post s) x h0 r h1))
     -> hoc a3p s
 
-| EnforcePre00 :
-    #s:pck_spec{SpecErr00? s /\ bit s == true} ->
-    check:(select_check a3p (argt0 s) unit
-                        (pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s))
-                        (fun x _ _ h1 -> (pre0 s) x h1)) ->
-    c_post:(x:(argt0 s) -> r:(resexn (rett0 s)) -> 
-        Lemma (forall h0 h1. (SpecErr00?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (rett0 s)) #(witnessable_resexn _ #(wt_rett0 s)) h0 r h1))
-    -> hoc a3p s
-
-| EnforcePre10 :
-    #s:pck_spec{SpecErr10? s /\ bit s == true} ->
-    check:(select_check a3p (argt1 s) unit
-                        (pre_poly_arrow a3p #(argt1 s) #(wt_argt1 s))
-                        (fun x _ _ h1 -> (pre1 s) x h1)) ->
-    c_post:(x:(argt1 s) -> r:(resexn (rett0 s)) -> 
-        Lemma (forall h0 h1. (SpecErr10?.post s) x h0 r h1 ==> post_poly_arrow a3p #(resexn (rett0 s)) #(witnessable_resexn _ #(wt_rett0 s)) h0 r h1))
-    -> hoc a3p s
-
-| EnforcePost :
+| EnforcePost00 :
     #s:pck_spec{SpecErr00? s /\ bit s == false} ->
     c_pre:(x:(argt0 s) -> 
         Lemma (forall h0. (pre0 s) x h0 ==> pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s) x h0)) ->
@@ -297,7 +301,7 @@ let myspec' : pck_spec =
 
 private
 let test_post : hoc c3p myspec' =
-  EnforcePost
+  EnforcePost00
     (fun _ -> ())
     (fun _ _ -> ())
     (fun x ->

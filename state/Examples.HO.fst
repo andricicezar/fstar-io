@@ -34,7 +34,7 @@ let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (f_a
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x))
 
 let f_hoc : hoc c3p f_spec =
-  EnforcePost
+  EnforcePost00
     (fun _ -> ())
     (fun _ _ -> ())
     (fun rx ->
