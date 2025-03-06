@@ -72,7 +72,7 @@ instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
 instance args_importable a3p : importable_to a3p (player_type a3p & (int & (int & int))) _ =
-  importable_pair a3p (player_type a3p) (int & (int & int)) _ Leaf #(safe_importable_is_importable a3p _ _ #(importable_player a3p))
+  importable_pair a3p (player_type a3p) _ #(safe_importable_is_importable a3p _ _ #(importable_player a3p)) (int & (int & int)) Leaf
 
 let play_guess_spec (a3p:threep) : pck_spec =
   SpecErr10 true
@@ -80,7 +80,7 @@ let play_guess_spec (a3p:threep) : pck_spec =
     (args_importable a3p).c_styp (** TODO: simply here with witnessable *)
     (fun x h0 -> inv a3p h0 /\ fst (snd (snd x)) < fst (snd x) /\ fst (snd x) < snd (snd (snd x)))
     (bool & int)
-    (exportable_pair a3p bool int Leaf Leaf).c_styp (** TODO: simply here with witnessable *)
+    (exportable_pair a3p bool Leaf int Leaf).c_styp (** TODO: simply here with witnessable *)
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
 let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
@@ -95,9 +95,10 @@ let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
 
 instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (play_guess_spec a3p) _ _) =
   exportable_arrow10 a3p 
-    _ _ _ _ 
+    _ _
     #(args_importable a3p)
-    #(exportable_pair a3p bool int Leaf Leaf)
+    _ _
+    #(exportable_pair a3p bool Leaf int Leaf)
     _ _
 
 let play_guess_st (a3p:threep) : spec_tree =

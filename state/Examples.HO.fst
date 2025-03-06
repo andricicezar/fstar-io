@@ -28,10 +28,8 @@ let f_spec : pck_spec = f_a3p c3p
 
 let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (f_a3p a3p) Leaf Leaf) =
   safe_importable_arrow a3p
-    (ref int) unit
-    Leaf Leaf
-    #(exportable_ref a3p int)
-    #(safe_importable_is_importable a3p unit Leaf #(safe_importable_unit a3p))
+    (ref int) Leaf #(exportable_ref a3p int)
+    unit Leaf #(safe_importable_is_importable a3p unit Leaf #(safe_importable_unit a3p))
     (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x))
 
@@ -121,12 +119,9 @@ let f_xeq5_spec (a3p:threep) : pck_spec =
 
 let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (f_xeq5_spec a3p) Leaf Leaf) =
   exportable_arrow00 a3p
-    (ref int) int
-    Leaf Leaf
-    #(safe_importable_is_importable a3p _ Leaf #(safe_importable_ref a3p int))
-    #(exportable_int a3p)
-    _
-    _
+    (ref int) Leaf #(safe_importable_is_importable a3p _ Leaf #(safe_importable_ref a3p int))
+    int Leaf #(exportable_int a3p)
+    _ _
 
 let f_xeq5_hoc : hoc c3p (f_xeq5_spec c3p) =
   EnforcePre00
