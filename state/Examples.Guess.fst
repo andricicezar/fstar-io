@@ -63,20 +63,6 @@ let player_spec (a3p:threep) : pck_spec =
 let player_hoc : hoc c3p (player_spec c3p) =
   TrivialPost10 (fun _ -> ()) (fun _ _ -> ())
 
-// select_check c3p (argt1 s) unit
-//                         (pre_poly_arrow c3p #(argt1 s) #(wt_argt1 s))
-//                         (fun x _ _ h1 -> (pre1 s) x h1)
-// cb_check a3p (argt1 s) unit #c2 pre post x eh0
-// type cb_check a3p (t1:Type) (t2:Type) {| c2: witnessable t2 |}
-//   (pre:(t1 -> st_pre))
-//   (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
-//   (x:t1)
-//   (eh0:FStar.Ghost.erased heap{pre x eh0}) =
-//   (r:t2 -> ST (resexn unit) (fun h1 -> post_poly_arrow a3p eh0 r h1) (fun h1 rck h1' ->
-//     h1 == h1' /\ (Inl? rck ==> post x eh0 r h1)))
-
-
-(** Stuck here: **)
 instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (player_spec a3p) Leaf Leaf) =
   safe_importable_arrow_safe10 
     a3p _ _
@@ -105,7 +91,7 @@ let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
       let check : cb_check c3p (player_type c3p & (int & (int & int))) _ (pre_poly_arrow c3p #(argt1 (play_guess_spec c3p)) #(wt_argt1 (play_guess_spec c3p))) (fun x _ _ h1 -> (pre1 (play_guess_spec c3p)) x h1)  args eh0 =
         (fun () -> if fst (snd (snd args)) < fst (snd args) && fst (snd args) < snd (snd (snd args)) then Inl () else Inr (Contract_failure "Invalid range")) in
       (| eh0, check |))
-    (fun _ _ -> admit ())
+    (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (rett0 (play_guess_spec c3p))) #(witnessable_resexn _ #(wt_rett0 (play_guess_spec c3p))) h0 r h1))
 
 instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (play_guess_spec a3p) _ _) =
   exportable_arrow10 a3p 
@@ -120,12 +106,16 @@ let play_guess_st (a3p:threep) : spec_tree =
         (Node (player_spec a3p) Leaf Leaf) Leaf)
     (EmptyNode Leaf Leaf)
 
+let player_pck_hoc : pck_hoc c3p =
+  (| player_spec c3p, player_hoc |)
+
+let play_guess_pck_hoc : pck_hoc c3p =
+  (| play_guess_spec c3p, play_guess_hoc |)
+
 let play_guess_hoc_tree : hoc_tree c3p (play_guess_st c3p) =
-  admit ();
-  Node (| play_guess_spec c3p, play_guess_hoc |)
+  Node play_guess_pck_hoc
     (EmptyNode
-      (Node (| player_spec c3p, player_hoc |) Leaf Leaf) 
-      Leaf)
+      (Node player_pck_hoc Leaf Leaf) Leaf)
     (EmptyNode Leaf Leaf)
 
 let sit2 : src_interface2 = {
@@ -134,3 +124,28 @@ let sit2 : src_interface2 = {
   pt = play_guess_type;
   c_pt = exportable_play_guess;
 }
+
+val prog2 : prog_src2 sit2
+let prog2 = play_guess
+
+let compiled_prog2 =
+  compile_pprog2 #sit2 prog2
+
+val some_ctx2 : ctx_tgt2 (comp_int_src_tgt2 sit2)
+let some_ctx2 #a3p _ _ alloc prog =
+  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #_ #(witnessable_arrow int cmp _ _)) int = 
+    (fun ((l, r), cb) -> let _ = cb l in let _ = cb (l+1) in r) in
+  match prog (cb, (0, (0, 10))) with
+  | Inl (b, guesses_count) -> if b then -2 else 0
+  | Inr _ -> -1
+
+let whole_prog2 : whole_tgt2 =
+  link_tgt2 compiled_prog2 some_ctx2
+
+let r2 = whole_prog2 ()
+let _ =
+  match r2 with
+  | 0 -> FStar.IO.print_string "Success!\n"
+  | -2 -> FStar.IO.print_string "Error! How did it guess?\n"
+  | -1 -> FStar.IO.print_string "Error! The contract was supposed to succeed!\n"
+  | _ -> FStar.IO.print_string "Impossible!\n"
