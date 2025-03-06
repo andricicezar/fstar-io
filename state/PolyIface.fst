@@ -63,13 +63,13 @@ instance poly_iface_int  a3p : poly_iface a3p int = { wt = witnessable_int }
 instance poly_iface_bool  a3p : poly_iface a3p bool = { wt = witnessable_bool }
 instance poly_iface_pair a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (t1 * t2)
-  = { wt = witnessable_pair t1 t2 #c1.wt #c2.wt }
+  = { wt = witnessable_pair t1 #c1.wt t2 #c2.wt }
 instance poly_iface_univ_raise a3p (t1:Type u#a) {| c1:poly_iface a3p t1 |}
   : poly_iface a3p (FStar.Universe.raise_t u#a u#b t1)
   = { wt = witnessable_univ_raise t1 #c1.wt }
 instance poly_iface_sum a3p t1 t2 {| c1:poly_iface a3p t1 |} {| c2:poly_iface a3p t2 |}
   : poly_iface a3p (either t1 t2)
-  = { wt = witnessable_sum t1 t2 #c1.wt #c2.wt }
+  = { wt = witnessable_sum t1 #c1.wt t2 #c2.wt }
 instance poly_iface_option a3p t1 {| c1:poly_iface a3p t1 |}
   : poly_iface a3p (option t1)
   = { wt = witnessable_option t1 #c1.wt }

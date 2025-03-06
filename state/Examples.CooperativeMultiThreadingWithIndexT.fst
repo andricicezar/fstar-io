@@ -51,8 +51,11 @@ instance poly_iface_run a3p
 
 let src_run_type (a3p:threep) =
   (mk_poly_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
-    #(witnessable_pair (nat * int) (l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
-      #(witnessable_pair nat int #(witnessable_refinement int (fun x -> x >= 0))) #solve)
+    #(witnessable_pair 
+      (nat * int) 
+      #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int) 
+      (l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
+      #solve)
     (resexn int) #solve)
 
 let exportable_run_type (a3p) : exportable_from a3p (src_run_type a3p) Leaf = {

@@ -81,7 +81,7 @@ instance exportable_option a3p t st {| c:exportable_from a3p t st |} : exportabl
 }
 
 instance exportable_sum a3p t1 t2 st1 st2 {| c1:exportable_from a3p t1 st1 |} {| c2:exportable_from a3p t2 st2 |} : exportable_from a3p (either t1 t2) (EmptyNode st1 st2) = {
-  c_styp = witnessable_sum t1 t2 #c1.c_styp #c2.c_styp;
+  c_styp = witnessable_sum t1 #c1.c_styp t2 #c2.c_styp;
   ityp = either c1.ityp c2.ityp;
   c_ityp = poly_iface_sum _ _ _ #c1.c_ityp #c2.c_ityp;
   export = (fun hocs x -> match x with | Inl x -> Inl (c1.export (left hocs) x) | Inr x -> Inr (c2.export (right hocs) x));
@@ -93,7 +93,7 @@ instance exportable_resexn a3p t st {| c:exportable_from a3p t st |} : exportabl
   exportable_sum a3p t err st Leaf #c #(exportable_err a3p)
 
 instance exportable_pair a3p t1 t2 st1 st2 {| c1:exportable_from a3p t1 st1 |} {| c2:exportable_from a3p t2 st2 |} : exportable_from a3p (t1 * t2) (EmptyNode st1 st2) = {
-  c_styp = witnessable_pair t1 t2 #c1.c_styp #c2.c_styp;
+  c_styp = witnessable_pair t1 #c1.c_styp t2 #c2.c_styp;
   ityp = c1.ityp * c2.ityp;
   c_ityp = poly_iface_pair _ _ _ #c1.c_ityp #c2.c_ityp;
   export = (fun hocs (x1, x2) -> (c1.export (left hocs) x1, c2.export (right hocs) x2));
@@ -286,7 +286,7 @@ instance importable_option a3p t st {| c:importable_to a3p t st |} : importable_
 }
 
 instance importable_sum a3p t1 t2 st1 st2 {| c1:importable_to a3p t1 st1 |} {| c2:importable_to a3p t2 st2 |} : importable_to a3p (either t1 t2) (EmptyNode st1 st2) = {
-  c_styp = witnessable_sum t1 t2 #c1.c_styp #c2.c_styp;
+  c_styp = witnessable_sum t1 #c1.c_styp t2 #c2.c_styp;
   ityp = either c1.ityp c2.ityp;
   c_ityp = poly_iface_sum _ _ _ #c1.c_ityp #c2.c_ityp;
   import = (fun x hocs ->
@@ -308,9 +308,9 @@ instance importable_sum a3p t1 t2 st1 st2 {| c1:importable_to a3p t1 st1 |} {| c
 }
 
 instance importable_pair a3p t1 t2 st1 st2 {| c1:importable_to a3p t1 st1 |} {| c2:importable_to a3p t2 st2 |} : importable_to a3p (t1 * t2) (EmptyNode st1 st2) = {
-  c_styp = witnessable_pair t1 t2 #c1.c_styp #c2.c_styp;
+  c_styp = witnessable_pair t1 #c1.c_styp t2 #c2.c_styp;
   ityp = c1.ityp * c2.ityp;
-  c_ityp = poly_iface_pair _ _ _ #c1.c_ityp #c2.c_ityp;
+  c_ityp = poly_iface_pair a3p _ _ #c1.c_ityp #c2.c_ityp;
   import = (fun (x, x') hocs ->
     match c1.import x (left hocs) with
     | Inl x -> begin
@@ -344,7 +344,7 @@ instance import_refinement a3p t st {| c:importable_to a3p t st |} (p:t->Type0) 
 }
 
 instance safe_importable_resexn a3p t st {| c:importable_to a3p t st |} : safe_importable_to a3p (resexn t) (EmptyNode st Leaf)= {
-  c_styp = witnessable_sum t err #c.c_styp;
+  c_styp = witnessable_sum t #c.c_styp err;
   ityp = resexn c.ityp;
   c_ityp = poly_iface_sum _ c.ityp err #c.c_ityp;
   safe_import = (fun x hocs ->
@@ -377,7 +377,7 @@ instance safe_importable_arrow
   c_styp = witnessable_arrow t1 (resexn t2) pre post;
   ityp = mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_resexn c2.ityp #c2.c_ityp.wt);
   c_ityp = poly_iface_arrow _ c1.ityp (resexn c2.ityp) #_ #(poly_iface_sum _ c2.ityp err #c2.c_ityp);
-  safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp err #c2.c_ityp.wt)) (hocs:hoc_tree a3p _) (x:t1) ->
+  safe_import = (fun (f:mk_poly_arrow a3p c1.ityp #c1.c_ityp.wt (resexn c2.ityp) #(witnessable_sum c2.ityp #c2.c_ityp.wt err)) (hocs:hoc_tree a3p _) (x:t1) ->
     let Node (| _, myhoc |) lhs rhs : hoc_tree a3p _ = hocs in
     let EnforcePost c_pre c_post check = myhoc in
     c_pre x;

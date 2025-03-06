@@ -133,7 +133,7 @@ let compiled_prog2 =
 
 val some_ctx2 : ctx_tgt2 (comp_int_src_tgt2 sit2)
 let some_ctx2 #a3p _ _ alloc prog =
-  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #_ #(witnessable_arrow int cmp _ _)) int = 
+  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #(witnessable_arrow int cmp _ _)) int = 
     (fun ((l, r), cb) -> let _ = cb l in let _ = cb (l+1) in r) in
   match prog (cb, (0, (0, 10))) with
   | Inl (b, guesses_count) -> if b then -2 else 0
