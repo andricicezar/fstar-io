@@ -112,94 +112,27 @@ open FStar.Tactics.Typeclasses
 #set-options "--print_implicits --print_universes"
 
 noeq
-type pck_spec =
-| SpecErr00 :
-    bit:bool ->
-    argt:Type u#0 ->
-    wt_argt:witnessable argt ->
+type spec : Type u#(max (1 + a) (1 + b)) =
+| Spec :
+    bit:bool -> (* true -> enforce pre, false -> enforce post *)
+    err:bool ->
+    argt:Type u#a ->
+    wt_argt:witnessable argt -> (** asking for a witnessable type here helps the implementation of HoC to work only with this instance *)
     pre:(argt -> st_pre) ->
-    rett:Type u#0 ->
+    rett:Type u#b ->
     wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0))) ->
-    pck_spec
-| SpecErr10 :
-    bit:bool ->
-    argt:Type u#1 ->
-    wt_argt:witnessable argt ->
-    pre:(argt -> st_pre) ->
-    rett:Type u#0 ->
-    wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' (resexn rett) (pre x h0))) ->
-    pck_spec
-| Spec00 :
-    bit:bool ->
-    argt:Type u#0 ->
-    wt_argt:witnessable argt ->
-    pre:(argt -> st_pre) ->
-    rett:Type u#0 ->
-    wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
-    pck_spec
-| Spec10 :
-    bit:bool ->
-    argt:Type u#1 ->
-    wt_argt:witnessable argt ->
-    pre:(argt -> st_pre) ->
-    rett:Type u#0 ->
-    wt_rett:witnessable rett ->
-    (post:(x:argt -> h0:heap -> st_post' rett (pre x h0))) ->
-    pck_spec
+    (post:(x:argt -> h0:heap -> st_post' (if err then resexn rett else rett) (pre x h0))) ->
+    spec
 
-let argt0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : Type u#0 =
-  match p with
-  | SpecErr00 _ argt _ _ _ _ _ -> argt
-  | Spec00 _ argt _ _ _ _ _ -> argt
+noeq
+type uspec = 
+| U00 : v:spec u#0 u#0 -> uspec 
+| U01 : v:spec u#0 u#1 -> uspec
+| U10 : v:spec u#1 u#0 -> uspec
+| U11 : v:spec u#1 u#1 -> uspec
 
-let wt_argt0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : witnessable (argt0 p) =
-  match p with
-  | SpecErr00 _ _ wt _ _ _ _ -> wt
-  | Spec00 _ _ wt _ _ _ _ -> wt
-
-let argt1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : Type u#1 =
-  match p with
-  | SpecErr10 _ argt _ _ _ _ _ -> argt  
-  | Spec10 _ argt _ _ _ _ _ -> argt
-
-let wt_argt1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : witnessable (argt1 p) =
-  match p with
-  | SpecErr10 _ _ wt _ _ _ _ -> wt
-  | Spec10 _ _ wt _ _ _ _ -> wt
-
-let rett0 (p:pck_spec) : Type u#0 =
-  match p with
-  | SpecErr00 _ _ _ _ rett _ _ -> rett
-  | SpecErr10 _ _ _ _ rett _ _ -> rett
-  | Spec00 _ _ _ _ rett _ _ -> rett
-  | Spec10 _ _ _ _ rett _ _ -> rett
-
-let wt_rett0 (p:pck_spec) : witnessable (rett0 p) =
-  match p with
-  | SpecErr00 _ _ _ _ _ wt _ -> wt
-  | SpecErr10 _ _ _ _ _ wt _ -> wt
-  | Spec00 _ _ _ _ _ wt _ -> wt
-  | Spec10 _ _ _ _ _ wt _ -> wt
-
-let bit (p:pck_spec) : bool =
-  match p with
-  | SpecErr00 b _ _ _ _ _ _ -> b
-  | SpecErr10 b _ _ _ _ _ _ -> b
-  | Spec00 b _ _ _ _ _ _ -> b
-  | Spec10 b _ _ _ _ _ _ -> b
-
-let pre0 (p:pck_spec{Spec00? p \/ SpecErr00? p}) : argt0 p -> st_pre =
-  match p with
-  | SpecErr00 _ _ _ pre _ _ _ -> pre
-  | Spec00 _ _ _ pre _ _ _ -> pre
-
-let pre1 (p:pck_spec{SpecErr10? p \/ Spec10? p}) : argt1 p -> st_pre =
-  match p with
-  | SpecErr10 _ _ _ pre _ _ _ -> pre
-  | Spec10 _ _ _ pre _ _ _ -> pre
+let test : spec =
+  Spec true false (FStar.Universe.raise_t u#0 u#5 int) solve (fun x h0 -> True) (FStar.Universe.raise_t u#0 u#8 int) solve (fun x h0 _ _ -> True)
 
 type pre_c_pre a3p (#a:Type) (c:witnessable a) (pre:a -> st_pre) =
   x:a -> Lemma (forall h0. pre_poly_arrow a3p #a #c x h0 ==> pre x h0)
@@ -207,116 +140,51 @@ type pre_c_pre a3p (#a:Type) (c:witnessable a) (pre:a -> st_pre) =
 type pre_c_post a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
   x:a -> r:b -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)
 
-// type pre_c_post_err a3p #a #b (c_b:witnessable b) (pre:a -> st_pre) (post:(x:a -> h0:heap -> st_post' b (pre x h0))) =
-//   x:a -> r:(resexn b) -> Lemma (forall h0 h1. post x h0 r h1 ==> post_poly_arrow a3p #b #c_b h0 r h1)
-
 type pre_check a3p a {| c:witnessable a |} (pre:a -> st_pre)=
   select_check a3p a unit (pre_poly_arrow a3p #a #c) (fun x _ _ h1 -> pre x h1)
 
 noeq
-type hoc a3p : (s:pck_spec) -> Type =
-| TrivialPre00 :
-    #s:pck_spec{Spec00? s /\ bit s == true} ->
-    c_pre:pre_c_pre a3p (wt_argt0 s) (pre0 s) -> 
-    c_post:pre_c_post a3p (wt_rett0 s) (pre0 s) (Spec00?.post s)
+type hoc a3p : (s:spec) -> Type =
+| TrivialPre :
+    #s:spec{s.err == false /\ s.bit == true} ->
+    c_pre:pre_c_pre a3p s.wt_argt s.pre -> 
+    c_post:pre_c_post a3p s.wt_rett s.pre s.post
     -> hoc a3p s
 
-| EnforcePre00 :
-    #s:pck_spec{SpecErr00? s /\ bit s == true} ->
-    check:pre_check a3p (argt0 s) #(wt_argt0 s) (pre0 s) ->
-    c_post:pre_c_post a3p (witnessable_resexn _ #(wt_rett0 s)) (pre0 s) (SpecErr00?.post s)
+| EnforcePre :
+    #s:spec{s.err == true /\ s.bit == true} ->
+    check:pre_check a3p s.argt #s.wt_argt s.pre ->
+    c_post:pre_c_post a3p (witnessable_resexn _ #s.wt_rett) s.pre s.post
     -> hoc a3p s
 
-| EnforcePre10 :
-    #s:pck_spec{SpecErr10? s /\ bit s == true} ->
-    check:pre_check a3p (argt1 s) #(wt_argt1 s) (pre1 s) ->
-    c_post:pre_c_post a3p (witnessable_resexn _ #(wt_rett0 s)) (pre1 s) (SpecErr10?.post s)
+| TrivialPost :
+    #s:spec{s.err == false /\ s.bit == false} ->
+    c_pre:(x:s.argt ->
+        Lemma (forall h0. s.pre x h0 ==> pre_poly_arrow a3p #s.argt #s.wt_argt x h0)) ->
+    c_post:(x:s.argt -> r:s.rett -> 
+        Lemma (forall h0 h1. post_poly_arrow a3p #s.rett #s.wt_rett h0 r h1 ==> s.post x h0 r h1))
     -> hoc a3p s
 
-| TrivialPost00 :
-    #s:pck_spec{Spec00? s /\ bit s == false} ->
-    c_pre:(x:(argt0 s) ->
-        Lemma (forall h0. (pre0 s) x h0 ==> pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s) x h0)) ->
-    c_post:(x:(argt0 s) -> r:(rett0 s) -> 
-        Lemma (forall h0 h1. post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1 ==> (Spec00?.post s) x h0 r h1))
+| EnforcePost :
+    #s:spec{s.err == true /\ s.bit == false} ->
+    c_pre:(x:s.argt -> 
+        Lemma (forall h0. s.pre x h0 ==> pre_poly_arrow a3p #s.argt #s.wt_argt x h0)) ->
+    c_post:(x:s.argt -> e:err -> 
+        Lemma (forall h0 h1. s.pre x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn _ #s.wt_rett) h0 (Inr e) h1 ==> s.post x h0 ((Inr e) <: resexn s.rett) h1)) ->
+    check:(select_check a3p s.argt (resexn s.rett) #(witnessable_resexn _ #s.wt_rett) s.pre s.post)
     -> hoc a3p s
 
-| TrivialPost10 :
-    #s:pck_spec{Spec10? s /\ bit s == false} ->
-    c_pre:(x:(argt1 s) ->
-        Lemma (forall h0. (pre1 s) x h0 ==> pre_poly_arrow a3p #(argt1 s) #(wt_argt1 s) x h0)) ->
-    c_post:(x:(argt1 s) -> r:(rett0 s) -> 
-        Lemma (forall h0 h1. post_poly_arrow a3p #(rett0 s) #(wt_rett0 s) h0 r h1 ==> (Spec10?.post s) x h0 r h1))
-    -> hoc a3p s
+noeq
+type uhoc a3p : (s:uspec) -> Type =
+| U00hoc : #s:uspec{U00? s} -> hoc a3p (U00?.v s) -> uhoc a3p s
+| U01hoc : #s:uspec{U01? s} -> hoc a3p (U01?.v s) -> uhoc a3p s
+| U10hoc : #s:uspec{U10? s} -> hoc a3p (U10?.v s) -> uhoc a3p s
+| U11hoc : #s:uspec{U11? s} -> hoc a3p (U11?.v s) -> uhoc a3p s
 
-| EnforcePost00 :
-    #s:pck_spec{SpecErr00? s /\ bit s == false} ->
-    c_pre:(x:(argt0 s) -> 
-        Lemma (forall h0. (pre0 s) x h0 ==> pre_poly_arrow a3p #(argt0 s) #(wt_argt0 s) x h0)) ->
-    c_post:(x:(argt0 s) -> e:err -> 
-        Lemma (forall h0 h1. (pre0 s) x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn _ #(wt_rett0 s)) h0 (Inr e) h1 ==> (SpecErr00?.post s) x h0 (Inr e) h1)) ->
-    check:(select_check a3p (argt0 s) (resexn (rett0 s)) #(witnessable_resexn _ #(wt_rett0 s)) (pre0 s) (SpecErr00?.post s))
-    -> hoc a3p s
+type pck_uhoc a3p : Type =
+  s:uspec & (uhoc a3p s)
 
-type pck_hoc a3p : Type =
-  s:pck_spec & (hoc a3p s)
-
-private
-let myspec : pck_spec =
-  SpecErr00
-    true
-    (ref int)
-    (witnessable_ref int)
-    (fun x h -> sel h x > 5)
-    unit
-    witnessable_unit
-    (fun _ -> post_poly_arrow c3p)
-
-private
-let test_pre : hoc c3p myspec =
-  EnforcePre00
-    (fun (x:(argt0 myspec)) ->
-      let x : ref int = x in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) unit (pre_poly_arrow c3p #(argt0 myspec) #(wt_argt0 myspec)) (fun x _ _ h1 -> (pre0 myspec) x h1) x eh0 = (
-        fun _ ->
-          assert (witnessed (contains_pred x));
-          recall (contains_pred x);
-          if read x > 5 then Inl ()
-          else Inr (Contract_failure "less than 5")
-      ) in
-      (| eh0, check |))
-    (fun _ _ -> ())
-
-private
-let myspec' : pck_spec =
-  SpecErr00
-    false
-    (ref int)
-    (witnessable_ref int)
-    (pre_poly_arrow c3p)
-    unit
-    witnessable_unit
-    (fun x h0 r h1 -> (Inr? r \/ sel h1 x > 5) /\ post_poly_arrow c3p h0 r h1)
-
-private
-let test_post : hoc c3p myspec' =
-  EnforcePost00
-    (fun _ -> ())
-    (fun _ _ -> ())
-    (fun x ->
-      let x : ref int = x in
-      let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) (resexn unit) #(witnessable_resexn _ #(wt_rett0 myspec')) (pre0 myspec') (SpecErr00?.post myspec') x eh0 = (
-        fun _ ->
-          assert (witnessed (contains_pred x));
-          recall (contains_pred x);
-          if read x > 5 then Inl ()
-          else Inr (Contract_failure "less than 5")
-      ) in
-      (| eh0, check |))
-
-type spec_tree : Type = tree pck_spec
+type spec_tree = tree uspec
 
 let hoc_tree a3p (st:spec_tree) : Type =
-  hocs:(tree (pck_hoc a3p)){equal_trees st (map_tree hocs dfst)}
+  hocs:(tree (pck_uhoc a3p)){equal_trees st (map_tree hocs dfst)}

@@ -42,8 +42,8 @@ open FStar.Tactics.Typeclasses
 instance player_args a3p : poly_iface a3p ((int & int) & (mk_poly_arrow a3p int cmp)) =
   poly_iface_pair a3p (int & int) (mk_poly_arrow a3p int cmp) #(poly_iface_arrow a3p int cmp)
 
-let cb_spec (a3p:threep) : pck_spec =
-  Spec00 true
+let cb_spec (a3p:threep) : spec =
+  Spec true false
     int
     (witnessable_int)
     (pre_poly_arrow a3p)
@@ -51,8 +51,8 @@ let cb_spec (a3p:threep) : pck_spec =
     (witnessable_cmp)
     (fun _ -> post_poly_arrow a3p)
 
-let player_spec (a3p:threep) : pck_spec =
-  (Spec10 false
+let player_spec (a3p:threep) : spec =
+  (Spec false false
     ((int & int) & mk_poly_arrow a3p int cmp)
     (poly_iface_is_exportable a3p ((int & int) & mk_poly_arrow a3p int cmp)).c_styp (** TODO: simplify here: (witnessable_pair _ _ #(witnessable_pair _ _ #witnessable_int #witnessable_int) #(witnessable_arrow int cmp _ _)) *)
     (fun x h0 -> inv a3p h0 /\ fst (fst x) < snd (fst x))
@@ -61,9 +61,9 @@ let player_spec (a3p:threep) : pck_spec =
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1))
 
 let player_hoc : hoc c3p (player_spec c3p) =
-  TrivialPost10 (fun _ -> ()) (fun _ _ -> ())
+  TrivialPost (fun _ -> ()) (fun _ _ -> ())
 
-instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (player_spec a3p) Leaf Leaf) =
+instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (U10 (player_spec a3p)) Leaf Leaf) =
   safe_importable_arrow10 
     a3p _ _
     #(poly_iface_is_exportable a3p _ #(poly_iface_pair a3p _ #(poly_iface_pair a3p int int) _ #(poly_iface_arrow a3p _ #(poly_iface_int a3p) _ #(poly_iface_cmp a3p))))
@@ -74,8 +74,8 @@ instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3
 instance args_importable a3p : importable_to a3p (player_type a3p & (int & (int & int))) _ =
   importable_pair a3p (player_type a3p) _ #(safe_importable_is_importable a3p _ _ #(importable_player a3p)) (int & (int & int)) Leaf
 
-let play_guess_spec (a3p:threep) : pck_spec =
-  SpecErr10 true
+let play_guess_spec (a3p:threep) : spec =
+  Spec true true
     (player_type a3p & (int & (int & int)))
     (args_importable a3p).c_styp (** TODO: simply here with witnessable *)
     (fun x h0 -> inv a3p h0 /\ fst (snd (snd x)) < fst (snd x) /\ fst (snd x) < snd (snd (snd x)))
@@ -84,16 +84,16 @@ let play_guess_spec (a3p:threep) : pck_spec =
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
 let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
-  EnforcePre10
+  EnforcePre
     (fun args ->
       let args : (player_type c3p & (int & (int & int))) = args in
       let eh0 = get_heap () in
-      let check : cb_check c3p (player_type c3p & (int & (int & int))) _ (pre_poly_arrow c3p #(argt1 (play_guess_spec c3p)) #(wt_argt1 (play_guess_spec c3p))) (fun x _ _ h1 -> (pre1 (play_guess_spec c3p)) x h1)  args eh0 =
+      let check : cb_check c3p (player_type c3p & (int & (int & int))) _ (pre_poly_arrow c3p #((play_guess_spec c3p).argt) #(play_guess_spec c3p).wt_argt) (fun x _ _ h1 -> (play_guess_spec c3p).pre x h1) args eh0 =
         (fun () -> if fst (snd (snd args)) < fst (snd args) && fst (snd args) < snd (snd (snd args)) then Inl () else Inr (Contract_failure "Invalid range")) in
       (| eh0, check |))
-    (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (rett0 (play_guess_spec c3p))) #(witnessable_resexn _ #(wt_rett0 (play_guess_spec c3p))) h0 r h1))
+    (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (play_guess_spec c3p).rett) #(witnessable_resexn _ #(play_guess_spec c3p).wt_rett) h0 r h1))
 
-instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (play_guess_spec a3p) _ _) =
+instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (U10 (play_guess_spec a3p)) _ _) =
   exportable_arrow_err10 a3p 
     _ _
     #(args_importable a3p)
@@ -102,16 +102,16 @@ instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (
     _ _
 
 let play_guess_st (a3p:threep) : spec_tree =
-  Node (play_guess_spec a3p) 
+  Node (U10 (play_guess_spec a3p))
     (EmptyNode
-        (Node (player_spec a3p) Leaf Leaf) Leaf)
+        (Node (U10 (player_spec a3p)) Leaf Leaf) Leaf)
     (EmptyNode Leaf Leaf)
 
-let player_pck_hoc : pck_hoc c3p =
-  (| player_spec c3p, player_hoc |)
+let player_pck_hoc : pck_uhoc c3p =
+  (| U10 (player_spec c3p), U10hoc player_hoc |)
 
-let play_guess_pck_hoc : pck_hoc c3p =
-  (| play_guess_spec c3p, play_guess_hoc |)
+let play_guess_pck_hoc : pck_uhoc c3p =
+  (| U10 (play_guess_spec c3p), U10hoc play_guess_hoc |)
 
 let play_guess_hoc_tree : hoc_tree c3p (play_guess_st c3p) =
   Node play_guess_pck_hoc

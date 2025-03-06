@@ -1,4 +1,4 @@
-module Examples.HO
+module Examples.HOC
 
 open FStar.Ghost
 open FStar.Monotonic.Heap
@@ -13,20 +13,20 @@ open Compiler
 open Witnessable
 open SpecTree
 
-#set-options "--print_universes"
+(** This files contains two examples **)
 
 type f_eqx (a3p:threep) = x:ref int -> ST (resexn unit) (requires (fun h0 -> inv a3p h0 /\ satisfy x (prref a3p))) (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
-let f_a3p (a3p:threep) : pck_spec =
- (SpecErr00 false (ref int) (witnessable_ref int)
+let f_a3p (a3p:threep) : spec =
+ (Spec false true (ref int) (witnessable_ref int)
     (fun x h0 -> inv a3p h0 /\ satisfy x (prref a3p))
     unit
     witnessable_unit
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x)))
 
-let f_spec : pck_spec = f_a3p c3p
+let f_spec : spec = f_a3p c3p
 
-let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (f_a3p a3p) Leaf Leaf) =
+let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (U00 (f_a3p a3p)) Leaf Leaf) =
   safe_importable_arrow_err00 a3p
     (ref int) Leaf #(exportable_ref a3p int)
     unit Leaf #(safe_importable_is_importable a3p unit Leaf #(safe_importable_unit a3p))
@@ -34,7 +34,7 @@ let f_eqx_is_safe_importable a3p : safe_importable_to a3p (f_eqx a3p) (Node (f_a
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ sel h0 x == sel h1 x))
 
 let f_hoc : hoc c3p f_spec =
-  EnforcePost00
+  EnforcePost
     (fun _ -> ())
     (fun _ _ -> ())
     (fun rx ->
@@ -46,14 +46,14 @@ let f_hoc : hoc c3p f_spec =
         (fun kres -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
 
-let f_pkhoc : pck_hoc c3p =
-  (| f_spec, f_hoc |)
+let f_pkhoc : pck_uhoc c3p =
+  (| U00 f_spec, U00hoc f_hoc |)
 
-let f_tree : hoc_tree c3p (Node f_spec Leaf Leaf) =
+let f_tree : hoc_tree c3p (Node (U00 f_spec) Leaf Leaf) =
   Node f_pkhoc Leaf Leaf
 
 let sit : src_interface1 = {
-  specs = (fun preds -> Node (f_a3p preds) Leaf Leaf);
+  specs = (fun a3p -> Node (U00 (f_a3p a3p)) Leaf Leaf);
   hocs = f_tree;
   ct = f_eqx;
   c_ct = f_eqx_is_safe_importable;
@@ -110,39 +110,39 @@ type f_xeq5 (a3p:threep) =
     (requires (fun h0 -> sel h0 x == 5 /\ inv a3p h0 /\ satisfy x (prref a3p))) 
     (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ (Inl? r /\ Inl?.v r == 2))))
 
-let f_xeq5_spec (a3p:threep) : pck_spec =
-  SpecErr00 true 
+let f_xeq5_spec (a3p:threep) : spec =
+  Spec true true
     (ref ℤ) (witnessable_ref int)
     (fun x h0 -> sel h0 x == 5 /\ inv a3p h0 /\ satisfy x (prref a3p))
     ℤ witnessable_int
     (fun x h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inr? r \/ (Inl? r /\ Inl?.v r == 2)))
 
-let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (f_xeq5_spec a3p) Leaf Leaf) =
+let f_xeq5_is_exportable a3p : exportable_from a3p (f_xeq5 a3p) (Node (U00 (f_xeq5_spec a3p)) Leaf Leaf) =
   exportable_arrow_err00 a3p
     (ref int) Leaf #(safe_importable_is_importable a3p _ Leaf #(safe_importable_ref a3p int))
     int Leaf #(exportable_int a3p)
     _ _
 
 let f_xeq5_hoc : hoc c3p (f_xeq5_spec c3p) =
-  EnforcePre00
+  EnforcePre
     (fun rx ->
       let rx :ref int = rx in
       let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(argt0 (f_xeq5_spec c3p)) #(wt_argt0 (f_xeq5_spec c3p))) (fun x _ _ h1 -> (pre0 (f_xeq5_spec c3p)) x h1) rx eh0 =
+      let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt) (fun x _ _ h1 -> (f_xeq5_spec c3p).pre x h1) rx eh0 =
         (fun _ ->
           recall (contains_pred rx);
           if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
     (fun x r -> ())
 
-let f_xeq5_pkhoc : pck_hoc c3p =
-  (| f_xeq5_spec c3p, f_xeq5_hoc |)
+let f_xeq5_pkhoc : pck_uhoc c3p =
+  (| U00 (f_xeq5_spec c3p), U00hoc f_xeq5_hoc |)
 
-let f_xeq5_tree : hoc_tree c3p (Node (f_xeq5_spec c3p) Leaf Leaf) =
+let f_xeq5_tree : hoc_tree c3p (Node (U00 (f_xeq5_spec c3p)) Leaf Leaf) =
   Node f_xeq5_pkhoc Leaf Leaf
 
 let sit2 : src_interface2 = {
-  specs = (fun preds -> Node (f_xeq5_spec preds) Leaf Leaf);
+  specs = (fun a3p -> Node (U00 (f_xeq5_spec a3p)) Leaf Leaf);
   hocs = f_xeq5_tree;
   pt = f_xeq5;
   c_pt = f_xeq5_is_exportable;
