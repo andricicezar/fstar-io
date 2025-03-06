@@ -77,10 +77,10 @@ instance args_importable a3p : importable_to a3p (player_type a3p & (int & (int 
 let play_guess_spec (a3p:threep) : spec =
   Spec true true
     (player_type a3p & (int & (int & int)))
-    (args_importable a3p).c_styp (** TODO: simply here with witnessable *)
+    (args_importable a3p).c_styp (** TODO: simplify here with witnessable *)
     (fun x h0 -> inv a3p h0 /\ fst (snd (snd x)) < fst (snd x) /\ fst (snd x) < snd (snd (snd x)))
     (bool & int)
-    (exportable_pair a3p bool Leaf int Leaf).c_styp (** TODO: simply here with witnessable *)
+    (exportable_pair a3p bool Leaf int Leaf).c_styp (** TODO: simplify here with witnessable *)
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
 let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
