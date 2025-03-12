@@ -29,51 +29,137 @@ instance witnessable_continuation a3p t {| c:witnessable t |} : witnessable (con
 instance poly_iface_continuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (continuation a3p t) =
   poly_iface_arrow a3p unit (atree a3p t #c.wt)
 
+(**
 let tgt_typ_run (a3p:threep) =
-  mk_poly_arrow a3p ((int * int) * list (t_task a3p)) #(witnessable_pair _ _ #(witnessable_list _ #(witnessable_arrow (ref int) _ _ _))) (resexn int)
+  mk_poly_arrow
+    a3p
+    ((int * int) * list (t_task a3p))
+    #(witnessable_pair
+      _
+      #(witnessable_pair int #witnessable_int int #witnessable_int)
+      _
+      #(witnessable_list _ #(witnessable_arrow (ref int) _ _ _)))
+    (resexn int)
+    #(witnessable_resexn int)
+**)
+
+instance witnessable_t_task a3p : witnessable (t_task a3p) =
+  witnessable_arrow (ref int) (continuation a3p unit) _ _
 
 instance poly_iface_t_task a3p : poly_iface a3p (t_task a3p) =
   poly_iface_arrow a3p (ref int) #(poly_iface_ref a3p int) (continuation a3p unit) #(poly_iface_continuation a3p unit)
-
-(** stuck here: **)
+(**
 instance poly_iface_run (a3p:threep) : poly_iface a3p (tgt_typ_run a3p) =
   poly_iface_arrow
     a3p
-    ((int * int) * list (t_task a3p))
+    _
     #(poly_iface_pair a3p
-      (int * int) #(poly_iface_pair a3p int #solve int #solve)
-      (list (t_task a3p))
+      _
+      #(poly_iface_pair a3p int #(poly_iface_int a3p) int #(poly_iface_int a3p))
+      _
       #(poly_iface_list a3p (t_task a3p) #(poly_iface_t_task a3p)))
-    (resexn int)
+    _
     #(poly_iface_resexn a3p int #(poly_iface_int a3p))
+**)
 
 let src_run_type (a3p:threep) =
-  mk_poly_arrow a3p
+  mk_poly_arrow
+    a3p
     ((nat * int) * l:(list (t_task a3p)){List.Tot.length l > 0})
     #(witnessable_pair
       (nat * int)
       #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int)
       (l:(list (t_task a3p)){List.Tot.length l > 0})
-      #solve)
-    (resexn int) #solve
+      #(witnessable_refinement
+        _
+        #(witnessable_list _ #(witnessable_t_task a3p))
+        (fun l -> List.Tot.length l > 0)))
+    (resexn int)
+    #(witnessable_resexn int #witnessable_int)
 
-let exportable_run_type (a3p) : exportable_from a3p (src_run_type a3p) Leaf = {
-  c_styp = solve;
-  ityp = tgt_typ_run a3p;
-  c_ityp = poly_iface_run a3p;
-  export = (fun _ (f:src_run_type a3p) ((fuel, init), tasks) ->
-    if fuel >= 0 && List.Tot.Base.length tasks > 0 then
-      (f ((fuel, init), tasks))
-    else Inr (Contract_failure "fuel, or tasks not good")
-  );
-  lemma_export_preserves_prref = (fun _ _ -> ())
-}
+let run_type_spec (a3p:threep) : spec =
+  Spec true true
+    ((nat & int) & l: list (t_task a3p) {List.Tot.Base.length l > 0})
+ (**   (witnessable_pair
+      (nat & int)
+      #(witnessable_pair nat #(witnessable_refinement int #witnessable_int _) int #witnessable_int)
+      (l: list (t_task a3p) {List.Tot.Base.length l > 0})
+      #(witnessable_refinement _ #(witnessable_list _ #(witnessable_t_task a3p)) _)) **)
+    (importable_pair a3p
+      (nat & int)
+      (EmptyNode Leaf Leaf)
+      #(importable_pair a3p
+        nat
+        Leaf
+        #(importable_refinement a3p int Leaf #(safe_importable_is_importable a3p _ Leaf #(safe_importable_int a3p)) (fun n -> n >= 0) (fun n -> n >= 0))
+        int
+        Leaf
+        #(safe_importable_is_importable a3p _ Leaf #(safe_importable_int a3p)))
+      (l: list (t_task a3p) {List.Tot.Base.length l > 0})
+      Leaf
+      #(importable_refinement a3p
+        (list (t_task a3p))
+        Leaf
+        #(safe_importable_is_importable a3p _ Leaf #(poly_iface_is_safely_importable a3p _ #(poly_iface_list a3p _ #(poly_iface_t_task a3p))))
+        (fun l -> List.Tot.length l > 0)
+        (fun l -> List.Tot.length l > 0))).c_styp
+    (pre_poly_arrow a3p #_ #(witnessable_pair (nat & int) #(witnessable_pair nat #(witnessable_refinement int (fun n -> n >= 0)) int) (l: list (t_task a3p) {List.Tot.Base.length l > 0})))
+    int
+    witnessable_int
+    (fun _ -> post_poly_arrow a3p)
+
+let run_type_st a3p : spec_tree =
+  (Node (U10 (run_type_spec a3p))
+    (EmptyNode (EmptyNode Leaf Leaf) Leaf)
+    Leaf)
+
+let exportable_run_type (a3p:threep) : exportable_from a3p (src_run_type a3p) (run_type_st a3p) =
+  exportable_arrow_err10 a3p
+    ((nat * int) * l:(list (t_task a3p)){List.Tot.length l > 0})
+    _
+    #(importable_pair a3p
+      _ _
+      #(importable_pair a3p
+        _ _
+        #(importable_refinement a3p int Leaf #(safe_importable_is_importable a3p _ Leaf #(safe_importable_int a3p)) (fun n -> n >= 0) (fun n -> n >= 0))
+        _ _
+        #(safe_importable_is_importable a3p _ Leaf #(safe_importable_int a3p)))
+      (l: list (t_task a3p) {List.Tot.Base.length l > 0})
+      _
+      #(importable_refinement a3p
+        (list (t_task a3p))
+        Leaf
+        #(safe_importable_is_importable a3p _ Leaf #(poly_iface_is_safely_importable a3p _ #(poly_iface_list a3p _ #(poly_iface_t_task a3p))))
+        (fun l -> List.Tot.length l > 0)
+        (fun l -> List.Tot.length l > 0)))
+    _ _ #(exportable_int a3p)
+    _
+    _
+
+let hoc_check : hoc c3p (run_type_spec c3p) =
+ EnforcePre
+   (fun x ->
+     let eh0 = get_heap () in
+     let check : cb_check c3p _ _ (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt) (fun x _ _ h1 -> (run_type_spec c3p).pre x h1) x eh0 =
+       (fun () ->
+         let h1 = get_heap () in
+         assert ((run_type_spec c3p).pre x h1) by (
+           norm [delta_only [`%run_type_spec;`%Spec?.pre;`%pre_poly_arrow]; iota];
+           let x = nth_binder 5 in
+           let _, _ = destruct_and x in
+           tadmit () (** TODO: this should be easy to prove **));
+         Inl ()) in
+     (| eh0, check |)   )
+   (fun x r -> ())
+
+let hoc_check_pck : pck_uhoc c3p =
+  (| U10 (run_type_spec c3p), U10hoc hoc_check |)
 
 let sit : src_interface2 = {
-  specs = (fun _ -> Leaf);
-  hocs = Leaf;
-  pt = (fun a3p -> src_run_type a3p);
-  c_pt = (fun a3p -> exportable_run_type a3p);
+  specs = run_type_st;
+  hocs = Node hoc_check_pck (EmptyNode (EmptyNode Leaf Leaf) Leaf) Leaf;
+  pt = src_run_type;
+  c_pt = exportable_run_type;
 }
 
 val run' : prog_src2 sit
@@ -82,20 +168,23 @@ let run' args = Inl (run args)
 let compiled_prog = compile_pprog2 #sit run'
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
-let some_ctx read write alloc run =
-  admit (); (* TODO: continuation has to be refactored to be polymorphic in a3p *)
-  let res_a (r : ref int) : continuation r unit = (fun () ->
+let some_ctx #a3p read write alloc my_run =
+  let res_a : t_task a3p = (fun r () ->
     let () = write r 42 in
     Return ()) in
 
-  let res_b (r : ref int) : continuation r unit = (fun () ->
+  let res_b : t_task a3p = (fun r () ->
     let j = read r in
     let m = alloc #SNat 42 in
     Yield (fun () ->
         let () = write r j in
         Return ())) in
 
-  match run ((5000,0),[res_a; res_b]) with
+  let args : (int * int) * (list (t_task a3p)) = ((5000,0), [res_a; res_b]) in
+  admit (); (**
+      TODO: very hard to debug. My guess was that it fails to show that
+      `satisfy args (prref a3p)`, but from my tests it is not that. **)
+  match my_run args with
   | Inl _ -> 0
   | Inr _ -> -1
 

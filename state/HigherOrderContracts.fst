@@ -65,9 +65,9 @@ instance poly_iface_is_exportable a3p t {| c1:poly_iface a3p t |} : exportable_f
   lemma_export_preserves_prref = (fun _ _ -> ()) }
 
 instance exportable_unit a3p : exportable_from a3p unit Leaf =
-  mk_exportable 
-    witnessable_unit 
-    (poly_iface_unit a3p)  
+  mk_exportable
+    witnessable_unit
+    (poly_iface_unit a3p)
     (fun Leaf x -> x) (fun _ _ -> ())
 
 instance exportable_err a3p : exportable_from a3p err Leaf = {
@@ -166,7 +166,7 @@ instance exportable_arrow_err00 a3p
   (t2:Type u#0) st2 {| c2:exportable_from a3p t2 st2 |}
   (pre:(t1 -> st_pre))
   (post:(x:t1 -> h0:heap -> st_post' (resexn t2) (pre x h0)))
-  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U00 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) = 
+  : exportable_from a3p (x:t1 -> ST (resexn t2) (pre x) (post x)) (Node (U00 (Spec true true t1 c1.c_styp pre t2 c2.c_styp post)) st1 st2) =
   mk_exportable
     (witnessable_arrow t1 (resexn t2) pre post)
     (poly_iface_arrow a3p _ #c1.c_ityp _ #(poly_iface_resexn a3p c2.ityp #c2.c_ityp))
@@ -302,6 +302,14 @@ instance safe_importable_unit a3p : safe_importable_to a3p unit Leaf = {
   lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
+instance safe_importable_int a3p : safe_importable_to a3p int Leaf = {
+  c_styp = witnessable_int;
+  ityp = int;
+  c_ityp = poly_iface_int a3p;
+  safe_import = (fun Leaf x -> x);
+  lemma_safe_import_preserves_prref = (fun _ _ -> ())
+}
+
 instance safe_importable_err a3p : safe_importable_to a3p err Leaf = {
   c_styp = witnessable_err;
   ityp = err;
@@ -375,7 +383,7 @@ instance safe_importable_ref a3p t {| c:tc_shareable_type t |} : safe_importable
   lemma_safe_import_preserves_prref = (fun _ _ -> ())
 }
 
-instance import_refinement a3p t st {| c:importable_to a3p t st |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): importable_to a3p (x:t{p x}) st = {
+instance importable_refinement a3p t st {| c:importable_to a3p t st |} (p:t->Type0) (check:(x:t -> r:bool{r ==> p x})): importable_to a3p (x:t{p x}) st = {
   c_styp = witnessable_refinement t #c.c_styp p;
   ityp = c.ityp;
   c_ityp = c.c_ityp;
