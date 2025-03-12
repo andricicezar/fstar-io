@@ -1,6 +1,7 @@
 module CooperativeMultiThreadingWithIndexT
 
 open FStar.List.Tot
+open PolyIface
 
 let incr (#k:nat) (i:nat{i < k}) : i:nat{i < k} = (i + 1) % k
 
@@ -76,13 +77,13 @@ let lemma_prefix_of_append #a (s l : list a) :
 open SharedRefs
 
 noeq
-type atree (a:Type0) =
-  | Return : a -> atree a
-  | Yield : continuation a -> atree a
-and continuation a =
-  unit -> SST (atree a)
-              (requires (fun _ -> True))
-              (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
+type atree (a3p:threep) (a:Type0) =
+  | Return : a -> atree a3p a
+  | Yield : continuation a3p a -> atree a3p a
+and continuation (a3p:threep) a =
+  unit -> ST (atree a3p a)
+              (requires (fun h0 -> inv a3p h0))
+              (ensures (fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1))
 
 noeq
 type mm (i : heap -> Type0) (r : ref int) (a : Type0) =
@@ -179,7 +180,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   and ();
   ()
 
-val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation unit)) (counter:counter_t (length tasks))
+val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation c3p unit)) (counter:counter_t (length tasks))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1))
@@ -187,7 +188,7 @@ val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation unit)) (counter
 let rec scheduler
   (fuel:nat)
   (r : ref int)
-  (tasks:list (continuation unit))
+  (tasks:list (continuation c3p unit))
   (counter:counter_t (length tasks))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
@@ -203,7 +204,7 @@ let rec scheduler
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> SST (atree c3p unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -227,7 +228,7 @@ let rec scheduler
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
 type t_task =
-  r:ref int -> SST (continuation unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  r:ref int -> SST (continuation c3p unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 
 val map:
   (x:'a -> SST 'b (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)) ->
