@@ -75,7 +75,19 @@ let lemma_prefix_of_append #a (s l : list a) :
 = strict_prefix_or_eq_append s l
 
 open SharedRefs
+open Witnessable
 
+noeq
+type atree (a3p:threep) (a:Type0) {| c:witnessable a |}=
+  | Return : a -> atree a3p a #c
+  | Yield : continuation a3p a -> atree a3p a #c
+and witnessable_atree a3p t {| c:witnessable t |} : witnessable (atree a3p t #c) = {
+  satisfy = (fun _ pred -> True);
+}
+and continuation (a3p:threep) a {| c:witnessable a |} =
+  mk_poly_arrow a3p unit (atree a3p a #c) #(witnessable_atree a3p a #c)
+
+(**
 noeq
 type atree (a3p:threep) (a:Type0) =
   | Return : a -> atree a3p a
@@ -83,14 +95,8 @@ type atree (a3p:threep) (a:Type0) =
 and continuation (a3p:threep) a =
   unit -> ST (atree a3p a)
               (requires (fun h0 -> inv a3p h0))
-              (ensures (fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1))
-
-noeq
-type mm (i : heap -> Type0) (r : ref int) (a : Type0) =
-  | MReturn : a -> mm i r a
-  | MYield : mmcont i r a -> mm i r a
-and mmcont (i : heap -> Type0) (r : ref int) a =
-  unit -> SST (mm i r a) (requires (fun h0 -> i h0)) (ensures (fun h0 _ h1 -> True))
+              (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ ))
+**)
 
 let rec get_number_of_steps (tid : int) (hist : list int) =
   match hist with
@@ -227,8 +233,13 @@ let rec scheduler
 
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
-type t_task =
-  r:ref int -> SST (continuation c3p unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+type t_task (a3p:threep) =
+  mk_poly_arrow
+    a3p
+    (ref int)
+    (continuation a3p unit)
+    #(witnessable_arrow unit (atree a3p unit) _ _)
+ // r:ref int -> ST (continuation a3p unit) (fun h0 -> inv a3p h0 /\ prref a3p r) (fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1)
 
 val map:
   (x:'a -> SST 'b (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)) ->
@@ -237,25 +248,25 @@ let rec map f x = match x with
   | [] -> []
   | a::tl -> f a::map f tl
 
-let run (args : (nat * int) * (tasks: (list t_task){length tasks > 0})) :
+let run (args : (nat * int) * (tasks: (list (t_task c3p)){length tasks > 0})) :
   SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1  /\ gets_shared Set.empty h0 h1)) =
   let ((fuel, init), tasks) = args in
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
   witness (contains_pred s); witness (is_shared s);
-  let tasks = map (fun (f:t_task) -> f s) tasks in
+  let tasks = map (fun (f:t_task c3p) -> f s) tasks in
   let () = scheduler fuel s tasks counter in
   let final_value = sst_read s in
   final_value
 
-val res_a : t_task
+val res_a : t_task c3p
 let res_a (r : ref int) () =
   recall (contains_pred r);
   recall (is_shared r);
   let () = sst_write_ref r 42 in
   Return ()
 
-val res_b : t_task
+val res_b : t_task c3p
 let res_b (r : ref int) () =
   recall (contains_pred r);
   recall (is_shared r);

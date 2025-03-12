@@ -14,51 +14,48 @@ open CooperativeMultiThreadingWithIndexT
 
 (* Calling SecRef* on it *)
 
-instance witnessable_atree (r:ref int) t {| c:witnessable t |} : witnessable (atree r t) = {
-  satisfy = (fun _ pred -> pred r);
-}
-
-instance witnessable_continuation (r:ref int) t {| c:witnessable t |} : witnessable (continuation r t) = {
-  satisfy = (fun _ pred -> pred r);
-}
-
-instance witnessable_rcontinuation t {| c:witnessable t |} : witnessable (r:ref int -> continuation r t) = {
+(**
+instance witnessable_atree a3p t {| c:witnessable t |} : witnessable (atree a3p t) = {
   satisfy = (fun _ pred -> True);
+}**)
+
+instance poly_iface_atree a3p t {| c:poly_iface a3p t |} : poly_iface a3p (atree a3p t) = {
+  wt = witnessable_atree a3p t #c.wt;
 }
 
-instance poly_iface_atree a3p (r:ref int) t {| c:poly_iface a3p t |} : poly_iface a3p (atree r t) = {
-  wt = witnessable_atree r t #c.wt;
-}
+instance witnessable_continuation a3p t {| c:witnessable t |} : witnessable (continuation a3p t) =
+  witnessable_arrow unit (atree a3p t) _ _
 
-instance poly_iface_continuation a3p (r:ref int) t {| c:poly_iface a3p t |} : poly_iface a3p (continuation r t) = {
-  wt = witnessable_continuation r t #c.wt;
-}
+instance poly_iface_continuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (continuation a3p t) =
+  poly_iface_arrow a3p unit (atree a3p t #c.wt)
 
-instance poly_iface_rcontinuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (r:ref int -> continuation r t) = {
-  wt = witnessable_rcontinuation t #c.wt;
-}
+let tgt_typ_run (a3p:threep) =
+  mk_poly_arrow a3p ((int * int) * list (t_task a3p)) #(witnessable_pair _ _ #(witnessable_list _ #(witnessable_arrow (ref int) _ _ _))) (resexn int)
 
-let tgt_typ_run a3p =
-  mk_poly_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) (resexn int)
+instance poly_iface_t_task a3p : poly_iface a3p (t_task a3p) =
+  poly_iface_arrow a3p (ref int) #(poly_iface_ref a3p int) (continuation a3p unit) #(poly_iface_continuation a3p unit)
 
-instance poly_iface_run a3p
-  : poly_iface a3p (tgt_typ_run a3p) =
-  poly_iface_arrow a3p ((int * int) * list (r:(ref int) -> (continuation r unit))) 
-    #(poly_iface_pair a3p 
-      (int * int) #solve
-      (list (r:(ref int) -> (continuation r unit)))
-      #(poly_iface_list a3p (r:(ref int) -> (continuation r unit)) #solve))
+(** stuck here: **)
+instance poly_iface_run (a3p:threep) : poly_iface a3p (tgt_typ_run a3p) =
+  poly_iface_arrow
+    a3p
+    ((int * int) * list (t_task a3p))
+    #(poly_iface_pair a3p
+      (int * int) #(poly_iface_pair a3p int #solve int #solve)
+      (list (t_task a3p))
+      #(poly_iface_list a3p (t_task a3p) #(poly_iface_t_task a3p)))
     (resexn int)
-    #(poly_iface_resexn a3p int #solve)
+    #(poly_iface_resexn a3p int #(poly_iface_int a3p))
 
 let src_run_type (a3p:threep) =
-  (mk_poly_arrow a3p ((nat * int) * l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
-    #(witnessable_pair 
-      (nat * int) 
-      #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int) 
-      (l:(list (r:(ref int) -> (continuation r unit))){List.Tot.length l > 0})
+  mk_poly_arrow a3p
+    ((nat * int) * l:(list (t_task a3p)){List.Tot.length l > 0})
+    #(witnessable_pair
+      (nat * int)
+      #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int)
+      (l:(list (t_task a3p)){List.Tot.length l > 0})
       #solve)
-    (resexn int) #solve)
+    (resexn int) #solve
 
 let exportable_run_type (a3p) : exportable_from a3p (src_run_type a3p) Leaf = {
   c_styp = solve;
