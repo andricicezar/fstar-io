@@ -76,12 +76,12 @@ let lemma_prefix_of_append #a (s l : list a) :
 open SharedRefs
 
 noeq
-type atree (r : ref int) (a:Type0) =
-  | Return : a -> atree r a
-  | Yield : continuation r a -> atree r a
-and continuation (r : ref int) a =
-  unit -> SST (atree r a)
-              (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)))
+type atree (a:Type0) =
+  | Return : a -> atree a
+  | Yield : continuation a -> atree a
+and continuation a =
+  unit -> SST (atree a)
+              (requires (fun _ -> True))
               (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
 
 noeq
@@ -179,7 +179,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   and ();
   ()
 
-val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
+val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation unit)) (counter:counter_t (length tasks))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1))
@@ -187,7 +187,7 @@ val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation r unit)) (count
 let rec scheduler
   (fuel:nat)
   (r : ref int)
-  (tasks:list (continuation r unit))
+  (tasks:list (continuation unit))
   (counter:counter_t (length tasks))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
@@ -203,7 +203,7 @@ let rec scheduler
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> SST (atree unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -226,23 +226,36 @@ let rec scheduler
 
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
-let run (args : (nat * int) * (tasks: list (r:ref int -> continuation r unit){length tasks > 0})) :
+type t_task =
+  r:ref int -> SST (continuation unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+
+val map:
+  (x:'a -> SST 'b (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)) ->
+  l:list 'a -> SST (list 'b) (fun _ -> True) (fun h0 r h1 -> length l == length r /\ modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+let rec map f x = match x with
+  | [] -> []
+  | a::tl -> f a::map f tl
+
+let run (args : (nat * int) * (tasks: (list t_task){length tasks > 0})) :
   SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1  /\ gets_shared Set.empty h0 h1)) =
   let ((fuel, init), tasks) = args in
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
-  let tasks = map (fun (f : (r:ref int) -> continuation r unit) -> f s) tasks in
+  witness (contains_pred s); witness (is_shared s);
+  let tasks = map (fun (f:t_task) -> f s) tasks in
   let () = scheduler fuel s tasks counter in
   let final_value = sst_read s in
   final_value
 
-let res_a (r : ref int) : continuation r unit = fun () ->
+val res_a : t_task
+let res_a (r : ref int) () =
   recall (contains_pred r);
   recall (is_shared r);
   let () = sst_write_ref r 42 in
   Return ()
 
-let res_b (r : ref int) : continuation r unit = fun () ->
+val res_b : t_task
+let res_b (r : ref int) () =
   recall (contains_pred r);
   recall (is_shared r);
   let j = sst_read r in
