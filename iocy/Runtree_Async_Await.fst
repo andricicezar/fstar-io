@@ -40,7 +40,7 @@ let w_ord = w_ord0
 unfold let (⊑) = w_ord
 
 unfold
-let w_return0 (#a:Type) (#e:Type) (x:a) : w #e a = 
+let w_return0 (#a:Type) (#e:Type) (x:a) : w #e a =
   fun p _ -> p empty_runtree x
 let w_return = w_return0
 
@@ -65,12 +65,12 @@ let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e
   fun p h -> wp (w_post_bind h kwp p) h
 let w_bind = w_bind0
 
-let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) : 
-  Lemma 
+let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) :
+  Lemma
     (requires ((forall x p h. wp2 x p h <==> wp3 x p h)))
     (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
 
-let __list_assoc_l l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) = 
+let __list_assoc_l l1 l2 l3 : Lemma (l1 `append_runtree` (l2 `append_runtree` l3) == (l1 `append_runtree` l2) `append_runtree` l3) =
   lemma_append_runtree_assoc l1 l2 l3
 let __iff_refl a : Lemma (a <==> a) = ()
 let w_law1 (x:'a) (k:'a -> w 'b) : Lemma (forall p h. w_bind (w_return x) k p h <==> k x p h) = ()
@@ -87,44 +87,45 @@ let w_law3 (m:w 'a) (g:'a -> w 'b) (k:'b -> w 'c) : Lemma (forall p h. w_bind (w
     end
   in
   Classical.forall_intro_2 pw
-  
+
 open FStar.Ghost
 
 noeq
-type promise (a:Type) = | Promise : id:erased nat -> r:erased a -> promise a
+type promise (id_t:Type0) (a:Type) = | Promise : id:erased id_t -> r:erased a -> promise id_t a
 
 noeq
-type free (#e:Type u#0) (a:Type u#a) : Type u#(max 1 a) =
-| Require : (pre:pure_pre) -> k:((squash pre) -> free u#a #e a) -> free #e a
-| Return : a -> free #e a
-| Print : (arg:e) -> cont:(unit -> free u#a #e a) -> free #e a 
-| Async : #c:Type u#0 -> free #e (Universe.raise_t u#0 u#a c) -> k:(promise c -> free u#a #e a) -> free #e a
-| Await : #c:Type u#0 -> promise c -> k:(c -> free u#a #e a) -> free #e a
+type free (#id:Type0) (#e:Type u#0) (a:Type u#a) : Type u#(max 1 a) =
+| Require : (pre:pure_pre) -> k:(squash pre -> free u#a #id #e a) -> free #id #e a
+| Return : a -> free #id #e a
+| Print : (arg:e) -> cont:(unit -> free u#a #id #e a) -> free #id #e a
+| Async : #c:Type u#0 -> free #id #e (Universe.raise_t u#0 u#a c) -> k:(promise id c -> free u#a #id #e a) -> free #id #e a
+| Await : #c:Type u#0 -> promise id c -> k:(c -> free u#a #id #e a) -> free #id #e a
 
 let free_return (#e:Type) (#a:Type) (x:a) : free #e a =
   Return x
 
 let rec free_bind
+  (#id:Type)
   (#e:Type)
   (#a:Type u#a)
   (#b:Type u#b)
-  (l : free #e a)
-  (cont : a -> free #e b) :
-  free #e b =
+  (l : free #id #e a)
+  (cont : a -> free #id #e b) :
+  free #id #e b =
   match l with
   | Require pre k ->
       Require pre (fun _ -> free_bind (k ()) cont)
   | Return x -> cont x
-  | Print str k -> 
+  | Print str k ->
       Print str (fun i -> free_bind (k i) cont)
   | Async f k ->
-      Async 
+      Async
         (free_bind f (fun x -> free_return (Universe.raise_val u#0 u#b (Universe.downgrade_val x))))
         (fun x -> free_bind (k x) cont)
   | Await pr k ->
       Await pr (fun x -> free_bind (k x) cont)
 
-let w_require #e (pre:pure_pre) : w #e (squash pre) = 
+let w_require #e (pre:pure_pre) : w #e (squash pre) =
   let wp' : w0 (squash pre) = fun p h -> pre /\ p empty_runtree () in
   wp'
 
@@ -133,17 +134,17 @@ let w_print #e (ev:e) : w #e unit =
   fun p _ -> p (return_runtree [Ev ev]) ()
 
 unfold let async_runtree (id:nat) (l:tracetree 'e) : tracetree 'e = Node [EAsync id] l Leaf
-  
-unfold let w_async0 #e #a id (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * promise a) =
+
+unfold let w_async0 #e #a id (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * promise nat a) =
   w_bind wf (fun (s1, r) -> w_return (s1, (Promise id (hide (Universe.downgrade_val r)))))
-  
-let w_async #e #a (id:nat) (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * (promise a)) =
+
+let w_async #e #a (id:nat) (wf:w #e (nat * (Universe.raise_t a))) : w #e (nat * (promise nat a)) =
   fun p -> (w_async0 id wf) (fun ltf spr -> p (async_runtree id ltf) spr)
 
-let w_await #e (pr:promise 'a) : w #e 'a =
+let w_await #e (pr:promise nat 'a) : w #e 'a =
   fun p h -> p (return_runtree [EAwait (Promise?.id pr)]) (reveal (Promise?. r pr))
-  
-val theta : (#e:Type) -> (#a:Type) -> free #e a -> nat -> w #e (nat * a)
+
+val theta : (#e:Type) -> (#a:Type) -> free #nat #e a -> nat -> w #e (nat * a)
 let rec theta m = fun s0 ->
   match m with
   | Require pre k ->
@@ -151,10 +152,10 @@ let rec theta m = fun s0 ->
   | Return x -> w_return (s0, x)
   | Print arg k ->
       w_bind (w_print arg) (fun r -> theta (k r) s0)
-  | Async f k -> 
+  | Async f k ->
       let id = s0+1 in
       w_bind (w_async id (theta f (s0+1))) (fun (s1, pr) -> theta (k pr) s1)
-  | Await pr k -> 
+  | Await pr k ->
       w_bind (w_await pr) (fun r -> theta (k r) s0)
 
 let theta_monad_morphism_ret (v:'a) (s0:nat) :
@@ -166,8 +167,8 @@ let lemma_w_async #e #a (wf:w #e (nat * (Universe.raise_t a))) (s0:nat) : Lemma 
   w_async (s0+1) wf) by (norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0]; iota]) = ()
 
 #set-options "--split_queries always --z3rlimit 10"
-let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free a) (km:a -> free b) (s0:nat) (p:w_post (nat * b)) h :
-  Lemma (w_bind (theta #e m s0) (fun (s1, x) -> theta (km x) s1) p h <==> theta (free_bind m km) s0 p h) = 
+let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free #nat #e a) (km:a -> free #nat #e b) (s0:nat) (p:w_post (nat * b)) h :
+  Lemma (w_bind (theta #e m s0) (fun (s1, x) -> theta (km x) s1) p h <==> theta (free_bind m km) s0 p h) =
   match m with
   | Return _ -> ()
   | Require pre k ->
@@ -179,10 +180,10 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       w_bind (w_bind (w_require pre) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
       <==> { w_law3 (w_require pre) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
       w_bind (w_require pre) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
-      <==> { 
+      <==> {
         let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
         let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
-        introduce forall (x:squash pre) p h. rhs x p h <==> rhs' x p h with 
+        introduce forall x p h. rhs x p h <==> rhs' x p h with
           theta_monad_morphism_bind0 (k x) km s0 p h;
         assert (forall x. rhs x p h <==> rhs' x p h);
         w_bind_subcomp (w_require pre) rhs rhs';
@@ -196,7 +197,7 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       <==> {}
       theta #e (free_bind m km) s0 p h;
     }
-  | Print arg k -> 
+  | Print arg k ->
     calc (<==>) {
       w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
       <==> {}
@@ -205,10 +206,10 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       w_bind (w_bind (w_print arg) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
       <==> { w_law3 (w_print arg) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
       w_bind (w_print arg) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
-      <==> { 
+      <==> {
         let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
         let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
-        introduce forall x p h. rhs x p h <==> rhs' x p h with 
+        introduce forall x p h. rhs x p h <==> rhs' x p h with
           theta_monad_morphism_bind0 (k x) km s0 p h;
         assert (forall x. rhs x p h <==> rhs' x p h);
         w_bind_subcomp (w_print arg) rhs rhs';
@@ -222,7 +223,7 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       <==> {}
       theta #e (free_bind m km) s0 p h;
     }
-  | Await pr k -> 
+  | Await pr k ->
     calc (<==>) {
       w_bind (theta #e m s0) (fun (s1, x) -> theta #e (km x) s1) p h;
       <==> {}
@@ -231,10 +232,10 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       w_bind (w_bind (w_await pr) (fun x -> theta (k x) s0)) (fun (s1, x) -> theta #e (km x) s1) p h;
       <==> { w_law3 (w_await pr) (fun x ->  theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1) }
       w_bind (w_await pr) (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) p h;
-      <==> { 
+      <==> {
         let rhs = (fun x -> w_bind (theta (k x) s0) (fun (s1, x) -> theta #e (km x) s1)) in
         let rhs' = (fun x -> theta (free_bind (k x) km) s0) in
-        introduce forall x p h. rhs x p h <==> rhs' x p h with 
+        introduce forall x p h. rhs x p h <==> rhs' x p h with
           theta_monad_morphism_bind0 (k x) km s0 p h;
         assert (forall x. rhs x p h <==> rhs' x p h);
         w_bind_subcomp (w_await pr) rhs rhs';
@@ -243,7 +244,7 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       w_bind (w_await pr) (fun x -> theta (free_bind (k x) km) s0) p h;
       <==> {}
       theta #e (Await pr (fun x -> free_bind (k x) km)) s0 p h;
-      <==> {}
+      <==> { _ by (compute ()) }
       theta #e (free_bind (Await pr k) km) s0 p h;
       <==> {}
       theta #e (free_bind m km) s0 p h;
@@ -257,10 +258,10 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
       w_bind (w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> theta (k x) s1)) (fun (s2, x) -> theta #e (km x) s2) p h;
       <==> { w_law3 (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) ->  theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2) }
       w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> w_bind (theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2)) p h;
-      <==> { 
+      <==> {
         let rhs = (fun (s1, x) -> w_bind (theta (k x) s1) (fun (s2, x) -> theta #e (km x) s2)) in
         let rhs' = (fun (s1, x) -> theta (free_bind (k x) km) s1) in
-        introduce forall x s0 p h. rhs (s0,x) p h <==> rhs' (s0,x) p h with 
+        introduce forall x s0 p h. rhs (s0,x) p h <==> rhs' (s0,x) p h with
           theta_monad_morphism_bind0 (k x) km s0 p h;
         assert (forall x. rhs x p h <==> rhs' x p h);
         w_bind_subcomp (w_async (s0+1) (theta f (s0+1))) rhs rhs';
@@ -268,17 +269,17 @@ let rec theta_monad_morphism_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (m:free
        }
       w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
       <==> { lemma_w_async (theta f (s0+1)) s0 }
-      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x)))))) 
+      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> w_return (s1,(Universe.raise_val (Universe.downgrade_val x))))))
            (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
       <==> { _ by (norm [delta_only [`%free_return]; iota]) }
-      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> theta (free_return (Universe.raise_val (Universe.downgrade_val x))) s1))) 
+      w_bind (w_async (s0+1) (w_bind (theta f (s0+1)) (fun (s1,x) -> theta (free_return (Universe.raise_val (Universe.downgrade_val x))) s1)))
            (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
-      <==> { 
+      <==> {
         let k = (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x))) in
-        introduce forall s0 p h. w_bind (theta #e f s0) (fun (s1, x) -> theta #e (k x) s1) p h <==> theta #e (free_bind f k) s0 p h with 
+        introduce forall s0 p h. w_bind (theta #e f s0) (fun (s1, x) -> theta #e (k x) s1) p h <==> theta #e (free_bind f k) s0 p h with
           theta_monad_morphism_bind0 f k s0 p h }
       w_bind (w_async (s0+1) (theta ((free_bind f (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x))))) (s0+1))) (fun (s1, x) -> theta (free_bind (k x) km) s1) p h;
-      <==> {}
+      <==> { _ by (compute ()) }
       theta (Async (free_bind f (fun x -> free_return (Universe.raise_val (Universe.downgrade_val x)))) (fun x -> free_bind (k x) km)) s0 p h;
       <==> { _ by (compute ()) }
       theta #e (free_bind (Async f k) km) s0 p h;
@@ -295,12 +296,12 @@ let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
 
 let lemma_wp_drop_state (wp:w #'e (nat * 'a)) p h : Lemma (
    w_bind wp (fun (_, x) -> w_return x) p h <==> wp (fun lt (_, rf) -> p lt rf) h) = ()
-   
-let lemma_theta_theta'0 (m:free #'e 'a) s0 p h : Lemma (
+
+let lemma_theta_theta'0 (m:free #nat #'e 'a) s0 p h : Lemma (
    theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
    lemma_wp_drop_state (theta m s0) p h
 
-let lemma_theta_theta' (m:free #'e 'a) : Lemma (
+let lemma_theta_theta' (m:free #nat #'e 'a) : Lemma (
    forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
    Classical.forall_intro_3 (lemma_theta_theta'0 m)
 
@@ -317,7 +318,7 @@ let lemma_better_sub0
   (wp:w #e a)
   (kwp:a -> w #e b)
   (c:dm a wp)
-  (kc:(x:a -> dm b (kwp x))) 
+  (kc:(x:a -> dm b (kwp x)))
   (s0:nat)
   (p:w_post #e b)
   h : Lemma
@@ -332,7 +333,7 @@ let lemma_better_sub0
     ==> { lemma_wp_drop_state (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) p h }
     w_bind (w_bind (theta c s0) (fun (s1, x) -> theta (kc x) s1)) (fun (_, x) -> w_return x) p h;
   }
-  
+
 
 let lemma_better
   (#e:Type)
@@ -408,12 +409,12 @@ let dm_subcomp
   Pure (dm a wp2)
     (requires (wp2 `w_ord0` wp1))
     (ensures (fun _ -> True)) =
-    c 
+    c
 
 let w_if_then_else (#e:Type) (#a:Type) (wp1 wp2:w #e a) (b:bool) : w #e a =
   fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
 
-let dm_if_then_else (#e:Type) (a : Type u#a) 
+let dm_if_then_else (#e:Type) (a : Type u#a)
   (wp1 wp2: w #e a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
   dm a (w_if_then_else wp1 wp2 b)
 
@@ -421,7 +422,7 @@ let dm_partial_return
   (#e:Type)
   (pre:pure_pre) : dm #e (squash pre) (w_require pre) =
   let m = Require pre (Return) in
-  assert (forall s0. w_require pre ⊑ theta' #e m s0) by (compute ());
+ // assert (forall s0. w_require pre ⊑ theta' #e m s0) by (compute ());
   m
 
 unfold
@@ -434,12 +435,14 @@ let lift_pure_w_as_requires (#e:Type) (#a:Type) (wp : pure_wp a) :
     assert (forall (p:w_post #e a) x. p empty_runtree x ==> True) ;
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
     assert (forall (p:w_post #e a). wp (fun x -> p empty_runtree x) ==> wp (fun _ -> True))
-  
-unfold let repr' = dm #int
-unfold let return' = dm_return #int
-unfold let bind' = dm_bind #int
-unfold let subcomp' = dm_subcomp #int
-unfold let if_then_else' = dm_if_then_else #int
+
+type repr (a:Type u#a) (wp: w #int a) : Type u#(max 1 a) = dm #int a wp
+let return (a:Type u#a) (x:a) : repr a (w_return x) = dm_return #int a x
+let require (pre:pure_pre) : repr (squash pre) (w_require pre) = dm_partial_return pre
+let bind (a:Type u#a) (b:Type u#b) (wp:w #int a) (kwp:a -> w #int b) (c:repr a wp) (kc:(x:a -> repr b (kwp x))) : repr b (w_bind0 wp kwp) = dm_bind #int a b wp kwp c kc
+let subcomp (a:Type u#a) (wp1:w #int a) (wp2:w #int a) (c:repr a wp1) : Pure (repr a wp2) (requires (wp2 `w_ord0` wp1)) (ensures (fun _ -> True)) = dm_subcomp #int a wp1 wp2 c
+let if_then_else (a : Type u#a)
+  (wp1 wp2: w #int a) (f : dm #int a wp1) (g : dm #int a wp2) (b : bool) : Type u#(max 1 a) = dm_if_then_else #int a wp1 wp2 f g b
 
 
 reflectable
@@ -448,25 +451,27 @@ total
 effect {
   CyWP (a:Type) (wp : w #int a)
   with {
-       repr       = repr'
-     ; return     = return' 
-     ; bind       = bind'
-     ; subcomp    = subcomp'
-     ; if_then_else = if_then_else'
+       repr       = repr
+     ; return     = return
+     ; bind       = bind
+     ; subcomp    = subcomp
+     ; if_then_else = if_then_else
      }
 }
 
-let lift_pure_dm 
-  (a : Type u#a) 
+#set-options "--print_universes"
+
+let lift_pure_dm
+  (a : Type u#a)
   (wp : pure_wp a)
-  (f:(eqtype_as_type unit -> PURE a wp)) : 
-  dm #int a (lift_pure_w wp) =
+  (f:(eqtype_as_type unit -> PURE a wp)) :
+  repr a (lift_pure_w wp) =
   lift_pure_w_as_requires #int #a wp;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  let lhs = dm_partial_return (as_requires wp) in
-  let rhs = (fun (pre:(squash (as_requires wp))) -> dm_return a (f ())) in
-  let m = dm_bind _ _ _ _ lhs rhs in
-  dm_subcomp a _ (lift_pure_w wp) m
+  let lhs = require (as_requires wp) in
+  let rhs = (fun (pre:(squash (as_requires wp))) -> return a (f pre)) in
+  let m = bind _ _ _ _ lhs rhs in
+  subcomp _ _ _ m
 
 sub_effect PURE ~> CyWP = lift_pure_dm
 
@@ -495,7 +500,7 @@ let partial_match (l : list nat) : Cy unit (requires (fun _ -> l <> [])) (ensure
 
 let partial_match_io (l : list int) : Cy int (requires fun _ -> l <> []) (ensures fun _ _ _ -> True) =
   match l with
-  | s :: _ -> s + 10 
+  | s :: _ -> s + 10
 
 // Cezar's tests
 
@@ -524,11 +529,11 @@ let raise_w (#a:Type u#a) (wp:w a) : w (Universe.raise_t u#a u#b a) =
   fun p -> wp (fun lt r -> p lt (Universe.raise_val r))
 
 [@"opaque_to_smt"]
-let async00 (#a:Type u#a) (#wp:w a) ($f:unit -> CyWP a wp) : dm (Universe.raise_t u#a u#b a) (raise_w u#a u#b wp)  = 
+let async00 (#a:Type u#a) (#wp:w a) ($f:unit -> CyWP a wp) : dm (Universe.raise_t u#a u#b a) (raise_w u#a u#b wp)  =
   let f' : dm a wp = reify (f ()) in
   dm_subcomp _ _ _ (dm_bind _ _ _ _ f' (fun x -> dm_return _ (Universe.raise_val u#a u#b x)))
 
-let async_spec_implies_theta 
+let async_spec_implies_theta
   (#a:Type)
   (pre:w_pre) (post:tracetree int -> a -> tracetree int -> Type0)
   (f:dm (Universe.raise_t a) (fun p h -> pre h /\ (forall r lt. post h r lt ==> p lt (Universe.raise_val r)))) :
@@ -536,8 +541,8 @@ let async_spec_implies_theta
     forall s0.
     (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr))
     ⊑
-    theta' (Async f free_return) s0) = 
-  introduce forall s0 (p:w_post (promise a)) h. (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr) ==>
+    theta' (Async f free_return) s0) =
+  introduce forall s0 (p:w_post (promise nat a)) h. (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr) ==>
        theta' (Async f free_return) s0 p h) with begin
        introduce (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) ==>
        theta' (Async f free_return) s0 p h with hyp. begin
@@ -561,26 +566,26 @@ let async_spec_implies_theta
             ==> { _ by (norm [delta_only [`%append_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
             theta f (s0+1) (fun lt (s1, rf) -> p (async_runtree (s0+1) (append_runtree lt empty_runtree)) (Promise (s0+1) (Universe.downgrade_val rf))) h;
             ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-            theta f (s0+1) (fun lt (s1, rf) -> w_return (s1, Promise (s0+1) (Universe.downgrade_val rf)) 
+            theta f (s0+1) (fun lt (s1, rf) -> w_return (s1, Promise (s0+1) (Universe.downgrade_val rf))
                   (fun lt' (_, pr) -> p (async_runtree (s0+1) (append_runtree lt lt')) pr) (append_runtree h lt)) h;
             ==> { _ by (norm [delta_only [`%w_async0;`%w_bind;`%w_bind0;`%w_post_bind;`%w_post_shift]; zeta;iota]) }
             w_async0 (s0+1) (theta f (s0+1)) (fun ltf (s1, pr) -> p (async_runtree (s0+1) ltf) pr) h;
             ==> { _ by (norm [delta_only [`%w_async]; zeta;iota]; assumption ()) }
             w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> p lt pr) h;
             ==> { _ by (norm [delta_only [`%append_runtree;`%empty_runtree]; zeta; iota]; assumption ())}
-            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> 
+            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) ->
                p (lt `append_runtree` empty_runtree) pr) h;
             ==> { _ by (norm [delta_only [`%w_return;`%w_return0]; iota]; assumption ())}
-            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) -> 
+            w_async (s0+1) (theta f (s0+1)) (fun lt (s1, pr) ->
               w_return (s1, pr) (fun lt' (_, pr) -> p (lt `append_runtree` lt') pr) (h `append_runtree` lt)) h;
             ==> { _ by (norm [delta_only [`%w_bind;`%w_bind0;`%w_post_bind;`%w_post_shift]; iota])}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) ->
               w_return (s1, pr)) (fun lt (s1, pr) -> p lt pr) h;
             ==> {}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) ->
               theta (Return pr) s1) (fun lt (s1, pr) -> p lt pr) h;
             ==> {}
-            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) -> 
+            w_bind (w_async (s0+1) (theta f (s0+1))) (fun (s1, pr) ->
               theta (free_return pr) s1) (fun lt (s1, pr) -> p lt pr) h;
             ==> { _ by (norm [delta_only [`%theta]; zeta;iota]; assumption ()) }
             theta (Async f free_return) s0 (fun lt (s1, pr) -> p lt pr) h;
@@ -594,27 +599,27 @@ let async_spec_implies_theta
   end
 
 let async0 (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> Type0) ($f:unit -> Cy a pre post) :
-  dm (promise a) (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) =
+  dm (promise nat a) (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) =
   let wp' : w (Universe.raise_t a) = raise_w (fun p h -> pre h /\ (forall lt r. post h r lt ==> p lt r)) in
   let f' : dm (Universe.raise_t a) wp' = async00 f in
-  let m : free (promise a) = Async f' free_return in
+  let m : free (promise nat a) = Async f' free_return in
   async_spec_implies_theta pre post f';
   m
 
 [@"opaque_to_smt"]
-let async (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> Type0) ($f:unit -> Cy a pre post) : 
-  Cy (promise a) pre (fun h pr lt -> exists lt'. lt == async_runtree (Promise?.id pr) lt' /\ post h (Promise?.r pr) lt') =
+let async (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> Type0) ($f:unit -> Cy a pre post) :
+  Cy (promise nat a) pre (fun h pr lt -> exists lt'. lt == async_runtree (Promise?.id pr) lt' /\ post h (Promise?.r pr) lt') =
   CyWP?.reflect (async0 f)
 
 [@"opaque_to_smt"]
-let await (#a:Type) (pr:promise a) : Cy a (fun _ -> True) (fun h r lt -> reveal (Promise?.r pr) == r /\ lt == return_runtree [EAwait (Promise?.id pr)]) =
+let await (#a:Type) (pr:promise nat a) : Cy a (fun _ -> True) (fun h r lt -> reveal (Promise?.r pr) == r /\ lt == return_runtree [EAwait (Promise?.id pr)]) =
   CyWP?.reflect (Await pr (free_return))
 
-let return (#a:Type) (x:a) () : Cy a (fun _ -> True) (fun h r lt -> r == x /\ lt == return_runtree [Ev 0;Ev 1;Ev 2]) = print 0; print 1; print 2; x
+let prints (#a:Type) (x:a) () : Cy a (fun _ -> True) (fun h r lt -> r == x /\ lt == return_runtree [Ev 0;Ev 1;Ev 2]) = print 0; print 1; print 2; x
 
 let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [Ev 1; Ev 2; Ev 2] Leaf Leaf))) =
-  let prx = async (return 2) in
-  let pry = async (return 3) in
+  let prx = async (prints 2) in
+  let pry = async (prints 3) in
   print 1;
   print 2;
   (if false then print 3
@@ -622,20 +627,20 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1
   1
 
 let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait id2] Leaf Leaf))) =
-  let prx = async (return 2) in
-  let pry = async (return 3) in
+  let prx = async (prints 2) in
+  let pry = async (prints 3) in
   let x : int = await prx in
   let y : int = await pry in
   x + y
 
 
-let f () : Cy (promise unit) (fun _ -> True) (fun h pr lt -> lt == Node [EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
-  async (return ())
+let f () : Cy (promise nat unit) (fun _ -> True) (fun h pr lt -> lt == Node [EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
+  async (prints ())
 
-let g () : Cy (promise unit)  (fun _ -> True) (fun h pr lt -> lt == Node [Ev 10; EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
+let g () : Cy (promise nat unit)  (fun _ -> True) (fun h pr lt -> lt == Node [Ev 10; EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
   print 10;
   f ()
 
-let h () : Cy unit (fun _ -> True) (fun h r lt -> exists (id1:nat). lt == Node [Ev 10; EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; Ev 20] Leaf Leaf)) = 
+let h () : Cy unit (fun _ -> True) (fun h r lt -> exists (id1:nat). lt == Node [Ev 10; EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; Ev 20] Leaf Leaf)) =
   await (g ());
   print 20
