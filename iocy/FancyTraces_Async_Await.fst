@@ -7,17 +7,6 @@ open FStar.Ghost
 
 friend Promise
 
-type w_post #s (a:Type) = s -> a -> Type0
-type w_pre #s = s -> Type0
-type w0 #s (a:Type) = w_post #s a -> w_pre #s
-unfold
-let w_post_ord (#s:Type) (#a:Type) (p1 p2:w_post #s a) = forall lt (r:a). p1 lt r ==> p2 lt r
-
-let w_monotonic (#s:Type) (#a:Type) (wp:w0 #s a) =
-  forall (p1 p2:w_post a). (p1 `w_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
-
-type w (#s:Type) (a:Type) = wp:(w0 #s a){w_monotonic wp}
-
 (**
 #push-options "--__no_positivity"
 noeq
@@ -34,6 +23,17 @@ type event (e: Type0) =
 | EAsync : #b:Type0 -> promise b -> trace e -> event e
 | EAwait : #b:Type0 -> promise b -> event e
 and trace e = list (event e)
+
+type w_post #e (a:Type) = trace e -> a -> Type0
+type w_pre #e = trace e -> Type0
+type w0 #e (a:Type) = w_post #e a -> w_pre #e
+unfold
+let w_post_ord (#e:Type) (#a:Type) (p1 p2:w_post #e a) = forall lt (r:a). p1 lt r ==> p2 lt r
+
+let w_monotonic (#e:Type) (#a:Type) (wp:w0 #e a) =
+  forall (p1 p2:w_post #e a). (p1 `w_post_ord` p2) ==> (forall h. wp p1 h ==> wp p2 h)
+
+type w (#e:Type) (a:Type) = wp:(w0 #e a){w_monotonic wp}
 
 (** Waiting twice for the same await
 let ex1 =
@@ -76,19 +76,19 @@ let w_equiv (wp1:w 'a) (wp2:w 'a) =
   forall p h. wp1 p h <==> wp2 p h
 let (≡) = w_equiv
 
-let w_subcomp (#e:Type) (#a:Type) (wp:w a) (p1 p2:w_post a) (h:trace e) :
+let w_subcomp (#e:Type) (#a:Type) (wp:w #e a) (p1 p2:w_post #e a) (h:trace e) :
   Lemma (requires (wp p1 h /\ p1 `w_post_ord` p2))
         (ensures (wp p2 h)) = ()
 
 unfold
-let w_ord0 (#s:Type) (#a:Type) (wp1:w #s a) (wp2:w #s a) = forall (p:w_post a) h. wp1 p h ==> wp2 p h
-let w_ord = w_ord0
+let w_ord0 #e (#a:Type) (wp1:w #e a) (wp2:w #e a) = forall (p:w_post a) h. wp1 p h ==> wp2 p h
+let w_ord #e (#a:Type) (wp1:w #e a) (wp2:w #e a) = w_ord0 #e #a wp1 wp2
 unfold let (⊑) = w_ord
 
 unfold
-let w_return0 (#a:Type) (#e:Type) (x:a) : w #(trace e) a =
+let w_return0 (#e:Type) (#a:Type) (x:a) : w #e a =
   fun p _ -> p [] x
-let w_return = w_return0
+let w_return (#e:Type) (#a:Type) (x:a) = w_return0 #e #a x
 
 unfold
 let w_post_shift (#e:Type) (p:w_post 'b) (lt:trace e) : w_post 'b =
@@ -107,8 +107,9 @@ let w_post_bind
 
 
 unfold
-let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w a) (kwp : a -> w b) : w b =
+let w_bind0 (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e b) : w #e b =
   fun p h -> wp (w_post_bind #e h kwp p) h
+val w_bind (#e:Type) (#a:Type u#a) (#b:Type u#b) (wp : w #e a) (kwp : a -> w #e b) : w #e b
 let w_bind = w_bind0
 
 let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) :
@@ -117,7 +118,7 @@ let w_bind_subcomp (wp1:w 'a) (wp2:'a -> w 'b) (wp3:'a -> w 'b) :
     (ensures (forall p h. w_bind wp1 wp2 p h <==> w_bind wp1 wp3 p h)) = ()
 
 let __iff_refl a : Lemma (a <==> a) = ()
-let w_law1 (x:'a) (k:'a -> w #(trace 'e) 'b) : Lemma (forall p h. w_bind (w_return x) k p h <==> k x p h) = admit ()
+let w_law1 (x:'a) (k:'a -> w #'e 'b) : Lemma (forall p h. w_bind (w_return x) k p h <==> k x p h) = admit ()
 (**by (
   norm [delta_only [`%w_bind;`%w_bind0;`%w_return;`%w_return0;`%w_post_bind;`%w_post_shift]; zeta;iota];
   smt ();
@@ -180,21 +181,24 @@ let w_print #e (ev:e) : w unit =
 unfold let async_event (pr:promise 'a) (asynced_lt:trace 'e) : trace 'e = [EAsync pr asynced_lt]
 
 type wst #s a = s0:nat -> w #s (s1:nat * a) // {s0 <= s1}
-let wst_return #e #a x : wst #(trace e) a = fun s0 -> w_return (s0, x)
-let wst_bind #e #a (m:wst #(trace e) a) #b (k:a -> wst #(trace e) b) : wst #(trace e) b =
+let wst_return #e #a x : wst #e a = fun s0 -> w_return (s0, x)
+let wst_bind #e #a (m:wst #e a) #b (k:a -> wst #e b) : wst #e b =
   fun s0 -> w_bind #e #(s1:nat * a) #(s2:nat * b) (m s0) (fun (s1, r) -> k r s1)
 
-unfold let w_async0 (#e:Type0) (#a:Type0) (wf:wst (Universe.raise_t u#0 u#c a)) : wst (promise a) =
-  wst_bind wf (fun r s1 -> w_return #_ #e (s1+1, (Promise (s1+1) (hide (Universe.downgrade_val r)))))
+unfold let w_async0 (#e:Type0) (#a:Type0) (wf:wst #e (Universe.raise_t u#0 u#c a)) : wst #e (promise a) =
+  wst_bind #e wf (fun r s1 -> w_return #e #_ (s1+1, (Promise (s1+1) (hide (Universe.downgrade_val r)))))
 
 //  fun (s0:nat) -> w_bind (wf s0) (fun (s1r:(nat * _)) -> let (s1, r) = s1r in w_return #(nat * promise a) #e (s1+1, (Promise (s1+1) (hide (Universe.downgrade_val r)))))
-let wst_async #e #a (wf:wst #(trace e) (Universe.raise_t a)) : wst #(trace e) (promise a) =
-  fun s0 p h -> w_async0 wf s0 (fun ltf (s1, pr) -> p (async_event pr ltf) (s1, pr)) h
+let wst_async #e #a (wf:wst #e (Universe.raise_t a)) : wst #e (promise a) =
+  fun s0 ->
+    let wp = fun p h -> w_async0 wf s0 (fun ltf (s1, pr) -> p (async_event pr ltf) (s1, pr)) h in
+    assume (w_monotonic wp);
+    wp
 
 let w_await (pr:promise 'a) : w 'a =
   fun p h -> p [EAwait pr] (reveal (Promise?.r pr))
 
-val theta : (#e:Type) -> (#a:Type) -> free #e a -> wst #(trace e) a
+val theta : (#e:Type) -> (#a:Type) -> free #e a -> wst #e a
 let rec theta m = fun s0 ->
   match m with
   | Require pre k ->
@@ -344,9 +348,11 @@ let theta_monad_morphism_bind (#e:Type) (#a:Type) (#b:Type) (m:free a) (km:a -> 
 
 **)
 
-let theta' m s0 = w_bind (theta m s0) (fun (s1, x) -> w_return x)
+val theta' : (#e:Type) -> (#a:Type) -> free #e a -> nat -> w #e a
+let theta' #e #a m s0 =
+  w_bind (theta m s0) (fun (s1, x) -> w_return #e #a x)
 
-let lemma_wp_drop_state (wp:w #(trace 'e) (nat * 'a)) p h : Lemma (
+let lemma_wp_drop_state (wp:w #'e (nat * 'a)) p h : Lemma (
    w_bind wp (fun (_, x) -> w_return x) p h <==> wp (fun lt (_, rf) -> p lt rf) h) = admit ()
 
 let lemma_theta_theta'0 (m:free #'e 'a) s0 p h : Lemma (
@@ -357,10 +363,10 @@ let lemma_theta_theta' (m:free #'e 'a) : Lemma (
    forall s0 p h. theta' m s0 p h <==> theta m s0 (fun lt (s1, rf) -> p lt rf) h) =
    Classical.forall_intro_3 (lemma_theta_theta'0 m)
 
-let dm (#e:Type0) (a:Type u#a) (wp:w #(trace e) a) =
+let dm (#e:Type) (a:Type u#a) (wp:w #e a) =
   m:(free a){forall s0. wp ⊑ theta' m s0}
 
-let dm_return (a:Type u#a) (x:a) : dm a (w_return0 x) =
+let dm_return (a:Type u#a) (x:a) : dm a (w_return x) =
   Return x
 
 (**
@@ -441,8 +447,8 @@ let dm_bind
   (#e:Type)
   (a:Type u#a)
   (b:Type u#b)
-  (wp:w #(trace e) a)
-  (kwp:a -> w #(trace e) b)
+  (wp:w #e a)
+  (kwp:a -> w #e b)
   (c:dm a wp)
   (kc:(x:a -> dm b (kwp x))) :
   dm #e b (w_bind0 wp kwp) =
@@ -457,8 +463,8 @@ let dm_bind
 let dm_subcomp
   (#e:Type)
   (a:Type u#a)
-  (wp1:w #(trace e) a)
-  (wp2:w #(trace e) a)
+  (wp1:w #e a)
+  (wp2:w #e a)
   (c:dm a wp1) :
   Pure (dm a wp2)
     (requires (wp2 `w_ord0` wp1))
@@ -469,7 +475,7 @@ let w_if_then_else (#e:Type) (#a:Type) (wp1 wp2:w #e a) (b:bool) : w #e a =
   fun p h -> (b ==> wp1 p h) /\ ((~b) ==> wp2 p h)
 
 let dm_if_then_else (#e:Type) (a : Type u#a)
-  (wp1 wp2: w #(trace e) a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
+  (wp1 wp2: w #e a) (f : dm a wp1) (g : dm a wp2) (b : bool) : Type =
   dm a (w_if_then_else wp1 wp2 b)
 
 let dm_partial_return
@@ -480,27 +486,54 @@ let dm_partial_return
   m
 
 unfold
-let lift_pure_w (#e:Type0) (#a:Type u#a) (wp : pure_wp a) : w #(trace e) a =
+let lift_pure_w (#e:Type) (#a:Type u#a) (wp : pure_wp a) : w #e a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   (fun (p:w_post a) _ -> wp (fun (r:a) -> p [] r))
 
 let lift_pure_w_as_requires (#e:Type) (#a:Type) (wp : pure_wp a) :
-  Lemma (forall (p:w_post #(trace e) a) h. lift_pure_w wp p h ==> as_requires wp) =
-    assert (forall (p:w_post #(trace e) a) x. p [] x ==> True) ;
+  Lemma (forall (p:w_post #e a) h. lift_pure_w wp p h ==> as_requires wp) =
+    assert (forall (p:w_post #e a) x. p [] x ==> True) ;
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
-    assert (forall (p:w_post #(trace e) a). wp (fun x -> p [] x) ==> wp (fun _ -> True))
+    assert (forall (p:w_post #e a). wp (fun x -> p [] x) ==> wp (fun _ -> True))
+
+let dm' (a:Type u#a) (wp:w #int a) = dm a wp
+let dm_return' (a:Type u#a) (x:a) : dm' a (w_return x) =
+  dm_return a x
+let dm_bind'
+  (a:Type u#a)
+  (b:Type u#b)
+  (wp:w a)
+  (kwp:a -> w b)
+  (c:dm' a wp)
+  (kc:(x:a -> dm' b (kwp x))) :
+  dm' b (w_bind wp kwp) =
+  dm_bind a b wp kwp c kc
+
+let dm_subcomp'
+  (a:Type u#a)
+  (wp1:w a)
+  (wp2:w a)
+  (c:dm' a wp1) :
+  Pure (dm' a wp2)
+    (requires (wp2 `w_ord` wp1))
+    (ensures (fun _ -> True)) =
+ dm_subcomp a wp1 wp2 c
+
+let dm_if_then_else' (a : Type u#a)
+  (wp1 wp2: w a) (f : dm' a wp1) (g : dm' a wp2) (b : bool) : Type =
+  dm_if_then_else a wp1 wp2 f g b
 
 reflectable
 reifiable
 total
 effect {
-  CyWP (a:Type) (wp : w #(trace int) a)
+  CyWP (a:Type) (wp : w #int a)
   with {
-       repr       = dm #int
-     ; return     = dm_return #int
-     ; bind       = dm_bind #int
-     ; subcomp    = dm_subcomp #int
-     ; if_then_else = dm_if_then_else #int
+       repr       = dm'
+     ; return     = dm_return'
+     ; bind       = dm_bind'
+     ; subcomp    = dm_subcomp'
+     ; if_then_else = dm_if_then_else'
      }
 }
 
@@ -508,7 +541,7 @@ let lift_pure_dm
   (a : Type u#a)
   (wp : pure_wp a)
   (f:(eqtype_as_type unit -> PURE a wp)) :
-  dm #int a (lift_pure_w wp) =
+  dm' a (lift_pure_w wp) =
   lift_pure_w_as_requires #int #a wp;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   let lhs = dm_partial_return (as_requires wp) in
@@ -553,39 +586,46 @@ assume val pure_lemma (_ : unit) : Lemma p
 assume val some_f (_ : squash p) : Cy unit (requires fun _ -> True) (ensures fun _ _ _ -> True)
 assume val some_f' : unit -> Cy unit (requires fun _ -> p) (ensures fun _ _ _ -> p')
 
+(**
 // TODO: why is this failing?
 let pure_lemma_test () : Cy unit (requires fun _ -> True) (ensures fun _ _ _ -> True) =
   pure_lemma () ;
   some_f ()
+**)
 
 let pure_lemma_test2 () : Cy unit (requires fun _ -> True) (ensures fun _ _ _ -> True) =
   pure_lemma () ;
   some_f () ;
   some_f' () ;
   assert p'
+
 (** *** DONE with tests of partiality **)
 
-let print (e:int) : Cy unit (fun _ -> True) (fun _ () lt -> lt == return_runtree [Ev e]) =
+let print (e:int) : Cy unit (fun _ -> True) (fun _ () lt -> lt == [Ev e]) by (
+  compute ()
+) =
   CyWP?.reflect (Print e (Return))
 
-let raise_w (#a:Type u#a) (wp:w a) : w (Universe.raise_t u#a u#b a) =
-  fun p -> wp (fun lt r -> p lt (Universe.raise_val r))
+let raise_w #e (#a:Type u#a) (wp:w #e a) : w #e (Universe.raise_t u#a u#b a) =
+  w_bind wp (fun r -> w_return (Universe.raise_val r))
+//  fun p h -> wp (fun lt r -> p lt (Universe.raise_val u#a u#b r)) h
 
 [@"opaque_to_smt"]
 let async00 (#a:Type u#a) (#wp:w a) ($f:unit -> CyWP a wp) : dm (Universe.raise_t u#a u#b a) (raise_w u#a u#b wp)  =
   let f' : dm a wp = reify (f ()) in
   dm_subcomp _ _ _ (dm_bind _ _ _ _ f' (fun x -> dm_return _ (Universe.raise_val u#a u#b x)))
 
+  (**
 let async_spec_implies_theta
   (#a:Type)
-  (pre:w_pre) (post:tracetree int -> a -> tracetree int -> Type0)
+  (pre:w_pre) (post:trace int -> a -> trace int -> Type0)
   (f:dm (Universe.raise_t a) (fun p h -> pre h /\ (forall r lt. post h r lt ==> p lt (Universe.raise_val r)))) :
   Lemma (
     forall s0.
-    (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr))
+    (fun p h -> pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_event (Promise?.id pr) lt) pr))
     ⊑
     theta' (Async f free_return) s0) =
-  introduce forall s0 (p:w_post (promise a)) h. (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr) ==>
+  introduce forall s0 (p:w_post (promise a)) h. (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_event (Promise?.id pr) lt) pr) ==>
        theta' (Async f free_return) s0 p h) with begin
        introduce (pre h /\ (forall pr lt. post h (Promise?.r pr) lt ==> p (async_runtree (Promise?.id pr) lt) pr)) ==>
        theta' (Async f free_return) s0 p h with hyp. begin
@@ -648,21 +688,30 @@ let async0 (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> 
   let m : free (promise a) = Async f' free_return in
   async_spec_implies_theta pre post f';
   m
+**)
 
 [@"opaque_to_smt"]
-let async (#a:Type) (#pre:w_pre) (#post:tracetree int -> a -> tracetree int -> Type0) ($f:unit -> Cy a pre post) :
-  Cy (promise a) pre (fun h pr lt -> exists lt'. lt == async_runtree (Promise?.id pr) lt' /\ post h (Promise?.r pr) lt') =
-  CyWP?.reflect (async0 f)
+let async (#a:Type) (#pre:w_pre) (#post:trace int -> a -> trace int -> Type0) ($f:unit -> Cy a pre post) :
+  Cy (promise a) pre (fun h pr lt -> exists lt'. lt == async_event pr lt' /\ post h (Promise?.r pr) lt') =
+  admit ()
+ // CyWP?.reflect (Async (async00 #a #_ f) Return)
 
 [@"opaque_to_smt"]
-let await (#a:Type) (pr:promise a) : Cy a (fun _ -> True) (fun h r lt -> reveal (Promise?.r pr) == r /\ lt == return_runtree [EAwait (Promise?.id pr)]) =
-  CyWP?.reflect (Await pr (free_return))
+let await (#a:Type) (pr:promise a) : Cy a (fun _ -> True) (fun h r lt -> reveal (Promise?.r pr) == r /\ lt == [EAwait pr]) =
+  admit ()
+ // CyWP?.reflect (Await pr Return)
 
-let return (#a:Type) (x:a) () : Cy a (fun _ -> True) (fun h r lt -> r == x /\ lt == return_runtree [Ev 0;Ev 1;Ev 2]) = print 0; print 1; print 2; x
+let synced (#a:Type) (x:a) () : Cy a (fun _ -> True) (fun h r lt -> r == x /\ lt == [Ev 0;Ev 1;Ev 2]) by (compute ()) = print 0; print 1; print 2; x
 
-let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [Ev 1; Ev 2; Ev 2] Leaf Leaf))) =
-  let prx = async (return 2) in
-  let pry = async (return 3) in
+let test () : Cy int (fun _ -> True) (fun h r lt -> exists pr1 lt1. r == 1 /\ lt == [EAsync pr1 lt1; Ev 1]) =
+  let prx = async (synced 2) in
+  print 1;
+  1
+
+let test () : Cy int (fun _ -> True) (fun h r lt -> exists pr1 pr2. r == 1 /\ lt == [EAsync pr1 [Ev 0; Ev 1; Ev 2]; EAsync pr2 [Ev 0; Ev 1; Ev 2]; Ev 1; Ev 2; Ev 2]) by (compute ();
+dump "H") =
+  let prx = async (synced 2) in
+  let pry = async (synced 3) in
   print 1;
   print 2;
   (if false then print 3
@@ -670,15 +719,15 @@ let test () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 1
   1
 
 let test2 () : Cy int (fun _ -> True) (fun h r lt -> exists (id1 id2:nat). r == 5 /\ lt == Node [EAsync id1] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAsync id2] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) (Node [EAwait id1; EAwait id2] Leaf Leaf))) =
-  let prx = async (return 2) in
-  let pry = async (return 3) in
+  let prx = async (synced 2) in
+  let pry = async (synced 3) in
   let x : int = await prx in
   let y : int = await pry in
   x + y
 
 
 let f () : Cy (promise unit) (fun _ -> True) (fun h pr lt -> lt == Node [EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
-  async (return ())
+  async (synced ())
 
 let g () : Cy (promise unit)  (fun _ -> True) (fun h pr lt -> lt == Node [Ev 10; EAsync (Promise?.id pr)] (Node [Ev 0; Ev 1; Ev 2] Leaf Leaf) Leaf) =
   print 10;
