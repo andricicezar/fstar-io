@@ -462,3 +462,46 @@ let g () : Cy (promise int unit) (fun _ -> True) (fun h pr lt -> lt == [Ev 10; E
 let h () : Cy unit (fun _ -> True) (fun h r lt -> exists (pr1:promise int unit). lt == [Ev 10; EAsync pr1; EAwait pr1; Ev 20]) =
   await (g ());
   print 20
+
+noeq
+type ltl_syntax (s:Type0) =
+| Eventually : ltl_syntax s -> ltl_syntax s
+| Always: ltl_syntax s -> ltl_syntax s
+| And: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Or: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Impl: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Now: (s -> Type0) -> ltl_syntax s
+
+#set-options "--print_implicits"
+let rec ltl_denote (#s: Type0) (form: ltl_syntax s) (tr: trace s) : GTot Type0 =
+  match form with
+  | Now p -> begin
+    match tr with
+    | [] -> False
+    | Ev x :: _ -> p x
+    | EAsync pr :: tl ->
+      assume (reveal (pr.lt) << tr); (** this is just because of reveal. fixable **)
+      ltl_denote form pr.lt /\ ltl_denote form tl
+    | EAwait pr :: tl -> False (** Wrong! if it is already awaited, then it should be the event from the tail. if it is not awaited, then it is some other event **)
+  end
+  | Eventually p -> begin
+    match tr with
+    | [] -> False
+    | Ev x :: tl -> ltl_denote p tr \/ ltl_denote form tl
+    | EAsync pr :: tl ->
+      assume (reveal (pr.lt) << tr); (** this is just because of reveal. fixable **)
+      ltl_denote form pr.lt \/ ltl_denote form tl (** ??? is it a conjunction or a disjunction? what if it is a prop that holds after interleaving (e.g., syncronization)? **)
+    | EAwait pr :: tl -> ltl_denote form tl
+  end
+  | Always p -> begin
+    match tr with
+    | [] -> False
+    | Ev x :: tl -> ltl_denote p tr /\ ltl_denote form tl
+    | EAsync pr :: tl ->
+      assume (reveal (pr.lt) << tr); (** this is just because of reveal. fixable **)
+      ltl_denote form pr.lt /\ ltl_denote form tl (** what if it is a prop that holds after interleaving (e.g., syncronization)? **)
+    | EAwait _ :: tl -> ltl_denote form tl
+  end
+  | And p q -> ltl_denote p tr /\ ltl_denote q tr
+  | Or p q -> ltl_denote p tr \/ ltl_denote q tr
+  | Impl p q -> ltl_denote p tr ==> ltl_denote q tr
