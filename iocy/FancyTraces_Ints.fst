@@ -5,14 +5,6 @@ open FStar.List.Tot
 open FStar.Classical.Sugar
 open FStar.Ghost
 
-
-type foo (a:Type u#a) : Type u#a=
-| Foo : a -> bar a -> foo a
-and bar (a:Type u#a) : Type u#a =
-| Nob : bar a
-| Bar : foo a -> bar a
-
-
 noeq
 type promise (e:Type0) (a:Type0) : Type u#1 =
 | Promise : id:erased nat -> lt:erased (trace e) -> r:erased a -> promise e a
