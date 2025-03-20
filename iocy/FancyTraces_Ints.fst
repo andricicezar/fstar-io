@@ -10,8 +10,8 @@ type promise (e:Type0) (a:Type0) : Type u#1 =
 | Promise : id:erased nat -> lt:erased (trace e) -> r:erased a -> promise e a
 and event (e: Type0) : Type u#1 =
 | Ev : e -> event e
-| EAsync : #b:Type0 -> promise e b -> event e
-| EAwait : #b:Type0 -> promise e b -> event e
+| EAsync : #b:Type0 -> pr:promise e b -> event e
+| EAwait : #b:Type0 -> pr:promise e b -> event e
 and trace e : Type u#1 = list (event e)
 
 type w_post (a:Type) = trace int -> a -> Type0
@@ -472,7 +472,6 @@ type ltl_syntax (s:Type0) =
 | Impl: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
 | Now: s -> ltl_syntax s
 
-#set-options "--print_implicits"
 let rec ltl_denote (#s: Type0) (form: ltl_syntax s) (tr: trace s) : GTot Type0 =
   match form with
   | Now ev -> begin
@@ -512,14 +511,145 @@ assume val law_one form (pr:promise 'e 'a) :
 (** Unit Tests **)
 
 let tr_sync0 : trace int = [Ev 0; Ev 1; Ev 2]
+let pr_sync0 : promise int int = Promise 1 tr_sync0 2
+let tr_async0 : trace int = [EAsync pr_sync0; EAwait pr_sync0]
+
 let _ = assert (ltl_denote (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
 let _ = assert (ltl_denote (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
 
-let pr_sync0 : promise int int = Promise 1 tr_sync0 2
-
-let tr_async0 : trace int = [EAsync pr_sync0; EAwait pr_sync0]
-
 let _ = assert (ltl_denote (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0)
 
+//[@expect_failure]
+//let _ = assert (ltl_denote (Now 0) [EAwait pr_sync0])
+
+let rec process_async (id:nat) (tr:trace 'e) : GTot (list (nat * trace 'e)) (decreases tr) =
+  match tr with
+  | [] -> [(id, [])]
+  | Ev _ :: _ -> [(id, tr)]
+  | EAwait _ :: _ -> [(id, tr)]
+  | EAsync pr :: tl ->
+    assume (reveal (pr.lt) << tr);
+    process_async id tl @ process_async pr.id pr.lt
+
+let _ = assert (forall (pr:promise int int). process_async 0 [Ev 5; EAsync pr] == [(0, [Ev 5; EAsync pr])])
+let _ = assert (forall (pr:promise int int). process_async 0 [EAsync (Promise 1 [Ev 2; EAsync pr] ()); Ev 6] == [(0, [Ev 6]); (1, [Ev 2; EAsync pr])])
+let _ = assert (process_async 0 [EAsync (Promise 1 [EAsync (Promise 2 [Ev 5] ()); Ev 2] ()); Ev 6] == [((0 <: nat), [Ev 6]); ((1 <: nat), [Ev 2]); ((2 <: nat), [Ev 5])])
+
+let rec can_process_await
+  (id:nat)
+  (tr:(trace 'e){Cons? tr /\ EAwait? (hd tr)})
+  (trs:list (nat * trace 'e){exists (i:nat{i < List.Tot.length trs}). fst (List.Tot.index trs i) == reveal (Promise?.id (EAwait?.pr (hd tr)))}) : GTot bool =
+  match trs with
+  | (id', tr') :: tl ->
+    if id = id' then begin
+      if List.Tot.length tr' = 0 then true
+      else false
+    end else begin
+      admit ();
+      can_process_await id tr tl
+    end
+
+type proc_await = | PrUnk | PrPending | PrFulfilled
+let rec can_process_await'
+  (id:nat)
+  (trs:list (nat * trace 'e)) : GTot proc_await =
+  match trs with
+  | [] -> PrUnk
+  | (id', tr') :: tl ->
+    if id = id' then begin
+      if List.Tot.length tr' = 0 then PrFulfilled
+      else PrPending
+    end else can_process_await' id tl
+
+let normalized_trace (tr:trace 'e) (trs:list (nat * trace 'e)) : Type0 =
+  match tr with
+  | [] -> True
+  | Ev _ :: _ -> True
+  | EAsync _:: _ -> False
+  | EAwait pr :: _ -> begin
+    match can_process_await' pr.id trs with
+    | PrFulfilled -> False
+    | _ -> True
+  end
+
+let normalized_traces (trs:list (nat * trace 'e)) : Type0 =
+  forall (itr:nat * trace 'e). itr `memP` trs ==>
+    normalized_trace (snd itr) trs
+
+(* Normalizes traces by looking at the trace head and processing EAsync and EAwaits.
+   Thus, in the end, traces should not start with EAsync or EAwaits that are PrFulfilled.**)
+[@@admit_termination]
+let rec _normalize_traces (ntrs trs:list (nat * trace 'e)) : GTot (list (nat * trace 'e)) =
+  match trs with
+  | [] -> ntrs
+  | (i, tr)::tls -> begin
+    match tr with
+    | [] | Ev _ :: _ -> _normalize_traces (ntrs@[(i,tr)]) tls
+    | EAsync _ :: tl -> _normalize_traces ntrs (process_async i tl @ tls)
+    | EAwait pr :: tl -> begin
+      match can_process_await' pr.id (ntrs @ tls) with
+      | PrFulfilled -> _normalize_traces [] (ntrs @ [(i,tl)] @ tls)
+      | _ -> _normalize_traces (ntrs@[(i,tr)]) tls
+    end
+  end
+
+let normalize_traces (trs:list (nat * trace 'e)) : GTot (ntrs:(list (nat * trace 'e)){normalized_traces ntrs}) =
+  let ntrs = _normalize_traces [] trs in
+  assume (normalized_traces ntrs);
+  ntrs
+
+let progress (trs:list (nat * trace 'e){length trs > 0}) (idx:nat{idx < length trs}) : GTot (list (nat * trace 'e)) =
+  // assume empty, Ev or Await
+  lemma_splitAt_snd_length idx trs;
+  let part1, (id, tr)::part2 = splitAt idx trs in
+  let tr' = match tr with | Ev _ :: tl -> tl | _ -> tr in
+  normalize_traces (part1 @ (id, tr') :: part2)
+
+let rec interval (l:int) (r:int{l <= r}) : Tot (list (x:int)) (decreases (r-l)) =
+  if l = r then []
+  else l :: (interval (l+1) r)
+
+let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs: list (nat * trace s)) : GTot Type0 =
+  assume (normalized_traces trs);
+  match trs with | [] -> False | _ ->
+  match form with
+  | Now ev -> begin
+    (** TODO: if all traces are empty, then it should return false **)
+    fold_left (/\) True
+      (map (fun (id, tr) ->
+        assume (normalized_trace tr trs);
+        match tr with
+        | [] -> True
+        | Ev x :: tl -> ev == x
+        | EAwait pr :: tl -> begin
+          match can_process_await' pr.id trs with
+          | PrUnk -> False
+          | PrPending -> True
+        end) trs)
+  end
+  | Eventually p -> begin
+    (** TODO: if all traces are empty, then it should return false **)
+    ltl_denote2 p trs \/
+    fold_left (/\) True
+      (map (fun (idx:int) ->
+        assume (0 <= idx /\ idx < length trs);
+        let new_trs = progress trs idx in
+        assume (new_trs << trs);
+        ltl_denote2 form new_trs
+      ) (interval 0 (length trs)))
+  end
+  | And p q -> ltl_denote2 p trs /\ ltl_denote2 q trs
+  | Or p q -> ltl_denote2 p trs \/ ltl_denote2 q trs
+  | Impl p q -> ltl_denote2 p trs ==> ltl_denote2 q trs
+  | _ -> False
+
+let ltl_denote' form tr =
+  ltl_denote2 form (normalize_traces [(0, tr)])
+
+let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
+let _ = assert (ltl_denote' (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
+
+// let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0) by (compute ())
+
 [@expect_failure]
-let _ = assert (ltl_denote (Now 0) [EAwait pr_sync0])
+let _ = assert (ltl_denote' (Now 0) [EAwait pr_sync0])
