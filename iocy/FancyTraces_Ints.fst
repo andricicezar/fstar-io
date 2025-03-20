@@ -535,20 +535,6 @@ let _ = assert (forall (pr:promise int int). process_async 0 [Ev 5; EAsync pr] =
 let _ = assert (forall (pr:promise int int). process_async 0 [EAsync (Promise 1 [Ev 2; EAsync pr] ()); Ev 6] == [(0, [Ev 6]); (1, [Ev 2; EAsync pr])])
 let _ = assert (process_async 0 [EAsync (Promise 1 [EAsync (Promise 2 [Ev 5] ()); Ev 2] ()); Ev 6] == [((0 <: nat), [Ev 6]); ((1 <: nat), [Ev 2]); ((2 <: nat), [Ev 5])])
 
-let rec can_process_await
-  (id:nat)
-  (tr:(trace 'e){Cons? tr /\ EAwait? (hd tr)})
-  (trs:list (nat * trace 'e){exists (i:nat{i < List.Tot.length trs}). fst (List.Tot.index trs i) == reveal (Promise?.id (EAwait?.pr (hd tr)))}) : GTot bool =
-  match trs with
-  | (id', tr') :: tl ->
-    if id = id' then begin
-      if List.Tot.length tr' = 0 then true
-      else false
-    end else begin
-      admit ();
-      can_process_await id tr tl
-    end
-
 type proc_await = | PrUnk | PrPending | PrFulfilled
 let rec can_process_await'
   (id:nat)
@@ -585,7 +571,7 @@ let rec _normalize_traces (ntrs trs:list (nat * trace 'e)) : GTot (list (nat * t
   | (i, tr)::tls -> begin
     match tr with
     | [] | Ev _ :: _ -> _normalize_traces (ntrs@[(i,tr)]) tls
-    | EAsync _ :: tl -> _normalize_traces ntrs (process_async i tl @ tls)
+    | EAsync _ :: _ -> _normalize_traces ntrs (process_async i tr @ tls)
     | EAwait pr :: tl -> begin
       match can_process_await' pr.id (ntrs @ tls) with
       | PrFulfilled -> _normalize_traces [] (ntrs @ [(i,tl)] @ tls)
@@ -598,19 +584,17 @@ let normalize_traces (trs:list (nat * trace 'e)) : GTot (ntrs:(list (nat * trace
   assume (normalized_traces ntrs);
   ntrs
 
-let progress (trs:list (nat * trace 'e){length trs > 0}) (idx:nat{idx < length trs}) : GTot (list (nat * trace 'e)) =
-  // assume empty, Ev or Await
+let progress (trs:list (nat * trace 'e){length trs > 0}) (idx:nat{idx < length trs}) : GTot (ntrs:(list (nat * trace 'e)){normalized_traces ntrs}) =
   lemma_splitAt_snd_length idx trs;
   let part1, (id, tr)::part2 = splitAt idx trs in
   let tr' = match tr with | Ev _ :: tl -> tl | _ -> tr in
   normalize_traces (part1 @ (id, tr') :: part2)
 
-let rec interval (l:int) (r:int{l <= r}) : Tot (list (x:int)) (decreases (r-l)) =
+let rec interval (l:int) (r:int{l <= r}) : Tot (list int) (decreases (r-l)) =
   if l = r then []
   else l :: (interval (l+1) r)
 
-let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs: list (nat * trace s)) : GTot Type0 =
-  assume (normalized_traces trs);
+let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s)){normalized_traces trs}) : GTot Type0 =
   match trs with | [] -> False | _ ->
   match form with
   | Now ev -> begin
@@ -638,10 +622,20 @@ let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs: list (nat * trace s))
         ltl_denote2 form new_trs
       ) (interval 0 (length trs)))
   end
+  | Always p -> begin
+    (** TODO: if all traces are empty, then it should return false **)
+    ltl_denote2 p trs /\
+    fold_left (/\) True
+      (map (fun (idx:int) ->
+        assume (0 <= idx /\ idx < length trs);
+        let new_trs = progress trs idx in
+        assume (new_trs << trs);
+        ltl_denote2 form new_trs
+      ) (interval 0 (length trs)))
+  end
   | And p q -> ltl_denote2 p trs /\ ltl_denote2 q trs
   | Or p q -> ltl_denote2 p trs \/ ltl_denote2 q trs
   | Impl p q -> ltl_denote2 p trs ==> ltl_denote2 q trs
-  | _ -> False
 
 let ltl_denote' form tr =
   ltl_denote2 form (normalize_traces [(0, tr)])
@@ -649,7 +643,21 @@ let ltl_denote' form tr =
 let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
 let _ = assert (ltl_denote' (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
 
-// let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0) by (compute ())
+let _ = assert (ltl_denote2 (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]]) by (
+  norm [delta_only [`%ltl_denote2;`%fold_left;`%map;`%can_process_await';`%Promise?.id];zeta;iota];
+  dump "H"
+)
+
+let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0)
+by (
+  norm [delta_only [`%tr_async0; `%ltl_denote';`%normalize_traces;`%_normalize_traces;`%process_async;`%pr_sync0;`%tr_sync0];zeta;iota];
+  l_to_r [`append_l_nil];
+  norm [delta_only [`%can_process_await'];zeta;iota];
+  l_to_r [`append_l_nil];
+  l_to_r [`append_nil_l];
+  norm [delta_only [`%_normalize_traces;`%Promise?.lt];zeta;iota];
+  dump "h"
+)
 
 [@expect_failure]
 let _ = assert (ltl_denote' (Now 0) [EAwait pr_sync0])
