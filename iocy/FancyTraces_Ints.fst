@@ -563,7 +563,7 @@ let normalized_traces (trs:list (nat * trace 'e)) : Type0 =
     normalized_trace (snd itr) trs
 
 (* Normalizes traces by looking at the trace head and processing EAsync and EAwaits.
-   Thus, in the end, traces should not start with EAsync or EAwaits that are PrFulfilled.**)
+   Thus, normalized traces do not start with EAsync or EAwaits that are PrFulfilled.**)
 [@@admit_termination]
 let rec _normalize_traces (ntrs trs:list (nat * trace 'e)) : GTot (list (nat * trace 'e)) =
   match trs with
@@ -584,15 +584,26 @@ let normalize_traces (trs:list (nat * trace 'e)) : GTot (ntrs:(list (nat * trace
   assume (normalized_traces ntrs);
   ntrs
 
-let progress (trs:list (nat * trace 'e){length trs > 0}) (idx:nat{idx < length trs}) : GTot (ntrs:(list (nat * trace 'e)){normalized_traces ntrs}) =
+let progress (trs:list (nat * trace 'e){length trs > 0}) (idx:nat{idx < length trs}) : GTot (r:(option (list (nat * trace 'e))){Some? r ==> normalized_traces (Some?.v r)}) =
   lemma_splitAt_snd_length idx trs;
   let part1, (id, tr)::part2 = splitAt idx trs in
-  let tr' = match tr with | Ev _ :: tl -> tl | _ -> tr in
-  normalize_traces (part1 @ (id, tr') :: part2)
+  match tr with
+  | Ev _ :: tl -> Some (normalize_traces (part1 @ (id, tl) :: part2))
+  | _ -> None
+
+let _ = assert (forall (lt:erased (trace int)). progress [0, [EAwait (Promise 1 lt 2)]; 1, [Ev 0; Ev 1; Ev 2]] 0 == None)
+
+let _ = assert (forall (lt:erased (trace int)). progress [0, [EAwait (Promise 1 lt 2)]; 1, [Ev 0; Ev 1; Ev 2]] 1 ==
+  Some [0, [EAwait (Promise 1 lt 2)]; 1, [Ev 1; Ev 2]])
+
+let _ = assert (forall (lt:erased (trace int)). progress [0, [EAwait (Promise 1 lt 2)]; 1, [Ev 2]] 1 ==
+  Some [0, []; 1, []])
 
 let rec interval (l:int) (r:int{l <= r}) : Tot (list int) (decreases (r-l)) =
   if l = r then []
   else l :: (interval (l+1) r)
+
+let _ = assert (interval 0 2 == [0;1])
 
 let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s)){normalized_traces trs}) : GTot Type0 =
   match trs with | [] -> False | _ ->
@@ -612,14 +623,18 @@ let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s))
         end) trs)
   end
   | Eventually p -> begin
-    (** TODO: if all traces are empty, then it should return false **)
+    (** TODO: if no progress in any of the traces, then it should return false **)
+    (** TODO: Eventually should jump over awaits on unknown promises **)
     ltl_denote2 p trs \/
     fold_left (/\) True
       (map (fun (idx:int) ->
         assume (0 <= idx /\ idx < length trs);
-        let new_trs = progress trs idx in
-        assume (new_trs << trs);
-        ltl_denote2 form new_trs
+        match progress trs idx with
+        | None -> True
+        | Some new_trs -> begin
+          assume (new_trs << trs);
+          ltl_denote2 form new_trs
+        end
       ) (interval 0 (length trs)))
   end
   | Always p -> begin
@@ -628,9 +643,12 @@ let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s))
     fold_left (/\) True
       (map (fun (idx:int) ->
         assume (0 <= idx /\ idx < length trs);
-        let new_trs = progress trs idx in
-        assume (new_trs << trs);
-        ltl_denote2 form new_trs
+        match progress trs idx with
+        | None -> True
+        | Some new_trs -> begin
+          assume (new_trs << trs);
+          ltl_denote2 form new_trs
+        end
       ) (interval 0 (length trs)))
   end
   | And p q -> ltl_denote2 p trs /\ ltl_denote2 q trs
@@ -642,22 +660,20 @@ let ltl_denote' form tr =
 
 let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
 let _ = assert (ltl_denote' (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
+let _ = assert (ltl_denote' (Eventually (And (Now 1) (Eventually (Now 2)))) tr_sync0)
+let _ = assert (ltl_denote' (Eventually (Now 2)) tr_sync0)
 
-let _ = assert (ltl_denote2 (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]]) by (
-  norm [delta_only [`%ltl_denote2;`%fold_left;`%map;`%can_process_await';`%Promise?.id];zeta;iota];
-  dump "H"
-)
+let _ = assert (ltl_denote2 (Now 0) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
+let _ = assert (ltl_denote2 (Eventually (Now 0)) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
 
+let _ = assert (ltl_denote2 (Eventually (Now 1)) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
+
+let _ = assert (ltl_denote2 (Eventually (Now 2)) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
+
+let _ = assert (ltl_denote2 (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
+
+#set-options "--z3rlimit 1000"
 let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0)
-by (
-  norm [delta_only [`%tr_async0; `%ltl_denote';`%normalize_traces;`%_normalize_traces;`%process_async;`%pr_sync0;`%tr_sync0];zeta;iota];
-  l_to_r [`append_l_nil];
-  norm [delta_only [`%can_process_await'];zeta;iota];
-  l_to_r [`append_l_nil];
-  l_to_r [`append_nil_l];
-  norm [delta_only [`%_normalize_traces;`%Promise?.lt];zeta;iota];
-  dump "h"
-)
 
 [@expect_failure]
 let _ = assert (ltl_denote' (Now 0) [EAwait pr_sync0])
