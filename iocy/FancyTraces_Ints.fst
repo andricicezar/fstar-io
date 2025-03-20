@@ -470,19 +470,19 @@ type ltl_syntax (s:Type0) =
 | And: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
 | Or: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
 | Impl: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
-| Now: (s -> Type0) -> ltl_syntax s
+| Now: s -> ltl_syntax s
 
 #set-options "--print_implicits"
 let rec ltl_denote (#s: Type0) (form: ltl_syntax s) (tr: trace s) : GTot Type0 =
   match form with
-  | Now p -> begin
+  | Now ev -> begin
     match tr with
     | [] -> False
-    | Ev x :: _ -> p x
+    | Ev x :: _ -> ev == x
     | EAsync pr :: tl ->
       assume (reveal (pr.lt) << tr); (** this is just because of reveal. fixable **)
       ltl_denote form pr.lt /\ ltl_denote form tl
-    | EAwait pr :: tl -> False (** Wrong! if it is already awaited, then it should be the event from the tail. if it is not awaited, then it is some other event **)
+    | EAwait pr :: tl -> True (** Wrong! if it is already awaited, then it should be the event from the tail. if it is not awaited, then it is some other event **)
   end
   | Eventually p -> begin
     match tr with
@@ -505,3 +505,21 @@ let rec ltl_denote (#s: Type0) (form: ltl_syntax s) (tr: trace s) : GTot Type0 =
   | And p q -> ltl_denote p tr /\ ltl_denote q tr
   | Or p q -> ltl_denote p tr \/ ltl_denote q tr
   | Impl p q -> ltl_denote p tr ==> ltl_denote q tr
+
+assume val law_one form (pr:promise 'e 'a) :
+  Lemma (ltl_denote form pr.lt <==> ltl_denote form [EAsync pr; EAwait pr])
+
+(** Unit Tests **)
+
+let tr_sync0 : trace int = [Ev 0; Ev 1; Ev 2]
+let _ = assert (ltl_denote (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
+let _ = assert (ltl_denote (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
+
+let pr_sync0 : promise int int = Promise 1 tr_sync0 2
+
+let tr_async0 : trace int = [EAsync pr_sync0; EAwait pr_sync0]
+
+let _ = assert (ltl_denote (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0)
+
+[@expect_failure]
+let _ = assert (ltl_denote (Now 0) [EAwait pr_sync0])
