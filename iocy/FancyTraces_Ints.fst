@@ -605,37 +605,50 @@ let rec interval (l:int) (r:int{l <= r}) : Tot (list int) (decreases (r-l)) =
 
 let _ = assert (interval 0 2 == [0;1])
 
+val mapG: ('a -> GTot 'b) -> list 'a -> GTot (list 'b)
+let rec mapG f x = match x with
+  | [] -> []
+  | a::tl -> f a::mapG f tl
+
 let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s)){normalized_traces trs}) : GTot Type0 =
   match trs with | [] -> False | _ ->
   match form with
   | Now ev -> begin
     (** TODO: if all traces are empty, then it should return false **)
-    fold_left (/\) True
-      (map (fun (id, tr) ->
-        assume (normalized_trace tr trs);
-        match tr with
-        | [] -> True
-        | Ev x :: tl -> ev == x
-        | EAwait pr :: tl -> begin
-          match can_process_await' pr.id trs with
-          | PrUnk -> False
-          | PrPending -> True
-        end) trs)
+    let new_trs = filter (fun (id, tr) -> length tr > 0) trs in
+    if length new_trs = 0 then False
+    else begin
+      fold_left (/\) True
+        (map (fun (id, tr) ->
+          assume (Cons? tr);
+          assume (normalized_trace tr trs);
+          match tr with
+          | Ev x :: tl -> ev == x
+          | EAwait pr :: tl -> begin
+            match can_process_await' pr.id trs with
+            | PrUnk -> False
+            | PrPending -> True
+          end) new_trs)
+    end
   end
   | Eventually p -> begin
-    (** TODO: if no progress in any of the traces, then it should return false **)
     (** TODO: Eventually should jump over awaits on unknown promises **)
     ltl_denote2 p trs \/
-    fold_left (/\) True
-      (map (fun (idx:int) ->
-        assume (0 <= idx /\ idx < length trs);
-        match progress trs idx with
-        | None -> True
-        | Some new_trs -> begin
+    (let new_trss =
+      map (fun (x:(r: option (list (nat & trace s)) {Some? r ==> normalized_traces (Some?.v r)})) -> assume (Some? x); Some?.v x) (
+        filter (Some?) (
+          mapG (fun (idx:int) ->
+            assume (0 <= idx /\ idx < length trs);
+            progress trs idx
+          ) (interval 0 (length trs)))) in
+    if length new_trss = 0 then False
+    else begin
+      fold_left (/\) True (
+        map (fun (new_trs:(list (nat * trace s))) ->
+          assume (normalized_traces new_trs);
           assume (new_trs << trs);
-          ltl_denote2 form new_trs
-        end
-      ) (interval 0 (length trs)))
+          ltl_denote2 form new_trs) new_trss)
+    end)
   end
   | Always p -> begin
     (** TODO: if all traces are empty, then it should return false **)
@@ -658,10 +671,15 @@ let rec ltl_denote2 (#s: Type0) (form: ltl_syntax s) (trs:(list (nat * trace s))
 let ltl_denote' form tr =
   ltl_denote2 form (normalize_traces [(0, tr)])
 
+#push-options "--z3rlimit 1000 --fuel 1000"
 let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_sync0)
+
 let _ = assert (ltl_denote' (Eventually (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))) tr_sync0)
 let _ = assert (ltl_denote' (Eventually (And (Now 1) (Eventually (Now 2)))) tr_sync0)
 let _ = assert (ltl_denote' (Eventually (Now 2)) tr_sync0)
+
+[@expect_failure]
+let _ = assert (ltl_denote' (Eventually (Now 5)) tr_sync0) by (compute (); dump "H")
 
 let _ = assert (ltl_denote2 (Now 0) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
 let _ = assert (ltl_denote2 (Eventually (Now 0)) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
@@ -672,8 +690,38 @@ let _ = assert (ltl_denote2 (Eventually (Now 2)) [0, [EAwait (Promise 1 [Ev 0; E
 
 let _ = assert (ltl_denote2 (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) [0, [EAwait (Promise 1 [Ev 0; Ev 1; Ev 2] 2)]; 1, [Ev 0; Ev 1; Ev 2]])
 
-#set-options "--z3rlimit 1000"
 let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) tr_async0)
+
+let tr_sync1 : trace int = [Ev 0]
+let pr_sync1 : promise int unit = Promise 1 tr_sync1 ()
+let _ = assert (ltl_denote' (Eventually (Now 3)) [EAsync pr_sync1; Ev 3; EAwait pr_sync1]) by (
+  compute ();
+  dump "h"
+)
+
+let _ = assert (ltl_denote' (Eventually (Now 3)) [EAsync pr_sync0; Ev 3])
+
+let _ = assert (ltl_denote' (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2))))) [EAsync pr_sync0; Ev 3; EAwait pr_sync0])
+
+let _ = assert (ltl_denote' (And (Eventually (And (Now 2) (Eventually (Now 4))))
+                                 (Eventually (And (Now 3) (Eventually (Now 4)))))
+                            [EAsync pr_sync0; Ev 3; EAwait pr_sync0; Ev 4])
+
+let prj0 : promise int unit = Promise 1 [Ev 0] ()
+let prj1 : promise int unit = Promise 2 [Ev 1] ()
+
+let _ = assert (ltl_denote' (Or (Impl (Now 0) (Eventually (Now 1)))
+                                (Impl (Now 1) (Eventually (Now 0)))) [EAsync prj0; EAsync prj1; EAwait prj0; EAwait prj1])
+
+let _ = assert (ltl_denote' (Or (And (Now 0) (Eventually (Now 1)))
+                                (And (Now 1) (Eventually (Now 0)))) [EAsync prj0; EAsync prj1; EAwait prj0; EAwait prj1])
+
+let _ = assert (ltl_denote' (Or (And (Now 0) (Eventually (And (Now 1) (Eventually (Now 2)))))
+                                (And (Now 1) (Eventually (And (Now 0) (Eventually (Now 2)))))) [EAsync prj0; EAsync prj1; EAwait prj0; EAwait prj1; Ev 2])
+
+
+
+#pop-options
 
 [@expect_failure]
 let _ = assert (ltl_denote' (Now 0) [EAwait pr_sync0])
