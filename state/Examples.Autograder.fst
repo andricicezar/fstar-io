@@ -201,11 +201,21 @@ let rec footprint_fuel (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (Set
   )
 
 let rec refs_of_ll (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (list (ref (linkedList int))) =
-  if fuel = 0 then [] else (
   ll :: (
     match sel h ll with
     | LLNil -> []
-    | LLCons _ tl -> refs_of_ll (fuel-1) tl h))
+    | LLCons _ tl -> if fuel = 0 then [] else refs_of_ll (fuel-1) tl h)
+
+val gmap: ('a -> GTot 'b) -> list 'a -> GTot (list 'b)
+let rec gmap f x = match x with
+  | [] -> []
+  | a::tl -> f a::gmap f tl
+
+let refs_of_ll_as_set (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (set nat) =
+  Set.as_set (gmap addr_of (refs_of_ll fuel ll h))
+
+let pred_ll (fuel:nat) (ll:ref (linkedList int)) (h:heap) (pred:(ref (linkedList int) -> Type0)) : Type0 =
+  forall r. r `memP` (refs_of_ll fuel ll h) ==> pred r
 
 (* TODO: add specs (one postcond should be no cycles) *)
 let rec generate_llist (l:list int)
@@ -214,8 +224,8 @@ let rec generate_llist (l:list int)
     (ensures (fun h0 ll h1 -> h1 `contains` ll /\
                           modifies !{} h0 h1 /\
                           no_cycles_fuel (length l) ll h1 /\
-                          (forall r. r `List.Tot.memP` (refs_of_ll (length l) ll h1) ==> fresh r h0 h1)
-                  )) =
+                          pred_ll (length l) ll h1 (fun r -> fresh r h0 h1) /\
+                          pred_ll (length l) ll h1 (fun r -> is_private r h1))) =
   let h0 = get_heap () in
   match l with
   | [] -> sst_alloc LLNil
@@ -224,7 +234,8 @@ let rec generate_llist (l:list int)
     let h1 = get_heap () in
     let ll = sst_alloc (LLCons hd tll) in
     let h2 = get_heap () in
-    assume ((forall r. r `List.Tot.memP` (refs_of_ll (length tl) tll h2) ==> fresh r h0 h2));
+    assume (pred_ll (length tl) tll h2 (fun r -> fresh r h0 h2));
+    assume (pred_ll (length tl) tll h2 (fun r -> is_private r h2));
     assume (no_cycles tll h2);
     assume (no_cycles_fuel (length tl) tll h2);
     assert (no_cycles_fuel (length l) ll h2);
@@ -232,9 +243,13 @@ let rec generate_llist (l:list int)
 
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
   : SST unit
-    (requires (fun h0 -> h0 `contains` ll /\ no_cycles_fuel fuel ll h0))
+    (requires (fun h0 -> h0 `contains` ll /\
+                      no_cycles_fuel fuel ll h0 /\
+                      pred_ll fuel ll h0 (fun r -> is_private r h0)
+                      ))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           equal_dom h0 h1 /\
+                          gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
                           is_shared ll h1))
 = let h0 = get_heap () in
   let v = sst_read ll in
@@ -246,7 +261,9 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   );
   let h1 = get_heap () in
   assume (is_private ll h1);
-  sst_share #(SLList SNat) ll
+  sst_share #(SLList SNat) ll;
+  let h2 = get_heap () in
+  assume (gets_shared (refs_of_ll_as_set fuel ll h2) h0 h2)
 
 let rec determine_fuel_fuel (ll:ref (linkedList int)) (ffuel:nat)
   : SST (option nat)
@@ -259,7 +276,7 @@ let rec determine_fuel_fuel (ll:ref (linkedList int)) (ffuel:nat)
     | LLNil -> Some 1
     | LLCons _ tl -> begin
       let h0 = get_heap () in
-      assume (h0 `contains` tl);
+      eliminate_ctrans_ref_pred h0 #(SLList SNat) ll contains_pred;
       match determine_fuel_fuel tl (ffuel-1) with
       | None -> None
       | Some fuel -> Some (fuel + 1)
@@ -267,8 +284,11 @@ let rec determine_fuel_fuel (ll:ref (linkedList int)) (ffuel:nat)
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
   : SST unit
-    (requires (fun h0 -> h0 `contains` ll /\ no_cycles_fuel fuel ll h0))
+    (requires (fun h0 -> h0 `contains` ll /\
+                      no_cycles_fuel fuel ll h0 /\
+                      pred_ll fuel ll h0 (fun r -> is_private r h0)))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
+                          gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
                           equal_dom h0 h1 /\
                           is_shared ll h1))
 = let h0 = get_heap () in
@@ -298,7 +318,8 @@ let auto_grader
     let ll = generate_llist test in
     label_llist_as_shareable ll (length test);
     let h1 = get_heap () in
-    assume (is_private gr h1);
+    assume (~(addr_of gr `Set.mem` (refs_of_ll_as_set (length test) ll h1)));
+    assert (is_private gr h1);
     match hw ll with
     | Some _ -> begin
       let h2 = get_heap () in
