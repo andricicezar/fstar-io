@@ -54,12 +54,13 @@ type student_solution =
   ll:ref(linkedList int) -> SST (option unit)
     (requires (fun h0 ->
       h0 `contains` ll /\
-      //no_cycles ll_ref h0 /\
+      no_cycles ll h0 /\
       is_shared ll h0))
     (ensures (fun h0 r h1 ->
       (Some? r ==> no_cycles ll h1 /\ sorted ll h1) /\ // /\ same_elements ll h0 h1) /\
       modifies_only_shared h0 h1 /\
       gets_shared Set.empty h0 h1))
+
 // let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
 (*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
 
@@ -113,6 +114,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
                       ))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           equal_dom h0 h1 /\
+                          no_cycles_fuel fuel ll h1 /\
                           gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
                           is_shared ll h1))
 = let h0 = get_heap () in
@@ -127,7 +129,8 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   assume (is_private ll h1);
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
-  assume (gets_shared (refs_of_ll_as_set fuel ll h2) h0 h2)
+  assume (gets_shared (refs_of_ll_as_set fuel ll h2) h0 h2);
+  assume (no_cycles_fuel fuel ll h2)
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
   : SST unit
@@ -135,6 +138,7 @@ let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
                       no_cycles_fuel fuel ll h0 /\
                       pred_ll fuel ll h0 (fun r -> is_private r h0)))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
+                          no_cycles_fuel fuel ll h1 /\
                           gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
                           equal_dom h0 h1 /\
                           is_shared ll h1))
