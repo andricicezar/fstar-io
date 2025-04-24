@@ -6,6 +6,7 @@ open FStar.Monotonic.Heap
 open FStar.Preorder
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
+open FStar.List.Tot
 
 open SharedRefs
 open Witnessable
@@ -214,27 +215,21 @@ let rec generate_llist (l:list int)
     (requires (fun h0 -> True))
     (ensures (fun h0 ll h1 -> h1 `contains` ll /\
                           modifies !{} h0 h1 /\
-                          no_cycles ll h1 /\
-                          (forall fuel. no_cycles_fuel fuel ll h1 ==>
-                              (forall r. r `List.Tot.memP` (refs_of_ll fuel ll h1) ==> fresh r h0 h1))
-      //                      gets_shared (footprint_fuel fuel ll h1) h0 h1)
+                          no_cycles_fuel (length l + 1) ll h1 /\
+                          (forall r. r `List.Tot.memP` (refs_of_ll (length l+1) ll h1) ==> fresh r h0 h1)
                   )) =
   let h0 = get_heap () in
   match l with
   | [] -> sst_alloc LLNil
   | hd::tl ->
-    let tl' = generate_llist tl in
+    let tll = generate_llist tl in
     let h1 = get_heap () in
-    assert (forall fuel'. no_cycles_fuel fuel' tl' h1 ==>
-       (forall r. r `List.Tot.memP` (refs_of_ll fuel' tl' h1) ==> fresh r h0 h1));
-    let ll = sst_alloc (LLCons hd tl') in
+    let ll = sst_alloc (LLCons hd tll) in
     let h2 = get_heap () in
-    assume (forall fuel'. no_cycles_fuel fuel' tl' h2 ==>
-       (forall r. r `List.Tot.memP` (refs_of_ll fuel' tl' h2) ==> fresh r h0 h2));
-    assume (no_cycles tl' h2);
-    eliminate exists fuel. no_cycles_fuel fuel tl' h2 returns exists fuel. no_cycles_fuel fuel ll h2 with _. begin
-      introduce exists fuel. no_cycles_fuel fuel ll h2 with (fuel+1) and ()
-    end;
+    assume ((forall r. r `List.Tot.memP` (refs_of_ll (length tl+1) tll h2) ==> fresh r h0 h2));
+    assume (no_cycles tll h2);
+    assume (no_cycles_fuel (length tl+1) tll h2);
+    assert (no_cycles_fuel (length l+1) ll h2);
     ll
 
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
@@ -255,15 +250,30 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   assume (is_private ll h1);
   sst_share #(SLList SNat) ll
 
+let rec determine_fuel_fuel (ll:ref (linkedList int)) (ffuel:nat)
+  : SST (option nat)
+    (requires (fun h0 -> h0 `contains` ll))
+    (ensures (fun h0 ofuel h1 -> h0 == h1 /\ (Some? ofuel ==> (Some?.v ofuel <= ffuel) /\ no_cycles_fuel (Some?.v ofuel) ll h0)))
+    (decreases ffuel) =
+  if ffuel = 0 then None
+  else
+    match !ll with
+    | LLNil -> Some 1
+    | LLCons _ tl -> begin
+      let h0 = get_heap () in
+      assume (h0 `contains` tl);
+      match determine_fuel_fuel tl (ffuel-1) with
+      | None -> None
+      | Some fuel -> Some (fuel + 1)
+    end
 
-let label_llist_as_shareable (ll:ref (linkedList int))
+let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
   : SST unit
-    (requires (fun h0 -> h0 `contains` ll /\ no_cycles ll h0))
+    (requires (fun h0 -> h0 `contains` ll /\ no_cycles_fuel fuel ll h0))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           equal_dom h0 h1 /\
                           is_shared ll h1))
 = let h0 = get_heap () in
-  let fuel = IndefiniteDescription.indefinite_description_tot nat (fun fuel -> no_cycles_fuel fuel ll h0) in
   label_llist_as_shareable_fuel fuel ll
 
 (** TODO: can we add SMTPat to these? **)
@@ -288,7 +298,7 @@ let auto_grader
                            modifies_shared_and h0 h1 !{gr})) =
     let h0 = get_heap () in
     let ll = generate_llist test in
-    label_llist_as_shareable ll;
+    label_llist_as_shareable ll (length test+1);
     let h1 = get_heap () in
     assume (is_private gr h1);
     match hw ll with
