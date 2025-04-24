@@ -32,11 +32,9 @@ let max_fuel = pow2 32 - 1
 
 (* TODO: two implementations of each : one with Type0 (pred) & one for HO contracts (ST effect) *)
 let rec no_cycles_fuel (fuel:nat) (ll:ref (linkedList 'a)) (h:heap): Type0 =
-  if fuel = 0 then False
-  else
-    match sel h ll with
-    | LLNil -> True
-    | LLCons x xsref -> no_cycles_fuel (fuel - 1) xsref h
+  match sel h ll with
+  | LLNil -> True
+  | LLCons x xsref -> if fuel = 0 then False else no_cycles_fuel (fuel - 1) xsref h
 
 let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
   if fuel = 0 then False
@@ -215,8 +213,8 @@ let rec generate_llist (l:list int)
     (requires (fun h0 -> True))
     (ensures (fun h0 ll h1 -> h1 `contains` ll /\
                           modifies !{} h0 h1 /\
-                          no_cycles_fuel (length l + 1) ll h1 /\
-                          (forall r. r `List.Tot.memP` (refs_of_ll (length l+1) ll h1) ==> fresh r h0 h1)
+                          no_cycles_fuel (length l) ll h1 /\
+                          (forall r. r `List.Tot.memP` (refs_of_ll (length l) ll h1) ==> fresh r h0 h1)
                   )) =
   let h0 = get_heap () in
   match l with
@@ -226,10 +224,10 @@ let rec generate_llist (l:list int)
     let h1 = get_heap () in
     let ll = sst_alloc (LLCons hd tll) in
     let h2 = get_heap () in
-    assume ((forall r. r `List.Tot.memP` (refs_of_ll (length tl+1) tll h2) ==> fresh r h0 h2));
+    assume ((forall r. r `List.Tot.memP` (refs_of_ll (length tl) tll h2) ==> fresh r h0 h2));
     assume (no_cycles tll h2);
-    assume (no_cycles_fuel (length tl+1) tll h2);
-    assert (no_cycles_fuel (length l+1) ll h2);
+    assume (no_cycles_fuel (length tl) tll h2);
+    assert (no_cycles_fuel (length l) ll h2);
     ll
 
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
@@ -298,7 +296,7 @@ let auto_grader
                            modifies_shared_and h0 h1 !{gr})) =
     let h0 = get_heap () in
     let ll = generate_llist test in
-    label_llist_as_shareable ll (length test+1);
+    label_llist_as_shareable ll (length test);
     let h1 = get_heap () in
     assume (is_private gr h1);
     match hw ll with
