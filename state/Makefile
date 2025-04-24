@@ -4,7 +4,7 @@ ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fst
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
-FLAGS  = --z3version 4.13.3
+FLAGS  = --z3version 4.14.1
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += $(OTHERFLAGS)
