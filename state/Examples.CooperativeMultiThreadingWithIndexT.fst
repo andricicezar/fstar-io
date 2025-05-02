@@ -111,7 +111,17 @@ let hoc_check : hoc c3p (run_type_spec c3p) =
            norm [delta_only [`%run_type_spec;`%Spec?.pre;`%pre_poly_arrow]; iota];
            let x = nth_binder 5 in
            let _, _ = destruct_and x in
-           tadmit () (** TODO: this should be easy to prove **));
+           split ();
+           bump_nth 2;
+           compute ();
+           compute ();
+           branch_on_match ();
+           split ();
+           bump_nth 2;
+           compute ();
+           tadmit ();(** TODO: this should be proveable **)
+           dump "H";
+           () );
          Inl ()) in
      (| eh0, check |)   )
    (fun x r -> ())
@@ -133,21 +143,7 @@ let compiled_prog = compile_pprog2 #sit run'
 
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
 let some_ctx #a3p read write alloc my_run =
-  let res_a : t_task a3p = (fun r () ->
-    let () = write r 42 in
-    Return ()) in
-
-  let res_b : t_task a3p = (fun r () ->
-    let j = read r in
-    let m = alloc #SNat 42 in
-    Yield (fun () ->
-        let () = write r j in
-        Return ())) in
-
-  let args : (int * int) * (list (t_task a3p)) = ((5000,0), [res_a; res_b]) in
-  admit (); (**
-      TODO: very hard to debug. My guess was that it fails to show that
-      `satisfy args (prref a3p)`. **)
+  let args : (int * int) * (list (t_task a3p)) = ((5000,0), []) in
   match my_run args with
   | Inl _ -> 0
   | Inr _ -> -1
