@@ -43,7 +43,7 @@ instance witnessable_refinement (t:Type) {| c:witnessable t |} (p:t -> Type0) : 
 instance witnessable_arrow
   (t1:Type) (t2:Type)
   (pre:t1 -> st_pre)
-  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0))) // TODO: one cannot have pre-post depending on outside things.
+  (post:(x:t1 -> h0:heap -> st_post' t2 (pre x h0)))
 : witnessable (x:t1 -> ST t2 (pre x) (post x)) = {
   satisfy = (fun _ _ -> True);
 }

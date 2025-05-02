@@ -187,7 +187,7 @@ type ctx_tgt2 (i:tgt_interface2) =
   write : ttl_write a3p ->
   alloc : ttl_alloc a3p  ->
   p:i.pt a3p ->
-  ST int  (fun h0 -> inv a3p h0) (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1) (** TODO: to check if the program should be an arrow because we don't enforce prref **)
+  ST int  (fun h0 -> inv a3p h0) (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1)
 
 type prog_tgt2 (i:tgt_interface2) =
   i.pt c3p

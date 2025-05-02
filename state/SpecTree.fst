@@ -17,12 +17,12 @@ instance witnessable_err : witnessable err = {
 instance poly_iface_err a3p : poly_iface a3p err = {
   wt = witnessable_err;
 }
- 
+
 instance witnessable_resexn t {| witnessable t |} : witnessable (resexn t) =
   witnessable_sum t err
 instance poly_iface_resexn a3p t1 {| c1:poly_iface a3p t1 |} : poly_iface a3p (resexn t1) =
   poly_iface_sum a3p t1 #c1 err
- 
+
 (** **** Tree **)
 type tree (a: Type u#a) =
   | Leaf : tree a
@@ -30,7 +30,6 @@ type tree (a: Type u#a) =
   | Node: data: a -> left: tree a -> right: tree a -> tree a
 
 let root (t:(tree 'a){Node? t}) = Node?.data t
-(** TODO: refactor these into two utils **)
 let left (t:(tree 'a){Node? t \/ EmptyNode? t}) : tree 'a =
   match t with
   | Node _ lt _ -> lt
@@ -125,8 +124,8 @@ type spec : Type u#(max (1 + a) (1 + b)) =
     spec
 
 noeq
-type uspec = 
-| U00 : v:spec u#0 u#0 -> uspec 
+type uspec =
+| U00 : v:spec u#0 u#0 -> uspec
 | U01 : v:spec u#0 u#1 -> uspec
 | U10 : v:spec u#1 u#0 -> uspec
 | U11 : v:spec u#1 u#1 -> uspec
@@ -141,7 +140,7 @@ noeq
 type hoc a3p : (s:spec) -> Type =
 | TrivialPre :
     #s:spec{s.err == false /\ s.bit == true} ->
-    c_pre:(x:s.argt -> Lemma (forall h0. pre_poly_arrow a3p #s.argt #s.wt_argt x h0 ==> s.pre x h0)) -> 
+    c_pre:(x:s.argt -> Lemma (forall h0. pre_poly_arrow a3p #s.argt #s.wt_argt x h0 ==> s.pre x h0)) ->
     c_post:pre_c_post a3p s.wt_rett s.pre s.post
     -> hoc a3p s
 
@@ -155,15 +154,15 @@ type hoc a3p : (s:spec) -> Type =
     #s:spec{s.err == false /\ s.bit == false} ->
     c_pre:(x:s.argt ->
         Lemma (forall h0. s.pre x h0 ==> pre_poly_arrow a3p #s.argt #s.wt_argt x h0)) ->
-    c_post:(x:s.argt -> r:s.rett -> 
+    c_post:(x:s.argt -> r:s.rett ->
         Lemma (forall h0 h1. post_poly_arrow a3p #s.rett #s.wt_rett h0 r h1 ==> s.post x h0 r h1))
     -> hoc a3p s
 
 | EnforcePost :
     #s:spec{s.err == true /\ s.bit == false} ->
-    c_pre:(x:s.argt -> 
+    c_pre:(x:s.argt ->
         Lemma (forall h0. s.pre x h0 ==> pre_poly_arrow a3p #s.argt #s.wt_argt x h0)) ->
-    c_post:(x:s.argt -> e:err -> 
+    c_post:(x:s.argt -> e:err ->
         Lemma (forall h0 h1. s.pre x h0 /\ post_poly_arrow a3p #_ #(witnessable_resexn _ #s.wt_rett) h0 (Inr e) h1 ==> s.post x h0 ((Inr e) <: resexn s.rett) h1)) ->
     check:(select_check a3p s.argt (resexn s.rett) #(witnessable_resexn _ #s.wt_rett) s.pre s.post)
     -> hoc a3p s

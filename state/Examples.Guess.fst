@@ -18,8 +18,8 @@ type player_type a3p =
 
 type play_guess_type a3p =
   args:(player_type a3p & (int & (int & int))) ->
-  ST (resexn (bool & int)) 
-    (requires fun h0 -> inv a3p h0 /\ fst (snd (snd args)) < fst (snd args) /\ fst (snd args) < snd (snd (snd args))) 
+  ST (resexn (bool & int))
+    (requires fun h0 -> inv a3p h0 /\ fst (snd (snd args)) < fst (snd args) /\ fst (snd args) < snd (snd (snd args)))
     (ensures fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1)
 
 val play_guess : play_guess_type c3p
@@ -54,7 +54,7 @@ let cb_spec (a3p:threep) : spec =
 let player_spec (a3p:threep) : spec =
   (Spec false false
     ((int & int) & mk_poly_arrow a3p int cmp)
-    (poly_iface_is_exportable a3p ((int & int) & mk_poly_arrow a3p int cmp)).c_styp (** TODO: simplify here: (witnessable_pair _ _ #(witnessable_pair _ _ #witnessable_int #witnessable_int) #(witnessable_arrow int cmp _ _)) *)
+    (poly_iface_is_exportable a3p ((int & int) & mk_poly_arrow a3p int cmp)).c_styp
     (fun x h0 -> inv a3p h0 /\ fst (fst x) < snd (fst x))
     int
     witnessable_int
@@ -64,7 +64,7 @@ let player_hoc : hoc c3p (player_spec c3p) =
   TrivialPost (fun _ -> ()) (fun _ _ -> ())
 
 instance importable_player (a3p:threep) : safe_importable_to a3p (player_type a3p) (Node (U10 (player_spec a3p)) Leaf Leaf) =
-  safe_importable_arrow10 
+  safe_importable_arrow10
     a3p _ _
     #(poly_iface_is_exportable a3p _ #(poly_iface_pair a3p _ #(poly_iface_pair a3p int int) _ #(poly_iface_arrow a3p _ #(poly_iface_int a3p) _ #(poly_iface_cmp a3p))))
     _ _ #(poly_iface_is_safely_importable a3p int #(poly_iface_int a3p))
@@ -77,10 +77,10 @@ instance args_importable a3p : importable_to a3p (player_type a3p & (int & (int 
 let play_guess_spec (a3p:threep) : spec =
   Spec true true
     (player_type a3p & (int & (int & int)))
-    (args_importable a3p).c_styp (** TODO: simplify here with witnessable *)
+    (args_importable a3p).c_styp
     (fun x h0 -> inv a3p h0 /\ fst (snd (snd x)) < fst (snd x) /\ fst (snd x) < snd (snd (snd x)))
     (bool & int)
-    (exportable_pair a3p bool Leaf int Leaf).c_styp (** TODO: simplify here with witnessable *)
+    (exportable_pair a3p bool Leaf int Leaf).c_styp
     (fun _ h0 _ h1 -> inv a3p h1 /\ hrel a3p h0 h1)
 
 let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
@@ -94,7 +94,7 @@ let play_guess_hoc : hoc c3p (play_guess_spec c3p) =
     (fun x r -> assert (forall h0 h1. inv c3p h1 /\ hrel c3p h0 h1 ==> post_poly_arrow c3p #(resexn (play_guess_spec c3p).rett) #(witnessable_resexn _ #(play_guess_spec c3p).wt_rett) h0 r h1))
 
 instance exportable_play_guess a3p : exportable_from a3p (play_guess_type a3p) (Node (U10 (play_guess_spec a3p)) _ _) =
-  exportable_arrow_err10 a3p 
+  exportable_arrow_err10 a3p
     _ _
     #(args_importable a3p)
     _ _
@@ -134,7 +134,7 @@ let compiled_prog2 =
 
 val some_ctx2 : ctx_tgt2 (comp_int_src_tgt2 sit2)
 let some_ctx2 #a3p _ _ alloc prog =
-  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #(witnessable_arrow int cmp _ _)) int = 
+  let cb : mk_poly_arrow a3p ((int & int) & (mk_poly_arrow a3p int #witnessable_int cmp #witnessable_cmp)) #(witnessable_pair (int & int) _ #(witnessable_arrow int cmp _ _)) int =
     (fun ((l, r), cb) -> let _ = cb l in let _ = cb (l+1) in r) in
   match prog (cb, (0, (0, 10))) with
   | Inl (b, guesses_count) -> if b then -2 else 0

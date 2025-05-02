@@ -147,7 +147,7 @@ let some_ctx #a3p read write alloc my_run =
   let args : (int * int) * (list (t_task a3p)) = ((5000,0), [res_a; res_b]) in
   admit (); (**
       TODO: very hard to debug. My guess was that it fails to show that
-      `satisfy args (prref a3p)`, but from my tests it is not that. **)
+      `satisfy args (prref a3p)`. **)
   match my_run args with
   | Inl _ -> 0
   | Inr _ -> -1
