@@ -12,12 +12,8 @@ open Compiler
 open CooperativeMultiThreadingWithIndexT
 
 
-(* Calling SecRef* on it *)
+(* Calling SecRef* on the case study *)
 
-(**
-instance witnessable_atree a3p t {| c:witnessable t |} : witnessable (atree a3p t) = {
-  satisfy = (fun _ pred -> True);
-}**)
 
 instance poly_iface_atree a3p t {| c:poly_iface a3p t |} : poly_iface a3p (atree a3p t) = {
   wt = witnessable_atree a3p t #c.wt;
@@ -29,38 +25,11 @@ instance witnessable_continuation a3p t {| c:witnessable t |} : witnessable (con
 instance poly_iface_continuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (continuation a3p t) =
   poly_iface_arrow a3p unit (atree a3p t #c.wt)
 
-(**
-let tgt_typ_run (a3p:threep) =
-  mk_poly_arrow
-    a3p
-    ((int * int) * list (t_task a3p))
-    #(witnessable_pair
-      _
-      #(witnessable_pair int #witnessable_int int #witnessable_int)
-      _
-      #(witnessable_list _ #(witnessable_arrow (ref int) _ _ _)))
-    (resexn int)
-    #(witnessable_resexn int)
-**)
-
 instance witnessable_t_task a3p : witnessable (t_task a3p) =
   witnessable_arrow (ref int) (continuation a3p unit) _ _
 
 instance poly_iface_t_task a3p : poly_iface a3p (t_task a3p) =
   poly_iface_arrow a3p (ref int) #(poly_iface_ref a3p int) (continuation a3p unit) #(poly_iface_continuation a3p unit)
-(**
-instance poly_iface_run (a3p:threep) : poly_iface a3p (tgt_typ_run a3p) =
-  poly_iface_arrow
-    a3p
-    _
-    #(poly_iface_pair a3p
-      _
-      #(poly_iface_pair a3p int #(poly_iface_int a3p) int #(poly_iface_int a3p))
-      _
-      #(poly_iface_list a3p (t_task a3p) #(poly_iface_t_task a3p)))
-    _
-    #(poly_iface_resexn a3p int #(poly_iface_int a3p))
-**)
 
 let src_run_type (a3p:threep) =
   mk_poly_arrow
@@ -80,11 +49,6 @@ let src_run_type (a3p:threep) =
 let run_type_spec (a3p:threep) : spec =
   Spec true true
     ((nat & int) & l: list (t_task a3p) {List.Tot.Base.length l > 0})
- (**   (witnessable_pair
-      (nat & int)
-      #(witnessable_pair nat #(witnessable_refinement int #witnessable_int _) int #witnessable_int)
-      (l: list (t_task a3p) {List.Tot.Base.length l > 0})
-      #(witnessable_refinement _ #(witnessable_list _ #(witnessable_t_task a3p)) _)) **)
     (importable_pair a3p
       (nat & int)
       (EmptyNode Leaf Leaf)

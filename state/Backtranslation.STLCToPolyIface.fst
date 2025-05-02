@@ -315,27 +315,6 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
   ()
 #pop-options
 
-(*
-(** DA: make fails without an assume on this val because of [@expect_failure] *)
-val progr_passing_private_to_callback_test:
-  ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
-  SST unit
-    (requires (fun h0 -> True))
-    (ensures (fun h0 _ h1 -> True))
-[@expect_failure]
-let progr_passing_private_to_callback_test f =
-  let secret: ref int = sst_alloc #SNat 0 in
-  witness (contains_pred secret);
-  let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
-    recall (contains_pred secret);
-    // let h0 = get_heap () in
-    // assume (is_shared secret h0);
-    sst_write_shareable #SNat secret (!secret + 1);
-    raise_val ()) in
-  downgrade_val (f cb);
-  ()
-*)
-
 val progr_getting_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
