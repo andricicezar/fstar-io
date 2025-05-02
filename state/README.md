@@ -42,6 +42,8 @@ all the F* files in it, including our formalization and examples. You
 can also inspect the files interactively in VS Code by installing the
 fstar-vscode-assistant extension.
 
+Note: the autograder example has parts of them admitted due to difficulties working with F* and fleshing out the proofs. We are confident we can soon fully verify everything. Do note, the framework itself is admit-free. All the other examples verify admit-free, are compiled using SecRef★, extract and can be run in OCaml.
+
 ## Running the examples
 
 The examples can be built by using the extraction plugin to extract them
