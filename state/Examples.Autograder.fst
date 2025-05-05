@@ -146,13 +146,13 @@ let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
   label_llist_as_shareable_fuel fuel ll
 
 (** TODO: can we add SMTPat to these? **)
-let lemma_modifies_shared_and h0 h1 h2 s :
-  Lemma (requires (modifies s h0 h1 /\ modifies_only_shared h1 h2))
-        (ensures (modifies_shared_and h0 h2 s)) = admit ()
+let lemma_lift_modifies s h0 h1 :
+  Lemma (requires (modifies s h0 h1))
+        (ensures (modifies_shared_and h0 h1 s)) = ()
 
-let lemma_modifies_shared_and' h0 h1 h2 s s' :
-  Lemma (requires (modifies_shared_and h0 h1 s /\ modifies s' h1 h2))
-        (ensures (modifies_shared_and h0 h2 (s `Set.union` s'))) = admit ()
+let lemma_trans_modifies_shared_and h0 h1 h2 s s' s'' :
+  Lemma (requires (modifies_shared_and h0 h1 s /\ gets_shared s'' h0 h1 /\ modifies_shared_and h1 h2 s'))
+        (ensures (modifies_shared_and h0 h2 (s'' `Set.union` (s `Set.union` s')))) = ()
 
 let auto_grader
   (test:list int)
@@ -166,26 +166,33 @@ let auto_grader
     (ensures (fun h0 () h1 -> ~(NotGraded? (sel h1 gr)) /\
                            modifies_shared_and h0 h1 !{gr})) =
     let h0 = get_heap () in
-    let ll = generate_llist test in
-    label_llist_as_shareable ll (length test);
+    let ll = generate_llist test in // a fresh set of references S
+    label_llist_as_shareable ll (length test); // set S gets shared
     let h1 = get_heap () in
+    assume (gets_shared Set.empty h0 h1);
     assume (~(addr_of gr `Set.mem` (refs_of_ll_as_set (length test) ll h1)));
     assert (is_private gr h1);
-    match hw ll with
+    match hw ll with // shareable references get modified
     | Some _ -> begin
       let h2 = get_heap () in
-      sst_write #grade gr MaxGrade;
+      assert (modifies_shared_and h0 h1 !{map_shared});
+      assert (gets_shared Set.empty h0 h1);
+      assert (modifies_shared_and h1 h2 Set.empty);
+      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+      assert (modifies_shared_and h0 h2 !{map_shared});
+      assert (gets_shared Set.empty h0 h2);
+      sst_write #grade gr MaxGrade; // grade gets modified
       let h3 = get_heap () in
-      lemma_modifies_shared_and h0 h1 h2 !{map_shared};
-      lemma_modifies_shared_and' h1 h2 h3 !{map_shared} !{gr};
+      assert (modifies_shared_and h2 h3 !{gr});
+      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
       assert (modifies_shared_and h0 h3 !{gr})
     end
     | None -> begin
       let h2 = get_heap () in
       sst_write gr MinGrade;
       let h3 = get_heap () in
-      lemma_modifies_shared_and h0 h1 h2 !{map_shared};
-      lemma_modifies_shared_and' h1 h2 h3 !{map_shared} !{gr};
+      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
       assert (modifies_shared_and h0 h3 !{gr})
     end
 
