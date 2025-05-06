@@ -163,9 +163,9 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   assume (is_private ll h1);
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
-  assume (gets_shared (footprint fuel ll h2) h0 h2);
   lemma_map_shared_not_in_footprint fuel ll h1;
   lemma_modifies_footprint map_shared fuel ll h1 h2;
+  assert (gets_shared (footprint fuel ll h2) h0 h2);
   assert (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
   assume (no_cycles_fuel fuel ll h2)
 
