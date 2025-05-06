@@ -71,6 +71,15 @@ let rec refs_of_ll (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (list (r
     | LLNil -> []
     | LLCons _ tl -> if fuel = 0 then [] else refs_of_ll (fuel-1) tl h)
 
+let rec footprint (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (Set.set nat) =
+  !{ll} `Set.union` (
+    match sel h ll with
+    | LLNil -> Set.empty
+    | LLCons _ tl -> if fuel = 0 then Set.empty else footprint (fuel-1) tl h)
+
+let pred_footprint (fuel:nat) (ll:ref (linkedList int)) (h:heap) (pred:pos -> Type0) : Type0 =
+  forall addr. addr `Set.mem` (footprint fuel ll h) ==> pred addr
+
 val gmap: ('a -> GTot 'b) -> list 'a -> GTot (list 'b)
 let rec gmap f x = match x with
   | [] -> []
@@ -89,7 +98,7 @@ let rec generate_llist (l:list int)
     (ensures (fun h0 ll h1 -> h1 `contains` ll /\
                           modifies !{} h0 h1 /\
                           no_cycles_fuel (length l) ll h1 /\
-                          pred_ll (length l) ll h1 (fun r -> fresh r h0 h1) /\
+                          pred_footprint (length l) ll h1 (fun addr -> addr `addr_unused_in` h0) /\
                           pred_ll (length l) ll h1 (fun r -> is_private r h1))) =
   let h0 = get_heap () in
   match l with
@@ -99,7 +108,7 @@ let rec generate_llist (l:list int)
     let h1 = get_heap () in
     let ll = sst_alloc (LLCons hd tll) in
     let h2 = get_heap () in
-    assume (pred_ll (length tl) tll h2 (fun r -> fresh r h0 h2));
+    assume (pred_footprint (length l) ll h2 (fun addr -> addr `addr_unused_in` h0));
     assume (pred_ll (length tl) tll h2 (fun r -> is_private r h2));
     assume (no_cycles tll h2);
     assume (no_cycles_fuel (length tl) tll h2);
@@ -115,7 +124,8 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           equal_dom h0 h1 /\
                           no_cycles_fuel fuel ll h1 /\
-                          gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
+                          gets_shared (footprint fuel ll h1) h0 h1 /\
+                          (footprint fuel ll h0 `Set.equal` footprint fuel ll h1) /\
                           is_shared ll h1))
 = let h0 = get_heap () in
   let v = sst_read ll in
@@ -129,7 +139,8 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   assume (is_private ll h1);
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
-  assume (gets_shared (refs_of_ll_as_set fuel ll h2) h0 h2);
+  assume (gets_shared (footprint fuel ll h2) h0 h2);
+  assume (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
   assume (no_cycles_fuel fuel ll h2)
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
@@ -139,7 +150,8 @@ let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
                       pred_ll fuel ll h0 (fun r -> is_private r h0)))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           no_cycles_fuel fuel ll h1 /\
-                          gets_shared (refs_of_ll_as_set fuel ll h1) h0 h1 /\
+                          gets_shared (footprint fuel ll h1) h0 h1 /\
+                          (footprint fuel ll h0 `Set.equal` footprint fuel ll h1) /\
                           equal_dom h0 h1 /\
                           is_shared ll h1))
 = let h0 = get_heap () in
@@ -169,14 +181,12 @@ let auto_grader
     let ll = generate_llist test in // a fresh set of references S
     label_llist_as_shareable ll (length test); // set S gets shared
     let h1 = get_heap () in
-    assume (gets_shared Set.empty h0 h1);
-    assume (~(addr_of gr `Set.mem` (refs_of_ll_as_set (length test) ll h1)));
+    assert (modifies_shared_and h0 h1 !{map_shared});
+    assert (gets_shared Set.empty h0 h1);
     assert (is_private gr h1);
     match hw ll with // shareable references get modified
     | Some _ -> begin
       let h2 = get_heap () in
-      assert (modifies_shared_and h0 h1 !{map_shared});
-      assert (gets_shared Set.empty h0 h1);
       assert (modifies_shared_and h1 h2 Set.empty);
       lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
       assert (modifies_shared_and h0 h2 !{map_shared});
