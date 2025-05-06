@@ -115,12 +115,36 @@ let rec generate_llist (l:list int)
     assert (no_cycles_fuel (length l) ll h2);
     ll
 
+let rec lemma_modifies_footprint #a #rel (r:mref a rel) fuel ll h0 h1 :
+  Lemma
+    (requires (h0 `contains` r /\
+               h0 `contains` ll /\
+               sst_inv h0 /\
+               no_cycles_fuel fuel ll h0 /\
+               ~(addr_of r `Set.mem` footprint fuel ll h0) /\
+               modifies !{r} h0 h1))
+    (ensures (footprint fuel ll h0 `Set.equal` footprint fuel ll h1)) =
+  match sel h1 ll with
+  | LLNil -> ()
+  | LLCons _ tl ->
+    eliminate_ctrans_ref_pred h0 #(SLList SNat) ll (contains_pred);
+    lemma_modifies_footprint r (fuel-1) tl h0 h1
+
+let rec lemma_map_shared_not_in_footprint fuel (ll:ref (linkedList int)) h :
+  Lemma
+    (requires (h `contains` map_shared /\ h `contains` ll /\ sst_inv h /\ no_cycles_fuel fuel ll h))
+    (ensures (~(addr_of map_shared `Set.mem` footprint fuel ll h))) =
+  match sel h ll with
+  | LLNil -> ()
+  | LLCons _ tl ->
+    eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
+    lemma_map_shared_not_in_footprint (fuel-1) tl h
+
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
   : SST unit
     (requires (fun h0 -> h0 `contains` ll /\
                       no_cycles_fuel fuel ll h0 /\
-                      pred_ll fuel ll h0 (fun r -> is_private r h0)
-                      ))
+                      pred_ll fuel ll h0 (fun r -> is_private r h0)))
     (ensures (fun h0 _ h1 -> modifies !{map_shared} h0 h1 /\
                           equal_dom h0 h1 /\
                           no_cycles_fuel fuel ll h1 /\
@@ -140,7 +164,9 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
   assume (gets_shared (footprint fuel ll h2) h0 h2);
-  assume (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
+  lemma_map_shared_not_in_footprint fuel ll h1;
+  lemma_modifies_footprint map_shared fuel ll h1 h2;
+  assert (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
   assume (no_cycles_fuel fuel ll h2)
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
