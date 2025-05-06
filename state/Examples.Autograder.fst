@@ -140,6 +140,20 @@ let rec lemma_map_shared_not_in_footprint fuel (ll:ref (linkedList int)) h :
     eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
     lemma_map_shared_not_in_footprint (fuel-1) tl h
 
+let rec lemma_map_shared_no_cycles fuel (ll:ref (linkedList int)) h0 h1 :
+  Lemma
+    (requires (h0 `contains` map_shared /\
+               h0 `contains` ll /\
+               sst_inv h0 /\
+               modifies !{map_shared} h0 h1 /\
+               no_cycles_fuel fuel ll h0))
+    (ensures (no_cycles_fuel fuel ll h1)) =
+  match sel h0 ll with
+  | LLNil -> ()
+  | LLCons _ tl ->
+    eliminate_ctrans_ref_pred h0 #(SLList SNat) ll contains_pred;
+    lemma_map_shared_no_cycles (fuel-1) tl h0 h1
+
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
   : SST unit
     (requires (fun h0 -> h0 `contains` ll /\
@@ -167,7 +181,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   lemma_modifies_footprint map_shared fuel ll h1 h2;
   assert (gets_shared (footprint fuel ll h2) h0 h2);
   assert (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
-  assume (no_cycles_fuel fuel ll h2)
+  lemma_map_shared_no_cycles fuel ll h1 h2
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
   : SST unit
