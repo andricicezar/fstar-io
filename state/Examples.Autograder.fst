@@ -80,40 +80,23 @@ let rec footprint (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (Set.set 
 let pred_footprint (fuel:nat) (ll:ref (linkedList int)) (h:heap) (pred:pos -> Type0) : Type0 =
   forall addr. addr `Set.mem` (footprint fuel ll h) ==> pred addr
 
-val gmap: ('a -> GTot 'b) -> list 'a -> GTot (list 'b)
-let rec gmap f x = match x with
-  | [] -> []
-  | a::tl -> f a::gmap f tl
-
-let refs_of_ll_as_set (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (set nat) =
-  Set.as_set (gmap addr_of (refs_of_ll fuel ll h))
-
 let pred_ll (fuel:nat) (ll:ref (linkedList int)) (h:heap) (pred:(ref (linkedList int) -> Type0)) : Type0 =
   forall r. r `memP` (refs_of_ll fuel ll h) ==> pred r
 
-(* TODO: add specs (one postcond should be no cycles) *)
-let rec generate_llist (l:list int)
-  : SST (ref (linkedList int))
-    (requires (fun h0 -> True))
-    (ensures (fun h0 ll h1 -> h1 `contains` ll /\
-                          modifies !{} h0 h1 /\
-                          no_cycles_fuel (length l) ll h1 /\
-                          pred_footprint (length l) ll h1 (fun addr -> addr `addr_unused_in` h0) /\
-                          pred_ll (length l) ll h1 (fun r -> is_private r h1))) =
-  let h0 = get_heap () in
-  match l with
-  | [] -> sst_alloc LLNil
-  | hd::tl ->
-    let tll = generate_llist tl in
-    let h1 = get_heap () in
-    let ll = sst_alloc (LLCons hd tll) in
-    let h2 = get_heap () in
-    assume (pred_footprint (length l) ll h2 (fun addr -> addr `addr_unused_in` h0));
-    assume (pred_ll (length tl) tll h2 (fun r -> is_private r h2));
-    assume (no_cycles tll h2);
-    assume (no_cycles_fuel (length tl) tll h2);
-    assert (no_cycles_fuel (length l) ll h2);
-    ll
+let rec lemma_map_shared_no_cycles fuel (ll:ref (linkedList int)) h0 h1 :
+  Lemma
+    (requires (h0 `contains` map_shared /\
+               h0 `contains` ll /\
+               sst_inv h0 /\
+               modifies !{map_shared} h0 h1 /\
+               no_cycles_fuel fuel ll h0))
+    (ensures (no_cycles_fuel fuel ll h1)) =
+  match sel h0 ll with
+  | LLNil -> ()
+  | LLCons _ tl ->
+    eliminate_ctrans_ref_pred h0 #(SLList SNat) ll contains_pred;
+    lemma_map_shared_no_cycles (fuel-1) tl h0 h1
+
 
 let rec lemma_modifies_footprint #a #rel (r:mref a rel) fuel ll h0 h1 :
   Lemma
@@ -140,19 +123,47 @@ let rec lemma_map_shared_not_in_footprint fuel (ll:ref (linkedList int)) h :
     eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
     lemma_map_shared_not_in_footprint (fuel-1) tl h
 
-let rec lemma_map_shared_no_cycles fuel (ll:ref (linkedList int)) h0 h1 :
+let rec lemma_pred_ll (fuel:nat) (ll:ref (linkedList int)) h0 h1 :
   Lemma
-    (requires (h0 `contains` map_shared /\
-               h0 `contains` ll /\
+    (requires (h0 `contains` ll /\
                sst_inv h0 /\
-               modifies !{map_shared} h0 h1 /\
+               pred_ll fuel ll h0 (fun r -> is_private r h0) /\
+               modifies Set.empty h0 h1 /\
                no_cycles_fuel fuel ll h0))
-    (ensures (no_cycles_fuel fuel ll h1)) =
+    (ensures (pred_ll fuel ll h1 (fun r -> is_private r h1))) =
   match sel h0 ll with
   | LLNil -> ()
   | LLCons _ tl ->
     eliminate_ctrans_ref_pred h0 #(SLList SNat) ll contains_pred;
-    lemma_map_shared_no_cycles (fuel-1) tl h0 h1
+    lemma_pred_ll (fuel-1) tl h0 h1
+
+(* TODO: add specs (one postcond should be no cycles) *)
+let rec generate_llist (l:list int)
+  : SST (ref (linkedList int))
+    (requires (fun h0 -> True))
+    (ensures (fun h0 ll h1 -> h1 `contains` ll /\
+                          modifies !{} h0 h1 /\
+                          no_cycles_fuel (length l) ll h1 /\
+                          pred_footprint (length l) ll h1 (fun addr -> addr `addr_unused_in` h0) /\
+                          pred_ll (length l) ll h1 (fun r -> is_private r h1))) =
+  let h0 = get_heap () in
+  match l with
+  | [] -> sst_alloc LLNil
+  | hd::tl ->
+    let tll = generate_llist tl in
+    let h1 = get_heap () in
+    let ll = sst_alloc (LLCons hd tll) in
+    let h2 = get_heap () in
+    lemma_modifies_footprint map_shared (length tl) tll h1 h2;
+    lemma_map_shared_no_cycles (length tl) tll h1 h2;
+    assert (pred_footprint (length l) ll h2 (fun addr -> addr `addr_unused_in` h0));
+    assert (pred_ll (length tl) tll h1 (fun r -> is_private r h1));
+    lemma_pred_ll (length tl) tll h1 h2;
+    assert (pred_ll (length tl) tll h2 (fun r -> is_private r h2));
+    assert (no_cycles tll h2);
+    assert (no_cycles_fuel (length tl) tll h2);
+    assert (no_cycles_fuel (length l) ll h2);
+    ll
 
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
   : SST unit
