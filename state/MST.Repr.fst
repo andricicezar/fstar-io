@@ -121,6 +121,7 @@ let write_wp (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a)
     (forall a. h0 `heap_rel` (upd h0 r v) /\ write_post r v h0 a (upd h0 r v) ==> p a (upd h0 r v))
 
 let alloc_post #a #rel init h0 (r:mref a rel) h1 : Type0 =
+  (addr_of r) `addr_unused_in` h0 /\
   fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ sel h1 r == init /\
   h1 == upd h0 r init /\ is_mm r == false /\
   addr_of r == next_addr h0 /\

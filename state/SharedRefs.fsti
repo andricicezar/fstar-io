@@ -84,7 +84,7 @@ val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
         h0 `contains` map_shared /\
         ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
         is_private map_shared h0 /\
-        is_private sr h0 /\ (** necessary to change the reference kind to shared *)
+        (is_private sr h0 \/ is_shared sr h0) /\ (** necessary to change the reference kind to shared *)
         (forall p. p >= next_addr h0 ==> is_private_addr p h0))) (** necessary to prove that freshly allocated references are not shared **)
       (ensures (share_post map_shared is_shared #a #p sr))
 
@@ -487,7 +487,7 @@ inline_for_extraction
 let sst_share (#t:shareable_typ) (r:ref (to_Type t))
 : SST unit
   (fun h0 -> h0 `contains` r /\
-         is_private r h0 /\
+         (is_private r h0 \/ is_shared r h0) /\
          forall_refs_heap is_shared h0 (sel h0 r))
   (share_post map_shared is_shared r)
 =

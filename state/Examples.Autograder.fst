@@ -173,11 +173,12 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
     eliminate_ctrans_ref_pred h0 #(SLList SNat) ll (contains_pred);
     label_llist_as_shareable_fuel (fuel-1) tl
   );
+  lemma_map_shared_not_in_footprint fuel ll h0;
   let h1 = get_heap () in
-  assume (is_private ll h1);
+  lemma_modifies_footprint map_shared fuel ll h0 h1;
+  assert (is_private ll h1 \/ is_shared ll h1);
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
-  lemma_map_shared_not_in_footprint fuel ll h1;
   lemma_modifies_footprint map_shared fuel ll h1 h2;
   assert (gets_shared (footprint fuel ll h2) h0 h2);
   assert (footprint fuel ll h0 `Set.equal` footprint fuel ll h2);
@@ -197,7 +198,6 @@ let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
 = let h0 = get_heap () in
   label_llist_as_shareable_fuel fuel ll
 
-(** TODO: can we add SMTPat to these? **)
 let lemma_lift_modifies s h0 h1 :
   Lemma (requires (modifies s h0 h1))
         (ensures (modifies_shared_and h0 h1 s)) = ()
@@ -217,33 +217,33 @@ let auto_grader
                       NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> ~(NotGraded? (sel h1 gr)) /\
                            modifies_shared_and h0 h1 !{gr})) =
-    let h0 = get_heap () in
+//    let h0 = get_heap () in
     let ll = generate_llist test in // a fresh set of references S
     label_llist_as_shareable ll (length test); // set S gets shared
-    let h1 = get_heap () in
-    assert (modifies_shared_and h0 h1 !{map_shared});
-    assert (gets_shared Set.empty h0 h1);
-    assert (is_private gr h1);
+//    let h1 = get_heap () in
+//    assert (modifies_shared_and h0 h1 !{map_shared});
+//    assert (gets_shared Set.empty h0 h1);
+//    assert (is_private gr h1);
     match hw ll with // shareable references get modified
     | Some _ -> begin
-      let h2 = get_heap () in
-      assert (modifies_shared_and h1 h2 Set.empty);
-      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
-      assert (modifies_shared_and h0 h2 !{map_shared});
-      assert (gets_shared Set.empty h0 h2);
-      sst_write #grade gr MaxGrade; // grade gets modified
-      let h3 = get_heap () in
-      assert (modifies_shared_and h2 h3 !{gr});
-      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
-      assert (modifies_shared_and h0 h3 !{gr})
+ //     let h2 = get_heap () in
+//      assert (modifies_shared_and h1 h2 Set.empty);
+//      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+//      assert (modifies_shared_and h0 h2 !{map_shared});
+//      assert (gets_shared Set.empty h0 h2);
+      sst_write #grade gr MaxGrade // grade gets modified
+//      let h3 = get_heap () in
+//      assert (modifies_shared_and h2 h3 !{gr});
+//      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
+//      assert (modifies_shared_and h0 h3 !{gr})
     end
     | None -> begin
-      let h2 = get_heap () in
-      sst_write gr MinGrade;
-      let h3 = get_heap () in
-      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
-      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
-      assert (modifies_shared_and h0 h3 !{gr})
+//      let h2 = get_heap () in
+      sst_write gr MinGrade
+//      let h3 = get_heap () in
+//      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+//      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
+//      assert (modifies_shared_and h0 h3 !{gr})
     end
 
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
