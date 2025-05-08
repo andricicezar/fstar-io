@@ -10,6 +10,10 @@ open FStar.List.Tot
 
 open SharedRefs
 open Witnessable
+open HigherOrderContracts
+open PolyIface
+open Compiler
+open SpecTree
 
 module FSet = FStar.FiniteSet.Base
 
@@ -33,37 +37,48 @@ let rec no_cycles_fuel (fuel:nat) (ll:ref (linkedList 'a)) (h:heap): Type0 =
   | LLNil -> True
   | LLCons x xsref -> if fuel = 0 then False else no_cycles_fuel (fuel - 1) xsref h
 
-let rec sorted_fuel (fuel:nat) (ll:linkedList int) (h:heap): Type0 =
+let rec sorted_fuel (fuel:nat) (ll:ref (linkedList int)) (h:heap): Type0 =
   if fuel = 0 then False
   else
-    match ll with
+    match sel h ll with
     | LLNil -> True
     | LLCons x next ->
       let tl = sel h next in
       match tl with
       | LLNil -> True
-      | LLCons y next -> x <= y /\ sorted_fuel (fuel - 1) tl h
+      | LLCons y next -> x <= y /\ sorted_fuel (fuel - 1) ll h
 
 let no_cycles (ll:ref (linkedList int)) (h:heap): Type0 =
   exists (fuel:nat). no_cycles_fuel fuel ll h
 
 let sorted (ll: ref (linkedList int)) (h:heap): Type0 =
-  exists fuel. sorted_fuel fuel (sel h ll) h
+  forall fuel. no_cycles_fuel fuel ll h ==>
+    sorted_fuel fuel ll h
+
+let rec ll_as_list (fuel:nat) (ll:ref (linkedList 'a)) (h:heap) : GTot (list 'a) =
+  match sel h ll with
+  | LLNil -> []
+  | LLCons hd tl -> if fuel = 0 then [hd] else hd :: ll_as_list (fuel-1) tl h
+
+assume val sort_list (l:list 'a) : list 'a
+
+let same_elements (ll:ref (linkedList int)) (h0 h1:heap) : Type0 =
+  forall fuel. no_cycles_fuel fuel ll h0 ==>
+    sort_list (ll_as_list fuel ll h0) == sort_list (ll_as_list fuel ll h1)
 
 type student_solution =
-  ll:ref(linkedList int) -> SST (option unit)
+  ll:ref (linkedList int) -> SST (resexn unit)
     (requires (fun h0 ->
       h0 `contains` ll /\
       no_cycles ll h0 /\
       is_shared ll h0))
     (ensures (fun h0 r h1 ->
-      (Some? r ==> no_cycles ll h1 /\ sorted ll h1) /\ // /\ same_elements ll h0 h1) /\
-      modifies_only_shared h0 h1 /\
+      (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1) /\
+      modifies_only_shared_and_encapsulated h0 h1 /\
       gets_shared Set.empty h0 h1))
 
 // let wss : witnessable (list (mref grade grade_preorder * student_solution)) = admit ()
 (*  witnessable_list (witnessable_pair (witnessable_mref witnessable_grade grade_preorder) witnessable_llist) *)
-
 
 let rec refs_of_ll (fuel:nat) (ll:ref (linkedList int)) (h:heap) : GTot (list (ref (linkedList int))) =
   ll :: (
@@ -96,7 +111,6 @@ let rec lemma_map_shared_no_cycles fuel (ll:ref (linkedList int)) h0 h1 :
   | LLCons _ tl ->
     eliminate_ctrans_ref_pred h0 #(SLList SNat) ll contains_pred;
     lemma_map_shared_no_cycles (fuel-1) tl h0 h1
-
 
 let rec lemma_modifies_footprint #a #rel (r:mref a rel) fuel ll h0 h1 :
   Lemma
@@ -217,6 +231,13 @@ let lemma_trans_modifies_shared_and h0 h1 h2 s s' s'' :
   Lemma (requires (modifies_shared_and h0 h1 s /\ gets_shared s'' h0 h1 /\ modifies_shared_and h1 h2 s'))
         (ensures (modifies_shared_and h0 h2 (s'' `Set.union` (s `Set.union` s')))) = ()
 
+let lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 s s' s'' :
+  Lemma (requires (modifies_shared_and_encapsulated_and h0 h1 s /\
+                   gets_shared s'' h0 h1 /\
+                   modifies_shared_and_encapsulated_and h1 h2 s'))
+        (ensures (modifies_shared_and_encapsulated_and h0 h2 (s'' `Set.union` (s `Set.union` s')))) = ()
+
+#push-options "--split_queries always"
 let auto_grader
   (test:list int)
   (hw: student_solution)
@@ -227,35 +248,36 @@ let auto_grader
                       h0 `contains` gr /\
                       NotGraded? (sel h0 gr)))
     (ensures (fun h0 () h1 -> ~(NotGraded? (sel h1 gr)) /\
-                           modifies_shared_and h0 h1 !{gr})) =
-//    let h0 = get_heap () in
+                           modifies_shared_and_encapsulated_and h0 h1 !{gr})) =
+    let h0 = get_heap () in
     let ll = generate_llist test in // a fresh set of references S
     label_llist_as_shareable ll (length test); // set S gets shared
-//    let h1 = get_heap () in
-//    assert (modifies_shared_and h0 h1 !{map_shared});
-//    assert (gets_shared Set.empty h0 h1);
-//    assert (is_private gr h1);
+    let h1 = get_heap () in
+    assert (modifies_shared_and_encapsulated_and h0 h1 !{map_shared});
+    assert (gets_shared Set.empty h0 h1);
+    assert (is_private gr h1);
     match hw ll with // shareable references get modified
-    | Some _ -> begin
- //     let h2 = get_heap () in
-//      assert (modifies_shared_and h1 h2 Set.empty);
-//      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
-//      assert (modifies_shared_and h0 h2 !{map_shared});
-//      assert (gets_shared Set.empty h0 h2);
-      sst_write #grade gr MaxGrade // grade gets modified
-//      let h3 = get_heap () in
-//      assert (modifies_shared_and h2 h3 !{gr});
-//      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
-//      assert (modifies_shared_and h0 h3 !{gr})
+    | Inl _ -> begin
+      let h2 = get_heap () in
+      assert (modifies_shared_and_encapsulated_and h1 h2 Set.empty);
+      lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+      assert (modifies_shared_and_encapsulated_and h0 h2 !{map_shared});
+      assert (gets_shared Set.empty h0 h2);
+      sst_write #grade gr MaxGrade; // grade gets modified
+      let h3 = get_heap () in
+      assert (modifies_shared_and_encapsulated_and h2 h3 !{gr});
+      lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
+      assert (modifies_shared_and_encapsulated_and h0 h3 !{gr})
     end
-    | None -> begin
-//      let h2 = get_heap () in
-      sst_write gr MinGrade
-//      let h3 = get_heap () in
-//      lemma_trans_modifies_shared_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
-//      lemma_trans_modifies_shared_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
-//      assert (modifies_shared_and h0 h3 !{gr})
+    | Inr _ -> begin
+      let h2 = get_heap () in
+      sst_write gr MinGrade;
+      let h3 = get_heap () in
+      lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
+      lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
+      assert (modifies_shared_and_encapsulated_and h0 h3 !{gr})
     end
+#pop-options
 
 let test1 () : STATEwp grade AllOps (fun _ _ -> False) =
   let test = [1;3;4;2;1] in
@@ -281,13 +303,6 @@ let rec determine_fuel (ll:ref (linkedList int)) (ffuel:nat)
     end
 
 (**
-let same_elements (ll:ref (linkedList int)) (h0 h1:heap): Type0 =
-  let length_h0 = ll_length ll h0 in
-  let length_h1 = ll_length ll h1 in
-  if length_h0 <> length_h1 then False
-  else
-    exists fuel. elements_of_ll_acc fuel ll h0 FSet.emptyset == elements_of_ll_acc fuel ll h0 FSet.emptyset
-
  let same_elements_SST (ll: linkedList int): SST bool
    (requires fun h0 -> satisfy_on_heap ll h0 contains_pred)
    (ensures fun h0 r h1 -> r ==> same_elements ll h0 h1)
@@ -313,3 +328,82 @@ let rec sorted_SST (fuel: nat) (ll: linkedList int): SST bool
           sorted_SST (fuel - 1) tl
         end
 **)
+
+type student_solution_a3p (a3p:threep) =
+  ll:ref (linkedList int) -> ST (resexn unit)
+    (requires (fun h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0))
+    (ensures (fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1)))
+
+let student_solution_spec (a3p:threep) : spec =
+ Spec false true
+   (ref (linkedList int)) (witnessable_ref (linkedList int) #(witnessable_llist int))
+   (fun ll h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0)
+   unit
+   witnessable_unit
+   (fun ll h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))
+
+let student_solution_safe_importable a3p : safe_importable_to a3p (student_solution_a3p a3p) (Node (U00 (student_solution_spec a3p)) Leaf Leaf) =
+  safe_importable_arrow_err00 a3p
+    (ref (linkedList int)) Leaf #(exportable_ref a3p (linkedList int))
+    unit Leaf #(safe_importable_is_importable a3p unit Leaf #(safe_importable_unit a3p))
+    (fun ll h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0)
+    (fun ll h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1 /\ (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))
+
+let student_solution_hoc : hoc c3p (student_solution_spec c3p) =
+  EnforcePost
+    (fun _ -> ())
+    (fun _ _ -> ())
+    (fun ll ->
+       let eh0 = get_heap () in
+       let check : cb_check c3p (ref (linkedList int)) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c) /\ no_cycles ll h0)) (fun x -> sst_post _ _ (fun h0 r h1 -> (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))) ll eh0 =
+         (fun res ->
+           let h1 = get_heap () in
+           assume (no_cycles ll h1);
+           assume (same_elements ll eh0 h1);
+           assume (sorted ll h1);
+           Inl ()) in
+       (| eh0, check |))
+
+let student_solution_pkhoc : pck_uhoc c3p =
+  (| U00 (student_solution_spec c3p), U00hoc student_solution_hoc |)
+
+let student_solution_tree : hoc_tree c3p (Node (U00 (student_solution_spec c3p)) Leaf Leaf) =
+  Node student_solution_pkhoc Leaf Leaf
+
+let sit : src_interface1 = {
+  specs = (fun a3p -> Node (U00 (student_solution_spec a3p)) Leaf Leaf);
+  hocs = student_solution_tree;
+  ct = student_solution_a3p;
+  c_ct = student_solution_safe_importable;
+  psi = fun _ _ _ -> True
+}
+
+val some_ctx : ctx_tgt1 (comp_int_src_tgt1 sit)
+let some_ctx read write alloc ll =
+  Inl ()
+
+val prog : prog_src1 sit
+let prog (ss:student_solution_a3p c3p) =
+  let ss' : student_solution = fun (ll:ref (linkedList int)) ->
+    witness (contains_pred ll);
+    witness (is_shared ll);
+    ss ll
+  in
+  let test = [1;2;3;4;5;6] in
+  let gr = sst_alloc #grade #grade_preorder NotGraded in
+  auto_grader test ss' gr;
+  0
+
+(* Calling SecRef* on it *)
+
+let compiled_prog =
+  compile_pprog1 #sit prog
+
+let whole_prog : whole_tgt1 =
+  link_tgt1 compiled_prog some_ctx
+
+let r = whole_prog ()
+let _ =
+  match r with
+  | 0 -> FStar.IO.print_string "Success!\n"
+  | _ -> FStar.IO.print_string "Impossible\n"
