@@ -29,63 +29,43 @@ instance witnessable_continuation a3p t {| c:witnessable t |} : witnessable (con
 instance poly_iface_continuation a3p t {| c:poly_iface a3p t |} : poly_iface a3p (continuation a3p t) =
   poly_iface_arrow a3p unit (atree a3p t #c.wt)
 
-(**
-let tgt_typ_run (a3p:threep) =
-  mk_poly_arrow
-    a3p
-    ((int * int) * list (t_task a3p))
-    #(witnessable_pair
-      _
-      #(witnessable_pair int #witnessable_int int #witnessable_int)
-      _
-      #(witnessable_list _ #(witnessable_arrow (ref int) _ _ _)))
-    (resexn int)
-    #(witnessable_resexn int)
-**)
-
 instance witnessable_t_task a3p : witnessable (t_task a3p) =
   witnessable_arrow (ref int) (continuation a3p unit) _ _
 
 instance poly_iface_t_task a3p : poly_iface a3p (t_task a3p) =
   poly_iface_arrow a3p (ref int) #(poly_iface_ref a3p int) (continuation a3p unit) #(poly_iface_continuation a3p unit)
-(**
-instance poly_iface_run (a3p:threep) : poly_iface a3p (tgt_typ_run a3p) =
-  poly_iface_arrow
-    a3p
-    _
-    #(poly_iface_pair a3p
+
+type arg_type a3p =
+  ((nat * int) * l:(list (t_task a3p)){List.Tot.length l > 0})
+
+type wit_arg_type a3p : witnessable (arg_type a3p) =
+  (witnessable_pair
+    (nat * int)
+    #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int)
+    (l:(list (t_task a3p)){List.Tot.length l > 0})
+    #(witnessable_refinement
       _
-      #(poly_iface_pair a3p int #(poly_iface_int a3p) int #(poly_iface_int a3p))
-      _
-      #(poly_iface_list a3p (t_task a3p) #(poly_iface_t_task a3p)))
-    _
-    #(poly_iface_resexn a3p int #(poly_iface_int a3p))
-**)
+      #(witnessable_list _ #(witnessable_t_task a3p))
+      (fun l -> List.Tot.length l > 0)))
 
 let src_run_type (a3p:threep) =
   mk_poly_arrow
     a3p
-    ((nat * int) * l:(list (t_task a3p)){List.Tot.length l > 0})
-    #(witnessable_pair
-      (nat * int)
-      #(witnessable_pair nat #(witnessable_refinement int (fun x -> x >= 0)) int)
-      (l:(list (t_task a3p)){List.Tot.length l > 0})
-      #(witnessable_refinement
-        _
-        #(witnessable_list _ #(witnessable_t_task a3p))
-        (fun l -> List.Tot.length l > 0)))
+    (arg_type a3p)
+    #(wit_arg_type a3p)
     (resexn int)
     #(witnessable_resexn int #witnessable_int)
 
 let run_type_spec (a3p:threep) : spec =
   Spec true true
-    ((nat & int) & l: list (t_task a3p) {List.Tot.Base.length l > 0})
+    (arg_type a3p)
  (**   (witnessable_pair
       (nat & int)
       #(witnessable_pair nat #(witnessable_refinement int #witnessable_int _) int #witnessable_int)
       (l: list (t_task a3p) {List.Tot.Base.length l > 0})
       #(witnessable_refinement _ #(witnessable_list _ #(witnessable_t_task a3p)) _)) **)
     (importable_pair a3p
+
       (nat & int)
       (EmptyNode Leaf Leaf)
       #(importable_pair a3p
@@ -136,18 +116,24 @@ let exportable_run_type (a3p:threep) : exportable_from a3p (src_run_type a3p) (r
     _
     _
 
+let rec lemma_always_satisfy_list_t_task a3p (l:(list (t_task a3p))) :
+  Lemma ((witnessable_list _ #(witnessable_t_task a3p)).satisfy l (prref a3p)) =
+  match l with
+  | [] -> ()
+  | hd::tl -> lemma_always_satisfy_list_t_task a3p tl
+
+let lemma_always_satisfy_arg_type a3p (x:arg_type a3p) :
+  Lemma ((wit_arg_type a3p).satisfy x (prref a3p)) =
+  let (_, l) = x in
+  lemma_always_satisfy_list_t_task a3p l
+
 let hoc_check : hoc c3p (run_type_spec c3p) =
  EnforcePre
    (fun x ->
      let eh0 = get_heap () in
      let check : cb_check c3p _ _ (pre_poly_arrow c3p #((run_type_spec c3p).argt) #(run_type_spec c3p).wt_argt) (fun x _ _ h1 -> (run_type_spec c3p).pre x h1) x eh0 =
        (fun () ->
-         let h1 = get_heap () in
-         assert ((run_type_spec c3p).pre x h1) by (
-           norm [delta_only [`%run_type_spec;`%Spec?.pre;`%pre_poly_arrow]; iota];
-           let x = nth_binder 5 in
-           let _, _ = destruct_and x in
-           tadmit () (** TODO: this should be easy to prove **));
+         lemma_always_satisfy_arg_type c3p x;
          Inl ()) in
      (| eh0, check |)   )
    (fun x r -> ())
