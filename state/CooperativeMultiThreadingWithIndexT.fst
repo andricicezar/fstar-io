@@ -237,6 +237,7 @@ type t_task (a3p:threep) =
   mk_poly_arrow
     a3p
     (ref int)
+    #(witnessable_ref int #witnessable_int)
     (continuation a3p unit)
     #(witnessable_arrow unit (atree a3p unit) _ _)
  // r:ref int -> ST (continuation a3p unit) (fun h0 -> inv a3p h0 /\ prref a3p r) (fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1)

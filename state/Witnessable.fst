@@ -55,7 +55,7 @@ instance witnessable_option (t:Type) {| c:witnessable t |} : witnessable (option
     | Some x' -> c.satisfy x' pred);}
 
 instance witnessable_pair (t1:Type) {| c1:witnessable t1 |} (t2:Type) {| c2:witnessable t2 |} : witnessable (t1 * t2) = {
-  satisfy = (fun (x1, x2) pred -> c1.satisfy x1 pred /\ c2.satisfy x2 pred);
+  satisfy = (fun xy pred -> c1.satisfy (fst xy) pred /\ c2.satisfy (snd xy) pred);
 }
 
 instance witnessable_sum (t1:Type) {| c1:witnessable t1 |} (t2:Type) {| c2:witnessable t2 |} : witnessable (either t1 t2) = {

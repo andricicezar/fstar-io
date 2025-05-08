@@ -362,10 +362,10 @@ instance importable_pair a3p t1 st1 {| c1:importable_to a3p t1 st1 |} t2 st2 {| 
   c_styp = witnessable_pair t1 #c1.c_styp t2 #c2.c_styp;
   ityp = c1.ityp * c2.ityp;
   c_ityp = poly_iface_pair a3p _ #c1.c_ityp _ #c2.c_ityp;
-  import = (fun hocs (x, x') ->
-    match c1.import (left hocs) x with
+  import = (fun hocs pr ->
+    match c1.import (left hocs) (fst pr) with
     | Inl x -> begin
-      match c2.import (right hocs) x' with
+      match c2.import (right hocs) (snd pr) with
       | Inl x' -> Inl (x,x')
       | Inr err -> Inr err
     end
