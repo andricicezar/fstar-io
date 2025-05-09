@@ -40,10 +40,10 @@ let f_hoc : hoc c3p f_spec =
     (fun rx ->
       let rx :ref int = rx in
       recall (contains_pred rx);
-      let x = sst_read rx in
+      let x = lr_read rx in
       let eh0 = get_heap () in
-      let check : cb_check c3p (ref int) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c))) (fun x -> sst_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)) rx eh0 =
-        (fun kres -> if x = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+      let check : cb_check c3p (ref int) (resexn unit) (fun x -> lr_pre (fun h0 -> satisfy x (prref_c))) (fun x -> lr_post _ _ (fun h0 r h1 -> Inr? r \/ sel h0 x == sel h1 x)) rx eh0 =
+        (fun kres -> if x = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
 
 let f_pkhoc : pck_uhoc c3p =
@@ -65,7 +65,7 @@ val unsafe_f : mk_interm_arrow (ref int) (resexn unit)
 let unsafe_f x =
   recall (contains_pred x);
   recall (is_shareable x);
-  sst_write x 0;
+  lr_write x 0;
   Inl ()**)
 
 val some_ctx : ctx_tgt1 (comp_int_src_tgt1 sit)
@@ -75,7 +75,7 @@ let some_ctx read write alloc x =
 
 val prog : prog_src1 sit
 let prog f =
-  let r = sst_alloc_shared #SNat 5 in
+  let r = lr_alloc_shared #SNat 5 in
   witness (contains_pred r);
   witness (is_shareable r);
   match f r with
@@ -131,7 +131,7 @@ let f_xeq5_hoc : hoc c3p (f_xeq5_spec c3p) =
       let check : cb_check c3p (ref int) _ (pre_poly_arrow c3p #(f_xeq5_spec c3p).argt #(f_xeq5_spec c3p).wt_argt) (fun x _ _ h1 -> (f_xeq5_spec c3p).pre x h1) rx eh0 =
         (fun _ ->
           recall (contains_pred rx);
-          if 5 = sst_read rx then Inl () else Inr (Contract_failure "x has changed")) in
+          if 5 = lr_read rx then Inl () else Inr (Contract_failure "x has changed")) in
       (| eh0, check |))
     (fun x r -> ())
 
@@ -151,7 +151,7 @@ let sit2 : src_interface2 = {
 val prog2 : prog_src2 sit2
 let prog2 x =
   recall (contains_pred x);
-  let v = sst_read x in
+  let v = lr_read x in
   assert (v == 5);
   Inl (10 / v)
 

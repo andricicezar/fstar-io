@@ -201,7 +201,7 @@ let rec scheduler
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) =
   witness (contains_pred r);
   witness (is_shareable r);
-  let counter_st = sst_read counter in
+  let counter_st = lr_read counter in
   let hist = counter_st._1 in
   let i = counter_st._2 in
   let inactive = counter_st._3 in
@@ -217,7 +217,7 @@ let rec scheduler
     lemma_fairness_step (length tasks) hist i;
     lemma_prefix_of_append hist [i];
     let counter_st' : counter_state (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
-    let () = sst_write counter counter_st' in
+    let () = lr_write counter counter_st' in
     scheduler (fuel-1) r tasks' counter
   | Yield k' ->
     let inactive' = 0 in
@@ -226,7 +226,7 @@ let rec scheduler
     lemma_fairness_step (length tasks) hist i;
     lemma_prefix_of_append hist [i];
     let counter_st' : counter_state (length tasks) = (| hist @ [i], (incr #(length tasks') i), inactive' |) in
-    let () = sst_write counter counter_st' in
+    let () = lr_write counter counter_st' in
     scheduler (fuel-1) r tasks' counter
   end
 #pop-options
@@ -252,31 +252,31 @@ let rec map f x = match x with
 let run (args : (nat * int) * (tasks: (list (t_task c3p)){length tasks > 0})) :
   LR int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1  /\ gets_shared Set.empty h0 h1)) =
   let ((fuel, init), tasks) = args in
-  let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
-  let s = sst_alloc_shared init in
+  let counter = lr_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
+  let s = lr_alloc_shared init in
   witness (contains_pred s); witness (is_shareable s);
   let tasks = map (fun (f:t_task c3p) -> f s) tasks in
   let () = scheduler fuel s tasks counter in
-  let final_value = sst_read s in
+  let final_value = lr_read s in
   final_value
 
 val res_a : t_task c3p
 let res_a (r : ref int) () =
   recall (contains_pred r);
   recall (is_shareable r);
-  let () = sst_write_ref r 42 in
+  let () = lr_write_ref r 42 in
   Return ()
 
 val res_b : t_task c3p
 let res_b (r : ref int) () =
   recall (contains_pred r);
   recall (is_shareable r);
-  let j = sst_read r in
-  let m = sst_alloc #int #(FStar.Heap.trivial_preorder _) 42 in
+  let j = lr_read r in
+  let m = lr_alloc #int #(FStar.Heap.trivial_preorder _) 42 in
   Yield (fun () ->
     recall (contains_pred r);
     recall (is_shareable r);
-    let () = sst_write r j in
+    let () = lr_write r j in
     Return ())
 
 let nmm () : LR int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run ((5000,0),[res_a; res_b])

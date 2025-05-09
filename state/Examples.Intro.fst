@@ -39,22 +39,22 @@ let sit : src_interface1 = {
 #push-options "--z3rlimit 10000" (* very flaky for some reason. *)
 #restart-solver
 let prog (lib : lib_type c3p) : LR int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
-  let secret : ref int = sst_alloc 42 in
-  let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
+  let secret : ref int = lr_alloc 42 in
+  let r : ref (ref int) = lr_alloc_shared #(SRef SNat) (lr_alloc_shared 0) in
   witness (contains_pred r);
   witness (is_shareable r);
   let cb = lib r in
-  let v : ref int = sst_alloc_shared 1 in
+  let v : ref int = lr_alloc_shared 1 in
   let h = get_heap () in
   (* Sad, but these asserts seem to help. They are really just the precondition
-  of sst_write. *)
+  of lr_write. *)
   assert (h `contains` r);
   assert (~(compare_addrs r map_shared));
   assert (
     (forall t. to_Type t == int ==>
       forall_refs_heap contains_pred h #t 1 /\
       (is_shareable r h ==> forall_refs_heap is_shareable h #t 1)));
-  sst_write r v;
+  lr_write r v;
   cb ();
   let v = !secret in
   assert (v == 42); (* we know statically that the secret has not changed. *)

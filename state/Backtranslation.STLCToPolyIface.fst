@@ -245,7 +245,7 @@ val progr_declassify_nested:
       is_private (sel h0 rp) h0))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
-  let p : ref int = sst_read rp in
+  let p : ref int = lr_read rp in
   sst_share #SNat p;
   sst_share #(SRef SNat) rp;
   witness (contains_pred rp);
@@ -265,9 +265,9 @@ val progr_secret_unchanged_test:
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
 let progr_secret_unchanged_test rp rs ctx =
-  let secret: ref int = sst_alloc_shareable #SNat 0 in
+  let secret: ref int = lr_alloc_shareable #SNat 0 in
   downgrade_val (ctx (raise_val ()));
-  let v = sst_read secret in
+  let v = lr_read secret in
   ()
 
 #push-options "--split_queries always --z3rlimit 10000"
@@ -283,12 +283,12 @@ val progr_passing_shared_to_callback_test:
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 // TODO: the callback of the program should be able to modify rp (DA: now the callbacks can modify encapsulated, not private references)
 let progr_passing_shared_to_callback_test rp rs f =
-  let secret: ref int = sst_alloc_shareable #SNat 0 in
+  let secret: ref int = lr_alloc_shareable #SNat 0 in
   sst_share #SNat secret;
   witness (contains_pred secret); witness (is_shareable secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_shareable secret);
-    sst_write_shareable #SNat secret (!secret + 1);
+    lr_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()
@@ -304,12 +304,12 @@ val progr_passing_encapsulated_to_callback_test:
       satisfy_on_heap rs h0 is_shareable))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 let progr_passing_encapsulated_to_callback_test rp rs f =
-  let secret: ref int = sst_alloc_shareable #SNat 0 in
+  let secret: ref int = lr_alloc_shareable #SNat 0 in
   sst_encapsulate secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_encapsulated secret);
-    sst_write_shareable #SNat secret (!secret + 1);
+    lr_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()
@@ -324,13 +324,13 @@ val progr_passing_private_to_callback_test:
     (ensures (fun h0 _ h1 -> True))
 [@expect_failure]
 let progr_passing_private_to_callback_test f =
-  let secret: ref int = sst_alloc #SNat 0 in
+  let secret: ref int = lr_alloc #SNat 0 in
   witness (contains_pred secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret);
     // let h0 = get_heap () in
     // assume (is_shareable secret h0);
-    sst_write_shareable #SNat secret (!secret + 1);
+    lr_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
   ()

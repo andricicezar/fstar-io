@@ -29,12 +29,12 @@ let lemma_eq_ref_types_eq_value_types _ = ()
 
 type ref_kind =
   | Private
-  | Shared
+  | Shareable
   | Encapsulated
 
 let ref_kind_rel : preorder ref_kind = fun k k' ->
   match k , k' with
-  | Private , _ | Shared , Shared | Encapsulated , Encapsulated -> True
+  | Private , _ | Shareable , Shareable | Encapsulated , Encapsulated -> True
   | _ , _ -> False
 
 type map_sharedT =
@@ -53,7 +53,7 @@ let is_private_addr : pos -> heap -> Type0 = (fun p h ->
 
 let is_shareable : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` map_shared /\ (** this contains is necessary to show that is_shareable is a stable predicate **)
-    Shared? ((sel h map_shared) (addr_of r)))
+    Shareable? ((sel h map_shared) (addr_of r)))
 
 let is_encapsulated : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
     h `contains` map_shared /\ (** this contains is necessary to show that is_encapsulated is a stable predicate **)
@@ -151,28 +151,28 @@ let trans_shared_contains (h:heap) =
   ctrans_ref_pred h contains_pred /\ ctrans_ref_pred h is_shareable
 
 unfold
-let sst_inv h =
+let lr_inv h =
   trans_shared_contains h /\
   h `contains` map_shared /\
   is_private (map_shared) h /\ (* the map stays unshared *)
   (forall p. p >= next_addr h ==> is_private_addr p h)
 
 unfold
-let sst_pre (pre:st_pre) : st_pre =
-  fun h0 -> sst_inv h0 /\ pre h0
+let lr_pre (pre:st_pre) : st_pre =
+  fun h0 -> lr_inv h0 /\ pre h0
 
 unfold
-let sst_post
+let lr_post
   (a:Type)
   (pre:st_pre)
-  (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h))))
-  : (h:heap -> Tot (st_post' a ((sst_pre pre) h))) =
-  fun h0 r h1 -> sst_inv h1 /\ post h0 r h1
+  (post: (h:heap -> Tot (st_post' a ((lr_pre pre) h))))
+  : (h:heap -> Tot (st_post' a ((lr_pre pre) h))) =
+  fun h0 r h1 -> lr_inv h1 /\ post h0 r h1
 
-effect LR (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
+effect LR (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((lr_pre pre) h)))) =
   ST a
-    (requires (sst_pre pre))
-    (ensures  (sst_post a pre post))
+    (requires (lr_pre pre))
+    (ensures  (lr_post a pre post))
 
 let eliminate_ctrans_ref_pred (h:heap) #a (r:ref (to_Type a)) (pred:mref_heap_stable_pred) :
   Lemma
@@ -261,7 +261,7 @@ let rec lemma_forall_refs_heap_force_retype (pred:mref_heap_stable_pred) (h:heap
       end
    end
 
-let lemma_sst_write_or_alloc_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_lr_write_or_alloc_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -290,7 +290,7 @@ let lemma_sst_write_or_alloc_preserves_contains #a (#rel:preorder a) (x:mref a r
     end
   end
 
-let lemma_sst_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
+let lemma_lr_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -306,7 +306,7 @@ let lemma_sst_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_
       lemma_forall_refs_heap_force_retype contains_pred h0 v
     end
   end;
-  lemma_sst_write_or_alloc_preserves_contains x v h0 h1
+  lemma_lr_write_or_alloc_preserves_contains x v h0 h1
 
 let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   (requires (
@@ -334,7 +334,7 @@ let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
   end
 
 #push-options "--split_queries always"
-let lemma_sst_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_lr_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -366,7 +366,7 @@ let lemma_sst_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (
 #pop-options
 
 #push-options "--split_queries always"
-let lemma_sst_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
+let lemma_lr_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -435,14 +435,14 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
 #pop-options
 
 inline_for_extraction
-let sst_read #a #rel (r:mref a rel)
+let lr_read #a #rel (r:mref a rel)
   : LR a
         (requires (fun h0 -> h0 `contains` r))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
 
 inline_for_extraction
-let sst_alloc #a (#rel:preorder a) (init:a)
+let lr_alloc #a (#rel:preorder a) (init:a)
 : LR (mref a rel)
     (fun h0 ->
       (forall t . to_Type t == a ==>
@@ -461,14 +461,14 @@ let sst_alloc #a (#rel:preorder a) (init:a)
   assert (is_private r h1);
   assert (alloc_post #a init h0 r h1);
   assert (ctrans_ref_pred h0 contains_pred);
-  lemma_sst_write_or_alloc_preserves_contains r init h0 h1;
-  lemma_sst_alloc_preserves_shared r init h0 h1;
+  lemma_lr_write_or_alloc_preserves_contains r init h0 h1;
+  lemma_lr_alloc_preserves_shared r init h0 h1;
   assert (ctrans_ref_pred h1 contains_pred);
   assert (ctrans_ref_pred h1 is_shareable);
   r
 
 inline_for_extraction
-let sst_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
+let lr_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
 : LR (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
     (fun h0 r h1 ->
@@ -481,7 +481,7 @@ let sst_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
   begin
     lemma_forall_refs_heap_force_retype contains_pred h0 init
   end;
-  sst_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
+  lr_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
 
 inline_for_extraction
 let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
@@ -502,7 +502,7 @@ let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
 
 #push-options "--split_queries always"
 inline_for_extraction
-let sst_alloc_shared (#t:full_ground_typ) (init:to_Type t)
+let lr_alloc_shared (#t:full_ground_typ) (init:to_Type t)
 : LR (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init /\ forall_refs_heap is_shareable h0 init)
     (fun h0 r h1 ->
@@ -514,7 +514,7 @@ let sst_alloc_shared (#t:full_ground_typ) (init:to_Type t)
       is_shareable r h1 /\
       modifies_only_shared h0 h1 (** here to help **)) =
   let h0 = get_heap () in
-  let r = sst_alloc_shareable init in
+  let r = lr_alloc_shareable init in
   let h1 = get_heap () in
   forall_refs_heap_monotonic is_shareable h0 h1 init;
   assert (~(addr_of map_shared `Set.mem` Set.empty));
@@ -535,7 +535,7 @@ let sst_alloc_shared (#t:full_ground_typ) (init:to_Type t)
   r
 #pop-options
 
-let lemma_sst_write_non_shareable_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_lr_write_non_shareable_preserves_contains #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `heap_rel` h1 /\
     (h0 `contains` x \/ fresh x h0 h1) /\
@@ -556,7 +556,7 @@ let lemma_sst_write_non_shareable_preserves_contains #a (#rel:preorder a) (x:mre
     end
   end
 
-let lemma_sst_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
+let lemma_lr_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -584,7 +584,7 @@ let lemma_sst_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref 
   end
 
 inline_for_extraction
-let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
+let lr_write #a (#rel:preorder a) (r:mref a rel) (v:a)
 : LR unit
   (requires (fun h0 ->
     h0 `contains` r /\
@@ -607,19 +607,19 @@ let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
   lemma_unmodified_map_implies_same_shared_status !{r} h0 h1;
   introduce (exists t. to_Type t == a) ==> trans_shared_contains h1 with _. begin
     eliminate exists t. to_Type t == a returns _ with _. begin
-      lemma_sst_write_or_alloc_preserves_contains_shareable #t #rel r v h0 h1;
-      lemma_sst_write_preserves_shared #t #rel r v h0 h1
+      lemma_lr_write_or_alloc_preserves_contains_shareable #t #rel r v h0 h1;
+      lemma_lr_write_preserves_shared #t #rel r v h0 h1
     end
   end;
   introduce (forall t. ~(to_Type t == a)) ==> trans_shared_contains h1 with _. begin
-    lemma_sst_write_non_shareable_preserves_contains r v h0 h1;
-    lemma_sst_write_non_shareable_preserves_shared r v h0 h1
+    lemma_lr_write_non_shareable_preserves_contains r v h0 h1;
+    lemma_lr_write_non_shareable_preserves_shared r v h0 h1
   end;
   ()
 
 #push-options "--split_queries always"
 inline_for_extraction
-let sst_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
+let lr_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
 : LR unit
   (requires (fun h0 ->
     h0 `contains` r /\ forall_refs_heap contains_pred h0 v /\
@@ -645,11 +645,11 @@ let sst_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
     end
   end;
   assert (~(compare_addrs r map_shared));
-  sst_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v
+  lr_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v
 #pop-options
 
 inline_for_extraction
-let sst_write_ref #a (r:ref a) (v:a)
+let lr_write_ref #a (r:ref a) (v:a)
 : LR unit
   (requires (fun h0 ->
     h0 `contains` r /\
@@ -661,7 +661,7 @@ let sst_write_ref #a (r:ref a) (v:a)
     write_post r v h0 () h1 /\
     gets_shared Set.empty h0 h1 /\
     (is_shareable r h0 ==> modifies_only_shared h0 h1) (** here to help **))) =
-  sst_write r v
+  lr_write r v
 
 let gets_encapsulated (s:set nat) (h0:heap) (h1:heap) =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}

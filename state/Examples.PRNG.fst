@@ -29,15 +29,15 @@ let sit : src_interface2 = {
 
 val prng : prog_src2 sit
 let prng (seed:int) =
-  let counter : mref int (fun v v' -> b2t(v <= v')) = sst_alloc 0 in
+  let counter : mref int (fun v v' -> b2t(v <= v')) = lr_alloc 0 in
   encapsulate counter;
   witness (contains_pred counter) ;
   witness (is_encapsulated counter) ;
   fun _ -> 
     recall (contains_pred counter);
     recall (is_encapsulated counter);
-    let ccounter = sst_read counter in
-    sst_write counter (ccounter + 1);
+    let ccounter = lr_read counter in
+    lr_write counter (ccounter + 1);
     generate_nr seed (ccounter + 1)
 
 let compiled_prog =

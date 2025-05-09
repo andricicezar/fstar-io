@@ -76,11 +76,11 @@ let rec sorted_LR (fuel: nat) (ll: ref (linkedList int)): LR bool
   let h = get_heap () in
   if fuel = 0 then false
   else begin
-    match sst_read ll with
+    match lr_read ll with
     | LLNil -> true
     | LLCons x next -> begin
       eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
-      match sst_read next with
+      match lr_read next with
       | LLNil -> true
       | LLCons y _ ->
         if x <= y then sorted_LR (fuel-1) next
@@ -98,7 +98,7 @@ let rec ll_as_list_LR (fuel:nat) (ll:ref (linkedList int)) : LR (list int)
   (ensures (fun h0 r h1 -> h0 == h1 /\ r == ll_as_list fuel ll h1)) =
   let h = get_heap () in
   eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
-  match sst_read ll with
+  match lr_read ll with
   | LLNil -> []
   | LLCons hd tl -> if fuel = 0 then [hd] else hd :: ll_as_list_LR (fuel-1) tl
 
@@ -142,7 +142,7 @@ let rec lemma_map_shared_no_cycles fuel (ll:ref (linkedList int)) h0 h1 :
   Lemma
     (requires (h0 `contains` map_shared /\
                h0 `contains` ll /\
-               sst_inv h0 /\
+               lr_inv h0 /\
                modifies !{map_shared} h0 h1 /\
                no_cycles_fuel fuel ll h0))
     (ensures (no_cycles_fuel fuel ll h1)) =
@@ -156,7 +156,7 @@ let rec lemma_modifies_footprint #a #rel (r:mref a rel) fuel ll h0 h1 :
   Lemma
     (requires (h0 `contains` r /\
                h0 `contains` ll /\
-               sst_inv h0 /\
+               lr_inv h0 /\
                no_cycles_fuel fuel ll h0 /\
                ~(addr_of r `Set.mem` footprint fuel ll h0) /\
                modifies !{r} h0 h1))
@@ -169,7 +169,7 @@ let rec lemma_modifies_footprint #a #rel (r:mref a rel) fuel ll h0 h1 :
 
 let rec lemma_map_shared_not_in_footprint fuel (ll:ref (linkedList int)) h :
   Lemma
-    (requires (h `contains` map_shared /\ h `contains` ll /\ sst_inv h /\ no_cycles_fuel fuel ll h))
+    (requires (h `contains` map_shared /\ h `contains` ll /\ lr_inv h /\ no_cycles_fuel fuel ll h))
     (ensures (~(addr_of map_shared `Set.mem` footprint fuel ll h))) =
   match sel h ll with
   | LLNil -> ()
@@ -180,7 +180,7 @@ let rec lemma_map_shared_not_in_footprint fuel (ll:ref (linkedList int)) h :
 let rec lemma_pred_ll (fuel:nat) (ll:ref (linkedList int)) h0 h1 :
   Lemma
     (requires (h0 `contains` ll /\
-               sst_inv h0 /\
+               lr_inv h0 /\
                pred_ll fuel ll h0 (fun r -> is_private r h0) /\
                modifies Set.empty h0 h1 /\
                no_cycles_fuel fuel ll h0))
@@ -202,11 +202,11 @@ let rec generate_llist (l:list int)
                           pred_ll (length l) ll h1 (fun r -> is_private r h1))) =
   let h0 = get_heap () in
   match l with
-  | [] -> sst_alloc LLNil
+  | [] -> lr_alloc LLNil
   | hd::tl ->
     let tll = generate_llist tl in
     let h1 = get_heap () in
-    let ll = sst_alloc (LLCons hd tll) in
+    let ll = lr_alloc (LLCons hd tll) in
     let h2 = get_heap () in
     lemma_modifies_footprint map_shared (length tl) tll h1 h2;
     lemma_map_shared_no_cycles (length tl) tll h1 h2;
@@ -231,7 +231,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
                           (footprint fuel ll h0 `Set.equal` footprint fuel ll h1) /\
                           is_shareable ll h1))
 = let h0 = get_heap () in
-  let v = sst_read ll in
+  let v = lr_read ll in
   (match v with
   | LLNil -> ()
   | LLCons _ tl ->
@@ -303,7 +303,7 @@ let auto_grader
       lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
       assert (modifies_shared_and_encapsulated_and h0 h2 !{map_shared});
       assert (gets_shared Set.empty h0 h2);
-      sst_write #grade gr MaxGrade; // grade gets modified
+      lr_write #grade gr MaxGrade; // grade gets modified
       let h3 = get_heap () in
       assert (modifies_shared_and_encapsulated_and h2 h3 !{gr});
       lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
@@ -311,7 +311,7 @@ let auto_grader
     end
     | Inr _ -> begin
       let h2 = get_heap () in
-      sst_write gr MinGrade;
+      lr_write gr MinGrade;
       let h3 = get_heap () in
       lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{map_shared} Set.empty Set.empty;
       lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{map_shared} !{gr} Set.empty;
@@ -354,7 +354,7 @@ let student_solution_hoc : hoc c3p (student_solution_spec c3p) =
        recall (contains_pred ll);
        let l0 = ll_as_list_LR 10000 ll in
        let eh0 = get_heap () in
-       let check : cb_check c3p (ref (linkedList int)) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c) /\ no_cycles ll h0)) (fun x -> sst_post _ _ (fun h0 r h1 -> (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))) ll eh0 =
+       let check : cb_check c3p (ref (linkedList int)) (resexn unit) (fun x -> lr_pre (fun h0 -> satisfy x (prref_c) /\ no_cycles ll h0)) (fun x -> lr_post _ _ (fun h0 r h1 -> (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))) ll eh0 =
          (fun res ->
            let h1 = get_heap () in
            recall (contains_pred ll);
@@ -415,9 +415,9 @@ let prog (ss:student_solution_a3p c3p) =
     ss ll
   in
   let test = [1;2;3;4;5;6] in
-  let gr = sst_alloc #grade #grade_preorder NotGraded in
+  let gr = lr_alloc #grade #grade_preorder NotGraded in
   auto_grader test ss' gr;
-  match sst_read gr with
+  match lr_read gr with
   | NotGraded -> -2
   | MinGrade -> -1
   | MaxGrade -> 0

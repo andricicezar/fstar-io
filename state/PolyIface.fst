@@ -172,7 +172,7 @@ let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
   recall (is_shareable r);
-  let v = sst_read r in
+  let v = lr_read r in
   assert (forall_refs_heap contains_pred h0 v);
   assert (forall_refs_heap is_shareable h0 v);
   lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
@@ -188,7 +188,7 @@ let tl_write #t r v =
   lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shareable r));
   lemma_forall_refs_witnessed_forall_refs_heap v contains_pred;
   lemma_forall_refs_witnessed_forall_refs_heap v is_shareable;
-  sst_write_shareable r v;
+  lr_write_shareable r v;
   let h1 = get_heap () in
   assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
   assert (trans_shared_contains h1);
@@ -203,7 +203,7 @@ let tl_alloc #t init =
   lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shareable r));
   lemma_forall_refs_witnessed_forall_refs_heap init contains_pred;
   lemma_forall_refs_witnessed_forall_refs_heap init is_shareable;
-  let r = sst_alloc_shared init in
+  let r = lr_alloc_shared init in
   witness (contains_pred r); witness (is_shareable r);
   r
 #pop-options

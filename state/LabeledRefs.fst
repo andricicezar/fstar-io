@@ -20,7 +20,7 @@ let share = (fun #a #p sr ->
     let h0 = get_heap () in
     lemma_next_addr_contained_refs_addr h0 sr ;
     let m = !secret_map in
-    let m' = (fun p -> if p = addr_of sr then Shared else m p) in
+    let m' = (fun p -> if p = addr_of sr then Shareable else m p) in
     secret_map := m';
     let h1 = get_heap () in
     lemma_next_addr_upd h0 secret_map m'
