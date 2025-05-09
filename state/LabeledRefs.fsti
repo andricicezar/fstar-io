@@ -169,7 +169,7 @@ let sst_post
   : (h:heap -> Tot (st_post' a ((sst_pre pre) h))) =
   fun h0 r h1 -> sst_inv h1 /\ post h0 r h1
 
-effect SST (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
+effect LR (a:Type) (pre:st_pre) (post: (h:heap -> Tot (st_post' a ((sst_pre pre) h)))) =
   ST a
     (requires (sst_pre pre))
     (ensures  (sst_post a pre post))
@@ -436,14 +436,14 @@ let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
 
 inline_for_extraction
 let sst_read #a #rel (r:mref a rel)
-  : SST a
+  : LR a
         (requires (fun h0 -> h0 `contains` r))
         (ensures (fun h0 v h1 -> h0 == h1 /\ v == sel h1 r)) =
   MST.Tot.read r
 
 inline_for_extraction
 let sst_alloc #a (#rel:preorder a) (init:a)
-: SST (mref a rel)
+: LR (mref a rel)
     (fun h0 ->
       (forall t . to_Type t == a ==>
         forall_refs_heap contains_pred h0 #t init))
@@ -469,7 +469,7 @@ let sst_alloc #a (#rel:preorder a) (init:a)
 
 inline_for_extraction
 let sst_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
-: SST (ref (to_Type t))
+: LR (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
     (fun h0 r h1 ->
       alloc_post #(to_Type t) init h0 r h1 /\
@@ -485,7 +485,7 @@ let sst_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
 
 inline_for_extraction
 let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
-: SST unit
+: LR unit
   (fun h0 -> h0 `contains` r /\
          (is_private r h0 \/ is_shareable r h0) /\
          forall_refs_heap is_shareable h0 (sel h0 r))
@@ -503,7 +503,7 @@ let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
 #push-options "--split_queries always"
 inline_for_extraction
 let sst_alloc_shared (#t:full_ground_typ) (init:to_Type t)
-: SST (ref (to_Type t))
+: LR (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init /\ forall_refs_heap is_shareable h0 init)
     (fun h0 r h1 ->
       fresh r h0 h1 /\
@@ -585,7 +585,7 @@ let lemma_sst_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref 
 
 inline_for_extraction
 let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
-: SST unit
+: LR unit
   (requires (fun h0 ->
     h0 `contains` r /\
     rel (sel h0 r) v /\
@@ -620,7 +620,7 @@ let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
 #push-options "--split_queries always"
 inline_for_extraction
 let sst_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
-: SST unit
+: LR unit
   (requires (fun h0 ->
     h0 `contains` r /\ forall_refs_heap contains_pred h0 v /\
     (is_shareable r h0 ==> forall_refs_heap is_shareable h0 v)))
@@ -650,7 +650,7 @@ let sst_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
 
 inline_for_extraction
 let sst_write_ref #a (r:ref a) (v:a)
-: SST unit
+: LR unit
   (requires (fun h0 ->
     h0 `contains` r /\
     ~(compare_addrs r map_shared) /\
@@ -728,7 +728,7 @@ val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
 
 inline_for_extraction
 let sst_encapsulate  #a (#rel:preorder a) (r:mref a rel)
-: SST unit
+: LR unit
   (fun h0 -> h0 `contains` r /\
          ~(compare_addrs r map_shared) /\  (** in contrast to sst_share, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
          is_private r h0)

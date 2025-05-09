@@ -41,7 +41,7 @@ let no_cycles (ll:ref (linkedList int)) (h:heap): Type0 =
   exists (fuel:nat). no_cycles_fuel fuel ll h
 
 let rec determine_fuel (ll:ref (linkedList int)) (ffuel:nat)
-  : SST (option nat)
+  : LR (option nat)
     (requires (fun h0 -> h0 `contains` ll))
     (ensures (fun h0 ofuel h1 -> h0 == h1 /\ (Some? ofuel ==> (Some?.v ofuel <= ffuel) /\ no_cycles_fuel (Some?.v ofuel) ll h0)))
     (decreases ffuel) =
@@ -70,7 +70,7 @@ let rec sorted_fuel (fuel:nat) (ll:ref (linkedList int)) (h:heap): Type0 =
 let sorted (ll: ref (linkedList int)) (h:heap): Type0 =
   exists (fuel:nat). sorted_fuel fuel ll h
 
-let rec sorted_SST (fuel: nat) (ll: ref (linkedList int)): SST bool
+let rec sorted_LR (fuel: nat) (ll: ref (linkedList int)): LR bool
   (requires fun h0 -> h0 `contains` ll)
   (ensures fun h0 r h1 -> h0 == h1 /\ (r ==> sorted_fuel fuel ll h0)) =
   let h = get_heap () in
@@ -83,7 +83,7 @@ let rec sorted_SST (fuel: nat) (ll: ref (linkedList int)): SST bool
       match sst_read next with
       | LLNil -> true
       | LLCons y _ ->
-        if x <= y then sorted_SST (fuel-1) next
+        if x <= y then sorted_LR (fuel-1) next
         else false
     end
   end
@@ -93,14 +93,14 @@ let rec ll_as_list (fuel:nat) (ll:ref (linkedList 'a)) (h:heap) : GTot (list 'a)
   | LLNil -> []
   | LLCons hd tl -> if fuel = 0 then [hd] else hd :: ll_as_list (fuel-1) tl h
 
-let rec ll_as_list_SST (fuel:nat) (ll:ref (linkedList int)) : SST (list int)
+let rec ll_as_list_LR (fuel:nat) (ll:ref (linkedList int)) : LR (list int)
   (requires (fun h0 -> h0 `contains` ll))
   (ensures (fun h0 r h1 -> h0 == h1 /\ r == ll_as_list fuel ll h1)) =
   let h = get_heap () in
   eliminate_ctrans_ref_pred h #(SLList SNat) ll contains_pred;
   match sst_read ll with
   | LLNil -> []
-  | LLCons hd tl -> if fuel = 0 then [hd] else hd :: ll_as_list_SST (fuel-1) tl
+  | LLCons hd tl -> if fuel = 0 then [hd] else hd :: ll_as_list_LR (fuel-1) tl
 
 val sort_list (l:list int) : list int
 let sort_list l = sortWith (compare_of_bool (<)) l
@@ -110,7 +110,7 @@ let same_elements (ll:ref (linkedList int)) (h0 h1:heap) : Type0 =
   // not that nice that fuel is fixed to a big number, but it suffices
 
 type student_solution =
-  ll:ref (linkedList int) -> SST (resexn unit)
+  ll:ref (linkedList int) -> LR (resexn unit)
     (requires (fun h0 ->
       h0 `contains` ll /\
       no_cycles ll h0 /\
@@ -193,7 +193,7 @@ let rec lemma_pred_ll (fuel:nat) (ll:ref (linkedList int)) h0 h1 :
 
 (* TODO: add specs (one postcond should be no cycles) *)
 let rec generate_llist (l:list int)
-  : SST (ref (linkedList int))
+  : LR (ref (linkedList int))
     (requires (fun h0 -> True))
     (ensures (fun h0 ll h1 -> h1 `contains` ll /\
                           modifies !{} h0 h1 /\
@@ -220,7 +220,7 @@ let rec generate_llist (l:list int)
     ll
 
 let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int))
-  : SST unit
+  : LR unit
     (requires (fun h0 -> h0 `contains` ll /\
                       no_cycles_fuel fuel ll h0 /\
                       pred_ll fuel ll h0 (fun r -> is_private r h0)))
@@ -250,7 +250,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   lemma_map_shared_no_cycles fuel ll h1 h2
 
 let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
-  : SST unit
+  : LR unit
     (requires (fun h0 -> h0 `contains` ll /\
                       no_cycles_fuel fuel ll h0 /\
                       pred_ll fuel ll h0 (fun r -> is_private r h0)))
@@ -282,7 +282,7 @@ let auto_grader
   (test:list int)
   (hw: student_solution)
   (gr: mref grade grade_preorder)
-  : SST unit
+  : LR unit
     (requires (fun h0 -> ~(compare_addrs gr map_shared) /\
                       is_private gr h0 /\
                       h0 `contains` gr /\
@@ -352,7 +352,7 @@ let student_solution_hoc : hoc c3p (student_solution_spec c3p) =
     (fun ll ->
        let ll : ref (linkedList int) = ll in
        recall (contains_pred ll);
-       let l0 = ll_as_list_SST 10000 ll in
+       let l0 = ll_as_list_LR 10000 ll in
        let eh0 = get_heap () in
        let check : cb_check c3p (ref (linkedList int)) (resexn unit) (fun x -> sst_pre (fun h0 -> satisfy x (prref_c) /\ no_cycles ll h0)) (fun x -> sst_post _ _ (fun h0 r h1 -> (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1))) ll eh0 =
          (fun res ->
@@ -362,8 +362,8 @@ let student_solution_hoc : hoc c3p (student_solution_spec c3p) =
            | None -> Inr (Contract_failure "Linked list contains cycles")
            | Some fuel -> begin
                 assert (no_cycles ll h1);
-                if sorted_SST fuel ll then begin
-                  let l1 = ll_as_list_SST 10000 ll in
+                if sorted_LR fuel ll then begin
+                  let l1 = ll_as_list_LR 10000 ll in
                   if sort_list l0 = sort_list l1 then Inl ()
                   else Inr (Contract_failure "Linked list has different elements")
                 end else Inr (Contract_failure "Linked list is not sorted")

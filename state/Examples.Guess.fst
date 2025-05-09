@@ -28,7 +28,7 @@ let play_guess args =
   let counter : mref int (fun v' v'' -> b2t (v' <= v'')) = sst_alloc 0 in
   sst_encapsulate counter;
   witness (contains_pred counter);witness (is_encapsulated counter);
-  let cb (g:int) : SST cmp (fun _ -> True) (fun h0 r h1 -> h0 `hrel_c` h1) = (
+  let cb (g:int) : LR cmp (fun _ -> True) (fun h0 r h1 -> h0 `hrel_c` h1) = (
     recall (contains_pred counter);recall (is_encapsulated counter);
     sst_write counter ((sst_read counter) + 1);
     if g = pick then EQ else if pick < g then LT else GT) in

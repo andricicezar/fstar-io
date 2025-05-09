@@ -80,7 +80,7 @@ type atree (#t:full_ground_typ) (r : ref (to_Type t)) (a:Type0) =
   | Return : a -> atree r a
   | Yield : continuation r a -> atree r a
 and continuation (#t:full_ground_typ) (r : ref (to_Type t)) a =
-  unit -> SST (atree r a)
+  unit -> LR (atree r a)
               (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)))
               (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
 
@@ -174,7 +174,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
 
 #push-options "--split_queries always"
 let rec scheduler (fuel:nat) (#t:full_ground_typ) (r : ref (to_Type t)) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
-  : SST unit
+  : LR unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) 
 =
@@ -189,7 +189,7 @@ let rec scheduler (fuel:nat) (#t:full_ground_typ) (r : ref (to_Type t)) (tasks:l
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> LR (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -213,7 +213,7 @@ let rec scheduler (fuel:nat) (#t:full_ground_typ) (r : ref (to_Type t)) (tasks:l
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
 let run (fuel : nat) (#t:full_ground_typ) (init:to_Type t) (tasks:list (r:ref (to_Type t) -> continuation r unit){length tasks > 0}) :
-  SST (to_Type t) 
+  LR (to_Type t) 
     (requires (fun h0 -> 
       forall_refs_heap contains_pred h0 init /\ 
       forall_refs_heap is_shareable h0 init)) 
@@ -241,4 +241,4 @@ let res_b (r : ref int) : continuation r unit = fun () ->
     let () = sst_write r j in
     Return ())
 
-let nmm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]
+let nmm () : LR int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run 5000 0 [res_a; res_b]

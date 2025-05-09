@@ -25,8 +25,8 @@ type src_interface1 = {
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct
-type prog_src1 (i:src_interface1) = i.ct -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
-type whole_src1 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> True)
+type prog_src1 (i:src_interface1) = i.ct -> LR int (fun h0 -> True) (fun h0 _ h1 -> True)
+type whole_src1 = unit -> LR int (fun h0 -> True) (fun h0 _ h1 -> True)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
   fun () -> p c
@@ -49,8 +49,8 @@ type tgt_interface1 = {
 type ctx_tgt1 (i:tgt_interface1) =
   e:exp{EAbs? e} & typing empty e i.ct
 
-type prog_tgt1 (i:tgt_interface1) = elab_typ c3p i.ct -> SST int (fun _ -> True) (fun _ _ _ -> True)
-type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
+type prog_tgt1 (i:tgt_interface1) = elab_typ c3p i.ct -> LR int (fun _ -> True) (fun _ _ _ -> True)
+type whole_tgt1 = (unit -> LR int (fun _ -> True) (fun _ _ _ -> True))
 
 val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> elab_typ c3p i.ct
 let instantiate_ctx_tgt1 c =

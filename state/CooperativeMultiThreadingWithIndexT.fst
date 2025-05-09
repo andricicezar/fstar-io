@@ -187,7 +187,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   ()
 
 val scheduler (fuel:nat) (r : ref int) (tasks:list (continuation c3p unit)) (counter:counter_t (length tasks))
-  : SST unit
+  : LR unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1))
 #push-options "--split_queries always"
@@ -196,7 +196,7 @@ let rec scheduler
   (r : ref int)
   (tasks:list (continuation c3p unit))
   (counter:counter_t (length tasks))
-  : SST unit
+  : LR unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) =
   witness (contains_pred r);
@@ -210,7 +210,7 @@ let rec scheduler
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree c3p unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> LR (atree c3p unit) (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -243,14 +243,14 @@ type t_task (a3p:threep) =
  // r:ref int -> ST (continuation a3p unit) (fun h0 -> inv a3p h0 /\ prref a3p r) (fun h0 _ h1 -> inv a3p h1 /\ h0 `hrel a3p` h1)
 
 val map:
-  (x:'a -> SST 'b (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)) ->
-  l:list 'a -> SST (list 'b) (fun _ -> True) (fun h0 r h1 -> length l == length r /\ modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
+  (x:'a -> LR 'b (fun _ -> True) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)) ->
+  l:list 'a -> LR (list 'b) (fun _ -> True) (fun h0 r h1 -> length l == length r /\ modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1)
 let rec map f x = match x with
   | [] -> []
   | a::tl -> f a::map f tl
 
 let run (args : (nat * int) * (tasks: (list (t_task c3p)){length tasks > 0})) :
-  SST int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1  /\ gets_shared Set.empty h0 h1)) =
+  LR int (requires (fun h0 -> True)) (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1  /\ gets_shared Set.empty h0 h1)) =
   let ((fuel, init), tasks) = args in
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s = sst_alloc_shared init in
@@ -279,4 +279,4 @@ let res_b (r : ref int) () =
     let () = sst_write r j in
     Return ())
 
-let nmm () : SST int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run ((5000,0),[res_a; res_b])
+let nmm () : LR int (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = run ((5000,0),[res_a; res_b])

@@ -211,7 +211,7 @@ let ctx_unverified_student_hw_sort #a3p bt_read bt_write bt_alloc =
 val progr_sep_test:
   #rp: ref int ->
   ctx:(elab_typ c3p (TArr TUnit TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0))
@@ -223,7 +223,7 @@ let progr_sep_test #rp f = (** If this test fails, it means that the spec of f d
 val progr_declassify :
   rp: ref int ->
   ctx:(elab_typ c3p (TArr (TRef TNat) TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0))
@@ -238,7 +238,7 @@ let progr_declassify rp f =
 val progr_declassify_nested:
   rp: ref (ref int) ->
   ctx:(elab_typ c3p (TArr (TRef (TRef TNat)) TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
@@ -257,7 +257,7 @@ val progr_secret_unchanged_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ c3p (TArr TUnit TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
@@ -275,7 +275,7 @@ val progr_passing_shared_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
@@ -297,7 +297,7 @@ val progr_passing_encapsulated_to_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
@@ -319,7 +319,7 @@ let progr_passing_encapsulated_to_callback_test rp rs f =
 (** DA: make fails without an assume on this val because of [@expect_failure] *)
 val progr_passing_private_to_callback_test:
   ctx:(elab_typ c3p (TArr (TArr TUnit TUnit) TUnit)) ->
-  SST unit
+  LR unit
     (requires (fun h0 -> True))
     (ensures (fun h0 _ h1 -> True))
 [@expect_failure]
@@ -340,7 +340,7 @@ val progr_getting_callback_test:
   rp: ref int ->
   rs: ref (ref int) ->
   ctx:(elab_typ c3p (TArr TUnit (TArr TUnit TUnit))) ->
-  SST unit
+  LR unit
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\

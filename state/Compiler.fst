@@ -34,11 +34,11 @@ type src_interface1 = {
 }
 
 type ctx_src1 (i:src_interface1)  = i.ct c3p
-type prog_src1 (i:src_interface1) = i.ct c3p -> SST int (fun h0 -> True) i.psi
-type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> SST int (fun h0 -> True) psi)
+type prog_src1 (i:src_interface1) = i.ct c3p -> LR int (fun h0 -> True) i.psi
+type whole_src1 = psi : (heap -> int -> heap -> Type0) & (unit -> LR int (fun h0 -> True) psi)
 
 let link_src1 (#i:src_interface1) (p:prog_src1 i) (c:ctx_src1 i) : whole_src1 =
-  (| i.psi, fun () -> p c <: SST int (fun _ -> True) i.psi|)
+  (| i.psi, fun () -> p c <: LR int (fun _ -> True) i.psi|)
 
 val beh_src1 : whole_src1 ^-> sem_state
 let beh_src1 = on_domain whole_src1 (fun ws -> beh_sem (reify ((dsnd ws) ()))) (** what happens with the pre-condition? **)
@@ -65,10 +65,10 @@ type ctx_tgt1 (i:tgt_interface1) =
 
 type prog_tgt1 (i:tgt_interface1) =
   i.ct c3p ->
-  SST int (fun _ -> True) (fun _ _ _ -> True)
+  LR int (fun _ -> True) (fun _ _ _ -> True)
 
 
-type whole_tgt1 = (unit -> SST int (fun _ -> True) (fun _ _ _ -> True))
+type whole_tgt1 = (unit -> LR int (fun _ -> True) (fun _ _ _ -> True))
 
 val instantiate_ctx_tgt1 : (#i:tgt_interface1) -> ctx_tgt1 i -> i.ct c3p
 let instantiate_ctx_tgt1 #i c =
@@ -157,10 +157,10 @@ type src_interface2 = {
 
 type ctx_src2 (i:src_interface2) =
   i.pt c3p ->
-  SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
+  LR int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
 type prog_src2 (i:src_interface2) = i.pt c3p
-type whole_src2 = unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
+type whole_src2 = unit -> LR int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1)
 
 let link_src2 (#i:src_interface2) (p:prog_src2 i) (c:ctx_src2 i) : whole_src2 =
   fun () -> c p
@@ -192,7 +192,7 @@ type ctx_tgt2 (i:tgt_interface2) =
 type prog_tgt2 (i:tgt_interface2) =
   i.pt c3p
 
-type whole_tgt2 = (unit -> SST int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1))
+type whole_tgt2 = (unit -> LR int (fun h0 -> True) (fun h0 _ h1 -> (hrel_c) h0 h1))
 
 val link_tgt2 : #i:tgt_interface2 -> prog_tgt2 i -> ctx_tgt2 i -> whole_tgt2
 let link_tgt2 p c =

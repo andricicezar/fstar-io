@@ -38,7 +38,7 @@ let sit : src_interface1 = {
 
 #push-options "--z3rlimit 10000" (* very flaky for some reason. *)
 #restart-solver
-let prog (lib : lib_type c3p) : SST int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
+let prog (lib : lib_type c3p) : LR int (requires fun h0 -> True) (ensures fun h0 _ h1 -> True) =
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
   witness (contains_pred r);

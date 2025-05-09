@@ -13,7 +13,7 @@ let generate_nr seed count = seed+count
 let post = fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1
 
 type prog_type =
-  seed:int -> SST (unit -> SST int (fun _ -> True) post) (fun _ -> True) post
+  seed:int -> LR (unit -> LR int (fun _ -> True) post) (fun _ -> True) post
 
 (* Calling SecRef* on it *)
 
