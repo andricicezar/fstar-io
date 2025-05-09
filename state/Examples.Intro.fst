@@ -49,7 +49,7 @@ let prog (lib : lib_type c3p) : LR int (requires fun h0 -> True) (ensures fun h0
   (* Sad, but these asserts seem to help. They are really just the precondition
   of lr_write. *)
   assert (h `contains` r);
-  assert (~(compare_addrs r map_shared));
+  assert (~(compare_addrs r label_map));
   assert (
     (forall t. to_Type t == int ==>
       forall_refs_heap contains_pred h #t 1 /\

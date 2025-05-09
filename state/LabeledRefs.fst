@@ -7,13 +7,13 @@ let lemma_eq_ref_types_eq_value_types _ = ()
 
 (**
 private (** TODO: is this necessary? **)
-let secret_map : map_sharedT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
+let secret_map : label_mapT = (** In Pulse, this can be a ghost reference and `share` can be a ghost computation *)
   alloc (fun _ -> false)
 **)
 (** Popular vote for this, instead of the top-level effectful call **)
-assume val secret_map : map_sharedT
+assume val secret_map : label_mapT
 
-let map_shared = FStar.Ghost.hide secret_map
+let label_map = FStar.Ghost.hide secret_map
 
 inline_for_extraction
 let _label_shareable = (fun #a #p sr ->

@@ -122,18 +122,18 @@ let c3p_hrel_trans (h0:heap) (h1:heap) (h2:heap)
   begin
     introduce ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> kind_not_modified r h0 h2 with _.
     begin
-      assert ((sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
-                h0 `contains` map_shared <==> h1 `contains` map_shared);
-      assert ((sel h1 map_shared) (addr_of r) = (sel h2 map_shared) (addr_of r) /\
-                h1 `contains` map_shared <==> h2 `contains` map_shared)
+      assert ((sel h0 label_map) (addr_of r) = (sel h1 label_map) (addr_of r) /\
+                h0 `contains` label_map <==> h1 `contains` label_map);
+      assert ((sel h1 label_map) (addr_of r) = (sel h2 label_map) (addr_of r) /\
+                h1 `contains` label_map <==> h2 `contains` label_map)
     end
   end
 
 let c3p : threep = (
     (fun h ->
         trans_shared_contains h /\
-        h `contains` map_shared /\
-        is_private (map_shared) h /\
+        h `contains` label_map /\
+        is_private (label_map) h /\
         (forall p. p >= next_addr h ==> is_private_addr p h)),
     (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shareable r)),
     (fun h0 h1 -> c3p_hrel h0 h1)
@@ -192,8 +192,8 @@ let tl_write #t r v =
   let h1 = get_heap () in
   assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
   assert (trans_shared_contains h1);
-  assert (h1 `contains` map_shared);
-  assert (is_private (map_shared) h1);
+  assert (h1 `contains` label_map);
+  assert (is_private (label_map) h1);
   assert ((forall p. p >= next_addr h1 ==> is_private_addr p h1))
 
 #push-options "--split_queries always"

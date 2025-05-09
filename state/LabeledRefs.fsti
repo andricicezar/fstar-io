@@ -37,42 +37,42 @@ let ref_kind_rel : preorder ref_kind = fun k k' ->
   | Private , _ | Shareable , Shareable | Encapsulated , Encapsulated -> True
   | _ , _ -> False
 
-type map_sharedT =
+type label_mapT =
   mref
     (pos -> GTot ref_kind)
     (fun (m0 m1:(pos -> GTot ref_kind)) ->
       forall p. (m0 p) `ref_kind_rel`  (m1 p))
 
-val map_shared : erased map_sharedT
+val label_map : erased label_mapT
 
 let is_private : mref_heap_pred = (fun #a #p (r:mref a p) h ->
-    Private? ((sel h map_shared) (addr_of r)))
+    Private? ((sel h label_map) (addr_of r)))
 
 let is_private_addr : pos -> heap -> Type0 = (fun p h ->
-    Private? ((sel h map_shared) p))
+    Private? ((sel h label_map) p))
 
 let is_shareable : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
-    h `contains` map_shared /\ (** this contains is necessary to show that is_shareable is a stable predicate **)
-    Shareable? ((sel h map_shared) (addr_of r)))
+    h `contains` label_map /\ (** this contains is necessary to show that is_shareable is a stable predicate **)
+    Shareable? ((sel h label_map) (addr_of r)))
 
 let is_encapsulated : mref_heap_stable_pred = (fun #a #p (r:mref a p) h ->
-    h `contains` map_shared /\ (** this contains is necessary to show that is_encapsulated is a stable predicate **)
-    Encapsulated? ((sel h map_shared) (addr_of r)))
+    h `contains` label_map /\ (** this contains is necessary to show that is_encapsulated is a stable predicate **)
+    Encapsulated? ((sel h label_map) (addr_of r)))
 
 let kind_not_modified #a #rel (r:mref a rel) (h0:heap) (h1:heap) =
-  (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r) /\
-  h0 `contains` map_shared <==> h1 `contains` map_shared
+  (sel h0 label_map) (addr_of r) = (sel h1 label_map) (addr_of r) /\
+  h0 `contains` label_map <==> h1 `contains` label_map
 
 let gets_shared (s:set nat) (h0:heap) (h1:heap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 label_map) (addr_of r))}
     ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> kind_not_modified r h0 h1) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_shareable r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_shareable r h1)
 
-let share_post (map_shared:map_sharedT) (is_shareable:mref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
+let share_post (label_map:label_mapT) (is_shareable:mref_heap_stable_pred) #a #rel (sr:mref a rel) h0 () h1 : Type0 =
     equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
-    is_private (map_shared) h1 /\
+    modifies !{label_map} h0 h1 /\
+    is_private (label_map) h1 /\
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     gets_shared !{sr} h0 h1
 
@@ -81,19 +81,19 @@ val _label_shareable : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
     ST unit
       (requires (fun h0 ->
         h0 `contains` sr /\
-        h0 `contains` map_shared /\
-        ~(compare_addrs sr map_shared) /\ (** prevent sharing the map *)
-        is_private map_shared h0 /\
+        h0 `contains` label_map /\
+        ~(compare_addrs sr label_map) /\ (** prevent sharing the map *)
+        is_private label_map h0 /\
         (is_private sr h0 \/ is_shareable sr h0) /\ (** necessary to change the reference kind to shared *)
         (forall p. p >= next_addr h0 ==> is_private_addr p h0))) (** necessary to prove that freshly allocated references are not shared **)
-      (ensures (share_post map_shared is_shareable #a #p sr))
+      (ensures (share_post label_map is_shareable #a #p sr))
 
 val lemma_fresh_ref_not_shared : #a:_ -> #rel:_ -> (r:mref a rel) -> h:heap ->
-    Lemma (requires (h `contains` map_shared /\ (forall p. p >= next_addr h ==> is_private_addr p h) /\ (addr_of r >= next_addr h)))
+    Lemma (requires (h `contains` label_map /\ (forall p. p >= next_addr h ==> is_private_addr p h) /\ (addr_of r >= next_addr h)))
           (ensures  (is_private r h))
 
 val lemma_unmodified_map_implies_same_shared_status : s:Set.set nat -> h0:heap -> h1:heap ->
-    Lemma (requires (h0 `contains` map_shared /\ h0 `heap_rel` h1 /\ ~(addr_of map_shared `Set.mem` s) /\ modifies s h0 h1))
+    Lemma (requires (h0 `contains` label_map /\ h0 `heap_rel` h1 /\ ~(addr_of label_map `Set.mem` s) /\ modifies s h0 h1))
           (ensures  (gets_shared Set.empty h0 h1))
 
 val lemma_same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ -> ra:mref aa rela -> rb:mref b relb -> h:heap ->
@@ -101,7 +101,7 @@ val lemma_same_addr_same_sharing_status : #aa:_ -> #rela:_ -> #b:_ -> #relb:_ ->
           (ensures (is_shareable ra h <==> is_shareable rb h))
 
 let lemma_fresh_gets_shared #a #rel (r:mref a rel) (h0:heap) (h1:heap) (h2:heap)
-: Lemma (requires (h0 `contains` map_shared /\ fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ gets_shared !{r} h1 h2))
+: Lemma (requires (h0 `contains` label_map /\ fresh r h0 h1 /\ modifies Set.empty h0 h1 /\ gets_shared !{r} h1 h2))
         (ensures  (gets_shared Set.empty h0 h2))
 =
   ()
@@ -116,22 +116,22 @@ unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
 
 let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
-    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shareable r h0)) ==> sel h0 r == sel h1 r) /\
+    (h0 `contains` r /\ ~(compare_addrs r label_map) /\ ~(is_shareable r h0)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let modifies_only_shared_and_encapsulated (h0:heap) (h1:heap) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
-    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shareable r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h1 r) /\
+    (h0 `contains` r /\ ~(compare_addrs r label_map) /\ ~(is_shareable r h0 \/ is_encapsulated r h0)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let modifies_shared_and (h0:heap) (h1:heap) (s:Set.set nat) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
-    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shareable r h0 \/ Set.mem (addr_of r) s)) ==> sel h0 r == sel h1 r) /\
+    (h0 `contains` r /\ ~(compare_addrs r label_map) /\ ~(is_shareable r h0 \/ Set.mem (addr_of r) s)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let modifies_shared_and_encapsulated_and (h0:heap) (h1:heap) (s:Set.set nat) : Type0 =
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (sel h1 r)}
-    (h0 `contains` r /\ ~(compare_addrs r map_shared) /\ ~(is_shareable r h0 \/ is_encapsulated r h0 \/ Set.mem (addr_of r) s)) ==> sel h0 r == sel h1 r) /\
+    (h0 `contains` r /\ ~(compare_addrs r label_map) /\ ~(is_shareable r h0 \/ is_encapsulated r h0 \/ Set.mem (addr_of r) s)) ==> sel h0 r == sel h1 r) /\
   unmodified_common h0 h1
 
 let ctrans_ref_pred (h:heap) (pred:mref_heap_stable_pred) =
@@ -153,8 +153,8 @@ let trans_shared_contains (h:heap) =
 unfold
 let lr_inv h =
   trans_shared_contains h /\
-  h `contains` map_shared /\
-  is_private (map_shared) h /\ (* the map stays unshared *)
+  h `contains` label_map /\
+  is_private (label_map) h /\ (* the map stays unshared *)
   (forall p. p >= next_addr h ==> is_private_addr p h)
 
 unfold
@@ -310,10 +310,10 @@ let lemma_lr_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_T
 
 let lemma_label_shareable_preserves_contains (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
+    modifies !{label_map} h0 h1 /\
     ctrans_ref_pred h0 contains_pred))
   (ensures (
     ctrans_ref_pred h1 contains_pred)) =
@@ -322,12 +322,12 @@ let lemma_label_shareable_preserves_contains (h0 h1:heap) : Lemma
   with begin
     introduce contains_pred r h1 ==> forall_refs_heap contains_pred h1 (sel h1 r)
     with _. begin
-      introduce addr_of r =!= addr_of map_shared ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
+      introduce addr_of r =!= addr_of label_map ==> forall_refs_heap contains_pred h1 (sel h1 r) with _. begin
         eliminate_ctrans_ref_pred h0 r contains_pred;
         assert (h0 `contains` r);
         forall_refs_heap_monotonic contains_pred h0 h1 (sel h0 r)
       end;
-      introduce addr_of r == addr_of map_shared ==> False with _. begin
+      introduce addr_of r == addr_of label_map ==> False with _. begin
         ()
       end
     end
@@ -336,7 +336,7 @@ let lemma_label_shareable_preserves_contains (h0 h1:heap) : Lemma
 #push-options "--split_queries always"
 let lemma_lr_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     fresh x h0 h1 /\
     h1 == upd h0 x v /\ (** SMTPat kicks in **)
@@ -348,7 +348,7 @@ let lemma_lr_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h
   with begin
     introduce h1 `contains` r /\ is_shareable r h1 ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
       introduce addr_of x =!= addr_of r ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
-        assert (~(addr_of map_shared `Set.mem` Set.empty));
+        assert (~(addr_of label_map `Set.mem` Set.empty));
         lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
         eliminate forall (a:Type) (rel:preorder a) (r:mref a rel).
           ((~ (Set.mem (addr_of r) Set.empty)) /\ h0 `contains` r) ==> (is_shareable r h0 <==> is_shareable r h1) with _ _ r;
@@ -368,7 +368,7 @@ let lemma_lr_alloc_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h
 #push-options "--split_queries always"
 let lemma_lr_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_Type t) rel) (v:to_Type t) (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     h0 `contains` x /\
     h1 == upd h0 x v /\ (** SMTPat kicks in **)
@@ -379,7 +379,7 @@ let lemma_lr_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_T
   introduce forall a (r:ref (to_Type a)). h1 `contains` r /\ is_shareable r h1 ==> forall_refs_heap is_shareable h1 (sel h1 r)
   with begin
     introduce h1 `contains` r /\ is_shareable r h1 ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
-      assert (~(addr_of map_shared `Set.mem` !{x}));
+      assert (~(addr_of label_map `Set.mem` !{x}));
       lemma_unmodified_map_implies_same_shared_status !{x} h0 h1;
       eliminate forall (a:Type) (rel:preorder a) (r:mref a rel).
         ((~ (Set.mem (addr_of r) !{x})) /\ h0 `contains` r) ==> (is_shareable r h0 <==> is_shareable r h1) with _ _ r;
@@ -402,10 +402,10 @@ let lemma_lr_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_T
 #push-options "--split_queries always"
 let lemma_label_shareable_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
+    modifies !{label_map} h0 h1 /\
     h0 `contains` x /\
     forall_refs_heap is_shareable h0 (sel h0 x) /\
     gets_shared !{x} h0 h1 /\
@@ -420,11 +420,11 @@ let lemma_label_shareable_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) :
         eliminate_ctrans_ref_pred h0 r (is_shareable);
         forall_refs_heap_monotonic is_shareable h0 h1 (sel h0 r);
         assert (forall_refs_heap is_shareable h1 (sel h0 r));
-        assert (addr_of r =!= addr_of map_shared);
+        assert (addr_of r =!= addr_of label_map);
         assert (sel h0 r == sel h1 r)
       end;
       introduce ~(is_shareable r h0) ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
-        assert (addr_of x =!= addr_of map_shared);
+        assert (addr_of x =!= addr_of label_map);
         assert (addr_of r == addr_of x);
         lemma_eq_addrs_eq_all r x h1;
         forall_refs_heap_monotonic is_shareable h0 h1 (sel h0 x);
@@ -489,9 +489,9 @@ let label_shareable (#t:full_ground_typ) (r:ref (to_Type t))
   (fun h0 -> h0 `contains` r /\
          (is_private r h0 \/ is_shareable r h0) /\
          forall_refs_heap is_shareable h0 (sel h0 r))
-  (share_post map_shared is_shareable r)
+  (share_post label_map is_shareable r)
 =
-  assert (~(compare_addrs r map_shared));
+  assert (~(compare_addrs r label_map));
   let h0 = get_heap () in
   _label_shareable r;
   let h1 = get_heap () in
@@ -509,7 +509,7 @@ let lr_alloc_shared (#t:full_ground_typ) (init:to_Type t)
       fresh r h0 h1 /\
       sel h1 r == init /\
       is_mm r == false /\
-      modifies !{map_shared} h0 h1 /\
+      modifies !{label_map} h0 h1 /\
       gets_shared Set.empty h0 h1 /\
       is_shareable r h1 /\
       modifies_only_shared h0 h1 (** here to help **)) =
@@ -517,15 +517,15 @@ let lr_alloc_shared (#t:full_ground_typ) (init:to_Type t)
   let r = lr_alloc_shareable init in
   let h1 = get_heap () in
   forall_refs_heap_monotonic is_shareable h0 h1 init;
-  assert (~(addr_of map_shared `Set.mem` Set.empty));
+  assert (~(addr_of label_map `Set.mem` Set.empty));
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
   label_shareable r;
   let h2 = get_heap () in
   assert (fresh r h0 h2);
-  assert (addr_of r =!= addr_of map_shared);
+  assert (addr_of r =!= addr_of label_map);
   assert (sel h2 r == init);
   assert (is_mm r == false);
-  assert (modifies !{map_shared} h0 h2);
+  assert (modifies !{label_map} h0 h2);
   assert (is_shareable r h2);
   assert (unmodified_common h0 h2);
   lemma_fresh_gets_shared r h0 h1 h2;
@@ -558,10 +558,10 @@ let lemma_lr_write_non_shareable_preserves_contains #a (#rel:preorder a) (x:mref
 
 let lemma_lr_write_non_shareable_preserves_shared #a (#rel:preorder a) (x:mref a rel) (v:a) (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     h0 `contains` x /\
-    ~(compare_addrs x map_shared) /\
+    ~(compare_addrs x label_map) /\
     h1 == upd h0 x v /\ (** SMTPat kicks in **)
     (forall t. ~(to_Type t == a)) /\
     ctrans_ref_pred h0 is_shareable))
@@ -589,7 +589,7 @@ let lr_write #a (#rel:preorder a) (r:mref a rel) (v:a)
   (requires (fun h0 ->
     h0 `contains` r /\
     rel (sel h0 r) v /\
-    ~(compare_addrs r map_shared) /\
+    ~(compare_addrs r label_map) /\
     (forall t. to_Type t == a ==>
       forall_refs_heap contains_pred h0 #t v /\
       (is_shareable r h0 ==> forall_refs_heap is_shareable h0 #t v))))
@@ -600,7 +600,7 @@ let lr_write #a (#rel:preorder a) (r:mref a rel) (v:a)
   let h0 = get_heap () in
   write r v;
   let h1 = get_heap () in
-  assert (~(is_shareable (map_shared) h1));
+  assert (~(is_shareable (label_map) h1));
   lemma_next_addr_upd h0 r v;
   assert (forall p. p >= next_addr h1 ==> is_private_addr p h1);
   lemma_upd_equals_upd_tot_for_contained_refs h0 r v;
@@ -644,7 +644,7 @@ let lr_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
       end
     end
   end;
-  assert (~(compare_addrs r map_shared));
+  assert (~(compare_addrs r label_map));
   lr_write #(to_Type t) #(FStar.Heap.trivial_preorder _) r v
 #pop-options
 
@@ -653,7 +653,7 @@ let lr_write_ref #a (r:ref a) (v:a)
 : LR unit
   (requires (fun h0 ->
     h0 `contains` r /\
-    ~(compare_addrs r map_shared) /\
+    ~(compare_addrs r label_map) /\
     (forall t. to_Type t == a ==>
       forall_refs_heap contains_pred h0 #t v /\
       (is_shareable r h0 ==> forall_refs_heap is_shareable h0 #t v))))
@@ -664,27 +664,27 @@ let lr_write_ref #a (r:ref a) (v:a)
   lr_write r v
 
 let gets_encapsulated (s:set nat) (h0:heap) (h1:heap) =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 map_shared) (addr_of r))}
-    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (sel h0 map_shared) (addr_of r) = (sel h1 map_shared) (addr_of r)) /\
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern ((sel h1 label_map) (addr_of r))}
+    ((~ (Set.mem (addr_of r) s)) /\ h0 `contains` r) ==> (sel h0 label_map) (addr_of r) = (sel h1 label_map) (addr_of r)) /\
   (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (is_encapsulated r h1)}
     ((Set.mem (addr_of r) s) /\ h0 `contains` r) ==> is_encapsulated r h1)
 
 let encapsulate_post #a #rel (r:mref a rel) h0 () h1 : Type0 =
     equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
-    is_private (map_shared) h1 /\
+    modifies !{label_map} h0 h1 /\
+    is_private (label_map) h1 /\
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     gets_encapsulated !{r} h0 h1
 
 #push-options "--split_queries always"
 let lemma_label_encapsulated_preserves_shared #a (#rel:preorder a) (x:mref a rel) (h0 h1:heap) : Lemma
   (requires (
-    h0 `contains` map_shared /\
+    h0 `contains` label_map /\
     h0 `heap_rel` h1 /\
     equal_dom h0 h1 /\
-    modifies !{map_shared} h0 h1 /\
+    modifies !{label_map} h0 h1 /\
     h0 `contains` x /\
-    ~(compare_addrs x map_shared) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
+    ~(compare_addrs x label_map) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from label_map's type *)
     gets_encapsulated !{x} h0 h1 /\
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     ctrans_ref_pred h0 is_shareable))
@@ -697,11 +697,11 @@ let lemma_label_encapsulated_preserves_shared #a (#rel:preorder a) (x:mref a rel
         eliminate_ctrans_ref_pred h0 r (is_shareable);
         forall_refs_heap_monotonic is_shareable h0 h1 (sel h0 r);
         assert (forall_refs_heap is_shareable h1 (sel h0 r));
-        assert (addr_of r =!= addr_of map_shared);
+        assert (addr_of r =!= addr_of label_map);
         assert (sel h0 r == sel h1 r)
       end;
       introduce ~(is_shareable r h0) ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
-        assert (addr_of x =!= addr_of map_shared);
+        assert (addr_of x =!= addr_of label_map);
         assert (is_private r h0 \/ is_encapsulated r h0);
         introduce is_private r h0 ==> forall_refs_heap is_shareable h1 (sel h1 r) with _. begin
           introduce addr_of x = addr_of r ==> False with _. begin
@@ -719,9 +719,9 @@ val _label_encapsulated : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
     ST unit
       (requires (fun h0 ->
         h0 `contains` r /\
-        h0 `contains` map_shared /\
-        ~(compare_addrs r map_shared) /\ (** prevent encapsulating the map *)
-        is_private map_shared h0 /\
+        h0 `contains` label_map /\
+        ~(compare_addrs r label_map) /\ (** prevent encapsulating the map *)
+        is_private label_map h0 /\
         is_private r h0 /\ (** necessary to change the reference kind to encapsulated *)
         (forall p. p >= next_addr h0 ==> is_private_addr p h0))) (** necessary to prove that freshly allocated references are not encapsulated **)
       (ensures (encapsulate_post #a #p r))
@@ -730,7 +730,7 @@ inline_for_extraction
 let label_encapsulated  #a (#rel:preorder a) (r:mref a rel)
 : LR unit
   (fun h0 -> h0 `contains` r /\
-         ~(compare_addrs r map_shared) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
+         ~(compare_addrs r label_map) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from label_map's type *)
          is_private r h0)
   (encapsulate_post r)
 =
