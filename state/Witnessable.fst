@@ -87,6 +87,6 @@ instance witnessable_univ_raise (t:Type u#a) {| c:witnessable t |} : witnessable
   satisfy = (fun x -> c.satisfy (downgrade_val x));
 }
 
-instance witnessable_shareable_type (t:Type) {| c:ShareableType.tc_shareable_type t |} : witnessable t = {
-  satisfy = (fun x pred -> ShareableType.forall_refs pred #c.__t x);
+instance witnessable_full_ground_type (t:Type) {| c:FullGroundType.tc_full_ground_type t |} : witnessable t = {
+  satisfy = (fun x pred -> FullGroundType.forall_refs pred #c.__t x);
 }

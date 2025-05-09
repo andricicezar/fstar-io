@@ -7,7 +7,7 @@ include FStar.Monotonic.Heap
 open FStar.Ghost
 open MST.Repr
 include MST.Tot
-include ShareableType
+include FullGroundType
 
 (** CA&DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
 val lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h:heap) : Lemma
@@ -136,7 +136,7 @@ let modifies_shared_and_encapsulated_and (h0:heap) (h1:heap) (s:Set.set nat) : T
 
 let ctrans_ref_pred (h:heap) (pred:mref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
-  (forall (t:shareable_typ) (r:ref (to_Type t)).
+  (forall (t:full_ground_typ) (r:ref (to_Type t)).
     h `contains` r /\ pred r h ==> forall_refs_heap pred h (sel h r)) (** cannot select without being contained **)
   // CA: previous version tried to implement this with typeclasses, but it was not working because one had to prove
   // that two instances of the same type are equal.
@@ -468,7 +468,7 @@ let sst_alloc #a (#rel:preorder a) (init:a)
   r
 
 inline_for_extraction
-let sst_alloc_shareable (#t:shareable_typ) (init:to_Type t)
+let sst_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init)
     (fun h0 r h1 ->
@@ -484,7 +484,7 @@ let sst_alloc_shareable (#t:shareable_typ) (init:to_Type t)
   sst_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
 
 inline_for_extraction
-let sst_share (#t:shareable_typ) (r:ref (to_Type t))
+let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
 : SST unit
   (fun h0 -> h0 `contains` r /\
          (is_private r h0 \/ is_shareable r h0) /\
@@ -502,7 +502,7 @@ let sst_share (#t:shareable_typ) (r:ref (to_Type t))
 
 #push-options "--split_queries always"
 inline_for_extraction
-let sst_alloc_shared (#t:shareable_typ) (init:to_Type t)
+let sst_alloc_shared (#t:full_ground_typ) (init:to_Type t)
 : SST (ref (to_Type t))
     (fun h0 -> forall_refs_heap contains_pred h0 init /\ forall_refs_heap is_shareable h0 init)
     (fun h0 r h1 ->
@@ -619,7 +619,7 @@ let sst_write #a (#rel:preorder a) (r:mref a rel) (v:a)
 
 #push-options "--split_queries always"
 inline_for_extraction
-let sst_write_shareable (#t:shareable_typ) (r:ref (to_Type t)) (v:to_Type t)
+let sst_write_shareable (#t:full_ground_typ) (r:ref (to_Type t)) (v:to_Type t)
 : SST unit
   (requires (fun h0 ->
     h0 `contains` r /\ forall_refs_heap contains_pred h0 v /\

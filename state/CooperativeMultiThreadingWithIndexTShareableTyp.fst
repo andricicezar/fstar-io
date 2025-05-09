@@ -76,10 +76,10 @@ let lemma_prefix_of_append #a (s l : list a) :
 open LabeledRefs
 
 noeq
-type atree (#t:shareable_typ) (r : ref (to_Type t)) (a:Type0) =
+type atree (#t:full_ground_typ) (r : ref (to_Type t)) (a:Type0) =
   | Return : a -> atree r a
   | Yield : continuation r a -> atree r a
-and continuation (#t:shareable_typ) (r : ref (to_Type t)) a =
+and continuation (#t:full_ground_typ) (r : ref (to_Type t)) a =
   unit -> SST (atree r a)
               (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)))
               (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
@@ -173,7 +173,7 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
   ()
 
 #push-options "--split_queries always"
-let rec scheduler (fuel:nat) (#t:shareable_typ) (r : ref (to_Type t)) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
+let rec scheduler (fuel:nat) (#t:full_ground_typ) (r : ref (to_Type t)) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
   : SST unit
     (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) 
@@ -212,7 +212,7 @@ let rec scheduler (fuel:nat) (#t:shareable_typ) (r : ref (to_Type t)) (tasks:lis
 
 let counter_init (k : nat{k > 0}) : counter_state k = fairness_init k; (| [], 0, 0 |)
 
-let run (fuel : nat) (#t:shareable_typ) (init:to_Type t) (tasks:list (r:ref (to_Type t) -> continuation r unit){length tasks > 0}) :
+let run (fuel : nat) (#t:full_ground_typ) (init:to_Type t) (tasks:list (r:ref (to_Type t) -> continuation r unit){length tasks > 0}) :
   SST (to_Type t) 
     (requires (fun h0 -> 
       forall_refs_heap contains_pred h0 init /\ 

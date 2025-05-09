@@ -114,7 +114,7 @@ instance exportable_pair a3p t1 st1 {| c1:exportable_from a3p t1 st1 |} t2 st2 {
   lemma_export_preserves_prref = (fun (x1, x2) hocs -> c1.lemma_export_preserves_prref x1 (left hocs); c2.lemma_export_preserves_prref x2 (right hocs))
 }
 
-instance exportable_ref a3p t {| c:tc_shareable_type t |} : exportable_from a3p (ref t) Leaf = {
+instance exportable_ref a3p t {| c:tc_full_ground_type t |} : exportable_from a3p (ref t) Leaf = {
   c_styp = witnessable_ref t #solve;
   ityp = ref t;
   c_ityp = poly_iface_ref a3p t #c;
@@ -122,7 +122,7 @@ instance exportable_ref a3p t {| c:tc_shareable_type t |} : exportable_from a3p 
   lemma_export_preserves_prref = (fun _ _ -> ());
 }
 
-instance exportable_llist a3p t {| c:tc_shareable_type t |} :
+instance exportable_llist a3p t {| c:tc_full_ground_type t |} :
   exportable_from a3p (linkedList t) Leaf = {
   c_styp = solve ;
   ityp = linkedList t ;
@@ -375,7 +375,7 @@ instance importable_pair a3p t1 st1 {| c1:importable_to a3p t1 st1 |} t2 st2 {| 
     c2.lemma_import_preserves_prref (snd x) (right hocs))
 }
 
-instance safe_importable_ref a3p t {| c:tc_shareable_type t |} : safe_importable_to a3p (ref t) Leaf = {
+instance safe_importable_ref a3p t {| c:tc_full_ground_type t |} : safe_importable_to a3p (ref t) Leaf = {
   c_styp = witnessable_mref t _ #solve;
   ityp = ref t;
   c_ityp = poly_iface_ref _ t;

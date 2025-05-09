@@ -1,4 +1,4 @@
-module ShareableType
+module FullGroundType
 
 open FStar.Tactics
 
@@ -7,15 +7,15 @@ open FStar.Monotonic.Heap
 open MST.Repr
 open MST.Tot
 
-type shareable_typ =
+type full_ground_typ =
   | SUnit
   | SNat
-  | SSum : shareable_typ -> shareable_typ -> shareable_typ
-  | SPair : shareable_typ -> shareable_typ -> shareable_typ
-  | SRef : shareable_typ -> shareable_typ
-  | SLList : shareable_typ -> shareable_typ
+  | SSum : full_ground_typ -> full_ground_typ -> full_ground_typ
+  | SPair : full_ground_typ -> full_ground_typ -> full_ground_typ
+  | SRef : full_ground_typ -> full_ground_typ
+  | SLList : full_ground_typ -> full_ground_typ
 
-let rec to_Type (t:shareable_typ) : Type u#0 =
+let rec to_Type (t:full_ground_typ) : Type u#0 =
   match t with
   | SUnit -> unit
   | SNat -> int
@@ -24,7 +24,7 @@ let rec to_Type (t:shareable_typ) : Type u#0 =
   | SRef t -> ref (to_Type t)
   | SLList t -> linkedList (to_Type t)
 
-let rec forall_refs (pred:mref_pred) (#t:shareable_typ) (x:to_Type t) : Type0 =
+let rec forall_refs (pred:mref_pred) (#t:full_ground_typ) (x:to_Type t) : Type0 =
   let rcall #t x = forall_refs pred #t x in
   match t with
   | SUnit -> True
@@ -49,16 +49,16 @@ let rec forall_refs (pred:mref_pred) (#t:shareable_typ) (x:to_Type t) : Type0 =
       rcall v /\ pred xsref
    end
 
-let forall_refs_heap (pred:mref_heap_pred) (h:heap) (#t:shareable_typ) (x:to_Type t) : Type0 =
+let forall_refs_heap (pred:mref_heap_pred) (h:heap) (#t:full_ground_typ) (x:to_Type t) : Type0 =
   forall_refs (fun r -> pred r h) x
 
-let lemma_forall_refs (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_pred) :
+let lemma_forall_refs (t:full_ground_typ) (x:to_Type (SRef t)) (pred:mref_pred) :
   Lemma (forall_refs pred x == pred #_ #(FStar.Heap.trivial_rel _) x) [SMTPat (forall_refs pred x)] by (compute ()) = ()
 
-let lemma_forall_refs_heap (t:shareable_typ) (x:to_Type (SRef t)) (pred:mref_heap_pred) (h:heap) :
+let lemma_forall_refs_heap (t:full_ground_typ) (x:to_Type (SRef t)) (pred:mref_heap_pred) (h:heap) :
   Lemma (forall_refs_heap pred h x == pred #_ #(FStar.Heap.trivial_rel _) x h) [SMTPat (forall_refs_heap pred h x)] by (compute ()) = ()
 
-let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t:shareable_typ) (x:to_Type t) :
+let rec forall_refs_heap_monotonic (pred:mref_heap_stable_pred) (h0 h1:heap) (#t:full_ground_typ) (x:to_Type t) :
   Lemma (requires (h0 `heap_rel` h1 /\ forall_refs_heap pred h0 x)) (ensures (forall_refs_heap pred h1 x)) [SMTPat (forall_refs_heap pred h0 x); SMTPat (forall_refs_heap pred h1 x)] =
   match t with
   | SUnit -> ()
@@ -192,46 +192,46 @@ let rec lemma_forall_refs_split #t (v:to_Type t) (pred1 pred2:mref_pred) :
       lemma_forall_refs_split v pred1 pred2
   end
 
-class tc_shareable_type (t:Type) = {
-  __t : __t:shareable_typ{t == to_Type __t};
+class tc_full_ground_type (t:Type) = {
+  __t : __t:full_ground_typ{t == to_Type __t};
 }
 
 (**
 let every_ref #t {| c:tc_shareable t |} (pred:mref_pred) (x:t) =
   forall_refs pred #c.__t x
 **)
-instance tc_shareable_type_unit : tc_shareable_type unit = {
+instance tc_full_ground_type_unit : tc_full_ground_type unit = {
   __t = SUnit;
 }
 
-instance tc_shareable_type_nat : tc_shareable_type int = {
+instance tc_full_ground_type_nat : tc_full_ground_type int = {
   __t = SNat;
 }
 
-instance tc_shareable_type_sum t1 t2 {| c1:tc_shareable_type t1 |} {| c2:tc_shareable_type t2 |} : tc_shareable_type (either t1 t2) = {
+instance tc_full_ground_type_sum t1 t2 {| c1:tc_full_ground_type t1 |} {| c2:tc_full_ground_type t2 |} : tc_full_ground_type (either t1 t2) = {
   __t = SSum c1.__t c2.__t;
 }
 
-instance tc_shareable_type_pair t1 t2 {| c1:tc_shareable_type t1 |} {| c2:tc_shareable_type t2 |} : tc_shareable_type (t1 * t2) = {
+instance tc_full_ground_type_pair t1 t2 {| c1:tc_full_ground_type t1 |} {| c2:tc_full_ground_type t2 |} : tc_full_ground_type (t1 * t2) = {
   __t = SPair c1.__t c2.__t;
 }
 
 (*** WTF **)
 // let _ = assert (mref int (fun x y ->  b2t(x <= y)) == ref int)
 
-instance tc_shareable_type_ref t {| c:tc_shareable_type t |} : tc_shareable_type (ref t) = {
+instance tc_full_ground_type_ref t {| c:tc_full_ground_type t |} : tc_full_ground_type (ref t) = {
   __t = SRef c.__t;
 }
 
-instance tc_shareable_type_llist t {| c:tc_shareable_type t |} : tc_shareable_type (linkedList t) = {
+instance tc_full_ground_type_llist t {| c:tc_full_ground_type t |} : tc_full_ground_type (linkedList t) = {
   __t = SLList c.__t;
 }
 
-let rec shareable_typ_to_tc (t:shareable_typ) : tc_shareable_type (to_Type t) =
+let rec full_ground_typ_to_tc (t:full_ground_typ) : tc_full_ground_type (to_Type t) =
   match t with
-  | SUnit -> tc_shareable_type_unit
-  | SNat -> tc_shareable_type_nat
-  | SSum t1 t2 -> tc_shareable_type_sum _ _ #(shareable_typ_to_tc t1) #(shareable_typ_to_tc t2)
-  | SPair t1 t2 -> tc_shareable_type_pair _ _ #(shareable_typ_to_tc t1) #(shareable_typ_to_tc t2)
-  | SRef t' -> tc_shareable_type_ref _ #(shareable_typ_to_tc t')
-  | SLList t' -> tc_shareable_type_llist _ #(shareable_typ_to_tc t')
+  | SUnit -> tc_full_ground_type_unit
+  | SNat -> tc_full_ground_type_nat
+  | SSum t1 t2 -> tc_full_ground_type_sum _ _ #(full_ground_typ_to_tc t1) #(full_ground_typ_to_tc t2)
+  | SPair t1 t2 -> tc_full_ground_type_pair _ _ #(full_ground_typ_to_tc t1) #(full_ground_typ_to_tc t2)
+  | SRef t' -> tc_full_ground_type_ref _ #(full_ground_typ_to_tc t')
+  | SLList t' -> tc_full_ground_type_llist _ #(full_ground_typ_to_tc t')

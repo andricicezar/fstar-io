@@ -54,8 +54,8 @@ let mk_poly_arrow
 class poly_iface (a3p:threep) (t:Type u#a) =
   { wt : witnessable t }
 
-instance poly_iface_shareable_type a3p (t:Type) {| c:tc_shareable_type t |} : poly_iface a3p t = {
-  wt = witnessable_shareable_type t #c;
+instance poly_iface_full_ground_type a3p (t:Type) {| c:tc_full_ground_type t |} : poly_iface a3p t = {
+  wt = witnessable_full_ground_type t #c;
 }
 
 instance poly_iface_unit a3p : poly_iface a3p unit = { wt = witnessable_unit }
@@ -73,13 +73,13 @@ instance poly_iface_sum a3p t1 {| c1:poly_iface a3p t1 |} t2 {| c2:poly_iface a3
 instance poly_iface_option a3p t1 {| c1:poly_iface a3p t1 |}
   : poly_iface a3p (option t1)
   = { wt = witnessable_option t1 #c1.wt }
-instance poly_iface_ref a3p t1 {| c1:tc_shareable_type t1 |}
+instance poly_iface_ref a3p t1 {| c1:tc_full_ground_type t1 |}
   : poly_iface a3p (ref t1)
   = { wt = witnessable_mref t1 (FStar.Heap.trivial_preorder t1) #solve }
 instance poly_iface_list a3p t1 {| c1:poly_iface a3p t1 |}
   : poly_iface a3p (list t1)
   = { wt = witnessable_list t1 #c1.wt }
-instance poly_iface_llist a3p t1 {| c1:tc_shareable_type t1 |}
+instance poly_iface_llist a3p t1 {| c1:tc_full_ground_type t1 |}
   : poly_iface a3p (linkedList t1)
   = { wt = witnessable_llist t1 #solve }
 
@@ -88,19 +88,19 @@ instance poly_iface_arrow a3p t1 {| c1:poly_iface a3p t1 |} t2 {| c2:poly_iface 
   = { wt = witnessable_arrow t1 t2 _ _ }
 
 type ttl_read (a3p:threep) =
-  (#t:shareable_typ) -> r:ref (to_Type t) ->
+  (#t:full_ground_typ) -> r:ref (to_Type t) ->
     ST (to_Type t)
       (requires (fun h0 -> inv a3p h0 /\ prref a3p r))
       (ensures  (fun h0 v h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ forall_refs (prref a3p) v))
 
 type ttl_write (a3p:threep) =
-  (#t:shareable_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
+  (#t:full_ground_typ) -> r:ref (to_Type t) -> v:(to_Type t) ->
     ST unit
       (requires (fun h0 -> inv a3p h0 /\ prref a3p r /\ forall_refs (prref a3p) v))
       (ensures  (fun h0 _ h1 -> h0 `hrel a3p` h1 /\ inv a3p h1))
 
 type ttl_alloc (a3p:threep) =
-  (#t:shareable_typ) -> init:(to_Type t) ->
+  (#t:full_ground_typ) -> init:(to_Type t) ->
     ST (ref (to_Type t))
       (requires (fun h0 -> inv a3p h0 /\ forall_refs (prref a3p) init))
       (ensures  (fun h0 r h1 -> h0 `hrel a3p` h1 /\ inv a3p h1 /\ prref a3p r))

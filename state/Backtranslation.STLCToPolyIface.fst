@@ -9,21 +9,21 @@ open PolyIface
 open STLC
 open FStar.Universe
 
-let rec to_shareable_typ (t:typ0) : shareable_typ =
+let rec to_full_ground_typ (t:typ0) : full_ground_typ =
   match t with
   | TUnit -> SUnit
   | TNat -> SNat
-  | TSum t1 t2 -> SSum (to_shareable_typ t1) (to_shareable_typ t2)
-  | TPair t1 t2 -> SPair (to_shareable_typ t1) (to_shareable_typ t2)
-  | TRef t -> SRef (to_shareable_typ t)
-  | TLList t -> SLList (to_shareable_typ t)
+  | TSum t1 t2 -> SSum (to_full_ground_typ t1) (to_full_ground_typ t2)
+  | TPair t1 t2 -> SPair (to_full_ground_typ t1) (to_full_ground_typ t2)
+  | TRef t -> SRef (to_full_ground_typ t)
+  | TLList t -> SLList (to_full_ground_typ t)
 
 unfold
 let elab_typ0 (t:typ0) : Type u#0 =
-  to_Type (to_shareable_typ t)
+  to_Type (to_full_ground_typ t)
 
-instance tc_shareable_type_typ0 (t:typ0) : tc_shareable_type (elab_typ0 t) = {
-  __t = to_shareable_typ t;
+instance tc_full_ground_type_typ0 (t:typ0) : tc_full_ground_type (elab_typ0 t) = {
+  __t = to_full_ground_typ t;
 }
 
 let rec elab_typ0_tc #a3p (t:typ0) : poly_iface a3p (elab_typ0 t) =
@@ -60,7 +60,7 @@ let rec _elab_typ (#a3p:threep) (t:typ) : tt:Type u#1 & poly_iface a3p tt =
     (| raise_t tt, poly_iface_univ_raise a3p _ #c_tt |)
   | TLList t ->
     let tt = elab_typ0 t in
-    (| raise_t (linkedList tt), poly_iface_univ_raise a3p _ #(poly_iface_llist a3p tt #(tc_shareable_type_typ0 t)) |)
+    (| raise_t (linkedList tt), poly_iface_univ_raise a3p _ #(poly_iface_llist a3p tt #(tc_full_ground_type_typ0 t)) |)
 
 let elab_typ (a3p:threep) (t:typ) : Type =
   dfst (_elab_typ #a3p t)
@@ -565,7 +565,7 @@ and backtranslate_eabs
 #pop-options
 
 let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_pred) :
-  Lemma ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) =
+  Lemma ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_full_ground_typ t) v) =
   match t with
   | TUnit -> ()
   | TNat -> ()
@@ -579,12 +579,12 @@ let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_p
      let v : (elab_typ0 t1) * (elab_typ0 t2) = v in
      lemma_satisfy_eqv_forall_refs a3p (fst v) pred;
      lemma_satisfy_eqv_forall_refs a3p (snd v) pred;
-     assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v)
+     assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_full_ground_typ t) v)
   end
   | TRef t' ->
     let aux (#t':typ0) (v:elab_typ0 (TRef t')) : ref (elab_typ0 t') = v in
     let v : ref (elab_typ0 t') = aux v in
-    assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v) by (compute ())
+    assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_full_ground_typ t) v) by (compute ())
   | TLList t' -> begin
     let aux (#t':typ0) (v:elab_typ0 (TLList t')) : linkedList (elab_typ0 t') = v in
     let v : linkedList (elab_typ0 t') = aux v in
@@ -593,13 +593,13 @@ let rec lemma_satisfy_eqv_forall_refs a3p (#t:typ0) (v:elab_typ0 t) (pred:mref_p
     | LLCons v' xsref -> (
       lemma_satisfy_eqv_forall_refs a3p v' pred;
       let xsref : ref (linkedList (elab_typ0 t')) = xsref in
-      assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_shareable_typ t) v))
+      assert ((elab_typ0_tc #a3p t).wt.satisfy v pred <==> forall_refs pred #(to_full_ground_typ t) v))
   end
 
 val bt_read : tbt_read c3p
 let bt_read #t r =
   lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
-  let v : elab_typ0 t = tl_read #(to_shareable_typ t) r in
+  let v : elab_typ0 t = tl_read #(to_full_ground_typ t) r in
   lemma_satisfy_eqv_forall_refs c3p #t v (prref_c);
   v
 
@@ -607,11 +607,11 @@ val bt_write : tbt_write c3p
 let bt_write #t r v =
   lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
   lemma_satisfy_eqv_forall_refs c3p #t v (prref_c);
-  tl_write #(to_shareable_typ t) r v
+  tl_write #(to_full_ground_typ t) r v
 
 val bt_alloc : tbt_alloc c3p
 let bt_alloc #t init =
   lemma_satisfy_eqv_forall_refs c3p #t init (prref_c);
-  let r = tl_alloc #(to_shareable_typ t) init in
+  let r = tl_alloc #(to_full_ground_typ t) init in
   lemma_satisfy_eqv_forall_refs c3p #(TRef t) r (prref_c);
   r
