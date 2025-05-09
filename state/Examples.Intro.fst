@@ -2,7 +2,7 @@ module Examples.Intro
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
-open SharedRefs
+open LabeledRefs
 open HigherOrderContracts
 open PolyIface
 open Compiler

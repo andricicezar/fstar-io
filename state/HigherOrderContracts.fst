@@ -3,7 +3,7 @@ module HigherOrderContracts
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open SharedRefs
+open LabeledRefs
 
 open Witnessable
 open PolyIface

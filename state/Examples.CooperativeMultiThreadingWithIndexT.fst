@@ -3,7 +3,7 @@ module Examples.CooperativeMultiThreadingWithIndexT
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 open PolyIface
 open SpecTree
@@ -197,16 +197,14 @@ let some_ctx #a3p read write alloc my_run =
                        `%poly_iface_int;`%witnessable_int;`%poly_iface_list;`%witnessable_list;`%poly_iface_t_task;`%poly_iface_arrow;
                        `%witnessable_arrow;
                        ];iota]
+//      explode ();
+ //     bump_nth 5;
+//      apply_lemma (`lemma_forall_in_list_true);
   ) = my_run x in
 
   let myargs : ((int & int) & list (t_task a3p)) = ((5000,0), [res_a;res_b]) in
-
-  let h = get_heap () in
-  lemma_forall_in_list_true (snd myargs);
-  assume (inv a3p h /\ forall_in_list (snd myargs) (fun _ -> True));
-  (** TODO: the assume is exactly the pre-condition of my_run123 ,
-      and this should not be even assumed because of the lemma. **)
   admit ();
+
   match my_run123 myargs with
   | Inl _ -> 0
   | Inr _ -> -1

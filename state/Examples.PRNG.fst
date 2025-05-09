@@ -1,6 +1,6 @@
 module Examples.PRNG
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 open Compiler
 open HigherOrderContracts

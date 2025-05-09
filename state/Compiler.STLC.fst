@@ -5,7 +5,7 @@ open FStar.Tactics
 
 open MST.Repr
 open MST.Tot
-open SharedRefs
+open LabeledRefs
 open PolyIface
 open STLC
 open Backtranslation.STLCToPolyIface

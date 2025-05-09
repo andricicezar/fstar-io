@@ -6,7 +6,7 @@ open FStar.Ghost
 
 open MST.Repr
 open MST.Tot
-open SharedRefs
+open LabeledRefs
 open PolyIface
 open BeyondCriteria
 open SpecTree

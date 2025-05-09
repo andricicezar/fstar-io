@@ -197,10 +197,10 @@ let tr_expr (g:uenv) (t:term) : mlexpr & e_tag & mlty =
   (* Even with --cmi, this isn't inlined automatically? Handle
   specially (extract as no-ops). *)
   | _, _, [_t; _rel; (r, None)]
-      when S.fv_eq_lid fv (Ident.lid_of_str "SharedRefs.share") ->
+      when S.fv_eq_lid fv (Ident.lid_of_str "LabeledRefs.share") ->
     ml_unit, E_PURE, ml_unit_ty
   | _, _, [_t; _rel; (r, None)]
-      when S.fv_eq_lid fv (Ident.lid_of_str "SharedRefs.encapsulate") ->
+      when S.fv_eq_lid fv (Ident.lid_of_str "LabeledRefs.encapsulate") ->
     ml_unit, E_PURE, ml_unit_ty
 
   | _ -> nop ()

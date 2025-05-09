@@ -1,6 +1,6 @@
 module Examples.Guess
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 open Compiler
 open HigherOrderContracts

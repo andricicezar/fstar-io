@@ -6,7 +6,7 @@ open FStar.Ghost
 open FStar.Preorder
 open FStar.Universe
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 
 (** *** Type to carry the three predicates around *)

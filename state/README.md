@@ -55,7 +55,7 @@ Simply run `make build-Examples.Intro` to verify, extract, build, and run
 - Section 1: `Examples.Intro.fst`
 - Section 2: `Examples.Autograder.fst`, `Examples.PRNG.fst`
 - Section 3: `MST.Repr.fst`, `MST.Soundness.fst`
-- Section 4: `SharedRefs.fsti` (`LR` under the name `SST`), `ShareableType.fst` (`full_ground_typ` under the name `shareable_typ`)
+- Section 4: `LabeledRefs.fsti` (`LR` under the name `SST`), `ShareableType.fst` (`full_ground_typ` under the name `shareable_typ`)
 - Section 5: `HigherOrderContracts.fst`
 - Section 6: `Compiler.fst`
 - Section 7: `CooperativeMultiThreadingWithIndexT.fst`

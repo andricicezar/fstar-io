@@ -1,4 +1,4 @@
-module SharedRefs
+module LabeledRefs
 
 open FStar.Tactics
 

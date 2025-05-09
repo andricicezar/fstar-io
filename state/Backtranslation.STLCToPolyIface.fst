@@ -3,7 +3,7 @@ module Backtranslation.STLCToPolyIface
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 open PolyIface
 open STLC

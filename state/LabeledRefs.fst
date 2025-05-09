@@ -1,4 +1,4 @@
-module SharedRefs
+module LabeledRefs
 
 friend FStar.Monotonic.Heap
 
@@ -37,7 +37,7 @@ let lemma_unmodified_map_implies_same_shared_status (ms:Set.set nat) (h0 h1:heap
         introduce is_shared r h1 ==> is_shared r h0 with _. ()
       end
     end
-    
+
 let lemma_same_addr_same_sharing_status = (fun ra rb h -> ())
 
 

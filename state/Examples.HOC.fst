@@ -6,7 +6,7 @@ open FStar.Preorder
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Universe
-open SharedRefs
+open LabeledRefs
 open HigherOrderContracts
 open PolyIface
 open Compiler

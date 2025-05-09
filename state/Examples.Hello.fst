@@ -5,7 +5,7 @@ open FStar.Ghost
 open FStar.Monotonic.Heap
 open FStar.Preorder
 open FStar.Tactics.Typeclasses
-open SharedRefs
+open LabeledRefs
 open Witnessable
 
 let hello0 ()

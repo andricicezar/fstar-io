@@ -2,7 +2,7 @@ module MST.Soundness
 
 open FStar.Preorder
 open FStar.Monotonic.Heap
-open SharedRefs { lemma_eq_addrs_eq_all, lemma_eq_ref_types_eq_value_types }
+open LabeledRefs { lemma_eq_addrs_eq_all, lemma_eq_ref_types_eq_value_types }
 
 let heap_rel (h1:heap) (h2:heap) =
   forall (a:Type0) (rel:preorder a) (r:mref a rel). h1 `contains` r ==>

@@ -8,7 +8,7 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.List.Tot
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 open HigherOrderContracts
 open PolyIface

@@ -74,7 +74,7 @@ let lemma_prefix_of_append #a (s l : list a) :
   Lemma (s `prefix_of` (s @ l))
 = strict_prefix_or_eq_append s l
 
-open SharedRefs
+open LabeledRefs
 open Witnessable
 
 noeq
