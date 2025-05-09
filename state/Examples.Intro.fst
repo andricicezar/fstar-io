@@ -42,7 +42,7 @@ let prog (lib : lib_type c3p) : SST int (requires fun h0 -> True) (ensures fun h
   let secret : ref int = sst_alloc 42 in
   let r : ref (ref int) = sst_alloc_shared #(SRef SNat) (sst_alloc_shared 0) in
   witness (contains_pred r);
-  witness (is_shared r);
+  witness (is_shareable r);
   let cb = lib r in
   let v : ref int = sst_alloc_shared 1 in
   let h = get_heap () in
@@ -53,7 +53,7 @@ let prog (lib : lib_type c3p) : SST int (requires fun h0 -> True) (ensures fun h
   assert (
     (forall t. to_Type t == int ==>
       forall_refs_heap contains_pred h #t 1 /\
-      (is_shared r h ==> forall_refs_heap is_shared h #t 1)));
+      (is_shareable r h ==> forall_refs_heap is_shareable h #t 1)));
   sst_write r v;
   cb ();
   let v = !secret in

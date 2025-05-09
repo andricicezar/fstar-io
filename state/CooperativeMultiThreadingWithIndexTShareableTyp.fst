@@ -81,7 +81,7 @@ type atree (#t:shareable_typ) (r : ref (to_Type t)) (a:Type0) =
   | Yield : continuation r a -> atree r a
 and continuation (#t:shareable_typ) (r : ref (to_Type t)) a =
   unit -> SST (atree r a)
-              (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)))
+              (requires (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)))
               (ensures (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1))
 
 let rec get_number_of_steps (tid : int) (hist : list int) =
@@ -175,11 +175,11 @@ let fairness_init (k : int) : Lemma (ensures fairness k [] 0) =
 #push-options "--split_queries always"
 let rec scheduler (fuel:nat) (#t:shareable_typ) (r : ref (to_Type t)) (tasks:list (continuation r unit)) (counter:counter_t (length tasks))
   : SST unit
-    (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shared r h0))
+    (requires (fun h0 -> h0 `contains` counter /\ is_private counter h0 /\ h0 `contains` r /\ is_shareable r h0))
     (ensures (fun h0 _ h1 -> modifies_shared_and_encapsulated_and h0 h1 (Set.singleton (addr_of counter)) /\ gets_shared Set.empty h0 h1)) 
 =
   witness (contains_pred r);
-  witness (is_shared r);
+  witness (is_shareable r);
   let counter_st = sst_read counter in
   let hist = counter_st._1 in
   let i = counter_st._2 in
@@ -189,7 +189,7 @@ let rec scheduler (fuel:nat) (#t:shareable_typ) (r : ref (to_Type t)) (tasks:lis
   match index tasks i () with
   | Return x ->
     let inactive' = inactive + 1 in
-    let k' : unit -> SST (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shared r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
+    let k' : unit -> SST (atree r unit) (fun _ -> witnessed (contains_pred r) /\ witnessed (is_shareable r)) (fun h0 _ h1 -> modifies_only_shared_and_encapsulated h0 h1 /\ gets_shared Set.empty h0 h1) =
       fun () -> Return x in
     let tasks' = update tasks i k' in
     lemma_update_eq_length tasks i k';
@@ -216,7 +216,7 @@ let run (fuel : nat) (#t:shareable_typ) (init:to_Type t) (tasks:list (r:ref (to_
   SST (to_Type t) 
     (requires (fun h0 -> 
       forall_refs_heap contains_pred h0 init /\ 
-      forall_refs_heap is_shared h0 init)) 
+      forall_refs_heap is_shareable h0 init)) 
     (ensures (fun h0 _ h1 -> True)) =
   let counter = sst_alloc #_ #(counter_preorder _) (counter_init (length tasks)) in
   let s : ref (to_Type t) = sst_alloc_shared init in
@@ -226,18 +226,18 @@ let run (fuel : nat) (#t:shareable_typ) (init:to_Type t) (tasks:list (r:ref (to_
   
 let res_a (r : ref int) : continuation r unit = fun () ->
   recall (contains_pred r);
-  recall (is_shared r);
+  recall (is_shareable r);
   let () = sst_write_ref r 42 in
   Return ()
 
 let res_b (r : ref int) : continuation r unit = fun () ->
   recall (contains_pred r);
-  recall (is_shared r);
+  recall (is_shareable r);
   let j = sst_read r in
   let m = sst_alloc #int #(FStar.Heap.trivial_preorder _) 42 in
   Yield (fun () ->
     recall (contains_pred r);
-    recall (is_shared r);
+    recall (is_shareable r);
     let () = sst_write r j in
     Return ())
 

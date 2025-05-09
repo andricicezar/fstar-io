@@ -135,7 +135,7 @@ let c3p : threep = (
         h `contains` map_shared /\
         is_private (map_shared) h /\
         (forall p. p >= next_addr h ==> is_private_addr p h)),
-    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shared r)),
+    (fun #a #rel (r:mref a rel) -> witnessed (contains_pred r) /\ witnessed (is_shareable r)),
     (fun h0 h1 -> c3p_hrel h0 h1)
 )
 
@@ -171,23 +171,23 @@ val tl_read : ttl_read c3p
 let tl_read #t r =
   let h0 = get_heap () in
   recall (contains_pred r);
-  recall (is_shared r);
+  recall (is_shareable r);
   let v = sst_read r in
   assert (forall_refs_heap contains_pred h0 v);
-  assert (forall_refs_heap is_shared h0 v);
+  assert (forall_refs_heap is_shareable h0 v);
   lemma_forall_refs_heap_forall_refs_witnessed v contains_pred;
-  lemma_forall_refs_heap_forall_refs_witnessed v is_shared;
-  lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  lemma_forall_refs_heap_forall_refs_witnessed v is_shareable;
+  lemma_forall_refs_join v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shareable r));
   v
 
 val tl_write : ttl_write c3p
 let tl_write #t r v =
   recall (contains_pred r);
-  recall (is_shared r);
+  recall (is_shareable r);
   let h0 = get_heap () in
-  lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  lemma_forall_refs_split v (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shareable r));
   lemma_forall_refs_witnessed_forall_refs_heap v contains_pred;
-  lemma_forall_refs_witnessed_forall_refs_heap v is_shared;
+  lemma_forall_refs_witnessed_forall_refs_heap v is_shareable;
   sst_write_shareable r v;
   let h1 = get_heap () in
   assert (modifies_only_shared h0 h1 /\ gets_shared Set.empty h0 h1);
@@ -199,11 +199,11 @@ let tl_write #t r v =
 #push-options "--split_queries always"
 val tl_alloc : ttl_alloc c3p
 let tl_alloc #t init =
-  assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shared r')) init);
-  lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shared r));
+  assert (forall_refs (fun r' -> witnessed (contains_pred r') /\ witnessed (is_shareable r')) init);
+  lemma_forall_refs_split init (fun r -> witnessed (contains_pred r)) (fun r -> witnessed (is_shareable r));
   lemma_forall_refs_witnessed_forall_refs_heap init contains_pred;
-  lemma_forall_refs_witnessed_forall_refs_heap init is_shared;
+  lemma_forall_refs_witnessed_forall_refs_heap init is_shareable;
   let r = sst_alloc_shared init in
-  witness (contains_pred r); witness (is_shared r);
+  witness (contains_pred r); witness (is_shareable r);
   r
 #pop-options

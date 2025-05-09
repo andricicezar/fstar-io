@@ -64,7 +64,7 @@ let sit : src_interface1 = {
 val unsafe_f : mk_interm_arrow (ref int) (resexn unit)
 let unsafe_f x =
   recall (contains_pred x);
-  recall (is_shared x);
+  recall (is_shareable x);
   sst_write x 0;
   Inl ()**)
 
@@ -77,7 +77,7 @@ val prog : prog_src1 sit
 let prog f =
   let r = sst_alloc_shared #SNat 5 in
   witness (contains_pred r);
-  witness (is_shared r);
+  witness (is_shareable r);
   match f r with
   | Inl () -> 0
   | Inr _ -> -1

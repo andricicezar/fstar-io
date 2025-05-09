@@ -114,7 +114,7 @@ type student_solution =
     (requires (fun h0 ->
       h0 `contains` ll /\
       no_cycles ll h0 /\
-      is_shared ll h0))
+      is_shareable ll h0))
     (ensures (fun h0 r h1 ->
       (Inl? r ==> no_cycles ll h1 /\ sorted ll h1 /\ same_elements ll h0 h1) /\
       modifies_only_shared_and_encapsulated h0 h1 /\
@@ -229,7 +229,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
                           no_cycles_fuel fuel ll h1 /\
                           gets_shared (footprint fuel ll h1) h0 h1 /\
                           (footprint fuel ll h0 `Set.equal` footprint fuel ll h1) /\
-                          is_shared ll h1))
+                          is_shareable ll h1))
 = let h0 = get_heap () in
   let v = sst_read ll in
   (match v with
@@ -241,7 +241,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   lemma_map_shared_not_in_footprint fuel ll h0;
   let h1 = get_heap () in
   lemma_modifies_footprint map_shared fuel ll h0 h1;
-  assert (is_private ll h1 \/ is_shared ll h1);
+  assert (is_private ll h1 \/ is_shareable ll h1);
   sst_share #(SLList SNat) ll;
   let h2 = get_heap () in
   lemma_modifies_footprint map_shared fuel ll h1 h2;
@@ -259,7 +259,7 @@ let label_llist_as_shareable (ll:ref (linkedList int)) (fuel:nat)
                           gets_shared (footprint fuel ll h1) h0 h1 /\
                           (footprint fuel ll h0 `Set.equal` footprint fuel ll h1) /\
                           equal_dom h0 h1 /\
-                          is_shared ll h1))
+                          is_shareable ll h1))
 = let h0 = get_heap () in
   label_llist_as_shareable_fuel fuel ll
 
@@ -411,7 +411,7 @@ val prog : prog_src1 sit
 let prog (ss:student_solution_a3p c3p) =
   let ss' : student_solution = fun (ll:ref (linkedList int)) ->
     witness (contains_pred ll);
-    witness (is_shared ll);
+    witness (is_shareable ll);
     ss ll
   in
   let test = [1;2;3;4;5;6] in

@@ -230,7 +230,7 @@ val progr_declassify :
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
   sst_share #SNat rp;
-  witness (contains_pred rp); witness (is_shared rp);
+  witness (contains_pred rp); witness (is_shareable rp);
   let r = downgrade_val (f (raise_val rp)) in
   r
 
@@ -249,7 +249,7 @@ let progr_declassify_nested rp f =
   sst_share #SNat p;
   sst_share #(SRef SNat) rp;
   witness (contains_pred rp);
-  witness (is_shared rp);
+  witness (is_shareable rp);
   downgrade_val (f (raise_val rp))
 #pop-options
 
@@ -261,7 +261,7 @@ val progr_secret_unchanged_test:
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
-      satisfy_on_heap rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shareable))
     (ensures (fun h0 _ h1 ->
       sel h0 rp == sel h1 rp))
 let progr_secret_unchanged_test rp rs ctx =
@@ -279,15 +279,15 @@ val progr_passing_shared_to_callback_test:
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
-      satisfy_on_heap rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shareable))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 // TODO: the callback of the program should be able to modify rp (DA: now the callbacks can modify encapsulated, not private references)
 let progr_passing_shared_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
   sst_share #SNat secret;
-  witness (contains_pred secret); witness (is_shared secret);
+  witness (contains_pred secret); witness (is_shareable secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
-    recall (contains_pred secret); recall (is_shared secret);
+    recall (contains_pred secret); recall (is_shareable secret);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
@@ -301,7 +301,7 @@ val progr_passing_encapsulated_to_callback_test:
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
-      satisfy_on_heap rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shareable))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 let progr_passing_encapsulated_to_callback_test rp rs f =
   let secret: ref int = sst_alloc_shareable #SNat 0 in
@@ -329,7 +329,7 @@ let progr_passing_private_to_callback_test f =
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret);
     // let h0 = get_heap () in
-    // assume (is_shared secret h0);
+    // assume (is_shareable secret h0);
     sst_write_shareable #SNat secret (!secret + 1);
     raise_val ()) in
   downgrade_val (f cb);
@@ -344,7 +344,7 @@ val progr_getting_callback_test:
     (requires (fun h0 ->
       satisfy_on_heap rp h0 contains_pred /\
       is_private rp h0 /\
-      satisfy_on_heap rs h0 is_shared))
+      satisfy_on_heap rs h0 is_shareable))
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp))
 let progr_getting_callback_test rp rs f =
   let cb = f (raise_val ()) in
