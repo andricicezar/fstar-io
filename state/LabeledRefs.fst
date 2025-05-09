@@ -16,7 +16,7 @@ assume val secret_map : map_sharedT
 let map_shared = FStar.Ghost.hide secret_map
 
 inline_for_extraction
-let share = (fun #a #p sr ->
+let _label_shareable = (fun #a #p sr ->
     let h0 = get_heap () in
     lemma_next_addr_contained_refs_addr h0 sr ;
     let m = !secret_map in
@@ -42,7 +42,7 @@ let lemma_same_addr_same_sharing_status = (fun ra rb h -> ())
 
 
 inline_for_extraction
-let encapsulate = (fun #a #p r ->
+let _label_encapsulated = (fun #a #p r ->
     let h0 = get_heap () in
     lemma_next_addr_contained_refs_addr h0 r ;
     let m = !secret_map in

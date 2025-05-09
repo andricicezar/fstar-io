@@ -242,7 +242,7 @@ let rec label_llist_as_shareable_fuel (fuel:erased nat) (ll:ref (linkedList int)
   let h1 = get_heap () in
   lemma_modifies_footprint map_shared fuel ll h0 h1;
   assert (is_private ll h1 \/ is_shareable ll h1);
-  sst_share #(SLList SNat) ll;
+  label_shareable #(SLList SNat) ll;
   let h2 = get_heap () in
   lemma_modifies_footprint map_shared fuel ll h1 h2;
   assert (gets_shared (footprint fuel ll h2) h0 h2);

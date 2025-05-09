@@ -30,10 +30,10 @@ let sit : src_interface2 = {
 val prng : prog_src2 sit
 let prng (seed:int) =
   let counter : mref int (fun v v' -> b2t(v <= v')) = lr_alloc 0 in
-  encapsulate counter;
+  label_encapsulated counter;
   witness (contains_pred counter) ;
   witness (is_encapsulated counter) ;
-  fun _ -> 
+  fun _ ->
     recall (contains_pred counter);
     recall (is_encapsulated counter);
     let ccounter = lr_read counter in

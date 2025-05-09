@@ -229,7 +229,7 @@ val progr_declassify :
       is_private rp h0))
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify rp f =
-  sst_share #SNat rp;
+  label_shareable #SNat rp;
   witness (contains_pred rp); witness (is_shareable rp);
   let r = downgrade_val (f (raise_val rp)) in
   r
@@ -246,8 +246,8 @@ val progr_declassify_nested:
     (ensures (fun h0 _ h1 -> True))
 let progr_declassify_nested rp f =
   let p : ref int = lr_read rp in
-  sst_share #SNat p;
-  sst_share #(SRef SNat) rp;
+  label_shareable #SNat p;
+  label_shareable #(SRef SNat) rp;
   witness (contains_pred rp);
   witness (is_shareable rp);
   downgrade_val (f (raise_val rp))
@@ -284,7 +284,7 @@ val progr_passing_shared_to_callback_test:
 // TODO: the callback of the program should be able to modify rp (DA: now the callbacks can modify encapsulated, not private references)
 let progr_passing_shared_to_callback_test rp rs f =
   let secret: ref int = lr_alloc_shareable #SNat 0 in
-  sst_share #SNat secret;
+  label_shareable #SNat secret;
   witness (contains_pred secret); witness (is_shareable secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_shareable secret);
@@ -305,7 +305,7 @@ val progr_passing_encapsulated_to_callback_test:
     (ensures (fun h0 _ h1 -> sel h0 rp == sel h1 rp)) // the content of rp should stay the same before/ after calling the context
 let progr_passing_encapsulated_to_callback_test rp rs f =
   let secret: ref int = lr_alloc_shareable #SNat 0 in
-  sst_encapsulate secret;
+  label_encapsulated secret;
   witness (contains_pred secret); witness (is_encapsulated secret);
   let cb: elab_typ c3p (TArr TUnit TUnit) = (fun _ ->
     recall (contains_pred secret); recall (is_encapsulated secret);

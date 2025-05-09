@@ -77,7 +77,7 @@ let share_post (map_shared:map_sharedT) (is_shareable:mref_heap_stable_pred) #a 
     gets_shared !{sr} h0 h1
 
 inline_for_extraction
-val share : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
+val _label_shareable : #a:Type0 -> #p:preorder a -> sr:(mref a p) ->
     ST unit
       (requires (fun h0 ->
         h0 `contains` sr /\
@@ -308,7 +308,7 @@ let lemma_lr_write_or_alloc_preserves_contains_shareable #t (#rel:preorder (to_T
   end;
   lemma_lr_write_or_alloc_preserves_contains x v h0 h1
 
-let lemma_sst_share_preserves_contains (h0 h1:heap) : Lemma
+let lemma_label_shareable_preserves_contains (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -400,7 +400,7 @@ let lemma_lr_write_preserves_shared #t (#rel:preorder (to_Type t)) (x:mref (to_T
 #pop-options
 
 #push-options "--split_queries always"
-let lemma_sst_share_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
+let lemma_label_shareable_preserves_shared #t (x:ref (to_Type t)) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
@@ -484,7 +484,7 @@ let lr_alloc_shareable (#t:full_ground_typ) (init:to_Type t)
   lr_alloc #(to_Type t) #(FStar.Heap.trivial_preorder _) init
 
 inline_for_extraction
-let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
+let label_shareable (#t:full_ground_typ) (r:ref (to_Type t))
 : LR unit
   (fun h0 -> h0 `contains` r /\
          (is_private r h0 \/ is_shareable r h0) /\
@@ -493,11 +493,11 @@ let sst_share (#t:full_ground_typ) (r:ref (to_Type t))
 =
   assert (~(compare_addrs r map_shared));
   let h0 = get_heap () in
-  share r;
+  _label_shareable r;
   let h1 = get_heap () in
-  lemma_sst_share_preserves_contains h0 h1;
+  lemma_label_shareable_preserves_contains h0 h1;
   assert (ctrans_ref_pred h1 contains_pred);
-  lemma_sst_share_preserves_shared r h0 h1;
+  lemma_label_shareable_preserves_shared r h0 h1;
   assert (ctrans_ref_pred h1 is_shareable)
 
 #push-options "--split_queries always"
@@ -519,7 +519,7 @@ let lr_alloc_shared (#t:full_ground_typ) (init:to_Type t)
   forall_refs_heap_monotonic is_shareable h0 h1 init;
   assert (~(addr_of map_shared `Set.mem` Set.empty));
   lemma_unmodified_map_implies_same_shared_status Set.empty h0 h1;
-  sst_share r;
+  label_shareable r;
   let h2 = get_heap () in
   assert (fresh r h0 h2);
   assert (addr_of r =!= addr_of map_shared);
@@ -677,14 +677,14 @@ let encapsulate_post #a #rel (r:mref a rel) h0 () h1 : Type0 =
     gets_encapsulated !{r} h0 h1
 
 #push-options "--split_queries always"
-let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (h0 h1:heap) : Lemma
+let lemma_label_encapsulated_preserves_shared #a (#rel:preorder a) (x:mref a rel) (h0 h1:heap) : Lemma
   (requires (
     h0 `contains` map_shared /\
     h0 `heap_rel` h1 /\
     equal_dom h0 h1 /\
     modifies !{map_shared} h0 h1 /\
     h0 `contains` x /\
-    ~(compare_addrs x map_shared) /\  (** in contrast to sst_share, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
+    ~(compare_addrs x map_shared) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
     gets_encapsulated !{x} h0 h1 /\
     (forall p. p >= next_addr h1 ==> is_private_addr p h1) /\
     ctrans_ref_pred h0 is_shareable))
@@ -715,7 +715,7 @@ let lemma_sst_encapsulate_preserves_shared #a (#rel:preorder a) (x:mref a rel) (
 #pop-options
 
 inline_for_extraction
-val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
+val _label_encapsulated : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
     ST unit
       (requires (fun h0 ->
         h0 `contains` r /\
@@ -727,16 +727,16 @@ val encapsulate : #a:Type0 -> #p:preorder a -> r:(mref a p) ->
       (ensures (encapsulate_post #a #p r))
 
 inline_for_extraction
-let sst_encapsulate  #a (#rel:preorder a) (r:mref a rel)
+let label_encapsulated  #a (#rel:preorder a) (r:mref a rel)
 : LR unit
   (fun h0 -> h0 `contains` r /\
-         ~(compare_addrs r map_shared) /\  (** in contrast to sst_share, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
+         ~(compare_addrs r map_shared) /\  (** in contrast to label_shareable, cannot be inferred because mref a rel is not guaranteed to be different from map_shared's type *)
          is_private r h0)
   (encapsulate_post r)
 =
   let h0 = get_heap () in
-  encapsulate r;
+  _label_encapsulated r;
   let h1 = get_heap () in
-  lemma_sst_share_preserves_contains h0 h1;
-  lemma_sst_encapsulate_preserves_shared r h0 h1;
+  lemma_label_shareable_preserves_contains h0 h1;
+  lemma_label_encapsulated_preserves_shared r h0 h1;
   ()
