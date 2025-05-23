@@ -1,0 +1,49 @@
+From: anon <anon>
+Subject: [PATCH 2/3] Allow native extraction of reifiable effects.
+
+---
+ src/extraction/FStarC.Extraction.ML.Term.fst    | 9 ++++++++-
+ src/typechecker/FStarC.TypeChecker.TcEffect.fst | 2 +-
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/extraction/FStarC.Extraction.ML.Term.fst b/src/extraction/FStarC.Extraction.ML.Term.fst
+--- a/src/extraction/FStarC.Extraction.ML.Term.fst
++++ b/src/extraction/FStarC.Extraction.ML.Term.fst
+@@ -111,6 +111,10 @@ let err_cannot_extract_effect (l:lident) (r:Range.range) (reason:string) (ctxt:s
+        (string_of_lid l) reason ctxt
+   ]
+ 
++let get_extraction_mode env (m:Ident.lident) =
++  let norm_m = Env.norm_eff_name env m in
++  (Env.get_effect_decl env norm_m).extraction_mode
++
+ (***********************************************************************)
+ (* Translating an effect lid to an e_tag = {E_PURE, E_ERASABLE, E_IMPURE} *)
+ (***********************************************************************)
+@@ -139,7 +143,10 @@ let effect_as_etag =
+          match ed_opt with
+          | Some (ed, qualifiers) ->
+            if TcEnv.is_reifiable_effect (tcenv_of_uenv g) ed.mname
+-           then E_PURE
++           then
++             if get_extraction_mode (tcenv_of_uenv g) ed.mname = S.Extract_reify
++             then E_PURE
++             else E_IMPURE
+            else E_IMPURE
+          | None -> E_IMPURE
+ 
+diff --git a/src/typechecker/FStarC.TypeChecker.TcEffect.fst b/src/typechecker/FStarC.TypeChecker.TcEffect.fst
+--- a/src/typechecker/FStarC.TypeChecker.TcEffect.fst
++++ b/src/typechecker/FStarC.TypeChecker.TcEffect.fst
+@@ -1907,7 +1907,7 @@ Errors.with_ctx (BU.format1 "While checking layered effect definition `%s`" (str
+       U.has_attribute ed.eff_attrs PC.primitive_extraction_attr in
+     let is_reifiable = List.contains Reifiable quals in
+ 
+-    if has_primitive_extraction && is_reifiable
++    if false && has_primitive_extraction && is_reifiable
+     then raise_error ed.mname Errors.Fatal_UnexpectedEffect
+                       (BU.format1 "Effect %s is declared to be both primitive extraction and reifiable"
+                         (show ed.mname)) 
+-- 
+2.48.0.rc2.29.gcc91ad6b1b
+
