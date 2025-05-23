@@ -1,6 +1,6 @@
 FSTAR := fstar.exe
 
-ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fsti)
+ROOTS := LabeledRefs.fsti
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)

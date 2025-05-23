@@ -1,8 +1,0 @@
-(executable
- (name main)
- (public_name main)
- (libraries fstar.lib)
-)
-(env
-  (_
-    (flags (:standard -w -A))))

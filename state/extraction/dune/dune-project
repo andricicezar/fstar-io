@@ -1,8 +1,0 @@
-(lang dune 3.2)
-(name secref_extr)
-(generate_opam_files false)
-(using menhir 2.1)
-(package
-  (name secref_extr)
-  (synopsis "Extracton plugin for SecRef*")
-)
