@@ -154,22 +154,6 @@ let rec lemma_forall_in_list_true (l:list 'a) :
   | [] -> ()
   | _::tl -> lemma_forall_in_list_true tl
 
-#set-options "--print_implicits"
-
-  (**
-let rec forall_in_list (l:list 'a) (pred:'a -> Type0) : Type0 =
-  match l with
-  | [] -> True
-  | hd::tl -> pred hd /\ forall_in_list tl pred
-
-let test () : ST unit (fun _ -> True) (fun _ _ _ -> True) =
-  let alloc' () : ST unit (fun _ -> True) (fun _ _ _ -> True) =  let x : ref int = alloc 5 in let _ = read x in () in
-  let alloc'' () : ST unit (fun _ -> True) (fun _ _ _ -> True) = let x : ref int = alloc 5 in () in
-  let l : list (unit -> ST unit (fun _ -> True) (fun _ _ _ -> True)) = [alloc'; alloc''] in
-  assert (forall_in_list l (fun _ -> True))**)
-
-let ctrue #a3p (x : t_task a3p) = True
-
 let res_a #a3p
   (read :  ttl_read a3p)
   (write : ttl_write a3p)
@@ -179,11 +163,11 @@ let res_a #a3p
     let () = write r 42 in
     Return ()
 
-let res_b #a3p 
+let res_b #a3p
   (read :  ttl_read a3p)
   (write : ttl_write a3p)
   (alloc : ttl_alloc a3p)
-: t_task a3p = 
+: t_task a3p =
   fun r () ->
     let j = read r in
     let m = alloc #SNat 42 in
@@ -191,49 +175,13 @@ let res_b #a3p
         let () = write r j in
         Return ())
 
-let all_ok #a3p (l : list (t_task a3p)) =
-  forall_in_list l (fun x -> ctrue x)
-
-let my_run123
-  #a3p
-  (my_run : (comp_int_src_tgt2 sit).pt a3p)
-   (x:((int & int) & list (t_task a3p))) : ST (resexn int)
-    (requires (fun h0 -> inv a3p h0 /\ forall_in_list (snd x) (fun _ -> True)))
-    (ensures (post_poly_arrow a3p))
-    by (
-    norm [delta_only [`%sit;`%comp_int_src_tgt2;`%Mktgt_interface2?.pt;`%Mksrc_interface2?.c_pt;`%exportable_run_type;
-                     `%exportable_arrow_err10;`%mk_exportable;`%Mkexportable_from?.ityp;`%mk_poly_arrow;
-                     `%importable_pair;`%importable_refinement;`%safe_importable_is_importable;`%safe_importable_int;
-                     `%Mkimportable_to?.ityp;`%Mksafe_importable_to?.ityp;
-                     `%poly_iface_is_safely_importable;
-                     `%exportable_int;`%pre_poly_arrow;
-                     `%Mkimportable_to?.c_ityp;`%Mksafe_importable_to?.c_ityp;
-                     `%poly_iface_pair;
-                     `%Mkpoly_iface?.wt;`%witnessable_pair;
-                     `%Mkwitnessable?.satisfy;
-                     `%poly_iface_int;`%witnessable_int;`%poly_iface_list;`%witnessable_list;`%poly_iface_t_task;`%poly_iface_arrow;
-                     `%witnessable_arrow;
-                    //  `%res_a;
-                    //  `%res_b;
-                    //  `%ctrue;
-                    //  `%all_ok;
-                     ];iota]
-//      explode ();
- //     bump_nth 5;
-//      apply_lemma (`lemma_forall_in_list_true);
-  )
-=
-  my_run x
-
 val some_ctx : ctx_tgt2 (comp_int_src_tgt2 sit)
 let some_ctx #a3p read write alloc my_run =
 
   let myargs : ((int & int) & list (t_task a3p)) = ((5000,0), [res_a read write alloc; res_b read write alloc]) in
   let h0 = get_heap () in
-  assume (all_ok (snd myargs)); (* should be easy to prove *)
-  assert (all_ok (snd myargs) ==> forall_in_list (snd myargs) (fun _ -> True));
 
-  match my_run123 my_run myargs with
+  match my_run myargs with
   | Inl _ -> 0
   | Inr _ -> -1
 
