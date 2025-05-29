@@ -17,10 +17,7 @@ open SpecTree
 
 module FSet = FStar.FiniteSet.Base
 
-type grade =
-| NotGraded
-| MaxGrade
-| MinGrade
+type grade = option int
 
 noextract
 instance witnessable_grade : witnessable grade = {
@@ -29,8 +26,12 @@ instance witnessable_grade : witnessable grade = {
 
 let grade_preorder : preorder grade = fun g1 g2 ->
   match g1 with
-  | NotGraded -> True
-  | _ -> g1 == g2
+  | None -> True
+  | Some v1 -> begin
+    match g2 with
+    | None -> False
+    | Some v2 -> v1 == v2
+  end
 
 let rec no_cycles_fuel (fuel:nat) (ll:ref (linkedList 'a)) (h:heap): Type0 =
   match sel h ll with
@@ -109,7 +110,7 @@ let same_elements (ll:ref (linkedList int)) (h0 h1:heap) : Type0 =
   sort_list (ll_as_list 10000 ll h0) == sort_list (ll_as_list 10000 ll h1)
   // not that nice that fuel is fixed to a big number, but it suffices
 
-type student_solution =
+type student_hw =
   ll:ref (linkedList int) -> LR (resexn unit)
     (requires (fun h0 ->
       h0 `contains` ll /\
@@ -278,16 +279,16 @@ let lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 s s' s'' :
         (ensures (modifies_shared_and_encapsulated_and h0 h2 (s'' `Set.union` (s `Set.union` s')))) = ()
 
 #push-options "--split_queries always"
-let auto_grader
+let autograder
   (test:list int)
-  (hw: student_solution)
+  (hw: student_hw)
   (gr: mref grade grade_preorder)
   : LR unit
     (requires (fun h0 -> ~(compare_addrs gr label_map) /\
                       is_private gr h0 /\
                       h0 `contains` gr /\
-                      NotGraded? (sel h0 gr)))
-    (ensures (fun h0 () h1 -> ~(NotGraded? (sel h1 gr)) /\
+                      None? (sel h0 gr)))
+    (ensures (fun h0 () h1 -> ~(None? (sel h1 gr)) /\
                            modifies_shared_and_encapsulated_and h0 h1 !{gr})) =
     let h0 = get_heap () in
     let ll = generate_llist test in // a fresh set of references S
@@ -303,7 +304,7 @@ let auto_grader
       lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{label_map} Set.empty Set.empty;
       assert (modifies_shared_and_encapsulated_and h0 h2 !{label_map});
       assert (gets_shared Set.empty h0 h2);
-      lr_write #grade gr MaxGrade; // grade gets modified
+      lr_write #grade gr (Some 10); // grade gets modified
       let h3 = get_heap () in
       assert (modifies_shared_and_encapsulated_and h2 h3 !{gr});
       lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{label_map} !{gr} Set.empty;
@@ -311,7 +312,7 @@ let auto_grader
     end
     | Inr _ -> begin
       let h2 = get_heap () in
-      lr_write gr MinGrade;
+      lr_write gr (Some 0);
       let h3 = get_heap () in
       lemma_trans_modifies_shared_and_encapsulated_and h0 h1 h2 !{label_map} Set.empty Set.empty;
       lemma_trans_modifies_shared_and_encapsulated_and h0 h2 h3 !{label_map} !{gr} Set.empty;
@@ -321,7 +322,7 @@ let auto_grader
 
 let test1 () : STATEwp grade (fun _ _ -> False) =
   let test = [1;3;4;2;1] in
-  let gr : mref grade grade_preorder = alloc (NotGraded) in
+  let gr : mref grade grade_preorder = alloc (None) in
  // auto_grader test solution gr;
   !gr
 
@@ -384,8 +385,13 @@ let sit : src_interface1 = {
   psi = fun _ _ _ -> True
 }
 
-val unverified_student_hw_sort : ctx_tgt1 (comp_int_src_tgt1 sit)
-let unverified_student_hw_sort #a3p my_read my_write my_alloc =
+/// The type `ctx_tgt1 (comp_int_src_tgt1 sit)` here is
+/// the type `poly_student_hw` from the paper.
+/// It is automatically computed by subtracting from the
+/// type `student_solution_a3p` the predicates enforced by
+/// higher order cotracts
+val unverified_student_hw : ctx_tgt1 (comp_int_src_tgt1 sit)
+let unverified_student_hw #a3p my_read my_write my_alloc =
   let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_arrow a3p l) (post_poly_arrow a3p) =
     if fuel = 0 then () else begin
       let cl : linkedList int = my_read #(SLList SNat) l in
@@ -409,18 +415,19 @@ let unverified_student_hw_sort #a3p my_read my_write my_alloc =
 
 val prog : prog_src1 sit
 let prog (ss:student_solution_a3p c3p) =
-  let ss' : student_solution = fun (ll:ref (linkedList int)) ->
+  let ss' : student_hw = fun (ll:ref (linkedList int)) ->
     witness (contains_pred ll);
     witness (is_shareable ll);
     ss ll
   in
   let test = [1;2;3;4;5;6] in
-  let gr = lr_alloc #grade #grade_preorder NotGraded in
-  auto_grader test ss' gr;
+  let gr = lr_alloc #grade #grade_preorder None in
+  autograder test ss' gr;
   match lr_read gr with
-  | NotGraded -> -2
-  | MinGrade -> -1
-  | MaxGrade -> 0
+  | None -> -2
+  | Some 0 -> -1
+  | Some 10 -> 0
+  | _ -> -5
 
 (* Calling SecRef* on it *)
 
@@ -428,7 +435,7 @@ let compiled_prog =
   compile_pprog1 #sit prog
 
 let whole_prog : whole_tgt1 =
-  link_tgt1 compiled_prog unverified_student_hw_sort
+  link_tgt1 compiled_prog unverified_student_hw
 
 let r = whole_prog ()
 let _ =

@@ -117,7 +117,7 @@ let comp1 : compiler = {
 
   compile_pprog = compile_pprog1;
 
-  rel_sem = (eq_sem);
+  rel_sem = (==);
 }
 
 let syntactic_equality1 (i:src_interface1) (ct:ctx_tgt1 (comp_int_src_tgt1 i)) (ps:prog_src1 i) : Lemma (
