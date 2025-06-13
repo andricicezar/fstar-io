@@ -1,22 +1,12 @@
 # Artifact for "SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*"
 
 This subdirectory contains the artifact associated with the ____ 2025 submission with the name:
-"[SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*](https://arxiv.org/abs/2303.01350)".
-TODO: The artifact is packaged using [Docker](https://www.docker.com/) and a VM ....
+"[SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*](___)".
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
 * [Download and Installation](#download-and-installation)
-   * [Hardware Requirements](#hardware-requirements)
-   * [Download and Installation using Docker](#download-and-installation-using-docker)
-   * [Download and Installation without Docker](#download-and-installation-without-docker)
 * [Evaluation Instructions](#evaluation-instructions)
-   * [Verify SCIO\*](#verify-scio)
-   * [Verify the Web Server](#verify-the-web-server)
-   * [Compiling the Web Server](#compiling-the-web-server)
-   * [Run the Echo variant](#run-the-echo-variant)
-   * [Run the File Serving variant](#run-the-file-serving-variant)
-   * [Run the Adversarial variant](#run-the-adversarial-variant)
 * [Reusability](#reusability)
 * [License](#license)
 
@@ -60,29 +50,6 @@ We list where the definitions and theorems of the paper are.
 | **More examples** | The other files named as `Examples.*.fst` |
 
 ## Download and Installation
-
-### Hardware Requirements
-
-To use this artifact, you will need a x86-64 machine capable of running Docker.
-If your machine is not x86-64, use a x86-64 Virtual Machine with Docker.
-
-### Download and Installation using Docker
-
-To use this artifact, you will need to install Docker on your machine.
-See
-[https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
-for the installation instructions.
-
-Building the image takes 10 minutes.
-```bash
-# Build the image
-$ docker build -t sciostar .
-
-# Run Image
-$ docker run --rm -it --name sciostar sciostar
-```
-
-### Download and Installation without Docker
 
 This directory contains the artifact for SecRef★. The layout is as
 follows:

@@ -475,7 +475,7 @@ let ctx_returns_callback_test : typing empty _ (TArr TUnit (TArr TUnit TUnit)) =
           (TyApp (TyAbs (TRef TNat) (TyAbs TUnit (TyWriteRef (TyVar 1) (TySucc (TyReadRef (TyVar 1))))))
                  (TyAllocRef TyZero))
 
-(** Cezar: landins knot should not be possible to type check in the current system **)
+(** landins knot should not be possible to type check in the current system **)
 (**
 let landins_knot : exp =
      EApp

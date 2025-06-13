@@ -9,23 +9,13 @@ open MST.Repr
 include MST.Tot
 include FullGroundType
 
-(** CA&DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
 val lemma_eq_addrs_eq_all #a #rela #b #relb (r1:mref a rela) (r2:mref b relb) (h:heap) : Lemma
   (requires (h `contains` r1 /\ h `contains` r2 /\ addr_of r1 == addr_of r2))
   (ensures (a == b /\ rela == relb /\ is_mm r1 == is_mm r2 /\ sel h r1 == sel h r2))
-(** DA: In my FStar.Monotonic.Heap.fst **)
-(*
-let lemma_eq_addrs_eq_all _ _ _ = ()
-*)
 
-(** DA: This can be proved trivially in FStar.Monotonic.Heap.fst **)
 val lemma_eq_ref_types_eq_value_types #a #b (#rela:preorder a) (#relb : preorder b) (r:mref a rela)
   : Lemma (requires (mref a rela == mref b relb))
           (ensures  (a == b))
-(** DA: In my FStar.Monotonic.Heap.fst **)
-(*
-let lemma_eq_ref_types_eq_value_types _ = ()
-*)
 
 type ref_kind =
   | Private
@@ -107,11 +97,11 @@ let lemma_fresh_gets_shared #a #rel (r:mref a rel) (h0:heap) (h1:heap) (h2:heap)
   ()
 
 unfold let unmodified_common (h0:heap) (h1:heap) : Type0 =
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)}  (** CA: why is this here? this is from heap_rel **)
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (contains h1 r)} 
                                h0 `contains` r ==> h1 `contains` r) /\
-  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)} (** CA: probably this can be proven from heap_rel too *)
+  (forall (a:Type) (rel:preorder a) (r:mref a rel).{:pattern (r `unused_in` h0)}
                                r `unused_in` h1 ==> r `unused_in` h0) /\
-  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) } (** CA: ditto **)
+  (forall (n: nat) . {:pattern (n `addr_unused_in` h0) }
     n `addr_unused_in` h1 ==> n `addr_unused_in` h0)
 
 let modifies_only_shared (h0:heap) (h1:heap) : Type0 =
@@ -138,7 +128,7 @@ let ctrans_ref_pred (h:heap) (pred:mref_heap_stable_pred) =
   (** forall references, if r satisfies pred in h, then the references r points to refs that also satisfy pred **)
   (forall (t:full_ground_typ) (r:ref (to_Type t)).
     h `contains` r /\ pred r h ==> forall_refs_heap pred h (sel h r)) (** cannot select without being contained **)
-  // CA: previous version tried to implement this with typeclasses, but it was not working because one had to prove
+  // previous version tried to implement this with typeclasses, but it was not working because one had to prove
   // that two instances of the same type are equal.
   // invariant:
   //   forall (a:Type) (c:witnessable a) (r:ref a).
