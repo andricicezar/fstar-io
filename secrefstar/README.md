@@ -1,6 +1,6 @@
 # Artifact for "SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*"
 
-This subdirectory contains the artifact associated with the ____ 2025 submission with the name:
+This directory contains the artifact associated with the ____ 2025 submission with the name:
 "[SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*](___)".
 
 ## Table of Contents
@@ -51,11 +51,7 @@ We list where the definitions and theorems of the paper are.
 
 ## Download and Installation
 
-This directory contains the artifact for SecRef★. The layout is as
-follows:
-- MST.Repr: Free monad representation
-- MST.Tot: MST Effect definition
-- Examples.*: Various examples
+The directory layout is as follows:
 - misc/: dune configuration files for examples
 
 - fstar-patches/: a set of patches needed for F*, to enable primitive
