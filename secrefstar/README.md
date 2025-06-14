@@ -1,7 +1,7 @@
-# Artifact for "SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*"
+# Artifact for "SecRef\*: Securely Sharing Mutable References Between Verified and Unverified Code in F\*"
 
 This subdirectory contains the artifact associated with the ICFP 2025 submission with the name:
-"[SecRef*: Securely Sharing Mutable References Between Verified and Unverified Code in F*](___)".
+"[SecRef\*: Securely Sharing Mutable References Between Verified and Unverified Code in F\*](___)".
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
@@ -22,7 +22,7 @@ The artifact contains:
 We list where the definitions and theorems of the paper are.
 
 | From the paper | In the artifact |
-| --------- | --------------- |
+| -------------- | --------------- |
 | **Introduction**  | |
 | The intro example. | [Examples.Intro.fst](./Examples.Intro.fst) |
 | **Section 2**  | |
@@ -41,7 +41,7 @@ We list where the definitions and theorems of the paper are.
 | Compilation Model from Figure 7. Soundness and RrHP Theorems. | `comp1` in `Compiler.fst` |
 | Syntactic Equality Law | `syntactic_equality1` in `Compiler.fst` |
 | Soundness Theorem | `soundness1` in `Compiler.fst` |
-|  Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.fst` as `comp1_rrhc` |
+| Robust Relational Hyperproperty Preservation (RrHP) Theorem | The theorem is defined in `BeyondCriteria.fst` as `rrhc` and then it is proved in `Compiler.fst` as `comp1_rrhc` |
 | Dual Setting, together with the Soundness-Dual Theorem | Definitions that end with '2' in `Compiler.fst` |
 | Syntactic representation of target contexts | `Compiler.STLC.fst` |
 | **Section 7. Case study - cooperative multi-threding scheduler** | |
