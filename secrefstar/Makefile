@@ -61,6 +61,7 @@ include .depend.mk
 
 .depend.mk: $(ROOTS)
 	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ --output_deps_to $@
+depend: .depend.mk
 
 # Make a dependency graph of the modules.
 dep.graph:
@@ -79,3 +80,13 @@ dep.pdf: dep.graph
 package:
 	git archive --prefix secref-artifact/ -o artifact.tar HEAD .
 	gzip -f -9 artifact.tar
+
+validate:
+	@# Run depend first without the flag, as otherwise it will
+	@# warn about every module in the standard library that does
+	@# not have an implementation.
+	$(MAKE) depend
+	$(MAKE) OTHERFLAGS='--report_assumes error'
+
+clean:
+	rm -rf $(CACHEDIR) $(ODIR)
