@@ -320,12 +320,6 @@ let autograder
     end
 #pop-options
 
-let test1 () : STATEwp grade (fun _ _ -> False) =
-  let test = [1;3;4;2;1] in
-  let gr : mref grade grade_preorder = alloc (None) in
- // auto_grader test solution gr;
-  !gr
-
 type student_solution_a3p (a3p:threep) =
   ll:ref (linkedList int) -> ST (resexn unit)
     (requires (fun h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0))
