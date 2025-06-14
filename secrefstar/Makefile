@@ -11,8 +11,9 @@ FLAGS += $(OTHERFLAGS)
 FLAGS += --warn_error -242 # inner let-rec not encoded, expected
 FLAGS += --warn_error -272 # top-level effects, we use them
 FLAGS += --warn_error -274 # namespace shadowing warning, benign
+FLAGS += --warn_error -321 # unexpected checked files present, completely spurious warning
 
-verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
+all: verify
 
 .cache/%.fst.checked: %.fst
 	$(FSTAR) $(FLAGS) $<
@@ -36,6 +37,11 @@ build-%: M=$*
 build-%: D=$*.bld
 build-%: .cache/%.fst.checked | plugin
 	mkdir -p $(D)
+	@# Must extract LabeledRefs.fst explicitly here since it has an interface.
+	$(FSTAR) $(FLAGS) --load_cmxs $(PLUG) \
+		--codegen OCaml --extract '*,-Prims,-FStar' \
+		--odir $(D) \
+		LabeledRefs.fst
 	$(FSTAR) $(FLAGS) --load_cmxs $(PLUG) \
 		--codegen OCaml --extract '*,-Prims,-FStar' \
 		--odir $(D) \
@@ -59,13 +65,15 @@ build-all: build-Examples.HOC build-Examples.Intro build-Examples.Autograder bui
 
 include .depend.mk
 
+verify: $(ALL_CHECKED_FILES)
+
 .depend.mk: $(ROOTS)
-	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ --output_deps_to $@
+	$(FSTAR) $(FLAGS) --dep full $(ROOTS) --extract '*' --output_deps_to $@
 depend: .depend.mk
 
 # Make a dependency graph of the modules.
 dep.graph:
-	$(FSTAR) $(FLAGS) --dep graph --warn_error -321 $(ROOTS)
+	$(FSTAR) $(FLAGS) --dep graph $(ROOTS)
 	@# Ignore F* library modules:
 	sed -i '/-> "fstar_/d' $@
 	sed -i '/-> "prims"/d' $@

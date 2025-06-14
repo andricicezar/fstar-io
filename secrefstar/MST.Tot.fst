@@ -49,7 +49,7 @@ let mheap_if_then_else (a : Type u#a)
   (f : mheap a wp1) (g : mheap a wp2) (b : bool) : Type =
   mheap a (st_if_then_else heap a b wp1 wp2)
 
-[@@ top_level_effect] //; primitive_extraction]
+[@@ top_level_effect; primitive_extraction]
 total
 reifiable
 reflectable
