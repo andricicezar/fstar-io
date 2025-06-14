@@ -157,10 +157,6 @@ build-Examples.Intro` to verify, extract, build, and run `Examples.Intro.fst`.
 Other files can be run by replacing `Examples.Intro` for something else.  The
 target `build-all` will build and run a suite of examples.
 
-## Expected output for each example
-
-TODO
-
 ## License
 This work is licensed under a
 [Creative Commons Attribution 4.0 International License][cc-by].

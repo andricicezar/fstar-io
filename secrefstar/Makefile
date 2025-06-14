@@ -53,7 +53,7 @@ build-%: .cache/%.fst.checked | plugin
 	$(FSTAR) --ocamlenv dune install --root=$D --prefix=.
 	./$D/bin/main
 
-build-all: build-Examples.HOC build-Examples.Intro build-Examples.Autograder build-Examples.PRNG
+build-all: build-Examples.Intro build-Examples.Autograder build-Examples.PRNG build-Examples.CooperativeMultiThreadingWithIndexT
 
 # Run your fst file in emacs with the same context as the batch mode.
 %.fst.emacs: %.fst
