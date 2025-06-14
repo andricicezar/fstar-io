@@ -99,6 +99,7 @@ let adv_lib #a3p read write alloc r =
     write #(SRef SNat) r r0;
     ()
   )
+#pop-options
 
 let whole_adv : whole_tgt1 =
   link_tgt1 compiled_prog adv_lib

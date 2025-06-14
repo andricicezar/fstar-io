@@ -8,6 +8,9 @@ FLAGS  = --z3version 4.13.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += $(OTHERFLAGS)
+FLAGS += --warn_error -242 # inner let-rec not encoded, expected
+FLAGS += --warn_error -272 # top-level effects, we use them
+FLAGS += --warn_error -274 # namespace shadowing warning, benign
 
 verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
 
