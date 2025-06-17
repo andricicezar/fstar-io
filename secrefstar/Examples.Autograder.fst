@@ -320,12 +320,6 @@ let autograder
     end
 #pop-options
 
-let test1 () : STATEwp grade (fun _ _ -> False) =
-  let test = [1;3;4;2;1] in
-  let gr : mref grade grade_preorder = alloc (None) in
- // auto_grader test solution gr;
-  !gr
-
 type student_solution_a3p (a3p:threep) =
   ll:ref (linkedList int) -> ST (resexn unit)
     (requires (fun h0 -> inv a3p h0 /\ satisfy ll (prref a3p) /\ no_cycles ll h0))
@@ -391,6 +385,8 @@ let sit : src_interface1 = {
 /// type `student_solution_a3p` the predicates enforced by
 /// higher order cotracts
 val unverified_student_hw : ctx_tgt1 (comp_int_src_tgt1 sit)
+
+#push-options "--warn_error -242" (* F* warns about the inner let-rec not being faithfully encoded, that's fine. *)
 let unverified_student_hw #a3p my_read my_write my_alloc =
   let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_arrow a3p l) (post_poly_arrow a3p) =
     if fuel = 0 then () else begin
@@ -412,6 +408,7 @@ let unverified_student_hw #a3p my_read my_write my_alloc =
     end
   in
   (fun l -> sort 10000 l; Inl ())
+#pop-options
 
 val prog : prog_src1 sit
 let prog (ss:student_solution_a3p c3p) =

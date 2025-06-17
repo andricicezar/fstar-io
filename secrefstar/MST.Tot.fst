@@ -49,7 +49,7 @@ let mheap_if_then_else (a : Type u#a)
   (f : mheap a wp1) (g : mheap a wp2) (b : bool) : Type =
   mheap a (st_if_then_else heap a b wp1 wp2)
 
-[@@ top_level_effect] //; primitive_extraction]
+[@@ top_level_effect; primitive_extraction]
 total
 reifiable
 reflectable
@@ -142,7 +142,7 @@ type mref_pred =
   #a:Type0 -> #rel:preorder a -> mref a rel -> Type0
 
 type mref_heap_pred =
-  #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0)
+  #a:Type -> #rel:_ -> mref a rel -> (heap -> Type0)
 
 type mref_heap_stable_pred =
   #a:Type -> #rel:_ -> mref a rel -> pred:(heap -> Type0){stable pred}

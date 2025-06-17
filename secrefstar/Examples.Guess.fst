@@ -12,9 +12,13 @@ type cmp = | LT | GT | EQ
 instance witnessable_cmp : witnessable cmp = { satisfy = (fun _ _ -> True) }
 instance poly_iface_cmp a3p : poly_iface a3p cmp = { wt = witnessable_cmp }
 
+(* F* warns below that the names are meaningless (and they are),
+   but we keep them for documentation purposes. *)
+#push-options "--warn_error -331"
 type player_type a3p =
   args:((int & int) & (guess: (mk_poly_arrow a3p int cmp))) ->
   ST int (requires (fun h0 -> inv a3p h0 /\ fst (fst args) < snd (fst args))) (ensures fun h0 r h1 -> inv a3p h1 /\ h0 `hrel a3p` h1)
+#pop-options
 
 type play_guess_type a3p =
   args:(player_type a3p & (int & (int & int))) ->

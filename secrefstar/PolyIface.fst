@@ -11,10 +11,14 @@ open Witnessable
 
 (** *** Type to carry the three predicates around *)
 
+(* F* warns below that the names are meaningless (and they are),
+   but we keep them for documentation purposes. *)
+#push-options "--warn_error -331"
 type threep =
   inv:(heap -> Type0) * prref:mref_pred * hrel:(preorder heap)
   (**                   ^ if this predicate would be also over heaps, then the contexts needs witness&recall in HO settings **)
-  
+#pop-options
+
 unfold
 let mk_threep
   (inv  : heap -> Type0)

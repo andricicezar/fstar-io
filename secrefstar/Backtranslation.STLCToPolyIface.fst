@@ -186,6 +186,7 @@ let ctx_HO_test4 _ _ bt_alloc f =
 
 val ctx_unverified_student_hw_sort :
   elab_poly_typ (TArr (TRef (TLList TNat)) TUnit)
+#push-options "--warn_error -242" (* F* warns about the inner let-rec not being faithfully encoded, that's fine. *)
 let ctx_unverified_student_hw_sort #a3p bt_read bt_write bt_alloc =
   let rec sort (fuel:nat) (l:ref (linkedList int)) : ST unit (pre_poly_arrow a3p l) (post_poly_arrow a3p) =
     if fuel = 0 then () else begin
@@ -207,6 +208,7 @@ let ctx_unverified_student_hw_sort #a3p bt_read bt_write bt_alloc =
     end
   in
   (fun l -> raise_val (sort 1000 (downgrade_val l)))
+#pop-options
 
 val progr_sep_test:
   #rp: ref int ->
