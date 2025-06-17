@@ -42,24 +42,17 @@ let do #a (#wp1:pure_wp a) (#wp2:(pure_wp a){pure_stronger _ wp2 wp1}) (f:dm_wp 
 let dm_assert (pre:Type0) : dm_wp unit (as_pure_wp (fun p -> pre /\ p ())) =
   Assert pre Return
 
-assume val dm_assume (post:Type0) : dm_wp unit (as_pure_wp (fun p -> post ==> p ()))
-assume val dm_admit #a () : dm_wp a (as_pure_wp (fun p -> forall r. p r))
+let dm_assume (post:Type0) : dm_wp unit (as_pure_wp (fun p -> post ==> p ())) = admit ()
 
-let dm_contradiction #a () : dm_wp a (as_pure_wp (fun p -> False /\ forall (r:a). p r)) =
-  dm_assert False ;!
-  dm_admit () (** i guess one can use the previous false to prove that a witness exists? **)
-
-
-type dm a (pre:Type0) (post:(_:a{pre} -> Type0)) =
-  dm_wp a (as_pure_wp (fun p -> pre /\ (forall r. post r ==> p r)))
+let dm_admit #a () : dm_wp a (as_pure_wp (fun p -> forall r. p r)) = admit ()
 
 (**** Test Refinements **)
 
 let dm_refine (#a:Type) (x:a) (ref:a -> Type0) : dm_wp (x:a{ref x}) (as_pure_wp #(x:a{ref x}) (fun p -> ref x /\ p (x <: (x:a{ref x})))) =
-  Assert (ref x) (fun _ -> Return (x <: (x:a{ref x}))) // what is the intuition behind this?
-
-let dm_erase_refinement (#a:Type) (ref:a -> Type0) (x:a{ref x}) : dm_wp a (as_pure_wp #a (fun p -> ref x ==> p (x <: a))) =
-  return x
+   Assert (ref x) (fun _ -> Return (x <: (x:a{ref x}))) // what is the intuition behind this?
+  // why does this not work?
+ //  dm_assert (ref x) ;!
+  // return (x <: (x:a{ref x}))
 
 val incr5 (x:int{x > 5}) : r:int{r-x == 5}
 let incr5 x = x + 5
