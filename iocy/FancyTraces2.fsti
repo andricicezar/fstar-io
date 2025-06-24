@@ -36,12 +36,12 @@ let ord_reflexive #e (pts:parallel_traces e) : Lemma (ord pts pts) = ()
 let ord_transitive #e (pts pts' pts'':parallel_traces e) :
   Lemma (ord pts pts' /\ ord pts' pts'' ==> ord pts pts'') = ()
 
-val insert (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) : 
-  pr:(promise 'e 'a){~(pr `mem` pts)} 
-  & 
+val insert (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
+  pr:(promise 'e 'a){~(pr `mem` pts)}
+  &
   pts':(parallel_traces 'e){pts `ord` pts'} // /\ pr `mem` pts' /\ sel pr pts' == lt}
 
-val await_pr (pr:promise 'e 'a) (pts:(parallel_traces 'e){pr `mem` pts}) : 
+val await_pr (pr:promise 'e 'a) (pts:(parallel_traces 'e){pr `mem` pts}) :
   pts':(parallel_traces 'e){pts `ord` pts'}
 
 // val size : atrace 'e -> nat
@@ -62,20 +62,20 @@ val closed_atrace (pts:parallel_traces 'e) (tr:atrace 'e) : GTot Type0 //(decrea
   //   closed_atrace (dsnd (insert pr lt m)) (lt@tl) (** the parent thread can await on the promise of the kid
   //                                              and promises returned/created by the kid *)
 
-val closed_atrace_insert #e #a h (pts:parallel_traces e) (r:a) lt : 
-  Lemma 
+val closed_atrace_insert #e #a h (pts:parallel_traces e) (r:a) lt :
+  Lemma
     (requires (closed_atrace pts (h@lt)))
     (ensures (
       let (| pr, pts' |) = insert r lt pts in
       closed_atrace pts' (h @ [EAsync pr r lt])))
 
 val closed_atrace_await_pr #e #a (pr:promise e a) h pts :
-  Lemma 
+  Lemma
     (requires (closed_atrace pts h))
     (ensures (closed_atrace (await_pr pr pts) (h @ [EAwait pr])))
 
 val closed_atrace_produce #e (ev:e) h pts :
-  Lemma 
+  Lemma
     (requires (closed_atrace pts h))
     (ensures (closed_atrace pts (h @ [Ev ev])))
 
@@ -98,7 +98,8 @@ let w_post e a h pts =
 
 let w e a = h:atrace e -> pts:parallel_traces e{closed_atrace pts h} -> w_post e a h pts -> Type0
 
-let w' e a = s0:nat -> w e (nat * a)
+let w_ord #e #a (w1 w2:w e a) =
+  forall h pts post. w2 h pts post ==> w1 h pts post
 
 let encode_pre_post_in_w #e #a
   (pre:w_pre e)
@@ -119,13 +120,13 @@ let w_bind #e #a #b (m:w e a) (f: a -> w e b) : w e b =
 let w_async #e #a (wf:w e a) : w e (promise e a) =
   fun h pts post ->
     wf h pts (fun r' lt' pts' ->
-      let (| pr, pts'' |) = insert r' lt' pts' in
+      let prpts'' = insert r' lt' pts' in
       closed_atrace_insert h pts' r' lt';
-      post pr [EAsync pr r' lt'] pts'')
+      post (dfst prpts'') [EAsync (dfst prpts'') r' lt'] (dsnd prpts''))
 
 let w_await #e #a (pr:promise e a) : w e a =
   fun h pts post ->
-    pr `mem` pts /\ 
+    pr `mem` pts /\
     (closed_atrace_await_pr pr h pts;
     post (sel_r pr pts) [EAwait pr] (await_pr pr pts))
 
@@ -134,7 +135,6 @@ let w_produce #e (ev:e) : w e unit =
     closed_atrace_produce ev h pts;
     post () [Ev ev] pts
 
-
 let (let!) = w_bind
 
 let f (pr:promise int unit) : w int unit =
@@ -142,10 +142,24 @@ let f (pr:promise int unit) : w int unit =
   w_produce 0
 
 let g () : w int unit =
-  let! pr' = w_async ( 
-    let! pr = w_async (w_produce (-2)) in
-    f pr) in (** h of f = [EAsync pr]) **)
+  let! pr'  = w_async (let! pr = w_async (w_produce (-2)) in f pr) in
   let! pr'' = w_async (w_produce (-1)) in
   w_await pr' ;!
   w_await pr''
 
+let _ =
+  assert (
+    g ()
+    `w_ord`
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr' lt' pr''. lt == [EAsync pr' () lt'; EAsync pr'' () [Ev (-1)]; EAwait pr'; EAwait pr''])
+  ) by (
+    norm [delta_only [`%encode_pre_post_in_w; `%w_ord;`%g];iota];
+    let h = forall_intro () in
+    let pts = forall_intro () in
+    let post = forall_intro () in
+    let hyp = implies_intro () in
+    let (_, hyp') = destruct_and hyp in
+    clear hyp;
+    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind];iota];
+    simpl ();
+    dump "H")
