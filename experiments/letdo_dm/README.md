@@ -1,7 +1,6 @@
 # Let do notation for Dijkstra Monads
 
-I'm trying to figure out if one can get rid off the F\*'s effect system
-by working directly with the monadic representation.
+I'm trying to figure out if one can work directly with a DM/monadic representation.
 
 #### Syntactic sugar
 F\*'s effect system handles for the user the interaction
