@@ -16,7 +16,7 @@ type trace e = list e
 val suffix_of : atrace 'e -> atrace 'e -> Type0
 val lemma_suffix_of_reflexive : l:atrace 'e -> Lemma (suffix_of l l)
 
-val parallel_traces (e:Type0) : Type u#1 (* promise_id -> atrace *)
+val parallel_traces (e:Type0) : Type u#1 (* promise_id -> atrace e *)
 
 val mem (pr:promise 'e 'a) (pts:parallel_traces 'e) : Type0
 val sel (pr:promise 'e 'a) (pts:(parallel_traces 'e){pr `mem` pts}) : atrace 'e
@@ -41,11 +41,9 @@ let rec closed_atrace (m:parallel_traces 'e) (tr:atrace 'e) : GTot Type0 (decrea
   | EAsync pr lt :: tl ->
     assume (size lt < size tr);
     assume (size (lt@tl) < size tr);
-    closed_atrace m lt /\
-    closed_atrace (insert pr lt m) (lt@tl)
-    (** this is a bit awkard because it exposes the promise to the asynchronus computation **)
-    (** this variant does not consider HO promises:
-        closed_atrace m lt /\ closed_atrace (map_insert pr m lt) tl **)
+    closed_atrace m lt /\ (** the new thread can await on existing promises *)
+    closed_atrace (insert pr lt m) (lt@tl) (** the parent thread can await on the promise of the kid
+                                               and promises returned/created by the kid *)
 
 val interleave_map
   (pts: parallel_traces 'e)
@@ -71,3 +69,4 @@ let encode_pre_post_in_w #e #a
   (post:(h:atrace e -> pts:parallel_traces e -> w_post e a h pts))
   : w e a
   = (fun h pts p -> pre h pts /\ (forall r' lt' pts'. post h pts r' lt' pts' ==> p r' lt' pts'))
+
