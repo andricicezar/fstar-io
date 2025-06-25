@@ -10,12 +10,12 @@ val rev_append: l1:list 'a -> l2:list 'a ->
         (ensures ((rev (l1@l2)) == ((rev l2)@(rev l1))))
   [SMTPat (rev (l1@l2))]**)
 
-val promise (e:Type u#a) (a:Type u#b) : Type u#(max a b)
+val promise (e:Type u#0) (a:Type u#0) : Type u#0
 
 noeq
 type event (e: Type0) : Type u#1 =
 | Ev : e -> event e
-| EAsync : #b:Type0 -> pr:promise e b -> r:b -> lt:atrace e -> event e
+| EAsync : b:Type0 -> pr:promise e b -> event e
 | EAwait : #b:Type0 -> pr:promise e b -> event e
 and atrace e : Type u#1 = list (event e)
 
@@ -36,7 +36,8 @@ val sel_r (pr:promise 'e 'a) (pts:(parallel_traces 'e){pr `mem` pts}) : 'a
 
 let ord #e (pts pts':parallel_traces e) =
   (forall a (x:promise e a). x `mem` pts ==> x `mem` pts') /\
-  (forall a (x:promise e a). x `mem` pts ==> (sel_lt x pts' `suffix_of` sel_lt x pts))
+  (forall a (x:promise e a). x `mem` pts ==> (sel_lt x pts' `suffix_of` sel_lt x pts)) /\
+  (forall a (x:promise e a). x `mem` pts ==> (sel_r x pts' == sel_r x pts))
 
 let ord_reflexive #e (pts:parallel_traces e) : Lemma (ord pts pts) = ()
 let ord_transitive #e (pts pts' pts'':parallel_traces e) :
@@ -63,6 +64,30 @@ val lemma_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
 val await (pr:promise 'e 'a) (pts:(parallel_traces 'e){pr `mem` pts}) :
   pts':(parallel_traces 'e){pts `ord` pts' /\ sel_lt pr pts' == []}
 
+let sel_r_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
+  Lemma (
+    let prpts = async r lt pts in
+    sel_r (fst prpts) (snd prpts) == r
+  )
+  [SMTPat (sel_r (fst (async r lt pts)) (snd (async r lt pts)))]
+  = ()
+
+let sel_lt_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
+  Lemma (
+    let prpts = async r lt pts in
+    sel_lt (fst prpts) (snd prpts) == lt
+  )
+  [SMTPat (sel_lt (fst (async r lt pts)) (snd (async r lt pts)))]
+  = ()
+
+let sel_lt_await_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
+  Lemma (
+    let prpts = async r lt pts in
+    sel_lt (fst prpts) (await (fst prpts) (snd prpts)) == []
+  )
+  [SMTPat (sel_lt (fst (async r lt pts)) (await (fst (async r lt pts)) (snd (async r lt pts))))]
+  = ()
+
 // val size : atrace 'e -> nat
 
 val closed_atrace (pts:parallel_traces 'e) (tr:atrace 'e) : GTot Type0 //(decreases (size tr))
@@ -86,8 +111,8 @@ val closed_atrace_async #e #a h (pts:parallel_traces e) (r:a) lt :
     (requires (closed_atrace pts ((rev lt) @ h)))
     (ensures (
       let (pr, pts') = async r lt pts in
-      closed_atrace pts' ((EAsync pr r lt) :: h)))
-    [SMTPat (closed_atrace (snd (async r lt pts)) ((EAsync (fst (async r lt pts)) r lt) :: h))]
+      closed_atrace pts' ((EAsync a pr) :: h)))
+    [SMTPat (closed_atrace (snd (async r lt pts)) ((EAsync a (fst (async r lt pts))) :: h))]
 //     SMTPat (closed_atrace (snd (async r lt pts)) ([EAsync (fst (async r lt pts)) r lt] @ h));
 //     SMTPat (closed_atrace (snd (async r lt pts)) ([EAsync (fst (async r lt pts)) r lt] @ h)) ]
 
@@ -164,7 +189,7 @@ let w_async #e #a (wf:w e a) : w e (promise e a) =
     (** CA: should wf get any pts' that extends pts? *)
     wf h pts (fun r' lt' pts' ->
       let prpts'' = async r' lt' pts' in
-      post (fst prpts'') [EAsync (fst prpts'') r' lt'] (snd prpts''))
+      post (fst prpts'') [EAsync a (fst prpts'')] (snd prpts''))
 
 unfold
 let w_await #e #a (pr:promise e a) : w e a =
@@ -216,25 +241,25 @@ let test_async () =
   assert (
     (w_async (w_produce 5))
     `w_ord`
-    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ pr lt _ -> lt == [EAsync pr () [Ev 5]]))
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ pr lt _ -> lt == [EAsync unit pr]))
 
 let test_async_ev () =
   assert (
     (let! _ = w_async (w_produce 5) in w_produce 2)
     `w_ord`
-    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync pr () [Ev 5]; Ev 2]))
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync unit pr; Ev 2]))
 
 let test_async_await () =
   assert (
     (let! pr = w_async (w_produce 5) in w_await pr)
     `w_ord`
-    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync pr () [Ev 5]; EAwait pr]))
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync unit pr; EAwait pr]))
 
 let test_async_ev_await () =
   assert (
     (let! pr = w_async (w_produce 5) in w_produce 0 ;! w_await pr)
     `w_ord`
-    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync pr () [Ev 5]; Ev 0; EAwait pr]))
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ -> exists pr. lt == [EAsync unit pr; Ev 0; EAwait pr]))
 
 unfold
 let f (pr:promise int unit) : w int unit =
@@ -254,30 +279,72 @@ let _ =
     (let! pr = w_async (w_produce (-2)) in f pr)
     `w_ord`
     encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ ->
-      exists pr. lt == [EAsync pr () [Ev (-2)]; EAwait pr; Ev 0])
+      exists pr. lt == [EAsync unit pr; EAwait pr; Ev 0])
   )
 
 let _ =
   assert (
-    (w_async (let! pr = w_async (w_produce (-2)) in f pr))
+    (let! _ = w_async (w_async (w_return int ())) in w_return int ())
     `w_ord`
-    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ pr' lt _ ->
-      exists pr. lt == [EAsync pr' () [EAsync pr () [Ev (-2)]; EAwait pr; Ev 0]])
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ () lt _ ->
+      exists pr. lt == [EAsync (promise int unit) pr])
+  )
+
+let stupid_lemma (e1 e2:'a) : Lemma ([e1]@[e2] == [e1;e2]) = ()
+
+let _ =
+  assert (
+    (let! pr = w_async (w_async (w_return int ())) in w_await pr ;! w_return int pr)
+    `w_ord`
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ pr lt _ ->
+      lt == [EAsync (promise int unit) pr; EAwait pr])
   )
   by (
-    norm [delta_only [`%encode_pre_post_in_w; `%w_ord;`%g;`%f];iota];
-    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang];iota];
+    norm [delta_only [`%encode_pre_post_in_w; `%w_ord];iota];
+    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang;`%w_return];iota];
+    let h = forall_intro () in
+    let pts = forall_intro () in
+    let post = forall_intro () in
+    let hyp = implies_intro () in
+    (**
+    let (_, hyp') = destruct_and hyp in
+    clear hyp;
+    FStar.Tactics.V1.Logic.split ();
+    bump_nth 2;
+    simpl ();
+    let hyp = instantiate hyp' (fresh_uvar None) in clear hyp';
+    let hyp' = instantiate hyp (fresh_uvar None) in clear hyp;
+    let hyp = instantiate hyp' (fresh_uvar None) in clear hyp';
+    mapply hyp;
+    clear hyp;
+    l_to_r [`sel_r_async];
+    l_to_r [`stupid_lemma];
+    tadmit ();
+    tadmit ();**)
+    // witness (`(fst (async (fst (async () [] (`#pts)))
+    //               [EAsync unit (fst (async () [] (`#pts)))]
+    //               (snd (async () [] (`#pts))))));
+    dump "H")
+
+let _ =
+  assert (
+    (w_async (let! pr = w_async (w_return int ()) in w_await pr) ;! w_return int ())
+    `w_ord`
+    encode_pre_post_in_w (fun _ _ -> True) (fun _ _ () lt _ ->
+      exists pr pr'. lt == [EAsync pr' () [EAsync pr () []; EAwait pr]])
+  )
+  by (
+    norm [delta_only [`%encode_pre_post_in_w; `%w_ord];iota];
+    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang;`%w_return];iota];
     let h = forall_intro () in
     let pts = forall_intro () in
     let post = forall_intro () in
     let hyp = implies_intro () in
     let (_, hyp') = destruct_and hyp in
     clear hyp;
-    simpl ();
     FStar.Tactics.V1.Logic.split ();
     bump_nth 2;
-    smt ();
-    smt ();
+    simpl ();
     dump "H")
 
 let _ =
