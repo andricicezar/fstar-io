@@ -21,12 +21,11 @@ and atrace e : Type u#1 = list (event e)
 
 type trace e = list e
 
-val suffix_of : atrace 'e -> atrace 'e -> Type0
-val lemma_suffix_of_reflexive : l:atrace 'e -> Lemma (suffix_of l l) [SMTPat (suffix_of l l)]
-val lemma_suffix_of_transitive :
-  l1:atrace 'e -> l2:atrace 'e -> l3:atrace 'e ->
+let suffix_of #e (l1:atrace e) (l2:atrace e) : Type0 = admit ()
+let lemma_suffix_of_reflexive #e (l:atrace e) : Lemma (suffix_of l l) [SMTPat (suffix_of l l)] = admit ()
+let lemma_suffix_of_transitive #e (l1:atrace e) (l2:atrace e) (l3:atrace e) :
   Lemma (suffix_of l1 l2 /\ suffix_of l2 l3 ==> suffix_of l1 l3)
-  [SMTPat (suffix_of l1 l2); SMTPat (suffix_of l2 l3); SMTPat (suffix_of l1 l3)]
+  [SMTPat (suffix_of l1 l2); SMTPat (suffix_of l2 l3); SMTPat (suffix_of l1 l3)] = ()
 
 val parallel_traces (e:Type0) : Type u#1 (* promise_id -> atrace e *)
 
@@ -46,7 +45,9 @@ let ord_transitive #e (pts pts' pts'':parallel_traces e) :
 val async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
   prpts':((promise 'e 'a) & (parallel_traces 'e)){
     ~(fst prpts' `mem` pts) /\ pts `ord` (snd prpts') /\
-    fst prpts' `mem` snd prpts' /\ sel_r (fst prpts') (snd prpts') == r /\ sel_lt (fst prpts') (snd prpts') == lt}
+    fst prpts' `mem` snd prpts' /\
+    sel_r (fst prpts') (snd prpts') == r /\
+    sel_lt (fst prpts') (snd prpts') == lt}
 
 (**
 val lemma_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
@@ -90,7 +91,7 @@ let sel_lt_await_async (r:'a) (lt:atrace 'e) (pts:parallel_traces 'e) :
 
 // val size : atrace 'e -> nat
 
-val closed_atrace (pts:parallel_traces 'e) (tr:atrace 'e) : GTot Type0 //(decreases (size tr))
+val closed_atrace (pts:parallel_traces 'e) (tr:atrace 'e) : Type0 //(decreases (size tr))
   // match tr with
   // | [] -> True
   // | Ev _ :: tl ->
@@ -141,11 +142,6 @@ let closed_atrace_rev_append #e h lt1 lt2 (pts:parallel_traces e) :
     [SMTPat (closed_atrace pts ((rev (lt1@lt2))@h));
      SMTPat (closed_atrace pts ((rev lt2) @ (rev lt1)@h))]
   = rev_append lt1 lt2
-
-// val interleave_map
-//   (pts: parallel_traces 'e)
-//   (#_: squash (forall a (pr:promise 'e a). pr `mem` pts ==> closed_atrace pts (sel pr pts)))
-//   : list (trace 'e)
 
 let w_pre e = h:atrace e -> pts:parallel_traces e{
   closed_atrace pts h
@@ -273,7 +269,6 @@ let g () : w int unit =
   w_await pr' ;!
   w_await pr''
 
-#push-options "--fuel 100 --z3rlimit 100"
 let _ =
   assert (
     (let! pr = w_async (w_produce (-2)) in f pr)
@@ -290,8 +285,6 @@ let _ =
       exists pr. lt == [EAsync (promise int unit) pr])
   )
 
-let stupid_lemma (e1 e2:'a) : Lemma ([e1]@[e2] == [e1;e2]) = ()
-
 let _ =
   assert (
     (let! pr = w_async (w_async (w_return int ())) in w_await pr ;! w_return int pr)
@@ -299,72 +292,49 @@ let _ =
     encode_pre_post_in_w (fun _ _ -> True) (fun _ _ pr lt _ ->
       lt == [EAsync (promise int unit) pr; EAwait pr])
   )
-  by (
-    norm [delta_only [`%encode_pre_post_in_w; `%w_ord];iota];
-    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang;`%w_return];iota];
-    let h = forall_intro () in
-    let pts = forall_intro () in
-    let post = forall_intro () in
-    let hyp = implies_intro () in
-    (**
-    let (_, hyp') = destruct_and hyp in
-    clear hyp;
-    FStar.Tactics.V1.Logic.split ();
-    bump_nth 2;
-    simpl ();
-    let hyp = instantiate hyp' (fresh_uvar None) in clear hyp';
-    let hyp' = instantiate hyp (fresh_uvar None) in clear hyp;
-    let hyp = instantiate hyp' (fresh_uvar None) in clear hyp';
-    mapply hyp;
-    clear hyp;
-    l_to_r [`sel_r_async];
-    l_to_r [`stupid_lemma];
-    tadmit ();
-    tadmit ();**)
-    // witness (`(fst (async (fst (async () [] (`#pts)))
-    //               [EAsync unit (fst (async () [] (`#pts)))]
-    //               (snd (async () [] (`#pts))))));
-    dump "H")
 
 let _ =
   assert (
     (w_async (let! pr = w_async (w_return int ()) in w_await pr) ;! w_return int ())
     `w_ord`
     encode_pre_post_in_w (fun _ _ -> True) (fun _ _ () lt _ ->
-      exists pr pr'. lt == [EAsync pr' () [EAsync pr () []; EAwait pr]])
+      exists pr'. lt == [EAsync unit pr'])
   )
-  by (
-    norm [delta_only [`%encode_pre_post_in_w; `%w_ord];iota];
-    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang;`%w_return];iota];
-    let h = forall_intro () in
-    let pts = forall_intro () in
-    let post = forall_intro () in
-    let hyp = implies_intro () in
-    let (_, hyp') = destruct_and hyp in
-    clear hyp;
-    FStar.Tactics.V1.Logic.split ();
-    bump_nth 2;
-    simpl ();
-    dump "H")
 
 let _ =
   assert (
     g ()
     `w_ord`
     encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ ->
-      exists pr' pr pr''. lt == [EAsync pr' () [EAsync pr () [Ev (-2)]; EAwait pr; Ev 0]; EAsync pr'' () [Ev (-1)]; EAwait pr'; EAwait pr''])
+      exists pr' pr''. lt == [EAsync unit pr'; EAsync unit pr''; EAwait pr'; EAwait pr''])
   )
-  by (
-    norm [delta_only [`%encode_pre_post_in_w; `%w_ord;`%g];iota];
-    norm [delta_only [`%w_async;`%w_produce;`%w_await;`%w_bind;`%op_let_Bang];iota];
-    let h = forall_intro () in
-    let pts = forall_intro () in
-    let post = forall_intro () in
-    let hyp = implies_intro () in
-    let (_, hyp') = destruct_and hyp in
-    clear hyp;
-    simpl ();
-    let hyp = instantiate hyp' (`()) in
-    clear hyp';
-    dump "H")
-#pop-options
+
+noeq
+type ltl_syntax (s:Type0) =
+| Eventually : ltl_syntax s -> ltl_syntax s
+| Always: ltl_syntax s -> ltl_syntax s
+| And: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Or: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Impl: ltl_syntax s -> ltl_syntax s -> ltl_syntax s
+| Now: s -> ltl_syntax s
+
+let rec ltl_denote (#s: Type0) (form: ltl_syntax s) (tr: trace s) : GTot Type0 = admit ()
+
+val size_pts : parallel_traces 'e -> nat
+val can_progress : pr:promise 'e 'a -> pts:parallel_traces 'e{pr `mem` pts} -> bool
+val get_next : #e:_ -> pts:parallel_traces e -> list (a:Type0 & pr:(promise e a){pr `mem` pts /\ can_progress pr pts})
+val progress : pr:promise 'e 'a -> pts:(parallel_traces 'e){pr `mem` pts /\ can_progress pr pts} -> 'e * pts':parallel_traces 'e{size_pts pts' < size_pts pts}
+
+let rec interleave_map
+  (h:trace 'e)
+  (pts: parallel_traces 'e)
+  : Tot (list (trace 'e)) (decreases (size_pts pts)) =
+  let next : list _ = get_next pts in
+  if length next = 0 then [h]
+  else begin
+    fold_left (@) [] (
+      map (fun (apr:(a:Type0 & pr:(promise 'e a){pr `mem` pts /\ can_progress pr pts})) ->
+        let (| _, pr |) = apr in
+        let (ev, pts') = progress pr pts in
+        interleave_map (ev::h) pts') next)
+  end
