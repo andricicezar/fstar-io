@@ -61,6 +61,7 @@ let waiting pr pts : bool =
   | EAwait _::_ -> true
   | _ -> false
 
+(** CA: this is not a good definition since pr contains traces that did not start yet **)
 let can_progress pr pts =
   not (fulfilled pr pts) && not (waiting pr pts)
 

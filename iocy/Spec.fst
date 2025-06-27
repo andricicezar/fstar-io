@@ -4,11 +4,16 @@ open FStar.Tactics
 open FStar.List.Tot
 open ParallelTraces
 
+(** The following refinement tries to capture the idea that pts is complete: contains
+    all the defined promises.
+
+CA: Not sure if it achieves that.   **)
 let w_pre e = h:atrace e -> pts:parallel_traces e{
   closed_atrace pts h
   // /\ (forall pr. pr `mem` pts ==> (sel pr pts) `suffix_of` pr.lt)
   // we cannot have this refinement since we don't store the trace on the promise anymore
 } -> Type0
+
 
 let w_post e a h pts =
   a -> lt:atrace e -> pts':parallel_traces e{
@@ -17,17 +22,6 @@ let w_post e a h pts =
   } -> Type0
 
 let w e a = h:atrace e -> pts:parallel_traces e{closed_atrace pts h} -> w_post e a h pts -> Type0
-
-unfold
-let w_ord #e #a (w1 w2:w e a) =
-  forall h pts post. w2 h pts post ==> w1 h pts post
-
-unfold
-let encode_pre_post_in_w #e #a
-  (pre:w_pre e)
-  (post:(h:atrace e -> pts:parallel_traces e -> w_post e a h pts))
-  : w e a
-  = (fun h pts p -> pre h pts /\ (forall r' lt' pts'. post h pts r' lt' pts' ==> p r' lt' pts'))
 
 unfold
 let w_return e #a (x:a) : w e a =
@@ -43,7 +37,16 @@ let w_bind #e #a #b (m:w e a) (f: a -> w e b) : w e b =
 unfold
 let w_async #e #a (wf:w e a) : w e (promise e a) =
   fun h pts post ->
-    (** CA: should wf get any pts' that extends pts? *)
+    (** CA: I think passing `h` and `pts` to `wf` is wrong,
+
+        wf can have as a pre that h and pts are empty,
+        which could be when wf is asynced.
+        However, one can always bind things later, which would
+        make h and pts not empty.
+
+        My guess is that one would have to do a
+          forall h' pts'. h < h' /\ pts < pts' ==> wf h' pts' ...
+    *)
     wf h pts (fun r' lt' pts' ->
       let prpts'' = async r' lt' pts' in
       post (fst prpts'') [EAsync a (fst prpts'')] (snd prpts''))
@@ -58,6 +61,17 @@ unfold
 let w_produce #e (ev:e) : w e unit =
   fun h pts post ->
     post () [Ev ev] pts
+
+unfold
+let w_ord #e #a (w1 w2:w e a) =
+  forall h pts post. w2 h pts post ==> w1 h pts post
+
+unfold
+let encode_pre_post_in_w #e #a
+  (pre:w_pre e)
+  (post:(h:atrace e -> pts:parallel_traces e -> w_post e a h pts))
+  : w e a
+  = (fun h pts p -> pre h pts /\ (forall r' lt' pts'. post h pts r' lt' pts' ==> p r' lt' pts'))
 
 unfold
 let (let!) #e #a #b (m:w e a) (f: a -> w e b) : w e b = w_bind m f
