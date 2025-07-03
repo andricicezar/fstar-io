@@ -23,9 +23,21 @@ let w_post e a h pts =
 
 let w e a = h:atrace e -> pts:parallel_traces e{closed_atrace pts h} -> w_post e a h pts -> Type0
 
+(** We would like to be able to verify that {empty} 1;2;3;4 {empty} *)
+
+
+(** One may need some extra constraint between how pts evolves to pts':
+let w e a = h:atrace e -> pts:parallel_traces e{closed_atrace pts h} -> c:(pts:_ -> pts':_ -> Type0) -> w_post e a h pts c -> Type0
+**)
+
 unfold
 let w_return e #a (x:a) : w e a =
   fun h pts p -> p x [] pts
+
+(** Return may also need a forall,
+
+    What about Bind? hopefully, it is covered .
+    similar to framing in pulse, steel? **)
 
 unfold
 let w_bind #e #a #b (m:w e a) (f: a -> w e b) : w e b =
@@ -33,6 +45,9 @@ let w_bind #e #a #b (m:w e a) (f: a -> w e b) : w e b =
     m h pts (fun r' lt' pts' ->
         f r' ((rev lt')@h) pts' (fun r'' lt'' pts'' ->
         post r'' (lt'@lt'') pts''))
+
+(** collecting - vs
+    scheduling - **)
 
 unfold
 let w_async #e #a (wf:w e a) : w e (promise e a) =
@@ -46,6 +61,8 @@ let w_async #e #a (wf:w e a) : w e (promise e a) =
 
         My guess is that one would have to do a
           forall h' pts'. h < h' /\ pts < pts' ==> wf h' pts' ...
+
+        Probably all operations need this quantification.
     *)
     wf h pts (fun r' lt' pts' ->
       let prpts'' = async r' lt' pts' in
