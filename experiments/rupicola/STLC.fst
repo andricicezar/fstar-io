@@ -63,6 +63,10 @@ instance compile_exp_lambda
   t = ELam ca.t cf.t
 }
 
+let test1_exp : compile_exp #(unit -> unit) (fun x -> ()) 0 =
+  solve
+let _ = assert (test1_exp.t == ELam TUnit (EUnit))
+
 let test2_exp : compile_exp #(unit -> unit) (fun x -> x) 0 =
   solve
 let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
@@ -121,7 +125,7 @@ instance compile_exp_myf n : compile_exp myf n = {
 
 let test1_fapp : compile_exp (myf ()) 0 =
   solve
-let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit)
+let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit) by (compute(); dump "H")
 
 assume val tt1 : unit
 instance compile_exp_tt1 (n:nat{n >= 1}) : compile_exp tt1 n = { t = (EVar (n-1)) }
