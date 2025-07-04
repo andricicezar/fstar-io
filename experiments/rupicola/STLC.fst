@@ -63,6 +63,10 @@ instance compile_exp_lambda
   t = ELam ca.t cf.t
 }
 
+let test1_exp : compile_exp #(unit -> unit) (fun x -> ()) 0 =
+  solve
+let _ = assert (test1_exp.t == ELam TUnit (EUnit))
+
 let test2_exp : compile_exp #(unit -> unit) (fun x -> x) 0 =
   solve
 let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
@@ -89,6 +93,10 @@ let test0_fapp : compile_exp #unit ((fun x y -> y) () ()) 0 =
   solve
 let _ = assert (test0_fapp.t == EUnit)
 
+let test0'_fapp : compile_exp #(unit->unit) (fun z -> (fun x y -> y) () ()) 0 =
+  solve
+let _ = assert (test0'_fapp.t == ELam TUnit EUnit) by (compute(); dump "H")
+
 (** How to deal with top level definitions?
 
 I suppose here is a point from which one has to use tactics.
@@ -106,7 +114,7 @@ instance compile_exp_f n : compile_exp f n = {
 
 let test1_fapp : compile_exp #unit (f ()) 0 =
   solve
-let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit)
+let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit) by (compute(); dump "H")
 
 assume val tt1 : unit
 instance compile_exp_tt1 (n:nat{n >= 1}) : compile_exp tt1 n = { t = (EVar (n-1)) }

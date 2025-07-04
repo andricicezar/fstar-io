@@ -19,9 +19,10 @@ let sem_t (t:tgt) (zs:list int) =
 let equiv (t:tgt) (z:int) =
   forall zs. sem_t t zs = z :: zs
 
-class compile (s:int) = { t:(t:tgt) }
+class compile (s:int) = { t:(t:tgt(* {equiv t s} *)) }
 
 instance compile_int (s:int) : compile s = { t = [TPush s] }
+
 instance compile_add s1 s2 {| c1:compile s1 |} {| c2:compile s2 |}  : compile (s1+s2) = {
   t = c1.t @ c2.t @ [TPopAdd]
 }
@@ -44,4 +45,5 @@ let g x = x
 
 let test2 : compile (if g true then f 10 else 4) = solve
 
+[@expect_failure]
 let _ = assert (test2.t == []) by (compute (); dump "H")
