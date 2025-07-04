@@ -85,26 +85,41 @@ instance compile_exp_app
   t = EApp (c1.t) (c2.t)
 }
 
-let test0_fapp : compile_exp #unit ((fun x y -> y) () ()) 0 =
+let test0_fapp : compile_exp ((fun x y -> y) () ()) 0 =
   solve
 let _ = assert (test0_fapp.t == EUnit)
 
-(** How to deal with top level definitions?
+(** How to deal with top level definitions? **)
 
-I suppose here is a point from which one has to use tactics.
+val myf : unit -> unit
+let myf () = ()
+
+(* It seems that it just unfolds the definition of myf, which is pretty cool **)
+let test1_topf : compile_exp (myf ()) 0 =
+  solve
+let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit)
+
+val myf2 : unit -> unit -> unit
+let myf2 x y = x
+
+(* Also handles partial application. Pretty amazing! *)
+let test2_topf : compile_exp (myf2 ()) 0 =
+  solve
+let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit)
+
+(**
+To avoid unfolding top level definitions,
+I suppose one could use tactics.
 One would start with an empty environment and then compile definitons one by one,
 and after each one the environment is extended
 and a new instance is defined in the style of `compile_exp_f`.
 **)
 
-val f : unit -> unit
-let f () = ()
-
-instance compile_exp_f n : compile_exp f n = {
+instance compile_exp_myf n : compile_exp myf n = {
   t = (EVar n) (** CA: `n` because I assume that `f` is the first in the environment **)
 }
 
-let test1_fapp : compile_exp #unit (f ()) 0 =
+let test1_fapp : compile_exp (myf ()) 0 =
   solve
 let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit)
 
@@ -118,7 +133,7 @@ assume val tt3 : unit
 instance compile_exp_tt3 (n:nat{n >= 3}) : compile_exp tt3 n = { t = (EVar (n-3)) }
 
 
-let test2_fapp : compile_exp (let x = tt1 in f x) 3 =
+let test2_fapp : compile_exp (let x = tt1 in myf x) 3 =
   solve
 
 let _ = assert (test2_fapp.t == EApp (EVar 3) (EVar 2)) by (compute (); dump "H")
