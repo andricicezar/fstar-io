@@ -100,18 +100,31 @@ and a new instance is defined in the style of `compile_exp_f`.
 val f : unit -> unit
 let f () = ()
 
-let compile_f : compile_exp f 0 = solve
-let _ = assert (compile_f.t == ELam TUnit EUnit)
-
-instance compile_exp_f n x {| c1:compile_exp x n |} : compile_exp (f x) n = {
-  t = EApp (EVar n) c1.t (** CA: `n` because I assume that `f` is the first in the environment **)
+instance compile_exp_f n : compile_exp f n = {
+  t = (EVar n) (** CA: `n` because I assume that `f` is the first in the environment **)
 }
 
 let test1_fapp : compile_exp #unit (f ()) 0 =
   solve
 let _ = assert (test1_fapp.t == EApp (EVar 0) EUnit)
 
-(** CA: this is useless since F* seems to get rid of lets:
+assume val tt1 : unit
+instance compile_exp_tt1 (n:nat{n >= 1}) : compile_exp tt1 n = { t = (EVar (n-1)) }
+
+assume val tt2 : unit
+instance compile_exp_tt2 (n:nat{n >= 2}) : compile_exp tt2 n = { t = (EVar (n-2)) }
+
+assume val tt3 : unit
+instance compile_exp_tt3 (n:nat{n >= 3}) : compile_exp tt3 n = { t = (EVar (n-3)) }
+
+
+let test2_fapp : compile_exp (let x = tt1 in f x) 3 =
+  solve
+
+let _ = assert (test2_fapp.t == EApp (EVar 3) (EVar 2)) by (compute (); dump "H")
+
+(** CA: is this useful? F* seems to get rid of lets:
+    Probably even this is interpreted as `f x` instead of the let.
 instance compile_exp_let
   (n:nat)
   (#a:Type) {| ca: compile_typ a |}
@@ -119,25 +132,10 @@ instance compile_exp_let
   (f:a -> b) {| cf: compile_exp (f (get_v (n+1) a)) (n+1) |}
   (x:a)     {| cx: compile_exp x n |}
   : compile_exp (let x' = x in f x') n = {
-  t = EApp (ELam ca.t (EApp (ELam ca.t cf.t) (EVar 0))) cx.t
+  t = EApp (ELam ca.t cf.t) cx.t
 }
 
-let test0_let : compile_exp #unit (let x = () in x) 0 =
-  compile_exp_let 0 _ #solve () #solve
-let _ = assert (test0_let.t ==
-    (EApp (ELam TUnit (EApp (ELam TUnit EUnit) (EVar 0)))
-          EUnit))
-
-let test1_let : compile_exp #unit (let f = (fun (x:unit) -> x) in f ()) 0 =
-  compile_exp_let 0 _ #solve (fun (x:unit) -> x) #solve
-  // solve -- this solves it to EUnit because of normalization :)
-
-let _ = assert (test1_let.t ==
-    (EApp
-      (ELam
-            (TArr TUnit TUnit)
-            (EApp
-                  (ELam (TArr TUnit TUnit) EUnit)
-                  (EVar 0)))
-      (ELam TUnit (EVar 0))))
-**)
+let test3_fapp : compile_exp (let x = tt1 in f x) 3 =
+  solve
+let _ = assert (test3_fapp.t == EApp (EVar 3) (EVar 2)) by (compute (); dump "H")
+ **)
