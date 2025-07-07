@@ -56,6 +56,8 @@ type exp =
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
 type env = var -> Tot (option typ)
+type env_card (g:env) =
+  g_card:nat{forall (i:nat). i < g_card ==> Some? (g i)}
 
 val empty : env
 let empty _ = None
@@ -87,60 +89,71 @@ noeq type typing : env -> exp -> typ -> Type =
              typing g EUnit TUnit
 
 
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (varn:nat) = {
-  [@@@no_method] t : exp
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (g:env) (g_card:env_card g) = {
+  [@@@no_method] t : exp;
+  [@@@no_method] proof : typing g t ca.t
 }
 
-assume val get_v : y:var -> a:Type0 -> a
-(** CA: this is an abstraction that helps with dealing with
-   variables **)
+//assume val get_v : g:env -> g_card:env_card g -> i:nat{i < g_card} -> a:Type -> ca:compile_typ a -> squash (Some?.v (g (g_card-i-1)) == ca.t) -> a
+assume val get_v : i:nat -> a:Type -> a
+(** CA: this is an abstraction that helps with dealing with variables.
+   It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
 
-instance compile_exp_unit n : compile_exp #unit #solve () n = {
-  t = EUnit
+instance compile_exp_unit g card_g : compile_exp #unit #solve () g card_g = {
+  t = EUnit;
+  proof = TyUnit;
 }
 
-let test_unit : compile_exp () 0 = solve
+let test_unit g n : compile_exp () g n = solve
 
-instance compile_exp_var (#a:Type) {| ca: compile_typ a |} n (i:nat{i <= n}) : compile_exp (get_v i a) n = {
-    t = EVar (n-i)
+instance compile_exp_var (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card /\ Some? (g (g_card-i-1)) /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp (get_v i a) g g_card = {
+    t = EVar (g_card-i-1);
+    proof = begin
+      let v = g_card-i-1 in
+      TyVar #g v
+    end
   }
 
 instance compile_exp_lambda
-  (n:nat)
+  g
+  (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:a -> b) {| cf: (compile_exp #_ #cb (f (get_v (n+1) a)) (n+1)) |}
-  : compile_exp #_ #solve (fun x -> f x) n = {
-  t = ELam ca.t cf.t
+  (f:a -> b) {| cf: (compile_exp #_ #cb (f (get_v g_card a)) (extend ca.t g) (g_card+1)) |}
+  : compile_exp #_ #solve (fun x -> f x) g g_card = {
+  t = ELam ca.t cf.t;
+  proof = TyLam #g ca.t cf.proof;
 }
 
-let test1_exp : compile_exp #(unit -> unit) (fun x -> ()) 0 =
+let test1_exp : compile_exp #(unit -> unit) (fun x -> ()) empty 0 =
   solve
 let _ = assert (test1_exp.t == ELam TUnit (EUnit))
 
-let test2_exp : compile_exp #(unit -> unit) (fun x -> x) 0 =
+let test2_exp : compile_exp #(unit -> unit) (fun x -> x) empty 0 =
   solve
 let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
 
-let test3_exp : compile_exp #(unit -> unit -> unit) (fun x y -> x) 0 =
+let test3_exp : compile_exp #(unit -> unit -> unit) (fun x y -> x) empty 0 =
   solve
 let _ = assert (test3_exp.t == ELam TUnit (ELam TUnit (EVar 1)))
 
-let test4_exp : compile_exp #(unit -> unit -> unit) (fun x y -> y) 0 =
+let test4_exp : compile_exp #(unit -> unit -> unit) (fun x y -> y) empty 0 =
   solve
 let _ = assert (test4_exp.t == ELam TUnit (ELam TUnit (EVar 0)))
 
 instance compile_exp_app
-  (n:nat)
+  g
+  (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:a -> b) {| cf: compile_exp #_ #solve f n |}
-  (x:a)     {| cx: compile_exp #_ #ca x n |}
-  : compile_exp #_ #cb (f x) n = {
-  t = EApp (cf.t) (cx.t)
+  (f:a -> b) {| cf: compile_exp #_ #solve f g g_card |}
+  (x:a)     {| cx: compile_exp #_ #ca x g g_card |}
+  : compile_exp #_ #cb (f x) g g_card = {
+  t = EApp (cf.t) (cx.t);
+  proof = TyApp #g cf.proof cx.proof;
 }
 
-let test0_fapp : compile_exp #unit #solve ((fun x y -> y) () ()) 0 =
+let test0_fapp : compile_exp #unit #solve ((fun x y -> y) () ()) empty 0 =
   solve
 let _ = assert (test0_fapp.t == EUnit)
 
@@ -150,7 +163,7 @@ val myf : unit -> unit
 let myf () = ()
 
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
-let test1_topf : compile_exp (myf ()) 0 =
+let test1_topf : compile_exp (myf ()) empty 0 =
   solve
 //let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit) by (dump "H")
 
@@ -158,6 +171,6 @@ val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
 (* Also handles partial application. Pretty amazing! *)
-let test2_topf : compile_exp (myf2 ()) 0 =
+let test2_topf : compile_exp (myf2 ()) empty 0 =
   solve
 //let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit)
