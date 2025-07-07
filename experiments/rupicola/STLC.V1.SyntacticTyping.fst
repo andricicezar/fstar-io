@@ -42,8 +42,6 @@ let test1 : compile_typ (unit -> unit) = solve
 let _ = assert (test1.t == (TArr TUnit TUnit))
 let test2 : compile_typ ((unit -> unit) -> (unit -> unit)) = solve
 let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
-// stress test
-let test3 : compile_typ ((unit -> unit) -> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)-> (unit -> unit)) = solve
 
 type var = nat
 
@@ -53,8 +51,7 @@ type exp =
   | EVar  : var -> exp
   | EApp  : exp -> exp -> exp
 
-(* Type system; as inductive relation (not strictly necessary for STLC) *)
-
+(* Type system; as inductive relation *)
 type env = var -> Tot (option typ)
 type env_card (g:env) =
   g_card:nat{forall (i:nat). i < g_card ==> Some? (g i)}
@@ -94,7 +91,6 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (g:env) (g_card:env_c
   [@@@no_method] proof : typing g t ca.t
 }
 
-//assume val get_v : g:env -> g_card:env_card g -> i:nat{i < g_card} -> a:Type -> ca:compile_typ a -> squash (Some?.v (g (g_card-i-1)) == ca.t) -> a
 assume val get_v : i:nat -> a:Type -> a
 (** CA: this is an abstraction that helps with dealing with variables.
    It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
@@ -106,7 +102,7 @@ instance compile_exp_unit g card_g : compile_exp #unit #solve () g card_g = {
 
 let test_unit g n : compile_exp () g n = solve
 
-instance compile_exp_var (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card /\ Some? (g (g_card-i-1)) /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp (get_v i a) g g_card = {
+instance compile_exp_var (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp (get_v i a) g g_card = {
     t = EVar (g_card-i-1);
     proof = begin
       let v = g_card-i-1 in
@@ -165,6 +161,7 @@ let myf () = ()
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
 let test1_topf : compile_exp (myf ()) empty 0 =
   solve
+// CA: fails because of partial evaluation
 //let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit) by (dump "H")
 
 val myf2 : unit -> unit -> unit
@@ -173,4 +170,5 @@ let myf2 x y = x
 (* Also handles partial application. Pretty amazing! *)
 let test2_topf : compile_exp (myf2 ()) empty 0 =
   solve
+// CA: fails because of partial evaluation
 //let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit)
