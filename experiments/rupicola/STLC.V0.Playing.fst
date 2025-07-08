@@ -1,22 +1,9 @@
-(* Based on file FStar/examples/metatheory/StlcStrongDbParSubst.fst *)
-
-module STLC
+module STLC.V0.Playing
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.List.Tot
-
-type typ =
-  | TArr  : typ -> typ -> typ
-  | TUnit : typ
-
-type var = nat
-
-type exp =
-  | EUnit : exp
-  | ELam  : typ -> exp -> exp
-  | EVar  : var -> exp
-  | EApp  : exp -> exp -> exp
+open StlcStrongDbParSubst
 
 class compile_typ (s:Type0) = {
   [@@@no_method] t : typ

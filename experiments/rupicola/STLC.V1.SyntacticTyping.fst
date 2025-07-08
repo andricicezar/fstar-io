@@ -5,9 +5,7 @@ open FStar.Tactics.Typeclasses
 open FStar.Calc
 open FStar.List.Tot
 
-type typ =
-  | TArr  : typ -> typ -> typ
-  | TUnit : typ
+open StlcStrongDbParSubst
 
 let rec elab_typ (t:typ) : Type0 =
   match t with
@@ -41,48 +39,8 @@ let _ = assert (test1.t == (TArr TUnit TUnit))
 let test2 : compile_typ ((unit -> unit) -> (unit -> unit)) = solve
 let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
 
-type var = nat
-
-type exp =
-  | EUnit : exp
-  | ELam  : typ -> exp -> exp
-  | EVar  : var -> exp
-  | EApp  : exp -> exp -> exp
-
-(* Type system; as inductive relation *)
-type env = var -> Tot (option typ)
 type env_card (g:env) =
   g_card:nat{forall (i:nat). i < g_card ==> Some? (g i)}
-
-val empty : env
-let empty _ = None
-
-(* we only need extend at 0 *)
-val extend : typ -> env -> Tot env
-let extend t g y = if y = 0 then Some t
-                   else g (y-1)
-
-noeq type typing : env -> exp -> typ -> Type =
-  | TyVar : #g:env ->
-             x:var{Some? (g x)} ->
-             typing g (EVar x) (Some?.v (g x))
-  | TyLam : #g :env ->
-             t :typ ->
-            #e1:exp ->
-            #t':typ ->
-            $hbody:typing (extend t g) e1 t' ->
-                   typing g (ELam t e1) (TArr t t')
-  | TyApp : #g:env ->
-            #e1:exp ->
-            #e2:exp ->
-            #t11:typ ->
-            #t12:typ ->
-            $h1:typing g e1 (TArr t11 t12) ->
-            $h2:typing g e2 t11 ->
-                typing g (EApp e1 e2) t12
-  | TyUnit : #g:env ->
-             typing g EUnit TUnit
-
 
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (g:env) (g_card:env_card g) = {
   [@@@no_method] t : exp;
