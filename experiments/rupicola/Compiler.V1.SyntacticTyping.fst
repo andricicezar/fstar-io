@@ -1,11 +1,11 @@
-module STLC.V1.SyntacticTyping
+module Compiler.V1.SyntacticTyping
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.Calc
 open FStar.List.Tot
 
-open StlcStrongDbParSubst
+open STLC
 
 let rec elab_typ (t:typ) : Type0 =
   match t with

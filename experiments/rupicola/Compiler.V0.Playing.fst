@@ -1,9 +1,9 @@
-module STLC.V0.Playing
+module Compiler.V0.Playing
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 open FStar.List.Tot
-open StlcStrongDbParSubst
+open STLC
 
 class compile_typ (s:Type0) = {
   [@@@no_method] t : typ
