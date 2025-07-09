@@ -96,6 +96,7 @@ let sub_beta (e:exp)
          with 0 and ();
     f
 
+
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
@@ -127,20 +128,15 @@ let is_value (e:exp) : bool = ELam? e || EUnit? e
 val step : exp -> Tot (option exp)
 let rec step e =
   match e with
-  | EApp e1 e2 ->
-      if is_value e1 then
-        if is_value e2 then
-          match e1 with
-          | ELam t e' -> Some (subst (sub_beta e2) e')
-          | _         -> None
-        else
-          match (step e2) with
-          | Some e2' -> Some (EApp e1 e2')
-          | None     -> None
-      else
-        (match (step e1) with
+  | EApp e1 e2 -> begin
+     match e1 with
+     | ELam t e' -> Some (subst (sub_beta e2) e')
+     | _         -> begin
+        match step e1 with
         | Some e1' -> Some (EApp e1' e2)
-        | None     -> None)
+        | None     -> None
+     end
+  end
   | _ -> None
 
 type steps : exp -> exp -> Type =
@@ -188,8 +184,6 @@ type typing : env -> exp -> typ -> Type =
             h2:typing g e2 t1 ->
             typing g (EApp e1 e2) t2
 
-
-
 (** Semantic type soundness *)
 let safe (e:exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ Some? (step e')
@@ -197,7 +191,7 @@ let safe (e:exp) : Type0 =
 let irred (e:exp) : Type0 =
   None? (step e)
 
-let rec wb_value (t:typ) (e:exp{is_value e}): Type0 =
+let rec wb_value (t:typ) (e:exp) : Tot (Type0) (decreases %[t;0]) =
   match t with
   | TUnit -> e == EUnit
   | TArr t1 t2 ->
@@ -207,20 +201,28 @@ let rec wb_value (t:typ) (e:exp{is_value e}): Type0 =
           (forall v. wb_value t1 v ==>
             wb_expr t2 (subst (sub_beta v) e'))
       | _ -> False
-and wb_expr (t:typ) (e:exp): Type0 =
-  forall e'. steps e e' ==> irred e' ==> wb_value t e'
+and wb_expr (t:typ) (e:exp) : Tot Type0 (decreases %[t;1]) =
+  forall (e':exp). steps e e' ==> irred e' ==> wb_value t e'
 (** definition of wb_expr is based on the fact that evaluation of expressions in the STLC
 always terminates **)
+
+(**
+let wb_expr_lemma t (e:exp) (e':exp) :
+  Lemma
+    (requires (steps e e' /\ wb_expr t e'))
+    (ensures (wb_expr t e)) =
+  assert (wb_expr t e');
+  assert (forall e''. steps e' e'' ==> irred e'' ==> wb_value t e'');
+  assume (forall e'''. steps e e''' ==> irred e''' ==> wb_value t e''');
+  admit ();
+  ()
+**)
 
 (** substitution function for semantically well-typed expressions **)
 let subfun (g:env) =
   s:(sub false){
     forall x. Some? (g x) ==> is_value (s x) /\ wb_value (Some?.v (g x)) (s x)
   }
-
-unfold
-let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
-  forall (s:subfun g). wb_expr t (subst s e)
 
 let sub_beta_extend (v:exp{is_value v}) #b (s:sub b)
   : sub false
@@ -234,6 +236,16 @@ let sub_beta_extend (v:exp{is_value v}) #b (s:sub b)
          with 0 and ();
     f
 
+let subfun_extend (#g:env) (s:subfun g) (t:typ) (v:exp{wb_value t v}) : subfun (extend t g) =
+  sub_beta_extend v s
+
+unfold
+let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
+  forall (s:subfun g). wb_expr t (subst s e)
+
+let substitution_lemma #g (s:subfun g) t1 v body : Lemma
+  ((subst (sub_beta v) (subst (sub_elam s) body)) ==
+   (subst (subfun_extend s t1 v) body)) = admit ()
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma (sem_typing g e t)
@@ -244,20 +256,38 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
   | TyVar x ->
     assert (e == EVar x);
     assert (sem_typing g e t) by (explode ())
-  | TyLam t1 hbody ->
-    assert (sem_typing g e t) by (explode ())
+  | TyLam t1 #_ #t2 hbody ->
+    let (ELam _ body) = e in
+    fundamental_property_of_logical_relations hbody;
+    introduce forall (s:subfun g). wb_expr t (subst s (ELam t1 body)) with begin
+      assert (wb_expr t (subst s (ELam t1 body)) <==> wb_expr t (ELam t1 (subst (sub_elam s) body)));
+      assume ( (** CA: refl **)
+        wb_value t (ELam t1 (subst (sub_elam s) body)) ==>
+        wb_expr t (ELam t1 (subst (sub_elam s) body)));
+      introduce forall v. wb_value t1 v ==>  wb_expr t2 (subst (sub_beta v) (subst (sub_elam s) body)) with begin
+        introduce _ ==> _ with _. begin
+          substitution_lemma s t1 v body
+        end
+      end
+    end
   | TyApp #_ #e1 #e2 #t1 h1 h2 ->
-    fundamental_property_of_logical_relations #g #e1 #(TArr t1 t) h1;
-    fundamental_property_of_logical_relations #g #e2 #t1 h2;
-
-    assert (sem_typing g (EApp e1 e2) t) by (
-      explode ();
-      binder_retype (nth_binder (-2)); norm [delta_only [`%subst]; zeta]; trefl ();
-      binder_retype (instantiate (nth_binder (-9)) (nth_binder (-4)));
-        norm [delta_only [`%wb_expr];zeta];
-      trefl ();
-      let _ = instantiate (nth_binder (-6)) (nth_binder (-5)) in
-  //    destruct_intros (nth_binder (-2));
-  //    smt ();
-
-      dump "H")
+    introduce forall (s:subfun g). wb_expr t (subst s (EApp e1 e2)) with begin
+      assert (wb_expr t (subst s (EApp e1 e2)) <==> wb_expr t (EApp (subst s e1) (subst s e2)));
+      match h1 with
+      | TyLam _ #body hbody -> begin
+        assert (wb_expr t (EApp (subst s (ELam t1 body)) (subst s e2)) <==>
+                wb_expr t (EApp (ELam t1 (subst (sub_elam s) body)) (subst s e2)));
+        assume ((** CA: no idea if correct, this is just taking a step. Progress and preservation? **)
+          wb_expr t (EApp (ELam t1 (subst (sub_elam s) body)) (subst s e2)) <==>
+          wb_expr t (subst (sub_beta (subst s e2)) (subst (sub_elam s) body)));
+        assume (wb_value t1 (subst s e2)); (** CA: for this to be true, one would have to step the value too **)
+        substitution_lemma s t1 (subst s e2) body;
+        fundamental_property_of_logical_relations hbody;
+        assert (wb_expr t (subst (subfun_extend s t1 (subst s e2)) body))
+      end
+      | _ -> begin
+        (** CA: I would like to call progress and preservation
+                and recursively call this lemma **)
+        admit ()
+      end
+    end
