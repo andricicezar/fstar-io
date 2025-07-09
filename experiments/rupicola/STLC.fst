@@ -18,6 +18,8 @@
 *)
 
 module STLC
+
+open FStar.Tactics
 open FStar.Classical.Sugar
 (* Constructive-style progress and preservation proof for STLC with
    strong reduction, using deBruijn indices and parallel substitution. *)
@@ -97,36 +99,57 @@ let sub_beta (e:exp)
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-type step : exp -> exp -> Type =
-  | SBeta : t:typ ->
-            e1:exp ->
-            e2:exp ->
-            step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
+// type step : exp -> exp -> Type =
+//   | SBeta : t:typ ->
+//             e1:exp ->
+//             e2:exp ->
+//             step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
 
-  | SApp1 : #e1:exp ->
-             e2:exp ->
-            #e1':exp ->
-            hst:step e1 e1' ->
-            step (EApp e1 e2) (EApp e1' e2)
+//   | SApp1 : #e1:exp ->
+//              e2:exp ->
+//             #e1':exp ->
+//             hst:step e1 e1' ->
+//             step (EApp e1 e2) (EApp e1' e2)
 
-  | SApp2 :  e1:exp ->
-            #e2:exp ->
-            #e2':exp ->
-            hst:step e2 e2' ->
-            step (EApp e1 e2) (EApp e1 e2')
+//   | SApp2 :  e1:exp ->
+//             #e2:exp ->
+//             #e2':exp ->
+//             hst:step e2 e2' ->
+//             step (EApp e1 e2) (EApp e1 e2')
 
-  | STrans : #e0:exp ->
-             #e1:exp ->
+//   | SStrong : t:typ ->
+//               e:exp ->
+//               e':exp ->
+//               step e e' ->
+//               step (ELam t e) (ELam t e')
+let is_value (e:exp) : bool = ELam? e || EUnit? e
+
+val step : exp -> Tot (option exp)
+let rec step e =
+  match e with
+  | EApp e1 e2 ->
+      if is_value e1 then
+        if is_value e2 then
+          match e1 with
+          | ELam t e' -> Some (subst (sub_beta e2) e')
+          | _         -> None
+        else
+          match (step e2) with
+          | Some e2' -> Some (EApp e1 e2')
+          | None     -> None
+      else
+        (match (step e1) with
+        | Some e1' -> Some (EApp e1' e2)
+        | None     -> None)
+  | _ -> None
+
+type steps : exp -> exp -> Type =
+| SRefl : e:exp -> steps e e
+| STrans : #e0:exp ->
              #e2:exp ->
-             step e0 e1 ->
-             step e1 e2 ->
-             step e0 e2
-
-  | SStrong : t:typ ->
-              e:exp ->
-              e':exp ->
-              step e e' ->
-              step (ELam t e) (ELam t e')
+             squash (Some? (step e0)) ->
+             steps (Some?.v (step e0)) e2 ->
+             steps e0 e2
 
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
@@ -159,91 +182,82 @@ type typing : env -> exp -> typ -> Type =
   | TyApp : #g:env ->
             #e1:exp ->
             #e2:exp ->
-            #t11:typ ->
-            #t12:typ ->
-            h1:typing g e1 (TArr t11 t12) ->
-            h2:typing g e2 t11 ->
-            typing g (EApp e1 e2) t12
+            #t1:typ ->
+            #t2:typ ->
+            h1:typing g e1 (TArr t1 t2) ->
+            h2:typing g e2 t1 ->
+            typing g (EApp e1 e2) t2
 
 
-(* Progress *)
 
-let is_value (e:exp) : bool = ELam? e || EUnit? e
+(** Semantic type soundness *)
+let safe (e:exp) : Type0 =
+  forall e'. steps e e' ==> is_value e' \/ Some? (step e')
 
-let rec progress (#e:exp {~ (is_value e) })
-                 (#t:typ)
-                 (h:typing empty e t)
-  : (e':exp & step e e')
-  = let TyApp #g #e1 #e2 #t11 #t12 h1 h2 = h in
-    match e1 with
-    | ELam t e1' -> (| subst (sub_beta e2) e1', SBeta t e1' e2 |)
-    | _          -> let (| e1', h1' |) = progress h1 in
-                   (| EApp e1' e2, SApp1 e2 h1'|)
+let irred (e:exp) : Type0 =
+  None? (step e)
 
-(* Typing of substitutions (very easy, actually) *)
-let subst_typing #r (s:sub r) (g1:env) (g2:env) =
-    x:var{Some? (g1 x)} -> typing g2 (s x) (Some?.v (g1 x))
+let rec wb_value (t:typ) (e:exp{is_value e}): Type0 =
+  match t with
+  | TUnit -> e == EUnit
+  | TArr t1 t2 ->
+      match e with
+      | ELam t' e' ->
+          t' == t1 /\
+          (forall v. wb_value t1 v ==>
+            wb_expr t2 (subst (sub_beta v) e'))
+      | _ -> False
+and wb_expr (t:typ) (e:exp): Type0 =
+  forall e'. steps e e' ==> irred e' ==> wb_value t e'
+(** definition of wb_expr is based on the fact that evaluation of expressions in the STLC
+always terminates **)
 
-(* Substitution preserves typing
-   Strongest possible statement; suggested by Steven Schäfer *)
-let rec substitution (#g1:env)
-                     (#e:exp)
-                     (#t:typ)
-                     (#r:bool)
-                     (s:sub r)
-                     (#g2:env)
-                     (h1:typing g1 e t)
-                     (hs:subst_typing s g1 g2)
-   : Tot (typing g2 (subst s e) t)
-         (decreases %[bool_order (EVar? e); bool_order r; e])
-   = match h1 with
-   | TyVar x -> hs x
-   | TyApp hfun harg -> TyApp (substitution s hfun hs) (substitution s harg hs)
-   | TyLam tlam hbody ->
-     let hs'' : subst_typing (sub_inc) g2 (extend tlam g2) =
-       fun x -> TyVar (x+1) in
-     let hs' : subst_typing (sub_elam s) (extend tlam g1) (extend tlam g2) =
-       fun y -> if y = 0 then TyVar y
-             else substitution sub_inc (hs (y - 1)) hs''
-     in TyLam tlam (substitution (sub_elam s) hbody hs')
-   | TyUnit -> TyUnit
+(** substitution function for semantically well-typed expressions **)
+let subfun (g:env) =
+  s:(sub false){
+    forall x. Some? (g x) ==> is_value (s x) /\ wb_value (Some?.v (g x)) (s x)
+  }
 
-(* Substitution for beta reduction
-   Now just a special case of substitution lemma *)
-let substitution_beta #e #v #t_x #t #g
-                      (h1:typing g v t_x)
-                      (h2:typing (extend t_x g) e t)
-  : typing g (subst (sub_beta v) e) t
-  = let hs : subst_typing (sub_beta v) (extend t_x g) g =
-        fun y -> if y = 0 then h1 else TyVar (y-1) in
-    substitution (sub_beta v) h2 hs
+unfold
+let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
+  forall (s:subfun g). wb_expr t (subst s e)
 
-(* Type preservation *)
-let rec preservation #e #e' #g #t (ht:typing g e t) (hs:step e e')
-  : Tot (typing g e' t)
-        (decreases hs)
-  = match hs with
-    | STrans s0 s1 ->
-      let ht' = preservation ht s0 in
-      preservation ht' s1
-    | _ ->
-      match ht with
-      | TyApp h1 h2 -> (
-        match hs with
-        | SBeta tx e1' e2' -> substitution_beta h2 (TyLam?.hbody h1)
-        | SApp1 e2' hs1   -> TyApp (preservation h1 hs1) h2
-        | SApp2 e1' hs2   -> TyApp h1 (preservation h2 hs2)
-      )
-      | TyLam t hb ->
-        let SStrong t e e' hs' = hs in
-        let hb' = preservation hb hs' in
-        TyLam t hb'
+let sub_beta_extend (v:exp{is_value v}) #b (s:sub b)
+  : sub false
+  = let f =
+      fun (y:var) ->
+        if y = 0 then v      (* substitute *)
+        else s (y-1)         (* shift -1 *)
+    in
+    if not (EVar? v)
+    then introduce exists (x:var). ~(EVar? (f x))
+         with 0 and ();
+    f
 
-let soundness #e #e' #t
-              (ht:typing empty e t)
-  : either (squash (is_value e))
-           (e':exp & step e e' & typing empty e' t)
-  = if is_value e then Inl ()
-    else let (| e', s |) = progress ht in
-         let ht' = preservation ht s in
-         Inr (| e', s, ht' |)
+
+let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
+  : Lemma (sem_typing g e t)
+  = match ht with
+  | TyUnit ->
+    assert (e == EUnit);
+    assert (sem_typing g e t) by (explode ())
+  | TyVar x ->
+    assert (e == EVar x);
+    assert (sem_typing g e t) by (explode ())
+  | TyLam t1 hbody ->
+    assert (sem_typing g e t) by (explode ())
+  | TyApp #_ #e1 #e2 #t1 h1 h2 ->
+    fundamental_property_of_logical_relations #g #e1 #(TArr t1 t) h1;
+    fundamental_property_of_logical_relations #g #e2 #t1 h2;
+
+    assert (sem_typing g (EApp e1 e2) t) by (
+      explode ();
+      binder_retype (nth_binder (-2)); norm [delta_only [`%subst]; zeta]; trefl ();
+      binder_retype (instantiate (nth_binder (-9)) (nth_binder (-4)));
+        norm [delta_only [`%wb_expr];zeta];
+      trefl ();
+      let _ = instantiate (nth_binder (-6)) (nth_binder (-5)) in
+  //    destruct_intros (nth_binder (-2));
+  //    smt ();
+
+      dump "H")
