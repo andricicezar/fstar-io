@@ -100,43 +100,25 @@ let sub_beta (e:exp)
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-// type step : exp -> exp -> Type =
-//   | SBeta : t:typ ->
-//             e1:exp ->
-//             e2:exp ->
-//             step (EApp (ELam t e1) e2) (subst (sub_beta e2) e1)
-
-//   | SApp1 : #e1:exp ->
-//              e2:exp ->
-//             #e1':exp ->
-//             hst:step e1 e1' ->
-//             step (EApp e1 e2) (EApp e1' e2)
-
-//   | SApp2 :  e1:exp ->
-//             #e2:exp ->
-//             #e2':exp ->
-//             hst:step e2 e2' ->
-//             step (EApp e1 e2) (EApp e1 e2')
-
-//   | SStrong : t:typ ->
-//               e:exp ->
-//               e':exp ->
-//               step e e' ->
-//               step (ELam t e) (ELam t e')
 let is_value (e:exp) : bool = ELam? e || EUnit? e
 
 val step : exp -> Tot (option exp)
 let rec step e =
   match e with
-  | EApp e1 e2 -> begin
-     match e1 with
-     | ELam t e' -> Some (subst (sub_beta e2) e')
-     | _         -> begin
-        match step e1 with
+  | EApp e1 e2 ->
+      if is_value e1 then
+        if is_value e2 then
+          match e1 with
+          | ELam t e' -> Some (subst (sub_beta e2) e')
+          | _         -> None
+        else
+          match (step e2) with
+          | Some e2' -> Some (EApp e1 e2')
+          | None     -> None
+      else
+        (match (step e1) with
         | Some e1' -> Some (EApp e1' e2)
-        | None     -> None
-     end
-  end
+        | None     -> None)
   | _ -> None
 
 type steps : exp -> exp -> Type =

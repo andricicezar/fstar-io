@@ -83,8 +83,7 @@ instance compile_exp_lambda
         wb_expr (TArr ca.t cb.t) (ELam ca.t (subst (sub_elam s) cf.t)));
       introduce forall v. wb_value ca.t v ==>  wb_expr cb.t (subst (sub_beta v) (subst (sub_elam s) cf.t)) with begin
         introduce _ ==> _ with _. begin
-            assume ((subst (sub_beta v) (subst (sub_elam s) cf.t)) ==
-                    (subst (subfun_extend s ca.t v ()) cf.t)) (** CA: substitution lemma *)
+          substitution_lemma s ca.t v cf.t
         end
       end
     end
@@ -119,24 +118,22 @@ instance compile_exp_app
   proof = (fun () ->
     cf.proof ();
     cx.proof ();
-    assert (forall (s:subfun g). wb_expr (TArr ca.t cb.t) (subst s cf.t));
-    assert (forall (s:subfun g). wb_expr ca.t (subst s cx.t));
-    assert (forall (s:subfun g) x' f'. is_value x' ==> is_value f' ==>
-      steps (subst s cf.t) (ELam ca.t f') ==>
-      steps (subst s cx.t) x'
-      ==> wb_expr cb.t (subst (sub_beta x') f')) by (
-      explode ()
-      );
-    assert (forall (s:subfun g) x' f'. is_value x' ==> is_value f' ==>
-      steps (subst s cf.t) (ELam ca.t f') ==>
-      steps (subst s cx.t) x'
-      ==> (forall (e':exp). steps (subst (sub_beta x') f') e' ==> irred e' ==> wb_value cb.t e'));
-    assume (forall (s:subfun g) e'. steps (EApp (subst s cf.t) (subst s cx.t)) e' ==> irred e' ==>
-      wb_value cb.t e');
-    assert (forall (s:subfun g). wb_expr cb.t (EApp (subst s cf.t) (subst s cx.t)));
-//    by (explode (); dump "H"  );
-    assert (forall (s:subfun g). wb_expr cb.t (subst s (EApp cf.t cx.t)));
-    assert (sem_typing g (EApp cf.t cx.t) cb.t))
+    introduce forall (s:subfun g). wb_expr cb.t (subst s (EApp cf.t cx.t)) with begin
+      assert (wb_expr (TArr ca.t cb.t) (subst s cf.t));
+      assert (wb_expr ca.t (subst s cx.t));
+      assert (forall x' f'. wb_value ca.t x' ==> wb_value (TArr ca.t cb.t) f' ==>
+        steps (subst s cf.t) (ELam ca.t f') ==>
+        steps (subst s cx.t) x'
+        ==> wb_expr cb.t (subst (sub_beta x') f')) by (explode ());
+      assume (forall x' f'. wb_value ca.t x' ==> wb_value (TArr ca.t cb.t) f' ==>
+        steps (subst s cf.t) (ELam ca.t f') ==>
+        steps (subst s cx.t) x' ==>
+        (forall e'. steps (subst (sub_beta x') f') e' <==> steps (EApp (subst s cf.t) (subst s cx.t)) e'));
+      assume (forall e'. steps (EApp (subst s cf.t) (subst s cx.t)) e' ==> irred e' ==>
+        wb_value cb.t e');
+      assert (wb_expr cb.t (EApp (subst s cf.t) (subst s cx.t)))
+    //    by (explode (); dump "H"  );
+    end)
 }
 
 let test0_fapp : compile_exp #unit #solve ((fun x y -> y) () ()) empty 0 =
