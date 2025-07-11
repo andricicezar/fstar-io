@@ -171,6 +171,19 @@ type steps : exp -> exp -> Type =
            steps e0 e2
 
 (** Semantic type soundness *)
+let rec closed_exp (n:nat) (e:exp) : Tot Type0 (decreases e) =
+  match e with
+  | EUnit -> True
+  | ELam _ e' -> closed_exp (n+1) e'
+  | EApp e1 e2 -> closed_exp n e1 /\ closed_exp n e2
+  | EVar i -> i < n
+
+let is_value (e:exp) : Type0 =
+  match e with
+  | EUnit -> True
+  | ELam _ e' -> closed_exp 1 e'
+  | _ -> False
+
 let safe (e:exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ Some? (step e')
 
