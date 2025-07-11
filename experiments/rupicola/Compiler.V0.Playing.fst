@@ -28,8 +28,15 @@ class compile_exp (#a:Type0) (s:a) (varn:nat) = {
 }
 
 assume val get_v : y:var -> a:Type0 -> a
-(** CA: this is an abstraction that helps with dealing with
-   variables **)
+(** This is an abstraction that helps with compiling functions.
+    To be able to compile an F* function `f : a -> b`, we have to get
+    the body of `f`. We can reveal it by passing the "symbol" `get_v i a` to `f`,
+    and basically compile `f (get_v i a)`. Treating `get_v i a` as a symbol allows
+    us to compile it to an EVar (the `i` helps with computing the deBruijn index).
+
+    Stated like: `assume val get_v : y:var -> a:Type0 -> a`
+    probably leads to unsoundness when `a` is an empty type.
+**)
 
 instance compile_exp_unit n : compile_exp () n = {
   t = EUnit
