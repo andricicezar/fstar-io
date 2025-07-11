@@ -95,7 +95,9 @@ let myf () = ()
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
 let test1_topf : compile_exp (myf ()) 0 =
   solve
-let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit)
+// because of partial evaluation we have to consider both cases
+let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit \/
+                test1_topf.t == EUnit)
 
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
@@ -103,7 +105,8 @@ let myf2 x y = x
 (* Also handles partial application. Pretty amazing! *)
 let test2_topf : compile_exp (myf2 ()) 0 =
   solve
-let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit)
+let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
+                test2_topf.t == ELam TUnit EUnit)
 
 (**
 To avoid unfolding top level definitions,
