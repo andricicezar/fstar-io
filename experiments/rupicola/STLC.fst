@@ -96,39 +96,6 @@ let sub_beta (e:exp)
          with 0 and ();
     f
 
-
-(* Small-step operational semantics; strong / full-beta reduction is
-   non-deterministic, so necessarily as inductive relation *)
-
-let is_value (e:exp) : bool = ELam? e || EUnit? e
-
-val step : exp -> Tot (option exp)
-let rec step e =
-  match e with
-  | EApp e1 e2 ->
-      if is_value e1 then
-        if is_value e2 then
-          match e1 with
-          | ELam t e' -> Some (subst (sub_beta e2) e')
-          | _         -> None
-        else
-          match (step e2) with
-          | Some e2' -> Some (EApp e1 e2')
-          | None     -> None
-      else
-        (match (step e1) with
-        | Some e1' -> Some (EApp e1' e2)
-        | None     -> None)
-  | _ -> None
-
-type steps : exp -> exp -> Type =
-| SRefl : e:exp -> steps e e
-| STrans : #e0:exp ->
-             #e2:exp ->
-             squash (Some? (step e0)) ->
-             steps (Some?.v (step e0)) e2 ->
-             steps e0 e2
-
 (* Type system; as inductive relation (not strictly necessary for STLC) *)
 
 type env = var -> option typ
@@ -166,12 +133,46 @@ type typing : env -> exp -> typ -> Type =
             h2:typing g e2 t1 ->
             typing g (EApp e1 e2) t2
 
-(** Semantic type soundness *)
-let safe (e:exp) : Type0 =
-  forall e'. steps e e' ==> is_value e' \/ Some? (step e')
+
+(* Small-step operational semantics; strong / full-beta reduction is
+   non-deterministic, so necessarily as inductive relation *)
+
+//let is_value (e:exp) : bool = ELam? e || EUnit? e
+(** CA: Amal defines values as unit or lambdas that contain no free variables. **)
+
+val step : exp -> Tot (option exp)
+let rec step e =
+  match e with
+  | EApp e1 e2 -> begin
+      match step e1 with (** PO-app1 **)
+      | Some e1' -> Some (EApp e1' e2)
+      | None     -> begin
+          match step e2 with (** PO-app2 **)
+          | Some e2' -> Some (EApp e1 e2')
+          | None     -> begin
+            match e1 with (** PO-app3 **)
+            | ELam t e' -> Some (subst (sub_beta e2) e')
+            | _ -> None
+          end
+      end
+  end
+  | _ -> None
 
 let irred (e:exp) : Type0 =
   None? (step e)
+
+(** reflexive transitive closure of step *)
+type steps : exp -> exp -> Type =
+| SRefl  : e:exp -> steps e e
+| STrans : #e0:exp ->
+           #e2:exp ->
+           squash (Some? (step e0)) ->
+           steps (Some?.v (step e0)) e2 ->
+           steps e0 e2
+
+(** Semantic type soundness *)
+let safe (e:exp) : Type0 =
+  forall e'. steps e e' ==> is_value e' \/ Some? (step e')
 
 let rec wb_value (t:typ) (e:exp) : Tot (Type0) (decreases %[t;0]) =
   match t with
@@ -203,7 +204,7 @@ let wb_expr_lemma t (e:exp) (e':exp) :
 (** substitution function for semantically well-typed expressions **)
 let subfun (g:env) =
   s:(sub false){
-    forall x. Some? (g x) ==> is_value (s x) /\ wb_value (Some?.v (g x)) (s x)
+    forall x. Some? (g x) ==> wb_value (Some?.v (g x)) (s x)
   }
 
 let sub_beta_extend (v:exp{is_value v}) #b (s:sub b)
