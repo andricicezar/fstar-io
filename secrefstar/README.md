@@ -161,7 +161,8 @@ If you installed F* in your system, you should be able just open VS Code in the
 `secrefstar/` directory and start verifying files interactively. You should have
 the [fstar-vscode-assistant](https://github.com/FStarLang/fstar-vscode-assistant/)
 extension installed. Make sure `fstar.exe` is in your PATH, or edit the
-`fstar_exe` field in `.fst.config.json` to the full path of the F* executable.
+`fstar_exe` field in the `.fst.config.json` file to the full path of the F*
+executable.
 
 If you are using the VM, you can SSH into it from VS Code (F1 -> "Remote-SSH:
 Connect to Host") and have the same experience. You will have to install the
