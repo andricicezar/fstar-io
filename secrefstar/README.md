@@ -1,9 +1,12 @@
 # Artifact for "SecRef\*: Securely Sharing Mutable References Between Verified and Unverified Code in F\*"
 
-This subdirectory contains the artifact associated with the ICFP 2025 submission with the name:
-"[SecRef\*: Securely Sharing Mutable References Between Verified and Unverified Code in F\*](___)".
+This contains the artifact associated with the ICFP 2025 submission with the name:
+"[SecRef\*: Securely Sharing Mutable References Between Verified and Unverified Code in F\*](https://icfp25.sigplan.org/details/icfp-2025-papers/18/SecRef-Securely-Sharing-Mutable-References-Between-Verified-and-Unverified-Code-in-)".
+
+This artifact is published in Zenodo: https://zenodo.org/records/15659350.
 
 ## Table of Contents
+* [Setup](#setup)
 * [List of Claims](#list-of-claims)
 * [Download and Installation](#download-and-installation)
 * [Evaluation Instructions](#evaluation-instructions)
@@ -52,31 +55,55 @@ We list where the definitions and theorems of the paper are.
 ## Directory layout
 
 The directory layout is as follows:
-- misc/: dune configuration files for examples
+- `misc/`: dune configuration files for examples
 
-- extraction/: The extraction plugin for SecRef★. Run `make` inside
+- `extraction/`: The extraction plugin for SecRef★. Run `make` inside
   here to build it. It will also be built automatically by the `build-%`
   rule, but *not* rebuilt, so do it manually if you've changed anything
   here or if F* has changed.
 
 ## Using the provided VM
 
-F* is already configured and set up, you can jump directly
-to the [Evaluation Instructions](#evaluation-instructions).
+There is virtual machine image (`vm.qcow.gz`) with all the needed dependencies
+installed. To run it, first decompress the image:
 
-## Download and Installation
-
-You need F* version 2025.06.13 to run this artifact. The easy way to get set up
-is:
-
-```bash
-git clone https://github.com/FStarLang/FStar
-cd FStar
-git checkout v2025.06.13
-opam install .
+```
+gunzip vm.cqow.gz
+```
+and run `start.sh` (or `start.bat` from Windows)
+```
+./start.sh
 ```
 
-After a while, a built F* should be avaiable in your PATH, via OPAM. If not, make
+**NOTE:** If you get an error like:
+    `qemu-system-x86_64: -accel kvm: Could not access KVM kernel module: No such file or directory`
+try passing `-accel tcg` to the script.
+
+**NOTE:** If you get an error like:
+    `gtk initialization failed`
+try passing `-display none` to the script.
+
+Once the VM starts, it should have an SSH server open at port 5555. You can log
+in via:
+```
+ssh -p 5555 artifact@localhost
+```
+The password is `password`. Inside you will find a tarball with the artifact
+that you should extract.
+
+Now you can jump to the [Evaluation Instructions](#evaluation-instructions).
+
+## Installing F* locally
+
+You need F* version 2025.06.13 (or higher) to run this artifact. The easy way to
+get set up is:
+
+```bash
+opam update
+opam install fstar
+```
+
+After a while, a built F* should be available in your PATH, via OPAM. If not, make
 sure to run `eval $(opam env)`. You can run
 ```
 fstar.exe --version
@@ -84,18 +111,20 @@ fstar.exe --version
 to check that F* is present.
 
 You also need Z3 version 4.13.3 in your PATH, named z3-4.13.3 so F* can find it.
-The script in `FStar/.scripts/get_fstar_z3.sh` can be used to automatically set it up.
-The following command:
+The script in `FStar/.scripts/get_fstar_z3.sh` can be used to automatically set
+it up.  The following command:
 
 ```
 ./FStar/.scripts/get_fstar_z3.sh ~/bin
 ```
 
-Should install z3-4.13.3 into your ~/bin (and Z3 4.8.5, though we do not use it).
+Should install z3-4.13.3 into your ~/bin (and Z3 4.8.5, though we do not use
+it).  If `~/bin` is not in your $PATH, you can add it, or instead install into a
+directory like `/usr/local/bin` (but you will need root privileges).
 
-Once installed, if `fstar.exe` is in your $PATH, then running `make`
-will verify all modules in this directory.
-You can use `-j` to run several jobs in parallel.
+Once installed, if `fstar.exe` is in your $PATH, then running `make` will verify
+all modules in this directory.  You can use `-j` to run several jobs in
+parallel.
 
 If you have F* installed somewhere outside of your PATH, you can set the 
 environment variable `FSTAR` to its location to use it.
@@ -107,12 +136,11 @@ See more details about [how to install F\* here](https://github.com/FStarLang/FS
 Running `make` succesfully indicates that all files have been verified.
 Some warnings about typeclass instantation are expected, they are benign.
 
-
 ### Verify SecRef\*
 
 **Expected time.**
-Around 4 minutes (if running just one job). This may
-be slower when using QEMU's TCG due to the cost of emulation.
+Around 4 minutes (if running just one job). This may be slower when using QEMU's
+TCG due to the cost of emulation.
 
 **Script for this step.**
 After setting up F*, running `make` in this repository should verify all the F*
@@ -132,11 +160,12 @@ instantion appear, they are benign and can be ignored.
 If you installed F* in your system, you should be able just open VS Code in the
 `secrefstar/` directory and start verifying files interactively. You should have
 the [fstar-vscode-assistant](https://github.com/FStarLang/fstar-vscode-assistant/)
-extension installed.
+extension installed. Make sure `fstar.exe` is in your PATH, or edit the
+`fstar_exe` field in `.fst.config.json` to the full path of the F* executable.
 
-If you are using the VM, you can SSH into it from VS Code (F1 -> "Remote-SSH: Connect
-to Host") and have the same experience. You will have to install the extension
-into the VM by going into the VS Code menus.
+If you are using the VM, you can SSH into it from VS Code (F1 -> "Remote-SSH:
+Connect to Host") and have the same experience. You will have to install the
+extension into the VM by going into the VS Code menus.
 
 **Checking for lack of axioms.**
 To check that we use no axioms or admit any proofs, you can clean the already
