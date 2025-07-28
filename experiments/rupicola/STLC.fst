@@ -21,6 +21,7 @@ module STLC
 
 open FStar.Tactics
 open FStar.Classical.Sugar
+open FStar.List.Tot
 (* Constructive-style progress and preservation proof for STLC with
    strong reduction, using deBruijn indices and parallel substitution. *)
 
@@ -134,13 +135,37 @@ type typing : env -> exp -> typ -> Type =
             typing g (EApp e1 e2) t2
 
 
+(** Semantic type soundness *)
+let rec free_vars_indx (e:exp) (n:nat) : list var =
+  match e with
+  | EUnit -> []
+  | ELam _ e' -> free_vars_indx e' (n+1)
+  | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
+  | EVar i -> if i < n then [] else [i]
+
+let free_vars e = free_vars_indx e 0
+
+let is_closed (e:exp) : bool =
+  free_vars e = []
+
+let is_value (e:exp) : Type0 =
+  match e with
+  | EUnit -> True
+  | ELam _ _ -> is_closed e
+  | _ -> False
+
+type value = e:exp{is_value e}
+type closed_exp = e:exp{is_closed e}
+
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-//let is_value (e:exp) : bool = ELam? e || EUnit? e
-(** CA: Amal defines values as unit or lambdas that contain no free variables. **)
+let lem_subst_preserves_is_closed (t:typ) (e v:exp) :
+  Lemma
+    (requires (is_closed (ELam t e) /\ is_closed v))
+    (ensures (is_closed (subst (sub_beta v) e))) = admit ()
 
-val step : exp -> Tot (option exp)
+val step : closed_exp -> option closed_exp
 let rec step e =
   match e with
   | EApp e1 e2 -> begin
@@ -151,93 +176,100 @@ let rec step e =
           | Some e2' -> Some (EApp e1 e2')
           | None     -> begin
             match e1 with (** PO-app3 **)
-            | ELam t e' -> Some (subst (sub_beta e2) e')
+            | ELam t e' -> begin
+              lem_subst_preserves_is_closed t e' e2;
+              Some (subst (sub_beta e2) e')
+            end
             | _ -> None
           end
       end
   end
   | _ -> None
 
-let irred (e:exp) : Type0 =
+let can_step (e:closed_exp) : Type0 =
+  Some? (step e)
+
+let irred (e:closed_exp) : Type0 =
   None? (step e)
 
 (** reflexive transitive closure of step *)
-type steps : exp -> exp -> Type =
-| SRefl  : e:exp -> steps e e
-| STrans : #e0:exp ->
-           #e2:exp ->
+type steps : closed_exp -> closed_exp -> Type =
+| SRefl  : e:closed_exp -> steps e e
+| STrans : #e0:closed_exp ->
+           #e2:closed_exp ->
            squash (Some? (step e0)) ->
            steps (Some?.v (step e0)) e2 ->
            steps e0 e2
 
-(** Semantic type soundness *)
-let rec closed_exp (n:nat) (e:exp) : Tot Type0 (decreases e) =
-  match e with
-  | EUnit -> True
-  | ELam _ e' -> closed_exp (n+1) e'
-  | EApp e1 e2 -> closed_exp n e1 /\ closed_exp n e2
-  | EVar i -> i < n
+let safe (e:closed_exp) : Type0 =
+  forall e'. steps e e' ==> is_value e' \/ can_step e'
 
-let is_value (e:exp) : Type0 =
-  match e with
-  | EUnit -> True
-  | ELam _ e' -> closed_exp 1 e'
-  | _ -> False
-
-let safe (e:exp) : Type0 =
-  forall e'. steps e e' ==> is_value e' \/ Some? (step e')
-
-let rec wb_value (t:typ) (e:exp) : Tot (Type0) (decreases %[t;0]) =
+let rec wb_value (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;0]) =
   match t with
   | TUnit -> e == EUnit
   | TArr t1 t2 ->
       match e with
       | ELam t' e' ->
           t' == t1 /\
-          (forall v. wb_value t1 v ==>
-            wb_expr t2 (subst (sub_beta v) e'))
+          (forall (v:value). wb_value t1 v ==>
+            (lem_subst_preserves_is_closed t' e' v;
+            wb_expr t2 (subst (sub_beta v) e')))
       | _ -> False
-and wb_expr (t:typ) (e:exp) : Tot Type0 (decreases %[t;1]) =
-  forall (e':exp). steps e e' ==> irred e' ==> wb_value t e'
+and wb_expr (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;1]) =
+  forall (e':closed_exp). steps e e' ==> irred e' ==>
+    wb_value t e'
 (** definition of wb_expr is based on the fact that evaluation of expressions in the STLC
 always terminates **)
 
-(**
-let wb_expr_lemma t (e:exp) (e':exp) :
+(** ground substitution / value environment **)
+let gsub (g:env) =
+  x:var{Some? (g x)} -> v:value{wb_value (Some?.v (g x)) v}
+
+let gsub_empty : gsub empty =
+  (fun v -> assert False; EVar v)
+
+let subfun_extend (#g:env) (s:gsub g) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) =
+  fun y -> if y = 0 then v else s (y-1)
+
+let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
   Lemma
-    (requires (steps e e' /\ wb_expr t e'))
-    (ensures (wb_expr t e)) =
-  assert (wb_expr t e');
-  assert (forall e''. steps e' e'' ==> irred e'' ==> wb_value t e'');
-  assume (forall e'''. steps e e''' ==> irred e''' ==> wb_value t e''');
-  admit ();
+    (requires ((forall fv. fv `mem` free_vars e ==> Some? (g fv)) /\
+               (exists x. Some? (g x))))
+    (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) = admit ()
+
+let gsubst (#g:env) (s:gsub g) (e:exp)
+  : Pure closed_exp
+    (requires (forall (fv:var). fv `memP` free_vars e ==> Some? (g fv)))
+    (ensures (fun _ -> True)) =
+  if is_closed e then e
+  else begin
+    lem_gsubst_closes_exp s e;
+    subst #false (fun x -> if Some? (g x) then s x else EVar x) e
+  end
+
+let e_gsub_empty (e:closed_exp) :
+  Lemma (gsubst gsub_empty e == e)
+  [SMTPat (gsubst gsub_empty e)] =
   ()
-**)
-
-(** substitution function for semantically well-typed expressions **)
-let subfun (g:env) =
-  s:(sub false){
-    forall x. Some? (g x) ==> wb_value (Some?.v (g x)) (s x)
-  }
-
-let sub_beta_extend (v:exp{is_value v}) #b (s:sub b)
-  : sub false
-  = let f =
-      fun (y:var) ->
-        if y = 0 then v      (* substitute *)
-        else s (y-1)         (* shift -1 *)
-    in
-    if not (EVar? v)
-    then introduce exists (x:var). ~(EVar? (f x))
-         with 0 and ();
-    f
-
-let subfun_extend (#g:env) (s:subfun g) (t:typ) (v:exp{wb_value t v}) : subfun (extend t g) =
-  sub_beta_extend v s
 
 unfold
 let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
-  forall (s:subfun g). wb_expr t (subst s e)
+  (forall fv. fv `mem` free_vars e ==> Some? (g fv)) /\
+  (forall (s:gsub g). wb_expr t (gsubst s e))
+
+let safety (e:exp) (t:typ) : Lemma
+  (requires sem_typing empty e t)
+  (ensures safe e) =
+  introduce forall e'. steps e e' ==> is_value e' \/ Some? (step e') with begin
+    introduce steps e e' ==> is_value e' \/ Some? (step e') with _. begin
+      introduce irred e' ==> is_value e' with _. begin
+        assert (forall (s: gsub empty). (forall (e':exp). steps (gsubst s e) e' ==> irred e' ==> wb_value t e'));
+        eliminate forall (s: gsub empty). (forall (e':exp). steps (gsubst s e) e' ==> irred e' ==> wb_value t e') with gsub_empty;
+        assert (wb_value t e');
+        admit ()
+      end
+    end
+  end
 
 let substitution_lemma #g (s:subfun g) t1 v body : Lemma
   ((subst (sub_beta v) (subst (sub_elam s) body)) ==
