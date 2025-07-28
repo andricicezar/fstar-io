@@ -228,7 +228,7 @@ let gsub (g:env) =
 let gsub_empty : gsub empty =
   (fun v -> assert False; EVar v)
 
-let subfun_extend (#g:env) (s:gsub g) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) =
+let gsub_extend (#g:env) (s:gsub g) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) =
   fun y -> if y = 0 then v else s (y-1)
 
 let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
@@ -252,9 +252,12 @@ let e_gsub_empty (e:closed_exp) :
   [SMTPat (gsubst gsub_empty e)] =
   ()
 
+let fv_in_env (g:env) (e:exp) : Type0 =
+  forall fv. fv `mem` free_vars e ==> Some? (g fv)
+
 unfold
 let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
-  (forall fv. fv `mem` free_vars e ==> Some? (g fv)) /\
+  fv_in_env g e /\
   (forall (s:gsub g). wb_expr t (gsubst s e))
 
 let safety (e:closed_exp) (t:typ) : Lemma
@@ -269,13 +272,22 @@ let safety (e:closed_exp) (t:typ) : Lemma
     end
   end
 
-let substitution_lemma #g (s:subfun g) t1 v body : Lemma
-  ((subst (sub_beta v) (subst (sub_elam s) body)) ==
-   (subst (subfun_extend s t1 v) body)) = admit ()
+(**
+let substitution_lemma #g (s:gsub g) t1 v body : Lemma
+  ((subst (sub_beta v) (gsubst s body)) ==
+   (gsubst (gsub_extend s t1 v) body)) = admit ()
+**)
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
-  : Lemma (sem_typing g e t)
-  = match ht with
+  : Lemma
+    (requires (fv_in_env g e))
+    (ensures sem_typing g e t)
+  = admit ()
+
+
+
+(**
+  match ht with
   | TyUnit ->
     assert (e == EUnit);
     assert (sem_typing g e t) by (explode ())
@@ -285,7 +297,7 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
   | TyLam t1 #_ #t2 hbody ->
     let (ELam _ body) = e in
     fundamental_property_of_logical_relations hbody;
-    introduce forall (s:subfun g). wb_expr t (subst s (ELam t1 body)) with begin
+    introduce forall (s:gsub g). wb_expr t (subst s (ELam t1 body)) with begin
       assert (wb_expr t (subst s (ELam t1 body)) <==> wb_expr t (ELam t1 (subst (sub_elam s) body)));
       assume ( (** CA: refl **)
         wb_value t (ELam t1 (subst (sub_elam s) body)) ==>
@@ -317,3 +329,4 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
         admit ()
       end
     end
+**)
