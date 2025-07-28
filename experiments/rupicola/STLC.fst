@@ -257,16 +257,14 @@ let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
   (forall fv. fv `mem` free_vars e ==> Some? (g fv)) /\
   (forall (s:gsub g). wb_expr t (gsubst s e))
 
-let safety (e:exp) (t:typ) : Lemma
+let safety (e:closed_exp) (t:typ) : Lemma
   (requires sem_typing empty e t)
   (ensures safe e) =
   introduce forall e'. steps e e' ==> is_value e' \/ Some? (step e') with begin
     introduce steps e e' ==> is_value e' \/ Some? (step e') with _. begin
       introduce irred e' ==> is_value e' with _. begin
-        assert (forall (s: gsub empty). (forall (e':exp). steps (gsubst s e) e' ==> irred e' ==> wb_value t e'));
-        eliminate forall (s: gsub empty). (forall (e':exp). steps (gsubst s e) e' ==> irred e' ==> wb_value t e') with gsub_empty;
-        assert (wb_value t e');
-        admit ()
+        eliminate forall (s: gsub empty). wb_expr t (gsubst s e) with gsub_empty;
+        assert (wb_value t e')
       end
     end
   end
