@@ -157,13 +157,23 @@ let is_value (e:exp) : Type0 =
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
+let fv_in_env (g:env) (e:exp) : Type0 =
+  forall fv. fv `mem` free_vars e ==> Some? (g fv)
+
+let lem_subst_closes_exp (g:env) (s:sub false) (e:exp) :
+  Lemma
+    (requires (fv_in_env g e /\ (forall x. Some? (g x) ==> is_closed (s x))))
+    (ensures (is_closed (subst s e))) = admit ()
+
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-let lem_subst_preserves_is_closed (t:typ) (e v:exp) :
+let rec lem_subst_preserves_is_closed (t:typ) (e v:exp) :
   Lemma
     (requires (is_closed (ELam t e) /\ is_closed v))
-    (ensures (is_closed (subst (sub_beta v) e))) = admit ()
+    (ensures (is_closed (subst (sub_beta v) e))) =
+  assume (fv_in_env (extend t empty) e);
+  lem_subst_closes_exp (extend t empty) (sub_beta v) e
 
 val step : closed_exp -> option closed_exp
 let rec step e =
@@ -233,9 +243,9 @@ let gsub_extend (#g:env) (s:gsub g) (t:typ) (v:value{wb_value t v}) : gsub (exte
 
 let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
   Lemma
-    (requires ((forall fv. fv `mem` free_vars e ==> Some? (g fv)) /\
-               (exists x. Some? (g x))))
-    (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) = admit ()
+    (requires (fv_in_env g e /\ (exists x. Some? (g x))))
+    (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) =
+  lem_subst_closes_exp g (fun x -> if Some? (g x) then s x else EVar x) e
 
 let gsubst (#g:env) (s:gsub g) (e:exp)
   : Pure closed_exp
@@ -251,9 +261,6 @@ let e_gsub_empty (e:closed_exp) :
   Lemma (gsubst gsub_empty e == e)
   [SMTPat (gsubst gsub_empty e)] =
   ()
-
-let fv_in_env (g:env) (e:exp) : Type0 =
-  forall fv. fv `mem` free_vars e ==> Some? (g fv)
 
 unfold
 let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
