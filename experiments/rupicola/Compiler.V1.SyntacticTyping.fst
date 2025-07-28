@@ -48,8 +48,6 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (g:env) (g_card:env_c
 }
 
 assume val get_v : i:nat -> a:Type -> a
-(** CA: this is an abstraction that helps with dealing with variables.
-   It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
 
 instance compile_exp_unit g card_g : compile_exp #unit #solve () g card_g = {
   t = EUnit;
