@@ -160,8 +160,30 @@ type closed_exp = e:exp{is_closed e}
 let fv_in_env (g:env) (e:exp) : Type0 =
   forall fv. fv `mem` free_vars e ==> Some? (g fv)
 
-let rec lem_subst_closes_exp
-  (s:sub false)
+let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
+  Lemma
+    (requires (free_vars_indx e n == [] /\
+               (forall (x:var). EVar?.v (s x) <= x+1)))
+    (ensures (free_vars_indx (subst s e) (n+1) == []))
+    (decreases e) =
+  match e with
+  | EApp e1 e2 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n
+  | ELam t e' -> begin
+    assert (free_vars_indx e' (n+1) == []);
+    let s' : sub true = sub_elam s in
+    assert (forall (x:var). EVar?.v (s' x) <= x+1);
+    lem_shifting_preserves_closed s' e' (n+1);
+    assert (free_vars_indx (subst s' e') (n+2) == []);
+    assert (free_vars_indx (subst s' e') (n+2) ==
+            free_vars_indx (subst s (ELam t e')) (n+1))
+  end
+  | _ -> ()
+
+let rec lem_subst_freevars_closes_exp
+  #b
+  (s:sub b)
   (e:exp)
   (n:nat) // number of binders
         // the substitutions for the free variables are in s from pos n to infinity
@@ -170,32 +192,28 @@ let rec lem_subst_closes_exp
   Lemma
     (requires (
       (forall (x:var). x < n ==> EVar? (s x) /\ EVar?.v (s x) < n) /\
-      (forall fv. fv `memP` free_vars_indx e n ==> is_closed (s (n+fv)))))
+      (forall fv. fv `memP` free_vars_indx e n ==>
+        free_vars_indx (s (n+fv)) n == [])))
     (ensures (free_vars_indx (subst s e) n == []))
     (decreases e) =
   match e with
   | EApp e1 e2 ->
     assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be easy **)
-    lem_subst_closes_exp s e1 n;
+    lem_subst_freevars_closes_exp s e1 n;
     assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be easy **)
-    lem_subst_closes_exp s e2 n
+    lem_subst_freevars_closes_exp s e2 n
   | ELam t e' ->
     let s' = sub_elam s in
     let n' = n+1 in
-    //assert (map ((+) 1) (free_vars_indx e n) @ [0] == free_vars_indx e1 (n+1));
     assert (free_vars_indx e n == free_vars_indx e' n');
-    assume (forall fv. fv `memP` free_vars_indx e' n' ==> is_closed (s' (n'+fv)));
-    lem_subst_closes_exp s' e' n'
-  | EVar x -> begin
-    assert (subst s (EVar x) == s x);
-    if x < n then assert (free_vars_indx (s x) n == [])
-    else begin
-      assert ((x-n) `memP` free_vars_indx e n);
-      assert (is_closed (s x));
-      assume (free_vars_indx (s x) 0 == [] ==> free_vars_indx (s x) n == []); (** should be easy to prove **)
-      assert (free_vars_indx (s x) n == [])
-    end
-  end
+    introduce forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (s' (x+1)) n' == [] with begin
+      introduce _ ==> _ with _. begin
+        assert (free_vars_indx (s x) n == []);
+        lem_shifting_preserves_closed (sub_inc) (s x) n;
+        assert (free_vars_indx (subst sub_inc (s x)) n' == [])
+      end
+    end;
+    lem_subst_freevars_closes_exp s' e' n'
   | _ -> ()
 
 (* Small-step operational semantics; strong / full-beta reduction is
@@ -205,8 +223,8 @@ let lem_subst_preserves_is_closed (t:typ) (e v:exp) :
   Lemma
     (requires (is_closed (ELam t e) /\ is_closed v))
     (ensures (is_closed (subst (sub_beta v) e))) =
-  assume (free_vars_indx e 0 == [0]);
-  lem_subst_closes_exp (sub_beta v) e 0
+  assume (free_vars_indx e 0 == [0]); (** should be provable **)
+  lem_subst_freevars_closes_exp (sub_beta v) e 0
 
 val step : closed_exp -> option closed_exp
 let rec step e =
@@ -278,7 +296,7 @@ let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
   Lemma
     (requires (fv_in_env g e /\ (exists x. Some? (g x))))
     (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) =
-  lem_subst_closes_exp (fun x -> if Some? (g x) then s x else EVar x) e 0
+  lem_subst_freevars_closes_exp #false (fun x -> if Some? (g x) then s x else EVar x) e 0
 
 let gsubst (#g:env) (s:gsub g) (e:exp)
   : Pure closed_exp
