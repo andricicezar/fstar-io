@@ -63,7 +63,10 @@ build-all: build-Examples.Intro build-Examples.Autograder build-Examples.PRNG bu
 %.fsti.emacs: %.fsti
 	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
 
+# If we're building a package, we don't need to run the dep analysis.
+ifneq ($(MAKECMDGOALS),package)
 include .depend.mk
+endif
 
 verify: $(ALL_CHECKED_FILES)
 
@@ -86,8 +89,7 @@ dep.pdf: dep.graph
 # already removes user and host names (good!)
 .PHONY: package
 package:
-	git archive --prefix secref-artifact/ -o artifact.tar HEAD .
-	gzip -f -9 artifact.tar
+	git archive --prefix secrefstar/ -o artifact.tar.gz HEAD .
 
 validate:
 	@# Run depend first without the flag, as otherwise it will
