@@ -32,7 +32,7 @@ type typ =
 let var = nat
 type exp =
   | EUnit : exp
-  | EVar  : var -> exp
+  | EVar  : v:var -> exp
   | ELam  : typ -> exp -> exp
   | EApp  : exp -> exp -> exp
 
@@ -136,12 +136,12 @@ type typing : env -> exp -> typ -> Type =
 
 
 (** Semantic type soundness *)
-let rec free_vars_indx (e:exp) (n:nat) : list var =
+let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binders
   match e with
   | EUnit -> []
   | ELam _ e' -> free_vars_indx e' (n+1)
   | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
-  | EVar i -> if i < n then [] else [i]
+  | EVar i -> if i < n then [] else [i-n]
 
 let free_vars e = free_vars_indx e 0
 
@@ -160,20 +160,53 @@ type closed_exp = e:exp{is_closed e}
 let fv_in_env (g:env) (e:exp) : Type0 =
   forall fv. fv `mem` free_vars e ==> Some? (g fv)
 
-let lem_subst_closes_exp (g:env) (s:sub false) (e:exp) :
+let rec lem_subst_closes_exp
+  (s:sub false)
+  (e:exp)
+  (n:nat) // number of binders
+        // the substitutions for the free variables are in s from pos n to infinity
+        // recursively, n increases, and s is shifted
+  :
   Lemma
-    (requires (fv_in_env g e /\ (forall x. Some? (g x) ==> is_closed (s x))))
-    (ensures (is_closed (subst s e))) = admit ()
+    (requires (
+      (forall (x:var). x < n ==> EVar? (s x) /\ EVar?.v (s x) < n) /\
+      (forall fv. fv `memP` free_vars_indx e n ==> is_closed (s (n+fv)))))
+    (ensures (free_vars_indx (subst s e) n == []))
+    (decreases e) =
+  match e with
+  | EApp e1 e2 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be easy **)
+    lem_subst_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be easy **)
+    lem_subst_closes_exp s e2 n
+  | ELam t e' ->
+    let s' = sub_elam s in
+    let n' = n+1 in
+    //assert (map ((+) 1) (free_vars_indx e n) @ [0] == free_vars_indx e1 (n+1));
+    assert (free_vars_indx e n == free_vars_indx e' n');
+    assume (forall fv. fv `memP` free_vars_indx e' n' ==> is_closed (s' (n'+fv)));
+    lem_subst_closes_exp s' e' n'
+  | EVar x -> begin
+    assert (subst s (EVar x) == s x);
+    if x < n then assert (free_vars_indx (s x) n == [])
+    else begin
+      assert ((x-n) `memP` free_vars_indx e n);
+      assert (is_closed (s x));
+      assume (free_vars_indx (s x) 0 == [] ==> free_vars_indx (s x) n == []); (** should be easy to prove **)
+      assert (free_vars_indx (s x) n == [])
+    end
+  end
+  | _ -> ()
 
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-let rec lem_subst_preserves_is_closed (t:typ) (e v:exp) :
+let lem_subst_preserves_is_closed (t:typ) (e v:exp) :
   Lemma
     (requires (is_closed (ELam t e) /\ is_closed v))
     (ensures (is_closed (subst (sub_beta v) e))) =
-  assume (fv_in_env (extend t empty) e);
-  lem_subst_closes_exp (extend t empty) (sub_beta v) e
+  assume (free_vars_indx e 0 == [0]);
+  lem_subst_closes_exp (sub_beta v) e 0
 
 val step : closed_exp -> option closed_exp
 let rec step e =
@@ -245,7 +278,7 @@ let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
   Lemma
     (requires (fv_in_env g e /\ (exists x. Some? (g x))))
     (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) =
-  lem_subst_closes_exp g (fun x -> if Some? (g x) then s x else EVar x) e
+  lem_subst_closes_exp (fun x -> if Some? (g x) then s x else EVar x) e 0
 
 let gsubst (#g:env) (s:gsub g) (e:exp)
   : Pure closed_exp
