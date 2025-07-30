@@ -337,7 +337,6 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
       let g' = extend t1 g in
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam t1 body) == ELam t1 body');
-      lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2);
       introduce forall (v:value). v ∈ t1 ==>  subst_beta t1 v body' ⋮ t2 with begin
         introduce _ ==> _ with _. begin
           assume (fv_in_env g' body); (** should be easy to prove **)
@@ -349,7 +348,8 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
           assert (subst_beta t1 v body' ⋮ t2)
         end
       end;
-      assert (ELam t1 body' ⋮ TArr t1 t2 )
+      assert (gsubst s (ELam t1 body) ∈ TArr t1 t2);
+      lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2)
     end
   end
   | _ -> admit ()
