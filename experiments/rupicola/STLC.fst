@@ -265,31 +265,32 @@ type steps : closed_exp -> closed_exp -> Type =
 let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'
 
-let rec wb_value (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;0]) =
+(** CA: should e be a value? **)
+let rec (∈) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;0]) =
   match t with
   | TUnit -> e == EUnit
   | TArr t1 t2 ->
       match e with
       | ELam t' e' ->
           t' == t1 /\
-          (forall (v:value). wb_value t1 v ==>
-            wb_expr t2 (subst_beta t' v e'))
+          (forall (v:value). v ∈ t1 ==> subst_beta t' v e' ⋮ t2)
       | _ -> False
-and wb_expr (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;1]) =
-  forall (e':closed_exp). steps e e' ==> irred e' ==>
-    wb_value t e'
+and (⋮) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;1]) =
+  forall (e':closed_exp). steps e e' ==> irred e' ==> e' ∈ t
 (** definition of wb_expr is based on the fact that evaluation of expressions in the STLC
 always terminates **)
 
+let lem_value_is_typed_exp e t : Lemma (e ∈ t ==> e ⋮ t) = admit ()
+
 (** ground substitution / value environment **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
-  s:(sub b){forall x. Some? (g x) ==> is_value (s x) /\ wb_value (Some?.v (g x)) (s x)}
+  s:(sub b){forall x. Some? (g x) ==> is_value (s x) /\ (s x) ∈ (Some?.v (g x))}
  // x:var{Some? (g x)} -> v:value{wb_value (Some?.v (g x)) v}
 
 let gsub_empty : gsub empty true =
   (fun v -> EVar v)
 
-let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) false =
+let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) : gsub (extend t g) false =
   let f = fun (y:var) -> if y = 0 then v else s (y-1) in
   introduce exists (x:var). ~(EVar? (f x)) with 0 and ();
   f
@@ -299,7 +300,7 @@ let gsubst (#g:env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
-let substitution_lemma #g #b (s:gsub g b) (t:typ) (v:value{wb_value t v}) (e:exp) : Lemma
+let substitution_lemma #g #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) (e:exp) : Lemma
   ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e)) = admit ()
 
 let e_gsub_empty (e:closed_exp) :
@@ -309,7 +310,7 @@ let e_gsub_empty (e:closed_exp) :
 
 let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
   fv_in_env g e /\
-  (forall b (s:gsub g b). wb_expr t (gsubst s e))
+  (forall b (s:gsub g b). (gsubst s e) ⋮ t)
 
 let safety (e:closed_exp) (t:typ) : Lemma
   (requires sem_typing empty e t)
@@ -317,8 +318,8 @@ let safety (e:closed_exp) (t:typ) : Lemma
   introduce forall e'. steps e e' ==> is_value e' \/ Some? (step e') with begin
     introduce steps e e' ==> is_value e' \/ Some? (step e') with _. begin
       introduce irred e' ==> is_value e' with _. begin
-        eliminate forall b (s: gsub empty b). wb_expr t (gsubst s e) with true gsub_empty;
-        assert (wb_value t e')
+        eliminate forall b (s: gsub empty b). (gsubst s e) ⋮ t with true gsub_empty;
+        assert (e' ∈ t)
       end
     end
   end
@@ -327,7 +328,31 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
   : Lemma
     (requires (fv_in_env g e))
     (ensures sem_typing g e t)
-  = admit ()
+  =
+  match ht with
+  | TyUnit -> assert (sem_typing g e t) by (explode ())
+  | TyVar _ -> assert (sem_typing g e t) by (explode ())
+  | TyLam t1 #body #t2 hbody -> begin
+    introduce forall b (s:gsub g b). gsubst s (ELam t1 body) ⋮ TArr t1 t2 with begin
+      let g' = extend t1 g in
+      let body' = subst (sub_elam s) body in
+      assert (gsubst s (ELam t1 body) == ELam t1 body');
+      lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2);
+      introduce forall (v:value). v ∈ t1 ==>  subst_beta t1 v body' ⋮ t2 with begin
+        introduce _ ==> _ with _. begin
+          assume (fv_in_env g' body); (** should be easy to prove **)
+          fundamental_property_of_logical_relations hbody;
+          assert (sem_typing g' body t2);
+          eliminate forall b (s:gsub g' b). (gsubst s body) ⋮ t2 with false (gsub_extend s t1 v);
+          assert (gsubst (gsub_extend s t1 v) body ⋮ t2);
+          substitution_lemma s t1 v body;
+          assert (subst_beta t1 v body' ⋮ t2)
+        end
+      end;
+      assert (ELam t1 body' ⋮ TArr t1 t2 )
+    end
+  end
+  | _ -> admit ()
 
 (**
   match ht with
