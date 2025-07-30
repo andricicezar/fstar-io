@@ -324,6 +324,22 @@ let safety (e:closed_exp) (t:typ) : Lemma
     end
   end
 
+let lem_helper #g #b (s:gsub g b) t1
+  (e1:closed_exp{fv_in_env g e1})
+  (e2:closed_exp{fv_in_env g e2})
+  (e':closed_exp)
+  (st:steps (gsubst s (EApp e1 e2)) e') :
+  Pure (exp * closed_exp)
+    (requires True)
+    (ensures fun (e11, e2') ->
+      is_closed (ELam t1 e11) /\ irred (ELam t1 e11) /\
+      irred e2' /\
+      steps (gsubst s e1) (ELam t1 e11) /\
+      steps (gsubst s e2) e2' /\
+      steps (gsubst s (EApp e1 e2)) (subst_beta t1 e2' e11) /\
+      steps (subst_beta t1 e2' e11) e')
+  = admit ()
+
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma
     (requires (fv_in_env g e))
@@ -352,7 +368,27 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
       lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2)
     end
   end
-  | _ -> admit ()
+  | TyApp #_ #e1 #e2 #t1 #t2 h1 h2 ->
+    introduce forall b (s:gsub g b). gsubst s (EApp e1 e2) ⋮ t2 with begin
+      introduce forall e'. steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> e' ∈ t2 with begin
+        introduce _ ==> e' ∈ t2 with h. begin
+          let steps_e_e' : squash (steps (gsubst s (EApp e1 e2)) e') = () in
+          FStar.Squash.map_squash #_ #(squash (e' ∈ t2)) steps_e_e' (fun steps_e_e' ->
+            assume (is_closed e1); (** should be easy to prove **)
+            assume (is_closed e2); (** should be easy to prove **)
+            assume (fv_in_env g e1); (** should be easy to prove **)
+            assume (fv_in_env g e2); (** should be easy to prove **)
+            let (e11, e2') = lem_helper s t1 e1 e2 e' steps_e_e' in
+            fundamental_property_of_logical_relations h1;
+            assert (ELam t1 e11 ∈ TArr t1 t2);
+            fundamental_property_of_logical_relations h2;
+            assert (e2' ∈ t1);
+            assert (subst_beta t1 e2' e11 ⋮ t2);
+            assert (e' ∈ t2)
+          )
+        end
+      end
+    end
 
 (**
   match ht with
