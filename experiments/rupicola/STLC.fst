@@ -158,7 +158,7 @@ type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
 let fv_in_env (g:env) (e:exp) : Type0 =
-  forall fv. fv `mem` free_vars e ==> Some? (g fv)
+  forall (fv:var). fv `memP` free_vars e <==> Some? (g fv)
 
 let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
@@ -219,12 +219,13 @@ let rec lem_subst_freevars_closes_exp
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-let lem_subst_preserves_is_closed (t:typ) (e v:exp) :
-  Lemma
+let subst_beta (t:typ) (v e:exp) :
+  Pure closed_exp
     (requires (is_closed (ELam t e) /\ is_closed v))
-    (ensures (is_closed (subst (sub_beta v) e))) =
+    (ensures (fun _ -> True)) =
   assume (free_vars_indx e 0 == [0]); (** should be provable **)
-  lem_subst_freevars_closes_exp (sub_beta v) e 0
+  lem_subst_freevars_closes_exp (sub_beta v) e 0;
+  subst (sub_beta v) e
 
 val step : closed_exp -> option closed_exp
 let rec step e =
@@ -238,8 +239,7 @@ let rec step e =
           | None     -> begin
             match e1 with (** PO-app3 **)
             | ELam t e' -> begin
-              lem_subst_preserves_is_closed t e' e2;
-              Some (subst (sub_beta e2) e')
+              Some (subst_beta t e2 e')
             end
             | _ -> None
           end
@@ -273,8 +273,7 @@ let rec wb_value (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;0]) =
       | ELam t' e' ->
           t' == t1 /\
           (forall (v:value). wb_value t1 v ==>
-            (lem_subst_preserves_is_closed t' e' v;
-            wb_expr t2 (subst (sub_beta v) e')))
+            wb_expr t2 (subst_beta t' v e'))
       | _ -> False
 and wb_expr (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;1]) =
   forall (e':closed_exp). steps e e' ==> irred e' ==>
@@ -283,40 +282,34 @@ and wb_expr (t:typ) (e:closed_exp) : Tot Type0 (decreases %[t;1]) =
 always terminates **)
 
 (** ground substitution / value environment **)
-let gsub (g:env) =
-  x:var{Some? (g x)} -> v:value{wb_value (Some?.v (g x)) v}
+let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
+  s:(sub b){forall x. Some? (g x) ==> is_value (s x) /\ wb_value (Some?.v (g x)) (s x)}
+ // x:var{Some? (g x)} -> v:value{wb_value (Some?.v (g x)) v}
 
-let gsub_empty : gsub empty =
-  (fun v -> assert False; EVar v)
+let gsub_empty : gsub empty true =
+  (fun v -> EVar v)
 
-let gsub_extend (#g:env) (s:gsub g) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) =
-  fun y -> if y = 0 then v else s (y-1)
+let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value{wb_value t v}) : gsub (extend t g) false =
+  let f = fun (y:var) -> if y = 0 then v else s (y-1) in
+  introduce exists (x:var). ~(EVar? (f x)) with 0 and ();
+  f
 
-let lem_gsubst_closes_exp (#g:env) (s:gsub g) (e:exp) :
-  Lemma
-    (requires (fv_in_env g e /\ (exists x. Some? (g x))))
-    (ensures (is_closed (subst #false (fun x -> if Some? (g x) then s x else EVar x) e))) =
-  lem_subst_freevars_closes_exp #false (fun x -> if Some? (g x) then s x else EVar x) e 0
+let gsubst (#g:env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
+ // let s : sub (is_closed e) = (fun x -> if Some? (g x) then gs x else EVar x) in
+  lem_subst_freevars_closes_exp s e 0;
+  subst s e
 
-let gsubst (#g:env) (s:gsub g) (e:exp)
-  : Pure closed_exp
-    (requires (forall (fv:var). fv `memP` free_vars e ==> Some? (g fv)))
-    (ensures (fun _ -> True)) =
-  if is_closed e then e
-  else begin
-    lem_gsubst_closes_exp s e;
-    subst #false (fun x -> if Some? (g x) then s x else EVar x) e
-  end
+let substitution_lemma #g #b (s:gsub g b) (t:typ) (v:value{wb_value t v}) (e:exp) : Lemma
+  ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e)) = admit ()
 
 let e_gsub_empty (e:closed_exp) :
   Lemma (gsubst gsub_empty e == e)
   [SMTPat (gsubst gsub_empty e)] =
-  ()
+  admit ()
 
-unfold
 let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
   fv_in_env g e /\
-  (forall (s:gsub g). wb_expr t (gsubst s e))
+  (forall b (s:gsub g b). wb_expr t (gsubst s e))
 
 let safety (e:closed_exp) (t:typ) : Lemma
   (requires sem_typing empty e t)
@@ -324,25 +317,17 @@ let safety (e:closed_exp) (t:typ) : Lemma
   introduce forall e'. steps e e' ==> is_value e' \/ Some? (step e') with begin
     introduce steps e e' ==> is_value e' \/ Some? (step e') with _. begin
       introduce irred e' ==> is_value e' with _. begin
-        eliminate forall (s: gsub empty). wb_expr t (gsubst s e) with gsub_empty;
+        eliminate forall b (s: gsub empty b). wb_expr t (gsubst s e) with true gsub_empty;
         assert (wb_value t e')
       end
     end
   end
-
-(**
-let substitution_lemma #g (s:gsub g) t1 v body : Lemma
-  ((subst (sub_beta v) (gsubst s body)) ==
-   (gsubst (gsub_extend s t1 v) body)) = admit ()
-**)
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma
     (requires (fv_in_env g e))
     (ensures sem_typing g e t)
   = admit ()
-
-
 
 (**
   match ht with
