@@ -341,20 +341,19 @@ let rec lem_helper t1
       steps (EApp e1 e2) (subst_beta t1 e2' e11) /\
       steps (subst_beta t1 e2' e11) e')
     (decreases st)
-  = admit ()
-  // assert (gsubst s (EApp e1 e2) == EApp (gsubst s e1) (gsubst s e2));
-  // match st with
-  // | SRefl _ _ -> begin
-  //   assume (ELam? e1); (** how to prove this? **)
-  //   let ELam _ e11 = gsubst s e1 in
-  //   let e2' = gsubst s e2 in
-  //   (e11, e2')
-  // end
-  // | STrans #e0 #e2 () st12 -> begin
-  //   admit ()
-  //   // e0 == (gsubst s (EApp e1 e2))
-  //   // e2 == e'
-  // end
+  = 
+  match st with
+  | SRefl _ _ -> begin
+    assume (ELam? e1); (** how to prove this? **)
+    let ELam _ e11 = e1 in
+    let e2' = e2 in
+    (e11, e2')
+  end
+  | STrans #e0 #e2 () st12 -> begin
+    admit ()
+    // e0 == (gsubst s (EApp e1 e2))
+    // e2 == e'
+  end
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma
@@ -405,48 +404,3 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
         end
       end
     end
-
-(**
-  match ht with
-  | TyUnit ->
-    assert (e == EUnit);
-    assert (sem_typing g e t) by (explode ())
-  | TyVar x ->
-    assert (e == EVar x);
-    assert (sem_typing g e t) by (explode ())
-  | TyLam t1 #_ #t2 hbody ->
-    let (ELam _ body) = e in
-    fundamental_property_of_logical_relations hbody;
-    introduce forall (s:gsub g). wb_expr t (subst s (ELam t1 body)) with begin
-      assert (wb_expr t (subst s (ELam t1 body)) <==> wb_expr t (ELam t1 (subst (sub_elam s) body)));
-      assume ( (** CA: refl **)
-        wb_value t (ELam t1 (subst (sub_elam s) body)) ==>
-        wb_expr t (ELam t1 (subst (sub_elam s) body)));
-      introduce forall v. wb_value t1 v ==>  wb_expr t2 (subst (sub_beta v) (subst (sub_elam s) body)) with begin
-        introduce _ ==> _ with _. begin
-          substitution_lemma s t1 v body
-        end
-      end
-    end
-  | TyApp #_ #e1 #e2 #t1 h1 h2 ->
-    introduce forall (s:subfun g). wb_expr t (subst s (EApp e1 e2)) with begin
-      assert (wb_expr t (subst s (EApp e1 e2)) <==> wb_expr t (EApp (subst s e1) (subst s e2)));
-      match h1 with
-      | TyLam _ #body hbody -> begin
-        assert (wb_expr t (EApp (subst s (ELam t1 body)) (subst s e2)) <==>
-                wb_expr t (EApp (ELam t1 (subst (sub_elam s) body)) (subst s e2)));
-        assume ((** CA: no idea if correct, this is just taking a step. Progress and preservation? **)
-          wb_expr t (EApp (ELam t1 (subst (sub_elam s) body)) (subst s e2)) <==>
-          wb_expr t (subst (sub_beta (subst s e2)) (subst (sub_elam s) body)));
-        assume (wb_value t1 (subst s e2)); (** CA: for this to be true, one would have to step the value too **)
-        substitution_lemma s t1 (subst s e2) body;
-        fundamental_property_of_logical_relations hbody;
-        assert (wb_expr t (subst (subfun_extend s t1 (subst s e2)) body))
-      end
-      | _ -> begin
-        (** CA: I would like to call progress and preservation
-                and recursively call this lemma **)
-        admit ()
-      end
-    end
-**)
