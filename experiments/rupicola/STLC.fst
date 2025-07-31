@@ -158,7 +158,7 @@ type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
 let fv_in_env (g:env) (e:exp) : Type0 =
-  forall (fv:var). fv `memP` free_vars e <==> Some? (g fv)
+  forall (fv:var). fv `memP` free_vars e ==> Some? (g fv)
 
 let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
@@ -354,6 +354,58 @@ let rec destruct_steps_eapp
   **)
   admit ()
 
+(** Typing Rules as Lemmas *)
+let typing_rule_unit (g:env) : Lemma (sem_typing g EUnit TUnit) =
+  assert (sem_typing g EUnit TUnit) by (explode ())
+
+let typing_rule_var (g:env) (x:nat) : Lemma
+  (requires Some? (g x))
+  (ensures sem_typing g (EVar x) (Some?.v (g x))) =
+  assert (sem_typing g (EVar x) (Some?.v (g x))) by (explode ())
+
+let typing_rule_lam g (t1:typ) (body:exp) (t2:typ) : Lemma
+  (requires sem_typing (extend t1 g) body t2)
+  (ensures sem_typing g (ELam t1 body) (TArr t1 t2)) =
+  let g' = extend t1 g in
+  assert (fv_in_env g' body);
+  assume (fv_in_env g (ELam t1 body));
+  introduce forall b (s:gsub g b). gsubst s (ELam t1 body) ⋮ TArr t1 t2 with begin
+    let g' = extend t1 g in
+    let body' = subst (sub_elam s) body in
+    assert (gsubst s (ELam t1 body) == ELam t1 body');
+    introduce forall (v:value). v ∈ t1 ==>  subst_beta t1 v body' ⋮ t2 with begin
+      introduce _ ==> _ with _. begin
+        assert (sem_typing g' body t2);
+        eliminate forall b (s:gsub g' b). (gsubst s body) ⋮ t2 with false (gsub_extend s t1 v);
+        assert (gsubst (gsub_extend s t1 v) body ⋮ t2);
+        lem_substitution s t1 v body;
+        assert (subst_beta t1 v body' ⋮ t2)
+      end
+    end;
+    assert (gsubst s (ELam t1 body) ∈ TArr t1 t2);
+    lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2)
+  end
+
+let typing_rule_app g (e1:exp) (e2:exp) (t1:typ) (t2:typ) : Lemma
+  (requires sem_typing g e1 (TArr t1 t2) /\ sem_typing g e2 t1)
+  (ensures sem_typing g (EApp e1 e2) t2) =
+  assert (fv_in_env g e1);
+  assert (fv_in_env g e2);
+  assume (fv_in_env g (EApp e1 e2)); (** should be proveable **)
+  introduce forall b (s:gsub g b). gsubst s (EApp e1 e2) ⋮ t2 with begin
+    introduce forall e'. steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> e' ∈ t2 with begin
+      introduce _ ==> e' ∈ t2 with h. begin
+        let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
+        FStar.Squash.map_squash #_ #(squash (e' ∈ t2)) steps_e_e' (fun steps_e_e' ->
+          let (e11, e2') = destruct_steps_eapp t1 (gsubst s e1) (gsubst s e2) e' steps_e_e' in
+          assert (ELam t1 e11 ∈ TArr t1 t2);
+          assert (e2' ∈ t1);
+          assert (subst_beta t1 e2' e11 ⋮ t2);
+          assert (e' ∈ t2)
+        )
+      end
+    end
+  end
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma
@@ -361,46 +413,18 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
     (ensures sem_typing g e t)
   =
   match ht with
-  | TyUnit -> assert (sem_typing g e t) by (explode ())
-  | TyVar _ -> assert (sem_typing g e t) by (explode ())
+  | TyUnit -> typing_rule_unit g
+  | TyVar x -> typing_rule_var g (EVar?.v e)
   | TyLam t1 #body #t2 hbody -> begin
-    introduce forall b (s:gsub g b). gsubst s (ELam t1 body) ⋮ TArr t1 t2 with begin
-      let g' = extend t1 g in
-      let body' = subst (sub_elam s) body in
-      assert (gsubst s (ELam t1 body) == ELam t1 body');
-      introduce forall (v:value). v ∈ t1 ==>  subst_beta t1 v body' ⋮ t2 with begin
-        introduce _ ==> _ with _. begin
-          assume (fv_in_env g' body); (** should be easy to prove **)
-          fundamental_property_of_logical_relations hbody;
-          assert (sem_typing g' body t2);
-          eliminate forall b (s:gsub g' b). (gsubst s body) ⋮ t2 with false (gsub_extend s t1 v);
-          assert (gsubst (gsub_extend s t1 v) body ⋮ t2);
-          lem_substitution s t1 v body;
-          assert (subst_beta t1 v body' ⋮ t2)
-        end
-      end;
-      assert (gsubst s (ELam t1 body) ∈ TArr t1 t2);
-      lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2)
-    end
+    let g' = extend t1 g in
+    assume (fv_in_env g' body); (** should be easy to prove **)
+    fundamental_property_of_logical_relations hbody;
+    typing_rule_lam g t1 body t2
   end
-  | TyApp #_ #e1 #e2 #t1 #t2 h1 h2 ->
-    introduce forall b (s:gsub g b). gsubst s (EApp e1 e2) ⋮ t2 with begin
-      introduce forall e'. steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> e' ∈ t2 with begin
-        introduce _ ==> e' ∈ t2 with h. begin
-          assume (fv_in_env g e1); (** should be proveable **)
-          assume (fv_in_env g e2); (** should be proveable **)
-          let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
-          FStar.Squash.map_squash #_ #(squash (e' ∈ t2)) steps_e_e' (fun steps_e_e' ->
-            assume (is_closed e1); (** should be proveable **)
-            assume (is_closed e2); (** should be proveable **)
-            let (e11, e2') = destruct_steps_eapp t1 (gsubst s e1) (gsubst s e2) e' steps_e_e' in
-            fundamental_property_of_logical_relations h1;
-            assert (ELam t1 e11 ∈ TArr t1 t2);
-            fundamental_property_of_logical_relations h2;
-            assert (e2' ∈ t1);
-            assert (subst_beta t1 e2' e11 ⋮ t2);
-            assert (e' ∈ t2)
-          )
-        end
-      end
-    end
+  | TyApp #_ #e1 #e2 #t1 #t2 h1 h2 -> begin
+    assume (fv_in_env g e1);
+    assume (fv_in_env g e2);
+    fundamental_property_of_logical_relations h1;
+    fundamental_property_of_logical_relations h2;
+    typing_rule_app g e1 e2 t1 t2
+  end
