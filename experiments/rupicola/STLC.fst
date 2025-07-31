@@ -198,9 +198,9 @@ let rec lem_subst_freevars_closes_exp
     (decreases e) =
   match e with
   | EApp e1 e2 ->
-    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be easy **)
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be easy **)
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e2 n
   | ELam t e' ->
     let s' = sub_elam s in
@@ -255,8 +255,7 @@ let irred (e:closed_exp) : Type0 =
 
 (** reflexive transitive closure of step *)
 type steps : closed_exp -> closed_exp -> Type =
-| SRefl  : e:closed_exp -> 
-           squash (irred e) -> 
+| SRefl  : e:closed_exp ->
            steps e e
 | STrans : #e0:closed_exp ->
            #e2:closed_exp ->
@@ -279,15 +278,16 @@ let rec (∈) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;0]) =
       | _ -> False
 and (⋮) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;1]) =
   forall (e':closed_exp). steps e e' ==> irred e' ==> e' ∈ t
-(** definition of wb_expr is based on the fact that evaluation of expressions in the STLC
-always terminates **)
+(** definition of `⋮` is based on the fact that evaluation of
+    expressions in the STLC always terminates **)
 
-let lem_value_is_typed_exp e t : Lemma (e ∈ t ==> e ⋮ t) = admit ()
+let lem_value_is_typed_exp e t
+  : Lemma (e ∈ t ==> e ⋮ t)
+  = admit () (** Amal uses such a lemma **)
 
 (** ground substitution / value environment **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x) /\ (s x) ∈ (Some?.v (g x))}
- // x:var{Some? (g x)} -> v:value{wb_value (Some?.v (g x)) v}
 
 let gsub_empty : gsub empty true =
   (fun v -> EVar v)
@@ -298,14 +298,15 @@ let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) : gsub (exte
   f
 
 let gsubst (#g:env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
- // let s : sub (is_closed e) = (fun x -> if Some? (g x) then gs x else EVar x) in
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
-let substitution_lemma #g #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) (e:exp) : Lemma
-  ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e)) = admit ()
+let lem_substitution #g #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) (e:exp)
+  : Lemma (
+    (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
+  = admit () (** common lemma **)
 
-let e_gsub_empty (e:closed_exp) :
+let lem_gsub_empty_identity (e:closed_exp) :
   Lemma (gsubst gsub_empty e == e)
   [SMTPat (gsubst gsub_empty e)] =
   admit ()
@@ -326,13 +327,14 @@ let safety (e:closed_exp) (t:typ) : Lemma
     end
   end
 
-let rec lem_helper t1
+let rec destruct_steps_eapp
+  t1
   (e1:closed_exp)
   (e2:closed_exp)
   (e':closed_exp)
   (st:steps (EApp e1 e2) e') :
   Pure (exp * closed_exp)
-    (requires irred e')
+    (requires irred e') (** CA: not sure if necessary **)
     (ensures fun (e11, e2') ->
       is_closed (ELam t1 e11) /\ irred (ELam t1 e11) /\
       irred e2' /\
@@ -341,19 +343,17 @@ let rec lem_helper t1
       steps (EApp e1 e2) (subst_beta t1 e2' e11) /\
       steps (subst_beta t1 e2' e11) e')
     (decreases st)
-  = 
-  match st with
-  | SRefl _ _ -> begin
-    assume (ELam? e1); (** how to prove this? **)
-    let ELam _ e11 = e1 in
-    let e2' = e2 in
-    (e11, e2')
-  end
-  | STrans #e0 #e2 () st12 -> begin
-    admit ()
-    // e0 == (gsubst s (EApp e1 e2))
-    // e2 == e'
-  end
+  =
+  (**
+    How the steps look like:
+      EApp e1 e2 -->* EApp (ELam t1 e11) e2' --> subst_beta t1 e2' e11 -->* e'
+
+    The function should destruct steps until it is again in EApp.
+    Based on the definition of step function, it should imply that (ELam t1 e11) and e2'
+    are irreducible.
+  **)
+  admit ()
+
 
 let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht:typing g e t)
   : Lemma
@@ -375,7 +375,7 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
           assert (sem_typing g' body t2);
           eliminate forall b (s:gsub g' b). (gsubst s body) ⋮ t2 with false (gsub_extend s t1 v);
           assert (gsubst (gsub_extend s t1 v) body ⋮ t2);
-          substitution_lemma s t1 v body;
+          lem_substitution s t1 v body;
           assert (subst_beta t1 v body' ⋮ t2)
         end
       end;
@@ -387,13 +387,13 @@ let rec fundamental_property_of_logical_relations (#g:env) (#e:exp) (#t:typ) (ht
     introduce forall b (s:gsub g b). gsubst s (EApp e1 e2) ⋮ t2 with begin
       introduce forall e'. steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> e' ∈ t2 with begin
         introduce _ ==> e' ∈ t2 with h. begin
-          assume (fv_in_env g e1); (** should be easy to prove **)
-          assume (fv_in_env g e2); (** should be easy to prove **)
+          assume (fv_in_env g e1); (** should be proveable **)
+          assume (fv_in_env g e2); (** should be proveable **)
           let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
           FStar.Squash.map_squash #_ #(squash (e' ∈ t2)) steps_e_e' (fun steps_e_e' ->
-            assume (is_closed e1); (** should be easy to prove **)
-            assume (is_closed e2); (** should be easy to prove **)
-            let (e11, e2') = lem_helper t1 (gsubst s e1) (gsubst s e2) e' steps_e_e' in
+            assume (is_closed e1); (** should be proveable **)
+            assume (is_closed e2); (** should be proveable **)
+            let (e11, e2') = destruct_steps_eapp t1 (gsubst s e1) (gsubst s e2) e' steps_e_e' in
             fundamental_property_of_logical_relations h1;
             assert (ELam t1 e11 ∈ TArr t1 t2);
             fundamental_property_of_logical_relations h2;
