@@ -53,7 +53,7 @@ assume val get_v : i:nat -> a:Type -> a
 
 instance compile_exp_unit g card_g : compile_exp #unit #compile_typ_unit () g card_g = {
   t = EUnit;
-  proof = (fun () -> assert (sem_typing g EUnit TUnit) by (explode ()));
+  proof = (fun () -> typing_rule_unit g);
 }
 
 let test_unit g n : compile_exp () g n = solve
@@ -61,9 +61,7 @@ let test_unit g n : compile_exp () g n = solve
 instance compile_exp_var (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp (get_v i a) g g_card =
   let v = g_card-i-1 in {
     t = EVar v;
-    proof = (fun () ->
-      assert (sem_typing g (EVar v) ca.t) by (explode ())
-    )
+    proof = (fun () -> typing_rule_var g v);
   }
 
 instance compile_exp_lambda
@@ -76,17 +74,7 @@ instance compile_exp_lambda
   t = ELam ca.t cf.t;
   proof = (fun () ->
     cf.proof ();
-    introduce forall (s:subfun g). wb_expr (TArr ca.t cb.t) (subst s (ELam ca.t cf.t)) with begin
-      assert (wb_expr (TArr ca.t cb.t) (subst s (ELam ca.t cf.t)) <==> wb_expr (TArr ca.t cb.t) (ELam ca.t (subst (sub_elam s) cf.t)));
-      assume ( (** CA: refl **)
-        wb_value (TArr ca.t cb.t) (ELam ca.t (subst (sub_elam s) cf.t)) ==>
-        wb_expr (TArr ca.t cb.t) (ELam ca.t (subst (sub_elam s) cf.t)));
-      introduce forall v. wb_value ca.t v ==>  wb_expr cb.t (subst (sub_beta v) (subst (sub_elam s) cf.t)) with begin
-        introduce _ ==> _ with _. begin
-          substitution_lemma s ca.t v cf.t
-        end
-      end
-    end
+    typing_rule_lam g ca.t cf.t cb.t
   );
 }
 
@@ -118,22 +106,8 @@ instance compile_exp_app
   proof = (fun () ->
     cf.proof ();
     cx.proof ();
-    introduce forall (s:subfun g). wb_expr cb.t (subst s (EApp cf.t cx.t)) with begin
-      assert (wb_expr (TArr ca.t cb.t) (subst s cf.t));
-      assert (wb_expr ca.t (subst s cx.t));
-      assert (forall x' f'. wb_value ca.t x' ==> wb_value (TArr ca.t cb.t) f' ==>
-        steps (subst s cf.t) (ELam ca.t f') ==>
-        steps (subst s cx.t) x'
-        ==> wb_expr cb.t (subst (sub_beta x') f')) by (explode ());
-      assume (forall x' f'. wb_value ca.t x' ==> wb_value (TArr ca.t cb.t) f' ==>
-        steps (subst s cf.t) (ELam ca.t f') ==>
-        steps (subst s cx.t) x' ==>
-        (forall e'. steps (subst (sub_beta x') f') e' <==> steps (EApp (subst s cf.t) (subst s cx.t)) e'));
-      assume (forall e'. steps (EApp (subst s cf.t) (subst s cx.t)) e' ==> irred e' ==>
-        wb_value cb.t e');
-      assert (wb_expr cb.t (EApp (subst s cf.t) (subst s cx.t)))
-    //    by (explode (); dump "H"  );
-    end)
+    typing_rule_app g cf.t cx.t ca.t cb.t 
+  );
 }
 
 let test0_fapp : compile_exp #unit #solve ((fun x y -> y) () ()) empty 0 =
