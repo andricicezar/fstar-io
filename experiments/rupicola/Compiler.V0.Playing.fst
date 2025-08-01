@@ -52,7 +52,8 @@ instance compile_exp_lambda
   (n:nat)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type)
-  (f:a -> b) {| cf: (compile_exp (f (get_v (n+1) a)) (n+1)) |}
+  (f:a -> b)
+  {| cf: (compile_exp (f (get_v (n+1) a)) (n+1)) |} (** CA: here we call f, which means f has to be pure **)
   : compile_exp (fun x -> f x) n = {
   t = ELam ca.t cf.t
 }
