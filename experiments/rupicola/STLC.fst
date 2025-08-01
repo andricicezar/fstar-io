@@ -274,7 +274,7 @@ let rec (∈) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;0]) =
       match e with
       | ELam t' e' ->
           t' == t1 /\
-          (forall (v:value). v ∈ t1 ==> subst_beta t' v e' ⋮ t2)
+          (forall (v:value). v ∈ t1 ==> subst_beta t1 v e' ⋮ t2)
       | _ -> False
 and (⋮) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;1]) =
   forall (e':closed_exp). steps e e' ==> irred e' ==> e' ∈ t
