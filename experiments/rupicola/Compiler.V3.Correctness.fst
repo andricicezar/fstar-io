@@ -57,7 +57,7 @@ let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
 
 (** For closed terms.
     Asymmetric Cross Language Binary Logical Relation between F* and STLC expressions.
-    It is assymetric because F* values are all closed, and only the e expressions are open. **)
+    It is asymmetric because F* values are all closed, and only the e expressions are open. **)
 let rec (∋) (t:typ) (p:elab_typ t * closed_exp) : Tot Type0 (decreases %[t;0]) =
   let fs_v = fst p in
   let e = snd p in
@@ -68,7 +68,7 @@ let rec (∋) (t:typ) (p:elab_typ t * closed_exp) : Tot Type0 (decreases %[t;0])
     match e with
     | ELam t' e' -> t1 == t' /\
       (forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>
-        t2 ⋮ ((fs_f fs_v), (subst_beta t1 v e')))
+        t2 ⋮ (fs_f fs_v, subst_beta t1 v e'))
     | _ -> False
   end
 and (⋮) (t:typ) (p: elab_typ t * closed_exp) : Tot Type0 (decreases %[t;1]) =
@@ -132,40 +132,39 @@ let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_
 (**
    For open terms.
    Asymmetric Cross Language Binary Logical Relation between F* and STLC expressions.
-   It is assymetric because F* values are all closed, and only the e expressions are open. **)
+   It is asymmetric because F* values are all closed, and only the e expressions are open. **)
 
-let equiv_envs (#g:env) #b #g_card (s:gsub g g_card b) (fs_s:fs_env g_card) : Type0 =
+let (∽) (#g:env) #b #g_card (s:gsub g g_card b) (fs_s:fs_env g_card) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s (var_to_fs g_card x), (s x))
 
-let equiv (#g:env) (g_card:env_card g) (t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
+let equiv (#g:env) (#g_card:env_card g) (t:typ) (fs_e:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   fv_in_env g e /\
   (forall b (s:gsub g g_card b) (fs_s:fs_env g_card).
-    equiv_envs s fs_s ==>  t ⋮ (fs_v fs_s, (gsubst s e)))
+    s ∽ fs_s ==>  t ⋮ (fs_e fs_s, (gsubst s e)))
 
-unfold
-let equiv' (#g:env) (#g_card:env_card g) (t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
-  equiv g_card t fs_v e
+let (≈) (#g:env) (#g_card:env_card g) (#t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
+  equiv #g #g_card t fs_v e
 
 (** Rules **)
 
 let equiv_unit #g (g_card:env_card g)
-  : Lemma ((fun _ -> ()) `equiv g_card TUnit` EUnit)
-  = assert ((fun _ -> ()) `equiv g_card TUnit` EUnit) by (explode ())
+  : Lemma ((fun (_:fs_env g_card) -> ()) `equiv TUnit` EUnit)
+  = assert ((fun (_:fs_env g_card) -> ()) `equiv TUnit` EUnit) by (explode ())
 
 let equiv_var #g (g_card:env_card g) (x:var{x < g_card})
-  : Lemma ((fun fs_s -> get_v fs_s (var_to_fs g_card x)) `equiv g_card (Some?.v (g x))` EVar x)
-  = assert ((fun fs_s -> get_v fs_s (var_to_fs g_card x)) `equiv g_card (Some?.v (g x))` EVar x) by (explode ())
+  : Lemma ((fun (fs_s:fs_env g_card) -> get_v fs_s (var_to_fs g_card x)) ≈ EVar x)
+  = assert ((fun (fs_s:fs_env g_card) -> get_v fs_s (var_to_fs g_card x)) ≈ EVar x) by (explode ())
 
 let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_card -> elab_typ (TArr t1 t2)) : Lemma
-  (requires equiv #(extend t1 g) (g_card+1) t2 (fun fs_s -> f (fs_pop fs_s) (get_v fs_s g_card)) body)
-            // the assymetry is here. body is an open expression, while for f, I don't have an open expression
+  (requires (fun fs_s -> f (fs_pop #t1 fs_s) (get_v fs_s g_card)) ≈ body)
+            // the asymmetry is here. body is an open expression, while for f, I don't have an open expression
             // the equiv is quantifying over the free variable of body, but not get_v
-  (ensures equiv g_card (TArr t1 t2) f (ELam t1 body)) =
+  (ensures f ≈ (ELam t1 body)) =
   let g' = extend t1 g in
   let g_card' : env_card g' = g_card + 1 in
   assume (fv_in_env g (ELam t1 body));
-  introduce forall b (s:gsub g g_card b) fs_s. equiv_envs s fs_s ==> TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body)) with begin
+  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam t1 body) == ELam t1 body');
@@ -173,10 +172,10 @@ let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_ca
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
           let fs_s' = fs_extend fs_s fs_v in
-          eliminate forall b (s':gsub g' g_card' b) fs_s'. equiv_envs s' fs_s' ==>  t2 ⋮ (f (fs_pop #t1 fs_s') (get_v fs_s' g_card), (gsubst s' body))
+          eliminate forall b (s':gsub g' g_card' b) fs_s'. s' ∽ fs_s' ==>  t2 ⋮ (f (fs_pop #t1 fs_s') (get_v fs_s' g_card), (gsubst s' body))
             with false s' fs_s';
-          assert (equiv_envs s fs_s);
-          assert (equiv_envs (gsub_extend s t1 v) (fs_extend fs_s fs_v));
+          assert (s ∽ fs_s);
+          assert (gsub_extend s t1 v ∽ fs_extend fs_s fs_v);
           assert (t2 ⋮ (f (fs_pop fs_s') (get_v fs_s' g_card), (gsubst s' body)));
           assert (get_v (fs_extend fs_s fs_v) g_card == fs_v);
           assert (t2 ⋮ (f (fs_pop fs_s') fs_v, (gsubst s' body)));
@@ -191,22 +190,25 @@ let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_ca
   end
 
 let equiv_app #g (g_card:env_card g) (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:fs_env g_card -> elab_typ (TArr t1 t2)) (fs_e2:fs_env g_card -> elab_typ t1) : Lemma
-  (requires equiv g_card (TArr t1 t2) fs_e1 e1 /\ equiv g_card t1 fs_e2 e2)
-  (ensures equiv g_card t2 (fun fs_s -> fs_e1 fs_s (fs_e2 fs_s)) (EApp e1 e2)) =
+  (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
+  (ensures (fun fs_s -> (fs_e1 fs_s) (fs_e2 fs_s)) ≈ (EApp e1 e2)) =
   assert (fv_in_env g e1);
   assert (fv_in_env g e2);
   assume (fv_in_env g (EApp e1 e2)); (** should be proveable **)
-  introduce forall b (s:gsub g g_card b) fs_s. equiv_envs s fs_s ==> t2 ⋮ ((fs_e1 fs_s (fs_e2 fs_s)), gsubst s (EApp e1 e2)) with begin
-    introduce equiv_envs s fs_s ==>  t2 ⋮ ((fs_e1 fs_s (fs_e2 fs_s)), gsubst s (EApp e1 e2)) with _. begin
-      introduce forall (e':closed_exp). steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> t2 ∋ (fs_e1 fs_s (fs_e2 fs_s), e') with begin
-        introduce _ ==> t2 ∋ (fs_e1 fs_s (fs_e2 fs_s), e') with h. begin
+  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> t2 ⋮ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
+    let fs_e1' = fs_e1 fs_s in
+    let fs_e2' = fs_e2 fs_s in
+    let fs_e = fs_e1' fs_e2' in
+    introduce s ∽ fs_s ==>  t2 ⋮ (fs_e, gsubst s (EApp e1 e2)) with _. begin
+      introduce forall (e':closed_exp). steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
+        introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
-          FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e1 fs_s (fs_e2 fs_s), e'))) steps_e_e' (fun steps_e_e' ->
+          FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
             let (e11, e2') = destruct_steps_eapp t1 (gsubst s e1) (gsubst s e2) e' steps_e_e' in
-            assert (TArr t1 t2 ∋ (fs_e1 fs_s, ELam t1 e11));
-            assert (t1 ∋ (fs_e2 fs_s, e2'));
-            assert (t2 ⋮ (fs_e1 fs_s (fs_e2 fs_s), subst_beta t1 e2' e11));
-            assert (t2 ∋ (fs_e1 fs_s (fs_e2 fs_s), e'))
+            assert (TArr t1 t2 ∋ (fs_e1', ELam t1 e11));
+            assert (t1 ∋ (fs_e2', e2'));
+            assert (t2 ⋮ (fs_e, subst_beta t1 e2' e11));
+            assert (t2 ∋ (fs_e, e'))
           )
         end
       end
@@ -218,7 +220,7 @@ let equiv_app #g (g_card:env_card g) (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g) (fs_e:fs_env g_card -> a) = {
   [@@@no_method] t : (t:exp{fv_in_env g t});
   [@@@no_method] proof : typing g t ca.t;
-  [@@@no_method] equiv_proof : unit -> Lemma (equiv g_card ca.t fs_e t);
+  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv ca.t` t);
 }
 
 instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
