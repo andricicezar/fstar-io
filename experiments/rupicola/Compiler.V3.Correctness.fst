@@ -242,34 +242,31 @@ instance compile_exp_lambda
   )
 }
 
-class compile_whole (#a:Type0) {| ca: compile_typ a |} (s:a) = {
-  t : compile_exp #a empty 0 (fun _ -> s)
-}
+unfold
+let compile_whole (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty 0 (fun _ -> s)
 
-let test1_exp : compile_whole #(unit -> unit) (fun x -> ()) = { t = solve }
+let test1_exp : compile_whole #(unit -> unit) (fun x -> ()) =
+  solve
 
-let _ = assert (test1_exp.t.t == ELam TUnit (EUnit))
+let _ = assert (test1_exp.t == ELam TUnit (EUnit))
 
-let test2_exp : compile_whole #(unit -> unit) (fun x -> x) = { t =
+let test2_exp : compile_whole #(unit -> unit) (fun x -> x) =
   compile_exp_lambda empty 0 (fun _ x -> x)
     #(compile_exp_var (extend TUnit empty) 1 0)
-}
-let _ = assert (test2_exp.t.t == ELam TUnit (EVar 0))
+let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
 
-let test3_exp : compile_whole #(unit -> unit -> unit) (fun x y -> x) = { t =
+let test3_exp : compile_whole #(unit -> unit -> unit) (fun x y -> x) =
   compile_exp_lambda empty 0 (fun _ x y -> x) (** CA: returning y instead of x does not return any error! **)
     #(compile_exp_lambda (extend TUnit empty) 1 (fun fs_s y -> get_v fs_s 0)
       #(compile_exp_var2 (extend TUnit empty) 1 TUnit 0))
-}
 
-let _ = assert (test3_exp.t.t == ELam TUnit (ELam TUnit (EVar 1)))
+let _ = assert (test3_exp.t == ELam TUnit (ELam TUnit (EVar 1)))
 
-let test4_exp : compile_whole #(unit -> unit -> unit) (fun x y -> y) = { t =
+let test4_exp : compile_whole #(unit -> unit -> unit) (fun x y -> y) =
   compile_exp_lambda empty 0 (fun _ x y -> y)
     #(compile_exp_lambda (extend TUnit empty) 1 (fun fs_s y -> y)
       #(compile_exp_var (extend TUnit (extend TUnit empty)) 2 1))
-}
-let _ = assert (test4_exp.t.t == ELam TUnit (ELam TUnit (EVar 0)))
+let _ = assert (test4_exp.t == ELam TUnit (ELam TUnit (EVar 0)))
 
 instance compile_exp_app
   g
@@ -287,8 +284,8 @@ instance compile_exp_app
   equiv_proof = (fun () -> admit ());
 }
 
-let test0_fapp : compile_whole #unit #solve ((fun x y -> y) () ()) = { t = solve }
-let _ = assert (test0_fapp.t.t == EUnit)
+let test0_fapp : compile_whole #unit #solve ((fun x y -> y) () ()) = solve
+let _ = assert (test0_fapp.t == EUnit)
 
 (** How to deal with top level definitions? **)
 
@@ -296,15 +293,15 @@ val myf : unit -> unit
 let myf () = ()
 
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
-let test1_topf : compile_whole (myf ()) = { t = solve }
+let test1_topf : compile_whole (myf ()) = solve
 // because of partial evaluation we have to consider both cases
-let _ = assert (test1_topf.t.t == EApp (ELam TUnit EUnit) EUnit \/
-                test1_topf.t.t == EUnit)
+let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit \/
+                test1_topf.t == EUnit)
 
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
 (* Also handles partial application. Pretty amazing! *)
-let test2_topf : compile_whole (myf2 ()) = { t = solve }
-let _ = assert (test2_topf.t.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
-                test2_topf.t.t == ELam TUnit EUnit)
+let test2_topf : compile_whole (myf2 ()) = solve
+let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
+                test2_topf.t == ELam TUnit EUnit)
