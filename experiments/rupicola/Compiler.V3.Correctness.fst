@@ -6,13 +6,13 @@ open FStar.Calc
 open FStar.List.Tot
 open STLC
 
-let rec elab_typ (t:typ) : Type0 =
+let rec elab_typ (t:typ) : Type0 = // this could already create universe problems when using monads `Type u#a -> Type u#(max 1 a)`
   match t with
   | TUnit -> unit
   | TArr t1 t2 -> (elab_typ t1 -> elab_typ t2)
 
 class compile_typ (s:Type) = {
-  [@@@no_method] t : (t:typ{elab_typ t == s}) // this could already create universe problems when using monads `Type u#a -> Type u#(max 1 a)`
+  [@@@no_method] t : (t:typ{elab_typ t == s})
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit }
@@ -29,6 +29,15 @@ instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |}
     );
     t
    end }
+
+let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
+  match t with
+  | TUnit -> compile_typ_unit
+  | TArr t1 t2 ->
+    assume (elab_typ t == (elab_typ t1 -> elab_typ t2));
+    compile_typ_arrow (elab_typ t1) (elab_typ t2) #(elab_typ_is_compile_typ t1) #(elab_typ_is_compile_typ t2)
+
+instance elab_typ_is_compile_typ' (t:typ) : compile_typ (elab_typ t) = elab_typ_is_compile_typ t
 
 // Some tests
 let test0 : compile_typ (unit) = solve
@@ -56,31 +65,14 @@ and (⋮) (t:typ) (p: elab_typ t * closed_exp) : Tot Type0 (decreases %[t;1]) =
   let e = snd p in
   forall (e':closed_exp). steps e e' ==> irred e' ==> t ∋ (fs_e, e)
 
-assume val get_v : i:nat -> a:Type -> a
-(** CA: this is an abstraction that helps with dealing with variables.
-   It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
-
-(** The deBrujin index is inverse to the index in F* env **)
-
-let var_to_fs (g_card:nat) (x:var{x < g_card}) : (i:nat{i < g_card}) =
-  g_card-x-1
-
-let fs_to_var (g_card:nat) (i:nat{i < g_card}) : var =
-  g_card-i-1
-
-let lem_inverse (g_card:nat) (x:var{x < g_card}) : Lemma (fs_to_var g_card (var_to_fs g_card x) == x) = ()
-let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_to_var g_card i) == i) = ()
-
 type env_card (g:env) =
   g_card:nat{forall (i:nat). i < g_card ==> Some? (g i)}
 
+(** STLC Evaluation Environment : variable -> value **)
+
 let gsub (g:env) (g_card:env_card g) (b:bool{b ==> (forall x. None? (g x))}) =
   s:(sub b){
-    forall (x:var). Some? (g x) ==>
-      x < g_card /\
-      is_value (s x)}
-
-(** I suppose such a condition would be useless if one has a back-translation from STLC expressions to F* expression **)
+    forall (x:var). Some? (g x) ==>  x < g_card /\ is_value (s x)}
 
 let gsub_empty : gsub empty 0 true =
   (fun v -> EVar v)
@@ -94,94 +86,141 @@ let gsubst (#g:env) #b #g_card (s:gsub g b g_card) (e:exp{fv_in_env g e}) : clos
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
+(** F* Evaluation Environment **)
+
+(** CA: this is an abstraction that helps with dealing with variables.
+   It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
+
+(** The deBrujin index is inverse to the index in F* env **)
+let var_to_fs (g_card:nat) (x:var{x < g_card}) : (i:nat{i < g_card}) =
+  g_card-x-1
+
+let fs_to_var (g_card:nat) (i:nat{i < g_card}) : var =
+  g_card-i-1
+
+assume type fs_env #g (g_card:env_card g) : Type u#1000 (** having such an env is even possible in practice? what would its universe be? **)
+assume val get_v : #g:_ -> #g_card:env_card g -> fs_env g_card -> i:nat{i < g_card} -> elab_typ (Some?.v (g (fs_to_var g_card i)))
+assume val fs_extend : #g:_ -> #g_card:env_card g -> fs_s:fs_env g_card -> #t:typ -> elab_typ t -> fs_s':(fs_env #(extend t g) (g_card+1))
+assume val fs_pop : #t:typ -> #g:_ -> #g_card:env_card g -> fs_env #(extend t g) (g_card+1) -> fs_env #g g_card
+
+assume val lem_fs_extend #g (#g_card:env_card g) (fs_s:fs_env g_card) #t (v:elab_typ t) : Lemma (
+  (forall (i:nat). i < g_card ==> get_v fs_s i == get_v (fs_extend fs_s v) i) /\
+  get_v (fs_extend fs_s v) g_card == v)
+  [SMTPat (fs_extend fs_s v)]
+
+assume val lem_fs_pop #g (#g_card:env_card g) #t (fs_s:fs_env #(extend t g) (g_card+1)) : Lemma (
+  (forall (i:nat). i < g_card ==> get_v fs_s i == get_v (fs_pop fs_s) i))
+  [SMTPat (fs_pop fs_s)]
+
+assume val pop_extend_inverse #g (#g_card:env_card g) (fs_s:fs_env g_card) #t (x:elab_typ t) : Lemma (fs_pop (fs_extend fs_s x) == fs_s)
+  [SMTPat (fs_pop (fs_extend fs_s x))]
+
+let lem_inverse (g_card:nat) (x:var{x < g_card}) : Lemma (fs_to_var g_card (var_to_fs g_card x) == x) = ()
+let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_to_var g_card i) == i) = ()
+
 (** Asymmetric Cross Language Binary Logical Relation between F* and STLC expressions.
    It is assymetric because F* values are all closed, and only the e expressions are open. **)
 
-let equiv (#g:env) (g_card:env_card g) (t:typ) (fs_v:elab_typ t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  (forall b (s:gsub g g_card b).
-    (forall (x:var). Some? (g x) ==> Some?.v (g x) ∋ (get_v (var_to_fs g_card x) (elab_typ (Some?.v (g x))), (s x))) ==>
-    t ⋮ (fs_v, (gsubst s e)))
+let equiv_envs (#g:env) #b #g_card (s:gsub g g_card b) (fs_s:fs_env g_card) : Type0 =
+  forall (x:var). Some? (g x) ==>
+    Some?.v (g x) ∋ (get_v fs_s (var_to_fs g_card x), (s x))
 
-let equiv_unit #g (g_card:env_card g) : Lemma (() `equiv g_card TUnit` EUnit)  =
+let equiv (#g:env) (g_card:env_card g) (t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  (forall b (s:gsub g g_card b) (fs_s:fs_env g_card).
+    equiv_envs s fs_s ==>  t ⋮ (fs_v fs_s, (gsubst s e)))
+
+let equiv_unit #g (g_card:env_card g) : Lemma ((fun _ -> ()) `equiv g_card TUnit` EUnit)  =
   ()
 
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (s:a) (g:env) (g_card:env_card g) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g) (fs_e:fs_env g_card -> a) = {
   [@@@no_method] t : (t:exp{fv_in_env g t});
   [@@@no_method] proof : typing g t ca.t;
-  [@@@no_method] equiv_proof : unit -> Lemma (equiv g_card ca.t s t);
+  [@@@no_method] equiv_proof : unit -> Lemma (equiv g_card ca.t fs_e t);
 }
 
-instance compile_exp_unit g g_card : compile_exp #unit #solve () g g_card = {
+instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
   t = EUnit;
   proof = TyUnit;
   equiv_proof = (fun () -> ());
 }
 
-let test_unit g n : compile_exp () g n = solve
+let test_unit g n : compile_exp g n (fun _ -> ()) = solve
 
-instance compile_exp_var (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp (get_v i a) g g_card =
+instance compile_exp_var g (g_card:env_card g) (i:nat{i < g_card}) :
+  compile_exp g g_card (fun fs_s -> get_v fs_s i) =
+  let x = fs_to_var g_card i in {
+    t = EVar x;
+    proof = begin
+      assume ((elab_typ_is_compile_typ' (Some?.v (g x))).t == (Some?.v (g x)));
+      TyVar #g x
+    end;
+    equiv_proof = (fun () -> ());
+  }
+
+instance compile_exp_var2 g (g_card:env_card g) t (i:nat{i < g_card}) :
+  compile_exp
+    (extend t g)
+    (g_card+1)
+    (fun fs_s -> get_v (fs_pop #t fs_s) i) =
+  let x = fs_to_var (g_card+1) i in {
+    t = EVar x;
+    proof = begin
+      assume ((elab_typ_is_compile_typ' (Some?.v ((extend t g) x))).t == (Some?.v ((extend t g) x)));
+      TyVar #(extend t g) x
+    end;
+    equiv_proof = (fun () -> ());
+  }
+
+(*
+instance compile_exp_var3 (#a:Type) {| ca: compile_typ a |} g (g_card:env_card g) (i:nat{i < g_card-2 /\ Some?.v (g (g_card-i-1)) == ca.t}) : compile_exp g g_card (fun fs_s -> get_v ((fs_pop (fs_pop fs_s))) i a) =
   let v = g_card-i-1 in {
     t = EVar v;
     proof = TyVar #g v;
-    equiv_proof = (fun () -> assert (equiv g_card ca.t (get_v i a) (EVar v)));
-  }
+    equiv_proof = (fun () -> admit ());
+  }**)
 
-let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:elab_typ (TArr t1 t2)) : Lemma
-  (requires equiv #(extend t1 g) (g_card+1) t2 (f (get_v g_card (elab_typ t1))) body)
+let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_card -> elab_typ (TArr t1 t2)) : Lemma
+  (requires equiv #(extend t1 g) (g_card+1) t2 (fun fs_s -> f (fs_pop fs_s) (get_v fs_s g_card)) body)
             // the assymetry is here. body is an open expression, while for f, I don't have an open expression
             // the equiv is quantifying over the free variable of body, but not get_v
   (ensures equiv g_card (TArr t1 t2) f (ELam t1 body)) =
   let g' = extend t1 g in
-  let g_card' = g_card + 1 in
+  let g_card' : env_card g' = g_card + 1 in
   assume (fv_in_env g (ELam t1 body));
-  let fs_v' = get_v g_card (elab_typ t1) in
-  introduce forall b (s:gsub g g_card b). (** ... ==> **) TArr t1 t2 ⋮ (f, gsubst s (ELam t1 body)) with begin
-    let body' = subst (sub_elam s) body in
-    assert (gsubst s (ELam t1 body) == ELam t1 body');
-    introduce forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>  t2 ⋮ (f fs_v, subst_beta t1 v body') with begin
-      introduce _ ==> _ with _. begin
-        //assume (t1 ∋ (fs_v', v));
-        eliminate forall b (s:gsub g' g_card' b).
-          (forall (x:var). Some? (g' x) ==> Some?.v (g' x) ∋ (get_v (var_to_fs g_card' x) (elab_typ (Some?.v (g' x))), (s x))) ==>  t2 ⋮ (f fs_v', (gsubst s body))
-        with false (gsub_extend s t1 v);
-        // ^ here I want to instantiate with a F* env that contains fs_v'.
-
-        admit ()
-      end
-    end;
-    assert (TArr t1 t2 ∋ (f, gsubst s (ELam t1 body)));
-    assume (TArr t1 t2 ⋮ (f, gsubst s (ELam t1 body)))
+  introduce forall b (s:gsub g g_card b) fs_s. equiv_envs s fs_s ==> TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body)) with begin
+    introduce _ ==> _ with _. begin
+      let body' = subst (sub_elam s) body in
+      assert (gsubst s (ELam t1 body) == ELam t1 body');
+      introduce forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>  t2 ⋮ (f fs_s fs_v, subst_beta t1 v body') with begin
+        introduce _ ==> _ with _. begin
+          let s' = gsub_extend s t1 v in
+          let fs_s' = fs_extend fs_s fs_v in
+          eliminate forall b (s':gsub g' g_card' b) fs_s'. equiv_envs s' fs_s' ==>  t2 ⋮ (f (fs_pop #t1 fs_s') (get_v fs_s' g_card), (gsubst s' body))
+            with false s' fs_s';
+          assert (equiv_envs s fs_s);
+          assert (equiv_envs (gsub_extend s t1 v) (fs_extend fs_s fs_v));
+          assert (t2 ⋮ (f (fs_pop fs_s') (get_v fs_s' g_card), (gsubst s' body)));
+          assert (get_v (fs_extend fs_s fs_v) g_card == fs_v);
+          assert (t2 ⋮ (f (fs_pop fs_s') fs_v, (gsubst s' body)));
+          assert (t2 ⋮ (f fs_s fs_v, (gsubst s' body)));
+          assume ((subst (sub_beta v) (subst (sub_elam s) body)) == (subst (gsub_extend s t1 v) body)); (** substitution lemma **)
+          assert (t2 ⋮ (f fs_s fs_v, subst_beta t1 v body'))
+        end
+      end;
+      assert (TArr t1 t2 ∋ (f fs_s, gsubst s (ELam t1 body)));
+      assume (TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body)))
+    end
   end
-
-(**  let g' = extend t1 g in
-  assert (fv_in_env g' body);
-  assume (fv_in_env g (ELam t1 body));
-  introduce forall b (s:gsub g b). gsubst s (ELam t1 body) ⋮ TArr t1 t2 with begin
-    let g' = extend t1 g in
-    let body' = subst (sub_elam s) body in
-    assert (gsubst s (ELam t1 body) == ELam t1 body');
-    introduce forall (v:value). v ∈ t1 ==>  subst_beta t1 v body' ⋮ t2 with begin
-      introduce _ ==> _ with _. begin
-        assert (sem_typing g' body t2);
-        eliminate forall b (s:gsub g' b). (gsubst s body) ⋮ t2 with false (gsub_extend s t1 v);
-        assert (gsubst (gsub_extend s t1 v) body ⋮ t2);
-        lem_substitution s t1 v body;
-        assert (subst_beta t1 v body' ⋮ t2)
-      end
-    end;
-    assert (gsubst s (ELam t1 body) ∈ TArr t1 t2);
-    lem_value_is_typed_exp (gsubst s (ELam t1 body)) (TArr t1 t2)
-  end
-**)
 
 instance compile_exp_lambda
   g
   (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:a -> b) {| cf: (compile_exp #_ #cb (f (get_v g_card a)) (extend ca.t g) (g_card+1)) |}
-  : compile_exp #_ #solve (fun x -> f x) g g_card = {
+  (f:fs_env g_card -> a -> b)
+  {| cf: (compile_exp #_ #cb (extend ca.t g) (g_card+1) (fun fs_s -> f (fs_pop fs_s) (get_v fs_s g_card))) |}
+  : compile_exp #_ #solve g g_card (fun x -> f x) = {
   t = begin
     let g' = extend ca.t g in
     assert (fv_in_env (extend ca.t g) cf.t);
@@ -195,37 +234,53 @@ instance compile_exp_lambda
   )
 }
 
-let test1_exp : compile_exp #(unit -> unit) (fun x -> ()) empty 0 =
-  solve
-let _ = assert (test1_exp.t == ELam TUnit (EUnit))
+class compile_whole (#a:Type0) {| ca: compile_typ a |} (s:a) = {
+  t : compile_exp #a empty 0 (fun _ -> s)
+}
 
-let test2_exp : compile_exp #(unit -> unit) (fun x -> x) empty 0 =
-  solve
-let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
+let test1_exp : compile_whole #(unit -> unit) (fun x -> ()) = { t = solve }
 
-let test3_exp : compile_exp #(unit -> unit -> unit) (fun x y -> x) empty 0 =
-  solve
-let _ = assert (test3_exp.t == ELam TUnit (ELam TUnit (EVar 1)))
+let _ = assert (test1_exp.t.t == ELam TUnit (EUnit))
 
-let test4_exp : compile_exp #(unit -> unit -> unit) (fun x y -> y) empty 0 =
-  solve
-let _ = assert (test4_exp.t == ELam TUnit (ELam TUnit (EVar 0)))
+let test2_exp : compile_whole #(unit -> unit) (fun x -> x) = { t =
+  compile_exp_lambda empty 0 (fun _ x -> x)
+    #(compile_exp_var (extend TUnit empty) 1 0)
+}
+let _ = assert (test2_exp.t.t == ELam TUnit (EVar 0))
+
+let test3_exp : compile_whole #(unit -> unit -> unit) (fun x y -> x) = { t =
+  compile_exp_lambda empty 0 (fun _ x y -> x) (** CA: returning y instead of x does not return any error! **)
+    #(compile_exp_lambda (extend TUnit empty) 1 (fun fs_s y -> get_v fs_s 0)
+      #(compile_exp_var2 (extend TUnit empty) 1 TUnit 0))
+}
+
+let _ = assert (test3_exp.t.t == ELam TUnit (ELam TUnit (EVar 1)))
+
+let test4_exp : compile_whole #(unit -> unit -> unit) (fun x y -> y) = { t =
+  compile_exp_lambda empty 0 (fun _ x y -> y)
+    #(compile_exp_lambda (extend TUnit empty) 1 (fun fs_s y -> y)
+      #(compile_exp_var (extend TUnit (extend TUnit empty)) 2 1))
+}
+let _ = assert (test4_exp.t.t == ELam TUnit (ELam TUnit (EVar 0)))
 
 instance compile_exp_app
   g
   (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:a -> b) {| cf: compile_exp #_ #solve f g g_card |}
-  (x:a)     {| cx: compile_exp #_ #ca x g g_card |}
-  : compile_exp #_ #cb (f x) g g_card = {
-  t = EApp (cf.t) (cx.t);
+  (f:fs_env g_card -> a -> b) {| cf: compile_exp #_ #solve g g_card f |}
+  (x:fs_env g_card -> a)     {| cx: compile_exp #_ #ca g g_card x |}
+  : compile_exp #_ #cb g g_card (fun fs_s -> (f fs_s) (x fs_s)) = {
+  t = begin
+    assume (fv_in_env g (EApp cf.t cx.t));
+    EApp cf.t cx.t
+  end;
   proof = TyApp #g cf.proof cx.proof;
+  equiv_proof = (fun () -> admit ());
 }
 
-let test0_fapp : compile_exp #unit #solve ((fun x y -> y) () ()) empty 0 =
-  solve
-let _ = assert (test0_fapp.t == EUnit)
+let test0_fapp : compile_whole #unit #solve ((fun x y -> y) () ()) = { t = solve }
+let _ = assert (test0_fapp.t.t == EUnit)
 
 (** How to deal with top level definitions? **)
 
@@ -233,17 +288,15 @@ val myf : unit -> unit
 let myf () = ()
 
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
-let test1_topf : compile_exp (myf ()) empty 0 =
-  solve
+let test1_topf : compile_whole (myf ()) = { t = solve }
 // because of partial evaluation we have to consider both cases
-let _ = assert (test1_topf.t == EApp (ELam TUnit EUnit) EUnit \/
-                test1_topf.t == EUnit)
+let _ = assert (test1_topf.t.t == EApp (ELam TUnit EUnit) EUnit \/
+                test1_topf.t.t == EUnit)
 
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
 (* Also handles partial application. Pretty amazing! *)
-let test2_topf : compile_exp (myf2 ()) empty 0 =
-  solve
-let _ = assert (test2_topf.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
-                test2_topf.t == ELam TUnit EUnit)
+let test2_topf : compile_whole (myf2 ()) = { t = solve }
+let _ = assert (test2_topf.t.t == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
+                test2_topf.t.t == ELam TUnit EUnit)
