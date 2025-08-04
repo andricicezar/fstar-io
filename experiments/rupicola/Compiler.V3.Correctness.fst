@@ -37,6 +37,14 @@ let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
     assume (elab_typ t == (elab_typ t1 -> elab_typ t2));
     compile_typ_arrow (elab_typ t1) (elab_typ t2) #(elab_typ_is_compile_typ t1) #(elab_typ_is_compile_typ t2)
 
+let rec inverse_elab_typ_compile_typ (t:typ) : Lemma ((elab_typ_is_compile_typ t).t == t) =
+  match t with
+  | TUnit -> ()
+  | TArr t1 t2 ->
+    inverse_elab_typ_compile_typ t1;
+    inverse_elab_typ_compile_typ t2;
+    ()
+
 instance elab_typ_is_compile_typ' (t:typ) : compile_typ (elab_typ t) = elab_typ_is_compile_typ t
 
 // Some tests
@@ -152,7 +160,7 @@ instance compile_exp_var g (g_card:env_card g) (i:nat{i < g_card}) :
   let x = fs_to_var g_card i in {
     t = EVar x;
     proof = begin
-      assume ((elab_typ_is_compile_typ' (Some?.v (g x))).t == (Some?.v (g x)));
+      inverse_elab_typ_compile_typ (Some?.v (g x));
       TyVar #g x
     end;
     equiv_proof = (fun () -> ());
@@ -166,7 +174,7 @@ instance compile_exp_var2 g (g_card:env_card g) t (i:nat{i < g_card}) :
   let x = fs_to_var (g_card+1) i in {
     t = EVar x;
     proof = begin
-      assume ((elab_typ_is_compile_typ' (Some?.v ((extend t g) x))).t == (Some?.v ((extend t g) x)));
+      inverse_elab_typ_compile_typ (Some?.v ((extend t g) x));
       TyVar #(extend t g) x
     end;
     equiv_proof = (fun () -> ());
