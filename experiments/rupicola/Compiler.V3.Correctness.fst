@@ -55,9 +55,8 @@ let _ = assert (test1.t == (TArr TUnit TUnit))
 let test2 : compile_typ ((unit -> unit) -> (unit -> unit)) = solve
 let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
 
-(** For closed terms.
-    Asymmetric Cross Language Binary Logical Relation between F* and STLC expressions.
-    It is asymmetric because F* values are all closed, and only the e expressions are open. **)
+(** Cross Language Binary Logical Relation between F* and STLC expressions
+     for __closed terms__. **)
 let rec (∋) (t:typ) (p:elab_typ t * closed_exp) : Tot Type0 (decreases %[t;0]) =
   let fs_v = fst p in
   let e = snd p in
@@ -129,19 +128,16 @@ assume val pop_extend_inverse #g (#g_card:env_card g) (fs_s:fs_env g_card) #t (x
 let lem_inverse (g_card:nat) (x:var{x < g_card}) : Lemma (fs_to_var g_card (var_to_fs g_card x) == x) = ()
 let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_to_var g_card i) == i) = ()
 
-(**
-   For open terms.
-   Asymmetric Cross Language Binary Logical Relation between F* and STLC expressions.
-   It is asymmetric because F* values are all closed, and only the e expressions are open. **)
-
 let (∽) (#g:env) #b #g_card (s:gsub g g_card b) (fs_s:fs_env g_card) : Type0 =
   forall (x:var). Some? (g x) ==>
-    Some?.v (g x) ∋ (get_v fs_s (var_to_fs g_card x), (s x))
+    Some?.v (g x) ∋ (get_v fs_s (var_to_fs g_card x), s x)
 
+(** Cross Language Binary Logical Relation between F* and STLC expressions
+     for __open terms__. **)
 let equiv (#g:env) (#g_card:env_card g) (t:typ) (fs_e:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   fv_in_env g e /\
-  (forall b (s:gsub g g_card b) (fs_s:fs_env g_card).
-    s ∽ fs_s ==>  t ⋮ (fs_e fs_s, (gsubst s e)))
+  forall b (s:gsub g g_card b) (fs_s:fs_env g_card).
+    s ∽ fs_s ==>  t ⋮ (fs_e fs_s, gsubst s e)
 
 let (≈) (#g:env) (#g_card:env_card g) (#t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   equiv #g #g_card t fs_v e
@@ -185,7 +181,7 @@ let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_ca
         end
       end;
       assert (TArr t1 t2 ∋ (f fs_s, gsubst s (ELam t1 body)));
-      assume (TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body)))
+      assume (TArr t1 t2 ⋮ (f fs_s, gsubst s (ELam t1 body))) (** lemma used by Amal **)
     end
   end
 
@@ -231,7 +227,7 @@ instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ ->
 
 let test_unit g n : compile_exp g n (fun _ -> ()) = solve
 
-instance compile_exp_var g (g_card:env_card g) (i:nat{i < g_card}) : compile_exp g g_card (fun fs_s -> get_v fs_s i) =
+instance compile_exp_var (g:env) (g_card:env_card g) (i:nat{i < g_card}) : compile_exp g g_card (fun fs_s -> get_v fs_s i) =
   let x = fs_to_var g_card i in {
     t = EVar x;
     proof = begin
@@ -239,9 +235,19 @@ instance compile_exp_var g (g_card:env_card g) (i:nat{i < g_card}) : compile_exp
       TyVar #g x
     end;
     equiv_proof = (fun () -> equiv_var g_card x);
+ }
+
+instance compile_exp_var3 (g:env) (g_card:env_card g) (t:typ) : compile_exp (extend t g) (g_card+1) (fun fs_s -> get_v fs_s g_card) =
+  let x = fs_to_var (g_card+1) g_card in {
+    t = EVar x;
+    proof = begin
+      inverse_elab_typ_compile_typ (Some?.v ((extend t g) x));
+      TyVar #(extend t g) x
+    end;
+    equiv_proof = (fun () -> equiv_var #(extend t g) (g_card+1) x);
   }
 
-instance compile_exp_var2 g (g_card:env_card g) t (i:nat{i < g_card}) : compile_exp (extend t g) (g_card+1) (fun fs_s -> get_v (fs_pop #t fs_s) i) =
+instance compile_exp_var2 (g:env) (g_card:env_card g) (t:typ) (i:nat{i < g_card}) : compile_exp (extend t g) (g_card+1) (fun fs_s -> get_v (fs_pop #t fs_s) i) =
   let x = fs_to_var (g_card+1) i in {
     t = EVar x;
     proof = begin
@@ -257,8 +263,8 @@ instance compile_exp_lambda
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
   (f:fs_env g_card -> a -> b)
-  {| cf: (compile_exp #_ #cb (extend ca.t g) (g_card+1) (fun fs_s -> f (fs_pop fs_s) (get_v fs_s g_card))) |}
-  : compile_exp #_ #solve g g_card (fun x -> f x) = {
+  {| cf: compile_exp #b #cb (extend ca.t g) (g_card+1) (fun fs_s -> f (fs_pop #ca.t fs_s) (get_v fs_s g_card)) |}
+  : compile_exp #_ #(compile_typ_arrow a b) g g_card (fun (fs_s:fs_env g_card) -> f fs_s) = {
   t = begin
     let g' = extend ca.t g in
     assert (fv_in_env (extend ca.t g) cf.t);
@@ -282,7 +288,8 @@ let _ = assert (test1_exp.t == ELam TUnit (EUnit))
 
 let test2_exp : compile_whole #(unit -> unit) (fun x -> x) =
   compile_exp_lambda empty 0 (fun _ x -> x)
-    #(compile_exp_var (extend TUnit empty) 1 0)
+    #(compile_exp_var3 empty 0 compile_typ_unit.t)
+    //#(compile_exp_var (extend compile_typ_unit.t empty) 1 0)
 let _ = assert (test2_exp.t == ELam TUnit (EVar 0))
 
 let test3_exp : compile_whole #(unit -> unit -> unit) (fun x y -> x) =
