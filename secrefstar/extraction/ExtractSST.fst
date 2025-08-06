@@ -59,7 +59,7 @@ let tr_typ (g:uenv) (t:term) : mlty =
   if None? ohua then
     nop ();
   let Some (fv, us, args) = ohua in
-  if !dbg then BU.print1 "!!! checking typ %s\n" (show ohua);
+  (* if !dbg then Format.print1 "!!! checking typ %s\n" (show ohua); *)
 
   (* handle a ref type *)
   let h_ref (t:term) : mlty =
@@ -98,8 +98,8 @@ let tr_typ (g:uenv) (t:term) : mlty =
 
 let tr_expr (g:uenv) (t:term) : mlexpr & e_tag & mlty =
   let t = SS.compress t in
-  if !dbg then
-    BU.print2 "!!! tr_expr (%s) (tag = %s)\n" (show t) (FStarC.Class.Tagged.tag_of t);
+  (* if !dbg then *)
+  (*   Format.print2 "!!! tr_expr (%s) (tag = %s)\n" (show t) (FStarC.Class.Tagged.tag_of t); *)
   (* Only enabled with an extension flag *)
   let cb = FStarC.Extraction.ML.Term.term_as_mlexpr in
   match reif t with
@@ -108,13 +108,13 @@ let tr_expr (g:uenv) (t:term) : mlexpr & e_tag & mlty =
 
   let hua = hua t in
   if None? hua then (
-    if !dbg then
-      BU.print1 "!!! no hua for expr %s\n" (show t);
+    (* if !dbg then *)
+    (*   Format.print1 "!!! no hua for expr %s\n" (show t); *)
     nop ()
   );
   let Some (fv, us, args) = hua in
-  if !dbg then
-    BU.print2 "!!! checking expr %s ; nargs = %s\n" (show hua) (show (List.length args));
+  (* if !dbg then *)
+  (*   Format.print2 "!!! checking expr %s ; nargs = %s\n" (show hua) (show (List.length args)); *)
   match fv, us, args with
 
   (* bind *)
