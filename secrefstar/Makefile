@@ -1,4 +1,5 @@
-FSTAR := fstar.exe
+FSTAR_EXE ?= fstar.exe
+FSTAR := $(FSTAR_EXE)
 
 ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fsti)
 
