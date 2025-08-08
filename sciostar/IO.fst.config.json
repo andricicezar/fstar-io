@@ -1,5 +1,0 @@
-{
-  "fstar_exe": "fstar.exe",
-  "options": [],
-  "include_dirs": ["case-studies", "case-studies/webserver"]
-}
