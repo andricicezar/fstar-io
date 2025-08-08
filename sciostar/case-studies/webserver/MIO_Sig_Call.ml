@@ -193,11 +193,11 @@ let (io_call : caller -> io_ops -> Obj.t -> (unit, Obj.t resexn) mio) =
 *)
 
 let (mio_call :
-  unit -> caller -> mio_ops -> Obj.t -> (unit, unit) mio)
+  unit -> caller -> mio_ops -> Obj.t -> (unit, Obj.t) mio)
   =
   fun () -> fun caller -> fun op -> fun argz ->
   match op with
-  | GetTrace -> mio_return () ()
+  | GetTrace -> mio_return () (Obj.magic ())
   | GetST -> 
     let s0 = Monitor.get_state () in
     print_string "GetST;";
