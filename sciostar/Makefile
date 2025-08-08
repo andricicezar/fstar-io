@@ -1,7 +1,8 @@
 # export PATH := ../z2/bin:$(PATH);
 # export PATH := ../FStar/bin:$(PATH);
 
-FSTAR := fstar.exe
+FSTAR_EXE ?= fstar.exe
+FSTAR := $(FSTAR_EXE)
 Z3_VERSION := $(shell z3 -version | cut -d ' ' -f 3)
 
 ROOTS := Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst
