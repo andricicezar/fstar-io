@@ -1,11 +1,12 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
+Z3_VERSION := $(shell z3 -version | cut -d ' ' -f 3)
 
 ROOTS := Compiler.fst Compiler.STLC.fst $(wildcard Examples.*.fst Examples.*.fsti)
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
-FLAGS  = --z3version 4.13.3
+FLAGS  = --z3version $(Z3_VERSION)
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += $(OTHERFLAGS)
