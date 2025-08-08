@@ -16,6 +16,7 @@ all: verify
 
 %.checked:
 	$(IDE_HACK) $(FSTAR_EXE) $(FLAGS) $<
+	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build
 
 include .depend.mk
@@ -42,8 +43,8 @@ dep.pdf: dep.graph
 # %.ml:
 #         $(FSTAR_EXE) $(FLAGS) --codegen OCaml $< -o $@
 
-extract:
-	$(FSTAR_EXE) $(FLAGS) --lax --odir out --codegen OCaml --extract '*' Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+extract: verify
+	$(FSTAR_EXE) $(FLAGS) --odir out --codegen OCaml --extract '*,-FStar' Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 _prepare_compilation:
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o

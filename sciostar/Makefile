@@ -4,7 +4,10 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-ROOTS := Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst
+ROOTS :=
+ROOTS += Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst
+ROOTS += Compiler.MIO.To.Interm.fst
+ROOTS += case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst
 
 CACHEDIR := .cache
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
