@@ -9,8 +9,9 @@ ROOTS := Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-stu
 CACHEDIR := .cache
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
+FLAGS += --include case-studies
 
-verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
+all: verify
 
 # A hack! After a run of `make` failed in a given file, run `make ide`
 # to open that exact file in the interactive with the exact same flags.
@@ -19,7 +20,7 @@ verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
 ide:
 	+$(MAKE) IDE_HACK="emacs -f fstar-debug-invocation" verify
 
-.cache/%.fst.checked: %.fst
+%.checked:
 	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build
@@ -28,10 +29,12 @@ ide:
 %.fst.emacs: %.fst
 	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
 
-include .depend.mk
-
 .depend.mk: $(ROOTS)
 	$(FSTAR) $(FLAGS) --dep full --warn_error -321 $^ >$@
+
+include .depend.mk
+
+verify: $(ALL_CHECKED_FILES)
 
 # Make a dependency graph of the modules.
 dep.graph:

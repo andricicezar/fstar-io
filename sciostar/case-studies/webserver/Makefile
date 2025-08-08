@@ -12,27 +12,18 @@ FLAGS += --include ../..
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 
-verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
+all: verify
 
-# A hack! After a run of `make` failed in a given file, run `make ide`
-# to open that exact file in the interactive with the exact same flags.
-# Make sure the first file that make attempts to verify actually fails,
-# and do NOT use -j.
-ide:
-	+$(MAKE) IDE_HACK="emacs -f fstar-debug-invocation" verify
-
-.cache/%.fst.checked: %.fst
+%.checked:
 	$(IDE_HACK) $(FSTAR_EXE) $(FLAGS) $<
 	@$(if $(IDE_HACK),false) # Make it stop the build
-
-# Run your file in emacs with the same context as the batch mode.
-%.fst.emacs: %.fst
-	emacs -f fstar-debug-invocation $(FSTAR_EXE) $(FLAGS) $<
 
 include .depend.mk
 
 .depend.mk: $(ROOTS)
-	$(FSTAR_EXE) $(FLAGS) --dep full --warn_error -321 $^ >$@
+	$(FSTAR_EXE) $(FLAGS) --dep full --extract '*' --warn_error -321 $^ -o $@
+
+verify: $(ALL_CHECKED_FILES)
 
 # Make a dependency graph of the modules.
 dep.graph:
@@ -45,13 +36,16 @@ dep.graph:
 dep.pdf: dep.graph
 	dot -Tpdf $< > $@
 
-out:
-	mkdir $@
+# This would be more incremental than the call monolitic call below, but doesn't work
+# for some reason.
+# extract: $(ALL_ML_FILES)
+# %.ml:
+#         $(FSTAR_EXE) $(FLAGS) --codegen OCaml $< -o $@
 
-extract: | out
+extract:
 	$(FSTAR_EXE) $(FLAGS) --lax --odir out --codegen OCaml --extract '*' Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
-_prepare_compilation: | out
+_prepare_compilation:
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
 	cp ../../UnixTypes.* out/.
 	cp Unix_Star.* out/.
@@ -65,32 +59,32 @@ _prepare_compilation: | out
 	find out/WebServer.ml -type f -exec sed -i 's/CommonUtils.Contract_failure)))))))))$$/CommonUtils.Contract_failure))))))))))/g' {} \;
 
 
-          
-_compile1: | out
+
+_compile1:
 	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/AdversarialHandlers.ml -o out/CS.exe
 
-_compile2: | out
+_compile2:
 	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler1.ml -o out/CS.exe
 
-_compile3: | out
+_compile3:
 	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler2.ml -o out/CS.exe
 
-compile_cs1: | out
+compile_cs1:
 	make _prepare_compilation;
 	make _compile1;
 	mv out/CS.exe out/ws_adversarial.exe
 
-compile_cs2: | out
+compile_cs2:
 	make _prepare_compilation;
 	make _compile2;
 	mv out/CS.exe out/ws_serve_file.exe
 
-compile_cs3: | out
+compile_cs3:
 	make _prepare_compilation;
 	make _compile3;
 	mv out/CS.exe out/ws_echo.exe
 
-build: | out
+build:
 	make extract;
 	make compile_cs1;
 	make compile_cs2;
