@@ -8,7 +8,7 @@ FSTAR_EXE ?= fstar.exe
 ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst
 
 CACHEDIR := .cache
-FLAGS += --include ../.. --record_hints --use_hints --hint_dir hints
+FLAGS += --include ../..
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 
@@ -21,11 +21,7 @@ verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
 ide:
 	+$(MAKE) IDE_HACK="emacs -f fstar-debug-invocation" verify
 
-# work around F* bug
-hints:
-	mkdir $@
-
-.cache/%.fst.checked: %.fst | hints
+.cache/%.fst.checked: %.fst
 	$(IDE_HACK) $(FSTAR_EXE) $(FLAGS) $<
 	@$(if $(IDE_HACK),false) # Make it stop the build
 
