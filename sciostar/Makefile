@@ -7,7 +7,6 @@ FSTAR := $(FSTAR_EXE)
 ROOTS := Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst
 
 CACHEDIR := .cache
-FLAGS += --record_hints --use_hints --hint_dir hints
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 
@@ -20,11 +19,7 @@ verify: $(patsubst %,$(CACHEDIR)/%.checked,$(ROOTS))
 ide:
 	+$(MAKE) IDE_HACK="emacs -f fstar-debug-invocation" verify
 
-# work around F* bug
-hints:
-	mkdir $@
-
-.cache/%.fst.checked: %.fst | hints
+.cache/%.fst.checked: %.fst
 	$(IDE_HACK) $(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 	@$(if $(IDE_HACK),false) # Make it stop the build

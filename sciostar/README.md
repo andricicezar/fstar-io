@@ -114,12 +114,11 @@ the `case-studies` folder, except the web server.
   few blue warnings appear which can be ignored.
 
 ```
-fstar.exe --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  --dep full --warn_error -321 Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst >.depend.mk
-fstar.exe --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  Hist.fst
+fstar.exe --cache_checked_modules --cache_dir .cache  --dep full --warn_error -321 Compiler.Model1.fst Compiler.Model2.fst Compiler.ModelStlc.fst case-studies/Compiler.Model1.Examples.fst case-studies/Compiler.Model2.Examples.fst case-studies/IOLogging.fst case-studies/Zip.fst case-studies/NoState.fst >.depend.mk
+fstar.exe --cache_checked_modules --cache_dir .cache  Hist.fst
 Verified module: Hist
 All verification conditions discharged successfully
 ...
-(Warning 333) Unable to open hints file: hints/NoState.fst.hints; ran without hints
 Verified module: NoState
 All verification conditions discharged successfully
 ```
@@ -141,7 +140,7 @@ subdirectory. This command verifies the web server and all the handlers.
   few blue warnings appear which can be ignored.
 
 ```bash
-fstar.exe --include ../.. --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  MIO.Sig.fst
+fstar.exe --include ../.. --cache_checked_modules --cache_dir .cache  MIO.Sig.fst
 FStar.Bytes.fsti(0,0-0,0): (Warning 241) Unable to load /home/opam/.opam/4.12/bin/../lib/fstar/.cache/FStar.Bytes.fsti.checked since checked file /home/opam/.opam/4.12/bin/../lib/fstar/.cache/FStar.Bytes.fsti.checked is stale (digest mismatch for FStar.Bytes.fsti); will recheck FStar.Bytes.fsti (suppressing this warning for further modules)
 ...
 StlcHandlers.fst(0,0-0,0): (Warning 247) .cache/StlcHandlers.fst.checked was not written since checked file .cache/Compiler.Languages.fst.checked does not exist
@@ -178,10 +177,10 @@ web server:
   native extraction produces many Warnings which can be ignored.
 
 ```bash
-fstar.exe --include ../.. --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  --dep full --warn_error -321 Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst >.depend.mk
+fstar.exe --include ../.. --cache_checked_modules --cache_dir .cache  --dep full --warn_error -321 Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst >.depend.mk
 make extract;
 make[1]: Entering directory '/home/opam/sciostar/case-studies/webserver'
-fstar.exe --include ../.. --record_hints --use_hints --hint_dir hints --cache_checked_modules --cache_dir .cache  --lax --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+fstar.exe --include ../.. --cache_checked_modules --cache_dir .cache  --lax --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 Extracted module FStar.Pervasives.Native
 Extracted module FStar.Preorder
 Extracted module FStar.Heap
