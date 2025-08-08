@@ -120,7 +120,7 @@ unfold
 let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
-let destruct_event (e:event) : ( caller & op:io_ops & (arg:io_sig.args op) & io_sig.res op arg )  =
+let destruct_event (e:event) : ( caller & op:io_ops & arg:(io_sig.args op) & io_sig.res op arg )  =
   match e with
   | EOpenfile caller arg res -> (| caller, Openfile, arg, res |)
   | ERead caller arg res -> (| caller, Read, arg, res |)

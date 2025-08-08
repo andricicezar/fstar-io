@@ -401,10 +401,11 @@ instance exportable_arrow_pre_post_args
       let eff_dc : eff_dc_typ fl mst #t1 #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
       assert (forall x s0 s1. check (root dcs) x s0 () s1 == dc x s0 () s1);
       let f' = enforce_pre_args pi pre dc eff_dc post f in
+      let d = exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post in
+      assert (d.ityp == (x:d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) by (compute ());
       d.export eff_dcs' f'
     )
 }
@@ -426,10 +427,11 @@ instance exportable_arrow_pre_post
       let eff_dc : eff_dc_typ fl mst #unit #unit dc = rityp_eff_dc eff_dc in
       let new_post = (fun _ h _ lt -> enforced_locally pi h lt) in
       let dcs' = (EmptyNode (left dcs) (right dcs)) in
-      let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
       let eff_dcs' = (EmptyNode (left eff_dcs) (right eff_dcs)) in
       assert (forall x s0 s1. check (root dcs) x s0 () s1 == dc x s0 () s1);
       let f' = enforce_pre pi pre dc eff_dc post f in
+      let d = (exportable_arrow_post_args #fl #pi #mst #dcs' t1 #d1 t2 #d2 new_post) in
+      assert (d.ityp == (d1.ityp -> MIOpi (resexn d2.ityp) fl pi mst)) by (compute ());
       d.export eff_dcs' f'
     )
 }

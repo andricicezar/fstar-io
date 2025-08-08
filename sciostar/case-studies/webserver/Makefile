@@ -1,12 +1,14 @@
 # export PATH := ../z3/bin:$(PATH);
 # export PATH := ../FStar/bin:$(PATH);
 
+Z3_VERSION := $(shell z3 -version | cut -d ' ' -f 3)
 # No need to have so many, I just kept the existing list.
 # Compiler.Model and Compiler.Examples sounds like a sensible list.
 ROOTS := Monitor.fst WebServer.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst StlcHandlers.fst
 
 CACHEDIR := .cache
-FLAGS  = --include ../.. --record_hints --use_hints --hint_dir hints
+FLAGS  = --z3version $(Z3_VERSION)
+FLAGS += --include ../.. --record_hints --use_hints --hint_dir hints
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += $(OTHERFLAGS)
 

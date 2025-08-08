@@ -180,7 +180,7 @@ let apply_changes (history local_events:trace) : Tot trace =
   (List.rev local_events) @ history
 
 unfold type event_data =
-  caller & op:io_ops & (arg:io_sig.args op) & io_sig.res op arg
+  caller & op:io_ops & arg:(io_sig.args op) & io_sig.res op arg
 
 let mk_event (x : event_data) : event =
   let (| caller, e, arg, res |) = x in
