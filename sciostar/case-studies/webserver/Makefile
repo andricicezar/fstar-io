@@ -53,12 +53,6 @@ _prepare_compilation:
 	cp Unsafe_Bytes.ml out/
 	@# Replacing the calling of monad constructors with calls to the Unix library
 	cp MIO_Sig_Call.* out/
-	@# Workarounds for F* extraction bugs: https://github.com/FStarLang/FStar/issues/2912
-	find out/Compiler_MIO_To_Interm.ml -type f -exec sed -i 's/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d ->/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d -> Obj.magic/g' {} \;
-	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc client/g' {} \;
-	find out/WebServer.ml -type f -exec sed -i 's/uu___2 uu___1 uu___/uu___2 (Obj.magic uu___1) uu___/g' {} \;
-	find out/WebServer.ml -type f -exec sed -i 's/ fun client ->/ Obj.magic (fun client ->/g' {} \;
-	find out/WebServer.ml -type f -exec sed -i 's/CommonUtils.Contract_failure)))))))))$$/CommonUtils.Contract_failure))))))))))/g' {} \;
 
 
 
