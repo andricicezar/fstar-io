@@ -47,10 +47,11 @@ extract:
 
 _prepare_compilation:
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
-	cp ../../UnixTypes.* out/.
-	cp Unix_Star.* out/.
+	cp ../../UnixTypes.* out/
+	cp Unix_Star.* out/
+	cp Unsafe_Bytes.ml out/
 	@# Replacing the calling of monad constructors with calls to the Unix library
-	cp MIO_Sig_Call.* out/.
+	cp MIO_Sig_Call.* out/
 	@# Workarounds for F* extraction bugs: https://github.com/FStarLang/FStar/issues/2912
 	find out/Compiler_MIO_To_Interm.ml -type f -exec sed -i 's/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d ->/= fun fl -> fun pi -> fun mst -> fun dcs -> fun d -> Obj.magic/g' {} \;
 	find out/WebServer.ml -type f -exec sed -i 's/eff_dc ()/eff_dc client/g' {} \;
@@ -61,13 +62,13 @@ _prepare_compilation:
 
 
 _compile1:
-	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/AdversarialHandlers.ml -o out/CS.exe
+	$(FSTAR_EXE) --ocamlopt -I out out/Unsafe_Bytes.ml out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/AdversarialHandlers.ml -o out/CS.exe
 
 _compile2:
-	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler1.ml -o out/CS.exe
+	$(FSTAR_EXE) --ocamlopt -I out out/Unsafe_Bytes.ml out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler1.ml -o out/CS.exe
 
 _compile3:
-	$(FSTAR_EXE) --ocamlopt -I out out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler2.ml -o out/CS.exe
+	$(FSTAR_EXE) --ocamlopt -I out out/Unsafe_Bytes.ml out/UnixTypes.ml out/CommonUtils.ml out/Unix_Star.ml out/Free.ml out/Hist.ml out/MIO_Sig.ml out/TC_Checkable.ml out/DMFree.ml out/MonitorParam.ml out/Monitor.ml out/MIO_Sig_Call.ml out/MIO.ml out/BeyondCriteria.ml out/MIO_Behavior.ml out/Compiler_Languages.ml out/Utils.ml out/Compiler_MIO_To_Interm.ml out/Compiler_Model1.ml out/WebServer.ml out/Execute.ml out/GoodHandler2.ml -o out/CS.exe
 
 compile_cs1:
 	make _prepare_compilation;
