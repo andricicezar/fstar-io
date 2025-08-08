@@ -238,17 +238,6 @@ val xor_commutative:
   -> Lemma (ensures (xor n b1 b2 == xor n b2 b1))
           [SMTPat (xor n b1 b2)]
 
-val xor_append:
-    b1:bytes
-  -> b2:bytes
-  -> x1:bytes{len x1 = len b1}
-  -> x2:bytes{len x2 = len b2}
-  -> Lemma (ensures (xor U32.(len b1 +^ len b2)
-                        (b1 @| b2)
-                        (x1 @| x2)
-                    ==
-                    xor (len b1) b1 x1 @| xor (len b2) b2 x2))
-
 val xor_idempotent:
     n:u32
   -> b1:lbytes (U32.v n)
