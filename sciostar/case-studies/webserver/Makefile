@@ -53,7 +53,7 @@ out:
 	mkdir $@
 
 extract: | out
-	$(FSTAR_EXE) $(FLAGS) --lax --odir out --codegen OCaml Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
+	$(FSTAR_EXE) $(FLAGS) --lax --odir out --codegen OCaml --extract '*' Monitor.fst AdversarialHandlers.fst GoodHandler1.fst GoodHandler2.fst
 
 _prepare_compilation: | out
 	rm -f *.cmx *.cmi *.o out/*.cmx out/*.cmi out/*.o
