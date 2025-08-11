@@ -224,6 +224,7 @@ effect MIO
   (post : trace -> a -> trace -> Type0) =
   MIOwp a mst fl (to_hist pre post) 
 
+#push-options "--z3rlimit 20"
 let static_op
   (#mst:mstate)
   caller
@@ -235,6 +236,7 @@ let static_op
         io_post op arg r /\
         lt == [convert_call_to_event caller op arg r])) =
   MIOwp?.reflect (MIO.Sig.Call.mio_call caller op arg)
+#pop-options
 
 let get_trace #mst () : MIOwp (Ghost.erased trace) mst GetMStateOps
   (fun p h -> p [] (Ghost.hide h)) =
