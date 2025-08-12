@@ -67,6 +67,15 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g)
 (** Just a helper typeclass **)
 unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty 0 (fun _ -> s)
 
+let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
+  : Lemma (ca.t ⦂ (fs_e, cs.e)) =
+  cs.equiv_proof ();
+  assert (is_closed cs.e);
+  eliminate forall b (s:gsub empty 0 b) (fs_s:fs_env #empty 0).
+    s ∽ fs_s ==>  ca.t ⦂ ((fun _ -> fs_e) fs_s, gsubst s cs.e) with true gsub_empty fs_empty;
+  assert (gsubst gsub_empty cs.e == cs.e);
+  assert (ca.t ⦂ (fs_e, cs.e))
+
 instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
   e = EUnit;
   proof = (fun () -> typing_rule_unit g);

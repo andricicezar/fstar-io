@@ -48,6 +48,10 @@ let gsubst (#g:env) #b #g_card (s:gsub g b g_card) (e:exp{fv_in_env g e}) : clos
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
+let lem_gsubst_empty (e:closed_exp) : Lemma (gsubst gsub_empty e == e)
+  [SMTPat (gsubst gsub_empty e)] =
+  admit ()
+
 (** F* Evaluation Environment **)
 
 (** CA: this is an abstraction that helps with dealing with variables.
@@ -61,6 +65,7 @@ let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_
 
 
 type fs_env #g (g_card:env_card g) : Type u#1000 (** having such an env is even possible in practice? what would its universe be? **)
+val fs_empty : fs_env #empty 0
 val get_v : #g:_ -> #g_card:env_card g -> fs_env g_card -> i:nat{i < g_card} -> elab_typ (Some?.v (g (fs_to_var g_card i)))
 val fs_extend : #g:_ -> #g_card:env_card g -> fs_s:fs_env g_card -> #t:typ -> elab_typ t -> fs_s':(fs_env #(extend t g) (g_card+1))
 val fs_shrink : #t:typ -> #g:_ -> #g_card:env_card g -> fs_env #(extend t g) (g_card+1) -> fs_env #g g_card
