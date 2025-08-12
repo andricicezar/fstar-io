@@ -34,5 +34,5 @@ let shrink_extend_inverse #g #g_card fs_s #t v =
   let fs_s' : fs_env g_card = fs_shrink (fs_extend fs_s v) in
   assert (forall x. fs_s' x == fs_s x);
   assert (feq fs_s' fs_s);
-  extensionality _ _ fs_s' fs_s;
+  extensionality (x:var{x < g_card}) (fun x -> elab_typ (Some?.v (g x))) fs_s' fs_s;
   assert (fs_s' == fs_s)

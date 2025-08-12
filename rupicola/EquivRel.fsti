@@ -27,6 +27,10 @@ and (⦂) (t:typ) (p: elab_typ t * closed_exp) : Tot Type0 (decreases %[t;1]) =
   let e = snd p in
   forall (e':closed_exp). steps e e' ==> irred e' ==> t ∋ (fs_e, e')
 
+let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∋ (fs_e, e))
+        (ensures  t ⦂ (fs_e, e)) = admit ()
+
 type env_card (g:env) =
   g_card:nat{forall (i:nat). i < g_card ==> Some? (g i)}
 
@@ -67,7 +71,7 @@ let lem_inverse' (g_card:nat) (i:var{i < g_card}) : Lemma (var_to_fs g_card (fs_
 val fs_env #g (g_card:env_card g) : Type u#0 (** having such an env is even possible in practice? what would its universe be? **)
 val fs_empty : fs_env #empty 0
 val get_v : #g:_ -> #g_card:env_card g -> fs_env g_card -> i:nat{i < g_card} -> elab_typ (Some?.v (g (fs_to_var g_card i)))
-val fs_extend : #g:_ -> #g_card:env_card g -> fs_s:fs_env g_card -> #t:typ -> elab_typ t -> fs_s':(fs_env #(extend t g) (g_card+1))
+val fs_extend : #g:_ -> #g_card:env_card g -> fs_s:fs_env g_card -> #t:typ -> elab_typ t -> fs_env #(extend t g) (g_card+1)
 val fs_shrink : #t:typ -> #g:_ -> #g_card:env_card g -> fs_env #(extend t g) (g_card+1) -> fs_env #g g_card
 
 val lem_fs_extend #g (#g_card:env_card g) (fs_s:fs_env g_card) #t (v:elab_typ t) : Lemma (
@@ -142,7 +146,8 @@ let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_ca
         end
       end;
       assert (TArr t1 t2 ∋ (f fs_s, gsubst s (ELam body)));
-      assume (TArr t1 t2 ⦂ (f fs_s, gsubst s (ELam body))) (** lemma used by Amal **)
+      lem_values_are_expressions (TArr t1 t2) (f fs_s) (gsubst s (ELam body));
+      assert (TArr t1 t2 ⦂ (f fs_s, gsubst s (ELam body)))
     end
   end
 
