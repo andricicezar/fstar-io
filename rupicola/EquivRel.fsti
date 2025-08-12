@@ -96,6 +96,13 @@ let equiv (#g:env) (#g_card:env_card g) (t:typ) (fs_e:fs_env g_card -> elab_typ 
 let (≈) (#g:env) (#g_card:env_card g) (#t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   equiv #g #g_card t fs_v e
 
+(** Equiv closed terms **)
+let equiv_closed_terms (#t:typ) (fs_e:elab_typ t) (e:closed_exp) :
+  Lemma (requires equiv #empty #0 t (fun _ -> fs_e) e)
+        (ensures  t ⦂ (fs_e, e)) =
+  eliminate forall b (s:gsub empty 0 b) (fs_s:fs_env #empty 0).
+    s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
+
 (** Rules **)
 
 let equiv_unit #g (g_card:env_card g)
