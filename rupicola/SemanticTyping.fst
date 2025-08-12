@@ -1,3 +1,5 @@
+(** Mechanization of Section 2, Amal Ahmed's PhD Thesis: https://www.ccs.neu.edu/home/amal/ahmedthesis.pdf **)
+
 module SemanticTyping
 
 open FStar.Tactics
@@ -5,7 +7,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
-open LinkingTypes
+open SyntacticTypes
 
 let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'

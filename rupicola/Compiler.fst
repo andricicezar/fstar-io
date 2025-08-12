@@ -6,12 +6,14 @@ open FStar.Calc
 open FStar.List.Tot
 
 open STLC
-open LinkingTypes
+open SyntacticTypes
 open SemanticTyping
 open EquivRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] t : (t:typ{elab_typ t == s}) (** CA: is this equality problematic? **)
+  [@@@no_method] t : (t:typ{elab_typ t == s}) 
+  (** CA: is this equality problematic? 
+      CA: Explain why do we need it **)
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit }
@@ -33,7 +35,7 @@ let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
   match t with
   | TUnit -> compile_typ_unit
   | TArr t1 t2 ->
-    assume (elab_typ t == (elab_typ t1 -> elab_typ t2));
+    assume (elab_typ t == (elab_typ t1 -> elab_typ t2)); (** I just proved this a few lines above **)
     compile_typ_arrow (elab_typ t1) (elab_typ t2) #(elab_typ_is_compile_typ t1) #(elab_typ_is_compile_typ t2)
 
 instance elab_typ_is_compile_typ' (t:typ) : compile_typ (elab_typ t) = elab_typ_is_compile_typ t
@@ -57,16 +59,16 @@ let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
 
 (** Compiling expressions **)
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g) (fs_e:fs_env g_card -> a) = {
-  [@@@no_method] t : (t:exp{fv_in_env g t});
-  [@@@no_method] proof : unit -> Lemma (sem_typing g t ca.t);
-  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv ca.t` t);
+  [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
+  [@@@no_method] proof : unit -> Lemma (sem_typing g e ca.t);
+  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv ca.t` e);
 }
 
 (** Just a helper typeclass **)
 unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty 0 (fun _ -> s)
 
 instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
-  t = EUnit;
+  e = EUnit;
   proof = (fun () -> typing_rule_unit g);
   equiv_proof = (fun () -> equiv_unit g_card);
 }
@@ -82,7 +84,7 @@ let get_v' #g #g_card fs_s i a =
 instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (g_card:env_card g) (i:nat{i < g_card /\ ca.t == Some?.v (g (fs_to_var g_card i))})
   : compile_exp #a #ca g g_card (fun fs_s -> get_v' fs_s i a) =
   let x = fs_to_var g_card i in {
-    t = EVar x;
+    e = EVar x;
     proof = (fun () ->
       inverse_elab_typ_compile_typ (Some?.v (g x));
       typing_rule_var g x
@@ -104,7 +106,7 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (i:nat{i < g_card /\ ca.t == Some?.v (g' (fs_to_var g_card' i))})
   {| ce:compile_exp g' g_card' (fun fs_s -> get_v' #g' #g_card' fs_s i a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
   : compile_exp g' g_card' (fun fs_s -> get_v' #g #g_card (fs_shrink #t #g #g_card fs_s) i a) = {
-    t = ce.t;
+    e = ce.e;
     proof = ce.proof;
     equiv_proof = (fun () ->
       reveal_opaque (`%get_v') (get_v' #g' #g_card');
@@ -127,34 +129,34 @@ instance compile_exp_lambda
   (f:fs_env g_card -> a -> b)
   {| cf: compile_exp #b #cb (extend ca.t g) (g_card+1) (fun fs_s -> f (fs_shrink #ca.t fs_s) (get_v' fs_s g_card a)) |}
   : compile_exp #_ #(compile_typ_arrow a b) g g_card (fun (fs_s:fs_env g_card) -> f fs_s) = {
-  t = begin
+  e = begin
     let g' = extend ca.t g in
-    assert (fv_in_env (extend ca.t g) cf.t);
-    assume (fv_in_env g (ELam cf.t));
-    ELam cf.t
+    assert (fv_in_env (extend ca.t g) cf.e);
+    assume (fv_in_env g (ELam cf.e));
+    ELam cf.e
   end;
   proof = (fun () ->
     cf.proof ();
-    typing_rule_lam g ca.t cf.t cb.t
+    typing_rule_lam g ca.t cf.e cb.t
   );
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     reveal_opaque (`%get_v') (get_v' #(extend ca.t g) #(g_card+1));
-    equiv_lam g_card ca.t cf.t cb.t f
+    equiv_lam g_card ca.t cf.e cb.t f
   )
 }
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
-let _ = assert (test1_exp.t == ELam (EUnit))
+let _ = assert (test1_exp.e == ELam (EUnit))
 
 let test2_exp : compile_closed #(unit -> unit) (fun x -> x) = solve
-let _ = assert (test2_exp.t == ELam (EVar 0))
+let _ = assert (test2_exp.e == ELam (EVar 0))
 
 let test3_exp : compile_closed #(unit -> unit -> unit) (fun x y -> x) = solve
-let _ = assert (test3_exp.t == ELam (ELam (EVar 1)))
+let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
-let _ = assert (test3_exp'.t == ELam (ELam (EVar 0)))
+let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
 (** TODO: **)
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
@@ -174,24 +176,24 @@ instance compile_exp_app
   (f:fs_env g_card -> a -> b) {| cf: compile_exp #_ #solve g g_card f |}
   (x:fs_env g_card -> a)     {| cx: compile_exp #_ #ca g g_card x |}
   : compile_exp #_ #cb g g_card (fun fs_s -> (f fs_s) (x fs_s)) = {
-  t = begin
-    assume (fv_in_env g (EApp cf.t cx.t));
-    EApp cf.t cx.t
+  e = begin
+    assume (fv_in_env g (EApp cf.e cx.e));
+    EApp cf.e cx.e
   end;
   proof = (fun () ->
     cf.proof ();
     cx.proof ();
-    typing_rule_app g cf.t cx.t ca.t cb.t
+    typing_rule_app g cf.e cx.e ca.t cb.t
   );
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     cx.equiv_proof ();
-    equiv_app g_card ca.t cb.t cf.t cx.t f x
+    equiv_app g_card ca.t cb.t cf.e cx.e f x
   );
 }
 
 let test0_fapp : compile_closed #unit #solve ((fun x y -> y) () ()) = solve
-let _ = assert (test0_fapp.t == EUnit)
+let _ = assert (test0_fapp.e == EUnit)
 
 (** How to deal with top level definitions? **)
 
@@ -201,13 +203,13 @@ let myf () = ()
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
 let test1_topf : compile_closed (myf ()) = solve
 // because of partial evaluation we have to consider both cases
-let _ = assert (test1_topf.t == EApp (ELam EUnit) EUnit \/
-                test1_topf.t == EUnit)
+let _ = assert (test1_topf.e == EApp (ELam EUnit) EUnit \/
+                test1_topf.e == EUnit)
 
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
 (* Also handles partial application. Pretty amazing! *)
 let test2_topf : compile_closed (myf2 ()) = solve
-let _ = assert (test2_topf.t == EApp (ELam (ELam (EVar 1))) EUnit \/
-                test2_topf.t == ELam EUnit)
+let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
+                test2_topf.e == ELam EUnit)

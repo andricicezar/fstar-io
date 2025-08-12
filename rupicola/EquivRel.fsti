@@ -5,7 +5,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
-open LinkingTypes
+open SyntacticTypes
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
@@ -19,10 +19,10 @@ let rec (∋) (t:typ) (p:elab_typ t * closed_exp) : Tot Type0 (decreases %[t;0])
     match e with
     | ELam e' ->
       (forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>
-        t2 ⋰ (fs_f fs_v, subst_beta v e'))
+        t2 ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
-and (⋰) (t:typ) (p: elab_typ t * closed_exp) : Tot Type0 (decreases %[t;1]) =
+and (⦂) (t:typ) (p: elab_typ t * closed_exp) : Tot Type0 (decreases %[t;1]) =
   let fs_e = fst p in
   let e = snd p in
   forall (e':closed_exp). steps e e' ==> irred e' ==> t ∋ (fs_e, e')
@@ -86,7 +86,7 @@ let (∽) (#g:env) #b #g_card (s:gsub g g_card b) (fs_s:fs_env g_card) : Type0 =
 let equiv (#g:env) (#g_card:env_card g) (t:typ) (fs_e:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g g_card b) (fs_s:fs_env g_card).
-    s ∽ fs_s ==>  t ⋰ (fs_e fs_s, gsubst s e)
+    s ∽ fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
 
 let (≈) (#g:env) (#g_card:env_card g) (#t:typ) (fs_v:fs_env g_card -> elab_typ t) (e:exp) : Type0 =
   equiv #g #g_card t fs_v e
@@ -109,28 +109,28 @@ let equiv_lam #g (g_card:env_card g) (t1:typ) (body:exp) (t2:typ) (f:fs_env g_ca
   let g' = extend t1 g in
   let g_card' : env_card g' = g_card + 1 in
   assume (fv_in_env g (ELam body));
-  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> TArr t1 t2 ⋰ (f fs_s, gsubst s (ELam body)) with begin
+  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> TArr t1 t2 ⦂ (f fs_s, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      introduce forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>  t2 ⋰ (f fs_s fs_v, subst_beta v body') with begin
+      introduce forall (v:value) (fs_v:elab_typ t1). t1 ∋ (fs_v, v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v body') with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
           let fs_s' = fs_extend fs_s fs_v in
-          eliminate forall b (s':gsub g' g_card' b) fs_s'. s' ∽ fs_s' ==>  t2 ⋰ (f (fs_shrink #t1 fs_s') (get_v fs_s' g_card), (gsubst s' body))
+          eliminate forall b (s':gsub g' g_card' b) fs_s'. s' ∽ fs_s' ==>  t2 ⦂ (f (fs_shrink #t1 fs_s') (get_v fs_s' g_card), (gsubst s' body))
             with false s' fs_s';
           assert (s ∽ fs_s);
           assert (gsub_extend s t1 v ∽ fs_extend fs_s fs_v);
-          assert (t2 ⋰ (f (fs_shrink fs_s') (get_v fs_s' g_card), (gsubst s' body)));
+          assert (t2 ⦂ (f (fs_shrink fs_s') (get_v fs_s' g_card), (gsubst s' body)));
           assert (get_v (fs_extend fs_s fs_v) g_card == fs_v);
-          assert (t2 ⋰ (f (fs_shrink fs_s') fs_v, (gsubst s' body)));
-          assert (t2 ⋰ (f fs_s fs_v, (gsubst s' body)));
+          assert (t2 ⦂ (f (fs_shrink fs_s') fs_v, (gsubst s' body)));
+          assert (t2 ⦂ (f fs_s fs_v, (gsubst s' body)));
           assume ((subst (sub_beta v) (subst (sub_elam s) body)) == (subst (gsub_extend s t1 v) body)); (** substitution lemma **)
-          assert (t2 ⋰ (f fs_s fs_v, subst_beta v body'))
+          assert (t2 ⦂ (f fs_s fs_v, subst_beta v body'))
         end
       end;
       assert (TArr t1 t2 ∋ (f fs_s, gsubst s (ELam body)));
-      assume (TArr t1 t2 ⋰ (f fs_s, gsubst s (ELam body))) (** lemma used by Amal **)
+      assume (TArr t1 t2 ⦂ (f fs_s, gsubst s (ELam body))) (** lemma used by Amal **)
     end
   end
 
@@ -140,11 +140,11 @@ let equiv_app #g (g_card:env_card g) (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:
   assert (fv_in_env g e1);
   assert (fv_in_env g e2);
   assume (fv_in_env g (EApp e1 e2)); (** should be proveable **)
-  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> t2 ⋰ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
+  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> t2 ⦂ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
     let fs_e1' = fs_e1 fs_s in
     let fs_e2' = fs_e2 fs_s in
     let fs_e = fs_e1' fs_e2' in
-    introduce s ∽ fs_s ==>  t2 ⋰ (fs_e, gsubst s (EApp e1 e2)) with _. begin
+    introduce s ∽ fs_s ==>  t2 ⦂ (fs_e, gsubst s (EApp e1 e2)) with _. begin
       introduce forall (e':closed_exp). steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
         introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
@@ -152,7 +152,7 @@ let equiv_app #g (g_card:env_card g) (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:
             let (e11, e2') = destruct_steps_eapp (gsubst s e1) (gsubst s e2) e' steps_e_e' in
             assert (TArr t1 t2 ∋ (fs_e1', ELam e11));
             assert (t1 ∋ (fs_e2', e2'));
-            assert (t2 ⋰ (fs_e, subst_beta e2' e11));
+            assert (t2 ⦂ (fs_e, subst_beta e2' e11));
             assert (t2 ∋ (fs_e, e'))
           )
         end

@@ -1,4 +1,6 @@
-module LinkingTypes
+(** Syntactic representation of F* types that we can compile. **)
+
+module SyntacticTypes
 
 open FStar.Tactics
 open FStar.Classical.Sugar
@@ -9,13 +11,16 @@ open STLC
 type typ =
   | TUnit : typ
   | TArr  : typ -> typ -> typ
-
-let rec elab_typ (t:typ) : Type0 = // this could already create universe problems when using monads `Type u#a -> Type u#(max 1 a)`
+  
+(** We have to very careful on how we define this elaboration of types.
+    We'll face universe problems when using monads `Type u#a -> Type u#(max 1 a)`.
+    See also: https://fstar.zulipchat.com/#narrow/stream/214975-fstar-ml-interop/topic/Language.20characterization **)
+let rec elab_typ (t:typ) : Type0 = 
   match t with
   | TUnit -> unit
   | TArr t1 t2 -> (elab_typ t1 -> elab_typ t2)
 
-(** Common definition of environment **)
+(** Common definition of typing environment **)
 type env = var -> option typ
 
 let empty : env = fun _ -> None

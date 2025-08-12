@@ -1,21 +1,4 @@
-(*
-   Copyright 2014-2015
-     Simon Forest - Inria and ENS Paris
-     Catalin Hritcu - Inria
-     Nikhil Swamy - Microsoft Research
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*)
+(* Substitution proof from: https://fstar-lang.org/tutorial/book/part2/part2_stlc.html *)
 
 module STLC
 
@@ -215,6 +198,7 @@ type steps : closed_exp -> closed_exp -> Type =
            steps (Some?.v (step e0)) e2 ->
            steps e0 e2
 
+(** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
   (e1:closed_exp)
   (e2:closed_exp)
