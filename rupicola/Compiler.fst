@@ -131,7 +131,7 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (g:env{g' == extend t g})
   (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
   {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun fs_s -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
+  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
     e = ce.e;
     typing_proof = ce.typing_proof;
     equiv_proof = (fun () ->
@@ -140,13 +140,27 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
       ce.equiv_proof ());
   }
 
-let test2_var : compile_exp (extend TUnit (extend TUnit empty)) (fun fs_s -> get_v' (fs_shrink #TUnit #_ fs_s) 0 unit) =
+instance compile_exp_var_shrink2 (** CA: how to make this general? **)
+  (a:Type) {| ca:compile_typ a |}
+  (g':env)
+  (t1 t2:typ)
+  (g:env{g' == extend t1 (extend t2 g)})
+  (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
+  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
+    e = ce.e;
+    typing_proof = ce.typing_proof;
+    equiv_proof = (fun () ->
+      reveal_opaque (`%get_v') (get_v' #g');
+      reveal_opaque (`%get_v') (get_v' #g);
+      ce.equiv_proof ());
+  }
+
+let test2_var : compile_exp (extend TUnit (extend TUnit empty)) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
   solve
 
-(** TODO: **)
-let test3_var : compile_exp (extend TUnit (extend TUnit (extend TUnit empty))) (fun fs_s -> get_v' (fs_shrink #TUnit #_ (fs_shrink #TUnit #_ fs_s)) 0 unit) =
-  admit ()
-//  solve
+let test3_var : compile_exp (extend TUnit (extend TUnit (extend TUnit empty))) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
+  solve
 
 instance compile_exp_lambda
   g
@@ -186,12 +200,14 @@ let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
 (** TODO: **)
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
-  admit ()
-//  solve
+  solve
+let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
 
 let test4_exp' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> y) = solve
+let _ = assert (test4_exp'.e == ELam (ELam (ELam (EVar 1))))
 
 let test4_exp'' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> z) = solve
+let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
 
 
 instance compile_exp_app
