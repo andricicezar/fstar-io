@@ -170,9 +170,7 @@ instance compile_exp_lambda
   {| cf: compile_exp #b #cb (extend ca.t g) (fun fs_s -> f (fs_shrink #ca.t fs_s) (get_v' fs_s 0 a)) |}
   : compile_exp g f = {
   e = begin
-    let g' = extend ca.t g in
-    assert (fv_in_env (extend ca.t g) cf.e);
-    assume (fv_in_env g (ELam cf.e));
+    lem_fv_in_env_lam g ca.t cf.e;
     ELam cf.e
   end;
   typing_proof = (fun () ->
@@ -218,7 +216,7 @@ instance compile_exp_app
   (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
   : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
   e = begin
-    assume (fv_in_env g (EApp cf.e cx.e));
+    lem_fv_in_env_app g cf.e cx.e;
     EApp cf.e cx.e
   end;
   typing_proof = (fun () ->
@@ -262,7 +260,7 @@ instance compile_exp_if
   (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
   : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
   e = begin
-    assume (fv_in_env g (EIf cco.e cth.e cel.e));
+    lem_fv_in_env_if g cco.e cth.e cel.e;
     EIf cco.e cth.e cel.e
   end;
   typing_proof = (fun () ->

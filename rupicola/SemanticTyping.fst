@@ -77,9 +77,8 @@ let typing_rule_var (g:env) (x:nat) : Lemma
 let typing_rule_lam g (t1:typ) (body:exp) (t2:typ) : Lemma
   (requires sem_typing (extend t1 g) body t2)
   (ensures sem_typing g (ELam body) (TArr t1 t2)) =
+  lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  assert (fv_in_env g' body);
-  assume (fv_in_env g (ELam body));
   introduce forall b (s:gsub g b). gsub_only_values s ==> gsubst s (ELam body) ⋮ TArr t1 t2 with
     introduce _ ==> _ with _. begin
       let g' = extend t1 g in
@@ -101,9 +100,7 @@ let typing_rule_lam g (t1:typ) (body:exp) (t2:typ) : Lemma
 let typing_rule_app g (e1:exp) (e2:exp) (t1:typ) (t2:typ) : Lemma
   (requires sem_typing g e1 (TArr t1 t2) /\ sem_typing g e2 t1)
   (ensures sem_typing g (EApp e1 e2) t2) =
-  assert (fv_in_env g e1);
-  assert (fv_in_env g e2);
-  assume (fv_in_env g (EApp e1 e2)); (** should be proveable **)
+  lem_fv_in_env_app g e1 e2;
   introduce forall b (s:gsub g b). gsub_only_values s ==> gsubst s (EApp e1 e2) ⋮ t2 with
     introduce gsub_only_values s ==> gsubst s (EApp e1 e2) ⋮ t2 with _. begin
       introduce forall e'. steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> e' ∈ t2 with begin
@@ -123,10 +120,7 @@ let typing_rule_app g (e1:exp) (e2:exp) (t1:typ) (t2:typ) : Lemma
 let typing_rule_if g (e1:exp) (e2:exp) (e3:exp) (t:typ) : Lemma
   (requires sem_typing g e1 TBool /\ sem_typing g e2 t /\ sem_typing g e3 t)
   (ensures sem_typing g (EIf e1 e2 e3) t) =
-  assert (fv_in_env g e1);
-  assert (fv_in_env g e2);
-  assert (fv_in_env g e3);
-  assume (fv_in_env g (EIf e1 e2 e3)); (** should be proveable **)
+  lem_fv_in_env_if g e1 e2 e3;
   introduce forall b (s:gsub g b). gsub_only_values s ==> gsubst s (EIf e1 e2 e3) ⋮ t with
     introduce gsub_only_values s ==> gsubst s (EIf e1 e2 e3) ⋮ t with _. begin
       introduce forall e'. steps (gsubst s (EIf e1 e2 e3)) e' /\ irred e' ==> e' ∈ t with begin

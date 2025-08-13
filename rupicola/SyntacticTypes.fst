@@ -42,6 +42,21 @@ let lem_no_fv_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
+let lem_fv_in_env_lam (g:env) (t:typ) (body:exp) :
+  Lemma
+    (requires fv_in_env (extend t g) body)
+    (ensures  fv_in_env g (ELam body)) = admit ()
+
+let lem_fv_in_env_app (g:env) (e1 e2:exp) :
+  Lemma
+    (requires fv_in_env g e1 /\ fv_in_env g e2)
+    (ensures  fv_in_env g (EApp e1 e2)) = admit ()
+
+let lem_fv_in_env_if (g:env) (e1 e2 e3:exp) :
+  Lemma
+    (requires fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3)
+    (ensures  fv_in_env g (EIf e1 e2 e3)) = admit ()
+
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}

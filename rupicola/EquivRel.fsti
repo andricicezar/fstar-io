@@ -110,8 +110,8 @@ let equiv_lam g (t1:typ) (body:exp) (t2:typ) (f:fs_env g -> elab_typ (TArr t1 t2
             // the asymmetry is here. body is an open expression, while for f, I don't have an open expression
             // the equiv is quantifying over the free variable of body, but not get_v
   (ensures f ≈ (ELam body)) =
+  lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  assume (fv_in_env g (ELam body));
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> TArr t1 t2 ⦂ (f fs_s, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
@@ -141,9 +141,7 @@ let equiv_lam g (t1:typ) (body:exp) (t2:typ) (f:fs_env g -> elab_typ (TArr t1 t2
 let equiv_app g (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:fs_env g -> elab_typ (TArr t1 t2)) (fs_e2:fs_env g -> elab_typ t1) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
   (ensures (fun fs_s -> (fs_e1 fs_s) (fs_e2 fs_s)) ≈ (EApp e1 e2)) =
-  assert (fv_in_env g e1);
-  assert (fv_in_env g e2);
-  assume (fv_in_env g (EApp e1 e2)); (** should be proveable **)
+  lem_fv_in_env_app g e1 e2;
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> t2 ⦂ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
     let fs_e1' = fs_e1 fs_s in
     let fs_e2' = fs_e2 fs_s in
@@ -167,10 +165,7 @@ let equiv_app g (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:fs_env g -> elab_typ 
 let equiv_if g (t:typ) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> elab_typ TBool) (fs_e2:fs_env g -> elab_typ t) (fs_e3:fs_env g -> elab_typ t) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fs_s -> if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s) ≈ EIf e1 e2 e3) =
-  assert (fv_in_env g e1);
-  assert (fv_in_env g e2);
-  assert (fv_in_env g e3);
-  assume (fv_in_env g (EIf e1 e2 e3)); (** should be proveable **)
+  lem_fv_in_env_if g e1 e2 e3;
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> t ⦂ ((if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s), gsubst s (EIf e1 e2 e3)) with begin
     let fs_e1' = fs_e1 fs_s in
     let fs_e2' = fs_e2 fs_s in
