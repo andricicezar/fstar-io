@@ -12,8 +12,11 @@ open EquivRel
 
 class compile_typ (s:Type) = {
   [@@@no_method] t : (t:typ{elab_typ t == s})
-  (** CA: is this equality problematic?
-      CA: Explain why do we need it **)
+  (** CA: can this equality become problematic when
+          `typ` will encode types that elaborate to
+          refined types, arrows with pre-post conditions, and monadic arrows? **)
+  (** CA: To get rid of the equality, one would have to find different
+          definitions for `get_v'` and redefine the `equiv` relation. **)
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit }
