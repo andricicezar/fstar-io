@@ -64,7 +64,7 @@ let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
 
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g) (fs_e:fs_env g_card -> a) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
@@ -73,7 +73,7 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g)
 }
 
 (** Just a helper typeclass **)
-unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty 0 (fun _ -> s)
+unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty (fun _ -> s)
 
 let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
   : Lemma (ca.t ⦂ (fs_e, cs.e) /\ cs.e ⋮ ca.t) =
@@ -82,22 +82,22 @@ let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a)
   cs.typing_proof ();
   lem_sem_typing_closed cs.e ca.t
 
-instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
+instance compile_exp_unit g : compile_exp #unit #solve g (fun _ -> ()) = {
   e = EUnit;
   typing_proof = (fun () -> typing_rule_unit g);
-  equiv_proof = (fun () -> equiv_unit g_card);
+  equiv_proof = (fun () -> equiv_unit g);
 }
 
-instance compile_exp_true g g_card : compile_exp #bool #solve g g_card (fun _ -> true) = {
+instance compile_exp_true g : compile_exp #bool #solve g (fun _ -> true) = {
   e = ETrue;
   typing_proof = (fun () -> typing_rule_true g);
-  equiv_proof = (fun () -> equiv_true g_card);
+  equiv_proof = (fun () -> equiv_true g);
 }
 
-instance compile_exp_false g g_card : compile_exp #bool #solve g g_card (fun _ -> false) = {
+instance compile_exp_false g : compile_exp #bool #solve g (fun _ -> false) = {
   e = EFalse;
   typing_proof = (fun () -> typing_rule_false g);
-  equiv_proof = (fun () -> equiv_false g_card);
+  equiv_proof = (fun () -> equiv_false g);
 }
 
 let test_unit : compile_closed () = solve
@@ -106,58 +106,55 @@ let test_false : compile_closed false = solve
 
 (** get_v' works better with typeclass resolution than get_v **)
 [@"opaque_to_smt"] (** not sure if the right pragma to prevent F* unfolding it during type class resolution **)
-val get_v' : #g:_ -> #g_card:env_card g -> fs_env g_card -> i:nat{i < g_card} -> a:Type{a == elab_typ (Some?.v (g (fs_to_var g_card i)))} -> a
-let get_v' #g #g_card fs_s i a =
-  get_v #g #g_card fs_s i
+val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == elab_typ (Some?.v (g x))} -> a
+let get_v' #g fs_s i a =
+  get_v #g fs_s i
 
-instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (g_card:env_card g) (i:nat{i < g_card /\ ca.t == Some?.v (g (fs_to_var g_card i))})
-  : compile_exp #a #ca g g_card (fun fs_s -> get_v' fs_s i a) =
-  let x = fs_to_var g_card i in {
+instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
+  : compile_exp #a #ca g (fun fs_s -> get_v' fs_s x a) = {
     e = EVar x;
     typing_proof = (fun () ->
       inverse_elab_typ_compile_typ (Some?.v (g x));
       typing_rule_var g x
     );
     equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g #g_card);
-      equiv_var g_card x);
+      reveal_opaque (`%get_v') (get_v' #g);
+      equiv_var g x);
 }
 
-let test1_var : compile_exp (extend TUnit empty) 1 (fun fs_s -> get_v' fs_s 0 unit) = solve
+let test1_var : compile_exp (extend TUnit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (a:Type) {| ca:compile_typ a |}
   (g':env)
-  (g_card':env_card g')
   (t:typ)
   (g:env{g' == extend t g})
-  (g_card:(env_card g){g_card == g_card' - 1})
-  (i:nat{i < g_card /\ ca.t == Some?.v (g' (fs_to_var g_card' i))})
-  {| ce:compile_exp g' g_card' (fun fs_s -> get_v' #g' #g_card' fs_s i a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' g_card' (fun fs_s -> get_v' #g #g_card (fs_shrink #t #g #g_card fs_s) i a) = {
+  (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
+  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' (fun fs_s -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
     e = ce.e;
     typing_proof = ce.typing_proof;
     equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g' #g_card');
-      reveal_opaque (`%get_v') (get_v' #g #g_card);
+      reveal_opaque (`%get_v') (get_v' #g');
+      reveal_opaque (`%get_v') (get_v' #g);
       ce.equiv_proof ());
   }
 
-let test2_var : compile_exp (extend TUnit (extend TUnit empty)) 2 (fun fs_s -> get_v' (fs_shrink #TUnit #_ #1 fs_s) 0 unit) = solve
+let test2_var : compile_exp (extend TUnit (extend TUnit empty)) (fun fs_s -> get_v' (fs_shrink #TUnit #_ fs_s) 0 unit) =
+  solve
 
 (** TODO: **)
-let test3_var : compile_exp (extend TUnit (extend TUnit (extend TUnit empty))) 3 (fun fs_s -> get_v' (fs_shrink #TUnit #_ #1 (fs_shrink #TUnit #_ #2 fs_s)) 0 unit) =
+let test3_var : compile_exp (extend TUnit (extend TUnit (extend TUnit empty))) (fun fs_s -> get_v' (fs_shrink #TUnit #_ (fs_shrink #TUnit #_ fs_s)) 0 unit) =
   admit ()
 //  solve
 
 instance compile_exp_lambda
   g
-  (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:fs_env g_card -> a -> b)
-  {| cf: compile_exp #b #cb (extend ca.t g) (g_card+1) (fun fs_s -> f (fs_shrink #ca.t fs_s) (get_v' fs_s g_card a)) |}
-  : compile_exp #_ #(compile_typ_arrow a b) g g_card (fun (fs_s:fs_env g_card) -> f fs_s) = {
+  (f:fs_env g -> a -> b)
+  {| cf: compile_exp #b #cb (extend ca.t g) (fun fs_s -> f (fs_shrink #ca.t fs_s) (get_v' fs_s 0 a)) |}
+  : compile_exp g f = {
   e = begin
     let g' = extend ca.t g in
     assert (fv_in_env (extend ca.t g) cf.e);
@@ -170,8 +167,8 @@ instance compile_exp_lambda
   );
   equiv_proof = (fun () ->
     cf.equiv_proof ();
-    reveal_opaque (`%get_v') (get_v' #(extend ca.t g) #(g_card+1));
-    equiv_lam g_card ca.t cf.e cb.t f
+    reveal_opaque (`%get_v') (get_v' #(extend ca.t g));
+    equiv_lam g ca.t cf.e cb.t f
   )
 }
 
@@ -199,12 +196,11 @@ let test4_exp'' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> z
 
 instance compile_exp_app
   g
-  (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
   (#b:Type) {| cb: compile_typ b |}
-  (f:fs_env g_card -> a -> b) {| cf: compile_exp #_ #solve g g_card f |}
-  (x:fs_env g_card -> a)     {| cx: compile_exp #_ #ca g g_card x |}
-  : compile_exp #_ #cb g g_card (fun fs_s -> (f fs_s) (x fs_s)) = {
+  (f:fs_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
+  (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
+  : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
   e = begin
     assume (fv_in_env g (EApp cf.e cx.e));
     EApp cf.e cx.e
@@ -217,7 +213,7 @@ instance compile_exp_app
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     cx.equiv_proof ();
-    equiv_app g_card ca.t cb.t cf.e cx.e f x
+    equiv_app g ca.t cb.t cf.e cx.e f x
   );
 }
 
@@ -244,12 +240,11 @@ let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
 
 instance compile_exp_if
   g
-  (g_card:env_card g)
   (#a:Type) {| ca: compile_typ a |}
-  (co:fs_env g_card -> bool)  {| cco: compile_exp #_ #solve g g_card co |}
-  (th:fs_env g_card -> a)     {| cth: compile_exp #_ #ca g g_card th |}
-  (el:fs_env g_card -> a)     {| cel: compile_exp #_ #ca g g_card el |}
-  : compile_exp #_ #ca g g_card (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
+  (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
+  (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
+  (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
+  : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
   e = begin
     assume (fv_in_env g (EIf cco.e cth.e cel.e));
     EIf cco.e cth.e cel.e
@@ -264,7 +259,7 @@ instance compile_exp_if
     cco.equiv_proof ();
     cth.equiv_proof ();
     cel.equiv_proof ();
-    equiv_if g_card ca.t cco.e cth.e cel.e co th el
+    equiv_if g ca.t cco.e cth.e cel.e co th el
   );
 }
 
