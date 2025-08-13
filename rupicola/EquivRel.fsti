@@ -59,8 +59,19 @@ let lem_gsubst_empty (e:closed_exp) : Lemma (gsubst gsub_empty e == e)
 
 (** F* Evaluation Environment : variable -> value **)
 
-(** CA: this is an abstraction that helps with dealing with variables.
-   It is like a symbol we introduce when dealing with lambdas and eliminate when dealing with variables **)
+(** We compile F* values, not F* expressions.
+    When compiling F* lambdas, there is no way to match and get
+    the body of the lambda.
+
+    To avoid this limitation, we do closure conversion of F* lambdas:
+    - be a lambda f:'a -> 'b
+    - we wrap f to a function that takes as argument an F* evaluation environment
+      that was extended to contain a value of type 'a
+    - we take the value from the environment to open f:
+        fun fs_s -> f (get_v fs_s |fs_s|)
+
+    What is cool about this is to define compilation to STLC the environment is abstract.
+ **)
 
 (** The deBrujin index is inverse to the index in F* env **)
 let var_to_fs (g_card:nat) (x:var{x < g_card}) : (i:nat{i < g_card}) = g_card-x-1
