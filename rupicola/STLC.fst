@@ -8,10 +8,13 @@ open FStar.List.Tot
 
 let var = nat
 type exp =
-  | EUnit : exp
-  | EVar  : v:var -> exp
-  | ELam  : exp -> exp
-  | EApp  : exp -> exp -> exp
+  | EUnit  : exp
+  | ETrue  : exp
+  | EFalse : exp
+  | EIf    : exp -> exp -> exp -> exp
+  | EVar   : v:var -> exp
+  | ELam   : exp -> exp
+  | EApp   : exp -> exp -> exp
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
@@ -37,7 +40,10 @@ let rec subst (#r:bool)
     | EVar x -> s x
     | ELam e1 -> ELam (subst (sub_elam s) e1)
     | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
+    | EIf e1 e2 e3 -> EIf (subst s e1) (subst s e2) (subst s e3)
     | EUnit -> EUnit
+    | ETrue -> ETrue
+    | EFalse -> EFalse
 
 and sub_elam (#r:bool) (s:sub r)
   : Tot (sub r)
@@ -77,8 +83,11 @@ let sub_beta (e:exp)
 let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binders
   match e with
   | EUnit -> []
+  | ETrue -> []
+  | EFalse -> []
   | ELam e' -> free_vars_indx e' (n+1)
   | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
+  | EIf e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
   | EVar i -> if i < n then [] else [i-n]
 
 let free_vars e = free_vars_indx e 0
@@ -89,6 +98,8 @@ let is_closed (e:exp) : bool =
 let is_value (e:exp) : Type0 =
   match e with
   | EUnit -> True
+  | ETrue -> True
+  | EFalse -> True
   | ELam _ -> is_closed e
   | _ -> False
 
@@ -105,6 +116,10 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   | EApp e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n
+  | EIf e1 e2 e3 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n;
+    lem_shifting_preserves_closed s e3 n
   | ELam e' -> begin
     assert (free_vars_indx e' (n+1) == []);
     let s' : sub true = sub_elam s in
@@ -137,6 +152,13 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s e1 n;
     assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e2 n
+  | EIf e1 e2 e3 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e2 n;
+    assume (forall x. x `memP` free_vars_indx e3 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e3 n
   | ELam e' ->
     let s' = sub_elam s in
     let n' = n+1 in
@@ -180,6 +202,16 @@ let rec step e =
           end
       end
   end
+  | EIf e1 e2 e3 -> begin
+    match step e1 with
+    | Some e1' -> Some (EIf e1' e2 e3)
+    | None -> begin
+      match e1 with
+      | ETrue -> Some e2
+      | EFalse -> Some e3
+      | _ -> None
+    end
+  end
   | _ -> None
 
 let can_step (e:closed_exp) : Type0 =
@@ -222,5 +254,27 @@ let rec destruct_steps_eapp
     The function should destruct steps until it is again in EApp.
     Based on the definition of step function, it should imply that (ELam t1 e11) and e2'
     are irreducible.
+  **)
+  admit ()
+
+let rec destruct_steps_eif
+  (e1:closed_exp)
+  (e2:closed_exp)
+  (e3:closed_exp)
+  (e':closed_exp)
+  (st:steps (EIf e1 e2 e3) e') :
+  Pure closed_exp
+    (requires irred e') (** CA: not sure if necessary **)
+    (ensures fun e1' ->
+      irred e1' /\
+      steps e1 e1' /\
+      steps (EIf e1 e2 e3) (EIf e1' e2 e3) /\
+      (ETrue? e1' ==> steps e2 e') /\
+      (EFalse? e1' ==> steps e3 e'))
+    (decreases st)
+  =
+  (**
+    How the steps look like:
+      EIf e1 e2 e3 -->* EIf e1' e2 e3 -->* e'
   **)
   admit ()

@@ -10,6 +10,7 @@ open STLC
 
 type typ =
   | TUnit : typ
+  | TBool : typ
   | TArr  : typ -> typ -> typ
 
 (** We have to very careful on how we define this elaboration of types.
@@ -18,6 +19,7 @@ type typ =
 let rec elab_typ (t:typ) : Type0 =
   match t with
   | TUnit -> unit
+  | TBool -> bool
   | TArr t1 t2 -> (elab_typ t1 -> elab_typ t2)
 
 (** Common definition of typing environment **)

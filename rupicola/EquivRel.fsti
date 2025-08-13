@@ -14,6 +14,7 @@ let rec (∋) (t:typ) (p:elab_typ t * closed_exp) : Tot Type0 (decreases %[t;0])
   let e = snd p in
   match t with
   | TUnit -> fs_v == () /\ e == EUnit
+  | TBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | TArr t1 t2 -> begin
     let fs_f : elab_typ t1 -> elab_typ t2 = fs_v in
     match e with
@@ -113,6 +114,14 @@ let equiv_unit #g (g_card:env_card g)
   : Lemma ((fun (_:fs_env g_card) -> ()) `equiv TUnit` EUnit)
   = assert ((fun (_:fs_env g_card) -> ()) `equiv TUnit` EUnit) by (explode ())
 
+let equiv_true #g (g_card:env_card g)
+  : Lemma ((fun (_:fs_env g_card) -> true) `equiv TBool` ETrue)
+  = assert ((fun (_:fs_env g_card) -> true) `equiv TBool` ETrue) by (explode ())
+
+let equiv_false #g (g_card:env_card g)
+  : Lemma ((fun (_:fs_env g_card) -> false) `equiv TBool` EFalse)
+  = assert ((fun (_:fs_env g_card) -> false) `equiv TBool` EFalse) by (explode ())
+
 let equiv_var #g (g_card:env_card g) (x:var{x < g_card})
   : Lemma ((fun (fs_s:fs_env g_card) -> get_v fs_s (var_to_fs g_card x)) ≈ EVar x)
   = assert ((fun (fs_s:fs_env g_card) -> get_v fs_s (var_to_fs g_card x)) ≈ EVar x) by (explode ())
@@ -171,6 +180,32 @@ let equiv_app #g (g_card:env_card g) (t1:typ) (t2:typ) (e1:exp) (e2:exp) (fs_e1:
             assert (t1 ∋ (fs_e2', e2'));
             assert (t2 ⦂ (fs_e, subst_beta e2' e11));
             assert (t2 ∋ (fs_e, e'))
+          )
+        end
+      end
+    end
+  end
+
+let equiv_if #g (g_card:env_card g) (t:typ) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g_card -> elab_typ TBool) (fs_e2:fs_env g_card -> elab_typ t) (fs_e3:fs_env g_card -> elab_typ t) : Lemma
+  (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
+  (ensures (fun fs_s -> if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s) ≈ EIf e1 e2 e3) =
+  assert (fv_in_env g e1);
+  assert (fv_in_env g e2);
+  assert (fv_in_env g e3);
+  assume (fv_in_env g (EIf e1 e2 e3)); (** should be proveable **)
+  introduce forall b (s:gsub g g_card b) fs_s. s ∽ fs_s ==> t ⦂ ((if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s), gsubst s (EIf e1 e2 e3)) with begin
+    let fs_e1' = fs_e1 fs_s in
+    let fs_e2' = fs_e2 fs_s in
+    let fs_e3' = fs_e3 fs_s in
+    let fs_e = if fs_e1' then fs_e2' else fs_e3' in
+    introduce s ∽ fs_s ==>  t ⦂ (fs_e, gsubst s (EIf e1 e2 e3)) with _. begin
+      introduce forall (e':closed_exp). steps (gsubst s (EIf e1 e2 e3)) e' /\ irred e' ==> t ∋ (fs_e, e') with begin
+        introduce _ ==> t ∋ (fs_e, e') with h. begin
+          let steps_e_e' : squash (steps (EIf (gsubst s e1) (gsubst s e2) (gsubst s e3)) e') = () in
+          FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            let e1' = destruct_steps_eif (gsubst s e1) (gsubst s e2) (gsubst s e3) e' steps_e_e' in
+            assert (TBool ∋ (fs_e1', e1'));
+            assert (t ∋ (fs_e, e'))
           )
         end
       end

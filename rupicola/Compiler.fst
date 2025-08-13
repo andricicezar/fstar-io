@@ -20,6 +20,7 @@ class compile_typ (s:Type) = {
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit }
+instance compile_typ_bool : compile_typ bool = { t = TBool }
 instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) =
   { t = begin
     let t = (TArr c1.t c2.t) in
@@ -37,6 +38,7 @@ instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |}
 let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
   match t with
   | TUnit -> compile_typ_unit
+  | TBool -> compile_typ_bool
   | TArr t1 t2 ->
     assume (elab_typ t == (elab_typ t1 -> elab_typ t2)); (** I just proved this a few lines above **)
     compile_typ_arrow (elab_typ t1) (elab_typ t2) #(elab_typ_is_compile_typ t1) #(elab_typ_is_compile_typ t2)
@@ -46,6 +48,7 @@ instance elab_typ_is_compile_typ' (t:typ) : compile_typ (elab_typ t) = elab_typ_
 let rec inverse_elab_typ_compile_typ (t:typ) : Lemma ((elab_typ_is_compile_typ t).t == t) [SMTPat (elab_typ_is_compile_typ t).t] =
   match t with
   | TUnit -> ()
+  | TBool -> ()
   | TArr t1 t2 ->
     inverse_elab_typ_compile_typ t1;
     inverse_elab_typ_compile_typ t2;
@@ -54,10 +57,10 @@ let rec inverse_elab_typ_compile_typ (t:typ) : Lemma ((elab_typ_is_compile_typ t
 // Some tests
 let test0 : compile_typ (unit) = solve
 let _ = assert (test0.t == TUnit)
-let test1 : compile_typ (unit -> unit) = solve
-let _ = assert (test1.t == (TArr TUnit TUnit))
-let test2 : compile_typ ((unit -> unit) -> (unit -> unit)) = solve
-let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
+let test1 : compile_typ (bool -> unit) = solve
+let _ = assert (test1.t == (TArr TBool TUnit))
+let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
+let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
 
 
 (** Compiling expressions **)
@@ -85,7 +88,21 @@ instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ ->
   equiv_proof = (fun () -> equiv_unit g_card);
 }
 
+instance compile_exp_true g g_card : compile_exp #bool #solve g g_card (fun _ -> true) = {
+  e = ETrue;
+  typing_proof = (fun () -> typing_rule_true g);
+  equiv_proof = (fun () -> equiv_true g_card);
+}
+
+instance compile_exp_false g g_card : compile_exp #bool #solve g g_card (fun _ -> false) = {
+  e = EFalse;
+  typing_proof = (fun () -> typing_rule_false g);
+  equiv_proof = (fun () -> equiv_false g_card);
+}
+
 let test_unit : compile_closed () = solve
+let test_true : compile_closed true = solve
+let test_false : compile_closed false = solve
 
 (** get_v' works better with typeclass resolution than get_v **)
 [@"opaque_to_smt"] (** not sure if the right pragma to prevent F* unfolding it during type class resolution **)
@@ -223,3 +240,38 @@ let myf2 x y = x
 let test2_topf : compile_closed (myf2 ()) = solve
 let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
                 test2_topf.e == ELam EUnit)
+
+
+instance compile_exp_if
+  g
+  (g_card:env_card g)
+  (#a:Type) {| ca: compile_typ a |}
+  (co:fs_env g_card -> bool)  {| cco: compile_exp #_ #solve g g_card co |}
+  (th:fs_env g_card -> a)     {| cth: compile_exp #_ #ca g g_card th |}
+  (el:fs_env g_card -> a)     {| cel: compile_exp #_ #ca g g_card el |}
+  : compile_exp #_ #ca g g_card (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
+  e = begin
+    assume (fv_in_env g (EIf cco.e cth.e cel.e));
+    EIf cco.e cth.e cel.e
+  end;
+  typing_proof = (fun () ->
+    cco.typing_proof ();
+    cth.typing_proof ();
+    cel.typing_proof ();
+    typing_rule_if g cco.e cth.e cel.e ca.t
+  );
+  equiv_proof = (fun () ->
+    cco.equiv_proof ();
+    cth.equiv_proof ();
+    cel.equiv_proof ();
+    equiv_if g_card ca.t cco.e cth.e cel.e co th el
+  );
+}
+
+let test1_if : compile_closed #(bool -> bool) (fun x -> if x then false else true) = solve
+let _ = assert (test1_if.e == ELam (EIf (EVar 0) EFalse ETrue))
+
+let myt = true
+
+let test2_if : compile_closed #bool (if myt then false else true) = solve
+let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)

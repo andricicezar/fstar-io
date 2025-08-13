@@ -16,6 +16,7 @@ let safe (e:closed_exp) : Type0 =
 let rec (∈) (e:closed_exp) (t:typ) : Tot Type0 (decreases %[t;0]) =
   match t with
   | TUnit -> e == EUnit
+  | TBool -> e == ETrue \/ e == EFalse
   | TArr t1 t2 ->
       match e with
       | ELam e' ->
@@ -51,7 +52,7 @@ let lem_substitution #g #b (s:gsub g b) (t:typ) (v:value{v ∈ t}) (e:exp)
     (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
   = admit () (** common lemma **)
 
-let lem_gsub_empty_identity (e:closed_exp) :
+let lem_gsubst_empty_identity (e:closed_exp) :
   Lemma (gsubst gsub_empty e == e)
   [SMTPat (gsubst gsub_empty e)] =
   admit ()
@@ -72,7 +73,10 @@ let safety (e:closed_exp) (t:typ) : Lemma
     introduce steps e e' ==> is_value e' \/ Some? (step e') with _. begin
       introduce irred e' ==> is_value e' with _. begin
         eliminate forall b (s: gsub empty b). (gsubst s e) ⋮ t with true gsub_empty;
-        assert (e' ∈ t)
+        assert ((gsubst gsub_empty e) ⋮ t);
+        lem_gsubst_empty_identity e;
+        assert (e' ∈ t);
+        assert (is_value e')
       end
     end
   end
@@ -80,6 +84,12 @@ let safety (e:closed_exp) (t:typ) : Lemma
 (** Typing Rules as Lemmas *)
 let typing_rule_unit (g:env) : Lemma (sem_typing g EUnit TUnit) =
   assert (sem_typing g EUnit TUnit) by (explode ())
+
+let typing_rule_true (g:env) : Lemma (sem_typing g ETrue TBool) =
+  assert (sem_typing g ETrue TBool) by (explode ())
+
+let typing_rule_false (g:env) : Lemma (sem_typing g EFalse TBool) =
+  assert (sem_typing g EFalse TBool) by (explode ())
 
 let typing_rule_var (g:env) (x:nat) : Lemma
   (requires Some? (g x))
@@ -125,6 +135,26 @@ let typing_rule_app g (e1:exp) (e2:exp) (t1:typ) (t2:typ) : Lemma
           assert (e2' ∈ t1);
           assert (subst_beta e2' e11 ⋮ t2);
           assert (e' ∈ t2)
+        )
+      end
+    end
+  end
+
+let typing_rule_if g (e1:exp) (e2:exp) (e3:exp) (t:typ) : Lemma
+  (requires sem_typing g e1 TBool /\ sem_typing g e2 t /\ sem_typing g e3 t)
+  (ensures sem_typing g (EIf e1 e2 e3) t) =
+  assert (fv_in_env g e1);
+  assert (fv_in_env g e2);
+  assert (fv_in_env g e3);
+  assume (fv_in_env g (EIf e1 e2 e3)); (** should be proveable **)
+  introduce forall b (s:gsub g b). gsubst s (EIf e1 e2 e3) ⋮ t with begin
+    introduce forall e'. steps (gsubst s (EIf e1 e2 e3)) e' /\ irred e' ==> e' ∈ t with begin
+      introduce _ ==> e' ∈ t with h. begin
+        let steps_e_e' : squash (steps (EIf (gsubst s e1) (gsubst s e2) (gsubst s e3)) e') = () in
+        FStar.Squash.map_squash #_ #(squash (e' ∈ t)) steps_e_e' (fun steps_e_e' ->
+          let e1' = destruct_steps_eif (gsubst s e1) (gsubst s e2) (gsubst s e3) e' steps_e_e' in
+          assert (e1' ∈ TBool);
+          assert (e' ∈ t)
         )
       end
     end
