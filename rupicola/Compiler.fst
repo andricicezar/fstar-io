@@ -11,7 +11,8 @@ open SemanticTyping
 open EquivRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] t : (t:typ{elab_typ t == s})
+  [@@@no_method] t : typ;
+  [@@@no_method] eq : squash (elab_typ t == s);
   (** CA: can this equality become problematic when
           `typ` will encode types that elaborate to
           refined types, arrows with pre-post conditions, and monadic arrows? **)
@@ -19,11 +20,12 @@ class compile_typ (s:Type) = {
           definitions for `get_v'` and redefine the `equiv` relation. **)
 }
 
-instance compile_typ_unit : compile_typ unit = { t = TUnit }
-instance compile_typ_bool : compile_typ bool = { t = TBool }
-instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) =
-  { t = begin
-    let t = (TArr c1.t c2.t) in
+instance compile_typ_unit : compile_typ unit = { t = TUnit; eq = () }
+instance compile_typ_bool : compile_typ bool = { t = TBool; eq = () }
+instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
+  t = TArr c1.t c2.t;
+  eq = begin
+    let t = TArr c1.t c2.t in
     assert (elab_typ t == (elab_typ c1.t -> elab_typ c2.t))
       by (norm [delta_only [`%elab_typ];zeta;iota]);
     assert (s1 == elab_typ c1.t);
@@ -31,9 +33,8 @@ instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |}
     assert ((s1 -> s2) == elab_typ t) by (
       rewrite (nth_binder (-1));
       rewrite (nth_binder (-3))
-    );
-    t
-   end }
+    )
+  end }
 
 let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
   match t with
@@ -73,7 +74,8 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a
 }
 
 (** Just a helper typeclass **)
-unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty (fun _ -> s)
+unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) =
+  compile_exp #a empty (fun _ -> s)
 
 let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
   : Lemma (ca.t ⦂ (fs_e, cs.e) /\ cs.e ⋮ ca.t) =
@@ -284,3 +286,11 @@ let myt = true
 
 let test2_if : compile_closed #bool (if myt then false else true) = solve
 let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)
+
+let test1_hoc : compile_closed
+  #((bool -> bool) -> bool)
+  #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
+  (fun f -> f false) =
+ // assume (elab_typ (compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool).t == (bool -> bool));
+  assume (elab_typ (TArr TBool TBool) == (bool -> bool));
+  compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
