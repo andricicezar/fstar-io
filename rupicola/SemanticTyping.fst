@@ -60,6 +60,11 @@ let sem_typing (g:env) (e:exp) (t:typ) : Type0 =
   fv_in_env g e /\
   (forall b (s:gsub g b). (gsubst s e) ⋮ t)
 
+let lem_sem_typing_closed (e:exp) (t:typ) :
+  Lemma (requires sem_typing empty e t)
+        (ensures  e ⋮ t) =
+  eliminate forall b (s:gsub empty b). (gsubst s e) ⋮ t with true gsub_empty
+
 let safety (e:closed_exp) (t:typ) : Lemma
   (requires sem_typing empty e t)
   (ensures safe e) =

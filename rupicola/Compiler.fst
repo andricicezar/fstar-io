@@ -60,7 +60,9 @@ let _ = assert (test2.t == TArr (TArr TUnit TUnit) (TArr TUnit TUnit))
 (** Compiling expressions **)
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g) (fs_e:fs_env g_card -> a) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
-  [@@@no_method] proof : unit -> Lemma (sem_typing g e ca.t);
+
+  (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
+  [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
   [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv ca.t` e);
 }
 
@@ -68,20 +70,22 @@ class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (g_card:env_card g)
 unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) = compile_exp #a empty 0 (fun _ -> s)
 
 let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
-  : Lemma (ca.t ⦂ (fs_e, cs.e)) =
+  : Lemma (ca.t ⦂ (fs_e, cs.e) /\ cs.e ⋮ ca.t) =
   cs.equiv_proof ();
-  equiv_closed_terms #ca.t fs_e cs.e
+  equiv_closed_terms #ca.t fs_e cs.e;
+  cs.typing_proof ();
+  lem_sem_typing_closed cs.e ca.t
 
 instance compile_exp_unit g g_card : compile_exp #unit #solve g g_card (fun _ -> ()) = {
   e = EUnit;
-  proof = (fun () -> typing_rule_unit g);
+  typing_proof = (fun () -> typing_rule_unit g);
   equiv_proof = (fun () -> equiv_unit g_card);
 }
 
 let test_unit : compile_closed () = solve
 
 (** get_v' works better with typeclass resolution than get_v **)
-[@"opaque_to_smt"]
+[@"opaque_to_smt"] (** not sure if the right pragma to prevent F* unfolding it during type class resolution **)
 val get_v' : #g:_ -> #g_card:env_card g -> fs_env g_card -> i:nat{i < g_card} -> a:Type{a == elab_typ (Some?.v (g (fs_to_var g_card i)))} -> a
 let get_v' #g #g_card fs_s i a =
   get_v #g #g_card fs_s i
@@ -90,7 +94,7 @@ instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (g_card:env_car
   : compile_exp #a #ca g g_card (fun fs_s -> get_v' fs_s i a) =
   let x = fs_to_var g_card i in {
     e = EVar x;
-    proof = (fun () ->
+    typing_proof = (fun () ->
       inverse_elab_typ_compile_typ (Some?.v (g x));
       typing_rule_var g x
     );
@@ -112,7 +116,7 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   {| ce:compile_exp g' g_card' (fun fs_s -> get_v' #g' #g_card' fs_s i a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
   : compile_exp g' g_card' (fun fs_s -> get_v' #g #g_card (fs_shrink #t #g #g_card fs_s) i a) = {
     e = ce.e;
-    proof = ce.proof;
+    typing_proof = ce.typing_proof;
     equiv_proof = (fun () ->
       reveal_opaque (`%get_v') (get_v' #g' #g_card');
       reveal_opaque (`%get_v') (get_v' #g #g_card);
@@ -140,8 +144,8 @@ instance compile_exp_lambda
     assume (fv_in_env g (ELam cf.e));
     ELam cf.e
   end;
-  proof = (fun () ->
-    cf.proof ();
+  typing_proof = (fun () ->
+    cf.typing_proof ();
     typing_rule_lam g ca.t cf.e cb.t
   );
   equiv_proof = (fun () ->
@@ -185,9 +189,9 @@ instance compile_exp_app
     assume (fv_in_env g (EApp cf.e cx.e));
     EApp cf.e cx.e
   end;
-  proof = (fun () ->
-    cf.proof ();
-    cx.proof ();
+  typing_proof = (fun () ->
+    cf.typing_proof ();
+    cx.typing_proof ();
     typing_rule_app g cf.e cx.e ca.t cb.t
   );
   equiv_proof = (fun () ->
@@ -199,8 +203,6 @@ instance compile_exp_app
 
 let test0_fapp : compile_closed #unit #solve ((fun x y -> y) () ()) = solve
 let _ = assert (test0_fapp.e == EUnit)
-
-(** How to deal with top level definitions? **)
 
 val myf : unit -> unit
 let myf () = ()
