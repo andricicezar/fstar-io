@@ -32,28 +32,6 @@ let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (fs_e, e))
         (ensures  t ⦂ (fs_e, e)) = admit ()
 
-(** STLC Evaluation Environment : variable -> value **)
-
-let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) =
-  s:(sub b){
-    forall (x:var). Some? (g x) ==>  is_value (s x)}
-
-let gsub_empty : gsub empty true =
-  (fun v -> EVar v)
-
-let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value) : gsub (extend t g) false =
-  let f = fun (y:var) -> if y = 0 then v else s (y-1) in
-  introduce exists (x:var). ~(EVar? (f x)) with 0 and ();
-  f
-
-let gsubst (#g:env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
-  lem_subst_freevars_closes_exp s e 0;
-  subst s e
-
-let lem_gsubst_empty (e:closed_exp) : Lemma (gsubst gsub_empty e == e)
-  [SMTPat (gsubst gsub_empty e)] =
-  admit ()
-
 (** F* Evaluation Environment : variable -> value **)
 
 (** We compile F* values, not F* expressions.
@@ -150,7 +128,7 @@ let equiv_lam g (t1:typ) (body:exp) (t2:typ) (f:fs_env g -> elab_typ (TArr t1 t2
           assert (get_v (fs_extend fs_s fs_v) 0 == fs_v);
           assert (t2 ⦂ (f (fs_shrink fs_s') fs_v, (gsubst s' body)));
           assert (t2 ⦂ (f fs_s fs_v, (gsubst s' body)));
-          assume ((subst (sub_beta v) (subst (sub_elam s) body)) == (subst (gsub_extend s t1 v) body)); (** substitution lemma **)
+          lem_substitution s t1 v body;
           assert (t2 ⦂ (f fs_s fs_v, subst_beta v body'))
         end
       end;
