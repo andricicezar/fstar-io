@@ -22,7 +22,7 @@ class compile_typ (s:Type) = {
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; eq = () }
 instance compile_typ_bool : compile_typ bool = { t = TBool; eq = () }
-instance compile_typ_arrow s1 s2 {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
+instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
   t = TArr c1.t c2.t;
   eq = begin
     let t = TArr c1.t c2.t in
@@ -83,6 +83,9 @@ let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a)
   equiv_closed_terms #ca.t fs_e cs.e;
   cs.typing_proof ();
   lem_sem_typing_closed cs.e ca.t
+
+let lemma_compile_closed_arrow_is_elam #a #b {| ca:compile_typ a |} {| cb:compile_typ b |} (fs_e:a -> b) {| cs:compile_closed #(a -> b) fs_e |}
+  : Lemma (ELam? cs.e) = admit ()
 
 instance compile_exp_unit g : compile_exp #unit #solve g (fun _ -> ()) = {
   e = EUnit;
@@ -279,8 +282,8 @@ instance compile_exp_if
   );
 }
 
-let test1_if : compile_closed #(bool -> bool) (fun x -> if x then false else true) = solve
-let _ = assert (test1_if.e == ELam (EIf (EVar 0) EFalse ETrue))
+let test1_if : compile_closed #(bool -> bool -> bool) (fun x y -> if x then false else y) = solve
+let _ = assert (test1_if.e == ELam (ELam (EIf (EVar 1) EFalse (EVar 0))))
 
 let myt = true
 

@@ -13,7 +13,7 @@ type exp =
   | EFalse : exp
   | EIf    : exp -> exp -> exp -> exp
   | EVar   : v:var -> exp
-  | ELam   : exp -> exp
+  | ELam   : b:exp -> exp
   | EApp   : exp -> exp -> exp
 
 (* Parallel substitution operation `subst` *)
@@ -229,6 +229,9 @@ type steps : closed_exp -> closed_exp -> Type =
            squash (Some? (step e0)) ->
            steps (Some?.v (step e0)) e2 ->
            steps e0 e2
+
+let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
+  FStar.Squash.return_squash (SRefl e)
 
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
