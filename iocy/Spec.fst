@@ -6,9 +6,11 @@ open ParallelTraces
 
 (** The following refinement tries to capture the idea that pts is complete: contains
     all the defined promises.
-
 CA: Not sure if it achieves that.   **)
-let w_pre e = h:atrace e -> pts:parallel_traces e{
+
+let w_pre e =
+  h:atrace e ->            (** the history of nodes processed in the current thread **)
+  pts:parallel_traces e{  (** state of the parallel traces to the current thread **)
   closed_atrace pts h
   // /\ (forall pr. pr `mem` pts ==> (sel pr pts) `suffix_of` pr.lt)
   // we cannot have this refinement since we don't store the trace on the promise anymore
@@ -16,14 +18,28 @@ let w_pre e = h:atrace e -> pts:parallel_traces e{
 
 
 let w_post e a h pts =
-  a -> lt:atrace e -> pts':parallel_traces e{
+  a ->                     (** the result of the current thread **)
+  lt:atrace e ->           (** the local trace of the computation as seen in the current thread **)
+  pts':parallel_traces e{ (** the new state of the parallel traces **)
       pts `ord` pts' /\
       closed_atrace pts' ((rev lt) @ h)
   } -> Type0
 
 let w e a = h:atrace e -> pts:parallel_traces e{closed_atrace pts h} -> w_post e a h pts -> Type0
 
-(** We would like to be able to verify that {empty} 1;2;3;4 {empty} *)
+(** Can we specify a main function that starts
+    from an empty history and with no parallel traces?
+    Something like:
+      {h == [] /\ pts == []} 1;2;3;4 {}
+
+    However, the way `w` is defined right now,
+    with `h` being an atrace, makes the pre-condition
+    to have a completly different meaning.
+
+    The pre-condition means that at the time of handling,
+    no other node was binded, which does not guarantee that
+    the first event of the computation would be the next in history.
+*)
 
 
 (** One may need some extra constraint between how pts evolves to pts':
@@ -45,6 +61,17 @@ let w_bind #e #a #b (m:w e a) (f: a -> w e b) : w e b =
     m h pts (fun r' lt' pts' ->
         f r' ((rev lt')@h) pts' (fun r'' lt'' pts'' ->
         post r'' (lt'@lt'') pts''))
+
+unfold
+let w_ord #e #a (w1 w2:w e a) =
+  forall h pts post. w2 h pts post ==> w1 h pts post
+
+unfold
+let encode_pre_post_in_w #e #a
+  (pre:w_pre e)
+  (post:(h:atrace e -> pts:parallel_traces e -> w_post e a h pts))
+  : w e a
+  = (fun h pts p -> pre h pts /\ (forall r' lt' pts'. post h pts r' lt' pts' ==> p r' lt' pts'))
 
 (** collecting - vs
     scheduling - **)
@@ -77,18 +104,8 @@ let w_await #e #a (pr:promise e a) : w e a =
 unfold
 let w_produce #e (ev:e) : w e unit =
   fun h pts post ->
-    post () [Ev ev] pts
-
-unfold
-let w_ord #e #a (w1 w2:w e a) =
-  forall h pts post. w2 h pts post ==> w1 h pts post
-
-unfold
-let encode_pre_post_in_w #e #a
-  (pre:w_pre e)
-  (post:(h:atrace e -> pts:parallel_traces e -> w_post e a h pts))
-  : w e a
-  = (fun h pts p -> pre h pts /\ (forall r' lt' pts'. post h pts r' lt' pts' ==> p r' lt' pts'))
+    //forall pts'. pts `ord` pts' ==>
+      post () [Ev ev] pts
 
 unfold
 let (let!) #e #a #b (m:w e a) (f: a -> w e b) : w e b = w_bind m f
@@ -200,3 +217,23 @@ let _ =
     encode_pre_post_in_w (fun _ _ -> True) (fun _ _ _ lt _ ->
       exists pr' pr''. lt == [EAsync unit pr'; EAsync unit pr''; EAwait pr'; EAwait pr''])
   )
+
+(** This example async a computation that has as a pre-condition that
+    h is empty.
+
+    But both event 1 and event 2 can be first,
+    which means that the conjunct pts == pts' is unsound.
+
+    How can I test for this?
+    **)
+let _ = assert (
+    (let _ = w_async (encode_pre_post_in_w #int #unit (fun h _ -> h == []) (fun _ pts _ lt pts' -> lt == [Ev 1] /\ pts == pts')) in
+     let _ = w_async (w_produce 2) in
+     w_return int ())
+    `w_ord`
+    encode_pre_post_in_w (fun h _ -> h == []) (fun _ _ _ _ _ -> True))
+
+let _ = assert (
+    (w_produce 1)
+    `w_ord`
+    encode_pre_post_in_w (fun h _ -> h == []) (fun h pts _ lt pts' -> pts == pts'))
