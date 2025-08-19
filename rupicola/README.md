@@ -1,4 +1,14 @@
-Notes from [Rupicola paper](https://dl.acm.org/doi/pdf/10.1145/3519939.3523706):
+### To try next
+
+Next challenges:
+- [ ] Compiling fixpoints
+- [ ] Compiling refined types
+- [ ] Compiling the identity monad
+
+TODOs:
+- [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./Compiler.fst))
+
+### Notes from [Rupicola paper](https://dl.acm.org/doi/pdf/10.1145/3519939.3523706):
 - Cezar: Their use case seems to be different than ours, so we may hit different challenges.
   Rupicola is designed to provide
   a proof that the compiled code satisfies the specification of the source code.
@@ -15,7 +25,8 @@ Notes from [Rupicola paper](https://dl.acm.org/doi/pdf/10.1145/3519939.3523706):
 mas (to relate high-level functional code patterns to low-level
 imperative ones) and Ltac tactics (to guide the application of
 these lemmas). Its core is very small (hundreds of lines)"
-      - Cezar: Does Coq have type classes? It would be interesting to see if one can just use what already exists in F\* or if we have to implement our own variant.
+      - Cezar: Does Coq have type classes? It would be interesting
+      to see if one can just use what already exists in F\* or if we have to implement our own variant.
       - "We designed Rupicola so that the default reaction to un-
 expected input is to stop and ask for user guidance, rather
 than fall back to a slower generic implementation."
