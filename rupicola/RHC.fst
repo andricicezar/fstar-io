@@ -22,7 +22,9 @@ type wholeS = bool // CA: To be able to compile whole programs requires a proof 
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
-val behS : wholeS -> bool
+type behS_t = bool
+
+val behS : wholeS -> behS_t
 let behS ws = ws
 
 (** Target **)
@@ -44,32 +46,40 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
 
 assume val eval : t:typ -> e:closed_exp{sem_typing empty e t} -> elab_typ t
 assume val eval_equiv (t:typ) (e:closed_exp{sem_typing empty e t}) : Lemma (t ∋ (eval t e, e))
-assume val lem_eval_bool (fs_e: bool) (e:closed_exp{sem_typing empty e TBool}) :
-  Lemma
-    (requires TBool ⦂ (fs_e, e))
-    (ensures  fs_e == eval TBool e)
+
+type behT_t = bool
 
 val behT : wt:wholeT -> bool
 let behT wt =
   eval TBool wt
 
+val rel_behs : behS_t -> behT_t -> Type0
+[@"opaque_to_smt"]
+let rel_behs = (==)
+
+assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
+  Lemma
+    (requires TBool ⦂ (fs_e, e))
+    (ensures  (behS fs_e) `rel_behs` (behT e))
+
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   (dsnd ps).typing_proof ();
   (dsnd ps).e
 
+
 (** The order of the quantifiers makes this RHC (Robust Hyperproperty Preservation) **)
 let rhc (#i:intS) (ps:progS i) =
   forall (ct:ctxT (comp_int i)).
-    exists (cs:ctxS i). behS (linkS ps cs) == behT (linkT (compile_prog ps) ct)
+    exists (cs:ctxS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx #i ct = eval i.comp_ct.t ct
 
 let rhc_1 (#i:intS) (ps:progS i) =
-  forall ct. behS (linkS ps (backtranslate_ctx ct)) == behT (linkT (compile_prog ps) ct)
+  forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct)
 
 let proof_rhc i ps : Lemma (rhc_1 #i ps) =
-  introduce forall ct. behS (linkS ps (backtranslate_ctx ct)) == behT (linkT (compile_prog ps) ct) with begin
+  introduce forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct) with begin
     let t : typ = (comp_int i).ct in
     let pt : exp = (dsnd ps).e in
     (dsnd ps).typing_proof ();
@@ -93,9 +103,9 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     eval_equiv t ct;
     assert (TBool ⦂ (ps' (backtranslate_ctx ct), subst_beta ct (ELam?.b pt)));
     assume (sem_typing empty (subst_beta ct (ELam?.b pt)) TBool);
-    lem_eval_bool (ps' (backtranslate_ctx ct)) (subst_beta ct (ELam?.b pt));
-    assert ((ps' (backtranslate_ctx ct) == eval TBool (subst_beta ct (ELam?.b pt))));
-    assume (eval TBool (EApp pt ct) == eval TBool (subst_beta ct (ELam?.b pt))); (** simple to prove **)
-    assert (behS ws == behT wt);
+    lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta ct (ELam?.b pt));
+ //   assert ((ps' (backtranslate_ctx ct) == eval TBool (subst_beta ct (ELam?.b pt))));
+    assume (behT (EApp pt ct) == behT (subst_beta ct (ELam?.b pt))); (** simple to prove **)
+//    assert (behS ws == behT wt);
     ()
   end
