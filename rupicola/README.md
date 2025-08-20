@@ -6,7 +6,8 @@ Next challenges:
 - [ ] Compiling the identity monad
 
 TODOs:
-- [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./Compiler.fst))
+- [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
+- [ ] [Makefile](./stlc/Makefile) fails with weird error
 
 ### Notes from [Rupicola paper](https://dl.acm.org/doi/pdf/10.1145/3519939.3523706):
 - Cezar: Their use case seems to be different than ours, so we may hit different challenges.

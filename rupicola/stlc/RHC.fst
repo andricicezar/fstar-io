@@ -35,7 +35,7 @@ val comp_int : intS -> intT
 let comp_int i = { ct = i.comp_ct.t }
 
 type progT (i:intT) = pt:closed_exp{sem_typing empty pt (TArr i.ct TBool)}
-type ctxT (i:intT) = ct:closed_exp{sem_typing empty ct i.ct /\ is_value ct}
+type ctxT (i:intT) = ct:value{sem_typing empty ct i.ct}
 type wholeT = wt:closed_exp{sem_typing empty wt TBool}
 
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
