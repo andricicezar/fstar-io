@@ -9,26 +9,45 @@ open FStar.List.Tot
 open STLC
 
 type typ =
-  | TUnit : typ
-  | TBool : typ
-  | TArr  : typ -> typ -> typ
+| TUnit : typ
+| TBool : typ
+| TArr  : typ -> typ -> typ
 
-(** We have to very careful on how we define this elaboration of types.
-    We'll face universe problems when using monads `Type u#a -> Type u#(max 1 a)`.
-    See also: https://fstar.zulipchat.com/#narrow/stream/214975-fstar-ml-interop/topic/Language.20characterization **)
-let rec elab_typ (t:typ) : Type0 =
-  match t with
-  | TUnit -> unit
-  | TBool -> bool
-  | TArr t1 t2 -> (elab_typ t1 -> elab_typ t2)
+noeq
+type rtyp : typ -> Type0 -> Type u#1 =
+| RUnit : rtyp TUnit unit
+| RBool : rtyp TBool bool
+| RArr : #t1:typ ->
+         #t2:typ ->
+         #s1:Type ->
+         #s2:Type ->
+         rtyp t1 s1 ->
+         rtyp t2 s2 ->
+         rtyp (TArr t1 t2) (s1 -> s2)
+
+let test_match t s (r:rtyp t s) =
+  match r with
+  | RUnit -> assert (t == TUnit /\ s == unit)
+  | RBool -> assert (t == TBool /\ s == bool)
+  | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
+
+type typsr =
+  t:typ & s:Type & rtyp t s
+
+let get_typ (t:typsr) = t._1
+let get_Type (t:typsr) = t._2
+let get_rel (t:typsr) = t._3
+
+let mk_arrow (t1 t2:typsr) : typsr =
+  (| _, _, RArr (get_rel t1) (get_rel t2) |)
 
 (** Typing environment **)
-type env = var -> option typ
+type env = var -> option typsr
 
 let empty : env = fun _ -> None
 
 (* we only need extend at 0 *)
-let extend (t:typ) (g:env)
+let extend (t:typsr) (g:env)
   : env
   = fun y -> if y = 0 then Some t
           else g (y-1)
@@ -42,7 +61,7 @@ let lem_no_fv_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
-let lem_fv_in_env_lam (g:env) (t:typ) (body:exp) :
+let lem_fv_in_env_lam (g:env) (t:typsr) (body:exp) :
   Lemma
     (requires fv_in_env (extend t g) body)
     (ensures  fv_in_env g (ELam body)) = admit ()
@@ -64,7 +83,7 @@ let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is pol
 let gsub_empty : gsub empty true =
   (fun v -> EVar v)
 
-let gsub_extend (#g:env) #b (s:gsub g b) (t:typ) (v:value) : gsub (extend t g) false =
+let gsub_extend (#g:env) #b (s:gsub g b) (t:typsr) (v:value) : gsub (extend t g) false =
   let f = fun (y:var) -> if y = 0 then v else s (y-1) in
   introduce exists (x:var). ~(EVar? (f x)) with 0 and ();
   f
@@ -73,7 +92,7 @@ let gsubst (#g:env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
-let lem_substitution #g #b (s:gsub g b) (t:typ) (v:value) (e:exp)
+let lem_substitution #g #b (s:gsub g b) (t:typsr) (v:value) (e:exp)
   : Lemma (
     (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
   = admit () (** common lemma **)
