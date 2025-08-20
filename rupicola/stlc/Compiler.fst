@@ -110,7 +110,7 @@ let test_true : compile_closed true = solve
 let test_false : compile_closed false = solve
 
 (** get_v' works better with typeclass resolution than get_v **)
-[@"opaque_to_smt"] (** not sure if the right pragma to prevent F* unfolding it during type class resolution **)
+[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v during type class resolution **)
 val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == elab_typ (Some?.v (g x))} -> a
 let get_v' #g fs_s i a =
   get_v #g fs_s i
