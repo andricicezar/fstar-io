@@ -22,6 +22,12 @@ instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:com
   t = TArr c1.t c2.t;
   r = RArr c1.r c2.r }
 
+instance compile_typ_refinement (s1:Type) {| c1:compile_typ s1 |} (p:s1 -> Type0) :
+  compile_typ (x:s1{p x}) = {
+  t = c1.t;
+  r = RRefined c1.r p;
+  }
+
 let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
 
 // Some tests
@@ -238,3 +244,41 @@ let test1_hoc : compile_closed
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
   compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+
+instance compile_exp_refinement
+  g
+  (#a:Type) {| ca: compile_typ a |}
+  (p:a -> Type0)
+  (v:fs_env g -> (x:a{p x}))
+  {| cv: compile_exp #a #solve g v |}
+  : compile_exp #(x:a{p x}) #solve g (fun fs_s -> v fs_s) = {
+  e = cv.e;
+  equiv_proof = (fun () ->
+    cv.equiv_proof ()
+  );
+}
+
+let refbool : (t:bool{t == true}) = true
+
+let test1_ref : compile_closed refbool = solve
+let _ = assert (test1_ref.e == ETrue)
+
+let test2_ref : compile_closed (fun (x:bool{x == true}) -> x) =
+  solve
+let _ = assert (test2_ref.e == ELam (EVar 0))
+
+let test3_ref : compile_closed (fun (x:bool{False}) -> x) =
+  solve
+let _ = assert (test3_ref.e == ELam (EVar 0))
+
+(** The last two examples are equivalent because in the logical relation it quantifies over:
+      (forall (v:value) (fs_v:s1). (| _, _, r1 |) ∋ (fs_v, v) ==>
+
+   all F* values of the F* type.
+
+   Which means that for test2 it quantifies over singleton true,
+   and for test3 it quantifies over nothing.
+
+   I suppose now there is the question: how do we fix the interface
+   so that something this weird cannot happen?
+**)

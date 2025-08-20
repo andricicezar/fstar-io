@@ -13,6 +13,9 @@ type typ =
 | TBool : typ
 | TArr  : typ -> typ -> typ
 
+unfold
+let test (s:Type0) (p:s -> Type0) : Type0 = x:s{p x}
+
 noeq
 type rtyp : typ -> Type0 -> Type u#1 =
 | RUnit : rtyp TUnit unit
@@ -24,12 +27,18 @@ type rtyp : typ -> Type0 -> Type u#1 =
          rtyp t1 s1 ->
          rtyp t2 s2 ->
          rtyp (TArr t1 t2) (s1 -> s2)
+| RRefined : #t:typ ->
+             #s:Type0 ->
+             rtyp t s ->
+             p:(s -> Type0) ->
+             rtyp t (test s p)
 
 let test_match t s (r:rtyp t s) =
   match r with
   | RUnit -> assert (t == TUnit /\ s == unit)
   | RBool -> assert (t == TBool /\ s == bool)
   | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
+  | RRefined #t' #s' _ p -> assert (t == t' /\ s == x:s'{p x})
 
 type typsr =
   t:typ & s:Type & rtyp t s

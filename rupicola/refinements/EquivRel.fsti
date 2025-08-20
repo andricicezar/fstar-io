@@ -23,6 +23,10 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
         (| _, _, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
+  | RRefined #t' #s' r' p -> begin
+    assert (p fs_v);
+    (| t', s', r' |) ∋ (fs_v, e)
+  end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let fs_e = fst p in
   let e = snd p in
@@ -160,6 +164,7 @@ let equiv_app g (t1:typsr) (t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_T
             let (e11, e2') = destruct_steps_eapp (gsubst s e1) (gsubst s e2) e' steps_e_e' in
             assert (mk_arrow t1 t2 ∋ (fs_e1', ELam e11));
             assert (t1 ∋ (fs_e2', e2'));
+            admit ();
             assert (t2 ⦂ (fs_e, subst_beta e2' e11));
             assert (t2 ∋ (fs_e, e'))
           )
