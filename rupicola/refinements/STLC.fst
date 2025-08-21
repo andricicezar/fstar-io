@@ -239,11 +239,10 @@ let rec destruct_steps_eapp
   (e2:closed_exp)
   (e':closed_exp)
   (st:steps (EApp e1 e2) e') :
-  Pure (exp * closed_exp)
+  Pure (exp * value)
     (requires irred e') (** CA: not sure if necessary **)
     (ensures fun (e11, e2') ->
-      is_closed (ELam e11) /\ irred (ELam e11) /\
-      irred e2' /\
+      is_closed (ELam e11) /\
       steps e1 (ELam e11) /\
       steps e2 e2' /\
       steps (EApp e1 e2) (subst_beta e2' e11) /\

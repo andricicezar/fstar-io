@@ -164,7 +164,9 @@ let equiv_app g (t1:typsr) (t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_T
             let (e11, e2') = destruct_steps_eapp (gsubst s e1) (gsubst s e2) e' steps_e_e' in
             assert (mk_arrow t1 t2 ∋ (fs_e1', ELam e11));
             assert (t1 ∋ (fs_e2', e2'));
-            admit ();
+            eliminate forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>
+              t2 ⦂ (fs_e1' fs_v, subst_beta v e11)
+            with e2' fs_e2';
             assert (t2 ⦂ (fs_e, subst_beta e2' e11));
             assert (t2 ∋ (fs_e, e'))
           )
