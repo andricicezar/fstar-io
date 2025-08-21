@@ -282,3 +282,21 @@ let _ = assert (test3_ref.e == ELam (EVar 0))
    I suppose now there is the question: how do we fix the interface
    so that something this weird cannot happen?
 **)
+
+let test4_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (x == x)) =
+  solve
+
+let _ = assert (test4_ref.e == ELam EUnit)
+
+[@expect_failure]
+let test5_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (False)) = (** funny, this fails **)
+  solve
+
+let test6_ref : compile_closed #(x:bool{x == true} -> x:bool{x == true}) (fun (x:bool{x == true}) -> assert (False); x) = (** something is unsound here! **)
+  solve
+
+let test7_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (False); ()) = (** something is unsound here! **)
+  solve
+
+[@expect_failure]
+let t : (x:bool{x == true} -> unit) = (fun (x:bool{x == true}) -> assert (False); ())
