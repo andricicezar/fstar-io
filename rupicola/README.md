@@ -1,9 +1,21 @@
 ### To try next
 
 Next challenges:
-- [ ] Compiling fixpoints
-- [ ] Compiling refined types
-- [ ] Compiling the identity monad
+* Limitations of type classes
+  - [ ] Pattern matching
+  - [ ] How powerful is phase1? A lot seems to get erased, which can be problematic if we want to claim any kind of end-to-end result.
+* Features of Dependently Typed Languages:
+  - [ ] Compiling fixpoints
+  - [ ] Compiling Dependent Pairs/Functions
+* Features of F\*:
+  - [ ] WIP: Compiling refined types
+  - [ ] Dealing with pre-conditionality
+  - [ ] Compiling arrows with pre-post-conditions
+  - [ ] Compiling effects?
+* Compiling the identity monad
+  - [ ] Identity monad
+  - [ ] State/IO?
+    * if we try to do state, I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that?
 
 TODOs:
 - [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
