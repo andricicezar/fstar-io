@@ -85,7 +85,10 @@ val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (S
 let get_v' #g fs_s i a =
   get_v #g fs_s i
 
-instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
+instance compile_exp_var
+  (g:env)
+  (a:Type) {| ca:compile_typ a |}
+  (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
   : compile_exp #a #ca g (fun fs_s -> get_v' fs_s x a) = {
     e = EVar x;
     equiv_proof = (fun () ->
@@ -96,8 +99,8 @@ instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g
 let test1_var : compile_exp (extend tunit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
-  (a:Type) {| ca:compile_typ a |}
   (g':env)
+  (a:Type) {| ca:compile_typ a |}
   (t:typsr)
   (g:env{g' == extend t g})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
@@ -111,8 +114,8 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   }
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
-  (a:Type) {| ca:compile_typ a |}
   (g':env)
+  (a:Type) {| ca:compile_typ a |}
   (t1 t2:typsr)
   (g:env{g' == extend t1 (extend t2 g)})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
@@ -133,8 +136,8 @@ let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (
 
 instance compile_exp_lambda
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b)
   {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)) |}
   : compile_exp g f = {
@@ -175,8 +178,8 @@ let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
 
 instance compile_exp_app
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
   (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
   : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
@@ -214,8 +217,9 @@ let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
 
 instance compile_exp_if
   g
-  (#a:Type) {| ca: compile_typ a |}
   (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
+
+  (#a:Type) {| ca: compile_typ a |}
   (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
   (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
   : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
@@ -231,6 +235,7 @@ instance compile_exp_if
   );
 }
 
+
 let test1_if : compile_closed #(bool -> bool -> bool) (fun x y -> if x then false else y) = solve
 let _ = assert (test1_if.e == ELam (ELam (EIf (EVar 1) EFalse (EVar 0))))
 
@@ -243,7 +248,7 @@ let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
-  compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
 
 instance compile_exp_refinement
   g
@@ -257,6 +262,7 @@ instance compile_exp_refinement
     cv.equiv_proof ()
   );
 }
+
 
 let refbool : (t:bool{t == true}) = true
 
@@ -283,20 +289,116 @@ let _ = assert (test3_ref.e == ELam (EVar 0))
    so that something this weird cannot happen?
 **)
 
-let test4_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (x == x)) =
+
+let test7_ref : compile_closed #(x:bool -> y:bool{y == false}) (fun x -> if x then false else false) =
   solve
 
-let _ = assert (test4_ref.e == ELam EUnit)
+(** *** Test partiality **)
+let ttrue : (x:bool{x == true}) = true
+let test_pm3 : compile_closed #bool ttrue = solve
 
+let test_ref_assume (x:bool) : (y:bool{y == true}) = assume (x == true); x
+let test_ref_assume' : compile_closed test_ref_assume = solve
+let _ = assert (test_ref_assume'.e == ELam (EVar 0))
+
+let test_pm2 : (x:bool -> y:bool{y == false}) = (fun x -> if x then if x then false else true else false)
+let test_pm2' : compile_closed test_pm2 = solve
+let _ = assert (test_pm2'.e == ELam (EIf (EVar 0) (EIf (EVar 0) EFalse ETrue) EFalse))
+  (** why does this work? how did it type `true` to `y:bool{y == false}`?
+
+      My intuition says that it should fail
+      because the else branch, `fun _ -> true` has to be typed as `fs_env g -> y:bool{y == false}`,
+      which should fail because it tries to do it without knowing that `x == false`, which would produce a
+      contradiction with the initial refinement `x == true`.
+  **)
+
+let test_ref_precond_f (x:bool{x == true}) : bool = false
+let test_ref_precond : compile_closed #(bool -> bool) (fun x -> test_ref_precond_f (test_ref_assume x)) =
+  solve
+let _ = assert (test_ref_precond.e == ELam EFalse) by (compute (); dump "H")
+
+let test_ref_erasure (x:bool{x == true}) : bool = x
+
+val test_ref_erasure' : compile_closed test_ref_erasure
 [@expect_failure]
-let test5_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (False)) = (** funny, this fails **)
-  solve
+let test_ref_erasure' = solve (** this fails **)
 
-let test6_ref : compile_closed #(x:bool{x == true} -> x:bool{x == true}) (fun (x:bool{x == true}) -> assert (False); x) = (** something is unsound here! **)
-  solve
+instance compile_exp_erase_refinement
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (p:a -> Type0)
+  (v:fs_env g -> (x:a{p x}))
+  {| cv: compile_exp #(x:a{p x}) #(compile_typ_refinement a #ca p) g v |}
+  : compile_exp #a #ca g (fun fs_s -> v fs_s) = {
+  e = cv.e;
+  equiv_proof = (fun () ->
+    cv.equiv_proof ()
+  );
+}
 
-let test7_ref : compile_closed #(x:bool{x == true} -> unit) (fun (x:bool{x == true}) -> assert (False); ()) = (** something is unsound here! **)
-  solve
+let test_ref_erasure' =
+  compile_exp_lambda _ _ _ _
+    #(compile_exp_erase_refinement
+      _ _
+      (fun x -> x == true)
+      (fun fs -> get_v' fs 0 (x:bool{x == true})))
 
+let _ = assert (test_ref_erasure'.e == ELam (EVar 0))
+
+let test_pm1 : (x:bool{x == true} -> bool) = (fun x -> if x then false else true)
 [@expect_failure]
-let t : (x:bool{x == true} -> unit) = (fun (x:bool{x == true}) -> assert (False); ())
+let test_pm1' : compile_closed test_pm1 = solve (** I suppose this would work if test_ref_erasure works **)
+
+
+
+(**
+instance compile_exp_subtype
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type{subtype_of a b}) {| cb: compile_typ b |}
+  (v:fs_env g -> a)
+  {| cv: compile_exp #a #ca g v |}
+  : compile_exp #b #cb g (fun fs_s -> v fs_s) = {
+  e = cv.e;
+  equiv_proof = (fun () ->
+    cv.equiv_proof ();
+    admit () (** probabbly impossible to prove **)
+  );
+}
+
+let test_ref_erasure'' : compile_closed test_ref_erasure =
+  compile_exp_lambda
+    empty
+    (x:bool{x == true}) #solve
+    bool #solve
+    (fun _ x -> x)
+    #(compile_exp_subtype
+      _
+      (x:bool{x == true}) #(compile_typ_refinement bool #compile_typ_bool (fun x -> x == true))
+      bool #compile_typ_bool
+      (fun fs -> get_v' fs 0 (x:bool{x == true}))
+      #(compile_exp_var
+        _
+        (x:bool{x == true}) #_
+        0))
+**)
+
+
+(** Test what phase 1 erases **)
+
+let test1_phase1 : compile_closed #(bool -> unit) (fun x -> assert (x == x)) =
+  solve
+let _ = assert (test1_phase1.e == ELam EUnit)
+
+
+let test2_phase1 : compile_closed #(bool -> unit) (fun x -> let y = FStar.Squash.get_proof (x == x) in ()) =
+  solve
+let _ = assert (test2_phase1.e == ELam EUnit)
+
+let test3_lem () : Lemma (True) = ()
+let test3_phase1 : compile_closed #(unit -> unit) (fun _ -> test3_lem ()) =
+  solve
+
+let test4_phase1 : compile_closed #(bool -> unit) (fun x -> let y = FStar.Squash.get_proof (x == x) in ()) =
+  solve
+let _ = assert (test4_phase1.e == ELam EUnit)
