@@ -2,10 +2,13 @@
 
 Next challenges:
 * Limitations of type classes
-  - [ ] Pattern matching
+  - [ ] Pattern matching -- an inherent problem of F*, one cannot abstract over them anyway. Not a typeclass problem.
+      	Typeclasses do not add any expressivity to F*. We're limited by what we can abstract away in F*.
+	For PMs, maybe one can generate instances on the fly.
   - [ ] How powerful is phase1? A lot seems to get erased, which can be problematic if we want to claim any kind of end-to-end result.
+  - [ ] Typeclasses in F* may be less fancy than other languages. We expect it to be portable.
 * Features of Dependently Typed Languages:
-  - [ ] Compiling fixpoints
+  - [ ] Compiling fixpoints (may work with F* if one defines instances for different arrities)
   - [ ] Compiling Dependent Pairs/Functions
 * Features of F\*:
   - [ ] WIP: Compiling refined types
@@ -15,7 +18,7 @@ Next challenges:
 * Compiling the identity monad
   - [ ] Identity monad
   - [ ] State/IO?
-    * if we try to do state, I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that?
+    * if we try to do state, I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that (not ideal since it gives us partial correctness)? Probably it is better to start with IO.
 
 TODOs:
 - [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))

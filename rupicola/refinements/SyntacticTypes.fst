@@ -13,9 +13,7 @@ type typ =
 | TBool : typ
 | TArr  : typ -> typ -> typ
 
-unfold
-let test (s:Type0) (p:s -> Type0) : Type0 = x:s{p x}
-
+[@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type rtyp : typ -> Type0 -> Type u#1 =
 | RUnit : rtyp TUnit unit
@@ -31,7 +29,7 @@ type rtyp : typ -> Type0 -> Type u#1 =
              #s:Type0 ->
              rtyp t s ->
              p:(s -> Type0) ->
-             rtyp t (test s p)
+             rtyp t (x:s{p x})
 
 let test_match t s (r:rtyp t s) =
   match r with

@@ -19,8 +19,8 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
     let fs_f : s1 -> s2 = fs_v in
     match e with
     | ELam e' ->
-      (forall (v:value) (fs_v:s1). (| _, _, r1 |) ∋ (fs_v, v) ==>
-        (| _, _, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
+      (forall (v:value) (fs_v:s1). (| t1, s1, r1 |) ∋ (fs_v, v) ==>
+        (| t2, s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
   | RRefined #t' #s' r' p -> begin

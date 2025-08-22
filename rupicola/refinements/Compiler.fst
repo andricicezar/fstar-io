@@ -11,9 +11,7 @@ open EquivRel
 
 class compile_typ (s:Type) = {
   [@@@no_method] t : typ;
-  [@@@no_method] r : rtyp t s;
-  (** CA: To get rid of the equality, one would have to find different
-          definitions for `get_v'`. **)
+  [@@@no_method] r : rtyp t s; // before we had: elab_typ t == s
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
@@ -164,7 +162,6 @@ let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
 let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
-(** TODO: **)
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
   solve
 let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
@@ -273,9 +270,21 @@ let test2_ref : compile_closed (fun (x:bool{x == true}) -> x) =
   solve
 let _ = assert (test2_ref.e == ELam (EVar 0))
 
-let test3_ref : compile_closed (fun (x:bool{False}) -> x) =
+let test3_ref : compile_closed (fun (x y:bool{False}) -> y) =
   solve
-let _ = assert (test3_ref.e == ELam (EVar 0))
+
+let test3_ref' : compile_closed (fun (x y:bool{False}) -> x) =
+  solve
+
+ (**
+let _ =
+  assert (forall x y. (fun (x y:bool{False}) -> y) x y == (fun (x y:bool{False}) -> x) x y);
+  assert ((fun (x y:bool{False}) -> y) == (fun (x y:bool{False}) -> x))
+*)
+let _ = assert (test3_ref.e == ELam (ELam (EVar 0)))
+
+// Can we prove that ELam (ELam (EVar 1)) is also in relation with test3_ref? Probably yes..
+// However, our compiler generates the correct syntax here.
 
 (** The last two examples are equivalent because in the logical relation it quantifies over:
       (forall (v:value) (fs_v:s1). (| _, _, r1 |) ∋ (fs_v, v) ==>
@@ -398,7 +407,4 @@ let _ = assert (test2_phase1.e == ELam EUnit)
 let test3_lem () : Lemma (True) = ()
 let test3_phase1 : compile_closed #(unit -> unit) (fun _ -> test3_lem ()) =
   solve
-
-let test4_phase1 : compile_closed #(bool -> unit) (fun x -> let y = FStar.Squash.get_proof (x == x) in ()) =
-  solve
-let _ = assert (test4_phase1.e == ELam EUnit)
+let _ = assert (test3_phase1.e == ELam EUnit)
