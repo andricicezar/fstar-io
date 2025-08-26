@@ -338,7 +338,7 @@ instance compile_exp_erase_refinement
   (p:a -> Type0)
   (v:fs_env g -> (x:a{p x}))
   {| cv: compile_exp #(x:a{p x}) #(compile_typ_refinement a #ca p) g v |}
-  : compile_exp #a #ca g (fun fs_s -> v fs_s) = {
+  : compile_exp #a #ca g v = {
   e = cv.e;
   equiv_proof = (fun () ->
     cv.equiv_proof ()
