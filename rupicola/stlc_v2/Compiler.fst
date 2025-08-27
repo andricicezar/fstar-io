@@ -75,7 +75,7 @@ let test_true : compile_closed true = solve
 let test_false : compile_closed false = solve
 
 (** get_v' works better with typeclass resolution than get_v **)
-[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v during type class resolution **)
+[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
 val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (Some?.v (g x))} -> a
 let get_v' #g fs_s i a =
   get_v #g fs_s i
@@ -128,8 +128,8 @@ let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (
 
 instance compile_exp_lambda
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b)
   {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)) |}
   : compile_exp g f = {
@@ -170,8 +170,8 @@ let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
 
 instance compile_exp_app
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
   (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
   : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
@@ -209,8 +209,8 @@ let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
 
 instance compile_exp_if
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
+  (a:Type) {| ca: compile_typ a |}
+  (co:fs_env g -> bool)  {| cco: compile_exp g co |}
   (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
   (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
   : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
@@ -238,12 +238,12 @@ let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
-  compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
 
 instance compile_exp_pair
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (l:fs_env g -> a)     {| cl: compile_exp #_ #ca g l |}
   (r:fs_env g -> b)     {| cr: compile_exp #_ #cb g r |}
   : compile_exp #(a & b) g (fun fs_s -> (l fs_s, r fs_s)) = {
@@ -291,4 +291,4 @@ let test4_pair = compile_exp_pair_fst _ _ _ _
 
 val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
 (** TODO: why does this not work automatically? **)
-let test5_pair = compile_exp_lambda _ _ #(compile_exp_pair_fst _ _ _ _)
+let test5_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_fst _ _ _ _)
