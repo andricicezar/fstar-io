@@ -237,6 +237,7 @@ let myt = true
 let test2_if : compile_closed #bool (if myt then false else true) = solve
 let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)
 
+(** TODO: why does this not work automatically **)
 let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
@@ -280,13 +281,9 @@ instance compile_exp_pair_fst
   end;
   equiv_proof = (fun () ->
     cp.equiv_proof ();
-    admit ();
-    ()
-   // equiv_pair g (pack ca) (pack cb) cl.e cr.e l r
+    equiv_pair_fst g (pack ca) (pack cb) cp.e p
   );
 }
-
-let mypairf : ((bool * bool) -> bool) = fun p -> fst p
 
 val test4_pair : compile_closed #bool (fst (true, ()))
 (** TODO: why does this not work automatically? **)
@@ -295,3 +292,26 @@ let test4_pair = compile_exp_pair_fst _ _ _ _
 val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
 (** TODO: why does this not work automatically? **)
 let test5_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_fst _ _ _ _)
+
+instance compile_exp_pair_snd
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
+  : compile_exp #b #cb g (fun fs_s -> snd #a #b (p fs_s)) = {
+  e = begin
+    ESnd cp.e
+  end;
+  equiv_proof = (fun () ->
+    cp.equiv_proof ();
+    equiv_pair_snd g (pack ca) (pack cb) cp.e p
+  );
+}
+
+val test6_pair : compile_closed #unit (snd (true, ()))
+(** TODO: why does this not work automatically? **)
+let test6_pair = compile_exp_pair_snd _ _ _ _
+
+val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
+(** TODO: why does this not work automatically? **)
+let test7_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_snd _ _ _ _)

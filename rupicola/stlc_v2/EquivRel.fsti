@@ -24,10 +24,9 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
     | _ -> False
   end
   | RPair #t1 #t2 #s1 #s2 r1 r2 -> begin
-    let (fs_v1, fs_v2) : s1 * s2 = fs_v in
     match e with
     | EPair e1 e2 ->
-      (| t1, s1, r1 |) ∋ (fs_v1, e1) /\ (| t2, s2, r2 |) ∋ (fs_v2, e2)
+      (| t1, s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| t2, s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
@@ -235,6 +234,60 @@ let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_Type t1)
             assert (t2 ∋ (fs_e2, e2'));
             assert (t ∋ (fs_e, EPair e1' e2'));
             lem_values_are_expressions t fs_e (EPair e1' e2')
+          )
+        end
+      end
+    end
+  end
+
+let equiv_pair_fst g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
+  (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
+  (ensures (fun fs_s -> fst (fs_e12 fs_s)) `equiv t1` (EFst e12)) =
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t1 ⦂ (fst (fs_e12 fs_s), gsubst s (EFst e12)) with begin
+    let fs_e12 = fs_e12 fs_s in
+    let fs_e = fst fs_e12 in
+    let e = EFst (gsubst s e12) in
+    assert (gsubst s (EFst e12) == e);
+    let EFst e12 = e in
+    introduce s ∽ fs_s ==>  t1 ⦂ (fs_e, e) with _. begin
+      introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t1 ∋ (fs_e, e') with begin
+        introduce _ ==> t1 ∋ (fs_e, e') with h. begin
+          let steps_e_e' : squash (steps e e') = () in
+          FStar.Squash.map_squash #_ #(squash (t1 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            let e12' = destruct_steps_epair_fst e12 e' steps_e_e' in
+            eliminate (mk_pair t1 t2) ⦂ (fs_e12, e12) /\ steps e12 e12' /\ irred e12'
+            returns (mk_pair t1 t2) ∋ (fs_e12, e12') with _ _. ();
+            let EPair e1' e2' = e12' in
+            assert (t1 ∋ (fs_e, e1'));
+            lem_destruct_steps_epair_fst e1' e2' e';
+            assert (t1 ∋ (fs_e, e'))
+          )
+        end
+      end
+    end
+  end
+
+let equiv_pair_snd g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
+  (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
+  (ensures (fun fs_s -> snd (fs_e12 fs_s)) `equiv t2` (ESnd e12)) =
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t2 ⦂ (snd (fs_e12 fs_s), gsubst s (ESnd e12)) with begin
+    let fs_e12 = fs_e12 fs_s in
+    let fs_e = snd fs_e12 in
+    let e = ESnd (gsubst s e12) in
+    assert (gsubst s (ESnd e12) == e);
+    let ESnd e12 = e in
+    introduce s ∽ fs_s ==>  t2 ⦂ (fs_e, e) with _. begin
+      introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
+        introduce _ ==> t2 ∋ (fs_e, e') with h. begin
+          let steps_e_e' : squash (steps e e') = () in
+          FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            let e12' = destruct_steps_epair_snd e12 e' steps_e_e' in
+            eliminate (mk_pair t1 t2) ⦂ (fs_e12, e12) /\ steps e12 e12' /\ irred e12'
+            returns (mk_pair t1 t2) ∋ (fs_e12, e12') with _ _. ();
+            let EPair e1' e2' = e12' in
+            assert (t2 ∋ (fs_e, e2'));
+            lem_destruct_steps_epair_snd e1' e2' e';
+            assert (t2 ∋ (fs_e, e'))
           )
         end
       end

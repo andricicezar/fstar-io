@@ -31,14 +31,14 @@ type rtyp : typ -> Type0 -> Type u#1 =
           #s2:Type ->
           rtyp t1 s1 ->
           rtyp t2 s2 ->
-          rtyp (TPair t1 t2) (s1 * s2)
+          rtyp (TPair t1 t2) (s1 & s2)
 
 let test_match t s (r:rtyp t s) = (** why does this work so well? **)
   match r with
   | RUnit -> assert (t == TUnit /\ s == unit)
   | RBool -> assert (t == TBool /\ s == bool)
   | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
-  | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 * s2)))
+  | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 & s2)))
 
 type typsr =
   t:typ & s:Type & rtyp t s

@@ -257,8 +257,24 @@ let rec step e =
       | None -> None
     end
   end
-  | EFst (EPair e1 _) -> Some e1
-  | ESnd (EPair _ e2) -> Some e2
+  | EFst e' -> begin
+    match step e' with
+    | Some e'' -> Some (EFst e'')
+    | None -> begin
+      match e' with
+      | EPair e1 _ -> Some e1
+      | _ -> None
+    end
+  end
+  | ESnd e' -> begin
+    match step e' with
+    | Some e'' -> Some (ESnd e'')
+    | None -> begin
+      match e' with
+      | EPair _ e2 -> Some e2
+      | _ -> None
+    end
+  end
   | _ -> None
 
 let can_step (e:closed_exp) : Type0 =
@@ -356,3 +372,49 @@ let rec destruct_steps_epair
       EPair e1 e2 -->* EPair e1' e2' == e'
   **)
   admit ()
+
+let rec destruct_steps_epair_fst
+  (e12:closed_exp)
+  (e':closed_exp)
+  (st:steps (EFst e12) e') :
+  Pure value
+    (requires irred e') (** CA: not sure if necessary **)
+    (ensures fun e12' ->
+      steps e12 e12' /\
+      steps (EFst e12') e')
+    (decreases st)
+  =
+  (**
+    How the steps look like:
+      EFst e12 -->* EFst e12' -> e'
+  **)
+  admit ()
+
+let lem_destruct_steps_epair_fst
+  (e1 e2:closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (EFst (EPair e1 e2)) e' /\ irred e1 /\ irred e2))
+        (ensures (e1 == e')) = admit ()
+
+let rec destruct_steps_epair_snd
+  (e12:closed_exp)
+  (e':closed_exp)
+  (st:steps (ESnd e12) e') :
+  Pure value
+    (requires irred e') (** CA: not sure if necessary **)
+    (ensures fun e12' ->
+      steps e12 e12' /\
+      steps (ESnd e12') e')
+    (decreases st)
+  =
+  (**
+    How the steps look like:
+      ESnd e12 -->* ESnd e12' -> e'
+  **)
+  admit ()
+
+let lem_destruct_steps_epair_snd
+  (e1 e2:closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (ESnd (EPair e1 e2)) e' /\ irred e1 /\ irred e2))
+        (ensures (e2 == e')) = admit ()
