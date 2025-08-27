@@ -11,7 +11,7 @@ open EquivRel
 
 class compile_typ (s:Type) = {
   [@@@no_method] t : typ;
-  [@@@no_method] r : rtyp t s;
+  [@@@no_method] r : rtyp t s; // before we had: elab_typ t == s
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
@@ -80,7 +80,10 @@ val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (S
 let get_v' #g fs_s i a =
   get_v #g fs_s i
 
-instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
+instance compile_exp_var
+  (g:env)
+  (a:Type) {| ca:compile_typ a |}
+  (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
   : compile_exp #a #ca g (fun fs_s -> get_v' fs_s x a) = {
     e = EVar x;
     equiv_proof = (fun () ->
@@ -91,8 +94,8 @@ instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g
 let test1_var : compile_exp (extend tunit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
-  (a:Type) {| ca:compile_typ a |}
   (g':env)
+  (a:Type) {| ca:compile_typ a |}
   (t:typsr)
   (g:env{g' == extend t g})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
@@ -106,8 +109,8 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   }
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
-  (a:Type) {| ca:compile_typ a |}
   (g':env)
+  (a:Type) {| ca:compile_typ a |}
   (t1 t2:typsr)
   (g:env{g' == extend t1 (extend t2 g)})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
@@ -156,7 +159,6 @@ let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
 let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
-(** TODO: **)
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
   solve
 let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
@@ -209,8 +211,9 @@ let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
 
 instance compile_exp_if
   g
+  (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
+
   (a:Type) {| ca: compile_typ a |}
-  (co:fs_env g -> bool)  {| cco: compile_exp g co |}
   (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
   (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
   : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
