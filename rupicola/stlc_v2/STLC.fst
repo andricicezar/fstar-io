@@ -15,6 +15,9 @@ type exp =
   | EVar   : v:var -> exp
   | ELam   : b:exp -> exp
   | EApp   : exp -> exp -> exp
+  | EPair  : fst:exp -> snd:exp -> exp
+  | EFst   : exp -> exp
+  | ESnd   : exp -> exp
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
@@ -44,6 +47,9 @@ let rec subst (#r:bool)
     | EUnit -> EUnit
     | ETrue -> ETrue
     | EFalse -> EFalse
+    | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
+    | EFst e' -> EFst (subst s e')
+    | ESnd e' -> ESnd (subst s e')
 
 and sub_elam (#r:bool) (s:sub r)
   : Tot (sub r)
@@ -89,19 +95,31 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
   | EIf e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
   | EVar i -> if i < n then [] else [i-n]
+  | EPair e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
+  | EFst e' -> free_vars_indx e' n
+  | ESnd e' -> free_vars_indx e' n
 
 let free_vars e = free_vars_indx e 0
 
 let is_closed (e:exp) : bool =
   free_vars e = []
 
-let is_value (e:exp) : Type0 =
+let rec is_value (e:exp) : Type0 =
   match e with
   | EUnit -> True
   | ETrue -> True
   | EFalse -> True
   | ELam _ -> is_closed e
+  | EPair e1 e2 -> is_value e1 /\ is_value e2
   | _ -> False
+
+let rec lem_value_is_closed (e:exp) : Lemma
+  (requires is_value e)
+  (ensures is_closed e)
+  [SMTPat (is_closed e)] =
+  match e with
+  | EPair e1 e2 -> lem_value_is_closed e1; lem_value_is_closed e2
+  | _ -> ()
 
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
@@ -113,13 +131,6 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     (ensures (free_vars_indx (subst s e) (n+1) == []))
     (decreases e) =
   match e with
-  | EApp e1 e2 ->
-    lem_shifting_preserves_closed s e1 n;
-    lem_shifting_preserves_closed s e2 n
-  | EIf e1 e2 e3 ->
-    lem_shifting_preserves_closed s e1 n;
-    lem_shifting_preserves_closed s e2 n;
-    lem_shifting_preserves_closed s e3 n
   | ELam e' -> begin
     assert (free_vars_indx e' (n+1) == []);
     let s' : sub true = sub_elam s in
@@ -129,6 +140,20 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     assert (free_vars_indx (subst s' e') (n+2) ==
             free_vars_indx (subst s (ELam e')) (n+1))
   end
+  | EApp e1 e2 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n
+  | EIf e1 e2 e3 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n;
+    lem_shifting_preserves_closed s e3 n
+  | EPair e1 e2 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n
+  | EFst e ->
+    lem_shifting_preserves_closed s e n
+  | ESnd e ->
+    lem_shifting_preserves_closed s e n
   | _ -> ()
 
 let rec lem_subst_freevars_closes_exp
@@ -147,18 +172,6 @@ let rec lem_subst_freevars_closes_exp
     (ensures (free_vars_indx (subst s e) n == []))
     (decreases e) =
   match e with
-  | EApp e1 e2 ->
-    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e2 n
-  | EIf e1 e2 e3 ->
-    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e2 n;
-    assume (forall x. x `memP` free_vars_indx e3 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e3 n
   | ELam e' ->
     let s' = sub_elam s in
     let n' = n+1 in
@@ -171,6 +184,29 @@ let rec lem_subst_freevars_closes_exp
       end
     end;
     lem_subst_freevars_closes_exp s' e' n'
+  | EApp e1 e2 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e2 n
+  | EIf e1 e2 e3 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e2 n;
+    assume (forall x. x `memP` free_vars_indx e3 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e3 n
+  | EPair e1 e2 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e2 n
+  | EFst e' ->
+    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e' n
+  | ESnd e' ->
+    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e' n
   | _ -> ()
 
 (* Small-step operational semantics; strong / full-beta reduction is
@@ -212,6 +248,17 @@ let rec step e =
       | _ -> None
     end
   end
+  | EPair e1 e2 -> begin
+    match step e1 with
+    | Some e1' -> Some (EPair e1' e2)
+    | None -> begin
+      match step e2 with
+      | Some e2' -> Some (EPair e1 e2')
+      | None -> None
+    end
+  end
+  | EFst (EPair e1 _) -> Some e1
+  | ESnd (EPair _ e2) -> Some e2
   | _ -> None
 
 let can_step (e:closed_exp) : Type0 =
@@ -219,6 +266,14 @@ let can_step (e:closed_exp) : Type0 =
 
 let irred (e:closed_exp) : Type0 =
   None? (step e)
+
+let rec lem_value_is_irred (e:closed_exp) : Lemma
+  (requires is_value e)
+  (ensures irred e)
+  [SMTPat (irred e)] =
+  match e with
+  | EPair e1 e2 -> lem_value_is_irred e1; lem_value_is_irred e2
+  | _ -> ()
 
 (** reflexive transitive closure of step *)
 type steps : closed_exp -> closed_exp -> Type =
@@ -239,11 +294,10 @@ let rec destruct_steps_eapp
   (e2:closed_exp)
   (e':closed_exp)
   (st:steps (EApp e1 e2) e') :
-  Pure (exp * closed_exp)
+  Pure (exp * value)
     (requires irred e') (** CA: not sure if necessary **)
     (ensures fun (e11, e2') ->
-      is_closed (ELam e11) /\ irred (ELam e11) /\
-      irred e2' /\
+      is_closed (ELam e11) /\
       steps e1 (ELam e11) /\
       steps e2 e2' /\
       steps (EApp e1 e2) (subst_beta e2' e11) /\
@@ -279,5 +333,26 @@ let rec destruct_steps_eif
   (**
     How the steps look like:
       EIf e1 e2 e3 -->* EIf e1' e2 e3 -->* e'
+  **)
+  admit ()
+
+
+let rec destruct_steps_epair
+  (e1:closed_exp)
+  (e2:closed_exp)
+  (e':closed_exp)
+  (st:steps (EPair e1 e2) e') :
+  Pure (value * value)
+    (requires irred e') (** CA: not sure if necessary **)
+    (ensures fun (e1', e2')->
+      steps e1 e1' /\
+      steps e2 e2' /\
+      steps (EPair e1 e2) (EPair e1' e2') /\
+      steps (EPair e1' e2') e')
+    (decreases st)
+  =
+  (**
+    How the steps look like:
+      EPair e1 e2 -->* EPair e1' e2' == e'
   **)
   admit ()

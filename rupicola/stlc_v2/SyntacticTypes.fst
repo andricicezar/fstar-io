@@ -12,6 +12,7 @@ type typ =
 | TUnit : typ
 | TBool : typ
 | TArr  : typ -> typ -> typ
+| TPair : typ -> typ -> typ
 
 noeq
 type rtyp : typ -> Type0 -> Type u#1 =
@@ -24,12 +25,20 @@ type rtyp : typ -> Type0 -> Type u#1 =
          rtyp t1 s1 ->
          rtyp t2 s2 ->
          rtyp (TArr t1 t2) (s1 -> s2)
+| RPair : #t1:typ ->
+          #t2:typ ->
+          #s1:Type ->
+          #s2:Type ->
+          rtyp t1 s1 ->
+          rtyp t2 s2 ->
+          rtyp (TPair t1 t2) (s1 * s2)
 
-let test_match t s (r:rtyp t s) =
+let test_match t s (r:rtyp t s) = (** why does this work so well? **)
   match r with
   | RUnit -> assert (t == TUnit /\ s == unit)
   | RBool -> assert (t == TBool /\ s == bool)
   | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
+  | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 * s2)))
 
 type typsr =
   t:typ & s:Type & rtyp t s
@@ -40,6 +49,9 @@ let get_rel (t:typsr) = t._3
 
 let mk_arrow (t1 t2:typsr) : typsr =
   (| _, _, RArr (get_rel t1) (get_rel t2) |)
+
+let mk_pair (t1 t2:typsr) : typsr =
+  (| _, _, RPair (get_rel t1) (get_rel t2) |)
 
 (** Typing environment **)
 type env = var -> option typsr
@@ -75,6 +87,11 @@ let lem_fv_in_env_if (g:env) (e1 e2 e3:exp) :
   Lemma
     (requires fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3)
     (ensures  fv_in_env g (EIf e1 e2 e3)) = admit ()
+
+let lem_fv_in_env_pair (g:env) (e1 e2:exp) :
+  Lemma
+    (requires fv_in_env g e1 /\ fv_in_env g e2)
+    (ensures  fv_in_env g (EPair e1 e2)) = admit ()
 
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)

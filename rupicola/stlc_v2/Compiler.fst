@@ -12,8 +12,6 @@ open EquivRel
 class compile_typ (s:Type) = {
   [@@@no_method] t : typ;
   [@@@no_method] r : rtyp t s;
-  (** CA: To get rid of the equality, one would have to find different
-          definitions for `get_v'`. **)
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
@@ -21,6 +19,9 @@ instance compile_typ_bool : compile_typ bool = { t = TBool; r = RBool }
 instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
   t = TArr c1.t c2.t;
   r = RArr c1.r c2.r }
+instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = {
+  t = TPair c1.t c2.t;
+  r = RPair c1.r c2.r }
 
 let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
 
@@ -238,3 +239,56 @@ let test1_hoc : compile_closed
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
   compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+
+instance compile_exp_pair
+  g
+  (#a:Type) {| ca: compile_typ a |}
+  (#b:Type) {| cb: compile_typ b |}
+  (l:fs_env g -> a)     {| cl: compile_exp #_ #ca g l |}
+  (r:fs_env g -> b)     {| cr: compile_exp #_ #cb g r |}
+  : compile_exp #(a & b) g (fun fs_s -> (l fs_s, r fs_s)) = {
+  e = begin
+    lem_fv_in_env_pair g cl.e cr.e;
+    EPair cl.e cr.e
+  end;
+  equiv_proof = (fun () ->
+    cl.equiv_proof ();
+    cr.equiv_proof ();
+    equiv_pair g (pack ca) (pack cb) cl.e cr.e l r
+  );
+}
+
+let test1_pair : compile_closed #(bool -> bool -> bool & bool) (fun x y-> (x,y)) = solve
+let _ = assert (test1_pair.e == ELam (ELam (EPair (EVar 1) (EVar 0))))
+
+let test2_pair : compile_closed #((bool -> bool) & (bool -> bool -> bool)) ((fun x -> x), (fun y x -> y)) = solve
+let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
+
+let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
+
+instance compile_exp_pair_fst
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
+  : compile_exp #a #ca g (fun fs_s -> fst #a #b (p fs_s)) = {
+  e = begin
+    EFst cp.e
+  end;
+  equiv_proof = (fun () ->
+    cp.equiv_proof ();
+    admit ();
+    ()
+   // equiv_pair g (pack ca) (pack cb) cl.e cr.e l r
+  );
+}
+
+let mypairf : ((bool * bool) -> bool) = fun p -> fst p
+
+val test4_pair : compile_closed #bool (fst (true, ()))
+(** TODO: why does this not work automatically? **)
+let test4_pair = compile_exp_pair_fst _ _ _ _
+
+val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
+(** TODO: why does this not work automatically? **)
+let test5_pair = compile_exp_lambda _ _ #(compile_exp_pair_fst _ _ _ _)
