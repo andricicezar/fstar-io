@@ -29,6 +29,16 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
       (| t1, s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| t2, s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
+  | RDPair #t1 #s1 r1 s2 xr2 -> begin
+    let fs_v : (x:s1 & s2 x) = fs_v in
+    let (| t2, r2 |) = xr2 (dfst fs_v) in
+    assume (r2 << get_rel t);
+    match e with
+    | EPair e1 e2 ->
+      (| t1, s1, r1 |) ∋ (dfst fs_v, e1) /\
+      (| t2, _,  r2 |) ∋ (dsnd fs_v, e2)
+    | _ -> False
+  end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let fs_e = fst p in
   let e = snd p in

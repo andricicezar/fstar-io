@@ -13,6 +13,7 @@ type typ =
 | TBool : typ
 | TArr  : typ -> typ -> typ
 | TPair : typ -> typ -> typ
+| TDPair : typ -> typ
 
 noeq
 type rtyp : typ -> Type0 -> Type u#1 =
@@ -32,6 +33,13 @@ type rtyp : typ -> Type0 -> Type u#1 =
           rtyp t1 s1 ->
           rtyp t2 s2 ->
           rtyp (TPair t1 t2) (s1 & s2)
+| RDPair : #t1:typ ->
+           #s1:Type0 ->
+           rtyp t1 s1 ->
+           s2:(s1 -> Type0) ->
+           (x:s1 -> t2:typ & rtyp t2 (s2 x)) ->
+           rtyp (TDPair t1) (x:s1 & s2 x)
+
 
 let test_match t s (r:rtyp t s) = (** why does this work so well? **)
   match r with
@@ -39,6 +47,7 @@ let test_match t s (r:rtyp t s) = (** why does this work so well? **)
   | RBool -> assert (t == TBool /\ s == bool)
   | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
   | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 & s2)))
+  | RDPair #t1 #s1 _ s2 _ -> assert (t == TDPair t1 /\ s == (x:s1 & s2 x))
 
 type typsr =
   t:typ & s:Type & rtyp t s

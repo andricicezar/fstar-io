@@ -23,6 +23,10 @@ instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:comp
   t = TPair c1.t c2.t;
   r = RPair c1.r c2.r }
 
+instance compile_typ_dpair (s1:Type) (s2:s1 -> Type) {| c1:compile_typ s1 |} {| c2:(x:s1 -> compile_typ (s2 x)) |} : compile_typ (x:s1 & s2 x) = {
+  t = TDPair c1.t;
+  r = RDPair c1.r s2 (fun x -> (| (c2 x).t, (c2 x).r |)) }
+
 let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
 
 // Some tests
@@ -32,6 +36,13 @@ let test1 : compile_typ (bool -> unit) = solve
 let _ = assert (test1.t == (TArr TBool TUnit))
 let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
 let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
+
+let test_typ_dpair : compile_typ (b:bool & (if b then unit else bool)) =
+  compile_typ_dpair
+    bool
+    (fun x -> if x then unit else bool)
+    #solve
+    #(fun x -> if x then compile_typ_unit else compile_typ_bool)
 
 
 (** Compiling expressions **)
@@ -60,7 +71,7 @@ instance compile_exp_unit g : compile_exp #unit #solve g (fun _ -> ()) = {
   equiv_proof = (fun () -> equiv_unit g);
 }
 
-instance compile_exp_true g : compile_exp #bool #solve g (fun _ -> true) = {
+instance compile_exp_true g : compile_exp #bool #compile_typ_bool g (fun _ -> true) = {
   e = ETrue;
   equiv_proof = (fun () -> equiv_true g);
 }
@@ -315,3 +326,61 @@ let test6_pair = compile_exp_pair_snd _ _ _ _
 val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
 (** TODO: why does this not work automatically? **)
 let test7_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_snd _ _ _ _)
+
+instance compile_exp_dpair_closed_l
+  g
+  (a:Type)                                {| ca: compile_typ a |}
+  (b:a -> Type)                            {| cb: (x:a -> compile_typ (b x)) |}
+  (l:a)                                   {| cl: compile_exp #_ #ca empty (fun _ -> l) |}
+  (r:(fs:fs_env g -> b l))                 {| cr: compile_exp #_ #(cb l) g r |}
+  : compile_exp #(x:a & b x) g (fun fs_s -> (| l, r fs_s |)) = {
+  e = begin
+    EPair cl.e cr.e
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+  );
+}
+
+let function_or_n : (b:bool & (if b then unit else bool)) = (| false, true |)
+
+val test_dp : compile_closed #_ #test_typ_dpair function_or_n
+// TODO: why does this not work automatically
+let test_dp =
+  compile_exp_dpair_closed_l
+    _
+    _ #solve
+    _ #_ // <-- having solve here fails
+    _ #solve
+    _ #solve
+
+let _ = assert (test_dp.e == EPair EFalse ETrue)
+
+instance compile_exp_dpair
+  // g
+  (a:Type)                                {| ca: compile_typ a |}
+  (b:a -> Type)                            {| cb: (x:a -> compile_typ (b x)) |}
+  (l:fs_env empty -> a)                    {| cl: compile_exp #_ #ca empty l |}
+  (r:(fs:fs_env empty -> b (l fs)))        {| cr: (fs:fs_env empty -> compile_closed #_ #(cb (l fs)) (r fs)) |} (** this cannot be general because we only have `l fs` **)
+  : compile_exp #(x:a & b x) empty (fun fs_s -> (| l fs_s, r fs_s |)) = {
+  e = begin
+    EPair cl.e (cr fs_empty).e (** having the F* evaluation environment here, `fs`,
+                                   is not possible because of the lambda instance where
+                                   we would have to pass an extended environment to get the body,
+                                   which we cannot do because we do not have any F* argument there **)
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+  );
+}
+
+val test_dp' : compile_closed #_ #test_typ_dpair function_or_n
+let test_dp' =
+  compile_exp_dpair
+    // empty
+    _ #solve
+    (fun x -> if x then unit else bool) #(fun x -> if x then compile_typ_unit else compile_typ_bool)
+    _ #solve
+    _ #(fun fs -> compile_exp_true empty)
+
+let _ = assert (test_dp.e == EPair EFalse ETrue)
