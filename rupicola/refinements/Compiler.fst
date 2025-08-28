@@ -16,15 +16,21 @@ class compile_typ (s:Type) = {
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
 instance compile_typ_bool : compile_typ bool = { t = TBool; r = RBool }
+  (**
 instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
   t = TArr c1.t c2.t;
   r = RArr c1.r c2.r }
-
+**)
 instance compile_typ_refinement (s1:Type) {| c1:compile_typ s1 |} (p:s1 -> Type0) :
   compile_typ (x:s1{p x}) = {
   t = c1.t;
   r = RRefined c1.r p;
   }
+
+instance compile_typ_arrow_wp (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} (wp:s1 -> pure_wp s2) : compile_typ (x:s1 -> PURE s2 (wp x)) = {
+  t = TArr c1.t c2.t;
+  r = RArrWP c1.r c2.r wp }
+(** This istance is redundant with compile_typ_arrow for F* **)
 
 let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
 
@@ -37,8 +43,12 @@ let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
 let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
 
 
+type test3_t  = (x:bool -> PURE bool (FStar.Monotonic.Pure.as_pure_wp (fun p -> p x)))
+let test3 : compile_typ test3_t = solve
+let _ = assert (test3.t == (TArr TBool TBool))
+
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (pre:fs_env g -> Type0) (fs_e:(fs_s:(fs_env g){pre fs_s}) -> a) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
@@ -132,13 +142,15 @@ let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fs_s -> get
 let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
   solve
 
+
+(**
 instance compile_exp_lambda
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b)
   {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)) |}
-  : compile_exp g f = {
+  : compile_exp #_ #(compile_typ_arrow a b #ca #cb) g f = {
   e = begin
     lem_fv_in_env_lam g (pack ca) cf.e;
     ELam cf.e
@@ -146,7 +158,36 @@ instance compile_exp_lambda
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
-    equiv_lam g (pack ca) cf.e (pack cb) f
+    equiv_lam g (pack ca) cf.e (pack cb) f;
+    assert (f `equiv (mk_arrow (pack ca) (pack cb))` (ELam cf.e))
+  )
+}**)
+
+let get_body_f g #a (#ca:compile_typ a) #b (#cb:compile_typ b) wp (f:fs_env g -> (x:a -> PURE b (wp x)))
+  : fs_env (extend (pack ca) g) -> b =
+  fun fs_s ->
+    assume (as_requires (wp (get_v' fs_s 0 a)));
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+    f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)
+
+instance compile_exp_lambda_wp
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (wp:a -> pure_wp b)
+  (f:fs_env g -> (x:a -> PURE b (wp x)))
+  {| cf: compile_exp (extend (pack ca) g) (get_body_f g #a #ca #b #cb wp f) |}
+  : compile_exp #_ #(compile_typ_arrow_wp a b wp) g f  = {
+  e = begin
+    lem_fv_in_env_lam g (pack ca) cf.e;
+    ELam cf.e
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+//    cf.equiv_proof ();
+//    reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
+//    equiv_lam g (pack ca) cf.e (pack cb) f;
+//    assert (f `equiv (mk_arrow (pack ca) (pack cb))` (ELam cf.e))
   )
 }
 

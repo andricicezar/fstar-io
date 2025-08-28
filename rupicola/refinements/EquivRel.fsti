@@ -7,6 +7,10 @@ open FStar.List.Tot
 open STLC
 open SyntacticTypes
 
+//#set-options "--print_implicits --print_universes"
+//let test (f:(x:'a -> PURE Type0 ('w x))) (x:'a) : Type0 by (dump "H"; compute (); dump "H") =
+//  'w x (fun _ -> True) ==>  f x
+
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
 let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
@@ -26,6 +30,16 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
   | RRefined #t' #s' r' p -> begin
     assert (p fs_v);
     (| t', s', r' |) ∋ (fs_v, e)
+  end
+  | RArrWP #t1 #t2 #s1 #s2 r1 r2 wp -> begin
+    let fs_f : (x:s1 -> PURE s2 (wp x)) = fs_v in
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+    match e with
+    | ELam e' ->
+      (forall (v:value) (fs_v:s1).
+        (| t1, s1, r1 |) ∋ (fs_v, v) /\ as_requires (wp fs_v) ==>  (** Interesting that we do not need to quantify over post-conditions because of monotonicity **)
+         (| t2, s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
+    | _ -> False
   end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let fs_e = fst p in
@@ -74,19 +88,22 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
+type fs_open_term (g:env) (pre:fs_env g -> Type0) (a:Type) =
+  s:(fs_env g){pre s} -> a
+
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (fs_e:fs_env g -> get_Type t) (e:exp) : Type0 =
+let equiv (#g:env) (t:typsr) (pre:fs_env g -> Type0) (fs_e:fs_open_term g pre (get_Type t)) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
-    s ∽ fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
+    s ∽ fs_s /\ pre fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (fs_v:fs_env g -> get_Type t) (e:exp) : Type0 =
-  equiv #g t fs_v e
+let (≈) (#g:env) (#t:typsr) (#pre:fs_env g -> Type0) (fs_v:fs_open_term g pre (get_Type t)) (e:exp) : Type0 =
+  equiv #g t pre fs_v e
 
 (** Equiv closed terms **)
 let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
-  Lemma (requires equiv #empty t (fun _ -> fs_e) e)
+  Lemma (requires equiv #empty t (fun _ -> True) (fun _ -> fs_e) e)
         (ensures  t ⦂ (fs_e, e)) =
   eliminate forall b (s:gsub empty b) (fs_s:fs_env empty).
     s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
@@ -97,28 +114,26 @@ let tunit : typsr =
   (| _, _, RUnit |)
 
 let equiv_unit g
-  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit)
-  = assert ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit) by (explode ())
+  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit (fun _ -> True)` EUnit)
+  = assert ((fun (_:fs_env g) -> ()) `equiv tunit (fun _ -> True)` EUnit) by (explode ())
 
 let tbool : typsr =
   (| _, _, RBool |)
 
 let equiv_true g
-  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool` ETrue)
-  = assert ((fun (_:fs_env g) -> true) `equiv tbool` ETrue) by (explode ())
+  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool (fun _ -> True)` ETrue)
+  = assert ((fun (_:fs_env g) -> true) `equiv tbool (fun _ -> True)` ETrue) by (explode ())
 
 let equiv_false g
-  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool` EFalse)
-  = assert ((fun (_:fs_env g) -> false) `equiv tbool` EFalse) by (explode ())
+  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool (fun _ -> True)` EFalse)
+  = assert ((fun (_:fs_env g) -> false) `equiv tbool (fun _ -> True)` EFalse) by (explode ())
 
 let equiv_var g (x:var{Some? (g x)})
   : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x)
   = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x) by (explode ())
 
-let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_env g -> get_Type (mk_arrow t1 t2)) : Lemma
-  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
-            // the asymmetry is here. body is an open expression, while for f, I don't have an open expression
-            // the equiv is quantifying over the free variable of body, but not get_v
+let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (pre:fs_env g -> Type0) (f:fs_open_term g pre (get_Type (mk_arrow t1 t2))) : Lemma
+  (requires (fun (fs_s:(s:(fs_env (extend t1 g)){pre s})) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
   (ensures f ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
@@ -197,3 +212,12 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type 
       end
     end
   end
+
+ (**
+let equiv_lam_wp g (t1:typsr) (body:exp) (t2:typsr) wp (f:fs_env g -> get_Type (mk_arrow_wp t1 t2 wp)) : Lemma
+  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
+            // the asymmetry is here. body is an open expression, while for f, I don't have an open expression
+            // the equiv is quantifying over the free variable of body, but not get_v
+  (ensures f ≈ (ELam body)) =
+  admit ()
+**)

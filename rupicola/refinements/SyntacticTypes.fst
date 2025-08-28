@@ -30,6 +30,14 @@ type rtyp : typ -> Type0 -> Type u#1 =
              rtyp t s ->
              p:(s -> Type0) ->
              rtyp t (x:s{p x})
+| RArrWP : #t1:typ ->
+           #t2:typ ->
+           #s1:Type ->
+           #s2:Type ->
+           rtyp t1 s1 ->
+           rtyp t2 s2 ->
+           wp:(s1 -> pure_wp s2) ->
+           rtyp (TArr t1 t2) (x:s1 -> PURE s2 (wp x))
 
 let test_match t s (r:rtyp t s) =
   match r with
@@ -37,6 +45,7 @@ let test_match t s (r:rtyp t s) =
   | RBool -> assert (t == TBool /\ s == bool)
   | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
   | RRefined #t' #s' _ p -> assert (t == t' /\ s == x:s'{p x})
+  | RArrWP #t1 #t2 #s1 #s2 _ _ wp -> assert (t == TArr t1 t2 /\ (s == (x:s1 -> PURE s2 (wp x))))
 
 type typsr =
   t:typ & s:Type & rtyp t s
@@ -47,6 +56,9 @@ let get_rel (t:typsr) = t._3
 
 let mk_arrow (t1 t2:typsr) : typsr =
   (| _, _, RArr (get_rel t1) (get_rel t2) |)
+
+let mk_arrow_wp (t1 t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2)) : typsr =
+  (| _, _, RArrWP (get_rel t1) (get_rel t2) wp |)
 
 (** Typing environment **)
 type env = var -> option typsr
