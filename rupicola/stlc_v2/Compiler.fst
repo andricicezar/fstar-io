@@ -378,9 +378,9 @@ val test_dp' : compile_closed #_ #test_typ_dpair function_or_n
 let test_dp' =
   compile_exp_dpair
     // empty
-    _ #solve
+    _ #_
     (fun x -> if x then unit else bool) #(fun x -> if x then compile_typ_unit else compile_typ_bool)
-    _ #solve
+    _ #_
     _ #(fun fs -> compile_exp_true empty)
 
 let _ = assert (test_dp.e == EPair EFalse ETrue)
