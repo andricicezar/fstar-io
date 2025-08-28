@@ -88,17 +88,17 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
-type fs_open_term (g:env) (pre:fs_env g -> Type0) (a:Type) =
-  s:(fs_env g){pre s} -> a
+type fs_open_term (#g:env) (pre:fs_env g -> Type0) (a:Type) =
+  s:(fs_env g) -> Pure a (pre s) (fun _ -> True)
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (pre:fs_env g -> Type0) (fs_e:fs_open_term g pre (get_Type t)) (e:exp) : Type0 =
+let equiv (#g:env) (t:typsr) (pre:fs_env g -> Type0) (fs_e:fs_open_term pre (get_Type t)) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
     s ∽ fs_s /\ pre fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (#pre:fs_env g -> Type0) (fs_v:fs_open_term g pre (get_Type t)) (e:exp) : Type0 =
+let (≈) (#g:env) (#t:typsr) (#pre:fs_env g -> Type0) (fs_v:fs_open_term pre (get_Type t)) (e:exp) : Type0 =
   equiv #g t pre fs_v e
 
 (** Equiv closed terms **)
@@ -132,9 +132,11 @@ let equiv_var g (x:var{Some? (g x)})
   : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x)
   = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x) by (explode ())
 
-let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (pre:fs_env g -> Type0) (f:fs_open_term g pre (get_Type (mk_arrow t1 t2))) : Lemma
-  (requires (fun (fs_s:(s:(fs_env (extend t1 g)){pre s})) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
-  (ensures f ≈ (ELam body)) =
+let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (pre:fs_env g -> Type0) (wp:get_Type t1 -> pure_wp (get_Type t2)) (f:fs_open_term pre (get_Type (mk_arrow_wp t1 t2 wp))) : Lemma
+  (requires (fun (fs_s:(fs_s:(fs_env (extend t1 g)){pre (fs_shrink #t1 fs_s) /\ as_requires (wp (get_v fs_s 0))})) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
+  (ensures f ≈ (ELam body)) =admit ()
+
+
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> mk_arrow t1 t2 ⦂ (f fs_s, gsubst s (ELam body)) with begin
