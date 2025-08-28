@@ -38,7 +38,7 @@ let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
-  (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
+  (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)
  // [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
   [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv (pack ca)` e);
 }
@@ -270,7 +270,7 @@ let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
 
 let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
 
-instance compile_exp_pair_fst
+instance compile_exp_pair_fst (** compile the fapp of fst **)
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
@@ -285,13 +285,42 @@ instance compile_exp_pair_fst
   );
 }
 
-val test4_pair : compile_closed #bool (fst (true, ()))
+val test4_pair : compile_closed (fst (true, ()))
 (** TODO: why does this not work automatically? **)
 let test4_pair = compile_exp_pair_fst _ _ _ _
 
 val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
 (** TODO: why does this not work automatically? **)
 let test5_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_fst _ _ _ _)
+
+instance compile_exp_fst (** compile fst independently **)
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  : compile_exp #(a & b -> a) g (fun _ -> fst #a #b) = {
+  e = begin
+    ELam (EFst (EVar 0))
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+ //   cp.equiv_proof ();
+ //   equiv_pair_fst g (pack ca) (pack cb) cp.e p
+  );
+}
+
+val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
+(** TODO: why does this not work automatically? **)
+let test4_pair_fst' = compile_exp_fst _ _ #solve _ #solve
+
+val test4_pair' : compile_closed #bool (fst (true, ()))
+(** TODO: why does this not work automatically? **)
+let test4_pair' =
+  compile_exp_app
+    empty
+    (bool & unit) #solve
+    _ #solve
+    _ #solve
+    (fun _ -> (true, ())) #solve
 
 instance compile_exp_pair_snd
   g
@@ -302,8 +331,7 @@ instance compile_exp_pair_snd
   e = begin
     ESnd cp.e
   end;
-  equiv_proof = (fun () ->
-    cp.equiv_proof ();
+  equiv_proof = (fun () ->    cp.equiv_proof ();
     equiv_pair_snd g (pack ca) (pack cb) cp.e p
   );
 }
