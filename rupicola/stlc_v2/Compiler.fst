@@ -270,76 +270,52 @@ let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
 
 let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
 
-instance compile_exp_pair_fst (** compile the fapp of fst **)
+instance compile_exp_pair_fst
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
-  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
-  : compile_exp #a #ca g (fun fs_s -> fst #a #b (p fs_s)) = {
-  e = begin
-    EFst cp.e
-  end;
-  equiv_proof = (fun () ->
-    cp.equiv_proof ();
-    equiv_pair_fst g (pack ca) (pack cb) cp.e p
-  );
-}
-
-val test4_pair : compile_closed (fst (true, ()))
-(** TODO: why does this not work automatically? **)
-let test4_pair = compile_exp_pair_fst _ _ _ _
-
-val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
-(** TODO: why does this not work automatically? **)
-let test5_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_fst _ _ _ _)
-
-instance compile_exp_fst (** compile fst independently **)
-  g
-  (a:Type) {| ca: compile_typ a |}
-  (b:Type) {| cb: compile_typ b |}
-  : compile_exp #(a & b -> a) g (fun _ -> fst #a #b) = {
+  : compile_exp #(a & b -> a) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #ca) g (fun _ -> fst #a #b) = {
   e = begin
     ELam (EFst (EVar 0))
   end;
   equiv_proof = (fun () ->
-    admit ()
- //   cp.equiv_proof ();
- //   equiv_pair_fst g (pack ca) (pack cb) cp.e p
+    equiv_pair_fst g (pack ca) (pack cb);
+    assert (
+      (mk_arrow (mk_pair (pack ca) (pack cb)) (pack ca)) ==
+      (pack (compile_typ_arrow (a & b) a #(compile_typ_pair a b #ca #cb) #ca))) by (compute ())
   );
 }
 
+val test4_pair : compile_closed (fst (true, ()))
+let test4_pair = solve
+
+val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
+let test5_pair = solve
+
 val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
-(** TODO: why does this not work automatically? **)
-let test4_pair_fst' = compile_exp_fst _ _ #solve _ #solve
+let test4_pair_fst' = solve
 
 val test4_pair' : compile_closed #bool (fst (true, ()))
-(** TODO: why does this not work automatically? **)
-let test4_pair' =
-  compile_exp_app
-    empty
-    (bool & unit) #solve
-    _ #solve
-    _ #solve
-    (fun _ -> (true, ())) #solve
+let test4_pair' = solve
 
-instance compile_exp_pair_snd
+instance compile_exp_snd
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
-  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
-  : compile_exp #b #cb g (fun fs_s -> snd #a #b (p fs_s)) = {
+  : compile_exp #(a & b -> b) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #cb) g (fun _ -> snd #a #b) = {
   e = begin
-    ESnd cp.e
+    ELam (ESnd (EVar 0))
   end;
-  equiv_proof = (fun () ->    cp.equiv_proof ();
-    equiv_pair_snd g (pack ca) (pack cb) cp.e p
+  equiv_proof = (fun () ->
+    equiv_pair_snd g (pack ca) (pack cb);
+    assert (
+      (mk_arrow (mk_pair (pack ca) (pack cb)) (pack cb)) ==
+      (pack (compile_typ_arrow (a & b) b #(compile_typ_pair a b #ca #cb) #cb))) by (compute ())
   );
 }
 
 val test6_pair : compile_closed #unit (snd (true, ()))
-(** TODO: why does this not work automatically? **)
-let test6_pair = compile_exp_pair_snd _ _ _ _
+let test6_pair = solve
 
 val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
-(** TODO: why does this not work automatically? **)
-let test7_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_snd _ _ _ _)
+let test7_pair = solve

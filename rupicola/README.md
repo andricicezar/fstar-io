@@ -10,17 +10,17 @@ Next challenges:
 * Features of Dependently Typed Languages:
   - [ ] Compiling fixpoints (may work with F* if one defines instances for different arrities). Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
   - [x] Compiling pairs
-    - [ ] Automation problems when compiling fst / snd. [See here](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/stlc_v2/Compiler.fst#L290).
-  - [ ] Compiling Dependent Pairs/Functions. See attempt on [dpair2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
+  - [ ] Compiling Dependent Pairs and Dependent Functions. See attempt on [dpair2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
 * Features of F\*:
   - [x] Compiling refined types
     - [ ] [Automation does not work when erasing](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
   - [ ] Compiling arrows with pre-post-conditions
-  - [ ] Compiling effects?
-* Compiling the identity monad
+    - [ ] Any related work for this?
+  - [ ] Compiling effects? We apply the lambdas we compile in multiple places (type of instances, the logical relation).
+* Compiling monads
   - [ ] Identity monad
-  - [ ] State/IO?
-    * if we try to do state, I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that (not ideal since it gives us partial correctness)? Probably it is better to start with IO.
+  - [ ] IO. Maybe easier than state?
+  - [ ] State. I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that (not ideal since it gives us partial correctness)? Probably it is better to start with IO.
 
 TODOs:
 - [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))

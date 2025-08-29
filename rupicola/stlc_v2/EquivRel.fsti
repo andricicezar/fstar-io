@@ -93,6 +93,14 @@ let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
   eliminate forall b (s:gsub empty b) (fs_s:fs_env empty).
     s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
 
+let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
+  Lemma (requires t ⦂ (fs_e, e))
+        (ensures  equiv #empty t (fun _ -> fs_e) e) =
+  introduce forall b (s:gsub empty b) (fs_s:fs_env empty).
+    s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with begin
+    assert (gsubst s e == e)
+  end
+
 (** Rules **)
 
 let tunit : typsr =
@@ -240,7 +248,7 @@ let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_Type t1)
     end
   end
 
-let equiv_pair_fst g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
+let equiv_pair_fst_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
   (ensures (fun fs_s -> fst (fs_e12 fs_s)) `equiv t1` (EFst e12)) =
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t1 ⦂ (fst (fs_e12 fs_s), gsubst s (EFst e12)) with begin
@@ -267,7 +275,41 @@ let equiv_pair_fst g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & g
     end
   end
 
-let equiv_pair_snd g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
+let equiv_pair_fst g (t1 t2:typsr) : Lemma
+  (requires True)
+  (ensures (fun _ -> fst #(get_Type t1) #(get_Type t2)) `equiv #g (mk_arrow (mk_pair t1 t2) t1)` (ELam (EFst (EVar 0)))) =
+  let tp = mk_pair t1 t2 in
+  let t = mk_arrow tp t1 in
+  let fs_e : (get_Type t1 & get_Type t2) -> get_Type t1 = fst in
+  let fs_e' : fs_env g -> get_Type t = (fun _ -> fs_e) in
+  let e = ELam (EFst (EVar 0)) in
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t ⦂ (fs_e' fs_s, gsubst s e) with begin
+    assert (gsubst s e == e);
+    assert (fs_e' fs_s == fs_e);
+
+    eliminate True /\ True
+    returns t ∋ (fs_e, e) with _ _. begin
+      introduce forall (v:value) (fs_v:get_Type tp). tp ∋ (fs_v, v) ==>
+        t1 ⦂ (fs_e fs_v, subst_beta v (EFst (EVar 0))) with begin
+        introduce _ ==> _ with _. begin
+          lem_values_are_expressions tp fs_v v;
+          lem_equiv_exp_are_equiv empty #tp fs_v v;
+          assert ((fun _ -> fs_v) `equiv #empty tp` v);
+          equiv_pair_fst_app empty t1 t2 v (fun _ -> fs_v);
+          assert ((fun _ -> fs_e fs_v) `equiv #empty t1` (EFst v));
+          equiv_closed_terms #t1 (fs_e fs_v) (EFst v);
+          assert (subst_beta v (EFst (EVar 0)) == EFst v);
+          ()
+        end
+      end
+    end;
+
+    assert (t ∋ (fs_e, e));
+    lem_values_are_expressions t fs_e e;
+    assert (t ⦂ (fs_e, e))
+  end
+
+let equiv_pair_snd_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & get_Type t2) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
   (ensures (fun fs_s -> snd (fs_e12 fs_s)) `equiv t2` (ESnd e12)) =
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t2 ⦂ (snd (fs_e12 fs_s), gsubst s (ESnd e12)) with begin
@@ -292,4 +334,38 @@ let equiv_pair_snd g (t1 t2:typsr) (e12:exp) (fs_e12:fs_env g -> get_Type t1 & g
         end
       end
     end
+  end
+
+let equiv_pair_snd g (t1 t2:typsr) : Lemma
+  (requires True)
+  (ensures (fun _ -> snd #(get_Type t1) #(get_Type t2)) `equiv #g (mk_arrow (mk_pair t1 t2) t2)` (ELam (ESnd (EVar 0)))) =
+  let tp = mk_pair t1 t2 in
+  let t = mk_arrow tp t2 in
+  let fs_e : (get_Type t1 & get_Type t2) -> get_Type t2 = snd in
+  let fs_e' : fs_env g -> get_Type t = (fun _ -> fs_e) in
+  let e = ELam (ESnd (EVar 0)) in
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==>  t ⦂ (fs_e' fs_s, gsubst s e) with begin
+    assert (gsubst s e == e);
+    assert (fs_e' fs_s == fs_e);
+
+    eliminate True /\ True
+    returns t ∋ (fs_e, e) with _ _. begin
+      introduce forall (v:value) (fs_v:get_Type tp). tp ∋ (fs_v, v) ==>
+        t2 ⦂ (fs_e fs_v, subst_beta v (ESnd (EVar 0))) with begin
+        introduce _ ==> _ with _. begin
+          lem_values_are_expressions tp fs_v v;
+          lem_equiv_exp_are_equiv empty #tp fs_v v;
+          assert ((fun _ -> fs_v) `equiv #empty tp` v);
+          equiv_pair_snd_app empty t1 t2 v (fun _ -> fs_v);
+          assert ((fun _ -> fs_e fs_v) `equiv #empty t2` (ESnd v));
+          equiv_closed_terms #t2 (fs_e fs_v) (ESnd v);
+          assert (subst_beta v (ESnd (EVar 0)) == ESnd v);
+          ()
+        end
+      end
+    end;
+
+    assert (t ∋ (fs_e, e));
+    lem_values_are_expressions t fs_e e;
+    assert (t ⦂ (fs_e, e))
   end
