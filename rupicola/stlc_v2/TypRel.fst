@@ -1,6 +1,6 @@
 (** Syntactic representation of F* types that we can compile. **)
 
-module SyntacticTypes
+module TypRel
 
 open FStar.Tactics
 open FStar.Classical.Sugar
@@ -8,59 +8,45 @@ open FStar.List.Tot
 
 open STLC
 
-type typ =
-| TUnit : typ
-| TBool : typ
-| TArr  : typ -> typ -> typ
-| TPair : typ -> typ -> typ
-| TDPair : typ -> typ
-
 noeq
-type rtyp : typ -> Type0 -> Type u#1 =
-| RUnit : rtyp TUnit unit
-| RBool : rtyp TBool bool
-| RArr : #t1:typ ->
-         #t2:typ ->
-         #s1:Type ->
+type rtyp : Type0 -> Type u#1 =
+| RUnit : rtyp unit
+| RBool : rtyp bool
+| RArr : #s1:Type ->
          #s2:Type ->
-         rtyp t1 s1 ->
-         rtyp t2 s2 ->
-         rtyp (TArr t1 t2) (s1 -> s2)
-| RPair : #t1:typ ->
-          #t2:typ ->
-          #s1:Type ->
+         rtyp s1 ->
+         rtyp s2 ->
+         rtyp (s1 -> s2)
+| RPair : #s1:Type ->
           #s2:Type ->
-          rtyp t1 s1 ->
-          rtyp t2 s2 ->
-          rtyp (TPair t1 t2) (s1 & s2)
-| RDPair : #t1:typ ->
-           #s1:Type0 ->
-           rtyp t1 s1 ->
+          rtyp s1 ->
+          rtyp s2 ->
+          rtyp (s1 & s2)
+| RDPair : #s1:Type0 ->
+           rtyp s1 ->
            s2:(s1 -> Type0) ->
-           (x:s1 -> t2:typ & rtyp t2 (s2 x)) ->
-           rtyp (TDPair t1) (x:s1 & s2 x)
+           (x:s1 -> rtyp (s2 x)) ->
+           rtyp (x:s1 & s2 x)
 
-
-let test_match t s (r:rtyp t s) = (** why does this work so well? **)
+let test_match s (r:rtyp s) = (** why does this work so well? **)
   match r with
-  | RUnit -> assert (t == TUnit /\ s == unit)
-  | RBool -> assert (t == TBool /\ s == bool)
-  | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
-  | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 & s2)))
-  | RDPair #t1 #s1 _ s2 _ -> assert (t == TDPair t1 /\ s == (x:s1 & s2 x))
+  | RUnit -> assert (s == unit)
+  | RBool -> assert (s == bool)
+  | RArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
+  | RPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
+  | RDPair #s1 _ s2 _ -> assert (s == (x:s1 & s2 x))
 
 type typsr =
-  t:typ & s:Type & rtyp t s
+  s:Type & rtyp s
 
-let get_typ (t:typsr) = t._1
-let get_Type (t:typsr) = t._2
-let get_rel (t:typsr) = t._3
+let get_Type (t:typsr) = t._1
+let get_rel (t:typsr) = t._2
 
 let mk_arrow (t1 t2:typsr) : typsr =
-  (| _, _, RArr (get_rel t1) (get_rel t2) |)
+  (| _, RArr (get_rel t1) (get_rel t2) |)
 
 let mk_pair (t1 t2:typsr) : typsr =
-  (| _, _, RPair (get_rel t1) (get_rel t2) |)
+  (| _, RPair (get_rel t1) (get_rel t2) |)
 
 (** Typing environment **)
 type env = var -> option typsr
@@ -123,7 +109,7 @@ let lem_substitution #g #b (s:gsub g b) (t:typsr) (v:value) (e:exp)
     (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
   = admit () (** common lemma **)
 
-let lem_gsubst_empty_identity (e:closed_exp) :
-  Lemma (gsubst gsub_empty e == e)
-  [SMTPat (gsubst gsub_empty e)] =
+let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
+  Lemma (gsubst s e == e)
+  [SMTPat (gsubst s e)] =
   admit ()

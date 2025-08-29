@@ -15,7 +15,7 @@ type typ =
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
-type rtyp : typ -> Type0 -> Type u#1 =
+type rtyp : typ -> Type0 -> Type u#1 = // elab_typ t == s
 | RUnit : rtyp TUnit unit
 | RBool : rtyp TBool bool
 | RArr : #t1:typ ->

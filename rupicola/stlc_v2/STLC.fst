@@ -304,6 +304,9 @@ type steps : closed_exp -> closed_exp -> Type =
 let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
   FStar.Squash.return_squash (SRefl e)
 
+let safe (e:closed_exp) : Type0 =
+  forall e'. steps e e' ==> is_value e' \/ can_step e'
+
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
   (e1:closed_exp)

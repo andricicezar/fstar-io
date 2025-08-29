@@ -6,36 +6,28 @@ open FStar.Calc
 open FStar.List.Tot
 
 open STLC
-open SyntacticTypes
-open EquivRel
+open TypRel
+open ExpRel
 
 class compile_typ (g:env) (s:fs_env g -> Type) = {
-  t : typ;
-  [@@@no_method] r : (fs_s:fs_env g -> rtyp t (s fs_s)); // before we had: elab_typ t == s
+  [@@@no_method] r : (fs_s:fs_env g -> rtyp (s fs_s));
 }
 
-instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
-instance compile_typ_bool : compile_typ bool = { t = TBool; r = RBool }
-instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
-  t = TArr c1.t c2.t;
-  r = RArr c1.r c2.r }
-instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = {
-  t = TPair c1.t c2.t;
-  r = RPair c1.r c2.r }
+instance compile_typ_unit : compile_typ unit = { r = RUnit }
+instance compile_typ_bool : compile_typ bool = { r = RBool }
+instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = { r = RArr c1.r c2.r }
+instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = RPair c1.r c2.r }
 
 instance compile_typ_dpair (s1:Type) (s2:s1 -> Type) {| c1:compile_typ s1 |} {| c2:(x:s1 -> compile_typ (s2 x)) |} : compile_typ (x:s1 & s2 x) = {
-  t = TDPair c1.t;
   r = RDPair c1.r s2 (fun x -> (| (c2 x).t, (c2 x).r |)) }
 
-let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
+let pack #s (c:compile_typ s) : typsr = (| s, c.r |)
 
 // Some tests
 let test0 : compile_typ (unit) = solve
-let _ = assert (test0.t == TUnit)
+let _ = assert (test0.r == RUnit)
 let test1 : compile_typ (bool -> unit) = solve
-let _ = assert (test1.t == (TArr TBool TUnit))
-let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
-let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
+let _ = assert (test1.r == (RArr RBool RUnit))
 
 let test_typ_dpair : compile_typ (b:bool & (if b then unit else bool)) =
   compile_typ_dpair
@@ -44,12 +36,14 @@ let test_typ_dpair : compile_typ (b:bool & (if b then unit else bool)) =
     #solve
     #(fun x -> if x then compile_typ_unit else compile_typ_bool)
 
+let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
+let _ = assert (test2.r == RArr (RArr RUnit RBool) (RArr RBool RUnit))
 
 (** Compiling expressions **)
 class compile_exp (g:env) (#a:fs_env g -> Type0) {| ca: compile_typ g a |} (fs_e:(s:fs_env g -> a s)) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
-  (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
+  (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)
  // [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
   [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv (pack ca)` e);
 }
@@ -285,47 +279,51 @@ instance compile_exp_pair_fst
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
-  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
-  : compile_exp #a #ca g (fun fs_s -> fst #a #b (p fs_s)) = {
+  : compile_exp #(a & b -> a) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #ca) g (fun _ -> fst #a #b) = {
   e = begin
-    EFst cp.e
+    ELam (EFst (EVar 0))
   end;
   equiv_proof = (fun () ->
-    cp.equiv_proof ();
-    equiv_pair_fst g (pack ca) (pack cb) cp.e p
+    equiv_pair_fst g (pack ca) (pack cb);
+    assert (
+      (mk_arrow (mk_pair (pack ca) (pack cb)) (pack ca)) ==
+      (pack (compile_typ_arrow (a & b) a #(compile_typ_pair a b #ca #cb) #ca))) by (compute ())
   );
 }
 
-val test4_pair : compile_closed #bool (fst (true, ()))
-(** TODO: why does this not work automatically? **)
-let test4_pair = compile_exp_pair_fst _ _ _ _
+val test4_pair : compile_closed (fst (true, ()))
+let test4_pair = solve
 
 val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
-(** TODO: why does this not work automatically? **)
-let test5_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_fst _ _ _ _)
+let test5_pair = solve
 
-instance compile_exp_pair_snd
+val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
+let test4_pair_fst' = solve
+
+val test4_pair' : compile_closed #bool (fst (true, ()))
+let test4_pair' = solve
+
+instance compile_exp_snd
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
-  (p:fs_env g -> (a & b)) {| cp: compile_exp #(a & b) g p |}
-  : compile_exp #b #cb g (fun fs_s -> snd #a #b (p fs_s)) = {
+  : compile_exp #(a & b -> b) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #cb) g (fun _ -> snd #a #b) = {
   e = begin
-    ESnd cp.e
+    ELam (ESnd (EVar 0))
   end;
   equiv_proof = (fun () ->
-    cp.equiv_proof ();
-    equiv_pair_snd g (pack ca) (pack cb) cp.e p
+    equiv_pair_snd g (pack ca) (pack cb);
+    assert (
+      (mk_arrow (mk_pair (pack ca) (pack cb)) (pack cb)) ==
+      (pack (compile_typ_arrow (a & b) b #(compile_typ_pair a b #ca #cb) #cb))) by (compute ())
   );
 }
 
 val test6_pair : compile_closed #unit (snd (true, ()))
-(** TODO: why does this not work automatically? **)
-let test6_pair = compile_exp_pair_snd _ _ _ _
+let test6_pair = solve
 
 val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
-(** TODO: why does this not work automatically? **)
-let test7_pair = compile_exp_lambda _ _ _ _ #(compile_exp_pair_snd _ _ _ _)
+let test7_pair = solve
 
 instance compile_exp_dpair_closed_l
   g

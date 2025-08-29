@@ -4,8 +4,8 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open STLC
-open SyntacticTypes
-open EquivRel
+open TypRel
+open ExpRel
 open Compiler
 
 noeq type intS = {
@@ -26,10 +26,10 @@ assume val behS : wholeS -> behS_t
 
 (** Target **)
 
-noeq type intT = { ct : typ }
+noeq type intT = { ct : unit }
 
 val comp_int : intS -> intT
-let comp_int i = { ct = i.comp_ct.t }
+let comp_int i = { ct = () }
 
 type progT (i:intT) = closed_exp
 type ctxT (i:intT) = ct:value//{sem_typing empty ct i.ct}

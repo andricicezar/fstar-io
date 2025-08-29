@@ -315,6 +315,8 @@ let test_pm2' : compile_closed test_pm2 = solve
 let _ = assert (test_pm2'.e == ELam (EIf (EVar 0) (EIf (EVar 0) EFalse ETrue) EFalse))
   (** why does this work? how did it type `true` to `y:bool{y == false}`?
 
+      we work with typed code. `true` is already typed as `y:bool{y==false}`.
+
       My intuition says that it should fail
       because the else branch, `fun _ -> true` has to be typed as `fs_env g -> y:bool{y == false}`,
       which should fail because it tries to do it without knowing that `x == false`, which would produce a
@@ -400,9 +402,12 @@ let test1_phase1 : compile_closed #(bool -> unit) (fun x -> assert (x == x)) =
 let _ = assert (test1_phase1.e == ELam EUnit)
 
 
-let test2_phase1 : compile_closed #(bool -> unit) (fun x -> let y = FStar.Squash.get_proof (x == x) in ()) =
-  solve
-let _ = assert (test2_phase1.e == ELam EUnit)
+let myft : bool-> unit = (fun x -> let y : squash (x == x) = FStar.Squash.get_proof (x == x) in y)
+
+//let test2_phase1 : compile_closed #(bool -> unit) (fun x -> let y : squash (x == x) = FStar.Squash.get_proof (x == x) in y) =
+//  solve
+
+// let _ = assert (test2_phase1.e == ELam EUnit)
 
 let test3_lem () : Lemma (True) = ()
 let test3_phase1 : compile_closed #(unit -> unit) (fun _ -> test3_lem ()) =
