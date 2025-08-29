@@ -9,9 +9,9 @@ open STLC
 open SyntacticTypes
 open EquivRel
 
-class compile_typ (s:Type) = {
-  [@@@no_method] t : typ;
-  [@@@no_method] r : rtyp t s; // before we had: elab_typ t == s
+class compile_typ (g:env) (s:fs_env g -> Type) = {
+  t : typ;
+  [@@@no_method] r : (fs_s:fs_env g -> rtyp t (s fs_s)); // before we had: elab_typ t == s
 }
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
@@ -46,7 +46,7 @@ let test_typ_dpair : compile_typ (b:bool & (if b then unit else bool)) =
 
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
+class compile_exp (g:env) (#a:fs_env g -> Type0) {| ca: compile_typ g a |} (fs_e:(s:fs_env g -> a s)) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
@@ -359,9 +359,9 @@ let _ = assert (test_dp.e == EPair EFalse ETrue)
 instance compile_exp_dpair
   // g
   (a:Type)                                {| ca: compile_typ a |}
-  (b:a -> Type)                            {| cb: (x:a -> compile_typ (b x)) |}
+  (b:a -> Type)                            {| cb: (x:a -> compile_typ (b x) g) |}
   (l:fs_env empty -> a)                    {| cl: compile_exp #_ #ca empty l |}
-  (r:(fs:fs_env empty -> b (l fs)))        {| cr: (fs:fs_env empty -> compile_closed #_ #(cb (l fs)) (r fs)) |} (** this cannot be general because we only have `l fs` **)
+  (r:(fs:fs_env empty -> b (l fs)))        {| cr: compile_closed #_ #(cb (l fs)) (r fs)) |} (** this cannot be general because we only have `l fs` **)
   : compile_exp #(x:a & b x) empty (fun fs_s -> (| l fs_s, r fs_s |)) = {
   e = begin
     EPair cl.e (cr fs_empty).e (** having the F* evaluation environment here, `fs`,

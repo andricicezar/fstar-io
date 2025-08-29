@@ -88,10 +88,10 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (fs_e:fs_env g -> get_Type t) (e:exp) : Type0 =
+let equiv (#g:env) ((| s, r |):typsr) (fs_e:fs_env g -> get_Type t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
-    s ∽ fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
+    s ∽ fs_s ==>  (| s fs_s, r fs_s |) ⦂ (fs_e fs_s, gsubst s e)
 
 let (≈) (#g:env) (#t:typsr) (fs_v:fs_env g -> get_Type t) (e:exp) : Type0 =
   equiv #g t fs_v e
