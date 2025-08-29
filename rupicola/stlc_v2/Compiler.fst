@@ -10,29 +10,24 @@ open SyntacticTypes
 open EquivRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] t : typ;
-  [@@@no_method] r : rtyp t s; // before we had: elab_typ t == s
+  [@@@no_method] r : rtyp s; // before we had: elab_typ t == s
 }
 
-instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
-instance compile_typ_bool : compile_typ bool = { t = TBool; r = RBool }
-instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
-  t = TArr c1.t c2.t;
-  r = RArr c1.r c2.r }
-instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = {
-  t = TPair c1.t c2.t;
-  r = RPair c1.r c2.r }
+instance compile_typ_unit : compile_typ unit = { r = RUnit }
+instance compile_typ_bool : compile_typ bool = { r = RBool }
+instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = { r = RArr c1.r c2.r }
+instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = RPair c1.r c2.r }
 
-let pack #s (c:compile_typ s) : typsr = (| c.t, s, c.r |)
+let pack #s (c:compile_typ s) : typsr = (| s, c.r |)
 
 // Some tests
 let test0 : compile_typ (unit) = solve
-let _ = assert (test0.t == TUnit)
+let _ = assert (test0.r == RUnit)
 let test1 : compile_typ (bool -> unit) = solve
-let _ = assert (test1.t == (TArr TBool TUnit))
-let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
-let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
+let _ = assert (test1.r == (RArr RBool RUnit))
 
+let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
+let _ = assert (test2.r == RArr (RArr RUnit RBool) (RArr RBool RUnit))
 
 (** Compiling expressions **)
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {

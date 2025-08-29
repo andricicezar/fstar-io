@@ -8,50 +8,39 @@ open FStar.List.Tot
 
 open STLC
 
-type typ =
-| TUnit : typ
-| TBool : typ
-| TArr  : typ -> typ -> typ
-| TPair : typ -> typ -> typ
-
 noeq
-type rtyp : typ -> Type0 -> Type u#1 =
-| RUnit : rtyp TUnit unit
-| RBool : rtyp TBool bool
-| RArr : #t1:typ ->
-         #t2:typ ->
-         #s1:Type ->
+type rtyp : Type0 -> Type u#1 =
+| RUnit : rtyp unit
+| RBool : rtyp bool
+| RArr : #s1:Type ->
          #s2:Type ->
-         rtyp t1 s1 ->
-         rtyp t2 s2 ->
-         rtyp (TArr t1 t2) (s1 -> s2)
-| RPair : #t1:typ ->
-          #t2:typ ->
-          #s1:Type ->
+         rtyp s1 ->
+         rtyp s2 ->
+         rtyp (s1 -> s2)
+| RPair : #s1:Type ->
           #s2:Type ->
-          rtyp t1 s1 ->
-          rtyp t2 s2 ->
-          rtyp (TPair t1 t2) (s1 & s2)
+          rtyp s1 ->
+          rtyp s2 ->
+          rtyp (s1 & s2)
 
-let test_match t s (r:rtyp t s) = (** why does this work so well? **)
+let test_match s (r:rtyp s) = (** why does this work so well? **)
   match r with
-  | RUnit -> assert (t == TUnit /\ s == unit)
-  | RBool -> assert (t == TBool /\ s == bool)
-  | RArr #t1 #t2 #s1 #s2 _ _ -> assert (t == TArr t1 t2 /\ (s == (s1 -> s2)))
-  | RPair #t1 #t2 #s1 #s2 _ _ -> assert (t == TPair t1 t2 /\ (s == (s1 & s2)))
+  | RUnit -> assert (s == unit)
+  | RBool -> assert (s == bool)
+  | RArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
+  | RPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
 
 type typsr =
-  t:typ & s:Type & rtyp t s
+  s:Type & rtyp s
 
-let get_typ (t:typsr) = t._1
-let get_Type (t:typsr) = t._2
-let get_rel (t:typsr) = t._3
+let get_Type (t:typsr) = t._1
+let get_rel (t:typsr) = t._2
 
 let mk_arrow (t1 t2:typsr) : typsr =
-  (| _, _, RArr (get_rel t1) (get_rel t2) |)
+  (| _, RArr (get_rel t1) (get_rel t2) |)
 
 let mk_pair (t1 t2:typsr) : typsr =
-  (| _, _, RPair (get_rel t1) (get_rel t2) |)
+  (| _, RPair (get_rel t1) (get_rel t2) |)
 
 (** Typing environment **)
 type env = var -> option typsr

@@ -15,18 +15,18 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
   match get_rel t with
   | RUnit -> fs_v == () /\ e == EUnit
   | RBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
-  | RArr #t1 #t2 #s1 #s2 r1 r2 -> begin
+  | RArr #s1 #s2 r1 r2 -> begin
     let fs_f : s1 -> s2 = fs_v in
     match e with
     | ELam e' ->
-      (forall (v:value) (fs_v:s1). (| t1, s1, r1 |) ∋ (fs_v, v) ==>
-        (| t2, s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
+      (forall (v:value) (fs_v:s1). (| s1, r1 |) ∋ (fs_v, v) ==>
+        (| s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
-  | RPair #t1 #t2 #s1 #s2 r1 r2 -> begin
+  | RPair #s1 #s2 r1 r2 -> begin
     match e with
     | EPair e1 e2 ->
-      (| t1, s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| t2, s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
+      (| s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
@@ -45,11 +45,11 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
   match get_rel t with
   | RUnit -> ()
   | RBool -> ()
-  | RArr #t1 #t2 #s1 #s2 r1 r2 -> ()
-  | RPair #t1 #t2 #s1 #s2 r1 r2 ->
+  | RArr #s1 #s2 r1 r2 -> ()
+  | RPair #s1 #s2 r1 r2 ->
     let EPair e1 e2 = e in
-    lem_values_are_values (| t1, s1, r1 |) (fst #s1 #s2 fs_e) e1;
-    lem_values_are_values (| t2, s2, r2 |) (snd #s1 #s2 fs_e) e2
+    lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1;
+    lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2
 
 let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
   (requires t ⦂ (fs_e, e))
@@ -130,14 +130,14 @@ let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) 
 (** Rules **)
 
 let tunit : typsr =
-  (| _, _, RUnit |)
+  (| _, RUnit |)
 
 let equiv_unit g
   : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit)
   = assert ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit) by (explode ())
 
 let tbool : typsr =
-  (| _, _, RBool |)
+  (| _, RBool |)
 
 let equiv_true g
   : Lemma ((fun (_:fs_env g) -> true) `equiv tbool` ETrue)
