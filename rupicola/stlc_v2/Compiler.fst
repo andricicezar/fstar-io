@@ -33,25 +33,28 @@ let _ = assert (test0.r fs_empty == RUnit)
 let test1 : compile_typ (bool -> unit) = solve
 let _ = assert (test1.r fs_empty == (RArr RBool RUnit))
 
-instance compile_typ_dpair g (s1:fs_otyp g) (s2:(s:fs_env g -> s1 s -> fs_otyp g)) {| c1:compile_otyp g s1 |} {| c2:(s:fs_env g -> x:s1 s -> compile_otyp g (s2 s x)) |}
-  : compile_otyp g (fun s -> x:(s1 s) & (s2 s x s)) = {
-    r = fun s -> RDPair (c1.r s) (fun x -> s2 s x s) (fun x -> (c2 s x).r s)
+(** First attempt at compiling dpairs, kind of weird **)
+instance compile_typ_dpair g
+  (t1:fs_otyp g) {| c1:compile_otyp g t1 |}
+  (t2:(s:fs_env g -> t1 s -> fs_otyp g)) {| c2:(s:fs_env g -> x:t1 s -> compile_otyp g (t2 s x)) |}
+  : compile_otyp g (fun s -> x:(t1 s) & (t2 s x s)) = {
+    r = fun s -> RDPair (c1.r s) (fun x -> t2 s x s) (fun x -> (c2 s x).r s)
   }
 
+(** Second attempt at compiling dpairs using extend,
+    but I need an evaluation environment to be able to call extend **)
 instance compile_typ_dpair' g
-  (s1:fs_otyp g) {| c1:compile_otyp g s1 |}
-  (s2:(s:fs_env g -> fs_otyp (extend (pack c1 s) g))) {| c2:(s:fs_env g -> compile_otyp (extend (pack c1 s) g) (s2 s)) |}
-  : compile_otyp g (fun s -> x:(s1 s) & (s2 s (fs_extend s x))) = {
-    r = fun s -> RDPair (c1.r s) (fun x -> s2 s (fs_extend s x)) (fun x -> (c2 s).r (fs_extend s x))
+  (t1:fs_otyp g) {| c1:compile_otyp g t1 |}
+  (t2:(s:fs_env g -> fs_otyp (extend (pack c1 s) g))) {| c2:(s:fs_env g -> compile_otyp (extend (pack c1 s) g) (t2 s)) |}
+  : compile_otyp g (fun s -> x:(t1 s) & (t2 s (fs_extend s x))) = {
+    r = fun s -> RDPair (c1.r s) (fun x -> t2 s (fs_extend s x)) (fun x -> (c2 s).r (fs_extend s x))
   }
 
-(** To extend g with s1, I need an evaluation environment????
-
+(**
 I think we need a different notion of typing environment and evaluation environment to make this work.
 
 val env
 val extend : g:env -> (fs_otyp g) -> env
-
 
 instance compile_typ_dpair''
   g
@@ -83,8 +86,8 @@ let test_typ_dpair : compile_typ (b:bool & (if b then unit else bool)) =
   compile_typ_dpair
     empty
     (fun _ -> bool)
-    (fun _ x _ -> if x then unit else bool)
     #solve
+    (fun _ x _ -> if x then unit else bool)
     #(fun _ x -> if x then compile_typ_unit empty else compile_typ_bool empty)
 
 [@expect_failure] // TODO
@@ -114,7 +117,7 @@ instance compile_exp_dpair
   (a:fs_otyp g)                           {| ca: compile_typ a |}
   (b:(s:fs_env g -> a s -> fs_otyp g))      {| c2:(s:fs_env g -> x:a s -> compile_otyp g (b s x)) |}
   (l:fs_env empty -> a)                    {| cl: compile_exp #_ #ca empty l |}
-  (r:(fs:fs_env empty -> b (l fs)))        {| cr: compile_closed #_ #(cb (l fs)) (r fs) |} (** this cannot be general because we only have `l fs` **)
+  (r:(fs:fs_env empty -> b (l fs)))        {| cr: compile_exp #_ #(cb (l fs)) (r fs) |} (** this cannot be general because we only have `l fs` **)
   : compile_exp #(x:a & b x) empty (fun fs_s -> (| l fs_s, r fs_s |)) = {
   e = begin
     EPair cl.e (cr fs_empty).e (** having the F* evaluation environment here, `fs`,
