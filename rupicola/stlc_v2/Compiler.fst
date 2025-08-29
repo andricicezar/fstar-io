@@ -6,8 +6,8 @@ open FStar.Calc
 open FStar.List.Tot
 
 open STLC
-open SyntacticTypes
-open EquivRel
+open TypRel
+open ExpRel
 
 class compile_typ (s:Type) = {
   [@@@no_method] r : rtyp s; // before we had: elab_typ t == s

@@ -1,11 +1,11 @@
-module EquivRel
+module ExpRel
 
 open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
-open SyntacticTypes
+open TypRel
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)

@@ -1,6 +1,6 @@
 (** Syntactic representation of F* types that we can compile. **)
 
-module SyntacticTypes
+module TypRel
 
 open FStar.Tactics
 open FStar.Classical.Sugar

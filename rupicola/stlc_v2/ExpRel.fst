@@ -1,4 +1,4 @@
-module EquivRel
+module ExpRel
 
 open FStar.FunctionalExtensionality
 
