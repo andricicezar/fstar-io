@@ -29,14 +29,14 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
       (| s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
-  | RDPair #t1 #s1 r1 s2 xr2 -> begin
+  | RDPair #s1 r1 s2 xr2 -> begin
     let fs_v : (x:s1 & s2 x) = fs_v in
-    let (| t2, r2 |) = xr2 (dfst fs_v) in
+    let r2 = xr2 (dfst fs_v) in
     assume (r2 << get_rel t);
     match e with
     | EPair e1 e2 ->
-      (| t1, s1, r1 |) ∋ (dfst fs_v, e1) /\
-      (| t2, _,  r2 |) ∋ (dsnd fs_v, e2)
+      (| s1, r1 |) ∋ (dfst fs_v, e1) /\
+      (| _,  r2 |) ∋ (dsnd fs_v, e2)
     | _ -> False
   end
 and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
@@ -60,6 +60,11 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1;
     lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2
+  | RDPair #s1 r1 s2 xr2 ->
+    let fs_e : (x:s1 & s2 x) = fs_e in
+    let EPair e1 e2 = e in
+    lem_values_are_values (| s1, r1 |) (dfst fs_e) e1;
+    lem_values_are_values (| s2 (dfst fs_e), xr2 (dfst fs_e) |) (dsnd fs_e) e2
 
 let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
   (requires t ⦂ (fs_e, e))
@@ -112,26 +117,32 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
+type otyp (g:env) =
+  s:fs_env g -> typsr
+
+type fs_oexp (#g:env) (t:otyp g) =
+  s:fs_env g -> get_Type (t s)
+
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) ((| s, r |):typsr) (fs_e:fs_env g -> get_Type t) (e:exp) : Type0 =
+let equiv #g (t:otyp g) (fs_e:fs_oexp t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
-    s ∽ fs_s ==>  (| s fs_s, r fs_s |) ⦂ (fs_e fs_s, gsubst s e)
+    s ∽ fs_s ==>  t fs_s ⦂ (fs_e fs_s, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (fs_v:fs_env g -> get_Type t) (e:exp) : Type0 =
-  equiv #g t fs_v e
+let (≈) #g (#t:otyp g) (fs_e:fs_oexp t) (e:exp) : Type0 =
+  equiv #g t fs_e e
 
 (** Equiv closed terms **)
 let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
-  Lemma (requires equiv #empty t (fun _ -> fs_e) e)
+  Lemma (requires equiv #empty (fun _ -> t) (fun _ -> fs_e) e)
         (ensures  t ⦂ (fs_e, e)) =
   eliminate forall b (s:gsub empty b) (fs_s:fs_env empty).
     s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
 
 let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
   Lemma (requires t ⦂ (fs_e, e))
-        (ensures  equiv #empty t (fun _ -> fs_e) e) =
+        (ensures  equiv #empty (fun _ -> t) (fun _ -> fs_e) e) =
   introduce forall b (s:gsub empty b) (fs_s:fs_env empty).
     s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with begin
     assert (gsubst s e == e)
@@ -139,15 +150,15 @@ let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) 
 
 (** Rules **)
 
-let tunit : typsr =
-  (| _, RUnit |)
+let tunit #g : otyp g =
+  fun _ -> (| _, RUnit |)
 
 let equiv_unit g
   : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit)
   = assert ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit) by (explode ())
 
-let tbool : typsr =
-  (| _, RBool |)
+let tbool #g : otyp g =
+  fun _ -> (| _, RBool |)
 
 let equiv_true g
   : Lemma ((fun (_:fs_env g) -> true) `equiv tbool` ETrue)
@@ -232,7 +243,7 @@ let equiv_app g (t1:typsr) (t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_T
     end
   end
 
-let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type tbool) (fs_e2:fs_env g -> get_Type t) (fs_e3:fs_env g -> get_Type t) : Lemma
+let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:(s:fs_env g -> get_Type (tbool s))) (fs_e2:fs_env g -> get_Type t) (fs_e3:fs_env g -> get_Type t) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fs_s -> if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s) ≈ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
@@ -248,7 +259,7 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type 
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
             let e1' = destruct_steps_eif e1 e2 e3 e' steps_e_e' in
-            assert (tbool ∋ (fs_e1, e1'));
+            assert (tbool fs_s ∋ (fs_e1, e1'));
             assert (t ∋ (fs_e, e'))
           )
         end
@@ -256,6 +267,7 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type 
     end
   end
 
+  (**
 let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_Type t1) (fs_e2:fs_env g -> get_Type t2) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
   (ensures (fun fs_s -> (fs_e1 fs_s, fs_e2 fs_s)) `equiv (mk_pair t1 t2)` EPair e1 e2) =
@@ -405,3 +417,4 @@ let equiv_pair_snd g (t1 t2:typsr) : Lemma
     lem_values_are_expressions t fs_e e;
     assert (t ⦂ (fs_e, e))
   end
+**)
