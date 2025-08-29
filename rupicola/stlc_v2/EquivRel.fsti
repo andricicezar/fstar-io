@@ -38,6 +38,32 @@ let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (fs_e, e))
         (ensures  t ⦂ (fs_e, e)) = admit ()
 
+let rec lem_values_are_values t fs_e (e:closed_exp) :
+  Lemma (requires t ∋ (fs_e, e))
+        (ensures is_value e)
+        (decreases e) =
+  match get_rel t with
+  | RUnit -> ()
+  | RBool -> ()
+  | RArr #t1 #t2 #s1 #s2 r1 r2 -> ()
+  | RPair #t1 #t2 #s1 #s2 r1 r2 ->
+    let EPair e1 e2 = e in
+    lem_values_are_values (| t1, s1, r1 |) (fst #s1 #s2 fs_e) e1;
+    lem_values_are_values (| t2, s2, r2 |) (snd #s1 #s2 fs_e) e2
+
+let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
+  (requires t ⦂ (fs_e, e))
+  (ensures safe e) =
+  introduce forall e'. steps e e' ==> is_value e' \/ can_step e' with begin
+    introduce steps e e' ==> is_value e' \/ can_step e' with _. begin
+      introduce irred e' ==> is_value e' with _. begin
+        assert (t ∋ (fs_e, e'));
+        lem_values_are_values t fs_e e';
+        assert (is_value e')
+      end
+    end
+  end
+
 (** F* Evaluation Environment : variable -> value **)
 
 (** We compile F* values, not F* expressions.

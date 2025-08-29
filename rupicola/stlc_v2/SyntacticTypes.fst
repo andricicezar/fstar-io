@@ -114,12 +114,6 @@ let lem_substitution #g #b (s:gsub g b) (t:typsr) (v:value) (e:exp)
     (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
   = admit () (** common lemma **)
 
-let lem_gsubst_empty_identity (e:closed_exp) :
-  Lemma (gsubst gsub_empty e == e)
-  [SMTPat (gsubst gsub_empty e)] =
-  admit ()
-**)
-
 let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   Lemma (gsubst s e == e)
   [SMTPat (gsubst s e)] =
