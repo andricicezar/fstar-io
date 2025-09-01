@@ -7,13 +7,19 @@ Next challenges:
 	For PMs, maybe one can generate instances on the fly. There is another project requiring this.
   - [ ] How powerful is phase1? A lot seems to happen, which can be problematic if we want to claim any kind of end-to-end result.
         Typeclasses in F* may be less fancy than other languages. We expect it to be portable.
+	From what we have noticed, phase1 does:
+	* Elaborates lets
 * Features of Dependently Typed Languages:
-  - [ ] Compiling fixpoints (may work with F* if one defines instances for different arrities). Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
+  - [ ] @Guido Compiling fixpoints (may work with F* if one defines instances for different arrities). Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
   - [x] Compiling pairs
-  - [ ] Compiling Dependent Pairs and Dependent Functions. See attempt on [dpair2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
+  - [ ] Compiling Dependent Pairs and Dependent Functions. See attempt on [dpairs2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
+      	We have a promising logical relation and compiler.
+	- [ ] We have to implement a typing environment, where adding a new type can depend on the types that already exists in the environment. To check if such envs are called Telescopes.
+	- [ ] Generally, the typing relation and the expression relation have to be defined mutually recursive, which is a definition rejected by Rocq (probably F* too).
+	      Since we want to compile to a language without universe polymorphism, maybe we can define it using concrete universes.
 * Features of F\*:
   - [x] Compiling refined types
-    - [ ] [Automation does not work when erasing](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
+    - [ ] @Guido [Automation does not work when erasing](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
   - [ ] Compiling arrows with pre-post-conditions
     - [ ] Any related work for this?
   - [ ] Compiling effects? We apply the lambdas we compile in multiple places (type of instances, the logical relation).
