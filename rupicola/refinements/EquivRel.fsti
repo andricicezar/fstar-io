@@ -8,8 +8,24 @@ open STLC
 open SyntacticTypes
 
 //#set-options "--print_implicits --print_universes"
-//let test (f:(x:'a -> PURE Type0 ('w x))) (x:'a) : Type0 by (dump "H"; compute (); dump "H") =
-//  'w x (fun _ -> True) ==>  f x
+let test (f:(x:'a -> PURE Type0 ('w x))) (x:'a) : Type0  =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  'w x (fun _ -> True) ==>  f x
+
+let lem_pure_true_monotonic (w:pure_wp 'a) :
+  Lemma (requires (w (fun _ -> True)))
+        (ensures (forall p. (forall r. p r) ==> w p)) =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  ()
+
+let test' (f:(x:'a -> PURE int ('w x))) (x:'a) : int =
+ // FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+ // assert (forall (q p:pure_post int). (forall r. p r ==> q r) ==> ('w x p ==> 'w x q));
+//  eliminate forall (q:pure_post int). (forall (p:pure_post int). (forall r. p r ==> q r) ==> ('w x p ==> 'w x q)) with (fun _ -> True);
+//  assert (forall (p:pure_post int). (forall r. p r ==>  True) ==> ('w x p ==> 'w x (fun _ -> True)));
+//  assert (forall (p:pure_post int). ('w x p ==> 'w x (fun _ -> True)));
+  assume ('w x (fun _ -> True));
+  f x
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
@@ -88,17 +104,20 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
-type fs_open_term (#g:env) (pre:fs_env g -> Type0) (a:Type) =
+type gpre (g:env) =
+  fs_env g -> Type0
+
+type fs_oexp (#g:env) (pre:gpre g) (a:Type) =
   s:(fs_env g) -> Pure a (pre s) (fun _ -> True)
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (pre:fs_env g -> Type0) (fs_e:fs_open_term pre (get_Type t)) (e:exp) : Type0 =
+let equiv (#g:env) (t:typsr) (pre:gpre g) (fs_e:fs_oexp pre (get_Type t)) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
     s ∽ fs_s /\ pre fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (#pre:fs_env g -> Type0) (fs_v:fs_open_term pre (get_Type t)) (e:exp) : Type0 =
+let (≈) (#g:env) (#t:typsr) (#pre:gpre g) (fs_v:fs_oexp pre (get_Type t)) (e:exp) : Type0 =
   equiv #g t pre fs_v e
 
 (** Equiv closed terms **)
@@ -113,85 +132,123 @@ let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
 let tunit : typsr =
   (| _, _, RUnit |)
 
-let equiv_unit g
-  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit (fun _ -> True)` EUnit)
-  = assert ((fun (_:fs_env g) -> ()) `equiv tunit (fun _ -> True)` EUnit) by (explode ())
+let equiv_unit g pre
+  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit pre` EUnit)
+  = assert ((fun (_:fs_env g) -> ()) `equiv tunit pre` EUnit) by (explode ())
 
 let tbool : typsr =
   (| _, _, RBool |)
 
-let equiv_true g
-  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool (fun _ -> True)` ETrue)
-  = assert ((fun (_:fs_env g) -> true) `equiv tbool (fun _ -> True)` ETrue) by (explode ())
+let equiv_true g pre
+  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue)
+  = assert ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue) by (explode ())
 
-let equiv_false g
-  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool (fun _ -> True)` EFalse)
-  = assert ((fun (_:fs_env g) -> false) `equiv tbool (fun _ -> True)` EFalse) by (explode ())
+let equiv_false g pre
+  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse)
+  = assert ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse) by (explode ())
 
-let equiv_var g (x:var{Some? (g x)})
-  : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x)
-  = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x) by (explode ())
+let equiv_var g (x:var{Some? (g x)}) pre
+  : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x)
+  = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x) by (explode ())
 
-let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (pre:fs_env g -> Type0) (wp:get_Type t1 -> pure_wp (get_Type t2)) (f:fs_open_term pre (get_Type (mk_arrow_wp t1 t2 wp))) : Lemma
-  (requires (fun (fs_s:(fs_s:(fs_env (extend t1 g)){pre (fs_shrink #t1 fs_s) /\ as_requires (wp (get_v fs_s 0))})) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
-  (ensures f ≈ (ELam body)) =admit ()
+let mk_pre_lam #g (pre:gpre g) (#t1 #t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2)) : gpre (extend t1 g) =
+  fun fs_s -> pre (fs_shrink fs_s) /\ as_requires (wp (get_v fs_s 0))
 
-
+let equiv_lam
+  g (pre:gpre g)
+  (t1:typsr) (t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2))
+  (body:exp)
+  (f:fs_oexp pre (get_Type (mk_arrow_wp t1 t2 wp)))
+  : Lemma
+    (requires (equiv #(extend t1 g) t2 (mk_pre_lam pre wp)
+                   (fun fs_s -> FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); f (fs_shrink fs_s) (get_v fs_s 0))
+                   body))
+    (ensures f ≈ (ELam body))
+  =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   lem_fv_in_env_lam g t1 body;
-  let g' = extend t1 g in
-  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> mk_arrow t1 t2 ⦂ (f fs_s, gsubst s (ELam body)) with begin
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s /\ pre fs_s ==> mk_arrow_wp t1 t2 wp ⦂ (f fs_s, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
-      let body' = subst (sub_elam s) body in
-      assert (gsubst s (ELam body) == ELam body');
-      introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v body') with begin
+      assert (gsubst s (ELam body) == ELam (subst (sub_elam s) body));
+      introduce forall (v:value) fs_v. t1 ∋ (fs_v, v) /\ as_requires (wp fs_v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v (subst (sub_elam s) body)) with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
           let fs_s' = fs_extend fs_s fs_v in
-          eliminate forall b (s':gsub g' b) fs_s'. s' ∽ fs_s' ==>  t2 ⦂ (f (fs_shrink #t1 fs_s') (get_v fs_s' 0), (gsubst s' body))
-            with false s' fs_s';
-          assert (s ∽ fs_s);
-          assert (gsub_extend s t1 v ∽ fs_extend fs_s fs_v);
-          assert (t2 ⦂ (f (fs_shrink fs_s') (get_v fs_s' 0), (gsubst s' body)));
-          assert (get_v (fs_extend fs_s fs_v) 0 == fs_v);
-          assert (t2 ⦂ (f (fs_shrink fs_s') fs_v, (gsubst s' body)));
-          assert (t2 ⦂ (f fs_s fs_v, (gsubst s' body)));
+          let g' = extend t1 g in
+          let pre' : gpre g' = mk_pre_lam pre wp in
+          let f' : fs_oexp pre' (get_Type t2) = fun fs_s -> FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); f (fs_shrink #t1 fs_s) (get_v fs_s 0) in
+          eliminate equiv #g' t2 pre' f' body /\ True
+          returns t2 ⦂ (f' fs_s', (gsubst s' body)) with _ _. begin
+            eliminate forall b (s':gsub g' b) fs_s'. s' ∽ fs_s' /\ pre' fs_s' ==>  t2 ⦂ (f' fs_s', gsubst s' body)
+              with false s' fs_s';
+            assert (s ∽ fs_s);
+            assert (gsub_extend s t1 v ∽ fs_extend fs_s fs_v)
+          end;
+          let fs_fres = f fs_s fs_v in (** this helps F* **)
+          eliminate t2 ⦂ (f' fs_s', gsubst s' body) /\ True
+          returns t2 ⦂ (fs_fres, gsubst s' body) with _ _. begin
+            assert (get_v (fs_extend fs_s fs_v) 0 == fs_v);
+            assert (fs_fres == f' fs_s')
+          end;
           lem_substitution s t1 v body;
-          assert (t2 ⦂ (f fs_s fs_v, subst_beta v body'))
+          assert (t2 ⦂ (fs_fres, subst_beta v (subst (sub_elam s) body)))
         end
       end;
-      assert (mk_arrow t1 t2 ∋ (f fs_s, gsubst s (ELam body)));
-      lem_values_are_expressions (mk_arrow t1 t2) (f fs_s) (gsubst s (ELam body));
-      assert (mk_arrow t1 t2 ⦂ (f fs_s, gsubst s (ELam body)))
+      assert (mk_arrow_wp t1 t2 wp ∋ (f fs_s, gsubst s (ELam body)));
+      lem_values_are_expressions (mk_arrow_wp t1 t2 wp) (f fs_s) (gsubst s (ELam body));
+      assert (mk_arrow_wp t1 t2 wp ⦂ (f fs_s, gsubst s (ELam body)))
     end
   end
 
-let equiv_app g (t1:typsr) (t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_env g -> get_Type (mk_arrow t1 t2)) (fs_e2:fs_env g -> get_Type t1) : Lemma
-  (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-  (ensures (fun fs_s -> (fs_e1 fs_s) (fs_e2 fs_s)) ≈ (EApp e1 e2)) =
+let mk_pre_app #g (pre:gpre g) (#t1 #t2:Type) (wp:t1 -> pure_wp t2) (fs_e:fs_oexp pre t1) : gpre g =
+  fun fs_s -> pre fs_s /\ as_requires (wp (fs_e fs_s))
+
+let equiv_app
+  g (pre:gpre g)
+  (t1:typsr) (t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2))
+  (e1:exp)
+  (fs_e1:fs_oexp pre (get_Type (mk_arrow_wp t1 t2 wp)))
+  (e2:exp)
+  (fs_e2:fs_oexp pre (get_Type t1)) : Lemma
+  (requires fs_e1 `equiv _ pre` e1 /\ fs_e2 `equiv _ pre` e2)
+  (ensures
+    equiv #g t2 (mk_pre_app pre wp fs_e2)
+      (fun fs_s -> FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); (fs_e1 fs_s) (fs_e2 fs_s))
+      (EApp e1 e2)) =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   lem_fv_in_env_app g e1 e2;
-  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s ==> t2 ⦂ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
-    let fs_e1' = fs_e1 fs_s in
-    let fs_e2' = fs_e2 fs_s in
-    let fs_e = fs_e1' fs_e2' in
-    introduce s ∽ fs_s ==>  t2 ⦂ (fs_e, gsubst s (EApp e1 e2)) with _. begin
-      introduce forall (e':closed_exp). steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
-        introduce _ ==> t2 ∋ (fs_e, e') with h. begin
+  let pre' : gpre g = (mk_pre_app pre wp fs_e2) in
+  let fs_e : fs_oexp pre' (get_Type t2) = fun fs_s -> (fs_e1 fs_s) (fs_e2 fs_s) in
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s /\ pre' fs_s ==> t2 ⦂ (fs_e fs_s, gsubst s (EApp e1 e2)) with begin
+    introduce s ∽ fs_s /\ pre' fs_s ==>  _ with _. begin
+      let fs_e1' : (x:get_Type t1 -> PURE (get_Type t2) (wp x)) = fs_e1 fs_s in
+      let fs_e2' = fs_e2 fs_s in
+      assert (as_requires (wp fs_e2'));
+      introduce forall (e':closed_exp). steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> t2 ∋ (fs_e fs_s, e') with begin
+        introduce steps (gsubst s (EApp e1 e2)) e' /\ irred e' ==> _ with h. begin
           let steps_e_e' : squash (steps (EApp (gsubst s e1) (gsubst s e2)) e') = () in
-          FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+          FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e fs_s, e'))) steps_e_e' (fun steps_e_e' ->
             let (e11, e2') = destruct_steps_eapp (gsubst s e1) (gsubst s e2) e' steps_e_e' in
-            assert (mk_arrow t1 t2 ∋ (fs_e1', ELam e11));
+            assert (mk_arrow_wp t1 t2 wp ∋ (fs_e1', ELam e11));
             assert (t1 ∋ (fs_e2', e2'));
-            eliminate forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>
-              t2 ⦂ (fs_e1' fs_v, subst_beta v e11)
-            with e2' fs_e2';
+            (**
+            let fs_res = fs_e1' fs_e2' in
+            eliminate True /\ True
+            returns t2 ⦂ (fs_res, subst_beta e2' e11) with _ _. begin
+              assert (forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) /\ as_requires (wp fs_v)  ==>
+                      t2 ⦂ (fs_e1' fs_v, subst_beta v e11))
+              //with e2' fs_e2'
+            end;
             assert (t2 ⦂ (fs_e, subst_beta e2' e11));
-            assert (t2 ∋ (fs_e, e'))
+            assert (t2 ∋ (fs_e, e'))**)
+            admit ()
           )
         end
       end
     end
   end
 
+(**
 let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type tbool) (fs_e2:fs_env g -> get_Type t) (fs_e3:fs_env g -> get_Type t) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fs_s -> if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s) ≈ EIf e1 e2 e3) =
@@ -214,12 +271,4 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type 
       end
     end
   end
-
- (**
-let equiv_lam_wp g (t1:typsr) (body:exp) (t2:typsr) wp (f:fs_env g -> get_Type (mk_arrow_wp t1 t2 wp)) : Lemma
-  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
-            // the asymmetry is here. body is an open expression, while for f, I don't have an open expression
-            // the equiv is quantifying over the free variable of body, but not get_v
-  (ensures f ≈ (ELam body)) =
-  admit ()
 **)
