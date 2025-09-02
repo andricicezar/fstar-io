@@ -230,15 +230,15 @@ let _ = assert (test2_pure.e == ELam EFalse)
 let test3_pure : compile_closed #(x:bool -> Pure bool False (fun r -> r == false)) (fun x -> true) = solve
 let _ = assert (test3_pure.e == ELam ETrue)
 
-// TODO: why does this fail?
 let compile_exp_app
   g (pre:gpre g)
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
   (wp:a -> pure_wp b)
-  (f:fs_oexp pre (x:a -> PURE b (wp x))) {| cf: compile_exp g pre f |}
+  (f:fs_oexp pre (x:a -> PURE b (wp x))) {| cf: compile_exp #_ #(compile_typ_arrow_wp a b wp) g pre f |}
   (x:fs_oexp pre a)                     {| cx: compile_exp g pre x |}
-  : compile_exp #b #cb g (mk_pre_app pre wp x) (fun fs_s -> (f fs_s) (x fs_s)) = {
+  (l:squash (forall fs_s. pre fs_s ==>  as_requires (wp (x fs_s))))
+  : compile_exp #b #cb g pre (fun fs_s -> helper_fapp wp (f fs_s) (x fs_s)) = {
   e = begin
     lem_fv_in_env_app g cf.e cx.e;
     EApp cf.e cx.e
@@ -246,31 +246,46 @@ let compile_exp_app
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     cx.equiv_proof ();
-    equiv_app g pre (pack ca) (pack cb) wp cf.e f cx.e x
+    equiv_app g pre (pack ca) (pack cb) wp cf.e f cx.e x l
   );
 }
+
+// TODO: how to test functional application?
+
+let myf : (x:bool -> Pure bool (x == true) (fun r -> r == false)) = fun x -> false
+
+instance compile_exp_myf g pre : compile_exp g pre (fun _ -> myf) = solve
 
 let test0_fapp : compile_closed #unit #solve ((fun x y -> y) () ()) = solve
 let _ = assert (test0_fapp.e == EUnit)
 
-val myf : unit -> unit
-let myf () = ()
-
-(* It seems that it just unfolds the definition of myf, which is pretty cool **)
-let test1_topf : compile_closed (myf ()) = solve
-// because of partial evaluation we have to consider both cases
-let _ = assert (test1_topf.e == EApp (ELam EUnit) EUnit \/
-                test1_topf.e == EUnit)
-
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
-(* Also handles partial application. Pretty amazing! *)
 let test2_topf : compile_closed (myf2 ()) = solve
-let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
-                test2_topf.e == ELam EUnit)
+let _ = assert (test2_topf.e == ELam EUnit)
 
 (**
+let test1_hoc : compile_closed
+  #((bool -> bool) -> bool)
+  (fun f -> f false) =
+  compile_exp_lambda_wp
+    empty
+    (fun _ -> True)
+    _
+    _
+    (fun _ p -> forall r. p r)
+    _
+    #(compile_exp_app
+      _
+      _
+      bool #solve
+      bool #_
+      (fun _ p -> forall r. p r)
+      (fun fs_s -> get_v' fs_s 0 _) #solve
+      (fun _ -> false) #solve
+      ())
+
 instance compile_exp_if
   g
   (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
