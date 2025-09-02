@@ -54,8 +54,8 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
     match e with
     | ELam e' ->
-      (forall (v:value) fs_v.
-        (| t1, s1, r1 |) ∋ (fs_v, v) /\ as_requires (wp fs_v) ==>  (** Interesting that we do not need to quantify over post-conditions because of monotonicity **)
+      (forall (v:value) fs_v p.
+        (| t1, s1, r1 |) ∋ (fs_v, v) /\ wp fs_v p ==>  (** Interesting that we do not need to quantify over post-conditions because of monotonicity **)
          (| t2, s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
@@ -174,7 +174,7 @@ let equiv_lam
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s /\ pre fs_s ==> mk_arrow_wp t1 t2 wp ⦂ (f fs_s, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       assert (gsubst s (ELam body) == ELam (subst (sub_elam s) body));
-      introduce forall (v:value) fs_v. t1 ∋ (fs_v, v) /\ as_requires (wp fs_v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v (subst (sub_elam s) body)) with begin
+      introduce forall (v:value) fs_v p. t1 ∋ (fs_v, v) /\ wp fs_v p ==>  t2 ⦂ (f fs_s fs_v, subst_beta v (subst (sub_elam s) body)) with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
           let fs_s' = fs_extend fs_s fs_v in
@@ -229,13 +229,13 @@ let eliminate_value_arrow (t1 t2:typsr) wp fs_e1 e11 fs_e2 (e2:value) :
                norm [delta_once [`%mk_arrow_wp; `%op_u8715;`%get_rel;`%Mkdtuple3?._3;`%snd;`%Mktuple2?._2;`%fst;`%Mktuple2?._1];zeta;iota];
                norm [delta_only [`%get_rel';`%helper_fapp];iota]
           )}
-      (forall (v:value) (fs_v:t1._2). (| t1._1, t1._2, get_rel' t1 |) ∋ (fs_v, v) /\ as_requires #t2._2 (wp fs_v)  ==>
+      (forall (v:value) (fs_v:t1._2) p. (| t1._1, t1._2, get_rel' t1 |) ∋ (fs_v, v) /\ wp fs_v p ==>
                  (| t2._1, t2._2, get_rel' t2 |) ⦂ (helper_fapp #t1._2 #t2._2 wp fs_e1 fs_v, subst_beta v e11));
       <==> { _ by (norm [delta_only [`%get_rel'];iota]) }
-      (forall (v:value) fs_v. t1 ∋ (fs_v, v) /\ as_requires #t2._2 (wp fs_v)  ==>
+      (forall (v:value) fs_v p. t1 ∋ (fs_v, v) /\ wp fs_v p  ==>
                  (| t2._1, t2._2, get_rel t2 |) ⦂ (helper_fapp #t1._2 #t2._2 wp fs_e1 fs_v, subst_beta v e11));
-      <==> { _ by (l_to_r [`lem_super_lemma]) }
-      (forall (v:value) fs_v. t1 ∋ (fs_v, v) /\ as_requires (wp fs_v)  ==>
+      <==> { _ by (l_to_r [`lem_super_lemma]; dump "h") }
+      (forall (v:value) fs_v p. t1 ∋ (fs_v, v) /\ wp fs_v p  ==>
                  (| t2._1, t2._2, get_rel t2 |) ⦂ (helper_fapp wp fs_e1 fs_v, subst_beta v e11));
     }
 
