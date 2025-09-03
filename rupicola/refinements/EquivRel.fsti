@@ -107,10 +107,14 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
 type gpre (g:env) =
-  fs_env g -> Type0
+  fs_env g -> pure_pre
 
 type fs_oexp (#g:env) (pre:gpre g) (a:Type) =
   fs_s:(fs_env g) -> Pure a (pre fs_s) (fun _ -> True)
+               (**  ^^^^ here probably we have the monad we compile.
+                    This will give us the initial state/history over which to state the pre-condition**)
+
+//  fs_s:(fs_env g) -> s0':_ -> ST a (fun s0 -> s0 == s0' /\ pre fs_s) (fun _ -> True)
                (**  ^^^^ here probably we have the monad we compile.
                     This will give us the initial state/history over which to state the pre-condition**)
 
@@ -120,6 +124,14 @@ let equiv (#g:env) (t:typsr) (pre:gpre g) (fs_e:fs_oexp pre (get_Type t)) (e:exp
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
     s ∽ fs_s /\ pre fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
+
+//  forall b (s:gsub g b) (fs_s:fs_env g) p.
+//    s ∽ fs_s /\ wp fs_s p ==>  t ⦂ (fs_e fs_s, gsubst s e)
+//                                    ^^^^^^^^^ expects wp to hold for a different p!
+
+//  forall b (s:gsub g b) (fs_s:fs_env g) h.
+//    s ∽ fs_s /\ pre fs_s h ==>  t ⦂ (fs_e fs_s, gsubst s e)
+//                                ^^^^^^^^^ expects wp to hold for a different p!
 
 let (≈) (#g:env) (#t:typsr) (#pre:gpre g) (fs_v:fs_oexp pre (get_Type t)) (e:exp) : Type0 =
   equiv #g t pre fs_v e
