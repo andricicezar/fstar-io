@@ -260,6 +260,9 @@ instance compile_exp_refinement
   );
 }
 
+let g_exp_ref' #a g (v:fs_env g -> a) (p:a -> Type0) (fs_s:fs_env g) : (x:a{p x}) =
+  assume (p (v fs_s));
+  v fs_s
 
 let refbool : (t:bool{t == true}) = true
 
@@ -313,20 +316,108 @@ let _ = assert (test_ref_assume'.e == ELam (EVar 0))
 let test_pm2 : (x:bool -> y:bool{y == false}) = (fun x -> if x then if x then false else true else false)
 let test_pm2' : compile_closed test_pm2 = solve
 let _ = assert (test_pm2'.e == ELam (EIf (EVar 0) (EIf (EVar 0) EFalse ETrue) EFalse))
-  (** why does this work? how did it type `true` to `y:bool{y == false}`?
-
-      we work with typed code. `true` is already typed as `y:bool{y==false}`.
-
-      My intuition says that it should fail
-      because the else branch, `fun _ -> true` has to be typed as `fs_env g -> y:bool{y == false}`,
-      which should fail because it tries to do it without knowing that `x == false`, which would produce a
-      contradiction with the initial refinement `x == true`.
+  (** Q: why does this work? how did it type `true` to `y:bool{y == false}`?
+      A: We work with typed code. The entire if is alread typed as `y:bool{y==false}`,
+         so it tries to compile the if at the type bool
   **)
+
+(** This is the outputput F* gives: **)
+let test_pm2'' : compile_closed test_pm2 =
+  compile_exp_lambda empty
+   bool
+   #compile_typ_bool
+   (y: bool{eq2 #bool y false})
+   #(compile_typ_refinement bool #compile_typ_bool (fun y -> eq2 #bool y false))
+   (fun _ -> test_pm2)
+   #(compile_exp_refinement (extend (pack #bool compile_typ_bool) empty)
+       #bool
+       #compile_typ_bool
+       (fun y -> eq2 #bool y false)
+       (fun fs_s -> test_pm2 (get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool))
+       #(compile_exp_if (extend (pack #bool compile_typ_bool) empty)
+           (fun fs_s -> get_v #(extend (pack #bool compile_typ_bool) empty) fs_s 0)
+           #(compile_exp_var (extend (pack #bool compile_typ_bool) empty) bool #compile_typ_bool 0)
+           #bool
+           #compile_typ_bool
+           (fun fs_s ->
+               match get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool with
+               | true -> false
+               | _ -> true)
+           #(compile_exp_if (extend (pack #bool compile_typ_bool) empty)
+               (fun fs_s -> get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool)
+               #(compile_exp_var (extend (pack #bool compile_typ_bool) empty)
+                   bool
+                   #compile_typ_bool
+                   0)
+               #bool
+               #compile_typ_bool
+               (fun _ -> false)
+               #(compile_exp_false (extend (pack #bool compile_typ_bool) empty))
+               (fun _ -> true)
+               #(compile_exp_true (extend (pack #bool compile_typ_bool) empty)))
+           (fun _ -> false)
+           #(compile_exp_false (extend (pack #bool compile_typ_bool) empty))))
+
+
+instance compile_exp_false_elim
+  g
+  (a:Type) {| ca: compile_typ a |}
+  : compile_exp #(_:unit{False} -> a) #solve g (fun _ -> false_elim #a) = {
+  e = EUnit;
+  equiv_proof = (fun () -> admit ());
+}
+
+instance compile_exp_refinement'
+  g
+  (#a:Type) {| ca: compile_typ a |}
+  (p:a -> Type0)
+  (v:fs_env g -> a)
+  {| cv: compile_exp #a #solve g v |}
+  : compile_exp #(x:a{p x}) #solve g (g_exp_ref' g v p) = {
+  e = cv.e;
+  equiv_proof = (fun () ->
+    cv.equiv_proof ()
+  );
+}
+
+let test_pm_false_elim : (bool -> bool) = (fun x -> if x then if x then false else false_elim () else false)
+let test_pm_false_elim' : compile_closed test_pm_false_elim =
+  compile_exp_lambda empty
+    bool
+    #compile_typ_bool
+    bool
+    #compile_typ_bool
+    (fun fs_s x -> if x then if x then false else false_elim () else false)
+    #(compile_exp_if (extend (pack #bool compile_typ_bool) empty)
+        (fun fs_s -> get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool)
+        #(compile_exp_var (extend (pack #bool compile_typ_bool) empty) bool #compile_typ_bool 0)
+        #bool
+        #compile_typ_bool
+        (fun fs_s ->
+            match get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool with
+            | true -> false
+            | _ -> true)
+        #(compile_exp_if (extend (pack #bool compile_typ_bool) empty)
+            (fun fs_s -> get_v' #(extend (pack #bool compile_typ_bool) empty) fs_s 0 bool)
+            #(compile_exp_var (extend (pack #bool compile_typ_bool) empty)
+                bool
+                #compile_typ_bool
+                0)
+            #bool
+            #compile_typ_bool
+            (fun _ -> false)
+            #(compile_exp_false (extend (pack #bool compile_typ_bool) empty))
+            _
+            #(compile_exp_app _ _ _ (fun _ -> false_elim) _ #(compile_exp_refinement' _ #unit (fun _ -> False) (fun _ -> ()))))
+        (fun _ -> false)
+        #(compile_exp_false (extend (pack #bool compile_typ_bool) empty)))
+
+let _ = assert (test_pm_false_elim'.e == ELam (EIf (EVar 0) (EIf (EVar 0) EFalse (EApp EUnit EUnit)) EFalse))
 
 let test_ref_precond_f (x:bool{x == true}) : bool = false
 let test_ref_precond : compile_closed #(bool -> bool) (fun x -> test_ref_precond_f (test_ref_assume x)) =
   solve
-let _ = assert (test_ref_precond.e == ELam EFalse) by (compute (); dump "H")
+let _ = assert (test_ref_precond.e == ELam EFalse)
 
 let test_ref_erasure (x:bool{x == true}) : bool = x
 
