@@ -115,7 +115,7 @@ type fs_oexp (#g:env) (a:Type) (wp:wp_g g a) =
                     This will give us the initial state/history over which to state the pre-condition**)
 
 unfold
-let helper_fapp wp (f:(x:'a -> PURE 'b (wp x))) (x:'a) : Pure 'b (as_requires (wp x)) (fun _ -> True) =
+let helper_fapp wp (f:(x:'a -> PURE 'b (wp x))) (x:'a) : Pure 'b (as_requires (wp x)) (as_ensures (wp x)) =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   f x
 

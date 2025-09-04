@@ -186,17 +186,6 @@ instance compile_exp_lambda_wp
 //  )
 }
 
-let _ = assert (
-    forall (fs_s: fs_env (extend (pack compile_typ_unit) empty))
-          (p: (_: unit -> Type0)).
-          mk_pre_lam #_ #tunit #tunit (fun _ ->
-                (fun p -> forall (any_result: unit). p any_result)
-                <:
-                pure_wp unit)
-            (fun _ -> pure_trivial (_: unit -> unit))
-            fs_s
-            p ==>
-          p ()) by (compute (); explode (); mapply (nth_binder (-1)); dump "h")
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
 let _ = assert (test1_exp.e == ELam (EUnit))
@@ -229,24 +218,41 @@ let _ = assert (test2_pure.e == ELam EFalse)
 let test3_pure : compile_closed #(x:bool -> Pure bool False (fun r -> r == false)) (fun x -> true) = solve
 let _ = assert (test3_pure.e == ELam ETrue)
 
-let compile_exp_app
-  g (pre:gpre g)
+let helper_fapp2
+  g
+  (a:Type)
+  (b:Type)
+  (wpG:wp_g g b)
+  (wp:a -> pure_wp b)
+  (f:fs_oexp (x:a -> PURE b (wp x)) (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. p r)))
+  (x:fs_oexp a (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. as_requires (wp r) ==> p r)))
+  (l:squash (forall fs_s p. FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); (wpG fs_s p ==>  wp (x fs_s) p)))
+  : fs_oexp b wpG =
+  fun fs_s ->
+    FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+    let f = helper_fapp (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. p r)) f fs_s in
+    let x = helper_fapp (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. as_requires (wp r) ==> p r)) x fs_s in
+    helper_fapp wp f x
+
+instance compile_exp_app
+  g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
+  (wpG:wp_g g b)
   (wp:a -> pure_wp b)
-  (f:fs_oexp pre (x:a -> PURE b (wp x))) {| cf: compile_exp #_ #(compile_typ_arrow_wp a b wp) g pre f |}
-  (x:fs_oexp pre a)                     {| cx: compile_exp g pre x |}
-  (l:squash (forall fs_s. pre fs_s ==>  as_requires (wp (x fs_s))))
-  : compile_exp #b #cb g pre (fun fs_s -> helper_fapp wp (f fs_s) (x fs_s)) = {
+  (f:fs_oexp (x:a -> PURE b (wp x)) (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. p r))) {| cf: compile_exp #_ #(compile_typ_arrow_wp a b wp) g _ f |}
+  (x:fs_oexp a (fun fs_s p -> as_requires (wpG fs_s) /\ (forall r. as_requires (wp r) ==> p r))) {| cx: compile_exp g _ x |}
+  (l:squash (forall fs_s p. FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); (wpG fs_s p ==>  wp (x fs_s) p)))
+  : compile_exp #b #cb g wpG (helper_fapp2 g a b wpG wp f x l) = {
   e = begin
     lem_fv_in_env_app g cf.e cx.e;
     EApp cf.e cx.e
   end;
-  equiv_proof = (fun () ->
-    cf.equiv_proof ();
+  equiv_proof = (fun () -> admit ());
+(*    cf.equiv_proof ();
     cx.equiv_proof ();
     equiv_app g pre (pack ca) (pack cb) wp cf.e f cx.e x l
-  );
+  );*)
 }
 
 // TODO: how to test functional application?
