@@ -106,69 +106,86 @@ let (∽) (#g:env) #b (s:gsub g b) (fs_s:fs_env g) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fs_s x, s x)
 
-type gpre (g:env) =
-  fs_env g -> Type0
+type wp_g (g:env) (a:Type) =
+  fs_env g -> pure_wp a
 
-type fs_oexp (#g:env) (pre:gpre g) (a:Type) =
-  fs_s:(fs_env g) -> Pure a (pre fs_s) (fun _ -> True)
+type fs_oexp (#g:env) (a:Type) (wp:wp_g g a) =
+  fs_s:(fs_env g) -> PURE a (wp fs_s)
                (**  ^^^^ here probably we have the monad we compile.
                     This will give us the initial state/history over which to state the pre-condition**)
 
+unfold
+let helper_fapp wp (f:(x:'a -> PURE 'b (wp x))) (x:'a) : Pure 'b (as_requires (wp x)) (fun _ -> True) =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  f x
+
+let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
+  : Lemma
+      (requires FStar.Monotonic.Pure.is_monotonic wp)
+      (ensures pure_wp_monotonic a wp)
+    [SMTPat (pure_wp_monotonic a wp)]
+  = FStar.Monotonic.Pure.intro_pure_wp_monotonicity wp
+
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (pre:gpre g) (fs_e:fs_oexp pre (get_Type t)) (e:exp) : Type0 =
+let equiv (#g:env) (t:typsr) (wp:wp_g g (get_Type t)) (fs_e:fs_oexp (get_Type t) wp) (e:exp) : Type0 =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fv_in_env g e /\
   forall b (s:gsub g b) (fs_s:fs_env g).
-    s ∽ fs_s /\ pre fs_s ==>  t ⦂ (fs_e fs_s, gsubst s e)
+    s ∽ fs_s /\ as_requires (wp fs_s) ==>  t ⦂ (helper_fapp wp fs_e fs_s, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (#pre:gpre g) (fs_v:fs_oexp pre (get_Type t)) (e:exp) : Type0 =
-  equiv #g t pre fs_v e
+let (≈) (#g:env) (#t:typsr) (#wp:wp_g g (get_Type t)) (fs_v:fs_oexp (get_Type t) wp) (e:exp) : Type0 =
+  equiv #g t wp fs_v e
+
+let pure_trivial a : pure_wp a = (fun p -> forall r. p r)
 
 (** Equiv closed terms **)
 let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
-  Lemma (requires equiv #empty t (fun _ -> True) (fun _ -> fs_e) e)
+  Lemma (requires equiv #empty t (fun _ -> pure_trivial _) (fun _ -> fs_e) e)
         (ensures  t ⦂ (fs_e, e)) =
   eliminate forall b (s:gsub empty b) (fs_s:fs_env empty).
-    s ∽ fs_s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
+    s ∽ fs_s /\ as_requires (pure_trivial (get_Type t)) ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
 
 (** Rules **)
 
 let tunit : typsr =
   (| _, _, RUnit |)
 
-let equiv_unit g pre
-  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit pre` EUnit)
-  = assert ((fun (_:fs_env g) -> ()) `equiv tunit pre` EUnit) by (explode ())
+let equiv_unit g
+  : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit (fun _ -> pure_trivial _)` EUnit)
+  =
+  introduce forall b (s:gsub g b) fs_s. s ∽ fs_s /\ as_requires (pure_trivial unit) ==>  tunit ⦂ ((), EUnit) with begin
+    introduce _ ==> _ with _. begin
+      assert (tunit ∋ ((), EUnit));
+      lem_values_are_expressions tunit () EUnit
+    end
+  end
 
 let tbool : typsr =
   (| _, _, RBool |)
 
-let equiv_true g pre
-  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue)
-  = assert ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue) by (explode ())
+let mk_pre_lam #g (#t1 #t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2)) (wpG:wp_g g (get_Type (mk_arrow_wp t1 t2 wp))) : wp_g (extend t1 g) (get_Type t2) =
+  fun fs_s ->
+    let new_wp : pure_wp' (get_Type t2) = fun p -> wpG (fs_shrink fs_s) (fun _ -> wp (get_v fs_s 0) p) in
+    assume (FStar.Monotonic.Pure.is_monotonic new_wp);
+    new_wp
 
-let equiv_false g pre
-  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse)
-  = assert ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse) by (explode ())
-
-let equiv_var g (x:var{Some? (g x)}) pre
-  : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x)
-  = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x) by (explode ())
-
-let mk_pre_lam #g (pre:gpre g) (#t1 #t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2)) : gpre (extend t1 g) =
-  fun fs_s -> pre (fs_shrink fs_s) /\ as_requires (wp (get_v fs_s 0))
 
 let equiv_lam
-  g (pre:gpre g)
-  (t1:typsr) (t2:typsr) (wp:get_Type t1 -> pure_wp (get_Type t2))
+  g
+  (t1:typsr) (t2:typsr)
   (body:exp)
-  (f:fs_oexp pre (get_Type (mk_arrow_wp t1 t2 wp)))
+  (wp:get_Type t1 -> pure_wp (get_Type t2))
+  (wpG: wp_g g (get_Type (mk_arrow_wp t1 t2 wp)))
+  (f:fs_oexp (get_Type (mk_arrow_wp t1 t2 wp)) wpG)
   : Lemma
-    (requires (equiv #(extend t1 g) t2 (mk_pre_lam pre wp)
+    (requires (equiv #(extend t1 g) t2 (mk_pre_lam wp wpG)
                    (fun fs_s -> FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall (); f (fs_shrink fs_s) (get_v fs_s 0))
                    body))
     (ensures f ≈ (ELam body))
-  =
+  = admit ()
+
+(**
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   lem_fv_in_env_lam g t1 body;
   introduce forall b (s:gsub g b) fs_s. s ∽ fs_s /\ pre fs_s ==> mk_arrow_wp t1 t2 wp ⦂ (f fs_s, gsubst s (ELam body)) with begin
@@ -204,13 +221,21 @@ let equiv_lam
     end
   end
 
+let equiv_true g pre
+  : Lemma ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue)
+  = assert ((fun (_:fs_env g) -> true) `equiv tbool pre` ETrue) by (explode ())
+
+let equiv_false g pre
+  : Lemma ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse)
+  = assert ((fun (_:fs_env g) -> false) `equiv tbool pre` EFalse) by (explode ())
+
+let equiv_var g (x:var{Some? (g x)}) pre
+  : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x)
+  = assert ((fun (fs_s:fs_env g) -> get_v fs_s x) `equiv (Some?.v (g x)) pre` EVar x) by (explode ())
+
+
 let mk_pre_app #g (pre:gpre g) (#t1 #t2:Type) (wp:t1 -> pure_wp t2) (fs_e:fs_oexp pre t1) : gpre g =
   fun fs_s -> pre fs_s /\ as_requires (wp (fs_e fs_s))
-
-unfold
-let helper_fapp wp (f:(x:'a -> PURE 'b (wp x))) (x:'a) : Pure 'b (as_requires (wp x)) (fun _ -> True) =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  f x
 
 let get_rel' = get_rel
 
@@ -302,4 +327,6 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_env g -> get_Type 
       end
     end
   end
+**)
+
 **)

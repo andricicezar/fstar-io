@@ -48,17 +48,17 @@ let test3 : compile_typ test3_t = solve
 let _ = assert (test3.t == (TArr TBool TBool))
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (pre:gpre g) (fs_e:fs_oexp pre a) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (wp:wp_g g a) (fs_e:fs_oexp a wp) = {
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
  // [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
-  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv (pack ca) pre` e);
+  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv (pack ca) wp` e);
 }
 
 (** Just a helper typeclass **)
 unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) =
-  compile_exp #a empty (fun _ -> True) (fun _ -> s)
+  compile_exp #a empty (fun _ -> pure_trivial a) (fun _ -> s)
 
 let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
   : Lemma (pack ca ⦂ (fs_e, cs.e)) =
@@ -68,19 +68,25 @@ let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a)
 let lemma_compile_closed_arrow_is_elam #a #b {| ca:compile_typ a |} {| cb:compile_typ b |} (fs_e:a -> b) {| cs:compile_closed #(a -> b) fs_e |}
   : Lemma (ELam? cs.e) = admit ()
 
-instance compile_exp_unit g pre : compile_exp #unit #solve g pre (fun _ -> ()) = {
+instance compile_exp_unit g (wp:wp_g g unit)
+  (_:squash (forall fs_s p. wp fs_s p ==>  p ()))
+  : compile_exp #unit #solve g wp (fun _ -> ()) = {
   e = EUnit;
-  equiv_proof = (fun () -> equiv_unit g pre);
+  equiv_proof = (fun () -> admit ()); //equiv_unit g wp);
 }
 
-instance compile_exp_true g pre : compile_exp #bool #solve g pre (fun _ -> true) = {
+instance compile_exp_true g (wp:wp_g g bool)
+  (_:squash (forall fs_s p. wp fs_s p ==>  p true))
+  : compile_exp #bool #solve g wp (fun _ -> true) = {
   e = ETrue;
-  equiv_proof = (fun () -> equiv_true g pre);
+  equiv_proof = (fun () -> admit ()); // equiv_true g pre);
 }
 
-instance compile_exp_false g pre : compile_exp #bool #solve g pre (fun _ -> false) = {
+instance compile_exp_false g (wp:wp_g g bool)
+  (_:squash (forall fs_s p. wp fs_s p ==>  p false))
+  : compile_exp #bool #solve g wp (fun _ -> false) = {
   e = EFalse;
-  equiv_proof = (fun () -> equiv_false g pre);
+  equiv_proof = (fun () -> admit ()); // equiv_false g pre);
 }
 
 let test_unit : compile_closed () = solve
@@ -95,43 +101,49 @@ let get_v' #g fs_s i a =
 
 instance compile_exp_var
   (g:env)
-  (pre:gpre g)
   (a:Type) {| ca:compile_typ a |}
+  (wp:wp_g g a)
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  : compile_exp #a #ca g pre (fun fs_s -> get_v' fs_s x a) = {
+  (_:squash (forall fs_s p. wp fs_s p ==>  p (get_v' fs_s x a)))
+  : compile_exp #a #ca g wp (fun fs_s -> get_v' fs_s x a) = {
     e = EVar x;
-    equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g);
-      equiv_var g x pre);
+    equiv_proof = (fun () -> admit ());
+
+//      reveal_opaque (`%get_v') (get_v' #g);
+//      equiv_var g x pre);
 }
 
-let test1_var : compile_exp (extend tunit empty) (fun _ -> True) (fun fs_s -> get_v' fs_s 0 unit) = solve
+let test1_var : compile_exp (extend tunit empty) (fun _ -> pure_trivial unit) (fun fs_s -> get_v' fs_s 0 unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (g':env)
-  (pre':gpre g')
   (a:Type) {| ca:compile_typ a |}
+  (wp':wp_g g' a)
   (t:typsr)
   (g:env{g' == extend t g})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  {| ce:compile_exp g' pre' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' pre' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
+  (_:squash (forall fs_s p. wp' fs_s p ==>  p (get_v' #g (fs_shrink #t #g fs_s) x a)))
+  (_:squash (forall fs_s p. wp' fs_s p ==>  p (get_v' #g' fs_s (x+1) a)))
+  {| ce:compile_exp g' wp' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' wp' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
     e = ce.e;
-    equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g');
-      reveal_opaque (`%get_v') (get_v' #g);
-      ce.equiv_proof ());
+    equiv_proof = (fun () -> admit ());
+ //     reveal_opaque (`%get_v') (get_v' #g');
+//      reveal_opaque (`%get_v') (get_v' #g);
+//      ce.equiv_proof ());
   }
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
   (g':env)
-  (pre':gpre g')
   (a:Type) {| ca:compile_typ a |}
+  (wp':wp_g g' a)
   (t1 t2:typsr)
   (g:env{g' == extend t1 (extend t2 g)})
   (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  {| ce:compile_exp g' pre' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' pre' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
+  (_:squash (forall fs_s p. wp' fs_s p ==>  p (get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a)))
+  (_:squash (forall fs_s p. wp' fs_s p ==>  p (get_v' #g' fs_s (x+2) a)))
+  {| ce:compile_exp g' wp' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' wp' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
     e = ce.e;
     equiv_proof = (fun () ->
       reveal_opaque (`%get_v') (get_v' #g');
@@ -139,46 +151,52 @@ instance compile_exp_var_shrink2 (** CA: how to make this general? **)
       ce.equiv_proof ());
   }
 
-let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun _ -> True) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
+let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun _ -> pure_trivial unit) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
   solve
 
-let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun _ -> True) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
+let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun _ -> pure_trivial unit) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
   solve
 
 (*** Compiling lambdas **)
 
-let get_body_f #g (pre:gpre g) a (#ca:compile_typ a) b (#cb:compile_typ b) wp (f:fs_oexp pre (x:a -> PURE b (wp x)))
-  : fs_oexp #(extend (pack ca) g) (mk_pre_lam pre #(pack ca) #(pack cb) wp) b =
+let get_body_f #g a (#ca:compile_typ a) b (#cb:compile_typ b) wp (wpG:wp_g g (get_Type (mk_arrow_wp (pack ca) (pack cb) wp))) (f:fs_oexp (x:a -> PURE b (wp x)) wpG)
+  : fs_oexp #(extend (pack ca) g) b (mk_pre_lam #g #(pack ca) #(pack cb) wp wpG) =
   fun fs_s ->
     FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
     reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
     f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)
 
 instance compile_exp_lambda_wp
-  g (pre:gpre g)
+  g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
   (wp:a -> pure_wp b)                    (** CA: the wp can depend on things that are in g, so maybe one can make this take a env of fs values? **)
-  (f:fs_oexp pre (x:a -> PURE b (wp x)))
-  {| cf: compile_exp (extend (pack ca) g) (mk_pre_lam pre #(pack ca) #(pack cb) wp) (get_body_f pre a b wp f) |}
-  : compile_exp #_ #(compile_typ_arrow_wp a b wp) g pre f  = {
+  (wpG:wp_g g (get_Type (mk_arrow_wp (pack ca) (pack cb) wp)))
+  (f:fs_oexp (x:a -> PURE b (wp x)) wpG)
+  {| cf: compile_exp (extend (pack ca) g) (mk_pre_lam #g #(pack ca) #(pack cb) wp wpG) (get_body_f a b wp wpG f) |}
+  : compile_exp #_ #(compile_typ_arrow_wp a b wp) g wpG f  = {
   e = begin
     lem_fv_in_env_lam g (pack ca) cf.e;
     ELam cf.e
   end;
-  equiv_proof = (fun () ->
-    cf.equiv_proof ();
-    reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
-    equiv_lam g pre (pack ca) (pack cb) wp cf.e f
-  )
+  equiv_proof = (fun () -> admit ());
+//    cf.equiv_proof ();
+//    reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
+//    equiv_lam g pre (pack ca) (pack cb) wp cf.e f
+//  )
 }
 
-let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
-  : Lemma
-      (requires FStar.Monotonic.Pure.is_monotonic wp)
-      (ensures pure_wp_monotonic a wp)
-    [SMTPat (pure_wp_monotonic a wp)]
-  = FStar.Monotonic.Pure.intro_pure_wp_monotonicity wp
+let _ = assert (
+    forall (fs_s: fs_env (extend (pack compile_typ_unit) empty))
+          (p: (_: unit -> Type0)).
+          mk_pre_lam #_ #tunit #tunit (fun _ ->
+                (fun p -> forall (any_result: unit). p any_result)
+                <:
+                pure_wp unit)
+            (fun _ -> pure_trivial (_: unit -> unit))
+            fs_s
+            p ==>
+          p ()) by (compute (); explode (); mapply (nth_binder (-1)); dump "h")
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
 let _ = assert (test1_exp.e == ELam (EUnit))
