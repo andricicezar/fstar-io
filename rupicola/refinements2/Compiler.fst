@@ -7,6 +7,12 @@ open FStar.List.Tot
 
 open STLC
 
+(** Helpers to deal with Monotonicity of Pure **)
+module M = FStar.Monotonic.Pure
+
+let pure_trivial #a : pure_wp a =
+  fun p -> forall r. p r
+
 (** Typing environment **)
 type typsr = Type0
 let get_Type (t:typsr) = t
@@ -23,27 +29,30 @@ let extend (t:typsr) (g:env)
 assume val fs_env (g:env) : Type u#0
 assume val fs_empty : fs_env empty
 assume val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> get_Type (Some?.v (g x))
-assume val fs_extend : #g:env -> fs_s:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
+assume val fs_extend : #g:env -> fsG:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
 assume val fs_shrink : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
 
-assume val lem_fs_extend #g (fs_s:fs_env g) #t (v:get_Type t) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s x == get_v (fs_extend fs_s v) (x+1)) /\
-  get_v (fs_extend fs_s v) 0 == v)
-  [SMTPat (fs_extend fs_s v)]
+assume val lem_fs_extend #g (fsG:fs_env g) #t (v:get_Type t) : Lemma (
+  (forall (x:var). Some? (g x) ==>  get_v fsG x == get_v (fs_extend fsG v) (x+1)) /\
+  get_v (fs_extend fsG v) 0 == v)
+  [SMTPat (fs_extend fsG v)]
 
-assume val lem_fs_shrink #g #t (fs_s:fs_env (extend t g)) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s (x+1) == get_v (fs_shrink fs_s) x))
-  [SMTPat (fs_shrink fs_s)]
+assume val lem_fs_shrink #g #t (fsG:fs_env (extend t g)) : Lemma (
+  (forall (x:var). Some? (g x) ==>  get_v fsG (x+1) == get_v (fs_shrink fsG) x))
+  [SMTPat (fs_shrink fsG)]
 
-assume val shrink_extend_inverse #g (fs_s:fs_env g) #t (x:get_Type t) : Lemma (fs_shrink (fs_extend fs_s x) == fs_s)
-  [SMTPat (fs_shrink (fs_extend fs_s x))]
+assume val shrink_extend_inverse #g (fsG:fs_env g) #t (x:get_Type t) : Lemma (fs_shrink (fs_extend fsG x) == fsG)
+  [SMTPat (fs_shrink (fs_extend fsG x))]
+
+type spec_env (g:env) (a:Type) =
+  fsG:fs_env g -> pure_wp a
 
 (** Definition of open FStar expressions **)
-type fs_oexp (g:env) (a:Type) =
-  fs_s:fs_env g -> a
+type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
+  fsG:fs_env g -> PURE a (wpG fsG)
 
 (** Compiling open expressions **)
-class compile_exp (#a:Type0) (g:env) (fs_e:fs_oexp g a) = {
+class compile_exp (#a:Type0) (g:env) (wpG:spec_env g a) (fs_e:fs_oexp g a wpG) = {
   [@@@no_method] e : exp; (** expression is closed by g *)
 }
 
@@ -70,18 +79,18 @@ let test_false : compile_closed false = solve
 (** get_v' works better with typeclass resolution than get_v **)
 [@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
 val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (Some?.v (g x))} -> a
-let get_v' #g fs_s i a =
-  get_v #g fs_s i
+let get_v' #g fsG i a =
+  get_v #g fsG i
 
 instance var_elim
   (#g:env)
   (a:Type)
   (x:var{Some? (g x) /\ a == Some?.v (g x)})
-  : compile_exp #a g (fun fs_s -> get_v' fs_s x a) = {
+  : compile_exp #a g (fun fsG -> get_v' fsG x a) = {
     e = EVar x;
 }
 
-let test1_var : compile_exp (extend unit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
+let test1_var : compile_exp (extend unit empty) (fun fsG -> get_v' fsG 0 unit) = solve
 
 instance var_elim_shrink1 (** CA: how to make this general? **)
   (g':env)
@@ -89,8 +98,8 @@ instance var_elim_shrink1 (** CA: how to make this general? **)
   (t:typsr)
   (g:env{g' == extend t g})
   (x:var{Some? (g x) /\ a == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
+  {| ce:compile_exp g' (fun fsG -> get_v' #g' fsG (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' (fun (fsG:fs_env g') -> get_v' #g (fs_shrink #t #g fsG) x a) = {
     e = ce.e;
   }
 
@@ -100,15 +109,15 @@ instance var_elim_shrink2 (** CA: how to make this general? **)
   (t1 t2:typsr)
   (g:env{g' == extend t1 (extend t2 g)})
   (x:var{Some? (g x) /\ a == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
+  {| ce:compile_exp g' (fun fsG -> get_v' #g' fsG (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
+  : compile_exp g' (fun (fsG:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fsG)) x a) = {
     e = ce.e;
   }
 
-let test2_var : compile_exp (extend unit (extend unit empty)) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
+let test2_var : compile_exp (extend unit (extend unit empty)) (fun fsG -> get_v' (fs_shrink fsG) 0 unit) =
   solve
 
-let test3_var : compile_exp (extend unit (extend unit (extend unit empty))) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
+let test3_var : compile_exp (extend unit (extend unit (extend unit empty))) (fun fsG -> get_v' (fs_shrink (fs_shrink fsG)) 0 unit) =
   solve
 
 instance lambda_elim
@@ -116,7 +125,7 @@ instance lambda_elim
   (a:Type)
   (b:Type)
   (f:fs_oexp g (a -> b))
-  {| cf: compile_exp #b (extend a g) (fun fs_s -> f (fs_shrink #a fs_s) (get_v' fs_s 0 a)) |}
+  {| cf: compile_exp #b (extend a g) (fun fsG -> f (fs_shrink #a fsG) (get_v' fsG 0 a)) |}
   : compile_exp g f = {
   e = ELam cf.e;
 }
@@ -150,7 +159,7 @@ instance app_elim
   (b:Type)
   (f:fs_oexp g (a -> b)) {| cf: compile_exp g f |}
   (x:fs_oexp g a)       {| cx: compile_exp g x |}
-  : compile_exp g (fun fs_s -> (f fs_s) (x fs_s)) = {
+  : compile_exp g (fun fsG -> (f fsG) (x fsG)) = {
   e = EApp cf.e cx.e;
 }
 
@@ -158,7 +167,7 @@ instance app_elim
 let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   (fun f -> f false) =
-  lambda_elim _ _ _ #(app_elim _ _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+  lambda_elim _ _ _ #(app_elim _ _ (fun fsG -> get_v' fsG 0 (bool -> bool)) _)
 
 instance if_elim
   #g
@@ -167,7 +176,7 @@ instance if_elim
   (a:Type)
   (th:fs_oexp g a)     {| cth: compile_exp g th |}
   (el:fs_oexp g a)     {| cel: compile_exp g el |}
-  : compile_exp #_ g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
+  : compile_exp #_ g (fun fsG -> if co fsG then th fsG else el fsG) = {
   e = EIf cco.e cth.e cel.e;
 }
 
@@ -185,7 +194,7 @@ instance pair_elim
   (b:Type)
   (l:fs_oexp g a)     {| cl: compile_exp g l |}
   (r:fs_oexp g b)     {| cr: compile_exp g r |}
-  : compile_exp #(a & b) g (fun fs_s -> (l fs_s, r fs_s)) = {
+  : compile_exp #(a & b) g (fun fsG -> (l fsG, r fsG)) = {
   e = EPair cl.e cr.e;
 }
 
