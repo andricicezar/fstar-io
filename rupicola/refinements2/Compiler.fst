@@ -17,18 +17,13 @@ let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
     [SMTPat (pure_wp_monotonic a wp)]
   = M.intro_pure_wp_monotonicity wp
 
+let pure_wp (a: Type) = wp:pure_wp' a{pure_wp_monotonic0 a wp}
+
 let pure_trivial #a : pure_wp a =
   fun p -> forall r. p r
 
-unfold let (<=) #a wp1 wp2 = pure_stronger a wp1 wp2
-unfold let ret #a x = pure_return a x
-
-unfold
-let helper_fapp wp (f:(x:'a -> PURE 'b (wp x))) (x:'a)
-  : Pure 'b (as_requires (wp x)) (as_ensures (wp x))
-  =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  f x
+unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
+unfold let ret #a x : pure_wp a = pure_return a x
 
 (** Typing environment **)
 type typsr = Type0
@@ -66,7 +61,7 @@ type spec_env (g:env) (a:Type) =
 
 (** Definition of open FStar expressions **)
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
-  fsG:fs_env g -> PURE a (wpG fsG)
+  fsG:fs_env g -> x:a{wpG fsG <= ret x} (** this works better than using PURE **)
 
 (** Compiling open expressions **)
 class compile_exp (#a:Type0) (g:env) (wpG:spec_env g a) (fs_e:fs_oexp g a wpG) = {
@@ -156,7 +151,8 @@ let test3_var
   : compile_exp (extend unit (extend unit (extend unit empty))) (fun _ -> pure_trivial) (fun fsG -> get_v' (fs_shrink (fs_shrink fsG)) 0 unit)
   = solve
 
-let body_wp
+unfold
+let lambda_body_wp
   #g
   (#a:Type)
   (#b:Type)
@@ -164,12 +160,9 @@ let body_wp
   (f:fs_oexp g (a -> b) wpG)
   : spec_env (extend a g) b
   = fun fsG ->
-    let wp = fun p -> as_requires (wpG (fs_shrink #a fsG)) /\ forall r. (as_ensures (wpG (fs_shrink #a fsG)) (f (fs_shrink #a fsG))) ==> p r in
-    wp
+    fun p -> wpG (fs_shrink fsG) (fun f' -> f (fs_shrink fsG) == f' /\ p (f (fs_shrink fsG) (get_v' fsG 0 a)))
 
-//   (fun fsG -> admit (); fun p -> wpG (fs_shrink #a fsG) (fun f' -> p (f' (get_v' fsG 0 a))))
-
-let lambda_elim
+instance lambda_elim
   #g
   (a:Type)
   (b:Type)
@@ -178,19 +171,26 @@ let lambda_elim
   (_:squash (forall fsG. wpG fsG <= ret (f fsG)))
   {| cf: compile_exp #b
            (extend a g)
-           (body_wp f)
-           (fun fsG -> f (fs_shrink #a fsG) (get_v' fsG 0 a)) |}
-  : compile_exp #(a -> b) g wpG (fun fsG -> admit (); f fsG)
-  by (tadmit ())
+           (lambda_body_wp f)
+           (fun fsG -> f (fs_shrink fsG) (get_v' fsG 0 a)) |}
+  : compile_exp #(a -> b) g wpG f
   = { e = ELam cf.e; }
 
-let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
+let test1_exp
+  : compile_closed (fun (x:unit) -> ())
+  = solve
 let _ = assert (test1_exp.e == ELam (EUnit))
 
-let test2_exp : compile_closed #(unit -> unit) (fun x -> x) = solve
+let test2_exp
+  : compile_closed #(unit -> unit) (fun x -> x)
+  = solve
 let _ = assert (test2_exp.e == ELam (EVar 0))
 
-let test3_exp : compile_closed #(unit -> unit -> unit) (fun x y -> x) = solve
+#set-options "--timing"
+let test3_exp // 450ms
+  : compile_closed #(unit -> unit -> unit) (fun x y -> x)
+  = solve
+
 let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
