@@ -44,6 +44,13 @@ let pure_trivial #a : pure_wp a =
 unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
 unfold let ret #a x : pure_wp a = pure_return a x
 
+(** Compiling types, helps with recursion of the other type class **)
+class compile_typ (s:Type) = {  [@@@no_method] r : unit; }
+instance compile_typ_unit : compile_typ unit = { r = () }
+instance compile_typ_bool : compile_typ bool = { r = () }
+instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = { r = () }
+instance compile_typ_refinement (s1:Type) {| c1:compile_typ s1 |} (p:s1 -> Type0) : compile_typ (x:s1{p x}) = { r = (); }
+
 (** Typing environment **)
 type typsr = Type0
 let get_Type (t:typsr) = t
@@ -83,12 +90,12 @@ type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> x:a{wpG fsG <= ret x} (** this works better than using PURE **)
 
 (** Compiling open expressions **)
-class compile_exp (#a:Type0) (g:env) (wpG:spec_env g a) (fs_e:fs_oexp g a wpG) = {
+class compile_exp (#a:Type0) {| compile_typ a |} (g:env) (wpG:spec_env g a) (fs_e:fs_oexp g a wpG) = {
   [@@@no_method] e : exp; (** expression is closed by g *)
 }
 
 (** Just a helper typeclass **)
-unfold let compile_closed (#a:Type0) (s:a) =
+unfold let compile_closed (#a:Type0) {| compile_typ a |} (s:a) =
   compile_exp #a empty (fun _ -> pure_trivial) (fun _ -> s)
 
 instance unit_elim
@@ -124,7 +131,7 @@ let get_v' #g fsG i a =
 
 instance var_elim
   (#g:env)
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (#wpG:spec_env g a)
   (x:var{Some? (g x) /\ a == Some?.v (g x)})
   (_:squash (forall fsG. wpG fsG <= ret (get_v' fsG x a)))
@@ -137,7 +144,7 @@ let test1_var
 
 instance var_elim_shrink1 (** CA: how to make this general? **)
   (g':env)
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (#wpG:spec_env g' a)
   (t:typsr)
   (g:env{g' == extend t g})
@@ -150,7 +157,7 @@ instance var_elim_shrink1 (** CA: how to make this general? **)
 
 instance var_elim_shrink2 (** CA: how to make this general? **)
   (g':env)
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (#wpG:spec_env g' a)
   (t1 t2:typsr)
   (g:env{g' == extend t1 (extend t2 g)})
@@ -183,8 +190,8 @@ let lambda_body_wp
 
 instance lambda_elim
   #g
-  (a:Type)
-  (b:Type)
+  (a:Type) {| compile_typ a |}
+  (b:Type) {| compile_typ b |}
   (#wpG:spec_env g (a -> b))
   (f:fs_oexp g (a -> b) wpG)
   {| cf: compile_exp #b
@@ -255,9 +262,9 @@ let fapp_f_wp
 
 instance app_elim
   #g
-  (b:Type)
+  (b:Type) {| compile_typ b |}
   (#wpG:spec_env g b)
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (x:fs_oexp g a (fapp_x_wp wpG a))         {| cx: compile_exp _ _ x |}
   (f:fs_oexp g (a -> b) (fapp_f_wp wpG x))   {| cf: compile_exp _ _ f |}
   (_:squash (forall fsG. wpG fsG <= ret ((f fsG) (x fsG))))
@@ -273,7 +280,7 @@ let test1_hoc : compile_closed
 
 instance false_elim_elim
   #g
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (#wpG:spec_env g (_:unit{False} -> a))
   (_:squash (forall fsG. wpG fsG <= ret (false_elim #a)))
   : compile_exp g wpG (fun _ -> false_elim #a)
@@ -312,7 +319,7 @@ let if_el_wp
 
 instance if_elim
   #g
-  (a:Type)
+  (a:Type) {| compile_typ a |}
   (#wpG:spec_env g a)
   (co:fs_oexp g bool (if_co_wp wpG))  {| cco: compile_exp _ _ co |}
 
@@ -342,7 +349,7 @@ let test3_if
 unfold
 let ref_wp
   #g
-  (#a:Type)
+  (#a:Type) {| compile_typ a |}
   (#ref:a -> Type0)
   (wpG:spec_env g (x:a{ref x}))
   : spec_env g a =
@@ -351,7 +358,7 @@ let ref_wp
 
 instance refinement_elim
   #g
-  (#a:Type)
+  (#a:Type) {| compile_typ a |}
   (ref:a -> Type0)
   (#wpG:spec_env g (x:a{ref x}))
   (v:fs_oexp g (x:a{ref x}) wpG)
