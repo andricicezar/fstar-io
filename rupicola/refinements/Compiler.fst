@@ -16,16 +16,11 @@ class compile_typ (s:Type) = {
 
 instance compile_typ_unit : compile_typ unit = { t = TUnit; r = RUnit }
 instance compile_typ_bool : compile_typ bool = { t = TBool; r = RBool }
-  (**
-instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
-  t = TArr c1.t c2.t;
-  r = RArr c1.r c2.r }
-**)
 instance compile_typ_refinement (s1:Type) {| c1:compile_typ s1 |} (p:s1 -> Type0) :
   compile_typ (x:s1{p x}) = {
   t = c1.t;
   r = RRefined c1.r p;
-  }
+}
 
 instance compile_typ_arrow_wp (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} (wp:s1 -> pure_wp s2) : compile_typ (x:s1 -> PURE s2 (wp x)) = {
   t = TArr c1.t c2.t;
@@ -211,7 +206,7 @@ let _ = assert (test2_pure.e == ELam EFalse)
 let test3_pure : compile_closed #(x:bool -> Pure bool False (fun r -> r == false)) (fun x -> true) = solve
 let _ = assert (test3_pure.e == ELam ETrue)
 
-let compile_exp_app
+instance compile_exp_app
   g (pre:gpre g)
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
