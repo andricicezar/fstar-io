@@ -7,6 +7,24 @@ open FStar.List.Tot
 
 open STLC
 
+(** We're stuck at defining a compiler that is able
+    to compile the following programs that make use of false_elim.
+**)
+
+let test_false_elim0
+  : bool -> bool
+  = fun x -> if x then if x then true else false_elim () else true
+
+let test_false_elim1
+  : x:unit{False} -> Tot bool
+  = fun x -> false_elim ()
+
+let test_false_elim2
+  : f:(unit -> x:bool{x == true}) -> Tot bool
+  = fun f -> if f () then true else false_elim ()
+
+(** What other examples should we add to the list? **)
+
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
 
@@ -17,8 +35,9 @@ let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
     [SMTPat (pure_wp_monotonic a wp)]
   = M.intro_pure_wp_monotonicity wp
 
-let pure_wp (a: Type) = wp:pure_wp' a{pure_wp_monotonic0 a wp}
+let pure_wp (a: Type) = wp:pure_wp' a{M.is_monotonic wp}
 
+unfold
 let pure_trivial #a : pure_wp a =
   fun p -> forall r. p r
 
@@ -86,7 +105,7 @@ instance true_elim
   : compile_exp g wpG (fun _ -> true)
   = { e = ETrue; }
 
-instance false_elim
+instance fals_elim
   #g
   (#wpG:spec_env g bool)
   (_:squash (forall fsG. wpG fsG <= ret false))
@@ -168,11 +187,11 @@ instance lambda_elim
   (b:Type)
   (#wpG:spec_env g (a -> b))
   (f:fs_oexp g (a -> b) wpG)
-  (_:squash (forall fsG. wpG fsG <= ret (f fsG)))
   {| cf: compile_exp #b
            (extend a g)
            (lambda_body_wp f)
            (fun fsG -> f (fs_shrink fsG) (get_v' fsG 0 a)) |}
+  (_:squash (forall fsG. wpG fsG <= ret (f fsG)))
   : compile_exp #(a -> b) g wpG f
   = { e = ELam cf.e; }
 
@@ -193,27 +212,56 @@ let test3_exp // 450ms
 
 let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 
-let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
+let test3_exp'
+  : compile_closed #(unit -> unit -> unit) (fun x y -> y)
+  = solve
 let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
-let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
-  solve
+let test4_exp
+  : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x)
+  = solve
 let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
 
-let test4_exp' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> y) = solve
+let test4_exp'
+  : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
+  = solve
 let _ = assert (test4_exp'.e == ELam (ELam (ELam (EVar 1))))
 
-let test4_exp'' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> z) = solve
+let test4_exp''
+  : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> z)
+  = solve
 let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
 
+unfold
+let fapp_x_wp
+  #g
+  (#b:Type)
+  (wpG:spec_env g b)
+  (a:Type)
+  : spec_env g a
+  = fun fsG ->
+    fun p -> wpG fsG (fun _ -> forall r. p r)
+
+unfold
+let fapp_f_wp
+  #g
+  (#b:Type)
+  (wpG:spec_env g b)
+  (#a:Type)
+  (x:fs_oexp g a (fapp_x_wp wpG a))
+  : spec_env g (a -> b)
+  = fun fsG ->
+      fun p -> wpG fsG (fun r -> forall (f:a -> b). f (x fsG) == r ==> p f)
 
 instance app_elim
   #g
-  (a:Type)
   (b:Type)
-  (f:fs_oexp g (a -> b)) {| cf: compile_exp g f |}
-  (x:fs_oexp g a)       {| cx: compile_exp g x |}
-  : compile_exp g (fun fsG -> (f fsG) (x fsG)) = {
+  (#wpG:spec_env g b)
+  (a:Type)
+  (x:fs_oexp g a (fapp_x_wp wpG a))         {| cx: compile_exp _ _ x |}
+  (f:fs_oexp g (a -> b) (fapp_f_wp wpG x))   {| cf: compile_exp _ _ f |}
+  (_:squash (forall fsG. wpG fsG <= ret ((f fsG) (x fsG))))
+  : compile_exp g wpG (fun fsG -> (f fsG) (x fsG)) = {
   e = EApp cf.e cx.e;
 }
 
@@ -221,75 +269,119 @@ instance app_elim
 let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   (fun f -> f false) =
-  lambda_elim _ _ _ #(app_elim _ _ (fun fsG -> get_v' fsG 0 (bool -> bool)) _)
+  lambda_elim _ _ _ #(app_elim _ _ _ (fun fsG -> get_v' fsG 0 (bool -> bool)) _) _
+
+instance false_elim_elim
+  #g
+  (a:Type)
+  (#wpG:spec_env g (_:unit{False} -> a))
+  (_:squash (forall fsG. wpG fsG <= ret (false_elim #a)))
+  : compile_exp g wpG (fun _ -> false_elim #a)
+  = { e = EUnit; } (** an error, or smth that makes it obvious that it gets stuck
+                       would be more informative **)
+
+
+unfold
+let if_co_wp
+  #g
+  (#a:Type)
+  (wpG:spec_env g a)
+  : spec_env g bool =
+  fun fsG ->
+    fun p -> wpG fsG (fun _ -> forall b. p b)
+
+unfold
+let if_th_wp
+  #g
+  (#a:Type)
+  (#wpG:spec_env g a)
+  (co:fs_oexp g bool (if_co_wp wpG))
+  : spec_env g a =
+  fun fsG ->
+    fun p -> wpG fsG (fun r -> co fsG /\ p r)
+
+unfold
+let if_el_wp
+  #g
+  (#a:Type)
+  (#wpG:spec_env g a)
+  (co:fs_oexp g bool (if_co_wp wpG))
+  : spec_env g a =
+  fun fsG ->
+    fun p -> wpG fsG (fun r -> ~(co fsG) /\ p r)
 
 instance if_elim
   #g
-  (co:fs_oexp g bool)  {| cco: compile_exp g co |}
-
   (a:Type)
-  (th:fs_oexp g a)     {| cth: compile_exp g th |}
-  (el:fs_oexp g a)     {| cel: compile_exp g el |}
-  : compile_exp #_ g (fun fsG -> if co fsG then th fsG else el fsG) = {
+  (#wpG:spec_env g a)
+  (co:fs_oexp g bool (if_co_wp wpG))  {| cco: compile_exp _ _ co |}
+
+  (th:fs_oexp g a (if_th_wp co))      {| cth: compile_exp _ _ th |}
+  (el:fs_oexp g a (if_el_wp co))      {| cel: compile_exp _ _ el |}
+  (_:squash (forall fsG. wpG fsG <= ret (if co fsG then th fsG else el fsG)))
+  : compile_exp g wpG (fun fsG -> if co fsG then th fsG else el fsG) = {
   e = EIf cco.e cth.e cel.e;
 }
 
-let test1_if : compile_closed #(bool -> bool -> bool) (fun x y -> if x then false else y) = solve
-let _ = assert (test1_if.e == ELam (ELam (EIf (EVar 1) EFalse (EVar 0))))
-
 let myt = true
+let test2_if
+  : compile_closed #bool (if myt then false else true)
+  = if_elim _ _ _ (fun _ -> true) #_ ()
 
-let test2_if : compile_closed #bool (if myt then false else true) = solve
 let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)
 
-instance pair_elim
+let test1_if
+  : compile_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
+  = solve
+let _ = assert (test1_if.e == ELam (ELam (EIf (EVar 1) EFalse (EVar 0))))
+
+let test3_if
+  : compile_closed #(bool -> bool) (fun x -> if x then if x then true else false else true)
+  = solve
+
+unfold
+let ref_wp
   #g
-  (a:Type)
-  (b:Type)
-  (l:fs_oexp g a)     {| cl: compile_exp g l |}
-  (r:fs_oexp g b)     {| cr: compile_exp g r |}
-  : compile_exp #(a & b) g (fun fsG -> (l fsG, r fsG)) = {
-  e = EPair cl.e cr.e;
-}
+  (#a:Type)
+  (#ref:a -> Type0)
+  (wpG:spec_env g (x:a{ref x}))
+  : spec_env g a =
+  fun fsG ->
+    fun p -> wpG fsG (fun r -> ref r /\ p r)
 
-let test1_pair : compile_closed #(bool -> bool -> bool & bool) (fun x y-> (x,y)) = solve
-let _ = assert (test1_pair.e == ELam (ELam (EPair (EVar 1) (EVar 0))))
-
-let test2_pair : compile_closed #((bool -> bool) & (bool -> bool -> bool)) ((fun x -> x), (fun y x -> y)) = solve
-let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
-
-let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
-
-instance fst_elim
+instance refinement_elim
   #g
-  (a:Type)
-  (b:Type)
-  : compile_exp #(a & b -> a) g (fun _ -> fst #a #b) = {
-  e = ELam (EFst (EVar 0));
-}
+  (#a:Type)
+  (ref:a -> Type0)
+  (#wpG:spec_env g (x:a{ref x}))
+  (v:fs_oexp g (x:a{ref x}) wpG)
+  {| cv: compile_exp #a g (ref_wp wpG) (fun fsG -> v fsG) |}
+  : compile_exp #(x:a{ref x}) g wpG v
+  = { e = cv.e; }
 
-val test4_pair : compile_closed (fst (true, ()))
-let test4_pair = solve
+let refbool : (t:bool{t == true}) = true
 
-val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
-let test5_pair = solve
+let test1_ref
+  : compile_closed refbool
+  = solve
+let _ = assert (test1_ref.e == ETrue)
 
-val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
-let test4_pair_fst' = solve
+let test2_ref : compile_closed (fun (x:bool{False}) -> x) =
+  solve
 
-val test4_pair' : compile_closed #bool (fst (true, ()))
-let test4_pair' = solve
+let _ = assert (test2_ref.e == ELam (EVar 0))
 
-instance snd_elim
-  #g
-  (a:Type)
-  (b:Type)
-  : compile_exp #(a & b -> b) g (fun _ -> snd #a #b) = {
-  e = ELam (ESnd (EVar 0));
-}
+let test_false_elim99
+  : x:unit{False} -> Tot bool
+  = fun x -> false_elim x
 
-val test6_pair : compile_closed #unit (snd (true, ()))
-let test6_pair = solve
+let test_false_elim99'
+  : compile_closed test_false_elim99
+  = lambda_elim _ _ _ #(app_elim _ _ _ _ #(false_elim_elim bool ()) ()) ()
 
-val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
-let test7_pair = solve
+(**
+let test_false_elim1'
+  : compile_closed test_false_elim1
+  =
+  lambda_elim _ _ _ #(app_elim _ #_ (_:unit{False}) (fun _ -> ()) #_ _ #(false_elim_elim bool ()) ()) _
+**)
