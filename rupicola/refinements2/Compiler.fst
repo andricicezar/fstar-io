@@ -44,6 +44,23 @@ let pure_trivial #a : pure_wp a =
 unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
 unfold let ret #a x : pure_wp a = pure_return a x
 
+(*** Testing that we can recover the WP F* computes **)
+assume val my_pre : Type0
+assume val f : _:unit{my_pre} -> bool
+let g () : bool = assume my_pre; f ()
+
+[@expect_failure]
+let _ =
+  assert (ret (g ()) <= ret (f ()))
+
+[@expect_failure]
+let _ =
+  assert ((fun p -> (forall r. my_pre ==> p r)) <= ret (g ())) by (
+    unfold_def (`ret); unfold_def (`(<=)); unfold_def (`g);
+    explode ();
+    dump "H"
+  )
+
 (** Compiling types, helps with recursion of the other type class **)
 class compile_typ (s:Type) = {  [@@@no_method] r : unit; }
 instance compile_typ_unit : compile_typ unit = { r = () }
@@ -95,6 +112,7 @@ class compile_exp (#a:Type0) {| compile_typ a |} (g:env) (wpG:spec_env g a) (fs_
 }
 
 (** Just a helper typeclass **)
+
 unfold let compile_closed (#a:Type0) {| compile_typ a |} (s:a) =
   compile_exp #a empty (fun _ -> pure_trivial) (fun _ -> s)
 
