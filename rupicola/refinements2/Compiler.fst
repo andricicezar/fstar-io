@@ -116,21 +116,21 @@ class compile_exp (#a:Type0) {| compile_typ a |} (g:env) (wpG:spec_env g a) (fs_
 unfold let compile_closed (#a:Type0) {| compile_typ a |} (s:a) =
   compile_exp #a empty (fun _ -> pure_trivial) (fun _ -> s)
 
-instance unit_elim
+instance unit_rule
   #g
   (#wpG:spec_env g unit)
   (_:squash (forall fsG. wpG fsG <= ret ()))
   : compile_exp g wpG (fun _ -> ())
   = { e = EUnit; }
 
-instance true_elim
+instance true_rule
   #g
   (#wpG:spec_env g bool)
   (_:squash (forall fsG. wpG fsG <= ret true))
   : compile_exp g wpG (fun _ -> true)
   = { e = ETrue; }
 
-instance fals_elim
+instance false_rule
   #g
   (#wpG:spec_env g bool)
   (_:squash (forall fsG. wpG fsG <= ret false))
@@ -147,7 +147,7 @@ val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (S
 let get_v' #g fsG i a =
   get_v #g fsG i
 
-instance var_elim
+instance var_rule
   (#g:env)
   (a:Type) {| compile_typ a |}
   (#wpG:spec_env g a)
@@ -160,7 +160,7 @@ let test1_var
   : compile_exp (extend unit empty) (fun _ -> pure_trivial) (fun fsG -> get_v' fsG 0 unit)
   = solve
 
-instance var_elim_shrink1 (** CA: how to make this general? **)
+instance var_rule_shrink1 (** CA: how to make this general? **)
   (g':env)
   (a:Type) {| compile_typ a |}
   (#wpG:spec_env g' a)
@@ -173,7 +173,7 @@ instance var_elim_shrink1 (** CA: how to make this general? **)
   : compile_exp g' wpG (fun fsG -> get_v' #g (fs_shrink #t fsG) x a)
   = { e = ce.e; }
 
-instance var_elim_shrink2 (** CA: how to make this general? **)
+instance var_rule_shrink2 (** CA: how to make this general? **)
   (g':env)
   (a:Type) {| compile_typ a |}
   (#wpG:spec_env g' a)
@@ -206,7 +206,7 @@ let lambda_body_wp
   = fun fsG ->
     fun p -> wpG (fs_shrink fsG) (fun f' -> f (fs_shrink fsG) == f' /\ p (f (fs_shrink fsG) (get_v' fsG 0 a)))
 
-instance lambda_elim
+instance lambda_rule
   #g
   (a:Type) {| compile_typ a |}
   (b:Type) {| compile_typ b |}
@@ -278,7 +278,7 @@ let fapp_f_wp
   = fun fsG ->
       fun p -> wpG fsG (fun r -> forall (f:a -> b). f (x fsG) == r ==> p f)
 
-instance app_elim
+instance app_rule
   #g
   (b:Type) {| compile_typ b |}
   (#wpG:spec_env g b)
@@ -294,9 +294,9 @@ instance app_elim
 let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   (fun f -> f false) =
-  lambda_elim _ _ _ #(app_elim _ _ _ (fun fsG -> get_v' fsG 0 (bool -> bool)) _) _
+  lambda_rule _ _ _ #(app_rule _ _ _ (fun fsG -> get_v' fsG 0 (bool -> bool)) _) _
 
-instance false_elim_elim
+instance false_elim_rule
   #g
   (a:Type) {| compile_typ a |}
   (#wpG:spec_env g (_:unit{False} -> a))
@@ -335,7 +335,7 @@ let if_el_wp
   fun fsG ->
     fun p -> wpG fsG (fun r -> ~(co fsG) /\ p r)
 
-instance if_elim
+instance if_rule
   #g
   (a:Type) {| compile_typ a |}
   (#wpG:spec_env g a)
@@ -351,7 +351,7 @@ instance if_elim
 let myt = true
 let test2_if
   : compile_closed #bool (if myt then false else true)
-  = if_elim _ _ _ (fun _ -> true) #_ ()
+  = if_rule _ _ _ (fun _ -> true) #_ ()
 
 let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)
 
@@ -374,7 +374,7 @@ let ref_wp
   fun fsG ->
     fun p -> wpG fsG (fun r -> ref r /\ p r)
 
-instance refinement_elim
+instance refinement_rule
   #g
   (#a:Type) {| compile_typ a |}
   (ref:a -> Type0)
@@ -402,11 +402,11 @@ let test_false_elim99
 
 let test_false_elim99'
   : compile_closed test_false_elim99
-  = lambda_elim _ _ _ #(app_elim _ _ _ _ #(false_elim_elim bool ()) ()) ()
+  = lambda_rule _ _ _ #(app_rule _ _ _ _ #(false_elim_rule bool ()) ()) ()
 
 (**
 let test_false_elim1'
   : compile_closed test_false_elim1
   =
-  lambda_elim _ _ _ #(app_elim _ #_ (_:unit{False}) (fun _ -> ()) #_ _ #(false_elim_elim bool ()) ()) _
+  lambda_rule _ _ _ #(app_rule _ #_ (_:unit{False}) (fun _ -> ()) #_ _ #(false_elim_rule bool ()) ()) _
 **)
