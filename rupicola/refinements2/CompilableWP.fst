@@ -80,6 +80,15 @@ let helper_fapp (#g:env) (#a #b:Type) (wpBody:spec_env (extend a g) b) (f :fs_oe
     );
     body
 
+unfold
+val wp_ref : #g:env ->  #a:Type -> ref1:(a -> Type0) -> ref2:(a -> Type0) -> wpV:spec_env g (x:a{ref1 x}) -> spec_env g (x:a{ref2 x})
+let wp_ref #g #a ref1 ref2 wpV =
+  fun fsG (p:(x:a{ref2 x})->Type0) ->  wpV fsG (fun r -> ref2 r ==> p r)
+
+val helper_ref : #g:env ->  #a:Type -> #ref1:(a -> Type0) -> #ref2:(a -> Type0) -> #wpV:spec_env g (x:a{ref1 x}) -> v:fs_oexp g (x:a{ref1 x}) wpV -> fs_oexp g (x:a{ref2 x}) (wp_ref ref1 ref2 wpV)
+let helper_ref #g #a #ref1 #ref2 #wpV v =
+  fun fsG -> v fsG (** not the same p! **)
+
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
 | CUnit       : #g:env -> compilable g (fun _ -> ret ()) (fun _ -> ())
@@ -135,6 +144,15 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                 cf:compilable #b (extend a g) wpBody (helper_fapp wpBody f) ->
                 compilable g (wp_lambda wpBody) f
+
+| CRefinement : #g:env ->
+                #a:Type ->
+                ref1:(a -> Type0) ->
+                ref2:(a -> Type0) ->
+                #wpV:spec_env g (x:a{ref1 x}) ->
+                #v:fs_oexp g (x:a{ref1 x}) wpV ->
+                compilable g wpV v ->
+                compilable #(x:a{ref2 x}) g (fun fsG (p:(x:a{ref2 x}) -> Type0) -> wpV fsG (fun r -> ref2 r ==> p r)) (fun fsG -> let x = v fsG in assert (ref2 x); x)
 
 unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) = compilable empty wp (fun _ -> x)
 
