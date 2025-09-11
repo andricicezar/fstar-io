@@ -22,13 +22,11 @@ unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
 unfold let ret #a x : pure_wp a = pure_return a x //fun p -> p x
 
 (** Typing environment **)
-type typsr = Type0
-let get_Type (t:typsr) = t
-type env = var -> option typsr
+type env = var -> option Type0
 let empty : env = fun _ -> None
 
 (* we only need extend at 0 *)
-let extend (t:typsr) (g:env)
+let extend (t:Type0) (g:env)
   : env
   = fun y -> if y = 0 then Some t
           else g (y-1)
@@ -36,12 +34,11 @@ let extend (t:typsr) (g:env)
 (** F* evaluation environment **)
 assume val fs_env (g:env) : Type u#0
 assume val fs_empty : fs_env empty
-assume val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> get_Type (Some?.v (g x))
-assume val fs_extend : #g:env -> fsG:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
-assume val fs_shrink : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
+assume val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> Some?.v (g x)
+assume val fs_extend : #g:env -> fsG:fs_env g -> #t:Type0 -> t -> fs_env (extend t g)
+assume val fs_shrink : #t:Type0 -> #g:env -> fs_env (extend t g) -> fs_env g
 
-(**
-assume val lem_fs_extend #g (fsG:fs_env g) #t (v:get_Type t) : Lemma (
+assume val lem_fs_extend #g (fsG:fs_env g) #t (v:t) : Lemma (
   (forall (x:var). Some? (g x) ==>  get_v fsG x == get_v (fs_extend fsG v) (x+1)) /\
   get_v (fs_extend fsG v) 0 == v)
   [SMTPat (fs_extend fsG v)]
@@ -50,9 +47,8 @@ assume val lem_fs_shrink #g #t (fsG:fs_env (extend t g)) : Lemma (
   (forall (x:var). Some? (g x) ==>  get_v fsG (x+1) == get_v (fs_shrink fsG) x))
   [SMTPat (fs_shrink fsG)]
 
-assume val shrink_extend_inverse #g (fsG:fs_env g) #t (x:get_Type t) : Lemma (fs_shrink (fs_extend fsG x) == fsG)
+assume val shrink_extend_inverse #g (fsG:fs_env g) #t (x:t) : Lemma (fs_shrink (fs_extend fsG x) == fsG)
   [SMTPat (fs_shrink (fs_extend fsG x))]
-**)
 
 type spec_env (g:env) (a:Type) =
   fsG:fs_env g -> pure_wp a
@@ -60,6 +56,29 @@ type spec_env (g:env) (a:Type) =
 (** Definition of open FStar expressions **)
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> x:a{wpG fsG <= ret x} (** this works better than using PURE **)
+
+unfold
+let wp_lambda (#g:env) (#a #b:Type) (wpBody:spec_env (extend a g) b) : spec_env g (a -> b) =
+  fun fsG (p:(a->b)->Type0) ->
+    forall f. (forall p' x. wpBody (fs_extend fsG x) p' ==>  p' (f x)) ==> p f
+
+ //   forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
+//      wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
+
+let helper_fapp (#g:env) (#a #b:Type) (wpBody:spec_env (extend a g) b) (f :fs_oexp g (a -> b) (wp_lambda wpBody))
+  : fs_oexp (extend a g) b wpBody
+    //by (set_guard_policy Goal; explode (); tadmit (); tadmit ();
+//    compute (); let x = forall_intro () in split (); tadmit (); tadmit (); dump "H")
+  = fun fsG ->
+    let body = f (fs_shrink #a fsG) (get_v fsG 0) in
+    assert ((wp_lambda wpBody) (fs_shrink fsG) <= ret (f (fs_shrink fsG)));
+    assert (wpBody fsG <= ret body) by (
+      compute ();
+      explode ();
+      tadmit (); (** no idea how to prove! *)
+      dump "H"
+    );
+    body
 
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
@@ -113,11 +132,9 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #a :Type ->
                 #b :Type ->
                 #wpBody:spec_env (extend a g) b ->
-   //             #f :fs_oexp g (a -> b) (fun fsG p -> forall (x:a). wpBody (fs_extend fsG x) (fun r -> forall f. f x == r ==> p f)) ->
-                #f :fs_oexp g (a -> b) (fun fsG p -> forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>  wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r ==> p (f fsG'))) ->
-                cf:compilable #b (extend a g) wpBody (fun fsG -> admit (); f (fs_shrink fsG) (get_v fsG 0)) ->
-                compilable g (fun fsG p -> forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>  wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r ==> p (f fsG'))) f
- ///               compilable g (fun fsG p -> forall (x:a). wpBody (fs_extend fsG x) (fun r -> forall f. f x == r ==> p f)) f
+                #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
+                cf:compilable #b (extend a g) wpBody (helper_fapp wpBody f) ->
+                compilable g (wp_lambda wpBody) f
 
 unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) = compilable empty wp (fun _ -> x)
 
@@ -125,22 +142,9 @@ let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
   = CVarShrink1 CVar
 
-let _ =
-  assert ((fun p ->
-            forall (x: unit) (y: unit) (z: unit).
-              ret (get_v (fs_shrink (fs_extend (fs_extend (fs_extend fs_empty #unit x) #unit y) #unit z))
-                    0)
-                (fun _ ->
-                    forall (f: (_: (_: unit -> unit){l_True}))
-                      (f: (_: (_: unit -> _: unit -> unit){l_True}))
-                      (f: (_: (_: unit -> _: unit -> _: unit -> unit){l_True})).
-                      p f)) <=
-        ret (fun x y z -> y)) by (
-          l_to_r [`shrink_extend_inverse;`lem_fs_extend];
-          unfold_def (`ret);
-          unfold_def (`(<=));
-          norm [iota];
-          dump "H")
+let test1_exp
+  : compilable_closed #(unit -> unit) (fun x -> x)
+  = CLambda CVar
 
 let test4_exp'
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
