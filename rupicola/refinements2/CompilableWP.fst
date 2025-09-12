@@ -198,6 +198,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 | CUnit       : #g:env -> compilable g (fun _ -> ret ()) (fun _ -> ())
 | CTrue       : #g:env -> compilable g (fun _ -> ret true) (fun _ -> true)
 | CFalse      : #g:env -> compilable g (fun _ -> ret false) (fun _ -> false)
+
 (** The following three rules for variables should be generalized. What would be an elegant solution? **)
 | CVar        : #g:env ->
                 #a:Type ->
@@ -209,7 +210,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
                 compilable #a (extend b g) (fun fsG -> ret (get_v fsG (x+1))) (fun fsG -> get_v fsG (x+1)) ->
                 compilable #a (extend b g) _ (helper_var1 g a b x)
-
 | CVarShrink2 : #g:env ->
                 #a:Type ->
                 #b:Type ->
