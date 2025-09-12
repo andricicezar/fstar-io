@@ -1,6 +1,12 @@
 module CompilableWP
 
-open FStar.Tactics
+open FStar.Tactics.V2
+
+assume val z : nat
+
+let f () : Pure (nat -> nat) (z > 0) (fun _ -> True) by (dump "H") =
+  (fun x -> x / z)
+
 
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
@@ -12,7 +18,7 @@ let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
     [SMTPat (pure_wp_monotonic a wp)]
   = M.intro_pure_wp_monotonicity wp
 
-let pure_wp (a: Type) = wp:pure_wp' a{M.is_monotonic wp}
+//let pure_wp (a: Type) = wp:pure_wp' a{M.is_monotonic wp}
 
 unfold
 let pure_trivial #a : pure_wp a =
@@ -55,39 +61,145 @@ type spec_env (g:env) (a:Type) =
 
 (** Definition of open FStar expressions **)
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
-  fsG:fs_env g -> x:a{wpG fsG <= ret x} (** this works better than using PURE **)
+  fsG:fs_env g -> PURE a (wpG fsG) // <= ret x} (** this works better than using PURE **)
 
 unfold
-let wp_lambda (#g:env) (#a #b:Type) (wpBody:spec_env (extend a g) b) : spec_env g (a -> b) =
-  fun fsG (p:(a->b)->Type0) ->
-    forall f. (forall p' x. wpBody (fs_extend fsG x) p' ==>  p' (f x)) ==> p f
-
- //   forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
-//      wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
-
-let helper_fapp (#g:env) (#a #b:Type) (wpBody:spec_env (extend a g) b) (f :fs_oexp g (a -> b) (wp_lambda wpBody))
-  : fs_oexp (extend a g) b wpBody
-    //by (set_guard_policy Goal; explode (); tadmit (); tadmit ();
-//    compute (); let x = forall_intro () in split (); tadmit (); tadmit (); dump "H")
-  = fun fsG ->
-    let body = f (fs_shrink #a fsG) (get_v fsG 0) in
-    assert ((wp_lambda wpBody) (fs_shrink fsG) <= ret (f (fs_shrink fsG)));
-    assert (wpBody fsG <= ret body) by (
-      compute ();
-      explode ();
-      tadmit (); (** no idea how to prove! *)
-      dump "H"
-    );
-    body
+val wp_ref :
+  #g:env ->
+  #a:Type ->
+  ref1:(a -> Type0) ->
+  ref2:(a -> Type0) ->
+  wpV:spec_env g (x:a{ref1 x}) ->
+  v:fs_oexp g (x:a{ref1 x}) wpV ->
+  spec_env g (x:a{ref2 x})
+let wp_ref #g #a ref1 ref2 wpV v =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun fsG (p:(x:a{ref2 x})->Type0) ->
+    wpV fsG (fun r -> ref2 r /\ p r)
 
 unfold
-val wp_ref : #g:env ->  #a:Type -> ref1:(a -> Type0) -> ref2:(a -> Type0) -> wpV:spec_env g (x:a{ref1 x}) -> spec_env g (x:a{ref2 x})
-let wp_ref #g #a ref1 ref2 wpV =
-  fun fsG (p:(x:a{ref2 x})->Type0) ->  wpV fsG (fun r -> ref2 r ==> p r)
-
-val helper_ref : #g:env ->  #a:Type -> #ref1:(a -> Type0) -> #ref2:(a -> Type0) -> #wpV:spec_env g (x:a{ref1 x}) -> v:fs_oexp g (x:a{ref1 x}) wpV -> fs_oexp g (x:a{ref2 x}) (wp_ref ref1 ref2 wpV)
+val helper_ref : #g:env ->
+                 #a:Type ->
+                 #ref1:(a -> Type0) ->
+                 #ref2:(a -> Type0) ->
+                 #wpV:spec_env g (x:a{ref1 x}) ->
+                 v:fs_oexp g (x:a{ref1 x}) wpV ->
+                 fs_oexp g (x:a{ref2 x}) (wp_ref ref1 ref2 wpV v)
 let helper_ref #g #a #ref1 #ref2 #wpV v =
-  fun fsG -> v fsG (** not the same p! **)
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun fsG -> v fsG
+
+unfold
+val wp_lambda : #g :env ->
+                #a :Type ->
+                #b :Type ->
+                wpBody:spec_env (extend a g) b ->
+                spec_env g (a -> b)
+
+let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
+  fun (p:(a->b)->Type0) ->
+ //  (forall f. p f) ==>
+ //    (forall x. wpBody (fs_extend fsG x) (fun _ -> True)) /\
+ //    (forall f. ret f p)
+
+    forall f. (forall p' (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
+      wpBody fsG' p' ==>  p' (f fsG (get_v fsG' 0))) /\ p (f fsG)
+
+  //  forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
+  //    wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
+
+val helper_lambda : #g :env ->
+                    #a :Type ->
+                    #b :Type ->
+                    wpBody:spec_env (extend a g) b ->
+                    f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
+                    fs_oexp (extend a g) b wpBody
+let helper_lambda #g #a #b wpBody f =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun fsG -> admit (); f (fs_shrink #a fsG) (get_v fsG 0)
+
+  (**
+    let f = f (fs_shrink #a fsG) in
+    //assume (wp_lambda wpBody (fs_shrink fsG) (fun _ -> True)); //by (explode (); dump "H");
+    let body = f (get_v fsG 0) in
+    //assume (as_ensures (wpBody fsG) body);
+    body
+**)
+
+unfold
+val helper_var : g:env ->
+                 a:Type ->
+                 x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                 fs_oexp g a (fun fsG -> ret (get_v fsG x))
+let helper_var g a x fsG = get_v fsG x
+
+unfold
+val helper_var1 : g:env ->
+                  a:Type ->
+                  b:Type ->
+                  x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                  fs_oexp (extend b g) a (fun fsG -> ret (get_v (fs_shrink #b fsG) x))
+let helper_var1 g a b x fsG = get_v (fs_shrink #b fsG) x
+
+unfold
+val helper_var2 : g:env ->
+                  a:Type ->
+                  b:Type ->
+                  c:Type ->
+                  x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                  fs_oexp (extend c (extend b g)) a (fun fsG -> ret (get_v (fs_shrink #b (fs_shrink #c fsG)) x))
+let helper_var2 g a b c x fsG = get_v (fs_shrink #b (fs_shrink #c fsG)) x
+
+unfold
+val fapp_wp : #g :env ->
+              #a :Type ->
+              #b :Type ->
+              wpF : spec_env g (a -> b) ->
+              wpX : spec_env g a ->
+              spec_env g b
+let fapp_wp #g #a #b wpF wpX fsG : pure_wp b =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun (p:pure_post b) -> wpF fsG (fun f' -> wpX fsG (fun x' -> ret (f' x') p))
+
+unfold
+val helper_fapp : g :env ->
+                  a :Type ->
+                  b :Type ->
+                  wpF : spec_env g (a -> b) ->
+                  f :fs_oexp g (a -> b) wpF ->
+                  wpX : spec_env g a ->
+                  x :fs_oexp g a wpX ->
+                  fs_oexp g b (fapp_wp wpF wpX)
+
+let helper_fapp g a b wpF f wpX x : fs_oexp g b (fapp_wp wpF wpX) =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun fsG -> (f fsG) (x fsG)
+
+unfold
+val if_wp : #g :env ->
+            #a :Type ->
+            wpC : spec_env g bool ->
+            wpT : spec_env g a ->
+            wpE : spec_env g a ->
+            spec_env g a
+let if_wp #g #a wpC wpT wpE fsG : pure_wp a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun (p:pure_post a) ->
+    wpC fsG (fun r -> (r == true ==> wpT fsG p) /\ (r == false ==> wpE fsG p))
+
+unfold
+val helper_if : #g :env ->
+                #a :Type ->
+                #wpC : spec_env g bool ->
+                c   : fs_oexp g bool wpC ->
+                #wpT : spec_env g a ->
+                t   : fs_oexp g a wpT ->
+                #wpE : spec_env g a ->
+                e   : fs_oexp g a wpE ->
+                fs_oexp g a (if_wp wpC wpT wpE)
+let helper_if c t e fsG =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  if c fsG then t fsG else e fsG
 
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
@@ -98,20 +210,21 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 | CVar        : #g:env ->
                 #a:Type ->
                 #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                compilable #a g (fun fsG -> ret (get_v fsG x)) (fun fsG -> get_v fsG x)
+                compilable #a g _ (helper_var g a x)
 | CVarShrink1 : #g:env ->
                 #a:Type ->
                 #b:Type ->
                 #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
                 compilable #a (extend b g) (fun fsG -> ret (get_v fsG (x+1))) (fun fsG -> get_v fsG (x+1)) ->
-                compilable #a (extend b g) (fun fsG -> ret (get_v (fs_shrink #b fsG) x)) (fun fsG -> get_v (fs_shrink #b fsG) x)
+                compilable #a (extend b g) _ (helper_var1 g a b x)
+
 | CVarShrink2 : #g:env ->
                 #a:Type ->
                 #b:Type ->
                 #c:Type ->
                 #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
                 compilable #a (extend c (extend b g)) (fun fsG -> ret (get_v fsG (x+2))) (fun fsG -> get_v fsG (x+2)) ->
-                compilable #a (extend c (extend b g)) (fun fsG -> ret (get_v (fs_shrink #b (fs_shrink #c fsG)) x)) (fun fsG -> get_v (fs_shrink #b (fs_shrink #c fsG)) x)
+                compilable #a (extend c (extend b g)) _ (helper_var2 g a b c x)
 
 | CApp        : #g :env ->
                 #a :Type ->
@@ -122,7 +235,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpX : spec_env g a ->
                 #x :fs_oexp g a wpX ->
                 cx:compilable g wpX x ->
-                compilable g (fun fsG p -> wpX fsG (fun x' -> wpF fsG (fun f' -> p (f' x')))) (fun fsG -> (f fsG) (x fsG))
+                compilable g _ (helper_fapp g a b wpF f wpX x)
 
 | CIf         : #g :env ->
                 #a :Type ->
@@ -135,14 +248,14 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpE : spec_env g a ->
                 #e   : fs_oexp g a wpE ->
                 ce   : compilable g wpE e ->
-                compilable g (fun fsG p -> wpC fsG (fun r -> (r ==> wpT fsG p) /\ (~r ==> wpE fsG p))) (fun fsG -> if c fsG then t fsG else e fsG)
+                compilable g _ (helper_if c t e)
 
 | CLambda     : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpBody:spec_env (extend a g) b ->
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
-                cf:compilable #b (extend a g) wpBody (helper_fapp wpBody f) ->
+                cf:compilable #b (extend a g) wpBody (helper_lambda wpBody f) ->
                 compilable g (wp_lambda wpBody) f
 
 | CRefinement : #g:env ->
@@ -152,16 +265,22 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpV:spec_env g (x:a{ref1 x}) ->
                 #v:fs_oexp g (x:a{ref1 x}) wpV ->
                 compilable g wpV v ->
-                compilable #(x:a{ref2 x}) g (fun fsG (p:(x:a{ref2 x}) -> Type0) -> wpV fsG (fun r -> ref2 r ==> p r)) (fun fsG -> let x = v fsG in assert (ref2 x); x)
+                compilable g _ (helper_ref #g #a #ref1 #ref2 #wpV v)
 
-unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) = compilable empty wp (fun _ -> x)
+let empty_wp #a (wp:spec_env empty a) : pure_wp a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun p -> forall fsG. wp fsG p
+
+#set-options "--print_universes"
+//unfold let compilable_closed #a #wp (x:a) : PURE _ (empty_wp wp) =
+//  compilable empty wp (fun _ -> x)
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
   = CVarShrink1 CVar
 
 let test1_exp
-  : compilable_closed #(unit -> unit) (fun x -> x)
+  : compilable #(unit -> unit) empty _ (fun x -> x)
   = CLambda CVar
 
 let test4_exp'
