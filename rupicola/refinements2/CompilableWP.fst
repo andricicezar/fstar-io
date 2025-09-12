@@ -70,21 +70,19 @@ val wp_ref :
   ref1:(a -> Type0) ->
   ref2:(a -> Type0) ->
   wpV:spec_env g (x:a{ref1 x}) ->
-  v:fs_oexp g (x:a{ref1 x}) wpV ->
   spec_env g (x:a{ref2 x})
-let wp_ref #g #a ref1 ref2 wpV v =
+let wp_ref #g #a ref1 ref2 wpV =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun fsG (p:(x:a{ref2 x})->Type0) ->
+  fun fsG (p:pure_post (x:a{ref2 x})) ->
     wpV fsG (fun r -> ref2 r /\ p r)
 
-unfold
 val helper_ref : #g:env ->
                  #a:Type ->
                  #ref1:(a -> Type0) ->
                  #ref2:(a -> Type0) ->
                  #wpV:spec_env g (x:a{ref1 x}) ->
                  v:fs_oexp g (x:a{ref1 x}) wpV ->
-                 fs_oexp g (x:a{ref2 x}) (wp_ref ref1 ref2 wpV v)
+                 fs_oexp g (x:a{ref2 x}) (wp_ref ref1 ref2 wpV)
 let helper_ref #g #a #ref1 #ref2 #wpV v =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun fsG -> v fsG
@@ -97,7 +95,7 @@ val wp_lambda : #g :env ->
                 spec_env g (a -> b)
 
 let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
-  fun (p:(a->b)->Type0) ->
+  fun (p:pure_post (a -> b)) ->
  //  (forall f. p f) ==>
  //    (forall x. wpBody (fs_extend fsG x) (fun _ -> True)) /\
  //    (forall f. ret f p)
@@ -117,14 +115,6 @@ val helper_lambda : #g :env ->
 let helper_lambda #g #a #b wpBody f =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun fsG -> admit (); f (fs_shrink #a fsG) (get_v fsG 0)
-
-  (**
-    let f = f (fs_shrink #a fsG) in
-    //assume (wp_lambda wpBody (fs_shrink fsG) (fun _ -> True)); //by (explode (); dump "H");
-    let body = f (get_v fsG 0) in
-    //assume (as_ensures (wpBody fsG) body);
-    body
-**)
 
 unfold
 val helper_var : g:env ->
@@ -201,6 +191,8 @@ let helper_if c t e fsG =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   if c fsG then t fsG else e fsG
 
+#set-options "--print_universes --print_implicits"
+
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
 | CUnit       : #g:env -> compilable g (fun _ -> ret ()) (fun _ -> ())
@@ -256,14 +248,14 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpBody:spec_env (extend a g) b ->
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                 cf:compilable #b (extend a g) wpBody (helper_lambda wpBody f) ->
-                compilable g (wp_lambda wpBody) f
+                compilable g _ f
 
 | CRefinement : #g:env ->
                 #a:Type ->
                 ref1:(a -> Type0) ->
                 ref2:(a -> Type0) ->
-                #wpV:spec_env g (x:a{ref1 x}) ->
-                #v:fs_oexp g (x:a{ref1 x}) wpV ->
+                wpV:spec_env g (x:a{ref1 x}) ->
+                v:fs_oexp g (x:a{ref1 x}) wpV ->
                 compilable g wpV v ->
                 compilable g _ (helper_ref #g #a #ref1 #ref2 #wpV v)
 
@@ -272,16 +264,16 @@ let empty_wp #a (wp:spec_env empty a) : pure_wp a =
   fun p -> forall fsG. wp fsG p
 
 #set-options "--print_universes"
-//unfold let compilable_closed #a #wp (x:a) : PURE _ (empty_wp wp) =
-//  compilable empty wp (fun _ -> x)
+unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
+  compilable empty wp (fun _ -> x)
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
   = CVarShrink1 CVar
 
 let test1_exp
-  : compilable #(unit -> unit) empty _ (fun x -> x)
-  = CLambda CVar
+  : compilable_closed #(unit -> unit) (fun x -> x)
+  = CLambda (CVar #_ #_ #0)
 
 let test4_exp'
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
