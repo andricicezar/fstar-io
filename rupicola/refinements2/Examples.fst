@@ -22,23 +22,11 @@ let test_if_x
   = fun f x -> if x then f x else false
 
 assume val p_ref : bool -> Type0
-assume val q_ref : bool -> Type0
+assume val q_ref : Type0
 let test_p_implies_q
-  : (f: (x:bool{p_ref x} -> _:unit{q_ref x})) -> (x:bool{p_ref x}) -> (x:bool{q_ref x})
+  : (f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})
   = fun f x -> f x; x
 
-let test_false_elim0
-  : bool -> bool
-  = fun x -> if x then if x then true else false_elim () else true
-
-let test_false_elim1
-  : x:unit{False} -> Tot bool
-  = fun x -> false_elim ()
-
-let test_false_elim2
-  : f:(unit -> x:bool{x == true}) -> Tot bool
-  = fun f -> if f () then true else false_elim ()
-
-let test_erase_ref
-  : (x:bool{x == true} -> bool)
-  = fun x -> x
+let test_true_implies_q
+  : (f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (x:bool{x == true ==>  q_ref})
+  = fun f x -> if x then (f x; x) else false

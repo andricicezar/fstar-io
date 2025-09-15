@@ -194,6 +194,31 @@ let helper_if c t e fsG =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   if c fsG then t fsG else e fsG
 
+unfold
+val wp_seq :     #g:env ->
+                 ref1:Type0 ->
+                 wpV:spec_env g (x:unit{ref1}) ->
+                 #a:Type ->
+                 wpK:spec_env g a ->
+                 spec_env g a
+let wp_seq ref1 wpV wpK fsG =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun p -> wpV fsG (fun _ -> wpK fsG p)
+
+unfold
+val helper_seq : #g:env ->
+                 ref1:Type0 ->
+                 #wpV:spec_env g (x:unit{ref1}) ->
+                 v:fs_oexp g (x:unit{ref1}) wpV -> (** since this is pure, I don't have to compile it **)
+
+                 #a:Type ->
+                 #wpK:spec_env g a ->
+                 k:fs_oexp g a wpK ->
+                 fs_oexp g a (wp_seq ref1 wpV wpK)
+let helper_seq ref1 v k =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+  fun fsG -> v fsG ; k fsG
+
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
@@ -260,6 +285,21 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #v:fs_oexp g (x:a{ref1 x}) wpV ->
                 compilable g wpV v ->
                 compilable g _ (helper_ref #g #a #ref1 #ref2 #wpV v)
+
+| CSeq        : #g:env ->
+                ref1:Type0 ->
+                #wpV:spec_env g (x:unit{ref1}) ->
+                #v:fs_oexp g (x:unit{ref1}) wpV ->
+                compilable g wpV v -> (** the name compilable is misleading here.
+                                         I have to compute the WP of `v` to be able to
+                                         compile the entire term **)
+
+                #a:Type ->
+                #wpK:spec_env g a ->
+                #k:fs_oexp g a wpK ->
+                compilable g wpK k ->
+                compilable g _ (helper_seq ref1 v k)
+
 
 let empty_wp #a (wp:spec_env empty a) : pure_wp a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
@@ -329,3 +369,16 @@ let test_always_false_complex''
 let test_if_x'
   : compilable_closed test_if_x
   = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0)) CFalse))
+
+let test_p_implies_q'
+  : compilable_closed test_p_implies_q
+  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref CVar0)))
+ // = CLambda (CLambda (CApp (CLambda (CRefinement p_ref #(fun _ -> q_ref) CVar1)) (CApp CVar1 CVar0)))
+
+let test_true_implies_q
+  : compilable_closed test_true_implies_q
+  = CLambda (CLambda (
+     CIf CVar0
+         (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
+                     (CRefinement (fun _ -> True) #(fun x -> x == true ==> q_ref) CVar0))
+         (CRefinement (fun _ -> True) #(fun x -> x == true ==> q_ref) CFalse)))
