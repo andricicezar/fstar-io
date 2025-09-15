@@ -74,6 +74,7 @@ let wp_ref #g #a ref1 ref2 wpV =
   fun fsG (p:pure_post (x:a{ref2 x})) ->
     wpV fsG (fun r -> ref2 r /\ p r)
 
+unfold
 val helper_ref : #g:env ->
                  #a:Type ->
                  #ref1:(a -> Type0) ->
@@ -108,6 +109,7 @@ let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
   //    wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
 **)
 
+unfold
 val helper_lambda : #g :env ->
                     #a :Type ->
                     #b :Type ->
@@ -200,23 +202,23 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 | CFalse      : #g:env -> compilable g (fun _ p -> p false) (fun _ -> false)
 
 (** The following three rules for variables should be generalized. What would be an elegant solution? **)
-| CVar        : #g:env ->
+| CVar0       : #g:env ->
                 #a:Type ->
-                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                compilable #a g _ (helper_var g a x)
-| CVarShrink1 : #g:env ->
+                #_:squash (Some? (g 0) /\ a == Some?.v (g 0)) ->
+                compilable #a g _ (helper_var g a 0)
+| CVar1       : #g:env ->
                 #a:Type ->
                 #b:Type ->
-                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                #_:squash (Some? (g 0) /\ a == Some?.v (g 0)) ->
  //               compilable #a (extend b g) (fun fsG p -> p (get_v fsG (x+1))) (fun fsG -> get_v fsG (x+1)) ->
-                compilable #a (extend b g) _ (helper_var1 g a b x)
-| CVarShrink2 : #g:env ->
+                compilable #a (extend b g) _ (helper_var1 g a b 0)
+| CVar2       : #g:env ->
                 #a:Type ->
                 #b:Type ->
                 #c:Type ->
-                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                #_:squash (Some? (g 0) /\ a == Some?.v (g 0)) ->
  //               compilable #a (extend c (extend b g)) (fun fsG p -> p (get_v fsG (x+2))) (fun fsG -> get_v fsG (x+2)) ->
-                compilable #a (extend c (extend b g)) _ (helper_var2 g a b c x)
+                compilable #a (extend c (extend b g)) _ (helper_var2 g a b c 0)
 
 | CApp        : #g :env ->
                 #a :Type ->
@@ -268,35 +270,35 @@ unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
-  = CVarShrink1 0
+  = CVar1
 
 let test1_exp
   : compilable_closed #(unit -> unit) (fun x -> x)
-  = CLambda (CVar 0)
+  = CLambda CVar0
 
 let test4_exp'
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = CLambda (CLambda (CLambda (CVarShrink1 0)))
+  = CLambda (CLambda (CLambda CVar1))
 
 let test1_hoc
   : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = CLambda (CApp (CVar 0) CFalse)
+  = CLambda (CApp CVar0 CFalse)
 
 let test2_if
   : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
-  = CLambda (CIf (CVar 0) CFalse CTrue)
+  = CLambda (CIf CVar0 CFalse CTrue)
 
 let test1_if
   : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = CLambda (CLambda (CIf (CVarShrink1 0) CFalse (CVar 0)))
+  = CLambda (CLambda (CIf CVar1 CFalse CVar0))
 
 let test1_comp_ref
   : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = CLambda (CVar 0)
+  = CLambda CVar0
 
 let test1_erase_ref
   : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = CLambda (CRefinement (fun x -> x == true) (CVar 0))
+  = CLambda (CRefinement (fun x -> x == true) CVar0)
 
 open Examples
 
@@ -310,25 +312,20 @@ let test_moving_ref'
 
 let test_always_false'
   : compilable_closed test_always_false
-  = CLambda (CRefinement _ (CIf (CVar 0) (CFalse) (CVar 0)))
+  = CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
 
 let test_always_false''
   : compilable_closed test_always_false
-  = CLambda (CIf (CVar 0) (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) (CVar 0)))
+  = CLambda (CIf CVar0 (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) CVar0))
 
-[@expect_failure]
-let test_pm2
-  : compilable_closed
-      #(bool -> y:bool{y == false})
-      (fun x -> if x then if x then false else true else false)
-  = CLambda (CIf CVar (CIf CVar CFalse CTrue) CFalse)
+let test_always_false_complex'
+  : compilable_closed test_always_false_complex
+  = CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
 
-[@expect_failure]
-let test1_erase_ref
-  : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = CLambda CVar
+let test_always_false_complex''
+  : compilable_closed test_always_false_complex
+  = CLambda (CIf CVar0 (CIf CVar0 (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) CTrue)) (CRefinement (fun _ -> True) CFalse))
 
-[@expect_failure]
-let test1_add_ref
-  : compilable_closed #(bool -> (x:bool{x == true})) (fun x -> true)
-  = CLambda CTrue
+let test_if_x'
+  : compilable_closed test_if_x
+  = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0)) CFalse))
