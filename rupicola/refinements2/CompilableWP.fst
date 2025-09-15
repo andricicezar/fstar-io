@@ -191,8 +191,7 @@ let helper_if c t e fsG =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   if c fsG then t fsG else e fsG
 
-#set-options "--print_universes --print_implicits"
-
+[@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
 | CUnit       : #g:env -> compilable g (fun _ -> ret ()) (fun _ -> ())
