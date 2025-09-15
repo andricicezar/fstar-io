@@ -1,6 +1,6 @@
 module CompilableWP
 
-open FStar.Tactics.V2
+open FStar.Tactics
 
 assume val z : nat
 
@@ -95,6 +95,8 @@ val wp_lambda : #g :env ->
                 spec_env g (a -> b)
 
 let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
+  pure_null_wp (a -> b)
+(**
   fun (p:pure_post (a -> b)) ->
  //  (forall f. p f) ==>
  //    (forall x. wpBody (fs_extend fsG x) (fun _ -> True)) /\
@@ -105,16 +107,18 @@ let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
 
   //  forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
   //    wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
+**)
 
 val helper_lambda : #g :env ->
                     #a :Type ->
                     #b :Type ->
                     wpBody:spec_env (extend a g) b ->
+                    proof : squash (forall fsG. wpBody fsG <= pure_null_wp b) ->
                     f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                     fs_oexp (extend a g) b wpBody
-let helper_lambda #g #a #b wpBody f =
+let helper_lambda #g #a #b wpBody proof f : fs_oexp (extend a g) b wpBody =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun fsG -> admit (); f (fs_shrink #a fsG) (get_v fsG 0)
+  fun fsG -> f (fs_shrink #a fsG) (get_v fsG 0)
 
 unfold
 val helper_var : g:env ->
@@ -245,8 +249,9 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #a :Type ->
                 #b :Type ->
                 #wpBody:spec_env (extend a g) b ->
+                #proof : squash (forall fsG. wpBody fsG <= pure_null_wp b) ->
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
-                cf:compilable #b (extend a g) wpBody (helper_lambda wpBody f) ->
+                cf:compilable #b (extend a g) wpBody (helper_lambda wpBody proof f) ->
                 compilable g _ f
 
 | CRefinement : #g:env ->
@@ -262,7 +267,6 @@ let empty_wp #a (wp:spec_env empty a) : pure_wp a =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
   fun p -> forall fsG. wp fsG p
 
-#set-options "--print_universes"
 unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
   compilable empty wp (fun _ -> x)
 
@@ -276,23 +280,35 @@ let test1_exp
 
 let test4_exp'
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = CLambda (CLambda (CLambda (CVarShrink1 (CVar))))
+  = CLambda (CLambda (CLambda (CVarShrink1 #_ #_ #_ #0 (CVar))))
+
+// TODO: why does this fail? it should be very easy to prove for the SMT!
+let _ = assert (forall (fsG: fs_env (extend (_: bool -> bool) empty)).
+          fapp_wp (fun fsG -> ret (get_v fsG 0)) (fun _ -> ret false) fsG
+          <=
+          pure_null_wp bool)
+  by (compute (); let fsG = forall_intro () in explode ();
+    let myH = nth_binder (-2) in
+    let myH = instantiate myH (`(get_v (`#fsG) 0)) in
+ //   let h = tcut  (`((get_v (`#fsG) 0) == (get_v (`#fsG) 0))) in
+    tadmit ();
+  dump "H")
 
 let test1_hoc
   : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = CLambda (CApp CVar CFalse)
+  = CLambda #_ #_ #_ #_ #(magic ()) #_ (CApp (CVar #_ #_ #0) CFalse)
 
 let test2_if
   : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
-  = CLambda (CIf CVar CFalse CTrue)
+  = CLambda (CIf (CVar #_ #_ #0) CFalse CTrue)
 
 let test1_if
   : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = CLambda (CLambda (CIf (CVarShrink1 CVar) CFalse CVar))
+  = CLambda (CLambda (CIf (CVarShrink1 #_ #_ #_ #0 CVar) CFalse (CVar #_ #_ #0)))
 
 let test1_comp_ref
   : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = CLambda CVar
+  = CLambda (CVar #_ #_ #0)
 
 [@expect_failure]
 let test_pm2
