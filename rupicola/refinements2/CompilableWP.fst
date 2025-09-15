@@ -18,8 +18,6 @@ let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
     [SMTPat (pure_wp_monotonic a wp)]
   = M.intro_pure_wp_monotonicity wp
 
-//let pure_wp (a: Type) = wp:pure_wp' a{M.is_monotonic wp}
-
 unfold
 let pure_trivial #a : pure_wp a =
   fun p -> forall r. p r
@@ -95,15 +93,16 @@ val wp_lambda : #g :env ->
                 spec_env g (a -> b)
 
 let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
-  pure_null_wp (a -> b)
-(**
   fun (p:pure_post (a -> b)) ->
+    forall (f:a -> b).
+      (forall (p':pure_post b) (fsG':fs_env (extend a g)).
+        fsG == fs_shrink fsG' ==>  wpBody fsG' p' ==>  p' (f (get_v fsG' 0))
+      ) ==>  p f
+(**
  //  (forall f. p f) ==>
  //    (forall x. wpBody (fs_extend fsG x) (fun _ -> True)) /\
  //    (forall f. ret f p)
 
-    forall f. (forall p' (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
-      wpBody fsG' p' ==>  p' (f fsG (get_v fsG' 0))) /\ p (f fsG)
 
   //  forall (fsG':fs_env (extend a g)). fsG == fs_shrink fsG' ==>
   //    wpBody fsG' (fun r -> forall f. f fsG' (get_v fsG' 0) == r /\ p (f fsG'))
@@ -113,18 +112,16 @@ val helper_lambda : #g :env ->
                     #a :Type ->
                     #b :Type ->
                     wpBody:spec_env (extend a g) b ->
-                    proof : squash (forall fsG. wpBody fsG <= pure_null_wp b) ->
                     f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                     fs_oexp (extend a g) b wpBody
-let helper_lambda #g #a #b wpBody proof f : fs_oexp (extend a g) b wpBody =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
+let helper_lambda #g #a #b wpBody f : fs_oexp (extend a g) b wpBody =
   fun fsG -> f (fs_shrink #a fsG) (get_v fsG 0)
 
 unfold
 val helper_var : g:env ->
                  a:Type ->
                  x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                 fs_oexp g a (fun fsG -> ret (get_v fsG x))
+                 fs_oexp g a (fun fsG p -> p (get_v fsG x))
 let helper_var g a x fsG = get_v fsG x
 
 unfold
@@ -132,7 +129,7 @@ val helper_var1 : g:env ->
                   a:Type ->
                   b:Type ->
                   x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                  fs_oexp (extend b g) a (fun fsG -> ret (get_v (fs_shrink #b fsG) x))
+                  fs_oexp (extend b g) a (fun fsG p -> p (get_v (fs_shrink #b fsG) x))
 let helper_var1 g a b x fsG = get_v (fs_shrink #b fsG) x
 
 unfold
@@ -141,7 +138,7 @@ val helper_var2 : g:env ->
                   b:Type ->
                   c:Type ->
                   x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                  fs_oexp (extend c (extend b g)) a (fun fsG -> ret (get_v (fs_shrink #b (fs_shrink #c fsG)) x))
+                  fs_oexp (extend c (extend b g)) a (fun fsG p -> p (get_v (fs_shrink #b (fs_shrink #c fsG)) x))
 let helper_var2 g a b c x fsG = get_v (fs_shrink #b (fs_shrink #c fsG)) x
 
 unfold
@@ -153,7 +150,7 @@ val fapp_wp : #g :env ->
               spec_env g b
 let fapp_wp #g #a #b wpF wpX fsG : pure_wp b =
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun (p:pure_post b) -> wpF fsG (fun f' -> wpX fsG (fun x' -> ret (f' x') p))
+  fun (p:pure_post b) -> wpF fsG (fun f' -> wpX fsG (fun x' -> p (f' x')))
 
 unfold
 val helper_fapp : g :env ->
@@ -198,27 +195,27 @@ let helper_if c t e fsG =
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
-| CUnit       : #g:env -> compilable g (fun _ -> ret ()) (fun _ -> ())
-| CTrue       : #g:env -> compilable g (fun _ -> ret true) (fun _ -> true)
-| CFalse      : #g:env -> compilable g (fun _ -> ret false) (fun _ -> false)
+| CUnit       : #g:env -> compilable g (fun _ p -> p ()) (fun _ -> ())
+| CTrue       : #g:env -> compilable g (fun _ p -> p true) (fun _ -> true)
+| CFalse      : #g:env -> compilable g (fun _ p -> p false) (fun _ -> false)
 
 (** The following three rules for variables should be generalized. What would be an elegant solution? **)
 | CVar        : #g:env ->
                 #a:Type ->
-                #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
                 compilable #a g _ (helper_var g a x)
 | CVarShrink1 : #g:env ->
                 #a:Type ->
                 #b:Type ->
-                #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                compilable #a (extend b g) (fun fsG -> ret (get_v fsG (x+1))) (fun fsG -> get_v fsG (x+1)) ->
+                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+ //               compilable #a (extend b g) (fun fsG p -> p (get_v fsG (x+1))) (fun fsG -> get_v fsG (x+1)) ->
                 compilable #a (extend b g) _ (helper_var1 g a b x)
 | CVarShrink2 : #g:env ->
                 #a:Type ->
                 #b:Type ->
                 #c:Type ->
-                #x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                compilable #a (extend c (extend b g)) (fun fsG -> ret (get_v fsG (x+2))) (fun fsG -> get_v fsG (x+2)) ->
+                x:var{Some? (g x) /\ a == Some?.v (g x)} ->
+ //               compilable #a (extend c (extend b g)) (fun fsG p -> p (get_v fsG (x+2))) (fun fsG -> get_v fsG (x+2)) ->
                 compilable #a (extend c (extend b g)) _ (helper_var2 g a b c x)
 
 | CApp        : #g :env ->
@@ -249,17 +246,16 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #a :Type ->
                 #b :Type ->
                 #wpBody:spec_env (extend a g) b ->
-                #proof : squash (forall fsG. wpBody fsG <= pure_null_wp b) ->
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
-                cf:compilable #b (extend a g) wpBody (helper_lambda wpBody proof f) ->
+                cf:compilable #b (extend a g) wpBody (helper_lambda wpBody f) ->
                 compilable g _ f
 
 | CRefinement : #g:env ->
                 #a:Type ->
                 ref1:(a -> Type0) ->
-                ref2:(a -> Type0) ->
-                wpV:spec_env g (x:a{ref1 x}) ->
-                v:fs_oexp g (x:a{ref1 x}) wpV ->
+                #ref2:(a -> Type0) ->
+                #wpV:spec_env g (x:a{ref1 x}) ->
+                #v:fs_oexp g (x:a{ref1 x}) wpV ->
                 compilable g wpV v ->
                 compilable g _ (helper_ref #g #a #ref1 #ref2 #wpV v)
 
@@ -272,43 +268,53 @@ unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
-  = CVarShrink1 CVar
+  = CVarShrink1 0
 
 let test1_exp
   : compilable_closed #(unit -> unit) (fun x -> x)
-  = CLambda (CVar #_ #_ #0)
+  = CLambda (CVar 0)
 
 let test4_exp'
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = CLambda (CLambda (CLambda (CVarShrink1 #_ #_ #_ #0 (CVar))))
-
-// TODO: why does this fail? it should be very easy to prove for the SMT!
-let _ = assert (forall (fsG: fs_env (extend (_: bool -> bool) empty)).
-          fapp_wp (fun fsG -> ret (get_v fsG 0)) (fun _ -> ret false) fsG
-          <=
-          pure_null_wp bool)
-  by (compute (); let fsG = forall_intro () in explode ();
-    let myH = nth_binder (-2) in
-    let myH = instantiate myH (`(get_v (`#fsG) 0)) in
- //   let h = tcut  (`((get_v (`#fsG) 0) == (get_v (`#fsG) 0))) in
-    tadmit ();
-  dump "H")
+  = CLambda (CLambda (CLambda (CVarShrink1 0)))
 
 let test1_hoc
   : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = CLambda #_ #_ #_ #_ #(magic ()) #_ (CApp (CVar #_ #_ #0) CFalse)
+  = CLambda (CApp (CVar 0) CFalse)
 
 let test2_if
   : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
-  = CLambda (CIf (CVar #_ #_ #0) CFalse CTrue)
+  = CLambda (CIf (CVar 0) CFalse CTrue)
 
 let test1_if
   : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = CLambda (CLambda (CIf (CVarShrink1 #_ #_ #_ #0 CVar) CFalse (CVar #_ #_ #0)))
+  = CLambda (CLambda (CIf (CVarShrink1 0) CFalse (CVar 0)))
 
 let test1_comp_ref
   : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = CLambda (CVar #_ #_ #0)
+  = CLambda (CVar 0)
+
+let test1_erase_ref
+  : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
+  = CLambda (CRefinement (fun x -> x == true) (CVar 0))
+
+open Examples
+
+let test_just_true'
+  : compilable_closed test_just_true
+  = CLambda (CRefinement _ CTrue)
+
+let test_moving_ref'
+  : compilable_closed test_moving_ref
+  = CLambda (CRefinement _ CUnit)
+
+let test_always_false'
+  : compilable_closed test_always_false
+  = CLambda (CRefinement _ (CIf (CVar 0) (CFalse) (CVar 0)))
+
+let test_always_false''
+  : compilable_closed test_always_false
+  = CLambda (CIf (CVar 0) (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) (CVar 0)))
 
 [@expect_failure]
 let test_pm2
@@ -326,7 +332,3 @@ let test1_erase_ref
 let test1_add_ref
   : compilable_closed #(bool -> (x:bool{x == true})) (fun x -> true)
   = CLambda CTrue
-
-let test1_erase_ref
-  : compilable_ref_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = CRLambda (CRRefErase (fun x -> x == true) CRVar)
