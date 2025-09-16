@@ -1,6 +1,6 @@
 module CompilableWP
 
-open FStar.Tactics
+open FStar.Tactics.V2
 
 assume val z : nat
 
@@ -18,12 +18,9 @@ let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
     [SMTPat (pure_wp_monotonic a wp)]
   = M.intro_pure_wp_monotonicity wp
 
-unfold
-let pure_trivial #a : pure_wp a =
-  fun p -> forall r. p r
-
 unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-unfold let ret #a x : pure_wp a = pure_return a x //fun p -> p x
+(** Using the ret is nicer, but makes things more fragile **)
+unfold let ret #a x : pure_wp a = fun p -> p x //pure_return a x //fun p -> p x
 
 (** Typing environment **)
 type env = var -> option Type0
@@ -59,7 +56,7 @@ type spec_env (g:env) (a:Type) =
 
 (** Definition of open FStar expressions **)
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
-  fsG:fs_env g -> PURE a (wpG fsG) // <= ret x} (** this works better than using PURE **)
+  fsG:fs_env g -> PURE a (wpG fsG)
 
 unfold
 val wp_ref :
@@ -301,10 +298,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable g _ (helper_seq ref1 v k)
 
 
-let empty_wp #a (wp:spec_env empty a) : pure_wp a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun p -> forall fsG. wp fsG p
-
 unfold let compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
   compilable empty wp (fun _ -> x)
 
@@ -342,6 +335,11 @@ let test1_erase_ref
 
 open Examples
 
+[@expect_failure]
+let test_just_false
+  : compilable_closed #(bool -> (x:bool{x == true})) (fun x -> false)
+  = CLambda (CRefinement (fun x -> True) #(fun x -> x == true) CFalse)
+
 let test_just_true'
   : compilable_closed test_just_true
   = CLambda (CRefinement _ CTrue)
@@ -366,13 +364,17 @@ let test_always_false_complex''
   : compilable_closed test_always_false_complex
   = CLambda (CIf CVar0 (CIf CVar0 (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) CTrue)) (CRefinement (fun _ -> True) CFalse))
 
+let test_always_false_ho
+  : compilable_closed test_always_false_ho
+  = CLambda (CIf (CRefinement (fun x -> x == true) (CApp CVar0 CUnit)) (CRefinement (fun _ -> True) CFalse) (CRefinement (fun _ -> True) CTrue))
+
 let test_if_x'
   : compilable_closed test_if_x
   = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0)) CFalse))
 
 let test_p_implies_q'
   : compilable_closed test_p_implies_q
-  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref CVar0)))
+  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref #(fun _ -> q_ref) CVar0)))
  // = CLambda (CLambda (CApp (CLambda (CRefinement p_ref #(fun _ -> q_ref) CVar1)) (CApp CVar1 CVar0)))
 
 let test_true_implies_q
@@ -382,3 +384,17 @@ let test_true_implies_q
          (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
                      (CRefinement (fun _ -> True) #(fun x -> x == true ==> q_ref) CVar0))
          (CRefinement (fun _ -> True) #(fun x -> x == true ==> q_ref) CFalse)))
+
+
+let test_context
+  : (x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool
+  = fun x f ->
+    if x then (f x)
+    else (fun y -> y)
+
+// How to make this work?
+let test_context'
+  : compilable_closed test_context
+  = CLambda (CLambda (CIf CVar1
+                          (CApp CVar0 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar1))
+                          (CLambda #_ #_ #_ #_ #(fun fsG y -> y) CVar0)))

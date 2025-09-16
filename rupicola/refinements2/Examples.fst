@@ -17,6 +17,10 @@ let test_always_false_complex
   : bool -> y:bool{y == false}
   = fun x -> if x then if x then false else true else false
 
+let test_always_false_ho
+  : (f:(unit -> x:bool{x == true})) -> y:bool{y == false}
+  = fun f -> if f () then false else true
+
 let test_if_x
   : (f:(x:bool{x == true}) -> bool) -> bool -> bool
   = fun f x -> if x then f x else false
@@ -30,3 +34,7 @@ let test_p_implies_q
 let test_true_implies_q
   : (f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (x:bool{x == true ==>  q_ref})
   = fun f x -> if x then (f x; x) else false
+
+let test_context
+  : (x:bool{p_ref x}) -> (f:(x:bool{p_ref x}) -> bool -> bool) -> (bool -> bool)
+  = fun x f y -> f x y
