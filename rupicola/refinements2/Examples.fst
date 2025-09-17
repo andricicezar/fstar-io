@@ -27,6 +27,14 @@ let test_if_x
 
 assume val p_ref : bool -> Type0
 assume val q_ref : Type0
+let test_p_implies_q_simpl
+  : (f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})
+  = fun f -> f (); ()
+
+let test_p_implies_q_simpl'
+  : (f: (unit -> _:unit{q_ref})) -> bool -> (_:bool{q_ref})
+  = fun f x -> f (); x
+
 let test_p_implies_q
   : (f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})
   = fun f x -> f x; x

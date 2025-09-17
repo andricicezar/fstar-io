@@ -1,23 +1,9 @@
 module CompilableWP
 
-open FStar.Tactics.V2
-
-assume val z : nat
-
-let f () : Pure (nat -> nat) (z > 0) (fun _ -> True) by (dump "H") =
-  (fun x -> x / z)
-
+open FStar.Tactics
 
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
-
-  (**
-let intro_pure_wp_monotonicity (#a:Type) (wp:pure_wp' a)
-  : Lemma
-      (requires M.is_monotonic wp)
-      (ensures pure_wp_monotonic a wp)
-    [SMTPat (pure_wp_monotonic a wp)]
-  = M.intro_pure_wp_monotonicity wp **)
 
 unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
 (** Using the ret is nicer, but makes things more fragile **)
@@ -40,20 +26,6 @@ assume val fs_top : #g:env{Some? (g 0)} -> fs_env g -> Some?.v (g 0)
 assume val fs_push : #g:env -> fsG:fs_env g -> #t:Type0 -> t -> fs_env (extend t g)
 assume val fs_pop : #t:Type0 -> #g:env -> fs_env (extend t g) -> fs_env g
 
-(**
-assume val lem_fs_extend #g (fsG:fs_env g) #t (v:t) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fsG x == get_v (fs_extend fsG v) (x+1)) /\
-  get_v (fs_extend fsG v) 0 == v)
-  [SMTPat (fs_extend fsG v)]
-
-assume val lem_fs_shrink #g #t (fsG:fs_env (extend t g)) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fsG (x+1) == get_v (fs_shrink fsG) x))
-  [SMTPat (fs_shrink fsG)]
-
-assume val shrink_extend_inverse #g (fsG:fs_env g) #t (x:t) : Lemma (fs_pop (fs_push fsG x) == fsG)
-  [SMTPat (fs_pop (fs_push fsG x))]
-**)
-
 type spec_env (g:env) (a:Type) =
   fsG:fs_env g -> pure_wp a
 
@@ -69,7 +41,7 @@ val wp_lambda : #g :env ->
                 spec_env g (a -> b)
 
 let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
-  reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
+  M.as_pure_wp
   fun (p:pure_post (a -> b)) ->
     forall (f:a -> b).
       (forall (p':pure_post b) (fsG':fs_env (extend a g)).
@@ -199,7 +171,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 type compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
   compilable empty wp (fun _ -> x)
 
-type compilable_debug #a wp (x:a{forall fsG. wp fsG <= ret x}) =
+type compilable_debug #a wp (x:a) (_:squash (forall fsG. wp fsG <= ret x)) =
   compilable empty wp (fun _ -> x)
 
 let test2_var
@@ -277,18 +249,40 @@ let test_if_x'
   : compilable_closed test_if_x
   = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0)) CFalse))
 
+#set-options "--log_types"
+
+
+let test_p_implies_q_simpl'
+  : compilable_debug _ test_p_implies_q_simpl _
+  = CLambda (CSeq q_ref (CApp CVar0 CUnit) (CRefinement (fun _ -> True) CUnit))
+ // = CLambda (CSeq q_ref (CApp CVar0 CUnit) (CRefinement (fun _ -> True) CUnit))
+ // = CLambda (CApp (CLambda (CRefinement (fun _ -> True) #(fun _ -> q_ref) CUnit)) (CApp CVar0 CUnit))
+
+let test_p_implies_q_simpl''
+  : compilable_debug _ test_p_implies_q_simpl' _
+  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CUnit) (CRefinement (fun _ -> True) CVar0)))
+  //= CLambda (CLambda (CApp (CLambda (CRefinement (fun _ -> True) CVar1)) (CApp CVar1 CUnit)))
+
+let test_p_implies_q'
+  : compilable_debug _ test_p_implies_q _
+  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref CVar0)))
+ // = CLambda (CLambda (CApp (CLambda (CRefinement p_ref #(fun _ -> q_ref) CVar1)) (CApp CVar1 CVar0)))
+
 let test_true_implies_q
-  : compilable_debug _ test_true_implies_q
+  : compilable_debug _ test_true_implies_q _
   = CLambda (CLambda (
      CIf CVar0
          (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
                      (CRefinement (fun _ -> True) CVar0))
          (CRefinement (fun _ -> True) CFalse)))
 
-let test_p_implies_q'
-  : compilable_debug _ test_p_implies_q
-  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref CVar0)))
- // = CLambda (CLambda (CApp (CLambda (CRefinement p_ref #(fun _ -> q_ref) CVar1)) (CApp CVar1 CVar0)))
+let test_true_implies_q
+  : compilable_debug _ test_true_implies_q _
+  = CLambda (CLambda (
+     CIf CVar0
+         (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
+                     (CRefinement (fun _ -> True) CVar0))
+         (CRefinement (fun _ -> True) CFalse)))
 
 let test_context
   : (x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool
