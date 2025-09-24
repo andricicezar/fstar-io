@@ -211,7 +211,7 @@ let test_fapp1 ()
   : Tot (compilable_debug #((unit -> unit) -> unit) _ (fun f -> f ()) ())
   = CLambda (CApp CVar0 CUnit)
 
-[@expect_failure] // FIXME
+[@expect_failure] // FIXME, depends on test_app1
 let test_fapp2
   : compilable_closed #((unit -> unit -> unit) -> unit) (fun f -> f () ())
   = CLambda (CApp (CApp CVar0 CUnit) CUnit)
