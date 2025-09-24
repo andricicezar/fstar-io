@@ -1,7 +1,6 @@
 module CompilableWP
 
 open FStar.Tactics
-open SpecialSeq
 
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
@@ -56,6 +55,21 @@ val helper_var : g:env{Some? (g 0)} ->
 let helper_var g a fsG =
   fs_hd fsG
 
+unfold
+val helper_var1 : g:env{Some? (g 0)} ->
+                  a:Type{Some?.v (g 0) == a} ->
+                  b:Type ->
+                  fs_oexp (extend b g) a (fun fsG -> pure_return a (fs_hd (fs_tail #b fsG)))
+let helper_var1 g a b fsG = fs_hd (fs_tail #b fsG)
+
+unfold
+val helper_var2 : g:env{Some? (g 0)} ->
+                  a:Type{Some?.v (g 0) == a} ->
+                  b:Type ->
+                  c:Type ->
+                  fs_oexp (extend c (extend b g)) a (fun fsG -> pure_return a (fs_hd (fs_tail #b (fs_tail #c fsG))))
+let helper_var2 g a b c fsG = fs_hd (fs_tail #b (fs_tail #c fsG))
+
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
@@ -82,16 +96,15 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #a:Type{a == Some?.v (g 0)} ->
                 #b:Type ->
                 compilable #a (extend b g)
-                  (fun fsG -> pure_return a (fs_hd (fs_tail #b fsG)))
-                  (fun fsG -> fs_hd (fs_tail #b fsG))
+                  _
+                  (helper_var1 g a b)
 | CVar2       : #g:env{Some? (g 0)} ->
                 #a:Type{a == Some?.v (g 0)} ->
                 #b:Type ->
                 #c:Type ->
                 compilable #a (extend c (extend b g))
-                  (fun fsG ->
-                    pure_return a (fs_hd (fs_tail #b (fs_tail #c fsG))))
-                  (fun fsG -> fs_hd (fs_tail #b (fs_tail #c fsG)))
+                  _
+                  (helper_var2 g a b c)
 
 | CApp        : #g :env ->
                 #a :Type ->
@@ -104,10 +117,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 cx:compilable g wpX x ->
                 compilable #b g
                   (fun fsG ->
- //                   M.elim_pure_wp_monotonicity_forall ();
-//                    M.as_pure_wp
-//                    fun p ->
-//                    wpF fsG (fun f' -> wpX fsG (fun x' -> p (f' x'))))
                     pure_bind_wp (a -> b) b (wpF fsG) (fun f' ->
                       pure_bind_wp a b (wpX fsG) (fun x' ->
                        pure_return b (f' x'))))
@@ -158,26 +167,22 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 //                      (fun _ -> pure_return (x:a{ref2 x}) r)))
                   (fun fsG -> M.elim_pure_wp_monotonicity_forall ();
                     v fsG)
-
 | CSeq        : #g:env ->
-                #a:Type ->
-                #wpV:spec_env g a ->
-                #v:fs_oexp g a wpV ->
-                compilable #a g wpV v -> (** the name compilable is misleading here.
+                ref1:Type0 ->
+                #wpV:spec_env g (_:unit{ref1}) ->
+                #v:fs_oexp g (_:unit{ref1}) wpV ->
+                compilable #(_:unit{ref1}) g wpV v -> (** the name compilable is misleading here.
                                          I have to compute the WP of `v` to be able to
                                          compile the entire term, even if this is computationally irelevant **)
 
-                #b:Type ->
-                #wpK:spec_env g b ->
-                #k:fs_oexp g b wpK ->
-                compilable #b g wpK k ->
-                compilable #b g
-                  (fun fsG -> pure_bind_wp a b (wpV fsG) (fun _ ->
-                    pure_bind_wp b b (wpK fsG) (fun r ->
-                      pure_return _ r)))
-                  (fun fsG ->
-                    M.elim_pure_wp_monotonicity_forall ();
-                    v fsG ⨟ k fsG)
+                #a:Type ->
+                #wpK:spec_env g a ->
+                #k:fs_oexp g a wpK ->
+                compilable #a g wpK k ->
+                compilable #a g
+                  (fun fsG -> pure_bind_wp (x:unit{ref1}) a (wpV fsG) (fun _ -> wpK fsG))
+                  (fun fsG -> M.elim_pure_wp_monotonicity_forall ();
+                    v fsG ; k fsG)
 
 type compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
   compilable empty wp (fun _ -> x)
@@ -278,81 +283,30 @@ let test_if_x'
   : compilable_closed test_if_x
   = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0)) CFalse))
 
-let test_seq
-  : bool -> bool
-  = fun x -> true ⨟ x
+let test_seq_basic' ()
+  : compilable_closed test_seq_basic
+  = CLambda (CSeq True (CApp CVar0 CUnit) CUnit)
 
-let test_seq'
-  : compilable_debug _ test_seq ()
-  = CLambda (CSeq CTrue CVar0)
+let test_seq_qref'
+  : compilable_closed test_seq_qref
+  = CLambda (CSeq q_ref (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
 
-assume val p_ref : bool -> Type0
-assume val q_ref : Type0
+[@expect_failure] // FIXME
+let test_seq_p_implies_q'
+  : compilable_debug _ test_seq_p_implies_q _
+  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref #(fun _ -> q_ref) CVar0)))
 
-let test_seq2
-  : (x:bool{q_ref}) -> _:unit{q_ref}
-  = fun x -> true ⨟ ()
-
-let test_seq2'
-  : compilable_debug _ test_seq2 ()
-  = CLambda (CSeq CTrue (CRefinement _ CUnit))
-
-let test_seq3
-  : (f: (unit -> unit)) -> unit
-  = fun f -> (f ()) ⨟ ()
-
-let test_seq3' ()
-  : Tot (compilable_debug _ test_seq3 ())
-  = CLambda (CSeq (CApp (CVar0 #_ #(unit -> unit)) CUnit) CUnit)
-
-let test_p_implies_q_simpl
-  : (f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})
-  = fun f -> (f ()) ⨟ ()
-
-let test_p_implies_q_simpl'
-  : compilable_debug _ test_p_implies_q_simpl ()
-  = CLambda (CSeq (CApp CVar0 CUnit) (CRefinement _ CUnit))
-
-let test_p_implies_q_simpl'''
-  : compilable_debug _ test_p_implies_q_simpl _
-  = CLambda (CSeq q_ref (CApp CVar0 CUnit) (CRefinement (fun _ -> True) CUnit))
- // = CLambda (CSeq q_ref (CApp CVar0 CUnit) (CRefinement (fun _ -> True) CUnit))
- // = CLambda (CApp (CLambda (CRefinement (fun _ -> True) #(fun _ -> q_ref) CUnit)) (CApp CVar0 CUnit))
-
-let test_p_implies_q_simpl''
-  : compilable_debug _ test_p_implies_q_simpl' _
-  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CUnit) (CRefinement (fun _ -> True) CVar0)))
-  //= CLambda (CLambda (CApp (CLambda (CRefinement (fun _ -> True) CVar1)) (CApp CVar1 CUnit)))
-
-let test_p_implies_q'
-  : compilable_debug _ test_p_implies_q _
-  = CLambda (CLambda (CSeq q_ref (CApp CVar1 CVar0) (CRefinement p_ref CVar0)))
- // = CLambda (CLambda (CApp (CLambda (CRefinement p_ref #(fun _ -> q_ref) CVar1)) (CApp CVar1 CVar0)))
-
+[@expect_failure] // FIXME
 let test_true_implies_q
-  : compilable_debug _ test_true_implies_q _
+  : compilable_debug _ test_if_seq _
   = CLambda (CLambda (
      CIf CVar0
          (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
-                     (CRefinement (fun _ -> True) CVar0))
-         (CRefinement (fun _ -> True) CFalse)))
+                     (CRefinement (fun _ -> True) #(fun r -> r == true ==>  q_ref) CVar0))
+         (CRefinement (fun _ -> True) #(fun r -> r == true ==>  q_ref) CVar0)))
 
-let test_true_implies_q''
-  : compilable_debug _ test_true_implies_q _
-  = CLambda (CLambda (
-     CIf CVar0
-         (CSeq q_ref (CApp CVar1 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar0))
-                     (CRefinement (fun _ -> True) CVar0))
-         (CRefinement (fun _ -> True) CFalse)))
-
-let test_context
-  : (x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool
-  = fun x f ->
-    if x then (f x)
-    else (fun y -> y)
-
-// How to make this work?
+[@expect_failure] // FIXME, depends on test_app1
 let test_context'
   : compilable_closed test_context
   = CLambda (CLambda (CIf CVar1

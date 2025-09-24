@@ -27,22 +27,25 @@ let test_if_x
 
 assume val p_ref : bool -> Type0
 assume val q_ref : Type0
-let test_p_implies_q_simpl
+
+let test_seq_basic
+  : (f: (unit -> unit)) -> unit
+  = fun f -> (f ()) ; ()
+
+let test_seq_qref
   : (f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})
-  = fun f -> f (); ()
+  = fun f -> (f ()) ; ()
 
-let test_p_implies_q_simpl'
-  : (f: (unit -> _:unit{q_ref})) -> bool -> (_:bool{q_ref})
-  = fun f x -> f (); x
-
-let test_p_implies_q
+let test_seq_p_implies_q
   : (f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})
-  = fun f x -> f x; x
+  = fun f x -> f x ; x
 
-let test_true_implies_q
-  : (f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (x:bool{x == true ==>  q_ref})
-  = fun f x -> if x then (f x; x) else false
+let test_if_seq
+  : (f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (r:bool{r == true ==>  q_ref})
+  = fun f x -> if x then (f x ; x) else x
 
 let test_context
-  : (x:bool{p_ref x}) -> (f:(x:bool{p_ref x}) -> bool -> bool) -> (bool -> bool)
-  = fun x f y -> f x y
+  : (x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool
+  = fun x f ->
+    if x then (f x)
+    else (fun y -> y)

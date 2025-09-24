@@ -101,7 +101,7 @@ unfold
 val helper_var : g:env ->
                  a:Type ->
                  x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                 fs_oexp g a (fun fsG p -> p (get_v fsG x))
+                 fs_oexp g a (fun fsG -> pure_return a (get_v fsG x))
 let helper_var g a x fsG = get_v fsG x
 
 unfold
@@ -109,7 +109,7 @@ val helper_var1 : g:env ->
                   a:Type ->
                   b:Type ->
                   x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                  fs_oexp (extend b g) a (fun fsG p -> p (get_v (fs_shrink #b fsG) x))
+                  fs_oexp (extend b g) a (fun fsG -> pure_return a (get_v (fs_shrink #b fsG) x))
 let helper_var1 g a b x fsG = get_v (fs_shrink #b fsG) x
 
 unfold
@@ -118,7 +118,7 @@ val helper_var2 : g:env ->
                   b:Type ->
                   c:Type ->
                   x:var{Some? (g x) /\ a == Some?.v (g x)} ->
-                  fs_oexp (extend c (extend b g)) a (fun fsG p -> p (get_v (fs_shrink #b (fs_shrink #c fsG)) x))
+                  fs_oexp (extend c (extend b g)) a (fun fsG -> pure_return a (get_v (fs_shrink #b (fs_shrink #c fsG)) x))
 let helper_var2 g a b c x fsG = get_v (fs_shrink #b (fs_shrink #c fsG)) x
 
 unfold
@@ -129,8 +129,9 @@ val fapp_wp : #g :env ->
               wpX : spec_env g a ->
               spec_env g b
 let fapp_wp #g #a #b wpF wpX fsG : pure_wp b =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  fun (p:pure_post b) -> wpF fsG (fun f' -> wpX fsG (fun x' -> p (f' x')))
+                    pure_bind_wp (a -> b) b (wpF fsG) (fun f' ->
+                      pure_bind_wp a b (wpX fsG) (fun x' ->
+                       pure_return b (f' x')))
 
 unfold
 val helper_fapp : g :env ->
@@ -206,8 +207,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 
 (** The following three rules for variables should be generalized. What would be an elegant solution? **)
 | CVar0       : #g:env ->
-                #a:Type ->
-                #_:squash (Some? (g 0) /\ a == Some?.v (g 0)) ->
+                #a:Type{Some? (g 0) /\ a == Some?.v (g 0)} ->
                 compilable #a g _ (helper_var g a 0)
 | CVar1       : #g:env ->
                 #a:Type ->
@@ -290,6 +290,18 @@ let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> get_v (fs_shrink fsG) 0)
   = CVar1
 
+let test_fapp0 ()
+  : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> (get_v fsG 0) ()))
+
+  = CApp CVar0 CUnit
+
+#set-options "--split_queries always --debug SMTFail"
+let test_fapp3 ()
+  : Tot (compilable (extend (unit -> unit -> unit) empty) _ (fun fsG ->
+        let f : unit -> unit -> unit = (get_v fsG 0) in
+        f () ()))
+  = CApp #_ #unit #unit (CApp CVar0 CUnit) CUnit
+
 let test1_exp
   : compilable_closed #(unit -> unit) (fun x -> x)
   = CLambda CVar0
@@ -317,6 +329,14 @@ let test1_comp_ref
 let test1_erase_ref
   : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
   = CLambda (CRefinement (fun x -> x == true) CVar0)
+
+let test_fapp1
+  : compilable_closed #((unit -> unit) -> unit) (fun f -> f ())
+  = CLambda (CApp CVar0 CUnit)
+
+let test_fapp2
+  : compilable_closed #((unit -> unit -> unit) -> unit) (fun f -> f () ())
+  = CLambda (CApp (CApp CVar0 CUnit) CUnit)
 
 open Examples
 

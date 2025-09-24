@@ -26,12 +26,18 @@ assume val fs_push : #g:env -> fsG:fs_env g -> #t:Type0 -> t -> fs_env (extend t
 assume val fs_top : #g:env{Some? (g 0)} -> fs_env g -> Some?.v (g 0)
 assume val fs_tail : #t:Type0 -> #g:env -> fs_env (extend t g) -> fs_env g
 
-type spec_env (g:env) (a:Type) =
+unfold let spec_env (g:env) (a:Type) =
   fsG:fs_env g -> pure_wp a
 
 (** Definition of open FStar expressions **)
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> PURE a (wpG fsG)
+
+unfold
+val helper_var : g:env{Some? (g 0)} ->
+                 a:Type{Some?.v (g 0) == a} ->
+                 fs_oexp g a (fun fsG -> pure_return a (fs_top fsG))
+let helper_var g a fsG = fs_top fsG
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
@@ -47,6 +53,12 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable #a g
                   (fun fsG -> pure_return a (fs_top fsG))
                   (fun fsG -> fs_top fsG)
+
+| CVar0'       : #g:env{Some? (g 0)} ->
+                #a:Type{a == Some?.v (g 0)} ->
+                compilable #a g
+                  _
+                  (helper_var g a)
 
 | CApp        : #g :env ->
                 #a :Type ->
@@ -66,12 +78,36 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                     (f fsG) (x fsG))
 
 let test_fapp2 ()
-  : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
-  by (
-    // explode (); // from 100 lines it goes to 3000
-    dump "H")
-  = CApp CVar0 CUnit
+  : (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
+  by (dump "H")
+  = CApp CVar0' CUnit
 
+#set-options "--split_queries always --debug SMTFail"
 let test_fapp3 ()
   : Tot (compilable (extend (unit -> unit -> unit) empty) _ (fun fsG -> (fs_top fsG) () ()))
   = CApp (CApp CVar0 CUnit) CUnit
+
+let test_fapp2 ()
+  : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
+  by (
+    set_guard_policy Drop; dump "h0";
+    split (); tadmit (); dump "h1";
+    split (); tadmit (); dump "h2";
+    let wpVar = forall_intro () in
+    let wpVarH = implies_intro () in
+    split (); bump_nth 2; tadmit ();
+    dump "h3";
+    let fsG = forall_intro () in
+    let p = forall_intro () in
+    let pH = implies_intro () in
+    split ();
+    trivial ();
+    let g = forall_intro () in
+    let gH = implies_intro () in
+
+    let f = forall_intro () in
+ //   binder_retype wpVarH; norm[delta_only[`%pure_return1;`%pure_return;`%Pervasives.pure_return;`%pure_return0]]; trefl ();
+    //let _ = pose (`((`#wpVar) (`#fsG) (`#p))) in
+
+    dump "H")
+  = CApp #_ #_ #_ #_ #(fun fsG -> fs_top fsG) CVar0 CUnit
