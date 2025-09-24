@@ -6,7 +6,6 @@ open FStar.Tactics
 module M = FStar.Monotonic.Pure
 
 unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-(** Using the ret is nicer, but makes things more fragile **)
 unfold let ret #a x : pure_wp a =
   reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
   fun p -> p x
@@ -29,9 +28,9 @@ let extend (t:Type0) (g:env)
 (** F* evaluation environment **)
 assume val fs_env (g:env) : Type u#0
 assume val fs_empty : fs_env empty
-assume val fs_stack : #g:env -> fsG:fs_env g -> #t:Type0 -> t -> fs_env (extend t g)
-assume val fs_hd : #g:env{Some? (g 0)} -> fs_env g -> Some?.v (g 0)
-assume val fs_tail : #t:Type0 -> #g:env -> fs_env (extend t g) -> fs_env g
+assume val fs_stack : #g:env -> fsG:fs_env g -> #t:Type -> t -> fs_env (extend t g)
+assume val fs_hd : #g:env -> #t:Type -> fs_env (extend t g) -> t
+assume val fs_tail : #t:Type -> #g:env -> fs_env (extend t g) -> fs_env g
 
 type spec_env (g:env) (a:Type) =
   fsG:fs_env g -> pure_wp a
