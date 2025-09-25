@@ -257,7 +257,7 @@ let test_app0 ()
 // FIXME, why does it need tactics to do such simple proofs?
 let test_app1 ()
   : Tot (compilable (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
-  by (explode ();
+  by (explode (); dump "H";
       rewrite_eqs_from_context (); assumption ();
       trefl ();
       trefl ();
@@ -271,7 +271,7 @@ let test ()
 
 let test1_exp ()
   : compilable_closed #(unit -> unit) (fun x -> x)
-  by (dump "H")
+  by (dump "H") // TODO: why are two conjuncts created here?
   = CLambda CVar0
 
 let test2 ()
@@ -382,7 +382,7 @@ let test_seq_p_implies_q'
   = CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
-  : Tot (compilable_closed (test_if_seq ()))
+  : Tot (compilable_debug _ (test_if_seq ()) ())
   by (dump "H")
   = CLambda (CLambda (
      CIf CVar0
