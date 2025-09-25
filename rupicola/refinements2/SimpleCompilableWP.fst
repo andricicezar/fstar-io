@@ -47,7 +47,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                   (fun _ -> pure_return unit ())
                   (fun _ -> ())
 
-(** Can we generalize the following three rules? **)
 | CVar0       : #g:env{Some? (g 0)} ->
                 #a:Type{a == Some?.v (g 0)} ->
                 compilable #a g
