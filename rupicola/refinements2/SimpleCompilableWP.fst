@@ -77,17 +77,15 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                   (fun fsG -> M.elim_pure_wp_monotonicity_forall ();
                     (f fsG) (x fsG))
 
-let test_fapp2 ()
+let test_fapp2' ()
   : (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
-  by (dump "H")
   = CApp CVar0' CUnit
 
-#set-options "--split_queries always --debug SMTFail"
-let test_fapp3 ()
-  : Tot (compilable (extend (unit -> unit -> unit) empty) _ (fun fsG -> (fs_top fsG) () ()))
-  = CApp (CApp CVar0 CUnit) CUnit
-
 let test_fapp2 ()
+  : (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
+  = CApp CVar0 CUnit
+
+let test_fapp2'' ()
   : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> (fs_top fsG) ()))
   by (
     set_guard_policy Drop; dump "h0";
@@ -111,3 +109,7 @@ let test_fapp2 ()
 
     dump "H")
   = CApp #_ #_ #_ #_ #(fun fsG -> fs_top fsG) CVar0 CUnit
+
+let test_fapp3 ()
+  : Tot (compilable (extend (unit -> unit -> unit) empty) _ (fun fsG -> (fs_top fsG) () ()))
+  = CApp (CApp CVar0 CUnit) CUnit
