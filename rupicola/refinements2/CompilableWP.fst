@@ -264,12 +264,24 @@ let test_app1 ()
       trefl ())
   = CApp (CApp CVar0 CTrue) CFalse
 
-let test1_exp
+let test ()
+  : Tot (unit -> unit)
+    by (dump "H")
+  = fun x -> x
+
+let test1_exp ()
   : compilable_closed #(unit -> unit) (fun x -> x)
+  by (dump "H")
   = CLambda CVar0
 
+let test2 ()
+  : Tot ((unit -> unit) -> unit)
+  by (dump "H")
+   = fun f -> f ()
+
 let test_fapp1 ()
-  : Tot (compilable_debug #((unit -> unit) -> unit) _ (fun f -> f ()) ())
+  : Tot (compilable_closed #((unit -> unit) -> unit) (fun f -> f ()))
+  by (dump "H")
   = CLambda (CApp CVar0 CUnit)
 
 let test_fapp2
@@ -370,7 +382,8 @@ let test_seq_p_implies_q'
   = CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
-  : Tot (compilable_closed test_if_seq)
+  : Tot (compilable_closed (test_if_seq ()))
+  by (dump "H")
   = CLambda (CLambda (
      CIf CVar0
          (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
