@@ -227,49 +227,34 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable #a g wpK k ->
                 compilable #a g _ (helper_seq wpV v wpK k)
 
+
+let helper_oexp (x:'a) (wp:spec_env empty 'a) (_:squash (forall fsG. wp fsG <= pure_return _ x)) : fs_oexp empty 'a wp =
+  fun _ -> x
+
+#set-options "--split_queries always --no_smt"
+
 type compilable_closed #a (#wp:spec_env empty a) (x:a) =
-  squash (forall fsG. wp fsG <= pure_return _ x) -> compilable empty wp (fun _ -> x)
+  proof:squash (forall fsG. wp fsG <= pure_return _ x) -> compilable empty wp (helper_oexp x wp proof)
 
 type compilable_debug #a (wp:spec_env empty a) (x:a) =
   compilable_closed #a #wp x
-
-//type compilable_debug' #a wp (x:a) =
-// unit -> PURE (compilable_closed #a #wp x) (fun p -> forall fsG. wp fsG <= )
-
-#set-options "--split_queries always --no_smt"
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
   = CVar1
 
 let test1_exp ()
-  : Tot (compilable_closed #(bool -> bool) (fun x -> x)
-  ) by (
-    let x = implies_intro () in
-    assumption ())
-  = fun _ -> CLambda #_ #_ #_ #_ #_ (CVar0 #_ #_)
+  : compilable_closed #(bool -> bool) (fun x -> x)
+  = fun _ -> CLambda CVar0
 
 let test1_exp' ()
   : Tot (compilable_closed #(bool -> bool -> bool) (fun x y -> y))
-  by (
-    set_guard_policy Drop;
-    let x = implies_intro () in
-    split ();
-    assumption ();
-    let _ = forall_intro () in
-    let h = implies_intro () in
-    assumption ())
   = fun _ ->  CLambda (CLambda CVar0)
 
 let test_app0 ()
-  : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> fs_hd fsG ()))
-  by (
-    let fsG = forall_intro () in
-    let p = forall_intro () in
-    let h = implies_intro () in
-    let u = forall_intro () in
-    tadmit ())
-  = CApp CVar0 CUnit
+  : Tot (compilable (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
+  by (tadmit ())
+  = CApp CVar0 CTrue
 
 // FIXME, why does it need tactics to do such simple proofs?
 let test_app1 ()
@@ -292,106 +277,39 @@ let test2 ()
 
 let test_fapp1 ()
   : compilable_closed #((unit -> unit) -> unit) (fun f -> f ())
-  by (
-    let x = implies_intro () in
-    // assumption ();
-    tadmit ()
-  )
   = fun _ -> CLambda (CApp CVar0 CUnit)
 
 let test_fapp2 ()
   : compilable_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false)
-  by (
-    let _ = forall_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CApp (CApp CVar0 CTrue) CFalse)
 
 let test4_exp' ()
   : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
-  by (
-    set_guard_policy Drop;
-
-    let _ = forall_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CLambda (CLambda CVar2))
 
 let test5_exp' ()
   : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> y)
-  by (
-    set_guard_policy Drop;
-
-    let _ = forall_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CLambda (CLambda CVar1))
 
 let test6_exp' ()
   : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
-  by (
-    set_guard_policy Drop;
-
-    let _ = forall_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CLambda (CLambda CVar0))
 
 [@expect_failure]
-let test4_exp' ()
+let test4_exp'' ()
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
   = fun _ -> CLambda (CLambda (CLambda CVar0))
 
 let test1_hoc ()
   : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
-  by (
-    let x = forall_intro () in
-    assumption ())
   = fun _ -> CLambda (CApp CVar0 CFalse)
 
 let test2_if ()
   : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
   by (
     set_guard_policy Drop;
-    let x = forall_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -403,9 +321,8 @@ let test3_if_ho ()
   : compilable_closed #(bool -> (bool -> bool)) (fun x -> if x then (fun y -> x) else (fun z -> z))
   by (
     set_guard_policy Drop;
-    let x = forall_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -441,51 +358,27 @@ let test3_if_ho ()
 let test1_if ()
   : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
   by (
-    set_guard_policy Drop;
-    let x = forall_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
-    let h = implies_intro () in
-
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let h2 = implies_intro () in
-    let _ = forall_intro () in
-    let h2 = implies_intro () in
-
-    compute (); trefl ())
+    let _ = implies_intro () in
+    compute (); trefl ()
+    )
   = fun _ -> CLambda (CLambda (CIf CVar1 CFalse CVar0))
 
 let test1_comp_ref ()
   : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  by (
-    set_guard_policy Drop;
-    let x = forall_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda CVar0
 
 let test1_erase_ref ()
   : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  by (
-    let x = implies_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CRefinement _ CVar0)
 
 open Examples
 
 let test_erase_refine_again ()
   : compilable_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
-  by (
-    set_guard_policy Drop;
-    let x = forall_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CRefinement _ (CRefinement _ CVar0))
 
 [@expect_failure]
@@ -495,21 +388,10 @@ let test_just_false
 
 let test_just_true' ()
   : compilable_closed test_just_true
-  by (
-    set_guard_policy Drop;
-    let x = forall_intro () in
-    assumption ()
-  )
   = fun _ -> CLambda (CRefinement _ CTrue)
 
 let test_moving_ref' ()
   : compilable_closed test_moving_ref
-  by (
-    set_guard_policy Drop;
-    let x = forall_intro () in
-    tadmit ()
- //   assumption ();
-  )
   = fun _ -> CLambda (CRefinement _ CUnit)
 
 let test_always_false' ()
@@ -517,8 +399,7 @@ let test_always_false' ()
   by (
     set_guard_policy Drop;
     let _ = forall_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -529,11 +410,8 @@ let test_always_false' ()
 let test_always_false'' ()
   : Tot (compilable_closed test_always_false)
   by (
-    set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
+    let _ = forall_intro () in
+    let _ = forall_intro () in
     let _ = forall_intro () in
     let _ = implies_intro () in
     compute (); trefl ()
@@ -545,9 +423,8 @@ let test_always_false_complex' ()
   : compilable_closed test_always_false_complex
   by (
     set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -559,9 +436,8 @@ let test_always_false_complex'' ()
   : compilable_closed test_always_false_complex
   by (
     set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -573,9 +449,8 @@ let test_always_false_ho ()
   : compilable_closed test_always_false_ho
   by (
     set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
@@ -587,17 +462,9 @@ let test_if_x' ()
   : compilable_closed test_if_x
   by (
     set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
     let _ = forall_intro () in
-    let _ = implies_intro () in
-
-    split ();
-    assumption ();
     let _ = forall_intro () in
-    let _ = implies_intro () in
+
     let _ = forall_intro () in
     let _ = implies_intro () in
     compute (); trefl ()
@@ -606,55 +473,25 @@ let test_if_x' ()
 
 let test_seq_basic' ()
   : compilable_closed test_seq_basic
-  by (
-    set_guard_policy Drop;
-    let _ = implies_intro () in
-    tadmit ()
-  )
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
 
 let test_seq_qref' ()
   : compilable_closed test_seq_qref
-  by (
-    set_guard_policy Drop;
-    let _ = implies_intro () in
-    tadmit ()
-  )
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
 let test_seq_p_implies_q' ()
   : compilable_closed test_seq_p_implies_q
-  by (
-    set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-
-    assumption ()
-  )
   = fun _ -> CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
   : compilable_closed test_if_seq
   by (
     set_guard_policy Drop;
-    let _ = implies_intro () in
-    split ();
-    assumption ();
+    let _ = forall_intro () in
+    let _ = forall_intro () in
 
     let _ = forall_intro () in
     let _ = implies_intro () in
-    split ();
-    assumption ();
-
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-    let _ = forall_intro () in
-    let _ = implies_intro () in
-
     compute (); trefl ()
   )
   = fun _ -> CLambda (CLambda (
