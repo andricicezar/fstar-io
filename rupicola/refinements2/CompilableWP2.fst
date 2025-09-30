@@ -228,32 +228,8 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable #a g _ (helper_seq wpV v wpK k)
 
 
-let helper_oexp (x:'a) (wp:spec_env empty 'a) (_:squash (forall fsG. wp fsG <= pure_return _ x)) : fs_oexp empty 'a wp =
-  fun _ -> x
-
-#set-options "--split_queries always --no_smt"
-
-type compilable_closed #a (#wp:spec_env empty a) (x:a) =
-  proof:squash (forall fsG. wp fsG <= pure_return _ x) -> compilable empty wp (helper_oexp x wp proof)
-
-type compilable_debug #a (wp:spec_env empty a) (x:a) =
-  compilable_closed #a #wp x
-
-let test2_var
-  : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
-  = CVar1
-
-let test1_exp ()
-  : compilable_closed #(bool -> bool) (fun x -> x)
-  = fun _ -> CLambda CVar0
-
-let test1_exp' ()
-  : Tot (compilable_closed #(bool -> bool -> bool) (fun x y -> y))
-  = fun _ ->  CLambda (CLambda CVar0)
-
 let test_app0 ()
   : Tot (compilable (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
-  by (tadmit ())
   = CApp CVar0 CTrue
 
 // FIXME, why does it need tactics to do such simple proofs?
@@ -267,13 +243,28 @@ let test_app1 ()
      // trefl ())
   = CApp (CApp CVar0 CTrue) CFalse
 
-let test ()
-  : Tot (unit -> unit)
-  = fun x -> x
+let test2_var
+  : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
+  = CVar1
 
-let test2 ()
-  : Tot ((unit -> unit) -> unit)
-   = fun f -> f ()
+let helper_oexp (x:'a) (wp:spec_env empty 'a) (_:squash (forall fsG. wp fsG <= pure_return _ x)) : fs_oexp empty 'a wp =
+  fun _ -> x
+
+#set-options "--split_queries always --no_smt"
+
+type compilable_closed #a (#wp:spec_env empty a) (x:a) =
+  proof:squash (forall fsG. wp fsG <= pure_return _ x) -> compilable empty wp (helper_oexp x wp proof)
+
+type compilable_debug #a (wp:spec_env empty a) (x:a) =
+  compilable_closed #a #wp x
+
+let test1_exp ()
+  : compilable_closed #(bool -> bool) (fun x -> x)
+  = fun _ -> CLambda CVar0
+
+let test1_exp' ()
+  : Tot (compilable_closed #(bool -> bool -> bool) (fun x y -> y))
+  = fun _ ->  CLambda (CLambda CVar0)
 
 let test_fapp1 ()
   : compilable_closed #((unit -> unit) -> unit) (fun f -> f ())
