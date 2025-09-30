@@ -250,6 +250,18 @@ let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
   = CVar1
 
+let lemma_conj a : Lemma (requires a) (ensures (a /\ a)) = ()
+
+let test1_exp ()
+  : compilable_closed #(bool -> bool) (fun x -> x)
+  by (
+    dump "h"; // TODO: why are two conjuncts created here?
+              // one seems to be from my squash
+              // and one from typing.
+    apply_lemma (`lemma_conj);
+    dump "H")
+  = CLambda CVar0
+
 let test_app0 ()
   : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> fs_hd fsG ()))
   = CApp CVar0 CUnit
@@ -268,11 +280,6 @@ let test ()
   : Tot (unit -> unit)
     by (dump "H")
   = fun x -> x
-
-let test1_exp ()
-  : compilable_closed #(unit -> unit) (fun x -> x)
-  by (dump "H") // TODO: why are two conjuncts created here?
-  = CLambda CVar0
 
 let test2 ()
   : Tot ((unit -> unit) -> unit)
@@ -390,9 +397,23 @@ let test_if_seq' ()
                      (CRefinement _ CVar0))
          (CRefinement _ CVar0)))
 
-[@expect_failure]
+[@expect_failure] // TODO
 let test_context' ()
   : Tot (compilable_debug _ test_context _)
   = CLambda (CLambda (CIf CVar1
                           (CApp CVar0 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar1))
                           (CLambda #_ #_ #_ #_ #(fun fsG y -> y) CVar0)))
+
+type compilable_debug' #a wp (x:a) =
+ squash (forall fsG. wp fsG <= ret x) -> compilable_closed #a #wp x
+
+let test_if_seq''
+  : compilable_debug' _ (test_if_seq ())
+  = fun () ->
+    CLambda (CLambda (
+      CIf CVar0
+         (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
+                     (CRefinement _ CVar0))
+         (CRefinement _ CVar0)))
+
+let x = test_if_seq'' ()
