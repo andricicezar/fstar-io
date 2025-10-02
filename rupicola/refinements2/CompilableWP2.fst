@@ -89,13 +89,13 @@ unfold
 val helper_app: #g :env ->
                 #a :Type ->
                 #b :Type ->
-                wpF : spec_env g (a -> b) ->
+                #wpF : spec_env g (a -> b) ->
                 f :fs_oexp g (a -> b) wpF ->
-                wpX : spec_env g a ->
+                #wpX : spec_env g a ->
                 x :fs_oexp g a wpX ->
                 fs_oexp g b (wp_app wpF wpX)
 
-let helper_app _ f _ x : (fs_oexp _ _ _) by (unfold_def (`ret))=
+let helper_app f x =
   fun fsG ->
     M.elim_pure_wp_monotonicity_forall ();
     (f fsG) (x fsG)
@@ -109,7 +109,7 @@ val wp_if : #g :env ->
 let wp_if #_ #a wpC wpT wpE =
   (fun fsG ->
     pure_bind_wp bool a (wpC fsG) (fun r ->
-      pure_if_then_else _ r (wpT fsG) (wpE fsG)))
+      pure_if_then_else a r (wpT fsG) (wpE fsG)))
 
 unfold
 val helper_if : #g :env ->
@@ -206,7 +206,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpX : spec_env g a ->
                 #x :fs_oexp g a wpX ->
                 cx:compilable g wpX x ->
-                compilable #b g _ (helper_app wpF f wpX x)
+                compilable #b g _ (helper_app #_ #_ #_ #wpF f x)
 
 | CIf         : #g :env ->
                 #a :Type ->
@@ -263,12 +263,13 @@ let test_app0 ()
 // FIXME, why does it need tactics to do such simple proofs?
 let test_app1 ()
   : Tot (compilable (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
-  by (tadmit ()) // TODO, why is this not working anymore?
-     //explode (); dump "H";
-     // rewrite_eqs_from_context (); assumption ();
-     // trefl ();
-     // trefl ();
-     // trefl ())
+  by (unfold_def (`wp_app);
+      explode ();
+       tadmit ();
+      trefl ();
+      trefl ();
+      trefl ()
+     )
   = CApp (CApp CVar0 CTrue) CFalse
 
 let test2_var
@@ -309,7 +310,7 @@ let test4_exp' ()
   = fun _ -> CLambda (CLambda (CLambda CVar2))
 
 let test5_exp' ()
-  : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> y)
+  : compilable_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
   = fun _ -> CLambda (CLambda (CLambda CVar1))
 
 let test6_exp' ()
@@ -335,6 +336,8 @@ let test2_if ()
 
 #pop-options
 
+
+// TODO: why do I have to hoist these outside?
 unfold
 let myf : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd (fs_tail fsG)))) =
   fun fsG y -> fs_hd fsG
@@ -351,7 +354,7 @@ let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
 let test3_if_ho ()
   : compilable_closed #(bool -> (bool -> bool)) creame
   = fun _ -> CLambda (CIf CVar0
-                       (CLambda #_ #_ #_ #_ #myf CVar1)
+                       (CLambda #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
                        (CLambda #_ #_ #_ #_ #myid CVar0))
 
 let test1_if ()
@@ -392,8 +395,9 @@ let test_always_false' ()
 let test_always_false'' ()
   : Tot (compilable_closed test_always_false)
   by (
+    let _ = forall_intro () in
+    dump "H";
     tadmit () // some guard?
-//    let _ = forall_intro () in
 //    let _ = forall_intro () in
 //    let _ = forall_intro () in
 //    let _ = implies_intro () in
