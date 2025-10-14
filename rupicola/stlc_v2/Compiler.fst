@@ -15,14 +15,21 @@ class compile_typ (s:Type) = {
 
 instance compile_typ_unit : compile_typ unit = { r = RUnit }
 instance compile_typ_bool : compile_typ bool = { r = RBool }
-instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = { r = RArr c1.r c2.r }
+instance compile_typ_arrow
+  (s1:Type)
+  (s2:Type)
+  {| c1:compile_typ s1 |}
+  {| c2:compile_typ s2 |} :
+  compile_typ (s1 -> s2) = { r = RArr c1.r c2.r }
 instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = RPair c1.r c2.r }
 
 let pack #s (c:compile_typ s) : typsr = (| s, c.r |)
 
 // Some tests
+
 let test0 : compile_typ (unit) = solve
 let _ = assert (test0.r == RUnit)
+
 let test1 : compile_typ (bool -> unit) = solve
 let _ = assert (test1.r == (RArr RBool RUnit))
 
@@ -238,6 +245,8 @@ let test1_hoc : compile_closed
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
   compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+
+let _ = assert (test1_hoc.e == ELam (EApp (EVar 0) EFalse))
 
 instance compile_exp_pair
   g

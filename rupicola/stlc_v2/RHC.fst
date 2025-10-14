@@ -8,6 +8,24 @@ open TypRel
 open ExpRel
 open Compiler
 
+let my_rel_bool (fs_e:bool) (e:exp) : Type0 =
+  (e == ETrue /\ fs_e == true) \/
+  (e == EFalse /\ fs_e == false)
+
+let lem_rel_beh' (fs_e: bool) (e:closed_exp) :
+  Lemma
+    (requires tbool ⦂ (fs_e, e))
+    (**     vvv To have an existential here one needs normalization **)
+    (ensures forall (e':closed_exp). steps e e' /\ irred e' ==>  my_rel_bool fs_e e')
+= ()
+
+assume val lem_rel_beh_arr (fs_e: bool -> bool) (e:closed_exp) :
+  Lemma
+    (requires (mk_arrow tbool tbool) ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
+    (ensures (forall fs_v (v:value). my_rel_bool fs_v v ==>
+      (forall (e':closed_exp). steps (EApp e v) e' /\ irred e' ==>
+        my_rel_bool (fs_e fs_v) e')))
+
 noeq type intS = {
   ct : Type;
   comp_ct : compile_typ ct;
@@ -44,6 +62,7 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
 assume type behT_t
 assume val behT : wt:wholeT -> behT_t
 assume val rel_behs : behS_t -> behT_t -> Type0
+
 assume val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 
 (** CA: I suppose these two lemmas are the most hard core **)
