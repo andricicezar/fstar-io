@@ -101,11 +101,11 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==> mk_arrow t tbool ∋ (ps', e') with pt;
     assert (mk_arrow t tbool ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
-        tbool ⦂ (ps' fs_v, subst_beta (to_typ (get_rel t)) v (ELam?.b pt))
+        tbool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
       with ct (backtranslate_ctx ct);
     lem_bt_ctx i ct;
-    assert (tbool ⦂ (ps' (backtranslate_ctx ct), subst_beta (to_typ (get_rel t)) ct (ELam?.b pt)));
-    lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta (to_typ (get_rel t)) ct (ELam?.b pt));
-    assume (behT (EApp pt ct) == behT (subst_beta (to_typ (get_rel t)) ct (ELam?.b pt))); (** simple to prove **)
+    assert (tbool ⦂ (ps' (backtranslate_ctx ct), subst_beta ct (ELam?.b pt)));
+    lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta ct (ELam?.b pt));
+    assume (behT (EApp pt ct) == behT (subst_beta ct (ELam?.b pt))); (** simple to prove **)
     ()
   end

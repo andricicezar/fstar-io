@@ -6,12 +6,6 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-type typ =
-  | TUnit : typ
-  | TBool : typ
-  | TArr  : typ -> typ -> typ
-  | TPair : typ -> typ -> typ
-
 let var = nat
 type exp =
   | EUnit  : exp
@@ -19,7 +13,7 @@ type exp =
   | EFalse : exp
   | EIf    : exp -> exp -> exp -> exp
   | EVar   : v:var -> exp
-  | ELam   : t:typ -> b:exp -> exp
+  | ELam   : b:exp -> exp
   | EApp   : exp -> exp -> exp
   | EPair  : fst:exp -> snd:exp -> exp
   | EFst   : exp -> exp
@@ -47,7 +41,7 @@ let rec subst (#r:bool)
                      e])
   = match e with
     | EVar x -> s x
-    | ELam t e1 -> ELam t (subst (sub_elam s) e1)
+    | ELam e1 -> ELam (subst (sub_elam s) e1)
     | EApp e1 e2 -> EApp (subst s e1) (subst s e2)
     | EIf e1 e2 e3 -> EIf (subst s e1) (subst s e2) (subst s e3)
     | EUnit -> EUnit
@@ -97,7 +91,7 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EUnit -> []
   | ETrue -> []
   | EFalse -> []
-  | ELam _ e' -> free_vars_indx e' (n+1)
+  | ELam e' -> free_vars_indx e' (n+1)
   | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
   | EIf e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
   | EVar i -> if i < n then [] else [i-n]
@@ -115,7 +109,7 @@ let rec is_value (e:exp) : Type0 =
   | EUnit -> True
   | ETrue -> True
   | EFalse -> True
-  | ELam _ _ -> is_closed e
+  | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
   | _ -> False
 
@@ -137,14 +131,14 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     (ensures (free_vars_indx (subst s e) (n+1) == []))
     (decreases e) =
   match e with
-  | ELam t e' -> begin
+  | ELam e' -> begin
     assert (free_vars_indx e' (n+1) == []);
     let s' : sub true = sub_elam s in
     assert (forall (x:var). EVar?.v (s' x) <= x+1);
     lem_shifting_preserves_closed s' e' (n+1);
     assert (free_vars_indx (subst s' e') (n+2) == []);
     assert (free_vars_indx (subst s' e') (n+2) ==
-            free_vars_indx (subst s (ELam t e')) (n+1))
+            free_vars_indx (subst s (ELam e')) (n+1))
   end
   | EApp e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
@@ -178,7 +172,7 @@ let rec lem_subst_freevars_closes_exp
     (ensures (free_vars_indx (subst s e) n == []))
     (decreases e) =
   match e with
-  | ELam t e' ->
+  | ELam e' ->
     let s' = sub_elam s in
     let n' = n+1 in
     assert (free_vars_indx e n == free_vars_indx e' n');
@@ -218,9 +212,9 @@ let rec lem_subst_freevars_closes_exp
 (* Small-step operational semantics; strong / full-beta reduction is
    non-deterministic, so necessarily as inductive relation *)
 
-let subst_beta (t:typ) (v e:exp) :
+let subst_beta (v e:exp) :
   Pure closed_exp
-    (requires (is_closed (ELam t e) /\ is_closed v))
+    (requires (is_closed (ELam e) /\ is_closed v))
     (ensures (fun _ -> True)) =
   assume (free_vars_indx e 0 == [0]); (** should be provable **)
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
@@ -237,8 +231,8 @@ let rec step e =
           | Some e2' -> Some (EApp e1 e2')
           | None     -> begin
             match e1 with (** PO-app3 **)
-            | ELam t e' -> begin
-              Some (subst_beta t e2 e')
+            | ELam e' -> begin
+              Some (subst_beta e2 e')
             end
             | _ -> None
           end
@@ -315,7 +309,6 @@ let safe (e:closed_exp) : Type0 =
 
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
-  (t1:typ)
   (e1:closed_exp)
   (e2:closed_exp)
   (e':closed_exp)
@@ -323,11 +316,11 @@ let rec destruct_steps_eapp
   Pure (exp * value)
     (requires irred e') (** CA: not sure if necessary **)
     (ensures fun (e11, e2') ->
-      is_closed (ELam t1 e11) /\
-      steps e1 (ELam t1 e11) /\
+      is_closed (ELam e11) /\
+      steps e1 (ELam e11) /\
       steps e2 e2' /\
-      steps (EApp e1 e2) (subst_beta t1 e2' e11) /\
-      steps (subst_beta t1 e2' e11) e')
+      steps (EApp e1 e2) (subst_beta e2' e11) /\
+      steps (subst_beta e2' e11) e')
     (decreases st)
   =
   (**

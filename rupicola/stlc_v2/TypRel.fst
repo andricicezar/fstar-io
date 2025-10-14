@@ -23,13 +23,6 @@ type rtyp : Type0 -> Type u#1 =
           rtyp s2 ->
           rtyp (s1 & s2)
 
-let rec to_typ #s (r:rtyp s) : typ =
-  match r with
-  | RUnit -> TUnit
-  | RBool -> TBool
-  | RArr r1 r2 -> TArr (to_typ r1) (to_typ r2)
-  | RPair r1 r2 -> TArr (to_typ r1) (to_typ r2)
-
 let test_match s (r:rtyp s) = (** why does this work so well? **)
   match r with
   | RUnit -> assert (s == unit)
@@ -72,7 +65,7 @@ let lem_no_fv_is_closed (e:exp) : Lemma
 let lem_fv_in_env_lam (g:env) (t:typsr) (body:exp) :
   Lemma
     (requires fv_in_env (extend t g) body)
-    (ensures  fv_in_env g (ELam (to_typ (get_rel t)) body)) = admit ()
+    (ensures  fv_in_env g (ELam body)) = admit ()
 
 let lem_fv_in_env_app (g:env) (e1 e2:exp) :
   Lemma
