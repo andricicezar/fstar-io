@@ -10,7 +10,7 @@ open TypRel
 open ExpRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] r : rtyp s; // before we had: elab_typ t == s
+  [@@@no_method] r : rtyp s;
 }
 
 instance compile_typ_unit : compile_typ unit = { r = RUnit }
@@ -37,7 +37,7 @@ let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
 let _ = assert (test2.r == RArr (RArr RUnit RBool) (RArr RBool RUnit))
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)
