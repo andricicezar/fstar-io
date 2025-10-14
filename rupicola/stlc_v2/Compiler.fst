@@ -79,13 +79,13 @@ let test_false : compile_closed false = solve
 (** fs_hd' works better with typeclass resolution than fs_hd **)
 [@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
 val fs_hd' : #g:env -> #t:typsr -> fs_env (extend t g) -> a:Type{a == get_Type t} -> a
-let fs_hd' #g fs_s a =
-  fs_hd #g fs_s
+let fs_hd' #g fsG a =
+  fs_hd #g fsG
 
 instance compile_exp_var
   (g:env)
   (a:Type) {| ca:compile_typ a |}
-  : compile_exp #a #ca (extend (pack ca) g) (fun fs_s -> fs_hd' fs_s a) = {
+  : compile_exp #a #ca (extend (pack ca) g) (fun fsG -> fs_hd' fsG a) = {
     e = EVar 0;
     equiv_proof = (fun () ->
       admit () (** this needs more refactoring **)
@@ -94,13 +94,13 @@ instance compile_exp_var
    );
 }
 
-let test1_var : compile_exp (extend tunit empty) (fun fs_s -> fs_hd' fs_s unit) = solve
+let test1_var : compile_exp (extend tunit empty) (fun fsG -> fs_hd' fsG unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (g:env)
   (a:Type) {| ca:compile_typ a |}
   (t:typsr)
-  : compile_exp (extend t (extend (pack ca) g)) (fun fs_s -> fs_hd' (fs_tail fs_s) a) = {
+  : compile_exp (extend t (extend (pack ca) g)) (fun fsG -> fs_hd' (fs_tail fsG) a) = {
     e = EVar 1;
     equiv_proof = (fun () -> admit ()
     (**
@@ -114,7 +114,7 @@ instance compile_exp_var_shrink2 (** CA: how to make this general? **)
   (a:Type) {| ca:compile_typ a |}
   (t1 t2:typsr)
   (g:env)
-  : compile_exp (extend t1 (extend t2 (extend (pack ca) g))) (fun fs_s -> fs_hd' (fs_tail (fs_tail fs_s)) a) = {
+  : compile_exp (extend t1 (extend t2 (extend (pack ca) g))) (fun fsG -> fs_hd' (fs_tail (fs_tail fsG)) a) = {
     e = EVar 2;
     equiv_proof = (fun () -> admit ()
       (** This needs more refactoring
@@ -123,10 +123,10 @@ instance compile_exp_var_shrink2 (** CA: how to make this general? **)
       ce.equiv_proof ()); **))
   }
 
-let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fs_s -> fs_hd' (fs_tail fs_s) unit) =
+let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fsG -> fs_hd' (fs_tail fsG) unit) =
   solve
 
-let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fs_s -> fs_hd' (fs_tail (fs_tail fs_s)) unit) =
+let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fsG -> fs_hd' (fs_tail (fs_tail fsG)) unit) =
   solve
 
 instance compile_exp_lambda
@@ -134,7 +134,7 @@ instance compile_exp_lambda
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b)
-  {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_tail #(pack ca) fs_s) (fs_hd' fs_s a)) |}
+  {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fsG -> f (fs_tail #(pack ca) fsG) (fs_hd' fsG a)) |}
   : compile_exp g f = {
   e = begin
     lem_fv_in_env_lam g (pack ca) cf.e;
@@ -176,7 +176,7 @@ instance compile_exp_app
   (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
   (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
-  : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
+  : compile_exp #_ #cb g (fun fsG -> (f fsG) (x fsG)) = {
   e = begin
     lem_fv_in_env_app g cf.e cx.e;
     EApp cf.e cx.e
@@ -216,7 +216,7 @@ instance compile_exp_if
   (a:Type) {| ca: compile_typ a |}
   (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
   (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
-  : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
+  : compile_exp #_ #ca g (fun fsG -> if co fsG then th fsG else el fsG) = {
   e = begin
     lem_fv_in_env_if g cco.e cth.e cel.e;
     EIf cco.e cth.e cel.e
@@ -242,7 +242,7 @@ let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
-  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> fs_hd' fs_s (bool -> bool)) _)
+  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fsG -> fs_hd' fsG (bool -> bool)) _)
 
 let _ = assert (test1_hoc.e == ELam (EApp (EVar 0) EFalse))
 
@@ -252,7 +252,7 @@ instance compile_exp_pair
   (b:Type) {| cb: compile_typ b |}
   (l:fs_env g -> a)     {| cl: compile_exp #_ #ca g l |}
   (r:fs_env g -> b)     {| cr: compile_exp #_ #cb g r |}
-  : compile_exp #(a & b) g (fun fs_s -> (l fs_s, r fs_s)) = {
+  : compile_exp #(a & b) g (fun fsG -> (l fsG, r fsG)) = {
   e = begin
     lem_fv_in_env_pair g cl.e cr.e;
     EPair cl.e cr.e

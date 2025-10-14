@@ -11,29 +11,30 @@ let fs_empty : fs_env empty =
     #(fun x -> get_Type (Some?.v (empty x)))
     (fun _ -> assert False)
 
-let fs_stack #g fs_s #t fs_v =
+let fs_stack #g fsG #t fs_v =
   on_dom
     (x:var{Some? ((extend t g) x)})
     #(fun x -> get_Type (Some?.v ((extend t g) x)))
     (fun y ->
-      if y = 0 then fs_v else fs_s (y-1))
+      if y = 0 then fs_v else fsG (y-1))
 
-let fs_hd #g fs_s = fs_s 0
+let fs_hd #g fsG = fsG 0
 
-let fs_tail #t #g fs_s =
+let fs_tail #t #g fsG =
   on_dom
     (x:var{Some? (g x)})
     #(fun x -> get_Type (Some?.v (g x)))
-    (fun y -> fs_s (y+1))
+    (fun y -> fsG (y+1))
 
-let get_v #g fs_s x = fs_s x
+let get_v #g fsG x = fsG x
 
-let lem_fs_extend fs_s v = ()
-let lem_fs_shrink fs_s = ()
+let lem_fs_stack_hd fsG v = ()
+let lem_fs_stack_get_v fsG v = ()
+let lem_fs_tail fsG = ()
 
-let shrink_extend_inverse #g fs_s #t v =
-  let fs_s' : fs_env g = fs_tail (fs_stack fs_s v) in
-  assert (forall x. fs_s' x == fs_s x);
-  assert (feq fs_s' fs_s);
-  extensionality (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x))) fs_s' fs_s;
-  assert (fs_s' == fs_s)
+let tail_stack_inverse #g fsG #t v =
+  let fsG' : fs_env g = fs_tail (fs_stack fsG v) in
+  assert (forall x. fsG' x == fsG x);
+  assert (feq fsG' fsG);
+  extensionality (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x))) fsG' fsG;
+  assert (fsG' == fsG)

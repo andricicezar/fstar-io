@@ -75,7 +75,7 @@ let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
     - we wrap f to a function that takes as argument an F* evaluation environment
       that was extended to contain a value of type 'a
     - we take the value from the environment to open f:
-        fun fs_s -> f (get_v fs_s 0)
+        fun fsG -> f (get_v fsG 0)
 
     What is cool about this is to define compilation to STLC the environment is abstract.
  **)
@@ -89,28 +89,28 @@ val fs_tail : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
 (** It would be nice to get rid of this, but not sure how **)
 val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> get_Type (Some?.v (g x))
 
-val lem_fs_extend2 #g (fs_s:fs_env g) #t (v:get_Type t)
+val lem_fs_stack_hd #g (fsG:fs_env g) #t (v:get_Type t)
   : Lemma (
- // (fs_hd fs_s == fs_hd (fs_tail (fs_stack fs_s v))) /\
-   fs_hd (fs_stack fs_s v) == v)
-  [SMTPat (fs_stack fs_s v)]
+ // (fs_hd fsG == fs_hd (fs_tail (fs_stack fsG v))) /\
+   fs_hd (fs_stack fsG v) == v)
+  [SMTPat (fs_stack fsG v)]
 
-val lem_fs_extend #g (fs_s:fs_env g) #t (v:get_Type t) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s x == get_v (fs_stack fs_s v) (x+1)) /\
-  get_v (fs_stack fs_s v) 0 == v)
-  [SMTPat (fs_stack fs_s v)]
+val lem_fs_stack_get_v #g (fsG:fs_env g) #t (v:get_Type t) : Lemma (
+  (forall (x:var). Some? (g x) ==>  get_v fsG x == get_v (fs_stack fsG v) (x+1)) /\
+  get_v (fs_stack fsG v) 0 == v)
+  [SMTPat (fs_stack fsG v)]
 
-val lem_fs_shrink #g #t (fs_s:fs_env (extend t g)) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s (x+1) == get_v (fs_tail fs_s) x))
-  [SMTPat (fs_tail fs_s)]
+val lem_fs_tail #g #t (fsG:fs_env (extend t g)) : Lemma (
+  (forall (x:var). Some? (g x) ==>  get_v fsG (x+1) == get_v (fs_tail fsG) x))
+  [SMTPat (fs_tail fsG)]
 
-val shrink_extend_inverse #g (fs_s:fs_env g) #t (x:get_Type t)
-  : Lemma (fs_tail (fs_stack fs_s x) == fs_s)
-  [SMTPat (fs_tail (fs_stack fs_s x))]
+val tail_stack_inverse #g (fsG:fs_env g) #t (x:get_Type t)
+  : Lemma (fs_tail (fs_stack fsG x) == fsG)
+  [SMTPat (fs_tail (fs_stack fsG x))]
 
-let (∽) (#g:env) #b (fs_s:fs_env g) (s:gsub g b) : Type0 =
+let (∽) (#g:env) #b (fsG:fs_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
-    Some?.v (g x) ∋ (get_v fs_s x, s x)
+    Some?.v (g x) ∋ (get_v fsG x, s x)
 
 type fs_oexp (g:env) (t:typsr) =
   fs_env g -> get_Type t
@@ -119,8 +119,8 @@ type fs_oexp (g:env) (t:typsr) =
      for __open terms__. **)
 let equiv (#g:env) (t:typsr) (fs_e:fs_oexp g t) (e:exp) : Type0 =
   fv_in_env g e /\
-  forall b (s:gsub g b) (fs_s:fs_env g).
-    fs_s ∽ s ==>  t ⦂ (fs_e fs_s, gsubst s e)
+  forall b (s:gsub g b) (fsG:fs_env g).
+    fsG ∽ s ==>  t ⦂ (fs_e fsG, gsubst s e)
 
 let (≈) (#g:env) (#t:typsr) (fs_v:fs_oexp g t) (e:exp) : Type0 =
   equiv #g t fs_v e
@@ -129,14 +129,14 @@ let (≈) (#g:env) (#t:typsr) (fs_v:fs_oexp g t) (e:exp) : Type0 =
 let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
   Lemma (requires equiv #empty t (fun _ -> fs_e) e)
         (ensures  t ⦂ (fs_e, e)) =
-  eliminate forall b (s:gsub empty b) (fs_s:fs_env empty).
-    fs_s ∽ s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with true gsub_empty fs_empty
+  eliminate forall b (s:gsub empty b) (fsG:fs_env empty).
+    fsG ∽ s ==>  t ⦂ ((fun _ -> fs_e) fsG, gsubst s e) with true gsub_empty fs_empty
 
 let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
   Lemma (requires t ⦂ (fs_e, e))
         (ensures  equiv #empty t (fun _ -> fs_e) e) =
-  introduce forall b (s:gsub empty b) (fs_s:fs_env empty).
-    fs_s ∽ s ==>  t ⦂ ((fun _ -> fs_e) fs_s, gsubst s e) with begin
+  introduce forall b (s:gsub empty b) (fsG:fs_env empty).
+    fsG ∽ s ==>  t ⦂ ((fun _ -> fs_e) fsG, gsubst s e) with begin
     assert (gsubst s e == e)
   end
 
@@ -161,43 +161,43 @@ let equiv_false g
   = assert ((fun (_:fs_env g) -> false) `equiv tbool` EFalse) by (explode ())
 
 let equiv_var g (x:var{Some? (g x)})
-  : Lemma ((fun (fs_s:fs_env g) -> get_v fs_s x) ≈ EVar x)
+  : Lemma ((fun (fsG:fs_env g) -> get_v fsG x) ≈ EVar x)
   =
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  Some?.v (g x) ⦂ (get_v fs_s x, gsubst s (EVar x)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  Some?.v (g x) ⦂ (get_v fsG x, gsubst s (EVar x)) with begin
     introduce _ ==> _ with _. begin
-      assert (Some?.v (g x) ∋ (get_v fs_s x, s x));
-      lem_values_are_expressions (Some?.v (g x)) (get_v fs_s x) (s x)
+      assert (Some?.v (g x) ∋ (get_v fsG x, s x));
+      lem_values_are_expressions (Some?.v (g x)) (get_v fsG x) (s x)
     end
   end
 
 let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_oexp g (mk_arrow t1 t2)) : Lemma
-  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_tail #t1 fs_s) (fs_hd fs_s)) ≈ body)
+  (requires (fun (fsG:fs_env (extend t1 g)) -> f (fs_tail #t1 fsG) (fs_hd fsG)) ≈ body)
   (ensures f ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==> mk_arrow t1 t2 ⦂ (f fs_s, gsubst s (ELam body)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> mk_arrow t1 t2 ⦂ (f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v body') with begin
+      introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>  t2 ⦂ (f fsG fs_v, subst_beta v body') with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
-          let fs_s' = fs_stack fs_s fs_v in
-          eliminate forall b (s':gsub g' b) (fs_s':fs_env g'). fs_s' ∽ s' ==>  t2 ⦂ (f (fs_tail #t1 fs_s') (fs_hd #g #t1 fs_s'), (gsubst s' body))
-            with false s' fs_s';
-          assert (fs_s ∽ s);
-          assert (fs_stack fs_s fs_v ∽ gsub_extend s t1 v);
-          assert (t2 ⦂ (f (fs_tail fs_s') (fs_hd fs_s'), (gsubst s' body)));
-          assert (fs_hd (fs_stack fs_s fs_v) == fs_v);
-          assert (t2 ⦂ (f (fs_tail fs_s') fs_v, (gsubst s' body)));
-          assert (t2 ⦂ (f fs_s fs_v, (gsubst s' body)));
+          let fsG' = fs_stack fsG fs_v in
+          eliminate forall b (s':gsub g' b) (fsG':fs_env g'). fsG' ∽ s' ==>  t2 ⦂ (f (fs_tail #t1 fsG') (fs_hd #g #t1 fsG'), (gsubst s' body))
+            with false s' fsG';
+          assert (fsG ∽ s);
+          assert (fs_stack fsG fs_v ∽ gsub_extend s t1 v);
+          assert (t2 ⦂ (f (fs_tail fsG') (fs_hd fsG'), (gsubst s' body)));
+          assert (fs_hd (fs_stack fsG fs_v) == fs_v);
+          assert (t2 ⦂ (f (fs_tail fsG') fs_v, (gsubst s' body)));
+          assert (t2 ⦂ (f fsG fs_v, (gsubst s' body)));
           lem_substitution s t1 v body;
-          assert (t2 ⦂ (f fs_s fs_v, subst_beta v body'))
+          assert (t2 ⦂ (f fsG fs_v, subst_beta v body'))
         end
       end;
-      assert (mk_arrow t1 t2 ∋ (f fs_s, gsubst s (ELam body)));
-      lem_values_are_expressions (mk_arrow t1 t2) (f fs_s) (gsubst s (ELam body));
-      assert (mk_arrow t1 t2 ⦂ (f fs_s, gsubst s (ELam body)))
+      assert (mk_arrow t1 t2 ∋ (f fsG, gsubst s (ELam body)));
+      lem_values_are_expressions (mk_arrow t1 t2) (f fsG) (gsubst s (ELam body));
+      assert (mk_arrow t1 t2 ⦂ (f fsG, gsubst s (ELam body)))
     end
   end
 
@@ -206,16 +206,16 @@ let equiv_app g
   (e1:exp) (e2:exp)
   (fs_e1:fs_oexp g (mk_arrow t1 t2)) (fs_e2:fs_oexp g t1) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-  (ensures (fun fs_s -> (fs_e1 fs_s) (fs_e2 fs_s)) ≈ (EApp e1 e2)) =
+  (ensures (fun fsG -> (fs_e1 fsG) (fs_e2 fsG)) ≈ (EApp e1 e2)) =
   lem_fv_in_env_app g e1 e2;
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==> t2 ⦂ ((fs_e1 fs_s) (fs_e2 fs_s), gsubst s (EApp e1 e2)) with begin
-    let fs_e1 = fs_e1 fs_s in
-    let fs_e2 = fs_e2 fs_s in
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ ((fs_e1 fsG) (fs_e2 fsG), gsubst s (EApp e1 e2)) with begin
+    let fs_e1 = fs_e1 fsG in
+    let fs_e2 = fs_e2 fsG in
     let fs_e = fs_e1 fs_e2 in
     let e = EApp (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EApp e1 e2) == e);
     let EApp e1 e2 = e in
-    introduce fs_s ∽ s ==>  t2 ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==>  t2 ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
         introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
@@ -240,15 +240,15 @@ let equiv_app g
 
 let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
-  (ensures (fun fs_s -> if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s) ≈ EIf e1 e2 e3) =
+  (ensures (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) ≈ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==> t ⦂ ((if fs_e1 fs_s then fs_e2 fs_s else fs_e3 fs_s), gsubst s (EIf e1 e2 e3)) with begin
-    let fs_e1 = fs_e1 fs_s in
-    let fs_e = if fs_e1 then fs_e2 fs_s else fs_e3 fs_s in
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t ⦂ ((if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
+    let fs_e1 = fs_e1 fsG in
+    let fs_e = if fs_e1 then fs_e2 fsG else fs_e3 fsG in
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
-    introduce fs_s ∽ s ==>  t ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==>  t ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ (fs_e, e') with begin
         introduce _ ==> t ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
@@ -264,17 +264,17 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_oexp g tbool) (fs_
 
 let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-  (ensures (fun fs_s -> (fs_e1 fs_s, fs_e2 fs_s)) `equiv (mk_pair t1 t2)` EPair e1 e2) =
+  (ensures (fun fsG -> (fs_e1 fsG, fs_e2 fsG)) `equiv (mk_pair t1 t2)` EPair e1 e2) =
   lem_fv_in_env_pair g e1 e2;
   let t = mk_pair t1 t2 in
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  t ⦂ ((fs_e1 fs_s, fs_e2 fs_s), gsubst s (EPair e1 e2)) with begin
-    let fs_e1 = fs_e1 fs_s in
-    let fs_e2 = fs_e2 fs_s in
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ ((fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
+    let fs_e1 = fs_e1 fsG in
+    let fs_e2 = fs_e2 fsG in
     let fs_e = (fs_e1, fs_e2) in
     let e = EPair (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EPair e1 e2) == e);
     let EPair e1 e2 = e in
-    introduce fs_s ∽ s ==>  t ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==>  t ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ (fs_e, e') with begin
         introduce _ ==> t ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
@@ -292,14 +292,14 @@ let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_oexp g t1) (fs_e2:fs_
 
 let equiv_pair_fst_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
-  (ensures (fun fs_s -> fst (fs_e12 fs_s)) `equiv t1` (EFst e12)) =
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  t1 ⦂ (fst (fs_e12 fs_s), gsubst s (EFst e12)) with begin
-    let fs_e12 = fs_e12 fs_s in
+  (ensures (fun fsG -> fst (fs_e12 fsG)) `equiv t1` (EFst e12)) =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t1 ⦂ (fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
+    let fs_e12 = fs_e12 fsG in
     let fs_e = fst fs_e12 in
     let e = EFst (gsubst s e12) in
     assert (gsubst s (EFst e12) == e);
     let EFst e12 = e in
-    introduce fs_s ∽ s ==>  t1 ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==>  t1 ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t1 ∋ (fs_e, e') with begin
         introduce _ ==> t1 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
@@ -325,9 +325,9 @@ let equiv_pair_fst g (t1 t2:typsr) : Lemma
   let fs_e : (get_Type t1 & get_Type t2) -> get_Type t1 = fst in
   let fs_e' : fs_env g -> get_Type t = (fun _ -> fs_e) in
   let e = ELam (EFst (EVar 0)) in
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  t ⦂ (fs_e' fs_s, gsubst s e) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ (fs_e' fsG, gsubst s e) with begin
     assert (gsubst s e == e);
-    assert (fs_e' fs_s == fs_e);
+    assert (fs_e' fsG == fs_e);
 
     eliminate True /\ True
     returns t ∋ (fs_e, e) with _ _. begin
@@ -353,14 +353,14 @@ let equiv_pair_fst g (t1 t2:typsr) : Lemma
 
 let equiv_pair_snd_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
-  (ensures (fun fs_s -> snd (fs_e12 fs_s)) `equiv t2` (ESnd e12)) =
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  t2 ⦂ (snd (fs_e12 fs_s), gsubst s (ESnd e12)) with begin
-    let fs_e12 = fs_e12 fs_s in
+  (ensures (fun fsG -> snd (fs_e12 fsG)) `equiv t2` (ESnd e12)) =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t2 ⦂ (snd (fs_e12 fsG), gsubst s (ESnd e12)) with begin
+    let fs_e12 = fs_e12 fsG in
     let fs_e = snd fs_e12 in
     let e = ESnd (gsubst s e12) in
     assert (gsubst s (ESnd e12) == e);
     let ESnd e12 = e in
-    introduce fs_s ∽ s ==>  t2 ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==>  t2 ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t2 ∋ (fs_e, e') with begin
         introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
@@ -386,9 +386,9 @@ let equiv_pair_snd g (t1 t2:typsr) : Lemma
   let fs_e : (get_Type t1 & get_Type t2) -> get_Type t2 = snd in
   let fs_e' : fs_env g -> get_Type t = (fun _ -> fs_e) in
   let e = ELam (ESnd (EVar 0)) in
-  introduce forall b (s:gsub g b) fs_s. fs_s ∽ s ==>  t ⦂ (fs_e' fs_s, gsubst s e) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ (fs_e' fsG, gsubst s e) with begin
     assert (gsubst s e == e);
-    assert (fs_e' fs_s == fs_e);
+    assert (fs_e' fsG == fs_e);
 
     eliminate True /\ True
     returns t ∋ (fs_e, e) with _ _. begin
