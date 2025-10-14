@@ -138,7 +138,7 @@ instance compile_exp_lambda
   : compile_exp g f = {
   e = begin
     lem_fv_in_env_lam g (pack ca) cf.e;
-    ELam cf.e
+    ELam (to_typ ca.r) cf.e
   end;
   equiv_proof = (fun () ->
     cf.equiv_proof ();
@@ -148,26 +148,26 @@ instance compile_exp_lambda
 }
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
-let _ = assert (test1_exp.e == ELam (EUnit))
+let _ = assert (test1_exp.e == ELam TUnit (EUnit))
 
 let test2_exp : compile_closed #(unit -> unit) (fun x -> x) = solve
-let _ = assert (test2_exp.e == ELam (EVar 0))
+let _ = assert (test2_exp.e == ELam TUnit (EVar 0))
 
 let test3_exp : compile_closed #(unit -> unit -> unit) (fun x y -> x) = solve
-let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
+let _ = assert (test3_exp.e == ELam TUnit (ELam TUnit (EVar 1)))
 
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
-let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
+let _ = assert (test3_exp'.e == ELam TUnit (ELam TUnit (EVar 0)))
 
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
   solve
-let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
+let _ = assert (test4_exp.e == ELam TUnit (ELam TUnit (ELam TUnit (EVar 2))))
 
 let test4_exp' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> y) = solve
-let _ = assert (test4_exp'.e == ELam (ELam (ELam (EVar 1))))
+let _ = assert (test4_exp'.e == ELam TUnit (ELam TUnit (ELam TUnit (EVar 1))))
 
 let test4_exp'' : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> z) = solve
-let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
+let _ = assert (test4_exp''.e == ELam TUnit (ELam TUnit (ELam TUnit (EVar 0))))
 
 
 instance compile_exp_app
@@ -197,16 +197,15 @@ let myf () = ()
 (* It seems that it just unfolds the definition of myf, which is pretty cool **)
 let test1_topf : compile_closed (myf ()) = solve
 // because of partial evaluation we have to consider both cases
-let _ = assert (test1_topf.e == EApp (ELam EUnit) EUnit \/
+let _ = assert (test1_topf.e == EApp (ELam TUnit EUnit) EUnit \/
                 test1_topf.e == EUnit)
 
 val myf2 : unit -> unit -> unit
 let myf2 x y = x
 
-(* Also handles partial application. Pretty amazing! *)
 let test2_topf : compile_closed (myf2 ()) = solve
-let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
-                test2_topf.e == ELam EUnit)
+let _ = assert (test2_topf.e == EApp (ELam TUnit (ELam TUnit (EVar 1))) EUnit \/
+                test2_topf.e == ELam TUnit EUnit)
 
 
 instance compile_exp_if
@@ -230,7 +229,7 @@ instance compile_exp_if
 }
 
 let test1_if : compile_closed #(bool -> bool -> bool) (fun x y -> if x then false else y) = solve
-let _ = assert (test1_if.e == ELam (ELam (EIf (EVar 1) EFalse (EVar 0))))
+let _ = assert (test1_if.e == ELam TBool (ELam TBool (EIf (EVar 1) EFalse (EVar 0))))
 
 let myt = true
 
@@ -244,7 +243,7 @@ let test1_hoc : compile_closed
   (fun f -> f false) =
   compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fsG -> fs_hd' fsG (bool -> bool)) _)
 
-let _ = assert (test1_hoc.e == ELam (EApp (EVar 0) EFalse))
+let _ = assert (test1_hoc.e == ELam (TArr TBool TBool) (EApp (EVar 0) EFalse))
 
 instance compile_exp_pair
   g
@@ -265,10 +264,10 @@ instance compile_exp_pair
 }
 
 let test1_pair : compile_closed #(bool -> bool -> bool & bool) (fun x y-> (x,y)) = solve
-let _ = assert (test1_pair.e == ELam (ELam (EPair (EVar 1) (EVar 0))))
+let _ = assert (test1_pair.e == ELam TBool (ELam TBool (EPair (EVar 1) (EVar 0))))
 
 let test2_pair : compile_closed #((bool -> bool) & (bool -> bool -> bool)) ((fun x -> x), (fun y x -> y)) = solve
-let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
+let _ = assert (test2_pair.e == EPair (ELam TBool (EVar 0)) (ELam TBool (ELam TBool (EVar 1))))
 
 let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
 
@@ -278,7 +277,7 @@ instance compile_exp_pair_fst
   (b:Type) {| cb: compile_typ b |}
   : compile_exp #(a & b -> a) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #ca) g (fun _ -> fst #a #b) = {
   e = begin
-    ELam (EFst (EVar 0))
+    ELam (to_typ (get_rel (mk_pair (pack ca) (pack cb)))) (EFst (EVar 0))
   end;
   equiv_proof = (fun () ->
     equiv_pair_fst g (pack ca) (pack cb);
@@ -306,7 +305,7 @@ instance compile_exp_snd
   (b:Type) {| cb: compile_typ b |}
   : compile_exp #(a & b -> b) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #cb) g (fun _ -> snd #a #b) = {
   e = begin
-    ELam (ESnd (EVar 0))
+    ELam (to_typ (get_rel (mk_pair (pack ca) (pack cb))))(ESnd (EVar 0))
   end;
   equiv_proof = (fun () ->
     equiv_pair_snd g (pack ca) (pack cb);
