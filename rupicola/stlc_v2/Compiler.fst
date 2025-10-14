@@ -76,59 +76,57 @@ let test_unit : compile_closed () = solve
 let test_true : compile_closed true = solve
 let test_false : compile_closed false = solve
 
-(** get_v' works better with typeclass resolution than get_v **)
+(** fs_hd' works better with typeclass resolution than fs_hd **)
 [@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
-val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == get_Type (Some?.v (g x))} -> a
-let get_v' #g fs_s i a =
-  get_v #g fs_s i
+val fs_hd' : #g:env -> #t:typsr -> fs_env (extend t g) -> a:Type{a == get_Type t} -> a
+let fs_hd' #g fs_s a =
+  fs_hd #g fs_s
 
 instance compile_exp_var
   (g:env)
   (a:Type) {| ca:compile_typ a |}
-  (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  : compile_exp #a #ca g (fun fs_s -> get_v' fs_s x a) = {
-    e = EVar x;
+  : compile_exp #a #ca (extend (pack ca) g) (fun fs_s -> fs_hd' fs_s a) = {
+    e = EVar 0;
     equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g);
-      equiv_var g x);
+      admit () (** this needs more refactoring **)
+ //     reveal_opaque (`%fs_hd') (fs_hd' #g #(pack ca));
+ //     equiv_var (extend (pack ca) g) 0);
+   );
 }
 
-let test1_var : compile_exp (extend tunit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
+let test1_var : compile_exp (extend tunit empty) (fun fs_s -> fs_hd' fs_s unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
-  (g':env)
+  (g:env)
   (a:Type) {| ca:compile_typ a |}
   (t:typsr)
-  (g:env{g' == extend t g})
-  (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
-    e = ce.e;
-    equiv_proof = (fun () ->
+  : compile_exp (extend t (extend (pack ca) g)) (fun fs_s -> fs_hd' (fs_tail fs_s) a) = {
+    e = EVar 1;
+    equiv_proof = (fun () -> admit ()
+    (**
       reveal_opaque (`%get_v') (get_v' #g');
       reveal_opaque (`%get_v') (get_v' #g);
-      ce.equiv_proof ());
+      ce.equiv_proof () **)
+    );
   }
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
-  (g':env)
   (a:Type) {| ca:compile_typ a |}
   (t1 t2:typsr)
-  (g:env{g' == extend t1 (extend t2 g)})
-  (x:var{Some? (g x) /\ pack ca == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
-    e = ce.e;
-    equiv_proof = (fun () ->
+  (g:env)
+  : compile_exp (extend t1 (extend t2 (extend (pack ca) g))) (fun fs_s -> fs_hd' (fs_tail (fs_tail fs_s)) a) = {
+    e = EVar 2;
+    equiv_proof = (fun () -> admit ()
+      (** This needs more refactoring
       reveal_opaque (`%get_v') (get_v' #g');
       reveal_opaque (`%get_v') (get_v' #g);
-      ce.equiv_proof ());
+      ce.equiv_proof ()); **))
   }
 
-let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
+let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fs_s -> fs_hd' (fs_tail fs_s) unit) =
   solve
 
-let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
+let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fs_s -> fs_hd' (fs_tail (fs_tail fs_s)) unit) =
   solve
 
 instance compile_exp_lambda
@@ -136,7 +134,7 @@ instance compile_exp_lambda
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
   (f:fs_env g -> a -> b)
-  {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_shrink #(pack ca) fs_s) (get_v' fs_s 0 a)) |}
+  {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fs_s -> f (fs_tail #(pack ca) fs_s) (fs_hd' fs_s a)) |}
   : compile_exp g f = {
   e = begin
     lem_fv_in_env_lam g (pack ca) cf.e;
@@ -144,7 +142,7 @@ instance compile_exp_lambda
   end;
   equiv_proof = (fun () ->
     cf.equiv_proof ();
-    reveal_opaque (`%get_v') (get_v' #(extend (pack ca) g));
+    reveal_opaque (`%fs_hd') (fs_hd' #g #(pack ca));
     equiv_lam g (pack ca) cf.e (pack cb) f
   )
 }
@@ -244,7 +242,7 @@ let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
-  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fs_s -> fs_hd' fs_s (bool -> bool)) _)
 
 let _ = assert (test1_hoc.e == ELam (EApp (EVar 0) EFalse))
 

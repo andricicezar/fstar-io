@@ -82,21 +82,31 @@ let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
 
 val fs_env (g:env) : Type u#0
 val fs_empty : fs_env empty
+val fs_stack : #g:env -> fsG:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
+val fs_hd : #g:env -> #t:typsr -> fs_env (extend t g) -> get_Type t
+val fs_tail : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
+
+(** It would be nice to get rid of this, but not sure how **)
 val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> get_Type (Some?.v (g x))
-val fs_extend : #g:env -> fs_s:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
-val fs_shrink : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
+
+val lem_fs_extend2 #g (fs_s:fs_env g) #t (v:get_Type t)
+  : Lemma (
+ // (fs_hd fs_s == fs_hd (fs_tail (fs_stack fs_s v))) /\
+   fs_hd (fs_stack fs_s v) == v)
+  [SMTPat (fs_stack fs_s v)]
 
 val lem_fs_extend #g (fs_s:fs_env g) #t (v:get_Type t) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s x == get_v (fs_extend fs_s v) (x+1)) /\
-  get_v (fs_extend fs_s v) 0 == v)
-  [SMTPat (fs_extend fs_s v)]
+  (forall (x:var). Some? (g x) ==>  get_v fs_s x == get_v (fs_stack fs_s v) (x+1)) /\
+  get_v (fs_stack fs_s v) 0 == v)
+  [SMTPat (fs_stack fs_s v)]
 
 val lem_fs_shrink #g #t (fs_s:fs_env (extend t g)) : Lemma (
-  (forall (x:var). Some? (g x) ==>  get_v fs_s (x+1) == get_v (fs_shrink fs_s) x))
-  [SMTPat (fs_shrink fs_s)]
+  (forall (x:var). Some? (g x) ==>  get_v fs_s (x+1) == get_v (fs_tail fs_s) x))
+  [SMTPat (fs_tail fs_s)]
 
-val shrink_extend_inverse #g (fs_s:fs_env g) #t (x:get_Type t) : Lemma (fs_shrink (fs_extend fs_s x) == fs_s)
-  [SMTPat (fs_shrink (fs_extend fs_s x))]
+val shrink_extend_inverse #g (fs_s:fs_env g) #t (x:get_Type t)
+  : Lemma (fs_tail (fs_stack fs_s x) == fs_s)
+  [SMTPat (fs_tail (fs_stack fs_s x))]
 
 let (∽) (#g:env) #b (fs_s:fs_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
@@ -161,7 +171,7 @@ let equiv_var g (x:var{Some? (g x)})
   end
 
 let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_oexp g (mk_arrow t1 t2)) : Lemma
-  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_shrink #t1 fs_s) (get_v fs_s 0)) ≈ body)
+  (requires (fun (fs_s:fs_env (extend t1 g)) -> f (fs_tail #t1 fs_s) (fs_hd fs_s)) ≈ body)
   (ensures f ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
@@ -172,14 +182,14 @@ let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_oexp g (mk_arrow t1 t2)) 
       introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==>  t2 ⦂ (f fs_s fs_v, subst_beta v body') with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
-          let fs_s' = fs_extend fs_s fs_v in
-          eliminate forall b (s':gsub g' b) fs_s'. fs_s' ∽ s' ==>  t2 ⦂ (f (fs_shrink #t1 fs_s') (get_v fs_s' 0), (gsubst s' body))
+          let fs_s' = fs_stack fs_s fs_v in
+          eliminate forall b (s':gsub g' b) (fs_s':fs_env g'). fs_s' ∽ s' ==>  t2 ⦂ (f (fs_tail #t1 fs_s') (fs_hd #g #t1 fs_s'), (gsubst s' body))
             with false s' fs_s';
           assert (fs_s ∽ s);
-          assert (fs_extend fs_s fs_v ∽ gsub_extend s t1 v);
-          assert (t2 ⦂ (f (fs_shrink fs_s') (get_v fs_s' 0), (gsubst s' body)));
-          assert (get_v (fs_extend fs_s fs_v) 0 == fs_v);
-          assert (t2 ⦂ (f (fs_shrink fs_s') fs_v, (gsubst s' body)));
+          assert (fs_stack fs_s fs_v ∽ gsub_extend s t1 v);
+          assert (t2 ⦂ (f (fs_tail fs_s') (fs_hd fs_s'), (gsubst s' body)));
+          assert (fs_hd (fs_stack fs_s fs_v) == fs_v);
+          assert (t2 ⦂ (f (fs_tail fs_s') fs_v, (gsubst s' body)));
           assert (t2 ⦂ (f fs_s fs_v, (gsubst s' body)));
           lem_substitution s t1 v body;
           assert (t2 ⦂ (f fs_s fs_v, subst_beta v body'))
