@@ -27,15 +27,20 @@ assume val lem_rel_beh_arr (fs_e: bool -> bool) (e:closed_exp) :
         my_rel_bool (fs_e fs_v) e')))
 
 noeq type intS = {
-  ct : Type;
-  comp_ct : compile_typ ct;
+  ct : Type; // type of context 
+  comp_ct : compile_typ ct; // compiled type of context, F* will crash if ct is not a type for which the compile_typ class has an instance
 }
 
 (* CA: this definition of progS is very comical! I have the compiled program inside the guarantee that it can be compiled :D **)
+// program parameterized by the type of the context
+// program is dependent pair type with:
+  // map from the type of context to bool (which represents output of the source program) 
+  // (proof of) compiled closed expression - where we pass in the type of ps (#_), the (proof of the) type of the compiled closed expression (#(compile_typ_arrow ...)), and ps
 type progS (i:intS) = ps:(i.ct -> bool) & compile_closed #_ #(compile_typ_arrow _ bool #i.comp_ct) ps
 type ctxS (i:intS) = i.ct
 type wholeS = bool // CA: To be able to compile whole programs requires a proof that it can be compiled
 
+// linking involves taking a program and context, extracting the first part of the dependent pair (so the program i.ct -> bool) and applying it to the context
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
@@ -44,10 +49,17 @@ assume val behS : wholeS -> behS_t
 
 (** Target **)
 
-noeq type intT = { ct : unit }
+noeq type intT = { ct : typ }
+
+let rec rtype_to_ttype s (r:rtyp s) : typ = 
+  match r with 
+  | RUnit -> TUnit
+  | RBool -> TBool
+  | RArr #s1 #s2 rs1 rs2 -> TArr (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
+  | RPair #s1 #s2 rs1 rs2 -> TPair (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
 
 val comp_int : intS -> intT
-let comp_int i = { ct = () }
+let comp_int i = { ct = (rtype_to_ttype i.ct i.comp_ct.r) }
 
 type progT (i:intT) = closed_exp
 type ctxT (i:intT) = ct:value//{sem_typing empty ct i.ct}
@@ -63,7 +75,24 @@ assume type behT_t
 assume val behT : wt:wholeT -> behT_t
 assume val rel_behs : behS_t -> behT_t -> Type0
 
-assume val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+//let num_bind (#i:intS) (ctxt:ctxT (comp_int i)) : nat =
+//  snd (free_vars_indx ctxt 0)
+
+val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> nat -> ctxS i
+let rec backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) (n:nat) : ctxS i 
+= 
+  match ctxt with 
+  | EUnit -> ()
+  | ETrue -> true
+  | EFalse -> false
+  | EIf e1 e2 e3 -> if (backtranslate_ctx i e1 n) then (backtranslate_ctx i e2 n) else (backtranslate_ctx i e3 n)
+  | EVar v -> 
+  | ELam b -> fun 
+  | EApp e1 e2 -> (backtranslate_ctx i e1 n) (backtranslate_ctx i e2 n)
+  | EPair e1 e2 -> ((backtranslate_ctx i e1 n), (backtranslate_ctx i e2 n))
+  | EFst e -> fst (backtranslate_ctx i e n)
+  | ESnd e -> snd (backtranslate_ctx i e n)
+
 
 (** CA: I suppose these two lemmas are the most hard core **)
 assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
