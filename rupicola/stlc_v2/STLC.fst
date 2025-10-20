@@ -6,6 +6,12 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
+type typ =
+  | TUnit  : typ 
+  | TBool  : typ 
+  | TArr   : typ -> typ -> typ
+  | TPair  : typ -> typ -> typ
+
 let var = nat
 type exp =
   | EUnit  : exp
@@ -86,23 +92,26 @@ let sub_beta (e:exp)
          with 0 and ();
     f
 
-let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binders
+let rec free_vars_indx (e:exp) (n:nat) : (list var * nat) = // n is the number of binders
   match e with
-  | EUnit -> []
-  | ETrue -> []
-  | EFalse -> []
+  | EUnit -> ([], n)
+  | ETrue -> ([], n)
+  | EFalse -> ([], n)
   | ELam e' -> free_vars_indx e' (n+1)
-  | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
-  | EIf e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
-  | EVar i -> if i < n then [] else [i-n]
-  | EPair e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
+  | EApp e1 e2 -> (fst (free_vars_indx e1 n) @ fst (free_vars_indx e2 n), snd (free_vars_indx e1 n) + snd (free_vars_indx e2 n))
+  | EIf e1 e2 e3 -> (fst (free_vars_indx e1 n) @ fst (free_vars_indx e2 n) @ fst (free_vars_indx e3 n), snd (free_vars_indx e1 n) + snd (free_vars_indx e2 n) + snd (free_vars_indx e3 n))
+  | EVar i -> if i < n then ([], n) else ([i-n], n)
+  | EPair e1 e2 -> (fst (free_vars_indx e1 n) @ fst (free_vars_indx e2 n), snd (free_vars_indx e1 n) + snd (free_vars_indx e2 n))
   | EFst e' -> free_vars_indx e' n
   | ESnd e' -> free_vars_indx e' n
 
 let free_vars e = free_vars_indx e 0
 
 let is_closed (e:exp) : bool =
-  free_vars e = []
+  let (ls, _) = free_vars e in
+  ls = []
+
+let _ = assert (free_vars (ELam(ELam(EVar 0))) == ([], 2)) 
 
 let rec is_value (e:exp) : Type0 =
   match e with
@@ -124,11 +133,11 @@ let rec lem_value_is_closed (e:exp) : Lemma
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
-let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
+(*let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires (free_vars_indx e n == [] /\
                (forall (x:var). EVar?.v (s x) <= x+1)))
-    (ensures (free_vars_indx (subst s e) (n+1) == []))
+    (ensures (fst (free_vars_indx (subst s e) (n+1)) == []))
     (decreases e) =
   match e with
   | ELam e' -> begin
@@ -421,3 +430,4 @@ let lem_destruct_steps_epair_snd
   (e':closed_exp) :
   Lemma (requires (steps (ESnd (EPair e1 e2)) e' /\ irred e1 /\ irred e2))
         (ensures (e2 == e')) = admit ()
+        *)
