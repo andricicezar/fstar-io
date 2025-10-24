@@ -58,11 +58,23 @@ let rec rtype_to_ttype s (r:rtyp s) : typ =
   | RArr #s1 #s2 rs1 rs2 -> TArr (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
   | RPair #s1 #s2 rs1 rs2 -> TPair (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
 
+let rec sem_typing (g:env) (t:typ) (e:exp) : Tot Type 
+  (decreases e)
+  =
+  match (t, e) with
+  | (TUnit, EUnit) -> true
+  | (TBool, ETrue) -> true
+  | (TBool, EFalse) -> true
+  | (TPair t1 t2, EPair e1 e2) -> (sem_typing g t1 e1) /\ (sem_typing g t2 e2)
+  | (t, EIf e1 e2 e3) -> (sem_typing g TBool e1) /\ (sem_typing g t e2) /\ (sem_typing g t e3)
+  | _ -> false
+
 val comp_int : intS -> intT
-let comp_int i = { ct = (rtype_to_ttype i.ct i.comp_ct.r) }
+let comp_int i = { ct = (rtype_to_ttype i.ct (i.comp_ct).r) }
 
 type progT (i:intT) = closed_exp
-type ctxT (i:intT) = ct:value//{sem_typing empty ct i.ct}
+
+type ctxT (i:intT) = ct:value{sem_typing empty i.ct ct}
 (** CA: syntactic typing necessary so that one can backtranslate and to know the type.
    **)
 type wholeT = closed_exp
@@ -78,20 +90,68 @@ assume val rel_behs : behS_t -> behT_t -> Type0
 //let num_bind (#i:intS) (ctxt:ctxT (comp_int i)) : nat =
 //  snd (free_vars_indx ctxt 0)
 
-val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> nat -> ctxS i
-let rec backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) (n:nat) : ctxS i 
-= 
+//type bt_env : var -> option typ
+
+val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+let rec backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   match ctxt with 
   | EUnit -> ()
   | ETrue -> true
   | EFalse -> false
-  | EIf e1 e2 e3 -> if (backtranslate_ctx i e1 n) then (backtranslate_ctx i e2 n) else (backtranslate_ctx i e3 n)
-  | EVar v -> 
-  | ELam b -> fun 
-  | EApp e1 e2 -> (backtranslate_ctx i e1 n) (backtranslate_ctx i e2 n)
-  | EPair e1 e2 -> ((backtranslate_ctx i e1 n), (backtranslate_ctx i e2 n))
-  | EFst e -> fst (backtranslate_ctx i e n)
-  | ESnd e -> snd (backtranslate_ctx i e n)
+  | EPair e1 e2 ->
+    let RPair #s1 #s2 r1 r2 = (i.comp_ct).r in
+    let comp_ct_1 : compile_typ s1 = admit () in
+    let comp_ct_2 : compile_typ s2 = admit () in
+    let intS_1 : intS = { ct = s1; comp_ct = comp_ct_1 } in
+    let intS_2 : intS = { ct = s2; comp_ct = comp_ct_2 } in
+    ((backtranslate_ctx #intS_1 e1), (backtranslate_ctx #intS_2 e2))
+  | EIf e1 e2 e3 -> 
+    let s = i.ct in
+    let intS_b : intS = { ct = bool; comp_ct = compile_typ_bool } in
+    let comp_ct_t: compile_typ s = admit () in
+    let intS_t : intS = { ct = s; comp_ct = comp_ct_t } in
+    let b = backtranslate_ctx #intS_b e1 in
+    let _ = assert(b == true \/ b == false) in
+    let v1 = backtranslate_ctx #intS_t e2 in
+    let v2 = backtranslate_ctx #intS_t e3 in
+    if b then v1 else v2
+  | _ -> ()
+  //  let v2 = backtranslate_ctx #i e3 in
+  //  let _ = assert(b == true \/ b == false) in
+  //  if b then v1 else v2
+  //| EVar v -> ()
+  //| ELam b -> fun () -> (backtranslate_ctx #i b)
+  (*| EApp e1 e2 -> begin 
+    let v1 = backtranslate_ctx e1 n in
+    let v2 = backtranslate_ctx e2 n in
+    v1 v2
+  end*)
+  //| EPair e1 e2 -> 
+  //  let _ = assume(sem_typing empty (comp_int i).ct e1) in
+  (*  let _ = assume(sem_typing empty (comp_int i).ct e2) in
+    let ct1: compile_typ (fst i.ct) = solve in
+    let ct2: compile_typ (snd i.ct) = solve in
+    let i1: intS = { ct = (fst i.ct); comp_ct = ct1 } in
+    let i2: intS = { ct = (snd i.ct); comp_ct = ct2 } in
+    let v1 = backtranslate_ctx #i1 e1 in
+    let v2 = backtranslate_ctx #i2 e2 in
+    (v1, v2)*)
+  //| EFst e1 -> fst (backtranslate_ctx #i e1 n)
+  //| ESnd e1 -> snd (backtranslate_ctx #i e1 n)
+
+(*let i_unit : intS = { ct = unit; comp_ct = compile_typ_unit }
+let result_unit = backtranslate_ctx #i_unit EUnit
+let _ = assert(result_unit == ())
+
+let i_bool : intS = { ct = bool; comp_ct = compile_typ_bool }
+let result_true = backtranslate_ctx #i_bool ETrue
+let result_false = backtranslate_ctx #i_bool EFalse
+let _ = assert(result_true == true)
+let _ = assert(result_false == false)
+
+let i_pair : intS = { ct = unit * unit; comp_ct = compile_typ_pair unit unit #compile_typ_unit #compile_typ_unit }
+let result_unit_unit = backtranslate_ctx #i_pair (EPair EUnit EUnit)
+let _ = assert(result_unit_unit == ((), ()))*)
 
 
 (** CA: I suppose these two lemmas are the most hard core **)
@@ -102,6 +162,7 @@ assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
 
 assume val lem_bt_ctx i ct : Lemma (pack i.comp_ct ∋ (backtranslate_ctx #i ct, ct))
 
+(*
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   (dsnd ps).e
 
@@ -138,3 +199,4 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     assume (behT (EApp pt ct) == behT (subst_beta ct (ELam?.b pt))); (** simple to prove **)
     ()
   end
+*)
