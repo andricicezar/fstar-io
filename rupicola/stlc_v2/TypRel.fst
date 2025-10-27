@@ -115,19 +115,19 @@ let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   [SMTPat (gsubst s e)] =
   admit ()
 
-noeq type typing : env -> exp -> typ -> Type =
+(*noeq type typing : env -> exp -> typsr -> Type =
   | TyUnit : #g:env ->
-             typing g EUnit TUnit
+             typing g EUnit tunit
   | TyTrue : #g:env ->
-             typing g ETrue TBool
+             typing g ETrue tbool
   | TyFalse : #g:env ->
-              typing g EFalse TBool
+              typing g EFalse tbool
   | TyIf : #g:env ->
            #e1:exp ->
            #e2:exp ->
            #e3:exp ->
-           #t:typ ->
-           $h1:typing g e1 TBool ->
+           #t:typsr ->
+           $h1:typing g e1 tbool ->
            $h2:typing g e2 t ->
            $h3:typing g e3 t ->
              typing g (EIf e1 e2 e3) t
@@ -167,6 +167,6 @@ noeq type typing : env -> exp -> typ -> Type =
             #t1:typ ->
             #t2:typ ->
             $h1:typing g e (TPair t1 t2) ->
-              typing g (ESnd e) t2
+              typing g (ESnd e) t2*)
              
   

@@ -411,3 +411,58 @@ let equiv_pair_snd g (t1 t2:typsr) : Lemma
     lem_values_are_expressions t fs_e e;
     assert (t ⦂ (fs_e, e))
   end
+
+noeq type typing : env -> exp -> typsr -> Type =
+  | TyUnit : #g:env ->
+             typing g EUnit tunit
+  | TyTrue : #g:env ->
+             typing g ETrue tbool
+  | TyFalse : #g:env ->
+              typing g EFalse tbool
+  | TyIf : #g:env ->
+           #e1:exp ->
+           #e2:exp ->
+           #e3:exp ->
+           #t:typsr ->
+           $h1:typing g e1 tbool ->
+           $h2:typing g e2 t ->
+           $h3:typing g e3 t ->
+             typing g (EIf e1 e2 e3) t
+  | TyVar : #g:env ->
+            x:var{Some? (g x)} ->
+              typing g (EVar x) (Some?.v (g x))
+  | TyLam : #g:env ->
+            #body:exp ->
+            #t1:typsr ->
+            #t2:typsr ->
+            $hbody:typing (extend t1 g) body t2 ->
+              typing g (ELam body) (mk_arrow t1 t2)
+  | TyApp : #g:env ->
+            #e1:exp ->
+            #e2:exp ->
+            #t1:typsr ->
+            #t2:typsr ->
+            $h1:typing g e1 (mk_arrow t1 t2) ->
+            $h2:typing g e2 t1 ->
+              typing g (EApp e1 e2) t2
+  | TyPair : #g:env ->
+            #e1:exp ->
+            #e2:exp ->
+            #t1:typsr ->
+            #t2:typsr ->
+            $h1:typing g e1 t1 ->
+            $h2:typing g e2 t2 ->
+              typing g (EPair e1 e2) (mk_pair t1 t2)
+  | TyFst : #g:env ->
+            #e:exp ->
+            #t1:typsr ->
+            #t2:typsr ->
+            $h1:typing g e (mk_pair t1 t2) ->
+              typing g (EFst e) t1
+  | TySnd : #g:env ->
+            #e:exp ->
+            #t1:typsr ->
+            #t2:typsr ->
+            $h1:typing g e (mk_pair t1 t2) ->
+              typing g (ESnd e) t2
+  

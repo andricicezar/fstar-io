@@ -49,20 +49,21 @@ assume val behS : wholeS -> behS_t
 
 (** Target **)
 
-noeq type intT = { ct : typ }
+noeq type intT = { ct : typsr }
 
 val comp_int : intS -> intT
-let comp_int i = { ct = (rtype_to_ttype i.ct (i.comp_ct).r) }
+let comp_int i = { ct = (| i.ct, (i.comp_ct).r |) }
 
 type progT (i:intT) = closed_exp
 
-type ctxT (i:intT) = ct:value//{sem_typing empty i.ct ct}
+type ctxT (i:intT) = ct:value & typing empty ct i.ct
 (** CA: syntactic typing necessary so that one can backtranslate and to know the type.
    **)
 type wholeT = closed_exp
 
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
-  let wt = EApp pt ct in
+  let (| e, h |) = ct in
+  let wt = EApp pt e in
   wt
 
 assume type behT_t
@@ -76,27 +77,29 @@ let rec typ_to_fstar (t:typ) : Type =
   | TArr t1 t2 -> (typ_to_fstar t1) -> (typ_to_fstar t2)
   | TPair t1 t2 -> (typ_to_fstar t1) * (typ_to_fstar t2)
 
-let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (fs_g:fs_env g) : (typ_to_fstar t) =
+let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
   | ETrue -> true
   | EFalse -> false
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
-    let b : bool = exp_to_fstar g e1 TBool h1 fs_g in
+    let b : bool = exp_to_fstar g e1 tbool h1 fs_g in
     let v1 = exp_to_fstar g e2 t h2 fs_g in
     let v2 = exp_to_fstar g e3 t h3 fs_g in
     if b then v1 else v2
-  //| EVar x ->
-  //  let TyVar #_ x1 = h in
-  //  let v : typ_to_fstar (rtype_to_ttype (get_Type (Some?.v (g x))) (get_rel (Some?.v (g x)))) = get_v fs_g x in
-  //  v
-  //| ELam b -
+  | EVar x -> get_v fs_g x 
+  | ELam b ->
+    let TyLam #_ #_ #t1 #t2 hbody = h in
+    assert (t == (mk_arrow t1 t2));
+    let w : (get_Type t1) -> (get_Type t2) =
+      (fun x -> exp_to_fstar (extend t1 g) b t2 hbody (fs_stack fs_g x)) in
+    w
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
-    assert ((typ_to_fstar t) == (typ_to_fstar t2));
-    let v1 : typ_to_fstar (TArr t1 t2) = exp_to_fstar g e1 (TArr t1 t2) h1 fs_g in
-    let v2 : typ_to_fstar t1 = exp_to_fstar g e2 t1 h2 fs_g in
+    assert ((get_Type t) == (get_Type t2));
+    let v1 : get_Type (mk_arrow t1 t2) = exp_to_fstar g e1 (mk_arrow t1 t2) h1 fs_g in
+    let v2 : get_Type t1 = exp_to_fstar g e2 t1 h2 fs_g in
     v1 v2
   | EPair e1 e2 ->
     let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
@@ -105,32 +108,17 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (fs_g:fs_env g) : 
     (v1, v2)
   | EFst e ->
     let TyFst #_ #_ #t1 #t2 h1 = h in
-    let v = exp_to_fstar g e (TPair t1 t2) h1 fs_g in
-    fst #(typ_to_fstar t1) #(typ_to_fstar t2) v
+    let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
+    fst #(get_Type t1) #(get_Type t2) v
   | ESnd e ->
     let TySnd #_ #_ #t1 #t2 h1 = h in
-    let v = exp_to_fstar g e (TPair t1 t2) h1 fs_g in
-    snd #(typ_to_fstar t1) #(typ_to_fstar t2) v
+    let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
+    snd #(get_Type t1) #(get_Type t2) v
 
-assume val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
-//let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
-//  exp_to_fstar empty ctxt (comp_int i).ct (typing empty ctxt (comp_int i).ct) fs_empty
-
-
-(*let i_unit : intS = { ct = unit; comp_ct = compile_typ_unit }
-let result_unit = backtranslate_ctx #i_unit EUnit
-let _ = assert(result_unit == ())
-
-let i_bool : intS = { ct = bool; comp_ct = compile_typ_bool }
-let result_true = backtranslate_ctx #i_bool ETrue
-let result_false = backtranslate_ctx #i_bool EFalse
-let _ = assert(result_true == true)
-let _ = assert(result_false == false)
-
-let i_pair : intS = { ct = unit * unit; comp_ct = compile_typ_pair unit unit #compile_typ_unit #compile_typ_unit }
-let result_unit_unit = backtranslate_ctx #i_pair (EPair EUnit EUnit)
-let _ = assert(result_unit_unit == ((), ()))*)
-
+val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
+  let (| e, h |) = ctxt in
+  exp_to_fstar empty e (comp_int i).ct h fs_empty
 
 (** CA: I suppose these two lemmas are the most hard core **)
 assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
@@ -138,9 +126,11 @@ assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
     (requires tbool ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
     (ensures  (behS fs_e) `rel_behs` (behT e))
 
-assume val lem_bt_ctx i ct : Lemma (pack i.comp_ct ∋ (backtranslate_ctx #i ct, ct))
+assume val lem_bt_ctx i ct : Lemma (
+  let (| e, h |) = ct in
+  pack i.comp_ct ∋ (backtranslate_ctx #i ct, e)
+  )
 
-(*
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   (dsnd ps).e
 
@@ -158,7 +148,8 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     let pt : exp = (dsnd ps).e in
     let pt : progT (comp_int i) = pt in
     let ws : wholeS = (dfst ps) (backtranslate_ctx ct) in
-    let wt : exp = EApp pt ct in
+    let (| e, h |) = ct in
+    let wt : exp = EApp pt e in
     let wt : wholeT = wt in
     (dsnd ps).equiv_proof ();
     let ps' = dfst ps in
@@ -170,11 +161,11 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     assert (mk_arrow t tbool ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
         tbool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
-      with ct (backtranslate_ctx ct);
+      with e (backtranslate_ctx ct);
     lem_bt_ctx i ct;
-    assert (tbool ⦂ (ps' (backtranslate_ctx ct), subst_beta ct (ELam?.b pt)));
-    lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta ct (ELam?.b pt));
-    assume (behT (EApp pt ct) == behT (subst_beta ct (ELam?.b pt))); (** simple to prove **)
+    assert (tbool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
+    lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta e (ELam?.b pt));
+    assume (behT (EApp pt e) == behT (subst_beta e (ELam?.b pt))); (** simple to prove **)
     ()
   end
-*)
+
