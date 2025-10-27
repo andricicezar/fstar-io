@@ -51,30 +51,12 @@ assume val behS : wholeS -> behS_t
 
 noeq type intT = { ct : typ }
 
-let rec rtype_to_ttype s (r:rtyp s) : typ = 
-  match r with 
-  | RUnit -> TUnit
-  | RBool -> TBool
-  | RArr #s1 #s2 rs1 rs2 -> TArr (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
-  | RPair #s1 #s2 rs1 rs2 -> TPair (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
-
-let rec sem_typing (g:env) (t:typ) (e:exp) : Tot Type 
-  (decreases e)
-  =
-  match (t, e) with
-  | (TUnit, EUnit) -> true
-  | (TBool, ETrue) -> true
-  | (TBool, EFalse) -> true
-  | (TPair t1 t2, EPair e1 e2) -> (sem_typing g t1 e1) /\ (sem_typing g t2 e2)
-  | (t, EIf e1 e2 e3) -> (sem_typing g TBool e1) /\ (sem_typing g t e2) /\ (sem_typing g t e3)
-  | _ -> false
-
 val comp_int : intS -> intT
 let comp_int i = { ct = (rtype_to_ttype i.ct (i.comp_ct).r) }
 
 type progT (i:intT) = closed_exp
 
-type ctxT (i:intT) = ct:value{sem_typing empty i.ct ct}
+type ctxT (i:intT) = ct:value//{sem_typing empty i.ct ct}
 (** CA: syntactic typing necessary so that one can backtranslate and to know the type.
    **)
 type wholeT = closed_exp
@@ -87,57 +69,53 @@ assume type behT_t
 assume val behT : wt:wholeT -> behT_t
 assume val rel_behs : behS_t -> behT_t -> Type0
 
-//let num_bind (#i:intS) (ctxt:ctxT (comp_int i)) : nat =
-//  snd (free_vars_indx ctxt 0)
+let rec typ_to_fstar (t:typ) : Type =
+  match t with
+  | TUnit -> unit
+  | TBool -> bool
+  | TArr t1 t2 -> (typ_to_fstar t1) -> (typ_to_fstar t2)
+  | TPair t1 t2 -> (typ_to_fstar t1) * (typ_to_fstar t2)
 
-//type bt_env : var -> option typ
-
-val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
-let rec backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
-  match ctxt with 
+let rec exp_to_fstar (g:env) (e:exp) (t:typ) (h:typing g e t) (fs_g:fs_env g) : (typ_to_fstar t) =
+  match e with
   | EUnit -> ()
   | ETrue -> true
   | EFalse -> false
-  | EPair e1 e2 ->
-    let RPair #s1 #s2 r1 r2 = (i.comp_ct).r in
-    let comp_ct_1 : compile_typ s1 = admit () in
-    let comp_ct_2 : compile_typ s2 = admit () in
-    let intS_1 : intS = { ct = s1; comp_ct = comp_ct_1 } in
-    let intS_2 : intS = { ct = s2; comp_ct = comp_ct_2 } in
-    ((backtranslate_ctx #intS_1 e1), (backtranslate_ctx #intS_2 e2))
-  | EIf e1 e2 e3 -> 
-    let s = i.ct in
-    let intS_b : intS = { ct = bool; comp_ct = compile_typ_bool } in
-    let comp_ct_t: compile_typ s = admit () in
-    let intS_t : intS = { ct = s; comp_ct = comp_ct_t } in
-    let b = backtranslate_ctx #intS_b e1 in
-    let _ = assert(b == true \/ b == false) in
-    let v1 = backtranslate_ctx #intS_t e2 in
-    let v2 = backtranslate_ctx #intS_t e3 in
+  | EIf e1 e2 e3 ->
+    let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
+    let b : bool = exp_to_fstar g e1 TBool h1 fs_g in
+    let v1 = exp_to_fstar g e2 t h2 fs_g in
+    let v2 = exp_to_fstar g e3 t h3 fs_g in
     if b then v1 else v2
-  | _ -> ()
-  //  let v2 = backtranslate_ctx #i e3 in
-  //  let _ = assert(b == true \/ b == false) in
-  //  if b then v1 else v2
-  //| EVar v -> ()
-  //| ELam b -> fun () -> (backtranslate_ctx #i b)
-  (*| EApp e1 e2 -> begin 
-    let v1 = backtranslate_ctx e1 n in
-    let v2 = backtranslate_ctx e2 n in
+  //| EVar x ->
+  //  let TyVar #_ x1 = h in
+  //  let v : typ_to_fstar (rtype_to_ttype (get_Type (Some?.v (g x))) (get_rel (Some?.v (g x)))) = get_v fs_g x in
+  //  v
+  //| ELam b -
+  | EApp e1 e2 ->
+    let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
+    assert ((typ_to_fstar t) == (typ_to_fstar t2));
+    let v1 : typ_to_fstar (TArr t1 t2) = exp_to_fstar g e1 (TArr t1 t2) h1 fs_g in
+    let v2 : typ_to_fstar t1 = exp_to_fstar g e2 t1 h2 fs_g in
     v1 v2
-  end*)
-  //| EPair e1 e2 -> 
-  //  let _ = assume(sem_typing empty (comp_int i).ct e1) in
-  (*  let _ = assume(sem_typing empty (comp_int i).ct e2) in
-    let ct1: compile_typ (fst i.ct) = solve in
-    let ct2: compile_typ (snd i.ct) = solve in
-    let i1: intS = { ct = (fst i.ct); comp_ct = ct1 } in
-    let i2: intS = { ct = (snd i.ct); comp_ct = ct2 } in
-    let v1 = backtranslate_ctx #i1 e1 in
-    let v2 = backtranslate_ctx #i2 e2 in
-    (v1, v2)*)
-  //| EFst e1 -> fst (backtranslate_ctx #i e1 n)
-  //| ESnd e1 -> snd (backtranslate_ctx #i e1 n)
+  | EPair e1 e2 ->
+    let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
+    let v1 = exp_to_fstar g e1 t1 h1 fs_g in
+    let v2 = exp_to_fstar g e2 t2 h2 fs_g in
+    (v1, v2)
+  | EFst e ->
+    let TyFst #_ #_ #t1 #t2 h1 = h in
+    let v = exp_to_fstar g e (TPair t1 t2) h1 fs_g in
+    fst #(typ_to_fstar t1) #(typ_to_fstar t2) v
+  | ESnd e ->
+    let TySnd #_ #_ #t1 #t2 h1 = h in
+    let v = exp_to_fstar g e (TPair t1 t2) h1 fs_g in
+    snd #(typ_to_fstar t1) #(typ_to_fstar t2) v
+
+assume val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
+//let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
+//  exp_to_fstar empty ctxt (comp_int i).ct (typing empty ctxt (comp_int i).ct) fs_empty
+
 
 (*let i_unit : intS = { ct = unit; comp_ct = compile_typ_unit }
 let result_unit = backtranslate_ctx #i_unit EUnit
