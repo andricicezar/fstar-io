@@ -1,5 +1,3 @@
-(** Syntactic representation of F* types that we can compile. **)
-
 module TypRel
 
 open FStar.Tactics
@@ -115,7 +113,7 @@ let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   [SMTPat (gsubst s e)] =
   admit ()
 
-(*noeq type typing : env -> exp -> typsr -> Type =
+(*noeq type typing : env -> exp -> typ -> Type =
   | TyUnit : #g:env ->
              typing g EUnit tunit
   | TyTrue : #g:env ->

@@ -339,6 +339,13 @@ let rec destruct_steps_eapp
   **)
   admit ()
 
+(*let lem_destruct_steps_eapp
+  (e1 e2:closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (EApp e1 e2) e' /\ irred e1 /\ irred e2))
+        (ensures ((
+*)
+
 let rec destruct_steps_eif
   (e1:closed_exp)
   (e2:closed_exp)
@@ -381,6 +388,12 @@ let rec destruct_steps_epair
       EPair e1 e2 -->* EPair e1' e2' == e'
   **)
   admit ()
+
+let lem_destruct_steps_epair 
+  (e1' e2':closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (EPair e1' e2') e' /\ irred e1' /\ irred e2'))
+        (ensures ((EPair e1' e2') == e')) = admit () 
 
 let rec destruct_steps_epair_fst
   (e12:closed_exp)

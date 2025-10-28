@@ -48,14 +48,18 @@ assume type behS_t
 assume val behS : wholeS -> behS_t
 
 (** Target **)
-
+// right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
+// unverified code: target + target type (typ) 
+// but maybe current typing works? cause you cannot have pre post conditions
+// the type of target contexts restricts us to unverified code
 noeq type intT = { ct : typsr }
 
 val comp_int : intS -> intT
-let comp_int i = { ct = (| i.ct, (i.comp_ct).r |) }
+let comp_int i = { ct = pack i.comp_ct }
 
 type progT (i:intT) = closed_exp
 
+// the typing makes sure that there are no pre post conditions - maybe...
 type ctxT (i:intT) = ct:value & typing empty ct i.ct
 (** CA: syntactic typing necessary so that one can backtranslate and to know the type.
    **)
@@ -70,6 +74,7 @@ assume type behT_t
 assume val behT : wt:wholeT -> behT_t
 assume val rel_behs : behS_t -> behT_t -> Type0
 
+// will cause universe problems
 let rec typ_to_fstar (t:typ) : Type =
   match t with
   | TUnit -> unit
@@ -77,6 +82,8 @@ let rec typ_to_fstar (t:typ) : Type =
   | TArr t1 t2 -> (typ_to_fstar t1) -> (typ_to_fstar t2)
   | TPair t1 t2 -> (typ_to_fstar t1) * (typ_to_fstar t2)
 
+// keep this as typsr to avoid typ_to_fstar
+// change typing to be over rrtype_to_ttype t - so typ
 let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
@@ -89,11 +96,11 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) 
     let v2 = exp_to_fstar g e3 t h3 fs_g in
     if b then v1 else v2
   | EVar x -> get_v fs_g x 
-  | ELam b ->
+  | ELam body ->
     let TyLam #_ #_ #t1 #t2 hbody = h in
     assert (t == (mk_arrow t1 t2));
     let w : (get_Type t1) -> (get_Type t2) =
-      (fun x -> exp_to_fstar (extend t1 g) b t2 hbody (fs_stack fs_g x)) in
+      (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fs_g x)) in
     w
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
@@ -126,10 +133,176 @@ assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
     (requires tbool ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
     (ensures  (behS fs_e) `rel_behs` (behT e))
 
-assume val lem_bt_ctx i ct : Lemma (
+// prove that this is equivalent for any fs_g
+// proof by induction on the expression (induction in backtranslation)
+val lem_exp_to_fstar g (e:exp) t (h:typing g e t) : Lemma 
+(equiv t (exp_to_fstar g e t h) e)
+let rec lem_exp_to_fstar g e t (h:typing g e t) =
+  assume(fv_in_env g e); 
+   match e with
+  | EUnit -> 
+    assert(forall b (s:gsub g b) (fsG:fs_env g).
+    fsG ∽ s ==> t ⦂ ((exp_to_fstar g EUnit t h) fsG, gsubst s EUnit)) 
+    by (explode ())
+  | ETrue -> 
+    assert(forall b (s:gsub g b) (fsG:fs_env g).
+    fsG ∽ s ==> t ⦂ ((exp_to_fstar g ETrue t h) fsG, gsubst s ETrue)) 
+    by (explode ())
+  | EFalse -> 
+    assert(forall b (s:gsub g b) (fsG:fs_env g).
+    fsG ∽ s ==> t ⦂ ((exp_to_fstar g EFalse t h) fsG, gsubst s EFalse)) 
+    by (explode ())
+  | EVar x ->
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> (Some?.v (g x)) ⦂ (get_v fsG x, gsubst s (EVar x)) with 
+      begin
+      introduce _ ==> _ with _.
+        begin
+        assert (Some?.v (g x) ∋ (get_v fsG x, s x));
+        lem_values_are_expressions (Some?.v (g x)) (get_v fsG x) (s x)
+        end
+      end
+   | EPair e1 e2 -> 
+    let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
+    assume (fv_in_env g e1);
+    assume (fv_in_env g e2);
+    lem_exp_to_fstar g e1 t1 h1;
+    lem_exp_to_fstar g e2 t2 h2;
+    let t = mk_pair t1 t2 in
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t ⦂ (((exp_to_fstar g e1 t1 h1) fsG, (exp_to_fstar g e2 t2 h2) fsG), gsubst s (EPair e1 e2)) with 
+      begin
+      let fs_e1 = (exp_to_fstar g e1 t1 h1) fsG in
+      let fs_e2 = (exp_to_fstar g e2 t2 h2) fsG in
+      let fs_e = (fs_e1, fs_e2) in
+      let e = EPair (gsubst s e1) (gsubst s e2) in
+      assert (gsubst s (EPair e1 e2) == e); 
+      let EPair e1 e2 = e in
+      introduce fsG ∽ s ==> t ⦂ (fs_e, e) with _. 
+        begin
+        introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ (fs_e, e') with 
+          begin
+          introduce _ ==> t ∋ (fs_e, e') with h. 
+            begin
+            let steps_e_e' : squash (steps e e') = () in
+            FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+              let (e1', e2') = destruct_steps_epair e1 e2 e' steps_e_e' in
+              assert (t1 ∋ (fs_e1, e1'));
+              assert (t2 ∋ (fs_e2, e2'));
+              assert (t ∋ (fs_e, EPair e1' e2'));
+              lem_destruct_steps_epair e1' e2' e';
+              lem_values_are_expressions t fs_e (EPair e1' e2')
+            )
+            end
+          end
+        end
+      end
+  | EIf e1 e2 e3 ->
+    let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
+    assume (fv_in_env g e1);
+    assume (fv_in_env g e2);
+    assume (fv_in_env g e3);
+    lem_exp_to_fstar g e1 tbool h1;
+    lem_exp_to_fstar g e2 t h2;
+    lem_exp_to_fstar g e3 t h3;
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t ⦂ ((if (exp_to_fstar g e1 tbool h1) fsG then (exp_to_fstar g e2 t h2) fsG else (exp_to_fstar g e3 t h3) fsG), gsubst s (EIf e1 e2 e3)) with 
+      begin
+      let fs_e1 : bool = (exp_to_fstar g e1 tbool h1) fsG in
+      let fs_e2 : (get_Type t) = (exp_to_fstar g e2 t h2) fsG in
+      let fs_e3 : (get_Type t) = (exp_to_fstar g e3 t h3) fsG in
+      let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
+      assert (gsubst s (EIf e1 e2 e3) == e);
+      let EIf e1 e2 e3 = e in
+      introduce fsG ∽ s ==>  t ⦂ ((if fs_e1 then fs_e2 else fs_e3), e) with _.
+        begin
+        introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ ((if fs_e1 then fs_e2 else fs_e3), e') with
+          begin
+          introduce _ ==> t ∋ ((if fs_e1 then fs_e2 else fs_e3), e') with h.
+            begin
+            let steps_e_e' : squash (steps e e') = () in
+            FStar.Squash.map_squash #_ #(squash (t ∋ ((if fs_e1 then fs_e2 else fs_e3), e'))) steps_e_e' (fun steps_e_e' -> 
+              let e1' = destruct_steps_eif e1 e2 e3 e' steps_e_e' in
+              assert (tbool ∋ (fs_e1, e1'));
+              assert (t ∋ ((if fs_e1 then fs_e2 else fs_e3), e'))
+            )
+            end
+          end
+        end
+      end
+  (*| ELam body ->
+    let TyLam #_ #body #t1 #t2 hbody = h in
+    assume (fv_in_env (extend t1 g) body);
+    let g' = extend t1 g in
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> (mk_arrow t1 t2) ⦂ ((fun x -> (exp_to_fstar (extend t1 g) body t2 hbody)) (fs_stack fsG x)) fsG, gsubst s (ELam body)) with 
+      begin
+      ()
+      end*)
+  (*| EApp e1 e2 ->
+    let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
+    assume (fv_in_env g e1);
+    assume (fv_in_env g e2);
+    lem_exp_to_fstar g e1 (mk_arrow t1 t2) h1;
+    lem_exp_to_fstar g e2 t1 h2;
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ (((exp_to_fstar g e1 (mk_arrow t1 t2) h1) fsG) ((exp_to_fstar g e2 t1 h2) fsG), gsubst s (EApp e1 e2)) with
+      begin
+      let fs_e1 = (exp_to_fstar g e1 (mk_arrow t1 t2) h1) fsG in
+      let fs_e2 = (exp_to_fstar g e2 t1 h2) fsG in
+      let fs_e = fs_e1 fs_e2 in
+      let e = EApp (gsubst s e1) (gsubst s e2) in
+      assert (gsubst s (EApp e1 e2) == e);
+      let EApp e1 e2 = e in
+      introduce fsG ∽ s ==>  t2 ⦂ (fs_e, e) with _. 
+        begin
+        introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t2 ∋ (fs_e, e') with
+          begin
+          introduce _ ==> t2 ∋ (fs_e, e') with h. 
+            begin
+              let steps_e_e' : squash (steps e e') = () in
+              FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+                let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' in
+                assert (mk_arrow t1 t2 ∋ (fs_e1, ELam e11));
+                ()
+              )
+            end
+          end
+        end
+      end*)
+  | EFst e ->
+    let TyFst #_ #_ #t1 #t2 h1 = h in
+    assume (fv_in_env g e);
+    lem_exp_to_fstar g e (mk_pair t1 t2) h1;
+    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t1 ⦂ (fst #(get_Type t1) #(get_Type t2) ((exp_to_fstar g e (mk_pair t1 t2) h1) fsG), gsubst s (EFst e)) with
+      begin
+      let fs_e = (exp_to_fstar g e (mk_pair t1 t2) h1) fsG in
+      let fs_fe = fst #(get_Type t1) #(get_Type t2) fs_e in
+      let fe = EFst (gsubst s e) in
+      assert (gsubst s (EFst e) == fe);
+      let EFst e = fe in
+      introduce fsG ∽ s ==> t1 ⦂ (fs_fe, fe) with _. 
+        begin
+        introduce forall (fe':closed_exp). steps fe fe' /\ irred fe' ==> t1 ∋ (fs_fe, fe') with
+          begin
+          introduce _ ==> t1 ∋ (fs_fe, fe') with h. 
+            begin
+            let steps_fe_fe' : squash (steps fe fe') = () in
+            FStar.Squash.map_squash #_ #(squash (t1 ∋ (fs_fe, fe'))) steps_fe_fe' (fun steps_fe_fe' -> 
+              let e12' = destruct_steps_epair_fst e fe' steps_fe_fe' in
+              admit ()
+              ) 
+            end
+          end
+        end
+      end
+  | _ -> admit ()
+
+val lem_bt_ctx i ct : Lemma (
   let (| e, h |) = ct in
   pack i.comp_ct ∋ (backtranslate_ctx #i ct, e)
   )
+let lem_bt_ctx i ct =
+  let (| e, h |) = ct in
+  lem_exp_to_fstar empty e (comp_int i).ct h;
+  equiv_closed_terms #(comp_int i).ct (exp_to_fstar empty e (comp_int i).ct h fs_empty) e;
+  // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
+  ()
 
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   (dsnd ps).e

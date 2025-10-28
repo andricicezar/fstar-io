@@ -12,7 +12,7 @@ open TypRel
 let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
   let fs_v = fst p in
   let e = snd p in
-  match get_rel t with
+  match get_rel t with // way to "match" on F* types
   | RUnit -> fs_v == () /\ e == EUnit
   | RBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | RArr #s1 #s2 r1 r2 -> begin
@@ -412,6 +412,8 @@ let equiv_pair_snd g (t1 t2:typsr) : Lemma
     assert (t ⦂ (fs_e, e))
   end
 
+// the environment is non-standard, more fancy
+// also over typsr instead of syntactic types (typ)
 noeq type typing : env -> exp -> typsr -> Type =
   | TyUnit : #g:env ->
              typing g EUnit tunit
@@ -430,7 +432,7 @@ noeq type typing : env -> exp -> typsr -> Type =
              typing g (EIf e1 e2 e3) t
   | TyVar : #g:env ->
             x:var{Some? (g x)} ->
-              typing g (EVar x) (Some?.v (g x))
+              typing g (EVar x) (Some?.v (g x)) 
   | TyLam : #g:env ->
             #body:exp ->
             #t1:typsr ->
