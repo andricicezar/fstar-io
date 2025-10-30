@@ -347,8 +347,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
   | EVar x -> exp_to_fstar_var g x h
   | EPair e1 e2 -> 
     let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
-    assume (fv_in_env g e1);
-    assume (fv_in_env g e2);
+    lem_pair_fv_in_env g e1 e2;
     lem_exp_to_fstar g e1 t1 h1;
     lem_exp_to_fstar g e2 t2 h2;
     let fs_e1 = (exp_to_fstar g e1 t1 h1) in
@@ -356,9 +355,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     exp_to_fstar_pair g t1 t2 e1 e2 fs_e1 fs_e2
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
-    assume (fv_in_env g e1);
-    assume (fv_in_env g e2);
-    assume (fv_in_env g e3);
+    lem_if_fv_in_env g e1 e2 e3;
     lem_exp_to_fstar g e1 tbool h1;
     lem_exp_to_fstar g e2 t h2;
     lem_exp_to_fstar g e3 t h3;
@@ -380,8 +377,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     exp_to_fstar_snd g t1 t2 e12 fs_e12
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
-    assume (fv_in_env g e1);
-    assume (fv_in_env g e2);
+    lem_app_fv_in_env g e1 e2;
     lem_exp_to_fstar g e1 (mk_arrow t1 t2) h1;
     lem_exp_to_fstar g e2 t1 h2;
     let fs_e1 = (exp_to_fstar g e1 (mk_arrow t1 t2) h1) in
@@ -403,6 +399,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
         begin
         introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (mk_arrow t1 t2) ∋ (f, e') with
           begin
+          lem_value_is_irred (ELam body');
           assume ((ELam body') == e');
           introduce _ ==> (mk_arrow t1 t2) ∋ (f, e') with h.
             begin
@@ -431,6 +428,9 @@ val lem_bt_ctx i ct : Lemma (
   )
 let lem_bt_ctx i ct =
   let (| e, h |) = ct in
+  lem_value_is_closed e;
+  lem_closed_is_no_fv e;
+  assert (fv_in_env empty e);
   lem_exp_to_fstar empty e (comp_int i).ct h;
   equiv_closed_terms #(comp_int i).ct (exp_to_fstar empty e (comp_int i).ct h fs_empty) e;
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
