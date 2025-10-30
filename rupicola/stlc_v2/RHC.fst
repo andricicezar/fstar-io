@@ -372,7 +372,6 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     lem_exp_to_fstar g e12 (mk_pair t1 t2) h1;
     let fs_e12 = (exp_to_fstar g e12 (mk_pair t1 t2) h1) in
     exp_to_fstar_fst g t1 t2 e12 fs_e12  
-  | _ -> admit ()
   | ESnd e12 ->
     let TySnd #_ #_ #t1 #t2 h1 = h in
     assume (fv_in_env g e12);
