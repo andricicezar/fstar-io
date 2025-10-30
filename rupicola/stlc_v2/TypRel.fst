@@ -67,6 +67,12 @@ let lem_no_fv_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
+let lem_closed_is_no_fv (e:exp) : Lemma
+  (requires is_closed e)
+  (ensures fv_in_env empty e)
+  [SMTPat (is_closed e)] = 
+  ()
+
 let lem_fv_in_env_lam (g:env) (t:typsr) (body:exp) :
   Lemma
     (requires fv_in_env (extend t g) body)
@@ -77,15 +83,30 @@ let lem_fv_in_env_app (g:env) (e1 e2:exp) :
     (requires fv_in_env g e1 /\ fv_in_env g e2)
     (ensures  fv_in_env g (EApp e1 e2)) = admit ()
 
+let lem_app_fv_in_env (g:env) (e1 e2:exp) :
+  Lemma
+    (requires fv_in_env g (EApp e1 e2))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
+
 let lem_fv_in_env_if (g:env) (e1 e2 e3:exp) :
   Lemma
     (requires fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3)
     (ensures  fv_in_env g (EIf e1 e2 e3)) = admit ()
 
+let lem_if_fv_in_env (g:env) (e1 e2 e3:exp) :
+  Lemma
+    (requires fv_in_env g (EIf e1 e2 e3))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) = admit ()
+
 let lem_fv_in_env_pair (g:env) (e1 e2:exp) :
   Lemma
     (requires fv_in_env g e1 /\ fv_in_env g e2)
     (ensures  fv_in_env g (EPair e1 e2)) = admit ()
+
+let lem_pair_fv_in_env (g:env) (e1 e2:exp) :
+  Lemma 
+    (requires fv_in_env g (EPair e1 e2))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
 
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
@@ -112,59 +133,3 @@ let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   Lemma (gsubst s e == e)
   [SMTPat (gsubst s e)] =
   admit ()
-
-(*noeq type typing : env -> exp -> typ -> Type =
-  | TyUnit : #g:env ->
-             typing g EUnit tunit
-  | TyTrue : #g:env ->
-             typing g ETrue tbool
-  | TyFalse : #g:env ->
-              typing g EFalse tbool
-  | TyIf : #g:env ->
-           #e1:exp ->
-           #e2:exp ->
-           #e3:exp ->
-           #t:typsr ->
-           $h1:typing g e1 tbool ->
-           $h2:typing g e2 t ->
-           $h3:typing g e3 t ->
-             typing g (EIf e1 e2 e3) t
-  //| TyVar : #g:env ->
-  //          x:var{Some? (g x)} ->
-  //            typing g (EVar x) (rtype_to_ttype (get_Type (Some?.v (g x))) (get_rel (Some?.v (g x))))
-  //| TyLam : #g:env ->
-  //          #body:exp ->
-  //          #t1:typ ->
-  //          #t2:typ ->
-  //          $hbody:typing (extend t1 g) body t2 ->
-  //            typing g (ELam body) (TArr t1 t2)
-  | TyApp : #g:env ->
-            #e1:exp ->
-            #e2:exp ->
-            #t1:typ ->
-            #t2:typ ->
-            $h1:typing g e1 (TArr t1 t2) -> 
-            $h2:typing g e2 t1 ->
-              typing g (EApp e1 e2) t2
-   | TyPair : #g:env ->
-             #e1:exp ->
-             #e2:exp ->
-             #t1:typ ->
-             #t2:typ ->
-             $h1:typing g e1 t1 ->
-             $h2:typing g e2 t2 ->
-               typing g (EPair e1 e2) (TPair t1 t2)
-  | TyFst : #g:env ->
-            #e:exp ->
-            #t1:typ ->
-            #t2:typ ->
-            $h1:typing g e (TPair t1 t2) ->
-              typing g (EFst e) t1
-  | TySnd : #g:env ->
-            #e:exp ->
-            #t1:typ ->
-            #t2:typ ->
-            $h1:typing g e (TPair t1 t2) ->
-              typing g (ESnd e) t2*)
-             
-  
