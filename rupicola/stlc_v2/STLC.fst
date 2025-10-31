@@ -307,6 +307,10 @@ type steps : closed_exp -> closed_exp -> Type =
            steps (Some?.v (step e0)) e2 ->
            steps e0 e2
 
+let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) : Lemma
+  (requires steps e e')
+  (ensures e == e') = admit ()
+
 let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
   FStar.Squash.return_squash (SRefl e)
 
