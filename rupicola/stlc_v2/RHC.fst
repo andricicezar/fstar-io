@@ -267,7 +267,7 @@ let exp_to_fstar_fst g (t1 t2:typsr) (e12:exp) fs_e12 : Lemma
 let exp_to_fstar_snd g (t1 t2:typsr) (e12:exp) fs_e12 : Lemma
   (requires equiv (mk_pair t1 t2) fs_e12 e12 /\ fv_in_env g (ESnd e12))
   (ensures equiv t2 (fun fsG -> snd #(get_Type t1) #(get_Type t2) (fs_e12 fsG)) (ESnd e12)) =
-      introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ (snd #(get_Type t1) #(get_Type t2) (fs_e12 fsG), gsubst s (ESnd e12)) with
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ (snd #(get_Type t1) #(get_Type t2) (fs_e12 fsG), gsubst s (ESnd e12)) with
       begin
       let fs_e12 = fs_e12 fsG in
       let fs_e = snd #(get_Type t1) #(get_Type t2) fs_e12 in
@@ -298,7 +298,7 @@ let exp_to_fstar_snd g (t1 t2:typsr) (e12:exp) fs_e12 : Lemma
 let exp_to_fstar_app g (t1 t2:typsr) (e1:exp) (e2:exp) fs_e1 fs_e2 : Lemma
   (requires equiv (mk_arrow t1 t2) fs_e1 e1 /\ equiv t1 fs_e2 e2 /\ fv_in_env g (EApp e1 e2))
   (ensures equiv t2 (fun fsG -> (fs_e1 fsG) (fs_e2 fsG)) (EApp e1 e2)) = 
-    introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ (((fs_e1 fsG) (fs_e2 fsG)), gsubst s (EApp e1 e2)) with
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ (((fs_e1 fsG) (fs_e2 fsG)), gsubst s (EApp e1 e2)) with
       begin
       let fs_e1 = fs_e1 fsG in
       let fs_e2 = fs_e2 fsG in
@@ -335,11 +335,9 @@ let exp_to_fstar_app g (t1 t2:typsr) (e1:exp) (e2:exp) fs_e1 fs_e2 : Lemma
         end
       end
   
-
-val lem_exp_to_fstar g (e:exp) t (h:typing g e t) : Lemma 
+val lem_exp_to_fstar g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma 
 (equiv t (exp_to_fstar g e t h) e)
 let rec lem_exp_to_fstar g e t (h:typing g e t) =
-  assume(fv_in_env g e); 
    match e with
   | EUnit -> exp_to_fstar_unit g
   | ETrue -> exp_to_fstar_true g
@@ -365,13 +363,13 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     exp_to_fstar_if g t e1 e2 e3 fs_e1 fs_e2 fs_e3
   | EFst e12 ->
     let TyFst #_ #_ #t1 #t2 h1 = h in
-    assume (fv_in_env g e12);
+    lem_fst_fv_in_env g e12;
     lem_exp_to_fstar g e12 (mk_pair t1 t2) h1;
     let fs_e12 = (exp_to_fstar g e12 (mk_pair t1 t2) h1) in
     exp_to_fstar_fst g t1 t2 e12 fs_e12  
   | ESnd e12 ->
     let TySnd #_ #_ #t1 #t2 h1 = h in
-    assume (fv_in_env g e12);
+    lem_snd_fv_in_env g e12;
     lem_exp_to_fstar g e12 (mk_pair t1 t2) h1;
     let fs_e12 = (exp_to_fstar g e12 (mk_pair t1 t2) h1) in
     exp_to_fstar_snd g t1 t2 e12 fs_e12
@@ -385,7 +383,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     exp_to_fstar_app g t1 t2 e1 e2 fs_e1 fs_e2
   | ELam body ->
     let TyLam #_ #body #t1 #t2 hbody = h in
-    assume (fv_in_env (extend t1 g) body);
+    lem_lam_fv_in_env g body t1;
     lem_exp_to_fstar (extend t1 g) body t2 hbody;
     assert (equiv t2 (exp_to_fstar (extend t1 g) body t2 hbody) body);
     assert (forall b (s:gsub (extend t1 g) b) (fsG:fs_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((exp_to_fstar (extend t1 g) body t2 hbody) fsG, gsubst s body)); 
@@ -399,10 +397,11 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
         begin
         introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (mk_arrow t1 t2) ∋ (f, e') with
           begin
-          lem_value_is_irred (ELam body');
-          assume ((ELam body') == e');
           introduce _ ==> (mk_arrow t1 t2) ∋ (f, e') with h.
             begin
+            lem_value_is_irred (ELam body');
+            lem_steps_irred_e_irred_e'_implies_e_e' (ELam body') e';
+            assert ((ELam body') == e');
             let RArr #s1 #s2 r1 r2 = get_rel (mk_arrow t1 t2) in
             introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with 
               begin
