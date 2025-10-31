@@ -108,6 +108,21 @@ let lem_pair_fv_in_env (g:env) (e1 e2:exp) :
     (requires fv_in_env g (EPair e1 e2))
     (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
 
+let lem_fst_fv_in_env (g:env) (e:exp) : // this only makes sense because of how we defined free_vars_indx 
+  Lemma
+    (requires fv_in_env g (EFst e))
+    (ensures fv_in_env g e) = admit ()
+
+let lem_snd_fv_in_env (g:env) (e:exp) :
+  Lemma 
+    (requires fv_in_env g (ESnd e))
+    (ensures fv_in_env g e) = admit ()
+
+let lem_lam_fv_in_env (g:env) (body:exp) (t1:typsr) :
+  Lemma
+    (requires fv_in_env g (ELam body))
+    (ensures fv_in_env (extend t1 g) body) = admit ()
+
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
