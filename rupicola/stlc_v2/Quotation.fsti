@@ -84,7 +84,7 @@ let test_var0 : rq_tc #(bool -> bool) empty (fun _ -> (fun x -> x)) = solve
 #set-options "--debug Tac"
 // Cezar: automation fails when applying a deBrujin variable
 let _ : rq_tc #((bool -> bool) -> bool ) empty (fun _ p  -> p false) =
-  solve
- // rq_CAbs (rq_CAbs (rq_CApp rq_CVar1 rq_CFalse))
+  solve // TODO: why does this fail?
+ // rq_CAbs (rq_CApp rq_CVar0 rq_CFalse)
 
 let cnp' : rq_tc empty (fun _ -> neg_pred) = solve
