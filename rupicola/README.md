@@ -1,34 +1,39 @@
 ### To try next
 
-Next challenges:
-* Limitations of type classes
-  - [ ] Pattern matching -- an inherent problem of F*, one cannot abstract over them anyway. Not a typeclass problem.
-      	Typeclasses do not add any expressivity to F*. We're limited by what we can abstract away in F*.
-	For PMs, maybe one can generate instances on the fly. There is another project requiring this.
-  - [ ] How powerful is phase1? A lot seems to happen, which can be problematic if we want to claim any kind of end-to-end result.
-        Typeclasses in F* may be less fancy than other languages. We expect it to be portable.
-	From what we have noticed, phase1 does:
-	* Elaborates lets
-* Features of Dependently Typed Languages:
-  - [ ] @Guido Compiling fixpoints (may work with F* if one defines instances for different arrities). Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
-  - [x] Compiling pairs
-  - [ ] Compiling Dependent Pairs and Dependent Functions. See attempt on [dpairs2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
-      	We have a promising logical relation and compiler.
-	- [ ] We have to implement a typing environment, where adding a new type can depend on the types that already exists in the environment. To check if such envs are called Telescopes.
-	- [ ] Generally, the typing relation and the expression relation have to be defined mutually recursive, which is a definition rejected by Rocq (probably F* too).
-	      Since we want to compile to a language without universe polymorphism, maybe we can define it using concrete universes.
-* Features of F\*:
-  - [x] Compiling refined types
-    - [ ] @Guido [Automation does not work when erasing](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
-  - [ ] Compiling arrows with pre-post-conditions
-    - [ ] Any related work for this?
-  - [ ] Compiling effects? We apply the lambdas we compile in multiple places (type of instances, the logical relation).
-* Compiling monads
+#### The predicate for quotation
+- [x] STLC with units and booleans
+- [ ] Refinements
+    - [ ] computes a WP that has to be separately proven. it will be nice to not have to compute it, but I think that is a futile exercise. We should look for how to prove it automatically. The good new is that we are not worse than Related Work: CakeML has the same problem. Œuf uses translation validation to verify quotation. Others trust quotation. 
+    - [ ] F* has problems computing the WP. It adds an "invisible" guard that is hard to debug: https://github.com/andricicezar/fstar-io/blob/master/rupicola/refinements2/CompilableWP2.fst#L396
+    - [ ] In HO cases, there is a problem with inference: https://github.com/andricicezar/fstar-io/blob/2fd2c9273b870317bc6c8841c30a0ff8f07432a1/rupicola/refinements2/CompilableWP2.fst#L354
+- [ ] Avoid quoting ghost code
+- [ ] Compiling fixpoints 
+    - [ ] @Guido, may work with F* if one defines instances for different arrities. Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
+    - [ ] Should we use a custom fixpoint combinator? Obvious drawback is that compilation would not be compatible with existing code. 
+- [ ] Arrows with pre-post
+- [ ] Dijkstra Monads. Note: we cannot compile effects directly because we apply the lambdas we compile in the logical relation.
   - [ ] Identity monad
   - [ ] IO. Maybe easier than state?
   - [ ] State. I suppose we would have to reproduce the proofs from Amal's Thesis, which are very complicated. From what I know, separation logic helps with those proofs. Any way to take advantage of Pulse for that (not ideal since it gives us partial correctness)? Probably it is better to start with IO.
+- [ ] Dependent Pairs and Dependent Functions. See attempt on [dpairs2](https://github.com/andricicezar/fstar-io/blob/dpairs2/rupicola/stlc_v2/Compiler.fst#L359) branch.
+      	We have a promising logical relation and compiler.
+  - [ ] We have to implement a typing environment, where adding a new type can depend on the types that already exists in the environment. To check if such envs are called Telescopes.
+  - [ ] Generally, the typing relation and the expression relation have to be defined mutually recursive, which is a definition rejected by Rocq (probably F* too).
+	    Since we want to compile to a language without universe polymorphism, maybe we can define it using concrete universes.
+- [ ] We need a way to test completness of the predicate. How? Right now, we write programs by hand.
 
-TODOs:
+#### Automation. Defining a type class on top of the predicate
+- [ ] Type class resolution does not seem to work in HO cases. (see [here](https://github.com/andricicezar/fstar-io/blob/2fd2c9273b870317bc6c8841c30a0ff8f07432a1/rupicola/stlc_v2/Quotation.fsti#L86) or `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
+- [ ] [Automation does not work when erasing refinements](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
+
+#### Proof of secure compilation
+- [ ] Complete proof for STLC
+    - [x] Verified back-translation
+    - [ ] Define the meta program as described in extended abstract
+    - [ ] Admit free
+    - [ ] Compiler correctness?
+
+#### Other TODOs:
 - [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
 - [ ] [Makefile](./stlc/Makefile) fails with weird error
 
