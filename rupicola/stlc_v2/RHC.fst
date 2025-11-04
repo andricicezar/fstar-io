@@ -44,8 +44,9 @@ type wholeS = bool // CA: To be able to compile whole programs requires a proof 
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
-assume type behS_t
-assume val behS : wholeS -> behS_t
+type behS_t = bool
+val behS : wholeS -> behS_t
+let behS ws = ws
 
 (** Target **)
 // right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
@@ -70,20 +71,6 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
   let wt = EApp pt e in
   wt
 
-assume type behT_t
-assume val behT : wt:wholeT -> behT_t
-assume val rel_behs : behS_t -> behT_t -> Type0
-
-// will cause universe problems
-let rec typ_to_fstar (t:typ) : Type =
-  match t with
-  | TUnit -> unit
-  | TBool -> bool
-  | TArr t1 t2 -> (typ_to_fstar t1) -> (typ_to_fstar t2)
-  | TPair t1 t2 -> (typ_to_fstar t1) * (typ_to_fstar t2)
-
-// keep this as typsr to avoid typ_to_fstar
-// change typing to be over rrtype_to_ttype t - so typ
 let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
@@ -122,13 +109,21 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) 
     let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
     snd #(get_Type t1) #(get_Type t2) v
 
+type behT_t = closed_exp
+val behT : wt:wholeT -> behT_t
+let behT wt = wt
+
+val rel_behs : behS_t -> behT_t -> Type0
+let rel_behs (bs:behS_t) (bt:behT_t) =
+  forall (e':closed_exp). steps bt e' /\ irred e' ==> my_rel_bool bs e'
+
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
   exp_to_fstar empty e (comp_int i).ct h fs_empty
 
 (** CA: I suppose these two lemmas are the most hard core **)
-assume val lem_rel_beh (fs_e: wholeS) (e:wholeT) :
+assume val lem_rel_beh (fs_e:wholeS) (e:wholeT) :
   Lemma
     (requires tbool ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
     (ensures  (behS fs_e) `rel_behs` (behT e))
