@@ -20,7 +20,7 @@ type trace_property (#event_typ:Type) = trace #event_typ -> Type0
 
 let subset_of (#event_typ:Type) (s1:trace_property #event_typ) (s2:trace_property #event_typ) : Type0 =
   forall tr. s1 tr ==> s2 tr
-  
+
 let member_of (#event_typ:Type) (tr:trace #event_typ) (s1:trace_property #event_typ) =
   s1 tr
 
@@ -85,9 +85,38 @@ let rrhc (comp:compiler) : Type0 =
         forall (ps:comp.source.pprog i).
           comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
 
+let rrhc_bt
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  : Type0 =
+  forall (i:comp.source.interface).
+    forall (ps:comp.source.pprog i).
+      forall (ct:comp.target.ctx (comp.comp_int i)).
+        comp.source.beh (ps `comp.source.link #i` (bt ct)) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+
+let rrhc_bt_rrhc
+  (comp:compiler)
+  (bt:(#i:comp.source.interface -> comp.target.ctx (comp.comp_int i) -> comp.source.ctx i))
+  : Lemma
+    (requires (rrhc_bt comp bt))
+    (ensures (rrhc comp)) =
+  introduce forall (i:comp.source.interface) (ct:comp.target.ctx (comp.comp_int i)).
+      exists (cs:comp.source.ctx i).
+        forall (ps:comp.source.pprog i).
+          comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct)
+  with begin
+    introduce exists (cs:comp.source.ctx i).
+      (forall (ps:comp.source.pprog i).
+        comp.source.beh (ps `comp.source.link #i` cs) `comp.rel_traces` comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` ct))
+    with (bt #i ct) and begin
+      ()
+    end
+  end;
+  assert (rrhc comp) by (norm [delta_only [`%rrhc]]; assumption ())
+
+
 let scc (comp:compiler) (compile_ctx:(#i:_ -> comp.source.ctx i -> comp.target.ctx (comp.comp_int i))) ((⊆):trace_property #comp.target.event_typ -> trace_property #comp.source.event_typ -> Type0): Type0 =
   forall (i:comp.source.interface).
     forall (cs:comp.source.ctx i).
       forall (ps:comp.source.pprog i).
         comp.target.beh (comp.compile_pprog #i ps `comp.target.link #(comp.comp_int i)` compile_ctx #i cs) ⊆ comp.source.beh (ps `comp.source.link #i` cs)
-  
