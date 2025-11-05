@@ -8,33 +8,15 @@ open TypRel
 open ExpRel
 open Compiler
 
-let my_rel_bool (fs_e:bool) (e:exp) : Type0 =
-  (e == ETrue /\ fs_e == true) \/
-  (e == EFalse /\ fs_e == false)
-
-let lem_rel_beh' (fs_e: bool) (e:closed_exp) :
-  Lemma
-    (requires tbool ⦂ (fs_e, e))
-    (**     vvv To have an existential here one needs normalization **)
-    (ensures forall (e':closed_exp). steps e e' /\ irred e' ==>  my_rel_bool fs_e e')
-= ()
-
-assume val lem_rel_beh_arr (fs_e: bool -> bool) (e:closed_exp) :
-  Lemma
-    (requires (mk_arrow tbool tbool) ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
-    (ensures (forall fs_v (v:value). my_rel_bool fs_v v ==>
-      (forall (e':closed_exp). steps (EApp e v) e' /\ irred e' ==>
-        my_rel_bool (fs_e fs_v) e')))
-
 noeq type intS = {
-  ct : Type; // type of context 
+  ct : Type; // type of context
   comp_ct : compile_typ ct; // compiled type of context, F* will crash if ct is not a type for which the compile_typ class has an instance
 }
 
 (* CA: this definition of progS is very comical! I have the compiled program inside the guarantee that it can be compiled :D **)
 // program parameterized by the type of the context
 // program is dependent pair type with:
-  // map from the type of context to bool (which represents output of the source program) 
+  // map from the type of context to bool (which represents output of the source program)
   // (proof of) compiled closed expression - where we pass in the type of ps (#_), the (proof of the) type of the compiled closed expression (#(compile_typ_arrow ...)), and ps
 type progS (i:intS) = ps:(i.ct -> bool) & compile_closed #_ #(compile_typ_arrow _ bool #i.comp_ct) ps
 type ctxS (i:intS) = i.ct
@@ -50,7 +32,7 @@ let behS ws = ws
 
 (** Target **)
 // right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
-// unverified code: target + target type (typ) 
+// unverified code: target + target type (typ)
 // but maybe current typing works? cause you cannot have pre post conditions
 // the type of target contexts restricts us to unverified code
 noeq type intT = { ct : typsr }
@@ -82,7 +64,7 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) 
     let v1 = exp_to_fstar g e2 t h2 fs_g in
     let v2 = exp_to_fstar g e3 t h3 fs_g in
     if b then v1 else v2
-  | EVar x -> get_v fs_g x 
+  | EVar x -> get_v fs_g x
   | ELam body ->
     let TyLam #_ #_ #t1 #t2 hbody = h in
     assert (t == (mk_arrow t1 t2));
@@ -109,27 +91,33 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) 
     let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
     snd #(get_Type t1) #(get_Type t2) v
 
-type behT_t = closed_exp
+let rel_bools (fs_e:bool) (e:exp) : Type0 =
+  (e == ETrue /\ fs_e == true) \/
+  (e == EFalse /\ fs_e == false)
+
+type behT_t = bool -> Type0
 val behT : wt:wholeT -> behT_t
-let behT wt = wt
+let behT wt = fun x ->
+(** vvv To have an existential here one needs normalization **)
+  forall (e':closed_exp). steps wt e' /\ irred e' ==>
+    rel_bools x e'
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
-  forall (e':closed_exp). steps bt e' /\ irred e' ==> my_rel_bool bs e'
+  bt bs
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
   exp_to_fstar empty e (comp_int i).ct h fs_empty
 
-(** CA: I suppose these two lemmas are the most hard core **)
-let lem_rel_beh (fs_e:wholeS) (e:wholeT) 
+let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires tbool ⦂ (fs_e, e)) (** here it is tbool because whole programs return booleans **)
+  (requires tbool ⦂ (fs_e, e))
   (ensures  (behS fs_e) `rel_behs` (behT e))
   = ()
-  
-val lem_exp_to_fstar g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma 
+
+val lem_exp_to_fstar g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma
 (equiv t (exp_to_fstar g e t h) e)
 let rec lem_exp_to_fstar g e t (h:typing g e t) =
    match e with
@@ -137,14 +125,14 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
   | ETrue -> equiv_true g
   | EFalse -> equiv_false g
   | EVar x -> equiv_var g x
-  | EPair e1 e2 -> 
+  | EPair e1 e2 ->
     let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
     lem_pair_fv_in_env g e1 e2;
     lem_exp_to_fstar g e1 t1 h1;
     lem_exp_to_fstar g e2 t2 h2;
     let fs_e1 = (exp_to_fstar g e1 t1 h1) in
     let fs_e2 = (exp_to_fstar g e2 t2 h2) in
-    equiv_pair g t1 t2 e1 e2 fs_e1 fs_e2 
+    equiv_pair g t1 t2 e1 e2 fs_e1 fs_e2
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
     lem_if_fv_in_env g e1 e2 e3;
@@ -180,14 +168,14 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     lem_lam_fv_in_env g body t1;
     lem_exp_to_fstar (extend t1 g) body t2 hbody;
     assert (equiv t2 (exp_to_fstar (extend t1 g) body t2 hbody) body);
-    assert (forall b (s:gsub (extend t1 g) b) (fsG:fs_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((exp_to_fstar (extend t1 g) body t2 hbody) fsG, gsubst s body)); 
+    assert (forall b (s:gsub (extend t1 g) b) (fsG:fs_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((exp_to_fstar (extend t1 g) body t2 hbody) fsG, gsubst s body));
     let g' = extend t1 g in
     introduce forall b (s:gsub g b) (fsG:fs_env g). fsG ∽ s ==> (mk_arrow t1 t2) ⦂ ((fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fsG x)), gsubst s (ELam body)) with
       begin
-      let f : (get_Type t1) -> (get_Type t2) = (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fsG x)) in 
+      let f : (get_Type t1) -> (get_Type t2) = (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fsG x)) in
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      introduce  fsG ∽ s ==> (mk_arrow t1 t2) ⦂ (f, ELam body') with _. 
+      introduce  fsG ∽ s ==> (mk_arrow t1 t2) ⦂ (f, ELam body') with _.
         begin
         introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (mk_arrow t1 t2) ∋ (f, e') with
           begin
@@ -197,7 +185,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
             lem_steps_irred_e_irred_e'_implies_e_e' (ELam body') e';
             assert ((ELam body') == e');
             let RArr #s1 #s2 r1 r2 = get_rel (mk_arrow t1 t2) in
-            introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with 
+            introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with
               begin
               introduce  t1 ∋ (fs_v, v) ==> _ with _.
                 begin
@@ -209,7 +197,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
               end;
               assert ((mk_arrow t1 t2) ∋ (f, gsubst s (ELam body)));
               lem_values_are_expressions (mk_arrow t1 t2) f (gsubst s (ELam body));
-              assert ((mk_arrow t1 t2) ⦂ (f, gsubst s (ELam body))) 
+              assert ((mk_arrow t1 t2) ⦂ (f, gsubst s (ELam body)))
             end
           end
         end
@@ -266,4 +254,3 @@ let proof_rhc i ps : Lemma (rhc_1 #i ps) =
     assume (behT (EApp pt e) == behT (subst_beta e (ELam?.b pt))); (** simple to prove **)
     ()
   end
-
