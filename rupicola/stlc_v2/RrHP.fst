@@ -1,4 +1,4 @@
-module RHC
+module RrHP
 
 open FStar.Tactics
 open FStar.Tactics.Typeclasses

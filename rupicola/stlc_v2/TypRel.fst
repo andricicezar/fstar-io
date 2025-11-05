@@ -1,5 +1,3 @@
-(** Syntactic representation of F* types that we can compile. **)
-
 module TypRel
 
 open FStar.Tactics
@@ -29,6 +27,13 @@ let test_match s (r:rtyp s) = (** why does this work so well? **)
   | RBool -> assert (s == bool)
   | RArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
   | RPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
+
+let rec rtype_to_ttype s (r:rtyp s) : typ =
+  match r with
+  | RUnit -> TUnit
+  | RBool -> TBool
+  | RArr #s1 #s2 rs1 rs2 -> TArr (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
+  | RPair #s1 #s2 rs1 rs2 -> TPair (rtype_to_ttype s1 rs1) (rtype_to_ttype s2 rs2)
 
 type typsr =
   s:Type & rtyp s
@@ -62,6 +67,12 @@ let lem_no_fv_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
+let lem_closed_is_no_fv (e:exp) : Lemma
+  (requires is_closed e)
+  (ensures fv_in_env empty e)
+  [SMTPat (is_closed e)] = 
+  ()
+
 let lem_fv_in_env_lam (g:env) (t:typsr) (body:exp) :
   Lemma
     (requires fv_in_env (extend t g) body)
@@ -72,15 +83,45 @@ let lem_fv_in_env_app (g:env) (e1 e2:exp) :
     (requires fv_in_env g e1 /\ fv_in_env g e2)
     (ensures  fv_in_env g (EApp e1 e2)) = admit ()
 
+let lem_app_fv_in_env (g:env) (e1 e2:exp) :
+  Lemma
+    (requires fv_in_env g (EApp e1 e2))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
+
 let lem_fv_in_env_if (g:env) (e1 e2 e3:exp) :
   Lemma
     (requires fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3)
     (ensures  fv_in_env g (EIf e1 e2 e3)) = admit ()
 
+let lem_if_fv_in_env (g:env) (e1 e2 e3:exp) :
+  Lemma
+    (requires fv_in_env g (EIf e1 e2 e3))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) = admit ()
+
 let lem_fv_in_env_pair (g:env) (e1 e2:exp) :
   Lemma
     (requires fv_in_env g e1 /\ fv_in_env g e2)
     (ensures  fv_in_env g (EPair e1 e2)) = admit ()
+
+let lem_pair_fv_in_env (g:env) (e1 e2:exp) :
+  Lemma 
+    (requires fv_in_env g (EPair e1 e2))
+    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
+
+let lem_fst_fv_in_env (g:env) (e:exp) : // this only makes sense because of how we defined free_vars_indx 
+  Lemma
+    (requires fv_in_env g (EFst e))
+    (ensures fv_in_env g e) = admit ()
+
+let lem_snd_fv_in_env (g:env) (e:exp) :
+  Lemma 
+    (requires fv_in_env g (ESnd e))
+    (ensures fv_in_env g e) = admit ()
+
+let lem_lam_fv_in_env (g:env) (body:exp) (t1:typsr) :
+  Lemma
+    (requires fv_in_env g (ELam body))
+    (ensures fv_in_env (extend t1 g) body) = admit ()
 
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)

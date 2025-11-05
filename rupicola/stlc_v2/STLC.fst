@@ -6,6 +6,12 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
+type typ =
+  | TUnit  : typ 
+  | TBool  : typ 
+  | TArr   : typ -> typ -> typ
+  | TPair  : typ -> typ -> typ
+
 let var = nat
 type exp =
   | EUnit  : exp
@@ -301,6 +307,10 @@ type steps : closed_exp -> closed_exp -> Type =
            steps (Some?.v (step e0)) e2 ->
            steps e0 e2
 
+let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) : Lemma
+  (requires steps e e')
+  (ensures e == e') = admit ()
+
 let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
   FStar.Squash.return_squash (SRefl e)
 
@@ -332,6 +342,13 @@ let rec destruct_steps_eapp
     are irreducible.
   **)
   admit ()
+
+(*let lem_destruct_steps_eapp
+  (e1 e2:closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (EApp e1 e2) e' /\ irred e1 /\ irred e2))
+        (ensures ((
+*)
 
 let rec destruct_steps_eif
   (e1:closed_exp)
@@ -375,6 +392,12 @@ let rec destruct_steps_epair
       EPair e1 e2 -->* EPair e1' e2' == e'
   **)
   admit ()
+
+let lem_destruct_steps_epair 
+  (e1' e2':closed_exp)
+  (e':closed_exp) :
+  Lemma (requires (steps (EPair e1' e2') e' /\ irred e1' /\ irred e2'))
+        (ensures ((EPair e1' e2') == e')) = admit () 
 
 let rec destruct_steps_epair_fst
   (e12:closed_exp)
