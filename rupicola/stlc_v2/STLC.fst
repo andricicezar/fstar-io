@@ -317,25 +317,57 @@ let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
 let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'
 
+(* We need syntactic types for this, or at least the top-level shape of types *)
+let sem_value_shape (t:typsr) (e : closed_exp) : Tot Type0 =
+  match get_rel t with
+  | RUnit -> e == EUnit
+  | RBool -> e == ETrue \/ e == EFalse
+  | RArr #s1 #s2 r1 r2 -> ELam? e
+  | RPair #s1 #s2 r1 r2 -> EPair? e
+
+let sem_expr_shape (t:typsr) (e:closed_exp) : Tot Type0 =
+  forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'
+
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
   (e1:closed_exp)
   (e2:closed_exp)
   (e':closed_exp)
   (st:steps (EApp e1 e2) e') :
-  Pure (exp * value)
-    (requires irred e') (** CA: not sure if necessary **)
+  Pure (exp * value) (** CH: may need classical axioms from Ghost *)
+    (requires irred e' /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
+      (* safe e1 /\ -- CH: new, but not enough, I think we actually need it semantically has an arrow type;
+                           currently not needed by the way our beta step currently works *)
+      sem_value_shape (RArr #s1 #s2 r1 r2) e1)
+      (* safe e2    -- CH: new; currently not needed *)
     (ensures fun (e11, e2') ->
       is_closed (ELam e11) /\
       steps e1 (ELam e11) /\
       steps e2 e2' /\
+      (* is_value e2' /\ -- CH: new; currently not needed *)
       steps (EApp e1 e2) (subst_beta e2' e11) /\
       steps (subst_beta e2' e11) e')
     (decreases st)
   =
+(* By induction on st.
+   Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
+     We case analyze if e1 can step, if it does contradiction, so e1 irreducible.
+       By sem_value_shape ELam? e1 .
+     We case analyze if e2 can step, if it does contradiction, so e2 irreducible.
+       (By safe e2 is_value e2; but not needed by step)
+       So e = EApp (ELam _) e2 -> subst ..., contradiction.
+   Case st = STrans .... We know (EApp e1 e2) -> e'' /\ e'' ->* e'
+     We case analyze if e1 can step.
+     Subcase e1 -> e1'. We know e'' = EApp e1' e2, so (EApp e1' e2) ->* e'.
+       By IH we almost conclude, plus e1 -> e1' ->* (ELam e11) by STrans
+     Subcase irred e1. From safe e1 we get is_value e1, and from sem_value_shape we get ELam? e1.
+       We case analyze if e2 can step.
+       Subsubcase e2 -> e2'. Similar to above, we use IH.
+       Subsubcase irred e2. (From safe e2 we get is_value e2; but not needed by step.)
+         So e = EApp (ELam e11) e2 -> subst_beta e2 e11 = e''. Return e11 e2. *)
   (**
     How the steps look like:
-      EApp e1 e2 -->* EApp (ELam t1 e11) e2' --> subst_beta t1 e2' e11 -->* e'
+      EApp e1 e2 -->* EApp (ELam e11) e2 ->* EApp (ELam e11) e2' --> subst_beta e2' e11 -->* e'
 
     The function should destruct steps until it is again in EApp.
     Based on the definition of step function, it should imply that (ELam t1 e11) and e2'
