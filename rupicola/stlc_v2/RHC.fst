@@ -53,6 +53,32 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
   let wt = EApp pt e in
   wt
 
+let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
+  (dsnd ps).e
+
+let rel_bools (fs_e:bool) (e:exp) : Type0 =
+  (e == ETrue /\ fs_e == true) \/
+  (e == EFalse /\ fs_e == false)
+
+type behT_t = bool -> Type0
+val behT : wt:wholeT -> behT_t
+let behT wt = fun x ->
+(** vvv To have an existential here one needs normalization **)
+  forall (e':closed_exp). steps wt e' /\ irred e' ==>
+    rel_bools x e'
+
+val rel_behs : behS_t -> behT_t -> Type0
+let rel_behs (bs:behS_t) (bt:behT_t) =
+  bt bs
+
+let lem_rel_beh (fs_e:wholeS) (e:wholeT)
+  : Lemma
+  (requires tbool ⦂ (fs_e, e))
+  (ensures  (behS fs_e) `rel_behs` (behT e))
+  = ()
+
+(** ** Proof of RrHP **)
+
 let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
@@ -91,31 +117,10 @@ let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) 
     let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
     snd #(get_Type t1) #(get_Type t2) v
 
-let rel_bools (fs_e:bool) (e:exp) : Type0 =
-  (e == ETrue /\ fs_e == true) \/
-  (e == EFalse /\ fs_e == false)
-
-type behT_t = bool -> Type0
-val behT : wt:wholeT -> behT_t
-let behT wt = fun x ->
-(** vvv To have an existential here one needs normalization **)
-  forall (e':closed_exp). steps wt e' /\ irred e' ==>
-    rel_bools x e'
-
-val rel_behs : behS_t -> behT_t -> Type0
-let rel_behs (bs:behS_t) (bt:behT_t) =
-  bt bs
-
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
   exp_to_fstar empty e (comp_int i).ct h fs_empty
-
-let lem_rel_beh (fs_e:wholeS) (e:wholeT)
-  : Lemma
-  (requires tbool ⦂ (fs_e, e))
-  (ensures  (behS fs_e) `rel_behs` (behT e))
-  = ()
 
 val lem_exp_to_fstar g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma
 (equiv t (exp_to_fstar g e t h) e)
@@ -217,18 +222,11 @@ let lem_bt_ctx i ct =
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
   ()
 
-let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
-  (dsnd ps).e
-
-(** The order of the quantifiers makes this RHC (Robust Hyperproperty Preservation) **)
-let rhc (#i:intS) (ps:progS i) =
-  forall (ct:ctxT (comp_int i)).
-    exists (cs:ctxS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
-
-let rhc_1 (#i:intS) (ps:progS i) =
+(** This variant implies RrHP **)
+let rrhp_1 (#i:intS) (ps:progS i) =
   forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct)
 
-let proof_rhc i ps : Lemma (rhc_1 #i ps) =
+let proof_rrhp_1 i ps : Lemma (rrhp_1 #i ps) =
   introduce forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct) with begin
     let t : typsr = pack (i.comp_ct) in
     let pt : exp = (dsnd ps).e in
