@@ -193,7 +193,7 @@ let test_if2
 
 let test_negb_pred
   : closed_exp_quotation ((QBool ^-> QBool) ^-> QBool ^-> QBool) negb_pred
-  = QLambda (QLambda (QIf (QApp QVar1 (QVar0 #_ #_ #QBool)) QFalse QTrue))
+  = QLambda (QLambda (QIf (QApp QVar1 (QVar0 #_ #_ #QBool)) QFalse QTrue)) // TODO: why does one have to pass QBool?
 
 let test_callback_return
   : closed_exp_quotation (QBool ^-> (QBool ^-> QBool)) callback_return

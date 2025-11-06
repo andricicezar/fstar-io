@@ -2,6 +2,7 @@
 
 #### The predicate for quotation
 - [x] STLC with units and booleans
+  - [ ] In HO cases, unification seems to not work as well as expected. See: `callback_return` and `callback_return'`
 - [ ] Refinements
     - [ ] computes a WP that has to be separately proven. it will be nice to not have to compute it, but I think that is a futile exercise. We should look for how to prove it automatically. The good new is that we are not worse than Related Work: CakeML has the same problem. Œuf uses translation validation to verify quotation. Others trust quotation. 
     - [ ] F* has problems computing the WP. It adds an "invisible" guard that is hard to debug: https://github.com/andricicezar/fstar-io/blob/master/rupicola/refinements2/CompilableWP2.fst#L396
