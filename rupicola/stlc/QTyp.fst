@@ -8,7 +8,9 @@ open STLC
 
 (** We define quotation for Type **)
 
-(** Cezar: why do we need quotation for types? **)
+(** Cezar: why do we need quotation for types?
+      We use it to define the logical relation.
+**)
 noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit

@@ -247,7 +247,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
             lem_value_is_irred (ELam body');
             lem_steps_irred_e_irred_e'_implies_e_e' (ELam body') e';
             assert ((ELam body') == e');
-            let RArr #s1 #s2 r1 r2 = get_rel (mk_arrow t1 t2) in
+            let QArr #s1 #s2 r1 r2 = get_rel (mk_arrow t1 t2) in
             introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with
               begin
               introduce  t1 ∋ (fs_v, v) ==> _ with _.

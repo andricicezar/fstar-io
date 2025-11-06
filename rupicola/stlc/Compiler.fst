@@ -6,35 +6,35 @@ open FStar.Calc
 open FStar.List.Tot
 
 open STLC
-open TypRel
+open QTyp
 open ExpRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] r : rtyp s;
+  [@@@no_method] r : type_quotation s;
 }
 
-instance compile_typ_unit : compile_typ unit = { r = RUnit }
-instance compile_typ_bool : compile_typ bool = { r = RBool }
+instance compile_typ_unit : compile_typ unit = { r = QUnit }
+instance compile_typ_bool : compile_typ bool = { r = QBool }
 instance compile_typ_arrow
   (s1:Type)
   (s2:Type)
   {| c1:compile_typ s1 |}
   {| c2:compile_typ s2 |} :
-  compile_typ (s1 -> s2) = { r = RArr c1.r c2.r }
-instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = RPair c1.r c2.r }
+  compile_typ (s1 -> s2) = { r = QArr c1.r c2.r }
+instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = QPair c1.r c2.r }
 
-let pack #s (c:compile_typ s) : typsr = (| s, c.r |)
+let pack #s (c:compile_typ s) : qType = (| s, c.r |)
 
 // Some tests
 
 let test0 : compile_typ (unit) = solve
-let _ = assert (test0.r == RUnit)
+let _ = assert (test0.r == QUnit)
 
 let test1 : compile_typ (bool -> unit) = solve
-let _ = assert (test1.r == (RArr RBool RUnit))
+let _ = assert (test1.r == (QArr QBool QUnit))
 
 let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
-let _ = assert (test2.r == RArr (RArr RUnit RBool) (RArr RBool RUnit))
+let _ = assert (test2.r == QArr (QArr QUnit QBool) (QArr QBool QUnit))
 
 (** Compiling expressions **)
 class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
@@ -81,7 +81,7 @@ let test_false : compile_closed false = solve
 
 (** fs_hd' works better with typeclass resolution than fs_hd **)
 [@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
-val fs_hd' : #g:env -> #t:typsr -> fs_env (extend t g) -> a:Type{a == get_Type t} -> a
+val fs_hd' : #g:env -> #t:qType -> fs_env (extend t g) -> a:Type{a == get_Type t} -> a
 let fs_hd' #g fsG a =
   fs_hd #g fsG
 
@@ -102,7 +102,7 @@ let test1_var : compile_exp (extend tunit empty) (fun fsG -> fs_hd' fsG unit) = 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (g:env)
   (a:Type) {| ca:compile_typ a |}
-  (t:typsr)
+  (t:qType)
   : compile_exp (extend t (extend (pack ca) g)) (fun fsG -> fs_hd' (fs_tail fsG) a) = {
     e = EVar 1;
     equiv_proof = (fun () -> admit ()
@@ -115,7 +115,7 @@ instance compile_exp_var_shrink1 (** CA: how to make this general? **)
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
   (a:Type) {| ca:compile_typ a |}
-  (t1 t2:typsr)
+  (t1 t2:qType)
   (g:env)
   : compile_exp (extend t1 (extend t2 (extend (pack ca) g))) (fun fsG -> fs_hd' (fs_tail (fs_tail fsG)) a) = {
     e = EVar 2;
