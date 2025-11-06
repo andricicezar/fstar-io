@@ -26,6 +26,9 @@ type type_quotation : Type0 -> Type u#1 =
           type_quotation s2 ->
           type_quotation (s1 & s2)
 
+let (^->) #s1 #s2 = QArr #s1 #s2
+let (^*) #s1 #s2 = QPair #s1 #s2
+
 let test_match s (r:type_quotation s) = (** why does this work so well? **)
   match r with
   | QUnit -> assert (s == unit)
@@ -48,10 +51,10 @@ let get_Type (t:qType) = t._1
 let get_rel (t:qType) = t._2
 
 let mk_arrow (t1 t2:qType) : qType =
-  (| _, QArr (get_rel t1) (get_rel t2) |)
+  (| _, (get_rel t1) ^-> (get_rel t2) |)
 
 let mk_pair (t1 t2:qType) : qType =
-  (| _, QPair (get_rel t1) (get_rel t2) |)
+  (| _, (get_rel t1) ^* (get_rel t2) |)
 
 (** typ_env is a typing environment: variables to Quotable Types **)
 type env = var -> option qType
