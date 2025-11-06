@@ -5,17 +5,17 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
-open TypRel
+open QTyp
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
-let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
+let rec (∋) (t:qType) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
   let fs_v = fst p in
   let e = snd p in
   match get_rel t with // way to "match" on F* types
-  | RUnit -> fs_v == () /\ e == EUnit
-  | RBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
-  | RArr #s1 #s2 r1 r2 -> begin
+  | QUnit -> fs_v == () /\ e == EUnit
+  | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QArr #s1 #s2 r1 r2 -> begin
     let fs_f : s1 -> s2 = fs_v in
     match e with
     | ELam e' ->
@@ -23,13 +23,13 @@ let rec (∋) (t:typsr) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
         (| s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
-  | RPair #s1 #s2 r1 r2 -> begin
+  | QPair #s1 #s2 r1 r2 -> begin
     match e with
     | EPair e1 e2 ->
       (| s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
-and (⦂) (t:typsr) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+and (⦂) (t:qType) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let fs_e = fst p in
   let e = snd p in
   forall (e':closed_exp). steps e e' ==> irred e' ==> t ∋ (fs_e, e')
@@ -43,15 +43,15 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
         (ensures is_value e)
         (decreases e) =
   match get_rel t with
-  | RUnit -> ()
-  | RBool -> ()
-  | RArr #s1 #s2 r1 r2 -> ()
-  | RPair #s1 #s2 r1 r2 ->
+  | QUnit -> ()
+  | QBool -> ()
+  | QArr #s1 #s2 r1 r2 -> ()
+  | QPair #s1 #s2 r1 r2 ->
     let EPair e1 e2 = e in
     lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1;
     lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2
 
-let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
+let safety (t:qType) (fs_e:get_Type t) (e:closed_exp) : Lemma
   (requires t ⦂ (fs_e, e))
   (ensures safe e) =
   introduce forall e'. steps e e' ==> is_value e' \/ can_step e' with begin
@@ -82,9 +82,9 @@ let safety (t:typsr) (fs_e:get_Type t) (e:closed_exp) : Lemma
 
 val fs_env (g:env) : Type u#0
 val fs_empty : fs_env empty
-val fs_stack : #g:env -> fsG:fs_env g -> #t:typsr -> get_Type t -> fs_env (extend t g)
-val fs_hd : #g:env -> #t:typsr -> fs_env (extend t g) -> get_Type t
-val fs_tail : #t:typsr -> #g:env -> fs_env (extend t g) -> fs_env g
+val fs_stack : #g:env -> fsG:fs_env g -> #t:qType -> get_Type t -> fs_env (extend t g)
+val fs_hd : #g:env -> #t:qType -> fs_env (extend t g) -> get_Type t
+val fs_tail : #t:qType -> #g:env -> fs_env (extend t g) -> fs_env g
 
 (** It would be nice to get rid of this, but not sure how **)
 val get_v : #g:env -> fs_env g -> x:var{Some? (g x)} -> get_Type (Some?.v (g x))
@@ -112,27 +112,27 @@ let (∽) (#g:env) #b (fsG:fs_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (get_v fsG x, s x)
 
-type fs_oexp (g:env) (t:typsr) =
+type fs_oexp (g:env) (t:qType) =
   fs_env g -> get_Type t
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:env) (t:typsr) (fs_e:fs_oexp g t) (e:exp) : Type0 =
+let equiv (#g:env) (t:qType) (fs_e:fs_oexp g t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fsG:fs_env g).
     fsG ∽ s ==>  t ⦂ (fs_e fsG, gsubst s e)
 
-let (≈) (#g:env) (#t:typsr) (fs_v:fs_oexp g t) (e:exp) : Type0 =
+let (≈) (#g:env) (#t:qType) (fs_v:fs_oexp g t) (e:exp) : Type0 =
   equiv #g t fs_v e
 
 (** Equiv closed terms **)
-let equiv_closed_terms (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
+let equiv_closed_terms (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
   Lemma (requires equiv #empty t (fun _ -> fs_e) e)
         (ensures  t ⦂ (fs_e, e)) =
   eliminate forall b (s:gsub empty b) (fsG:fs_env empty).
     fsG ∽ s ==>  t ⦂ ((fun _ -> fs_e) fsG, gsubst s e) with true gsub_empty fs_empty
 
-let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) :
+let lem_equiv_exp_are_equiv (g:env) (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
   Lemma (requires t ⦂ (fs_e, e))
         (ensures  equiv #empty t (fun _ -> fs_e) e) =
   introduce forall b (s:gsub empty b) (fsG:fs_env empty).
@@ -142,15 +142,15 @@ let lem_equiv_exp_are_equiv (g:env) (#t:typsr) (fs_e:get_Type t) (e:closed_exp) 
 
 (** Rules **)
 
-let tunit : typsr =
-  (| _, RUnit |)
+let tunit : qType =
+  (| _, QUnit |)
 
 let equiv_unit g
   : Lemma ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit)
   = assert ((fun (_:fs_env g) -> ()) `equiv tunit` EUnit) by (explode ())
 
-let tbool : typsr =
-  (| _, RBool |)
+let tbool : qType =
+  (| _, QBool |)
 
 let equiv_true g
   : Lemma ((fun (_:fs_env g) -> true) `equiv tbool` ETrue)
@@ -170,7 +170,7 @@ let equiv_var g (x:var{Some? (g x)})
     end
   end
 
-let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_oexp g (mk_arrow t1 t2)) : Lemma
+let equiv_lam g (t1:qType) (body:exp) (t2:qType) (f:fs_oexp g (mk_arrow t1 t2)) : Lemma
   (requires (fun (fsG:fs_env (extend t1 g)) -> f (fs_tail #t1 fsG) (fs_hd fsG)) ≈ body)
   (ensures f ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
@@ -202,7 +202,7 @@ let equiv_lam g (t1:typsr) (body:exp) (t2:typsr) (f:fs_oexp g (mk_arrow t1 t2)) 
   end
 
 let equiv_app g
-  (t1:typsr) (t2:typsr)
+  (t1:qType) (t2:qType)
   (e1:exp) (e2:exp)
   (fs_e1:fs_oexp g (mk_arrow t1 t2)) (fs_e2:fs_oexp g t1) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
@@ -238,7 +238,7 @@ let equiv_app g
     end
   end
 
-let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) : Lemma
+let equiv_if g (t:qType) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) ≈ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
@@ -262,7 +262,7 @@ let equiv_if g (t:typsr) (e1:exp) (e2:exp) (e3:exp) (fs_e1:fs_oexp g tbool) (fs_
     end
   end
 
-let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) : Lemma
+let equiv_pair g (t1 t2:qType) (e1:exp) (e2:exp) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
   (ensures (fun fsG -> (fs_e1 fsG, fs_e2 fsG)) `equiv (mk_pair t1 t2)` EPair e1 e2) =
   lem_fv_in_env_pair g e1 e2;
@@ -290,7 +290,7 @@ let equiv_pair g (t1 t2:typsr) (e1:exp) (e2:exp) (fs_e1:fs_oexp g t1) (fs_e2:fs_
     end
   end
 
-let equiv_pair_fst_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
+let equiv_pair_fst_app g (t1 t2:qType) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
   (ensures (fun fsG -> fst (fs_e12 fsG)) `equiv t1` (EFst e12)) =
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t1 ⦂ (fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
@@ -317,7 +317,7 @@ let equiv_pair_fst_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t
     end
   end
 
-let equiv_pair_fst g (t1 t2:typsr) : Lemma
+let equiv_pair_fst g (t1 t2:qType) : Lemma
   (requires True)
   (ensures (fun _ -> fst #(get_Type t1) #(get_Type t2)) `equiv #g (mk_arrow (mk_pair t1 t2) t1)` (ELam (EFst (EVar 0)))) =
   let tp = mk_pair t1 t2 in
@@ -351,7 +351,7 @@ let equiv_pair_fst g (t1 t2:typsr) : Lemma
     assert (t ⦂ (fs_e, e))
   end
 
-let equiv_pair_snd_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
+let equiv_pair_snd_app g (t1 t2:qType) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t2)) : Lemma
   (requires fs_e12 `equiv (mk_pair t1 t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
   (ensures (fun fsG -> snd (fs_e12 fsG)) `equiv t2` (ESnd e12)) =
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t2 ⦂ (snd (fs_e12 fsG), gsubst s (ESnd e12)) with begin
@@ -378,7 +378,7 @@ let equiv_pair_snd_app g (t1 t2:typsr) (e12:exp) (fs_e12:fs_oexp g (mk_pair t1 t
     end
   end
 
-let equiv_pair_snd g (t1 t2:typsr) : Lemma
+let equiv_pair_snd g (t1 t2:qType) : Lemma
   (requires True)
   (ensures (fun _ -> snd #(get_Type t1) #(get_Type t2)) `equiv #g (mk_arrow (mk_pair t1 t2) t2)` (ELam (ESnd (EVar 0)))) =
   let tp = mk_pair t1 t2 in
@@ -411,60 +411,3 @@ let equiv_pair_snd g (t1 t2:typsr) : Lemma
     lem_values_are_expressions t fs_e e;
     assert (t ⦂ (fs_e, e))
   end
-
-// the environment is non-standard, more fancy
-// also over typsr instead of syntactic types (typ)
-noeq type typing : env -> exp -> typsr -> Type =
-  | TyUnit : #g:env ->
-             typing g EUnit tunit
-  | TyTrue : #g:env ->
-             typing g ETrue tbool
-  | TyFalse : #g:env ->
-              typing g EFalse tbool
-  | TyIf : #g:env ->
-           #e1:exp ->
-           #e2:exp ->
-           #e3:exp ->
-           #t:typsr ->
-           $h1:typing g e1 tbool ->
-           $h2:typing g e2 t ->
-           $h3:typing g e3 t ->
-             typing g (EIf e1 e2 e3) t
-  | TyVar : #g:env ->
-            x:var{Some? (g x)} ->
-              typing g (EVar x) (Some?.v (g x)) 
-  | TyLam : #g:env ->
-            #body:exp ->
-            #t1:typsr ->
-            #t2:typsr ->
-            $hbody:typing (extend t1 g) body t2 ->
-              typing g (ELam body) (mk_arrow t1 t2)
-  | TyApp : #g:env ->
-            #e1:exp ->
-            #e2:exp ->
-            #t1:typsr ->
-            #t2:typsr ->
-            $h1:typing g e1 (mk_arrow t1 t2) ->
-            $h2:typing g e2 t1 ->
-              typing g (EApp e1 e2) t2
-  | TyPair : #g:env ->
-            #e1:exp ->
-            #e2:exp ->
-            #t1:typsr ->
-            #t2:typsr ->
-            $h1:typing g e1 t1 ->
-            $h2:typing g e2 t2 ->
-              typing g (EPair e1 e2) (mk_pair t1 t2)
-  | TyFst : #g:env ->
-            #e:exp ->
-            #t1:typsr ->
-            #t2:typsr ->
-            $h1:typing g e (mk_pair t1 t2) ->
-              typing g (EFst e) t1
-  | TySnd : #g:env ->
-            #e:exp ->
-            #t1:typsr ->
-            #t2:typsr ->
-            $h1:typing g e (mk_pair t1 t2) ->
-              typing g (ESnd e) t2
-  

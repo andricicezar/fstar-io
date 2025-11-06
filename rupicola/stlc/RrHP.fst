@@ -4,9 +4,67 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open STLC
-open TypRel
+open QTyp
 open ExpRel
 open Compiler
+
+
+// the environment is non-standard, more fancy
+// also over qType instead of syntactic types (typ)
+noeq type typing : env -> exp -> qType -> Type =
+  | TyUnit : #g:env ->
+             typing g EUnit tunit
+  | TyTrue : #g:env ->
+             typing g ETrue tbool
+  | TyFalse : #g:env ->
+              typing g EFalse tbool
+  | TyIf : #g:env ->
+           #e1:exp ->
+           #e2:exp ->
+           #e3:exp ->
+           #t:qType ->
+           $h1:typing g e1 tbool ->
+           $h2:typing g e2 t ->
+           $h3:typing g e3 t ->
+             typing g (EIf e1 e2 e3) t
+  | TyVar : #g:env ->
+            x:var{Some? (g x)} ->
+              typing g (EVar x) (Some?.v (g x))
+  | TyLam : #g:env ->
+            #body:exp ->
+            #t1:qType ->
+            #t2:qType ->
+            $hbody:typing (extend t1 g) body t2 ->
+              typing g (ELam body) (mk_arrow t1 t2)
+  | TyApp : #g:env ->
+            #e1:exp ->
+            #e2:exp ->
+            #t1:qType ->
+            #t2:qType ->
+            $h1:typing g e1 (mk_arrow t1 t2) ->
+            $h2:typing g e2 t1 ->
+              typing g (EApp e1 e2) t2
+  | TyPair : #g:env ->
+            #e1:exp ->
+            #e2:exp ->
+            #t1:qType ->
+            #t2:qType ->
+            $h1:typing g e1 t1 ->
+            $h2:typing g e2 t2 ->
+              typing g (EPair e1 e2) (mk_pair t1 t2)
+  | TyFst : #g:env ->
+            #e:exp ->
+            #t1:qType ->
+            #t2:qType ->
+            $h1:typing g e (mk_pair t1 t2) ->
+              typing g (EFst e) t1
+  | TySnd : #g:env ->
+            #e:exp ->
+            #t1:qType ->
+            #t2:qType ->
+            $h1:typing g e (mk_pair t1 t2) ->
+              typing g (ESnd e) t2
+
 
 noeq type intS = {
   ct : Type; // type of context
@@ -35,7 +93,7 @@ let behS ws = ws
 // unverified code: target + target type (typ)
 // but maybe current typing works? cause you cannot have pre post conditions
 // the type of target contexts restricts us to unverified code
-noeq type intT = { ct : typsr }
+noeq type intT = { ct : qType }
 
 val comp_int : intS -> intT
 let comp_int i = { ct = pack i.comp_ct }
@@ -79,7 +137,7 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
 
 (** ** Proof of RrHP **)
 
-let rec exp_to_fstar (g:env) (e:exp) (t:typsr) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
+let rec exp_to_fstar (g:env) (e:exp) (t:qType) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
   | ETrue -> true
@@ -228,7 +286,7 @@ let rrhp_1 (#i:intS) (ps:progS i) =
 
 let proof_rrhp_1 i ps : Lemma (rrhp_1 #i ps) =
   introduce forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct) with begin
-    let t : typsr = pack (i.comp_ct) in
+    let t : qType = pack (i.comp_ct) in
     let pt : exp = (dsnd ps).e in
     let pt : progT (comp_int i) = pt in
     let ws : wholeS = (dfst ps) (backtranslate_ctx ct) in
