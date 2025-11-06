@@ -283,6 +283,7 @@ let rec step e =
   end
   | _ -> None
 
+
 let can_step (e:closed_exp) : Type0 =
   Some? (step e)
 
@@ -318,15 +319,23 @@ let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'
 
 (* We need syntactic types for this, or at least the top-level shape of types *)
-let sem_value_shape (t:typsr) (e : closed_exp) : Tot Type0 =
-  match get_rel t with
-  | RUnit -> e == EUnit
-  | RBool -> e == ETrue \/ e == EFalse
-  | RArr #s1 #s2 r1 r2 -> ELam? e
-  | RPair #s1 #s2 r1 r2 -> EPair? e
+(*let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
+  match t with
+  | TUnit -> e == EUnit
+  | TBool -> e == ETrue \/ e == EFalse
+  | TArr t1 t2 -> ELam? e
+  | TPair t1 t2 -> EPair? e
 
-let sem_expr_shape (t:typsr) (e:closed_exp) : Tot Type0 =
-  forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'
+let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
+  forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'*)
+
+let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
+  (requires 
+    ELam? e1 /\ 
+    safe e2 /\ 
+    (EApp e1 e2) == e')
+  (ensures ~(irred e')) = 
+  ()
 
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
@@ -338,7 +347,8 @@ let rec destruct_steps_eapp
     (requires irred e' /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
       (* safe e1 /\ -- CH: new, but not enough, I think we actually need it semantically has an arrow type;
                            currently not needed by the way our beta step currently works *)
-      sem_value_shape (RArr #s1 #s2 r1 r2) e1)
+      //sem_value_shape ( #s1 #s2 r1 r2) e1)
+      ELam? e1)
       (* safe e2    -- CH: new; currently not needed *)
     (ensures fun (e11, e2') ->
       is_closed (ELam e11) /\
@@ -349,6 +359,35 @@ let rec destruct_steps_eapp
       steps (subst_beta e2' e11) e')
     (decreases st)
   =
+  (*match st with
+  | SRefl e1 -> 
+    let impossible : False = srefl_impossible e1 e2 e' st in
+    false_elim impossible
+  | STrans #e0 #e2 s0 s2 ->
+    match step e1 with
+    | Some e1' -> 
+      assert (steps e1 e1');
+      let (EApp e1' e2)  = Some?.v (step (EApp e1 e2)) in
+      assert (steps (EApp e1 e2) (EApp e1' e2));
+      destruct_steps_eapp e1' e2 e' s2
+    | None -> 
+      match step e2 with
+      | Some e2' -> 
+        assert (steps e2 e2');
+        let (EApp e1 e2') = Some?.v (step (EApp e1 e2)) in
+        assert (steps (EApp e1 e2) (EApp e1 e2'));
+        destruct_steps_eapp e1 e2' e' s2
+      | None ->
+        assume (is_value e2);
+        match e1 with
+        | ELam e11 ->
+          assert (is_closed (ELam e11));
+          let final_result = Some?.v (step (EApp (ELam e11) e2)) in
+          assume (steps (EApp e1 e2) (subst_beta e2 e11));
+          assume (steps (subst_beta e2 e11) e');
+          (e11, e2)
+        | _ -> admit ()
+   *) 
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
      We case analyze if e1 can step, if it does contradiction, so e1 irreducible.
@@ -374,7 +413,6 @@ let rec destruct_steps_eapp
     are irreducible.
   **)
   admit ()
-
 (*let lem_destruct_steps_eapp
   (e1 e2:closed_exp)
   (e':closed_exp) :
@@ -404,26 +442,55 @@ let rec destruct_steps_eif
   **)
   admit ()
 
-
 let rec destruct_steps_epair
   (e1:closed_exp)
   (e2:closed_exp)
   (e':closed_exp)
   (st:steps (EPair e1 e2) e') :
   Pure (value * value)
-    (requires irred e') (** CA: not sure if necessary **)
-    (ensures fun (e1', e2')->
+    (requires 
+      irred e' /\ ///\
+      safe e1 /\
+      safe e2) (** CA: not sure if necessary **)
+    (ensures fun (e1', e2')-> 
       steps e1 e1' /\
       steps e2 e2' /\
       steps (EPair e1 e2) (EPair e1' e2') /\
-      steps (EPair e1' e2') e')
+      (EPair e1' e2') == e')
     (decreases st)
-  =
+  = match st with
+    | SRefl e -> (e1, e2)
+    | STrans #e0 #e2 s0 s2 ->
+      assume (e0 == (EPair e1 e2));
+      assume (e2 == e');
+      match step e1 with
+      | Some e1' ->
+        let (EPair e1' e2) = Some?.v (step (EPair e1 e2)) in
+        assume (safe e1');
+        let s2 : steps (EPair e1' e2) e' = s2 in
+        let s2 : steps (EPair e1' e2) (EPair (fst (destruct_steps_epair e1' e2 e' s2)) (snd (destruct_steps_epair e1' e2 e' s2))) = s2 in
+        let s2_fst : steps e1' (fst (destruct_steps_epair e1' e2 e' s2)) = admit () in
+        let _ : steps e1 (fst (destruct_steps_epair e1' e2 e' s2)) = STrans #e1 #(fst (destruct_steps_epair e1' e2 e' s2)) (FStar.Squash.return_squash #bool (Some? (step e1))) s2_fst in
+        assert (steps e1 (fst (destruct_steps_epair e1' e2 e' s2)));
+        assert (steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1' e2 e' s2)) (snd (destruct_steps_epair e1' e2 e' s2))));
+        destruct_steps_epair e1' e2 e' s2
+      | None -> 
+        match step e2 with
+        | Some e2' -> 
+          let (EPair e1 e2') = Some?.v (step (EPair e1 e2)) in
+          assume (safe e2');
+          let s2 : steps (EPair e1 e2') e' = s2 in
+          assume (steps e2 (snd (destruct_steps_epair e1 e2' e' s2)));
+          let _ : steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1 e2' e' s2)) (snd (destruct_steps_epair e1 e2' e' s2))) = s2 in
+          assert (steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1 e2' e' s2)) (snd (destruct_steps_epair e1 e2' e' s2))));
+          destruct_steps_epair e1 e2' e' s2
+        | None -> (e1, e2)
+
   (**
     How the steps look like:
       EPair e1 e2 -->* EPair e1' e2' == e'
   **)
-  admit ()
+ 
 
 let lem_destruct_steps_epair 
   (e1' e2':closed_exp)
