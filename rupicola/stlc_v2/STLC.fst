@@ -220,7 +220,7 @@ let rec lem_subst_freevars_closes_exp
 
 let subst_beta (v e:exp) :
   Pure closed_exp
-    (requires (is_closed (ELam e) /\ is_closed v))
+    (requires (is_closed (ELam e)) /\ is_closed v)
     (ensures (fun _ -> True)) =
   assume (free_vars_indx e 0 == [0]); (** should be provable **)
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
@@ -348,46 +348,41 @@ let rec destruct_steps_eapp
       (* safe e1 /\ -- CH: new, but not enough, I think we actually need it semantically has an arrow type;
                            currently not needed by the way our beta step currently works *)
       //sem_value_shape ( #s1 #s2 r1 r2) e1)
-      ELam? e1)
+      ELam? e1 /\
+      safe e2)
       (* safe e2    -- CH: new; currently not needed *)
     (ensures fun (e11, e2') ->
       is_closed (ELam e11) /\
       steps e1 (ELam e11) /\
-      steps e2 e2' /\
+      steps e2 e2') ///\
       (* is_value e2' /\ -- CH: new; currently not needed *)
-      steps (EApp e1 e2) (subst_beta e2' e11) /\
-      steps (subst_beta e2' e11) e')
+      //steps (EApp e1 e2) (subst_beta e2' e11) /\
+      //(subst_beta e2' e11) == e')
     (decreases st)
   =
-  (*match st with
+  match st with
   | SRefl e1 -> 
     let impossible : False = srefl_impossible e1 e2 e' st in
     false_elim impossible
   | STrans #e0 #e2 s0 s2 ->
-    match step e1 with
-    | Some e1' -> 
-      assert (steps e1 e1');
-      let (EApp e1' e2)  = Some?.v (step (EApp e1 e2)) in
-      assert (steps (EApp e1 e2) (EApp e1' e2));
-      destruct_steps_eapp e1' e2 e' s2
+    //match step e1 with
+    //| Some e1' ->
+    //  let (EApp e1' 
+    let (ELam e11) = e1 in
+    assert (is_closed (ELam e11));
+    let _ : steps e1 (ELam e11) = SRefl e1 in
+    match step e2 with
+    | Some e2' ->
+      let (EApp (ELam e11) e2') = Some?.v (step (EApp (ELam e11) e2)) in
+      assert (safe e2');
+      let s2 : steps (EApp (ELam e11) e2') e' = s2 in
+      let s2 : 
+      destruct_steps_eapp (ELam e11) e2' e' s2
     | None -> 
-      match step e2 with
-      | Some e2' -> 
-        assert (steps e2 e2');
-        let (EApp e1 e2') = Some?.v (step (EApp e1 e2)) in
-        assert (steps (EApp e1 e2) (EApp e1 e2'));
-        destruct_steps_eapp e1 e2' e' s2
-      | None ->
-        assume (is_value e2);
-        match e1 with
-        | ELam e11 ->
-          assert (is_closed (ELam e11));
-          let final_result = Some?.v (step (EApp (ELam e11) e2)) in
-          assume (steps (EApp e1 e2) (subst_beta e2 e11));
-          assume (steps (subst_beta e2 e11) e');
-          (e11, e2)
-        | _ -> admit ()
-   *) 
+      let subst = Some?.v (step (EApp (ELam e11) e2)) in
+      assert (subst == (subst_beta e2 e11));
+      assume (is_value e2);
+      (e11, e2)
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
      We case analyze if e1 can step, if it does contradiction, so e1 irreducible.
@@ -412,7 +407,7 @@ let rec destruct_steps_eapp
     Based on the definition of step function, it should imply that (ELam t1 e11) and e2'
     are irreducible.
   **)
-  admit ()
+  
 (*let lem_destruct_steps_eapp
   (e1 e2:closed_exp)
   (e':closed_exp) :
