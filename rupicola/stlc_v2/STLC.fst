@@ -336,8 +336,6 @@ let lem_steps_transitive (e1 e2 e3:closed_exp) :
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
 
-
-
 let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) : Lemma
   (requires steps e e')
   (ensures e == e') = admit ()
@@ -374,13 +372,30 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
 let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
   forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'
 
-let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
+let lem_sem_expr_shape_and_steps_implies_sem_expr_shape (e e':closed_exp) (t:typ) :
+  Lemma
+    (requires (sem_expr_shape t e) /\ (steps e e'))
+    (ensures (sem_expr_shape t e')) = admit ()
+ (* introduce forall e_f. steps e' e_f /\ irred e_f ==> sem_value_shape t e_f with
+    begin
+    introduce steps e' e_f /\ irred_ef ==> sem_value_shape t e_f with h.
+      begin
+      bind_squash #(steps e' e_f) () (fun st_f ->
+      match st_f with
+      | SRefl e' -> ()
+      | STrans e'_can_step st_f' -> )
+      end
+    end*)
+
+let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') (t:typ) : Lemma
   (requires
-    ELam? e1 /\
+    safe e1 /\
     safe e2 /\
-    (EApp e1 e2) == e')
-  (ensures ~(irred e')) =
-  ()
+    sem_expr_shape t e1)
+  (ensures ~(irred e')) = admit ()
+
+assume val t1 : typ
+assume val t2 : typ
 
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
@@ -390,10 +405,9 @@ let rec destruct_steps_eapp
   (st:steps (EApp e1 e2) e') :
   Pure (exp * value) (** CH: may need classical axioms from Ghost *)
     (requires irred e' /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
-      (* safe e1 /\ -- CH: new, but not enough, I think we actually need it semantically has an arrow type;
+      safe e1 /\ (*-- CH: new, but not enough, I think we actually need it semantically has an arrow type;
                            currently not needed by the way our beta step currently works *)
-      //sem_expr_shape ( #s1 #s2 r1 r2) e1)
-      ELam? e1 /\
+      sem_expr_shape (TArr t1 t2) e1 /\
       safe e2)
       (* safe e2    -- CH: new; currently not needed *)
     (ensures fun (e11, e2') ->
@@ -406,42 +420,38 @@ let rec destruct_steps_eapp
     (decreases st)
   =
   match st with
-  | SRefl e1 -> begin
-    let impossible : False = srefl_impossible e1 e2 e' st in
+  | SRefl e1 ->
+    let impossible : False = srefl_impossible e1 e2 e' st (TArr t1 t2) in
     false_elim impossible
-  end
-  | STrans e_can_step st' -> begin
-    //match step e1 with
-    //| Some e1' ->
-    //  let (EApp e1'
-    let (ELam e11) = e1 in
-    assert (is_closed (ELam e11));
-    let _ : steps e1 (ELam e11) = SRefl e1 in
-    match step e2 with
-    | Some e2' ->
-      let (EApp (ELam e11) e2') = Some?.v (step (EApp (ELam e11) e2)) in
-      assume (safe e2');
-      let s2 : steps (EApp (ELam e11) e2') e' = st' in
-      let (e11, e2'') = destruct_steps_eapp (ELam e11) e2' e' s2 in
-      assert (is_closed (ELam e11));
-      assert (steps e1 (ELam e11));
-      lem_step_implies_steps e2;
-      assert (steps e2' e2'');
-      lem_steps_transitive e2 e2' e2'';
-      assert (steps e2 e2'');
-      assert (steps (EApp e1 e2') (subst_beta e2'' e11));
-      assume (steps (EApp e1 e2) (EApp e1 e2'));
-      lem_steps_transitive (EApp e1 e2) (EApp e1 e2') (subst_beta e2'' e11);
-      assert (steps (EApp e1 e2) (subst_beta e2'' e11));
-      assert (steps (subst_beta e2'' e11) e');
-      (e11, e2'')
+  | STrans e_can_step st' ->
+    match step e1 with
+    | Some e1' ->
+      let (EApp e1' e2) = Some?.v (step (EApp e1 e2)) in
+      lem_step_implies_steps e1;
+      lem_step_implies_steps (EApp e1 e2);
+      lem_safe_and_steps_implies_safe e1 e1';
+      lem_sem_expr_shape_and_steps_implies_sem_expr_shape e1 e1' (TArr t1 t2);
+      let s2 : steps (EApp e1' e2) e' = st' in
+      let (e11'', e2'') = destruct_steps_eapp e1' e2 e' s2 in
+      lem_steps_transitive e1 e1' (ELam e11'');
+      lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (subst_beta e2'' e11'');
+      (e11'', e2'')
     | None ->
-      let subst = Some?.v (step (EApp (ELam e11) e2)) in
-      assert (subst == (subst_beta e2 e11));
-      assert (is_value e2); // safe e2 gives us that e2 is a value
-      admit ();
-      (e11, e2)
-  end
+      match step e2 with
+      | Some e2' ->
+        let (EApp e1 e2') = Some?.v (step (EApp e1 e2)) in
+        lem_step_implies_steps e2;
+        lem_step_implies_steps (EApp e1 e2);
+        lem_safe_and_steps_implies_safe e2 e2';
+        let s2 : steps (EApp e1 e2') e' = st' in
+        let (e11'', e2'') = destruct_steps_eapp e1 e2' e' s2 in
+        lem_steps_transitive e2 e2' e2'';
+        lem_steps_transitive (EApp e1 e2) (EApp e1 e2') (subst_beta e2'' e11'');
+        (e11'', e2'')
+      | None ->
+        let (ELam e11) = e1 in
+        assume (steps (EApp e1 e2) (subst_beta e2 e11));
+        (e11, e2)
 
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
