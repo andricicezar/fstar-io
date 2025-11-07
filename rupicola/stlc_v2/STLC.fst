@@ -375,28 +375,48 @@ let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
 let lem_sem_expr_shape_and_steps_implies_sem_expr_shape (e e':closed_exp) (t:typ) :
   Lemma
     (requires (sem_expr_shape t e) /\ (steps e e'))
-    (ensures (sem_expr_shape t e')) = admit ()
- (* introduce forall e_f. steps e' e_f /\ irred e_f ==> sem_value_shape t e_f with
+    (ensures (sem_expr_shape t e')) = 
+  introduce forall e_f. steps e' e_f /\ irred e_f ==> sem_value_shape t e_f with
     begin
-    introduce steps e' e_f /\ irred_ef ==> sem_value_shape t e_f with h.
+    introduce _  ==> sem_value_shape t e_f with h.
       begin
-      bind_squash #(steps e' e_f) () (fun st_f ->
-      match st_f with
-      | SRefl e' -> ()
-      | STrans e'_can_step st_f' -> )
+        bind_squash #(steps e' e_f) () (fun st_f ->
+        match st_f with
+        | SRefl e' -> ()
+        | STrans e'_can_step st_f' -> lem_steps_transitive e e' e_f)
       end
-    end*)
-
-let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') (t:typ) : Lemma
-  (requires
-    safe e1 /\
-    safe e2 /\
-    sem_expr_shape t e1)
-  (ensures ~(irred e')) = admit ()
+    end
 
 assume val t1 : typ
 assume val t2 : typ
 
+let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
+  (requires
+    irred e' /\
+    safe e1 /\
+    safe e2 /\
+    sem_expr_shape (TArr t1 t2) e1 /\
+    (EApp e1 e2) == e')
+  (ensures ~(irred e') \/ ~(sem_expr_shape (TArr t1 t2) e1)) 
+  = 
+  match step e1 with
+  | Some e1' -> ()
+  | None -> 
+    match step e2 with
+    | Some e2' -> ()
+    | None ->
+      match e1 with
+      | ELam e11 -> ()
+      | _ -> ()
+
+let e1_not_ELam_impossible (e1:closed_exp) : Lemma
+  (requires 
+    sem_expr_shape (TArr t1 t2) e1 /\ 
+    irred e1 /\
+    ~(ELam? e1))
+  (ensures ~(sem_expr_shape (TArr t1 t2) e1)) 
+  = ()
+    
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
   (e1:closed_exp)
@@ -408,8 +428,7 @@ let rec destruct_steps_eapp
       safe e1 /\ (*-- CH: new, but not enough, I think we actually need it semantically has an arrow type;
                            currently not needed by the way our beta step currently works *)
       sem_expr_shape (TArr t1 t2) e1 /\
-      safe e2)
-      (* safe e2    -- CH: new; currently not needed *)
+      safe e2) (* -- CH: new; currently not needed *)
     (ensures fun (e11, e2') ->
       is_closed (ELam e11) /\
       steps e1 (ELam e11) /\
@@ -420,8 +439,9 @@ let rec destruct_steps_eapp
     (decreases st)
   =
   match st with
-  | SRefl e1 ->
-    let impossible : False = srefl_impossible e1 e2 e' st (TArr t1 t2) in
+  | SRefl (EApp e1 e2) ->
+    assert ((EApp e1 e2) == e');
+    let impossible : False = srefl_impossible e1 e2 e' st in
     false_elim impossible
   | STrans e_can_step st' ->
     match step e1 with
@@ -453,11 +473,9 @@ let rec destruct_steps_eapp
         | ELam e11 -> 
           let subst = Some?.v (step (EApp e1 e2)) in
           lem_step_implies_steps (EApp e1 e2);
-          assume (steps (EApp e1 e2) (subst_beta e2 e11));
           (e11, e2)
         | _ -> 
-          let impossible : False = srefl_impossible e1 e2 e' st (TArr t1 t2) in
-          false_elim impossible
+          let impossible : False = e1_not_ELam_impossible e1 in false_elim impossible
       
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
