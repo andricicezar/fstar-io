@@ -449,10 +449,16 @@ let rec destruct_steps_eapp
         lem_steps_transitive (EApp e1 e2) (EApp e1 e2') (subst_beta e2'' e11'');
         (e11'', e2'')
       | None ->
-        let (ELam e11) = e1 in
-        assume (steps (EApp e1 e2) (subst_beta e2 e11));
-        (e11, e2)
-
+        match e1 with
+        | ELam e11 -> 
+          let subst = Some?.v (step (EApp e1 e2)) in
+          lem_step_implies_steps (EApp e1 e2);
+          assume (steps (EApp e1 e2) (subst_beta e2 e11));
+          (e11, e2)
+        | _ -> 
+          let impossible : False = srefl_impossible e1 e2 e' st (TArr t1 t2) in
+          false_elim impossible
+      
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
      We case analyze if e1 can step, if it does contradiction, so e1 irreducible.
