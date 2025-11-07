@@ -11,14 +11,14 @@ open Compiler
 
 // the environment is non-standard, more fancy
 // also over qType instead of syntactic types (typ)
-noeq type typing : env -> exp -> qType -> Type =
-  | TyUnit : #g:env ->
+noeq type typing : typ_env -> exp -> qType -> Type =
+  | TyUnit : #g:typ_env ->
              typing g EUnit tunit
-  | TyTrue : #g:env ->
+  | TyTrue : #g:typ_env ->
              typing g ETrue tbool
-  | TyFalse : #g:env ->
+  | TyFalse : #g:typ_env ->
               typing g EFalse tbool
-  | TyIf : #g:env ->
+  | TyIf : #g:typ_env ->
            #e1:exp ->
            #e2:exp ->
            #e3:exp ->
@@ -27,42 +27,42 @@ noeq type typing : env -> exp -> qType -> Type =
            $h2:typing g e2 t ->
            $h3:typing g e3 t ->
              typing g (EIf e1 e2 e3) t
-  | TyVar : #g:env ->
+  | TyVar : #g:typ_env ->
             x:var{Some? (g x)} ->
               typing g (EVar x) (Some?.v (g x))
-  | TyLam : #g:env ->
+  | TyLam : #g:typ_env ->
             #body:exp ->
             #t1:qType ->
             #t2:qType ->
             $hbody:typing (extend t1 g) body t2 ->
-              typing g (ELam body) (mk_arrow t1 t2)
-  | TyApp : #g:env ->
+              typing g (ELam body) (t1 ^-> t2)
+  | TyApp : #g:typ_env ->
             #e1:exp ->
             #e2:exp ->
             #t1:qType ->
             #t2:qType ->
-            $h1:typing g e1 (mk_arrow t1 t2) ->
+            $h1:typing g e1 (t1 ^-> t2) ->
             $h2:typing g e2 t1 ->
               typing g (EApp e1 e2) t2
-  | TyPair : #g:env ->
+  | TyPair : #g:typ_env ->
             #e1:exp ->
             #e2:exp ->
             #t1:qType ->
             #t2:qType ->
             $h1:typing g e1 t1 ->
             $h2:typing g e2 t2 ->
-              typing g (EPair e1 e2) (mk_pair t1 t2)
-  | TyFst : #g:env ->
+              typing g (EPair e1 e2) (t1 ^* t2)
+  | TyFst : #g:typ_env ->
             #e:exp ->
             #t1:qType ->
             #t2:qType ->
-            $h1:typing g e (mk_pair t1 t2) ->
+            $h1:typing g e (t1 ^* t2) ->
               typing g (EFst e) t1
-  | TySnd : #g:env ->
+  | TySnd : #g:typ_env ->
             #e:exp ->
             #t1:qType ->
             #t2:qType ->
-            $h1:typing g e (mk_pair t1 t2) ->
+            $h1:typing g e (t1 ^* t2) ->
               typing g (ESnd e) t2
 
 
@@ -137,7 +137,7 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
 
 (** ** Proof of RrHP **)
 
-let rec exp_to_fstar (g:env) (e:exp) (t:qType) (h:typing g e t) (fs_g:fs_env g) : (get_Type t) =
+let rec exp_to_fstar (g:typ_env) (e:exp) (t:qType) (h:typing g e t) (fs_g:eval_env g) : (get_Type t) =
   match e with
   | EUnit -> ()
   | ETrue -> true
@@ -148,17 +148,17 @@ let rec exp_to_fstar (g:env) (e:exp) (t:qType) (h:typing g e t) (fs_g:fs_env g) 
     let v1 = exp_to_fstar g e2 t h2 fs_g in
     let v2 = exp_to_fstar g e3 t h3 fs_g in
     if b then v1 else v2
-  | EVar x -> get_v fs_g x
+  | EVar x -> index fs_g x
   | ELam body ->
     let TyLam #_ #_ #t1 #t2 hbody = h in
-    assert (t == (mk_arrow t1 t2));
+    assert (t == (t1 ^-> t2));
     let w : (get_Type t1) -> (get_Type t2) =
-      (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fs_g x)) in
+      (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (stack fs_g x)) in
     w
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
     assert ((get_Type t) == (get_Type t2));
-    let v1 : get_Type (mk_arrow t1 t2) = exp_to_fstar g e1 (mk_arrow t1 t2) h1 fs_g in
+    let v1 : get_Type (t1 ^-> t2) = exp_to_fstar g e1 (t1 ^-> t2) h1 fs_g in
     let v2 : get_Type t1 = exp_to_fstar g e2 t1 h2 fs_g in
     v1 v2
   | EPair e1 e2 ->
@@ -168,18 +168,19 @@ let rec exp_to_fstar (g:env) (e:exp) (t:qType) (h:typing g e t) (fs_g:fs_env g) 
     (v1, v2)
   | EFst e ->
     let TyFst #_ #_ #t1 #t2 h1 = h in
-    let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
+    let v = exp_to_fstar g e (t1 ^* t2) h1 fs_g in
     fst #(get_Type t1) #(get_Type t2) v
   | ESnd e ->
     let TySnd #_ #_ #t1 #t2 h1 = h in
-    let v = exp_to_fstar g e (mk_pair t1 t2) h1 fs_g in
+    let v = exp_to_fstar g e (t1 ^* t2) h1 fs_g in
     snd #(get_Type t1) #(get_Type t2) v
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
-  exp_to_fstar empty e (comp_int i).ct h fs_empty
+  exp_to_fstar empty e (comp_int i).ct h empty_eval
 
+#push-options "--split_queries always"
 val lem_exp_to_fstar g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma
 (equiv t (exp_to_fstar g e t h) e)
 let rec lem_exp_to_fstar g e t (h:typing g e t) =
@@ -195,7 +196,7 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     lem_exp_to_fstar g e2 t2 h2;
     let fs_e1 = (exp_to_fstar g e1 t1 h1) in
     let fs_e2 = (exp_to_fstar g e2 t2 h2) in
-    equiv_pair g t1 t2 e1 e2 fs_e1 fs_e2
+    equiv_pair g t1 t2 fs_e1 fs_e2 e1 e2
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
     lem_if_fv_in_env g e1 e2 e3;
@@ -205,66 +206,67 @@ let rec lem_exp_to_fstar g e t (h:typing g e t) =
     let fs_e1 = (exp_to_fstar g e1 tbool h1) in
     let fs_e2 = (exp_to_fstar g e2 t h2) in
     let fs_e3 = (exp_to_fstar g e3 t h3) in
-    equiv_if g t e1 e2 e3 fs_e1 fs_e2 fs_e3
+    equiv_if g t fs_e1 fs_e2 fs_e3 e1 e2 e3
   | EFst e12 ->
     let TyFst #_ #_ #t1 #t2 h1 = h in
     lem_fst_fv_in_env g e12;
-    lem_exp_to_fstar g e12 (mk_pair t1 t2) h1;
-    let fs_e12 = (exp_to_fstar g e12 (mk_pair t1 t2) h1) in
-    equiv_pair_fst_app g t1 t2 e12 fs_e12
+    lem_exp_to_fstar g e12 (t1 ^* t2) h1;
+    let fs_e12 = (exp_to_fstar g e12 (t1 ^* t2) h1) in
+    equiv_pair_fst_app g t1 t2 fs_e12 e12
   | ESnd e12 ->
     let TySnd #_ #_ #t1 #t2 h1 = h in
     lem_snd_fv_in_env g e12;
-    lem_exp_to_fstar g e12 (mk_pair t1 t2) h1;
-    let fs_e12 = (exp_to_fstar g e12 (mk_pair t1 t2) h1) in
-    equiv_pair_snd_app g t1 t2 e12 fs_e12
+    lem_exp_to_fstar g e12 (t1 ^* t2) h1;
+    let fs_e12 = (exp_to_fstar g e12 (t1 ^* t2) h1) in
+    equiv_pair_snd_app g t1 t2 fs_e12 e12
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
     lem_app_fv_in_env g e1 e2;
-    lem_exp_to_fstar g e1 (mk_arrow t1 t2) h1;
+    lem_exp_to_fstar g e1 (t1 ^-> t2) h1;
     lem_exp_to_fstar g e2 t1 h2;
-    let fs_e1 = (exp_to_fstar g e1 (mk_arrow t1 t2) h1) in
+    let fs_e1 = (exp_to_fstar g e1 (t1 ^-> t2) h1) in
     let fs_e2 = (exp_to_fstar g e2 t1 h2) in
-    equiv_app g t1 t2 e1 e2 fs_e1 fs_e2
+    equiv_app g t1 t2 fs_e1 fs_e2 e1 e2
   | ELam body ->
     let TyLam #_ #body #t1 #t2 hbody = h in
     lem_lam_fv_in_env g body t1;
     lem_exp_to_fstar (extend t1 g) body t2 hbody;
     assert (equiv t2 (exp_to_fstar (extend t1 g) body t2 hbody) body);
-    assert (forall b (s:gsub (extend t1 g) b) (fsG:fs_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((exp_to_fstar (extend t1 g) body t2 hbody) fsG, gsubst s body));
+    assert (forall b (s:gsub (extend t1 g) b) (fsG:eval_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((exp_to_fstar (extend t1 g) body t2 hbody) fsG, gsubst s body));
     let g' = extend t1 g in
-    introduce forall b (s:gsub g b) (fsG:fs_env g). fsG ∽ s ==> (mk_arrow t1 t2) ⦂ ((fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fsG x)), gsubst s (ELam body)) with
+    introduce forall b (s:gsub g b) (fsG:eval_env g). fsG ∽ s ==> (t1 ^-> t2) ⦂ ((fun x -> exp_to_fstar (extend t1 g) body t2 hbody (stack fsG x)), gsubst s (ELam body)) with
       begin
-      let f : (get_Type t1) -> (get_Type t2) = (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (fs_stack fsG x)) in
+      let f : (get_Type t1) -> (get_Type t2) = (fun x -> exp_to_fstar (extend t1 g) body t2 hbody (stack fsG x)) in
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      introduce  fsG ∽ s ==> (mk_arrow t1 t2) ⦂ (f, ELam body') with _.
+      introduce  fsG ∽ s ==> (t1 ^-> t2) ⦂ (f, ELam body') with _.
         begin
-        introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (mk_arrow t1 t2) ∋ (f, e') with
+        introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (t1 ^-> t2) ∋ (f, e') with
           begin
-          introduce _ ==> (mk_arrow t1 t2) ∋ (f, e') with h.
+          introduce _ ==> (t1 ^-> t2) ∋ (f, e') with h.
             begin
             lem_value_is_irred (ELam body');
             lem_steps_irred_e_irred_e'_implies_e_e' (ELam body') e';
             assert ((ELam body') == e');
-            let QArr #s1 #s2 r1 r2 = get_rel (mk_arrow t1 t2) in
+            let QArr #s1 #s2 r1 r2 = get_rel (t1 ^-> t2) in
             introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with
               begin
               introduce  t1 ∋ (fs_v, v) ==> _ with _.
                 begin
                 let s' = gsub_extend s t1 v in
-                let fsG' = fs_stack fsG fs_v in
+                let fsG' = stack fsG fs_v in
                 lem_substitution s t1 v body;
                 assert (t2 ⦂ (f fs_v, gsubst s' body))
                 end
               end;
-              assert ((mk_arrow t1 t2) ∋ (f, gsubst s (ELam body)));
-              lem_values_are_expressions (mk_arrow t1 t2) f (gsubst s (ELam body));
-              assert ((mk_arrow t1 t2) ⦂ (f, gsubst s (ELam body)))
+              assert ((t1 ^-> t2) ∋ (f, gsubst s (ELam body)));
+              lem_values_are_expressions (t1 ^-> t2) f (gsubst s (ELam body));
+              assert ((t1 ^-> t2) ⦂ (f, gsubst s (ELam body)))
             end
           end
         end
       end
+#pop-options
 
 val lem_bt_ctx i ct : Lemma (
   let (| e, h |) = ct in
@@ -276,7 +278,7 @@ let lem_bt_ctx i ct =
   lem_closed_is_no_fv e;
   assert (fv_in_env empty e);
   lem_exp_to_fstar empty e (comp_int i).ct h;
-  equiv_closed_terms #(comp_int i).ct (exp_to_fstar empty e (comp_int i).ct h fs_empty) e;
+  equiv_closed_terms #(comp_int i).ct (exp_to_fstar empty e (comp_int i).ct h empty_eval) e;
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
   ()
 
@@ -296,11 +298,11 @@ let proof_rrhp_1 i ps : Lemma (rrhp_1 #i ps) =
     (dsnd ps).equiv_proof ();
     let ps' = dfst ps in
     lemma_compile_closed_in_equiv_rel ps' #(dsnd ps);
-    assert (mk_arrow t tbool ⦂ (ps', pt));
+    assert ((t ^-> tbool) ⦂ (ps', pt));
     lemma_compile_closed_arrow_is_elam #_ #_ #i.comp_ct ps' #(dsnd ps);
     assert (ELam? pt /\ is_closed pt /\ irred pt);
-    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==> mk_arrow t tbool ∋ (ps', e') with pt;
-    assert (mk_arrow t tbool ∋ (ps', pt));
+    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==>  (t ^-> tbool) ∋ (ps', e') with pt;
+    assert ((t ^-> tbool) ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
         tbool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
       with e (backtranslate_ctx ct);

@@ -2,18 +2,6 @@ module QExp
 
 open QTyp
 
-type typ_env = env
-
-(** eval_env is an evaluation environment: variables to F* values **)
-val eval_env (g:typ_env) : Type u#0
-val hd : #t:qType -> #g:_ -> eval_env (extend t g) -> get_Type t
-val stack : #g:_ -> fsG:eval_env g -> #t:qType -> get_Type t -> eval_env (extend t g)
-val tail : #t:qType -> #g:_ -> eval_env (extend t g) -> eval_env g
-val index : #g:_ -> eval_env g -> x:STLC.var{Some? (g x)} -> get_Type (Some?.v (g x))
-
-type fs_oexp (g:typ_env) (a:qType) =
-  eval_env g -> get_Type a
-
 (** These helper functions are necessary to help F* do unification
     in such a way no VC is generated **)
 
@@ -192,7 +180,7 @@ open FStar.Tactics
 
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%Mkdtuple2?._1;`%Mkdtuple2?._2]] x
+  norm_term_env (top_env ()) [delta_only [`%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return
