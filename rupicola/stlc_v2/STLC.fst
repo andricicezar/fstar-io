@@ -336,6 +336,8 @@ let lem_steps_transitive (e1 e2 e3:closed_exp) :
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
 
+
+
 let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) : Lemma
   (requires steps e e')
   (ensures e == e') = admit ()
@@ -346,8 +348,23 @@ let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
 let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'
 
+let lem_safe_and_steps_implies_safe (e e':closed_exp) :
+  Lemma
+    (requires (safe e) /\ (steps e e'))
+    (ensures (safe e')) =
+  introduce forall e_f. steps e' e_f ==> is_value e_f \/ can_step e_f with
+    begin
+    introduce steps e' e_f ==> is_value e_f \/ can_step e_f with h.
+      begin
+      bind_squash #(steps e' e_f) () (fun st_f ->
+      match st_f with
+        | SRefl e' -> ()
+        | STrans e'_can_step st_f' -> lem_steps_transitive e e' e_f)
+      end
+    end
+
 (* We need syntactic types for this, or at least the top-level shape of types *)
-(*let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
+let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
   | TUnit -> e == EUnit
   | TBool -> e == ETrue \/ e == EFalse
@@ -355,7 +372,7 @@ let safe (e:closed_exp) : Type0 =
   | TPair t1 t2 -> EPair? e
 
 let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
-  forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'*)
+  forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'
 
 let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
   (requires
@@ -494,35 +511,36 @@ let rec destruct_steps_epair
       steps e1 e1' /\
       steps e2 e2' /\
       steps (EPair e1 e2) (EPair e1' e2') /\
-      (EPair e1' e2') == e')
+      steps (EPair e1' e2') e')
     (decreases st)
   = match st with
     | SRefl e -> (e1, e2)
-    | STrans #e0 #e2 s0 s2 ->
-      assume (e0 == (EPair e1 e2));
-      assume (e2 == e');
+    | STrans e_can_step st' ->
       match step e1 with
       | Some e1' ->
         let (EPair e1' e2) = Some?.v (step (EPair e1 e2)) in
-        assume (safe e1');
-        let s2 : steps (EPair e1' e2) e' = s2 in
-        let s2 : steps (EPair e1' e2) (EPair (fst (destruct_steps_epair e1' e2 e' s2)) (snd (destruct_steps_epair e1' e2 e' s2))) = s2 in
-        let s2_fst : steps e1' (fst (destruct_steps_epair e1' e2 e' s2)) = admit () in
-        let _ : steps e1 (fst (destruct_steps_epair e1' e2 e' s2)) = STrans #e1 #(fst (destruct_steps_epair e1' e2 e' s2)) (FStar.Squash.return_squash #bool (Some? (step e1))) s2_fst in
-        assert (steps e1 (fst (destruct_steps_epair e1' e2 e' s2)));
-        assert (steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1' e2 e' s2)) (snd (destruct_steps_epair e1' e2 e' s2))));
-        destruct_steps_epair e1' e2 e' s2
+        lem_step_implies_steps e1;
+        lem_step_implies_steps (EPair e1 e2);
+        lem_safe_and_steps_implies_safe e1 e1';
+        let s2 : steps (EPair e1' e2) e' = st' in
+        let (e1'', e2'') = destruct_steps_epair e1' e2 e' s2 in
+        lem_steps_transitive e1 e1' e1'';
+        lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2'');
+        (e1'', e2'')
       | None ->
         match step e2 with
         | Some e2' ->
           let (EPair e1 e2') = Some?.v (step (EPair e1 e2)) in
-          assume (safe e2');
-          let s2 : steps (EPair e1 e2') e' = s2 in
-          assume (steps e2 (snd (destruct_steps_epair e1 e2' e' s2)));
-          let _ : steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1 e2' e' s2)) (snd (destruct_steps_epair e1 e2' e' s2))) = s2 in
-          assert (steps (EPair e1 e2) (EPair (fst (destruct_steps_epair e1 e2' e' s2)) (snd (destruct_steps_epair e1 e2' e' s2))));
-          destruct_steps_epair e1 e2' e' s2
-        | None -> (e1, e2)
+          lem_step_implies_steps e2;
+          lem_step_implies_steps (EPair e1 e2);
+          lem_safe_and_steps_implies_safe e2 e2';
+          let s2 : steps (EPair e1 e2') e' = st' in
+          let (e1'', e2'') = destruct_steps_epair e1 e2' e' s2 in
+          lem_steps_transitive e2 e2' e2'';
+          lem_steps_transitive (EPair e1 e2) (EPair e1 e2') (EPair e1'' e2'');
+          (e1'', e2'')
+        | None ->
+          (e1, e2)
 
   (**
     How the steps look like:
