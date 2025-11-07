@@ -139,7 +139,7 @@ let equiv_var g (x:var{Some? (g x)})
     end
   end
 
-let equiv_lam g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
+let equiv_lam #g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
   (requires (fun (fsG:eval_env (extend t1 g)) -> f (tail #t1 fsG) (hd fsG)) ≈ body)
   (ensures f ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
@@ -170,8 +170,8 @@ let equiv_lam g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lem
     end
   end
 
-let equiv_app g
-  (t1:qType) (t2:qType)
+let equiv_app #g
+  (#t1:qType) (#t2:qType)
   (fs_e1:fs_oexp g (t1 ^-> t2)) (fs_e2:fs_oexp g t1)
   (e1:exp) (e2:exp)
   : Lemma
@@ -209,7 +209,7 @@ let equiv_app g
     end
   end
 
-let equiv_if g (t:qType) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
+let equiv_if #g (#t:qType) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) ≈ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;

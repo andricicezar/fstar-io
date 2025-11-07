@@ -146,7 +146,7 @@ instance compile_exp_lambda
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     reveal_opaque (`%hd') (hd' #g #(pack ca));
-    equiv_lam g (pack ca) (pack cb) f cf.e
+    equiv_lam (pack ca) (pack cb) f cf.e
   )
 }
 
@@ -187,7 +187,7 @@ instance compile_exp_app
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     cx.equiv_proof ();
-    equiv_app g (pack ca) (pack cb) f x cf.e cx.e
+    equiv_app #g #(pack ca) #(pack cb) f x cf.e cx.e
   );
 }
 
@@ -228,7 +228,7 @@ instance compile_exp_if
     cco.equiv_proof ();
     cth.equiv_proof ();
     cel.equiv_proof ();
-    equiv_if g (pack ca) co th el cco.e cth.e cel.e
+    equiv_if #g #(pack ca) co th el cco.e cth.e cel.e
   );
 }
 

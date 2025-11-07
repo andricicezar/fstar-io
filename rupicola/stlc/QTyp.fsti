@@ -33,16 +33,18 @@ let test_match s (r:type_quotation s) = (** why does this work so well? **)
   | QArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
   | QPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
 
-let rec type_quotation_to_typ s (r:type_quotation s) : typ =
+let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   match r with
   | QUnit -> TUnit
   | QBool -> TBool
-  | QArr #s1 #s2 rs1 rs2 -> TArr (type_quotation_to_typ s1 rs1) (type_quotation_to_typ s2 rs2)
-  | QPair #s1 #s2 rs1 rs2 -> TPair (type_quotation_to_typ s1 rs1) (type_quotation_to_typ s2 rs2)
+  | QArr #s1 #s2 rs1 rs2 -> TArr (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
+  | QPair #s1 #s2 rs1 rs2 -> TPair (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
 
 (** Type of Quotable Types **)
 type qType =
   s:Type & type_quotation s
+
+let pack (q:type_quotation 's) : qType = (| _, q |)
 
 let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
