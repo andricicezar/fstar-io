@@ -1,13 +1,17 @@
 ### To try next
 
 #### The predicate for quotation
-- [x] STLC with units and booleans
-  - [ ] In HO cases, unification seems to not work as well as expected. See: `callback_return` and `callback_return'`
-- [ ] Refinements
+- [x] STLC (see `stlc` folder)
+  - [ ] Problems with unification. See in `stlc/QExp.fst`.
+      - [ ] Pairs. `pair_of_functions` and `pair_of_functions2`
+      - [ ] Top level definitions. `apply_top_level_def`, `apply_top_level_def'` and `papply_top_level_def`
+      - [ ] HO cases. `callback_return` and `callback_return'`
+- [ ] Refinements (see `refinements` folder)
     - [ ] computes a WP that has to be separately proven. it will be nice to not have to compute it, but I think that is a futile exercise. We should look for how to prove it automatically. The good new is that we are not worse than Related Work: CakeML has the same problem. Œuf uses translation validation to verify quotation. Others trust quotation. 
     - [ ] F* has problems computing the WP. It adds an "invisible" guard that is hard to debug: https://github.com/andricicezar/fstar-io/blob/master/rupicola/refinements2/CompilableWP2.fst#L396
-    - [ ] In HO cases, there is a problem with inference: https://github.com/andricicezar/fstar-io/blob/2fd2c9273b870317bc6c8841c30a0ff8f07432a1/rupicola/refinements2/CompilableWP2.fst#L354
 - [ ] Avoid quoting ghost code
+- [ ] Free Monad
+  - [ ] IO
 - [ ] Compiling fixpoints 
     - [ ] @Guido, may work with F* if one defines instances for different arrities. Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
     - [ ] Should we use a custom fixpoint combinator? Obvious drawback is that compilation would not be compatible with existing code. 
@@ -24,7 +28,11 @@
 - [ ] We need a way to test completness of the predicate. How? Right now, we write programs by hand.
 
 #### Automation. Defining a type class on top of the predicate
-- [ ] Type class resolution does not seem to work in HO cases. (see [here](https://github.com/andricicezar/fstar-io/blob/2fd2c9273b870317bc6c8841c30a0ff8f07432a1/rupicola/stlc_v2/Quotation.fsti#L86) or `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
+- [ ] Build a TC on top of the predicate for quotation
+  - Cezar: this seems a lot harder to do since what is good for a nice relation
+    is not necessarly good for type class automation. One example is `hd'`,
+    a wrapper on top of `hd`. In practice, it helps type class resolution,
+    but it does not work great with the predicate.
 - [ ] [Automation does not work when erasing refinements](https://github.com/andricicezar/fstar-io/blob/010dda6a013cb23288ad14019eca03b2bea2bdd0/rupicola/refinements/Compiler.fst#L333)
 
 #### Proof of secure compilation
@@ -33,10 +41,8 @@
     - [ ] Define the meta program as described in extended abstract
     - [ ] Admit free
     - [ ] Compiler correctness?
-
-#### Other TODOs:
-- [ ] Improve performance in HOC cases (see `test1_hoc` in [Compiler.fst](./stlc/Compiler.fst))
-- [ ] [Makefile](./stlc/Makefile) fails with weird error
+    - [ ] Is it funny that back-translation does not even use the predicate
+      	  for quotation?
 
 ### Notes from [Rupicola paper](https://dl.acm.org/doi/pdf/10.1145/3519939.3523706):
 - Cezar: Their use case seems to be different than ours, so we may hit different challenges.
