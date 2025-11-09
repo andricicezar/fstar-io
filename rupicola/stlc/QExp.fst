@@ -303,8 +303,8 @@ let test_make_pair
 let test_pair_of_functions
   : closed_exp_quotation 
     ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
-    (FStar.Pervasives.norm [delta_only [`%pair_of_functions; `%negb]] pair_of_functions)
-  = admit (); QMkpair
+    pair_of_functions
+  = admit (); QMkpair // TODO
       (QLambda (QApp #_ #_ #_ #(fun _ x -> if x then false else true)
                   (QLambda (QIf QVar0 QFalse QTrue))
                   QVar0))
@@ -313,8 +313,8 @@ let test_pair_of_functions
 let test_pair_of_functions2
   : closed_exp_quotation 
     ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
-    (FStar.Pervasives.norm [delta_only [`%pair_of_functions2]] pair_of_functions2)
-  = admit (); QMkpair
+    pair_of_functions2
+  = admit (); QMkpair // TODO
       (QLambda (QIf QVar0 QFalse QTrue))
       (QLambda (QLambda (QIf QVar1 QFalse QVar0)))
 
