@@ -233,7 +233,7 @@ let equiv_if #g (#t:qType) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs
     end
   end
 
-let equiv_pair g (t1 t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp) (e2:exp) : Lemma
+let equiv_pair #g (#t1 #t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp) (e2:exp) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
   (ensures (fun fsG -> (fs_e1 fsG, fs_e2 fsG)) `equiv (t1 ^* t2)` EPair e1 e2) =
   lem_fv_in_env_pair g e1 e2;
@@ -261,7 +261,7 @@ let equiv_pair g (t1 t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp
     end
   end
 
-let equiv_pair_fst_app g (t1 t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp) : Lemma
+let equiv_pair_fst_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp) : Lemma
   (requires fs_e12 `equiv (t1 ^* t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
   (ensures (fun fsG -> fst (fs_e12 fsG)) `equiv t1` (EFst e12)) =
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t1 ⦂ (fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
@@ -310,7 +310,7 @@ let equiv_pair_fst g (t1 t2:qType)
           lem_values_are_expressions tp fs_v v;
           lem_equiv_exp_are_equiv empty #tp fs_v v;
           assert ((fun _ -> fs_v) `equiv #empty tp` v);
-          equiv_pair_fst_app empty t1 t2 (fun _ -> fs_v) v;
+          equiv_pair_fst_app #empty #t1 #t2 (fun _ -> fs_v) v;
           assert ((fun _ -> fs_e fs_v) `equiv #empty t1` (EFst v));
           equiv_closed_terms #t1 (fs_e fs_v) (EFst v);
           assert (subst_beta v (EFst (EVar 0)) == EFst v);
@@ -324,7 +324,7 @@ let equiv_pair_fst g (t1 t2:qType)
     assert (t ⦂ (fs_e, e))
   end
 
-let equiv_pair_snd_app g (t1 t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp)
+let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 `equiv (t1 ^* t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
     (ensures (fun fsG -> snd (fs_e12 fsG)) `equiv t2` (ESnd e12))
@@ -375,7 +375,7 @@ let equiv_pair_snd g (t1 t2:qType)
           lem_values_are_expressions tp fs_v v;
           lem_equiv_exp_are_equiv empty #tp fs_v v;
           assert ((fun _ -> fs_v) `equiv #empty tp` v);
-          equiv_pair_snd_app empty t1 t2 (fun _ -> fs_v) v;
+          equiv_pair_snd_app #empty #t1 #t2 (fun _ -> fs_v) v;
           assert ((fun _ -> fs_e fs_v) `equiv #empty t2` (ESnd v));
           equiv_closed_terms #t2 (fs_e fs_v) (ESnd v);
           assert (subst_beta v (ESnd (EVar 0)) == ESnd v);

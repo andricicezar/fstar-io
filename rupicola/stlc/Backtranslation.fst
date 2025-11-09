@@ -105,39 +105,7 @@ val lem_backtranslate g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma
 let rec lem_backtranslate g e t (h:typing g e t) =
    match e with
   | EUnit -> equiv_unit g
-  | ETrue -> equiv_true g
-  | EFalse -> equiv_false g
   | EVar x -> equiv_var g x
-  | EPair e1 e2 ->
-    let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
-    lem_pair_fv_in_env g e1 e2;
-    lem_backtranslate g e1 t1 h1;
-    lem_backtranslate g e2 t2 h2;
-    let fs_e1 = (backtranslate g e1 t1 h1) in
-    let fs_e2 = (backtranslate g e2 t2 h2) in
-    equiv_pair g t1 t2 fs_e1 fs_e2 e1 e2
-  | EIf e1 e2 e3 ->
-    let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
-    lem_if_fv_in_env g e1 e2 e3;
-    lem_backtranslate g e1 tbool h1;
-    lem_backtranslate g e2 t h2;
-    lem_backtranslate g e3 t h3;
-    let fs_e1 = (backtranslate g e1 tbool h1) in
-    let fs_e2 = (backtranslate g e2 t h2) in
-    let fs_e3 = (backtranslate g e3 t h3) in
-    equiv_if fs_e1 fs_e2 fs_e3 e1 e2 e3
-  | EFst e12 ->
-    let TyFst #_ #_ #t1 #t2 h1 = h in
-    lem_fst_fv_in_env g e12;
-    lem_backtranslate g e12 (t1 ^* t2) h1;
-    let fs_e12 = (backtranslate g e12 (t1 ^* t2) h1) in
-    equiv_pair_fst_app g t1 t2 fs_e12 e12
-  | ESnd e12 ->
-    let TySnd #_ #_ #t1 #t2 h1 = h in
-    lem_snd_fv_in_env g e12;
-    lem_backtranslate g e12 (t1 ^* t2) h1;
-    let fs_e12 = (backtranslate g e12 (t1 ^* t2) h1) in
-    equiv_pair_snd_app g t1 t2 fs_e12 e12
   | EApp e1 e2 ->
     let TyApp #_ #_ #_ #t1 #t2 h1 h2 = h in
     lem_app_fv_in_env g e1 e2;
@@ -185,4 +153,36 @@ let rec lem_backtranslate g e t (h:typing g e t) =
           end
         end
       end
+  | ETrue -> equiv_true g
+  | EFalse -> equiv_false g
+  | EIf e1 e2 e3 ->
+    let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
+    lem_if_fv_in_env g e1 e2 e3;
+    lem_backtranslate g e1 tbool h1;
+    lem_backtranslate g e2 t h2;
+    lem_backtranslate g e3 t h3;
+    let fs_e1 = (backtranslate g e1 tbool h1) in
+    let fs_e2 = (backtranslate g e2 t h2) in
+    let fs_e3 = (backtranslate g e3 t h3) in
+    equiv_if fs_e1 fs_e2 fs_e3 e1 e2 e3
+  | EPair e1 e2 ->
+    let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
+    lem_pair_fv_in_env g e1 e2;
+    lem_backtranslate g e1 t1 h1;
+    lem_backtranslate g e2 t2 h2;
+    let fs_e1 = (backtranslate g e1 t1 h1) in
+    let fs_e2 = (backtranslate g e2 t2 h2) in
+    equiv_pair fs_e1 fs_e2 e1 e2
+  | EFst e12 ->
+    let TyFst #_ #_ #t1 #t2 h1 = h in
+    lem_fst_fv_in_env g e12;
+    lem_backtranslate g e12 (t1 ^* t2) h1;
+    let fs_e12 = (backtranslate g e12 (t1 ^* t2) h1) in
+    equiv_pair_fst_app fs_e12 e12
+  | ESnd e12 ->
+    let TySnd #_ #_ #t1 #t2 h1 = h in
+    lem_snd_fv_in_env g e12;
+    lem_backtranslate g e12 (t1 ^* t2) h1;
+    let fs_e12 = (backtranslate g e12 (t1 ^* t2) h1) in
+    equiv_pair_snd_app fs_e12 e12
 #pop-options

@@ -263,7 +263,7 @@ instance compile_exp_pair
   equiv_proof = (fun () ->
     cl.equiv_proof ();
     cr.equiv_proof ();
-    equiv_pair g (pack ca) (pack cb) l r cl.e cr.e
+    equiv_pair #g #(pack ca) #(pack cb) l r cl.e cr.e
   );
 }
 
