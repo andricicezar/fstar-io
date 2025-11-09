@@ -1,4 +1,4 @@
-module CompilableWP2
+module QExp
 
 open FStar.Tactics.V2
 
@@ -281,7 +281,7 @@ let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <=
   : fs_oexp empty 'a wp
   = fun _ -> x
 
-#push-options "--split_queries always --no_smt"
+#push-options "--no_smt"
 
 type compilable_closed #a (#wp:spec_env empty a) (x:a) =
   proof:squash (forall fsG. wp fsG <= pure_return a x) -> compilable empty wp (helper_oexp x #wp #proof)
@@ -346,7 +346,7 @@ unfold
 let myid : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
   fun fsG z -> z
 
-#push-options "--split_queries always --no_smt"
+#push-options "--no_smt"
 
 val creame : bool -> (bool -> bool)
 let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
@@ -381,82 +381,57 @@ let test_just_false
   = fun _ -> CLambda (CRefinement _ CFalse)
 
 let test_just_true' ()
-  : compilable_closed test_just_true
+  : compilable_closed just_true
   = fun _ -> CLambda (CRefinement _ CTrue)
 
 let test_moving_ref' ()
-  : compilable_closed test_moving_ref
+  : compilable_closed moving_ref
   = fun _ -> CLambda (CRefinement _ CUnit)
 
 let test_always_false' ()
-  : compilable_closed test_always_false
+  : compilable_closed always_false
   = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
 
 let test_always_false'' ()
-  : Tot (compilable_closed test_always_false)
-  by (
-    let _ = forall_intro () in
-    dump "H";
-    tadmit () // some guard?
-//    let _ = forall_intro () in
-//    let _ = forall_intro () in
-//    let _ = implies_intro () in
- //   compute (); trefl ()
-  )
+  : Tot (compilable_closed always_false)
+  by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
   = fun _ ->
-    CLambda (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CVar0))
+    CLambda (CIf CVar0 
+                (CRefinement (fun y -> True) CFalse)
+                (CRefinement (fun y -> True) CVar0))
 
 let test_always_false_complex' ()
-  : compilable_closed test_always_false_complex
+  : compilable_closed always_false_complex
   = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
 
 let test_always_false_complex'' ()
-  : compilable_closed test_always_false_complex
+  : compilable_closed always_false_complex
   = fun _ -> CLambda (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
 
 let test_always_false_ho ()
-  : compilable_closed test_always_false_ho
+  : compilable_closed always_false_ho
   = fun _ -> CLambda (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
 
 let test_if_x' ()
-  : compilable_closed test_if_x
-  by (
-    norm [delta_only [`%test_if_x]];
-    dump "H";
-    tadmit () // cannot introduce
-   // set_guard_policy Drop;
- //   let _ = forall_intro () in
-    //let _ = forall_intro () in
-
-//    let _ = forall_intro () in
-//    let _ = implies_intro () in
-//    compute (); trefl ()
-  )
+  : compilable_closed if_x
+  by (norm [delta_only [`%if_x]]) // TODO: why is the unfolding necessary?
   = fun _ -> CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
 
 let test_seq_basic' ()
-  : compilable_closed test_seq_basic
+  : compilable_closed seq_basic
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
 
 let test_seq_qref' ()
-  : compilable_closed test_seq_qref
+  : compilable_closed seq_qref
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
 let test_seq_p_implies_q' ()
-  : compilable_closed test_seq_p_implies_q
+  : compilable_closed seq_p_implies_q
   = fun _ -> CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
-  : compilable_closed test_if_seq
-  by (tadmit ()
- //   set_guard_policy Drop;
-//    let _ = forall_intro () in
-//    let _ = forall_intro () in
-
-//    let _ = forall_intro () in
-//    let _ = implies_intro () in
-//    compute (); trefl ()
-  )
+  : compilable_closed if_seq
+  by (norm [delta_only [`%if_seq]]) // TODO: why is the unfolding necessary?
   = fun _ -> CLambda (CLambda (
      CIf CVar0
        (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
@@ -469,17 +444,13 @@ unfold
 let myid2 : fs_oexp (extend (f:(x:bool{x == true}) -> bool -> bool) (extend bool empty)) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
   fun fsG y -> y
 
-#push-options "--split_queries always --no_smt"
+#push-options "--no_smt"
 
 let test_context' ()
-  : compilable_closed test_context
-  by (
-    norm [delta_only [`%test_context]];
-    dump "H";
- //   set_guard_policy Drop;
-    tadmit () //cannot introduce
-    )
+  : compilable_closed context
+  by (norm [delta_only [`%context]]; tadmit ()) // TODO: why is the unfolding necessary? // TODO: why is the tadmit necessary?
   = fun _ ->
+    // TODO: why does it fail here?
     CLambda (CLambda (CIf CVar1
                           (CApp CVar0 (CRefinement _ CVar1))
-                          (CLambda #_ #_ #_ #_ #myid2 CVar0)))
+                          (CLambda #_ #_ #_ #_ #(fun _ y -> y) CVar0)))

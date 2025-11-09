@@ -10,7 +10,7 @@
   - [ ] IO
 - [ ] Refinements (see `refinements` folder)
     - [ ] computes a WP that has to be separately proven. it will be nice to not have to compute it, but I think that is a futile exercise. We should look for how to prove it automatically. The good new is that we are not worse than Related Work: CakeML has the same problem. Œuf uses translation validation to verify quotation. Others trust quotation. 
-    - [ ] F* has problems computing the WP. It adds an "invisible" guard that is hard to debug: https://github.com/andricicezar/fstar-io/blob/master/rupicola/refinements2/CompilableWP2.fst#L396
+    - [ ] Problems with unification. See TODO in [`refinements/QExp.fst`](./refinements/QExp.fst).
 - [ ] Avoid quoting ghost code
 - [ ] Compiling fixpoints 
     - [ ] @Guido, may work with F* if one defines instances for different arrities. Stuck [FStarLang/FStar#3991](https://github.com/FStarLang/FStar/issues/3991)
