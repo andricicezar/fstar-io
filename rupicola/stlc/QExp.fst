@@ -6,65 +6,64 @@ open QTyp
     in such a way no VC is generated **)
 
 unfold
-let helper_var0 :
+val helper_var0 :
   g:typ_env ->
   a:qType ->
   fs_oexp (extend a g) a
-= fun _ _ fsG -> hd fsG
+let helper_var0 g a fsG = hd fsG
 
 unfold
-let helper_var1 : g:typ_env ->
+val helper_var1 : g:typ_env ->
                   a:qType ->
                   b:qType ->
                   fs_oexp (extend b (extend a g)) a
-= fun _ _ _ fsG -> hd (tail fsG)
-
+let helper_var1 g a b fsG = hd (tail fsG)
 unfold
-let helper_var2 : g:typ_env ->
+val helper_var2 : g:typ_env ->
                   a:qType ->
                   b:qType ->
                   c:qType ->
                   fs_oexp (extend c (extend b (extend a g))) a
-= fun _ _ _ _ fsG -> hd (tail (tail fsG))
+let helper_var2 g a b c fsG = hd (tail (tail fsG))
 
 unfold
-let helper_unit : g:typ_env -> fs_oexp g qUnit
-= fun g _ -> ()
+val helper_unit : g:typ_env -> fs_oexp g qUnit
+let helper_unit g _ = ()
 
 unfold
-let helper_true : g:typ_env -> fs_oexp g qBool
-= fun g _ -> true
+val helper_true : g:typ_env -> fs_oexp g qBool
+let helper_true g _ = true
 
 unfold
-let helper_false : g:typ_env -> fs_oexp g qBool
-= fun g _ -> false
+val helper_false : g:typ_env -> fs_oexp g qBool
+let helper_false g _ = false
 
 unfold
-let helper_app: #g : typ_env ->
+val helper_app: #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 f :fs_oexp g (a ^-> b) ->
                 x :fs_oexp g a ->
                 fs_oexp g b
-= fun f x fsG -> (f fsG) (x fsG)
+let helper_app f x fsG = (f fsG) (x fsG)
 
 unfold
-let helper_if : #g :typ_env ->
+val helper_if : #g :typ_env ->
                 #a  : qType ->
                 c   : fs_oexp g qBool ->
                 t   : fs_oexp g a ->
                 e   : fs_oexp g a ->
                 fs_oexp g a
-= fun c t e fsG ->
+let helper_if c t e fsG =
     if c fsG then t fsG else e fsG
 
 unfold
-let helper_lambda : #g :typ_env ->
+val helper_lambda : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
                 f :fs_oexp g (a ^-> b) ->
                 fs_oexp (extend a g) b
-= fun #_ #_ f fsG -> f (tail fsG) (hd fsG)
+let helper_lambda #_ #_ f fsG = f (tail fsG) (hd fsG)
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
