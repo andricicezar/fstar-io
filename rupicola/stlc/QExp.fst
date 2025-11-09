@@ -296,29 +296,33 @@ let test_make_pair
   : closed_exp_quotation (qBool ^-> qBool ^-> (qBool ^* qBool)) make_pair
   = QLambda (QLambda (QMkpair QVar1 QVar0))
 
-// #set-options "--print_implicits"
-// [@@ (preprocess_with simplify_qType)]
+#push-options "--print_implicits --print_universes"
 
 // TODO: why does this fail?
-let test_pair_of_functions
-  : closed_exp_quotation 
-    ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
-    pair_of_functions
-  = admit (); QMkpair // TODO
+[@@ (preprocess_with simplify_qType)]
+let test_pair_of_functions ()
+  : Tot (closed_exp_quotation ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
+                              pair_of_functions)
+  by (norm [delta_only [`%pair_of_functions]];
+      norm [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
+     // trefl (); //this fails
+     dump "H";
+     tadmit ())
+  =  QMkpair
       (QLambda (QApp #_ #_ #_ #(fun _ x -> if x then false else true)
                   (QLambda (QIf QVar0 QFalse QTrue))
                   QVar0))
       (QLambda (QLambda QVar0))
 
 let test_pair_of_functions2
-  : closed_exp_quotation 
+  : closed_exp_quotation
     ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
     pair_of_functions2
   = admit (); QMkpair // TODO
       (QLambda (QIf QVar0 QFalse QTrue))
       (QLambda (QLambda (QIf QVar1 QFalse QVar0)))
 
-let test_fst_pair 
+let test_fst_pair
   : closed_exp_quotation (qBool) fst_pair
   = (QFst (QMkpair QTrue Qtt))
 
@@ -330,7 +334,7 @@ let test_wrap_fst_pa
   : closed_exp_quotation ((qBool ^* qBool) ^-> qBool) wrap_fst_pa
   = QLambda (QFst QVar0)
 
-let test_snd_pair 
+let test_snd_pair
   : closed_exp_quotation (qUnit) snd_pair
   = (QSnd (QMkpair QTrue Qtt))
 
