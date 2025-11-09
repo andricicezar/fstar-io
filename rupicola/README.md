@@ -42,3 +42,6 @@
     - [ ] Compiler correctness?
     - [ ] Is it funny that back-translation does not even use the predicate
       	  for quotation?
+
+#### Other TODOs
+- [ ] Why do we need the helpers functions to define the predicate for quotation? See file [`./experiments/HelpersBug.fst`](./experiments/HelpersBug.fst) for minimized PoC

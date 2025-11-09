@@ -1,4 +1,4 @@
-module SimpleCompilableWP2
+module HelpersBug
 
 open FStar.Tactics
 
@@ -82,5 +82,5 @@ let test_app0 ()
 
 let test_app0' ()
   : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> fs_hd fsG ()))
-  by (dump "H") // this fails, has a different VC
+  by (dump "H") // TODO: why does this fail? Why does it have a different VC?
   = CApp CVar0' CUnit
