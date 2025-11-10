@@ -647,9 +647,9 @@ let rec destruct_steps_epair_fst
   =
   match st with
   | SRefl (EFst e12) -> false_elim ()
-  | STrans e_can_step st' ->
+  | STrans e_can_step st' -> begin
     match step e12 with
-    | Some e12' ->
+    | Some e12' -> begin
       let (EFst e12') = Some?.v (step (EFst e12)) in
       lem_step_implies_steps e12;
       lem_step_implies_steps (EFst e12);
@@ -659,12 +659,16 @@ let rec destruct_steps_epair_fst
       let e12'' = destruct_steps_epair_fst e12' e' s2 t1 t2 in
       lem_steps_transitive e12 e12' e12'';
       e12''
-    | None ->
+      end
+    | None -> begin
       match e12 with
-      | EPair e1 _ ->
+      | EPair e1 _ -> begin
         lem_step_implies_steps (EFst e12);
         e12
+        end
       | _ -> false_elim ()
+      end
+    end
 
   (**
     How the steps look like:
@@ -695,9 +699,9 @@ let rec destruct_steps_epair_snd
   =
   match st with
   | SRefl (ESnd e12) -> false_elim ()
-  | STrans e_can_step st' ->
+  | STrans e_can_step st' -> begin
     match step e12 with
-    | Some e12' ->
+    | Some e12' -> begin
       let (ESnd e12') = Some?.v (step (ESnd e12)) in
       lem_step_implies_steps e12;
       lem_step_implies_steps (ESnd e12);
@@ -707,12 +711,16 @@ let rec destruct_steps_epair_snd
       let e12'' = destruct_steps_epair_snd e12' e' s2 t1 t2 in
       lem_steps_transitive e12 e12' e12'';
       e12''
-    | None ->
+      end
+    | None -> begin
       match e12 with
-      | EPair _ e2 ->
+      | EPair _ e2 -> begin
         lem_step_implies_steps (ESnd e12);
         e12
+        end
       | _ -> false_elim ()
+      end
+    end
 
   (**
     How the steps look like:
