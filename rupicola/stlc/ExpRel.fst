@@ -111,23 +111,35 @@ let lem_equiv_exp_are_equiv (g:typ_env) (#t:qType) (fs_e:get_Type t) (e:closed_e
 
 (** Rules **)
 
-let tunit : qType =
-  (| _, QUnit |)
-
 let equiv_unit g
-  : Lemma ((fun (_:eval_env g) -> ()) `equiv tunit` EUnit)
-  = assert ((fun (_:eval_env g) -> ()) `equiv tunit` EUnit) by (explode ())
-
-let tbool : qType =
-  (| _, QBool |)
+  : Lemma ((fun (_:eval_env g) -> ()) `equiv qUnit` EUnit)
+  =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  qUnit ⦂ ((), gsubst s EUnit) with begin
+    introduce _ ==> _ with _. begin
+      assert (qUnit ∋ ((), EUnit));
+      lem_values_are_expressions qUnit () EUnit
+    end
+  end
 
 let equiv_true g
-  : Lemma ((fun (_:eval_env g) -> true) `equiv tbool` ETrue)
-  = assert ((fun (_:eval_env g) -> true) `equiv tbool` ETrue) by (explode ())
+  : Lemma ((fun (_:eval_env g) -> true) `equiv qBool` ETrue)
+  =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  qBool ⦂ (true, gsubst s ETrue) with begin
+    introduce _ ==> _ with _. begin
+      assert (qBool ∋ (true, ETrue));
+      lem_values_are_expressions qBool true ETrue
+    end
+  end
 
 let equiv_false g
-  : Lemma ((fun (_:eval_env g) -> false) `equiv tbool` EFalse)
-  = assert ((fun (_:eval_env g) -> false) `equiv tbool` EFalse) by (explode ())
+  : Lemma ((fun (_:eval_env g) -> false) `equiv qBool` EFalse)
+  =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  qBool ⦂ (false, gsubst s EFalse) with begin
+    introduce _ ==> _ with _. begin
+      assert (qBool ∋ (false, EFalse));
+      lem_values_are_expressions qBool false EFalse
+    end
+  end
 
 let equiv_var g (x:var{Some? (g x)})
   : Lemma ((fun (fsG:eval_env g) -> index fsG x) ≈ EVar x)
@@ -192,7 +204,7 @@ let equiv_app #g
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
             let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' in
-            assert ((t1 ^-> t2) ∋ (fs_e1, ELam e11));
+            assume ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
             introduce True ==>  t1 ∋ (fs_e2, e2') with _. begin
               assert (t1 ⦂ (fs_e2, e2));
               assert (steps e2 e2');
@@ -209,7 +221,7 @@ let equiv_app #g
     end
   end
 
-let equiv_if #g (#t:qType) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
+let equiv_if #g (#t:qType) (fs_e1:fs_oexp g qBool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
   (ensures (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) ≈ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
@@ -225,7 +237,7 @@ let equiv_if #g (#t:qType) (fs_e1:fs_oexp g tbool) (fs_e2:fs_oexp g t) (fs_e3:fs
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
             let e1' = destruct_steps_eif e1 e2 e3 e' steps_e_e' in
-            assert (tbool ∋ (fs_e1, e1'));
+            assert (qBool ∋ (fs_e1, e1'));
             assert (t ∋ (fs_e, e'))
           )
         end

@@ -9,17 +9,17 @@ open ExpRel
 // also over qType instead of syntactic types (typ)
 noeq type typing : typ_env -> exp -> qType -> Type =
   | TyUnit : #g:typ_env ->
-             typing g EUnit tunit
+             typing g EUnit qUnit
   | TyTrue : #g:typ_env ->
-             typing g ETrue tbool
+             typing g ETrue qBool
   | TyFalse : #g:typ_env ->
-              typing g EFalse tbool
+              typing g EFalse qBool
   | TyIf : #g:typ_env ->
            #e1:exp ->
            #e2:exp ->
            #e3:exp ->
            #t:qType ->
-           $h1:typing g e1 tbool ->
+           $h1:typing g e1 qBool ->
            $h2:typing g e2 t ->
            $h3:typing g e3 t ->
              typing g (EIf e1 e2 e3) t
@@ -68,7 +68,7 @@ let rec backtranslate (g:typ_env) (e:exp) (t:qType) (h:typing g e t) (fs_g:eval_
   | EFalse -> false
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
-    let b : bool = backtranslate g e1 tbool h1 fs_g in
+    let b : bool = backtranslate g e1 qBool h1 fs_g in
     let v1 = backtranslate g e2 t h2 fs_g in
     let v2 = backtranslate g e3 t h3 fs_g in
     if b then v1 else v2
@@ -158,10 +158,10 @@ let rec lem_backtranslate g e t (h:typing g e t) =
   | EIf e1 e2 e3 ->
     let TyIf #_ #_ #_ #_ #t h1 h2 h3 = h in
     lem_if_fv_in_env g e1 e2 e3;
-    lem_backtranslate g e1 tbool h1;
+    lem_backtranslate g e1 qBool h1;
     lem_backtranslate g e2 t h2;
     lem_backtranslate g e3 t h3;
-    let fs_e1 = (backtranslate g e1 tbool h1) in
+    let fs_e1 = (backtranslate g e1 qBool h1) in
     let fs_e2 = (backtranslate g e2 t h2) in
     let fs_e3 = (backtranslate g e3 t h3) in
     equiv_if fs_e1 fs_e2 fs_e3 e1 e2 e3

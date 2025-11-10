@@ -78,7 +78,7 @@ let rel_behs (bs:behS_t) (bt:behT_t) =
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires tbool ⦂ (fs_e, e))
+  (requires qBool ⦂ (fs_e, e))
   (ensures  (behS fs_e) `rel_behs` (behT e))
   = ()
 
@@ -120,16 +120,16 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     compile_equiv (dsnd ps);
     let ps' = dfst ps in
     compile_closed_equiv (dsnd ps);
-    assert ((t ^-> tbool) ⦂ (ps', pt));
+    assert ((t ^-> qBool) ⦂ (ps', pt));
     lemma_compile_closed_arrow_is_elam (dsnd ps);
     assert (ELam? pt /\ is_closed pt /\ irred pt);
-    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==>  (t ^-> tbool) ∋ (ps', e') with pt;
-    assert ((t ^-> tbool) ∋ (ps', pt));
+    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==>  (t ^-> qBool) ∋ (ps', e') with pt;
+    assert ((t ^-> qBool) ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
-        tbool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
+        qBool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
       with e (backtranslate_ctx ct);
     lem_bt_ctx i ct;
-    assert (tbool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
+    assert (qBool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
     lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta e (ELam?.b pt));
     assume (behT (EApp pt e) == behT (subst_beta e (ELam?.b pt))); (** simple to prove **)
     ()

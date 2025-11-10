@@ -97,7 +97,7 @@ instance compile_exp_var
    );
 }
 
-let test1_var : compile_exp (extend tunit empty) (fun fsG -> hd' fsG unit) = solve
+let test1_var : compile_exp (extend qUnit empty) (fun fsG -> hd' fsG unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
   (g:typ_env)
@@ -126,10 +126,10 @@ instance compile_exp_var_shrink2 (** CA: how to make this general? **)
       ce.equiv_proof ()); **))
   }
 
-let test2_var : compile_exp (extend tunit (extend tunit empty)) (fun fsG -> hd' (tail fsG) unit) =
+let test2_var : compile_exp (extend qUnit (extend qUnit empty)) (fun fsG -> hd' (tail fsG) unit) =
   solve
 
-let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fsG -> hd' (tail (tail fsG)) unit) =
+let test3_var : compile_exp (extend qUnit (extend qUnit (extend qUnit empty))) (fun fsG -> hd' (tail (tail fsG)) unit) =
   solve
 
 instance compile_exp_lambda
