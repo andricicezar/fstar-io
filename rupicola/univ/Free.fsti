@@ -7,7 +7,7 @@ module Free
     one could produce code as close as the one written usin the
     do notation. **)
 
-val free (a:Type u#a) : Type u#a
+val free (a:Type u#a) : Type u#(max 1 a)
 
 val free_return (#a:Type) (x:a) : free a
 
