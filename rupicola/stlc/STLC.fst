@@ -632,19 +632,44 @@ let lem_destruct_steps_epair
 let rec destruct_steps_epair_fst
   (e12:closed_exp)
   (e':closed_exp)
-  (st:steps (EFst e12) e') :
+  (st:steps (EFst e12) e')
+  (t1:typ)
+  (t2:typ) :
   Pure value
-    (requires irred e') (** CA: not sure if necessary **)
+    (requires irred e' /\
+      safe e12 /\
+      sem_expr_shape (TPair t1 t2) e12) (** CA: not sure if necessary **)
     (ensures fun e12' ->
+      irred e12' /\
       steps e12 e12' /\
       steps (EFst e12') e')
     (decreases st)
   =
+  match st with
+  | SRefl (EFst e12) -> false_elim ()
+  | STrans e_can_step st' ->
+    match step e12 with
+    | Some e12' ->
+      let (EFst e12') = Some?.v (step (EFst e12)) in
+      lem_step_implies_steps e12;
+      lem_step_implies_steps (EFst e12);
+      lem_steps_preserve_safe e12 e12';
+      lem_steps_preserve_sem_expr_shape e12 e12' (TPair t1 t2);
+      let s2 : steps (EFst e12') e' = st' in
+      let e12'' = destruct_steps_epair_fst e12' e' s2 t1 t2 in
+      lem_steps_transitive e12 e12' e12'';
+      e12''
+    | None ->
+      match e12 with
+      | EPair e1 _ ->
+        lem_step_implies_steps (EFst e12);
+        e12
+      | _ -> false_elim ()
+
   (**
     How the steps look like:
       EFst e12 -->* EFst e12' -> e'
   **)
-  admit ()
 
 let lem_destruct_steps_epair_fst
   (e1 e2:closed_exp)
@@ -655,19 +680,44 @@ let lem_destruct_steps_epair_fst
 let rec destruct_steps_epair_snd
   (e12:closed_exp)
   (e':closed_exp)
-  (st:steps (ESnd e12) e') :
+  (st:steps (ESnd e12) e')
+  (t1:typ)
+  (t2:typ) :
   Pure value
-    (requires irred e') (** CA: not sure if necessary **)
+    (requires irred e' /\
+      safe e12 /\
+      sem_expr_shape (TPair t1 t2) e12) (** CA: not sure if necessary **)
     (ensures fun e12' ->
+      irred e12' /\
       steps e12 e12' /\
       steps (ESnd e12') e')
     (decreases st)
   =
+  match st with
+  | SRefl (ESnd e12) -> false_elim ()
+  | STrans e_can_step st' ->
+    match step e12 with
+    | Some e12' ->
+      let (ESnd e12') = Some?.v (step (ESnd e12)) in
+      lem_step_implies_steps e12;
+      lem_step_implies_steps (ESnd e12);
+      lem_steps_preserve_safe e12 e12';
+      lem_steps_preserve_sem_expr_shape e12 e12' (TPair t1 t2);
+      let s2 : steps (ESnd e12') e' = st' in
+      let e12'' = destruct_steps_epair_snd e12' e' s2 t1 t2 in
+      lem_steps_transitive e12 e12' e12'';
+      e12''
+    | None ->
+      match e12 with
+      | EPair _ e2 ->
+        lem_step_implies_steps (ESnd e12);
+        e12
+      | _ -> false_elim ()
+
   (**
     How the steps look like:
       ESnd e12 -->* ESnd e12' -> e'
   **)
-  admit ()
 
 let lem_destruct_steps_epair_snd
   (e1 e2:closed_exp)
