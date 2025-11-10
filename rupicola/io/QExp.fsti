@@ -95,19 +95,19 @@ type exp_quotation : #a:uType -> g:typ_env -> fs_oexp g a -> Type =
         #a:Type0 ->
         exp_quotation #(U1 (a -> free a)) g (fun _ _ -> free_return #a)
 
-// | QFreeBind :
-//         #g:typ_env ->
-//         #a:Type0 ->
-//         #b:Type0 ->
-//         exp_quotation #(U1 (free a -> (a -> free b) -> free b)) g (fun _ _ -> free_bind #a #b)
+| QFreeBind :
+        #g:typ_env ->
+        #a:Type0 ->
+        #b:Type0 ->
+        exp_quotation #(U1 (free a -> (a -> free b) -> free b)) g (fun _ _ -> free_bind #a #b)
 
-// | QFreeRead :
-//         #g:typ_env ->
-//         exp_quotation #(U1 (unit -> free bool)) g (fun _ _ -> free_read)
+| QFreeRead :
+        #g:typ_env ->
+        exp_quotation #(U1 (unit -> free bool)) g (fun _ _ -> free_read)
 
-// | QFreeWrite :
-//         #g:typ_env ->
-//         exp_quotation #(U1 (bool -> free unit)) g (fun _ _ -> free_write)
+| QFreeWrite :
+        #g:typ_env ->
+        exp_quotation #(U1 (bool -> free unit)) g (fun _ _ -> free_write)
 
 open ExamplesIO
 
