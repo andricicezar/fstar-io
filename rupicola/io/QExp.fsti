@@ -16,13 +16,6 @@ let (^->) (a b:uType) : uType =
   | U1 a, U0 b -> U1 (a -> b)
   | U1 a, U1 b -> U1 (a -> b)
 
-let ($->) (a b:uType) : uType =
-  match a, b with
-  | U0 a, U0 b -> U1 (a -> free b)
-  | U0 a, U1 b -> U1 (a -> free b)
-  | U1 a, U0 b -> U1 (a -> free b)
-  | U1 a, U1 b -> U1 (a -> free b)
-
 let get_Type (a:uType) : Type u#1 =
   match a with
   | U0 a -> ((raise_t unit) -> a)
