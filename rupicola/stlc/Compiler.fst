@@ -6,102 +6,72 @@ open FStar.Calc
 open FStar.List.Tot
 
 open STLC
-open SyntacticTypes
-open SemanticTyping
-open EquivRel
+open QTyp
+open ExpRel
 
 class compile_typ (s:Type) = {
-  [@@@no_method] t : typ;
-  [@@@no_method] eq : squash (elab_typ t == s);
-  (** CA: can this equality become problematic when
-          `typ` will encode types that elaborate to
-          refined types, arrows with pre-post conditions, and monadic arrows? **)
-  (** CA: To get rid of the equality, one would have to find different
-          definitions for `get_v'` and redefine the `equiv` relation. **)
+  [@@@no_method] r : type_quotation s;
 }
 
-instance compile_typ_unit : compile_typ unit = { t = TUnit; eq = () }
-instance compile_typ_bool : compile_typ bool = { t = TBool; eq = () }
-instance compile_typ_arrow (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 -> s2) = {
-  t = TArr c1.t c2.t;
-  eq = begin
-    let t = TArr c1.t c2.t in
-    assert (elab_typ t == (elab_typ c1.t -> elab_typ c2.t))
-      by (norm [delta_only [`%elab_typ];zeta;iota]);
-    assert (s1 == elab_typ c1.t);
-    assert (s2 == elab_typ c2.t);
-    assert ((s1 -> s2) == elab_typ t) by (
-      rewrite (nth_binder (-1));
-      rewrite (nth_binder (-3))
-    )
-  end }
+instance compile_typ_unit : compile_typ unit = { r = QUnit }
+instance compile_typ_bool : compile_typ bool = { r = QBool }
+instance compile_typ_arrow
+  (s1:Type)
+  (s2:Type)
+  {| c1:compile_typ s1 |}
+  {| c2:compile_typ s2 |} :
+  compile_typ (s1 -> s2) = { r = QArr c1.r c2.r }
+instance compile_typ_pair (s1:Type) (s2:Type) {| c1:compile_typ s1 |} {| c2:compile_typ s2 |} : compile_typ (s1 & s2) = { r = QPair c1.r c2.r }
 
-let rec elab_typ_is_compile_typ (t:typ) : compile_typ (elab_typ t) =
-  match t with
-  | TUnit -> compile_typ_unit
-  | TBool -> compile_typ_bool
-  | TArr t1 t2 ->
-    assume (elab_typ t == (elab_typ t1 -> elab_typ t2)); (** I just proved this a few lines above **)
-    compile_typ_arrow (elab_typ t1) (elab_typ t2) #(elab_typ_is_compile_typ t1) #(elab_typ_is_compile_typ t2)
-
-instance elab_typ_is_compile_typ' (t:typ) : compile_typ (elab_typ t) = elab_typ_is_compile_typ t
-
-let rec inverse_elab_typ_compile_typ (t:typ) : Lemma ((elab_typ_is_compile_typ t).t == t) [SMTPat (elab_typ_is_compile_typ t).t] =
-  match t with
-  | TUnit -> ()
-  | TBool -> ()
-  | TArr t1 t2 ->
-    inverse_elab_typ_compile_typ t1;
-    inverse_elab_typ_compile_typ t2;
-    ()
+let pack #s (c:compile_typ s) : qType = (| s, c.r |)
 
 // Some tests
-let test0 : compile_typ (unit) = solve
-let _ = assert (test0.t == TUnit)
-let test1 : compile_typ (bool -> unit) = solve
-let _ = assert (test1.t == (TArr TBool TUnit))
-let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
-let _ = assert (test2.t == TArr (TArr TUnit TBool) (TArr TBool TUnit))
 
+let test0 : compile_typ (unit) = solve
+let _ = assert (test0.r == QUnit)
+
+let test1 : compile_typ (bool -> unit) = solve
+let _ = assert (test1.r == (QArr QBool QUnit))
+
+let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
+let _ = assert (test2.r == QArr (QArr QUnit QBool) (QArr QBool QUnit))
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:env) (fs_e:fs_env g -> a) = {
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:typ_env) (fs_e:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
-  (** The following two lemmas are indepenent one of the other (we don't use one to prove the other). **)
-  [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
-  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv ca.t` e);
+  (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)
+ // [@@@no_method] typing_proof : unit -> Lemma (sem_typing g e ca.t);
+  [@@@no_method] equiv_proof : unit -> Lemma (fs_e `equiv (pack ca)` e);
 }
 
 (** Just a helper typeclass **)
+// unfold let means that function should be subject to unfolding during proofs / tactic execution
+// {| ca: compile_typ a |} is an implicit instance argument for the typeclass compile_typ - for type a, F* must be able to find an instance of the typeclass compile_typ a and name it ca
+// (s:a) - closed expression of type a
 unfold let compile_closed (#a:Type0) {| ca: compile_typ a |} (s:a) =
   compile_exp #a empty (fun _ -> s)
 
 let lemma_compile_closed_in_equiv_rel (#a:Type0) {| ca:compile_typ a |} (fs_e:a) {| cs:compile_closed #a #ca fs_e |}
-  : Lemma (ca.t ⦂ (fs_e, cs.e) /\ cs.e ⋮ ca.t) =
+  : Lemma (pack ca ⦂ (fs_e, cs.e)) =
   cs.equiv_proof ();
-  equiv_closed_terms #ca.t fs_e cs.e;
-  cs.typing_proof ();
-  lem_sem_typing_closed cs.e ca.t
+  equiv_closed_terms #(pack ca) fs_e cs.e
 
 let lemma_compile_closed_arrow_is_elam #a #b {| ca:compile_typ a |} {| cb:compile_typ b |} (fs_e:a -> b) {| cs:compile_closed #(a -> b) fs_e |}
   : Lemma (ELam? cs.e) = admit ()
 
 instance compile_exp_unit g : compile_exp #unit #solve g (fun _ -> ()) = {
   e = EUnit;
-  typing_proof = (fun () -> typing_rule_unit g);
   equiv_proof = (fun () -> equiv_unit g);
 }
 
 instance compile_exp_true g : compile_exp #bool #solve g (fun _ -> true) = {
   e = ETrue;
-  typing_proof = (fun () -> typing_rule_true g);
   equiv_proof = (fun () -> equiv_true g);
 }
 
 instance compile_exp_false g : compile_exp #bool #solve g (fun _ -> false) = {
   e = EFalse;
-  typing_proof = (fun () -> typing_rule_false g);
   equiv_proof = (fun () -> equiv_false g);
 }
 
@@ -109,83 +79,74 @@ let test_unit : compile_closed () = solve
 let test_true : compile_closed true = solve
 let test_false : compile_closed false = solve
 
-(** get_v' works better with typeclass resolution than get_v **)
-[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v during type class resolution **)
-val get_v' : #g:env -> fs_env g -> x:var{Some? (g x)} -> a:Type{a == elab_typ (Some?.v (g x))} -> a
-let get_v' #g fs_s i a =
-  get_v #g fs_s i
+(** fs_hd' works better with typeclass resolution than fs_hd **)
+[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
+val hd' : #g:typ_env -> #t:qType -> eval_env (extend t g) -> a:Type{a == get_Type t} -> a
+let hd' #g fsG a =
+  hd fsG
 
-instance compile_exp_var (a:Type) {| ca:compile_typ a |} (g:env) (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
-  : compile_exp #a #ca g (fun fs_s -> get_v' fs_s x a) = {
-    e = EVar x;
-    typing_proof = (fun () ->
-      inverse_elab_typ_compile_typ (Some?.v (g x));
-      typing_rule_var g x
-    );
+instance compile_exp_var
+  (g:typ_env)
+  (a:Type) {| ca:compile_typ a |}
+  : compile_exp #a #ca (extend (pack ca) g) (fun fsG -> hd' fsG a) = {
+    e = EVar 0;
     equiv_proof = (fun () ->
-      reveal_opaque (`%get_v') (get_v' #g);
-      equiv_var g x);
+      admit () (** this needs more refactoring **)
+ //     reveal_opaque (`%fs_hd') (fs_hd' #g #(pack ca));
+ //     equiv_var (extend (pack ca) g) 0);
+   );
 }
 
-let test1_var : compile_exp (extend TUnit empty) (fun fs_s -> get_v' fs_s 0 unit) = solve
+let test1_var : compile_exp (extend qUnit empty) (fun fsG -> hd' fsG unit) = solve
 
 instance compile_exp_var_shrink1 (** CA: how to make this general? **)
+  (g:typ_env)
   (a:Type) {| ca:compile_typ a |}
-  (g':env)
-  (t:typ)
-  (g:env{g' == extend t g})
-  (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+1) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t #g fs_s) x a) = {
-    e = ce.e;
-    typing_proof = ce.typing_proof;
-    equiv_proof = (fun () ->
+  (t:qType)
+  : compile_exp (extend t (extend (pack ca) g)) (fun fsG -> hd' (tail fsG) a) = {
+    e = EVar 1;
+    equiv_proof = (fun () -> admit ()
+    (**
       reveal_opaque (`%get_v') (get_v' #g');
       reveal_opaque (`%get_v') (get_v' #g);
-      ce.equiv_proof ());
+      ce.equiv_proof () **)
+    );
   }
 
 instance compile_exp_var_shrink2 (** CA: how to make this general? **)
   (a:Type) {| ca:compile_typ a |}
-  (g':env)
-  (t1 t2:typ)
-  (g:env{g' == extend t1 (extend t2 g)})
-  (x:var{Some? (g x) /\ ca.t == Some?.v (g x)})
-  {| ce:compile_exp g' (fun fs_s -> get_v' #g' fs_s (x+2) a) |} (** this is not necessary. I am hoping that it can be modified to be recursive **)
-  : compile_exp g' (fun (fs_s:fs_env g') -> get_v' #g (fs_shrink #t2 (fs_shrink #t1 fs_s)) x a) = {
-    e = ce.e;
-    typing_proof = ce.typing_proof;
-    equiv_proof = (fun () ->
+  (t1 t2:qType)
+  (g:typ_env)
+  : compile_exp (extend t1 (extend t2 (extend (pack ca) g))) (fun fsG -> hd' (tail (tail fsG)) a) = {
+    e = EVar 2;
+    equiv_proof = (fun () -> admit ()
+      (** This needs more refactoring
       reveal_opaque (`%get_v') (get_v' #g');
       reveal_opaque (`%get_v') (get_v' #g);
-      ce.equiv_proof ());
+      ce.equiv_proof ()); **))
   }
 
-let test2_var : compile_exp (extend TUnit (extend TUnit empty)) (fun fs_s -> get_v' (fs_shrink fs_s) 0 unit) =
+let test2_var : compile_exp (extend qUnit (extend qUnit empty)) (fun fsG -> hd' (tail fsG) unit) =
   solve
 
-let test3_var : compile_exp (extend TUnit (extend TUnit (extend TUnit empty))) (fun fs_s -> get_v' (fs_shrink (fs_shrink fs_s)) 0 unit) =
+let test3_var : compile_exp (extend qUnit (extend qUnit (extend qUnit empty))) (fun fsG -> hd' (tail (tail fsG)) unit) =
   solve
 
 instance compile_exp_lambda
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
-  (f:fs_env g -> a -> b)
-  {| cf: compile_exp #b #cb (extend ca.t g) (fun fs_s -> f (fs_shrink #ca.t fs_s) (get_v' fs_s 0 a)) |}
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (f:eval_env g -> a -> b)
+  {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fsG -> f (tail #(pack ca) fsG) (hd' fsG a)) |}
   : compile_exp g f = {
   e = begin
-    lem_fv_in_env_lam g ca.t cf.e;
+    lem_fv_in_env_lam g (pack ca) cf.e;
     ELam cf.e
   end;
-  typing_proof = (fun () ->
-    cf.typing_proof ();
-    typing_rule_lam g ca.t cf.e cb.t
-  );
   equiv_proof = (fun () ->
     cf.equiv_proof ();
-    reveal_opaque (`%get_v') (get_v' #(extend ca.t g));
-    equiv_lam g ca.t cf.e cb.t f
+    reveal_opaque (`%hd') (hd' #g #(pack ca));
+    equiv_lam (pack ca) (pack cb) f cf.e
   )
 }
 
@@ -201,7 +162,6 @@ let _ = assert (test3_exp.e == ELam (ELam (EVar 1)))
 let test3_exp' : compile_closed #(unit -> unit -> unit) (fun x y -> y) = solve
 let _ = assert (test3_exp'.e == ELam (ELam (EVar 0)))
 
-(** TODO: **)
 let test4_exp : compile_closed #(unit -> unit -> unit -> unit) (fun x y z -> x) =
   solve
 let _ = assert (test4_exp.e == ELam (ELam (ELam (EVar 2))))
@@ -215,24 +175,19 @@ let _ = assert (test4_exp''.e == ELam (ELam (ELam (EVar 0))))
 
 instance compile_exp_app
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (#b:Type) {| cb: compile_typ b |}
-  (f:fs_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
-  (x:fs_env g -> a)     {| cx: compile_exp #_ #ca g x |}
-  : compile_exp #_ #cb g (fun fs_s -> (f fs_s) (x fs_s)) = {
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (f:eval_env g -> a -> b) {| cf: compile_exp #_ #solve g f |}
+  (x:eval_env g -> a)     {| cx: compile_exp #_ #ca g x |}
+  : compile_exp #_ #cb g (fun fsG -> (f fsG) (x fsG)) = {
   e = begin
     lem_fv_in_env_app g cf.e cx.e;
     EApp cf.e cx.e
   end;
-  typing_proof = (fun () ->
-    cf.typing_proof ();
-    cx.typing_proof ();
-    typing_rule_app g cf.e cx.e ca.t cb.t
-  );
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     cx.equiv_proof ();
-    equiv_app g ca.t cb.t cf.e cx.e f x
+    equiv_app #g #(pack ca) #(pack cb) f x cf.e cx.e
   );
 }
 
@@ -259,26 +214,21 @@ let _ = assert (test2_topf.e == EApp (ELam (ELam (EVar 1))) EUnit \/
 
 instance compile_exp_if
   g
-  (#a:Type) {| ca: compile_typ a |}
-  (co:fs_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
-  (th:fs_env g -> a)     {| cth: compile_exp #_ #ca g th |}
-  (el:fs_env g -> a)     {| cel: compile_exp #_ #ca g el |}
-  : compile_exp #_ #ca g (fun fs_s -> if co fs_s then th fs_s else el fs_s) = {
+  (co:eval_env g -> bool)  {| cco: compile_exp #_ #solve g co |}
+
+  (a:Type) {| ca: compile_typ a |}
+  (th:eval_env g -> a)     {| cth: compile_exp #_ #ca g th |}
+  (el:eval_env g -> a)     {| cel: compile_exp #_ #ca g el |}
+  : compile_exp #_ #ca g (fun fsG -> if co fsG then th fsG else el fsG) = {
   e = begin
     lem_fv_in_env_if g cco.e cth.e cel.e;
     EIf cco.e cth.e cel.e
   end;
-  typing_proof = (fun () ->
-    cco.typing_proof ();
-    cth.typing_proof ();
-    cel.typing_proof ();
-    typing_rule_if g cco.e cth.e cel.e ca.t
-  );
   equiv_proof = (fun () ->
     cco.equiv_proof ();
     cth.equiv_proof ();
     cel.equiv_proof ();
-    equiv_if g ca.t cco.e cth.e cel.e co th el
+    equiv_if #g #(pack ca) co th el cco.e cth.e cel.e
   );
 }
 
@@ -290,10 +240,88 @@ let myt = true
 let test2_if : compile_closed #bool (if myt then false else true) = solve
 let _ = assert (test2_if.e == EIf ETrue EFalse ETrue)
 
+(** TODO: why does this not work automatically **)
 let test1_hoc : compile_closed
   #((bool -> bool) -> bool)
   #(compile_typ_arrow _ _ #(compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool))
   (fun f -> f false) =
- // assume (elab_typ (compile_typ_arrow _ _ #compile_typ_bool #compile_typ_bool).t == (bool -> bool));
-  assume (elab_typ (TArr TBool TBool) == (bool -> bool));
-  compile_exp_lambda _ _ #(compile_exp_app _ (fun fs_s -> get_v' fs_s 0 (bool -> bool)) _)
+  compile_exp_lambda _ _ _ _ #(compile_exp_app _ _ _ (fun fsG -> hd' fsG (bool -> bool)) _)
+
+let _ = assert (test1_hoc.e == ELam (EApp (EVar 0) EFalse))
+
+instance compile_exp_pair
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  (l:eval_env g -> a)     {| cl: compile_exp #_ #ca g l |}
+  (r:eval_env g -> b)     {| cr: compile_exp #_ #cb g r |}
+  : compile_exp #(a & b) g (fun fsG -> (l fsG, r fsG)) = {
+  e = begin
+    lem_fv_in_env_pair g cl.e cr.e;
+    EPair cl.e cr.e
+  end;
+  equiv_proof = (fun () ->
+    cl.equiv_proof ();
+    cr.equiv_proof ();
+    equiv_pair #g #(pack ca) #(pack cb) l r cl.e cr.e
+  );
+}
+
+let test1_pair : compile_closed #(bool -> bool -> bool & bool) (fun x y-> (x,y)) = solve
+let _ = assert (test1_pair.e == ELam (ELam (EPair (EVar 1) (EVar 0))))
+
+let test2_pair : compile_closed #((bool -> bool) & (bool -> bool -> bool)) ((fun x -> x), (fun y x -> y)) = solve
+let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
+
+let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
+let _ = assert (test3_pair.e == EPair (ELam (EVar 0)) (ELam (EIf (EVar 0) EFalse ETrue)))
+
+instance compile_exp_pair_fst
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  : compile_exp #(a & b -> a) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #ca) g (fun _ -> fst #a #b) = {
+  e = begin
+    ELam (EFst (EVar 0))
+  end;
+  equiv_proof = (fun () ->
+    equiv_pair_fst g (pack ca) (pack cb);
+    assert (
+      (((pack ca) ^* (pack cb)) ^-> (pack ca)) ==
+      (pack (compile_typ_arrow (a & b) a #(compile_typ_pair a b #ca #cb) #ca))) by (compute ())
+  );
+}
+
+assume val test4_pair : compile_closed (fst (true, ()))
+//let test4_pair = solve
+
+assume val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
+//let test5_pair = solve
+
+assume val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
+//let test4_pair_fst' = solve
+
+assume val test4_pair' : compile_closed #bool (fst (true, ()))
+//let test4_pair' = solve
+
+instance compile_exp_snd
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
+  : compile_exp #(a & b -> b) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #cb) g (fun _ -> snd #a #b) = {
+  e = begin
+    ELam (ESnd (EVar 0))
+  end;
+  equiv_proof = (fun () ->
+    equiv_pair_snd g (pack ca) (pack cb);
+    assert (
+      (((pack ca) ^* (pack cb)) ^-> (pack cb)) ==
+      (pack (compile_typ_arrow (a & b) b #(compile_typ_pair a b #ca #cb) #cb))) by (compute ())
+  );
+}
+
+assume val test6_pair : compile_closed #unit (snd (true, ()))
+//let test6_pair = solve
+
+assume val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
+//let test7_pair = solve

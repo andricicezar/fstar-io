@@ -1,4 +1,4 @@
-module Quotation
+module PredicateQuotation
 
 (** typ_env is a typing environment: variables to F* types **)
 type typ_env = nat -> option Type

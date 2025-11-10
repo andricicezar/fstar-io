@@ -1,16 +1,16 @@
-module CompilableWP
+module QExp
 
-open FStar.Tactics
+open FStar.Tactics.V2
 
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
 
-unfold let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-unfold let ret #a x : pure_wp a =
+let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
+let ret #a x : pure_wp a =
   reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
   fun p -> p x
 
-unfold let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
+let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
   pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
     (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
@@ -43,7 +43,7 @@ unfold
 val helper_var0 : g:env ->
                  a:Type ->
                  fs_oexp (extend a g) a (fun fsG -> ret (fs_hd fsG))
-let helper_var0 g a fsG =
+let helper_var0 g a fsG : PURE a (ret (fs_hd fsG)) =
   fs_hd fsG
 
 unfold
@@ -73,43 +73,59 @@ unfold
 val helper_false : g:env -> fs_oexp g bool (fun _ -> ret false)
 let helper_false g = fun _ -> false
 
+val wp_app:     #g :env ->
+                #a :Type ->
+                #b :Type ->
+                wpF : spec_env g (a -> b) ->
+                wpX : spec_env g a ->
+                spec_env g b
+let wp_app #_ #a #b wpF wpX =
+  (fun fsG ->
+    pure_bind_wp (a -> b) b (wpF fsG) (fun f' ->
+      pure_bind_wp a b (wpX fsG) (fun x' ->
+        pure_return b (f' x'))))
+
 unfold
 val helper_app: #g :env ->
                 #a :Type ->
                 #b :Type ->
-                wpF : spec_env g (a -> b) ->
+                #wpF : spec_env g (a -> b) ->
                 f :fs_oexp g (a -> b) wpF ->
-                wpX : spec_env g a ->
+                #wpX : spec_env g a ->
                 x :fs_oexp g a wpX ->
-                fs_oexp g b
-                  (fun fsG ->
-                    pure_bind_wp (a -> b) b (wpF fsG) (fun f' ->
-                      pure_bind_wp a b (wpX fsG) (fun x' ->
-                       ret (f' x'))))
-let helper_app _ f _ x =
+                fs_oexp g b (wp_app wpF wpX)
+
+let helper_app f x =
   fun fsG ->
     M.elim_pure_wp_monotonicity_forall ();
     (f fsG) (x fsG)
 
+val wp_if : #g :env ->
+                #a :Type ->
+                wpC : spec_env g bool ->
+                wpT : spec_env g a ->
+                wpE : spec_env g a ->
+                spec_env g a
+let wp_if #_ #a wpC wpT wpE =
+  (fun fsG ->
+    pure_bind_wp bool a (wpC fsG) (fun r ->
+      pure_if_then_else a r (wpT fsG) (wpE fsG)))
+
 unfold
 val helper_if : #g :env ->
                 #a :Type ->
-                wpC : spec_env g bool ->
+                #wpC : spec_env g bool ->
                 c   : fs_oexp g bool wpC ->
-                wpT : spec_env g a ->
+                #wpT : spec_env g a ->
                 t   : fs_oexp g a wpT ->
-                wpE : spec_env g a ->
+                #wpE : spec_env g a ->
                 e   : fs_oexp g a wpE ->
-                fs_oexp g a
-                  (fun fsG ->
-                    pure_bind_wp bool a (wpC fsG) (fun r ->
-                      pure_if_then_else _ r (wpT fsG) (wpE fsG)))
-let helper_if _ c _ t _ e =
+                fs_oexp g a (wp_if wpC wpT wpE)
+let helper_if c t e =
   fun fsG ->
     M.elim_pure_wp_monotonicity_forall ();
     if c fsG then t fsG else e fsG
 
-unfold
 val wp_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -128,10 +144,10 @@ unfold
 val helper_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
-                wpBody:spec_env (extend a g) b ->
+                #wpBody:spec_env (extend a g) b ->
                 f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                 fs_oexp (extend a g) b wpBody
-let helper_lambda #g #a _ f =
+let helper_lambda #g #a f =
   fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)
 
 unfold
@@ -190,7 +206,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpX : spec_env g a ->
                 #x :fs_oexp g a wpX ->
                 cx:compilable g wpX x ->
-                compilable #b g _ (helper_app wpF f wpX x)
+                compilable #b g _ (helper_app #_ #_ #_ #wpF f x)
 
 | CIf         : #g :env ->
                 #a :Type ->
@@ -203,7 +219,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #wpE : spec_env g a ->
                 #e   : fs_oexp g a wpE ->
                 ce   : compilable g wpE e ->
-                compilable g _ (helper_if wpC c wpT t wpE e)
+                compilable g _ (helper_if c t e)
 
 | CLambda     : #g :env ->
                 #a :Type ->
@@ -212,8 +228,9 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
                 cf:compilable #b (extend a g)
                               wpBody
-                              (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
-                compilable g (wp_lambda wpBody) f
+                              (helper_lambda f) ->
+                             // (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
+                compilable g (wp_lambda #g #a #b wpBody) f
 
 | CRefinement : #g:env ->
                 #a:Type ->
@@ -238,182 +255,202 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable #a g wpK k ->
                 compilable #a g _ (helper_seq wpV v wpK k)
 
-type compilable_closed #a #wp (x:a{forall fsG. wp fsG <= ret x}) =
-  compilable empty wp (fun _ -> x)
 
-type compilable_debug #a wp (x:a) (_:squash (forall fsG. wp fsG <= ret x)) =
-  compilable_closed #a #wp x
+let test_app0 ()
+  : Tot (compilable (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
+  = CApp CVar0 CTrue
 
-#set-options "--timing"
+// FIXME, why does it need tactics to do such simple proofs?
+let test_app1 ()
+  : Tot (compilable (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
+  by (unfold_def (`wp_app);
+      explode ();
+       tadmit ();
+      trefl ();
+      trefl ();
+      trefl ()
+     )
+  = CApp (CApp CVar0 CTrue) CFalse
 
 let test2_var
   : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
   = CVar1
 
-let lemma_conj a : Lemma (requires a) (ensures (a /\ a)) = ()
+unfold
+let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <= pure_return 'a x))
+  : fs_oexp empty 'a wp
+  = fun _ -> x
+
+#push-options "--no_smt"
+
+type compilable_closed #a (#wp:spec_env empty a) (x:a) =
+  proof:squash (forall fsG. wp fsG <= pure_return a x) -> compilable empty wp (helper_oexp x #wp #proof)
+
+type compilable_debug #a (wp:spec_env empty a) (x:a) =
+  compilable_closed #a #wp x
 
 let test1_exp ()
   : compilable_closed #(bool -> bool) (fun x -> x)
-  by (
-    dump "h"; // TODO: why are two conjuncts created here?
-              // one seems to be from my squash
-              // and one from typing.
-    apply_lemma (`lemma_conj);
-    dump "H")
-  = CLambda CVar0
+  = fun _ -> CLambda CVar0
 
-let test_app0 ()
-  : Tot (compilable (extend (unit -> unit) empty) _ (fun fsG -> fs_hd fsG ()))
-  = CApp CVar0 CUnit
-
-// FIXME, why does it need tactics to do such simple proofs?
-let test_app1 ()
-  : Tot (compilable (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
-  by (explode (); dump "H";
-      rewrite_eqs_from_context (); assumption ();
-      trefl ();
-      trefl ();
-      trefl ())
-  = CApp (CApp CVar0 CTrue) CFalse
-
-let test ()
-  : Tot (unit -> unit)
-    by (dump "H")
-  = fun x -> x
-
-let test2 ()
-  : Tot ((unit -> unit) -> unit)
-  by (dump "H")
-   = fun f -> f ()
+let test1_exp' ()
+  : Tot (compilable_closed #(bool -> bool -> bool) (fun x y -> y))
+  = fun _ ->  CLambda (CLambda CVar0)
 
 let test_fapp1 ()
-  : Tot (compilable_closed #((unit -> unit) -> unit) (fun f -> f ()))
-  by (dump "H")
-  = CLambda (CApp CVar0 CUnit)
+  : compilable_closed #((unit -> unit) -> unit) (fun f -> f ())
+  = fun _ -> CLambda (CApp CVar0 CUnit)
 
-let test_fapp2
-  : compilable_closed #((unit -> unit -> unit) -> unit) (fun f -> f () ())
-  = CLambda (CApp (CApp CVar0 CUnit) CUnit)
+let test_fapp2 ()
+  : compilable_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false)
+  = fun _ -> CLambda (CApp (CApp CVar0 CTrue) CFalse)
 
-let test4_exp'
-  : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> x)
-  = CLambda (CLambda (CLambda CVar2))
+let test4_exp' ()
+  : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
+  = fun _ -> CLambda (CLambda (CLambda CVar2))
 
-let test5_exp'
-  : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = CLambda (CLambda (CLambda CVar1))
+let test5_exp' ()
+  : compilable_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
+  = fun _ -> CLambda (CLambda (CLambda CVar1))
 
-let test6_exp'
-  : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> z)
-  = CLambda (CLambda (CLambda CVar0))
+let test6_exp' ()
+  : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
+  = fun _ -> CLambda (CLambda (CLambda CVar0))
 
 [@expect_failure]
-let test4_exp'
+let test4_exp'' ()
   : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = CLambda (CLambda (CLambda CVar0))
+  = fun _ -> CLambda (CLambda (CLambda CVar0))
 
-let test1_hoc
+let test1_hoc ()
   : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = CLambda (CApp CVar0 CFalse)
+  = fun _ -> CLambda (CApp CVar0 CFalse)
 
-let test2_if
+let test2_if0 ()
+  : compilable_closed #(bool) (if true then false else true)
+  = fun _ -> (CIf CTrue CFalse CTrue)
+
+let test2_if ()
   : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
-  = CLambda (CIf CVar0 CFalse CTrue)
+  = fun _ -> CLambda (CIf CVar0 CFalse CTrue)
 
-let test1_if
+#pop-options
+
+
+// TODO: why do I have to hoist these outside?
+unfold
+let myf : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd (fs_tail fsG)))) =
+  fun fsG y -> fs_hd fsG
+
+unfold
+let myid : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
+  fun fsG z -> z
+
+#push-options "--no_smt"
+
+val creame : bool -> (bool -> bool)
+let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
+
+let test3_if_ho ()
+  : compilable_closed #(bool -> (bool -> bool)) creame
+  = fun _ -> CLambda (CIf CVar0
+                       (CLambda #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
+                       (CLambda #_ #_ #_ #_ #myid CVar0))
+
+let test1_if ()
   : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = CLambda (CLambda (CIf CVar1 CFalse CVar0))
+  = fun _ -> CLambda (CLambda (CIf CVar1 CFalse CVar0))
 
-let test1_comp_ref
+let test1_comp_ref ()
   : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = CLambda CVar0
+  = fun _ -> CLambda CVar0
 
-let test1_erase_ref
+let test1_erase_ref ()
   : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = CLambda (CRefinement _ CVar0)
+  = fun _ -> CLambda (CRefinement _ CVar0)
 
 open Examples
 
-let test_erase_refine_again
+let test_erase_refine_again ()
   : compilable_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
-  = CLambda (CRefinement _ (CRefinement _ CVar0))
+  = fun _ -> CLambda (CRefinement _ (CRefinement _ CVar0))
 
 [@expect_failure]
 let test_just_false
   : compilable_closed #(bool -> (x:bool{x == true})) (fun x -> false)
-  = CLambda (CRefinement _ CFalse)
+  = fun _ -> CLambda (CRefinement _ CFalse)
 
-let test_just_true'
-  : compilable_closed test_just_true
-  = CLambda (CRefinement _ CTrue)
+let test_just_true' ()
+  : compilable_closed just_true
+  = fun _ -> CLambda (CRefinement _ CTrue)
 
-let test_moving_ref'
-  : compilable_closed test_moving_ref
-  = CLambda (CRefinement _ CUnit)
+let test_moving_ref' ()
+  : compilable_closed moving_ref
+  = fun _ -> CLambda (CRefinement _ CUnit)
 
-let test_always_false'
-  : compilable_closed test_always_false
-  = CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
+let test_always_false' ()
+  : compilable_closed always_false
+  = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
 
 let test_always_false'' ()
-  : Tot (compilable_closed test_always_false)
-  = CLambda (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CVar0))
+  : Tot (compilable_closed always_false)
+  by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
+  = fun _ ->
+    CLambda (CIf CVar0 
+                (CRefinement (fun y -> True) CFalse)
+                (CRefinement (fun y -> True) CVar0))
 
-let test_always_false_complex'
-  : compilable_closed test_always_false_complex
-  = CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
+let test_always_false_complex' ()
+  : compilable_closed always_false_complex
+  = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
 
-let test_always_false_complex''
-  : compilable_closed test_always_false_complex
-  = CLambda (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
+let test_always_false_complex'' ()
+  : compilable_closed always_false_complex
+  = fun _ -> CLambda (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
 
-let test_always_false_ho
-  : compilable_closed test_always_false_ho
-  = CLambda (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
+let test_always_false_ho ()
+  : compilable_closed always_false_ho
+  = fun _ -> CLambda (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
 
-let test_if_x'
-  : compilable_closed test_if_x
-  = CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
+let test_if_x' ()
+  : compilable_closed if_x
+  by (norm [delta_only [`%if_x]]) // TODO: why is the unfolding necessary?
+  = fun _ -> CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
 
 let test_seq_basic' ()
-  : compilable_closed test_seq_basic
-  = CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
+  : compilable_closed seq_basic
+  = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
 
-let test_seq_qref'
-  : compilable_closed test_seq_qref
-  = CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
+let test_seq_qref' ()
+  : compilable_closed seq_qref
+  = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
-
-let test_seq_p_implies_q'
-  : compilable_closed test_seq_p_implies_q
-  = CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
+let test_seq_p_implies_q' ()
+  : compilable_closed seq_p_implies_q
+  = fun _ -> CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
-  : Tot (compilable_debug _ (test_if_seq ()) ())
-  by (dump "H")
-  = CLambda (CLambda (
+  : compilable_closed if_seq
+  by (norm [delta_only [`%if_seq]]) // TODO: why is the unfolding necessary?
+  = fun _ -> CLambda (CLambda (
      CIf CVar0
-         (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
+       (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
                      (CRefinement _ CVar0))
-         (CRefinement _ CVar0)))
+       (CRefinement _ CVar0)))
 
-[@expect_failure] // TODO
+#pop-options
+
+unfold
+let myid2 : fs_oexp (extend (f:(x:bool{x == true}) -> bool -> bool) (extend bool empty)) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
+  fun fsG y -> y
+
+#push-options "--no_smt"
+
 let test_context' ()
-  : Tot (compilable_debug _ test_context _)
-  = CLambda (CLambda (CIf CVar1
-                          (CApp CVar0 (CRefinement (fun _ -> True) #(fun x -> x == true) CVar1))
-                          (CLambda #_ #_ #_ #_ #(fun fsG y -> y) CVar0)))
-
-type compilable_debug' #a wp (x:a) =
- squash (forall fsG. wp fsG <= ret x) -> compilable_closed #a #wp x
-
-let test_if_seq''
-  : compilable_debug' _ (test_if_seq ())
-  = fun () ->
-    CLambda (CLambda (
-      CIf CVar0
-         (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
-                     (CRefinement _ CVar0))
-         (CRefinement _ CVar0)))
-
-let x = test_if_seq'' ()
+  : compilable_closed context
+  by (norm [delta_only [`%context]]; tadmit ()) // TODO: why is the unfolding necessary? // TODO: why is the tadmit necessary?
+  = fun _ ->
+    // TODO: why does it fail here?
+    CLambda (CLambda (CIf CVar1
+                          (CApp CVar0 (CRefinement _ CVar1))
+                          (CLambda #_ #_ #_ #_ #(fun _ y -> y) CVar0)))

@@ -1,7 +1,7 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-ROOTS := Compiler.fst RHC.fst
+ROOTS := QExp.fst
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
