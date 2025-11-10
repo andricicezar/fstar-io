@@ -390,7 +390,7 @@ let lem_sem_expr_shape_and_steps_implies_sem_expr_shape (e e':closed_exp) (t:typ
 assume val t1 : typ
 assume val t2 : typ
 
-let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
+let srefl_eapp_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
   (requires
     irred e' /\
     safe e1 /\
@@ -409,14 +409,39 @@ let srefl_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') : Lemma
       | ELam e11 -> ()
       | _ -> ()
 
-let e1_not_ELam_impossible (e1:closed_exp) : Lemma
+let srefl_eif_impossible (e1 e2 e3 e':closed_exp) (st:steps (EIf e1 e2 e3) e') : Lemma
+  (requires
+    irred e' /\
+    safe e1 /\
+    safe e2 /\
+    sem_expr_shape TBool e1 /\
+    (EIf e1 e2 e3) == e')
+  (ensures ~(irred e') \/ ~(sem_expr_shape TBool e1))
+  =
+  match step e1 with
+  | Some e1' -> ()
+  | None ->
+    match e1 with
+    | ETrue -> ()
+    | EFalse -> ()
+    | _ -> ()
+
+let e1_not_lam_impossible (e1:closed_exp) : Lemma
   (requires 
     sem_expr_shape (TArr t1 t2) e1 /\ 
     irred e1 /\
     ~(ELam? e1))
   (ensures ~(sem_expr_shape (TArr t1 t2) e1)) 
   = ()
-    
+
+let e1_not_bool_impossible (e1:closed_exp) : Lemma
+  (requires
+    sem_expr_shape TBool e1 /\
+    irred e1 /\
+    ~(ETrue? e1 \/ EFalse? e1))
+  (ensures  ~(sem_expr_shape TBool e1))
+  = ()
+
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2 **)
 let rec destruct_steps_eapp
   (e1:closed_exp)
@@ -441,7 +466,7 @@ let rec destruct_steps_eapp
   match st with
   | SRefl (EApp e1 e2) ->
     assert ((EApp e1 e2) == e');
-    let impossible : False = srefl_impossible e1 e2 e' st in
+    let impossible : False = srefl_eapp_impossible e1 e2 e' st in
     false_elim impossible
   | STrans e_can_step st' ->
     match step e1 with
@@ -471,11 +496,10 @@ let rec destruct_steps_eapp
       | None ->
         match e1 with
         | ELam e11 -> 
-          let subst = Some?.v (step (EApp e1 e2)) in
           lem_step_implies_steps (EApp e1 e2);
           (e11, e2)
         | _ -> 
-          let impossible : False = e1_not_ELam_impossible e1 in false_elim impossible
+          let impossible : False = e1_not_lam_impossible e1 in false_elim impossible
       
 (* By induction on st.
    Case st = SRefl e1. We know e' = EApp e1 e2, so irreducible.
@@ -516,7 +540,10 @@ let rec destruct_steps_eif
   (e':closed_exp)
   (st:steps (EIf e1 e2 e3) e') :
   Pure closed_exp
-    (requires irred e') (** CA: not sure if necessary **)
+    (requires irred e' /\
+      safe e1 /\
+      safe e2 /\
+      sem_expr_shape TBool e1) (** CA: not sure if necessary **)
     (ensures fun e1' ->
       irred e1' /\
       steps e1 e1' /\
@@ -525,11 +552,37 @@ let rec destruct_steps_eif
       (EFalse? e1' ==> steps e3 e'))
     (decreases st)
   =
+  match st with
+  | SRefl (EIf e1 e2 e3) ->
+    let impossible : False = srefl_eif_impossible e1 e2 e3 e' st in false_elim impossible
+  | STrans e_can_step st' ->
+    match step e1 with
+    | Some e1' ->
+      let (EIf e1' e2 e3) = Some?.v (step (EIf e1 e2 e3)) in
+      lem_step_implies_steps e1;
+      lem_step_implies_steps (EIf e1 e2 e3);
+      lem_safe_and_steps_implies_safe e1 e1';
+      lem_sem_expr_shape_and_steps_implies_sem_expr_shape e1 e1' TBool;
+      let s2 : steps (EIf e1' e2 e3) e' = st' in
+      let e1'' = destruct_steps_eif e1' e2 e3 e' s2 in
+      lem_steps_transitive e1 e1' e1'';
+      lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) (EIf e1'' e2 e3);
+      e1''
+    | None -> 
+      match e1 with
+      | ETrue ->
+        lem_step_implies_steps (EIf e1 e2 e3);
+        e1
+      | EFalse ->
+        lem_step_implies_steps (EIf e1 e2 e3);
+        e1
+      | _ ->
+        let impossible : False = e1_not_bool_impossible e1 in false_elim impossible
+
   (**
     How the steps look like:
       EIf e1 e2 e3 -->* EIf e1' e2 e3 -->* e'
   **)
-  admit ()
 
 let rec destruct_steps_epair
   (e1:closed_exp)
