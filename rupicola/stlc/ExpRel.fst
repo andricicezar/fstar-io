@@ -203,7 +203,10 @@ let equiv_app #g
         introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
-            let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' in
+            safety t1 fs_e2 e2;
+            let t1_typ = type_quotation_to_typ (get_rel t1) in
+            let t2_typ = type_quotation_to_typ (get_rel t2) in
+            let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' t1_typ t2_typ in
             assume ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
             introduce True ==>  t1 ∋ (fs_e2, e2') with _. begin
               assert (t1 ⦂ (fs_e2, e2));
@@ -231,13 +234,18 @@ let equiv_if #g (#t:qType) (fs_e1:fs_oexp g qBool) (fs_e2:fs_oexp g t) (fs_e3:fs
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
-    introduce fsG ∽ s ==>  t ⦂ (fs_e, e) with _. begin
+    introduce fsG ∽ s ==> t ⦂ (fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ (fs_e, e') with begin
         introduce _ ==> t ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            safety qBool fs_e1 e1;
+            safety t (fs_e2 fsG) e2;
+            safety t (fs_e3 fsG) e3;
             let e1' = destruct_steps_eif e1 e2 e3 e' steps_e_e' in
             assert (qBool ∋ (fs_e1, e1'));
+            assert (ETrue? e1' ==> (t ∋ (fs_e2 fsG, e')));
+            assert (EFalse? e1' ==> (t ∋ (fs_e3 fsG, e')));
             assert (t ∋ (fs_e, e'))
           )
         end
@@ -262,6 +270,8 @@ let equiv_pair #g (#t1 #t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:
         introduce _ ==> t ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            safety t1 fs_e1 e1;
+            safety t2 fs_e2 e2;
             let (e1', e2') = destruct_steps_epair e1 e2 e' steps_e_e' in
             assert (t1 ∋ (fs_e1, e1'));
             assert (t2 ∋ (fs_e2, e2'));
