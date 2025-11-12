@@ -119,3 +119,5 @@ instance quotable_if
   : quotable_exp #_ #qa g (fun fsG -> if co fsG then th fsG else el fsG) = {
   q = QIf qco.q qth.q qel.q
 }
+
+(** When using solve, one should also use the pre-processor **)

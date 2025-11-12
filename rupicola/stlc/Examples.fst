@@ -15,6 +15,9 @@ let var1 fsG = hd (tail fsG)
 let var2 : fs_oexp (extend qBool (extend qBool (extend qBool empty))) qBool =
   fun fsG -> hd (tail (tail fsG))
 
+let var3 : fs_oexp (extend qBool (extend qBool (extend qBool (extend qBool empty)))) qBool =
+  fun fsG -> hd (tail (tail (tail fsG)))
+
 let constant (x: bool) : bool =
   true
 

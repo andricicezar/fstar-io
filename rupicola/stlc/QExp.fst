@@ -14,6 +14,14 @@ val helper_var0 :
 let helper_var0 g a fsG = hd fsG
 
 unfold
+val helper_varS : g:typ_env ->
+                  a:qType ->
+                  b:qType ->
+                  fs_oexp g a ->
+                  fs_oexp (extend b g) a
+let helper_varS g a b x fsG = x (tail fsG)
+
+unfold
 val helper_var1 : g:typ_env ->
                   a:qType ->
                   b:qType ->
@@ -101,6 +109,13 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
                 #a : qType ->
                 exp_quotation _ (helper_var0 g a)
 
+| QVarS       : #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                #x : fs_oexp g a ->
+                exp_quotation g x ->
+                exp_quotation _ (helper_varS g a b x)
+
 | QVar1       : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
@@ -110,7 +125,13 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
                 #b : qType ->
                 #c : qType ->
                 exp_quotation _ (helper_var2 g a b c)
+
 (** we need a case for each deBrujin variable **)
+| QAppGhost   : #g : typ_env ->
+                #a : qType ->
+                #f : fs_oexp g (a ^-> qUnit) -> (** This has to be Tot. If it is GTot unit, F* can treat it as Pure unit **)
+                #x : fs_oexp g a ->
+                exp_quotation #qUnit g (helper_app #_ #_ #_ f x)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
@@ -191,9 +212,21 @@ let test_var1
   : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
   = QVar1
 
+let test_var1_alt
+  : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
+  = QVarS QVar0
+
 let test_var2
   : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
   = QVar2
+
+let test_var2_alt
+  : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
+  = QVarS (QVarS QVar0)
+
+let test_var3
+  : exp_quotation #qBool (extend qBool (extend qBool (extend qBool (extend qBool empty)))) var3
+  = QVarS (QVarS (QVarS QVar0))
 
 let test_constant
   : closed_exp_quotation (qBool ^-> qBool) constant
@@ -222,23 +255,24 @@ let test_proj3
 let test_apply_top_level_def
   : closed_exp_quotation (qBool ^-> qBool) apply_top_level_def
   = QLambda (QApp
-              (QApp #_ #_ #_ #(fun _ x y -> y) // TODO: why cannot it infer this? is it difficult to unfold thunked_id?
-                (QLambda (QLambda QVar0))
+              (QApp
+                (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
                 QVar0)
               QTrue)
 
 let test_apply_top_level_def'
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool) apply_top_level_def'
   = QLambda (QLambda (QApp
-                      (QApp #_ #_ #_ #(fun _ x y -> y)
-                        (QLambda (QLambda QVar0))
-                        QVar1)
-                      QVar0))
+                       (QApp
+                          (QLambda (QLambda #_ #_ #_ #(fun _ y -> y) QVar0))
+ //                       (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
+                          QVar1)
+                       QVar0))
 
 let test_papply__top_level_def
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool) papply__top_level_def
-  = QLambda (QApp #_ #_ #_ #(fun _ x y -> y)
-              (QLambda (QLambda QVar0))
+  = QLambda (QApp
+              (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
               QVar0)
 
 let test_apply_arg
@@ -282,15 +316,15 @@ let simplify_qType (x:term) : Tac term =
 let test_callback_return
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1) // TODO: why cannot it infer myf?
-                       (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
+                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1)
+                 (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return'
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return'
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1)
-                       (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
+                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1)
+                 (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
   : closed_exp_quotation (qBool ^-> qBool ^-> (qBool ^* qBool)) make_pair
@@ -309,10 +343,10 @@ let test_pair_of_functions ()
      dump "H";
      tadmit ())
   =  QMkpair
-      (QLambda (QApp #_ #_ #_ #(fun _ x -> if x then false else true)
-                  (QLambda (QIf QVar0 QFalse QTrue))
+      (QLambda (QApp
+                  (QLambda #_ #_ #_ #(fun _ x -> if x then false else true) (QIf QVar0 QFalse QTrue))
                   QVar0))
-      (QLambda (QLambda QVar0))
+      (QLambda (QLambda #_ #_ #_ #(fun _ y -> y) QVar0))
 
 let test_pair_of_functions2
   : closed_exp_quotation

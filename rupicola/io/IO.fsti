@@ -1,4 +1,4 @@
-module Free
+module IO
 
 (** we only have bools in STLC right now **)
 
@@ -7,16 +7,16 @@ module Free
     one could produce code as close as the one written usin the
     do notation. **)
 
-val free (a:Type u#a) : Type u#a
+val io (a:Type u#a) : Type u#a
 
-val free_return (#a:Type) (x:a) : free a
+val io_return (#a:Type) (x:a) : io a
 
-val free_bind
+val io_bind
   (#a:Type u#a)
   (#b:Type u#b)
-  (l : free a)
-  (k : a -> free b) :
-  free b
+  (l : io a)
+  (k : a -> io b) :
+  io b
 
-val free_read () : free bool
-val free_write (x:bool) : free unit
+val read () : io bool
+val write (x:bool) : io unit
