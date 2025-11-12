@@ -7,6 +7,8 @@ module IO
     one could produce code as close as the one written usin the
     do notation. **)
 
+open Hist
+
 val io (a:Type u#a) : Type u#a
 
 val io_return (#a:Type) (x:a) : io a
@@ -20,3 +22,9 @@ val io_bind
 
 val read () : io bool
 val write (x:bool) : io unit
+
+type event =
+| EvRead : bool -> event
+| EvWrite : bool -> event
+
+val theta : #a:Type -> io a -> hist #event a
