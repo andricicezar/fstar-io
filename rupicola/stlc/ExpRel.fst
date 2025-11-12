@@ -202,6 +202,8 @@ let equiv_lam #g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Le
     end
   end
 
+
+#push-options "--z3rlimit 5000 --fuel 5000"
 let equiv_app #g
   (#t1:qType) (#t2:qType)
   (fs_e1:fs_oexp g (t1 ^-> t2)) (fs_e2:fs_oexp g t1)
@@ -227,7 +229,7 @@ let equiv_app #g
             let t1_typ = type_quotation_to_typ (get_rel t1) in
             let t2_typ = type_quotation_to_typ (get_rel t2) in
             let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' t1_typ t2_typ in
-            assume ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
+            assert ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
             introduce True ==>  t1 ∋ (fs_e2, e2') with _. begin
               assert (t1 ⦂ (fs_e2, e2));
               assert (steps e2 e2');
@@ -272,6 +274,7 @@ let equiv_if #g (#t:qType) (fs_e1:fs_oexp g qBool) (fs_e2:fs_oexp g t) (fs_e3:fs
       end
     end
   end
+#pop-options
 
 let equiv_pair #g (#t1 #t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp) (e2:exp) : Lemma
   (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
