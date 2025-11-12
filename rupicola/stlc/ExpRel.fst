@@ -297,7 +297,10 @@ let equiv_pair_fst_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp
         introduce _ ==> t1 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t1 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
-            let e12' = destruct_steps_epair_fst e12 e' steps_e_e' in
+            safety (t1 ^* t2) fs_e12 e12;
+            let t1_typ = type_quotation_to_typ (get_rel t1) in
+            let t2_typ = type_quotation_to_typ (get_rel t2) in
+            let e12' = destruct_steps_epair_fst e12 e' steps_e_e' t1_typ t2_typ in
             eliminate (t1 ^* t2) ⦂ (fs_e12, e12) /\ steps e12 e12' /\ irred e12'
             returns (t1 ^* t2) ∋ (fs_e12, e12') with _ _. ();
             let EPair e1' e2' = e12' in
@@ -362,7 +365,10 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp
         introduce _ ==> t2 ∋ (fs_e, e') with h. begin
           let steps_e_e' : squash (steps e e') = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
-            let e12' = destruct_steps_epair_snd e12 e' steps_e_e' in
+            safety (t1 ^* t2) fs_e12 e12;
+            let t1_typ = type_quotation_to_typ (get_rel t1) in
+            let t2_typ = type_quotation_to_typ (get_rel t2) in
+            let e12' = destruct_steps_epair_snd e12 e' steps_e_e' t1_typ t2_typ in
             eliminate (t1 ^* t2) ⦂ (fs_e12, e12) /\ steps e12 e12' /\ irred e12'
             returns (t1 ^* t2) ∋ (fs_e12, e12') with _ _. ();
             let EPair e1' e2' = e12' in
