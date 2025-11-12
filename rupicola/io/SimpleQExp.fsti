@@ -1,8 +1,8 @@
-module QExp
+module SimpleQExp
 
 open FStar.Tactics
 open FStar.Universe
-open Free
+open IO
 
 (** typ_env is a typing environment: variables to F* types **)
 type typ_env = nat -> option Type0
@@ -50,39 +50,39 @@ type exp_quotation : #a:Type0 -> g:typ_env -> fs_oexp g a -> Type =
         #a:Type0 ->
         #x:fs_oexp g a ->
         exp_quotation g x ->
-        exp_quotation #(free a) g (fun fsG -> free_return #a (x fsG))
+        exp_quotation #(io a) g (fun fsG -> io_return #a (x fsG))
 
 | QBind :
         #g:typ_env ->
         #a:Type0 ->
         #b:Type0 ->
-        #m:fs_oexp g (free a) ->
-        #k:fs_oexp g (a -> free b) ->
+        #m:fs_oexp g (io a) ->
+        #k:fs_oexp g (a -> io b) ->
         exp_quotation g m ->
         exp_quotation g k ->
-        exp_quotation #(free b) g (fun fsG -> free_bind #a #b (m fsG) (k fsG))
+        exp_quotation #(io b) g (fun fsG -> io_bind #a #b (m fsG) (k fsG))
 
 (** Return and Bind as functions:
 | QReturn :
         #g:typ_env ->
         #a:Type0 ->
-        exp_quotation #(a -> free a) g (fun _ -> free_return #a)
+        exp_quotation #(a -> io a) g (fun _ -> io_return #a)
 
 | QBind :
         #g:typ_env ->
         #a:Type0 ->
         #b:Type0 ->
-        exp_quotation #(free a -> (a -> free b) -> free b) g (fun _ -> free_bind #a #b)
+        exp_quotation #(io a -> (a -> io b) -> io b) g (fun _ -> io_bind #a #b)
 **)
 
 (** Read & Write as functions **)
 | QRead :
         #g:typ_env ->
-        exp_quotation #(unit -> free bool) g (fun _ -> free_read)
+        exp_quotation #(unit -> io bool) g (fun _ -> read)
 
 | QWrite :
         #g:typ_env ->
-        exp_quotation #(bool -> free unit) g (fun _ -> free_write)
+        exp_quotation #(bool -> io unit) g (fun _ -> write)
 
 open ExamplesIO
 
@@ -96,71 +96,71 @@ let test_u_return
   = QReturn QTrue
 
 (**
-let test_papply_free_return
-  : closed_exp_quotation _ papply_free_return
+let test_papply_io_return
+  : closed_exp_quotation _ papply_io_return
   = QReturn
 **)
 
-let test_apply_free_return
-  : closed_exp_quotation _ apply_free_return
+let test_apply_io_return
+  : closed_exp_quotation _ apply_io_return
   = QLambda (QReturn QVar0)
 
-let test_apply_free_read
-  : closed_exp_quotation _ apply_free_read
+let test_apply_read
+  : closed_exp_quotation _ apply_read
   = QApp QRead Qtt
 
-let test_apply_free_write_const
-  : closed_exp_quotation _ apply_free_write_const
+let test_apply_write_const
+  : closed_exp_quotation _ apply_write_const
   = QApp QWrite QTrue
 
-let test_apply_free_write
-  : closed_exp_quotation _ apply_free_write
+let test_apply_write
+  : closed_exp_quotation _ apply_write
   = QLambda (QApp QWrite QVar0)
 
-let test_apply_free_bind_const
-  : closed_exp_quotation _ apply_free_bind_const
+let test_apply_io_bind_const
+  : closed_exp_quotation _ apply_io_bind_const
   = QBind
       (QReturn QTrue)
       (QLambda (QReturn QVar0))
 
-let test_apply_free_bind_identity
-  : closed_exp_quotation _ apply_free_bind_identity
+let test_apply_io_bind_identity
+  : closed_exp_quotation _ apply_io_bind_identity
   = QLambda
       (QBind
         (QReturn QVar0)
-        (QLambda #_ #_ #_ #(fun fsG y -> free_return y) (QReturn QVar0)))
+        (QLambda #_ #_ #_ #(fun fsG y -> io_return y) (QReturn QVar0)))
 
-let test_apply_free_bind_pure_if
-  : closed_exp_quotation _ apply_free_bind_pure_if
+let test_apply_io_bind_pure_if
+  : closed_exp_quotation _ apply_io_bind_pure_if
   = QLambda
       (QBind
         (QReturn QVar0)
-        (QLambda #_ #_ #_ #(fun fsG y -> if y then free_return false else free_return true)
+        (QLambda #_ #_ #_ #(fun fsG y -> if y then io_return false else io_return true)
           (QIf QVar0
             (QReturn QFalse)
             (QReturn QTrue))))
 
-let test_apply_free_bind_write
-  : closed_exp_quotation _ apply_free_bind_write
+let test_apply_io_bind_write
+  : closed_exp_quotation _ apply_io_bind_write
   = QLambda (
       QBind
          (QReturn QVar0)
-         (QLambda #_ #_ #_ #(fun fsG y -> free_write y)
+         (QLambda #_ #_ #_ #(fun fsG y -> write y)
            (QApp QWrite QVar0)))
 
-let test_apply_free_bind_read_write
-  : closed_exp_quotation _ apply_free_bind_read_write
+let test_apply_io_bind_read_write
+  : closed_exp_quotation _ apply_io_bind_read_write
   = QBind
      (QApp QRead Qtt)
      (QLambda
        (QApp QWrite QVar0))
 
-let test_apply_free_bind_read_write'
-  : closed_exp_quotation _ apply_free_bind_read_write'
+let test_apply_io_bind_read_write'
+  : closed_exp_quotation _ apply_io_bind_read_write'
   = QBind (QApp QRead Qtt) QWrite
 
-let test_apply_free_bind_read_if_write
-  : closed_exp_quotation _ apply_free_bind_read_if_write
+let test_apply_io_bind_read_if_write
+  : closed_exp_quotation _ apply_io_bind_read_if_write
   = QBind
       (QApp QRead Qtt)
       (QLambda (** TODO: weird that this does not require the lambda as the other examples **)
