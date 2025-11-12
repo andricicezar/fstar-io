@@ -7,34 +7,45 @@ open STLC
 open QTyp
 open QExp
 open ExpRel
+open IO
 open Compilation
 open Backtranslation
+
+type traceS = list (* IO.*)event
+type traceT = STLC.trace
+type trace = unit (** making sure no one uses this trace **)
+
+// TODO:
+let rel_traces (ts:traceS) (tt:traceT) : Type0 =
+  match ts, tt with
+  | [], [] -> True
+  | _, _ -> False
 
 noeq type intS = {
   ct : qType;
 }
 
-(* CA: this definition of progS is very comical! I have the compiled program inside the guarantee that it can be compiled :D **)
 // program parameterized by the type of the context
 // program is dependent pair type with:
   // map from the type of context to bool (which represents output of the source program)
-  // (proof of) compiled closed expression - where we pass in the type of ps (#_), the (proof of the) type of the compiled closed expression (#(compile_typ_arrow ...)), and ps
+  // proof that ps is in the subset we can compile
   // should exp_quotation also carry fs_event trace?
 type progS (i:intS) =
-  ps:(get_Type i.ct -> bool) 
-  & 
-  exp_quotation #(i.ct ^-> qBool) empty (fun _ -> ps)
+  ps:(get_Type i.ct -> io bool)
+  &
+  exp_quotation #(i.ct ^-> (!@ qBool)) empty (fun _ -> ps)
 
 type ctxS (i:intS) = get_Type i.ct
-type wholeS = bool // CA: To be able to compile whole programs requires a proof that it can be compiled
+type wholeS = io bool // CA: To be able to compile whole programs requires a proof that it can be compiled
 
 // linking involves taking a program and context, extracting the first part of the dependent pair (so the program i.ct -> bool) and applying it to the context
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
-type behS_t = bool
+(** Definition from SCIO*, section 6.2 **)
+type behS_t = traceS * bool -> Type0
 val behS : wholeS -> behS_t
-let behS ws = ws
+let behS ws = fun (lt, res) -> forall p. theta ws p [] ==> p lt res
 
 (** Target **)
 // right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
@@ -66,22 +77,23 @@ let rel_bools (fs_e:bool) (e:exp) : Type0 =
   (e == ETrue /\ fs_e == true) \/
   (e == EFalse /\ fs_e == false)
 
-type behT_t = bool -> Type0
+type behT_t = traceT * exp -> Type0
 val behT : wt:wholeT -> behT_t
-let behT wt = fun x ->
+let behT wt = fun (lt, r) ->
 (** vvv To have an existential here one needs normalization **)
-  forall (e':closed_exp). steps wt e' /\ irred e' ==>
-    rel_bools x e'
+  forall (e':closed_exp) (st:steps wt e'). irred e' ==>
+    lt == get_local_trace st /\ r == e'
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
-  bt bs
+  (forall rS ltS. bs (ltS, rS) ==>  (exists rT ltT. rel_bools rS rT /\ rel_traces ltS ltT /\ bt (ltT, rT))) /\
+  (forall rT ltT. bt (ltT, rT) ==>  (exists rS ltS. rel_bools rS rT /\ rel_traces ltS ltT /\ bs (ltS, rS)))
 
-let lem_rel_beh (fs_e:wholeS) (e:wholeT)  
+let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires qBool ⦂ (fs_e, e))
+  (requires (!@ qBool) ⦂ (fs_e, e))
   (ensures  (behS fs_e) `rel_behs` (behT e))
-  = ()
+  = admit () // TODO
 
 (** ** Proof of RrHP **)
 
@@ -121,16 +133,16 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     compile_equiv (dsnd ps);
     let ps' = dfst ps in
     compile_closed_equiv (dsnd ps);
-    assert ((t ^-> qBool) ⦂ (ps', pt));
+    assert ((t ^-> !@ qBool) ⦂ (ps', pt));
     lemma_compile_closed_arrow_is_elam (dsnd ps);
     assert (ELam? pt /\ is_closed pt /\ irred pt);
-    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==> (t ^-> qBool) ∋ (ps', e') with pt;
-    assume ((t ^-> qBool) ∋ (ps', pt));
+    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==> (t ^-> !@ qBool) ∋ (ps', e') with pt;
+    assume ((t ^-> !@ qBool) ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
-        qBool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt)) 
+        !@ qBool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
       with e (backtranslate_ctx ct);
     lem_bt_ctx i ct;
-    assert (qBool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
+    assert (!@ qBool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
     lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta e (ELam?.b pt));
     assume (behT (EApp pt e) == behT (subst_beta e (ELam?.b pt))); (** simple to prove **)
     ()

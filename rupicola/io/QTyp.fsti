@@ -5,6 +5,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
+open IO
 
 (** We define quotation for Type **)
 
@@ -18,6 +19,11 @@ type type_quotation : Type0 -> Type u#1 =
          type_quotation s1 ->
          type_quotation s2 ->
          type_quotation (s1 -> s2)
+| QIO : #s1:Type ->
+         //#s2:Type ->
+         type_quotation s1 ->
+         //type_quotation s2 ->
+         type_quotation (io s1)
 | QPair : #s1:Type ->
           #s2:Type ->
           type_quotation s1 ->
@@ -29,14 +35,17 @@ let test_match s (r:type_quotation s) = (** why does this work so well? **)
   | QUnit -> assert (s == unit)
   | QBool -> assert (s == bool)
   | QArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
+  | QIO #s1 _ -> assert (s == io s1)
   | QPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
 
 let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   match r with
   | QUnit -> TUnit
   | QBool -> TBool
-  | QArr #s1 #s2 rs1 rs2 -> TArr (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
-  | QPair #s1 #s2 rs1 rs2 -> TPair (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
+  | QArr #s1 #s2 qs1 qs2 ->
+    TArr (type_quotation_to_typ qs1) (type_quotation_to_typ qs2)
+  | QIO #s1 qs1 -> type_quotation_to_typ qs1
+  | QPair #s1 #s2 qs1 qs2 -> TPair (type_quotation_to_typ qs1) (type_quotation_to_typ qs2)
 
 (** Type of Quotable Types **)
 type qType =
@@ -50,6 +59,9 @@ let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
+let (!@) (t1:qType) : qType =
+  (| _, QIO (get_rel t1) |)
+
 
 let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
@@ -178,7 +190,7 @@ val lem_index_tail #g #t (fsG:eval_env (extend t g)) : Lemma (
   (forall (x:var). Some? (g x) ==>  index fsG (x+1) == index (tail fsG) x))
   [SMTPat (tail fsG)]
 
-val tail_stack_inverse #g (fsG:eval_env g) #t (x:get_Type t)
+val tail_stack_inveqse #g (fsG:eval_env g) #t (x:get_Type t)
   : Lemma (tail (stack fsG x) == fsG)
   [SMTPat (tail (stack fsG x))]
 

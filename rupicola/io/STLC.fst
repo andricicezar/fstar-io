@@ -294,11 +294,11 @@ let rec pure_step e =
   end
   | _ -> None
 
-// type trace = list event
-
 type event =
   | EvRead : exp -> event
   | EvWrite : exp -> event
+
+type trace = list event
 
 type effectful_step : (*trace ->*) closed_exp -> closed_exp -> Type =
   | SRead  :
@@ -330,7 +330,7 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
   (ensures irred e)
   [SMTPat (irred e)] =
   match e with
-  | EPair e1 e2 -> lem_value_is_irred e1; lem_value_is_irred e2 
+  | EPair e1 e2 -> lem_value_is_irred e1; lem_value_is_irred e2
   | _ -> ()
 
 (** reflexive transitive closure of step *)
@@ -403,7 +403,7 @@ let safe (e:closed_exp) : Type0 =
 let lem_steps_preserve_safe (e e':closed_exp) :
   Lemma
     (requires (safe e) /\ (steps e e'))
-    (ensures (safe e')) = 
+    (ensures (safe e')) =
     introduce forall e_f. steps e' e_f ==> is_value e_f \/ can_step e_f with
     begin
       introduce steps e' e_f ==> is_value e_f \/ can_step e_f with h.
@@ -510,7 +510,7 @@ let rec destruct_steps_eapp
       steps (EApp e1 e2) (subst_beta e2' e11) /\
       steps (subst_beta e2' e11) e')
     (decreases st)
-  = 
+  =
   match st with
   | SRefl (EApp e1 e2) ->
     assert ((EApp e1 e2) == e');
@@ -597,12 +597,12 @@ let rec destruct_steps_eif
       (ETrue? e1' ==> steps e2 e') /\
       (EFalse? e1' ==> steps e3 e'))
     (decreases st)
-  = 
+  =
   match st with
   | SRefl (EIf e1 e2 e3) -> admit ()
     //let impossible : False = srefl_eif_impossible e1 e2 e3 e' st in false_elim impossible
   | STrans e_can_step st' -> begin
-    match pure_step e1 with 
+    match pure_step e1 with
     | Some e1' -> begin
       let (EIf e1' e2 e3) = Some?.v (pure_step (EIf e1 e2 e3)) in
       lem_step_implies_steps e1;
@@ -616,7 +616,7 @@ let rec destruct_steps_eif
       e1''
       end
     | None -> begin
-      match e1 with 
+      match e1 with
       | ETrue ->
         lem_step_implies_steps (EIf e1 e2 e3);
         e1
@@ -650,9 +650,9 @@ let rec destruct_steps_epair
       steps (EPair e1 e2) (EPair e1' e2') /\
       steps (EPair e1' e2') e')
     (decreases st)
-  = 
+  =
   match st with
-    | SRefl e -> 
+    | SRefl e ->
       assume (is_value e1 /\ is_value e2);
       (e1, e2)
     | STrans e_can_step st' -> begin
