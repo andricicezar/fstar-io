@@ -84,12 +84,12 @@ type exp_quotation : #a:Type0 -> g:typ_env -> fs_oexp g a -> Type =
         #g:typ_env ->
         exp_quotation #(bool -> io unit) g (fun _ -> write)
 
-open ExamplesIO
-
 type closed_exp_quotation (a:Type0) (x:a) =
   exp_quotation #a empty (fun _ -> x)
 
 #push-options "--no_smt"
+
+open ExamplesIO
 
 let test_u_return
   : closed_exp_quotation _ u_return
