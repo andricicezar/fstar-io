@@ -6,8 +6,9 @@ open FStar.Tactics.Typeclasses
 open QTyp
 open QExp
 
-(** fs_hd' works better with typeclass resolution than fs_hd **)
-[@"opaque_to_smt"] (** not sure if it is the right pragma to prevent F* unfolding get_v' during type class resolution **)
+(** hd' works better with typeclass resolution than hd,
+    but not sure how to integrate it **)
+[@"opaque_to_smt"]
 val hd' : #g:typ_env -> #t:qType -> eval_env (extend t g) -> a:Type{a == get_Type t} -> a
 let hd' #g fsG a =
   hd fsG
@@ -18,15 +19,16 @@ class quotable_typ (s:Type) = {
 
 let pack #s (c:quotable_typ s) : qType = (| s, c.q |)
 
-instance quotable_typ_unit : quotable_typ unit = { q = QUnit }
-instance quotable_typ_bool : quotable_typ bool = { q = QBool }
-instance quotable_typ_arrow
+instance q_unit : quotable_typ unit = { q = QUnit }
+instance q_bool : quotable_typ bool = { q = QBool }
+instance q_arr
   (s1:Type)
   (s2:Type)
   {| c1:quotable_typ s1 |}
   {| c2:quotable_typ s2 |} :
   quotable_typ (s1 -> s2) = { q = QArr c1.q c2.q }
-instance quotable_typ_pair (s1:Type) (s2:Type) {| c1:quotable_typ s1 |} {| c2:quotable_typ s2 |} : quotable_typ (s1 & s2) = { q = QPair c1.q c2.q }
+
+instance q_pair (s1:Type) (s2:Type) {| c1:quotable_typ s1 |} {| c2:quotable_typ s2 |} : quotable_typ (s1 & s2) = { q = QPair c1.q c2.q }
 
 class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
   [@@@no_method] q : exp_quotation #(pack ca) g s;
@@ -35,71 +37,62 @@ class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g
 unfold let quotable (#a:Type0) {| ca: quotable_typ a |} (s:a) =
   quotable_exp #a empty (fun _ -> s)
 
-instance quotable_tt g : quotable_exp #unit #solve g (fun _ -> ()) = {
+instance q_tt g : quotable_exp #unit #solve g (fun _ -> ()) = {
   q = Qtt;
 }
 
-instance quotable_true g : quotable_exp #bool #solve g (fun _ -> true) = {
+instance q_true g : quotable_exp #bool #solve g (fun _ -> true) = {
   q = QTrue;
 }
 
-instance quotable_false g : quotable_exp #bool #solve g (fun _ -> false) = {
+instance q_false g : quotable_exp #bool #solve g (fun _ -> false) = {
   q = QFalse;
 }
 
-instance quotable_var0
+instance q_var0
   (g:typ_env)
   (a:Type)
   {| qa:quotable_typ a |}
-  : quotable_exp #a #qa (extend (pack qa) g) (fun fsG -> hd' fsG a) = {
-    q = magic (); //QVar0;
+  : quotable_exp #a #qa (extend (pack qa) g) (fun fsG -> hd fsG) = {
+    q = QVar0;
 }
 
-let test1_var : quotable_exp (extend qUnit empty) (fun fsG -> hd fsG) = solve
-
-instance quotable_var1
+instance q_varS
   (g:typ_env)
   (a:Type)
   (b:Type)
   {| qa:quotable_typ a |}
   {| qb:quotable_typ b |}
-  : quotable_exp #a #qa (extend (pack qb) (extend (pack qa) g))
-    (fun fsG -> hd' (tail fsG) a) = {
-    q = magic (); // QVar1;
+  (x:eval_env g -> a)
+  {| qx:quotable_exp g x |}
+  : quotable_exp #a #qa (extend (pack qb) g)
+    (fun fsG -> x (tail fsG)) = {
+    q = QVarS qx.q;
 }
 
-instance quotable_var2
-  (g:typ_env)
-  (a:Type)
-  (b:Type)
-  (c:Type)
-  {| qa:quotable_typ a |}
-  {| qb:quotable_typ b |}
-  {| qc:quotable_typ c |}
-  : quotable_exp #a #qa (extend (pack qc) (extend (pack qb) (extend (pack qa) g)))
-    (fun fsG -> hd' (tail (tail fsG)) a) = {
-    q = magic (); // QVar2;
-}
-
-(**
-let test2_var : quotable_exp (extend qUnit (extend qUnit empty)) (fun fsG -> hd' (tail fsG) unit) =
+let test1_var : quotable_exp (extend qUnit empty) (fun fsG -> hd fsG) =
   solve
 
-let test3_var : compile_exp (extend tunit (extend tunit (extend tunit empty))) (fun fsG -> hd' (tail (tail fsG)) unit) =
-  solve
-**)
+val test2_var : quotable_exp (extend qUnit (extend qUnit empty)) (fun fsG -> hd (tail fsG))
+let test2_var =
+ q_varS _ _ _ _ #(q_var0 _ _)
+ // TODO: solve
 
-instance quotable_lambda
+let test3_var : quotable_exp (extend qUnit (extend qUnit (extend qUnit empty))) (fun fsG -> hd (tail (tail fsG))) =
+  q_varS _ _ _ _ #(q_varS _ _ _ _ #(q_var0 _ _))
+ // TODO: solve
+
+instance q_lambda
   g
   (a:Type) {| qa: quotable_typ a |}
   (b:Type) {| qb: quotable_typ b |}
   (f:eval_env g -> a -> b)
-  {| cf: quotable_exp #b #qb (extend (pack qa) g) (fun fsG -> f (tail #(pack qa) fsG) (hd' fsG a)) |}
-  : quotable_exp g f = {
-  q = magic ();
+  {| cf: quotable_exp #b #qb (extend (pack qa) g) (fun fsG -> f (tail #(pack qa) fsG) (hd fsG)) |}
+  : quotable_exp #(a -> b) #(q_arr a b) g f = {
+  q = QLambda #g #(pack qa) #(pack qb) #f cf.q;
 }
 
-instance quotable_app
+instance q_app
   g
   (a:Type) {| qa: quotable_typ a |}
   (b:Type) {| qb: quotable_typ b |}
@@ -109,7 +102,7 @@ instance quotable_app
   q = QApp qf.q qx.q;
 }
 
-instance quotable_if
+instance q_if
   g
   (co:eval_env g -> bool)  {| qco: quotable_exp #_ #solve g co |}
 

@@ -141,6 +141,26 @@ let equiv_false g
     end
   end
 
+(** Used in compilation **)
+let equiv_var0 (g:typ_env) (t:qType)
+  : Lemma ((fun (fsG:eval_env (extend t g)) -> hd fsG) ≈ EVar 0)
+  =
+  introduce forall b (s:gsub (extend t g) b) fsG. fsG ∽ s ==>  t ⦂ (hd fsG, gsubst s (EVar 0)) with begin
+    introduce _ ==> _ with _. begin
+      index_0_hd fsG;
+      assert (t ∋ (hd fsG, s 0));
+      lem_values_are_expressions t (hd fsG) (s 0)
+    end
+  end
+
+(** Used in compilation **)
+let equiv_varS (#g:typ_env) #a #t (s:fs_oexp g a) (e:exp)
+  : Lemma
+      (requires (equiv #g a s e))
+      (ensures (equiv #(extend t g) a (fun fsG -> s (tail fsG)) (subst sub_inc e)))
+  = admit ()
+
+(** Used in the back-translation **)
 let equiv_var g (x:var{Some? (g x)})
   : Lemma ((fun (fsG:eval_env g) -> index fsG x) ≈ EVar x)
   =

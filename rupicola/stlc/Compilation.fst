@@ -11,8 +11,8 @@ let rec compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : Tot exp (decreas
   match qs with
   | Qtt -> EUnit
   | QVar0 -> EVar 0
-  | QVar1 -> EVar 1
-  | QVar2 -> EVar 2
+  | QVarS #g qx -> subst sub_inc (compile qx)
+  | QAppGhost -> EUnit
   | QApp qf qx -> EApp (compile qf) (compile qx)
   | QLambda qbody -> ELam (compile qbody)
   | QFalse -> EFalse
@@ -21,7 +21,6 @@ let rec compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : Tot exp (decreas
   | QMkpair q1 q2 -> EPair (compile q1) (compile q2)
   | QFst qp -> EFst (compile qp)
   | QSnd qp -> ESnd (compile qp)
-
 
 let lem_compile_empty_closed #a (#s:fs_oexp empty a) (qs:exp_quotation empty s) : Lemma (is_closed (compile qs)) = admit ()
 
@@ -33,9 +32,11 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
   : Lemma (ensures (s `equiv a` (compile qs))) (decreases qs)
   = match qs with
   | Qtt -> equiv_unit g
-  | QVar0 -> admit () // equiv_var g 0
-  | QVar1 -> admit () // equiv_var g 1
-  | QVar2 -> admit () //equiv_var g 2
+  | QVar0 #g' #_ -> equiv_var0 g' a
+  | QVarS #g' #_ #b #x qx ->
+    compile_equiv qx;
+    equiv_varS #g' #a #b x (compile qx)
+  | QAppGhost -> equiv_unit g
   | QApp #_ #qa #qb #f #x qf qx ->
     compile_equiv qf;
     compile_equiv qx;
