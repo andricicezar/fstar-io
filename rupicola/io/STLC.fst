@@ -224,7 +224,7 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s e' n
   | EWrite e' ->
     assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e' n    
+    lem_subst_freevars_closes_exp s e' n
   | _ -> ()
 
 (* Small-step operational semantics; strong / full-beta reduction is
@@ -238,6 +238,7 @@ let subst_beta (v e:exp) :
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
+// TODO: rename this to pure_step
 val step : closed_exp -> option closed_exp
 let rec step e =
   match e with
@@ -295,10 +296,11 @@ let rec step e =
   end
   | _ -> None
 
-
+// TODO: this should check both for pure steps and effectful steps
 let can_step (e:closed_exp) : Type0 =
   Some? (step e)
 
+// TODO: this should check both for pure steps and effectful steps
 let irred (e:closed_exp) : Type0 =
   None? (step e)
 
@@ -310,48 +312,65 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
   | EPair e1 e2 -> lem_value_is_irred e1; lem_value_is_irred e2
   | _ -> ()
 
-type first_order_val = 
+type first_order_val =
   | VTrue  : first_order_val
   | VFalse : first_order_val
 
-let embed_val (v:first_order_val) : exp = 
+let embed_val (v:first_order_val) : exp =
   match v with
   | VTrue -> ETrue
   | VFalse -> EFalse
 
-type event = 
-  | EvRead  : first_order_val -> event
-  | EvWrite : first_order_val -> event
+// Traces in STLC are syntactic :(
+type event = // TODO: this should take an exp.
+  | EvRead  : exp -> event
+  | EvWrite : exp -> event
 
-type effectual_step : closed_exp -> closed_exp -> event -> Type =
-  | SRead  : 
-    b:first_order_val -> 
-    effectual_step ERead EUnit (EvRead b)
-  | SWrite : 
-    b:first_order_val ->  
-    effectual_step (EWrite (embed_val b)) (embed_val b) (EvWrite b)
+type trace = list event
+
+type effectful_step : (*trace ->*) closed_exp -> closed_exp -> Type =
+  | SRead  :
+//    #h:trace ->
+    b:closed_exp ->
+    effectful_step (* h *) ERead b
+  | SWrite :
+//    #h:trace ->
+    b:closed_exp -> // TODO: this should be an exp. Typing will make sure it is a boolean
+    effectful_step (* h *) (EWrite b) EUnit
+
+let ev_of #e1 #e2 (eff_step:effectful_step e1 e2) : event =
+  match eff_step with
+  | SRead b -> EvRead b
+  | SWrite b -> EvWrite b
 
 let can_eff_step (e:closed_exp) : Type0 =
-  exists (e':closed_exp) (ev:event). effectual_step e e' ev
- 
+  exists (e':closed_exp). effectful_step e e'
+
 (** reflexive transitive closure of step *)
-type steps : closed_exp -> closed_exp -> list event -> Type =
-| SRefl  : e:closed_exp ->
-           steps e e []
-| STrans : #e:closed_exp ->
+type steps : //trace ->
+           closed_exp -> closed_exp -> Type =
+| SRefl  : //h:trace ->
+           e:closed_exp ->
+           steps (* h *) e e
+| STrans : //#h:trace ->
+           #e:closed_exp ->
            #e':closed_exp ->
-           #tr:list event -> 
            squash (Some? (step e)) ->
-           steps (Some?.v (step e)) e' tr ->
-           steps e e' tr
-| STransEff : #e0:closed_exp ->
+           steps (* h *) (Some?.v (step e)) e' ->
+           steps (* h *) e e'
+| STransEff : (*#h:trace ->*)
+              #e0:closed_exp ->
               #e1:closed_exp ->
               #e2:closed_exp ->
-              #ev:event -> 
-              #tr:list event ->
-              effectual_step e0 e1 ev -> 
-              steps e1 e2 tr ->
-              steps e0 e2 (ev::tr)
+              eff_step:effectful_step (* h *) e0 e1 ->
+              steps (* ((ev_of eff_step)::h) *) e1 e2 ->
+              steps (* h *) e0 e2
+
+let rec get_local_trace #e1 #e2 (s:steps e1 e2) : Tot (list event) (decreases s) =
+  match s with
+  | SRefl _ -> []
+  | STrans () s' -> get_local_trace s'
+  | STransEff #_ #_ #_ eff_step s' -> (ev_of eff_step) :: (get_local_trace s')
 
 let rec lem_steps_transitive_constructive
   (#e1 #e2 #e3:closed_exp) (#tr1 #tr2:list event)
@@ -382,6 +401,7 @@ let lem_steps_transitive (e1 e2 e3:closed_exp) (tr1 tr2:list event):
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
 
+// TODO: maybe can be removed?
 let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) (tr:list event) : Lemma
   (requires steps e e' tr)
   (ensures e == e') = admit ()
@@ -392,9 +412,9 @@ let lem_steps_refl (e:closed_exp) : Lemma (steps e e []) [SMTPat (steps e e)] =
 let safe (e:closed_exp) (tr:list event) : Type0 =
   forall e'. steps e e' tr ==> is_value e' \/ can_step e' \/ can_eff_step e'
 
-let lem_steps_preserve_safe (e e':closed_exp) (tr tr1 tr2:list event)  :
+let lem_steps_preserve_safe (e e':closed_exp) (tr1 tr2:list event)  :
   Lemma
-    (requires (safe e tr) /\ (steps e e' tr1) /\ tr == (tr1 @ tr2))
+    (requires (safe e (tr1 @ tr2)) /\ (steps e e' tr1))
     (ensures (safe e' tr2)) = admit ()
   (*introduce forall e_f. steps e' e_f tr2 ==> is_value e_f \/ can_step e_f \/ (exists (e'':closed_exp). exists (ev:event). effectual_step e' e'' ev) with
     begin
@@ -636,7 +656,7 @@ let rec destruct_steps_epair
       steps (EPair e1 e2) (EPair e1' e2') [] /\
       steps (EPair e1' e2') e' [])
     (decreases st)
-  = admit () 
+  = admit ()
   (*match st with
     | SRefl e -> (e1, e2)
     | STrans e_can_step st' ->
