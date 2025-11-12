@@ -38,3 +38,5 @@ let tail_stack_inverse #g fsG #t v =
   assert (feq fsG' fsG);
   extensionality (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x))) fsG' fsG;
   assert (fsG' == fsG)
+
+let index_0_hd fsG = ()
