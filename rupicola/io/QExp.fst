@@ -2,6 +2,7 @@ module QExp
 
 open FStar.Tactics
 open QTyp
+open IO
 
 (** These helper functions are necessary to help F* do unification
     in such a way no VC is generated **)
@@ -161,6 +162,33 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
               exp_quotation g p ->
               exp_quotation g (helper_snd p)
 
+(** Return and Bind of the monad **)
+| QReturn :
+        #g:typ_env ->
+        #a:qType ->
+        #x:fs_oexp g a ->
+        exp_quotation g x ->
+        exp_quotation #(!@ a) g (fun fsG -> io_return (x fsG))
+
+| QBind :
+        #g:typ_env ->
+        #a:qType ->
+        #b:qType ->
+        #m:fs_oexp g (!@ a) ->
+        #k:fs_oexp g (a ^-> !@ b) ->
+        exp_quotation g m ->
+        exp_quotation g k ->
+        exp_quotation #(!@ b) g (fun fsG -> io_bind (m fsG) (k fsG))
+
+(** Read & Write as functions **)
+| QRead :
+        #g:typ_env ->
+        exp_quotation #(qUnit ^-> !@ qBool) g (fun _ -> read)
+
+| QWrite :
+        #g:typ_env ->
+        exp_quotation #(qBool ^-> !@ qUnit) g (fun _ -> write)
+
 unfold
 let helper_oexp (#a:qType) (x:get_Type a) : fs_oexp empty a = fun _ -> x
 
@@ -276,7 +304,7 @@ let test_if2
 
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
+  norm_term_env (top_env ()) [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return
@@ -345,3 +373,77 @@ let test_wrap_snd
 let test_wrap_snd_pa
   : closed_exp_quotation ((qBool ^* qUnit) ^-> qUnit) wrap_snd_pa
   = QLambda (QSnd QVar0)
+
+open ExamplesIO
+
+let test_u_return
+  : closed_exp_quotation _ u_return
+  = QReturn QTrue
+
+let test_apply_io_return
+  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_return
+  = QLambda (QReturn QVar0)
+
+let test_apply_read
+  : closed_exp_quotation _ apply_read
+  = QApp QRead Qtt
+
+let test_apply_write_const
+  : closed_exp_quotation _ apply_write_const
+  = QApp QWrite QTrue
+
+let test_apply_write
+  : closed_exp_quotation _ apply_write
+  = QLambda (QApp QWrite QVar0)
+
+let test_apply_io_bind_const
+  : closed_exp_quotation _ apply_io_bind_const
+  = QBind
+      (QReturn QTrue)
+      (QLambda (QReturn QVar0))
+
+let test_apply_io_bind_identity
+  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_bind_identity
+  = QLambda
+      (QBind
+        (QReturn QVar0)
+        (QLambda #_ #_ #_ #(fun fsG y -> io_return y) (QReturn QVar0)))
+
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_pure_if
+  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_bind_pure_if
+  = QLambda
+      (QBind
+        (QReturn QVar0)
+        (QLambda #_ #_ #_ #(fun fsG y -> if y then io_return false else io_return true)
+          (QIf QVar0
+            (QReturn QFalse)
+            (QReturn QTrue))))
+
+let test_apply_io_bind_write
+  : closed_exp_quotation _ apply_io_bind_write
+  = QLambda (
+      QBind
+         (QReturn QVar0)
+         (QLambda #_ #_ #_ #(fun fsG y -> write y)
+           (QApp QWrite QVar0)))
+
+let test_apply_io_bind_read_write
+  : closed_exp_quotation _ apply_io_bind_read_write
+  = QBind
+     (QApp QRead Qtt)
+     (QLambda
+       (QApp QWrite QVar0))
+
+let test_apply_io_bind_read_write'
+  : closed_exp_quotation _ apply_io_bind_read_write'
+  = QBind (QApp QRead Qtt) QWrite
+
+let test_apply_io_bind_read_if_write
+  : closed_exp_quotation _ apply_io_bind_read_if_write
+  = QBind
+      (QApp QRead Qtt)
+      (QLambda (** TODO: weird that this does not require the lambda as the other examples **)
+        (QIf QVar0
+          (QApp QWrite QFalse)
+          (QApp QWrite QTrue)))
