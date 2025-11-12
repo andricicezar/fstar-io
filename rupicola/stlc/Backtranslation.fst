@@ -7,7 +7,9 @@ open ExpRel
 
 // the environment is non-standard, more fancy
 // also over qType instead of syntactic types (typ)
-noeq type typing : typ_env -> exp -> qType -> Type =
+
+noeq
+type typing : typ_env -> exp -> qType -> Type =
   | TyUnit : #g:typ_env ->
              typing g EUnit qUnit
   | TyTrue : #g:typ_env ->
@@ -100,8 +102,6 @@ let rec backtranslate (g:typ_env) (e:exp) (t:qType) (h:typing g e t) (fs_g:eval_
     snd #(get_Type t1) #(get_Type t2) v
 
 #push-options "--split_queries always"
-val lem_backtranslate g (e:exp{fv_in_env g e}) t (h:typing g e t) : Lemma
-(equiv t (backtranslate g e t h) e)
 let rec lem_backtranslate g e t (h:typing g e t) =
    match e with
   | EUnit -> equiv_unit g
