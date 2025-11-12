@@ -7,53 +7,39 @@ open FStar.List.Tot
 open STLC
 open QTyp
 
-assume type fs_event
-
-val trace_related : list fs_event -> list event -> Type0
-let trace_related fs_tr tr = True
-
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
-let rec (∋) (t:qType) (p:(get_Type t * (list fs_event)) * (closed_exp * (list event))) : Tot Type0 (decreases %[get_rel t;0]) =
-  let fs_v_tr = fst p in
-  let e_tr = snd p in
-  let fs_v = fst fs_v_tr in
-  let fs_tr = snd fs_v_tr in
-  let e = fst e_tr in
-  let tr = snd e_tr in
-  assert (trace_related fs_tr tr);
+let rec (∋) (t:qType) (p:(get_Type t) * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
+  let fs_v = fst p in
+  let e = snd p in
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | QArr #s1 #s2 r1 r2 -> begin
     let fs_f : s1 -> s2 = fs_v in
     match e with
-    | ELam e' ->
-      (forall (v:value) (fs_v:s1) (tr':list event) (fs_tr':list fs_event). (| s1, r1 |) ∋ ((fs_v, fs_tr'), (v, tr')) /\ (trace_related fs_tr' tr') ==> exists (tr'':list event) (fs_tr'':list fs_event). 
-        (| s2, r2 |) ⦂ ((fs_f fs_v, fs_tr''), (subst_beta v e', tr'')) /\ (trace_related fs_tr'' tr'') /\ (tr == tr' @ tr'') /\ (fs_tr == fs_tr' @ fs_tr''))
+    | ELam e' -> // instead quantify over h'' - extensions of the history
+      (forall (v:value) (fs_v:s1). (| s1, r1 |) ∋ (fs_v, v) ==> 
+        (| s2, r2 |) ⦂ (fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
   | QPair #s1 #s2 r1 r2 -> begin
     match e with
     | EPair e1 e2 ->
-      (| s1, r1 |) ∋ ((fst #s1 #s2 fs_v, fs_tr), (e1, tr)) /\ (| s2, r2 |) ∋ ((snd #s1 #s2 fs_v, fs_tr), (e2, tr))
+      (| s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
-and (⦂) (t:qType) (p: (get_Type t * (list fs_event)) * (closed_exp * (list event))) : Tot Type0 (decreases %[get_rel t;1]) =
-  let fs_tr = fst p in
-  let e_tr = snd p in
-  let fs_e = fst fs_tr in
-  let fs_tr = snd fs_tr in
-  let e = fst e_tr in
-  let tr = snd e_tr in
-  forall (e':closed_exp). steps e e' tr ==> irred e' ==> t ∋ ((fs_e, fs_tr), (e', tr))
+and (⦂) (t:qType) (p:(get_Type t) * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+  let fs_e = fst p in
+  let e = snd p in
+  forall (e':closed_exp). steps e e' ==> irred e' ==> t ∋ (fs_e, e')
 
-let lem_values_are_expressions t fs_e e fs_tr tr : (** lemma used by Amal **)
-  Lemma (requires t ∋ ((fs_e, fs_tr), (e, tr)))
-        (ensures  t ⦂ ((fs_e, fs_tr), (e, tr))) = admit ()
+let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∋ (fs_e, e))
+        (ensures  t ⦂ (fs_e, e)) = admit ()
 
-let rec lem_values_are_values t fs_e (e:closed_exp) fs_tr tr :
-  Lemma (requires t ∋ ((fs_e, fs_tr), (e, tr)))
+let rec lem_values_are_values t fs_e (e:closed_exp) :
+  Lemma (requires t ∋ (fs_e, e))
         (ensures is_value e)
         (decreases e) =
   match get_rel t with
@@ -62,17 +48,17 @@ let rec lem_values_are_values t fs_e (e:closed_exp) fs_tr tr :
   | QArr #s1 #s2 r1 r2 -> ()
   | QPair #s1 #s2 r1 r2 ->
     let EPair e1 e2 = e in
-    lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1 fs_tr tr;
-    lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2 fs_tr tr
+    lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1;
+    lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2
 
-let safety (t:qType) (fs_e:get_Type t) (e:closed_exp) (fs_tr:list fs_event) (tr:list event) : Lemma
-  (requires t ⦂ ((fs_e, fs_tr), (e, tr)))
-  (ensures safe e tr) =
-  introduce forall e'. steps e e' tr ==> is_value e' \/ can_step e' \/ can_eff_step e' with begin
-    introduce steps e e' tr ==> is_value e' \/ can_step e' \/ can_eff_step e' with _. begin
+let safety (t:qType) (fs_e:get_Type t) (e:closed_exp) : Lemma
+  (requires t ⦂ (fs_e, e))
+  (ensures safe e) =
+  introduce forall e'. steps e e' ==> is_value e' \/ can_step e' with begin
+    introduce steps e e' ==> is_value e' \/ can_step e' with _. begin
       introduce irred e' ==> is_value e' with _. begin
-        assert (t ∋ ((fs_e, fs_tr), (e', tr)));
-        lem_values_are_values t fs_e e' fs_tr tr;
+        assert (t ∋ (fs_e, e'));
+        lem_values_are_values t fs_e e';
         assert (is_value e')
       end
     end
@@ -94,83 +80,83 @@ let safety (t:qType) (fs_e:get_Type t) (e:closed_exp) (fs_tr:list fs_event) (tr:
     What is cool about this is to define compilation to STLC the environment is abstract.
  **)
 
-let (∽) (#g:typ_env) #b (#fs_tr:list fs_event) (#tr:list event) (fsG:eval_env g) (s:gsub g b) : Type0 =
+let (∽) (#g:typ_env) #b (fsG:eval_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
-    Some?.v (g x) ∋ ((index fsG x, fs_tr), (s x, tr))
+    Some?.v (g x) ∋ (index fsG x, s x)
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:typ_env) (#fs_tr:list fs_event) (#tr:list event) (t:qType) (fs_e:fs_oexp g t) (e:exp) : Type0 =
+let equiv (#g:typ_env) (t:qType) (fs_e:fs_oexp g t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fsG:eval_env g).
-    (∽) #g #b #fs_tr #tr fsG s ==> t ⦂ ((fs_e fsG, fs_tr), (gsubst s e, tr))
+    fsG ∽ s ==> t ⦂ (fs_e fsG, gsubst s e)
 
-let (≈) (#g:typ_env) (#fs_tr:list fs_event) (#tr:list event) (#t:qType) (fs_v:fs_oexp g t) (e:exp) : Type0 =
-  equiv #g #fs_tr #tr t fs_v e
+let (≈) (#g:typ_env) (#t:qType) (fs_v:fs_oexp g t) (e:exp) : Type0 =
+  equiv #g t fs_v e
 
 (** Equiv closed terms **)
-let equiv_closed_terms (#fs_tr:list fs_event) (#tr:list event) (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
-  Lemma (requires equiv #empty #fs_tr #tr t (fun _ -> fs_e) e)
-        (ensures  t ⦂ ((fs_e, fs_tr), (e, tr))) =
+let equiv_closed_terms (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
+  Lemma (requires equiv #empty t (fun _ -> fs_e) e)
+        (ensures  t ⦂ (fs_e, e)) =
   eliminate forall b (s:gsub empty b) (fsG:eval_env empty).
-    (∽) #empty #b #fs_tr #tr fsG s ==> t ⦂ (((fun _ -> fs_e) fsG, fs_tr), (gsubst s e, tr)) with true gsub_empty empty_eval
+    fsG ∽ s ==> t ⦂ ((fun _ -> fs_e) fsG, gsubst s e) with true gsub_empty empty_eval
 
-let lem_equiv_exp_are_equiv (g:typ_env) (#fs_tr:list fs_event) (#tr:list event) (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
-  Lemma (requires t ⦂ ((fs_e, fs_tr), (e, tr)))
-        (ensures  equiv #empty #fs_tr #tr t (fun _ -> fs_e) e) =
+let lem_equiv_exp_are_equiv (g:typ_env) (#t:qType) (fs_e:get_Type t) (e:closed_exp) :
+  Lemma (requires t ⦂ (fs_e, e))
+        (ensures  equiv #empty t (fun _ -> fs_e) e) =
   introduce forall b (s:gsub empty b) (fsG:eval_env empty).
-    (∽) #empty #b #fs_tr #tr fsG s ==> t ⦂ (((fun _ -> fs_e) fsG, fs_tr), (gsubst s e, tr)) with begin
+    fsG ∽ s ==> t ⦂ ((fun _ -> fs_e) fsG, gsubst s e) with begin
     assert (gsubst s e == e)
   end
 
 (** Rules **)
 
-let equiv_unit g (#fs_tr:list fs_event) (#tr:list event) 
-  : Lemma (equiv #g #fs_tr #tr qUnit (fun (_:eval_env g) -> ()) EUnit)
+let equiv_unit g 
+  : Lemma ((fun (_:eval_env g) -> ()) `equiv qUnit` EUnit)
   =
-  introduce forall b (s:gsub g b) fsG. (∽) #g #b #fs_tr #tr fsG s ==> qUnit ⦂ (((), fs_tr), (gsubst s EUnit, tr)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> qUnit ⦂ ((), gsubst s EUnit) with begin
     introduce _ ==> _ with _. begin
-      assert (qUnit ∋ (((), fs_tr), (EUnit, tr)));
-      lem_values_are_expressions qUnit () EUnit fs_tr tr
+      assert (qUnit ∋ ((), EUnit));
+      lem_values_are_expressions qUnit () EUnit
     end
   end
 
-let equiv_true g (#fs_tr:list fs_event) (#tr:list event)
-  : Lemma (equiv #g #fs_tr #tr qBool (fun (_:eval_env g) -> true) ETrue)
+let equiv_true g
+  : Lemma ((fun (_:eval_env g) -> true) `equiv qBool` ETrue)
   =
-  introduce forall b (s:gsub g b) fsG. (∽) #g #b #fs_tr #tr fsG s ==> qBool ⦂ ((true, fs_tr), (gsubst s ETrue, tr)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> qBool ⦂ (true, gsubst s ETrue) with begin
     introduce _ ==> _ with _. begin
-      assert (qBool ∋ ((true, fs_tr), (ETrue, tr)));
-      lem_values_are_expressions qBool true ETrue fs_tr tr
+      assert (qBool ∋ (true, ETrue));
+      lem_values_are_expressions qBool true ETrue
     end
   end
 
-let equiv_false g (#fs_tr:list fs_event) (#tr:list event)
-  : Lemma (equiv #g #fs_tr #tr qBool (fun (_:eval_env g) -> false) EFalse)
+let equiv_false g 
+  : Lemma ((fun (_:eval_env g) -> false) `equiv qBool` EFalse)
   =
-  introduce forall b (s:gsub g b) fsG. (∽) #g #b #fs_tr #tr fsG s ==> qBool ⦂ ((false, fs_tr), (gsubst s EFalse, tr)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> qBool ⦂ (false, gsubst s EFalse) with begin
     introduce _ ==> _ with _. begin
-      assert (qBool ∋ ((false, fs_tr), (EFalse, tr)));
-      lem_values_are_expressions qBool false EFalse fs_tr tr
+      assert (qBool ∋ (false, EFalse));
+      lem_values_are_expressions qBool false EFalse
     end
   end
 
-let equiv_var g (x:var{Some? (g x)}) (#fs_tr:list fs_event) (#tr:list event)
-  : Lemma ((≈) #g #fs_tr #tr (fun (fsG:eval_env g) -> index fsG x) (EVar x))
+let equiv_var g (x:var{Some? (g x)})
+  : Lemma ((fun (fsG:eval_env g) -> index fsG x) ≈ EVar x)
   =
-  introduce forall b (s:gsub g b) fsG. (∽) #g #b #fs_tr #tr fsG s ==> Some?.v (g x) ⦂ ((index fsG x, fs_tr), (gsubst s (EVar x), tr)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> Some?.v (g x) ⦂ (index fsG x, gsubst s (EVar x)) with begin
     introduce _ ==> _ with _. begin
-      assert (Some?.v (g x) ∋ ((index fsG x, fs_tr), (s x, tr)));
-      lem_values_are_expressions (Some?.v (g x)) (index fsG x) (s x) fs_tr tr
+      assert (Some?.v (g x) ∋ (index fsG x, s x));
+      lem_values_are_expressions (Some?.v (g x)) (index fsG x) (s x)
     end
   end
 
-let equiv_lam #g (#fs_tr:list fs_event) (#tr:list event) (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
-  (requires (≈) #(extend t1 g) #fs_tr #tr (fun (fsG:eval_env (extend t1 g)) -> f (tail #t1 fsG) (hd fsG)) body)
-  (ensures (≈) #g #fs_tr #tr f (ELam body)) = admit ()
-  (*lem_fv_in_env_lam g t1 body;
+let equiv_lam #g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
+  (requires (fun (fsG:eval_env (extend t1 g)) -> f (tail #t1 fsG) (hd fsG)) ≈ body)
+  (ensures f ≈ (ELam body)) = 
+  lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  introduce forall b (s:gsub g b) fsG. (∽) #g #b #fs_tr #tr fsG s ==> (t1 ^-> t2) ⦂ ((f fsG, fs_tr), (gsubst s (ELam body), tr)) with begin
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> (t1 ^-> t2) ⦂ (f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
@@ -194,18 +180,17 @@ let equiv_lam #g (#fs_tr:list fs_event) (#tr:list event) (t1:qType) (t2:qType) (
       lem_values_are_expressions (t1 ^-> t2) (f fsG) (gsubst s (ELam body));
       assert ((t1 ^-> t2) ⦂ (f fsG, gsubst s (ELam body)))
     end
-  end*)
+  end
 
 let equiv_app #g
-  (#fs_tr:list fs_event) (#tr:list event)
   (#t1:qType) (#t2:qType)
   (fs_e1:fs_oexp g (t1 ^-> t2)) (fs_e2:fs_oexp g t1)
   (e1:exp) (e2:exp)
   : Lemma
-    (requires (≈) #g #fs_tr #tr fs_e1 e1 /\ (≈) #g #fs_tr #tr fs_e2 e2)
-    (ensures (≈) #g #fs_tr #tr (fun fsG -> (fs_e1 fsG) (fs_e2 fsG)) (EApp e1 e2))
-  = admit ()
-  (*lem_fv_in_env_app g e1 e2;
+    (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
+    (ensures (fun fsG -> (fs_e1 fsG) (fs_e2 fsG)) ≈ (EApp e1 e2))
+  = 
+  lem_fv_in_env_app g e1 e2;
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t2 ⦂ ((fs_e1 fsG) (fs_e2 fsG), gsubst s (EApp e1 e2)) with begin
     let fs_e1 = fs_e1 fsG in
     let fs_e2 = fs_e2 fsG in
@@ -237,14 +222,14 @@ let equiv_app #g
         end
       end
     end
-  end*)
+  end
 
-let equiv_if #g (#fs_tr:list fs_event) (#tr:list event) (#t:qType) (fs_e1:fs_oexp g qBool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
-  (requires (≈) #g #fs_tr #tr fs_e1 e1 /\ (≈) #g #fs_tr #tr fs_e2 e2 /\ (≈) #g #fs_tr #tr fs_e3 e3)
-  (ensures (≈) #g #fs_tr #tr (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) (EIf e1 e2 e3)) = admit ()
-  (*lem_fv_in_env_if g e1 e2 e3;
+let equiv_if #g (#t:qType) (fs_e1:fs_oexp g qBool) (fs_e2:fs_oexp g t) (fs_e3:fs_oexp g t) (e1:exp) (e2:exp) (e3:exp) : Lemma
+  (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
+  (ensures (fun fsG -> if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG) ≈ (EIf e1 e2 e3)) = 
+  lem_fv_in_env_if g e1 e2 e3;
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> t ⦂ ((if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
-    let fs_e1 = fs_e1 fsG in
+    (*let fs_e1 = fs_e1 fsG in
     let fs_e = if fs_e1 then fs_e2 fsG else fs_e3 fsG in
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
@@ -265,13 +250,14 @@ let equiv_if #g (#fs_tr:list fs_event) (#tr:list event) (#t:qType) (fs_e1:fs_oex
           )
         end
       end
-    end
-  end*)
+    end*)
+    admit ()
+  end
 
-let equiv_pair #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp) (e2:exp) : Lemma
-  (requires (≈) #g #fs_tr #tr fs_e1 e1 /\ (≈) #g #fs_tr #tr fs_e2 e2)
-  (ensures equiv #g #fs_tr #tr (t1 ^* t2) (fun fsG -> (fs_e1 fsG, fs_e2 fsG)) (EPair e1 e2)) = admit ()
-  (*lem_fv_in_env_pair g e1 e2;
+let equiv_pair #g (#t1 #t2:qType) (fs_e1:fs_oexp g t1) (fs_e2:fs_oexp g t2) (e1:exp) (e2:exp) : Lemma
+  (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
+  (ensures equiv #g (t1 ^* t2) (fun fsG -> (fs_e1 fsG, fs_e2 fsG)) (EPair e1 e2)) = 
+  lem_fv_in_env_pair g e1 e2;
   let t = t1 ^* t2 in
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ ((fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
     let fs_e1 = fs_e1 fsG in
@@ -296,12 +282,12 @@ let equiv_pair #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType) (fs_e1
         end
       end
     end
-  end*)
+  end
 
-let equiv_pair_fst_app #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp) : Lemma
-  (requires equiv #g #fs_tr #tr (t1 ^* t2) fs_e12 e12) (** is this too strict? we only care for the left to be equivalent. **)
-  (ensures equiv #g #fs_tr #tr t1 (fun fsG -> fst (fs_e12 fsG)) (EFst e12)) = admit ()
-  (*introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t1 ⦂ (fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
+let equiv_pair_fst_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp) : Lemma
+  (requires equiv #g (t1 ^* t2) fs_e12 e12) (** is this too strict? we only care for the left to be equivalent. **)
+  (ensures equiv #g t1 (fun fsG -> fst (fs_e12 fsG)) (EFst e12)) = 
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t1 ⦂ (fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
     let fs_e12 = fs_e12 fsG in
     let fs_e = fst fs_e12 in
     let e = EFst (gsubst s e12) in
@@ -323,14 +309,14 @@ let equiv_pair_fst_app #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType
         end
       end
     end
-  end*)
+  end
 
-let equiv_pair_fst g (t1 t2:qType) (#fs_tr:list fs_event) (#tr:list event)
+let equiv_pair_fst g (t1 t2:qType)
   : Lemma
     (requires True)
-    (ensures equiv #g #fs_tr #tr ((t1 ^* t2) ^-> t1) (fun _ -> fst #(get_Type t1) #(get_Type t2)) (ELam (EFst (EVar 0))))
-  = admit ()
-  (*let tp = t1 ^* t2 in
+    (ensures equiv #g ((t1 ^* t2) ^-> t1) (fun _ -> fst #(get_Type t1) #(get_Type t2)) (ELam (EFst (EVar 0))))
+  = 
+  let tp = t1 ^* t2 in
   let t = tp ^-> t1 in
   let fs_e : (get_Type t1 & get_Type t2) -> get_Type t1 = fst in
   let fs_e' : eval_env g -> get_Type t = (fun _ -> fs_e) in
@@ -359,14 +345,14 @@ let equiv_pair_fst g (t1 t2:qType) (#fs_tr:list fs_event) (#tr:list event)
     assert (t ∋ (fs_e, e));
     lem_values_are_expressions t fs_e e;
     assert (t ⦂ (fs_e, e))
-  end*)
+  end
 
-let equiv_pair_snd_app #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp)
+let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oexp g (t1 ^* t2)) (e12:exp)
   : Lemma
-    (requires equiv #g #fs_tr #tr (t1 ^* t2) fs_e12 e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures equiv #g #fs_tr #tr t2 (fun fsG -> snd (fs_e12 fsG)) (ESnd e12))
-  = admit ()
-  (*introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t2 ⦂ (snd (fs_e12 fsG), gsubst s (ESnd e12)) with begin
+    (requires equiv #g (t1 ^* t2) fs_e12 e12) (** is this too strict? we only care for the left to be equivalent. **)
+    (ensures equiv #g t2 (fun fsG -> snd (fs_e12 fsG)) (ESnd e12))
+  = 
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t2 ⦂ (snd (fs_e12 fsG), gsubst s (ESnd e12)) with begin
     let fs_e12 = fs_e12 fsG in
     let fs_e = snd fs_e12 in
     let e = ESnd (gsubst s e12) in
@@ -388,14 +374,14 @@ let equiv_pair_snd_app #g (#fs_tr:list fs_event) (#tr:list event) (#t1 #t2:qType
         end
       end
     end
-  end*)
+  end
 
-let equiv_pair_snd g (t1 t2:qType) (#fs_tr:list fs_event) (#tr:list event) 
+let equiv_pair_snd g (t1 t2:qType) 
   : Lemma
     (requires True)
-    (ensures equiv #g #fs_tr #tr ((t1 ^* t2) ^-> t2) (fun _ -> snd #(get_Type t1) #(get_Type t2)) (ELam (ESnd (EVar 0))))
-  = admit ()
-  (*let tp = t1 ^* t2 in
+    (ensures equiv #g ((t1 ^* t2) ^-> t2) (fun _ -> snd #(get_Type t1) #(get_Type t2)) (ELam (ESnd (EVar 0))))
+  =
+  let tp = t1 ^* t2 in
   let t = tp ^-> t2 in
   let fs_e : (get_Type t1 & get_Type t2) -> get_Type t2 = snd in
   let fs_e' : eval_env g -> get_Type t = (fun _ -> fs_e) in
@@ -425,4 +411,3 @@ let equiv_pair_snd g (t1 t2:qType) (#fs_tr:list fs_event) (#tr:list event)
     lem_values_are_expressions t fs_e e;
     assert (t ⦂ (fs_e, e))
   end
-*)
