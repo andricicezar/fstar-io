@@ -45,22 +45,42 @@ type exp_quotation : #a:Type0 -> g:typ_env -> fs_oexp g a -> Type =
         exp_quotation #b (extend a g) (fun fsG -> (f (tail fsG)) (hd fsG)) ->
         exp_quotation g f
 
-| QFreeReturn :
+| QReturn :
+        #g:typ_env ->
+        #a:Type0 ->
+        #x:fs_oexp g a ->
+        exp_quotation g x ->
+        exp_quotation #(free a) g (fun fsG -> free_return #a (x fsG))
+
+| QBind :
+        #g:typ_env ->
+        #a:Type0 ->
+        #b:Type0 ->
+        #m:fs_oexp g (free a) ->
+        #k:fs_oexp g (a -> free b) ->
+        exp_quotation g m ->
+        exp_quotation g k ->
+        exp_quotation #(free b) g (fun fsG -> free_bind #a #b (m fsG) (k fsG))
+
+(** Return and Bind as functions:
+| QReturn :
         #g:typ_env ->
         #a:Type0 ->
         exp_quotation #(a -> free a) g (fun _ -> free_return #a)
 
-| QFreeBind :
+| QBind :
         #g:typ_env ->
         #a:Type0 ->
         #b:Type0 ->
         exp_quotation #(free a -> (a -> free b) -> free b) g (fun _ -> free_bind #a #b)
+**)
 
-| QFreeRead :
+(** Read & Write as functions **)
+| QRead :
         #g:typ_env ->
         exp_quotation #(unit -> free bool) g (fun _ -> free_read)
 
-| QFreeWrite :
+| QWrite :
         #g:typ_env ->
         exp_quotation #(bool -> free unit) g (fun _ -> free_write)
 
@@ -73,48 +93,77 @@ type closed_exp_quotation (a:Type0) (x:a) =
 
 let test_u_return
   : closed_exp_quotation _ u_return
-  = QApp QFreeReturn QTrue
+  = QReturn QTrue
 
+(**
 let test_papply_free_return
   : closed_exp_quotation _ papply_free_return
-  = QFreeReturn
+  = QReturn
+**)
 
 let test_apply_free_return
   : closed_exp_quotation _ apply_free_return
-  = QLambda (QApp QFreeReturn QVar0)
+  = QLambda (QReturn QVar0)
 
 let test_apply_free_read
   : closed_exp_quotation _ apply_free_read
-  = QApp QFreeRead Qtt
+  = QApp QRead Qtt
 
 let test_apply_free_write_const
   : closed_exp_quotation _ apply_free_write_const
-  = QApp QFreeWrite QTrue
+  = QApp QWrite QTrue
 
 let test_apply_free_write
   : closed_exp_quotation _ apply_free_write
-  = QLambda (QApp QFreeWrite QVar0)
+  = QLambda (QApp QWrite QVar0)
 
-let test_apply_free_bind_pure_if ()
+let test_apply_free_bind_const
+  : closed_exp_quotation _ apply_free_bind_const
+  = QBind
+      (QReturn QTrue)
+      (QLambda (QReturn QVar0))
+
+let test_apply_free_bind_identity
+  : closed_exp_quotation _ apply_free_bind_identity
+  = QLambda
+      (QBind
+        (QReturn QVar0)
+        (QLambda #_ #_ #_ #(fun fsG y -> free_return y) (QReturn QVar0)))
+
+let test_apply_free_bind_pure_if
   : closed_exp_quotation _ apply_free_bind_pure_if
-  = magic ()
-//    QLambda
-//       (QApp
-//         (QApp 
-//           QFreeBind
-//           (QApp QFreeReturn QVar0))
-//         (QLambda
-//           (QIf QVar0
-//             (QApp QFreeReturn QFalse)
-//             (QApp QFreeReturn QTrue))))
+  = QLambda
+      (QBind
+        (QReturn QVar0)
+        (QLambda #_ #_ #_ #(fun fsG y -> if y then free_return false else free_return true)
+          (QIf QVar0
+            (QReturn QFalse)
+            (QReturn QTrue))))
 
 let test_apply_free_bind_write
   : closed_exp_quotation _ apply_free_bind_write
-  = magic ()
-//   = QLambda (
-//       QApp 
-//         (QApp 
-//           QFreeBind
-//           (QApp QFreeReturn QVar0))
-//         (QLambda
-//           (QApp QFreeWrite QVar0)))
+  = QLambda (
+      QBind
+         (QReturn QVar0)
+         (QLambda #_ #_ #_ #(fun fsG y -> free_write y)
+           (QApp QWrite QVar0)))
+
+let test_apply_free_bind_read_write
+  : closed_exp_quotation _ apply_free_bind_read_write
+  = QBind
+     (QApp QRead Qtt)
+     (QLambda
+       (QApp QWrite QVar0))
+
+let test_apply_free_bind_read_write'
+  : closed_exp_quotation _ apply_free_bind_read_write'
+  = QBind (QApp QRead Qtt) QWrite
+
+let test_apply_free_bind_read_if_write
+  : closed_exp_quotation _ apply_free_bind_read_if_write
+  = QBind
+      (QApp QRead Qtt)
+      (QLambda (** TODO: weird that this does not require the lambda as the other examples **)
+        (QIf QVar0
+          (QApp QWrite QFalse)
+          (QApp QWrite QTrue)))
