@@ -14,6 +14,14 @@ val helper_var0 :
 let helper_var0 g a fsG = hd fsG
 
 unfold
+val helper_varS : g:typ_env ->
+                  a:qType ->
+                  b:qType ->
+                  fs_oexp g a ->
+                  fs_oexp (extend b g) a
+let helper_varS g a b x fsG = x (tail fsG)
+
+unfold
 val helper_var1 : g:typ_env ->
                   a:qType ->
                   b:qType ->
@@ -100,6 +108,13 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
 | QVar0       : #g : typ_env ->
                 #a : qType ->
                 exp_quotation _ (helper_var0 g a)
+
+| QVarS       : #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                #x : fs_oexp g a ->
+                exp_quotation g x ->
+                exp_quotation _ (helper_varS g a b x)
 
 | QVar1       : #g : typ_env ->
                 #a : qType ->
@@ -197,9 +212,21 @@ let test_var1
   : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
   = QVar1
 
+let test_var1_alt
+  : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
+  = QVarS QVar0
+
 let test_var2
   : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
   = QVar2
+
+let test_var2_alt
+  : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
+  = QVarS (QVarS QVar0)
+
+let test_var3
+  : exp_quotation #qBool (extend qBool (extend qBool (extend qBool (extend qBool empty)))) var3
+  = QVarS (QVarS (QVarS QVar0))
 
 let test_constant
   : closed_exp_quotation (qBool ^-> qBool) constant
