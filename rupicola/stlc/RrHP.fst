@@ -122,7 +122,8 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     compile_closed_equiv (dsnd ps);
     assert ((t ^-> qBool) ⦂ (ps', pt));
     lemma_compile_closed_arrow_is_elam (dsnd ps);
-    assert (ELam? pt /\ is_closed pt /\ irred pt);
+    assert (ELam? pt /\ is_closed pt);
+    lem_value_is_irred pt;
     eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==>  (t ^-> qBool) ∋ (ps', e') with pt;
     assert ((t ^-> qBool) ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
