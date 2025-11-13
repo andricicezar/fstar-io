@@ -113,7 +113,7 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
 
 let free_vars e = free_vars_indx e 0
 
-let is_closed (e:exp) : bool =
+let is_closed (e:exp) : Type0 =
   free_vars e = []
 
 let rec is_value (e:exp) : Type0 =
@@ -237,6 +237,89 @@ let subst_beta (v e:exp) :
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
+type event =
+  | EvRead : exp -> event
+  | EvWrite : exp -> event
+
+type step : closed_exp -> closed_exp -> option event -> Type =
+  | SERead : 
+    b:closed_exp ->
+    step ERead b (Some (EvRead b))
+  | SEWrite :
+    b:closed_exp ->
+    step (EWrite b) EUnit (Some (EvWrite b))
+  | AppLeft :
+    #e1:closed_exp ->
+    e2:closed_exp ->
+    #e1':closed_exp ->
+    #oev:option event ->
+    hst:step e1 e1' oev ->
+    step (EApp e1 e2) (EApp e1' e2) oev
+  | AppRight :
+    e1:closed_exp ->
+    #e2:closed_exp ->
+    #e2':closed_exp ->
+    #oev:option event -> 
+    hst:step e2 e2' oev ->
+    step (EApp e1 e2) (EApp e1 e2') oev
+  (*| Beta :
+    e11:exp ->
+    e2:closed_exp ->
+    is_value e2 ->
+    step (EApp (ELam e11) e2) (subst_beta e2 e11)*)
+  | IfCond :
+    #e1:closed_exp ->
+    e2:closed_exp ->
+    e3:closed_exp ->
+    #e1':closed_exp ->
+    #oev:option event ->
+    hst:step e1 e1' oev ->
+    step (EIf e1 e2 e3) (EIf e1' e2 e3) oev
+  | IfLeft :
+    e2:closed_exp ->
+    e3:closed_exp ->
+    step (EIf ETrue e2 e3) e2 None
+  | IfRight :
+    e2:closed_exp ->
+    e3:closed_exp ->
+    step (EIf EFalse e2 e3) e3 None
+  | PairLeft :
+    #e1:closed_exp ->
+    e2:closed_exp ->
+    #e1':closed_exp ->
+    #oev:option event ->
+    hst:step e1 e1' oev ->
+    step (EPair e1 e2) (EPair e1' e2) oev
+  | PairRight :
+    e1:closed_exp ->
+    #e2:closed_exp ->
+    #e2':closed_exp ->
+    #oev:option event ->
+    hst:step e2 e2' oev ->
+    step (EPair e1 e2) (EPair e1 e2') oev
+  | FstPair :
+    #e':closed_exp ->
+    #e'':closed_exp ->
+    #oev:option event ->
+    hst:step e' e'' oev ->
+    step (EFst e') (EFst e'') oev
+  | FstPairReturn :
+    #e1:closed_exp ->
+    #e2:closed_exp ->
+    is_value (EPair e1 e2) ->
+    step (EFst (EPair e1 e2)) e1 None
+  | SndPair :
+    #e':closed_exp ->
+    #e'':closed_exp ->
+    #oev:option event ->
+    hst:step e' e'' oev ->
+    step (ESnd e') (ESnd e'') oev
+  | SndPairReturn :
+    #e1:closed_exp ->
+    #e2:closed_exp ->
+    is_value (EPair e1 e2) ->
+    step (ESnd (EPair e1 e2)) e2 None
+
 val pure_step : closed_exp -> option closed_exp
 let rec pure_step e =
   match e with
@@ -294,10 +377,6 @@ let rec pure_step e =
   end
   | _ -> None
 
-type event =
-  | EvRead : exp -> event
-  | EvWrite : exp -> event
-
 type trace = list event
 
 type effectful_step : (*trace ->*) closed_exp -> closed_exp -> Type =
@@ -322,16 +401,35 @@ let can_eff_step (e:closed_exp) : Type0 =
 let can_step (e:closed_exp) : Type0 =
   Some? (pure_step e) \/ can_eff_step e
 
+let can_step' (e:closed_exp) : Type0 =
+  exists (e':closed_exp) (oev:option event). step e e' oev
+
 let irred (e:closed_exp) : Type0 =
   None? (pure_step e) /\ ~(can_eff_step e)
 
+let irred' (e:closed_exp) : Type0 =
+  forall (e':closed_exp) (oev:option event). ~(step e e' oev)
+
 let rec lem_value_is_irred (e:closed_exp) : Lemma
   (requires is_value e)
-  (ensures irred e)
-  [SMTPat (irred e)] =
+  (ensures irred' e)
+  [SMTPat (irred' e)] = 
   match e with
+  | EUnit -> 
+    assert (forall (e':closed_exp) (oev:option event). ~(step EUnit e' oev)) by explode ()
+  | ETrue -> 
+    assert (forall (e':closed_exp) (oev:option event). ~(step ETrue e' oev)) by explode ()
+  | EFalse ->
+    assert (forall (e':closed_exp) (oev:option event). ~(step EFalse e' oev)) by explode ()
+  | ELam e11 -> 
+    assert (forall (e':closed_exp) (oev:option event). ~(step (ELam e11) e' oev)) by explode ()
+  | EPair e1 e2 ->
+    lem_value_is_irred e1; 
+    lem_value_is_irred e2;
+    admit ()
+  (*match e with
   | EPair e1 e2 -> lem_value_is_irred e1; lem_value_is_irred e2
-  | _ -> ()
+  | _ -> ()*)
 
 (** reflexive transitive closure of step *)
 type steps : //trace ->
@@ -352,6 +450,18 @@ type steps : //trace ->
               eff_step:effectful_step (* h *) e0 e1 ->
               steps (* ((ev_of eff_step)::h) *) e1 e2 ->
               steps (* h *) e0 e2
+
+type steps' : closed_exp -> closed_exp -> trace -> Type =
+  | SRefl'  : e:closed_exp ->
+              steps' e e []
+  | STrans' : #e0:closed_exp ->
+              #e1:closed_exp ->
+              #e2:closed_exp ->
+              #oev:option event ->
+              #tr:trace -> 
+              step:step e0 e1 oev ->
+              steps' e1 e2 tr ->
+              steps' e0 e2 (if Some? oev then (Some?.v oev)::tr else tr)
 
 let rec get_local_trace #e1 #e2 (s:steps e1 e2) : Tot (list event) (decreases s) =
   match s with
