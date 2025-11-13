@@ -369,8 +369,24 @@ let rec lem_steps_transitive_constructive
     | STrans e1_can_step st12' ->
       let e1' = Some?.v (pure_step e1) in
       STrans e1_can_step (lem_steps_transitive_constructive st12' st23)
-    | STransEff eff_e1_e2 st_e2_e3 ->
-      STransEff eff_e1_e2 (lem_steps_transitive_constructive st_e2_e3 st23)
+    | STransEff e1_can_step st12' ->
+      STransEff e1_can_step (lem_steps_transitive_constructive st12' st23)
+
+let rec lem_trans_get_local_trace
+  (#e1 #e2 #e3:closed_exp)
+  (st12:steps e1 e2)
+  (st23:steps e2 e3)
+  : Lemma
+    (ensures
+      (get_local_trace (lem_steps_transitive_constructive st12 st23) ==
+           (get_local_trace st12) @ (get_local_trace st23)))
+    (decreases st12)
+  = match st12 with
+    | SRefl _ -> ()
+    | STrans _ st12' ->
+      lem_trans_get_local_trace st12' st23
+    | STransEff _ st12' ->
+      lem_trans_get_local_trace st12' st23
 
 open FStar.Squash
 
