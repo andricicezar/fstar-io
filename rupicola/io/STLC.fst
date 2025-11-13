@@ -136,6 +136,16 @@ let rec lem_value_is_closed (e:exp) : Lemma
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
+let rec is_fo_value (v:value) : Type0 =
+  match v with
+  | EUnit -> False
+  | ETrue -> True
+  | EFalse -> True
+  | EPair _ _ -> False 
+  | _ -> False
+
+type fo_value = v:value{is_fo_value v}
+
 let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires (free_vars_indx e n == [] /\
@@ -238,15 +248,16 @@ let subst_beta (v e:exp) :
   subst (sub_beta v) e
 
 type event =
-  | EvRead : exp -> event
-  | EvWrite : exp -> event
+  | EvRead : fo_value -> event
+  | EvWrite : fo_value -> event
 
+noeq
 type step : closed_exp -> closed_exp -> option event -> Type =
   | SERead : 
-    b:closed_exp ->
+    b:fo_value ->
     step ERead b (Some (EvRead b))
   | SEWrite :
-    b:closed_exp ->
+    b:fo_value ->
     step (EWrite b) EUnit (Some (EvWrite b))
   | AppLeft :
     #e1:closed_exp ->
@@ -262,11 +273,11 @@ type step : closed_exp -> closed_exp -> option event -> Type =
     #oev:option event -> 
     hst:step e2 e2' oev ->
     step (EApp e1 e2) (EApp e1 e2') oev
-  (*| Beta :
-    e11:exp ->
+  | Beta :
+    e11:exp{is_closed (ELam e11)} ->
     e2:closed_exp ->
     is_value e2 ->
-    step (EApp (ELam e11) e2) (subst_beta e2 e11)*)
+    step (EApp (ELam e11) e2) (subst_beta e2 e11) None
   | IfCond :
     #e1:closed_exp ->
     e2:closed_exp ->
@@ -295,6 +306,7 @@ type step : closed_exp -> closed_exp -> option event -> Type =
     #e2:closed_exp ->
     #e2':closed_exp ->
     #oev:option event ->
+    is_value e1 ->
     hst:step e2 e2' oev ->
     step (EPair e1 e2) (EPair e1 e2') oev
   | FstPair :
@@ -389,10 +401,10 @@ type effectful_step : (*trace ->*) closed_exp -> closed_exp -> Type =
     b:closed_exp -> // TODO: this should be an exp. Typing will make sure it is a boolean
     effectful_step (* h *) (EWrite b) EUnit
 
-let ev_of #e1 #e2 (eff_step:effectful_step e1 e2) : event =
+(*let ev_of #e1 #e2 (eff_step:effectful_step e1 e2) : event =
   match eff_step with
   | SRead b -> EvRead b
-  | SWrite b -> EvWrite b
+  | SWrite b -> EvWrite b*)
 
 let can_eff_step (e:closed_exp) : Type0 =
   //exists (e':closed_exp). effectful_step e e'
@@ -451,6 +463,7 @@ type steps : //trace ->
               steps (* ((ev_of eff_step)::h) *) e1 e2 ->
               steps (* h *) e0 e2
 
+noeq
 type steps' : closed_exp -> closed_exp -> trace -> Type =
   | SRefl'  : e:closed_exp ->
               steps' e e []
@@ -463,11 +476,11 @@ type steps' : closed_exp -> closed_exp -> trace -> Type =
               steps' e1 e2 tr ->
               steps' e0 e2 (if Some? oev then (Some?.v oev)::tr else tr)
 
-let rec get_local_trace #e1 #e2 (s:steps e1 e2) : Tot (list event) (decreases s) =
+(*let rec get_local_trace #e1 #e2 (s:steps e1 e2) : Tot (list event) (decreases s) =
   match s with
   | SRefl _ -> []
   | STrans () s' -> get_local_trace s'
-  | STransEff #_ #_ #_ eff_step s' -> (ev_of eff_step) :: (get_local_trace s')
+  | STransEff #_ #_ #_ eff_step s' -> (ev_of eff_step) :: (get_local_trace s')*)
 
 let rec lem_steps_transitive_constructive
   (#e1 #e2 #e3:closed_exp)
@@ -482,6 +495,16 @@ let rec lem_steps_transitive_constructive
     | STransEff eff_e1_e2 st_e2_e3 ->
       STransEff eff_e1_e2 (lem_steps_transitive_constructive st_e2_e3 st23)
 
+let rec lem_steps_transitive_constructive'
+  (#e1 #e2 #e3:closed_exp) (#tr1 #tr2:trace)
+  (st12:steps' e1 e2 tr1)
+  (st23:steps' e2 e3 tr2)
+  : Tot (steps' e1 e3 (tr1 @ tr2)) (decreases st12)
+  = match st12 with
+    | SRefl' _ -> st23
+    | STrans' e1_step st12' ->
+      STrans' e1_step (lem_steps_transitive_constructive' st12' st23)
+
 open FStar.Squash
 
 let lem_step_implies_steps (e:closed_exp) :
@@ -489,6 +512,14 @@ let lem_step_implies_steps (e:closed_exp) :
     (requires (Some? (pure_step e)))
     (ensures (steps e (Some?.v (pure_step e)))) =
   return_squash (STrans () (SRefl (Some?.v (pure_step e))))
+
+let lem_step_implies_steps' #e #e' #oev (st:step e e' oev) :
+  Lemma (ensures (steps' e e' ((if Some? oev then ((Some?.v oev)::[]) else [])))) =
+  return_squash (STrans' st (SRefl' e'))
+
+let get_steps #e #e' #oev (st:step e e' oev) =
+  let h : steps' e e' ((if Some? oev then ((Some?.v oev)::[]) else [])) = STrans' st (SRefl' e') in
+  h
 
 let lem_steps_transitive (e1 e2 e3:closed_exp) :
   Lemma
@@ -498,6 +529,15 @@ let lem_steps_transitive (e1 e2 e3:closed_exp) :
     bind_squash #(steps e2 e3) () (fun st23 ->
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
+
+let lem_steps_transitive' (e1 e2 e3:closed_exp) (tr1 tr2:trace) :
+  Lemma
+    (requires (steps' e1 e2 tr1 /\ steps' e2 e3 tr2))
+    (ensures (steps' e1 e3 (tr1 @ tr2))) =
+  bind_squash #(steps' e1 e2 tr1) () (fun st12 ->
+    bind_squash #(steps' e2 e3 tr2) () (fun st23 ->
+      return_squash (
+        lem_steps_transitive_constructive' st12 st23)))
 
 // TODO: maybe can be removed?
 let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) : Lemma
@@ -509,6 +549,9 @@ let lem_steps_refl (e:closed_exp) : Lemma (steps e e) [SMTPat (steps e e)] =
 
 let safe (e:closed_exp) : Type0 =
   forall e'. steps e e' ==> is_value e' \/ can_step e'
+
+let safe' (e:closed_exp) : Type0 =
+  forall e' tr. steps' e e' tr ==> is_value e' \/ can_step' e'
 
 let lem_steps_preserve_safe (e e':closed_exp) :
   Lemma
@@ -526,6 +569,21 @@ let lem_steps_preserve_safe (e e':closed_exp) :
       end
     end
 
+let lem_steps_preserve_safe' (e e':closed_exp) (tr:trace) :
+  Lemma
+    (requires (safe' e) /\ (steps' e e' tr))
+    (ensures (safe' e')) = 
+    introduce forall e_f tr'. steps' e' e_f tr' ==> is_value e_f \/ can_step' e_f with
+    begin
+      introduce steps' e' e_f tr' ==> is_value e_f \/ can_step' e_f with h.
+      begin
+      bind_squash #(steps' e' e_f tr') () (fun st_f ->
+      match st_f with
+        | SRefl' e' -> ()
+        | STrans' e'_can_step st_f' -> lem_steps_transitive' e e' e_f tr tr')
+      end
+    end
+
 (* We need syntactic types for this, or at least the top-level shape of types *)
 let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
@@ -536,6 +594,9 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
 
 let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
   forall (e':closed_exp). steps e e' ==> irred e' ==> sem_value_shape t e'
+
+let sem_expr_shape' (t:typ) (e:closed_exp): Tot Type0 =
+  forall (e':closed_exp) (tr:trace). steps' e e' tr ==> irred' e' ==> sem_value_shape t e'
 
 let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (t:typ) :
   Lemma
@@ -550,6 +611,21 @@ let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (t:typ) :
         | SRefl e' -> ()
         | STrans e'_can_step st_f' -> lem_steps_transitive e e' e_f
         | STransEff e0_can_step st_f' -> lem_steps_transitive e e' e_f)
+      end
+    end
+
+let lem_steps_preserve_sem_expr_shape' (e e':closed_exp) (t:typ) (tr:trace) :
+  Lemma
+    (requires (sem_expr_shape' t e) /\ (steps' e e' tr))
+    (ensures (sem_expr_shape' t e')) =
+    introduce forall e_f tr'. steps' e' e_f tr' /\ irred' e_f ==> sem_value_shape t e_f with
+      begin
+      introduce _  ==> sem_value_shape t e_f with h.
+        begin
+        bind_squash #(steps' e' e_f tr') () (fun st_f ->
+        match st_f with
+        | SRefl' e' -> ()
+        | STrans' e'_can_step st_f' -> lem_steps_transitive' e e' e_f tr tr')
       end
     end
 
@@ -743,6 +819,42 @@ let rec destruct_steps_eif
     How the steps look like:
       EIf e1 e2 e3 -->* EIf e1' e2 e3 -->* e'
   **)
+let rec destruct_steps_epair'
+  (e1:closed_exp)
+  (e2:closed_exp)
+  (e':closed_exp)
+  (tr:trace)
+  (st:steps' (EPair e1 e2) e' tr) :
+  Pure (value * value * list event * list event)
+    (requires
+      irred' e' /\
+      safe' e1 /\
+      safe' e2)
+    (ensures fun (e1', e2', tr1, tr2) ->
+      steps' e1 e1' tr1 /\
+      steps' e2 e2' tr2 /\
+      steps' (EPair e1 e2) (EPair e1' e2') (tr1 @ tr2) /\
+      steps' (EPair e1' e2') e' [])
+    (decreases st)
+  =
+  match st with
+  | SRefl' (EPair e1 e2) -> begin
+      admit ()
+    end
+  | STrans' epair_step steps_epair_step_e' -> begin
+    match epair_step with
+    | PairLeft e2 e1_step ->
+      lem_step_implies_steps' e1_step;
+      let h : steps e1 e1' oev tr = get_steps e1_step in
+      lem_step_implies_steps' epair_step;
+      let e1_tr = (if Some? oev_g then ((Some?.v oev_g)::[]) else []) in
+      lem_steps_preserve_safe' g1 g1' e1_tr;
+      let st' = get_steps epair_step in
+      let (e1_f, e2_f, tr1_f, tr2_f) = destruct_steps_epair' g1' g2 e' e1_tr st' in
+      admit ()
+    | _ -> admit ()
+    end
+  | _ -> admit ()
 
 let rec destruct_steps_epair
   (e1:closed_exp)
