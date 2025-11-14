@@ -215,9 +215,6 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s e' n
   | _ -> ()
 
-(* Small-step operational semantics; strong / full-beta reduction is
-   non-deterministic, so necessarily as inductive relation *)
-
 let subst_beta (v e:exp) :
   Pure closed_exp
     (requires (is_closed (ELam e)) /\ is_closed v)
@@ -226,21 +223,23 @@ let subst_beta (v e:exp) :
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
+(* Small-step operational semantics; strong / full-beta reduction is
+   right to left  *)
+
 noeq
 type step : closed_exp -> closed_exp -> Type =
-  | AppLeft :
-    #e1:closed_exp ->
-    e2:closed_exp ->
-    #e1':closed_exp ->
-    hst:step e1 e1' ->
-    step (EApp e1 e2) (EApp e1' e2)
   | AppRight :
     e1:closed_exp ->
     #e2:closed_exp ->
     #e2':closed_exp ->
-    is_value e1 ->
     hst:step e2 e2' ->
     step (EApp e1 e2) (EApp e1 e2')
+  | AppLeft :
+    #e1:closed_exp ->
+    e2:closed_exp{is_value e2} -> (** e2 being a value makes the semantics to be call by value. TODO: funny one cannot use [value] directly **)
+    #e1':closed_exp ->
+    hst:step e1 e1' ->
+    step (EApp e1 e2) (EApp e1' e2)
   | Beta :
     e11:exp{is_closed (ELam e11)} ->
     e2:value ->
@@ -499,7 +498,7 @@ let rec destruct_steps_eapp
         lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (subst_beta e2'' e11'');
         (e11'', e2'')
         end
-      | AppRight e1 #e2 #e2' is_val_e1 step_e2 -> begin
+      | AppRight e1 #e2 #e2' step_e2 -> begin
         let (EApp e1 e2') = f2 in
         lem_step_implies_steps e2 e2';
         lem_step_implies_steps (EApp e1 e2) (EApp e1 e2');
