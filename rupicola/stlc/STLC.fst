@@ -278,9 +278,8 @@ type step : closed_exp -> closed_exp -> Type =
     hst:step e' e'' ->
     step (EFst e') (EFst e'')
   | FstPairReturn :
-    #e1:closed_exp ->
-    #e2:closed_exp ->
-    is_value (EPair e1 e2) ->
+    #e1:value ->
+    #e2:value ->
     step (EFst (EPair e1 e2)) e1
   | SndPair :
     #e':closed_exp ->
@@ -288,9 +287,8 @@ type step : closed_exp -> closed_exp -> Type =
     hst:step e' e'' ->
     step (ESnd e') (ESnd e'')
   | SndPairReturn :
-    #e1:closed_exp ->
+    #e1:closed_exp -> (* why doesn´t this work with value like I did for FstPairReturn? *)
     #e2:closed_exp ->
-    is_value (EPair e1 e2) ->
     step (ESnd (EPair e1 e2)) e2
 
 let can_step (e:closed_exp) : Type0 =
@@ -534,30 +532,29 @@ let rec destruct_steps_eapp
       | _ -> false_elim ()
       end
 
-let srefl_eif_impossible (e1 e2 e3 e':closed_exp) (st:steps (EIf e1 e2 e3) e') : Lemma
+let can_step_eif_when_safe (e1 e2 e3:closed_exp) : Lemma
   (requires
-    irred e' /\
     safe e1 /\
-    sem_expr_shape TBool e1 /\
-    (EIf e1 e2 e3) == e')
-  (ensures ~(irred e') \/ ~(sem_expr_shape TBool e1))
-  = introduce irred (EIf e1 e2 e3) /\ (sem_expr_shape TBool e1) ==> False with h.
-    begin
-      introduce (forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1') ==> False with h.
-      begin
-        FStar.Squash.bind_squash #((forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1')) h (fun conj ->
-        ///let (irred, sem_shape) = conj in
-        admit ()
-        )
-      end
+    sem_expr_shape TBool e1)
+  (ensures (exists e'. step (EIf e1 e2 e3) e'))
+  =
+  introduce irred e1 /\ e1 == ETrue ==> (exists e'. step (EIf e1 e2 e3) e') with _.
+  begin
+    let st : step (EIf ETrue e2 e3) e2 = IfTrue e2 e3 in
+    ()
+  end;
+  introduce irred e1 /\ e1 == EFalse ==> (exists e'. step (EIf e1 e2 e3) e') with _.
+  begin
+    let st : step (EIf EFalse e2 e3) e3 = IfFalse e2 e3 in
+    ()
+  end;
+  introduce ~(irred e1) ==> (exists e'. step (EIf e1 e2 e3) e') with _.
+  begin
+    assert (exists e1'. step e1 e1');
+    eliminate exists e1'. step e1 e1' returns exists e'. step (EIf e1 e2 e3) e' with st. begin
+      bind_squash st (fun st -> return_squash (IfCond e2 e3 st))
     end
-  (*match step e1 with
-  | Some e1' -> ()
-  | None ->
-    match e1 with
-    | ETrue -> ()
-    | EFalse -> ()
-    | _ -> ()*)
+  end
 
 let rec destruct_steps_eif
   (e1:closed_exp)
@@ -578,8 +575,8 @@ let rec destruct_steps_eif
     (decreases st)
   = match st with
     | SRefl (EIf e1 e2 e3) -> begin
-      assert ((EIf e1 e2 e3) == e');
-      admit ()
+      can_step_eif_when_safe e1 e2 e3;
+      false_elim ()
       end
     | STrans #f1 #f2 #f3 step_eif step_eif_steps -> begin
       let (EIf e1 e2 e3) = f1 in
@@ -675,6 +672,27 @@ let lem_destruct_steps_epair
   Lemma (requires (steps (EPair e1' e2') e' /\ irred e1' /\ irred e2'))
         (ensures ((EPair e1' e2') == e')) = admit ()
 
+let can_step_efst_when_safe (e12:closed_exp) (t1 t2:typ) : Lemma
+  (requires
+    safe e12 /\
+    sem_expr_shape (TPair t1 t2) e12)
+  (ensures (exists e'. step (EFst e12) e'))
+  =
+  introduce irred e12 ==> (exists e'. step (EFst e12) e') with _.
+  begin
+    let (EPair e1 e2) = e12 in
+    let st : step (EFst (EPair e1 e2)) e1 = FstPairReturn in
+    ()
+  end;
+  introduce ~(irred e12) ==> (exists e'. step (EFst e12) e') with _.
+  begin
+    assert (exists e12'. step e12 e12');
+    eliminate exists e12'. step e12 e12' returns exists e'. step (EFst e12) e' with st.
+    begin
+      bind_squash st (fun st -> return_squash (FstPair st))
+    end
+  end
+
 let rec destruct_steps_epair_fst
   (e12:closed_exp)
   (e':closed_exp)
@@ -694,7 +712,8 @@ let rec destruct_steps_epair_fst
   =
   match st with
   | SRefl (EFst e12) -> begin
-    admit ()
+    can_step_efst_when_safe e12 t1 t2;
+    false_elim ()
     end
   | STrans #f1 #f2 #f3 step_efst step_efst_steps -> begin
     let (EFst e12) = f1 in
@@ -711,7 +730,7 @@ let rec destruct_steps_epair_fst
       lem_steps_transitive e12 e12' e12'';
       e12''
       end
-    | FstPairReturn #e1 #e2 is_val_epair -> begin
+    | FstPairReturn #e1 #e2 -> begin
       lem_step_implies_steps (EFst (EPair e1 e2)) e1;
       e12
       end
@@ -728,6 +747,27 @@ let lem_destruct_steps_epair_fst
   (e':closed_exp) :
   Lemma (requires (steps (EFst (EPair e1 e2)) e' /\ irred e1 /\ irred e2))
         (ensures (e1 == e')) = admit ()
+
+let can_step_esnd_when_safe (e12:closed_exp) (t1 t2:typ) : Lemma
+  (requires
+    safe e12 /\
+    sem_expr_shape (TPair t1 t2) e12)
+  (ensures (exists e'. step (ESnd e12) e'))
+  =
+  introduce irred e12 ==> (exists e'. step (ESnd e12) e') with _.
+  begin
+    let (EPair e1 e2) = e12 in
+    let st : step (ESnd (EPair e1 e2)) e2 = SndPairReturn in
+    ()
+  end;
+  introduce ~(irred e12) ==> (exists e'. step (ESnd e12) e') with _.
+  begin
+    assert (exists e12'. step e12 e12');
+    eliminate exists e12'. step e12 e12' returns exists e'. step (ESnd e12) e' with st.
+    begin
+      bind_squash st (fun st -> return_squash (SndPair st))
+    end
+  end
 
 let rec destruct_steps_epair_snd
   (e12:closed_exp)
@@ -747,7 +787,10 @@ let rec destruct_steps_epair_snd
     (decreases st)
   =
   match st with
-  | SRefl (ESnd e12) -> admit ()
+  | SRefl (ESnd e12) -> begin
+    can_step_esnd_when_safe e12 t1 t2;
+    false_elim ()
+    end
   | STrans #f1 #f2 #f3 step_esnd step_esnd_steps -> begin
     let (ESnd e12) = f1 in
     let e' = f3 in
@@ -763,8 +806,9 @@ let rec destruct_steps_epair_snd
       lem_steps_transitive e12 e12' e12'';
       e12''
       end
-    | SndPairReturn #e1 #e2 is_val_epair -> begin
+    | SndPairReturn #e1 #e2 -> begin
       lem_step_implies_steps (ESnd (EPair e1 e2)) e2;
+      assume (is_value e12);
       e12
       end
     | _ -> false_elim ()
