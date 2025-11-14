@@ -521,11 +521,19 @@ let srefl_eif_impossible (e1 e2 e3 e':closed_exp) (st:steps (EIf e1 e2 e3) e') :
   (requires
     irred e' /\
     safe e1 /\
-    safe e2 /\
     sem_expr_shape TBool e1 /\
     (EIf e1 e2 e3) == e')
   (ensures ~(irred e') \/ ~(sem_expr_shape TBool e1))
-  = admit ()
+  = introduce irred (EIf e1 e2 e3) /\ (sem_expr_shape TBool e1) ==> False with h. 
+    begin
+      introduce (forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1') ==> False with h. 
+      begin
+        FStar.Squash.bind_squash #((forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1')) h (fun conj ->
+        ///let (irred, sem_shape) = conj in
+        admit ()
+        )
+      end
+    end
   (*match step e1 with
   | Some e1' -> ()
   | None ->
@@ -668,7 +676,9 @@ let rec destruct_steps_epair_fst
     (decreases st)
   =
   match st with
-  | SRefl (EFst e12) -> admit ()
+  | SRefl (EFst e12) -> begin
+    admit ()
+    end
   | STrans #f1 #f2 #f3 step_efst step_efst_steps -> begin
     let (EFst e12) = f1 in
     let e' = f3 in
