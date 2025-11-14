@@ -23,8 +23,4 @@ val io_bind
 val read () : io bool
 val write (x:bool) : io unit
 
-type event =
-| EvRead : bool -> event
-| EvWrite : bool -> event
-
-val theta : #a:Type -> io a -> hist #event a
+val theta : #a:Type -> io a -> hist a
