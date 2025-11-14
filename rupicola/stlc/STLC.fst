@@ -421,24 +421,36 @@ let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (t:typ) :
       end
     end
 
-let srefl_eapp_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') (t1 t2:typ) : Lemma
+let exists_stepping_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) : Lemma
   (requires
-    irred e' /\
     safe e1 /\
     safe e2 /\
-    sem_expr_shape (TArr t1 t2) e1 /\
-    (EApp e1 e2) == e')
-  (ensures ~(irred e') \/ ~(sem_expr_shape (TArr t1 t2) e1))
-  = admit ()
-  (*match step e1 with
-  | Some e1' -> ()
-  | None ->
-    match step e2 with
-    | Some e2' -> ()
-    | None ->
-      match e1 with
-      | ELam e11 -> ()
-      | _ -> ()*)
+    sem_expr_shape (TArr t1 t2) e1)
+  (ensures (exists e'. step (EApp e1 e2) e'))
+  =
+  (**
+     We case analyze if e1 can step or if e2 can step,
+       and for each case, we build a step accordingly **)
+  introduce irred e1 /\ irred e2 ==>  (exists e'. step (EApp e1 e2) e') with _. begin
+    let ELam e11 = e1 in (* By sem_expr_shape ELam? e1 **)
+    let st : step (EApp (ELam e11) e2) (subst_beta e2 e11) =
+      Beta e11 e2 in
+    ()
+  end;
+
+  introduce ~(irred e1) /\ irred e2 ==>  (exists e'. step (EApp e1 e2) e') with _. begin
+    assert (exists e1'. step e1 e1');
+    eliminate exists e1'. step e1 e1' returns exists e'. step (EApp e1 e2) e' with st. begin
+      bind_squash st (fun st -> return_squash (AppLeft e2 st))
+    end
+  end;
+
+  introduce ~(irred e2) ==>  (exists e'. step (EApp e1 e2) e') with _. begin
+    assert (exists e2'. step e2 e2');
+    eliminate exists e2'. step e2 e2' returns exists e'. step (EApp e1 e2) e' with st. begin
+      bind_squash st (fun st -> return_squash (AppRight e1 st))
+    end
+  end
 
 (** Such a lemma is mentioned by Amal Ahmed in her PhD thesis, section 2
 
@@ -461,6 +473,7 @@ let srefl_eapp_impossible (e1 e2 e':closed_exp) (st:steps (EApp e1 e2) e') (t1 t
        Subsubcase e2 -> e2'. Similar to above, we use IH.
        Subsubcase irred e2. (From safe e2 we get is_value e2; but not needed by step.)
          So e = EApp (ELam e11) e2 -> subst_beta e2 e11 = e''. Return e11 e2. *)
+
 let rec destruct_steps_eapp
   (e1:closed_exp)
   (e2:closed_exp)
@@ -481,7 +494,12 @@ let rec destruct_steps_eapp
       steps (subst_beta e2' e11) e')
     (decreases st)
   = match st with
-    | SRefl (EApp e1 e2) -> admit ()
+    | SRefl (EApp e1 e2) -> begin
+      (** I am contradicting `irred (EApp e1 e2)` by proving that
+       `exists e'. step (EApp e1 e2)` **)
+      exists_stepping_eapp_when_safe e1 e2 t1 t2;
+      false_elim ()
+    end
     | STrans #f1 #f2 #f3 step_eapp step_eapp_steps -> begin
       let (EApp e1 e2) = f1 in
       let e' = f3 in
@@ -523,9 +541,9 @@ let srefl_eif_impossible (e1 e2 e3 e':closed_exp) (st:steps (EIf e1 e2 e3) e') :
     sem_expr_shape TBool e1 /\
     (EIf e1 e2 e3) == e')
   (ensures ~(irred e') \/ ~(sem_expr_shape TBool e1))
-  = introduce irred (EIf e1 e2 e3) /\ (sem_expr_shape TBool e1) ==> False with h. 
+  = introduce irred (EIf e1 e2 e3) /\ (sem_expr_shape TBool e1) ==> False with h.
     begin
-      introduce (forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1') ==> False with h. 
+      introduce (forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1') ==> False with h.
       begin
         FStar.Squash.bind_squash #((forall e''. ~(step (EIf e1 e2 e3) e'')) /\ (forall e1'. steps e1 e1' /\ irred e1' ==> sem_value_shape TBool e1')) h (fun conj ->
         ///let (irred, sem_shape) = conj in
