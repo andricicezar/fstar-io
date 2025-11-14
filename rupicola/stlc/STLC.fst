@@ -421,7 +421,7 @@ let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (t:typ) :
       end
     end
 
-let exists_stepping_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) : Lemma
+let can_step_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) : Lemma
   (requires
     safe e1 /\
     safe e2 /\
@@ -497,7 +497,7 @@ let rec destruct_steps_eapp
     | SRefl (EApp e1 e2) -> begin
       (** I am contradicting `irred (EApp e1 e2)` by proving that
        `exists e'. step (EApp e1 e2)` **)
-      exists_stepping_eapp_when_safe e1 e2 t1 t2;
+      can_step_eapp_when_safe e1 e2 t1 t2;
       false_elim ()
     end
     | STrans #f1 #f2 #f3 step_eapp step_eapp_steps -> begin
