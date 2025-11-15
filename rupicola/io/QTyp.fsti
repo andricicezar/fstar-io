@@ -14,42 +14,60 @@ noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
 | QBool : type_quotation bool
-| QArr : #s1:Type ->
-         #s2:Type ->
-         type_quotation s1 ->
-         type_quotation s2 ->
-         type_quotation (s1 -> s2)
-| QIO : #s1:Type ->
-         //#s2:Type ->
-         type_quotation s1 ->
-         //type_quotation s2 ->
-         type_quotation (io s1)
-| QPair : #s1:Type ->
-          #s2:Type ->
-          type_quotation s1 ->
-          type_quotation s2 ->
-          type_quotation (s1 & s2)
+(** Having two types of arrow, pure and IO, seem to complicate
+    the logical relation for expression.
+    Disabling for now **)
+ (**
+| QArr : #t1:Type ->
+         #t2:Type ->
+         type_quotation t1 ->
+         type_quotation t2 ->
+         type_quotation (t1 -> t2)**)
+| QPair : #t1:Type ->
+          #t2:Type ->
+          type_quotation t1 ->
+          type_quotation t2 ->
+          type_quotation (t1 & t2)
+(** Design decision:
+    One can allow one for the quotation of IO Arrows:
+    | QArrIO: type_quotation 'a -> type_quotation 'b -> type_quotation ('a -> io 'b)
 
-let test_match s (r:type_quotation s) = (** why does this work so well? **)
-  match r with
-  | QUnit -> assert (s == unit)
-  | QBool -> assert (s == bool)
-  | QArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
-  | QIO #s1 _ -> assert (s == io s1)
-  | QPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
+    or can allow for the quotation of IO computatinos:
+    | QIO: type_quotation 'a -> type_quotation (io 'a)
+
+    I think the first one is what we need and what gives us the right
+    structure.
+
+    The second one, forces us to treat IO computatinos as values in the logical
+    expression. Sounds like a rule one would want if one would do Algebraic Effects?
+
+    In our case, effects are not values, are just extra typing information.
+**)
+| QArr : #t1:Type ->
+         #t2:Type ->
+         type_quotation t1 ->
+         type_quotation t2 ->
+         type_quotation (t1 -> io t2)
+
+let test_match t (tq:type_quotation t) = (** why does this work so well? **)
+  match tq with
+  | QUnit -> assert (t == unit)
+  | QBool -> assert (t == bool)
+  //| QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
+  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
+  | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
 
 let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   match r with
   | QUnit -> TUnit
   | QBool -> TBool
-  | QArr #s1 #s2 qs1 qs2 ->
-    TArr (type_quotation_to_typ qs1) (type_quotation_to_typ qs2)
-  | QIO #s1 qs1 -> type_quotation_to_typ qs1
-  | QPair #s1 #s2 qs1 qs2 -> TPair (type_quotation_to_typ qs1) (type_quotation_to_typ qs2)
+  | QPair qt1 qt2 -> TPair (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
+  | QArr qt1 qt2 ->
+    TArr (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
 
 (** Type of Quotable Types **)
 type qType =
-  s:Type & type_quotation s
+  t:Type & type_quotation t
 
 let pack (q:type_quotation 's) : qType = (| _, q |)
 
@@ -57,14 +75,10 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
-let (^->) (t1 t2:qType) : qType =
-  (| _, QArr (get_rel t1) (get_rel t2) |)
-let (!@) (t1:qType) : qType =
-  (| _, QIO (get_rel t1) |)
-
-
 let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
+let (^->) (t1 t2:qType) : qType =
+  (| _, QArr (get_rel t1) (get_rel t2) |)
 
 (** typ_env is a typing environment: variables to Quotable F* Types **)
 type typ_env = var -> option qType
@@ -195,4 +209,4 @@ val tail_stack_inveqse #g (fsG:eval_env g) #t (x:get_Type t)
   [SMTPat (tail (stack fsG x))]
 
 type fs_oexp (g:typ_env) (t:qType) =
-  eval_env g -> get_Type t
+  eval_env g -> io (get_Type t)
