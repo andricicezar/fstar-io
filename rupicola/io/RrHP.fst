@@ -7,19 +7,10 @@ open STLC
 open QTyp
 open QExp
 open ExpRel
+open Trace
 open IO
 open Compilation
 open Backtranslation
-
-type traceS = list (* IO.*)event
-type traceT = STLC.trace
-type trace = unit (** making sure no one uses this trace **)
-
-// TODO:
-let rel_traces (ts:traceS) (tt:traceT) : Type0 =
-  match ts, tt with
-  | [], [] -> True
-  | _, _ -> False
 
 noeq type intS = {
   ct : qType;
@@ -43,9 +34,9 @@ let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
 (** Definition from SCIO*, section 6.2 **)
-type behS_t = traceS * bool -> Type0
+type behS_t = trace * bool -> Type0
 val behS : wholeS -> behS_t
-let behS ws = fun (lt, res) -> forall p. theta ws p [] ==> p lt res
+let behS ws = fun (lt, res) -> forall p. theta ws [] p ==> p lt res
 
 (** Target **)
 // right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
@@ -77,17 +68,14 @@ let rel_bools (fs_e:bool) (e:exp) : Type0 =
   (e == ETrue /\ fs_e == true) \/
   (e == EFalse /\ fs_e == false)
 
-type behT_t = traceT * exp -> Type0
+type behT_t = trace * exp -> Type0
 val behT : wt:wholeT -> behT_t
-let behT wt = fun (lt, r) ->
-(** vvv To have an existential here one needs normalization **)
-  forall (e':closed_exp) (st:steps wt e'). irred e' ==>
-    lt == get_local_trace st /\ r == e'
+let behT wt = fun (lt, r) -> steps wt r lt
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
-  (forall rS ltS. bs (ltS, rS) ==>  (exists rT ltT. rel_bools rS rT /\ rel_traces ltS ltT /\ bt (ltT, rT))) /\
-  (forall rT ltT. bt (ltT, rT) ==>  (exists rS ltS. rel_bools rS rT /\ rel_traces ltS ltT /\ bs (ltS, rS)))
+  (forall rS lt. bs (lt, rS) ==>  (exists rT. rel_bools rS rT /\ bt (lt, rT))) /\
+  (forall rT lt. bt (lt, rT) ==>  (exists rS. rel_bools rS rT /\ bs (lt, rS)))
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
