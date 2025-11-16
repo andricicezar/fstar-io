@@ -266,10 +266,9 @@ type step : closed_exp -> closed_exp -> Type =
     hst:step e1 e1' ->
     step (EPair e1 e2) (EPair e1' e2)
   | PairRight :
-    e1:closed_exp ->
+    e1:closed_exp{is_value e1} ->
     #e2:closed_exp ->
     #e2':closed_exp ->
-    is_value e1 ->
     hst:step e2 e2' ->
     step (EPair e1 e2) (EPair e1 e2')
   | FstPair :
@@ -278,8 +277,8 @@ type step : closed_exp -> closed_exp -> Type =
     hst:step e' e'' ->
     step (EFst e') (EFst e'')
   | FstPairReturn :
-    #e1:value ->
-    #e2:value ->
+    #e1:closed_exp{is_value e1} ->
+    #e2:closed_exp{is_value e2} ->
     step (EFst (EPair e1 e2)) e1
   | SndPair :
     #e':closed_exp ->
@@ -287,8 +286,8 @@ type step : closed_exp -> closed_exp -> Type =
     hst:step e' e'' ->
     step (ESnd e') (ESnd e'')
   | SndPairReturn :
-    #e1:closed_exp -> (* why doesn´t this work with value like I did for FstPairReturn? *)
-    #e2:closed_exp ->
+    #e1:closed_exp{is_value e1} ->
+    #e2:closed_exp{is_value e2} ->
     step (ESnd (EPair e1 e2)) e2
 
 let can_step (e:closed_exp) : Type0 =
@@ -318,7 +317,7 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
         FStar.Squash.bind_squash #(step e e') () (fun st ->
         match st with
         | PairLeft e2 hst -> ()
-        | PairRight e1 is_val_e1 hst -> ()
+        | PairRight e1 hst -> ()
         | _ -> ())
       end
     end
@@ -610,6 +609,31 @@ let rec destruct_steps_eif
       EIf e1 e2 e3 -->* EIf e1' e2 e3 -->* e'
   **)
 
+let srefl_epair_implies_value (e1 e2:closed_exp) : Lemma
+  (requires safe e1 /\ safe e2 /\ irred (EPair e1 e2))
+  (ensures is_value (EPair e1 e2))
+  =
+  introduce irred e1 /\ irred e2 ==> is_value (EPair e1 e2) with _.
+  begin () end;
+  introduce ~(irred e1) ==> is_value (EPair e1 e2) with _.
+  begin
+    assert (exists e1'. step e1 e1');
+    eliminate exists e1'. step e1 e1' returns exists e'. step (EPair e1 e2) e' with st.
+    begin
+      bind_squash st (fun st -> return_squash (PairLeft e2 st))
+    end;
+    false_elim ()
+  end;
+  introduce irred e1 /\ ~(irred e2) ==> is_value (EPair e1 e2) with _.
+  begin
+    assert (exists e2'. step e2 e2');
+    eliminate exists e2'. step e2 e2' returns exists e'. step (EPair e1 e2) e' with st.
+    begin
+      bind_squash st (fun st -> return_squash (PairRight e1 st))
+    end;
+    false_elim ()
+  end
+
 let rec destruct_steps_epair
   (e1:closed_exp)
   (e2:closed_exp)
@@ -628,7 +652,7 @@ let rec destruct_steps_epair
     (decreases st)
   = match st with
     | SRefl (EPair e1 e2) -> begin
-      assume (is_value e1 /\ is_value e2);
+      srefl_epair_implies_value e1 e2;
       (e1, e2)
       end
     | STrans #f1 #f2 #f3 step_epair step_epair_steps -> begin
@@ -646,7 +670,7 @@ let rec destruct_steps_epair
         lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2'');
         (e1'', e2'')
         end
-      | PairRight e1 #e2 #e2' is_val_e1 step_e2 -> begin
+      | PairRight e1 #e2 #e2' step_e2 -> begin
         let (EPair e1 e2') = f2 in
         lem_step_implies_steps e2 e2';
         lem_step_implies_steps (EPair e1 e2) (EPair e1 e2');
@@ -808,7 +832,6 @@ let rec destruct_steps_epair_snd
       end
     | SndPairReturn #e1 #e2 -> begin
       lem_step_implies_steps (ESnd (EPair e1 e2)) e2;
-      assume (is_value e12);
       e12
       end
     | _ -> false_elim ()
