@@ -243,27 +243,36 @@ let get_ebool (b:bool) : closed_exp =
 (* Small-step operational semantics; strong / full-beta reduction is
    right to left  *)
 
+// define event that is correct wrt to histories
+// instead of refinement on event - use event_h (which is refinement with test_event h ev)
+// usually we do not look at the history
 noeq
-type step : closed_exp -> closed_exp -> option event -> Type =
+type step : closed_exp -> closed_exp -> (h:history) -> (lt:local_trace h) -> option (event_h lt) -> Type =
   | AppRight :
     e1:closed_exp ->
     #e2:closed_exp ->
     #e2':closed_exp ->
-    #oev:option event ->
-    hst:step e2 e2' oev ->
-    step (EApp e1 e2) (EApp e1 e2') oev
+    #h:history ->
+    #lt:local_trace h ->
+    #oev:option (event_h lt) ->
+    hst:step e2 e2' h lt oev ->
+    step (EApp e1 e2) (EApp e1 e2') h lt oev
   | AppLeft :
     #e1:closed_exp ->
     e2:closed_exp{is_value e2} -> (** e2 being a value makes the semantics to be call by value. TODO: funny one cannot use [value] directly **)
     #e1':closed_exp ->
-    #oev:option event ->
-    hst:step e1 e1' oev ->
-    step (EApp e1 e2) (EApp e1' e2) oev
+    #h:history ->
+    #lt:local_trace h ->
+    #oev:option (event_h lt) ->
+    hst:step e1 e1' h lt oev ->
+    step (EApp e1 e2) (EApp e1' e2) h lt oev
   | Beta :
     e11:exp{is_closed (ELam e11)} ->
     e2:value ->
-    step (EApp (ELam e11) e2) (subst_beta e2 e11) None
-  | IfCond :
+    h:history ->
+    lt:local_trace h ->
+    step (EApp (ELam e11) e2) (subst_beta e2 e11) h lt None
+  (*| IfCond :
     #e1:closed_exp ->
     e2:closed_exp ->
     e3:closed_exp ->
@@ -318,15 +327,16 @@ type step : closed_exp -> closed_exp -> option event -> Type =
     step ERead (get_ebool b) (Some (EvRead () (Some b)))
   | SWrite :
     b:bool ->
-    step (EWrite (get_ebool b)) EUnit (Some (EvWrite b (Some ())))
+    step (EWrite (get_ebool b)) EUnit (Some (EvWrite b (Some ())))*)
 
-let can_step (e:closed_exp) : Type0 =
-  exists (e':closed_exp) (oev:option event). step e e' oev
+let can_step (e:closed_exp) (h:history) (lt:local_trace h) : Type0 =
+  exists (e':closed_exp) (oev:option (event_h lt)). step e e' h lt oev
 
-let irred (e:closed_exp) : Type0 =
-  forall (e':closed_exp) (oev:option event). ~(step e e' oev) // optionally \/ is_value e - Amal's definition
+let irred (e:closed_exp) (h:history) (lt:local_trace h)  : Type0 =
+  forall (e':closed_exp) (oev:option (event_h lt)). ~(step e e' h lt oev) 
+  // optionally \/ is_value e - Amal's definition
 
-let rec lem_value_is_irred (e:closed_exp) : Lemma
+(*let rec lem_value_is_irred (e:closed_exp) : Lemma
   (requires is_value e)
   (ensures irred e)
   [SMTPat (irred e)] =
@@ -351,31 +361,51 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
         | _ -> ())
       end
     end
-  | _ -> ()
+  | _ -> ()*)
+
+(*let rec compute_lt (lt:local_trace []) (oev:option event) : local_trace [] = 
+   if Some? oev then begin
+   let lt' = ((Some?.v oev)::lt) in
+   assume (test_event [] (Some?.v oev));
+   lt'
+   end
+   else lt*)
+
+(*let rec compute_lt' (h:history) (lt:local_trace h) : Tot (local_trace []) (decreases lt) =
+  match lt with
+  | [] -> []
+  | ev' :: tl -> ev' :: (compute_lt' (ev'::h) tl)*)
+
+//let compute_lt (oev:option event) (h:history) : local_trace h =
+//    if Some? oev then [Some?.v oev] else []
 
 (** reflexive transitive closure of step *)
 noeq
-type steps : closed_exp -> closed_exp -> local_trace [] -> Type =
+type steps : closed_exp -> closed_exp -> (h:history) -> local_trace h -> Type =
 | SRefl  : e:closed_exp ->
-           steps e e []
+           h:history ->
+           steps e e h []
 | STrans : #e1:closed_exp ->
            #e2:closed_exp ->
            #e3:closed_exp ->
-           #lt:local_trace [] ->
-           #oev:option event{(Some? oev) ==> well_formed_local_trace [] (lt @ [Some?.v oev])} ->
-           step e1 e2 oev ->
-           steps e2 e3 lt ->
-           steps e1 e3 (if Some? oev then (lt @ [Some?.v oev]) else lt)
+           #h:history ->
+           #lt:local_trace h ->
+           #oev:option (event_h lt) -> 
+           step e1 e2 h lt oev ->
+           steps e2 e3 h lt ->
+           steps e1 e3 h (if Some? oev then ((Some?.v oev)::lt) else lt)
 
 // how would we check the compatability of two histories? saying that there exists an ordering of the events that is well-formed?
 let rec lem_steps_transitive_constructive
   (#e1 #e2 #e3:closed_exp) 
-  (#tr12:local_trace [])
-  (#tr23:local_trace []{well_formed_local_trace (List.rev tr12) tr23})
-  (st12:steps e1 e2 tr12)
-  (st23:steps e2 e3 tr23)
-  : Tot (steps e1 e3 (tr12 @ tr23)) (decreases st12)
-  = match st12 with
+  (#h:history)
+  (#lt1:local_trace h) (#lt2:local_trace (h++lt1))
+  (st12:steps e1 e2 h lt1)
+  (st23:steps e2 e3 (h++lt1) lt2)
+  : Tot (steps e1 e3 h (lt1 @ lt2)) (decreases st12)
+  = admit () 
+  
+  (*match st12 with
   | SRefl _ -> st23
   | STrans #f1 #f1' #f2 #lt_f1'_f2 #oev f1_f1'_step f1'_f2_steps -> begin
     let e1 = f1 in
@@ -394,7 +424,7 @@ let rec lem_steps_transitive_constructive
     | None -> begin
       STrans f1_f1'_step (lem_steps_transitive_constructive f1'_f2_steps st23)
       end
-    end
+    end*)
 
   (*= match st12 with
     | SRefl _ -> st23
@@ -429,46 +459,48 @@ let rec lem_steps_transitive_constructive
 
 open FStar.Squash
 
-let lem_step_implies_steps (e e':closed_exp) (oev:option event) :
+let lem_step_implies_steps (e e':closed_exp) (h:history) (lt:local_trace h) (oev:option (event_h lt)) :
   Lemma
-    (requires step e e' oev /\ (Some? oev ==> well_formed_local_trace [] [Some?.v oev])) 
-    (ensures steps e e' (if Some? oev then ([] @ [Some?.v oev]) else [])) =
-  introduce forall e e'. step e e' oev ==> steps e e' (if Some? oev then ([] @ [Some?.v oev]) else []) with
+    (requires step e e' h lt oev)
+    (ensures steps e e' h (if Some? oev then ((Some?.v oev)::lt) else [])) =
+    admit ()
+  (*introduce forall e e'. step e e' oev ==> steps e e' (if Some? oev then ([] @ [Some?.v oev]) else []) with
     begin
     introduce step e e' oev ==> steps e e' (if Some? oev then ([] @ [Some?.v oev]) else []) with h.
       begin
       bind_squash #(step e e' oev) () (fun st ->
       return_squash (STrans st (SRefl e')))
       end
-    end
+    end*)
 
 let lem_steps_transitive 
-  (e1 e2 e3:closed_exp) 
-  (tr12:local_trace []) 
-  (tr23:local_trace []{well_formed_local_trace (List.rev tr12) tr23}) :
+  (e1 e2 e3:closed_exp)
+  (h:history)
+  (lt12:local_trace h) 
+  (lt23:local_trace (h++lt12)) :
   Lemma
-    (requires (steps e1 e2 tr12 /\ steps e2 e3 tr23))
-    (ensures (steps e1 e3 (tr12 @ tr23))) =
-  bind_squash #(steps e1 e2 tr12) () (fun st12 ->
-    bind_squash #(steps e2 e3 tr23) () (fun st23 ->
+    (requires (steps e1 e2 h lt12 /\ steps e2 e3 (h++lt12) lt23))
+    (ensures (steps e1 e3 h (lt12 @ lt23))) =
+  bind_squash #(steps e1 e2 h lt12) () (fun st12 ->
+    bind_squash #(steps e2 e3 (h++lt12) lt23) () (fun st23 ->
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
 
-let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) (lt:local_trace []) : Lemma
+(*let lem_steps_irred_e_irred_e'_implies_e_e' (e:closed_exp{irred e}) (e':closed_exp{irred e'}) (lt:local_trace []) : Lemma
   (requires steps e e' lt)
   (ensures e == e') = admit ()
 
 let lem_steps_refl (e:closed_exp) : Lemma (steps e e []) [SMTPat (steps e e)] =
-  FStar.Squash.return_squash (SRefl e)
+  FStar.Squash.return_squash (SRefl e)*)
 
 let safe (e:closed_exp) : Type0 =
-  forall e' lt. steps e e' lt ==> is_value e' \/ can_step e'
+  forall e' h lt. steps e e' h lt ==> is_value e' \/ can_step e' h lt
 
-let lem_steps_preserve_safe (e e':closed_exp) (lt_e_e':local_trace []) :
+let lem_steps_preserve_safe (e e':closed_exp) (h:history) (lt:local_trace h) :
   Lemma
-    (requires (safe e) /\ (steps e e' lt_e_e'))
-    (ensures (safe e')) =
-  introduce forall e_f lt_e'_ef. steps e' e_f lt_e'_ef ==> is_value e_f \/ can_step e_f with
+    (requires (safe e) /\ (steps e e' h lt))
+    (ensures (safe e')) = admit ()
+  (*introduce forall e_f lt_e'_ef. steps e' e_f lt_e'_ef ==> is_value e_f \/ can_step e_f with
     begin
     introduce steps e' e_f lt_e'_ef ==> is_value e_f \/ can_step e_f with h.
       begin
@@ -479,7 +511,7 @@ let lem_steps_preserve_safe (e e':closed_exp) (lt_e_e':local_trace []) :
         assume (well_formed_local_trace (List.rev lt_e_e') lt_e'_ef);
         lem_steps_transitive e e' e_f lt_e_e' lt_e'_ef)
       end
-    end
+    end*)
 
 (* We need syntactic types for this, or at least the top-level shape of types *)
 let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
@@ -490,13 +522,13 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TPair t1 t2 -> EPair? e
 
 let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =
-  forall (e':closed_exp) (lt:local_trace []). steps e e' lt ==> irred e' ==> sem_value_shape t e'
+  forall e' h lt. steps e e' h lt ==> irred e' h lt ==> sem_value_shape t e'
 
-let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (lt_e_e':local_trace []) (t:typ) :
+let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (h:history) (lt:local_trace h) (t:typ) :
   Lemma
-    (requires (sem_expr_shape t e) /\ (steps e e' lt_e_e'))
-    (ensures (sem_expr_shape t e')) =
-  introduce forall e_f lt_e'_ef. steps e' e_f lt_e'_ef /\ irred e_f ==> sem_value_shape t e_f with
+    (requires (sem_expr_shape t e) /\ (steps e e' h lt))
+    (ensures (sem_expr_shape t e')) = admit ()
+  (*introduce forall e_f lt_e'_ef. steps e' e_f lt_e'_ef /\ irred e_f ==> sem_value_shape t e_f with
     begin
     introduce _  ==> sem_value_shape t e_f with h.
       begin
@@ -507,26 +539,31 @@ let lem_steps_preserve_sem_expr_shape (e e':closed_exp) (lt_e_e':local_trace [])
           assume (well_formed_local_trace (List.rev lt_e_e') lt_e'_ef);
           lem_steps_transitive e e' e_f lt_e_e' lt_e'_ef)
       end
-    end
+    end*)
 
-let can_step_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) : Lemma
+let can_step_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) (h:history) (lt:local_trace h) : Lemma
   (requires
     safe e1 /\
     safe e2 /\
     sem_expr_shape (TArr t1 t2) e1)
-  (ensures (exists e' oev. step (EApp e1 e2) e' oev))
+  (ensures (exists e' oev. step (EApp e1 e2) e' h lt oev))
   =
   (**
      We case analyze if e1 can step or if e2 can step,
        and for each case, we build a step accordingly **)
-  introduce irred e1 /\ irred e2 ==>  (exists e' oev. step (EApp e1 e2) e' oev) with _. begin
-    match e1 with
+  introduce irred e1 h lt /\ irred e2 h lt ==> (exists e' oev. step (EApp e1 e2) e' h lt oev) with _. begin
+    (*let ELam e11 = e1 in
+    let st : step (EApp (ELam e11) e2) (subst_beta e2 e11) h lt None = Beta e11 e2 h lt in
+    ()*)
+    admit ()
+  end;
+    (*match e1 with
     | ELam e11 -> begin
       assert (steps e2 e2 []);
       let st : step (EApp (ELam e11) e2) (subst_beta e2 e11) None = Beta e11 e2 in 
       ()
       end
-    | _ -> begin
+    | _ -> begin*)
       (*introduce forall e1' lt1. steps e1 e1' lt1 /\ irred e1' ==> sem_value_shape (TArr t1 t2) e1' with 
         begin
         introduce steps e1 e1' lt1 /\ irred e1' ==> sem_value_shape (TArr t1 t2) e1' with _. 
@@ -539,21 +576,18 @@ let can_step_eapp_when_safe (e1 e2:closed_exp) (t1 t2:typ) : Lemma
           ()
           end
         end*)
-      admit ()
-      end
-  end;
   
-  introduce ~(irred e1) /\ irred e2 ==>  (exists e' oev. step (EApp e1 e2) e' oev) with _. begin
-    assert (steps e2 e2 []);
-    assert (exists e1' oev1. step e1 e1' oev1);
-    eliminate exists e1' oev1. step e1 e1' oev1 returns exists e' oev. step (EApp e1 e2) e' oev with st. begin
+  introduce ~(irred e1 h lt) /\ irred e2 h lt ==>  (exists e' oev. step (EApp e1 e2) e' h lt oev) with _. begin
+    assert (steps e2 e2 h lt);
+    assert (exists e1' oev1. step e1 e1' h lt oev1);
+    eliminate exists e1' oev1. step e1 e1' h lt oev1 returns exists e' oev. step (EApp e1 e2) e' h lt oev with st. begin
       bind_squash st (fun st -> return_squash (AppLeft e2 st))
     end
   end;
 
-  introduce ~(irred e2) ==>  (exists e' oev. step (EApp e1 e2) e' oev) with _. begin
-    assert (exists e2' oev2. step e2 e2' oev2);
-    eliminate exists e2' oev2. step e2 e2' oev2 returns exists e' oev. step (EApp e1 e2) e' oev with st. begin
+  introduce ~(irred e2 h lt) ==>  (exists e' oev. step (EApp e1 e2) e' h lt oev) with _. begin
+    assert (exists e2' oev2. step e2 e2' h lt oev2);
+    eliminate exists e2' oev2. step e2 e2' h lt oev2 returns exists e' oev. step (EApp e1 e2) e' h lt oev with st. begin
       bind_squash st (fun st -> return_squash (AppRight e1 st))
     end
   end
@@ -710,7 +744,8 @@ let rec destruct_steps_eif
       (EFalse? e1' ==> steps e3 e' lt3) /\
       ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3)))
     (decreases st)
-  = match st with
+  = admit ()
+    (*match st with
     | SRefl (EIf e1 e2 e3) -> begin
       can_step_eif_when_safe e1 e2 e3;
       false_elim ()
@@ -764,20 +799,27 @@ let srefl_epair_implies_value (e1 e2:closed_exp) : Lemma
   (ensures is_value (EPair e1 e2))
   =
   introduce irred e1 /\ irred e2 ==> is_value (EPair e1 e2) with _.
-  begin () end;
+  begin 
+    assert (steps e1 e1 []);
+    assert (steps e2 e2 []);
+    ()
+  end;
+  
   introduce ~(irred e1) ==> is_value (EPair e1 e2) with _.
   begin
-    assert (exists e1'. step e1 e1');
-    eliminate exists e1'. step e1 e1' returns exists e'. step (EPair e1 e2) e' with st.
+    assert (exists e1' oev1. step e1 e1' oev1);
+    eliminate exists e1' oev1. step e1 e1' oev1 returns exists e' oev. step (EPair e1 e2) e' oev with st.
     begin
       bind_squash st (fun st -> return_squash (PairLeft e2 st))
     end;
     false_elim ()
   end;
+  
   introduce irred e1 /\ ~(irred e2) ==> is_value (EPair e1 e2) with _.
   begin
-    assert (exists e2'. step e2 e2');
-    eliminate exists e2'. step e2 e2' returns exists e'. step (EPair e1 e2) e' with st.
+    assert (steps e1 e1 []);
+    assert (exists e2' oev2. step e2 e2' oev2);
+    eliminate exists e2' oev2. step e2 e2' oev2 returns exists e' oev. step (EPair e1 e2) e' oev with st.
     begin
       bind_squash st (fun st -> return_squash (PairRight e1 st))
     end;
@@ -788,37 +830,67 @@ let rec destruct_steps_epair
   (e1:closed_exp)
   (e2:closed_exp)
   (e':closed_exp)
-  (st:steps (EPair e1 e2) e') :
+  (lt:local_trace [])
+  (st:steps (EPair e1 e2) e' lt) :
   Pure (value * value)
     (requires
       irred e' /\ ///\
       safe e1 /\
       safe e2) (** CA: not sure if necessary **)
-    (ensures fun (e1', e2')->
-      steps e1 e1' /\
-      steps e2 e2' /\
-      steps (EPair e1 e2) (EPair e1' e2') /\
-      steps (EPair e1' e2') e')
+    (ensures fun (e1', e2') ->
+      exists lt1 lt2 lt_f.
+      (steps e1 e1' lt1 /\
+       steps e2 e2' lt2 /\
+       well_formed_local_trace [] (lt1 @ lt2) /\
+       steps (EPair e1 e2) (EPair e1' e2') (lt1 @ lt2) /\
+       steps (EPair e1' e2') e' lt_f /\
+       lt == (lt1 @ lt2) @ lt_f))
     (decreases st)
   = match st with
     | SRefl (EPair e1 e2) -> begin
       srefl_epair_implies_value e1 e2;
-      (e1, e2)
+      (e1, e2, [], [], [])
       end
-    | STrans #f1 #f2 #f3 step_epair step_epair_steps -> begin
+    | STrans #f1 #f2 #f3 #lt_f2_f3 #oev_f1_f2 step_epair step_epair_steps -> begin
       let (EPair e1 e2) = f1 in
       let e' = f3 in
       match step_epair with
-      | PairLeft #e1 e2 #e1' step_e1 -> begin
+      | PairLeft #e1 e2 #e1' #oev1 step_e1 -> begin
         let (EPair e1' e2) = f2 in
-        lem_step_implies_steps e1 e1';
-        lem_step_implies_steps (EPair e1 e2) (EPair e1' e2);
-        lem_steps_preserve_safe e1 e1';
-        let s2 : steps (EPair e1' e2) e' = step_epair_steps in
-        let (e1'', e2'') = destruct_steps_epair e1' e2 e' s2 in
-        lem_steps_transitive e1 e1' e1'';
-        lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2'');
-        (e1'', e2'')
+        singleton_no_history_trivially_well_formed oev1;
+        lem_step_implies_steps e1 e1' oev1;
+        lem_step_implies_steps (EPair e1 e2) (EPair e1' e2) oev_f1_f2;
+        let lt1 = if Some? oev1 then ([] @ [Some?.v oev1]) else [] in
+        assert (steps e1 e1' lt1);
+        assert (steps (EPair e1 e2) (EPair e1' e2) lt1);
+        assert (steps e2 e2 []);
+        lem_steps_preserve_safe e1 e1' lt1;
+        let s2 : steps (EPair e1' e2) e' lt_f2_f3 = step_epair_steps in
+        let (e1'', e2'', lt1'', lt2'', lt_f'') = destruct_steps_epair e1' e2 e' lt_f2_f3 s2 in
+        assume (well_formed_local_trace [] (lt1 @ lt1''));
+        lem_steps_transitive e1 e1' e1'' lt1 lt1'';
+        assume (well_formed_local_trace [] (lt1 @ (lt1'' @ lt2'')));
+        lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2'') lt1 (lt1'' @ lt2'');
+        (*assert (steps e1 e1'' (lt1 @ lt1''));
+        assert (steps e2 e2'' lt2'');
+        assume (well_formed_local_trace [] ((lt1 @ lt1'') @ lt2''));
+        assert (steps (EPair e1 e2) (EPair e1'' e2'') ((lt1 @ lt1'') @ lt2''));
+        assert (steps (EPair e1'' e2'') e' lt_f'');
+        assume (lt == ((lt1 @ lt1'') @ lt2'') @ lt_f'');*)
+        assert (steps e1 e1'' (lt1 @ lt1''));
+        admit ()
+        (*assume (steps e1 e1'' lt1'');
+        assume (steps e2 e2'' lt2'');
+        assume (well_formed_local_trace [] (lt1'' @ lt2''));
+        assume (steps (EPair e1 e2) (EPair e1'' e2'') (lt1'' @ lt2''));
+        assume (steps (EPair e1'' e2'') e' lt_f'');
+        assume (lt == (lt1'' @ lt2'') @ lt_f'');*)
+        //(e1'', e2'', lt1'', lt2'', lt_f'')
+        end
+      | _ -> admit ()  
+        end
+        
+     (*   (e1'', e2'')
         end
       | PairRight e1 #e2 #e2' step_e2 -> begin
         let (EPair e1 e2') = f2 in
@@ -832,7 +904,7 @@ let rec destruct_steps_epair
         (e1'', e2'')
         end
       | _ -> (e1, e2)
-      end
+      end*)
 
   (**
     How the steps look like:
