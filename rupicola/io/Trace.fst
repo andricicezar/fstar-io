@@ -71,10 +71,11 @@ type event_h (t:trace) = (ev:event{test_event t ev})
 type local_trace (h:trace) =
   lt:trace{well_formed_local_trace h lt}
 
-let append_event_h_gives_wf_local_trace (h:history) (lt:local_trace h) (ev:event_h lt) :
+//  event needs to be at end
+(*let append_event_h_gives_wf_local_trace (h:history) (lt:local_trace h) (ev:event_h lt) :
   Lemma (well_formed_local_trace h (ev::lt)) 
   [SMTPat (well_formed_local_trace h (ev::lt))] = 
-    admit ()
+    admit ()*)
 
 open FStar.List.Tot
 
@@ -85,3 +86,23 @@ let trans_well_formed_local_trace (h:trace) (lt:local_trace h) (lt1:local_trace 
   Lemma (well_formed_local_trace h (lt @ lt1))
   [SMTPat (well_formed_local_trace h (lt @ lt1))] =
     admit ()
+
+let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (ev::h)) :
+  Lemma (well_formed_local_trace h ([ev] @ lt))
+  [SMTPat (well_formed_local_trace h ([ev] @ lt))] = 
+    admit ()
+
+let singleton_event_well_formed_local_trace (h:trace) (ev:event_h h) :
+  Lemma (well_formed_local_trace h [ev])
+  [SMTPat (well_formed_local_trace h [ev])] =
+    admit ()
+
+let lem_destruct_lt (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) :
+  Lemma (requires well_formed_local_trace h ([ev] @ lt))
+        (ensures well_formed_local_trace (h++[ev]) lt) = admit ()
+
+let lem_construct_lt (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) : 
+  Lemma (requires well_formed_local_trace (h++[ev]) lt)
+        (ensures well_formed_local_trace h ([ev] @ lt)) = admit ()
+
+
