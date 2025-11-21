@@ -407,8 +407,7 @@ let rec lem_steps_transitive_constructive
   (st12:steps e1 e2 h lt1)
   (st23:steps e2 e3 (h++lt1) lt2)
   : Tot (steps e1 e3 h (lt1 @ lt2)) (decreases st12)
-  = admit () 
-  
+  = admit ()   
   (*match st12 with
   | SRefl _ -> st23
   | STrans #f1 #f1' #f2 #lt_f1'_f2 #oev f1_f1'_step f1'_f2_steps -> begin
@@ -610,7 +609,7 @@ let rec destruct_steps_eapp
   (st:steps (EApp e1 e2) e' h lt)
   (t1:typ)
   (t2:typ) :
-  Pure (exp * value * (lt2:local_trace h & (lt1:local_trace (h++lt2) & local_trace ((h++(lt2 @ lt1))))))
+  Pure (exp * value * (lt2:local_trace h & (lt1:local_trace (h++lt2) & local_trace (((h++lt2)++lt1)))))
     (requires irred e' h /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
       safe e1 /\
       sem_expr_shape (TArr t1 t2) e1 /\
@@ -620,7 +619,7 @@ let rec destruct_steps_eapp
       is_closed (ELam e11) /\
       steps e1 (ELam e11) (h++lt2) lt1 /\      
       steps (EApp e1 e2) (subst_beta e2' e11) h (lt2 @ lt1) /\
-      steps (subst_beta e2' e11) e' (h++(lt2 @ lt1)) lt3 /\
+      steps (subst_beta e2' e11) e' ((h++lt2)++lt1) lt3 /\
       lt == ((lt2 @ lt1) @ lt3) /\
       (irred e2 h ==> lt2 == []) /\
       (irred e1 (h++lt2) ==> lt1 == []))
@@ -635,7 +634,30 @@ let rec destruct_steps_eapp
     | STrans #e #f2 #e' #h #_ #lt23 step_eapp step_eapp_steps -> begin
       let (EApp e1 e2) = e in
       match step_eapp with
-      | AppLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
+      | AppRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
+        let (EApp e1 e2') = f2 in
+        lem_step_implies_steps e2 e2' h oev2;
+        lem_step_implies_steps (EApp e1 e2) (EApp e1 e2') h oev2;
+        match oev2 with
+        | Some ev -> 
+          let lt2 : local_trace h = [ev] in
+          lem_steps_preserve_safe e2 e2' h lt2;
+          let s2 : steps (EApp e1 e2') e' (h++[ev]) lt23 = step_eapp_steps in
+          assume (irred e' (h++[ev]));
+          assert (lt == ([ev] @ lt23));
+          let (e11, e2'', (| lt2', (| lt1, lt3 |) |)) = destruct_steps_eapp e1 e2' e' (h++[ev]) lt23 s2 t1 t2 in
+          //lem_steps_transitive e2 e2' e2'' h lt2 lt2';
+          let lt2'' : local_trace h = ([ev] @ lt2') in
+          //trans_well_formed_local_trace 
+          //let lt1' : local_trace (h++lt2') = lt1 in
+          //lem_steps_transitive (EApp e1 e2) (EApp e1 e2') h lt2 lt2';
+          (e11, e2'', (| lt2'', (| lt1, lt3 |) |))
+          //admit ()
+        | None -> admit ()
+        end
+      | _ -> admit ()
+      end
+       (*| AppLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
         let (EApp e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EApp e1 e2) (EApp e1' e2) h oev1;
@@ -649,24 +671,30 @@ let rec destruct_steps_eapp
           assume (irred e' (h++[ev]));
           let (e11, e2', (| _, (| lt1', lt3 |) |)) = destruct_steps_eapp e1' e2 e' (h++[ev]) lt23 s2 t1 t2 in
           assume (irred e2 (h++[ev]));
-          assume (irred e2 h);
           let lt3 : local_trace ((h++[ev])++lt1') = lt3 in
           let lt1' : local_trace (h++[ev]) = lt1' in
           let lt1 : local_trace h = [ev] in
           lem_steps_transitive e1 e1' (ELam e11) h lt1 lt1';
-          //lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (subst_beta e2' e11) h lt1 lt1';
-          trans_well_formed_local_trace h lt1 lt1';
-//          trans_well_formed_local_trace (h++[ev]) lt1' lt3;
-          let lt1'' : local_trace h = ([ev] @ lt1') in
-          lem_construct_lt h ev lt1'';
-          let lt3'' : local_trace (h++([ev] @ lt1')) = lt3 in
-          //let lt3'' : local_trace (h++[ev]) = (lt1' @ lt3) in
-          //lem_destruct_lt h ev lt1';
-          //let _ : local_trace (h++lt1'') = lt3 in
-          //let lt3 : local_trace (h++[ev]) = (lt1' @ lt3) in
-          //let lt3 : local_trace ((h++[])++lt1') = lt3 in
-          (e11, e2', (| [] , (| lt1'', lt3 |) |))
-        | None ->
+          let lt3 : local_trace ((h++[ev])++lt1') = lt3 in
+          let lt3_a : local_trace (h++[ev]) = (lt1' @ lt3) in 
+          let lt3_b : local_trace h = ([ev] @ (lt1' @ lt3)) in
+          let lt3_c : local_trace h = (([ev] @ lt1') @ lt3) in
+          test_lemma h ev lt1' lt3;
+          let lt3_d : local_trace (h++([ev] @ lt1')) = lt3 in
+          assume (steps e2 e2' h []);
+          assert (is_closed (ELam e11));
+          assert (steps e1 (ELam e11) h ([ev] @ lt1'));
+          assume (steps (EApp e1 e2) (subst_beta e2' e11) h ([ev] @ lt1'));
+          assume (steps (subst_beta e2' e11) e' (h++([ev] @ lt1')) lt3_d);
+          assert (lt == (([ev] @ lt1') @ lt3_d));
+          assert (irred e2 h ==> True);
+          assert (irred e1 h ==> ([ev] ++ lt1') == []);
+          (e11, e2', (| [] , (| ([ev] @ lt1'), lt3_d |) |)) 
+          // lt1' : local_trace (h++[ev])
+          // lt1'': local_trace h
+          // lt3: local_trace ((h++[ev])++lt1')
+          // lt3'': local_trace (h++lt1'')                                                  
+       | None ->
           let lt1 : local_trace h = [] in
           lem_steps_preserve_safe e1 e1' h lt1;
           lem_steps_preserve_sem_expr_shape e1 e1' h lt1 (TArr t1 t2);
@@ -677,9 +705,8 @@ let rec destruct_steps_eapp
           lem_steps_transitive e1 e1' (ELam e11) h lt1 lt1';
           lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (subst_beta e2' e11) h lt1 lt1';
           (e11, e2', (| [] , (| lt1', lt3 |) |))
-        end
-      | _ -> admit ()
-      end
+        end*)  
+     
 
 
 

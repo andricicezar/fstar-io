@@ -97,12 +97,21 @@ let singleton_event_well_formed_local_trace (h:trace) (ev:event_h h) :
   [SMTPat (well_formed_local_trace h [ev])] =
     admit ()
 
-let lem_destruct_lt (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) :
+let lem_destruct_lt_event (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) :
   Lemma (requires well_formed_local_trace h ([ev] @ lt))
         (ensures well_formed_local_trace (h++[ev]) lt) = admit ()
+
+let lem_destruct_lt (h:history) (lt:local_trace h) (lt1:local_trace (h++lt)) :
+  Lemma (requires well_formed_local_trace h (lt @ lt1))
+        (ensures well_formed_local_trace (h++lt) lt1) = admit ()
 
 let lem_construct_lt (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) : 
   Lemma (requires well_formed_local_trace (h++[ev]) lt)
         (ensures well_formed_local_trace h ([ev] @ lt)) = admit ()
+
+let test_lemma (h:history) (ev:event_h h) (lt:local_trace (h++[ev])) (lt':local_trace ((h++[ev])++lt)) :
+  Lemma (well_formed_local_trace (h++([ev] @ lt)) lt')
+  [SMTPat (well_formed_local_trace (h++([ev] @ lt)) lt')] =
+    admit ()
 
 
