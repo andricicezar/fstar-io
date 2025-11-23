@@ -7,6 +7,7 @@ open FStar.List.Tot
 open STLC
 open QTyp
 open IO
+open Trace
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
@@ -34,9 +35,9 @@ let rec (∋) (t:qType) (p:(get_Type t) * closed_exp) : Tot Type0 (decreases %[g
 and (⦂) (t:qType) (p:io (get_Type t) * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let io_e = fst p in
   let e = snd p in
-  theta io_e [] (fun lt r ->
+  theta io_e [] (fun (lt:local_trace []) (r:get_Type t) ->
     (** vvv has to be an exist? Feels like lt is a tape and this is determinacy **)
-    forall (e':closed_exp). steps e e' (** lt **) ==> irred e' ==>
+    forall (e':closed_exp). steps e e' [] lt ==> irred e' lt ==>
       t ∋ (r, e'))
 
 let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
@@ -58,18 +59,16 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
 
 let safety (t:qType) (fs_e:io (get_Type t)) (e:closed_exp) : Lemma
   (requires t ⦂ (fs_e, e))
-  (ensures safe e) =
-  admit ()
-  (**
-  introduce forall e'. steps e e' ==> is_value e' \/ can_step e' with begin
-    introduce steps e e' ==> is_value e' \/ can_step e' with _. begin
-      introduce irred e' ==> is_value e' with _. begin
+  (ensures safe e []) = admit ()
+  (*introduce forall e' lt. steps e e' [] lt ==> is_value e' \/ can_step e' lt with begin
+    introduce steps e e' [] lt ==> is_value e' \/ can_step e' lt with _. begin
+      introduce irred e' lt ==> is_value e' with _. begin
         assert (t ∋ (fs_e, e'));
         lem_values_are_values t fs_e e';
         assert (is_value e')
       end
     end
-  end**)
+  end*)
 
 (** F* Evaluation Environment : variable -> value **)
 
@@ -160,10 +159,8 @@ let equiv_var g (x:var{Some? (g x)})
 
 let equiv_lam #g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
   (requires (fun (fsG:eval_env (extend t1 g)) -> io_bind (f (tail #t1 fsG)) (fun f -> f (hd fsG))) ≈ body)
-  (ensures f ≈ (ELam body)) =
-  admit ()
-  (*
-  lem_fv_in_env_lam g t1 body;
+  (ensures f ≈ (ELam body)) = admit ()
+  (*lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> (t1 ^-> t2) ⦂ (f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
