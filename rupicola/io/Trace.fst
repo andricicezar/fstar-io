@@ -71,12 +71,6 @@ type event_h (t:trace) = (ev:event{test_event t ev})
 type local_trace (h:trace) =
   lt:trace{well_formed_local_trace h lt}
 
-//  event needs to be at end
-(*let append_event_h_gives_wf_local_trace (h:history) (lt:local_trace h) (ev:event_h lt) :
-  Lemma (well_formed_local_trace h (ev::lt)) 
-  [SMTPat (well_formed_local_trace h (ev::lt))] = 
-    admit ()*)
-
 open FStar.List.Tot
 
 let (++) (h:history) (lt:local_trace h) : history =
