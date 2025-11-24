@@ -31,8 +31,9 @@ let write (x:bool) : io unit =
   Call OWrite x Return
 
 let op_wp (o:io_ops) (args:io_args o) : hist (io_res o args) =
-  to_hist (fun h -> io_pre h o args) (fun h res lt ->
-    io_post h o args res /\ lt == [op_to_ev o args res])
+  to_hist
+    (fun h -> io_pre h o args)
+    (fun h res lt -> io_post h o args res /\ lt == [op_to_ev o args res])
 
 let rec theta #a (m:io a) : hist a =
   match m with
