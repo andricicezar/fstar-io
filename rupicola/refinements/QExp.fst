@@ -176,6 +176,31 @@ let helper_seq _ v _ k =
   fun fsG -> M.elim_pure_wp_monotonicity_forall ();
     v fsG ; k fsG
 
+unfold
+val wp_unref :
+  #g:env ->
+  #a:Type ->
+  #p:(a -> Type0) ->
+  spec_env g (x:a{p x}) ->
+  spec_env g a
+// let wp_unref #g #a #p wp fsG : pure_wp a =
+//   fun (po : pure_post a) ->
+//     fun x -> True
+let wp_unref #g #a #p wp fG =
+  refv_wp #a p (fun _ -> True) (wp fG)
+
+unfold
+val helper_unref :
+  #g:env ->
+  #a:Type ->
+  #p:(a -> Type0) ->
+  #wp:spec_env g (x:a{p x}) ->
+  fs_oexp g (x:a{p x}) wp ->
+  fs_oexp g a (wp_unref wp)
+let helper_unref #g #a #p #wp v =
+  fun fsG -> admit () ; v fsG
+
+
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
@@ -240,6 +265,14 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #v:fs_oexp g (x:a{ref1 x}) wpV ->
                 compilable #(x:a{ref1 x}) g wpV v ->
                 compilable #(x:a{ref2 x}) g _ (helper_refv ref2 wpV v)
+
+| CRef        : #g:env ->
+                #a:Type ->
+                #p:(a -> Type) ->
+                #wpV:spec_env g (x:a{p x}) ->
+                #v:fs_oexp g (x:a{p x}) wpV ->
+                compilable #a g (wp_unref wpV) (helper_unref v) ->
+                compilable #(x:a{p x}) g wpV v
 
 | CSeq        : #g:env ->
                 ref1:Type0 ->
@@ -369,6 +402,10 @@ let test1_erase_ref ()
   : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
   = fun _ -> CLambda (CRefinement _ CVar0)
 
+let test1_erase_ref_alt ()
+  : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
+  = fun _ -> CLambda (CRef CVar0)
+
 open Examples
 
 let test_erase_refine_again ()
@@ -396,7 +433,7 @@ let test_always_false'' ()
   : Tot (compilable_closed always_false)
   by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
   = fun _ ->
-    CLambda (CIf CVar0 
+    CLambda (CIf CVar0
                 (CRefinement (fun y -> True) CFalse)
                 (CRefinement (fun y -> True) CVar0))
 
