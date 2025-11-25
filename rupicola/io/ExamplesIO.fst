@@ -44,3 +44,13 @@ let apply_io_bind_read_if_write : io unit =
   if x
   then write false
   else write true
+
+(** Examples inspired from the Web Server **)
+val utf8_encode : bool -> bool
+let utf8_encode x = x
+
+let sendError400 (fd:bool) : io unit =
+  let x = utf8_encode true in
+  let p = (fd, x) in
+  write fd ;!@
+  return ()

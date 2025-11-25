@@ -17,11 +17,17 @@ assume val accept : file_descr -> io (resexn file_descr)
 assume val set_non_block : file_descr -> io (resexn unit)
 assume val socket : unit -> io (resexn file_descr)
 
-type req_handler =
-  file_descr ->
-  Bytes.bytes ->
-  (Bytes.bytes -> io (resexn unit)) ->
-  io (resexn unit)
+type req_handler = file_descr -> Bytes.bytes -> (Bytes.bytes -> io (resexn unit)) -> io (resexn unit)
+
+(** TODO to be able to quote the Web Server:
+- [ ] support for either
+- [ ] support for gazillion data types
+  - [ ] How to encode Bytes.utf8_encode. Are we going to treat it like a symbol? How?
+  - [ ] Similar for UInt8
+  - [ ] file_descr, list of file descriptors
+  - [ ] support for strings
+- [ ] support for fixpoints to be able to define `server_loop`
+ **)
 
 let sendError400 (fd:file_descr) : io unit =
   write (fd,(Bytes.utf8_encode "HTTP/1.1 400\n")) ;!@

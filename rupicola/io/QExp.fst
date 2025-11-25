@@ -530,3 +530,17 @@ let test_apply_io_bind_read_if_write
         (QIfIO QVar0
           (QAppIO QWrite QFalse)
           (QAppIO QWrite QTrue)))
+
+let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp g (a ^->!@ b))
+  (qx : exp_quotation g x) (qf : exp_quotation g f) :
+  io_quotation g (fun fsG -> let y = x fsG in f fsG y) =
+  QAppIO qf qx
+
+let test_sendErro400
+  : closed_exp_quotation _ sendError400
+  = QLambdaIO
+      (qLet (QApp (QLambda #_ #_ #_ #(fun fsG x -> x) QVar0) QTrue) (QLambdaIO
+      (qLet (QMkpair (QVarS QVar0) QVar0) (QLambdaIO
+      (QBindIO
+        (QAppIO QWrite (QVarS (QVarS QVar0)))
+        (QLambdaIO #_ #_ #_ #(fun _ _ -> return ()) (QReturn Qtt)))))))
