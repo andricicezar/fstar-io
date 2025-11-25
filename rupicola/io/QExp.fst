@@ -115,7 +115,25 @@ val helper_snd : #g : typ_env ->
                  #b : qType ->
                  p : fs_oexp g (a ^* b) ->
                  fs_oexp g b
-let helper_snd #_ #_ #_ p fsG = snd (p fsG)
+let helper_snd p fsG = snd (p fsG)
+
+unfold
+val helper_bind_io : #g:typ_env ->
+                     #a:qType ->
+                     #b:qType ->
+                     m:io_oexp g a ->
+                     k:fs_oexp g (a ^->!@ b) ->
+                     io_oexp g b
+let helper_bind_io m k fsG =
+  io_bind (m fsG) (k fsG)
+
+unfold
+val helper_return_io :
+        #g:typ_env ->
+        #a:qType ->
+        x:fs_oexp g a ->
+        io_oexp g a
+let helper_return_io x fsG = return (x fsG)
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
@@ -204,9 +222,9 @@ and io_quotation : #a:qType -> g:typ_env -> io_oexp g a -> Type =
         #a:qType ->
         #x:fs_oexp g a ->
         exp_quotation g x ->
-        io_quotation #a g (fun fsG -> return (x fsG))
+        io_quotation #a g (helper_return_io x)
 
-| QBind :
+| QBindIO :
         #g:typ_env ->
         #a:qType ->
         #b:qType ->
@@ -214,7 +232,7 @@ and io_quotation : #a:qType -> g:typ_env -> io_oexp g a -> Type =
         #k:fs_oexp g (a ^->!@ b) ->
         io_quotation g m ->
         exp_quotation g k ->
-        io_quotation #b g (fun fsG -> io_bind (m fsG) (k fsG))
+        io_quotation #b g (helper_bind_io m k)
 
 | QAppIO      : #g : typ_env ->
                 #a : qType ->
@@ -455,14 +473,14 @@ let test_apply_write
 
 let test_apply_io_bind_const
   : closed_io_exp_quotation _ apply_io_bind_const
-  = QBind
+  = QBindIO
       (QReturn QTrue)
       (QLambdaIO (QReturn QVar0))
 
 let test_apply_io_bind_identity
   : closed_exp_quotation (qBool ^->!@ qBool) apply_io_bind_identity
   = QLambdaIO
-      (QBind
+      (QBindIO
         (QReturn QVar0)
         (QLambdaIO #_ #_ #_ #(fun fsG y -> return y) (QReturn QVar0)))
 
@@ -478,7 +496,7 @@ let test_apply_io_bind_pure_if ()
       explode (); trefl ();
       explode (); trefl ())
   = QLambdaIO
-      (QBind
+      (QBindIO
         (QReturn QVar0)
         (QLambdaIO #_ #_ #_ #(fun fsG y -> if y then return false else return true)
           (QIfIO QVar0
@@ -488,25 +506,25 @@ let test_apply_io_bind_pure_if ()
 let test_apply_io_bind_write
   : closed_exp_quotation _ apply_io_bind_write
   = QLambdaIO (
-      QBind
+      QBindIO
          (QReturn QVar0)
          (QLambdaIO #_ #_ #_ #(fun fsG y -> write y)
            (QAppIO QWrite QVar0)))
 
 let test_apply_io_bind_read_write
   : closed_io_exp_quotation _ apply_io_bind_read_write
-  = QBind
+  = QBindIO
      (QAppIO QRead Qtt)
      (QLambdaIO
        (QAppIO QWrite QVar0))
 
 let test_apply_io_bind_read_write' ()
   : Tot (closed_io_exp_quotation _ apply_io_bind_read_write')
-  = QBind (QAppIO QRead Qtt) QWrite
+  = QBindIO (QAppIO QRead Qtt) QWrite
 
 let test_apply_io_bind_read_if_write
   : closed_io_exp_quotation _ apply_io_bind_read_if_write
-  = QBind
+  = QBindIO
       (QAppIO QRead Qtt)
       (QLambdaIO
         (QIfIO QVar0
