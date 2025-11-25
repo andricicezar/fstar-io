@@ -12,9 +12,6 @@ open Trace
 type io_cexp (t:qType) =
   io (get_Type t)
 
-type io_oexp (g:typ_env) (t:qType) =
-  eval_env g -> io (get_Type t)
-
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
 let rec (∋) (t:qType) (p:(history * (get_Type t) * closed_exp)) : Tot Type0 (decreases %[get_rel t;0]) =
@@ -23,6 +20,14 @@ let rec (∋) (t:qType) (p:(history * (get_Type t) * closed_exp)) : Tot Type0 (d
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | QArr #t1 #t2 qt1 qt2 -> begin
+    let fs_f : t1 -> t2 = fs_v in
+    match e with
+    | ELam e' ->
+      (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
+        pack qt2 ∶(h++lt_v, fs_f fs_v, subst_beta v e'))
+    | _ -> False
+  end
+  | QArrIO #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> io t2 = fs_v in
     match e with
     | ELam e' -> // instead quantify over h'' - extensions of the history
@@ -36,17 +41,23 @@ let rec (∋) (t:qType) (p:(history * (get_Type t) * closed_exp)) : Tot Type0 (d
         pack qt1 ∋ (h, fst #t1 #t2 fs_v, e1) /\ pack qt2 ∋ (h, snd #t1 #t2 fs_v, e2)
     | _ -> False
   end
-  (**             vvvvvvvv defined ove IO computations **)
+                           (** vvvvvvvvvv defined over F* values **)
+and (∶) (t:qType) (p:history * get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+  let (h, fs_e, e) = p in
+  forall (e':closed_exp).
+    steps e e' h [] ==> irred e' h ==>
+    t ∋ (h, fs_e, e')
+                           (** vvvvvvvvvv defined over IO computations **)
 and (⦂) (t:qType) (p:history * io_cexp t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
-
-(**  forall lt fs_r.
-    (forall p. theta fs_e h p ==> p lt fs_r) ==>
-      (forall (e':closed_exp). steps e e' h lt ==>  t ∋ (h++lt, fs_r, e'))**)
   forall lt (e':closed_exp).
     steps e e' h lt ==> irred e' (h++lt) ==>
     (exists fs_r. t ∋ (h++lt, fs_r, e') /\ (forall p. theta fs_e h p ==> p lt fs_r))
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
+
+(**  forall lt fs_r.
+    (forall p. theta fs_e h p ==> p lt fs_r) ==>
+      (forall (e':closed_exp). steps e e' h lt ==>  t ∋ (h++lt, fs_r, e'))**)
 
 (** Section 8.1: https://www.cs.uoregon.edu/research/summerschool/summer24/lectures/Ahmed.pdf **)
 
@@ -62,6 +73,7 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
   | QUnit -> ()
   | QBool -> ()
   | QArr _ _ -> ()
+  | QArrIO _ _ -> ()
   | QPair #t1 #t2 qt1 qt2 ->
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
