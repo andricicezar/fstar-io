@@ -66,6 +66,8 @@ let rec well_formed_local_trace (h:trace) (lt:trace) : Tot Type0 (decreases lt) 
 
 type history = trace (** a history is a trace kept backwards **)
 
+type event_h (t:trace) = (ev:event{test_event t ev})
+
 type local_trace (h:trace) =
   lt:trace{well_formed_local_trace h lt}
 
@@ -78,3 +80,20 @@ let trans_well_formed_local_trace (h:trace) (lt:local_trace h) (lt1:local_trace 
   Lemma (well_formed_local_trace h (lt @ lt1))
   [SMTPat (well_formed_local_trace h (lt @ lt1))] =
     admit ()
+
+let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (ev::h)) :
+  Lemma (well_formed_local_trace h ([ev] @ lt))
+  [SMTPat (well_formed_local_trace h ([ev] @ lt))] = 
+    admit ()
+
+let singleton_event_well_formed_local_trace (h:trace) (ev:event_h h) :
+  Lemma (well_formed_local_trace h [ev])
+  [SMTPat (well_formed_local_trace h [ev])] =
+    admit ()
+
+let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
+  Lemma (((h++lt)++lt') == (h++(lt @ lt')))
+  [SMTPat (h++(lt @ lt'))] =
+    admit ()
+
+

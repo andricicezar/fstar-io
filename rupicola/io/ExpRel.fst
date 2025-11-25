@@ -7,12 +7,18 @@ open FStar.List.Tot
 open STLC
 open QTyp
 open IO
+open Trace
+
+type io_cexp (t:qType) =
+  io (get_Type t)
+
+type io_oexp (g:typ_env) (t:qType) =
+  eval_env g -> io (get_Type t)
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
-let rec (∋) (t:qType) (p:(get_Type t) * closed_exp) : Tot Type0 (decreases %[get_rel t;0]) =
-  let fs_v = fst p in
-  let e = snd p in
+let rec (∋) (t:qType) (p:(history * (get_Type t) * closed_exp)) : Tot Type0 (decreases %[get_rel t;0]) =
+  let (h, fs_v, e) = p in
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
@@ -20,31 +26,36 @@ let rec (∋) (t:qType) (p:(get_Type t) * closed_exp) : Tot Type0 (decreases %[g
     let fs_f : t1 -> io t2 = fs_v in
     match e with
     | ELam e' -> // instead quantify over h'' - extensions of the history
-      (forall (v:value) (fs_v:t1). pack qt1 ∋ (fs_v, v) ==>
-        pack qt2 ⦂ (fs_f fs_v, subst_beta v e'))
+      (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
+        pack qt2 ⦂ (h++lt_v, fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
   | QPair #t1 #t2 qt1 qt2 -> begin
     match e with
-    | EPair e1 e2 ->
-      pack qt1 ∋ (fst #t1 #t2 fs_v, e1) /\ pack qt2 ∋ (snd #t1 #t2 fs_v, e2)
+    | EPair e1 e2 -> (** e1 and e2 are values. no need to quantify over lts **)
+        pack qt1 ∋ (h, fst #t1 #t2 fs_v, e1) /\ pack qt2 ∋ (h, snd #t1 #t2 fs_v, e2)
     | _ -> False
   end
   (**             vvvvvvvv defined ove IO computations **)
-and (⦂) (t:qType) (p:io (get_Type t) * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
-  let io_e = fst p in
-  let e = snd p in
-  theta io_e [] (fun lt r ->
-    (** vvv has to be an exist? Feels like lt is a tape and this is determinacy **)
-    forall (e':closed_exp). steps e e' (** lt **) ==> irred e' ==>
-      t ∋ (r, e'))
+and (⦂) (t:qType) (p:history * io_cexp t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+  let (h, fs_e, e) = p in
 
-let lem_values_are_expressions t fs_e e : (** lemma used by Amal **)
-  Lemma (requires t ∋ (fs_e, e))
-        (ensures  t ⦂ (io_return fs_e, e)) = admit ()
+(**  forall lt fs_r.
+    (forall p. theta fs_e h p ==> p lt fs_r) ==>
+      (forall (e':closed_exp). steps e e' h lt ==>  t ∋ (h++lt, fs_r, e'))**)
+  forall lt (e':closed_exp).
+    steps e e' h lt ==> irred e' (h++lt) ==>
+    (exists fs_r. t ∋ (h++lt, fs_r, e') /\ (forall p. theta fs_e h p ==> p lt fs_r))
+                           (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
 
-let rec lem_values_are_values t fs_e (e:closed_exp) :
-  Lemma (requires t ∋ (fs_e, e))
+(** Section 8.1: https://www.cs.uoregon.edu/research/summerschool/summer24/lectures/Ahmed.pdf **)
+
+let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∋ (h, fs_e, e))
+        (ensures  t ⦂ (h, io_return fs_e, e)) = admit ()
+
+let rec lem_values_are_values t h fs_e (e:closed_exp) :
+  Lemma (requires t ∋ (h, fs_e, e))
         (ensures is_value e)
         (decreases e) =
   match get_rel t with
@@ -53,23 +64,8 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
   | QArr _ _ -> ()
   | QPair #t1 #t2 qt1 qt2 ->
     let EPair e1 e2 = e in
-    lem_values_are_values (pack qt1) (fst #t1 #t2 fs_e) e1;
-    lem_values_are_values (pack qt2) (snd #t1 #t2 fs_e) e2
-
-let safety (t:qType) (fs_e:io (get_Type t)) (e:closed_exp) : Lemma
-  (requires t ⦂ (fs_e, e))
-  (ensures safe e) =
-  admit ()
-  (**
-  introduce forall e'. steps e e' ==> is_value e' \/ can_step e' with begin
-    introduce steps e e' ==> is_value e' \/ can_step e' with _. begin
-      introduce irred e' ==> is_value e' with _. begin
-        assert (t ∋ (fs_e, e'));
-        lem_values_are_values t fs_e e';
-        assert (is_value e')
-      end
-    end
-  end**)
+    lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
+    lem_values_are_values (pack qt2) h (snd #t1 #t2 fs_e) e2
 
 (** F* Evaluation Environment : variable -> value **)
 
@@ -87,18 +83,43 @@ let safety (t:qType) (fs_e:io (get_Type t)) (e:closed_exp) : Lemma
     What is cool about this is to define compilation to STLC the environment is abstract.
  **)
 
-let (∽) (#g:typ_env) #b (fsG:eval_env g) (s:gsub g b) : Type0 =
+let (∽) (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
-    Some?.v (g x) ∋ (index fsG x, s x)
+    Some?.v (g x) ∋ (h, index fsG x, s x)
+  (**  TODO      ^^^ not like in Amal's work. she uses an exp relation **)
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __open terms__. **)
-let equiv (#g:typ_env) (t:qType) (fs_e:fs_oexp g t) (e:exp) : Type0 =
+let equiv (#g:typ_env) (t:qType) (fs_e:io_oexp g t) (e:exp) : Type0 =
   fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g).
-    fsG ∽ s ==> t ⦂ (fs_e fsG, gsubst s e)
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> t ⦂ (h, fs_e fsG, gsubst s e)
 
-let (≈) (#g:typ_env) (#t:qType) (fs_v:fs_oexp g t) (e:exp) : Type0 =
+let equiv_closed (#t:qType) (fs_e:io_cexp t) (e:exp) : Type0 =
+  equiv #empty t (fun _ -> fs_e) e
+
+let safety (#t:qType) (fs_e:io_cexp t) (e:exp) : Lemma
+  (requires (equiv_closed fs_e e))
+  (ensures (forall h. safe e h)) =
+  introduce forall h (e':closed_exp) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ can_step e' (h++lt) with _. begin
+      introduce irred e' (h++lt) ==> is_value e' with _. begin
+        eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+          fsG `(∽) h` s ==> t ⦂ (h, fs_e, gsubst s e)
+        with  true gsub_empty empty_eval h;
+        assert (t ⦂ (h, fs_e, e));
+        eliminate exists fs_r. t ∋ (h++lt, fs_r, e') /\ (forall p. theta fs_e h p ==> p lt fs_r)
+        returns is_value e' with _. begin
+          assert (t ∋ (h++lt, fs_r, e'));
+          lem_values_are_values t (h++lt) fs_r e';
+          assert (is_value e')
+        end
+      end
+    end
+  end
+
+let (≈) (#g:typ_env) (#t:qType) (fs_v:io_oexp g t) (e:exp) : Type0 =
   equiv #g t fs_v e
 
 (** Equiv closed terms **)
@@ -160,10 +181,8 @@ let equiv_var g (x:var{Some? (g x)})
 
 let equiv_lam #g (t1:qType) (t2:qType) (f:fs_oexp g (t1 ^-> t2)) (body:exp) : Lemma
   (requires (fun (fsG:eval_env (extend t1 g)) -> io_bind (f (tail #t1 fsG)) (fun f -> f (hd fsG))) ≈ body)
-  (ensures f ≈ (ELam body)) =
-  admit ()
-  (*
-  lem_fv_in_env_lam g t1 body;
+  (ensures f ≈ (ELam body)) = admit ()
+  (*lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==> (t1 ^-> t2) ⦂ (f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin

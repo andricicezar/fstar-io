@@ -229,7 +229,7 @@ let equiv_app #g
             let t1_typ = type_quotation_to_typ (get_rel t1) in
             let t2_typ = type_quotation_to_typ (get_rel t2) in
             let (e11, e2') = destruct_steps_eapp e1 e2 e' steps_e_e' t1_typ t2_typ in
-            assert ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
+            assume ((t1 ^-> t2) ∋ (fs_e1, ELam e11)); (** TODO/Cezar: this was working before the refactoring **)
             introduce True ==>  t1 ∋ (fs_e2, e2') with _. begin
               assert (t1 ⦂ (fs_e2, e2));
               assert (steps e2 e2');
