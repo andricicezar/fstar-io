@@ -29,6 +29,13 @@ let rec (∋) (t:qType) (p:get_Type t * closed_exp) : Tot Type0 (decreases %[get
       (| s1, r1 |) ∋ (fst #s1 #s2 fs_v, e1) /\ (| s2, r2 |) ∋ (snd #s1 #s2 fs_v, e2)
     | _ -> False
   end
+  | QSum #s1 #s2 r1 r2 -> begin
+    let fs_v : either s1 s2 = fs_v in
+    match fs_v, e with
+    | Inl fs_v', EInl e' -> (| s1, r1 |) ∋ (fs_v', e')
+    | Inr fs_v', EInr e' -> (| s2, r2 |) ∋ (fs_v', e')
+    | _ -> False
+  end
 and (⦂) (t:qType) (p: get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let fs_e = fst p in
   let e = snd p in
@@ -50,6 +57,11 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (| s1, r1 |) (fst #s1 #s2 fs_e) e1;
     lem_values_are_values (| s2, r2 |) (snd #s1 #s2 fs_e) e2
+  | QSum #s1 #s2 r1 r2 ->
+    match fs_e, e with
+    | Inl fs_e', EInl e' -> lem_values_are_values (| s1, r1 |) fs_e' e'
+    | Inr fs_e', EInr e' -> lem_values_are_values (| s2, r2 |) fs_e' e'
+
 
 let safety (t:qType) (fs_e:get_Type t) (e:closed_exp) : Lemma
   (requires t ⦂ (fs_e, e))

@@ -21,6 +21,9 @@ let rec compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : Tot exp (decreas
   | QMkpair q1 q2 -> EPair (compile q1) (compile q2)
   | QFst qp -> EFst (compile qp)
   | QSnd qp -> ESnd (compile qp)
+  | QInl qp -> EInl (compile qp)
+  | QInr qp -> EInr (compile qp)
+  | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
 
 let lem_compile_empty_closed #a (#s:fs_oexp empty a) (qs:exp_quotation empty s) : Lemma (is_closed (compile qs)) = admit ()
 
@@ -66,6 +69,17 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
   | QSnd #_ #_ #_ #p qp ->
     compile_equiv qp;
     equiv_pair_snd_app p (compile qp)
+  | QInl qp ->
+    compile_equiv qp;
+    admit ()
+  | QInr qp ->
+    compile_equiv qp;
+    admit ()
+  | QCase cond inlc inrc ->
+    compile_equiv cond;
+    compile_equiv inlc;
+    compile_equiv inrc;
+    admit ()
 
 let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs:exp_quotation #a empty (fun _ -> s))
   : Lemma (ensures (a ⦂ (s, compile_closed qs))) =

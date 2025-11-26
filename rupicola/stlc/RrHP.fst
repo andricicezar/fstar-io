@@ -87,7 +87,7 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
-  backtranslate empty e (comp_int i).ct h empty_eval
+  backtranslate h empty_eval
 
 
 val lem_bt_ctx i ct : Lemma (
@@ -99,8 +99,8 @@ let lem_bt_ctx i ct =
   lem_value_is_closed e;
   lem_closed_is_no_fv e;
   assert (fv_in_env empty e);
-  lem_backtranslate empty e (comp_int i).ct h;
-  equiv_closed_terms #(comp_int i).ct (backtranslate empty e (comp_int i).ct h empty_eval) e;
+  lem_backtranslate h;
+  equiv_closed_terms #(comp_int i).ct (backtranslate h empty_eval) e;
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
   ()
 

@@ -127,6 +127,8 @@ let rec is_value (e:exp) : Type0 =
   | EFalse -> True
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
+  | EInl e'
+  | EInr e' -> is_value e'
   | _ -> False
 
 let rec lem_value_is_closed (e:exp) : Lemma
@@ -135,6 +137,8 @@ let rec lem_value_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   match e with
   | EPair e1 e2 -> lem_value_is_closed e1; lem_value_is_closed e2
+  | EInl e'
+  | EInr e' -> lem_value_is_closed e'
   | _ -> ()
 
 type value = e:exp{is_value e}
@@ -331,27 +335,19 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
   (ensures irred e)
   [SMTPat (irred e)] =
   match e with
-  | EUnit ->
-    assert (forall e'. ~(step EUnit e')) by explode ()
-  | ETrue ->
-    assert (forall e'. ~(step ETrue e')) by explode ()
-  | EFalse ->
-    assert (forall e'. ~(step EFalse e')) by explode ()
-  | ELam e11 ->
-    assert (forall e'. ~(step (ELam e11) e')) by explode ()
   | EPair e1 e2 ->
     lem_value_is_irred e1;
     lem_value_is_irred e2;
     introduce forall (e':closed_exp). step e e' ==> False with begin
       introduce step e e' ==> False with h. begin
-        FStar.Squash.bind_squash #(step e e') () (fun st ->
-        match st with
-        | PairLeft e2 hst -> ()
-        | PairRight e1 hst -> ()
-        | _ -> ())
+        FStar.Squash.bind_squash #(step e e') h (fun st ->
+          match st with
+          | PairLeft e2 hst -> ()
+          | PairRight e1 hst -> ()
+          | _ -> false_elim ())
       end
     end
-  | _ -> ()
+  | _ -> assert (forall e'. ~(step e e')) by (explode ())
 
 (** reflexive transitive closure of step *)
 noeq
