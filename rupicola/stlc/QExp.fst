@@ -76,7 +76,7 @@ val helper_fst : #g : typ_env ->
                  #b : qType ->
                  p : fs_oexp g (a ^* b) ->
                  fs_oexp g a
-let helper_fst #_ #_ #_ p fsG = fst (p fsG)
+let helper_fst p fsG = fst (p fsG)
 
 unfold
 val helper_snd : #g : typ_env ->
@@ -84,7 +84,37 @@ val helper_snd : #g : typ_env ->
                  #b : qType ->
                  p : fs_oexp g (a ^* b) ->
                  fs_oexp g b
-let helper_snd #_ #_ #_ p fsG = snd (p fsG)
+let helper_snd p fsG = snd (p fsG)
+
+unfold
+val helper_inl : #g : typ_env ->
+                 #a : qType ->
+                 b : qType ->
+                 p : fs_oexp g a ->
+                 fs_oexp g (a ^+ b)
+let helper_inl _ p fsG = Inl (p fsG)
+
+unfold
+val helper_inr : #g : typ_env ->
+                 a : qType ->
+                 #b : qType ->
+                 p : fs_oexp g b ->
+                 fs_oexp g (a ^+ b)
+let helper_inr _ p fsG = Inr (p fsG)
+
+unfold
+val helper_case : #g :typ_env ->
+                  #a  : qType ->
+                  #b  : qType ->
+                  #c  : qType ->
+                  cond: fs_oexp g (a ^+ b) ->
+                  inlc: fs_oexp g (a ^-> c) ->
+                  inrc: fs_oexp g (b ^-> c) ->
+                  fs_oexp g c
+let helper_case cond inlc inrc fsG =
+  match cond fsG with
+  | Inl x -> inlc fsG x
+  | Inr x -> inrc fsG x
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
@@ -100,7 +130,7 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
                 #b : qType ->
                 #x : fs_oexp g a ->
                 exp_quotation g x ->
-                exp_quotation _ (helper_varS g a b x)
+                exp_quotation (extend b g) (helper_varS g a b x)
 
 | QAppGhost   : #g : typ_env ->
                 #a : qType ->
@@ -129,7 +159,7 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oexp g qBool ->
-                exp_quotation #qBool g c ->
+                exp_quotation g c ->
                 #t : fs_oexp g a ->
                 exp_quotation g t ->
                 #e : fs_oexp g a ->
@@ -156,6 +186,30 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
               #p : fs_oexp g (a ^* b) ->
               exp_quotation g p ->
               exp_quotation g (helper_snd p)
+| QInl      : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #p : fs_oexp g a ->
+              exp_quotation g p ->
+              exp_quotation g (helper_inl b p)
+| QInr      : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #p : fs_oexp g b ->
+              exp_quotation g p ->
+              exp_quotation g (helper_inr a p)
+| QCase     : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #c : qType ->
+              #cond : fs_oexp g (a ^+ b) ->
+              exp_quotation g cond ->
+              #inlc : fs_oexp g (a ^-> c) ->
+              exp_quotation g inlc ->
+              #inrc : fs_oexp g (b ^-> c) ->
+              exp_quotation g inrc ->
+              exp_quotation g (helper_case cond inlc inrc)
+
 
 unfold
 let helper_oexp (#a:qType) (x:get_Type a) : fs_oexp empty a = fun _ -> x
@@ -183,17 +237,23 @@ let test_var0
   : exp_quotation #qBool (extend qBool empty) var0
   = QVar0
 
+let qVar1 #g #a #b : exp_quotation (extend b (extend a g)) (fun fsG -> hd (tail fsG)) =
+  QVarS QVar0
+
+let qVar2 #g #a #b #c : exp_quotation (extend c (extend b (extend a g))) (fun fsG -> hd (tail (tail fsG))) =
+  QVarS qVar1
+
 let test_var1
   : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
-  = QVarS QVar0
+  = qVar1
 
 let test_var2
   : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
-  = QVarS (QVarS QVar0)
+  = qVar2
 
 let test_var3
   : exp_quotation #qBool (extend qBool (extend qBool (extend qBool (extend qBool empty)))) var3
-  = QVarS (QVarS (QVarS QVar0))
+  = QVarS (qVar2)
 
 let test_constant
   : closed_exp_quotation (qBool ^-> qBool) constant
@@ -209,11 +269,11 @@ let test_thunked_id
 
 let test_proj1
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj1
-  = QLambda (QLambda (QLambda (QVarS (QVarS QVar0))))
+  = QLambda (QLambda (QLambda qVar2))
 
 let test_proj2
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj2
-  = QLambda (QLambda (QLambda (QVarS QVar0)))
+  = QLambda (QLambda (QLambda qVar1))
 
 let test_proj3
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj3
@@ -233,7 +293,7 @@ let test_apply_top_level_def'
                        (QApp
                           (QLambda (QLambda #_ #_ #_ #(fun _ y -> y) QVar0))
  //                       (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
-                          (QVarS QVar0))
+                          qVar1)
                        QVar0))
 
 let test_papply__top_level_def
@@ -266,48 +326,44 @@ let test_negb
 
 let test_negb_pred
   : closed_exp_quotation ((qBool ^-> qBool) ^-> qBool ^-> qBool) negb_pred
-  = QLambda (QLambda (QIf (QApp (QVarS QVar0) QVar0) QFalse QTrue))
+  = QLambda (QLambda (QIf (QApp qVar1 QVar0) QFalse QTrue))
 
 let test_if2
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool) if2
-  = QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0))
+  = QLambda (QLambda (QIf qVar1 QFalse QVar0))
 
 (** Because of the fancy types, now one needs a preprocessing tactic to
     get rid of the qTypes **)
 
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
+  norm_term_env (top_env ()) [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota;simplify] x
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return
   = QLambda (QIf QVar0
-                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0))
+                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) qVar1)
                  (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return'
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return'
   = QLambda (QIf QVar0
-                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0))
+                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) qVar1)
                  (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
   : closed_exp_quotation (qBool ^-> qBool ^-> (qBool ^* qBool)) make_pair
-  = QLambda (QLambda (QMkpair (QVarS QVar0) QVar0))
+  = QLambda (QLambda (QMkpair qVar1 QVar0))
 
-#push-options "--print_implicits --print_universes"
-
-// TODO: why does this fail?
 [@@ (preprocess_with simplify_qType)]
 let test_pair_of_functions ()
   : Tot (closed_exp_quotation ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                               pair_of_functions)
   by (norm [delta_only [`%pair_of_functions]];
       norm [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
-     // trefl (); //this fails
-     dump "H";
+     // trefl (); //TODO: why does this fail?
      tadmit ())
   =  QMkpair
       (QLambda (QApp
@@ -321,7 +377,7 @@ let test_pair_of_functions2
     pair_of_functions2
   = admit (); QMkpair // TODO
       (QLambda (QIf QVar0 QFalse QTrue))
-      (QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0)))
+      (QLambda (QLambda (QIf qVar1 QFalse QVar0)))
 
 let test_fst_pair
   : closed_exp_quotation (qBool) fst_pair
@@ -356,7 +412,42 @@ let test_a_few_lets
   : closed_exp_quotation (qBool ^-> qUnit) a_few_lets
   = QLambda
      (qLet (QMkpair QVar0 QVar0) (QLambda
-     (qLet (QVarS QVar0) (QLambda
-     (qLet (QFst (QVarS QVar0)) (QLambda
-     (qLet (QMkpair (QVarS QVar0) QVar0) (QLambda
+     (qLet qVar1 (QLambda
+     (qLet (QFst qVar1) (QLambda
+     (qLet (QMkpair qVar1 QVar0) (QLambda
      Qtt))))))))
+
+let test_inl_true
+  : closed_exp_quotation (qBool ^+ qUnit) inl_true
+  = QInl QTrue
+
+let test_inr_unit
+  : closed_exp_quotation (qBool ^+ qUnit) inr_unit
+  = QInr Qtt
+
+[@@ (preprocess_with simplify_qType)]
+let test_return_either ()
+  : closed_exp_quotation (qBool ^-> (qUnit ^+ qUnit)) return_either
+  by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%return_either]; iota];
+     // trefl (); -- TODO: this fails even if it is an equality.
+     tadmit ())
+  = QLambda (QIf QVar0 (QInl Qtt) (QInr Qtt))
+
+let test_match_either ()
+  : closed_exp_quotation ((qBool ^+ qBool) ^-> qBool) match_either
+  = QLambda (QCase QVar0 (QLambda #_ #_ #_ #(fun _ x -> x) QVar0) (QLambda #_ #_ #_ #(fun _ x -> x) QVar0))
+
+[@@ (preprocess_with simplify_qType)]
+let test_match_either' ()
+  : closed_exp_quotation ((qBool ^+ qBool) ^-> qBool) match_either'
+  by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%match_either']; iota];
+     tadmit ()) // TODO: expected failure. any way to sort the cases?
+  = QLambda (QCase QVar0 (QLambda #_ #_ #_ #(fun _ x -> x) QVar0) (QLambda #_ #_ #_ #(fun _ x -> x) QVar0))
+
+let test_match_either_arg ()
+  : closed_exp_quotation ((qBool ^+ qBool) ^-> qBool ^-> qBool) match_either_arg
+  = QLambda (QLambda (
+       QCase
+         qVar1
+         (QLambda #_ #_ #_ #(fun _ x -> x) QVar0)
+         (QLambda #_ #_ #_ #(fun fsG _ -> hd fsG) qVar1)))

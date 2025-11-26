@@ -23,6 +23,11 @@ type type_quotation : Type0 -> Type u#1 =
           type_quotation s1 ->
           type_quotation s2 ->
           type_quotation (s1 & s2)
+| QSum  : #s1:Type ->
+          #s2:Type ->
+          type_quotation s1 ->
+          type_quotation s2 ->
+          type_quotation (either s1 s2)
 
 let test_match s (r:type_quotation s) = (** why does this work so well? **)
   match r with
@@ -30,13 +35,15 @@ let test_match s (r:type_quotation s) = (** why does this work so well? **)
   | QBool -> assert (s == bool)
   | QArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
   | QPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
+  | QSum #s1 #s2 _ _ -> assert (s == either s1 s2)
 
 let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   match r with
   | QUnit -> TUnit
   | QBool -> TBool
-  | QArr #s1 #s2 rs1 rs2 -> TArr (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
-  | QPair #s1 #s2 rs1 rs2 -> TPair (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
+  | QArr rs1 rs2 -> TArr (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
+  | QPair rs1 rs2 -> TPair (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
+  | QSum rs1 rs2 -> TSum (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
 
 (** Type of Quotable Types **)
 type qType =
@@ -53,6 +60,8 @@ let (^->) (t1 t2:qType) : qType =
 
 let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
+let (^+) (t1 t2:qType) : qType =
+  (| _, QSum (get_rel t1) (get_rel t2) |)
 
 (** typ_env is a typing environment: variables to Quotable F* Types **)
 type typ_env = var -> option qType

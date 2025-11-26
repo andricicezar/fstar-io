@@ -96,3 +96,26 @@ let a_few_lets : bool -> unit =
     let z = fst p in
     let g = (y, z) in
     ()
+
+let inl_true : either bool unit = Inl true
+let inr_unit : either bool unit = Inr ()
+let return_either : bool -> either unit unit =
+  fun x -> if x then Inl () else Inr ()
+
+let match_either : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inl x -> x
+    | Inr x -> x
+
+let match_either' : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inr x -> x
+    | Inl x -> x
+
+let match_either_arg : either bool bool -> bool -> bool =
+  fun x y ->
+    match x with
+    | Inl x -> x
+    | Inr x -> y
