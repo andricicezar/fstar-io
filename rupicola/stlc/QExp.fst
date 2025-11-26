@@ -346,3 +346,17 @@ let test_wrap_snd
 let test_wrap_snd_pa
   : closed_exp_quotation ((qBool ^* qUnit) ^-> qUnit) wrap_snd_pa
   = QLambda (QSnd QVar0)
+
+let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp g (a ^-> b))
+  (qx : exp_quotation g x) (qf : exp_quotation g f) :
+  exp_quotation g (fun fsG -> let y = x fsG in f fsG y) =
+  QApp qf qx
+
+let test_a_few_lets
+  : closed_exp_quotation (qBool ^-> qUnit) a_few_lets
+  = QLambda
+     (qLet (QMkpair QVar0 QVar0) (QLambda
+     (qLet (QVarS QVar0) (QLambda
+     (qLet (QFst (QVarS QVar0)) (QLambda
+     (qLet (QMkpair (QVarS QVar0) QVar0) (QLambda
+     Qtt))))))))

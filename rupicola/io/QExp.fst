@@ -15,18 +15,12 @@ val helper_var0 :
 let helper_var0 g a fsG = hd fsG
 
 unfold
-val helper_var1 : g:typ_env ->
+val helper_varS : g:typ_env ->
                   a:qType ->
                   b:qType ->
-                  fs_oexp (extend b (extend a g)) a
-let helper_var1 g a b fsG = hd (tail fsG)
-unfold
-val helper_var2 : g:typ_env ->
-                  a:qType ->
-                  b:qType ->
-                  c:qType ->
-                  fs_oexp (extend c (extend b (extend a g))) a
-let helper_var2 g a b c fsG = hd (tail (tail fsG))
+                  fs_oexp g a ->
+                  fs_oexp (extend b g) a
+let helper_varS g a b x fsG = x (tail fsG)
 
 unfold
 val helper_unit : g:typ_env -> fs_oexp g qUnit
@@ -39,7 +33,19 @@ val helper_app: #g : typ_env ->
                 f :fs_oexp g (a ^-> b) ->
                 x :fs_oexp g a ->
                 fs_oexp g b
-let helper_app f x fsG = (f fsG) (x fsG)
+let helper_app f x fsG =
+  (f fsG) (x fsG)
+
+unfold
+val helper_app_io :
+                #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                f :fs_oexp g (a ^->!@ b) ->
+                x :fs_oexp g a ->
+                io_oexp g b
+let helper_app_io f x fsG =
+  (f fsG) (x fsG)
 
 unfold
 val helper_lambda : #g :typ_env ->
@@ -48,6 +54,14 @@ val helper_lambda : #g :typ_env ->
                 f :fs_oexp g (a ^-> b) ->
                 fs_oexp (extend a g) b
 let helper_lambda #_ #_ f fsG = f (tail fsG) (hd fsG)
+
+unfold
+val helper_lambda_io : #g :typ_env ->
+                #a :qType ->
+                #b :qType ->
+                f :fs_oexp g (a ^->!@ b) ->
+                io_oexp (extend a g) b
+let helper_lambda_io #_ #_ f fsG = f (tail fsG) (hd fsG)
 
 unfold
 val helper_true : g:typ_env -> fs_oexp g qBool
@@ -65,6 +79,16 @@ val helper_if : #g :typ_env ->
                 e   : fs_oexp g a ->
                 fs_oexp g a
 let helper_if c t e fsG =
+  if c fsG then t fsG else e fsG
+
+unfold
+val helper_if_io : #g :typ_env ->
+                #a  : qType ->
+                c   : fs_oexp g qBool ->
+                t   : io_oexp g a ->
+                e   : io_oexp g a ->
+                io_oexp g a
+let helper_if_io c t e fsG =
   if c fsG then t fsG else e fsG
 
 unfold
@@ -91,7 +115,25 @@ val helper_snd : #g : typ_env ->
                  #b : qType ->
                  p : fs_oexp g (a ^* b) ->
                  fs_oexp g b
-let helper_snd #_ #_ #_ p fsG = snd (p fsG)
+let helper_snd p fsG = snd (p fsG)
+
+unfold
+val helper_bind_io : #g:typ_env ->
+                     #a:qType ->
+                     #b:qType ->
+                     m:io_oexp g a ->
+                     k:fs_oexp g (a ^->!@ b) ->
+                     io_oexp g b
+let helper_bind_io m k fsG =
+  io_bind (m fsG) (k fsG)
+
+unfold
+val helper_return_io :
+        #g:typ_env ->
+        #a:qType ->
+        x:fs_oexp g a ->
+        io_oexp g a
+let helper_return_io x fsG = return (x fsG)
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
@@ -102,15 +144,13 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
                 #a : qType ->
                 exp_quotation _ (helper_var0 g a)
 
-| QVar1       : #g : typ_env ->
+| QVarS       : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                exp_quotation _ (helper_var1 g a b)
-| QVar2       : #g : typ_env ->
-                #a : qType ->
-                #b : qType ->
-                #c : qType ->
-                exp_quotation _ (helper_var2 g a b c)
+                #x : fs_oexp g a ->
+                exp_quotation g x ->
+                exp_quotation _ (helper_varS g a b x)
+
 (** we need a case for each deBrujin variable **)
 
 | QApp        : #g : typ_env ->
@@ -120,13 +160,20 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
                 #x : fs_oexp g a ->
                 exp_quotation g f ->
                 exp_quotation g x ->
-                exp_quotation g (helper_app #_ #_ #_ f x)
+                exp_quotation g (helper_app f x)
 
 | QLambda     : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #f : fs_oexp g (a ^-> b) ->
                 exp_quotation (extend a g) (helper_lambda f) ->
+                exp_quotation g f
+
+| QLambdaIO   : #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                #f : fs_oexp g (a ^->!@ b) ->
+                io_quotation (extend a g) (helper_lambda_io f) ->
                 exp_quotation g f
 
 | QTrue       : #g : typ_env -> exp_quotation g (helper_true g)
@@ -161,39 +208,61 @@ type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
               #p : fs_oexp g (a ^* b) ->
               exp_quotation g p ->
               exp_quotation g (helper_snd p)
+| QRead :
+        #g:typ_env ->
+        exp_quotation #(qUnit ^->!@ qBool) g (fun _ -> read)
 
+| QWrite :
+        #g:typ_env ->
+        exp_quotation #(qBool ^->!@ qUnit) g (fun _ -> write)
+and io_quotation : #a:qType -> g:typ_env -> io_oexp g a -> Type =
 (** Return and Bind of the monad **)
 | QReturn :
         #g:typ_env ->
         #a:qType ->
         #x:fs_oexp g a ->
         exp_quotation g x ->
-        exp_quotation #(!@ a) g (fun fsG -> io_return (x fsG))
+        io_quotation #a g (helper_return_io x)
 
-| QBind :
+| QBindIO :
         #g:typ_env ->
         #a:qType ->
         #b:qType ->
-        #m:fs_oexp g (!@ a) ->
-        #k:fs_oexp g (a ^-> !@ b) ->
-        exp_quotation g m ->
+        #m:io_oexp g a ->
+        #k:fs_oexp g (a ^->!@ b) ->
+        io_quotation g m ->
         exp_quotation g k ->
-        exp_quotation #(!@ b) g (fun fsG -> io_bind (m fsG) (k fsG))
+        io_quotation #b g (helper_bind_io m k)
 
-(** Read & Write as functions **)
-| QRead :
-        #g:typ_env ->
-        exp_quotation #(qUnit ^-> !@ qBool) g (fun _ -> read)
-
-| QWrite :
-        #g:typ_env ->
-        exp_quotation #(qBool ^-> !@ qUnit) g (fun _ -> write)
+| QAppIO      : #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                #f : fs_oexp g (a ^->!@ b) ->
+                #x : fs_oexp g a ->
+                exp_quotation g f ->
+                exp_quotation g x ->
+                io_quotation g (helper_app_io f x)
+| QIfIO       : #g : typ_env ->
+                #a : qType ->
+                #c : fs_oexp g qBool ->
+                exp_quotation #qBool g c ->
+                #t : io_oexp g a ->
+                io_quotation g t ->
+                #e : io_oexp g a ->
+                io_quotation g e ->
+                io_quotation g (helper_if_io c t e)
 
 unfold
 let helper_oexp (#a:qType) (x:get_Type a) : fs_oexp empty a = fun _ -> x
 
+unfold
+let helper_io_oexp (#a:qType) (x:io (get_Type a)) : io_oexp empty a = fun _ -> x
+
 type closed_exp_quotation (a:qType) (x:get_Type a) =
   exp_quotation #a empty (helper_oexp x)
+
+type closed_io_exp_quotation (a:qType) (x:io (get_Type a)) =
+  io_quotation #a empty (helper_io_oexp x)
 
 open Examples
 
@@ -211,17 +280,26 @@ let test_ut_false
   : closed_exp_quotation qBool ut_false
   = QFalse
 
+val var0 : fs_oexp (extend qBool empty) qBool
+let var0 fsG = hd fsG
+
+val var1 : fs_oexp (extend qBool (extend qBool empty)) qBool
+let var1 fsG = hd (tail fsG)
+
+let var2 : fs_oexp (extend qBool (extend qBool (extend qBool empty))) qBool =
+  fun fsG -> hd (tail (tail fsG))
+
 let test_var0
   : exp_quotation #qBool (extend qBool empty) var0
   = QVar0
 
 let test_var1
   : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
-  = QVar1
+  = QVarS QVar0
 
 let test_var2
   : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
-  = QVar2
+  = QVarS (QVarS QVar0)
 
 let test_constant
   : closed_exp_quotation (qBool ^-> qBool) constant
@@ -237,11 +315,11 @@ let test_thunked_id
 
 let test_proj1
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj1
-  = QLambda (QLambda (QLambda QVar2))
+  = QLambda (QLambda (QLambda (QVarS (QVarS QVar0))))
 
 let test_proj2
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj2
-  = QLambda (QLambda (QLambda QVar1))
+  = QLambda (QLambda (QLambda (QVarS QVar0)))
 
 let test_proj3
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj3
@@ -260,7 +338,7 @@ let test_apply_top_level_def'
   = QLambda (QLambda (QApp
                       (QApp #_ #_ #_ #(fun _ x y -> y)
                         (QLambda (QLambda QVar0))
-                        QVar1)
+                        (QVarS QVar0))
                       QVar0))
 
 let test_papply__top_level_def
@@ -293,38 +371,36 @@ let test_negb
 
 let test_negb_pred
   : closed_exp_quotation ((qBool ^-> qBool) ^-> qBool ^-> qBool) negb_pred
-  = QLambda (QLambda (QIf (QApp QVar1 QVar0) QFalse QTrue))
+  = QLambda (QLambda (QIf (QApp (QVarS QVar0) QVar0) QFalse QTrue))
 
 let test_if2
   : closed_exp_quotation (qBool ^-> qBool ^-> qBool) if2
-  = QLambda (QLambda (QIf QVar1 QFalse QVar0))
+  = QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0))
 
 (** Because of the fancy types, now one needs a preprocessing tactic to
     get rid of the qTypes **)
 
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
+  norm_term_env (top_env ()) [delta_only [`%fs_oexp;`%io_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Subtraction_Greater_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1) // TODO: why cannot it infer myf?
+                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0)) // TODO: why cannot it infer myf?
                        (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_callback_return'
   : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return'
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) QVar1)
+                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0))
                        (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
   : closed_exp_quotation (qBool ^-> qBool ^-> (qBool ^* qBool)) make_pair
-  = QLambda (QLambda (QMkpair QVar1 QVar0))
-
-#push-options "--print_implicits --print_universes"
+  = QLambda (QLambda (QMkpair (QVarS QVar0) QVar0))
 
 // TODO: why does this fail?
 [@@ (preprocess_with simplify_qType)]
@@ -332,9 +408,8 @@ let test_pair_of_functions ()
   : Tot (closed_exp_quotation ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                               pair_of_functions)
   by (norm [delta_only [`%pair_of_functions]];
-      norm [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
+      norm [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Subtraction_Greater_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
      // trefl (); //this fails
-     dump "H";
      tadmit ())
   =  QMkpair
       (QLambda (QApp #_ #_ #_ #(fun _ x -> if x then false else true)
@@ -348,7 +423,7 @@ let test_pair_of_functions2
     pair_of_functions2
   = admit (); QMkpair // TODO
       (QLambda (QIf QVar0 QFalse QTrue))
-      (QLambda (QLambda (QIf QVar1 QFalse QVar0)))
+      (QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0)))
 
 let test_fst_pair
   : closed_exp_quotation (qBool) fst_pair
@@ -377,73 +452,95 @@ let test_wrap_snd_pa
 open ExamplesIO
 
 let test_u_return
-  : closed_exp_quotation _ u_return
+  : closed_io_exp_quotation _ u_return
   = QReturn QTrue
 
 let test_apply_io_return
-  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_return
-  = QLambda (QReturn QVar0)
+  : closed_exp_quotation (qBool ^->!@ qBool) apply_io_return
+  = QLambdaIO (QReturn QVar0)
 
 let test_apply_read
-  : closed_exp_quotation _ apply_read
-  = QApp QRead Qtt
+  : closed_io_exp_quotation _ apply_read
+  = QAppIO QRead Qtt
 
 let test_apply_write_const
-  : closed_exp_quotation _ apply_write_const
-  = QApp QWrite QTrue
+  : closed_io_exp_quotation _ apply_write_const
+  = QAppIO QWrite QTrue
 
 let test_apply_write
   : closed_exp_quotation _ apply_write
-  = QLambda (QApp QWrite QVar0)
+  = QLambdaIO (QAppIO QWrite QVar0)
 
 let test_apply_io_bind_const
-  : closed_exp_quotation _ apply_io_bind_const
-  = QBind
+  : closed_io_exp_quotation _ apply_io_bind_const
+  = QBindIO
       (QReturn QTrue)
-      (QLambda (QReturn QVar0))
+      (QLambdaIO (QReturn QVar0))
 
 let test_apply_io_bind_identity
-  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_bind_identity
-  = QLambda
-      (QBind
+  : closed_exp_quotation (qBool ^->!@ qBool) apply_io_bind_identity
+  = QLambdaIO
+      (QBindIO
         (QReturn QVar0)
-        (QLambda #_ #_ #_ #(fun fsG y -> io_return y) (QReturn QVar0)))
+        (QLambdaIO #_ #_ #_ #(fun fsG y -> return y) (QReturn QVar0)))
 
 [@@ (preprocess_with simplify_qType)]
-let test_apply_io_bind_pure_if
-  : closed_exp_quotation (qBool ^-> !@ qBool) apply_io_bind_pure_if
-  = QLambda
-      (QBind
+let test_apply_io_bind_pure_if ()
+  : Tot (closed_exp_quotation (qBool ^->!@ qBool) apply_io_bind_pure_if)
+    by (
+      // TODO: why?
+      norm [delta_only [`%apply_io_bind_pure_if]];
+      norm [delta_only [`%op_Hat_Subtraction_Greater_Bang_At]];
+      set_guard_policy Goal;
+      split (); trefl ();
+      explode (); trefl ();
+      explode (); trefl ())
+  = QLambdaIO
+      (QBindIO
         (QReturn QVar0)
-        (QLambda #_ #_ #_ #(fun fsG y -> if y then io_return false else io_return true)
-          (QIf QVar0
+        (QLambdaIO #_ #_ #_ #(fun fsG y -> if y then return false else return true)
+          (QIfIO QVar0
             (QReturn QFalse)
             (QReturn QTrue))))
 
 let test_apply_io_bind_write
   : closed_exp_quotation _ apply_io_bind_write
-  = QLambda (
-      QBind
+  = QLambdaIO (
+      QBindIO
          (QReturn QVar0)
-         (QLambda #_ #_ #_ #(fun fsG y -> write y)
-           (QApp QWrite QVar0)))
+         (QLambdaIO #_ #_ #_ #(fun fsG y -> write y)
+           (QAppIO QWrite QVar0)))
 
 let test_apply_io_bind_read_write
-  : closed_exp_quotation _ apply_io_bind_read_write
-  = QBind
-     (QApp QRead Qtt)
-     (QLambda
-       (QApp QWrite QVar0))
+  : closed_io_exp_quotation _ apply_io_bind_read_write
+  = QBindIO
+     (QAppIO QRead Qtt)
+     (QLambdaIO
+       (QAppIO QWrite QVar0))
 
-let test_apply_io_bind_read_write'
-  : closed_exp_quotation _ apply_io_bind_read_write'
-  = QBind (QApp QRead Qtt) QWrite
+let test_apply_io_bind_read_write' ()
+  : Tot (closed_io_exp_quotation _ apply_io_bind_read_write')
+  = QBindIO (QAppIO QRead Qtt) QWrite
 
 let test_apply_io_bind_read_if_write
-  : closed_exp_quotation _ apply_io_bind_read_if_write
-  = QBind
-      (QApp QRead Qtt)
-      (QLambda (** TODO: weird that this does not require the lambda as the other examples **)
-        (QIf QVar0
-          (QApp QWrite QFalse)
-          (QApp QWrite QTrue)))
+  : closed_io_exp_quotation _ apply_io_bind_read_if_write
+  = QBindIO
+      (QAppIO QRead Qtt)
+      (QLambdaIO
+        (QIfIO QVar0
+          (QAppIO QWrite QFalse)
+          (QAppIO QWrite QTrue)))
+
+let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp g (a ^->!@ b))
+  (qx : exp_quotation g x) (qf : exp_quotation g f) :
+  io_quotation g (fun fsG -> let y = x fsG in f fsG y) =
+  QAppIO qf qx
+
+let test_sendErro400
+  : closed_exp_quotation _ sendError400
+  = QLambdaIO
+      (qLet (QApp (QLambda #_ #_ #_ #(fun fsG x -> x) QVar0) QTrue) (QLambdaIO
+      (qLet (QMkpair (QVarS QVar0) QVar0) (QLambdaIO
+      (QBindIO
+        (QAppIO QWrite (QVarS (QVarS QVar0)))
+        (QLambdaIO #_ #_ #_ #(fun _ _ -> return ()) (QReturn Qtt)))))))

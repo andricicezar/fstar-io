@@ -24,3 +24,6 @@ val read () : io bool
 val write (x:bool) : io unit
 
 val theta : #a:Type -> io a -> hist a
+
+let return = io_return
+let (let!@) = io_bind

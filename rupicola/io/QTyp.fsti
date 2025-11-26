@@ -14,36 +14,37 @@ noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
 | QBool : type_quotation bool
-(** Having two types of arrow, pure and IO, seem to complicate
-    the logical relation for expression.
-    Disabling for now **)
- (**
-| QArr : #t1:Type ->
-         #t2:Type ->
-         type_quotation t1 ->
-         type_quotation t2 ->
-         type_quotation (t1 -> t2)**)
 | QPair : #t1:Type ->
           #t2:Type ->
           type_quotation t1 ->
           type_quotation t2 ->
           type_quotation (t1 & t2)
 (** Design decision:
-    One can allow one for the quotation of IO Arrows:
-    | QArrIO: type_quotation 'a -> type_quotation 'b -> type_quotation ('a -> io 'b)
+    * Only one type of arrow: a -> io b.
+      Advantage: simple representation
+      Disatvantage:
+      * no currying. one has to work with pairs
+      Limitation:
+      * how to do quotation of bind? one needs to be able to quote an `io a`
 
-    or can allow for the quotation of IO computatinos:
-    | QIO: type_quotation 'a -> type_quotation (io 'a)
+    * Having pure and IO arrows.
 
-    I think the first one is what we need and what gives us the right
-    structure.
+    * Having pure arrows and IO computations:
+      Advantage: simple representation
+      Limitation:
+      * now IO computations are values, which means one can have pairs of computations
 
-    The second one, forces us to treat IO computatinos as values in the logical
-    expression. Sounds like a rule one would want if one would do Algebraic Effects?
 
-    In our case, effects are not values, are just extra typing information.
+
+      The second one, forces us to treat IO computatinos as values in the logical
+      expression. Sounds like a rule one would want if one would do Algebraic Effects?
 **)
 | QArr : #t1:Type ->
+         #t2:Type ->
+         type_quotation t1 ->
+         type_quotation t2 ->
+         type_quotation (t1 -> t2)
+| QArrIO : #t1:Type ->
          #t2:Type ->
          type_quotation t1 ->
          type_quotation t2 ->
@@ -53,8 +54,8 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   match tq with
   | QUnit -> assert (t == unit)
   | QBool -> assert (t == bool)
-  //| QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
-  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
+  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
+  | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
 
 let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
@@ -62,7 +63,8 @@ let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   | QUnit -> TUnit
   | QBool -> TBool
   | QPair qt1 qt2 -> TPair (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
-  | QArr qt1 qt2 ->
+  | QArr qt1 qt2
+  | QArrIO qt1 qt2 ->
     TArr (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
 
 (** Type of Quotable Types **)
@@ -79,6 +81,8 @@ let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
+let (^->!@) (t1 t2:qType) : qType =
+  (| _, QArrIO (get_rel t1) (get_rel t2) |)
 
 (** typ_env is a typing environment: variables to Quotable F* Types **)
 type typ_env = var -> option qType
@@ -209,4 +213,7 @@ val tail_stack_inveqse #g (fsG:eval_env g) #t (x:get_Type t)
   [SMTPat (tail (stack fsG x))]
 
 type fs_oexp (g:typ_env) (t:qType) =
+  eval_env g -> get_Type t (** this should have no IO **)
+
+type io_oexp (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)

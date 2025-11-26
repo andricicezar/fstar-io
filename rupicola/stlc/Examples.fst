@@ -87,3 +87,12 @@ let wrap_fst_pa : (bool & bool) -> bool = fst
 let snd_pair : unit = snd (true, ())
 let wrap_snd : (bool & unit) -> unit = fun p -> snd p
 let wrap_snd_pa : (bool & unit) -> unit = snd
+
+
+let a_few_lets : bool -> unit =
+  fun x ->
+    let p = (x, x) in
+    let y = x in
+    let z = fst p in
+    let g = (y, z) in
+    ()

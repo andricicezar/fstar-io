@@ -6,15 +6,6 @@ let ut_unit = ()
 let ut_true = true
 let ut_false = false
 
-val var0 : fs_oexp (extend qBool empty) qBool
-let var0 fsG = hd fsG
-
-val var1 : fs_oexp (extend qBool (extend qBool empty)) qBool
-let var1 fsG = hd (tail fsG)
-
-let var2 : fs_oexp (extend qBool (extend qBool (extend qBool empty))) qBool =
-  fun fsG -> hd (tail (tail fsG))
-
 let constant (x: bool) : bool =
   true
 
