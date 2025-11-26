@@ -150,40 +150,21 @@ val helper_lambda : #g :env ->
 let helper_lambda #g #a f =
   fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)
 
-// val wp_lambdaWP : #g :env ->
-//                 #a :Type ->
-//                 #b :Type ->
-//                 wp: _ ->
-//                 wpBody:spec_env (extend a g) b ->
-//                 spec_env g (x:a -> PURE b (wp x))
-
-// let wp_lambdaWP #g #a #b wp wpBody fsG : pure_wp (x:a -> PURE b (wp x)) =
-//   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
-//   fun (p:pure_post (x:a -> PURE b (wp x))) ->
-//     forall (f:(x:a -> PURE b (wp x))).
-//       (forall (p':pure_post b) (fsG':fs_env (extend a g)).
-//         fsG == fs_tail fsG' ==> wp (fs_hd fsG') p' ==> wpBody fsG' p' ==>  p' (f (fs_hd fsG'))
-//       ) ==>  p f
-
 val wp_lambdaWP :
   #g :env ->
   #a :Type ->
   #b :Type ->
   wp: (a -> pure_wp b) ->
-  spec_env g (x:a -> PURE b (wp x)) ->
-  spec_env (extend a g) b
+  spec_env (extend a g) b ->
+  spec_env g (x:a -> PURE b (wp x))
 
-let wp_lambdaWP #g #a #b wp wp' fsG : pure_wp b =
-  // wp (fs_hd fsG)
+let wp_lambdaWP #g #a #b wp wp' fsG : pure_wp (x:a -> PURE b (wp x)) =
   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
-  admit () ;
-  fun (p : pure_post b) ->
-    wp (fs_hd fsG) p /\
-    (let p' : pure_post (x:a -> PURE b (wp x)) =
-      fun f -> forall (x:a). p (f x)
-    in
-    wp' (fs_tail fsG) p')
-
+  fun (p:pure_post (x:a -> PURE b (wp x))) ->
+    forall (f:(x:a -> PURE b (wp x))).
+      (forall (p':pure_post b) (fsG':fs_env (extend a g)).
+        fsG == fs_tail fsG' ==> wp (fs_hd fsG') p' ==> wp' fsG' p' ==>  p' (f (fs_hd fsG'))
+      ) ==>  p f
 
 unfold
 val helper_lambdaWP :
@@ -192,8 +173,8 @@ val helper_lambdaWP :
   #b :Type ->
   #wp: _ ->
   #wp': _ ->
-  fs_oexp g (x:a -> PURE b (wp x)) wp' ->
-  fs_oexp (extend a g) b (wp_lambdaWP wp wp')
+  fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
+  fs_oexp (extend a g) b wp'
 
 let helper_lambdaWP #g #a f fsG =
   admit () ;
@@ -283,14 +264,14 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable g (wp_lambda #g #a #b wpBody) f
 
 | CLambdaDepWP :
-  #g :env ->
-  #a :Type ->
-  #b :Type ->
-  wp : _ ->
-  wp': _ ->
-  #f :fs_oexp g (x:a -> PURE b (wp x)) wp' ->
-  compilable #b (extend a g) (wp_lambdaWP wp wp') (helper_lambdaWP f) ->
-  compilable g wp' f
+  #g : env ->
+  #a : Type ->
+  #b : Type ->
+  wp : (a -> pure_wp b) ->
+  wp' : spec_env (extend a g) b ->
+  #f : fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
+  compilable #b (extend a g) wp' (helper_lambdaWP f) ->
+  compilable g (wp_lambdaWP wp wp') f
 
 | CRefinement : #g:env ->
                 #a:Type ->
@@ -403,9 +384,11 @@ let on_true (b : bool) : Pure bool (requires b == true) (ensures fun r -> r == b
 [@@expect_failure]
 let test_on_true ()
   : compilable_closed #(b: bool -> Pure bool (requires b == true) (ensures fun r -> r == b)) on_true
-  = let wp : bool -> pure_wp bool = _ in
-    let wp' : spec_env empty (x: bool -> PURE bool (wp x)) = fun fsG p -> True in
-    fun _ -> CLambdaDepWP #_ #bool #bool wp wp' CVar0
+=
+  // let wp : bool -> pure_wp bool = _ in
+  // let wp' : spec_env (extend bool empty) bool = fun fsG p -> True in
+  // fun _ -> CLambdaDepWP #_ #bool #bool wp wp' CVar0
+  fun _ -> CLambdaDepWP #_ #bool #bool _ _ CVar0
 
 // TODO: why do I have to hoist these outside?
 unfold
