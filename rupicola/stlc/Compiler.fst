@@ -146,7 +146,7 @@ instance compile_exp_lambda
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     reveal_opaque (`%hd') (hd' #g #(pack ca));
-    equiv_lam (pack ca) (pack cb) f cf.e
+    equiv_lam #g #(pack ca) #(pack cb) f cf.e
   )
 }
 
