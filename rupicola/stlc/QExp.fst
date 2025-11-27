@@ -441,6 +441,7 @@ let test_match_either ()
 let test_match_either' ()
   : closed_exp_quotation ((qBool ^+ qBool) ^-> qBool) match_either'
   by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%match_either']; iota];
+     dump "H";
      tadmit ()) // TODO: expected failure. any way to sort the cases?
   = QLambda (QCase QVar0 (QLambda #_ #_ #_ #(fun _ x -> x) QVar0) (QLambda #_ #_ #_ #(fun _ x -> x) QVar0))
 

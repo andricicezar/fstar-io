@@ -536,7 +536,7 @@ let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp g (a ^->!@ b))
   io_quotation g (fun fsG -> let y = x fsG in f fsG y) =
   QAppIO qf qx
 
-let test_sendErro400
+let test_sendError400
   : closed_exp_quotation _ sendError400
   = QLambdaIO
       (qLet (QApp (QLambda #_ #_ #_ #(fun fsG x -> x) QVar0) QTrue) (QLambdaIO

@@ -2,12 +2,12 @@ module ExamplesIO
 
 open IO
 
-let u_return : io bool = io_return true
+let u_return : io bool = return true
 
 
 (** let papply_io_return : bool -> io bool = io_return **)
 
-let apply_io_return : bool -> io bool = fun x -> io_return x
+let apply_io_return : bool -> io bool = fun x -> return x
 
 let apply_read : io bool = read ()
 let apply_write_const : io unit = write true
