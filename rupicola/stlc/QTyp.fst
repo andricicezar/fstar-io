@@ -40,3 +40,13 @@ let tail_stack_inverse #g fsG #t v =
   assert (fsG' == fsG)
 
 let index_0_hd fsG = ()
+
+let lem_stack_tail_hd #g #t fsG =
+  let g' : typ_env = extend t g in
+  let fsG : eval_env g' = fsG in
+  let fsG' : eval_env g' = stack (tail #t #g fsG) (hd #t #g fsG) in
+  assert (forall x. fsG' x == fsG x);
+  assert (feq fsG' fsG);
+  extensionality (x:var{Some? (g' x)}) (fun x -> get_Type (Some?.v (g' x))) fsG' fsG;
+  // TODO: why does this not work?
+  assume (fsG' == fsG)

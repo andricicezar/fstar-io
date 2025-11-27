@@ -22,7 +22,7 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(get_Type i.ct -> bool)
   &
-  exp_quotation #(i.ct ^-> qBool) empty (fun _ -> ps)
+  (i.ct ^-> qBool) ⊩ ps
 
 type ctxS (i:intS) = get_Type i.ct
 type wholeS = bool // CA: To be able to compile whole programs requires a proof that it can be compiled

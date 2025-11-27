@@ -30,7 +30,7 @@ instance q_arr
 
 instance q_pair (s1:Type) (s2:Type) {| c1:quotable_typ s1 |} {| c2:quotable_typ s2 |} : quotable_typ (s1 & s2) = { q = QPair c1.q c2.q }
 
-class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
+class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g -> a) = { (** using fs_oval g (pack ca) complicates the instances of the type class **)
   [@@@no_method] q : exp_quotation #(pack ca) g s;
 }
 

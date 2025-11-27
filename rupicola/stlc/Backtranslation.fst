@@ -133,6 +133,8 @@ let rec backtranslate (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) (fs_g:ev
     | Inl x -> backtranslate hinlc (stack fs_g x)
     | Inr x -> backtranslate hinrc (stack fs_g x)
 
+open FStar.Tactics
+
 #push-options "--split_queries always"
 let rec lem_backtranslate #g #e #t (h:typing g e t) =
    match e with
@@ -146,45 +148,12 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     let fs_e1 = backtranslate h1 in
     let fs_e2 = backtranslate h2 in
     equiv_app fs_e1 fs_e2 e1 e2
-  | ELam _ -> (** TODO/Abigail: check if one can refactor this with equiv_lam **)
+  | ELam _ -> 
     let TyLam #t1 #t2 #body hbody = h in
     lem_lam_fv_in_env g body t1;
     lem_backtranslate hbody;
-    assert (equiv t2 (backtranslate hbody) body);
-    assert (forall b (s:gsub (extend t1 g) b) (fsG:eval_env (extend t1 g)). fsG ∽ s ==> t2 ⦂ ((backtranslate hbody) fsG, gsubst s body));
-    let g' = extend t1 g in
-    introduce forall b (s:gsub g b) (fsG:eval_env g). fsG ∽ s ==> (t1 ^-> t2) ⦂ ((fun x -> backtranslate hbody (stack fsG x)), gsubst s (ELam body)) with
-      begin
-      let f : (get_Type t1) -> (get_Type t2) = (fun x -> backtranslate hbody (stack fsG x)) in
-      let body' = subst (sub_elam s) body in
-      assert (gsubst s (ELam body) == ELam body');
-      introduce  fsG ∽ s ==> (t1 ^-> t2) ⦂ (f, ELam body') with _.
-        begin
-        introduce forall (e':closed_exp). steps (ELam body') e' /\ irred e' ==> (t1 ^-> t2) ∋ (f, e') with
-          begin
-          introduce _ ==> (t1 ^-> t2) ∋ (f, e') with h.
-            begin
-            lem_value_is_irred (ELam body');
-            lem_steps_irred_e_irred_e'_implies_e_e' (ELam body') e';
-            assert ((ELam body') == e');
-            let QArr #s1 #s2 r1 r2 = get_rel (t1 ^-> t2) in
-            introduce forall (v:value) (fs_v:get_Type t1). t1 ∋ (fs_v, v) ==> t2 ⦂ (f fs_v, subst_beta v body') with
-              begin
-              introduce  t1 ∋ (fs_v, v) ==> _ with _.
-                begin
-                let s' = gsub_extend s t1 v in
-                let fsG' = stack fsG fs_v in
-                lem_substitution s t1 v body;
-                assert (t2 ⦂ (f fs_v, gsubst s' body))
-                end
-              end;
-              assert ((t1 ^-> t2) ∋ (f, gsubst s (ELam body)));
-              lem_values_are_expressions (t1 ^-> t2) f (gsubst s (ELam body));
-              assert ((t1 ^-> t2) ⦂ (f, gsubst s (ELam body)))
-            end
-          end
-        end
-      end
+    let w : fs_oval g (t1 ^-> t2) = (fun fsG x -> backtranslate hbody (stack fsG x)) in
+    equiv_lam w body
   | ETrue -> equiv_true g
   | EFalse -> equiv_false g
   | EIf e1 e2 e3 ->

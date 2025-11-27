@@ -37,7 +37,7 @@ let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
 let _ = assert (test2.r == QArr (QArr QUnit QBool) (QArr QBool QUnit))
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:typ_env) (fs_e:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:typ_env) (fs_e:eval_env g -> a) = { (** using fs_oval g (pack ca) complicates the instances of the type class **)
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)

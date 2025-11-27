@@ -194,5 +194,12 @@ val tail_stack_inverse #g (fsG:eval_env g) #t (x:get_Type t)
 val index_0_hd #g #t (fsG:eval_env (extend t g))
   : Lemma (index fsG 0 == hd fsG)
 
-type fs_oexp (g:typ_env) (t:qType) =
+val lem_stack_tail_hd #g #t (fsG:eval_env (extend t g))
+  : Lemma (stack (tail fsG) (hd fsG) == fsG)
+  [SMTPat (stack (tail fsG) (hd fsG))]
+
+type fs_val (t:qType) =
+  get_Type t
+
+type fs_oval (g:typ_env) (t:qType) =
   eval_env g -> get_Type t

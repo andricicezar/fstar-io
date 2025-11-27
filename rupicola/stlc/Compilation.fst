@@ -7,7 +7,7 @@ open QTyp
 open QExp
 open ExpRel
 
-let rec compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : Tot exp (decreases qs) =
+let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
   | Qtt -> EUnit
   | QVar0 -> EVar 0
@@ -25,14 +25,14 @@ let rec compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : Tot exp (decreas
   | QInr qp -> EInr (compile qp)
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
 
-let lem_compile_empty_closed #a (#s:fs_oexp empty a) (qs:exp_quotation empty s) : Lemma (is_closed (compile qs)) = admit ()
+let lem_compile_empty_closed #a (#s:fs_oval empty a) (qs:empty ⊢ s) : Lemma (is_closed (compile qs)) = admit ()
 
-let compile_closed (#a:qType) (#s:get_Type a) (qs:exp_quotation #a empty (fun _ -> s)) : closed_exp =
+let compile_closed  #a #s (qs:a ⊩ s) : closed_exp =
   lem_compile_empty_closed qs;
   compile qs
 
-let rec compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
-  : Lemma (ensures (s `equiv a` (compile qs))) (decreases qs)
+let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
+  : Lemma (ensures (s `equiv a` (compile qs)))
   = match qs with
   | Qtt -> equiv_unit g
   | QVar0 #g' #_ -> equiv_var0 g' a
@@ -46,7 +46,7 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
     equiv_app f x (compile qf) (compile qx)
   | QLambda #_ #_ #_ #f qbody ->
     compile_equiv qbody;
-    equiv_lam _ _ f (compile qbody);
+    equiv_lam f (compile qbody);
     assert (s `equiv a` (ELam (compile qbody)));
     assert (s `equiv a` (compile qs)) by (
       norm [delta_only [`%compile]; zeta;iota];
@@ -81,12 +81,12 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
     compile_equiv inrc;
     admit ()
 
-let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs:exp_quotation #a empty (fun _ -> s))
+let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs: a ⊩ s)
   : Lemma (ensures (a ⦂ (s, compile_closed qs))) =
   compile_equiv qs;
   equiv_closed_terms #a s (compile_closed qs)
 
 let lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:get_Type (a ^-> b))
-  (qs:exp_quotation #(a ^-> b) empty (fun _ -> s))
+  (qs:(a ^-> b) ⊩ s)
   : Lemma (ELam? (compile_closed qs))
   = admit ()
