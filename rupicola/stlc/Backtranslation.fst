@@ -148,7 +148,7 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     let fs_e1 = backtranslate h1 in
     let fs_e2 = backtranslate h2 in
     equiv_app fs_e1 fs_e2 e1 e2
-  | ELam _ -> 
+  | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_lam_fv_in_env g body t1;
     lem_backtranslate hbody;
@@ -191,15 +191,15 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     assume (fv_in_env g e');
     lem_backtranslate h';
     let fs_e' = backtranslate h' in
-    admit ()
+    equiv_inl t2 fs_e' e'
   | EInr e' ->
     let TyInr t1 h' = h in
     assume (fv_in_env g e');
     lem_backtranslate h';
     let fs_e' = backtranslate h' in
-    admit ()
+    equiv_inr t1 fs_e' e'
   | ECase cond inlc inrc ->
-    let TyCase #t1 #t2 hcond hinlc hinrc = h in
+    let TyCase #t1 #t2 #t3 hcond hinlc hinrc = h in
     assume (fv_in_env g cond);
     assume (fv_in_env (extend t1 g) inlc);
     assume (fv_in_env (extend t2 g) inrc);
@@ -209,5 +209,5 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     let fs_cond = backtranslate hcond in
     let fs_inlc = backtranslate hinlc in
     let fs_inrc = backtranslate hinrc in
-    admit ()
+    equiv_case #_ #t1 #t2 #t3 fs_cond fs_inlc fs_inrc cond inlc inrc
 #pop-options
