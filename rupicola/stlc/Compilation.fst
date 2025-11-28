@@ -69,17 +69,17 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QSnd #_ #_ #_ #p qp ->
     compile_equiv qp;
     equiv_pair_snd_app p (compile qp)
-  | QInl qp ->
+  | QInl #_ #_ #t2 #p qp ->
     compile_equiv qp;
-    admit ()
-  | QInr qp ->
+    equiv_inl t2 p (compile qp)
+  | QInr #_ #t1 #_ #p qp ->
     compile_equiv qp;
-    admit ()
-  | QCase cond inlc inrc ->
-    compile_equiv cond;
-    compile_equiv inlc;
-    compile_equiv inrc;
-    admit ()
+    equiv_inr t1 p (compile qp)
+  | QCase #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    compile_equiv qcond;
+    compile_equiv qinlc;
+    compile_equiv qinrc;
+    equiv_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
 
 let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs: a ⊩ s)
   : Lemma (ensures (a ⦂ (s, compile_closed qs))) =

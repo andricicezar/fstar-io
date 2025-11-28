@@ -108,13 +108,13 @@ val helper_case : #g :typ_env ->
                   #b  : qType ->
                   #c  : qType ->
                   cond: fs_oval g (a ^+ b) ->
-                  inlc: fs_oval g (a ^-> c) ->
-                  inrc: fs_oval g (b ^-> c) ->
+                  inlc: fs_oval (extend a g) c ->
+                  inrc: fs_oval (extend b g) c ->
                   fs_oval g c
 let helper_case cond inlc inrc fsG =
   match cond fsG with
-  | Inl x -> inlc fsG x
-  | Inr x -> inrc fsG x
+  | Inl x -> inlc (stack fsG x)
+  | Inr x -> inrc (stack fsG x)
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
@@ -204,10 +204,10 @@ type value_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
               #c : qType ->
               #cond : fs_oval g (a ^+ b) ->
               value_quotation g cond ->
-              #inlc : fs_oval g (a ^-> c) ->
-              value_quotation g inlc ->
-              #inrc : fs_oval g (b ^-> c) ->
-              value_quotation g inrc ->
+              #inlc : fs_oval (extend a g) c ->
+              value_quotation _ inlc ->
+              #inrc : fs_oval (extend b g) c ->
+              value_quotation _ inrc ->
               value_quotation g (helper_case cond inlc inrc)
 
 let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
@@ -337,6 +337,9 @@ let test_if2
 (** Because of the fancy types, now one needs a preprocessing tactic to
     get rid of the qTypes **)
 
+let l_to_r_fsG () : Tac unit = // TODO: merge this in simplify_qType
+   l_to_r [`lem_stack_hd; `lem_stack_index; `lem_stack_tail_hd; `tail_stack_inverse]
+
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
   norm_term_env (top_env ()) [delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota;simplify] x
@@ -436,20 +439,22 @@ let test_return_either ()
 
 let test_match_either ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
-  = QLambda (QCase QVar0 (QLambda #_ #_ #_ #(fun _ x -> x) QVar0) (QLambda #_ #_ #_ #(fun _ x -> x) QVar0))
+  by (l_to_r_fsG (); norm [delta_only [`%match_either]])
+  = QLambda (QCase QVar0 QVar0 QVar0)
 
 [@@ (preprocess_with simplify_qType)]
 let test_match_either' ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
   by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%match_either']; iota];
-     dump "H";
+      l_to_r_fsG ();
      tadmit ()) // TODO: expected failure. any way to sort the cases?
-  = QLambda (QCase QVar0 (QLambda #_ #_ #_ #(fun _ x -> x) QVar0) (QLambda #_ #_ #_ #(fun _ x -> x) QVar0))
+  = QLambda (QCase QVar0 QVar0 QVar0)
 
 let test_match_either_arg ()
   : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
+  by (l_to_r_fsG (); norm [delta_only [`%match_either_arg]]; dump "H")
   = QLambda (QLambda (
        QCase
          qVar1
-         (QLambda #_ #_ #_ #(fun _ x -> x) QVar0)
-         (QLambda #_ #_ #_ #(fun fsG _ -> hd fsG) qVar1)))
+         QVar0
+         qVar1))

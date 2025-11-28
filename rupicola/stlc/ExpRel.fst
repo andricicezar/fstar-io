@@ -377,3 +377,25 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
       end
     end
   end
+
+let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
+  (requires fs_e ≈ e)
+  (ensures (fun fsG -> Inl (fs_e fsG)) `equiv (t1 ^+ t2)` (EInl e)) =
+  admit ()
+
+let equiv_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
+  (requires fs_e ≈ e)
+  (ensures (fun fsG -> Inr (fs_e fsG)) `equiv (t1 ^+ t2)` (EInr e)) =
+  admit ()
+
+let equiv_case
+  #g
+  (#t1 #t2 #t3:qType)
+  (fs_case:fs_oval g (t1 ^+ t2))
+  (fs_lc:fs_oval (extend t1 g) t3)
+  (fs_rc:fs_oval (extend t2 g) t3)
+  (e_case e_lc e_rc:exp)
+  : Lemma
+    (requires fs_case ≈ e_case /\ fs_lc ≈ e_lc /\ fs_rc ≈ e_rc)
+    (ensures (fun fsG -> match fs_case fsG with | Inl x -> fs_lc (stack fsG x) | Inr x -> fs_rc (stack fsG x)) `equiv t3` (ECase e_case e_lc e_rc))
+  = admit ()
