@@ -346,42 +346,6 @@ let equiv_pair_fst_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
     end
   end
 
-let equiv_pair_fst g (t1 t2:qType)
-  : Lemma
-    (requires True)
-    (ensures (fun _ -> fst #(get_Type t1) #(get_Type t2)) `equiv #g ((t1 ^* t2) ^-> t1)` (ELam (EFst (EVar 0))))
-  =
-  let tp = t1 ^* t2 in
-  let t = tp ^-> t1 in
-  let fs_e : (get_Type t1 & get_Type t2) -> get_Type t1 = fst in
-  let fs_e' : eval_env g -> get_Type t = (fun _ -> fs_e) in
-  let e = ELam (EFst (EVar 0)) in
-  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ (fs_e' fsG, gsubst s e) with begin
-    assert (gsubst s e == e);
-    assert (fs_e' fsG == fs_e);
-
-    eliminate True /\ True
-    returns t ∋ (fs_e, e) with _ _. begin
-      introduce forall (v:value) (fs_v:get_Type tp). tp ∋ (fs_v, v) ==>
-        t1 ⦂ (fs_e fs_v, subst_beta v (EFst (EVar 0))) with begin
-        introduce _ ==> _ with _. begin
-          lem_values_are_expressions tp fs_v v;
-          lem_equiv_exp_are_equiv empty #tp fs_v v;
-          assert ((fun _ -> fs_v) `equiv #empty tp` v);
-          equiv_pair_fst_app #empty #t1 #t2 (fun _ -> fs_v) v;
-          assert ((fun _ -> fs_e fs_v) `equiv #empty t1` (EFst v));
-          equiv_closed_terms #t1 (fs_e fs_v) (EFst v);
-          assert (subst_beta v (EFst (EVar 0)) == EFst v);
-          ()
-        end
-      end
-    end;
-
-    assert (t ∋ (fs_e, e));
-    lem_values_are_expressions t fs_e e;
-    assert (t ⦂ (fs_e, e))
-  end
-
 let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 `equiv (t1 ^* t2)` e12) (** is this too strict? we only care for the left to be equivalent. **)
@@ -412,40 +376,4 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
         end
       end
     end
-  end
-
-let equiv_pair_snd g (t1 t2:qType)
-  : Lemma
-    (requires True)
-    (ensures (fun _ -> snd #(get_Type t1) #(get_Type t2)) `equiv #g ((t1 ^* t2) ^-> t2)` (ELam (ESnd (EVar 0))))
-  =
-  let tp = t1 ^* t2 in
-  let t = tp ^-> t2 in
-  let fs_e : (get_Type t1 & get_Type t2) -> get_Type t2 = snd in
-  let fs_e' : eval_env g -> get_Type t = (fun _ -> fs_e) in
-  let e = ELam (ESnd (EVar 0)) in
-  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  t ⦂ (fs_e' fsG, gsubst s e) with begin
-    assert (gsubst s e == e);
-    assert (fs_e' fsG == fs_e);
-
-    eliminate True /\ True
-    returns t ∋ (fs_e, e) with _ _. begin
-      introduce forall (v:value) (fs_v:fs_val tp). tp ∋ (fs_v, v) ==>
-        t2 ⦂ (fs_e fs_v, subst_beta v (ESnd (EVar 0))) with begin
-        introduce _ ==> _ with _. begin
-          lem_values_are_expressions tp fs_v v;
-          lem_equiv_exp_are_equiv empty #tp fs_v v;
-          assert ((fun _ -> fs_v) `equiv #empty tp` v);
-          equiv_pair_snd_app #empty #t1 #t2 (fun _ -> fs_v) v;
-          assert ((fun _ -> fs_e fs_v) `equiv #empty t2` (ESnd v));
-          equiv_closed_terms #t2 (fs_e fs_v) (ESnd v);
-          assert (subst_beta v (ESnd (EVar 0)) == ESnd v);
-          ()
-        end
-      end
-    end;
-
-    assert (t ∋ (fs_e, e));
-    lem_values_are_expressions t fs_e e;
-    assert (t ⦂ (fs_e, e))
   end
