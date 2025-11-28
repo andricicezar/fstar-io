@@ -136,6 +136,23 @@ instance compile_exp_lambda
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
+  (f:eval_env (extend (pack ca) g) -> b)
+  {| cf: compile_exp #b #cb (extend (pack ca) g) f |}
+  : compile_exp g (fun fsG x -> f (stack fsG x)) = {
+  e = begin
+    lem_fv_in_env_lam g (pack ca) cf.e;
+    ELam cf.e
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+  )
+}
+
+(**
+instance compile_exp_lambda
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:eval_env g -> a -> b)
   {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fsG -> f (tail #(pack ca) fsG) (hd' fsG a)) |}
   : compile_exp g f = {
@@ -148,7 +165,7 @@ instance compile_exp_lambda
     reveal_opaque (`%hd') (hd' #g #(pack ca));
     equiv_lam #g #(pack ca) #(pack cb) f cf.e
   )
-}
+}**)
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
 let _ = assert (test1_exp.e == ELam (EUnit))
