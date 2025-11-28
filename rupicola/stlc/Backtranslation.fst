@@ -152,8 +152,7 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     let TyLam #t1 #t2 #body hbody = h in
     lem_lam_fv_in_env g body t1;
     lem_backtranslate hbody;
-    let w : fs_oval g (t1 ^-> t2) = (fun fsG x -> backtranslate hbody (stack fsG x)) in
-    equiv_lam w body
+    equiv_lam (backtranslate hbody) body
   | ETrue -> equiv_true g
   | EFalse -> equiv_false g
   | EIf e1 e2 e3 ->

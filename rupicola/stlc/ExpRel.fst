@@ -181,11 +181,12 @@ let equiv_var g (x:var{Some? (g x)})
     end
   end
 
-let equiv_lam #g (#t1:qType) (#t2:qType) (f:fs_oval g (t1 ^-> t2)) (body:exp) : Lemma
-  (requires (fun (fsG:eval_env (extend t1 g)) -> f (tail #t1 fsG) (hd fsG)) ≈ body)
-  (ensures f ≈ (ELam body)) =
+let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (body:exp) : Lemma
+  (requires fs_body ≈ body)
+  (ensures (fun fsG x -> fs_body (stack fsG x)) `equiv (t1 ^-> t2)` (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
+  let f : fs_oval g (t1 ^-> t2) = fun fsG x -> fs_body (stack fsG x) in
   introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  (t1 ^-> t2) ⦂ (f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in

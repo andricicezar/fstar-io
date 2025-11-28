@@ -38,9 +38,9 @@ unfold
 val helper_lambda : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
-                f :fs_oval g (a ^-> b) ->
-                fs_oval (extend a g) b
-let helper_lambda #_ #_ f fsG = f (tail fsG) (hd fsG)
+                body :fs_oval (extend a g) b ->
+                fs_oval g (a ^-> b)
+let helper_lambda #_ #_ body fsG x = body (stack fsG x)
 
 unfold
 val helper_true : g:typ_env -> fs_oval g qBool
@@ -147,12 +147,12 @@ type value_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 value_quotation g x ->
                 value_quotation g (helper_app #_ #_ #_ f x)
 
-| QLambda     : #g : typ_env ->
-                #a : qType ->
+| QLambda     : #a : qType ->
                 #b : qType ->
-                #f : fs_oval g (a ^-> b) ->
-                value_quotation (extend a g) (helper_lambda f) ->
-                value_quotation g f
+                #g : typ_env ->
+                #body : fs_oval (extend a g) b ->
+                value_quotation (extend a g) body ->
+                value_quotation #(a ^-> b) g (helper_lambda body)
 
 | QTrue       : #g : typ_env -> value_quotation g (helper_true g)
 | QFalse      : #g : typ_env -> value_quotation g (helper_false g)
@@ -219,6 +219,27 @@ let helper_oexp (#a:qType) (x:get_Type a) : fs_oval empty a = fun _ -> x
 let (⊩) (a:qType) (x:get_Type a) =
   value_quotation #a empty (helper_oexp x)
 
+
+(** Because of the fancy types, now one needs a preprocessing tactic to
+    get rid of the qTypes **)
+
+let l_to_r_fsG () : Tac unit = // TODO: merge this in simplify_qType
+   l_to_r [`lem_hd_stack; `lem_stack_index; `lem_stack_tail_hd; `tail_stack_inverse]
+
+let simplify_fsG (x:term) : Tac term =
+  norm_term_env (top_env ()) [
+    delta_only [`%hd; `%stack]; // this seems to not work
+    iota
+  ] x
+
+let simplify_qType (x:term) : Tac term =
+  (** TODO: why is F* not doing this automatically anyway? **)
+  norm_term_env (top_env ()) [
+    delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    iota;
+    simplify
+  ] x
+
 open Examples
 
 #push-options "--no_smt"
@@ -258,8 +279,12 @@ let test_var3
   = QVarS (qVar2)
 
 let test_constant
-  : (qBool ^-> qBool) ⊩ constant
+  : ((qBool ^-> qBool) ⊩ constant)
   = QLambda QTrue
+
+let test_constant' (** TODO: why is this accepted. is it a problem? **)
+  : ((qBool ^-> qBool) ⊩ constant)
+  = QLambda (QVarS QTrue)
 
 let test_identity
   : (qBool ^-> qBool) ⊩ identity
@@ -285,7 +310,7 @@ let test_apply_top_level_def
   : (qBool ^-> qBool) ⊩ apply_top_level_def
   = QLambda (QApp
               (QApp
-                (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
+                (QLambda (QLambda QVar0))
                 QVar0)
               QTrue)
 
@@ -293,23 +318,23 @@ let test_apply_top_level_def'
   : (qBool ^-> qBool ^-> qBool) ⊩ apply_top_level_def'
   = QLambda (QLambda (QApp
                        (QApp
-                          (QLambda (QLambda #_ #_ #_ #(fun _ y -> y) QVar0))
- //                       (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
+                          (QLambda (QLambda QVar0))
                           qVar1)
                        QVar0))
 
 let test_papply__top_level_def
   : (qBool ^-> qBool ^-> qBool) ⊩ papply__top_level_def
   = QLambda (QApp
-              (QLambda #_ #_ #_ #(fun _ x y -> y) (QLambda QVar0))
+              (QLambda (QLambda QVar0))
               QVar0)
 
 let test_apply_arg
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ apply_arg
   = QLambda (QApp QVar0 Qtt)
 
-let test_apply_arg2
+let test_apply_arg2 ()
   : ((qBool ^-> qBool ^-> qBool) ^-> qBool) ⊩ apply_arg2
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QApp (QApp QVar0 QTrue) QFalse)
 
 
@@ -330,33 +355,24 @@ let test_negb_pred
   : ((qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ negb_pred
   = QLambda (QLambda (QIf (QApp qVar1 QVar0) QFalse QTrue))
 
-let test_if2
+let test_if2 ()
   : (qBool ^-> qBool ^-> qBool) ⊩ if2
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QLambda (QIf qVar1 QFalse QVar0))
 
-(** Because of the fancy types, now one needs a preprocessing tactic to
-    get rid of the qTypes **)
-
-let l_to_r_fsG () : Tac unit = // TODO: merge this in simplify_qType
-   l_to_r [`lem_stack_hd; `lem_stack_index; `lem_stack_tail_hd; `tail_stack_inverse]
-
-let simplify_qType (x:term) : Tac term =
-  (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota;simplify] x
-
-[@@ (preprocess_with simplify_qType)]
-let test_callback_return
+let test_callback_return ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QIf QVar0
-                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) qVar1)
-                 (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
+                 (QLambda qVar1)
+                 (QLambda QVar0))
 
-[@@ (preprocess_with simplify_qType)]
-let test_callback_return'
+let test_callback_return' ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return'
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QIf QVar0
-                 (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) qVar1)
-                 (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
+                 (QLambda qVar1)
+                 (QLambda QVar0)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
   : (qBool ^-> qBool ^-> (qBool ^* qBool)) ⊩ make_pair
@@ -366,20 +382,19 @@ let test_make_pair
 let test_pair_of_functions ()
   : Tot (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                             ⊩ pair_of_functions)
-  by (norm [delta_only [`%pair_of_functions]];
-      norm [delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
-     // trefl (); //TODO: why does this fail?
-     tadmit ())
+  by (l_to_r_fsG (); trefl ())
   =  QMkpair
       (QLambda (QApp
-                  (QLambda #_ #_ #_ #(fun _ x -> if x then false else true) (QIf QVar0 QFalse QTrue))
+                  (QLambda (QIf QVar0 QFalse QTrue))
                   QVar0))
-      (QLambda (QLambda #_ #_ #_ #(fun _ y -> y) QVar0))
+      (QLambda (QLambda QVar0))
 
-let test_pair_of_functions2
+[@@ (preprocess_with simplify_qType)]
+let test_pair_of_functions2 ()
   : (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
     ⊩ pair_of_functions2)
-  = admit (); QMkpair // TODO
+  by (l_to_r_fsG (); trefl ())
+  = QMkpair
       (QLambda (QIf QVar0 QFalse QTrue))
       (QLambda (QLambda (QIf qVar1 QFalse QVar0)))
 
@@ -407,19 +422,19 @@ let test_wrap_snd_pa
   : ((qBool ^* qUnit) ^-> qUnit) ⊩ wrap_snd_pa
   = QLambda (QSnd QVar0)
 
-let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval g (a ^-> b))
-  (qx : value_quotation g x) (qf : value_quotation g f) :
-  value_quotation g (fun fsG -> let y = x fsG in f fsG y) =
-  QApp qf qx
+let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval (extend a g) b)
+  (qx : value_quotation g x) (qf : value_quotation _ f) :
+  value_quotation g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+  QApp (QLambda qf) qx
 
 let test_a_few_lets
   : (qBool ^-> qUnit) ⊩ a_few_lets
   = QLambda
-     (qLet (QMkpair QVar0 QVar0) (QLambda
-     (qLet qVar1 (QLambda
-     (qLet (QFst qVar1) (QLambda
-     (qLet (QMkpair qVar1 QVar0) (QLambda
-     Qtt))))))))
+     (qLet (QMkpair QVar0 QVar0)
+     (qLet qVar1
+     (qLet (QFst qVar1)
+     (qLet (QMkpair qVar1 QVar0)
+     Qtt))))
 
 let test_inl_true
   : (qBool ^+ qUnit) ⊩ inl_true
@@ -429,30 +444,25 @@ let test_inr_unit
   : (qBool ^+ qUnit) ⊩ inr_unit
   = QInr Qtt
 
-[@@ (preprocess_with simplify_qType)]
 let test_return_either ()
   : (qBool ^-> (qUnit ^+ qUnit)) ⊩ return_either
-  by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%return_either]; iota];
-     // trefl (); -- TODO: this fails even if it is an equality.
-     tadmit ())
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QIf QVar0 (QInl Qtt) (QInr Qtt))
 
 let test_match_either ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
-  by (l_to_r_fsG (); norm [delta_only [`%match_either]])
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QCase QVar0 QVar0 QVar0)
 
-[@@ (preprocess_with simplify_qType)]
+[@expect_failure]
 let test_match_either' ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
-  by (norm [delta_only [`%get_Type;`%Mkdtuple2?._1; `%match_either']; iota];
-      l_to_r_fsG ();
-     tadmit ()) // TODO: expected failure. any way to sort the cases?
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QCase QVar0 QVar0 QVar0)
 
 let test_match_either_arg ()
   : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
-  by (l_to_r_fsG (); norm [delta_only [`%match_either_arg]]; dump "H")
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QLambda (
        QCase
          qVar1
