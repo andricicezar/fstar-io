@@ -48,13 +48,13 @@ let rec (∋) (t:qType) (p:(history * (get_Type t) * closed_exp)) : Tot Type0 (d
 and (∶) (t:qType) (p:history * get_Type t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall (e':closed_exp).
-    steps e e' h [] ==> irred e' h ==>
+    steps e e' h [] ==> indexed_irred e' h ==>
     t ∋ (h, fs_e, e')
                            (** vvvvvvvvvv defined over IO computations **)
 and (⦂) (t:qType) (p:history * io_cexp t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall lt (e':closed_exp).
-    steps e e' h lt ==> irred e' (h++lt) ==>
+    steps e e' h lt ==> indexed_irred e' (h++lt) ==>
     (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e'))// /\ (forall p. theta fs_e h p ==> p lt fs_r))
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
 
@@ -115,11 +115,11 @@ let equiv_closed (#t:qType) (fs_e:io_cexp t) (e:closed_exp) : Type0 =
 
 let safety (#t:qType) (fs_e:io_cexp t) (e:closed_exp) : Lemma
   (requires equiv_closed fs_e e)
-  (ensures (forall h. safe e h)) =
+  (ensures forall h. indexed_safe e h) =
   introduce forall h (e':closed_exp) (lt:local_trace h).
-    steps e e' h lt ==> is_value e' \/ can_step e' (h++lt) with begin
-    introduce steps e e' h lt ==> is_value e' \/ can_step e' (h++lt) with _. begin
-      introduce irred e' (h++lt) ==> is_value e' with _. begin
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
         eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
           fsG `(∽) h` s ==> t ⦂ (h, fs_e, gsubst s e)
         with  true gsub_empty empty_eval h;
@@ -133,6 +133,36 @@ let safety (#t:qType) (fs_e:io_cexp t) (e:closed_exp) : Lemma
       end
     end
   end
+
+let deterministic_safety (#t:qType) (fs_e:io_cexp t) (e:closed_exp) : Lemma
+  (requires equiv_closed fs_e e)
+  (ensures deterministic_safe e) =
+  (*introduce forall h (e':closed_exp) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
+        eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+          fsG `(∽) h` s ==> t ⦂ (h, fs_e, gsubst s e)
+        with  true gsub_empty empty_eval h;
+        assert (t ⦂ (h, fs_e, e));
+        eliminate exists fs_r. t ∋ (h++lt, fs_r, e') ///\ (forall p. theta fs_e h p ==> p lt fs_r)
+        returns is_value e' with _. begin
+          assert (t ∋ (h++lt, fs_r, e'));
+          lem_values_are_values t (h++lt) fs_r e';
+          assert (is_value e')
+        end
+      end
+    end;
+    introduce steps e e' h lt ==> deterministic_path e' h lt with _. begin
+      FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
+      introduce forall e'' h' lt'. steps e' e'' h' lt' ==> (h' == (h++lt)) with begin
+        introduce steps e' e'' h' lt' ==> (h' == (h++lt)) with _. begin
+          assume (~(steps e' e'' h' lt')); // I feel like this should be true, because e' needs to be irreducble
+          admit ()
+        end
+      end)
+    end
+  end*)
 
 let (≈) (#g:typ_env) (#t:qType) (fs_v:io_oexp g t) (e:exp) : Type0 =
   equiv #g t fs_v e
