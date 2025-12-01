@@ -263,15 +263,15 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                              // (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
                 compilable g (wp_lambda #g #a #b wpBody) f
 
-| CLambdaDepWP :
-  #g : env ->
-  #a : Type ->
-  #b : Type ->
-  wp : (a -> pure_wp b) ->
-  wp' : spec_env (extend a g) b ->
-  #f : fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
-  compilable #b (extend a g) wp' (helper_lambdaWP f) ->
-  compilable g (wp_lambdaWP wp wp') f
+// "Ideal" rule below
+// | QLambda :
+//   #g : env ->
+//   #a : Type ->
+//   #b : Type ->
+//   wp : spec_env (extend a g) b -> (* The solution is to allow only 1 depth of quantification in the WP *)
+//   #body : fs_oexp (extend a g) b wp ->
+//   compilable #b (extend a g) wp body ->
+//   compilable g _ (fun fsG x -> body (fs_stack fsG x))
 
 | CRefinement : #g:env ->
                 #a:Type ->
