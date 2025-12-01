@@ -89,54 +89,40 @@ let lem_closed_is_no_fv (e:exp) : Lemma
   ()
 
 let lem_fv_in_env_lam (g:typ_env) (t:qType) (body:exp) :
-  Lemma
-    (requires fv_in_env (extend t g) body)
-    (ensures  fv_in_env g (ELam body)) = admit ()
+  Lemma (fv_in_env (extend t g) body <==>  fv_in_env g (ELam body))
+   = admit ()
 
 let lem_fv_in_env_app (g:typ_env) (e1 e2:exp) :
-  Lemma
-    (requires fv_in_env g e1 /\ fv_in_env g e2)
-    (ensures  fv_in_env g (EApp e1 e2)) = admit ()
-
-let lem_app_fv_in_env (g:typ_env) (e1 e2:exp) :
-  Lemma
-    (requires fv_in_env g (EApp e1 e2))
-    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EApp e1 e2))
+  = admit ()
 
 let lem_fv_in_env_if (g:typ_env) (e1 e2 e3:exp) :
-  Lemma
-    (requires fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3)
-    (ensures  fv_in_env g (EIf e1 e2 e3)) = admit ()
-
-let lem_if_fv_in_env (g:typ_env) (e1 e2 e3:exp) :
-  Lemma
-    (requires fv_in_env g (EIf e1 e2 e3))
-    (ensures fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) = admit ()
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) <==> fv_in_env g (EIf e1 e2 e3))
+  = admit ()
 
 let lem_fv_in_env_pair (g:typ_env) (e1 e2:exp) :
-  Lemma
-    (requires fv_in_env g e1 /\ fv_in_env g e2)
-    (ensures  fv_in_env g (EPair e1 e2)) = admit ()
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EPair e1 e2))
+  = admit ()
 
-let lem_pair_fv_in_env (g:typ_env) (e1 e2:exp) :
-  Lemma
-    (requires fv_in_env g (EPair e1 e2))
-    (ensures fv_in_env g e1 /\ fv_in_env g e2) = admit ()
+let lem_fv_in_env_fst (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (EFst e) <==> fv_in_env g e)
+  = admit ()
 
-let lem_fst_fv_in_env (g:typ_env) (e:exp) : // this only makes sense because of how we defined free_vars_indx
-  Lemma
-    (requires fv_in_env g (EFst e))
-    (ensures fv_in_env g e) = admit ()
+let lem_fv_in_env_snd (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (ESnd e) <==>  fv_in_env g e)
+  = admit ()
 
-let lem_snd_fv_in_env (g:typ_env) (e:exp) :
-  Lemma
-    (requires fv_in_env g (ESnd e))
-    (ensures fv_in_env g e) = admit ()
+let lem_fv_in_env_inl (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (EInl e) <==>  fv_in_env g e)
+  = admit ()
 
-let lem_lam_fv_in_env (g:typ_env) (body:exp) (t1:qType) :
-  Lemma
-    (requires fv_in_env g (ELam body))
-    (ensures fv_in_env (extend t1 g) body) = admit ()
+let lem_fv_in_env_inr (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (EInr e) <==>  fv_in_env g e)
+  = admit ()
+
+let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
+  Lemma ((fv_in_env g e1 /\ fv_in_env (extend t1 g) e2 /\ fv_in_env (extend t2 g) e3) <==> fv_in_env g (ECase e1 e2 e3))
+  = admit ()
 
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
@@ -223,19 +209,6 @@ let tail_stack_inverse #g fsG #t v =
 val index_0_hd #g #t (fsG:eval_env (extend t g))
   : Lemma (index fsG 0 == hd fsG)
 let index_0_hd fsG = ()
-
-val lem_stack_tail_hd #g #t (fsG:eval_env (extend t g))
-  : Lemma (stack (tail fsG) (hd fsG) == fsG)
-  [SMTPat (stack (tail fsG) (hd fsG))]
-let lem_stack_tail_hd #g #t fsG =
-  let g' : typ_env = extend t g in
-  let fsG : eval_env g' = fsG in
-  let fsG' : eval_env g' = stack (tail #t #g fsG) (hd #t #g fsG) in
-  assert (forall x. fsG' x == fsG x);
-  assert (FE.feq fsG' fsG);
-  FE.extensionality (x:var{Some? (g' x)}) (fun x -> get_Type (Some?.v (g' x))) fsG' fsG;
-  // TODO: why does this not work?
-  assume (fsG' == fsG)
 
 type fs_val (t:qType) =
   get_Type t

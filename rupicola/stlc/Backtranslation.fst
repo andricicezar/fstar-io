@@ -142,7 +142,7 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
   | EVar x -> equiv_var g x
   | EApp e1 e2 ->
     let TyApp h1 h2 = h in
-    lem_app_fv_in_env g e1 e2;
+    lem_fv_in_env_app g e1 e2;
     lem_backtranslate h1;
     lem_backtranslate h2;
     let fs_e1 = backtranslate h1 in
@@ -150,14 +150,14 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     equiv_app fs_e1 fs_e2 e1 e2
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
-    lem_lam_fv_in_env g body t1;
+    lem_fv_in_env_lam g t1 body;
     lem_backtranslate hbody;
     equiv_lam (backtranslate hbody) body
   | ETrue -> equiv_true g
   | EFalse -> equiv_false g
   | EIf e1 e2 e3 ->
     let TyIf h1 h2 h3 = h in
-    lem_if_fv_in_env g e1 e2 e3;
+    lem_fv_in_env_if g e1 e2 e3;
     lem_backtranslate h1;
     lem_backtranslate h2;
     lem_backtranslate h3;
@@ -167,7 +167,7 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     equiv_if fs_e1 fs_e2 fs_e3 e1 e2 e3
   | EPair e1 e2 ->
     let TyPair h1 h2 = h in
-    lem_pair_fv_in_env g e1 e2;
+    lem_fv_in_env_pair g e1 e2;
     lem_backtranslate h1;
     lem_backtranslate h2;
     let fs_e1 = (backtranslate h1) in
@@ -175,33 +175,31 @@ let rec lem_backtranslate #g #e #t (h:typing g e t) =
     equiv_pair fs_e1 fs_e2 e1 e2
   | EFst e12 ->
     let TyFst h1 = h in
-    lem_fst_fv_in_env g e12;
+    lem_fv_in_env_fst g e12;
     lem_backtranslate h1;
     let fs_e12 = (backtranslate h1) in
     equiv_pair_fst_app fs_e12 e12
   | ESnd e12 ->
     let TySnd h1 = h in
-    lem_snd_fv_in_env g e12;
+    lem_fv_in_env_snd g e12;
     lem_backtranslate h1;
     let fs_e12 = (backtranslate h1) in
     equiv_pair_snd_app fs_e12 e12
   | EInl e' ->
     let TyInl t2 h' = h in
-    assume (fv_in_env g e');
+    lem_fv_in_env_inl g e';
     lem_backtranslate h';
     let fs_e' = backtranslate h' in
     equiv_inl t2 fs_e' e'
   | EInr e' ->
     let TyInr t1 h' = h in
-    assume (fv_in_env g e');
+    lem_fv_in_env_inr g e';
     lem_backtranslate h';
     let fs_e' = backtranslate h' in
     equiv_inr t1 fs_e' e'
   | ECase cond inlc inrc ->
     let TyCase #t1 #t2 #t3 hcond hinlc hinrc = h in
-    assume (fv_in_env g cond);
-    assume (fv_in_env (extend t1 g) inlc);
-    assume (fv_in_env (extend t2 g) inrc);
+    lem_fv_in_env_case g t1 t2 cond inlc inrc;
     lem_backtranslate hcond;
     lem_backtranslate hinlc;
     lem_backtranslate hinrc;

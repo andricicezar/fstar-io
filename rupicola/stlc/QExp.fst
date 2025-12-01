@@ -116,6 +116,7 @@ let helper_case cond inlc inrc fsG =
   | Inl x -> inlc (stack fsG x)
   | Inr x -> inrc (stack fsG x)
 
+(** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type value_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
@@ -224,7 +225,7 @@ let (⊩) (a:qType) (x:get_Type a) =
     get rid of the qTypes **)
 
 let l_to_r_fsG () : Tac unit = // TODO: merge this in simplify_qType
-   l_to_r [`lem_hd_stack; `lem_stack_index; `lem_stack_tail_hd; `tail_stack_inverse]
+   l_to_r [`lem_hd_stack; `tail_stack_inverse]
 
 let simplify_fsG (x:term) : Tac term =
   norm_term_env (top_env ()) [
