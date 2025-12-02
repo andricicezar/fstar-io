@@ -37,7 +37,7 @@ let apply_io_bind_read_write : io unit =
   write x
 
 let apply_io_bind_read_write' : io unit =
-  io_bind (read ()) write
+  io_bind (read ()) (fun x -> write x)
 
 let apply_io_bind_read_if_write : io unit =
   let!@ x = read () in
@@ -54,3 +54,9 @@ let sendError400 (fd:bool) : io unit =
   let p = (fd, x) in
   write fd ;!@
   return ()
+
+let get_req (fd:bool) : io (either bool bool) =
+  let x = utf8_encode fd in
+  if!@ (read ())
+  then return (Inl true)
+  else return (Inr false)

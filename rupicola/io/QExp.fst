@@ -16,12 +16,12 @@ val helper_var0 :
 let helper_var0 g a fsG = hd fsG
 
 unfold
-val helper_varS : g:typ_env ->
-                  a:qType ->
+val helper_varS : #g:typ_env ->
+                  #a:qType ->
                   b:qType ->
                   fs_oval g a ->
                   fs_oval (extend b g) a
-let helper_varS g a b x fsG = x (tail fsG)
+let helper_varS _ x fsG = x (tail fsG)
 
 unfold
 val helper_unit : g:typ_env -> fs_oval g qUnit
@@ -166,10 +166,10 @@ val helper_bind_prod : #g:typ_env ->
                      #a:qType ->
                      #b:qType ->
                      m:fs_oprod g a ->
-                     k:fs_oval g (a ^->!@ b) ->
+                     k:fs_oprod (extend a g) b ->
                      fs_oprod g b
 let helper_bind_prod m k fsG =
-  io_bind (m fsG) (k fsG)
+  io_bind (m fsG) (fun x -> k (stack fsG x))
 
 unfold
 val helper_return_prod :
@@ -194,7 +194,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 #b : qType ->
                 #x : fs_oval g a ->
                 oval_quotation g x ->
-                oval_quotation (extend b g) (helper_varS g a b x)
+                oval_quotation (extend b g) (helper_varS b x)
 
 | QAppGhost   : #g : typ_env ->
                 #a : qType ->
@@ -279,15 +279,17 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 #body : fs_oprod (extend a g) b ->
                 oprod_quotation (extend a g) body ->
                 oval_quotation g (helper_lambda_prod body)
+and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QRead :
         #g:typ_env ->
-        oval_quotation #(qUnit ^->!@ qBool) g (fun _ -> read)
+        oprod_quotation #qBool g (fun _ -> read ())
 
 | QWrite :
         #g:typ_env ->
-        oval_quotation #(qBool ^->!@ qUnit) g (fun _ -> write)
-and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
-(** Return and Bind of the monad **)
+        #arg:fs_oval g qBool ->
+        oval_quotation g arg ->
+        oprod_quotation #qUnit g (fun fsG -> write (arg fsG))
+
 | QReturn :
         #g:typ_env ->
         #a:qType ->
@@ -300,9 +302,9 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #a:qType ->
         #b:qType ->
         #m:fs_oprod g a ->
-        #k:fs_oval g (a ^->!@ b) ->
+        #k:fs_oprod (extend a g) b ->
         oprod_quotation g m ->
-        oval_quotation g k ->
+        oprod_quotation (extend a g) k ->
         oprod_quotation #b g (helper_bind_prod m k)
 
 | QAppProd    : #g : typ_env ->
@@ -610,28 +612,28 @@ let test_apply_io_return
 
 let test_apply_read
   : prod_quotation _ apply_read
-  = QAppProd QRead Qtt
+  = QRead
 
 let test_apply_write_const
   : prod_quotation _ apply_write_const
-  = QAppProd QWrite QTrue
+  = QWrite QTrue
 
 let test_apply_write
   : _ ⊩  apply_write
-  = QLambdaProd (QAppProd QWrite QVar0)
+  = QLambdaProd (QWrite QVar0)
 
 let test_apply_io_bind_const
   : prod_quotation _ apply_io_bind_const
   = QBindProd
       (QReturn QTrue)
-      (QLambdaProd (QReturn QVar0))
+      (QReturn QVar0)
 
 let test_apply_io_bind_identity
   : (qBool ^->!@ qBool) ⊩ apply_io_bind_identity
   = QLambdaProd
       (QBindProd
         (QReturn QVar0)
-        (QLambdaProd (QReturn QVar0)))
+        (QReturn QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_pure_if ()
@@ -640,38 +642,34 @@ let test_apply_io_bind_pure_if ()
   = QLambdaProd
       (QBindProd
         (QReturn QVar0)
-        (QLambdaProd
-          (QIfProd QVar0
-            (QReturn QFalse)
-            (QReturn QTrue))))
+        (QIfProd QVar0
+           (QReturn QFalse)
+           (QReturn QTrue)))
 
 let test_apply_io_bind_write
   : _ ⊩ apply_io_bind_write
   = QLambdaProd (
       QBindProd
          (QReturn QVar0)
-         (QLambdaProd
-           (QAppProd QWrite QVar0)))
+         (QWrite QVar0))
 
 let test_apply_io_bind_read_write
   : prod_quotation _ apply_io_bind_read_write
   = QBindProd
-     (QAppProd QRead Qtt)
-     (QLambdaProd
-       (QAppProd QWrite QVar0))
+     QRead
+     (QWrite QVar0)
 
 let test_apply_io_bind_read_write'
   : prod_quotation _ apply_io_bind_read_write'
-  = QBindProd (QAppProd QRead Qtt) QWrite
+  = QBindProd QRead (QWrite QVar0)
 
 let test_apply_io_bind_read_if_write
   : prod_quotation _ apply_io_bind_read_if_write
   = QBindProd
-      (QAppProd QRead Qtt)
-      (QLambdaProd
-        (QIfProd QVar0
-          (QAppProd QWrite QFalse)
-          (QAppProd QWrite QTrue)))
+      QRead
+      (QIfProd QVar0
+        (QWrite QFalse)
+        (QWrite QTrue))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
   (qx : oval_quotation g x) (qf : oprod_quotation _ f) :
@@ -684,5 +682,5 @@ let test_sendError400 ()
       (qLetProd (QApp (QLambda QVar0) QTrue) (
       (qLetProd (QMkpair (QVarS QVar0) QVar0) (
       (QBindProd
-        (QAppProd QWrite (QVarS (QVarS QVar0)))
-        (QLambdaProd (QReturn Qtt)))))))
+        (QWrite (QVarS (QVarS QVar0)))
+        (QReturn Qtt))))))
