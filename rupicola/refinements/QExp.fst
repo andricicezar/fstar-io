@@ -150,35 +150,70 @@ val helper_lambda : #g :env ->
 let helper_lambda #g #a f =
   fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)
 
-val wp_lambdaWP :
+val wp_lambda' :
   #g :env ->
   #a :Type ->
   #b :Type ->
-  wp: (a -> pure_wp b) ->
+  wpFun: (a -> pure_wp b) ->
   spec_env (extend a g) b ->
-  spec_env g (x:a -> PURE b (wp x))
+  spec_env g (x:a -> PURE b (wpFun x))
 
-let wp_lambdaWP #g #a #b wp wp' fsG : pure_wp (x:a -> PURE b (wp x)) =
-  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
-  fun (p:pure_post (x:a -> PURE b (wp x))) ->
-    forall (f:(x:a -> PURE b (wp x))).
-      (forall (p':pure_post b) (fsG':fs_env (extend a g)).
-        fsG == fs_tail fsG' ==> wp (fs_hd fsG') p' ==> wp' fsG' p' ==>  p' (f (fs_hd fsG'))
-      ) ==>  p f
+let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
+  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic) ;
+  fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
+    (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
+    forall (f:(x:a -> PURE b (wpFun x))).
+      (
+        forall (q : pure_post b) (x:a).
+          wpFun x q ==>
+          wpCtx (fs_stack fsG x) q ==>
+          q (f x)
+      ) ==>
+      p f
 
-unfold
-val helper_lambdaWP :
-  #g :env ->
-  #a :Type ->
-  #b :Type ->
-  #wp: _ ->
-  #wp': _ ->
-  fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
-  fs_oexp (extend a g) b wp'
+// - This query failed:
+// - Prims.auto_squash (wpCtx (QExp.fs_stack fsG x)
+//         (fun bind_result_1 ->
+//             p (body (fs_stack fsG x))))
 
-let helper_lambdaWP #g #a f fsG =
-  admit () ;
-  f (fs_tail #a fsG) (fs_hd fsG)
+
+    // forall x.
+    //   // wpFun x (fun r -> exists f. r == f x) ==>
+    //   wpCtx (fs_stack fsG x) p
+
+    // forall (f:(x:a -> PURE b (wpFun x))).
+    //   (forall (p':pure_post b) (fsG':fs_env (extend a g)).
+    //     fsG == fs_tail fsG' ==> wpFun (fs_hd fsG') (fun _ -> True) ==> wpCtx fsG' p' ==>  p' (f (fs_hd fsG'))
+    //   ) ==>  p f
+
+
+#push-options "--debug SMTFail --split_queries always"
+
+val test :
+  #g : env ->
+  #a : Type ->
+  #b : Type ->
+  wpCtx : spec_env (extend a g) b ->
+  wpFun : (a -> pure_wp b) ->
+  fs_oexp (extend a g) b wpCtx ->
+  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpFun wpCtx)
+
+let test #g #a #b wpCtx wpFun body fsG x =
+  body (fs_stack fsG x)
+
+// unfold
+// val helper_lambdaWP :
+//   #g :env ->
+//   #a :Type ->
+//   #b :Type ->
+//   #wp: _ ->
+//   #wp': _ ->
+//   fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
+//   fs_oexp (extend a g) b wp'
+
+// let helper_lambdaWP #g #a f fsG =
+//   admit () ;
+//   f (fs_tail #a fsG) (fs_hd fsG)
 
 
 unfold
@@ -264,14 +299,15 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 compilable g (wp_lambda #g #a #b wpBody) f
 
 // "Ideal" rule below
-// | QLambda :
-//   #g : env ->
-//   #a : Type ->
-//   #b : Type ->
-//   wp : spec_env (extend a g) b -> (* The solution is to allow only 1 depth of quantification in the WP *)
-//   #body : fs_oexp (extend a g) b wp ->
-//   compilable #b (extend a g) wp body ->
-//   compilable g _ (fun fsG x -> body (fs_stack fsG x))
+| QLambda :
+  #g : env ->
+  #a : Type ->
+  #b : Type ->
+  wpCtx : spec_env (extend a g) b ->
+  wpFun : (a -> pure_wp b) ->
+  #body : fs_oexp (extend a g) b wpCtx ->
+  compilable #b (extend a g) wpCtx body ->
+  compilable #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpFun wpCtx) (fun fsG x -> body (fs_stack fsG x))
 
 | CRefinement : #g:env ->
                 #a:Type ->
