@@ -22,8 +22,8 @@ unfold let io_args (op:io_ops) : Type =
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
-  | ORead -> option bool
-  | OWrite -> option unit
+  | ORead -> bool
+  | OWrite -> unit
 
 type event =
 | EvRead  : args:io_args ORead -> io_res ORead args -> event
@@ -96,3 +96,6 @@ let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
   Lemma (((h++lt)++lt') == (h++(lt @ lt')))
   [SMTPat (h++(lt @ lt'))] =
     admit ()
+
+let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
+  if Some? oev then [Some?.v oev] else []

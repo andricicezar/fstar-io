@@ -75,3 +75,34 @@ let wrap_fst_pa : (bool & bool) -> bool = fst
 let snd_pair : unit = snd (true, ())
 let wrap_snd : (bool & unit) -> unit = fun p -> snd p
 let wrap_snd_pa : (bool & unit) -> unit = snd
+
+let a_few_lets : bool -> unit =
+  fun x ->
+    let p = (x, x) in
+    let y = x in
+    let z = fst p in
+    let g = (y, z) in
+    ()
+
+let inl_true : either bool unit = Inl true
+let inr_unit : either bool unit = Inr ()
+let return_either : bool -> either unit unit =
+  fun x -> if x then Inl () else Inr ()
+
+let match_either : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inl x -> x
+    | Inr x -> x
+
+let match_either' : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inr x -> x
+    | Inl x -> x
+
+let match_either_arg : either bool bool -> bool -> bool =
+  fun x y ->
+    match x with
+    | Inl x -> x
+    | Inr x -> y

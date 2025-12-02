@@ -12,6 +12,7 @@ type typ =
   | TBool  : typ
   | TArr   : typ -> typ -> typ
   | TPair  : typ -> typ -> typ
+  | TSum   : typ -> typ -> typ
 
 let var = nat
 type exp =
@@ -25,6 +26,9 @@ type exp =
   | EPair  : fst:exp -> snd:exp -> exp
   | EFst   : exp -> exp
   | ESnd   : exp -> exp
+  | EInl   : exp -> exp
+  | EInr   : exp -> exp
+  | ECase  : exp -> exp -> exp -> exp
   | ERead  : exp
   | EWrite : exp -> exp
 
@@ -59,6 +63,9 @@ let rec subst (#r:bool)
     | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
     | EFst e' -> EFst (subst s e')
     | ESnd e' -> ESnd (subst s e')
+    | EInl e' -> EInl (subst s e')
+    | EInr e' -> EInr (subst s e')
+    | ECase e1 e2 e3 -> ECase (subst s e1) (subst (sub_elam s) e2) (subst (sub_elam s) e3)
     | ERead -> ERead
     | EWrite e' -> EWrite (subst s e')
 
@@ -109,6 +116,9 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EPair e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
   | EFst e' -> free_vars_indx e' n
   | ESnd e' -> free_vars_indx e' n
+  | EInl e' -> free_vars_indx e' n
+  | EInr e' -> free_vars_indx e' n
+  | ECase e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 (n+1) @ free_vars_indx e3 (n+1)
   | ERead -> []
   | EWrite e' -> free_vars_indx e' n
 
@@ -124,6 +134,8 @@ let rec is_value (e:exp) : Type0 =
   | EFalse -> True
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
+  | EInl e'
+  | EInr e' -> is_value e'
   | _ -> False
 
 let rec lem_value_is_closed (e:exp) : Lemma
@@ -132,11 +144,14 @@ let rec lem_value_is_closed (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   match e with
   | EPair e1 e2 -> lem_value_is_closed e1; lem_value_is_closed e2
+  | EInl e'
+  | EInr e' -> lem_value_is_closed e'
   | _ -> ()
 
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
+#push-options "--split_queries always"
 let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires (free_vars_indx e n == [] /\
@@ -153,22 +168,25 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     assert (free_vars_indx (subst s' e') (n+2) ==
             free_vars_indx (subst s (ELam e')) (n+1))
   end
-  | EApp e1 e2 ->
+  | EFst e
+  | ESnd e
+  | EInl e
+  | EInr e
+  | EWrite e ->
+    lem_shifting_preserves_closed s e n
+  | EApp e1 e2
+  | EPair e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n
   | EIf e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n;
     lem_shifting_preserves_closed s e3 n
-  | EPair e1 e2 ->
+  | ECase e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
-    lem_shifting_preserves_closed s e2 n
-  | EFst e ->
-    lem_shifting_preserves_closed s e n
-  | ESnd e ->
-    lem_shifting_preserves_closed s e n
-  | EWrite e ->
-    lem_shifting_preserves_closed s e n
+    lem_shifting_preserves_closed s e2 (n+1);
+    admit ();
+    lem_shifting_preserves_closed s e3 (n+1)
   | _ -> ()
 
 let rec lem_subst_freevars_closes_exp
@@ -199,7 +217,8 @@ let rec lem_subst_freevars_closes_exp
       end
     end;
     lem_subst_freevars_closes_exp s' e' n'
-  | EApp e1 e2 ->
+  | EApp e1 e2
+  | EPair e1 e2 ->
     assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e1 n;
     assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
@@ -211,21 +230,16 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s e2 n;
     assume (forall x. x `memP` free_vars_indx e3 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e3 n
-  | EPair e1 e2 ->
-    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e2 n
-  | EFst e' ->
-    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e' n
-  | ESnd e' ->
-    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
-    lem_subst_freevars_closes_exp s e' n
+  | EFst e'
+  | ESnd e'
+  | EInl e'
+  | EInr e'
   | EWrite e' ->
-    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);
+    assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e' n
+  | ECase e1 e2 e3 -> admit ()
   | _ -> ()
+#pop-options
 
 let subst_beta (v e:exp) :
   Pure closed_exp
@@ -235,13 +249,13 @@ let subst_beta (v e:exp) :
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
+(* Small-step operational semantics; strong / full-beta reduction is
+   right to left  *)
+
 let get_ebool (b:bool) : closed_exp =
   match b with
   | true -> ETrue
   | false -> EFalse
-
-(* Small-step operational semantics; strong / full-beta reduction is
-   right to left  *)
 
 noeq
 type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Type =
@@ -325,34 +339,47 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     #e2:closed_exp{is_value e2} ->
     h:history ->
     step (ESnd (EPair e1 e2)) e2 h None
+  | SCase :
+    #e1:closed_exp ->
+    e2:exp{is_closed (ELam e2)} ->
+    e3:exp{is_closed (ELam e3)} ->
+    #e1':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step e1 e1' h oev ->
+    step (ECase e1 e2 e3) (ECase e1' e2 e3) h oev
+  | SInl :
+    e1:value ->
+    e2:exp{is_closed (ELam e2)} ->
+    e3:exp{is_closed (ELam e3)} ->
+    h:history ->
+    step (ECase (EInl e1) e2 e3) (subst_beta e1 e2) h None
+  | SInr :
+    e1:value ->
+    e2:exp{is_closed (ELam e2)} ->
+    e3:exp{is_closed (ELam e3)} ->
+    h:history ->
+    step (ECase (EInr e1) e2 e3) (subst_beta e1 e3) h None
   | SRead :
     b:bool ->
     h:history ->
-    step ERead (get_ebool b) h (Some (EvRead () (Some b)))
+    step ERead (get_ebool b) h (Some (EvRead () b))
   | SWrite :
     b:bool ->
     h:history ->
-    step (EWrite (get_ebool b)) EUnit h (Some (EvWrite b (Some ())))
+    step (EWrite (get_ebool b)) EUnit h (Some (EvWrite b ()))
 
-let can_step (e:closed_exp) : Type0 =
-  exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
+let can_step (e:closed_exp) (h:history) : Type0 =
+  exists (e':closed_exp) (oev:option (event_h h)). step e e' h oev
 
 let irred (e:closed_exp) (h:history) : Type0 =
-  forall (e':closed_exp) (oev:option (event_h h)). ~(step e e' h oev) 
-  // optionally \/ is_value e - Amal's definition
+  forall (e':closed_exp) (oev:option (event_h h)). ~(step e e' h oev) // optionally \/ is_value e - Amal's definition
 
 let rec lem_value_is_irred (e:closed_exp) : Lemma
   (requires is_value e)
-  (ensures (forall h. irred e h)) =
+  (ensures (forall h. irred e h))
+  [SMTPat (irred e)] =
   match e with
-  | EUnit ->
-    assert (forall h e' oev. ~(step EUnit e' h oev)) by explode ()
-  | ETrue ->
-    assert (forall h e' oev. ~(step ETrue e' h oev)) by explode ()
-  | EFalse ->
-    assert (forall h e' oev. ~(step EFalse e' h oev)) by explode ()
-  | ELam e11 ->
-    assert (forall h e' oev. ~(step (ELam e11) e' h  oev)) by explode ()
   | EPair e1 e2 ->
     lem_value_is_irred e1;
     lem_value_is_irred e2;
@@ -365,7 +392,7 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
         | _ -> ())
       end
     end
-  | _ -> ()
+  | _ -> assert (forall h e' oev. ~(step e e' h oev)) by (explode ())
 
 (** reflexive transitive closure of step *)
 noeq
@@ -377,14 +404,14 @@ type steps : closed_exp -> closed_exp -> (h:history) -> local_trace h -> Type =
            #e2:closed_exp ->
            #e3:closed_exp ->
            #h:history ->
-           #oev:option (event_h h) -> 
-           #lt:local_trace (if Some? oev then (Some?.v oev)::h else h) ->
+           #oev:option (event_h h) ->
+           #lt:local_trace (h++(as_lt oev)) ->
            step e1 e2 h oev ->
-           steps e2 e3 (if Some? oev then (Some?.v oev)::h else h) lt ->
-           steps e1 e3 h (if Some? oev then [Some?.v oev] @ lt else lt)
+           steps e2 e3 (h++(as_lt oev)) lt ->
+           steps e1 e3 h (as_lt oev @ lt)
 
 let rec lem_steps_transitive_constructive
-  (#e1 #e2 #e3:closed_exp) 
+  (#e1 #e2 #e3:closed_exp)
   (#h:history)
   (#lt1:local_trace h) (#lt2:local_trace (h++lt1))
   (st12:steps e1 e2 h lt1)
@@ -397,23 +424,20 @@ let rec lem_steps_transitive_constructive
 
 open FStar.Squash
 
-let get_event_trace (#h:history) (oev:option (event_h h)) : local_trace h = 
-  if Some? oev then [Some?.v oev] else []
-
 let lem_step_implies_steps (e e':closed_exp) (h:history) (oev:option (event_h h)) :
   Lemma
     (requires step e e' h oev)
-    (ensures steps e e' h (get_event_trace oev)) =
-  introduce forall e e'. step e e' h oev ==> steps e e' h (get_event_trace oev) with begin
-    introduce step e e' h oev ==> steps e e' h (get_event_trace oev) with _. begin
-      bind_squash #(step e e' h oev) () (fun st -> return_squash (STrans st (SRefl e' (h++(get_event_trace oev)))))
+    (ensures steps e e' h (as_lt oev)) =
+  introduce forall e e'. step e e' h oev ==> steps e e' h (as_lt oev) with begin
+    introduce step e e' h oev ==> steps e e' h (as_lt oev) with _. begin
+      bind_squash #(step e e' h oev) () (fun st -> return_squash (STrans st (SRefl e' (h++(as_lt oev)))))
     end
   end
 
-let lem_steps_transitive 
+let lem_steps_transitive
   (e1 e2 e3:closed_exp)
   (h:history)
-  (lt12:local_trace h) 
+  (lt12:local_trace h)
   (lt23:local_trace (h++lt12)) :
   Lemma
     (requires (steps e1 e2 h lt12 /\ steps e2 e3 (h++lt12) lt23))
@@ -423,53 +447,34 @@ let lem_steps_transitive
       return_squash (
         lem_steps_transitive_constructive st12 st23)))
 
-(*let lem_steps_irred_e_irred_e'_implies_e_e' (#h:history) (e:closed_exp{irred e h}) (e':closed_exp{irred e' h}) (lt:local_trace h) : Lemma
-  (requires steps e e' h lt)
-  (ensures e == e') = admit ()*)
-
 let lem_steps_refl (e:closed_exp) (h:history) : Lemma (steps e e h []) [SMTPat (steps e e h [])] =
   FStar.Squash.return_squash (SRefl e h)
 
 let safe (e:closed_exp) (h:history) : Type0 =
-  forall (e':closed_exp) (lt:local_trace h). steps e e' h lt ==> is_value e' \/ can_step e' 
+  forall (e':closed_exp) (lt:local_trace h). steps e e' h lt ==> is_value e' \/ can_step e' (h++lt)
 
-let lem_steps_preserve_safe (e e':closed_exp) (h:history) (lt:local_trace h) :
+let rec lem_step_preserve_safe (#e #e':closed_exp) #h #oev (st:step e e' h oev) :
+  Lemma (requires (forall h. safe e h))
+        (ensures (forall h. safe e' h)) =
+  admit ()
+
+let rec lem_steps_preserve_safe (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (st:steps e e' h lt):
   Lemma
-    (requires (forall h'. (safe e h /\ exists (lt:local_trace h'). steps e e' h' lt)))
-    (ensures (forall h'. safe e' h')) =
-  eliminate forall h'. (safe e h' /\ exists lt. steps e e' h' lt) with h;
-  
-  introduce is_value e' ==> (forall h'. safe e' h') with _. begin
-    introduce forall h_ e_ lt_. steps e' e_ h_ lt_ ==> is_value e_ \/ can_step e_ with begin
-      introduce steps e' e_ h_ lt_ ==> is_value e_ \/ can_step e_  with _. begin
-        bind_squash #(steps e' e_ h_ lt_) () (fun st ->
-        match st with
-        | SRefl e' h_ -> begin
-          lem_value_is_irred e'
-          end
-        | STrans can_step st' -> 
-          lem_value_is_irred e';
-          false_elim ())
-      end
-    end
-  end;
+    (requires (forall h. safe e h))
+    (ensures (forall h. safe e' h))
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #ei #_ #oev #_ stei steie' ->
+    lem_step_preserve_safe stei;
+    lem_steps_preserve_safe steie'
 
-  introduce can_step e' ==> (forall h'. safe e' h') with _. begin
-    introduce forall h_ e_ lt_. steps e' e_ h_ lt_ ==> is_value e_ \/ can_step e_ with begin
-      introduce steps e' e_ h_ lt_ ==> is_value e_ \/ can_step e_ with _. begin
-        bind_squash #(steps e' e_ h_ lt_) () (fun st ->
-        match st with
-        | SRefl e' h_ -> begin
-          assert (can_step e')
-          end
-        | STrans step st' -> begin
-          //assert (safe e' (h++lt));
-          admit ()
-          end)
-      end
-    end
-  end
-  
+let lem_steps_preserve_safe_sqh (e e':closed_exp) (h:history) (lt:local_trace h) :
+  Lemma
+    (requires (forall h. safe e h) /\ steps e e' h lt)
+    (ensures (forall h. safe e' h)) =
+  bind_squash #(steps e e' h lt) #(forall h. safe e' h) () (fun st -> lem_steps_preserve_safe st)
+
 (* We need syntactic types for this, or at least the top-level shape of types *)
 let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
@@ -477,6 +482,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TBool -> e == ETrue \/ e == EFalse
   | TArr t1 t2 -> ELam? e
   | TPair t1 t2 -> EPair? e
+  | TSum t1 t2 -> EInl? e \/ EInr? e
 
 let sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
   forall (e':closed_exp) (lt:local_trace h). steps e e' h lt ==> irred e' (h++lt) ==> sem_value_shape t e'
@@ -586,8 +592,8 @@ let rec destruct_steps_eapp
         let (EApp e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EApp e1 e2) (EApp e1' e2) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
-        lem_steps_preserve_safe e1 e1' h lt1;
+        let lt1 : local_trace h = as_lt oev1 in
+        lem_steps_preserve_safe_sqh e1 e1' h lt1;
         lem_steps_preserve_sem_expr_shape e1 e1' h lt1 (TArr t1 t2);
         let s2 : steps (EApp e1' e2) e' (h++lt1) lt23 = step_eapp_steps in
         eliminate forall h'. safe e2 h' with (h++lt1);
@@ -602,8 +608,8 @@ let rec destruct_steps_eapp
         let (EApp e1 e2') = f2 in
         lem_step_implies_steps e2 e2' h oev2;
         lem_step_implies_steps (EApp e1 e2) (EApp e1 e2') h oev2;
-        let lt2 : local_trace h = get_event_trace oev2 in
-        lem_steps_preserve_safe e2 e2' h lt2;
+        let lt2 : local_trace h = as_lt oev2 in
+        lem_steps_preserve_safe_sqh e2 e2' h lt2;
         let s2 : steps (EApp e1 e2') e' (h++lt2) lt23 = step_eapp_steps in
         assume (sem_expr_shape (TArr t1 t2) e1 (h++lt2));
         let (e11, e2'', (| lt2', (| lt1, lt3 |) |)) = destruct_steps_eapp e1 e2' e' (h++lt2) lt23 s2 t1 t2 in
@@ -622,24 +628,24 @@ let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
     safe e1 h /\
     sem_expr_shape TBool e1 h)
   (ensures (exists e' oev. step (EIf e1 e2 e3) e' h oev))
-  = 
+  =
   introduce irred e1 h /\ e1 == ETrue ==> (exists e' oev. step (EIf e1 e2 e3) e' h oev) with _. begin
     assert (steps e1 e1 h []);
     let st : step (EIf ETrue e2 e3) e2 h None = IfTrue e2 e3 h in
     ()
   end;
-  
+
   introduce irred e1 h /\ e1 == EFalse ==> (exists e' oev. step (EIf e1 e2 e3) e' h oev) with _. begin
     assert (steps e1 e1 h []);
     let st : step (EIf EFalse e2 e3) e3 h None = IfFalse e2 e3 h in
     ()
   end;
-  
+
   introduce irred e1 h /\ ~(e1 == EFalse \/ e1 == ETrue) ==> (exists e' oev. step (EIf e1 e2 e3) e' h oev) with _. begin
     assert (steps e1 e1 h []);
     false_elim ()
   end;
-  
+
   introduce ~(irred e1 h) ==> (exists e' oev. step (EIf e1 e2 e3) e' h oev) with _. begin
     assert (exists e1' oev1. step e1 e1' h oev1);
     eliminate exists e1' oev1. step e1 e1' h oev1 returns exists e' oev. step (EIf e1 e2 e3) e' h oev with st. begin
@@ -680,8 +686,8 @@ let rec destruct_steps_eif
         let (EIf e1' e2 e3) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EIf e1 e2 e3) (EIf e1' e2 e3) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
-        lem_steps_preserve_safe e1 e1' h lt1;
+        let lt1 : local_trace h = as_lt oev1 in
+        lem_steps_preserve_safe_sqh e1 e1' h lt1;
         lem_steps_preserve_sem_expr_shape e1 e1' h lt1 TBool;
         eliminate forall h'. safe e1' h' with (h++lt1);
         let s2 : steps (EIf e1' e2 e3) e' (h++lt1) lt23 = step_eif_steps in
@@ -712,7 +718,7 @@ let srefl_epair_implies_value (e1 e2:closed_exp) (h:history) : Lemma
   (ensures is_value (EPair e1 e2))
   =
   introduce irred e1 h /\ irred e2 h ==> is_value (EPair e1 e2) with _.
-  begin 
+  begin
     assert (steps e1 e1 h []);
     assert (steps e2 e2 h []);
     ()
@@ -727,7 +733,7 @@ let srefl_epair_implies_value (e1 e2:closed_exp) (h:history) : Lemma
     end;
     false_elim ()
   end;
-  
+
   introduce irred e1 h /\ ~(irred e2 h) ==> is_value (EPair e1 e2) with _.
   begin
     assert (steps e1 e1 h []);
@@ -771,8 +777,8 @@ let rec destruct_steps_epair
         let (EPair e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EPair e1 e2) (EPair e1' e2) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
-        lem_steps_preserve_safe e1 e1' h lt1;
+        let lt1 : local_trace h = as_lt oev1 in
+        lem_steps_preserve_safe_sqh e1 e1' h lt1;
         let s2 : steps (EPair e1' e2) e' (h++lt1) lt23 = step_epair_steps in
         eliminate forall h'. safe e1' h' with (h++lt1);
         eliminate forall h'. safe e2 h' with (h++lt1);
@@ -785,8 +791,8 @@ let rec destruct_steps_epair
         let (EPair e1 e2') = f2 in
         lem_step_implies_steps e2 e2' h oev2;
         lem_step_implies_steps (EPair e1 e2) (EPair e1 e2') h oev2;
-        let lt2 : local_trace h = get_event_trace oev2 in
-        lem_steps_preserve_safe e2 e2' h lt2;
+        let lt2 : local_trace h = as_lt oev2 in
+        lem_steps_preserve_safe_sqh e2 e2' h lt2;
         let s2 : steps (EPair e1 e2') e' (h++lt2) lt23 = step_epair_steps in
         eliminate forall h'. safe e2' h' with (h++lt2);
         eliminate forall h'. safe e1 h' with (h++lt2);
@@ -794,9 +800,9 @@ let rec destruct_steps_epair
         lem_value_is_irred e1;
         lem_steps_transitive e2 e2' e2'' h lt2 lt2';
         lem_steps_transitive (EPair e1 e2) (EPair e1 e2') (EPair e1' e2'') h lt2 lt2';
-        (e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |)) 
+        (e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |))
         end
-      | _ -> 
+      | _ ->
         (e1, e2, (| [], (| [], [] |) |))
       end
 
@@ -808,7 +814,7 @@ let rec destruct_steps_epair
 
 let lem_destruct_steps_epair
   (e1' e2':closed_exp)
-  (e':closed_exp) 
+  (e':closed_exp)
   (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (EPair e1' e2') e' h lt /\ irred e1' h /\ irred e2' h))
@@ -826,7 +832,7 @@ let can_step_efst_when_safe (e12:closed_exp) (t1 t2:typ) (h:history) : Lemma
     let st : step (EFst (EPair e1 e2)) e1 h None = FstPairReturn h in
     ()
   end;
-  
+
   introduce ~(irred e12 h) ==> (exists e' oev. step (EFst e12) e' h oev) with _. begin
     assert (exists e12' oev12. step e12 e12' h oev12);
     eliminate exists e12' oev12. step e12 e12' h oev12 returns exists e' oev. step (EFst e12) e' h oev with st. begin
@@ -866,8 +872,8 @@ let rec destruct_steps_epair_fst
         let (EFst e12') = f2 in
         lem_step_implies_steps e12 e12' h oev12;
         lem_step_implies_steps (EFst e12) (EFst e12') h oev12;
-        let lt12 : local_trace h = get_event_trace oev12 in
-        lem_steps_preserve_safe e12 e12' h lt12;
+        let lt12 : local_trace h = as_lt oev12 in
+        lem_steps_preserve_safe_sqh e12 e12' h lt12;
         lem_steps_preserve_sem_expr_shape e12 e12' h lt12 (TPair t1 t2);
         let s2 : steps (EFst e12') e' (h++lt12) lt23 = step_efst_steps in
         let (e12'', (| lt12', lt_f |)) = destruct_steps_epair_fst e12' e' (h++lt12) lt23 s2 t1 t2 in
@@ -889,8 +895,8 @@ let rec destruct_steps_epair_fst
 
 let lem_destruct_steps_epair_fst
   (e1 e2:closed_exp)
-  (e':closed_exp) 
-  (h:history) 
+  (e':closed_exp)
+  (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (EFst (EPair e1 e2)) e' h lt /\ irred e1 h /\ irred e2 h))
         (ensures (e1 == e')) = admit ()
@@ -907,7 +913,7 @@ let can_step_esnd_when_safe (e12:closed_exp) (t1 t2:typ) (h:history) : Lemma
     let st : step (ESnd (EPair e1 e2)) e2 h None = SndPairReturn h in
     ()
   end;
-  
+
   introduce ~(irred e12 h) ==> (exists e' oev. step (ESnd e12) e' h oev) with _. begin
     assert (exists e12' oev12. step e12 e12' h oev12);
     eliminate exists e12' oev12. step e12 e12' h oev12 returns exists e' oev. step (ESnd e12) e' h oev with st. begin
@@ -947,8 +953,8 @@ let rec destruct_steps_epair_snd
         let (ESnd e12') = f2 in
         lem_step_implies_steps e12 e12' h oev12;
         lem_step_implies_steps (ESnd e12) (ESnd e12') h oev12;
-        let lt12 : local_trace h = get_event_trace oev12 in
-        lem_steps_preserve_safe e12 e12' h lt12;
+        let lt12 : local_trace h = as_lt oev12 in
+        lem_steps_preserve_safe_sqh e12 e12' h lt12;
         lem_steps_preserve_sem_expr_shape e12 e12' h lt12 (TPair t1 t2);
         let s2 : steps (ESnd e12') e' (h++lt12) lt23 = step_esnd_steps in
         let (e12'', (| lt12', lt_f |)) = destruct_steps_epair_snd e12' e' (h++lt12) lt23 s2 t1 t2 in
@@ -970,8 +976,8 @@ let rec destruct_steps_epair_snd
 
 let lem_destruct_steps_epair_snd
   (e1 e2:closed_exp)
-  (e':closed_exp) 
-  (h:history) 
+  (e':closed_exp)
+  (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (ESnd (EPair e1 e2)) e' h lt /\ irred e1 h /\ irred e2 h))
         (ensures (e2 == e')) = admit ()

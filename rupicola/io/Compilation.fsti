@@ -7,18 +7,16 @@ open QTyp
 open QExp
 open ExpRel
 
-val compile #g #a (#s:fs_oexp g a) (qs:exp_quotation g s) : exp
+val compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : exp
 
-val lem_compile_empty_closed #a (#s:fs_oexp empty a) (qs:exp_quotation empty s) : Lemma (is_closed (compile qs))
+val lem_compile_empty_closed #a (#s:fs_oval empty a) (qs:empty ⊢ s) : Lemma (is_closed (compile qs))
 
-val compile_closed (#a:qType) (#s:get_Type a) (qs:exp_quotation #a empty (fun _ -> s)) : closed_exp
+val compile_closed (#a:qType) (#s:get_Type a) (qs:a ⊩ s) : closed_exp
+val compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
+  : Lemma (ensures (s `equiv_oval a` (compile qs))) (decreases qs)
 
-val compile_equiv #g (#a:qType) (#s:fs_oexp g a) (qs:exp_quotation g s)
-  : Lemma (ensures (s `equiv a` (compile qs))) (decreases qs)
+val compile_closed_equiv (#a:qType) (#s:get_Type a) (qs:a ⊩ s)
+  : Lemma (ensures (forall h. a ⦂ (h, s, compile_closed qs)))
 
-val compile_closed_equiv (#a:qType) (#s:get_Type a) (qs:exp_quotation #a empty (fun _ -> s))
-  : Lemma (ensures (a ⦂ (s, compile_closed qs)))
-
-val lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:get_Type (a ^-> b))
-  (qs:exp_quotation #(a ^-> b) empty (fun _ -> s))
+val lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^-> b)) (qs: (a ^-> b) ⊩ s)
   : Lemma (ELam? (compile_closed qs))
