@@ -171,12 +171,6 @@ let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
       ) ==>
       p f
 
-// - This query failed:
-// - Prims.auto_squash (wpCtx (QExp.fs_stack fsG x)
-//         (fun bind_result_1 ->
-//             p (body (fs_stack fsG x))))
-
-
     // forall x.
     //   // wpFun x (fun r -> exists f. r == f x) ==>
     //   wpCtx (fs_stack fsG x) p
@@ -186,20 +180,6 @@ let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
     //     fsG == fs_tail fsG' ==> wpFun (fs_hd fsG') (fun _ -> True) ==> wpCtx fsG' p' ==>  p' (f (fs_hd fsG'))
     //   ) ==>  p f
 
-// g : env
-// a : Type0
-// b : Type
-// wpCtx : spec_env (extend a g) b
-// wpFun : _: a -> pure_wp b
-// body : fs_oexp (extend a g) b wpCtx
-// fsG : fs_env g
-// p : pure_post (x: a -> PURE b (wpFun x))
-// uu___ : wp_lambda' wpFun wpCtx fsG p
-// x : a
-// ------------------ (*?u84*) _
-// squash (auto_squash (wpCtx (fs_stack fsG x) (fun _ -> l_True)))
-
-#push-options "--debug SMTFail --split_queries always"
 
 val test :
   #g : env ->
@@ -210,9 +190,37 @@ val test :
   fs_oexp (extend a g) b wpCtx ->
   fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpFun wpCtx)
 
-let test #g #a #b wpCtx wpFun body fsG x : _ by (explode () ; dump "h") =
-  assume (wpCtx (fs_stack fsG x) (fun _ -> True)) ;
-  body (fs_stack fsG x)
+let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
+  // assume (forall fsG x. wpCtx (fs_stack fsG x) (fun _ -> True)) ;
+  // assume (forall p (f:(x:a -> PURE b (wpFun x))). p f) ;
+  // assume (False) ;
+  // admit () ;
+  // assume (forall (fsG: fs_env g).
+  //     forall (p: pure_post (x: a -> PURE b (wpFun x))).
+  //       // wp_lambda' wpFun wpCtx fsG p ==>
+  //       forall (f:(x:a -> PURE b (wpFun x))).
+  //       ((forall (x: a).
+  //           (* forall (q: pure_post b) *) (* q' *)(* . *)
+  //             // wpFun x q ==>
+  //             wpCtx (fs_stack fsG x) (* q' *) (fun _ -> True)
+  //               (* (fun r -> p f) *)) /\
+  //           p f)) ;
+  assume (forall (fsG: fs_env g).
+      forall (p: pure_post (x: a -> PURE b (wpFun x))).
+        wp_lambda' wpFun wpCtx fsG p ==>
+        (forall (x: a).
+            forall (p: pure_post b).
+              wpFun x p ==>
+              wpCtx (fs_stack fsG x)
+                (fun bind_result_1 ->
+                    bind_result_1 == body (fs_stack fsG x) ==>
+                    (forall (return_val: b). return_val == bind_result_1 ==> p return_val))) /\
+        (forall (any_result: (x: a -> PURE b (wpFun x))).
+            any_result == (fun x -> body (fs_stack fsG x)) ==>
+            (forall (return_val: (x: a -> PURE b (wpFun x))).
+                return_val == any_result ==> p return_val))) ;
+  fun fsG x ->
+    body (fs_stack fsG x)
 
 // unfold
 // val helper_lambdaWP :
