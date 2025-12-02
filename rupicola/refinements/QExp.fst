@@ -161,7 +161,7 @@ val wp_lambda' :
 let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic) ;
   fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
-    (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
+    (forall x. (* wpFun x (fun _ -> True) ==> *) wpCtx (fs_stack fsG x) (fun _ -> True)) /\
     forall (f:(x:a -> PURE b (wpFun x))).
       (
         forall (q : pure_post b) (x:a).
@@ -186,6 +186,18 @@ let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
     //     fsG == fs_tail fsG' ==> wpFun (fs_hd fsG') (fun _ -> True) ==> wpCtx fsG' p' ==>  p' (f (fs_hd fsG'))
     //   ) ==>  p f
 
+// g : env
+// a : Type0
+// b : Type
+// wpCtx : spec_env (extend a g) b
+// wpFun : _: a -> pure_wp b
+// body : fs_oexp (extend a g) b wpCtx
+// fsG : fs_env g
+// p : pure_post (x: a -> PURE b (wpFun x))
+// uu___ : wp_lambda' wpFun wpCtx fsG p
+// x : a
+// ------------------ (*?u84*) _
+// squash (auto_squash (wpCtx (fs_stack fsG x) (fun _ -> l_True)))
 
 #push-options "--debug SMTFail --split_queries always"
 
@@ -198,7 +210,8 @@ val test :
   fs_oexp (extend a g) b wpCtx ->
   fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpFun wpCtx)
 
-let test #g #a #b wpCtx wpFun body fsG x =
+let test #g #a #b wpCtx wpFun body fsG x : _ by (explode () ; dump "h") =
+  assume (wpCtx (fs_stack fsG x) (fun _ -> True)) ;
   body (fs_stack fsG x)
 
 // unfold
