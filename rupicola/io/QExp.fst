@@ -273,7 +273,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
               #inrc : fs_oval (extend b g) c ->
               oval_quotation _ inrc ->
               oval_quotation g (helper_case cond inlc inrc)
-| QLambdaProd   : #g : typ_env ->
+| QLambdaProd : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #body : fs_oprod (extend a g) b ->
