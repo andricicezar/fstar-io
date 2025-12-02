@@ -372,14 +372,8 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
 let can_step (e:closed_exp) : Type0 =
   exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
 
-let indexed_can_step (e:closed_exp) (h:history) : Type0 =
-  exists (e':closed_exp) (oev:option (event_h h)). step e e' h oev
-
 let irred (e:closed_exp) : Type0 =
   forall (e':closed_exp) (h:history) (oev:option (event_h h)). ~(step e e' h oev) 
-
-let indexed_irred (e:closed_exp) (h:history) : Type0 =
-  forall (e':closed_exp) (oev:option (event_h h)). ~(step e e' h oev)
 
 let rec lem_value_is_irred (e:closed_exp) : Lemma
   (requires is_value e)
@@ -436,9 +430,6 @@ let rec lem_steps_transitive_constructive
       STrans e1_can_step (lem_steps_transitive_constructive st12' st23)
 
 open FStar.Squash
-
-let get_event_trace (#h:history) (oev:option (event_h h)): local_trace h =
-  if Some? oev then [Some?.v oev] else []
 
 let lem_step_implies_steps (e e':closed_exp) (h:history) (oev:option (event_h h)) :
   Lemma
@@ -629,7 +620,7 @@ let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace 
     step_implies_step_for_all_histories e_step;
     let oev' = construct_option_ev e_step h' in
     lem_step_implies_steps e e_i h' oev';
-    let lt_ = get_event_trace oev' in
+    let lt_ = as_lt oev' in
     let rest_of_trace = construct_local_trace steps_to_e' (h'++lt_) in
     lem_steps_transitive e e_i e' h' lt_ rest_of_trace;
     match oev' with
@@ -651,7 +642,7 @@ let lem_step_preserve_safe (e e':closed_exp) (h:history) (oev:option (event_h h)
       bind_squash #(steps e' e'' h' lt') () (fun sts ->
       steps_implies_steps_for_all_histories sts;
       assert (forall h_. exists lt_. steps e' e'' h_ lt_);
-      let lt_ev = get_event_trace oev in
+      let lt_ev = as_lt oev in
       eliminate forall h_. exists lt_. steps e' e'' h_ lt_ with (h++lt_ev);
       assert (exists lt_. steps e' e'' (h++lt_ev) lt_);
       eliminate exists lt_. steps e' e'' (h++lt_ev) lt_
@@ -684,7 +675,7 @@ let lem_step_preserve_sem_expr_shape (e e':closed_exp) (h:history) (oev:option (
     introduce _  ==> sem_value_shape t e'' with _. begin
       bind_squash #(steps e' e'' h' lt') () (fun sts ->
       steps_implies_steps_for_all_histories sts;
-      let lt_ev = get_event_trace oev in
+      let lt_ev = as_lt oev in
       eliminate forall h_. exists lt_. steps e' e'' h_ lt_ with (h++lt_ev);
       eliminate exists lt_. steps e' e'' (h++lt_ev) lt_
       returns sem_value_shape t e'' with _. begin
@@ -787,7 +778,7 @@ let rec destruct_steps_eapp
         let (EApp e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EApp e1 e2) (EApp e1' e2) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
+        let lt1 : local_trace h = as_lt oev1 in
         lem_step_preserve_safe e1 e1' h oev1;
         lem_step_preserve_sem_expr_shape e1 e1' h oev1 (TArr t1 t2);
         let s2 : steps (EApp e1' e2) e' (h++lt1) lt23 = step_eapp_steps in
@@ -801,7 +792,7 @@ let rec destruct_steps_eapp
         let (EApp e1 e2') = f2 in
         lem_step_implies_steps e2 e2' h oev2;
         lem_step_implies_steps (EApp e1 e2) (EApp e1 e2') h oev2;
-        let lt2 : local_trace h = get_event_trace oev2 in
+        let lt2 : local_trace h = as_lt oev2 in
         lem_step_preserve_safe e2 e2' h oev2;
         let s2 : steps (EApp e1 e2') e' (h++lt2) lt23 = step_eapp_steps in
         let (e11, e2'', (| lt2', (| lt1, lt3 |) |)) = destruct_steps_eapp e1 e2' e' (h++lt2) lt23 s2 t1 t2 in
@@ -878,7 +869,7 @@ let rec destruct_steps_eif
         let (EIf e1' e2 e3) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EIf e1 e2 e3) (EIf e1' e2 e3) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
+        let lt1 : local_trace h = as_lt oev1 in
         lem_step_preserve_safe e1 e1' h oev1;
         lem_step_preserve_sem_expr_shape e1 e1' h oev1 TBool;
         let s2 : steps (EIf e1' e2 e3) e' (h++lt1) lt23 = step_eif_steps in
@@ -968,7 +959,7 @@ let rec destruct_steps_epair
         let (EPair e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
         lem_step_implies_steps (EPair e1 e2) (EPair e1' e2) h oev1;
-        let lt1 : local_trace h = get_event_trace oev1 in
+        let lt1 : local_trace h = as_lt oev1 in
         lem_step_preserve_safe e1 e1' h oev1;
         let s2 : steps (EPair e1' e2) e' (h++lt1) lt23 = step_epair_steps in
         let (e1'', e2', (| lt1', (| lt2, lt3 |) |)) = destruct_steps_epair e1' e2 e' (h++lt1) lt23 s2 in
@@ -980,7 +971,7 @@ let rec destruct_steps_epair
         let (EPair e1 e2') = f2 in
         lem_step_implies_steps e2 e2' h oev2;
         lem_step_implies_steps (EPair e1 e2) (EPair e1 e2') h oev2;
-        let lt2 : local_trace h = get_event_trace oev2 in
+        let lt2 : local_trace h = as_lt oev2 in
         lem_step_preserve_safe e2 e2' h oev2;
         let s2 : steps (EPair e1 e2') e' (h++lt2) lt23 = step_epair_steps in
         let (e1', e2'', (| lt1, (| lt2', lt3 |) |)) = destruct_steps_epair e1 e2' e' (h++lt2) lt23 s2 in
@@ -1058,7 +1049,7 @@ let rec destruct_steps_epair_fst
         let (EFst e12') = f2 in
         lem_step_implies_steps e12 e12' h oev12;
         lem_step_implies_steps (EFst e12) (EFst e12') h oev12;
-        let lt12 : local_trace h = get_event_trace oev12 in
+        let lt12 : local_trace h = as_lt oev12 in
         lem_step_preserve_safe e12 e12' h oev12;
         lem_step_preserve_sem_expr_shape e12 e12' h oev12 (TPair t1 t2);
         let s2 : steps (EFst e12') e' (h++lt12) lt23 = step_efst_steps in
@@ -1139,7 +1130,7 @@ let rec destruct_steps_epair_snd
         let (ESnd e12') = f2 in
         lem_step_implies_steps e12 e12' h oev12;
         lem_step_implies_steps (ESnd e12) (ESnd e12') h oev12;
-        let lt12 : local_trace h = get_event_trace oev12 in
+        let lt12 : local_trace h = as_lt oev12 in
         lem_step_preserve_safe e12 e12' h oev12;
         lem_step_preserve_sem_expr_shape e12 e12' h oev12 (TPair t1 t2);
         let s2 : steps (ESnd e12') e' (h++lt12) lt23 = step_esnd_steps in
