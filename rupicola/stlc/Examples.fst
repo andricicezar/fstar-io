@@ -6,16 +6,16 @@ let ut_unit = ()
 let ut_true = true
 let ut_false = false
 
-val var0 : fs_oexp (extend qBool empty) qBool
+val var0 : fs_oval (extend qBool empty) qBool
 let var0 fsG = hd fsG
 
-val var1 : fs_oexp (extend qBool (extend qBool empty)) qBool
+val var1 : fs_oval (extend qBool (extend qBool empty)) qBool
 let var1 fsG = hd (tail fsG)
 
-let var2 : fs_oexp (extend qBool (extend qBool (extend qBool empty))) qBool =
+let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
   fun fsG -> hd (tail (tail fsG))
 
-let var3 : fs_oexp (extend qBool (extend qBool (extend qBool (extend qBool empty)))) qBool =
+let var3 : fs_oval (extend qBool (extend qBool (extend qBool (extend qBool empty)))) qBool =
   fun fsG -> hd (tail (tail (tail fsG)))
 
 let constant (x: bool) : bool =
@@ -96,3 +96,26 @@ let a_few_lets : bool -> unit =
     let z = fst p in
     let g = (y, z) in
     ()
+
+let inl_true : either bool unit = Inl true
+let inr_unit : either bool unit = Inr ()
+let return_either : bool -> either unit unit =
+  fun x -> if x then Inl () else Inr ()
+
+let match_either : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inl x -> x
+    | Inr x -> x
+
+let match_either' : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inr x -> x
+    | Inl x -> x
+
+let match_either_arg : either bool bool -> bool -> bool =
+  fun x y ->
+    match x with
+    | Inl x -> x
+    | Inr x -> y

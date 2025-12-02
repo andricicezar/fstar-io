@@ -30,8 +30,8 @@ instance q_arr
 
 instance q_pair (s1:Type) (s2:Type) {| c1:quotable_typ s1 |} {| c2:quotable_typ s2 |} : quotable_typ (s1 & s2) = { q = QPair c1.q c2.q }
 
-class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
-  [@@@no_method] q : exp_quotation #(pack ca) g s;
+class quotable_exp (#a:Type0) {| ca: quotable_typ a |} (g:typ_env) (s:eval_env g -> a) = { (** using fs_oval g (pack ca) complicates the instances of the type class **)
+  [@@@no_method] q : value_quotation #(pack ca) g s;
 }
 
 unfold let quotable (#a:Type0) {| ca: quotable_typ a |} (s:a) =
@@ -57,6 +57,35 @@ instance q_var0
     q = QVar0;
 }
 
+instance q_lambda
+  g
+  (a:Type) {| qa: quotable_typ a |}
+  (b:Type) {| qb: quotable_typ b |}
+  (body:eval_env (extend (pack qa) g) -> b)
+  {| cf: quotable_exp #b #qb _ body |}
+  : quotable_exp #(a -> b) #(q_arr a b) g (fun fsG x -> body (stack fsG x)) = {
+  q = QLambda #(pack qa) #(pack qb) #g #body cf.q;
+}
+
+open Examples
+
+let test_constant'
+  : quotable_exp empty (fun _ -> constant)
+  = solve
+
+let _ = assert (test_constant'.q == test_constant) by (compute (); trefl ())
+
+let test_identity'
+  : quotable_exp empty (fun _ -> identity)
+  // = solve
+  = q_lambda _ _ _ _ #(q_var0 _ _)
+
+let test_thunked_id'
+  : quotable_exp empty (fun _ -> thunked_id)
+  // = solve
+  = q_lambda _ _ _ _
+      #(q_lambda _ _ _ _ #(q_var0 _ _))
+
 instance q_varS
   (g:typ_env)
   (a:Type)
@@ -75,22 +104,12 @@ let test1_var : quotable_exp (extend qUnit empty) (fun fsG -> hd fsG) =
 
 val test2_var : quotable_exp (extend qUnit (extend qUnit empty)) (fun fsG -> hd (tail fsG))
 let test2_var =
- q_varS _ _ _ _ #(q_var0 _ _)
- // TODO: solve
+  q_varS _ _ _ #q_unit #q_unit _ #(q_var0 _ _)
+  // TODO: solve
 
 let test3_var : quotable_exp (extend qUnit (extend qUnit (extend qUnit empty))) (fun fsG -> hd (tail (tail fsG))) =
-  q_varS _ _ _ _ #(q_varS _ _ _ _ #(q_var0 _ _))
- // TODO: solve
-
-instance q_lambda
-  g
-  (a:Type) {| qa: quotable_typ a |}
-  (b:Type) {| qb: quotable_typ b |}
-  (f:eval_env g -> a -> b)
-  {| cf: quotable_exp #b #qb (extend (pack qa) g) (fun fsG -> f (tail #(pack qa) fsG) (hd fsG)) |}
-  : quotable_exp #(a -> b) #(q_arr a b) g f = {
-  q = QLambda #g #(pack qa) #(pack qb) #f cf.q;
-}
+  q_varS _ _ _ #q_unit #q_unit _ #(q_varS _ _ _ _ #(q_var0 _ _))
+  // TODO: solve
 
 instance q_app
   g

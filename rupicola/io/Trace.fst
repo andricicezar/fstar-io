@@ -22,8 +22,8 @@ unfold let io_args (op:io_ops) : Type =
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
-  | ORead -> option bool
-  | OWrite -> option unit
+  | ORead -> bool
+  | OWrite -> unit
 
 type event =
 | EvRead  : args:io_args ORead -> io_res ORead args -> event
@@ -41,6 +41,7 @@ let destruct_ev (ev:event) : op:io_ops & args:io_args op & io_res op args =
 
 let trace = list event
 
+(** TODO: get rid of pres **)
 unfold
 let io_pre (h:trace) (op:io_ops) (arg:io_args op) : Type0 =
   match op with
@@ -56,8 +57,8 @@ let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
 unfold
 let test_event (h:trace) (ev:event) =
   match ev with
-  | EvRead v r -> io_pre h ORead v /\ io_post h ORead v r
-  | EvWrite v r -> io_pre h OWrite v /\ io_post h OWrite v r
+  | EvRead v r -> io_post h ORead v r
+  | EvWrite v r -> io_post h OWrite v r
 
 let rec well_formed_local_trace (h:trace) (lt:trace) : Tot Type0 (decreases lt) =
   match lt with
@@ -83,7 +84,7 @@ let trans_well_formed_local_trace (h:trace) (lt:local_trace h) (lt1:local_trace 
 
 let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (ev::h)) :
   Lemma (well_formed_local_trace h ([ev] @ lt))
-  [SMTPat (well_formed_local_trace h ([ev] @ lt))] = 
+  [SMTPat (well_formed_local_trace h ([ev] @ lt))] =
     admit ()
 
 let singleton_event_well_formed_local_trace (h:trace) (ev:event_h h) :
@@ -96,4 +97,5 @@ let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
   [SMTPat (h++(lt @ lt'))] =
     admit ()
 
-
+let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
+  if Some? oev then [Some?.v oev] else []

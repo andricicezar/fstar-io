@@ -37,7 +37,7 @@ let test2 : compile_typ ((unit -> bool) -> (bool -> unit)) = solve
 let _ = assert (test2.r == QArr (QArr QUnit QBool) (QArr QBool QUnit))
 
 (** Compiling expressions **)
-class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:typ_env) (fs_e:eval_env g -> a) = { (** using fs_oexp g (pack ca) complicates the instances of the type class **)
+class compile_exp (#a:Type0) {| ca: compile_typ a |} (g:typ_env) (fs_e:eval_env g -> a) = { (** using fs_oval g (pack ca) complicates the instances of the type class **)
   [@@@no_method] e : (e:exp{fv_in_env g e}); (** expression is closed by g *)
 
   (** The following two lemmas are independent one of the other (we don't use one to prove the other). **)
@@ -136,6 +136,23 @@ instance compile_exp_lambda
   g
   (a:Type) {| ca: compile_typ a |}
   (b:Type) {| cb: compile_typ b |}
+  (f:eval_env (extend (pack ca) g) -> b)
+  {| cf: compile_exp #b #cb (extend (pack ca) g) f |}
+  : compile_exp g (fun fsG x -> f (stack fsG x)) = {
+  e = begin
+    lem_fv_in_env_lam g (pack ca) cf.e;
+    ELam cf.e
+  end;
+  equiv_proof = (fun () ->
+    admit ()
+  )
+}
+
+(**
+instance compile_exp_lambda
+  g
+  (a:Type) {| ca: compile_typ a |}
+  (b:Type) {| cb: compile_typ b |}
   (f:eval_env g -> a -> b)
   {| cf: compile_exp #b #cb (extend (pack ca) g) (fun fsG -> f (tail #(pack ca) fsG) (hd' fsG a)) |}
   : compile_exp g f = {
@@ -146,9 +163,9 @@ instance compile_exp_lambda
   equiv_proof = (fun () ->
     cf.equiv_proof ();
     reveal_opaque (`%hd') (hd' #g #(pack ca));
-    equiv_lam (pack ca) (pack cb) f cf.e
+    equiv_lam #g #(pack ca) #(pack cb) f cf.e
   )
-}
+}**)
 
 let test1_exp : compile_closed (fun (x:unit) -> ()) = solve
 let _ = assert (test1_exp.e == ELam (EUnit))
@@ -275,53 +292,3 @@ let _ = assert (test2_pair.e == EPair (ELam (EVar 0)) (ELam (ELam (EVar 1))))
 
 let test3_pair : compile_closed #((bool -> bool) & (bool -> bool)) ((fun x -> x), (fun x -> if x then false else true)) = solve
 let _ = assert (test3_pair.e == EPair (ELam (EVar 0)) (ELam (EIf (EVar 0) EFalse ETrue)))
-
-instance compile_exp_pair_fst
-  g
-  (a:Type) {| ca: compile_typ a |}
-  (b:Type) {| cb: compile_typ b |}
-  : compile_exp #(a & b -> a) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #ca) g (fun _ -> fst #a #b) = {
-  e = begin
-    ELam (EFst (EVar 0))
-  end;
-  equiv_proof = (fun () ->
-    equiv_pair_fst g (pack ca) (pack cb);
-    assert (
-      (((pack ca) ^* (pack cb)) ^-> (pack ca)) ==
-      (pack (compile_typ_arrow (a & b) a #(compile_typ_pair a b #ca #cb) #ca))) by (compute ())
-  );
-}
-
-assume val test4_pair : compile_closed (fst (true, ()))
-//let test4_pair = solve
-
-assume val test5_pair : compile_closed #((bool & bool) -> bool) (fun p -> fst p)
-//let test5_pair = solve
-
-assume val test4_pair_fst' : compile_closed #(bool & unit -> bool) (fst #bool #unit)
-//let test4_pair_fst' = solve
-
-assume val test4_pair' : compile_closed #bool (fst (true, ()))
-//let test4_pair' = solve
-
-instance compile_exp_snd
-  g
-  (a:Type) {| ca: compile_typ a |}
-  (b:Type) {| cb: compile_typ b |}
-  : compile_exp #(a & b -> b) #(compile_typ_arrow _ _ #(compile_typ_pair _ _ #ca #cb) #cb) g (fun _ -> snd #a #b) = {
-  e = begin
-    ELam (ESnd (EVar 0))
-  end;
-  equiv_proof = (fun () ->
-    equiv_pair_snd g (pack ca) (pack cb);
-    assert (
-      (((pack ca) ^* (pack cb)) ^-> (pack cb)) ==
-      (pack (compile_typ_arrow (a & b) b #(compile_typ_pair a b #ca #cb) #cb))) by (compute ())
-  );
-}
-
-assume val test6_pair : compile_closed #unit (snd (true, ()))
-//let test6_pair = solve
-
-assume val test7_pair : compile_closed #((bool & unit) -> unit) (fun p -> snd p)
-//let test7_pair = solve

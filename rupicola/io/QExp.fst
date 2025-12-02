@@ -2,6 +2,7 @@ module QExp
 
 open FStar.Tactics
 open QTyp
+
 open IO
 
 (** These helper functions are necessary to help F* do unification
@@ -11,93 +12,63 @@ unfold
 val helper_var0 :
   g:typ_env ->
   a:qType ->
-  fs_oexp (extend a g) a
+  fs_oval (extend a g) a
 let helper_var0 g a fsG = hd fsG
 
 unfold
-val helper_varS : g:typ_env ->
-                  a:qType ->
+val helper_varS : #g:typ_env ->
+                  #a:qType ->
                   b:qType ->
-                  fs_oexp g a ->
-                  fs_oexp (extend b g) a
-let helper_varS g a b x fsG = x (tail fsG)
+                  fs_oval g a ->
+                  fs_oval (extend b g) a
+let helper_varS _ x fsG = x (tail fsG)
 
 unfold
-val helper_unit : g:typ_env -> fs_oexp g qUnit
+val helper_unit : g:typ_env -> fs_oval g qUnit
 let helper_unit g _ = ()
 
 unfold
 val helper_app: #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                f :fs_oexp g (a ^-> b) ->
-                x :fs_oexp g a ->
-                fs_oexp g b
-let helper_app f x fsG =
-  (f fsG) (x fsG)
-
-unfold
-val helper_app_io :
-                #g : typ_env ->
-                #a : qType ->
-                #b : qType ->
-                f :fs_oexp g (a ^->!@ b) ->
-                x :fs_oexp g a ->
-                io_oexp g b
-let helper_app_io f x fsG =
-  (f fsG) (x fsG)
+                f :fs_oval g (a ^-> b) ->
+                x :fs_oval g a ->
+                fs_oval g b
+let helper_app f x fsG = (f fsG) (x fsG)
 
 unfold
 val helper_lambda : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
-                f :fs_oexp g (a ^-> b) ->
-                fs_oexp (extend a g) b
-let helper_lambda #_ #_ f fsG = f (tail fsG) (hd fsG)
+                body :fs_oval (extend a g) b ->
+                fs_oval g (a ^-> b)
+let helper_lambda #_ #_ body fsG x = body (stack fsG x)
 
 unfold
-val helper_lambda_io : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                f :fs_oexp g (a ^->!@ b) ->
-                io_oexp (extend a g) b
-let helper_lambda_io #_ #_ f fsG = f (tail fsG) (hd fsG)
-
-unfold
-val helper_true : g:typ_env -> fs_oexp g qBool
+val helper_true : g:typ_env -> fs_oval g qBool
 let helper_true g _ = true
 
 unfold
-val helper_false : g:typ_env -> fs_oexp g qBool
+val helper_false : g:typ_env -> fs_oval g qBool
 let helper_false g _ = false
 
 unfold
 val helper_if : #g :typ_env ->
                 #a  : qType ->
-                c   : fs_oexp g qBool ->
-                t   : fs_oexp g a ->
-                e   : fs_oexp g a ->
-                fs_oexp g a
+                c   : fs_oval g qBool ->
+                t   : fs_oval g a ->
+                e   : fs_oval g a ->
+                fs_oval g a
 let helper_if c t e fsG =
-  if c fsG then t fsG else e fsG
-
-unfold
-val helper_if_io : #g :typ_env ->
-                #a  : qType ->
-                c   : fs_oexp g qBool ->
-                t   : io_oexp g a ->
-                e   : io_oexp g a ->
-                io_oexp g a
-let helper_if_io c t e fsG =
   if c fsG then t fsG else e fsG
 
 unfold
 val helper_pair : #g : typ_env ->
                   #a : qType ->
                   #b : qType ->
-                  x : fs_oexp g a ->
-                  y : fs_oexp g b ->
-                  fs_oexp g (a ^* b)
+                  x : fs_oval g a ->
+                  y : fs_oval g b ->
+                  fs_oval g (a ^* b)
 let helper_pair #_ #_ #_ x y fsG =
   (x fsG, y fsG)
 
@@ -105,442 +76,611 @@ unfold
 val helper_fst : #g : typ_env ->
                  #a : qType ->
                  #b : qType ->
-                 p : fs_oexp g (a ^* b) ->
-                 fs_oexp g a
-let helper_fst #_ #_ #_ p fsG = fst (p fsG)
+                 p : fs_oval g (a ^* b) ->
+                 fs_oval g a
+let helper_fst p fsG = fst (p fsG)
 
 unfold
 val helper_snd : #g : typ_env ->
                  #a : qType ->
                  #b : qType ->
-                 p : fs_oexp g (a ^* b) ->
-                 fs_oexp g b
+                 p : fs_oval g (a ^* b) ->
+                 fs_oval g b
 let helper_snd p fsG = snd (p fsG)
 
 unfold
-val helper_bind_io : #g:typ_env ->
-                     #a:qType ->
-                     #b:qType ->
-                     m:io_oexp g a ->
-                     k:fs_oexp g (a ^->!@ b) ->
-                     io_oexp g b
-let helper_bind_io m k fsG =
-  io_bind (m fsG) (k fsG)
+val helper_inl : #g : typ_env ->
+                 #a : qType ->
+                 b : qType ->
+                 p : fs_oval g a ->
+                 fs_oval g (a ^+ b)
+let helper_inl _ p fsG = Inl (p fsG)
 
 unfold
-val helper_return_io :
+val helper_inr : #g : typ_env ->
+                 a : qType ->
+                 #b : qType ->
+                 p : fs_oval g b ->
+                 fs_oval g (a ^+ b)
+let helper_inr _ p fsG = Inr (p fsG)
+
+unfold
+val helper_case : #g :typ_env ->
+                  #a  : qType ->
+                  #b  : qType ->
+                  #c  : qType ->
+                  cond: fs_oval g (a ^+ b) ->
+                  inlc: fs_oval (extend a g) c ->
+                  inrc: fs_oval (extend b g) c ->
+                  fs_oval g c
+let helper_case cond inlc inrc fsG =
+  match cond fsG with
+  | Inl x -> inlc (stack fsG x)
+  | Inr x -> inrc (stack fsG x)
+
+unfold
+val helper_app_prod :
+                #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                f :fs_oval g (a ^->!@ b) ->
+                x :fs_oval g a ->
+                fs_oprod g b
+let helper_app_prod f x fsG =
+  (f fsG) (x fsG)
+
+unfold
+val helper_lambda_prod : #g :typ_env ->
+                #a :qType ->
+                #b :qType ->
+                body :fs_oprod (extend a g) b ->
+                fs_oval g (a ^->!@ b)
+let helper_lambda_prod #_ #_ body fsG x = body (stack fsG x)
+
+unfold
+val helper_if_prod : #g :typ_env ->
+                #a  : qType ->
+                c   : fs_oval g qBool ->
+                t   : fs_oprod g a ->
+                e   : fs_oprod g a ->
+                fs_oprod g a
+let helper_if_prod c t e fsG =
+  if c fsG then t fsG else e fsG
+
+unfold
+val helper_case_prod : #g :typ_env ->
+                #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_oval g (a ^+ b) ->
+                inlc : fs_oprod (extend a g) c ->
+                inrc : fs_oprod (extend b g) c ->
+                fs_oprod g c
+let helper_case_prod cond inlc inrc fsG =
+  match cond fsG with
+  | Inl x -> inlc (stack fsG x)
+  | Inr x -> inrc (stack fsG x)
+
+unfold
+val helper_bind_prod : #g:typ_env ->
+                     #a:qType ->
+                     #b:qType ->
+                     m:fs_oprod g a ->
+                     k:fs_oprod (extend a g) b ->
+                     fs_oprod g b
+let helper_bind_prod m k fsG =
+  io_bind (m fsG) (fun x -> k (stack fsG x))
+
+unfold
+val helper_return_prod :
         #g:typ_env ->
         #a:qType ->
-        x:fs_oexp g a ->
-        io_oexp g a
-let helper_return_io x fsG = return (x fsG)
+        x:fs_oval g a ->
+        fs_oprod g a
+let helper_return_prod x fsG = return (x fsG)
 
+(** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
-type exp_quotation : #a:qType -> g:typ_env -> fs_oexp g a -> Type =
-| Qtt         : #g : typ_env -> exp_quotation g (helper_unit g)
+type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
+| Qtt         : #g : typ_env -> oval_quotation g (helper_unit g)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
-                exp_quotation _ (helper_var0 g a)
+                oval_quotation (extend a g) (helper_var0 g a)
 
 | QVarS       : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #x : fs_oexp g a ->
-                exp_quotation g x ->
-                exp_quotation _ (helper_varS g a b x)
+                #x : fs_oval g a ->
+                oval_quotation g x ->
+                oval_quotation (extend b g) (helper_varS b x)
 
-(** we need a case for each deBrujin variable **)
+| QAppGhost   : #g : typ_env ->
+                #a : qType ->
+                #f : fs_oval g (a ^-> qUnit) -> (** This has to be Tot. If it is GTot unit, F* can treat it as Pure unit **)
+                #x : fs_oval g a ->
+                oval_quotation #qUnit g (helper_app #_ #_ #_ f x)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #f : fs_oexp g (a ^-> b) ->
-                #x : fs_oexp g a ->
-                exp_quotation g f ->
-                exp_quotation g x ->
-                exp_quotation g (helper_app f x)
+                #f : fs_oval g (a ^-> b) ->
+                #x : fs_oval g a ->
+                oval_quotation g f ->
+                oval_quotation g x ->
+                oval_quotation g (helper_app #_ #_ #_ f x)
 
-| QLambda     : #g : typ_env ->
-                #a : qType ->
+| QLambda     : #a : qType ->
                 #b : qType ->
-                #f : fs_oexp g (a ^-> b) ->
-                exp_quotation (extend a g) (helper_lambda f) ->
-                exp_quotation g f
+                #g : typ_env ->
+                #body : fs_oval (extend a g) b ->
+                oval_quotation (extend a g) body ->
+                oval_quotation #(a ^-> b) g (helper_lambda body)
 
-| QLambdaIO   : #g : typ_env ->
-                #a : qType ->
-                #b : qType ->
-                #f : fs_oexp g (a ^->!@ b) ->
-                io_quotation (extend a g) (helper_lambda_io f) ->
-                exp_quotation g f
-
-| QTrue       : #g : typ_env -> exp_quotation g (helper_true g)
-| QFalse      : #g : typ_env -> exp_quotation g (helper_false g)
+| QTrue       : #g : typ_env -> oval_quotation g (helper_true g)
+| QFalse      : #g : typ_env -> oval_quotation g (helper_false g)
 | QIf         : #g : typ_env ->
                 #a : qType ->
-                #c : fs_oexp g qBool ->
-                exp_quotation #qBool g c ->
-                #t : fs_oexp g a ->
-                exp_quotation g t ->
-                #e : fs_oexp g a ->
-                exp_quotation g e ->
-                exp_quotation g (helper_if c t e)
+                #c : fs_oval g qBool ->
+                oval_quotation g c ->
+                #t : fs_oval g a ->
+                oval_quotation g t ->
+                #e : fs_oval g a ->
+                oval_quotation g e ->
+                oval_quotation g (helper_if c t e)
 
 | QMkpair   : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #x : fs_oexp g a ->
-              #y : fs_oexp g b ->
-              exp_quotation g x ->
-              exp_quotation g y ->
-              exp_quotation g (helper_pair x y)
+              #x : fs_oval g a ->
+              #y : fs_oval g b ->
+              oval_quotation g x ->
+              oval_quotation g y ->
+              oval_quotation g (helper_pair x y)
 | QFst      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oexp g (a ^* b) ->
-              exp_quotation g p ->
-              exp_quotation g (helper_fst p)
+              #p : fs_oval g (a ^* b) ->
+              oval_quotation g p ->
+              oval_quotation g (helper_fst p)
 | QSnd      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
-              #p : fs_oexp g (a ^* b) ->
-              exp_quotation g p ->
-              exp_quotation g (helper_snd p)
+              #p : fs_oval g (a ^* b) ->
+              oval_quotation g p ->
+              oval_quotation g (helper_snd p)
+| QInl      : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #p : fs_oval g a ->
+              oval_quotation g p ->
+              oval_quotation g (helper_inl b p)
+| QInr      : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #p : fs_oval g b ->
+              oval_quotation g p ->
+              oval_quotation g (helper_inr a p)
+| QCase     : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #c : qType ->
+              #cond : fs_oval g (a ^+ b) ->
+              oval_quotation g cond ->
+              #inlc : fs_oval (extend a g) c ->
+              oval_quotation _ inlc ->
+              #inrc : fs_oval (extend b g) c ->
+              oval_quotation _ inrc ->
+              oval_quotation g (helper_case cond inlc inrc)
+| QLambdaProd : #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                #body : fs_oprod (extend a g) b ->
+                oprod_quotation (extend a g) body ->
+                oval_quotation g (helper_lambda_prod body)
+and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QRead :
         #g:typ_env ->
-        exp_quotation #(qUnit ^->!@ qBool) g (fun _ -> read)
+        oprod_quotation #qBool g (fun _ -> read ())
 
 | QWrite :
         #g:typ_env ->
-        exp_quotation #(qBool ^->!@ qUnit) g (fun _ -> write)
-and io_quotation : #a:qType -> g:typ_env -> io_oexp g a -> Type =
-(** Return and Bind of the monad **)
+        #arg:fs_oval g qBool ->
+        oval_quotation g arg ->
+        oprod_quotation #qUnit g (fun fsG -> write (arg fsG))
+
 | QReturn :
         #g:typ_env ->
         #a:qType ->
-        #x:fs_oexp g a ->
-        exp_quotation g x ->
-        io_quotation #a g (helper_return_io x)
+        #x:fs_oval g a ->
+        oval_quotation g x ->
+        oprod_quotation #a g (helper_return_prod x)
 
-| QBindIO :
+| QBindProd :
         #g:typ_env ->
         #a:qType ->
         #b:qType ->
-        #m:io_oexp g a ->
-        #k:fs_oexp g (a ^->!@ b) ->
-        io_quotation g m ->
-        exp_quotation g k ->
-        io_quotation #b g (helper_bind_io m k)
+        #m:fs_oprod g a ->
+        #k:fs_oprod (extend a g) b ->
+        oprod_quotation g m ->
+        oprod_quotation (extend a g) k ->
+        oprod_quotation #b g (helper_bind_prod m k)
 
-| QAppIO      : #g : typ_env ->
+| QAppProd    : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #f : fs_oexp g (a ^->!@ b) ->
-                #x : fs_oexp g a ->
-                exp_quotation g f ->
-                exp_quotation g x ->
-                io_quotation g (helper_app_io f x)
-| QIfIO       : #g : typ_env ->
+                #f : fs_oval g (a ^->!@ b) ->
+                #x : fs_oval g a ->
+                oval_quotation g f ->
+                oval_quotation g x ->
+                oprod_quotation g (helper_app_prod f x)
+| QIfProd     : #g : typ_env ->
                 #a : qType ->
-                #c : fs_oexp g qBool ->
-                exp_quotation #qBool g c ->
-                #t : io_oexp g a ->
-                io_quotation g t ->
-                #e : io_oexp g a ->
-                io_quotation g e ->
-                io_quotation g (helper_if_io c t e)
+                #c : fs_oval g qBool ->
+                oval_quotation #qBool g c ->
+                #t : fs_oprod g a ->
+                oprod_quotation g t ->
+                #e : fs_oprod g a ->
+                oprod_quotation g e ->
+                oprod_quotation g (helper_if_prod c t e)
+| QCaseProd : #g : typ_env ->
+              #a : qType ->
+              #b : qType ->
+              #c : qType ->
+              #cond : fs_oval g (a ^+ b) ->
+              oval_quotation g cond ->
+              #inlc : fs_oprod (extend a g) c ->
+              oprod_quotation _ inlc ->
+              #inrc : fs_oprod (extend b g) c ->
+              oprod_quotation _ inrc ->
+              oprod_quotation g (helper_case_prod cond inlc inrc)
+
+let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
+  oval_quotation g x
 
 unfold
-let helper_oexp (#a:qType) (x:get_Type a) : fs_oexp empty a = fun _ -> x
+let helper_oval (#a:qType) (x:fs_val a) : fs_oval empty a = fun _ -> x
 
 unfold
-let helper_io_oexp (#a:qType) (x:io (get_Type a)) : io_oexp empty a = fun _ -> x
+let helper_oprod (#a:qType) (x:fs_prod a) : fs_oprod empty a = fun _ -> x
 
-type closed_exp_quotation (a:qType) (x:get_Type a) =
-  exp_quotation #a empty (helper_oexp x)
+let (⊩) (a:qType) (x:fs_val a) =
+  oval_quotation #a empty (helper_oval x)
 
-type closed_io_exp_quotation (a:qType) (x:io (get_Type a)) =
-  io_quotation #a empty (helper_io_oexp x)
+type prod_quotation (a:qType) (x:fs_prod a) =
+  oprod_quotation #a empty (helper_oprod x)
+
+
+(** Because of the fancy types, now one needs a preprocessing tactic to
+    get rid of the qTypes **)
+
+let l_to_r_fsG () : Tac unit =
+   l_to_r [`lem_hd_stack; `tail_stack_inverse]
+
+let simplify_qType (x:term) : Tac term =
+  (** TODO: why is F* not doing this automatically anyway? **)
+  norm_term_env (top_env ()) [
+    delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    iota;
+    simplify
+  ] x
 
 open Examples
 
 #push-options "--no_smt"
 
 let test_ut_unit
-  : closed_exp_quotation qUnit ut_unit
+  : qUnit ⊩ ut_unit
   = Qtt
 
 let test_ut_true
-  : closed_exp_quotation qBool ut_true
+  : qBool ⊩ ut_true
   = QTrue
 
 let test_ut_false
-  : closed_exp_quotation qBool ut_false
+  : qBool ⊩ ut_false
   = QFalse
 
-val var0 : fs_oexp (extend qBool empty) qBool
+val var0 : fs_oval (extend qBool empty) qBool
 let var0 fsG = hd fsG
 
-val var1 : fs_oexp (extend qBool (extend qBool empty)) qBool
+val var1 : fs_oval (extend qBool (extend qBool empty)) qBool
 let var1 fsG = hd (tail fsG)
 
-let var2 : fs_oexp (extend qBool (extend qBool (extend qBool empty))) qBool =
+let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
   fun fsG -> hd (tail (tail fsG))
 
 let test_var0
-  : exp_quotation #qBool (extend qBool empty) var0
+  : (extend qBool empty) ⊢ var0
   = QVar0
 
+let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
+  QVarS QVar0
+
+let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
+  QVarS qVar1
+
 let test_var1
-  : exp_quotation #qBool (extend qBool (extend qBool empty)) var1
-  = QVarS QVar0
+  : (extend qBool (extend qBool empty)) ⊢ var1
+  = qVar1
 
 let test_var2
-  : exp_quotation #qBool (extend qBool (extend qBool (extend qBool empty))) var2
-  = QVarS (QVarS QVar0)
+  : (extend qBool (extend qBool (extend qBool empty))) ⊢ var2
+  = qVar2
 
 let test_constant
-  : closed_exp_quotation (qBool ^-> qBool) constant
+  : ((qBool ^-> qBool) ⊩ constant)
   = QLambda QTrue
 
+let test_constant' (** TODO: why is this accepted. is it a problem? **)
+  : ((qBool ^-> qBool) ⊩ constant)
+  = QLambda (QVarS QTrue)
+
 let test_identity
-  : closed_exp_quotation (qBool ^-> qBool) identity
+  : (qBool ^-> qBool) ⊩ identity
   = QLambda QVar0
 
 let test_thunked_id
-  : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) thunked_id
+  : (qBool ^-> (qBool ^-> qBool)) ⊩ thunked_id
   = QLambda (QLambda QVar0)
 
 let test_proj1
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj1
-  = QLambda (QLambda (QLambda (QVarS (QVarS QVar0))))
+  : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj1
+  = QLambda (QLambda (QLambda qVar2))
 
 let test_proj2
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj2
-  = QLambda (QLambda (QLambda (QVarS QVar0)))
+  : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj2
+  = QLambda (QLambda (QLambda qVar1))
 
 let test_proj3
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj3
+  : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj3
   = QLambda (QLambda (QLambda QVar0))
 
 let test_apply_top_level_def
-  : closed_exp_quotation (qBool ^-> qBool) apply_top_level_def
+  : (qBool ^-> qBool) ⊩ apply_top_level_def
   = QLambda (QApp
-              (QApp #_ #_ #_ #(fun _ x y -> y) // TODO: why cannot it infer this? is it difficult to unfold thunked_id?
+              (QApp
                 (QLambda (QLambda QVar0))
                 QVar0)
               QTrue)
 
 let test_apply_top_level_def'
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool) apply_top_level_def'
+  : (qBool ^-> qBool ^-> qBool) ⊩ apply_top_level_def'
   = QLambda (QLambda (QApp
-                      (QApp #_ #_ #_ #(fun _ x y -> y)
-                        (QLambda (QLambda QVar0))
-                        (QVarS QVar0))
-                      QVar0))
+                       (QApp
+                          (QLambda (QLambda QVar0))
+                          qVar1)
+                       QVar0))
 
 let test_papply__top_level_def
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool) papply__top_level_def
-  = QLambda (QApp #_ #_ #_ #(fun _ x y -> y)
+  : (qBool ^-> qBool ^-> qBool) ⊩ papply__top_level_def
+  = QLambda (QApp
               (QLambda (QLambda QVar0))
               QVar0)
 
 let test_apply_arg
-  : closed_exp_quotation ((qUnit ^-> qUnit) ^-> qUnit) apply_arg
+  : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ apply_arg
   = QLambda (QApp QVar0 Qtt)
 
-let test_apply_arg2
-  : closed_exp_quotation ((qBool ^-> qBool ^-> qBool) ^-> qBool) apply_arg2
+let test_apply_arg2 ()
+  : ((qBool ^-> qBool ^-> qBool) ^-> qBool) ⊩ apply_arg2
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QApp (QApp QVar0 QTrue) QFalse)
 
 
 [@expect_failure]
 let test_proj2'
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool ^-> qBool) proj2
+  : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj2
   = QLambda (QLambda (QLambda QVar0))
 
 let test_anif
-  : closed_exp_quotation qBool anif
+  : qBool ⊩ anif
   = QIf QTrue QFalse QTrue
 
 let test_negb
-  : closed_exp_quotation (qBool ^-> qBool) negb
+  : (qBool ^-> qBool) ⊩ negb
   = QLambda (QIf QVar0 QFalse QTrue)
 
 let test_negb_pred
-  : closed_exp_quotation ((qBool ^-> qBool) ^-> qBool ^-> qBool) negb_pred
-  = QLambda (QLambda (QIf (QApp (QVarS QVar0) QVar0) QFalse QTrue))
+  : ((qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ negb_pred
+  = QLambda (QLambda (QIf (QApp qVar1 QVar0) QFalse QTrue))
 
-let test_if2
-  : closed_exp_quotation (qBool ^-> qBool ^-> qBool) if2
-  = QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0))
+let test_if2 ()
+  : (qBool ^-> qBool ^-> qBool) ⊩ if2
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QLambda (QIf qVar1 QFalse QVar0))
 
-(** Because of the fancy types, now one needs a preprocessing tactic to
-    get rid of the qTypes **)
-
-let simplify_qType (x:term) : Tac term =
-  (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [delta_only [`%fs_oexp;`%io_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Subtraction_Greater_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota] x
-
-[@@ (preprocess_with simplify_qType)]
-let test_callback_return
-  : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return
+let test_callback_return ()
+  : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0)) // TODO: why cannot it infer myf?
-                       (QLambda #_ #_ #_ #(fun fsG z -> z) QVar0))
+                 (QLambda qVar1)
+                 (QLambda QVar0))
 
-[@@ (preprocess_with simplify_qType)]
-let test_callback_return'
-  : closed_exp_quotation (qBool ^-> (qBool ^-> qBool)) callback_return'
+let test_callback_return' ()
+  : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return'
+  by (l_to_r_fsG (); trefl ())
   = QLambda (QIf QVar0
-                       (QLambda #_ #_ #_ #(fun fsG y -> hd fsG) (QVarS QVar0))
-                       (QLambda #_ #_ #_ #(fun fsG -> identity) QVar0)) // TODO: why does it not work to unfold identity here?
+                 (QLambda qVar1)
+                 (QLambda QVar0)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
-  : closed_exp_quotation (qBool ^-> qBool ^-> (qBool ^* qBool)) make_pair
-  = QLambda (QLambda (QMkpair (QVarS QVar0) QVar0))
+  : (qBool ^-> qBool ^-> (qBool ^* qBool)) ⊩ make_pair
+  = QLambda (QLambda (QMkpair qVar1 QVar0))
 
-// TODO: why does this fail?
 [@@ (preprocess_with simplify_qType)]
 let test_pair_of_functions ()
-  : Tot (closed_exp_quotation ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
-                              pair_of_functions)
-  by (norm [delta_only [`%pair_of_functions]];
-      norm [delta_only [`%fs_oexp; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Subtraction_Greater_Bang_At; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];iota];
-     // trefl (); //this fails
-     tadmit ())
+  : Tot (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
+                            ⊩ pair_of_functions)
+  by (l_to_r_fsG (); trefl ())
   =  QMkpair
-      (QLambda (QApp #_ #_ #_ #(fun _ x -> if x then false else true)
+      (QLambda (QApp
                   (QLambda (QIf QVar0 QFalse QTrue))
                   QVar0))
       (QLambda (QLambda QVar0))
 
-let test_pair_of_functions2
-  : closed_exp_quotation
-    ((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
-    pair_of_functions2
-  = admit (); QMkpair // TODO
+[@@ (preprocess_with simplify_qType)]
+let test_pair_of_functions2 ()
+  : (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
+    ⊩ pair_of_functions2)
+  by (l_to_r_fsG (); trefl ())
+  = QMkpair
       (QLambda (QIf QVar0 QFalse QTrue))
-      (QLambda (QLambda (QIf (QVarS QVar0) QFalse QVar0)))
+      (QLambda (QLambda (QIf qVar1 QFalse QVar0)))
 
 let test_fst_pair
-  : closed_exp_quotation (qBool) fst_pair
+  : (qBool) ⊩ fst_pair
   = (QFst (QMkpair QTrue Qtt))
 
 let test_wrap_fst
-  : closed_exp_quotation ((qBool ^* qBool) ^-> qBool) wrap_fst
+  : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst
   = QLambda (QFst QVar0)
 
 let test_wrap_fst_pa
-  : closed_exp_quotation ((qBool ^* qBool) ^-> qBool) wrap_fst_pa
+  : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst_pa
   = QLambda (QFst QVar0)
 
 let test_snd_pair
-  : closed_exp_quotation (qUnit) snd_pair
+  : (qUnit) ⊩ snd_pair
   = (QSnd (QMkpair QTrue Qtt))
 
 let test_wrap_snd
-  : closed_exp_quotation ((qBool ^* qUnit) ^-> qUnit) wrap_snd
+  : ((qBool ^* qUnit) ^-> qUnit) ⊩ wrap_snd
   = QLambda (QSnd QVar0)
 
 let test_wrap_snd_pa
-  : closed_exp_quotation ((qBool ^* qUnit) ^-> qUnit) wrap_snd_pa
+  : ((qBool ^* qUnit) ^-> qUnit) ⊩ wrap_snd_pa
   = QLambda (QSnd QVar0)
+
+let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval (extend a g) b)
+  (qx : oval_quotation g x) (qf : oval_quotation _ f) :
+  oval_quotation g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+  QApp (QLambda qf) qx
+
+let test_a_few_lets
+  : (qBool ^-> qUnit) ⊩ a_few_lets
+  = QLambda
+     (qLet (QMkpair QVar0 QVar0)
+     (qLet qVar1
+     (qLet (QFst qVar1)
+     (qLet (QMkpair qVar1 QVar0)
+     Qtt))))
+
+let test_inl_true
+  : (qBool ^+ qUnit) ⊩ inl_true
+  = QInl QTrue
+
+let test_inr_unit
+  : (qBool ^+ qUnit) ⊩ inr_unit
+  = QInr Qtt
+
+let test_return_either ()
+  : (qBool ^-> (qUnit ^+ qUnit)) ⊩ return_either
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QIf QVar0 (QInl Qtt) (QInr Qtt))
+
+let test_match_either ()
+  : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QCase QVar0 QVar0 QVar0)
+
+[@expect_failure]
+let test_match_either' ()
+  : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QCase QVar0 QVar0 QVar0)
+
+let test_match_either_arg ()
+  : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QLambda (
+       QCase
+         qVar1
+         QVar0
+         qVar1))
 
 open ExamplesIO
 
 let test_u_return
-  : closed_io_exp_quotation _ u_return
+  : prod_quotation _ u_return
   = QReturn QTrue
 
 let test_apply_io_return
-  : closed_exp_quotation (qBool ^->!@ qBool) apply_io_return
-  = QLambdaIO (QReturn QVar0)
+  : (qBool ^->!@ qBool) ⊩ apply_io_return
+  = QLambdaProd (QReturn QVar0)
 
 let test_apply_read
-  : closed_io_exp_quotation _ apply_read
-  = QAppIO QRead Qtt
+  : prod_quotation _ apply_read
+  = QRead
 
 let test_apply_write_const
-  : closed_io_exp_quotation _ apply_write_const
-  = QAppIO QWrite QTrue
+  : prod_quotation _ apply_write_const
+  = QWrite QTrue
 
 let test_apply_write
-  : closed_exp_quotation _ apply_write
-  = QLambdaIO (QAppIO QWrite QVar0)
+  : _ ⊩  apply_write
+  = QLambdaProd (QWrite QVar0)
 
 let test_apply_io_bind_const
-  : closed_io_exp_quotation _ apply_io_bind_const
-  = QBindIO
+  : prod_quotation _ apply_io_bind_const
+  = QBindProd
       (QReturn QTrue)
-      (QLambdaIO (QReturn QVar0))
+      (QReturn QVar0)
 
 let test_apply_io_bind_identity
-  : closed_exp_quotation (qBool ^->!@ qBool) apply_io_bind_identity
-  = QLambdaIO
-      (QBindIO
+  : (qBool ^->!@ qBool) ⊩ apply_io_bind_identity
+  = QLambdaProd
+      (QBindProd
         (QReturn QVar0)
-        (QLambdaIO #_ #_ #_ #(fun fsG y -> return y) (QReturn QVar0)))
+        (QReturn QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_pure_if ()
-  : Tot (closed_exp_quotation (qBool ^->!@ qBool) apply_io_bind_pure_if)
-    by (
-      // TODO: why?
-      norm [delta_only [`%apply_io_bind_pure_if]];
-      norm [delta_only [`%op_Hat_Subtraction_Greater_Bang_At]];
-      set_guard_policy Goal;
-      split (); trefl ();
-      explode (); trefl ();
-      explode (); trefl ())
-  = QLambdaIO
-      (QBindIO
+  : Tot ((qBool ^->!@ qBool) ⊩ apply_io_bind_pure_if)
+  by (l_to_r_fsG (); trefl ())
+  = QLambdaProd
+      (QBindProd
         (QReturn QVar0)
-        (QLambdaIO #_ #_ #_ #(fun fsG y -> if y then return false else return true)
-          (QIfIO QVar0
-            (QReturn QFalse)
-            (QReturn QTrue))))
+        (QIfProd QVar0
+           (QReturn QFalse)
+           (QReturn QTrue)))
 
 let test_apply_io_bind_write
-  : closed_exp_quotation _ apply_io_bind_write
-  = QLambdaIO (
-      QBindIO
+  : _ ⊩ apply_io_bind_write
+  = QLambdaProd (
+      QBindProd
          (QReturn QVar0)
-         (QLambdaIO #_ #_ #_ #(fun fsG y -> write y)
-           (QAppIO QWrite QVar0)))
+         (QWrite QVar0))
 
 let test_apply_io_bind_read_write
-  : closed_io_exp_quotation _ apply_io_bind_read_write
-  = QBindIO
-     (QAppIO QRead Qtt)
-     (QLambdaIO
-       (QAppIO QWrite QVar0))
+  : prod_quotation _ apply_io_bind_read_write
+  = QBindProd
+     QRead
+     (QWrite QVar0)
 
-let test_apply_io_bind_read_write' ()
-  : Tot (closed_io_exp_quotation _ apply_io_bind_read_write')
-  = QBindIO (QAppIO QRead Qtt) QWrite
+let test_apply_io_bind_read_write'
+  : prod_quotation _ apply_io_bind_read_write'
+  = QBindProd QRead (QWrite QVar0)
 
 let test_apply_io_bind_read_if_write
-  : closed_io_exp_quotation _ apply_io_bind_read_if_write
-  = QBindIO
-      (QAppIO QRead Qtt)
-      (QLambdaIO
-        (QIfIO QVar0
-          (QAppIO QWrite QFalse)
-          (QAppIO QWrite QTrue)))
+  : prod_quotation _ apply_io_bind_read_if_write
+  = QBindProd
+      QRead
+      (QIfProd QVar0
+        (QWrite QFalse)
+        (QWrite QTrue))
 
-let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp g (a ^->!@ b))
-  (qx : exp_quotation g x) (qf : exp_quotation g f) :
-  io_quotation g (fun fsG -> let y = x fsG in f fsG y) =
-  QAppIO qf qx
+let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
+  (qx : oval_quotation g x) (qf : oprod_quotation _ f) :
+  oprod_quotation g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+  QAppProd (QLambdaProd qf) qx
 
-let test_sendErro400
-  : closed_exp_quotation _ sendError400
-  = QLambdaIO
-      (qLet (QApp (QLambda #_ #_ #_ #(fun fsG x -> x) QVar0) QTrue) (QLambdaIO
-      (qLet (QMkpair (QVarS QVar0) QVar0) (QLambdaIO
-      (QBindIO
-        (QAppIO QWrite (QVarS (QVarS QVar0)))
-        (QLambdaIO #_ #_ #_ #(fun _ _ -> return ()) (QReturn Qtt)))))))
+let test_sendError400 ()
+  : _ ⊩ sendError400
+  = QLambdaProd
+      (qLetProd (QApp (QLambda QVar0) QTrue) (
+      (qLetProd (QMkpair (QVarS QVar0) QVar0) (
+      (QBindProd
+        (QWrite (QVarS (QVarS QVar0)))
+        (QReturn Qtt))))))

@@ -22,7 +22,7 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(get_Type i.ct -> bool)
   &
-  exp_quotation #(i.ct ^-> qBool) empty (fun _ -> ps)
+  (i.ct ^-> qBool) ⊩ ps
 
 type ctxS (i:intS) = get_Type i.ct
 type wholeS = bool // CA: To be able to compile whole programs requires a proof that it can be compiled
@@ -87,7 +87,7 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
-  backtranslate empty e (comp_int i).ct h empty_eval
+  backtranslate h empty_eval
 
 
 val lem_bt_ctx i ct : Lemma (
@@ -99,8 +99,8 @@ let lem_bt_ctx i ct =
   lem_value_is_closed e;
   lem_closed_is_no_fv e;
   assert (fv_in_env empty e);
-  lem_backtranslate empty e (comp_int i).ct h;
-  equiv_closed_terms #(comp_int i).ct (backtranslate empty e (comp_int i).ct h empty_eval) e;
+  lem_backtranslate h;
+  equiv_closed_terms #(comp_int i).ct (backtranslate h empty_eval) e;
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
   ()
 

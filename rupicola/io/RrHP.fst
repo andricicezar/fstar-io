@@ -16,25 +16,25 @@ noeq type intS = {
   ct : qType;
 }
 
+(* CA: this definition of progS is very comical! I have the compiled program inside the guarantee that it can be compiled :D **)
 // program parameterized by the type of the context
 // program is dependent pair type with:
   // map from the type of context to bool (which represents output of the source program)
-  // proof that ps is in the subset we can compile
-  // should exp_quotation also carry fs_event trace?
+  // (proof of) compiled closed expression - where we pass in the type of ps (#_), the (proof of the) type of the compiled closed expression (#(compile_typ_arrow ...)), and ps
 type progS (i:intS) =
-  ps:(get_Type i.ct -> io bool)
+  ps:(fs_val (i.ct ^->!@ qBool))
   &
-  exp_quotation #(i.ct ^-> (!@ qBool)) empty (fun _ -> ps)
+  (i.ct ^->!@ qBool) ⊩ ps
 
-type ctxS (i:intS) = get_Type i.ct
-type wholeS = io bool // CA: To be able to compile whole programs requires a proof that it can be compiled
+type ctxS (i:intS) = fs_val i.ct
+type wholeS = fs_prod qBool // CA: To be able to compile whole programs requires a proof that it can be compiled
 
 // linking involves taking a program and context, extracting the first part of the dependent pair (so the program i.ct -> bool) and applying it to the context
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
 (** Definition from SCIO*, section 6.2 **)
-type behS_t = trace * bool -> Type0
+type behS_t = local_trace [] * bool -> Type0
 val behS : wholeS -> behS_t
 let behS ws = fun (lt, res) -> forall p. theta ws [] p ==> p lt res
 
@@ -64,13 +64,13 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   compile_closed (dsnd ps)
 
-let rel_bools (fs_e:bool) (e:exp) : Type0 =
+let rel_bools (fs_e:bool) (e:closed_exp) : Type0 =
   (e == ETrue /\ fs_e == true) \/
   (e == EFalse /\ fs_e == false)
 
-type behT_t = trace * exp -> Type0
+type behT_t = local_trace [] * closed_exp -> Type0
 val behT : wt:wholeT -> behT_t
-let behT wt = fun (lt, r) -> steps wt r lt
+let behT wt = fun (lt, r) -> steps wt r [] lt
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
@@ -79,29 +79,31 @@ let rel_behs (bs:behS_t) (bt:behT_t) =
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires (!@ qBool) ⦂ (fs_e, e))
+  (requires forall h. qBool ⪾ (h, fs_e, e))
   (ensures  (behS fs_e) `rel_behs` (behT e))
-  = admit () // TODO
+  = admit ()
 
 (** ** Proof of RrHP **)
 
 val backtranslate_ctx : (#i:intS) -> ctxT (comp_int i) -> ctxS i
 let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
-  backtranslate empty e (comp_int i).ct h empty_eval
+  backtranslate h empty_eval
 
 
 val lem_bt_ctx i ct : Lemma (
-  let (| e, h |) = ct in
-    (comp_int i).ct ∋ (backtranslate_ctx #i ct, e)
+  forall h.
+  let (| e, _ |) = ct in
+    (comp_int i).ct ∋ (h, backtranslate_ctx #i ct, e)
   )
+
 let lem_bt_ctx i ct =
   let (| e, h |) = ct in
   lem_value_is_closed e;
   lem_closed_is_no_fv e;
   assert (fv_in_env empty e);
-  lem_backtranslate empty e (comp_int i).ct h;
-  equiv_closed_terms #(comp_int i).ct (backtranslate empty e (comp_int i).ct h empty_eval) e;
+  lem_backtranslate h;
+  lem_equiv_val #(comp_int i).ct (backtranslate h empty_eval) e;
   // t : (bt e, e) and the fact that e is a value implies they are in the value relation (the statement of the lemma)
   ()
 
@@ -121,17 +123,20 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     compile_equiv (dsnd ps);
     let ps' = dfst ps in
     compile_closed_equiv (dsnd ps);
-    assert ((t ^-> !@ qBool) ⦂ (ps', pt));
+    admit ()
+    (**
+    assert ((t ^-> qBool) ⦂ (ps', pt));
     lemma_compile_closed_arrow_is_elam (dsnd ps);
-    assert (ELam? pt /\ is_closed pt /\ irred pt);
-    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==> (t ^-> !@ qBool) ∋ (ps', e') with pt;
-    assume ((t ^-> !@ qBool) ∋ (ps', pt));
+    assert (ELam? pt /\ is_closed pt);
+    lem_value_is_irred pt;
+    eliminate forall (e':closed_exp). steps pt e' ==> irred e' ==>  (t ^-> qBool) ∋ (ps', e') with pt;
+    assert ((t ^-> qBool) ∋ (ps', pt));
     eliminate forall (v:value) (fs_v:get_Type t). t ∋ (fs_v, v) ==>
-        !@ qBool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
+        qBool ⦂ (ps' fs_v, subst_beta v (ELam?.b pt))
       with e (backtranslate_ctx ct);
     lem_bt_ctx i ct;
-    assert (!@ qBool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
+    assert (qBool ⦂ (ps' (backtranslate_ctx ct), subst_beta e (ELam?.b pt)));
     lem_rel_beh (ps' (backtranslate_ctx ct)) (subst_beta e (ELam?.b pt));
     assume (behT (EApp pt e) == behT (subst_beta e (ELam?.b pt))); (** simple to prove **)
-    ()
+    ()**)
   end
