@@ -205,20 +205,19 @@ let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
   //             wpCtx (fs_stack fsG x) (* q' *) (fun _ -> True)
   //               (* (fun r -> p f) *)) /\
   //           p f)) ;
-  assume (forall (fsG: fs_env g).
-      forall (p: pure_post (x: a -> PURE b (wpFun x))).
+  assume (
+    forall (fsG: fs_env g).
+      forall (p: pure_post (x: a -> PURE b (wpFun x))) (* (f:fs_oexp (extend a g) b wpCtx) *).
         wp_lambda' wpFun wpCtx fsG p ==>
         (forall (x: a).
             forall (p: pure_post b).
               wpFun x p ==>
               wpCtx (fs_stack fsG x)
-                (fun bind_result_1 ->
-                    bind_result_1 == body (fs_stack fsG x) ==>
-                    (forall (return_val: b). return_val == bind_result_1 ==> p return_val))) /\
-        (forall (any_result: (x: a -> PURE b (wpFun x))).
-            any_result == (fun x -> body (fs_stack fsG x)) ==>
-            (forall (return_val: (x: a -> PURE b (wpFun x))).
-                return_val == any_result ==> p return_val))) ;
+                (fun res ->
+                    res == body (fs_stack fsG x) ==>
+                    (forall (return_val: b). return_val == res ==> p return_val))) /\
+        p (fun x -> body (fs_stack fsG x))
+  ) ;
   fun fsG x ->
     body (fs_stack fsG x)
 
