@@ -154,31 +154,33 @@ val wp_lambda' :
   #g :env ->
   #a :Type ->
   #b :Type ->
-  wpFun: (a -> pure_wp b) ->
-  spec_env (extend a g) b ->
+  wpCtx : spec_env (extend a g) b ->
+  wpFun : (a -> pure_wp b) ->
+  fs_oexp (extend a g) b wpCtx ->
   spec_env g (x:a -> PURE b (wpFun x))
 
-let wp_lambda' #g #a #b wpFun wpCtx fsG : pure_wp (x:a -> PURE b (wpFun x)) =
+let wp_lambda' #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x)) by (dump "h") =
   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic) ;
   fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
-    (forall x. (* wpFun x (fun _ -> True) ==> *) wpCtx (fs_stack fsG x) (fun _ -> True)) /\
-    forall (f:(x:a -> PURE b (wpFun x))).
-      (
-        forall (q : pure_post b) (x:a).
-          wpFun x q ==>
-          wpCtx (fs_stack fsG x) q ==>
-          q (f x)
-      ) ==>
-      p f
+    (forall (x: a) (p: pure_post b).
+      wpFun x p ==>
+      wpCtx (fs_stack fsG x) (fun _ -> True) /\
+      wpCtx (fs_stack fsG x) (fun res ->
+        res == body (fs_stack fsG x) ==>
+        (forall (return_val: b). return_val == res ==> p return_val))
+    ) /\ p (fun x -> body (fs_stack fsG x))
 
-    // forall x.
-    //   // wpFun x (fun r -> exists f. r == f x) ==>
-    //   wpCtx (fs_stack fsG x) p
 
-    // forall (f:(x:a -> PURE b (wpFun x))).
-    //   (forall (p':pure_post b) (fsG':fs_env (extend a g)).
-    //     fsG == fs_tail fsG' ==> wpFun (fs_hd fsG') (fun _ -> True) ==> wpCtx fsG' p' ==>  p' (f (fs_hd fsG'))
-    //   ) ==>  p f
+  // fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
+  //   (forall x. (* wpFun x (fun _ -> True) ==> *) wpCtx (fs_stack fsG x) (fun _ -> True)) /\
+  //   forall (f:(x:a -> PURE b (wpFun x))).
+  //     (
+  //       forall (q : pure_post b) (x:a).
+  //         wpFun x q ==>
+  //         wpCtx (fs_stack fsG x) q ==>
+  //         q (f x)
+  //     ) ==>
+  //     p f
 
 
 val test :
@@ -187,8 +189,8 @@ val test :
   #b : Type ->
   wpCtx : spec_env (extend a g) b ->
   wpFun : (a -> pure_wp b) ->
-  fs_oexp (extend a g) b wpCtx ->
-  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpFun wpCtx)
+  body : fs_oexp (extend a g) b wpCtx ->
+  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body)
 
 let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
   // assume (forall fsG x. wpCtx (fs_stack fsG x) (fun _ -> True)) ;
@@ -205,19 +207,19 @@ let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
   //             wpCtx (fs_stack fsG x) (* q' *) (fun _ -> True)
   //               (* (fun r -> p f) *)) /\
   //           p f)) ;
-  assume (
-    forall (fsG: fs_env g).
-      forall (p: pure_post (x: a -> PURE b (wpFun x))) (* (f:fs_oexp (extend a g) b wpCtx) *).
-        wp_lambda' wpFun wpCtx fsG p ==>
-        (forall (x: a).
-            forall (p: pure_post b).
-              wpFun x p ==>
-              wpCtx (fs_stack fsG x)
-                (fun res ->
-                    res == body (fs_stack fsG x) ==>
-                    (forall (return_val: b). return_val == res ==> p return_val))) /\
-        p (fun x -> body (fs_stack fsG x))
-  ) ;
+  // assume (
+  //   forall (fsG: fs_env g).
+  //     forall (p: pure_post (x: a -> PURE b (wpFun x))) (* (f:fs_oexp (extend a g) b wpCtx) *).
+  //       wp_lambda' wpFun wpCtx fsG p ==>
+  //       (forall (x: a).
+  //           forall (p: pure_post b).
+  //             wpFun x p ==>
+  //             wpCtx (fs_stack fsG x)
+  //               (fun res ->
+  //                   res == body (fs_stack fsG x) ==>
+  //                   (forall (return_val: b). return_val == res ==> p return_val))) /\
+  //       p (fun x -> body (fs_stack fsG x))
+  // ) ;
   fun fsG x ->
     body (fs_stack fsG x)
 
@@ -318,7 +320,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                              // (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
                 compilable g (wp_lambda #g #a #b wpBody) f
 
-// "Ideal" rule below
 | QLambda :
   #g : env ->
   #a : Type ->
@@ -327,7 +328,7 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
   wpFun : (a -> pure_wp b) ->
   #body : fs_oexp (extend a g) b wpCtx ->
   compilable #b (extend a g) wpCtx body ->
-  compilable #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpFun wpCtx) (fun fsG x -> body (fs_stack fsG x))
+  compilable #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpCtx wpFun body) (fun fsG x -> body (fs_stack fsG x))
 
 | CRefinement : #g:env ->
                 #a:Type ->
