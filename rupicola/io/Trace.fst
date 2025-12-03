@@ -7,6 +7,8 @@ module Trace
   The file should be usable both to define the Dijkstra Monad
   and the semantics of the Syntactic Language. **)
 
+type resexn a = either a unit
+
 noeq
 type sig (op:Type u#a) = {
   args : op -> Type u#a;
@@ -22,8 +24,8 @@ unfold let io_args (op:io_ops) : Type =
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
-  | ORead -> bool
-  | OWrite -> unit
+  | ORead -> resexn bool
+  | OWrite -> resexn unit
 
 type event =
 | EvRead  : args:io_args ORead -> io_res ORead args -> event
