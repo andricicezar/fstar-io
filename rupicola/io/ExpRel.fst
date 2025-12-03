@@ -54,19 +54,64 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
 and (⦂) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall (e':closed_exp).
-    steps e e' h [] ==> indexed_irred e' h ==>
+    steps e e' h [] ==> irred e' ==>
     t ∋ (h, fs_e, e')
                            (** vvvvvvvvvv defined over producers **)
 and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall lt (e':closed_exp).
-    steps e e' h lt ==> indexed_irred e' (h++lt) ==>
+    steps e e' h lt ==> irred e' ==>
     (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e'))// /\ (forall p. theta fs_e h p ==> p lt fs_r))
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
 
-let lem_type_closed_under_history_extension (t:qType) (h:history) (fs_e:fs_val t) (e:closed_exp) :
-  Lemma (requires t ∋ (h, fs_e, e))
-        (ensures forall (lt:local_trace h). t ∋ (h++lt, fs_e, e)) = admit ()
+let rec lem_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
+  Lemma (requires t ∋ (h, fs_v, e))
+        (ensures forall (lt:local_trace h). t ∋ (h++lt, fs_v, e))
+        (decreases %[get_rel t;0]) =
+  introduce forall lt. t ∋ (h++lt, fs_v, e) with begin
+    match get_rel t with
+    | QUnit -> ()
+    | QBool -> ()
+    | QArr #t1 #t2 qt1 qt2 -> begin
+      let fs_f : t1 -> t2 = fs_v in
+      match e with
+      | ELam e' -> begin
+        introduce forall (v:value) (fs_v':t1) (lt_v:local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v, fs_v', v) ==>
+        pack qt2 ⦂ ((h++lt)++lt_v, fs_f fs_v', subst_beta v e') with begin
+          eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
+            pack qt2 ⦂ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v)
+          end
+        end
+      | _ -> false_elim ()
+      end
+    | QArrIO #t1 #t2 qt1 qt2 -> begin
+      let fs_f : t1 -> io t2 = fs_v in
+      match e with
+      | ELam e' -> begin
+        introduce forall (v:value) (fs_v':t1) (lt_v:local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v, fs_v', v) ==>
+        pack qt2 ⪾ ((h++lt)++lt_v, fs_f fs_v', subst_beta v e') with begin
+          eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
+            pack qt2 ⪾ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v)
+          end
+        end
+      | _ -> false_elim ()
+      end
+    | QPair #t1 #t2 qt1 qt2 -> begin
+      match e with
+      | EPair e1 e2 -> begin
+        lem_type_closed_under_history_extension (pack qt1) h (fst #t1 #t2 fs_v) e1;
+        lem_type_closed_under_history_extension (pack qt2) h (snd #t1 #t2 fs_v) e2
+        end
+      | _ -> false_elim ()
+      end
+    | QSum #t1 #t2 qt1 qt2 -> begin
+      let fs_v : either t1 t2 = fs_v in
+      match fs_v, e with
+      | Inl fs_v', EInl e' -> lem_type_closed_under_history_extension (pack qt1) h fs_v' e'
+      | Inr fs_v', EInr e' -> lem_type_closed_under_history_extension (pack qt2) h fs_v' e'
+      | _ -> false_elim ()
+      end
+  end
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
