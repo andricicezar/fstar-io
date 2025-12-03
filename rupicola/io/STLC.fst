@@ -693,14 +693,18 @@ let indexed_sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
 
 let indexed_irred_history_independence (e:closed_exp) (h:history) :
   Lemma (requires indexed_irred e h)
-        (ensures forall h'. indexed_irred e h') = admit ()
-  (*introduce forall (h':history) (e':closed_exp) (oev':option (event_h h')). step e e' h' oev' ==> False with begin
+        (ensures forall h'. indexed_irred e h') =
+  introduce forall (h':history) (e':closed_exp) (oev':option (event_h h')). step e e' h' oev' ==> False with begin
     introduce step e e' h' oev' ==> False with _. begin
-      eliminate forall e_ oev_. step e e_ h oev_ ==> False with e' oev' 
+      bind_squash #(step e e' h' oev') () (fun st ->
+      step_history_independence st;
+      eliminate forall h_. exists oev_. step e e' h_ oev_ with h;
+      eliminate exists oev_. step e e' h oev_
       returns False with _. begin
-        admit ()
-      end
-    end*)
+        eliminate forall e_ oev_. step e e_ h oev_ ==> False with e' oev_
+      end)
+    end
+  end
 
 let sem_expr_shape_history_independence (e:closed_exp) (h:history) (t:typ) :
   Lemma (requires indexed_sem_expr_shape t e h)
