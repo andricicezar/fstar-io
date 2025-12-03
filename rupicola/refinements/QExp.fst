@@ -132,26 +132,26 @@ let helper_if #_ #_ #wpC c #wpT t #wpE e =
 val wp_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
-                wpBody:spec_env (extend a g) b ->
+                wpCtx:spec_env (extend a g) b ->
+                body:fs_oexp (extend a g) b wpCtx ->
                 spec_env g (a -> b)
 
-let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
+let wp_lambda #g #a #b wpCtx body fsG : pure_wp (a -> b) = (** Cezar: this seems to be exactly what F* generates **)
   M.as_pure_wp
   fun (p:pure_post (a -> b)) ->
-    forall (f:a -> b).
-      (forall (p':pure_post b) (fsG':fs_env (extend a g)).
-        fsG == fs_tail fsG' ==>  wpBody fsG' p' ==>  p' (f (fs_hd fsG'))
-      ) ==>  p f
+    (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
+    pure_return _ (fun x -> body (fs_stack fsG x)) p
+//    p (fun x -> body (fs_stack fsG x))
 
 unfold
 val helper_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
-                #wpBody:spec_env (extend a g) b ->
-                f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
-                fs_oexp (extend a g) b wpBody
-let helper_lambda #g #a f =
-  fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)
+                #wpCtx:spec_env (extend a g) b ->
+                body :fs_oexp (extend a g) b wpCtx ->
+                fs_oexp g (a -> b) (wp_lambda wpCtx body)
+let helper_lambda #g #a #b #wpCtx body fsG =
+  (fun x -> body (fs_stack fsG x))
 
 val wp_lambda' :
   #g :env ->
@@ -166,10 +166,11 @@ let wp_lambda' #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x))
   let w : pure_wp' _ = fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
     (forall (x: a) (p: pure_post b).
       wpFun x p ==>
-      wpCtx (fs_stack fsG x) (fun _ -> True) /\
+      (wpCtx (fs_stack fsG x) (fun _ -> True) /\ (** Cezar: this is the only extra thing compared to the VC created by F* **)
       wpCtx (fs_stack fsG x) (fun res ->
         res == body (fs_stack fsG x) ==>
-        (forall (return_val: b). return_val == res ==> p return_val))
+        pure_return _ res p))
+    //) /\ pure_return _ (fun x -> body (fs_stack fsG x)) p // Cezar: this is not accepted?
     ) /\ p (fun x -> body (fs_stack fsG x))
   in
   assume (M.is_monotonic w);
@@ -198,7 +199,7 @@ val test :
   body : fs_oexp (extend a g) b wpCtx ->
   fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body)
 
-let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
+let test #g #a #b wpCtx wpFun body fsG : PURE (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body fsG) by (dump "H")=
   // assume (forall fsG x. wpCtx (fs_stack fsG x) (fun _ -> True)) ;
   // assume (forall p (f:(x:a -> PURE b (wpFun x))). p f) ;
   // assume (False) ;
@@ -226,7 +227,7 @@ let test #g #a #b wpCtx wpFun body (* : _ by (explode () ; dump "h") *) =
   //                   (forall (return_val: b). return_val == res ==> p return_val))) /\
   //       p (fun x -> body (fs_stack fsG x))
   // ) ;
-  fun fsG x ->
+  fun x ->
     body (fs_stack fsG x)
 
 // unfold
@@ -320,13 +321,12 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
 | CLambda     : #g :env ->
                 #a :Type ->
                 #b :Type ->
-                #wpBody:spec_env (extend a g) b ->
-                #f :fs_oexp g (a -> b) (wp_lambda wpBody) ->
+                #wpCtx:spec_env (extend a g) b ->
+                #body :fs_oexp (extend a g) b wpCtx ->
                 cf:compilable #b (extend a g)
-                              wpBody
-                              (helper_lambda f) ->
-                             // (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
-                compilable g (wp_lambda #g #a #b wpBody) f
+                              wpCtx
+                              body ->
+                compilable g (wp_lambda #g #a #b wpCtx body) (helper_lambda body)
 
 | QLambda :
   #g : env ->
