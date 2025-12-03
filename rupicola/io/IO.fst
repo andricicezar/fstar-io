@@ -24,10 +24,10 @@ let rec io_bind
       Call o args (fun i ->
         io_bind #a #b (fnc i) k)
 
-let read () : io bool =
+let read () : io (resexn bool) =
   Call ORead () Return
 
-let write (x:bool) : io unit =
+let write (x:bool) : io (resexn unit) =
   Call OWrite x Return
 
 let op_wp (o:io_ops) (args:io_args o) : hist (io_res o args) =
