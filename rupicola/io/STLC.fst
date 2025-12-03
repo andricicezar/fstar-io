@@ -812,7 +812,7 @@ let rec destruct_steps_eapp
   (t1:typ)
   (t2:typ) :
   Pure (exp * value * (lt2:local_trace h & (lt1:local_trace (h++lt2) & local_trace (((h++lt2)++lt1)))))
-    (requires irred e' /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
+    (requires indexed_irred e' (h++lt) /\ (** CH: needed, otherwise I can take zero steps; could be replaced by value e' *)
       safe e1 /\
       indexed_sem_expr_shape (TArr t1 t2) e1 h /\
       safe e2)
