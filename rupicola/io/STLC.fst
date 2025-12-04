@@ -921,8 +921,8 @@ let rec destruct_steps_eif
       indexed_irred e1' (h++lt1) /\
       steps e1 e1' h lt1 /\
       steps (EIf e1 e2 e3) (EIf e1' e2 e3) h lt1 /\
-      (ETrue? e1' ==> steps e2 e' (h++lt1) lt2) /\
-      (EFalse? e1' ==> steps e3 e' (h++lt1) lt3) /\
+      (ETrue? e1' ==> (steps e2 e' (h++lt1) lt2 /\ lt == lt1 @ lt2)) /\
+      (EFalse? e1' ==> (steps e3 e' (h++lt1) lt3 /\ lt == lt1 @ lt3)) /\
       ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3)) /\
       (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1')))
     (decreases st)
