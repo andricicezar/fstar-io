@@ -472,8 +472,9 @@ let safe (e:closed_exp) : Type0 =
 let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) (oev':option (event_h h')) : Pure (step e e' h' oev')
   (requires step e e' h oev /\
             (None? oev ==> None? oev') /\
-            (Some? oev ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
-            (Some? oev ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
+            ((Some? oev /\ (EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (oev == oev')) /\
+            ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
+            ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
   (ensures fun _ -> step e e' h' oev')
   (decreases st) =
   match st with
@@ -524,8 +525,9 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
   (ensures fun (oev') ->
     (step e e' h' oev') /\
     (None? oev ==> None? oev') /\
-    (Some? oev ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
-    (Some? oev ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
+    ((Some? oev /\ (EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (oev == oev')) /\
+    ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
+    ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
   (decreases st) =
   match st with
   | AppRight e1 #e2 #e2' #h #oev2 hst2 -> begin
@@ -614,20 +616,23 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
     end
 
 let step_history_independence (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) :
-  Lemma (ensures forall h'. exists oev'. step e e' h' oev') =
-  introduce forall h'. exists oev'. step e e' h' oev' with begin
+  Lemma (ensures forall h'. exists oev'. step e e' h' oev' /\ oev' == oev) =
+  introduce forall h'. exists oev'. step e e' h' oev' /\ oev' == oev with begin
     assert (step e e' h' (construct_option_ev st h'))
   end
 
 let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (st:steps e e' h lt) (h':history) : Pure (local_trace h')
   (requires steps e e' h lt)
-  (ensures fun lt' -> steps e e' h' lt')
+  (ensures fun lt' -> 
+    steps e e' h' lt' /\
+    lt == lt')
   (decreases st) =
   match st with
   | SRefl _ _ -> []
   | STrans #e #e_i #e' #h #oev #_ e_step steps_to_e' -> begin
     step_history_independence e_step;
     let oev' = construct_option_ev e_step h' in
+    assert (oev == oev');
     lem_step_implies_steps e e_i h' oev';
     let lt_ = as_lt oev' in
     let rest_of_trace = construct_local_trace steps_to_e' (h'++lt_) in
@@ -638,8 +643,8 @@ let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace 
     end
 
 let steps_history_independence (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (sts:steps e e' h lt) :
-  Lemma (ensures forall h'. exists lt'. steps e e' h' lt') =
-  introduce forall h'. exists lt'. steps e e' h' lt' with begin
+  Lemma (ensures forall h'. exists lt'. steps e e' h' lt' /\ lt == lt') =
+  introduce forall h'. exists lt'. steps e e' h' lt' /\ lt == lt' with begin
     assert (steps e e' h' (construct_local_trace sts h'))
  end
 
