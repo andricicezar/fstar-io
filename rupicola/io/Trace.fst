@@ -7,7 +7,7 @@ module Trace
   The file should be usable both to define the Dijkstra Monad
   and the semantics of the Syntactic Language. **)
 
-type resexn a = either a unit
+include BaseTypes
 
 noeq
 type sig (op:Type u#a) = {

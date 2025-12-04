@@ -64,7 +64,6 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
-
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =
@@ -74,6 +73,8 @@ let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
 let (^+) (t1 t2:qType) : qType =
   (| _, QSum (get_rel t1) (get_rel t2) |)
+
+let qResexn (t1:qType) : qType = t1 ^+ qUnit
 
 (** typ_env is a typing environment: variables to Quotable F* Types **)
 type typ_env = var -> option qType

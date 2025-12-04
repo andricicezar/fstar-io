@@ -282,13 +282,13 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QRead :
         #g:typ_env ->
-        oprod_quotation #qBool g (fun _ -> read ())
+        oprod_quotation #(qResexn qBool) g (fun _ -> read ())
 
 | QWrite :
         #g:typ_env ->
         #arg:fs_oval g qBool ->
         oval_quotation g arg ->
-        oprod_quotation #qUnit g (fun fsG -> write (arg fsG))
+        oprod_quotation #(qResexn qUnit) g (fun fsG -> write (arg fsG))
 
 | QReturn :
         #g:typ_env ->
@@ -361,7 +361,7 @@ let l_to_r_fsG () : Tac unit =
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
   norm_term_env (top_env ()) [
-    delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    delta_only [`%fs_oval; `%qUnit; `%qBool; `%qResexn; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     iota;
     simplify
   ] x
@@ -653,23 +653,33 @@ let test_apply_io_bind_write
          (QReturn QVar0)
          (QWrite QVar0))
 
-let test_apply_io_bind_read_write
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write ()
   : prod_quotation _ apply_io_bind_read_write
-  = QBindProd
-     QRead
+  by (l_to_r_fsG (); trefl ())
+  = QBindProd QRead
+    (QCaseProd QVar0
      (QWrite QVar0)
+     (QReturn (QInr QVar0)))
 
-let test_apply_io_bind_read_write'
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write' ()
   : prod_quotation _ apply_io_bind_read_write'
-  = QBindProd QRead (QWrite QVar0)
+  by (l_to_r_fsG (); trefl ())
+  = QBindProd QRead (
+      QCaseProd QVar0 (QWrite QVar0) (QReturn (QInr QVar0)))
 
-let test_apply_io_bind_read_if_write
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_if_write ()
   : prod_quotation _ apply_io_bind_read_if_write
+  by (l_to_r_fsG (); trefl ())
   = QBindProd
       QRead
-      (QIfProd QVar0
-        (QWrite QFalse)
-        (QWrite QTrue))
+      (QCaseProd QVar0
+        (QIfProd QVar0
+          (QWrite QFalse)
+          (QWrite QTrue))
+        (QReturn (QInr QVar0)))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
   (qx : oval_quotation g x) (qf : oprod_quotation _ f) :

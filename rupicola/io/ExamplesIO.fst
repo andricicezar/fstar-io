@@ -9,9 +9,9 @@ let u_return : io bool = return true
 
 let apply_io_return : bool -> io bool = fun x -> return x
 
-let apply_read : io bool = read ()
-let apply_write_const : io unit = write true
-let apply_write : bool -> io unit = fun x -> write x
+let apply_read : io (resexn bool) = read ()
+let apply_write_const : io (resexn unit) = write true
+let apply_write : bool -> io (resexn unit) = fun x -> write x
 
 let apply_io_bind_const : io bool =
   let!@ x = return true in
@@ -27,23 +27,25 @@ let apply_io_bind_pure_if : bool -> io bool =
     if!@ (return x) then return false
     else return true
 
-let apply_io_bind_write : bool -> io unit =
+let apply_io_bind_write : bool -> io (resexn unit) =
   fun x ->
     let!@ y = return x in
     write y
 
-let apply_io_bind_read_write : io unit =
-  let!@ x = read () in
-  write x
+let apply_io_bind_read_write : io (resexn unit) =
+  match!@ read () with
+  | Inl x -> write x
+  | Inr x -> return (Inr x)
 
-let apply_io_bind_read_write' : io unit =
-  io_bind (read ()) (fun x -> write x)
+let apply_io_bind_read_write' : io (resexn unit) =
+  io_bind (read ()) (fun x -> match x with | Inl x -> write x | Inr x -> return (Inr x))
 
-let apply_io_bind_read_if_write : io unit =
-  let!@ x = read () in
-  if x
-  then write false
-  else write true
+let apply_io_bind_read_if_write : io (resexn unit) =
+  match!@ read () with
+  | Inl x -> if x
+            then write false
+            else write true
+  | Inr x -> return (Inr x)
 
 (** Examples inspired from the Web Server **)
 val utf8_encode : bool -> bool
@@ -57,6 +59,6 @@ let sendError400 (fd:bool) : io unit =
 
 let get_req (fd:bool) : io (either bool bool) =
   let x = utf8_encode fd in
-  if!@ (read ())
-  then return (Inl true)
-  else return (Inr false)
+  match!@ read () with
+  | Inl x -> if x then return (Inl true) else return (Inr false)
+  | Inr x -> return (Inr false)

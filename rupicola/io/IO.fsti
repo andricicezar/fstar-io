@@ -7,6 +7,7 @@ module IO
     one could produce code as close as the one written usin the
     do notation. **)
 
+include BaseTypes
 open Hist
 
 val io (a:Type u#a) : Type u#a
@@ -20,8 +21,8 @@ val io_bind
   (k : a -> io b) :
   io b
 
-val read () : io bool
-val write (x:bool) : io unit
+val read () : io (resexn bool)
+val write (x:bool) : io (resexn unit)
 
 val theta : #a:Type -> io a -> hist a
 
