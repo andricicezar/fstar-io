@@ -365,7 +365,6 @@ let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (bod
     end
   end
 
-
 #push-options "--z3rlimit 5000 --fuel 5000"
 let equiv_app #g
   (#t1:qType) (#t2:qType)
@@ -429,24 +428,36 @@ let equiv_if #g
     introduce fsG `(∽) h` s ==> t ⦂ (h, fs_e, e) with _. begin
       introduce forall (e':closed_exp). steps e e' h [] /\ indexed_irred e' h ==> t ∋ (h, fs_e, e') with begin
         introduce _ ==> t ∋ (h, fs_e, e') with _. begin
-          let steps_e_e' : squash (steps e e' h []) = () in
-          FStar.Squash.map_squash #_ #(t ∋ (h, fs_e, e')) steps_e_e' (fun steps_e_e' ->
+          FStar.Squash.bind_squash #(steps e e' h []) () (fun sts ->
             exp_type_history_independence qBool h fs_e1 e1;
+            exp_type_history_independence t h (fs_e2 fsG) e2;
+            exp_type_history_independence t h (fs_e3 fsG) e3;
             safety_val #qBool fs_e1 e1;
             sem_expr_shape_val #qBool fs_e1 e1 h;
-            let (e1', (| [], ([], []) |)) = destruct_steps_eif e1 e2 e3 e' h [] steps_e_e' in
-            assert (qBool ⦂ (h, fs_e1, e1'));
+            let (e1', (| lt1, (lt2, lt3) |)) = destruct_steps_eif e1 e2 e3 e' h [] sts in
+            assert (qBool ∋ (h, fs_e1, e1'));
+            assert (ETrue? e1' ==> (t ∋ (h, fs_e2 fsG, e')));
+            assert (EFalse? e1' ==> (t ∋ (h, fs_e3 fsG, e')))
+            )
+          (*let steps_e_e' : squash (steps e e' h []) = () in
+          FStar.Squash.map_squash #_ #(t ∋ (h, fs_e, e')) steps_e_e' (fun steps_e_e' ->
+            exp_type_history_independence qBool h fs_e1 e1;
+            exp_type_history_independence t h (fs_e2 fsG) e2;
+            exp_type_history_independence t h (fs_e3 fsG) e3;
+            safety_val #qBool fs_e1 e1;
+            sem_expr_shape_val #qBool fs_e1 e1 h;
+            let (e1', (| lt1, (lt2, lt3) |)) = destruct_steps_eif e1 e2 e3 e' h [] steps_e_e' in
             assert (qBool ∋ (h, fs_e1, e1'));
             assert (ETrue? e1' ==> (t ∋ (h, fs_e2 fsG, e')));
             assert (EFalse? e1' ==> (t ∋ (h, fs_e3 fsG, e')));
-            assert (t ∋ (h, fs_e, e'));
-            ()
-          )
+            assert (t ∋ (h, fs_e, e'))
+          )*)
         end
       end
     end
   end
 #pop-options
+
 
 let equiv_pair #g 
   (#t1 #t2:qType) 
@@ -454,8 +465,8 @@ let equiv_pair #g
   (e1:exp) (e2:exp) 
   : Lemma
     (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-    (ensures helper_pair fs_e1 fs_e2 ≈ EPair e1 e2) = admit ()
-  (**lem_fv_in_env_pair g e1 e2;
+    (ensures helper_pair fs_e1 fs_e2 ≈ EPair e1 e2) =
+  lem_fv_in_env_pair g e1 e2;
   let t = t1 ^* t2 in
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==>  t ⦂ (h, (fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
     let fs_e1 = fs_e1 fsG in
@@ -465,22 +476,26 @@ let equiv_pair #g
     assert (gsubst s (EPair e1 e2) == e);
     let EPair e1 e2 = e in
     introduce fsG `(∽) h` s ==>  t ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp). steps e e' /\ irred e' ==> t ∋ (fs_e, e') with begin
-        introduce _ ==> t ∋ (fs_e, e') with h. begin
-          let steps_e_e' : squash (steps e e') = () in
-          FStar.Squash.map_squash #_ #(squash (t ∋ (fs_e, e'))) steps_e_e' (fun steps_e_e' ->
-            safety t1 fs_e1 e1;
-            safety t2 fs_e2 e2;
-            let (e1', e2') = destruct_steps_epair e1 e2 e' steps_e_e' in
-            assert (t1 ∋ (fs_e1, e1'));
-            assert (t2 ∋ (fs_e2, e2'));
-            assert (t ∋ (fs_e, EPair e1' e2'));
-            lem_values_are_expressions t fs_e (EPair e1' e2')
+      introduce forall (e':closed_exp). steps e e' h [] /\ indexed_irred e' h ==> t ∋ (h, fs_e, e') with begin
+        introduce _ ==> t ∋ (h, fs_e, e') with _. begin
+          let steps_e_e' : squash (steps e e' h []) = () in
+          FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_e, e'))) steps_e_e' (fun steps_e_e' ->
+            exp_type_history_independence t1 h fs_e1 e1;
+            exp_type_history_independence t2 h fs_e2 e2;
+            safety_val #t1 fs_e1 e1;
+            safety_val #t2 fs_e2 e2;
+            let (e1', e2', (| lt1, (| lt2, lt3 |) |)) = destruct_steps_epair e1 e2 e' h [] steps_e_e' in
+            lem_value_is_irred e1';
+            lem_value_is_irred e2';
+            assert (t1 ∋ (h, fs_e1, e1'));
+            assert (t2 ∋ (h, fs_e2, e2'));
+            assert (t ∋ (h, fs_e, EPair e1' e2'));
+            lem_values_are_expressions t h fs_e (EPair e1' e2')
           )
         end
       end
     end
-  end **)
+  end 
 
 let equiv_pair_fst_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp) : Lemma
   (requires fs_e12 ≈ e12) (** is this too strict? we only care for the left to be equivalent. **)
@@ -587,17 +602,17 @@ let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2
     end
   end
 
-let equiv_oprod_read g
+(*let equiv_oprod_read g
   : Lemma
     (requires True)
     (ensures (fun fsG -> read ()) `equiv_oprod #g qBool` ERead)
-  = admit ()
+  = admit ()*)
 
-let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
+(*let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
   : Lemma
     (requires fs_arg ≈ arg)
     (ensures (fun fsG -> write (fs_arg fsG)) `equiv_oprod #g qUnit` EWrite arg)
-  = admit ()
+  = admit ()*)
 
 let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
@@ -635,12 +650,16 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval 
             sem_expr_shape_val #(a ^->!@ b) fs_f f h;
             let a_typ = type_quotation_to_typ (get_rel a) in
             let b_typ = type_quotation_to_typ (get_rel b) in
-            let (e11, e2', (| lt2, (| lt1, lt3 |) |)) = destruct_steps_eapp f x e' h lt steps_e_e' a_typ b_typ in
-            assume ((a ^->!@ b) ∋ (h, fs_f, ELam e11));
-            admit ()
-            (*introduce True ==> a ∋ (h, fs_x, x) with _. begin
+            let (f1, x', (| lt2, (| lt1, lt3 |) |)) = destruct_steps_eapp f x e' h lt steps_e_e' a_typ b_typ in
+            assume ((a ^->!@ b) ∋ (h, fs_f, ELam f1));
+            introduce True ==> a ∋ (h, fs_x, x') with _. begin
+              (*assert (a ⦂ (h, fs_x, x));
+              assert (steps x x' h []);
+              lem_value_is_irred x';
+              assert (indexed_irred x' h)*)
               admit ()
-            end*)
+            end;
+            admit ()
           )
         end
       end
