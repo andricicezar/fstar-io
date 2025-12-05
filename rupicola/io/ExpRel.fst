@@ -63,6 +63,11 @@ and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases 
     steps e e' h lt ==> indexed_irred e' (h++lt)  ==>
     (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ (forall p. theta fs_e h p ==> p lt fs_r))
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
+
+let theta_history_independence #t (fs_e:fs_prod t) (h:history) (lt:local_trace h) (fs_r:get_Type t):
+  Lemma (requires forall p. theta fs_e h p ==> p lt fs_r)
+        (ensures forall h' (lt':local_trace h') p. theta fs_e h' p ==> p lt' fs_r) = admit ()
+
 let rec val_type_history_independence (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
         (ensures forall h'. t ∋ (h', fs_v, e))
@@ -85,7 +90,20 @@ let rec val_type_history_independence (t:qType) (h:history) (fs_v:fs_val t) (e:c
       end
     | _ -> false_elim ()
     end
-  | QArrIO #t1 #t2 qt1 qt2 -> admit ()
+  | QArrIO #t1 #t2 qt1 qt2 -> begin
+    let fs_f : t1 -> io t2 = fs_v in
+    match e with
+    | ELam e' -> begin
+      introduce forall (v:value) (fs_v':t1) (lt_v':local_trace h'). pack qt1 ∋ (h'++lt_v', fs_v', v) ==> pack qt2 ⪾ (h'++lt_v', fs_f fs_v', subst_beta v e') with begin
+        introduce pack qt1 ∋ (h'++lt_v', fs_v', v) ==> pack qt2 ⪾ (h'++lt_v', fs_f fs_v', subst_beta v e') with _. begin
+          eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⪾ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' [];
+          val_type_history_independence (pack qt1) (h'++lt_v') fs_v' v;
+          io_exp_type_history_independence (pack qt2) h (fs_f fs_v') (subst_beta v e')
+          end
+        end
+      end
+    | _ -> false_elim ()
+    end  
   | QPair #t1 #t2 qt1 qt2 -> begin
     match e with
     | EPair e1 e2 -> begin
@@ -119,10 +137,29 @@ and exp_type_history_independence (t:qType) (h:history) (fs_e:fs_val t) (e:close
     end
   end
 
-(*and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:closed_exp) :
+and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:closed_exp) :
   Lemma (requires t ⪾ (h, fs_e, e))
-        (ensures forall h'. t ⪾ (h, fs_e, e))
-        (decreases %[get_rel t;1]) = admit ()*) // universe issues?
+        (ensures forall h'. t ⪾ (h', fs_e, e))
+        (decreases %[get_rel t;1]) =
+  introduce forall h'. t ⪾ (h', fs_e, e) with begin
+    introduce forall lt' (e':closed_exp). steps e e' h' lt' /\ indexed_irred e' (h'++lt') ==> (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ (forall p. theta fs_e h' p ==> p lt' fs_r)) with begin
+      introduce steps e e' h' lt' /\ indexed_irred e' (h'++lt') ==> (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ (forall p. theta fs_e h' p ==> p lt' fs_r)) with _. begin
+        FStar.Squash.bind_squash #(steps e e' h' lt') () (fun sts ->
+          steps_history_independence sts;
+          eliminate forall h_. exists lt_. steps e e' h_ lt_ with h;
+          eliminate exists lt_. steps e e' h lt_
+          returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ (forall p. theta fs_e h' p ==> p lt' fs_r)) with _. begin
+            eliminate forall lt_ e_. steps e e_ h lt_ /\ indexed_irred e_ (h++lt_) ==> (exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e_) /\ (forall p. theta fs_e h p ==> p lt_ fs_r)) with lt_ e';
+            indexed_irred_history_independence e' (h'++lt');
+            eliminate exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e') /\ (forall p. theta fs_e h p ==> p lt_ fs_r)
+            returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ (forall p. theta fs_e h' p ==> p lt' fs_r)) with _. begin
+              val_type_history_independence t (h++lt_) fs_r e';
+              theta_history_independence #t fs_e h lt_ fs_r
+            end
+          end)
+      end
+    end
+  end
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
