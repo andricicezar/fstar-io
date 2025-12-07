@@ -16,6 +16,7 @@ let io_oexp (g:typ_env) (t:qType) =
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
+[@inline_let]
 let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decreases %[get_rel t;0]) =
   let (h, fs_v, e) = p in
   match get_rel t with // way to "match" on F* types
@@ -66,7 +67,14 @@ and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases 
 
 let theta_history_independence #t (fs_e:fs_prod t) (h:history) (lt:local_trace h) (fs_r:get_Type t):
   Lemma (requires forall p. theta fs_e h p ==> p lt fs_r)
-        (ensures forall h' (lt':local_trace h') p. theta fs_e h' p ==> p lt' fs_r) = admit ()
+        (ensures forall h' (lt':local_trace h') p. theta fs_e h' p ==> p lt' fs_r) =
+  introduce forall h' lt' p. theta fs_e h' p ==> p lt' fs_r with begin
+    introduce theta fs_e h' p ==> p lt' fs_r with _. begin
+      let fs_e : io (get_Type t) = fs_e in
+      match fs_e with
+      | _ -> admit ()
+    end
+  end
 
 let rec val_type_history_independence (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
@@ -402,6 +410,22 @@ let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (bod
     end
   end
 
+let test_lemma_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
+  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
+          (ensures True) =
+  assume (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11)) // not unrolling QArr relation properly
+
+let test_lemma_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
+          (ensures True) =
+  assume (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11)) // not unrolling QArrIO relation properly
+
+let test_lemma_epair (t1 t2:qType) (h:history) (fs_e:fs_val (t1 ^* t2)) (e1 e2:value)
+  : Lemma (requires (is_closed (EPair e1 e2)) /\ (t1 ^* t2) ∋ (h, fs_e, EPair e1 e2))
+          (ensures True) =
+  assert (t1 ∋ (h, fst #(get_Type t1) #(get_Type t2) fs_e, e1));
+  assert (t2 ∋ (h, snd #(get_Type t1) #(get_Type t2) fs_e, e2))
+
 #push-options "--z3rlimit 5000 --fuel 5000"
 let equiv_app #g
   (#t1:qType) (#t2:qType)
@@ -642,8 +666,10 @@ let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      let fs_f : (get_Type t1) -> io (get_Type t2) = f fsG in
-      assume ((t1 ^->!@ t2) ⦂ (h, fs_f, ELam body'))
+      assume ((t1 ^->!@ t2) ⦂ (h, f fsG, gsubst s (ELam body)))
+      (*introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, f fsG fs_v, subst_beta v body') with begin
+        admit ()
+      end*)
     end
   end
 
