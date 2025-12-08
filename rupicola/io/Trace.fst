@@ -99,5 +99,14 @@ let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
   [SMTPat (h++(lt @ lt'))] =
     admit ()
 
+let trans_history' (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
+  Lemma (((h++lt)++lt') == (h++(lt @ lt')))
+  [SMTPat ((h++lt)++lt')] =
+    admit ()
+
+let associative_history #h (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt3:local_trace ((h++lt1)++lt2)) :
+  Lemma ((lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) =
+    admit ()
+
 let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
   if Some? oev then [Some?.v oev] else []
