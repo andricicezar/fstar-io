@@ -409,7 +409,6 @@ let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (bod
     end
   end
 
-#push-options "--z3rlimit 5000 --fuel 5000"
 let unroll_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
   : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
           (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
@@ -418,6 +417,7 @@ let unroll_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:e
   : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
           (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
 
+#push-options "--z3rlimit 5000 --fuel 5000"
 let equiv_app #g
   (#t1:qType) (#t2:qType)
   (fs_e1:fs_oval g (t1 ^-> t2)) (fs_e2:fs_oval g t1)
@@ -686,17 +686,17 @@ let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2
     end
   end
 
-(*let equiv_oprod_read g
+let equiv_oprod_read g
   : Lemma
     (requires True)
-    (ensures (fun fsG -> read ()) `equiv_oprod #g qBool` ERead)
-  = admit ()*)
+    (ensures (fun fsG -> read ()) `equiv_oprod #g (qResexn qBool)` ERead)
+  = admit ()
 
-(*let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
+let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
   : Lemma
     (requires fs_arg ≈ arg)
-    (ensures (fun fsG -> write (fs_arg fsG)) `equiv_oprod #g qUnit` EWrite arg)
-  = admit ()*)
+    (ensures (fun fsG -> write (fs_arg fsG)) `equiv_oprod #g (qResexn qUnit)` EWrite arg)
+  = admit ()
 
 let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
@@ -761,7 +761,7 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval 
             let b_typ = type_quotation_to_typ (get_rel b) in
             let (f1, x', (| lt2, (| lt1, lt3 |) |)) = destruct_steps_eapp f x e' h lt steps_e_e' a_typ b_typ in
             assume ((a ^->!@ b) ∋ (h, fs_f, ELam f1));
-            assume (forall (v:value) (fs_v:(get_Type a)) (lt_v:local_trace h). a ∋ (h++lt_v, fs_v, v) ==> b ⪾ (h++lt_v, fs_f fs_v, subst_beta v f1));
+            unroll_elam_io a b h fs_f f1;
             introduce True ==> a ∋ (h++lt2, fs_x, x') with _. begin
               assert (a ⦂ (h, fs_x, x));
               assume (lt2 == []); // need to prove this, but it should hold (since the IO computation only happens in the body, not in the argument to the function 
