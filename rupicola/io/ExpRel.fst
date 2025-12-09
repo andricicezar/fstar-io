@@ -409,23 +409,15 @@ let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (bod
     end
   end
 
-let test_lemma_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures True) =
-  assume (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11)) // not unrolling QArr relation properly
-
-let test_lemma_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures True) =
-  assume (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11)) // not unrolling QArrIO relation properly
-
-let test_lemma_epair (t1 t2:qType) (h:history) (fs_e:fs_val (t1 ^* t2)) (e1 e2:value)
-  : Lemma (requires (is_closed (EPair e1 e2)) /\ (t1 ^* t2) ∋ (h, fs_e, EPair e1 e2))
-          (ensures True) =
-  assert (t1 ∋ (h, fst #(get_Type t1) #(get_Type t2) fs_e, e1));
-  assert (t2 ∋ (h, snd #(get_Type t1) #(get_Type t2) fs_e, e2))
-
 #push-options "--z3rlimit 5000 --fuel 5000"
+let unroll_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
+  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
+          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+
+let unroll_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
+          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+
 let equiv_app #g
   (#t1:qType) (#t2:qType)
   (fs_e1:fs_oval g (t1 ^-> t2)) (fs_e2:fs_oval g t1)
@@ -462,7 +454,7 @@ let equiv_app #g
               assert (indexed_irred e2' h)
             end;
             assert ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11));
-            assume (forall (v:value) (fs_v:(get_Type t1)) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11));
+            unroll_elam t1 t2 h fs_e1 e11;
             assert (t2 ⦂ (h, fs_e, subst_beta e2' e11));
             assert (t2 ∋ (h, fs_e, e'))
           )
@@ -665,10 +657,32 @@ let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      assume ((t1 ^->!@ t2) ⦂ (h, f fsG, gsubst s (ELam body)))
-      (*introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, f fsG fs_v, subst_beta v body') with begin
-        admit ()
-      end*)
+      introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, (f fsG) fs_v, subst_beta v body') with begin
+        introduce _ ==> _ with _. begin
+          let s' = gsub_extend s t1 v in
+          let fsG' = stack fsG fs_v in
+          let h' = h++lt_v in
+          eliminate forall b (s':gsub g' b) (fsG':eval_env g') h'. fsG' `(∽) h'` s' ==> t2 ⪾ (h', f (tail #t1 fsG') (hd #t1 #g fsG'), gsubst s' body)
+            with false s' fsG' h';
+          assert (fsG `(∽) h` s);
+          assert (t1 ∋ (h++lt_v, fs_v, v));
+          introduce forall (x:var). Some? (g x) ==> Some?.v (g x) ∋ (h++lt_v, index fsG x, s x) with begin
+            introduce _ ==> _ with _. begin
+              val_type_history_independence (Some?.v (g x)) h (index fsG x) (s x)
+            end
+          end;
+          assert (stack fsG fs_v `(∽) h'` gsub_extend s t1 v);
+          assert (t2 ⪾ (h', f (tail fsG') (hd fsG'), gsubst s' body));
+          assert (hd (stack fsG fs_v) == fs_v);
+          assert (t2 ⪾ (h', f (tail fsG') fs_v, gsubst s' body));
+          assert (t2 ⪾ (h', f fsG fs_v, gsubst s' body));
+          lem_substitution s t1 v body;
+          assert (t2 ⪾ (h', f fsG fs_v, subst_beta v body'))
+        end
+      end;
+      assert ((t1 ^->!@ t2) ∋ (h, f fsG, gsubst s (ELam body)));
+      lem_values_are_expressions (t1 ^->!@ t2) h (f fsG) (gsubst s (ELam body));
+      assert ((t1 ^->!@ t2) ⦂ (h, f fsG, gsubst s (ELam body)))
     end
   end
 
