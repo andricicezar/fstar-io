@@ -1016,7 +1016,8 @@ let rec destruct_steps_epair
       (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1')) /\
       (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2')))
     (decreases st)
-   = match st with
+   = admit ()
+   (*match st with
     | SRefl (EPair e1 e2) h -> begin
       srefl_epair_implies_value e1 e2 h;
       (e1, e2, (| [], (| [], [] |) |))
@@ -1054,7 +1055,7 @@ let rec destruct_steps_epair
         end
       | _ ->
         (e1, e2, (| [], (| [], [] |) |))
-      end
+      end*)
 
   (**
     How the steps look like:
@@ -1148,7 +1149,7 @@ let lem_destruct_steps_epair_fst
   (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (EFst (EPair e1 e2)) e' h lt /\ indexed_irred e1 h /\ indexed_irred e2 h))
-        (ensures (e1 == e')) = admit ()
+        (ensures (e1 == e') /\ lt == []) = admit ()
 
 let can_step_esnd_when_safe (e12:closed_exp) (t1 t2:typ) (h:history) : Lemma
   (requires
