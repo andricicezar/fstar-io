@@ -9,6 +9,7 @@ module IO
 
 include BaseTypes
 open Hist
+open Trace
 
 val io (a:Type u#a) : Type u#a
 
@@ -28,3 +29,16 @@ val theta : #a:Type -> io a -> hist a
 
 let return = io_return
 let (let!@) = io_bind
+
+val theta_history_independence #a (m:io a) (h:history) (lt:local_trace h) (fs_r:a) (p:hist_post h a) :
+  Lemma (requires forall p. theta m h p ==> p lt fs_r)
+        (ensures forall h' (lt':local_trace h') p'. theta m h' p' ==> p' lt' fs_r)
+
+val theta_history_independence' (#a:Type) (m:io a) (h:history) (p:hist_post h a) :
+  Lemma (requires theta m h p)
+        (ensures forall h'. exists (p':hist_post h' a). (theta m h' p') /\
+                 (forall (lt:local_trace h) (lt':local_trace h') r. p lt r ==> p' lt' r))
+
+val post_condition_history_independence (#a:Type) (m:io a) (h h':history) (p:hist_post h a) (p':hist_post h' a) (lt':local_trace h') (r:a) :
+  Lemma (requires theta m h p /\ theta m h' p' /\ p' lt' r)
+        (ensures exists (lt:local_trace h). p lt r)

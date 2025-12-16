@@ -15,8 +15,8 @@ The history is in reverse chronological order.
 At the end of an io computation, the local trace is
 reversed and appended to the history. **)
 
-let hist_post (h:history) a = lt:local_trace h -> r:a -> Type0
-let hist_pre = h:history -> Type0
+type hist_post (h:history) a = lt:local_trace h -> r:a -> Type0
+type hist_pre = h:history -> Type0
 
 type hist0 a =
   h:history -> hist_post h a -> Type0

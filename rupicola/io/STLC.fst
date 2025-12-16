@@ -1017,45 +1017,64 @@ let rec destruct_steps_epair
       (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2')))
     (decreases st)
    = admit ()
-   (*match st with
-    | SRefl (EPair e1 e2) h -> begin
-      srefl_epair_implies_value e1 e2 h;
-      (e1, e2, (| [], (| [], [] |) |))
-      end
-    | STrans #e #f2 #e' #h #_ #lt23 step_epair step_epair_steps -> begin
-      let (EPair e1 e2) = e in
-      match step_epair with
-      | PairLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
-        let (EPair e1' e2) = f2 in
-        lem_step_implies_steps e1 e1' h oev1;
-        lem_step_implies_steps (EPair e1 e2) (EPair e1' e2) h oev1;
-        let lt1 : local_trace h = as_lt oev1 in
-        lem_step_preserve_safe e1 e1' h oev1;
-        let s2 : steps (EPair e1' e2) e' (h++lt1) lt23 = step_epair_steps in
-        let (e1'', e2', (| lt1', (| lt2, lt3 |) |)) = destruct_steps_epair e1' e2 e' (h++lt1) lt23 s2 in
-        lem_steps_transitive e1 e1' e1'' h lt1 lt1';
-        lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2') h lt1 (lt1' @ lt2);
-        introduce indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2') with _. begin
-          indexed_irred_history_independence e2 h
-        end;
-        (e1'', e2', (| (lt1 @ lt1'), (| lt2, lt3 |) |))
-        end
-      | PairRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
-        let (EPair e1 e2') = f2 in
-        lem_step_implies_steps e2 e2' h oev2;
-        lem_step_implies_steps (EPair e1 e2) (EPair e1 e2') h oev2;
-        let lt2 : local_trace h = as_lt oev2 in
-        lem_step_preserve_safe e2 e2' h oev2;
-        let s2 : steps (EPair e1 e2') e' (h++lt2) lt23 = step_epair_steps in
-        let (e1', e2'', (| lt1, (| lt2', lt3 |) |)) = destruct_steps_epair e1 e2' e' (h++lt2) lt23 s2 in
-        lem_value_is_irred e1;
-        lem_steps_transitive e2 e2' e2'' h lt2 lt2';
-        lem_steps_transitive (EPair e1 e2) (EPair e1 e2') (EPair e1' e2'') h lt2 lt2';
-        (e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |))
-        end
-      | _ ->
-        (e1, e2, (| [], (| [], [] |) |))
-      end*)
+     (*match st with
+     | SRefl (EPair e1 e2) h -> begin
+       srefl_epair_implies_value e1 e2 h;
+       (e1, e2, (| [], (| [], [] |) |))
+       end
+     | STrans #e #f2 #e' #h #_ #lt23 step_epair step_epair_steps -> begin
+       let (EPair e1 e2) = e in
+       match step_epair with
+       | PairLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
+         let (EPair e1' e2) = f2 in
+         lem_step_implies_steps e1 e1' h oev1;
+         lem_step_implies_steps (EPair e1 e2) (EPair e1' e2) h oev1;
+         let lt1 : local_trace h = as_lt oev1 in
+         lem_step_preserve_safe e1 e1' h oev1;
+         let s2 : steps (EPair e1' e2) e' (h++lt1) lt23 = step_epair_steps in
+         let (e1'', e2', (| lt1', (| lt2, lt3 |) |)) = destruct_steps_epair e1' e2 e' (h++lt1) lt23 s2 in
+         lem_steps_transitive e1 e1' e1'' h lt1 lt1';
+         lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2') h lt1 (lt1' @ lt2);
+         introduce indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2') with _. begin
+           indexed_irred_history_independence e2 h
+         end;
+         assume (steps (EPair e1 e2) (EPair e1'' e2') h (lt1 @ (lt1' @ lt2)));
+         assert (indexed_irred e1 h ==> ((lt1 @ lt1') == [] /\ e1 == e1''));
+         assert (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2'));
+         (e1'', e2', (| (lt1 @ lt1'), (| lt2, lt3 |) |))
+         end
+       | _ -> admit ()
+       end
+       | PairRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
+         let (EPair e1 e2') = f2 in
+         lem_step_implies_steps e2 e2' h oev2;
+         lem_step_implies_steps (EPair e1 e2) (EPair e1 e2') h oev2;
+         let lt2 : local_trace h = as_lt oev2 in
+         lem_step_preserve_safe e2 e2' h oev2;
+         let s2 : steps (EPair e1 e2') e' (h++lt2) lt23 = step_epair_steps in
+         let (e1', e2'', (| lt1, (| lt2', lt3 |) |)) = destruct_steps_epair e1 e2' e' (h++lt2) lt23 s2 in
+         lem_value_is_irred e1;
+         lem_steps_transitive e2 e2' e2'' h lt2 lt2';
+         lem_steps_transitive (EPair e1 e2) (EPair e1 e2') (EPair e1' e2'') h lt2 lt2';
+         introduce indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1') with _. begin
+           indexed_irred_history_independence e1 h
+         end;
+         assume (steps e1 e1' h lt1);
+         assume (steps e2' e2'' (h++lt1) (lt2 @ lt2'));
+         assume (steps (EPair e1 e2) (EPair e1' e2'') h (lt1 @ (lt2 @ lt2')));
+         assume (steps (EPair e1' e2'') e' ((h++lt1)++(lt2 @ lt2')) lt3);
+         assume (lt == ((lt1 @ (lt2 @ lt2')) @ lt3));
+         assume (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1'));
+         assume (indexed_irred e2 h ==> ((lt2 @ lt2') == [] /\ e2 == e2''));
+         (*assert (steps (EPair e1 e2) (EPair e1' e2'') h (lt1 @ (lt2 @ lt2')));
+         assert (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1'));
+         assert (indexed_irred e2 h ==> ((lt2 @ lt2') == [] /\ e2 == e2''));*)
+         admit ()
+         //(e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |))
+         end
+       | _ -> admit ()
+         //(e1, e2, (| [], (| [], [] |) |))
+       end*)
 
   (**
     How the steps look like:
@@ -1230,4 +1249,4 @@ let lem_destruct_steps_epair_snd
   (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (ESnd (EPair e1 e2)) e' h lt /\ indexed_irred e1 h /\ indexed_irred e2 h))
-        (ensures (e2 == e')) = admit ()
+        (ensures (e2 == e') /\ lt == []) = admit ()
