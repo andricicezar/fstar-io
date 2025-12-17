@@ -40,6 +40,16 @@ let rec theta #a (m:io a) : hist a =
   | Return x -> hist_return x
   | Call o args k -> hist_bind (op_wp o args) (fun r -> theta (k r))
 
+let lem_theta_return (#a:Type) (x:a) (h:history) (lt:local_trace h) :
+  Lemma (requires lt == [])
+        (ensures forall p. theta (return x) h p ==> p lt x) =
+  introduce forall p. theta (return x) h p ==> p lt x with begin
+    introduce theta (return x) h p ==> p lt x with _. begin
+      assert (return x == Return x);
+      assert (theta (return x) h p == p [] x)
+    end
+  end
+
 let post_condition_independence (#a:Type) (#h:history) (p:hist_post h a) (x:a) :
   Lemma (requires p [] x)
         (ensures forall h' (p':hist_post h' a). p' [] x) = admit ()
