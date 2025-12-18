@@ -475,23 +475,43 @@ let equiv_app #g
 // try making auxiliary lemmas with very precise preconditions/postconditions and very small blocks of code
 // try adding some SMT patterns
 
-let equiv_if_true_case (e1':value) (fs_e1:bool) (h:history) (lt1:local_trace h) (t:qType) (fs_e2:get_Type t) (fs_e3:get_Type t) (e2:closed_exp) (e':closed_exp) (lt2:local_trace (h++lt1)) (lt:local_trace h) :
-  Lemma (requires (ETrue? e1') /\
-                  (qBool ∋ (h, fs_e1, e1')) /\
-                  (lt1 == []) /\
-                  (t ⦂ (h, fs_e2, e2)) /\
-                  (steps e2 e' (h++lt1) lt2 /\ lt == lt1 @ lt2) /\
-                  (indexed_irred e' (h++lt)))
-        (ensures (t ∋ (h, (if fs_e1 then fs_e2 else fs_e3), e') /\ lt == [])) = admit ()
+let equiv_if_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:bool) (fs_e2 fs_e3 fs_e:get_Type t) (e1:closed_exp) (e2:closed_exp) (e3:closed_exp) =
+  (fs_e == (if fs_e1 then fs_e2 else fs_e3)) /\
+  (e == (EIf e1 e2 e3)) /\
+  (steps (EIf e1 e2 e3) e' h lt) /\
+  (indexed_irred e' (h++lt)) /\
+  (qBool ⦂ (h, fs_e1, e1)) /\
+  (t ⦂ (h, fs_e2, e2)) /\
+  (t ⦂ (h, fs_e3, e3))
 
-let equiv_if_steps #e #e' #h #lt (sts:steps e e' h lt) (t:qType) (fs_e1:bool) (fs_e2:get_Type t) (fs_e3:get_Type t) (e1:closed_exp) (e2:closed_exp) (e3:closed_exp) :
-  Lemma (requires (indexed_irred e' (h++lt)) /\
-                  (qBool ⦂ (h, fs_e1, e1)) /\
-                  (t ⦂ (h, fs_e2, e2)) /\
-                  (t ⦂ (h, fs_e3, e3)))
-        (ensures t ∋ (h, (if fs_e1 then fs_e2 else fs_e3), e') /\ lt == []) = 
+let equiv_if_steps #e #e' #h #lt #t #fs_e1 #fs_e2 #fs_e3 #fs_e #e1 #e2 #e3 (sq:squash (equiv_if_steps_pre e e' h lt t fs_e1 fs_e2 fs_e3 fs_e e1 e2 e3)) : squash (t ∋ (h, fs_e, e') /\ lt == []) = 
   exp_type_history_independence qBool h fs_e1 e1;
-  admit ()
+  exp_type_history_independence t h fs_e2 e2;
+  exp_type_history_independence t h fs_e3 e3;
+  safety_val #qBool fs_e1 e1;
+  sem_expr_shape_val #qBool fs_e1 e1 h;
+  FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
+    let (e1', (| lt1, (lt2, lt3) |)) = destruct_steps_eif e1 e2 e3 e' h lt sts in
+    eliminate forall e1' lt1. steps e1 e1' h lt1 /\ indexed_irred e1' (h++lt1) ==> (qBool ∋ (h, fs_e1, e1') /\ lt1 == []) with e1' lt1;
+    assert (qBool ∋ (h, fs_e1, e1') /\ lt1 == []);
+    introduce ETrue? e1' ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      assert (fs_e == fs_e2);
+      assert (t ⦂ (h, fs_e2, e2));
+      assert (steps e2 e' h lt2 /\ indexed_irred e' (h++lt2) ==> (t ∋ (h, fs_e2, e') /\ lt2 == []));
+      assert (steps e2 e' (h++lt1) lt2 /\ lt == lt1 @ lt2);
+      assert (indexed_irred e' (h++lt));
+      assert (t ∋ (h, fs_e2, e') /\ lt2 == []);
+      assert (t ∋ (h, fs_e, e') /\ lt == [])
+    end;
+    introduce EFalse? e1' ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      assert (fs_e == fs_e3);
+      assert (t ⦂ (h, fs_e3, e3));
+      assert (steps e3 e' h lt3 /\ indexed_irred e' (h++lt3) ==> (t ∋ (h, fs_e3, e') /\ lt3 == []));
+      assert (steps e3 e' (h++lt1) lt3 /\ lt == lt1 @ lt3);
+      assert (indexed_irred e' (h++lt));
+      assert (t ∋ (h, fs_e3, e') /\ lt3 == []);   
+      assert (t ∋ (h, fs_e, e') /\ lt == [])
+    end)
 
 let equiv_if #g
   (#t:qType)
@@ -512,41 +532,9 @@ let equiv_if #g
     introduce fsG `(∽) h` s ==> t ⦂ (h, fs_e, e) with _. begin
       introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
         introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
-          FStar.Squash.bind_squash #(
-          //let steps_e_e' : squash (steps e e' h lt) = () in
-          //FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
-            equiv_if_steps steps_e_e' t fs_e1 fs_e2 fs_e3
-            //admit ()
-            (*exp_type_history_independence qBool h fs_e1 e1;
-            exp_type_history_independence t h fs_e2 e2;
-            exp_type_history_independence t h fs_e3 e3;
-            safety_val #qBool fs_e1 e1;
-            sem_expr_shape_val #qBool fs_e1 e1 h;
-            let (e1', (| lt1, (lt2, lt3) |)) = destruct_steps_eif e1 e2 e3 e' h lt steps_e_e' in
-            eliminate forall e1' lt1. steps e1 e1' h lt1 /\ indexed_irred e1' (h++lt1) ==> (qBool ∋ (h, fs_e1, e1') /\ lt1 == []) with e1' lt1;
-            assert (qBool ∋ (h, fs_e1, e1') /\ lt1 == []);
-            introduce ETrue? e1' ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
-              (*assert (fs_e == fs_e2);
-              assert (t ⦂ (h, fs_e2, e2));
-              assume (steps e2 e' h lt2 /\ indexed_irred e' (h++lt2) ==> (t ∋ (h, fs_e2, e') /\ lt2 == []));
-              assert (steps e2 e' (h++lt1) lt2 /\ lt == lt1 @ lt2);
-              assert (indexed_irred e' (h++lt));
-              assert (t ∋ (h, fs_e2, e') /\ lt2 == []);
-              assert (t ∋ (h, fs_e, e') /\ lt == [])*)
-              //equiv_if_true_case e1' fs_e1 h lt1 t fs_e2 fs_e3 e2 e' lt2 lt
-              admit ()
-            end;
-            introduce EFalse? e1' ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
-              admit ()
-              (*assert (fs_e == fs_e3);
-              assert (t ⦂ (h, fs_e3, e3));
-              assume (steps e3 e' h lt3 /\ indexed_irred e' (h++lt3) ==> (t ∋ (h, fs_e3, e') /\ lt3 == []));
-              assert (steps e3 e' (h++lt1) lt3 /\ lt == lt1 @ lt3);
-              assert (indexed_irred e' (h++lt));
-              assume (t ∋ (h, fs_e3, e') /\ lt3 == []);   
-              assume (t ∋ (h, fs_e, e') /\ lt == [])*)
-            end*)
-          )
+          let steps_pre : squash (equiv_if_steps_pre e e' h lt t fs_e1 fs_e2 fs_e3 fs_e e1 e2 e3) = () in
+          FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_e, e') /\ lt == [])) steps_pre (fun steps_pre ->
+              equiv_if_steps #e #e' #h #lt #t #fs_e1 #fs_e2 #fs_e3 #fs_e #e1 #e2 #e3 steps_pre)
         end
       end
     end
