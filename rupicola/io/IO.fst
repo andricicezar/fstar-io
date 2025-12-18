@@ -42,7 +42,7 @@ let rec theta #a (m:io a) : hist a =
 
 let lem_theta_return (#a:Type) (x:a) (h:history) (lt:local_trace h) :
   Lemma (requires lt == [])
-        (ensures forall p. theta (return x) h p ==> p lt x) =
+        (ensures wp2p (theta (return x)) h lt x) =
   introduce forall p. theta (return x) h p ==> p lt x with begin
     introduce theta (return x) h p ==> p lt x with _. begin
       assert (return x == Return x);

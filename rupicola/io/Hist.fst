@@ -30,6 +30,9 @@ let hist_wp_monotonic (wp:hist0 'a) =
 
 type hist a = wp:(hist0 a){hist_wp_monotonic wp}
 
+let wp2p (wp:hist 'a) (h:history) : hist_post h 'a =
+  fun lt res -> forall p. wp h p ==> p lt res
+
 val hist_subcomp0 : #a:Type -> #p1:(a -> Type0) -> #p2:(a -> Type0) -> #_:unit{forall x. p1 x ==> p2 x} -> wp:hist (x:a{p1 x}) ->
   (hist (x:a{p2 x}))
 let hist_subcomp0 #a #p1 #p2 #_ wp : (hist (x:a{p2 x})) =
@@ -109,7 +112,6 @@ let lemma_hist_bind_associativity #a #b #c (w1:hist a) (w2:a -> hist b) (w3: b -
     end
   in
   Classical.forall_intro_2 pw
-
 
 unfold
 let to_hist #a (pre:hist_pre) (post:(h:history -> a -> local_trace h -> Type0)) : hist a =
