@@ -25,6 +25,10 @@ unfold
 let hist_post_ord (#h:history) (p1 p2:hist_post h 'a) = forall lt r. p1 lt r ==> p2 lt r
 
 unfold
+let hist_post_equiv (#h:history) (p1 p2:hist_post h 'a) =
+  hist_post_ord p1 p2 /\ hist_post_ord p2 p1
+
+unfold
 let hist_wp_monotonic (wp:hist0 'a) =
   forall h (p1 p2:hist_post h 'a). (p1 `hist_post_ord` p2) ==>  (wp h p1 ==> wp h p2)
 

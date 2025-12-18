@@ -26,25 +26,38 @@ val io_bind
 val read () : io (resexn bool)
 val write (x:bool) : io (resexn unit)
 
+let return = io_return
+let (let!@) = io_bind
+
 val theta : #a:Type -> io a -> hist a
+
+val theta_monad_morphism_ret (x:'a) :
+  Lemma (theta (return x) == hist_return x)
+
+val theta_monad_morphism_bind (m:io 'a) (k:'a -> io 'b) :
+  Lemma (theta (io_bind m k) `hist_equiv` hist_bind (theta m) (fun x -> theta (k x)))
+
+val wp2p_theta_bind (m:io 'a) (k:'a -> io 'b) :
+  Lemma (forall h.
+         wp2p (hist_bind (theta m) (fun x -> theta (k x))) h
+         `hist_post_equiv`
+         wp2p (theta (io_bind m k)) h)
 
 val io_bind_equivalence #a #b (k k':a -> io b) (m:io a) :
   Lemma (requires forall x. k x == k' x)
         (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k'))
 
-let return = io_return
-let (let!@) = io_bind
-
-val lem_theta_return #a (x:a) (h:history) (lt:local_trace h) :
+let lem_theta_return #a (x:a) (h:history) (lt:local_trace h) :
   Lemma (requires lt == [])
-        (ensures wp2p (theta (return x)) h lt x)
+        (ensures wp2p (theta (return x)) h lt x) =
+  theta_monad_morphism_ret x
 
-val lem_theta_bind #a #b (m:io a) (h:history) (lt2:local_trace h) (fs_r_m:a) (k:a -> io b) (lt3:local_trace (h++lt2)) (fs_r:b) (lt:local_trace h) :
+let lem_theta_bind #a #b (m:io a) (h:history) (lt2:local_trace h) (fs_r_m:a) (k:a -> io b) (lt3:local_trace (h++lt2)) (fs_r:b) (lt:local_trace h) :
   Lemma (requires wp2p (theta m) h lt2 fs_r_m /\
                   wp2p (theta (k fs_r_m)) (h++lt2) lt3 fs_r /\
                   (lt == lt2 @ lt3))
-        (ensures wp2p (theta (io_bind m k)) h lt fs_r)
-// theta (io_bind m k) == pred transformer bind of (theta m) (fun x -> theta (k x))
+        (ensures wp2p (theta (io_bind m k)) h lt fs_r) =
+  wp2p_theta_bind m k
 
 val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
   Lemma (requires wp2p (theta m) h lt fs_r) 

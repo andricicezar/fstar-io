@@ -123,7 +123,7 @@ let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs: a ⊩ s)
   compile_equiv qs;
   lem_equiv_val #a s (compile_closed qs)
 
-let lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:get_Type (a ^-> b))
-  (qs:(a ^-> b) ⊩ s)
+let lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:get_Type (a ^->!@ b))
+  (qs:(a ^->!@ b) ⊩ s)
   : Lemma (ELam? (compile_closed qs))
   = admit ()
