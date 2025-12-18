@@ -43,23 +43,23 @@ let behS ws = fun (lt, res) -> forall p. theta ws [] p ==> p lt res
 // unverified code: target + target type (typ)
 // but maybe current typing works? cause you cannot have pre post conditions
 // the type of target contexts restricts us to unverified code
-noeq type intT = { ct : qType }
+  noeq type intT = { ct : qType }
 
-val comp_int : intS -> intT
-//let comp_int i = { ct = type_quotation_to_typ i.qct }
-let comp_int i = { ct = i.ct }
+  val comp_int : intS -> intT
+  //let comp_int i = { ct = type_quotation_to_typ i.qct }
+  let comp_int i = { ct = i.ct }
 
-type progT (i:intT) = closed_exp
+  type progT (i:intT) = closed_exp
 
-// the typing makes sure that there are no pre post conditions - maybe...
-type ctxT (i:intT) = ct:value & typing empty ct i.ct
-(** syntactic typing necessary to be able to backtranslate **)
-type wholeT = closed_exp
+  // the typing makes sure that there are no pre post conditions - maybe...
+  type ctxT (i:intT) = ct:value & typing empty ct i.ct
+  (** syntactic typing necessary to be able to backtranslate **)
+  type wholeT = closed_exp
 
-let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
-  let (| e, h |) = ct in
-  let wt = EApp pt e in
-  wt
+  let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
+    let (| e, h |) = ct in
+    let wt = EApp pt e in
+    wt
 
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   compile_closed (dsnd ps)
