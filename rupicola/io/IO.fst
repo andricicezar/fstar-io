@@ -40,6 +40,10 @@ let rec theta #a (m:io a) : hist a =
   | Return x -> hist_return x
   | Call o args k -> hist_bind (op_wp o args) (fun r -> theta (k r))
 
+let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
+  Lemma (requires forall x. k x == k' x)
+        (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k')) = admit ()
+        
 let lem_theta_return (#a:Type) (x:a) (h:history) (lt:local_trace h) :
   Lemma (requires lt == [])
         (ensures wp2p (theta (return x)) h lt x) =
@@ -50,40 +54,12 @@ let lem_theta_return (#a:Type) (x:a) (h:history) (lt:local_trace h) :
     end
   end
 
-let post_condition_independence (#a:Type) (#h:history) (p:hist_post h a) (x:a) :
-  Lemma (requires p [] x)
-        (ensures forall h' (p':hist_post h' a). p' [] x) = admit ()
+let lem_theta_bind #a #b (m:io a) (h:history) (lt2:local_trace h) (fs_r_m:a) (k:a -> io b) (lt3:local_trace (h++lt2)) (fs_r:b) (lt:local_trace h) :
+  Lemma (requires wp2p (theta m) h lt2 fs_r_m /\
+                  wp2p (theta (k fs_r_m)) (h++lt2) lt3 fs_r /\
+                  (lt == lt2 @ lt3))
+        (ensures wp2p (theta (io_bind m k)) h lt fs_r) = admit ()
 
-(*let theta_hist_indep #a (m:io a) (h:history) (lt:local_trace h) (fs_r:a) (p:hist_post h a) :
-  Lemma (requires theta m h p ==> p lt fs_r)
-        (ensures forall (h':history). exists (p':hist_post h' a) (lt':local_trace h'). theta m h' p' ==> p' lt' fs_r /\ (lt' == lt) /\ (p == p')) = admit () *)
-
-let theta_history_independence #a (m:io a) (h:history) (lt:local_trace h) (fs_r:a) (p:hist_post h a) :
-  Lemma (requires theta m h p ==> p lt fs_r)
-        (ensures forall h' (lt':local_trace h') p'. theta m h' p' ==> p' lt' fs_r) =
-  introduce forall h' lt' p'. theta m h' p' ==> p' lt' fs_r with begin
-    introduce theta m h' p' ==> p' lt' fs_r with _. begin
-      let _ : hist0 a = theta m in
-      let _ : h:history -> hist_post h a -> Type0 = theta m in
-      let _ : hist_post h a = p in
-      let _ : local_trace h -> a -> Type0 = p in
-      match m with
-      | Return x -> begin
-        assert (theta m h p == (hist_return x) h p);
-        assert (theta m h p == p [] x);
-        assert (p [] x ==> p lt fs_r);
-        assume (p' [] x ==> p' lt' fs_r);
-        ()
-        //admit ()
-        end
-      | Call o args k -> begin
-        //hist_bind (op_wp o args) (fun r -> theta (k r))
-        //fun h p -> (op_wp o args) h (hist_post_bind h (fun r -> theta (k r)) p)
-        assume (theta m h p == (hist_bind (op_wp o args) (fun r -> theta (k r))) h p);
-        assert (theta m h p == (op_wp o args) h (hist_post_bind h (fun r -> theta (k r)) p));
-        assert (theta m h p == (op_wp o args) h (fun lt r -> (fun r -> theta (k r)) r (h++lt) (hist_post_shift h p lt)));
-        assert (theta m h p == (op_wp o args) h (fun lt r -> (fun r -> theta (k r)) r (h++lt) (fun lt' r -> p (lt @ lt') r)));
-        admit ()
-        end
-    end
-  end
+let theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
+  Lemma (requires wp2p (theta m) h lt fs_r) 
+        (ensures wp2p (theta m) h' lt' fs_r) = admit ()

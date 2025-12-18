@@ -167,9 +167,7 @@ and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:c
             eliminate exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e') /\ fs_beh fs_e h lt_ fs_r
             returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
               val_type_history_independence t (h++lt_) fs_r e';
-              //theta_history_independence #(get_Type t) fs_e h lt_ fs_r;
-              assume (fs_beh fs_e h' lt' fs_r);
-              ()
+              theta_history_independence #(get_Type t) fs_e h h' lt_ lt' fs_r
             end
           end)
       end

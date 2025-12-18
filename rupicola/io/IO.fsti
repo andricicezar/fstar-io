@@ -46,15 +46,7 @@ val lem_theta_bind #a #b (m:io a) (h:history) (lt2:local_trace h) (fs_r_m:a) (k:
         (ensures wp2p (theta (io_bind m k)) h lt fs_r)
 // theta (io_bind m k) == pred transformer bind of (theta m) (fun x -> theta (k x))
 
-val theta_history_independence #a (m:io a) (h:history) (lt:local_trace h) (fs_r:a) :
-  Lemma (requires wp2p (theta m) h lt fs_r)
-        (ensures forall h' (lt':local_trace h'). wp2p (theta m) h' lt' fs_r) // use steps e e' h lt and construct_local_trace
-
-val theta_history_independence' (#a:Type) (m:io a) (h:history) (p:hist_post h a) :
-  Lemma (requires theta m h p)
-        (ensures forall h'. exists (p':hist_post h' a). (theta m h' p') /\
-                 (forall (lt:local_trace h) (lt':local_trace h') r. (lt == lt') ==> (p lt r <==> p' lt' r)))
-
-val post_condition_history_independence (#a:Type) (m:io a) (h h':history) (p:hist_post h a) (p':hist_post h' a) (lt':local_trace h') (r:a) :
-  Lemma (requires theta m h p /\ theta m h' p' /\ p' lt' r)
-        (ensures exists (lt:local_trace h). p lt r)
+val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
+  Lemma (requires wp2p (theta m) h lt fs_r) 
+        (ensures wp2p (theta m) h' lt' fs_r) 
+        // use steps e e' h lt and construct_local_trace
