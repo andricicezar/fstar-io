@@ -67,16 +67,6 @@ and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases 
     (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
 
-let theta_history_independence' #t (e e':closed_exp) (fs_e:fs_prod t) (h:history) (lt:local_trace h) (fs_r:get_Type t):
-  Lemma (requires steps e e' h lt /\
-                  indexed_irred e' (h++lt) /\
-                  t ∋ (h++lt, fs_r, e') /\
-                  fs_beh fs_e h lt fs_r)
-        (ensures forall h' (lt':local_trace h'). fs_beh fs_e h' lt' fs_r) =
-  introduce forall h' lt'. fs_beh fs_e h' lt' fs_r with begin
-    admit ()
-  end
-
 let rec val_type_history_independence (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
         (ensures forall h'. t ∋ (h', fs_v, e))
@@ -477,9 +467,6 @@ let equiv_app #g
     end
   end
 
-// try making auxiliary lemmas with very precise preconditions/postconditions and very small blocks of code
-// try adding some SMT patterns
-
 let equiv_if_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:bool) (fs_e2 fs_e3 fs_e:get_Type t) (e1:closed_exp) (e2:closed_exp) (e3:closed_exp) =
   (fs_e == (if fs_e1 then fs_e2 else fs_e3)) /\
   (e == (EIf e1 e2 e3)) /\
@@ -647,10 +634,23 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
     end
   end
 
-let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
-  (requires fs_e ≈ e)
-  (ensures helper_inl t2 fs_e ≈ (EInl e)) =
-  admit ()
+let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e':exp) : Lemma
+  (requires fs_e ≈ e')
+  (ensures helper_inl t2 fs_e ≈ (EInl e')) =
+  lem_fv_in_env_inl g e';
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inl (fs_e fsG), gsubst s (EInl e')) with begin
+    let fs_e = fs_e fsG in
+    let e = EInl (gsubst s e') in
+    assert (gsubst s (EInl e') == e);
+    let EInl e' = e in
+    introduce fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inl fs_e, e) with _. begin
+      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> ((t1 ^+ t2) ∋ (h, Inl fs_e, e') /\ lt == []) with begin
+        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> ((t1 ^+ t2) ∋ (h, Inl fs_e, e') /\ lt == []) with _. begin
+          admit ()
+        end
+      end
+    end
+  end
 
 let equiv_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
   (requires fs_e ≈ e)
