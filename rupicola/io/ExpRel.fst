@@ -58,7 +58,7 @@ and (⦂) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %
   let (h, fs_e, e) = p in
   forall (e':closed_exp) lt.
     steps e e' h lt ==> indexed_irred e' (h++lt) ==>
-    (t ∋ (h, fs_e, e') /\ lt == []) ///\ (forall p. p lt fs_e)) <- this helps return proof go through
+    (t ∋ (h, fs_e, e') /\ lt == [])
                            (** vvvvvvvvvv defined over producers **)
 and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
@@ -634,19 +634,33 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
     end
   end
 
-let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e':exp) : Lemma
-  (requires fs_e ≈ e')
-  (ensures helper_inl t2 fs_e ≈ (EInl e')) =
-  lem_fv_in_env_inl g e';
-  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inl (fs_e fsG), gsubst s (EInl e')) with begin
+let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
+  (requires fs_e ≈ e)
+  (ensures helper_inl t2 fs_e ≈ (EInl e)) =
+  lem_fv_in_env_inl g e;
+  let t = t1 ^+ t2 in
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inl (fs_e fsG), gsubst s (EInl e)) with begin
     let fs_e = fs_e fsG in
-    let e = EInl (gsubst s e') in
-    assert (gsubst s (EInl e') == e);
-    let EInl e' = e in
-    introduce fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inl fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> ((t1 ^+ t2) ∋ (h, Inl fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> ((t1 ^+ t2) ∋ (h, Inl fs_e, e') /\ lt == []) with _. begin
-          admit ()
+    let fs_ex = Inl #(get_Type t1) #(get_Type t2) fs_e in
+    let ex = EInl (gsubst s e) in
+    assert (gsubst s (EInl e) == ex);
+    let EInl e = ex in
+    introduce fsG `(∽) h` s ==> t ⦂ (h, fs_ex, ex) with _. begin
+      introduce forall (ex':closed_exp) lt. steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
+        introduce _ ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with _. begin
+          let steps_e_e' : squash (steps ex ex' h lt) = () in
+          FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_ex, ex') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
+            exp_type_history_independence t1 h fs_e e;
+            safety_val #t1 fs_e e;
+            let t1_typ = type_quotation_to_typ (get_rel t1) in
+            let t2_typ = type_quotation_to_typ (get_rel t2) in
+            let (e', (| lt12, lt_f |)) = destruct_steps_einl e ex' h lt steps_e_e' t1_typ t2_typ in
+            lem_value_is_irred e';
+            lem_value_is_irred (EInl e');
+            assert (t1 ∋ (h, fs_e, e') /\ lt12 == []);
+            lem_destruct_steps_einl e' ex' h lt_f t1_typ t2_typ;
+            assert (t ∋ (h, fs_ex, ex'))
+          )
         end
       end
     end
@@ -655,7 +669,34 @@ let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e':exp) : Lemma
 let equiv_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
   (requires fs_e ≈ e)
   (ensures helper_inr t1 fs_e ≈ (EInr e)) =
-  admit ()
+  lem_fv_in_env_inr g e;
+  let t = t1 ^+ t2 in
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⦂ (h, Inr (fs_e fsG), gsubst s (EInr e)) with begin
+    let fs_e = fs_e fsG in
+    let fs_ex = Inr #(get_Type t1) #(get_Type t2) fs_e in
+    let ex = EInr (gsubst s e) in
+    assert (gsubst s (EInr e) == ex);
+    let EInr e = ex in
+    introduce fsG `(∽) h` s ==> t ⦂ (h, fs_ex, ex) with _. begin
+      introduce forall (ex':closed_exp) lt. steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
+        introduce _ ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with _. begin
+          let steps_e_e' : squash (steps ex ex' h lt) = () in
+          FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_ex, ex') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
+            exp_type_history_independence t2 h fs_e e;
+            safety_val #t2 fs_e e;
+            let t1_typ = type_quotation_to_typ (get_rel t1) in
+            let t2_typ = type_quotation_to_typ (get_rel t2) in
+            let (e', (| lt12, lt_f |)) = destruct_steps_einr e ex' h lt steps_e_e' t1_typ t2_typ in
+            lem_value_is_irred e';
+            lem_value_is_irred (EInr e');
+            assert (t2 ∋ (h, fs_e, e') /\ lt12 == []);
+            lem_destruct_steps_einr e' ex' h lt_f t1_typ t2_typ;
+            assert (t ∋ (h, fs_ex, ex'))
+          )
+        end
+      end
+    end
+  end
 
 let equiv_case
   #g
