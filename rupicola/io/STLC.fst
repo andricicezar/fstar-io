@@ -359,12 +359,26 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     hst:step e1 e1' h oev ->
     step (ECase e1 e2 e3) (ECase e1' e2 e3) h oev
   | SInl :
+    #e':closed_exp ->
+    #e'':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step e' e'' h oev ->
+    step (EInl e') (EInl e'') h oev
+  | SInlReturn :
     e1:value ->
     e2:exp{is_closed (ELam e2)} ->
     e3:exp{is_closed (ELam e3)} ->
     h:history ->
     step (ECase (EInl e1) e2 e3) (subst_beta e1 e2) h None
   | SInr :
+    #e':closed_exp ->
+    #e'':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step e' e'' h oev ->
+    step (EInr e') (EInr e'') h oev
+  | SInrReturn :
     e1:value ->
     e2:exp{is_closed (ELam e2)} ->
     e3:exp{is_closed (ELam e3)} ->
@@ -405,6 +419,26 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
         match st with
         | PairLeft e2 hst -> ()
         | PairRight e1 hst -> ()
+        | _ -> ())
+      end
+    end
+  | EInl e12 ->
+    lem_value_is_irred e12;
+    introduce forall (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev ==> False with begin
+      introduce step e e' h oev ==> False with _. begin
+        FStar.Squash.bind_squash #(step e e' h oev) () (fun st ->
+        match st with
+        | SInl hst -> ()
+        | _ -> ())
+      end
+    end
+  | EInr e12 ->
+    lem_value_is_irred e12;
+    introduce forall (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev ==> False with begin
+      introduce step e e' h oev ==> False with _. begin
+        FStar.Squash.bind_squash #(step e e' h oev) () (fun st ->
+        match st with
+        | SInr hst -> ()
         | _ -> ())
       end
     end
@@ -515,8 +549,16 @@ let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)
     let hst' = construct_step hst h' oev' in
     SCase e2 e3 hst'
     end
-  | SInl e1 e2 e3 h -> SInl e1 e2 e3 h'
-  | SInr e1 e2 e3 h -> SInr e1 e2 e3 h'
+  | SInl hst -> begin
+    let hst' = construct_step hst h' oev' in
+    SInl hst'
+    end
+  | SInlReturn e1 e2 e3 h -> SInlReturn e1 e2 e3 h'
+  | SInr hst -> begin
+    let hst' = construct_step hst h' oev' in
+    SInr hst'
+    end
+  | SInrReturn e1 e2 e3 h -> SInrReturn e1 e2 e3 h'
   | SRead b h -> SRead b h'
   | SWrite b r h -> SWrite b r h'
 
@@ -598,12 +640,24 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
     let _ : step e e' h' oev1' = SCase e2 e3 hst' in
     oev1'
     end
-  | SInl e1 e2 e3 h -> begin
-    let _ : step e e' h' None = SInl e1 e2 e3 h' in
+  | SInl #e12 #e12' #h #oev hst -> begin
+    let oev' = construct_option_ev hst h' in
+    let hst' : step e12 e12' h' oev' = construct_step hst h' oev' in
+    let _ : step e e' h' oev' = SInl hst' in
+    oev'
+    end
+  | SInlReturn e1 e2 e3 h -> begin
+    let _ : step e e' h' None = SInlReturn e1 e2 e3 h' in
     None
     end
-  | SInr e1 e2 e3 h -> begin
-    let _ : step e e' h' None = SInr e1 e2 e3 h' in
+  | SInr #e12 #e12' #h #oev hst -> begin
+    let oev' = construct_option_ev hst h' in
+    let hst' : step e12 e12' h' oev' = construct_step hst h' oev' in
+    let _ : step e e' h' oev' = SInr hst' in
+    oev'
+    end
+  | SInrReturn e1 e2 e3 h -> begin
+    let _ : step e e' h' None = SInrReturn e1 e2 e3 h' in
     None
     end
   | SRead b h -> begin
@@ -996,6 +1050,7 @@ let srefl_epair_implies_value (e1 e2:closed_exp) (h:history) : Lemma
     false_elim ()
   end
 
+#push-options "--z3rlimit 10000"
 let rec destruct_steps_epair
   (e1:closed_exp)
   (e2:closed_exp)
@@ -1016,8 +1071,7 @@ let rec destruct_steps_epair
       (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1')) /\
       (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2')))
     (decreases st)
-   = admit ()
-     (*match st with
+   = match st with
      | SRefl (EPair e1 e2) h -> begin
        srefl_epair_implies_value e1 e2 h;
        (e1, e2, (| [], (| [], [] |) |))
@@ -1038,13 +1092,8 @@ let rec destruct_steps_epair
          introduce indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2') with _. begin
            indexed_irred_history_independence e2 h
          end;
-         assume (steps (EPair e1 e2) (EPair e1'' e2') h (lt1 @ (lt1' @ lt2)));
-         assert (indexed_irred e1 h ==> ((lt1 @ lt1') == [] /\ e1 == e1''));
-         assert (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2'));
          (e1'', e2', (| (lt1 @ lt1'), (| lt2, lt3 |) |))
          end
-       | _ -> admit ()
-       end
        | PairRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
          let (EPair e1 e2') = f2 in
          lem_step_implies_steps e2 e2' h oev2;
@@ -1059,22 +1108,11 @@ let rec destruct_steps_epair
          introduce indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1') with _. begin
            indexed_irred_history_independence e1 h
          end;
-         assume (steps e1 e1' h lt1);
-         assume (steps e2' e2'' (h++lt1) (lt2 @ lt2'));
-         assume (steps (EPair e1 e2) (EPair e1' e2'') h (lt1 @ (lt2 @ lt2')));
-         assume (steps (EPair e1' e2'') e' ((h++lt1)++(lt2 @ lt2')) lt3);
-         assume (lt == ((lt1 @ (lt2 @ lt2')) @ lt3));
-         assume (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1'));
-         assume (indexed_irred e2 h ==> ((lt2 @ lt2') == [] /\ e2 == e2''));
-         (*assert (steps (EPair e1 e2) (EPair e1' e2'') h (lt1 @ (lt2 @ lt2')));
-         assert (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1'));
-         assert (indexed_irred e2 h ==> ((lt2 @ lt2') == [] /\ e2 == e2''));*)
-         admit ()
-         //(e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |))
+         (e1', e2'', (| lt1, (| (lt2 @ lt2'), lt3 |) |))
          end
-       | _ -> admit ()
-         //(e1, e2, (| [], (| [], [] |) |))
-       end*)
+       | _ -> (e1, e2, (| [], (| [], [] |) |))
+       end
+#pop-options
 
   (**
     How the steps look like:
@@ -1250,3 +1288,155 @@ let lem_destruct_steps_epair_snd
   (lt:local_trace h) :
   Lemma (requires (steps (ESnd (EPair e1 e2)) e' h lt /\ indexed_irred e1 h /\ indexed_irred e2 h))
         (ensures (e2 == e') /\ lt == []) = admit ()
+
+let srefl_einl_implies_value (e12:closed_exp) (t1 t2:typ) (h:history) : Lemma
+  (requires safe e12 /\ indexed_irred (EInl e12) h)
+  (ensures is_value (EInl e12))
+  =
+  introduce indexed_irred e12 h ==> is_value (EInl e12) with _. begin
+    assert (steps e12 e12 h []);
+    ()
+  end;
+
+  introduce ~(indexed_irred e12 h) ==> is_value (EInl e12) with _. begin
+    assert (exists e12' oev12. step e12 e12' h oev12);
+    eliminate exists e12' oev12. step e12 e12' h oev12 returns exists e' oev. step (EInl e12) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SInl st))
+    end;
+    false_elim ()
+  end
+
+let rec destruct_steps_einl
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (EInl e12) e' h lt)
+  (t1:typ)
+  (t2:typ) :
+  Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
+    (requires indexed_irred e' (h++lt) /\
+              safe e12)
+    (ensures fun (e12', (| lt12, lt_f |)) ->
+              indexed_irred e12' (h++lt12) /\
+              steps e12 e12' h lt12 /\
+              steps (EInl e12) (EInl e12') h lt12 /\
+              is_closed (EInl e12') /\
+              steps (EInl e12') e' (h++lt12) lt_f /\
+              lt == (lt12 @ lt_f) /\
+              (indexed_irred e12 h ==> (lt12 == [] /\ e12 == e12')))
+    (decreases st)
+  = match st with
+    | SRefl (EInl e12) h -> begin
+      srefl_einl_implies_value e12 t1 t2 h;
+      lem_value_is_irred e12;
+      (e12, (| [], [] |))
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_einl step_einl_steps -> begin
+      let (EInl e12) = e in
+      let SInl #e12 #e12' #h #oev12 step_e12 = step_einl in
+      let (EInl e12') = f2 in
+      lem_step_implies_steps e12 e12' h oev12;
+      lem_step_implies_steps (EInl e12) (EInl e12') h oev12;
+      let lt12 : local_trace h = as_lt oev12 in
+      lem_step_preserve_safe e12 e12' h oev12;
+      let s2 : steps (EInl e12') e' (h++lt12) lt23 = step_einl_steps in
+      let (e12'', (| lt12', lt_f |)) = destruct_steps_einl e12' e' (h++lt12) lt23 s2 t1 t2 in
+      lem_steps_transitive e12 e12' e12'' h lt12 lt12';
+      lem_steps_transitive (EInl e12) (EInl e12') (EInl e12'') h lt12 lt12';
+      (e12'', (| (lt12 @ lt12'), lt_f |))
+      end
+
+let lem_destruct_steps_einl
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (t1 t2:typ) :
+  Lemma (requires steps (EInl e12) e' h lt /\
+                  indexed_irred e12 h /\
+                  indexed_irred (EInl e12) h)
+        (ensures (EInl e12 == e') /\ lt == []) =
+  introduce steps (EInl e12) e' h lt ==> ((EInl e12 == e') /\ lt == []) with _. begin
+    FStar.Squash.bind_squash #(steps (EInl e12) e' h lt) () (fun sts ->
+    match sts with
+    | SRefl (EInl e12) h -> ()
+    | STrans #e #f2 #e' #h #_ #lt23 step_einl step_einl_steps -> false_elim ()
+    )
+  end
+
+let srefl_einr_implies_value (e12:closed_exp) (t1 t2:typ) (h:history) : Lemma
+  (requires safe e12 /\ indexed_irred (EInr e12) h)
+  (ensures is_value (EInr e12))
+  =
+  introduce indexed_irred e12 h ==> is_value (EInr e12) with _. begin
+    assert (steps e12 e12 h []);
+    ()
+  end;
+
+  introduce ~(indexed_irred e12 h) ==> is_value (EInr e12) with _. begin
+    assert (exists e12' oev12. step e12 e12' h oev12);
+    eliminate exists e12' oev12. step e12 e12' h oev12 returns exists e' oev. step (EInr e12) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SInr st))
+    end;
+    false_elim ()
+  end
+
+let rec destruct_steps_einr
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (EInr e12) e' h lt)
+  (t1:typ)
+  (t2:typ) :
+  Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
+    (requires indexed_irred e' (h++lt) /\
+              safe e12)
+    (ensures fun (e12', (| lt12, lt_f |)) ->
+              indexed_irred e12' (h++lt12) /\
+              steps e12 e12' h lt12 /\
+              steps (EInr e12) (EInr e12') h lt12 /\
+              is_closed (EInr e12') /\
+              steps (EInr e12') e' (h++lt12) lt_f /\
+              lt == (lt12 @ lt_f) /\
+              (indexed_irred e12 h ==> (lt12 == [] /\ e12 == e12')))
+    (decreases st)
+  = match st with
+    | SRefl (EInr e12) h -> begin
+      srefl_einr_implies_value e12 t1 t2 h;
+      lem_value_is_irred e12;
+      (e12, (| [], [] |))
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_einr step_einr_steps -> begin
+      let (EInr e12) = e in
+      let SInr #e12 #e12' #h #oev12 step_e12 = step_einr in
+      let (EInr e12') = f2 in
+      lem_step_implies_steps e12 e12' h oev12;
+      lem_step_implies_steps (EInr e12) (EInr e12') h oev12;
+      let lt12 : local_trace h = as_lt oev12 in
+      lem_step_preserve_safe e12 e12' h oev12;
+      let s2 : steps (EInr e12') e' (h++lt12) lt23 = step_einr_steps in
+      let (e12'', (| lt12', lt_f |)) = destruct_steps_einr e12' e' (h++lt12) lt23 s2 t1 t2 in
+      lem_steps_transitive e12 e12' e12'' h lt12 lt12';
+      lem_steps_transitive (EInr e12) (EInr e12') (EInr e12'') h lt12 lt12';
+      (e12'', (| (lt12 @ lt12'), lt_f |))
+      end
+
+let lem_destruct_steps_einr
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (t1 t2:typ) :
+  Lemma (requires steps (EInr e12) e' h lt /\
+                  indexed_irred e12 h /\
+                  indexed_irred (EInr e12) h)
+        (ensures (EInr e12 == e') /\ lt == []) =
+  introduce steps (EInr e12) e' h lt ==> ((EInr e12 == e') /\ lt == []) with _. begin
+    FStar.Squash.bind_squash #(steps (EInr e12) e' h lt) () (fun sts ->
+    match sts with
+    | SRefl (EInr e12) h -> ()
+    | STrans #e #f2 #e' #h #_ #lt23 step_einr step_einr_steps -> false_elim ()
+    )
+  end
