@@ -1440,3 +1440,117 @@ let lem_destruct_steps_einr
     | STrans #e #f2 #e' #h #_ #lt23 step_einr step_einr_steps -> false_elim ()
     )
   end
+
+let can_step_ecase_when_safe (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)}) (e_rc:exp{is_closed (ELam e_rc)}) (h:history) (t1 t2:typ) : Lemma
+  (requires
+    safe e_case /\
+    indexed_sem_expr_shape (TSum t1 t2) e_case h)
+  (ensures (exists e' oev. step (ECase e_case e_lc e_rc) e' h oev))
+  =
+  introduce indexed_irred e_case h ==> (exists e' oev. step (ECase e_case e_lc e_rc) e' h oev) with _. begin
+    match e_case with
+    | EInl e_c' -> begin
+      assert (steps e_case e_case h []);
+      let st : step (ECase (EInl e_c') e_lc e_rc) (subst_beta e_c' e_lc) h None = SInlReturn e_c' e_lc e_rc h in
+      ()
+      end
+    | EInr e_c' -> begin
+      assert (steps e_case e_case h []);
+      let st : step (ECase (EInr e_c') e_lc e_rc) (subst_beta e_c' e_rc) h None = SInrReturn e_c' e_lc e_rc h in
+      ()
+      end
+    | _ -> begin
+      assert (steps e_case e_case h []);
+      false_elim ()
+      end
+  end;
+
+  introduce ~(indexed_irred e_case h) ==> (exists e' oev. step (ECase e_case e_lc e_rc) e' h oev) with _. begin
+    assert (exists e_case' oev1. step e_case e_case' h oev1);
+    eliminate exists e_case' oev1. step e_case e_case' h oev1 returns exists e' oev. step (ECase e_case e_lc e_rc) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SCase e_lc e_rc st))
+    end
+  end
+
+let get_einl_v (x:closed_exp{EInl? x}) =
+  match x with
+  | EInl v -> v
+
+let get_einr_v (x:closed_exp{EInr? x}) =
+  match x with
+  | EInr v -> v
+
+#push-options "--z3rlimit 10000"
+let rec destruct_steps_ecase
+  (e_case:closed_exp)
+  (e_lc:exp{is_closed (ELam e_lc)})
+  (e_rc:exp{is_closed (ELam e_rc)})
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (ECase e_case e_lc e_rc) e' h lt)
+  (t1:typ)
+  (t2:typ) :
+  Pure (closed_exp * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
+    (requires indexed_irred e' (h++lt) /\
+              safe e_case /\
+              indexed_sem_expr_shape (TSum t1 t2) e_case h)
+    (ensures fun (e_case', (| lt1, (lt2, lt3) |)) ->
+      indexed_irred e_case' (h++lt1) /\
+      steps e_case e_case' h lt1 /\
+      steps (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) h lt1 /\
+      (EInl? e_case' ==>
+        (e_case' == EInl (get_einl_v e_case')) /\
+        (steps (ECase e_case e_lc e_rc) (subst_beta (get_einl_v e_case') e_lc) h lt1) /\
+        (steps (subst_beta (get_einl_v e_case') e_lc) e' (h++lt1) lt2) /\
+        (lt == (lt1 @ lt2))) /\
+      (EInr? e_case' ==>
+        (e_case' == EInr (get_einr_v e_case')) /\
+        (steps (ECase e_case e_lc e_rc) (subst_beta (get_einr_v e_case') e_rc) h lt1) /\
+        (steps (subst_beta (get_einr_v e_case') e_rc) e' (h++lt1) lt3) /\
+        (lt == (lt1 @ lt3))) /\
+      ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3)) /\
+      (indexed_irred e_case h ==> (lt1 == [] /\ e_case == e_case')))
+    (decreases st)
+  = match st with
+    | SRefl (ECase e_case e_lc e_rc) h -> begin
+      can_step_ecase_when_safe e_case e_lc e_rc h t1 t2;
+      false_elim ()
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_ecase step_ecase_steps -> begin
+      let (ECase e_case e_lc e_rc) = e in
+      match step_ecase with
+      | SCase #e_case e_lc e_rc #e_case' #h #oev1 step_e1 -> begin
+        let (ECase e_case' e_lc e_rc) = f2 in
+        lem_step_implies_steps e_case e_case' h oev1;
+        lem_step_implies_steps (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) h oev1;
+        let lt1 : local_trace h = as_lt oev1 in
+        lem_step_preserve_safe e_case e_case' h oev1;
+        lem_step_preserve_sem_expr_shape e_case e_case' h oev1 (TSum t1 t2);
+        let s2 : steps (ECase e_case' e_lc e_rc) e' (h++lt1) lt23 = step_ecase_steps in
+        let (e_case'', (| lt1', (lt2, lt3) |)) = destruct_steps_ecase e_case' e_lc e_rc e' (h++lt1) lt23 s2 t1 t2 in
+        lem_steps_transitive e_case e_case' e_case'' h lt1 lt1';
+        lem_steps_transitive (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) (ECase e_case'' e_lc e_rc) h lt1 lt1';
+        match e_case'' with
+        | EInl v -> begin
+          lem_steps_transitive (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) (subst_beta v e_lc) h lt1 lt1';
+          (e_case'', (| (lt1 @ lt1'), (lt2, lt3) |))
+          end
+        | EInr v -> begin
+          lem_steps_transitive (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) (subst_beta v e_rc) h lt1 lt1';
+          (e_case'', (| (lt1 @ lt1'), (lt2, lt3) |))
+          end
+        | _ -> false_elim ()
+        end
+      | SInlReturn e_c' e_lc e_rc h -> begin
+        lem_step_implies_steps (ECase (EInl e_c') e_lc e_rc) (subst_beta e_c' e_lc) h None;
+        lem_value_is_irred (EInl e_c');
+        (EInl e_c', (| [], (lt, []) |))
+        end
+      | SInrReturn e_c' e_lc e_rc h -> begin
+        lem_step_implies_steps (ECase (EInr e_c') e_lc e_rc) (subst_beta e_c' e_rc) h None;
+        lem_value_is_irred (EInr e_c');
+        (EInr e_c', (| [], ([], lt) |))
+        end
+      end
+#pop-options
