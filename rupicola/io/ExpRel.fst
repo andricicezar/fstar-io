@@ -259,11 +259,11 @@ let safety_prod (#t:qType) (fs_e:fs_prod t) (e:exp) : Lemma
     end
   end
 
-let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
   Lemma (requires equiv_val fs_e e)
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
 
-let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
+let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:exp) (h:history) :
   Lemma (requires equiv_prod fs_e e)
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
   introduce forall e' (lt:local_trace h). steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
@@ -698,6 +698,45 @@ let equiv_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
     end
   end
 
+let equiv_case_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t1 t2 t3:qType) (fs_case:get_Type (t1 ^+ t2)) (fs_lc_lam:get_Type (t1 ^-> t3)) (fs_rc_lam:get_Type (t2 ^-> t3)) (fs_e:get_Type t3) (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)}) (e_rc:exp{is_closed (ELam e_rc)}) =
+  (fs_e == (match fs_case with
+           | Inl x -> fs_lc_lam x
+           | Inr x -> fs_rc_lam x)) /\
+  (e == (ECase e_case e_lc e_rc)) /\
+  (steps (ECase e_case e_lc e_rc) e' h lt) /\
+  (indexed_irred e' (h++lt)) /\
+  ((t1 ^+ t2) ⦂ (h, fs_case, e_case)) /\
+  ((t1 ^-> t3) ⦂ (h, fs_lc_lam, ELam e_lc)) /\
+  ((t2 ^-> t3) ⦂ (h, fs_rc_lam, ELam e_rc))
+
+let equiv_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #fs_rc_lam #fs_e #e_case #e_lc #e_rc (sq:squash (equiv_case_steps_pre e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc)) : squash (t3 ∋ (h, fs_e, e') /\ lt == []) =
+  exp_type_history_independence (t1 ^+ t2) h fs_case e_case;
+  safety_val #(t1 ^+ t2) fs_case e_case;
+  sem_expr_shape_val #(t1 ^+ t2) fs_case e_case h;
+  let t1_typ = type_quotation_to_typ (get_rel t1) in
+  let t2_typ = type_quotation_to_typ (get_rel t2) in
+  FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
+    let (e_case', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts t1_typ t2_typ in
+    match e_case' with
+    | EInl e_c' -> begin
+      assert (steps (ELam e_lc) (ELam e_lc) h []);
+      lem_value_is_irred (ELam e_lc);
+      assert ((t1 ^-> t3) ∋ (h, fs_lc_lam, ELam e_lc));
+      unroll_elam t1 t3 h fs_lc_lam e_lc;
+      assert (t3 ⦂ (h, fs_e, subst_beta e_c' e_lc));
+      assert (t3 ∋ (h, fs_e, e'))
+      end
+    | EInr e_c' -> begin
+      assert (steps (ELam e_rc) (ELam e_rc) h []);
+      lem_value_is_irred (ELam e_rc);
+      assert ((t2 ^-> t3) ∋ (h, fs_rc_lam, ELam e_rc));
+      unroll_elam t2 t3 h fs_rc_lam e_rc;
+      assert (t3 ⦂ (h, fs_e, subst_beta e_c' e_rc));
+      assert (t3 ∋ (h, fs_e, e'))
+      end
+    | _ -> false_elim ())
+
+#push-options "--z3rlimit 10000"
 let equiv_case
   #g
   (#t1 #t2 #t3:qType)
@@ -707,8 +746,45 @@ let equiv_case
   (e_case e_lc e_rc:exp)
   : Lemma
     (requires fs_case ≈ e_case /\ fs_lc ≈ e_lc /\ fs_rc ≈ e_rc)
-    (ensures helper_case fs_case fs_lc fs_rc ≈ ECase e_case e_lc e_rc)
-  = admit ()
+    (ensures helper_case fs_case fs_lc fs_rc ≈ ECase e_case e_lc e_rc) =
+  lem_fv_in_env_case g t1 t2 e_case e_lc e_rc;
+  lem_fv_in_env_lam g t1 e_lc;
+  lem_fv_in_env_lam g t2 e_rc;
+  equiv_lam #g #t1 #t3 fs_lc e_lc;
+  equiv_lam #g #t2 #t3 fs_rc e_rc;
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t3 ⦂ (h,
+    (match fs_case fsG with
+    | Inl x -> fs_lc (stack fsG x)
+    | Inr x -> fs_rc (stack fsG x)),
+    gsubst s (ECase e_case e_lc e_rc)) with begin
+    let fs_case = fs_case fsG in
+    let fs_lc_lam : fs_oval g (t1 ^-> t3) = fun fsG x -> fs_lc (stack fsG x) in
+    let fs_lc_lam = fs_lc_lam fsG in
+    let fs_rc_lam : fs_oval g (t2 ^-> t3) = fun fsG x -> fs_rc (stack fsG x) in
+    let fs_rc_lam = fs_rc_lam fsG in
+    let fs_e = (match fs_case with
+               | Inl x -> fs_lc_lam x
+               | Inr x -> fs_rc_lam x) in
+    let e_lc' = subst (sub_elam s) e_lc in
+    let e_rc' = subst (sub_elam s) e_rc in
+    assert (gsubst s (ELam e_lc) == ELam e_lc');
+    assert (gsubst s (ELam e_rc) == ELam e_rc');
+    let e = ECase (gsubst s e_case) e_lc' e_rc' in
+    assert (gsubst s (ECase e_case e_lc e_rc) == e);
+    let ECase e_case e_lc e_rc = e in
+    introduce fsG `(∽) h` s ==> t3 ⦂ (h, fs_e, e) with _. begin
+      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with _. begin
+          assert ((t1 ^-> t3) ⦂ (h, fs_lc_lam, ELam e_lc));
+          assert ((t2 ^-> t3) ⦂ (h, fs_rc_lam, ELam e_rc));
+          let steps_pre : squash (equiv_case_steps_pre e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc) = () in
+          FStar.Squash.map_squash #_ #(squash (t3 ∋ (h, fs_e, e') /\ lt == [])) steps_pre (fun steps_pre ->
+            equiv_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #fs_rc_lam #fs_e #e_case #e_lc #e_rc steps_pre)
+        end
+      end
+    end
+  end
+#pop-options
 
 let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2) (body:exp)
   : Lemma
@@ -754,7 +830,14 @@ let equiv_oprod_read g
   : Lemma
     (requires True)
     (ensures (fun fsG -> read ()) `equiv_oprod #g (qResexn qBool)` ERead)
-  = admit ()
+  =
+  assume (fv_in_env g ERead);
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qResexn qBool) ⪾ (h, read (), gsubst s ERead) with begin
+    introduce _ ==> _ with _. begin
+      assert (gsubst s ERead == ERead);
+      admit ()
+    end
+  end
 
 let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
   : Lemma
