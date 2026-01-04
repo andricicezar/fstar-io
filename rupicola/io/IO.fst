@@ -52,6 +52,27 @@ let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
   Lemma (requires forall x. k x == k' x)
         (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k')) = admit ()
 
+(*let hist_independence #a (wp:hist0 a) (h:history) (p:hist_post h a) :
+  Lemma (requires wp h p)
+        (ensures forall h_. exists p_. wp h_ p_) = admit ()
+
+let hist_post_independence #a #h (p:hist_post h a) (lt:local_trace h) (r:a) :
+  Lemma (requires p lt r)
+        (ensures forall (h_:history). exists (p_:hist_post h_ a). p_ lt r)*)
+
+// steps e e' h' lt'
+// indexed_irred e' (h'++lt')
+// steps e e' h lt_
+// indexed_irred e' (h++lt_)
+// t in (h++lt_, fs_r, e')
+// fs_beh fs_e h lt_ fs_r == wp2p (theta fs_r)
+
 let theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
   Lemma (requires wp2p (theta m) h lt fs_r)
-        (ensures wp2p (theta m) h' lt' fs_r) = admit ()
+        (ensures wp2p (theta m) h' lt' fs_r) =
+  introduce forall p. (theta m) h' p ==> p lt' fs_r with begin
+    introduce (theta m) h' p ==> p lt' fs_r with _. begin
+      let _ : hist0 a = (theta m) in
+      admit ()
+    end
+  end
