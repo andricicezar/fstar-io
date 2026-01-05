@@ -1022,8 +1022,87 @@ let equiv_oprod_if #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod g a)
     end
   end
 
+let equiv_case_prod_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (a b c:qType) (fs_cond:get_Type (a ^+ b)) (fs_inlc:get_Type (a ^->!@ c)) (fs_inrc:get_Type (b ^->!@ c)) (fs_e:fs_prod c) (cond:closed_exp) (inlc:exp{is_closed (ELam inlc)}) (inrc:exp{is_closed (ELam inrc)}) =
+  (fs_e == (match fs_cond with
+           | Inl x -> fs_inlc x
+           | Inr x -> fs_inrc x)) /\
+  (e == (ECase cond inlc inrc)) /\
+  (steps (ECase cond inlc inrc) e' h lt) /\
+  (indexed_irred e' (h++lt)) /\
+  ((a ^+ b) ⦂ (h, fs_cond, cond)) /\
+  ((a ^->!@ c) ⦂ (h, fs_inlc, ELam inlc)) /\
+  ((b ^->!@ c) ⦂ (h, fs_inrc, ELam inrc))
+
+let equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_e #cond #inlc #inrc (sq:squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc fs_inrc fs_e cond inlc inrc)) : squash (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) =
+  exp_type_history_independence (a ^+ b) h fs_cond cond;
+  safety_val #(a ^+ b) fs_cond cond;
+  sem_expr_shape_val #(a ^+ b) fs_cond cond h;
+  let a_typ = type_quotation_to_typ (get_rel a) in
+  let b_typ = type_quotation_to_typ (get_rel b) in
+  FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
+    let (cond', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase cond inlc inrc e' h lt sts a_typ b_typ in
+    match cond' with
+    | EInl c' -> begin
+      assert (steps (ELam inlc) (ELam inlc) h []);
+      lem_value_is_irred (ELam inlc);
+      assert ((a ^->!@ c) ∋ (h, fs_inlc, ELam inlc));
+      unroll_elam_io a c h fs_inlc inlc;
+      assert (c ⪾ (h, fs_e, subst_beta c' inlc));
+      assert (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
+      end
+    | EInr c' -> begin
+      assert (steps (ELam inrc) (ELam inrc) h []);
+      lem_value_is_irred (ELam inrc);
+      assert ((b ^->!@ c) ∋ (h, fs_inrc, ELam inrc));
+      unroll_elam_io b c h fs_inrc inrc;
+      assert (c ⪾ (h, fs_e, subst_beta c' inrc));
+      assert (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
+      end
+    | _ -> false_elim ()
+  )
+
+#push-options "--z3rlimit 10000"
 let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ≈ cond /\ fs_inlc `equiv_oprod c` inlc /\ fs_inrc `equiv_oprod c` inrc)
-    (ensures (helper_case_prod fs_cond fs_inlc fs_inrc) `equiv_oprod c` (ECase cond inlc inrc))
-  = admit ()
+    (ensures (helper_case_prod fs_cond fs_inlc fs_inrc) `equiv_oprod c` (ECase cond inlc inrc)) =
+  lem_fv_in_env_case g a b cond inlc inrc;
+  lem_fv_in_env_lam g a inlc;
+  lem_fv_in_env_lam g b inrc;
+  equiv_lam_prod fs_inlc inlc;
+  equiv_lam_prod fs_inrc inrc;
+  let fs_inlc' : fs_oval g (a ^->!@ c) = fun fsG x -> fs_inlc (stack fsG x) in
+  let fs_inrc' : fs_oval g (b ^->!@ c) = fun fsG x -> fs_inrc (stack fsG x) in
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> c ⪾ (h,
+    (match fs_cond fsG with
+    | Inl x -> fs_inlc (stack fsG x)
+    | Inr x -> fs_inrc (stack fsG x)),
+    gsubst s (ECase cond inlc inrc)) with begin
+    let fs_cond = fs_cond fsG in
+    let fs_inlc' = fs_inlc' fsG in
+    let fs_inrc' = fs_inrc' fsG in
+    let fs_e = (match fs_cond with
+               | Inl x -> fs_inlc' x
+               | Inr x -> fs_inrc' x) in
+    let inlc' = subst (sub_elam s) inlc in
+    let inrc' = subst (sub_elam s) inrc in
+    assert (gsubst s (ELam inlc) == ELam inlc');
+    assert (gsubst s (ELam inrc) == ELam inrc');
+    let e = ECase (gsubst s cond) inlc' inrc' in
+    assert (gsubst s (ECase cond inlc inrc) == e);
+    let ECase cond inlc inrc = e in
+    introduce fsG `(∽) h` s ==> c ⪾ (h, fs_e, e) with _. begin
+      introduce forall lt (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+          assert ((a ^->!@ c) ⦂ (h, fs_inlc', ELam inlc));
+          assume ((b ^->!@ c) ⦂ (h, fs_inrc', ELam inrc));
+          admit ()
+          (*let steps_pre : squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc fs_inrc fs_e cond inlc inrc) = () in
+          FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)) steps_pre (fun steps_pre ->
+            equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_e #cond #inlc #inrc steps_pre)*)
+          // takes too long to verify :(
+        end
+      end
+    end
+  end
+#pop-options
