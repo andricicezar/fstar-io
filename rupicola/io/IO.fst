@@ -52,6 +52,16 @@ let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
   Lemma (requires forall x. k x == k' x)
         (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k')) = admit ()
 
+let lem_theta_read (x:io_res ORead ()) (h:history) (lt:local_trace h) :
+  Lemma (requires lt == [EvRead () x])
+        (ensures wp2p (theta (read ())) h lt x) =
+  assert (theta (read ()) == (fun (h:history) (p:hist_post h (resexn bool)) -> (forall (lt:local_trace h) (r:resexn bool). lt == [EvRead () r] ==> p (lt @ []) r))) by (assert (lt @ []) == lt; FStar.Tactics.compute ())
+
+let lem_theta_write (b:bool) (x:io_res OWrite b) (h:history) (lt:local_trace h) :
+  Lemma (requires lt == [EvWrite b x])
+        (ensures wp2p (theta (write b)) h lt x) =
+  assert (theta (write b) == (fun (h:history) (p:hist_post h (resexn unit)) -> (forall (lt:local_trace h) (r:resexn unit). lt == [EvWrite b r] ==> p (lt @ []) r))) by (assert (lt @ []) == lt; FStar.Tactics.compute ())
+
 (*let hist_independence #a (wp:hist0 a) (h:history) (p:hist_post h a) :
   Lemma (requires wp h p)
         (ensures forall h_. exists p_. wp h_ p_) = admit ()
@@ -67,12 +77,30 @@ let hist_post_independence #a #h (p:hist_post h a) (lt:local_trace h) (r:a) :
 // t in (h++lt_, fs_r, e')
 // fs_beh fs_e h lt_ fs_r == wp2p (theta fs_r)
 
+(*let test_lemma (e e':closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e:fs_prod t) (fs_r:get_Type t) :
+  Lemma (requires steps e e' h lt /\
+                  indexed_irred e' (h++lt) /\
+                  t ⪾ (h, fs_e, e) /\
+                  t ∋ (h++lt, fs_r, e')) /\
+                  (theta fs_e) == fs_r)
+        (ensures wp2p (theta fs_e) h lt fs_r) =
+  introduce forall p. (theta fs_e) h p ==> p lt fs_r with begin // we have no information about this p, since we don´t know how the ((theta fs_e) h p) predicate is calculated
+    admit ()
+  end*)
+
 let theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
-  Lemma (requires wp2p (theta m) h lt fs_r)
+  Lemma (requires wp2p (theta m) h lt fs_r /\ lt == lt')
         (ensures wp2p (theta m) h' lt' fs_r) =
-  introduce forall p. (theta m) h' p ==> p lt' fs_r with begin
-    introduce (theta m) h' p ==> p lt' fs_r with _. begin
-      let _ : hist0 a = (theta m) in
+  match lt' with
+  | [] -> begin
+    match m with
+    | Return x -> begin
+      assert (m == (return x));
+      lem_theta_return x h' lt';
+      assert (wp2p (theta m) h' lt' x);
       admit ()
+      end
+    | _ -> admit ()//false_elim ()
+    //admit ()
     end
-  end
+  | ev :: tl -> admit ()
