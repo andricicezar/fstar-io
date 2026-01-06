@@ -249,6 +249,11 @@ let subst_beta (v e:exp) :
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
+let get_bool (e:value{ETrue? e \/ EFalse? e}) : bool =
+  match e with
+  | ETrue -> true
+  | EFalse -> false
+
 let get_ebool (b:bool) : closed_exp =
   match b with
   | true -> ETrue
@@ -389,10 +394,17 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     h:history ->
     step ERead (get_resexn_bool r) h (Some (EvRead () r))
   | SWrite :
-    b:bool ->
+    #arg:closed_exp ->
+    #arg':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step arg arg' h oev ->
+    step (EWrite arg) (EWrite arg') h oev
+  | SWriteReturn :
+    arg:value{ETrue? arg \/ EFalse? arg} ->
     r:resexn unit ->
     h:history ->
-    step (EWrite (get_ebool b)) (get_resexn_unit r) h (Some (EvWrite b r))
+    step (EWrite arg) (get_resexn_unit r) h (Some (EvWrite (get_bool arg) r))
 
 let can_step (e:closed_exp) : Type0 =
   exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
@@ -503,6 +515,10 @@ let lem_steps_refl (e:closed_exp) (h:history) : Lemma (steps e e h []) [SMTPat (
 let safe (e:closed_exp) : Type0 =
   forall (e':closed_exp) (h:history) (lt:local_trace h). steps e e' h lt ==> (is_value e' \/ indexed_can_step e' (h++lt))
 
+let lem_value_is_safe (e:closed_exp) :
+  Lemma (requires is_value e)
+        (ensures safe e) = admit ()
+
 let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) (oev':option (event_h h')) : Pure (step e e' h' oev')
   (requires step e e' h oev /\
             (None? oev ==> None? oev') /\
@@ -560,7 +576,11 @@ let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)
     end
   | SInrReturn e1 e2 e3 h -> SInrReturn e1 e2 e3 h'
   | SRead b h -> SRead b h'
-  | SWrite b r h -> SWrite b r h'
+  | SWrite hst -> begin
+    let hst' = construct_step hst h' oev' in
+    SWrite hst'
+    end
+  | SWriteReturn arg r h -> SWriteReturn arg r h'
 
 let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) : Pure (option (event_h h'))
   (requires step e e' h oev)
@@ -664,9 +684,15 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
     let _ : step e e' h' (Some (EvRead () b)) = SRead b h' in
     Some (EvRead () b)
     end
-  | SWrite b r h -> begin
-    let _ : step e e' h' (Some (EvWrite b r)) = SWrite b r h' in
-    Some (EvWrite b r)
+  | SWrite #arg #arg' #h #oev hst -> begin
+    let oev' = construct_option_ev hst h' in
+    let hst' : step arg arg' h' oev' = construct_step hst h' oev' in
+    let _ : step e e' h' oev' = SWrite hst' in
+    oev'
+    end
+  | SWriteReturn arg r h -> begin
+    let _ : step e e' h' (Some (EvWrite (get_bool arg) r)) = SWriteReturn arg r h' in
+    Some (EvWrite (get_bool arg) r)
     end
 
 let step_history_independence (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) :
@@ -1554,3 +1580,163 @@ let rec destruct_steps_ecase
         end
       end
 #pop-options
+
+let can_step_eread (h:history) :
+  Lemma (ensures (exists e' oev. step ERead e' h oev)) =
+  let st1 : step ERead (EInl ETrue) h (Some (EvRead () (Inl true))) = SRead (Inl true) h in
+  let st2 : step ERead (EInl EFalse) h (Some (EvRead () (Inl false))) = SRead (Inl false) h in
+  let st3: step ERead (EInr EUnit) h (Some (EvRead () (Inr ()))) = SRead (Inr ()) h in
+  ()
+
+let destruct_steps_eread
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps ERead e' h lt) :
+  Pure (value * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1) * local_trace (h++lt1))))
+    (requires indexed_irred e' (h++lt))
+    (ensures fun (e_r, (| lt1, (lt2, lt3, lt4) |)) ->
+             steps ERead e_r h lt1 /\
+             (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
+             (EInl? e_r ==> (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == lt1 @ lt2 /\ lt1 == as_lt (Some (EvRead () (Inl true))))) /\
+                            (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == lt1 @ lt3 /\ lt1 == as_lt (Some (EvRead () (Inl false)))))) /\
+             (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == lt1 @ lt4 /\ lt1 == as_lt (Some (EvRead () (Inr ())))) /\
+             ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3) \/ (lt == lt1 @ lt4)))
+    (decreases st) =
+    match st with
+    | SRefl ERead h -> begin
+      can_step_eread h;
+      false_elim ()
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_eread step_eread_steps -> begin
+      let ERead = e in
+      match step_eread with
+      | SRead (Inl true) h -> begin
+        let EInl ETrue = f2 in
+        lem_step_implies_steps ERead (EInl ETrue) h (Some (EvRead () (Inl true)));
+        let lt' : local_trace h = as_lt (Some (EvRead () (Inl true))) in
+        let s2 : steps (EInl ETrue) e' (h++lt') lt23 = step_eread_steps in
+        lem_value_is_safe ETrue;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einl ETrue e' (h++lt') lt23 s2 TBool TUnit in
+        (f2, (| lt', (lt12 @ lt_f, [], []) |))
+        end
+      | SRead (Inl false) h -> begin
+        let EInl EFalse = f2 in
+        lem_step_implies_steps ERead (EInl EFalse) h (Some (EvRead () (Inl false)));
+        let lt' : local_trace h = as_lt (Some (EvRead () (Inl false))) in
+        let s2 : steps (EInl EFalse) e' (h++lt') lt23 = step_eread_steps in
+        lem_value_is_safe EFalse;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einl EFalse e' (h++lt') lt23 s2 TBool TUnit in
+        (f2, (| lt', ([], lt12 @ lt_f, []) |))
+        end
+      | SRead (Inr ()) h -> begin
+        let EInr EUnit = f2 in
+        lem_step_implies_steps ERead (EInr EUnit) h (Some (EvRead () (Inr ())));
+        let lt' : local_trace h = as_lt (Some (EvRead () (Inr ()))) in
+        let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eread_steps in
+        lem_value_is_safe EUnit;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 TBool TUnit in
+        (f2, (| lt', ([], [], (lt12 @ lt_f)) |))
+        end
+      end
+
+let can_step_ewrite_when_safe (arg:closed_exp) (h:history) :
+  Lemma (requires
+          safe arg /\
+          indexed_sem_expr_shape TBool arg h)
+        (ensures (exists e' oev. step (EWrite arg) e' h oev))
+  =
+  introduce indexed_irred arg h /\ arg == ETrue ==> (exists e' oev. step (EWrite arg) e' h oev) with _. begin
+    assert (steps arg arg h []);
+    let _ : step (EWrite ETrue) (EInl EUnit) h (Some (EvWrite true (Inl ()))) = SWriteReturn ETrue (Inl ()) h in
+    let _ : step (EWrite ETrue) (EInr EUnit) h (Some (EvWrite true (Inr ()))) = SWriteReturn ETrue (Inr ()) h in
+    ()
+  end;
+
+  introduce indexed_irred arg h /\ arg == EFalse ==> (exists e' oev. step (EWrite arg) e' h oev) with _. begin
+    assert (steps arg arg h []);
+    let _ : step (EWrite EFalse) (EInl EUnit) h (Some (EvWrite false (Inl ()))) = SWriteReturn EFalse (Inl ()) h in
+    let _ : step (EWrite EFalse) (EInr EUnit) h (Some (EvWrite false (Inr ()))) = SWriteReturn EFalse (Inr ()) h in
+    ()
+  end;
+
+  introduce indexed_irred arg h /\ ~(arg == EFalse \/ arg == ETrue) ==> (exists e' oev. step (EWrite arg) e' h oev) with _. begin
+    assert (steps arg arg h []);
+    false_elim ()
+  end;
+
+  introduce ~(indexed_irred arg h) ==> (exists e' oev. step (EWrite arg) e' h oev) with _. begin
+    assert (exists arg' oev'. step arg arg' h oev');
+    eliminate exists arg' oev'. step arg arg' h oev' returns exists e' oev. step (EWrite arg) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SWrite st))
+    end
+  end
+
+let rec destruct_steps_ewrite
+  (arg:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (EWrite arg) e' h lt) :
+  Pure (closed_exp * value * (lt1:local_trace h & (lt2:local_trace (h++lt1) & (local_trace ((h++lt1)++lt2) * local_trace ((h++lt1)++lt2)))))
+    (requires indexed_irred e' (h++lt) /\
+      safe arg /\
+      indexed_sem_expr_shape TBool arg h)
+    (ensures fun (arg', e_r, (| lt1, (| lt2, (lt3, lt4) |) |)) ->
+      indexed_irred arg' (h++lt1) /\
+      steps arg arg' h lt1 /\
+      steps (EWrite arg) (EWrite arg') h lt1 /\
+      steps (EWrite arg') e_r (h++lt1) lt2 /\
+      (e_r == EInl EUnit \/ e_r == EInr EUnit) /\
+      (ETrue? arg' ==>
+        (EInl? e_r ==> steps e_r e' ((h++lt1)++lt2) lt3 /\ lt == ((lt1 @ lt2) @ lt3) /\ lt2 == [EvWrite true (Inl ())]) /\
+        (EInr? e_r ==> steps e_r e' ((h++lt1)++lt2) lt4 /\ lt == ((lt1 @ lt2) @ lt4) /\ lt2 == [EvWrite true (Inr ())])) /\
+      (EFalse? arg' ==>
+        (EInl? e_r ==> steps e_r e' ((h++lt1)++lt2) lt3 /\ lt == ((lt1 @ lt2) @ lt3) /\ lt2 == [EvWrite false (Inl ())]) /\
+        (EInr? e_r ==> steps e_r e' ((h++lt1)++lt2) lt4 /\ lt == ((lt1 @ lt2) @ lt4) /\ lt2 == [EvWrite false (Inr ())])) /\
+      ((lt == (lt1 @ lt2) @ lt3) \/ (lt == (lt1 @ lt2) @ lt4)) /\
+      (indexed_irred arg h ==> (lt1 == [] /\ arg == arg')))
+    (decreases st) =
+    match st with
+    | SRefl (EWrite arg) h -> begin
+      can_step_ewrite_when_safe arg h;
+      false_elim ()
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_ewrite step_ewrite_steps -> begin
+      let (EWrite arg) = e in
+      match step_ewrite with
+      | SWrite #arg #arg' #h #oev step_arg -> begin
+        let (EWrite arg') = f2 in
+        lem_step_implies_steps arg arg' h oev;
+        lem_step_implies_steps (EWrite arg) (EWrite arg') h oev;
+        let lt1 : local_trace h = as_lt oev in
+        lem_step_preserve_safe arg arg' h oev;
+        lem_step_preserve_sem_expr_shape arg arg' h oev TBool;
+        let s2 : steps (EWrite arg') e' (h++lt1) lt23 = step_ewrite_steps in
+        let (arg'', e_r, (| lt1', (| lt2, (lt3, lt4) |) |)) = destruct_steps_ewrite arg' e' (h++lt1) lt23 s2 in
+        lem_steps_transitive arg arg' arg'' h lt1 lt1';
+        lem_steps_transitive (EWrite arg) (EWrite arg') (EWrite arg'') h lt1 lt1';
+        associative_history #h lt1 lt1' lt2;
+        (arg'', e_r, (| (lt1 @ lt1'), (| lt2, (lt3, lt4) |) |))
+        end
+      | SWriteReturn arg (Inl ()) h -> begin
+        let EInl EUnit = f2 in
+        lem_step_implies_steps (EWrite arg) (EInl EUnit) h (Some (EvWrite (get_bool arg) (Inl ())));
+        lem_value_is_irred arg;
+        let lt' : local_trace h = [EvWrite (get_bool arg) (Inl ())] in
+        let s2 : steps (EInl EUnit) e' (h++lt') lt23 = step_ewrite_steps in
+        lem_value_is_safe EUnit;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einl EUnit e' (h++lt') lt23 s2 TUnit TUnit in
+        (arg, f2, (| [], (| lt', (lt12 @ lt_f, []) |) |))
+        end
+      | SWriteReturn arg (Inr ()) h -> begin
+        let EInr EUnit = f2 in
+        lem_step_implies_steps (EWrite arg) (EInr EUnit) h (Some (EvWrite (get_bool arg) (Inr ())));
+        lem_value_is_irred arg;
+        let lt' : local_trace h = [EvWrite (get_bool arg) (Inr ())] in
+        let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_ewrite_steps in
+        lem_value_is_safe EUnit;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 TUnit TUnit in
+        (arg, f2, (| [], (| lt', ([], lt12 @ lt_f) |) |))
+        end
+      end
