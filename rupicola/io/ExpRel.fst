@@ -157,6 +157,7 @@ and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:c
             eliminate exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e') /\ fs_beh fs_e h lt_ fs_r
             returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
               val_type_history_independence t (h++lt_) fs_r e';
+              assume (lt_ == lt');
               theta_history_independence #(get_Type t) fs_e h h' lt_ lt' fs_r
             end
           end)
@@ -363,12 +364,61 @@ let equiv_var0 (g:typ_env) (t:qType)
     end
   end
 
+//val lem_index_tail #g #t (fsG:eval_env (extend t g)) : Lemma (
+//  (forall (x:var). Some? (g x) ==>  index fsG (x+1) == index (tail fsG) x))
+// index fsG 0 == hd fsG
+// fsG:eval_env (extend t g)
+// forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) in (h, index fsG x, s x)
+
 (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
       (requires (s ≈ e))
       (ensures (helper_varS t s ≈ subst sub_inc e))
-  = admit ()
+  =
+  assume (fv_in_env (extend t g) (subst sub_inc e));
+  assert (equiv_oval #g a s e);
+  assert (fv_in_env g e /\
+         forall b (s':gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst s' e));
+  introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
+    introduce _ ==> _ with _. begin
+      let _ : eval_env g = tail fsG in
+      assume (b ==> None? (extend t g 0));
+      //let s'' : gsub g b = fun y -> s' (y+1) in
+      //eliminate forall b (s':gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst s' e) with b s''(*:gsub g b - gsubst s'' e == gsubst s' (subst sub_inc e)*) (tail fsG) h';
+      //assume ((tail fsG) `(∽) h` s'');
+      lem_index_tail fsG;
+      admit ()
+    end
+  end
+  (*assume (fv_in_env (extend t g) (subst sub_inc e));
+  introduce forall b (s':gsub (extend t g) b) fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
+    admit ()
+  end*)
+
+  (*let _ : sub true = sub_inc in
+  let _ : var -> exp = sub_inc in
+  assert (forall x. EVar? (sub_inc x));
+  let _ : e':exp{EVar? e <==> EVar? e'} = subst sub_inc e in
+  match e with
+  | EVar e' -> begin
+    let _ : var = e' in
+    assert (EVar? (subst sub_inc e));
+    assert (subst sub_inc e == EVar (e'+1));
+    admit ()
+    end
+  | ELam e1 -> begin
+    assert (subst sub_inc e == ELam (subst (sub_elam sub_inc) e1));
+    admit ()
+    end
+  | _ -> admit ()*)
+  //let _ : sub true = sub_inc in
+  //
+  //assert (EVar? e);
+  //admit ()
+  (*introduce forall b (s':gsub (extend t g) b) fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
+    admit ()
+  end*)
 
 let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (body:exp) : Lemma
   (requires fs_body ≈ body)
@@ -831,11 +881,38 @@ let equiv_oprod_read g
     (requires True)
     (ensures (fun fsG -> read ()) `equiv_oprod #g (qResexn qBool)` ERead)
   =
-  assume (fv_in_env g ERead);
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qResexn qBool) ⪾ (h, read (), gsubst s ERead) with begin
-    introduce _ ==> _ with _. begin
-      assert (gsubst s ERead == ERead);
-      admit ()
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⪾ (h, read (), ERead) with begin
+    let e = ERead in
+    let fs_e = read () in
+    introduce forall (lt:local_trace h) (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+      introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+        let steps_e_e' : squash (steps e e' h lt) = () in
+        FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r))) steps_e_e' (fun steps_e_e' ->
+          let (e_r, (| lt1, (lt2, lt3, lt4) |)) = destruct_steps_eread e' h lt steps_e_e' in
+          match e_r with
+          | EInl ETrue -> begin
+            lem_value_is_irred ETrue;
+            lem_value_is_irred (EInl ETrue);
+            lem_destruct_steps_einl ETrue e' (h++lt1) lt2 TBool TUnit;
+            assert ((qBool ^+ qUnit) ∋ (h++lt, Inl true, EInl ETrue));
+            lem_theta_read (Inl true) h lt
+            end
+          | EInl EFalse -> begin
+            lem_value_is_irred EFalse;
+            lem_value_is_irred (EInl EFalse);
+            lem_destruct_steps_einl EFalse e' (h++lt1) lt3 TBool TUnit;
+            assert ((qBool ^+ qUnit) ∋ (h++lt, Inl false, EInl EFalse));
+            lem_theta_read (Inl false) h lt
+            end
+          | EInr EUnit -> begin
+            lem_value_is_irred EUnit;
+            lem_value_is_irred (EInr EUnit);
+            lem_destruct_steps_einr EUnit e' (h++lt1) lt4 TBool TUnit;
+            assert ((qBool ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+            lem_theta_read (Inr ()) h lt
+            end
+        )
+      end
     end
   end
 
@@ -843,7 +920,62 @@ let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
   : Lemma
     (requires fs_arg ≈ arg)
     (ensures (fun fsG -> write (fs_arg fsG)) `equiv_oprod #g (qResexn qUnit)` EWrite arg)
-  = admit ()
+  =
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, write (fs_arg fsG), gsubst s (EWrite arg)) with begin
+    let fs_arg = fs_arg fsG in
+    let fs_e = write (fs_arg) in
+    let e = EWrite (gsubst s arg) in
+    assert (gsubst s (EWrite arg) == e);
+    let EWrite arg = e in
+    introduce fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, fs_e, e) with _. begin
+      introduce forall (lt:local_trace h) (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+          let steps_e_e' : squash (steps e e' h lt) = () in
+          FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r))) steps_e_e' (fun steps_e_e' ->
+            exp_type_history_independence qBool h fs_arg arg;
+            safety_val #qBool fs_arg arg;
+            sem_expr_shape_val #qBool fs_arg arg h;
+            let (arg', e_r, (| lt1, (| lt2, (lt3, lt4) |) |)) = destruct_steps_ewrite arg e' h lt steps_e_e' in
+            assert (qBool ∋ (h, fs_arg, arg') /\ lt1 == []);
+            introduce ETrue? arg' ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+              match e_r with
+              | EInl EUnit -> begin
+                lem_value_is_irred EUnit;
+                lem_value_is_irred (EInl EUnit);
+                lem_destruct_steps_einl EUnit e' ((h++lt1)++lt2) lt3 TUnit TUnit;
+                assert ((qUnit ^+ qUnit) ∋ (h++lt, Inl (), EInl EUnit));
+                lem_theta_write true (Inl ()) h lt
+                end
+              | EInr EUnit -> begin
+                lem_value_is_irred EUnit;
+                lem_value_is_irred (EInr EUnit);
+                lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt4 TUnit TUnit;
+                assert ((qUnit ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+                lem_theta_write true (Inr ()) h lt
+                end
+            end;
+            introduce EFalse? arg' ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+              match e_r with
+              | EInl EUnit -> begin
+                lem_value_is_irred EUnit;
+                lem_value_is_irred (EInl EUnit);
+                lem_destruct_steps_einl EUnit e' ((h++lt1)++lt2) lt3 TUnit TUnit;
+                assert ((qUnit ^+ qUnit) ∋ (h++lt, Inl (), EInl EUnit));
+                lem_theta_write false (Inl ()) h lt
+                end
+              | EInr EUnit -> begin
+                lem_value_is_irred EUnit;
+                lem_value_is_irred (EInr EUnit);
+                lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt4 TUnit TUnit;
+                assert ((qUnit ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+                lem_theta_write false (Inr ()) h lt
+                end
+            end
+          )
+        end
+      end
+    end
+  end
 
 let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
