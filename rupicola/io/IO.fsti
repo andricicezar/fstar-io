@@ -59,6 +59,14 @@ let lem_theta_bind #a #b (m:io a) (h:history) (lt2:local_trace h) (fs_r_m:a) (k:
         (ensures wp2p (theta (io_bind m k)) h lt fs_r) = admit ()
   //wp2p_theta_bind m k
 
+val lem_theta_read (x:io_res ORead ()) (h:history) (lt:local_trace h) :
+  Lemma (requires lt == [EvRead () x])
+        (ensures wp2p (theta (read ())) h lt x)
+
+val lem_theta_write (b:bool) (x:io_res OWrite b) (h:history) (lt:local_trace h) :
+  Lemma (requires lt == [EvWrite b x])
+        (ensures wp2p (theta (write b)) h lt x)
+
 val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
-  Lemma (requires wp2p (theta m) h lt fs_r) 
+  Lemma (requires wp2p (theta m) h lt fs_r /\ lt == lt')
         (ensures wp2p (theta m) h' lt' fs_r)
