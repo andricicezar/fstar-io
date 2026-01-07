@@ -1598,9 +1598,9 @@ let destruct_steps_eread
     (ensures fun (e_r, (| lt1, (lt2, lt3, lt4) |)) ->
              steps ERead e_r h lt1 /\
              (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
-             (EInl? e_r ==> (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == lt1 @ lt2 /\ lt1 == as_lt (Some (EvRead () (Inl true))))) /\
-                            (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == lt1 @ lt3 /\ lt1 == as_lt (Some (EvRead () (Inl false)))))) /\
-             (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == lt1 @ lt4 /\ lt1 == as_lt (Some (EvRead () (Inr ())))) /\
+             (EInl? e_r ==> (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == lt1 @ lt2 /\ lt1 == [EvRead () (Inl true)])) /\
+                           (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == lt1 @ lt3 /\ lt1 == [EvRead () (Inl false)]))) /\
+             (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == lt1 @ lt4 /\ lt1 == [EvRead () (Inr ())]) /\
              ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3) \/ (lt == lt1 @ lt4)))
     (decreases st) =
     match st with
@@ -1614,7 +1614,7 @@ let destruct_steps_eread
       | SRead (Inl true) h -> begin
         let EInl ETrue = f2 in
         lem_step_implies_steps ERead (EInl ETrue) h (Some (EvRead () (Inl true)));
-        let lt' : local_trace h = as_lt (Some (EvRead () (Inl true))) in
+        let lt' : local_trace h = [EvRead () (Inl true)] in
         let s2 : steps (EInl ETrue) e' (h++lt') lt23 = step_eread_steps in
         lem_value_is_safe ETrue;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl ETrue e' (h++lt') lt23 s2 TBool TUnit in
@@ -1623,7 +1623,7 @@ let destruct_steps_eread
       | SRead (Inl false) h -> begin
         let EInl EFalse = f2 in
         lem_step_implies_steps ERead (EInl EFalse) h (Some (EvRead () (Inl false)));
-        let lt' : local_trace h = as_lt (Some (EvRead () (Inl false))) in
+        let lt' : local_trace h = [EvRead () (Inl false)] in
         let s2 : steps (EInl EFalse) e' (h++lt') lt23 = step_eread_steps in
         lem_value_is_safe EFalse;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl EFalse e' (h++lt') lt23 s2 TBool TUnit in
@@ -1632,7 +1632,7 @@ let destruct_steps_eread
       | SRead (Inr ()) h -> begin
         let EInr EUnit = f2 in
         lem_step_implies_steps ERead (EInr EUnit) h (Some (EvRead () (Inr ())));
-        let lt' : local_trace h = as_lt (Some (EvRead () (Inr ()))) in
+        let lt' : local_trace h = [EvRead () (Inr ())] in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eread_steps in
         lem_value_is_safe EUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 TBool TUnit in
