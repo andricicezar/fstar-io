@@ -1203,15 +1203,15 @@ let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:f
   lem_fv_in_env_lam g b inrc;
   equiv_lam_prod fs_inlc inlc;
   equiv_lam_prod fs_inrc inrc;
-  let fs_inlc' : fs_oval g (a ^->!@ c) = fun fsG x -> fs_inlc (stack fsG x) in
-  let fs_inrc' : fs_oval g (b ^->!@ c) = fun fsG x -> fs_inrc (stack fsG x) in
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> c ⪾ (h,
     (match fs_cond fsG with
     | Inl x -> fs_inlc (stack fsG x)
     | Inr x -> fs_inrc (stack fsG x)),
     gsubst s (ECase cond inlc inrc)) with begin
     let fs_cond = fs_cond fsG in
+    let fs_inlc' : fs_oval g (a ^->!@ c) = fun fsG x -> fs_inlc (stack fsG x) in
     let fs_inlc' = fs_inlc' fsG in
+    let fs_inrc' : fs_oval g (b ^->!@ c) = fun fsG x -> fs_inrc (stack fsG x) in
     let fs_inrc' = fs_inrc' fsG in
     let fs_e = (match fs_cond with
                | Inl x -> fs_inlc' x
@@ -1227,12 +1227,10 @@ let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:f
       introduce forall lt (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           assert ((a ^->!@ c) ⦂ (h, fs_inlc', ELam inlc));
-          assume ((b ^->!@ c) ⦂ (h, fs_inrc', ELam inrc));
-          admit ()
-          (*let steps_pre : squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc fs_inrc fs_e cond inlc inrc) = () in
+          assert ((b ^->!@ c) ⦂ (h, fs_inrc', ELam inrc));
+          let steps_pre : squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc' fs_inrc' fs_e cond inlc inrc) = () in
           FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)) steps_pre (fun steps_pre ->
-            equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_e #cond #inlc #inrc steps_pre)*)
-          // takes too long to verify :(
+            equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc' #fs_inrc' #fs_e #cond #inlc #inrc steps_pre)
         end
       end
     end
