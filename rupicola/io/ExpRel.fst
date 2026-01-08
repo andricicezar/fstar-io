@@ -370,6 +370,44 @@ let equiv_var0 (g:typ_env) (t:qType)
 // fsG:eval_env (extend t g)
 // forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) in (h, index fsG x, s x)
 
+let rec test_lemma #t #g (#b:bool{b ==> (forall x. None? ((extend t g) x) /\ None? (g x))}) (s':gsub (extend t g) b) (e:exp) (f:gsub g b{forall x. (f x) == (s' (x+1))}) :
+  Lemma (ensures subst s' (subst sub_inc e) == subst #b f e) 
+        (decreases e) =
+  match e with
+  | EVar x -> ()
+  | ELam e1 -> begin
+    assert (subst sub_inc e == ELam (subst (sub_elam sub_inc) e1));
+    assert (subst s' (ELam (subst (sub_elam sub_inc) e1)) == ELam (subst (sub_elam s') (subst (sub_elam sub_inc) e1)));
+    assert (subst #b f e == ELam (subst #b (sub_elam f) e1));
+    admit ()
+    end
+  | EApp e1 e2 -> begin
+    test_lemma s' e1 f;
+    test_lemma s' e2 f
+    end
+  | EIf e1 e2 e3 -> begin
+    test_lemma s' e1 f;
+    test_lemma s' e2 f;
+    test_lemma s' e3 f
+    end
+  | EUnit -> ()
+  | ETrue -> ()
+  | EFalse -> ()
+  | EPair e1 e2 -> begin
+    test_lemma s' e1 f;
+    test_lemma s' e2 f
+    end
+  | EFst e' -> test_lemma s' e' f
+  | ESnd e' -> test_lemma s' e' f
+  | EInl e' -> test_lemma s' e' f
+  | EInr e' -> test_lemma s' e' f
+  | ECase e1 e2 e3 -> begin
+    test_lemma s' e1 f;
+    admit ()
+    end
+  | ERead -> ()
+  | EWrite e' -> test_lemma s' e' f
+
 (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
@@ -379,46 +417,40 @@ let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   assume (fv_in_env (extend t g) (subst sub_inc e));
   assert (equiv_oval #g a s e);
   assert (fv_in_env g e /\
-         forall b (s':gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst s' e));
+         forall b' (s'':gsub g b') (fsG':eval_env g) (h':history). fsG' `(∽) h'` s'' ==> a ⦂ (h', s fsG', gsubst s'' e));
   introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
-    introduce _ ==> _ with _. begin
-      let _ : eval_env g = tail fsG in
-      assume (b ==> None? (extend t g 0));
-      //let s'' : gsub g b = fun y -> s' (y+1) in
-      //eliminate forall b (s':gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst s' e) with b s''(*:gsub g b - gsubst s'' e == gsubst s' (subst sub_inc e)*) (tail fsG) h';
-      //assume ((tail fsG) `(∽) h` s'');
+    introduce fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
       lem_index_tail fsG;
-      admit ()
+      assert (forall (x:var). Some? (g x) ==> index fsG (x+1) == index (tail fsG) x);
+      assert (forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) ∋ (h, index fsG x, s' x));
+      assert (forall (x:var{x > 0}). (extend t g) x == g (x-1));
+      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> Some?.v (g (x-1))  ∋ (h, index fsG x, s' x));
+      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> Some?.v (g (x-1))  ∋ (h, index (tail fsG) (x-1), s' x));
+      assert (forall (x:var). Some? (g x) ==> Some?.v (g x) ∋ (h, index (tail fsG) x, s' (x+1)));
+      let f : var -> exp = fun (y:var) -> s' (y+1) in
+      assert (forall x. (f x) == (s' (x+1)));
+      assert (b ==> (forall x. None? ((extend t g) x)));
+      assert (forall (x:var{x > 0}). None? ((extend t g) x) ==> None? (g (x-1)));
+      assert (b ==> (forall (x:var{x > 0}). None? (g (x-1))));
+      assert (b ==> (forall x. None? (g x)));
+      assert (b ==> (forall x. EVar? (f x)));
+      assert ((forall x. EVar? (s' x)) ==> b);
+      assert (((forall (x:var). EVar? (s' (x+1))) /\ EVar? (s' 0)) <==> (forall x. EVar? (s' x)));
+      assert (((forall (x:var). EVar? (f x)) /\ EVar? (s' 0)) <==> (forall x. EVar? (s' x)));
+      assume ((forall (x:var). EVar? (f x)) ==> b);
+      assert (forall x. Some? ((extend t g) x) ==> is_value (s' x));
+      assert (forall (x:var{x > 0}). Some? ((extend t g) x) ==> Some? (g (x-1)));
+      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> is_value (s' x));
+      assert (forall (x:var). Some? (g x) ==> is_value (s' (x+1)));
+      assert (forall x. Some? (g x) ==> is_value (f x));
+      let _ : gsub g b = f in
+      eliminate forall b s' fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst #g #b s' e) with b f (tail fsG) h;
+      assert (a ⦂ (h, s (tail fsG), gsubst #g #b f e));
+      test_lemma s' e f;
+      assert (subst s' (subst sub_inc e) == subst #b f e);
+      assert (gsubst s' (subst sub_inc e) == gsubst #g #b f e)
     end
   end
-  (*assume (fv_in_env (extend t g) (subst sub_inc e));
-  introduce forall b (s':gsub (extend t g) b) fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
-    admit ()
-  end*)
-
-  (*let _ : sub true = sub_inc in
-  let _ : var -> exp = sub_inc in
-  assert (forall x. EVar? (sub_inc x));
-  let _ : e':exp{EVar? e <==> EVar? e'} = subst sub_inc e in
-  match e with
-  | EVar e' -> begin
-    let _ : var = e' in
-    assert (EVar? (subst sub_inc e));
-    assert (subst sub_inc e == EVar (e'+1));
-    admit ()
-    end
-  | ELam e1 -> begin
-    assert (subst sub_inc e == ELam (subst (sub_elam sub_inc) e1));
-    admit ()
-    end
-  | _ -> admit ()*)
-  //let _ : sub true = sub_inc in
-  //
-  //assert (EVar? e);
-  //admit ()
-  (*introduce forall b (s':gsub (extend t g) b) fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
-    admit ()
-  end*)
 
 let equiv_lam #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (body:exp) : Lemma
   (requires fs_body ≈ body)
