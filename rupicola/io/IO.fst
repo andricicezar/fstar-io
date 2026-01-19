@@ -62,45 +62,15 @@ let lem_theta_write (b:bool) (x:io_res OWrite b) (h:history) (lt:local_trace h) 
         (ensures wp2p (theta (write b)) h lt x) =
   assert (theta (write b) == (fun (h:history) (p:hist_post h (resexn unit)) -> (forall (lt:local_trace h) (r:resexn unit). lt == [EvWrite b r] ==> p (lt @ []) r))) by (assert (lt @ []) == lt; FStar.Tactics.compute ())
 
-(*let hist_independence #a (wp:hist0 a) (h:history) (p:hist_post h a) :
-  Lemma (requires wp h p)
-        (ensures forall h_. exists p_. wp h_ p_) = admit ()
-
-let hist_post_independence #a #h (p:hist_post h a) (lt:local_trace h) (r:a) :
-  Lemma (requires p lt r)
-        (ensures forall (h_:history). exists (p_:hist_post h_ a). p_ lt r)*)
-
-// steps e e' h' lt'
-// indexed_irred e' (h'++lt')
-// steps e e' h lt_
-// indexed_irred e' (h++lt_)
-// t in (h++lt_, fs_r, e')
-// fs_beh fs_e h lt_ fs_r == wp2p (theta fs_r)
-
-(*let test_lemma (e e':closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e:fs_prod t) (fs_r:get_Type t) :
-  Lemma (requires steps e e' h lt /\
-                  indexed_irred e' (h++lt) /\
-                  t ⪾ (h, fs_e, e) /\
-                  t ∋ (h++lt, fs_r, e')) /\
-                  (theta fs_e) == fs_r)
-        (ensures wp2p (theta fs_e) h lt fs_r) =
-  introduce forall p. (theta fs_e) h p ==> p lt fs_r with begin // we have no information about this p, since we don´t know how the ((theta fs_e) h p) predicate is calculated
-    admit ()
-  end*)
-
 let theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
   Lemma (requires wp2p (theta m) h lt fs_r /\ lt == lt')
         (ensures wp2p (theta m) h' lt' fs_r) =
-  match lt' with
-  | [] -> begin
-    match m with
-    | Return x -> begin
-      assert (m == (return x));
-      lem_theta_return x h' lt';
-      assert (wp2p (theta m) h' lt' x);
-      admit ()
-      end
-    | _ -> admit ()//false_elim ()
-    //admit ()
+  introduce forall p'. (theta m) h' p' ==> p' lt' fs_r with begin
+    introduce (theta m) h' p' ==> p' lt' fs_r with _. begin
+      let p : hist_post h a = fun _ _ -> p' lt fs_r in
+      eliminate forall p. (theta m) h p ==> p lt fs_r with p;
+      assert ((theta m) h' p');
+      assume ((theta m) h p)
     end
-  | ev :: tl -> admit ()
+  end
+  
