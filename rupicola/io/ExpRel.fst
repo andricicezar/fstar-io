@@ -148,19 +148,23 @@ and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:c
     introduce forall lt' (e':closed_exp). steps e e' h' lt' /\ indexed_irred e' (h'++lt') ==> (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with begin
       introduce steps e e' h' lt' /\ indexed_irred e' (h'++lt') ==> (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
         FStar.Squash.bind_squash #(steps e e' h' lt') () (fun sts ->
-          steps_history_independence sts;
-          eliminate forall h_. exists lt_. steps e e' h_ lt_ with h;
-          eliminate exists lt_. steps e e' h lt_
-          returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
-            eliminate forall lt_ e_. steps e e_ h lt_ /\ indexed_irred e_ (h++lt_) ==> (exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e_) /\ fs_beh fs_e h lt_ fs_r) with lt_ e';
+          steps_history_independence' sts;
+          //eliminate forall h_. exists lt_. steps e e' h_ lt_ with h;
+          eliminate forall h_. steps e e' h_ (get_lt h' h_ lt') with h;
+          //eliminate exists lt_. steps e e' h lt_
+          //returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
+            eliminate forall lt_ e_. steps e e_ h lt_ /\ indexed_irred e_ (h++lt_) ==> (exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e_) /\ fs_beh fs_e h lt_ fs_r) with (get_lt h' h lt') e';
             indexed_irred_history_independence e' (h'++lt');
-            eliminate exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e') /\ fs_beh fs_e h lt_ fs_r
+            //admit ()
+            eliminate exists (fs_r:get_Type t). t ∋ (h++(get_lt h' h lt'), fs_r, e') /\ fs_beh fs_e h (get_lt h' h lt') fs_r
             returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
-              val_type_history_independence t (h++lt_) fs_r e';
-              assume (lt' == get_lt h h' lt_);
-              theta_history_independence #(get_Type t) fs_e h h' lt_ fs_r
-            end
-          end)
+              val_type_history_independence t (h++(get_lt h' h lt')) fs_r e';
+              assert (wp2p (theta fs_e) h (get_lt h' h lt') fs_r);
+              assume (wp2p (theta fs_e) h' lt' fs_r)
+              //admit ()
+              //assume (lt' == get_lt h h' (get_lt h' h lt'));
+              //theta_history_independence #(get_Type t) fs_e h h' lt'  fs_r
+            end)
       end
     end
   end

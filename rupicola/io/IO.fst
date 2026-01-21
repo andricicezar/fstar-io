@@ -84,10 +84,13 @@ let rec get_lt (h h':history) (lt:local_trace h) : Tot (local_trace h') (decreas
       end
     end
 
+// (lt == [] ==> (get_lt h h' []) == [])
+
 let get_lt_correct (h h':history) (lt:local_trace h) :
   Lemma ((lt == [] ==> (get_lt h h' []) == []) /\
-         (forall lt1 lt2. lt == (lt1 @ lt2) ==> (get_lt h h' (lt1 @ lt2)) == lt1 @ (get_lt (h++lt1) (h'++lt1) lt2))) = admit ()
+         (forall (lt1:local_trace h) (lt2:local_trace (h++lt1)). lt == (lt1 @ lt2) ==> (get_lt h h' (lt1 @ lt2)) == (get_lt h h' lt1) @ (get_lt (h++lt1) (h'++lt1) lt2))) = admit ()
 
+// x ( lt1 @ lt2) == x lt1 @ x lt2
 
 let rec theta_monotonic_hist (m:io 'a) :
 Lemma (forall h h' (p':hist_post h' 'a). (theta m h' p' ==> theta m h (fun lt res -> p' (get_lt h h' lt) res))) =
@@ -108,6 +111,8 @@ Lemma (forall h h' (p':hist_post h' 'a). (theta m h' p' ==> theta m h (fun lt re
         assume ((theta m h (fun lt res -> p' (get_lt h h' lt) res)) == (forall lt (r:io_res o args). lt == [op_to_ev o args r] ==> theta (k r) (h++lt) (fun (lt':local_trace (h++lt)) r -> p' (get_lt h h' (lt @ lt')) r)));
         introduce forall lt (r:io_res o args). lt == [op_to_ev o args r] ==> theta (k r) (h++lt) (fun (lt':local_trace (h++lt)) r -> p' (get_lt h h' (lt @ lt')) r) with begin
           introduce lt == [op_to_ev o args r] ==> theta (k r) (h++lt) (fun (lt':local_trace (h++lt)) r -> p' (get_lt h h' (lt @ lt')) r) with _. begin
+          // theta (k r) (h'++lt) (fun (lt':local_trace (h'++lt)) r -> p' (lt @ lt') r)
+          // theta (k r) (h++lt) (fun (lt':local_trace (h++lt)) r -> p' (get_lt h h' (lt @ lt')) r)
             assert (theta (k r) (h'++lt) (fun (lt':local_trace (h'++lt)) r -> p' (lt @ lt') r));
             theta_monotonic_hist (k r);
             assert (forall h h' (p':hist_post h' 'a). (theta (k r) h' p' ==> theta (k r) h (fun lt res -> p' (get_lt h h' lt) res)));

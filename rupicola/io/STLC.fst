@@ -728,6 +728,14 @@ let steps_history_independence (#e #e':closed_exp) (#h:history) (#lt:local_trace
     assert (steps e e' h' (construct_local_trace sts h'))
  end
 
+open IO
+
+let steps_history_independence' (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (sts:steps e e' h lt) :
+  Lemma (ensures forall h'. steps e e' h' (get_lt h h' lt)) = admit ()
+  (*introduce forall h'. exists lt'. steps e e' h' lt' /\ lt == lt' with begin
+    assert (steps e e' h' (get_lt h h' lt))
+ end*)
+
 let indexed_can_step_history_independence (e:closed_exp) (h:history) :
   Lemma (requires indexed_can_step e h)
         (ensures forall h'. indexed_can_step e h') =
