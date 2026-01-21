@@ -157,8 +157,8 @@ and io_exp_type_history_independence (t:qType) (h:history) (fs_e:fs_prod t) (e:c
             eliminate exists (fs_r:get_Type t). t ∋ (h++lt_, fs_r, e') /\ fs_beh fs_e h lt_ fs_r
             returns (exists (fs_r:get_Type t). t ∋ (h'++lt', fs_r, e') /\ fs_beh fs_e h' lt' fs_r) with _. begin
               val_type_history_independence t (h++lt_) fs_r e';
-              assume (lt_ == lt');
-              theta_history_independence #(get_Type t) fs_e h h' lt_ lt' fs_r
+              assume (lt' == get_lt h h' lt_);
+              theta_history_independence #(get_Type t) fs_e h h' lt_ fs_r
             end
           end)
       end
@@ -364,56 +364,79 @@ let equiv_var0 (g:typ_env) (t:qType)
     end
   end
 
-//val lem_index_tail #g #t (fsG:eval_env (extend t g)) : Lemma (
-//  (forall (x:var). Some? (g x) ==>  index fsG (x+1) == index (tail fsG) x))
-// index fsG 0 == hd fsG
-// fsG:eval_env (extend t g)
-// forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) in (h, index fsG x, s x)
-
-let rec test_lemma #t #g (#b:bool{b ==> (forall x. None? ((extend t g) x) /\ None? (g x))}) (s':gsub (extend t g) b) (e:exp) (f:gsub g b{forall x. (f x) == (s' (x+1))}) :
-  Lemma (ensures subst s' (subst sub_inc e) == subst #b f e) 
-        (decreases e) =
+let rec shift_sub_equiv_sub_inc_rename_elam #t
+  (s':gsub (extend t empty) false)
+  (e:exp)
+  (f:gsub empty true{forall x. (f x) == (s' (x+1))}) :
+  Lemma (ensures subst (sub_elam s') (subst (sub_elam sub_inc) e) == subst (sub_elam f) e) =
   match e with
   | EVar x -> ()
   | ELam e1 -> begin
-    assert (subst sub_inc e == ELam (subst (sub_elam sub_inc) e1));
-    assert (subst s' (ELam (subst (sub_elam sub_inc) e1)) == ELam (subst (sub_elam s') (subst (sub_elam sub_inc) e1)));
-    assert (subst #b f e == ELam (subst #b (sub_elam f) e1));
+    assert (subst (sub_elam sub_inc) e == ELam (subst (sub_elam (sub_elam sub_inc)) e1));
+    assert (subst (sub_elam s') (ELam (subst (sub_elam (sub_elam sub_inc)) e1)) == ELam (subst (sub_elam (sub_elam s')) (subst (sub_elam (sub_elam sub_inc)) e1)));
+    assert (subst (sub_elam f) e == ELam (subst (sub_elam (sub_elam f)) e1));
     admit ()
     end
-  | EApp e1 e2 -> begin
-    test_lemma s' e1 f;
-    test_lemma s' e2 f
+  | _ -> admit ()
+  
+let rec shift_sub_equiv_sub_inc_rename #t
+  (s':gsub (extend t empty) false) 
+  (e:exp) 
+  (f:gsub empty true{(ELam? e ==> (forall (x:var{x > 0}). (f x) == (s' (x+1)))) /\
+                     (~(ELam? e) ==> (forall x. (f x) == (s' (x+1))))}) :
+  Lemma (ensures subst s' (subst sub_inc e) == subst f e) 
+        (decreases e) =
+  match e with 
+  | EVar x -> ()
+  | ELam e1 -> begin
+    assert (forall x. Some? ((extend t empty) x) ==> is_value (s' x));
+    introduce forall x. Some? ((extend t empty) x) ==> is_value ((sub_elam s') x) with begin
+      introduce _ ==> _ with _. begin
+        admit ()
+      end
+    end;
+    shift_sub_equiv_sub_inc_rename #t (sub_elam s') e1 (sub_elam f)
     end
-  | EIf e1 e2 e3 -> begin
-    test_lemma s' e1 f;
-    test_lemma s' e2 f;
-    test_lemma s' e3 f
-    end
+  | EApp e1 e2 ->
+    shift_sub_equiv_sub_inc_rename s' e1 f;
+    shift_sub_equiv_sub_inc_rename s' e2 f
+  | EIf e1 e2 e3 ->
+    shift_sub_equiv_sub_inc_rename s' e1 f;
+    shift_sub_equiv_sub_inc_rename s' e2 f;
+    shift_sub_equiv_sub_inc_rename s' e3 f
   | EUnit -> ()
   | ETrue -> ()
   | EFalse -> ()
-  | EPair e1 e2 -> begin
-    test_lemma s' e1 f;
-    test_lemma s' e2 f
-    end
-  | EFst e' -> test_lemma s' e' f
-  | ESnd e' -> test_lemma s' e' f
-  | EInl e' -> test_lemma s' e' f
-  | EInr e' -> test_lemma s' e' f
-  | ECase e1 e2 e3 -> begin
-    test_lemma s' e1 f;
-    admit ()
-    end
+  | EPair e1 e2 ->
+    shift_sub_equiv_sub_inc_rename s' e1 f;
+    shift_sub_equiv_sub_inc_rename s' e2 f
+  | EFst e' -> shift_sub_equiv_sub_inc_rename s' e' f
+  | ESnd e' -> shift_sub_equiv_sub_inc_rename s' e' f
+  | EInl e' -> shift_sub_equiv_sub_inc_rename s' e' f
+  | EInr e' -> shift_sub_equiv_sub_inc_rename s' e' f
+  | ECase e1 e2 e3 ->
+    shift_sub_equiv_sub_inc_rename s' e1 f;
+    shift_sub_equiv_sub_inc_rename_elam s' e2 f;
+    shift_sub_equiv_sub_inc_rename_elam s' e3 f
   | ERead -> ()
-  | EWrite e' -> test_lemma s' e' f
+  | EWrite e' -> shift_sub_equiv_sub_inc_rename s' e' f
+  | _ -> admit ()
+
+let rec shift_sub_equiv_sub_inc #t #g
+  (s':gsub (extend t g) false)
+  (e:exp)
+  (f:gsub g false{forall x. (f x) == (s' (x+1))}) :
+  Lemma (ensures subst s' (subst sub_inc e) == subst f e) 
+        (decreases e) = admit ()
 
 (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
       (requires (s ≈ e))
       (ensures (helper_varS t s ≈ subst sub_inc e))
-  =
+      //(ensures equiv_val #a (helper_varS t s) (subst sub_inc e))
+  = //admit ()
+  equiv_var0 g t; 
   assume (fv_in_env (extend t g) (subst sub_inc e));
   assert (equiv_oval #g a s e);
   assert (fv_in_env g e /\
@@ -421,34 +444,21 @@ let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
     introduce fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
       lem_index_tail fsG;
-      assert (forall (x:var). Some? (g x) ==> index fsG (x+1) == index (tail fsG) x);
-      assert (forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) ∋ (h, index fsG x, s' x));
-      assert (forall (x:var{x > 0}). (extend t g) x == g (x-1));
-      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> Some?.v (g (x-1))  ∋ (h, index fsG x, s' x));
-      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> Some?.v (g (x-1))  ∋ (h, index (tail fsG) (x-1), s' x));
-      assert (forall (x:var). Some? (g x) ==> Some?.v (g x) ∋ (h, index (tail fsG) x, s' (x+1)));
       let f : var -> exp = fun (y:var) -> s' (y+1) in
-      assert (forall x. (f x) == (s' (x+1)));
-      assert (b ==> (forall x. None? ((extend t g) x)));
-      assert (forall (x:var{x > 0}). None? ((extend t g) x) ==> None? (g (x-1)));
-      assert (b ==> (forall (x:var{x > 0}). None? (g (x-1))));
-      assert (b ==> (forall x. None? (g x)));
-      assert (b ==> (forall x. EVar? (f x)));
-      assert ((forall x. EVar? (s' x)) ==> b);
-      assert (((forall (x:var). EVar? (s' (x+1))) /\ EVar? (s' 0)) <==> (forall x. EVar? (s' x)));
-      assert (((forall (x:var). EVar? (f x)) /\ EVar? (s' 0)) <==> (forall x. EVar? (s' x)));
-      assume ((forall (x:var). EVar? (f x)) ==> b);
-      assert (forall x. Some? ((extend t g) x) ==> is_value (s' x));
-      assert (forall (x:var{x > 0}). Some? ((extend t g) x) ==> Some? (g (x-1)));
-      assert (forall (x:var{x > 0}). Some? (g (x-1)) ==> is_value (s' x));
-      assert (forall (x:var). Some? (g x) ==> is_value (s' (x+1)));
-      assert (forall x. Some? (g x) ==> is_value (f x));
-      let _ : gsub g b = f in
-      eliminate forall b s' fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst #g #b s' e) with b f (tail fsG) h;
-      assert (a ⦂ (h, s (tail fsG), gsubst #g #b f e));
-      test_lemma s' e f;
-      assert (subst s' (subst sub_inc e) == subst #b f e);
-      assert (gsubst s' (subst sub_inc e) == gsubst #g #b f e)
+      introduce (forall (x:var{x > 0}). EVar? (s' x)) ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+        let _ : gsub empty true = f in
+        eliminate forall b s' fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst #g #b s' e) with true f (tail fsG) h;
+        shift_sub_equiv_sub_inc_rename #t s' e f
+      end;
+      introduce ~(forall (x:var{x > 0}). EVar? (s' x)) ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+        eliminate exists (x:var{x > 0}). ~(EVar? (s' x))
+        returns a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+          assert (~(EVar? (f (x-1))));
+          let _ : gsub g false = f in
+          eliminate forall b s' fsG h. fsG `(∽) h` s' ==> a ⦂ (h, s fsG, gsubst #g #b s' e) with false f (tail fsG) h;
+          shift_sub_equiv_sub_inc #t #g s' e f
+        end
+      end
     end
   end
 

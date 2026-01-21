@@ -118,10 +118,10 @@ let lemma_hist_bind_associativity #a #b #c (w1:hist a) (w2:a -> hist b) (w3: b -
   Classical.forall_intro_2 pw
 
 unfold
-let to_hist #a (pre:hist_pre) (post:(h:history -> a -> local_trace h -> Type0)) : hist a =
+let to_hist (#op:io_ops) (#args:io_args op) (pre:hist_pre) (post:(h:history -> io_res op args -> local_trace h -> Type0)) : hist (io_res op args)  =
   fun h p -> pre h /\ (forall lt r. post h r lt ==> p lt r)
 
-let post_as_hist = to_hist (fun _ -> True)
+//let post_as_hist = to_hist (fun _ -> True)
 
-let trivial_hist #a : hist a =
-  to_hist (fun _ -> True) (fun _ _ _ -> True)
+//let trivial_hist #a : hist a =
+//  to_hist (fun _ -> True) (fun _ _ _ -> True)

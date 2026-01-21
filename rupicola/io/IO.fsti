@@ -11,6 +11,7 @@ include BaseTypes
 include Hist
 open Trace
 open FStar.List.Tot
+open STLC
 
 val io (a:Type u#a) : Type u#a
 
@@ -67,6 +68,19 @@ val lem_theta_write (b:bool) (x:io_res OWrite b) (h:history) (lt:local_trace h) 
   Lemma (requires lt == [EvWrite b x])
         (ensures wp2p (theta (write b)) h lt x)
 
-val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) :
-  Lemma (requires wp2p (theta m) h lt fs_r /\ lt == lt')
-        (ensures wp2p (theta m) h' lt' fs_r)
+val get_lt (h h':history) (lt:local_trace h) : Tot (local_trace h') 
+
+val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (fs_r:a) :
+  Lemma (requires wp2p (theta m) h lt fs_r)
+        (ensures wp2p (theta m) h' (get_lt h h' lt) fs_r) 
+
+(*val theta_monotonic_hist #a #e #e' #h' #lt' (m:io a) (st:steps e e' h' lt') :
+  Lemma (forall h h' (p':hist_post h' a). theta m h' p' ==> theta m h (fun lt res -> p' (construct_local_trace st*) 
+
+(*val theta_history_independence #a #e #e' (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) (st':steps e e' h' lt') (st:steps e e' h lt) :
+  Lemma (requires wp2p (theta m) h (construct_local_trace st' h) fs_r)
+        (ensures wp2p (theta m) h' (construct_local_trace st h') fs_r)*)
+
+(*let same_shape #h #h' (lt:local_trace h) (lt':local_trace h') : Type0 = lt == lt'
+
+val get_lt (h h':history) (lt:local_trace h) : (lt':local_trace h'{same_shape lt lt'})*)
