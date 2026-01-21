@@ -70,10 +70,10 @@ val lem_theta_write (b:bool) (x:io_res OWrite b) (h:history) (lt:local_trace h) 
 val get_lt (h h':history) (lt:local_trace h) : Tot (local_trace h') 
 
 val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (fs_r:a) :
-  //Lemma (requires wp2p (theta m) h lt fs_r)
-  //      (ensures wp2p (theta m) h' (get_lt h h' lt) fs_r) 
-  (requires wp2p (theta m) h (get_lt h' h lt') fs_r)
-  (ensures wp2p (theta m) h' lt' fs_r)
+  Lemma (requires wp2p (theta m) h lt fs_r)
+        (ensures wp2p (theta m) h' (get_lt h h' lt) fs_r) 
+  //(requires wp2p (theta m) h (get_lt h' h lt') fs_r)
+  //(ensures wp2p (theta m) h' lt' fs_r)
   //      (ensures wp2p (theta m) h' (get_lt h h' lt) fs_r) 
 
 (*val theta_monotonic_hist #a #e #e' #h' #lt' (m:io a) (st:steps e e' h' lt') :
