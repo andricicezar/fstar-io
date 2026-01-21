@@ -15,31 +15,41 @@ type sig (op:Type u#a) = {
   res : (cmd:op) -> (args cmd) -> Type u#a;
 }
 
-type io_ops = | ORead | OWrite
+type io_ops = | ORead | OWrite | OOpen | OClose
 
 unfold let io_args (op:io_ops) : Type =
   match op with
   | ORead -> unit
   | OWrite -> bool
+  | OOpen -> string
+  | OClose -> bool
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
   | ORead -> resexn bool
   | OWrite -> resexn unit
+  | OOpen -> resexn bool
+  | OClose -> resexn unit
 
 type event =
 | EvRead  : args:io_args ORead -> io_res ORead args -> event
 | EvWrite : args:io_args OWrite -> io_res OWrite args -> event
+| EvOpen  : args:io_args OOpen -> io_res OOpen args -> event
+| EvClose : args:io_args OClose -> io_res OClose args -> event
 
 let op_to_ev (op:io_ops) (args:io_args op) (res:io_res op args) : event =
   match op with
   | ORead -> EvRead args res
   | OWrite -> EvWrite args res
+  | OOpen -> EvOpen args res
+  | OClose -> EvClose args res
 
 let destruct_ev (ev:event) : op:io_ops & args:io_args op & io_res op args =
   match ev with
   | EvRead a r -> (| ORead, a, r |)
   | EvWrite a r -> (| OWrite, a, r |)
+  | EvOpen a r -> (| OOpen, a, r |)
+  | EvClose a r -> (| OClose, a, r |)
 
 let trace = list event
 
@@ -49,18 +59,24 @@ let io_pre (h:trace) (op:io_ops) (arg:io_args op) : Type0 =
   match op with
   | ORead -> True
   | OWrite -> True
+  | OOpen -> True
+  | OClose -> True
 
 unfold
 let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
   match op with
   | ORead -> True
   | OWrite -> True
+  | OOpen -> True
+  | OClose -> True
 
 unfold
 let test_event (h:trace) (ev:event) =
   match ev with
   | EvRead v r -> io_post h ORead v r
   | EvWrite v r -> io_post h OWrite v r
+  | EvOpen v r -> io_post h OOpen v r
+  | EvClose v r -> io_post h OClose v r
 
 let rec well_formed_local_trace (h:trace) (lt:trace) : Tot Type0 (decreases lt) =
   match lt with

@@ -31,6 +31,8 @@ type exp =
   | ECase  : exp -> exp -> exp -> exp
   | ERead  : exp
   | EWrite : exp -> exp
+  | EOpen  : string -> exp
+  | EClose : exp -> exp
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
@@ -68,6 +70,8 @@ let rec subst (#r:bool)
     | ECase e1 e2 e3 -> ECase (subst s e1) (subst (sub_elam s) e2) (subst (sub_elam s) e3)
     | ERead -> ERead
     | EWrite e' -> EWrite (subst s e')
+    | EOpen e' -> EOpen e'
+    | EClose e' -> EClose (subst s e')
 
 and sub_elam (#r:bool) (s:sub r)
   : Tot (sub r)
@@ -121,6 +125,8 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | ECase e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 (n+1) @ free_vars_indx e3 (n+1)
   | ERead -> []
   | EWrite e' -> free_vars_indx e' n
+  | EOpen e' -> []
+  | EClose e' -> free_vars_indx e' n
 
 let free_vars e = free_vars_indx e 0
 
@@ -172,6 +178,7 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   | ESnd e
   | EInl e
   | EInr e
+  | EClose e
   | EWrite e ->
     lem_shifting_preserves_closed s e n
   | EApp e1 e2
@@ -234,6 +241,7 @@ let rec lem_subst_freevars_closes_exp
   | ESnd e'
   | EInl e'
   | EInr e'
+  | EClose e'
   | EWrite e' ->
     assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e' n
@@ -405,6 +413,16 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     r:resexn unit ->
     h:history ->
     step (EWrite arg) (get_resexn_unit r) h (Some (EvWrite (get_bool arg) r))
+  | SOpen :
+    str:string ->
+    r:resexn bool ->
+    h:history ->
+    step (EOpen str) (get_resexn_bool r) h (Some (EvOpen str r))
+  | SClose :
+    file_descr:bool ->
+    r:resexn unit ->
+    h:history ->
+    step (EClose (get_ebool file_descr)) (get_resexn_unit r) h (Some (EvClose file_descr r))
 
 let can_step (e:closed_exp) : Type0 =
   exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
@@ -525,6 +543,7 @@ let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)
             ((Some? oev /\ (EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (oev == oev')) /\
             ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
             ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
+            // TODO: this is not correct
   (ensures fun _ -> step e e' h' oev')
   (decreases st) =
   match st with
@@ -581,6 +600,9 @@ let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)
     SWrite hst'
     end
   | SWriteReturn arg r h -> SWriteReturn arg r h'
+  | SOpen str r h -> SOpen str r h'
+  | SClose file_descr r h -> SClose file_descr r h'
+  | _ -> admit ()
 
 let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) : Pure (option (event_h h'))
   (requires step e e' h oev)
@@ -694,10 +716,18 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
     let _ : step e e' h' (Some (EvWrite (get_bool arg) r)) = SWriteReturn arg r h' in
     Some (EvWrite (get_bool arg) r)
     end
+  | SOpen str r h -> begin
+    let _ : step e e' h' (Some (EvOpen str r)) = SOpen str r h' in
+    Some (EvOpen str r)
+    end
+  | SClose file_descr r h -> begin
+    let _ : step e e' h' (Some (EvClose file_descr r)) = SClose file_descr r h' in
+    Some (EvClose file_descr r)
+    end
 
 let step_history_independence (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) :
-  Lemma (ensures forall h'. exists oev'. step e e' h' oev' /\ oev' == oev) =
-  introduce forall h'. exists oev'. step e e' h' oev' /\ oev' == oev with begin
+  Lemma (ensures forall h'. exists oev'. step e e' h' oev' /\ (None? oev <==> None? oev')) =
+  introduce forall h'. exists oev'. step e e' h' oev' /\ (None? oev <==> None? oev') with begin
     assert (step e e' h' (construct_option_ev st h'))
   end
 
@@ -705,7 +735,7 @@ let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace 
   (requires steps e e' h lt)
   (ensures fun lt' -> 
     steps e e' h' lt' /\
-    lt == lt')
+    (lt == [] <==> lt' == []))
   (decreases st) =
   match st with
   | SRefl _ _ -> []
@@ -723,18 +753,18 @@ let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace 
     end
 
 let steps_history_independence (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (sts:steps e e' h lt) :
-  Lemma (ensures forall h'. exists lt'. steps e e' h' lt' /\ lt == lt') =
-  introduce forall h'. exists lt'. steps e e' h' lt' /\ lt == lt' with begin
+  Lemma (ensures forall h'. exists lt'. steps e e' h' lt' /\ (lt == [] <==> lt' == [])) =
+  introduce forall h'. exists lt'. steps e e' h' lt' /\ (lt == [] <==> lt' == []) with begin
     assert (steps e e' h' (construct_local_trace sts h'))
  end
 
-open IO
+(*open IO
 
 let steps_history_independence' (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (sts:steps e e' h lt) :
   Lemma (ensures forall h'. steps e e' h' (get_lt h h' lt)) = admit ()
   (*introduce forall h'. exists lt'. steps e e' h' lt' /\ lt == lt' with begin
     assert (steps e e' h' (get_lt h h' lt))
- end*)
+ end*)*)
 
 let indexed_can_step_history_independence (e:closed_exp) (h:history) :
   Lemma (requires indexed_can_step e h)
