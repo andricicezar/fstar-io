@@ -19,16 +19,16 @@ type io_ops = | ORead | OWrite | OOpen | OClose
 
 unfold let io_args (op:io_ops) : Type =
   match op with
-  | ORead -> unit
-  | OWrite -> bool
-  | OOpen -> string
-  | OClose -> bool
+  | ORead -> file_descr
+  | OWrite -> file_descr * bool
+  | OOpen -> bool
+  | OClose -> file_descr
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
   | ORead -> resexn bool
   | OWrite -> resexn unit
-  | OOpen -> resexn bool
+  | OOpen -> resexn file_descr
   | OClose -> resexn unit
 
 type event =
@@ -53,14 +53,31 @@ let destruct_ev (ev:event) : op:io_ops & args:io_args op & io_res op args =
 
 let trace = list event
 
+type history = trace (** a history is a trace kept backwards **)
+
+let rec last_fd (h:history) : Tot file_descr
+  (decreases h) = 
+  match h with
+  | [] -> 0
+  | (EvOpen arg (Inl fd)) :: _ -> fd
+  | _ :: tl -> last_fd tl
+
+let fresh_fd (h:history) : file_descr = (last_fd h) + 1
+
+let valid_fd (h:history) (fd:file_descr) : bool =
+  0 < fd && fd <= (last_fd h)
+
+let recast_fd h h' (fd:file_descr{valid_fd h fd}) : file_descr =
+  ((fresh_fd h) - fd) + (fresh_fd h')
+
 (** TODO: get rid of pres **)
 unfold
 let io_pre (h:trace) (op:io_ops) (arg:io_args op) : Type0 =
   match op with
-  | ORead -> True
-  | OWrite -> True
+  | ORead -> valid_fd h arg
+  | OWrite -> valid_fd h (fst #file_descr #bool arg)
   | OOpen -> True
-  | OClose -> True
+  | OClose -> valid_fd h arg
 
 unfold
 let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
@@ -73,7 +90,7 @@ let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
 unfold
 let test_event (h:trace) (ev:event) =
   match ev with
-  | EvRead v r -> io_post h ORead v r
+  | EvRead v r -> io_pre h ORead v /\ io_post h ORead v r
   | EvWrite v r -> io_post h OWrite v r
   | EvOpen v r -> io_post h OOpen v r
   | EvClose v r -> io_post h OClose v r
@@ -82,8 +99,6 @@ let rec well_formed_local_trace (h:trace) (lt:trace) : Tot Type0 (decreases lt) 
   match lt with
   | [] -> True
   | ev :: tl -> test_event h ev /\ well_formed_local_trace (ev::h) tl
-
-type history = trace (** a history is a trace kept backwards **)
 
 type event_h (t:trace) = (ev:event{test_event t ev})
 

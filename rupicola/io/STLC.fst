@@ -29,9 +29,10 @@ type exp =
   | EInl   : exp -> exp
   | EInr   : exp -> exp
   | ECase  : exp -> exp -> exp -> exp
-  | ERead  : exp
-  | EWrite : exp -> exp
-  | EOpen  : string -> exp
+  | ERead  : exp -> exp
+  | EWrite : exp -> exp -> exp
+  | EFileDescr : fd:file_descr -> exp
+  | EOpen  : exp -> exp
   | EClose : exp -> exp
 
 (* Parallel substitution operation `subst` *)
@@ -68,9 +69,10 @@ let rec subst (#r:bool)
     | EInl e' -> EInl (subst s e')
     | EInr e' -> EInr (subst s e')
     | ECase e1 e2 e3 -> ECase (subst s e1) (subst (sub_elam s) e2) (subst (sub_elam s) e3)
-    | ERead -> ERead
-    | EWrite e' -> EWrite (subst s e')
-    | EOpen e' -> EOpen e'
+    | ERead e' -> ERead (subst s e')
+    | EWrite e1 e2  -> EWrite (subst s e1) (subst s e2)
+    | EFileDescr i -> EFileDescr i
+    | EOpen e' -> EOpen (subst s e')
     | EClose e' -> EClose (subst s e')
 
 and sub_elam (#r:bool) (s:sub r)
@@ -123,9 +125,10 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EInl e' -> free_vars_indx e' n
   | EInr e' -> free_vars_indx e' n
   | ECase e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 (n+1) @ free_vars_indx e3 (n+1)
-  | ERead -> []
-  | EWrite e' -> free_vars_indx e' n
-  | EOpen e' -> []
+  | ERead e' -> free_vars_indx e' n
+  | EWrite e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
+  | EFileDescr i -> []
+  | EOpen e' -> free_vars_indx e' n
   | EClose e' -> free_vars_indx e' n
 
 let free_vars e = free_vars_indx e 0
@@ -138,6 +141,7 @@ let rec is_value (e:exp) : Type0 =
   | EUnit -> True
   | ETrue -> True
   | EFalse -> True
+  | EFileDescr _ -> True
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
   | EInl e'
@@ -178,9 +182,11 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   | ESnd e
   | EInl e
   | EInr e
+  | EOpen e
   | EClose e
-  | EWrite e ->
+  | ERead e ->
     lem_shifting_preserves_closed s e n
+  | EWrite e1 e2
   | EApp e1 e2
   | EPair e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
@@ -225,6 +231,7 @@ let rec lem_subst_freevars_closes_exp
     end;
     lem_subst_freevars_closes_exp s' e' n'
   | EApp e1 e2
+  | EWrite e1 e2
   | EPair e1 e2 ->
     assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e1 n;
@@ -242,7 +249,8 @@ let rec lem_subst_freevars_closes_exp
   | EInl e'
   | EInr e'
   | EClose e'
-  | EWrite e' ->
+  | EOpen e'
+  | ERead e' ->
     assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e' n
   | ECase e1 e2 e3 -> admit ()
@@ -267,6 +275,9 @@ let get_ebool (b:bool) : closed_exp =
   | true -> ETrue
   | false -> EFalse
 
+let get_efd (fd:file_descr) : closed_exp =
+  EFileDescr fd
+
 let get_resexn_unit (x:resexn unit) : closed_exp =
   match x with
   | Inl () -> EInl EUnit
@@ -276,6 +287,19 @@ let get_resexn_bool (x:resexn bool) : closed_exp =
   match x with
   | Inl b -> EInl (get_ebool b)
   | Inr () -> EInr EUnit
+
+let get_resexn_fd (x:resexn file_descr) : closed_exp =
+  match x with
+  | Inl fd -> EInl (get_efd fd)
+  | Inr () -> EInr EUnit
+
+(*let ecase_closed_exp_inr (e1:value) (e2:exp{is_closed (ELam e2)}) (e3:exp{is_closed (ELam e3)}) :
+  Lemma (ensures is_closed (ECase (EInr e1) e2 e3))
+  [SMTPat (is_closed (ECase (EInr e1) e2 e3))] = admit ()
+
+let ecase_closed_exp_inl (e1:value) (e2:exp{is_closed (ELam e2)}) (e3:exp{is_closed (ELam e3)}) :
+  Lemma (ensures is_closed (ECase (EInl e1) e2 e3))
+  [SMTPat (is_closed (ECase (EInl  e1) e2 e3))] = admit ()*)
 
 (* Small-step operational semantics; strong / full-beta reduction is
    right to left  *)
@@ -300,7 +324,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     step (EApp e1 e2) (EApp e1' e2) h oev
   | Beta :
     e11:exp{is_closed (ELam e11)} ->
-    e2:value ->
+    e2:closed_exp{is_value e2} ->
     h:history ->
     step (EApp (ELam e11) e2) (subst_beta e2 e11) h None
   | IfCond :
@@ -379,7 +403,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     hst:step e' e'' h oev ->
     step (EInl e') (EInl e'') h oev
   | SInlReturn :
-    e1:value ->
+    e1:closed_exp{is_value e1} ->
     e2:exp{is_closed (ELam e2)} ->
     e3:exp{is_closed (ELam e3)} ->
     h:history ->
@@ -392,37 +416,72 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     hst:step e' e'' h oev ->
     step (EInr e') (EInr e'') h oev
   | SInrReturn :
-    e1:value ->
+    e1:closed_exp{is_value e1} ->
     e2:exp{is_closed (ELam e2)} ->
     e3:exp{is_closed (ELam e3)} ->
     h:history ->
     step (ECase (EInr e1) e2 e3) (subst_beta e1 e3) h None
   | SRead :
-    r:resexn bool ->
+    #fd:closed_exp ->
+    #fd':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step fd fd' h oev ->
+    step (ERead fd) (ERead fd') h oev
+  | SReadReturn :
     h:history ->
-    step ERead (get_resexn_bool r) h (Some (EvRead () r))
-  | SWrite :
+    fd:file_descr{valid_fd h fd}  ->
+    r:resexn bool ->
+    step (ERead (get_efd fd)) (get_resexn_bool r) h (Some (EvRead fd r))
+  | SWriteArg :
     #arg:closed_exp ->
     #arg':closed_exp ->
     #h:history ->
     #oev:option (event_h h) ->
+    fd:closed_exp ->
     hst:step arg arg' h oev ->
-    step (EWrite arg) (EWrite arg') h oev
+    step (EWrite fd arg) (EWrite fd arg') h oev
+  | SWriteFd :
+    #fd:closed_exp ->
+    #fd':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    arg:closed_exp ->
+    hst:step fd fd' h oev ->
+    step (EWrite fd arg) (EWrite fd' arg) h oev
   | SWriteReturn :
+    h:history ->
+    fd:file_descr{valid_fd h fd} ->
     arg:value{ETrue? arg \/ EFalse? arg} ->
     r:resexn unit ->
-    h:history ->
-    step (EWrite arg) (get_resexn_unit r) h (Some (EvWrite (get_bool arg) r))
+    step (EWrite (get_efd fd) arg) (get_resexn_unit r) h (Some (EvWrite (fd, get_bool arg) r))
   | SOpen :
-    str:string ->
-    r:resexn bool ->
+    #str:closed_exp ->
+    #str':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step str str' h oev ->
+    step (EOpen str) (EOpen str') h oev
+  | SOpenReturnSuccess :
+    str:value{ETrue? str \/ EFalse? str} ->
     h:history ->
-    step (EOpen str) (get_resexn_bool r) h (Some (EvOpen str r))
+    step (EOpen str) (get_resexn_fd (Inl (fresh_fd h))) h (Some (EvOpen (get_bool str) (Inl (fresh_fd h))))
+  | SOpenReturnFail :
+    str:value{ETrue? str \/ EFalse? str} ->
+    h:history ->
+    step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_bool str) (Inr ())))
   | SClose :
-    file_descr:bool ->
-    r:resexn unit ->
+    #fd:closed_exp ->
+    #fd':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step fd fd' h oev ->
+    step (EClose fd) (EClose fd') h oev
+  | SCloseReturn :
     h:history ->
-    step (EClose (get_ebool file_descr)) (get_resexn_unit r) h (Some (EvClose file_descr r))
+    fd:file_descr{valid_fd h fd} ->
+    r:resexn unit ->
+    step (EClose (get_efd fd)) (get_resexn_unit r) h (Some (EvClose fd r))
 
 let can_step (e:closed_exp) : Type0 =
   exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
@@ -537,13 +596,75 @@ let lem_value_is_safe (e:closed_exp) :
   Lemma (requires is_value e)
         (ensures safe e) = admit ()
 
+let get_read_arg (ev:event{EvRead? ev}) : io_args ORead =
+  match ev with
+  | EvRead arg res -> arg
+
+let get_read_res (args:io_args ORead) (ev:event{EvRead? ev}) : io_res ORead args =
+  match ev with
+  | EvRead arg res -> res
+
+let get_open_arg (ev:event{EvOpen? ev}) : io_args OOpen =
+  match ev with
+  | EvOpen arg res -> arg
+
+let get_open_res (args:io_args OOpen) (ev:event{EvOpen? ev}) : io_res OOpen args =
+  match ev with
+  | EvOpen arg res -> res
+
+let get_einl_v (x:closed_exp{EInl? x}) =
+  match x with
+  | EInl v -> v
+
+let get_einr_v (x:closed_exp{EInr? x}) =
+  match x with
+  | EInr v -> v
+
+assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'}) 
+
+(*let corresponding_event #h #h' (oev:option (event_h h)) (oev':option (event_h h')) =
+  (None? oev <==> None? oev') /\
+  ((Some? oev /\ (test_event h' (Some?.v oev))) ==> 
+    (oev == oev')) /\ // if the read/write/open/close was an error, it would be an error in any history
+  ((Some? oev /\ (EvRead? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==> 
+    ((EInl? (get_read_res (get_read_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (EvRead (get_read_arg (Some?.v oev)) (Inr ()))))) /\
+  // this will look the same for EvWrite
+  ((Some? oev /\ (EvOpen? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
+    ((EInl? (get_open_res (get_open_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (get_new_file_descr (Some?.v oev) h'))))*)
+  //((Some? oev /\ (EvClose? (Some?.v oev)) /\ 
+
+// h = [1 2 3] [4]
+// h' = [] [1]
+
+// TODO: add file descr to read and write (and check that they are in the bounds of the semantics, so 1 and last fd of the history)
+
+let new_event #h #h' (oev:option (event_h h)) : option (event_h h') =
+  match oev with
+  | None -> None
+  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
+  | Some (EvRead fd r) -> Some (EvRead (recast_fd h h' fd) r)
+  | Some (EvWrite (fd, arg) r) -> Some (EvWrite ((recast_fd h h' fd), arg) r)
+  | Some (EvClose fd arg) -> Some (EvClose (recast_fd h h' fd) arg) 
+  | _ -> oev
+
+// should be able to try to read from closed file descriptors -> error
+
+// example correct traces:
+// [EvOpen "0" -> Inl true, EvWrite true -> Inl (), EvRead () -> Inl true, EvClose true -> Inl ()]
+
+// rules as I understand them when we change histories:
+// 1. EvRead fails if an EvOpen does NOT precede it AND if something has NOT been written to the file
+// 2. EvWrite fails if an EvOpen does NOT precede it
+// 3. EvOpen never fails but returns different file descriptor
+// 4. EvClose fails if an EvOpen with the same file descriptor does NOT precede it
+
 let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) (oev':option (event_h h')) : Pure (step e e' h' oev')
   (requires step e e' h oev /\
             (None? oev ==> None? oev') /\
             ((Some? oev /\ (EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (oev == oev')) /\
             ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (test_event h' (Some?.v oev) ==> (oev == oev'))) /\
             ((Some? oev /\ ~(EvRead? (Some?.v oev) \/ EvWrite? (Some?.v oev))) ==> (~(test_event h' (Some?.v oev)) ==> (None? oev'))))
-            // TODO: this is not correct
+            // TODO: this is not correct - look at corresponding_event for correct spec
   (ensures fun _ -> step e e' h' oev')
   (decreases st) =
   match st with
@@ -600,9 +721,17 @@ let rec construct_step (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)
     SWrite hst'
     end
   | SWriteReturn arg r h -> SWriteReturn arg r h'
-  | SOpen str r h -> SOpen str r h'
-  | SClose file_descr r h -> SClose file_descr r h'
-  | _ -> admit ()
+  | SOpen hst -> begin
+    let hst' = construct_step hst h' oev' in
+    SOpen hst'
+    end
+  | SOpenReturnSuccess str h -> SOpenReturnSuccess str h'
+  | SOpenReturnFail str h -> SOpenReturnFail str h'
+  | SClose hst -> begin
+    let hst' = construct_step hst h' oev' in
+    SClose hst'
+    end
+  | SCloseReturn file_descr r h -> SCloseReturn file_descr r h'
 
 let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event_h h)) (st:step e e' h oev) (h':history) : Pure (option (event_h h'))
   (requires step e e' h oev)
@@ -716,12 +845,28 @@ let rec construct_option_ev (#e #e':closed_exp) (#h:history) (#oev:option (event
     let _ : step e e' h' (Some (EvWrite (get_bool arg) r)) = SWriteReturn arg r h' in
     Some (EvWrite (get_bool arg) r)
     end
-  | SOpen str r h -> begin
-    let _ : step e e' h' (Some (EvOpen str r)) = SOpen str r h' in
-    Some (EvOpen str r)
+  | SOpen #str #str' #h #oev hst -> begin
+    let oev' = construct_option_ev hst h' in
+    let hst' : step str str' h' oev' = construct_step hst h' oev' in
+    let _ : step e e' h' oev' = SOpen hst' in
+    oev'
     end
-  | SClose file_descr r h -> begin
-    let _ : step e e' h' (Some (EvClose file_descr r)) = SClose file_descr r h' in
+  | SOpenReturnSuccess str h -> begin
+    let _ : step e e' h' (Some (EvOpen (get_bool str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h' in
+    (Some (EvOpen (get_bool str) (Inl (fresh_fd h))))
+    end
+  | SOpenReturnFail str h -> begin
+    let _ : step e e' h' (Some (EvOpen (get_bool str) (Inr ()))) = SOpenReturnFail str h' in
+    (Some (EvOpen (get_bool str) (Inr ())))
+    end
+  | SClose #fd #fd' #h #oev hst -> begin
+    let oev' = construct_option_ev hst h' in
+    let hst' : step fd fd' h' oev' = construct_step hst h' oev' in
+    let _ : step e e' h' oev' = SClose hst' in
+    oev'
+    end
+  | SCloseReturn file_descr r h -> begin
+    let _ : step e e' h' (Some (EvClose file_descr r)) = SCloseReturn file_descr r h' in
     Some (EvClose file_descr r)
     end
 
@@ -1535,14 +1680,6 @@ let can_step_ecase_when_safe (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)
       bind_squash st (fun st -> return_squash (SCase e_lc e_rc st))
     end
   end
-
-let get_einl_v (x:closed_exp{EInl? x}) =
-  match x with
-  | EInl v -> v
-
-let get_einr_v (x:closed_exp{EInr? x}) =
-  match x with
-  | EInr v -> v
 
 #push-options "--z3rlimit 10000"
 let rec destruct_steps_ecase
