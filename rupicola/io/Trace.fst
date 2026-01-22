@@ -55,6 +55,12 @@ let trace = list event
 
 type history = trace (** a history is a trace kept backwards **)
 
+// valid series of steps:
+// SOpenReturnSuccess ETrue [] == 
+  // step (EOpen ETrue) (EInl (EFileDescr 1)) [] (Some (EvOpen true (Inl 1)))
+// STrans (SOpenReturnSuccess ETrue []) (SRefl (EInl (EFileDescr 1)) (EInl (EFileDescr 1)) []++[EvOpen true (Inl 1)] [] ==
+  // steps (EOpen ETrue) (EInl (EFileDescr 1)) [] [EvOpen true (Inl 1)]
+
 let rec last_fd (h:history) : Tot file_descr
   (decreases h) = 
   match h with
@@ -70,14 +76,33 @@ let valid_fd (h:history) (fd:file_descr) : bool =
 let recast_fd h h' (fd:file_descr{valid_fd h fd}) : file_descr =
   ((fresh_fd h) - fd) + (fresh_fd h')
 
+let recast_fd_preserves_validity h h' (fd:file_descr{valid_fd h fd}) :
+  Lemma (ensures valid_fd h' (recast_fd h h' fd))
+  [SMTPat (valid_fd h' (recast_fd h h' fd))] =
+  assert (0 < fd && fd <= (last_fd h));
+  assert ((fresh_fd h) == (last_fd h) + 1);
+  assert (0 > -fd);
+  assert ((last_fd h) + 1 > ((fresh_fd h) - fd));
+  assert (((last_fd h) + 1 + (last_fd h') + 1) > (((fresh_fd h) - fd) + (fresh_fd h')));
+  assert (-(last_fd h) <= -fd);
+  assert ((fresh_fd h) - (last_fd h) <= (fresh_fd h) - fd);
+  assert (1 + (fresh_fd h') <= ((fresh_fd h) - fd) + (fresh_fd h'));
+  assert (0 < ((fresh_fd h) - fd) + (fresh_fd h'));
+  //assert ((fresh_fd h) == (last_fd h) + 1);
+  //assert (0 < ((fresh_fd h) - fd) && ((fresh_fd h) - fd) <= (last_fd h));
+  //assert ((fresh_fd h') == (last_fd h') + 1);
+  //assert ((last_fd h') + 1 < (((fresh_fd h) - fd) + (fresh_fd h')));
+  
+  admit ()
+
 (** TODO: get rid of pres **)
 unfold
 let io_pre (h:trace) (op:io_ops) (arg:io_args op) : Type0 =
   match op with
-  | ORead -> valid_fd h arg
-  | OWrite -> valid_fd h (fst #file_descr #bool arg)
+  | ORead -> True
+  | OWrite -> True
   | OOpen -> True
-  | OClose -> valid_fd h arg
+  | OClose -> True
 
 unfold
 let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
@@ -91,9 +116,9 @@ unfold
 let test_event (h:trace) (ev:event) =
   match ev with
   | EvRead v r -> io_pre h ORead v /\ io_post h ORead v r
-  | EvWrite v r -> io_post h OWrite v r
+  | EvWrite v r -> io_pre h OWrite v /\ io_post h OWrite v r 
   | EvOpen v r -> io_post h OOpen v r
-  | EvClose v r -> io_post h OClose v r
+  | EvClose v r -> io_pre h OClose v /\ io_post h OClose v r
 
 let rec well_formed_local_trace (h:trace) (lt:trace) : Tot Type0 (decreases lt) =
   match lt with

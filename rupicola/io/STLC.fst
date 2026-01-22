@@ -293,14 +293,6 @@ let get_resexn_fd (x:resexn file_descr) : closed_exp =
   | Inl fd -> EInl (get_efd fd)
   | Inr () -> EInr EUnit
 
-(*let ecase_closed_exp_inr (e1:value) (e2:exp{is_closed (ELam e2)}) (e3:exp{is_closed (ELam e3)}) :
-  Lemma (ensures is_closed (ECase (EInr e1) e2 e3))
-  [SMTPat (is_closed (ECase (EInr e1) e2 e3))] = admit ()
-
-let ecase_closed_exp_inl (e1:value) (e2:exp{is_closed (ELam e2)}) (e3:exp{is_closed (ELam e3)}) :
-  Lemma (ensures is_closed (ECase (EInl e1) e2 e3))
-  [SMTPat (is_closed (ECase (EInl  e1) e2 e3))] = admit ()*)
-
 (* Small-step operational semantics; strong / full-beta reduction is
    right to left  *)
 
@@ -430,7 +422,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     step (ERead fd) (ERead fd') h oev
   | SReadReturn :
     h:history ->
-    fd:file_descr{valid_fd h fd}  ->
+    fd:file_descr ->
     r:resexn bool ->
     step (ERead (get_efd fd)) (get_resexn_bool r) h (Some (EvRead fd r))
   | SWriteArg :
@@ -451,7 +443,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     step (EWrite fd arg) (EWrite fd' arg) h oev
   | SWriteReturn :
     h:history ->
-    fd:file_descr{valid_fd h fd} ->
+    fd:file_descr ->
     arg:value{ETrue? arg \/ EFalse? arg} ->
     r:resexn unit ->
     step (EWrite (get_efd fd) arg) (get_resexn_unit r) h (Some (EvWrite (fd, get_bool arg) r))
@@ -479,7 +471,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     step (EClose fd) (EClose fd') h oev
   | SCloseReturn :
     h:history ->
-    fd:file_descr{valid_fd h fd} ->
+    fd:file_descr ->
     r:resexn unit ->
     step (EClose (get_efd fd)) (get_resexn_unit r) h (Some (EvClose fd r))
 
@@ -620,7 +612,7 @@ let get_einr_v (x:closed_exp{EInr? x}) =
   match x with
   | EInr v -> v
 
-assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'}) 
+//assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'}) 
 
 (*let corresponding_event #h #h' (oev:option (event_h h)) (oev':option (event_h h')) =
   (None? oev <==> None? oev') /\
@@ -633,10 +625,29 @@ assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{t
     ((EInl? (get_open_res (get_open_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (get_new_file_descr (Some?.v oev) h'))))*)
   //((Some? oev /\ (EvClose? (Some?.v oev)) /\ 
 
+// h = [] [1]
+// h' = [] (1 - 1) + 1 = [1]
+
+// h = [3, 2, 1] [2, 3, OpenFile 4, 4]
+// h' = [4, 3, 2, 1] [2, 3, OpenFile 5, 5]
+
+// (fd - (last_fd h)) + (last_fd h')
+
 // h = [1 2 3] [4]
 // h' = [] [1]
 
 // TODO: add file descr to read and write (and check that they are in the bounds of the semantics, so 1 and last fd of the history)
+
+let new_event' #h #h' (oev:option (event_h h)) : option (event_h h') =
+  match oev with
+  | None -> None
+  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
+    // I think fresh_fd should return the max_fd (since file descriptors are forgeable and we can't guarantee that they'll increase monotonically
+  | Some (EvRead fd (Inl b)) -> if (valid_fd h' fd) then Some (EvRead fd (Inl b)) else Some (EvRead fd (Inr ()))
+    // and here, valid_fd should check that fd appears in h' (not just whether it is in the range)
+  | Some (EvWrite (fd, arg) (Inl ())) -> if (valid_fd h' fd) then Some (EvWrite (fd, arg) (Inl ())) else Some (EvWrite (fd, arg) (Inr ()))
+  | Some (EvClose fd (Inl ())) -> if (valid_fd h' fd) then Some (EvClose fd (Inl ())) else Some (EvClose fd (Inr ()))
+  | _ -> oev // evopen inr (), evread inr ()
 
 let new_event #h #h' (oev:option (event_h h)) : option (event_h h') =
   match oev with
