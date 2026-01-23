@@ -1,7 +1,7 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-ROOTS := Metaprogram.fst RrHP.fst
+ROOTS := Metaprogram.fst RrHP.fst STLCToLambdaBox.fst LambdaBoxToSexp.fst
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
