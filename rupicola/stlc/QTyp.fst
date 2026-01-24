@@ -124,6 +124,16 @@ let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env (extend t1 g) e2 /\ fv_in_env (extend t2 g) e3) <==> fv_in_env g (ECase e1 e2 e3))
   = admit ()
 
+let lem_fv_in_env_succ (g:typ_env) (e:exp) :
+  Lemma (fv_in_env g (ESucc e) <==> fv_in_env g e)
+  [SMTPat (fv_in_env g (ESucc e))]
+  = ()
+
+let lem_fv_in_env_nrec (g:typ_env) (e1 e2 e3:exp) :
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) <==> fv_in_env g (ENRec e1 e2 e3))
+  [SMTPat (fv_in_env g (ENRec e1 e2 e3))]
+  = admit ()
+
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
@@ -137,6 +147,11 @@ let gsub_extend (#g:typ_env) #b (s:gsub g b) (t:qType) (v:value) : gsub (extend 
   f
 
 let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
+  introduce forall (x:var). x `memP` free_vars_indx e 0 ==> free_vars_indx (s x) 0 == [] with begin
+    introduce x `memP` free_vars_indx e 0 ==> free_vars_indx (s x) 0 == [] with _. begin
+      assert (is_closed (s x))
+    end
+  end;
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
