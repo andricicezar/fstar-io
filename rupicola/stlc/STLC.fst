@@ -9,6 +9,7 @@ open FStar.List.Tot
 type typ =
   | TUnit  : typ
   | TBool  : typ
+  | TNat   : typ
   | TArr   : typ -> typ -> typ
   | TPair  : typ -> typ -> typ
   | TSum   : typ -> typ -> typ
@@ -18,6 +19,9 @@ type exp =
   | EUnit  : exp
   | ETrue  : exp
   | EFalse : exp
+  | EZero  : exp
+  | ESucc  : exp -> exp
+  | ENRec  : exp -> exp -> exp -> exp
   | EIf    : exp -> exp -> exp -> exp
   | EVar   : v:var -> exp
   | ELam   : b:exp -> exp
@@ -57,6 +61,9 @@ let rec subst (#r:bool)
     | EUnit -> EUnit
     | ETrue -> ETrue
     | EFalse -> EFalse
+    | EZero -> EZero
+    | ESucc e' -> ESucc (subst s e')
+    | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
     | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
     | EFst e' -> EFst (subst s e')
     | ESnd e' -> ESnd (subst s e')
@@ -104,6 +111,9 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EUnit -> []
   | ETrue -> []
   | EFalse -> []
+  | EZero -> []
+  | ESucc e' -> free_vars_indx e' n
+  | ENRec e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
   | ELam e' -> free_vars_indx e' (n+1)
   | EApp e1 e2 -> free_vars_indx e1 n @ free_vars_indx e2 n
   | EIf e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
@@ -125,6 +135,8 @@ let rec is_value (e:exp) : Type0 =
   | EUnit -> True
   | ETrue -> True
   | EFalse -> True
+  | EZero -> True
+  | ESucc e' -> is_value e'
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
   | EInl e'
@@ -138,7 +150,8 @@ let rec lem_value_is_closed (e:exp) : Lemma
   match e with
   | EPair e1 e2 -> lem_value_is_closed e1; lem_value_is_closed e2
   | EInl e'
-  | EInr e' -> lem_value_is_closed e'
+  | EInr e'
+  | ESucc e' -> lem_value_is_closed e'
   | _ -> ()
 
 type value = e:exp{is_value e}
@@ -164,13 +177,18 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   | EFst e
   | ESnd e
   | EInl e
-  | EInr e ->
+  | EInr e
+  | ESucc e ->
     lem_shifting_preserves_closed s e n
   | EApp e1 e2
   | EPair e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n
   | EIf e1 e2 e3 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n;
+    lem_shifting_preserves_closed s e3 n
+  | ENRec e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n;
     lem_shifting_preserves_closed s e3 n
@@ -225,9 +243,17 @@ let rec lem_subst_freevars_closes_exp
   | EFst e'
   | ESnd e'
   | EInl e'
-  | EInr e' ->
+  | EInr e'
+  | ESucc e' ->
     assume (forall x. x `memP` free_vars_indx e' n ==> x `memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s e' n
+  | ENRec e1 e2 e3 ->
+    assume (forall x. x `memP` free_vars_indx e1 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e1 n;
+    assume (forall x. x `memP` free_vars_indx e2 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e2 n;
+    assume (forall x. x `memP` free_vars_indx e3 n ==> x `memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s e3 n
   | ECase e1 e2 e3 -> admit ()
   | _ -> ()
 #pop-options
@@ -239,6 +265,36 @@ let subst_beta (v e:exp) :
   assume (free_vars_indx e 0 == [0]); (** should be provable **)
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
+
+let lem_esucc_value_closed (e:value{is_closed e}) :
+  Lemma (is_closed (ESucc e))
+  [SMTPat (is_closed (ESucc e))] =
+  ()
+
+let lem_einr_value_closed (e:value{is_closed e}) :
+  Lemma (is_closed (EInr e))
+  [SMTPat (is_closed (EInr e))] =
+  ()
+
+let lem_einl_value_closed (e:value{is_closed e}) :
+  Lemma (is_closed (EInl e))
+  [SMTPat (is_closed (EInl e))] =
+  ()
+
+let lem_eapp_closed (e1:closed_exp) (e2:closed_exp) :
+  Lemma (is_closed (EApp e1 e2))
+  [SMTPat (is_closed (EApp e1 e2))] =
+  ()
+
+let lem_epair_closed (e1:closed_exp) (e2:closed_exp) :
+  Lemma (is_closed (EPair e1 e2))
+  [SMTPat (is_closed (EPair e1 e2))] =
+  ()
+
+let lem_ecase_closed (e1:closed_exp) (e2:exp{is_closed (ELam e2)}) (e3:exp{is_closed (ELam e3)}) :
+  Lemma (is_closed (ECase e1 e2 e3))
+  [SMTPat (is_closed (ECase e1 e2 e3))] =
+  ()
 
 (* Small-step operational semantics; strong / full-beta reduction is
    right to left  *)
@@ -261,6 +317,27 @@ type step : closed_exp -> closed_exp -> Type =
     e11:exp{is_closed (ELam e11)} ->
     e2:value ->
     step (EApp (ELam e11) e2) (subst_beta e2 e11)
+  | SSucc :
+    #e:closed_exp ->
+    #e':closed_exp ->
+    hst:step e e' ->
+    step (ESucc e) (ESucc e')
+  | SNRecV :
+    #e1:closed_exp ->
+    #e1':closed_exp ->
+    e2:closed_exp ->
+    e3:closed_exp ->
+    hst:step e1 e1' ->
+    step (ENRec e1 e2 e3) (ENRec e1' e2 e3)
+  | SNRec0 :
+    e2:closed_exp ->
+    e3:closed_exp ->
+    step (ENRec EZero e2 e3) e2
+  | SNRecIter :
+    v:closed_exp{is_value v} ->
+    e2:closed_exp ->
+    e3:closed_exp ->
+    step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3)
   | IfCond :
     #e1:closed_exp ->
     e2:closed_exp ->
@@ -347,6 +424,16 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
           | _ -> false_elim ())
       end
     end
+  | ESucc e' ->
+    lem_value_is_irred e';
+    introduce forall (e_next:closed_exp). step e e_next ==> False with begin
+      introduce step e e_next ==> False with h. begin
+        FStar.Squash.bind_squash #(step e e_next) h (fun st ->
+          match st with
+          | SSucc hst -> ()
+          | _ -> false_elim ())
+      end
+    end
   | _ -> assert (forall e'. ~(step e e')) by (explode ())
 
 (** reflexive transitive closure of step *)
@@ -423,6 +510,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
   | TUnit -> e == EUnit
   | TBool -> e == ETrue \/ e == EFalse
+  | TNat -> EZero? e \/ ESucc? e
   | TArr t1 t2 -> ELam? e
   | TPair t1 t2 -> EPair? e
   | TSum t1 t2 -> EInl? e \/ EInr? e
