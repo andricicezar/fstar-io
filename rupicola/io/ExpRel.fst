@@ -17,6 +17,10 @@ let io_oexp (g:typ_env) (t:qType) =
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
 
+unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Type0
+let e_beh e e' h lt =
+  steps e e' h lt /\ indexed_irred e' (h++lt)
+
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
 let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decreases %[get_rel t;0]) =
@@ -58,13 +62,13 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
 and (⦂) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall (e':closed_exp) lt.
-    steps e e' h lt ==> indexed_irred e' (h++lt) ==>
+    e_beh e e' h lt ==>
     (t ∋ (h, fs_e, e') /\ lt == [])
                            (** vvvvvvvvvv defined over producers **)
 and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall (lt:local_trace h) (e':closed_exp).
-    steps e e' h lt ==> indexed_irred e' (h++lt)  ==>
+    e_beh e e' h lt ==>
     (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
 
@@ -240,8 +244,8 @@ let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
 let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:exp) (h:history) :
   Lemma (requires equiv_prod fs_e e)
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
-  introduce forall e' (lt:local_trace h). steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
-    introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+  introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
+    introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
       eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
           fsG `(∽) h` s ==> t ⪾ (h, fs_e, gsubst s e)
       with  true gsub_empty empty_eval h;
@@ -522,21 +526,21 @@ let equiv_app #g
     assert (gsubst s (EApp e1 e2) == e);
     let EApp e1 e2 = e in
     introduce fsG `(∽) h` s ==> t2 ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values t1 h fs_e2;
-            assert (forall e2' lt2. steps e2 e2' h lt2 /\ indexed_irred e2' (h++lt2) ==> is_value e2');
+            assert (forall e2' lt2. e_beh e2 e2' h lt2 ==> is_value e2');
             let (e2', (| lt2, lt' |)) = destruct_steps_eapp_e2 e1 e2 e' h lt steps_e_e' in
             lem_shift_type_value_environments h fsG s;
             assert (forall (lt:local_trace h). (t1 ^-> t2) ⦂ (h++lt, fs_e1, e1));
-            assert (forall e1' (lt1:local_trace (h++lt2)). (steps e1 e1' (h++lt2) lt1 /\ indexed_irred e1' ((h++lt2)++lt1)) ==> (ELam? e1' /\ is_closed e1'));
+            assert (forall e1' (lt1:local_trace (h++lt2)). e_beh e1 e1' (h++lt2) lt1 ==> (ELam? e1' /\ is_closed e1'));
             FStar.Squash.bind_squash #(steps (EApp e1 e2') e' (h++lt2) lt') () (fun sts2 ->
             let (e11, (| lt1, lt'' |)) = destruct_steps_eapp_e1 e1 e2' e' (h++lt2) lt' sts2 in
-            eliminate forall e2' lt2. steps e2 e2' h lt2 /\ indexed_irred e2' (h++lt2) ==> (t1 ∋ (h, fs_e2, e2') /\ lt2 == []) with e2' lt2;
+            eliminate forall e2' lt2. e_beh e2 e2' h lt2 ==> (t1 ∋ (h, fs_e2, e2') /\ lt2 == []) with e2' lt2;
             lem_value_is_irred e2';
-            eliminate forall e1' lt1. steps e1 e1' h lt1 /\ indexed_irred e1' (h++lt1) ==> ((t1 ^-> t2) ∋ (h, fs_e1, e1') /\ lt1 == []) with (ELam e11) lt1;
+            eliminate forall e1' lt1. e_beh e1 e1' h lt1 ==> ((t1 ^-> t2) ∋ (h, fs_e1, e1') /\ lt1 == []) with (ELam e11) lt1;
             lem_value_is_irred (ELam e11);
             unroll_elam t1 t2 h fs_e1 e11;
             assert (t2 ⦂ (h, fs_e, subst_beta e2' e11));
@@ -556,7 +560,7 @@ let equiv_if_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t:qType
   (t ⦂ (h, fs_e3, e3))
 
 let equiv_if_steps #e #e' #h #lt #t #fs_e1 #fs_e2 #fs_e3 #fs_e #e1 #e2 #e3 (sq:squash (equiv_if_steps_pre e e' h lt t fs_e1 fs_e2 fs_e3 fs_e e1 e2 e3)) : squash (t ∋ (h, fs_e, e') /\ lt == []) =
-  assert (forall e1' lt1. (steps e1 e1' h lt1 /\ indexed_irred e1' (h++lt1)) ==> (ETrue? e1' \/ EFalse? e1'));
+  assert (forall e1' lt1. e_beh e1 e1' h lt1 ==> (ETrue? e1' \/ EFalse? e1'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
   let (e1', (| lt1, (lt2, lt3) |)) = destruct_steps_eif e1 e2 e3 e' h lt sts in
   assert (qBool ∋ (h, fs_e1, e1') /\ lt1 == []);
@@ -584,8 +588,8 @@ let equiv_if #g
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
     introduce fsG `(∽) h` s ==> t ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
           let steps_pre : squash (equiv_if_steps_pre e e' h lt t fs_e1 fs_e2 fs_e3 fs_e e1 e2 e3) = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_e, e') /\ lt == [])) steps_pre (fun steps_pre ->
               equiv_if_steps #e #e' #h #lt #t #fs_e1 #fs_e2 #fs_e3 #fs_e #e1 #e2 #e3 steps_pre)
@@ -611,17 +615,17 @@ let equiv_pair #g
     assert (gsubst s (EPair e1 e2) == e);
     let EPair e1 e2 = e in
     introduce fsG `(∽) h` s ==>  t ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
         introduce _ ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
           lem_forall_values_are_values t1 h fs_e1;
-          assert (forall e1' lt1. steps e1 e1' h lt1 /\ indexed_irred e1' (h++lt1) ==> is_value e1');
+          assert (forall e1' lt1. e_beh e1 e1' h lt1 ==> is_value e1');
           let (e1', (| lt1, lt' |)) = destruct_steps_epair_e1 e1 e2 e' h lt steps_e_e' in
           lem_shift_type_value_environments h fsG s;
-          assert (forall (lt:local_trace h). t2 ⦂ (h++lt, fs_e2, e2));
+          assert (forall lt. t2 ⦂ (h++lt, fs_e2, e2));
           lem_forall_values_are_values t2 (h++lt1) fs_e2;
-          assert (forall e2' (lt2:local_trace (h++lt1)). steps e2 e2' (h++lt1) lt2 /\ indexed_irred e2' ((h++lt1)++lt2) ==> is_value e2');
+          assert (forall e2' lt2. e_beh e2 e2' (h++lt1) lt2 ==> is_value e2');
           FStar.Squash.bind_squash #(steps (EPair e1' e2) e' (h++lt1) lt') () (fun sts1 ->
           let (e2', (| lt2, lt'' |)) = destruct_steps_epair_e2 e1' e2 e' (h++lt1) lt' sts1 in
           lem_value_is_irred e1';
@@ -650,16 +654,16 @@ let equiv_pair_fst_app #g
     assert (gsubst s (EFst e12) == e);
     let EFst e12 = e in
     introduce fsG `(∽) h` s ==> t1 ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t1 ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t1 ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t1 ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t1 ∋ (h, fs_e, e') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t1 ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values (t1 ^* t2) h fs_e12;
-            assert (forall e12' lt12. (steps e12 e12' h lt12 /\ indexed_irred e12' (h++lt12)) ==> (EPair? e12' /\ is_value e12'));
+            assert (forall e12' lt12. e_beh e12 e12' h lt12 ==> (EPair? e12' /\ is_value e12'));
             let (e12', (| lt12, lt_f |)) = destruct_steps_epair_fst e12 e' h lt steps_e_e' in
             lem_value_is_irred e12';
             assert ((t1 ^* t2) ⦂ (h, fs_e12, e12));
-            eliminate forall e12' lt12. steps e12 e12' h lt12 /\ indexed_irred e12' (h++lt12) ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
+            eliminate forall e12' lt12. e_beh e12 e12' h lt12 ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
             assert ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []);
             let EPair e1' e2' = e12' in
             lem_value_is_irred e1';
@@ -684,16 +688,16 @@ let equiv_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp
     assert (gsubst s (ESnd e12) == e);
     let ESnd e12 = e in
     introduce fsG `(∽) h` s ==> t2 ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t2 ∋ (h, fs_e, e') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values (t1 ^* t2) h fs_e12;
-            assert (forall e12' lt12. (steps e12 e12' h lt12 /\ indexed_irred e12' (h++lt12)) ==> (EPair? e12' /\ is_value e12'));
+            assert (forall e12' lt12. e_beh e12 e12' h lt12 ==> (EPair? e12' /\ is_value e12'));
             let (e12', (| lt12, lt_f |)) = destruct_steps_epair_snd e12 e' h lt steps_e_e' in
             lem_value_is_irred e12';
             assert ((t1 ^* t2) ⦂ (h, fs_e12, e12));
-            eliminate forall e12' lt12. steps e12 e12' h lt12 /\ indexed_irred e12' (h++lt12) ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
+            eliminate forall e12' lt12. e_beh e12 e12' h lt12 ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
             assert ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []);
             let EPair e1' e2' = e12' in
             lem_value_is_irred e1';
@@ -718,12 +722,12 @@ let equiv_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
     assert (gsubst s (EInl e) == ex);
     let EInl e = ex in
     introduce fsG `(∽) h` s ==> t ⦂ (h, fs_ex, ex) with _. begin
-      introduce forall (ex':closed_exp) lt. steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
+      introduce forall (ex':closed_exp) lt. e_beh ex ex' h lt ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
         introduce _ ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps ex ex' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_ex, ex') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values t1 h fs_e;
-            assert (forall e' lt'. steps e e' h lt' /\ indexed_irred e' (h++lt') ==> is_value e');
+            assert (forall e' lt'. e_beh e e' h lt' ==> is_value e');
             let (e', (| lt12, lt_f |)) = destruct_steps_einl e ex' h lt steps_e_e' in
             lem_value_is_irred e';
             lem_value_is_irred (EInl e');
@@ -748,12 +752,12 @@ let equiv_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
     assert (gsubst s (EInr e) == ex);
     let EInr e = ex in
     introduce fsG `(∽) h` s ==> t ⦂ (h, fs_ex, ex) with _. begin
-      introduce forall (ex':closed_exp) lt. steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
+      introduce forall (ex':closed_exp) lt. e_beh ex ex' h lt ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with begin
         introduce _ ==> (t ∋ (h, fs_ex, ex') /\ lt == []) with _. begin
           let steps_e_e' : squash (steps ex ex' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t ∋ (h, fs_ex, ex') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values t2 h fs_e;
-            assert (forall e' lt'. steps e e' h lt' /\ indexed_irred e' (h++lt') ==> is_value e');
+            assert (forall e' lt'. e_beh e e' h lt' ==> is_value e');
             let (e', (| lt12, lt_f |)) = destruct_steps_einr e ex' h lt steps_e_e' in
             lem_value_is_irred e';
             lem_value_is_irred (EInr e');
@@ -779,7 +783,7 @@ let equiv_case_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t1 t2
 
 let equiv_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #fs_rc_lam #fs_e #e_case #e_lc #e_rc (sq:squash (equiv_case_steps_pre e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc)) : squash (t3 ∋ (h, fs_e, e') /\ lt == []) =
   lem_forall_values_are_values (t1 ^+ t2) h fs_case;
-  assert (forall e_case' lt'. steps e_case e_case' h lt' /\ indexed_irred e_case' (h++lt') ==> ((EInl? e_case' \/ EInr? e_case') /\ is_value e_case'));
+  assert (forall e_case' lt'. e_beh e_case e_case' h lt' ==> ((EInl? e_case' \/ EInr? e_case') /\ is_value e_case'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
     let (e_case', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts in
     match e_case' with
@@ -838,8 +842,8 @@ let equiv_case
     assert (gsubst s (ECase e_case e_lc e_rc) == e);
     let ECase e_case e_lc e_rc = e in
     introduce fsG `(∽) h` s ==> t3 ⦂ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with _. begin
           assert ((t1 ^-> t3) ⦂ (h, fs_lc_lam, ELam e_lc));
           assert ((t2 ^-> t3) ⦂ (h, fs_rc_lam, ELam e_rc));
           let steps_pre : squash (equiv_case_steps_pre e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc) = () in
@@ -899,8 +903,8 @@ let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⪾ (h, read (), ERead) with begin
     let e = ERead in
     let fs_e = read () in
-    introduce forall (lt:local_trace h) (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
-      introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+    introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+      introduce e_beh e e' h lt ==> (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
         let steps_e_e' : squash (steps e e' h lt) = () in
         FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r))) steps_e_e' (fun steps_e_e' ->
           let (e_r, (| lt1, (lt2, lt3, lt4) |)) = destruct_steps_eread e' h lt steps_e_e' in
@@ -943,8 +947,8 @@ let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
     assert (gsubst s (EWrite arg) == e);
     let EWrite arg = e in
     introduce fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r))) steps_e_e' (fun steps_e_e' ->
             exp_type_history_independence qBool h fs_arg arg;
@@ -1001,10 +1005,10 @@ let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
       let fs_x = fs_x fsG in
       let fs_e = return fs_x in
       let e = gsubst s x in
-      introduce forall (lt:local_trace h) (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
         assert (t ⦂ (h, fs_x, e));
-        eliminate forall e' lt'. steps e e' h lt' /\ indexed_irred e' (h++lt') ==> (t ∋ (h, fs_x, e') /\ lt' == []) with e' lt;
+        eliminate forall e' lt'. e_beh e e' h lt' ==> (t ∋ (h, fs_x, e') /\ lt' == []) with e' lt;
         assert (t ∋ (h++lt, fs_x, e'));
         lem_thetaP_return fs_x h
         end
@@ -1015,24 +1019,23 @@ let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
 let equiv_bind_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (a:qType) (b:qType) (fs_k':(get_Type a) -> io (get_Type b)) (fs_m:io (get_Type a)) (fs_e':io (get_Type b)) (m:closed_exp) (k':exp) =
   (fs_e' == io_bind fs_m fs_k') /\
   (e == EApp (ELam k') m) /\
-  (steps e e' h lt) /\
-  (indexed_irred e' (h++lt)) /\
+  (e_beh e e' h lt) /\
   (a ⪾ (h, fs_m, m)) /\
   (forall (lt:local_trace h). ((a ^->!@ b) ⦂ (h++lt, fs_k', (ELam k'))))
 
 let equiv_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k' (sq:squash (equiv_bind_steps_pre e e' h lt a b fs_k' fs_m fs_e' m k')) : squash (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) =
   lem_forall_values_are_values_prod a h;
-  assert (forall m' lt2. steps m m' h lt2 /\ indexed_irred m' (h++lt2) ==> is_value m');
+  assert (forall m' lt2. e_beh m m' h lt2 ==> is_value m');
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
   let (m', (| lt2, lt' |)) = destruct_steps_eapp_e2 (ELam k') m e' h lt sts in
   assert ((a ^->!@ b) ⦂ (h++lt2, fs_k', (ELam k')));
-  assert (forall k_ (lt1:local_trace (h++lt2)). (steps (ELam k') k_ (h++lt2) lt1 /\ indexed_irred k_ ((h++lt2)++lt1)) ==> (ELam? k_ /\ is_closed k_));
+  assert (forall k_ (lt1:local_trace (h++lt2)). e_beh (ELam k') k_ (h++lt2) lt1 ==> (ELam? k_ /\ is_closed k_));
   FStar.Squash.bind_squash #(steps (EApp (ELam k') m') e' (h++lt2) lt') () (fun sts2 ->
   let (k1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 (ELam k') m' e' (h++lt2) lt' sts2 in
   lem_value_is_irred m';
-  eliminate forall lt2 m'. steps m m' h lt2 /\ indexed_irred m' (h++lt2) ==> (exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m) with lt2 m';
+  eliminate forall lt2 m'. e_beh m m' h lt2 ==> (exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m) with lt2 m';
   lem_value_is_irred (ELam k1);
-  eliminate forall e' lt. steps (ELam k') e' (h++lt2) lt /\ indexed_irred e' ((h++lt2)++lt) ==> ((a ^->!@ b) ∋ (h++lt2, fs_k', e') /\ lt1 == []) with (ELam k1) lt1;
+  eliminate forall e' lt. e_beh (ELam k') e' (h++lt2) lt ==> ((a ^->!@ b) ∋ (h++lt2, fs_k', e') /\ lt1 == []) with (ELam k1) lt1;
   unroll_elam_io a b (h++lt2) fs_k' k1;
   eliminate exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m
   returns exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r with _. begin
@@ -1062,8 +1065,8 @@ let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend
     assert (gsubst s (EApp (ELam k) m) == e);
     let EApp (ELam k') m = e in
     introduce fsG `(∽) h` s ==> b ⪾ (h, fs_e, e) with _. begin
-      introduce forall lt (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) with _. begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
           let steps_pre : squash (equiv_bind_steps_pre e e' h lt a b fs_k' fs_m fs_e' m k') = () in
           FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r)) steps_pre (fun steps_pre ->
@@ -1086,19 +1089,19 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval 
     assert (gsubst s (EApp f x) == e);
     let EApp f x = e in
     introduce fsG `(∽) h` s ==> b ⪾ (h, fs_e, e) with _. begin
-      introduce forall lt (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type b). b  ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type b). b  ∋ (h++lt, fs_r, e') /\ (fs_beh fs_e h lt fs_r)) with begin
         introduce _ ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values a h fs_x;
             let (x', (| lt2, lt' |)) = destruct_steps_eapp_e2 f x e' h lt steps_e_e' in
             lem_shift_type_value_environments h fsG s;
-            assert (forall f' (lt1:local_trace (h++lt2)). (steps f f' (h++lt2) lt1 /\ indexed_irred f' ((h++lt2)++lt1)) ==> (ELam? f' /\ is_closed f'));
+            assert (forall f' (lt1:local_trace (h++lt2)). e_beh f f' (h++lt2) lt1 ==> (ELam? f' /\ is_closed f'));
             FStar.Squash.bind_squash #(steps (EApp f x') e' (h++lt2) lt') () (fun sts2 ->
             let (f1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 f x' e' (h++lt2) lt' sts2 in
-            eliminate forall x' lt2. steps x x' h lt2 /\ indexed_irred x' (h++lt2) ==> (a ∋ (h, fs_x, x') /\ lt2 == []) with x' lt2;
+            eliminate forall x' lt2. e_beh x x' h lt2 ==> (a ∋ (h, fs_x, x') /\ lt2 == []) with x' lt2;
             lem_value_is_irred x';
-            eliminate forall f' lt1. steps f f' h lt1 /\ indexed_irred f' (h++lt1) ==> ((a ^->!@ b) ∋ (h, fs_f, f') /\ lt1 == []) with (ELam f1) lt1;
+            eliminate forall f' lt1. e_beh f f' h lt1 ==> ((a ^->!@ b) ∋ (h, fs_f, f') /\ lt1 == []) with (ELam f1) lt1;
             lem_value_is_irred (ELam f1);
             unroll_elam_io a b h fs_f f1;
             assert (b ⪾ (h, fs_e, subst_beta x' f1));
@@ -1111,14 +1114,13 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval 
 let equiv_if_prod_steps_pre (ex ex':closed_exp) (h:history) (lt:local_trace h) (a:qType) (fs_c:bool) (fs_t fs_e fs_ex:fs_prod a) (c t e:closed_exp) =
   (fs_ex == (if fs_c then fs_t else fs_e)) /\
   (ex == (EIf c t e)) /\
-  (steps ex ex' h lt) /\
-  (indexed_irred ex' (h++lt)) /\
+  (e_beh ex ex' h lt) /\
   (qBool ⦂ (h, fs_c, c)) /\
   (a ⪾ (h, fs_t, t)) /\
   (a ⪾ (h, fs_e, e))
 
 let equiv_if_prod_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex #c #t #e (sq:squash (equiv_if_prod_steps_pre ex ex' h lt a fs_c fs_t fs_e fs_ex c t e)) : squash (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) =
-  assert (forall c' lt'. (steps c c' h lt' /\ indexed_irred c' (h++lt')) ==> (ETrue? c' \/ EFalse? c'));
+  assert (forall c' lt'. e_beh c c' h lt' ==> (ETrue? c' \/ EFalse? c'));
   FStar.Squash.bind_squash #(steps ex ex' h lt) () (fun sts ->
   let (c', (| lt1, (lt2, lt3) |)) = destruct_steps_eif c t e ex' h lt sts in
   assert (qBool ∋ (h, fs_c, c') /\ lt1 == []);
@@ -1143,8 +1145,8 @@ let equiv_oprod_if #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod g a)
     assert (gsubst s (EIf c t e) == ex);
     let EIf c t e = ex in
     introduce fsG `(∽) h` s ==> a ⪾ (h, fs_ex, ex) with _. begin
-      introduce forall lt (ex':closed_exp). steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with begin
-        introduce steps ex ex' h lt /\ indexed_irred ex' (h++lt) ==> (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
+      introduce forall lt (ex':closed_exp). e_beh ex ex' h lt ==> (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with begin
+        introduce e_beh ex ex' h lt ==> (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
           let steps_pre : squash (equiv_if_prod_steps_pre ex ex' h lt a fs_c fs_t fs_e fs_ex c t e) = () in
           FStar.Squash.map_squash #_ #(squash (exists (fs_r:get_Type a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r)) steps_pre (fun steps_pre ->
             equiv_if_prod_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex #c #t #e steps_pre)
@@ -1158,15 +1160,14 @@ let equiv_case_prod_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (
            | Inl x -> fs_inlc x
            | Inr x -> fs_inrc x)) /\
   (e == (ECase cond inlc inrc)) /\
-  (steps (ECase cond inlc inrc) e' h lt) /\
-  (indexed_irred e' (h++lt)) /\
+  e_beh (ECase cond inlc inrc) e' h lt /\
   ((a ^+ b) ⦂ (h, fs_cond, cond)) /\
   ((a ^->!@ c) ⦂ (h, fs_inlc, ELam inlc)) /\
   ((b ^->!@ c) ⦂ (h, fs_inrc, ELam inrc))
 
 let equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_e #cond #inlc #inrc (sq:squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc fs_inrc fs_e cond inlc inrc)) : squash (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) =
   lem_forall_values_are_values (a ^+ b) h fs_cond;
-  assert (forall cond' lt'. steps cond cond' h lt' /\ indexed_irred cond' (h++lt') ==> ((EInl? cond' \/ EInr? cond') /\ is_value cond'));
+  assert (forall cond' lt'. e_beh cond cond' h lt' ==> ((EInl? cond' \/ EInr? cond') /\ is_value cond'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
     let (cond', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase cond inlc inrc e' h lt sts in
     match cond' with
@@ -1220,8 +1221,8 @@ let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:f
     assert (gsubst s (ECase cond inlc inrc) == e);
     let ECase cond inlc inrc = e in
     introduce fsG `(∽) h` s ==> c ⪾ (h, fs_e, e) with _. begin
-      introduce forall lt (e':closed_exp). steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce steps e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           assert ((a ^->!@ c) ⦂ (h, fs_inlc', ELam inlc));
           assert ((b ^->!@ c) ⦂ (h, fs_inrc', ELam inrc));
           let steps_pre : squash (equiv_case_prod_steps_pre e e' h lt a b c fs_cond fs_inlc' fs_inrc' fs_e cond inlc inrc) = () in

@@ -36,7 +36,7 @@ let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
 (** Definition from SCIO*, section 6.2 **)
 type behS_t = hist_post [] bool
 val behS : wholeS -> behS_t
-let behS ws = wp2p (theta ws) []
+let behS ws = fs_beh ws []
 
 (** Target **)
 // right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
@@ -70,12 +70,12 @@ let rel_bools (fs_e:bool) (e:closed_exp) : Type0 =
 
 type behT_t = local_trace [] * closed_exp -> Type0
 val behT : wt:wholeT -> behT_t
-let behT wt = fun (lt, r) -> steps wt r [] lt
+let behT wt = fun (lt, r) -> e_beh wt r [] lt
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
-  (forall rS lt. bs lt rS ==>  (exists rT. rel_bools rS rT /\ bt (lt, rT))) /\
-  (forall rT lt. bt (lt, rT) ==>  (exists rS. rel_bools rS rT /\ bs lt rS))
+  forall rS rT lt. rel_bools rS rT ==>
+    (bs lt rS <==>  bt (lt, rT))
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
