@@ -184,6 +184,7 @@ let helper_return_prod x fsG = return (x fsG)
 noeq
 type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | Qtt         : #g : typ_env -> oval_quotation g (helper_unit g)
+| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation #qFileDescr g (fun _ -> fd)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
@@ -282,13 +283,17 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QRead :
         #g:typ_env ->
-        oprod_quotation #(qResexn qBool) g (fun _ -> read ())
+        #arg:fs_oval g qFileDescr ->
+        oval_quotation g arg ->
+        oprod_quotation #(qResexn qBool) g (fun fsG -> read (arg fsG))
 
 | QWrite :
         #g:typ_env ->
-        #arg:fs_oval g qBool ->
-        oval_quotation g arg ->
-        oprod_quotation #(qResexn qUnit) g (fun fsG -> write (arg fsG))
+        #fd:fs_oval g qFileDescr ->
+        #msg:fs_oval g qBool ->
+        oval_quotation g fd ->
+        oval_quotation g msg ->
+        oprod_quotation #(qResexn qUnit) g (fun fsG -> write ((fd fsG), (msg fsG)))
 
 | QReturn :
         #g:typ_env ->
@@ -612,15 +617,15 @@ let test_apply_io_return
 
 let test_apply_read
   : prod_quotation _ apply_read
-  = QRead
+  = QRead (QFd 0)
 
 let test_apply_write_const
   : prod_quotation _ apply_write_const
-  = QWrite QTrue
+  = QWrite (QFd 2) QTrue
 
 let test_apply_write
   : _ ⊩  apply_write
-  = QLambdaProd (QWrite QVar0)
+  = QLambdaProd (QWrite (QFd 1) QVar0)
 
 let test_apply_io_bind_const
   : prod_quotation _ apply_io_bind_const
@@ -651,34 +656,34 @@ let test_apply_io_bind_write
   = QLambdaProd (
       QBindProd
          (QReturn QVar0)
-         (QWrite QVar0))
+         (QWrite (QFd 2) QVar0))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : prod_quotation _ apply_io_bind_read_write
   by (l_to_r_fsG (); trefl ())
-  = QBindProd QRead
+  = QBindProd (QRead (QFd 4))
     (QCaseProd QVar0
-     (QWrite QVar0)
+     (QWrite (QFd 1) QVar0)
      (QReturn (QInr QVar0)))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
   : prod_quotation _ apply_io_bind_read_write'
   by (l_to_r_fsG (); trefl ())
-  = QBindProd QRead (
-      QCaseProd QVar0 (QWrite QVar0) (QReturn (QInr QVar0)))
+  = QBindProd (QRead (QFd 9)) (
+      QCaseProd QVar0 (QWrite (QFd 2) QVar0) (QReturn (QInr QVar0)))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
   : prod_quotation _ apply_io_bind_read_if_write
   by (l_to_r_fsG (); trefl ())
   = QBindProd
-      QRead
+      (QRead (QFd 0))
       (QCaseProd QVar0
         (QIfProd QVar0
-          (QWrite QFalse)
-          (QWrite QTrue))
+          (QWrite (QFd 7) QFalse)
+          (QWrite (QFd 8) QTrue))
         (QReturn (QInr QVar0)))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
@@ -692,5 +697,5 @@ let test_sendError400 ()
       (qLetProd (QApp (QLambda QVar0) QTrue) (
       (qLetProd (QMkpair (QVarS QVar0) QVar0) (
       (QBindProd
-        (QWrite (QVarS (QVarS QVar0)))
+        (QWrite (QFd 9) (QVarS (QVarS QVar0)))
         (QReturn Qtt))))))

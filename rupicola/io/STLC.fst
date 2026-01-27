@@ -10,6 +10,7 @@ open Trace
 type typ =
   | TUnit  : typ
   | TBool  : typ
+  | TFileDescr : typ
   | TArr   : typ -> typ -> typ
   | TPair  : typ -> typ -> typ
   | TSum   : typ -> typ -> typ
@@ -627,18 +628,18 @@ let get_einr_v (x:closed_exp{EInr? x}) =
   match x with
   | EInr v -> v
 
-//assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'}) 
+//assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'})
 
 (*let corresponding_event #h #h' (oev:option (event_h h)) (oev':option (event_h h')) =
   (None? oev <==> None? oev') /\
-  ((Some? oev /\ (test_event h' (Some?.v oev))) ==> 
+  ((Some? oev /\ (test_event h' (Some?.v oev))) ==>
     (oev == oev')) /\ // if the read/write/open/close was an error, it would be an error in any history
-  ((Some? oev /\ (EvRead? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==> 
+  ((Some? oev /\ (EvRead? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
     ((EInl? (get_read_res (get_read_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (EvRead (get_read_arg (Some?.v oev)) (Inr ()))))) /\
   // this will look the same for EvWrite
   ((Some? oev /\ (EvOpen? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
     ((EInl? (get_open_res (get_open_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (get_new_file_descr (Some?.v oev) h'))))*)
-  //((Some? oev /\ (EvClose? (Some?.v oev)) /\ 
+  //((Some? oev /\ (EvClose? (Some?.v oev)) /\
 
 // h = [] [1]
 // h' = [] (1 - 1) + 1 = [1]
@@ -670,7 +671,7 @@ let new_event' #h #h' (oev:option (event_h h)) : option (event_h h') =
   | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
   | Some (EvRead fd r) -> Some (EvRead (recast_fd h h' fd) r)
   | Some (EvWrite (fd, arg) r) -> Some (EvWrite ((recast_fd h h' fd), arg) r)
-  | Some (EvClose fd arg) -> Some (EvClose (recast_fd h h' fd) arg) 
+  | Some (EvClose fd arg) -> Some (EvClose (recast_fd h h' fd) arg)
   | _ -> oev*)
 
 // should be able to try to read from closed file descriptors -> error
@@ -827,7 +828,7 @@ let rec destruct_steps_eapp_e1
   (e1:closed_exp)
   (e2':closed_exp{is_value e2'})
   (e':closed_exp)
-  (h:history) 
+  (h:history)
   (lt:local_trace h)
   (st:steps (EApp e1 e2') e' h lt) :
   Pure (exp * (lt1:local_trace h & local_trace (h++lt1)))
@@ -878,7 +879,7 @@ let rec destruct_steps_eapp_e2
   (h:history)
   (lt:local_trace h)
   (st:steps (EApp e1 e2) e' h lt) :
-  Pure (value * (lt2:local_trace h & local_trace (h++lt2))) 
+  Pure (value * (lt2:local_trace h & local_trace (h++lt2)))
     (requires indexed_irred e' (h++lt) /\
       (forall e2' lt2. steps e2 e2' h lt2 /\ indexed_irred e2' (h++lt2) ==> is_value e2'))
     (ensures fun (e2', (| lt2, lt' |)) ->
@@ -1125,7 +1126,7 @@ let rec destruct_steps_epair_e2
       (e2'', (| (lt2 @ lt2'), lt' |))
       end
     | PairLeft _ _ -> begin
-      lem_value_is_irred e1'; 
+      lem_value_is_irred e1';
       (e2, (| [], lt |))
       end
     end
@@ -1513,7 +1514,7 @@ let rec destruct_steps_ecase
         lem_step_implies_steps e_case e_case' h oev1;
         lem_step_implies_steps (ECase e_case e_lc e_rc) (ECase e_case' e_lc e_rc) h oev1;
         let lt1 : local_trace h = as_lt oev1 in
-        lem_steps_preserve_is_sum_value e_case e_case' h lt1; 
+        lem_steps_preserve_is_sum_value e_case e_case' h lt1;
         let s2 : steps (ECase e_case' e_lc e_rc) e' (h++lt1) lt23 = step_ecase_steps in
         let (e_case'', (| lt1', (lt2, lt3) |)) = destruct_steps_ecase e_case' e_lc e_rc e' (h++lt1) lt23 s2 in
         lem_steps_transitive e_case e_case' e_case'' h lt1 lt1';
@@ -1928,7 +1929,7 @@ let step_history_independence (#e #e':closed_exp) (#h:history) (#oev:option (eve
 
 let rec construct_local_trace (#e #e':closed_exp) (#h:history) (#lt:local_trace h) (st:steps e e' h lt) (h':history) : Pure (local_trace h')
   (requires steps e e' h lt)
-  (ensures fun lt' -> 
+  (ensures fun lt' ->
     steps e e' h' lt' /\
     (lt == [] <==> lt' == []))
   (decreases st) =
@@ -1964,7 +1965,7 @@ let indexed_can_step_history_independence (e:closed_exp) (h:history) :
       )
     end
   end
-  
+
 let lem_step_preserve_safe (e e':closed_exp) (h:history) (oev:option (event_h h)) :
   Lemma (requires safe e /\ step e e' h oev)
         (ensures safe e') =
@@ -2040,7 +2041,7 @@ let lem_step_preserve_sem_expr_shape (e e':closed_exp) (h:history) (oev:option (
       end)
     end
   end
-  
+
 let indexed_irred_history_independence (e:closed_exp) (h:history) :
   Lemma (requires indexed_irred e h)
         (ensures forall h'. indexed_irred e h') =
@@ -2073,4 +2074,3 @@ let sem_expr_shape_history_independence (e:closed_exp) (h:history) (t:typ) :
     end
   end
   *)
-

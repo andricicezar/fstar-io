@@ -14,6 +14,7 @@ noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
 | QBool : type_quotation bool
+| QFileDescriptor : type_quotation file_descr
 | QArr : #t1:Type ->
          #t2:Type ->
          type_quotation t1 ->
@@ -39,6 +40,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   match tq with
   | QUnit -> assert (t == unit)
   | QBool -> assert (t == bool)
+  | QFileDescriptor -> assert (t == file_descr)
   | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
   | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
@@ -48,6 +50,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   match qt with
   | QUnit -> TUnit
   | QBool -> TBool
+  | QFileDescriptor -> TFileDescr
   | QPair qt1 qt2 -> TPair (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QArr qt1 qt2
   | QArrIO qt1 qt2 ->
@@ -64,6 +67,7 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
+let qFileDescr : qType = (| _, QFileDescriptor |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =
