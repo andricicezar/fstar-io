@@ -74,7 +74,7 @@ val lem_theta_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
 val lem_theta_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
   Lemma (thetaP (write arg) h [EvWrite arg res] res)
 
-let thetaP_monad_morphism_return #a (x:a) (h:history) :
+let lem_thetaP_return #a (x:a) (h:history) :
   Lemma (thetaP (return x) h [] x) =
   theta_monad_morphism_ret x
 

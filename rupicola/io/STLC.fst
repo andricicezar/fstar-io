@@ -30,9 +30,9 @@ type exp =
   | EInl   : exp -> exp
   | EInr   : exp -> exp
   | ECase  : exp -> exp -> exp -> exp
+  | EFileDescr : fd:file_descr -> exp
   | ERead  : exp -> exp
   | EWrite : exp -> exp -> exp
-  | EFileDescr : fd:file_descr -> exp
   | EOpen  : exp -> exp
   | EClose : exp -> exp
 
@@ -692,6 +692,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TBool -> e == ETrue \/ e == EFalse
   | TArr t1 t2 -> ELam? e
   | TPair t1 t2 -> EPair? e
+  | TFileDescr -> EFileDescr? e
   | TSum t1 t2 -> EInl? e \/ EInr? e
 
 let sem_expr_shape (t:typ) (e:closed_exp) : Tot Type0 =

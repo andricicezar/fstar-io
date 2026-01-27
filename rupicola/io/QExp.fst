@@ -9,6 +9,10 @@ open IO
     in such a way no VC is generated **)
 
 unfold
+val helper_file_descr : g:typ_env -> fd:file_descr -> fs_oval g qFileDescr
+let helper_file_descr g fd _ = fd
+
+unfold
 val helper_var0 :
   g:typ_env ->
   a:qType ->
@@ -179,12 +183,41 @@ val helper_return_prod :
         fs_oprod g a
 let helper_return_prod x fsG = return (x fsG)
 
+unfold
+val helper_prod_openfile :
+        #g:typ_env ->
+        fnm:fs_oval g qBool ->
+        fs_oprod g (qResexn qFileDescr)
+let helper_prod_openfile fnm fsG = openfile (fnm fsG)
+
+unfold
+val helper_prod_read :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        fs_oprod g (qResexn qBool)
+let helper_prod_read fd fsG = read (fd fsG)
+
+unfold
+val helper_prod_write :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        msg:fs_oval g qBool ->
+        fs_oprod g (qResexn qUnit)
+let helper_prod_write fd msg fsG = write ((fd fsG), (msg fsG))
+
+unfold
+val helper_prod_close :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        fs_oprod g (qResexn qUnit)
+let helper_prod_close fd fsG = close (fd fsG)
+
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | Qtt         : #g : typ_env -> oval_quotation g (helper_unit g)
-| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation #qFileDescr g (fun _ -> fd)
+| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation g (helper_file_descr g fd)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
@@ -285,13 +318,13 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #g:typ_env ->
         #fnm:fs_oval g qBool ->
         oval_quotation g fnm ->
-        oprod_quotation #(qResexn qFileDescr) g (fun fsG -> openfile (fnm fsG))
+        oprod_quotation #(qResexn qFileDescr) g (helper_prod_openfile fnm)
 
 | QRead :
         #g:typ_env ->
-        #arg:fs_oval g qFileDescr ->
-        oval_quotation g arg ->
-        oprod_quotation #(qResexn qBool) g (fun fsG -> read (arg fsG))
+        #fd:fs_oval g qFileDescr ->
+        oval_quotation g fd ->
+        oprod_quotation #(qResexn qBool) g (helper_prod_read fd)
 
 | QWrite :
         #g:typ_env ->
@@ -299,13 +332,13 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #msg:fs_oval g qBool ->
         oval_quotation g fd ->
         oval_quotation g msg ->
-        oprod_quotation #(qResexn qUnit) g (fun fsG -> write ((fd fsG), (msg fsG)))
+        oprod_quotation #(qResexn qUnit) g (helper_prod_write fd msg)
 
 | QClose :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qUnit) g (fun fsG -> close (fd fsG))
+        oprod_quotation #(qResexn qUnit) g (helper_prod_close fd)
 
 | QReturn :
         #g:typ_env ->

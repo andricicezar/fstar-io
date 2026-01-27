@@ -14,8 +14,8 @@ open Trace
 let io_oexp (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
 
-val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
-let fs_beh m = wp2p (theta m)
+unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
+let fs_beh m = thetaP m
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
      for __closed terms__. **)
@@ -24,6 +24,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QFileDescriptor ->  e == EFileDescr fs_v
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     match e with
@@ -75,6 +76,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
   match get_rel t with
   | QUnit -> ()
   | QBool -> ()
+  | QFileDescriptor -> ()
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     let ELam e' = e in
@@ -126,8 +128,9 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
   match get_rel t with
   | QUnit -> ()
   | QBool -> ()
+  | QFileDescriptor -> ()
   | QArr _ _ -> ()
-  | QArrIO _ _ -> () 
+  | QArrIO _ _ -> ()
   | QPair #t1 #t2 qt1 qt2 ->
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
@@ -146,7 +149,7 @@ let lem_forall_values_are_values t h fs_e :
   end
 
 let lem_forall_values_are_values_prod t h :
-  Lemma (forall (e:closed_exp) (lt:local_trace h) (fs_r:get_Type t). t ∋ (h++lt, fs_r, e) ==> is_value e) = 
+  Lemma (forall (e:closed_exp) (lt:local_trace h) (fs_r:get_Type t). t ∋ (h++lt, fs_r, e) ==> is_value e) =
   introduce forall e lt fs_r. t ∋ (h++lt, fs_r, e) ==> is_value e with begin
     introduce _ ==> _ with _. begin
       lem_values_are_values t (h++lt) fs_r e
@@ -249,6 +252,9 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:exp) (h:history) :
 let (≈) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
   equiv_oval #g t fs_v e
 
+let (≋) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
+  equiv_oprod #g t fs_v e
+
 (** Equiv closed terms **)
 let lem_equiv_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
   Lemma (requires equiv_val fs_e e)
@@ -322,6 +328,16 @@ let equiv_var g (x:var{Some? (g x)})
     end
   end
 
+let equiv_file_descr g fd
+  : Lemma (helper_file_descr g fd `equiv_oval qFileDescr` EFileDescr fd)
+  =
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qFileDescr ⦂ (h, fd, gsubst s (EFileDescr fd)) with begin
+    introduce _ ==> _ with _. begin
+      assert (qFileDescr ∋ (h, fd, (EFileDescr fd)));
+      lem_values_are_expressions qFileDescr h fd (EFileDescr fd)
+    end
+  end
+
 (** Used in compilation **)
 let equiv_var0 (g:typ_env) (t:qType)
   : Lemma (helper_var0 g t ≈ EVar 0)
@@ -348,15 +364,15 @@ let equiv_var0 (g:typ_env) (t:qType)
     admit ()
     end
   | _ -> admit ()
-  
+
 let rec shift_sub_equiv_sub_inc_rename #t
-  (s':gsub (extend t empty) false) 
-  (e:exp) 
+  (s':gsub (extend t empty) false)
+  (e:exp)
   (f:gsub empty true{(ELam? e ==> (forall (x:var{x > 0}). (f x) == (s' (x+1)))) /\
                      (~(ELam? e) ==> (forall x. (f x) == (s' (x+1))))}) :
-  Lemma (ensures subst s' (subst sub_inc e) == subst f e) 
+  Lemma (ensures subst s' (subst sub_inc e) == subst f e)
         (decreases e) =
-  match e with 
+  match e with
   | EVar x -> ()
   | ELam e1 -> begin
     assert (forall x. Some? ((extend t empty) x) ==> is_value (s' x));
@@ -396,8 +412,9 @@ let rec shift_sub_equiv_sub_inc #t #g
   (s':gsub (extend t g) false)
   (e:exp)
   (f:gsub g false{forall x. (f x) == (s' (x+1))}) :
-  Lemma (ensures subst s' (subst sub_inc e) == subst f e) 
+  Lemma (ensures subst s' (subst sub_inc e) == subst f e)
         (decreases e) = admit ()
+**)
 
 (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
@@ -405,8 +422,10 @@ let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
       (requires (s ≈ e))
       (ensures (helper_varS t s ≈ subst sub_inc e))
       //(ensures equiv_val #a (helper_varS t s) (subst sub_inc e))
-  = //admit ()
-  equiv_var0 g t; 
+  = admit ()
+
+(**
+  equiv_var0 g t;
   assume (fv_in_env (extend t g) (subst sub_inc e));
   assert (equiv_oval #g a s e);
   assert (fv_in_env g e /\
@@ -508,7 +527,7 @@ let equiv_app #g
           let steps_e_e' : squash (steps e e' h lt) = () in
           FStar.Squash.map_squash #_ #(squash (t2 ∋ (h, fs_e, e') /\ lt == [])) steps_e_e' (fun steps_e_e' ->
             lem_forall_values_are_values t1 h fs_e2;
-            assert (forall e2' lt2. steps e2 e2' h lt2 /\ indexed_irred e2' (h++lt2) ==> is_value e2'); 
+            assert (forall e2' lt2. steps e2 e2' h lt2 /\ indexed_irred e2' (h++lt2) ==> is_value e2');
             let (e2', (| lt2, lt' |)) = destruct_steps_eapp_e2 e1 e2 e' h lt steps_e_e' in
             lem_shift_type_value_environments h fsG s;
             assert (forall (lt:local_trace h). (t1 ^-> t2) ⦂ (h++lt, fs_e1, e1));
@@ -834,8 +853,8 @@ let equiv_case
 
 let equiv_lam_prod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2) (body:exp)
   : Lemma
-    (requires fs_body `equiv_oprod t2` body)
-    (ensures helper_lambda_prod fs_body `equiv_oval (t1 ^->!@ t2)` (ELam body)) =
+    (requires fs_body ≋ body)
+    (ensures helper_lambda_prod fs_body ≈ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   let f : fs_oval g (t1 ^->!@ t2) = fun fsG x -> fs_body (stack fsG x) in
@@ -976,7 +995,7 @@ let equiv_oprod_write #g (fs_arg:fs_oval g qBool) (arg:exp)
 let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
     (requires fs_x ≈ x)
-    (ensures helper_return_prod fs_x `equiv_oprod t` x) =
+    (ensures helper_return_prod fs_x ≋ x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t ⪾ (h, return (fs_x fsG), gsubst s x) with begin
     introduce _ ==> _ with _. begin
       let fs_x = fs_x fsG in
@@ -987,7 +1006,7 @@ let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
         assert (t ⦂ (h, fs_x, e));
         eliminate forall e' lt'. steps e e' h lt' /\ indexed_irred e' (h++lt') ==> (t ∋ (h, fs_x, e') /\ lt' == []) with e' lt;
         assert (t ∋ (h++lt, fs_x, e'));
-        lem_theta_return fs_x h lt
+        lem_thetaP_return fs_x h
         end
       end
     end
@@ -1002,7 +1021,7 @@ let equiv_bind_steps_pre (e e':closed_exp) (h:history) (lt:local_trace h) (a:qTy
   (forall (lt:local_trace h). ((a ^->!@ b) ⦂ (h++lt, fs_k', (ELam k'))))
 
 let equiv_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k' (sq:squash (equiv_bind_steps_pre e e' h lt a b fs_k' fs_m fs_e' m k')) : squash (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) =
-  lem_forall_values_are_values_prod a h; 
+  lem_forall_values_are_values_prod a h;
   assert (forall m' lt2. steps m m' h lt2 /\ indexed_irred m' (h++lt2) ==> is_value m');
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
   let (m', (| lt2, lt' |)) = destruct_steps_eapp_e2 (ELam k') m e' h lt sts in
@@ -1019,14 +1038,14 @@ let equiv_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k' (sq:squash (
   returns exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r with _. begin
   eliminate exists (fs_r':get_Type b). b ∋ ((h++lt2)++lt'', fs_r', e') /\ fs_beh (fs_k' fs_r_m) (h++lt2) lt'' fs_r'
   returns exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r with _. begin
-  lem_theta_bind #(get_Type a) #(get_Type b) fs_m h lt2 fs_r_m fs_k' lt'' fs_r' lt
+  lem_thetaP_bind #(get_Type a) #(get_Type b) fs_m h lt2 fs_r_m fs_k' lt'' fs_r'
   end
   end))
-  
+
 let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend a g) b) (m k:exp)
   : Lemma
-    (requires fs_m `equiv_oprod a` m /\ fs_k `equiv_oprod b` k)
-    (ensures (helper_bind_prod fs_m fs_k) `equiv_oprod b` (EApp (ELam k) m)) =
+    (requires fs_m ≋ m /\ fs_k ≋ k)
+    (ensures (helper_bind_prod fs_m fs_k) ≋ (EApp (ELam k) m)) =
   lem_fv_in_env_lam g a k;
   lem_fv_in_env_app g (ELam k) m;
   equiv_lam_prod fs_k k;
@@ -1057,7 +1076,7 @@ let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend
 let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval g a) (f x:exp)
   : Lemma
     (requires fs_f ≈ f /\ fs_x ≈ x)
-    (ensures (helper_app_prod fs_f fs_x) `equiv_oprod b` (EApp f x)) =
+    (ensures (helper_app_prod fs_f fs_x) ≋ (EApp f x)) =
   lem_fv_in_env_app g f x;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⪾ (h, (fs_f fsG) (fs_x fsG), gsubst s (EApp f x)) with begin
     let fs_f = fs_f fsG in
@@ -1112,8 +1131,8 @@ let equiv_if_prod_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex #c #t #e (sq
 
 let equiv_oprod_if #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod g a) (c t e:exp)
   : Lemma
-    (requires fs_c ≈ c /\ fs_t `equiv_oprod a` t /\ fs_e `equiv_oprod a` e)
-    (ensures (helper_if_prod fs_c fs_t fs_e) `equiv_oprod a` (EIf c t e)) =
+    (requires fs_c ≈ c /\ fs_t ≋ t /\ fs_e ≋ e)
+    (ensures (helper_if_prod fs_c fs_t fs_e) ≋ (EIf c t e)) =
   lem_fv_in_env_if g c t e;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> a ⪾ (h, (if (fs_c fsG) then (fs_t fsG) else (fs_e fsG)), gsubst s (EIf c t e)) with begin
     let fs_c = fs_c fsG in
@@ -1173,8 +1192,8 @@ let equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_
 #push-options "--z3rlimit 10000"
 let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
-    (requires fs_cond ≈ cond /\ fs_inlc `equiv_oprod c` inlc /\ fs_inrc `equiv_oprod c` inrc)
-    (ensures (helper_case_prod fs_cond fs_inlc fs_inrc) `equiv_oprod c` (ECase cond inlc inrc)) =
+    (requires fs_cond ≈ cond /\ fs_inlc ≋ inlc /\ fs_inrc ≋ inrc)
+    (ensures (helper_case_prod fs_cond fs_inlc fs_inrc) ≋ (ECase cond inlc inrc)) =
   lem_fv_in_env_case g a b cond inlc inrc;
   lem_fv_in_env_lam g a inlc;
   lem_fv_in_env_lam g b inrc;
@@ -1213,3 +1232,27 @@ let equiv_oprod_case #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:f
     end
   end
 #pop-options
+
+let equiv_oprod_openfile #g (fs_fnm:fs_oval g qBool) (fnm:exp)
+  : Lemma
+    (requires fs_fnm ≈ fnm)
+    (ensures helper_prod_openfile fs_fnm ≋ EOpen fnm)
+  = admit ()
+
+let equiv_oprod_read #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
+  : Lemma
+    (requires fs_fd ≈ fd)
+    (ensures helper_prod_read fs_fd ≋ ERead fd)
+  = admit ()
+
+let equiv_oprod_write #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
+  : Lemma
+    (requires fs_fd ≈ fd /\ fs_msg ≈ msg)
+    (ensures helper_prod_write fs_fd fs_msg ≋ EWrite fd msg)
+  = admit ()
+
+let equiv_oprod_close #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
+  : Lemma
+    (requires fs_fd ≈ fd)
+    (ensures helper_prod_close fs_fd ≋ EClose fd)
+  = admit ()
