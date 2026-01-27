@@ -29,6 +29,11 @@ let hist_post_equiv (#h:history) (p1 p2:hist_post h 'a) =
   hist_post_ord p1 p2 /\ hist_post_ord p2 p1
 
 unfold
+let hist_post_bind #h (m:hist_post h 'a) (k:(lt:local_trace h -> 'a -> hist_post (h++lt) 'b)) : hist_post h 'b =
+  fun lt b ->
+    exists a lta ltb. m lta a /\ lta@ltb == lt /\ k lta a ltb b
+
+unfold
 let hist_wp_monotonic (wp:hist0 'a) =
   forall h (p1 p2:hist_post h 'a). (p1 `hist_post_ord` p2) ==>  (wp h p1 ==> wp h p2)
 
@@ -60,9 +65,9 @@ let hist_post_shift (h:history) (p:hist_post h 'a) (lt:local_trace h) : hist_pos
   fun lt' r -> p (lt @ lt') r
 
 unfold
-let hist_post_bind
+let hist_post_bind'
   (#a #b:Type)
-  (h:history)
+  (#h:history)
   (kw : a -> hist b)
   (p:hist_post h b) :
   Tot (hist_post h a) =
@@ -71,7 +76,7 @@ let hist_post_bind
 
 unfold
 let hist_bind (#a #b:Type) (w : hist a) (kw : a -> hist b) : hist b =
-  fun h p -> w h (hist_post_bind #a #b h kw p)
+  fun h p -> w h (hist_post_bind' kw p)
 
 unfold
 let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
