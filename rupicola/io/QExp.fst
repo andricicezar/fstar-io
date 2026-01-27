@@ -281,6 +281,12 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 oprod_quotation (extend a g) body ->
                 oval_quotation g (helper_lambda_prod body)
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
+| QOpenfile :
+        #g:typ_env ->
+        #fnm:fs_oval g qBool ->
+        oval_quotation g fnm ->
+        oprod_quotation #(qResexn qFileDescr) g (fun fsG -> openfile (fnm fsG))
+
 | QRead :
         #g:typ_env ->
         #arg:fs_oval g qFileDescr ->
@@ -294,6 +300,12 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         oval_quotation g fd ->
         oval_quotation g msg ->
         oprod_quotation #(qResexn qUnit) g (fun fsG -> write ((fd fsG), (msg fsG)))
+
+| QClose :
+        #g:typ_env ->
+        #fd:fs_oval g qFileDescr ->
+        oval_quotation g fd ->
+        oprod_quotation #(qResexn qUnit) g (fun fsG -> close (fd fsG))
 
 | QReturn :
         #g:typ_env ->

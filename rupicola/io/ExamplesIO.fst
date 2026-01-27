@@ -62,3 +62,14 @@ let get_req (fd:bool) : io (either bool bool) =
   match!@ read 11 with
   | Inl x -> if x then return (Inl true) else return (Inr false)
   | Inr x -> return (Inr false)
+
+let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
+  match!@ m with
+  | Inl x -> k x
+  | Inr x -> return (Inr x)
+
+let open2_read_write () =
+  let!@! fd1 = openfile false in
+  let!@! fd2 = openfile true in
+  let!@! msg = read fd1 in
+  write (fd2, msg)
