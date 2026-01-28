@@ -52,7 +52,7 @@ let comp_int i = { ct = i.ct }
 type progT (i:intT) = closed_exp
 
 // the typing makes sure that there are no pre post conditions - maybe...
-type ctxT (i:intT) = ct:value & typing empty ct i.ct
+type ctxT (i:intT) = ct:closed_exp{is_value ct} & typing empty ct i.ct
 (** syntactic typing necessary to be able to backtranslate **)
 type wholeT = closed_exp
 
