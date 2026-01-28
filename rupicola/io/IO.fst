@@ -62,11 +62,16 @@ let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
 let wp2p_theta_bind m k =
   theta_monad_morphism_bind m k
 
+let lem_theta_open arg res h = admit ()
+
 let lem_theta_read arg res h =
   assert (thetaP (read arg) h [EvRead arg res] res) by (compute ())
 
 let lem_theta_write arg res h =
   assert (thetaP (write arg) h [EvWrite arg res] res) by (compute ())
+
+let lem_theta_close arg res h =
+  assert (thetaP (close arg) h [EvClose arg res] res) by (compute ())
 
 (**
 let rec get_lt (h h':history) (lt:local_trace h) : Tot (local_trace h') (decreases lt) =
