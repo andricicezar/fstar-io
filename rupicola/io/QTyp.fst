@@ -141,6 +141,22 @@ let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env (extend t1 g) e2 /\ fv_in_env (extend t2 g) e3) <==> fv_in_env g (ECase e1 e2 e3))
   = admit ()
 
+let lem_fv_in_env_openfile (g:typ_env) (fnm:exp) :
+  Lemma (fv_in_env g fnm <==> fv_in_env g (EOpen fnm))
+  = admit ()
+
+let lem_fv_in_env_read (g:typ_env) (fd:exp) :
+  Lemma (fv_in_env g fd <==> fv_in_env g (ERead fd))
+  = admit ()
+
+let lem_fv_in_env_write (g:typ_env) (fd msg:exp) :
+  Lemma ((fv_in_env g fd /\ fv_in_env g msg) <==> fv_in_env g (EWrite fd msg))
+  = admit ()
+
+let lem_fv_in_env_close (g:typ_env) (fd:exp) :
+  Lemma (fv_in_env g fd <==> fv_in_env g (EClose fd))
+  = admit ()
+
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
@@ -154,6 +170,22 @@ let gsub_extend (#g:typ_env) #b (s:gsub g b) (t:qType) (v:value) : gsub (extend 
   f
 
 let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
+  introduce forall fv. fv `memP` free_vars_indx e 0 ==> free_vars_indx (s fv) 0 == [] with begin
+    introduce _ ==> _ with _. begin
+    match (s fv) with
+    | EUnit -> ()
+    | ETrue -> ()
+    | EFalse -> ()
+    | EFileDescr _ -> ()
+    | ELam _ -> ()
+    | EPair e1 e2 -> begin
+      lem_value_is_closed e1;
+      lem_value_is_closed e2
+      end
+    | EInl e' -> lem_value_is_closed e'
+    | EInr e' -> lem_value_is_closed e'
+    end
+  end;
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
