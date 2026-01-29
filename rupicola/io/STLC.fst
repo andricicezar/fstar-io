@@ -616,7 +616,7 @@ let lem_value_preserves_value (e:closed_exp) (h:history) :
         (ensures (forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> is_value e')) =
   introduce forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> is_value e' with begin
     introduce _ ==> _ with _. begin
-      lem_value_is_irred e; 
+      lem_value_is_irred e;
       FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
       lem_irred_implies_srefl_steps sts)
     end
@@ -1580,9 +1580,9 @@ let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
   ()
 
 let can_step_eread (fd:closed_exp) (h:history) :
-  Lemma 
+  Lemma
   (requires (forall fd' lt'. steps fd fd' h lt' /\ indexed_irred fd' (h++lt') ==> (EFileDescr? fd' /\ is_value fd')))  
-  (ensures (exists e' oev. step (ERead fd) e' h oev)) 
+  (ensures (exists e' oev. step (ERead fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
     assert (steps fd fd h []);
@@ -1650,7 +1650,7 @@ let destruct_steps_eread
     (ensures fun (e_r, (| lt1, (lt2, lt3, lt4) |)) ->
        steps (ERead fd) e_r h lt1 /\
        (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
-       (EInl? e_r ==> 
+       (EInl? e_r ==>
          (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl true)])) /\
          (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
        (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == (lt1 @ lt4) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
@@ -1867,16 +1867,16 @@ let destruct_steps_ewrite
 #pop-options
 
 let can_step_eopen_str (str:closed_exp{ETrue? str \/ EFalse? str}) (h:history) :
-  Lemma (exists e' oev. step (EOpen str) e' h oev) 
+  Lemma (exists e' oev. step (EOpen str) e' h oev)
   =
   let st1 : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_bool str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
   let st2 : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_bool str) (Inr ()))) = SOpenReturnFail str h in
   ()
 
 let can_step_eopen (str:closed_exp) (h:history) :
-  Lemma 
+  Lemma
   (requires (forall str' lt'. steps str str' h lt' /\ indexed_irred str' (h++lt') ==> (ETrue? str' \/ EFalse? str')))  
-  (ensures (exists e' oev. step (EOpen str) e' h oev)) 
+  (ensures (exists e' oev. step (EOpen str) e' h oev))
   =
   introduce indexed_irred str h ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
     assert (steps str str h []);
@@ -1943,9 +1943,9 @@ let destruct_steps_eopen
     (ensures fun (e_r, (| lt1, (lt2, lt3) |)) ->
        steps (EOpen str') e_r h lt1 /\
        (e_r == EInl (get_efd (fresh_fd h)) \/ e_r == EInr EUnit) /\
-       (EInl? e_r ==> 
+       (EInl? e_r ==>
          steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inl (fresh_fd h))]) /\
-       (EInr? e_r ==> 
+       (EInr? e_r ==>
          steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
        (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3)))
     (decreases st) =
@@ -1979,9 +1979,9 @@ let destruct_steps_eopen
 #pop-options
 
 let can_step_eclose (fd:closed_exp) (h:history) :
-  Lemma 
+  Lemma
   (requires (forall fd' lt'. steps fd fd' h lt' /\ indexed_irred fd' (h++lt') ==> (EFileDescr? fd' /\ is_value fd')))  
-  (ensures (exists e' oev. step (EClose fd) e' h oev)) 
+  (ensures (exists e' oev. step (EClose fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (EClose fd) e' h oev) with _. begin
     assert (steps fd fd h []);
@@ -2037,7 +2037,7 @@ let rec destruct_steps_eclose_fd
     end
 
 let can_step_eclose_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
-  Lemma (exists e' oev. step (EClose fd) e' h oev) 
+  Lemma (exists e' oev. step (EClose fd) e' h oev)
   =
   let st1 : step (EClose fd) (EInl EUnit) h (Some (EvClose (get_fd fd) (Inl ()))) = SCloseReturn h (get_fd fd) (Inl ()) in
   let st2 : step (EClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCloseReturn h (get_fd fd) (Inr ()) in
@@ -2055,9 +2055,9 @@ let destruct_steps_eclose
     (ensures fun (e_r, (| lt1, (lt2, lt3) |)) ->
        steps (EClose fd) e_r h lt1 /\
        (e_r == EInl EUnit \/ e_r == EInr EUnit) /\
-       (EInl? e_r ==> 
+       (EInl? e_r ==>
          steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvClose (get_fd fd) (Inl ())]) /\
-       (EInr? e_r ==> 
+       (EInr? e_r ==>
          steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvClose (get_fd fd) (Inr ())]) /\
        (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3)))
     (decreases st) =
