@@ -1240,9 +1240,8 @@ let equiv_oprod_openfile #g (fs_fnm:fs_oval g qBool) (fnm:exp)
     (requires fs_fnm ≈ fnm)
     (ensures helper_prod_openfile fs_fnm ≋ EOpen fnm)
   =
-  assume (fv_in_env g (EOpen fnm));
-  assume (is_closed (EOpen fnm));
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⪾ (h, openfile (fs_fnm fsG), EOpen fnm) with begin
+  lem_fv_in_env_openfile g fnm;
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⪾ (h, openfile (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
     let fs_fnm = fs_fnm fsG in
     let fs_e = openfile fs_fnm in
     let e = EOpen (gsubst s fnm) in
@@ -1304,10 +1303,8 @@ let equiv_oprod_read #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (requires fs_fd ≈ fd)
     (ensures helper_prod_read fs_fd ≋ ERead fd)
   =
-  assert (fv_in_env g fd);
-  assume (fv_in_env g (ERead fd));
-  assume (is_closed (ERead fd));
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⪾ (h, read (fs_fd fsG), ERead fd) with begin
+  lem_fv_in_env_read g fd;
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⪾ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = read fs_fd in
     let e = ERead (gsubst s fd) in
@@ -1368,9 +1365,8 @@ let equiv_oprod_write #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (
     (requires fs_fd ≈ fd /\ fs_msg ≈ msg)
     (ensures helper_prod_write fs_fd fs_msg ≋ EWrite fd msg)
   =
-  assume (fv_in_env g (EWrite fd msg));
-  assume (is_closed (EWrite fd msg));
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, write (fs_fd fsG, fs_msg fsG), EWrite fd msg) with begin
+  lem_fv_in_env_write g fd msg;
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, write (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
     let fs_fd = fs_fd fsG in
     let fs_msg = fs_msg fsG in
     let fs_e = write (fs_fd, fs_msg) in
@@ -1426,9 +1422,8 @@ let equiv_oprod_close #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (requires fs_fd ≈ fd)
     (ensures helper_prod_close fs_fd ≋ EClose fd)
   =
-  assume (fv_in_env g (EClose fd));
-  assume (is_closed (EClose fd));
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, close (fs_fd fsG), EClose fd) with begin
+  lem_fv_in_env_close g fd;
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, close (fs_fd fsG), gsubst s (EClose fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = close fs_fd in
     let e = EClose (gsubst s fd) in
