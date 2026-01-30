@@ -67,10 +67,13 @@ and (⦂) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %
                            (** vvvvvvvvvv defined over producers **)
 and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
-  forall (lt:local_trace h) (e':closed_exp).
-    e_beh e e' h lt ==>
-    (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
+  forall lt.
+    (forall e'. e_beh e e' h lt ==>
+      (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r))
                            (** TODO: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ check this **)
+//    /\
+//    (forall (fs_r:get_Type t). fs_beh fs_e h lt fs_r ==>
+//      exists e'. t ∋ (h++lt, fs_r, e') /\ e_beh e e' h lt)
 
 let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
@@ -1270,7 +1273,7 @@ let equiv_oprod_read_steps #e #e' #h #lt #fs_fd #fs_e #fd (sq:squash (equiv_opro
   let (fd', (| lt1, lt' |)) = destruct_steps_eread_fd fd e' h lt steps_e_e' in
   FStar.Squash.bind_squash #(steps (ERead fd') e' (h++lt1) lt') () (fun sts1 ->
   let (e_r, (| lt2, (lt3, lt4, lt5) |)) = destruct_steps_eread fd' e' (h++lt1) lt' sts1 in
-  assert (qFileDescr ⦂ (h, fs_fd, fd)); 
+  assert (qFileDescr ⦂ (h, fs_fd, fd));
   lem_value_is_irred fd';
   match e_r with
   | EInl ETrue -> begin
