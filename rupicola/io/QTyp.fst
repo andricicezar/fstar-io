@@ -105,6 +105,10 @@ let lem_closed_is_no_fv (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
+let lem_fv_in_env_varS (g:typ_env) (t:qType) (e:exp) :
+  Lemma (fv_in_env g e <==> fv_in_env (extend t g) (subst sub_inc e))
+  = admit ()
+
 let lem_fv_in_env_lam (g:typ_env) (t:qType) (body:exp) :
   Lemma (fv_in_env (extend t g) body <==>  fv_in_env g (ELam body))
    = admit ()
