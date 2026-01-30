@@ -74,8 +74,8 @@ let behT wt = fun (lt, r) -> e_beh wt r [] lt
 
 val rel_behs : behS_t -> behT_t -> Type0
 let rel_behs (bs:behS_t) (bt:behT_t) =
-  forall rS rT lt. rel_bools rS rT ==>
-    (bs lt rS <==>  bt (lt, rT))
+  (forall rS lt. bs lt rS ==>  (exists rT. rel_bools rS rT /\ bt (lt, rT))) /\
+  (forall rT lt. bt (lt, rT) ==>  (exists rS. rel_bools rS rT /\ bs lt rS))
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
