@@ -91,24 +91,3 @@ let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k
         (ensures thetaP (io_bind m k) h (lt1@lt2) fs_r) =
   assume (wp2p (hist_bind (theta m) (fun x -> theta (k x))) h (lt1@lt2) fs_r);
   wp2p_theta_bind m k
-
-(**
-val get_lt (h h':history) (lt:local_trace h) : Tot (local_trace h')
-
-val theta_history_independence #a (m:io a) (h h':history) (lt:local_trace h) (fs_r:a) :
-  Lemma (requires thetaP m h lt fs_r)
-        (ensures thetaP m h' (get_lt h h' lt) fs_r)**)
-  //(requires thetaP m) h (get_lt h' h lt') fs_r)
-  //(ensures thetaP m) h' lt' fs_r)
-  //      (ensures thetaP m) h' (get_lt h h' lt) fs_r)
-
-(*val theta_monotonic_hist #a #e #e' #h' #lt' (m:io a) (st:steps e e' h' lt') :
-  Lemma (forall h h' (p':hist_post h' a). theta m h' p' ==> theta m h (fun lt res -> p' (construct_local_trace st*)
-
-(*val theta_history_independence #a #e #e' (m:io a) (h h':history) (lt:local_trace h) (lt':local_trace h') (fs_r:a) (st':steps e e' h' lt') (st:steps e e' h lt) :
-  Lemma (requires thetaP m) h (construct_local_trace st' h) fs_r)
-        (ensures thetaP m) h' (construct_local_trace st h') fs_r)*)
-
-(*let same_shape #h #h' (lt:local_trace h) (lt':local_trace h') : Type0 = lt == lt'
-
-val get_lt (h h':history) (lt:local_trace h) : (lt':local_trace h'{same_shape lt lt'})*)

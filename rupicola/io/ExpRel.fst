@@ -252,7 +252,11 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:exp) (h:history) :
       eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
           fsG `(∽) h` s ==> t ⪾ (h, fs_e, gsubst s e)
       with  true gsub_empty empty_eval h;
-      assert (t ⪾ (h, fs_e, e))
+      assert (t ⪾ (h, fs_e, e));
+      eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
+      returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+      lem_values_are_values t (h++lt) fs_r e'
+      end
     end
   end
 
@@ -423,13 +427,53 @@ let rec shift_sub_equiv_sub_inc #t #g
         (decreases e) = admit ()
 **)
 
+(*let shifted_function_equality #t #g #b (s':gsub (extend t g) b) (e:exp) (f:gsub g b{forall y. (f y) == (s' (y+1))}) :
+  Lemma ((gsubst s' (subst sub_inc e)) == (gsubst #g #true f e)) = admit ()*)
+
 (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
       (requires (s ≈ e))
       (ensures (helper_varS t s ≈ subst sub_inc e))
-      //(ensures equiv_val #a (helper_varS t s) (subst sub_inc e))
-  = admit ()
+  =
+  lem_fv_in_env_varS g t e;
+  introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
+    introduce fsG `(∽) h` s' ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+      lem_index_tail fsG;
+      assert (forall (x:var). Some? (g x) ==> index fsG (x+1) == index (tail fsG) x);
+      assert (forall (x:var). Some? ((extend t g) x) ==> is_value (s' x));
+      assert (forall (x:var). Some? ((extend t g) x) ==> Some?.v ((extend t g) x) ∋ (h, index fsG x, s' x));
+      let f : var -> exp = fun (y:var) -> s' (y+1) in
+      introduce (forall (x:var{x>0}). EVar? (s' x)) ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+        eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). fsG_ `(∽) h_` s_ ==> a ⦂ (h_, s fsG_, gsubst s_ e) with true f (tail fsG) h;
+        assert ((tail fsG) `(∽) #_ #true h` f ==> a ⦂ (h, s (tail fsG), gsubst #g #true f e));
+        assert ((tail fsG) `(∽) #_ #true h` f);
+        assert (forall (x:var). Some? (g x) ==> Some?.v ((tail fsG) x) ∋ (h, index fsG (x+1), s' (x+1)));
+        assert (a ⦂ (h, s (tail fsG), gsubst #g #true f e));
+        match e with
+        | EUnit -> ()
+        | ETrue -> ()
+        | EFalse -> ()
+        | EVar v -> begin
+          assert (subst sub_inc e == EVar (v+1));
+          assert (gsubst #g #true f e == s' (v+1));
+          ()
+          end
+        | ELam e' -> begin
+          assert (subst sub_inc e == ELam (subst (sub_elam sub_inc) e'));
+          admit ()
+          end
+        | EIf e1 e2 e3 -> admit ()
+        | _ -> admit ()
+        //assume (gsubst s' (subst sub_inc e) == gsubst #g #true f e)
+        //admit ()
+      end;
+      (*introduce (~(forall (x:var{x>0}). EVar? (s' x))) ==> a ⦂ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+        admit ()
+      end*)
+      admit ()
+    end
+  end
 
 (**
   equiv_var0 g t;
@@ -527,7 +571,9 @@ let equiv_app_steps #e #e' #h #lt #t1 #t2 #fs_e1 #fs_e2 #fs_e #e1 #e2 (sq:squash
   let (e2', (| lt2, lt' |)) = destruct_steps_eapp_e2 e1 e2 e' h lt steps_e_e' in
   assert (forall e1' (lt1:local_trace (h++lt2)). e_beh e1 e1' (h++lt2) lt1 ==> (ELam? e1' /\ is_closed e1'));
   FStar.Squash.bind_squash #(steps (EApp e1 e2') e' (h++lt2) lt') () (fun sts2 ->
-  let (e11, (| lt1, lt'' |)) = destruct_steps_eapp_e1 e1 e2' e' (h++lt2) lt' sts2 in
+  let t1_typ = type_quotation_to_typ (get_rel t1) in
+  let t2_typ = type_quotation_to_typ (get_rel t2) in
+  let (e11, (| lt1, lt'' |)) = destruct_steps_eapp_e1 e1 e2' e' (h++lt2) lt' sts2 t1_typ t2_typ in
   eliminate forall e2' lt2. e_beh e2 e2' h lt2 ==> (t1 ∋ (h, fs_e2, e2') /\ lt2 == []) with e2' lt2;
   lem_value_is_irred e2';
   eliminate forall e1' lt1. e_beh e1 e1' h lt1 ==> ((t1 ^-> t2) ∋ (h, fs_e1, e1') /\ lt1 == []) with (ELam e11) lt1;
@@ -672,7 +718,9 @@ let equiv_pair_fst_steps #e #e' #h #lt #t1 #t2 #fs_e12 #fs_e #e12 (sq:squash (eq
   lem_forall_values_are_values (t1 ^* t2) h fs_e12;
   assert (forall e12' lt12. e_beh e12 e12' h lt12 ==> (EPair? e12' /\ is_value e12'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun steps_e_e' ->
-  let (e12', (| lt12, lt_f |)) = destruct_steps_epair_fst e12 e' h lt steps_e_e' in
+  let t1_typ = type_quotation_to_typ (get_rel t1) in
+  let t2_typ = type_quotation_to_typ (get_rel t2) in
+  let (e12', (| lt12, lt_f |)) = destruct_steps_epair_fst e12 e' h lt steps_e_e' t1_typ t2_typ in
   lem_value_is_irred e12';
   assert ((t1 ^* t2) ⦂ (h, fs_e12, e12));
   eliminate forall e12' lt12. e_beh e12 e12' h lt12 ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
@@ -720,7 +768,9 @@ let equiv_pair_snd_steps #e #e' #h #lt #t1 #t2 #fs_e12 #fs_e #e12 (sq:squash (eq
   lem_forall_values_are_values (t1 ^* t2) h fs_e12;
   assert (forall e12' lt12. e_beh e12 e12' h lt12 ==> (EPair? e12' /\ is_value e12'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun steps_e_e' ->
-  let (e12', (| lt12, lt_f |)) = destruct_steps_epair_snd e12 e' h lt steps_e_e' in
+  let t1_typ = type_quotation_to_typ (get_rel t1) in
+  let t2_typ = type_quotation_to_typ (get_rel t2) in
+  let (e12', (| lt12, lt_f |)) = destruct_steps_epair_snd e12 e' h lt steps_e_e' t1_typ t2_typ in
   lem_value_is_irred e12';
   assert ((t1 ^* t2) ⦂ (h, fs_e12, e12));
   eliminate forall e12' lt12. e_beh e12 e12' h lt12 ==> ((t1 ^* t2) ∋ (h, fs_e12, e12') /\ lt12 == []) with e12' lt12;
@@ -847,7 +897,9 @@ let equiv_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #fs_rc_lam #f
   lem_forall_values_are_values (t1 ^+ t2) h fs_case;
   assert (forall e_case' lt'. e_beh e_case e_case' h lt' ==> ((EInl? e_case' \/ EInr? e_case') /\ is_value e_case'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
-    let (e_case', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts in
+    let t1_typ = type_quotation_to_typ (get_rel t1) in
+    let t2_typ = type_quotation_to_typ (get_rel t2) in
+    let (e_case', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts t1_typ t2_typ in
     match e_case' with
     | EInl e_c' -> begin
       assert (steps (ELam e_lc) (ELam e_lc) h []);
@@ -992,7 +1044,9 @@ let equiv_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k' (sq:squash (
   assert ((a ^->!@ b) ⦂ (h++lt2, fs_k', (ELam k')));
   assert (forall k_ (lt1:local_trace (h++lt2)). e_beh (ELam k') k_ (h++lt2) lt1 ==> (ELam? k_ /\ is_closed k_));
   FStar.Squash.bind_squash #(steps (EApp (ELam k') m') e' (h++lt2) lt') () (fun sts2 ->
-  let (k1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 (ELam k') m' e' (h++lt2) lt' sts2 in
+  let a_typ = type_quotation_to_typ (get_rel a) in
+  let b_typ = type_quotation_to_typ (get_rel b) in
+  let (k1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 (ELam k') m' e' (h++lt2) lt' sts2 a_typ b_typ in
   lem_value_is_irred m';
   eliminate forall lt2 m'. e_beh m m' h lt2 ==> (exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m) with lt2 m';
   lem_value_is_irred (ELam k1);
@@ -1050,7 +1104,9 @@ let equiv_oprod_app_steps #e #e' #h #lt #a #b #fs_f #fs_x #fs_e #f #x (sq:squash
   let (x', (| lt2, lt' |)) = destruct_steps_eapp_e2 f x e' h lt steps_e_e' in
   assert (forall f' (lt1:local_trace (h++lt2)). e_beh f f' (h++lt2) lt1 ==> (ELam? f' /\ is_closed f'));
   FStar.Squash.bind_squash #(steps (EApp f x') e' (h++lt2) lt') () (fun sts2 ->
-  let (f1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 f x' e' (h++lt2) lt' sts2 in
+  let a_typ = type_quotation_to_typ (get_rel a) in
+  let b_typ = type_quotation_to_typ (get_rel b) in
+  let (f1, (| lt1, lt'' |)) = destruct_steps_eapp_e1 f x' e' (h++lt2) lt' sts2 a_typ b_typ in
   eliminate forall x' lt2. e_beh x x' h lt2 ==> (a ∋ (h, fs_x, x') /\ lt2 == []) with x' lt2;
   lem_value_is_irred x';
   eliminate forall f' lt1. e_beh f f' h lt1 ==> ((a ^->!@ b) ∋ (h, fs_f, f') /\ lt1 == []) with (ELam f1) lt1;
@@ -1141,7 +1197,9 @@ let equiv_case_prod_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc #fs_inrc #fs_
   lem_forall_values_are_values (a ^+ b) h fs_cond;
   assert (forall cond' lt'. e_beh cond cond' h lt' ==> ((EInl? cond' \/ EInr? cond') /\ is_value cond'));
   FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
-    let (cond', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase cond inlc inrc e' h lt sts in
+    let a_typ = type_quotation_to_typ (get_rel a) in
+    let b_typ = type_quotation_to_typ (get_rel b) in
+    let (cond', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase cond inlc inrc e' h lt sts a_typ b_typ in
     match cond' with
     | EInl c' -> begin
       assert (steps (ELam inlc) (ELam inlc) h []);
@@ -1442,3 +1500,4 @@ let equiv_oprod_close #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
       end
     end
   end
+ 
