@@ -263,14 +263,308 @@ val index_0_hd #g #t (fsG:eval_env (extend t g))
   : Lemma (index fsG 0 == hd fsG)
 let index_0_hd fsG = ()
 
+(** Closed values **)
 type fs_val (t:qType) =
   get_Type t
 
+unfold
+let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
+  (x, y)
+
+unfold
+let fs_val_inl (#a b:qType) (p:fs_val a) : fs_val (a ^+ b) =
+  Inl p
+
+unfold
+let fs_val_inr (a #b:qType) (p:fs_val b) : fs_val (a ^+ b) =
+  Inr p
+
+(** Open values **)
 type fs_oval (g:typ_env) (t:qType) =
   eval_env g -> get_Type t
 
+unfold
+let fs_oval_return (g:typ_env) (t:qType) (x:fs_val t) : fs_oval g t =
+  fun _ -> x
+
+unfold
+let fs_oval_var0 (g:typ_env) (t:qType) : fs_oval (extend t g) t =
+  fun fsG -> hd fsG
+
+unfold
+let fs_oval_varS (#g:typ_env) (#a:qType) (b:qType) (x:fs_oval g a) : fs_oval (extend b g) a =
+  fun fsG -> x (tail fsG)
+
+unfold
+let fs_oval_var (g:typ_env) (x:var{Some? (g x)}) : fs_oval g (Some?.v (g x)) =
+  fun fsG -> index fsG x
+
+unfold
+val fs_oval_app: #g : typ_env ->
+                 #a : qType ->
+                 #b : qType ->
+                 f :fs_oval g (a ^-> b) ->
+                 x :fs_oval g a ->
+                 fs_oval g b
+let fs_oval_app f x fsG = (f fsG) (x fsG)
+
+unfold
+val fs_oval_lambda : #g :typ_env ->
+                     #a :qType ->
+                     #b :qType ->
+                     body :fs_oval (extend a g) b ->
+                     fs_oval g (a ^-> b)
+let fs_oval_lambda #_ #_ body fsG x = body (stack fsG x)
+
+unfold
+val fs_oval_if : #g :typ_env ->
+                 #a  : qType ->
+                 c   : fs_oval g qBool ->
+                 t   : fs_oval g a ->
+                 e   : fs_oval g a ->
+                 fs_oval g a
+let fs_oval_if c t e fsG =
+  if c fsG then t fsG else e fsG
+
+unfold
+val fs_oval_pair : #g : typ_env ->
+                   #a : qType ->
+                   #b : qType ->
+                   x : fs_oval g a ->
+                   y : fs_oval g b ->
+                   fs_oval g (a ^* b)
+let fs_oval_pair x y fsG =
+  fs_val_pair (x fsG) (y fsG)
+
+unfold
+val fs_oval_fmap : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    p : fs_oval g a ->
+                    f : (fs_val a -> fs_val b) ->
+                    fs_oval g b
+let fs_oval_fmap p f fsG = f (p fsG)
+
+unfold
+val fs_oval_case : #g :typ_env ->
+                  #a  : qType ->
+                  #b  : qType ->
+                  #c  : qType ->
+                  cond: fs_oval g (a ^+ b) ->
+                  inlc: fs_oval (extend a g) c ->
+                  inrc: fs_oval (extend b g) c ->
+                  fs_oval g c
+let fs_oval_case cond inlc inrc fsG =
+  match cond fsG with
+  | Inl x -> inlc (stack fsG x)
+  | Inr x -> inrc (stack fsG x)
+
+(** Producers **)
 type fs_prod (t:qType) =
    io (get_Type t)
 
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
+
+unfold
+val fs_oprod_return :
+        #g:typ_env ->
+        #a:qType ->
+        x:fs_oval g a ->
+        fs_oprod g a
+let fs_oprod_return x fsG = return (x fsG)
+
+unfold
+val fs_oprod_bind : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    m:fs_oprod g a ->
+                    k:fs_oprod (extend a g) b ->
+                    fs_oprod g b
+let fs_oprod_bind m k fsG =
+  io_bind (m fsG) (fun x -> k (stack fsG x))
+
+(** a standard version of the bind **)
+unfold
+val fs_oprod_bind' : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    m:fs_oprod g a ->
+                    k:(get_Type a -> fs_oprod g b) ->
+                    fs_oprod g b
+let fs_oprod_bind' m k =
+  fs_oprod_bind m (fun fsG -> k (hd fsG) (tail fsG))
+
+unfold
+val fs_oprod_openfile :
+        #g:typ_env ->
+        fnm:fs_oval g qBool ->
+        fs_oprod g (qResexn qFileDescr)
+let fs_oprod_openfile fnm fsG = openfile (fnm fsG)
+
+unfold
+val fs_oprod_read :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        fs_oprod g (qResexn qBool)
+let fs_oprod_read fd fsG = read (fd fsG)
+
+unfold
+val fs_oprod_write :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        msg:fs_oval g qBool ->
+        fs_oprod g (qResexn qUnit)
+let fs_oprod_write fd msg fsG = write ((fd fsG), (msg fsG))
+
+unfold
+val fs_oprod_close :
+        #g:typ_env ->
+        fd:fs_oval g qFileDescr ->
+        fs_oprod g (qResexn qUnit)
+let fs_oprod_close fd fsG = close (fd fsG)
+
+unfold
+val fs_oval_lambda_oprod : #g :typ_env ->
+                #a :qType ->
+                #b :qType ->
+                body :fs_oprod (extend a g) b ->
+                fs_oval g (a ^->!@ b)
+let fs_oval_lambda_oprod #_ #_ body fsG x = body (stack fsG x)
+
+unfold
+val fs_oprod_app_oval_oval :
+                #g : typ_env ->
+                #a : qType ->
+                #b : qType ->
+                f :fs_oval g (a ^->!@ b) ->
+                x :fs_oval g a ->
+                fs_oprod g b
+let fs_oprod_app_oval_oval f x fsG =
+  (f fsG) (x fsG)
+
+unfold
+val fs_oprod_if_val : #g :typ_env ->
+                #a  : qType ->
+                t   : fs_oprod g a ->
+                e   : fs_oprod g a ->
+                c   : fs_val qBool ->
+                fs_oprod g a
+let fs_oprod_if_val t e c fsG =
+  if c then t fsG else e fsG
+
+unfold
+val fs_oprod_if_oval : #g :typ_env ->
+                #a  : qType ->
+                c   : fs_oval g qBool ->
+                t   : fs_oprod g a ->
+                e   : fs_oprod g a ->
+                fs_oprod g a
+let fs_oprod_if_oval c t e fsG =
+  fs_oprod_if_val t e (c fsG) fsG
+
+val fs_oprod_if : #g :typ_env ->
+                  #a : qType ->
+                  c  : fs_oprod g qBool ->
+                  t  : fs_oprod g a ->
+                  e  : fs_oprod g a ->
+                  fs_oprod g a
+let fs_oprod_if c t e =
+  fs_oprod_bind' c (fs_oprod_if_val t e)
+
+unfold
+val fs_oprod_case_val : #g :typ_env ->
+                #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_val (a ^+ b) ->
+                inlc : fs_oprod (extend a g) c ->
+                inrc : fs_oprod (extend b g) c ->
+                fs_oprod g c
+let fs_oprod_case_val cond inlc inrc fsG =
+  match cond with
+  | Inl x -> inlc (stack fsG x)
+  | Inr x -> inrc (stack fsG x)
+
+val fs_oprod_case_oval : #g :typ_env ->
+                #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_oval g (a ^+ b) ->
+                inlc : fs_oprod (extend a g) c ->
+                inrc : fs_oprod (extend b g) c ->
+                fs_oprod g c
+let fs_oprod_case_oval cond inlc inrc fsG =
+  fs_oprod_case_val (cond fsG) inlc inrc fsG
+
+val fs_oprod_case : #g :typ_env ->
+                #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_oprod g (a ^+ b) ->
+                inlc : fs_oprod (extend a g) c ->
+                inrc : fs_oprod (extend b g) c ->
+                fs_oprod g c
+let fs_oprod_case cond inlc inrc =
+  fs_oprod_bind' cond (fun cond' ->
+    fs_oprod_case_val cond' inlc inrc)
+
+(** Necessary for the backtranslation **)
+val fs_oprod_return_prod :
+        g:typ_env ->
+        a:qType ->
+        x:fs_prod a ->
+        fs_oprod g a
+let fs_oprod_return_prod g a x =
+  (fun _ -> x)
+
+val fs_oprod_return_val :
+        g:typ_env ->
+        a:qType ->
+        x:fs_val a ->
+        fs_oprod g a
+let fs_oprod_return_val g a x =
+  fs_oprod_return (fs_oval_return g a x)
+
+let fs_oprod_var (g:typ_env) (x:var{Some? (g x)}) : fs_oprod g (Some?.v (g x)) =
+  fs_oprod_return (fs_oval_var g x)
+
+val fs_oprod_lambda : #g :typ_env ->
+                #a :qType ->
+                #b :qType ->
+                body :fs_oprod (extend a g) b ->
+                fs_oprod g (a ^->!@ b)
+let fs_oprod_lambda body =
+  fs_oprod_return (fs_oval_lambda_oprod body)
+
+val fs_oprod_app : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    f:fs_oprod g (a ^->!@ b) ->
+                    x:fs_oprod g a ->
+                    fs_oprod g b
+let fs_oprod_app f x =
+  fs_oprod_bind' f (fun f' ->
+    fs_oprod_bind' x (fun x' ->
+      fs_oprod_return_prod _ _ (f' x')))
+
+val fs_oprod_pair : #g : typ_env ->
+                   #a : qType ->
+                   #b : qType ->
+                   x : fs_oprod g a ->
+                   y : fs_oprod g b ->
+                   fs_oprod g (a ^* b)
+let fs_oprod_pair x y =
+  fs_oprod_bind' x (fun x' ->
+    fs_oprod_bind' y (fun y' ->
+      fs_oprod_return_val _ _ (fs_val_pair x' y')))
+
+val fs_oprod_fmap : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    p : fs_oprod g a ->
+                    f : (fs_val a -> fs_val b) ->
+                    fs_oprod g b
+let fs_oprod_fmap p f =
+  fs_oprod_bind' p (fun p' ->
+    fs_oprod_return_val _ _ (f p'))

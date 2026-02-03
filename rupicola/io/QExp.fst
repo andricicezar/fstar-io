@@ -5,236 +5,29 @@ open QTyp
 
 open IO
 
-(** These helper functions are necessary to help F* do unification
-    in such a way no VC is generated **)
-
-unfold
-val helper_file_descr : g:typ_env -> fd:file_descr -> fs_oval g qFileDescr
-let helper_file_descr g fd _ = fd
-
-unfold
-val helper_var0 :
-  g:typ_env ->
-  a:qType ->
-  fs_oval (extend a g) a
-let helper_var0 g a fsG = hd fsG
-
-unfold
-val helper_varS : #g:typ_env ->
-                  #a:qType ->
-                  b:qType ->
-                  fs_oval g a ->
-                  fs_oval (extend b g) a
-let helper_varS _ x fsG = x (tail fsG)
-
-unfold
-val helper_unit : g:typ_env -> fs_oval g qUnit
-let helper_unit g _ = ()
-
-unfold
-val helper_app: #g : typ_env ->
-                #a : qType ->
-                #b : qType ->
-                f :fs_oval g (a ^-> b) ->
-                x :fs_oval g a ->
-                fs_oval g b
-let helper_app f x fsG = (f fsG) (x fsG)
-
-unfold
-val helper_lambda : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                body :fs_oval (extend a g) b ->
-                fs_oval g (a ^-> b)
-let helper_lambda #_ #_ body fsG x = body (stack fsG x)
-
-unfold
-val helper_true : g:typ_env -> fs_oval g qBool
-let helper_true g _ = true
-
-unfold
-val helper_false : g:typ_env -> fs_oval g qBool
-let helper_false g _ = false
-
-unfold
-val helper_if : #g :typ_env ->
-                #a  : qType ->
-                c   : fs_oval g qBool ->
-                t   : fs_oval g a ->
-                e   : fs_oval g a ->
-                fs_oval g a
-let helper_if c t e fsG =
-  if c fsG then t fsG else e fsG
-
-unfold
-val helper_pair : #g : typ_env ->
-                  #a : qType ->
-                  #b : qType ->
-                  x : fs_oval g a ->
-                  y : fs_oval g b ->
-                  fs_oval g (a ^* b)
-let helper_pair #_ #_ #_ x y fsG =
-  (x fsG, y fsG)
-
-unfold
-val helper_fst : #g : typ_env ->
-                 #a : qType ->
-                 #b : qType ->
-                 p : fs_oval g (a ^* b) ->
-                 fs_oval g a
-let helper_fst p fsG = fst (p fsG)
-
-unfold
-val helper_snd : #g : typ_env ->
-                 #a : qType ->
-                 #b : qType ->
-                 p : fs_oval g (a ^* b) ->
-                 fs_oval g b
-let helper_snd p fsG = snd (p fsG)
-
-unfold
-val helper_inl : #g : typ_env ->
-                 #a : qType ->
-                 b : qType ->
-                 p : fs_oval g a ->
-                 fs_oval g (a ^+ b)
-let helper_inl _ p fsG = Inl (p fsG)
-
-unfold
-val helper_inr : #g : typ_env ->
-                 a : qType ->
-                 #b : qType ->
-                 p : fs_oval g b ->
-                 fs_oval g (a ^+ b)
-let helper_inr _ p fsG = Inr (p fsG)
-
-unfold
-val helper_case : #g :typ_env ->
-                  #a  : qType ->
-                  #b  : qType ->
-                  #c  : qType ->
-                  cond: fs_oval g (a ^+ b) ->
-                  inlc: fs_oval (extend a g) c ->
-                  inrc: fs_oval (extend b g) c ->
-                  fs_oval g c
-let helper_case cond inlc inrc fsG =
-  match cond fsG with
-  | Inl x -> inlc (stack fsG x)
-  | Inr x -> inrc (stack fsG x)
-
-unfold
-val helper_app_prod :
-                #g : typ_env ->
-                #a : qType ->
-                #b : qType ->
-                f :fs_oval g (a ^->!@ b) ->
-                x :fs_oval g a ->
-                fs_oprod g b
-let helper_app_prod f x fsG =
-  (f fsG) (x fsG)
-
-unfold
-val helper_lambda_prod : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                body :fs_oprod (extend a g) b ->
-                fs_oval g (a ^->!@ b)
-let helper_lambda_prod #_ #_ body fsG x = body (stack fsG x)
-
-unfold
-val helper_if_prod : #g :typ_env ->
-                #a  : qType ->
-                c   : fs_oval g qBool ->
-                t   : fs_oprod g a ->
-                e   : fs_oprod g a ->
-                fs_oprod g a
-let helper_if_prod c t e fsG =
-  if c fsG then t fsG else e fsG
-
-unfold
-val helper_case_prod : #g :typ_env ->
-                #a  : qType ->
-                #b : qType ->
-                #c : qType ->
-                cond : fs_oval g (a ^+ b) ->
-                inlc : fs_oprod (extend a g) c ->
-                inrc : fs_oprod (extend b g) c ->
-                fs_oprod g c
-let helper_case_prod cond inlc inrc fsG =
-  match cond fsG with
-  | Inl x -> inlc (stack fsG x)
-  | Inr x -> inrc (stack fsG x)
-
-unfold
-val helper_bind_prod : #g:typ_env ->
-                     #a:qType ->
-                     #b:qType ->
-                     m:fs_oprod g a ->
-                     k:fs_oprod (extend a g) b ->
-                     fs_oprod g b
-let helper_bind_prod m k fsG =
-  io_bind (m fsG) (fun x -> k (stack fsG x))
-
-unfold
-val helper_return_prod :
-        #g:typ_env ->
-        #a:qType ->
-        x:fs_oval g a ->
-        fs_oprod g a
-let helper_return_prod x fsG = return (x fsG)
-
-unfold
-val helper_prod_openfile :
-        #g:typ_env ->
-        fnm:fs_oval g qBool ->
-        fs_oprod g (qResexn qFileDescr)
-let helper_prod_openfile fnm fsG = openfile (fnm fsG)
-
-unfold
-val helper_prod_read :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qBool)
-let helper_prod_read fd fsG = read (fd fsG)
-
-unfold
-val helper_prod_write :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        msg:fs_oval g qBool ->
-        fs_oprod g (qResexn qUnit)
-let helper_prod_write fd msg fsG = write ((fd fsG), (msg fsG))
-
-unfold
-val helper_prod_close :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qUnit)
-let helper_prod_close fd fsG = close (fd fsG)
-
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
-| Qtt         : #g : typ_env -> oval_quotation g (helper_unit g)
-| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation g (helper_file_descr g fd)
+| Qtt         : #g : typ_env -> oval_quotation g (fs_oval_return g qUnit ())
+| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation g (fs_oval_return g qFileDescr fd)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
-                oval_quotation (extend a g) (helper_var0 g a)
+                oval_quotation (extend a g) (fs_oval_var0 g a)
 
 | QVarS       : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #x : fs_oval g a ->
                 oval_quotation g x ->
-                oval_quotation (extend b g) (helper_varS b x)
+                oval_quotation (extend b g) (fs_oval_varS b x)
 
 | QAppGhost   : #g : typ_env ->
                 #a : qType ->
                 #f : fs_oval g (a ^-> qUnit) -> (** This has to be Tot. If it is GTot unit, F* can treat it as Pure unit **)
                 #x : fs_oval g a ->
-                oval_quotation #qUnit g (helper_app #_ #_ #_ f x)
+                oval_quotation #qUnit g (fs_oval_app #_ #_ #_ f x)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
@@ -243,17 +36,17 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 #x : fs_oval g a ->
                 oval_quotation g f ->
                 oval_quotation g x ->
-                oval_quotation g (helper_app #_ #_ #_ f x)
+                oval_quotation g (fs_oval_app #_ #_ #_ f x)
 
 | QLambda     : #a : qType ->
                 #b : qType ->
                 #g : typ_env ->
                 #body : fs_oval (extend a g) b ->
                 oval_quotation (extend a g) body ->
-                oval_quotation #(a ^-> b) g (helper_lambda body)
+                oval_quotation #(a ^-> b) g (fs_oval_lambda body)
 
-| QTrue       : #g : typ_env -> oval_quotation g (helper_true g)
-| QFalse      : #g : typ_env -> oval_quotation g (helper_false g)
+| QTrue       : #g : typ_env -> oval_quotation g (fs_oval_return g qBool true)
+| QFalse      : #g : typ_env -> oval_quotation g (fs_oval_return g qBool false)
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
@@ -262,7 +55,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 oval_quotation g t ->
                 #e : fs_oval g a ->
                 oval_quotation g e ->
-                oval_quotation g (helper_if c t e)
+                oval_quotation g (fs_oval_if c t e)
 
 | QMkpair   : #g : typ_env ->
               #a : qType ->
@@ -271,31 +64,31 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
               #y : fs_oval g b ->
               oval_quotation g x ->
               oval_quotation g y ->
-              oval_quotation g (helper_pair x y)
+              oval_quotation g (fs_oval_pair x y)
 | QFst      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g (a ^* b) ->
               oval_quotation g p ->
-              oval_quotation g (helper_fst p)
+              oval_quotation g (fs_oval_fmap p fst)
 | QSnd      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g (a ^* b) ->
               oval_quotation g p ->
-              oval_quotation g (helper_snd p)
+              oval_quotation g (fs_oval_fmap p snd)
 | QInl      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g a ->
               oval_quotation g p ->
-              oval_quotation g (helper_inl b p)
+              oval_quotation #(a ^+ b) g (fs_oval_fmap p Inl)
 | QInr      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g b ->
               oval_quotation g p ->
-              oval_quotation g (helper_inr a p)
+              oval_quotation #(a ^+ b) g (fs_oval_fmap p Inr)
 | QCase     : #g : typ_env ->
               #a : qType ->
               #b : qType ->
@@ -306,25 +99,25 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
               oval_quotation _ inlc ->
               #inrc : fs_oval (extend b g) c ->
               oval_quotation _ inrc ->
-              oval_quotation g (helper_case cond inlc inrc)
+              oval_quotation g (fs_oval_case cond inlc inrc)
 | QLambdaProd : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #body : fs_oprod (extend a g) b ->
                 oprod_quotation (extend a g) body ->
-                oval_quotation g (helper_lambda_prod body)
+                oval_quotation g (fs_oval_lambda_oprod body)
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QOpenfile :
         #g:typ_env ->
         #fnm:fs_oval g qBool ->
         oval_quotation g fnm ->
-        oprod_quotation #(qResexn qFileDescr) g (helper_prod_openfile fnm)
+        oprod_quotation #(qResexn qFileDescr) g (fs_oprod_openfile fnm)
 
 | QRead :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qBool) g (helper_prod_read fd)
+        oprod_quotation #(qResexn qBool) g (fs_oprod_read fd)
 
 | QWrite :
         #g:typ_env ->
@@ -332,20 +125,20 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #msg:fs_oval g qBool ->
         oval_quotation g fd ->
         oval_quotation g msg ->
-        oprod_quotation #(qResexn qUnit) g (helper_prod_write fd msg)
+        oprod_quotation #(qResexn qUnit) g (fs_oprod_write fd msg)
 
 | QClose :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qUnit) g (helper_prod_close fd)
+        oprod_quotation #(qResexn qUnit) g (fs_oprod_close fd)
 
 | QReturn :
         #g:typ_env ->
         #a:qType ->
         #x:fs_oval g a ->
         oval_quotation g x ->
-        oprod_quotation #a g (helper_return_prod x)
+        oprod_quotation #a g (fs_oprod_return x)
 
 | QBindProd :
         #g:typ_env ->
@@ -355,7 +148,7 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #k:fs_oprod (extend a g) b ->
         oprod_quotation g m ->
         oprod_quotation (extend a g) k ->
-        oprod_quotation #b g (helper_bind_prod m k)
+        oprod_quotation #b g (fs_oprod_bind m k)
 
 | QAppProd    : #g : typ_env ->
                 #a : qType ->
@@ -364,7 +157,7 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
                 #x : fs_oval g a ->
                 oval_quotation g f ->
                 oval_quotation g x ->
-                oprod_quotation g (helper_app_prod f x)
+                oprod_quotation g (fs_oprod_app_oval_oval f x)
 | QIfProd     : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
@@ -373,7 +166,7 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
                 oprod_quotation g t ->
                 #e : fs_oprod g a ->
                 oprod_quotation g e ->
-                oprod_quotation g (helper_if_prod c t e)
+                oprod_quotation g (fs_oprod_if_oval c t e)
 | QCaseProd : #g : typ_env ->
               #a : qType ->
               #b : qType ->
@@ -384,7 +177,7 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
               oprod_quotation _ inlc ->
               #inrc : fs_oprod (extend b g) c ->
               oprod_quotation _ inrc ->
-              oprod_quotation g (helper_case_prod cond inlc inrc)
+              oprod_quotation g (fs_oprod_case_oval cond inlc inrc)
 
 let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
   oval_quotation g x
