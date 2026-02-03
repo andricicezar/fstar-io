@@ -267,11 +267,12 @@ let (≋) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
   equiv_oprod #g t fs_v e
 
 (** Equiv closed terms **)
-(**let lem_equiv_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
+let lem_equiv_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
   Lemma (requires equiv_val fs_e e)
         (ensures forall h. t ⦂ (h, fs_e, e)) =
   admit ()
 
+(**
 let lem_equiv_val' (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
   Lemma (requires forall h. t ⦂ (h, fs_e, e))
         (ensures equiv_val fs_e e) =
@@ -1283,10 +1284,10 @@ let equiv_oprod_openfile_steps #e #e' #h #lt #fs_fnm #fs_e #fnm (sq:squash (equi
     lem_theta_open fs_fnm (Inr ()) h
     end))
 
-let equiv_oprod_openfile #g (fs_fnm:fs_oval g qBool) (fnm:exp)
+let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qBool) (fnm:exp)
   : Lemma
     (requires fs_fnm ≈ fnm)
-    (ensures fs_oprod_openfile fs_fnm ≋ EOpen fnm)
+    (ensures fs_oprod_openfile_oval fs_fnm ≋ EOpen fnm)
   =
   lem_fv_in_env_openfile g fnm;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⪾ (h, openfile (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
@@ -1346,10 +1347,10 @@ let equiv_oprod_read_steps #e #e' #h #lt #fs_fd #fs_e #fd (sq:squash (equiv_opro
     lem_theta_read fs_fd (Inr ()) h
     end))
 
-let equiv_oprod_read #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
+let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ≈ fd)
-    (ensures fs_oprod_read fs_fd ≋ ERead fd)
+    (ensures fs_oprod_read_oval fs_fd ≋ ERead fd)
   =
   lem_fv_in_env_read g fd;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⪾ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
@@ -1408,10 +1409,10 @@ let equiv_write_steps #e #e' #h #lt #fs_fd #fs_msg #fs_e #fd #msg (sq:squash (eq
     end)))
 #pop-options
 
-let equiv_oprod_write #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
+let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
   : Lemma
     (requires fs_fd ≈ fd /\ fs_msg ≈ msg)
-    (ensures fs_oprod_write fs_fd fs_msg ≋ EWrite fd msg)
+    (ensures fs_oprod_write_oval fs_fd fs_msg ≋ EWrite fd msg)
   =
   lem_fv_in_env_write g fd msg;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, write (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
@@ -1465,10 +1466,10 @@ let equiv_oprod_close_steps #e #e' #h #lt #fs_fd #fs_e #fd (sq:squash (equiv_opr
     lem_theta_close fs_fd (Inr ()) h
     end))
 
-let equiv_oprod_close #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
+let equiv_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ≈ fd)
-    (ensures fs_oprod_close fs_fd ≋ EClose fd)
+    (ensures fs_oprod_close_oval fs_fd ≋ EClose fd)
   =
   lem_fv_in_env_close g fd;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⪾ (h, close (fs_fd fsG), gsubst s (EClose fd)) with begin
@@ -1579,3 +1580,27 @@ let equiv_oprod_case #g (#a #b #c:qType)
     (requires fs_cond ≋ cond /\ fs_inlc ≋ inlc /\ fs_inrc ≋ inrc)
     (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ≋ (ECase cond inlc inrc)) =
   admit ()
+
+let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qBool) (fnm:exp)
+  : Lemma
+    (requires fs_fnm ≋ fnm)
+    (ensures fs_oprod_openfile fs_fnm ≋ EOpen fnm)
+  = admit ()
+
+let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
+  : Lemma
+    (requires fs_fd ≋ fd)
+    (ensures fs_oprod_read fs_fd ≋ ERead fd)
+  = admit ()
+
+let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qBool) (fd msg:exp)
+  : Lemma
+    (requires fs_fd ≋ fd /\ fs_msg ≋ msg)
+    (ensures fs_oprod_write fs_fd fs_msg ≋ EWrite fd msg)
+  = admit ()
+
+let equiv_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
+  : Lemma
+    (requires fs_fd ≋ fd)
+    (ensures fs_oprod_close fs_fd ≋ EClose fd)
+  = admit ()

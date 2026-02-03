@@ -396,33 +396,33 @@ let fs_oprod_bind' m k =
   fs_oprod_bind m (fun fsG -> k (hd fsG) (tail fsG))
 
 unfold
-val fs_oprod_openfile :
+val fs_oprod_openfile_oval :
         #g:typ_env ->
         fnm:fs_oval g qBool ->
         fs_oprod g (qResexn qFileDescr)
-let fs_oprod_openfile fnm fsG = openfile (fnm fsG)
+let fs_oprod_openfile_oval fnm fsG = openfile (fnm fsG)
 
 unfold
-val fs_oprod_read :
+val fs_oprod_read_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
         fs_oprod g (qResexn qBool)
-let fs_oprod_read fd fsG = read (fd fsG)
+let fs_oprod_read_oval fd fsG = read (fd fsG)
 
 unfold
-val fs_oprod_write :
+val fs_oprod_write_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
         msg:fs_oval g qBool ->
         fs_oprod g (qResexn qUnit)
-let fs_oprod_write fd msg fsG = write ((fd fsG), (msg fsG))
+let fs_oprod_write_oval fd msg fsG = write ((fd fsG), (msg fsG))
 
 unfold
-val fs_oprod_close :
+val fs_oprod_close_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
         fs_oprod g (qResexn qUnit)
-let fs_oprod_close fd fsG = close (fd fsG)
+let fs_oprod_close_oval fd fsG = close (fd fsG)
 
 unfold
 val fs_oval_lambda_oprod : #g :typ_env ->
@@ -568,3 +568,38 @@ val fs_oprod_fmap : #g:typ_env ->
 let fs_oprod_fmap p f =
   fs_oprod_bind' p (fun p' ->
     fs_oprod_return_val _ _ (f p'))
+
+
+val fs_oprod_openfile :
+        #g:typ_env ->
+        fnm:fs_oprod g qBool ->
+        fs_oprod g (qResexn qFileDescr)
+let fs_oprod_openfile fnm =
+  fs_oprod_bind' fnm (fun fnm' ->
+    fs_oprod_return_prod _ _ (openfile fnm'))
+
+val fs_oprod_read :
+        #g:typ_env ->
+        fd:fs_oprod g qFileDescr ->
+        fs_oprod g (qResexn qBool)
+let fs_oprod_read fd =
+  fs_oprod_bind' fd (fun fd' ->
+    fs_oprod_return_prod _ _ (read fd'))
+
+val fs_oprod_write :
+        #g:typ_env ->
+        fd:fs_oprod g qFileDescr ->
+        msg:fs_oprod g qBool ->
+        fs_oprod g (qResexn qUnit)
+let fs_oprod_write fd msg =
+  fs_oprod_bind' fd (fun fd' ->
+    fs_oprod_bind' msg (fun msg' ->
+      fs_oprod_return_prod _ _ (write (fd', msg'))))
+
+val fs_oprod_close :
+        #g:typ_env ->
+        fd:fs_oprod g qFileDescr ->
+        fs_oprod g (qResexn qUnit)
+let fs_oprod_close fd =
+  fs_oprod_bind' fd (fun fd' ->
+    fs_oprod_return_prod _ _ (close fd'))

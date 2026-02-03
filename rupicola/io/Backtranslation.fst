@@ -87,7 +87,32 @@ type typing : typ_env -> exp -> qType -> Type =
            $h2:typing (extend t1 g) inlc t3 ->
            $h3:typing (extend t2 g) inrc t3 ->
            typing g (ECase cond inlc inrc) t3
-
+| TyFileDescr :
+           #g:typ_env ->
+           fd:file_descr ->
+           typing g (EFileDescr fd) qFileDescr
+| TyOpenfile :
+           #g:typ_env ->
+           #e1:exp ->
+           $h1:typing g e1 qBool ->
+           typing g (EOpen e1) (qResexn qFileDescr)
+| TyRead :
+           #g:typ_env ->
+           #e1:exp ->
+           $h1:typing g e1 qFileDescr ->
+           typing g (ERead e1) (qResexn qBool)
+| TyWrite :
+           #g:typ_env ->
+           #e1:exp ->
+           #e2:exp ->
+           $h1:typing g e1 qFileDescr ->
+           $h2:typing g e2 qBool ->
+           typing g (EWrite e1 e2) (qResexn qUnit)
+| TyClose :
+           #g:typ_env ->
+           #e1:exp ->
+           $h1:typing g e1 qFileDescr ->
+           typing g (EClose e1) (qResexn qUnit)
 
 open FStar.Tactics.V1
 
@@ -142,8 +167,28 @@ let rec backtranslate' #g #e #t h : Tot (fs_oprod g t) =
     let h2 : typing (extend t1 g) _ t3 = h2 in
     let h3 : typing (extend t2 g) _ t3 = h3 in
     fs_oprod_case (backtranslate' h1) (backtranslate' h2) (backtranslate' h3)
+  | EFileDescr _ ->
+    let TyFileDescr fd = h in
+    fs_oprod_return_val g qFileDescr fd
+  | EOpen _ ->
+    let TyOpenfile h' = h in
+    let h' : typing g _ qBool = h' in
+    fs_oprod_openfile (backtranslate' h')
+  | ERead _ ->
+    let TyRead h' = h in
+    let h' : typing g _ qFileDescr = h' in
+    fs_oprod_read (backtranslate' h')
+  | EWrite _ _ ->
+    let TyWrite h1 h2 = h in
+    let h1 : typing g _ qFileDescr = h1 in
+    let h2 : typing g _ qBool = h2 in
+    fs_oprod_write (backtranslate' h1) (backtranslate' h2)
+  | EClose _ ->
+    let TyClose h' = h in
+    let h' : typing g _ qFileDescr = h' in
+    fs_oprod_close (backtranslate' h')
 
-let rec lem_backtranslate' #g #e #t (h:typing g e t) : Lemma (backtranslate' h â‰‹ e)=
+let rec lem_backtranslate' #g #e #t (h:typing g e t) : Lemma (backtranslate' h â‰‹ e) =
    match e with
   | EUnit -> equiv_oprod_unit g
   | ETrue -> equiv_oprod_true g
@@ -154,7 +199,6 @@ let rec lem_backtranslate' #g #e #t (h:typing g e t) : Lemma (backtranslate' h â
     lem_backtranslate' h2;
     lem_backtranslate' h3;
     equiv_oprod_if (backtranslate' h1) (backtranslate' h2) (backtranslate' h3) e1 e2 e3
-  | EFileDescr fd -> equiv_oprod_file_descr g fd
   | EVar x -> equiv_oprod_var g x
   | EApp _ _ ->
     let TyApp #t1 #t2 #e1 #e2 h1 h2 = h in
@@ -192,6 +236,24 @@ let rec lem_backtranslate' #g #e #t (h:typing g e t) : Lemma (backtranslate' h â
     lem_backtranslate' h2;
     lem_backtranslate' h3;
     equiv_oprod_case (backtranslate' h1) (backtranslate' h2) (backtranslate' h3) e1 e2 e3
+  | EFileDescr fd -> equiv_oprod_file_descr g fd
+  | EOpen _ ->
+    let TyOpenfile #_ #e' h' = h in
+    lem_backtranslate' h';
+    equiv_oprod_openfile (backtranslate' h') e'
+  | ERead _ ->
+    let TyRead #_ #e' h' = h in
+    lem_backtranslate' h';
+    equiv_oprod_read (backtranslate' h') e'
+  | EWrite _ _ ->
+    let TyWrite #_ #e1 #e2 h1 h2 = h in
+    lem_backtranslate' h1;
+    lem_backtranslate' h2;
+    equiv_oprod_write (backtranslate' h1) (backtranslate' h2) e1 e2
+  | EClose _ ->
+    let TyClose #_ #e' h' = h in
+    lem_backtranslate' h';
+    equiv_oprod_close (backtranslate' h') e'
 
 let rec lem_backtranslate_value_no_io (#g:typ_env) (#e:value) (#t:qType) (h:typing g e t) (fsG:eval_env g) :
   Pure (fs_val t) True (fun v -> return v == backtranslate' h fsG) =

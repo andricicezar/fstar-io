@@ -45,7 +45,7 @@ let compile_closed  #a #s (qs:a ⊩ s) : closed_exp =
   compile qs
 
 let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
-  : Lemma (ensures (s `equiv_oval a` (compile qs)))
+  : Lemma (ensures (s ≈ (compile qs)))
   = match qs with
   | Qtt -> equiv_unit g
   | QVar0 #g' #_ -> equiv_var0 g' a
@@ -93,22 +93,22 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     compile_equiv_prod qbody;
     equiv_lam_prod body (compile_oprod qbody)
 and compile_equiv_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
-  : Lemma (ensures (s `equiv_oprod a` (compile_oprod qs))) (decreases qs)
+  : Lemma (ensures (s ≋ (compile_oprod qs))) (decreases qs)
   =
   match qs with
   | QOpenfile #_ #fnm qfnm ->
     compile_equiv qfnm;
-    equiv_oprod_openfile fnm (compile qfnm)
+    equiv_oprod_openfile_oval fnm (compile qfnm)
   | QRead #_ #fd qfd ->
     compile_equiv qfd;
-    equiv_oprod_read fd (compile qfd)
+    equiv_oprod_read_oval fd (compile qfd)
   | QWrite #_ #fd #msg qfd qmsg ->
     compile_equiv qfd;
     compile_equiv qmsg;
-    equiv_oprod_write fd msg (compile qfd) (compile qmsg)
+    equiv_oprod_write_oval fd msg (compile qfd) (compile qmsg)
   | QClose #_ #fd qfd ->
     compile_equiv qfd;
-    equiv_oprod_close fd (compile qfd)
+    equiv_oprod_close_oval fd (compile qfd)
   | QReturn #_ #_ #x qx ->
     compile_equiv qx;
     equiv_oprod_return x (compile qx)
