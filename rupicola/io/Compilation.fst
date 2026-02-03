@@ -119,17 +119,17 @@ and compile_equiv_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
   | QAppProd #_ #_ #_ #f #x qf qx ->
     compile_equiv qf;
     compile_equiv qx;
-    equiv_oprod_app f x (compile qf) (compile qx)
+    equiv_oprod_app_oval_oval f x (compile qf) (compile qx)
   | QIfProd #_ #_ #c qc #t qt #e qe ->
     compile_equiv qc;
     compile_equiv_prod qt;
     compile_equiv_prod qe;
-    equiv_oprod_if c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
+    equiv_oprod_if_oval c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
   | QCaseProd #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
     compile_equiv qcond;
     compile_equiv_prod qinlc;
     compile_equiv_prod qinrc;
-    equiv_oprod_case cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+    equiv_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
 let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs: a ⊩ s)
   : Lemma (ensures (forall h. a ⦂ (h, s, compile_closed qs))) =
