@@ -38,7 +38,7 @@ type exp =
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
-    f:(var -> exp){ renaming <==> (forall x. EVar? (f x)) }
+    f:(var -> exp){ renaming ==> (forall x. EVar? (f x)) }
 
 let bool_order (b:bool) = if b then 0 else 1
 
@@ -88,15 +88,6 @@ and sub_elam (#r:bool) (s:sub r)
         then EVar y
         else subst sub_inc (s (y - 1))
     in
-    introduce not r ==> (exists x. ~ (EVar? (f x)))
-    with not_r.
-      eliminate exists y. ~ (EVar? (s y))
-      returns (exists x. ~ (EVar? (f x)))
-      with (not_evar_sy:squash (~(EVar? (s y)))).
-        introduce exists x. ~(EVar? (f x))
-        with (y + 1)
-        and ()
-    ;
     f
 
 let sub_beta (e:exp)
@@ -110,6 +101,41 @@ let sub_beta (e:exp)
     then introduce exists (x:var). ~(EVar? (f x))
          with 0 and ();
     f
+
+let rec equiv_subs_implies_equiv_substs #b #b' (f:sub b) (g:sub b') (e:exp) : Lemma
+    (requires (forall x. f x == g x))
+    (ensures subst f e == subst g e)
+    (decreases e) =
+  match e with
+  | EUnit
+  | ETrue
+  | EFalse
+  | EVar _
+  | EFileDescr _ -> ()
+  | ELam e1 -> equiv_subs_implies_equiv_substs (sub_elam f) (sub_elam g) e1
+  | EFst e1
+  | ESnd e1
+  | EInl e1
+  | EInr e1
+  | ERead e1
+  | EOpen e1
+  | EClose e1 -> equiv_subs_implies_equiv_substs f g e1
+  | EApp e1 e2
+  | EWrite e1 e2
+  | EPair e1 e2 -> begin
+    equiv_subs_implies_equiv_substs f g e1;
+    equiv_subs_implies_equiv_substs f g e2
+    end
+  | EIf e1 e2 e3 -> begin
+    equiv_subs_implies_equiv_substs f g e1;
+    equiv_subs_implies_equiv_substs f g e2;
+    equiv_subs_implies_equiv_substs f g e3
+    end
+  | ECase e1 e2 e3 -> begin
+    equiv_subs_implies_equiv_substs f g e1;
+    equiv_subs_implies_equiv_substs (sub_elam f) (sub_elam g) e2;
+    equiv_subs_implies_equiv_substs (sub_elam f) (sub_elam g) e3
+    end
 
 let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binders
   match e with

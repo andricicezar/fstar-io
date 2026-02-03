@@ -173,6 +173,56 @@ let gsub_extend (#g:typ_env) #b (s:gsub g b) (t:qType) (v:value) : gsub (extend 
   introduce exists (x:var). ~(EVar? (f x)) with 0 and ();
   f
 
+let gsub_comp #b #b' (g:sub b) (f:sub b') : sub (b && b') =
+  fun (y:var) -> subst g (f y)
+
+#push-options "--split_queries always --z3rlimit 32"
+let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
+  Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
+        (decreases e) =
+  match e with
+  | EUnit
+  | ETrue
+  | EFalse
+  | EVar _
+  | EFileDescr _ -> ()
+  | ELam e1 -> begin
+    subst_comp (sub_elam f) (sub_elam g) e1;
+    introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
+      ()
+    end;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
+    end
+  | EFst e1
+  | ESnd e1
+  | EInl e1
+  | EInr e1
+  | ERead e1
+  | EOpen e1
+  | EClose e1 -> subst_comp f g e1
+  | EApp e1 e2
+  | EWrite e1 e2
+  | EPair e1 e2 -> begin
+    subst_comp f g e1;
+    subst_comp f g e2
+    end
+  | EIf e1 e2 e3 -> begin
+    subst_comp f g e1;
+    subst_comp f g e2;
+    subst_comp f g e3
+    end
+  | ECase e1 e2 e3 -> begin
+    subst_comp f g e1;
+    subst_comp (sub_elam f) (sub_elam g) e2;
+    subst_comp (sub_elam f) (sub_elam g) e3;
+    introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
+      ()
+    end;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e2;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e3
+    end
+#pop-options
+
 let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
   introduce forall fv. fv `memP` free_vars_indx e 0 ==> free_vars_indx (s fv) 0 == [] with begin
     introduce _ ==> _ with _. begin
