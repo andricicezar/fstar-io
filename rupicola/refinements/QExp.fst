@@ -6,12 +6,10 @@ open FStar.Tactics.V2
 module M = FStar.Monotonic.Pure
 
 let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-let ret #a x : pure_wp a =
-  reveal_opaque (`%pure_wp_monotonic) pure_wp_monotonic;
-  fun p -> p x
+let ret (#a:Type u#a) x : pure_wp a = pure_return a x
 
-let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
-  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
+let refv_wp (#a:Type u#a) (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
+  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#a);
   pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
     (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
 
@@ -87,17 +85,18 @@ let wp_app #_ #a #b wpF wpX =
 
 unfold
 val helper_app: #g :env ->
-                #a :Type ->
-                #b :Type ->
+                #a :Type u#a ->
+                #b :Type u#b ->
                 #wpF : spec_env g (a -> b) ->
                 f :fs_oexp g (a -> b) wpF ->
                 #wpX : spec_env g a ->
                 x :fs_oexp g a wpX ->
                 fs_oexp g b (wp_app wpF wpX)
 
-let helper_app f x =
+let helper_app #_ #_ #_ #wpF f #wpX x =
   fun fsG ->
-    M.elim_pure_wp_monotonicity_forall ();
+    M.elim_pure_wp_monotonicity (wpF fsG);
+    M.elim_pure_wp_monotonicity (wpX fsG);
     (f fsG) (x fsG)
 
 val wp_if : #g :env ->
@@ -113,7 +112,7 @@ let wp_if #_ #a wpC wpT wpE =
 
 unfold
 val helper_if : #g :env ->
-                #a :Type ->
+                #a :Type u#a ->
                 #wpC : spec_env g bool ->
                 c   : fs_oexp g bool wpC ->
                 #wpT : spec_env g a ->
@@ -123,17 +122,18 @@ val helper_if : #g :env ->
                 fs_oexp g a (wp_if wpC wpT wpE)
 let helper_if c t e =
   fun fsG ->
-    M.elim_pure_wp_monotonicity_forall ();
+    M.elim_pure_wp_monotonicity_forall u#0 ();
+    M.elim_pure_wp_monotonicity_forall u#a ();
     if c fsG then t fsG else e fsG
 
 val wp_lambda : #g :env ->
-                #a :Type ->
-                #b :Type ->
+                #a :Type u#0 ->
+                #b :Type u#b ->
                 wpBody:spec_env (extend a g) b ->
                 spec_env g (a -> b)
 
 let wp_lambda #g #a #b wpBody fsG : pure_wp (a -> b) =
-  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic);
+  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#b);
   fun (p:pure_post (a -> b)) ->
     forall (f:a -> b).
       (forall (p':pure_post b) (fsG':fs_env (extend a g)).
@@ -167,13 +167,13 @@ val helper_seq :#g:env ->
                 #ref1:Type0 ->
                 wpV:spec_env g (_:unit{ref1}) ->
                 v:fs_oexp g (_:unit{ref1}) wpV ->
-                #a:Type ->
+                #a:Type u#a ->
                 wpK:spec_env g a ->
                 k:fs_oexp g a wpK ->
                 fs_oexp g a
                   (fun fsG -> pure_bind_wp (x:unit{ref1}) a (wpV fsG) (fun _ -> wpK fsG))
 let helper_seq _ v _ k =
-  fun fsG -> M.elim_pure_wp_monotonicity_forall ();
+  fun fsG -> M.elim_pure_wp_monotonicity_forall u#0 ();  M.elim_pure_wp_monotonicity_forall u#a ();
     v fsG ; k fsG
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
@@ -229,7 +229,6 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 cf:compilable #b (extend a g)
                               wpBody
                               (helper_lambda f) ->
-                             // (fun fsG -> f (fs_tail #a fsG) (fs_hd fsG)) ->
                 compilable g (wp_lambda #g #a #b wpBody) f
 
 | CRefinement : #g:env ->
@@ -396,7 +395,7 @@ let test_always_false'' ()
   : Tot (compilable_closed always_false)
   by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
   = fun _ ->
-    CLambda (CIf CVar0 
+    CLambda (CIf CVar0
                 (CRefinement (fun y -> True) CFalse)
                 (CRefinement (fun y -> True) CVar0))
 
