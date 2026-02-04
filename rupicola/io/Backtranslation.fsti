@@ -3,11 +3,15 @@ module Backtranslation
 open STLC
 open QTyp
 open QExp
-open ExpRel
+open LogRelSourceTarget
+open LogRelTargetSource
 
 val typing : typ_env -> exp -> qType -> Type u#1
 
-val backtranslate (#g:typ_env) (#e:value) (#t:qType) (h:typing g e t) : fs_oval g t
+val backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t
 
-val lem_backtranslate #g (#e:value{fv_in_env g e}) #t (h:typing g e t) : Lemma
-(backtranslate h ≈ e)
+val lem_backtranslate (#e:value) #t (h:typing empty e t)
+  : Lemma (
+    valid_in_val #t (backtranslate h) e /\
+    (forall hist. t ∈ (hist, backtranslate h, e))
+  )

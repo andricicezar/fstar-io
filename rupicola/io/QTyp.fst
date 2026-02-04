@@ -322,17 +322,23 @@ unfold
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
-unfold
-let fs_val_inl (#a b:qType) (p:fs_val a) : fs_val (a ^+ b) =
-  Inl p
-
-unfold
-let fs_val_inr (a #b:qType) (p:fs_val b) : fs_val (a ^+ b) =
-  Inr p
-
 (** Open values **)
 type fs_oval (g:typ_env) (t:qType) =
   eval_env g -> get_Type t
+
+(** We compile F* values, not F* expressions.
+    When compiling F* lambdas, there is no way to match and get
+    the body of the lambda.
+
+    To avoid this limitation, we do closure conversion of F* lambdas:
+    - be a lambda f:'a -> 'b
+    - we wrap f to a function that takes as argument an F* evaluation environment
+      that was extended to contain a value of type 'a
+    - we take the value from the environment to open f:
+        fun fsG -> f (index fsG 0)
+
+    What is cool about this is to define compilation to STLC the environment is abstract.
+ **)
 
 unfold
 let fs_oval_return (g:typ_env) (t:qType) (x:fs_val t) : fs_oval g t =
@@ -441,7 +447,7 @@ val fs_oprod_bind' : #g:typ_env ->
                     #a:qType ->
                     #b:qType ->
                     m:fs_oprod g a ->
-                    k:(get_Type a -> fs_oprod g b) ->
+                    k:(fs_val a -> fs_oprod g b) ->
                     fs_oprod g b
 let fs_oprod_bind' m k =
   fs_oprod_bind m (fun fsG -> k (hd fsG) (tail fsG))
@@ -654,3 +660,12 @@ val fs_oprod_close :
 let fs_oprod_close fd =
   fs_oprod_bind' fd (fun fd' ->
     fs_oprod_return_prod _ _ (close fd'))
+
+open Trace
+
+unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
+let fs_beh m = thetaP m
+
+unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Type0
+let e_beh e e' h lt =
+  steps e e' h lt /\ indexed_irred e' (h++lt)
