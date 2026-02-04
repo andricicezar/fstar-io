@@ -1,6 +1,5 @@
 module LogRelSourceTarget
 
-open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
@@ -252,17 +251,45 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
     end
   end
 
-let unroll_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+open FStar.Tactics.V1
 
-let unroll_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
+  : Lemma
+    (requires is_closed (ELam e11) /\ (t1 ^-> t2) ∋ (h, fs_e1, ELam e11))
+    (ensures forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))
+  by (explode ();
+    bump_nth 4;
+    let x = nth_binder (-2) in
+    let x', x'' = destruct_and x in
+    clear x;
+    let (x'0, x'1) = destruct_and x' in
+    clear x';
+    binder_retype x'1;
+      norm [delta_once [`%op_u8715;`%(^->);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
+      l_to_r [`lem_pack_get_rel];
+    trefl ();
+    let x''' = instantiate x'' (fresh_uvar None) in
+    clear x'';
+    mapply x''';
+    clear x''')
+  = ()
 
-let unroll_elam_io' (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ (forall h. (t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall h (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) =
-  introduce forall h. forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11) with begin
-    unroll_elam_io t1 t2 h fs_e1 e11
-  end
+let unfold_contains_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+  : Lemma
+    (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
+    (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))
+  by (explode ();
+    bump_nth 4;
+    let x = nth_binder (-2) in
+    let x', x'' = destruct_and x in
+    clear x;
+    let (x'0, x'1) = destruct_and x' in
+    clear x';
+    binder_retype x'1;
+      norm [delta_once [`%op_u8715;`%(^->!@);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
+      l_to_r [`lem_pack_get_rel];
+    trefl ();
+    let x''' = instantiate x'' (fresh_uvar None) in
+    clear x'';
+    mapply x''')
+  = ()

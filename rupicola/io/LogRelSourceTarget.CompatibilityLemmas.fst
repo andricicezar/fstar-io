@@ -237,7 +237,7 @@ let helper_equiv_oval_app_steps #e #e' #h #lt #t1 #t2 #fs_e1 #fs_e2 #fs_e #e1 #e
   lem_value_is_irred e2';
   eliminate forall e1' lt1. e_beh e1 e1' h lt1 ==> ((t1 ^-> t2) ∋ (h, fs_e1, e1') /\ lt1 == []) with (ELam e11) lt1;
   lem_value_is_irred (ELam e11);
-  unroll_elam t1 t2 h fs_e1 e11;
+  unfold_contains_arrow t1 t2 h fs_e1 e11;
   assert (t2 ⊇ (h, fs_e, subst_beta e2' e11));
   assert (t2 ∋ (h, fs_e, e'))))
 
@@ -564,7 +564,7 @@ let helper_equiv_oval_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #
       assert (steps (ELam e_lc) (ELam e_lc) h []);
       lem_value_is_irred (ELam e_lc);
       assert ((t1 ^-> t3) ∋ (h, fs_lc_lam, ELam e_lc));
-      unroll_elam t1 t3 h fs_lc_lam e_lc;
+      unfold_contains_arrow t1 t3 h fs_lc_lam e_lc;
       assert (t3 ⊇ (h, fs_e, subst_beta e_c' e_lc));
       assert (t3 ∋ (h, fs_e, e'))
       end
@@ -572,7 +572,7 @@ let helper_equiv_oval_case_steps #e #e' #h #lt #t1 #t2 #t3 #fs_case #fs_lc_lam #
       assert (steps (ELam e_rc) (ELam e_rc) h []);
       lem_value_is_irred (ELam e_rc);
       assert ((t2 ^-> t3) ∋ (h, fs_rc_lam, ELam e_rc));
-      unroll_elam t2 t3 h fs_rc_lam e_rc;
+      unfold_contains_arrow t2 t3 h fs_rc_lam e_rc;
       assert (t3 ⊇ (h, fs_e, subst_beta e_c' e_rc));
       assert (t3 ∋ (h, fs_e, e'))
       end
@@ -710,7 +710,7 @@ let helper_equiv_oprod_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k'
   eliminate forall lt2 m'. e_beh m m' h lt2 ==> (exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m) with lt2 m';
   lem_value_is_irred (ELam k1);
   eliminate forall e' lt. e_beh (ELam k') e' (h++lt2) lt ==> ((a ^->!@ b) ∋ (h++lt2, fs_k', e') /\ lt1 == []) with (ELam k1) lt1;
-  unroll_elam_io a b (h++lt2) fs_k' k1;
+  unfold_contains_io_arrow a b (h++lt2) fs_k' k1;
   eliminate exists (fs_r_m:get_Type a). a ∋ (h++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m
   returns exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r with _. begin
   eliminate exists (fs_r':get_Type b). b ∋ ((h++lt2)++lt'', fs_r', e') /\ fs_beh (fs_k' fs_r_m) (h++lt2) lt'' fs_r'
@@ -770,7 +770,7 @@ let helper_equiv_oprod_app_oval_oval_steps #e #e' #h #lt #a #b #fs_f #fs_x #fs_e
   lem_value_is_irred x';
   eliminate forall f' lt1. e_beh f f' h lt1 ==> ((a ^->!@ b) ∋ (h, fs_f, f') /\ lt1 == []) with (ELam f1) lt1;
   lem_value_is_irred (ELam f1);
-  unroll_elam_io a b h fs_f f1;
+  unfold_contains_io_arrow a b h fs_f f1;
   assert (b ⫄ (h, fs_e, subst_beta x' f1));
   assert (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)))
 
@@ -864,7 +864,7 @@ let helper_equiv_oprod_case_oval_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc 
       assert (steps (ELam inlc) (ELam inlc) h []);
       lem_value_is_irred (ELam inlc);
       assert ((a ^->!@ c) ∋ (h, fs_inlc, ELam inlc));
-      unroll_elam_io a c h fs_inlc inlc;
+      unfold_contains_io_arrow a c h fs_inlc inlc;
       assert (c ⫄ (h, fs_e, subst_beta c' inlc));
       assert (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
       end
@@ -872,7 +872,7 @@ let helper_equiv_oprod_case_oval_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc 
       assert (steps (ELam inrc) (ELam inrc) h []);
       lem_value_is_irred (ELam inrc);
       assert ((b ^->!@ c) ∋ (h, fs_inrc, ELam inrc));
-      unroll_elam_io b c h fs_inrc inrc;
+      unfold_contains_io_arrow b c h fs_inrc inrc;
       assert (c ⫄ (h, fs_e, subst_beta c' inrc));
       assert (exists (fs_r:get_Type c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
       end
