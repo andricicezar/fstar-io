@@ -7,11 +7,16 @@ module IO
     one could produce code as close as the one written usin the
     do notation. **)
 
-open Hist
+include BaseTypes
+include Hist
+open Trace
+open FStar.List.Tot
 
 val io (a:Type u#a) : Type u#a
 
 val io_return (#a:Type) (x:a) : io a
+
+val extract_v_from_io_return (#a:Type) (m:(io a){exists x. m == io_return x}) : (x:a{io_return x == m})
 
 val io_bind
   (#a:Type u#a)
@@ -20,10 +25,71 @@ val io_bind
   (k : a -> io b) :
   io b
 
-val read () : io bool
-val write (x:bool) : io unit
-
-val theta : #a:Type -> io a -> hist a
+val openfile : bool -> io (resexn file_descr)
+val read : file_descr -> io (resexn bool)
+val write : file_descr * bool -> io (resexn unit)
+val close : file_descr -> io (resexn unit)
 
 let return = io_return
 let (let!@) = io_bind
+
+val theta : #a:Type -> io a -> hist a
+
+val theta_monad_morphism_ret (x:'a) :
+  Lemma (theta (return x) == hist_return x)
+
+val theta_monad_morphism_bind (m:io 'a) (k:'a -> io 'b) :
+  Lemma (theta (io_bind m k) `hist_equiv` hist_bind (theta m) (fun x -> theta (k x)))
+
+val io_bind_equivalence #a #b (k k':a -> io b) (m:io a) :
+  Lemma (requires forall x. k x == k' x)
+        (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k'))
+
+let thetaP m = wp2p (theta m)
+
+val wp2p_theta_bind (m:io 'a) (k:'a -> io 'b) :
+  Lemma (forall h.
+         wp2p (hist_bind (theta m) (fun x -> theta (k x))) h (** Kind of ugly. Can we use hist_post_bind? **)
+         `hist_post_equiv`
+         thetaP (io_bind m k) h)
+
+(** Cezar: Trying to connect with hist_post_bind. Does not look like it holds.
+let lem_thetaP_bind #a #b (m:io a) (k:a -> io b) :
+  Lemma (forall h.
+         wp2p (hist_bind (theta m) (fun x -> theta (k x))) h
+        `hist_post_equiv`
+         hist_post_bind (thetaP m h) (fun lt r -> thetaP (k r) (h++lt))) =
+  assert (forall h.
+         wp2p (hist_bind (theta m) (fun x -> theta (k x))) h
+        `hist_post_equiv`
+         hist_post_bind (thetaP m h) (fun lt r -> thetaP (k r) (h++lt))) by (
+         norm [delta_only [`%hist_post_bind; `%thetaP; `%hist_bind; `%wp2p;
+         `%hist_post_bind'; `%hist_post_shift;`%hist_post_equiv;`%hist_post_ord]; iota];
+         let h = forall_intro () in
+         split ();
+         dump "H")
+**)
+val lem_theta_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
+  Lemma (thetaP (openfile arg) h [EvOpen arg res] res)
+
+val lem_theta_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
+  Lemma (thetaP (read arg) h [EvRead arg res] res)
+
+val lem_theta_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
+  Lemma (thetaP (write arg) h [EvWrite arg res] res)
+
+val lem_theta_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
+  Lemma (thetaP (close arg) h [EvClose arg res] res)
+
+let lem_thetaP_return #a (x:a) (h:history) :
+  Lemma (thetaP (return x) h [] x) =
+  theta_monad_morphism_ret x
+
+open FStar.Tactics
+
+let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k:a -> io b) (lt2:local_trace (h++lt1)) (fs_r:b) :
+  Lemma (requires thetaP m h lt1 fs_r_m /\
+                  thetaP (k fs_r_m) (h++lt1) lt2 fs_r)
+        (ensures thetaP (io_bind m k) h (lt1@lt2) fs_r) =
+  assume (wp2p (hist_bind (theta m) (fun x -> theta (k x))) h (lt1@lt2) fs_r);
+  wp2p_theta_bind m k

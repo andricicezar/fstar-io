@@ -12,6 +12,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | Qtt -> EUnit
   | QVar0 -> EVar 0
   | QVarS #g qx -> subst sub_inc (compile qx)
+  | QFd fd -> EFileDescr fd
   | QAppGhost -> EUnit
   | QApp qf qx -> EApp (compile qf) (compile qx)
   | QLambda qbody -> ELam (compile qbody)
@@ -27,8 +28,10 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambdaProd qbody -> ELam (compile_oprod qbody)
 and compile_oprod #g #a (#s:fs_oprod g a) (qs:oprod_quotation g s) : Tot exp (decreases qs) =
   match qs with
-  | QRead -> ERead
-  | QWrite qarg -> EWrite (compile qarg)
+  | QOpenfile qfnm -> EOpen (compile qfnm)
+  | QRead qfd -> ERead (compile qfd)
+  | QWrite qfd qmsg -> EWrite (compile qfd) (compile qmsg)
+  | QClose qfd -> EClose (compile qfd)
   | QReturn qx -> compile qx
   | QBindProd qm qk -> EApp (ELam (compile_oprod qk)) (compile_oprod qm)
   | QAppProd qf qx -> EApp (compile qf) (compile qx)
@@ -42,13 +45,14 @@ let compile_closed  #a #s (qs:a ⊩ s) : closed_exp =
   compile qs
 
 let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
-  : Lemma (ensures (s `equiv_oval a` (compile qs)))
+  : Lemma (ensures (s ≈ (compile qs)))
   = match qs with
   | Qtt -> equiv_unit g
   | QVar0 #g' #_ -> equiv_var0 g' a
   | QVarS #g' #_ #b #x qx ->
     compile_equiv qx;
     equiv_varS #g' #a #b x (compile qx)
+  | QFd fd -> equiv_file_descr g fd
   | QAppGhost -> equiv_unit g
   | QApp #_ #qa #qb #f #x qf qx ->
     compile_equiv qf;
@@ -89,13 +93,22 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     compile_equiv_prod qbody;
     equiv_lam_prod body (compile_oprod qbody)
 and compile_equiv_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
-  : Lemma (ensures (s `equiv_oprod a` (compile_oprod qs))) (decreases qs)
+  : Lemma (ensures (s ≋ (compile_oprod qs))) (decreases qs)
   =
   match qs with
-  | QRead -> equiv_oprod_read g
-  | QWrite #_ #arg qarg ->
-    compile_equiv qarg;
-    equiv_oprod_write arg (compile qarg)
+  | QOpenfile #_ #fnm qfnm ->
+    compile_equiv qfnm;
+    equiv_oprod_openfile_oval fnm (compile qfnm)
+  | QRead #_ #fd qfd ->
+    compile_equiv qfd;
+    equiv_oprod_read_oval fd (compile qfd)
+  | QWrite #_ #fd #msg qfd qmsg ->
+    compile_equiv qfd;
+    compile_equiv qmsg;
+    equiv_oprod_write_oval fd msg (compile qfd) (compile qmsg)
+  | QClose #_ #fd qfd ->
+    compile_equiv qfd;
+    equiv_oprod_close_oval fd (compile qfd)
   | QReturn #_ #_ #x qx ->
     compile_equiv qx;
     equiv_oprod_return x (compile qx)
@@ -106,24 +119,24 @@ and compile_equiv_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
   | QAppProd #_ #_ #_ #f #x qf qx ->
     compile_equiv qf;
     compile_equiv qx;
-    equiv_oprod_app f x (compile qf) (compile qx)
+    equiv_oprod_app_oval_oval f x (compile qf) (compile qx)
   | QIfProd #_ #_ #c qc #t qt #e qe ->
     compile_equiv qc;
     compile_equiv_prod qt;
     compile_equiv_prod qe;
-    equiv_oprod_if c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
+    equiv_oprod_if_oval c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
   | QCaseProd #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
     compile_equiv qcond;
     compile_equiv_prod qinlc;
     compile_equiv_prod qinrc;
-    equiv_oprod_case cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+    equiv_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
 let compile_closed_equiv (#a:qType) (#s:get_Type a) (qs: a ⊩ s)
   : Lemma (ensures (forall h. a ⦂ (h, s, compile_closed qs))) =
   compile_equiv qs;
   lem_equiv_val #a s (compile_closed qs)
 
-let lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:get_Type (a ^-> b))
-  (qs:(a ^-> b) ⊩ s)
+let lemma_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
+  (qs:(a ^->!@ b) ⊩ s)
   : Lemma (ELam? (compile_closed qs))
   = admit ()
