@@ -81,7 +81,19 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
   (requires forall h. qBool ⪾ (h, fs_e, e))
   (ensures  (behS fs_e) `rel_behs` (behT e))
-  = admit ()
+  =
+  //assert (forall lt. (forall e'. e_beh e e' h lt ==> (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)));
+  introduce forall rS lt. (behS fs_e) lt rS ==> (exists rT. rel_bools rS rT /\ (behT e) (lt, rT)) with begin
+    introduce _ ==> _ with _. begin
+      assert ((fs_beh fs_e []) lt rS);
+      assume (forall lt. (forall rS. fs_beh fs_e [] lt rS ==> (exists e'. qBool ∋ ([]++lt, rS, e') /\ e_beh e e' [] lt)))
+    end
+  end;
+  introduce forall rT lt. (behT e) (lt, rT) ==> (exists rS. rel_bools rS rT /\ (behS fs_e) lt rS) with begin
+    introduce _ ==> _ with _. begin
+      ()
+    end
+  end
 
 (** ** Proof of RrHP **)
 
