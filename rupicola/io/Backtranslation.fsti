@@ -12,6 +12,6 @@ val backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t
 
 val lem_backtranslate (#e:value) #t (h:typing empty e t)
   : Lemma (
-    valid_in_val #t (backtranslate h) e /\
-    (forall hist. t ∈ (hist, backtranslate h, e))
+    valid_contains #t (backtranslate h) e /\
+    valid_member_of (backtranslate h) e
   )

@@ -7,7 +7,7 @@ open IO
 open LogRelSourceTarget
 
 
-let equiv_oval_unit g : Lemma (fs_oval_return g qUnit () ≈ EUnit) =
+let equiv_oval_unit g : Lemma (fs_oval_return g qUnit () ⊐ EUnit) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qUnit ⊇ (h, (), gsubst s EUnit) with begin
     introduce _ ==> _ with _. begin
       assert (qUnit ∋ (h, (), EUnit));
@@ -15,7 +15,7 @@ let equiv_oval_unit g : Lemma (fs_oval_return g qUnit () ≈ EUnit) =
     end
   end
 
-let equiv_oval_true g : Lemma (fs_oval_return g qBool true ≈ ETrue) =
+let equiv_oval_true g : Lemma (fs_oval_return g qBool true ⊐ ETrue) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qBool ⊇ (h, true, gsubst s ETrue) with begin
     introduce _ ==> _ with _. begin
       assert (qBool ∋ (h, true, ETrue));
@@ -23,7 +23,7 @@ let equiv_oval_true g : Lemma (fs_oval_return g qBool true ≈ ETrue) =
     end
   end
 
-let equiv_oval_false g : Lemma (fs_oval_return g qBool false ≈ EFalse) =
+let equiv_oval_false g : Lemma (fs_oval_return g qBool false ⊐ EFalse) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qBool ⊇ (h, false, gsubst s EFalse) with begin
     introduce _ ==> _ with _. begin
       assert (qBool ∋ (h, false, EFalse));
@@ -31,7 +31,7 @@ let equiv_oval_false g : Lemma (fs_oval_return g qBool false ≈ EFalse) =
     end
   end
 
-let equiv_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ≈ EFileDescr fd) =
+let equiv_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ⊐ EFileDescr fd) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qFileDescr ⊇ (h, fd, gsubst s (EFileDescr fd)) with begin
     introduce _ ==> _ with _. begin
       assert (qFileDescr ∋ (h, fd, (EFileDescr fd)));
@@ -40,7 +40,7 @@ let equiv_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ≈ EFile
   end
 
 (** Used in backtranslation **)
-let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ≈ EVar x) =
+let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊐ EVar x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> Some?.v (g x) ⊇ (h, index fsG x, gsubst s (EVar x)) with begin
     introduce _ ==> _ with _. begin
       assert (Some?.v (g x) ∋ (h, index fsG x, s x));
@@ -49,7 +49,7 @@ let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ≈ EVar x) =
   end
 
 (** Used in compilation **)
-let equiv_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ≈ EVar 0) =
+let equiv_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ⊐ EVar 0) =
   introduce forall b (s:gsub (extend t g) b) fsG h. fsG `(∽) h` s ==>  t ⊇ (h, hd fsG, gsubst s (EVar 0)) with begin
     introduce _ ==> _ with _. begin
       index_0_hd fsG;
@@ -157,8 +157,8 @@ let rec shift_sub_equiv_sub_inc_rename #t
  (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
-      (requires (s ≈ e))
-      (ensures (fs_oval_varS t s ≈ subst sub_inc e))
+      (requires (s ⊐ e))
+      (ensures (fs_oval_varS t s ⊐ subst sub_inc e))
   =
   lem_fv_in_env_varS g t e;
   introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(∽) h` s' ==> a ⊇ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
@@ -178,8 +178,8 @@ let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
 #pop-options
 
 let equiv_oval_lambda #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (body:exp) : Lemma
-  (requires fs_body ≈ body)
-  (ensures (fs_oval_lambda fs_body ≈ ELam body)) =
+  (requires fs_body ⊐ body)
+  (ensures (fs_oval_lambda fs_body ⊐ ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   let f : fs_oval g (t1 ^-> t2) = fun fsG x -> fs_body (stack fsG x) in
@@ -246,8 +246,8 @@ let equiv_oval_app #g
   (fs_e1:fs_oval g (t1 ^-> t2)) (fs_e2:fs_oval g t1)
   (e1:exp) (e2:exp)
   : Lemma
-    (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-    (ensures fs_oval_app fs_e1 fs_e2 ≈ EApp e1 e2) =
+    (requires fs_e1 ⊐ e1 /\ fs_e2 ⊐ e2)
+    (ensures fs_oval_app fs_e1 fs_e2 ⊐ EApp e1 e2) =
   lem_fv_in_env_app g e1 e2;
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t2 ⊇ (h, (fs_e1 fsG) (fs_e2 fsG), gsubst s (EApp e1 e2)) with begin
     let fs_e1 = fs_e1 fsG in
@@ -294,8 +294,8 @@ let equiv_oval_if #g
   (fs_e1:fs_oval g qBool) (fs_e2:fs_oval g t) (fs_e3:fs_oval g t)
   (e1:exp) (e2:exp) (e3:exp)
   : Lemma
-    (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2 /\ fs_e3 ≈ e3)
-    (ensures fs_oval_if fs_e1 fs_e2 fs_e3 ≈ EIf e1 e2 e3) =
+    (requires fs_e1 ⊐ e1 /\ fs_e2 ⊐ e2 /\ fs_e3 ⊐ e3)
+    (ensures fs_oval_if fs_e1 fs_e2 fs_e3 ⊐ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t ⊇ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
     let fs_e1 = fs_e1 fsG in
@@ -344,8 +344,8 @@ let equiv_oval_pair #g
   (fs_e1:fs_oval g t1) (fs_e2:fs_oval g t2)
   (e1:exp) (e2:exp)
   : Lemma
-    (requires fs_e1 ≈ e1 /\ fs_e2 ≈ e2)
-    (ensures fs_oval_pair fs_e1 fs_e2 ≈ EPair e1 e2) =
+    (requires fs_e1 ⊐ e1 /\ fs_e2 ⊐ e2)
+    (ensures fs_oval_pair fs_e1 fs_e2 ⊐ EPair e1 e2) =
   lem_fv_in_env_pair g e1 e2;
   let t = t1 ^* t2 in
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==>  t ⊇ (h, (fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
@@ -392,13 +392,13 @@ let helper_equiv_oval_pair_fst_steps #e #e' #h #lt #t1 #t2 #fs_e12 #fs_e #e12 (s
   assert (t1 ∋ (h, fs_e, e')))
 
 
-let equiv_oval_pair_fst_app #g
+let equiv_oval_pair_fst #g
   (#t1 #t2:qType)
   (fs_e12:fs_oval g (t1 ^* t2))
   (e12:exp)
   : Lemma
-    (requires fs_e12 ≈ e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures fs_oval_fmap fs_e12 fst ≈ (EFst e12)) =
+    (requires fs_e12 ⊐ e12) (** is this too strict? we only care for the left to be equivalent. **)
+    (ensures fs_oval_fmap fs_e12 fst ⊐ (EFst e12)) =
   lem_fv_in_env_fst g e12;
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==>  t1 ⊇ (h, fst (fs_e12 fsG), gsubst s (EFst e12)) with begin
     let fs_e12 = fs_e12 fsG in
@@ -441,10 +441,10 @@ let helper_equiv_oval_pair_snd_steps #e #e' #h #lt #t1 #t2 #fs_e12 #fs_e #e12 (s
   lem_destruct_steps_epair_snd e1' e2' e' h lt_f;
   assert (t2 ∋ (h, fs_e, e')))
 
-let equiv_oval_pair_snd_app #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp)
+let equiv_oval_pair_snd #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:exp)
   : Lemma
-    (requires fs_e12 ≈ e12)
-    (ensures fs_oval_fmap fs_e12 snd ≈ (ESnd e12)) =
+    (requires fs_e12 ⊐ e12)
+    (ensures fs_oval_fmap fs_e12 snd ⊐ (ESnd e12)) =
   lem_fv_in_env_snd g e12;
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t2 ⊇ (h, snd (fs_e12 fsG), gsubst s (ESnd e12)) with begin
     let fs_e12 = fs_e12 fsG in
@@ -481,8 +481,8 @@ let helper_equiv_oval_inl_steps #ex #ex' #h #lt #t1 #t2 #fs_e #fs_ex #e (sq:squa
   assert ((t1 ^+ t2) ∋ (h, fs_ex, ex')))
 
 let equiv_oval_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
-  (requires fs_e ≈ e)
-  (ensures fs_oval_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ≈ (EInl e)) =
+  (requires fs_e ⊐ e)
+  (ensures fs_oval_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊐ (EInl e)) =
   lem_fv_in_env_inl g e;
   let t = t1 ^+ t2 in
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⊇ (h, Inl (fs_e fsG), gsubst s (EInl e)) with begin
@@ -520,8 +520,8 @@ let helper_equiv_oval_inr_steps #ex #ex' #h #lt #t1 #t2 #fs_e #fs_ex #e (sq:squa
   assert ((t1 ^+ t2) ∋ (h, fs_ex, ex')))
 
 let equiv_oval_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
-  (requires fs_e ≈ e)
-  (ensures fs_oval_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ≈ (EInr e)) =
+  (requires fs_e ⊐ e)
+  (ensures fs_oval_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ⊐ (EInr e)) =
   lem_fv_in_env_inr g e;
   let t = t1 ^+ t2 in
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⊇ (h, Inr (fs_e fsG), gsubst s (EInr e)) with begin
@@ -587,8 +587,8 @@ let equiv_oval_case
   (fs_rc:fs_oval (extend t2 g) t3)
   (e_case e_lc e_rc:exp)
   : Lemma
-    (requires fs_case ≈ e_case /\ fs_lc ≈ e_lc /\ fs_rc ≈ e_rc)
-    (ensures fs_oval_case fs_case fs_lc fs_rc ≈ ECase e_case e_lc e_rc) =
+    (requires fs_case ⊐ e_case /\ fs_lc ⊐ e_lc /\ fs_rc ⊐ e_rc)
+    (ensures fs_oval_case fs_case fs_lc fs_rc ⊐ ECase e_case e_lc e_rc) =
   lem_fv_in_env_case g t1 t2 e_case e_lc e_rc;
   lem_fv_in_env_lam g t1 e_lc;
   lem_fv_in_env_lam g t2 e_rc;
@@ -630,8 +630,8 @@ let equiv_oval_case
 
 let equiv_oval_lambda_oprod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2) (body:exp)
   : Lemma
-    (requires fs_body ≋ body)
-    (ensures fs_oval_lambda_oprod fs_body ≈ (ELam body)) =
+    (requires fs_body ⊒ body)
+    (ensures fs_oval_lambda_oprod fs_body ⊐ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
   let f : fs_oval g (t1 ^->!@ t2) = fun fsG x -> fs_body (stack fsG x) in
@@ -670,8 +670,8 @@ let equiv_oval_lambda_oprod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend
 
 let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
-    (requires fs_x ≈ x)
-    (ensures fs_oprod_return fs_x ≋ x) =
+    (requires fs_x ⊐ x)
+    (ensures fs_oprod_return fs_x ⊒ x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t ⫄ (h, return (fs_x fsG), gsubst s x) with begin
     introduce _ ==> _ with _. begin
       let fs_x = fs_x fsG in
@@ -721,8 +721,8 @@ let helper_equiv_oprod_bind_steps #e #e' #h #lt #a #b #fs_k' #fs_m #fs_e' #m #k'
 
 let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend a g) b) (m k:exp)
   : Lemma
-    (requires fs_m ≋ m /\ fs_k ≋ k)
-    (ensures (fs_oprod_bind fs_m fs_k) ≋ (EApp (ELam k) m)) =
+    (requires fs_m ⊒ m /\ fs_k ⊒ k)
+    (ensures (fs_oprod_bind fs_m fs_k) ⊒ (EApp (ELam k) m)) =
   lem_fv_in_env_lam g a k;
   lem_fv_in_env_app g (ELam k) m;
   equiv_oval_lambda_oprod fs_k k;
@@ -776,8 +776,8 @@ let helper_equiv_oprod_app_oval_oval_steps #e #e' #h #lt #a #b #fs_f #fs_x #fs_e
 
 let equiv_oprod_app_oval_oval #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_x:fs_oval g a) (f x:exp)
   : Lemma
-    (requires fs_f ≈ f /\ fs_x ≈ x)
-    (ensures (fs_oprod_app_oval_oval fs_f fs_x) ≋ (EApp f x)) =
+    (requires fs_f ⊐ f /\ fs_x ⊐ x)
+    (ensures (fs_oprod_app_oval_oval fs_f fs_x) ⊒ (EApp f x)) =
   lem_fv_in_env_app g f x;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⫄ (h, (fs_f fsG) (fs_x fsG), gsubst s (EApp f x)) with begin
     let fs_f = fs_f fsG in
@@ -820,8 +820,8 @@ let helper_equiv_oprod_if_oval_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex
 
 let equiv_oprod_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod g a) (c t e:exp)
   : Lemma
-    (requires fs_c ≈ c /\ fs_t ≋ t /\ fs_e ≋ e)
-    (ensures (fs_oprod_if_oval fs_c fs_t fs_e) ≋ (EIf c t e)) =
+    (requires fs_c ⊐ c /\ fs_t ⊒ t /\ fs_e ⊒ e)
+    (ensures (fs_oprod_if_oval fs_c fs_t fs_e) ⊒ (EIf c t e)) =
   lem_fv_in_env_if g c t e;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> a ⫄ (h, (if (fs_c fsG) then (fs_t fsG) else (fs_e fsG)), gsubst s (EIf c t e)) with begin
     let fs_c = fs_c fsG in
@@ -882,8 +882,8 @@ let helper_equiv_oprod_case_oval_steps #e #e' #h #lt #a #b #c #fs_cond #fs_inlc 
 #push-options "--z3rlimit 10000"
 let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
-    (requires fs_cond ≈ cond /\ fs_inlc ≋ inlc /\ fs_inrc ≋ inrc)
-    (ensures (fs_oprod_case_oval fs_cond fs_inlc fs_inrc) ≋ (ECase cond inlc inrc)) =
+    (requires fs_cond ⊐ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
+    (ensures (fs_oprod_case_oval fs_cond fs_inlc fs_inrc) ⊒ (ECase cond inlc inrc)) =
   lem_fv_in_env_case g a b cond inlc inrc;
   lem_fv_in_env_lam g a inlc;
   lem_fv_in_env_lam g b inrc;
@@ -957,8 +957,8 @@ let helper_equiv_oprod_openfile_oval_steps #e #e' #h #lt #fs_fnm #fs_e #fnm (sq:
 
 let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qBool) (fnm:exp)
   : Lemma
-    (requires fs_fnm ≈ fnm)
-    (ensures fs_oprod_openfile_oval fs_fnm ≋ EOpen fnm)
+    (requires fs_fnm ⊐ fnm)
+    (ensures fs_oprod_openfile_oval fs_fnm ⊒ EOpen fnm)
   =
   lem_fv_in_env_openfile g fnm;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, openfile (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
@@ -1020,8 +1020,8 @@ let helper_equiv_oprod_read_oval_steps #e #e' #h #lt #fs_fd #fs_e #fd (sq:squash
 
 let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
-    (requires fs_fd ≈ fd)
-    (ensures fs_oprod_read_oval fs_fd ≋ ERead fd)
+    (requires fs_fd ⊐ fd)
+    (ensures fs_oprod_read_oval fs_fd ⊒ ERead fd)
   =
   lem_fv_in_env_read g fd;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⫄ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
@@ -1082,8 +1082,8 @@ let helper_equiv_oprod_write_oval_steps #e #e' #h #lt #fs_fd #fs_msg #fs_e #fd #
 
 let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
   : Lemma
-    (requires fs_fd ≈ fd /\ fs_msg ≈ msg)
-    (ensures fs_oprod_write_oval fs_fd fs_msg ≋ EWrite fd msg)
+    (requires fs_fd ⊐ fd /\ fs_msg ⊐ msg)
+    (ensures fs_oprod_write_oval fs_fd fs_msg ⊒ EWrite fd msg)
   =
   lem_fv_in_env_write g fd msg;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, write (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
@@ -1139,8 +1139,8 @@ let helper_equiv_oprod_close_oval_steps #e #e' #h #lt #fs_fd #fs_e #fd (sq:squas
 
 let equiv_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
-    (requires fs_fd ≈ fd)
-    (ensures fs_oprod_close_oval fs_fd ≋ EClose fd)
+    (requires fs_fd ⊐ fd)
+    (ensures fs_oprod_close_oval fs_fd ⊒ EClose fd)
   =
   lem_fv_in_env_close g fd;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, close (fs_fd fsG), gsubst s (EClose fd)) with begin
@@ -1160,15 +1160,15 @@ let equiv_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     end
   end
 
-let equiv_oprod_unit g : Lemma (fs_oprod_return_val g qUnit () ≋ EUnit) =
+let equiv_oprod_unit g : Lemma (fs_oprod_return_val g qUnit () ⊒ EUnit) =
   equiv_oval_unit g;
   equiv_oprod_return (fs_oval_return g qUnit ()) EUnit
 
-let equiv_oprod_true g : Lemma (fs_oprod_return_val g qBool true ≋ ETrue) =
+let equiv_oprod_true g : Lemma (fs_oprod_return_val g qBool true ⊒ ETrue) =
   equiv_oval_true g;
   equiv_oprod_return (fs_oval_return g qBool true) ETrue
 
-let equiv_oprod_false g : Lemma (fs_oprod_return_val g qBool false ≋ EFalse) =
+let equiv_oprod_false g : Lemma (fs_oprod_return_val g qBool false ⊒ EFalse) =
   equiv_oval_false g;
   equiv_oprod_return (fs_oval_return g qBool false) EFalse
 
@@ -1177,15 +1177,15 @@ let equiv_oprod_if #g
   (fs_e1:fs_oprod g qBool) (fs_e2:fs_oprod g t) (fs_e3:fs_oprod g t)
   (e1:exp) (e2:exp) (e3:exp)
   : Lemma
-    (requires fs_e1 ≋ e1 /\ fs_e2 ≋ e2 /\ fs_e3 ≋ e3)
-    (ensures fs_oprod_if fs_e1 fs_e2 fs_e3 ≋ EIf e1 e2 e3) =
+    (requires fs_e1 ⊒ e1 /\ fs_e2 ⊒ e2 /\ fs_e3 ⊒ e3)
+    (ensures fs_oprod_if fs_e1 fs_e2 fs_e3 ⊒ EIf e1 e2 e3) =
   admit ()
 
-let equiv_oprod_file_descr g fd : Lemma (fs_oprod_return_val g qFileDescr fd ≋ EFileDescr fd) =
+let equiv_oprod_file_descr g fd : Lemma (fs_oprod_return_val g qFileDescr fd ⊒ EFileDescr fd) =
   equiv_oval_file_descr g fd;
   equiv_oprod_return (fs_oval_return g qFileDescr fd) (EFileDescr fd)
 
-let equiv_oprod_var g (x:var{Some? (g x)}) : Lemma (fs_oprod_var g x ≋ EVar x) =
+let equiv_oprod_var g (x:var{Some? (g x)}) : Lemma (fs_oprod_var g x ⊒ EVar x) =
   equiv_oval_var g x;
   equiv_oprod_return (fs_oval_var g x) (EVar x)
 
@@ -1206,8 +1206,8 @@ let equiv_oprod_app_steps' #e #e' #h #lt #a #b #fs_x' #fs_f #fs_e' #f #x (sq:squ
 
 let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_oprod g a) (f x:exp)
   : Lemma
-    (requires fs_f ≋ f /\ fs_x ≋ x)
-    (ensures fs_oprod_app fs_f fs_x ≋ EApp f x)
+    (requires fs_f ⊒ f /\ fs_x ⊒ x)
+    (ensures fs_oprod_app fs_f fs_x ⊒ EApp f x)
   =
   let fs_x' = fun (fsG:eval_env g) (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_) in
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⫄ (h, io_bind (fs_f fsG) (fun (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_)), gsubst s (EApp f x)) with begin
@@ -1235,22 +1235,22 @@ let equiv_oprod_lambda #g (#t1:qType) (#t2:qType)
   (fs_body:fs_oprod (extend t1 g) t2)
   (body:exp)
   : Lemma
-    (requires fs_body ≋ body)
-    (ensures fs_oprod_lambda fs_body ≋ (ELam body))
+    (requires fs_body ⊒ body)
+    (ensures fs_oprod_lambda fs_body ⊒ (ELam body))
   =
   equiv_oval_lambda_oprod #g #t1 #t2 fs_body body;
   equiv_oprod_return (fs_oval_lambda_oprod fs_body) (ELam body)
 
 let equiv_oprod_inl #g (t1 t2:qType) (fs_e:fs_oprod g t1) (e:exp)
   : Lemma
-    (requires fs_e ≋ e)
-    (ensures fs_oprod_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ≋ (EInl e))
+    (requires fs_e ⊒ e)
+    (ensures fs_oprod_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊒ (EInl e))
   = admit ()
 
 let equiv_oprod_inr #g (t1 t2:qType) (fs_e:fs_oprod g t2) (e:exp)
   : Lemma
-    (requires fs_e ≋ e)
-    (ensures fs_oprod_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ≋ (EInr e))
+    (requires fs_e ⊒ e)
+    (ensures fs_oprod_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ⊒ (EInr e))
   =
   admit ()
 
@@ -1259,8 +1259,8 @@ let equiv_oprod_pair #g
   (fs_e1:fs_oprod g t1) (fs_e2:fs_oprod g t2)
   (e1:exp) (e2:exp)
   : Lemma
-    (requires fs_e1 ≋ e1 /\ fs_e2 ≋ e2)
-    (ensures fs_oprod_pair fs_e1 fs_e2 ≋ EPair e1 e2) =
+    (requires fs_e1 ⊒ e1 /\ fs_e2 ⊒ e2)
+    (ensures fs_oprod_pair fs_e1 fs_e2 ⊒ EPair e1 e2) =
   admit ()
 
 let equiv_oprod_fst #g
@@ -1268,14 +1268,14 @@ let equiv_oprod_fst #g
   (fs_e12:fs_oprod g (t1 ^* t2))
   (e12:exp)
   : Lemma
-    (requires fs_e12 ≋ e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures fs_oprod_fmap fs_e12 fst ≋ (EFst e12))
+    (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
+    (ensures fs_oprod_fmap fs_e12 fst ⊒ (EFst e12))
   = admit ()
 
 let equiv_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
   : Lemma
-    (requires fs_e12 ≋ e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures fs_oprod_fmap fs_e12 snd ≋ (ESnd e12)) =
+    (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
+    (ensures fs_oprod_fmap fs_e12 snd ⊒ (ESnd e12)) =
   admit ()
 
 let equiv_oprod_case #g (#a #b #c:qType)
@@ -1284,30 +1284,30 @@ let equiv_oprod_case #g (#a #b #c:qType)
   (fs_inrc:fs_oprod (extend b g) c)
   (cond inlc inrc:exp)
   : Lemma
-    (requires fs_cond ≋ cond /\ fs_inlc ≋ inlc /\ fs_inrc ≋ inrc)
-    (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ≋ (ECase cond inlc inrc)) =
+    (requires fs_cond ⊒ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
+    (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ⊒ (ECase cond inlc inrc)) =
   admit ()
 
 let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qBool) (fnm:exp)
   : Lemma
-    (requires fs_fnm ≋ fnm)
-    (ensures fs_oprod_openfile fs_fnm ≋ EOpen fnm)
+    (requires fs_fnm ⊒ fnm)
+    (ensures fs_oprod_openfile fs_fnm ⊒ EOpen fnm)
   = admit ()
 
 let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
-    (requires fs_fd ≋ fd)
-    (ensures fs_oprod_read fs_fd ≋ ERead fd)
+    (requires fs_fd ⊒ fd)
+    (ensures fs_oprod_read fs_fd ⊒ ERead fd)
   = admit ()
 
 let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qBool) (fd msg:exp)
   : Lemma
-    (requires fs_fd ≋ fd /\ fs_msg ≋ msg)
-    (ensures fs_oprod_write fs_fd fs_msg ≋ EWrite fd msg)
+    (requires fs_fd ⊒ fd /\ fs_msg ⊒ msg)
+    (ensures fs_oprod_write fs_fd fs_msg ⊒ EWrite fd msg)
   = admit ()
 
 let equiv_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
-    (requires fs_fd ≋ fd)
-    (ensures fs_oprod_close fs_fd ≋ EClose fd)
+    (requires fs_fd ⊒ fd)
+    (ensures fs_oprod_close fs_fd ⊒ EClose fd)
   = admit ()

@@ -3,11 +3,11 @@ module Backtranslation
 open STLC
 open QTyp
 open QExp
+open IO
 open LogRelSourceTarget
 open LogRelTargetSource
-open IO
-
 module C1 = LogRelSourceTarget.CompatibilityLemmas
+module C2 = LogRelTargetSource.CompatibilityLemmas
 
 // the environment is non-standard, more fancy
 // also over qType instead of syntactic types (typ)
@@ -190,7 +190,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
     let h' : typing g _ qFileDescr = h' in
     fs_oprod_close (backtranslate_exp h')
 
-let rec lem_backtranslate_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ≋ e) =
+let rec lem_backtranslate_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
   | EUnit -> C1.equiv_oprod_unit g
   | ETrue -> C1.equiv_oprod_true g
@@ -269,7 +269,7 @@ let lem_bt_ctx i ct : Lemma (
   lem_closed_is_no_fv e;
   assert (fv_in_env empty e);
   lem_backtranslate tyj;
-  assert (cs ≈ e);
+  assert (cs ⊐ e);
   lem_equiv_val #t (cs empty_eval) e;
   lem_values_in_exp_rel_are_in_val_rel t (cs empty_eval) e **)
 

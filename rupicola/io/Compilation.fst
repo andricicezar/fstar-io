@@ -5,8 +5,11 @@ open FStar.Tactics
 open STLC
 open QTyp
 open QExp
+
 open LogRelSourceTarget
+open LogRelTargetSource
 module C1 = LogRelSourceTarget.CompatibilityLemmas
+module C2 = LogRelTargetSource.CompatibilityLemmas
 
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
@@ -40,7 +43,7 @@ and compile_oprod #g #a (#s:fs_oprod g a) (qs:oprod_quotation g s) : Tot exp (de
   | QCaseProd qcond qinlc qinrc -> ECase (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
 let rec lem_compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
-  : Lemma (ensures (s ≈ (compile qs))) (decreases qs)
+  : Lemma (ensures (s ⊐ (compile qs))) (decreases qs)
   = match qs with
   | Qtt -> C1.equiv_oval_unit g
   | QVar0 #g' #_ -> C1.equiv_oval_var0 g' a
@@ -69,10 +72,10 @@ let rec lem_compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     C1.equiv_oval_pair s1 s2 (compile q1) (compile q2)
   | QFst #_ #_ #_ #p qp ->
     lem_compile_equiv qp;
-    C1.equiv_oval_pair_fst_app p (compile qp)
+    C1.equiv_oval_pair_fst p (compile qp)
   | QSnd #_ #_ #_ #p qp ->
     lem_compile_equiv qp;
-    C1.equiv_oval_pair_snd_app p (compile qp)
+    C1.equiv_oval_pair_snd p (compile qp)
   | QInl #_ #_ #t2 #p qp ->
     lem_compile_equiv qp;
     C1.equiv_oval_inl t2 p (compile qp)
@@ -88,7 +91,7 @@ let rec lem_compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     lem_compile_equiv_prod qbody;
     C1.equiv_oval_lambda_oprod body (compile_oprod qbody)
 and lem_compile_equiv_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
-  : Lemma (ensures (s ≋ (compile_oprod qs))) (decreases qs)
+  : Lemma (ensures (s ⊒ (compile_oprod qs))) (decreases qs)
   =
   match qs with
   | QOpenfile #_ #fnm qfnm ->
@@ -134,8 +137,8 @@ let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
   assume (is_closed (compile qs));
   assume (is_value (compile qs));
-  assume (valid_in_val s (compile qs));
-  assume (forall hist. a ∈ (hist, s, compile qs))
+  assume (valid_contains s (compile qs));
+  assume (valid_member_of s (compile qs))
 
 (**
 val compile_prog_equiv #i (ps:progS i)
