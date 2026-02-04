@@ -330,7 +330,7 @@ let get_resexn_fd (x:resexn file_descr) : closed_exp =
 noeq
 type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Type =
   | AppRight :
-    e1:closed_exp ->
+    e1:closed_exp{ELam? e1 /\ is_closed e1} ->
     #e2:closed_exp ->
     #e2':closed_exp ->
     #h:history ->
@@ -339,7 +339,7 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     step (EApp e1 e2) (EApp e1 e2') h oev
   | AppLeft :
     #e1:closed_exp ->
-    e2:closed_exp{is_value e2} -> (** e2 being a value makes the semantics to be call by value. TODO: funny one cannot use [value] directly **)
+    e2:closed_exp -> (** e2 being a value makes the semantics to be call by value. TODO: funny one cannot use [value] directly **)
     #e1':closed_exp ->
     #h:history ->
     #oev:option (event_h h) ->
@@ -763,34 +763,34 @@ let lem_step_preserve_indexed_sem_expr_shape (e e':closed_exp) (h:history) (oev:
 
 // DESTRUCT LEMMAS
 
-let can_step_eapp_when_reduced (e1:closed_exp) (e2:closed_exp{is_value e2}) (h:history) (t1 t2:typ) : Lemma
-  (requires indexed_sem_expr_shape (TArr t1 t2) e1 h)
+let can_step_eapp_when_reduced (e1:closed_exp{ELam? e1 /\ is_closed e1}) (e2:closed_exp) (h:history) : Lemma
+  (requires indexed_safe e2 h)
   (ensures (exists e' oev. step (EApp e1 e2) e' h oev))
   =
   (**
      We case analyze if e1 can step or if e2 can step,
        and for each case, we build a step accordingly **)
 
-  introduce indexed_irred e1 h ==> (exists e' oev. step (EApp e1 e2) e' h oev) with _. begin
-    assert (steps e1 e1 h []);
+  introduce indexed_irred e2 h ==> (exists e' oev. step (EApp e1 e2) e' h oev) with _. begin
+    assert (steps e2 e2 h []);
     let ELam e11 = e1 in
     let st : step (EApp (ELam e11) e2) (subst_beta e2 e11) h None = Beta e11 e2 h in
     ()
   end;
 
-  introduce ~(indexed_irred e1 h) ==> (exists e' oev. step (EApp e1 e2) e' h oev) with _. begin
-    assert (exists e1' oev1. step e1 e1' h oev1);
-    eliminate exists e1' oev1. step e1 e1' h oev1 returns exists e' oev. step (EApp e1 e2) e' h oev with st. begin
-      bind_squash st (fun st -> return_squash (AppLeft e2 st))
+  introduce ~(indexed_irred e2 h) ==> (exists e' oev. step (EApp e1 e2) e' h oev) with _. begin
+    assert (exists e2' oev2. step e2 e2' h oev2);
+    eliminate exists e2' oev2. step e2 e2' h oev2 returns exists e' oev. step (EApp e1 e2) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (AppRight e1 st))
     end
   end
 
-let lem_irred_eapp_implies_irred_e2 (e1 e2:closed_exp) (h:history) :
+let lem_irred_eapp_implies_irred_e1 (e1 e2:closed_exp) (h:history) :
   Lemma (requires indexed_irred (EApp e1 e2) h)
-        (ensures indexed_irred e2 h) =
-  introduce forall (e2':closed_exp) (oev:option (event_h h)). step e2 e2' h oev ==> False with begin
+        (ensures indexed_irred e1 h) =
+  introduce forall (e1':closed_exp) (oev:option (event_h h)). step e1 e1' h oev ==> False with begin
     introduce _ ==> _ with st. begin
-      bind_squash st (fun st -> return_squash (AppRight e1 #e2 #e2' #h #oev st))
+      bind_squash st (fun st -> return_squash (AppLeft #e1 e2 #e1' #h #oev st))
     end
   end
 
@@ -818,11 +818,11 @@ let lem_irred_eapp_implies_irred_e2 (e1 e2:closed_exp) (h:history) :
 
 let rec destruct_steps_eapp_e1
   (e1:closed_exp)
-  (e2':closed_exp{is_value e2'})
+  (e2:closed_exp)
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EApp e1 e2') e' h lt) 
+  (st:steps (EApp e1 e2) e' h lt)
   (t1 t2:typ) :
   Pure (exp * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt) /\
@@ -830,43 +830,41 @@ let rec destruct_steps_eapp_e1
     (ensures fun (e11, (| lt1, lt' |)) ->
       is_closed (ELam e11) /\
       steps e1 (ELam e11) h lt1 /\
-      steps (EApp e1 e2') (subst_beta e2' e11) h lt1 /\
-      steps (subst_beta e2' e11) e' (h++lt1) lt' /\
+      steps (EApp e1 e2) (EApp (ELam e11) e2) h lt1 /\
+      steps (EApp (ELam e11) e2) e' (h++lt1) lt' /\
       (lt == (lt1 @ lt')) /\
       (indexed_irred e1 h ==> (lt1 == [] /\ e1 == ELam e11)))
     (decreases st) =
     match st with
     | SRefl (EApp e1 e2') h -> begin
-      can_step_eapp_when_reduced e1 e2' h t1 t2;
-      false_elim ()
+      lem_irred_eapp_implies_irred_e1 e1 e2 h;
+      assert (steps e1 e1 h []);
+      let ELam e11 = e1 in
+      (e11, (| [], lt |))
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_eapp step_eapp_steps -> begin
-      let (EApp e1 e2') = e in
+      let (EApp e1 e2) = e in
       match step_eapp with
-      | AppLeft #e1 e2' #e1' #h #oev1 step_e1 -> begin
-        let (EApp e1' e2') = f2 in
+      | AppLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
+        let (EApp e1' e2) = f2 in
         lem_step_implies_steps e1 e1' h oev1;
-        lem_step_implies_steps (EApp e1 e2') (EApp e1' e2') h oev1;
+        lem_step_implies_steps (EApp e1 e2) (EApp e1' e2) h oev1;
         let lt1 : local_trace h = as_lt oev1 in
-        let s2 : steps (EApp e1' e2') e' (h++lt1) lt23 = step_eapp_steps in
+        let s2 : steps (EApp e1' e2) e' (h++lt1) lt23 = step_eapp_steps in
         lem_step_preserve_indexed_sem_expr_shape e1 e1' h oev1 (TArr t1 t2);
-        let (e11, (| lt1', lt' |)) = destruct_steps_eapp_e1 e1' e2' e' (h++lt1) lt23 s2 t1 t2 in
+        let (e11, (| lt1', lt' |)) = destruct_steps_eapp_e1 e1' e2 e' (h++lt1) lt23 s2 t1 t2 in
         lem_steps_transitive e1 e1' (ELam e11) h lt1 lt1';
-        lem_steps_transitive (EApp e1 e2') (EApp e1' e2') (subst_beta e2' e11) h lt1 lt1';
+        lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (EApp (ELam e11) e2) h lt1 lt1';
         (e11, (| (lt1 @ lt1'), lt' |))
         end
-      | AppRight _ _ -> begin
-        lem_value_is_irred e2';
-        (e1, (| [], lt |))
-        end
-      | Beta e11 e2' h -> begin
-        lem_step_implies_steps (EApp e1 e2') (subst_beta e2' e11) h None;
+      | _ -> begin
+        let ELam e11 = e1 in
         (e11, (| [], lt |))
         end
       end
 
 let rec destruct_steps_eapp_e2
-  (e1:closed_exp)
+  (e1:closed_exp{ELam? e1 /\ is_closed e1})
   (e2:closed_exp)
   (e':closed_exp)
   (h:history)
@@ -884,7 +882,7 @@ let rec destruct_steps_eapp_e2
     (decreases st) =
     match st with
     | SRefl (EApp e1 e2) h -> begin
-      lem_irred_eapp_implies_irred_e2 e1 e2 h;
+      can_step_eapp_when_reduced e1 e2 h;
       assert (steps e2 e2 h []);
       (e2, (| [], lt |))
       end
@@ -903,7 +901,14 @@ let rec destruct_steps_eapp_e2
         lem_steps_transitive (EApp e1 e2) (EApp e1 e2') (EApp e1 e2'') h lt2 lt2';
         (e2'', (| (lt2 @ lt2'), lt' |))
         end
-      | _ -> (e2, (| [], lt |))
+      | AppLeft _ _ -> begin
+        lem_value_is_irred e1;
+        (e2, (| [], lt |))
+        end
+      | Beta e11 e2' h -> begin
+        lem_step_implies_steps (EApp e1 e2') (subst_beta e2' e11) h None;
+        (e2, (| [], lt |))
+        end
       end
 
 let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
