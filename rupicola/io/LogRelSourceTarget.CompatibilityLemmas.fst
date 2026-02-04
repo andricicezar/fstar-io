@@ -1189,11 +1189,11 @@ let equiv_oprod_var g (x:var{Some? (g x)}) : Lemma (fs_oprod_var g x ≋ EVar x)
   equiv_oval_var g x;
   equiv_oprod_return (fs_oval_var g x) (EVar x)
 
-let equiv_oprod_app_steps_pre' (e e':closed_exp) (h:history) (lt:local_trace h) (a b:qType) (fs_x':(get_Type (a ^->!@ b)) -> io (get_Type b)) (fs_f:io (get_Type (a ^->!@ b))) (fs_e':io (get_Type b)) (f x:exp) =
+let equiv_oprod_app_steps_pre' (e e':closed_exp) (h:history) (lt:local_trace h) (a b:qType) (fs_x':(fs_val (a ^->!@ b)) -> fs_prod b) (fs_f:fs_prod (a ^->!@ b)) (fs_e':fs_prod b) (f x:exp) =
   (fs_e' == io_bind fs_f fs_x') /\
   (e == EApp f x) /\
   (e_beh e e' h lt) /\
-  ((a ^->!@ b) ⪾ (h, fs_f, f))
+  ((a ^->!@ b) ⫄ (h, fs_f, f))
 
 let equiv_oprod_app_steps' #e #e' #h #lt #a #b #fs_x' #fs_f #fs_e' #f #x (sq:squash (equiv_oprod_app_steps_pre' e e' h lt a b fs_x' fs_f fs_e' f x)) : squash (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) =
   lem_forall_values_are_values_prod (a ^->!@ b) h;
@@ -1210,7 +1210,7 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_opro
     (ensures fs_oprod_app fs_f fs_x ≋ EApp f x)
   =
   let fs_x' = fun (fsG:eval_env g) (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_) in
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⪾ (h, io_bind (fs_f fsG) (fun (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_)), gsubst s (EApp f x)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⫄ (h, io_bind (fs_f fsG) (fun (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_)), gsubst s (EApp f x)) with begin
     let fs_f = fs_f fsG in
     let fs_x' = fs_x' fsG in
     io_bind_equivalence (fun (x_:get_Type (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':get_Type (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':get_Type a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_)) fs_x' fs_f;
@@ -1219,7 +1219,7 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_opro
     let e = EApp (gsubst s f) (gsubst s x) in
     assert (gsubst s (EApp f x) == e);
     let EApp f x = e in
-    introduce fsG `(∽) h` s ==> b ⪾ (h, fs_e, e) with _. begin
+    introduce fsG `(∽) h` s ==> b ⫄ (h, fs_e, e) with _. begin
       introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:get_Type b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e' h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
@@ -1230,7 +1230,7 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_opro
       end
     end
   end
-  
+
 let equiv_oprod_lambda #g (#t1:qType) (#t2:qType)
   (fs_body:fs_oprod (extend t1 g) t2)
   (body:exp)
