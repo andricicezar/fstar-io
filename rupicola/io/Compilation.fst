@@ -145,7 +145,7 @@ let compile_prog_equiv #i pS =
     let (| ps, qps |) = pS in
     let pt : progT (comp_int i) = compile_prog pS in
     compile_closed_equiv qps;
-    assert (forall h. (t ^->!@ qBool) ⦂ (h, ps, pt));
+    assert (forall h. (t ^->!@ qBool) ⊇ (h, ps, pt));
     lemma_compile_closed_arrow_is_elam qps;
     assert (ELam? pt /\ is_closed pt);
     lem_value_is_irred pt;

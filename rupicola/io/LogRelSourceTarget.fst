@@ -24,7 +24,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
     match e with
     | ELam e' ->
       (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
-        pack qt2 ⦂ (h++lt_v, fs_f fs_v, subst_beta v e'))
+        pack qt2 ⊇ (h++lt_v, fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
   | QArrIO #t1 #t2 qt1 qt2 -> begin
@@ -32,7 +32,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
     match e with
     | ELam e' -> // instead quantify over h'' - extensions of the history
       (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==>
-        pack qt2 ⪾ (h++lt_v, fs_f fs_v, subst_beta v e'))
+        pack qt2 ⫄ (h++lt_v, fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
   | QPair #t1 #t2 qt1 qt2 -> begin
@@ -49,13 +49,13 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
     | _ -> False
   end
                            (** vvvvvvvvvv defined over values **)
-and (⦂) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+and (⊇) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall (e':closed_exp) lt.
     e_beh e e' h lt ==>
     (t ∋ (h, fs_e, e') /\ lt == [])
                            (** vvvvvvvvvv defined over producers **)
-and (⪾) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+and (⫄) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall lt.
     (forall e'. e_beh e e' h lt ==>
@@ -65,10 +65,10 @@ let valid_in_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
   forall (h:history). t ∋ (h, fs_e, e)
 
 let valid_in_expr_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
-  forall (h:history). t ⦂ (h, fs_e, e)
+  forall (h:history). t ⊇ (h, fs_e, e)
 
 let valid_in_expr_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
-  forall (h:history). t ⪾ (h, fs_e, e)
+  forall (h:history). t ⫄ (h, fs_e, e)
 
 let lem_values_in_exp_rel_are_in_val_rel t (fs_e:fs_val t) (e:value) :
   Lemma (requires valid_in_expr_val fs_e e)
@@ -76,11 +76,11 @@ let lem_values_in_exp_rel_are_in_val_rel t (fs_e:fs_val t) (e:value) :
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
-        (ensures  t ⦂ (h, fs_e, e)) = admit ()
+        (ensures  t ⊇ (h, fs_e, e)) = admit ()
 
 let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
-        (ensures  t ⪾ (h, io_return fs_e, e)) = admit ()
+        (ensures  t ⫄ (h, io_return fs_e, e)) = admit ()
 
 let rec lem_values_are_values t h fs_e (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_e, e))
@@ -137,18 +137,18 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     let ELam e' = e in
-    introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⦂ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
+    introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⊇ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
       introduce pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> _ with _. begin
-        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⦂ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
+        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⊇ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
       end
     end
     end
   | QArrIO #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> io t2 = fs_v in
     let ELam e' = e in
-    introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⪾ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
+    introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⫄ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
       introduce pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> _ with _. begin
-        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⪾ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
+        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⫄ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
       end
     end
     end
@@ -183,12 +183,12 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
 let equiv_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⦂ (h, fs_e fsG, gsubst s e)
+    fsG `(∽) h` s ==> t ⊇ (h, fs_e fsG, gsubst s e)
 
 let equiv_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⪾ (h, fs_e fsG, gsubst s e)
+    fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e)
 
 let safety_val (#t:qType) (fs_e:fs_val t) (e:value) : Lemma
   (requires (valid_in_val fs_e e))
@@ -203,9 +203,9 @@ let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
     introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
       introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
         eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
-          fsG `(∽) h` s ==> t ⪾ (h, fs_e, gsubst s e)
+          fsG `(∽) h` s ==> t ⫄ (h, fs_e, gsubst s e)
         with  true gsub_empty empty_eval h;
-        assert (t ⪾ (h, fs_e, e));
+        assert (t ⫄ (h, fs_e, e));
         eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r
         returns is_value e' with _. begin
           assert (t ∋ (h++lt, fs_r, e'));
@@ -225,7 +225,7 @@ let (≋) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
 
 (**
 let lem_equiv_val' (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
-  Lemma (requires forall h. t ⦂ (h, fs_e, e))
+  Lemma (requires forall h. t ⊇ (h, fs_e, e))
         (ensures equiv_val fs_e e) =
   admit ()
 **)
@@ -242,9 +242,9 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
   introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
     introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
       eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
-          fsG `(∽) h` s ==> t ⪾ (h, fs_e, gsubst s e)
+          fsG `(∽) h` s ==> t ⫄ (h, fs_e, gsubst s e)
       with  true gsub_empty empty_eval h;
-      assert (t ⪾ (h, fs_e, e));
+      assert (t ⫄ (h, fs_e, e));
       eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
       returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
       lem_values_are_values t (h++lt) fs_r e'
@@ -254,15 +254,15 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
 
 let unroll_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
   : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⦂ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
 
 let unroll_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
   : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
+          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
 
 let unroll_elam_io' (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
   : Lemma (requires (is_closed (ELam e11)) /\ (forall h. (t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall h (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) =
-  introduce forall h. forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⪾ (h++lt_v, fs_e1 fs_v, subst_beta v e11) with begin
+          (ensures (forall h (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) =
+  introduce forall h. forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11) with begin
     unroll_elam_io t1 t2 h fs_e1 e11
   end

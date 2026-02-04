@@ -120,21 +120,21 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     assert (ELam? pt /\ is_closed pt);
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
-    eliminate True /\ True returns (forall h. qBool ⪾ (h, ws, (subst_beta ct (ELam?.b pt)))) with _ _. begin
+    eliminate True /\ True returns (forall h. qBool ⫄ (h, ws, (subst_beta ct (ELam?.b pt)))) with _ _. begin
         lem_compile_closed_valid qps;
         assert (forall h. (t ^->!@ qBool) ∋ (h, ps, pt)); (** unfold ∋ **)
         unroll_elam_io' t qBool ps (ELam?.b pt);
         assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∋ (h++lt_v, fs_v, v) ==>
-            qBool ⪾ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
+            qBool ⫄ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
         (** eliminate v fs_v with ct cs **)
         assert (forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==>
-            qBool ⪾ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
-        introduce forall h. t ∋ (h, cs, ct) ==> qBool ⪾ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
-        eliminate forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==> qBool ⪾ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
+            qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
+        introduce forall h. t ∋ (h, cs, ct) ==> qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
+        eliminate forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==> qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
         with h []
         end;
         lem_backtranslate (dsnd cT);
-        assert (forall h. qBool ⪾ (h, ps cs, subst_beta ct (ELam?.b pt)))
+        assert (forall h. qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)))
     end;
     eliminate True /\ True returns (forall h. qBool ⫃ (h, ws, (subst_beta ct (ELam?.b pt)))) with _ _. begin
         lem_compile_closed_valid qps;
