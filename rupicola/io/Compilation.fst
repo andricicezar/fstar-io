@@ -5,7 +5,6 @@ open FStar.Tactics
 open STLC
 open QTyp
 open QExp
-
 open LogRelSourceTarget
 open LogRelTargetSource
 module C1 = LogRelSourceTarget.CompatibilityLemmas
