@@ -65,7 +65,7 @@ let valid_subset_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
 let valid_subset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
   forall (h:history). t ⫃ (h, fs_e, e)
 
-let lem_values_in_exp_rel_are_in_val_rel t (fs_e:fs_val t) (e:value) :
+let lem_values_valid_subset_val_valid_member_of t (fs_e:fs_val t) (e:value) :
   Lemma (requires valid_subset_val fs_e e)
         (ensures  valid_member_of fs_e e) = admit () (** TODO **)
 
@@ -116,6 +116,36 @@ let (≍) (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∈ (h, index fsG x, s x)
   (**  TODO      ^^^ not like in Amal's work. she uses an exp relation - but this is what she meant, because index fsG x is necessarily a value **)
+
+(** Cross Language Binary Logical Relation between F* and STLC expressions
+     for __open terms__. **)
+let subset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(≍) h` s ==> t ⊆ (h, fs_e fsG, gsubst s e)
+
+let (⊏) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
+  subset_oval #g t fs_v e
+
+let subset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(≍) h` s ==> t ⫃ (h, fs_e fsG, gsubst s e)
+
+let (⊑) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
+  subset_oprod #g t fs_v e
+
+let lem_value_subset_valid_member_of t (fs_e:fs_val t) (e:value) :
+  Lemma (requires (fun _ -> fs_e) `(⊏) #empty #t` e)
+        (ensures  valid_member_of #t fs_e e) =
+  introduce forall h. t ∈ (h, fs_e, e) with begin
+    assert ((fun _ -> fs_e) `(⊏) #empty #t` e);
+    eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+      fsG `(≍) h` s ==> t ⊆ (h, fs_e, gsubst s e) with false gsub_empty empty_eval h;
+    assert (t ⊆ (h, fs_e, e));
+    lem_values_valid_subset_val_valid_member_of t fs_e e;
+    assert (t ∈ (h, fs_e, e))
+  end
 
 let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∈ (h, fs_v, e))
@@ -169,24 +199,6 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
       end
     end
   end
-
-(** Cross Language Binary Logical Relation between F* and STLC expressions
-     for __open terms__. **)
-let subset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(≍) h` s ==> t ⊆ (h, fs_e fsG, gsubst s e)
-
-let (⊏) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
-  subset_oval #g t fs_v e
-
-let subset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(≍) h` s ==> t ⫃ (h, fs_e fsG, gsubst s e)
-
-let (⊑) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
-  subset_oprod #g t fs_v e
 
 let safety_val (#t:qType) (fs_e:fs_val t) (e:value) : Lemma
   (requires valid_member_of fs_e e)

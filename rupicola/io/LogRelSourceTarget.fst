@@ -69,7 +69,7 @@ let valid_superset_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
 let valid_superset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
   forall (h:history). t ⫄ (h, fs_e, e)
 
-let lem_values_in_exp_rel_are_in_val_rel t (fs_e:fs_val t) (e:value) :
+let lem_values_valid_superset_val_valid_contains t (fs_e:fs_val t) (e:value) :
   Lemma (requires valid_superset_val fs_e e)
         (ensures  valid_contains fs_e e) = admit () (** TODO **)
 
@@ -117,12 +117,40 @@ let lem_forall_values_are_values_prod t h :
   end
 
 (** F* Evaluation Environment : variable -> value **)
-
-
 let (∽) (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (h, index fsG x, s x)
   (**  TODO      ^^^ not like in Amal's work. she uses an exp relation - but this is what she meant, because index fsG x is necessarily a value **)
+
+(** Cross Language Binary Logical Relation between F* and STLC expressions
+     for __open terms__. **)
+let superset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> t ⊇ (h, fs_e fsG, gsubst s e)
+
+let (⊐) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
+  superset_oval #g t fs_v e
+
+let superset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e)
+
+let (⊒) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
+  superset_oprod #g t fs_v e
+
+let lem_value_superset_valid_contains t (fs_e:fs_val t) (e:value) :
+  Lemma (requires (fun _ -> fs_e) `(⊐) #empty #t` e)
+        (ensures  valid_contains #t fs_e e) =
+  introduce forall h. t ∋ (h, fs_e, e) with begin
+    assert ((fun _ -> fs_e) `(⊐) #empty #t` e);
+    eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+      fsG `(∽) h` s ==> t ⊇ (h, fs_e, gsubst s e) with false gsub_empty empty_eval h;
+    assert (t ⊇ (h, fs_e, e));
+    lem_values_valid_superset_val_valid_contains t fs_e e;
+    assert (t ∋ (h, fs_e, e))
+  end
 
 let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
@@ -177,18 +205,6 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
     end
   end
 
-(** Cross Language Binary Logical Relation between F* and STLC expressions
-     for __open terms__. **)
-let superset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⊇ (h, fs_e fsG, gsubst s e)
-
-let superset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e)
-
 let safety_val (#t:qType) (fs_e:fs_val t) (e:value) : Lemma
   (requires (valid_contains fs_e e))
   (ensures safe e) =
@@ -211,42 +227,6 @@ let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
           lem_values_are_values t (h++lt) fs_r e';
           assert (is_value e')
         end
-      end
-    end
-  end
-
-
-let (⊐) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
-  superset_oval #g t fs_v e
-
-let (⊒) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
-  superset_oprod #g t fs_v e
-
-(**
-let lem_equiv_val' (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
-  Lemma (requires forall h. t ⊇ (h, fs_e, e))
-        (ensures equiv_val fs_e e) =
-  admit ()
-**)
-
-(** Unused
-let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
-  Lemma (requires equiv_val fs_e e)
-        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
-**)
-(** Unused **)
-let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
-  Lemma (requires valid_superset_prod fs_e e)
-        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
-  introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
-    introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
-          fsG `(∽) h` s ==> t ⫄ (h, fs_e, gsubst s e)
-      with  true gsub_empty empty_eval h;
-      assert (t ⫄ (h, fs_e, e));
-      eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
-      returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      lem_values_are_values t (h++lt) fs_r e'
       end
     end
   end
@@ -293,3 +273,25 @@ let unfold_contains_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t
     clear x'';
     mapply x''')
   = ()
+
+(** Unused
+let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
+  Lemma (requires equiv_val fs_e e)
+        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
+**)
+(** Unused **)
+let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
+  Lemma (requires valid_superset_prod fs_e e)
+        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
+  introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
+    introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+      eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+          fsG `(∽) h` s ==> t ⫄ (h, fs_e, gsubst s e)
+      with  true gsub_empty empty_eval h;
+      assert (t ⫄ (h, fs_e, e));
+      eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
+      returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
+      lem_values_are_values t (h++lt) fs_r e'
+      end
+    end
+  end
