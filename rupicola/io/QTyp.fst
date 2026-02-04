@@ -177,6 +177,7 @@ let gsub_comp #b #b' (g:sub b) (f:sub b') : sub (b && b') =
   fun (y:var) -> subst g (f y)
 
 #push-options "--split_queries always --z3rlimit 32"
+(* this should be true for arbitrary b b' *)
 let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
