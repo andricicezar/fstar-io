@@ -203,11 +203,11 @@ val wp_lambda' :
   fs_oexp (extend a g) b wpCtx ->
   fsG:fs_env g ->
   pure_wp (x:a -> PURE b (wpFun x))
-let wp_lambda' #g (#a:Type u#0) (#b:Type u#b) wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x)) = admit ()
-
-//  lem_wp_lambda'_monotonic wpCtx wpFun body fsG;
-//  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#b);
-// wp_lambda0' #g #a #b wpCtx wpFun body fsG
+let wp_lambda' #g (#a:Type u#0) (#b:Type u#b) wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x)) =
+  lem_wp_lambda'_monotonic wpCtx wpFun body fsG;
+  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#b);
+  admit ();
+  wp_lambda0' #g #a #b wpCtx wpFun body fsG
 
 
 unfold
@@ -220,7 +220,6 @@ val helper_lambda' :
   body : fs_oexp (extend a g) b wpCtx ->
   fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body)
 let helper_lambda' wpCtx wpFun body fsG =
-  admit ();
   fun x -> body (fs_stack fsG x)
 
 
