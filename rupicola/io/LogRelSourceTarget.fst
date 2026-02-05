@@ -1,6 +1,5 @@
 module LogRelSourceTarget
 
-open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
@@ -61,18 +60,18 @@ and (⫄) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases 
     (forall e'. e_beh e e' h lt ==>
       (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r))
 
-let valid_in_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
+let valid_contains (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
   forall (h:history). t ∋ (h, fs_e, e)
 
-let valid_in_expr_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
+let valid_superset_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
   forall (h:history). t ⊇ (h, fs_e, e)
 
-let valid_in_expr_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
+let valid_superset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
   forall (h:history). t ⫄ (h, fs_e, e)
 
-let lem_values_in_exp_rel_are_in_val_rel t (fs_e:fs_val t) (e:value) :
-  Lemma (requires valid_in_expr_val fs_e e)
-        (ensures  valid_in_val fs_e e) = admit () (** TODO **)
+let lem_values_valid_superset_val_valid_contains t (fs_e:fs_val t) (e:value) :
+  Lemma (requires valid_superset_val fs_e e)
+        (ensures  valid_contains fs_e e) = admit () (** TODO **)
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
@@ -118,12 +117,40 @@ let lem_forall_values_are_values_prod t h :
   end
 
 (** F* Evaluation Environment : variable -> value **)
-
-
 let (∽) (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) : Type0 =
   forall (x:var). Some? (g x) ==>
     Some?.v (g x) ∋ (h, index fsG x, s x)
   (**  TODO      ^^^ not like in Amal's work. she uses an exp relation - but this is what she meant, because index fsG x is necessarily a value **)
+
+(** Cross Language Binary Logical Relation between F* and STLC expressions
+     for __open terms__. **)
+let superset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> t ⊇ (h, fs_e fsG, gsubst s e)
+
+let (⊐) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
+  superset_oval #g t fs_v e
+
+let superset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
+  fv_in_env g e /\
+  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e)
+
+let (⊒) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
+  superset_oprod #g t fs_v e
+
+let lem_value_superset_valid_contains t (fs_e:fs_val t) (e:value) :
+  Lemma (requires (fun _ -> fs_e) `(⊐) #empty #t` e)
+        (ensures  valid_contains #t fs_e e) =
+  introduce forall h. t ∋ (h, fs_e, e) with begin
+    assert ((fun _ -> fs_e) `(⊐) #empty #t` e);
+    eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
+      fsG `(∽) h` s ==> t ⊇ (h, fs_e, gsubst s e) with false gsub_empty empty_eval h;
+    assert (t ⊇ (h, fs_e, e));
+    lem_values_valid_superset_val_valid_contains t fs_e e;
+    assert (t ∋ (h, fs_e, e))
+  end
 
 let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
@@ -178,25 +205,13 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
     end
   end
 
-(** Cross Language Binary Logical Relation between F* and STLC expressions
-     for __open terms__. **)
-let equiv_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⊇ (h, fs_e fsG, gsubst s e)
-
-let equiv_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
-  fv_in_env g e /\
-  forall b (s:gsub g b) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e)
-
 let safety_val (#t:qType) (fs_e:fs_val t) (e:value) : Lemma
-  (requires (valid_in_val fs_e e))
-  (ensures forall h'. indexed_safe e h') =
+  (requires (valid_contains fs_e e))
+  (ensures safe e) =
   admit ()
 
 let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
-  (requires (valid_in_expr_prod fs_e e))
+  (requires (valid_superset_prod fs_e e))
   (ensures safe e) =
   introduce forall (e':closed_exp) (h:history) (lt:local_trace h).
     steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
@@ -216,19 +231,48 @@ let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
     end
   end
 
+open FStar.Tactics.V1
 
-let (≈) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
-  equiv_oval #g t fs_v e
+let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
+  : Lemma
+    (requires is_closed (ELam e11) /\ (t1 ^-> t2) ∋ (h, fs_e1, ELam e11))
+    (ensures forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))
+  by (explode ();
+    bump_nth 4;
+    let x = nth_binder (-2) in
+    let x', x'' = destruct_and x in
+    clear x;
+    let (x'0, x'1) = destruct_and x' in
+    clear x';
+    binder_retype x'1;
+      norm [delta_once [`%op_u8715;`%(^->);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
+      l_to_r [`lem_pack_get_rel];
+    trefl ();
+    let x''' = instantiate x'' (fresh_uvar None) in
+    clear x'';
+    mapply x''';
+    clear x''')
+  = ()
 
-let (≋) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
-  equiv_oprod #g t fs_v e
-
-(**
-let lem_equiv_val' (#t:qType) (fs_e:fs_val t) (e:closed_exp) :
-  Lemma (requires forall h. t ⊇ (h, fs_e, e))
-        (ensures equiv_val fs_e e) =
-  admit ()
-**)
+let unfold_contains_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+  : Lemma
+    (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
+    (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))
+  by (explode ();
+    bump_nth 4;
+    let x = nth_binder (-2) in
+    let x', x'' = destruct_and x in
+    clear x;
+    let (x'0, x'1) = destruct_and x' in
+    clear x';
+    binder_retype x'1;
+      norm [delta_once [`%op_u8715;`%(^->!@);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
+      l_to_r [`lem_pack_get_rel];
+    trefl ();
+    let x''' = instantiate x'' (fresh_uvar None) in
+    clear x'';
+    mapply x''')
+  = ()
 
 (** Unused
 let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
@@ -237,7 +281,7 @@ let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
 **)
 (** Unused **)
 let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
-  Lemma (requires valid_in_expr_prod fs_e e)
+  Lemma (requires valid_superset_prod fs_e e)
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
   introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
     introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
@@ -250,19 +294,4 @@ let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
       lem_values_are_values t (h++lt) fs_r e'
       end
     end
-  end
-
-let unroll_elam (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
-
-let unroll_elam_io (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) = admit ()
-
-let unroll_elam_io' (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
-  : Lemma (requires (is_closed (ELam e11)) /\ (forall h. (t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
-          (ensures (forall h (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11))) =
-  introduce forall h. forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11) with begin
-    unroll_elam_io t1 t2 h fs_e1 e11
   end

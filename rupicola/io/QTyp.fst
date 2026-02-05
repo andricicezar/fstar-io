@@ -65,6 +65,8 @@ let pack (q:type_quotation 's) : qType = (| _, q |)
 
 let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
+let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
+
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
 let qFileDescr : qType = (| _, QFileDescriptor |)

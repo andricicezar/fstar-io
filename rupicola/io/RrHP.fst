@@ -80,7 +80,7 @@ let rel_behs (bs:behS_t) (bt:behT_t) =
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires (valid_in_expr_prod fs_e e) /\ (forall h. qBool ⫃ (h, fs_e, e)))
+  (requires valid_superset_prod fs_e e /\ valid_subset_prod fs_e e)
   (ensures  (behS fs_e) `rel_behs` (behT e))
   =
   introduce forall rS lt. (behS fs_e) lt rS ==> (exists rT. rel_bools rS rT /\ (behT e) (lt, rT)) with begin
@@ -120,37 +120,39 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     assert (ELam? pt /\ is_closed pt);
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
-    eliminate True /\ True returns (forall h. qBool ⫄ (h, ws, (subst_beta ct (ELam?.b pt)))) with _ _. begin
-        lem_compile_closed_valid qps;
-        assert (forall h. (t ^->!@ qBool) ∋ (h, ps, pt)); (** unfold ∋ **)
-        unroll_elam_io' t qBool ps (ELam?.b pt);
-        assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∋ (h++lt_v, fs_v, v) ==>
-            qBool ⫄ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
+    eliminate True /\ True
+    returns valid_superset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+      lem_compile_closed_valid qps;
+      assert (valid_contains ps pt);
+      unroll_elam_io' t qBool ps (ELam?.b pt); (** unfold ∋ **)
+      assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∋ (h++lt_v, fs_v, v) ==>
+                qBool ⫄ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
         (** eliminate v fs_v with ct cs **)
-        assert (forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==>
-            qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
-        introduce forall h. t ∋ (h, cs, ct) ==> qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
+      assert (forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==>
+                qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
+      introduce forall h. t ∋ (h, cs, ct) ==> qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
         eliminate forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==> qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
         with h []
-        end;
-        lem_backtranslate (dsnd cT);
-        assert (forall h. qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)))
+      end;
+      lem_backtranslate (dsnd cT);
+      assert (valid_superset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
-    eliminate True /\ True returns (forall h. qBool ⫃ (h, ws, (subst_beta ct (ELam?.b pt)))) with _ _. begin
-        lem_compile_closed_valid qps;
-        assert (forall h. (t ^->!@ qBool) ∈ (h, ps, pt)); (** unfold ∈ **)
-        unroll_elam_io123' t qBool ps (ELam?.b pt);
-        assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∈ (h++lt_v, fs_v, v) ==>
-            qBool ⫃ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
-        (** eliminate v fs_v with ct cs **)
-        assert (forall h (lt_v:local_trace h). t ∈ (h++lt_v, cs, ct) ==>
-            qBool ⫃ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
-        introduce forall h. t ∈ (h, cs, ct) ==> qBool ⫃ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
+    eliminate True /\ True
+    returns valid_subset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+      lem_compile_closed_valid qps;
+      assert (valid_member_of ps pt);
+      unroll_elam_io123' t qBool ps (ELam?.b pt); (** unfold ∈ **)
+      assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∈ (h++lt_v, fs_v, v) ==>
+                qBool ⫃ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
+      (** eliminate v fs_v with ct cs **)
+      assert (forall h (lt_v:local_trace h). t ∈ (h++lt_v, cs, ct) ==>
+                qBool ⫃ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
+      introduce forall h. t ∈ (h, cs, ct) ==> qBool ⫃ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
         eliminate forall h (lt_v:local_trace h). t ∈ (h++lt_v, cs, ct) ==> qBool ⫃ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
         with h []
-        end;
-        lem_backtranslate (dsnd cT);
-        assert (forall h. qBool ⫃ (h, ps cs, subst_beta ct (ELam?.b pt)))
+      end;
+      lem_backtranslate (dsnd cT);
+      assert (valid_subset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
     lem_rel_beh ws (subst_beta ct (ELam?.b pt));
     assume (behT (EApp pt ct) == behT wt); (** simple to prove **)
