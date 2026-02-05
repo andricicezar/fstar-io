@@ -864,49 +864,50 @@ let rec destruct_steps_eapp_e1
       end
 
 let rec destruct_steps_eapp_e2
-  (e1:closed_exp{ELam? e1 /\ is_closed e1})
+  (e11:exp{is_closed (ELam e11)})
   (e2:closed_exp)
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EApp e1 e2) e' h lt) :
+  (st:steps (EApp (ELam e11) e2) e' h lt) :
   Pure (value * (lt2:local_trace h & local_trace (h++lt2)))
     (requires indexed_irred e' (h++lt) /\
       indexed_safe e2 h)
     (ensures fun (e2', (| lt2, lt' |)) ->
       steps e2 e2' h lt2 /\
-      steps (EApp e1 e2) (EApp e1 e2') h lt2 /\
-      steps (EApp e1 e2') e' (h++lt2) lt' /\
+      //steps (EApp (ELam e11) e2) (EApp (ELam e11) e2') h lt2 /\
+      steps (EApp (ELam e11) e2) (subst_beta e2' e11) h lt2 /\
+      steps (subst_beta e2' e11) e' (h++lt2) lt' /\
       (lt == (lt2 @ lt')) /\
       (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2')))
     (decreases st) =
     match st with
-    | SRefl (EApp e1 e2) h -> begin
-      can_step_eapp_when_reduced e1 e2 h;
+    | SRefl (EApp (ELam e11) e2) h -> begin
+      can_step_eapp_when_reduced (ELam e11) e2 h;
       assert (steps e2 e2 h []);
       (e2, (| [], lt |))
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_eapp step_eapp_steps -> begin
-      let (EApp e1 e2) = e in
+      let (EApp (ELam e11) e2) = e in
       match step_eapp with
-      | AppRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
-        let (EApp e1 e2') = f2 in
+      | AppRight (ELam e11) #e2 #e2' #h #oev2 step_e2 -> begin
+        let (EApp (ELam e11) e2') = f2 in
         lem_step_implies_steps e2 e2' h oev2;
-        lem_step_implies_steps (EApp e1 e2) (EApp e1 e2') h oev2;
+        lem_step_implies_steps (EApp (ELam e11) e2) (EApp (ELam e11) e2') h oev2;
         let lt2 : local_trace h = as_lt oev2 in
-        let s2 : steps (EApp e1 e2') e' (h++lt2) lt23 = step_eapp_steps in
+        let s2 : steps (EApp (ELam e11) e2') e' (h++lt2) lt23 = step_eapp_steps in
         lem_step_preserve_indexed_safe e2 e2' h oev2;
-        let (e2'', (| lt2', lt' |)) = destruct_steps_eapp_e2 e1 e2' e' (h++lt2) lt23 s2 in
+        let (e2'', (| lt2', lt' |)) = destruct_steps_eapp_e2 e11 e2' e' (h++lt2) lt23 s2 in
         lem_steps_transitive e2 e2' e2'' h lt2 lt2';
-        lem_steps_transitive (EApp e1 e2) (EApp e1 e2') (EApp e1 e2'') h lt2 lt2';
+        lem_steps_transitive (EApp (ELam e11) e2) (EApp (ELam e11) e2') (subst_beta e2'' e11) h lt2 lt2';
         (e2'', (| (lt2 @ lt2'), lt' |))
         end
       | AppLeft _ _ -> begin
-        lem_value_is_irred e1;
+        lem_value_is_irred (ELam e11);
         (e2, (| [], lt |))
         end
       | Beta e11 e2' h -> begin
-        lem_step_implies_steps (EApp e1 e2') (subst_beta e2' e11) h None;
+        lem_step_implies_steps (EApp (ELam e11) e2') (subst_beta e2' e11) h None;
         (e2, (| [], lt |))
         end
       end
