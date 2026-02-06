@@ -422,6 +422,13 @@ let fs_oval_case cond inlc inrc fsG =
 type fs_prod (t:qType) =
    io (get_Type t)
 
+val fs_prod_bind : #a:qType ->
+                    #b:qType ->
+                    m:fs_prod a ->
+                    k:(fs_val a -> fs_prod b) ->
+                    fs_prod b
+let fs_prod_bind m k = io_bind m k
+
 unfold
 val fs_prod_if_val :
                 #a  : qType ->
@@ -451,7 +458,7 @@ val fs_oprod_bind : #g:typ_env ->
                     k:fs_oprod (extend a g) b ->
                     fs_oprod g b
 let fs_oprod_bind m k fsG =
-  io_bind (m fsG) (fun x -> k (stack fsG x))
+  fs_prod_bind (m fsG) (fun x -> k (stack fsG x))
 
 (** a standard version of the bind **)
 unfold
@@ -677,6 +684,12 @@ open Trace
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
+
+let lem_fs_beh_bind #a #b (m:fs_prod a) (h:history) (lt1:local_trace h) (fs_r_m:fs_val a) (k:fs_val a -> fs_prod b) (lt2:local_trace (h++lt1)) (fs_r:fs_val b) :
+  Lemma (requires fs_beh m h lt1 fs_r_m /\
+                  fs_beh (k fs_r_m) (h++lt1) lt2 fs_r)
+        (ensures fs_beh (fs_prod_bind m k) h (lt1@lt2) fs_r) =
+  lem_thetaP_bind m h lt1 fs_r_m k lt2 fs_r
 
 unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Type0
 let e_beh e e' h lt =

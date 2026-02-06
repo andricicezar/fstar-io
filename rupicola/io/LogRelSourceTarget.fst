@@ -152,6 +152,14 @@ let lem_value_superset_valid_contains t (fs_e:fs_val t) (e:value) :
     assert (t ∋ (h, fs_e, e))
   end
 
+let lem_closed_superset_valid_prod g (fsG:eval_env g) #t #b (s:gsub g b) (fs_e:fs_oprod g t) (e:exp) :
+  Lemma (requires fs_e ⊒ e /\ (forall h. fsG `(∽) h` s))
+        (ensures  valid_superset_prod #t (fs_e fsG) (gsubst s e)) =
+  introduce forall h. t ⫄ (h, fs_e fsG, gsubst s e) with begin
+    eliminate forall b (s:gsub g b) (fsG:eval_env g) (h:history).
+      fsG `(∽) h` s ==> t ⫄ (h, fs_e fsG, gsubst s e) with b s fsG h
+  end
+
 let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_val t) (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_v, e))
         (ensures forall lt. t ∋ (h++lt, fs_v, e))
