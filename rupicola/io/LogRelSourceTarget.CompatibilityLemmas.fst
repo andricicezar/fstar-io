@@ -800,23 +800,18 @@ let equiv_oprod_app_oval_oval #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_
     end
   end
 
-let helper_equiv_oprod_if_oval_steps_pre (ex ex':closed_exp) (h:history) (lt:local_trace h) (a:qType) (fs_c:bool) (fs_t fs_e fs_ex:fs_prod a) (c t e:closed_exp) =
-  (fs_ex == (if fs_c then fs_t else fs_e)) /\
-  (ex == (EIf c t e)) /\
-  (e_beh ex ex' h lt) /\
-  (qBool ⊇ (h, fs_c, c)) /\
-  (a ⫄ (h, fs_t, t)) /\
-  (a ⫄ (h, fs_e, e))
-
-let helper_equiv_oprod_if_oval_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex #c #t #e (sq:squash (helper_equiv_oprod_if_oval_steps_pre ex ex' h lt a fs_c fs_t fs_e fs_ex c t e)) : squash (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) =
+let helper_equiv_oprod_if_oval_steps (ex':closed_exp) (#h:history) (lt:local_trace h) (#a:qType) (fs_c:fs_val qBool) (fs_t:fs_prod a) (fs_e:fs_prod a) (c t e:closed_exp) :
+  Lemma
+    (requires (e_beh (EIf c t e) ex' h lt /\ qBool ⊇ (h, fs_c, c) /\ a ⫄ (h, fs_t, t) /\ a ⫄ (h, fs_e, e)))
+    (ensures (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r)) =
   assert (forall c' lt'. e_beh c c' h lt' ==> (ETrue? c' \/ EFalse? c'));
-  FStar.Squash.bind_squash #(steps ex ex' h lt) () (fun sts ->
+  FStar.Squash.bind_squash #(steps (EIf c t e) ex' h lt) #(exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r) () (fun sts ->
   let (c', (| lt1, (lt2, lt3) |)) = destruct_steps_eif c t e ex' h lt sts in
   assert (qBool ∋ (h, fs_c, c') /\ lt1 == []);
-  introduce ETrue? c' ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
+  introduce ETrue? c' ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r) with _. begin
     assert (exists (fs_r:fs_val a). a ∋ (h++lt2, fs_r, ex') /\ fs_beh fs_t h lt2 fs_r)
   end;
-  introduce EFalse? c' ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
+  introduce EFalse? c' ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r) with _. begin
     assert (exists (fs_r:fs_val a). a ∋ (h++lt3, fs_r, ex') /\ fs_beh fs_e h lt3 fs_r)
   end)
 
@@ -836,9 +831,7 @@ let equiv_oprod_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod
     introduce fsG `(∽) h` s ==> a ⫄ (h, fs_ex, ex) with _. begin
       introduce forall lt (ex':closed_exp). e_beh ex ex' h lt ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with begin
         introduce e_beh ex ex' h lt ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
-          let steps_pre : squash (helper_equiv_oprod_if_oval_steps_pre ex ex' h lt a fs_c fs_t fs_e fs_ex c t e) = () in
-          FStar.Squash.map_squash #_ #(squash (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r)) steps_pre (fun steps_pre ->
-            helper_equiv_oprod_if_oval_steps #ex #ex' #h #lt #a #fs_c #fs_t #fs_e #fs_ex #c #t #e steps_pre)
+          helper_equiv_oprod_if_oval_steps ex' lt fs_c fs_t fs_e c t e
         end
       end
     end

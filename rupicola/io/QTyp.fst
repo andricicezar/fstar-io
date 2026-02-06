@@ -422,6 +422,16 @@ let fs_oval_case cond inlc inrc fsG =
 type fs_prod (t:qType) =
    io (get_Type t)
 
+unfold
+val fs_prod_if_val :
+                #a  : qType ->
+                c   : fs_val qBool ->
+                t   : fs_prod a ->
+                e   : fs_prod a ->
+                fs_prod a
+let fs_prod_if_val c t e =
+  if c then t else e
+
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
 
@@ -505,12 +515,12 @@ let fs_oprod_app_oval_oval f x fsG =
 unfold
 val fs_oprod_if_val : #g :typ_env ->
                 #a  : qType ->
+                c   : fs_val qBool ->
                 t   : fs_oprod g a ->
                 e   : fs_oprod g a ->
-                c   : fs_val qBool ->
                 fs_oprod g a
-let fs_oprod_if_val t e c fsG =
-  if c then t fsG else e fsG
+let fs_oprod_if_val c t e fsG =
+  fs_prod_if_val c (t fsG) (e fsG)
 
 unfold
 val fs_oprod_if_oval : #g :typ_env ->
@@ -520,7 +530,7 @@ val fs_oprod_if_oval : #g :typ_env ->
                 e   : fs_oprod g a ->
                 fs_oprod g a
 let fs_oprod_if_oval c t e fsG =
-  fs_oprod_if_val t e (c fsG) fsG
+  fs_oprod_if_val (c fsG) t e fsG
 
 val fs_oprod_if : #g :typ_env ->
                   #a : qType ->
@@ -529,7 +539,7 @@ val fs_oprod_if : #g :typ_env ->
                   e  : fs_oprod g a ->
                   fs_oprod g a
 let fs_oprod_if c t e =
-  fs_oprod_bind' c (fs_oprod_if_val t e)
+  fs_oprod_bind' c (fun c' -> fs_oprod_if_val c' t e)
 
 unfold
 val fs_oprod_case_val : #g :typ_env ->
