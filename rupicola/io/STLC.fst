@@ -1590,16 +1590,16 @@ let destruct_steps_eread
   (h:history)
   (lt:local_trace h)
   (st:steps (ERead fd) e' h lt) :
-  Pure (value * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1) * local_trace (h++lt1))))
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
-    (ensures fun (e_r, (| lt1, (lt2, lt3, lt4) |)) ->
+    (ensures fun (e_r, (| lt1, lt2 |)) ->
        steps (ERead fd) e_r h lt1 /\
        (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl true)])) /\
-         (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
-       (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == (lt1 @ lt4) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
-       (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3) \/ lt == (lt1 @ lt4)))
+         (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
+       (EInr? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
+       (lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
     | SRefl (ERead fd) h -> begin
@@ -1616,7 +1616,7 @@ let destruct_steps_eread
         let s2 : steps (EInl ETrue) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value ETrue (h++lt') TBool;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl ETrue e' (h++lt') lt23 s2 in
-        (f2, (| lt', (lt12 @ lt_f, [], []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SReadReturn h fd (Inl false) -> begin
         let EInl EFalse = f2 in
@@ -1625,7 +1625,7 @@ let destruct_steps_eread
         let s2 : steps (EInl EFalse) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value EFalse (h++lt') TBool;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl EFalse e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], lt12 @ lt_f, []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SReadReturn h fd (Inr ()) -> begin
         let EInr EUnit = f2 in
@@ -1634,7 +1634,7 @@ let destruct_steps_eread
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], [], lt12 @ lt_f) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       end
 #pop-options
@@ -1883,16 +1883,16 @@ let destruct_steps_eopen
   (h:history)
   (lt:local_trace h)
   (st:steps (EOpen str') e' h lt) :
-  Pure (value * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
-    (ensures fun (e_r, (| lt1, (lt2, lt3) |)) ->
+    (ensures fun (e_r, (| lt1, lt2 |)) ->
        steps (EOpen str') e_r h lt1 /\
        (e_r == EInl (get_efd (fresh_fd h)) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inl (fresh_fd h))]) /\
        (EInr? e_r ==>
-         steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
-       (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3)))
+         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
+       lt == (lt1 @ lt2))
     (decreases st) =
     match st with
     | SRefl (EOpen str') h -> begin
@@ -1909,7 +1909,7 @@ let destruct_steps_eopen
         let s2 : steps (EInl (get_efd (fresh_fd h))) e' (h++lt') lt23 = step_eopen_steps in
         lem_value_preserves_value (get_efd (fresh_fd h)) (h++lt') TFileDescr;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl (get_efd (fresh_fd h)) e' (h++lt') lt23 s2 in
-        (f2, (| lt', (lt12 @ lt_f, []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SOpenReturnFail str' h -> begin
         let EInr EUnit = f2 in
@@ -1918,7 +1918,7 @@ let destruct_steps_eopen
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eopen_steps in
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], lt12 @ lt_f) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       end
 #pop-options

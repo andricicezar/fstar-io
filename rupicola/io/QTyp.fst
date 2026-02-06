@@ -320,7 +320,9 @@ let index_0_hd fsG = ()
 type fs_val (t:qType) =
   get_Type t
 
-unfold
+let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
+  if c then e else t
+
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
@@ -438,6 +440,27 @@ val fs_prod_if_val :
                 fs_prod a
 let fs_prod_if_val c t e =
   if c then t else e
+
+val fs_prod_openfile_val :
+        fnm:fs_val qBool ->
+        fs_prod (qResexn qFileDescr)
+let fs_prod_openfile_val fnm = openfile fnm
+
+val fs_prod_read_val :
+        fd:fs_val qFileDescr ->
+        fs_prod (qResexn qBool)
+let fs_prod_read_val fd = read fd
+
+val fs_prod_write_val :
+        fd:fs_val qFileDescr ->
+        msg:fs_val qBool ->
+        fs_prod (qResexn qUnit)
+let fs_prod_write_val fd msg = write (fd, msg)
+
+val fs_prod_close_val :
+        fd:fs_val qFileDescr ->
+        fs_prod (qResexn qUnit)
+let fs_prod_close_val fd = close fd
 
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
