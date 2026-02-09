@@ -761,6 +761,80 @@ let lem_step_preserve_indexed_sem_expr_shape (e e':closed_exp) (h:history) (oev:
     end
   end
 
+// CONSTRUCT LEMMAS
+let rec construct_steps_eapp_e1
+  (e1:closed_exp)
+  (e11:exp{is_closed (ELam e11)})
+  (e2:closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (st1:steps e1 (ELam e11) h lt1) :
+  Lemma
+    (requires indexed_irred (ELam e11) (h++lt1))
+    (ensures steps (EApp e1 e2) (EApp (ELam e11) e2) h lt1)
+    (decreases st1) =
+  match st1 with
+  | SRefl e1 h -> ()
+  | STrans #e1 #e1' #_ #h #oev1 #lt23 step_e1 step_e1_steps -> begin
+    let _ : step (EApp e1 e2) (EApp e1' e2) h oev1 = AppLeft e2 step_e1 in
+    lem_step_implies_steps (EApp e1 e2) (EApp e1' e2) h oev1;
+    let lt' : local_trace h = as_lt oev1 in
+    let s2 : steps e1' (ELam e11) (h++lt') lt23 = step_e1_steps in
+    construct_steps_eapp_e1 e1' e11 e2 (h++lt') lt23 s2;
+    lem_steps_transitive (EApp e1 e2) (EApp e1' e2) (EApp (ELam e11) e2) h lt' lt23
+    end
+
+let rec construct_steps_eapp_e2
+  (e11:exp{is_closed (ELam e11)})
+  (e2:closed_exp)
+  (e2':closed_exp{is_value e2'})
+  (h:history)
+  (lt2:local_trace h)
+  (st2:steps e2 e2' h lt2) :
+  Lemma
+    (requires indexed_irred e2' (h++lt2))
+    (ensures steps (EApp (ELam e11) e2) (EApp (ELam e11) e2') h lt2)
+    (decreases st2) =
+  match st2 with
+  | SRefl e2 h -> ()
+  | STrans #e2 #e2_ #e2' #h #oev2 #lt23 step_e2 step_e2_steps -> begin
+    let _ : step (EApp (ELam e11) e2) (EApp (ELam e11) e2_) h oev2 = AppRight (ELam e11) step_e2 in
+    lem_step_implies_steps (EApp (ELam e11) e2) (EApp (ELam e11) e2_) h oev2;
+    let lt' : local_trace h = as_lt oev2 in
+    let s2 : steps e2_ e2' (h++lt') lt23 = step_e2_steps in
+    construct_steps_eapp_e2 e11 e2_ e2' (h++lt') lt23 s2;
+    lem_steps_transitive (EApp (ELam e11) e2) (EApp (ELam e11) e2_) (EApp (ELam e11) e2') h lt' lt23
+    end
+
+let construct_steps_eapp
+  (e1:closed_exp)
+  (e11:exp{is_closed (ELam e11)})
+  (e2:closed_exp)
+  (e2':closed_exp{is_value e2'})
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (lt3:local_trace ((h++lt1)++lt2))
+  (sts1:steps e1 (ELam e11) h lt1)
+  (sts2:steps e2 e2' (h++lt1) lt2)
+  (sts3:steps (subst_beta e2' e11) e' ((h++lt1)++lt2) lt3) :
+  Lemma (requires indexed_irred (ELam e11) (h++lt1) /\
+                  indexed_irred e2' ((h++lt1)++lt2) /\
+                  indexed_irred e' (((h++lt1)++lt2)++lt3))
+        (ensures steps (EApp e1 e2) e' h lt /\ lt == (lt1@(lt2@lt3))) =
+  construct_steps_eapp_e1 e1 e11 e2 h lt1 sts1;
+  construct_steps_eapp_e2 e11 e2 e2' (h++lt1) lt2 sts2;
+  lem_steps_transitive (EApp e1 e2) (EApp (ELam e11) e2) (EApp (ELam e11) e2') h lt1 lt2;
+  let _ : step (EApp (ELam e11) e2') (subst_beta e2' e11) ((h++lt1)++lt2) None = Beta e11 e2' ((h++lt1)++lt2) in
+  lem_step_implies_steps (EApp (ELam e11) e2') (subst_beta e2' e11) ((h++lt1)++lt2) None;
+  lem_steps_transitive (EApp (ELam e11) e2') (subst_beta e2' e11) e' ((h++lt1)++lt2) [] lt3;
+  lem_steps_transitive (EApp e1 e2) (EApp (ELam e11) e2') e' h (lt1@lt2) lt3;
+  associative_history lt1 lt2 lt3;
+  assert (steps (EApp e1 e2) e' h (lt1@(lt2@lt3)));
+  assume (lt == (lt1@(lt2@lt3)))
+
 // DESTRUCT LEMMAS
 
 let can_step_eapp_when_reduced (e1:closed_exp{ELam? e1 /\ is_closed e1}) (e2:closed_exp) (h:history) : Lemma
