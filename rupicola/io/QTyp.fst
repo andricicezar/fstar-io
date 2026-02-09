@@ -320,7 +320,9 @@ let index_0_hd fsG = ()
 type fs_val (t:qType) =
   get_Type t
 
-unfold
+let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
+  if c then e else t
+
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
@@ -422,6 +424,44 @@ let fs_oval_case cond inlc inrc fsG =
 type fs_prod (t:qType) =
    io (get_Type t)
 
+val fs_prod_bind : #a:qType ->
+                    #b:qType ->
+                    m:fs_prod a ->
+                    k:(fs_val a -> fs_prod b) ->
+                    fs_prod b
+let fs_prod_bind m k = io_bind m k
+
+unfold
+val fs_prod_if_val :
+                #a  : qType ->
+                c   : fs_val qBool ->
+                t   : fs_prod a ->
+                e   : fs_prod a ->
+                fs_prod a
+let fs_prod_if_val c t e =
+  if c then t else e
+
+val fs_prod_openfile_val :
+        fnm:fs_val qBool ->
+        fs_prod (qResexn qFileDescr)
+let fs_prod_openfile_val fnm = openfile fnm
+
+val fs_prod_read_val :
+        fd:fs_val qFileDescr ->
+        fs_prod (qResexn qBool)
+let fs_prod_read_val fd = read fd
+
+val fs_prod_write_val :
+        fd:fs_val qFileDescr ->
+        msg:fs_val qBool ->
+        fs_prod (qResexn qUnit)
+let fs_prod_write_val fd msg = write (fd, msg)
+
+val fs_prod_close_val :
+        fd:fs_val qFileDescr ->
+        fs_prod (qResexn qUnit)
+let fs_prod_close_val fd = close fd
+
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
 
@@ -441,7 +481,7 @@ val fs_oprod_bind : #g:typ_env ->
                     k:fs_oprod (extend a g) b ->
                     fs_oprod g b
 let fs_oprod_bind m k fsG =
-  io_bind (m fsG) (fun x -> k (stack fsG x))
+  fs_prod_bind (m fsG) (fun x -> k (stack fsG x))
 
 (** a standard version of the bind **)
 unfold
@@ -505,12 +545,12 @@ let fs_oprod_app_oval_oval f x fsG =
 unfold
 val fs_oprod_if_val : #g :typ_env ->
                 #a  : qType ->
+                c   : fs_val qBool ->
                 t   : fs_oprod g a ->
                 e   : fs_oprod g a ->
-                c   : fs_val qBool ->
                 fs_oprod g a
-let fs_oprod_if_val t e c fsG =
-  if c then t fsG else e fsG
+let fs_oprod_if_val c t e fsG =
+  fs_prod_if_val c (t fsG) (e fsG)
 
 unfold
 val fs_oprod_if_oval : #g :typ_env ->
@@ -520,7 +560,7 @@ val fs_oprod_if_oval : #g :typ_env ->
                 e   : fs_oprod g a ->
                 fs_oprod g a
 let fs_oprod_if_oval c t e fsG =
-  fs_oprod_if_val t e (c fsG) fsG
+  fs_oprod_if_val (c fsG) t e fsG
 
 val fs_oprod_if : #g :typ_env ->
                   #a : qType ->
@@ -529,7 +569,7 @@ val fs_oprod_if : #g :typ_env ->
                   e  : fs_oprod g a ->
                   fs_oprod g a
 let fs_oprod_if c t e =
-  fs_oprod_bind' c (fs_oprod_if_val t e)
+  fs_oprod_bind' c (fun c' -> fs_oprod_if_val c' t e)
 
 unfold
 val fs_oprod_case_val : #g :typ_env ->
@@ -667,6 +707,12 @@ open Trace
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
+
+let lem_fs_beh_bind #a #b (m:fs_prod a) (h:history) (lt1:local_trace h) (fs_r_m:fs_val a) (k:fs_val a -> fs_prod b) (lt2:local_trace (h++lt1)) (fs_r:fs_val b) :
+  Lemma (requires fs_beh m h lt1 fs_r_m /\
+                  fs_beh (k fs_r_m) (h++lt1) lt2 fs_r)
+        (ensures fs_beh (fs_prod_bind m k) h (lt1@lt2) fs_r) =
+  lem_thetaP_bind m h lt1 fs_r_m k lt2 fs_r
 
 unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Type0
 let e_beh e e' h lt =

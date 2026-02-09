@@ -742,7 +742,7 @@ let indexed_sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
 let lem_value_preserves_value (e:closed_exp) (h:history) (t:typ) :
   Lemma (requires is_value e /\ sem_value_shape t e)
         (ensures indexed_sem_expr_shape t e h) =
-  introduce forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape t e' with begin 
+  introduce forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape t e' with begin
     introduce _ ==> _ with _. begin
       lem_value_is_irred e;
       FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
@@ -1014,6 +1014,7 @@ let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_eif
   (e1:closed_exp)
   (e2:closed_exp)
@@ -1022,16 +1023,18 @@ let rec destruct_steps_eif
   (h:history)
   (lt:local_trace h)
   (st:steps (EIf e1 e2 e3) e' h lt) :
-  Pure (closed_exp * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
+  Pure (closed_exp * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt) /\
       indexed_sem_expr_shape TBool e1 h)
-    (ensures fun (e1', (| lt1, (lt2, lt3) |)) ->
+    (ensures fun (e1', (| lt1, lt2 |)) ->
       indexed_irred e1' (h++lt1) /\
+      is_value e1' /\
       steps e1 e1' h lt1 /\
       steps (EIf e1 e2 e3) (EIf e1' e2 e3) h lt1 /\
-      (ETrue? e1' ==> (steps e2 e' (h++lt1) lt2 /\ lt == lt1 @ lt2)) /\
-      (EFalse? e1' ==> (steps e3 e' (h++lt1) lt3 /\ lt == lt1 @ lt3)) /\
-      ((lt == lt1 @ lt2) \/ (lt == lt1 @ lt3)) /\
+      steps (EIf e1' e2 e3) e' (h++lt1) lt2 /\
+      (ETrue? e1' ==> (steps e2 e' (h++lt1) lt2)) /\
+      (EFalse? e1' ==> (steps e3 e' (h++lt1) lt2)) /\
+      (lt == lt1 @ lt2) /\
       (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1')))
     (decreases st)
   = match st with
@@ -1049,22 +1052,23 @@ let rec destruct_steps_eif
         let lt1 : local_trace h = as_lt oev1 in
         lem_step_preserve_indexed_sem_expr_shape e1 e1' h oev1 TBool;
         let s2 : steps (EIf e1' e2 e3) e' (h++lt1) lt23 = step_eif_steps in
-        let (e1'', (| lt1', (lt2, lt3) |)) = destruct_steps_eif e1' e2 e3 e' (h++lt1) lt23 s2 in
+        let (e1'', (| lt1', lt2 |)) = destruct_steps_eif e1' e2 e3 e' (h++lt1) lt23 s2 in
         lem_steps_transitive e1 e1' e1'' h lt1 lt1';
         lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) (EIf e1'' e2 e3) h lt1 lt1';
-        (e1'', (| (lt1 @ lt1'), (lt2, lt3) |))
+        (e1'', (| (lt1 @ lt1'), lt2 |))
         end
       | IfTrue e2 e3 h -> begin
         lem_step_implies_steps (EIf e1 e2 e3) e2 h None;
         lem_value_is_irred e1;
-        (e1, (| [], (lt, []) |))
+        (e1, (| [], lt |))
         end
       | IfFalse e2 e3 h -> begin
         lem_step_implies_steps (EIf e1 e2 e3) e3 h None;
         lem_value_is_irred e1;
-        (e1, (| [], ([], lt) |))
+        (e1, (| [], lt |))
         end
       end
+#pop-options
 
   (**
     How the steps look like:
@@ -1210,7 +1214,7 @@ let rec destruct_steps_epair_fst
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EFst e12) e' h lt) 
+  (st:steps (EFst e12) e' h lt)
   (t1 t2:typ) :
   Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
     (requires indexed_irred e' (h++lt) /\
@@ -1286,7 +1290,7 @@ let rec destruct_steps_epair_snd
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ESnd e12) e' h lt) 
+  (st:steps (ESnd e12) e' h lt)
   (t1 t2:typ) :
   Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
     (requires indexed_irred e' (h++lt) /\
@@ -1522,7 +1526,7 @@ let rec destruct_steps_ecase
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ECase e_case e_lc e_rc) e' h lt) 
+  (st:steps (ECase e_case e_lc e_rc) e' h lt)
   (t1 t2:typ) :
   Pure (closed_exp * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
     (requires indexed_irred e' (h++lt) /\
@@ -1587,7 +1591,7 @@ let rec destruct_steps_ecase
 #pop-options
 
 let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
-  Lemma (exists e' oev. step (ERead fd) e' h oev) 
+  Lemma (exists e' oev. step (ERead fd) e' h oev)
   =
   let st1 : step (ERead fd) (EInl ETrue) h (Some (EvRead (get_fd fd) (Inl true))) = SReadReturn h (get_fd fd) (Inl true) in
     let st2 : step (ERead fd) (EInl EFalse) h (Some (EvRead (get_fd fd) (Inl false))) = SReadReturn h (get_fd fd) (Inl false) in
@@ -1596,7 +1600,7 @@ let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
 
 let can_step_eread (fd:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TFileDescr fd h)  
+  (requires indexed_sem_expr_shape TFileDescr fd h)
   (ensures (exists e' oev. step (ERead fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
@@ -1660,16 +1664,16 @@ let destruct_steps_eread
   (h:history)
   (lt:local_trace h)
   (st:steps (ERead fd) e' h lt) :
-  Pure (value * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1) * local_trace (h++lt1))))
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
-    (ensures fun (e_r, (| lt1, (lt2, lt3, lt4) |)) ->
+    (ensures fun (e_r, (| lt1, lt2 |)) ->
        steps (ERead fd) e_r h lt1 /\
        (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl true)])) /\
-         (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
-       (EInr? e_r ==> steps e_r e' (h++lt1) lt4 /\ lt == (lt1 @ lt4) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
-       (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3) \/ lt == (lt1 @ lt4)))
+         (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
+       (EInr? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
+       (lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
     | SRefl (ERead fd) h -> begin
@@ -1686,7 +1690,7 @@ let destruct_steps_eread
         let s2 : steps (EInl ETrue) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value ETrue (h++lt') TBool;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl ETrue e' (h++lt') lt23 s2 in
-        (f2, (| lt', (lt12 @ lt_f, [], []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SReadReturn h fd (Inl false) -> begin
         let EInl EFalse = f2 in
@@ -1695,7 +1699,7 @@ let destruct_steps_eread
         let s2 : steps (EInl EFalse) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value EFalse (h++lt') TBool;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl EFalse e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], lt12 @ lt_f, []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SReadReturn h fd (Inr ()) -> begin
         let EInr EUnit = f2 in
@@ -1704,7 +1708,7 @@ let destruct_steps_eread
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eread_steps in
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], [], lt12 @ lt_f) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       end
 #pop-options
@@ -1890,7 +1894,7 @@ let can_step_eopen_str (str:closed_exp{ETrue? str \/ EFalse? str}) (h:history) :
 
 let can_step_eopen (str:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TBool str h)  
+  (requires indexed_sem_expr_shape TBool str h)
   (ensures (exists e' oev. step (EOpen str) e' h oev))
   =
   introduce indexed_irred str h ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
@@ -1953,16 +1957,16 @@ let destruct_steps_eopen
   (h:history)
   (lt:local_trace h)
   (st:steps (EOpen str') e' h lt) :
-  Pure (value * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
-    (ensures fun (e_r, (| lt1, (lt2, lt3) |)) ->
+    (ensures fun (e_r, (| lt1, lt2 |)) ->
        steps (EOpen str') e_r h lt1 /\
        (e_r == EInl (get_efd (fresh_fd h)) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inl (fresh_fd h))]) /\
        (EInr? e_r ==>
-         steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
-       (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3)))
+         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
+       lt == (lt1 @ lt2))
     (decreases st) =
     match st with
     | SRefl (EOpen str') h -> begin
@@ -1979,7 +1983,7 @@ let destruct_steps_eopen
         let s2 : steps (EInl (get_efd (fresh_fd h))) e' (h++lt') lt23 = step_eopen_steps in
         lem_value_preserves_value (get_efd (fresh_fd h)) (h++lt') TFileDescr;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl (get_efd (fresh_fd h)) e' (h++lt') lt23 s2 in
-        (f2, (| lt', (lt12 @ lt_f, []) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       | SOpenReturnFail str' h -> begin
         let EInr EUnit = f2 in
@@ -1988,14 +1992,14 @@ let destruct_steps_eopen
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eopen_steps in
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 in
-        (f2, (| lt', ([], lt12 @ lt_f) |))
+        (f2, (| lt', lt12 @ lt_f |))
         end
       end
 #pop-options
 
 let can_step_eclose (fd:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TFileDescr fd h)  
+  (requires indexed_sem_expr_shape TFileDescr fd h)
   (ensures (exists e' oev. step (EClose fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (EClose fd) e' h oev) with _. begin

@@ -85,11 +85,18 @@ let lem_thetaP_return #a (x:a) (h:history) :
   Lemma (thetaP (return x) h [] x) =
   theta_monad_morphism_ret x
 
-open FStar.Tactics
-
 let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k:a -> io b) (lt2:local_trace (h++lt1)) (fs_r:b) :
   Lemma (requires thetaP m h lt1 fs_r_m /\
                   thetaP (k fs_r_m) (h++lt1) lt2 fs_r)
-        (ensures thetaP (io_bind m k) h (lt1@lt2) fs_r) =
-  assume (wp2p (hist_bind (theta m) (fun x -> theta (k x))) h (lt1@lt2) fs_r);
-  wp2p_theta_bind m k
+        (ensures thetaP (io_bind m k) h (lt1@lt2) fs_r)
+        =
+  wp2p_theta_bind m k;
+  introduce forall (p:hist_post h b). hist_bind (theta m) (fun x -> theta (k x)) h p ==> p (lt1@lt2) fs_r with begin
+    introduce _ ==> _ with _. begin
+      assert (wp2p (theta (k fs_r_m)) (h++lt1) lt2 fs_r);
+      assert (forall (p':hist_post (h++lt1) b). theta (k fs_r_m) (h++lt1) p' ==> p' lt2 fs_r);
+      let p' : hist_post (h++lt1) b = fun lt r -> p (lt1@lt) r in
+      assert (theta (k fs_r_m) (h++lt1) p' ==> p' lt2 fs_r);
+      assert (p (lt1@lt2) fs_r)
+    end
+  end
