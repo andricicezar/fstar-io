@@ -54,13 +54,11 @@ The TODOs for the paper, are in the paper.
     - [ ] `lem_substitution`
     ```fstar
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
-  : Lemma (
-    (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
+	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
     - [ ] `lem_gsubst_closed_identity`
     ```fstar
-    let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
-      Lemma (gsubst s e == e)
+    let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) : Lemma (gsubst s e == e)
     ```
     - [ ] 14 admitted lemmas about fv_in_env
   - [ ] STLC.fst
