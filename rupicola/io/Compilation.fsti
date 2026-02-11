@@ -17,7 +17,8 @@ val lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures s ⊏ compile qs) (decreases qs)
 
 val lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b)) (qs: (a ^->!@ b) ⊩ s)
-  : Lemma (ELam? (compile qs))
+  : Lemma (requires (QLambdaProd? qs))
+          (ensures (ELam? (compile qs)))
 
 val lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
   : Lemma (ensures (
