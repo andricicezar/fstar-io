@@ -100,3 +100,12 @@ let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k
       assert (p (lt1@lt2) fs_r)
     end
   end
+
+val destruct_fs_beh #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local_trace h) (fs_r:t2) :
+  Lemma
+    (requires thetaP (io_bind m k) h lt fs_r)
+    (ensures exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_m:t1).
+      lt == (lt1@lt2) /\
+      thetaP m h lt1 fs_m /\
+      thetaP (k fs_m) (h++lt1) lt2 fs_r)
+
