@@ -40,7 +40,7 @@ The TODOs for the paper, are in the paper.
   - [ ] working on IO examples
   - [ ] working on the running example
 
-- [ ] Admits (77)
+- [ ] Admits (74)
   - [ ] Trace.fst
     - [ ] 6 admits about traces and append
   - [ ] IO.fsti
@@ -76,15 +76,8 @@ The TODOs for the paper, are in the paper.
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
   - [ ] Compilation.fst
-    - [ ] `lem_compile_closed_arrow_is_elam`
-    ```fstar
-    let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b)) (qs:(a ^->!@ b)   s) : Lemma (ELam? (compile qs))
- 	 ```
-    - [ ] Two big assumes in `lem_compile_closed_valid` @Cezar
-  - [ ] Backtranslation.fst @Cezar
-    - [ ] backtranslation of values missing
-    - [ ] verify backtranslation of values
-  - [ ] RrHP.fst 
+    - [ ] Two big assumes in `lem_compile_closed_valid`
+  - [ ] RrHP.fst
     - [ ] one assume in the main theorem
 
 
