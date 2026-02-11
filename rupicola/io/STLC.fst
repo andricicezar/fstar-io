@@ -669,63 +669,6 @@ let get_epair_e2 (x:closed_exp{EPair? x}) =
   match x with
   | EPair e1 e2 -> e2
 
-//assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'})
-
-(*let corresponding_event #h #h' (oev:option (event_h h)) (oev':option (event_h h')) =
-  (None? oev <==> None? oev') /\
-  ((Some? oev /\ (test_event h' (Some?.v oev))) ==>
-    (oev == oev')) /\ // if the read/write/open/close was an error, it would be an error in any history
-  ((Some? oev /\ (EvRead? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
-    ((EInl? (get_read_res (get_read_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (EvRead (get_read_arg (Some?.v oev)) (Inr ()))))) /\
-  // this will look the same for EvWrite
-  ((Some? oev /\ (EvOpen? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
-    ((EInl? (get_open_res (get_open_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (get_new_file_descr (Some?.v oev) h'))))*)
-  //((Some? oev /\ (EvClose? (Some?.v oev)) /\
-
-// h = [] [1]
-// h' = [] (1 - 1) + 1 = [1]
-
-// h = [3, 2, 1] [2, 3, OpenFile 4, 4]
-// h' = [4, 3, 2, 1] [2, 3, OpenFile 5, 5]
-
-// (fd - (last_fd h)) + (last_fd h')
-
-// h = [1 2 3] [4]
-// h' = [] [1]
-
-// TODO: add file descr to read and write (and check that they are in the bounds of the semantics, so 1 and last fd of the history)
-
-let new_event' #h #h' (oev:option (event_h h)) : option (event_h h') =
-  match oev with
-  | None -> None
-  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
-    // I think fresh_fd should return the max_fd (since file descriptors are forgeable and we can't guarantee that they'll increase monotonically
-  | Some (EvRead fd (Inl b)) -> if (valid_fd h' fd) then Some (EvRead fd (Inl b)) else Some (EvRead fd (Inr ()))
-    // and here, valid_fd should check that fd appears in h' (not just whether it is in the range)
-  | Some (EvWrite (fd, arg) (Inl ())) -> if (valid_fd h' fd) then Some (EvWrite (fd, arg) (Inl ())) else Some (EvWrite (fd, arg) (Inr ()))
-  | Some (EvClose fd (Inl ())) -> if (valid_fd h' fd) then Some (EvClose fd (Inl ())) else Some (EvClose fd (Inr ()))
-  | _ -> oev // evopen inr (), evread inr ()
-
-(*let new_event #h #h' (oev:option (event_h h)) : option (event_h h') =
-  match oev with
-  | None -> None
-  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
-  | Some (EvRead fd r) -> Some (EvRead (recast_fd h h' fd) r)
-  | Some (EvWrite (fd, arg) r) -> Some (EvWrite ((recast_fd h h' fd), arg) r)
-  | Some (EvClose fd arg) -> Some (EvClose (recast_fd h h' fd) arg)
-  | _ -> oev*)
-
-// should be able to try to read from closed file descriptors -> error
-
-// example correct traces:
-// [EvOpen "0" -> Inl true, EvWrite true -> Inl (), EvRead () -> Inl true, EvClose true -> Inl ()]
-
-// rules as I understand them when we change histories:
-// 1. EvRead fails if an EvOpen does NOT precede it AND if something has NOT been written to the file
-// 2. EvWrite fails if an EvOpen does NOT precede it
-// 3. EvOpen never fails but returns different file descriptor
-// 4. EvClose fails if an EvOpen with the same file descriptor does NOT precede it
-
 (* We need syntactic types for this, or at least the top-level shape of types *)
 let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with
@@ -742,7 +685,7 @@ let indexed_sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
 let lem_value_preserves_value (e:closed_exp) (h:history) (t:typ) :
   Lemma (requires is_value e /\ sem_value_shape t e)
         (ensures indexed_sem_expr_shape t e h) =
-  introduce forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape t e' with begin 
+  introduce forall e' lt. steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape t e' with begin
     introduce _ ==> _ with _. begin
       lem_value_is_irred e;
       FStar.Squash.bind_squash #(steps e e' h lt) () (fun sts ->
@@ -1135,7 +1078,7 @@ let rec destruct_steps_epair_fst
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EFst e12) e' h lt) 
+  (st:steps (EFst e12) e' h lt)
   (t1 t2:typ) :
   Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
     (requires indexed_irred e' (h++lt) /\
@@ -1211,7 +1154,7 @@ let rec destruct_steps_epair_snd
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ESnd e12) e' h lt) 
+  (st:steps (ESnd e12) e' h lt)
   (t1 t2:typ) :
   Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
     (requires indexed_irred e' (h++lt) /\
@@ -1447,7 +1390,7 @@ let rec destruct_steps_ecase
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ECase e_case e_lc e_rc) e' h lt) 
+  (st:steps (ECase e_case e_lc e_rc) e' h lt)
   (t1 t2:typ) :
   Pure (closed_exp * (lt1:local_trace h & (local_trace (h++lt1) * local_trace (h++lt1))))
     (requires indexed_irred e' (h++lt) /\
@@ -1512,7 +1455,7 @@ let rec destruct_steps_ecase
 #pop-options
 
 let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
-  Lemma (exists e' oev. step (ERead fd) e' h oev) 
+  Lemma (exists e' oev. step (ERead fd) e' h oev)
   =
   let st1 : step (ERead fd) (EInl ETrue) h (Some (EvRead (get_fd fd) (Inl true))) = SReadReturn h (get_fd fd) (Inl true) in
     let st2 : step (ERead fd) (EInl EFalse) h (Some (EvRead (get_fd fd) (Inl false))) = SReadReturn h (get_fd fd) (Inl false) in
@@ -1521,7 +1464,7 @@ let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
 
 let can_step_eread (fd:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TFileDescr fd h)  
+  (requires indexed_sem_expr_shape TFileDescr fd h)
   (ensures (exists e' oev. step (ERead fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
@@ -1815,7 +1758,7 @@ let can_step_eopen_str (str:closed_exp{ETrue? str \/ EFalse? str}) (h:history) :
 
 let can_step_eopen (str:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TBool str h)  
+  (requires indexed_sem_expr_shape TBool str h)
   (ensures (exists e' oev. step (EOpen str) e' h oev))
   =
   introduce indexed_irred str h ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
@@ -1920,7 +1863,7 @@ let destruct_steps_eopen
 
 let can_step_eclose (fd:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TFileDescr fd h)  
+  (requires indexed_sem_expr_shape TFileDescr fd h)
   (ensures (exists e' oev. step (EClose fd) e' h oev))
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (EClose fd) e' h oev) with _. begin
