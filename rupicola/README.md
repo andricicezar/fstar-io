@@ -43,11 +43,11 @@ The TODOs for the paper, are in the paper.
 - [ ] Admits (81)
   - [ ] Trace.fst
     - [ ] 6 admits about traces and append
-  - [ ] Hist.fst
+  - [ ] Hist.fst @Cezar
     - [ ] 2 admits about monotonicity
   - [ ] IO.fsti
     - [ ] one assume that was fixed on Abigail's branch
-  - [ ] IO.fst
+  - [ ] IO.fst @Cezar
     - [ ] theta is a monad morphism
     - [ ] `io_bind_equivalence`
   - [ ] QTyp.fst 
@@ -76,7 +76,7 @@ The TODOs for the paper, are in the paper.
     - [ ] `lem_values_are_expressions`
     - [ ] `lem_values_are_producers`
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] `equiv_oprod_app` has to be redone
+    - [ ] `equiv_oprod_app` has to be redone since it uses functional extensionality
     - [ ] 10 admitted compatibility lemmas on Abigail's branch
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
@@ -85,11 +85,11 @@ The TODOs for the paper, are in the paper.
     ```fstar
     let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b)) (qs:(a ^->!@ b)   s) : Lemma (ELam? (compile qs))
  	 ```
-    - [ ] Two big assumes in `lem_compile_closed_valid`
-  - [ ] Backtranslation.fst
+    - [ ] Two big assumes in `lem_compile_closed_valid` @Cezar
+  - [ ] Backtranslation.fst @Cezar
     - [ ] backtranslation of values missing
     - [ ] verify backtranslation of values
-  - [ ] RrHP.fst
+  - [ ] RrHP.fst 
     - [ ] one assume in the main theorem
 
 
