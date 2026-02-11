@@ -215,7 +215,7 @@ and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation 
     lem_compile_subset_prod qinrc;
     C2.equiv_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
-let lem_compile_closed_arrow_is_elam2 (#a #b:qType) (#s:fs_val (a ^->!@ b))
+let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
   (qs:(a ^->!@ b) ⊩ s)
   : Lemma (requires (QLambdaProd? qs))
           (ensures (ELam? (compile qs)))
@@ -223,7 +223,7 @@ let lem_compile_closed_arrow_is_elam2 (#a #b:qType) (#s:fs_val (a ^->!@ b))
   match qs with
   | QLambdaProd qbody ->
     assert (ELam? (compile qs)) by (norm [delta_once [`%compile];zeta;iota])
-  
+
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
   assume (is_closed (compile qs));
   assume (is_value (compile qs));
