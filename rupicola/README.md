@@ -86,7 +86,7 @@ The TODOs for the paper, are in the paper.
     - [ ] `lem_compile_closed_arrow_is_elam`
     ```fstar
     let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b)) (qs:(a ^->!@ b)   s) : Lemma (ELam? (compile qs))
-  ```
+ 	 ```
     - [ ] Two big assumes in `lem_compile_closed_valid`
   - [ ] Backtranslation.fst
     - [ ] backtranslation of values missing
