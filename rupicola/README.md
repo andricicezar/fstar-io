@@ -40,14 +40,11 @@ The TODOs for the paper, are in the paper.
   - [ ] working on IO examples
   - [ ] working on the running example
 
-- [ ] Admits (79)
+- [ ] Admits (77)
   - [ ] Trace.fst
     - [ ] 6 admits about traces and append
   - [ ] IO.fsti
     - [ ] one assume that was fixed on Abigail's branch
-  - [ ] IO.fst @Cezar
-    - [ ] theta is a monad morphism
-    - [ ] `io_bind_equivalence`
   - [ ] QTyp.fst 
     - [ ] `lem_substitution`
     ```fstar
