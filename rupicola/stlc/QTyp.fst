@@ -11,8 +11,9 @@ open STLC
 (** We need quotation for types to define the logical relation. **)
 noeq
 type type_quotation : Type0 -> Type u#1 =
-| QUnit : type_quotation unit
-| QBool : type_quotation bool
+| QUnit   : type_quotation unit
+| QBool   : type_quotation bool
+| QString : type_quotation string
 | QArr : #s1:Type ->
          #s2:Type ->
          type_quotation s1 ->
@@ -33,6 +34,7 @@ let test_match s (r:type_quotation s) = (** why does this work so well? **)
   match r with
   | QUnit -> assert (s == unit)
   | QBool -> assert (s == bool)
+  | QString -> assert (s == string)
   | QArr #s1 #s2 _ _ -> assert (s == (s1 -> s2))
   | QPair #s1 #s2 _ _ -> assert (s == (s1 & s2))
   | QSum #s1 #s2 _ _ -> assert (s == either s1 s2)
@@ -41,6 +43,7 @@ let rec type_quotation_to_typ #s (r:type_quotation s) : typ =
   match r with
   | QUnit -> TUnit
   | QBool -> TBool
+  | QString -> TString
   | QArr rs1 rs2 -> TArr (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
   | QPair rs1 rs2 -> TPair (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
   | QSum rs1 rs2 -> TSum (type_quotation_to_typ rs1) (type_quotation_to_typ rs2)
@@ -55,6 +58,7 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
+let qString : qType = (| _, QString |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 

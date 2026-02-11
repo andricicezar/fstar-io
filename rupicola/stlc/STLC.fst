@@ -7,31 +7,33 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 type typ =
-  | TUnit  : typ
-  | TBool  : typ
-  | TNat   : typ
-  | TArr   : typ -> typ -> typ
-  | TPair  : typ -> typ -> typ
-  | TSum   : typ -> typ -> typ
+  | TUnit   : typ
+  | TBool   : typ
+  | TNat    : typ
+  | TString : typ
+  | TArr    : typ -> typ -> typ
+  | TPair   : typ -> typ -> typ
+  | TSum    : typ -> typ -> typ
 
 let var = nat
 type exp =
-  | EUnit  : exp
-  | ETrue  : exp
-  | EFalse : exp
-  | EZero  : exp
-  | ESucc  : exp -> exp
-  | ENRec  : exp -> exp -> exp -> exp
-  | EIf    : exp -> exp -> exp -> exp
-  | EVar   : v:var -> exp
-  | ELam   : b:exp -> exp
-  | EApp   : exp -> exp -> exp
-  | EPair  : fst:exp -> snd:exp -> exp
-  | EFst   : exp -> exp
-  | ESnd   : exp -> exp
-  | EInl   : exp -> exp
-  | EInr   : exp -> exp
-  | ECase  : exp -> exp -> exp -> exp
+  | EUnit   : exp
+  | ETrue   : exp
+  | EFalse  : exp
+  | EZero   : exp
+  | EString : string -> exp
+  | ESucc   : exp -> exp
+  | ENRec   : exp -> exp -> exp -> exp
+  | EIf     : exp -> exp -> exp -> exp
+  | EVar    : v:var -> exp
+  | ELam    : b:exp -> exp
+  | EApp    : exp -> exp -> exp
+  | EPair   : fst:exp -> snd:exp -> exp
+  | EFst    : exp -> exp
+  | ESnd    : exp -> exp
+  | EInl    : exp -> exp
+  | EInr    : exp -> exp
+  | ECase   : exp -> exp -> exp -> exp
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
@@ -62,6 +64,7 @@ let rec subst (#r:bool)
     | ETrue -> ETrue
     | EFalse -> EFalse
     | EZero -> EZero
+    | EString s' -> EString s'
     | ESucc e' -> ESucc (subst s e')
     | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
     | EPair e1 e2 -> EPair (subst s e1) (subst s e2)
@@ -112,6 +115,7 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | ETrue -> []
   | EFalse -> []
   | EZero -> []
+  | EString _ -> []
   | ESucc e' -> free_vars_indx e' n
   | ENRec e1 e2 e3 -> free_vars_indx e1 n @ free_vars_indx e2 n @ free_vars_indx e3 n
   | ELam e' -> free_vars_indx e' (n+1)
@@ -136,6 +140,7 @@ let rec is_value (e:exp) : Type0 =
   | ETrue -> True
   | EFalse -> True
   | EZero -> True
+  | EString _ -> True
   | ESucc e' -> is_value e'
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
@@ -511,6 +516,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TUnit -> e == EUnit
   | TBool -> e == ETrue \/ e == EFalse
   | TNat -> EZero? e \/ ESucc? e
+  | TString -> EString? e
   | TArr t1 t2 -> ELam? e
   | TPair t1 t2 -> EPair? e
   | TSum t1 t2 -> EInl? e \/ EInr? e
