@@ -224,6 +224,6 @@ let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
   assume (is_closed (compile qs));
   assume (is_value (compile qs));
   lem_compile_superset qs;
-  lem_value_superset_valid_contains a s (compile qs);
+  lem_value_superset_valid_contains a (fun _ -> s) (compile qs);
   lem_compile_subset qs;
-  lem_value_subset_valid_member_of a s (compile qs)
+  lem_value_subset_valid_member_of a (fun _ -> s) (compile qs)
