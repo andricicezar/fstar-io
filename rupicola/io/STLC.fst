@@ -769,7 +769,7 @@ let rec construct_steps_eapp_e1
   (h:history)
   (lt1:local_trace h)
   (st1:steps e1 (ELam e11) h lt1) :
-  Lemma
+  Lemma 
     (requires indexed_irred (ELam e11) (h++lt1))
     (ensures steps (EApp e1 e2) (EApp (ELam e11) e2) h lt1)
     (decreases st1) =
@@ -813,7 +813,6 @@ let construct_steps_eapp
   (e2':closed_exp{is_value e2'})
   (e':closed_exp)
   (h:history)
-  (lt:local_trace h)
   (lt1:local_trace h)
   (lt2:local_trace (h++lt1))
   (lt3:local_trace ((h++lt1)++lt2))
@@ -823,7 +822,7 @@ let construct_steps_eapp
   Lemma (requires indexed_irred (ELam e11) (h++lt1) /\
                   indexed_irred e2' ((h++lt1)++lt2) /\
                   indexed_irred e' (((h++lt1)++lt2)++lt3))
-        (ensures steps (EApp e1 e2) e' h lt /\ lt == (lt1@(lt2@lt3))) =
+        (ensures steps (EApp e1 e2) e' h ((lt1@lt2)@lt3)) =
   construct_steps_eapp_e1 e1 e11 e2 h lt1 sts1;
   construct_steps_eapp_e2 e11 e2 e2' (h++lt1) lt2 sts2;
   lem_steps_transitive (EApp e1 e2) (EApp (ELam e11) e2) (EApp (ELam e11) e2') h lt1 lt2;
@@ -832,8 +831,7 @@ let construct_steps_eapp
   lem_steps_transitive (EApp (ELam e11) e2') (subst_beta e2' e11) e' ((h++lt1)++lt2) [] lt3;
   lem_steps_transitive (EApp e1 e2) (EApp (ELam e11) e2') e' h (lt1@lt2) lt3;
   associative_history lt1 lt2 lt3;
-  assert (steps (EApp e1 e2) e' h (lt1@(lt2@lt3)));
-  assume (lt == (lt1@(lt2@lt3)))
+  assert (steps (EApp e1 e2) e' h (lt1@(lt2@lt3)))
 
 // DESTRUCT LEMMAS
 
@@ -985,6 +983,60 @@ let rec destruct_steps_eapp_e2
         (e2, (| [], lt |))
         end
       end
+
+let rec construct_steps_eif_e1
+  (e1:closed_exp)
+  (e1':closed_exp{ETrue? e1' \/ EFalse? e1'})
+  (e2:closed_exp)
+  (e3:closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (sts1:steps e1 e1' h lt1) :
+  Lemma
+    (requires indexed_irred e1' (h++lt1))
+    (ensures steps (EIf e1 e2 e3) (EIf e1' e2 e3) h lt1)
+    (decreases sts1) =
+  match sts1 with
+  | SRefl e1 h -> ()
+  | STrans #e1 #e1_ #_ #h #oev1 #lt23 step_e1 step_e1_steps -> begin
+    let _ : step (EIf e1 e2 e3) (EIf e1_ e2 e3) h oev1 = IfCond e2 e3 step_e1 in
+    lem_step_implies_steps (EIf e1 e2 e3) (EIf e1_ e2 e3) h oev1;
+    let lt' : local_trace h = as_lt oev1 in
+    let s2 : steps e1_ e1' (h++lt') lt23 = step_e1_steps in
+    construct_steps_eif_e1 e1_ e1' e2 e3 (h++lt') lt23 s2;
+    lem_steps_transitive (EIf e1 e2 e3) (EIf e1_ e2 e3) (EIf e1' e2 e3) h lt' lt23
+    end
+
+let construct_steps_eif
+  (e1:closed_exp)
+  (e1':closed_exp{ETrue? e1' \/ EFalse? e1'})
+  (e2:closed_exp)
+  (e3:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (sts1:steps e1 e1' h lt1)
+  (sts2:steps (match e1' with | ETrue -> e2 | EFalse -> e3) e' (h++lt1) lt2) :
+  Lemma 
+    (requires indexed_irred e1' (h++lt1) /\
+              indexed_irred e' ((h++lt1)++lt2))
+    (ensures steps (EIf e1 e2 e3) e' h (lt1@lt2))
+    (decreases sts1) =
+  construct_steps_eif_e1 e1 e1' e2 e3 h lt1 sts1;
+  match e1' with
+  | ETrue -> begin
+    let _ : step (EIf ETrue e2 e3) e2 (h++lt1) None = IfTrue e2 e3 (h++lt1) in
+    lem_step_implies_steps (EIf ETrue e2 e3) e2 (h++lt1) None;
+    lem_steps_transitive (EIf e1' e2 e3) e2 e' (h++lt1) [] lt2;
+    lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) e' h lt1 lt2
+    end
+  | EFalse -> begin
+    let _ : step (EIf EFalse e2 e3) e3 (h++lt1) None = IfFalse e2 e3 (h++lt1) in
+    lem_step_implies_steps (EIf EFalse e2 e3) e3 (h++lt1) None;
+    lem_steps_transitive (EIf e1' e2 e3) e3 e' (h++lt1) [] lt2;
+    lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) e' h lt1 lt2
+    end
 
 let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
   (requires indexed_sem_expr_shape TBool e1 h)
