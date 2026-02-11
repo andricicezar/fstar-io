@@ -40,11 +40,9 @@ The TODOs for the paper, are in the paper.
   - [ ] working on IO examples
   - [ ] working on the running example
 
-- [ ] Admits (81)
+- [ ] Admits (79)
   - [ ] Trace.fst
     - [ ] 6 admits about traces and append
-  - [ ] Hist.fst @Cezar
-    - [ ] 2 admits about monotonicity
   - [ ] IO.fsti
     - [ ] one assume that was fixed on Abigail's branch
   - [ ] IO.fst @Cezar

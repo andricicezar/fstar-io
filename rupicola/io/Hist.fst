@@ -56,9 +56,11 @@ let hist_subcomp #a #p1 #p2 wp = hist_subcomp0 #a #p1 #p2 #() wp
 
 
 unfold
-let hist_return (x:'a) : hist 'a =
-  admit ();
+let hist_return0 (x:'a) : hist0 'a =
   fun _ p -> p [] x
+
+unfold
+let hist_return (x:'a) : hist 'a = hist_return0 x
 
 unfold
 let hist_post_shift (h:history) (p:hist_post h 'a) (lt:local_trace h) : hist_post (h++lt) 'a =
@@ -79,10 +81,14 @@ let hist_bind (#a #b:Type) (w : hist a) (kw : a -> hist b) : hist b =
   fun h p -> w h (hist_post_bind' kw p)
 
 unfold
-let wp_lift_pure_hist (w : pure_wp 'a) : hist 'a =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall ();
-  admit ();
+let wp_lift_pure_hist0 (#a:Type u#a) (w : pure_wp a) : hist0 a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   fun _ p -> w (p [])
+
+unfold
+let wp_lift_pure_hist (#a:Type u#a) (w : pure_wp a) : hist a =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
+  wp_lift_pure_hist0 w
 
 let lemma_wp_lift_pure_hist_implies_as_requires #a w :
   Lemma (forall h (p:hist_post h a). wp_lift_pure_hist w h p ==> as_requires w) =
@@ -101,6 +107,22 @@ let hist_equiv wp1 wp2 = forall h p. wp1 h p <==> wp2 h p
 unfold
 let hist_if_then_else (wp1 wp2:hist 'a) (b:bool) : hist 'a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
+
+let lem_hist_bind_subset (#a #b:Type) (m m':hist a) (k k':a -> hist b) :
+  Lemma
+    (requires (m ⊑ m' /\ (forall x. k x ⊑ k' x)))
+    (ensures (hist_bind m k ⊑ hist_bind m' k')) = ()
+
+let lem_hist_bind_equiv (#a #b:Type) (m m':hist a) (k k':a -> hist b) :
+  Lemma
+    (requires (m `hist_equiv` m' /\ (forall x. k x `hist_equiv` k' x)))
+    (ensures (hist_bind m k `hist_equiv` hist_bind m' k')) = ()
+
+let lem_hist_equiv_reflexive #a (m:hist a) :
+  Lemma (m `hist_equiv` m) = ()
+
+let lem_hist_equiv_commutative #a (m m':hist a) :
+  Lemma (m `hist_equiv` m' ==> m' `hist_equiv` m) = ()
 
 let __list_assoc_l #a (l1 l2 l3 : list a) : Lemma (l1 @ (l2 @ l3) == (l1 @ l2) @ l3) = List.Tot.Properties.append_assoc l1 l2 l3
 let __helper #a (lt lt' : list a) : Lemma (rev_acc lt [] @ rev_acc lt' [] == rev_acc (lt'@lt) []) = List.Tot.Properties.rev_append lt' lt
