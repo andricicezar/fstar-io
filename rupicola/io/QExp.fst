@@ -311,6 +311,10 @@ let test_apply_arg2 ()
   by (l_to_r_fsG (); trefl ())
   = QLambda (QApp (QApp QVar0 QTrue) QFalse)
 
+let test_papply_arg2 ()
+  : ((qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ papply_arg2
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QApp QVar0 QTrue)
 
 [@expect_failure]
 let test_proj2'
