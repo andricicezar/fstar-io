@@ -124,7 +124,7 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     returns valid_superset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
       lem_compile_closed_valid qps;
       assert (valid_contains ps pt);
-      unroll_elam_io' t qBool ps (ELam?.b pt); (** unfold ∋ **)
+      Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∋ **)
       assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∋ (h++lt_v, fs_v, v) ==>
                 qBool ⫄ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
         (** eliminate v fs_v with ct cs **)
@@ -141,7 +141,7 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
     returns valid_subset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
       lem_compile_closed_valid qps;
       assert (valid_member_of ps pt);
-      unroll_elam_io123' t qBool ps (ELam?.b pt); (** unfold ∈ **)
+      Classical.forall_intro (Classical.move_requires (unfold_member_of_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∈ **)
       assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∈ (h++lt_v, fs_v, v) ==>
                 qBool ⫃ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
       (** eliminate v fs_v with ct cs **)

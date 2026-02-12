@@ -669,63 +669,6 @@ let get_epair_e2 (x:closed_exp{EPair? x}) =
   match x with
   | EPair e1 e2 -> e2
 
-//assume val get_new_file_descr (ev:event{EvOpen? ev}) (h':history) : (ev':event{test_event h' ev'})
-
-(*let corresponding_event #h #h' (oev:option (event_h h)) (oev':option (event_h h')) =
-  (None? oev <==> None? oev') /\
-  ((Some? oev /\ (test_event h' (Some?.v oev))) ==>
-    (oev == oev')) /\ // if the read/write/open/close was an error, it would be an error in any history
-  ((Some? oev /\ (EvRead? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
-    ((EInl? (get_read_res (get_read_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (EvRead (get_read_arg (Some?.v oev)) (Inr ()))))) /\
-  // this will look the same for EvWrite
-  ((Some? oev /\ (EvOpen? (Some?.v oev)) /\ (~(test_event h' (Some?.v oev)))) ==>
-    ((EInl? (get_open_res (get_open_arg (Some?.v oev)) (Some?.v oev))) /\ (oev' == Some (get_new_file_descr (Some?.v oev) h'))))*)
-  //((Some? oev /\ (EvClose? (Some?.v oev)) /\
-
-// h = [] [1]
-// h' = [] (1 - 1) + 1 = [1]
-
-// h = [3, 2, 1] [2, 3, OpenFile 4, 4]
-// h' = [4, 3, 2, 1] [2, 3, OpenFile 5, 5]
-
-// (fd - (last_fd h)) + (last_fd h')
-
-// h = [1 2 3] [4]
-// h' = [] [1]
-
-// TODO: add file descr to read and write (and check that they are in the bounds of the semantics, so 1 and last fd of the history)
-
-let new_event' #h #h' (oev:option (event_h h)) : option (event_h h') =
-  match oev with
-  | None -> None
-  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
-    // I think fresh_fd should return the max_fd (since file descriptors are forgeable and we can't guarantee that they'll increase monotonically
-  | Some (EvRead fd (Inl b)) -> if (valid_fd h' fd) then Some (EvRead fd (Inl b)) else Some (EvRead fd (Inr ()))
-    // and here, valid_fd should check that fd appears in h' (not just whether it is in the range)
-  | Some (EvWrite (fd, arg) (Inl ())) -> if (valid_fd h' fd) then Some (EvWrite (fd, arg) (Inl ())) else Some (EvWrite (fd, arg) (Inr ()))
-  | Some (EvClose fd (Inl ())) -> if (valid_fd h' fd) then Some (EvClose fd (Inl ())) else Some (EvClose fd (Inr ()))
-  | _ -> oev // evopen inr (), evread inr ()
-
-(*let new_event #h #h' (oev:option (event_h h)) : option (event_h h') =
-  match oev with
-  | None -> None
-  | Some (EvOpen str (Inl fd)) -> Some (EvOpen str (Inl (fresh_fd h')))
-  | Some (EvRead fd r) -> Some (EvRead (recast_fd h h' fd) r)
-  | Some (EvWrite (fd, arg) r) -> Some (EvWrite ((recast_fd h h' fd), arg) r)
-  | Some (EvClose fd arg) -> Some (EvClose (recast_fd h h' fd) arg)
-  | _ -> oev*)
-
-// should be able to try to read from closed file descriptors -> error
-
-// example correct traces:
-// [EvOpen "0" -> Inl true, EvWrite true -> Inl (), EvRead () -> Inl true, EvClose true -> Inl ()]
-
-// rules as I understand them when we change histories:
-// 1. EvRead fails if an EvOpen does NOT precede it AND if something has NOT been written to the file
-// 2. EvWrite fails if an EvOpen does NOT precede it
-// 3. EvOpen never fails but returns different file descriptor
-// 4. EvClose fails if an EvOpen with the same file descriptor does NOT precede it
-
 (* We need syntactic types for this, or at least the top-level shape of types *)
 let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   match t with

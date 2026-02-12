@@ -4,7 +4,8 @@ module IO
 open Trace
 open STLC
 
-open FStar.Tactics
+open FStar.Tactics.V1
+open FStar.Calc
 
 noeq
 type io (a:Type u#a) : Type u#a =
@@ -53,13 +54,65 @@ let rec theta #a (m:io a) : hist a =
 let theta_monad_morphism_ret x =
   assert (theta (return x) == hist_return x) by (FStar.Tactics.compute ())
 
-let theta_monad_morphism_bind m k =
-  admit () (** Cezar: should be double. existing proof in sciostar/DMFree.fst **)
+let rec theta_monad_morphism_bind m k =
+  match m with
+  | Return _ -> ()
+  | Call o arg m' -> 
+    calc (hist_equiv) {
+      theta (io_bind (Call o arg m') k);
+      `hist_equiv` { _ by (compute ()) }
+      theta (Call o arg (fun x -> io_bind (m' x) k));
+      `hist_equiv` { _ by (norm [delta_once [`%theta]; iota]) }
+      hist_bind (op_wp o arg) (fun r -> theta (io_bind (m' r) k));
+      `hist_equiv` { 
+        introduce forall r. theta (io_bind (m' r) k) `hist_equiv` hist_bind (theta (m' r)) (fun x -> theta (k x)) with begin
+          theta_monad_morphism_bind (m' r) k
+        end;
+        lem_hist_bind_equiv (op_wp o arg) (op_wp o arg) (fun r -> theta (io_bind (m' r) k)) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k x)))
+       }
+      hist_bind (op_wp o arg) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k x)));
+      `hist_equiv` { lemma_hist_bind_associativity (op_wp o arg) (fun r -> theta (m' r)) (fun x -> theta (k x)) }
+      hist_bind (hist_bind (op_wp o arg) (fun r -> theta (m' r))) (fun x -> theta (k x));
+      `hist_equiv` {
+        assert (hist_equiv
+          (hist_bind (theta (Call o arg m')) (fun x -> theta (k x))) 
+          (hist_bind (hist_bind (op_wp o arg) (fun r -> theta (m' r))) (fun x -> theta (k x)))
+        ) by (norm [delta_once [`%theta]; zeta; iota]; 
+          apply_lemma (`lem_hist_equiv_reflexive)) }
+      hist_bind (theta (Call o arg m')) (fun x -> theta (k x));
+    }
 
 let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
   Lemma (requires forall x. k x == k' x)
         (ensures theta (io_bind m k) `hist_equiv` theta (io_bind m k')) =
-  admit () (** Cezar: Is induction on m enough? **)
+  match m with
+  | Return _ -> ()
+  | Call o arg m' ->
+    calc (hist_equiv) {
+      theta (io_bind (Call o arg m') k);
+      `hist_equiv` { theta_monad_morphism_bind (Call o arg m') k }
+      hist_bind (theta (Call o arg m')) (fun x -> theta (k x));
+      `hist_equiv` { _ by (norm [delta_once [`%theta]; zeta;iota]) }
+      hist_bind (hist_bind (op_wp o arg) (fun r -> theta (m' r))) (fun x -> theta (k x));
+      `hist_equiv` { lemma_hist_bind_associativity (op_wp o arg) (fun r -> theta (m' r)) (fun x -> theta (k x)) }
+      hist_bind (op_wp o arg) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k x)));
+      `hist_equiv` {
+        lem_hist_bind_equiv (op_wp o arg) (op_wp o arg) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k x))) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k' x)))
+      }
+      hist_bind (op_wp o arg) (fun r -> hist_bind (theta (m' r)) (fun x -> theta (k' x)));
+      `hist_equiv` { lemma_hist_bind_associativity (op_wp o arg) (fun r -> theta (m' r)) (fun x -> theta (k' x)) }
+      hist_bind (hist_bind (op_wp o arg) (fun r -> theta (m' r))) (fun x -> theta (k' x));
+      `hist_equiv` {
+        assert (hist_equiv
+          (hist_bind (theta (Call o arg m')) (fun x -> theta (k' x))) 
+          (hist_bind (hist_bind (op_wp o arg) (fun r -> theta (m' r))) (fun x -> theta (k' x)))
+        ) by (norm [delta_once [`%theta]; zeta; iota]; 
+          apply_lemma (`lem_hist_equiv_reflexive)) 
+       }
+      hist_bind (theta (Call o arg m')) (fun x -> theta (k' x));
+      `hist_equiv` { theta_monad_morphism_bind m k' }
+      theta (io_bind (Call o arg m') k');
+    }
 
 let wp2p_theta_bind m k =
   theta_monad_morphism_bind m k

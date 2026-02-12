@@ -213,11 +213,6 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
     end
   end
 
-let safety_val (#t:qType) (fs_e:fs_val t) (e:value) : Lemma
-  (requires (valid_contains fs_e e))
-  (ensures safe e) =
-  admit ()
-
 let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
   (requires (valid_superset_prod fs_e e))
   (ensures safe e) =
@@ -262,7 +257,7 @@ let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (
     clear x''')
   = ()
 
-let unfold_contains_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp) (h:history)
   : Lemma
     (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
     (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))
