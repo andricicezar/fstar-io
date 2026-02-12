@@ -696,7 +696,7 @@ Lemma
       lem_value_is_irred (ELam k1);
       eliminate forall m' lt2. e_beh m m' (h++lt1) lt2 ==> (exists (fs_r_m:fs_val a). a ∋ ((h++lt1)++lt2, fs_r_m, m') /\ fs_beh fs_m (h++lt1) lt2 fs_r_m) with m' lt2;
       lem_value_is_irred m';
-      unfold_contains_io_arrow a b h fs_k' k1;
+      unfold_contains_io_arrow a b fs_k' k1 h;
       eliminate exists (fs_r_m:fs_val a). a ∋ ((h++lt1)++lt2, fs_r_m, m') /\ fs_beh fs_m h lt2 fs_r_m
       returns exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_bind fs_m fs_k') h lt fs_r with _. begin
         eliminate exists (fs_r':fs_val b). b ∋ (((h++lt1)++lt2)++lt'', fs_r', e') /\ fs_beh (fs_k' fs_r_m) ((h++lt1)++lt2) lt'' fs_r'
@@ -753,7 +753,7 @@ Lemma
       lem_value_is_irred (ELam f1);
       eliminate forall x' lt2. e_beh x x' h lt2 ==> (a ∋ (h, fs_x, x') /\ lt2 == []) with x' lt2;
       lem_value_is_irred x';
-      unfold_contains_io_arrow a b h fs_f f1;
+      unfold_contains_io_arrow a b fs_f f1 h;
       assert (b ⫄ (h, fs_f fs_x, subst_beta x' f1));
       assert (exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh (fs_f fs_x) h lt fs_r);
       get_squash (exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh (fs_f fs_x) h lt fs_r)))
@@ -845,7 +845,7 @@ let helper_equiv_oprod_case_oval_steps (e e':closed_exp) (h:history) (lt:local_t
       assert (steps (ELam inlc) (ELam inlc) h []);
       lem_value_is_irred (ELam inlc);
       assert ((a ^->!@ c) ∋ (h, fs_inlc, ELam inlc));
-      unfold_contains_io_arrow a c h fs_inlc inlc;
+      unfold_contains_io_arrow a c fs_inlc inlc h;
       assert (c ⫄ (h, fs_e, subst_beta c' inlc));
       assert (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
       end
@@ -853,7 +853,7 @@ let helper_equiv_oprod_case_oval_steps (e e':closed_exp) (h:history) (lt:local_t
       assert (steps (ELam inrc) (ELam inrc) h []);
       lem_value_is_irred (ELam inrc);
       assert ((b ^->!@ c) ∋ (h, fs_inrc, ELam inrc));
-      unfold_contains_io_arrow b c h fs_inrc inrc;
+      unfold_contains_io_arrow b c fs_inrc inrc h;
       assert (c ⫄ (h, fs_e, subst_beta c' inrc));
       assert (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
       end
@@ -1206,9 +1206,43 @@ let equiv_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_opro
     (requires fs_f ⊒ f /\ fs_x ⊒ x)
     (ensures fs_oprod_app fs_f fs_x ⊒ EApp f x)
   =
-  assume (fv_in_env g x);
-  assume (fv_in_env g f);
-  assume (fv_in_env g (EApp f x));
+  lem_fv_in_env_app g f x;
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⫄ (h, fs_oprod_app fs_f fs_x fsG, gsubst s (EApp f x)) with begin
+    let fs_f' : fs_prod (a ^->!@ b) = fs_f fsG in
+    let fs_x' : fs_prod a = fs_x fsG in
+    let fs_e = fs_prod_bind fs_f' (fun f' -> fs_prod_bind fs_x' (fun x' -> (f' x'))) in
+    assert (fs_e == fs_oprod_app fs_f fs_x fsG) by (
+      norm [delta_only [`%fs_oprod_app;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_app_oval_oval]];
+      l_to_r [`lem_hd_stack;`tail_stack_inverse];
+      trefl ());
+    let e = EApp (gsubst s f) (gsubst s x) in
+    assert (gsubst s (EApp f x) == e);
+    let EApp f x = e in
+    introduce fsG `(∽) h` s ==> b ⫄ (h, fs_oprod_app fs_f fs_x fsG, gsubst s (EApp f x)) with _. begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+          lem_shift_type_value_environments h fsG s;
+          bind_squash (steps e e' h lt) (fun sts1 ->
+            let a_typ = type_quotation_to_typ (get_rel a) in
+            let b_typ = type_quotation_to_typ (get_rel b) in
+            let (f1, (| lt1, lt' |)) = destruct_steps_eapp_e1 f x e' h lt sts1 a_typ b_typ in
+            assert ((a ^->!@ b) ⫄ (h, fs_f', f));
+            eliminate forall lt1 f'. e_beh f f' h lt1 ==> (exists (fs_r_f:fs_val (a ^->!@ b)). (a ^->!@ b) ∋ (h++lt1, fs_r_f, f') /\ fs_beh fs_f' h lt1 fs_r_f) with lt1 (ELam f1);
+            lem_value_is_irred (ELam f1);
+            eliminate exists (fs_r_f:fs_val (a ^->!@ b)). (a ^->!@ b) ∋ (h++lt1, fs_r_f, (ELam f1)) /\ fs_beh fs_f' h lt1 fs_r_f
+              returns exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+            lem_values_are_expressions (a ^->!@ b) (h++lt1) fs_r_f (ELam f1);
+            assert ((a ^->!@ b) ⊇ (h++lt1, fs_r_f, (ELam f1)));
+            assert (forall (lt:local_trace h). a ⫄ (h++lt, fs_x', x));
+            assert (is_closed (EApp (ELam f1) x));
+            assert (steps (EApp (ELam f1) x) e' (h++lt1) lt');
+            admit ()
+            end
+          )
+        end
+      end
+    end
+  end
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> b ⫄ (h, io_bind (fs_f fsG) (fun (x_:fs_val (a ^->!@ b)) -> (fun (fsG_:eval_env (extend (a ^->!@ b) g)) -> (fun (f':fs_val (a ^->!@ b)) -> fs_oprod_bind fs_x (fun (fsG':eval_env (extend a g)) -> (fun (x':fs_val a) -> fs_oprod_return_prod _ _ (f' x')) (hd fsG') (tail fsG'))) (hd fsG_) (tail fsG_)) (stack fsG x_)), gsubst s (EApp f x)) with begin
   introduce _ ==> _ with _. begin
     let fs_f = fs_f fsG in
