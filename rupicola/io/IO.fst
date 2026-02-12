@@ -434,39 +434,49 @@ let destruct_fs_beh_read #t1 #t2 (args:io_args ORead) (res:io_res ORead args) (c
   end
 *)
 
-(*
-let rec extend_theta_to_io_bind #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) (p:hist_post h t1) :
-  Lemma (requires (theta m h p))
-        (ensures  (exists lt1 fs_m . theta (io_bind m f) h (fun lt _ -> exists (lt2: local_trace (h ++ lt1)) . lt = lt1@lt2 /\ p lt1 fs_m))) =
+#push-options "--z3rlimit 10000"
+let rec theta_thetaP_in_post #t (m:io t) (h:history) : Lemma (theta m h (fun lt fs_r -> thetaP m h lt fs_r)) = 
   match m with
-  | Return x ->
-      assert (p [] x);
-      introduce exists lt1 . (exists fs_m . theta (io_bind m f) h (fun lt fs_r -> exists (lt2: local_trace (h ++ lt1)) . lt = lt1@lt2 /\ p lt1 fs_m)) with [] and begin
-        introduce exists fs_m . theta (io_bind m f) h (fun lt fs_r -> exists (lt2: local_trace h) . lt = []@lt2 /\ p [] fs_m) with x and begin
-          assume (theta (f x) h (fun lt fs_r -> True)); // Can we prove this?
-          assert (theta (f x) h (fun lt fs_r -> True) ==> theta (f x) h (fun lt fs_r -> exists lt2 fs_m . lt = [] @ lt2 /\ p [] fs_m)); // Monotonicity
-          assert (theta (f x) h (fun lt fs_r -> exists lt2 fs_m . lt = [] @ lt2 /\ p [] fs_m))
-        end
-      end
+  | Return x -> ()
   | Call o args k -> 
-    assert (hist_bind (op_wp o args) (fun r -> theta (k r)) h p);
-    assert ((op_wp o args) h (fun lt r ->  theta (k r) (h ++ lt) (fun lt' r' -> p (lt @ lt') r')));
-    admit ()
-*)
+      introduce forall (lt:local_trace h) r. (lt == [op_to_ev o args r]) ==> theta (k r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r') with begin
+        introduce _ ==> _ with _. begin
+          theta_thetaP_in_post (k r) (h ++ lt);
+          assert (theta (k r) (h ++ lt) (fun lt' fs_r' -> thetaP (k r) (h ++ lt) lt' fs_r'));
+          assume (forall lt' fs_r . thetaP (k r) (h ++ lt) lt' fs_r ==> thetaP m h (lt@lt') fs_r); // We should be able to prove something like this, right?
+          assert (theta (k r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r'))
+        end
+      end;
+      assert ((op_wp o args) h (fun lt fs_r -> theta (k fs_r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r')))
+#pop-options
 
 unfold
 let theta_io_bind_exists_post #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) (lt:local_trace h) (fs_r:t2) =
   exists fs_m lt1 lt2 . 
       lt = lt1@lt2 /\ 
       thetaP m h lt1 fs_m /\
-      thetaP (f fs_m) (h++lt1) lt2 fs_r
+      thetaP (f fs_m) (h++lt1) lt2 fs_r /\
+      theta m h (fun lt1' fs_m' -> lt1' == lt1 /\ fs_m' == fs_m)
 
 let rec theta_io_bind_exists #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Lemma (theta (io_bind m f) h (theta_io_bind_exists_post m f h)) =
   match m with
   | Return x ->
+      theta_thetaP_in_post (f x) h; // Gives [ theta (f x) h (fun lt fs_r -> thetaP (f x) h lt fs_r) ]
       assume (theta (f x) h (fun lt fs_r -> 
-        exists fs_m lt1 lt2 . lt = lt1@lt2 /\ thetaP (Return x) h lt1 fs_m /\ thetaP (f fs_m) (h++lt1) lt2 fs_r))
-  | Call o args k -> admit ()
+        exists lt2 . lt = []@lt2 /\ thetaP (f x) h lt2 fs_r));  // Equivalent to the previous line, ought to follow from monotonicity of hist
+      assume (theta (f x) h (fun lt fs_r -> 
+        exists lt2 . lt = []@lt2 /\ (forall (p:hist_post h t1). p [] x ==> p [] x) /\ thetaP (f x) h lt2 fs_r)); // Equivalent to the previous line, ought to follow from monotonicity of hist
+      assume (theta (f x) h (fun lt fs_r -> 
+        exists lt2 . lt = []@lt2 /\ thetaP (Return x) h [] x /\ thetaP (f x) h lt2 fs_r));  // Equivalent to previous line, ought to follow from monotonicity of hist
+      assume (theta (f x) h (fun lt fs_r -> 
+        exists fs_m lt1 lt2 . lt = lt1@lt2 /\ thetaP (Return x) h lt1 fs_m /\ thetaP (f fs_m) (h++lt1) lt2 fs_r /\ lt1 == [] /\ fs_m == x)); // This goes through as an assert intermittently
+      // Below is what needs to be shown in the Return case, ought to follow from monotonicity of hist
+      assume (theta (f x) h (fun lt fs_r -> 
+        exists fs_m lt1 lt2 . lt = lt1@lt2 /\ thetaP (Return x) h lt1 fs_m /\ thetaP (f fs_m) (h++lt1) lt2 fs_r /\ theta (Return x) h (fun lt1' fs_m' -> lt1' == lt1 /\ fs_m' == fs_m))) 
+  | Call o args k -> 
+      // TODO: Spell out this case step-by-step as well
+      assume (theta (io_bind (Call o args k) f) h (theta_io_bind_exists_post m f h)) // What needs to be shown in the Call case
+
 
 let destruct_fs_beh #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local_trace h) (fs_r:t2) :
   Lemma
@@ -474,19 +484,12 @@ let destruct_fs_beh #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local_trac
     (ensures exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_m:t1).
       lt == (lt1@lt2) /\
       thetaP m h lt1 fs_m /\ // forall p. theta m h p ==> p lt1 fs_m
-      thetaP (k fs_m) (h++lt1) lt2 fs_r) (* forall p. theta (k fs_m) (h++lt1) p ==> p lt2 fs_r *) = 
-    assert (forall (p:hist_post h t2). theta (io_bind m k) h p ==> p lt fs_r);
-    let p : hist_post h t2 = fun (lt:local_trace h) (r:t2) -> exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_m:t1). (lt==lt1@lt2) /\ thetaP m h lt1 fs_m /\ thetaP (k fs_m) (h++lt1) lt2 fs_r in
-    eliminate forall (p:hist_post h t2). theta (io_bind m k) h p ==> p lt fs_r with p;
-    //assume (theta (io_bind m k) h p)
-    theta_monad_morphism_bind m k;
-    assert (theta (io_bind m k) `hist_equiv` hist_bind (theta m) (fun x -> theta (k x)));
-    eliminate forall (h:history) (p:hist_post h t2). theta (io_bind m k) h p <==> hist_bind (theta m) (fun x -> theta (k x)) h p with h p;
-    assert (hist_bind (theta m) (fun x -> theta (k x)) h p == (theta m) h (hist_post_bind' (fun x -> theta (k x)) p));
-    assert ((theta m) h (hist_post_bind' (fun x -> theta (k x)) p) == (theta m) h (fun lt r -> theta (k r) (h++lt) (hist_post_shift h p lt)));
-    assert ((theta m) h (fun lt r -> theta (k r) (h++lt) (hist_post_shift h p lt)) == (theta m) h (fun lt r -> theta (k r) (h++lt) (fun lt' r' -> p (lt @ lt') r')));
-    //assume ((theta m) h (fun lt r -> theta (k r) (h++lt) (fun lt' r' -> p (lt @ lt') r')))
-    admit ()
+      thetaP (k fs_m) (h++lt1) lt2 fs_r) (* forall p. theta (k fs_m) (h++lt1) p ==> p lt2 fs_r *) =
+    (* IDEA: First, prove that [ theta (io_bind m f) h (theta_io_bind_exists_post m f h) ] 
+             Second, combine it with [ thetaP (io_bind m k) h lt fs_r ] i.e. with [ forall p. theta (io_bind m k) h p ==> p lt fs_r ] *)
+    theta_io_bind_exists m k h
+
+
 
 
 (* Thoughts with Danel 
