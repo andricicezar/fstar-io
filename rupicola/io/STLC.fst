@@ -967,19 +967,14 @@ let construct_steps_eif
     (ensures steps (EIf e1 e2 e3) e' h (lt1@lt2))
     (decreases sts1) =
   construct_steps_eif_e1 e1 e1' e2 e3 h lt1 sts1;
-  match e1' with
-  | ETrue -> begin
-    let _ : step (EIf ETrue e2 e3) e2 (h++lt1) None = IfTrue e2 e3 (h++lt1) in
-    lem_step_implies_steps (EIf ETrue e2 e3) e2 (h++lt1) None;
-    lem_steps_transitive (EIf e1' e2 e3) e2 e' (h++lt1) [] lt2;
-    lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) e' h lt1 lt2
-    end
-  | EFalse -> begin
-    let _ : step (EIf EFalse e2 e3) e3 (h++lt1) None = IfFalse e2 e3 (h++lt1) in
-    lem_step_implies_steps (EIf EFalse e2 e3) e3 (h++lt1) None;
-    lem_steps_transitive (EIf e1' e2 e3) e3 e' (h++lt1) [] lt2;
-    lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) e' h lt1 lt2
-    end
+  let e_tf = match e1' with | ETrue -> e2 | EFalse -> e3 in
+  let _ : step (EIf e1' e2 e3) e_tf (h++lt1) None =
+    match e1' with
+    | ETrue -> IfTrue e2 e3 (h++lt1)
+    | EFalse -> IfFalse e2 e3 (h++lt1) in
+  lem_step_implies_steps (EIf e1' e2 e3) e_tf (h++lt1) None;
+  lem_steps_transitive (EIf e1' e2 e3) e_tf e' (h++lt1) [] lt2;
+  lem_steps_transitive (EIf e1 e2 e3) (EIf e1' e2 e3) e'  h lt1 lt2
 
 let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
   (requires indexed_sem_expr_shape TBool e1 h)
