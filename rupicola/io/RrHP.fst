@@ -24,7 +24,7 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
-  (i.ct ^->!@ qBool) ⊩ ps
+  qs:((i.ct ^->!@ qBool) ⊩ ps){ QLambdaProd? qs }
 
 type ctxS (i:intS) = fs_val i.ct
 type wholeS = fs_prod qBool // CA: To be able to compile whole programs requires a proof that it can be compiled

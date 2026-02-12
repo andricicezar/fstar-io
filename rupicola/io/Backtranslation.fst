@@ -156,7 +156,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
   | EInl _ ->
     let TyInl #t1 t2 h1 = h in
     let h1 : typing g _ t1 = h1 in
-    fs_oprod_fmap #_ #_ #(t1 ^+ t2)(backtranslate_exp h1) Inl
+    fs_oprod_fmap #_ #_ #(t1 ^+ t2) (backtranslate_exp h1) Inl
   | EInr _ ->
     let TyInr t1 #t2 h1 = h in
     let h1 : typing g _ t2 = h1 in
@@ -322,61 +322,80 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     lem_backtranslate_subset_exp h';
     C2.equiv_oprod_close (backtranslate_exp h') e'
 
-let backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
-  admit ()
+let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
+  match e with
+  | EUnit -> ()
+  | ETrue -> true
+  | EFalse -> false
+  | ELam _ ->
+    let TyLam #t1 #t2 hbody = h in
+    let hbody : typing (extend t1 empty) _ t2 = hbody in
+    fun x -> (backtranslate_exp hbody) (stack empty_eval x)
+  | EPair _ _ ->
+    let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
+    let h1 : typing empty _ t1 = h1 in
+    let h2 : typing empty _ t2 = h2 in
+    fs_val_pair (backtranslate h1) (backtranslate h2)
+  | EInl _ ->
+    let TyInl #t1 t2 h1 = h in
+    let h1 : typing empty _ t1 = h1 in
+    Inl #(get_Type t1) #(get_Type t2) (backtranslate h1)
+  | EInr _ ->
+    let TyInr t1 #t2 h1 = h in
+    let h1 : typing empty _ t2 = h1 in
+    Inr #(get_Type t1) #(get_Type t2) (backtranslate h1)
+  | EFileDescr _ ->
+    let TyFileDescr fd = h in
+    fd
 
-let lem_backtranslate (#e:value) #t (h:typing empty e t) =
-  assume (valid_contains #t (backtranslate h) e);
-  assume (valid_member_of (backtranslate h) e)
-
-(**
-let lem_bt_ctx i ct : Lemma (
-  let (| e, _ |) = ct in
-  valid_in_val (backtranslate_ctx #i ct) e)
-=
-  let (| e, tyj |) = ct in
-  let cs = backtranslate tyj in
-  let t = (comp_int i).ct in
-  lem_value_is_closed e;
-  lem_closed_is_no_fv e;
-  assert (fv_in_env empty e);
-  lem_backtranslate tyj;
-  assert (cs ⊐ e);
-  lem_equiv_val #t (cs empty_eval) e;
-  lem_values_in_exp_rel_are_in_val_rel t (cs empty_eval) e **)
-
-(**
-let rec lem_backtranslate_value_no_io (#g:typ_env) (#e:value) (#t:qType) (h:typing g e t) (fsG:eval_env g) :
-  Pure (fs_val t) True (fun v -> return v == backtranslate_exp h fsG) =
-  let r = backtranslate_exp h fsG in
+let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Lemma (valid_contains #t (backtranslate h) e) =
   match e with
   | EUnit
   | ETrue
-  | EVar _
-  | EFalse -> extract_v_from_io_return r
+  | EFalse
+  | EFileDescr _ -> ()
+  | ELam _ ->
+    let TyLam #t1 #t2 #body hbody = h in
+    lem_backtranslate_superset_exp hbody;
+    C1.equiv_oval_lambda_oprod (backtranslate_exp hbody) body;
+    let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
+    lem_value_superset_valid_contains (t1 ^->!@ t2) f' e;
+    assert (valid_contains #(t1 ^->!@ t2) (f' empty_eval) e)
+  | EPair _ _ ->
+    let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
+    lem_backtranslate_valid_contains h1;
+    lem_backtranslate_valid_contains h2
+  | EInl _ ->
+    let TyInl #t1 t2 #e' h' = h in
+    lem_backtranslate_valid_contains h'
+  | EInr _ ->
+    let TyInr t1 #t2 #e' h' = h in
+    lem_backtranslate_valid_contains h'
 
-  | EInl e' ->
-    let TyInl #t1 t2 h' = h in
-    let r : fs_prod (t1 ^+ t2) = r in
-    assert (r == io_bind (backtranslate_exp h' fsG) (fun x -> return (Inl #_ #(get_Type t2) x))) by (
-      rewrite_eqs_from_context ();
-      norm [delta_once [`%backtranslate_exp;`%(let!@)];zeta;iota]);
+let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : Lemma (valid_member_of #t (backtranslate h) e) =
+  match e with
+  | EUnit
+  | ETrue
+  | EFalse
+  | EFileDescr _ -> ()
+  | ELam _ ->
+    let TyLam #t1 #t2 #body hbody = h in
+    lem_backtranslate_subset_exp hbody;
+    C2.equiv_oval_lambda_oprod (backtranslate_exp hbody) body;
+    let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
+    lem_value_subset_valid_member_of (t1 ^->!@ t2) f' e;
+    assert (valid_member_of #(t1 ^->!@ t2) (f' empty_eval) e)
+  | EPair _ _ ->
+    let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
+    lem_backtranslate_valid_member_of h1;
+    lem_backtranslate_valid_member_of h2
+  | EInl _ ->
+    let TyInl #t1 t2 #e' h' = h in
+    lem_backtranslate_valid_member_of h'
+  | EInr _ ->
+    let TyInr t1 #t2 #e' h' = h in
+    lem_backtranslate_valid_member_of h'
 
-    let r' = lem_backtranslate_value_no_io h' fsG in
-    assert (
-      io_bind (backtranslate_exp h' fsG) (fun x -> return (Inl #_ #(get_Type t2) x))
-      == io_bind (return r') (fun x -> return (Inl #_ #(get_Type t2) x)));
-    assume (io_bind (return r') (fun x -> return (Inl #_ #(get_Type t2) x)) ==
-      return (Inl #_ #(get_Type t2) r'));
-    assume (r == return (Inl #_ #(get_Type t2) r'));
-    extract_v_from_io_return r
-  | EInr e' -> admit ()
-  | EPair _ _ -> admit ()
-  | ELam _ -> admit ()
-
-  | EIf _ _ _
-  | EApp _ _
-  | EFst _
-  | ESnd _
-  | ECase _ _ _ -> assert False
-**)
+let lem_backtranslate (#e:value) #t (h:typing empty e t) =
+  lem_backtranslate_valid_contains h;
+  lem_backtranslate_valid_member_of h

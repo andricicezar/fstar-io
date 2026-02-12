@@ -217,13 +217,17 @@ and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation 
 
 let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
   (qs:(a ^->!@ b) ⊩ s)
-  : Lemma (ELam? (compile qs))
-  = admit ()
+  : Lemma (requires (QLambdaProd? qs))
+          (ensures (ELam? (compile qs)))
+  =
+  match qs with
+  | QLambdaProd qbody ->
+    assert (ELam? (compile qs)) by (norm [delta_once [`%compile];zeta;iota])
 
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
   assume (is_closed (compile qs));
   assume (is_value (compile qs));
   lem_compile_superset qs;
-  lem_value_superset_valid_contains a s (compile qs);
+  lem_value_superset_valid_contains a (fun _ -> s) (compile qs);
   lem_compile_subset qs;
-  lem_value_subset_valid_member_of a s (compile qs)
+  lem_value_subset_valid_member_of a (fun _ -> s) (compile qs)
