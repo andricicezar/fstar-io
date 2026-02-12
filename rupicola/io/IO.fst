@@ -434,6 +434,34 @@ let destruct_fs_beh_read #t1 #t2 (args:io_args ORead) (res:io_res ORead args) (c
   end
 *)
 
+let rec extend_theta_to_io_bind #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) (p:hist_post h t1) :
+  Lemma (requires (theta m h p))
+        (ensures  (exists lt1 fs_m . theta (io_bind m f) h (fun lt _ -> exists (lt2: local_trace (h ++ lt1)) . lt = lt1@lt2 /\ p lt1 fs_m))) =
+  match m with
+  | Return x ->
+      assert (p [] x);
+      introduce exists lt1 . (exists fs_m . theta (io_bind m f) h (fun lt fs_r -> exists (lt2: local_trace (h ++ lt1)) . lt = lt1@lt2 /\ p lt1 fs_m)) with [] and begin
+        introduce exists fs_m . theta (io_bind m f) h (fun lt fs_r -> exists (lt2: local_trace h) . lt = []@lt2 /\ p [] fs_m) with x and begin
+          assume (theta (f x) h (fun lt fs_r -> True)); // Can we prove this?
+          assert (theta (f x) h (fun lt fs_r -> True) ==> theta (f x) h (fun lt fs_r -> exists lt2 fs_m . lt = [] @ lt2 /\ p [] fs_m)); // Monotonicity
+          assert (theta (f x) h (fun lt fs_r -> exists lt2 fs_m . lt = [] @ lt2 /\ p [] fs_m))
+        end
+      end
+  | Call o args k -> 
+    assert (hist_bind (op_wp o args) (fun r -> theta (k r)) h p);
+    assert ((op_wp o args) h (fun lt r ->  theta (k r) (h ++ lt) (fun lt' r' -> p (lt @ lt') r')));
+    admit ()
+
+let destruct_fs_beh' #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local_trace h) (fs_r:t2) :
+  Lemma
+    (requires thetaP (io_bind m k) h lt fs_r) // forall p. theta (io_bind m k) h p ==> p lt fs_r
+    (ensures exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_m:t1).
+      lt == (lt1@lt2) /\
+      thetaP m h lt1 fs_m) = // forall p. theta m h p ==> p lt1 fs_m
+  assert (forall (p:hist_post h t2). theta (io_bind m k) h p ==> p lt fs_r);
+  admit ()
+
+
 let destruct_fs_beh #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local_trace h) (fs_r:t2) :
   Lemma
     (requires thetaP (io_bind m k) h lt fs_r) // forall p. theta (io_bind m k) h p ==> p lt fs_r
