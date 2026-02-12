@@ -173,7 +173,8 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     let ELam e' = e in
     introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⊇ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
       introduce pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> _ with _. begin
-        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⊇ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
+        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⊇ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v');
+        trans_history h lt lt_v'
       end
     end
     end
@@ -182,7 +183,8 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     let ELam e' = e in
     introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⫄ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
       introduce pack qt1 ∋ ((h++lt)++lt_v', fs_v', v) ==> _ with _. begin
-        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⫄ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v')
+        eliminate forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∋ (h++lt_v, fs_v, v) ==> pack qt2 ⫄ (h++lt_v, fs_f fs_v, subst_beta v e') with v fs_v' (lt @ lt_v');
+        trans_history h lt lt_v'
       end
     end
     end

@@ -478,13 +478,11 @@ let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend
   (*lem_fv_in_env_lam g a k;
   lem_fv_in_env_app g (ELam k) m;
   equiv_oval_lambda_oprod fs_k k;
-  let fs_k' : fs_oval g (a ^->!@ b) = fun fsG x -> fs_k (stack fsG x) in
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> b ⫃ (h, io_bind (fs_m fsG) (fun x -> fs_k (stack fsG x)), gsubst s (EApp (ELam k) m)) with begin
-    let fs_m = fs_m fsG in
-    let fs_k' = fs_k' fsG in
-    io_bind_equivalence (fun x -> fs_k (stack fsG x)) fs_k' fs_m;
-    let fs_e = io_bind fs_m (fun x -> fs_k (stack fsG x)) in
-    let fs_e' = io_bind fs_m fs_k' in
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> b ⫃ (h, fs_oprod_bind fs_m fs_k fsG, gsubst s (EApp (ELam k) m)) with begin
+    let fs_m' = fs_m fsG in
+    let fs_k' : fs_val a -> fs_prod b = fun x -> fs_k (stack fsG x) in
+    let fs_e = fs_prod_bind fs_m' fs_k' in
+    assert ((fs_oprod_bind fs_m fs_k fsG) == fs_e);
     let k' = subst (sub_elam s) k in
     assert (gsubst s (ELam k) == ELam k');
     let e = EApp (ELam k') (gsubst s m) in
@@ -700,7 +698,55 @@ let equiv_oprod_false g : Lemma (fs_oprod_return_val g qBool false ⊑ EFalse) =
   equiv_oval_false g;
   equiv_oprod_return (fs_oval_return g qBool false) EFalse
 
-#push-options "--split_queries always --z3rlimit 32"
+let helper_equiv_oprod_if_steps_pre (g:typ_env) (e:closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:fs_prod qBool) (fs_e2 fs_e3:fs_oprod g t) (fs_e:fs_prod t) (fs_r:fs_val t) (e1 e2 e3:closed_exp) (fsG:eval_env g) =
+  (fs_e == (io_bind fs_e1 (fun x -> (if (hd (stack fsG x)) then (fs_e2 (tail (stack fsG x))) else (fs_e3 (tail (stack fsG x))))))) /\
+  (e == (EIf e1 e2 e3)) /\
+  (fs_beh fs_e h lt fs_r) /\
+  (qBool ⫃ (h, fs_e1, e1)) /\
+  (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e2 fsG), e2)) /\
+  (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e3 fsG), e3))
+
+#push-options "--split_queries always"
+let helper_equiv_oprod_if_steps #g #e #h #lt #t #fs_e1 #fs_e2 #fs_e3 #fs_e #fs_r #e1 #e2 #e3 #fsG (sq:squash (helper_equiv_oprod_if_steps_pre g e h lt t fs_e1 fs_e2 fs_e3 fs_e fs_r e1 e2 e3 fsG)) : squash (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) =
+  destruct_fs_beh fs_e1 (fun x -> (if (hd (stack fsG x)) then (fs_e2 (tail (stack fsG x))) else (fs_e3 (tail (stack fsG x))))) h lt fs_r;
+  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_m:fs_val qBool). 
+  lt == (lt1@lt2) /\ fs_beh fs_e1 h lt1 fs_m /\ fs_beh ((fun x -> (if (hd (stack fsG x)) then (fs_e2 (tail (stack fsG x))) else (fs_e3 (tail (stack fsG x))))) fs_m) (h++lt1) lt2 fs_r
+  returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+  assert (qBool ⫃ (h, fs_e1, e1));
+  assume (forall (lt1:local_trace h) (fs_r1:get_Type qBool). fs_beh fs_e1 h lt1 fs_r1 ==> exists e1'. qBool ∈ (h++lt1, fs_r1, e1') /\ e_beh e1 e1' h lt1);
+  eliminate forall (lt1:local_trace h) (fs_r1:get_Type qBool). fs_beh fs_e1 h lt1 fs_r1 ==> exists e1'. qBool ∈ (h++lt1, fs_r1, e1') /\ e_beh e1 e1' h lt1 with lt1 fs_m;
+  assert (t ⫃ (h++lt1, (fs_e2 fsG), e2));
+  assume (forall (lt2:local_trace (h++lt1)) (fs_r2:get_Type t). fs_beh (fs_e2 fsG) (h++lt1) lt2 fs_r2 ==> exists e'. t ∈ ((h++lt1)++lt2, fs_r2, e') /\ e_beh e2 e' (h++lt1) lt2);
+  eliminate forall (lt2:local_trace (h++lt1)) (fs_r2:get_Type t). fs_beh (fs_e2 fsG) (h++lt1) lt2 fs_r2 ==> exists e'. t ∈ ((h++lt1)++lt2, fs_r2, e') /\ e_beh e2 e' (h++lt1) lt2 with lt2 fs_r;
+  assert (t ⫃ (h++lt1, (fs_e3 fsG), e3));
+  assume (forall (lt3:local_trace (h++lt1)) (fs_r3:get_Type t). fs_beh (fs_e3 fsG) (h++lt1) lt3 fs_r3 ==> exists e'. t ∈ ((h++lt1)++lt3, fs_r3, e') /\ e_beh e3 e' (h++lt1) lt3);
+  eliminate forall (lt3:local_trace (h++lt1)) (fs_r3:get_Type t). fs_beh (fs_e3 fsG) (h++lt1) lt3 fs_r3 ==> exists e'. t ∈ ((h++lt1)++lt3, fs_r3, e') /\ e_beh e3 e' (h++lt1) lt3 with lt2 fs_r;
+  eliminate exists e1'. qBool ∈ (h++lt1, fs_m, e1') /\ e_beh e1 e1' h lt1
+  returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+  assert (fs_m == true \/ fs_m == false);
+  introduce fs_m == true ==> exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e2 e' (h++lt1) lt2
+    returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+    FStar.Squash.bind_squash #(steps e1 e1' h lt1) () (fun sts1 ->
+    FStar.Squash.bind_squash #(steps e2 e' (h++lt1) lt2) () (fun sts2 ->
+    construct_steps_eif e1 e1' e2 e3 e' h lt1 lt2 sts1 sts2;
+    trans_history h lt1 lt2))
+    end
+  end;
+  introduce fs_m == false ==> exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e3 e' (h++lt1) lt2
+    returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+    FStar.Squash.bind_squash #(steps e1 e1' h lt1) () (fun sts1 ->
+    FStar.Squash.bind_squash #(steps e3 e' (h++lt1) lt2) () (fun sts3 ->
+    construct_steps_eif e1 e1' e2 e3 e' h lt1 lt2 sts1 sts3;
+    trans_history h lt1 lt2))
+    end
+  end
+  end
+  end
+#pop-options
+
+#push-options "--split_queries always"
 let equiv_oprod_if #g
   (#t:qType)
   (fs_e1:fs_oprod g qBool) (fs_e2:fs_oprod g t) (fs_e3:fs_oprod g t)

@@ -101,37 +101,29 @@ type local_trace (h:trace) =
 
 open FStar.List.Tot
 
-let (++) (h:history) (lt:local_trace h) : history =
-  List.rev lt @ h
-
-let trans_well_formed_local_trace (h:trace) (lt:local_trace h) (lt1:local_trace (h++lt)) :
-  Lemma (well_formed_local_trace h (lt @ lt1))
-  [SMTPat (well_formed_local_trace h (lt @ lt1))] =
-    admit ()
-
-let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (ev::h)) :
-  Lemma (well_formed_local_trace h ([ev] @ lt))
-  [SMTPat (well_formed_local_trace h ([ev] @ lt))] =
-    admit ()
-
-let singleton_event_well_formed_local_trace (h:trace) (ev:event_h h) :
-  Lemma (well_formed_local_trace h [ev])
-  [SMTPat (well_formed_local_trace h [ev])] =
-    admit ()
-
-let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
-  Lemma (((h++lt)++lt') == (h++(lt @ lt')))
-  [SMTPat (h++(lt @ lt'))] =
-    admit ()
-
-let trans_history' (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
-  Lemma (((h++lt)++lt') == (h++(lt @ lt')))
-  [SMTPat ((h++lt)++lt')] =
-    admit ()
-
-let associative_history #h (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt3:local_trace ((h++lt1)++lt2)) :
-  Lemma ((lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) =
-    admit ()
+let ev_lt (#h:history) (ev:event_h h) : local_trace h =
+  assume (well_formed_local_trace h [ev]);
+  [ev]
 
 let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
-  if Some? oev then [Some?.v oev] else []
+  assume (well_formed_local_trace h []);
+  if Some? oev then (ev_lt (Some?.v oev)) else []
+
+let (++) (h:history) (lt:local_trace h) : history =
+  List.rev lt `List.append` h
+
+let (@) (#h:history) (lt:local_trace h) (lt':local_trace (h++lt)) : local_trace h =
+  assume (well_formed_local_trace h (lt `List.append` lt'));
+  lt `List.append` lt'
+
+let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (h++(ev_lt ev))) :
+  Lemma (well_formed_local_trace h ((ev_lt ev) @ lt)) = admit ()
+
+let trans_well_formed_local_trace_event' (h:trace) (oev:option (event_h h)) (lt:local_trace (h++(as_lt oev))) :
+  Lemma (well_formed_local_trace h ((as_lt oev) @ lt)) = admit ()
+
+let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
+  Lemma (((h++lt)++lt') == (h++(lt @ lt'))) = admit ()
+
+let associative_history #h (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt3:local_trace ((h++lt1)++lt2)) :
+  Lemma (trans_history h lt1 lt2; (lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) = admit ()
