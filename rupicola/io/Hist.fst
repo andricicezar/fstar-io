@@ -1,7 +1,7 @@
 module Hist
 
 open FStar.Tactics
-open FStar.List.Tot.Base
+//open FStar.List.Tot.Base
 open Trace
 (** The postcondition for an io computation is defined over the
 result (type: a) and local trace (type: list event).
@@ -102,8 +102,10 @@ unfold
 let hist_if_then_else (wp1 wp2:hist 'a) (b:bool) : hist 'a =
   fun h p -> (b ==> wp1 h p) /\ ((~b) ==> wp2 h p)
 
-let __list_assoc_l #a (l1 l2 l3 : list a) : Lemma (l1 @ (l2 @ l3) == (l1 @ l2) @ l3) = List.Tot.Properties.append_assoc l1 l2 l3
-let __helper #a (lt lt' : list a) : Lemma (rev_acc lt [] @ rev_acc lt' [] == rev_acc (lt'@lt) []) = List.Tot.Properties.rev_append lt' lt
+module L = FStar.List.Tot
+
+let __list_assoc_l #a (l1 l2 l3 : list a) : Lemma (L.append l1 (l2 `L.append` l3) == (l1 `L.append` l2) `L.append` l3) = List.Tot.Properties.append_assoc l1 l2 l3
+let __helper #a (lt lt' : list a) : Lemma (L.rev_acc lt [] `L.append` L.rev_acc lt' [] == L.rev_acc (lt' `L.append` lt) []) = List.Tot.Properties.rev_append lt' lt
 let __iff_refl a : Lemma (a <==> a) = ()
 
 let lemma_hist_bind_associativity #a #b #c (w1:hist a) (w2:a -> hist b) (w3: b -> hist c) :

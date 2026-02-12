@@ -2,7 +2,6 @@ module IO
 
 (** we only have bools in STLC right now **)
 open Trace
-open STLC
 
 open FStar.Tactics
 
@@ -65,7 +64,7 @@ let wp2p_theta_bind m k =
   theta_monad_morphism_bind m k
 
 let lem_theta_open arg res h =
-  introduce forall (p:hist_post h (io_res OOpen arg)). (theta (openfile arg)) h p ==> p [EvOpen arg res] res with begin
+  introduce forall (p:hist_post h (io_res OOpen arg)). (theta (openfile arg)) h p ==> p (ev_lt (EvOpen arg res)) res with begin
     introduce _ ==> _ with _. begin
     match openfile arg with
     | Return x -> false_elim ()
@@ -77,13 +76,13 @@ let lem_theta_open arg res h =
   end
 
 let lem_theta_read arg res h =
-  assert (thetaP (read arg) h [EvRead arg res] res) by (compute ())
+  assert (thetaP (read arg) h (ev_lt (EvRead arg res)) res) by (compute ())
 
 let lem_theta_write arg res h =
-  assert (thetaP (write arg) h [EvWrite arg res] res) by (compute ())
+  assert (thetaP (write arg) h (ev_lt (EvWrite arg res)) res) by (compute ())
 
 let lem_theta_close arg res h =
-  assert (thetaP (close arg) h [EvClose arg res] res) by (compute ())
+  assert (thetaP (close arg) h (ev_lt (EvClose arg res)) res) by (compute ())
 
 (*let rec destruct_fs_beh_m #t1 #t2 (m:io t1) (w:t1 -> hist t2) (h:history) (lt:local_trace h) (fs_r:t2) :
   Lemma (requires forall p. hist_bind (theta m) w h p ==> p lt fs_r) 
@@ -167,7 +166,7 @@ let rec destruct_fs_beh' #t1 #t2 (m:io t1) (k:t1 -> io t2) (h:history) (lt:local
     (requires theta (io_bind (Call ORead args cont_m) k) h p) 
     (ensures forall (lt':local_trace h) (r':io_res ORead args). io_pre h ORead args /\ (io_post h ORead args r' /\ lt' == [op_to_ev ORead args r']) ==> theta (io_bind #t1 #t2 (cont_m r') k) (h++lt') (fun lt'' r'' -> p (lt' @ lt'') r'')) = admit ()*)// this is by definition
 
-let test #t1 #t2 (args:io_args ORead) (res:io_res ORead args) (cont_m:io_res ORead args -> io t1) (k:t1 -> io t2) (h:history) (tl:local_trace (h++[EvRead args res])) (fs_r:t2) (p:hist_post h t2) :
+(*let test #t1 #t2 (args:io_args ORead) (res:io_res ORead args) (cont_m:io_res ORead args -> io t1) (k:t1 -> io t2) (h:history) (tl:local_trace (h++[EvRead args res])) (fs_r:t2) (p:hist_post h t2) :
   Lemma (requires (theta (io_bind (Call ORead args cont_m) k) h p ==> p ([EvRead args res]@tl) fs_r) /\ theta (io_bind (Call ORead args cont_m) k) h p)
         (ensures (theta (io_bind (cont_m res) k) (h++[EvRead args res]) (fun (lt'':local_trace (h++[EvRead args res])) (r'':t2) -> p ([EvRead args res] @ lt'') r'') ==> (fun lt'' r'' -> p ([EvRead args res] @ lt'') r'') tl fs_r)) = ()
 
@@ -432,7 +431,7 @@ let destruct_fs_beh_read #t1 #t2 (args:io_args ORead) (res:io_res ORead args) (c
       end
     end
   end
-*)
+*)*)
 
 #push-options "--z3rlimit 10000"
 let rec theta_thetaP_in_post #t (m:io t) (h:history) : Lemma (theta m h (fun lt fs_r -> thetaP m h lt fs_r)) = 
