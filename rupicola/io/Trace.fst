@@ -102,7 +102,12 @@ type local_trace (h:trace) =
 open FStar.List.Tot
 
 let ev_lt (#h:history) (ev:event_h h) : local_trace h =
-  assume (well_formed_local_trace h [ev]);
+  assert ([ev] == ev::[]);
+  assert (forall h. well_formed_local_trace h []);
+  assert (well_formed_local_trace (ev::h) []);
+  assert (test_event h ev);
+  assert (well_formed_local_trace h [ev] <==> well_formed_local_trace h (ev::[]));
+  assume (well_formed_local_trace h (ev::[]) <==> (test_event h ev /\ well_formed_local_trace (ev::h) []));
   [ev]
 
 let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
@@ -127,3 +132,9 @@ let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
 
 let associative_history #h (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt3:local_trace ((h++lt1)++lt2)) :
   Lemma (trans_history h lt1 lt2; (lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) = admit ()
+
+let unit_l #h (lt:local_trace h) :
+  Lemma (lt@[] == lt) = admit ()
+
+let unit_r #h (lt:local_trace h) :
+  Lemma ([]@lt == lt) = admit ()
