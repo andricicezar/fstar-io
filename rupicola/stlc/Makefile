@@ -1,18 +1,26 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-ROOTS := Metaprogram.fst RrHP.fst STLCToLambdaBox.fst LambdaBoxToSexp.fst
+LAMBDABOX_DIR := lambdabox
+ROOTS := Metaprogram.fst RrHP.fst \
+         $(LAMBDABOX_DIR)/STLCToLambdaBox.fst \
+         $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
 FLAGS  = --z3version 4.15.2
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
+FLAGS += --include $(LAMBDABOX_DIR)
 FLAGS += $(OTHERFLAGS)
 
 all: verify
 
 .cache/%.fst.checked: %.fst
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+.cache/%.fst.checked: $(LAMBDABOX_DIR)/%.fst
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
@@ -65,16 +73,16 @@ validate:
 
 IOFLAGS := --unsafe_tactic_exec $(FLAGS)
 
-io_program.ast: LambdaBoxExamples.fst LambdaBoxMeta.fst \
-                STLCToLambdaBox.fst LambdaBoxToSexp.fst \
-                LambdaBox.fst Sexp.fst STLC.fst
-	$(FSTAR) $(IOFLAGS) LambdaBoxExamples.fst
+io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst $(LAMBDABOX_DIR)/LambdaBoxMeta.fst \
+                $(LAMBDABOX_DIR)/STLCToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
+                $(LAMBDABOX_DIR)/LambdaBox.fst Sexp.fst STLC.fst
+	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
 
 io_program_raw.mlf: io_program.ast
 	peregrine ocaml $< -o $@
 
-axioms.cmx: axioms.ml
-	ocamlfind ocamlopt -c $<
+axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml
+	ocamlfind ocamlopt -c -o $@ $<
 
 io_program_raw.cmx: io_program_raw.mlf
 	malfunction cmx $<
