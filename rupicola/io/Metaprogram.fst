@@ -10,12 +10,48 @@ open FStar.Stubs.Reflection.V2.Data
 
 open QExp
 
+let mk_qunit : term = mk_app (`QTyp.qUnit) []
+let mk_qbool : term = mk_app (`QTyp.qBool) []
+let mk_qarr (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qarrio (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qpair (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qsum (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
+
+let rec typ_translation (qt:term) : Tac term = 
+  match inspect_ln qt with
+  | Tv_FVar fv -> begin
+    match fv_to_string fv with
+    | "Prims.unit" -> mk_qunit
+    | "Prims.bool" -> mk_qbool
+    | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
+  end
+
+  | Tv_Arrow b c ->  begin
+    let tbv = typ_translation (binder_sort b) in
+    match inspect_comp c with
+    | C_Total ret -> 
+      let tc = typ_translation ret in
+      mk_qarr tbv tc
+    | _ -> fail ("not a total function type")
+  end
+
+  (** erase refinement **)
+  | Tv_Refine b _ -> 
+    let b = inspect_binder b in
+    typ_translation b.sort
+
+  | Tv_Unknown -> fail ("an underscore was found in the term")
+  | Tv_Unsupp -> fail ("unsupported by F* terms")
+
+  | _ -> fail ("not implemented: " ^ tag_of qt)
+
+
 let mk_tyj (ty t : term) : Tot term =
   let t = mk_app (`helper_oval) [(ty, Q_Implicit); (t, Q_Explicit)] in
   mk_app (`oval_quotation) [(ty, Q_Implicit); ((`QTyp.empty), Q_Explicit); (t, Q_Explicit)]
 
 let mk_qtt : term = mk_app (`Qtt) []
-
+let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 let mk_qtrue : term = mk_app (`QTrue) []
 
 let mk_qfalse : term = mk_app (`QFalse) []
@@ -160,55 +196,58 @@ let translation g (qprog:term) (qtyp:term) : Tac (r:(term & term){tot_typing g (
     (qderivation, desired_qtyp_derivation)
   end
 
-let meta_translation (nm:string) (qprog:term) (qtyp:term) : dsl_tac_t = fun (g, expected_t) ->
+open FStar.Tactics.Typeclasses
+
+let meta_translation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
-    let (qderivation, qtyp_derivation) = translation g qprog qtyp in
+    let (qprog, (eff, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
+    let (qderivation, qtyp_derivation) = translation g qprog (typ_translation qtyp) in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
 
 open QTyp
 
 
-#push-options "--print_implicits --no_smt"
+#push-options "--no_smt"
 
-%splice_t[tgt1] (meta_translation "tgt1" (`Examples.ut_unit) (`qUnit))
+%splice_t[tgt1] (meta_translation "tgt1" (`Examples.ut_unit))
 let _ = assert (tgt1 == test_ut_unit) by (trefl ())
 
-%splice_t[tgt2] (meta_translation "tgt2" (`Examples.ut_true) (`qBool))
+%splice_t[tgt2] (meta_translation "tgt2" (`Examples.ut_true))
 let _ = assert (tgt2 == test_ut_true) by (trefl ())
 
-%splice_t[tgt3] (meta_translation "tgt3" (`Examples.ut_false) (`qBool))
+%splice_t[tgt3] (meta_translation "tgt3" (`Examples.ut_false))
 let _ = assert (tgt3 == test_ut_false) by (trefl ())
 
 
 
-%splice_t[tgt4] (meta_translation "tgt4" (`Examples.constant) (`(qBool ^-> qBool)))
+%splice_t[tgt4] (meta_translation "tgt4" (`Examples.constant))
 
 let _ = assert (tgt4 == test_constant) by (trefl ())
 
-%splice_t[tgt5] (meta_translation "tgt5" (`Examples.identity) (`(qBool ^-> qBool)))
+%splice_t[tgt5] (meta_translation "tgt5" (`Examples.identity))
 let _ = assert (tgt5 == test_identity) by (trefl ())
 
-%splice_t[tgt6] (meta_translation "tgt6" (`Examples.thunked_id) (`(qBool ^-> qBool ^-> qBool)))
+%splice_t[tgt6] (meta_translation "tgt6" (`Examples.thunked_id))
 let _ = assert (tgt6 == test_thunked_id) by (trefl ())
 
-%splice_t[tgt7] (meta_translation "tgt7" (`Examples.proj1) (`(qBool ^-> qBool ^-> qBool ^-> qBool)))
+%splice_t[tgt7] (meta_translation "tgt7" (`Examples.proj1))
 let _ = assert (tgt7 == test_proj1) by (trefl ())
-%splice_t[tgt8] (meta_translation "tgt8" (`Examples.proj2) (`(qBool ^-> qBool ^-> qBool ^-> qBool)))
+%splice_t[tgt8] (meta_translation "tgt8" (`Examples.proj2))
 let _ = assert (tgt8 == test_proj2) by (trefl ())
-%splice_t[tgt9] (meta_translation "tgt9" (`Examples.proj3) (`(qBool ^-> qBool ^-> qBool ^-> qBool)))
+%splice_t[tgt9] (meta_translation "tgt9" (`Examples.proj3))
 let _ = assert (tgt9 == test_proj3) by (trefl ())
 
-%splice_t[tgt10] (meta_translation "tgt10" (`Examples.apply_arg) (`((qUnit ^-> qUnit) ^-> qUnit)))
+%splice_t[tgt10] (meta_translation "tgt10" (`Examples.apply_arg))
 let _ = assert (tgt10 == test_apply_arg) by (trefl ())
 
 
 
-%splice_t[tgt11] (meta_translation "tgt11" (`Examples.apply_arg2) (`((qBool ^-> qBool ^-> qBool) ^-> qBool)))
+%splice_t[tgt11] (meta_translation "tgt11" (`Examples.apply_arg2))
 let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
 
 
-%splice_t[tgt12] (meta_translation "tgt12" (`Examples.papply_arg2) (`((qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)))
+%splice_t[tgt12] (meta_translation "tgt12" (`Examples.papply_arg2))
 let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())
