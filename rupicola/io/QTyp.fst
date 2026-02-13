@@ -708,6 +708,10 @@ open Trace
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
 
+let lem_fs_beh_return #a (x:fs_val a) (h:history) :
+  Lemma (fs_beh (return x) h [] x) =
+  lem_thetaP_return x h
+
 let lem_fs_beh_bind #a #b (m:fs_prod a) (h:history) (lt1:local_trace h) (fs_r_m:fs_val a) (k:fs_val a -> fs_prod b) (lt2:local_trace (h++lt1)) (fs_r:fs_val b) :
   Lemma (requires fs_beh m h lt1 fs_r_m /\
                   fs_beh (k fs_r_m) (h++lt1) lt2 fs_r)
