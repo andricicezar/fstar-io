@@ -1198,7 +1198,7 @@ let lem_destruct_steps_epair
   (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (EPair e1' e2') e' h lt /\ indexed_irred e1' h /\ indexed_irred e2' h))
-        (ensures ((EPair e1' e2') == e')) = admit ()
+        (ensures ((EPair e1' e2') == e') /\ lt == []) = admit ()
 
 let can_step_efst_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)
