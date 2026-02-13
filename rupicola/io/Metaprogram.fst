@@ -14,49 +14,23 @@ let mk_tyj (ty t : term) : Tot term =
   let t = mk_app (`helper_oval) [(ty, Q_Implicit); (t, Q_Explicit)] in
   mk_app (`oval_quotation) [(ty, Q_Implicit); ((`QTyp.empty), Q_Explicit); (t, Q_Explicit)]
 
-let mk_qtt : term =
-  mk_app (`Qtt) [(pack_ln Tv_Unknown, Q_Implicit)]
+let mk_qtt : term = mk_app (`Qtt) []
 
-let mk_qtrue : term =
-  mk_app (`QTrue) [(pack_ln Tv_Unknown, Q_Implicit)]
+let mk_qtrue : term = mk_app (`QTrue) []
 
-let mk_qfalse : term =
-  mk_app (`QFalse) [(pack_ln Tv_Unknown, Q_Implicit)]
+let mk_qfalse : term = mk_app (`QFalse) []
 
-let mk_qvar0 : term =
-  mk_app (`QVar0) [
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit)]
+let mk_qvar0 : term = mk_app (`QVar0) []
 
-let mk_qvars (t:term) : term =
-  mk_app (`QVarS) [
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (t, Q_Explicit)]
+let mk_qvars (t:term) : term = mk_app (`QVarS) [(t, Q_Explicit)]
 
 let rec mk_qvarI (n:nat) : term =
   if n = 0 then mk_qvar0
   else mk_qvars (mk_qvarI (n-1))
 
-let mk_qlambda (body:term) : term =
-  mk_app (`QLambda) [
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (body, Q_Explicit)]
+let mk_qlambda (body:term) : term = mk_app (`QLambda) [(body, Q_Explicit)]
 
-let mk_qapp (f arg : term) : term =
-  mk_app (`QApp) [
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (pack_ln Tv_Unknown, Q_Implicit);
-    (f, Q_Explicit);
-    (arg, Q_Explicit)]
+let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
 
 noeq
 type fs_var =
@@ -143,26 +117,48 @@ let rec def_translation g (gmap:mapping) (qdef:term) : Tac (string * term) =
   end
   | _ -> fail ("not top-level definition")
 
+let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
+  : Lemma
+    (requires typing_token g e (eff, ty))
+    (ensures typing g e (eff, ty)) =
+    assert (typing_token g e (eff, ty));
+    Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
+    // (fst r, snd (snd r))
+
+let check_if_ovals_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
+  let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
+  let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
+  let u = must <| universe_of g goal_ty in
+  let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () -> 
+    // l_to_r_fsG (); 
+    trefl ()) u goal_ty in (** funny that trefl works better than using the check_subtyping **)
+  // w is proof that t == desired_t, but I have a typing_token and not sub_typing
+  assume (sub_typing g t desired_t)
+
+let lem_retype_expression g e (t:typ{tot_typing g e t}) (desired_t:typ) :
+  Lemma (requires tot_typing g e t /\ sub_typing g t desired_t)
+        (ensures tot_typing g e desired_t) =
+  Squash.bind_squash #(typing g e (E_Total, t)) () (fun d_typing ->
+    Squash.bind_squash #(sub_typing g t desired_t) () (fun d_sub ->
+      let d_sub_comp = Relc_typ g t desired_t E_Total R_Sub d_sub in
+      let d_res = T_Sub g e (E_Total, t) (E_Total, desired_t) d_typing d_sub_comp in
+      Squash.return_squash d_res))
+
 let translation g (qprog:term) (qtyp:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r) }) =
   let desired_qtyp_derivation = mk_tyj qtyp qprog in
   let (_, qderivation) = def_translation g empty_mapping qprog in
 
-  match instantiate_implicits g qderivation (Some desired_qtyp_derivation) true with
-  | (Some (_, qderivation', _), _) -> begin
-    match tc_term g qderivation' with
-    | (Some r, _) -> begin
-      let qderivation'' = fst r in
-      let qtyp_derivation'' = snd (snd r) in
-      if E_Total? (fst (snd r)) then begin
-        assume (typing g qderivation'' (E_Total, qtyp_derivation''));
-        // TODO: prove that qtyp_derivation'' is equal to desired_qtyp_derivation
-        //   just create a equality, and unfold everything, rewrites and then trefl.
-        (qderivation'', qtyp_derivation'')
-      end else fail "not a total function type"
-    end
-    | _ -> fail "typechecking failed for derivation'"
+  let (_, qderivation, desired_qtyp_derivation) = must <| instantiate_implicits g qderivation (Some desired_qtyp_derivation) true in
+  let (qderivation, (eff, qtyp_derivation)) = must <| tc_term g qderivation in
+  if E_Ghost? eff then fail "not a total function type"
+  else begin
+    check_if_ovals_are_equal g qtyp_derivation desired_qtyp_derivation;
+
+    token_as_typing g qderivation eff qtyp_derivation;
+    lem_retype_expression g qderivation qtyp_derivation desired_qtyp_derivation;
+
+    (qderivation, desired_qtyp_derivation)
   end
-  | _ -> fail "could not instantiate implicits in derivation"
 
 let meta_translation (nm:string) (qprog:term) (qtyp:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
@@ -174,6 +170,9 @@ let meta_translation (nm:string) (qprog:term) (qtyp:term) : dsl_tac_t = fun (g, 
 
 open QTyp
 
+
+#push-options "--print_implicits --no_smt"
+
 %splice_t[tgt1] (meta_translation "tgt1" (`Examples.ut_unit) (`qUnit))
 let _ = assert (tgt1 == test_ut_unit) by (trefl ())
 
@@ -183,7 +182,10 @@ let _ = assert (tgt2 == test_ut_true) by (trefl ())
 %splice_t[tgt3] (meta_translation "tgt3" (`Examples.ut_false) (`qBool))
 let _ = assert (tgt3 == test_ut_false) by (trefl ())
 
+
+
 %splice_t[tgt4] (meta_translation "tgt4" (`Examples.constant) (`(qBool ^-> qBool)))
+
 let _ = assert (tgt4 == test_constant) by (trefl ())
 
 %splice_t[tgt5] (meta_translation "tgt5" (`Examples.identity) (`(qBool ^-> qBool)))
@@ -205,16 +207,8 @@ let _ = assert (tgt10 == test_apply_arg) by (trefl ())
 
 
 %splice_t[tgt11] (meta_translation "tgt11" (`Examples.apply_arg2) (`((qBool ^-> qBool ^-> qBool) ^-> qBool)))
-// TODO: why is this failing?
-// let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
-
-// let test_apply_arg2' ()
-//   : ((qBool ^-> qBool ^-> qBool) ^-> qBool) ⊩ Examples.apply_arg2
-//   = _ by (
-//     exact (fst (translation (top_env ()) (`Examples.apply_arg2) (`((qBool ^-> qBool ^-> qBool) ^-> qBool)))))
-// let _ = assert (test_apply_arg2' () == test_apply_arg2 ()) by (trefl ())
+let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
 
 
 %splice_t[tgt12] (meta_translation "tgt12" (`Examples.papply_arg2) (`((qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)))
-// TODO: why is this failing?
-// let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())
+let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())

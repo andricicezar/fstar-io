@@ -201,13 +201,15 @@ type prod_quotation (a:qType) (x:fs_prod a) =
 let l_to_r_fsG () : Tac unit =
    l_to_r [`lem_hd_stack; `tail_stack_inverse]
 
-let simplify_qType (x:term) : Tac term =
+let simplify_qType_g g (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
-  norm_term_env (top_env ()) [
+  norm_term_env g [
     delta_only [`%fs_oval; `%qUnit; `%qBool; `%qResexn; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     iota;
     simplify
   ] x
+
+let simplify_qType  (x:term) : Tac term = simplify_qType_g (top_env ()) x
 
 open Examples
 
