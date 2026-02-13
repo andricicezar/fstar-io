@@ -146,24 +146,16 @@ let extend_gmap (gmap:mapping) (b:string) : mapping =
       | FVar v -> if fv_to_string v = b then Some 0 else (incr_option (gmap x))
       | _ -> (incr_option (gmap x)))
 
-  // | Tv_FVar fv -> begin
-  //   let fnm = fv_to_string fv in
-  //   print ("    def: " ^ fnm ^ "\n");
-  //   let qdef' = norm_term_env g [delta_only [fnm]; zeta] qfs in
-  //   match inspect_ln qdef' with
-  //   | Tv_FVar fv' ->
-  //     if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
-  //     else create_derivation g gmap qdef'
-  //   | _ -> create_derivation g gmap qdef'
-  //   // print ("        looking for fvar: " ^ fv_to_string fv);
-  //   // match gmap (FVar fv) with
-  //   // | Some v -> mk_qvarI v
-  //   // | None -> fail (fv_to_string fv ^ " not defined")
-  // end
-
-let rec create_derivation (g:env) (gmap:mapping) (qfs:term) : Tac term =
+let rec create_derivation (gmap:mapping) (qfs:term) : Tac term =
   print ("      in exp translation: " ^ tag_of qfs);
   match inspect_ln qfs with
+  | Tv_FVar fv -> begin
+    print ("        looking for fvar: " ^ fv_to_string fv);
+    match gmap (FVar fv) with
+    | Some v -> mk_qvarI v
+    | None -> fail (fv_to_string fv ^ " not defined")
+  end
+
   | Tv_BVar v -> begin
     let i = (inspect_bv v).index in
     match gmap (BVar i) with
@@ -171,7 +163,7 @@ let rec create_derivation (g:env) (gmap:mapping) (qfs:term) : Tac term =
     | None -> fail (print_nat i ^ " not defined")
   end
 
-  | Tv_Abs bin body -> mk_qlambda (create_derivation g (extend_gmap_binder gmap) body)
+  | Tv_Abs bin body -> mk_qlambda (create_derivation (extend_gmap_binder gmap) body)
   | Tv_App hd (a, _) -> begin
     let (head, args) = collect_app qfs in
     let fv_opt =
@@ -184,18 +176,18 @@ let rec create_derivation (g:env) (gmap:mapping) (qfs:term) : Tac term =
     | Some fv -> begin
       match fv_to_string fv, args with
       | "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-        mk_qmkpair (create_derivation g gmap v1) (create_derivation g gmap v2)
+        mk_qmkpair (create_derivation gmap v1) (create_derivation gmap v2)
       | "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
-        mk_qfst (create_derivation g gmap v1)
+        mk_qfst (create_derivation gmap v1)
       | "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
-        mk_qsnd (create_derivation g gmap v1)
+        mk_qsnd (create_derivation gmap v1)
       | "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
-        mk_qinl (create_derivation g gmap v1)
+        mk_qinl (create_derivation gmap v1)
       | "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
-        mk_qinr (create_derivation g gmap v1)
-      | _ -> mk_qapp (create_derivation g gmap hd) (create_derivation g gmap a)
+        mk_qinr (create_derivation gmap v1)
+      | _ -> mk_qapp (create_derivation gmap hd) (create_derivation gmap a)
     end
-    | _ -> mk_qapp (create_derivation g gmap hd) (create_derivation g gmap a)
+    | _ -> mk_qapp (create_derivation gmap hd) (create_derivation gmap a)
   end
 
   | Tv_Const C_Unit -> mk_qtt
@@ -207,24 +199,24 @@ let rec create_derivation (g:env) (gmap:mapping) (qfs:term) : Tac term =
       print ("Got: " ^ (branches_to_string brs));
       match brs with
       | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
-      mk_qif (create_derivation g gmap b) (create_derivation g gmap t1) (create_derivation g (skip_gmap_binder gmap) t2)
+      mk_qif (create_derivation gmap b) (create_derivation gmap t1) (create_derivation (skip_gmap_binder gmap) t2)
       // | [(Pat_Constant C_False, t2); (Pat_Var _ _, t1)] ->
       //    mk_qif (create_derivation g gmap b) (create_derivation g (skip_gmap_binder gmap) t1) (create_derivation g gmap t2)
       | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
         let fnm1 = fv_to_string fv1 in
         if fnm1 = "FStar.Pervasives.Inl"
-        then mk_qcase (create_derivation g gmap b) (create_derivation g (extend_gmap_binder gmap) t1) (create_derivation g (extend_gmap_binder gmap) t2)
+        then mk_qcase (create_derivation gmap b) (create_derivation (extend_gmap_binder gmap) t1) (create_derivation (extend_gmap_binder gmap) t2)
         else fail ("only supporting matches on inl and inr for now. Got: " ^ fnm1)
       | _ -> fail ("Only boolean matches (if-then-else) are supported. Got: " ^ (branches_to_string brs))  end
 
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
-    | C_Total _ -> create_derivation g gmap t
+    | C_Total _ -> create_derivation gmap t
     | _ -> fail ("not a total function type")
   end
 
-  | Tv_AscribedT e t _ _ -> create_derivation g gmap e
+  | Tv_AscribedT e t _ _ -> create_derivation gmap e
   | Tv_UInst v _ -> fail ("unexpected universe instantiation in expression: " ^ fv_to_string v)
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
@@ -243,9 +235,7 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   // how to go from one to the other?
   assume (sub_typing g t desired_t)
 
-let create_and_type_check_derivation g (gmap:mapping) (qprog:term) (desired_qtyp:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  let qderivation = create_derivation g gmap qprog in
-
+let type_check_derivation g (gmap:mapping) (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
   if E_Ghost? eff then fail "not a total function type"
@@ -258,8 +248,12 @@ let create_and_type_check_derivation g (gmap:mapping) (qprog:term) (desired_qtyp
     (qderivation, desired_qtyp)
   end
 
+let create_and_type_check_derivation g (gmap:mapping) (qprog:term) (desired_qtyp:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+  let qderivation = create_derivation gmap qprog in
+  type_check_derivation g gmap qderivation desired_qtyp
+
 let top_level_def_translation g (gmap:mapping) (qprog:term) : Tac (string * (r:(term & term){tot_typing g (fst r) (snd r)}) ) =
-  print "  in def translation\n";
+  print "  in top_level_def_translation\n";
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
   let derivation_typ = mk_tyj (typ_translation qtyp) qprog in
   match inspect_ln qprog with
@@ -275,103 +269,126 @@ let top_level_def_translation g (gmap:mapping) (qprog:term) : Tac (string * (r:(
   end
   | _ -> fail ("not top-level definition")
 
-let meta_translation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
+let rec translate_list_of_qprogs g gmap (qprogs:(list term){List.length qprogs > 0}) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+  match qprogs with
+  | qprog :: [] -> snd (top_level_def_translation g gmap qprog)
+  | qprog :: tl -> 
+    let (fnm, (qderiv, _)) = top_level_def_translation g gmap qprog in
+    print ("Translated " ^ fnm ^ "\n");
+    let (qderiv', qtyp') = translate_list_of_qprogs g (extend_gmap gmap fnm) tl in
+    
+    let deriv = mk_qapp (mk_qlambda qderiv') qderiv in
+    let typ = qtyp' in
+    type_check_derivation g gmap deriv typ
+    // assume (tot_typing g deriv typ);
+    // (deriv, typ)
+
+
+let meta_translation (nm:string) (qprogs:(list term){List.length qprogs > 0}) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
-    let _, (qderivation, qtyp_derivation) = top_level_def_translation g empty_mapping qprog in
+    let _, (qderivation, qtyp_derivation) = top_level_def_translation g empty_mapping (List.Tot.hd qprogs) in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
 
 (** Unit tests **)
 
-#push-options "--no_smt"
+// #push-options "--no_smt"
 
-%splice_t[tgt1] (meta_translation "tgt1" (`Examples.ut_unit))
+%splice_t[tgt1] (meta_translation "tgt1" [(`Examples.ut_unit)])
 let _ = assert (tgt1 == test_ut_unit) by (trefl ())
 
-%splice_t[tgt2] (meta_translation "tgt2" (`Examples.ut_true))
+%splice_t[tgt2] (meta_translation "tgt2" [`Examples.ut_true])
 let _ = assert (tgt2 == test_ut_true) by (trefl ())
 
-%splice_t[tgt3] (meta_translation "tgt3" (`Examples.ut_false))
+%splice_t[tgt3] (meta_translation "tgt3" [`Examples.ut_false])
 let _ = assert (tgt3 == test_ut_false) by (trefl ())
 
 
 
-%splice_t[tgt4] (meta_translation "tgt4" (`Examples.constant))
+%splice_t[tgt4] (meta_translation "tgt4" [`Examples.constant])
 
 let _ = assert (tgt4 == test_constant) by (trefl ())
 
-%splice_t[tgt5] (meta_translation "tgt5" (`Examples.identity))
+%splice_t[tgt5] (meta_translation "tgt5" [`Examples.identity])
 let _ = assert (tgt5 == test_identity) by (trefl ())
 
-%splice_t[tgt6] (meta_translation "tgt6" (`Examples.thunked_id))
+%splice_t[tgt6] (meta_translation "tgt6" [`Examples.thunked_id])
 let _ = assert (tgt6 == test_thunked_id) by (trefl ())
 
-%splice_t[tgt7] (meta_translation "tgt7" (`Examples.proj1))
+%splice_t[tgt7] (meta_translation "tgt7" [`Examples.proj1])
 let _ = assert (tgt7 == test_proj1) by (trefl ())
-%splice_t[tgt8] (meta_translation "tgt8" (`Examples.proj2))
+%splice_t[tgt8] (meta_translation "tgt8" [`Examples.proj2])
 let _ = assert (tgt8 == test_proj2) by (trefl ())
-%splice_t[tgt9] (meta_translation "tgt9" (`Examples.proj3))
+%splice_t[tgt9] (meta_translation "tgt9" [`Examples.proj3])
 let _ = assert (tgt9 == test_proj3) by (trefl ())
 
-%splice_t[tgt10] (meta_translation "tgt10" (`Examples.apply_arg))
+%splice_t[tgt10] (meta_translation "tgt10" [`Examples.apply_arg])
 let _ = assert (tgt10 == test_apply_arg) by (trefl ())
 
 
-
-%splice_t[tgt11] (meta_translation "tgt11" (`Examples.apply_arg2))
+%splice_t[tgt11] (meta_translation "tgt11" [`Examples.apply_arg2])
 let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
 
 
-%splice_t[tgt12] (meta_translation "tgt12" (`Examples.papply_arg2))
+%splice_t[tgt12] (meta_translation "tgt12" [`Examples.papply_arg2])
 let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())
 
-%splice_t[tgt13] (meta_translation "tgt13" (`Examples.negb))
+%splice_t[tgt13] (meta_translation "tgt13" [`Examples.negb])
 let _ = assert (tgt13 == test_negb) by (trefl ())
 
-%splice_t[tgt14] (meta_translation "tgt14" (`Examples.if2))
+%splice_t[tgt14] (meta_translation "tgt14" [`Examples.if2])
 let _ = assert (tgt14 == test_if2 ()) by (trefl ())
 
-%splice_t[tgt15] (meta_translation "tgt15" (`Examples.callback_return))
+%splice_t[tgt15] (meta_translation "tgt15" [`Examples.callback_return])
 let _ = assert (tgt15 == test_callback_return ()) by (trefl ())
 
-// %splice_t[tgt16] (meta_translation "tgt16" (`Examples.callback_return'))
-// let _ = assert (tgt16 == test_callback_return' ()) by (trefl ())
 
-%splice_t[tgt_make_pair] (meta_translation "tgt_make_pair" (`Examples.make_pair))
+%splice_t[tgt_make_pair] (meta_translation "tgt_make_pair" [`Examples.make_pair])
 let _ = assert (tgt_make_pair == test_make_pair) by (trefl ())
 
-// %splice_t[tgt_pair_of_functions] (meta_translation "tgt_pair_of_functions" (`Examples.pair_of_functions))
-// let _ = assert (tgt_pair_of_functions == test_pair_of_functions) by (trefl ())
-
-%splice_t[tgt_fst_pair] (meta_translation "tgt_fst_pair" (`Examples.fst_pair))
+%splice_t[tgt_fst_pair] (meta_translation "tgt_fst_pair" [`Examples.fst_pair])
 let _ = assert (tgt_fst_pair == test_fst_pair) by (trefl ())
 
-%splice_t[tgt_wrap_fst] (meta_translation "tgt_wrap_fst" (`Examples.wrap_fst))
+%splice_t[tgt_wrap_fst] (meta_translation "tgt_wrap_fst" [`Examples.wrap_fst])
 let _ = assert (tgt_wrap_fst == test_wrap_fst) by (trefl ())
 
-%splice_t[tgt_snd_pair] (meta_translation "tgt_snd_pair" (`Examples.snd_pair))
+%splice_t[tgt_snd_pair] (meta_translation "tgt_snd_pair" [`Examples.snd_pair])
 let _ = assert (tgt_snd_pair == test_snd_pair) by (trefl ())
 
-%splice_t[tgt_wrap_snd] (meta_translation "tgt_wrap_snd" (`Examples.wrap_snd))
+%splice_t[tgt_wrap_snd] (meta_translation "tgt_wrap_snd" [`Examples.wrap_snd])
 let _ = assert (tgt_wrap_snd == test_wrap_snd) by (trefl ())
 
-%splice_t[tgt_a_few_lets] (meta_translation "tgt_a_few_lets" (`Examples.a_few_lets))
+%splice_t[tgt_a_few_lets] (meta_translation "tgt_a_few_lets" [`Examples.a_few_lets])
 let _ = assert (tgt_a_few_lets == QLambda Qtt) by (trefl ())
 
-%splice_t[tgt_inl_true] (meta_translation "tgt_inl_true" (`Examples.inl_true))
+%splice_t[tgt_inl_true] (meta_translation "tgt_inl_true" [`Examples.inl_true])
 let _ = assert (tgt_inl_true == test_inl_true) by (trefl ())
 
-%splice_t[tgt_inr_unit] (meta_translation "tgt_inr_unit" (`Examples.inr_unit))
+%splice_t[tgt_inr_unit] (meta_translation "tgt_inr_unit" [`Examples.inr_unit])
 let _ = assert (tgt_inr_unit == test_inr_unit) by (trefl ())
 
-%splice_t[tgt_return_either] (meta_translation "tgt_return_either" (`Examples.return_either))
+%splice_t[tgt_return_either] (meta_translation "tgt_return_either" [`Examples.return_either])
 let _ = assert (tgt_return_either == test_return_either ()) by (trefl ())
 
-%splice_t[tgt_match_either] (meta_translation "tgt_match_either" (`Examples.match_either))
+%splice_t[tgt_match_either] (meta_translation "tgt_match_either" [`Examples.match_either])
 let _ = assert (tgt_match_either == test_match_either ()) by (trefl ())
 
 
-%splice_t[tgt_match_either_arg] (meta_translation "tgt_match_either_arg" (`Examples.match_either_arg))
+%splice_t[tgt_match_either_arg] (meta_translation "tgt_match_either_arg" [`Examples.match_either_arg])
 let _ = assert (tgt_match_either_arg == test_match_either_arg ()) by (trefl ())
+
+
+%splice_t[tgt_apply_top_level_def] (meta_translation "tgt_apply_top_level_def" [`Examples.thunked_id;`Examples.apply_top_level_def])
+
+%splice_t[tgt_apply_top_level_def'] (meta_translation "tgt_apply_top_level_def'" [`Examples.thunked_id;`Examples.apply_top_level_def'])
+
+%splice_t[tgt_papply_top_level_def] (meta_translation "tgt_papply_top_level_def" [`Examples.thunked_id;`Examples.papply__top_level_def])
+
+%splice_t[tgt16] (meta_translation "tgt16" [`Examples.identity;`Examples.callback_return'])
+let _ = assert (tgt16 == test_callback_return' ()) by (compute (); dump "H")
+
+%splice_t[tgt_pair_of_functions] (meta_translation "tgt_pair_of_functions" [`Examples.negb;`Examples.pair_of_functions])
+
+let _ = assert (tgt_pair_of_functions == test_pair_of_functions ()) by (trefl ())
