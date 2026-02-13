@@ -12,6 +12,8 @@ open QExp
 
 let mk_qunit : term = mk_app (`QTyp.qUnit) []
 let mk_qbool : term = mk_app (`QTyp.qBool) []
+let mk_qfiledescr : term = mk_app (`QTyp.qFileDescr) []
+let mk_qresexn (t:term) : term = mk_app (`QTyp.qResexn) [(t, Q_Explicit)]
 let mk_qarr (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qarrio (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qpair (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
@@ -23,7 +25,28 @@ let rec typ_translation (qt:term) : Tac term =
     match fv_to_string fv with
     | "Prims.unit" -> mk_qunit
     | "Prims.bool" -> mk_qbool
+    | "BaseTypes.file_descr" -> mk_qfiledescr
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
+  end
+
+  | Tv_App l (r, _) -> begin
+      match inspect_ln l with
+      | Tv_App l2 (r2, _) ->
+         (match inspect_ln l2 with
+          | Tv_FVar fv ->
+             let fnm = fv_to_string fv in
+             if fnm = "FStar.Pervasives.Native.tuple2" then
+               mk_qpair (typ_translation r2) (typ_translation r)
+             else if fnm = "FStar.Pervasives.Either.either" then
+               mk_qsum (typ_translation r2) (typ_translation r)
+             else fail ("Type application " ^ fnm ^ " not supported")
+          | _ -> fail ("Type application not supported: " ^ tag_of qt))
+      | Tv_FVar fv ->
+         let fnm = fv_to_string fv in
+         if fnm = "BaseTypes.resexn" then
+           mk_qresexn (typ_translation r)
+         else fail ("Type application " ^ fnm ^ " not supported")
+      | _ -> fail ("Type application not supported: " ^ tag_of qt)
   end
 
   | Tv_Arrow b c ->  begin
@@ -44,7 +67,6 @@ let rec typ_translation (qt:term) : Tac term =
   | Tv_Unsupp -> fail ("unsupported by F* terms")
 
   | _ -> fail ("not implemented: " ^ tag_of qt)
-
 
 let mk_tyj (ty t : term) : Tot term =
   let t = mk_app (`helper_oval) [(ty, Q_Implicit); (t, Q_Explicit)] in
