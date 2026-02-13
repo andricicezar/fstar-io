@@ -17,6 +17,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambda qbody -> ELam (compile qbody)
   | QFalse -> EFalse
   | QTrue -> ETrue
+  | QStringLit s -> EString s
   | QIf qc qt qe -> EIf (compile qc) (compile qt) (compile qe)
   | QMkpair q1 q2 -> EPair (compile q1) (compile q2)
   | QFst qp -> EFst (compile qp)
@@ -54,6 +55,7 @@ let rec compile_equiv #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
       assumption ())
   | QFalse -> equiv_false g
   | QTrue -> equiv_true g
+  | QStringLit #_ str -> equiv_string g str
   | QIf #_ #_ #c qc #t qt #e qe ->
     compile_equiv qc;
     compile_equiv qt;

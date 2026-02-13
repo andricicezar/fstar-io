@@ -51,6 +51,10 @@ val helper_false : g:typ_env -> fs_oval g qBool
 let helper_false g _ = false
 
 unfold
+val helper_string : g:typ_env -> s:string -> fs_oval g qString
+let helper_string g s _ = s
+
+unfold
 val helper_if : #g :typ_env ->
                 #a  : qType ->
                 c   : fs_oval g qBool ->
@@ -157,6 +161,7 @@ type value_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 
 | QTrue       : #g : typ_env -> value_quotation g (helper_true g)
 | QFalse      : #g : typ_env -> value_quotation g (helper_false g)
+| QStringLit  : #g : typ_env -> s:string -> value_quotation g (helper_string g s)
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
@@ -236,7 +241,7 @@ let simplify_fsG (x:term) : Tac term =
 let simplify_qType (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
   norm_term_env (top_env ()) [
-    delta_only [`%fs_oval; `%qUnit; `%qBool; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    delta_only [`%fs_oval; `%qUnit; `%qBool; `%qString; `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     iota;
     simplify
   ] x
@@ -469,3 +474,18 @@ let test_match_either_arg ()
          qVar1
          QVar0
          qVar1))
+
+let test_greeting
+  : (qBool ^-> qString) ⊩ greeting
+  = QLambda (QIf QVar0 (QStringLit "hello") (QStringLit "goodbye"))
+
+let test_const_string
+  : qString ⊩ const_string
+  = QStringLit "constant"
+
+let test_string_choice ()
+  : (qBool ^-> qBool ^-> qString) ⊩ string_choice
+  by (l_to_r_fsG (); trefl ())
+  = QLambda (QLambda (QIf qVar1
+                          (QIf QVar0 (QStringLit "both") (QStringLit "first"))
+                          (QStringLit "neither")))

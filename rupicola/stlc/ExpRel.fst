@@ -14,6 +14,7 @@ let rec (∋) (t:qType) (p:fs_val t * closed_exp) : Tot Type0 (decreases %[get_r
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #s1 #s2 r1 r2 -> begin
     let fs_f : s1 -> s2 = fs_v in
     match e with
@@ -50,6 +51,7 @@ let rec lem_values_are_values t fs_e (e:closed_exp) :
   match get_rel t with
   | QUnit -> ()
   | QBool -> ()
+  | QString -> ()
   | QArr #s1 #s2 r1 r2 -> ()
   | QPair #s1 #s2 r1 r2 ->
     let EPair e1 e2 = e in
@@ -148,6 +150,16 @@ let equiv_false g
     introduce _ ==> _ with _. begin
       assert (qBool ∋ (false, EFalse));
       lem_values_are_expressions qBool false EFalse
+    end
+  end
+
+let equiv_string g (str:string)
+  : Lemma ((fun (_:eval_env g) -> str) `equiv qString` EString str)
+  =
+  introduce forall b (s:gsub g b) fsG. fsG ∽ s ==>  qString ⦂ (str, gsubst s (EString str)) with begin
+    introduce _ ==> _ with _. begin
+      assert (qString ∋ (str, EString str));
+      lem_values_are_expressions qString str (EString str)
     end
   end
 

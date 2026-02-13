@@ -119,3 +119,11 @@ let match_either_arg : either bool bool -> bool -> bool =
     match x with
     | Inl x -> x
     | Inr x -> y
+
+let greeting : bool -> string =
+  fun x -> if x then "hello" else "goodbye"
+
+let const_string : string = "constant"
+
+let string_choice : bool -> bool -> string =
+  fun x y -> if x then (if y then "both" else "first") else "neither"
