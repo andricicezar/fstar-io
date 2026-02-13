@@ -550,9 +550,7 @@ let rec theta_io_bind_exists #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Lem
         (fun lt fs_r -> exists fs_m lt1 lt2. lt = lt1@lt2 /\ thetaP (Return x) h lt1 fs_m /\ thetaP (f fs_m) (h++lt1) lt2 fs_r /\ theta (Return x) h (fun lt1' fs_m' -> lt1' == lt1 /\ fs_m' == fs_m));
       };
       assert (theta (f x) h (theta_io_bind_exists_post m f h))
-  | Call o args k ->
-      //assume (forall lt r. lt == [op_to_ev o args r] ==> theta (io_bind (k r) f) (h ++ lt) (fun lt' r' -> theta_io_bind_exists_post m f h (lt @ lt') r'));
-      
+  | Call o args k ->      
       introduce forall lt r. lt == [op_to_ev o args r] ==> theta (io_bind (k r) f) (h ++ lt) (fun lt' fs_r' -> theta_io_bind_exists_post m f h (lt @ lt') fs_r') with begin
         introduce _ ==> _ with _. begin
           theta_io_bind_exists (k r) f (h ++ lt);
@@ -566,7 +564,7 @@ let rec theta_io_bind_exists #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Lem
                             theta (k r) (h ++ lt) (fun lt1' fs_m' -> lt1' == lt1 /\ fs_m' == fs_m)
               returns theta_io_bind_exists_post m f h (lt @ lt') fs_r'
               with _. begin
-                assume (h ++ (lt @ lt1) == h ++ lt ++ lt1);
+                trans_history h lt lt1;
                 introduce exists fs_m' lt1' lt2' .
                               lt @ lt' = lt1' @ lt2' /\
                               thetaP m h lt1' fs_m /\
@@ -574,8 +572,8 @@ let rec theta_io_bind_exists #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Lem
                               theta m h (fun lt1'' fs_m'' -> lt1'' == lt1' /\ fs_m'' == fs_m')
                 with fs_m (lt @ lt1) lt2
                 and begin
-                  thetaP_shift_op_lt o args k r h lt;
                   (* First part of ther postcondition *)
+                  thetaP_shift_op_lt o args k r h lt;
                   assert (thetaP m h (lt @ lt1) fs_m);
                   (* Second part of ther postcondition *)
                   assert (thetaP (f fs_m) (h ++ (lt @ lt1)) lt2 fs_r');
@@ -584,6 +582,7 @@ let rec theta_io_bind_exists #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Lem
                   introduce forall lt'' r' . lt'' == [op_to_ev o args r'] ==> theta (k r') (h ++ lt'') (fun lt1'' fs_m'' -> lt''@lt1'' == lt @ lt1 /\ fs_m'' == fs_m) with begin
                     introduce _ ==> _ with _. begin
                       (* TODO: How could we get r == r', which is needed for lt == lt'', which is in turn needed to prove this case? *)
+                      (* Problem: We know theta (k r) for one particular continuation invocation, but need to prove theta (k r') about all of them. *)
                       admit ()
                     end
                   end;
