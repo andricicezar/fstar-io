@@ -63,5 +63,41 @@ validate:
 	$(MAKE) depend
 	$(MAKE) OTHERFLAGS='--report_assumes error'
 
+# ── io_program pipeline ──────────────────────────────────────────────────────
+# Produces io_program_exe by running LambdaBoxExamples.fst through F*, then
+# Peregrine → malfunction → ocamlfind.  Mirrors the steps in run-io.py.
+
+# F* with file-writing tactic enabled
+IOFLAGS := --unsafe_tactic_exec $(FLAGS)
+
+# Step 1: type-check LambdaBoxExamples.fst; the embedded tactic writes
+#         io_program.ast via launch_process (MetaLambdabox.write_term_to_file).
+io_program.ast: LambdaBoxExamples.fst MetaLambdabox.fst \
+                STLCToLambdaBox.fst LambdaBoxToSexp.fst \
+                LambdaBox.fst Sexp.fst STLC.fst
+	$(FSTAR) $(IOFLAGS) LambdaBoxExamples.fst
+
+# Step 2: Peregrine → Malfunction
+io_program_raw.mlf: io_program.ast
+	peregrine ocaml $< -o $@
+
+# Step 3: Compile the axioms OCaml module
+axioms.cmx: axioms.ml
+	ocamlfind ocamlopt -c $<
+
+# Step 4: Compile generated Malfunction to a CMX
+io_program_raw.cmx: io_program_raw.mlf
+	malfunction cmx $<
+
+# Step 5: Link
+io_program_exe: axioms.cmx io_program_raw.cmx
+	ocamlfind ocamlopt -linkpkg $^ -o $@
+
+.PHONY: io_program
+io_program: io_program_exe
+
 clean:
 	rm -rf $(CACHEDIR) $(ODIR)
+	rm -f io_program.ast io_program_raw.mlf io_program_raw.cmi \
+	      io_program_raw.cmx io_program_raw.o io_program_exe \
+	      axioms.cmi axioms.cmx axioms.o

@@ -2,8 +2,9 @@
 """
 Compile and run an STLC IO program end-to-end.
 
-Uses F* --ide to evaluate `red_prog <term>`, then compiles with
-Peregrine/malfunction, links with axioms.ml, and runs the result.
+Step 1 uses an F* tactic (write_term_to_file in MetaLambdabox.fst) to
+serialise the LambdaBox AST to a file during type-checking.  The remaining
+steps compile and run the result with Peregrine/malfunction.
 
 Usage:
     ./run-io.py [--lax] [--z3version=X.Y.Z] <file.fst> <io_program_term>
@@ -12,68 +13,9 @@ Examples:
     ./run-io.py --lax LambdaBoxExamples.fst io_program
 """
 
-import json
 import os
 import subprocess
 import sys
-
-
-def fstar_eval(filename, term, lax=True, z3version="4.15.2"):
-    """Evaluate an F* term via the IDE protocol. Returns the result string."""
-    with open(filename) as f:
-        code = f.read()
-
-    fstar_args = ["fstar.exe", filename, "--ide", "--z3version", z3version]
-    if lax:
-        fstar_args.append("--lax")
-
-    push_query = json.dumps({
-        "query-id": "1",
-        "query": "push",
-        "args": {"kind": "lax" if lax else "full", "code": code, "line": 1, "column": 0},
-    })
-    compute_query = json.dumps({
-        "query-id": "2",
-        "query": "compute",
-        "args": {"term": term, "rules": ["beta", "delta", "iota", "zeta"]},
-    })
-
-    proc = subprocess.Popen(
-        fstar_args,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    proc.stdin.write(push_query + "\n")
-    proc.stdin.write(compute_query + "\n")
-    proc.stdin.close()
-
-    errors, result = [], None
-    for line in proc.stdout:
-        try:
-            resp = json.loads(line)
-            if resp.get("kind") == "message" and resp.get("query-id") == "2" \
-                    and resp.get("level") == "error":
-                errors.append(resp.get("contents", ""))
-            if resp.get("kind") == "response" and resp.get("query-id") == "2":
-                if resp.get("status") == "success":
-                    result = resp.get("response")
-                break
-        except json.JSONDecodeError:
-            pass
-    proc.terminate()
-
-    if result is None:
-        if errors:
-            print("F* error:", file=sys.stderr)
-            for e in errors:
-                print(e, file=sys.stderr)
-        else:
-            print("No response from F*", file=sys.stderr)
-        sys.exit(1)
-
-    return result
 
 
 def run(cmd):
@@ -115,11 +57,12 @@ def main():
     step = lambda n, msg: print(f"=== Step {n}: {msg} ===", flush=True)
 
     # Step 1: F* → LambdaBox AST
+    # The write_term_to_file tactic in MetaLambdabox.fst evaluates
+    # `red_prog io_program` at type-checking time and writes the result
+    # directly to io_program.ast via launch_process.
     step(1, "F* → LambdaBox AST")
-    raw = fstar_eval(filename, f"red_prog {term_name}", lax=lax, z3version=z3version)
-    ast_str = raw.strip('"').replace('\\"', '"')
-    with open(ast_file, "w") as f:
-        f.write(ast_str)
+    fstar_cmd = ["fstar.exe", "--unsafe_tactic_exec", "--z3version", z3version, filename]
+    run(fstar_cmd)
     print(f"  Written {ast_file}", flush=True)
 
     # Step 2: Peregrine → Malfunction

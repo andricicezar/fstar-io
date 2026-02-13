@@ -9,6 +9,7 @@ open LambdaBox
 open Sexp
 open STLCToLambdaBox
 open LambdaBoxToSexp
+open MetaLambdabox
 
 let my_modpath : modpath = MPfile ["Nat"]
 
@@ -108,3 +109,9 @@ let p5 () = EApp fact_stlc (ESucc (ESucc (ESucc EZero)))
 
 (* Test fibonacci: fib(6) = 8 *)
 let p6 () = EApp fib_stlc (ESucc (ESucc (ESucc (ESucc (ESucc (ESucc EZero))))))
+
+(** Serialise io_program to io_program.ast at compile time.
+    Triggered by: fstar.exe --unsafe_tactic_exec LambdaBoxExamples.fst *)
+let _ =
+  assert True
+    by (write_term_to_file "io_program.ast" (`red_prog io_program); trivial ())
