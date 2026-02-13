@@ -2,13 +2,14 @@ module Metaprogram
 
 open HelperTactics
 
-open FStar.Tactics.Typeclasses
 open FStar.Tactics.V2
 open FStar.Reflection.Typing
 open FStar.Stubs.Reflection.V2.Builtins
 open FStar.Stubs.Reflection.V2.Data
 
 open QExp
+
+(** Quotation of types **)
 
 let mk_qunit : term = mk_app (`QTyp.qUnit) []
 let mk_qbool : term = mk_app (`QTyp.qBool) []
@@ -30,23 +31,25 @@ let rec typ_translation (qt:term) : Tac term =
   end
 
   | Tv_App l (r, _) -> begin
-      match inspect_ln l with
-      | Tv_App l2 (r2, _) ->
-         (match inspect_ln l2 with
-          | Tv_FVar fv ->
-             let fnm = fv_to_string fv in
-             if fnm = "FStar.Pervasives.Native.tuple2" then
-               mk_qpair (typ_translation r2) (typ_translation r)
-             else if fnm = "FStar.Pervasives.Either.either" then
-               mk_qsum (typ_translation r2) (typ_translation r)
-             else fail ("Type application " ^ fnm ^ " not supported")
-          | _ -> fail ("Type application not supported: " ^ tag_of qt))
-      | Tv_FVar fv ->
-         let fnm = fv_to_string fv in
-         if fnm = "BaseTypes.resexn" then
-           mk_qresexn (typ_translation r)
-         else fail ("Type application " ^ fnm ^ " not supported")
-      | _ -> fail ("Type application not supported: " ^ tag_of qt)
+    let (head, app_args) = collect_app qt in
+    let fv_opt =
+      match inspect_ln head with
+      | Tv_FVar fv -> Some fv
+      | Tv_UInst fv _ -> Some fv
+      | _ -> None
+    in
+    match fv_opt with
+    | Some fv -> begin
+        match fv_to_string fv, app_args with
+        | "FStar.Pervasives.Native.tuple2", [(v1, _); (v2, _)] ->
+          mk_qpair (typ_translation v1) (typ_translation v2)
+        | "FStar.Pervasives.either", [(v1, _); (v2, _)] ->
+           mk_qsum (typ_translation v1) (typ_translation v2)
+        | "BaseTypes.resexn", [(v, _)] ->
+           mk_qresexn (typ_translation v)
+        | fnm, _ -> fail ("Type application not supported: "^ fnm ^ " - " ^ term_to_string qt)
+    end
+    | _ -> fail ("Type application not supported: " ^ term_to_string qt)
   end
 
   | Tv_Arrow b c ->  begin
@@ -75,7 +78,9 @@ let rec typ_translation (qt:term) : Tac term =
   | Tv_Unknown -> fail ("an underscore was found in the term")
   | Tv_Unsupp -> fail ("unsupported by F* terms")
 
-  | _ -> fail ("not implemented: " ^ tag_of qt)
+  | _ -> fail ("not implemented in types: " ^ tag_of qt)
+
+(** Quotation of expressions **)
 
 let mk_tyj (ty t : term) : Tot term =
   let t = mk_app (`helper_oval) [(ty, Q_Implicit); (t, Q_Explicit)] in
@@ -83,33 +88,43 @@ let mk_tyj (ty t : term) : Tot term =
 
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
-let mk_qtrue : term = mk_app (`QTrue) []
 
+let mk_qtrue : term = mk_app (`QTrue) []
 let mk_qfalse : term = mk_app (`QFalse) []
+let mk_qif (b:term) (t1:term) (t2:term) : term =
+  mk_app (`QIf) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
+
+let mk_qmkpair (t1:term) (t2:term) : term =
+  mk_app (`QMkpair) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
+let mk_qsnd (t:term) : term = mk_app (`QSnd) [(t, Q_Explicit)]
+
+let mk_qinl (t:term) : term = mk_app (`QInl) [(t, Q_Explicit)]
+let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
+let mk_qcase (t:term) (x1:term) (x2:term) : term =
+  mk_app (`QCase) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
 let mk_qvar0 : term = mk_app (`QVar0) []
-
 let mk_qvars (t:term) : term = mk_app (`QVarS) [(t, Q_Explicit)]
-
-let rec mk_qvarI (n:nat) : term =
-  if n = 0 then mk_qvar0
+let rec mk_qvarI (n:int) : term =
+  if n <= 0 then mk_qvar0
   else mk_qvars (mk_qvarI (n-1))
-
 let mk_qlambda (body:term) : term = mk_app (`QLambda) [(body, Q_Explicit)]
-
 let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
+
+(** Map between F* variables and LambdaIO variables **)
 
 noeq
 type fs_var =
 | FVar : fv -> fs_var
-| BVar : var -> fs_var
+| BVar : int -> fs_var
 
 type mapping =
-  fs_var -> option nat
+  fs_var -> option int
 
 let empty_mapping : mapping = fun _ -> None
 
-let incr_option (x:option nat) : option nat =
+let incr_option (x:option int) : option int =
   match x with
   | Some n -> Some (n+1)
   | None -> None
@@ -120,18 +135,17 @@ let extend_gmap_binder (gmap:mapping)
       | BVar v -> if v = 0 then Some 0 else incr_option (gmap (BVar (v-1))) //Some v
       | _ -> incr_option (gmap x))
 
+let skip_gmap_binder (gmap:mapping)
+  : mapping =
+  (fun x -> match x with
+      | BVar v -> gmap (BVar (v-1))
+      | _ -> gmap x)
+
 let extend_gmap (gmap:mapping) (b:string) : mapping =
   (fun x -> match x with
       | FVar v -> if fv_to_string v = b then Some 0 else (incr_option (gmap x))
       | _ -> (incr_option (gmap x)))
 
-let rec exp_translation
-  g
-  (gmap:mapping)
-  (qfs:term)
-  : Tac term =
-  print ("      in exp translation: " ^ tag_of qfs);
-  match inspect_ln qfs with
   // | Tv_FVar fv -> begin
   //   let fnm = fv_to_string fv in
   //   print ("    def: " ^ fnm ^ "\n");
@@ -147,6 +161,13 @@ let rec exp_translation
   //   // | None -> fail (fv_to_string fv ^ " not defined")
   // end
 
+let rec exp_translation
+  g
+  (gmap:mapping)
+  (qfs:term)
+  : Tac term =
+  print ("      in exp translation: " ^ tag_of qfs);
+  match inspect_ln qfs with
   | Tv_BVar v -> begin
     let i = (inspect_bv v).index in
     match gmap (BVar i) with
@@ -155,11 +176,53 @@ let rec exp_translation
   end
 
   | Tv_Abs bin body -> mk_qlambda (exp_translation g (extend_gmap_binder gmap) body)
-  | Tv_App hd (a, _) -> mk_qapp (exp_translation g gmap hd) (exp_translation g gmap a)
+  | Tv_App hd (a, _) -> begin
+    let (head, args) = collect_app qfs in
+    let fv_opt =
+      match inspect_ln head with
+      | Tv_FVar fv -> Some fv
+      | Tv_UInst fv _ -> Some fv
+      | _ -> None
+    in
+    match fv_opt with
+    | Some fv -> begin
+      match fv_to_string fv, args with
+      | "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
+        mk_qmkpair (exp_translation g gmap v1) (exp_translation g gmap v2)
+      | "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
+        mk_qfst (exp_translation g gmap v1)
+      | "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
+        mk_qsnd (exp_translation g gmap v1)
+      | "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
+        mk_qinl (exp_translation g gmap v1)
+      | "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
+        mk_qinr (exp_translation g gmap v1)
+      | _ -> mk_qapp (exp_translation g gmap hd) (exp_translation g gmap a)
+    end
+    | _ -> mk_qapp (exp_translation g gmap hd) (exp_translation g gmap a)
+  end
 
   | Tv_Const C_Unit -> mk_qtt
   | Tv_Const C_True -> mk_qtrue
   | Tv_Const C_False -> mk_qfalse
+
+  | Tv_Match b _ brs -> begin
+      if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else ();
+      print ("Got: " ^ (branches_to_string brs));
+      match brs with
+      | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
+      mk_qif (exp_translation g gmap b) (exp_translation g gmap t1) (exp_translation g (skip_gmap_binder gmap) t2)
+      // | [(Pat_Constant C_False, t2); (Pat_Var _ _, t1)] ->
+      //    mk_qif (exp_translation g gmap b) (exp_translation g (skip_gmap_binder gmap) t1) (exp_translation g gmap t2)
+      | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
+        let fnm1 = fv_to_string fv1 in
+        if fnm1 = "FStar.Pervasives.Inl"
+        then mk_qcase (exp_translation g gmap b) (exp_translation g (extend_gmap_binder gmap) t1) (exp_translation g (extend_gmap_binder gmap) t2)
+        else if fnm1 = "FStar.Pervasives.Inr"
+        then mk_qcase (exp_translation g gmap b) (exp_translation g (extend_gmap_binder gmap) t2) (exp_translation g (extend_gmap_binder gmap) t1)
+        else fail ("only supporting matches on inl and inr for now. Got: " ^ fnm1)
+      | _ -> fail ("Only boolean matches (if-then-else) are supported. Got: " ^ (branches_to_string brs))  end
+
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
@@ -167,7 +230,14 @@ let rec exp_translation
     | _ -> fail ("not a total function type")
   end
 
-  | _ -> fail ("not implemented: " ^ tag_of qfs)
+  | Tv_AscribedT e t _ _ -> begin
+    exp_translation g gmap e
+    // | _ -> fail ("not a total function type")
+  end
+
+  | Tv_UInst v _ -> fail ("unexpected universe instantiation in expression: " ^ fv_to_string v)
+
+  | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
 let rec def_translation g (gmap:mapping) (qdef:term) : Tac (string * term) =
   print "  in def translation\n";
@@ -190,16 +260,19 @@ let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
     (ensures typing g e (eff, ty)) =
     assert (typing_token g e (eff, ty));
     Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
-    // (fst r, snd (snd r))
 
 let check_if_ovals_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
+  // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
   let u = must <| universe_of g goal_ty in
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () -> 
     // l_to_r_fsG (); 
-    trefl ()) u goal_ty in (** funny that trefl works better than using the check_subtyping **)
-  // w is proof that t == desired_t, but I have a typing_token and not sub_typing
+    trefl ()) u goal_ty in
+
+  // we dynamically check that the types are equal (thus, extraction would fail if they are not)
+  // w is proof that t == desired_t, but it is a typing_token and not a sub_typing token
+  // how to go from one to the other?
   assume (sub_typing g t desired_t)
 
 let lem_retype_expression g e (t:typ{tot_typing g e t}) (desired_t:typ) :
@@ -227,8 +300,6 @@ let translation g (qprog:term) (qtyp:term) : Tac (r:(term & term){tot_typing g (
     (qderivation, desired_qtyp_derivation)
   end
 
-open FStar.Tactics.Typeclasses
-
 let meta_translation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
@@ -238,8 +309,7 @@ let meta_translation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) 
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
 
-open QTyp
-
+(** Unit tests **)
 
 #push-options "--no_smt"
 
@@ -282,3 +352,52 @@ let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
 
 %splice_t[tgt12] (meta_translation "tgt12" (`Examples.papply_arg2))
 let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())
+
+%splice_t[tgt13] (meta_translation "tgt13" (`Examples.negb))
+let _ = assert (tgt13 == test_negb) by (trefl ())
+
+%splice_t[tgt14] (meta_translation "tgt14" (`Examples.if2))
+let _ = assert (tgt14 == test_if2 ()) by (trefl ())
+
+%splice_t[tgt15] (meta_translation "tgt15" (`Examples.callback_return))
+let _ = assert (tgt15 == test_callback_return ()) by (trefl ())
+
+// %splice_t[tgt16] (meta_translation "tgt16" (`Examples.callback_return'))
+// let _ = assert (tgt16 == test_callback_return' ()) by (trefl ())
+
+%splice_t[tgt_make_pair] (meta_translation "tgt_make_pair" (`Examples.make_pair))
+let _ = assert (tgt_make_pair == test_make_pair) by (trefl ())
+
+// %splice_t[tgt_pair_of_functions] (meta_translation "tgt_pair_of_functions" (`Examples.pair_of_functions))
+// let _ = assert (tgt_pair_of_functions == test_pair_of_functions) by (trefl ())
+
+%splice_t[tgt_fst_pair] (meta_translation "tgt_fst_pair" (`Examples.fst_pair))
+let _ = assert (tgt_fst_pair == test_fst_pair) by (trefl ())
+
+%splice_t[tgt_wrap_fst] (meta_translation "tgt_wrap_fst" (`Examples.wrap_fst))
+let _ = assert (tgt_wrap_fst == test_wrap_fst) by (trefl ())
+
+%splice_t[tgt_snd_pair] (meta_translation "tgt_snd_pair" (`Examples.snd_pair))
+let _ = assert (tgt_snd_pair == test_snd_pair) by (trefl ())
+
+%splice_t[tgt_wrap_snd] (meta_translation "tgt_wrap_snd" (`Examples.wrap_snd))
+let _ = assert (tgt_wrap_snd == test_wrap_snd) by (trefl ())
+
+%splice_t[tgt_a_few_lets] (meta_translation "tgt_a_few_lets" (`Examples.a_few_lets))
+let _ = assert (tgt_a_few_lets == QLambda Qtt) by (trefl ())
+
+%splice_t[tgt_inl_true] (meta_translation "tgt_inl_true" (`Examples.inl_true))
+let _ = assert (tgt_inl_true == test_inl_true) by (trefl ())
+
+%splice_t[tgt_inr_unit] (meta_translation "tgt_inr_unit" (`Examples.inr_unit))
+let _ = assert (tgt_inr_unit == test_inr_unit) by (trefl ())
+
+%splice_t[tgt_return_either] (meta_translation "tgt_return_either" (`Examples.return_either))
+let _ = assert (tgt_return_either == test_return_either ()) by (trefl ())
+
+%splice_t[tgt_match_either] (meta_translation "tgt_match_either" (`Examples.match_either))
+let _ = assert (tgt_match_either == test_match_either ()) by (trefl ())
+
+
+%splice_t[tgt_match_either_arg] (meta_translation "tgt_match_either_arg" (`Examples.match_either_arg))
+let _ = assert (tgt_match_either_arg == test_match_either_arg ()) by (trefl ())
