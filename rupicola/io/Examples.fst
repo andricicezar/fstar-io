@@ -59,7 +59,7 @@ let callback_return : bool -> (bool -> bool) =
 let callback_return' : bool -> (bool -> bool) =
   fun x -> if x then (fun _ -> x) else identity
 
-let make_pair : bool -> bool -> (bool & bool) =
+let make_pair : bool -> bool -> (bool * bool) =
   fun x y -> (x, y)
 
 let pair_of_functions : (bool -> bool) & (bool -> bool -> bool) =
