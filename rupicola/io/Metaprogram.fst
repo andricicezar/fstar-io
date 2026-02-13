@@ -53,8 +53,17 @@ let rec typ_translation (qt:term) : Tac term =
     let tbv = typ_translation (binder_sort b) in
     match inspect_comp c with
     | C_Total ret -> 
-      let tc = typ_translation ret in
-      mk_qarr tbv tc
+      let maybe_io = 
+        match inspect_ln ret with
+        | Tv_App l (r, _) ->
+           (match inspect_ln l with
+            | Tv_FVar fv -> if fv_to_string fv = "IO.io" then Some r else None
+            | _ -> None)
+        | _ -> None
+      in
+      (match maybe_io with
+       | Some r -> mk_qarrio tbv (typ_translation r)
+       | None -> mk_qarr tbv (typ_translation ret))
     | _ -> fail ("not a total function type")
   end
 
