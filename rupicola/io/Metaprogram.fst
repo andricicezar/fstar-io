@@ -153,19 +153,15 @@ let extend_gmap (gmap:mapping) (b:string) : mapping =
   //   match inspect_ln qdef' with
   //   | Tv_FVar fv' ->
   //     if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
-  //     else exp_translation g gmap qdef'
-  //   | _ -> exp_translation g gmap qdef'
+  //     else create_derivation g gmap qdef'
+  //   | _ -> create_derivation g gmap qdef'
   //   // print ("        looking for fvar: " ^ fv_to_string fv);
   //   // match gmap (FVar fv) with
   //   // | Some v -> mk_qvarI v
   //   // | None -> fail (fv_to_string fv ^ " not defined")
   // end
 
-let rec exp_translation
-  g
-  (gmap:mapping)
-  (qfs:term)
-  : Tac term =
+let rec create_derivation (g:env) (gmap:mapping) (qfs:term) : Tac term =
   print ("      in exp translation: " ^ tag_of qfs);
   match inspect_ln qfs with
   | Tv_BVar v -> begin
@@ -175,7 +171,7 @@ let rec exp_translation
     | None -> fail (print_nat i ^ " not defined")
   end
 
-  | Tv_Abs bin body -> mk_qlambda (exp_translation g (extend_gmap_binder gmap) body)
+  | Tv_Abs bin body -> mk_qlambda (create_derivation g (extend_gmap_binder gmap) body)
   | Tv_App hd (a, _) -> begin
     let (head, args) = collect_app qfs in
     let fv_opt =
@@ -188,18 +184,18 @@ let rec exp_translation
     | Some fv -> begin
       match fv_to_string fv, args with
       | "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-        mk_qmkpair (exp_translation g gmap v1) (exp_translation g gmap v2)
+        mk_qmkpair (create_derivation g gmap v1) (create_derivation g gmap v2)
       | "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
-        mk_qfst (exp_translation g gmap v1)
+        mk_qfst (create_derivation g gmap v1)
       | "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
-        mk_qsnd (exp_translation g gmap v1)
+        mk_qsnd (create_derivation g gmap v1)
       | "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
-        mk_qinl (exp_translation g gmap v1)
+        mk_qinl (create_derivation g gmap v1)
       | "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
-        mk_qinr (exp_translation g gmap v1)
-      | _ -> mk_qapp (exp_translation g gmap hd) (exp_translation g gmap a)
+        mk_qinr (create_derivation g gmap v1)
+      | _ -> mk_qapp (create_derivation g gmap hd) (create_derivation g gmap a)
     end
-    | _ -> mk_qapp (exp_translation g gmap hd) (exp_translation g gmap a)
+    | _ -> mk_qapp (create_derivation g gmap hd) (create_derivation g gmap a)
   end
 
   | Tv_Const C_Unit -> mk_qtt
@@ -211,57 +207,29 @@ let rec exp_translation
       print ("Got: " ^ (branches_to_string brs));
       match brs with
       | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
-      mk_qif (exp_translation g gmap b) (exp_translation g gmap t1) (exp_translation g (skip_gmap_binder gmap) t2)
+      mk_qif (create_derivation g gmap b) (create_derivation g gmap t1) (create_derivation g (skip_gmap_binder gmap) t2)
       // | [(Pat_Constant C_False, t2); (Pat_Var _ _, t1)] ->
-      //    mk_qif (exp_translation g gmap b) (exp_translation g (skip_gmap_binder gmap) t1) (exp_translation g gmap t2)
+      //    mk_qif (create_derivation g gmap b) (create_derivation g (skip_gmap_binder gmap) t1) (create_derivation g gmap t2)
       | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
         let fnm1 = fv_to_string fv1 in
         if fnm1 = "FStar.Pervasives.Inl"
-        then mk_qcase (exp_translation g gmap b) (exp_translation g (extend_gmap_binder gmap) t1) (exp_translation g (extend_gmap_binder gmap) t2)
-        else if fnm1 = "FStar.Pervasives.Inr"
-        then mk_qcase (exp_translation g gmap b) (exp_translation g (extend_gmap_binder gmap) t2) (exp_translation g (extend_gmap_binder gmap) t1)
+        then mk_qcase (create_derivation g gmap b) (create_derivation g (extend_gmap_binder gmap) t1) (create_derivation g (extend_gmap_binder gmap) t2)
         else fail ("only supporting matches on inl and inr for now. Got: " ^ fnm1)
       | _ -> fail ("Only boolean matches (if-then-else) are supported. Got: " ^ (branches_to_string brs))  end
 
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
-    | C_Total _ -> exp_translation g gmap t
+    | C_Total _ -> create_derivation g gmap t
     | _ -> fail ("not a total function type")
   end
 
-  | Tv_AscribedT e t _ _ -> begin
-    exp_translation g gmap e
-    // | _ -> fail ("not a total function type")
-  end
-
+  | Tv_AscribedT e t _ _ -> create_derivation g gmap e
   | Tv_UInst v _ -> fail ("unexpected universe instantiation in expression: " ^ fv_to_string v)
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
-let rec def_translation g (gmap:mapping) (qdef:term) : Tac (string * term) =
-  print "  in def translation\n";
-  match inspect_ln qdef with
-  | Tv_FVar fv -> begin
-    let fnm = fv_to_string fv in
-    print ("    def: " ^ fnm ^ "\n");
-    let qdef' = norm_term_env g [delta_only [fnm]; zeta] qdef in
-    match inspect_ln qdef' with
-    | Tv_FVar fv' ->
-      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
-      else def_translation g gmap qdef'
-    | _ -> (fnm, exp_translation g gmap qdef')
-  end
-  | _ -> fail ("not top-level definition")
-
-let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
-  : Lemma
-    (requires typing_token g e (eff, ty))
-    (ensures typing g e (eff, ty)) =
-    assert (typing_token g e (eff, ty));
-    Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
-
-let check_if_ovals_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
+let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
   // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
@@ -275,37 +243,43 @@ let check_if_ovals_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_
   // how to go from one to the other?
   assume (sub_typing g t desired_t)
 
-let lem_retype_expression g e (t:typ{tot_typing g e t}) (desired_t:typ) :
-  Lemma (requires tot_typing g e t /\ sub_typing g t desired_t)
-        (ensures tot_typing g e desired_t) =
-  Squash.bind_squash #(typing g e (E_Total, t)) () (fun d_typing ->
-    Squash.bind_squash #(sub_typing g t desired_t) () (fun d_sub ->
-      let d_sub_comp = Relc_typ g t desired_t E_Total R_Sub d_sub in
-      let d_res = T_Sub g e (E_Total, t) (E_Total, desired_t) d_typing d_sub_comp in
-      Squash.return_squash d_res))
+let create_and_type_check_derivation g (gmap:mapping) (qprog:term) (desired_qtyp:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+  let qderivation = create_derivation g gmap qprog in
 
-let translation g (qprog:term) (qtyp:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r) }) =
-  let desired_qtyp_derivation = mk_tyj qtyp qprog in
-  let (_, qderivation) = def_translation g empty_mapping qprog in
-
-  let (_, qderivation, desired_qtyp_derivation) = must <| instantiate_implicits g qderivation (Some desired_qtyp_derivation) true in
-  let (qderivation, (eff, qtyp_derivation)) = must <| tc_term g qderivation in
+  let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
+  let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
   if E_Ghost? eff then fail "not a total function type"
   else begin
-    check_if_ovals_are_equal g qtyp_derivation desired_qtyp_derivation;
+    check_if_derivation_types_are_equal g qtyp desired_qtyp;
 
-    token_as_typing g qderivation eff qtyp_derivation;
-    lem_retype_expression g qderivation qtyp_derivation desired_qtyp_derivation;
+    token_as_typing g qderivation eff qtyp;
+    lem_retype_expression g qderivation qtyp desired_qtyp;
 
-    (qderivation, desired_qtyp_derivation)
+    (qderivation, desired_qtyp)
   end
+
+let top_level_def_translation g (gmap:mapping) (qprog:term) : Tac (string * (r:(term & term){tot_typing g (fst r) (snd r)}) ) =
+  print "  in def translation\n";
+  let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
+  let derivation_typ = mk_tyj (typ_translation qtyp) qprog in
+  match inspect_ln qprog with
+  | Tv_FVar fv -> begin
+    let fnm = fv_to_string fv in
+    print ("    def: " ^ fnm ^ "\n");
+    let qprog' = norm_term_env g [delta_only [fnm]; zeta] qprog in
+    match inspect_ln qprog' with
+    | Tv_FVar fv' ->
+      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
+      else (fnm, create_and_type_check_derivation g gmap qprog' derivation_typ)
+    | _ -> (fnm, create_and_type_check_derivation g gmap qprog' derivation_typ)
+  end
+  | _ -> fail ("not top-level definition")
 
 let meta_translation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
-    let (qprog, (eff, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-    let (qderivation, qtyp_derivation) = translation g qprog (typ_translation qtyp) in
+    let _, (qderivation, qtyp_derivation) = top_level_def_translation g empty_mapping qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
 

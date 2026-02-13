@@ -49,6 +49,24 @@ let assert_dynamically g phi : TacH unit (requires True) (ensures fun _ -> valid
   let ht : tot_typing g qunit (mk_squash phi) = dyn_typing () in
   Squash.return_squash ht
 
+
+let lem_retype_expression g e (t:typ{tot_typing g e t}) (desired_t:typ) :
+  Lemma (requires tot_typing g e t /\ sub_typing g t desired_t)
+        (ensures tot_typing g e desired_t) =
+  Squash.bind_squash #(typing g e (E_Total, t)) () (fun d_typing ->
+    Squash.bind_squash #(sub_typing g t desired_t) () (fun d_sub ->
+      let d_sub_comp = Relc_typ g t desired_t E_Total R_Sub d_sub in
+      let d_res = T_Sub g e (E_Total, t) (E_Total, desired_t) d_typing d_sub_comp in
+      Squash.return_squash d_res))
+
+
+let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
+  : Lemma
+    (requires typing_token g e (eff, ty))
+    (ensures typing g e (eff, ty)) =
+    assert (typing_token g e (eff, ty));
+    Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
+
 let rec fold_left (f:'a -> 'b -> 'a) (acc:'a) (l:list 'b) : Tot 'a (decreases l)=
   match l with
   | [] -> acc
