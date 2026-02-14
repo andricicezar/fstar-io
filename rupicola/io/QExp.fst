@@ -47,6 +47,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 
 | QTrue       : #g : typ_env -> oval_quotation g (fs_oval_return g qBool true)
 | QFalse      : #g : typ_env -> oval_quotation g (fs_oval_return g qBool false)
+| QStringLit  : #g : typ_env -> s:string -> oval_quotation g (fs_oval_return g qString s)
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
@@ -546,3 +547,11 @@ let test_sendError400 ()
       (QBindProd
         (QWrite (QFd 9) (QVarS (QVarS QVar0)))
         (QReturn Qtt))))))
+
+let test_const_str
+  : qString ⊩ const_str
+  = QStringLit "constant"
+
+let test_greeting
+  : (qBool ^-> qString) ⊩ greeting
+  = QLambda (QIf QVar0 (QStringLit "hello") (QStringLit "goodbye"))

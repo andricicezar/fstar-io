@@ -15,6 +15,7 @@ type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
 | QBool : type_quotation bool
 | QFileDescriptor : type_quotation file_descr
+| QString : type_quotation string
 | QArr : #t1:Type ->
          #t2:Type ->
          type_quotation t1 ->
@@ -41,6 +42,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QUnit -> assert (t == unit)
   | QBool -> assert (t == bool)
   | QFileDescriptor -> assert (t == file_descr)
+  | QString -> assert (t == string)
   | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
   | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
@@ -51,6 +53,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   | QUnit -> TUnit
   | QBool -> TBool
   | QFileDescriptor -> TFileDescr
+  | QString -> TString
   | QPair qt1 qt2 -> TPair (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QArr qt1 qt2
   | QArrIO qt1 qt2 ->
@@ -70,6 +73,7 @@ let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
 let qFileDescr : qType = (| _, QFileDescriptor |)
+let qString : qType = (| _, QString |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =
@@ -188,7 +192,8 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   | ETrue
   | EFalse
   | EVar _
-  | EFileDescr _ -> ()
+  | EFileDescr _
+  | EString _ -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
@@ -234,6 +239,7 @@ let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
     | ETrue -> ()
     | EFalse -> ()
     | EFileDescr _ -> ()
+    | EString _ -> ()
     | ELam _ -> ()
     | EPair e1 e2 -> begin
       lem_value_is_closed e1;

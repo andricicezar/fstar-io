@@ -14,6 +14,8 @@ open QExp
 let mk_qunit : term = mk_app (`QTyp.qUnit) []
 let mk_qbool : term = mk_app (`QTyp.qBool) []
 let mk_qfiledescr : term = mk_app (`QTyp.qFileDescr) []
+let mk_qstring : term = mk_app (`QTyp.qString) []
+let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
 let mk_qresexn (t:term) : term = mk_app (`QTyp.qResexn) [(t, Q_Explicit)]
 let mk_qarr (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qarrio (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
@@ -27,6 +29,7 @@ let rec typ_translation (qt:term) : Tac term =
     | "Prims.unit" -> mk_qunit
     | "Prims.bool" -> mk_qbool
     | "BaseTypes.file_descr" -> mk_qfiledescr
+    | "Prims.string" -> mk_qstring
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
 
@@ -176,6 +179,7 @@ let rec create_derivation (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : Tac
   | Tv_Const C_Unit -> mk_qtt
   | Tv_Const C_True -> mk_qtrue
   | Tv_Const C_False -> mk_qfalse
+  | Tv_Const (C_String s) -> mk_qstringlit (pack_ln (Tv_Const (C_String s)))
 
   | Tv_Match b _ brs -> begin
       if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else ();

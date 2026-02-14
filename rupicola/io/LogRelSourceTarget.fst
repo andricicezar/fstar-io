@@ -18,6 +18,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | QFileDescriptor ->  e == EFileDescr fs_v
+  | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     match e with
@@ -89,6 +90,7 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
   | QUnit -> ()
   | QBool -> ()
   | QFileDescriptor -> ()
+  | QString -> ()
   | QArr _ _ -> ()
   | QArrIO _ _ -> ()
   | QPair #t1 #t2 qt1 qt2 ->
@@ -168,6 +170,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
   | QUnit -> ()
   | QBool -> ()
   | QFileDescriptor -> ()
+  | QString -> ()
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     let ELam e' = e in

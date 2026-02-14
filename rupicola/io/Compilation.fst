@@ -21,6 +21,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambda qbody -> ELam (compile qbody)
   | QFalse -> EFalse
   | QTrue -> ETrue
+  | QStringLit s -> EString s
   | QIf qc qt qe -> EIf (compile qc) (compile qt) (compile qe)
   | QMkpair q1 q2 -> EPair (compile q1) (compile q2)
   | QFst qp -> EFst (compile qp)
@@ -60,6 +61,7 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     C1.equiv_oval_lambda body (compile qbody)
   | QFalse -> C1.equiv_oval_false g
   | QTrue -> C1.equiv_oval_true g
+  | QStringLit #_ str -> C1.equiv_oval_string g str
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_superset qc;
     lem_compile_superset qt;
@@ -147,6 +149,7 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     C2.equiv_oval_lambda body (compile qbody)
   | QFalse -> C2.equiv_oval_false g
   | QTrue -> C2.equiv_oval_true g
+  | QStringLit #_ str -> C2.equiv_oval_string g str
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_subset qc;
     lem_compile_subset qt;
