@@ -208,6 +208,7 @@ let simplify_qType_g g (x:term) : Tac term =
     delta_only [
       `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qResexn; 
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; 
+      `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     iota;
     simplify
@@ -456,30 +457,31 @@ let test_match_either_arg ()
 open ExamplesIO
 
 let test_u_return
-  : prod_quotation _ u_return
-  = QReturn QTrue
+  : (qUnit ^->!@ qBool) ⊩ u_return
+  = QLambdaProd (QReturn QTrue)
 
 let test_apply_io_return
   : (qBool ^->!@ qBool) ⊩ apply_io_return
   = QLambdaProd (QReturn QVar0)
 
 let test_apply_read
-  : prod_quotation _ apply_read
-  = QRead (QFd 0)
+  : (qUnit ^->!@ (qResexn qBool)) ⊩ apply_read
+  = QLambdaProd (QRead (QFd 0))
 
 let test_apply_write_const
-  : prod_quotation _ apply_write_const
-  = QWrite (QFd 2) QTrue
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_write_const
+  = QLambdaProd (QWrite (QFd 2) QTrue)
 
 let test_apply_write
   : _ ⊩  apply_write
   = QLambdaProd (QWrite (QFd 1) QVar0)
 
 let test_apply_io_bind_const
-  : prod_quotation _ apply_io_bind_const
-  = QBindProd
-      (QReturn QTrue)
-      (QReturn QVar0)
+  : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
+  = QLambdaProd (
+      QBindProd
+        (QReturn QTrue)
+        (QReturn QVar0))
 
 let test_apply_io_bind_identity
   : (qBool ^->!@ qBool) ⊩ apply_io_bind_identity
@@ -508,31 +510,32 @@ let test_apply_io_bind_write
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
-  : prod_quotation _ apply_io_bind_read_write
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (l_to_r_fsG (); trefl ())
-  = QBindProd (QRead (QFd 4))
+  = QLambdaProd (QBindProd (QRead (QFd 4))
     (QCaseProd QVar0
      (QWrite (QFd 1) QVar0)
-     (QReturn (QInr QVar0)))
+     (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
-  : prod_quotation _ apply_io_bind_read_write'
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
   by (l_to_r_fsG (); trefl ())
-  = QBindProd (QRead (QFd 9)) (
-      QCaseProd QVar0 (QWrite (QFd 2) QVar0) (QReturn (QInr QVar0)))
+  = QLambdaProd (QBindProd (QRead (QFd 9)) (
+      QCaseProd QVar0 (QWrite (QFd 2) QVar0) (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
-  : prod_quotation _ apply_io_bind_read_if_write
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
   by (l_to_r_fsG (); trefl ())
-  = QBindProd
-      (QRead (QFd 0))
-      (QCaseProd QVar0
-        (QIfProd QVar0
-          (QWrite (QFd 7) QFalse)
-          (QWrite (QFd 8) QTrue))
-        (QReturn (QInr QVar0)))
+  = QLambdaProd
+      (QBindProd
+        (QRead (QFd 0))
+        (QCaseProd QVar0
+          (QIfProd QVar0
+            (QWrite (QFd 7) QFalse)
+            (QWrite (QFd 8) QTrue))
+          (QReturn (QInr QVar0))))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
   (qx : oval_quotation g x) (qf : oprod_quotation _ f) :

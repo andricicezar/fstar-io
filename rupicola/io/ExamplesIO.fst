@@ -2,45 +2,42 @@ module ExamplesIO
 
 open IO
 
-let u_return : io bool = return true
+let u_return () : io bool = return true
 
+let apply_io_return : bool -> io bool = fun x -> io_return x
 
-(** let papply_io_return : bool -> io bool = io_return **)
-
-let apply_io_return : bool -> io bool = fun x -> return x
-
-let apply_read : io (resexn bool) = read 0
-let apply_write_const : io (resexn unit) = write (2,true)
+let apply_read () : io (resexn bool) = read 0
+let apply_write_const () : io (resexn unit) = write (2,true)
 let apply_write : bool -> io (resexn unit) = fun x -> write (1,x)
 
-let apply_io_bind_const : io bool =
-  let!@ x = return true in
-  return x
+let apply_io_bind_const () : io bool =
+  let!@ x = io_return true in
+  io_return x
 
 let apply_io_bind_identity : bool -> io bool =
   fun x ->
-    let!@ y = return x in
-    return y
+    let!@ y = io_return x in
+    io_return y
 
 let apply_io_bind_pure_if : bool -> io bool =
   fun x ->
-    if!@ (return x) then return false
-    else return true
+    if!@ (io_return x) then io_return false
+    else io_return true
 
 let apply_io_bind_write : bool -> io (resexn unit) =
   fun x ->
-    let!@ y = return x in
+    let!@ y = io_return x in
     write (2,y)
 
-let apply_io_bind_read_write : io (resexn unit) =
+let apply_io_bind_read_write () : io (resexn unit) =
   match!@ read 4 with
   | Inl x -> write (1,x)
-  | Inr x -> return (Inr x)
+  | Inr x -> io_return (Inr x)
 
-let apply_io_bind_read_write' : io (resexn unit) =
-  io_bind (read 9) (fun x -> match x with | Inl x -> write (2,x) | Inr x -> return (Inr x))
+let apply_io_bind_read_write' () : io (resexn unit) =
+  io_bind (read 9) (fun x -> match x with | Inl x -> write (2,x) | Inr x -> io_return (Inr x))
 
-let apply_io_bind_read_if_write : io (resexn unit) =
+let apply_io_bind_read_if_write () : io (resexn unit) =
   match!@ read 0 with
   | Inl x -> if x
             then write (7,false)
