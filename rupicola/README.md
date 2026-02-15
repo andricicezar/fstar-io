@@ -7,13 +7,15 @@ The TODOs for the paper, are in the paper.
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
     - [x] Admit free `equiv_oval_app`
     - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_app`
+    - [ ] Admit free `equiv_oprod_bind`
+    - [x] Admit free `equiv_oprod_app`
     - [x] Admit free `equiv_oval_lambda`
     - [x] Admit free `equiv_oval_lambda_oprod`
     - [x] Admit free `equiv_oprod_lambda`
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [x] Admit free `equiv_oval_app`
     - [x] Admit free `equiv_oprod_app_oval_oval`
+    - [ ] Admit free `equiv_oprod_bind`
     - [ ] Admit free `equiv_oprod_app` (+ @Danel)
     - [x] Admit free `equiv_oval_lambda`
     - [x] Admit free `equiv_oval_lambda_oprod`
@@ -35,16 +37,14 @@ The TODOs for the paper, are in the paper.
 - [ ] Backend to λ□  (@Exe)
   - [ ] extract the running example to Malfunction and run it
 
-- [ ] Metaprogram (@Cezar)
-  - [ ] working on simply typed F* examples
-  - [ ] working on IO examples
-  - [ ] working on the running example
+- [x] Metaprogram (@Cezar)
+  - [x] working on simply typed F* examples
+  - [x] working on IO examples
+  - [ ] working on the running example (@Theo)
 
-- [ ] Admits (74)
+- [ ] Admits (70)
   - [ ] Trace.fst
-    - [ ] 6 admits about traces and append
-  - [ ] IO.fsti
-    - [ ] one assume that was fixed on Abigail's branch
+    - [ ] 8 admits about traces and append
   - [ ] QTyp.fst 
     - [ ] `lem_substitution`
     ```fstar
@@ -71,8 +71,8 @@ The TODOs for the paper, are in the paper.
     - [ ] `lem_values_are_expressions`
     - [ ] `lem_values_are_producers`
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] `equiv_oprod_app` has to be redone since it uses functional extensionality
-    - [ ] 10 admitted compatibility lemmas on Abigail's branch
+    - [ ] `equiv_oprod_bind` has two silly assumes
+    - [ ] 5 admitted compatibility lemmas 
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
   - [ ] Compilation.fst
@@ -82,7 +82,7 @@ The TODOs for the paper, are in the paper.
 
 
 - [ ] Prepare artifact
-  - [ ] Use the names from the paper in the artifact (e.g., rename STLC to something better)
+  - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
