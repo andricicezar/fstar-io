@@ -42,7 +42,7 @@ The TODOs for the paper, are in the paper.
   - [x] working on IO examples
   - [ ] working on the running example (@Theo)
 
-- [ ] Admits (70)
+- [ ] Admits (67)
   - [ ] Trace.fst
     - [ ] 8 admits about traces and append
   - [ ] QTyp.fst 
@@ -62,14 +62,8 @@ The TODOs for the paper, are in the paper.
     - [ ] `lem_destruct_steps_epair_snd`
     - [ ] one case in `lem_shifting_preserves_closed`
     - [ ] admits and assumes in `lem_subst_freevars_closes_exp`
-  - [ ] LogRelSourceTarget.fst
-    - [ ] `lem_values_valid_superset_val_valid_contains`
-    - [ ] `lem_values_are_expressions`
-    - [ ] `lem_values_are_producers`
   - [ ] LogRelTargetSource.fst
-    - [ ] `lem_values_valid_subset_val_valid_member_of`
-    - [ ] `lem_values_are_expressions`
-    - [ ] `lem_values_are_producers`
+    - [ ] `safety_prod`
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
     - [ ] `equiv_oprod_bind` has two silly assumes
     - [ ] 5 admitted compatibility lemmas 

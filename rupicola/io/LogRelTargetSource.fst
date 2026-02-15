@@ -66,18 +66,6 @@ let valid_subset_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
 let valid_subset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
   forall (h:history). t ⫃ (h, fs_e, e)
 
-let lem_values_valid_subset_val_valid_member_of t (fs_e:fs_val t) (e:value) :
-  Lemma (requires valid_subset_val fs_e e)
-        (ensures  valid_member_of fs_e e) = admit () (** TODO **)
-
-let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
-  Lemma (requires t ∈ (h, fs_e, e))
-        (ensures  t ⊆ (h, fs_e, e)) = admit ()
-
-let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
-  Lemma (requires t ∈ (h, fs_e, e))
-        (ensures  t ⫃ (h, io_return fs_e, e)) = admit ()
-
 let rec lem_values_are_values t h fs_e (e:closed_exp) :
   Lemma (requires t ∈ (h, fs_e, e))
         (ensures is_value e)
@@ -97,6 +85,82 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+
+let steps_val_id (e:value) (e':closed_exp) (h:history)
+  : Lemma (requires squash (steps e e' h []))
+          (ensures e == e') =
+   lem_value_is_irred e;
+   (* Return the proof of equality *)
+   let sq_eq : squash (e == e') = 
+     FStar.Squash.bind_squash #(steps e e' h []) #(squash (e == e')) (FStar.Squash.get_proof (steps e e' h [])) (fun (st:steps e e' h []) ->
+       lem_irred_implies_srefl_steps st;
+       (* Now we know e == e' here *)
+       FStar.Squash.get_proof (e == e')
+     )
+   in
+   ()
+
+let lem_values_valid_subset_val_valid_member_of t (fs_e:fs_val t) (e:value) :
+  Lemma (requires valid_subset_val fs_e e)
+        (ensures  valid_member_of fs_e e) =
+  introduce forall h. t ∈ (h, fs_e, e) with begin
+    assert (t ⊆ (h, fs_e, e));
+    let p (e':closed_exp) = e_beh e e' h [] /\ t ∈ (h, fs_e, e') in
+    assert_norm (t ⊆ (h, fs_e, e) == (exists e'. p e'));
+    
+    let aux (e':closed_exp) : Lemma
+      (requires p e')
+      (ensures t ∈ (h, fs_e, e)) =
+        assert_norm (e_beh e e' h [] == (steps e e' h [] /\ indexed_irred e' (h++[])));
+        steps_val_id e e' h;
+        assert (e == e');
+        assert (t ∈ (h, fs_e, e))
+    in
+    eliminate exists e'. p e'
+    returns t ∈ (h, fs_e, e)
+    with _. aux e'
+  end
+
+
+let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∈ (h, fs_e, e))
+        (ensures  t ⊆ (h, fs_e, e)) =
+  lem_values_are_values t h fs_e e;
+  lem_value_is_irred e;
+  assert (e_beh e e h [])
+
+let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∈ (h, fs_e, e))
+        (ensures  t ⫃ (h, io_return fs_e, e)) =
+  lem_values_are_values t h fs_e e;
+  lem_value_is_irred e;
+  introduce forall lt (fs_r:get_Type t). fs_beh (io_return fs_e) h lt fs_r ==>
+    (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with begin
+    introduce fs_beh (io_return fs_e) h lt fs_r ==>
+      (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with fs_beh_k. begin
+       theta_monad_morphism_ret fs_e;
+       (* Using intermediate assertions to guide the solver *)
+       assert (theta (io_return fs_e) == hist_return fs_e); 
+       
+       let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == fs_e in
+       assert (hist_return fs_e h p); (* definition of hist_return *)
+       assert (theta (io_return fs_e) h p); (* rewrite *)
+       assert (thetaP (io_return fs_e) h lt fs_r); (* hypothesis fs_beh_k *)
+       
+       (* Expand definition of thetaP / wp2p *)
+       (* thetaP m h lt r <==> forall p. theta m h p ==> p lt r *)
+       (* Therefore theta (io_return fs_e) h p ==> p lt fs_r *)
+       
+       assert (p lt fs_r);
+       
+       assert (lt == []);
+       assert (fs_r == fs_e);
+
+       lem_steps_refl e h;
+       assert (e_beh e e h []);
+       assert (t ∈ (h++lt, fs_r, e))
+    end
+  end
 
 let lem_forall_values_are_values t h fs_e :
   Lemma (forall (e:closed_exp). t ∈ (h, fs_e, e) ==> is_value e) =
