@@ -20,7 +20,7 @@ type io_ops = | ORead | OWrite | OOpen | OClose
 unfold let io_args (op:io_ops) : Type =
   match op with
   | ORead -> file_descr
-  | OWrite -> file_descr * bool
+  | OWrite -> file_descr * string
   | OOpen -> string
   | OClose -> file_descr
 

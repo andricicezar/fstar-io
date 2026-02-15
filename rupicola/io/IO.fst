@@ -31,7 +31,7 @@ let openfile (fnm:string) : io (resexn file_descr) =
 let read (fd:file_descr) : io (resexn bool) =
   Call ORead fd Return
 
-let write (x:file_descr * bool) : io (resexn unit) =
+let write (x:file_descr * string) : io (resexn unit) =
   Call OWrite x Return
 
 let close (fd:file_descr) : io (resexn unit) =

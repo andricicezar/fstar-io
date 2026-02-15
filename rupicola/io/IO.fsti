@@ -24,7 +24,7 @@ val io_bind
 
 val openfile : string -> io (resexn file_descr)
 val read : file_descr -> io (resexn bool)
-val write : file_descr * bool -> io (resexn unit)
+val write : file_descr * string -> io (resexn unit)
 val close : file_descr -> io (resexn unit)
 
 let return = io_return

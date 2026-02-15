@@ -661,7 +661,7 @@ let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     end
   end
 
-let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
+let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊏ fd /\ fs_msg ⊏ msg)
     (ensures fs_oprod_write_oval fs_fd fs_msg ⊑ EWrite fd msg)
@@ -898,7 +898,7 @@ let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
     (ensures fs_oprod_read fs_fd ⊑ ERead fd)
   = admit ()
 
-let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qBool) (fd msg:exp)
+let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊑ fd /\ fs_msg ⊑ msg)
     (ensures fs_oprod_write fs_fd fs_msg ⊑ EWrite fd msg)

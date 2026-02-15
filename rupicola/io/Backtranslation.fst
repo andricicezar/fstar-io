@@ -108,7 +108,7 @@ type typing : typ_env -> exp -> qType -> Type =
            #e1:exp ->
            #e2:exp ->
            $h1:typing g e1 qFileDescr ->
-           $h2:typing g e2 qBool ->
+           $h2:typing g e2 qString ->
            typing g (EWrite e1 e2) (qResexn qUnit)
 | TyClose :
            #g:typ_env ->
@@ -181,7 +181,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
   | EWrite _ _ ->
     let TyWrite h1 h2 = h in
     let h1 : typing g _ qFileDescr = h1 in
-    let h2 : typing g _ qBool = h2 in
+    let h2 : typing g _ qString = h2 in
     fs_oprod_write (backtranslate_exp h1) (backtranslate_exp h2)
   | EClose _ ->
     let TyClose h' = h in
