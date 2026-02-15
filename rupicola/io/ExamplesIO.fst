@@ -66,7 +66,7 @@ let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   | Inr x -> return (Inr x)
 
 let open2_read_write () =
-  let!@! fd1 = openfile false in
-  let!@! fd2 = openfile true in
+  let!@! fd1 = openfile "/tmp/input" in
+  let!@! fd2 = openfile "/tmp/output" in
   let!@! msg = read fd1 in
   write (fd2, msg)

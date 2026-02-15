@@ -21,7 +21,7 @@ unfold let io_args (op:io_ops) : Type =
   match op with
   | ORead -> file_descr
   | OWrite -> file_descr * bool
-  | OOpen -> bool
+  | OOpen -> string
   | OClose -> file_descr
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =

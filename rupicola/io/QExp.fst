@@ -110,7 +110,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QOpenfile :
         #g:typ_env ->
-        #fnm:fs_oval g qBool ->
+        #fnm:fs_oval g qString ->
         oval_quotation g fnm ->
         oprod_quotation #(qResexn qFileDescr) g (fs_oprod_openfile_oval fnm)
 

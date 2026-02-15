@@ -627,7 +627,7 @@ let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_i
   end
 #pop-options
 
-let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qBool) (fnm:exp)
+let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊏ fnm)
     (ensures fs_oprod_openfile_oval fs_fnm ⊑ EOpen fnm)
@@ -886,7 +886,7 @@ let equiv_oprod_case #g (#a #b #c:qType)
     (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ⊑ (ECase cond inlc inrc)) =
   admit ()
 
-let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qBool) (fnm:exp)
+let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊑ fnm)
     (ensures fs_oprod_openfile fs_fnm ⊑ EOpen fnm)

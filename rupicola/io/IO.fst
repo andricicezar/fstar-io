@@ -25,7 +25,7 @@ let rec io_bind
       Call o args (fun i ->
         io_bind #a #b (fnc i) k)
 
-let openfile (fnm:bool) : io (resexn file_descr) =
+let openfile (fnm:string) : io (resexn file_descr) =
   Call OOpen fnm Return
 
 let read (fd:file_descr) : io (resexn bool) =

@@ -448,7 +448,7 @@ let fs_prod_if_val c t e =
   if c then t else e
 
 val fs_prod_openfile_val :
-        fnm:fs_val qBool ->
+        fnm:fs_val qString ->
         fs_prod (qResexn qFileDescr)
 let fs_prod_openfile_val fnm = openfile fnm
 
@@ -503,7 +503,7 @@ let fs_oprod_bind' m k =
 unfold
 val fs_oprod_openfile_oval :
         #g:typ_env ->
-        fnm:fs_oval g qBool ->
+        fnm:fs_oval g qString ->
         fs_oprod g (qResexn qFileDescr)
 let fs_oprod_openfile_oval fnm fsG = openfile (fnm fsG)
 
@@ -677,7 +677,7 @@ let fs_oprod_fmap p f =
 
 val fs_oprod_openfile :
         #g:typ_env ->
-        fnm:fs_oprod g qBool ->
+        fnm:fs_oprod g qString ->
         fs_oprod g (qResexn qFileDescr)
 let fs_oprod_openfile fnm =
   fs_oprod_bind' fnm (fun fnm' ->

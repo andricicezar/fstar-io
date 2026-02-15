@@ -309,6 +309,8 @@ let get_ebool (b:bool) : closed_exp =
   | true -> ETrue
   | false -> EFalse
 
+let get_string (e:value{EString? e}) : string = EString?.s e
+
 let get_fd (e:closed_exp{EFileDescr? e}) : file_descr =
   let EFileDescr fd = e in
   fd
@@ -493,13 +495,13 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     hst:step str str' h oev ->
     step (EOpen str) (EOpen str') h oev
   | SOpenReturnSuccess :
-    str:value{ETrue? str \/ EFalse? str} ->
+    str:value{EString? str} ->
     h:history ->
-    step (EOpen str) (get_resexn_fd (Inl (fresh_fd h))) h (Some (EvOpen (get_bool str) (Inl (fresh_fd h))))
+    step (EOpen str) (get_resexn_fd (Inl (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h))))
   | SOpenReturnFail :
-    str:value{ETrue? str \/ EFalse? str} ->
+    str:value{EString? str} ->
     h:history ->
-    step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_bool str) (Inr ())))
+    step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ())))
   | SClose :
     #fd:closed_exp ->
     #fd':closed_exp ->
@@ -1922,22 +1924,22 @@ let destruct_steps_ewrite
       end
 #pop-options
 
-let can_step_eopen_str (str:closed_exp{ETrue? str \/ EFalse? str}) (h:history) :
+let can_step_eopen_str (str:closed_exp{EString? str}) (h:history) :
   Lemma (exists e' oev. step (EOpen str) e' h oev)
   =
-  let st1 : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_bool str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
-  let st2 : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_bool str) (Inr ()))) = SOpenReturnFail str h in
+  let st1 : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
+  let st2 : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SOpenReturnFail str h in
   ()
 
 let can_step_eopen (str:closed_exp) (h:history) :
   Lemma
-  (requires indexed_sem_expr_shape TBool str h)
+  (requires indexed_sem_expr_shape TString str h)
   (ensures (exists e' oev. step (EOpen str) e' h oev))
   =
   introduce indexed_irred str h ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
     assert (steps str str h []);
-    let _ : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_bool str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
-    let _ : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_bool str) (Inr ()))) = SOpenReturnFail str h in
+    let _ : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
+    let _ : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SOpenReturnFail str h in
   ()
   end;
 
@@ -1956,9 +1958,9 @@ let rec destruct_steps_eopen_str
   (st:steps (EOpen str) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
   (requires indexed_irred e' (h++lt) /\
-    indexed_sem_expr_shape TBool str h)
+    indexed_sem_expr_shape TString str h)
   (ensures fun (str', (| lt1, lt' |)) ->
-    (ETrue? str' \/ EFalse? str') /\
+    EString? str' /\
     steps str str' h lt1 /\
     steps (EOpen str) (EOpen str') h lt1 /\
     steps (EOpen str') e' (h++lt1) lt' /\
@@ -1979,7 +1981,7 @@ let rec destruct_steps_eopen_str
       let lt1 : local_trace h = as_lt oev in
       let s2 : steps (EOpen str') e' (h++lt1) lt23 = step_eopen_steps in
       trans_history h lt1 lt23;
-      lem_step_preserve_indexed_sem_expr_shape str str' h oev TBool;
+      lem_step_preserve_indexed_sem_expr_shape str str' h oev TString;
       let (str'', (| lt1', lt' |)) = destruct_steps_eopen_str str' e' (h++lt1) lt23 s2 in
       trans_history h lt1 lt1';
       lem_steps_transitive str str' str'' h lt1 lt1';
@@ -1991,7 +1993,7 @@ let rec destruct_steps_eopen_str
 
 #push-options "--z3rlimit 10000"
 let destruct_steps_eopen
-  (str':closed_exp{ETrue? str' \/ EFalse? str'})
+  (str':closed_exp{EString? str'})
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
@@ -2002,9 +2004,9 @@ let destruct_steps_eopen
        steps (EOpen str') e_r h lt1 /\
        (e_r == EInl (get_efd (fresh_fd h)) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
-         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inl (fresh_fd h))]) /\
+         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_string str') (Inl (fresh_fd h))]) /\
        (EInr? e_r ==>
-         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_bool str') (Inr ())]) /\
+         steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_string str') (Inr ())]) /\
        lt == (lt1 @ lt2))
     (decreases st) =
     match st with
@@ -2017,8 +2019,8 @@ let destruct_steps_eopen
       match step_eopen with
       | SOpenReturnSuccess str' h -> begin
         assert (EInl (get_efd (fresh_fd h)) == f2);
-        lem_step_implies_steps (EOpen str') (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_bool str') (Inl (fresh_fd h))));
-        let lt' : local_trace h = [EvOpen (get_bool str') (Inl (fresh_fd h))] in
+        lem_step_implies_steps (EOpen str') (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str') (Inl (fresh_fd h))));
+        let lt' : local_trace h = [EvOpen (get_string str') (Inl (fresh_fd h))] in
         let s2 : steps (EInl (get_efd (fresh_fd h))) e' (h++lt') lt23 = step_eopen_steps in
         trans_history h lt' lt23;
         lem_value_preserves_value (get_efd (fresh_fd h)) (h++lt') TFileDescr;
@@ -2027,8 +2029,8 @@ let destruct_steps_eopen
         end
       | SOpenReturnFail str' h -> begin
         let EInr EUnit = f2 in
-        lem_step_implies_steps (EOpen str') (EInr EUnit) h (Some (EvOpen (get_bool str') (Inr ())));
-        let lt' : local_trace h = [EvOpen (get_bool str') (Inr ())] in
+        lem_step_implies_steps (EOpen str') (EInr EUnit) h (Some (EvOpen (get_string str') (Inr ())));
+        let lt' : local_trace h = [EvOpen (get_string str') (Inr ())] in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eopen_steps in
         trans_history h lt' lt23;
         lem_value_preserves_value EUnit (h++lt') TUnit;

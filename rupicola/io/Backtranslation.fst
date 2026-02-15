@@ -96,7 +96,7 @@ type typing : typ_env -> exp -> qType -> Type =
 | TyOpenfile :
            #g:typ_env ->
            #e1:exp ->
-           $h1:typing g e1 qBool ->
+           $h1:typing g e1 qString ->
            typing g (EOpen e1) (qResexn qFileDescr)
 | TyRead :
            #g:typ_env ->
@@ -172,7 +172,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
     fs_oprod_return_val g qFileDescr fd
   | EOpen _ ->
     let TyOpenfile h' = h in
-    let h' : typing g _ qBool = h' in
+    let h' : typing g _ qString = h' in
     fs_oprod_openfile (backtranslate_exp h')
   | ERead _ ->
     let TyRead h' = h in
