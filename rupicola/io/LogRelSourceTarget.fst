@@ -72,7 +72,12 @@ let valid_superset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
 
 let lem_values_valid_superset_val_valid_contains t (fs_e:fs_val t) (e:value) :
   Lemma (requires valid_superset_val fs_e e)
-        (ensures  valid_contains fs_e e) = admit () (** TODO **)
+        (ensures  valid_contains fs_e e) =
+  introduce forall (h:history). t ∋ (h, fs_e, e) with begin
+    assert (t ⊇ (h, fs_e, e));
+    lem_value_is_irred e;
+    assert (e_beh e e h [])
+  end
 
 let rec lem_values_are_values t h fs_e (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_e, e))
