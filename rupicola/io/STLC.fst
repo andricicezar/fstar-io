@@ -310,12 +310,54 @@ let rec lem_subst_freevars_closes_exp
   | _ -> ()
 #pop-options
 
+let append_eq_nil (#a:Type) (l1 l2:list a) :
+  Lemma (requires l1 `L.append` l2 == [])
+        (ensures l1 == [] /\ l2 == []) = ()
+
+let rec lem_free_vars_next_binder (e:exp) (n:nat) :
+  Lemma
+    (requires free_vars_indx e (n+1) == [])
+    (ensures (forall x. x `L.memP` free_vars_indx e n ==> x == 0))
+    (decreases e) =
+  match e with
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EVar _ -> ()
+  | ELam e' -> lem_free_vars_next_binder e' (n+1)
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ERead e' | EOpen e' | EClose e' ->
+    lem_free_vars_next_binder e' n
+  | EApp e1 e2 | EWrite e1 e2 | EPair e1 e2 ->
+    append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
+    lem_free_vars_next_binder e1 n;
+    lem_free_vars_next_binder e2 n;
+    introduce forall x. x `L.memP` free_vars_indx e n ==> x == 0
+    with introduce _ ==> _ with _.
+      L.append_memP (free_vars_indx e1 n) (free_vars_indx e2 n) x
+  | EIf e1 e2 e3 ->
+    append_eq_nil (free_vars_indx e1 (n+1) `L.append` free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
+    append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
+    lem_free_vars_next_binder e1 n;
+    lem_free_vars_next_binder e2 n;
+    lem_free_vars_next_binder e3 n;
+    introduce forall x. x `L.memP` free_vars_indx e n ==> x == 0
+    with introduce _ ==> _ with _.
+      (L.append_memP (free_vars_indx e1 n `L.append` free_vars_indx e2 n) (free_vars_indx e3 n) x;
+       L.append_memP (free_vars_indx e1 n) (free_vars_indx e2 n) x)
+  | ECase e1 e2 e3 ->
+    append_eq_nil (free_vars_indx e1 (n+1) `L.append` free_vars_indx e2 (n+2)) (free_vars_indx e3 (n+2));
+    append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+2));
+    lem_free_vars_next_binder e1 n;
+    lem_free_vars_next_binder e2 (n+1);
+    lem_free_vars_next_binder e3 (n+1);
+    introduce forall x. x `L.memP` free_vars_indx e n ==> x == 0
+    with introduce _ ==> _ with _.
+      (L.append_memP (free_vars_indx e1 n `L.append` free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1)) x;
+       L.append_memP (free_vars_indx e1 n) (free_vars_indx e2 (n+1)) x)
+
 let subst_beta (v e:exp) :
   Pure closed_exp
     (requires (is_closed (ELam e)) /\ is_closed v)
     (ensures (fun _ -> True)) =
-  // assume (free_vars_indx e 0 == [0]); (** should be provable **)
-  assume (forall x. x `L.memP` free_vars_indx e 0 ==> x == 0);
+  lem_free_vars_next_binder e 0;
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
