@@ -110,7 +110,7 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QOpenfile :
         #g:typ_env ->
-        #fnm:fs_oval g qBool ->
+        #fnm:fs_oval g qString ->
         oval_quotation g fnm ->
         oprod_quotation #(qResexn qFileDescr) g (fs_oprod_openfile_oval fnm)
 
@@ -118,12 +118,12 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qBool) g (fs_oprod_read_oval fd)
+        oprod_quotation #(qResexn qString) g (fs_oprod_read_oval fd)
 
 | QWrite :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
-        #msg:fs_oval g qBool ->
+        #msg:fs_oval g qString ->
         oval_quotation g fd ->
         oval_quotation g msg ->
         oprod_quotation #(qResexn qUnit) g (fs_oprod_write_oval fd msg)
@@ -206,7 +206,7 @@ let simplify_qType_g g (x:term) : Tac term =
   (** TODO: why is F* not doing this automatically anyway? **)
   norm_term_env g [
     delta_only [
-      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qResexn; 
+      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn;
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; 
       `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
@@ -465,12 +465,12 @@ let test_apply_io_return
   = QLambdaProd (QReturn QVar0)
 
 let test_apply_read
-  : (qUnit ^->!@ (qResexn qBool)) ⊩ apply_read
+  : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
   = QLambdaProd (QRead (QFd 0))
 
 let test_apply_write_const
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_write_const
-  = QLambdaProd (QWrite (QFd 2) QTrue)
+  = QLambdaProd (QWrite (QFd 2) (QStringLit "hello"))
 
 let test_apply_write
   : _ ⊩  apply_write
@@ -513,8 +513,8 @@ let test_apply_io_bind_read_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (l_to_r_fsG (); trefl ())
   = QLambdaProd (QBindProd (QRead (QFd 4))
-    (QCaseProd QVar0
-     (QWrite (QFd 1) QVar0)
+    (QCaseProd #_ #qString #qUnit QVar0
+     (QWrite (QFd 1) (QStringLit "data"))
      (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
@@ -522,7 +522,7 @@ let test_apply_io_bind_read_write' ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
   by (l_to_r_fsG (); trefl ())
   = QLambdaProd (QBindProd (QRead (QFd 9)) (
-      QCaseProd QVar0 (QWrite (QFd 2) QVar0) (QReturn (QInr QVar0))))
+      QCaseProd #_ #qString #qUnit QVar0 (QWrite (QFd 2) (QStringLit "data")) (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
@@ -531,10 +531,8 @@ let test_apply_io_bind_read_if_write ()
   = QLambdaProd
       (QBindProd
         (QRead (QFd 0))
-        (QCaseProd QVar0
-          (QIfProd QVar0
-            (QWrite (QFd 7) QFalse)
-            (QWrite (QFd 8) QTrue))
+        (QCaseProd #_ #qString #qUnit QVar0
+          (QWrite (QFd 7) (QStringLit "data"))
           (QReturn (QInr QVar0))))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
@@ -543,13 +541,11 @@ let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
   QAppProd (QLambdaProd qf) qx
 
 let test_sendError400 ()
-  : _ ⊩ sendError400
+  : (qBool ^->!@ qUnit) ⊩ sendError400
   = QLambdaProd
-      (qLetProd (QApp (QLambda QVar0) QTrue) (
-      (qLetProd (QMkpair (QVarS QVar0) QVar0) (
       (QBindProd
-        (QWrite (QFd 9) (QVarS (QVarS QVar0)))
-        (QReturn Qtt))))))
+        (QWrite (QFd 9) (QStringLit "error400"))
+        (QReturn Qtt))
 
 let test_const_str
   : qString ⊩ const_str

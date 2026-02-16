@@ -530,7 +530,7 @@ let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_i
   end
 #pop-options
 
-let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qBool) (fnm:exp)
+let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊏ fnm)
     (ensures fs_oprod_openfile_oval fs_fnm ⊑ EOpen fnm)
@@ -553,18 +553,18 @@ let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (ensures fs_oprod_read_oval fs_fd ⊑ ERead fd)
   =
   lem_fv_in_env_read g fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(≍) h` s ==> (qBool ^+ qUnit) ⫃ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(≍) h` s ==> (qString ^+ qUnit) ⫃ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = read fs_fd in
     let e = ERead (gsubst s fd) in
     assert (gsubst s (ERead fd) == e);
     let ERead fd = e in
-    introduce fsG `(≍) h` s ==> (qBool ^+ qUnit) ⫃ (h, fs_e, e) with _. begin
+    introduce fsG `(≍) h` s ==> (qString ^+ qUnit) ⫃ (h, fs_e, e) with _. begin
       admit ()
     end
   end
 
-let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
+let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊏ fd /\ fs_msg ⊏ msg)
     (ensures fs_oprod_write_oval fs_fd fs_msg ⊑ EWrite fd msg)
@@ -789,7 +789,7 @@ let equiv_oprod_case #g (#a #b #c:qType)
     (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ⊑ (ECase cond inlc inrc)) =
   admit ()
 
-let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qBool) (fnm:exp)
+let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊑ fnm)
     (ensures fs_oprod_openfile fs_fnm ⊑ EOpen fnm)
@@ -801,7 +801,7 @@ let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
     (ensures fs_oprod_read fs_fd ⊑ ERead fd)
   = admit ()
 
-let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qBool) (fd msg:exp)
+let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊑ fd /\ fs_msg ⊑ msg)
     (ensures fs_oprod_write fs_fd fs_msg ⊑ EWrite fd msg)
