@@ -1369,7 +1369,6 @@ let equiv_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
     end
   end
 
-#push-options "--split_queries always"
 let equiv_oprod_case #g (#a #b #c:qType)
   (fs_cond:fs_oprod g (a ^+ b))
   (fs_inlc:fs_oprod (extend a g) c)
@@ -1385,18 +1384,16 @@ let equiv_oprod_case #g (#a #b #c:qType)
   equiv_oprod_lambda fs_inrc inrc;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> c ⫄ (h, fs_oprod_case fs_cond fs_inlc fs_inrc fsG, gsubst s (ECase cond inlc inrc)) with begin
     introduce _ ==> _ with _. begin
-      let fs_cond' : fs_prod (a ^+ b) = fs_cond fsG in
-      let fs_e = fs_prod_bind fs_cond' (fun cond' -> fs_oprod_case_val cond' fs_inlc fs_inrc fsG) in
+      let fs_sc : fs_prod (a ^+ b) = fs_cond fsG in
+      let fs_il : fs_val (a ^->!@ c) = fun x -> fs_inlc (stack fsG x) in
+      let fs_ir : fs_val (b ^->!@ c) = fun x -> fs_inrc (stack fsG x) in
+      let fs_e = fs_prod_bind fs_sc (fun fs_sc' -> fs_prod_case_val fs_sc' fs_il fs_ir) in
       assert (fs_e == fs_oprod_case fs_cond fs_inlc fs_inrc fsG) by (
-        norm [delta_only [`%fs_oprod_case;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_case_val]];
+        norm [delta_only [`%fs_oprod_case;`%fs_prod_case_val;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_case_val]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
-      let inlc' = STLC.subst (STLC.sub_elam s) inlc in
-      let inrc' = STLC.subst (STLC.sub_elam s) inrc in
-      assert (gsubst s (ELam inlc) == ELam inlc');
-      assert (gsubst s (ELam inrc) == ELam inrc');
-      let e = ECase (gsubst s cond) inlc' inrc' in
-      assert (gsubst s (ECase cond inlc inrc) == e);
+      let e = ECase (gsubst s cond) (STLC.subst (STLC.sub_elam s) inlc) (STLC.subst (STLC.sub_elam s) inrc) in
+      assert (gsubst s (ECase cond inlc inrc) == e) by (trefl ());
       let ECase cond inlc inrc = e in
       introduce fsG `(∽) h` s ==> c ⫄ (h, fs_e, e) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
@@ -1407,27 +1404,26 @@ let equiv_oprod_case #g (#a #b #c:qType)
               let b_typ = type_quotation_to_typ (get_rel b) in
               lem_forall_values_are_values_prod (a ^+ b) h;
               let (cond', (| lt1, lt2 |)) = destruct_steps_ecase cond inlc inrc e' h lt sts1 a_typ b_typ in
-              assert ((a ^+ b) ⫄ (h, fs_cond', cond));
-              eliminate forall lt1 cond'. e_beh cond cond' h lt1 ==> (exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_cond' h lt1 fs_r_cond) with lt1 cond';
+              assert ((a ^+ b) ⫄ (h, fs_sc, cond));
+              eliminate forall lt1 cond'. e_beh cond cond' h lt1 ==> (exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_sc h lt1 fs_r_cond) with lt1 cond';
               lem_value_is_irred cond';
               trans_history h lt1 lt2;
-              eliminate exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_cond' h lt1 fs_r_cond
+              eliminate exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_sc h lt1 fs_r_cond
                 returns exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_values_are_expressions (a ^+ b) (h++lt1) fs_r_cond cond';
-              assume ((a ^->!@ c) ⊇ (h++lt1, (fun x -> fs_inlc (stack fsG x)), ELam inlc));
-              assume ((b ^->!@ c) ⊇ (h++lt1, (fun x -> fs_inrc (stack fsG x)), ELam inrc));
-              helper_equiv_oprod_case_oval #g fsG e' (h++lt1) lt2 a b c fs_r_cond fs_inlc fs_inrc cond' inlc inrc;
+              assume ((a ^->!@ c) ⊇ (h++lt1, fs_il, ELam inlc));
+              assume ((b ^->!@ c) ⊇ (h++lt1, fs_ir, ELam inrc));
+              helper_equiv_prod_case_val e' #(h++lt1) lt2 fs_r_cond fs_il fs_ir cond' inlc inrc;
               eliminate exists (fs_r:fs_val c). c ∋ ((h++lt1)++lt2, fs_r, e') /\ fs_beh (fs_oprod_case_val fs_r_cond fs_inlc fs_inrc fsG) (h++lt1) lt2 fs_r
                 returns exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_fs_beh_bind fs_cond' h lt1 fs_r_cond (fun x -> fs_oprod_case_val x fs_inlc fs_inrc fsG) lt2 fs_r
+                lem_fs_beh_bind fs_sc h lt1 fs_r_cond (fun x -> fs_oprod_case_val x fs_inlc fs_inrc fsG) lt2 fs_r
               end
-              end)
+            end)
           end
         end
       end
     end
   end
-#pop-options
 
 let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
@@ -1459,7 +1455,7 @@ let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
                 returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_values_are_expressions qBool (h++lt1) fs_r_fnm fnm';
               trans_history h lt1 lt';
-              helper_equiv_oprod_openfile_oval e' (h++lt1) lt' fs_r_fnm fnm';
+              helper_equiv_oprod_openfile_oval_steps e' (h++lt1) lt' fs_r_fnm fnm';
               eliminate exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_prod_openfile_val fs_r_fnm) (h++lt1) lt' fs_r
                 returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_fs_beh_bind fs_fnm' h lt1 fs_r_fnm (fun x -> fs_prod_openfile_val x) lt' fs_r
@@ -1562,7 +1558,7 @@ let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStrin
                 lem_shift_type_value_environments ((h++lt1)++lt2) fsG s;
                 assert (forall (lt:local_trace ((h++lt1)++lt2)). fsG `(∽) ((h++lt1)++lt2)` s ==> fsG `(∽) (((h++lt1)++lt2)++lt)` s);
                 assume (forall (lt:local_trace ((h++lt1)++lt2)). qBool ⊇ (((h++lt1)++lt2)++lt, fs_r_msg, msg'));
-                helper_equiv_oprod_write_oval e' #((h++lt1)++lt2) lt'' fs_r_fd fs_r_msg fd' msg';
+                helper_equiv_oprod_write_oval_steps e' #((h++lt1)++lt2) lt'' fs_r_fd fs_r_msg fd' msg';
                 eliminate exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (((h++lt1)++lt2)++lt'', fs_r, e') /\ fs_beh (fs_prod_write_val fs_r_fd fs_r_msg) ((h++lt1)++lt2) lt'' fs_r
                   returns exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
                 lem_fs_beh_bind fs_msg' (h++lt1) lt2 fs_r_msg (fun msg' -> fs_prod_write_val fs_r_fd msg') lt'' fs_r;
