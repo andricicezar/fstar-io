@@ -10,6 +10,7 @@ type typ =
   | TUnit  : typ
   | TBool  : typ
   | TFileDescr : typ
+  | TString : typ
   | TArr   : typ -> typ -> typ
   | TPair  : typ -> typ -> typ
   | TSum   : typ -> typ -> typ
@@ -30,6 +31,7 @@ type exp =
   | EInr   : exp -> exp
   | ECase  : exp -> exp -> exp -> exp
   | EFileDescr : fd:file_descr -> exp
+  | EString : s:string -> exp
   | ERead  : exp -> exp
   | EWrite : exp -> exp -> exp
   | EOpen  : exp -> exp
@@ -72,6 +74,7 @@ let rec subst (#r:bool)
     | ERead e' -> ERead (subst s e')
     | EWrite e1 e2  -> EWrite (subst s e1) (subst s e2)
     | EFileDescr i -> EFileDescr i
+    | EString s' -> EString s'
     | EOpen e' -> EOpen (subst s e')
     | EClose e' -> EClose (subst s e')
 
@@ -110,7 +113,8 @@ let rec equiv_subs_implies_equiv_substs #b #b' (f:sub b) (g:sub b') (e:exp) : Le
   | ETrue
   | EFalse
   | EVar _
-  | EFileDescr _ -> ()
+  | EFileDescr _
+  | EString _ -> ()
   | ELam e1 -> equiv_subs_implies_equiv_substs (sub_elam f) (sub_elam g) e1
   | EFst e1
   | ESnd e1
@@ -156,6 +160,7 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | ERead e' -> free_vars_indx e' n
   | EWrite e1 e2 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n
   | EFileDescr i -> []
+  | EString _ -> []
   | EOpen e' -> free_vars_indx e' n
   | EClose e' -> free_vars_indx e' n
 
@@ -170,6 +175,7 @@ let rec is_value (e:exp) : Type0 =
   | ETrue -> True
   | EFalse -> True
   | EFileDescr _ -> True
+  | EString _ -> True
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
   | EInl e'
@@ -678,6 +684,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TUnit -> e == EUnit
   | TBool -> e == ETrue \/ e == EFalse
   | TFileDescr -> EFileDescr? e
+  | TString -> EString? e
   | TArr t1 t2 -> ELam? e /\ is_closed e
   | TPair t1 t2 -> EPair? e /\ is_value (get_epair_e1 e) /\ is_value (get_epair_e2 e)
   | TSum t1 t2 -> (EInl? e /\ is_value (get_einl_v e)) \/ (EInr? e /\ is_value (get_einr_v e))

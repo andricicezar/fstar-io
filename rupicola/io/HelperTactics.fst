@@ -78,6 +78,13 @@ let fv_to_string (fv:fv) : string =
   | h::[] -> h
   | h::tl -> fold_left (fun x y -> x ^ "." ^ y) h tl
 
+
+let get_fv (head:term) : option string =
+  match inspect_ln head with
+  | Tv_FVar fv -> Some (fv_to_string fv)
+  | Tv_UInst fv _ -> Some (fv_to_string fv)
+  | _ -> None
+
 let rec print_nat (n:nat) : string =
   match n with
   | 0 -> "0"

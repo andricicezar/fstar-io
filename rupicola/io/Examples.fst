@@ -106,3 +106,6 @@ let match_either_arg : either bool bool -> bool -> bool =
     match x with
     | Inl x -> x
     | Inr x -> y
+
+let greeting (b:bool) : string = if b then "hello" else "goodbye"
+let const_str : string = "constant"

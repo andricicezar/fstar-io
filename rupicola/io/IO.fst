@@ -13,8 +13,6 @@ type io (a:Type u#a) : Type u#a =
 let io_return (#a:Type) (x:a) : io a =
   Return x
 
-let extract_v_from_io_return (#a:Type) (m:(io a){exists x. m == io_return x}) : (x:a{io_return x == m}) = admit ()
-
 let rec io_bind
   (#a:Type u#a)
   (#b:Type u#b)

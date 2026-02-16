@@ -45,6 +45,14 @@ let equiv_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ⊏ EFile
     end
   end
 
+let equiv_oval_string g (str:string) : Lemma (fs_oval_return g qString str ⊏ EString str) =
+  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qString ⊆ (h, str, gsubst s (EString str)) with begin
+    introduce _ ==> _ with _. begin
+      assert (qString ∈ (h, str, EString str));
+      lem_values_are_expressions qString h str (EString str)
+    end
+  end
+
 (** Used in backtranslation **)
 let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊏ EVar x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> Some?.v (g x) ⊆ (h, index fsG x, gsubst s (EVar x)) with begin
@@ -75,7 +83,8 @@ let rec shift_sub_equiv_sub_inc_no_rename #t #g
   | ETrue
   | EFalse
   | EVar _
-  | EFileDescr _ -> ()
+  | EFileDescr _
+  | EString _ -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam s') (sub_elam sub_inc) e1;
     introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
@@ -123,7 +132,8 @@ let rec shift_sub_equiv_sub_inc_rename #t
   | ETrue
   | EFalse
   | EVar _
-  | EFileDescr _ -> ()
+  | EFileDescr _
+  | EString _ -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam s') (sub_elam sub_inc) e1;
     introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
