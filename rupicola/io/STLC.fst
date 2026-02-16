@@ -750,7 +750,7 @@ let rec construct_steps_eapp_e1
   (h:history)
   (lt1:local_trace h)
   (st1:steps e1 (ELam e11) h lt1) :
-  Lemma 
+  Lemma
     (requires indexed_irred (ELam e11) (h++lt1))
     (ensures steps (EApp e1 e2) (EApp (ELam e11) e2) h lt1)
     (decreases st1) =
@@ -1007,7 +1007,7 @@ let construct_steps_eif
   (lt2:local_trace (h++lt1))
   (sts1:steps e1 e1' h lt1)
   (sts2:steps (match e1' with | ETrue -> e2 | EFalse -> e3) e' (h++lt1) lt2) :
-  Lemma 
+  Lemma
     (requires indexed_irred e1' (h++lt1) /\
               indexed_irred e' ((h++lt1)++lt2))
     (ensures steps (EIf e1 e2 e3) e' h (lt1@lt2))
@@ -1883,8 +1883,8 @@ let destruct_steps_ewrite
       (e_r == EInl EUnit \/ e_r == EInr EUnit) /\
       (EString? arg' ==>
         (EInl? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvWrite (get_fd fd', get_string arg') (Inl ())]) /\
-        (EInr? e_r ==> steps e_r e' (h++lt1) lt3 /\ lt == (lt1 @ lt3) /\ lt1 == [EvWrite (get_fd fd', get_string arg') (Inr ())])) /\
-      (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt3)))
+        (EInr? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvWrite (get_fd fd', get_string arg') (Inr ())])) /\
+      (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
     | SRefl (EWrite fd' arg') h -> begin

@@ -565,6 +565,19 @@ type fs_val (t:qType) =
 let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
   if c then e else t
 
+unfold
+val fs_val_case : #a  : qType ->
+                  #b  : qType ->
+                  #c  : qType ->
+                  cond: fs_val (a ^+ b) ->
+                  inlc: (fs_val a -> fs_val c) ->
+                  inrc: (fs_val b -> fs_val c) ->
+                  fs_val c
+let fs_val_case cond inlc inrc =
+  match cond with
+  | Inl x -> inlc x
+  | Inr x -> inrc x
+
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
@@ -955,7 +968,7 @@ let lem_fs_beh_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
   lem_theta_open arg res h
 
 let lem_fs_beh_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
-  Lemma (fs_beh #(qResexn qBool) (read arg) h (ev_lt (EvRead arg res)) res) =
+  Lemma (fs_beh #(qResexn qString) (read arg) h (ev_lt (EvRead arg res)) res) =
   lem_theta_read arg res h
 
 let lem_fs_beh_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
