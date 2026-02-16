@@ -6,7 +6,7 @@ let u_return () : io bool = return true
 
 let apply_io_return : bool -> io bool = fun x -> io_return x
 
-let apply_read () : io (resexn bool) = read 0
+let apply_read () : io (resexn string) = read 0
 let apply_write_const () : io (resexn unit) = write (2,"hello")
 let apply_write : string -> io (resexn unit) = fun x -> write (1,x)
 
@@ -39,9 +39,7 @@ let apply_io_bind_read_write' () : io (resexn unit) =
 
 let apply_io_bind_read_if_write () : io (resexn unit) =
   match!@ read 0 with
-  | Inl x -> if x
-            then write (7,"data")
-            else write (8,"data")
+  | Inl _ -> write (7,"data")
   | Inr x -> return (Inr x)
 
 (** Examples inspired from the Web Server **)
@@ -55,8 +53,8 @@ let sendError400 (fd:bool) : io unit =
 let get_req (fd:bool) : io (either bool bool) =
   let x = utf8_encode fd in
   match!@ read 11 with
-  | Inl x -> if x then return (Inl true) else return (Inr false)
-  | Inr x -> return (Inr false)
+  | Inl _ -> return (Inl true)
+  | Inr _ -> return (Inr false)
 
 let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
@@ -66,5 +64,5 @@ let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
 let open2_read_write () =
   let!@! fd1 = openfile "/tmp/input" in
   let!@! fd2 = openfile "/tmp/output" in
-  let!@! _ = read fd1 in
-  write (fd2, "data")
+  let!@! data = read fd1 in
+  write (fd2, data)

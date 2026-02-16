@@ -944,7 +944,7 @@ let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
 let helper_equiv_oprod_read_oval_steps (e':closed_exp) (#h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fd:closed_exp) :
   Lemma
     (requires (e_beh (ERead fd) e' h lt /\ qFileDescr ⊇ (h, fs_fd, fd)))
-    (ensures (exists (fs_r:fs_val (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)) =
+    (ensures (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)) =
   lem_forall_values_are_values qFileDescr h fs_fd;
   bind_squash (steps (ERead fd) e' h lt) (fun steps_e_e' ->
     let (fd', (| lt1, lt' |)) = destruct_steps_eread_fd fd e' h lt steps_e_e' in
@@ -955,31 +955,23 @@ let helper_equiv_oprod_read_oval_steps (e':closed_exp) (#h:history) (lt:local_tr
       lem_value_is_irred fd';
       assert (is_value e_r);
       (match e_r with
-      | EInl ETrue -> begin
-        lem_value_is_irred ETrue;
-        lem_value_is_irred (EInl ETrue);
-        lem_destruct_steps_einl ETrue e' ((h++lt1)++lt2) lt3;
-        assert ((qBool ^+ qUnit) ∋ (h++lt, Inl true, EInl ETrue));
-        assert (lt == [EvRead fs_fd (Inl true)]);
-        lem_theta_read fs_fd (Inl true) h
-      end
-      | EInl EFalse -> begin
-        lem_value_is_irred EFalse;
-        lem_value_is_irred (EInl EFalse);
-        lem_destruct_steps_einl EFalse e' ((h++lt1)++lt2) lt3;
-        assert ((qBool ^+ qUnit) ∋ (h++lt, Inl false, EInl EFalse));
-        assert (lt == [EvRead fs_fd (Inl false)]);
-        lem_theta_read fs_fd (Inl false) h
+      | EInl (EString s) -> begin
+        lem_value_is_irred (EString s);
+        lem_value_is_irred (EInl (EString s));
+        lem_destruct_steps_einl (EString s) e' ((h++lt1)++lt2) lt3;
+        assert ((qString ^+ qUnit) ∋ (h++lt, Inl s, EInl (EString s)));
+        assert (lt == [EvRead fs_fd (Inl s)]);
+        lem_theta_read fs_fd (Inl s) h
       end
       | EInr EUnit -> begin
         lem_value_is_irred EUnit;
         lem_value_is_irred (EInr EUnit);
         lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
-        assert ((qBool ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+        assert ((qString ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
         assert (lt == [EvRead fs_fd (Inr ())]);
         lem_theta_read fs_fd (Inr ()) h
       end);
-      get_squash (exists (fs_r:fs_val (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)))
+      get_squash (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)))
 
 let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
@@ -987,15 +979,15 @@ let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (ensures fs_oprod_read_oval fs_fd ⊒ ERead fd)
   =
   lem_fv_in_env_read g fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qBool ^+ qUnit) ⫄ (h, fs_oprod_read_oval fs_fd fsG, gsubst s (ERead fd)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, fs_oprod_read_oval fs_fd fsG, gsubst s (ERead fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = fs_prod_read_val fs_fd in
     let e = ERead (gsubst s fd) in
     assert (gsubst s (ERead fd) == e);
     let ERead fd = e in
-    introduce fsG `(∽) h` s ==> (qBool ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qBool ^+ qUnit)). (qBool ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+    introduce fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           helper_equiv_oprod_read_oval_steps e' lt fs_fd fd
         end
       end

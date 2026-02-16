@@ -26,7 +26,7 @@ unfold let io_args (op:io_ops) : Type =
 
 unfold let io_res (op:io_ops) (_:io_args op) : Type =
   match op with
-  | ORead -> resexn bool
+  | ORead -> resexn string
   | OWrite -> resexn unit
   | OOpen -> resexn file_descr
   | OClose -> resexn unit

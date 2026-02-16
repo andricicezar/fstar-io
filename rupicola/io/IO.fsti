@@ -23,7 +23,7 @@ val io_bind
   io b
 
 val openfile : string -> io (resexn file_descr)
-val read : file_descr -> io (resexn bool)
+val read : file_descr -> io (resexn string)
 val write : file_descr * string -> io (resexn unit)
 val close : file_descr -> io (resexn unit)
 

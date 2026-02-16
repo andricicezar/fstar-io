@@ -454,7 +454,7 @@ let fs_prod_openfile_val fnm = openfile fnm
 
 val fs_prod_read_val :
         fd:fs_val qFileDescr ->
-        fs_prod (qResexn qBool)
+        fs_prod (qResexn qString)
 let fs_prod_read_val fd = read fd
 
 val fs_prod_write_val :
@@ -511,7 +511,7 @@ unfold
 val fs_oprod_read_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qBool)
+        fs_oprod g (qResexn qString)
 let fs_oprod_read_oval fd fsG = read (fd fsG)
 
 unfold
@@ -686,7 +686,7 @@ let fs_oprod_openfile fnm =
 val fs_oprod_read :
         #g:typ_env ->
         fd:fs_oprod g qFileDescr ->
-        fs_oprod g (qResexn qBool)
+        fs_oprod g (qResexn qString)
 let fs_oprod_read fd =
   fs_oprod_bind' fd (fun fd' ->
     fs_oprod_return_prod _ _ (read fd'))

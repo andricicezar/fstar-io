@@ -28,7 +28,7 @@ let rec io_bind
 let openfile (fnm:string) : io (resexn file_descr) =
   Call OOpen fnm Return
 
-let read (fd:file_descr) : io (resexn bool) =
+let read (fd:file_descr) : io (resexn string) =
   Call ORead fd Return
 
 let write (x:file_descr * string) : io (resexn unit) =

@@ -102,7 +102,7 @@ type typing : typ_env -> exp -> qType -> Type =
            #g:typ_env ->
            #e1:exp ->
            $h1:typing g e1 qFileDescr ->
-           typing g (ERead e1) (qResexn qBool)
+           typing g (ERead e1) (qResexn qString)
 | TyWrite :
            #g:typ_env ->
            #e1:exp ->

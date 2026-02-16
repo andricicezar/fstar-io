@@ -328,6 +328,11 @@ let get_resexn_bool (x:resexn bool) : closed_exp =
   | Inl b -> EInl (get_ebool b)
   | Inr () -> EInr EUnit
 
+let get_resexn_string (x:resexn string) : closed_exp =
+  match x with
+  | Inl s -> EInl (EString s)
+  | Inr () -> EInr EUnit
+
 let get_resexn_fd (x:resexn file_descr) : closed_exp =
   match x with
   | Inl fd -> EInl (get_efd fd)
@@ -463,8 +468,8 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
   | SReadReturn :
     h:history ->
     fd:file_descr ->
-    r:resexn bool ->
-    step (ERead (get_efd fd)) (get_resexn_bool r) h (Some (EvRead fd r))
+    r:resexn string ->
+    step (ERead (get_efd fd)) (get_resexn_string r) h (Some (EvRead fd r))
   | SWriteArg :
     #arg:closed_exp ->
     #arg':closed_exp ->
@@ -1621,9 +1626,8 @@ let rec destruct_steps_ecase
 let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
   Lemma (exists e' oev. step (ERead fd) e' h oev)
   =
-  let st1 : step (ERead fd) (EInl ETrue) h (Some (EvRead (get_fd fd) (Inl true))) = SReadReturn h (get_fd fd) (Inl true) in
-    let st2 : step (ERead fd) (EInl EFalse) h (Some (EvRead (get_fd fd) (Inl false))) = SReadReturn h (get_fd fd) (Inl false) in
-    let st3: step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
+  let st1 : step (ERead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SReadReturn h (get_fd fd) (Inl "") in
+  let st2 : step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
   ()
 
 let can_step_eread (fd:closed_exp) (h:history) :
@@ -1633,9 +1637,8 @@ let can_step_eread (fd:closed_exp) (h:history) :
   =
   introduce indexed_irred fd h ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
     assert (steps fd fd h []);
-    let st1 : step (ERead fd) (EInl ETrue) h (Some (EvRead (get_fd fd) (Inl true))) = SReadReturn h (get_fd fd) (Inl true) in
-    let st2 : step (ERead fd) (EInl EFalse) h (Some (EvRead (get_fd fd) (Inl false))) = SReadReturn h (get_fd fd) (Inl false) in
-    let st3: step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
+    let st1 : step (ERead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SReadReturn h (get_fd fd) (Inl "") in
+    let st2 : step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
   ()
   end;
 
@@ -1698,10 +1701,11 @@ let destruct_steps_eread
     (requires indexed_irred e' (h++lt))
     (ensures fun (e_r, (| lt1, lt2 |)) ->
        steps (ERead fd) e_r h lt1 /\
-       (e_r == EInl ETrue \/ e_r == EInl EFalse \/ e_r == EInr EUnit) /\
+       (EInl? e_r /\ EString? (get_einl_v e_r) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
-         (ETrue? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl true)])) /\
-         (EFalse? (get_einl_v e_r) ==> (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inl false)]))) /\
+         (EString? (get_einl_v e_r) ==>
+           (steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\
+            lt1 == [EvRead (get_fd fd) (Inl (get_string (get_einl_v e_r)))]))) /\
        (EInr? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvRead (get_fd fd) (Inr ())]) /\
        (lt == (lt1 @ lt2)))
     (decreases st) =
@@ -1713,24 +1717,14 @@ let destruct_steps_eread
     | STrans #e #f2 #e' #h #_ #lt23 step_eread step_eread_steps -> begin
       let ERead fd = e in
       match step_eread with
-      | SReadReturn h fd (Inl true) -> begin
-        let EInl ETrue = f2 in
-        lem_step_implies_steps (ERead (get_efd fd)) (EInl ETrue) h (Some (EvRead fd (Inl true)));
-        let lt' : local_trace h = [EvRead fd (Inl true)] in
-        let s2 : steps (EInl ETrue) e' (h++lt') lt23 = step_eread_steps in
+      | SReadReturn h fd (Inl s) -> begin
+        let EInl (EString _) = f2 in
+        lem_step_implies_steps (ERead (get_efd fd)) (EInl (EString s)) h (Some (EvRead fd (Inl s)));
+        let lt' : local_trace h = [EvRead fd (Inl s)] in
+        let s2 : steps (EInl (EString s)) e' (h++lt') lt23 = step_eread_steps in
         trans_history h lt' lt23;
-        lem_value_preserves_value ETrue (h++lt') TBool;
-        let (e12', (| lt12, lt_f |)) = destruct_steps_einl ETrue e' (h++lt') lt23 s2 in
-        (f2, (| lt', lt12 @ lt_f |))
-        end
-      | SReadReturn h fd (Inl false) -> begin
-        let EInl EFalse = f2 in
-        lem_step_implies_steps (ERead (get_efd fd)) (EInl EFalse) h (Some (EvRead fd (Inl false)));
-        let lt' : local_trace h = [EvRead fd (Inl false)] in
-        let s2 : steps (EInl EFalse) e' (h++lt') lt23 = step_eread_steps in
-        trans_history h lt' lt23;
-        lem_value_preserves_value EFalse (h++lt') TBool;
-        let (e12', (| lt12, lt_f |)) = destruct_steps_einl EFalse e' (h++lt') lt23 s2 in
+        lem_value_preserves_value (EString s) (h++lt') TString;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einl (EString s) e' (h++lt') lt23 s2 in
         (f2, (| lt', lt12 @ lt_f |))
         end
       | SReadReturn h fd (Inr ()) -> begin
