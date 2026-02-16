@@ -904,13 +904,17 @@ let helper_equiv_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace h
         lem_value_is_irred fd';
         assert (qString ⊇ (h, fs_msg, msg));
         lem_value_is_irred msg';
+        assert (e_beh fd fd' h lt1);
+        assert (lt1 == []);
+        assert (e_beh msg msg' (h++lt1) lt2);
+        assert (lt2 == []);
         (match e_r with
         | EInl EUnit -> begin
           lem_value_is_irred EUnit;
           lem_value_is_irred (EInl EUnit);
           lem_destruct_steps_einl EUnit e' (((h++lt1)++lt2)++lt3) lt4;
-          assume ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
-          assume (lt == [EvWrite (fs_fd, fs_msg) (Inl ())]);
+          assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
+          assert (lt == [EvWrite (fs_fd, fs_msg) (Inl ())]);
           lem_theta_write (fs_fd, fs_msg) (Inl ()) h
         end
         | EInr EUnit -> begin
@@ -918,7 +922,7 @@ let helper_equiv_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace h
           lem_value_is_irred (EInr EUnit);
           lem_destruct_steps_einr EUnit e' (((h++lt1)++lt2)++lt3) lt4;
           assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
-          assume (lt == [EvWrite (fs_fd, fs_msg) (Inr ())]);
+          assert (lt == [EvWrite (fs_fd, fs_msg) (Inr ())]);
           lem_theta_write (fs_fd, fs_msg) (Inr ()) h
         end);
         get_squash (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_write_val fs_fd fs_msg) h lt fs_r))))
@@ -1302,7 +1306,10 @@ let equiv_oprod_fst #g
               let EPair e1 e2 = e12' in
               lem_value_is_irred e1;
               lem_value_is_irred e2;
-              assume (exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12);
+              assert ((t1 ^* t2) ⫄ (h, fs_e12', e12));
+              assert (e_beh e12 e12' h lt12);
+              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==>
+                (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
               eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t1). t1 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_destruct_steps_epair_fst e1 e2 e' (h++lt12) lt_f;
@@ -1348,7 +1355,9 @@ let equiv_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
               let EPair e1 e2 = e12' in
               lem_value_is_irred e1;
               lem_value_is_irred e2;
-              assume (exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12);
+              assert ((t1 ^* t2) ⫄ (h, fs_e12', e12));
+              assert (e_beh e12 e12' h lt12);
+              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
               eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t2). t2 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_destruct_steps_epair_snd e1 e2 e' (h++lt12) lt_f;
@@ -1357,7 +1366,7 @@ let equiv_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
               assert (fs_beh #t2 ((fun e12' -> (return (snd #(fs_val t1) #(fs_val t2) e12'))) fs_r_e12) (h++lt12) [] (snd #(fs_val t1) #(fs_val t2) fs_r_e12));
               lem_fs_beh_bind #(t1 ^* t2) #t2 fs_e12' h lt12 fs_r_e12 (fun e' -> (return (snd #(fs_val t1) #(fs_val t2) e'))) [] (snd #(fs_val t1) #(fs_val t2) fs_r_e12);
               unit_l lt12
-              end)
+            end)
           end
         end
       end
