@@ -231,10 +231,13 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     lem_shifting_preserves_closed s e3 n
   | ECase e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
-    lem_shifting_preserves_closed s e2 (n+1);
-    admit ();
-    lem_shifting_preserves_closed s e3 (n+1)
+    lem_shifting_preserves_closed (sub_elam s) e2 (n+1);
+    lem_shifting_preserves_closed (sub_elam s) e3 (n+1)
   | _ -> ()
+
+let lemma_free_vars_of_sub_in_parent (e' e:exp) (n:nat) :
+  Lemma (forall x. x `L.memP` free_vars_indx e' n ==> x `L.memP` free_vars_indx e n) =
+  admit ()
 
 let rec lem_subst_freevars_closes_exp
   #b
@@ -267,16 +270,16 @@ let rec lem_subst_freevars_closes_exp
   | EApp e1 e2
   | EWrite e1 e2
   | EPair e1 e2 ->
-    assume (forall x. x `L.memP` free_vars_indx e1 n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e1 e n;
     lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `L.memP` free_vars_indx e2 n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e2 e n;
     lem_subst_freevars_closes_exp s e2 n
   | EIf e1 e2 e3 ->
-    assume (forall x. x `L.memP` free_vars_indx e1 n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e1 e n;
     lem_subst_freevars_closes_exp s e1 n;
-    assume (forall x. x `L.memP` free_vars_indx e2 n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e2 e n;
     lem_subst_freevars_closes_exp s e2 n;
-    assume (forall x. x `L.memP` free_vars_indx e3 n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e3 e n;
     lem_subst_freevars_closes_exp s e3 n
   | EFst e'
   | ESnd e'
@@ -285,9 +288,25 @@ let rec lem_subst_freevars_closes_exp
   | EClose e'
   | EOpen e'
   | ERead e' ->
-    assume (forall x. x `L.memP` free_vars_indx e' n ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lemma_free_vars_of_sub_in_parent e' e n;
     lem_subst_freevars_closes_exp s e' n
-  | ECase e1 e2 e3 -> admit ()
+  | ECase e1 e2 e3 -> begin
+    let s' = sub_elam s in
+    let n' = n+1 in
+    lemma_free_vars_of_sub_in_parent e1 e n;
+    lem_subst_freevars_closes_exp s e1 n;
+    introduce forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (s' (x+1)) n' == [] with begin
+      introduce _ ==> _ with _. begin
+        assert (free_vars_indx (s x) n == []);
+        lem_shifting_preserves_closed (sub_inc) (s x) n;
+        assert (free_vars_indx (subst sub_inc (s x)) n' == [])
+      end
+    end;
+    assume (forall x. x `L.memP` free_vars_indx e2 n' ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    assume (forall x. x `L.memP` free_vars_indx e3 n' ==> x `L.memP` free_vars_indx e n);(** should be provable **)
+    lem_subst_freevars_closes_exp s' e2 n';
+    lem_subst_freevars_closes_exp s' e3 n'
+  end
   | _ -> ()
 #pop-options
 
@@ -295,7 +314,8 @@ let subst_beta (v e:exp) :
   Pure closed_exp
     (requires (is_closed (ELam e)) /\ is_closed v)
     (ensures (fun _ -> True)) =
-  assume (free_vars_indx e 0 == [0]); (** should be provable **)
+  // assume (free_vars_indx e 0 == [0]); (** should be provable **)
+  assume (forall x. x `L.memP` free_vars_indx e 0 ==> x == 0);
   lem_subst_freevars_closes_exp (sub_beta v) e 0;
   subst (sub_beta v) e
 
