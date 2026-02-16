@@ -79,7 +79,7 @@ io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst $(LAMBDABOX_DIR)/LambdaBo
 	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
 
 io_program_raw.mlf: io_program.ast
-	peregrine ocaml $< -o $@
+	opam exec --switch=only-peregrine -- peregrine ocaml $< -o $@
 
 axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml
 	ocamlfind ocamlopt -c -o $@ $<

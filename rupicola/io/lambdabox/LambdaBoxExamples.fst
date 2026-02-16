@@ -1,7 +1,7 @@
 module LambdaBoxExamples
 
 (** Example IO programs compiled to LambdaBox.
-    These use the IO-extended STLC (with ERead, EWrite, EOpen, EClose, EFileDescr). *)
+    These use the IO-extended STLC (with ERead, EWrite, EOpen, EClose, EFileDescr, EString). *)
 
 open FStar.Tactics.V2
 open STLC
@@ -12,22 +12,22 @@ open LambdaBoxMeta
 
 let my_modpath : modpath = MPfile ["IO"]
 
-(** echo: reads a bool from fd 0, writes it to fd 1.
+(** echo: reads a string from fd 0, writes it to fd 1.
     Type: unit -> resexn unit
-    If the read succeeds (Inl b), write b to fd 1.
+    If the read succeeds (Inl s), write s to fd 1.
     If the read fails (Inr _), return unit. *)
 let echo_stlc : exp =
   ELam  (* () *)
     (ECase (ERead (EFileDescr 0))
-      (ELam (EWrite (EFileDescr 1) (EVar 0)))  (* Inl b => write b to fd 1 *)
+      (ELam (EWrite (EFileDescr 1) (EVar 0)))  (* Inl s => write s to fd 1 *)
       (ELam EUnit))                            (* Inr _ => unit *)
 
-(** write_true: writes 'true' to fd 1 unconditionally.
+(** write_hello: writes "hello\n" to fd 1 unconditionally.
     Type: unit -> resexn unit *)
-let write_true_stlc : exp =
-  ELam (EWrite (EFileDescr 1) ETrue)
+let write_hello_stlc : exp =
+  ELam (EWrite (EFileDescr 1) (EString "hello\n"))
 
-(** open_and_read: opens a file (using bool filename), reads a bool from it,
+(** open_and_read: opens a file by name, reads a string from it,
     writes the value to fd 1, then closes the file.
     Type: unit -> resexn unit
     Uses monad-erased sequencing: EApp (ELam continuation) operation.
@@ -35,20 +35,20 @@ let write_true_stlc : exp =
     De Bruijn stack at each binding (0 = innermost):
       outer ELam:              [unit_arg]
       Inl fd branch ELam:      [fd, unit_arg]
-      Inl b  branch ELam:      [b, fd, unit_arg]
-      after-write ELam:        [write_result, b, fd, unit_arg]  fd = EVar 2
+      Inl s  branch ELam:      [s, fd, unit_arg]
+      after-write ELam:        [write_result, s, fd, unit_arg]  fd = EVar 2
       Inr-of-read ELam:        [err, fd, unit_arg]             fd = EVar 1 *)
 let open_and_read_stlc : exp =
   ELam  (* () *)
-    (* EOpen EFalse : resexn file_descr *)
-    (ECase (EOpen EFalse)
+    (* EOpen (EString "/tmp/test.txt") : resexn file_descr *)
+    (ECase (EOpen (EString "/tmp/test.txt"))
       (* Inl fd => read from fd, write to stdout, close fd *)
       (ELam
         (* fd = EVar 0 *)
         (ECase (ERead (EVar 0))
-          (* Inl b => write b to fd 1, then close fd *)
+          (* Inl s => write s to fd 1, then close fd *)
           (ELam
-            (* b = EVar 0; fd = EVar 1 *)
+            (* s = EVar 0; fd = EVar 1 *)
             (EApp
               (* after write: close fd; fd = EVar 2 inside this lambda *)
               (ELam (EClose (EVar 2)))

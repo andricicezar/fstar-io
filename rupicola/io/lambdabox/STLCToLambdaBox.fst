@@ -184,6 +184,9 @@ let rec compile (e: exp) : Tot term (decreases e) =
         ([], compile e)
       ]
 
+  (* String literal: compile to a LambdaBox primitive string *)
+  | EString s -> TPrim (PrimString s)
+
   (* File descriptor literal: compile nat value to Church-encoded nat *)
   | EFileDescr fd -> compile_nat fd
 

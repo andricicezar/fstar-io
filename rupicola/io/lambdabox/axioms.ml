@@ -2,8 +2,7 @@
    Implements IO operations on Church-encoded values.
 
    LambdaBox/Peregrine value conventions (OCaml runtime):
-     bool:       true  = int 0  (nullary constructor 0)
-                 false = int 1  (nullary constructor 1)
+     string:     native OCaml string (from TPrim (PrimString s))
      unit:       tt    = int 0  (nullary constructor 0)
      nat:        zero  = int 0  (nullary constructor 0)
                  succ n = block { tag=0, field[0] = n }  (only non-nullary ctor)
@@ -50,26 +49,22 @@ let fd_table : (int, in_channel * out_channel) Hashtbl.t =
 
 let next_fd = ref 3
 
-(* io_read fd : resexn bool
-   Read one byte from the input channel associated with fd.
-   Returns Inl true  (int 0 wrapped in inl) if byte is nonzero,
-           Inl false (int 1 wrapped in inl) if byte is zero,
-           Inr ()    on EOF or error. *)
+(* io_read fd : resexn string
+   Read one line from the input channel associated with fd.
+   Returns Inl s (OCaml string) on success, Inr () on EOF or error. *)
 let def_Runtime_io_read fd =
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
   | None -> make_inr unit_val
   | Some (ic, _) ->
     (try
-      let byte = input_byte ic in
-      let bool_val = if byte <> 0 then Obj.repr 0  (* true *)
-                     else Obj.repr 1                (* false *)
-      in make_inl bool_val
+      let line = input_line ic in
+      make_inl (Obj.repr line)
     with End_of_file -> make_inr unit_val)
 
 (* io_write fd msg : resexn unit
-   Write one byte to the output channel associated with fd.
-   msg is a Church-encoded bool: true = int 0, false = int 1.
+   Write a string to the output channel associated with fd.
+   msg is a native OCaml string (from TPrim (PrimString s)).
    Returns Inl () on success, Inr () on error. *)
 let def_Runtime_io_write fd msg =
   let n = decode_nat fd in
@@ -77,23 +72,18 @@ let def_Runtime_io_write fd msg =
   | None -> make_inr unit_val
   | Some (_, oc) ->
     (try
-      (* bool: true = int 0, false = int 1 *)
-      let byte = if Obj.obj msg = 0 then 1 else 0 in
-      output_byte oc byte;
+      let s = (Obj.obj msg : string) in
+      output_string oc s;
       flush oc;
       make_inl unit_val
     with _ -> make_inr unit_val)
 
 (* io_open fnm : resexn file_descr
-   Open a file based on a bool filename.
-   true (int 0)  -> opens "/tmp/lb_file_true"  for reading
-   false (int 1) -> opens "/tmp/lb_file_false" for reading
+   Open a file with the given string filename.
+   fnm is a native OCaml string (from TPrim (PrimString s)).
    Returns Inl fd (Church-encoded nat) on success, Inr () on error. *)
 let def_Runtime_io_open fnm =
-  let filename =
-    if (Obj.obj fnm : int) = 0 then "/tmp/lb_file_true"
-    else "/tmp/lb_file_false"
-  in
+  let filename = (Obj.obj fnm : string) in
   try
     let ic = open_in filename in
     let oc = open_out_gen [Open_append; Open_creat] 0o644 filename in
