@@ -102,39 +102,53 @@ type local_trace (h:trace) =
 open FStar.List.Tot
 
 let ev_lt (#h:history) (ev:event_h h) : local_trace h =
-  assert ([ev] == ev::[]);
-  assert (forall h. well_formed_local_trace h []);
-  assert (well_formed_local_trace (ev::h) []);
-  assert (test_event h ev);
-  assert (well_formed_local_trace h [ev] <==> well_formed_local_trace h (ev::[]));
-  assume (well_formed_local_trace h (ev::[]) <==> (test_event h ev /\ well_formed_local_trace (ev::h) []));
+  assert_norm (well_formed_local_trace h [ev] <==> (test_event h ev /\ well_formed_local_trace (ev::h) []));
   [ev]
 
 let as_lt (#h:history) (oev:option (event_h h)) : local_trace h =
-  assume (well_formed_local_trace h []);
+  assert_norm (well_formed_local_trace h []);
   if Some? oev then (ev_lt (Some?.v oev)) else []
 
 let (++) (h:history) (lt:local_trace h) : history =
   List.rev lt `List.append` h
 
+let rec lem_append_append_wf  (#h:history) (lt:local_trace h) (lt':local_trace (h++lt))
+  : Lemma (ensures well_formed_local_trace h (lt `List.append` lt'))
+  (decreases lt) =
+  match lt with
+  | [] -> ()
+  | ev :: tl ->
+    assert_norm (well_formed_local_trace h (ev :: tl) <==> (test_event h ev /\ well_formed_local_trace (ev::h) tl));
+    FStar.List.Tot.Properties.rev_append [ev] tl;
+    FStar.List.Tot.Properties.append_assoc (List.rev tl) [ev] h;
+    lem_append_append_wf #(ev::h) tl lt';
+    assert (well_formed_local_trace (ev::h) (tl `List.append` lt'));
+    assert (test_event h ev);
+    assert_norm (well_formed_local_trace h (ev :: (tl `List.append` lt')) <==> (test_event h ev /\ well_formed_local_trace (ev::h) (tl `List.append` lt')))
+
 let (@) (#h:history) (lt:local_trace h) (lt':local_trace (h++lt)) : local_trace h =
-  assume (well_formed_local_trace h (lt `List.append` lt'));
-  lt `List.append` lt'
+  lem_append_append_wf lt lt';
+  lt `List.Tot.append` lt'
 
 let trans_well_formed_local_trace_event (h:trace) (ev:event_h h) (lt:local_trace (h++(ev_lt ev))) :
-  Lemma (well_formed_local_trace h ((ev_lt ev) @ lt)) = admit ()
+  Lemma (well_formed_local_trace h ((ev_lt ev) @ lt)) = ()
 
 let trans_well_formed_local_trace_event' (h:trace) (oev:option (event_h h)) (lt:local_trace (h++(as_lt oev))) :
-  Lemma (well_formed_local_trace h ((as_lt oev) @ lt)) = admit ()
+  Lemma (well_formed_local_trace h ((as_lt oev) @ lt)) = ()
 
 let trans_history (h:history) (lt:local_trace h) (lt':local_trace (h++lt)) :
-  Lemma (((h++lt)++lt') == (h++(lt @ lt'))) = admit ()
+  Lemma (((h++lt)++lt') == (h++(lt @ lt'))) =
+  FStar.List.Tot.Properties.append_assoc (List.rev lt') (List.rev lt) h;
+  FStar.List.Tot.Properties.rev_append lt lt'
 
 let associative_history #h (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt3:local_trace ((h++lt1)++lt2)) :
-  Lemma (trans_history h lt1 lt2; (lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) = admit ()
+  Lemma (trans_history h lt1 lt2; (lt1 @ (lt2 @ lt3)) == ((lt1 @ lt2) @ lt3)) =
+  FStar.List.Tot.Properties.append_assoc lt1 lt2 lt3
 
 let unit_l #h (lt:local_trace h) :
-  Lemma (lt@[] == lt) = admit ()
+  Lemma (lt@[] == lt) =
+  FStar.List.Tot.Properties.append_l_nil lt
 
 let unit_r #h (lt:local_trace h) :
-  Lemma ([]@lt == lt) = admit ()
+  Lemma ([]@lt == lt) = 
+  FStar.List.Tot.Properties.append_nil_l lt
