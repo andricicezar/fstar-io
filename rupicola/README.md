@@ -42,7 +42,7 @@ The TODOs for the paper, are in the paper.
   - [x] working on IO examples
   - [ ] working on the running example (@Theo)
 
-- [ ] Admits (67)
+- [ ] Admits
   - [ ] Trace.fst
     - [ ] 8 admits about traces and append
   - [ ] QTyp.fst 
@@ -51,11 +51,6 @@ The TODOs for the paper, are in the paper.
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
 	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
-    - [ ] `lem_gsubst_closed_identity`
-    ```fstar
-    let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) : Lemma (gsubst s e == e)
-    ```
-    - [ ] 14 admitted lemmas about fv_in_env
   - [ ] STLC.fst
     - [ ] assume in `subst_beta`
     - [ ] `lem_destruct_steps_epair_fst`
@@ -63,10 +58,9 @@ The TODOs for the paper, are in the paper.
     - [ ] one case in `lem_shifting_preserves_closed`
     - [ ] admits and assumes in `lem_subst_freevars_closes_exp`
   - [ ] LogRelTargetSource.fst
-    - [ ] `safety_prod`
+    - [ ] `safety_prod` (do we even need this?)
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] `equiv_oprod_bind` has two silly assumes
-    - [ ] 5 admitted compatibility lemmas 
+    - [ ] 2 lemmas with silly assumes
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
   - [ ] Compilation.fst
