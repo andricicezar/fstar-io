@@ -125,9 +125,9 @@ let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
         (ensures  t ⫄ (h, io_return fs_e, e)) =
   lem_values_are_values t h fs_e e;
   lem_value_is_irred e;
-  introduce forall (e':closed_exp) (lt : local_trace h). e_beh e e' h lt ==> 
+  introduce forall (e':closed_exp) (lt : local_trace h). e_beh e e' h lt ==>
       (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r) with begin
-    introduce e_beh e e' h lt ==> 
+    introduce e_beh e e' h lt ==>
         (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r) with h_beh. begin
       eliminate steps e e' h lt /\ indexed_irred e' (h++lt)
       returns (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r)
@@ -261,6 +261,24 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
     end
   end
 
+let indexed_safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) : Lemma
+  (requires t ⫄ (h, fs_e, e))
+  (ensures indexed_safe e h) =
+  introduce forall (e':closed_exp) (h':history) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
+        assert (t ⫄ (h, fs_e, e));
+        eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r
+        returns is_value e' with _. begin
+          assert (t ∋ (h++lt, fs_r, e'));
+          lem_values_are_values t (h++lt) fs_r e';
+          assert (is_value e')
+        end
+      end
+    end
+  end
+
 let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
   (requires (valid_superset_prod fs_e e))
   (ensures safe e) =
@@ -330,15 +348,11 @@ let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
   Lemma (requires equiv_val fs_e e)
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
 **)
-(** Unused **)
 let sem_expr_shape_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) (h:history) :
-  Lemma (requires valid_superset_prod fs_e e)
+  Lemma (requires t ⫄ (h, fs_e, e))
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
   introduce forall e' (lt:local_trace h). e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with begin
     introduce e_beh e e' h lt ==> sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin
-      eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
-          fsG `(∽) h` s ==> t ⫄ (h, fs_e, gsubst s e)
-      with  true gsub_empty empty_eval h;
       assert (t ⫄ (h, fs_e, e));
       eliminate exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e')
       returns sem_value_shape (type_quotation_to_typ (get_rel t)) e' with _. begin

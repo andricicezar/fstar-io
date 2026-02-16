@@ -1143,7 +1143,7 @@ let equiv_oprod_inl #g (t1 t2:qType) (fs_e:fs_oprod g t1) (e:exp)
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod t1 h;
-              assume (indexed_safe e h);
+              indexed_safety_prod fs_e' e h;
               let (e12', (| lt12, lt_f |)) = destruct_steps_einl e ex' h lt sts1 in
               trans_history h lt12 lt_f;
               lem_value_is_irred e12';
@@ -1184,7 +1184,7 @@ let equiv_oprod_inr #g (t1 t2:qType) (fs_e:fs_oprod g t2) (e:exp)
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod t2 h;
-              assume (indexed_safe e h);
+              indexed_safety_prod fs_e' e h;
               let (e12', (| lt12, lt_f |)) = destruct_steps_einr e ex' h lt sts1 in
               trans_history h lt12 lt_f;
               lem_value_is_irred e12';
@@ -1231,7 +1231,7 @@ let equiv_oprod_pair #g
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           bind_squash (steps e e' h lt) (fun sts1 ->
             lem_forall_values_are_values_prod t1 h;
-            assume (indexed_safe e1 h);
+            indexed_safety_prod fs_e1' e1 h;
             let (e1', (| lt1, lt' |)) = destruct_steps_epair_e1 e1 e2 e' h lt sts1 in
             assert (t1 ⫄ (h, fs_e1', e1));
             eliminate forall lt1 e1'. e_beh e1 e1' h lt1 ==> (exists (fs_r_e1:fs_val t1). t1 ∋ (h++lt1, fs_r_e1, e1') /\ fs_beh fs_e1' h lt1 fs_r_e1) with lt1 e1';
@@ -1246,6 +1246,7 @@ let equiv_oprod_pair #g
             assert (t2 ⫄ (h++lt1, fs_e2', e2));
             lem_forall_values_are_values_prod t2 (h++lt1);
             bind_squash (steps (EPair e1' e2) e' (h++lt1) lt') (fun sts2 ->
+              indexed_safety_prod fs_e2' e2 (h++lt1);
               let (e2', (| lt2, lt'' |)) = destruct_steps_epair_e2 e1' e2 e' (h++lt1) lt' sts2 in
               trans_history h lt1 lt2;
               eliminate forall lt2 e2'. e_beh e2 e2' (h++lt1) lt2 ==> (exists (fs_r_e2:fs_val t2). t2 ∋ ((h++lt1)++lt2, fs_r_e2, e2') /\ fs_beh fs_e2' (h++lt1) lt2 fs_r_e2) with lt2 e2';
@@ -1397,6 +1398,8 @@ let equiv_oprod_case #g (#a #b #c:qType)
               let a_typ = type_quotation_to_typ (get_rel a) in
               let b_typ = type_quotation_to_typ (get_rel b) in
               lem_forall_values_are_values_prod (a ^+ b) h;
+              sem_expr_shape_prod fs_sc cond h;
+              assert (indexed_sem_expr_shape (TSum a_typ b_typ) cond h);
               let (cond', (| lt1, lt2 |)) = destruct_steps_ecase cond inlc inrc e' h lt sts1 a_typ b_typ in
               assert ((a ^+ b) ⫄ (h, fs_sc, cond));
               eliminate forall lt1 cond'. e_beh cond cond' h lt1 ==> (exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_sc h lt1 fs_r_cond) with lt1 cond';
@@ -1440,6 +1443,7 @@ let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps e e' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod qString h;
+              sem_expr_shape_prod fs_fnm' fnm h;
               let (fnm', (|lt1, lt' |)) = destruct_steps_eopen_str fnm e' h lt sts1 in
               assert (qString ⫄ (h, fs_fnm', fnm));
               eliminate forall lt1 fnm'. e_beh fnm fnm' h lt1 ==> (exists (fs_r_fnm:fs_val qString). qString ∋ (h++lt1, fs_r_fnm, fnm') /\ fs_beh fs_fnm' h lt1 fs_r_fnm) with lt1 fnm';
