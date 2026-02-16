@@ -126,7 +126,7 @@ let r2rtc (i:intS) =
   forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
     behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
       (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps2 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
 
 (** Variants that use backtranslation and imply the original criteria **)
 let rrhp_1 (i:intS) =
@@ -159,19 +159,19 @@ let r2rtc_1 (i:intS) =
   forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
     behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
       (exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps2 (backtranslate_ctx ct)) lt1 rs1) /\ (behS (linkS ps2 (backtranslate_ctx ct)) lt2 rs2))
+                         (behS (linkS ps1 (backtranslate_ctx ct)) lt1 rs1) /\ (behS (linkS ps2 (backtranslate_ctx ct)) lt2 rs2))
                       
 let r2rtc_1_implies_r2rtc (i:intS) :
   Lemma (requires r2rtc_1 i)
-        (ensures r2rtc_1 i) =
+        (ensures r2rtc i) =
   introduce forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
     behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
       (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps2 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
   with
     introduce _ ==> _ with _.
       introduce exists cs. exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps2 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2)
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2)
       with (backtranslate_ctx ct) and ()
 
 
@@ -260,7 +260,7 @@ let proof_rschc_1 i : Lemma (rschc_1 i) =
   end
 
 let proof_r2rtc_1 i : Lemma (r2rtc_1 i) =
-  admit ()
+  proof_rschc_1 i
 
 let proof_rrhp_1 i : Lemma (rrhp_1 i) =
   introduce forall pS cT. behS (linkS pS (backtranslate_ctx cT)) `rel_behs` behT (linkT (compile_prog pS) cT) with begin
