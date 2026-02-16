@@ -1804,7 +1804,7 @@ let rec destruct_steps_ewrite_fd
   | SRefl (EWrite fd arg) h -> begin
     lem_irred_ewrite_implies_irred_fd fd arg h;
     (fd, (| [], lt |))
-    end
+  end
   | STrans #e #f2 #e' #h #_ #lt23 step_ewrite step_ewrite_steps -> begin
     let (EWrite fd arg) = e in
     match step_ewrite with
