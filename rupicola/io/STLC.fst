@@ -1356,13 +1356,42 @@ let rec destruct_steps_epair_fst
       EFst e12 -->* EFst e12' -> e'
   **)
 
+let lem_destruct_steps_epair_fst_core
+  (e1:closed_exp{is_value e1})
+  (e2:closed_exp{is_value e2})
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (sts:steps (EFst (EPair e1 e2)) e' h lt)
+  : Lemma (requires indexed_irred e' (h++lt))
+          (ensures (e1 == e') /\ lt == []) =
+  lem_value_is_irred e1;
+  lem_value_is_irred e2;
+  match sts with
+  | SRefl _ _ ->
+    assert (indexed_irred (EFst (EPair e1 e2)) (h++[]));
+    FStar.List.Tot.Properties.append_l_nil h;
+    let st : step (EFst (EPair e1 e2)) e1 h None = FstPairReturn h in
+    false_elim ()
+  | STrans #_ #f2 #_ #_ #_ #lt23 step_efst step_rest ->
+    match step_efst with
+    | FstPair hst ->
+      (match hst with
+       | PairLeft _ _ -> false_elim ()
+       | PairRight _ _ -> false_elim ())
+    | FstPairReturn _ ->
+      lem_irred_implies_srefl_steps step_rest
+
 let lem_destruct_steps_epair_fst
   (e1 e2:closed_exp)
   (e':closed_exp)
   (h:history)
   (lt:local_trace h) :
-  Lemma (requires (steps (EFst (EPair e1 e2)) e' h lt /\ indexed_irred e1 h /\ indexed_irred e2 h))
-        (ensures (e1 == e') /\ lt == []) = admit ()
+  Lemma (requires (steps (EFst (EPair e1 e2)) e' h lt /\ is_value e1 /\ is_value e2 /\ indexed_irred e' (h++lt)))
+        (ensures (e1 == e') /\ lt == []) =
+  FStar.Squash.bind_squash #(steps (EFst (EPair e1 e2)) e' h lt) #((e1 == e') /\ lt == []) () (fun sts ->
+    lem_destruct_steps_epair_fst_core e1 e2 e' h lt sts
+  )
 
 let can_step_esnd_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)
@@ -1434,13 +1463,44 @@ let rec destruct_steps_epair_snd
       ESnd e12 -->* ESnd e12' -> e'
   **)
 
+let lem_destruct_steps_epair_snd_core
+  (e1:closed_exp{is_value e1})
+  (e2:closed_exp{is_value e2})
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (sts:steps (ESnd (EPair e1 e2)) e' h lt)
+  : Lemma (requires indexed_irred e' (h++lt))
+          (ensures (e2 == e') /\ lt == []) =
+  lem_value_is_irred e1;
+  lem_value_is_irred e2;
+  match sts with
+  | SRefl _ _ ->
+    (* SRefl refines e' = ESnd (EPair e1 e2) and lt = [].
+       indexed_irred (ESnd (EPair e1 e2)) (h++[]) contradicts SndPairReturn. *)
+    assert (indexed_irred (ESnd (EPair e1 e2)) (h++[]));
+    FStar.List.Tot.Properties.append_l_nil h;
+    let st : step (ESnd (EPair e1 e2)) e2 h None = SndPairReturn h in
+    false_elim ()
+  | STrans #_ #f2 #_ #_ #_ #lt23 step_esnd step_rest ->
+    match step_esnd with
+    | SndPair hst ->
+      (match hst with
+       | PairLeft _ _ -> false_elim ()
+       | PairRight _ _ -> false_elim ())
+    | SndPairReturn _ ->
+      lem_irred_implies_srefl_steps step_rest
+
 let lem_destruct_steps_epair_snd
   (e1 e2:closed_exp)
   (e':closed_exp)
   (h:history)
   (lt:local_trace h) :
-  Lemma (requires (steps (ESnd (EPair e1 e2)) e' h lt /\ indexed_irred e1 h /\ indexed_irred e2 h))
-        (ensures (e2 == e') /\ lt == []) = admit ()
+  Lemma (requires (steps (ESnd (EPair e1 e2)) e' h lt /\ is_value e1 /\ is_value e2 /\ indexed_irred e' (h++lt)))
+        (ensures (e2 == e') /\ lt == []) =
+  FStar.Squash.bind_squash #(steps (ESnd (EPair e1 e2)) e' h lt) #((e2 == e') /\ lt == []) () (fun sts ->
+    lem_destruct_steps_epair_snd_core e1 e2 e' h lt sts
+  )
 
 let srefl_einl_implies_value (e12:closed_exp) (h:history) : Lemma
   (requires indexed_safe e12 h /\ indexed_irred (EInl e12) h)
