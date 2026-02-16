@@ -65,8 +65,6 @@ The TODOs for the paper, are in the paper.
     - [ ] 26 admitted compatibility lemmas
   - [ ] Compilation.fst
     - [ ] Two big assumes in `lem_compile_closed_valid`
-  - [ ] RrHP.fst
-    - [ ] one assume in the main theorem
 
 
 - [ ] Prepare artifact
