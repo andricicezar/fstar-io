@@ -1560,7 +1560,10 @@ let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStrin
                 eliminate forall (lt:local_trace (h++lt1)). fsG `(∽) (h++lt1)` s ==> fsG  `(∽) ((h++lt1)++lt)` s with lt2;
                 lem_shift_type_value_environments ((h++lt1)++lt2) fsG s;
                 assert (forall (lt:local_trace ((h++lt1)++lt2)). fsG `(∽) ((h++lt1)++lt2)` s ==> fsG `(∽) (((h++lt1)++lt2)++lt)` s);
-                assume (forall (lt:local_trace ((h++lt1)++lt2)). qString ⊇ (((h++lt1)++lt2)++lt, fs_r_msg, msg'));
+                val_type_closed_under_history_extension qString ((h++lt1)++lt2) fs_r_msg msg';
+                introduce forall (lt:local_trace ((h++lt1)++lt2)). qString ⊇ (((h++lt1)++lt2)++lt, fs_r_msg, msg') with begin
+                  lem_values_are_expressions qString (((h++lt1)++lt2)++lt) fs_r_msg msg'
+                end;
                 helper_equiv_oprod_write_oval e' #((h++lt1)++lt2) lt'' fs_r_fd fs_r_msg fd' msg';
                 eliminate exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (((h++lt1)++lt2)++lt'', fs_r, e') /\ fs_beh (fs_prod_write_val fs_r_fd fs_r_msg) ((h++lt1)++lt2) lt'' fs_r
                   returns exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
