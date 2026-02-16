@@ -49,20 +49,12 @@ The TODOs for the paper, are in the paper.
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
 	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
-  - [ ] STLC.fst
-    - [ ] assume in `subst_beta`
-    - [ ] `lem_destruct_steps_epair_fst`
-    - [ ] `lem_destruct_steps_epair_snd`
-    - [ ] one case in `lem_shifting_preserves_closed`
-    - [ ] admits and assumes in `lem_subst_freevars_closes_exp`
   - [ ] LogRelTargetSource.fst
     - [ ] `safety_prod` (we do not use this, do we need it?)
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
     - [ ] 2 lemmas with silly assumes
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
-  - [ ] Compilation.fst
-    - [ ] Two big assumes in `lem_compile_closed_valid`
 
 - [ ] Prepare artifact
   - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)

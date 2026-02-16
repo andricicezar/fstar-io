@@ -21,9 +21,11 @@ val lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b)) (qs: 
           (ensures (ELam? (compile qs)))
 
 val lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
-  : Lemma (ensures (
-    is_closed (compile qs) /\
-    is_value (compile qs) /\
-    valid_contains s (compile qs) /\
-    valid_member_of s (compile qs)
-    ))
+  : Lemma
+    (requires (QLambdaProd? qs))
+    (ensures (
+        is_closed (compile qs) /\
+        is_value (compile qs) /\
+        valid_contains s (compile qs) /\
+        valid_member_of s (compile qs)
+      ))

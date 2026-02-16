@@ -218,6 +218,93 @@ and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation 
     lem_compile_subset_prod qinrc;
     C2.equiv_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
+let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
+  : Lemma (ensures fv_in_env g (compile qs)) (decreases qs)
+  = match qs with
+  | Qtt -> ()
+  | QVar0 -> ()
+  | QVarS #g' #_ #b #x qx ->
+    lem_compile_fv_in_env qx;
+    lem_fv_in_env_varS g' b (compile qx)
+  | QFd _ -> ()
+  | QAppGhost -> ()
+  | QApp qf qx ->
+    lem_compile_fv_in_env qf;
+    lem_compile_fv_in_env qx;
+    lem_fv_in_env_app g (compile qf) (compile qx)
+  | QLambda #qa #_ #_ #body qbody ->
+    lem_compile_fv_in_env qbody;
+    lem_fv_in_env_lam g qa (compile qbody)
+  | QFalse -> ()
+  | QTrue -> ()
+  | QStringLit _ -> ()
+  | QIf qc qt qe ->
+    lem_compile_fv_in_env qc;
+    lem_compile_fv_in_env qt;
+    lem_compile_fv_in_env qe;
+    lem_fv_in_env_if g (compile qc) (compile qt) (compile qe)
+  | QMkpair q1 q2 ->
+    lem_compile_fv_in_env q1;
+    lem_compile_fv_in_env q2;
+    lem_fv_in_env_pair g (compile q1) (compile q2)
+  | QFst qp ->
+    lem_compile_fv_in_env qp;
+    lem_fv_in_env_fst g (compile qp)
+  | QSnd qp ->
+    lem_compile_fv_in_env qp;
+    lem_fv_in_env_snd g (compile qp)
+  | QInl qp ->
+    lem_compile_fv_in_env qp;
+    lem_fv_in_env_inl g (compile qp)
+  | QInr qp ->
+    lem_compile_fv_in_env qp;
+    lem_fv_in_env_inr g (compile qp)
+  | QCase #_ #ta #tb #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    lem_compile_fv_in_env qcond;
+    lem_compile_fv_in_env qinlc;
+    lem_compile_fv_in_env qinrc;
+    lem_fv_in_env_case g ta tb (compile qcond) (compile qinlc) (compile qinrc)
+  | QLambdaProd #_ #qa #_ #body qbody ->
+    lem_compile_fv_in_env_prod qbody;
+    lem_fv_in_env_lam g qa (compile_oprod qbody)
+and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
+  : Lemma (ensures fv_in_env g (compile_oprod qs)) (decreases qs)
+  = match qs with
+  | QOpenfile qfnm ->
+    lem_compile_fv_in_env qfnm;
+    lem_fv_in_env_openfile g (compile qfnm)
+  | QRead qfd ->
+    lem_compile_fv_in_env qfd;
+    lem_fv_in_env_read g (compile qfd)
+  | QWrite qfd qmsg ->
+    lem_compile_fv_in_env qfd;
+    lem_compile_fv_in_env qmsg;
+    lem_fv_in_env_write g (compile qfd) (compile qmsg)
+  | QClose qfd ->
+    lem_compile_fv_in_env qfd;
+    lem_fv_in_env_close g (compile qfd)
+  | QReturn qx ->
+    lem_compile_fv_in_env qx
+  | QBindProd #_ #ta #_ #m #k qm qk ->
+    lem_compile_fv_in_env_prod qm;
+    lem_compile_fv_in_env_prod qk;
+    lem_fv_in_env_lam g ta (compile_oprod qk);
+    lem_fv_in_env_app g (ELam (compile_oprod qk)) (compile_oprod qm)
+  | QAppProd qf qx ->
+    lem_compile_fv_in_env qf;
+    lem_compile_fv_in_env qx;
+    lem_fv_in_env_app g (compile qf) (compile qx)
+  | QIfProd qc qt qe ->
+    lem_compile_fv_in_env qc;
+    lem_compile_fv_in_env_prod qt;
+    lem_compile_fv_in_env_prod qe;
+    lem_fv_in_env_if g (compile qc) (compile_oprod qt) (compile_oprod qe)
+  | QCaseProd #_ #ta #tb #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    lem_compile_fv_in_env qcond;
+    lem_compile_fv_in_env_prod qinlc;
+    lem_compile_fv_in_env_prod qinrc;
+    lem_fv_in_env_case g ta tb (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+
 let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
   (qs:(a ^->!@ b) ⊩ s)
   : Lemma (requires (QLambdaProd? qs))
@@ -227,10 +314,17 @@ let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
   | QLambdaProd qbody ->
     assert (ELam? (compile qs)) by (norm [delta_once [`%compile];zeta;iota])
 
+let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
+  : Lemma (is_closed (compile qs))
+  = lem_compile_fv_in_env qs
+
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
-  assume (is_closed (compile qs));
-  assume (is_value (compile qs));
-  lem_compile_superset qs;
-  lem_value_superset_valid_contains a (fun _ -> s) (compile qs);
-  lem_compile_subset qs;
-  lem_value_subset_valid_member_of a (fun _ -> s) (compile qs)
+  match qs with
+  | QLambdaProd #_ #b #c qbody ->
+    lem_compile_is_closed qs;
+    lem_compile_closed_arrow_is_elam #b #c #s qs;
+    assert (is_value (compile qs));
+    lem_compile_superset qs;
+    lem_value_superset_valid_contains a (fun _ -> s) (compile qs);
+    lem_compile_subset qs;
+    lem_value_subset_valid_member_of a (fun _ -> s) (compile qs)
