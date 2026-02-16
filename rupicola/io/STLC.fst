@@ -235,9 +235,13 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     lem_shifting_preserves_closed (sub_elam s) e3 (n+1)
   | _ -> ()
 
-let lemma_free_vars_of_sub_in_parent (e' e:exp) (n:nat) :
-  Lemma (forall x. x `L.memP` free_vars_indx e' n ==> x `L.memP` free_vars_indx e n) =
-  admit ()
+let lemma_memP_append (l1 l2:list var) :
+  Lemma ((forall x. x `L.memP` l1 ==> x `L.memP` (l1 `L.append` l2)) /\
+         (forall x. x `L.memP` l2 ==> x `L.memP` (l1 `L.append` l2))) =
+  introduce forall (x:var).
+    (x `L.memP` l1 ==> x `L.memP` (l1 `L.append` l2)) /\
+    (x `L.memP` l2 ==> x `L.memP` (l1 `L.append` l2))
+  with L.append_memP l1 l2 x
 
 let rec lem_subst_freevars_closes_exp
   #b
@@ -270,16 +274,14 @@ let rec lem_subst_freevars_closes_exp
   | EApp e1 e2
   | EWrite e1 e2
   | EPair e1 e2 ->
-    lemma_free_vars_of_sub_in_parent e1 e n;
+    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n);
     lem_subst_freevars_closes_exp s e1 n;
-    lemma_free_vars_of_sub_in_parent e2 e n;
     lem_subst_freevars_closes_exp s e2 n
   | EIf e1 e2 e3 ->
-    lemma_free_vars_of_sub_in_parent e1 e n;
+    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n);
+    lemma_memP_append (free_vars_indx e1 n `L.append` free_vars_indx e2 n) (free_vars_indx e3 n);
     lem_subst_freevars_closes_exp s e1 n;
-    lemma_free_vars_of_sub_in_parent e2 e n;
     lem_subst_freevars_closes_exp s e2 n;
-    lemma_free_vars_of_sub_in_parent e3 e n;
     lem_subst_freevars_closes_exp s e3 n
   | EFst e'
   | ESnd e'
@@ -288,12 +290,12 @@ let rec lem_subst_freevars_closes_exp
   | EClose e'
   | EOpen e'
   | ERead e' ->
-    lemma_free_vars_of_sub_in_parent e' e n;
     lem_subst_freevars_closes_exp s e' n
   | ECase e1 e2 e3 -> begin
     let s' = sub_elam s in
     let n' = n+1 in
-    lemma_free_vars_of_sub_in_parent e1 e n;
+    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n');
+    lemma_memP_append (free_vars_indx e1 n `L.append` free_vars_indx e2 n') (free_vars_indx e3 n');
     lem_subst_freevars_closes_exp s e1 n;
     introduce forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (s' (x+1)) n' == [] with begin
       introduce _ ==> _ with _. begin
@@ -302,8 +304,6 @@ let rec lem_subst_freevars_closes_exp
         assert (free_vars_indx (subst sub_inc (s x)) n' == [])
       end
     end;
-    assume (forall x. x `L.memP` free_vars_indx e2 n' ==> x `L.memP` free_vars_indx e n);(** should be provable **)
-    assume (forall x. x `L.memP` free_vars_indx e3 n' ==> x `L.memP` free_vars_indx e n);(** should be provable **)
     lem_subst_freevars_closes_exp s' e2 n';
     lem_subst_freevars_closes_exp s' e3 n'
   end
@@ -1232,7 +1232,17 @@ let lem_destruct_steps_epair
   (h:history)
   (lt:local_trace h) :
   Lemma (requires (steps (EPair e1' e2') e' h lt /\ indexed_irred e1' h /\ indexed_irred e2' h))
-        (ensures ((EPair e1' e2') == e') /\ lt == []) = admit ()
+        (ensures ((EPair e1' e2') == e') /\ lt == []) =
+  introduce steps (EPair e1' e2') e' h lt ==> ((EPair e1' e2') == e') /\ lt == [] with _. begin
+    FStar.Squash.bind_squash #(steps (EPair e1' e2') e' h lt) () (fun sts ->
+    match sts with
+    | SRefl (EPair _ _) h -> ()
+    | STrans #e #f2 #e' #h #_ #lt23 step_epair step_epair_steps ->
+      match step_epair with
+      | PairLeft _ _ -> false_elim ()
+      | PairRight _ _ -> false_elim ()
+    )
+  end
 
 let can_step_efst_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)
