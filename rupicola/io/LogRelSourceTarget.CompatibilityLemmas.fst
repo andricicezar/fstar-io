@@ -185,7 +185,7 @@ let equiv_oval_app #g
     end
   end
 
-let helper_equiv_oval_if (e':closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:fs_val qBool) (fs_e2 fs_e3:fs_val t) (e1:closed_exp) (e2:closed_exp) (e3:closed_exp)  :
+let helper_equiv_val_if (e':closed_exp) (#h:history) (lt:local_trace h) (t:qType) (fs_e1:fs_val qBool) (fs_e2 fs_e3:fs_val t) (e1:closed_exp) (e2:closed_exp) (e3:closed_exp)  :
   Lemma
     (requires (steps (EIf e1 e2 e3) e' h lt) /\
               (indexed_irred e' (h++lt)) /\
@@ -194,10 +194,11 @@ let helper_equiv_oval_if (e':closed_exp) (h:history) (lt:local_trace h) (t:qType
               (t ⊇ (h, fs_e3, e3)))
     (ensures (t ∋ (h,  fs_val_if fs_e1 fs_e2 fs_e3, e') /\ lt == [])) =
   assert (forall e1' lt1. e_beh e1 e1' h lt1 ==> (ETrue? e1' \/ EFalse? e1'));
-  bind_squash (steps (EIf e1 e2 e3) e' h lt) #(t ∋ (h,  fs_val_if fs_e1 fs_e2 fs_e3, e') /\ lt == []) (fun sts ->
+  bind_squash (steps (EIf e1 e2 e3) e' h lt) (fun sts ->
     let (e1', (| lt1, lt2 |)) = destruct_steps_eif e1 e2 e3 e' h lt sts in
     assert (qBool ∋ (h, fs_e1, e1') /\ lt1 == []);
-    assert (t ∋ (h, (if fs_e1 then fs_e2 else fs_e3), e') /\ lt2 == []))
+    assert (t ∋ (h, (if fs_e1 then fs_e2 else fs_e3), e') /\ lt2 == []);
+    get_squash (t ∋ (h, fs_val_if fs_e1 fs_e2 fs_e3, e') /\ lt == []))
 
 let equiv_oval_if #g
   (#t:qType)
@@ -218,7 +219,7 @@ let equiv_oval_if #g
     introduce fsG `(∽) h` s ==> t ⊇ (h, fs_e, e) with _. begin
       introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
         introduce e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
-          helper_equiv_oval_if e' h lt t fs_e1 fs_e2 fs_e3 e1 e2 e3
+          helper_equiv_val_if e' lt t fs_e1 fs_e2 fs_e3 e1 e2 e3
         end
       end
     end
@@ -433,39 +434,42 @@ let equiv_oval_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
     end
   end
 
-let helper_equiv_oval_case_pre (e e':closed_exp) (h:history) (lt:local_trace h) (t1 t2 t3:qType) (fs_case:fs_val (t1 ^+ t2)) (fs_lc_lam:fs_val (t1 ^-> t3)) (fs_rc_lam:fs_val (t2 ^-> t3)) (fs_e:fs_val t3) (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)}) (e_rc:exp{is_closed (ELam e_rc)}) =
-  (fs_e == (match fs_case with
-           | Inl x -> fs_lc_lam x
-           | Inr x -> fs_rc_lam x)) /\
-  (e == (ECase e_case e_lc e_rc)) /\
-  (steps (ECase e_case e_lc e_rc) e' h lt) /\
-  (indexed_irred e' (h++lt)) /\
-  ((t1 ^+ t2) ⊇ (h, fs_case, e_case)) /\
-  ((t1 ^-> t3) ⊇ (h, fs_lc_lam, ELam e_lc)) /\
-  ((t2 ^-> t3) ⊇ (h, fs_rc_lam, ELam e_rc))
-
-let helper_equiv_oval_case (e e':closed_exp) (h:history) (lt:local_trace h) (t1 t2 t3:qType) (fs_case:fs_val (t1 ^+ t2)) (fs_lc_lam:fs_val (t1 ^-> t3)) (fs_rc_lam:fs_val (t2 ^-> t3)) (fs_e:fs_val t3) (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)}) (e_rc:exp{is_closed (ELam e_rc)}) :
+#push-options "--fuel 32 --z3rlimit 10"
+let helper_equiv_val_case (e':closed_exp)
+  (#h:history) (lt:local_trace h)
+  (#t1 #t2 #t3:qType)
+  (fs_sc:fs_val (t1 ^+ t2))
+  (fs_li:fs_val t1 -> fs_val t3)
+  (fs_ri:fs_val t2 -> fs_val t3)
+  (e_sc:closed_exp)
+  (e_li:exp{is_closed (ELam e_li)})
+  (e_ri:exp{is_closed (ELam e_ri)}) :
   Lemma
-    (requires (helper_equiv_oval_case_pre e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc))
-    (ensures (t3 ∋ (h, fs_e, e') /\ lt == [])) =
-  lem_forall_values_are_values (t1 ^+ t2) h fs_case;
-  assert (forall e_case' lt'. e_beh e_case e_case' h lt' ==> ((EInl? e_case' \/ EInr? e_case') /\ is_value e_case'));
-  bind_squash (steps e e' h lt) #(t3 ∋ (h, fs_e, e') /\ lt == []) (fun sts ->
+    (requires (
+      steps (ECase e_sc e_li e_ri) e' h lt /\
+      indexed_irred e' (h++lt) /\
+      (t1 ^+ t2) ⊇ (h, fs_sc, e_sc) /\
+      (t1 ^-> t3) ⊇ (h, fs_li, ELam e_li) /\
+      (t2 ^-> t3) ⊇ (h, fs_ri, ELam e_ri)))
+    (ensures t3 ∋ (h, fs_val_case fs_sc fs_li fs_ri, e') /\ lt == []) =
+  lem_forall_values_are_values (t1 ^+ t2) h fs_sc;
+  assert (forall e_sc' lt'. e_beh e_sc e_sc' h lt' ==> ((EInl? e_sc' \/ EInr? e_sc') /\ is_value e_sc'));
+  bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) (fun sts ->
     let t1_typ = type_quotation_to_typ (get_rel t1) in
     let t2_typ = type_quotation_to_typ (get_rel t2) in
-    let (e_case', (| lt1, lt2 |)) = destruct_steps_ecase e_case e_lc e_rc e' h lt sts t1_typ t2_typ in
-    let e_c = match e_case' with | EInl _ -> e_lc | EInr _ -> e_rc in
-    let e_c' = match e_case' with | EInl e_c' -> e_c' | EInr e_c' -> e_c' in
-    let t_c = match e_case' with | EInl _ -> t1 | EInr _ -> t2 in 
-    let fs_c_lam = match e_case' with | EInl _ -> fs_lc_lam | EInr _ -> fs_rc_lam in
-    assert (steps (ELam e_c) (ELam e_c) h []);
-    lem_value_is_irred (ELam e_c);
-    assert ((t_c ^-> t3) ∋ (h, fs_c_lam, ELam e_c));
-    unfold_contains_arrow t_c t3 h fs_c_lam e_c;
-    assert (t3 ⊇ (h, fs_e, subst_beta e_c' e_c));
-    assert (t3 ∋ (h, fs_e, e')))
+    let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_li e_ri e' h lt sts t1_typ t2_typ in
+    let res   = match e_sc' with | EInl _ -> e_li | EInr _ -> e_ri in
+    let res'  = match e_sc' with | EInl x -> x | EInr x -> x in
+    let tres' = match e_sc' with | EInl _ -> t1 | EInr _ -> t2 in
+    let fs_res = match e_sc' with | EInl _ -> fs_li | EInr _ -> fs_ri in
+    lem_steps_refl (ELam res) h;
+    lem_value_is_irred (ELam res);
+    assert ((tres' ^-> t3) ∋ (h, fs_res, ELam res));
+    unfold_contains_arrow tres' t3 h fs_res res;
+    assert (t3 ⊇ (h, fs_val_case fs_sc fs_li fs_ri, subst_beta res' res));
+    get_squash (t3 ∋ (h, fs_val_case fs_sc fs_li fs_ri, e') /\ lt == []))
+#pop-options
 
-#push-options "--z3rlimit 10000"
 let equiv_oval_case
   #g
   (#t1 #t2 #t3:qType)
@@ -481,37 +485,23 @@ let equiv_oval_case
   lem_fv_in_env_lam g t2 e_rc;
   equiv_oval_lambda #g #t1 #t3 fs_lc e_lc;
   equiv_oval_lambda #g #t2 #t3 fs_rc e_rc;
-  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t3 ⊇ (h,
-    (match fs_case fsG with
-    | Inl x -> fs_lc (stack fsG x)
-    | Inr x -> fs_rc (stack fsG x)),
-    gsubst s (ECase e_case e_lc e_rc)) with begin
-    let fs_case = fs_case fsG in
-    let fs_lc_lam : fs_oval g (t1 ^-> t3) = fun fsG x -> fs_lc (stack fsG x) in
-    let fs_lc_lam = fs_lc_lam fsG in
-    let fs_rc_lam : fs_oval g (t2 ^-> t3) = fun fsG x -> fs_rc (stack fsG x) in
-    let fs_rc_lam = fs_rc_lam fsG in
-    let fs_e = (match fs_case with
-               | Inl x -> fs_lc_lam x
-               | Inr x -> fs_rc_lam x) in
-    let e_lc' = subst (sub_elam s) e_lc in
-    let e_rc' = subst (sub_elam s) e_rc in
-    assert (gsubst s (ELam e_lc) == ELam e_lc');
-    assert (gsubst s (ELam e_rc) == ELam e_rc');
-    let e = ECase (gsubst s e_case) e_lc' e_rc' in
+  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> t3 ⊇ (h, fs_oval_case fs_case fs_lc fs_rc fsG, gsubst s (ECase e_case e_lc e_rc)) with begin
+    let fs_sc = fs_case fsG in
+    let fs_il : fs_val t1 -> fs_val t3 = fun x -> fs_lc (stack fsG x) in
+    let fs_ir : fs_val t2 -> fs_val t3 = fun x -> fs_rc (stack fsG x) in
+    let e = ECase (gsubst s e_case) (subst (sub_elam s) e_lc) (subst (sub_elam s) e_rc) in
     assert (gsubst s (ECase e_case e_lc e_rc) == e);
     let ECase e_case e_lc e_rc = e in
-    introduce fsG `(∽) h` s ==> t3 ⊇ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce e_beh e e' h lt ==> (t3 ∋ (h, fs_e, e') /\ lt == []) with _. begin
-          assert ((t1 ^-> t3) ⊇ (h, fs_lc_lam, ELam e_lc));
-          assert ((t2 ^-> t3) ⊇ (h, fs_rc_lam, ELam e_rc));
-          helper_equiv_oval_case e e' h lt t1 t2 t3 fs_case fs_lc_lam fs_rc_lam fs_e e_case e_lc e_rc
+    introduce fsG `(∽) h` s ==> t3 ⊇ (h, fs_val_case fs_sc fs_il fs_ir, e) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t3 ∋ (h, fs_val_case fs_sc fs_il fs_ir, e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (t3 ∋ (h, fs_val_case fs_sc fs_il fs_ir, e') /\ lt == []) with _. begin
+          assert ((t1 ^-> t3) ⊇ (h, fs_il, ELam e_lc));
+          assert ((t2 ^-> t3) ⊇ (h, fs_ir, ELam e_rc));
+          helper_equiv_val_case e' lt fs_sc fs_il fs_ir e_case e_lc e_rc
         end
       end
     end
   end
-#pop-options
 
 let equiv_oval_lambda_oprod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2) (body:exp)
   : Lemma
@@ -587,7 +577,7 @@ Lemma
     let b_typ = type_quotation_to_typ (get_rel b) in
     lem_value_is_irred (ELam k');
     let (k', (| [], lt |)) = destruct_steps_eapp_e1 (ELam k') m e' h lt sts1 a_typ b_typ in
-    assert ((a ^->!@ b) ∋ (h, fs_k', (ELam k'))); 
+    assert ((a ^->!@ b) ∋ (h, fs_k', (ELam k')));
     lem_forall_values_are_values_prod a h;
     let (m', (| lt1, lt' |)) = destruct_steps_eapp_e2 k' m e' h lt sts1 in
     eliminate forall m' lt1. e_beh m m' h lt1 ==> (exists (fs_r_m:fs_val a). a ∋ (h++lt1, fs_r_m, m') /\ fs_beh fs_m h lt1 fs_r_m) with m' lt1;
@@ -602,7 +592,7 @@ Lemma
     assert (fs_beh ((fun m' -> fs_k' m') fs_r_m) (h++lt1) lt' fs_r');
     lem_fs_beh_bind fs_m h lt1 fs_r_m (fun m' -> fs_k' m') lt' fs_r'
     end
-    end)
+  end)
 #pop-options
 
 let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend a g) b) (m k:exp)
@@ -682,8 +672,10 @@ let equiv_oprod_app_oval_oval #g (#a #b:qType) (fs_f:fs_oval g (a ^->!@ b)) (fs_
 
 let helper_equiv_oprod_if_val (ex':closed_exp) (#h:history) (lt:local_trace h) (#a:qType) (fs_c:fs_val qBool) (fs_t:fs_prod a) (fs_e:fs_prod a) (c t e:closed_exp) :
   Lemma
-    (requires (e_beh (EIf c t e) ex' h lt /\ qBool ⊇ (h, fs_c, c) /\
-               a ⫄ (h, fs_t, t) /\ a ⫄ (h, fs_e, e)))
+    (requires (e_beh (EIf c t e) ex' h lt /\
+               qBool ⊇ (h, fs_c, c) /\
+               a ⫄ (h, fs_t, t) /\
+               a ⫄ (h, fs_e, e)))
     (ensures (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r)) =
   assert (forall c' lt'. e_beh c c' h lt' ==> (ETrue? c' \/ EFalse? c'));
   bind_squash (steps (EIf c t e) ex' h lt) #(exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh (fs_prod_if_val fs_c fs_t fs_e) h lt fs_r) (fun sts ->
@@ -714,34 +706,50 @@ let equiv_oprod_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod
     end
   end
 
-#push-options "--split_queries always"
-let helper_equiv_oprod_case_oval #g (fsG:eval_env g) (e':closed_exp) (h:history) (lt:local_trace h) (a b c:qType) (fs_cond:fs_val (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond:closed_exp) (inlc:exp{is_closed (ELam inlc)}) (inrc:exp{is_closed (ELam inrc)}) :
+let helper_equiv_prod_case_val
+  (e':closed_exp)
+  (#h:history) (lt:local_trace h)
+  (#a #b #c:qType)
+  (fs_sc:fs_val (a ^+ b))
+  (fs_li:fs_val (a ^->!@ c)) (fs_ri:fs_val (b ^->!@ c))
+  (e_sc:closed_exp) (e_li:exp{is_closed (ELam e_li)}) (e_ri:exp{is_closed (ELam e_ri)}) :
   Lemma
-    (requires (e_beh (ECase cond inlc inrc) e' h lt) /\
-              ((a ^+ b) ⊇ (h, fs_cond, cond)) /\
-              ((a ^->!@ c) ⊇ (h, (fun x -> fs_inlc (stack fsG x)), ELam inlc)) /\
-              ((b ^->!@ c) ⊇ (h, (fun x -> fs_inrc (stack fsG x)), ELam inrc)))
-    (ensures (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_oprod_case_val fs_cond fs_inlc fs_inrc fsG) h lt fs_r)) =
-  lem_forall_values_are_values (a ^+ b) h fs_cond;
-  assert (forall cond' lt'. e_beh cond cond' h lt' ==> ((EInl? cond' \/ EInr? cond') /\ is_value cond'));
-  bind_squash (steps (ECase cond inlc inrc) e' h lt) #(exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_oprod_case_val fs_cond fs_inlc fs_inrc fsG) h lt fs_r) (fun sts ->
+    (requires (e_beh (ECase e_sc e_li e_ri) e' h lt) /\
+              ((a ^+ b) ⊇ (h, fs_sc, e_sc)) /\
+              ((a ^->!@ c) ⊇ (h, fs_li, ELam e_li)) /\
+              ((b ^->!@ c) ⊇ (h, fs_ri, ELam e_ri)))
+    (ensures (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_li fs_ri) h lt fs_r)) =
+  lem_forall_values_are_values (a ^+ b) h fs_sc;
+  assert (forall e_sc' lt'. e_beh e_sc e_sc' h lt' ==> ((EInl? e_sc' \/ EInr? e_sc') /\ is_value e_sc'));
+  bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) (fun sts ->
     let a_typ = type_quotation_to_typ (get_rel a) in
     let b_typ = type_quotation_to_typ (get_rel b) in
-    let (cond', (| lt1, (lt2, lt3) |)) = destruct_steps_ecase cond inlc inrc e' h lt sts a_typ b_typ in
-    match cond' with
-    | EInl e_c' ->
-      lem_value_is_irred (ELam inlc);
-      eliminate forall f' lt'. e_beh (ELam inlc) f' h lt' ==> ((a ^->!@ c) ∋ (h, fs_inlc, f') /\ lt' == []) with (ELam inlc) [];
-      unfold_contains_io_arrow a c fs_inlc inlc h;
-      assert (c ⫄ (h, fs_e, subst_beta e_c' inlc));
-      get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r)
-    | EInr e_c' ->
-      lem_value_is_irred (ELam inrc);
-      eliminate forall f' lt'. e_beh (ELam inrc) f' h lt' ==> ((b ^->!@ c) ∋ (h, fs_inrc, f') /\ lt' == []) with (ELam inrc) [];
-      assert (c ⫄ (h, fs_e, subst_beta e_c' inrc));
-      get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r))
+    let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_li e_ri e' h lt sts a_typ b_typ in
+    assert ((a ^+ b) ∋ (h, fs_sc, e_sc'));
+    match e_sc' with
+    | EInl e_l ->
+      assert (Inl? fs_sc);
+      let Inl fs_l = fs_sc in
+      assert (is_value e_l);
+      lem_value_is_irred (ELam e_li);
+      eliminate forall f' lt'. e_beh (ELam e_li) f' h lt' ==> ((a ^->!@ c) ∋ (h, fs_li, f') /\ lt' == []) with (ELam e_li) [];
+      unfold_contains_io_arrow a c fs_li e_li h;
+      eliminate forall (v:value) (fs_v:fs_val a) (lt_v:local_trace h). a ∋ (h++lt_v, fs_v, v) ==> c ⫄ (h++lt_v, fs_li fs_v, subst_beta v e_li) with e_l fs_l [];
+      assert (a ∋ (h, fs_l, e_l));
+      assert (c ⫄ (h, fs_li fs_l, subst_beta e_l e_li));
+      get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_li fs_ri) h lt fs_r)
+    | EInr e_r ->
+      assert (Inr? fs_sc);
+      let Inr fs_r = fs_sc in
+      assert (is_value e_r);
+      lem_value_is_irred (ELam e_ri);
+      eliminate forall f' lt'. e_beh (ELam e_ri) f' h lt' ==> ((b ^->!@ c) ∋ (h, fs_ri, f') /\ lt' == []) with (ELam e_ri) [];
+      unfold_contains_io_arrow b c fs_ri e_ri h;
+      eliminate forall (v:value) (fs_v:fs_val b) (lt_v:local_trace h). b ∋ (h++lt_v, fs_v, v) ==> c ⫄ (h++lt_v, fs_ri fs_v, subst_beta v e_ri) with e_r fs_r [];
+      assert (b ∋ (h, fs_r, e_r));
+      assert (c ⫄ (h, fs_ri fs_r, subst_beta e_r e_ri));
+      get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_li fs_ri) h lt fs_r))
 
-#push-options "--z3rlimit 10000"
 let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊐ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
@@ -751,28 +759,23 @@ let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_i
   lem_fv_in_env_lam g b inrc;
   equiv_oval_lambda_oprod fs_inlc inlc;
   equiv_oval_lambda_oprod fs_inrc inrc;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> c ⫄ (h, fs_oprod_case_val (fs_cond fsG) fs_inlc fs_inrc fsG, gsubst s (ECase cond inlc inrc)) with begin
-    let fs_cond = fs_cond fsG in
-    let fs_e = fs_oprod_case_val fs_cond fs_inlc fs_inrc fsG in
-    let inlc' = subst (sub_elam s) inlc in
-    let inrc' = subst (sub_elam s) inrc in
-    assert (gsubst s (ELam inlc) == ELam inlc');
-    assert (gsubst s (ELam inrc) == ELam inrc');
-    let e = ECase (gsubst s cond) inlc' inrc' in
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> c ⫄ (h, fs_oprod_case_oval fs_cond fs_inlc fs_inrc fsG, gsubst s (ECase cond inlc inrc)) with begin
+    let fs_sc = fs_cond fsG in
+    let fs_il : fs_val (a ^->!@ c) = fun x -> fs_inlc (stack fsG x) in
+    let fs_ir : fs_val (b ^->!@ c) = fun x -> fs_inrc (stack fsG x) in
+    let e = ECase (gsubst s cond) (subst (sub_elam s) inlc) (subst (sub_elam s) inrc) in
     assert (gsubst s (ECase cond inlc inrc) == e);
     let ECase cond inlc inrc = e in
-    introduce fsG `(∽) h` s ==> c ⫄ (h, fs_e, e) with _. begin
-      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          assert ((a ^->!@ c) ⊇ (h, (fun x -> fs_inlc (stack fsG x)), ELam inlc));
-          assert ((b ^->!@ c) ⊇ (h, (fun x -> fs_inrc (stack fsG x)), ELam inrc));
-          helper_equiv_oprod_case_oval #g fsG e' h lt a b c fs_cond fs_inlc fs_inrc cond inlc inrc
+    introduce fsG `(∽) h` s ==> c ⫄ (h, fs_prod_case_val fs_sc fs_il fs_ir, e) with _. begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_il fs_ir) h lt fs_r) with begin
+        introduce e_beh e e' h lt /\ indexed_irred e' (h++lt) ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_il fs_ir) h lt fs_r) with _. begin
+          helper_equiv_prod_case_val e' lt fs_sc fs_il fs_ir cond inlc inrc
         end
       end
     end
   end
-#pop-options
 
+#push-options "--split_queries always --fuel 10 --z3rlimit 10"
 let helper_equiv_oprod_openfile_oval_steps (e':closed_exp) (h:history) (lt:local_trace h) (fs_fnm:fs_val qString) (fnm:closed_exp) :
   Lemma
     (requires e_beh (EOpen fnm) e' h lt /\
@@ -821,7 +824,7 @@ let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
     introduce fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
       introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          helper_equiv_oprod_openfile_oval e' h lt fs_fnm fnm
+          helper_equiv_oprod_openfile_oval_steps e' h lt fs_fnm fnm
         end
       end
     end
@@ -874,7 +877,7 @@ let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     introduce fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
       introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          helper_equiv_oprod_read_oval_steps e' lt fs_fd fd
+          helper_equiv_oprod_read_oval e' lt fs_fd fd
         end
       end
     end
@@ -939,7 +942,7 @@ let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qSt
       introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
-          helper_equiv_oprod_write_oval e' lt fs_fd fs_msg fd msg
+          helper_equiv_oprod_write_oval_steps e' lt fs_fd fs_msg fd msg
         end
       end
     end
@@ -1142,7 +1145,7 @@ let equiv_oprod_inl #g (t1 t2:qType) (fs_e:fs_oprod g t1) (e:exp)
           introduce e_beh ex ex' h lt ==> (exists (fs_r:fs_val (t1 ^+ t2)). (t1 ^+ t2) ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
-              lem_forall_values_are_values_prod t1 h; 
+              lem_forall_values_are_values_prod t1 h;
               let (e12', (| lt12, lt_f |)) = destruct_steps_einl e ex' h lt sts1 in
               trans_history h lt12 lt_f;
               lem_value_is_irred e12';
@@ -1235,7 +1238,7 @@ let equiv_oprod_pair #g
       introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           bind_squash (steps e e' h lt) (fun sts1 ->
-            lem_forall_values_are_values_prod t1 h; 
+            lem_forall_values_are_values_prod t1 h;
             let (e1', (| lt1, lt' |)) = destruct_steps_epair_e1 e1 e2 e' h lt sts1 in
             assert (t1 ⫄ (h, fs_e1', e1));
             eliminate forall lt1 e1'. e_beh e1 e1' h lt1 ==> (exists (fs_r_e1:fs_val t1). t1 ∋ (h++lt1, fs_r_e1, e1') /\ fs_beh fs_e1' h lt1 fs_r_e1) with lt1 e1';
@@ -1245,13 +1248,13 @@ let equiv_oprod_pair #g
             lem_values_are_expressions t1 (h++lt1) fs_r_e1 e1';
             trans_history h lt1 lt';
             lem_shift_type_value_environments h fsG s;
-            eliminate forall (lt:local_trace h). fsG `(∽) h` s ==> fsG `(∽) (h++lt)` s with lt1; 
+            eliminate forall (lt:local_trace h). fsG `(∽) h` s ==> fsG `(∽) (h++lt)` s with lt1;
             lem_shift_type_value_environments (h++lt1) fsG s;
             assert (t2 ⫄ (h++lt1, fs_e2', e2));
             lem_forall_values_are_values_prod t2 (h++lt1);
             bind_squash (steps (EPair e1' e2) e' (h++lt1) lt') (fun sts2 ->
               let (e2', (| lt2, lt'' |)) = destruct_steps_epair_e2 e1' e2 e' (h++lt1) lt' sts2 in
-              trans_history h lt1 lt2; 
+              trans_history h lt1 lt2;
               eliminate forall lt2 e2'. e_beh e2 e2' (h++lt1) lt2 ==> (exists (fs_r_e2:fs_val t2). t2 ∋ ((h++lt1)++lt2, fs_r_e2, e2') /\ fs_beh fs_e2' (h++lt1) lt2 fs_r_e2) with lt2 e2';
               lem_value_is_irred e2';
               eliminate exists (fs_r_e2:fs_val t2). t2 ∋ ((h++lt1)++lt2, fs_r_e2, e2') /\ fs_beh fs_e2' (h++lt1) lt2 fs_r_e2
@@ -1456,7 +1459,7 @@ let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
                 returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_values_are_expressions qBool (h++lt1) fs_r_fnm fnm';
               trans_history h lt1 lt';
-              helper_equiv_oprod_openfile_oval e' (h++lt1) lt' fs_r_fnm fnm'; 
+              helper_equiv_oprod_openfile_oval e' (h++lt1) lt' fs_r_fnm fnm';
               eliminate exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_prod_openfile_val fs_r_fnm) (h++lt1) lt' fs_r
                 returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_fs_beh_bind fs_fnm' h lt1 fs_r_fnm (fun x -> fs_prod_openfile_val x) lt' fs_r
@@ -1532,7 +1535,7 @@ let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStrin
           introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
             bind_squash (steps e e' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod qFileDescr h;
-              let (fd', (| lt1, lt' |)) = destruct_steps_ewrite_fd fd msg e' h lt sts1 in 
+              let (fd', (| lt1, lt' |)) = destruct_steps_ewrite_fd fd msg e' h lt sts1 in
               assert (qFileDescr ⫄ (h, fs_fd', fd));
               eliminate forall lt1 fd'. e_beh fd fd' h lt1 ==> (exists (fs_r_fd:fs_val qFileDescr). qFileDescr ∋ (h++lt1, fs_r_fd, fd') /\ fs_beh fs_fd' h lt1 fs_r_fd) with lt1 fd';
               lem_value_is_irred fd';

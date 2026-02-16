@@ -696,6 +696,19 @@ val fs_prod_if_val :
 let fs_prod_if_val c t e =
   if c then t else e
 
+unfold
+val fs_prod_case_val : #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_val (a ^+ b) ->
+                inlc : (fs_val a -> fs_prod c) ->
+                inrc : (fs_val b -> fs_prod c) ->
+                fs_prod c
+let fs_prod_case_val cond inlc inrc =
+  match cond with
+  | Inl x -> inlc x
+  | Inr x -> inrc x
+
 val fs_prod_openfile_val :
         fnm:fs_val qString ->
         fs_prod (qResexn qFileDescr)
