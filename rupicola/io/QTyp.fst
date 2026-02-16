@@ -708,6 +708,22 @@ open Trace
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
 
+let lem_fs_beh_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
+  Lemma (fs_beh #(qResexn qFileDescr) (openfile arg) h (ev_lt (EvOpen arg res)) res) =
+  lem_theta_open arg res h
+
+let lem_fs_beh_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
+  Lemma (fs_beh #(qResexn qBool) (read arg) h (ev_lt (EvRead arg res)) res) =
+  lem_theta_read arg res h
+
+let lem_fs_beh_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
+  Lemma (fs_beh #(qResexn qUnit) (write arg) h (ev_lt (EvWrite arg res)) res) =
+  lem_theta_write arg res h
+
+let lem_fs_beh_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
+  Lemma (fs_beh #(qResexn qUnit) (close arg) h (ev_lt (EvClose arg res)) res) =
+  lem_theta_close arg res h
+
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =
   lem_thetaP_return x h
