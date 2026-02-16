@@ -106,6 +106,58 @@ let rrhp_1 (#i:intS) =
   forall (ps:progS i).
     forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct)
 
+#push-options "--z3rlimit 30"
+let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
+  : Lemma 
+      (requires ELam? pt /\ is_value ct)
+      (ensures forall lt r. behT (EApp pt ct) (lt, r) <==> behT (subst_beta ct (ELam?.b pt)) (lt, r)) = 
+  let h0 : history = [] in
+  let b = ELam?.b pt in
+  let sb = subst_beta ct b in
+  lem_value_is_irred (ELam b);
+  lem_value_is_irred ct;
+  (* Establish the Beta step *)
+  let _beta = FStar.Squash.return_squash (Beta b ct h0) in
+  (* Backward: steps sb r [] lt ==> steps (EApp (ELam b) ct) r [] lt *)
+  introduce forall (r:closed_exp) (lt:local_trace h0).
+    steps sb r h0 lt ==> steps (EApp (ELam b) ct) r h0 lt
+  with begin
+    introduce _ ==> _ with _. begin
+      lem_step_implies_steps (EApp (ELam b) ct) sb h0 None;
+      lem_steps_transitive (EApp (ELam b) ct) sb r h0 ([] <: local_trace h0) lt
+    end
+  end;
+  (* Forward: steps (EApp (ELam b) ct) r [] lt /\ indexed_irred r ([]++lt)
+              ==> steps sb r [] lt
+     Case analysis: SRefl is impossible (Beta fires), STrans must start with Beta
+     (AppRight/AppLeft impossible since ct and ELam b are values/irred) *)
+  introduce forall (r:closed_exp) (lt:local_trace h0).
+    (steps (EApp (ELam b) ct) r h0 lt /\ indexed_irred r (h0++lt)) ==>
+    steps sb r h0 lt
+  with begin
+    introduce _ ==> _ with _. begin
+      FStar.Squash.bind_squash
+        #(steps (EApp (ELam b) ct) r h0 lt)
+        #(steps sb r h0 lt)
+        ()
+        (fun (st : steps (EApp (ELam b) ct) r h0 lt) ->
+          match st with
+          | SRefl _ _ -> false_elim ()
+          | STrans step1 rest ->
+            (match step1 with
+            | Beta _ _ _ -> FStar.Squash.return_squash rest
+            | AppRight _ hst -> false_elim ()
+            | AppLeft _ hst -> false_elim ()))
+    end
+  end;
+  (* Pointwise equivalence of behT: follows from steps equivalence *)
+  introduce forall (lt:local_trace h0) (r:closed_exp).
+    behT (EApp pt ct) (lt, r) <==> behT sb (lt, r)
+  with begin
+    ()
+  end
+#pop-options
+
 let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
   introduce forall pS cT. behS (linkS pS (backtranslate_ctx cT)) `rel_behs` behT (linkT (compile_prog pS) cT) with begin
     let t : qType = i.ct in
@@ -155,6 +207,6 @@ let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
       assert (valid_subset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
     lem_rel_beh ws (subst_beta ct (ELam?.b pt));
-    assume (behT (EApp pt ct) == behT wt); (** simple to prove **)
+    lem_app_eq_subst_beta pt ct;
     ()
   end

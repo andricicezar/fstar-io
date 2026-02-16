@@ -15,6 +15,7 @@ type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
 | QBool : type_quotation bool
 | QFileDescriptor : type_quotation file_descr
+| QString : type_quotation string
 | QArr : #t1:Type ->
          #t2:Type ->
          type_quotation t1 ->
@@ -41,6 +42,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QUnit -> assert (t == unit)
   | QBool -> assert (t == bool)
   | QFileDescriptor -> assert (t == file_descr)
+  | QString -> assert (t == string)
   | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
   | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
@@ -51,6 +53,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   | QUnit -> TUnit
   | QBool -> TBool
   | QFileDescriptor -> TFileDescr
+  | QString -> TString
   | QPair qt1 qt2 -> TPair (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QArr qt1 qt2
   | QArrIO qt1 qt2 ->
@@ -70,6 +73,7 @@ let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
 let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
 let qFileDescr : qType = (| _, QFileDescriptor |)
+let qString : qType = (| _, QString |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =
@@ -107,61 +111,163 @@ let lem_closed_is_no_fv (e:exp) : Lemma
   [SMTPat (is_closed e)] =
   ()
 
+(** Helper: incrementing the binder depth shifts free variable indices by -1.
+    I.e., fv in free_vars_indx at depth n+1 iff fv+1 in free_vars_indx at depth n. **)
+let rec lem_free_vars_indx_shift (e:exp) (n:nat) :
+  Lemma (ensures forall (fv:var). fv `memP` free_vars_indx e (n+1) <==> (fv+1) `memP` free_vars_indx e n)
+        (decreases e) =
+  match e with
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EVar _ -> ()
+  | ELam e' -> lem_free_vars_indx_shift e' (n+1)
+  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | ERead e' | EOpen e' | EClose e' -> lem_free_vars_indx_shift e' n
+  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 ->
+    lem_free_vars_indx_shift e1 n;
+    lem_free_vars_indx_shift e2 n;
+    append_memP_forall (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
+  | EIf e1 e2 e3 ->
+    lem_free_vars_indx_shift e1 n;
+    lem_free_vars_indx_shift e2 n;
+    lem_free_vars_indx_shift e3 n;
+    append_memP_forall (free_vars_indx e1 (n+1) @ free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
+    append_memP_forall (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
+    append_memP_forall (free_vars_indx e1 n @ free_vars_indx e2 n) (free_vars_indx e3 n);
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
+  | ECase e1 e2 e3 ->
+    lem_free_vars_indx_shift e1 n;
+    lem_free_vars_indx_shift e2 (n+1);
+    lem_free_vars_indx_shift e3 (n+1);
+    append_memP_forall (free_vars_indx e1 (n+1) @ free_vars_indx e2 (n+2)) (free_vars_indx e3 (n+2));
+    append_memP_forall (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+2));
+    append_memP_forall (free_vars_indx e1 n @ free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 (n+1))
+
+(** Helper: a "shift-at-depth-n" substitution (identity below n, +1 at/above n)
+    shifts all free variable indices by +1. *)
+#push-options "--split_queries always --z3rlimit 15"
+let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
+  Lemma
+    (requires
+      (forall (y:var). y < n ==> s y == EVar y) /\
+      (forall (y:var). y >= n ==> s y == EVar (y + 1)))
+    (ensures forall (fv:var). (fv+1) `memP` free_vars_indx (subst s e) n <==> fv `memP` free_vars_indx e n)
+    (decreases e) =
+  match e with
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EVar _ -> ()
+  | ELam e' ->
+    let s' = sub_elam s in
+    introduce forall (y:var). y < n+1 ==> s' y == EVar y with begin
+      introduce _ ==> _ with _. begin
+        if y = 0 then () else ()
+      end
+    end;
+    introduce forall (y:var). y >= n+1 ==> s' y == EVar (y + 1) with begin
+      introduce _ ==> _ with _. ()
+    end;
+    lem_free_vars_subst_inc s' e' (n+1)
+  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | ERead e' | EOpen e' | EClose e' ->
+    lem_free_vars_subst_inc s e' n
+  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 ->
+    lem_free_vars_subst_inc s e1 n;
+    lem_free_vars_subst_inc s e2 n;
+    append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s e2) n);
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
+  | EIf e1 e2 e3 ->
+    lem_free_vars_subst_inc s e1 n;
+    lem_free_vars_subst_inc s e2 n;
+    lem_free_vars_subst_inc s e3 n;
+    append_memP_forall (free_vars_indx (subst s e1) n @ free_vars_indx (subst s e2) n) (free_vars_indx (subst s e3) n);
+    append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s e2) n);
+    append_memP_forall (free_vars_indx e1 n @ free_vars_indx e2 n) (free_vars_indx e3 n);
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
+  | ECase e1 e2 e3 ->
+    lem_free_vars_subst_inc s e1 n;
+    let s' = sub_elam s in
+    introduce forall (y:var). y < n+1 ==> s' y == EVar y with begin
+      introduce _ ==> _ with _. begin
+        if y = 0 then () else ()
+      end
+    end;
+    introduce forall (y:var). y >= n+1 ==> s' y == EVar (y + 1) with begin
+      introduce _ ==> _ with _. ()
+    end;
+    lem_free_vars_subst_inc s' e2 (n+1);
+    lem_free_vars_subst_inc s' e3 (n+1);
+    append_memP_forall (free_vars_indx (subst s e1) n @ free_vars_indx (subst s' e2) (n+1)) (free_vars_indx (subst s' e3) (n+1));
+    append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s' e2) (n+1));
+    append_memP_forall (free_vars_indx e1 n @ free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
+    append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 (n+1))
+#pop-options
+
 let lem_fv_in_env_varS (g:typ_env) (t:qType) (e:exp) :
   Lemma (fv_in_env g e <==> fv_in_env (extend t g) (subst sub_inc e))
-  = admit ()
+  = lem_free_vars_subst_inc sub_inc e 0
 
 let lem_fv_in_env_lam (g:typ_env) (t:qType) (body:exp) :
   Lemma (fv_in_env (extend t g) body <==>  fv_in_env g (ELam body))
-   = admit ()
+   = lem_free_vars_indx_shift body 0
 
 let lem_fv_in_env_app (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EApp e1 e2))
-  = admit ()
+  = append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_if (g:typ_env) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) <==> fv_in_env g (EIf e1 e2 e3))
-  = admit ()
+  = append_memP_forall (free_vars e1 @ free_vars e2) (free_vars e3);
+    append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_pair (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EPair e1 e2))
-  = admit ()
+  = append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_fst (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EFst e) <==> fv_in_env g e)
-  = admit ()
+  = ()
 
 let lem_fv_in_env_snd (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (ESnd e) <==>  fv_in_env g e)
-  = admit ()
+  = ()
 
 let lem_fv_in_env_inl (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EInl e) <==>  fv_in_env g e)
-  = admit ()
+  = ()
 
 let lem_fv_in_env_inr (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EInr e) <==>  fv_in_env g e)
-  = admit ()
+  = ()
 
+
+#push-options "--split_queries always --z3rlimit 10"
 let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env (extend t1 g) e2 /\ fv_in_env (extend t2 g) e3) <==> fv_in_env g (ECase e1 e2 e3))
-  = admit ()
+  =
+  (* Split memP over the appended free variable lists *)
+  append_memP_forall (free_vars_indx e1 0 @ free_vars_indx e2 1) (free_vars_indx e3 1);
+  append_memP_forall (free_vars_indx e1 0) (free_vars_indx e2 1);
+  (* Connect fv_in_env (extend t g) e with free_vars_indx e at depth 1 *)
+  lem_free_vars_indx_shift e2 0;
+  lem_free_vars_indx_shift e3 0
+#pop-options
 
 let lem_fv_in_env_openfile (g:typ_env) (fnm:exp) :
   Lemma (fv_in_env g fnm <==> fv_in_env g (EOpen fnm))
-  = admit ()
+  = ()
 
 let lem_fv_in_env_read (g:typ_env) (fd:exp) :
   Lemma (fv_in_env g fd <==> fv_in_env g (ERead fd))
-  = admit ()
+  = ()
 
 let lem_fv_in_env_write (g:typ_env) (fd msg:exp) :
   Lemma ((fv_in_env g fd /\ fv_in_env g msg) <==> fv_in_env g (EWrite fd msg))
-  = admit ()
+  = append_memP_forall (free_vars fd) (free_vars msg)
 
 let lem_fv_in_env_close (g:typ_env) (fd:exp) :
   Lemma (fv_in_env g fd <==> fv_in_env g (EClose fd))
-  = admit ()
+  = ()
 
 (** STLC Evaluation Environment : variable -> value **)
 let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
@@ -188,7 +294,8 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   | ETrue
   | EFalse
   | EVar _
-  | EFileDescr _ -> ()
+  | EFileDescr _
+  | EString _ -> ()
   | ELam e1 -> begin
     subst_comp (sub_elam f) (sub_elam g) e1;
     introduce forall (x:var). (gsub_comp (sub_elam f) (sub_elam g)) x == (sub_elam (gsub_comp f g)) x with begin
@@ -224,6 +331,101 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e2;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e3
     end
+
+let rec shift_sub_equiv_sub_inc_no_rename #t #g
+  (s':gsub (extend t g) false)
+  (e:exp)
+  (f:gsub g false{forall (x:var). (f x) == (s' (x+1))}) :
+  Lemma (ensures subst s' (subst sub_inc e) == subst #false f e) =
+  match e with
+  | EUnit
+  | ETrue
+  | EFalse
+  | EVar _
+  | EFileDescr _
+  | EString _ -> ()
+  | ELam e1 -> begin
+    subst_comp (sub_elam s') (sub_elam sub_inc) e1;
+    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
+      ()
+    end;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e1
+  end
+  | EFst e1
+  | ESnd e1
+  | EInl e1
+  | EInr e1
+  | ERead e1
+  | EOpen e1
+  | EClose e1 -> shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f
+  | EApp e1 e2
+  | EWrite e1 e2
+  | EPair e1 e2 -> begin
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f
+  end
+  | EIf e1 e2 e3 -> begin
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f;
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e3 f
+  end
+  | ECase e1 e2 e3 -> begin
+    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
+    subst_comp (sub_elam s') (sub_elam sub_inc) e2;
+    subst_comp (sub_elam s') (sub_elam sub_inc) e3;
+    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
+      ()
+    end;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e2;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e3
+  end
+
+let rec shift_sub_equiv_sub_inc_rename #t
+  (s':gsub (extend t empty) false)
+  (e:exp)
+  (f:gsub empty true{forall (x:var). (f x) == (s' (x+1))}) :
+  Lemma (ensures subst s' (subst sub_inc e) == subst #true f e)
+        (decreases e) =
+  match e with
+  | EUnit
+  | ETrue
+  | EFalse
+  | EVar _
+  | EFileDescr _
+  | EString _ -> ()
+  | ELam e1 -> begin
+    subst_comp (sub_elam s') (sub_elam sub_inc) e1;
+    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with ();
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e1
+  end
+  | EFst e1
+  | ESnd e1
+  | EInl e1
+  | EInr e1
+  | ERead e1
+  | EOpen e1
+  | EClose e1 -> shift_sub_equiv_sub_inc_rename #t s' e1 f
+  | EApp e1 e2
+  | EWrite e1 e2
+  | EPair e1 e2 -> begin
+    shift_sub_equiv_sub_inc_rename #t s' e1 f;
+    shift_sub_equiv_sub_inc_rename #t s' e2 f
+  end
+  | EIf e1 e2 e3 -> begin
+    shift_sub_equiv_sub_inc_rename #t s' e1 f;
+    shift_sub_equiv_sub_inc_rename #t s' e2 f;
+    shift_sub_equiv_sub_inc_rename #t s' e3 f
+  end
+  | ECase e1 e2 e3 -> begin
+    shift_sub_equiv_sub_inc_rename #t s' e1 f;
+    subst_comp (sub_elam s') (sub_elam sub_inc) e2;
+    subst_comp (sub_elam s') (sub_elam sub_inc) e3;
+    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
+      ()
+    end;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e2;
+    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e3
+  end
 #pop-options
 
 let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
@@ -234,6 +436,7 @@ let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
     | ETrue -> ()
     | EFalse -> ()
     | EFileDescr _ -> ()
+    | EString _ -> ()
     | ELam _ -> ()
     | EPair e1 e2 -> begin
       lem_value_is_closed e1;
@@ -251,10 +454,49 @@ let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
     (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
   = admit () (** common lemma **)
 
+(** Helper: substitution is identity on closed expressions.
+    If e has no free variables at binder depth n, and s acts as identity on
+    variables below n, then subst s e == e. *)
+let rec lem_subst_closed_identity #b (s:sub b) (e:exp) (n:nat) :
+  Lemma
+    (requires free_vars_indx e n == [] /\
+              (forall (x:var). x < n ==> s x == EVar x))
+    (ensures subst s e == e)
+    (decreases e) =
+  match e with
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EVar _ -> ()
+  | ELam e' ->
+    introduce forall (x:var). x < n+1 ==> sub_elam s x == EVar x with begin
+      introduce _ ==> _ with _. begin
+        if x = 0 then () else ()
+      end
+    end;
+    lem_subst_closed_identity (sub_elam s) e' (n+1)
+  | EFst e' | ESnd e' | EInl e' | EInr e'
+  | ERead e' | EOpen e' | EClose e' ->
+    lem_subst_closed_identity s e' n
+  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 ->
+    lem_subst_closed_identity s e1 n;
+    lem_subst_closed_identity s e2 n
+  | EIf e1 e2 e3 ->
+    lem_subst_closed_identity s e1 n;
+    lem_subst_closed_identity s e2 n;
+    lem_subst_closed_identity s e3 n
+  | ECase e1 e2 e3 ->
+    lem_subst_closed_identity s e1 n;
+    introduce forall (x:var). x < n+1 ==> sub_elam s x == EVar x with begin
+      introduce _ ==> _ with _. begin
+        if x = 0 then () else ()
+      end
+    end;
+    lem_subst_closed_identity (sub_elam s) e2 (n+1);
+    lem_subst_closed_identity (sub_elam s) e3 (n+1)
+
 let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   Lemma (gsubst s e == e)
   [SMTPat (gsubst s e)] =
-  admit ()
+  lem_subst_closed_identity s e 0
 
 module FE = FStar.FunctionalExtensionality
 
@@ -322,6 +564,19 @@ type fs_val (t:qType) =
 
 let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
   if c then e else t
+
+unfold
+val fs_val_case : #a  : qType ->
+                  #b  : qType ->
+                  #c  : qType ->
+                  cond: fs_val (a ^+ b) ->
+                  inlc: (fs_val a -> fs_val c) ->
+                  inrc: (fs_val b -> fs_val c) ->
+                  fs_val c
+let fs_val_case cond inlc inrc =
+  match cond with
+  | Inl x -> inlc x
+  | Inr x -> inrc x
 
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
@@ -441,19 +696,32 @@ val fs_prod_if_val :
 let fs_prod_if_val c t e =
   if c then t else e
 
+unfold
+val fs_prod_case_val : #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_val (a ^+ b) ->
+                inlc : (fs_val a -> fs_prod c) ->
+                inrc : (fs_val b -> fs_prod c) ->
+                fs_prod c
+let fs_prod_case_val cond inlc inrc =
+  match cond with
+  | Inl x -> inlc x
+  | Inr x -> inrc x
+
 val fs_prod_openfile_val :
-        fnm:fs_val qBool ->
+        fnm:fs_val qString ->
         fs_prod (qResexn qFileDescr)
 let fs_prod_openfile_val fnm = openfile fnm
 
 val fs_prod_read_val :
         fd:fs_val qFileDescr ->
-        fs_prod (qResexn qBool)
+        fs_prod (qResexn qString)
 let fs_prod_read_val fd = read fd
 
 val fs_prod_write_val :
         fd:fs_val qFileDescr ->
-        msg:fs_val qBool ->
+        msg:fs_val qString ->
         fs_prod (qResexn qUnit)
 let fs_prod_write_val fd msg = write (fd, msg)
 
@@ -497,7 +765,7 @@ let fs_oprod_bind' m k =
 unfold
 val fs_oprod_openfile_oval :
         #g:typ_env ->
-        fnm:fs_oval g qBool ->
+        fnm:fs_oval g qString ->
         fs_oprod g (qResexn qFileDescr)
 let fs_oprod_openfile_oval fnm fsG = openfile (fnm fsG)
 
@@ -505,14 +773,14 @@ unfold
 val fs_oprod_read_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qBool)
+        fs_oprod g (qResexn qString)
 let fs_oprod_read_oval fd fsG = read (fd fsG)
 
 unfold
 val fs_oprod_write_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
-        msg:fs_oval g qBool ->
+        msg:fs_oval g qString ->
         fs_oprod g (qResexn qUnit)
 let fs_oprod_write_oval fd msg fsG = write ((fd fsG), (msg fsG))
 
@@ -671,7 +939,7 @@ let fs_oprod_fmap p f =
 
 val fs_oprod_openfile :
         #g:typ_env ->
-        fnm:fs_oprod g qBool ->
+        fnm:fs_oprod g qString ->
         fs_oprod g (qResexn qFileDescr)
 let fs_oprod_openfile fnm =
   fs_oprod_bind' fnm (fun fnm' ->
@@ -680,7 +948,7 @@ let fs_oprod_openfile fnm =
 val fs_oprod_read :
         #g:typ_env ->
         fd:fs_oprod g qFileDescr ->
-        fs_oprod g (qResexn qBool)
+        fs_oprod g (qResexn qString)
 let fs_oprod_read fd =
   fs_oprod_bind' fd (fun fd' ->
     fs_oprod_return_prod _ _ (read fd'))
@@ -688,7 +956,7 @@ let fs_oprod_read fd =
 val fs_oprod_write :
         #g:typ_env ->
         fd:fs_oprod g qFileDescr ->
-        msg:fs_oprod g qBool ->
+        msg:fs_oprod g qString ->
         fs_oprod g (qResexn qUnit)
 let fs_oprod_write fd msg =
   fs_oprod_bind' fd (fun fd' ->
@@ -707,6 +975,26 @@ open Trace
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
+
+let lem_fs_beh_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
+  Lemma (fs_beh #(qResexn qFileDescr) (openfile arg) h (ev_lt (EvOpen arg res)) res) =
+  lem_theta_open arg res h
+
+let lem_fs_beh_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
+  Lemma (fs_beh #(qResexn qString) (read arg) h (ev_lt (EvRead arg res)) res) =
+  lem_theta_read arg res h
+
+let lem_fs_beh_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
+  Lemma (fs_beh #(qResexn qUnit) (write arg) h (ev_lt (EvWrite arg res)) res) =
+  lem_theta_write arg res h
+
+let lem_fs_beh_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
+  Lemma (fs_beh #(qResexn qUnit) (close arg) h (ev_lt (EvClose arg res)) res) =
+  lem_theta_close arg res h
+
+let lem_fs_beh_return #a (x:fs_val a) (h:history) :
+  Lemma (fs_beh (return x) h [] x) =
+  lem_thetaP_return x h
 
 let lem_fs_beh_bind #a #b (m:fs_prod a) (h:history) (lt1:local_trace h) (fs_r_m:fs_val a) (k:fs_val a -> fs_prod b) (lt2:local_trace (h++lt1)) (fs_r:fs_val b) :
   Lemma (requires fs_beh m h lt1 fs_r_m /\

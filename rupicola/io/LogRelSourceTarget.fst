@@ -18,6 +18,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   | QUnit -> fs_v == () /\ e == EUnit
   | QBool -> (fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | QFileDescriptor ->  e == EFileDescr fs_v
+  | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     match e with
@@ -71,15 +72,12 @@ let valid_superset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
 
 let lem_values_valid_superset_val_valid_contains t (fs_e:fs_val t) (e:value) :
   Lemma (requires valid_superset_val fs_e e)
-        (ensures  valid_contains fs_e e) = admit () (** TODO **)
-
-let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
-  Lemma (requires t ∋ (h, fs_e, e))
-        (ensures  t ⊇ (h, fs_e, e)) = admit ()
-
-let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
-  Lemma (requires t ∋ (h, fs_e, e))
-        (ensures  t ⫄ (h, io_return fs_e, e)) = admit ()
+        (ensures  valid_contains fs_e e) =
+  introduce forall (h:history). t ∋ (h, fs_e, e) with begin
+    assert (t ⊇ (h, fs_e, e));
+    lem_value_is_irred e;
+    assert (e_beh e e h [])
+  end
 
 let rec lem_values_are_values t h fs_e (e:closed_exp) :
   Lemma (requires t ∋ (h, fs_e, e))
@@ -89,6 +87,7 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
   | QUnit -> ()
   | QBool -> ()
   | QFileDescriptor -> ()
+  | QString -> ()
   | QArr _ _ -> ()
   | QArrIO _ _ -> ()
   | QPair #t1 #t2 qt1 qt2 ->
@@ -99,6 +98,53 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+
+let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∋ (h, fs_e, e))
+        (ensures  t ⊇ (h, fs_e, e)) =
+  lem_values_are_values t h fs_e e;
+  lem_value_is_irred e;
+  introduce forall (e':closed_exp) (lt:local_trace h). e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
+    introduce e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with h_beh. begin
+      eliminate steps e e' h lt /\ indexed_irred e' (h++lt)
+      returns (t ∋ (h, fs_e, e') /\ lt == []) with sq_sts _. begin
+        assert (indexed_irred e h);
+        FStar.Squash.bind_squash sq_sts (fun (sts:steps e e' h lt) ->
+          let _ = lem_irred_implies_srefl_steps sts in
+          assert (e == e');
+          assert (lt == []);
+          assert (t ∋ (h, fs_e, e'));
+          FStar.Squash.get_proof (t ∋ (h, fs_e, e') /\ lt == [])
+        )
+      end
+    end
+  end
+
+let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
+  Lemma (requires t ∋ (h, fs_e, e))
+        (ensures  t ⫄ (h, io_return fs_e, e)) =
+  lem_values_are_values t h fs_e e;
+  lem_value_is_irred e;
+  introduce forall (e':closed_exp) (lt : local_trace h). e_beh e e' h lt ==> 
+      (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r) with begin
+    introduce e_beh e e' h lt ==> 
+        (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r) with h_beh. begin
+      eliminate steps e e' h lt /\ indexed_irred e' (h++lt)
+      returns (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r)
+      with sq_sts _. begin
+        assert (indexed_irred e h);
+        FStar.Squash.bind_squash sq_sts (fun (sts:steps e e' h lt) ->
+          let _ = lem_irred_implies_srefl_steps sts in
+          assert (e == e');
+          assert (lt == []);
+          assert (t ∋ (h, fs_e, e));
+          lem_fs_beh_return fs_e h;
+          assert (fs_beh (io_return fs_e) h [] fs_e);
+          FStar.Squash.get_proof (exists (fs_r:get_Type t). t ∋ (h++lt, fs_r, e') /\ fs_beh (io_return fs_e) h lt fs_r)
+        )
+      end
+    end
+  end
 
 let lem_forall_values_are_values t h fs_e :
   Lemma (forall (e:closed_exp). t ∋ (h, fs_e, e) ==> is_value e) =
@@ -168,6 +214,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
   | QUnit -> ()
   | QBool -> ()
   | QFileDescriptor -> ()
+  | QString -> ()
   | QArr #t1 #t2 qt1 qt2 -> begin
     let fs_f : t1 -> t2 = fs_v in
     let ELam e' = e in

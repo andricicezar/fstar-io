@@ -45,6 +45,14 @@ let equiv_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ⊏ EFile
     end
   end
 
+let equiv_oval_string g (str:string) : Lemma (fs_oval_return g qString str ⊏ EString str) =
+  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qString ⊆ (h, str, gsubst s (EString str)) with begin
+    introduce _ ==> _ with _. begin
+      assert (qString ∈ (h, str, EString str));
+      lem_values_are_expressions qString h str (EString str)
+    end
+  end
+
 (** Used in backtranslation **)
 let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊏ EVar x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> Some?.v (g x) ⊆ (h, index fsG x, gsubst s (EVar x)) with begin
@@ -65,101 +73,6 @@ let equiv_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ⊏ EVar 0) 
   end
 
 #push-options "--split_queries always --z3rlimit 32"
-let rec shift_sub_equiv_sub_inc_no_rename #t #g
-  (s':gsub (extend t g) false)
-  (e:exp)
-  (f:gsub g false{forall (x:var). (f x) == (s' (x+1))}) :
-  Lemma (ensures subst s' (subst sub_inc e) == subst #false f e) =
-  match e with
-  | EUnit
-  | ETrue
-  | EFalse
-  | EVar _
-  | EFileDescr _ -> ()
-  | ELam e1 -> begin
-    subst_comp (sub_elam s') (sub_elam sub_inc) e1;
-    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
-      ()
-    end;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e1
-    end
-  | EFst e1
-  | ESnd e1
-  | EInl e1
-  | EInr e1
-  | ERead e1
-  | EOpen e1
-  | EClose e1 -> shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f
-  | EApp e1 e2
-  | EWrite e1 e2
-  | EPair e1 e2 -> begin
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f
-    end
-  | EIf e1 e2 e3 -> begin
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e2 f;
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e3 f
-    end
-  | ECase e1 e2 e3 -> begin
-    shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
-    subst_comp (sub_elam s') (sub_elam sub_inc) e2;
-    subst_comp (sub_elam s') (sub_elam sub_inc) e3;
-    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
-      ()
-    end;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e2;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e3
-    end
-
-let rec shift_sub_equiv_sub_inc_rename #t
-  (s':gsub (extend t empty) false)
-  (e:exp)
-  (f:gsub empty true{forall (x:var). (f x) == (s' (x+1))}) :
-  Lemma (ensures subst s' (subst sub_inc e) == subst #true f e)
-        (decreases e) =
-  match e with
-  | EUnit
-  | ETrue
-  | EFalse
-  | EVar _
-  | EFileDescr _ -> ()
-  | ELam e1 -> begin
-    subst_comp (sub_elam s') (sub_elam sub_inc) e1;
-    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
-      ()
-    end;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e1
-    end
-  | EFst e1
-  | ESnd e1
-  | EInl e1
-  | EInr e1
-  | ERead e1
-  | EOpen e1
-  | EClose e1 -> shift_sub_equiv_sub_inc_rename #t s' e1 f
-  | EApp e1 e2
-  | EWrite e1 e2
-  | EPair e1 e2 -> begin
-    shift_sub_equiv_sub_inc_rename #t s' e1 f;
-    shift_sub_equiv_sub_inc_rename #t s' e2 f
-    end
-  | EIf e1 e2 e3 -> begin
-    shift_sub_equiv_sub_inc_rename #t s' e1 f;
-    shift_sub_equiv_sub_inc_rename #t s' e2 f;
-    shift_sub_equiv_sub_inc_rename #t s' e3 f
-    end
-  | ECase e1 e2 e3 -> begin
-    shift_sub_equiv_sub_inc_rename #t s' e1 f;
-    subst_comp (sub_elam s') (sub_elam sub_inc) e2;
-    subst_comp (sub_elam s') (sub_elam sub_inc) e3;
-    introduce forall (x:var). (gsub_comp (sub_elam s') (sub_elam sub_inc)) x == (sub_elam f) x with begin
-      ()
-    end;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e2;
-    equiv_subs_implies_equiv_substs (gsub_comp (sub_elam s') (sub_elam sub_inc)) (sub_elam f) e3
-    end
-
  (** Used in compilation **)
 let equiv_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
@@ -617,7 +530,7 @@ let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_i
   end
 #pop-options
 
-let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qBool) (fnm:exp)
+let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊏ fnm)
     (ensures fs_oprod_openfile_oval fs_fnm ⊑ EOpen fnm)
@@ -640,18 +553,18 @@ let equiv_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (ensures fs_oprod_read_oval fs_fd ⊑ ERead fd)
   =
   lem_fv_in_env_read g fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(≍) h` s ==> (qBool ^+ qUnit) ⫃ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(≍) h` s ==> (qString ^+ qUnit) ⫃ (h, read (fs_fd fsG), gsubst s (ERead fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = read fs_fd in
     let e = ERead (gsubst s fd) in
     assert (gsubst s (ERead fd) == e);
     let ERead fd = e in
-    introduce fsG `(≍) h` s ==> (qBool ^+ qUnit) ⫃ (h, fs_e, e) with _. begin
+    introduce fsG `(≍) h` s ==> (qString ^+ qUnit) ⫃ (h, fs_e, e) with _. begin
       admit ()
     end
   end
 
-let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qBool) (fd msg:exp)
+let equiv_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊏ fd /\ fs_msg ⊏ msg)
     (ensures fs_oprod_write_oval fs_fd fs_msg ⊑ EWrite fd msg)
@@ -876,7 +789,7 @@ let equiv_oprod_case #g (#a #b #c:qType)
     (ensures (fs_oprod_case fs_cond fs_inlc fs_inrc) ⊑ (ECase cond inlc inrc)) =
   admit ()
 
-let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qBool) (fnm:exp)
+let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊑ fnm)
     (ensures fs_oprod_openfile fs_fnm ⊑ EOpen fnm)
@@ -888,7 +801,7 @@ let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
     (ensures fs_oprod_read fs_fd ⊑ ERead fd)
   = admit ()
 
-let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qBool) (fd msg:exp)
+let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊑ fd /\ fs_msg ⊑ msg)
     (ensures fs_oprod_write fs_fd fs_msg ⊑ EWrite fd msg)

@@ -7,13 +7,15 @@ The TODOs for the paper, are in the paper.
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
     - [x] Admit free `equiv_oval_app`
     - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_app`
+    - [ ] Admit free `equiv_oprod_bind`
+    - [x] Admit free `equiv_oprod_app`
     - [x] Admit free `equiv_oval_lambda`
     - [x] Admit free `equiv_oval_lambda_oprod`
     - [x] Admit free `equiv_oprod_lambda`
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [x] Admit free `equiv_oval_app`
     - [x] Admit free `equiv_oprod_app_oval_oval`
+    - [ ] Admit free `equiv_oprod_bind`
     - [ ] Admit free `equiv_oprod_app` (+ @Danel)
     - [x] Admit free `equiv_oval_lambda`
     - [x] Admit free `equiv_oval_lambda_oprod`
@@ -35,54 +37,35 @@ The TODOs for the paper, are in the paper.
 - [ ] Backend to λ□  (@Exe)
   - [ ] extract the running example to Malfunction and run it
 
-- [ ] Metaprogram (@Cezar)
-  - [ ] working on simply typed F* examples
-  - [ ] working on IO examples
-  - [ ] working on the running example
+- [x] Metaprogram (@Cezar)
+  - [x] working on simply typed F* examples
+  - [x] working on IO examples
+  - [ ] working on the running example (@Theo)
 
-- [ ] Admits (74)
-  - [ ] Trace.fst
-    - [ ] 6 admits about traces and append
-  - [ ] IO.fsti
-    - [ ] one assume that was fixed on Abigail's branch
+- [ ] Admits
   - [ ] QTyp.fst 
     - [ ] `lem_substitution`
     ```fstar
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
 	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
-    - [ ] `lem_gsubst_closed_identity`
-    ```fstar
-    let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) : Lemma (gsubst s e == e)
-    ```
-    - [ ] 14 admitted lemmas about fv_in_env
   - [ ] STLC.fst
     - [ ] assume in `subst_beta`
     - [ ] `lem_destruct_steps_epair_fst`
     - [ ] `lem_destruct_steps_epair_snd`
     - [ ] one case in `lem_shifting_preserves_closed`
     - [ ] admits and assumes in `lem_subst_freevars_closes_exp`
-  - [ ] LogRelSourceTarget.fst
-    - [ ] `lem_values_valid_superset_val_valid_contains`
-    - [ ] `lem_values_are_expressions`
-    - [ ] `lem_values_are_producers`
   - [ ] LogRelTargetSource.fst
-    - [ ] `lem_values_valid_subset_val_valid_member_of`
-    - [ ] `lem_values_are_expressions`
-    - [ ] `lem_values_are_producers`
+    - [ ] `safety_prod` (we do not use this, do we need it?)
   - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] `equiv_oprod_app` has to be redone since it uses functional extensionality
-    - [ ] 10 admitted compatibility lemmas on Abigail's branch
+    - [ ] 2 lemmas with silly assumes
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
     - [ ] 26 admitted compatibility lemmas
   - [ ] Compilation.fst
     - [ ] Two big assumes in `lem_compile_closed_valid`
-  - [ ] RrHP.fst
-    - [ ] one assume in the main theorem
-
 
 - [ ] Prepare artifact
-  - [ ] Use the names from the paper in the artifact (e.g., rename STLC to something better)
+  - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
