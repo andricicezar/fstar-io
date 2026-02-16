@@ -139,7 +139,7 @@ let lem_fv_in_env_nrec (g:typ_env) (e1 e2 e3:exp) :
   = admit ()
 
 (** STLC Evaluation Environment : variable -> value **)
-let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
+let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) : Type = (** CA: this b is polluting **)
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
 
 let gsub_empty : gsub empty true =
@@ -159,10 +159,96 @@ let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
   lem_subst_freevars_closes_exp s e 0;
   subst s e
 
-let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
-  : Lemma (
-    (subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
-  = admit () (** common lemma **)
+open FStar.Math.Lemmas
+
+let rec lem_sub_beta_inc (v:value) (e:exp) :
+  Lemma (subst (sub_beta v) (subst sub_inc e) == e) =
+  match e with
+  | EVar x -> ()
+  | ELam e1 -> lem_sub_beta_inc v e1;
+    calc (==) {
+      subst (sub_beta v) (subst sub_inc (ELam e1));
+      == { }
+      subst (sub_beta v) (ELam (subst (sub_elam sub_inc) e1));
+      == { }
+      ELam (subst (sub_elam (sub_beta v)) (subst (sub_elam sub_inc) e1));
+      == { admit() }
+      ELam e1;
+    }
+  | ECase e1 e2 e3 -> admit()
+  | EUnit
+  | ETrue
+  | EFalse
+  | EZero
+  | EString _ -> ()
+  | ESucc e'
+  | EFst e'
+  | ESnd e'
+  | EInl e'
+  | EInr e' -> lem_sub_beta_inc v e'
+  | EApp e1 e2
+  | EPair e1 e2 ->
+    lem_sub_beta_inc v e1;
+    lem_sub_beta_inc v e2
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
+    lem_sub_beta_inc v e1;
+    lem_sub_beta_inc v e2;
+    lem_sub_beta_inc v e3
+
+let rec lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
+  : Lemma
+      (requires True)
+      (ensures ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e)))
+      (decreases e) =
+  match e with
+  | EVar x -> if x = 0 then () else
+    calc (==) {
+      subst (sub_beta v) (subst (sub_elam s) (EVar x));
+      == { }
+      subst (sub_beta v) (sub_elam s x);
+      == { }
+      subst (sub_beta v) (subst sub_inc (s (x-1)));
+      == { (* can't prove `is_value (s (x-1))` since we don't know anything about g *)
+           lem_sub_beta_inc v (s (x-1)) }
+      s (x-1);
+      == { () }
+      gsub_extend s t v x;
+      == { () }
+      subst (gsub_extend s t v) (EVar x);
+    }
+  | ELam e1 -> lem_substitution s t v e1;
+    calc (==) {
+      subst (sub_beta v) (subst (sub_elam s) (ELam e1));
+      == { }
+      subst (sub_beta v) (ELam (subst (sub_elam (sub_elam s)) e1));
+      == { }
+      ELam (subst (sub_elam (sub_beta v)) (subst (sub_elam (sub_elam s)) e1));
+      == { admit() }
+      ELam (subst (sub_elam (gsub_extend s t v)) e1);
+      == { }
+      subst (gsub_extend s t v) (ELam e1);
+    }
+  | ECase e1 e2 e3 -> admit()
+  | EUnit
+  | ETrue
+  | EFalse
+  | EZero
+  | EString _ -> ()
+  | ESucc e'
+  | EFst e'
+  | ESnd e'
+  | EInl e'
+  | EInr e' -> lem_substitution s t v e'
+  | EApp e1 e2
+  | EPair e1 e2 ->
+    lem_substitution s t v e1;
+    lem_substitution s t v e2
+  | EIf e1 e2 e3
+  | ENRec e1 e2 e3 ->
+    lem_substitution s t v e1;
+    lem_substitution s t v e2;
+    lem_substitution s t v e3
 
 let lem_gsubst_closed_identiy #g #b (s:gsub g b) (e:closed_exp) :
   Lemma (gsubst s e == e)
