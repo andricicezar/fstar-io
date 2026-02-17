@@ -557,8 +557,8 @@ let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
 let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend a g) b) (m k:exp)
   : Lemma
     (requires fs_m ⊑ m /\ fs_k ⊑ k)
-    (ensures (fs_oprod_bind fs_m fs_k) ⊑ (EApp (ELam k) m)) = admit ()
-  (*lem_fv_in_env_lam g a k;
+    (ensures (fs_oprod_bind fs_m fs_k) ⊑ (EApp (ELam k) m)) =
+  lem_fv_in_env_lam g a k;
   lem_fv_in_env_app g (ELam k) m;
   equiv_oval_lambda_oprod fs_k k;
   introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> b ⫃ (h, fs_oprod_bind fs_m fs_k fsG, gsubst s (EApp (ELam k) m)) with begin
@@ -574,7 +574,7 @@ let equiv_oprod_bind #g (#a #b:qType) (fs_m:fs_oprod g a) (fs_k:fs_oprod (extend
     introduce fsG `(≍) h` s ==> b ⫃ (h, fs_e, e) with _. begin
       admit ()
     end
-  end*)
+  end
 
 let helper_equiv_oprod_app_oval_oval_steps (h:history) (lt:local_trace h) (a b:qType) (fs_f:fs_val (a ^->!@ b)) (fs_x:fs_val a) (f x:closed_exp) (fs_r:fs_val b) :
   Lemma
