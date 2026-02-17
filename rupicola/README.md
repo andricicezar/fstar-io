@@ -28,20 +28,6 @@ The TODOs for the paper, are in the paper.
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
 
-If there is time before the deadline:
-- [ ] Admits (the other direction of the logical relation)
-  - [ ] LogRelTargetSource.fst
-    - [ ] `safety_prod` (we do not use this, do we need it?)
-  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
-    - [x] Admit free `equiv_oval_app`
-    - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_bind`
-    - [ ] Admit free `equiv_oprod_app` (+ @Danel)
-    - [x] Admit free `equiv_oval_lambda`
-    - [x] Admit free `equiv_oval_lambda_oprod`
-    - [x] Admit free `equiv_oprod_lambda`
-    - [ ] 26 admitted compatibility lemmas
-
 ### Old todos
 
 #### The predicate for quotation
