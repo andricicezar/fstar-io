@@ -40,3 +40,9 @@ let test () =
 
 [@expect_failure]
 %splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
+
+let simpler_test () =
+  let!@! contents = read_file "todo" in
+  io_return (Inl ())
+
+%splice_t[tgt_test] (meta_translation "tgt_test" [`simpler_test])
