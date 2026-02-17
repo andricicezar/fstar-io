@@ -1199,7 +1199,8 @@ unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type 
 let fs_beh m = thetaP m
 
 let lem_fs_beh_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
-  Lemma (fs_beh #(qResexn qFileDescr) (openfile arg) h (ev_lt (EvOpen arg res)) res) =
+  Lemma (requires Inl? res ==> Inl?.v res == fresh_fd h)
+        (ensures fs_beh #(qResexn qFileDescr) (openfile arg) h (ev_lt (EvOpen arg res)) res) =
   lem_theta_open arg res h
 
 let lem_fs_beh_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :

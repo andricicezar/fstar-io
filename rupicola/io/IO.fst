@@ -125,6 +125,17 @@ let lem_theta_open arg res h =
     end
   end
 
+let destruct_thetaP_open arg h lt fs_r =
+  let p : hist_post h (io_res OOpen arg) = fun lt' r' ->
+    (r' == Inl (fresh_fd h) /\ lt' == [EvOpen arg (Inl (fresh_fd h))]) \/
+    (r' == Inr () /\ lt' == [EvOpen arg (Inr ())]) in
+  match openfile arg with
+  | Return _ -> false_elim ()
+  | Call OOpen arg' k -> begin
+    assert (theta (openfile arg) h p) by (compute ());
+    assert (p lt fs_r)
+    end
+
 let lem_theta_read arg res h =
   assert (thetaP (read arg) h (ev_lt (EvRead arg res)) res) by (compute ())
 

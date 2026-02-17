@@ -67,7 +67,13 @@ let lem_thetaP_bind #a #b (m:io a) (k:a -> io b) :
          dump "H")
 **)
 val lem_theta_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
-  Lemma (thetaP (openfile arg) h (ev_lt (EvOpen arg res)) res)
+  Lemma (requires Inl? res ==> Inl?.v res == fresh_fd h)
+        (ensures thetaP (openfile arg) h (ev_lt (EvOpen arg res)) res)
+
+val destruct_thetaP_open (arg:io_args OOpen) (h:history) (lt:local_trace h) (fs_r:io_res OOpen arg) :
+  Lemma (requires thetaP (openfile arg) h lt fs_r)
+        (ensures (fs_r == Inl (fresh_fd h) /\ lt == [EvOpen arg (Inl (fresh_fd h))]) \/
+                 (fs_r == Inr () /\ lt == [EvOpen arg (Inr ())]))
 
 val lem_theta_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
   Lemma (thetaP (read arg) h (ev_lt (EvRead arg res)) res)

@@ -1007,6 +1007,27 @@ let rec construct_steps_einr
     lem_steps_transitive (EInr e) (EInr e_) (EInr e') h lt' lt23
     end
 
+let rec construct_steps_eopen
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (EOpen e) (EOpen e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (EOpen e) (EOpen e_) h oev = SOpen step_e in
+    lem_step_implies_steps (EOpen e) (EOpen e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_eopen e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (EOpen e) (EOpen e_) (EOpen e') h lt' lt23
+    end
+
 let rec construct_steps_ecase_cond
   (e1:closed_exp)
   (e1':closed_exp)

@@ -78,7 +78,7 @@ let io_post (h:trace) (op:io_ops) (arg:io_args op) (res:io_res op arg) : Type0 =
   match op with
   | ORead -> True
   | OWrite -> True
-  | OOpen -> True // Cezar: no post here?
+  | OOpen -> res == Inl #file_descr #unit (fresh_fd h) \/ res == Inr #file_descr #unit ()
   | OClose -> True
 
 unfold
