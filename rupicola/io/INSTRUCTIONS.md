@@ -1,31 +1,37 @@
 To build io_program_exe
 -----------------------
 
-1. Add extra repositories as default:
+Overview
+--------
+Two opam switches are used:
+- `only-fstar`    — default; used for F* checking, `malfunction`, and `ocamlfind` steps
+- `only-peregrine`— used only for the Peregrine extraction step via
+                    `opam exec --switch=only-peregrine` (already wired in Makefile)
 
-```
-$ opam repo add coq-released https://coq.inria.fr/opam/released --set-default
-$ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev --set-default
-$ opam repo add rocq-core-dev https://rocq-prover.org/opam/core-dev --set-default
-$ opam repo add rocq-released https://rocq-prover.org/opam/released --set-default
-```
+1. Create the only-fstar switch:
 
-2. Import switch:
-```
-$ opam switch import fstar-and-peregrine.export --switch fstar-and-peregrine
-```
+$ opam switch import only-fstar.export --switch only-fstar
 
-3. Switch, eval:
-```
-$ opam switch fstar-and-peregrine
-$ eval $(opam env)
-```
+2. Create the only-peregrine switch (Peregrine + Rocq stack):
 
-4. Make and exec:
-```
+$ opam repo add coq-released   https://coq.inria.fr/opam/released      --on-switch only-peregrine
+$ opam repo add rocq-released  https://rocq-prover.org/opam/released   --on-switch only-peregrine
+$ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-switch only-peregrine
+$ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev  --on-switch only-peregrine
+$ opam switch import only-peregrine.export --switch only-peregrine
+
+Note: all pinned packages (MetaRocq, CertiCoq, CompCert, coq-ceres, …) are
+embedded in the export file. First build takes a while.
+
+3. Build (activate only-fstar first):
+
+$ opam switch only-fstar && eval $(opam env)
 rupicola/io$ make io_program_exe
-rupicola/io$ printf '\x02' | ./io_program_exe | xxd
-00000000: 01
-rupicola/io$ printf '\x00' | ./io_program_exe | xxd
-00000000: 00
-```
+
+The Peregrine step (`io_program_raw.mlf`) runs automatically under
+`opam exec --switch=only-peregrine` — no manual switch needed for that step.
+
+4. Test the echo program:
+
+$ echo "hello" | ./io_program_exe
+hello
