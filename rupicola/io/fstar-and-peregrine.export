@@ -1,0 +1,498 @@
+opam-version: "2.0"
+compiler: ["ocaml-base-compiler.4.14.2"]
+roots: [
+  "ocaml-base-compiler.4.14.2"
+  "rocq-peregrine.dev"
+  "rocq-primitive.9.0.0"
+]
+installed: [
+  "astring.0.8.5"
+  "atd.2.16.0"
+  "atdgen.2.16.0"
+  "atdgen-runtime.2.16.0"
+  "atdts.2.16.0"
+  "base.v0.16.4"
+  "base-bigarray.base"
+  "base-bytes.base"
+  "base-threads.base"
+  "base-unix.base"
+  "batteries.3.10.0"
+  "biniou.1.2.2"
+  "camlp-streams.5.0.1"
+  "cmdliner.1.3.0"
+  "conf-c++.1.0"
+  "conf-clang.2"
+  "conf-gmp.5"
+  "conf-linux-libc-dev.0"
+  "conf-pkg-config.4"
+  "conf-python-3.9.0.0"
+  "coq.9.0.0"
+  "coq-ceres.dev"
+  "coq-certicoq.dev"
+  "coq-compcert.3.16"
+  "coq-core.9.0.0"
+  "coq-equations.1.3.1+9.0"
+  "coq-ext-lib.0.13.0"
+  "coq-flocq.4.2.1"
+  "coq-mathcomp-ssreflect.2.4.0"
+  "coq-menhirlib.20250912"
+  "coq-parseque.0.2.2"
+  "coq-primitive.8.20.dev"
+  "coq-stdlib.9.0.0"
+  "coq-wasm.2.2.0"
+  "coqide-server.9.0.0"
+  "cppo.1.8.0"
+  "csexp.1.5.2"
+  "dune.3.20.2"
+  "dune-configurator.3.20.2"
+  "easy-format.1.3.4"
+  "elpi.3.4.2"
+  "fmt.0.11.0"
+  "gen.1.1"
+  "linenoise.1.5.1"
+  "logs.0.10.0"
+  "malfunction.0.7"
+  "mdx.2.5.1"
+  "memtrace.0.2.3"
+  "menhir.20250912"
+  "menhirCST.20250912"
+  "menhirLib.20250912"
+  "menhirSdk.20250912"
+  "mtime.2.1.0"
+  "num.1.6"
+  "ocaml.4.14.2"
+  "ocaml-base-compiler.4.14.2"
+  "ocaml-compiler-libs.v0.12.4"
+  "ocaml-config.2"
+  "ocaml-options-vanilla.1"
+  "ocaml-version.4.0.3"
+  "ocamlbuild.0.16.1"
+  "ocamlfind.1.9.8"
+  "pprint.20230830"
+  "ppx_derivers.1.2.1"
+  "ppx_deriving.6.0.3"
+  "ppx_deriving_yojson.3.9.1"
+  "ppx_optcomp.v0.16.0"
+  "ppxlib.0.35.0"
+  "process.0.2.1"
+  "re.1.14.0"
+  "result.1.5"
+  "rocq-core.9.0.0"
+  "rocq-elm-extraction.9.0.dev"
+  "rocq-elpi.3.2.0"
+  "rocq-equations.1.3.1+9.0"
+  "rocq-hierarchy-builder.1.10.1"
+  "rocq-mathcomp-ssreflect.2.4.0"
+  "rocq-metarocq-common.1.4+9.0"
+  "rocq-metarocq-erasure.1.4+9.0"
+  "rocq-metarocq-erasure-plugin.1.4+9.0"
+  "rocq-metarocq-pcuic.1.4+9.0"
+  "rocq-metarocq-safechecker.1.4+9.0"
+  "rocq-metarocq-safechecker-plugin.1.4+9.0"
+  "rocq-metarocq-template.1.4+9.0"
+  "rocq-metarocq-template-pcuic.1.4+9.0"
+  "rocq-metarocq-utils.1.4+9.0"
+  "rocq-peregrine.dev"
+  "rocq-primitive.9.0.0"
+  "rocq-runtime.9.0.0"
+  "rocq-rust-extraction.9.0.dev"
+  "rocq-stdlib.9.0.0"
+  "rocq-typed-extraction-common.9.0.dev"
+  "rocq-verified-extraction.9.0.dev"
+  "sedlex.3.4"
+  "seq.base"
+  "sexplib0.v0.16.0"
+  "stdint.0.7.2"
+  "stdio.v0.16.0"
+  "stdlib-shims.0.3.0"
+  "topkg.1.1.1"
+  "wasm.2.0.2"
+  "yojson.2.2.2"
+  "z3.4.15.2"
+  "zarith.1.14"
+]
+pinned: [
+  "coq-ceres.dev"
+  "coq-certicoq.dev"
+  "coq-compcert.3.16"
+  "coq-primitive.8.20.dev"
+  "rocq-elm-extraction.9.0.dev"
+  "rocq-peregrine.dev"
+  "rocq-rust-extraction.9.0.dev"
+  "rocq-typed-extraction-common.9.0.dev"
+  "rocq-verified-extraction.9.0.dev"
+  "z3.4.15.2"
+]
+package "coq-ceres" {
+  opam-version: "2.0"
+  version: "dev"
+  synopsis: "Library for serialization via S-expressions"
+  maintainer: "lysxia@gmail.com"
+  authors: "Li-yao Xia"
+  license: "MIT"
+  homepage: "https://github.com/Lysxia/coq-ceres"
+  bug-reports: "https://github.com/Lysxia/coq-ceres/issues"
+  depends: [
+    "dune" {>= "2.8"}
+    "coq" {>= "9.0~"}
+    "rocq-metarocq-utils" {>= "1.4~"}
+    "odoc" {with-doc}
+  ]
+  build: [
+    ["dune" "subst"] {dev}
+    [
+      "dune"
+      "build"
+      "-p"
+      name
+      "-j"
+      jobs
+      "@install"
+      "@runtest" {with-test}
+      "@doc" {with-doc}
+    ]
+  ]
+  run-test: ["dune" "build" "-p" name "test" "tutorial"]
+  dev-repo: "git+https://github.com/Lysxia/coq-ceres.git"
+  url {
+    src:
+      "git+https://github.com/4ever2/rocq-ceres.git#01bee32638df4b6180b3e9ee70beed11150a5da0"
+  }
+}
+package "coq-certicoq" {
+  opam-version: "2.0"
+  version: "dev"
+  synopsis: "A Verified Compiler for Gallina, Written in Gallina"
+  maintainer: "The CertiCoq Team"
+  authors: [
+    "Andrew Appel"
+    "Yannick Forster"
+    "Anvay Grover"
+    "Joomy Korkut"
+    "John Li"
+    "Zoe Paraskevopoulou"
+    "Matthieu Sozeau"
+    "Matthew Weaver"
+    "Abhishek Anand"
+    "Greg Morrisett"
+    "Randy Pollack"
+    "Olivier Savary Belanger"
+  ]
+  license: "MIT"
+  homepage: "https://certicoq.org/"
+  bug-reports: "https://github.com/CertiCoq/certicoq/issues"
+  depends: [
+    "ocaml" {>= "4.13"}
+    "conf-clang"
+    "stdlib-shims"
+    "rocq-core" {>= "9.0" & < "9.1~"}
+    "rocq-stdlib" {>= "9.0" & < "9.1~"}
+    "coq-compcert" {= "3.16"}
+    "rocq-equations" {= "1.3.1+9.0"}
+    "rocq-metarocq-erasure-plugin" {= "1.4+9.0"}
+    "rocq-metarocq-safechecker-plugin" {= "1.4+9.0"}
+    "coq-ext-lib" {>= "0.12"}
+    "coq-wasm" {= "2.2.0"}
+  ]
+  build: [
+    ["bash" "./configure.sh"]
+    [make "all"]
+    [make "runtime"]
+  ]
+  install: [make "install"]
+  dev-repo: "git+https://github.com/CertiCoq/certicoq"
+  url {
+    src:
+      "git+https://github.com/4ever2/certicoq.git#476ba6f262b8180600853c304e873fd9f7f20b8d"
+  }
+}
+package "coq-compcert" {
+  opam-version: "2.0"
+  version: "3.16"
+  synopsis: "The CompCert C compiler (64 bit)"
+  maintainer: "Michael Soegtrop and Xavier Leroy"
+  authors: "Xavier Leroy <xavier.leroy@college-de-france.fr>"
+  license: "INRIA Non-Commercial License Agreement"
+  tags: [
+    "category:Computer Science/Semantics and Compilation/Compilation"
+    "category:Computer Science/Semantics and Compilation/Semantics"
+    "keyword:C"
+    "keyword:compiler"
+    "logpath:compcert"
+    "date:2025-09-01"
+  ]
+  homepage: "https://compcert.org/"
+  bug-reports: "https://github.com/AbsInt/CompCert/issues"
+  depends: [
+    "coq" {>= "8.15.0" & < "9.1~"}
+    "menhir" {>= "20200624" & != "dev"}
+    "ocaml" {>= "4.05.0" & < "5.5~"}
+    "coq-flocq" {>= "4.1.0" & < "5~"}
+    "coq-menhirlib" {>= "20200624"}
+  ]
+  build: [
+    [
+      "./configure"
+      "amd64-linux" {os = "linux" & arch = "x86_64"}
+      "amd64-macosx" {os = "macos" & arch = "x86_64"}
+      "arm64-linux" {os = "linux" & (arch = "arm64" | arch = "aarch64")}
+      "arm64-macosx" {os = "macos" & (arch = "arm64" | arch = "aarch64")}
+      "amd64-cygwin" {os = "cygwin"}
+      "amd64-cygwin" {os = "win32" & os-distribution = "cygwinports"}
+      "-toolprefix"
+        {os = "win32" & os-distribution = "cygwinports" & arch = "i686"}
+      "x86_64-pc-cygwin-"
+        {os = "win32" & os-distribution = "cygwinports" & arch = "i686"}
+      "-prefix"
+      "%{prefix}%"
+      "-install-coqdev"
+      "-clightgen"
+      "-use-external-Flocq"
+      "-use-external-MenhirLib"
+      "-coqdevdir"
+      "%{lib}%/coq/user-contrib/compcert"
+      "-ignore-coq-version"
+      "-ignore-ocaml-version"
+    ]
+    [make "-j%{jobs}%" {ocaml:version >= "4.06"}]
+  ]
+  install: [make "install"]
+  dev-repo: "git+https://github.com/AbsInt/CompCert.git"
+  url {
+    src:
+      "git+https://github.com/4ever2/CompCert.git#4d57cc53a535484578846e05d1896a5b6abed30b"
+  }
+}
+package "coq-primitive" {
+  opam-version: "2.0"
+  version: "8.20.dev"
+  synopsis: "Coq primitive object OCaml library"
+  description: """\
+This library provides OCaml modules for primitive objects in Coq.
+These modules can be used in Coq-based projects that rely on extraction to OCaml."""
+  maintainer: "Karl Palmskog"
+  authors: "The Coq development team, INRIA, CNRS, and contributors"
+  license: "LGPL-2.1-only"
+  homepage: "https://coq.inria.fr/"
+  doc: "https://coq.github.io/doc/"
+  bug-reports: "https://github.com/coq-community/coq-primitive/issues"
+  depends: [
+    "dune" {>= "2.9"}
+    "ocaml" {>= "4.09.0"}
+    "ocamlfind" {>= "1.8.1"}
+    "odoc" {with-doc}
+  ]
+  build: [
+    ["dune" "subst"] {dev}
+    [
+      "dune"
+      "build"
+      "-p"
+      name
+      "-j"
+      jobs
+      "--promote-install-files=false"
+      "@install"
+      "@runtest" {with-test}
+      "@doc" {with-doc}
+    ]
+    ["dune" "install" "-p" name "--create-install-files" name]
+  ]
+  dev-repo: "git+https://github.com/coq-community/coq-primitive.git"
+  url {
+    src:
+      "git+https://github.com/4ever2/coq-primitive.git#ccd389d209aec3ce4563714981283a1ea3497ce3"
+  }
+}
+package "rocq-elm-extraction" {
+  opam-version: "2.0"
+  version: "9.0.dev"
+  synopsis: "Rocq extraction to Elm"
+  description: "A framework for extracting Rocq programs to Elm"
+  maintainer: "Danil Annenkov <danil.v.annenkov@gmail.com>"
+  authors: "The COBRA team"
+  license: "MIT"
+  tags: ["keyword:elm" "keyword:extraction" "logpath:TypedExtraction"]
+  homepage: "https://github.com/peregrine-project/rocq-typed-extraction"
+  doc: "https://peregrine-project.github.io/rocq-typed-extraction/toc.html"
+  bug-reports:
+    "https://github.com/peregrine-project/rocq-typed-extraction/issues"
+  depends: [
+    "rocq-typed-extraction-common" {= version}
+  ]
+  build: [
+    ["bash" "./configure.sh"]
+    [make "-j" "%{jobs}%" "-C" "elm"]
+  ]
+  install: [make "-C" "elm" "install"]
+  dev-repo:
+    "git+https://github.com/peregrine-project/rocq-typed-extraction.git"
+  url {
+    src:
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+  }
+}
+package "rocq-peregrine" {
+  opam-version: "2.0"
+  version: "dev"
+  synopsis:
+    "The Peregrine tool is a unified middle-end for code generation from proof assistants"
+  description:
+    "The Peregrine tool is a unified middle-end for code generation from proof assistants"
+  maintainer: "The Peregrine team"
+  authors: "The Peregrine team"
+  license: "MIT"
+  tags: ["keyword:extraction" "logpath:Peregrine"]
+  homepage: "https://peregrine-project.github.io/"
+  bug-reports: "https://github.com/peregrine-project/peregrine-tool/issues"
+  depends: [
+    "rocq-core" {>= "9.0" & < "9.1~"}
+    "rocq-stdlib" {>= "9.0" & < "9.1~"}
+    "rocq-metarocq-utils" {= "1.4+9.0"}
+    "rocq-metarocq-common" {= "1.4+9.0"}
+    "rocq-metarocq-template" {= "1.4+9.0"}
+    "rocq-metarocq-template-pcuic" {= "1.4+9.0"}
+    "rocq-metarocq-pcuic" {= "1.4+9.0"}
+    "rocq-metarocq-safechecker" {= "1.4+9.0"}
+    "rocq-metarocq-erasure" {= "1.4+9.0"}
+    "rocq-typed-extraction-common" {= "9.0.dev"}
+    "rocq-rust-extraction" {= "9.0.dev"}
+    "rocq-elm-extraction" {= "9.0.dev"}
+    "coq-certicoq" {= "dev"}
+    "rocq-primitive" {= "9.0.0"}
+    "coq-ceres" {= "dev"}
+    "rocq-verified-extraction" {= "9.0.dev"}
+    "cmdliner" {< "2.0.0"}
+    "coq-compcert" {= "3.16"}
+  ]
+  build: [make "build"]
+  install: [make "install"]
+  dev-repo: "git+https://github.com/peregrine-project/peregrine-tool.git"
+  pin-depends: [
+    [
+      "coq-ceres.dev"
+      "git+https://github.com/4ever2/rocq-ceres.git#01bee32638df4b6180b3e9ee70beed11150a5da0"
+    ]
+    [
+      "coq-compcert.3.16"
+      "git+https://github.com/4ever2/CompCert.git#4d57cc53a535484578846e05d1896a5b6abed30b"
+    ]
+    [
+      "coq-certicoq.dev"
+      "git+https://github.com/4ever2/certicoq.git#476ba6f262b8180600853c304e873fd9f7f20b8d"
+    ]
+    [
+      "rocq-verified-extraction.9.0.dev"
+      "git+https://github.com/4ever2/rocq-verified-extraction.git#ab5009fddd7744225533f7b4d5b19cbff652f5a3"
+    ]
+    [
+      "rocq-typed-extraction-common.9.0.dev"
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+    ]
+    [
+      "rocq-rust-extraction.9.0.dev"
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+    ]
+    [
+      "rocq-elm-extraction.9.0.dev"
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+    ]
+  ]
+  url {
+    src: "git+https://github.com/peregrine-project/peregrine-tool.git#544f2ea480f913b5b8b1ed33f89b6a43318328d5"
+  }
+}
+package "rocq-rust-extraction" {
+  opam-version: "2.0"
+  version: "9.0.dev"
+  synopsis: "Rocq extraction to Rust"
+  description: "A framework for extracting Rocq programs to Rust"
+  maintainer: "Danil Annenkov <danil.v.annenkov@gmail.com>"
+  authors: "The COBRA team"
+  license: "MIT"
+  tags: ["keyword:rust" "keyword:extraction" "logpath:TypedExtraction"]
+  homepage: "https://github.com/peregrine-project/rocq-typed-extraction"
+  doc: "https://peregrine-project.github.io/rocq-typed-extraction/toc.html"
+  bug-reports:
+    "https://github.com/peregrine-project/rocq-typed-extraction/issues"
+  depends: [
+    "rocq-typed-extraction-common" {= version}
+  ]
+  build: [
+    ["bash" "./configure.sh"]
+    [make "-j" "%{jobs}%" "-C" "rust"]
+  ]
+  install: [make "-C" "rust" "install"]
+  dev-repo:
+    "git+https://github.com/peregrine-project/rocq-typed-extraction.git"
+  url {
+    src:
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+  }
+}
+package "rocq-typed-extraction-common" {
+  opam-version: "2.0"
+  version: "9.0.dev"
+  synopsis: "Rocq extraction to Rust and Elm"
+  description: "A framework for extracting Rocq programs to Rust and Elm"
+  maintainer: "Danil Annenkov <danil.v.annenkov@gmail.com>"
+  authors: "The COBRA team"
+  license: "MIT"
+  tags: ["keyword:extraction" "logpath:TypedExtraction"]
+  homepage: "https://github.com/peregrine-project/rocq-typed-extraction"
+  doc: "https://peregrine-project.github.io/rocq-typed-extraction/toc.html"
+  bug-reports:
+    "https://github.com/peregrine-project/rocq-typed-extraction/issues"
+  depends: [
+    "rocq-core" {>= "9.0" & < "9.1~"}
+    "rocq-stdlib" {>= "9.0" & < "9.1~"}
+    "rocq-metarocq-utils" {>= "1.4"}
+    "rocq-metarocq-common" {>= "1.4"}
+    "rocq-metarocq-template" {>= "1.4"}
+    "rocq-metarocq-template-pcuic" {>= "1.4"}
+    "rocq-metarocq-pcuic" {>= "1.4"}
+    "rocq-metarocq-safechecker" {>= "1.4"}
+    "rocq-metarocq-erasure" {>= "1.4"}
+  ]
+  build: [
+    ["bash" "./configure.sh"]
+    [make "-j" "%{jobs}%" "-C" "common"]
+  ]
+  install: [make "-C" "common" "install"]
+  dev-repo:
+    "git+https://github.com/peregrine-project/rocq-typed-extraction.git"
+  url {
+    src:
+      "git+https://github.com/peregrine-project/rocq-typed-extraction.git#5b9de3c5eaf47177e46cc8177bf44cf6f89291a1"
+  }
+}
+package "rocq-verified-extraction" {
+  opam-version: "2.0"
+  version: "9.0.dev"
+  synopsis: "Verified extraction from Rocq to OCaml"
+  maintainer: "yannick.forster@inria.fr"
+  authors: ["Yannick Forster" "Matthieu Sozeau" "Nicolas Tabareau"]
+  license: "MIT"
+  tags: [
+    "keyword:extraction"
+    "category:Miscellaneous/Rocq Extensions"
+    "date:2025-04-23"
+    "logpath:VerifiedExtraction"
+  ]
+  homepage: "https://github.com/MetaRocq/rocq-verified-extraction"
+  bug-reports: "https://github.com/MetaRocq/rocq-verified-extraction/issues"
+  depends: [
+    "rocq-core" {>= "9.0"}
+    "rocq-stdlib" {>= "9.0"}
+    "coq-ceres" {= "dev"}
+    "rocq-metarocq-erasure-plugin" {= "1.4+9.0"}
+    "malfunction" {>= "0.7"}
+  ]
+  build: make
+  install: [make "-j%{jobs}%" "install"]
+  dev-repo: "git+https://github.com/MetaRocq/rocq-verified-extraction"
+  url {
+    src:
+      "git+https://github.com/4ever2/rocq-verified-extraction.git#ab5009fddd7744225533f7b4d5b19cbff652f5a3"
+  }
+}

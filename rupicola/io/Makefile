@@ -1,18 +1,27 @@
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-ROOTS := RrHP.fst Metaprogram.fst
+LAMBDABOX_DIR := lambdabox
+ROOTS := RrHP.fst \
+         Metaprogram.fst \
+         $(LAMBDABOX_DIR)/STLCToLambdaBox.fst \
+         $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
 FLAGS  = --z3version 4.15.2
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
+FLAGS += --include $(LAMBDABOX_DIR)
 FLAGS += $(OTHERFLAGS)
 
 all: verify
 
 .cache/%.fst.checked: %.fst
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+.cache/%.fst.checked: $(LAMBDABOX_DIR)/%.fst
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
@@ -63,5 +72,30 @@ validate:
 	$(MAKE) depend
 	$(MAKE) OTHERFLAGS='--report_assumes error'
 
+IOFLAGS := --unsafe_tactic_exec $(FLAGS)
+
+io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst $(LAMBDABOX_DIR)/LambdaBoxMeta.fst \
+                $(LAMBDABOX_DIR)/STLCToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
+                $(LAMBDABOX_DIR)/LambdaBox.fst Sexp.fst STLC.fst
+	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
+
+io_program_raw.mlf: io_program.ast
+	opam exec --switch=only-peregrine -- peregrine ocaml $< -o $@
+
+axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml
+	ocamlfind ocamlopt -c -o $@ $<
+
+io_program_raw.cmx: io_program_raw.mlf
+	malfunction cmx $<
+
+io_program_exe: axioms.cmx io_program_raw.cmx
+	ocamlfind ocamlopt -linkpkg $^ -o $@
+
+.PHONY: io_program
+io_program: io_program_exe
+
 clean:
 	rm -rf $(CACHEDIR) $(ODIR)
+	rm -f io_program.ast io_program_raw.mlf io_program_raw.cmi \
+	      io_program_raw.cmx io_program_raw.o io_program_exe \
+	      axioms.cmi axioms.cmx axioms.o
