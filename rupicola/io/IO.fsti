@@ -84,6 +84,18 @@ val lem_theta_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
 val lem_theta_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
   Lemma (thetaP (close arg) h (ev_lt (EvClose arg res)) res)
 
+val destruct_thetaP_read (arg:io_args ORead) (h:history) (lt:local_trace h) (fs_r:io_res ORead arg) :
+  Lemma (requires thetaP (read arg) h lt fs_r)
+        (ensures lt == [EvRead arg fs_r])
+
+val destruct_thetaP_write (arg:io_args OWrite) (h:history) (lt:local_trace h) (fs_r:io_res OWrite arg) :
+  Lemma (requires thetaP (write arg) h lt fs_r)
+        (ensures lt == [EvWrite arg fs_r])
+
+val destruct_thetaP_close (arg:io_args OClose) (h:history) (lt:local_trace h) (fs_r:io_res OClose arg) :
+  Lemma (requires thetaP (close arg) h lt fs_r)
+        (ensures lt == [EvClose arg fs_r])
+
 let lem_thetaP_return #a (x:a) (h:history) :
   Lemma (thetaP (return x) h [] x) =
   theta_monad_morphism_ret x

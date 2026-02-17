@@ -1028,6 +1028,92 @@ let rec construct_steps_eopen
     lem_steps_transitive (EOpen e) (EOpen e_) (EOpen e') h lt' lt23
     end
 
+let rec construct_steps_eread
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (ERead e) (ERead e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (ERead e) (ERead e_) h oev = SRead step_e in
+    lem_step_implies_steps (ERead e) (ERead e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_eread e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (ERead e) (ERead e_) (ERead e') h lt' lt23
+    end
+
+let rec construct_steps_eclose
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (EClose e) (EClose e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (EClose e) (EClose e_) h oev = SClose step_e in
+    lem_step_implies_steps (EClose e) (EClose e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_eclose e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (EClose e) (EClose e_) (EClose e') h lt' lt23
+    end
+
+let rec construct_steps_ewrite_fd
+  (fd:closed_exp)
+  (fd':closed_exp)
+  (msg:closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps fd fd' h lt) :
+  Lemma
+    (requires indexed_irred fd' (h++lt))
+    (ensures steps (EWrite fd msg) (EWrite fd' msg) h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #fd_ #_ #_ #oev #lt23 step_fd rest -> begin
+    let _ : step (EWrite fd msg) (EWrite fd_ msg) h oev = SWriteFd msg step_fd in
+    lem_step_implies_steps (EWrite fd msg) (EWrite fd_ msg) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_ewrite_fd fd_ fd' msg (h++lt') lt23 rest;
+    lem_steps_transitive (EWrite fd msg) (EWrite fd_ msg) (EWrite fd' msg) h lt' lt23
+    end
+
+let rec construct_steps_ewrite_arg
+  (fd:closed_exp{EFileDescr? fd})
+  (msg:closed_exp)
+  (msg':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps msg msg' h lt) :
+  Lemma
+    (requires indexed_irred msg' (h++lt))
+    (ensures steps (EWrite fd msg) (EWrite fd msg') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #msg_ #_ #_ #oev #lt23 step_msg rest -> begin
+    let _ : step (EWrite fd msg) (EWrite fd msg_) h oev = SWriteArg fd step_msg in
+    lem_step_implies_steps (EWrite fd msg) (EWrite fd msg_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_ewrite_arg fd msg_ msg' (h++lt') lt23 rest;
+    lem_steps_transitive (EWrite fd msg) (EWrite fd msg_) (EWrite fd msg') h lt' lt23
+    end
+
 let rec construct_steps_ecase_cond
   (e1:closed_exp)
   (e1':closed_exp)
