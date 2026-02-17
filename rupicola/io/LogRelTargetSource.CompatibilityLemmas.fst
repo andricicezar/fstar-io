@@ -180,6 +180,22 @@ let equiv_oval_app #g
     end
   end
 
+let helper_equiv_oval_if_steps (h:history) (t:qType) (fs_c:fs_val qBool) (fs_t fs_f:fs_val t) (c e_t e_f:closed_exp) :
+  Lemma
+    (requires qBool ⊆ (h, fs_c, c) /\
+              t ⊆ (h, fs_t, e_t) /\
+              t ⊆ (h, fs_f, e_f))
+    (ensures exists (e':closed_exp). e_beh (EIf c e_t e_f) e' h [] /\ t ∈ (h, (if fs_c then fs_t else fs_f), e')) =
+  eliminate exists (c':closed_exp). e_beh c c' h [] /\ qBool ∈ (h, fs_c, c')
+    returns exists (e':closed_exp). e_beh (EIf c e_t e_f) e' h [] /\ t ∈ (h, (if fs_c then fs_t else fs_f), e') with _. begin
+  eliminate exists (e':closed_exp). e_beh (if fs_c then e_t else e_f) e' h [] /\ t ∈ (h, (if fs_c then fs_t else fs_f), e')
+    returns exists (e':closed_exp). e_beh (EIf c e_t e_f) e' h [] /\ t ∈ (h, (if fs_c then fs_t else fs_f), e') with _. begin
+  FStar.Squash.bind_squash #(steps c c' h []) () (fun sts1 ->
+    FStar.Squash.bind_squash #(steps (if fs_c then e_t else e_f) e' h []) () (fun sts2 ->
+      construct_steps_eif c c' e_t e_f e' h [] [] sts1 sts2))
+    end
+  end
+
 let equiv_oval_if #g
   (#t:qType)
   (fs_e1:fs_oval g qBool) (fs_e2:fs_oval g t) (fs_e3:fs_oval g t)
@@ -197,9 +213,34 @@ let equiv_oval_if #g
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
     introduce fsG `(≍) h` s ==> t ⊆ (h, fs_e, e) with _. begin
-      admit ()
+      helper_equiv_oval_if_steps h t fs_e1 fs_e2 fs_e3 e1 e2 e3
     end
   end
+
+#push-options "--z3rlimit 10"
+let helper_equiv_oval_pair_steps (h:history) (t1 t2:qType) (fs_e1:fs_val t1) (fs_e2:fs_val t2) (e1 e2:closed_exp) :
+  Lemma
+    (requires t1 ⊆ (h, fs_e1, e1) /\
+              t2 ⊆ (h, fs_e2, e2))
+    (ensures (t1 ^* t2) ⊆ (h, (fs_e1, fs_e2), EPair e1 e2)) =
+  let t = t1 ^* t2 in
+  eliminate exists (e1':closed_exp). e_beh e1 e1' h [] /\ t1 ∈ (h, fs_e1, e1')
+    returns t ⊆ (h, (fs_e1, fs_e2), EPair e1 e2) with _. begin
+  eliminate exists (e2':closed_exp). e_beh e2 e2' h [] /\ t2 ∈ (h, fs_e2, e2')
+    returns t ⊆ (h, (fs_e1, fs_e2), EPair e1 e2) with _. begin
+  lem_values_are_values t1 h fs_e1 e1';
+  lem_values_are_values t2 h fs_e2 e2';
+  lem_value_is_irred e1';
+  lem_value_is_irred e2';
+  assert (is_value (EPair e1' e2'));
+  lem_value_is_irred (EPair e1' e2');
+  assert (t ∈ (h, (fs_e1, fs_e2), EPair e1' e2'));
+  FStar.Squash.bind_squash #(steps e1 e1' h []) #(squash (t ⊆ (h, (fs_e1, fs_e2), EPair e1 e2))) () (fun (sts1:steps e1 e1' h []) ->
+  FStar.Squash.bind_squash #(steps e2 e2' h []) #(squash (t ⊆ (h, (fs_e1, fs_e2), EPair e1 e2))) () (fun (sts2:steps e2 e2' h []) ->
+  construct_steps_epair e1 e1' e2 e2' h [] [] sts1 sts2))
+  end
+  end
+#pop-options
 
 let equiv_oval_pair #g
   (#t1 #t2:qType)
@@ -218,8 +259,52 @@ let equiv_oval_pair #g
     assert (gsubst s (EPair e1 e2) == e);
     let EPair e1 e2 = e in
     introduce fsG `(≍) h` s ==>  t ⊆ (h, fs_e, e) with _. begin
-      admit ()
+      helper_equiv_oval_pair_steps h t1 t2 fs_e1 fs_e2 e1 e2
     end
+  end
+
+let helper_equiv_oval_fst_steps (h:history) (t1 t2:qType) (fs_e12:fs_val (t1 ^* t2)) (e12:closed_exp) :
+  Lemma
+    (requires (t1 ^* t2) ⊆ (h, fs_e12, e12))
+    (ensures t1 ⊆ (h, fst fs_e12, EFst e12)) =
+  eliminate exists (e12':closed_exp). e_beh e12 e12' h [] /\ (t1 ^* t2) ∈ (h, fs_e12, e12')
+    returns t1 ⊆ (h, fst fs_e12, EFst e12) with _. begin
+  let EPair e1' e2' = e12' in
+  assert (t1 ∈ (h, fst fs_e12, e1'));
+  assert (t2 ∈ (h, snd fs_e12, e2'));
+  lem_values_are_values t1 h (fst fs_e12) e1';
+  lem_values_are_values t2 h (snd fs_e12) e2';
+  lem_value_is_irred e1';
+  lem_value_is_irred e2';
+  lem_value_is_irred (EPair e1' e2');
+  let fst_ret : step (EFst (EPair e1' e2')) e1' h None = FstPairReturn h in
+  lem_step_implies_steps (EFst (EPair e1' e2')) e1' h None;
+  FStar.Squash.bind_squash #(steps e12 (EPair e1' e2') h []) #(squash (t1 ⊆ (h, fst fs_e12, EFst e12))) () (fun (sts12:steps e12 (EPair e1' e2') h []) ->
+    construct_steps_efst e12 (EPair e1' e2') h [] sts12;
+    lem_steps_transitive (EFst e12) (EFst (EPair e1' e2')) e1' h [] []
+  )
+  end
+
+let helper_equiv_oval_snd_steps (h:history) (t1 t2:qType) (fs_e12:fs_val (t1 ^* t2)) (e12:closed_exp) :
+  Lemma
+    (requires (t1 ^* t2) ⊆ (h, fs_e12, e12))
+    (ensures t2 ⊆ (h, snd fs_e12, ESnd e12)) =
+  eliminate exists (e12':closed_exp). e_beh e12 e12' h [] /\ (t1 ^* t2) ∈ (h, fs_e12, e12')
+    returns t2 ⊆ (h, snd fs_e12, ESnd e12) with _. begin
+  let EPair e1' e2' = e12' in
+  assert (t1 ∈ (h, fst fs_e12, e1'));
+  assert (t2 ∈ (h, snd fs_e12, e2'));
+  lem_values_are_values t1 h (fst fs_e12) e1';
+  lem_values_are_values t2 h (snd fs_e12) e2';
+  lem_value_is_irred e1';
+  lem_value_is_irred e2';
+  lem_value_is_irred (EPair e1' e2');
+  let snd_ret : step (ESnd (EPair e1' e2')) e2' h None = SndPairReturn h in
+  lem_step_implies_steps (ESnd (EPair e1' e2')) e2' h None;
+  FStar.Squash.bind_squash #(steps e12 (EPair e1' e2') h []) #(squash (t2 ⊆ (h, snd fs_e12, ESnd e12))) () (fun (sts12:steps e12 (EPair e1' e2') h []) ->
+    construct_steps_esnd e12 (EPair e1' e2') h [] sts12;
+    lem_steps_transitive (ESnd e12) (ESnd (EPair e1' e2')) e2' h [] []
+  )
   end
 
 let equiv_oval_pair_fst #g
@@ -237,7 +322,7 @@ let equiv_oval_pair_fst #g
     assert (gsubst s (EFst e12) == e);
     let EFst e12 = e in
     introduce fsG `(≍) h` s ==> t1 ⊆ (h, fs_e, e) with _. begin
-      admit ()
+      helper_equiv_oval_fst_steps h t1 t2 fs_e12 e12
     end
   end
 
@@ -253,7 +338,7 @@ let equiv_oval_pair_snd #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:ex
     assert (gsubst s (ESnd e12) == e);
     let ESnd e12 = e in
     introduce fsG `(≍) h` s ==> t2 ⊆ (h, fs_e, e) with _. begin
-      admit ()
+      helper_equiv_oval_snd_steps h t1 t2 fs_e12 e12
     end
   end
 

@@ -859,6 +859,112 @@ let construct_steps_eapp
   associative_history lt1 lt2 lt3;
   assert (steps (EApp e1 e2) e' h (lt1@(lt2@lt3)))
 
+let rec construct_steps_epair_e1
+  (e1:closed_exp)
+  (e1':closed_exp{is_value e1'})
+  (e2:closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (st1:steps e1 e1' h lt1) :
+  Lemma
+    (requires indexed_irred e1' (h++lt1))
+    (ensures steps (EPair e1 e2) (EPair e1' e2) h lt1)
+    (decreases st1) =
+  match st1 with
+  | SRefl e1 h -> ()
+  | STrans #e1 #e1_ #_ #h #oev1 #lt23 step_e1 step_e1_steps -> begin
+    let _ : step (EPair e1 e2) (EPair e1_ e2) h oev1 = PairLeft e2 step_e1 in
+    lem_step_implies_steps (EPair e1 e2) (EPair e1_ e2) h oev1;
+    let lt' : local_trace h = as_lt oev1 in
+    let s2 : steps e1_ e1' (h++lt') lt23 = step_e1_steps in
+    trans_history h lt' lt23;
+    construct_steps_epair_e1 e1_ e1' e2 (h++lt') lt23 s2;
+    lem_steps_transitive (EPair e1 e2) (EPair e1_ e2) (EPair e1' e2) h lt' lt23
+    end
+
+let rec construct_steps_epair_e2
+  (e1':closed_exp{is_value e1'})
+  (e2:closed_exp)
+  (e2':closed_exp{is_value e2'})
+  (h:history)
+  (lt2:local_trace h)
+  (st2:steps e2 e2' h lt2) :
+  Lemma
+    (requires indexed_irred e2' (h++lt2))
+    (ensures steps (EPair e1' e2) (EPair e1' e2') h lt2)
+    (decreases st2) =
+  match st2 with
+  | SRefl e2 h -> ()
+  | STrans #e2 #e2_ #_ #h #oev2 #lt23 step_e2 step_e2_steps -> begin
+    let _ : step (EPair e1' e2) (EPair e1' e2_) h oev2 = PairRight e1' step_e2 in
+    lem_step_implies_steps (EPair e1' e2) (EPair e1' e2_) h oev2;
+    let lt' : local_trace h = as_lt oev2 in
+    let s2 : steps e2_ e2' (h++lt') lt23 = step_e2_steps in
+    trans_history h lt' lt23;
+    construct_steps_epair_e2 e1' e2_ e2' (h++lt') lt23 s2;
+    lem_steps_transitive (EPair e1' e2) (EPair e1' e2_) (EPair e1' e2') h lt' lt23
+    end
+
+let construct_steps_epair
+  (e1:closed_exp)
+  (e1':closed_exp{is_value e1'})
+  (e2:closed_exp)
+  (e2':closed_exp{is_value e2'})
+  (h:history)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (sts1:steps e1 e1' h lt1)
+  (sts2:steps e2 e2' (h++lt1) lt2) :
+  Lemma (requires indexed_irred e1' (h++lt1) /\
+                  indexed_irred e2' ((h++lt1)++lt2))
+        (ensures steps (EPair e1 e2) (EPair e1' e2') h (lt1@lt2)) =
+  construct_steps_epair_e1 e1 e1' e2 h lt1 sts1;
+  construct_steps_epair_e2 e1' e2 e2' (h++lt1) lt2 sts2;
+  trans_history h lt1 lt2;
+  lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1' e2') h lt1 lt2
+
+let rec construct_steps_efst
+  (e12:closed_exp)
+  (e12':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e12 e12' h lt) :
+  Lemma
+    (requires indexed_irred e12' (h++lt))
+    (ensures steps (EFst e12) (EFst e12') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e12_ #_ #_ #oev #lt23 step12 rest -> begin
+    let _ : step (EFst e12) (EFst e12_) h oev = FstPair step12 in
+    lem_step_implies_steps (EFst e12) (EFst e12_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_efst e12_ e12' (h++lt') lt23 rest;
+    lem_steps_transitive (EFst e12) (EFst e12_) (EFst e12') h lt' lt23
+    end
+
+let rec construct_steps_esnd
+  (e12:closed_exp)
+  (e12':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e12 e12' h lt) :
+  Lemma
+    (requires indexed_irred e12' (h++lt))
+    (ensures steps (ESnd e12) (ESnd e12') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e12_ #_ #_ #oev #lt23 step12 rest -> begin
+    let _ : step (ESnd e12) (ESnd e12_) h oev = SndPair step12 in
+    lem_step_implies_steps (ESnd e12) (ESnd e12_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_esnd e12_ e12' (h++lt') lt23 rest;
+    lem_steps_transitive (ESnd e12) (ESnd e12_) (ESnd e12') h lt' lt23
+    end
+
 // DESTRUCT LEMMAS
 
 let can_step_eapp_when_reduced (e1:closed_exp{ELam? e1 /\ is_closed e1}) (e2:closed_exp) (h:history) : Lemma
