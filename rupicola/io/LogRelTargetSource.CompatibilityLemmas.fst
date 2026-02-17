@@ -537,7 +537,20 @@ let equiv_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
       let fs_x = fs_x fsG in
       let fs_e = return fs_x in
       let e = gsubst s x in
-      admit ()
+      introduce forall lt (fs_r:get_Type t). fs_beh fs_e h lt fs_r ==>
+        (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with begin
+        introduce fs_beh fs_e h lt fs_r ==>
+          (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with _. begin
+          theta_monad_morphism_ret fs_x;
+          let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == fs_x in
+          assert (hist_return fs_x h p);
+          assert (theta (io_return fs_x) h p);
+          assert (thetaP (io_return fs_x) h lt fs_r);
+          assert (p lt fs_r);
+          assert (lt == []);
+          assert (fs_r == fs_x)
+        end
+      end
     end
   end
 
@@ -651,7 +664,6 @@ let equiv_oprod_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod
     end
   end
 
-#push-options "--z3rlimit 10000"
 let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊏ cond /\ fs_inlc ⊑ inlc /\ fs_inrc ⊑ inrc)
@@ -661,31 +673,18 @@ let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_i
   lem_fv_in_env_lam g b inrc;
   equiv_oval_lambda_oprod fs_inlc inlc;
   equiv_oval_lambda_oprod fs_inrc inrc;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> c ⫃ (h,
-    (match fs_cond fsG with
-    | Inl x -> fs_inlc (stack fsG x)
-    | Inr x -> fs_inrc (stack fsG x)),
-    gsubst s (ECase cond inlc inrc)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> c ⫃ (h, fs_oprod_case_oval fs_cond fs_inlc fs_inrc fsG, gsubst s (ECase cond inlc inrc)) with begin
     let fs_cond = fs_cond fsG in
-    let fs_inlc' : fs_oval g (a ^->!@ c) = fun fsG x -> fs_inlc (stack fsG x) in
-    let fs_inlc' = fs_inlc' fsG in
-    let fs_inrc' : fs_oval g (b ^->!@ c) = fun fsG x -> fs_inrc (stack fsG x) in
-    let fs_inrc' = fs_inrc' fsG in
-    let fs_e = (match fs_cond with
-               | Inl x -> fs_inlc' x
-               | Inr x -> fs_inrc' x) in
-    let inlc' = subst (sub_elam s) inlc in
-    let inrc' = subst (sub_elam s) inrc in
-    assert (gsubst s (ELam inlc) == ELam inlc');
-    assert (gsubst s (ELam inrc) == ELam inrc');
-    let e = ECase (gsubst s cond) inlc' inrc' in
+    let fs_inlc' : fs_val (a ^->!@ c) = fun x -> fs_inlc (stack fsG x) in
+    let fs_inrc' : fs_val (b ^->!@ c) = fun x -> fs_inrc (stack fsG x) in
+    let fs_e = fs_prod_case_val fs_cond fs_inlc' fs_inrc' in
+    let e = ECase (gsubst s cond) (subst (sub_elam s) inlc) (subst (sub_elam s) inrc) in
     assert (gsubst s (ECase cond inlc inrc) == e);
     let ECase cond inlc inrc = e in
     introduce fsG `(≍) h` s ==> c ⫃ (h, fs_e, e) with _. begin
       admit ()
     end
   end
-#pop-options
 
 let equiv_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
