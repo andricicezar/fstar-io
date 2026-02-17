@@ -162,7 +162,7 @@ let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : T
       let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
       match inspect_ln qfs' with
       | Tv_FVar fv' ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivaiton!")
+        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
         else create_derivation g dbmap fvmap qfs'
       | _ -> create_derivation g dbmap fvmap qfs'
     end
