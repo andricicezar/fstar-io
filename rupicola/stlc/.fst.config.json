@@ -2,7 +2,6 @@
   "fstar_exe": "fstar.exe",
   "options": [ "--z3version", "4.15.2" ],
   "include_dirs": [
-    ".cache",
-    "lambdabox"
+    ".cache"
   ]
 }
