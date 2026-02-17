@@ -1373,6 +1373,21 @@ let equiv_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
     end
   end
 
+let helper_lemma_equiv_oprod_case #g #a #b
+  (fs_e:fs_oprod (extend a g) b)
+  (e:exp)
+  #bo (s:gsub g bo) (fsG:eval_env g) (h:history)
+  : Lemma
+    (requires fs_e ⊒ e /\ fsG `(∽) h` s /\ is_closed (ELam e))
+    (ensures (a ^->!@ b) ⊇ (h, fs_oval_lambda_oprod fs_e fsG, gsubst s (ELam e)))
+  = 
+  equiv_oval_lambda_oprod fs_e e;
+  let fs_il' : fs_oval g (a ^->!@ b) = (fun fsG x -> fs_e (stack fsG x)) in
+  assert (fs_il' ⊐ (ELam e));
+  eliminate forall bo (s:gsub g bo) (fsG:eval_env g) (h:history).
+    fsG `(∽) h` s ==> (a ^->!@ b) ⊇ (h, fs_il' fsG, gsubst s (ELam e)) 
+  with bo s fsG h
+
 let equiv_oprod_case #g (#a #b #c:qType)
   (fs_cond:fs_oprod g (a ^+ b))
   (fs_inlc:fs_oprod (extend a g) c)
@@ -1398,7 +1413,7 @@ let equiv_oprod_case #g (#a #b #c:qType)
         trefl ());
       let e = ECase (gsubst s cond) (STLC.subst (STLC.sub_elam s) inlc) (STLC.subst (STLC.sub_elam s) inrc) in
       assert (gsubst s (ECase cond inlc inrc) == e) by (trefl ());
-      let ECase cond inlc inrc = e in
+      let ECase e_sc e_il e_ir = e in
       introduce fsG `(∽) h` s ==> c ⫄ (h, fs_e, e) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
           introduce e_beh e e' h lt ==> (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
@@ -1407,19 +1422,29 @@ let equiv_oprod_case #g (#a #b #c:qType)
               let a_typ = type_quotation_to_typ (get_rel a) in
               let b_typ = type_quotation_to_typ (get_rel b) in
               lem_forall_values_are_values_prod (a ^+ b) h;
-              sem_expr_shape_prod fs_sc cond h;
-              assert (indexed_sem_expr_shape (TSum a_typ b_typ) cond h);
-              let (cond', (| lt1, lt2 |)) = destruct_steps_ecase cond inlc inrc e' h lt sts1 a_typ b_typ in
-              assert ((a ^+ b) ⫄ (h, fs_sc, cond));
-              eliminate forall lt1 cond'. e_beh cond cond' h lt1 ==> (exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_sc h lt1 fs_r_cond) with lt1 cond';
-              lem_value_is_irred cond';
+              sem_expr_shape_prod fs_sc e_sc h;
+              assert (indexed_sem_expr_shape (TSum a_typ b_typ) e_sc h);
+              let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_il e_ir e' h lt sts1 a_typ b_typ in
+              assert ((a ^+ b) ⫄ (h, fs_sc, e_sc));
+              eliminate forall lt1 e_sc'. e_beh e_sc e_sc' h lt1 ==> (exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, e_sc') /\ fs_beh fs_sc h lt1 fs_r_cond) with lt1 e_sc';
+              lem_value_is_irred e_sc';
               trans_history h lt1 lt2;
-              eliminate exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, cond') /\ fs_beh fs_sc h lt1 fs_r_cond
+              eliminate exists (fs_r_cond:fs_val (a ^+ b)). (a ^+ b) ∋ (h++lt1, fs_r_cond, e_sc') /\ fs_beh fs_sc h lt1 fs_r_cond
                 returns exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_values_are_expressions (a ^+ b) (h++lt1) fs_r_cond cond';
-              assume ((a ^->!@ c) ⊇ (h++lt1, fs_il, ELam inlc));
-              assume ((b ^->!@ c) ⊇ (h++lt1, fs_ir, ELam inrc));
-              helper_equiv_prod_case_val e' #(h++lt1) lt2 fs_r_cond fs_il fs_ir cond' inlc inrc;
+              lem_values_are_expressions (a ^+ b) (h++lt1) fs_r_cond e_sc';
+              eliminate True /\ True
+              returns (a ^->!@ c) ⊇ (h++lt1, fs_il, ELam e_il) with _ _. begin
+                lem_shift_type_value_environments h fsG s;
+                assume (is_closed (ELam inlc));
+                helper_lemma_equiv_oprod_case fs_inlc inlc s fsG (h++lt1)
+              end;
+              eliminate True /\ True
+              returns ((b ^->!@ c) ⊇ (h++lt1, fs_ir, ELam e_ir)) with _ _. begin
+                lem_shift_type_value_environments h fsG s;
+                assume (is_closed (ELam inrc));
+                helper_lemma_equiv_oprod_case fs_inrc inrc s fsG (h++lt1)
+              end;
+              helper_equiv_prod_case_val e' #(h++lt1) lt2 fs_r_cond fs_il fs_ir e_sc' e_il e_ir;
               eliminate exists (fs_r:fs_val c). c ∋ ((h++lt1)++lt2, fs_r, e') /\ fs_beh (fs_oprod_case_val fs_r_cond fs_inlc fs_inrc fsG) (h++lt1) lt2 fs_r
                 returns exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
                 lem_fs_beh_bind fs_sc h lt1 fs_r_cond (fun x -> fs_oprod_case_val x fs_inlc fs_inrc fsG) lt2 fs_r
@@ -1430,8 +1455,6 @@ let equiv_oprod_case #g (#a #b #c:qType)
       end
     end
   end
-
-#push-options "--print_implicits"
 
 let equiv_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
