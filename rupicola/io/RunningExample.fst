@@ -1,18 +1,15 @@
 module RunningExample
 
 open IO
+open Metaprogram
 
-type task_t =
-| ReplaceWith : string -> task_t
-| Truncate : nat -> task_t
-| Append : string -> task_t
+(* The task is to append the string *)
+unfold
+type task_t = string
 
 val validate : string -> task_t -> string -> bool
 let validate olds ts news =
-  match ts with
-  | ReplaceWith s -> news = s
-  | Truncate n -> n <= String.length olds && news = String.sub olds 0 n
-  | Append s -> news = olds ^ s
+  news = olds ^ ts
 
 let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
@@ -31,3 +28,6 @@ let wrapper f task agent =
   if validate contents task new_contents
   then io_return (Inl ())
   else io_return (Inr ())
+
+[@expect_failure]
+%splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`ExamplesIO.utf8_encode;`wrapper])
