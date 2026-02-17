@@ -42,26 +42,25 @@ The TODOs for the paper, are in the paper.
   - [x] working on IO examples
   - [ ] working on the running example (@Theo)
 
-- [ ] Admits
+- [ ] Admits 
   - [ ] QTyp.fst 
     - [ ] `lem_substitution`
     ```fstar
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
 	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
-  - [ ] LogRelTargetSource.fst
-    - [ ] `safety_prod` (we do not use this, do we need it?)
-  - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] 2 lemmas with silly assumes
-  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
-    - [ ] 26 admitted compatibility lemmas
-
+    
 - [ ] Prepare artifact
   - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
 
+- [ ] Admits (the other direction of the logical relation)
+  - [ ] LogRelTargetSource.fst
+    - [ ] `safety_prod` (we do not use this, do we need it?)
+  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
+    - [ ] 26 admitted compatibility lemmas
 
 
 ### Old todos

@@ -1378,7 +1378,7 @@ let helper_lemma_equiv_oprod_case #g #a #b
   (e:exp)
   #bo (s:gsub g bo) (fsG:eval_env g) (h:history)
   : Lemma
-    (requires fs_e ⊒ e /\ fsG `(∽) h` s /\ is_closed (ELam e))
+    (requires fs_e ⊒ e /\ fsG `(∽) h` s /\ fv_in_env g (ELam e))
     (ensures (a ^->!@ b) ⊇ (h, fs_oval_lambda_oprod fs_e fsG, gsubst s (ELam e)))
   = 
   equiv_oval_lambda_oprod fs_e e;
@@ -1435,13 +1435,13 @@ let equiv_oprod_case #g (#a #b #c:qType)
               eliminate True /\ True
               returns (a ^->!@ c) ⊇ (h++lt1, fs_il, ELam e_il) with _ _. begin
                 lem_shift_type_value_environments h fsG s;
-                assume (is_closed (ELam inlc));
+                lem_fv_in_env_lam g a inlc;
                 helper_lemma_equiv_oprod_case fs_inlc inlc s fsG (h++lt1)
               end;
               eliminate True /\ True
               returns ((b ^->!@ c) ⊇ (h++lt1, fs_ir, ELam e_ir)) with _ _. begin
                 lem_shift_type_value_environments h fsG s;
-                assume (is_closed (ELam inrc));
+                lem_fv_in_env_lam g b inrc;
                 helper_lemma_equiv_oprod_case fs_inrc inrc s fsG (h++lt1)
               end;
               helper_equiv_prod_case_val e' #(h++lt1) lt2 fs_r_cond fs_il fs_ir e_sc' e_il e_ir;
