@@ -22,14 +22,6 @@ The TODOs for the paper, are in the paper.
   - [x] working on IO examples
   - [ ] working on the running example (@Theo)
 
-- [ ] Admits 
-  - [ ] QTyp.fst 
-    - [ ] `lem_substitution`
-    ```fstar
-    let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
-	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
-    ```
-
 - [ ] Prepare artifact
   - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
