@@ -342,6 +342,38 @@ let equiv_oval_pair_snd #g (#t1 #t2:qType) (fs_e12:fs_oval g (t1 ^* t2)) (e12:ex
     end
   end
 
+let helper_equiv_oval_inl_steps (h:history) (t1 t2:qType) (fs_e:fs_val t1) (e:closed_exp) :
+  Lemma
+    (requires t1 ⊆ (h, fs_e, e))
+    (ensures (t1 ^+ t2) ⊆ (h, Inl #(get_Type t1) #(get_Type t2) fs_e, EInl e)) =
+  eliminate exists (e':closed_exp). e_beh e e' h [] /\ t1 ∈ (h, fs_e, e')
+    returns (t1 ^+ t2) ⊆ (h, Inl #(get_Type t1) #(get_Type t2) fs_e, EInl e) with _. begin
+  lem_values_are_values t1 h fs_e e';
+  lem_value_is_irred e';
+  lem_value_is_irred (EInl e');
+  assert ((t1 ^+ t2) ∈ (h, Inl #(get_Type t1) #(get_Type t2) fs_e, EInl e'));
+  assert (e_beh (EInl e') (EInl e') h []);
+  FStar.Squash.bind_squash #(steps e e' h []) #(squash ((t1 ^+ t2) ⊆ (h, Inl #(get_Type t1) #(get_Type t2) fs_e, EInl e))) () (fun (sts:steps e e' h []) ->
+    construct_steps_einl e e' h [] sts;
+    lem_steps_transitive (EInl e) (EInl e') (EInl e') h [] [])
+  end
+
+let helper_equiv_oval_inr_steps (h:history) (t1 t2:qType) (fs_e:fs_val t2) (e:closed_exp) :
+  Lemma
+    (requires t2 ⊆ (h, fs_e, e))
+    (ensures (t1 ^+ t2) ⊆ (h, Inr #(get_Type t1) #(get_Type t2) fs_e, EInr e)) =
+  eliminate exists (e':closed_exp). e_beh e e' h [] /\ t2 ∈ (h, fs_e, e')
+    returns (t1 ^+ t2) ⊆ (h, Inr #(get_Type t1) #(get_Type t2) fs_e, EInr e) with _. begin
+  lem_values_are_values t2 h fs_e e';
+  lem_value_is_irred e';
+  lem_value_is_irred (EInr e');
+  assert ((t1 ^+ t2) ∈ (h, Inr #(get_Type t1) #(get_Type t2) fs_e, EInr e'));
+  assert (e_beh (EInr e') (EInr e') h []);
+  FStar.Squash.bind_squash #(steps e e' h []) #(squash ((t1 ^+ t2) ⊆ (h, Inr #(get_Type t1) #(get_Type t2) fs_e, EInr e))) () (fun (sts:steps e e' h []) ->
+    construct_steps_einr e e' h [] sts;
+    lem_steps_transitive (EInr e) (EInr e') (EInr e') h [] [])
+  end
+
 let equiv_oval_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
   (requires fs_e ⊏ e)
   (ensures fs_oval_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊏ (EInl e)) =
@@ -354,7 +386,7 @@ let equiv_oval_inl #g (#t1 t2:qType) (fs_e:fs_oval g t1) (e:exp) : Lemma
     assert (gsubst s (EInl e) == ex);
     let EInl e = ex in
     introduce fsG `(≍) h` s ==> t ⊆ (h, fs_ex, ex) with _. begin
-      admit ()
+      helper_equiv_oval_inl_steps h t1 t2 fs_e e
     end
   end
 
@@ -370,11 +402,64 @@ let equiv_oval_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
     assert (gsubst s (EInr e) == ex);
     let EInr e = ex in
     introduce fsG `(≍) h` s ==> t ⊆ (h, fs_ex, ex) with _. begin
-      admit ()
+      helper_equiv_oval_inr_steps h t1 t2 fs_e e
     end
   end
 
-#push-options "--z3rlimit 10000"
+#push-options "--z3rlimit 15"
+let helper_equiv_oval_case_steps (h:history) (t1 t2 t3:qType)
+  (fs_case:fs_val (t1 ^+ t2))
+  (fs_lc_lam:fs_val (t1 ^-> t3))
+  (fs_rc_lam:fs_val (t2 ^-> t3))
+  (e_case:closed_exp)
+  (e_lc:exp{is_closed (ELam e_lc)})
+  (e_rc:exp{is_closed (ELam e_rc)}) :
+  Lemma
+    (requires (t1 ^+ t2) ⊆ (h, fs_case, e_case) /\
+              (t1 ^-> t3) ⊆ (h, fs_lc_lam, ELam e_lc) /\
+              (t2 ^-> t3) ⊆ (h, fs_rc_lam, ELam e_rc))
+    (ensures t3 ⊆ (h, fs_val_case fs_case fs_lc_lam fs_rc_lam, ECase e_case e_lc e_rc)) =
+  eliminate exists (ec':closed_exp). e_beh e_case ec' h [] /\ (t1 ^+ t2) ∈ (h, fs_case, ec')
+    returns t3 ⊆ (h, fs_val_case fs_case fs_lc_lam fs_rc_lam, ECase e_case e_lc e_rc) with _. begin
+  lem_values_are_values (t1 ^+ t2) h fs_case ec';
+  match fs_case with
+  | Inl x -> begin
+    let EInl v = ec' in
+    lem_values_are_values t1 h x v;
+    eliminate exists (elc':closed_exp). e_beh (ELam e_lc) elc' h [] /\ (t1 ^-> t3) ∈ (h, fs_lc_lam, elc')
+      returns t3 ⊆ (h, fs_lc_lam x, ECase e_case e_lc e_rc) with _. begin
+    steps_val_id (ELam e_lc) elc' h;
+    unfold_member_of_arrow t1 t3 h fs_lc_lam e_lc;
+    eliminate forall (v':value) (fs_v:fs_val t1) (lt_v:local_trace h).
+      t1 ∈ (h++lt_v, fs_v, v') ==> t3 ⊆ (h++lt_v, fs_lc_lam fs_v, subst_beta v' e_lc) with v x [];
+    eliminate exists (e':closed_exp). e_beh (subst_beta v e_lc) e' h [] /\ t3 ∈ (h, fs_lc_lam x, e')
+      returns t3 ⊆ (h, fs_lc_lam x, ECase e_case e_lc e_rc) with _. begin
+    FStar.Squash.bind_squash #(steps e_case (EInl v) h []) #(squash (t3 ⊆ (h, fs_lc_lam x, ECase e_case e_lc e_rc))) () (fun (sts1:steps e_case (EInl v) h []) ->
+    FStar.Squash.bind_squash #(steps (subst_beta v e_lc) e' h []) #(squash (t3 ⊆ (h, fs_lc_lam x, ECase e_case e_lc e_rc))) () (fun (sts2:steps (subst_beta v e_lc) e' h []) ->
+      construct_steps_ecase_inl e_case v e_lc e_rc e' h [] [] sts1 sts2))
+    end
+    end
+  end
+  | Inr x -> begin
+    let EInr v = ec' in
+    lem_values_are_values t2 h x v;
+    eliminate exists (erc':closed_exp). e_beh (ELam e_rc) erc' h [] /\ (t2 ^-> t3) ∈ (h, fs_rc_lam, erc')
+      returns t3 ⊆ (h, fs_rc_lam x, ECase e_case e_lc e_rc) with _. begin
+    steps_val_id (ELam e_rc) erc' h;
+    unfold_member_of_arrow t2 t3 h fs_rc_lam e_rc;
+    eliminate forall (v':value) (fs_v:fs_val t2) (lt_v:local_trace h).
+      t2 ∈ (h++lt_v, fs_v, v') ==> t3 ⊆ (h++lt_v, fs_rc_lam fs_v, subst_beta v' e_rc) with v x [];
+    eliminate exists (e':closed_exp). e_beh (subst_beta v e_rc) e' h [] /\ t3 ∈ (h, fs_rc_lam x, e')
+      returns t3 ⊆ (h, fs_rc_lam x, ECase e_case e_lc e_rc) with _. begin
+    FStar.Squash.bind_squash #(steps e_case (EInr v) h []) #(squash (t3 ⊆ (h, fs_rc_lam x, ECase e_case e_lc e_rc))) () (fun (sts1:steps e_case (EInr v) h []) ->
+    FStar.Squash.bind_squash #(steps (subst_beta v e_rc) e' h []) #(squash (t3 ⊆ (h, fs_rc_lam x, ECase e_case e_lc e_rc))) () (fun (sts2:steps (subst_beta v e_rc) e' h []) ->
+      construct_steps_ecase_inr e_case v e_lc e_rc e' h [] [] sts1 sts2))
+    end
+    end
+  end
+  end
+#pop-options
+
 let equiv_oval_case
   #g
   (#t1 #t2 #t3:qType)
@@ -390,31 +475,18 @@ let equiv_oval_case
   lem_fv_in_env_lam g t2 e_rc;
   equiv_oval_lambda #g #t1 #t3 fs_lc e_lc;
   equiv_oval_lambda #g #t2 #t3 fs_rc e_rc;
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t3 ⊆ (h,
-    (match fs_case fsG with
-    | Inl x -> fs_lc (stack fsG x)
-    | Inr x -> fs_rc (stack fsG x)),
-    gsubst s (ECase e_case e_lc e_rc)) with begin
+  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t3 ⊆ (h, fs_oval_case fs_case fs_lc fs_rc fsG, gsubst s (ECase e_case e_lc e_rc)) with begin
     let fs_case = fs_case fsG in
-    let fs_lc_lam : fs_oval g (t1 ^-> t3) = fun fsG x -> fs_lc (stack fsG x) in
-    let fs_lc_lam = fs_lc_lam fsG in
-    let fs_rc_lam : fs_oval g (t2 ^-> t3) = fun fsG x -> fs_rc (stack fsG x) in
-    let fs_rc_lam = fs_rc_lam fsG in
-    let fs_e = (match fs_case with
-               | Inl x -> fs_lc_lam x
-               | Inr x -> fs_rc_lam x) in
-    let e_lc' = subst (sub_elam s) e_lc in
-    let e_rc' = subst (sub_elam s) e_rc in
-    assert (gsubst s (ELam e_lc) == ELam e_lc');
-    assert (gsubst s (ELam e_rc) == ELam e_rc');
-    let e = ECase (gsubst s e_case) e_lc' e_rc' in
+    let fs_lc_lam : fs_val (t1 ^-> t3) = fun x -> fs_lc (stack fsG x) in
+    let fs_rc_lam : fs_val (t2 ^-> t3) = fun  x -> fs_rc (stack fsG x) in
+    let fs_e = (fs_val_case fs_case fs_lc_lam fs_rc_lam) in
+    let e = ECase (gsubst s e_case) (subst (sub_elam s) e_lc) (subst (sub_elam s) e_rc) in
     assert (gsubst s (ECase e_case e_lc e_rc) == e);
     let ECase e_case e_lc e_rc = e in
     introduce fsG `(≍) h` s ==> t3 ⊆ (h, fs_e, e) with _. begin
-      admit ()
+      helper_equiv_oval_case_steps h t1 t2 t3 fs_case fs_lc_lam fs_rc_lam e_case e_lc e_rc
     end
   end
-#pop-options
 
 let equiv_oval_lambda_oprod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (extend t1 g) t2) (body:exp)
   : Lemma

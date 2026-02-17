@@ -965,6 +965,115 @@ let rec construct_steps_esnd
     lem_steps_transitive (ESnd e12) (ESnd e12_) (ESnd e12') h lt' lt23
     end
 
+let rec construct_steps_einl
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (EInl e) (EInl e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (EInl e) (EInl e_) h oev = SInl step_e in
+    lem_step_implies_steps (EInl e) (EInl e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_einl e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (EInl e) (EInl e_) (EInl e') h lt' lt23
+    end
+
+let rec construct_steps_einr
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (EInr e) (EInr e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (EInr e) (EInr e_) h oev = SInr step_e in
+    lem_step_implies_steps (EInr e) (EInr e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_einr e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (EInr e) (EInr e_) (EInr e') h lt' lt23
+    end
+
+let rec construct_steps_ecase_cond
+  (e1:closed_exp)
+  (e1':closed_exp)
+  (e2:exp{is_closed (ELam e2)})
+  (e3:exp{is_closed (ELam e3)})
+  (h:history)
+  (lt1:local_trace h)
+  (sts1:steps e1 e1' h lt1) :
+  Lemma
+    (requires indexed_irred e1' (h++lt1))
+    (ensures steps (ECase e1 e2 e3) (ECase e1' e2 e3) h lt1)
+    (decreases sts1) =
+  match sts1 with
+  | SRefl _ _ -> ()
+  | STrans #_ #e1_ #_ #_ #oev1 #lt23 step_e1 step_e1_steps -> begin
+    let _ : step (ECase e1 e2 e3) (ECase e1_ e2 e3) h oev1 = SCase e2 e3 step_e1 in
+    lem_step_implies_steps (ECase e1 e2 e3) (ECase e1_ e2 e3) h oev1;
+    let lt' : local_trace h = as_lt oev1 in
+    trans_history h lt' lt23;
+    construct_steps_ecase_cond e1_ e1' e2 e3 (h++lt') lt23 step_e1_steps;
+    lem_steps_transitive (ECase e1 e2 e3) (ECase e1_ e2 e3) (ECase e1' e2 e3) h lt' lt23
+    end
+
+let construct_steps_ecase_inl
+  (e1:closed_exp)
+  (v:closed_exp{is_value v})
+  (e2:exp{is_closed (ELam e2)})
+  (e3:exp{is_closed (ELam e3)})
+  (e':closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (sts1:steps e1 (EInl v) h lt1)
+  (sts2:steps (subst_beta v e2) e' (h++lt1) lt2) :
+  Lemma
+    (requires indexed_irred (EInl v) (h++lt1) /\
+              indexed_irred e' ((h++lt1)++lt2))
+    (ensures steps (ECase e1 e2 e3) e' h (lt1@lt2)) =
+  construct_steps_ecase_cond e1 (EInl v) e2 e3 h lt1 sts1;
+  let _ : step (ECase (EInl v) e2 e3) (subst_beta v e2) (h++lt1) None = SInlReturn v e2 e3 (h++lt1) in
+  lem_step_implies_steps (ECase (EInl v) e2 e3) (subst_beta v e2) (h++lt1) None;
+  trans_history h lt1 lt2;
+  lem_steps_transitive (ECase (EInl v) e2 e3) (subst_beta v e2) e' (h++lt1) [] lt2;
+  lem_steps_transitive (ECase e1 e2 e3) (ECase (EInl v) e2 e3) e' h lt1 lt2
+
+let construct_steps_ecase_inr
+  (e1:closed_exp)
+  (v:closed_exp{is_value v})
+  (e2:exp{is_closed (ELam e2)})
+  (e3:exp{is_closed (ELam e3)})
+  (e':closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (sts1:steps e1 (EInr v) h lt1)
+  (sts2:steps (subst_beta v e3) e' (h++lt1) lt2) :
+  Lemma
+    (requires indexed_irred (EInr v) (h++lt1) /\
+              indexed_irred e' ((h++lt1)++lt2))
+    (ensures steps (ECase e1 e2 e3) e' h (lt1@lt2)) =
+  construct_steps_ecase_cond e1 (EInr v) e2 e3 h lt1 sts1;
+  let _ : step (ECase (EInr v) e2 e3) (subst_beta v e3) (h++lt1) None = SInrReturn v e2 e3 (h++lt1) in
+  lem_step_implies_steps (ECase (EInr v) e2 e3) (subst_beta v e3) (h++lt1) None;
+  trans_history h lt1 lt2;
+  lem_steps_transitive (ECase (EInr v) e2 e3) (subst_beta v e3) e' (h++lt1) [] lt2;
+  lem_steps_transitive (ECase e1 e2 e3) (ECase (EInr v) e2 e3) e' h lt1 lt2
+
 // DESTRUCT LEMMAS
 
 let can_step_eapp_when_reduced (e1:closed_exp{ELam? e1 /\ is_closed e1}) (e2:closed_exp) (h:history) : Lemma
