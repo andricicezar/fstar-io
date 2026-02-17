@@ -2,26 +2,6 @@
 
 The TODOs for the paper, are in the paper.
 
-- [ ] Compatibility lemmas (@Abigal)
-  - [ ] Make the proofs stable
-  - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [x] Admit free `equiv_oval_app`
-    - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_bind`
-    - [x] Admit free `equiv_oprod_app`
-    - [x] Admit free `equiv_oval_lambda`
-    - [x] Admit free `equiv_oval_lambda_oprod`
-    - [x] Admit free `equiv_oprod_lambda`
-  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
-    - [x] Admit free `equiv_oval_app`
-    - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_bind`
-    - [ ] Admit free `equiv_oprod_app` (+ @Danel)
-    - [x] Admit free `equiv_oval_lambda`
-    - [x] Admit free `equiv_oval_lambda_oprod`
-    - [x] Admit free `equiv_oprod_lambda`
-  - [ ] Do we agree that proving these lemmas is enough to be confident that we can prove the other compatibility lemmas?
-
 - [ ] Running example (@Theo)
   - [ ] @everyone, give feedback on the running example in the paper
   - [ ] implement the running example in F*
@@ -49,7 +29,7 @@ The TODOs for the paper, are in the paper.
     let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
 	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
     ```
-    
+
 - [ ] Prepare artifact
   - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
@@ -60,8 +40,14 @@ The TODOs for the paper, are in the paper.
   - [ ] LogRelTargetSource.fst
     - [ ] `safety_prod` (we do not use this, do we need it?)
   - [ ] LogRelTargetSource.CompatibilityLemmas.fst
+    - [x] Admit free `equiv_oval_app`
+    - [x] Admit free `equiv_oprod_app_oval_oval`
+    - [ ] Admit free `equiv_oprod_bind`
+    - [ ] Admit free `equiv_oprod_app` (+ @Danel)
+    - [x] Admit free `equiv_oval_lambda`
+    - [x] Admit free `equiv_oval_lambda_oprod`
+    - [x] Admit free `equiv_oprod_lambda`
     - [ ] 26 admitted compatibility lemmas
-
 
 ### Old todos
 
