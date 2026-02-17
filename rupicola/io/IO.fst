@@ -125,6 +125,17 @@ let lem_theta_open arg res h =
     end
   end
 
+let destruct_thetaP_open arg h lt fs_r =
+  let p : hist_post h (io_res OOpen arg) = fun lt' r' ->
+    (r' == Inl (fresh_fd h) /\ lt' == [EvOpen arg (Inl (fresh_fd h))]) \/
+    (r' == Inr () /\ lt' == [EvOpen arg (Inr ())]) in
+  match openfile arg with
+  | Return _ -> false_elim ()
+  | Call OOpen arg' k -> begin
+    assert (theta (openfile arg) h p) by (compute ());
+    assert (p lt fs_r)
+    end
+
 let lem_theta_read arg res h =
   assert (thetaP (read arg) h (ev_lt (EvRead arg res)) res) by (compute ())
 
@@ -133,6 +144,33 @@ let lem_theta_write arg res h =
 
 let lem_theta_close arg res h =
   assert (thetaP (close arg) h (ev_lt (EvClose arg res)) res) by (compute ())
+
+let destruct_thetaP_read arg h lt fs_r =
+  let p : hist_post h (io_res ORead arg) = fun lt' r' -> lt' == [EvRead arg r'] in
+  match read arg with
+  | Return _ -> false_elim ()
+  | Call ORead arg' k -> begin
+    assert (theta (read arg) h p) by (compute ());
+    assert (p lt fs_r)
+    end
+
+let destruct_thetaP_write arg h lt fs_r =
+  let p : hist_post h (io_res OWrite arg) = fun lt' r' -> lt' == [EvWrite arg r'] in
+  match write arg with
+  | Return _ -> false_elim ()
+  | Call OWrite arg' k -> begin
+    assert (theta (write arg) h p) by (compute ());
+    assert (p lt fs_r)
+    end
+
+let destruct_thetaP_close arg h lt fs_r =
+  let p : hist_post h (io_res OClose arg) = fun lt' r' -> lt' == [EvClose arg r'] in
+  match close arg with
+  | Return _ -> false_elim ()
+  | Call OClose arg' k -> begin
+    assert (theta (close arg) h p) by (compute ());
+    assert (p lt fs_r)
+    end
 
 let thetaP_shift_op_lt #t (o:io_ops) (args:io_args o) (k:io_res o args -> io t) (r:io_res o args) (h:history) (lt:local_trace h) 
   : Lemma 

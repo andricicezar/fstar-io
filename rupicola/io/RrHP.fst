@@ -73,10 +73,25 @@ type behT_t = local_trace [] * closed_exp -> Type0
 val behT : wt:wholeT -> behT_t
 let behT wt = fun (lt, r) -> e_beh wt r [] lt
 
+unfold val behT_in_behS : behT_t -> behS_t -> Type0
+let behT_in_behS bt bs = 
+  (forall rT lt. bt (lt, rT) ==> (exists rS. rel_bools rS rT /\ bs lt rS))
+
 val rel_behs : behS_t -> behT_t -> Type0
-let rel_behs (bs:behS_t) (bt:behT_t) =
-  (forall rS lt. bs lt rS ==>  (exists rT. rel_bools rS rT /\ bt (lt, rT))) /\
-  (forall rT lt. bt (lt, rT) ==>  (exists rS. rel_bools rS rT /\ bs lt rS))
+let rel_behs bs bt =
+  (forall rS lt. bs lt rS ==> (exists rT. rel_bools rS rT /\ bt (lt, rT))) /\
+  behT_in_behS bt bs
+
+let lem_rel_behTS (fs_e:wholeS) (e:wholeT)
+  : Lemma
+  (requires valid_superset_prod fs_e e)
+  (ensures  (behT e) `behT_in_behS` (behS fs_e))
+  =
+  introduce forall rT lt. (behT e) (lt, rT) ==> (exists rS. rel_bools rS rT /\ (behS fs_e) lt rS) with begin
+    introduce _ ==> _ with _. begin
+      ()
+    end
+  end
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
@@ -88,11 +103,7 @@ let lem_rel_beh (fs_e:wholeS) (e:wholeT)
       assert ((fs_beh fs_e []) lt rS)
     end
   end;
-  introduce forall rT lt. (behT e) (lt, rT) ==> (exists rS. rel_bools rS rT /\ (behS fs_e) lt rS) with begin
-    introduce _ ==> _ with _. begin
-      ()
-    end
-  end
+  lem_rel_behTS fs_e e
 
 (** ** Proof of RrHP **)
 
@@ -101,12 +112,69 @@ let backtranslate_ctx (#i:intS) (ctxt:ctxT (comp_int i)) : ctxS i =
   let (| e, h |) = ctxt in
   backtranslate h
 
-(** This variant implies RrHP **)
-let rrhp_1 (#i:intS) =
+let rrhp (i:intS) =
+  forall ct. exists cs.
+    forall (ps:progS i).
+      behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
+
+let rschc (i:intS) =
+  forall (ps:progS i).
+    forall ct. exists cs.
+      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs) 
+
+let r2rtc (i:intS) =
+  forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
+    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
+      (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
+
+(** Variants that use backtranslation and imply the original criteria **)
+let rrhp_1 (i:intS) =
   forall (ps:progS i).
     forall ct. behS (linkS ps (backtranslate_ctx ct)) `rel_behs` behT (linkT (compile_prog ps) ct)
 
-#push-options "--z3rlimit 30"
+let rrhp_1_implies_rrhp (i:intS) :
+  Lemma (requires rrhp_1 i)
+        (ensures rrhp i) =
+  introduce forall ct. 
+    exists cs. forall (ps:progS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
+  with begin
+    introduce exists cs. forall (ps:progS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
+    with (backtranslate_ctx ct) and ()
+  end
+
+let rschc_1 (i:intS) =
+  forall (ps:progS i).
+    forall ct.
+      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps (backtranslate_ctx ct)) 
+
+let rschc_1_implies_rschs (i:intS) :
+  Lemma (requires rschc_1 i)
+        (ensures rschc i) = 
+  introduce forall (ps:progS i) ct. exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs) with
+    introduce exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs)
+    with (backtranslate_ctx ct) and ()
+
+let r2rtc_1 (i:intS) =
+  forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
+    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
+      (exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
+                         (behS (linkS ps1 (backtranslate_ctx ct)) lt1 rs1) /\ (behS (linkS ps2 (backtranslate_ctx ct)) lt2 rs2))
+                      
+let r2rtc_1_implies_r2rtc (i:intS) :
+  Lemma (requires r2rtc_1 i)
+        (ensures r2rtc i) =
+  introduce forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
+    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
+      (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
+  with
+    introduce _ ==> _ with _.
+      introduce exists cs. exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
+                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2)
+      with (backtranslate_ctx ct) and ()
+
+
 let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   : Lemma 
       (requires ELam? pt /\ is_value ct)
@@ -153,12 +221,48 @@ let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   (* Pointwise equivalence of behT: follows from steps equivalence *)
   introduce forall (lt:local_trace h0) (r:closed_exp).
     behT (EApp pt ct) (lt, r) <==> behT sb (lt, r)
-  with begin
+  with ()
+  
+let proof_rschc_1 i : Lemma (rschc_1 i) =
+  introduce forall pS cT. behT (linkT (compile_prog pS) cT) `behT_in_behS` behS (linkS pS (backtranslate_ctx cT)) with begin
+    let t : qType = i.ct in
+    let ps = dfst pS in
+    let qps = dsnd pS in
+    let pt : progT (comp_int i) = compile_prog pS in
+    assert (pt == compile qps);
+    let cs = backtranslate_ctx cT in
+    let (| ct, tyj |) = cT in
+    let ws : wholeS = ps cs in
+    lem_compile_closed_arrow_is_elam qps;
+    assert (ELam? pt /\ is_closed pt);
+    let wt : wholeT = subst_beta ct (ELam?.b pt) in
+
+    eliminate True /\ True
+    returns valid_superset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+      lem_compile_closed_valid qps;
+      assert (valid_contains ps pt);
+      Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∋ **)
+      assert (forall h (v:value) (fs_v:get_Type t) (lt_v:local_trace h). t ∋ (h++lt_v, fs_v, v) ==>
+                qBool ⫄ (h++lt_v, ps fs_v, subst_beta v (ELam?.b pt)));
+        (** eliminate v fs_v with ct cs **)
+      assert (forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==>
+                qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt)));
+      introduce forall h. t ∋ (h, cs, ct) ==> qBool ⫄ (h, ps cs, subst_beta ct (ELam?.b pt)) with begin
+        eliminate forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==> qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
+        with h []
+      end;
+      lem_backtranslate (dsnd cT);
+      assert (valid_superset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
+    end;
+    lem_rel_behTS ws (subst_beta ct (ELam?.b pt));
+    lem_app_eq_subst_beta pt ct;
     ()
   end
-#pop-options
 
-let proof_rrhp_1 i : Lemma (rrhp_1 #i) =
+let proof_r2rtc_1 i : Lemma (r2rtc_1 i) =
+  proof_rschc_1 i
+
+let proof_rrhp_1 i : Lemma (rrhp_1 i) =
   introduce forall pS cT. behS (linkS pS (backtranslate_ctx cT)) `rel_behs` behT (linkT (compile_prog pS) cT) with begin
     let t : qType = i.ct in
     let ps = dfst pS in

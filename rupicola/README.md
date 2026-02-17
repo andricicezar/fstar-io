@@ -2,26 +2,6 @@
 
 The TODOs for the paper, are in the paper.
 
-- [ ] Compatibility lemmas (@Abigal)
-  - [ ] Make the proofs stable
-  - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [x] Admit free `equiv_oval_app`
-    - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_bind`
-    - [x] Admit free `equiv_oprod_app`
-    - [x] Admit free `equiv_oval_lambda`
-    - [x] Admit free `equiv_oval_lambda_oprod`
-    - [x] Admit free `equiv_oprod_lambda`
-  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
-    - [x] Admit free `equiv_oval_app`
-    - [x] Admit free `equiv_oprod_app_oval_oval`
-    - [ ] Admit free `equiv_oprod_bind`
-    - [ ] Admit free `equiv_oprod_app` (+ @Danel)
-    - [x] Admit free `equiv_oval_lambda`
-    - [x] Admit free `equiv_oval_lambda_oprod`
-    - [x] Admit free `equiv_oprod_lambda`
-  - [ ] Do we agree that proving these lemmas is enough to be confident that we can prove the other compatibility lemmas?
-
 - [ ] Running example (@Theo)
   - [ ] @everyone, give feedback on the running example in the paper
   - [ ] implement the running example in F*
@@ -42,35 +22,11 @@ The TODOs for the paper, are in the paper.
   - [x] working on IO examples
   - [ ] working on the running example (@Theo)
 
-- [ ] Admits
-  - [ ] QTyp.fst 
-    - [ ] `lem_substitution`
-    ```fstar
-    let lem_substitution #g #b (s:gsub g b) (t:qType) (v:value) (e:exp)
-	: Lemma ((subst (sub_beta v) (subst (sub_elam s) e)) == (subst (gsub_extend s t v) e))
-    ```
-  - [ ] STLC.fst
-    - [ ] assume in `subst_beta`
-    - [ ] `lem_destruct_steps_epair_fst`
-    - [ ] `lem_destruct_steps_epair_snd`
-    - [ ] one case in `lem_shifting_preserves_closed`
-    - [ ] admits and assumes in `lem_subst_freevars_closes_exp`
-  - [ ] LogRelTargetSource.fst
-    - [ ] `safety_prod` (we do not use this, do we need it?)
-  - [ ] LogRelSourceTarget.CompatibilityLemmas.fst
-    - [ ] 2 lemmas with silly assumes
-  - [ ] LogRelTargetSource.CompatibilityLemmas.fst
-    - [ ] 26 admitted compatibility lemmas
-  - [ ] Compilation.fst
-    - [ ] Two big assumes in `lem_compile_closed_valid`
-
 - [ ] Prepare artifact
   - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
   - [ ] Cleanup comments
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
-
-
 
 ### Old todos
 

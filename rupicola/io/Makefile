@@ -3,6 +3,7 @@ FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
 ROOTS := RrHP.fst \
+         Metaprogram.fst \
          $(LAMBDABOX_DIR)/STLCToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
