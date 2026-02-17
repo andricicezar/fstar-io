@@ -36,6 +36,7 @@ The TODOs for the paper, are in the paper.
   - [ ] Prepare README
     - [ ] Prepare message on why things are admitted :D
 
+If there is time before the deadline:
 - [ ] Admits (the other direction of the logical relation)
   - [ ] LogRelTargetSource.fst
     - [ ] `safety_prod` (we do not use this, do we need it?)
