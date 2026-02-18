@@ -47,12 +47,31 @@ let ignored_test () =
 let smol () =
   io_return ()
 
+let open2_read_write () =
+  let!@! fd1 = openfile "/tmp/input" in
+  let!@! fd2 = openfile "/tmp/output" in
+  let!@! data = read fd1 in
+  write (fd2, data)
+
 %splice_t[tgt_smol] (meta_translation "tgt_smol" [`smol])
 
 %splice_t[tgt_test] (meta_translation "tgt_test" [`ignored_test])
 
 [@expect_failure]
 %splice_t[tgt_simtest] (meta_translation "tgt_simtest" [`simpler_test])
+
+%splice_t[tgt_readfile] (meta_translation "tgt_readfile" [`read_file])
+
+%splice_t[tgt_open2_read_write] (meta_translation "tgt_open2_read_write" [`open2_read_write])
+
+val simpler_test_inlined : unit -> io (resexn unit)
+let simpler_test_inlined () =
+  (* Inlining read_file *)
+  let!@! fd = openfile "todo" in
+  let!@! contents = read fd in
+  io_return (Inl ())
+
+%splice_t[tgt_simtest_inl] (meta_translation "tgt_simtest_inl" [`simpler_test_inlined])
 
 // [@expect_failure]
 // %splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
