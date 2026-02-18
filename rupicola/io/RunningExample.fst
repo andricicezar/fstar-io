@@ -40,30 +40,19 @@ let simpler_test () =
   let!@! contents = read_file "todo" in
   io_return (Inl ())
 
-val ignore_io : io 'a -> unit
-let ignore_io m = ()
-
 let ignored_test () =
-  ignore_io (simpler_test ())
+  let _ = simpler_test () in
+  ()
 
 let smol () =
   io_return ()
 
 %splice_t[tgt_smol] (meta_translation "tgt_smol" [`smol])
 
-let ignored_smol () =
-  ignore_io (smol ())
+%splice_t[tgt_test] (meta_translation "tgt_test" [`ignored_test])
 
 [@expect_failure]
-%splice_t[tgt_ignore_io] (meta_translation "tgt_ignore_io" [`ignore_io])
-
-[@expect_failure]
-%splice_t[tgt_ismol] (meta_translation "tgt_ismol" [`ignored_smol])
-
-// [@expect_failure]
-// %splice_t[tgt_test] (meta_translation "tgt_test" [`ignored_test])
-
-// %splice_t[tgt_test] (meta_translation "tgt_test" [`simpler_test])
+%splice_t[tgt_simtest] (meta_translation "tgt_simtest" [`simpler_test])
 
 // [@expect_failure]
 // %splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
