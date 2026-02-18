@@ -73,8 +73,22 @@ let simpler_test_inlined () =
 
 %splice_t[tgt_simtest_inl] (meta_translation "tgt_simtest_inl" [`simpler_test_inlined])
 
+val wrapper_inlined : string -> string -> (string -> string -> io unit) -> io (resexn unit)
+let wrapper_inlined f task agent =
+  let!@! fd = openfile f in
+  let!@! contents = read fd in
+  let!@ () = agent f task in
+  let!@! new_fd = openfile f in
+  let!@! new_contents = read new_fd in
+  if validate contents task new_contents
+  then io_return (Inl ())
+  else io_return (Inr ())
+
 // [@expect_failure]
 // %splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
+
+// So slow it seems to slow down my laptop
+// %splice_t[tgt_wrapper_inl] (meta_translation "tgt_wrapper_inl" [`wrapper_inlined])
 
 // [@expect_failure]
 // %splice_t[tgt_test] (meta_translation "tgt_test" [`test])
