@@ -181,12 +181,6 @@ let app_result_is_io (g:env) (btmap:bt_mapping) (hd:term) : Tac bool =
      | _ -> false)
   | None -> false
 
-(** Map between free F* variable F* and uninstantiated derivations **)
-type fv_mapping = string -> option term
-let empty_fv_mapping : fv_mapping = fun _ -> None
-let extend_fv_mapping (m:fv_mapping) (nm:string) (t:term) : fv_mapping =
-  fun s -> if s = nm then Some t else m s
-
 let is_oprod (t:term) : Tac bool =
   let (h, _) = collect_app t in
   match inspect_ln h with
@@ -205,22 +199,18 @@ let is_lambdaprod (t:term) : Tac bool =
      s = "QExp.QLambdaProd"
   | _ -> false
 
-let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapping) (qfs:term) : Tac term =
+let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : Tac term =
   print ("      in exp translation: " ^ tag_of qfs);
   match inspect_ln qfs with
   | Tv_FVar fv -> begin
     let fnm = fv_to_string fv in
     print ("        looking for fvar: " ^ fnm);
-    match fvmap fnm with
-    | Some t -> t
-    | None -> begin
-      let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
-      match inspect_ln qfs' with
-      | Tv_FVar fv' ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap btmap fvmap qfs'
-      | _ -> create_derivation g dbmap btmap fvmap qfs'
-    end
+    let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
+    match inspect_ln qfs' with
+    | Tv_FVar fv' ->
+      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
+      else create_derivation g dbmap btmap qfs'
+    | _ -> create_derivation g dbmap btmap qfs'
   end
 
   | Tv_BVar v -> begin
@@ -231,7 +221,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
   end
 
   | Tv_Abs bin body ->
-     let qbody = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) fvmap body in
+     let qbody = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) body in
      if is_oprod qbody then mk_qlambdaprod qbody
      else mk_qlambda qbody
 
@@ -239,38 +229,38 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
     let (head, args) = collect_app qfs in
     match get_fv head, args with
     | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-      mk_qmkpair (create_derivation g dbmap btmap fvmap v1) (create_derivation g dbmap btmap fvmap v2)
+      mk_qmkpair (create_derivation g dbmap btmap v1) (create_derivation g dbmap btmap v2)
     | Some "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
-      mk_qfst (create_derivation g dbmap btmap fvmap v1)
+      mk_qfst (create_derivation g dbmap btmap v1)
     | Some "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
-      mk_qsnd (create_derivation g dbmap btmap fvmap v1)
+      mk_qsnd (create_derivation g dbmap btmap v1)
     | Some "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
-      mk_qinl (create_derivation g dbmap btmap fvmap v1)
+      mk_qinl (create_derivation g dbmap btmap v1)
     | Some "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
-      mk_qinr (create_derivation g dbmap btmap fvmap v1)
+      mk_qinr (create_derivation g dbmap btmap v1)
     | Some "IO.io_return", [_; (v, _)] ->
-      mk_qreturn (create_derivation g dbmap btmap fvmap v)
+      mk_qreturn (create_derivation g dbmap btmap v)
     | Some "IO.return", [_; (v, _)] ->
-      mk_qreturn (create_derivation g dbmap btmap fvmap v)
+      mk_qreturn (create_derivation g dbmap btmap v)
     | Some "IO.openfile", [(v, _)] ->
-      mk_qopenfile (create_derivation g dbmap btmap fvmap v)
+      mk_qopenfile (create_derivation g dbmap btmap v)
     | Some "IO.read", [(v, _)] ->
-      mk_qread (create_derivation g dbmap btmap fvmap v)
+      mk_qread (create_derivation g dbmap btmap v)
     | Some "IO.write", [(v, _)] -> begin
       let (h, as_) = collect_app v in
       match get_fv h, as_ with
       | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-          mk_qwrite (create_derivation g dbmap btmap fvmap v1) (create_derivation g dbmap btmap fvmap v2)
+          mk_qwrite (create_derivation g dbmap btmap v1) (create_derivation g dbmap btmap v2)
       | _ -> fail "IO.write argument is not a tuple structure"
     end
     | Some "IO.close", [(v, _)] ->
-      mk_qclose (create_derivation g dbmap btmap fvmap v)
+      mk_qclose (create_derivation g dbmap btmap v)
     | Some "IO.op_let_Bang_At", [_; _; (m, _); (k, _)]
     | Some "IO.io_bind", [_; _; (m, _); (k, _)] -> begin
-      let qm = create_derivation g dbmap btmap fvmap m in
+      let qm = create_derivation g dbmap btmap m in
       match inspect_ln k with
       | Tv_Abs bin body ->
-          let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) fvmap body in
+          let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) body in
           mk_qbind qm qk
       | _ -> fail "IO.io_bind continuation is not a lambda"
     end
@@ -279,18 +269,18 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
           Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
           So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
-      let qm = create_derivation g dbmap btmap fvmap m in
+      let qm = create_derivation g dbmap btmap m in
       match inspect_ln k with
       | Tv_Abs bin body ->
           let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
-          let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) fvmap body in
+          let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) body in
           let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
           mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | _ ->
-      let f = (create_derivation g dbmap btmap fvmap hd) in
-      let x = (create_derivation g dbmap btmap fvmap a) in
+      let f = (create_derivation g dbmap btmap hd) in
+      let x = (create_derivation g dbmap btmap a) in
       if is_lambdaprod f then mk_qappprod f x
       else if app_result_is_io g btmap hd then mk_qappprod f x
       else mk_qapp f x
@@ -308,9 +298,9 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
       print ("Got: " ^ (branches_to_string brs));
       match brs with
       | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
-        let qb = create_derivation g dbmap btmap fvmap b in
-        let qt1 = create_derivation g dbmap btmap fvmap t1 in
-        let qt2 = create_derivation g (skip_dbmap_binder dbmap) (skip_btmap btmap) fvmap t2 in
+        let qb = create_derivation g dbmap btmap b in
+        let qt1 = create_derivation g dbmap btmap t1 in
+        let qt2 = create_derivation g (skip_dbmap_binder dbmap) (skip_btmap btmap) t2 in
         if is_oprod qt1 then mk_qifprod qb qt1 qt2
         else mk_qif qb qt1 qt2
 
@@ -318,9 +308,9 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
         let fnm1 = fv_to_string fv1 in
         if fnm1 = "FStar.Pervasives.Inl"
         then
-           let qb = create_derivation g dbmap btmap fvmap b in
-           let qt1 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) fvmap t1 in
-           let qt2 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) fvmap t2 in
+           let qb = create_derivation g dbmap btmap b in
+           let qt1 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) t1 in
+           let qt2 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) t2 in
            if is_oprod qt1 then mk_qcaseprod qb qt1 qt2
            else mk_qcase qb qt1 qt2
         else fail ("only supporting matches on inl and inr for now (in this order). Got: " ^ fnm1)
@@ -329,28 +319,24 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fvmap:fv_mapp
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
-    | C_Total _ -> create_derivation g dbmap btmap fvmap t
+    | C_Total _ -> create_derivation g dbmap btmap t
     | _ -> fail ("not a total function type")
   end
 
-  | Tv_AscribedT e t _ _ -> create_derivation g dbmap btmap fvmap e
+  | Tv_AscribedT e t _ _ -> create_derivation g dbmap btmap e
 
   | Tv_UInst fv _ -> begin
     let fnm = fv_to_string fv in
     print ("        looking for uinst fvar: " ^ fnm);
-    match fvmap fnm with
-    | Some t -> t
-    | None -> begin
-      let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
-      match inspect_ln qfs' with
-      | Tv_FVar fv' ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap btmap fvmap qfs'
-      | Tv_UInst fv' _ ->
-        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-        else create_derivation g dbmap btmap fvmap qfs'
-      | _ -> create_derivation g dbmap btmap fvmap qfs'
-    end
+    let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
+    match inspect_ln qfs' with
+    | Tv_FVar fv' ->
+      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
+      else create_derivation g dbmap btmap qfs'
+    | Tv_UInst fv' _ ->
+      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
+      else create_derivation g dbmap btmap qfs'
+    | _ -> create_derivation g dbmap btmap qfs'
   end
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
@@ -382,42 +368,17 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
     (qderivation, desired_qtyp)
   end
 
-let create_and_type_check_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qprog:term) (desired_qtyp:term) : Tac (term & r:(term & term){tot_typing g (fst r) (snd r)}) =
-  let qderivation = create_derivation g dbmap empty_btmap fvmap qprog in
-  qderivation, type_check_derivation g qderivation desired_qtyp
-
-let top_level_def_translation g (dbmap:db_mapping) (fvmap:fv_mapping) (qprog:term) : Tac (string & (term & r:(term & term){tot_typing g (fst r) (snd r)})) =
-  print "  in top_level_def_translation\n";
+let create_and_type_check_derivation g (dbmap:db_mapping) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-  let derivation_typ = mk_tyj (typ_translation qtyp) qprog in
-  match inspect_ln qprog with
-  | Tv_FVar fv -> begin
-    let fnm = fv_to_string fv in
-    print ("    def: " ^ fnm ^ "\n");
-    let qprog' = norm_term_env g [delta_only [fnm]; zeta] qprog in
-    match inspect_ln qprog' with
-    | Tv_FVar fv' ->
-      if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold!")
-      else (fnm, create_and_type_check_derivation g dbmap fvmap qprog' derivation_typ)
-    | _ -> (fnm, create_and_type_check_derivation g dbmap fvmap qprog' derivation_typ)
-  end
-  | _ -> fail ("not top-level definition")
+  let desired_qtyp = mk_tyj (typ_translation qtyp) qprog in
+  let qderivation = create_derivation g dbmap empty_btmap qprog in
+  type_check_derivation g qderivation desired_qtyp
 
-let rec translate_list_of_qprogs g dbmap (fvmap:fv_mapping) (qprogs:(list term){List.length qprogs > 0}) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  match qprogs with
-  | qprog :: [] ->
-      let (_, (_, qderiv)) = top_level_def_translation g dbmap fvmap qprog in
-      qderiv
-  | qprog :: tl ->
-    let (fnm, (uni_qderiv, (qderiv, _))) = top_level_def_translation g dbmap fvmap qprog in
-    print ("Translated " ^ fnm ^ "\n");
-    translate_list_of_qprogs g dbmap (extend_fv_mapping fvmap fnm uni_qderiv) tl
-
-let meta_translation (nm:string) (qprogs:(list term){List.length qprogs > 0}) : dsl_tac_t = fun (g, expected_t) ->
+let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
-    let (qderivation, qtyp_derivation) = translate_list_of_qprogs g empty_mapping empty_fv_mapping qprogs in
+    let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping qprog in
     //dump (term_to_string qderivation ^ " : " ^ term_to_string qtyp_derivation);
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
@@ -431,130 +392,130 @@ open IO
 let hocf (agent:bool -> bool -> bool -> bool -> bool -> io bool) : io bool =
   agent true false false true true
 
-%splice_t[tgt_f] (meta_translation "tgt_f" [(`hocf)])
+%splice_t[tgt_f] (generate_derivation "tgt_f" (`hocf))
 
-%splice_t[tgt1] (meta_translation "tgt1" [(`Examples.ut_unit)])
+%splice_t[tgt1] (generate_derivation "tgt1" (`Examples.ut_unit))
 let _ = assert (tgt1 == test_ut_unit) by (trefl ())
 
-%splice_t[tgt2] (meta_translation "tgt2" [`Examples.ut_true])
+%splice_t[tgt2] (generate_derivation "tgt2" (`Examples.ut_true))
 let _ = assert (tgt2 == test_ut_true) by (trefl ())
 
-%splice_t[tgt3] (meta_translation "tgt3" [`Examples.ut_false])
+%splice_t[tgt3] (generate_derivation "tgt3" (`Examples.ut_false))
 let _ = assert (tgt3 == test_ut_false) by (trefl ())
 
 
 
-%splice_t[tgt4] (meta_translation "tgt4" [`Examples.constant])
+%splice_t[tgt4] (generate_derivation "tgt4" (`Examples.constant))
 
 let _ = assert (tgt4 == test_constant) by (trefl ())
 
-%splice_t[tgt5] (meta_translation "tgt5" [`Examples.identity])
+%splice_t[tgt5] (generate_derivation "tgt5" (`Examples.identity))
 let _ = assert (tgt5 == test_identity) by (trefl ())
 
-%splice_t[tgt6] (meta_translation "tgt6" [`Examples.thunked_id])
+%splice_t[tgt6] (generate_derivation "tgt6" (`Examples.thunked_id))
 let _ = assert (tgt6 == test_thunked_id) by (trefl ())
 
-%splice_t[tgt7] (meta_translation "tgt7" [`Examples.proj1])
+%splice_t[tgt7] (generate_derivation "tgt7" (`Examples.proj1)  )
 let _ = assert (tgt7 == test_proj1) by (trefl ())
-%splice_t[tgt8] (meta_translation "tgt8" [`Examples.proj2])
+%splice_t[tgt8] (generate_derivation "tgt8" (`Examples.proj2))
 let _ = assert (tgt8 == test_proj2) by (trefl ())
-%splice_t[tgt9] (meta_translation "tgt9" [`Examples.proj3])
+%splice_t[tgt9] (generate_derivation "tgt9" (`Examples.proj3))
 let _ = assert (tgt9 == test_proj3) by (trefl ())
 
-%splice_t[tgt10] (meta_translation "tgt10" [`Examples.apply_arg])
+%splice_t[tgt10] (generate_derivation "tgt10" (`Examples.apply_arg))
 let _ = assert (tgt10 == test_apply_arg) by (trefl ())
 
 
-%splice_t[tgt11] (meta_translation "tgt11" [`Examples.apply_arg2])
+%splice_t[tgt11] (generate_derivation "tgt11" (`Examples.apply_arg2))
 let _ = assert (tgt11 == test_apply_arg2 ()) by (trefl ())
 
 
-%splice_t[tgt12] (meta_translation "tgt12" [`Examples.papply_arg2])
+%splice_t[tgt12] (generate_derivation "tgt12" (`Examples.papply_arg2))
 let _ = assert (tgt12 == test_papply_arg2 ()) by (trefl ())
 
-%splice_t[tgt13] (meta_translation "tgt13" [`Examples.negb])
+%splice_t[tgt13] (generate_derivation "tgt13" (`Examples.negb))
 let _ = assert (tgt13 == test_negb) by (trefl ())
 
-%splice_t[tgt14] (meta_translation "tgt14" [`Examples.if2])
+%splice_t[tgt14] (generate_derivation "tgt14" (`Examples.if2))
 let _ = assert (tgt14 == test_if2 ()) by (trefl ())
 
-%splice_t[tgt15] (meta_translation "tgt15" [`Examples.callback_return])
+%splice_t[tgt15] (generate_derivation "tgt15" (`Examples.callback_return))
 let _ = assert (tgt15 == test_callback_return ()) by (trefl ())
 
 
-%splice_t[tgt_make_pair] (meta_translation "tgt_make_pair" [`Examples.make_pair])
+%splice_t[tgt_make_pair] (generate_derivation "tgt_make_pair" (`Examples.make_pair))
 let _ = assert (tgt_make_pair == test_make_pair) by (trefl ())
 
-%splice_t[tgt_fst_pair] (meta_translation "tgt_fst_pair" [`Examples.fst_pair])
+%splice_t[tgt_fst_pair] (generate_derivation "tgt_fst_pair" (`Examples.fst_pair))
 let _ = assert (tgt_fst_pair == test_fst_pair) by (trefl ())
 
-%splice_t[tgt_wrap_fst] (meta_translation "tgt_wrap_fst" [`Examples.wrap_fst])
+%splice_t[tgt_wrap_fst] (generate_derivation "tgt_wrap_fst" (`Examples.wrap_fst))
 let _ = assert (tgt_wrap_fst == test_wrap_fst) by (trefl ())
 
-%splice_t[tgt_snd_pair] (meta_translation "tgt_snd_pair" [`Examples.snd_pair])
+%splice_t[tgt_snd_pair] (generate_derivation "tgt_snd_pair" (`Examples.snd_pair))
 let _ = assert (tgt_snd_pair == test_snd_pair) by (trefl ())
 
-%splice_t[tgt_wrap_snd] (meta_translation "tgt_wrap_snd" [`Examples.wrap_snd])
+%splice_t[tgt_wrap_snd] (generate_derivation "tgt_wrap_snd" (`Examples.wrap_snd))
 let _ = assert (tgt_wrap_snd == test_wrap_snd) by (trefl ())
 
-%splice_t[tgt_a_few_lets] (meta_translation "tgt_a_few_lets" [`Examples.a_few_lets])
+%splice_t[tgt_a_few_lets] (generate_derivation "tgt_a_few_lets" (`Examples.a_few_lets))
 let _ = assert (tgt_a_few_lets == QLambda Qtt) by (trefl ())
 
-%splice_t[tgt_inl_true] (meta_translation "tgt_inl_true" [`Examples.inl_true])
+%splice_t[tgt_inl_true] (generate_derivation "tgt_inl_true" (`Examples.inl_true))
 let _ = assert (tgt_inl_true == test_inl_true) by (trefl ())
 
-%splice_t[tgt_inr_unit] (meta_translation "tgt_inr_unit" [`Examples.inr_unit])
+%splice_t[tgt_inr_unit] (generate_derivation "tgt_inr_unit" (`Examples.inr_unit))
 let _ = assert (tgt_inr_unit == test_inr_unit) by (trefl ())
 
-%splice_t[tgt_return_either] (meta_translation "tgt_return_either" [`Examples.return_either])
+%splice_t[tgt_return_either] (generate_derivation "tgt_return_either" (`Examples.return_either))
 let _ = assert (tgt_return_either == test_return_either ()) by (trefl ())
 
-%splice_t[tgt_match_either] (meta_translation "tgt_match_either" [`Examples.match_either])
+%splice_t[tgt_match_either] (generate_derivation "tgt_match_either" (`Examples.match_either))
 let _ = assert (tgt_match_either == test_match_either ()) by (trefl ())
 
 
-%splice_t[tgt_match_either_arg] (meta_translation "tgt_match_either_arg" [`Examples.match_either_arg])
+%splice_t[tgt_match_either_arg] (generate_derivation "tgt_match_either_arg" (`Examples.match_either_arg))
 let _ = assert (tgt_match_either_arg == test_match_either_arg ()) by (trefl ())
 
 
-%splice_t[tgt_apply_top_level_def] (meta_translation "tgt_apply_top_level_def" [(`Examples.thunked_id);(`Examples.apply_top_level_def)])
+%splice_t[tgt_apply_top_level_def] (generate_derivation "tgt_apply_top_level_def" (`Examples.apply_top_level_def))
 
-%splice_t[tgt_apply_top_level_def'] (meta_translation "tgt_apply_top_level_def'" [`Examples.thunked_id;`Examples.apply_top_level_def'])
+%splice_t[tgt_apply_top_level_def'] (generate_derivation "tgt_apply_top_level_def'" (`Examples.apply_top_level_def'))
 
-%splice_t[tgt_papply_top_level_def] (meta_translation "tgt_papply_top_level_def" [`Examples.thunked_id;`Examples.papply__top_level_def])
+%splice_t[tgt_papply_top_level_def] (generate_derivation "tgt_papply_top_level_def" (`Examples.papply__top_level_def))
 
-%splice_t[tgt16] (meta_translation "tgt16" [`Examples.identity;`Examples.callback_return'])
+%splice_t[tgt16] (generate_derivation "tgt16" (`Examples.callback_return'))
 let _ = assert (tgt16 == test_callback_return' ()) by (trefl ())
 
-%splice_t[tgt_pair_of_functions] (meta_translation "tgt_pair_of_functions" [`Examples.negb;`Examples.pair_of_functions])
+%splice_t[tgt_pair_of_functions] (generate_derivation "tgt_pair_of_functions" (`Examples.pair_of_functions))
 [@@ (preprocess_with simplify_qType)]
 let test () = assert (tgt_pair_of_functions == test_pair_of_functions ()) by (trefl ())
 
-%splice_t[tgt_io_return] (meta_translation "tgt_io_return" [`ExamplesIO.u_return])
-%splice_t[tgt_apply_io_return] (meta_translation "tgt_apply_io_return" [`ExamplesIO.apply_io_return])
-%splice_t[tgt_apply_read] (meta_translation "tgt_apply_read" [`ExamplesIO.apply_read])
-%splice_t[tgt_apply_write_const] (meta_translation "tgt_apply_write_const" [`ExamplesIO.apply_write_const])
-%splice_t[tgt_apply_write] (meta_translation "tgt_apply_write" [`ExamplesIO.apply_write])
-%splice_t[tgt_apply_io_bind_const] (meta_translation "tgt_apply_io_bind_const" [`ExamplesIO.apply_io_bind_const])
-%splice_t[tgt_apply_io_bind_identity] (meta_translation "tgt_apply_io_bind_identity" [`ExamplesIO.apply_io_bind_identity])
+%splice_t[tgt_io_return] (generate_derivation "tgt_io_return" (`ExamplesIO.u_return))
+%splice_t[tgt_apply_io_return] (generate_derivation "tgt_apply_io_return" (`ExamplesIO.apply_io_return))
+%splice_t[tgt_apply_read] (generate_derivation "tgt_apply_read" (`ExamplesIO.apply_read))
+%splice_t[tgt_apply_write_const] (generate_derivation "tgt_apply_write_const" (`ExamplesIO.apply_write_const))
+%splice_t[tgt_apply_write] (generate_derivation "tgt_apply_write" (`ExamplesIO.apply_write))
+%splice_t[tgt_apply_io_bind_const] (generate_derivation "tgt_apply_io_bind_const" (`ExamplesIO.apply_io_bind_const))
+%splice_t[tgt_apply_io_bind_identity] (generate_derivation "tgt_apply_io_bind_identity" (`ExamplesIO.apply_io_bind_identity))
 let _ = assert (tgt_apply_io_bind_identity == test_apply_io_bind_identity) by (trefl ())
 
-%splice_t[tgt_apply_io_bind_pure_if] (meta_translation "tgt_apply_io_bind_pure_if" [`ExamplesIO.apply_io_bind_pure_if])
+%splice_t[tgt_apply_io_bind_pure_if] (generate_derivation "tgt_apply_io_bind_pure_if" (`ExamplesIO.apply_io_bind_pure_if))
 let _ = assert (tgt_apply_io_bind_pure_if == test_apply_io_bind_pure_if ()) by (trefl ())
 
-%splice_t[tgt_apply_io_bind_write] (meta_translation "tgt_apply_io_bind_write" [`ExamplesIO.apply_io_bind_write])
+%splice_t[tgt_apply_io_bind_write] (generate_derivation "tgt_apply_io_bind_write" (`ExamplesIO.apply_io_bind_write))
 let _ = assert (tgt_apply_io_bind_write == test_apply_io_bind_write) by (trefl ())
 
-%splice_t[tgt_apply_io_bind_read_write] (meta_translation "tgt_apply_io_bind_read_write" [`ExamplesIO.apply_io_bind_read_write])
+%splice_t[tgt_apply_io_bind_read_write] (generate_derivation "tgt_apply_io_bind_read_write" (`ExamplesIO.apply_io_bind_read_write))
 let _ = assert (tgt_apply_io_bind_read_write == test_apply_io_bind_read_write ()) by (trefl ())
 
-%splice_t[tgt_apply_io_bind_read_write' ] (meta_translation "tgt_apply_io_bind_read_write'" [`ExamplesIO.apply_io_bind_read_write'])
+%splice_t[tgt_apply_io_bind_read_write' ] (generate_derivation "tgt_apply_io_bind_read_write'" (`ExamplesIO.apply_io_bind_read_write'))
 let _ = assert (tgt_apply_io_bind_read_write' == test_apply_io_bind_read_write' ()) by (trefl ())
 
-%splice_t[tgt_apply_io_bind_read_if_write] (meta_translation "tgt_apply_io_bind_read_if_write" [`ExamplesIO.apply_io_bind_read_if_write])
+%splice_t[tgt_apply_io_bind_read_if_write] (generate_derivation "tgt_apply_io_bind_read_if_write" (`ExamplesIO.apply_io_bind_read_if_write))
 let _ = assert (tgt_apply_io_bind_read_if_write == test_apply_io_bind_read_if_write ()) by (trefl ())
 
-%splice_t[tgt_sendError400] (meta_translation "tgt_sendError400" [`ExamplesIO.utf8_encode;`ExamplesIO.sendError400])
-%splice_t[tgt_get_req] (meta_translation "tgt_get_req" [`ExamplesIO.utf8_encode;`ExamplesIO.get_req])
+%splice_t[tgt_sendError400] (generate_derivation "tgt_sendError400" (`ExamplesIO.sendError400))
+%splice_t[tgt_get_req] (generate_derivation "tgt_get_req" (`ExamplesIO.get_req))
 
-%splice_t[tgt_open2_read_write] (meta_translation "tgt_open2_read_write" [`ExamplesIO.open2_read_write])
+%splice_t[tgt_open2_read_write] (generate_derivation "tgt_open2_read_write" (`ExamplesIO.open2_read_write))
