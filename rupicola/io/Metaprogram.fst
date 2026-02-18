@@ -145,10 +145,18 @@ let is_oprod (t:term) : Tac bool =
   match inspect_ln h with
   | Tv_FVar fv ->
      let s = fv_to_string fv in
-     s = "QExp.QReturn" || s = "QExp.QBindProd" || s = "QExp.QRead" || s = "QExp.QWrite" ||
-     s = "QExp.QOpenfile" || s = "QExp.QClose" || s = "QExp.QCaseProd" || s = "QExp.QIfProd"
+     s = "QExp.QReturn" || s = "QExp.QBindProd" || s = "QExp.QAppProd" ||
+     s = "QExp.QRead" || s = "QExp.QWrite" || s = "QExp.QOpenfile" || s = "QExp.QClose" ||
+     s = "QExp.QCaseProd" || s = "QExp.QIfProd"
   | _ -> false
 
+let is_lambdaprod (t:term) : Tac bool =
+  let (h, _) = collect_app t in
+  match inspect_ln h with
+  | Tv_FVar fv ->
+     let s = fv_to_string fv in
+     s = "QExp.QLambdaProd"
+  | _ -> false
 
 let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : Tac term =
   print ("      in exp translation: " ^ tag_of qfs);
@@ -182,62 +190,62 @@ let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : T
 
   | Tv_App hd (a, _) -> begin
     let (head, args) = collect_app qfs in
-    match get_fv head with
-    | Some fv -> begin
-      match fv, args with
-      | "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-        mk_qmkpair (create_derivation g dbmap fvmap v1) (create_derivation g dbmap fvmap v2)
-      | "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
-        mk_qfst (create_derivation g dbmap fvmap v1)
-      | "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
-        mk_qsnd (create_derivation g dbmap fvmap v1)
-      | "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
-        mk_qinl (create_derivation g dbmap fvmap v1)
-      | "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
-        mk_qinr (create_derivation g dbmap fvmap v1)
-      | "IO.io_return", [_; (v, _)] ->
-        mk_qreturn (create_derivation g dbmap fvmap v)
-      | "IO.return", [_; (v, _)] ->
-        mk_qreturn (create_derivation g dbmap fvmap v)
-      | "IO.openfile", [(v, _)] ->
-        mk_qopenfile (create_derivation g dbmap fvmap v)
-      | "IO.read", [(v, _)] ->
-        mk_qread (create_derivation g dbmap fvmap v)
-      | "IO.write", [(v, _)] -> begin
-        let (h, as_) = collect_app v in
-        match get_fv h, as_ with
-        | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-            mk_qwrite (create_derivation g dbmap fvmap v1) (create_derivation g dbmap fvmap v2)
-        | _ -> fail "IO.write argument is not a tuple structure"
-      end
-      | "IO.close", [(v, _)] ->
-        mk_qclose (create_derivation g dbmap fvmap v)
-      | "IO.op_let_Bang_At", [_; _; (m, _); (k, _)]
-      | "IO.io_bind", [_; _; (m, _); (k, _)] -> begin
-        let qm = create_derivation g dbmap fvmap m in
-        match inspect_ln k with
-        | Tv_Abs _ body ->
-            let qk = create_derivation g (extend_dbmap_binder dbmap) fvmap body in
-            mk_qbind qm qk
-        | _ -> fail "IO.io_bind continuation is not a lambda"
-      end
-      | "ExamplesIO.op_let_Bang_At_Bang", [_; _; (m, _); (k, _)] -> begin
-        (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
-            Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
-            The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
-            So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
-        let qm = create_derivation g dbmap fvmap m in
-        match inspect_ln k with
-        | Tv_Abs _ body ->
-            let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
-            let qk_body = create_derivation g dbmap' fvmap body in
-            let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
-            mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
-        | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
-      end
-      | _ -> mk_qapp (create_derivation g dbmap fvmap hd) (create_derivation g dbmap fvmap a)
+    match get_fv head, args with
+    | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
+      mk_qmkpair (create_derivation g dbmap fvmap v1) (create_derivation g dbmap fvmap v2)
+    | Some "FStar.Pervasives.Native.fst", [_; _; (v1, _)] ->
+      mk_qfst (create_derivation g dbmap fvmap v1)
+    | Some "FStar.Pervasives.Native.snd", [_; _; (v1, _)] ->
+      mk_qsnd (create_derivation g dbmap fvmap v1)
+    | Some "FStar.Pervasives.Inl", [_; _; (v1, _)] ->
+      mk_qinl (create_derivation g dbmap fvmap v1)
+    | Some "FStar.Pervasives.Inr", [_; _; (v1, _)] ->
+      mk_qinr (create_derivation g dbmap fvmap v1)
+    | Some "IO.io_return", [_; (v, _)] ->
+      mk_qreturn (create_derivation g dbmap fvmap v)
+    | Some "IO.return", [_; (v, _)] ->
+      mk_qreturn (create_derivation g dbmap fvmap v)
+    | Some "IO.openfile", [(v, _)] ->
+      mk_qopenfile (create_derivation g dbmap fvmap v)
+    | Some "IO.read", [(v, _)] ->
+      mk_qread (create_derivation g dbmap fvmap v)
+    | Some "IO.write", [(v, _)] -> begin
+      let (h, as_) = collect_app v in
+      match get_fv h, as_ with
+      | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
+          mk_qwrite (create_derivation g dbmap fvmap v1) (create_derivation g dbmap fvmap v2)
+      | _ -> fail "IO.write argument is not a tuple structure"
     end
-    | _ -> mk_qapp (create_derivation g dbmap fvmap hd) (create_derivation g dbmap fvmap a)
+    | Some "IO.close", [(v, _)] ->
+      mk_qclose (create_derivation g dbmap fvmap v)
+    | Some "IO.op_let_Bang_At", [_; _; (m, _); (k, _)]
+    | Some "IO.io_bind", [_; _; (m, _); (k, _)] -> begin
+      let qm = create_derivation g dbmap fvmap m in
+      match inspect_ln k with
+      | Tv_Abs _ body ->
+          let qk = create_derivation g (extend_dbmap_binder dbmap) fvmap body in
+          mk_qbind qm qk
+      | _ -> fail "IO.io_bind continuation is not a lambda"
+    end
+    | Some "ExamplesIO.op_let_Bang_At_Bang", [_; _; (m, _); (k, _)] -> begin
+      (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
+          Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
+          The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
+          So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
+      let qm = create_derivation g dbmap fvmap m in
+      match inspect_ln k with
+      | Tv_Abs _ body ->
+          let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
+          let qk_body = create_derivation g dbmap' fvmap body in
+          let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
+          mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
+      | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
+    end
+    | _ ->
+      let f = (create_derivation g dbmap fvmap hd) in
+      let x = (create_derivation g dbmap fvmap a) in
+      if is_lambdaprod f then mk_qappprod f x
+      else mk_qapp f x
   end
 
   | Tv_Const C_Unit -> mk_qtt
@@ -302,7 +310,7 @@ let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : T
 let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
-  // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
+ // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
   let u = must <| universe_of g goal_ty in
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
     // l_to_r_fsG ();
@@ -362,7 +370,7 @@ let meta_translation (nm:string) (qprogs:(list term){List.length qprogs > 0}) : 
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
     let (qderivation, qtyp_derivation) = translate_list_of_qprogs g empty_mapping empty_fv_mapping qprogs in
-    dump (term_to_string qderivation ^ " : " ^ term_to_string qtyp_derivation);
+    //dump (term_to_string qderivation ^ " : " ^ term_to_string qtyp_derivation);
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
 
