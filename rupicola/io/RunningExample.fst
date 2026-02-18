@@ -15,11 +15,13 @@ let read_file (f : string) : io (resexn string) =
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
 let wrapper f task agent =
   let!@! contents = read_file f in
-  let!@ () = agent f task in
+  // let!@ () = agent f task in
   let!@! new_contents = read_file f in
   if validate contents task new_contents
   then io_return (Inl ())
   else io_return (Inr ())
+
+%splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`read_file;`wrapper])
 
 val good_agent_aux : string -> string -> io (resexn unit)
 let good_agent_aux fn task =
@@ -57,7 +59,6 @@ let open2_read_write () =
 
 %splice_t[tgt_test] (meta_translation "tgt_test" [`ignored_test])
 
-[@expect_failure]
 %splice_t[tgt_simtest] (meta_translation "tgt_simtest" [`simpler_test])
 
 %splice_t[tgt_readfile] (meta_translation "tgt_readfile" [`read_file])
@@ -85,7 +86,7 @@ let wrapper_inlined f task agent =
   else io_return (Inr ())
 
 // [@expect_failure]
-// %splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
+//%splice_t[tgt_wrapper] (meta_translation "tgt_wrapper" [`wrapper])
 
 // So slow it seems to slow down my laptop
 // %splice_t[tgt_wrapper_inl] (meta_translation "tgt_wrapper_inl" [`wrapper_inlined])
