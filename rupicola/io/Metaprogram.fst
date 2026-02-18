@@ -199,8 +199,12 @@ let is_lambdaprod (t:term) : Tac bool =
      s = "QExp.QLambdaProd"
   | _ -> false
 
-let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : Tac term =
-  print ("      in exp translation: " ^ tag_of qfs);
+let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fuel:int) (qfs:term) : Tac term =
+  if fuel <= 0 then
+    fail ("Unfolding depth exceeded while processing: " ^ tag_of qfs ^ " — " ^ term_to_string qfs
+          ^ "\nThis likely means an unsupported primitive (e.g., op_Equality, op_Hat) was encountered.")
+  else
+  let _ = print ("      in exp translation: " ^ tag_of qfs) in
   match inspect_ln qfs with
   | Tv_FVar fv -> begin
     let fnm = fv_to_string fv in
@@ -209,8 +213,8 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
     match inspect_ln qfs' with
     | Tv_FVar fv' ->
       if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-      else create_derivation g dbmap btmap qfs'
-    | _ -> create_derivation g dbmap btmap qfs'
+      else create_derivation g dbmap btmap (fuel - 1) qfs'
+    | _ -> create_derivation g dbmap btmap (fuel - 1) qfs'
   end
 
   | Tv_BVar v -> begin
@@ -221,7 +225,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
   end
 
   | Tv_Abs bin body ->
-    let qbody = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) body in
+    let qbody = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) fuel body in
     if is_oprod qbody then mk_qlambdaprod qbody
     else mk_qlambda qbody
 
@@ -231,38 +235,38 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
       args |> List.Tot.filter (fun (_, q) -> Q_Explicit? q) |> List.Tot.map fst in
     match get_fv head, explicit_args with
     | Some "FStar.Pervasives.Native.Mktuple2", [v1; v2] ->
-      mk_qmkpair (create_derivation g dbmap btmap v1) (create_derivation g dbmap btmap v2)
+      mk_qmkpair (create_derivation g dbmap btmap fuel v1) (create_derivation g dbmap btmap fuel v2)
     | Some "FStar.Pervasives.Native.fst", [v1] ->
-      mk_qfst (create_derivation g dbmap btmap v1)
+      mk_qfst (create_derivation g dbmap btmap fuel v1)
     | Some "FStar.Pervasives.Native.snd", [v1] ->
-      mk_qsnd (create_derivation g dbmap btmap v1)
+      mk_qsnd (create_derivation g dbmap btmap fuel v1)
     | Some "FStar.Pervasives.Inl", [v1] ->
-      mk_qinl (create_derivation g dbmap btmap v1)
+      mk_qinl (create_derivation g dbmap btmap fuel v1)
     | Some "FStar.Pervasives.Inr", [v1] ->
-      mk_qinr (create_derivation g dbmap btmap v1)
+      mk_qinr (create_derivation g dbmap btmap fuel v1)
     | Some "IO.io_return", [v] ->
-      mk_qreturn (create_derivation g dbmap btmap v)
+      mk_qreturn (create_derivation g dbmap btmap fuel v)
     | Some "IO.return", [v] ->
-      mk_qreturn (create_derivation g dbmap btmap v)
+      mk_qreturn (create_derivation g dbmap btmap fuel v)
     | Some "IO.openfile", [v] ->
-      mk_qopenfile (create_derivation g dbmap btmap v)
+      mk_qopenfile (create_derivation g dbmap btmap fuel v)
     | Some "IO.read", [v] ->
-      mk_qread (create_derivation g dbmap btmap v)
+      mk_qread (create_derivation g dbmap btmap fuel v)
     | Some "IO.close", [v] ->
-      mk_qclose (create_derivation g dbmap btmap v)
+      mk_qclose (create_derivation g dbmap btmap fuel v)
     | Some "IO.write", [v] -> begin
       let (h, as_) = collect_app v in
       match get_fv h, as_ with
       | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-        mk_qwrite (create_derivation g dbmap btmap v1) (create_derivation g dbmap btmap v2)
+        mk_qwrite (create_derivation g dbmap btmap fuel v1) (create_derivation g dbmap btmap fuel v2)
       | _ -> fail "IO.write argument is not a tuple structure"
     end
     | Some "IO.op_let_Bang_At", [m; k]
     | Some "IO.io_bind", [m; k] -> begin
-      let qm = create_derivation g dbmap btmap m in
+      let qm = create_derivation g dbmap btmap fuel m in
       match inspect_ln k with
       | Tv_Abs bin body ->
-        let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) body in
+        let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) fuel body in
         mk_qbind qm qk
       | _ -> fail "IO.io_bind continuation is not a lambda"
     end
@@ -271,18 +275,18 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
           Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
           So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
-      let qm = create_derivation g dbmap btmap m in
+      let qm = create_derivation g dbmap btmap fuel m in
       match inspect_ln k with
       | Tv_Abs bin body ->
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
-        let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) body in
+        let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) fuel body in
         let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
         mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | _ ->
-      let f = (create_derivation g dbmap btmap hd) in
-      let x = (create_derivation g dbmap btmap a) in
+      let f = (create_derivation g dbmap btmap fuel hd) in
+      let x = (create_derivation g dbmap btmap fuel a) in
       if is_lambdaprod f then mk_qappprod f x
       else if app_result_is_io g btmap hd then mk_qappprod f x
       else mk_qapp f x
@@ -300,18 +304,18 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
     print ("Got: " ^ (branches_to_string brs));
     match brs with
     | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
-      let qb = create_derivation g dbmap btmap b in
-      let qt1 = create_derivation g dbmap btmap t1 in
-      let qt2 = create_derivation g (skip_dbmap_binder dbmap) (skip_btmap btmap) t2 in
+      let qb = create_derivation g dbmap btmap fuel b in
+      let qt1 = create_derivation g dbmap btmap fuel t1 in
+      let qt2 = create_derivation g (skip_dbmap_binder dbmap) (skip_btmap btmap) fuel t2 in
       if is_oprod qt1 then mk_qifprod qb qt1 qt2
       else mk_qif qb qt1 qt2
 
     | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
       let fnm1 = fv_to_string fv1 in
       if fnm1 = "FStar.Pervasives.Inl" then
-        let qb = create_derivation g dbmap btmap b in
-        let qt1 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) t1 in
-        let qt2 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) t2 in
+        let qb = create_derivation g dbmap btmap fuel b in
+        let qt1 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) fuel t1 in
+        let qt2 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) fuel t2 in
         if is_oprod qt1 then mk_qcaseprod qb qt1 qt2
         else mk_qcase qb qt1 qt2
       else fail ("only supporting matches on inl and inr for now (in this order). Got: " ^ fnm1)
@@ -320,11 +324,11 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
 
   | Tv_AscribedC t c _ _ -> begin
     match inspect_comp c with
-    | C_Total _ -> create_derivation g dbmap btmap t
+    | C_Total _ -> create_derivation g dbmap btmap fuel t
     | _ -> fail ("not a total function type")
   end
 
-  | Tv_AscribedT e t _ _ -> create_derivation g dbmap btmap e
+  | Tv_AscribedT e t _ _ -> create_derivation g dbmap btmap fuel e
 
   | Tv_UInst fv _ -> begin
     let fnm = fv_to_string fv in
@@ -333,11 +337,11 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping)  (qfs:term) : 
     match inspect_ln qfs' with
     | Tv_FVar fv' ->
       if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-      else create_derivation g dbmap btmap qfs'
+      else create_derivation g dbmap btmap (fuel - 1) qfs'
     | Tv_UInst fv' _ ->
       if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
-      else create_derivation g dbmap btmap qfs'
-    | _ -> create_derivation g dbmap btmap qfs'
+      else create_derivation g dbmap btmap (fuel - 1) qfs'
+    | _ -> create_derivation g dbmap btmap (fuel - 1) qfs'
   end
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
@@ -369,10 +373,12 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
     (qderivation, desired_qtyp)
   end
 
+let initial_unfold_fuel : int = 32
+
 let create_and_type_check_derivation g (dbmap:db_mapping) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
   let desired_qtyp = mk_tyj (typ_translation qtyp) qprog in
-  let qderivation = create_derivation g dbmap empty_btmap qprog in
+  let qderivation = create_derivation g dbmap empty_btmap initial_unfold_fuel qprog in
   type_check_derivation g qderivation desired_qtyp
 
 let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
