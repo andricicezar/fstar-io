@@ -15,7 +15,7 @@ let read_file (f : string) : io (resexn string) =
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
 let wrapper f task agent =
   let!@! contents = read_file f in
-  // let!@ () = agent f task in
+  let!@ () = agent f task in
   let!@! new_contents = read_file f in
   if validate contents task new_contents
   then io_return (Inl ())
