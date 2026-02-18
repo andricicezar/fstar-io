@@ -221,6 +221,20 @@ let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : T
             mk_qbind qm qk
         | _ -> fail "IO.io_bind continuation is not a lambda"
       end
+      | "ExamplesIO.op_let_Bang_At_Bang", [_; _; (m, _); (k, _)] -> begin
+        (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
+            Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
+            The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
+            So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
+        let qm = create_derivation g dbmap fvmap m in
+        match inspect_ln k with
+        | Tv_Abs _ body ->
+            let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
+            let qk_body = create_derivation g dbmap' fvmap body in
+            let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
+            mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
+        | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
+      end
       | _ -> mk_qapp (create_derivation g dbmap fvmap hd) (create_derivation g dbmap fvmap a)
     end
     | _ -> mk_qapp (create_derivation g dbmap fvmap hd) (create_derivation g dbmap fvmap a)
@@ -264,7 +278,24 @@ let rec create_derivation g (dbmap:db_mapping) (fvmap:fv_mapping) (qfs:term) : T
   end
 
   | Tv_AscribedT e t _ _ -> create_derivation g dbmap fvmap e
-  | Tv_UInst v _ -> fail ("unexpected universe instantiation in expression: " ^ fv_to_string v)
+
+  | Tv_UInst fv _ -> begin
+    let fnm = fv_to_string fv in
+    print ("        looking for uinst fvar: " ^ fnm);
+    match fvmap fnm with
+    | Some t -> t
+    | None -> begin
+      let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
+      match inspect_ln qfs' with
+      | Tv_FVar fv' ->
+        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
+        else create_derivation g dbmap fvmap qfs'
+      | Tv_UInst fv' _ ->
+        if fnm = fv_to_string fv' then fail (fnm ^ " does not unfold in create_derivation!")
+        else create_derivation g dbmap fvmap qfs'
+      | _ -> create_derivation g dbmap fvmap qfs'
+    end
+  end
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
@@ -462,3 +493,5 @@ let _ = assert (tgt_apply_io_bind_read_if_write == test_apply_io_bind_read_if_wr
 
 %splice_t[tgt_sendError400] (meta_translation "tgt_sendError400" [`ExamplesIO.utf8_encode;`ExamplesIO.sendError400])
 %splice_t[tgt_get_req] (meta_translation "tgt_get_req" [`ExamplesIO.utf8_encode;`ExamplesIO.get_req])
+
+%splice_t[tgt_open2_read_write] (meta_translation "tgt_open2_read_write" [`ExamplesIO.open2_read_write])
