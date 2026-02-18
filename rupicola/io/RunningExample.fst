@@ -55,6 +55,9 @@ let ignored_smol () =
   ignore_io (smol ())
 
 [@expect_failure]
+%splice_t[tgt_ignore_io] (meta_translation "tgt_ignore_io" [`ignore_io])
+
+[@expect_failure]
 %splice_t[tgt_ismol] (meta_translation "tgt_ismol" [`ignored_smol])
 
 // [@expect_failure]
