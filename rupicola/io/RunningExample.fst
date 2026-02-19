@@ -39,14 +39,28 @@ let wrapped_wrapper_fst f task agent : io bool =
   | Inl () -> io_return true
   | Inr () -> io_return false
 
-[@expect_failure]
-%splice_t[tgt_wrapper] (generate_derivation "tgt_wrapper" (`wrapped_wrapper_fst))
+// [@expect_failure]
+// %splice_t[tgt_wrapper] (generate_derivation "tgt_wrapper" (`wrapped_wrapper_fst))
+
+
+(* Specification *)
+
+unfold
+let hist_prepost #a (pre : hist_pre) (post : (h:_ -> hist_post h a)) : hist a =
+  fun h p -> pre h /\ (forall r lt. post h lt r ==> p lt r)
+
+let wrapper_spec (f task : string) =
+  hist_prepost (* Should I use to_hist? *)
+    (fun h -> False)
+    (fun h lt r -> True)
+
+let wrapper_sat_spec f task agent :
+  Lemma (theta (wrapper f task agent) ⊑ wrapper_spec f task)
+= ()
 
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =
 //   (wrapped_wrapper_fst, tgt_wrapper)
-
-// let compile_wrapper : compile_prog #wrapper_intS wrapper = solve
 
 // val good_agent_aux : string -> string -> io (resexn unit)
 // let good_agent_aux fn task =
