@@ -22,6 +22,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QFalse -> EFalse
   | QTrue -> ETrue
   | QStringLit s -> EString s
+  | QStringEq s1 s2 -> EStringEq (compile s1) (compile s2)
   | QIf qc qt qe -> EIf (compile qc) (compile qt) (compile qe)
   | QMkpair q1 q2 -> EPair (compile q1) (compile q2)
   | QFst qp -> EFst (compile qp)
@@ -62,6 +63,10 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QFalse -> C1.equiv_oval_false g
   | QTrue -> C1.equiv_oval_true g
   | QStringLit #_ str -> C1.equiv_oval_string g str
+  | QStringEq qs1 qs2 ->
+    lem_compile_superset qs1;
+    lem_compile_superset qs2;
+    admit ()
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_superset qc;
     lem_compile_superset qt;
@@ -150,6 +155,10 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QFalse -> C2.equiv_oval_false g
   | QTrue -> C2.equiv_oval_true g
   | QStringLit #_ str -> C2.equiv_oval_string g str
+  | QStringEq qs1 qs2 ->
+    lem_compile_subset qs1;
+    lem_compile_subset qs2;
+    admit ()
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_subset qc;
     lem_compile_subset qt;
@@ -238,6 +247,10 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QFalse -> ()
   | QTrue -> ()
   | QStringLit _ -> ()
+  | QStringEq qs1 qs2 ->
+    lem_compile_fv_in_env qs1;
+    lem_compile_fv_in_env qs2;
+    admit ()
   | QIf qc qt qe ->
     lem_compile_fv_in_env qc;
     lem_compile_fv_in_env qt;

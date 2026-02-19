@@ -50,8 +50,8 @@ let openfile_sat_spec f :
 = () // At least here it works (not with regular theta so we made progress)
 
 let read_file_sat_spec f :
-  Lemma (theta_unf (read_file f) ⊑ basic_spec)
-= admit ()
+  Lemma (theta_unf (read f) ⊑ basic_spec)
+= ()
 
 unfold
 let wrapper_spec (f task : string) =

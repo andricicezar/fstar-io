@@ -32,6 +32,7 @@ type exp =
   | ECase  : exp -> exp -> exp -> exp
   | EFileDescr : fd:file_descr -> exp
   | EString : s:string -> exp
+  | EStringEq : exp -> exp -> exp
   | ERead  : exp -> exp
   | EWrite : exp -> exp -> exp
   | EOpen  : exp -> exp
@@ -75,6 +76,7 @@ let rec subst (#r:bool)
     | EWrite e1 e2  -> EWrite (subst s e1) (subst s e2)
     | EFileDescr i -> EFileDescr i
     | EString s' -> EString s'
+    | EStringEq e1 e2 -> EStringEq (subst s e1) (subst s e2)
     | EOpen e' -> EOpen (subst s e')
     | EClose e' -> EClose (subst s e')
 
@@ -123,6 +125,7 @@ let rec equiv_subs_implies_equiv_substs #b #b' (f:sub b) (g:sub b') (e:exp) : Le
   | ERead e1
   | EOpen e1
   | EClose e1 -> equiv_subs_implies_equiv_substs f g e1
+  | EStringEq e1 e2
   | EApp e1 e2
   | EWrite e1 e2
   | EPair e1 e2 -> begin
@@ -161,6 +164,7 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | EWrite e1 e2 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n
   | EFileDescr i -> []
   | EString _ -> []
+  | EStringEq e1 e2 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n
   | EOpen e' -> free_vars_indx e' n
   | EClose e' -> free_vars_indx e' n
 
@@ -222,6 +226,7 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     lem_shifting_preserves_closed s e n
   | EWrite e1 e2
   | EApp e1 e2
+  | EStringEq e1 e2
   | EPair e1 e2 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n
@@ -273,6 +278,7 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s' e' n'
   | EApp e1 e2
   | EWrite e1 e2
+  | EStringEq e1 e2
   | EPair e1 e2 ->
     lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n);
     lem_subst_freevars_closes_exp s e1 n;
@@ -325,7 +331,7 @@ let rec lem_free_vars_next_binder (e:exp) (n:nat) :
   | ELam e' -> lem_free_vars_next_binder e' (n+1)
   | EFst e' | ESnd e' | EInl e' | EInr e' | ERead e' | EOpen e' | EClose e' ->
     lem_free_vars_next_binder e' n
-  | EApp e1 e2 | EWrite e1 e2 | EPair e1 e2 ->
+  | EApp e1 e2 | EWrite e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
     lem_free_vars_next_binder e1 n;
     lem_free_vars_next_binder e2 n;
@@ -2217,6 +2223,7 @@ let lem_irred_ewrite_implies_irred_arg (fd:closed_exp{EFileDescr? fd})  (arg:clo
     end
   end
 
+#push-options "--split_queries always --fuel 12 --z3rlimit 12"
 let rec destruct_steps_ewrite_fd
   (fd:closed_exp)
   (arg:closed_exp)
@@ -2258,7 +2265,9 @@ let rec destruct_steps_ewrite_fd
       end
     | _ -> (fd, (| [], lt |))
     end
+#pop-options
 
+#push-options "--split_queries always --fuel 12 --z3rlimit 12"
 let rec destruct_steps_ewrite_arg
   (fd':closed_exp{EFileDescr? fd'})
   (arg:closed_exp)
@@ -2301,8 +2310,9 @@ let rec destruct_steps_ewrite_arg
     | SWriteFd _ _ -> (arg, (| [], lt |))
     | SWriteReturn _ _ _ _ -> (arg, (| [], lt |))
     end
+#pop-options 
 
-#push-options "--z3rlimit 10000"
+#push-options "--z3rlimit 32"
 let destruct_steps_ewrite
   (fd':closed_exp{EFileDescr? fd'})
   (arg':closed_exp{EString? arg'})
@@ -2422,7 +2432,7 @@ let rec destruct_steps_eopen_str
     | _ -> (str, (| [], lt |))
     end
 
-#push-options "--z3rlimit 10000"
+#push-options "--z3rlimit 32"
 let destruct_steps_eopen
   (str':closed_exp{EString? str'})
   (e':closed_exp)
@@ -2538,7 +2548,7 @@ let can_step_eclose_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
   let st2 : step (EClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCloseReturn h (get_fd fd) (Inr ()) in
   ()
 
-#push-options "--z3rlimit 10000"
+#push-options "--z3rlimit 32"
 let destruct_steps_eclose
   (fd:closed_exp{EFileDescr? fd})
   (e':closed_exp)
