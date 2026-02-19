@@ -7,6 +7,7 @@ open Metaprogram
 open ExamplesIO
 open RrHP
 open QTyp
+open QExp
 
 (* We consider the task is string that need to replace the old contents *)
 
@@ -33,10 +34,27 @@ val main : (string -> string -> io unit) -> io bool
 let main agent =
   let!@ r = wrapper "./temp" "overwrite" agent in
   match r with
-  | Inl () -> io_return true
-  | Inr () -> io_return false
+  | Inl _ -> return true
+  | Inr _ -> return false
+
+// %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
+// %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
+// %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
 
 %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+
+// [@@ (preprocess_with simplify_qType)]
+// let main_derivation () : oval_quotation empty (helper_oval main)
+//   by (trefl ())
+//   = QLambdaProd (
+//       QBindProd
+//         (QAppProd
+//           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
+//                 (QStringLit "overwrite"))
+//           QVar0)
+//         (QCaseProd QVar0
+//           (QReturn QTrue)
+//           (QReturn QFalse)))
 
 let wrapper_intS : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
