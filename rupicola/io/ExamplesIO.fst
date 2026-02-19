@@ -66,3 +66,7 @@ let open2_read_write () =
   let!@! fd2 = openfile "/tmp/output" in
   let!@! data = read fd1 in
   write (fd2, data)
+
+let echo () =
+  let!@! data = read 0 in
+  write (1, data)

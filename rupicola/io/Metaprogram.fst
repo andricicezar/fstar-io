@@ -495,3 +495,5 @@ let _ = assert (tgt_apply_io_bind_read_if_write == test_apply_io_bind_read_if_wr
 %splice_t[tgt_get_req] (meta_translation "tgt_get_req" [`ExamplesIO.utf8_encode;`ExamplesIO.get_req])
 
 %splice_t[tgt_open2_read_write] (meta_translation "tgt_open2_read_write" [`ExamplesIO.open2_read_write])
+
+%splice_t[tgt_echo] (meta_translation "tgt_echo" [`ExamplesIO.echo])
