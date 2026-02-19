@@ -92,6 +92,9 @@ let mk_qfalse : term = mk_app (`QFalse) []
 let mk_qif (b:term) (t1:term) (t2:term) : term =
   mk_app (`QIf) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 
+let mk_qeq_string (v1 v2 : term) : term =
+  mk_app (`QStringEq) [(v1, Q_Explicit); (v2, Q_Explicit)]
+
 let mk_qmkpair (t1:term) (t2:term) : term =
   mk_app (`QMkpair) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qfst (t:term) : term = mk_app (`QFst) [(t, Q_Explicit)]
@@ -231,7 +234,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fuel:int) (qf
 
   | Tv_App hd (a, _) -> begin
     let (head, args) = collect_app qfs in
-    let explicit_args : list term = 
+    let explicit_args : list term =
       args |> List.Tot.filter (fun (_, q) -> Q_Explicit? q) |> List.Tot.map fst in
     match get_fv head, explicit_args with
     | Some "FStar.Pervasives.Native.Mktuple2", [v1; v2] ->
@@ -270,6 +273,8 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (fuel:int) (qf
         mk_qbind qm qk
       | _ -> fail "IO.io_bind continuation is not a lambda"
     end
+    | Some "ExamplesIO.eq_string", [v1; v2] ->
+      mk_qeq_string (create_derivation g dbmap btmap fuel v1) (create_derivation g dbmap btmap fuel v2)
     | Some "ExamplesIO.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
           Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))

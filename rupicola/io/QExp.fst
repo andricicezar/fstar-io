@@ -48,6 +48,12 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | QTrue       : #g : typ_env -> oval_quotation g (fs_oval_return g qBool true)
 | QFalse      : #g : typ_env -> oval_quotation g (fs_oval_return g qBool false)
 | QStringLit  : #g : typ_env -> s:string -> oval_quotation g (fs_oval_return g qString s)
+| QStringEq   : #g : typ_env ->
+                #s1 : fs_oval g qString ->
+                oval_quotation g s1 ->
+                #s2 : fs_oval g qString ->
+                oval_quotation g s2 ->
+                oval_quotation g (fs_oval_eq_string s1 s2)
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
@@ -207,7 +213,7 @@ let simplify_qType_g g (x:term) : Tac term =
   norm_term_env g [
     delta_only [
       `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn;
-      `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus; 
+      `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     iota;

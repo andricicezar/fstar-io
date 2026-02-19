@@ -66,3 +66,7 @@ let open2_read_write () =
   let!@! fd2 = openfile "/tmp/output" in
   let!@! data = read fd1 in
   write (fd2, data)
+
+val eq_string : string -> string -> bool
+let eq_string s t =
+  s = t

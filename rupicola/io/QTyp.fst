@@ -855,6 +855,15 @@ val fs_oval_lambda : #g :typ_env ->
 let fs_oval_lambda #_ #_ body fsG x = body (stack fsG x)
 
 unfold
+val fs_oval_eq_string :
+  #g : typ_env ->
+  s1 : fs_oval g qString ->
+  s2 : fs_oval g qString ->
+  fs_oval g qBool
+let fs_oval_eq_string s1 s2 fsG =
+  (s1 fsG) = (s2 fsG)
+
+unfold
 val fs_oval_if : #g :typ_env ->
                  #a  : qType ->
                  c   : fs_oval g qBool ->
