@@ -16,7 +16,9 @@ let validate olds task news =
 
 let read_file (f : string) : io (resexn string) =
   let!@! fd = openfile f in
-  read fd
+  let!@! r = read fd in
+  let!@! () = close fd in
+  io_return (Inl r)
 
 let wrapper_intS : intS = {
   ct = qString ^-> qString ^-> (qString ^-> qString ^->!@ qUnit) (* ^->!@ qResexn qUnit *)
@@ -33,8 +35,7 @@ let wrapper f task agent =
   else io_return (Inr ())
 
 let wrapped_wrapper_fst f task agent : io bool =
-  let!@ r = wrapper f task agent in
-  match r with
+  match!@ wrapper f task agent with
   | Inl () -> io_return true
   | Inr () -> io_return false
 
