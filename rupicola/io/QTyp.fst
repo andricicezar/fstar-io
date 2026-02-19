@@ -910,6 +910,7 @@ let fs_oval_case cond inlc inrc fsG =
 type fs_prod (t:qType) =
    io (get_Type t)
 
+unfold
 val fs_prod_bind : #a:qType ->
                     #b:qType ->
                     m:fs_prod a ->
@@ -1084,6 +1085,7 @@ let fs_oprod_case_val cond inlc inrc fsG =
   | Inl x -> inlc (stack fsG x)
   | Inr x -> inrc (stack fsG x)
 
+unfold
 val fs_oprod_case_oval : #g :typ_env ->
                 #a  : qType ->
                 #b : qType ->

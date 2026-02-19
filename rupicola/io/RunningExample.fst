@@ -18,9 +18,6 @@ let read_file (f : string) : io (resexn string) =
   let!@! fd = openfile f in
   read fd
 
-let wrapper_intS : intS = {
-  ct = qString ^-> qString ^-> (qString ^-> qString ^->!@ qUnit) (* ^->!@ qResexn qUnit *)
-}
 
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
 // val wrapper : progS wrapper_intS
@@ -32,15 +29,18 @@ let wrapper f task agent =
   then io_return (Inl ())
   else io_return (Inr ())
 
-let wrapped_wrapper_fst f task agent : io bool =
-  let!@ r = wrapper f task agent in
+val main : (string -> string -> io unit) -> io bool
+let main agent =
+  let!@ r = wrapper "./temp" "overwrite" agent in
   match r with
   | Inl () -> io_return true
   | Inr () -> io_return false
 
-[@expect_failure]
-%splice_t[tgt_wrapper] (generate_derivation "tgt_wrapper" (`wrapped_wrapper_fst))
+%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
+let wrapper_intS : intS = {
+  ct = (qString ^-> qString ^->!@ qUnit)
+}
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =
 //   (wrapped_wrapper_fst, tgt_wrapper)

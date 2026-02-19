@@ -215,7 +215,9 @@ let simplify_qType_g g (x:term) : Tac term =
       `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn;
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
-      `%get_rel; `%get_Type; `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+      `%get_rel; `%get_Type;
+      `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    zeta;
     iota;
     simplify
   ] x
