@@ -19,6 +19,9 @@ type typing : typ_env -> exp -> qType -> Type =
            typing g ETrue qBool
 | TyFalse : #g:typ_env ->
             typing g EFalse qBool
+| TyString : #g:typ_env ->
+             #s:string ->
+             typing g (EString s) qString
 | TyIf : #g:typ_env ->
          #e1:exp ->
          #e2:exp ->
@@ -122,6 +125,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
   | EUnit -> fs_oprod_return_val g t ()
   | ETrue -> fs_oprod_return_val g t true
   | EFalse -> fs_oprod_return_val g t false
+  | EString s -> fs_oprod_return_val g t s
   | EIf _ _ _ ->
     let TyIf h1 h2 h3 = h in
     let h1 : typing g _ qBool = h1 in
@@ -193,6 +197,7 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
   | EUnit -> C1.equiv_oprod_unit g
   | ETrue -> C1.equiv_oprod_true g
   | EFalse -> C1.equiv_oprod_false g
+  | EString s -> C1.equiv_oprod_string g s
   | EIf _ _ _ ->
     let TyIf #_ #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_superset_exp h1;
@@ -260,6 +265,7 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
   | EUnit -> C2.equiv_oprod_unit g
   | ETrue -> C2.equiv_oprod_true g
   | EFalse -> C2.equiv_oprod_false g
+  | EString s -> C2.equiv_oprod_string g s
   | EIf _ _ _ ->
     let TyIf #_ #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_subset_exp h1;
@@ -327,6 +333,7 @@ let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
   | EUnit -> ()
   | ETrue -> true
   | EFalse -> false
+  | EString s -> s
   | ELam _ ->
     let TyLam #t1 #t2 hbody = h in
     let hbody : typing (extend t1 empty) _ t2 = hbody in
@@ -353,6 +360,7 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
   | EUnit
   | ETrue
   | EFalse
+  | EString _
   | EFileDescr _ -> ()
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
@@ -377,6 +385,7 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
   | EUnit
   | ETrue
   | EFalse
+  | EString _
   | EFileDescr _ -> ()
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in

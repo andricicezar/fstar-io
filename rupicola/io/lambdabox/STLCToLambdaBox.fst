@@ -171,8 +171,8 @@ let rec compile (e: exp) : Tot term (decreases e) =
       (* case s of inl x => l x | inr y => r y *)
       (* l and r are already lambdas in STLC, so we apply them to the bound variable *)
       TCase (sumTyId, 0) (compile s) [
-        ([NAnon], TApp (compile l) (TRel 0));
-        ([NAnon], TApp (compile r) (TRel 0))
+        ([NAnon], compile l);
+        ([NAnon], compile r)
       ]
 
   (* Conditional *)

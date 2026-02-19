@@ -70,3 +70,7 @@ let open2_read_write () =
 val eq_string : string -> string -> bool
 let eq_string s t =
   s = t
+
+let echo () =
+  let!@! data = read 0 in
+  write (1, data)

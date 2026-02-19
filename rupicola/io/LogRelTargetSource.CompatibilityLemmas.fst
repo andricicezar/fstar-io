@@ -1068,6 +1068,10 @@ let equiv_oprod_false g : Lemma (fs_oprod_return_val g qBool false ⊑ EFalse) =
   equiv_oval_false g;
   equiv_oprod_return (fs_oval_return g qBool false) EFalse
 
+let equiv_oprod_string g s : Lemma (fs_oprod_return_val g qString s ⊑ EString s) =
+  equiv_oval_string g s;
+  equiv_oprod_return (fs_oval_return g qString s) (EString s)
+
 let helper_equiv_oprod_if_steps_pre (g:typ_env) (e:closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:fs_prod qBool) (fs_e2 fs_e3:fs_oprod g t) (fs_e:fs_prod t) (fs_r:fs_val t) (e1 e2 e3:closed_exp) (fsG:eval_env g) =
   (fs_e == (io_bind fs_e1 (fun x -> (if (hd (stack fsG x)) then (fs_e2 (tail (stack fsG x))) else (fs_e3 (tail (stack fsG x))))))) /\
   (e == (EIf e1 e2 e3)) /\

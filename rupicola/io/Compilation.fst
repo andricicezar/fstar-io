@@ -43,6 +43,81 @@ and compile_oprod #g #a (#s:fs_oprod g a) (qs:oprod_quotation g s) : Tot exp (de
   | QIfProd qc qt qe -> EIf (compile qc) (compile_oprod qt) (compile_oprod qe)
   | QCaseProd qcond qinlc qinrc -> ECase (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
 
+let rec _compile_eq_compile
+  #g #a (#s:fs_oval g a)
+  (qs:g ⊢ s)
+  : Lemma (ensures _compile qs == compile qs)
+  (decreases qs)
+=
+  match qs with
+  | Qtt -> ()
+  | QVar0 -> ()
+  | QVarS #g qx ->
+      _compile_eq_compile qx
+  | QFd _ -> ()
+  | QAppGhost -> ()
+  | QApp qf qx ->
+      _compile_eq_compile qf;
+      _compile_eq_compile qx
+  | QLambda qbody ->
+      _compile_eq_compile qbody
+  | QFalse -> ()
+  | QTrue -> ()
+  | QStringLit _ -> ()
+  | QIf qc qt qe ->
+      _compile_eq_compile qc;
+      _compile_eq_compile qt;
+      _compile_eq_compile qe
+  | QMkpair q1 q2 ->
+      _compile_eq_compile q1;
+      _compile_eq_compile q2
+  | QFst qp ->
+      _compile_eq_compile qp
+  | QSnd qp ->
+      _compile_eq_compile qp
+  | QInl qp ->
+      _compile_eq_compile qp
+  | QInr qp ->
+      _compile_eq_compile qp
+  | QCase cond inlc inrc ->
+      _compile_eq_compile cond;
+      _compile_eq_compile inlc;
+      _compile_eq_compile inrc
+  | QLambdaProd qbody ->
+      _compile_oprod_eq_compile_oprod qbody
+and _compile_oprod_eq_compile_oprod
+  #g #a (#s:fs_oprod g a)
+  (qs:oprod_quotation g s)
+  : Lemma (ensures _compile_oprod qs == compile_oprod qs)
+  (decreases qs)
+=
+  match qs with
+  | QOpenfile qfnm ->
+      _compile_eq_compile qfnm
+  | QRead qfd ->
+      _compile_eq_compile qfd
+  | QWrite qfd qmsg ->
+      _compile_eq_compile qfd;
+      _compile_eq_compile qmsg
+  | QClose qfd ->
+      _compile_eq_compile qfd
+  | QReturn qx ->
+      _compile_eq_compile qx
+  | QBindProd qm qk ->
+      _compile_oprod_eq_compile_oprod qm;
+      _compile_oprod_eq_compile_oprod qk
+  | QAppProd qf qx ->
+      _compile_eq_compile qf;
+      _compile_eq_compile qx
+  | QIfProd qc qt qe ->
+      _compile_eq_compile qc;
+      _compile_oprod_eq_compile_oprod qt;
+      _compile_oprod_eq_compile_oprod qe
+  | QCaseProd qcond qinlc qinrc ->
+      _compile_eq_compile qcond;
+      _compile_oprod_eq_compile_oprod qinlc;
+      _compile_oprod_eq_compile_oprod qinrc
+
 let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures (s ⊐ (compile qs))) (decreases qs)
   = match qs with
