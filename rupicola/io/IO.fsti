@@ -11,7 +11,10 @@ include BaseTypes
 include Hist
 open Trace
 
-val io (a:Type u#a) : Type u#a
+noeq
+type io (a:Type u#a) : Type u#a =
+| Call : o:io_ops -> args:io_args o -> (io_res o args -> io a) -> io a
+| Return : a -> io a
 
 val io_return (#a:Type) (x:a) : io a
 
@@ -30,7 +33,19 @@ val close : file_descr -> io (resexn unit)
 let return = io_return
 let (let!@) = io_bind
 
+let op_wp (o:io_ops) (args:io_args o) : hist (io_res o args) =
+  to_hist
+    (fun h -> io_pre h o args)
+    (fun h res lt -> io_post h o args res /\ lt == [op_to_ev o args res])
+
+let rec theta_unf #a (m:io a) : hist a =
+  match m with
+  | Return x -> hist_return x
+  | Call o args k -> hist_bind (op_wp o args) (fun r -> theta_unf (k r))
+
 val theta : #a:Type -> io a -> hist a
+
+val unfold_theta : #a : Type -> Lemma (theta #a == theta_unf #a)
 
 val theta_monad_morphism_ret (x:'a) :
   Lemma (theta (return x) == hist_return x)
