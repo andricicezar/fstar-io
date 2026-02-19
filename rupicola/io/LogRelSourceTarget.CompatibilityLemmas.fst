@@ -706,6 +706,7 @@ let equiv_oprod_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_oprod
     end
   end
 
+#push-options "--fuel 32 --z3rlimit 32"
 let helper_equiv_prod_case_val
   (e':closed_exp)
   (#h:history) (lt:local_trace h)
@@ -749,7 +750,7 @@ let helper_equiv_prod_case_val
       assert (b ∋ (h, fs_r, e_r));
       assert (c ⫄ (h, fs_ri fs_r, subst_beta e_r e_ri));
       get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_li fs_ri) h lt fs_r))
-
+#pop-options
 let equiv_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊐ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
@@ -1384,12 +1385,12 @@ let helper_lemma_equiv_oprod_case #g #a #b
   : Lemma
     (requires fs_e ⊒ e /\ fsG `(∽) h` s /\ fv_in_env g (ELam e))
     (ensures (a ^->!@ b) ⊇ (h, fs_oval_lambda_oprod fs_e fsG, gsubst s (ELam e)))
-  = 
+  =
   equiv_oval_lambda_oprod fs_e e;
   let fs_il' : fs_oval g (a ^->!@ b) = (fun fsG x -> fs_e (stack fsG x)) in
   assert (fs_il' ⊐ (ELam e));
   eliminate forall bo (s:gsub g bo) (fsG:eval_env g) (h:history).
-    fsG `(∽) h` s ==> (a ^->!@ b) ⊇ (h, fs_il' fsG, gsubst s (ELam e)) 
+    fsG `(∽) h` s ==> (a ^->!@ b) ⊇ (h, fs_il' fsG, gsubst s (ELam e))
   with bo s fsG h
 
 let equiv_oprod_case #g (#a #b #c:qType)
@@ -1539,6 +1540,7 @@ let equiv_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
     end
   end
 
+#push-options "--fuel 32 --z3rlimit 32"
 let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊒ fd /\ fs_msg ⊒ msg)
@@ -1604,6 +1606,7 @@ let equiv_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStrin
       end
     end
   end
+#pop-options
 
 let equiv_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
