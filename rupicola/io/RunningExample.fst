@@ -91,25 +91,33 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 
-%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
+// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
-// %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-// [@@ (preprocess_with simplify_qType)]
-// let main_derivation () : oval_quotation empty (helper_oval main)
-//   by (trefl ())
-//   = QLambdaProd (
-//       QBindProd
-//         (QAppProd
-//           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-//                 (QStringLit "overwrite"))
-//           QVar0)
-//         (QCaseProd QVar0
-//           (QReturn QTrue)
-//           (QReturn QFalse)))
+%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+[@@ (preprocess_with simplify_qType)]
+let main_derivation #g : oval_quotation g (helper_oval_g #_ #g main)
+  by (trefl ())
+  = QLambdaProd (
+      QBindProd
+        (QAppProd
+          (QApp (QApp wrapper_derivation (QStringLit "./temp"))
+                (QStringLit "overwrite"))
+          QVar0)
+        (QCaseProd QVar0
+          (QReturn QTrue)
+          (QReturn QFalse)))
 
-let wrapper_intS : intS = {
+let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
 }
+
+
+val ps_main : progS re_int
+let ps_main : progS re_int=
+  (| main, main_derivation #empty |)
+
+let pt_main = RrHP.compile_prog ps_main
+
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =
 //   (wrapped_wrapper_fst, tgt_wrapper)
