@@ -193,6 +193,9 @@ unfold
 let helper_oval (#a:qType) (x:fs_val a) : fs_oval empty a = fun _ -> x
 
 unfold
+let helper_oval_g (#a:qType) (#g:typ_env) (x:fs_val a) : fs_oval g a = fun _ -> x
+
+unfold
 let helper_oprod (#a:qType) (x:fs_prod a) : fs_oprod empty a = fun _ -> x
 
 let (⊩) (a:qType) (x:fs_val a) =
