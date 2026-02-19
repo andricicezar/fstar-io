@@ -90,9 +90,10 @@ let main agent =
 
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
-// %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+
 %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
+// %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
 // [@@ (preprocess_with simplify_qType)]
 // let main_derivation () : oval_quotation empty (helper_oval main)
 //   by (trefl ())
