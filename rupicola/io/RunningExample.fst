@@ -50,6 +50,20 @@ let hist_prepost #a (pre : hist_pre) (post : (h:_ -> hist_post h a)) : hist a =
   fun h p -> pre h /\ (forall r lt. post h lt r ==> p lt r)
 
 unfold
+let basic_spec =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt r -> True)
+
+let openfile_sat_spec f :
+  Lemma (theta_unf (openfile f) ⊑ basic_spec)
+= () // At least here it works (not with regular theta so we made progress)
+
+let read_file_sat_spec f :
+  Lemma (theta_unf (read_file f) ⊑ basic_spec)
+= admit ()
+
+unfold
 let wrapper_spec (f task : string) =
   hist_prepost
     (fun h -> True)
