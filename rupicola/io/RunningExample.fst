@@ -17,7 +17,9 @@ let validate olds task news =
 
 let read_file (f : string) : io (resexn string) =
   let!@! fd = openfile f in
-  read fd
+  let!@! r = read fd in
+  let!@! () = close fd in
+  io_return (Inl r)
 
 
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
@@ -30,6 +32,55 @@ let wrapper f task agent =
   then io_return (Inl ())
   else io_return (Inr ())
 
+
+(* Specification *)
+
+unfold
+let hist_prepost #a (pre : hist_pre) (post : (h:_ -> hist_post h a)) : hist a =
+  fun h p -> pre h /\ (forall r lt. post h lt r ==> p lt r)
+
+unfold
+let basic_spec =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt r -> True)
+
+let openfile_sat_spec f :
+  Lemma (theta_unf (openfile f) ⊑ basic_spec)
+= () // At least here it works (not with regular theta so we made progress)
+
+let read_file_sat_spec f :
+  Lemma (theta_unf (read_file f) ⊑ basic_spec)
+= admit ()
+
+unfold
+let wrapper_spec (f task : string) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt r -> True)
+
+let wrapper_sat_spec f task agent :
+  Lemma (theta_unf (wrapper f task agent) ⊑ wrapper_spec f task)
+  // by (norm [delta_only [`%theta_unf;`%wrapper;`%(let!@!);`%(let!@);`%io_bind]] ; (* compute () ; *) explode () ; dump "oh")
+= // unfold_theta #(resexn unit)
+  introduce
+    forall (h: Trace.history) (p: hist_post h (resexn unit)).
+      (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
+      theta_unf (wrapper f task agent) h p
+  with begin
+    introduce
+      (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
+      theta_unf (wrapper f task agent) h p
+    with _. begin
+      admit ()
+    end
+  end
+  // ()
+
+// assume (forall (h: Trace.history) (p: hist_post h (resexn unit)).
+//       (forall (r: resexn unit) (lt: Trace.local_trace h). auto_squash (p lt r)) ==>
+//       theta (wrapper f task agent) h p)
+
 val main : (string -> string -> io unit) -> io bool
 let main agent =
   let!@ r = wrapper "./temp" "overwrite" agent in
@@ -40,7 +91,6 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 // %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-
 %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
 // [@@ (preprocess_with simplify_qType)]
@@ -62,8 +112,6 @@ let wrapper_intS : intS = {
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =
 //   (wrapped_wrapper_fst, tgt_wrapper)
-
-// let compile_wrapper : compile_prog #wrapper_intS wrapper = solve
 
 // val good_agent_aux : string -> string -> io (resexn unit)
 // let good_agent_aux fn task =

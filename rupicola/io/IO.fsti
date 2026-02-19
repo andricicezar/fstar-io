@@ -11,26 +11,54 @@ include BaseTypes
 include Hist
 open Trace
 
-val io (a:Type u#a) : Type u#a
+noeq
+type io (a:Type u#a) : Type u#a =
+| Call : o:io_ops -> args:io_args o -> (io_res o args -> io a) -> io a
+| Return : a -> io a
 
-val io_return (#a:Type) (x:a) : io a
+let io_return (#a:Type) (x:a) : io a =
+  Return x
 
-val io_bind
+let rec io_bind
   (#a:Type u#a)
   (#b:Type u#b)
   (l : io a)
   (k : a -> io b) :
-  io b
+  io b =
+  match l with
+  | Return x -> k x
+  | Call o args fnc ->
+      Call o args (fun i ->
+        io_bind #a #b (fnc i) k)
 
-val openfile : string -> io (resexn file_descr)
-val read : file_descr -> io (resexn string)
-val write : file_descr * string -> io (resexn unit)
-val close : file_descr -> io (resexn unit)
+let openfile (fnm:string) : io (resexn file_descr) =
+  Call OOpen fnm Return
+
+let read (fd:file_descr) : io (resexn string) =
+  Call ORead fd Return
+
+let write (x:file_descr * string) : io (resexn unit) =
+  Call OWrite x Return
+
+let close (fd:file_descr) : io (resexn unit) =
+  Call OClose fd Return
 
 let return = io_return
 let (let!@) = io_bind
 
+let op_wp (o:io_ops) (args:io_args o) : hist (io_res o args) =
+  to_hist
+    (fun h -> io_pre h o args)
+    (fun h res lt -> io_post h o args res /\ lt == [op_to_ev o args res])
+
+let rec theta_unf #a (m:io a) : hist a =
+  match m with
+  | Return x -> hist_return x
+  | Call o args k -> hist_bind (op_wp o args) (fun r -> theta_unf (k r))
+
 val theta : #a:Type -> io a -> hist a
+
+val unfold_theta : #a : Type -> Lemma (theta #a == theta_unf #a)
 
 val theta_monad_morphism_ret (x:'a) :
   Lemma (theta (return x) == hist_return x)
