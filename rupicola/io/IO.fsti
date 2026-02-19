@@ -16,19 +16,32 @@ type io (a:Type u#a) : Type u#a =
 | Call : o:io_ops -> args:io_args o -> (io_res o args -> io a) -> io a
 | Return : a -> io a
 
-val io_return (#a:Type) (x:a) : io a
+let io_return (#a:Type) (x:a) : io a =
+  Return x
 
-val io_bind
+let rec io_bind
   (#a:Type u#a)
   (#b:Type u#b)
   (l : io a)
   (k : a -> io b) :
-  io b
+  io b =
+  match l with
+  | Return x -> k x
+  | Call o args fnc ->
+      Call o args (fun i ->
+        io_bind #a #b (fnc i) k)
 
-val openfile : string -> io (resexn file_descr)
-val read : file_descr -> io (resexn string)
-val write : file_descr * string -> io (resexn unit)
-val close : file_descr -> io (resexn unit)
+let openfile (fnm:string) : io (resexn file_descr) =
+  Call OOpen fnm Return
+
+let read (fd:file_descr) : io (resexn string) =
+  Call ORead fd Return
+
+let write (x:file_descr * string) : io (resexn unit) =
+  Call OWrite x Return
+
+let close (fd:file_descr) : io (resexn unit) =
+  Call OClose fd Return
 
 let return = io_return
 let (let!@) = io_bind

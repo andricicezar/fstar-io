@@ -5,33 +5,6 @@ open Trace
 
 open FStar.Tactics.V1
 
-let io_return (#a:Type) (x:a) : io a =
-  Return x
-
-let rec io_bind
-  (#a:Type u#a)
-  (#b:Type u#b)
-  (l : io a)
-  (k : a -> io b) :
-  io b =
-  match l with
-  | Return x -> k x
-  | Call o args fnc ->
-      Call o args (fun i ->
-        io_bind #a #b (fnc i) k)
-
-let openfile (fnm:string) : io (resexn file_descr) =
-  Call OOpen fnm Return
-
-let read (fd:file_descr) : io (resexn string) =
-  Call ORead fd Return
-
-let write (x:file_descr * string) : io (resexn unit) =
-  Call OWrite x Return
-
-let close (fd:file_descr) : io (resexn unit) =
-  Call OClose fd Return
-
 let theta = theta_unf
 
 let unfold_theta #a :
@@ -215,7 +188,7 @@ let rec theta_thetaP_in_post #t (m:io t) (h:history) : Lemma (theta m h (fun lt 
           assert (theta (k r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r'))
         end
       end;
-      assert ((op_wp o args) h (fun lt fs_r -> theta (k fs_r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r')))
+      assert ((op_wp o args) h (fun lt fs_r -> theta_unf (k fs_r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r')))
 #pop-options
 
 unfold
