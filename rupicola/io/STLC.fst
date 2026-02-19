@@ -575,6 +575,27 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     str:value{EString? str} ->
     h:history ->
     step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ())))
+  | StringEqLeft :
+    #e1:closed_exp ->
+    e2:closed_exp ->
+    #e1':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step e1 e1' h oev ->
+    step (EStringEq e1 e2) (EStringEq e1' e2) h oev
+  | StringEqRight :
+    e1:closed_exp{EString? e1} ->
+    #e2:closed_exp ->
+    #e2':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    hst:step e2 e2' h oev ->
+    step (EStringEq e1 e2) (EStringEq e1 e2') h oev
+  | StringEqReturn :
+    s1:string ->
+    s2:string ->
+    h:history ->
+    step (EStringEq (EString s1) (EString s2)) (if s1 = s2 then ETrue else EFalse) h None
   | SClose :
     #fd:closed_exp ->
     #fd':closed_exp ->
@@ -928,6 +949,70 @@ let construct_steps_epair
   construct_steps_epair_e2 e1' e2 e2' (h++lt1) lt2 sts2;
   trans_history h lt1 lt2;
   lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1' e2') h lt1 lt2
+
+let rec construct_steps_estringeq_e1
+  (e1:closed_exp)
+  (e1':closed_exp{EString? e1'})
+  (e2:closed_exp)
+  (h:history)
+  (lt1:local_trace h)
+  (st1:steps e1 e1' h lt1) :
+  Lemma
+    (requires indexed_irred e1' (h++lt1))
+    (ensures steps (EStringEq e1 e2) (EStringEq e1' e2) h lt1)
+    (decreases st1) =
+  match st1 with
+  | SRefl e1 h -> ()
+  | STrans #e1 #e1_ #_ #h #oev1 #lt23 step_e1 step_e1_steps -> begin
+    let _ : step (EStringEq e1 e2) (EStringEq e1_ e2) h oev1 = StringEqLeft e2 step_e1 in
+    lem_step_implies_steps (EStringEq e1 e2) (EStringEq e1_ e2) h oev1;
+    let lt' : local_trace h = as_lt oev1 in
+    let s2 : steps e1_ e1' (h++lt') lt23 = step_e1_steps in
+    trans_history h lt' lt23;
+    construct_steps_estringeq_e1 e1_ e1' e2 (h++lt') lt23 s2;
+    lem_steps_transitive (EStringEq e1 e2) (EStringEq e1_ e2) (EStringEq e1' e2) h lt' lt23
+    end
+
+let rec construct_steps_estringeq_e2
+  (e1':closed_exp{EString? e1'})
+  (e2:closed_exp)
+  (e2':closed_exp{EString? e2'})
+  (h:history)
+  (lt2:local_trace h)
+  (st2:steps e2 e2' h lt2) :
+  Lemma
+    (requires indexed_irred e2' (h++lt2))
+    (ensures steps (EStringEq e1' e2) (EStringEq e1' e2') h lt2)
+    (decreases st2) =
+  match st2 with
+  | SRefl e2 h -> ()
+  | STrans #e2 #e2_ #_ #h #oev2 #lt23 step_e2 step_e2_steps -> begin
+    let _ : step (EStringEq e1' e2) (EStringEq e1' e2_) h oev2 = StringEqRight e1' step_e2 in
+    lem_step_implies_steps (EStringEq e1' e2) (EStringEq e1' e2_) h oev2;
+    let lt' : local_trace h = as_lt oev2 in
+    let s2 : steps e2_ e2' (h++lt') lt23 = step_e2_steps in
+    trans_history h lt' lt23;
+    construct_steps_estringeq_e2 e1' e2_ e2' (h++lt') lt23 s2;
+    lem_steps_transitive (EStringEq e1' e2) (EStringEq e1' e2_) (EStringEq e1' e2') h lt' lt23
+    end
+
+let construct_steps_estringeq
+  (e1:closed_exp)
+  (e1':closed_exp{EString? e1'})
+  (e2:closed_exp)
+  (e2':closed_exp{EString? e2'})
+  (h:history)
+  (lt1:local_trace h)
+  (lt2:local_trace (h++lt1))
+  (sts1:steps e1 e1' h lt1)
+  (sts2:steps e2 e2' (h++lt1) lt2) :
+  Lemma (requires indexed_irred e1' (h++lt1) /\
+                  indexed_irred e2' ((h++lt1)++lt2))
+        (ensures steps (EStringEq e1 e2) (EStringEq e1' e2') h (lt1@lt2)) =
+  construct_steps_estringeq_e1 e1 e1' e2 h lt1 sts1;
+  construct_steps_estringeq_e2 e1' e2 e2' (h++lt1) lt2 sts2;
+  trans_history h lt1 lt2;
+  lem_steps_transitive (EStringEq e1 e2) (EStringEq e1' e2) (EStringEq e1' e2') h lt1 lt2
 
 let rec construct_steps_efst
   (e12:closed_exp)
@@ -1613,6 +1698,116 @@ let lem_destruct_steps_epair
       | PairRight _ _ -> false_elim ()
     )
   end
+
+let lem_irred_estringeq_implies_irred_e1 (e1 e2:closed_exp) (h:history) :
+  Lemma (requires indexed_irred (EStringEq e1 e2) h)
+        (ensures indexed_irred e1 h) =
+  introduce forall (e1':closed_exp) (oev:option (event_h h)). step e1 e1' h oev ==> False with begin
+    introduce _ ==> _ with st. begin
+      bind_squash st (fun st -> return_squash (StringEqLeft #e1 e2 #e1' #h #oev st))
+    end
+  end
+
+let lem_irred_estringeq_implies_irred_e2 (e1':closed_exp{EString? e1'}) (e2:closed_exp) (h:history) :
+  Lemma (requires indexed_irred (EStringEq e1' e2) h)
+        (ensures indexed_irred e2 h) =
+  introduce forall (e2':closed_exp) (oev:option (event_h h)). step e2 e2' h oev ==> False with begin
+    introduce _ ==> _ with st. begin
+      bind_squash st (fun st -> return_squash (StringEqRight e1' #e2 #e2' #h #oev st))
+    end
+  end
+
+let rec destruct_steps_estringeq_e1
+  (e1:closed_exp)
+  (e2:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (EStringEq e1 e2) e' h lt) :
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
+    (requires indexed_irred e' (h++lt) /\
+      indexed_safe e1 h)
+    (ensures fun (e1', (| lt1, lt' |)) ->
+      steps e1 e1' h lt1 /\
+      steps (EStringEq e1 e2) (EStringEq e1' e2) h lt1 /\
+      steps (EStringEq e1' e2) e' (h++lt1) lt' /\
+      (lt == (lt1 @ lt')) /\
+      (indexed_irred e1 h ==> (lt1 == [] /\ e1 == e1')))
+    (decreases st) =
+  match st with
+  | SRefl (EStringEq e1 e2) h -> begin
+    lem_irred_estringeq_implies_irred_e1 e1 e2 h;
+    assert (steps e1 e1 h []);
+    (e1, (| [], lt |))
+    end
+  | STrans #e #f2 #e' #h #_ #lt23 step_estringeq step_estringeq_steps -> begin
+    let (EStringEq e1 e2) = e in
+    match step_estringeq with
+    | StringEqLeft #e1 e2 #e1' #h #oev1 step_e1 -> begin
+      let (EStringEq e1' e2) = f2 in
+      lem_step_implies_steps e1 e1' h oev1;
+      lem_step_implies_steps (EStringEq e1 e2) (EStringEq e1' e2) h oev1;
+      let lt1 : local_trace h = as_lt oev1 in
+      let s2 : steps (EStringEq e1' e2) e' (h++lt1) lt23 = step_estringeq_steps in
+      trans_history h lt1 lt23;
+      lem_step_preserve_indexed_safe e1 e1' h oev1;
+      let (e1'', (| lt1', lt' |)) = destruct_steps_estringeq_e1 e1' e2 e' (h++lt1) lt23 s2 in
+      trans_history h lt1 lt1';
+      lem_steps_transitive e1 e1' e1'' h lt1 lt1';
+      lem_steps_transitive (EStringEq e1 e2) (EStringEq e1' e2) (EStringEq e1'' e2) h lt1 lt1';
+      (e1'', (| (lt1 @ lt1'), lt' |))
+      end
+    | _ -> (e1, (| [], lt |))
+    end
+
+let rec destruct_steps_estringeq_e2
+  (e1':closed_exp{EString? e1'})
+  (e2:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (EStringEq e1' e2) e' h lt) :
+  Pure (value * (lt2:local_trace h & local_trace (h++lt2)))
+    (requires indexed_irred e' (h++lt) /\
+      indexed_safe e2 h)
+    (ensures fun (e2', (| lt2, lt' |)) ->
+      steps e2 e2' h lt2 /\
+      steps (EStringEq e1' e2) (EStringEq e1' e2') h lt2 /\
+      steps (EStringEq e1' e2') e' (h++lt2) lt' /\
+      (lt == (lt2 @ lt')) /\
+      (indexed_irred e2 h ==> (lt2 == [] /\ e2 == e2')))
+    (decreases st) =
+  match st with
+  | SRefl (EStringEq e1' e2) h -> begin
+    lem_irred_estringeq_implies_irred_e2 e1' e2 h;
+    assert (steps e2 e2 h []);
+    (e2, (| [], lt |))
+    end
+  | STrans #e #f2 #e' #h #_ #lt23 step_estringeq step_estringeq_steps -> begin
+    let (EStringEq e1 e2) = e in
+    match step_estringeq with
+    | StringEqRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
+      let (EStringEq e1' e2') = f2 in
+      lem_step_implies_steps e2 e2' h oev2;
+      lem_step_implies_steps (EStringEq e1' e2) (EStringEq e1' e2') h oev2;
+      let lt2 : local_trace h = as_lt oev2 in
+      let s2 : steps (EStringEq e1' e2') e' (h++lt2) lt23 = step_estringeq_steps in
+      trans_history h lt2 lt23;
+      lem_step_preserve_indexed_safe e2 e2' h oev2;
+      let (e2'', (| lt2', lt' |)) = destruct_steps_estringeq_e2 e1' e2' e' (h++lt2) lt23 s2 in
+      trans_history h lt2 lt2';
+      lem_steps_transitive e2 e2' e2'' h lt2 lt2';
+      lem_steps_transitive (EStringEq e1' e2) (EStringEq e1' e2') (EStringEq e1' e2'') h lt2 lt2';
+      (e2'', (| (lt2 @ lt2'), lt' |))
+      end
+    | StringEqLeft _ _ -> begin
+      lem_value_is_irred e1';
+      (e2, (| [], lt |))
+      end
+    | StringEqReturn _ _ _ -> begin
+      (e2, (| [], lt |))
+      end
+    end
 
 let can_step_efst_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)

@@ -224,6 +224,10 @@ let lem_fv_in_env_pair (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EPair e1 e2))
   = append_memP_forall (free_vars e1) (free_vars e2)
 
+let lem_fv_in_env_string_eq (g:typ_env) (e1 e2:exp) :
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EStringEq e1 e2))
+  = append_memP_forall (free_vars e1) (free_vars e2)
+
 let lem_fv_in_env_fst (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EFst e) <==> fv_in_env g e)
   = ()
