@@ -1,21 +1,19 @@
 (* Runtime axioms for the STLC (IO) -> LambdaBox pipeline.
-   Implements IO operations on Church-encoded values.
+   Implements IO operations.
 
    LambdaBox/Peregrine value conventions (OCaml runtime):
      string:     native OCaml string (from TPrim (PrimString s))
      unit:       tt    = int 0  (nullary constructor 0)
-     nat:        zero  = int 0  (nullary constructor 0)
-                 succ n = block { tag=0, field[0] = n }  (only non-nullary ctor)
      sum/either: inl x = block { tag=0, field[0] = x }
                  inr y = block { tag=1, field[0] = y }
-   file_descr = nat (Church-encoded nat) *)
+     file_descr = nat *)
 
-(* Decode a Church-encoded nat to an OCaml int *)
+(* Decode a nat to an OCaml int *)
 let rec decode_nat x =
   if Obj.is_int x then 0
   else 1 + decode_nat (Obj.field x 0)
 
-(* Encode an OCaml int as a Church-encoded nat *)
+(* Encode an OCaml int as a nat *)
 let rec encode_nat n =
   if n = 0 then Obj.repr 0
   else
@@ -66,7 +64,7 @@ let def_Runtime_io_read fd =
    Write a string to the output channel associated with fd.
    msg is a native OCaml string (from TPrim (PrimString s)).
    Returns Inl () on success, Inr () on error. *)
-let def_Runtime_io_write fd msg =
+let def_Runtime_io_write (fd : Obj.t) (msg : Obj.t) : Obj.t =
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
   | None -> make_inr unit_val
@@ -81,7 +79,7 @@ let def_Runtime_io_write fd msg =
 (* io_open fnm : resexn file_descr
    Open a file with the given string filename.
    fnm is a native OCaml string (from TPrim (PrimString s)).
-   Returns Inl fd (Church-encoded nat) on success, Inr () on error. *)
+   Returns Inl fd on success, Inr () on error. *)
 let def_Runtime_io_open fnm =
   let filename = (Obj.obj fnm : string) in
   try

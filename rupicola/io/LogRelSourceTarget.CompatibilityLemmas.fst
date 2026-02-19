@@ -1015,6 +1015,10 @@ let equiv_oprod_false g : Lemma (fs_oprod_return_val g qBool false ⊒ EFalse) =
   equiv_oval_false g;
   equiv_oprod_return (fs_oval_return g qBool false) EFalse
 
+let equiv_oprod_string g s : Lemma (fs_oprod_return_val g qString s ⊒ EString s) =
+  equiv_oval_string g s;
+  equiv_oprod_return (fs_oval_return g qString s) (EString s)
+
 open FStar.Tactics.V1
 
 let equiv_oprod_if #g
