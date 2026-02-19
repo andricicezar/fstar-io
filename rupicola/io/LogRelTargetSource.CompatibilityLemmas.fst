@@ -53,6 +53,55 @@ let equiv_oval_string g (str:string) : Lemma (fs_oval_return g qString str ⊏ E
     end
   end
 
+#push-options "--z3rlimit 10"
+let helper_equiv_oval_string_eq_steps (h:history) (fs_e1:fs_val qString) (fs_e2:fs_val qString) (e1 e2:closed_exp) :
+  Lemma
+    (requires qString ⊆ (h, fs_e1, e1) /\
+              qString ⊆ (h, fs_e2, e2))
+    (ensures exists (e':closed_exp). e_beh (EStringEq e1 e2) e' h [] /\ qBool ∈ (h, (fs_e1 = fs_e2), e')) =
+  eliminate exists (e1':closed_exp). e_beh e1 e1' h [] /\ qString ∈ (h, fs_e1, e1')
+    returns exists (e':closed_exp). e_beh (EStringEq e1 e2) e' h [] /\ qBool ∈ (h, (fs_e1 = fs_e2), e') with _. begin
+  eliminate exists (e2':closed_exp). e_beh e2 e2' h [] /\ qString ∈ (h, fs_e2, e2')
+    returns exists (e':closed_exp). e_beh (EStringEq e1 e2) e' h [] /\ qBool ∈ (h, (fs_e1 = fs_e2), e') with _. begin
+  let EString s1 = e1' in
+  let EString s2 = e2' in
+  lem_values_are_values qString h fs_e1 e1';
+  lem_values_are_values qString h fs_e2 e2';
+  lem_value_is_irred e1';
+  lem_value_is_irred e2';
+  let result = if s1 = s2 then ETrue else EFalse in
+  let _ : step (EStringEq (EString s1) (EString s2)) result h None = StringEqReturn s1 s2 h in
+  lem_step_implies_steps (EStringEq (EString s1) (EString s2)) result h None;
+  lem_value_is_irred result;
+  FStar.Squash.bind_squash #(steps e1 e1' h []) #(squash (exists (e':closed_exp). e_beh (EStringEq e1 e2) e' h [] /\ qBool ∈ (h, (fs_e1 = fs_e2), e'))) () (fun (sts1:steps e1 e1' h []) ->
+  FStar.Squash.bind_squash #(steps e2 e2' h []) #(squash (exists (e':closed_exp). e_beh (EStringEq e1 e2) e' h [] /\ qBool ∈ (h, (fs_e1 = fs_e2), e'))) () (fun (sts2:steps e2 e2' h []) ->
+  construct_steps_estringeq e1 e1' e2 e2' h [] [] sts1 sts2;
+  lem_steps_transitive (EStringEq e1 e2) (EStringEq (EString s1) (EString s2)) result h [] [];
+  assert (qBool ∈ (h, (fs_e1 = fs_e2), result))
+  ))
+  end
+  end
+#pop-options
+
+let equiv_oval_string_eq #g
+  (fs_e1:fs_oval g qString) (fs_e2:fs_oval g qString)
+  (e1:exp) (e2:exp)
+  : Lemma
+    (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2)
+    (ensures fs_oval_eq_string fs_e1 fs_e2 ⊏ EStringEq e1 e2) =
+  lem_fv_in_env_string_eq g e1 e2;
+  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qBool ⊆ (h, (fs_e1 fsG = fs_e2 fsG), gsubst s (EStringEq e1 e2)) with begin
+    let fs_e1 = fs_e1 fsG in
+    let fs_e2 = fs_e2 fsG in
+    let fs_e = (fs_e1 = fs_e2) in
+    let e = EStringEq (gsubst s e1) (gsubst s e2) in
+    assert (gsubst s (EStringEq e1 e2) == e);
+    let EStringEq e1 e2 = e in
+    introduce fsG `(≍) h` s ==> qBool ⊆ (h, fs_e, e) with _. begin
+      helper_equiv_oval_string_eq_steps h fs_e1 fs_e2 e1 e2
+    end
+  end
+
 (** Used in backtranslation **)
 let equiv_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊏ EVar x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> Some?.v (g x) ⊆ (h, index fsG x, gsubst s (EVar x)) with begin
