@@ -27,7 +27,7 @@ type progS (i:intS) =
   qs:((i.ct ^->!@ qBool) ⊩ ps){ QLambdaProd? qs }
 
 type ctxS (i:intS) = fs_val i.ct
-type wholeS = fs_prod qBool // CA: To be able to compile whole programs requires a proof that it can be compiled
+type wholeS = fs_prod qBool
 
 // linking involves taking a program and context, extracting the first part of the dependent pair (so the program i.ct -> bool) and applying it to the context
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
@@ -74,7 +74,7 @@ val behT : wt:wholeT -> behT_t
 let behT wt = fun (lt, r) -> e_beh wt r [] lt
 
 unfold val behT_in_behS : behT_t -> behS_t -> Type0
-let behT_in_behS bt bs = 
+let behT_in_behS bt bs =
   (forall rT lt. bt (lt, rT) ==> (exists rS. rel_bools rS rT /\ bs lt rS))
 
 val rel_behs : behS_t -> behT_t -> Type0
@@ -120,7 +120,7 @@ let rrhp (i:intS) =
 let rschc (i:intS) =
   forall (ps:progS i).
     forall ct. exists cs.
-      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs) 
+      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs)
 
 let r2rtc (i:intS) =
   forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
@@ -136,7 +136,7 @@ let rrhp_1 (i:intS) =
 let rrhp_1_implies_rrhp (i:intS) :
   Lemma (requires rrhp_1 i)
         (ensures rrhp i) =
-  introduce forall ct. 
+  introduce forall ct.
     exists cs. forall (ps:progS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
   with begin
     introduce exists cs. forall (ps:progS i). behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
@@ -146,11 +146,11 @@ let rrhp_1_implies_rrhp (i:intS) :
 let rschc_1 (i:intS) =
   forall (ps:progS i).
     forall ct.
-      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps (backtranslate_ctx ct)) 
+      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps (backtranslate_ctx ct))
 
 let rschc_1_implies_rschs (i:intS) :
   Lemma (requires rschc_1 i)
-        (ensures rschc i) = 
+        (ensures rschc i) =
   introduce forall (ps:progS i) ct. exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs) with
     introduce exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs)
     with (backtranslate_ctx ct) and ()
@@ -160,7 +160,7 @@ let r2rtc_1 (i:intS) =
     behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
       (exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
                          (behS (linkS ps1 (backtranslate_ctx ct)) lt1 rs1) /\ (behS (linkS ps2 (backtranslate_ctx ct)) lt2 rs2))
-                      
+
 let r2rtc_1_implies_r2rtc (i:intS) :
   Lemma (requires r2rtc_1 i)
         (ensures r2rtc i) =
@@ -176,9 +176,9 @@ let r2rtc_1_implies_r2rtc (i:intS) :
 
 
 let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
-  : Lemma 
+  : Lemma
       (requires ELam? pt /\ is_value ct)
-      (ensures forall lt r. behT (EApp pt ct) (lt, r) <==> behT (subst_beta ct (ELam?.b pt)) (lt, r)) = 
+      (ensures forall lt r. behT (EApp pt ct) (lt, r) <==> behT (subst_beta ct (ELam?.b pt)) (lt, r)) =
   let h0 : history = [] in
   let b = ELam?.b pt in
   let sb = subst_beta ct b in
@@ -222,7 +222,7 @@ let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   introduce forall (lt:local_trace h0) (r:closed_exp).
     behT (EApp pt ct) (lt, r) <==> behT sb (lt, r)
   with ()
-  
+
 let proof_rschc_1 i : Lemma (rschc_1 i) =
   introduce forall pS cT. behT (linkT (compile_prog pS) cT) `behT_in_behS` behS (linkS pS (backtranslate_ctx cT)) with begin
     let t : qType = i.ct in

@@ -1120,7 +1120,7 @@ let equiv_oprod_if #g
               let (e1', (| lt1, lt2 |)) = destruct_steps_eif e1 e2 e3 e' h lt sts1 in
               eliminate exists (fs_r_e1:fs_val qBool). qBool ∋ (h++lt1, fs_r_e1, e1') /\ fs_beh fs_e1' h lt1 fs_r_e1
               returns exists (fs_r:fs_val t). t ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-                lem_values_are_expressions qBool (h++lt1) fs_r_e1 e1'; (** Cezar: feels wrong **)
+                lem_values_are_expressions qBool (h++lt1) fs_r_e1 e1';
                 trans_history h lt1 lt2;
                 helper_equiv_oprod_if_val e' lt2 fs_r_e1 fs_e2' fs_e3' e1' e2 e3;
                 eliminate exists (fs_r:fs_val t). t ∋ (h++lt1++lt2, fs_r, e') /\ fs_beh (fs_prod_if_val fs_r_e1 fs_e2' fs_e3') (h++lt1) lt2 fs_r

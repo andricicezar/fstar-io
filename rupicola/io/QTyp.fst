@@ -274,7 +274,7 @@ let lem_fv_in_env_close (g:typ_env) (fd:exp) :
   = ()
 
 (** STLC Evaluation Environment : variable -> value **)
-let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) = (** CA: this b is polluting **)
+let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) =
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
 
 let gsub_empty : gsub empty true =
