@@ -94,10 +94,7 @@ let def_Runtime_io_close fd =
 let def_Runtime_string_eq s1 s2 =
     String.equal s1 s2
 
-let agent (s1 : string) (s2 : string) : unit =
-  print_endline @@ "I'm the agent called with s1 = " ^ s1 ^ " and s2 = " ^ s2
-
-let def_Runtime_run_main f =
+let def_Runtime_run_main f agent =
   let result = f agent in
   (match result with
   | false -> print_string "false"

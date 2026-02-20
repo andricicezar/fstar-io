@@ -121,6 +121,27 @@ let pt_main = RrHP.compile_prog ps_main
 
 let lazy_agent : exp = ELam (ELam EUnit)
 
+let write_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (EOpen (EVar 1))
+        (* Inl fd *)
+        (
+          (* fd = EVar 0
+             content = EVar 1
+             filename = EVar 2 *)
+
+          EApp
+            (* after write: close fd *)
+            (ELam (EClose (EVar 1)))
+            (EWrite (EVar 0) (EVar 1))
+        )
+
+        (* Inr _ => unit *)
+        EUnit
+      )
+    )
+
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =
 //   (wrapped_wrapper_fst, tgt_wrapper)
