@@ -135,11 +135,11 @@ let compat_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
       let f : var -> exp = fun (y:var) -> s' (y+1) in
       introduce (forall (x:var{x>0}). EVar? (s' x)) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
         eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). fsG_ `(≍) h_` s_ ==> a ⊆ (h_, s fsG_, gsubst s_ e) with true f (tail fsG) h;
-        shift_sub_compat_sub_inc_rename #t s' e f
+        shift_sub_equiv_sub_inc_rename #t s' e f
       end;
       introduce (~(forall (x:var{x>0}). EVar? (s' x))) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
         eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). fsG_ `(≍) h_` s_  ==> a ⊆ (h_, s fsG_, gsubst s_ e) with false f (tail fsG) h;
-        shift_sub_compat_sub_inc_no_rename #t #g s' e f
+        shift_sub_equiv_sub_inc_no_rename #t #g s' e f
       end
     end
   end
