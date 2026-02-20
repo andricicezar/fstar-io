@@ -224,6 +224,10 @@ let lem_fv_in_env_pair (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EPair e1 e2))
   = append_memP_forall (free_vars e1) (free_vars e2)
 
+let lem_fv_in_env_string_eq (g:typ_env) (e1 e2:exp) :
+  Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EStringEq e1 e2))
+  = append_memP_forall (free_vars e1) (free_vars e2)
+
 let lem_fv_in_env_fst (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EFst e) <==> fv_in_env g e)
   = ()
@@ -1161,6 +1165,15 @@ let fs_oprod_pair x y =
   fs_oprod_bind' x (fun x' ->
     fs_oprod_bind' y (fun y' ->
       fs_oprod_return_val _ _ (fs_val_pair x' y')))
+
+val fs_oprod_string_eq : #g : typ_env ->
+                         x : fs_oprod g qString ->
+                         y : fs_oprod g qString ->
+                         fs_oprod g qBool
+let fs_oprod_string_eq x y =
+  fs_oprod_bind' x (fun x' ->
+    fs_oprod_bind' y (fun y' ->
+      fs_oprod_return_val _ _ (x' = y')))
 
 val fs_oprod_fmap : #g:typ_env ->
                     #a:qType ->

@@ -63,10 +63,10 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QFalse -> C1.equiv_oval_false g
   | QTrue -> C1.equiv_oval_true g
   | QStringLit #_ str -> C1.equiv_oval_string g str
-  | QStringEq qs1 qs2 ->
+  | QStringEq #_ #s1 qs1 #s2 qs2 ->
     lem_compile_superset qs1;
     lem_compile_superset qs2;
-    admit ()
+    C1.equiv_oval_string_eq s1 s2 (compile qs1) (compile qs2)
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_superset qc;
     lem_compile_superset qt;
@@ -155,10 +155,10 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QFalse -> C2.equiv_oval_false g
   | QTrue -> C2.equiv_oval_true g
   | QStringLit #_ str -> C2.equiv_oval_string g str
-  | QStringEq qs1 qs2 ->
+  | QStringEq #_ #s1 qs1 #s2 qs2 ->
     lem_compile_subset qs1;
     lem_compile_subset qs2;
-    admit ()
+    C2.equiv_oval_string_eq s1 s2 (compile qs1) (compile qs2)
   | QIf #_ #_ #c qc #t qt #e qe ->
     lem_compile_subset qc;
     lem_compile_subset qt;
@@ -250,7 +250,7 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QStringEq qs1 qs2 ->
     lem_compile_fv_in_env qs1;
     lem_compile_fv_in_env qs2;
-    admit ()
+    lem_fv_in_env_string_eq g (compile qs1) (compile qs2)
   | QIf qc qt qe ->
     lem_compile_fv_in_env qc;
     lem_compile_fv_in_env qt;

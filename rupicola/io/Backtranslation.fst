@@ -118,6 +118,13 @@ type typing : typ_env -> exp -> qType -> Type =
            #e1:exp ->
            $h1:typing g e1 qFileDescr ->
            typing g (EClose e1) (qResexn qUnit)
+| TyStringEq :
+           #g:typ_env ->
+           #e1:exp ->
+           #e2:exp ->
+           $h1:typing g e1 qString ->
+           $h2:typing g e2 qString ->
+           typing g (EStringEq e1 e2) qBool
 
 val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_oprod g t
 let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
@@ -191,6 +198,11 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
     let TyClose h' = h in
     let h' : typing g _ qFileDescr = h' in
     fs_oprod_close (backtranslate_exp h')
+  | EStringEq _ _ ->
+    let TyStringEq h1 h2 = h in
+    let h1 : typing g _ qString = h1 in
+    let h2 : typing g _ qString = h2 in
+    fs_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2)
 
 let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
@@ -259,6 +271,11 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     let TyClose #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
     C1.equiv_oprod_close (backtranslate_exp h') e'
+  | EStringEq _ _ ->
+    let TyStringEq #_ #e1 #e2 h1 h2 = h in
+    lem_backtranslate_superset_exp h1;
+    lem_backtranslate_superset_exp h2;
+    C1.equiv_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
 
 let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊑ e) =
    match e with
@@ -327,6 +344,11 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     let TyClose #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
     C2.equiv_oprod_close (backtranslate_exp h') e'
+  | EStringEq _ _ ->
+    let TyStringEq #_ #e1 #e2 h1 h2 = h in
+    lem_backtranslate_subset_exp h1;
+    lem_backtranslate_subset_exp h2;
+    C2.equiv_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
 
 let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
   match e with
