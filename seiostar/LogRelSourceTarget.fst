@@ -137,28 +137,16 @@ let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
   introduce forall lt (fs_r:get_Type t). fs_beh (io_return fs_e) h lt fs_r ==>
     (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with begin
     introduce fs_beh (io_return fs_e) h lt fs_r ==>
-      (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with fs_beh_k. begin
-       theta_monad_morphism_ret fs_e;
-       (* Using intermediate assertions to guide the solver *)
-       assert (theta (io_return fs_e) == hist_return fs_e);
-
-       let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == fs_e in
-       assert (hist_return fs_e h p); (* definition of hist_return *)
-       assert (theta (io_return fs_e) h p); (* rewrite *)
-       assert (thetaP (io_return fs_e) h lt fs_r); (* hypothesis fs_beh_k *)
-
-       (* Expand definition of thetaP / wp2p *)
-       (* thetaP m h lt r <==> forall p. theta m h p ==> p lt r *)
-       (* Therefore theta (io_return fs_e) h p ==> p lt fs_r *)
-
-       assert (p lt fs_r);
-
-       assert (lt == []);
-       assert (fs_r == fs_e);
-
-       lem_steps_refl e h;
-       assert (e_beh e e h []);
-       assert (t ∈ (h++lt, fs_r, e))
+      (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with _. begin
+      theta_monad_morphism_ret fs_e;
+      let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == fs_e in
+      assert (hist_return fs_e h p);
+      assert (theta (io_return fs_e) h p);
+      assert (thetaP (io_return fs_e) h lt fs_r);
+      assert (p lt fs_r);
+      assert (lt == []);
+      assert (fs_r == fs_e);
+      assert (e_beh e e h [])
     end
   end
 
