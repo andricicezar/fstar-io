@@ -7,8 +7,9 @@ open QTyp
 open QExp
 open LogRelSourceTarget
 open LogRelTargetSource
-module C1 = LogRelSourceTarget.CompatibilityLemmas
-module C2 = LogRelTargetSource.CompatibilityLemmas
+
+module C1 = LogRelTargetSource.CompatibilityLemmas
+module C2 = LogRelSourceTarget.CompatibilityLemmas
 
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with

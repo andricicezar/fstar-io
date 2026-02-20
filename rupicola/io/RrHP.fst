@@ -17,10 +17,6 @@ noeq type intS = {
   ct : qType;
 }
 
-// program parameterized by the type of the context
-// program is dependent pair type with:
-  // map from the type of context to bool (which represents output of the source program)
-  // (proof of) compiled closed expression - where we pass in the type of ps (#_), the (proof of the) type of the compiled closed expression (#(compile_typ_arrow ...)), and ps
 type progS (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
@@ -33,16 +29,11 @@ type wholeS = fs_prod qBool
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
   (dfst ps) cs
 
-(** Definition from SCIO*, section 6.2 **)
 type behS_t = hist_post [] bool
 val behS : wholeS -> behS_t
 let behS ws = fs_beh ws []
 
 (** Target **)
-// right now, we give the target a source type (which might have pre post conditions, etc.) -> which is not a correct model of unverified code
-// unverified code: target + target type (typ)
-// but maybe current typing works? cause you cannot have pre post conditions
-// the type of target contexts restricts us to unverified code
 noeq type intT = { ct : qType }
 
 val comp_int : intS -> intT
@@ -51,9 +42,7 @@ let comp_int i = { ct = i.ct }
 
 type progT (i:intT) = closed_exp
 
-// the typing makes sure that there are no pre post conditions - maybe...
 type ctxT (i:intT) = ct:closed_exp{is_value ct} & typing empty ct i.ct
-(** syntactic typing necessary to be able to backtranslate **)
 type wholeT = closed_exp
 
 let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
@@ -117,17 +106,6 @@ let rrhp (i:intS) =
     forall (ps:progS i).
       behS (linkS ps cs) `rel_behs` behT (linkT (compile_prog ps) ct)
 
-let rschc (i:intS) =
-  forall (ps:progS i).
-    forall ct. exists cs.
-      behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs)
-
-let r2rtc (i:intS) =
-  forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
-    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
-      (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
-
 (** Variants that use backtranslation and imply the original criteria **)
 let rrhp_1 (i:intS) =
   forall (ps:progS i).
@@ -143,37 +121,10 @@ let rrhp_1_implies_rrhp (i:intS) :
     with (backtranslate_ctx ct) and ()
   end
 
-let rschc_1 (i:intS) =
+let rrtp_right (i:intS) =
   forall (ps:progS i).
     forall ct.
       behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps (backtranslate_ctx ct))
-
-let rschc_1_implies_rschs (i:intS) :
-  Lemma (requires rschc_1 i)
-        (ensures rschc i) =
-  introduce forall (ps:progS i) ct. exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs) with
-    introduce exists cs. behT (linkT (compile_prog ps) ct) `behT_in_behS` behS (linkS ps cs)
-    with (backtranslate_ctx ct) and ()
-
-let r2rtc_1 (i:intS) =
-  forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
-    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
-      (exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps1 (backtranslate_ctx ct)) lt1 rs1) /\ (behS (linkS ps2 (backtranslate_ctx ct)) lt2 rs2))
-
-let r2rtc_1_implies_r2rtc (i:intS) :
-  Lemma (requires r2rtc_1 i)
-        (ensures r2rtc i) =
-  introduce forall (ps1 ps2:progS i) ct lt1 r1 lt2 r2.
-    behT (linkT (compile_prog ps1) ct) (lt1,r1) /\ behT (linkT (compile_prog ps2) ct) (lt2,r2) ==>
-      (exists cs rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2))
-  with
-    introduce _ ==> _ with _.
-      introduce exists cs. exists rs1 rs2. rel_bools rs1 r1 /\ rel_bools rs2 r2 /\
-                         (behS (linkS ps1 cs) lt1 rs1) /\ (behS (linkS ps2 cs) lt2 rs2)
-      with (backtranslate_ctx ct) and ()
-
 
 let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
   : Lemma
@@ -223,7 +174,7 @@ let lem_app_eq_subst_beta #i (pt:progT (comp_int i)) (ct:closed_exp)
     behT (EApp pt ct) (lt, r) <==> behT sb (lt, r)
   with ()
 
-let proof_rschc_1 i : Lemma (rschc_1 i) =
+let proof_rrtp_right i : Lemma (rrtp_right i) =
   introduce forall pS cT. behT (linkT (compile_prog pS) cT) `behT_in_behS` behS (linkS pS (backtranslate_ctx cT)) with begin
     let t : qType = i.ct in
     let ps = dfst pS in
@@ -258,9 +209,6 @@ let proof_rschc_1 i : Lemma (rschc_1 i) =
     lem_app_eq_subst_beta pt ct;
     ()
   end
-
-let proof_r2rtc_1 i : Lemma (r2rtc_1 i) =
-  proof_rschc_1 i
 
 let proof_rrhp_1 i : Lemma (rrhp_1 i) =
   introduce forall pS cT. behS (linkS pS (backtranslate_ctx cT)) `rel_behs` behT (linkT (compile_prog pS) cT) with begin

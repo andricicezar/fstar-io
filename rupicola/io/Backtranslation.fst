@@ -6,8 +6,9 @@ open QExp
 open IO
 open LogRelSourceTarget
 open LogRelTargetSource
-module C1 = LogRelSourceTarget.CompatibilityLemmas
-module C2 = LogRelTargetSource.CompatibilityLemmas
+
+module C1 = LogRelTargetSource.CompatibilityLemmas
+module C2 = LogRelSourceTarget.CompatibilityLemmas
 
 // the environment is non-standard, more fancy
 // also over qType instead of syntactic types (typ)
