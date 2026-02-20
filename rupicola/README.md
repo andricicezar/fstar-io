@@ -2,34 +2,14 @@
 
 The TODOs for the paper, are in the paper.
 
-- [ ] Running example (@Theo)
-  - [ ] @everyone, give feedback on the running example in the paper
-  - [ ] implement the running example in F*
-    - [ ] quotation
-    - [ ] instantiate the compiler (preferably, not the night before the deadline :D)
-  - [ ] @everyone, debate on how to instantiate the running example: what is a task? what is validate? what would be some attacks?
+- [ ] Running example
+  - [ ] verify the running example in F*
 
-- [ ] Merge Exe's strings, natural numbers and interation to IO
+- [ ] Merge natural numbers and interation to IO
   - [ ] Add compatibility lemmas
   - [ ] Extend compilation
   - [ ] Extend backtranslation (one has to extend the syntactic typing for STLC)
   
-- [ ] Backend to λ□  (@Exe)
-  - [ ] extract the running example to Malfunction and run it
-
-- [x] Metaprogram (@Cezar)
-  - [x] working on simply typed F* examples
-  - [x] working on IO examples
-  - [ ] working on the running example (@Theo)
-
-- [ ] Prepare artifact
-  - [ ] Use the names from the paper in the artifact (e.g., rename STLC to LambdaIO)
-  - [ ] Cleanup comments
-  - [ ] Prepare README
-    - [ ] Prepare message on why things are admitted :D
-
-### Old todos
-
 #### The predicate for quotation
 - [x] STLC (see `stlc` folder)
   - [ ] Problems with unification. See TODO in [`stlc/QExp.fst`](./stlc/QExp.fst).
