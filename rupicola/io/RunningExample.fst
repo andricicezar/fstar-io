@@ -218,43 +218,32 @@ let read_file_sat_spec f :
         | Inr x -> io_return (Inr x)
       )
     ) ;
-    `hist_equiv` {
-      hist_bind_commut_resexn (openfile_spec f) (fun fd ->
+    ⊑ {
+      hist_bind_resexn_weaken (openfile_spec f) (fun fd ->
         let!@! r = read fd in
         let!@! () = close fd in
         io_return (Inl r)
       )
     }
-    hist_bind (openfile_spec f) (fun res ->
-      match res with
-      | Inl fd ->
-        theta (
-          let!@! r = read fd in
-          let!@! () = close fd in
-          io_return (Inl r)
-        )
-      | Inr x -> hist_return (Inr x)
-    ) ;
+    hist_bind (openfile_spec f) (hist_inl (fun fd ->
+      theta (
+        let!@! r = read fd in
+        let!@! () = close fd in
+        io_return (Inl r)
+      )
+    )) ;
     // Skipping ahead for now, just manipulations as the ones above
     ⊑ { admit () }
-    hist_bind (openfile_spec f) (fun res ->
-      match res with
-      | Inl fd ->
-        hist_bind (read_spec fd) (fun res2 ->
-          match res2 with
-          | Inl r ->
-            hist_bind (close_spec fd) (fun res3 ->
-              match res3 with
-              | Inl () ->
-                hist_return (Inl r)
-              | Inr x -> hist_return (Inr x)
-            )
-          | Inr x -> hist_return (Inr x)
-        )
-      | Inr x -> hist_return (Inr x)
-    ) ;
+    hist_bind (openfile_spec f) (hist_inl (fun fd ->
+      hist_bind (read_spec fd) (hist_inl (fun r ->
+        hist_bind (close_spec fd) (hist_inl (fun () ->
+          hist_return (Inl r)
+        ))
+      ))
+    )) ;
     // ⊑ { _ by (compute ()) }
     ⊑ { admit () }
+    // ⊑ {}
     read_file_spec f ;
   }
 
