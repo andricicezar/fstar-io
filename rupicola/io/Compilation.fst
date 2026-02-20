@@ -332,7 +332,15 @@ let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
   : Lemma (is_closed (compile qs))
   = lem_compile_fv_in_env qs
 
-let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s) =
+let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
+  : Lemma
+    (requires (QLambdaProd? qs))
+    (ensures (
+        is_closed (compile qs) /\
+        is_value (compile qs) /\
+        valid_contains s (compile qs) /\
+        valid_member_of s (compile qs)
+      )) =
   match qs with
   | QLambdaProd #_ #b #c qbody ->
     lem_compile_is_closed qs;
