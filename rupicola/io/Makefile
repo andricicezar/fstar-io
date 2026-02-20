@@ -83,13 +83,13 @@ io_program_raw.mlf: io_program.ast
 	opam exec --switch=only-peregrine -- peregrine ocaml $< -o $@
 
 axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml
-	ocamlfind ocamlopt -c -o $@ $<
+	ocamlfind ocamlopt -package unix -c -o $@ $<
 
 io_program_raw.cmx: io_program_raw.mlf
 	malfunction cmx $<
 
 io_program_exe: axioms.cmx io_program_raw.cmx
-	ocamlfind ocamlopt -linkpkg $^ -o $@
+	ocamlfind ocamlopt -package unix -linkpkg $^ -o $@
 
 .PHONY: io_program
 io_program: io_program_exe

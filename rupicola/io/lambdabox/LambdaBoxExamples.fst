@@ -73,7 +73,7 @@ let io_program (main : exp) (agent : exp) : program =
     Triggered by: fstar.exe --unsafe_tactic_exec LambdaBoxExamples.fst *)
 let _ =
   assert True
-    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main write_agent))); trivial ())
+    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main indirect_agent))); trivial ())
 
 // let _ =
 //   assert True

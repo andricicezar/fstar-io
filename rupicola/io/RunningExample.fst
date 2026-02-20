@@ -119,8 +119,10 @@ let ps_main : progS re_int=
 
 let pt_main = RrHP.compile_prog ps_main
 
+(* bad: this agent does nothing *)
 let lazy_agent : exp = ELam (ELam EUnit)
 
+(* good: this agent writes the expected string on the file *)
 let write_agent : exp =
   ELam (* filename *)
     (ELam (* content *)
@@ -130,14 +132,104 @@ let write_agent : exp =
           (* fd = EVar 0
              content = EVar 1
              filename = EVar 2 *)
-
           EApp
             (* after write: close fd *)
             (ELam (EClose (EVar 1)))
             (EWrite (EVar 0) (EVar 1))
         )
-
         (* Inr _ => unit *)
+        EUnit
+      )
+    )
+
+(* bad: this agent writes twice the string on the file *)
+let write_twice_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (EOpen (EVar 1))
+
+        (* Inl fd *)
+        (
+          EApp
+            (* after first write *)
+            (ELam
+              (EApp
+                (* after second write *)
+                (ELam (EClose (EVar 2)))
+                (EWrite (EVar 1) (EVar 2))
+              ))
+            (EWrite (EVar 0) (EVar 1))
+        )
+        (* Inr _ *)
+        EUnit
+      )
+    )
+
+(* bad: this agent, confused writes the filename on a file named by string *)
+let write_mixedup_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (EOpen (EVar 0))
+        (* Inl fd *)
+        (
+          (* fd = EVar 0
+             content = EVar 1
+             filename = EVar 2 *)
+          EApp
+            (* after write: close fd *)
+            (ELam (EClose (EVar 1)))
+            (EWrite (EVar 0) (EVar 2))
+        )
+        (* Inr _ => unit *)
+        EUnit
+      )
+    )
+
+(* good: this agent first writes the given filename into a file "TMP", then reads the filename back from "TMP", opens that file, and writes the provided content into it *)
+let indirect_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (* open "TMP" *)
+      (ECase (EOpen (EString "TMP"))
+        (* Inl tmpfd *)
+        (
+          EApp
+            (* after writing filename to TMP *)
+            (ELam
+              (* reopen TMP *)
+              (ECase (EOpen (EString "TMP"))
+                (* Inl tmpfd2 *)
+                (
+                  ECase (ERead (EVar 0))
+                    (* Inl fname *)
+                    (
+                      EApp
+                        (* after closing tmpfd2 *)
+                        (ELam
+                          (* open fname *)
+                          (ECase (EOpen (EVar 0))
+                            (* Inl fd *)
+                            (
+                              EApp
+                                (ELam (EClose (EVar 1)))
+                                (EWrite (EVar 0) (EVar 3))
+                            )
+                            (* Inr _ *)
+                            EUnit
+                          )
+                        )
+                        (EClose (EVar 1))
+                    )
+                    (* Inr _ *)
+                    EUnit
+                )
+                (* Inr _ *)
+                EUnit
+              )
+            )
+            (EWrite (EVar 0) (EVar 2))
+        )
+        (* Inr _ *)
         EUnit
       )
     )
