@@ -88,6 +88,45 @@ let agent_spec =
     (fun h lt r -> True)
 
 unfold
+let openfile_spec (f : string) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt (r:resexn file_descr) ->
+      Inl? r ==>
+      exists fd. lt == [ EvOpen f (Inl fd) ]
+    )
+
+let openfile_sat_spec f :
+  Lemma (theta (openfile f) ⊑ openfile_spec f)
+= ()
+
+unfold
+let read_spec (fd : file_descr) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt (r:resexn string) ->
+      Inl? r ==>
+      exists fd. lt == [ EvRead fd (Inl (Inl?.v r)) ]
+    )
+
+let read_sat_spec fd :
+  Lemma (theta (read fd) ⊑ read_spec fd)
+= ()
+
+unfold
+let close_spec (fd : file_descr) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt (r:resexn unit) ->
+      Inl? r ==>
+      exists fd. lt == [ EvClose fd (Inl ()) ]
+    )
+
+let close_sat_spec fd :
+  Lemma (theta (close fd) ⊑ close_spec fd)
+= ()
+
+unfold
 let read_file_spec (f : string) =
   hist_prepost
     (fun h -> True)
@@ -95,18 +134,6 @@ let read_file_spec (f : string) =
       Inl? r ==>
       exists fd. lt == [ EvOpen f (Inl fd) ; EvRead fd (Inl (Inl?.v r)) ; EvClose fd (Inl ()) ]
     )
-
-let read_fiile_sat_spec f :
-  Lemma (theta (read_file f) ⊑ read_file_spec f)
-= admit ()
-
-unfold
-let wrapper_spec (f task : string) =
-  hist_prepost
-    (fun h -> True)
-    (fun h lt (r:resexn unit) -> Inl? r ==>
-      Some? (fst_read_from f lt) /\ Some? (last_read_from f lt) /\
-      (validate (Some?.v (fst_read_from f lt)) task (Some?.v (last_read_from f lt))))
 
 let hist_bind_commut_resexn #a #b (m : hist (resexn a)) (k : a -> io (resexn b)) :
   Lemma (
@@ -119,6 +146,107 @@ let hist_bind_commut_resexn #a #b (m : hist (resexn a)) (k : a -> io (resexn b))
     | Inr x -> theta_monad_morphism_ret #(resexn a) (Inr x)
   end ;
   lem_hist_bind_equiv m m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) (fun r -> match r with | Inl x -> theta (k x) | Inr x -> hist_return (Inr x))
+
+let read_file_sat_spec f :
+  Lemma (theta (read_file f) ⊑ read_file_spec f)
+= calc (⊑) {
+    theta (read_file f) ;
+    == {}
+    theta (
+      let!@! fd = openfile f in
+      let!@! r = read fd in
+      let!@! () = close fd in
+      io_return (Inl r)
+    ) ;
+    == { _ by (compute ()) }
+    theta (
+      io_bind (openfile f) (fun res ->
+        match res with
+        | Inl fd ->
+          let!@! r = read fd in
+          let!@! () = close fd in
+          io_return (Inl r)
+        | Inr x -> io_return (Inr x)
+      )
+    ) ;
+    `hist_equiv` {
+      theta_monad_morphism_bind (openfile f) (fun res ->
+        match res with
+        | Inl fd ->
+          let!@! r = read fd in
+          let!@! () = close fd in
+          io_return (Inl r)
+        | Inr x -> io_return (Inr x)
+      )
+    }
+    hist_bind (theta (openfile f)) (fun res ->
+      theta (
+        match res with
+        | Inl fd ->
+          let!@! r = read fd in
+          let!@! () = close fd in
+          io_return (Inl r)
+        | Inr x -> io_return (Inr x)
+      )
+    ) ;
+    ⊑ { openfile_sat_spec f }
+    hist_bind (openfile_spec f) (fun res ->
+      theta (
+        match res with
+        | Inl fd ->
+          let!@! r = read fd in
+          let!@! () = close fd in
+          io_return (Inl r)
+        | Inr x -> io_return (Inr x)
+      )
+    ) ;
+    `hist_equiv` {
+      hist_bind_commut_resexn (openfile_spec f) (fun fd ->
+        let!@! r = read fd in
+        let!@! () = close fd in
+        io_return (Inl r)
+      )
+    }
+    hist_bind (openfile_spec f) (fun res ->
+      match res with
+      | Inl fd ->
+        theta (
+          let!@! r = read fd in
+          let!@! () = close fd in
+          io_return (Inl r)
+        )
+      | Inr x -> hist_return (Inr x)
+    ) ;
+    // Skipping ahead for now, just manipulations as the ones above
+    ⊑ { admit () }
+    hist_bind (openfile_spec f) (fun res ->
+      match res with
+      | Inl fd ->
+        hist_bind (read_spec fd) (fun res2 ->
+          match res2 with
+          | Inl r ->
+            hist_bind (close_spec fd) (fun res3 ->
+              match res3 with
+              | Inl () ->
+                hist_return (Inl r)
+              | Inr x -> hist_return (Inr x)
+            )
+          | Inr x -> hist_return (Inr x)
+        )
+      | Inr x -> hist_return (Inr x)
+    ) ;
+    // ⊑ { _ by (compute ()) }
+    ⊑ { admit () }
+    read_file_spec f ;
+  }
+
+unfold
+let wrapper_spec (f task : string) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt (r:resexn unit) -> Inl? r ==>
+      Some? (fst_read_from f lt) /\ Some? (last_read_from f lt) /\
+      (validate (Some?.v (fst_read_from f lt)) task (Some?.v (last_read_from f lt))))
 
 let wrapper_sat_spec_aux f task agent :
   Lemma (
@@ -305,7 +433,7 @@ let wrapper_sat_spec f task agent :
           | Inr x -> io_return (Inr x)
         )
       ) ;
-      ⊑ { read_fiile_sat_spec f }
+      ⊑ { read_file_sat_spec f }
       hist_bind (read_file_spec f) (fun res ->
         theta (
           match res with
