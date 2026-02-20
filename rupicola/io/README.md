@@ -46,10 +46,29 @@ We list where the definitions and theorems of the paper are.
 
 | From the paper | In the artifact |
 | -------------- | --------------- |
-| **Section 3** - Relational quotation | |
-| **Section 4** - Relating trace-producing semantics  | |
+| **Section 2/3** - Relational quotation | |
+| Typing relations for values and computations | `QExp.fst` as the type constructors `oval_quotation` and `oprod_quotation` |
+| Events | `IO.fst` as the type constructor `event` |
+| Local traces | `IO.fst` |
+| Metaprogram | `Metaprogram.fst` as function `generate_derivation` |
+| **Section 4** - Relating trace-producing semantics | |
+| Syntax and semantics of $\lambda_{io}$ | `STLC.fst` as type constructors `exp`, `step`, and `steps` |
+| Behaviors of $\lambda_{io}$ expressions | `QTyp.fst` as `e_beh` |
+| Syntax of $IO^{\star}$ | `IO.fst` as type constructor `io` |
+| Functor part of predicate transformer monad | `Hist.fst` |
+| Semantics of $IO^{\star}$ | `IO.fst` as functions `op_wp` and `theta` |
+| Behaviors of $IO^{\star}$ computations | `QTyp.fst` as `fs_beh` |
+| Predicate on types for logical relation | `QTyp.fst` as type constructor `type_quotation` |
+| Target-to-source logical relation | `LogRelTargetSource.fst` |
+| Source-to-target logical relation | `LogRelSourceTarget.fst` |
+| Target-to-source compatibility lemmas | `LogRelTargetSource.CompatibilityLemmas.fst` |
+| Source-to-target compatibility lemmas | `LogRelSourceTarget.CompatibilityLemmas.fst` |
 | **Section 5** - Proof of RrHP | |
+| Compilation model | `RrHP.fst` |
+| RrHP | `RrHP.fst` |
+| Backtranslation | `Backtranslation.fst` |
 | **Section 6** - Running SEIO* | |
+| Compiling from $\lambda_{io}$ to $\lambda_{\box}$ | `lambdabox/STLCToLambdaBox.fst` |
 | **More examples** | The other files named as `Examples.*.fst` |
 
 ## Installing F* locally
