@@ -4,9 +4,9 @@ To build io_program_exe
 Overview
 --------
 Two opam switches are used:
-- `only-fstar`    — default; used for F* checking, `malfunction`, and `ocamlfind` steps
-- `only-peregrine`— used only for the Peregrine extraction step via
-                    `opam exec --switch=only-peregrine` (already wired in Makefile)
+- `only-fstar`     -- default; used for F* checking, `malfunction`, and `ocamlfind` steps
+- `only-peregrine` -- used only for the Peregrine extraction step via
+                      `opam exec --switch=only-peregrine` (already wired in Makefile)
 
 1. Create the only-fstar switch:
 
@@ -14,6 +14,7 @@ $ opam switch import only-fstar.export --switch only-fstar
 
 2. Create the only-peregrine switch (Peregrine + Rocq stack):
 
+$ opam switch create only-peregrine ocaml-base-compiler.4.14.2
 $ opam repo add coq-released   https://coq.inria.fr/opam/released      --on-switch only-peregrine
 $ opam repo add rocq-released  https://rocq-prover.org/opam/released   --on-switch only-peregrine
 $ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-switch only-peregrine
@@ -36,7 +37,8 @@ The Peregrine step (`io_program_raw.mlf`) runs automatically under
 rupicola/io$ echo "foo" > temp
 rupicola/io$ ./io_program_exe
 true
-rupicola/io$
+rupicola/io$ cat temp
+overwrite
 
 5. Test other agents:
 
@@ -48,4 +50,4 @@ let _ =
     by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main write_agent))); trivial ())
 ```
 
-Replace there `write_agent` by other agents.
+Replace there `write_agent` by other agents. Compile `io_program_exe`.
