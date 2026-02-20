@@ -123,6 +123,7 @@ let io_read_kn  : kername = (runtime_modpath, "io_read")
 let io_write_kn : kername = (runtime_modpath, "io_write")
 let io_open_kn  : kername = (runtime_modpath, "io_open")
 let io_close_kn : kername = (runtime_modpath, "io_close")
+let string_eq_kn : kername = (runtime_modpath, "string_eq")
 let run_main_kn : kername = (runtime_modpath, "run_main")
 
 (** Abstract runtime declarations — no body → Peregrine emits (global $Axioms ...) *)
@@ -131,6 +132,7 @@ let runtime_env : global_env = [
   (io_write_kn, ConstantDecl { cst_body = None });
   (io_open_kn,  ConstantDecl { cst_body = None });
   (io_close_kn, ConstantDecl { cst_body = None });
+  (string_eq_kn, ConstantDecl { cst_body = None });
   (run_main_kn, ConstantDecl { cst_body = None });
 ]
 
@@ -201,6 +203,8 @@ let rec compile (e: exp) : Tot term (decreases e) =
       TApp (TConst io_open_kn) (compile fnm)
   | EClose fd ->
       TApp (TConst io_close_kn) (compile fd)
+  | EStringEq s1 s2 ->
+      TApp (TApp (TConst string_eq_kn) (compile s1)) (compile s2)
 
 (** Compile a full program with the base environment *)
 let compile_program (e: exp) : program = (base_env, compile e)

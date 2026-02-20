@@ -8,6 +8,7 @@ open ExamplesIO
 open RrHP
 open QTyp
 open QExp
+open STLC
 
 (* We consider the task is string that need to replace the old contents *)
 
@@ -46,11 +47,11 @@ let basic_spec =
     (fun h lt r -> True)
 
 let openfile_sat_spec f :
-  Lemma (theta_unf (openfile f) ⊑ basic_spec)
+  Lemma (theta (openfile f) ⊑ basic_spec)
 = () // At least here it works (not with regular theta so we made progress)
 
 let read_file_sat_spec f :
-  Lemma (theta_unf (read f) ⊑ basic_spec)
+  Lemma (theta (read f) ⊑ basic_spec)
 = ()
 
 unfold
@@ -60,17 +61,17 @@ let wrapper_spec (f task : string) =
     (fun h lt r -> True)
 
 let wrapper_sat_spec f task agent :
-  Lemma (theta_unf (wrapper f task agent) ⊑ wrapper_spec f task)
-  // by (norm [delta_only [`%theta_unf;`%wrapper;`%(let!@!);`%(let!@);`%io_bind]] ; (* compute () ; *) explode () ; dump "oh")
+  Lemma (theta (wrapper f task agent) ⊑ wrapper_spec f task)
+  // by (norm [delta_only [`%theta;`%wrapper;`%(let!@!);`%(let!@);`%io_bind]] ; (* compute () ; *) explode () ; dump "oh")
 = // unfold_theta #(resexn unit)
   introduce
     forall (h: Trace.history) (p: hist_post h (resexn unit)).
       (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
-      theta_unf (wrapper f task agent) h p
+      theta (wrapper f task agent) h p
   with begin
     introduce
       (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
-      theta_unf (wrapper f task agent) h p
+      theta (wrapper f task agent) h p
     with _. begin
       admit ()
     end
@@ -117,6 +118,8 @@ let ps_main : progS re_int=
   (| main, main_derivation #empty |)
 
 let pt_main = RrHP.compile_prog ps_main
+
+let lazy_agent : exp = ELam (ELam EUnit)
 
 // val wrapped_wrapper : progS wrapper_intS
 // let wrapped_wrapper =

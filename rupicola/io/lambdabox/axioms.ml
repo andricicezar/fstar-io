@@ -33,7 +33,6 @@ let make_inr x =
   Obj.set_field b 0 x;
   b
 
-(* Unit value: tt = int 0 *)
 let unit_val = Obj.repr 0
 
 (* File descriptor table: maps nat fds to Unix file descriptors.
@@ -47,9 +46,6 @@ let fd_table : (int, in_channel * out_channel) Hashtbl.t =
 
 let next_fd = ref 3
 
-(* io_read fd : resexn string
-   Read one line from the input channel associated with fd.
-   Returns Inl s (OCaml string) on success, Inr () on EOF or error. *)
 let def_Runtime_io_read fd =
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
@@ -60,10 +56,6 @@ let def_Runtime_io_read fd =
       make_inl (Obj.repr line)
     with End_of_file -> make_inr unit_val)
 
-(* io_write fd msg : resexn unit
-   Write a string to the output channel associated with fd.
-   msg is a native OCaml string (from TPrim (PrimString s)).
-   Returns Inl () on success, Inr () on error. *)
 let def_Runtime_io_write (fd : Obj.t) (msg : Obj.t) : Obj.t =
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
@@ -76,10 +68,6 @@ let def_Runtime_io_write (fd : Obj.t) (msg : Obj.t) : Obj.t =
       make_inl unit_val
     with _ -> make_inr unit_val)
 
-(* io_open fnm : resexn file_descr
-   Open a file with the given string filename.
-   fnm is a native OCaml string (from TPrim (PrimString s)).
-   Returns Inl fd on success, Inr () on error. *)
 let def_Runtime_io_open fnm =
   let filename = (Obj.obj fnm : string) in
   try
@@ -91,9 +79,6 @@ let def_Runtime_io_open fnm =
     make_inl (encode_nat fd)
   with _ -> make_inr unit_val
 
-(* io_close fd : resexn unit
-   Close the file descriptor.
-   Returns Inl () on success, Inr () on error. *)
 let def_Runtime_io_close fd =
   let n = decode_nat fd in
   match Hashtbl.find_opt fd_table n with
@@ -104,15 +89,17 @@ let def_Runtime_io_close fd =
       (if oc <> stdout && oc <> stderr then close_out oc);
       Hashtbl.remove fd_table n;
       make_inl unit_val
-    with _ -> make_inr unit_val)
+      with _ -> make_inr unit_val)
 
-(* run_main f : unit
-   Execute the IO program: apply f to unit, which runs all IO effects.
-   f has type unit -> resexn unit (after monad erasure).
-   Prints an error message if the computation returns Inr (failure). *)
+let def_Runtime_string_eq s1 s2 =
+    String.equal s1 s2
+
+let agent (s1 : string) (s2 : string) : unit =
+  print_endline @@ "I'm the agent called with s1 = " ^ s1 ^ " and s2 = " ^ s2
+
 let def_Runtime_run_main f =
-  let result = f unit_val in
-  (* result : resexn unit = Inl () | Inr () *)
-  if Obj.is_block result && Obj.tag result = 1 then
-    (Printf.eprintf "IO program returned an error\n"; flush stderr);
+  let result = f agent in
+  (match result with
+  | false -> print_string "false"
+  | true -> print_string "true");
   unit_val

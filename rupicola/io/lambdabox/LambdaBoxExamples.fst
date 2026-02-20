@@ -12,6 +12,7 @@ open LambdaBoxMeta
 open Metaprogram
 open Compilation
 open ExamplesIO
+open RunningExample
 
 let my_modpath : modpath = MPfile ["IO"]
 
@@ -61,17 +62,19 @@ let open_and_read_stlc : exp =
       (* Inr _ => unit (open failed) *)
       (ELam EUnit))
 
-let from_meta : exp = _compile tgt_open2_read_write
-
 (** io_program: the echo program.
     main : unit -> resexn unit = echo_stlc *)
-let io_program : program =
+let io_program (e : exp) : program =
   compile_io_program my_modpath
-    [("main", from_meta)]
+    [("main", e)]
     "main"
 
 (** Serialise io_program to io_program.ast at compile time.
     Triggered by: fstar.exe --unsafe_tactic_exec LambdaBoxExamples.fst *)
 let _ =
   assert True
-    by (write_term_to_file "io_program.ast" (`(red_prog io_program)); trivial ())
+    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main))); trivial ())
+
+let _ =
+  assert True
+    by (write_term_to_file "lazy_agent.ast" (`(red_prog (io_program lazy_agent))); trivial ())
