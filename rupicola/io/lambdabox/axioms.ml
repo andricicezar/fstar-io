@@ -110,6 +110,6 @@ let def_Runtime_string_eq s1 s2 =
 
 let def_Runtime_run_main f agent =
   let result = f agent in
-  if (Obj.obj result : int) = 0 then print_string "true"
-  else print_string "false";
+  if (Obj.obj result : int) = 0 then print_endline "true"
+  else print_endline "false";
   unit_val

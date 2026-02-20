@@ -26,12 +26,26 @@ embedded in the export file. First build takes a while.
 3. Build (activate only-fstar first):
 
 $ opam switch only-fstar && eval $(opam env)
-rupicola/io$ make io_program_exe
+$ make io_program_exe
 
 The Peregrine step (`io_program_raw.mlf`) runs automatically under
-`opam exec --switch=only-peregrine` — no manual switch needed for that step.
+`opam exec --switch=only-peregrine`, no manual switch needed for that step.
 
-4. Test the echo program:
+4. Test io_program_exe:
 
-$ echo "hello" | ./io_program_exe
-hello
+rupicola/io$ echo "foo" > temp
+rupicola/io$ ./io_program_exe
+true
+rupicola/io$
+
+5. Test other agents:
+
+To test other agents, modify the file `lambdabox/LambdaBoxExamples.fst`:
+
+```
+let _ =
+  assert True
+    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main write_agent))); trivial ())
+```
+
+Replace there `write_agent` by other agents.
