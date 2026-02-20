@@ -12,9 +12,15 @@ open STLC
 
 (* We consider the task is string that need to replace the old contents *)
 
+val notb : bool -> bool
+let notb b = if b then false else true
+
+val andb : bool -> bool -> bool
+let andb b1 b2 = if b1 then b2 else false
+
 val validate : string -> string -> string -> bool
-let validate olds task news =
-  eq_string task news
+let validate olds task news = eq_string task news
+  // andb (notb (eq_string olds news)) (eq_string task news)
 
 let read_file (f : string) : io (resexn string) =
   let!@! fd = openfile f in
@@ -207,12 +213,12 @@ let indirect_agent : exp =
                         (* after closing tmpfd2 *)
                         (ELam
                           (* open fname *)
-                          (ECase (EOpen (EVar 0))
+                          (ECase (EOpen (EVar 1))
                             (* Inl fd *)
                             (
                               EApp
                                 (ELam (EClose (EVar 1)))
-                                (EWrite (EVar 0) (EVar 3))
+                                (EWrite (EVar 0) (EVar 6))
                             )
                             (* Inr _ *)
                             EUnit

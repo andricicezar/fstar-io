@@ -35,6 +35,9 @@ let make_inr x =
 
 let unit_val = Obj.repr 0
 
+let true_val = Obj.repr 0
+let false_val = Obj.repr 1
+
 (* File descriptor table: maps nat fds to a single Unix file descriptor.
    fd 0 = stdin, fd 1 = stdout, fd 2 = stderr; others opened via io_open. *)
 let fd_table : (int, Unix.file_descr) Hashtbl.t =
@@ -103,11 +106,10 @@ let def_Runtime_io_close fd =
     with _ -> make_inr unit_val)
 
 let def_Runtime_string_eq s1 s2 =
-    String.equal s1 s2
+  if String.equal s1 s2 then true_val else false_val
 
 let def_Runtime_run_main f agent =
   let result = f agent in
-  (match result with
-  | false -> print_string "false"
-  | true -> print_string "true");
+  if (Obj.obj result : int) = 0 then print_string "true"
+  else print_string "false";
   unit_val
