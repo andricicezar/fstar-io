@@ -64,17 +64,17 @@ let open_and_read_stlc : exp =
 
 (** io_program: the echo program.
     main : unit -> resexn unit = echo_stlc *)
-let io_program (e : exp) : program =
+let io_program (main : exp) (agent : exp) : program =
   compile_io_program my_modpath
-    [("main", e)]
-    "main"
+    [("main", main); ("agent", agent)]
+    "main" "agent"
 
 (** Serialise io_program to io_program.ast at compile time.
     Triggered by: fstar.exe --unsafe_tactic_exec LambdaBoxExamples.fst *)
 let _ =
   assert True
-    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main))); trivial ())
+    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main write_agent))); trivial ())
 
-let _ =
-  assert True
-    by (write_term_to_file "lazy_agent.ast" (`(red_prog (io_program lazy_agent))); trivial ())
+// let _ =
+//   assert True
+//     by (write_term_to_file "lazy_agent.ast" (`(red_prog (io_program lazy_agent))); trivial ())

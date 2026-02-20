@@ -232,13 +232,14 @@ let compile_program_with_consts (modpath: modpath)
 let compile_io_program (modpath: modpath)
   (defs: list (string & exp))
   (main_name: string)
+  (agent_name: string)
   : program =
   let compile_one (name_and_exp: string & exp) : kername & global_decl =
     let (name, e) = name_and_exp in
     ((modpath, name), ConstantDecl { cst_body = Some (compile e) })
   in
   let const_decls : global_env = List.Tot.map compile_one defs in
-  let main_term = TApp (TConst run_main_kn) (TConst (modpath, main_name)) in
+  let main_term = TApp (TApp (TConst run_main_kn) (TConst (modpath, main_name))) (TConst (modpath, agent_name)) in
   (const_decls @ base_env @ runtime_env, main_term)
 
 (** Serialize a program to its LambdaBox s-expression string (used by run-io.py) *)
