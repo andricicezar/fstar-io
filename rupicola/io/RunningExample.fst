@@ -75,6 +75,18 @@ let last_read_from (f:string) (lt:trace) =
   | None -> None
   | Some fd -> last_read_from_read f fd (List.rev lt)
 
+
+(* We assume the agent as a trivial spec.
+  In principle we should require in the wrapper that the agent satisfies it,
+  because we would need parametricity to claim it.
+  For now we assume it in the proof.
+*)
+unfold
+let agent_spec =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt r -> True)
+
 unfold
 let read_file_spec (f : string) =
   hist_prepost
@@ -96,7 +108,17 @@ let wrapper_spec (f task : string) =
       Some? (fst_read_from f lt) /\ Some? (last_read_from f lt) /\
       (validate (Some?.v (fst_read_from f lt)) task (Some?.v (last_read_from f lt))))
 
-// let commut_either_match #a #b (f : )
+let hist_bind_commut_resexn #a #b (m : hist (resexn a)) (k : a -> io (resexn b)) :
+  Lemma (
+    hist_bind m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) `hist_equiv`
+    hist_bind m (fun r -> match r with | Inl x -> theta (k x) | Inr x -> hist_return (Inr x)))
+= introduce forall r. (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) r `hist_equiv` (fun r -> match r with | Inl x -> theta (k x) | Inr x -> hist_return (Inr x)) r
+  with begin
+    match r with
+    | Inl x -> ()
+    | Inr x -> theta_monad_morphism_ret #(resexn a) (Inr x)
+  end ;
+  lem_hist_bind_equiv m m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) (fun r -> match r with | Inl x -> theta (k x) | Inr x -> hist_return (Inr x))
 
 let wrapper_sat_spec f task agent :
   Lemma (theta (wrapper f task agent) ⊑ wrapper_spec f task)
@@ -161,7 +183,15 @@ let wrapper_sat_spec f task agent :
           | Inr x -> io_return (Inr x)
         )
       ) ;
-      `hist_equiv` { admit () }
+      `hist_equiv` {
+        hist_bind_commut_resexn (read_file_spec f) (fun contents ->
+          let!@ () = agent f task in
+          let!@! new_contents = read_file f in
+          if validate contents task new_contents
+          then io_return (Inl ())
+          else io_return (Inr ())
+        )
+      }
       hist_bind (read_file_spec f) (fun res ->
         match res with
         | Inl contents ->
@@ -172,7 +202,43 @@ let wrapper_sat_spec f task agent :
             then io_return (Inl ())
             else io_return (Inr ())
           )
-        | Inr x -> theta (io_return (Inr x))
+        | Inr x -> hist_return (Inr x)
+      ) ;
+      // Skipping ahead for now, just manipulations as the ones above
+      ⊑ { admit () }
+      hist_bind (read_file_spec f) (fun res ->
+        match res with
+        | Inl contents ->
+          hist_bind (theta (agent f task)) (fun () ->
+            hist_bind (read_file_spec f) (fun res' ->
+              match res' with
+              | Inl new_contents ->
+                hist_if_then_else
+                  (hist_return (Inl ()))
+                  (hist_return (Inr ()))
+                  (validate contents task new_contents)
+              | Inr x -> hist_return (Inr x)
+            )
+          )
+        | Inr x -> hist_return (Inr x)
+      ) ;
+      // We assume the agent has the trivial spec
+      ⊑ { admit () }
+      hist_bind (read_file_spec f) (fun res ->
+        match res with
+        | Inl contents ->
+          hist_bind agent_spec (fun () ->
+            hist_bind (read_file_spec f) (fun res' ->
+              match res' with
+              | Inl new_contents ->
+                hist_if_then_else
+                  (hist_return (Inl ()))
+                  (hist_return (Inr ()))
+                  (validate contents task new_contents)
+              | Inr x -> hist_return (Inr x)
+            )
+          )
+        | Inr x -> hist_return (Inr x)
       ) ;
       ⊑ { admit () }
       wrapper_spec f task ;

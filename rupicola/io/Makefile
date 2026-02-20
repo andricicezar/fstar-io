@@ -63,7 +63,7 @@ dep.pdf: dep.graph
 # already removes user and host names (good!)
 .PHONY: package
 package:
-	git archive --prefix rupicola/ -o artifact.tar.gz HEAD .
+	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
 
 validate:
 	@# Run depend first without the flag, as otherwise it will

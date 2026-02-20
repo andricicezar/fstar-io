@@ -34,10 +34,10 @@ The Peregrine step (`io_program_raw.mlf`) runs automatically under
 
 4. Test io_program_exe:
 
-rupicola/io$ echo "foo" > temp
-rupicola/io$ ./io_program_exe
+seiostar/io$ echo "foo" > temp
+seiostar/io$ ./io_program_exe
 true
-rupicola/io$ cat temp
+seiostar/io$ cat temp
 overwrite
 
 5. Test other agents:
