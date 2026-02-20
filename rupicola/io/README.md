@@ -3,6 +3,29 @@
 This contains the artifact associated with the ICFP 2026 submission with the name:
 "[Misquoted No More: Securely Extracting F\* Programs with IO](...)".
 
+The artifact contains an (almost) full formalization of the paper.
+In file `RunningExample.fst`, we implement the running example from section 2,
+and we use the metaprogram to find the derivation, and then we instantiate the
+compilation model from section 6, which shows that it is secure to link the
+extracted running example with unverified agents.
+
+The artifact is not fully formalized because of two reasons:
+1. We did not manage to finish the proof that the running example
+   satisfies the spec presented in section 2.3. We just ran out of time,
+   and we think the proof is going to be finished soon.
+2. There is an assumption in the metaprogram that generates derivations.
+   When testing that the derivation has the expected type,
+   we end up testing for equality between types by 
+   manually creating a statement of form `t1 == t2`.
+   Since we build this statement manually, F* does not register it as
+   an equality between types, which prevents us from retyping the derivation.
+   Therefore,
+   we assume that the successful checking of the statement
+   gives us equality between types. (Extraction will fail if the types are not equal)
+   We think this it is a situation where
+   we did not figure out in time how to use Meta-F* to avoid the assumption.
+   We are in contact with the developers of F* to figure out how to get rid of the assumption.
+
 ## Table of Contents
 * [Setup](#setup)
 * [List of Claims](#list-of-claims)
@@ -15,7 +38,7 @@ This contains the artifact associated with the ICFP 2026 submission with the nam
 
 The artifact contains:
 * a formalization of the contributions from the paper;
-* the mechanized proofs RrHP;
+* the mechanized proof of RrHP;
 * the running example, and other examples
 
 We list where the definitions and theorems of the paper are.
@@ -25,7 +48,7 @@ We list where the definitions and theorems of the paper are.
 | **Section 3** - Relational quotation | |
 | **Section 4** - Relating trace-producing semantics  | |
 | **Section 5** - Proof of RrHP | |
-| **Section 6** - Running SCIO* | |
+| **Section 6** - Running SEIO* | |
 | **More examples** | The other files named as `Examples.*.fst` |
 
 ## Directory layout
