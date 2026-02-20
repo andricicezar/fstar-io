@@ -241,6 +241,16 @@ let read_file_sat_spec f :
         ))
       ))
     )) ;
+    ⊑ { admit () }
+    hist_bind (openfile_spec f) (hist_inl (fun fd ->
+      hist_bind (read_spec fd) (hist_inl (fun r ->
+        hist_bind (close_spec fd) (
+          fun res h p ->
+            (Inl? res ==> hist_return (Inl r) h p) /\
+            (hist_return (Inr ()) h p)
+        )
+      ))
+    )) ;
     // ⊑ { _ by (compute ()) }
     ⊑ { admit () }
     // ⊑ {}
