@@ -241,6 +241,16 @@ let read_file_sat_spec f :
         ))
       ))
     )) ;
+    ⊑ { admit () }
+    hist_bind (openfile_spec f) (hist_inl (fun fd ->
+      hist_bind (read_spec fd) (hist_inl (fun r ->
+        hist_bind (close_spec fd) (
+          fun res h p ->
+            (Inl? res ==> hist_return (Inl r) h p) /\
+            (hist_return (Inr ()) h p)
+        )
+      ))
+    )) ;
     // ⊑ { _ by (compute ()) }
     ⊑ { admit () }
     // ⊑ {}
@@ -299,61 +309,6 @@ let wrapper_sat_spec_aux f task agent :
       wrapper_spec f task h p ;
       // ==> { _ by (compute () ; dump "h") }
       ==> { admit () }
-    (* (forall r lt.
-        (Inl? r ==>
-          (exists (fd: (i: int{i >= 0 == true /\ i >= 0 == true})).
-              lt ==
-              [
-                EvOpen f (Inl fd);
-                EvRead fd
-                  (Inl (match r as proj_ret returns$ string with | Inl v -> v));
-                EvClose fd (Inl ())
-              ])) ==>
-        (match r with
-          | Inl contents ->
-            hist_bind agent_spec
-              (fun _ ->
-                  hist_bind (read_file_spec f)
-                    (fun res' ->
-                        (match res' with
-                          | Inl new_contents ->
-                            hist_if_then_else (hist_return (Inl ()))
-                              (hist_return (Inr ()))
-                              (validate contents task new_contents)
-                          | Inr x -> hist_return (Inr x))
-                        <:
-                        hist (either unit unit)))
-          | Inr () -> hist_return (Inr ())) (match
-              match lt with
-              | [] -> []
-              | hd :: tl -> List.Tot.Base.rev_acc tl [hd]
-            with
-            | [] -> h
-            | a :: tl -> a :: (tl @ h))
-          (fun lt' r ->
-              p (match lt with
-                  | [] -> lt'
-                  | a :: tl -> a :: (tl @ lt'))
-                r)) ;
-      == { _ by (compute ()) } *)
-      // read_file_spec f h (fun lt (res : resexn string) ->
-      //   begin match res with
-      //   | Inl contents ->
-      //     hist_bind agent_spec (fun () ->
-      //       hist_bind (read_file_spec f) (fun res' ->
-      //         match res' with
-      //         | Inl new_contents ->
-      //           hist_if_then_else
-      //             (hist_return (Inl ()))
-      //             (hist_return (Inr ()))
-      //             (validate contents task new_contents)
-      //         | Inr x -> hist_return (Inr x)
-      //       )
-      //     )
-      //   | Inr () -> hist_return #(resexn unit) (Inr ())
-      //   end (h ++ lt) (hist_post_shift h p lt)
-      // ) ;
-      // == {}
       read_file_spec f h (hist_post_bind' (fun res ->
         match res with
         | Inl contents ->
