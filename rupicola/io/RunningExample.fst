@@ -30,7 +30,6 @@ let read_file (f : string) : io (resexn string) =
 
 
 val wrapper : string -> string -> (string -> string -> io unit) -> io (resexn unit)
-// val wrapper : progS wrapper_intS
 let wrapper f task agent =
   let!@! contents = read_file f in
   let!@ () = agent f task in
@@ -239,23 +238,3 @@ let indirect_agent : exp =
         EUnit
       )
     )
-
-// val wrapped_wrapper : progS wrapper_intS
-// let wrapped_wrapper =
-//   (wrapped_wrapper_fst, tgt_wrapper)
-
-// val good_agent_aux : string -> string -> io (resexn unit)
-// let good_agent_aux fn task =
-//   let!@! fd = openfile fn in
-//   // let!@! data = read fd in
-//   write (fd, task)
-
-// val good_agent : string -> string -> io unit
-// let good_agent fn task =
-//   let!@ r = good_agent_aux fn task in
-//   io_return ()
-
-// let test () =
-//   wrapper "bla" "st" good_agent
-
-// %splice_t[tgt_test] (generate_derivation "tgt_test" (`test))
