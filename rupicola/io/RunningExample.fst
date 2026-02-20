@@ -76,16 +76,107 @@ let last_read_from (f:string) (lt:trace) =
   | Some fd -> last_read_from_read f fd (List.rev lt)
 
 unfold
+let read_file_spec (f : string) =
+  hist_prepost
+    (fun h -> True)
+    (fun h lt (r:resexn string) ->
+      Inl? r ==>
+      exists fd. lt == [ EvOpen f (Inl fd) ; EvRead fd (Inl (Inl?.v r)) ; EvClose fd (Inl ()) ]
+    )
+
+let read_fiile_sat_spec f :
+  Lemma (theta (read_file f) ⊑ read_file_spec f)
+= admit ()
+
+unfold
 let wrapper_spec (f task : string) =
   hist_prepost
     (fun h -> True)
-    (fun h lt (r:resexn unit) -> Inl? r ==> 
+    (fun h lt (r:resexn unit) -> Inl? r ==>
       Some? (fst_read_from f lt) /\ Some? (last_read_from f lt) /\
       (validate (Some?.v (fst_read_from f lt)) task (Some?.v (last_read_from f lt))))
 
+// let commut_either_match #a #b (f : )
+
 let wrapper_sat_spec f task agent :
   Lemma (theta (wrapper f task agent) ⊑ wrapper_spec f task)
-  = admit ()
+  = calc (⊑) {
+      theta (wrapper f task agent) ;
+      == {}
+      theta (
+        let!@! contents = read_file f in
+        let!@ () = agent f task in
+        let!@! new_contents = read_file f in
+        if validate contents task new_contents
+        then io_return (Inl ())
+        else io_return (Inr ())
+      ) ;
+      == { _ by (compute ()) }
+      theta (
+        io_bind (read_file f) (fun res ->
+          match res with
+          | Inl contents ->
+            let!@ () = agent f task in
+            let!@! new_contents = read_file f in
+            if validate contents task new_contents
+            then io_return (Inl ())
+            else io_return (Inr ())
+          | Inr x -> io_return (Inr x)
+        )
+      ) ;
+      `hist_equiv` {
+        theta_monad_morphism_bind (read_file f) (fun res ->
+          match res with
+          | Inl contents ->
+            let!@ () = agent f task in
+            let!@! new_contents = read_file f in
+            if validate contents task new_contents
+            then io_return (Inl ())
+            else io_return (Inr ())
+          | Inr x -> io_return (Inr x)
+        )
+      }
+      hist_bind (theta (read_file f)) (fun res ->
+        theta (
+          match res with
+          | Inl contents ->
+            let!@ () = agent f task in
+            let!@! new_contents = read_file f in
+            if validate contents task new_contents
+            then io_return (Inl ())
+            else io_return (Inr ())
+          | Inr x -> io_return (Inr x)
+        )
+      ) ;
+      ⊑ { read_fiile_sat_spec f }
+      hist_bind (read_file_spec f) (fun res ->
+        theta (
+          match res with
+          | Inl contents ->
+            let!@ () = agent f task in
+            let!@! new_contents = read_file f in
+            if validate contents task new_contents
+            then io_return (Inl ())
+            else io_return (Inr ())
+          | Inr x -> io_return (Inr x)
+        )
+      ) ;
+      `hist_equiv` { admit () }
+      hist_bind (read_file_spec f) (fun res ->
+        match res with
+        | Inl contents ->
+          theta (
+            let!@ () = agent f task in
+            let!@! new_contents = read_file f in
+            if validate contents task new_contents
+            then io_return (Inl ())
+            else io_return (Inr ())
+          )
+        | Inr x -> theta (io_return (Inr x))
+      ) ;
+      ⊑ { admit () }
+      wrapper_spec f task ;
+    }
 
 val main : (string -> string -> io unit) -> io bool
 let main agent =
