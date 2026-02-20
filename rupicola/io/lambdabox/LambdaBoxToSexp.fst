@@ -1,52 +1,42 @@
 module LambdaBoxToSexp
 
 (** Serialize LambdaBox terms to S-expressions following the Peregrine format.
-    Reference: https://github.com/peregrine-project/peregrine-tool/blob/ast-format/doc/format.md *)
+    Reference: https://github.com/peregrine-project/peregrine-tool/blob/master/doc/format.md *)
 
 open LambdaBox
 open Sexp
 open FStar.List.Tot
 
-(** Serialize an identifier *)
 let serialize_ident (i: ident) : sexp = str i
 
-(** Serialize a directory path *)
 let serialize_dirpath (dp: dirpath) : sexp =
   slist (List.Tot.map str dp)
 
-(** Serialize a module path *)
 let rec serialize_modpath (mp: modpath) : Tot sexp (decreases mp) =
   match mp with
   | MPfile dp -> slist [raw "MPfile"; serialize_dirpath dp]
   | MPbound dp id n -> slist [raw "MPbound"; serialize_dirpath dp; str id; num n]
   | MPdot mp' id -> slist [raw "MPdot"; serialize_modpath mp'; str id]
 
-(** Serialize a kernel name *)
 let serialize_kername (kn: kername) : sexp =
   let (mp, id) = kn in
   slist [serialize_modpath mp; str id]
 
-(** Serialize a name (binder name) *)
 let serialize_name (n: name) : sexp =
   match n with
   | NAnon -> raw "nAnon"
   | NNamed id -> slist [raw "nNamed"; str id]
 
-(** Serialize an inductive reference *)
 let serialize_inductive (ind: inductive) : sexp =
   slist [raw "inductive"; serialize_kername ind.inductive_mind; num ind.inductive_ind]
 
-(** Serialize a primitive value *)
 let serialize_prim_val (pv: prim_val) : sexp =
   match pv with
   | PrimString s -> slist [raw "primString"; str s]
-  (* Future: PrimFloat, PrimArray *)
 
-(** Serialize a list of names (for branch binders) *)
 let serialize_names (ns: list name) : sexp =
   slist (List.Tot.map serialize_name ns)
 
-(** Serialize a term - uses explicit recursion for lists to help termination checker *)
 let rec serialize_term (t: term) : Tot sexp (decreases t) =
   match t with
   | TBox -> raw "tBox"
@@ -86,11 +76,9 @@ and serialize_fixpoint_defs (defs: list (name & term & nat)) : Tot (list sexp) (
   | (n, body, rarg) :: rest ->
       slist [raw "def"; serialize_name n; serialize_term body; num rarg] :: serialize_fixpoint_defs rest
 
-(** Serialize a constructor body *)
 let serialize_constructor_body (cb: constructor_body) : sexp =
   slist [raw "constructor_body"; str cb.cstr_name; num cb.cstr_nargs]
 
-(** Serialize one inductive body *)
 let serialize_one_inductive_body (oib: one_inductive_body) : sexp =
   slist [
     raw "one_inductive_body";
@@ -101,7 +89,6 @@ let serialize_one_inductive_body (oib: one_inductive_body) : sexp =
     slist []
   ]
 
-(** Serialize a mutual inductive body *)
 let serialize_mutual_inductive_body (mib: mutual_inductive_body) : sexp =
   slist [
     raw "mutual_inductive_body";
@@ -110,28 +97,23 @@ let serialize_mutual_inductive_body (mib: mutual_inductive_body) : sexp =
     slist (List.Tot.map serialize_one_inductive_body mib.ind_bodies)
   ]
 
-(** Serialize a constant body *)
 let serialize_constant_body (cb: constant_body) : sexp =
   match cb.cst_body with
   | None -> slist [raw "constant_body"; raw "None"]
   | Some t -> slist [raw "constant_body"; slist [raw "Some"; serialize_term t]]
 
-(** Serialize a global declaration *)
 let serialize_global_decl (gd: global_decl) : sexp =
   match gd with
   | ConstantDecl cb -> slist [raw "ConstantDecl"; serialize_constant_body cb]
   | InductiveDecl mib -> slist [raw "InductiveDecl"; serialize_mutual_inductive_body mib]
 
-(** Serialize a global environment entry *)
 let serialize_global_entry (entry: kername & global_decl) : sexp =
   let (kn, gd) = entry in
   slist [serialize_kername kn; serialize_global_decl gd]
 
-(** Serialize a global environment *)
 let serialize_global_env (env: global_env) : sexp =
   slist (List.Tot.map serialize_global_entry env)
 
-(** Serialize a complete program (environment + main term) *)
 let serialize_program (p: program) : sexp =
   let (env, t) = p in
   slist [serialize_global_env env; serialize_term t]

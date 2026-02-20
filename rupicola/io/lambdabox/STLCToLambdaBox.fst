@@ -1,6 +1,6 @@
 module STLCToLambdaBox
 
-(** Compiler from STLC expressions (with IO) to LambdaBox terms. *)
+(** Compiler from STLC expressions to LambdaBox terms. *)
 
 open STLC
 open LambdaBox
@@ -11,15 +11,13 @@ open FStar.List.Tot
 (** Module path for our STLC types - using a simple file path *)
 let stlc_modpath : modpath = MPfile ["STLC"]
 
-(** Predefined inductive type identifiers *)
-
 (** Unit type: single constructor tt *)
 let unitTyId : inductive = {
   inductive_mind = (stlc_modpath, "unit");
   inductive_ind = 0;
 }
 
-(** Bool type: constructors true (0) and false (1) *)
+(** Bool type: constructors true (0) and false (1), this is opposite to OCaml's repr. *)
 let boolTyId : inductive = {
   inductive_mind = (stlc_modpath, "bool");
   inductive_ind = 0;
@@ -72,7 +70,7 @@ let bool_decl : mutual_inductive_body = {
 }
 
 let prod_decl : mutual_inductive_body = {
-  ind_npars = 0;  (* We erase type parameters *)
+  ind_npars = 0;
   ind_bodies = [{
     ind_name = "prod";
     ind_propositional = false;
@@ -84,7 +82,7 @@ let prod_decl : mutual_inductive_body = {
 }
 
 let sum_decl : mutual_inductive_body = {
-  ind_npars = 0;  (* We erase type parameters *)
+  ind_npars = 0;
   ind_bodies = [{
     ind_name = "sum";
     ind_propositional = false;
@@ -117,7 +115,7 @@ let base_env : global_env = [
   ((stlc_modpath, "nat"), InductiveDecl nat_decl);
 ]
 
-(** Module path and kernel names for the IO runtime *)
+(** Module path and kernel names for the runtime *)
 let runtime_modpath : modpath = MPfile ["Runtime"]
 let io_read_kn  : kername = (runtime_modpath, "io_read")
 let io_write_kn : kername = (runtime_modpath, "io_write")
@@ -126,7 +124,7 @@ let io_close_kn : kername = (runtime_modpath, "io_close")
 let string_eq_kn : kername = (runtime_modpath, "string_eq")
 let run_main_kn : kername = (runtime_modpath, "run_main")
 
-(** Abstract runtime declarations — no body → Peregrine emits (global $Axioms ...) *)
+(** Abstract runtime declarations *)
 let runtime_env : global_env = [
   (io_read_kn,  ConstantDecl { cst_body = None });
   (io_write_kn, ConstantDecl { cst_body = None });
@@ -136,7 +134,7 @@ let runtime_env : global_env = [
   (run_main_kn, ConstantDecl { cst_body = None });
 ]
 
-(** Compile a file_descr (nat) literal to a Church-encoded LambdaBox nat term.
+(** Compile a file_descr (nat) literal to a nat term.
     file_descr = nat, so fd 0 = zero, fd 1 = succ zero, etc. *)
 let rec compile_nat (n: nat) : Tot term (decreases n) =
   if n = 0 then TConstruct natTyId 0 []
@@ -145,56 +143,45 @@ let rec compile_nat (n: nat) : Tot term (decreases n) =
 (** Main compilation function: STLC expression (with IO) to LambdaBox term *)
 let rec compile (e: exp) : Tot term (decreases e) =
   match e with
-  (* Unit and boolean constructors *)
   | EUnit  -> TConstruct unitTyId 0 []
   | ETrue  -> TConstruct boolTyId 0 []
   | EFalse -> TConstruct boolTyId 1 []
 
-  (* Variables and lambdas *)
   | EVar x   -> TRel x
   | ELam b   -> TLambda NAnon (compile b)
   | EApp f x -> TApp (compile f) (compile x)
 
-  (* Pair operations *)
   | EPair e1 e2 -> TConstruct pairTyId 0 [compile e1; compile e2]
   | EFst e' ->
-      (* case e' of pair x y => x *)
-      (* Branch binds 2 variables, returns the first (index 1 since de Bruijn) *)
+      (* Branch binds 2 variables, returns the first (index 1) *)
       TCase (pairTyId, 0) (compile e') [([NAnon; NAnon], TRel 1)]
   | ESnd e' ->
-      (* case e' of pair x y => y *)
       (* Branch binds 2 variables, returns the second (index 0) *)
       TCase (pairTyId, 0) (compile e') [([NAnon; NAnon], TRel 0)]
 
-  (* Sum operations (also covers resexn = either a unit) *)
   | EInl e' -> TConstruct sumTyId 0 [compile e']
   | EInr e' -> TConstruct sumTyId 1 [compile e']
   | ECase s l r ->
       (* case s of inl x => l x | inr y => r y *)
-      (* l and r are already lambdas in STLC, so we apply them to the bound variable *)
+      (* l and r have a variable shift *)
       TCase (sumTyId, 0) (compile s) [
         ([NAnon], compile l);
         ([NAnon], compile r)
       ]
 
-  (* Conditional *)
   | EIf c t e ->
-      (* case c of true => t | false => e *)
-      (* Bool constructors have 0 arguments *)
       TCase (boolTyId, 0) (compile c) [
         ([], compile t);
         ([], compile e)
       ]
 
-  (* String literal: compile to a LambdaBox primitive string *)
   | EString s -> TPrim (PrimString s)
 
-  (* File descriptor literal: compile nat value to Church-encoded nat *)
+  (* File descriptor literal: compile nat value *)
   | EFileDescr fd -> compile_nat fd
 
-  (* IO operations: compiled as calls to runtime axioms.
-     The monad is erased: ERead/EWrite/EOpen/EClose are direct calls that return values.
-     Sequencing (bind) has been compiled away to EApp (ELam k) m at the STLC level. *)
+  (* Operations/primitives: compiled as calls to runtime axioms.
+     ERead/EWrite/EOpen/EClose/EStringEq are direct calls that return values. *)
   | ERead fd ->
       TApp (TConst io_read_kn) (compile fd)
   | EWrite fd msg ->
@@ -211,9 +198,8 @@ let compile_program (e: exp) : program = (base_env, compile e)
 
 (** Compile a program with named top-level constants.
     [modpath] is the module path for the definitions.
-    [defs] is a list of (name, STLC expression) pairs — each becomes a ConstantDecl.
+    [defs] is a list of (name, STLC expression) pairs.
     [main_name] names which def is the entry point; the main term will be (TConst (modpath, main_name)).
-    The definitions are compiled independently (no cross-references via TConst at the STLC level).
     base_env inductive declarations are included. *)
 let compile_program_with_consts (modpath: modpath)
   (defs: list (string & exp))
@@ -224,11 +210,12 @@ let compile_program_with_consts (modpath: modpath)
     ((modpath, name), ConstantDecl { cst_body = Some (compile e) })
   in
   let const_decls : global_env = List.Tot.map compile_one defs in
-  (* IMPORTANT: Peregrine requires inductives AFTER constants that use them *)
   (const_decls @ base_env, TConst (modpath, main_name))
 
-(** Compile an IO program: [main_name] must be a (unit -> resexn unit) function.
-    The main term is (run_main main_fn), which executes the IO computation. *)
+(** Compile a wrapper program.
+    [main_name] must be a (string -> string -> unit) -> bool function.
+    [agent_name] must be a (string -> string -> unit) function.
+    The main term is (run_main main_fn agent_fn). *)
 let compile_io_program (modpath: modpath)
   (defs: list (string & exp))
   (main_name: string)
@@ -242,5 +229,5 @@ let compile_io_program (modpath: modpath)
   let main_term = TApp (TApp (TConst run_main_kn) (TConst (modpath, main_name))) (TConst (modpath, agent_name)) in
   (const_decls @ base_env @ runtime_env, main_term)
 
-(** Serialize a program to its LambdaBox s-expression string (used by run-io.py) *)
-let red_prog (p: program) : string = sexp_to_string (serialize_program p)
+(** Serialize a program to its LambdaBox S-expression and then obtain a string *)
+let string_of_prog (p: program) : string = sexp_to_string (serialize_program p)

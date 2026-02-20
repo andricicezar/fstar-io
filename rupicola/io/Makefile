@@ -74,9 +74,9 @@ validate:
 
 IOFLAGS := --unsafe_tactic_exec $(FLAGS)
 
-io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst $(LAMBDABOX_DIR)/LambdaBoxMeta.fst \
+io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst \
                 $(LAMBDABOX_DIR)/STLCToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
-                $(LAMBDABOX_DIR)/LambdaBox.fst Sexp.fst STLC.fst
+                $(LAMBDABOX_DIR)/LambdaBox.fst $(LAMBDABOX_DIR)/Sexp.fst STLC.fst
 	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
 
 io_program_raw.mlf: io_program.ast
