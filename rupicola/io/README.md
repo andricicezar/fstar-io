@@ -4,12 +4,13 @@ This contains the artifact associated with the ICFP 2026 submission with the nam
 "[Misquoted No More: Securely Extracting F\* Programs with IO](...)".
 
 The artifact contains an (almost) full formalization of the paper.
+SEIO* is fully formalized, including the proof that SEIO* is secure (that it satisfies RrHP).
 In file `RunningExample.fst`, we implement the running example from section 2,
 and we use the metaprogram to find the derivation, and then we instantiate the
 compilation model from section 6, which shows that it is secure to link the
 extracted running example with unverified agents.
 
-The artifact is not fully formalized because of two reasons:
+The artifact contains two assumptions that are not relevant to the formalization of SEIO*:
 1. We did not manage to finish the proof that the running example
    satisfies the spec presented in section 2.3. We just ran out of time,
    and we think the proof is going to be finished soon.
