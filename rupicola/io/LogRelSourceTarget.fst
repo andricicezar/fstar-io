@@ -91,7 +91,7 @@ let steps_val_id (e:value) (e':closed_exp) (h:history)
           (ensures e == e') =
    lem_value_is_irred e;
    (* Return the proof of equality *)
-   let sq_eq : squash (e == e') = 
+   let sq_eq : squash (e == e') =
      FStar.Squash.bind_squash #(steps e e' h []) #(squash (e == e')) (FStar.Squash.get_proof (steps e e' h [])) (fun (st:steps e e' h []) ->
        lem_irred_implies_srefl_steps st;
        (* Now we know e == e' here *)
@@ -107,7 +107,7 @@ let lem_values_valid_subset_val_valid_member_of t (fs_e:fs_val t) (e:value) :
     assert (t ⊆ (h, fs_e, e));
     let p (e':closed_exp) = e_beh e e' h [] /\ t ∈ (h, fs_e, e') in
     assert_norm (t ⊆ (h, fs_e, e) == (exists e'. p e'));
-    
+
     let aux (e':closed_exp) : Lemma
       (requires p e')
       (ensures t ∈ (h, fs_e, e)) =
@@ -140,19 +140,19 @@ let lem_values_are_producers t h fs_e e : (** lemma used by Amal **)
       (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt) with fs_beh_k. begin
        theta_monad_morphism_ret fs_e;
        (* Using intermediate assertions to guide the solver *)
-       assert (theta (io_return fs_e) == hist_return fs_e); 
-       
+       assert (theta (io_return fs_e) == hist_return fs_e);
+
        let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == fs_e in
        assert (hist_return fs_e h p); (* definition of hist_return *)
        assert (theta (io_return fs_e) h p); (* rewrite *)
        assert (thetaP (io_return fs_e) h lt fs_r); (* hypothesis fs_beh_k *)
-       
+
        (* Expand definition of thetaP / wp2p *)
        (* thetaP m h lt r <==> forall p. theta m h p ==> p lt r *)
        (* Therefore theta (io_return fs_e) h p ==> p lt fs_r *)
-       
+
        assert (p lt fs_r);
-       
+
        assert (lt == []);
        assert (fs_r == fs_e);
 
@@ -264,29 +264,6 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
         introduce _ ==> _ with _. begin
           val_type_closed_under_history_extension (Some?.v (g x)) h (index fsG x) (s x)
         end
-      end
-    end
-  end
-
-let safety_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Lemma
-  (requires (valid_subset_prod fs_e e))
-  (ensures safe e) =
-  introduce forall (e':closed_exp) (h:history) (lt:local_trace h).
-    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
-    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
-      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
-        eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
-          fsG `(≍) h` s ==> t ⫃ (h, fs_e, gsubst s e)
-        with  true gsub_empty empty_eval h;
-        assert (t ⫃ (h, fs_e, e));
-        admit ()
-  (**
-        eliminate exists (fs_r:get_Type t). t ∈ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r
-        returns is_value e' with _. begin
-          assert (t ∈ (h++lt, fs_r, e'));
-          lem_values_are_values t (h++lt) fs_r e';
-          assert (is_value e')
-        end **)
       end
     end
   end

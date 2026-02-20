@@ -63,40 +63,15 @@ The directory layout is as follows:
 
 ## Installing F* locally
 
-You need F* version 2025.12.15 (or higher) to run this artifact. The easy way to
-get set up is:
+Two opam switches are used:
+- `only-fstar`     -- default; used for F* checking, `malfunction`, and `ocamlfind` steps
 
-```bash
-opam update
-opam install fstar
-```
+1. Create the only-fstar switch:
 
-After a while, a built F* should be available in your PATH, via OPAM. If not, make
-sure to run `eval $(opam env)`. You can run
-```
-fstar.exe --version
-```
-to check that F* is present.
+$ opam switch import only-fstar.export --switch only-fstar
 
-You also need Z3 version 4.13.3 in your PATH, named z3-4.13.3 so F* can find it.
-The script in `FStar/.scripts/get_fstar_z3.sh` can be used to automatically set
-it up.  The following command:
-
-```
-./FStar/.scripts/get_fstar_z3.sh ~/bin
-```
-
-Should install z3-4.13.3 into your ~/bin (and Z3 4.8.5, though we do not use
-it).  If `~/bin` is not in your $PATH, you can add it, or instead install into a
-directory like `/usr/local/bin` (but you will need root privileges).
-
-Once installed, if `fstar.exe` is in your $PATH, then running `make` will verify
-all modules in this directory.  You can use `-j` to run several jobs in
-parallel.
-
-If you have F* installed somewhere outside of your PATH, you can set the 
-environment variable `FSTAR` to its location to use it.
-
+If you want to install F* manually,
+You need F* version 2025.12.15 (or higher) to run this artifact.
 See more details about [how to install F\* here](https://github.com/FStarLang/FStar/blob/master/INSTALL.md).
 
 ## Evaluation Instructions
@@ -107,7 +82,7 @@ Some warnings are expected, they are benign.
 ### Verify SEIO\*
 
 **Expected time.**
-Around 4 minutes (if running just one job). 
+Around 10 minutes (if running 8 jobs in parallel). 
 
 **Script for this step.**
 After setting up F*, running `make` in this repository should verify all the F*
@@ -120,8 +95,10 @@ by installing the fstar-vscode-assistant extension.
 ```
 
 **Expected output.**
-Should be a long list of files verified by F\*. A few warnings appear, 
+Should be a long list of files verified by F\*. A few warnings appear
+that the name of our `IO` module conflicts with F*'s module,
 they are benign and can be ignored.
+Also logs from the metaprogram appear.
 
 **Opening the files interactively.**
 If you installed F* in your system, you should be able just open VS Code in the
@@ -141,14 +118,10 @@ built F* modules (by `make clean`) and then run `make validate`. This will run
 the build passing the `--report_assumes error` flag to F*. If any unsafe feature
 is used, you should see a hard error.
 
-### Running the examples
+### Running the example
 
-The examples can be built by using the extraction plugin to extract them into
-native OCaml, and then building them with dune. This is process is a bit
-complicated so there is a rule in the Makefile to automate it.  Simply run `make
-build-Examples.Intro` to verify, extract, build, and run `Examples.Intro.fst`.
-Other files can be run by replacing `Examples.Intro` for something else.  The
-target `build-all` will build and run a suite of examples.
+The examples can be built by extracting them to Malfunction.
+Look in file [RUNNING.md](./RUNNING.md) for instructions on how to do that.
 
 ## License
 This work is licensed under a

@@ -315,7 +315,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
 
   | Tv_Match b _ brs -> begin
     if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else ();
-    print ("Got: " ^ (branches_to_string brs));
+    // print ("Got: " ^ (branches_to_string brs));
     match brs with
     | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
       let qb = create_derivation g dbmap btmap prior_derivs fuel b in
@@ -370,7 +370,7 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
   // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
-  print ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
+  // print ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
   let u = must <| universe_of g goal_ty in
   print ("DEBUG: successfully got universe");
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
@@ -387,7 +387,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
   print ("DEBUG: entering type_check_derivation");
   let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   print ("DEBUG: instantiate_implicits done");
-  print ("DEBUG: elaborated = " ^ term_to_string qderivation);
+  // print ("DEBUG: elaborated = " ^ term_to_string qderivation);
   let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
   print ("DEBUG: done type checking the derivation");
   if E_Ghost? eff then fail "derivation is not a total type. impossible!"
