@@ -1836,7 +1836,7 @@ let rec destruct_steps_epair_fst
   (t1 t2:typ) :
   Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
     (requires indexed_irred e' (h++lt) /\
-      indexed_sem_expr_shape (TPair t1 t2) e12 h) )
+      indexed_sem_expr_shape (TPair t1 t2) e12 h)
     (ensures fun (e12', (| lt12, lt_f |)) ->
       indexed_irred e12' (h++lt12) /\
       steps e12 e12' h lt12 /\
