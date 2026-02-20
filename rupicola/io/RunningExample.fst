@@ -1,7 +1,7 @@
 module RunningExample
 
-open FStar.Tactics
-open FStar.Tactics.Typeclasses
+open FStar.Tactics.V1
+open Trace
 open IO
 open Metaprogram
 open ExamplesIO
@@ -46,47 +46,47 @@ unfold
 let hist_prepost #a (pre : hist_pre) (post : (h:_ -> hist_post h a)) : hist a =
   fun h p -> pre h /\ (forall r lt. post h lt r ==> p lt r)
 
-unfold
-let basic_spec =
-  hist_prepost
-    (fun h -> True)
-    (fun h lt r -> True)
+let rec fst_read_from_fd (fd:file_descr) (lt:trace) =
+  match lt with
+  | [] -> None
+  | EvRead fd' (Inl msg) ::lt' -> if fd = fd' then Some msg else fst_read_from_fd fd lt'
+  | _::lt' -> fst_read_from_fd fd lt'
 
-let openfile_sat_spec f :
-  Lemma (theta (openfile f) ⊑ basic_spec)
-= () // At least here it works (not with regular theta so we made progress)
+let rec fst_read_from (f:string) (lt:trace) =
+  match lt with
+  | [] -> None
+  | EvOpen f' (Inl fd) ::lt' -> if f = f' then fst_read_from_fd fd lt' else fst_read_from f lt'
+  | _::lt' -> fst_read_from f lt'
 
-let read_file_sat_spec f :
-  Lemma (theta (read f) ⊑ basic_spec)
-= ()
+let rec last_read_from_open (f:string) (lt:trace) =
+  match lt with
+  | [] -> None
+  | EvOpen f' (Inl fd) ::lt' -> if f = f' then Some fd else last_read_from_open f lt'
+  | _::lt' -> last_read_from_open f lt'
+
+let rec last_read_from_read (fnm:string) (fd:file_descr) (lt:trace) =
+  match lt with
+  | [] -> None
+  | EvRead fd' (Inl msg) ::lt' -> if fd = fd' then Some msg else last_read_from_read fnm fd lt'
+  | EvOpen f' (Inl fd') ::lt' -> if fnm = f' && fd = fd' then None else last_read_from_read fnm fd lt'
+  | _::lt' -> last_read_from_read fnm fd lt'
+
+let last_read_from (f:string) (lt:trace) =
+  match last_read_from_open f (List.rev lt) with
+  | None -> None
+  | Some fd -> last_read_from_read f fd (List.rev lt)
 
 unfold
 let wrapper_spec (f task : string) =
   hist_prepost
     (fun h -> True)
-    (fun h lt r -> True)
+    (fun h lt (r:resexn unit) -> Inl? r ==> 
+      Some? (fst_read_from f lt) /\ Some? (last_read_from f lt) /\
+      (validate (Some?.v (fst_read_from f lt)) task (Some?.v (last_read_from f lt))))
 
 let wrapper_sat_spec f task agent :
   Lemma (theta (wrapper f task agent) ⊑ wrapper_spec f task)
-  // by (norm [delta_only [`%theta;`%wrapper;`%(let!@!);`%(let!@);`%io_bind]] ; (* compute () ; *) explode () ; dump "oh")
-= // unfold_theta #(resexn unit)
-  introduce
-    forall (h: Trace.history) (p: hist_post h (resexn unit)).
-      (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
-      theta (wrapper f task agent) h p
-  with begin
-    introduce
-      (forall (r: resexn unit) (lt: Trace.local_trace h). p lt r) ==>
-      theta (wrapper f task agent) h p
-    with _. begin
-      admit ()
-    end
-  end
-  // ()
-
-// assume (forall (h: Trace.history) (p: hist_post h (resexn unit)).
-//       (forall (r: resexn unit) (lt: Trace.local_trace h). auto_squash (p lt r)) ==>
-//       theta (wrapper f task agent) h p)
+  = admit ()
 
 val main : (string -> string -> io unit) -> io bool
 let main agent =

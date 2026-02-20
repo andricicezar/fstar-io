@@ -59,7 +59,7 @@ let get_req (fd:bool) : io (either bool bool) =
 let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
   match!@ m with
   | Inl x -> k x
-  | Inr x -> return (Inr x)
+  | Inr x -> io_return (Inr x)
 
 let open2_read_write () =
   let!@! fd1 = openfile "/tmp/input" in
