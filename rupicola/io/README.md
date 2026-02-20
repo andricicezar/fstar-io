@@ -3,29 +3,30 @@
 This contains the artifact associated with the ICFP 2026 submission with the name:
 "[Misquoted No More: Securely Extracting F\* Programs with IO](...)".
 
-The artifact contains an (almost) full formalization of the paper.
-SEIO* is fully formalized, including the proof that SEIO* is secure (that it satisfies RrHP).
+The artifact contains the F* formalization from the paper. In particular, the
+proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
+
 In file `RunningExample.fst`, we implement the running example from section 2,
 and we use the metaprogram to find the derivation, and then we instantiate the
 compilation model from section 6, which shows that it is secure to link the
 extracted running example with unverified agents.
 
-The artifact contains two assumptions that are not relevant to the formalization of SEIO*:
-1. We did not manage to finish the proof that the running example
-   satisfies the spec presented in section 2.3. We just ran out of time,
-   and we think the proof is going to be finished soon.
-2. There is an assumption in the metaprogram that generates derivations.
-   When testing that the derivation has the expected type,
-   we end up testing for equality between types by 
+The artifact contains two assumptions that are not relevant to the fully
+mechanized proof that SEIO* satisfies RrHP:
+1. We did not manage to finish the proof that the source code of the running
+   example satisfies the spec presented in section 2.3. We just ran out of time,
+   but we think the proof is going to be finished soon.
+2. We still have an assumption in the unverified metaprogram that generates
+   derivations. When checking that the derivation has the expected type,
+   we end up checking for equality between types by
    manually creating a statement of form `t1 == t2`.
-   Since we build this statement manually, F* does not register it as
+   Since we build this statement manually, F* does not internally register it as
    an equality between types, which prevents us from retyping the derivation.
-   Therefore,
-   we assume that the successful checking of the statement
-   gives us equality between types. (Extraction will fail if the types are not equal)
-   We think this it is a situation where
-   we did not figure out in time how to use Meta-F* to avoid the assumption.
-   We are in contact with the developers of F* to figure out how to get rid of the assumption.
+   Therefore, we assume that the successful checking of the statement
+   gives us equality between types.
+   (Extraction will anyway fail if the types are not equal)
+   We did not figure out in time how to use Meta-F* to avoid this assumption,
+   but we are in contact with the developers of F* to get rid of it.
 
 ## Table of Contents
 * [Setup](#setup)
