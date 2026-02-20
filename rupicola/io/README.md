@@ -51,16 +51,6 @@ We list where the definitions and theorems of the paper are.
 | **Section 6** - Running SEIO* | |
 | **More examples** | The other files named as `Examples.*.fst` |
 
-## Directory layout
-
-The directory layout is as follows:
-- `misc/`: dune configuration files for examples
-
-- `extraction/`: The extraction plugin for SecRef★. Run `make` inside
-  here to build it. It will also be built automatically by the `build-%`
-  rule, but *not* rebuilt, so do it manually if you've changed anything
-  here or if F* has changed.
-
 ## Installing F* locally
 
 Two opam switches are used:
