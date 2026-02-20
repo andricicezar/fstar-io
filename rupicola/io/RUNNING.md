@@ -21,8 +21,7 @@ $ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-swit
 $ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev  --on-switch only-peregrine
 $ opam switch import only-peregrine.export --switch only-peregrine
 
-Note: all pinned packages (MetaRocq, CertiCoq, CompCert, coq-ceres, …) are
-embedded in the export file. First build takes a while.
+Note: export file generated with `opam switch export`. First build takes a while.
 
 3. Build (activate only-fstar first):
 
@@ -47,7 +46,7 @@ To test other agents, modify the file `lambdabox/LambdaBoxExamples.fst`:
 ```
 let _ =
   assert True
-    by (write_term_to_file "io_program.ast" (`(red_prog (io_program pt_main write_agent))); trivial ())
+    by (write_term_to_file "io_program.ast" (`(string_of_prog (io_program pt_main write_agent))); trivial ())
 ```
 
 Replace there `write_agent` by other agents. Compile `io_program_exe`.

@@ -69,6 +69,8 @@ We list where the definitions and theorems of the paper are.
 | Backtranslation | `Backtranslation.fst` |
 | **Section 6** - Running SEIO* | |
 | Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/STLCToLambdaBox.fst` |
+| Compiling running example | `lambdabox/LambdaBoxExamples.fst` |
+| Runtime with implementing primitives | `lambdabox/axioms.ml` |
 | **More examples** | The other files named as `Examples.*.fst` |
 
 ## Installing F* locally

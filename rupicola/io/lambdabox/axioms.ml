@@ -1,7 +1,6 @@
-(* Runtime axioms for the STLC (IO) -> LambdaBox pipeline.
-   Implements IO operations.
+(* Runtime axioms for the LambdaBox pipeline.
 
-   LambdaBox/Peregrine value conventions (OCaml runtime):
+   LambdaBox value conventions (OCaml runtime):
      string:     native OCaml string (from TPrim (PrimString s))
      unit:       tt    = int 0  (nullary constructor 0)
      sum/either: inl x = block { tag=0, field[0] = x }
