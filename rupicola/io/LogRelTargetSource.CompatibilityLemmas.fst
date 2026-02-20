@@ -1720,6 +1720,101 @@ let equiv_oprod_pair #g
   end
 #pop-options
 
+#push-options "--z3rlimit 30 --split_queries always"
+let helper_equiv_oprod_string_eq_steps (h:history) (lt:local_trace h)
+  (fs_e1':fs_prod qString) (fs_e2':fs_prod qString) (fs_r:fs_val qBool) (e1 e2:closed_exp) :
+  Lemma
+    (requires fs_beh (fs_prod_bind fs_e1' (fun v1 -> fs_prod_bind #qString #qBool fs_e2' (fun v2 -> return (v1 = v2)))) h lt fs_r /\
+              qString ⫃ (h, fs_e1', e1) /\
+              (forall (lt':local_trace h). qString ⫃ (h++lt', fs_e2', e2)))
+    (ensures exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh (EStringEq e1 e2) e' h lt) =
+  let fs_k1 : fs_val qString -> fs_prod qBool = fun v1 -> fs_prod_bind #qString #qBool fs_e2' (fun v2 -> return (v1 = v2)) in
+  assert (fs_prod_bind fs_e1' fs_k1 == io_bind fs_e1' fs_k1) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
+  destruct_fs_beh fs_e1' fs_k1 h lt fs_r;
+  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_v1:fs_val qString).
+    lt == (lt1@lt2) /\ fs_beh fs_e1' h lt1 fs_v1 /\ fs_beh (fs_k1 fs_v1) (h++lt1) lt2 fs_r
+    returns exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh (EStringEq e1 e2) e' h lt with _. begin
+  // Get e1 value
+  eliminate forall (lt':local_trace h) (fs_r':get_Type qString). fs_beh fs_e1' h lt' fs_r' ==> exists em'. qString ∈ (h++lt', fs_r', em') /\ e_beh e1 em' h lt' with lt1 fs_v1;
+  eliminate exists em1. qString ∈ (h++lt1, fs_v1, em1) /\ e_beh e1 em1 h lt1
+    returns exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh (EStringEq e1 e2) e' h lt with _. begin
+  lem_values_are_values qString (h++lt1) fs_v1 em1;
+  lem_value_is_irred em1;
+  let EString s1 = em1 in
+  // Decompose inner bind: fs_prod_bind fs_e2' (fun v2 -> return (fs_v1 = v2))
+  let fs_k2 : fs_val qString -> fs_prod qBool = fun v2 -> return (fs_v1 = v2) in
+  assert (fs_prod_bind #qString #qBool fs_e2' fs_k2 == io_bind fs_e2' fs_k2) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
+  destruct_fs_beh fs_e2' fs_k2 (h++lt1) lt2 fs_r;
+  eliminate exists (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a)) (fs_v2:fs_val qString).
+    lt2 == (lt2a@lt2b) /\ fs_beh fs_e2' (h++lt1) lt2a fs_v2 /\ fs_beh (return (fs_v1 = fs_v2)) ((h++lt1)++lt2a) lt2b fs_r
+    returns exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh (EStringEq e1 e2) e' h lt with _. begin
+  let val_ : bool = (fs_v1 = fs_v2) in
+  theta_monad_morphism_ret val_;
+  let p : hist_post ((h++lt1)++lt2a) bool = fun lt' r' -> lt' == [] /\ r' == val_ in
+  assert (hist_return val_ ((h++lt1)++lt2a) p);
+  assert (theta (io_return val_) ((h++lt1)++lt2a) p);
+  assert (thetaP (io_return val_) ((h++lt1)++lt2a) lt2b fs_r);
+  assert (p lt2b fs_r);
+  assert (lt2b == []);
+  assert (fs_r == val_);
+  unit_l lt2a;
+  // Get e2 value
+  assert (qString ⫃ (h++lt1, fs_e2', e2));
+  eliminate forall (lt':local_trace (h++lt1)) (fs_r':get_Type qString). fs_beh fs_e2' (h++lt1) lt' fs_r' ==> exists em'. qString ∈ ((h++lt1)++lt', fs_r', em') /\ e_beh e2 em' (h++lt1) lt' with lt2a fs_v2;
+  eliminate exists em2. qString ∈ ((h++lt1)++lt2a, fs_v2, em2) /\ e_beh e2 em2 (h++lt1) lt2a
+    returns exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh (EStringEq e1 e2) e' h lt with _. begin
+  lem_values_are_values qString ((h++lt1)++lt2a) fs_v2 em2;
+  lem_value_is_irred em2;
+  let EString s2 = em2 in
+  trans_history h lt1 lt2a;
+  val_type_closed_under_history_extension qString (h++lt1) fs_v1 em1;
+  let result = if s1 = s2 then ETrue else EFalse in
+  let _ : step (EStringEq (EString s1) (EString s2)) result (h++(lt1@lt2a)) None = StringEqReturn s1 s2 (h++(lt1@lt2a)) in
+  lem_step_implies_steps (EStringEq (EString s1) (EString s2)) result (h++(lt1@lt2a)) None;
+  lem_value_is_irred result;
+  // Construct: EStringEq e1 e2 -->* EStringEq (EString s1) (EString s2) --> result
+  FStar.Squash.bind_squash #(steps e1 em1 h lt1) () (fun sts1 ->
+  FStar.Squash.bind_squash #(steps e2 em2 (h++lt1) lt2a) () (fun sts2 ->
+  construct_steps_estringeq e1 em1 e2 em2 h lt1 lt2a sts1 sts2;
+  lem_steps_transitive (EStringEq e1 e2) (EStringEq (EString s1) (EString s2)) result h (lt1@lt2a) []))
+  end
+  end
+  end
+  end
+#pop-options
+
+#push-options "--split_queries always"
+let equiv_oprod_string_eq #g
+  (fs_e1:fs_oprod g qString) (fs_e2:fs_oprod g qString)
+  (e1:exp) (e2:exp)
+  : Lemma
+    (requires fs_e1 ⊑ e1 /\ fs_e2 ⊑ e2)
+    (ensures fs_oprod_string_eq fs_e1 fs_e2 ⊑ EStringEq e1 e2) =
+  lem_fv_in_env_string_eq g e1 e2;
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> qBool ⫃ (h, fs_oprod_string_eq fs_e1 fs_e2 fsG, gsubst s (EStringEq e1 e2)) with begin
+    introduce _ ==> _ with _. begin
+      let fs_e1' : fs_prod qString = fs_e1 fsG in
+      let fs_e2' : fs_prod qString = fs_e2 fsG in
+      let fs_e = fs_prod_bind fs_e1' (fun v1 -> fs_prod_bind #qString #qBool fs_e2' (fun v2 -> return (v1 = v2))) in
+      assert (fs_e == fs_oprod_string_eq fs_e1 fs_e2 fsG) by (
+        norm [delta_only [`%fs_oprod_string_eq;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
+        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        trefl ());
+      let e = EStringEq (gsubst s e1) (gsubst s e2) in
+      assert (gsubst s (EStringEq e1 e2) == e);
+      let EStringEq e1 e2 = e in
+      introduce fsG `(≍) h` s ==> qBool ⫃ (h, fs_e, e) with _. begin
+        lem_shift_type_value_environments h fsG s;
+        introduce forall lt (fs_r:fs_val qBool). fs_beh fs_e h lt fs_r ==> exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with begin
+          introduce fs_beh fs_e h lt fs_r ==> exists e'. qBool ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+            helper_equiv_oprod_string_eq_steps h lt fs_e1' fs_e2' fs_r e1 e2
+          end
+        end
+      end
+    end
+  end
+#pop-options
+
 #push-options "--split_queries always"
 let equiv_oprod_fst #g
   (#t1 #t2:qType)

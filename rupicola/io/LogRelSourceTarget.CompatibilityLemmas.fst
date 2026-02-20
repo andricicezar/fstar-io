@@ -1348,6 +1348,86 @@ let equiv_oprod_pair #g
     end
   end
 
+#push-options "--z3rlimit 20 --split_queries always"
+let equiv_oprod_string_eq #g
+  (fs_e1:fs_oprod g qString) (fs_e2:fs_oprod g qString)
+  (e1:exp) (e2:exp)
+  : Lemma
+    (requires fs_e1 ⊒ e1 /\ fs_e2 ⊒ e2)
+    (ensures fs_oprod_string_eq fs_e1 fs_e2 ⊒ EStringEq e1 e2) =
+  lem_fv_in_env_string_eq g e1 e2;
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> qBool ⫄ (h, fs_oprod_string_eq fs_e1 fs_e2 fsG, gsubst s (EStringEq e1 e2)) with begin
+    let fs_e1' : fs_prod qString = fs_e1 fsG in
+    let fs_e2' : fs_prod qString = fs_e2 fsG in
+    let fs_e = fs_prod_bind fs_e1' (fun x' -> fs_prod_bind #qString #qBool fs_e2' (fun y' -> return (x' = y'))) in
+    assert (fs_e == fs_oprod_string_eq fs_e1 fs_e2 fsG) by (
+      norm [delta_only [`%fs_oprod_string_eq;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
+      l_to_r [`lem_hd_stack;`tail_stack_inverse];
+      trefl ());
+    let e = EStringEq (gsubst s e1) (gsubst s e2) in
+    assert (gsubst s (EStringEq e1 e2) == e) by (trefl ());
+    let EStringEq e1 e2 = e in
+    introduce fsG `(∽) h` s ==> qBool ⫄ (h, fs_oprod_string_eq fs_e1 fs_e2 fsG, gsubst s (EStringEq e1 e2)) with _. begin
+      introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val qBool). qBool ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val qBool). qBool ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+          bind_squash (steps e e' h lt) (fun sts1 ->
+            lem_forall_values_are_values_prod qString h;
+            indexed_safety_prod fs_e1' e1 h;
+            let (e1v, (| lt1, lt' |)) = destruct_steps_estringeq_e1 e1 e2 e' h lt sts1 in
+            assert (qString ⫄ (h, fs_e1', e1));
+            eliminate forall lt1 e1'. e_beh e1 e1' h lt1 ==> (exists (fs_r_e1:fs_val qString). qString ∋ (h++lt1, fs_r_e1, e1') /\ fs_beh fs_e1' h lt1 fs_r_e1) with lt1 e1v;
+            lem_value_is_irred e1v;
+            eliminate exists (fs_r_e1:fs_val qString). qString ∋ (h++lt1, fs_r_e1, e1v) /\ fs_beh fs_e1' h lt1 fs_r_e1
+              returns exists (fs_r:fs_val qBool). qBool ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+            lem_values_are_expressions qString (h++lt1) fs_r_e1 e1v;
+            let EString s1 = e1v in
+            trans_history h lt1 lt';
+            lem_shift_type_value_environments h fsG s;
+            eliminate forall (lt:local_trace h). fsG `(∽) h` s ==> fsG `(∽) (h++lt)` s with lt1;
+            lem_shift_type_value_environments (h++lt1) fsG s;
+            assert (qString ⫄ (h++lt1, fs_e2', e2));
+            lem_forall_values_are_values_prod qString (h++lt1);
+            bind_squash (steps (EStringEq e1v e2) e' (h++lt1) lt') (fun sts2 ->
+              indexed_safety_prod fs_e2' e2 (h++lt1);
+              let (e2v, (| lt2, lt'' |)) = destruct_steps_estringeq_e2 e1v e2 e' (h++lt1) lt' sts2 in
+              trans_history h lt1 lt2;
+              eliminate forall lt2 e2'. e_beh e2 e2' (h++lt1) lt2 ==> (exists (fs_r_e2:fs_val qString). qString ∋ ((h++lt1)++lt2, fs_r_e2, e2') /\ fs_beh fs_e2' (h++lt1) lt2 fs_r_e2) with lt2 e2v;
+              lem_value_is_irred e2v;
+              eliminate exists (fs_r_e2:fs_val qString). qString ∋ ((h++lt1)++lt2, fs_r_e2, e2v) /\ fs_beh fs_e2' (h++lt1) lt2 fs_r_e2
+                returns exists (fs_r:fs_val qBool). qBool ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+              lem_values_are_expressions qString ((h++lt1)++lt2) fs_r_e2 e2v;
+              let EString s2 = e2v in
+              trans_history (h++lt1) lt2 lt'';
+              bind_squash (steps (EStringEq (EString s1) (EString s2)) e' ((h++lt1)++lt2) lt'') (fun sts3 ->
+                match sts3 with
+                | SRefl _ _ ->
+                  let _ : step (EStringEq (EString s1) (EString s2)) (if s1 = s2 then ETrue else EFalse) ((h++lt1)++lt2) None = StringEqReturn s1 s2 ((h++lt1)++lt2) in
+                  false_elim ()
+                | STrans step_seq step_rest ->
+                  match step_seq with
+                  | StringEqReturn _ _ _ ->
+                    lem_value_is_irred (if s1 = s2 then ETrue else EFalse);
+                    lem_irred_implies_srefl_steps step_rest;
+                    lem_fs_beh_return #qBool (fs_r_e1 = fs_r_e2) ((h++lt1)++lt2);
+                    lem_fs_beh_bind #qString #qBool fs_e2' (h++lt1) lt2 fs_r_e2 (fun y' -> return (fs_r_e1 = y')) [] (fs_r_e1 = fs_r_e2);
+                    unit_l lt2;
+                    lem_fs_beh_bind #qString #qBool fs_e1' h lt1 fs_r_e1 (fun x' -> (fs_prod_bind #qString #qBool fs_e2' (fun y' -> return (x' = y')))) lt2 (fs_r_e1 = fs_r_e2);
+                    unit_l lt2
+                  | StringEqLeft _ step_e1 ->
+                    lem_value_is_irred (EString s1);
+                    false_elim ()
+                  | StringEqRight _ step_e2 ->
+                    lem_value_is_irred (EString s2);
+                    false_elim ()
+              )
+            end)
+          end)
+        end
+      end
+    end
+  end
+#pop-options
+
 let equiv_oprod_fst #g
   (#t1 #t2:qType)
   (fs_e12:fs_oprod g (t1 ^* t2))

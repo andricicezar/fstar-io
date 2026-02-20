@@ -1166,6 +1166,15 @@ let fs_oprod_pair x y =
     fs_oprod_bind' y (fun y' ->
       fs_oprod_return_val _ _ (fs_val_pair x' y')))
 
+val fs_oprod_string_eq : #g : typ_env ->
+                         x : fs_oprod g qString ->
+                         y : fs_oprod g qString ->
+                         fs_oprod g qBool
+let fs_oprod_string_eq x y =
+  fs_oprod_bind' x (fun x' ->
+    fs_oprod_bind' y (fun y' ->
+      fs_oprod_return_val _ _ (x' = y')))
+
 val fs_oprod_fmap : #g:typ_env ->
                     #a:qType ->
                     #b:qType ->
