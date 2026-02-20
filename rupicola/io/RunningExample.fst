@@ -149,7 +149,8 @@ let hist_bind_commut_resexn #a #b (m : hist (resexn a)) (k : a -> io (resexn b))
 
 let hist_inl #a #b (k : a -> hist (resexn b)) (r : resexn a) : hist (resexn b) =
   fun h p ->
-    Inl? r ==> k (Inl?.v r) h p
+    (Inl? r ==> k (Inl?.v r) h p) /\
+    (hist_return (Inr ()) h p)
 
 let hist_bind_resexn_weaken #a #b (m : hist (resexn a)) (k : a -> io (resexn b)) :
   Lemma (
@@ -160,22 +161,7 @@ let hist_bind_resexn_weaken #a #b (m : hist (resexn a)) (k : a -> io (resexn b))
   with begin
     match r with
     | Inl x -> ()
-    | Inr x ->
-      // assume (theta (io_return (Inr x)) ⊑ (hist_inl (fun x -> theta (k x))) (Inr x))
-      theta_monad_morphism_ret #(resexn b) (Inr x) ;
-      // assume (hist_return (Inr x) ⊑ (hist_inl (fun x -> theta (k x))) (Inr x))
-      introduce forall h p. (hist_inl (fun x -> theta (k x))) (Inr x) h p ==> hist_return (Inr x) h p
-      with begin
-        // assume ((hist_inl (fun x -> theta (k x))) (Inr x) h p ==> p [] (Inr x))
-        calc (==>) {
-          (hist_inl (fun x -> theta (k x))) (Inr x) h p ;
-          // ^^ this is just a trivial pre
-          ==> { admit () }
-          p [] (Inr x) ;
-          == {}
-          hist_return (Inr x) h p ;
-        }
-      end
+    | Inr x -> theta_monad_morphism_ret #(resexn b) (Inr x)
   end ;
   lem_hist_bind_subset m m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) (hist_inl (fun x -> theta (k x)))
 
