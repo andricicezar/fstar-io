@@ -1,4 +1,4 @@
-module HelperTactics
+module Metaprogram.Utils
 
 open FStar.Tactics.V2
 open FStar.Reflection.Typing
@@ -117,7 +117,7 @@ let pat_to_string (p:pattern) : string =
   match p with
   | Pat_Constant c -> "Pat_Constant " ^ (print_vconst c)
   | Pat_Cons head univs subpats ->
-      // let subpats : list ((p: pattern{p << p}) & bool) = FStar.List.Tot.map #(pattern & bool) #((p: pattern{p << p}) & bool) 
+      // let subpats : list ((p: pattern{p << p}) & bool) = FStar.List.Tot.map #(pattern & bool) #((p: pattern{p << p}) & bool)
       //   (fun (x, y) -> (x, y)) subpats in
      "Pat_Cons " ^ fv_to_string head //^ " (" ^ FStar.List.Tot.fold_left (fun acc (p, b) -> acc ^ ", " ^ pat_to_string p) "" subpats  ^ ")"
   | Pat_Var v sort -> "Pat_Var"

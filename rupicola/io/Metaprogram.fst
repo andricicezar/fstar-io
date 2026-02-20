@@ -1,6 +1,6 @@
 module Metaprogram
 
-open HelperTactics
+open Metaprogram.Utils
 
 open FStar.Tactics.V2
 open FStar.Reflection.Typing

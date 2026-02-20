@@ -2,8 +2,8 @@ FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
-ROOTS := RrHP.fst \
-         Metaprogram.fst \
+ROOTS := Metaprogram.Tests.fst \
+	 RunningExample.fst \
          $(LAMBDABOX_DIR)/STLCToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
