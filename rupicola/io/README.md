@@ -67,7 +67,7 @@ We list where the definitions and theorems of the paper are.
 | RrHP | `RrHP.fst` |
 | Backtranslation | `Backtranslation.fst` |
 | **Section 6** - Running SEIO* | |
-| Compiling from $\lambda_{io}$ to $\lambda_{\box}$ | `lambdabox/STLCToLambdaBox.fst` |
+| Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/STLCToLambdaBox.fst` |
 | **More examples** | The other files named as `Examples.*.fst` |
 
 ## Installing F* locally
