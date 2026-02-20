@@ -147,6 +147,19 @@ let hist_bind_commut_resexn #a #b (m : hist (resexn a)) (k : a -> io (resexn b))
   end ;
   lem_hist_bind_equiv m m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) (fun r -> match r with | Inl x -> theta (k x) | Inr x -> hist_return (Inr x))
 
+let hist_bind_resexn_weaken #a #b (m : hist (resexn a)) (k : a -> io (resexn b)) :
+  Lemma (
+    hist_bind m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) ⊑
+    hist_bind m (fun r h lt -> Inl? r ==> theta (k (Inl?.v r)) h lt)
+  )
+= (* introduce forall r. (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) r ⊑ (fun r h lt -> Inl? r ==> theta (k (Inl?.v r)) h lt) r
+  with begin
+    admit ()
+  end ; *)
+  // assume (forall r. (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) r ⊑ (fun r h lt -> Inl? r ==> theta (k (Inl?.v r)) h lt) r) ;
+  admit () ;
+  lem_hist_bind_subset m m (fun (r : resexn a) -> theta (match r with | Inl x -> k x | Inr x -> io_return (Inr x))) (fun r h lt -> Inl? r ==> theta (k (Inl?.v r)) h lt)
+
 let read_file_sat_spec f :
   Lemma (theta (read_file f) ⊑ read_file_spec f)
 = calc (⊑) {
