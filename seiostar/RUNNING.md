@@ -10,34 +10,35 @@ Two opam switches are used:
 
 1. Create the only-fstar switch:
 
-$ opam switch import only-fstar.export --switch only-fstar
+        $ opam switch import only-fstar.export --switch only-fstar
 
 2. Create the only-peregrine switch (Peregrine + Rocq stack):
 
-$ opam switch create only-peregrine ocaml-base-compiler.4.14.2
-$ opam repo add coq-released   https://coq.inria.fr/opam/released      --on-switch only-peregrine
-$ opam repo add rocq-released  https://rocq-prover.org/opam/released   --on-switch only-peregrine
-$ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-switch only-peregrine
-$ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev  --on-switch only-peregrine
-$ opam switch import only-peregrine.export --switch only-peregrine
+        $ opam switch create only-peregrine ocaml-base-compiler.4.14.2
+        $ opam repo add coq-released   https://coq.inria.fr/opam/released      --on-switch only-peregrine
+        $ opam repo add rocq-released  https://rocq-prover.org/opam/released   --on-switch only-peregrine
+        $ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-switch only-peregrine
+        $ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev  --on-switch only-peregrine
+        $ opam update
+        $ opam switch import only-peregrine.export --switch only-peregrine
 
 Note: export file generated with `opam switch export`. First build takes a while.
 
 3. Build (activate only-fstar first):
 
-$ opam switch only-fstar && eval $(opam env)
-$ make io_program_exe
+        $ opam switch only-fstar && eval $(opam env)
+        $ make io_program_exe
 
 The Peregrine step (`io_program_raw.mlf`) runs automatically under
 `opam exec --switch=only-peregrine`, no manual switch needed for that step.
 
 4. Test io_program_exe:
 
-seiostar/io$ echo "foo" > temp
-seiostar/io$ ./io_program_exe
-true
-seiostar/io$ cat temp
-overwrite
+        seiostar/io$ echo "foo" > temp
+        seiostar/io$ ./io_program_exe
+        true
+        seiostar/io$ cat temp
+        overwrite
 
 5. Test other agents:
 
