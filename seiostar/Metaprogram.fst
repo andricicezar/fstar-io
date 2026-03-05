@@ -62,7 +62,7 @@ let rec typ_translation (qt:term) : Tac term =
         match inspect_ln ret with
         | Tv_App l (r, _) -> begin
           match get_fv l with
-          | Some "IOFree.io" -> Some r
+          | Some "IOStar.io" -> Some r
           | _ -> None
         end
         | _ -> None
@@ -181,7 +181,7 @@ let app_result_is_io (g:env) (btmap:bt_mapping) (hd:term) : Tac bool =
           (match inspect_ln ret with
            | Tv_App l _ ->
              (match get_fv l with
-              | Some "IOFree.io" -> true
+              | Some "IOStar.io" -> true
               | _ -> false)
            | _ -> false)
         | _ -> false)
@@ -261,31 +261,31 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qinl (create_derivation g dbmap btmap prior_derivs fuel v1)
     | Some "FStar.Pervasives.Inr", [v1] ->
       mk_qinr (create_derivation g dbmap btmap prior_derivs fuel v1)
-    | Some "IOFree.io_return", [v] ->
+    | Some "IOStar.io_return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOFree.return", [v] ->
+    | Some "IOStar.return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOFree.openfile", [v] ->
+    | Some "IOStar.openfile", [v] ->
       mk_qopenfile (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOFree.read", [v] ->
+    | Some "IOStar.read", [v] ->
       mk_qread (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOFree.close", [v] ->
+    | Some "IOStar.close", [v] ->
       mk_qclose (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOFree.write", [v] -> begin
+    | Some "IOStar.write", [v] -> begin
       let (h, as_) = collect_app v in
       match get_fv h, as_ with
       | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
         mk_qwrite (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
-      | _ -> fail "IOFree.write argument is not a tuple structure"
+      | _ -> fail "IOStar.write argument is not a tuple structure"
     end
-    | Some "IOFree.op_let_Bang_At", [m; k]
-    | Some "IOFree.io_bind", [m; k] -> begin
+    | Some "IOStar.op_let_Bang_At", [m; k]
+    | Some "IOStar.io_bind", [m; k] -> begin
       let qm = create_derivation g dbmap btmap prior_derivs fuel m in
       match inspect_ln k with
       | Tv_Abs bin body ->
         let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) prior_derivs fuel body in
         mk_qbind qm qk
-      | _ -> fail "IOFree.io_bind continuation is not a lambda"
+      | _ -> fail "IOStar.io_bind continuation is not a lambda"
     end
     | Some "ExamplesIO.eq_string", [v1; v2] ->
       mk_qeq_string (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)

@@ -3,7 +3,7 @@ module QExp
 open FStar.Tactics
 open QTyp
 
-open IOFree
+open IOStar
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986

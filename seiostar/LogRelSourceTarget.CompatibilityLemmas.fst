@@ -7,7 +7,7 @@ open FStar.List.Tot
 open LambdaIO
 open LambdaIO.ConstructLemmas
 open QTyp
-open IOFree
+open IOStar
 open Trace
 open LogRelSourceTarget
 

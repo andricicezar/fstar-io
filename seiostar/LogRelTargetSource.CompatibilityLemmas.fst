@@ -4,7 +4,7 @@ open Trace
 open LambdaIO
 open LambdaIO.DestructLemmas
 open QTyp
-open IOFree
+open IOStar
 open LogRelTargetSource
 
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =

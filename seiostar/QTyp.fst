@@ -5,7 +5,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open LambdaIO
-open IOFree
+open IOStar
 
 (** We define quotation for Type **)
 

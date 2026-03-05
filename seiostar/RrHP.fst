@@ -7,7 +7,7 @@ open LambdaIO
 open QTyp
 open QExp
 open Trace
-open IOFree
+open IOStar
 open Compilation
 open Backtranslation
 open LogRelSourceTarget

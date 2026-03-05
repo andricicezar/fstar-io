@@ -5,7 +5,7 @@ open FStar.List.Tot
 
 open LambdaIO
 open QTyp
-open IOFree
+open IOStar
 open Trace
 
 (** Cross Language Binary Logical Relation between F* and LambdaIO expressions

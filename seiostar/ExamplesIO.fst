@@ -1,6 +1,6 @@
 module ExamplesIO
 
-open IOFree
+open IOStar
 
 let u_return () : io bool = return true
 
