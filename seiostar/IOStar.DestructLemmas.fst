@@ -21,10 +21,10 @@ let thetaP_shift_op_lt #t (o:io_ops) (args:io_args o) (k:io_res o args -> io t) 
     introduce thetaP (k r) (h ++ lt) lt' fs_r ==> thetaP (Call o args k) h (lt@lt') fs_r with _. begin
       introduce forall (p:hist_post h t). theta (Call o args k) h p ==> p (lt@lt') fs_r with begin
         introduce theta (Call o args k) h p ==> p (lt@lt') fs_r with _. begin
-          assert (hist_bind (op_wp o args) (fun r -> theta (k r)) h p);
+          assert (hist_bind (hist_call o args) (fun r -> theta (k r)) h p);
           assert (forall (lt:local_trace h) (r:io_res o args). lt == [op_to_ev o args r] ==> theta (k r) (h++lt) (hist_post_shift h p lt)) by (
             binder_retype (nth_binder (-1));
-              norm [delta_only [`%hist_bind;`%op_wp;`%to_hist;`%io_post;`%io_pre;`%hist_post_bind'];iota];
+              norm [delta_only [`%hist_bind;`%hist_call;`%to_hist;`%io_post;`%io_pre;`%hist_post_bind'];iota];
             trefl ());
           eliminate forall (lt:local_trace h) (r:io_res o args). lt == [op_to_ev o args r] ==> theta (k r) (h++lt) (hist_post_shift h p lt)
             with lt r;
@@ -48,7 +48,7 @@ let rec theta_thetaP_in_post #t (m:io t) (h:history) : Lemma (theta m h (fun lt 
           assert (theta (k r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r'))
         end
       end;
-      assert ((op_wp o args) h (fun lt fs_r -> theta (k fs_r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r')))
+      assert ((hist_call o args) h (fun lt fs_r -> theta (k fs_r) (h ++ lt) (fun lt' fs_r' -> thetaP m h (lt@lt') fs_r')))
 #pop-options
 
 unfold
@@ -99,7 +99,7 @@ let rec theta_io_bind_exists_ #t1 #t2 (m:io t1) (f:t1 -> io t2) (h:history) : Le
           assert (theta (io_bind (k r) f) (h ++ lt) (fun lt' r' -> theta_io_bind_exists_post m f h (lt @ lt') r'))
         end
       end;
-      assert (hist_bind (op_wp o args) (fun r -> theta (io_bind (k r) f)) h (theta_io_bind_exists_post m f h));
+      assert (hist_bind (hist_call o args) (fun r -> theta (io_bind (k r) f)) h (theta_io_bind_exists_post m f h));
       assert (theta (io_bind (Call o args k) f) h (theta_io_bind_exists_post m f h))
 #pop-options
 
