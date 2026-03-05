@@ -265,18 +265,22 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
     | Some "IOStar.return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOStar.openfile", [v] ->
-      mk_qopenfile (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOStar.read", [v] ->
-      mk_qread (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOStar.close", [v] ->
-      mk_qclose (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOStar.write", [v] -> begin
-      let (h, as_) = collect_app v in
-      match get_fv h, as_ with
-      | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-        mk_qwrite (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
-      | _ -> fail "IOStar.write argument is not a tuple structure"
+    | Some "IOStar.io_call", [op; v] -> begin
+      match get_fv op with
+      | Some "Trace.OOpen" ->
+        mk_qopenfile (create_derivation g dbmap btmap prior_derivs fuel v)
+      | Some "Trace.ORead" ->
+        mk_qread (create_derivation g dbmap btmap prior_derivs fuel v)
+      | Some "Trace.OClose" ->
+        mk_qclose (create_derivation g dbmap btmap prior_derivs fuel v)
+      | Some "Trace.OWrite" -> begin
+        let (h, as_) = collect_app v in
+        match get_fv h, as_ with
+        | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
+          mk_qwrite (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
+        | _ -> fail "IOStar.io_call OWrite argument is not a tuple structure"
+      end
+      | _ -> fail "IOStar.io_call: unknown operation"
     end
     | Some "IOStar.op_let_Bang_At", [m; k]
     | Some "IOStar.io_bind", [m; k] -> begin

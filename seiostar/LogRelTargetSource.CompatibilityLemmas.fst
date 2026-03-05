@@ -870,7 +870,7 @@ let helper_compat_oprod_openfile_oval (e':closed_exp) (h:history) (lt:local_trac
           lem_destruct_steps_einl (EFileDescr fd) e' ((h++lt1)++lt2) lt3;
           assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inl fd, EInl (EFileDescr fd)));
           assert (lt == [EvOpen fs_fnm (Inl fd)]);
-          lem_theta_open fs_fnm (Inl fd) h
+          lem_theta_call OOpen fs_fnm (Inl fd) h
         end
       | EInr EUnit -> begin
           lem_value_is_irred EUnit;
@@ -878,7 +878,7 @@ let helper_compat_oprod_openfile_oval (e':closed_exp) (h:history) (lt:local_trac
           lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
           assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
           assert (lt == [EvOpen fs_fnm (Inr ())]);
-          lem_theta_open fs_fnm (Inr ()) h
+          lem_theta_call OOpen fs_fnm (Inr ()) h
         end);
       get_squash (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_openfile_val fs_fnm) h lt fs_r)))
 #pop-options
@@ -889,9 +889,9 @@ let compat_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
     (ensures fs_oprod_openfile_oval fs_fnm ⊒ EOpen fnm)
   =
   lem_fv_in_env_openfile g fnm;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, openfile (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, io_call OOpen (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
     let fs_fnm = fs_fnm fsG in
-    let fs_e = openfile fs_fnm in
+    let fs_e = io_call OOpen fs_fnm in
     let e = EOpen (gsubst s fnm) in
     assert (gsubst s (EOpen fnm) == e);
     let EOpen fnm = e in
@@ -925,7 +925,7 @@ let helper_compat_oprod_read_oval (e':closed_exp) (#h:history) (lt:local_trace h
         lem_destruct_steps_einl (EString s) e' ((h++lt1)++lt2) lt3;
         assert (qResexn qString ∋ (h++lt, Inl s, EInl (EString s)));
         assert (lt == [EvRead fs_fd (Inl s)]);
-        lem_theta_read fs_fd (Inl s) h
+        lem_theta_call ORead fs_fd (Inl s) h
       end
       | EInr EUnit -> begin
         lem_value_is_irred EUnit;
@@ -933,7 +933,7 @@ let helper_compat_oprod_read_oval (e':closed_exp) (#h:history) (lt:local_trace h
         lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
         assert (qResexn qString ∋ (h++lt, Inr (), EInr EUnit));
         assert (lt == [EvRead fs_fd (Inr ())]);
-        lem_theta_read fs_fd (Inr ()) h
+        lem_theta_call ORead fs_fd (Inr ()) h
       end);
       get_squash (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)))
 #pop-options
@@ -992,7 +992,7 @@ let helper_compat_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
           lem_destruct_steps_einl EUnit e' (((h++lt1)++lt2)++lt3) lt4;
           assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
           assert (lt == [EvWrite (fs_fd, fs_msg) (Inl ())]);
-          lem_theta_write (fs_fd, fs_msg) (Inl ()) h
+          lem_theta_call OWrite (fs_fd, fs_msg) (Inl ()) h
         end
         | EInr EUnit -> begin
           lem_value_is_irred EUnit;
@@ -1000,7 +1000,7 @@ let helper_compat_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
           lem_destruct_steps_einr EUnit e' (((h++lt1)++lt2)++lt3) lt4;
           assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
           assert (lt == [EvWrite (fs_fd, fs_msg) (Inr ())]);
-          lem_theta_write (fs_fd, fs_msg) (Inr ()) h
+          lem_theta_call OWrite (fs_fd, fs_msg) (Inr ()) h
         end);
         get_squash (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_write_val fs_fd fs_msg) h lt fs_r))))
 #pop-options
@@ -1011,10 +1011,10 @@ let compat_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qS
     (ensures fs_oprod_write_oval fs_fd fs_msg ⊒ EWrite fd msg)
   =
   lem_fv_in_env_write g fd msg;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, write (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OWrite (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
     let fs_fd = fs_fd fsG in
     let fs_msg = fs_msg fsG in
-    let fs_e = write (fs_fd, fs_msg) in
+    let fs_e = io_call OWrite (fs_fd, fs_msg) in
     let e = EWrite (gsubst s fd) (gsubst s msg) in
     assert (gsubst s (EWrite fd msg) == e);
     let EWrite fd msg = e in
@@ -1048,7 +1048,7 @@ let helper_compat_oprod_close_oval (e':closed_exp) (h:history) (lt:local_trace h
       lem_destruct_steps_einl EUnit e' ((h++lt1)++lt2) lt3;
       assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
       assert (lt == [EvClose (get_fd fd') (Inl ())]);
-      lem_theta_close fs_fd (Inl ()) h
+      lem_theta_call OClose fs_fd (Inl ()) h
     end
     | EInr EUnit -> begin
       lem_value_is_irred EUnit;
@@ -1056,7 +1056,7 @@ let helper_compat_oprod_close_oval (e':closed_exp) (h:history) (lt:local_trace h
       lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
       assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
       assert (lt == [EvClose (get_fd fd') (Inr ())]);
-      lem_theta_close fs_fd (Inr ()) h
+      lem_theta_call OClose fs_fd (Inr ()) h
     end);
     get_squash (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_close_val fs_fd) h lt fs_r)))
 #pop-options
@@ -1067,9 +1067,9 @@ let compat_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     (ensures fs_oprod_close_oval fs_fd ⊒ EClose fd)
   =
   lem_fv_in_env_close g fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, close (fs_fd fsG), gsubst s (EClose fd)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OClose (fs_fd fsG), gsubst s (EClose fd)) with begin
     let fs_fd = fs_fd fsG in
-    let fs_e = close fs_fd in
+    let fs_e = io_call OClose fs_fd in
     let e = EClose (gsubst s fd) in
     assert (gsubst s (EClose fd) == e);
     let EClose fd = e in

@@ -2,7 +2,6 @@ module QTyp
 
 open FStar.Tactics
 open FStar.Classical.Sugar
-open FStar.List.Tot
 
 open LambdaIO
 open IOStar
@@ -97,7 +96,7 @@ let extend (t:qType) (g:typ_env)
           else g (y-1)
 
 let fv_in_env (g:typ_env) (e:exp) : Type0 =
-  forall (fv:var). fv `memP` free_vars e ==> Some? (g fv)
+  forall (fv:var). fv `FStar.List.Tot.memP` free_vars e ==> Some? (g fv)
 
 let lem_no_fv_is_closed (e:exp) : Lemma
   (requires fv_in_env empty e)
@@ -114,8 +113,9 @@ let lem_closed_is_no_fv (e:exp) : Lemma
 (** Helper: incrementing the binder depth shifts free variable indices by -1.
     I.e., fv in free_vars_indx at depth n+1 iff fv+1 in free_vars_indx at depth n. **)
 let rec lem_free_vars_indx_shift (e:exp) (n:nat) :
-  Lemma (ensures forall (fv:var). fv `memP` free_vars_indx e (n+1) <==> (fv+1) `memP` free_vars_indx e n)
+  Lemma (ensures forall (fv:var). fv `FStar.List.Tot.memP` free_vars_indx e (n+1) <==> (fv+1) `FStar.List.Tot.memP` free_vars_indx e n)
         (decreases e) =
+  let open FStar.List.Tot in
   match e with
   | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
   | EVar _ -> ()
@@ -152,8 +152,9 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     (requires
       (forall (y:var). y < n ==> s y == EVar y) /\
       (forall (y:var). y >= n ==> s y == EVar (y + 1)))
-    (ensures forall (fv:var). (fv+1) `memP` free_vars_indx (subst s e) n <==> fv `memP` free_vars_indx e n)
+    (ensures forall (fv:var). (fv+1) `FStar.List.Tot.memP` free_vars_indx (subst s e) n <==> fv `FStar.List.Tot.memP` free_vars_indx e n)
     (decreases e) =
+  let open FStar.List.Tot in
   match e with
   | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
   | EVar _ -> ()
@@ -213,20 +214,24 @@ let lem_fv_in_env_lam (g:typ_env) (t:qType) (body:exp) :
 
 let lem_fv_in_env_app (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EApp e1 e2))
-  = append_memP_forall (free_vars e1) (free_vars e2)
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_if (g:typ_env) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2 /\ fv_in_env g e3) <==> fv_in_env g (EIf e1 e2 e3))
-  = append_memP_forall (free_vars e1 @ free_vars e2) (free_vars e3);
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars e1 @ free_vars e2) (free_vars e3);
     append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_pair (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EPair e1 e2))
-  = append_memP_forall (free_vars e1) (free_vars e2)
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_string_eq (g:typ_env) (e1 e2:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env g e2) <==> fv_in_env g (EStringEq e1 e2))
-  = append_memP_forall (free_vars e1) (free_vars e2)
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars e1) (free_vars e2)
 
 let lem_fv_in_env_fst (g:typ_env) (e:exp) :
   Lemma (fv_in_env g (EFst e) <==> fv_in_env g e)
@@ -249,6 +254,7 @@ let lem_fv_in_env_inr (g:typ_env) (e:exp) :
 let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
   Lemma ((fv_in_env g e1 /\ fv_in_env (extend t1 g) e2 /\ fv_in_env (extend t2 g) e3) <==> fv_in_env g (ECase e1 e2 e3))
   =
+  let open FStar.List.Tot in
   (* Split memP over the appended free variable lists *)
   append_memP_forall (free_vars_indx e1 0 @ free_vars_indx e2 1) (free_vars_indx e3 1);
   append_memP_forall (free_vars_indx e1 0) (free_vars_indx e2 1);
@@ -267,7 +273,8 @@ let lem_fv_in_env_read (g:typ_env) (fd:exp) :
 
 let lem_fv_in_env_write (g:typ_env) (fd msg:exp) :
   Lemma ((fv_in_env g fd /\ fv_in_env g msg) <==> fv_in_env g (EWrite fd msg))
-  = append_memP_forall (free_vars fd) (free_vars msg)
+  = let open FStar.List.Tot in
+    append_memP_forall (free_vars fd) (free_vars msg)
 
 let lem_fv_in_env_close (g:typ_env) (fd:exp) :
   Lemma (fv_in_env g fd <==> fv_in_env g (EClose fd))
@@ -436,7 +443,7 @@ let rec shift_sub_equiv_sub_inc_rename #t
 #pop-options
 
 let gsubst (#g:typ_env) #b (s:gsub g b) (e:exp{fv_in_env g e}) : closed_exp =
-  introduce forall fv. fv `memP` free_vars_indx e 0 ==> free_vars_indx (s fv) 0 == [] with begin
+  introduce forall fv. fv `FStar.List.Tot.memP` free_vars_indx e 0 ==> free_vars_indx (s fv) 0 == [] with begin
     introduce _ ==> _ with _. begin
     match (s fv) with
     | EUnit -> ()
@@ -787,6 +794,13 @@ val index_0_hd #g #t (fsG:eval_env (extend t g))
   : Lemma (index fsG 0 == hd fsG)
 let index_0_hd fsG = ()
 
+
+
+
+
+
+open Trace
+
 (** Closed values **)
 type fs_val (t:qType) =
   get_Type t
@@ -951,23 +965,23 @@ let fs_prod_case_val cond inlc inrc =
 val fs_prod_openfile_val :
         fnm:fs_val qString ->
         fs_prod (qResexn qFileDescr)
-let fs_prod_openfile_val fnm = openfile fnm
+let fs_prod_openfile_val fnm = io_call OOpen fnm
 
 val fs_prod_read_val :
         fd:fs_val qFileDescr ->
         fs_prod (qResexn qString)
-let fs_prod_read_val fd = read fd
+let fs_prod_read_val fd = io_call ORead fd
 
 val fs_prod_write_val :
         fd:fs_val qFileDescr ->
         msg:fs_val qString ->
         fs_prod (qResexn qUnit)
-let fs_prod_write_val fd msg = write (fd, msg)
+let fs_prod_write_val fd msg = io_call OWrite (fd, msg)
 
 val fs_prod_close_val :
         fd:fs_val qFileDescr ->
         fs_prod (qResexn qUnit)
-let fs_prod_close_val fd = close fd
+let fs_prod_close_val fd = io_call OClose fd
 
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
@@ -1006,14 +1020,14 @@ val fs_oprod_openfile_oval :
         #g:typ_env ->
         fnm:fs_oval g qString ->
         fs_oprod g (qResexn qFileDescr)
-let fs_oprod_openfile_oval fnm fsG = openfile (fnm fsG)
+let fs_oprod_openfile_oval fnm fsG = io_call OOpen (fnm fsG)
 
 unfold
 val fs_oprod_read_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
         fs_oprod g (qResexn qString)
-let fs_oprod_read_oval fd fsG = read (fd fsG)
+let fs_oprod_read_oval fd fsG = io_call ORead (fd fsG)
 
 unfold
 val fs_oprod_write_oval :
@@ -1021,14 +1035,14 @@ val fs_oprod_write_oval :
         fd:fs_oval g qFileDescr ->
         msg:fs_oval g qString ->
         fs_oprod g (qResexn qUnit)
-let fs_oprod_write_oval fd msg fsG = write ((fd fsG), (msg fsG))
+let fs_oprod_write_oval fd msg fsG = io_call OWrite ((fd fsG), (msg fsG))
 
 unfold
 val fs_oprod_close_oval :
         #g:typ_env ->
         fd:fs_oval g qFileDescr ->
         fs_oprod g (qResexn qUnit)
-let fs_oprod_close_oval fd fsG = close (fd fsG)
+let fs_oprod_close_oval fd fsG = io_call OClose (fd fsG)
 
 unfold
 val fs_oval_lambda_oprod : #g :typ_env ->
@@ -1192,7 +1206,7 @@ val fs_oprod_openfile :
         fs_oprod g (qResexn qFileDescr)
 let fs_oprod_openfile fnm =
   fs_oprod_bind' fnm (fun fnm' ->
-    fs_oprod_return_prod _ _ (openfile fnm'))
+    fs_oprod_return_prod _ _ (io_call OOpen fnm'))
 
 val fs_oprod_read :
         #g:typ_env ->
@@ -1200,7 +1214,7 @@ val fs_oprod_read :
         fs_oprod g (qResexn qString)
 let fs_oprod_read fd =
   fs_oprod_bind' fd (fun fd' ->
-    fs_oprod_return_prod _ _ (read fd'))
+    fs_oprod_return_prod _ _ (io_call ORead fd'))
 
 val fs_oprod_write :
         #g:typ_env ->
@@ -1210,7 +1224,7 @@ val fs_oprod_write :
 let fs_oprod_write fd msg =
   fs_oprod_bind' fd (fun fd' ->
     fs_oprod_bind' msg (fun msg' ->
-      fs_oprod_return_prod _ _ (write (fd', msg'))))
+      fs_oprod_return_prod _ _ (io_call OWrite (fd', msg'))))
 
 val fs_oprod_close :
         #g:typ_env ->
@@ -1218,29 +1232,22 @@ val fs_oprod_close :
         fs_oprod g (qResexn qUnit)
 let fs_oprod_close fd =
   fs_oprod_bind' fd (fun fd' ->
-    fs_oprod_return_prod _ _ (close fd'))
-
-open Trace
+    fs_oprod_return_prod _ _ (io_call OClose fd'))
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
 let fs_beh m = thetaP m
 
-let lem_fs_beh_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
-  Lemma (requires Inl? res ==> Inl?.v res == fresh_fd h)
-        (ensures fs_beh #(qResexn qFileDescr) (openfile arg) h (ev_lt (EvOpen arg res)) res) =
-  lem_theta_open arg res h
+let q_io_res (o:io_ops) : qType =
+  match o with
+  | OOpen  -> qResexn qFileDescr
+  | ORead  -> qResexn qString
+  | OWrite -> qResexn qUnit
+  | OClose -> qResexn qUnit
 
-let lem_fs_beh_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
-  Lemma (fs_beh #(qResexn qString) (read arg) h (ev_lt (EvRead arg res)) res) =
-  lem_theta_read arg res h
-
-let lem_fs_beh_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
-  Lemma (fs_beh #(qResexn qUnit) (write arg) h (ev_lt (EvWrite arg res)) res) =
-  lem_theta_write arg res h
-
-let lem_fs_beh_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
-  Lemma (fs_beh #(qResexn qUnit) (close arg) h (ev_lt (EvClose arg res)) res) =
-  lem_theta_close arg res h
+let lem_fs_beh_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
+  Lemma (requires io_post h o args res)
+        (ensures fs_beh #(q_io_res o) (io_call o args) h [op_to_ev o args res] res) =
+  lem_theta_call o args res h
 
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =

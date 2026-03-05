@@ -23,9 +23,9 @@ let validate olds task news = eq_string task news
   // andb (notb (eq_string olds news)) (eq_string task news)
 
 let read_file (f : string) : io (resexn string) =
-  let!@! fd = openfile f in
-  let!@! r = read fd in
-  let!@! () = close fd in
+  let!@! fd = io_call OOpen f in
+  let!@! r = io_call ORead fd in
+  let!@! () = io_call OClose fd in
   io_return (Inl r)
 
 
@@ -97,7 +97,7 @@ let openfile_spec (f : string) =
     )
 
 let openfile_sat_spec f :
-  Lemma (theta (openfile f) ⊑ openfile_spec f)
+  Lemma (theta (io_call OOpen f) ⊑ openfile_spec f)
 = ()
 
 unfold
@@ -110,7 +110,7 @@ let read_spec (fd : file_descr) =
     )
 
 let read_sat_spec fd :
-  Lemma (theta (read fd) ⊑ read_spec fd)
+  Lemma (theta (io_call ORead fd) ⊑ read_spec fd)
 = ()
 
 unfold
@@ -123,7 +123,7 @@ let close_spec (fd : file_descr) =
     )
 
 let close_sat_spec fd :
-  Lemma (theta (close fd) ⊑ close_spec fd)
+  Lemma (theta (io_call OClose fd) ⊑ close_spec fd)
 = ()
 
 unfold
@@ -171,38 +171,38 @@ let read_file_sat_spec f :
     theta (read_file f) ;
     == {}
     theta (
-      let!@! fd = openfile f in
-      let!@! r = read fd in
-      let!@! () = close fd in
+      let!@! fd = io_call OOpen f in
+      let!@! r = io_call ORead fd in
+      let!@! () = io_call OClose fd in
       io_return (Inl r)
     ) ;
     == { _ by (compute ()) }
     theta (
-      io_bind (openfile f) (fun res ->
+      io_bind (io_call OOpen f) (fun res ->
         match res with
         | Inl fd ->
-          let!@! r = read fd in
-          let!@! () = close fd in
+          let!@! r = io_call ORead fd in
+          let!@! () = io_call OClose fd in
           io_return (Inl r)
         | Inr x -> io_return (Inr x)
       )
     ) ;
     `hist_equiv` {
-      theta_monad_morphism_bind (openfile f) (fun res ->
+      theta_monad_morphism_bind (io_call OOpen f) (fun res ->
         match res with
         | Inl fd ->
-          let!@! r = read fd in
-          let!@! () = close fd in
+          let!@! r = io_call ORead fd in
+          let!@! () = io_call OClose fd in
           io_return (Inl r)
         | Inr x -> io_return (Inr x)
       )
     }
-    hist_bind (theta (openfile f)) (fun res ->
+    hist_bind (theta (io_call OOpen f)) (fun res ->
       theta (
         match res with
         | Inl fd ->
-          let!@! r = read fd in
-          let!@! () = close fd in
+          let!@! r = io_call ORead fd in
+          let!@! () = io_call OClose fd in
           io_return (Inl r)
         | Inr x -> io_return (Inr x)
       )
@@ -212,23 +212,23 @@ let read_file_sat_spec f :
       theta (
         match res with
         | Inl fd ->
-          let!@! r = read fd in
-          let!@! () = close fd in
+          let!@! r = io_call ORead fd in
+          let!@! () = io_call OClose fd in
           io_return (Inl r)
         | Inr x -> io_return (Inr x)
       )
     ) ;
     ⊑ {
       hist_bind_resexn_weaken (openfile_spec f) (fun fd ->
-        let!@! r = read fd in
-        let!@! () = close fd in
+        let!@! r = io_call ORead fd in
+        let!@! () = io_call OClose fd in
         io_return (Inl r)
       )
     }
     hist_bind (openfile_spec f) (hist_inl (fun fd ->
       theta (
-        let!@! r = read fd in
-        let!@! () = close fd in
+        let!@! r = io_call ORead fd in
+        let!@! () = io_call OClose fd in
         io_return (Inl r)
       )
     )) ;
@@ -520,7 +520,7 @@ let write_agent : exp =
              content = EVar 1
              filename = EVar 2 *)
           EApp
-            (* after write: close fd *)
+            (* after io_call OWrite: io_call OClose fd *)
             (ELam (EClose (EVar 1)))
             (EWrite (EVar 0) (EVar 1))
         )
@@ -538,10 +538,10 @@ let write_twice_agent : exp =
         (* Inl fd *)
         (
           EApp
-            (* after first write *)
+            (* after first io_call OWrite *)
             (ELam
               (EApp
-                (* after second write *)
+                (* after second io_call OWrite *)
                 (ELam (EClose (EVar 2)))
                 (EWrite (EVar 1) (EVar 2))
               ))
@@ -563,7 +563,7 @@ let write_mixedup_agent : exp =
              content = EVar 1
              filename = EVar 2 *)
           EApp
-            (* after write: close fd *)
+            (* after io_call OWrite: io_call OClose fd *)
             (ELam (EClose (EVar 1)))
             (EWrite (EVar 0) (EVar 2))
         )

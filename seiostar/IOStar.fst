@@ -4,7 +4,9 @@ open FStar.Tactics.V1
 
 include BaseTypes
 include Hist
-open Trace
+include Trace
+
+(** Computational Monad **)
 
 noeq
 type io (a:Type u#a) : Type u#a =
@@ -26,17 +28,8 @@ let rec io_bind
       Call o args (fun i ->
         io_bind #a #b (fnc i) k)
 
-let openfile (fnm:string) : io (resexn file_descr) =
-  Call OOpen fnm Return
-
-let read (fd:file_descr) : io (resexn string) =
-  Call ORead fd Return
-
-let write (x:file_descr * string) : io (resexn unit) =
-  Call OWrite x Return
-
-let close (fd:file_descr) : io (resexn unit) =
-  Call OClose fd Return
+let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
+  Call o args Return
 
 let return = io_return
 let (let!@) = io_bind
@@ -147,92 +140,36 @@ let lem_thetaP_bind #a #b (m:io a) (k:a -> io b) :
          split ();
          dump "H")
 **)
-val lem_theta_open (arg:io_args OOpen) (res:io_res OOpen arg) (h:history) :
-  Lemma (requires Inl? res ==> Inl?.v res == fresh_fd h)
-        (ensures thetaP (openfile arg) h (ev_lt (EvOpen arg res)) res)
-let lem_theta_open arg res h =
-  introduce forall (p:hist_post h (io_res OOpen arg)). (theta (openfile arg)) h p ==> p (ev_lt (EvOpen arg res)) res with begin
-    introduce _ ==> _ with _. begin
-    match openfile arg with
-    | Return x -> false_elim ()
-    | Call OOpen arg k -> begin
-      assert ((hist_bind (op_wp OOpen arg) (fun (r:io_res OOpen arg) -> theta (k r))) h p ==> (hist_bind (to_hist (fun h_ -> io_pre h_ OOpen arg) (fun h_ res_ lt_ -> io_post h_ OOpen arg res_ /\ lt_ == [op_to_ev OOpen arg res_])) (fun (r:io_res OOpen arg) -> theta (k r))) h p) by (compute ());
-      eliminate forall (lt':local_trace h) (r':io_res OOpen arg). lt' == [EvOpen arg r'] ==> (theta (k r')) (h++lt') (fun (lt'':local_trace (h++lt')) (r'':io_res OOpen arg) -> p (lt' @ lt'') r'') with [EvOpen arg res] res
-      end
+
+#push-options "--split_queries always"
+val lem_theta_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
+  Lemma (requires io_post h o args res)
+        (ensures thetaP (io_call o args) h [op_to_ev o args res] res)
+let lem_theta_call o args res h =
+  introduce forall (p:hist_post h (io_res o args)). (theta (io_call o args)) h p ==> p [op_to_ev o args res] res with begin
+    introduce (theta (io_call o args)) h p ==> p [op_to_ev o args res] res with _. begin
+      assert ((hist_bind (op_wp o args) (fun (r:io_res o args) -> theta (Return r))) h p ==>
+              (hist_bind (to_hist (fun h_ -> io_pre h_ o args) (fun h_ res_ lt_ -> io_post h_ o args res_ /\ lt_ == [op_to_ev o args res_])) (fun (r:io_res o args) -> theta (Return r))) h p) by (compute ());
+      eliminate forall (lt':local_trace h) (r':io_res o args). lt' == [op_to_ev o args r'] ==>
+        (theta (Return r')) (h++lt') (fun (lt'':local_trace (h++lt')) (r'':io_res o args) -> p (lt' @ lt'') r'')
+        with [op_to_ev o args res] res
     end
   end
+#pop-options
 
-val lem_theta_read (arg:io_args ORead) (res:io_res ORead arg) (h:history) :
-  Lemma (thetaP (read arg) h (ev_lt (EvRead arg res)) res)
-let lem_theta_read arg res h =
-  assert (thetaP (read arg) h (ev_lt (EvRead arg res)) res) by (compute ())
-
-val lem_theta_write (arg:io_args OWrite) (res:io_res OWrite arg) (h:history) :
-  Lemma (thetaP (write arg) h (ev_lt (EvWrite arg res)) res)
-let lem_theta_write arg res h =
-  assert (thetaP (write arg) h (ev_lt (EvWrite arg res)) res) by (compute ())
-
-val lem_theta_close (arg:io_args OClose) (res:io_res OClose arg) (h:history) :
-  Lemma (thetaP (close arg) h (ev_lt (EvClose arg res)) res)
-let lem_theta_close arg res h =
-  assert (thetaP (close arg) h (ev_lt (EvClose arg res)) res) by (compute ())
-
-val destruct_thetaP_open (arg:io_args OOpen) (h:history) (lt:local_trace h) (fs_r:io_res OOpen arg) :
-  Lemma (requires thetaP (openfile arg) h lt fs_r)
-        (ensures (fs_r == Inl (fresh_fd h) /\ lt == [EvOpen arg (Inl (fresh_fd h))]) \/
-                 (fs_r == Inr () /\ lt == [EvOpen arg (Inr ())]))
-let destruct_thetaP_open arg h lt fs_r =
-  let p : hist_post h (io_res OOpen arg) = fun lt' r' ->
-    (r' == Inl (fresh_fd h) /\ lt' == [EvOpen arg (Inl (fresh_fd h))]) \/
-    (r' == Inr () /\ lt' == [EvOpen arg (Inr ())]) in
-  match openfile arg with
-  | Return _ -> false_elim ()
-  | Call OOpen arg' k -> begin
-    assert (theta (openfile arg) h p) by (compute ());
-    assert (p lt fs_r)
-    end
-
-val destruct_thetaP_read (arg:io_args ORead) (h:history) (lt:local_trace h) (fs_r:io_res ORead arg) :
-  Lemma (requires thetaP (read arg) h lt fs_r)
-        (ensures lt == [EvRead arg fs_r])
-let destruct_thetaP_read arg h lt fs_r =
-  let p : hist_post h (io_res ORead arg) = fun lt' r' -> lt' == [EvRead arg r'] in
-  match read arg with
-  | Return _ -> false_elim ()
-  | Call ORead arg' k -> begin
-    assert (theta (read arg) h p) by (compute ());
-    assert (p lt fs_r)
-    end
-
-val destruct_thetaP_write (arg:io_args OWrite) (h:history) (lt:local_trace h) (fs_r:io_res OWrite arg) :
-  Lemma (requires thetaP (write arg) h lt fs_r)
-        (ensures lt == [EvWrite arg fs_r])
-let destruct_thetaP_write arg h lt fs_r =
-  let p : hist_post h (io_res OWrite arg) = fun lt' r' -> lt' == [EvWrite arg r'] in
-  match write arg with
-  | Return _ -> false_elim ()
-  | Call OWrite arg' k -> begin
-    assert (theta (write arg) h p) by (compute ());
-    assert (p lt fs_r)
-    end
-
-
-val destruct_thetaP_close (arg:io_args OClose) (h:history) (lt:local_trace h) (fs_r:io_res OClose arg) :
-  Lemma (requires thetaP (close arg) h lt fs_r)
-        (ensures lt == [EvClose arg fs_r])
-let destruct_thetaP_close arg h lt fs_r =
-  let p : hist_post h (io_res OClose arg) = fun lt' r' -> lt' == [EvClose arg r'] in
-  match close arg with
-  | Return _ -> false_elim ()
-  | Call OClose arg' k -> begin
-    assert (theta (close arg) h p) by (compute ());
-    assert (p lt fs_r)
-    end
+val destruct_thetaP_call (o:io_ops) (args:io_args o) (h:history) (lt:local_trace h) (fs_r:io_res o args) :
+  Lemma (requires thetaP (io_call o args) h lt fs_r)
+        (ensures lt == [op_to_ev o args fs_r] /\ io_post h o args fs_r)
+let destruct_thetaP_call o args h lt fs_r =
+  let p : hist_post h (io_res o args) = fun lt' r' -> lt' == [op_to_ev o args r'] /\ io_post h o args r' in
+  assert (theta (io_call o args) h p) by (compute ());
+  assert (p lt fs_r)
 
 let lem_thetaP_return #a (x:a) (h:history) :
   Lemma (thetaP (return x) h [] x) =
   theta_monad_morphism_ret x
 
+#push-options "--split_queries always"
 let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k:a -> io b) (lt2:local_trace (h++lt1)) (fs_r:b) :
   Lemma (requires thetaP m h lt1 fs_r_m /\
                   thetaP (k fs_r_m) (h++lt1) lt2 fs_r)
@@ -248,6 +185,7 @@ let lem_thetaP_bind #a #b (m:io a) (h:history) (lt1:local_trace h) (fs_r_m:a) (k
       assert (p (lt1@lt2) fs_r)
     end
   end
+#pop-options
 
 let thetaP_shift_op_lt #t (o:io_ops) (args:io_args o) (k:io_res o args -> io t) (r:io_res o args) (h:history) (lt:local_trace h)
   : Lemma
