@@ -10,8 +10,7 @@ open LogRelTargetSource
 module C1 = LogRelTargetSource.CompatibilityLemmas
 module C2 = LogRelSourceTarget.CompatibilityLemmas
 
-// the environment is non-standard, more fancy
-// also over qType instead of syntactic types (typ)
+// the environment is over qType instead of syntactic types (typ)
 noeq
 type typing : typ_env -> exp -> qType -> Type =
 | TyUnit : #g:typ_env ->

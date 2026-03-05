@@ -5,6 +5,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open LambdaIO
+open LambdaIO.ConstructLemmas
 open QTyp
 open IOFree
 open Trace

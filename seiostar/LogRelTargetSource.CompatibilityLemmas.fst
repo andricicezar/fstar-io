@@ -2,6 +2,7 @@ module LogRelTargetSource.CompatibilityLemmas
 
 open Trace
 open LambdaIO
+open LambdaIO.DestructLemmas
 open QTyp
 open IOFree
 open LogRelTargetSource
