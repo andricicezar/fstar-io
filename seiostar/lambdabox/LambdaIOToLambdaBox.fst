@@ -1,45 +1,45 @@
-module STLCToLambdaBox
+module LambdaIOToLambdaBox
 
-(** Compiler from STLC expressions to LambdaBox terms. *)
+(** Compiler from LambdaIO expressions to LambdaBox terms. *)
 
-open STLC
+open LambdaIO
 open LambdaBox
 open Sexp
 open LambdaBoxToSexp
 open FStar.List.Tot
 
-(** Module path for our STLC types - using a simple file path *)
-let stlc_modpath : modpath = MPfile ["STLC"]
+(** Module path for our LambdaIO types - using a simple file path *)
+let lambdaio_modpath : modpath = MPfile ["LambdaIO"]
 
 (** Unit type: single constructor tt *)
 let unitTyId : inductive = {
-  inductive_mind = (stlc_modpath, "unit");
+  inductive_mind = (lambdaio_modpath, "unit");
   inductive_ind = 0;
 }
 
 (** Bool type: constructors true (0) and false (1), this is opposite to OCaml's repr. *)
 let boolTyId : inductive = {
-  inductive_mind = (stlc_modpath, "bool");
+  inductive_mind = (lambdaio_modpath, "bool");
   inductive_ind = 0;
 }
 
 (** Pair type: constructor pair (0) with 2 arguments *)
 let pairTyId : inductive = {
-  inductive_mind = (stlc_modpath, "prod");
+  inductive_mind = (lambdaio_modpath, "prod");
   inductive_ind = 0;
 }
 
 (** Sum type: constructors inl (0) and inr (1), each with 1 argument.
     Also used for resexn = either a unit. *)
 let sumTyId : inductive = {
-  inductive_mind = (stlc_modpath, "sum");
+  inductive_mind = (lambdaio_modpath, "sum");
   inductive_ind = 0;
 }
 
 (** Nat type: constructors zero (0) and succ (1).
     Used to represent file_descr values (file_descr = nat). *)
 let natTyId : inductive = {
-  inductive_mind = (stlc_modpath, "nat");
+  inductive_mind = (lambdaio_modpath, "nat");
   inductive_ind = 0;
 }
 
@@ -108,11 +108,11 @@ let nat_decl : mutual_inductive_body = {
 (** The base environment containing declarations for Unit, Bool, Pair, Sum, Nat.
     Nat is kept for representing file_descr values (file_descr = nat). *)
 let base_env : global_env = [
-  ((stlc_modpath, "unit"), InductiveDecl unit_decl);
-  ((stlc_modpath, "bool"), InductiveDecl bool_decl);
-  ((stlc_modpath, "prod"), InductiveDecl prod_decl);
-  ((stlc_modpath, "sum"), InductiveDecl sum_decl);
-  ((stlc_modpath, "nat"), InductiveDecl nat_decl);
+  ((lambdaio_modpath, "unit"), InductiveDecl unit_decl);
+  ((lambdaio_modpath, "bool"), InductiveDecl bool_decl);
+  ((lambdaio_modpath, "prod"), InductiveDecl prod_decl);
+  ((lambdaio_modpath, "sum"), InductiveDecl sum_decl);
+  ((lambdaio_modpath, "nat"), InductiveDecl nat_decl);
 ]
 
 (** Module path and kernel names for the runtime *)
@@ -140,7 +140,7 @@ let rec compile_nat (n: nat) : Tot term (decreases n) =
   if n = 0 then TConstruct natTyId 0 []
   else TConstruct natTyId 1 [compile_nat (n - 1)]
 
-(** Main compilation function: STLC expression (with IO) to LambdaBox term *)
+(** Main compilation function: LambdaIO expression to LambdaBox term *)
 let rec compile (e: exp) : Tot term (decreases e) =
   match e with
   | EUnit  -> TConstruct unitTyId 0 []
@@ -198,7 +198,7 @@ let compile_program (e: exp) : program = (base_env, compile e)
 
 (** Compile a program with named top-level constants.
     [modpath] is the module path for the definitions.
-    [defs] is a list of (name, STLC expression) pairs.
+    [defs] is a list of (name, LambdaIO expression) pairs.
     [main_name] names which def is the entry point; the main term will be (TConst (modpath, main_name)).
     base_env inductive declarations are included. *)
 let compile_program_with_consts (modpath: modpath)

@@ -3,7 +3,7 @@ module RrHP
 open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
-open STLC
+open LambdaIO
 open QTyp
 open QExp
 open Trace

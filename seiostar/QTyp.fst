@@ -4,7 +4,7 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-open STLC
+open LambdaIO
 open IOFree
 
 (** We define quotation for Type **)
@@ -273,7 +273,7 @@ let lem_fv_in_env_close (g:typ_env) (fd:exp) :
   Lemma (fv_in_env g fd <==> fv_in_env g (EClose fd))
   = ()
 
-(** STLC Evaluation Environment : variable -> value **)
+(** Evaluation Environment : variable -> value **)
 let gsub (g:typ_env) (b:bool{b ==> (forall x. None? (g x))}) =
   s:(sub b){forall x. Some? (g x) ==> is_value (s x)}
 
@@ -752,7 +752,7 @@ let tail #t #g fsG =
     (x:var{Some? (g x)})
     #(fun x -> get_Type (Some?.v (g x)))
     (fun y -> fsG (y+1))
-val index : #g:_ -> eval_env g -> x:STLC.var{Some? (g x)} -> get_Type (Some?.v (g x))
+val index : #g:_ -> eval_env g -> x:LambdaIO.var{Some? (g x)} -> get_Type (Some?.v (g x))
 let index #g fsG x = fsG x
 
 val lem_hd_stack #t #g (fsG:eval_env g) (v:get_Type t)
@@ -825,7 +825,7 @@ type fs_oval (g:typ_env) (t:qType) =
     - we take the value from the environment to open f:
         fun fsG -> f (index fsG 0)
 
-    What is cool about this is to define compilation to STLC the environment is abstract.
+    What is cool about this is that the evaluation environment can be abstract.
  **)
 
 unfold

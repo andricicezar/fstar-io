@@ -4,7 +4,7 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-open STLC
+open LambdaIO
 open QTyp
 open IOFree
 open Trace

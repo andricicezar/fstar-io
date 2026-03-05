@@ -39,7 +39,7 @@ type prim_val =
   | PrimString : string -> prim_val     (* String / byte string *)
   (* Future: PrimFloat, PrimArray *)
 
-(** Terms - subset of MetaRocq EAst.term needed for STLC *)
+(** Terms - subset of MetaRocq EAst.term needed for LambdaIO *)
 noeq type term =
   | TBox : term                                              (* Proofs/irrelevant terms *)
   | TRel : nat -> term                                       (* de Bruijn index *)

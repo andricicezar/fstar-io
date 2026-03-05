@@ -3,12 +3,12 @@ module LogRelSourceTarget
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-open STLC
+open LambdaIO
 open QTyp
 open IOFree
 open Trace
 
-(** Cross Language Binary Logical Relation between F* and STLC expressions
+(** Cross Language Binary Logical Relation between F* and LambdaIO expressions
      for __closed terms__. **)
 let rec (∈) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decreases %[get_rel t;0]) =
   let (h, fs_v, e) = p in
@@ -171,7 +171,7 @@ let (≍) (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) : Type0 =
     Some?.v (g x) ∈ (h, index fsG x, s x)
   (**  TODO      ^^^ not like in Amal's work. she uses an exp relation - but this is what she meant, because index fsG x is necessarily a value **)
 
-(** Cross Language Binary Logical Relation between F* and STLC expressions
+(** Cross Language Binary Logical Relation between F* and LambdaIO expressions
      for __open terms__. **)
 let subset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
   fv_in_env g e /\

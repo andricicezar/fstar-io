@@ -2,7 +2,7 @@ module Compilation
 
 open FStar.Tactics
 
-open STLC
+open LambdaIO
 open QTyp
 open QExp
 open LogRelSourceTarget

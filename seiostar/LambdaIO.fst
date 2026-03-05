@@ -1,6 +1,6 @@
 (* Substitution proof from: https://fstar-lang.org/tutorial/book/part2/part2_stlc.html *)
 
-module STLC
+module LambdaIO
 
 open FStar.Tactics
 open FStar.Classical.Sugar

@@ -4,7 +4,7 @@ FSTAR := $(FSTAR_EXE)
 LAMBDABOX_DIR := lambdabox
 ROOTS := Metaprogram.Tests.fst \
 	 RunningExample.fst \
-         $(LAMBDABOX_DIR)/STLCToLambdaBox.fst \
+         $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
 CACHEDIR := .cache
@@ -75,8 +75,8 @@ validate:
 IOFLAGS := --unsafe_tactic_exec $(FLAGS)
 
 io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst \
-                $(LAMBDABOX_DIR)/STLCToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
-                $(LAMBDABOX_DIR)/LambdaBox.fst $(LAMBDABOX_DIR)/Sexp.fst STLC.fst
+                $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
+                $(LAMBDABOX_DIR)/LambdaBox.fst $(LAMBDABOX_DIR)/Sexp.fst LambdaIO.fst
 	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
 
 io_program_raw.mlf: io_program.ast

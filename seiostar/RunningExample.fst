@@ -8,7 +8,7 @@ open ExamplesIO
 open RrHP
 open QTyp
 open QExp
-open STLC
+open LambdaIO
 
 (* We consider the task is string that need to replace the old contents *)
 

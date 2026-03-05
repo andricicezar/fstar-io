@@ -14,8 +14,8 @@ let write_term_to_file (filename : string) (t : term) : Tac unit =
   | _ -> fail "write_term_to_file: term did not reduce to a string constant"
 
 open LambdaBox
-open STLC
-open STLCToLambdaBox
+open LambdaIO
+open LambdaIOToLambdaBox
 open RunningExample
 
 let my_modpath : modpath = MPfile ["IO"]

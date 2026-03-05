@@ -1,6 +1,6 @@
 module Backtranslation
 
-open STLC
+open LambdaIO
 open QTyp
 open QExp
 open LogRelSourceTarget

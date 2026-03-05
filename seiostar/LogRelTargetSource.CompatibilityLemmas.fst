@@ -1,7 +1,7 @@
 module LogRelTargetSource.CompatibilityLemmas
 
 open Trace
-open STLC
+open LambdaIO
 open QTyp
 open IOFree
 open LogRelTargetSource
@@ -1576,7 +1576,7 @@ let compat_oprod_case #g (#a #b #c:qType)
         norm [delta_only [`%fs_oprod_case;`%fs_prod_case_val;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_case_val]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
-      let e = ECase (gsubst s cond) (STLC.subst (STLC.sub_elam s) inlc) (STLC.subst (STLC.sub_elam s) inrc) in
+      let e = ECase (gsubst s cond) (LambdaIO.subst (LambdaIO.sub_elam s) inlc) (LambdaIO.subst (LambdaIO.sub_elam s) inrc) in
       assert (gsubst s (ECase cond inlc inrc) == e) by (trefl ());
       let ECase e_sc e_il e_ir = e in
       introduce fsG `(∽) h` s ==> c ⫄ (h, fs_e, e) with _. begin
