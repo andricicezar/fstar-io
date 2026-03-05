@@ -3,7 +3,7 @@ FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
 ROOTS := Metaprogram.Tests.fst \
-	 RunningExample.fst \
+	     RunningExample.fst \
          $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 

@@ -962,27 +962,6 @@ let fs_prod_case_val cond inlc inrc =
   | Inl x -> inlc x
   | Inr x -> inrc x
 
-val fs_prod_openfile_val :
-        fnm:fs_val qString ->
-        fs_prod (qResexn qFileDescr)
-let fs_prod_openfile_val fnm = io_call OOpen fnm
-
-val fs_prod_read_val :
-        fd:fs_val qFileDescr ->
-        fs_prod (qResexn qString)
-let fs_prod_read_val fd = io_call ORead fd
-
-val fs_prod_write_val :
-        fd:fs_val qFileDescr ->
-        msg:fs_val qString ->
-        fs_prod (qResexn qUnit)
-let fs_prod_write_val fd msg = io_call OWrite (fd, msg)
-
-val fs_prod_close_val :
-        fd:fs_val qFileDescr ->
-        fs_prod (qResexn qUnit)
-let fs_prod_close_val fd = io_call OClose fd
-
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
 
@@ -1201,6 +1180,12 @@ val fs_oprod_call_oval :
         args:fs_oval g (q_io_args o) ->
         fs_oprod g (q_io_res o)
 let fs_oprod_call_oval o args fsG = io_call o (args fsG)
+
+val fs_prod_call_val :
+        o:io_ops ->
+        args:fs_val (q_io_args o) ->
+        fs_prod (q_io_res o)
+let fs_prod_call_val o args = io_call o args
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (fs_val t)
 let fs_beh m = thetaP m
