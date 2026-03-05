@@ -429,6 +429,11 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
     let TyInr t1 #t2 #e' h' = h in
     lem_backtranslate_valid_member_of h'
 
+val lem_backtranslate (#e:value) #t (h:typing empty e t)
+  : Lemma (
+    valid_contains #t (backtranslate h) e /\
+    valid_member_of (backtranslate h) e
+  )
 let lem_backtranslate (#e:value) #t (h:typing empty e t) =
   lem_backtranslate_valid_contains h;
   lem_backtranslate_valid_member_of h
