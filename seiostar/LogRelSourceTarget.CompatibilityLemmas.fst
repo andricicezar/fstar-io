@@ -4,10 +4,11 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
+open QTyp
 open LambdaIO
 open LambdaIO.ConstructLemmas
-open QTyp
 open IOStar
+open IOStar.DestructLemmas
 open Trace
 open LogRelSourceTarget
 

@@ -1247,7 +1247,7 @@ let q_io_res (o:io_ops) : qType =
 let lem_fs_beh_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
   Lemma (requires io_post h o args res)
         (ensures fs_beh #(q_io_res o) (io_call o args) h [op_to_ev o args res] res) =
-  lem_theta_call o args res h
+  lem_thetaP_call o args res h
 
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =
