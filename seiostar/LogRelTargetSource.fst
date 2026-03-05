@@ -5,7 +5,7 @@ open FStar.List.Tot
 
 open QTyp
 open STLC
-open IO
+open IOFree
 open Trace
 
 (** Section 8.1: https://www.cs.uoregon.edu/research/summerschool/summer24/lectures/Ahmed.pdf **)

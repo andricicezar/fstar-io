@@ -2,7 +2,7 @@ module RunningExample
 
 open FStar.Tactics.V1
 open Trace
-open IO
+open IOFree
 open Metaprogram
 open ExamplesIO
 open RrHP

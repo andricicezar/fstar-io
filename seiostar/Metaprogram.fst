@@ -3,11 +3,16 @@ module Metaprogram
 open Metaprogram.Utils
 
 open FStar.Tactics.V2
+open FStar.Tactics.Typeclasses
 open FStar.Reflection.Typing
 open FStar.Stubs.Reflection.V2.Builtins
 open FStar.Stubs.Reflection.V2.Data
 
 open QExp
+
+let print_debug (s:string) : Tac unit =
+  ()
+ // print s
 
 (** Quotation of types **)
 
@@ -57,7 +62,7 @@ let rec typ_translation (qt:term) : Tac term =
         match inspect_ln ret with
         | Tv_App l (r, _) -> begin
           match get_fv l with
-          | Some "IO.io" -> Some r
+          | Some "IOFree.io" -> Some r
           | _ -> None
         end
         | _ -> None
@@ -176,7 +181,7 @@ let app_result_is_io (g:env) (btmap:bt_mapping) (hd:term) : Tac bool =
           (match inspect_ln ret with
            | Tv_App l _ ->
              (match get_fv l with
-              | Some "IO.io" -> true
+              | Some "IOFree.io" -> true
               | _ -> false)
            | _ -> false)
         | _ -> false)
@@ -210,16 +215,16 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
     fail ("Unfolding depth exceeded while processing: " ^ tag_of qfs ^ " — " ^ term_to_string qfs
           ^ "\nThis likely means an unsupported primitive (e.g., op_Equality, op_Hat) was encountered.")
   else
-  let _ = print ("      in exp translation: " ^ tag_of qfs) in
+  let _ = print_debug ("      in exp translation: " ^ tag_of qfs) in
   match inspect_ln qfs with
   | Tv_FVar fv -> begin
     let fnm = fv_to_string fv in
     match List.Tot.assoc fnm prior_derivs with
     | Some cached ->
-      print ("        reusing prior derivation for: " ^ fnm);
+      print_debug ("        reusing prior derivation for: " ^ fnm);
       cached
     | None -> begin
-      print ("        looking for fvar: " ^ fnm);
+      print_debug ("        looking for fvar: " ^ fnm);
       let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
       match inspect_ln qfs' with
       | Tv_FVar fv' ->
@@ -256,31 +261,31 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qinl (create_derivation g dbmap btmap prior_derivs fuel v1)
     | Some "FStar.Pervasives.Inr", [v1] ->
       mk_qinr (create_derivation g dbmap btmap prior_derivs fuel v1)
-    | Some "IO.io_return", [v] ->
+    | Some "IOFree.io_return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IO.return", [v] ->
+    | Some "IOFree.return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IO.openfile", [v] ->
+    | Some "IOFree.openfile", [v] ->
       mk_qopenfile (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IO.read", [v] ->
+    | Some "IOFree.read", [v] ->
       mk_qread (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IO.close", [v] ->
+    | Some "IOFree.close", [v] ->
       mk_qclose (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IO.write", [v] -> begin
+    | Some "IOFree.write", [v] -> begin
       let (h, as_) = collect_app v in
       match get_fv h, as_ with
       | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
         mk_qwrite (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
-      | _ -> fail "IO.write argument is not a tuple structure"
+      | _ -> fail "IOFree.write argument is not a tuple structure"
     end
-    | Some "IO.op_let_Bang_At", [m; k]
-    | Some "IO.io_bind", [m; k] -> begin
+    | Some "IOFree.op_let_Bang_At", [m; k]
+    | Some "IOFree.io_bind", [m; k] -> begin
       let qm = create_derivation g dbmap btmap prior_derivs fuel m in
       match inspect_ln k with
       | Tv_Abs bin body ->
         let qk = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) prior_derivs fuel body in
         mk_qbind qm qk
-      | _ -> fail "IO.io_bind continuation is not a lambda"
+      | _ -> fail "IOFree.io_bind continuation is not a lambda"
     end
     | Some "ExamplesIO.eq_string", [v1; v2] ->
       mk_qeq_string (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
@@ -315,7 +320,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
 
   | Tv_Match b _ brs -> begin
     if List.length brs <> 2 then fail ("only supporting matches with 2 branches") else ();
-    // print ("Got: " ^ (branches_to_string brs));
+    // print_debug ("Got: " ^ (branches_to_string brs));
     match brs with
     | [(Pat_Constant C_True, t1); (Pat_Var _ _, t2)] -> (** if **)
       let qb = create_derivation g dbmap btmap prior_derivs fuel b in
@@ -348,10 +353,10 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
     let fnm = fv_to_string fv in
     match List.Tot.assoc fnm prior_derivs with
     | Some cached ->
-      print ("        reusing prior derivation for: " ^ fnm);
+      print_debug ("        reusing prior derivation for: " ^ fnm);
       cached
     | None -> begin
-      print ("        looking for uinst fvar: " ^ fnm);
+      print_debug ("        looking for uinst fvar: " ^ fnm);
       let qfs' = norm_term_env g [delta_only [fnm]; zeta] qfs in
       match inspect_ln qfs' with
       | Tv_FVar fv' ->
@@ -370,13 +375,13 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
   // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
-  // print ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
+  // print_debug ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
   let u = must <| universe_of g goal_ty in
-  print ("DEBUG: successfully got universe");
+  print_debug ("DEBUG: successfully got universe");
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
  //   l_to_r_fsG ();
     trefl ()) u goal_ty in
-  print ("DEBUG: proved equality!");
+  print_debug ("DEBUG: proved equality!");
 
   // we dynamically check that the types are equal (thus, extraction would fail if they are not)
   // w is proof that t == desired_t, but it is a typing_token and not a sub_typing token
@@ -384,12 +389,12 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   assume (sub_typing g t desired_t)
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  print ("DEBUG: entering type_check_derivation");
+  print_debug ("DEBUG: entering type_check_derivation");
   let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
-  print ("DEBUG: instantiate_implicits done");
-  // print ("DEBUG: elaborated = " ^ term_to_string qderivation);
+  print_debug ("DEBUG: instantiate_implicits done");
+  // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
   let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
-  print ("DEBUG: done type checking the derivation");
+  print_debug ("DEBUG: done type checking the derivation");
   if E_Ghost? eff then fail "derivation is not a total type. impossible!"
   else begin
     check_if_derivation_types_are_equal g qtyp desired_qtyp;

@@ -3,7 +3,7 @@ module Backtranslation
 open STLC
 open QTyp
 open QExp
-open IO
+open IOFree
 open LogRelSourceTarget
 open LogRelTargetSource
 
@@ -205,6 +205,7 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
     let h2 : typing g _ qString = h2 in
     fs_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2)
 
+#push-options "--split_queries always"
 let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
   | EUnit -> C1.compat_oprod_unit g
@@ -350,6 +351,7 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     C2.compat_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+#pop-options
 
 let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
   match e with

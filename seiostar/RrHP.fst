@@ -7,7 +7,7 @@ open STLC
 open QTyp
 open QExp
 open Trace
-open IO
+open IOFree
 open Compilation
 open Backtranslation
 open LogRelSourceTarget

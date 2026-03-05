@@ -3,7 +3,7 @@ module LogRelTargetSource.CompatibilityLemmas
 open Trace
 open STLC
 open QTyp
-open IO
+open IOFree
 open LogRelTargetSource
 
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =
@@ -821,6 +821,7 @@ let helper_compat_prod_case_val
       assert (c ⫄ (h, fs_ri fs_r, subst_beta e_r e_ri));
       get_squash (exists (fs_r:fs_val c). c ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_case_val fs_sc fs_li fs_ri) h lt fs_r))
 #pop-options
+
 let compat_oprod_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_inlc:fs_oprod (extend a g) c) (fs_inrc:fs_oprod (extend b g) c) (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊐ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
@@ -879,6 +880,7 @@ let helper_compat_oprod_openfile_oval (e':closed_exp) (h:history) (lt:local_trac
           lem_theta_open fs_fnm (Inr ()) h
         end);
       get_squash (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_openfile_val fs_fnm) h lt fs_r)))
+#pop-options
 
 let compat_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
@@ -901,6 +903,7 @@ let compat_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
     end
   end
 
+#push-options "--split_queries always"
 let helper_compat_oprod_read_oval (e':closed_exp) (#h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fd:closed_exp) :
   Lemma
     (requires (e_beh (ERead fd) e' h lt /\ qFileDescr ⊇ (h, fs_fd, fd)))
@@ -932,6 +935,7 @@ let helper_compat_oprod_read_oval (e':closed_exp) (#h:history) (lt:local_trace h
         lem_theta_read fs_fd (Inr ()) h
       end);
       get_squash (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_read_val fs_fd) h lt fs_r)))
+#pop-options
 
 let compat_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
@@ -954,6 +958,7 @@ let compat_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
     end
   end
 
+#push-options "--z3rlimit 32 --fuel 32"
 let helper_compat_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fs_msg:fs_val qString) (fd msg:closed_exp) :
   Lemma
     (requires (
@@ -997,6 +1002,7 @@ let helper_compat_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
           lem_theta_write (fs_fd, fs_msg) (Inr ()) h
         end);
         get_squash (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_write_val fs_fd fs_msg) h lt fs_r))))
+#pop-options
 
 let compat_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
   : Lemma
@@ -1021,6 +1027,7 @@ let compat_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qS
     end
   end
 
+#push-options "--z3rlimit 32 --fuel 32"
 let helper_compat_oprod_close_oval (e':closed_exp) (h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fd:closed_exp) :
   Lemma
     (requires (e_beh (EClose fd) e' h lt /\ qFileDescr ⊇ (h, fs_fd, fd)))
@@ -1051,6 +1058,7 @@ let helper_compat_oprod_close_oval (e':closed_exp) (h:history) (lt:local_trace h
       lem_theta_close fs_fd (Inr ()) h
     end);
     get_squash (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_prod_close_val fs_fd) h lt fs_r)))
+#pop-options
 
 let compat_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
@@ -1285,6 +1293,7 @@ let compat_oprod_inr #g (t1 t2:qType) (fs_e:fs_oprod g t2) (e:exp)
     end
   end
 
+#push-options "--split_queries always"
 let compat_oprod_pair #g
   (#t1 #t2:qType)
   (fs_e1:fs_oprod g t1) (fs_e2:fs_oprod g t2)
@@ -1347,6 +1356,7 @@ let compat_oprod_pair #g
       end
     end
   end
+#pop-options
 
 #push-options "--z3rlimit 20 --split_queries always"
 let compat_oprod_string_eq #g

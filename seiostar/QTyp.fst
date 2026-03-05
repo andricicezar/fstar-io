@@ -5,7 +5,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open STLC
-open IO
+open IOFree
 
 (** We define quotation for Type **)
 

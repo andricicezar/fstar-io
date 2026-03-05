@@ -4,6 +4,7 @@ out
 *.cmi
 *.cmx
 *.o
+*.swp
 
 .depend.mk
 .cache/**

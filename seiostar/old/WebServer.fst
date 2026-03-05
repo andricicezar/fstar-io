@@ -3,7 +3,7 @@ module WebServer
 open FStar.List.Tot.Base
 open FStar.List.Tot.Properties
 
-open IO
+open IOFree
 
 type resexn a = either a exn
 type file_descr = int

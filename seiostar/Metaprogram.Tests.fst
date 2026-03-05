@@ -2,7 +2,7 @@ module Metaprogram.Tests
 
 open FStar.Tactics
 open Metaprogram
-open IO
+open IOFree
 open QExp
 open QTyp
 

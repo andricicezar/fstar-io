@@ -3,7 +3,7 @@ module QExp
 open FStar.Tactics
 open QTyp
 
-open IO
+open IOFree
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
@@ -565,3 +565,5 @@ let test_const_str
 let test_greeting
   : (qBool ^-> qString) ⊩ greeting
   = QLambda (QIf QVar0 (QStringLit "hello") (QStringLit "goodbye"))
+
+#pop-options

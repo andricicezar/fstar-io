@@ -1587,6 +1587,7 @@ let lem_irred_epair_implies_irred_e2 (e1':closed_exp{is_value e1'}) (e2:closed_e
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_epair_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -1629,6 +1630,7 @@ let rec destruct_steps_epair_e1
       end
     | _ -> (e1, (| [], lt |))
     end
+#pop-options
 
 let rec destruct_steps_epair_e2
   (e1':closed_exp{is_value e1'})
@@ -1717,6 +1719,7 @@ let lem_irred_estringeq_implies_irred_e2 (e1':closed_exp{EString? e1'}) (e2:clos
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_estringeq_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -1808,6 +1811,7 @@ let rec destruct_steps_estringeq_e2
       (e2, (| [], lt |))
       end
     end
+#pop-options
 
 let can_step_efst_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)

@@ -6,7 +6,7 @@ open FStar.List.Tot
 
 open STLC
 open QTyp
-open IO
+open IOFree
 open Trace
 open LogRelSourceTarget
 

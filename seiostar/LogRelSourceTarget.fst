@@ -5,7 +5,7 @@ open FStar.List.Tot
 
 open STLC
 open QTyp
-open IO
+open IOFree
 open Trace
 
 (** Cross Language Binary Logical Relation between F* and STLC expressions
