@@ -1200,42 +1200,12 @@ let fs_oprod_fmap p f =
     fs_oprod_return_val _ _ (f p'))
 
 
-val fs_oprod_openfile :
-        #g:typ_env ->
-        fnm:fs_oprod g qString ->
-        fs_oprod g (qResexn qFileDescr)
-let fs_oprod_openfile fnm =
-  fs_oprod_bind' fnm (fun fnm' ->
-    fs_oprod_return_prod _ _ (io_call OOpen fnm'))
-
-val fs_oprod_read :
-        #g:typ_env ->
-        fd:fs_oprod g qFileDescr ->
-        fs_oprod g (qResexn qString)
-let fs_oprod_read fd =
-  fs_oprod_bind' fd (fun fd' ->
-    fs_oprod_return_prod _ _ (io_call ORead fd'))
-
-val fs_oprod_write :
-        #g:typ_env ->
-        fd:fs_oprod g qFileDescr ->
-        msg:fs_oprod g qString ->
-        fs_oprod g (qResexn qUnit)
-let fs_oprod_write fd msg =
-  fs_oprod_bind' fd (fun fd' ->
-    fs_oprod_bind' msg (fun msg' ->
-      fs_oprod_return_prod _ _ (io_call OWrite (fd', msg'))))
-
-val fs_oprod_close :
-        #g:typ_env ->
-        fd:fs_oprod g qFileDescr ->
-        fs_oprod g (qResexn qUnit)
-let fs_oprod_close fd =
-  fs_oprod_bind' fd (fun fd' ->
-    fs_oprod_return_prod _ _ (io_call OClose fd'))
-
-unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (get_Type t)
-let fs_beh m = thetaP m
+let q_io_args (o:io_ops) : qType =
+  match o with
+  | OOpen  -> qString
+  | ORead  -> qFileDescr
+  | OWrite -> qFileDescr ^* qString
+  | OClose -> qFileDescr
 
 let q_io_res (o:io_ops) : qType =
   match o with
@@ -1243,6 +1213,18 @@ let q_io_res (o:io_ops) : qType =
   | ORead  -> qResexn qString
   | OWrite -> qResexn qUnit
   | OClose -> qResexn qUnit
+
+val fs_oprod_call :
+        #g:typ_env ->
+        o:io_ops ->
+        args:fs_oprod g (q_io_args o) ->
+        fs_oprod g (q_io_res o)
+let fs_oprod_call o args =
+  fs_oprod_bind' args (fun args' ->
+    fs_oprod_return_prod _ _ (io_call o args'))
+
+unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (fs_val t)
+let fs_beh m = thetaP m
 
 let lem_fs_beh_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
   Lemma (requires io_post h o args res)

@@ -1573,56 +1573,91 @@ let helper_compat_oprod_close_steps (h:history) (lt:local_trace h)
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --split_queries always"
+let lem_fs_beh_return_inv (#t:qType) (val_:fs_val t) (h:history) (lt:local_trace h) (fs_r:fs_val t) :
+  Lemma (requires fs_beh (return val_) h lt fs_r)
+        (ensures lt == [] /\ fs_r == val_) =
+  theta_monad_morphism_ret val_;
+  assert (theta (io_return val_) == hist_return val_);
+  let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == val_ in
+  assert (hist_return val_ h p);
+  assert (theta (io_return val_) h p);
+  assert (thetaP (io_return val_) h lt fs_r);
+  assert (p lt fs_r)
+
+#push-options "--z3rlimit 50"
 let helper_compat_oprod_write_steps (h:history) (lt:local_trace h)
   (fs_fd':fs_prod qFileDescr) (fs_msg':fs_prod qString) (fs_r:fs_val (qResexn qUnit)) (fd msg:closed_exp) :
   Lemma
-    (requires fs_beh (fs_prod_bind fs_fd' (fun fd' -> fs_prod_bind #qString #(qResexn qUnit) fs_msg' (fun msg' -> io_call OWrite (fd', msg')))) h lt fs_r /\
+    (requires fs_beh (fs_prod_bind (fs_prod_bind fs_fd' (fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y')))) (fun args' -> io_call OWrite args')) h lt fs_r /\
               qFileDescr ⫃ (h, fs_fd', fd) /\
               (forall (lt':local_trace h). qString ⫃ (h++lt', fs_msg', msg)))
     (ensures exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt) =
-  let fs_k1 : fs_val qFileDescr -> fs_prod (qResexn qUnit) = fun fd' -> fs_prod_bind #qString #(qResexn qUnit) fs_msg' (fun msg' -> io_call OWrite (fd', msg')) in
+  let ewrite : closed_exp = EWrite fd msg in
+  let pair_comp = fs_prod_bind fs_fd' (fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y'))) in
+  let fs_k_call : fs_val (qFileDescr ^* qString) -> fs_prod (qResexn qUnit) = fun args' -> io_call OWrite args' in
+  assert (fs_prod_bind pair_comp fs_k_call == io_bind pair_comp fs_k_call) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
+  destruct_fs_beh pair_comp fs_k_call h lt fs_r;
+  eliminate exists (lt_pair:local_trace h) (lt_call:local_trace (h++lt_pair)) (pair_val:fs_val (qFileDescr ^* qString)).
+    lt == (lt_pair@lt_call) /\ fs_beh pair_comp h lt_pair pair_val /\ fs_beh (io_call OWrite pair_val) (h++lt_pair) lt_call fs_r
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
+  // Decompose pair_comp = bind fs_fd' (fun x -> bind fs_msg' (fun y -> return (x,y)))
+  let fs_k1 : fs_val qFileDescr -> fs_prod (qFileDescr ^* qString) = fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y')) in
   assert (fs_prod_bind fs_fd' fs_k1 == io_bind fs_fd' fs_k1) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
-  destruct_fs_beh fs_fd' fs_k1 h lt fs_r;
-  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_fd_val:fs_val qFileDescr).
-    lt == (lt1@lt2) /\ fs_beh fs_fd' h lt1 fs_fd_val /\ fs_beh (fs_k1 fs_fd_val) (h++lt1) lt2 fs_r
-    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt with _. begin
+  destruct_fs_beh fs_fd' fs_k1 h lt_pair pair_val;
+  eliminate exists (lt1:local_trace h) (lt_msg_ret:local_trace (h++lt1)) (fs_fd_val:fs_val qFileDescr).
+    lt_pair == (lt1@lt_msg_ret) /\ fs_beh fs_fd' h lt1 fs_fd_val /\ fs_beh (fs_k1 fs_fd_val) (h++lt1) lt_msg_ret pair_val
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
   // Get fd value
   eliminate forall (lt':local_trace h) (fs_r':get_Type qFileDescr). fs_beh fs_fd' h lt' fs_r' ==> exists em'. qFileDescr ∈ (h++lt', fs_r', em') /\ e_beh fd em' h lt' with lt1 fs_fd_val;
   eliminate exists em_fd. qFileDescr ∈ (h++lt1, fs_fd_val, em_fd) /\ e_beh fd em_fd h lt1
-    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt with _. begin
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
   lem_values_are_values qFileDescr (h++lt1) fs_fd_val em_fd;
   lem_value_is_irred em_fd;
-  // Decompose inner bind: fs_prod_bind fs_msg' (fun msg' -> io_call OWrite (fs_fd_val, msg'))
-  let fs_k2 : fs_val qString -> fs_prod (qResexn qUnit) = fun msg' -> io_call OWrite (fs_fd_val, msg') in
-  assert (fs_prod_bind #qString #(qResexn qUnit) fs_msg' fs_k2 == io_bind fs_msg' fs_k2) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
-  destruct_fs_beh fs_msg' fs_k2 (h++lt1) lt2 fs_r;
-  eliminate exists (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a)) (fs_msg_val:fs_val qString).
-    lt2 == (lt2a@lt2b) /\ fs_beh fs_msg' (h++lt1) lt2a fs_msg_val /\ fs_beh (io_call OWrite (fs_fd_val, fs_msg_val)) ((h++lt1)++lt2a) lt2b fs_r
-    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt with _. begin
+  // Decompose inner: bind fs_msg' (fun y -> return (fd_val, y))
+  let fs_k2 : fs_val qString -> fs_prod (qFileDescr ^* qString) = fun y' -> return (fs_fd_val, y') in
+  assert (fs_prod_bind fs_msg' fs_k2 == io_bind fs_msg' fs_k2) by (norm [delta_only [`%fs_prod_bind]]; trefl ());
+  destruct_fs_beh fs_msg' fs_k2 (h++lt1) lt_msg_ret pair_val;
+  eliminate exists (lt2a:local_trace (h++lt1)) (lt_ret:local_trace ((h++lt1)++lt2a)) (fs_msg_val:fs_val qString).
+    lt_msg_ret == (lt2a@lt_ret) /\ fs_beh fs_msg' (h++lt1) lt2a fs_msg_val /\ fs_beh (return (fs_fd_val, fs_msg_val)) ((h++lt1)++lt2a) lt_ret pair_val
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
+  // return gives empty trace and pair_val = (fd_val, msg_val)
+  lem_fs_beh_return_inv #(qFileDescr ^* qString) (fs_fd_val, fs_msg_val) ((h++lt1)++lt2a) lt_ret pair_val;
+  assert (lt_ret == []);
+  assert (pair_val == (fs_fd_val, fs_msg_val));
+  unit_l lt2a; // lt_msg_ret = lt2a @ [] = lt2a
   // Get msg value
   assert (qString ⫃ (h++lt1, fs_msg', msg));
   eliminate forall (lt':local_trace (h++lt1)) (fs_r':get_Type qString). fs_beh fs_msg' (h++lt1) lt' fs_r' ==> exists em'. qString ∈ ((h++lt1)++lt', fs_r', em') /\ e_beh msg em' (h++lt1) lt' with lt2a fs_msg_val;
   eliminate exists em_msg. qString ∈ ((h++lt1)++lt2a, fs_msg_val, em_msg) /\ e_beh msg em_msg (h++lt1) lt2a
-    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt with _. begin
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
   lem_values_are_values qString ((h++lt1)++lt2a) fs_msg_val em_msg;
+  let ewrite_em : closed_exp = EWrite em_fd em_msg in
   trans_history h lt1 lt2a;
-  trans_history (h++lt1) lt2a lt2b;
-  trans_history h lt1 lt2;
-  associative_history lt1 lt2a lt2b;
+  trans_history (h++lt1) lt2a lt_call;
+  associative_history lt1 lt2a lt_call;
   // Use existing io_call OWrite oval helper at history (h++lt1)++lt2a
   val_type_closed_under_history_extension qFileDescr (h++lt1) fs_fd_val em_fd;
-  helper_compat_oprod_write_oval_steps ((h++lt1)++lt2a) lt2b fs_fd_val fs_msg_val em_fd em_msg fs_r;
-  eliminate exists e'. (qResexn qUnit) ∈ (((h++lt1)++lt2a)++lt2b, fs_r, e') /\ e_beh (EWrite em_fd em_msg) e' ((h++lt1)++lt2a) lt2b
-    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh (EWrite fd msg) e' h lt with _. begin
-  // Construct: EWrite fd msg -->* EWrite em_fd msg -->* EWrite em_fd em_msg -->* e'
+  helper_compat_oprod_write_oval_steps ((h++lt1)++lt2a) lt_call fs_fd_val fs_msg_val em_fd em_msg fs_r;
+  assert (lt_pair == lt1@lt2a);
+  assert (lt == (lt1@lt2a)@lt_call);
+  eliminate exists e'. (qResexn qUnit) ∈ (((h++lt1)++lt2a)++lt_call, fs_r, e') /\ e_beh ewrite_em e' ((h++lt1)++lt2a) lt_call
+    returns exists e'. (qResexn qUnit) ∈ (h++lt, fs_r, e') /\ e_beh ewrite e' h lt with _. begin
+  // Establish history equality inside eliminate body
+  trans_history h lt1 lt2a;
+  trans_history (h++lt1) lt2a lt_call;
+  trans_history h lt1 (lt2a@lt_call);
+  associative_history lt1 lt2a lt_call;
+  assert (((h++lt1)++lt2a)++lt_call == h++lt);
+  // Construct: ewrite -->* EWrite em_fd msg -->* ewrite_em -->* e'
   FStar.Squash.bind_squash #(steps fd em_fd h lt1) () (fun sts_fd ->
   construct_steps_ewrite_fd fd em_fd msg h lt1 sts_fd;
   FStar.Squash.bind_squash #(steps msg em_msg (h++lt1) lt2a) () (fun sts_msg ->
+  let ewrite_em_fd : closed_exp = EWrite em_fd msg in
   construct_steps_ewrite_arg em_fd msg em_msg (h++lt1) lt2a sts_msg;
-  lem_steps_transitive (EWrite fd msg) (EWrite em_fd msg) (EWrite em_fd em_msg) h lt1 lt2a;
-  FStar.Squash.bind_squash #(steps (EWrite em_fd em_msg) e' ((h++lt1)++lt2a) lt2b) () (fun sts_wr ->
-  lem_steps_transitive (EWrite fd msg) (EWrite em_fd em_msg) e' h (lt1@lt2a) lt2b)))
+  lem_steps_transitive ewrite ewrite_em_fd ewrite_em h lt1 lt2a;
+  FStar.Squash.bind_squash #(steps ewrite_em e' ((h++lt1)++lt2a) lt_call) () (fun sts_wr ->
+  lem_steps_transitive ewrite ewrite_em e' h (lt1@lt2a) lt_call)))
+  end
   end
   end
   end
@@ -1721,17 +1756,6 @@ let compat_oprod_pair #g
     end
   end
 #pop-options
-
-let lem_fs_beh_return_inv (#t:qType) (val_:fs_val t) (h:history) (lt:local_trace h) (fs_r:fs_val t) :
-  Lemma (requires fs_beh (return val_) h lt fs_r)
-        (ensures lt == [] /\ fs_r == val_) =
-  theta_monad_morphism_ret val_;
-  assert (theta (io_return val_) == hist_return val_);
-  let p : hist_post h (get_Type t) = fun lt' r' -> lt' == [] /\ r' == val_ in
-  assert (hist_return val_ h p);
-  assert (theta (io_return val_) h p);
-  assert (thetaP (io_return val_) h lt fs_r);
-  assert (p lt fs_r)
 
 #push-options "--z3rlimit 100 --split_queries always"
 let helper_compat_oprod_string_eq_steps (h:history) (lt:local_trace h)
@@ -1995,15 +2019,15 @@ let compat_oprod_inr #g (t1 t2:qType) (fs_e:fs_oprod g t2) (e:exp)
 let compat_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊑ fnm)
-    (ensures fs_oprod_openfile fs_fnm ⊑ EOpen fnm)
+    (ensures fs_oprod_call OOpen fs_fnm ⊑ EOpen fnm)
   =
   lem_fv_in_env_openfile g fnm;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qFileDescr) ⫃ (h, (fs_oprod_openfile fs_fnm) fsG, gsubst s (EOpen fnm)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qFileDescr) ⫃ (h, (fs_oprod_call OOpen fs_fnm) fsG, gsubst s (EOpen fnm)) with begin
     introduce _ ==> _ with _. begin
       let fs_fnm' : fs_prod qString = fs_fnm fsG in
       let fs_e = fs_prod_bind fs_fnm' (fun fnm' -> io_call OOpen fnm') in
-      assert (fs_e == (fs_oprod_openfile fs_fnm) fsG) by (
-        norm [delta_only [`%fs_oprod_openfile;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+      assert (fs_e == (fs_oprod_call OOpen fs_fnm) fsG) by (
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EOpen (gsubst s fnm) in
@@ -2025,15 +2049,15 @@ let compat_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
 let compat_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊑ fd)
-    (ensures fs_oprod_read fs_fd ⊑ ERead fd)
+    (ensures fs_oprod_call ORead fs_fd ⊑ ERead fd)
   =
   lem_fv_in_env_read g fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qString) ⫃ (h, (fs_oprod_read fs_fd) fsG, gsubst s (ERead fd)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qString) ⫃ (h, (fs_oprod_call ORead fs_fd) fsG, gsubst s (ERead fd)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind fs_fd' (fun fd' -> io_call ORead fd') in
-      assert (fs_e == (fs_oprod_read fs_fd) fsG) by (
-        norm [delta_only [`%fs_oprod_read;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+      assert (fs_e == (fs_oprod_call ORead fs_fd) fsG) by (
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = ERead (gsubst s fd) in
@@ -2055,16 +2079,17 @@ let compat_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
 let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊑ fd /\ fs_msg ⊑ msg)
-    (ensures fs_oprod_write fs_fd fs_msg ⊑ EWrite fd msg)
+    (ensures fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg) ⊑ EWrite fd msg)
   =
   lem_fv_in_env_write g fd msg;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qUnit) ⫃ (h, (fs_oprod_write fs_fd fs_msg) fsG, gsubst s (EWrite fd msg)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qUnit) ⫃ (h, (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG, gsubst s (EWrite fd msg)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_msg' : fs_prod qString = fs_msg fsG in
-      let fs_e = fs_prod_bind fs_fd' (fun fd' -> fs_prod_bind #qString #(qResexn qUnit) fs_msg' (fun msg' -> io_call OWrite (fd', msg'))) in
-      assert (fs_e == (fs_oprod_write fs_fd fs_msg) fsG) by (
-        norm [delta_only [`%fs_oprod_write;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+      let fs_pair' = fs_prod_bind fs_fd' (fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y'))) in
+      let fs_e = fs_prod_bind fs_pair' (fun args' -> io_call OWrite args') in
+      assert (fs_e == (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG) by (
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod;`%fs_oprod_return_val;`%fs_val_pair;`%fs_prod_bind]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EWrite (gsubst s fd) (gsubst s msg) in
@@ -2086,15 +2111,15 @@ let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStri
 let compat_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊑ fd)
-    (ensures fs_oprod_close fs_fd ⊑ EClose fd)
+    (ensures fs_oprod_call OClose fs_fd ⊑ EClose fd)
   =
   lem_fv_in_env_close g fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qUnit) ⫃ (h, (fs_oprod_close fs_fd) fsG, gsubst s (EClose fd)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(≍) h` s ==> (qResexn qUnit) ⫃ (h, (fs_oprod_call OClose fs_fd) fsG, gsubst s (EClose fd)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind fs_fd' (fun fd' -> io_call OClose fd') in
-      assert (fs_e == (fs_oprod_close fs_fd) fsG) by (
-        norm [delta_only [`%fs_oprod_close;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+      assert (fs_e == (fs_oprod_call OClose fs_fd) fsG) by (
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EClose (gsubst s fd) in

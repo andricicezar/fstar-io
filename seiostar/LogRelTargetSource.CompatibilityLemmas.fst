@@ -1625,13 +1625,13 @@ let compat_oprod_case #g (#a #b #c:qType)
 let compat_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊒ fnm)
-    (ensures fs_oprod_openfile fs_fnm ⊒ EOpen fnm) =
+    (ensures fs_oprod_call OOpen fs_fnm ⊒ EOpen fnm) =
   lem_fv_in_env_openfile g fnm;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qFileDescr) ⫄ (h, (fs_oprod_openfile fs_fnm) fsG, gsubst s (EOpen fnm)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qFileDescr) ⫄ (h, (fs_oprod_call OOpen fs_fnm) fsG, gsubst s (EOpen fnm)) with begin
     introduce _ ==> _ with _. begin
       let fs_fnm' : fs_prod qString = fs_fnm fsG in
       let fs_e = fs_prod_bind #qString #(qResexn qFileDescr) fs_fnm' (fun fnm' -> fs_prod_openfile_val fnm') in
-      assert (fs_e == (fs_oprod_openfile fs_fnm) fsG) by (trefl ());
+      assert (fs_e == (fs_oprod_call OOpen fs_fnm) fsG) by (trefl ());
       let e = EOpen (gsubst s fnm) in
       assert (gsubst s (EOpen fnm) == e) by (trefl ());
       let EOpen fnm = e in
@@ -1665,17 +1665,17 @@ let compat_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
 let compat_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊒ fd)
-    (ensures fs_oprod_read fs_fd ⊒ ERead fd) =
+    (ensures fs_oprod_call ORead fs_fd ⊒ ERead fd) =
   lem_fv_in_env_read g fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_oprod_read fs_fd) fsG, gsubst s (ERead fd)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_oprod_call ORead fs_fd) fsG, gsubst s (ERead fd)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind #qFileDescr #(qResexn qString) fs_fd' (fun fd' -> fs_prod_read_val fd') in
-      assert (fs_e == (fs_oprod_read fs_fd) fsG) by (trefl ());
+      assert (fs_e == (fs_oprod_call ORead fs_fd) fsG) by (trefl ());
       let e = ERead (gsubst s fd) in
       assert (gsubst s (ERead fd) == e);
       let ERead fd = e in
-      introduce fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_oprod_read fs_fd) fsG, gsubst s (ERead fd)) with _. begin
+      introduce fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_oprod_call ORead fs_fd) fsG, gsubst s (ERead fd)) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
           introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
             lem_shift_type_value_environments h fsG s;
@@ -1705,21 +1705,22 @@ let compat_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
 let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊒ fd /\ fs_msg ⊒ msg)
-    (ensures fs_oprod_write fs_fd fs_msg ⊒ EWrite fd msg) =
+    (ensures fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg) ⊒ EWrite fd msg) =
   lem_fv_in_env_write g fd msg;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_write fs_fd fs_msg) fsG, gsubst s (EWrite fd msg)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG, gsubst s (EWrite fd msg)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_msg' : fs_prod qString = fs_msg fsG in
-      let fs_e = fs_prod_bind fs_fd' (fun fd' -> fs_prod_bind #qString #(qResexn qUnit) fs_msg' (fun msg' -> fs_prod_write_val fd' msg')) in
-      assert (fs_e == (fs_oprod_write fs_fd fs_msg) fsG) by (
-        norm [delta_only [`%fs_oprod_write;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod;`%fs_prod_write_val]];
+      let fs_pair' = fs_prod_bind fs_fd' (fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y'))) in
+      let fs_e = fs_prod_bind fs_pair' (fun args' -> io_call OWrite args') in
+      assert (fs_e == (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG) by (
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod;`%fs_oprod_return_val;`%fs_val_pair;`%fs_prod_bind]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EWrite (gsubst s fd) (gsubst s msg) in
       assert (gsubst s (EWrite fd msg) == e);
       let EWrite fd msg = e in
-      introduce fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_write fs_fd fs_msg) fsG, gsubst s (EWrite fd msg)) with _. begin
+      introduce fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG, gsubst s (EWrite fd msg)) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
           introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
             bind_squash (steps e e' h lt) (fun sts1 ->
@@ -1757,8 +1758,19 @@ let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStri
                 helper_compat_oprod_write_oval e' #((h++lt1)++lt2) lt'' fs_r_fd fs_r_msg fd' msg';
                 eliminate exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (((h++lt1)++lt2)++lt'', fs_r, e') /\ fs_beh (fs_prod_write_val fs_r_fd fs_r_msg) ((h++lt1)++lt2) lt'' fs_r
                   returns exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-                  lem_fs_beh_bind fs_msg' (h++lt1) lt2 fs_r_msg (fun msg' -> fs_prod_write_val fs_r_fd msg') lt'' fs_r;
-                  lem_fs_beh_bind fs_fd' h lt1 fs_r_fd (fun fd' -> (fs_prod_bind fs_msg' (fun msg' -> fs_prod_write_val fd' msg'))) (lt2@lt'') fs_r
+                  // Reconstruct fs_beh for the new term structure:
+                  // fs_e = bind pair_comp (fun p -> io_call OWrite p)
+                  // pair_comp = bind fs_fd' (fun x -> bind fs_msg' (fun y -> return (x,y)))
+                  // Build: return pair -> bind msg -> bind fd -> bind pair_comp with io_call
+                  lem_fs_beh_return #(qFileDescr ^* qString) (fs_r_fd, fs_r_msg) ((h++lt1)++lt2);
+                  lem_fs_beh_bind #qString #(qFileDescr ^* qString) fs_msg' (h++lt1) lt2 fs_r_msg (fun y -> return (fs_r_fd, y)) [] (fs_r_fd, fs_r_msg);
+                  assert (fs_beh (fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y -> return (fs_r_fd, y))) (h++lt1) (lt2@[]) (fs_r_fd, fs_r_msg));
+                  FStar.List.Tot.Properties.append_l_nil lt2;
+                  assert (fs_beh (fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y -> return (fs_r_fd, y))) (h++lt1) lt2 (fs_r_fd, fs_r_msg));
+                  lem_fs_beh_bind #qFileDescr #(qFileDescr ^* qString) fs_fd' h lt1 fs_r_fd (fun x -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y -> return (x, y))) lt2 (fs_r_fd, fs_r_msg);
+                  assert (fs_beh fs_pair' h (lt1@lt2) (fs_r_fd, fs_r_msg));
+                  lem_fs_beh_bind fs_pair' h (lt1@lt2) (fs_r_fd, fs_r_msg) (fun p -> io_call OWrite p) lt'' fs_r;
+                  associative_history lt1 lt2 lt''
                 end
               end)
             end)
@@ -1772,17 +1784,17 @@ let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStri
 let compat_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊒ fd)
-    (ensures fs_oprod_close fs_fd ⊒ EClose fd) =
+    (ensures fs_oprod_call OClose fs_fd ⊒ EClose fd) =
   lem_fv_in_env_close g fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_close fs_fd) fsG, gsubst s (EClose fd)) with begin
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_call OClose fs_fd) fsG, gsubst s (EClose fd)) with begin
     introduce _ ==> _ with _. begin
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind #qFileDescr #(qResexn qUnit) fs_fd' (fun fd' -> fs_prod_close_val fd') in
-      assert (fs_e == (fs_oprod_close fs_fd) fsG) by (trefl ());
+      assert (fs_e == (fs_oprod_call OClose fs_fd) fsG) by (trefl ());
       let e = EClose (gsubst s fd) in
       assert (gsubst s (EClose fd) == e) by (trefl ());
       let EClose fd = e in
-      introduce fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_close fs_fd) fsG, gsubst s (EClose fd)) with _. begin
+      introduce fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_oprod_call OClose fs_fd) fsG, gsubst s (EClose fd)) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
           introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
             lem_shift_type_value_environments h fsG s;

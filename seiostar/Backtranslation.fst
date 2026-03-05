@@ -184,20 +184,20 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
   | EOpen _ ->
     let TyOpenfile h' = h in
     let h' : typing g _ qString = h' in
-    fs_oprod_openfile (backtranslate_exp h')
+    fs_oprod_call OOpen (backtranslate_exp h')
   | ERead _ ->
     let TyRead h' = h in
     let h' : typing g _ qFileDescr = h' in
-    fs_oprod_read (backtranslate_exp h')
+    fs_oprod_call ORead (backtranslate_exp h')
   | EWrite _ _ ->
     let TyWrite h1 h2 = h in
     let h1 : typing g _ qFileDescr = h1 in
     let h2 : typing g _ qString = h2 in
-    fs_oprod_write (backtranslate_exp h1) (backtranslate_exp h2)
+    fs_oprod_call OWrite (fs_oprod_pair (backtranslate_exp h1) (backtranslate_exp h2))
   | EClose _ ->
     let TyClose h' = h in
     let h' : typing g _ qFileDescr = h' in
-    fs_oprod_close (backtranslate_exp h')
+    fs_oprod_call OClose (backtranslate_exp h')
   | EStringEq _ _ ->
     let TyStringEq h1 h2 = h in
     let h1 : typing g _ qString = h1 in
