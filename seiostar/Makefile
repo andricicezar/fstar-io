@@ -10,7 +10,6 @@ ROOTS := Metaprogram.Tests.fst \
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
 FLAGS  = --z3version 4.15.2
-FLAGS += --already_cached Prims.fst FStar.*
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
