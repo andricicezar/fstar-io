@@ -1016,35 +1016,6 @@ let fs_oprod_bind' m k =
   fs_oprod_bind m (fun fsG -> k (hd fsG) (tail fsG))
 
 unfold
-val fs_oprod_openfile_oval :
-        #g:typ_env ->
-        fnm:fs_oval g qString ->
-        fs_oprod g (qResexn qFileDescr)
-let fs_oprod_openfile_oval fnm fsG = io_call OOpen (fnm fsG)
-
-unfold
-val fs_oprod_read_oval :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qString)
-let fs_oprod_read_oval fd fsG = io_call ORead (fd fsG)
-
-unfold
-val fs_oprod_write_oval :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        msg:fs_oval g qString ->
-        fs_oprod g (qResexn qUnit)
-let fs_oprod_write_oval fd msg fsG = io_call OWrite ((fd fsG), (msg fsG))
-
-unfold
-val fs_oprod_close_oval :
-        #g:typ_env ->
-        fd:fs_oval g qFileDescr ->
-        fs_oprod g (qResexn qUnit)
-let fs_oprod_close_oval fd fsG = io_call OClose (fd fsG)
-
-unfold
 val fs_oval_lambda_oprod : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
@@ -1222,6 +1193,14 @@ val fs_oprod_call :
 let fs_oprod_call o args =
   fs_oprod_bind' args (fun args' ->
     fs_oprod_return_prod _ _ (io_call o args'))
+
+unfold
+val fs_oprod_call_oval :
+        #g:typ_env ->
+        o:io_ops ->
+        args:fs_oval g (q_io_args o) ->
+        fs_oprod g (q_io_res o)
+let fs_oprod_call_oval o args fsG = io_call o (args fsG)
 
 unfold val fs_beh : #t:qType -> fs_prod t -> h:history -> hist_post h (fs_val t)
 let fs_beh m = thetaP m

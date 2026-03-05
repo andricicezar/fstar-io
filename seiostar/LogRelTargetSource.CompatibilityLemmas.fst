@@ -886,7 +886,7 @@ let helper_compat_oprod_openfile_oval (e':closed_exp) (h:history) (lt:local_trac
 let compat_oprod_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
   : Lemma
     (requires fs_fnm ⊐ fnm)
-    (ensures fs_oprod_openfile_oval fs_fnm ⊒ EOpen fnm)
+    (ensures fs_oprod_call_oval OOpen fs_fnm ⊒ EOpen fnm)
   =
   lem_fv_in_env_openfile g fnm;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, io_call OOpen (fs_fnm fsG), gsubst s (EOpen fnm)) with begin
@@ -941,10 +941,10 @@ let helper_compat_oprod_read_oval (e':closed_exp) (#h:history) (lt:local_trace h
 let compat_oprod_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊐ fd)
-    (ensures fs_oprod_read_oval fs_fd ⊒ ERead fd)
+    (ensures fs_oprod_call_oval ORead fs_fd ⊒ ERead fd)
   =
   lem_fv_in_env_read g fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, fs_oprod_read_oval fs_fd fsG, gsubst s (ERead fd)) with begin
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, io_call ORead (fs_fd fsG), gsubst s (ERead fd)) with begin
     let fs_fd = fs_fd fsG in
     let fs_e = fs_prod_read_val fs_fd in
     let e = ERead (gsubst s fd) in
@@ -1008,7 +1008,7 @@ let helper_compat_oprod_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
 let compat_oprod_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
   : Lemma
     (requires fs_fd ⊐ fd /\ fs_msg ⊐ msg)
-    (ensures fs_oprod_write_oval fs_fd fs_msg ⊒ EWrite fd msg)
+    (ensures fs_oprod_call_oval OWrite (fs_oval_pair fs_fd fs_msg) ⊒ EWrite fd msg)
   =
   lem_fv_in_env_write g fd msg;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OWrite (fs_fd fsG, fs_msg fsG), gsubst s (EWrite fd msg)) with begin
@@ -1064,7 +1064,7 @@ let helper_compat_oprod_close_oval (e':closed_exp) (h:history) (lt:local_trace h
 let compat_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
   : Lemma
     (requires fs_fd ⊐ fd)
-    (ensures fs_oprod_close_oval fs_fd ⊒ EClose fd)
+    (ensures fs_oprod_call_oval OClose fs_fd ⊒ EClose fd)
   =
   lem_fv_in_env_close g fd;
   introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OClose (fs_fd fsG), gsubst s (EClose fd)) with begin

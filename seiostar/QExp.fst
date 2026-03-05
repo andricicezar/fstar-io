@@ -118,13 +118,13 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #g:typ_env ->
         #fnm:fs_oval g qString ->
         oval_quotation g fnm ->
-        oprod_quotation #(qResexn qFileDescr) g (fs_oprod_openfile_oval fnm)
+        oprod_quotation #(qResexn qFileDescr) g (fs_oprod_call_oval OOpen fnm)
 
 | QRead :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qString) g (fs_oprod_read_oval fd)
+        oprod_quotation #(qResexn qString) g (fs_oprod_call_oval ORead fd)
 
 | QWrite :
         #g:typ_env ->
@@ -132,13 +132,13 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #msg:fs_oval g qString ->
         oval_quotation g fd ->
         oval_quotation g msg ->
-        oprod_quotation #(qResexn qUnit) g (fs_oprod_write_oval fd msg)
+        oprod_quotation #(qResexn qUnit) g (fs_oprod_call_oval OWrite (fs_oval_pair fd msg))
 
 | QClose :
         #g:typ_env ->
         #fd:fs_oval g qFileDescr ->
         oval_quotation g fd ->
-        oprod_quotation #(qResexn qUnit) g (fs_oprod_close_oval fd)
+        oprod_quotation #(qResexn qUnit) g (fs_oprod_call_oval OClose fd)
 
 | QReturn :
         #g:typ_env ->
