@@ -1,6 +1,6 @@
-module Metaprogram
+module RQ.Metaprogram
 
-open Metaprogram.Utils
+open RQ.Metaprogram.Utils
 
 open FStar.Tactics.V2
 open FStar.Tactics.Typeclasses

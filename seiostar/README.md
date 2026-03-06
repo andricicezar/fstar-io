@@ -51,7 +51,7 @@ We list where the definitions and theorems of the paper are.
 | Typing relations for values and computations | `RQ.TypingRelation.fst` as the type constructors `oval_quotation` and `oprod_quotation` |
 | Events | `IO.fst` as the type constructor `event` |
 | Local traces | `IO.fst` |
-| Metaprogram | `Metaprogram.fst` as function `generate_derivation` |
+| Metaprogram | `RQ.Metaprogram.fst` as function `generate_derivation` |
 | **Section 4** - Relating trace-producing semantics | |
 | Syntax and semantics of $\lambda_{io}$ | `LambdaIO.fst` as type constructors `exp`, `step`, and `steps` |
 | Behaviors of $\lambda_{io}$ expressions | `QTyp.fst` as `e_beh` |

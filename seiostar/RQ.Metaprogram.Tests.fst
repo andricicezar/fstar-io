@@ -1,7 +1,7 @@
-module Metaprogram.Tests
+module RQ.Metaprogram.Tests
 
 open FStar.Tactics
-open Metaprogram
+open RQ.Metaprogram
 open IOStar
 open RQ.TypingRelation
 open QTyp

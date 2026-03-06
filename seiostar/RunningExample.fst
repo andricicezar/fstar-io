@@ -3,7 +3,7 @@ module RunningExample
 open FStar.Tactics.V1
 open Trace
 open IOStar
-open Metaprogram
+open RQ.Metaprogram
 open ExamplesIO
 open RrHP
 open QTyp
