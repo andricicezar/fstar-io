@@ -39,7 +39,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QInr qp -> EInr (compile qp)
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
   | QLambdaProd qbody -> ELam (compile_oprod qbody)
-and compile_oprod #g #a (#s:fs_oprod g a) (qs:oprod_quotation g s) : Tot exp (decreases qs) =
+and compile_oprod #g #a (#s:fs_oprod g a) (qs:typing_io g s) : Tot exp (decreases qs) =
   match qs with
   | QCall o qargs -> compile_call o (compile qargs)
   | QReturn qx -> compile qx
@@ -101,7 +101,7 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QLambdaProd #_ #_ #_ #body qbody ->
     lem_compile_superset_prod qbody;
     C1.compat_oval_lambda_oprod body (compile_oprod qbody)
-and lem_compile_superset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
+and lem_compile_superset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
   : Lemma (ensures (s ⊒ (compile_oprod qs))) (decreases qs)
   =
   match qs with
@@ -193,7 +193,7 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QLambdaProd #_ #_ #_ #body qbody ->
     lem_compile_subset_prod qbody;
     C2.compat_oval_lambda_oprod body (compile_oprod qbody)
-and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
+and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
   : Lemma (ensures (s ⊑ (compile_oprod qs))) (decreases qs)
   =
   match qs with
@@ -285,7 +285,7 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   | QLambdaProd #_ #qa #_ #body qbody ->
     lem_compile_fv_in_env_prod qbody;
     lem_fv_in_env_lam g qa (compile_oprod qbody)
-and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
+and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
   : Lemma (ensures fv_in_env g (compile_oprod qs)) (decreases qs)
   = match qs with
   | QCall o qargs ->

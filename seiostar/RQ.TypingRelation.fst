@@ -8,125 +8,125 @@ open IOStar
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
-type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
-| Qtt         : #g : typ_env -> oval_quotation g (fs_oval_return g qUnit ())
-| QFd         : #g : typ_env -> fd:file_descr -> oval_quotation g (fs_oval_return g qFileDescr fd)
+type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
+| Qtt         : #g : typ_env -> typing g (fs_oval_return g qUnit ())
+| QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g qFileDescr fd)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
-                oval_quotation (extend a g) (fs_oval_var0 g a)
+                typing (extend a g) (fs_oval_var0 g a)
 
 | QVarS       : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #x : fs_oval g a ->
-                oval_quotation g x ->
-                oval_quotation (extend b g) (fs_oval_varS b x)
+                typing g x ->
+                typing (extend b g) (fs_oval_varS b x)
 
 | QAppGhost   : #g : typ_env ->
                 #a : qType ->
                 #f : fs_oval g (a ^-> qUnit) -> (** This has to be Tot. If it is GTot unit, F* can treat it as Pure unit **)
                 #x : fs_oval g a ->
-                oval_quotation #qUnit g (fs_oval_app #_ #_ #_ f x)
+                typing #qUnit g (fs_oval_app #_ #_ #_ f x)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #f : fs_oval g (a ^-> b) ->
                 #x : fs_oval g a ->
-                oval_quotation g f ->
-                oval_quotation g x ->
-                oval_quotation g (fs_oval_app #_ #_ #_ f x)
+                typing g f ->
+                typing g x ->
+                typing g (fs_oval_app #_ #_ #_ f x)
 
 | QLambda     : #a : qType ->
                 #b : qType ->
                 #g : typ_env ->
                 #body : fs_oval (extend a g) b ->
-                oval_quotation (extend a g) body ->
-                oval_quotation #(a ^-> b) g (fs_oval_lambda body)
+                typing (extend a g) body ->
+                typing #(a ^-> b) g (fs_oval_lambda body)
 
-| QTrue       : #g : typ_env -> oval_quotation g (fs_oval_return g qBool true)
-| QFalse      : #g : typ_env -> oval_quotation g (fs_oval_return g qBool false)
-| QStringLit  : #g : typ_env -> s:string -> oval_quotation g (fs_oval_return g qString s)
+| QTrue       : #g : typ_env -> typing g (fs_oval_return g qBool true)
+| QFalse      : #g : typ_env -> typing g (fs_oval_return g qBool false)
+| QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g qString s)
 | QStringEq   : #g : typ_env ->
                 #s1 : fs_oval g qString ->
-                oval_quotation g s1 ->
+                typing g s1 ->
                 #s2 : fs_oval g qString ->
-                oval_quotation g s2 ->
-                oval_quotation g (fs_oval_eq_string s1 s2)
+                typing g s2 ->
+                typing g (fs_oval_eq_string s1 s2)
 | QIf         : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
-                oval_quotation g c ->
+                typing g c ->
                 #t : fs_oval g a ->
-                oval_quotation g t ->
+                typing g t ->
                 #e : fs_oval g a ->
-                oval_quotation g e ->
-                oval_quotation g (fs_oval_if c t e)
+                typing g e ->
+                typing g (fs_oval_if c t e)
 
 | QMkpair   : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #x : fs_oval g a ->
               #y : fs_oval g b ->
-              oval_quotation g x ->
-              oval_quotation g y ->
-              oval_quotation g (fs_oval_pair x y)
+              typing g x ->
+              typing g y ->
+              typing g (fs_oval_pair x y)
 | QFst      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g (a ^* b) ->
-              oval_quotation g p ->
-              oval_quotation g (fs_oval_fmap p fst)
+              typing g p ->
+              typing g (fs_oval_fmap p fst)
 | QSnd      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g (a ^* b) ->
-              oval_quotation g p ->
-              oval_quotation g (fs_oval_fmap p snd)
+              typing g p ->
+              typing g (fs_oval_fmap p snd)
 | QInl      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g a ->
-              oval_quotation g p ->
-              oval_quotation #(a ^+ b) g (fs_oval_fmap p Inl)
+              typing g p ->
+              typing #(a ^+ b) g (fs_oval_fmap p Inl)
 | QInr      : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #p : fs_oval g b ->
-              oval_quotation g p ->
-              oval_quotation #(a ^+ b) g (fs_oval_fmap p Inr)
+              typing g p ->
+              typing #(a ^+ b) g (fs_oval_fmap p Inr)
 | QCase     : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #c : qType ->
               #cond : fs_oval g (a ^+ b) ->
-              oval_quotation g cond ->
+              typing g cond ->
               #inlc : fs_oval (extend a g) c ->
-              oval_quotation _ inlc ->
+              typing _ inlc ->
               #inrc : fs_oval (extend b g) c ->
-              oval_quotation _ inrc ->
-              oval_quotation g (fs_oval_case cond inlc inrc)
+              typing _ inrc ->
+              typing g (fs_oval_case cond inlc inrc)
 | QLambdaProd : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #body : fs_oprod (extend a g) b ->
-                oprod_quotation (extend a g) body ->
-                oval_quotation g (fs_oval_lambda_oprod body)
-and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
+                typing_io (extend a g) body ->
+                typing g (fs_oval_lambda_oprod body)
+and typing_io : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 | QCall :
         #g:typ_env ->
         o:io_ops ->
         #args:fs_oval g (q_io_args o) ->
-        oval_quotation g args ->
-        oprod_quotation #(q_io_res o) g (fs_oprod_call_oval o args)
+        typing g args ->
+        typing_io #(q_io_res o) g (fs_oprod_call_oval o args)
 
 | QReturn :
         #g:typ_env ->
         #a:qType ->
         #x:fs_oval g a ->
-        oval_quotation g x ->
-        oprod_quotation #a g (fs_oprod_return x)
+        typing g x ->
+        typing_io #a g (fs_oprod_return x)
 
 | QBindProd :
         #g:typ_env ->
@@ -134,41 +134,41 @@ and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #b:qType ->
         #m:fs_oprod g a ->
         #k:fs_oprod (extend a g) b ->
-        oprod_quotation g m ->
-        oprod_quotation (extend a g) k ->
-        oprod_quotation #b g (fs_oprod_bind m k)
+        typing_io g m ->
+        typing_io (extend a g) k ->
+        typing_io #b g (fs_oprod_bind m k)
 
 | QAppProd    : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #f : fs_oval g (a ^->!@ b) ->
                 #x : fs_oval g a ->
-                oval_quotation g f ->
-                oval_quotation g x ->
-                oprod_quotation g (fs_oprod_app_oval_oval f x)
+                typing g f ->
+                typing g x ->
+                typing_io g (fs_oprod_app_oval_oval f x)
 | QIfProd     : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
-                oval_quotation #qBool g c ->
+                typing #qBool g c ->
                 #t : fs_oprod g a ->
-                oprod_quotation g t ->
+                typing_io g t ->
                 #e : fs_oprod g a ->
-                oprod_quotation g e ->
-                oprod_quotation g (fs_oprod_if_oval c t e)
+                typing_io g e ->
+                typing_io g (fs_oprod_if_oval c t e)
 | QCaseProd : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #c : qType ->
               #cond : fs_oval g (a ^+ b) ->
-              oval_quotation g cond ->
+              typing g cond ->
               #inlc : fs_oprod (extend a g) c ->
-              oprod_quotation _ inlc ->
+              typing_io _ inlc ->
               #inrc : fs_oprod (extend b g) c ->
-              oprod_quotation _ inrc ->
-              oprod_quotation g (fs_oprod_case_oval cond inlc inrc)
+              typing_io _ inrc ->
+              typing_io g (fs_oprod_case_oval cond inlc inrc)
 
 let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
-  oval_quotation g x
+  typing g x
 
 unfold
 let helper_oval (#a:qType) (x:fs_val a) : fs_oval empty a = fun _ -> x
@@ -180,10 +180,10 @@ unfold
 let helper_oprod (#a:qType) (x:fs_prod a) : fs_oprod empty a = fun _ -> x
 
 let (⊩) (a:qType) (x:fs_val a) =
-  oval_quotation #a empty (helper_oval x)
+  typing #a empty (helper_oval x)
 
 type prod_quotation (a:qType) (x:fs_prod a) =
-  oprod_quotation #a empty (helper_oprod x)
+  typing_io #a empty (helper_oprod x)
 
 
 (** Because of the fancy types, now one needs a preprocessing tactic to
@@ -401,8 +401,8 @@ let test_wrap_snd_pa
   = QLambda (QSnd QVar0)
 
 let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval (extend a g) b)
-  (qx : oval_quotation g x) (qf : oval_quotation _ f) :
-  oval_quotation g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+  (qx : typing g x) (qf : typing _ f) :
+  typing g (fun fsG -> let y = x fsG in f (stack fsG y)) =
   QApp (QLambda qf) qx
 
 let test_a_few_lets
@@ -529,8 +529,8 @@ let test_apply_io_bind_read_if_write ()
           (QReturn (QInr QVar0))))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
-  (qx : oval_quotation g x) (qf : oprod_quotation _ f) :
-  oprod_quotation g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+  (qx : typing g x) (qf : typing_io _ f) :
+  typing_io g (fun fsG -> let y = x fsG in f (stack fsG y)) =
   QAppProd (QLambdaProd qf) qx
 
 let test_sendError400 ()

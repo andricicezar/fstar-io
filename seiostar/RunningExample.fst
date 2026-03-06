@@ -483,7 +483,7 @@ let main agent =
 
 %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
 [@@ (preprocess_with simplify_qType)]
-let main_derivation #g : oval_quotation g (helper_oval_g #_ #g main)
+let main_derivation #g : typing g (helper_oval_g #_ #g main)
   by (trefl ())
   = QLambdaProd (
       QBindProd

@@ -87,7 +87,7 @@ let rec typ_translation (qt:term) : Tac term =
 
 let mk_tyj (ty t g_env : term) : Tot term =
   let t = mk_app (`helper_oval_g) [(ty, Q_Implicit); (g_env, Q_Implicit); (t, Q_Explicit)] in
-  mk_app (`oval_quotation) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
+  mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 
@@ -415,7 +415,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
   let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTyp.typ_env) }) in
   let qderivation_fun = pack_ln (Tv_Abs g_env_binder qderivation_closed) in
 
-  (** Build the arrow type: (g_env : typ_env) -> oval_quotation g_env (...) **)
+  (** Build the arrow type: (g_env : typ_env) -> typing g_env (...) **)
   let qtyp_fun = pack_ln (Tv_Arrow g_env_binder (pack_comp (C_Total qtyp_closed))) in
 
   (** Type-check the wrapped function in the original environment **)
