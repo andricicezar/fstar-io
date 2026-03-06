@@ -114,31 +114,12 @@ type oval_quotation : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 oprod_quotation (extend a g) body ->
                 oval_quotation g (fs_oval_lambda_oprod body)
 and oprod_quotation : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
-| QOpenfile :
+| QCall :
         #g:typ_env ->
-        #fnm:fs_oval g qString ->
-        oval_quotation g fnm ->
-        oprod_quotation #(qResexn qFileDescr) g (fs_oprod_call_oval OOpen fnm)
-
-| QRead :
-        #g:typ_env ->
-        #fd:fs_oval g qFileDescr ->
-        oval_quotation g fd ->
-        oprod_quotation #(qResexn qString) g (fs_oprod_call_oval ORead fd)
-
-| QWrite :
-        #g:typ_env ->
-        #fd:fs_oval g qFileDescr ->
-        #msg:fs_oval g qString ->
-        oval_quotation g fd ->
-        oval_quotation g msg ->
-        oprod_quotation #(qResexn qUnit) g (fs_oprod_call_oval OWrite (fs_oval_pair fd msg))
-
-| QClose :
-        #g:typ_env ->
-        #fd:fs_oval g qFileDescr ->
-        oval_quotation g fd ->
-        oprod_quotation #(qResexn qUnit) g (fs_oprod_call_oval OClose fd)
+        o:io_ops ->
+        #args:fs_oval g (q_io_args o) ->
+        oval_quotation g args ->
+        oprod_quotation #(q_io_res o) g (fs_oprod_call_oval o args)
 
 | QReturn :
         #g:typ_env ->
@@ -219,6 +200,7 @@ let simplify_qType_g g (x:term) : Tac term =
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
       `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type;
+      `%q_io_args; `%q_io_res;
       `%Mkdtuple2?._1;`%Mkdtuple2?._2];
     zeta;
     iota;
@@ -477,15 +459,15 @@ let test_apply_io_return
 
 let test_apply_read
   : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
-  = QLambdaProd (QRead (QFd 0))
+  = QLambdaProd (QCall ORead (QFd 0))
 
 let test_apply_write_const
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_write_const
-  = QLambdaProd (QWrite (QFd 2) (QStringLit "hello"))
+  = QLambdaProd (QCall OWrite (QMkpair (QFd 2) (QStringLit "hello")))
 
 let test_apply_write
   : _ ⊩  apply_write
-  = QLambdaProd (QWrite (QFd 1) QVar0)
+  = QLambdaProd (QCall OWrite (QMkpair (QFd 1) QVar0))
 
 let test_apply_io_bind_const
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
@@ -517,23 +499,23 @@ let test_apply_io_bind_write
   = QLambdaProd (
       QBindProd
          (QReturn QVar0)
-         (QWrite (QFd 2) QVar0))
+         (QCall OWrite (QMkpair (QFd 2) QVar0)))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (l_to_r_fsG (); trefl ())
-  = QLambdaProd (QBindProd (QRead (QFd 4))
+  = QLambdaProd (QBindProd (QCall ORead (QFd 4))
     (QCaseProd #_ #qString #qUnit QVar0
-     (QWrite (QFd 1) (QStringLit "data"))
+     (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
      (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
   by (l_to_r_fsG (); trefl ())
-  = QLambdaProd (QBindProd (QRead (QFd 9)) (
-      QCaseProd #_ #qString #qUnit QVar0 (QWrite (QFd 2) (QStringLit "data")) (QReturn (QInr QVar0))))
+  = QLambdaProd (QBindProd (QCall ORead (QFd 9)) (
+      QCaseProd #_ #qString #qUnit QVar0 (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
@@ -541,9 +523,9 @@ let test_apply_io_bind_read_if_write ()
   by (l_to_r_fsG (); trefl ())
   = QLambdaProd
       (QBindProd
-        (QRead (QFd 0))
+        (QCall ORead (QFd 0))
         (QCaseProd #_ #qString #qUnit QVar0
-          (QWrite (QFd 7) (QStringLit "data"))
+          (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
           (QReturn (QInr QVar0))))
 
 let qLetProd #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oprod (extend a g) b)
@@ -555,7 +537,7 @@ let test_sendError400 ()
   : (qBool ^->!@ qUnit) ⊩ sendError400
   = QLambdaProd
       (QBindProd
-        (QWrite (QFd 9) (QStringLit "error400"))
+        (QCall OWrite (QMkpair (QFd 9) (QStringLit "error400")))
         (QReturn Qtt))
 
 let test_const_str

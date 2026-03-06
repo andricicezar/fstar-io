@@ -11,6 +11,13 @@ open LogRelTargetSource
 module C1 = LogRelTargetSource.CompatibilityLemmas
 module C2 = LogRelSourceTarget.CompatibilityLemmas
 
+let compile_call (o:io_ops) (e:exp) : exp =
+  match o with
+  | OOpen -> EOpen e
+  | ORead -> ERead e
+  | OClose -> EClose e
+  | OWrite -> EWrite (EFst e) (ESnd e)
+
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
   | Qtt -> EUnit
@@ -34,10 +41,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambdaProd qbody -> ELam (compile_oprod qbody)
 and compile_oprod #g #a (#s:fs_oprod g a) (qs:oprod_quotation g s) : Tot exp (decreases qs) =
   match qs with
-  | QOpenfile qfnm -> EOpen (compile qfnm)
-  | QRead qfd -> ERead (compile qfd)
-  | QWrite qfd qmsg -> EWrite (compile qfd) (compile qmsg)
-  | QClose qfd -> EClose (compile qfd)
+  | QCall o qargs -> compile_call o (compile qargs)
   | QReturn qx -> compile qx
   | QBindProd qm qk -> EApp (ELam (compile_oprod qk)) (compile_oprod qm)
   | QAppProd qf qx -> EApp (compile qf) (compile qx)
@@ -101,19 +105,19 @@ and lem_compile_superset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotatio
   : Lemma (ensures (s ⊒ (compile_oprod qs))) (decreases qs)
   =
   match qs with
-  | QOpenfile #_ #fnm qfnm ->
-    lem_compile_superset qfnm;
-    C1.compat_oprod_openfile_oval fnm (compile qfnm)
-  | QRead #_ #fd qfd ->
-    lem_compile_superset qfd;
-    C1.compat_oprod_read_oval fd (compile qfd)
-  | QWrite #_ #fd #msg qfd qmsg ->
-    lem_compile_superset qfd;
-    lem_compile_superset qmsg;
-    C1.compat_oprod_write_oval fd msg (compile qfd) (compile qmsg)
-  | QClose #_ #fd qfd ->
-    lem_compile_superset qfd;
-    C1.compat_oprod_close_oval fd (compile qfd)
+  | QCall o #args qargs ->
+    lem_compile_superset qargs;
+    (match o with
+     | OOpen -> C1.compat_oprod_openfile_oval args (compile qargs)
+     | ORead -> C1.compat_oprod_read_oval args (compile qargs)
+     | OClose -> C1.compat_oprod_close_oval args (compile qargs)
+     | OWrite ->
+       C1.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
+       C1.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
+       C1.compat_oprod_write_oval
+         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
+         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
+         (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn #_ #_ #x qx ->
     lem_compile_superset qx;
     C1.compat_oprod_return x (compile qx)
@@ -193,19 +197,19 @@ and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation 
   : Lemma (ensures (s ⊑ (compile_oprod qs))) (decreases qs)
   =
   match qs with
-  | QOpenfile #_ #fnm qfnm ->
-    lem_compile_subset qfnm;
-    C2.compat_oprod_openfile_oval fnm (compile qfnm)
-  | QRead #_ #fd qfd ->
-    lem_compile_subset qfd;
-    C2.compat_oprod_read_oval fd (compile qfd)
-  | QWrite #_ #fd #msg qfd qmsg ->
-    lem_compile_subset qfd;
-    lem_compile_subset qmsg;
-    C2.compat_oprod_write_oval fd msg (compile qfd) (compile qmsg)
-  | QClose #_ #fd qfd ->
-    lem_compile_subset qfd;
-    C2.compat_oprod_close_oval fd (compile qfd)
+  | QCall o #args qargs ->
+    lem_compile_subset qargs;
+    (match o with
+     | OOpen -> C2.compat_oprod_openfile_oval args (compile qargs)
+     | ORead -> C2.compat_oprod_read_oval args (compile qargs)
+     | OClose -> C2.compat_oprod_close_oval args (compile qargs)
+     | OWrite ->
+       C2.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
+       C2.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
+       C2.compat_oprod_write_oval
+         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
+         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
+         (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn #_ #_ #x qx ->
     lem_compile_subset qx;
     C2.compat_oprod_return x (compile qx)
@@ -284,19 +288,16 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
 and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:oprod_quotation g s)
   : Lemma (ensures fv_in_env g (compile_oprod qs)) (decreases qs)
   = match qs with
-  | QOpenfile qfnm ->
-    lem_compile_fv_in_env qfnm;
-    lem_fv_in_env_openfile g (compile qfnm)
-  | QRead qfd ->
-    lem_compile_fv_in_env qfd;
-    lem_fv_in_env_read g (compile qfd)
-  | QWrite qfd qmsg ->
-    lem_compile_fv_in_env qfd;
-    lem_compile_fv_in_env qmsg;
-    lem_fv_in_env_write g (compile qfd) (compile qmsg)
-  | QClose qfd ->
-    lem_compile_fv_in_env qfd;
-    lem_fv_in_env_close g (compile qfd)
+  | QCall o qargs ->
+    lem_compile_fv_in_env qargs;
+    (match o with
+     | OOpen -> lem_fv_in_env_openfile g (compile qargs)
+     | ORead -> lem_fv_in_env_read g (compile qargs)
+     | OClose -> lem_fv_in_env_close g (compile qargs)
+     | OWrite ->
+       lem_fv_in_env_fst g (compile qargs);
+       lem_fv_in_env_snd g (compile qargs);
+       lem_fv_in_env_write g (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn qx ->
     lem_compile_fv_in_env qx
   | QBindProd #_ #ta #_ #m #k qm qk ->

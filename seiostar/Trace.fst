@@ -9,12 +9,6 @@ module Trace
 
 include BaseTypes
 
-noeq
-type sig (op:Type u#a) = {
-  args : op -> Type u#a;
-  res : (cmd:op) -> (args cmd) -> Type u#a;
-}
-
 type io_ops = | ORead | OWrite | OOpen | OClose
 
 unfold let io_args (op:io_ops) : Type =
@@ -150,5 +144,5 @@ let unit_l #h (lt:local_trace h) :
   FStar.List.Tot.Properties.append_l_nil lt
 
 let unit_r #h (lt:local_trace h) :
-  Lemma ([]@lt == lt) = 
+  Lemma ([]@lt == lt) =
   FStar.List.Tot.Properties.append_nil_l lt

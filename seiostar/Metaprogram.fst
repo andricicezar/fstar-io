@@ -119,10 +119,7 @@ let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Exp
 
 let mk_qlambdaprod (body:term) : term = mk_app (`QLambdaProd) [(body, Q_Explicit)]
 let mk_qappprod (f arg : term) : term = mk_app (`QAppProd) [(f, Q_Explicit); (arg, Q_Explicit)]
-let mk_qopenfile (fd:term) : term = mk_app (`QOpenfile) [(fd, Q_Explicit)]
-let mk_qread (fd:term) : term = mk_app (`QRead) [(fd, Q_Explicit)]
-let mk_qwrite (fd:term) (b:term) : term = mk_app (`QWrite) [(fd, Q_Explicit); (b, Q_Explicit)]
-let mk_qclose (fd:term) : term = mk_app (`QClose) [(fd, Q_Explicit)]
+let mk_qcall (op:term) (args:term) : term = mk_app (`QCall) [(op, Q_Explicit); (args, Q_Explicit)]
 let mk_qreturn (t:term) : term = mk_app (`QReturn) [(t, Q_Explicit)]
 let mk_qbind (e:term) (f:term) : term = mk_app (`QBindProd) [(e, Q_Explicit); (f, Q_Explicit)]
 let mk_qifprod (b:term) (t1:term) (t2:term) : term =
@@ -194,7 +191,7 @@ let is_oprod (t:term) : Tac bool =
   | Tv_FVar fv ->
      let s = fv_to_string fv in
      s = "QExp.QReturn" || s = "QExp.QBindProd" || s = "QExp.QAppProd" ||
-     s = "QExp.QRead" || s = "QExp.QWrite" || s = "QExp.QOpenfile" || s = "QExp.QClose" ||
+     s = "QExp.QCall" ||
      s = "QExp.QCaseProd" || s = "QExp.QIfProd"
   | _ -> false
 
@@ -265,23 +262,8 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
     | Some "IOStar.return", [v] ->
       mk_qreturn (create_derivation g dbmap btmap prior_derivs fuel v)
-    | Some "IOStar.io_call", [op; v] -> begin
-      match get_fv op with
-      | Some "Trace.OOpen" ->
-        mk_qopenfile (create_derivation g dbmap btmap prior_derivs fuel v)
-      | Some "Trace.ORead" ->
-        mk_qread (create_derivation g dbmap btmap prior_derivs fuel v)
-      | Some "Trace.OClose" ->
-        mk_qclose (create_derivation g dbmap btmap prior_derivs fuel v)
-      | Some "Trace.OWrite" -> begin
-        let (h, as_) = collect_app v in
-        match get_fv h, as_ with
-        | Some "FStar.Pervasives.Native.Mktuple2", [_; _; (v1, _); (v2, _)] ->
-          mk_qwrite (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
-        | _ -> fail "IOStar.io_call OWrite argument is not a tuple structure"
-      end
-      | _ -> fail "IOStar.io_call: unknown operation"
-    end
+    | Some "IOStar.io_call", [op; v] ->
+      mk_qcall op (create_derivation g dbmap btmap prior_derivs fuel v)
     | Some "IOStar.op_let_Bang_At", [m; k]
     | Some "IOStar.io_bind", [m; k] -> begin
       let qm = create_derivation g dbmap btmap prior_derivs fuel m in
