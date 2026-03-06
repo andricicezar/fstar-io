@@ -126,230 +126,230 @@ type typing : typ_env -> exp -> qType -> Type =
            $h2:typing g e2 qString ->
            typing g (EStringEq e1 e2) qBool
 
-val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_oprod g t
-let rec backtranslate_exp #g #e #t h : Tot (fs_oprod g t) =
+val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t
+let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t) =
   match e with
-  | EUnit -> fs_oprod_return_val g t ()
-  | ETrue -> fs_oprod_return_val g t true
-  | EFalse -> fs_oprod_return_val g t false
-  | EString s -> fs_oprod_return_val g t s
+  | EUnit -> fs_ocomp_return_val g t ()
+  | ETrue -> fs_ocomp_return_val g t true
+  | EFalse -> fs_ocomp_return_val g t false
+  | EString s -> fs_ocomp_return_val g t s
   | EIf _ _ _ ->
     let TyIf h1 h2 h3 = h in
     let h1 : typing g _ qBool = h1 in
     let h2 : typing g _ t = h2 in
     let h3 : typing g _ t = h3 in
-    fs_oprod_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
-  | EVar x -> fs_oprod_var g x
+    fs_ocomp_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
+  | EVar x -> fs_ocomp_var g x
   | ELam _ ->
     let TyLam #t1 #t2 hbody = h in
     let hbody : typing (extend t1 g) _ t2 = hbody in
-    fs_oprod_lambda (backtranslate_exp hbody)
+    fs_ocomp_lambda (backtranslate_exp hbody)
   | EApp _ _ ->
     let TyApp #t1 #t2 h1 h2 = h in
     let h1 : typing g _ (t1 ^->!@ t2) = h1 in
     let h2 : typing g _ t1 = h2 in
-    fs_oprod_app (backtranslate_exp h1) (backtranslate_exp h2)
+    fs_ocomp_app (backtranslate_exp h1) (backtranslate_exp h2)
 
   | EPair _ _ ->
     let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
     let h1 : typing g _ t1 = h1 in
     let h2 : typing g _ t2 = h2 in
-    fs_oprod_pair (backtranslate_exp h1) (backtranslate_exp h2)
+    fs_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2)
   | EFst _ ->
     let TyFst #t1 #t2 h1 = h in
     let h1 : typing g _ (t1 ^* t2) = h1 in
-    fs_oprod_fmap #_ #(t1 ^* t2) (backtranslate_exp h1) fst
+    fs_ocomp_fmap #_ #(t1 ^* t2) (backtranslate_exp h1) fst
   | ESnd _ ->
     let TySnd #t2 #t1 h1 = h in
     let h1 : typing g _ (t1 ^* t2) = h1 in
-    fs_oprod_fmap #_ #(t1 ^* t2) (backtranslate_exp h1) snd
+    fs_ocomp_fmap #_ #(t1 ^* t2) (backtranslate_exp h1) snd
 
   | EInl _ ->
     let TyInl #t1 t2 h1 = h in
     let h1 : typing g _ t1 = h1 in
-    fs_oprod_fmap #_ #_ #(t1 ^+ t2) (backtranslate_exp h1) Inl
+    fs_ocomp_fmap #_ #_ #(t1 ^+ t2) (backtranslate_exp h1) Inl
   | EInr _ ->
     let TyInr t1 #t2 h1 = h in
     let h1 : typing g _ t2 = h1 in
-    fs_oprod_fmap #_ #_ #(t1 ^+ t2) (backtranslate_exp h1) Inr
+    fs_ocomp_fmap #_ #_ #(t1 ^+ t2) (backtranslate_exp h1) Inr
   | ECase _ _ _ ->
     let TyCase #t1 #t2 #t3 h1 h2 h3 = h in
     let h1 : typing g _ (t1 ^+ t2) = h1 in
     let h2 : typing (extend t1 g) _ t3 = h2 in
     let h3 : typing (extend t2 g) _ t3 = h3 in
-    fs_oprod_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
+    fs_ocomp_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
   | EFileDescr _ ->
     let TyFileDescr fd = h in
-    fs_oprod_return_val g qFileDescr fd
+    fs_ocomp_return_val g qFileDescr fd
   | EOpen _ ->
     let TyOpenfile h' = h in
     let h' : typing g _ qString = h' in
-    fs_oprod_call OOpen (backtranslate_exp h')
+    fs_ocomp_call OOpen (backtranslate_exp h')
   | ERead _ ->
     let TyRead h' = h in
     let h' : typing g _ qFileDescr = h' in
-    fs_oprod_call ORead (backtranslate_exp h')
+    fs_ocomp_call ORead (backtranslate_exp h')
   | EWrite _ _ ->
     let TyWrite h1 h2 = h in
     let h1 : typing g _ qFileDescr = h1 in
     let h2 : typing g _ qString = h2 in
-    fs_oprod_call OWrite (fs_oprod_pair (backtranslate_exp h1) (backtranslate_exp h2))
+    fs_ocomp_call OWrite (fs_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2))
   | EClose _ ->
     let TyClose h' = h in
     let h' : typing g _ qFileDescr = h' in
-    fs_oprod_call OClose (backtranslate_exp h')
+    fs_ocomp_call OClose (backtranslate_exp h')
   | EStringEq _ _ ->
     let TyStringEq h1 h2 = h in
     let h1 : typing g _ qString = h1 in
     let h2 : typing g _ qString = h2 in
-    fs_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2)
+    fs_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2)
 
 #push-options "--split_queries always"
 let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
-  | EUnit -> C1.compat_oprod_unit g
-  | ETrue -> C1.compat_oprod_true g
-  | EFalse -> C1.compat_oprod_false g
-  | EString s -> C1.compat_oprod_string g s
+  | EUnit -> C1.compat_ocomp_unit g
+  | ETrue -> C1.compat_ocomp_true g
+  | EFalse -> C1.compat_ocomp_false g
+  | EString s -> C1.compat_ocomp_string g s
   | EIf _ _ _ ->
     let TyIf #_ #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
     lem_backtranslate_superset_exp h3;
-    C1.compat_oprod_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
-  | EVar x -> C1.compat_oprod_var g x
+    C1.compat_ocomp_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+  | EVar x -> C1.compat_ocomp_var g x
   | EApp _ _ ->
     let TyApp #t1 #t2 #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_oprod_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C1.compat_ocomp_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_superset_exp hbody;
-    C1.compat_oprod_lambda (backtranslate_exp hbody) body
+    C1.compat_ocomp_lambda (backtranslate_exp hbody) body
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_oprod_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C1.compat_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | EFst _ ->
     let TyFst #t1 #t2 #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_fst (backtranslate_exp h') e'
+    C1.compat_ocomp_fst (backtranslate_exp h') e'
   | ESnd _ ->
     let TySnd #t2 #t1 #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_snd (backtranslate_exp h') e'
+    C1.compat_ocomp_snd (backtranslate_exp h') e'
   | EInl _ ->
     let TyInl #t1 t2 #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_inl t1 t2 (backtranslate_exp h') e'
+    C1.compat_ocomp_inl t1 t2 (backtranslate_exp h') e'
   | EInr _ ->
     let TyInr t1 #t2 #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_inr t1 t2 (backtranslate_exp h') e'
+    C1.compat_ocomp_inr t1 t2 (backtranslate_exp h') e'
   | ECase _ _ _ ->
     let TyCase #t1 #t2 #t3 #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
     lem_backtranslate_superset_exp h3;
-    C1.compat_oprod_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
-  | EFileDescr fd -> C1.compat_oprod_file_descr g fd
+    C1.compat_ocomp_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+  | EFileDescr fd -> C1.compat_ocomp_file_descr g fd
   | EOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_openfile (backtranslate_exp h') e'
+    C1.compat_ocomp_openfile (backtranslate_exp h') e'
   | ERead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_read (backtranslate_exp h') e'
+    C1.compat_ocomp_read (backtranslate_exp h') e'
   | EWrite _ _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_oprod_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C1.compat_ocomp_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | EClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_oprod_close (backtranslate_exp h') e'
+    C1.compat_ocomp_close (backtranslate_exp h') e'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C1.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
 
 let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊑ e) =
    match e with
-  | EUnit -> C2.compat_oprod_unit g
-  | ETrue -> C2.compat_oprod_true g
-  | EFalse -> C2.compat_oprod_false g
-  | EString s -> C2.compat_oprod_string g s
+  | EUnit -> C2.compat_ocomp_unit g
+  | ETrue -> C2.compat_ocomp_true g
+  | EFalse -> C2.compat_ocomp_false g
+  | EString s -> C2.compat_ocomp_string g s
   | EIf _ _ _ ->
     let TyIf #_ #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     lem_backtranslate_subset_exp h3;
-    C2.compat_oprod_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
-  | EVar x -> C2.compat_oprod_var g x
+    C2.compat_ocomp_if (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+  | EVar x -> C2.compat_ocomp_var g x
   | EApp _ _ ->
     let TyApp #t1 #t2 #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_oprod_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C2.compat_ocomp_app (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_subset_exp hbody;
-    C2.compat_oprod_lambda (backtranslate_exp hbody) body
+    C2.compat_ocomp_lambda (backtranslate_exp hbody) body
   | EPair _ _ ->
     let TyPair #_ #e1 #e2 #t1 #t2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_oprod_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C2.compat_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | EFst _ ->
     let TyFst #t1 #t2 #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_fst (backtranslate_exp h') e'
+    C2.compat_ocomp_fst (backtranslate_exp h') e'
   | ESnd _ ->
     let TySnd #t2 #t1 #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_snd (backtranslate_exp h') e'
+    C2.compat_ocomp_snd (backtranslate_exp h') e'
   | EInl _ ->
     let TyInl #t1 t2 #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_inl t1 t2 (backtranslate_exp h') e'
+    C2.compat_ocomp_inl t1 t2 (backtranslate_exp h') e'
   | EInr _ ->
     let TyInr t1 #t2 #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_inr t1 t2 (backtranslate_exp h') e'
+    C2.compat_ocomp_inr t1 t2 (backtranslate_exp h') e'
   | ECase _ _ _ ->
     let TyCase #t1 #t2 #t3 #e1 #e2 #e3 h1 h2 h3 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     lem_backtranslate_subset_exp h3;
-    C2.compat_oprod_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
-  | EFileDescr fd -> C2.compat_oprod_file_descr g fd
+    C2.compat_ocomp_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
+  | EFileDescr fd -> C2.compat_ocomp_file_descr g fd
   | EOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_openfile (backtranslate_exp h') e'
+    C2.compat_ocomp_openfile (backtranslate_exp h') e'
   | ERead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_read (backtranslate_exp h') e'
+    C2.compat_ocomp_read (backtranslate_exp h') e'
   | EWrite _ _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_oprod_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C2.compat_ocomp_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
   | EClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_oprod_close (backtranslate_exp h') e'
+    C2.compat_ocomp_close (backtranslate_exp h') e'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
-    C2.compat_oprod_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C2.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
 #pop-options
 
 let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
@@ -389,7 +389,7 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_superset_exp hbody;
-    C1.compat_oval_lambda_oprod (backtranslate_exp hbody) body;
+    C1.compat_oval_lambda_ocomp (backtranslate_exp hbody) body;
     let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
     lem_value_superset_valid_contains (t1 ^->!@ t2) f' e;
     assert (valid_contains #(t1 ^->!@ t2) (f' empty_eval) e)
@@ -414,7 +414,7 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_subset_exp hbody;
-    C2.compat_oval_lambda_oprod (backtranslate_exp hbody) body;
+    C2.compat_oval_lambda_ocomp (backtranslate_exp hbody) body;
     let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
     lem_value_subset_valid_member_of (t1 ^->!@ t2) f' e;
     assert (valid_member_of #(t1 ^->!@ t2) (f' empty_eval) e)

@@ -38,15 +38,15 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QInl qp -> EInl (compile qp)
   | QInr qp -> EInr (compile qp)
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
-  | QLambdaProd qbody -> ELam (compile_oprod qbody)
-and compile_oprod #g #a (#s:fs_oprod g a) (qs:typing_io g s) : Tot exp (decreases qs) =
+  | QLambdaIO qbody -> ELam (compile_ocomp qbody)
+and compile_ocomp #g #a (#s:fs_ocomp g a) (qs:typing_io g s) : Tot exp (decreases qs) =
   match qs with
   | QCall o qargs -> compile_call o (compile qargs)
   | QReturn qx -> compile qx
-  | QBindProd qm qk -> EApp (ELam (compile_oprod qk)) (compile_oprod qm)
-  | QAppProd qf qx -> EApp (compile qf) (compile qx)
-  | QIfProd qc qt qe -> EIf (compile qc) (compile_oprod qt) (compile_oprod qe)
-  | QCaseProd qcond qinlc qinrc -> ECase (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+  | QBind qm qk -> EApp (ELam (compile_ocomp qk)) (compile_ocomp qm)
+  | QAppIO qf qx -> EApp (compile qf) (compile qx)
+  | QIfIO qc qt qe -> EIf (compile qc) (compile_ocomp qt) (compile_ocomp qe)
+  | QCaseIO qcond qinlc qinrc -> ECase (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures (s ⊐ (compile qs))) (decreases qs)
@@ -98,47 +98,47 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     lem_compile_superset qinlc;
     lem_compile_superset qinrc;
     C1.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
-  | QLambdaProd #_ #_ #_ #body qbody ->
-    lem_compile_superset_prod qbody;
-    C1.compat_oval_lambda_oprod body (compile_oprod qbody)
-and lem_compile_superset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
-  : Lemma (ensures (s ⊒ (compile_oprod qs))) (decreases qs)
+  | QLambdaIO #_ #_ #_ #body qbody ->
+    lem_compile_superset_comp qbody;
+    C1.compat_oval_lambda_ocomp body (compile_ocomp qbody)
+and lem_compile_superset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
+  : Lemma (ensures (s ⊒ (compile_ocomp qs))) (decreases qs)
   =
   match qs with
   | QCall o #args qargs ->
     lem_compile_superset qargs;
     (match o with
-     | OOpen -> C1.compat_oprod_openfile_oval args (compile qargs)
-     | ORead -> C1.compat_oprod_read_oval args (compile qargs)
-     | OClose -> C1.compat_oprod_close_oval args (compile qargs)
+     | OOpen -> C1.compat_ocomp_openfile_oval args (compile qargs)
+     | ORead -> C1.compat_ocomp_read_oval args (compile qargs)
+     | OClose -> C1.compat_ocomp_close_oval args (compile qargs)
      | OWrite ->
        C1.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
        C1.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
-       C1.compat_oprod_write_oval
+       C1.compat_ocomp_write_oval
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
          (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn #_ #_ #x qx ->
     lem_compile_superset qx;
-    C1.compat_oprod_return x (compile qx)
-  | QBindProd #_ #_ #_ #m #k qm qk ->
-    lem_compile_superset_prod qm;
-    lem_compile_superset_prod qk;
-    C1.compat_oprod_bind m k (compile_oprod qm) (compile_oprod qk)
-  | QAppProd #_ #_ #_ #f #x qf qx ->
+    C1.compat_ocomp_return x (compile qx)
+  | QBind #_ #_ #_ #m #k qm qk ->
+    lem_compile_superset_comp qm;
+    lem_compile_superset_comp qk;
+    C1.compat_ocomp_bind m k (compile_ocomp qm) (compile_ocomp qk)
+  | QAppIO #_ #_ #_ #f #x qf qx ->
     lem_compile_superset qf;
     lem_compile_superset qx;
-    C1.compat_oprod_app_oval_oval f x (compile qf) (compile qx)
-  | QIfProd #_ #_ #c qc #t qt #e qe ->
+    C1.compat_ocomp_app_oval_oval f x (compile qf) (compile qx)
+  | QIfIO #_ #_ #c qc #t qt #e qe ->
     lem_compile_superset qc;
-    lem_compile_superset_prod qt;
-    lem_compile_superset_prod qe;
-    C1.compat_oprod_if_oval c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
-  | QCaseProd #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    lem_compile_superset_comp qt;
+    lem_compile_superset_comp qe;
+    C1.compat_ocomp_if_oval c t e (compile qc) (compile_ocomp qt) (compile_ocomp qe)
+  | QCaseIO #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
     lem_compile_superset qcond;
-    lem_compile_superset_prod qinlc;
-    lem_compile_superset_prod qinrc;
-    C1.compat_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+    lem_compile_superset_comp qinlc;
+    lem_compile_superset_comp qinrc;
+    C1.compat_ocomp_case_oval cond inlc inrc (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures (s ⊏ (compile qs))) (decreases qs)
@@ -190,47 +190,47 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     lem_compile_subset qinlc;
     lem_compile_subset qinrc;
     C2.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
-  | QLambdaProd #_ #_ #_ #body qbody ->
-    lem_compile_subset_prod qbody;
-    C2.compat_oval_lambda_oprod body (compile_oprod qbody)
-and lem_compile_subset_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
-  : Lemma (ensures (s ⊑ (compile_oprod qs))) (decreases qs)
+  | QLambdaIO #_ #_ #_ #body qbody ->
+    lem_compile_subset_comp qbody;
+    C2.compat_oval_lambda_ocomp body (compile_ocomp qbody)
+and lem_compile_subset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
+  : Lemma (ensures (s ⊑ (compile_ocomp qs))) (decreases qs)
   =
   match qs with
   | QCall o #args qargs ->
     lem_compile_subset qargs;
     (match o with
-     | OOpen -> C2.compat_oprod_openfile_oval args (compile qargs)
-     | ORead -> C2.compat_oprod_read_oval args (compile qargs)
-     | OClose -> C2.compat_oprod_close_oval args (compile qargs)
+     | OOpen -> C2.compat_ocomp_openfile_oval args (compile qargs)
+     | ORead -> C2.compat_ocomp_read_oval args (compile qargs)
+     | OClose -> C2.compat_ocomp_close_oval args (compile qargs)
      | OWrite ->
        C2.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
        C2.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
-       C2.compat_oprod_write_oval
+       C2.compat_ocomp_write_oval
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
          (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn #_ #_ #x qx ->
     lem_compile_subset qx;
-    C2.compat_oprod_return x (compile qx)
-  | QBindProd #_ #_ #_ #m #k qm qk ->
-    lem_compile_subset_prod qm;
-    lem_compile_subset_prod qk;
-    C2.compat_oprod_bind m k (compile_oprod qm) (compile_oprod qk)
-  | QAppProd #_ #_ #_ #f #x qf qx ->
+    C2.compat_ocomp_return x (compile qx)
+  | QBind #_ #_ #_ #m #k qm qk ->
+    lem_compile_subset_comp qm;
+    lem_compile_subset_comp qk;
+    C2.compat_ocomp_bind m k (compile_ocomp qm) (compile_ocomp qk)
+  | QAppIO #_ #_ #_ #f #x qf qx ->
     lem_compile_subset qf;
     lem_compile_subset qx;
-    C2.compat_oprod_app_oval_oval f x (compile qf) (compile qx)
-  | QIfProd #_ #_ #c qc #t qt #e qe ->
+    C2.compat_ocomp_app_oval_oval f x (compile qf) (compile qx)
+  | QIfIO #_ #_ #c qc #t qt #e qe ->
     lem_compile_subset qc;
-    lem_compile_subset_prod qt;
-    lem_compile_subset_prod qe;
-    C2.compat_oprod_if_oval c t e (compile qc) (compile_oprod qt) (compile_oprod qe)
-  | QCaseProd #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    lem_compile_subset_comp qt;
+    lem_compile_subset_comp qe;
+    C2.compat_ocomp_if_oval c t e (compile qc) (compile_ocomp qt) (compile_ocomp qe)
+  | QCaseIO #_ #_ #_ #_ #cond qcond #inlc qinlc #inrc qinrc ->
     lem_compile_subset qcond;
-    lem_compile_subset_prod qinlc;
-    lem_compile_subset_prod qinrc;
-    C2.compat_oprod_case_oval cond inlc inrc (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+    lem_compile_subset_comp qinlc;
+    lem_compile_subset_comp qinrc;
+    C2.compat_ocomp_case_oval cond inlc inrc (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures fv_in_env g (compile qs)) (decreases qs)
@@ -282,11 +282,11 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
     lem_compile_fv_in_env qinlc;
     lem_compile_fv_in_env qinrc;
     lem_fv_in_env_case g ta tb (compile qcond) (compile qinlc) (compile qinrc)
-  | QLambdaProd #_ #qa #_ #body qbody ->
+  | QLambdaIO #_ #qa #_ #body qbody ->
     lem_compile_fv_in_env_prod qbody;
-    lem_fv_in_env_lam g qa (compile_oprod qbody)
-and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s)
-  : Lemma (ensures fv_in_env g (compile_oprod qs)) (decreases qs)
+    lem_fv_in_env_lam g qa (compile_ocomp qbody)
+and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
+  : Lemma (ensures fv_in_env g (compile_ocomp qs)) (decreases qs)
   = match qs with
   | QCall o qargs ->
     lem_compile_fv_in_env qargs;
@@ -300,33 +300,33 @@ and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_oprod g a) (qs:typing_io g s
        lem_fv_in_env_write g (EFst (compile qargs)) (ESnd (compile qargs)))
   | QReturn qx ->
     lem_compile_fv_in_env qx
-  | QBindProd #_ #ta #_ #m #k qm qk ->
+  | QBind #_ #ta #_ #m #k qm qk ->
     lem_compile_fv_in_env_prod qm;
     lem_compile_fv_in_env_prod qk;
-    lem_fv_in_env_lam g ta (compile_oprod qk);
-    lem_fv_in_env_app g (ELam (compile_oprod qk)) (compile_oprod qm)
-  | QAppProd qf qx ->
+    lem_fv_in_env_lam g ta (compile_ocomp qk);
+    lem_fv_in_env_app g (ELam (compile_ocomp qk)) (compile_ocomp qm)
+  | QAppIO qf qx ->
     lem_compile_fv_in_env qf;
     lem_compile_fv_in_env qx;
     lem_fv_in_env_app g (compile qf) (compile qx)
-  | QIfProd qc qt qe ->
+  | QIfIO qc qt qe ->
     lem_compile_fv_in_env qc;
     lem_compile_fv_in_env_prod qt;
     lem_compile_fv_in_env_prod qe;
-    lem_fv_in_env_if g (compile qc) (compile_oprod qt) (compile_oprod qe)
-  | QCaseProd #_ #ta #tb #_ #cond qcond #inlc qinlc #inrc qinrc ->
+    lem_fv_in_env_if g (compile qc) (compile_ocomp qt) (compile_ocomp qe)
+  | QCaseIO #_ #ta #tb #_ #cond qcond #inlc qinlc #inrc qinrc ->
     lem_compile_fv_in_env qcond;
     lem_compile_fv_in_env_prod qinlc;
     lem_compile_fv_in_env_prod qinrc;
-    lem_fv_in_env_case g ta tb (compile qcond) (compile_oprod qinlc) (compile_oprod qinrc)
+    lem_fv_in_env_case g ta tb (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
   (qs:(a ^->!@ b) ⊩ s)
-  : Lemma (requires (QLambdaProd? qs))
+  : Lemma (requires (QLambdaIO? qs))
           (ensures (ELam? (compile qs)))
   =
   match qs with
-  | QLambdaProd qbody ->
+  | QLambdaIO qbody ->
     assert (ELam? (compile qs)) by (norm [delta_once [`%compile];zeta;iota])
 
 let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
@@ -335,7 +335,7 @@ let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
 
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
   : Lemma
-    (requires (QLambdaProd? qs))
+    (requires (QLambdaIO? qs))
     (ensures (
         is_closed (compile qs) /\
         is_value (compile qs) /\
@@ -343,7 +343,7 @@ let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
         valid_member_of s (compile qs)
       )) =
   match qs with
-  | QLambdaProd #_ #b #c qbody ->
+  | QLambdaIO #_ #b #c qbody ->
     lem_compile_is_closed qs;
     lem_compile_closed_arrow_is_elam #b #c #s qs;
     assert (is_value (compile qs));

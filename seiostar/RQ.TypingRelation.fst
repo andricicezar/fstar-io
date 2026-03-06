@@ -107,65 +107,65 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
               #inrc : fs_oval (extend b g) c ->
               typing _ inrc ->
               typing g (fs_oval_case cond inlc inrc)
-| QLambdaProd : #g : typ_env ->
+| QLambdaIO : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                #body : fs_oprod (extend a g) b ->
+                #body : fs_ocomp (extend a g) b ->
                 typing_io (extend a g) body ->
-                typing g (fs_oval_lambda_oprod body)
-and typing_io : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
+                typing g (fs_oval_lambda_ocomp body)
+and typing_io : #a:qType -> g:typ_env -> fs_ocomp g a -> Type =
 | QCall :
         #g:typ_env ->
         o:io_ops ->
         #args:fs_oval g (q_io_args o) ->
         typing g args ->
-        typing_io #(q_io_res o) g (fs_oprod_call_oval o args)
+        typing_io #(q_io_res o) g (fs_ocomp_call_oval o args)
 
 | QReturn :
         #g:typ_env ->
         #a:qType ->
         #x:fs_oval g a ->
         typing g x ->
-        typing_io #a g (fs_oprod_return_oval x)
+        typing_io #a g (fs_ocomp_return_oval x)
 
-| QBindProd :
+| QBind :
         #g:typ_env ->
         #a:qType ->
         #b:qType ->
-        #m:fs_oprod g a ->
-        #k:fs_oprod (extend a g) b ->
+        #m:fs_ocomp g a ->
+        #k:fs_ocomp (extend a g) b ->
         typing_io g m ->
         typing_io (extend a g) k ->
-        typing_io #b g (fs_oprod_bind m k)
+        typing_io #b g (fs_ocomp_bind m k)
 
-| QAppProd    : #g : typ_env ->
+| QAppIO    : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #f : fs_oval g (a ^->!@ b) ->
                 #x : fs_oval g a ->
                 typing g f ->
                 typing g x ->
-                typing_io g (fs_oprod_app_oval_oval f x)
-| QIfProd     : #g : typ_env ->
+                typing_io g (fs_ocomp_app_oval_oval f x)
+| QIfIO     : #g : typ_env ->
                 #a : qType ->
                 #c : fs_oval g qBool ->
                 typing #qBool g c ->
-                #t : fs_oprod g a ->
+                #t : fs_ocomp g a ->
                 typing_io g t ->
-                #e : fs_oprod g a ->
+                #e : fs_ocomp g a ->
                 typing_io g e ->
-                typing_io g (fs_oprod_if_oval c t e)
-| QCaseProd : #g : typ_env ->
+                typing_io g (fs_ocomp_if_oval c t e)
+| QCaseIO : #g : typ_env ->
               #a : qType ->
               #b : qType ->
               #c : qType ->
               #cond : fs_oval g (a ^+ b) ->
               typing g cond ->
-              #inlc : fs_oprod (extend a g) c ->
+              #inlc : fs_ocomp (extend a g) c ->
               typing_io _ inlc ->
-              #inrc : fs_oprod (extend b g) c ->
+              #inrc : fs_ocomp (extend b g) c ->
               typing_io _ inrc ->
-              typing_io g (fs_oprod_case_oval cond inlc inrc)
+              typing_io g (fs_ocomp_case_oval cond inlc inrc)
 
 let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
   typing g x
@@ -173,5 +173,5 @@ let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
 let (⊩) (a:qType) (x:fs_val a) =
   typing #a empty (fs_oval_return empty x)
 
-type prod_quotation (a:qType) (x:fs_prod a) =
-  typing_io #a empty (fs_oprod_return empty x)
+type comp_quotation (a:qType) (x:fs_comp a) =
+  typing_io #a empty (fs_ocomp_return empty x)

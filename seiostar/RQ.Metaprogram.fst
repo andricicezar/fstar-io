@@ -118,15 +118,15 @@ let rec mk_qvarI (n:int) : term =
 let mk_qlambda (body:term) : term = mk_app (`QLambda) [(body, Q_Explicit)]
 let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
 
-let mk_qlambdaprod (body:term) : term = mk_app (`QLambdaProd) [(body, Q_Explicit)]
-let mk_qappprod (f arg : term) : term = mk_app (`QAppProd) [(f, Q_Explicit); (arg, Q_Explicit)]
+let mk_qlambdacomp (body:term) : term = mk_app (`QLambdaIO) [(body, Q_Explicit)]
+let mk_qappcomp (f arg : term) : term = mk_app (`QAppIO) [(f, Q_Explicit); (arg, Q_Explicit)]
 let mk_qcall (op:term) (args:term) : term = mk_app (`QCall) [(op, Q_Explicit); (args, Q_Explicit)]
 let mk_qreturn (t:term) : term = mk_app (`QReturn) [(t, Q_Explicit)]
-let mk_qbind (e:term) (f:term) : term = mk_app (`QBindProd) [(e, Q_Explicit); (f, Q_Explicit)]
-let mk_qifprod (b:term) (t1:term) (t2:term) : term =
-  mk_app (`QIfProd) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qcaseprod (t:term) (x1:term) (x2:term) : term =
-  mk_app (`QCaseProd) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
+let mk_qbind (e:term) (f:term) : term = mk_app (`QBind) [(e, Q_Explicit); (f, Q_Explicit)]
+let mk_qifcomp (b:term) (t1:term) (t2:term) : term =
+  mk_app (`QIfIO) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qcasecomp (t:term) (x1:term) (x2:term) : term =
+  mk_app (`QCaseIO) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
 (** Map between de Brujin F* variables and LambdaIO variables **)
 type db_mapping = int -> option int
@@ -186,22 +186,22 @@ let app_result_is_io (g:env) (btmap:bt_mapping) (hd:term) : Tac bool =
      | _ -> false)
   | None -> false
 
-let is_oprod (t:term) : Tac bool =
+let is_ocomp (t:term) : Tac bool =
   let (h, _) = collect_app t in
   match inspect_ln h with
   | Tv_FVar fv ->
      let s = fv_to_string fv in
-     s = "RQ.TypingRelation.QReturn" || s = "RQ.TypingRelation.QBindProd" || s = "RQ.TypingRelation.QAppProd" ||
+     s = "RQ.TypingRelation.QReturn" || s = "RQ.TypingRelation.QBind" || s = "RQ.TypingRelation.QAppIO" ||
      s = "RQ.TypingRelation.QCall" ||
-     s = "RQ.TypingRelation.QCaseProd" || s = "RQ.TypingRelation.QIfProd"
+     s = "RQ.TypingRelation.QCaseIO" || s = "RQ.TypingRelation.QIfIO"
   | _ -> false
 
-let is_lambdaprod (t:term) : Tac bool =
+let is_lambdacomp (t:term) : Tac bool =
   let (h, _) = collect_app t in
   match inspect_ln h with
   | Tv_FVar fv ->
      let s = fv_to_string fv in
-     s = "RQ.TypingRelation.QLambdaProd"
+     s = "RQ.TypingRelation.QLambdaIO"
   | _ -> false
 
 (** Cache of already-generated derivations: maps source fvar name to term to emit at cache hit.
@@ -241,7 +241,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
 
   | Tv_Abs bin body ->
     let qbody = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap btmap (binder_sort bin)) prior_derivs fuel body in
-    if is_oprod qbody then mk_qlambdaprod qbody
+    if is_ocomp qbody then mk_qlambdacomp qbody
     else mk_qlambda qbody
 
   | Tv_App hd (a, _) -> begin
@@ -278,7 +278,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qeq_string (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
     | Some "ExamplesIO.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
-          Translates to: QBindProd m (QCaseProd QVar0 (k_body) (QReturn (QInr QVar0)))
+          Translates to: QBind m (QCaseIO QVar0 (k_body) (QReturn (QInr QVar0)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
           So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
       let qm = create_derivation g dbmap btmap prior_derivs fuel m in
@@ -287,14 +287,14 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
         let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) prior_derivs fuel body in
         let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
-        mk_qbind qm (mk_qcaseprod mk_qvar0 qk_body qinr_branch)
+        mk_qbind qm (mk_qcasecomp mk_qvar0 qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | _ ->
       let f = (create_derivation g dbmap btmap prior_derivs fuel hd) in
       let x = (create_derivation g dbmap btmap prior_derivs fuel a) in
-      if is_lambdaprod f then mk_qappprod f x
-      else if app_result_is_io g btmap hd then mk_qappprod f x
+      if is_lambdacomp f then mk_qappcomp f x
+      else if app_result_is_io g btmap hd then mk_qappcomp f x
       else mk_qapp f x
   end
 
@@ -313,7 +313,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       let qb = create_derivation g dbmap btmap prior_derivs fuel b in
       let qt1 = create_derivation g dbmap btmap prior_derivs fuel t1 in
       let qt2 = create_derivation g (skip_dbmap_binder dbmap) (skip_btmap btmap) prior_derivs fuel t2 in
-      if is_oprod qt1 then mk_qifprod qb qt1 qt2
+      if is_ocomp qt1 then mk_qifcomp qb qt1 qt2
       else mk_qif qb qt1 qt2
 
     | [(Pat_Cons fv1 _ _, t1); (Pat_Cons _ _ _, t2)] ->
@@ -322,7 +322,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
         let qb = create_derivation g dbmap btmap prior_derivs fuel b in
         let qt1 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) prior_derivs fuel t1 in
         let qt2 = create_derivation g (extend_dbmap_binder dbmap) (extend_btmap_unknown btmap) prior_derivs fuel t2 in
-        if is_oprod qt1 then mk_qcaseprod qb qt1 qt2
+        if is_ocomp qt1 then mk_qcasecomp qb qt1 qt2
         else mk_qcase qb qt1 qt2
       else fail ("only supporting matches on inl and inr for now (in this order). Got: " ^ fnm1)
     | _ -> fail ("Only boolean matches (if-then-else) are supported. Got: " ^ (branches_to_string brs))  end

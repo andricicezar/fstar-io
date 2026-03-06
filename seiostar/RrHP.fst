@@ -18,10 +18,10 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
-  qs:((i.ct ^->!@ qBool) ⊩ ps){ QLambdaProd? qs }
+  qs:((i.ct ^->!@ qBool) ⊩ ps){ QLambdaIO? qs }
 
 type ctxS (i:intS) = fs_val i.ct
-type wholeS = fs_prod qBool
+type wholeS = fs_comp qBool
 
 // linking involves taking a program and context, extracting the first part of the dependent pair (so the program i.ct -> bool) and applying it to the context
 let linkS (#i:intS) (ps:progS i) (cs:ctxS i) : wholeS =
@@ -71,7 +71,7 @@ let rel_behs bs bt =
 
 let lem_rel_behTS (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires valid_superset_prod fs_e e)
+  (requires valid_superset_comp fs_e e)
   (ensures  (behT e) `behT_in_behS` (behS fs_e))
   =
   introduce forall rT lt. (behT e) (lt, rT) ==> (exists rS. rel_bools rS rT /\ (behS fs_e) lt rS) with begin
@@ -82,7 +82,7 @@ let lem_rel_behTS (fs_e:wholeS) (e:wholeT)
 
 let lem_rel_beh (fs_e:wholeS) (e:wholeT)
   : Lemma
-  (requires valid_superset_prod fs_e e /\ valid_subset_prod fs_e e)
+  (requires valid_superset_comp fs_e e /\ valid_subset_comp fs_e e)
   (ensures  (behS fs_e) `rel_behs` (behT e))
   =
   introduce forall rS lt. (behS fs_e) lt rS ==> (exists rT. rel_bools rS rT /\ (behT e) (lt, rT)) with begin
@@ -187,7 +187,7 @@ let proof_rrtp_right i : Lemma (rrtp_right i) =
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
     eliminate True /\ True
-    returns valid_superset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+    returns valid_superset_comp ws (subst_beta ct (ELam?.b pt)) with _ _. begin
       lem_compile_closed_valid qps;
       assert (valid_contains ps pt);
       Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∋ **)
@@ -201,7 +201,7 @@ let proof_rrtp_right i : Lemma (rrtp_right i) =
         with h []
       end;
       lem_backtranslate (dsnd cT);
-      assert (valid_superset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
+      assert (valid_superset_comp (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
     lem_rel_behTS ws (subst_beta ct (ELam?.b pt));
     lem_app_eq_subst_beta pt ct;
@@ -223,7 +223,7 @@ let proof_rrhp_1 i : Lemma (rrhp_1 i) =
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
     eliminate True /\ True
-    returns valid_superset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+    returns valid_superset_comp ws (subst_beta ct (ELam?.b pt)) with _ _. begin
       lem_compile_closed_valid qps;
       assert (valid_contains ps pt);
       Classical.forall_intro (Classical.move_requires (unfold_contains_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∋ **)
@@ -237,10 +237,10 @@ let proof_rrhp_1 i : Lemma (rrhp_1 i) =
         with h []
       end;
       lem_backtranslate (dsnd cT);
-      assert (valid_superset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
+      assert (valid_superset_comp (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
     eliminate True /\ True
-    returns valid_subset_prod ws (subst_beta ct (ELam?.b pt)) with _ _. begin
+    returns valid_subset_comp ws (subst_beta ct (ELam?.b pt)) with _ _. begin
       lem_compile_closed_valid qps;
       assert (valid_member_of ps pt);
       Classical.forall_intro (Classical.move_requires (unfold_member_of_io_arrow t qBool ps (ELam?.b pt))); (** unfold ∈ **)
@@ -254,7 +254,7 @@ let proof_rrhp_1 i : Lemma (rrhp_1 i) =
         with h []
       end;
       lem_backtranslate (dsnd cT);
-      assert (valid_subset_prod (ps cs) (subst_beta ct (ELam?.b pt)))
+      assert (valid_subset_comp (ps cs) (subst_beta ct (ELam?.b pt)))
     end;
     lem_rel_beh ws (subst_beta ct (ELam?.b pt));
     lem_app_eq_subst_beta pt ct;

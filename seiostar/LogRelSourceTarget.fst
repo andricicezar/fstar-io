@@ -52,7 +52,7 @@ and (⊆) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %
   let (h, fs_e, e) = p in
   exists (e':closed_exp). e_beh e e' h [] /\ t ∈ (h, fs_e, e')
                            (** vvvvvvvvvv defined over producers **)
-and (⫃) (t:qType) (p:history * fs_prod t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
+and (⫃) (t:qType) (p:history * fs_comp t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
   forall lt.
     (forall (fs_r:get_Type t). fs_beh fs_e h lt fs_r ==>
@@ -64,7 +64,7 @@ let valid_member_of (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
 let valid_subset_val (#t:qType) (fs_e:fs_val t) (e:value) : Type0 =
   forall (h:history). t ⊆ (h, fs_e, e)
 
-let valid_subset_prod (#t:qType) (fs_e:fs_prod t) (e:closed_exp) : Type0 =
+let valid_subset_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) : Type0 =
   forall (h:history). t ⫃ (h, fs_e, e)
 
 let rec lem_values_are_values t h fs_e (e:closed_exp) :
@@ -182,13 +182,13 @@ let subset_oval (#g:typ_env) (t:qType) (fs_e:fs_oval g t) (e:exp) : Type0 =
 let (⊏) (#g:typ_env) (#t:qType) (fs_v:fs_oval g t) (e:exp) : Type0 =
   subset_oval #g t fs_v e
 
-let subset_oprod (#g:typ_env) (t:qType) (fs_e:fs_oprod g t) (e:exp) : Type0 =
+let subset_ocomp (#g:typ_env) (t:qType) (fs_e:fs_ocomp g t) (e:exp) : Type0 =
   fv_in_env g e /\
   forall b (s:gsub g b) (fsG:eval_env g) (h:history).
     fsG `(≍) h` s ==> t ⫃ (h, fs_e fsG, gsubst s e)
 
-let (⊑) (#g:typ_env) (#t:qType) (fs_v:fs_oprod g t) (e:exp) : Type0 =
-  subset_oprod #g t fs_v e
+let (⊑) (#g:typ_env) (#t:qType) (fs_v:fs_ocomp g t) (e:exp) : Type0 =
+  subset_ocomp #g t fs_v e
 
 let lem_value_subset_valid_member_of t (fs_e:fs_oval empty t) (e:value) :
   Lemma (requires fs_e ⊏ e)

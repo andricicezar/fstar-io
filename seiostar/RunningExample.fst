@@ -486,13 +486,13 @@ let main agent =
 [@@ (preprocess_with simplify_qType)]
 let main_derivation #g : typing g (fs_oval_return g main)
   by (trefl ())
-  = QLambdaProd (
-      QBindProd
-        (QAppProd
+  = QLambdaIO (
+      QBind
+        (QAppIO
           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
                 (QStringLit "overwrite"))
           QVar0)
-        (QCaseProd QVar0
+        (QCaseIO QVar0
           (QReturn QTrue)
           (QReturn QFalse)))
 
