@@ -20,13 +20,6 @@ let qunit : term = `()
 let valid (g:env) (phi:term) : prop =
   squash (tot_typing g qunit (mk_squash phi))
 
-let valid_wtf (g:env) (phi:term)
-  : Lemma (requires valid g phi)
-          (ensures squash (tot_typing g qunit (mk_squash phi)))
-  = let goal = squash (tot_typing g qunit (mk_squash phi)) in
-    assert (valid g phi ==> goal) by (compute ()); /// WHY????
-    () // ????
-
 let same_typing (t0 t1 : term) : prop =
   forall g c typ. typing g t0 (c, typ) ==> typing g t1 (c, typ)
 
