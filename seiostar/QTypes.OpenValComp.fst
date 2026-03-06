@@ -6,6 +6,9 @@ open IOStar
 include QTypes.TypEnv
 include QTypes.EvalEnv
 
+(** F* works better with these functions because it helps dealing with qTypes,
+    even if they are synonyms *)
+
 (** Closed values **)
 type fs_val (t:qType) =
   get_Type t
@@ -80,6 +83,15 @@ let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
   fun _ -> x
 
 unfold
+val fs_oval_fmap : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    p : fs_oval g a ->
+                    f : (fs_val a -> fs_val b) ->
+                    fs_oval g b
+let fs_oval_fmap p f fsG = f (p fsG)
+
+unfold
 let fs_oval_var0 (g:typ_env) (t:qType) : fs_oval (extend t g) t =
   fun fsG -> hd fsG
 
@@ -136,15 +148,6 @@ val fs_oval_pair : #g : typ_env ->
                    fs_oval g (a ^* b)
 let fs_oval_pair x y fsG =
   fs_val_pair (x fsG) (y fsG)
-
-unfold
-val fs_oval_fmap : #g:typ_env ->
-                    #a:qType ->
-                    #b:qType ->
-                    p : fs_oval g a ->
-                    f : (fs_val a -> fs_val b) ->
-                    fs_oval g b
-let fs_oval_fmap p f fsG = f (p fsG)
 
 unfold
 val fs_oval_case : #g :typ_env ->
@@ -209,6 +212,35 @@ val fs_ocomp_bind' : #g:typ_env ->
                     fs_ocomp g b
 let fs_ocomp_bind' m k =
   fs_ocomp_bind m (fun fsG -> k (hd fsG) (tail fsG))
+
+val fs_ocomp_fmap : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    p : fs_ocomp g a ->
+                    f : (fs_val a -> fs_val b) ->
+                    fs_ocomp g b
+let fs_ocomp_fmap p f =
+  fs_ocomp_bind' p (fun p' ->
+    fs_ocomp_return_val _ _ (f p'))
+
+
+unfold
+val fs_ocomp_call :
+        #g:typ_env ->
+        o:io_ops ->
+        args:fs_ocomp g (q_io_args o) ->
+        fs_ocomp g (q_io_res o)
+let fs_ocomp_call o args =
+  fs_ocomp_bind' args (fun args' ->
+    fs_ocomp_return _ (io_call o args'))
+
+unfold
+val fs_ocomp_call_oval :
+        #g:typ_env ->
+        o:io_ops ->
+        args:fs_oval g (q_io_args o) ->
+        fs_ocomp g (q_io_res o)
+let fs_ocomp_call_oval o args fsG = io_call o (args fsG)
 
 unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->
@@ -296,7 +328,6 @@ let fs_ocomp_case cond inlc inrc =
   fs_ocomp_bind' cond (fun cond' ->
     fs_ocomp_case_val cond' inlc inrc)
 
-(** Necessary for the backtranslation **)
 let fs_ocomp_var (g:typ_env) (x:var{Some? (g x)}) : fs_ocomp g (Some?.v (g x)) =
   fs_ocomp_return_oval (fs_oval_var g x)
 
@@ -338,31 +369,3 @@ let fs_ocomp_string_eq x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
-
-val fs_ocomp_fmap : #g:typ_env ->
-                    #a:qType ->
-                    #b:qType ->
-                    p : fs_ocomp g a ->
-                    f : (fs_val a -> fs_val b) ->
-                    fs_ocomp g b
-let fs_ocomp_fmap p f =
-  fs_ocomp_bind' p (fun p' ->
-    fs_ocomp_return_val _ _ (f p'))
-
-unfold
-val fs_ocomp_call :
-        #g:typ_env ->
-        o:io_ops ->
-        args:fs_ocomp g (q_io_args o) ->
-        fs_ocomp g (q_io_res o)
-let fs_ocomp_call o args =
-  fs_ocomp_bind' args (fun args' ->
-    fs_ocomp_return _ (io_call o args'))
-
-unfold
-val fs_ocomp_call_oval :
-        #g:typ_env ->
-        o:io_ops ->
-        args:fs_oval g (q_io_args o) ->
-        fs_ocomp g (q_io_res o)
-let fs_ocomp_call_oval o args fsG = io_call o (args fsG)
