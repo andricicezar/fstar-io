@@ -274,7 +274,7 @@ let test_constant
   : ((qBool ^-> qBool) ⊩ constant)
   = QLambda QTrue
 
-let test_constant' (** TODO: why is this accepted. is it a problem? **)
+let test_constant'
   : ((qBool ^-> qBool) ⊩ constant)
   = QLambda (QVarS QTrue)
 

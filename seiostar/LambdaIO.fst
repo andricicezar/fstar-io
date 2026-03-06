@@ -4,7 +4,7 @@ module LambdaIO
 
 open FStar.Tactics
 open FStar.Classical.Sugar
-open Trace
+include Trace
 
 type typ =
   | TUnit  : typ

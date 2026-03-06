@@ -821,6 +821,7 @@ let fs_val_case cond inlc inrc =
   | Inl x -> inlc x
   | Inr x -> inrc x
 
+unfold
 let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
@@ -971,7 +972,7 @@ val fs_oprod_return :
         #a:qType ->
         x:fs_oval g a ->
         fs_oprod g a
-let fs_oprod_return x fsG = return (x fsG)
+let fs_oprod_return x fsG = io_return (x fsG)
 
 unfold
 val fs_oprod_bind : #g:typ_env ->
@@ -1149,7 +1150,7 @@ let fs_oprod_fmap p f =
   fs_oprod_bind' p (fun p' ->
     fs_oprod_return_val _ _ (f p'))
 
-
+unfold
 let q_io_args (o:io_ops) : qType =
   match o with
   | OOpen  -> qString
@@ -1157,6 +1158,7 @@ let q_io_args (o:io_ops) : qType =
   | OWrite -> qFileDescr ^* qString
   | OClose -> qFileDescr
 
+unfold
 let q_io_res (o:io_ops) : qType =
   match o with
   | OOpen  -> qResexn qFileDescr
@@ -1164,6 +1166,7 @@ let q_io_res (o:io_ops) : qType =
   | OWrite -> qResexn qUnit
   | OClose -> qResexn qUnit
 
+unfold
 val fs_oprod_call :
         #g:typ_env ->
         o:io_ops ->
