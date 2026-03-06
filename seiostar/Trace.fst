@@ -7,7 +7,9 @@ module Trace
   The file should be usable both to define the Dijkstra Monad
   and the semantics of the Syntactic Language. **)
 
-include BaseTypes
+(** Base types **)
+type resexn a = either a unit
+type file_descr = nat
 
 type io_ops = | ORead | OWrite | OOpen | OClose
 
@@ -58,7 +60,6 @@ let rec last_fd (h:history) : Tot file_descr
 
 let fresh_fd (h:history) : file_descr = (last_fd h) + 1
 
-(** TODO: get rid of pres **)
 unfold
 let io_pre (h:trace) (op:io_ops) (arg:io_args op) : Type0 =
   match op with
