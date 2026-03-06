@@ -21,8 +21,8 @@ let compile_call (o:io_ops) (e:exp) : exp =
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
   | Qtt -> EUnit
-  | QVar0 -> EVar 0
-  | QVarS #g qx -> subst sub_inc (compile qx)
+  | QAxiom -> EVar 0
+  | QWeaken #g qx -> subst sub_inc (compile qx)
   | QFd fd -> EFileDescr fd
   | QAppGhost -> EUnit
   | QApp qf qx -> EApp (compile qf) (compile qx)
@@ -52,10 +52,10 @@ let rec lem_compile_superset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures (s ⊐ (compile qs))) (decreases qs)
   = match qs with
   | Qtt -> C1.compat_oval_unit g
-  | QVar0 #g' #_ -> C1.compat_oval_var0 g' a
-  | QVarS #g' #_ #b #x qx ->
+  | QAxiom #g' #_ -> C1.compat_oval_axiom g' a
+  | QWeaken #g' #_ #b #x qx ->
     lem_compile_superset qx;
-    C1.compat_varS #g' #a #b x (compile qx)
+    C1.compat_weaken #g' #a #b x (compile qx)
   | QFd fd -> C1.compat_oval_file_descr g fd
   | QAppGhost -> C1.compat_oval_unit g
   | QApp #_ #qa #qb #f #x qf qx ->
@@ -144,10 +144,10 @@ let rec lem_compile_subset #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures (s ⊏ (compile qs))) (decreases qs)
   = match qs with
   | Qtt -> C2.compat_oval_unit g
-  | QVar0 #g' #_ -> C2.compat_oval_var0 g' a
-  | QVarS #g' #_ #b #x qx ->
+  | QAxiom #g' #_ -> C2.compat_oval_axiom g' a
+  | QWeaken #g' #_ #b #x qx ->
     lem_compile_subset qx;
-    C2.compat_varS #g' #a #b x (compile qx)
+    C2.compat_weaken #g' #a #b x (compile qx)
   | QFd fd -> C2.compat_oval_file_descr g fd
   | QAppGhost -> C2.compat_oval_unit g
   | QApp #_ #qa #qb #f #x qf qx ->
@@ -236,10 +236,10 @@ let rec lem_compile_fv_in_env #g (#a:qType) (#s:fs_oval g a) (qs:g ⊢ s)
   : Lemma (ensures fv_in_env g (compile qs)) (decreases qs)
   = match qs with
   | Qtt -> ()
-  | QVar0 -> ()
-  | QVarS #g' #_ #b #x qx ->
+  | QAxiom -> ()
+  | QWeaken #g' #_ #b #x qx ->
     lem_compile_fv_in_env qx;
-    lem_fv_in_env_varS g' b (compile qx)
+    lem_fv_in_env_weaken g' b (compile qx)
   | QFd _ -> ()
   | QAppGhost -> ()
   | QApp qf qx ->

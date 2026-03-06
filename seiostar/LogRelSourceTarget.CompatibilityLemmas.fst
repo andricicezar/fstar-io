@@ -115,7 +115,7 @@ let compat_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊏ EVar x) 
   end
 
 (** Used in compilation **)
-let compat_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ⊏ EVar 0) =
+let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊏ EVar 0) =
   introduce forall b (s:gsub (extend t g) b) fsG h. fsG `(≍) h` s ==>  t ⊆ (h, hd fsG, gsubst s (EVar 0)) with begin
     introduce _ ==> _ with _. begin
       lem_index_0_hd fsG;
@@ -126,12 +126,12 @@ let compat_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ⊏ EVar 0)
 
 #push-options "--split_queries always --z3rlimit 32"
  (** Used in compilation **)
-let compat_varS (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
+let compat_weaken (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
       (requires (s ⊏ e))
-      (ensures (fs_oval_varS t s ⊏ subst sub_inc e))
+      (ensures (fs_oval_weaken t s ⊏ subst sub_inc e))
   =
-  lem_fv_in_env_varS g t e;
+  lem_fv_in_env_weaken g t e;
   introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(≍) h` s' ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
     introduce fsG `(≍) h` s' ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
       lem_index_tail fsG;

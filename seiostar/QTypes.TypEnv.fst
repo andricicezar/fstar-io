@@ -128,7 +128,7 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 (n+1))
 #pop-options
 
-let lem_fv_in_env_varS (g:typ_env) (t:qType) (e:exp) :
+let lem_fv_in_env_weaken (g:typ_env) (t:qType) (e:exp) :
   Lemma (fv_in_env g e <==> fv_in_env (extend t g) (subst sub_inc e))
   = lem_free_vars_subst_inc sub_inc e 0
 

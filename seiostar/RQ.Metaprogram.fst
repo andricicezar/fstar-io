@@ -110,11 +110,11 @@ let mk_qinr (t:term) : term = mk_app (`QInr) [(t, Q_Explicit)]
 let mk_qcase (t:term) (x1:term) (x2:term) : term =
   mk_app (`QCase) [(t, Q_Explicit); (x1, Q_Explicit); (x2, Q_Explicit)]
 
-let mk_qvar0 : term = mk_app (`QVar0) []
-let mk_qvars (t:term) : term = mk_app (`QVarS) [(t, Q_Explicit)]
+let mk_qaxiom : term = mk_app (`QAxiom) []
+let mk_qweaken (t:term) : term = mk_app (`QWeaken) [(t, Q_Explicit)]
 let rec mk_qvarI (n:int) : term =
-  if n <= 0 then mk_qvar0
-  else mk_qvars (mk_qvarI (n-1))
+  if n <= 0 then mk_qaxiom
+  else mk_qweaken (mk_qvarI (n-1))
 let mk_qlambda (body:term) : term = mk_app (`QLambda) [(body, Q_Explicit)]
 let mk_qapp (f arg : term) : term = mk_app (`QApp) [(f, Q_Explicit); (arg, Q_Explicit)]
 
@@ -278,7 +278,7 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       mk_qeq_string (create_derivation g dbmap btmap prior_derivs fuel v1) (create_derivation g dbmap btmap prior_derivs fuel v2)
     | Some "ExamplesIO.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
-          Translates to: QBind m (QCaseIO QVar0 (k_body) (QReturn (QInr QVar0)))
+          Translates to: QBind m (QCaseIO QAxiom (k_body) (QReturn (QInr QAxiom)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
           So we shift existing mappings by 1 (for the synthetic bind binder) and then extend for the case binder. **)
       let qm = create_derivation g dbmap btmap prior_derivs fuel m in
@@ -286,8 +286,8 @@ let rec create_derivation g (dbmap:db_mapping) (btmap:bt_mapping) (prior_derivs:
       | Tv_Abs bin body ->
         let dbmap' = extend_dbmap_binder (fun x -> incr_option (dbmap x)) in
         let qk_body = create_derivation g dbmap' (extend_btmap btmap (binder_sort bin)) prior_derivs fuel body in
-        let qinr_branch = mk_qreturn (mk_qinr mk_qvar0) in
-        mk_qbind qm (mk_qcasecomp mk_qvar0 qk_body qinr_branch)
+        let qinr_branch = mk_qreturn (mk_qinr mk_qaxiom) in
+        mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | _ ->

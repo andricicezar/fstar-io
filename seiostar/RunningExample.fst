@@ -491,8 +491,8 @@ let main_derivation #g : typing g (fs_oval_return g main)
         (QAppIO
           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
                 (QStringLit "overwrite"))
-          QVar0)
-        (QCaseIO QVar0
+          QAxiom)
+        (QCaseIO QAxiom
           (QReturn QTrue)
           (QReturn QFalse)))
 

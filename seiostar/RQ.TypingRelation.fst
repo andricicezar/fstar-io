@@ -12,16 +12,16 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
 | Qtt         : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
 | QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g #qFileDescr fd)
 
-| QVar0       : #g : typ_env ->
+| QAxiom      : #g : typ_env ->
                 #a : qType ->
-                typing (extend a g) (fs_oval_var0 g a)
+                typing (extend a g) (fs_oval_axiom g a)
 
-| QVarS       : #g : typ_env ->
+| QWeaken      : #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
                 #x : fs_oval g a ->
                 typing g x ->
-                typing (extend b g) (fs_oval_varS b x)
+                typing (extend b g) (fs_oval_weaken b x)
 
 | QAppGhost   : #g : typ_env ->
                 #a : qType ->

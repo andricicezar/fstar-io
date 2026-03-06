@@ -92,11 +92,11 @@ val fs_oval_fmap : #g:typ_env ->
 let fs_oval_fmap p f fsG = f (p fsG)
 
 unfold
-let fs_oval_var0 (g:typ_env) (t:qType) : fs_oval (extend t g) t =
+let fs_oval_axiom (g:typ_env) (t:qType) : fs_oval (extend t g) t =
   fun fsG -> hd fsG
 
 unfold
-let fs_oval_varS (#g:typ_env) (#a:qType) (b:qType) (x:fs_oval g a) : fs_oval (extend b g) a =
+let fs_oval_weaken (#g:typ_env) (#a:qType) (b:qType) (x:fs_oval g a) : fs_oval (extend b g) a =
   fun fsG -> x (tail fsG)
 
 unfold

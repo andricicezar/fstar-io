@@ -32,13 +32,13 @@ let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
 
 let test_var0
   : (extend qBool empty) ⊢ var0
-  = QVar0
+  = QAxiom
 
 let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
-  QVarS QVar0
+  QWeaken QAxiom
 
 let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
-  QVarS qVar1
+  QWeaken qVar1
 
 let test_var1
   : (extend qBool (extend qBool empty)) ⊢ var1
@@ -54,15 +54,15 @@ let test_constant
 
 let test_constant'
   : ((qBool ^-> qBool) ⊩ constant)
-  = QLambda (QVarS QTrue)
+  = QLambda (QWeaken QTrue)
 
 let test_identity
   : (qBool ^-> qBool) ⊩ identity
-  = QLambda QVar0
+  = QLambda QAxiom
 
 let test_thunked_id
   : (qBool ^-> (qBool ^-> qBool)) ⊩ thunked_id
-  = QLambda (QLambda QVar0)
+  = QLambda (QLambda QAxiom)
 
 let test_proj1
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj1
@@ -74,48 +74,48 @@ let test_proj2
 
 let test_proj3
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj3
-  = QLambda (QLambda (QLambda QVar0))
+  = QLambda (QLambda (QLambda QAxiom))
 
 let test_apply_top_level_def
   : (qBool ^-> qBool) ⊩ apply_top_level_def
   = QLambda (QApp
               (QApp
-                (QLambda (QLambda QVar0))
-                QVar0)
+                (QLambda (QLambda QAxiom))
+                QAxiom)
               QTrue)
 
 let test_apply_top_level_def'
   : (qBool ^-> qBool ^-> qBool) ⊩ apply_top_level_def'
   = QLambda (QLambda (QApp
                        (QApp
-                          (QLambda (QLambda QVar0))
+                          (QLambda (QLambda QAxiom))
                           qVar1)
-                       QVar0))
+                       QAxiom))
 
 let test_papply__top_level_def
   : (qBool ^-> qBool ^-> qBool) ⊩ papply__top_level_def
   = QLambda (QApp
-              (QLambda (QLambda QVar0))
-              QVar0)
+              (QLambda (QLambda QAxiom))
+              QAxiom)
 
 let test_apply_arg
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ apply_arg
-  = QLambda (QApp QVar0 Qtt)
+  = QLambda (QApp QAxiom Qtt)
 
 let test_apply_arg2 ()
   : ((qBool ^-> qBool ^-> qBool) ^-> qBool) ⊩ apply_arg2
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QApp (QApp QVar0 QTrue) QFalse)
+  = QLambda (QApp (QApp QAxiom QTrue) QFalse)
 
 let test_papply_arg2 ()
   : ((qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ papply_arg2
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QApp QVar0 QTrue)
+  = QLambda (QApp QAxiom QTrue)
 
 [@expect_failure]
 let test_proj2'
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj2
-  = QLambda (QLambda (QLambda QVar0))
+  = QLambda (QLambda (QLambda QAxiom))
 
 let test_anif
   : qBool ⊩ anif
@@ -123,34 +123,34 @@ let test_anif
 
 let test_negb
   : (qBool ^-> qBool) ⊩ negb
-  = QLambda (QIf QVar0 QFalse QTrue)
+  = QLambda (QIf QAxiom QFalse QTrue)
 
 let test_negb_pred
   : ((qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ negb_pred
-  = QLambda (QLambda (QIf (QApp qVar1 QVar0) QFalse QTrue))
+  = QLambda (QLambda (QIf (QApp qVar1 QAxiom) QFalse QTrue))
 
 let test_if2 ()
   : (qBool ^-> qBool ^-> qBool) ⊩ if2
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QLambda (QIf qVar1 QFalse QVar0))
+  = QLambda (QLambda (QIf qVar1 QFalse QAxiom))
 
 let test_callback_return ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QIf QVar0
+  = QLambda (QIf QAxiom
                  (QLambda qVar1)
-                 (QLambda QVar0))
+                 (QLambda QAxiom))
 
 let test_callback_return' ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return'
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QIf QVar0
+  = QLambda (QIf QAxiom
                  (QLambda qVar1)
-                 (QLambda QVar0)) // TODO: why does it not work to unfold identity here?
+                 (QLambda QAxiom)) // TODO: why does it not work to unfold identity here?
 
 let test_make_pair
   : (qBool ^-> qBool ^-> (qBool ^* qBool)) ⊩ make_pair
-  = QLambda (QLambda (QMkpair qVar1 QVar0))
+  = QLambda (QLambda (QMkpair qVar1 QAxiom))
 
 [@@ (preprocess_with simplify_qType)]
 let test_pair_of_functions ()
@@ -159,9 +159,9 @@ let test_pair_of_functions ()
   by (simplify_stack_ops (); trefl ())
   =  QMkpair
       (QLambda (QApp
-                  (QLambda (QIf QVar0 QFalse QTrue))
-                  QVar0))
-      (QLambda (QLambda QVar0))
+                  (QLambda (QIf QAxiom QFalse QTrue))
+                  QAxiom))
+      (QLambda (QLambda QAxiom))
 
 [@@ (preprocess_with simplify_qType)]
 let test_pair_of_functions2 ()
@@ -169,8 +169,8 @@ let test_pair_of_functions2 ()
     ⊩ pair_of_functions2)
   by (simplify_stack_ops (); trefl ())
   = QMkpair
-      (QLambda (QIf QVar0 QFalse QTrue))
-      (QLambda (QLambda (QIf qVar1 QFalse QVar0)))
+      (QLambda (QIf QAxiom QFalse QTrue))
+      (QLambda (QLambda (QIf qVar1 QFalse QAxiom)))
 
 let test_fst_pair
   : (qBool) ⊩ fst_pair
@@ -178,11 +178,11 @@ let test_fst_pair
 
 let test_wrap_fst
   : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst
-  = QLambda (QFst QVar0)
+  = QLambda (QFst QAxiom)
 
 let test_wrap_fst_pa
   : ((qBool ^* qBool) ^-> qBool) ⊩ wrap_fst_pa
-  = QLambda (QFst QVar0)
+  = QLambda (QFst QAxiom)
 
 let test_snd_pair
   : (qUnit) ⊩ snd_pair
@@ -190,11 +190,11 @@ let test_snd_pair
 
 let test_wrap_snd
   : ((qBool ^* qUnit) ^-> qUnit) ⊩ wrap_snd
-  = QLambda (QSnd QVar0)
+  = QLambda (QSnd QAxiom)
 
 let test_wrap_snd_pa
   : ((qBool ^* qUnit) ^-> qUnit) ⊩ wrap_snd_pa
-  = QLambda (QSnd QVar0)
+  = QLambda (QSnd QAxiom)
 
 let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval (extend a g) b)
   (qx : typing g x) (qf : typing _ f) :
@@ -204,10 +204,10 @@ let qLet #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_oval (extend a g) b)
 let test_a_few_lets
   : (qBool ^-> qUnit) ⊩ a_few_lets
   = QLambda
-     (qLet (QMkpair QVar0 QVar0)
+     (qLet (QMkpair QAxiom QAxiom)
      (qLet qVar1
      (qLet (QFst qVar1)
-     (qLet (QMkpair qVar1 QVar0)
+     (qLet (QMkpair qVar1 QAxiom)
      Qtt))))
 
 let test_inl_true
@@ -221,18 +221,18 @@ let test_inr_unit
 let test_return_either ()
   : (qBool ^-> (qUnit ^+ qUnit)) ⊩ return_either
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QIf QVar0 (QInl Qtt) (QInr Qtt))
+  = QLambda (QIf QAxiom (QInl Qtt) (QInr Qtt))
 
 let test_match_either ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QCase QVar0 QVar0 QVar0)
+  = QLambda (QCase QAxiom QAxiom QAxiom)
 
 [@expect_failure]
 let test_match_either' ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
   by (simplify_stack_ops (); trefl ())
-  = QLambda (QCase QVar0 QVar0 QVar0)
+  = QLambda (QCase QAxiom QAxiom QAxiom)
 
 let test_match_either_arg ()
   : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
@@ -240,7 +240,7 @@ let test_match_either_arg ()
   = QLambda (QLambda (
        QCase
          qVar1
-         QVar0
+         QAxiom
          qVar1))
 
 open ExamplesIO
@@ -251,7 +251,7 @@ let test_u_return
 
 let test_apply_io_return
   : (qBool ^->!@ qBool) ⊩ apply_io_return
-  = QLambdaIO (QReturn QVar0)
+  = QLambdaIO (QReturn QAxiom)
 
 let test_apply_read
   : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
@@ -263,21 +263,21 @@ let test_apply_write_const
 
 let test_apply_write
   : _ ⊩  apply_write
-  = QLambdaIO (QCall OWrite (QMkpair (QFd 1) QVar0))
+  = QLambdaIO (QCall OWrite (QMkpair (QFd 1) QAxiom))
 
 let test_apply_io_bind_const
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
   = QLambdaIO (
       QBind
         (QReturn QTrue)
-        (QReturn QVar0))
+        (QReturn QAxiom))
 
 let test_apply_io_bind_identity
   : (qBool ^->!@ qBool) ⊩ apply_io_bind_identity
   = QLambdaIO
       (QBind
-        (QReturn QVar0)
-        (QReturn QVar0))
+        (QReturn QAxiom)
+        (QReturn QAxiom))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_pure_if ()
@@ -285,8 +285,8 @@ let test_apply_io_bind_pure_if ()
   by (simplify_stack_ops (); trefl ())
   = QLambdaIO
       (QBind
-        (QReturn QVar0)
-        (QIfIO QVar0
+        (QReturn QAxiom)
+        (QIfIO QAxiom
            (QReturn QFalse)
            (QReturn QTrue)))
 
@@ -294,24 +294,24 @@ let test_apply_io_bind_write
   : _ ⊩ apply_io_bind_write
   = QLambdaIO (
       QBind
-         (QReturn QVar0)
-         (QCall OWrite (QMkpair (QFd 2) QVar0)))
+         (QReturn QAxiom)
+         (QCall OWrite (QMkpair (QFd 2) QAxiom)))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (simplify_stack_ops (); trefl ())
   = QLambdaIO (QBind (QCall ORead (QFd 4))
-    (QCaseIO #_ #qString #qUnit QVar0
+    (QCaseIO #_ #qString #qUnit QAxiom
      (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
-     (QReturn (QInr QVar0))))
+     (QReturn (QInr QAxiom))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
   by (simplify_stack_ops (); trefl ())
   = QLambdaIO (QBind (QCall ORead (QFd 9)) (
-      QCaseIO #_ #qString #qUnit QVar0 (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QVar0))))
+      QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
@@ -320,9 +320,9 @@ let test_apply_io_bind_read_if_write ()
   = QLambdaIO
       (QBind
         (QCall ORead (QFd 0))
-        (QCaseIO #_ #qString #qUnit QVar0
+        (QCaseIO #_ #qString #qUnit QAxiom
           (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
-          (QReturn (QInr QVar0))))
+          (QReturn (QInr QAxiom))))
 
 let qLetIO #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_ocomp (extend a g) b)
   (qx : typing g x) (qf : typing_io _ f) :
@@ -342,6 +342,6 @@ let test_const_str
 
 let test_greeting
   : (qBool ^-> qString) ⊩ greeting
-  = QLambda (QIf QVar0 (QStringLit "hello") (QStringLit "goodbye"))
+  = QLambda (QIf QAxiom (QStringLit "hello") (QStringLit "goodbye"))
 
 #pop-options
