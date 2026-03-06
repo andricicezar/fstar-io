@@ -33,8 +33,8 @@ let rec typ_translation (qt:term) : Tac term =
     match fv_to_string fv with
     | "Prims.unit" -> mk_qunit
     | "Prims.bool" -> mk_qbool
-    | "BaseTypes.file_descr" -> mk_qfiledescr
     | "Prims.string" -> mk_qstring
+    | "Trace.file_descr" -> mk_qfiledescr
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
 
@@ -47,7 +47,7 @@ let rec typ_translation (qt:term) : Tac term =
           mk_qpair (typ_translation v1) (typ_translation v2)
         | "FStar.Pervasives.either", [(v1, _); (v2, _)] ->
            mk_qsum (typ_translation v1) (typ_translation v2)
-        | "BaseTypes.resexn", [(v, _)] ->
+        | "Trace.resexn", [(v, _)] ->
            mk_qresexn (typ_translation v)
         | fnm, _ -> fail ("Type application not supported: "^ fnm ^ " - " ^ term_to_string qt)
     end

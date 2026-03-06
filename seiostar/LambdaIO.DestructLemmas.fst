@@ -1,8 +1,6 @@
 module LambdaIO.DestructLemmas
 
 open FStar.Squash
-
-open Trace
 open LambdaIO
 
 // DESTRUCT LEMMAS

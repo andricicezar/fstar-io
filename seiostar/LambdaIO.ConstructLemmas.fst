@@ -1,6 +1,5 @@
 module LambdaIO.ConstructLemmas
 
-open Trace
 open LambdaIO
 
 // CONSTRUCT LEMMAS

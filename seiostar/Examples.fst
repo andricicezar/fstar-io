@@ -1,7 +1,5 @@
 module Examples
 
-open QTyp
-
 let ut_unit = ()
 let ut_true = true
 let ut_false = false
