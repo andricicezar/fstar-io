@@ -6,7 +6,7 @@ open FStar.List.Tot
 open LambdaIO
 open IOStar
 open QTypes.Subst
-open QTypes.Sem
+open QTypes.OpenValComp
 include LogRel.Semantics
 
 (** Cross Language Binary Logical Relation between F* and LambdaIO expressions

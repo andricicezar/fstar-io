@@ -4,7 +4,7 @@ open LambdaIO
 open LambdaIO.DestructLemmas
 open IOStar
 open QTypes.Subst
-open QTypes.Sem
+open QTypes.OpenValComp
 open QTypes.HelperTactics
 open LogRelTargetSource
 

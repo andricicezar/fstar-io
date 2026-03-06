@@ -9,7 +9,7 @@ open LambdaIO.ConstructLemmas
 open IOStar
 open IOStar.DestructLemmas
 open QTypes.Subst
-open QTypes.Sem
+open QTypes.OpenValComp
 open QTypes.HelperTactics
 open LogRelSourceTarget
 

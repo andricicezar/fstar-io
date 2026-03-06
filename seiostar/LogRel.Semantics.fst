@@ -2,7 +2,7 @@ module LogRel.Semantics
 
 open LambdaIO
 open IOStar
-open QTypes.Sem
+open QTypes.OpenValComp
 
 unfold val fs_beh : #t:qType -> fs_comp t -> h:history -> hist_post h (fs_val t)
 let fs_beh m = thetaP m

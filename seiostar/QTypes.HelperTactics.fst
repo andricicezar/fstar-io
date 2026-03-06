@@ -1,7 +1,7 @@
 module QTypes.HelperTactics
 
 open FStar.Tactics.V1
-open QTypes.Sem
+open QTypes.OpenValComp
 
 (** Tactics to simplify qTypes **)
 

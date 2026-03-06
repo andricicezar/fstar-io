@@ -3,7 +3,7 @@ module RQ.TypingRelation
 open FStar.Tactics
 
 open IOStar
-include QTypes.Sem
+include QTypes.OpenValComp
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986

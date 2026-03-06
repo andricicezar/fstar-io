@@ -1,4 +1,4 @@
-module QTypes.Sem
+module QTypes.OpenValComp
 
 open LambdaIO
 open IOStar

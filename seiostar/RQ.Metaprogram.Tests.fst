@@ -1,10 +1,10 @@
 module RQ.Metaprogram.Tests
 
 open FStar.Tactics
-open RQ.Metaprogram
 open IOStar
 open RQ.TypingRelation
 open RQ.TypingRelation.Tests
+open RQ.Metaprogram
 open QTypes.HelperTactics
 
 let hocf (agent:bool -> bool -> bool -> bool -> bool -> io bool) : io bool =
