@@ -4,10 +4,8 @@ open FStar.Tactics
 open FStar.Tactics.Typeclasses
 
 open LambdaIO
-open QTypes.Sem
-open RQ.TypingRelation
-open Trace
 open IOStar
+open RQ.TypingRelation
 open Compilation
 open Backtranslation
 open LogRelSourceTarget

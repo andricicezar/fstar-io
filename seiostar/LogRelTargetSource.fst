@@ -5,9 +5,9 @@ open FStar.List.Tot
 
 open LambdaIO
 open IOStar
-open QTypes.EvalEnv
 open QTypes.Subst
 open QTypes.Sem
+include LogRel.Semantics
 
 (** Section 8.1: https://www.cs.uoregon.edu/research/summerschool/summer24/lectures/Ahmed.pdf **)
 

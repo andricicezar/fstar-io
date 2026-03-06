@@ -5,9 +5,9 @@ open FStar.List.Tot
 
 open LambdaIO
 open IOStar
-open QTypes.EvalEnv
 open QTypes.Subst
 open QTypes.Sem
+include LogRel.Semantics
 
 (** Cross Language Binary Logical Relation between F* and LambdaIO expressions
      for __closed terms__. **)

@@ -2,10 +2,8 @@ module RQ.TypingRelation
 
 open FStar.Tactics
 
-open QTypes.TypEnv
-open QTypes.Sem
-
 open IOStar
+include QTypes.Sem
 
 (** Fine-grained call by value **)
 [@@no_auto_projectors] // FStarLang/FStar#3986
