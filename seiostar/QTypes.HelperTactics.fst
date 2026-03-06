@@ -5,8 +5,8 @@ open QTypes.Sem
 
 (** Tactics to simplify qTypes **)
 
-let l_to_r_fsG () : Tac unit =
-   l_to_r [`lem_hd_stack; `tail_stack_inverse]
+let simplify_stack_ops () : Tac unit =
+   l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
 let simplify_qType_g g (x:term) : Tac term =
   norm_term_env g [

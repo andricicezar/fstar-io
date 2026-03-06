@@ -366,7 +366,7 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   let u = must <| universe_of g goal_ty in
   print_debug ("DEBUG: successfully got universe");
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
- //   l_to_r_fsG ();
+ //   simplify_stack_ops ();
     trefl ()) u goal_ty in
   print_debug ("DEBUG: proved equality!");
 

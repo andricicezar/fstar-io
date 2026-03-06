@@ -3,9 +3,9 @@ module LogRelTargetSource.CompatibilityLemmas
 open LambdaIO
 open LambdaIO.DestructLemmas
 open IOStar
-open QTypes.EvalEnv
 open QTypes.Subst
 open QTypes.Sem
+open QTypes.HelperTactics
 open LogRelTargetSource
 
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =
@@ -136,7 +136,7 @@ let compat_oval_var g (x:var{Some? (g x)}) : Lemma (fs_oval_var g x ⊐ EVar x) 
 let compat_oval_var0 (g:typ_env) (t:qType) : Lemma (fs_oval_var0 g t ⊐ EVar 0) =
   introduce forall b (s:gsub (extend t g) b) fsG h. fsG `(∽) h` s ==>  t ⊇ (h, hd fsG, gsubst s (EVar 0)) with begin
     introduce _ ==> _ with _. begin
-      index_0_hd fsG;
+      lem_index_0_hd fsG;
       assert (t ∋ (h, hd fsG, s 0));
       lem_values_are_expressions t h (hd fsG) (s 0)
     end
@@ -1117,7 +1117,7 @@ let compat_oprod_if #g
       let fs_e = fs_prod_bind fs_e1' (fun x -> fs_prod_if_val x fs_e2' fs_e3') in
       assert (fs_e == fs_oprod_if fs_e1 fs_e2 fs_e3 fsG) by (
         norm [delta_only [`%fs_oprod_if;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_if_val]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
       assert (gsubst s (EIf e1 e2 e3) == e) by (trefl ());
@@ -1165,7 +1165,7 @@ let compat_oprod_app #g (#a #b:qType) (fs_f:fs_oprod g (a ^->!@ b)) (fs_x:fs_opr
     let fs_e = fs_prod_bind fs_f' (fun f' -> fs_prod_bind fs_x' (fun x' -> f' x')) in
     assert (fs_e == fs_oprod_app fs_f fs_x fsG) by (
       norm [delta_only [`%fs_oprod_app;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_app_oval_oval]];
-      l_to_r [`lem_hd_stack;`tail_stack_inverse];
+      simplify_stack_ops ();
       trefl ());
     let e = EApp (gsubst s f) (gsubst s x) in
     assert (gsubst s (EApp f x) == e) by (trefl ());
@@ -1221,7 +1221,7 @@ let compat_oprod_inl #g (t1 t2:qType) (fs_e:fs_oprod g t1) (e:exp)
       let fs_ex = fs_prod_bind #t1 #(t1 ^+ t2) fs_e' (fun e' -> return (Inl #(fs_val t1) #(fs_val t2) e')) in
       assert (fs_ex == (fs_oprod_fmap #g #t1 #(t1 ^+ t2) fs_e Inl) fsG) by (
         norm [delta_only [`%fs_oprod_fmap;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let ex = EInl (gsubst s e) in
       assert (gsubst s (EInl e) == ex) by (trefl ());
@@ -1311,7 +1311,7 @@ let compat_oprod_pair #g
     let fs_e = fs_prod_bind fs_e1' (fun e1' -> fs_prod_bind #t2 #(t1 ^* t2) fs_e2' (fun e2' -> return (e1', e2'))) in
     assert (fs_e == fs_oprod_pair fs_e1 fs_e2 fsG) by (
       norm [delta_only [`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val;`%fs_val_pair]];
-      l_to_r [`lem_hd_stack;`tail_stack_inverse];
+      simplify_stack_ops ();
       trefl ());
     let e = EPair (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EPair e1 e2) == e) by (trefl ());
@@ -1374,7 +1374,7 @@ let compat_oprod_string_eq #g
     let fs_e = fs_prod_bind fs_e1' (fun x' -> fs_prod_bind #qString #qBool fs_e2' (fun y' -> return (x' = y'))) in
     assert (fs_e == fs_oprod_string_eq fs_e1 fs_e2 fsG) by (
       norm [delta_only [`%fs_oprod_string_eq;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
-      l_to_r [`lem_hd_stack;`tail_stack_inverse];
+      simplify_stack_ops ();
       trefl ());
     let e = EStringEq (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EStringEq e1 e2) == e) by (trefl ());
@@ -1454,7 +1454,7 @@ let compat_oprod_fst #g
       let fs_e = fs_prod_bind #(t1 ^* t2) #t1 fs_e12' (fun e12' -> return (fst #(fs_val t1) #(fs_val t2) e12')) in
       assert (fs_e == (fs_oprod_fmap #g #(t1 ^* t2) #t1 fs_e12 fst) fsG) by (
         norm [delta_only [`%fs_oprod_fmap;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let e = EFst (gsubst s e12) in
       assert (gsubst s (EFst e12) == e) by (trefl ());
@@ -1503,7 +1503,7 @@ let compat_oprod_snd #g (#t1 #t2:qType) (fs_e12:fs_oprod g (t1 ^* t2)) (e12:exp)
       let fs_e = fs_prod_bind #(t1 ^* t2) #t2 fs_e12' (fun e12' -> return (snd #(fs_val t1) #(fs_val t2) e12')) in
       assert (fs_e == (fs_oprod_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG) by (
         norm [delta_only [`%fs_oprod_fmap;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_val]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let e = ESnd (gsubst s e12) in
       assert (gsubst s (ESnd e12) == e);
@@ -1576,7 +1576,7 @@ let compat_oprod_case #g (#a #b #c:qType)
       let fs_e = fs_prod_bind fs_sc (fun fs_sc' -> fs_prod_case_val fs_sc' fs_il fs_ir) in
       assert (fs_e == fs_oprod_case fs_cond fs_inlc fs_inrc fsG) by (
         norm [delta_only [`%fs_oprod_case;`%fs_prod_case_val;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_case_val]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let e = ECase (gsubst s cond) (LambdaIO.subst (LambdaIO.sub_elam s) inlc) (LambdaIO.subst (LambdaIO.sub_elam s) inrc) in
       assert (gsubst s (ECase cond inlc inrc) == e) by (trefl ());
@@ -1716,7 +1716,7 @@ let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStri
       let fs_e = fs_prod_bind fs_pair' (fun args' -> io_call OWrite args') in
       assert (fs_e == (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG) by (
         norm [delta_only [`%fs_oprod_call;`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return;`%fs_oprod_return_val;`%fs_val_pair;`%fs_prod_bind]];
-        l_to_r [`lem_hd_stack;`tail_stack_inverse];
+        simplify_stack_ops ();
         trefl ());
       let e = EWrite (gsubst s fd) (gsubst s msg) in
       assert (gsubst s (EWrite fd msg) == e);

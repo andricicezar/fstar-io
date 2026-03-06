@@ -104,12 +104,12 @@ let test_apply_arg
 
 let test_apply_arg2 ()
   : ((qBool ^-> qBool ^-> qBool) ^-> qBool) ⊩ apply_arg2
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QApp (QApp QVar0 QTrue) QFalse)
 
 let test_papply_arg2 ()
   : ((qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ papply_arg2
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QApp QVar0 QTrue)
 
 [@expect_failure]
@@ -131,19 +131,19 @@ let test_negb_pred
 
 let test_if2 ()
   : (qBool ^-> qBool ^-> qBool) ⊩ if2
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QLambda (QIf qVar1 QFalse QVar0))
 
 let test_callback_return ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QIf QVar0
                  (QLambda qVar1)
                  (QLambda QVar0))
 
 let test_callback_return' ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return'
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QIf QVar0
                  (QLambda qVar1)
                  (QLambda QVar0)) // TODO: why does it not work to unfold identity here?
@@ -156,7 +156,7 @@ let test_make_pair
 let test_pair_of_functions ()
   : Tot (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                             ⊩ pair_of_functions)
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   =  QMkpair
       (QLambda (QApp
                   (QLambda (QIf QVar0 QFalse QTrue))
@@ -167,7 +167,7 @@ let test_pair_of_functions ()
 let test_pair_of_functions2 ()
   : (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
     ⊩ pair_of_functions2)
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QMkpair
       (QLambda (QIf QVar0 QFalse QTrue))
       (QLambda (QLambda (QIf qVar1 QFalse QVar0)))
@@ -220,23 +220,23 @@ let test_inr_unit
 
 let test_return_either ()
   : (qBool ^-> (qUnit ^+ qUnit)) ⊩ return_either
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QIf QVar0 (QInl Qtt) (QInr Qtt))
 
 let test_match_either ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QCase QVar0 QVar0 QVar0)
 
 [@expect_failure]
 let test_match_either' ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QCase QVar0 QVar0 QVar0)
 
 let test_match_either_arg ()
   : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambda (QLambda (
        QCase
          qVar1
@@ -282,7 +282,7 @@ let test_apply_io_bind_identity
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_pure_if ()
   : Tot ((qBool ^->!@ qBool) ⊩ apply_io_bind_pure_if)
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambdaProd
       (QBindProd
         (QReturn QVar0)
@@ -300,7 +300,7 @@ let test_apply_io_bind_write
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambdaProd (QBindProd (QCall ORead (QFd 4))
     (QCaseProd #_ #qString #qUnit QVar0
      (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
@@ -309,14 +309,14 @@ let test_apply_io_bind_read_write ()
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambdaProd (QBindProd (QCall ORead (QFd 9)) (
       QCaseProd #_ #qString #qUnit QVar0 (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QVar0))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
-  by (l_to_r_fsG (); trefl ())
+  by (simplify_stack_ops (); trefl ())
   = QLambdaProd
       (QBindProd
         (QCall ORead (QFd 0))

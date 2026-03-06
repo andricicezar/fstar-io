@@ -51,16 +51,16 @@ val lem_index_tail #g #t (fsG:eval_env (extend t g)) : Lemma (
   [SMTPat (tail fsG)]
 let lem_index_tail fsG = ()
 
-val tail_stack_inverse #g (fsG:eval_env g) #t (x:get_Type t)
+val lem_tail_stack_inverse #g (fsG:eval_env g) #t (x:get_Type t)
   : Lemma (tail (stack fsG x) == fsG)
   [SMTPat (tail (stack fsG x))]
-let tail_stack_inverse #g fsG #t v =
+let lem_tail_stack_inverse #g fsG #t v =
   let fsG' : eval_env g = tail (stack fsG v) in
   assert (forall x. fsG' x == fsG x);
   assert (FE.feq fsG' fsG);
   FE.extensionality (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x))) fsG' fsG;
   assert (fsG' == fsG)
 
-val index_0_hd #g #t (fsG:eval_env (extend t g))
+val lem_index_0_hd #g #t (fsG:eval_env (extend t g))
   : Lemma (index fsG 0 == hd fsG)
-let index_0_hd fsG = ()
+let lem_index_0_hd fsG = ()
