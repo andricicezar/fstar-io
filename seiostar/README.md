@@ -48,7 +48,7 @@ We list where the definitions and theorems of the paper are.
 | From the paper | In the artifact |
 | -------------- | --------------- |
 | **Section 2/3** - Relational quotation | |
-| Typing relations for values and computations | `QExp.fst` as the type constructors `oval_quotation` and `oprod_quotation` |
+| Typing relations for values and computations | `RQ.TypingRelation.fst` as the type constructors `oval_quotation` and `oprod_quotation` |
 | Events | `IO.fst` as the type constructor `event` |
 | Local traces | `IO.fst` |
 | Metaprogram | `Metaprogram.fst` as function `generate_derivation` |

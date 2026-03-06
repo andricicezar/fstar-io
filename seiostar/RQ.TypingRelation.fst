@@ -1,4 +1,4 @@
-module QExp
+module RQ.TypingRelation
 
 open FStar.Tactics
 open QTyp

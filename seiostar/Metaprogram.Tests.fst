@@ -3,7 +3,7 @@ module Metaprogram.Tests
 open FStar.Tactics
 open Metaprogram
 open IOStar
-open QExp
+open RQ.TypingRelation
 open QTyp
 
 let hocf (agent:bool -> bool -> bool -> bool -> bool -> io bool) : io bool =

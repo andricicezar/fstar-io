@@ -4,7 +4,7 @@ open FStar.Tactics
 
 open LambdaIO
 open QTyp
-open QExp
+open RQ.TypingRelation
 open LogRelSourceTarget
 open LogRelTargetSource
 

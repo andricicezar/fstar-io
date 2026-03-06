@@ -8,7 +8,7 @@ open FStar.Reflection.Typing
 open FStar.Stubs.Reflection.V2.Builtins
 open FStar.Stubs.Reflection.V2.Data
 
-open QExp
+open RQ.TypingRelation
 
 let print_debug (s:string) : Tac unit =
   ()
@@ -190,9 +190,9 @@ let is_oprod (t:term) : Tac bool =
   match inspect_ln h with
   | Tv_FVar fv ->
      let s = fv_to_string fv in
-     s = "QExp.QReturn" || s = "QExp.QBindProd" || s = "QExp.QAppProd" ||
-     s = "QExp.QCall" ||
-     s = "QExp.QCaseProd" || s = "QExp.QIfProd"
+     s = "RQ.TypingRelation.QReturn" || s = "RQ.TypingRelation.QBindProd" || s = "RQ.TypingRelation.QAppProd" ||
+     s = "RQ.TypingRelation.QCall" ||
+     s = "RQ.TypingRelation.QCaseProd" || s = "RQ.TypingRelation.QIfProd"
   | _ -> false
 
 let is_lambdaprod (t:term) : Tac bool =
@@ -200,7 +200,7 @@ let is_lambdaprod (t:term) : Tac bool =
   match inspect_ln h with
   | Tv_FVar fv ->
      let s = fv_to_string fv in
-     s = "QExp.QLambdaProd"
+     s = "RQ.TypingRelation.QLambdaProd"
   | _ -> false
 
 (** Cache of already-generated derivations: maps source fvar name to term to emit at cache hit.

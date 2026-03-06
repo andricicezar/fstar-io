@@ -5,7 +5,7 @@ open FStar.Tactics.Typeclasses
 
 open LambdaIO
 open QTyp
-open QExp
+open RQ.TypingRelation
 open Trace
 open IOStar
 open Compilation
