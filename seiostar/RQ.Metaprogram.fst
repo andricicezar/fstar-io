@@ -87,7 +87,7 @@ let rec typ_translation (qt:term) : Tac term =
 (** Quotation of expressions **)
 
 let mk_tyj (ty t g_env : term) : Tot term =
-  let t = mk_app (`helper_oval_g) [(ty, Q_Implicit); (g_env, Q_Implicit); (t, Q_Explicit)] in
+  let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
   mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]

@@ -49,7 +49,7 @@ type fs_oval (g:typ_env) (t:qType) =
  **)
 
 unfold
-let fs_oval_return (g:typ_env) (t:qType) (x:fs_val t) : fs_oval g t =
+let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
   fun _ -> x
 
 unfold
@@ -173,11 +173,27 @@ type fs_oprod (g:typ_env) (t:qType) =
 
 unfold
 val fs_oprod_return :
+        g:typ_env ->
+        #a:qType ->
+        x:fs_prod a ->
+        fs_oprod g a
+let fs_oprod_return _ x _ = x
+
+unfold
+val fs_oprod_return_oval :
         #g:typ_env ->
         #a:qType ->
         x:fs_oval g a ->
         fs_oprod g a
-let fs_oprod_return x fsG = io_return (x fsG)
+let fs_oprod_return_oval x fsG = io_return (x fsG)
+
+val fs_oprod_return_val :
+        g:typ_env ->
+        a:qType ->
+        x:fs_val a ->
+        fs_oprod g a
+let fs_oprod_return_val g a x =
+  fs_oprod_return_oval (fs_oval_return g x)
 
 unfold
 val fs_oprod_bind : #g:typ_env ->
@@ -287,24 +303,8 @@ let fs_oprod_case cond inlc inrc =
     fs_oprod_case_val cond' inlc inrc)
 
 (** Necessary for the backtranslation **)
-val fs_oprod_return_prod :
-        g:typ_env ->
-        a:qType ->
-        x:fs_prod a ->
-        fs_oprod g a
-let fs_oprod_return_prod g a x =
-  (fun _ -> x)
-
-val fs_oprod_return_val :
-        g:typ_env ->
-        a:qType ->
-        x:fs_val a ->
-        fs_oprod g a
-let fs_oprod_return_val g a x =
-  fs_oprod_return (fs_oval_return g a x)
-
 let fs_oprod_var (g:typ_env) (x:var{Some? (g x)}) : fs_oprod g (Some?.v (g x)) =
-  fs_oprod_return (fs_oval_var g x)
+  fs_oprod_return_oval (fs_oval_var g x)
 
 val fs_oprod_lambda : #g :typ_env ->
                 #a :qType ->
@@ -312,7 +312,7 @@ val fs_oprod_lambda : #g :typ_env ->
                 body :fs_oprod (extend a g) b ->
                 fs_oprod g (a ^->!@ b)
 let fs_oprod_lambda body =
-  fs_oprod_return (fs_oval_lambda_oprod body)
+  fs_oprod_return_oval (fs_oval_lambda_oprod body)
 
 val fs_oprod_app : #g:typ_env ->
                     #a:qType ->
@@ -323,7 +323,7 @@ val fs_oprod_app : #g:typ_env ->
 let fs_oprod_app f x =
   fs_oprod_bind' f (fun f' ->
     fs_oprod_bind' x (fun x' ->
-      fs_oprod_return_prod _ _ (f' x')))
+      fs_oprod_return _ (f' x')))
 
 val fs_oprod_pair : #g : typ_env ->
                    #a : qType ->
@@ -356,22 +356,6 @@ let fs_oprod_fmap p f =
     fs_oprod_return_val _ _ (f p'))
 
 unfold
-let q_io_args (o:io_ops) : qType =
-  match o with
-  | OOpen  -> qString
-  | ORead  -> qFileDescr
-  | OWrite -> qFileDescr ^* qString
-  | OClose -> qFileDescr
-
-unfold
-let q_io_res (o:io_ops) : qType =
-  match o with
-  | OOpen  -> qResexn qFileDescr
-  | ORead  -> qResexn qString
-  | OWrite -> qResexn qUnit
-  | OClose -> qResexn qUnit
-
-unfold
 val fs_oprod_call :
         #g:typ_env ->
         o:io_ops ->
@@ -379,7 +363,7 @@ val fs_oprod_call :
         fs_oprod g (q_io_res o)
 let fs_oprod_call o args =
   fs_oprod_bind' args (fun args' ->
-    fs_oprod_return_prod _ _ (io_call o args'))
+    fs_oprod_return _ (io_call o args'))
 
 unfold
 val fs_oprod_call_oval :

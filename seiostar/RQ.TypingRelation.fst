@@ -9,8 +9,8 @@ include QTypes.Sem
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
-| Qtt         : #g : typ_env -> typing g (fs_oval_return g qUnit ())
-| QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g qFileDescr fd)
+| Qtt         : #g : typ_env -> typing g (fs_oval_return g #qUnit ())
+| QFd         : #g : typ_env -> fd:file_descr -> typing g (fs_oval_return g #qFileDescr fd)
 
 | QVar0       : #g : typ_env ->
                 #a : qType ->
@@ -45,9 +45,9 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 typing (extend a g) body ->
                 typing #(a ^-> b) g (fs_oval_lambda body)
 
-| QTrue       : #g : typ_env -> typing g (fs_oval_return g qBool true)
-| QFalse      : #g : typ_env -> typing g (fs_oval_return g qBool false)
-| QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g qString s)
+| QTrue       : #g : typ_env -> typing g (fs_oval_return g #qBool true)
+| QFalse      : #g : typ_env -> typing g (fs_oval_return g #qBool false)
+| QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g #qString s)
 | QStringEq   : #g : typ_env ->
                 #s1 : fs_oval g qString ->
                 typing g s1 ->
@@ -126,7 +126,7 @@ and typing_io : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
         #a:qType ->
         #x:fs_oval g a ->
         typing g x ->
-        typing_io #a g (fs_oprod_return x)
+        typing_io #a g (fs_oprod_return_oval x)
 
 | QBindProd :
         #g:typ_env ->
@@ -170,17 +170,8 @@ and typing_io : #a:qType -> g:typ_env -> fs_oprod g a -> Type =
 let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
   typing g x
 
-unfold
-let helper_oval (#a:qType) (x:fs_val a) : fs_oval empty a = fun _ -> x
-
-unfold
-let helper_oval_g (#a:qType) (#g:typ_env) (x:fs_val a) : fs_oval g a = fun _ -> x
-
-unfold
-let helper_oprod (#a:qType) (x:fs_prod a) : fs_oprod empty a = fun _ -> x
-
 let (⊩) (a:qType) (x:fs_val a) =
-  typing #a empty (helper_oval x)
+  typing #a empty (fs_oval_return empty x)
 
 type prod_quotation (a:qType) (x:fs_prod a) =
-  typing_io #a empty (helper_oprod x)
+  typing_io #a empty (fs_oprod_return empty x)

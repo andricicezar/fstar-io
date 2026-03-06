@@ -16,7 +16,7 @@ open LogRelSourceTarget
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) = 
   FStar.Squash.bind_squash #a () f
 
-let compat_oval_unit g : Lemma (fs_oval_return g qUnit () ⊏ EUnit) =
+let compat_oval_unit g : Lemma (fs_oval_return g #qUnit () ⊏ EUnit) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qUnit ⊆ (h, (), gsubst s EUnit) with begin
     introduce _ ==> _ with _. begin
       assert (qUnit ∈ (h, (), EUnit));
@@ -24,7 +24,7 @@ let compat_oval_unit g : Lemma (fs_oval_return g qUnit () ⊏ EUnit) =
     end
   end
 
-let compat_oval_true g : Lemma (fs_oval_return g qBool true ⊏ ETrue) =
+let compat_oval_true g : Lemma (fs_oval_return g #qBool true ⊏ ETrue) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qBool ⊆ (h, true, gsubst s ETrue) with begin
     introduce _ ==> _ with _. begin
       assert (qBool ∈ (h, true, ETrue));
@@ -32,7 +32,7 @@ let compat_oval_true g : Lemma (fs_oval_return g qBool true ⊏ ETrue) =
     end
   end
 
-let compat_oval_false g : Lemma (fs_oval_return g qBool false ⊏ EFalse) =
+let compat_oval_false g : Lemma (fs_oval_return g #qBool false ⊏ EFalse) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qBool ⊆ (h, false, gsubst s EFalse) with begin
     introduce _ ==> _ with _. begin
       assert (qBool ∈ (h, false, EFalse));
@@ -40,7 +40,7 @@ let compat_oval_false g : Lemma (fs_oval_return g qBool false ⊏ EFalse) =
     end
   end
 
-let compat_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ⊏ EFileDescr fd) =
+let compat_oval_file_descr g fd : Lemma (fs_oval_return g #qFileDescr fd ⊏ EFileDescr fd) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qFileDescr ⊆ (h, fd, gsubst s (EFileDescr fd)) with begin
     introduce _ ==> _ with _. begin
       assert (qFileDescr ∈ (h, fd, (EFileDescr fd)));
@@ -48,7 +48,7 @@ let compat_oval_file_descr g fd : Lemma (fs_oval_return g qFileDescr fd ⊏ EFil
     end
   end
 
-let compat_oval_string g (str:string) : Lemma (fs_oval_return g qString str ⊏ EString str) =
+let compat_oval_string g (str:string) : Lemma (fs_oval_return g #qString str ⊏ EString str) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qString ⊆ (h, str, gsubst s (EString str)) with begin
     introduce _ ==> _ with _. begin
       assert (qString ∈ (h, str, EString str));
@@ -583,7 +583,7 @@ let compat_oval_lambda_oprod #g (#t1:qType) (#t2:qType) (fs_body:fs_oprod (exten
 let compat_oprod_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
   : Lemma
     (requires fs_x ⊏ x)
-    (ensures fs_oprod_return fs_x ⊑ x) =
+    (ensures fs_oprod_return_oval fs_x ⊑ x) =
   introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t ⫃ (h, return (fs_x fsG), gsubst s x) with begin
     introduce _ ==> _ with _. begin
       let fs_x = fs_x fsG in
@@ -1061,19 +1061,19 @@ let compat_oprod_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
 
 let compat_oprod_unit g : Lemma (fs_oprod_return_val g qUnit () ⊑ EUnit) =
   compat_oval_unit g;
-  compat_oprod_return (fs_oval_return g qUnit ()) EUnit
+  compat_oprod_return (fs_oval_return g #qUnit ()) EUnit
 
 let compat_oprod_true g : Lemma (fs_oprod_return_val g qBool true ⊑ ETrue) =
   compat_oval_true g;
-  compat_oprod_return (fs_oval_return g qBool true) ETrue
+  compat_oprod_return (fs_oval_return g #qBool true) ETrue
 
 let compat_oprod_false g : Lemma (fs_oprod_return_val g qBool false ⊑ EFalse) =
   compat_oval_false g;
-  compat_oprod_return (fs_oval_return g qBool false) EFalse
+  compat_oprod_return (fs_oval_return g #qBool false) EFalse
 
 let compat_oprod_string g s : Lemma (fs_oprod_return_val g qString s ⊑ EString s) =
   compat_oval_string g s;
-  compat_oprod_return (fs_oval_return g qString s) (EString s)
+  compat_oprod_return (fs_oval_return g #qString s) (EString s)
 
 let helper_compat_oprod_if_steps_pre (g:typ_env) (e:closed_exp) (h:history) (lt:local_trace h) (t:qType) (fs_e1:fs_prod qBool) (fs_e2 fs_e3:fs_oprod g t) (fs_e:fs_prod t) (fs_r:fs_val t) (e1 e2 e3:closed_exp) (fsG:eval_env g) =
   (fs_e == (io_bind fs_e1 (fun x -> (if (hd (stack fsG x)) then (fs_e2 (tail (stack fsG x))) else (fs_e3 (tail (stack fsG x))))))) /\
@@ -1172,7 +1172,7 @@ let compat_oprod_if #g
 
 let compat_oprod_file_descr g fd : Lemma (fs_oprod_return_val g qFileDescr fd ⊑ EFileDescr fd) =
   compat_oval_file_descr g fd;
-  compat_oprod_return (fs_oval_return g qFileDescr fd) (EFileDescr fd)
+  compat_oprod_return (fs_oval_return g #qFileDescr fd) (EFileDescr fd)
 
 let compat_oprod_var g (x:var{Some? (g x)}) : Lemma (fs_oprod_var g x ⊑ EVar x) =
   compat_oval_var g x;
@@ -2028,7 +2028,7 @@ let compat_oprod_openfile #g (fs_fnm:fs_oprod g qString) (fnm:exp)
       let fs_fnm' : fs_prod qString = fs_fnm fsG in
       let fs_e = fs_prod_bind fs_fnm' (fun fnm' -> io_call OOpen fnm') in
       assert (fs_e == (fs_oprod_call OOpen fs_fnm) fsG) by (
-        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EOpen (gsubst s fnm) in
@@ -2058,7 +2058,7 @@ let compat_oprod_read #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind fs_fd' (fun fd' -> io_call ORead fd') in
       assert (fs_e == (fs_oprod_call ORead fs_fd) fsG) by (
-        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = ERead (gsubst s fd) in
@@ -2090,7 +2090,7 @@ let compat_oprod_write #g (fs_fd:fs_oprod g qFileDescr) (fs_msg:fs_oprod g qStri
       let fs_pair' = fs_prod_bind fs_fd' (fun x' -> fs_prod_bind #qString #(qFileDescr ^* qString) fs_msg' (fun y' -> return (x', y'))) in
       let fs_e = fs_prod_bind fs_pair' (fun args' -> io_call OWrite args') in
       assert (fs_e == (fs_oprod_call OWrite (fs_oprod_pair fs_fd fs_msg)) fsG) by (
-        norm [delta_only [`%fs_oprod_call;`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod;`%fs_oprod_return_val;`%fs_val_pair;`%fs_prod_bind]];
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_pair;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return;`%fs_oprod_return_val;`%fs_val_pair;`%fs_prod_bind]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EWrite (gsubst s fd) (gsubst s msg) in
@@ -2120,7 +2120,7 @@ let compat_oprod_close #g (fs_fd:fs_oprod g qFileDescr) (fd:exp)
       let fs_fd' : fs_prod qFileDescr = fs_fd fsG in
       let fs_e = fs_prod_bind fs_fd' (fun fd' -> io_call OClose fd') in
       assert (fs_e == (fs_oprod_call OClose fs_fd) fsG) by (
-        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return_prod]];
+        norm [delta_only [`%fs_oprod_call;`%fs_oprod_bind';`%fs_oprod_bind;`%fs_oprod_return]];
         l_to_r [`lem_hd_stack;`tail_stack_inverse];
         trefl ());
       let e = EClose (gsubst s fd) in
