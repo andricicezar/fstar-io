@@ -1,10 +1,11 @@
 module LogRelTargetSource.CompatibilityLemmas
 
-open Trace
 open LambdaIO
 open LambdaIO.DestructLemmas
-open QTyp
 open IOStar
+open QTypes.EvalEnv
+open QTypes.Subst
+open QTypes.Sem
 open LogRelTargetSource
 
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =

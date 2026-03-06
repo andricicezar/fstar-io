@@ -2,7 +2,8 @@ module RQ.TypingRelation.Tests
 
 open FStar.Tactics.V1
 open Trace
-open QTyp
+open QTypes.Sem
+open QTypes.HelperTactics
 open RQ.TypingRelation
 
 #push-options "--no_smt"

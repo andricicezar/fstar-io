@@ -6,7 +6,8 @@ open IOStar
 open RQ.Metaprogram
 open ExamplesIO
 open RrHP
-open QTyp
+open QTypes.Sem
+open QTypes.HelperTactics
 open RQ.TypingRelation
 open LambdaIO
 

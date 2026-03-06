@@ -4,7 +4,9 @@ open FStar.Tactics
 open RQ.Metaprogram
 open IOStar
 open RQ.TypingRelation
-open QTyp
+open RQ.TypingRelation.Tests
+open QTypes.Sem
+open QTypes.HelperTactics
 
 let hocf (agent:bool -> bool -> bool -> bool -> bool -> io bool) : io bool =
   agent true false false true true

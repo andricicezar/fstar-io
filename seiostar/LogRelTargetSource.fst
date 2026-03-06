@@ -3,10 +3,11 @@ module LogRelTargetSource
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-open QTyp
 open LambdaIO
 open IOStar
-open Trace
+open QTypes.EvalEnv
+open QTypes.Subst
+open QTypes.Sem
 
 (** Section 8.1: https://www.cs.uoregon.edu/research/summerschool/summer24/lectures/Ahmed.pdf **)
 

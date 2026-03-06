@@ -9,6 +9,7 @@ open FStar.Stubs.Reflection.V2.Builtins
 open FStar.Stubs.Reflection.V2.Data
 
 open RQ.TypingRelation
+open QTypes.HelperTactics
 
 let print_debug (s:string) : Tac unit =
   ()
@@ -16,16 +17,16 @@ let print_debug (s:string) : Tac unit =
 
 (** Quotation of types **)
 
-let mk_qunit : term = mk_app (`QTyp.qUnit) []
-let mk_qbool : term = mk_app (`QTyp.qBool) []
-let mk_qfiledescr : term = mk_app (`QTyp.qFileDescr) []
-let mk_qstring : term = mk_app (`QTyp.qString) []
+let mk_qunit : term = mk_app (`QTypes.qUnit) []
+let mk_qbool : term = mk_app (`QTypes.qBool) []
+let mk_qfiledescr : term = mk_app (`QTypes.qFileDescr) []
+let mk_qstring : term = mk_app (`QTypes.qString) []
 let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
-let mk_qresexn (t:term) : term = mk_app (`QTyp.qResexn) [(t, Q_Explicit)]
-let mk_qarr (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qarrio (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qpair (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qsum (t1 t2:term) : term = mk_app (`QTyp.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qresexn (t:term) : term = mk_app (`QTypes.qResexn) [(t, Q_Explicit)]
+let mk_qarr (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qarrio (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qpair (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qsum (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
 
 let rec typ_translation (qt:term) : Tac term =
   match inspect_ln qt with
@@ -398,7 +399,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
 
   (** Create a fresh binder g_env : typ_env to parameterize the derivation **)
   let g_env_uid = fresh () in
-  let g_env_nv = pack_namedv ({ ppname = seal "g_env"; sort = seal (`QTyp.typ_env); uniq = g_env_uid }) in
+  let g_env_nv = pack_namedv ({ ppname = seal "g_env"; sort = seal (`QTypes.TypEnv.typ_env); uniq = g_env_uid }) in
   let g_env_term = pack_ln (Tv_Var g_env_nv) in
   let g' = push_namedv g g_env_nv in
 
@@ -412,7 +413,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
   let qtyp_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qtyp_body in
 
   (** Wrap in lambda: fun (g_env : typ_env) -> derivation_body **)
-  let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTyp.typ_env) }) in
+  let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
   let qderivation_fun = pack_ln (Tv_Abs g_env_binder qderivation_closed) in
 
   (** Build the arrow type: (g_env : typ_env) -> typing g_env (...) **)

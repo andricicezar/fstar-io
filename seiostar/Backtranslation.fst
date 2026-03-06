@@ -1,7 +1,7 @@
 module Backtranslation
 
 open LambdaIO
-open QTyp
+open QTypes.Sem
 open RQ.TypingRelation
 open IOStar
 open LogRelSourceTarget

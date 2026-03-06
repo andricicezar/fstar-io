@@ -4,12 +4,13 @@ open FStar.Tactics
 open FStar.Classical.Sugar
 open FStar.List.Tot
 
-open QTyp
 open LambdaIO
 open LambdaIO.ConstructLemmas
 open IOStar
 open IOStar.DestructLemmas
-open Trace
+open QTypes.EvalEnv
+open QTypes.Subst
+open QTypes.Sem
 open LogRelSourceTarget
 
 let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) = 

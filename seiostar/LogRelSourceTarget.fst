@@ -4,9 +4,10 @@ open FStar.Classical.Sugar
 open FStar.List.Tot
 
 open LambdaIO
-open QTyp
 open IOStar
-open Trace
+open QTypes.EvalEnv
+open QTypes.Subst
+open QTypes.Sem
 
 (** Cross Language Binary Logical Relation between F* and LambdaIO expressions
      for __closed terms__. **)

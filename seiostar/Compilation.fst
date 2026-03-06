@@ -3,7 +3,7 @@ module Compilation
 open FStar.Tactics
 
 open LambdaIO
-open QTyp
+open QTypes.Sem
 open RQ.TypingRelation
 open LogRelSourceTarget
 open LogRelTargetSource
