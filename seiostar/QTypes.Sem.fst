@@ -27,26 +27,53 @@ let fs_val_case cond inlc inrc =
   | Inr x -> inrc x
 
 unfold
-let fs_val_pair #a #b (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
+let fs_val_pair (#a #b:qType) (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
+
+(** Closed Producers **)
+type fs_prod (t:qType) =
+   io (get_Type t)
+
+unfold
+val fs_prod_bind : #a:qType ->
+                    #b:qType ->
+                    m:fs_prod a ->
+                    k:(fs_val a -> fs_prod b) ->
+                    fs_prod b
+let fs_prod_bind m k = io_bind m k
+
+unfold
+val fs_prod_if_val :
+                #a  : qType ->
+                c   : fs_val qBool ->
+                t   : fs_prod a ->
+                e   : fs_prod a ->
+                fs_prod a
+let fs_prod_if_val c t e =
+  if c then t else e
+
+unfold
+val fs_prod_case_val : #a  : qType ->
+                #b : qType ->
+                #c : qType ->
+                cond : fs_val (a ^+ b) ->
+                inlc : (fs_val a -> fs_prod c) ->
+                inrc : (fs_val b -> fs_prod c) ->
+                fs_prod c
+let fs_prod_case_val cond inlc inrc =
+  match cond with
+  | Inl x -> inlc x
+  | Inr x -> inrc x
+  
+val fs_prod_call_val :
+        o:io_ops ->
+        args:fs_val (q_io_args o) ->
+        fs_prod (q_io_res o)
+let fs_prod_call_val o args = io_call o args
 
 (** Open values **)
 type fs_oval (g:typ_env) (t:qType) =
   eval_env g -> get_Type t
-
-(** We compile F* values, not F* expressions.
-    When compiling F* lambdas, there is no way to match and get
-    the body of the lambda.
-
-    To avoid this limitation, we do closure conversion of F* lambdas:
-    - be a lambda f:'a -> 'b
-    - we wrap f to a function that takes as argument an F* evaluation environment
-      that was extended to contain a value of type 'a
-    - we take the value from the environment to open f:
-        fun fsG -> f (index fsG 0)
-
-    What is cool about this is that the evaluation environment can be abstract.
- **)
 
 unfold
 let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
@@ -133,40 +160,7 @@ let fs_oval_case cond inlc inrc fsG =
   | Inl x -> inlc (stack fsG x)
   | Inr x -> inrc (stack fsG x)
 
-(** Producers **)
-type fs_prod (t:qType) =
-   io (get_Type t)
-
-unfold
-val fs_prod_bind : #a:qType ->
-                    #b:qType ->
-                    m:fs_prod a ->
-                    k:(fs_val a -> fs_prod b) ->
-                    fs_prod b
-let fs_prod_bind m k = io_bind m k
-
-unfold
-val fs_prod_if_val :
-                #a  : qType ->
-                c   : fs_val qBool ->
-                t   : fs_prod a ->
-                e   : fs_prod a ->
-                fs_prod a
-let fs_prod_if_val c t e =
-  if c then t else e
-
-unfold
-val fs_prod_case_val : #a  : qType ->
-                #b : qType ->
-                #c : qType ->
-                cond : fs_val (a ^+ b) ->
-                inlc : (fs_val a -> fs_prod c) ->
-                inrc : (fs_val b -> fs_prod c) ->
-                fs_prod c
-let fs_prod_case_val cond inlc inrc =
-  match cond with
-  | Inl x -> inlc x
-  | Inr x -> inrc x
+(** Open producers **)
 
 type fs_oprod (g:typ_env) (t:qType) =
   eval_env g -> io (get_Type t)
@@ -372,9 +366,3 @@ val fs_oprod_call_oval :
         args:fs_oval g (q_io_args o) ->
         fs_oprod g (q_io_res o)
 let fs_oprod_call_oval o args fsG = io_call o (args fsG)
-
-val fs_prod_call_val :
-        o:io_ops ->
-        args:fs_val (q_io_args o) ->
-        fs_prod (q_io_res o)
-let fs_prod_call_val o args = io_call o args
