@@ -172,6 +172,3 @@ let (⊢) (#a:qType) (g:typ_env) (x:fs_oval g a) =
 
 let (⊩) (a:qType) (x:fs_val a) =
   typing #a empty (fs_oval_return empty x)
-
-type comp_quotation (a:qType) (x:fs_comp a) =
-  typing_io #a empty (fs_ocomp_return empty x)
