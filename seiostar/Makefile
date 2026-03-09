@@ -9,7 +9,7 @@ ROOTS := RQ.Metaprogram.Tests.fst \
 
 CACHEDIR := .cache
 ODIR := $(CACHEDIR)
-FLAGS  = --z3version 4.15.2
+FLAGS  = --z3version 4.15.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
