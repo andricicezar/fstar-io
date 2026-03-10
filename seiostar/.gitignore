@@ -13,6 +13,7 @@ dep.graph
 dep.pdf
 .depend
 .depend.rsp
+.build
 
 hints/
 
