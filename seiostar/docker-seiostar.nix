@@ -1,6 +1,11 @@
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
-  pkgs = import nixpkgs { config = {}; overlays = []; };
+  pkgs = import nixpkgs {
+    config = {
+      allowUnfreePredicate = pkg: (pkg.pname or "") == "claude-code";
+    };
+    overlays = [];
+  };
   lib = pkgs.lib;
   system = pkgs.stdenv.hostPlatform.system;
   fstar = builtins.getFlake "github:FStarLang/FStar";
@@ -18,6 +23,23 @@ let
   writablePaths = [
     "/workspace/.git"
     "/workspace/seiostar/README.md"
+    "/workspace/seiostar/Backtranslation.fst"
+    "/workspace/seiostar/Compilation.fst"
+    "/workspace/seiostar/IOStar.DestructLemmas.fst"
+    "/workspace/seiostar/LambdaIO.ConstructLemmas.fst"
+    "/workspace/seiostar/LambdaIO.DestructLemmas.fst"
+    "/workspace/seiostar/LogRel.Semantics.fst"
+    "/workspace/seiostar/LogRelSourceTarget.fst"
+    "/workspace/seiostar/LogRelSourceTarget.CompatibilityLemmas.fst"
+    "/workspace/seiostar/LogRelTargetSource.fst"
+    "/workspace/seiostar/LogRelTargetSource.CompatibilityLemmas.fst"
+    "/workspace/seiostar/QTypes.HelperTactics.fst"
+    "/workspace/seiostar/QTypes.Subst.fst"
+    "/workspace/seiostar/QTypes.TypEnv.fst"
+    "/workspace/seiostar/Metaprogram.fst"
+    "/workspace/seiostar/Metaprogram.Utils.fst"
+    "/workspace/seiostar/RrHP.fst"
+    "/workspace/seiostar/RunningExample.fst"
   ];
 
   makeWritableCommand = path:
@@ -37,7 +59,10 @@ let
 
   runtimePackages = [
     pkgs.bashInteractive
+    pkgs."claude-code"
     pkgs.coreutils
+    pkgs.curl
+    pkgs.dockerTools.caCertificates
     pkgs.findutils
     pkgs.git
     pkgs.gnugrep
@@ -60,6 +85,10 @@ pkgs.dockerTools.buildLayeredImage {
       "PATH=/bin"
       "HOME=/home/${userName}"
       "BUILD_DIR=/tmp/seiostar_build"
+      "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+      "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+      "CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
+      "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt"
     ];
     User = "agent";
     WorkingDir = "/workspace/seiostar";

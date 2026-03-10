@@ -101,22 +101,22 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 .PHONY: $(BUILD_DIR)/io_program
 $(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
 
-$(BUILD_DIR)/image$(IMAGE_TAG): | $(BUILD_DIR)
-	IMAGE_TAG=$(IMAGE_TAG) nix-build docker-seiostar.nix -o $(BUILD_DIR)/image$(IMAGE_TAG)
-	docker image load -i $(BUILD_DIR)/image$(IMAGE_TAG)
+$(BUILD_DIR)/image_$(IMAGE_TAG): | $(BUILD_DIR)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build docker-seiostar.nix -o $(BUILD_DIR)/image_$(IMAGE_TAG)
+	docker image load -i $(BUILD_DIR)/image_$(IMAGE_TAG)
 
-create_image: $(BUILD_DIR)/image$(IMAGE_TAG)
+create_image: $(BUILD_DIR)/image_$(IMAGE_TAG)
 
 delete_image:
-	rm -f $(BUILD_DIR)/image$(IMAGE_TAG)
+	rm -f $(BUILD_DIR)/image_$(IMAGE_TAG)
 	docker image rm -f seiostar:$(IMAGE_TAG)
 
 recreate_image: delete_image create_image
 
-new_temp_sandbox: $(BUILD_DIR)/image$(IMAGE_TAG)
+new_temp_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
 	docker run --rm -it seiostar:$(IMAGE_TAG) /bin/bash
 
-new_session: $(BUILD_DIR)/image$(IMAGE_TAG)
+new_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
 	docker run --name seiostar_$(SESSION_NAME) -it seiostar:$(IMAGE_TAG) /bin/bash
 
 load_session: 
