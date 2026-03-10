@@ -11,7 +11,7 @@ ROOTS := RQ.Metaprogram.Tests.fst \
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
-FLAGS  = --z3version 4.15.2
+FLAGS  = --z3version 4.15.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
@@ -97,7 +97,17 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 	ocamlfind ocamlopt -package unix -linkpkg $^ -o $@
 
 .PHONY: $(BUILD_DIR)/io_program
-io_program: $(BUILD_DIR)/io_program_exe
+$(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
+
+new_temp_sandbox: $(BUILD_DIR)
+	@set -e; \
+	IMAGE_TAG="$$(od -vAn -N6 -tx1 /dev/urandom | tr -d ' \n')"; \
+	TEMP_IMAGE="$(BUILD_DIR)/temp_image$$IMAGE_TAG"; \
+	IMAGE_TAG="$$IMAGE_TAG" nix-build docker-seiostar.nix -o "$$TEMP_IMAGE"; \
+	docker image load -i "$$TEMP_IMAGE"; \
+	docker run --rm -it seiostar:$$IMAGE_TAG /bin/bash; \
+	docker image rm seiostar:$$IMAGE_TAG;
+	rm -f "$$TEMP_IMAGE"
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(CACHEDIR)

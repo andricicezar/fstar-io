@@ -1,19 +1,21 @@
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
   pkgs = import nixpkgs { config = {}; overlays = []; };
+  imageTag =
+    let value = builtins.getEnv "IMAGE_TAG";
+    in if value == "" then "latest" else value;
   lib = pkgs.lib;
   system = pkgs.stdenv.hostPlatform.system;
   fstar = builtins.getFlake "github:FStarLang/FStar";
   userName = "agent";
   userUid = 1000;
   userGid = 1000;
-  source = builtins.path {
-    path = ./../.;
-    name = "seiostar-source";
+  repoDir = builtins.path {
+    path = ../.;
+    name = "project-repo";
   };
-  writablePaths = [
-    "/workspace/seiostar/.depend.mk"
-    "/workspace/seiostar/.cache/"
+
+  writablePaths = [ 
     "/workspace/seiostar/README.md"
   ];
 
@@ -21,22 +23,12 @@ let
     let
       relativePath = lib.removePrefix "/" (lib.removeSuffix "/" path);
       quotedPath = lib.escapeShellArg relativePath;
-      isDirectory = lib.hasSuffix "/" path;
     in
     ''
       if [ -d ${quotedPath} ]; then
         chown -R ${toString userUid}:${toString userGid} ${quotedPath}
         chmod -R u+w ${quotedPath}
       elif [ -e ${quotedPath} ]; then
-        chown ${toString userUid}:${toString userGid} ${quotedPath}
-        chmod u+w ${quotedPath}
-      elif [ ${if isDirectory then "1" else "0"} -eq 1 ]; then
-        mkdir -p ${quotedPath}
-        chown -R ${toString userUid}:${toString userGid} ${quotedPath}
-        chmod -R u+w ${quotedPath}
-      else
-        mkdir -p "$(dirname ${quotedPath})"
-        touch ${quotedPath}
         chown ${toString userUid}:${toString userGid} ${quotedPath}
         chmod u+w ${quotedPath}
        fi
@@ -51,8 +43,8 @@ let
   ];
 in
 pkgs.dockerTools.buildLayeredImage {
-  name = "docker-seiostar";
-  tag = "latest";
+  name = "seiostar";
+  tag = imageTag;
 
   contents = runtimePackages;
 
@@ -61,6 +53,7 @@ pkgs.dockerTools.buildLayeredImage {
     Env = [
       "PATH=/bin"
       "HOME=/home/${userName}"
+      "BUILD_DIR=/tmp/seiostar_build"
     ];
     User = userName;
     WorkingDir = "/workspace/seiostar";
@@ -68,7 +61,7 @@ pkgs.dockerTools.buildLayeredImage {
 
   extraCommands = ''
     mkdir -p etc home/${userName} tmp workspace
-    cp -r ${source}/. workspace/
+    cp -r ${repoDir}/. workspace/
 
     printf 'root:x:0:0:root:/root:/bin/bash\n${userName}:x:${toString userUid}:${toString userGid}:${userName}:/home/${userName}:/bin/bash\n' > etc/passwd
     printf 'root:x:0:\n${userName}:x:${toString userGid}:\n' > etc/group
@@ -78,8 +71,11 @@ pkgs.dockerTools.buildLayeredImage {
   '';
 
   fakeRootCommands = ''
-    chattr +a workspace/seiostar
     chown ${toString userUid}:${toString userGid} home/${userName}
+    chmod u+w workspace/seiostar
+
+    # allow the agent to modify only specific files in the project
     ${lib.concatMapStringsSep "\n" makeWritableCommand writablePaths}
+    chmod u-w workspace/seiostar # agent cannot create/remove files
   '';
 }
