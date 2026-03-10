@@ -4,25 +4,19 @@ let
   lib = pkgs.lib;
   system = pkgs.stdenv.hostPlatform.system;
   fstar = builtins.getFlake "github:FStarLang/FStar";
-  readIntEnv = name: default:
-    let
-      value = builtins.getEnv name;
-    in
-    if value == "" then default
-    else if builtins.match "[0-9]+" value != null then builtins.fromJSON value
-    else throw "${name} must be a non-negative integer";
   imageTag =
     let value = builtins.getEnv "IMAGE_TAG";
     in if value == "" then "latest" else value;
   userName = "agent";
-  userUid = readIntEnv "GIT_UID" 1000;
-  userGid = readIntEnv "GIT_GUID" 1000;
+  userUid = 1000;
+  userGid = 1000;
   repoDir = builtins.path {
     path = ../.;
     name = "project-repo";
   };
 
   writablePaths = [
+    "/workspace/.git"
     "/workspace/seiostar/README.md"
   ];
 
@@ -44,9 +38,11 @@ let
   runtimePackages = [
     pkgs.bashInteractive
     pkgs.coreutils
+    pkgs.findutils
     pkgs.git
+    pkgs.gnugrep
     pkgs.gnumake
-    pkgs."util-linux"
+    pkgs.less
     fstar.packages.${system}.fstar
     fstar.packages.${system}.z3
   ];
@@ -65,7 +61,7 @@ pkgs.dockerTools.buildLayeredImage {
       "HOME=/home/${userName}"
       "BUILD_DIR=/tmp/seiostar_build"
     ];
-    User = "root";
+    User = "agent";
     WorkingDir = "/workspace/seiostar";
   };
 
@@ -76,18 +72,6 @@ pkgs.dockerTools.buildLayeredImage {
     cat > bin/seiostar-entrypoint <<'EOF'
     #!/bin/bash
     set -euo pipefail
-
-    if [ "$(id -u)" -eq 0 ]; then
-      if [ -e /workspace/.git ]; then
-        chown -R ${toString userUid}:${toString userGid} /workspace/.git
-      fi
-
-      exec /bin/setpriv \
-        --reuid=${toString userUid} \
-        --regid=${toString userGid} \
-        --clear-groups \
-        /bin/seiostar-entrypoint "$@"
-    fi
 
     found=0
     while IFS= read -r dir; do
@@ -114,10 +98,9 @@ pkgs.dockerTools.buildLayeredImage {
 
   fakeRootCommands = ''
     chown ${toString userUid}:${toString userGid} home/${userName}
-    chown ${toString userUid}:${toString userGid} workspace
-    chmod u+w workspace
 
     chmod u+w workspace/seiostar
+
     chmod -R u+w workspace/seiostar/.build
     rm -rf workspace/seiostar/.build
 

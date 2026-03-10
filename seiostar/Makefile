@@ -2,10 +2,8 @@ BUILD_DIR ?= .build
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-IMAGE_TAG ?=
-ifeq ($(strip $(IMAGE_TAG)),)
-IMAGE_TAG := $(shell od -vAn -N6 -tx1 /dev/urandom | tr -d ' \n')
-endif
+IMAGE_TAG ?= latest
+SESSION_NAME ?= current
 
 LAMBDABOX_DIR := lambdabox
 ROOTS := RQ.Metaprogram.Tests.fst \
@@ -103,12 +101,29 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 .PHONY: $(BUILD_DIR)/io_program
 $(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
 
-new_temp_sandbox: $(BUILD_DIR)
-	GIT_UID=$(shell id -u) GIT_GUID=$(shell id -g) IMAGE_TAG=$(IMAGE_TAG) nix-build docker-seiostar.nix -o $(BUILD_DIR)/temp_image$(IMAGE_TAG)
-	docker image load -i $(BUILD_DIR)/temp_image$(IMAGE_TAG)
-	docker run -v $(abspath ../.git):/workspace/.git --rm -it seiostar:$(IMAGE_TAG) /bin/bash
-	docker image rm seiostar:$(IMAGE_TAG)
-	rm -f $(BUILD_DIR)/temp_image$(IMAGE_TAG)
+$(BUILD_DIR)/image$(IMAGE_TAG): | $(BUILD_DIR)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build docker-seiostar.nix -o $(BUILD_DIR)/image$(IMAGE_TAG)
+	docker image load -i $(BUILD_DIR)/image$(IMAGE_TAG)
+
+create_image: $(BUILD_DIR)/image$(IMAGE_TAG)
+
+delete_image:
+	rm -f $(BUILD_DIR)/image$(IMAGE_TAG)
+	docker image rm -f seiostar:$(IMAGE_TAG)
+
+recreate_image: delete_image create_image
+
+new_temp_sandbox: $(BUILD_DIR)/image$(IMAGE_TAG)
+	docker run --rm -it seiostar:$(IMAGE_TAG) /bin/bash
+
+new_session: $(BUILD_DIR)/image$(IMAGE_TAG)
+	docker run --name seiostar_$(SESSION_NAME) -it seiostar:$(IMAGE_TAG) /bin/bash
+
+load_session: 
+	docker start -ai seiostar_$(SESSION_NAME)
+
+delete_session:
+	docker rm seiostar_$(SESSION_NAME)
 
 clean:
 	rm -rf $(CACHEDIR)
