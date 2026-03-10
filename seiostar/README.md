@@ -1,7 +1,7 @@
 # Artifact for "Misquoted No More: Securely Extracting F\* Programs with IO"
 
 This contains the artifact associated with the ICFP 2026 submission with the name:
-"[Misquoted No More: Securely Extracting F\* Programs with IO](...)".
+"[Misquoted No More: Securely Extracting F\* Programs with IO](https://arxiv.org/pdf/2602.19973)".
 
 The artifact contains the F* formalization from the paper. In particular, the
 proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
