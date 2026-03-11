@@ -81,6 +81,7 @@ pkgs.dockerTools.buildLayeredImage {
   contents = runtimePackages;
 
   config = {
+    Entrypoint = [ "/workspace/seiostar/claude-sandbox.entrypoint.sh" ];
     Cmd = [ "/bin/bash" ];
     Env = [
       "PATH=/bin"
@@ -98,6 +99,7 @@ pkgs.dockerTools.buildLayeredImage {
   extraCommands = ''
     mkdir -p bin etc home/${userName} tmp workspace
     cp -r ${repoDir}/. workspace/
+    chmod 0755 workspace/seiostar/claude-sandbox.entrypoint.sh
 
     printf 'root:x:0:0:root:/root:/bin/bash\n${userName}:x:${toString userUid}:${toString userGid}:${userName}:/home/${userName}:/bin/bash\n' > etc/passwd
     printf 'root:x:0:\n${userName}:x:${toString userGid}:\n' > etc/group
