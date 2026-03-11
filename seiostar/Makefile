@@ -1,5 +1,9 @@
+BUILD_DIR ?= .build
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
+
+IMAGE_TAG ?= latest
+SESSION_NAME ?= current
 
 LAMBDABOX_DIR := lambdabox
 ROOTS := RQ.Metaprogram.Tests.fst \
@@ -7,25 +11,28 @@ ROOTS := RQ.Metaprogram.Tests.fst \
          $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
-CACHEDIR := .cache
-ODIR := $(CACHEDIR)
-FLAGS  = --z3version 4.15.2
+CACHEDIR := $(BUILD_DIR)/cache
+ODIR := $(BUILD_DIR)/odir
+FLAGS  = --z3version 4.15.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
 FLAGS += $(OTHERFLAGS)
 
+$(BUILD_DIR) $(CACHEDIR) $(ODIR):
+	mkdir -p $@
+
 all: verify
 
-.cache/%.fst.checked: %.fst
+$(CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
-.cache/%.fst.checked: $(LAMBDABOX_DIR)/%.fst
+$(CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
-.cache/%.fsti.checked: %.fsti
+$(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
@@ -39,24 +46,24 @@ all: verify
 
 # If we're building a package, we don't need to run the dep analysis.
 ifneq ($(MAKECMDGOALS),package)
-include .depend.mk
+include $(BUILD_DIR)/depend.mk
 endif
 
 verify: $(ALL_CHECKED_FILES)
 
-.depend.mk: $(ROOTS)
+$(BUILD_DIR)/depend.mk: $(ROOTS) | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) --dep full $(ROOTS) --extract '*' --output_deps_to $@
-depend: .depend.mk
+depend: $(BUILD_DIR)/depend.mk
 
 # Make a dependency graph of the modules.
-dep.graph:
+$(BUILD_DIR)/dep.graph: | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) --dep graph $(ROOTS)
 	@# Ignore F* library modules:
 	sed -i '/-> "fstar_/d' $@
 	sed -i '/-> "prims"/d' $@
-.PHONY: dep.graph
+.PHONY: $(BUILD_DIR)/dep.graph
 
-dep.pdf: dep.graph
+$(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 	dot -Tpdf $< > $@
 
 # Package this directory (from Git). Note: git archive apparently
@@ -74,28 +81,59 @@ validate:
 
 IOFLAGS := --unsafe_tactic_exec $(FLAGS)
 
-io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst \
+$(BUILD_DIR)/io_program.ast: $(LAMBDABOX_DIR)/LambdaBoxExamples.fst \
                 $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst \
-                $(LAMBDABOX_DIR)/LambdaBox.fst $(LAMBDABOX_DIR)/Sexp.fst LambdaIO.fst
+                $(LAMBDABOX_DIR)/LambdaBox.fst $(LAMBDABOX_DIR)/Sexp.fst LambdaIO.fst | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(IOFLAGS) $(LAMBDABOX_DIR)/LambdaBoxExamples.fst
 
-io_program_raw.mlf: io_program.ast
+$(BUILD_DIR)/io_program_raw.mlf: $(BUILD_DIR)/io_program.ast | $(BUILD_DIR)
 	opam exec --switch=only-peregrine -- peregrine ocaml $< -o $@
 
-axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml
+$(BUILD_DIR)/axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml | $(BUILD_DIR)
 	ocamlfind ocamlopt -package unix -c -o $@ $<
 
-io_program_raw.cmx: io_program_raw.mlf
+$(BUILD_DIR)/io_program_raw.cmx: $(BUILD_DIR)/io_program_raw.mlf | $(BUILD_DIR)
 	malfunction cmx $<
 
-io_program_exe: axioms.cmx io_program_raw.cmx
+$(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw.cmx | $(BUILD_DIR)
 	ocamlfind ocamlopt -package unix -linkpkg $^ -o $@
 
-.PHONY: io_program
-io_program: io_program_exe
+.PHONY: $(BUILD_DIR)/io_program
+$(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
+
+$(BUILD_DIR)/image_$(IMAGE_TAG): | $(BUILD_DIR)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build claude-sandbox.nix -o $(BUILD_DIR)/image_$(IMAGE_TAG)
+	docker image load -i $(BUILD_DIR)/image_$(IMAGE_TAG)
+
+create_image: $(BUILD_DIR)/image_$(IMAGE_TAG)
+
+delete_image:
+	rm -f $(BUILD_DIR)/image_$(IMAGE_TAG)
+	docker image rm -f seiostar:$(IMAGE_TAG)
+
+recreate_image: delete_image create_image
+
+new_temp_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
+	docker run \
+		--rm \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-it \
+		seiostar:$(IMAGE_TAG) /bin/bash
+
+new_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
+	docker run \
+		--name seiostar_$(SESSION_NAME) \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-it seiostar:$(IMAGE_TAG) \
+		/bin/bash
+
+load_session: 
+	docker start -ai seiostar_$(SESSION_NAME)
+
+delete_session:
+	docker rm seiostar_$(SESSION_NAME)
 
 clean:
-	rm -rf $(CACHEDIR) $(ODIR)
-	rm -f io_program.ast io_program_raw.mlf io_program_raw.cmi \
-	      io_program_raw.cmx io_program_raw.o io_program_exe \
-	      axioms.cmi axioms.cmx axioms.o
+	rm -rf $(CACHEDIR)
