@@ -1,7 +1,10 @@
 {
   "fstar_exe": "fstar.exe",
-  "options": [ "--z3version", "4.15.2" ],
-  "include_dirs": [
-    ".cache"
-  ]
+  "options":[
+    "--z3version", "4.15.3",
+    "--include", "lambdabox",
+    "--cache_dir", ".build/cache",
+    "--hint_dir", ".build/hints",
+    "--record_hints",
+    "--use_hint_hashes"]
 }

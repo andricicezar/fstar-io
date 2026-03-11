@@ -15,6 +15,7 @@ CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
 FLAGS  = --z3version 4.15.3
 FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
+FLAGS += --record_hints --use_hints --hint_dir $(BUILD_DIR)/hints
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
 FLAGS += $(OTHERFLAGS)
