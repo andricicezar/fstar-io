@@ -514,7 +514,7 @@ let lazy_agent : exp = ELam (ELam EUnit)
 let write_agent : exp =
   ELam (* filename *)
     (ELam (* content *)
-      (ECase (EOpen (EVar 1))
+      (ECase (ECall OOpen (EVar 1))
         (* Inl fd *)
         (
           (* fd = EVar 0
@@ -522,8 +522,8 @@ let write_agent : exp =
              filename = EVar 2 *)
           EApp
             (* after io_call OWrite: io_call OClose fd *)
-            (ELam (EClose (EVar 1)))
-            (EWrite (EVar 0) (EVar 1))
+            (ELam (ECall OClose (EVar 1)))
+            (ECall OWrite (EPair (EVar 0) (EVar 1)))
         )
         (* Inr _ => unit *)
         EUnit
@@ -534,7 +534,7 @@ let write_agent : exp =
 let write_twice_agent : exp =
   ELam (* filename *)
     (ELam (* content *)
-      (ECase (EOpen (EVar 1))
+      (ECase (ECall OOpen (EVar 1))
 
         (* Inl fd *)
         (
@@ -543,10 +543,10 @@ let write_twice_agent : exp =
             (ELam
               (EApp
                 (* after second io_call OWrite *)
-                (ELam (EClose (EVar 2)))
-                (EWrite (EVar 1) (EVar 2))
+                (ELam (ECall OClose (EVar 2)))
+                (ECall OWrite (EPair (EVar 1) (EVar 2)))
               ))
-            (EWrite (EVar 0) (EVar 1))
+            (ECall OWrite (EPair (EVar 0) (EVar 1)))
         )
         (* Inr _ *)
         EUnit
@@ -557,7 +557,7 @@ let write_twice_agent : exp =
 let write_mixedup_agent : exp =
   ELam (* filename *)
     (ELam (* content *)
-      (ECase (EOpen (EVar 0))
+      (ECase (ECall OOpen (EVar 0))
         (* Inl fd *)
         (
           (* fd = EVar 0
@@ -565,8 +565,8 @@ let write_mixedup_agent : exp =
              filename = EVar 2 *)
           EApp
             (* after io_call OWrite: io_call OClose fd *)
-            (ELam (EClose (EVar 1)))
-            (EWrite (EVar 0) (EVar 2))
+            (ELam (ECall OClose (EVar 1)))
+            (ECall OWrite (EPair (EVar 0) (EVar 2)))
         )
         (* Inr _ => unit *)
         EUnit
@@ -578,35 +578,35 @@ let indirect_agent : exp =
   ELam (* filename *)
     (ELam (* content *)
       (* open "TMP" *)
-      (ECase (EOpen (EString "TMP"))
+      (ECase (ECall OOpen (EString "TMP"))
         (* Inl tmpfd *)
         (
           EApp
             (* after writing filename to TMP *)
             (ELam
               (* reopen TMP *)
-              (ECase (EOpen (EString "TMP"))
+              (ECase (ECall OOpen (EString "TMP"))
                 (* Inl tmpfd2 *)
                 (
-                  ECase (ERead (EVar 0))
+                  ECase (ECall ORead (EVar 0))
                     (* Inl fname *)
                     (
                       EApp
                         (* after closing tmpfd2 *)
                         (ELam
                           (* open fname *)
-                          (ECase (EOpen (EVar 1))
+                          (ECase (ECall OOpen (EVar 1))
                             (* Inl fd *)
                             (
                               EApp
-                                (ELam (EClose (EVar 1)))
-                                (EWrite (EVar 0) (EVar 6))
+                                (ELam (ECall OClose (EVar 1)))
+                                (ECall OWrite (EPair (EVar 0) (EVar 6)))
                             )
                             (* Inr _ *)
                             EUnit
                           )
                         )
-                        (EClose (EVar 1))
+                        (ECall OClose (EVar 1))
                     )
                     (* Inr _ *)
                     EUnit
@@ -615,7 +615,7 @@ let indirect_agent : exp =
                 EUnit
               )
             )
-            (EWrite (EVar 0) (EVar 2))
+            (ECall OWrite (EPair (EVar 0) (EVar 2)))
         )
         (* Inr _ *)
         EUnit
