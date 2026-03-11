@@ -39,11 +39,11 @@ $(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 
 # Run your fst file in emacs with the same context as the batch mode.
 %.fst.emacs: %.fst
-	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
+	emacs -nw -f fstar-debug-invocation $(FSTAR) $(FLAGS) --use_hint_hashes $<
 
 # Run your fsti file in emacs with the same context as the batch mode.
 %.fsti.emacs: %.fsti
-	emacs -f fstar-debug-invocation $(FSTAR) $(FLAGS) $<
+	emacs -nw -f fstar-debug-invocation $(FSTAR) $(FLAGS) --use_hint_hashes $<
 
 # If we're building a package, we don't need to run the dep analysis.
 ifneq ($(MAKECMDGOALS),package)

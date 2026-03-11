@@ -6,5 +6,6 @@
     "--cache_dir", ".build/cache",
     "--hint_dir", ".build/hints",
     "--record_hints",
-    "--use_hint_hashes"]
+    "--use_hints", "--use_hint_hashes"
+  ]
 }
