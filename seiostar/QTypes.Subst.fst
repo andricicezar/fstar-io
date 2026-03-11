@@ -43,11 +43,8 @@ let rec subst_comp (f:sub false) (g:sub true) (e:exp) :
   | ESnd e1
   | EInl e1
   | EInr e1
-  | ERead e1
-  | EOpen e1
-  | EClose e1 -> subst_comp f g e1
+  | ECall _ e1 -> subst_comp f g e1
   | EApp e1 e2
-  | EWrite e1 e2
   | EStringEq e1 e2
   | EPair e1 e2 -> begin
     subst_comp f g e1;
@@ -92,11 +89,8 @@ let rec shift_sub_equiv_sub_inc_no_rename #t #g
   | ESnd e1
   | EInl e1
   | EInr e1
-  | ERead e1
-  | EOpen e1
-  | EClose e1 -> shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f
+  | ECall _ e1 -> shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f
   | EApp e1 e2
-  | EWrite e1 e2
   | EStringEq e1 e2
   | EPair e1 e2 -> begin
     shift_sub_equiv_sub_inc_no_rename #t #g s' e1 f;
@@ -140,11 +134,8 @@ let rec shift_sub_equiv_sub_inc_rename #t
   | ESnd e1
   | EInl e1
   | EInr e1
-  | ERead e1
-  | EOpen e1
-  | EClose e1 -> shift_sub_equiv_sub_inc_rename #t s' e1 f
+  | ECall _ e1 -> shift_sub_equiv_sub_inc_rename #t s' e1 f
   | EApp e1 e2
-  | EWrite e1 e2
   | EStringEq e1 e2
   | EPair e1 e2 -> begin
     shift_sub_equiv_sub_inc_rename #t s' e1 f;
@@ -204,8 +195,8 @@ let rec lem_subst_id (e:exp) :
     equiv_subs_implies_equiv_substs (sub_elam sub_id) sub_id e';
     lem_subst_id e'
   | EFst e' | ESnd e' | EInl e' | EInr e'
-  | ERead e' | EOpen e' | EClose e' -> lem_subst_id e'
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e' -> lem_subst_id e'
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_subst_id e1; lem_subst_id e2
   | EIf e1 e2 e3 ->
     lem_subst_id e1; lem_subst_id e2; lem_subst_id e3
@@ -249,8 +240,8 @@ let rec subst_comp_ren_ren (f:sub true) (g:sub true) (e:exp) :
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
   | EFst e1 | ESnd e1 | EInl e1 | EInr e1
-  | ERead e1 | EOpen e1 | EClose e1 -> subst_comp_ren_ren f g e1
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e1 -> subst_comp_ren_ren f g e1
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren_ren f g e1; subst_comp_ren_ren f g e2
   | EIf e1 e2 e3 ->
     subst_comp_ren_ren f g e1; subst_comp_ren_ren f g e2; subst_comp_ren_ren f g e3
@@ -292,8 +283,8 @@ let rec subst_comp_ren #b (r:sub true) (g:sub b) (e:exp) :
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam r) (sub_elam g)) (sub_elam (gsub_comp r g)) e1
   | EFst e1 | ESnd e1 | EInl e1 | EInr e1
-  | ERead e1 | EOpen e1 | EClose e1 -> subst_comp_ren r g e1
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e1 -> subst_comp_ren r g e1
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren r g e1; subst_comp_ren r g e2
   | EIf e1 e2 e3 ->
     subst_comp_ren r g e1; subst_comp_ren r g e2; subst_comp_ren r g e3
@@ -330,8 +321,8 @@ let rec subst_comp_ren_right #b (f:sub b) (g:sub true) (e:exp) :
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
   | EFst e1 | ESnd e1 | EInl e1 | EInr e1
-  | ERead e1 | EOpen e1 | EClose e1 -> subst_comp_ren_right f g e1
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e1 -> subst_comp_ren_right f g e1
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_ren_right f g e1; subst_comp_ren_right f g e2
   | EIf e1 e2 e3 ->
     subst_comp_ren_right f g e1; subst_comp_ren_right f g e2; subst_comp_ren_right f g e3
@@ -382,8 +373,8 @@ let rec subst_comp_general #b1 #b2 (f:sub b1) (g:sub b2) (e:exp) :
     end;
     equiv_subs_implies_equiv_substs (gsub_comp (sub_elam f) (sub_elam g)) (sub_elam (gsub_comp f g)) e1
   | EFst e1 | ESnd e1 | EInl e1 | EInr e1
-  | ERead e1 | EOpen e1 | EClose e1 -> subst_comp_general f g e1
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e1 -> subst_comp_general f g e1
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     subst_comp_general f g e1; subst_comp_general f g e2
   | EIf e1 e2 e3 ->
     subst_comp_general f g e1; subst_comp_general f g e2; subst_comp_general f g e3
@@ -435,9 +426,9 @@ let rec lem_subst_closed_identity #b (s:sub b) (e:exp) (n:nat) :
     end;
     lem_subst_closed_identity (sub_elam s) e' (n+1)
   | EFst e' | ESnd e' | EInl e' | EInr e'
-  | ERead e' | EOpen e' | EClose e' ->
+  | ECall _ e' ->
     lem_subst_closed_identity s e' n
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_subst_closed_identity s e1 n;
     lem_subst_closed_identity s e2 n
   | EIf e1 e2 e3 ->
