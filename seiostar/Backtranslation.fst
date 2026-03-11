@@ -100,24 +100,24 @@ type typing : typ_env -> exp -> qType -> Type =
            #g:typ_env ->
            #e1:exp ->
            $h1:typing g e1 qString ->
-           typing g (EOpen e1) (qResexn qFileDescr)
+           typing g (ECall OOpen e1) (qResexn qFileDescr)
 | TyRead :
            #g:typ_env ->
            #e1:exp ->
            $h1:typing g e1 qFileDescr ->
-           typing g (ERead e1) (qResexn qString)
+           typing g (ECall ORead e1) (qResexn qString)
 | TyWrite :
            #g:typ_env ->
            #e1:exp ->
            #e2:exp ->
            $h1:typing g e1 qFileDescr ->
            $h2:typing g e2 qString ->
-           typing g (EWrite e1 e2) (qResexn qUnit)
+           typing g (ECall OWrite (EPair e1 e2)) (qResexn qUnit)
 | TyClose :
            #g:typ_env ->
            #e1:exp ->
            $h1:typing g e1 qFileDescr ->
-           typing g (EClose e1) (qResexn qUnit)
+           typing g (ECall OClose e1) (qResexn qUnit)
 | TyStringEq :
            #g:typ_env ->
            #e1:exp ->
@@ -181,20 +181,20 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t) =
   | EFileDescr _ ->
     let TyFileDescr fd = h in
     fs_ocomp_return_val g qFileDescr fd
-  | EOpen _ ->
+  | ECall OOpen _ ->
     let TyOpenfile h' = h in
     let h' : typing g _ qString = h' in
     fs_ocomp_call OOpen (backtranslate_exp h')
-  | ERead _ ->
+  | ECall ORead _ ->
     let TyRead h' = h in
     let h' : typing g _ qFileDescr = h' in
     fs_ocomp_call ORead (backtranslate_exp h')
-  | EWrite _ _ ->
+  | ECall OWrite _ ->
     let TyWrite h1 h2 = h in
     let h1 : typing g _ qFileDescr = h1 in
     let h2 : typing g _ qString = h2 in
     fs_ocomp_call OWrite (fs_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2))
-  | EClose _ ->
+  | ECall OClose _ ->
     let TyClose h' = h in
     let h' : typing g _ qFileDescr = h' in
     fs_ocomp_call OClose (backtranslate_exp h')
@@ -255,20 +255,20 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     lem_backtranslate_superset_exp h3;
     C1.compat_ocomp_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
   | EFileDescr fd -> C1.compat_ocomp_file_descr g fd
-  | EOpen _ ->
+  | ECall OOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
     C1.compat_ocomp_openfile (backtranslate_exp h') e'
-  | ERead _ ->
+  | ECall ORead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
     C1.compat_ocomp_read (backtranslate_exp h') e'
-  | EWrite _ _ ->
+  | ECall OWrite _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
     C1.compat_ocomp_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
-  | EClose _ ->
+  | ECall OClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
     C1.compat_ocomp_close (backtranslate_exp h') e'
@@ -328,20 +328,20 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     lem_backtranslate_subset_exp h3;
     C2.compat_ocomp_case (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
   | EFileDescr fd -> C2.compat_ocomp_file_descr g fd
-  | EOpen _ ->
+  | ECall OOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
     C2.compat_ocomp_openfile (backtranslate_exp h') e'
-  | ERead _ ->
+  | ECall ORead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
     C2.compat_ocomp_read (backtranslate_exp h') e'
-  | EWrite _ _ ->
+  | ECall OWrite _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     C2.compat_ocomp_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
-  | EClose _ ->
+  | ECall OClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
     C2.compat_ocomp_close (backtranslate_exp h') e'
