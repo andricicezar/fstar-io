@@ -9,6 +9,7 @@ let
   lib = pkgs.lib;
   system = pkgs.stdenv.hostPlatform.system;
   fstar = builtins.getFlake "github:FStarLang/FStar";
+  claudeCode = builtins.getFlake "github:sadjow/claude-code-nix";
   imageTag =
     let value = builtins.getEnv "IMAGE_TAG";
     in if value == "" then "latest" else value;
@@ -59,7 +60,6 @@ let
 
   runtimePackages = [
     pkgs.bashInteractive
-    pkgs."claude-code"
     pkgs.coreutils
     pkgs.curl
     pkgs.dockerTools.caCertificates
@@ -68,8 +68,10 @@ let
     pkgs.gnugrep
     pkgs.gnumake
     pkgs.less
+    pkgs.which
     fstar.packages.${system}.fstar
     fstar.packages.${system}.z3
+    claudeCode.packages.${system}."claude-code-bun"
   ];
 in
 pkgs.dockerTools.buildLayeredImage {
@@ -79,7 +81,6 @@ pkgs.dockerTools.buildLayeredImage {
   contents = runtimePackages;
 
   config = {
-    Entrypoint = [ "/bin/seiostar-entrypoint" ];
     Cmd = [ "/bin/bash" ];
     Env = [
       "PATH=/bin"
@@ -98,29 +99,9 @@ pkgs.dockerTools.buildLayeredImage {
     mkdir -p bin etc home/${userName} tmp workspace
     cp -r ${repoDir}/. workspace/
 
-    cat > bin/seiostar-entrypoint <<'EOF'
-    #!/bin/bash
-    set -euo pipefail
-
-    found=0
-    while IFS= read -r dir; do
-      if [ "$dir" = "/workspace" ]; then
-        found=1
-        break
-      fi
-    done < <(git config --global --get-all safe.directory 2>/dev/null || true)
-
-    if [ "$found" -eq 0 ]; then
-      git config --global --add safe.directory /workspace
-    fi
-
-    exec "$@"
-    EOF
-
     printf 'root:x:0:0:root:/root:/bin/bash\n${userName}:x:${toString userUid}:${toString userGid}:${userName}:/home/${userName}:/bin/bash\n' > etc/passwd
     printf 'root:x:0:\n${userName}:x:${toString userGid}:\n' > etc/group
 
-    chmod 0755 bin/seiostar-entrypoint
     chmod 0755 home/${userName}
     chmod 1777 tmp
   '';

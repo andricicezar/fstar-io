@@ -114,10 +114,20 @@ delete_image:
 recreate_image: delete_image create_image
 
 new_temp_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
-	docker run --rm -it seiostar:$(IMAGE_TAG) /bin/bash
+	docker run \
+		--rm \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-it \
+		seiostar:$(IMAGE_TAG) /bin/bash
 
 new_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
-	docker run --name seiostar_$(SESSION_NAME) -it seiostar:$(IMAGE_TAG) /bin/bash
+	docker run \
+		--name seiostar_$(SESSION_NAME) \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-it seiostar:$(IMAGE_TAG) \
+		/bin/bash
 
 load_session: 
 	docker start -ai seiostar_$(SESSION_NAME)
