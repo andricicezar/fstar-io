@@ -131,8 +131,19 @@ new_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
 		-it seiostar:$(IMAGE_TAG) \
 		/bin/bash
 
+attach_session: 
+	docker attach seiostar_$(SESSION_NAME)
+
 load_session: 
 	docker start -ai seiostar_$(SESSION_NAME)
+
+SYNC_FROM ?= $(shell git rev-parse HEAD)
+
+sync_commits_from_session:
+	docker exec seiostar_$(SESSION_NAME) /bin/bash -c "cd /workspace && git format-patch $(SYNC_FROM)..HEAD --stdout" > $(BUILD_DIR)/$(SESSION_NAME).patch
+	cat $(BUILD_DIR)/$(SESSION_NAME).patch
+	git am < $(BUILD_DIR)/$(SESSION_NAME).patch
+	rm $(BUILD_DIR)/$(SESSION_NAME).patch
 
 delete_session:
 	docker rm seiostar_$(SESSION_NAME)
