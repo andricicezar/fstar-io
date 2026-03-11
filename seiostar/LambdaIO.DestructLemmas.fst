@@ -960,28 +960,28 @@ let rec destruct_steps_ecase
 #pop-options
 
 let can_step_eread_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
-  Lemma (exists e' oev. step (ERead fd) e' h oev)
+  Lemma (exists e' oev. step (ECall ORead fd) e' h oev)
   =
-  let st1 : step (ERead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SReadReturn h (get_fd fd) (Inl "") in
-  let st2 : step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
+  let st1 : step (ECall ORead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SCallReturn h ORead (get_fd fd) (Inl "") in
+  let st2 : step (ECall ORead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SCallReturn h ORead (get_fd fd) (Inr ()) in
   ()
 
 let can_step_eread (fd:closed_exp) (h:history) :
   Lemma
   (requires indexed_sem_expr_shape TFileDescr fd h)
-  (ensures (exists e' oev. step (ERead fd) e' h oev))
+  (ensures (exists e' oev. step (ECall ORead fd) e' h oev))
   =
-  introduce indexed_irred fd h ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
+  introduce indexed_irred fd h ==> (exists e' oev. step (ECall ORead fd) e' h oev) with _. begin
     assert (steps fd fd h []);
-    let st1 : step (ERead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SReadReturn h (get_fd fd) (Inl "") in
-    let st2 : step (ERead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SReadReturn h (get_fd fd) (Inr ()) in
+    let st1 : step (ECall ORead fd) (EInl (EString "")) h (Some (EvRead (get_fd fd) (Inl ""))) = SCallReturn h ORead (get_fd fd) (Inl "") in
+    let st2 : step (ECall ORead fd) (EInr EUnit) h (Some (EvRead (get_fd fd) (Inr ()))) = SCallReturn h ORead (get_fd fd) (Inr ()) in
   ()
   end;
 
-  introduce ~(indexed_irred fd h) ==> (exists e' oev. step (ERead fd) e' h oev) with _. begin
+  introduce ~(indexed_irred fd h) ==> (exists e' oev. step (ECall ORead fd) e' h oev) with _. begin
     assert (exists fd' oev'. step fd fd' h oev');
-    eliminate exists fd' oev'. step fd fd' h oev' returns exists e' oev. step (ERead fd) e' h oev with st. begin
-      bind_squash st (fun st -> return_squash (SRead st))
+    eliminate exists fd' oev'. step fd fd' h oev' returns exists e' oev. step (ECall ORead fd) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SCall #_ #_ #_ #_ #ORead st))
     end
   end
 
@@ -990,37 +990,37 @@ let rec destruct_steps_eread_fd
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ERead fd) e' h lt) :
+  (st:steps (ECall ORead fd) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
   (requires indexed_irred e' (h++lt) /\
     indexed_sem_expr_shape TFileDescr fd h)
   (ensures fun (fd', (| lt1, lt' |)) ->
     EFileDescr? fd' /\
     steps fd fd' h lt1 /\
-    steps (ERead fd) (ERead fd') h lt1 /\
-    steps (ERead fd') e' (h++lt1) lt' /\
+    steps (ECall ORead fd) (ECall ORead fd') h lt1 /\
+    steps (ECall ORead fd') e' (h++lt1) lt' /\
     (lt == (lt1 @ lt')))
   (decreases st) =
   match st with
-  | SRefl (ERead fd) h -> begin
+  | SRefl (ECall ORead fd) h -> begin
     can_step_eread fd h;
     false_elim ()
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_eread step_eread_steps -> begin
-    let (ERead fd) = e in
+    let (ECall ORead fd) = e in
     match step_eread with
-    | SRead #fd #fd' #h #oev step_fd -> begin
-      let (ERead fd') = f2 in
+    | SCall #fd #fd' #h' #oev #op step_fd -> begin
+      let (ECall ORead fd') = f2 in
       lem_step_implies_steps fd fd' h oev;
-      lem_step_implies_steps (ERead fd) (ERead fd') h oev;
+      lem_step_implies_steps (ECall ORead fd) (ECall ORead fd') h oev;
       let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (ERead fd') e' (h++lt1) lt23 = step_eread_steps in
+      let s2 : steps (ECall ORead fd') e' (h++lt1) lt23 = step_eread_steps in
       trans_history h lt1 lt23;
       lem_step_preserve_indexed_sem_expr_shape fd fd' h oev TFileDescr;
       let (fd'', (| lt1', lt' |)) = destruct_steps_eread_fd fd' e' (h++lt1) lt23 s2 in
       trans_history h lt1 lt1';
       lem_steps_transitive fd fd' fd'' h lt1 lt1';
-      lem_steps_transitive (ERead fd) (ERead fd') (ERead fd'') h lt1 lt1';
+      lem_steps_transitive (ECall ORead fd) (ECall ORead fd') (ECall ORead fd'') h lt1 lt1';
       (fd'', (| (lt1 @ lt1'), lt' |))
       end
     | _ -> (fd, (| [], lt |))
@@ -1032,11 +1032,11 @@ let destruct_steps_eread
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (ERead fd) e' h lt) :
+  (st:steps (ECall ORead fd) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
     (ensures fun (e_r, (| lt1, lt2 |)) ->
-       steps (ERead fd) e_r h lt1 /\
+       steps (ECall ORead fd) e_r h lt1 /\
        (EInl? e_r /\ EString? (get_einl_v e_r) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          (EString? (get_einl_v e_r) ==>
@@ -1046,16 +1046,16 @@ let destruct_steps_eread
        (lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
-    | SRefl (ERead fd) h -> begin
+    | SRefl (ECall ORead fd) h -> begin
       can_step_eread_fd fd h;
       false_elim ()
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_eread step_eread_steps -> begin
-      let ERead fd = e in
+      let ECall ORead fd = e in
       match step_eread with
-      | SReadReturn h fd (Inl s) -> begin
+      | SCallReturn h ORead fd (Inl s) -> begin
         let EInl (EString _) = f2 in
-        lem_step_implies_steps (ERead (get_efd fd)) (EInl (EString s)) h (Some (EvRead fd (Inl s)));
+        lem_step_implies_steps (ECall ORead (get_efd fd)) (EInl (EString s)) h (Some (EvRead fd (Inl s)));
         let lt' : local_trace h = [EvRead fd (Inl s)] in
         let s2 : steps (EInl (EString s)) e' (h++lt') lt23 = step_eread_steps in
         trans_history h lt' lt23;
@@ -1063,9 +1063,9 @@ let destruct_steps_eread
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl (EString s) e' (h++lt') lt23 s2 in
         (f2, (| lt', lt12 @ lt_f |))
         end
-      | SReadReturn h fd (Inr ()) -> begin
+      | SCallReturn h ORead fd (Inr ()) -> begin
         let EInr EUnit = f2 in
-        lem_step_implies_steps (ERead (get_efd fd)) (EInr EUnit) h (Some (EvRead fd (Inr ())));
+        lem_step_implies_steps (ECall ORead (get_efd fd)) (EInr EUnit) h (Some (EvRead fd (Inr ())));
         let lt' : local_trace h = ev_lt (EvRead fd (Inr ())) in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eread_steps in
         trans_history h lt' lt23;
@@ -1076,31 +1076,69 @@ let destruct_steps_eread
       end
 #pop-options
 
+let lem_irred_sem_shape_gives_value_shape (t:typ) (e:closed_exp) (h:history) :
+  Lemma (requires indexed_irred e h /\ indexed_sem_expr_shape t e h)
+        (ensures sem_value_shape t e) =
+  assert (steps e e h []);
+  assert (indexed_irred e (h++[]))
+
 let can_step_ewrite_when_fd_arg_value (fd:value{EFileDescr? fd}) (arg:value{EString? arg}) (h:history) :
-  Lemma (ensures (exists e' oev. step (EWrite fd arg) e' h oev))
+  Lemma (ensures (exists e' oev. step (ECall OWrite (EPair fd arg)) e' h oev))
   =
-  let _ : step (EWrite fd arg) (EInl EUnit) h (Some (EvWrite (get_fd fd, get_string arg) (Inl ()))) = SWriteReturn h (get_fd fd) arg (Inl ()) in
+  let _ : step (ECall OWrite (EPair fd arg)) (EInl EUnit) h (Some (EvWrite (get_fd fd, get_string arg) (Inl ()))) = SCallReturn h OWrite (get_fd fd, get_string arg) (Inl ()) in
   ()
 
 let lem_irred_ewrite_implies_irred_fd (fd arg:closed_exp) (h:history) :
-  Lemma (requires indexed_irred (EWrite fd arg) h)
+  Lemma (requires indexed_irred (ECall OWrite (EPair fd arg)) h)
         (ensures indexed_irred fd h) =
   introduce forall fd' oev. step fd fd' h oev ==> False with begin
     introduce _ ==> _ with _. begin
       bind_squash #(step fd fd' h oev) () (fun st ->
-      let _ : step (EWrite fd arg) (EWrite fd' arg) h oev = SWriteFd arg st in ())
+      let _ : step (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd' arg)) h oev = SCall (PairLeft arg st) in ())
     end
   end
 
 let lem_irred_ewrite_implies_irred_arg (fd:closed_exp{EFileDescr? fd})  (arg:closed_exp) (h:history) :
-  Lemma (requires indexed_irred (EWrite fd arg) h)
+  Lemma (requires indexed_irred (ECall OWrite (EPair fd arg)) h)
         (ensures indexed_irred arg h) =
   introduce forall arg' oev. step arg arg' h oev ==> False with begin
     introduce _ ==> _ with _. begin
       bind_squash #(step arg arg' h oev) () (fun st ->
-      let _ : step (EWrite fd arg) (EWrite fd arg') h oev = SWriteArg fd st in ())
+      let _ : step (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd arg')) h oev = SCall (PairRight fd st) in ())
     end
   end
+
+// Helper: given a step (ECall OWrite (EPair fd arg)) -> (ECall OWrite (EPair fd' arg))
+// extract the inner step on fd.
+// This works because the only step rule that changes the first arg of EPair inside ECall is PairLeft via SCall.
+// Helper: extract the inner step on fd from a step on (ECall OWrite (EPair fd arg)).
+// Returns (fd', step fd fd' h oev) given st : step (ECall OWrite (EPair fd arg)) e2 h oev
+// where e2 must be of the form ECall OWrite (EPair fd' arg).
+let extract_ewrite_fd_step
+  (fd:closed_exp) (arg:closed_exp)
+  (h:history) (oev:option (event_h h))
+  (e2:closed_exp)
+  (st:step (ECall OWrite (EPair fd arg)) e2 h oev) :
+  Pure (fd':closed_exp & step fd fd' h oev)
+    (requires SCall? st /\ PairLeft? (SCall?.hst st))
+    (ensures fun _ -> True) =
+  let SCall pair_step = st in
+  let PairLeft e2_v step_fd = pair_step in
+  (| _, step_fd |)
+
+// Helper: extract the inner step on arg from a step on (ECall OWrite (EPair fd arg)).
+// Returns (arg', step arg arg' h oev).
+let extract_ewrite_arg_step
+  (fd:closed_exp{EFileDescr? fd}) (arg:closed_exp)
+  (h:history) (oev:option (event_h h))
+  (e2:closed_exp)
+  (st:step (ECall OWrite (EPair fd arg)) e2 h oev) :
+  Pure (arg':closed_exp & step arg arg' h oev)
+    (requires SCall? st /\ PairRight? (SCall?.hst st))
+    (ensures fun _ -> True) =
+  let SCall pair_step = st in
+  let PairRight e1_v step_arg = pair_step in
+  (| _, step_arg |)
 
 #push-options "--split_queries always --fuel 12 --z3rlimit 12"
 let rec destruct_steps_ewrite_fd
@@ -1109,40 +1147,58 @@ let rec destruct_steps_ewrite_fd
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EWrite fd arg) e' h lt) :
+  (st:steps (ECall OWrite (EPair fd arg)) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt) /\
       indexed_sem_expr_shape TFileDescr fd h)
     (ensures fun (fd', (| lt1, lt' |)) ->
       EFileDescr? fd' /\
       steps fd fd' h lt1 /\
-      steps (EWrite fd arg) (EWrite fd' arg) h lt1 /\
-      steps (EWrite fd' arg) e' (h++lt1) lt' /\
+      steps (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd' arg)) h lt1 /\
+      steps (ECall OWrite (EPair fd' arg)) e' (h++lt1) lt' /\
       (lt == (lt1 @ lt')))
     (decreases st) =
   match st with
-  | SRefl (EWrite fd arg) h -> begin
+  | SRefl (ECall OWrite (EPair fd arg)) h -> begin
     lem_irred_ewrite_implies_irred_fd fd arg h;
+    lem_irred_sem_shape_gives_value_shape TFileDescr fd h;
     (fd, (| [], lt |))
   end
   | STrans #e #f2 #e' #h #_ #lt23 step_ewrite step_ewrite_steps -> begin
-    let (EWrite fd arg) = e in
+    let (ECall OWrite (EPair fd arg)) = e in
     match step_ewrite with
-    | SWriteFd #fd #fd' #h #oev arg step_fd -> begin
-      let (EWrite fd' arg) = f2 in
-      lem_step_implies_steps fd fd' h oev;
-      lem_step_implies_steps (EWrite fd arg) (EWrite fd' arg) h oev;
-      let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (EWrite fd' arg) e' (h++lt1) lt23 = step_ewrite_steps in
-      trans_history h lt1 lt23;
-      lem_step_preserve_indexed_sem_expr_shape fd fd' h oev TFileDescr;
-      let (fd'', (| lt1', lt' |)) = destruct_steps_ewrite_fd fd' arg e' (h++lt1) lt23 s2 in
-      trans_history h lt1 lt1';
-      lem_steps_transitive fd fd' fd'' h lt1 lt1';
-      lem_steps_transitive (EWrite fd arg) (EWrite fd' arg) (EWrite fd'' arg) h lt1 lt1';
-      (fd'', (| (lt1 @ lt1'), lt' |))
+    | SCall #_ #_ #_ #_ #_ pair_step -> begin
+      match pair_step with
+      | PairLeft #fd arg2 #fd' #h #oev1 step_fd -> begin
+        // step_fd : step fd fd' h oev1
+        let (ECall OWrite (EPair fd' _)) = f2 in
+        lem_step_implies_steps fd fd' h oev1;
+        let step_pair_ecall : step (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd' arg)) h oev1 =
+          SCall (PairLeft arg2 step_fd) in
+        lem_step_implies_steps (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd' arg)) h oev1;
+        let lt1 : local_trace h = as_lt oev1 in
+        let s2 : steps (ECall OWrite (EPair fd' arg)) e' (h++lt1) lt23 = step_ewrite_steps in
+        trans_history h lt1 lt23;
+        lem_step_preserve_indexed_sem_expr_shape fd fd' h oev1 TFileDescr;
+        let (fd'', (| lt1', lt' |)) = destruct_steps_ewrite_fd fd' arg e' (h++lt1) lt23 s2 in
+        trans_history h lt1 lt1';
+        lem_steps_transitive fd fd' fd'' h lt1 lt1';
+        lem_steps_transitive (ECall OWrite (EPair fd arg)) (ECall OWrite (EPair fd' arg)) (ECall OWrite (EPair fd'' arg)) h lt1 lt1';
+        (fd'', (| (lt1 @ lt1'), lt' |))
+        end
+      | PairRight fd_v #arg2 #arg' #h #oev1 step_arg -> begin
+        // fd is already a value (fd = fd_v), only arg steps
+        lem_value_is_irred fd_v;
+        lem_irred_sem_shape_gives_value_shape TFileDescr fd_v h;
+        (fd_v, (| [], lt |))
+        end
       end
-    | _ -> (fd, (| [], lt |))
+    | SCallReturn h_sr OWrite args_sr _ -> begin
+      // SCallReturn on OWrite means fd = EFileDescr fd_t is already in args_sr
+      // fd = EFileDescr (fst args_sr)
+      assert (fd == EFileDescr (fst args_sr));
+      (fd, (| [], lt |))
+      end
     end
 #pop-options
 
@@ -1153,41 +1209,42 @@ let rec destruct_steps_ewrite_arg
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EWrite fd' arg) e' h lt) :
+  (st:steps (ECall OWrite (EPair fd' arg)) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt) /\
       indexed_sem_expr_shape TString arg h)
     (ensures fun (arg', (| lt1, lt' |)) ->
       EString? arg' /\
       steps arg arg' h lt1 /\
-      steps (EWrite fd' arg) (EWrite fd' arg') h lt1 /\
-      steps (EWrite fd' arg') e' (h++lt1) lt' /\
+      steps (ECall OWrite (EPair fd' arg)) (ECall OWrite (EPair fd' arg')) h lt1 /\
+      steps (ECall OWrite (EPair fd' arg')) e' (h++lt1) lt' /\
       (lt == (lt1 @ lt')))
     (decreases st) =
   match st with
-  | SRefl (EWrite fd' arg) h -> begin
+  | SRefl (ECall OWrite (EPair fd' arg)) h -> begin
     lem_irred_ewrite_implies_irred_arg fd' arg h;
     (arg, (| [], lt |))
     end
-  | STrans #e #f2 #e' #h #_ #lt23 step_ewrite step_ewrite_steps -> begin
-    let (EWrite fd' arg) = e in
+  | STrans #e #f2 #e' #h #oev #lt23 step_ewrite step_ewrite_steps -> begin
+    let (ECall OWrite (EPair fd' arg)) = e in
     match step_ewrite with
-    | SWriteArg #arg #arg' #h #oev fd' step_arg -> begin
-      let (EWrite fd' arg') = f2 in
-      lem_step_implies_steps arg arg' h oev;
-      lem_step_implies_steps (EWrite fd' arg) (EWrite fd' arg') h oev;
+    | SCall #_ #_ #_ #oev2 #_ (PairRight fd_v #arg2 #arg' #h2 #oev3 step_arg) -> begin
+      // step_arg : step arg arg' h2 oev3
+      let (ECall OWrite (EPair _ arg')) = f2 in
+      lem_step_implies_steps arg arg' h2 oev3;
+      lem_step_implies_steps (ECall OWrite (EPair fd_v arg2)) (ECall OWrite (EPair fd_v arg')) h2 oev3;
       let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (EWrite fd' arg') e' (h++lt1) lt23 = step_ewrite_steps in
+      let s2 : steps (ECall OWrite (EPair fd' arg')) e' (h++lt1) lt23 = step_ewrite_steps in
       trans_history h lt1 lt23;
-      lem_step_preserve_indexed_sem_expr_shape arg arg' h oev TString;
+      lem_step_preserve_indexed_sem_expr_shape arg arg' h2 oev3 TString;
       let (arg'', (| lt1', lt' |)) = destruct_steps_ewrite_arg fd' arg' e' (h++lt1) lt23 s2 in
       trans_history h lt1 lt1';
       lem_steps_transitive arg arg' arg'' h lt1 lt1';
-      lem_steps_transitive (EWrite fd' arg) (EWrite fd' arg') (EWrite fd' arg'') h lt1 lt1';
+      lem_steps_transitive (ECall OWrite (EPair fd' arg)) (ECall OWrite (EPair fd' arg')) (ECall OWrite (EPair fd' arg'')) h lt1 lt1';
       (arg'', (| (lt1 @ lt1'), lt' |))
       end
-    | SWriteFd _ _ -> (arg, (| [], lt |))
-    | SWriteReturn _ _ _ _ -> (arg, (| [], lt |))
+    | SCall #_ #_ #_ #_ #_ (PairLeft _ _) -> (arg, (| [], lt |))
+    | SCallReturn _ _ _ _ -> (arg, (| [], lt |))
     end
 #pop-options
 
@@ -1198,11 +1255,11 @@ let destruct_steps_ewrite
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EWrite fd' arg') e' h lt) :
+  (st:steps (ECall OWrite (EPair fd' arg')) e' h lt) :
   Pure (closed_exp * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
     (ensures fun (e_r, (| lt1, lt2 |)) ->
-      steps (EWrite fd' arg') e_r h lt1 /\
+      steps (ECall OWrite (EPair fd' arg')) e_r h lt1 /\
       (e_r == EInl EUnit \/ e_r == EInr EUnit) /\
       (EString? arg' ==>
         (EInl? e_r ==> steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvWrite (get_fd fd', get_string arg') (Inl ())]) /\
@@ -1210,63 +1267,61 @@ let destruct_steps_ewrite
       (lt == (lt1 @ lt2) \/ lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
-    | SRefl (EWrite fd' arg') h -> begin
+    | SRefl (ECall OWrite (EPair fd' arg')) h -> begin
       can_step_ewrite_when_fd_arg_value fd' arg' h;
       false_elim ()
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_ewrite step_ewrite_steps -> begin
-      let (EWrite fd' arg') = e in
+      let (ECall OWrite (EPair fd' arg')) = e in
       match step_ewrite with
-      | SWriteReturn h fd_t arg' (Inl ()) -> begin
+      | SCallReturn h OWrite (fd_t, arg_t) (Inl ()) -> begin
         let EInl EUnit = f2 in
-        lem_step_implies_steps (EWrite (get_efd fd_t) arg') (EInl EUnit) h (Some (EvWrite (fd_t, get_string arg') (Inl ())));
-        lem_value_is_irred arg';
-        let lt' : local_trace h = [EvWrite (fd_t, get_string arg') (Inl ())] in
+        lem_step_implies_steps (ECall OWrite (EPair (get_efd fd_t) (EString arg_t))) (EInl EUnit) h (Some (EvWrite (fd_t, arg_t) (Inl ())));
+        let lt' : local_trace h = [EvWrite (fd_t, arg_t) (Inl ())] in
         let s2 : steps (EInl EUnit) e' (h++lt') lt23 = step_ewrite_steps in
         trans_history h lt' lt23;
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl EUnit e' (h++lt') lt23 s2 in
         (f2, (| lt', (lt12 @ lt_f) |))
         end
-      | SWriteReturn h fd_t arg' (Inr ()) -> begin
+      | SCallReturn h OWrite (fd_t, arg_t) (Inr ()) -> begin
         let EInr EUnit = f2 in
-        lem_step_implies_steps (EWrite (get_efd fd_t) arg') (EInr EUnit) h (Some (EvWrite (fd_t, get_string arg') (Inr ())));
-        lem_value_is_irred arg';
-        let lt' : local_trace h = [EvWrite (fd_t, get_string arg') (Inr ())] in
+        lem_step_implies_steps (ECall OWrite (EPair (get_efd fd_t) (EString arg_t))) (EInr EUnit) h (Some (EvWrite (fd_t, arg_t) (Inr ())));
+        let lt' : local_trace h = [EvWrite (fd_t, arg_t) (Inr ())] in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_ewrite_steps in
         trans_history h lt' lt23;
         lem_value_preserves_value EUnit (h++lt') TUnit;
         let (e12', (| lt12, lt_f |)) = destruct_steps_einr EUnit e' (h++lt') lt23 s2 in
         (f2, (| lt', (lt12 @ lt_f) |))
         end
-      | SWriteArg _ _ -> false_elim ()
-      | SWriteFd _ _ -> false_elim ()
+      | SCall #_ #_ #_ #_ #_ (PairRight _ _) -> false_elim ()
+      | SCall #_ #_ #_ #_ #_ (PairLeft _ _) -> false_elim ()
       end
 #pop-options
 
 let can_step_eopen_str (str:closed_exp{EString? str}) (h:history) :
-  Lemma (exists e' oev. step (EOpen str) e' h oev)
+  Lemma (exists e' oev. step (ECall OOpen str) e' h oev)
   =
-  let st1 : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
-  let st2 : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SOpenReturnFail str h in
+  let st1 : step (ECall OOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SCallReturn h OOpen (get_string str) (Inl (fresh_fd h)) in
+  let st2 : step (ECall OOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SCallReturn h OOpen (get_string str) (Inr ()) in
   ()
 
 let can_step_eopen (str:closed_exp) (h:history) :
   Lemma
   (requires indexed_sem_expr_shape TString str h)
-  (ensures (exists e' oev. step (EOpen str) e' h oev))
+  (ensures (exists e' oev. step (ECall OOpen str) e' h oev))
   =
-  introduce indexed_irred str h ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
+  introduce indexed_irred str h ==> (exists e' oev. step (ECall OOpen str) e' h oev) with _. begin
     assert (steps str str h []);
-    let _ : step (EOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SOpenReturnSuccess str h in
-    let _ : step (EOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SOpenReturnFail str h in
+    let _ : step (ECall OOpen str) (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str) (Inl (fresh_fd h)))) = SCallReturn h OOpen (get_string str) (Inl (fresh_fd h)) in
+    let _ : step (ECall OOpen str) (EInr EUnit) h (Some (EvOpen (get_string str) (Inr ()))) = SCallReturn h OOpen (get_string str) (Inr ()) in
   ()
   end;
 
-  introduce ~(indexed_irred str h) ==> (exists e' oev. step (EOpen str) e' h oev) with _. begin
+  introduce ~(indexed_irred str h) ==> (exists e' oev. step (ECall OOpen str) e' h oev) with _. begin
     assert (exists str' oev'. step str str' h oev');
-    eliminate exists str' oev'. step str str' h oev' returns exists e' oev. step (EOpen str) e' h oev with st. begin
-      bind_squash st (fun st -> return_squash (SOpen st))
+    eliminate exists str' oev'. step str str' h oev' returns exists e' oev. step (ECall OOpen str) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SCall #_ #_ #_ #_ #OOpen st))
     end
   end
 
@@ -1275,37 +1330,37 @@ let rec destruct_steps_eopen_str
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EOpen str) e' h lt) :
+  (st:steps (ECall OOpen str) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
   (requires indexed_irred e' (h++lt) /\
     indexed_sem_expr_shape TString str h)
   (ensures fun (str', (| lt1, lt' |)) ->
     EString? str' /\
     steps str str' h lt1 /\
-    steps (EOpen str) (EOpen str') h lt1 /\
-    steps (EOpen str') e' (h++lt1) lt' /\
+    steps (ECall OOpen str) (ECall OOpen str') h lt1 /\
+    steps (ECall OOpen str') e' (h++lt1) lt' /\
     (lt == (lt1 @ lt')))
   (decreases st) =
   match st with
-  | SRefl (EOpen str) h -> begin
+  | SRefl (ECall OOpen str) h -> begin
     can_step_eopen str h;
     false_elim ()
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_eopen step_eopen_steps -> begin
-    let (EOpen str) = e in
+    let (ECall OOpen str) = e in
     match step_eopen with
-    | SOpen #str #str' #h #oev step_str -> begin
-      let (EOpen str') = f2 in
+    | SCall #str #str' #h #oev #_ step_str -> begin
+      let (ECall OOpen str') = f2 in
       lem_step_implies_steps str str' h oev;
-      lem_step_implies_steps (EOpen str) (EOpen str') h oev;
+      lem_step_implies_steps (ECall OOpen str) (ECall OOpen str') h oev;
       let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (EOpen str') e' (h++lt1) lt23 = step_eopen_steps in
+      let s2 : steps (ECall OOpen str') e' (h++lt1) lt23 = step_eopen_steps in
       trans_history h lt1 lt23;
       lem_step_preserve_indexed_sem_expr_shape str str' h oev TString;
       let (str'', (| lt1', lt' |)) = destruct_steps_eopen_str str' e' (h++lt1) lt23 s2 in
       trans_history h lt1 lt1';
       lem_steps_transitive str str' str'' h lt1 lt1';
-      lem_steps_transitive (EOpen str) (EOpen str') (EOpen str'') h lt1 lt1';
+      lem_steps_transitive (ECall OOpen str) (ECall OOpen str') (ECall OOpen str'') h lt1 lt1';
       (str'', (| (lt1 @ lt1'), lt' |))
       end
     | _ -> (str, (| [], lt |))
@@ -1317,11 +1372,11 @@ let destruct_steps_eopen
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EOpen str') e' h lt) :
+  (st:steps (ECall OOpen str') e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
     (ensures fun (e_r, (| lt1, lt2 |)) ->
-       steps (EOpen str') e_r h lt1 /\
+       steps (ECall OOpen str') e_r h lt1 /\
        (e_r == EInl (get_efd (fresh_fd h)) \/ e_r == EInr EUnit) /\
        (EInl? e_r ==>
          steps e_r e' (h++lt1) lt2 /\ lt == (lt1 @ lt2) /\ lt1 == [EvOpen (get_string str') (Inl (fresh_fd h))]) /\
@@ -1330,27 +1385,27 @@ let destruct_steps_eopen
        lt == (lt1 @ lt2))
     (decreases st) =
     match st with
-    | SRefl (EOpen str') h -> begin
+    | SRefl (ECall OOpen str') h -> begin
       can_step_eopen_str str' h;
       false_elim ()
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_eopen step_eopen_steps -> begin
-      let EOpen str' = e in
+      let ECall OOpen str' = e in
       match step_eopen with
-      | SOpenReturnSuccess str' h -> begin
+      | SCallReturn h OOpen str_t (Inl fd_v) -> begin
         assert (EInl (get_efd (fresh_fd h)) == f2);
-        lem_step_implies_steps (EOpen str') (EInl (get_efd (fresh_fd h))) h (Some (EvOpen (get_string str') (Inl (fresh_fd h))));
-        let lt' : local_trace h = [EvOpen (get_string str') (Inl (fresh_fd h))] in
-        let s2 : steps (EInl (get_efd (fresh_fd h))) e' (h++lt') lt23 = step_eopen_steps in
+        lem_step_implies_steps (ECall OOpen (EString str_t)) (EInl (get_efd fd_v)) h (Some (EvOpen str_t (Inl fd_v)));
+        let lt' : local_trace h = [EvOpen str_t (Inl fd_v)] in
+        let s2 : steps (EInl (get_efd fd_v)) e' (h++lt') lt23 = step_eopen_steps in
         trans_history h lt' lt23;
-        lem_value_preserves_value (get_efd (fresh_fd h)) (h++lt') TFileDescr;
-        let (e12', (| lt12, lt_f |)) = destruct_steps_einl (get_efd (fresh_fd h)) e' (h++lt') lt23 s2 in
+        lem_value_preserves_value (get_efd fd_v) (h++lt') TFileDescr;
+        let (e12', (| lt12, lt_f |)) = destruct_steps_einl (get_efd fd_v) e' (h++lt') lt23 s2 in
         (f2, (| lt', lt12 @ lt_f |))
         end
-      | SOpenReturnFail str' h -> begin
+      | SCallReturn h OOpen str_t (Inr ()) -> begin
         let EInr EUnit = f2 in
-        lem_step_implies_steps (EOpen str') (EInr EUnit) h (Some (EvOpen (get_string str') (Inr ())));
-        let lt' : local_trace h = [EvOpen (get_string str') (Inr ())] in
+        lem_step_implies_steps (ECall OOpen (EString str_t)) (EInr EUnit) h (Some (EvOpen str_t (Inr ())));
+        let lt' : local_trace h = [EvOpen str_t (Inr ())] in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eopen_steps in
         trans_history h lt' lt23;
         lem_value_preserves_value EUnit (h++lt') TUnit;
@@ -1363,19 +1418,19 @@ let destruct_steps_eopen
 let can_step_eclose (fd:closed_exp) (h:history) :
   Lemma
   (requires indexed_sem_expr_shape TFileDescr fd h)
-  (ensures (exists e' oev. step (EClose fd) e' h oev))
+  (ensures (exists e' oev. step (ECall OClose fd) e' h oev))
   =
-  introduce indexed_irred fd h ==> (exists e' oev. step (EClose fd) e' h oev) with _. begin
+  introduce indexed_irred fd h ==> (exists e' oev. step (ECall OClose fd) e' h oev) with _. begin
     assert (steps fd fd h []);
-    let st1 : step (EClose fd) (EInl EUnit) h (Some (EvClose (get_fd fd) (Inl ()))) = SCloseReturn h (get_fd fd) (Inl ()) in
-    let st2 : step (EClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCloseReturn h (get_fd fd) (Inr ()) in
+    let st1 : step (ECall OClose fd) (EInl EUnit) h (Some (EvClose (get_fd fd) (Inl ()))) = SCallReturn h OClose (get_fd fd) (Inl ()) in
+    let st2 : step (ECall OClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCallReturn h OClose (get_fd fd) (Inr ()) in
   ()
   end;
 
-  introduce ~(indexed_irred fd h) ==> (exists e' oev. step (EClose fd) e' h oev) with _. begin
+  introduce ~(indexed_irred fd h) ==> (exists e' oev. step (ECall OClose fd) e' h oev) with _. begin
     assert (exists fd' oev'. step fd fd' h oev');
-    eliminate exists fd' oev'. step fd fd' h oev' returns exists e' oev. step (EClose fd) e' h oev with st. begin
-      bind_squash st (fun st -> return_squash (SClose st))
+    eliminate exists fd' oev'. step fd fd' h oev' returns exists e' oev. step (ECall OClose fd) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SCall #_ #_ #_ #_ #OClose st))
     end
   end
 
@@ -1384,47 +1439,47 @@ let rec destruct_steps_eclose_fd
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EClose fd) e' h lt) :
+  (st:steps (ECall OClose fd) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
   (requires indexed_irred e' (h++lt) /\
     indexed_sem_expr_shape TFileDescr fd h)
   (ensures fun (fd', (| lt1, lt' |)) ->
     EFileDescr? fd' /\
     steps fd fd' h lt1 /\
-    steps (EClose fd) (EClose fd') h lt1 /\
-    steps (EClose fd') e' (h++lt1) lt' /\
+    steps (ECall OClose fd) (ECall OClose fd') h lt1 /\
+    steps (ECall OClose fd') e' (h++lt1) lt' /\
     (lt == (lt1 @ lt')))
   (decreases st) =
   match st with
-  | SRefl (EClose fd) h -> begin
+  | SRefl (ECall OClose fd) h -> begin
     can_step_eclose fd h;
     false_elim ()
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_eclose step_eclose_steps -> begin
-    let (EClose fd) = e in
+    let (ECall OClose fd) = e in
     match step_eclose with
-    | SClose #fd #fd' #h #oev step_fd -> begin
-      let (EClose fd') = f2 in
+    | SCall #fd #fd' #h #oev #_ step_fd -> begin
+      let (ECall OClose fd') = f2 in
       lem_step_implies_steps fd fd' h oev;
-      lem_step_implies_steps (EClose fd) (EClose fd') h oev;
+      lem_step_implies_steps (ECall OClose fd) (ECall OClose fd') h oev;
       let lt1 : local_trace h = as_lt oev in
-      let s2 : steps (EClose fd') e' (h++lt1) lt23 = step_eclose_steps in
+      let s2 : steps (ECall OClose fd') e' (h++lt1) lt23 = step_eclose_steps in
       trans_history h lt1 lt23;
       lem_step_preserve_indexed_sem_expr_shape fd fd' h oev TFileDescr;
       let (fd'', (| lt1', lt' |)) = destruct_steps_eclose_fd fd' e' (h++lt1) lt23 s2 in
       trans_history h lt1 lt1';
       lem_steps_transitive fd fd' fd'' h lt1 lt1';
-      lem_steps_transitive (EClose fd) (EClose fd') (EClose fd'') h lt1 lt1';
+      lem_steps_transitive (ECall OClose fd) (ECall OClose fd') (ECall OClose fd'') h lt1 lt1';
       (fd'', (| (lt1 @ lt1'), lt' |))
       end
     | _ -> (fd, (| [], lt |))
     end
 
 let can_step_eclose_fd (fd:closed_exp{EFileDescr? fd}) (h:history) :
-  Lemma (exists e' oev. step (EClose fd) e' h oev)
+  Lemma (exists e' oev. step (ECall OClose fd) e' h oev)
   =
-  let st1 : step (EClose fd) (EInl EUnit) h (Some (EvClose (get_fd fd) (Inl ()))) = SCloseReturn h (get_fd fd) (Inl ()) in
-  let st2 : step (EClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCloseReturn h (get_fd fd) (Inr ()) in
+  let st1 : step (ECall OClose fd) (EInl EUnit) h (Some (EvClose (get_fd fd) (Inl ()))) = SCallReturn h OClose (get_fd fd) (Inl ()) in
+  let st2 : step (ECall OClose fd) (EInr EUnit) h (Some (EvClose (get_fd fd) (Inr ()))) = SCallReturn h OClose (get_fd fd) (Inr ()) in
   ()
 
 #push-options "--z3rlimit 32"
@@ -1433,11 +1488,11 @@ let destruct_steps_eclose
   (e':closed_exp)
   (h:history)
   (lt:local_trace h)
-  (st:steps (EClose fd) e' h lt) :
+  (st:steps (ECall OClose fd) e' h lt) :
   Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
     (requires indexed_irred e' (h++lt))
     (ensures fun (e_r, (| lt1, lt2 |)) ->
-       steps (EClose fd) e_r h lt1 /\
+       steps (ECall OClose fd) e_r h lt1 /\
        (e_r == EInl EUnit \/ e_r == EInr EUnit) /\
        steps e_r e' (h++lt1) lt2 /\
        (EInl? e_r ==> lt1 == ev_lt (EvClose (get_fd fd) (Inl ()))) /\
@@ -1445,16 +1500,16 @@ let destruct_steps_eclose
        (lt == (lt1 @ lt2)))
     (decreases st) =
     match st with
-    | SRefl (EClose fd) h -> begin
+    | SRefl (ECall OClose fd) h -> begin
       can_step_eclose_fd fd h;
       false_elim ()
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_eclose step_eclose_steps -> begin
-      let EClose fd = e in
+      let ECall OClose fd = e in
       match step_eclose with
-      | SCloseReturn h fd (Inl ()) -> begin
+      | SCallReturn h OClose fd (Inl ()) -> begin
         let EInl EUnit = f2 in
-        lem_step_implies_steps (EClose (get_efd fd)) (EInl EUnit) h (Some (EvClose fd (Inl ())));
+        lem_step_implies_steps (ECall OClose (get_efd fd)) (EInl EUnit) h (Some (EvClose fd (Inl ())));
         let lt' : local_trace h = ev_lt (EvClose fd (Inl ())) in
         let s2 : steps (EInl EUnit) e' (h++lt') lt23 = step_eclose_steps in
         trans_history h lt' lt23;
@@ -1462,9 +1517,9 @@ let destruct_steps_eclose
         let (e12', (| lt12, lt_f |)) = destruct_steps_einl EUnit e' (h++lt') lt23 s2 in
         (f2, (| lt', (lt12 @ lt_f) |))
         end
-      | SCloseReturn h fd (Inr ()) -> begin
+      | SCallReturn h OClose fd (Inr ()) -> begin
         let EInr EUnit = f2 in
-        lem_step_implies_steps (EClose (get_efd fd)) (EInr EUnit) h (Some (EvClose fd (Inr ())));
+        lem_step_implies_steps (ECall OClose (get_efd fd)) (EInr EUnit) h (Some (EvClose fd (Inr ())));
         let lt' : local_trace h = ev_lt (EvClose fd (Inr ())) in
         let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_eclose_steps in
         trans_history h lt' lt23;
