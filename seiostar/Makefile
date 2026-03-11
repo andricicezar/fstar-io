@@ -18,6 +18,7 @@ FLAGS += --cache_checked_modules --cache_dir $(CACHEDIR)
 FLAGS += --record_hints --use_hints --hint_dir $(BUILD_DIR)/hints
 FLAGS += --odir $(ODIR)
 FLAGS += --include $(LAMBDABOX_DIR)
+FLAGS += --silent
 FLAGS += $(OTHERFLAGS)
 
 $(BUILD_DIR) $(CACHEDIR) $(ODIR):
