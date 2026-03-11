@@ -13,10 +13,10 @@ module C2 = LogRelSourceTarget.CompatibilityLemmas
 
 let compile_call (o:io_ops) (e:exp) : exp =
   match o with
-  | OOpen -> EOpen e
-  | ORead -> ERead e
-  | OClose -> EClose e
-  | OWrite -> EWrite (EFst e) (ESnd e)
+  | OOpen -> ECall OOpen e
+  | ORead -> ECall ORead e
+  | OClose -> ECall OClose e
+  | OWrite -> ECall OWrite (EPair (EFst e) (ESnd e))
 
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
@@ -291,13 +291,14 @@ and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s
   | QCall o qargs ->
     lem_compile_fv_in_env qargs;
     (match o with
-     | OOpen -> lem_fv_in_env_openfile g (compile qargs)
-     | ORead -> lem_fv_in_env_read g (compile qargs)
-     | OClose -> lem_fv_in_env_close g (compile qargs)
+     | OOpen -> lem_fv_in_env_call g OOpen (compile qargs)
+     | ORead -> lem_fv_in_env_call g ORead (compile qargs)
+     | OClose -> lem_fv_in_env_call g OClose (compile qargs)
      | OWrite ->
        lem_fv_in_env_fst g (compile qargs);
        lem_fv_in_env_snd g (compile qargs);
-       lem_fv_in_env_write g (EFst (compile qargs)) (ESnd (compile qargs)))
+       lem_fv_in_env_pair g (EFst (compile qargs)) (ESnd (compile qargs));
+       lem_fv_in_env_call g OWrite (EPair (EFst (compile qargs)) (ESnd (compile qargs))))
   | QReturn qx ->
     lem_compile_fv_in_env qx
   | QBind #_ #ta #_ #m #k qm qk ->
