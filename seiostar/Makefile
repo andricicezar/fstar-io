@@ -102,7 +102,7 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 $(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
 
 $(BUILD_DIR)/image_$(IMAGE_TAG): | $(BUILD_DIR)
-	IMAGE_TAG=$(IMAGE_TAG) nix-build docker-seiostar.nix -o $(BUILD_DIR)/image_$(IMAGE_TAG)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build claude-sandbox.nix -o $(BUILD_DIR)/image_$(IMAGE_TAG)
 	docker image load -i $(BUILD_DIR)/image_$(IMAGE_TAG)
 
 create_image: $(BUILD_DIR)/image_$(IMAGE_TAG)
