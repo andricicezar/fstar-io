@@ -885,7 +885,7 @@ let lem_ecall_result_facts
   | OClose -> lem_thetaP_call OClose fs_arg res h
 #pop-options
 
-#push-options "--fuel 32 --z3rlimit 32 --split_queries always"
+#push-options "--fuel 32 --z3rlimit 64"
 let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
@@ -893,27 +893,30 @@ let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:h
               (q_io_args op) ⊇ (h, fs_arg, arg))
     (ensures (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\
              fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)) =
-    admit ()
-  // lem_forall_values_are_values (q_io_args op) h fs_arg;
-  // bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
-  //   let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt steps_e_e' in
-  //   bind_squash (steps (ECall op arg') e' (h++lt1) lt') (fun sts1 ->
-  //     trans_history h lt1 lt';
-  //     let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
-  //     assert (q_io_args op ⊇ (h, fs_arg, arg));
-  //     lem_value_is_irred arg';
-  //     lem_value_steps_gives_refl e_r e' ((h++lt1)++lt2) lt3;
-  //     let the_goal = exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r in
-  //     Classical.exists_elim the_goal #_ #_ () (fun (args:io_args op) ->
-  //       Classical.exists_elim the_goal #_ #_ () (fun (res:io_res op args) ->
-  //         assert ((q_io_args op) ∋ (h++lt1, fs_arg, arg'));
-  //         assert (e_beh arg arg' h lt1);
-  //         assert (lt1 == []);
-  //         assert ((q_io_args op) ∋ (h, fs_arg, arg'));
-  //         lem_ecall_result_facts op fs_arg args res arg' e_r (h++lt1);
-  //         get_squash the_goal));
-  //     get_squash (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\
-  //            fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)))
+  let the_goal = exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r in
+  lem_forall_values_are_values (q_io_args op) h fs_arg;
+  bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
+    let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt steps_e_e' in
+    FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #the_goal () (fun sts1 ->
+      trans_history h lt1 lt';
+      let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
+      lem_value_is_irred arg';
+      lem_value_steps_gives_refl e_r e' ((h++lt1)++lt2) lt3;
+      let goal_lemma () : Lemma the_goal =
+        assert (e_beh arg arg' h lt1);
+        assert (lt1 == []);
+        assert ((q_io_args op) ∋ (h, fs_arg, arg'));
+        eliminate exists (args:io_args op) (res:io_res op args).
+          io_pre (h++lt1) op args /\ io_post (h++lt1) op args res /\
+          arg' == as_e_io_args op args /\
+          e_r == as_e_io_res op args res /\
+          lt2 == [op_to_ev op args res]
+        returns the_goal with _. begin
+          lem_ecall_result_facts op fs_arg args res arg' e_r (h++lt1)
+        end
+      in
+      goal_lemma ();
+      get_squash the_goal))
 #pop-options
 
 let compat_ocomp_call_oval #g (op:io_ops{op <> OWrite}) (fs_arg:fs_oval g (q_io_args op)) (arg:exp)
