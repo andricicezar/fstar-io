@@ -2,9 +2,6 @@ BUILD_DIR ?= .build
 FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
-IMAGE_TAG ?= latest
-SESSION_NAME ?= current
-
 LAMBDABOX_DIR := lambdabox
 ROOTS := RQ.Metaprogram.Tests.fst \
 	     RunningExample.fst \
@@ -104,50 +101,57 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 .PHONY: $(BUILD_DIR)/io_program
 $(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
 
-$(BUILD_DIR)/image_$(IMAGE_TAG): | $(BUILD_DIR)
-	IMAGE_TAG=$(IMAGE_TAG) nix-build claude-sandbox.nix -o $(BUILD_DIR)/image_$(IMAGE_TAG)
-	docker image load -i $(BUILD_DIR)/image_$(IMAGE_TAG)
+AGENT_NAME ?= copilot
+IMAGE_TAG ?= latest
+SESSION_NAME ?= current
+IMAGE_FILE ?= $(BUILD_DIR)/image_$(AGENT_NAME)_$(IMAGE_TAG)
+IMAGE_NAME ?= seiostar_$(AGENT_NAME):$(IMAGE_TAG)
+CONTAINER_NAME ?= seiostar_$(AGENT_NAME)_$(SESSION_NAME)
 
-create_image: $(BUILD_DIR)/image_$(IMAGE_TAG)
+$(IMAGE_FILE): | $(BUILD_DIR)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build $(AGENT_NAME)-sandbox.nix -o $(IMAGE_FILE)
+	docker image load -i $(IMAGE_FILE)
+
+create_image: $(IMAGE_FILE)
 
 delete_image:
-	rm -f $(BUILD_DIR)/image_$(IMAGE_TAG)
-	docker image rm -f seiostar:$(IMAGE_TAG)
+	rm -f $(IMAGE_FILE)
+	docker image rm -f $(IMAGE_NAME)
 
 recreate_image: delete_image create_image
 
-new_temp_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
+new_temp_session: $(IMAGE_FILE)
 	docker run \
 		--rm \
- 		-v ~/agentstemp/claude:/home/agent/.claude \
- 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+ 		-v ~/agentstemp/$(AGENT_NAME):/home/agent/.$(AGENT_NAME) \
+ 		-v ~/agentstemp/$(AGENT_NAME).json:/home/agent/.$(AGENT_NAME).json \
 		-it \
-		seiostar:$(IMAGE_TAG) /bin/bash
+		$(IMAGE_NAME) /bin/bash
 
-new_session: $(BUILD_DIR)/image_$(IMAGE_TAG)
+new_session: $(IMAGE_FILE)
 	docker run \
-		--name seiostar_$(SESSION_NAME) \
- 		-v ~/agentstemp/claude:/home/agent/.claude \
- 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
-		-it seiostar:$(IMAGE_TAG) \
+		--name $(CONTAINER_NAME) \
+ 		-v ~/agentstemp/$(AGENT_NAME):/home/agent/.$(AGENT_NAME) \
+ 		-v ~/agentstemp/$(AGENT_NAME).json:/home/agent/.$(AGENT_NAME).json \
+		-it $(IMAGE_NAME) \
 		/bin/bash
 
 attach_session: 
-	docker attach seiostar_$(SESSION_NAME)
+	docker attach $(CONTAINER_NAME)
 
 load_session: 
-	docker start -ai seiostar_$(SESSION_NAME)
+	docker start -ai $(CONTAINER_NAME)
 
 SYNC_FROM ?= $(shell git rev-parse HEAD)
 
 sync_commits_from_session:
-	docker exec seiostar_$(SESSION_NAME) /bin/bash -c "cd /workspace && git format-patch $(SYNC_FROM)..HEAD --stdout" > $(BUILD_DIR)/$(SESSION_NAME).patch
+	docker exec $(CONTAINER_NAME) /bin/bash -c "cd /workspace && git format-patch $(SYNC_FROM)..HEAD --stdout" > $(BUILD_DIR)/$(SESSION_NAME).patch
 	cat $(BUILD_DIR)/$(SESSION_NAME).patch
 	git am < $(BUILD_DIR)/$(SESSION_NAME).patch
 	rm $(BUILD_DIR)/$(SESSION_NAME).patch
 
 delete_session:
-	docker rm seiostar_$(SESSION_NAME)
+	docker rm $(CONTAINER_NAME)
 
 clean:
 	rm -rf $(CACHEDIR)
