@@ -1076,63 +1076,12 @@ let destruct_steps_ecall
       false_elim ()
       end
     | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin
-      match op with
-      | ORead -> begin
-        match step_ecall with
-        | SCallReturn h ORead fd (Inl s) -> begin
-          let EInl (EString _) = f2 in
-          lem_step_implies_steps (ECall ORead (get_efd fd)) (EInl (EString s)) h (Some (EvRead fd (Inl s)));
-          let lt' : local_trace h = [EvRead fd (Inl s)] in
-          let s2 : steps (EInl (EString s)) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        | SCallReturn h ORead fd (Inr ()) -> begin
-          let EInr EUnit = f2 in
-          lem_step_implies_steps (ECall ORead (get_efd fd)) (EInr EUnit) h (Some (EvRead fd (Inr ())));
-          let lt' : local_trace h = ev_lt (EvRead fd (Inr ())) in
-          let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        end
-      | OOpen -> begin
-        match step_ecall with
-        | SCallReturn h OOpen str_t (Inl fd_v) -> begin
-          lem_step_implies_steps (ECall OOpen (EString str_t)) (EInl (get_efd fd_v)) h (Some (EvOpen str_t (Inl fd_v)));
-          let lt' : local_trace h = [EvOpen str_t (Inl fd_v)] in
-          let s2 : steps (EInl (get_efd fd_v)) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        | SCallReturn h OOpen str_t (Inr ()) -> begin
-          let EInr EUnit = f2 in
-          lem_step_implies_steps (ECall OOpen (EString str_t)) (EInr EUnit) h (Some (EvOpen str_t (Inr ())));
-          let lt' : local_trace h = [EvOpen str_t (Inr ())] in
-          let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        end
-      | OClose -> begin
-        match step_ecall with
-        | SCallReturn h OClose fd (Inl ()) -> begin
-          let EInl EUnit = f2 in
-          lem_step_implies_steps (ECall OClose (get_efd fd)) (EInl EUnit) h (Some (EvClose fd (Inl ())));
-          let lt' : local_trace h = ev_lt (EvClose fd (Inl ())) in
-          let s2 : steps (EInl EUnit) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        | SCallReturn h OClose fd (Inr ()) -> begin
-          let EInr EUnit = f2 in
-          lem_step_implies_steps (ECall OClose (get_efd fd)) (EInr EUnit) h (Some (EvClose fd (Inr ())));
-          let lt' : local_trace h = ev_lt (EvClose fd (Inr ())) in
-          let s2 : steps (EInr EUnit) e' (h++lt') lt23 = step_ecall_steps in
-          trans_history h lt' lt23;
-          (f2, (| lt', lt23 |))
-          end
-        end
+      match step_ecall with
+      | SCallReturn h op args res ->
+        lem_step_implies_steps (ECall op (as_e_io_args op args)) (as_e_io_res op args res) h (Some (op_to_ev op args res));
+        let lt' : local_trace h = [op_to_ev op args res] in
+        trans_history h lt' lt23;
+        (f2, (| lt', lt23 |))
       end
 #pop-options
 
