@@ -83,7 +83,6 @@ let (^+) (t1 t2:qType) : qType =
 let qResexn (t1:qType) : qType = t1 ^+ qUnit
 
 
-unfold
 let q_io_args (o:io_ops) : qType =
   match o with
   | OOpen  -> qString
@@ -91,7 +90,6 @@ let q_io_args (o:io_ops) : qType =
   | OWrite -> qFileDescr ^* qString
   | OClose -> qFileDescr
 
-unfold
 let q_io_res (o:io_ops) : qType =
   match o with
   | OOpen  -> qResexn qFileDescr
