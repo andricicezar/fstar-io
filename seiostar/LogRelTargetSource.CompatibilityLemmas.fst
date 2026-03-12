@@ -542,6 +542,7 @@ let helper_compat_val_case (e':closed_exp)
     get_squash (t3 ∋ (h, fs_val_case fs_sc fs_li fs_ri, e') /\ lt == []))
 #pop-options
 
+#push-options "--split_queries always"
 let compat_oval_case
   #g
   (#t1 #t2 #t3:qType)
@@ -574,6 +575,7 @@ let compat_oval_case
       end
     end
   end
+#pop-options
 
 let compat_oval_lambda_ocomp #g (#t1:qType) (#t2:qType) (fs_body:fs_ocomp (extend t1 g) t2) (body:exp)
   : Lemma
