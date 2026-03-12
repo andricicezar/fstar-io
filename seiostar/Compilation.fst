@@ -108,9 +108,9 @@ and lem_compile_superset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
   | QCall o #args qargs ->
     lem_compile_superset qargs;
     (match o with
-     | OOpen -> C1.compat_ocomp_openfile_oval args (compile qargs)
-     | ORead -> C1.compat_ocomp_read_oval args (compile qargs)
-     | OClose -> C1.compat_ocomp_close_oval args (compile qargs)
+     | OOpen -> C1.compat_ocomp_call_oval OOpen args (compile qargs)
+     | ORead -> C1.compat_ocomp_call_oval ORead args (compile qargs)
+     | OClose -> C1.compat_ocomp_call_oval OClose args (compile qargs)
      | OWrite ->
        C1.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
        C1.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
@@ -200,9 +200,9 @@ and lem_compile_subset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
   | QCall o #args qargs ->
     lem_compile_subset qargs;
     (match o with
-     | OOpen -> C2.compat_ocomp_openfile_oval args (compile qargs)
-     | ORead -> C2.compat_ocomp_read_oval args (compile qargs)
-     | OClose -> C2.compat_ocomp_close_oval args (compile qargs)
+     | OOpen -> C2.compat_ocomp_call_oval OOpen args (compile qargs)
+     | ORead -> C2.compat_ocomp_call_oval ORead args (compile qargs)
+     | OClose -> C2.compat_ocomp_call_oval OClose args (compile qargs)
      | OWrite ->
        C2.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
        C2.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);

@@ -258,11 +258,11 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
   | ECall OOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_ocomp_openfile (backtranslate_exp h') e'
+    C1.compat_ocomp_call OOpen (backtranslate_exp h') e'
   | ECall ORead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_ocomp_read (backtranslate_exp h') e'
+    C1.compat_ocomp_call ORead (backtranslate_exp h') e'
   | ECall OWrite _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
@@ -271,7 +271,7 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
   | ECall OClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
-    C1.compat_ocomp_close (backtranslate_exp h') e'
+    C1.compat_ocomp_call OClose (backtranslate_exp h') e'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
@@ -331,11 +331,11 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
   | ECall OOpen _ ->
     let TyOpenfile #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_ocomp_openfile (backtranslate_exp h') e'
+    C2.compat_ocomp_call OOpen (backtranslate_exp h') e'
   | ECall ORead _ ->
     let TyRead #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_ocomp_read (backtranslate_exp h') e'
+    C2.compat_ocomp_call ORead (backtranslate_exp h') e'
   | ECall OWrite _ ->
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;
@@ -344,7 +344,7 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
   | ECall OClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_subset_exp h';
-    C2.compat_ocomp_close (backtranslate_exp h') e'
+    C2.compat_ocomp_call OClose (backtranslate_exp h') e'
   | EStringEq _ _ ->
     let TyStringEq #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_subset_exp h1;

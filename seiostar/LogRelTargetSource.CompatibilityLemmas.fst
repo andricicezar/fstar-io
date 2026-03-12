@@ -849,112 +849,121 @@ let compat_ocomp_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_
     end
   end
 
-#push-options "--split_queries always --fuel 10 --z3rlimit 10"
-let helper_compat_ocomp_openfile_oval (e':closed_exp) (h:history) (lt:local_trace h) (fs_fnm:fs_val qString) (fnm:closed_exp) :
+#push-options "--fuel 10 --z3rlimit 100"
+let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:history) (lt:local_trace h)
+  (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
-    (requires e_beh (ECall OOpen fnm) e' h lt /\
-              qString ⊇ (h, fs_fnm, fnm))
-    (ensures (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\
-             fs_beh (fs_comp_call_val OOpen fs_fnm) h lt fs_r)) =
-  lem_forall_values_are_values qString h fs_fnm;
-  bind_squash (steps (ECall OOpen fnm) e' h lt) (fun steps_e_e' ->
-    let (fnm', (| lt1, lt' |)) = destruct_steps_eopen_str fnm e' h lt steps_e_e' in
-    bind_squash (steps (ECall OOpen fnm') e' (h++lt1) lt') (fun sts1 ->
-      trans_history h lt1 lt';
-      let (e_r, (| lt2, lt3 |)) = destruct_steps_eopen fnm' e' (h++lt1) lt' sts1 in
-      assert (qString ⊇ (h, fs_fnm, fnm));
-      lem_value_is_irred fnm';
-      (match e_r with
-      | EInl (EFileDescr fd) -> begin
-          lem_value_is_irred (EFileDescr fd);
-          lem_value_is_irred (EInl (EFileDescr fd));
-          lem_destruct_steps_einl (EFileDescr fd) e' ((h++lt1)++lt2) lt3;
-          assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inl fd, EInl (EFileDescr fd)));
-          assert (lt == [EvOpen fs_fnm (Inl fd)]);
-          lem_thetaP_call OOpen fs_fnm (Inl fd) h
-        end
-      | EInr EUnit -> begin
-          lem_value_is_irred EUnit;
-          lem_value_is_irred (EInr EUnit);
-          lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
-          assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
-          assert (lt == [EvOpen fs_fnm (Inr ())]);
-          lem_thetaP_call OOpen fs_fnm (Inr ()) h
-        end);
-      get_squash (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OOpen fs_fnm) h lt fs_r)))
-#pop-options
-
-let compat_ocomp_openfile_oval #g (fs_fnm:fs_oval g qString) (fnm:exp)
-  : Lemma
-    (requires fs_fnm ⊐ fnm)
-    (ensures fs_ocomp_call_oval OOpen fs_fnm ⊒ ECall OOpen fnm)
-  =
-  lem_fv_in_env_call g OOpen fnm;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, io_call OOpen (fs_fnm fsG), gsubst s (ECall OOpen fnm)) with begin
-    let fs_fnm = fs_fnm fsG in
-    let fs_e = io_call OOpen fs_fnm in
-    let e = ECall OOpen (gsubst s fnm) in
-    assert (gsubst s (ECall OOpen fnm) == e);
-    let ECall OOpen fnm = e in
-    introduce fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          helper_compat_ocomp_openfile_oval e' h lt fs_fnm fnm
-        end
-      end
+    (requires e_beh (ECall op arg) e' h lt /\
+              (q_io_args op) ⊇ (h, fs_arg, arg))
+    (ensures (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\
+             fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)) =
+  lem_forall_values_are_values (q_io_args op) h fs_arg;
+  match op with
+  | OOpen -> begin
+      let fs_arg_c : io_args OOpen = fs_arg in
+      bind_squash (steps (ECall OOpen arg) e' h lt) (fun steps_e_e' ->
+        let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg OOpen arg e' h lt steps_e_e' in
+        bind_squash (steps (ECall OOpen arg') e' (h++lt1) lt') (fun sts1 ->
+          trans_history h lt1 lt';
+          let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall OOpen arg' e' (h++lt1) lt' sts1 in
+          assert (q_io_args op ⊇ (h, fs_arg, arg));
+          lem_value_is_irred arg';
+          (match e_r with
+          | EInl (EFileDescr fd) -> begin
+              lem_value_is_irred (EFileDescr fd);
+              lem_value_is_irred (EInl (EFileDescr fd));
+              lem_destruct_steps_einl (EFileDescr fd) e' ((h++lt1)++lt2) lt3;
+              assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inl fd, EInl (EFileDescr fd)));
+              assert (lt == [EvOpen fs_arg_c (Inl fd)]);
+              lem_thetaP_call OOpen fs_arg_c (Inl fd) h
+            end
+          | EInr EUnit -> begin
+              lem_value_is_irred EUnit;
+              lem_value_is_irred (EInr EUnit);
+              lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
+              assert ((qFileDescr ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+              assert (lt == [EvOpen fs_arg_c (Inr ())]);
+              lem_thetaP_call OOpen fs_arg_c (Inr ()) h
+            end);
+          get_squash (exists (fs_r:fs_val (qFileDescr ^+ qUnit)). (qFileDescr ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OOpen fs_arg_c) h lt fs_r)));
+      assert (q_io_res op == qFileDescr ^+ qUnit)
     end
-  end
-
-#push-options "--split_queries always"
-let helper_compat_ocomp_read_oval (e':closed_exp) (#h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fd:closed_exp) :
-  Lemma
-    (requires (e_beh (ECall ORead fd) e' h lt /\ qFileDescr ⊇ (h, fs_fd, fd)))
-    (ensures (exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_fd) h lt fs_r)) =
-  lem_forall_values_are_values qFileDescr h fs_fd;
-  bind_squash (steps (ECall ORead fd) e' h lt) (fun steps_e_e' ->
-    let (fd', (| lt1, lt' |)) = destruct_steps_eread_fd fd e' h lt steps_e_e' in
-    bind_squash (steps (ECall ORead fd') e' (h++lt1) lt') (fun sts1 ->
-      trans_history h lt1 lt';
-      let (e_r, (| lt2, lt3 |)) = destruct_steps_eread fd' e' (h++lt1) lt' sts1 in
-      assert (qFileDescr ⊇ (h, fs_fd, fd));
-      lem_value_is_irred fd';
-      assert (is_value e_r);
-      (match e_r with
-      | EInl (EString s) -> begin
-        lem_value_is_irred (EString s);
-        lem_value_is_irred (EInl (EString s));
-        lem_destruct_steps_einl (EString s) e' ((h++lt1)++lt2) lt3;
-        assert (qResexn qString ∋ (h++lt, Inl s, EInl (EString s)));
-        assert (lt == [EvRead fs_fd (Inl s)]);
-        lem_thetaP_call ORead fs_fd (Inl s) h
-      end
-      | EInr EUnit -> begin
-        lem_value_is_irred EUnit;
-        lem_value_is_irred (EInr EUnit);
-        lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
-        assert (qResexn qString ∋ (h++lt, Inr (), EInr EUnit));
-        assert (lt == [EvRead fs_fd (Inr ())]);
-        lem_thetaP_call ORead fs_fd (Inr ()) h
-      end);
-      get_squash (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_fd) h lt fs_r)))
+  | ORead -> begin
+      let fs_arg_c : io_args ORead = fs_arg in
+      bind_squash (steps (ECall ORead arg) e' h lt) (fun steps_e_e' ->
+        let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg ORead arg e' h lt steps_e_e' in
+        bind_squash (steps (ECall ORead arg') e' (h++lt1) lt') (fun sts1 ->
+          trans_history h lt1 lt';
+          let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall ORead arg' e' (h++lt1) lt' sts1 in
+          assert (q_io_args op ⊇ (h, fs_arg, arg));
+          lem_value_is_irred arg';
+          (match e_r with
+          | EInl (EString s) -> begin
+              lem_value_is_irred (EString s);
+              lem_value_is_irred (EInl (EString s));
+              lem_destruct_steps_einl (EString s) e' ((h++lt1)++lt2) lt3;
+              assert ((qString ^+ qUnit) ∋ (h++lt, Inl s, EInl (EString s)));
+              assert (lt == [EvRead fs_arg_c (Inl s)]);
+              lem_thetaP_call ORead fs_arg_c (Inl s) h
+            end
+          | EInr EUnit -> begin
+              lem_value_is_irred EUnit;
+              lem_value_is_irred (EInr EUnit);
+              lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
+              assert ((qString ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+              assert (lt == [EvRead fs_arg_c (Inr ())]);
+              lem_thetaP_call ORead fs_arg_c (Inr ()) h
+            end);
+          get_squash (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_arg_c) h lt fs_r)));
+      assert (q_io_res op == qString ^+ qUnit)
+    end
+  | OClose -> begin
+      let fs_arg_c : io_args OClose = fs_arg in
+      bind_squash (steps (ECall OClose arg) e' h lt) (fun steps_e_e' ->
+        let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg OClose arg e' h lt steps_e_e' in
+        bind_squash (steps (ECall OClose arg') e' (h++lt1) lt') (fun sts1 ->
+          trans_history h lt1 lt';
+          let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall OClose arg' e' (h++lt1) lt' sts1 in
+          assert (q_io_args op ⊇ (h, fs_arg, arg));
+          lem_value_is_irred arg';
+          (match e_r with
+          | EInl EUnit -> begin
+              lem_value_is_irred EUnit;
+              lem_value_is_irred (EInl EUnit);
+              lem_destruct_steps_einl EUnit e' ((h++lt1)++lt2) lt3;
+              assert ((qUnit ^+ qUnit) ∋ (h++lt, Inl (), EInl EUnit));
+              assert (lt == [EvClose fs_arg_c (Inl ())]);
+              lem_thetaP_call OClose fs_arg_c (Inl ()) h
+            end
+          | EInr EUnit -> begin
+              lem_value_is_irred EUnit;
+              lem_value_is_irred (EInr EUnit);
+              lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
+              assert ((qUnit ^+ qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+              assert (lt == [EvClose fs_arg_c (Inr ())]);
+              lem_thetaP_call OClose fs_arg_c (Inr ()) h
+            end);
+          get_squash (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_arg_c) h lt fs_r)));
+      assert (q_io_res op == qUnit ^+ qUnit)
+    end
 #pop-options
 
-let compat_ocomp_read_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
+let compat_ocomp_call_oval #g (op:io_ops{op <> OWrite}) (fs_arg:fs_oval g (q_io_args op)) (arg:exp)
   : Lemma
-    (requires fs_fd ⊐ fd)
-    (ensures fs_ocomp_call_oval ORead fs_fd ⊒ ECall ORead fd)
+    (requires fs_arg ⊐ arg)
+    (ensures fs_ocomp_call_oval op fs_arg ⊒ ECall op arg)
   =
-  lem_fv_in_env_call g ORead fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, io_call ORead (fs_fd fsG), gsubst s (ECall ORead fd)) with begin
-    let fs_fd = fs_fd fsG in
-    let fs_e = fs_comp_call_val ORead fs_fd in
-    let e = ECall ORead (gsubst s fd) in
-    assert (gsubst s (ECall ORead fd) == e);
-    let ECall ORead fd = e in
-    introduce fsG `(∽) h` s ==> (qString ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qString ^+ qUnit)). (qString ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          helper_compat_ocomp_read_oval e' lt fs_fd fd
+  lem_fv_in_env_call g op arg;
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, io_call op (fs_arg fsG), gsubst s (ECall op arg)) with begin
+    let fs_arg_v = fs_arg fsG in
+    let fs_e = io_call op fs_arg_v in
+    let e = ECall op (gsubst s arg) in
+    assert (gsubst s (ECall op arg) == e);
+    let ECall _ arg = e in
+    introduce fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, fs_e, e) with _. begin
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+          helper_compat_ocomp_call_oval op e' h lt fs_arg_v arg
         end
       end
     end
@@ -1026,60 +1035,6 @@ let compat_ocomp_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qS
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
           helper_compat_ocomp_write_oval e' lt fs_fd fs_msg fd msg
-        end
-      end
-    end
-  end
-
-#push-options "--z3rlimit 32 --fuel 32"
-let helper_compat_ocomp_close_oval (e':closed_exp) (h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fd:closed_exp) :
-  Lemma
-    (requires (e_beh (ECall OClose fd) e' h lt /\ qFileDescr ⊇ (h, fs_fd, fd)))
-    (ensures (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_fd) h lt fs_r)) =
-  lem_forall_values_are_values qFileDescr h fs_fd;
-  bind_squash (steps (ECall OClose fd) e' h lt) (fun steps_e_e' ->
-    let (fd', (| lt1, lt' |)) = destruct_steps_eclose_fd fd e' h lt steps_e_e' in
-    bind_squash (steps (ECall OClose fd') e' (h++lt1) lt') (fun sts1 ->
-    trans_history h lt1 lt';
-    let (e_r, (| lt2, lt3 |)) = destruct_steps_eclose fd' e' (h++lt1) lt' sts1 in
-    assert (qFileDescr ⊇ (h, fs_fd, fd));
-    lem_value_is_irred fd';
-    (match e_r with
-    | EInl EUnit -> begin
-      lem_value_is_irred EUnit;
-      lem_value_is_irred (EInl EUnit);
-      lem_destruct_steps_einl EUnit e' ((h++lt1)++lt2) lt3;
-      assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
-      assert (lt == [EvClose (get_fd fd') (Inl ())]);
-      lem_thetaP_call OClose fs_fd (Inl ()) h
-    end
-    | EInr EUnit -> begin
-      lem_value_is_irred EUnit;
-      lem_value_is_irred (EInr EUnit);
-      lem_destruct_steps_einr EUnit e' ((h++lt1)++lt2) lt3;
-      assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
-      assert (lt == [EvClose (get_fd fd') (Inr ())]);
-      lem_thetaP_call OClose fs_fd (Inr ()) h
-    end);
-    get_squash (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_fd) h lt fs_r)))
-#pop-options
-
-let compat_ocomp_close_oval #g (fs_fd:fs_oval g qFileDescr) (fd:exp)
-  : Lemma
-    (requires fs_fd ⊐ fd)
-    (ensures fs_ocomp_call_oval OClose fs_fd ⊒ ECall OClose fd)
-  =
-  lem_fv_in_env_call g OClose fd;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OClose (fs_fd fsG), gsubst s (ECall OClose fd)) with begin
-    let fs_fd = fs_fd fsG in
-    let fs_e = io_call OClose fs_fd in
-    let e = ECall OClose (gsubst s fd) in
-    assert (gsubst s (ECall OClose fd) == e);
-    let ECall OClose fd = e in
-    introduce fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          helper_compat_ocomp_close_oval e' h lt fs_fd fd
         end
       end
     end
@@ -1625,77 +1580,37 @@ let compat_ocomp_case #g (#a #b #c:qType)
     end
   end
 
-let compat_ocomp_openfile #g (fs_fnm:fs_ocomp g qString) (fnm:exp)
+let compat_ocomp_call #g (op:io_ops{op <> OWrite}) (fs_arg:fs_ocomp g (q_io_args op)) (arg:exp)
   : Lemma
-    (requires fs_fnm ⊒ fnm)
-    (ensures fs_ocomp_call OOpen fs_fnm ⊒ ECall OOpen fnm) =
-  lem_fv_in_env_call g OOpen fnm;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qFileDescr) ⫄ (h, (fs_ocomp_call OOpen fs_fnm) fsG, gsubst s (ECall OOpen fnm)) with begin
+    (requires fs_arg ⊒ arg)
+    (ensures fs_ocomp_call op fs_arg ⊒ ECall op arg) =
+  lem_fv_in_env_call g op arg;
+  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, (fs_ocomp_call op fs_arg) fsG, gsubst s (ECall op arg)) with begin
     introduce _ ==> _ with _. begin
-      let fs_fnm' : fs_comp qString = fs_fnm fsG in
-      let fs_e = fs_comp_bind #qString #(qResexn qFileDescr) fs_fnm' (fun fnm' -> fs_comp_call_val OOpen fnm') in
-      assert (fs_e == (fs_ocomp_call OOpen fs_fnm) fsG) by (trefl ());
-      let e = ECall OOpen (gsubst s fnm) in
-      assert (gsubst s (ECall OOpen fnm) == e) by (trefl ());
-      let ECall OOpen fnm = e in
-      introduce fsG `(∽) h` s ==> (qFileDescr ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-        introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-          introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+      let fs_arg' : fs_comp (q_io_args op) = fs_arg fsG in
+      let fs_e = fs_comp_bind #(q_io_args op) #(q_io_res op) fs_arg' (fun arg' -> fs_comp_call_val op arg') in
+      assert (fs_e == (fs_ocomp_call op fs_arg) fsG) by (trefl ());
+      let e = ECall op (gsubst s arg) in
+      assert (gsubst s (ECall op arg) == e);
+      let ECall _ arg = e in
+      introduce fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, fs_e, e) with _. begin
+        introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
+          introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps e e' h lt) (fun sts1 ->
-              lem_forall_values_are_values_prod qString h;
-              sem_expr_shape_comp fs_fnm' fnm h;
-              let (fnm', (|lt1, lt' |)) = destruct_steps_eopen_str fnm e' h lt sts1 in
-              assert (qString ⫄ (h, fs_fnm', fnm));
-              eliminate forall lt1 fnm'. e_beh fnm fnm' h lt1 ==> (exists (fs_r_fnm:fs_val qString). qString ∋ (h++lt1, fs_r_fnm, fnm') /\ fs_beh fs_fnm' h lt1 fs_r_fnm) with lt1 fnm';
-              lem_value_is_irred fnm';
-              eliminate exists (fs_r_fnm:fs_val qString). qString ∋ (h++lt1, fs_r_fnm, fnm') /\ fs_beh fs_fnm' h lt1 fs_r_fnm
-                returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_values_are_expressions qString (h++lt1) fs_r_fnm fnm';
+              lem_forall_values_are_values_prod (q_io_args op) h;
+              let (arg_val, (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt sts1 in
+              assert ((q_io_args op) ⫄ (h, fs_arg', arg));
+              eliminate forall lt1 arg_val. e_beh arg arg_val h lt1 ==> (exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg) with lt1 arg_val;
+              lem_value_is_irred arg_val;
+              eliminate exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg
+                returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+              lem_values_are_expressions (q_io_args op) (h++lt1) fs_r_arg arg_val;
               trans_history h lt1 lt';
-              helper_compat_ocomp_openfile_oval e' (h++lt1) lt' fs_r_fnm fnm';
-              eliminate exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_comp_call_val OOpen fs_r_fnm) (h++lt1) lt' fs_r
-                returns exists (fs_r:fs_val (qResexn qFileDescr)). (qResexn qFileDescr) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-                lem_fs_beh_bind #qString #(qResexn qFileDescr) fs_fnm' h lt1 fs_r_fnm (fun x -> fs_comp_call_val OOpen x) lt' fs_r
-              end
-             end)
-            end
-          end
-        end
-      end
-    end
-
-let compat_ocomp_read #g (fs_fd:fs_ocomp g qFileDescr) (fd:exp)
-  : Lemma
-    (requires fs_fd ⊒ fd)
-    (ensures fs_ocomp_call ORead fs_fd ⊒ ECall ORead fd) =
-  lem_fv_in_env_call g ORead fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_ocomp_call ORead fs_fd) fsG, gsubst s (ECall ORead fd)) with begin
-    introduce _ ==> _ with _. begin
-      let fs_fd' : fs_comp qFileDescr = fs_fd fsG in
-      let fs_e = fs_comp_bind #qFileDescr #(qResexn qString) fs_fd' (fun fd' -> fs_comp_call_val ORead fd') in
-      assert (fs_e == (fs_ocomp_call ORead fs_fd) fsG) by (trefl ());
-      let e = ECall ORead (gsubst s fd) in
-      assert (gsubst s (ECall ORead fd) == e);
-      let ECall ORead fd = e in
-      introduce fsG `(∽) h` s ==> (qResexn qString) ⫄ (h, (fs_ocomp_call ORead fs_fd) fsG, gsubst s (ECall ORead fd)) with _. begin
-        introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-          introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-            lem_shift_type_value_environments h fsG s;
-            bind_squash (steps e e' h lt) (fun sts1 ->
-              lem_forall_values_are_values_prod qFileDescr h;
-              let (fd', (| lt1, lt' |)) = destruct_steps_eread_fd fd e' h lt sts1 in
-              assert (qFileDescr ⫄ (h, fs_fd', fd));
-              eliminate forall lt1 fd'. e_beh fd fd' h lt1 ==> (exists (fs_r_fd:fs_val qFileDescr). qFileDescr ∋ (h++lt1, fs_r_fd, fd') /\ fs_beh fs_fd' h lt1 fs_r_fd) with lt1 fd';
-              lem_value_is_irred fd';
-              eliminate exists (fs_r_fd:fs_val qFileDescr). qFileDescr ∋ (h++lt1, fs_r_fd, fd') /\ fs_beh fs_fd' h lt1 fs_r_fd
-                returns exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_values_are_expressions qFileDescr (h++lt1) fs_r_fd fd';
-              trans_history h lt1 lt';
-              helper_compat_ocomp_read_oval e' lt' fs_r_fd fd';
-              eliminate exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_r_fd) (h++lt1) lt' fs_r
-                returns exists (fs_r:fs_val (qResexn qString)). (qResexn qString) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-                lem_fs_beh_bind #qFileDescr #(qResexn qString) fs_fd' h lt1 fs_r_fd (fun x -> fs_comp_call_val ORead x) lt' fs_r
+              helper_compat_ocomp_call_oval op e' (h++lt1) lt' fs_r_arg arg_val;
+              eliminate exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_comp_call_val op fs_r_arg) (h++lt1) lt' fs_r
+                returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+                lem_fs_beh_bind #(q_io_args op) #(q_io_res op) fs_arg' h lt1 fs_r_arg (fun x -> fs_comp_call_val op x) lt' fs_r
               end
             end)
           end
@@ -1786,41 +1701,4 @@ let compat_ocomp_write #g (fs_fd:fs_ocomp g qFileDescr) (fs_msg:fs_ocomp g qStri
   end
 #pop-options
 
-let compat_ocomp_close #g (fs_fd:fs_ocomp g qFileDescr) (fd:exp)
-  : Lemma
-    (requires fs_fd ⊒ fd)
-    (ensures fs_ocomp_call OClose fs_fd ⊒ ECall OClose fd) =
-  lem_fv_in_env_call g OClose fd;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_ocomp_call OClose fs_fd) fsG, gsubst s (ECall OClose fd)) with begin
-    introduce _ ==> _ with _. begin
-      let fs_fd' : fs_comp qFileDescr = fs_fd fsG in
-      let fs_e = fs_comp_bind #qFileDescr #(qResexn qUnit) fs_fd' (fun fd' -> fs_comp_call_val OClose fd') in
-      assert (fs_e == (fs_ocomp_call OClose fs_fd) fsG) by (trefl ());
-      let e = ECall OClose (gsubst s fd) in
-      assert (gsubst s (ECall OClose fd) == e) by (trefl ());
-      let ECall OClose fd = e in
-      introduce fsG `(∽) h` s ==> (qResexn qUnit) ⫄ (h, (fs_ocomp_call OClose fs_fd) fsG, gsubst s (ECall OClose fd)) with _. begin
-        introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-          introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-            lem_shift_type_value_environments h fsG s;
-            bind_squash (steps e e' h lt) (fun sts1 ->
-              lem_forall_values_are_values_prod qFileDescr h;
-              let (fd', (| lt1, lt' |)) = destruct_steps_eclose_fd fd e' h lt sts1 in
-              assert (qFileDescr ⫄ (h, fs_fd', fd));
-              eliminate forall lt1 fd'. e_beh fd fd' h lt1 ==> (exists (fs_r_fd:fs_val qFileDescr). qFileDescr ∋ (h++lt1, fs_r_fd, fd') /\ fs_beh fs_fd' h lt1 fs_r_fd) with lt1 fd';
-              lem_value_is_irred fd';
-              eliminate exists (fs_r_fd:fs_val qFileDescr). qFileDescr ∋ (h++lt1, fs_r_fd, fd') /\ fs_beh fs_fd' h lt1 fs_r_fd
-                returns exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_values_are_expressions qFileDescr (h++lt1) fs_r_fd fd';
-              trans_history h lt1 lt';
-              helper_compat_ocomp_close_oval e' (h++lt1) lt' fs_r_fd fd';
-              eliminate exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_r_fd) (h++lt1) lt' fs_r
-                returns exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-                lem_fs_beh_bind #qFileDescr #(qResexn qUnit) fs_fd' h lt1 fs_r_fd (fun x -> fs_comp_call_val OClose x) lt' fs_r
-              end
-            end)
-          end
-        end
-      end
-    end
-  end
+
