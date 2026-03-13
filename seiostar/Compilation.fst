@@ -211,10 +211,15 @@ and lem_compile_subset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
      | OWrite ->
        C2.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
        C2.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
-       C2.compat_ocomp_write_oval
+       C2.compat_oval_pair
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
          (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
-         (EFst (compile qargs)) (ESnd (compile qargs)))
+         (EFst (compile qargs)) (ESnd (compile qargs));
+       C2.compat_ocomp_call_oval OWrite
+         (fs_oval_pair
+           (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
+           (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd))
+         (EPair (EFst (compile qargs)) (ESnd (compile qargs))))
   | QReturn #_ #_ #x qx ->
     lem_compile_subset qx;
     C2.compat_ocomp_return x (compile qx)
