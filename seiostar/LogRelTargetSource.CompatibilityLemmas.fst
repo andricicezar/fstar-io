@@ -899,6 +899,7 @@ let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:h
     let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt steps_e_e' in
     FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #the_goal () (fun sts1 ->
       trans_history h lt1 lt';
+      lem_sem_value_shape_implies_ecall_val_arg op arg';
       let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
       lem_value_is_irred arg';
       lem_value_steps_gives_refl e_r e' ((h++lt1)++lt2) lt3;
@@ -949,6 +950,7 @@ let helper_compat_ocomp_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
         (qFileDescr ⊇ (h, fs_fd, fd)) /\
         (forall (lt:local_trace h). qString ⊇ (h++lt, fs_msg, msg))))
     (ensures (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OWrite (fs_fd, fs_msg)) h lt fs_r)) =
+  let the_goal = exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OWrite (fs_fd, fs_msg)) h lt fs_r in
   lem_forall_values_are_values qFileDescr h fs_fd;
   bind_squash (steps (ECall OWrite (EPair fd msg)) e' h lt) (fun sts ->
     let (fd', (| lt1, lt' |)) = destruct_steps_ewrite_fd fd msg e' h lt sts in
@@ -957,7 +959,8 @@ let helper_compat_ocomp_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
       let (msg', (| lt2, lt'' |)) = destruct_steps_ewrite_arg fd' msg e' (h++lt1) lt' sts1 in
       bind_squash (steps (ECall OWrite (EPair fd' msg')) e' ((h++lt1)++lt2) lt'') (fun sts2 ->
         trans_history (h++lt1) lt2 lt'';
-        let (e_r, (| lt3, lt4 |)) = destruct_steps_ewrite fd' msg' e' ((h++lt1)++lt2) lt'' sts2 in
+        assert (EPair fd' msg' == as_e_io_args OWrite (EFileDescr?.fd fd', EString?.s msg'));
+        let (e_r, (| lt3, lt4 |)) = destruct_steps_ecall OWrite (EPair fd' msg') e' ((h++lt1)++lt2) lt'' sts2 in
         assert (qFileDescr ⊇ (h, fs_fd, fd));
         lem_value_is_irred fd';
         assert (qString ⊇ (h, fs_msg, msg));
@@ -966,24 +969,33 @@ let helper_compat_ocomp_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
         assert (lt1 == []);
         assert (e_beh msg msg' (h++lt1) lt2);
         assert (lt2 == []);
-        (match e_r with
-        | EInl EUnit -> begin
-          lem_value_is_irred EUnit;
-          lem_value_is_irred (EInl EUnit);
-          lem_destruct_steps_einl EUnit e' (((h++lt1)++lt2)++lt3) lt4;
-          assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
-          assert (lt == [EvWrite (fs_fd, fs_msg) (Inl ())]);
-          lem_thetaP_call OWrite (fs_fd, fs_msg) (Inl ()) h
-        end
-        | EInr EUnit -> begin
-          lem_value_is_irred EUnit;
-          lem_value_is_irred (EInr EUnit);
-          lem_destruct_steps_einr EUnit e' (((h++lt1)++lt2)++lt3) lt4;
-          assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
-          assert (lt == [EvWrite (fs_fd, fs_msg) (Inr ())]);
-          lem_thetaP_call OWrite (fs_fd, fs_msg) (Inr ()) h
-        end);
-        get_squash (exists (fs_r:fs_val (qResexn qUnit)). (qResexn qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OWrite (fs_fd, fs_msg)) h lt fs_r))))
+        eliminate exists (args:io_args OWrite) (res:io_res OWrite args).
+          io_pre ((h++lt1)++lt2) OWrite args /\ io_post ((h++lt1)++lt2) OWrite args res /\
+          EPair fd' msg' == as_e_io_args OWrite args /\
+          e_r == as_e_io_res OWrite args res /\
+          lt3 == [op_to_ev OWrite args res]
+        returns the_goal with _. begin
+          assert (args == (get_fd fd', EString?.s msg'));
+          assert (args == (fs_fd, fs_msg));
+          match res with
+          | Inl () -> begin
+            lem_value_is_irred EUnit;
+            lem_value_is_irred (EInl EUnit);
+            lem_destruct_steps_einl EUnit e' (((h++lt1)++lt2)++lt3) lt4;
+            assert ((qResexn qUnit) ∋ (h++lt, Inl (), EInl EUnit));
+            assert (lt == [EvWrite (fs_fd, fs_msg) (Inl ())]);
+            lem_thetaP_call OWrite (fs_fd, fs_msg) (Inl ()) h
+          end
+          | Inr () -> begin
+            lem_value_is_irred EUnit;
+            lem_value_is_irred (EInr EUnit);
+            lem_destruct_steps_einr EUnit e' (((h++lt1)++lt2)++lt3) lt4;
+            assert ((qResexn qUnit) ∋ (h++lt, Inr (), EInr EUnit));
+            assert (lt == [EvWrite (fs_fd, fs_msg) (Inr ())]);
+            lem_thetaP_call OWrite (fs_fd, fs_msg) (Inr ()) h
+          end
+        end;
+        get_squash the_goal)))
 #pop-options
 
 let compat_ocomp_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
