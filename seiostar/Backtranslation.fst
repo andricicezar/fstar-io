@@ -267,7 +267,8 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     let TyWrite #_ #e1 #e2 h1 h2 = h in
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
-    C1.compat_ocomp_write (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+    C1.compat_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2) e1 e2;
+    C1.compat_ocomp_call OWrite (fs_ocomp_pair (backtranslate_exp h1) (backtranslate_exp h2)) (EPair e1 e2)
   | ECall OClose _ ->
     let TyClose #_ #e' h' = h in
     lem_backtranslate_superset_exp h';
