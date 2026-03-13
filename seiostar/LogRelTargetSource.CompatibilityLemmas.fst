@@ -861,9 +861,20 @@ let lem_value_steps_gives_refl (e:value) (e':closed_exp) (h:history) (lt:local_t
       lem_irred_implies_srefl_steps sts)
   end
 
+(* From ∋ at q_io_args, derive the as_e_io_args representation *)
+let lem_val_rel_implies_ecall_args (op:io_ops) (h:history) (fs_arg:fs_val (q_io_args op)) (val_arg:closed_exp) :
+  Lemma
+    (requires (q_io_args op) ∋ (h, fs_arg, val_arg))
+    (ensures exists (args:io_args op). val_arg == as_e_io_args op args) =
+  match op with
+  | OOpen -> ()
+  | ORead -> ()
+  | OClose -> ()
+  | OWrite -> ()
+
 #push-options "--fuel 10 --z3rlimit 100"
 let lem_ecall_result_facts
-  (op:io_ops{op <> OWrite})
+  (op:io_ops)
   (fs_arg:fs_val (q_io_args op))
   (args:io_args op)
   (res:io_res op args)
@@ -883,10 +894,94 @@ let lem_ecall_result_facts
   | OOpen -> lem_thetaP_call OOpen fs_arg res h
   | ORead -> lem_thetaP_call ORead fs_arg res h
   | OClose -> lem_thetaP_call OClose fs_arg res h
+  | OWrite -> lem_thetaP_call OWrite fs_arg res h
 #pop-options
 
+(* Preservation of ⊇ under reduction: if arg steps to arg', ⊇ is preserved *)
+let lem_superset_preserved_by_step
+  (t:qType) (h:history) (fs_v:fs_val t) (e e':closed_exp) (oev:option (event_h h)) :
+  Lemma
+    (requires t ⊇ (h, fs_v, e) /\ squash (step e e' h oev))
+    (ensures t ⊇ (h++(as_lt oev), fs_v, e')) =
+  introduce forall (e'':closed_exp) (lt':local_trace (h++(as_lt oev))). e_beh e' e'' (h++(as_lt oev)) lt' ==> (t ∋ (h++(as_lt oev), fs_v, e'') /\ lt' == []) with begin
+    introduce _ ==> _ with _. begin
+      lem_step_implies_steps e e' h oev;
+      trans_history h (as_lt oev) lt';
+      lem_steps_transitive e e' e'' h (as_lt oev) lt';
+      assert (e_beh e e'' h ((as_lt oev) @ lt'));
+      assert (t ∋ (h, fs_v, e'') /\ ((as_lt oev) @ lt') == []);
+      assert (as_lt oev == [] /\ lt' == [])
+    end
+  end
+
+(* General helper for all ops - no case analysis on op *)
 #push-options "--fuel 32 --z3rlimit 64"
-let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:history) (lt:local_trace h)
+let rec destruct_steps_ecall_arg_all
+  (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
+  (fs_arg:fs_val (q_io_args op))
+  (st:steps (ECall op arg) e' h lt) :
+  Pure (value * (lt1:local_trace h & local_trace (h++lt1)))
+    (requires indexed_irred e' (h++lt) /\
+      (q_io_args op) ⊇ (h, fs_arg, arg))
+    (ensures fun (val_arg, (| lt1, lt' |)) ->
+      (q_io_args op) ∋ (h, fs_arg, val_arg) /\
+      (exists (args:io_args op). val_arg == as_e_io_args op args) /\
+      steps arg val_arg h lt1 /\
+      steps (ECall op arg) (ECall op val_arg) h lt1 /\
+      steps (ECall op val_arg) e' (h++lt1) lt' /\
+      (lt == (lt1 @ lt')))
+    (decreases st) =
+  match st with
+  | SRefl _ h -> begin
+    (* ECall op arg is irreducible, but it can always step — contradiction.
+       First derive indexed_irred arg h from indexed_irred (ECall op arg) h. *)
+    introduce forall (arg':closed_exp) (oev:option (event_h h)). step arg arg' h oev ==> False with begin
+      introduce _ ==> _ with st. begin
+        FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SCall #arg #arg' #h #oev #op st))
+      end
+    end;
+    assert (e_beh arg arg h []);
+    assert ((q_io_args op) ∋ (h, fs_arg, arg));
+    lem_val_rel_implies_ecall_args op h fs_arg arg;
+    can_step_ecall_val_all op arg h;
+    false_elim ()
+    end
+  | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin
+    let (ECall _ arg) = e in
+    match step_ecall with
+    | SCall #arg #arg' #h' #oev #_ step_arg -> begin
+      let (ECall _ arg') = f2 in
+      lem_step_implies_steps arg arg' h oev;
+      lem_step_implies_steps (ECall op arg) (ECall op arg') h oev;
+      let lt1 : local_trace h = as_lt oev in
+      let s2 : steps (ECall op arg') e' (h++lt1) lt23 = step_ecall_steps in
+      trans_history h lt1 lt23;
+      lem_superset_preserved_by_step (q_io_args op) h fs_arg arg arg' oev;
+      let (val_arg, (| lt1', lt' |)) = destruct_steps_ecall_arg_all op arg' e' (h++lt1) lt23 fs_arg s2 in
+      trans_history h lt1 lt1';
+      lem_steps_transitive arg arg' val_arg h lt1 lt1';
+      lem_steps_transitive (ECall op arg) (ECall op arg') (ECall op val_arg) h lt1 lt1';
+      assert ((q_io_args op) ∋ (h++lt1, fs_arg, val_arg));
+      (* from ⊇ preservation, the trace from arg to val_arg is empty *)
+      lem_value_is_irred val_arg;
+      assert (e_beh arg val_arg h (lt1 @ lt1'));
+      assert ((lt1 @ lt1') == []);
+      (val_arg, (| (lt1 @ lt1'), lt' |))
+      end
+    | SCallReturn _ _ args _ -> begin
+      (* arg is already as_e_io_args form, which is a value *)
+      lem_value_is_irred (as_e_io_args op args);
+      assert (e_beh arg arg h []);
+      assert ((q_io_args op) ∋ (h, fs_arg, arg));
+      lem_val_rel_implies_ecall_args op h fs_arg arg;
+      (arg, (| [], lt |))
+      end
+    end
+#pop-options
+
+(* General helper - works for all ops without case analysis on op *)
+#push-options "--fuel 32 --z3rlimit 64"
+let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
     (requires e_beh (ECall op arg) e' h lt /\
@@ -896,10 +991,9 @@ let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:h
   let the_goal = exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r in
   lem_forall_values_are_values (q_io_args op) h fs_arg;
   bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
-    let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg op arg e' h lt steps_e_e' in
+    let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg_all op arg e' h lt fs_arg steps_e_e' in
     FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #the_goal () (fun sts1 ->
       trans_history h lt1 lt';
-      lem_sem_value_shape_implies_ecall_val_arg op arg';
       let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
       lem_value_is_irred arg';
       lem_value_steps_gives_refl e_r e' ((h++lt1)++lt2) lt3;
@@ -920,7 +1014,8 @@ let helper_compat_ocomp_call_oval (op:io_ops{op <> OWrite}) (e':closed_exp) (h:h
       get_squash the_goal))
 #pop-options
 
-let compat_ocomp_call_oval #g (op:io_ops{op <> OWrite}) (fs_arg:fs_oval g (q_io_args op)) (arg:exp)
+(* General compat_ocomp_call_oval - works for all ops *)
+let compat_ocomp_call_oval #g (op:io_ops) (fs_arg:fs_oval g (q_io_args op)) (arg:exp)
   : Lemma
     (requires fs_arg ⊐ arg)
     (ensures fs_ocomp_call_oval op fs_arg ⊒ ECall op arg)
@@ -935,12 +1030,23 @@ let compat_ocomp_call_oval #g (op:io_ops{op <> OWrite}) (fs_arg:fs_oval g (q_io_
     introduce fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, fs_e, e) with _. begin
       introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
         introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+          lem_shift_type_value_environments h fsG s;
           helper_compat_ocomp_call_oval op e' h lt fs_arg_v arg
         end
       end
     end
   end
 
+(* Backward-compatible wrapper for OWrite *)
+let compat_ocomp_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
+  : Lemma
+    (requires fs_fd ⊐ fd /\ fs_msg ⊐ msg)
+    (ensures fs_ocomp_call_oval OWrite (fs_oval_pair fs_fd fs_msg) ⊒ ECall OWrite (EPair fd msg))
+  =
+  compat_oval_pair fs_fd fs_msg fd msg;
+  compat_ocomp_call_oval OWrite (fs_oval_pair fs_fd fs_msg) (EPair fd msg)
+
+(* Old helper retained for internal use by compat_ocomp_write *)
 #push-options "--z3rlimit 32 --fuel 32"
 let helper_compat_ocomp_write_oval (e':closed_exp) (#h:history) (lt:local_trace h) (fs_fd:fs_val qFileDescr) (fs_msg:fs_val qString) (fd msg:closed_exp) :
   Lemma
@@ -997,31 +1103,6 @@ let helper_compat_ocomp_write_oval (e':closed_exp) (#h:history) (lt:local_trace 
         end;
         get_squash the_goal)))
 #pop-options
-
-let compat_ocomp_write_oval #g (fs_fd:fs_oval g qFileDescr) (fs_msg:fs_oval g qString) (fd msg:exp)
-  : Lemma
-    (requires fs_fd ⊐ fd /\ fs_msg ⊐ msg)
-    (ensures fs_ocomp_call_oval OWrite (fs_oval_pair fs_fd fs_msg) ⊒ ECall OWrite (EPair fd msg))
-  =
-  lem_fv_in_env_pair g fd msg;
-  lem_fv_in_env_call g OWrite (EPair fd msg);
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, io_call OWrite (fs_fd fsG, fs_msg fsG), gsubst s (ECall OWrite (EPair fd msg))) with begin
-    let fs_fd = fs_fd fsG in
-    let fs_msg = fs_msg fsG in
-    let fs_e = io_call OWrite (fs_fd, fs_msg) in
-    let e = ECall OWrite (EPair (gsubst s fd) (gsubst s msg)) in
-    assert (gsubst s (ECall OWrite (EPair fd msg)) == e);
-    let ECall OWrite arg = e in
-    let EPair fd msg = arg in
-    introduce fsG `(∽) h` s ==> (qUnit ^+ qUnit) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (qUnit ^+ qUnit)). (qUnit ^+ qUnit) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-          lem_shift_type_value_environments h fsG s;
-          helper_compat_ocomp_write_oval e' lt fs_fd fs_msg fd msg
-        end
-      end
-    end
-  end
 
 let compat_ocomp_unit g : Lemma (fs_ocomp_return_val g qUnit () ⊒ EUnit) =
   compat_oval_unit g;
