@@ -11,8 +11,6 @@ open LogRelTargetSource
 module C1 = LogRelTargetSource.CompatibilityLemmas
 module C2 = LogRelSourceTarget.CompatibilityLemmas
 
-let compile_call (o:io_ops) (e:exp) : exp = ECall o e
-
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
   | Qtt -> EUnit
@@ -36,7 +34,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambdaIO qbody -> ELam (compile_ocomp qbody)
 and compile_ocomp #g #a (#s:fs_ocomp g a) (qs:typing_io g s) : Tot exp (decreases qs) =
   match qs with
-  | QCall o qargs -> compile_call o (compile qargs)
+  | QCall o qargs -> ECall o (compile qargs)
   | QReturn qx -> compile qx
   | QBind qm qk -> EApp (ELam (compile_ocomp qk)) (compile_ocomp qm)
   | QAppIO qf qx -> EApp (compile qf) (compile qx)
