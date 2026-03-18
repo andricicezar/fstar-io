@@ -101,6 +101,15 @@ $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw
 .PHONY: $(BUILD_DIR)/io_program
 $(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
 
+
+clean:
+	rm -rf $(CACHEDIR)
+	rm -rf $(BUILD_DIR)/hints
+
+
+## Commands for agents
+
+
 AGENT_NAME ?= copilot
 IMAGE_TAG ?= latest
 SESSION_NAME ?= current
@@ -152,6 +161,3 @@ sync_commits_from_session:
 
 delete_session:
 	docker rm $(CONTAINER_NAME)
-
-clean:
-	rm -rf $(CACHEDIR)
