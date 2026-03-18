@@ -44,12 +44,33 @@ $(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 %.fsti.emacs: %.fsti
 	emacs -nw -f fstar-debug-invocation $(FSTAR) $(FLAGS) --use_hint_hashes $<
 
-# If we're building a package, we don't need to run the dep analysis.
-ifneq ($(MAKECMDGOALS),package)
-include $(BUILD_DIR)/depend.mk
+# Support `make verify <file>.fst` and `make validate <file>.fst`
+ifeq (verify,$(firstword $(MAKECMDGOALS)))
+  _SINGLE_FILE := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(_SINGLE_FILE),)
+    $(eval $(_SINGLE_FILE):;@:)
+  endif
+endif
+ifeq (validate,$(firstword $(MAKECMDGOALS)))
+  _SINGLE_FILE := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(_SINGLE_FILE),)
+    $(eval $(_SINGLE_FILE):;@:)
+  endif
 endif
 
+# If we're building a package or a single file, we don't need to run the dep analysis.
+ifneq ($(MAKECMDGOALS),package)
+ifeq ($(_SINGLE_FILE),)
+include $(BUILD_DIR)/depend.mk
+endif
+endif
+
+ifdef _SINGLE_FILE
+verify: | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $(_SINGLE_FILE)
+else
 verify: $(ALL_CHECKED_FILES)
+endif
 
 $(BUILD_DIR)/depend.mk: $(ROOTS) | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) --dep full $(ROOTS) --extract '*' --output_deps_to $@
@@ -72,12 +93,17 @@ $(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 package:
 	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
 
+ifdef _SINGLE_FILE
+validate: | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) --report_assumes error $(_SINGLE_FILE)
+else
 validate:
 	@# Run depend first without the flag, as otherwise it will
 	@# warn about every module in the standard library that does
 	@# not have an implementation.
 	$(MAKE) depend
 	$(MAKE) OTHERFLAGS='--report_assumes error'
+endif
 
 IOFLAGS := --unsafe_tactic_exec $(FLAGS)
 
@@ -132,16 +158,18 @@ recreate_image: delete_image create_image
 new_temp_session: $(IMAGE_FILE)
 	docker run \
 		--rm \
- 		-v ~/agentstemp/$(AGENT_NAME):/home/agent/.$(AGENT_NAME) \
- 		-v ~/agentstemp/$(AGENT_NAME).json:/home/agent/.$(AGENT_NAME).json \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-v ~/agentstemp/copilot:/home/agent/.copilot \
 		-it \
 		$(IMAGE_NAME) /bin/bash
 
 new_session: $(IMAGE_FILE)
 	docker run \
 		--name $(CONTAINER_NAME) \
- 		-v ~/agentstemp/$(AGENT_NAME):/home/agent/.$(AGENT_NAME) \
- 		-v ~/agentstemp/$(AGENT_NAME).json:/home/agent/.$(AGENT_NAME).json \
+ 		-v ~/agentstemp/claude:/home/agent/.claude \
+ 		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
+		-v ~/agentstemp/copilot:/home/agent/.copilot \
 		-it $(IMAGE_NAME) \
 		/bin/bash
 
