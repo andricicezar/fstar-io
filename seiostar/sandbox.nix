@@ -2,14 +2,13 @@ let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
   pkgs = import nixpkgs {
     config = {
-      allowUnfreePredicate = pkg: (pkg.pname or "") == "claude-code";
     };
     overlays = [];
   };
   lib = pkgs.lib;
   system = pkgs.stdenv.hostPlatform.system;
   fstar = builtins.getFlake "github:FStarLang/FStar";
-  claudeCode = builtins.getFlake "github:sadjow/claude-code-nix";
+  llmAgents = builtins.getFlake "github:numtide/llm-agents.nix";
   imageTag =
     let value = builtins.getEnv "IMAGE_TAG";
     in if value == "" then "latest" else value;
@@ -23,7 +22,6 @@ let
 
   writablePaths = [
     "/workspace/.git"
-    "/workspace/seiostar/README.md"
     "/workspace/seiostar/Backtranslation.fst"
     "/workspace/seiostar/Compilation.fst"
     "/workspace/seiostar/IOStar.DestructLemmas.fst"
@@ -71,7 +69,8 @@ let
     pkgs.which
     fstar.packages.${system}.fstar
     fstar.packages.${system}.z3
-    claudeCode.packages.${system}."claude-code-bun"
+    llmAgents.packages.${system}."claude-code"
+    llmAgents.packages.${system}."copilot-cli"
   ];
 in
 pkgs.dockerTools.buildLayeredImage {
@@ -81,7 +80,7 @@ pkgs.dockerTools.buildLayeredImage {
   contents = runtimePackages;
 
   config = {
-    Entrypoint = [ "/workspace/seiostar/claude-sandbox.entrypoint.sh" ];
+    Entrypoint = [ "/workspace/seiostar/sandbox.entrypoint.sh" ];
     Cmd = [ "/bin/bash" ];
     Env = [
       "PATH=/bin"
@@ -99,7 +98,7 @@ pkgs.dockerTools.buildLayeredImage {
   extraCommands = ''
     mkdir -p bin etc home/${userName} tmp workspace
     cp -r ${repoDir}/. workspace/
-    chmod 0755 workspace/seiostar/claude-sandbox.entrypoint.sh
+    chmod 0755 workspace/seiostar/sandbox.entrypoint.sh
 
     printf 'root:x:0:0:root:/root:/bin/bash\n${userName}:x:${toString userUid}:${toString userGid}:${userName}:/home/${userName}:/bin/bash\n' > etc/passwd
     printf 'root:x:0:\n${userName}:x:${toString userGid}:\n' > etc/group

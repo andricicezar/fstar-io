@@ -45,8 +45,8 @@ let rec lem_free_vars_indx_shift (e:exp) (n:nat) :
   | EVar _ -> ()
   | ELam e' -> lem_free_vars_indx_shift e' (n+1)
   | EFst e' | ESnd e' | EInl e' | EInr e'
-  | ERead e' | EOpen e' | EClose e' -> lem_free_vars_indx_shift e' n
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | ECall _ e' -> lem_free_vars_indx_shift e' n
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_free_vars_indx_shift e1 n;
     lem_free_vars_indx_shift e2 n;
     append_memP_forall (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
@@ -94,9 +94,9 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     end;
     lem_free_vars_subst_inc s' e' (n+1)
   | EFst e' | ESnd e' | EInl e' | EInr e'
-  | ERead e' | EOpen e' | EClose e' ->
+  | ECall _ e' ->
     lem_free_vars_subst_inc s e' n
-  | EApp e1 e2 | EPair e1 e2 | EWrite e1 e2 | EStringEq e1 e2 ->
+  | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     lem_free_vars_subst_inc s e1 n;
     lem_free_vars_subst_inc s e2 n;
     append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s e2) n);
@@ -187,19 +187,6 @@ let lem_fv_in_env_case (g:typ_env) (t1 t2:qType) (e1 e2 e3:exp) :
   lem_free_vars_indx_shift e3 0
 #pop-options
 
-let lem_fv_in_env_openfile (g:typ_env) (fnm:exp) :
-  Lemma (fv_in_env g fnm <==> fv_in_env g (EOpen fnm))
-  = ()
-
-let lem_fv_in_env_read (g:typ_env) (fd:exp) :
-  Lemma (fv_in_env g fd <==> fv_in_env g (ERead fd))
-  = ()
-
-let lem_fv_in_env_write (g:typ_env) (fd msg:exp) :
-  Lemma ((fv_in_env g fd /\ fv_in_env g msg) <==> fv_in_env g (EWrite fd msg))
-  = let open FStar.List.Tot in
-    append_memP_forall (free_vars fd) (free_vars msg)
-
-let lem_fv_in_env_close (g:typ_env) (fd:exp) :
-  Lemma (fv_in_env g fd <==> fv_in_env g (EClose fd))
+let lem_fv_in_env_call (g:typ_env) (op:io_ops) (e:exp) :
+  Lemma (fv_in_env g e <==> fv_in_env g (ECall op e))
   = ()

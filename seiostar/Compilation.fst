@@ -11,13 +11,6 @@ open LogRelTargetSource
 module C1 = LogRelTargetSource.CompatibilityLemmas
 module C2 = LogRelSourceTarget.CompatibilityLemmas
 
-let compile_call (o:io_ops) (e:exp) : exp =
-  match o with
-  | OOpen -> EOpen e
-  | ORead -> ERead e
-  | OClose -> EClose e
-  | OWrite -> EWrite (EFst e) (ESnd e)
-
 let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   match qs with
   | Qtt -> EUnit
@@ -41,7 +34,7 @@ let rec compile #g #a (#s:fs_oval g a) (qs:g ⊢ s) : Tot exp (decreases qs) =
   | QLambdaIO qbody -> ELam (compile_ocomp qbody)
 and compile_ocomp #g #a (#s:fs_ocomp g a) (qs:typing_io g s) : Tot exp (decreases qs) =
   match qs with
-  | QCall o qargs -> compile_call o (compile qargs)
+  | QCall o qargs -> ECall o (compile qargs)
   | QReturn qx -> compile qx
   | QBind qm qk -> EApp (ELam (compile_ocomp qk)) (compile_ocomp qm)
   | QAppIO qf qx -> EApp (compile qf) (compile qx)
@@ -107,17 +100,7 @@ and lem_compile_superset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
   match qs with
   | QCall o #args qargs ->
     lem_compile_superset qargs;
-    (match o with
-     | OOpen -> C1.compat_ocomp_openfile_oval args (compile qargs)
-     | ORead -> C1.compat_ocomp_read_oval args (compile qargs)
-     | OClose -> C1.compat_ocomp_close_oval args (compile qargs)
-     | OWrite ->
-       C1.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
-       C1.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
-       C1.compat_ocomp_write_oval
-         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
-         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
-         (EFst (compile qargs)) (ESnd (compile qargs)))
+    C1.compat_ocomp_call_oval o args (compile qargs)
   | QReturn #_ #_ #x qx ->
     lem_compile_superset qx;
     C1.compat_ocomp_return x (compile qx)
@@ -199,17 +182,7 @@ and lem_compile_subset_comp #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s)
   match qs with
   | QCall o #args qargs ->
     lem_compile_subset qargs;
-    (match o with
-     | OOpen -> C2.compat_ocomp_openfile_oval args (compile qargs)
-     | ORead -> C2.compat_ocomp_read_oval args (compile qargs)
-     | OClose -> C2.compat_ocomp_close_oval args (compile qargs)
-     | OWrite ->
-       C2.compat_oval_pair_fst #_ #qFileDescr #qString args (compile qargs);
-       C2.compat_oval_pair_snd #_ #qFileDescr #qString args (compile qargs);
-       C2.compat_ocomp_write_oval
-         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qFileDescr args fst)
-         (fs_oval_fmap #_ #(qFileDescr ^* qString) #qString args snd)
-         (EFst (compile qargs)) (ESnd (compile qargs)))
+    C2.compat_ocomp_call_oval o args (compile qargs)
   | QReturn #_ #_ #x qx ->
     lem_compile_subset qx;
     C2.compat_ocomp_return x (compile qx)
@@ -290,14 +263,7 @@ and lem_compile_fv_in_env_prod #g (#a:qType) (#s:fs_ocomp g a) (qs:typing_io g s
   = match qs with
   | QCall o qargs ->
     lem_compile_fv_in_env qargs;
-    (match o with
-     | OOpen -> lem_fv_in_env_openfile g (compile qargs)
-     | ORead -> lem_fv_in_env_read g (compile qargs)
-     | OClose -> lem_fv_in_env_close g (compile qargs)
-     | OWrite ->
-       lem_fv_in_env_fst g (compile qargs);
-       lem_fv_in_env_snd g (compile qargs);
-       lem_fv_in_env_write g (EFst (compile qargs)) (ESnd (compile qargs)))
+    lem_fv_in_env_call g o (compile qargs)
   | QReturn qx ->
     lem_compile_fv_in_env qx
   | QBind #_ #ta #_ #m #k qm qk ->

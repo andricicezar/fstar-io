@@ -180,16 +180,15 @@ let rec compile (e: exp) : Tot term (decreases e) =
   (* File descriptor literal: compile nat value *)
   | EFileDescr fd -> compile_nat fd
 
-  (* Operations/primitives: compiled as calls to runtime axioms.
-     ERead/EWrite/EOpen/EClose/EStringEq are direct calls that return values. *)
-  | ERead fd ->
-      TApp (TConst io_read_kn) (compile fd)
-  | EWrite fd msg ->
-      TApp (TApp (TConst io_write_kn) (compile fd)) (compile msg)
-  | EOpen fnm ->
-      TApp (TConst io_open_kn) (compile fnm)
-  | EClose fd ->
-      TApp (TConst io_close_kn) (compile fd)
+  (* Operations/primitives: compiled as calls to runtime axioms. *)
+  | ECall op arg ->
+      let kn = match op with
+        | OOpen -> io_open_kn
+        | ORead -> io_read_kn
+        | OWrite -> io_write_kn
+        | OClose -> io_close_kn
+      in
+      TApp (TConst kn) (compile arg)
   | EStringEq s1 s2 ->
       TApp (TApp (TConst string_eq_kn) (compile s1)) (compile s2)
 
