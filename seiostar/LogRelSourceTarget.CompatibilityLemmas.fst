@@ -1012,7 +1012,68 @@ let compat_ocomp_var g (x:var{Some? (g x)}) : Lemma (fs_ocomp_var g x ⊑ EVar x
   compat_oval_var g x;
   compat_ocomp_return (fs_oval_var g x) (EVar x)
 
-#push-options "--z3rlimit 15 --split_queries always"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_ocomp_app_from_arg_value (h:history) (lt:local_trace h) (a b:qType)
+  (lt1:local_trace h) (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a))
+  (fs_r_f:fs_val (a ^->!@ b)) (fs_r_x:fs_val a) (fs_r:fs_val b)
+  (f':closed_exp) (x':closed_exp) (f x:closed_exp) :
+  Lemma
+    (requires
+      lt == lt1@(lt2a@lt2b) /\
+      (a ^->!@ b) ∈ (h++lt1, fs_r_f, f') /\
+      a ∈ ((h++lt1)++lt2a, fs_r_x, x') /\
+      e_beh f f' h lt1 /\ e_beh x x' (h++lt1) lt2a /\
+      is_value f' /\ indexed_irred f' (h++lt1) /\
+      is_value x' /\ indexed_irred x' ((h++lt1)++lt2a) /\
+      fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt2b fs_r)
+    (ensures exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt) =
+  let ELam f1 = f' in
+  unfold_member_of_io_arrow a b fs_r_f f1 (h++lt1);
+  eliminate forall (v:value) (fs_v:fs_val a) (lt_v:local_trace (h++lt1)).
+    a ∈ ((h++lt1)++lt_v, fs_v, v) ==> b ⫃ ((h++lt1)++lt_v, fs_r_f fs_v, subst_beta v f1) with x' fs_r_x lt2a;
+  eliminate forall (lt':local_trace ((h++lt1)++lt2a)) (fs_r':get_Type b).
+    fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt' fs_r' ==> exists e'. b ∈ (((h++lt1)++lt2a)++lt', fs_r', e') /\ e_beh (subst_beta x' f1) e' ((h++lt1)++lt2a) lt' with lt2b fs_r;
+  eliminate exists e'. b ∈ (((h++lt1)++lt2a)++lt2b, fs_r, e') /\ e_beh (subst_beta x' f1) e' ((h++lt1)++lt2a) lt2b
+    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
+  let goal : Type0 = (exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt) in
+  FStar.Squash.bind_squash #(steps f (ELam f1) h lt1) #goal () (fun sts_f ->
+  FStar.Squash.bind_squash #(steps x x' (h++lt1) lt2a) #goal () (fun sts_x ->
+  FStar.Squash.bind_squash #(steps (subst_beta x' f1) e' ((h++lt1)++lt2a) lt2b) #goal () (fun sts_body ->
+  construct_steps_eapp f f1 x x' e' h lt1 lt2a lt2b sts_f sts_x sts_body;
+  trans_history (h++lt1) lt2a lt2b;
+  trans_history h lt1 (lt2a@lt2b))))
+  end
+#pop-options
+
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_ocomp_app_inner_bind (h:history) (lt:local_trace h) (a b:qType)
+  (lt1:local_trace h) (lt2:local_trace (h++lt1))
+  (fs_r_f:fs_val (a ^->!@ b)) (fs_r:fs_val b)
+  (fs_x':fs_comp a) (f':closed_exp) (f x:closed_exp) :
+  Lemma
+    (requires
+      lt == lt1@lt2 /\
+      (a ^->!@ b) ∈ (h++lt1, fs_r_f, f') /\ e_beh f f' h lt1 /\
+      is_value f' /\ indexed_irred f' (h++lt1) /\
+      fs_beh (fs_comp_bind fs_x' (fun x' -> fs_r_f x')) (h++lt1) lt2 fs_r /\
+      a ⫃ (h++lt1, fs_x', x))
+    (ensures exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt) =
+  assert (fs_comp_bind fs_x' (fun x' -> fs_r_f x') == io_bind fs_x' (fun x' -> fs_r_f x')) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
+  destruct_fs_beh fs_x' (fun x' -> fs_r_f x') (h++lt1) lt2 fs_r;
+  eliminate exists (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a)) (fs_r_x:fs_val a).
+    lt2 == (lt2a@lt2b) /\ fs_beh fs_x' (h++lt1) lt2a fs_r_x /\ fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt2b fs_r
+    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
+  assert (a ⫃ (h++lt1, fs_x', x));
+  eliminate forall (lt':local_trace (h++lt1)) (fs_r':get_Type a). fs_beh fs_x' (h++lt1) lt' fs_r' ==> exists e'. a ∈ ((h++lt1)++lt', fs_r', e') /\ e_beh x e' (h++lt1) lt' with lt2a fs_r_x;
+  eliminate exists x'. a ∈ ((h++lt1)++lt2a, fs_r_x, x') /\ e_beh x x' (h++lt1) lt2a
+    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
+  lem_values_are_values a ((h++lt1)++lt2a) fs_r_x x';
+  helper_ocomp_app_from_arg_value h lt a b lt1 lt2a lt2b fs_r_f fs_r_x fs_r f' x' f x
+  end
+  end
+#pop-options
+
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_app_steps (h:history) (lt:local_trace h) (a b:qType)
   (fs_f':fs_comp (a ^->!@ b)) (fs_x':fs_comp a) (fs_r:fs_val b)
   (f x:closed_exp) :
@@ -1027,42 +1088,14 @@ let helper_compat_ocomp_app_steps (h:history) (lt:local_trace h) (a b:qType)
   eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_r_f:fs_val (a ^->!@ b)).
     lt == (lt1@lt2) /\ fs_beh fs_f' h lt1 fs_r_f /\ fs_beh (fs_outer_k fs_r_f) (h++lt1) lt2 fs_r
     returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
-  // From (a ^->!@ b) ⫃ (h, fs_f', f), get the function value
   eliminate forall (lt':local_trace h) (fs_r':get_Type (a ^->!@ b)). fs_beh fs_f' h lt' fs_r' ==> exists e'. (a ^->!@ b) ∈ (h++lt', fs_r', e') /\ e_beh f e' h lt' with lt1 fs_r_f;
   eliminate exists f'. (a ^->!@ b) ∈ (h++lt1, fs_r_f, f') /\ e_beh f f' h lt1
     returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
-  let ELam f1 = f' in
-  // Decompose the inner bind: fs_comp_bind fs_x' (fun x' -> fs_r_f x') at h++lt1
-  assert (fs_comp_bind fs_x' (fun x' -> fs_r_f x') == io_bind fs_x' (fun x' -> fs_r_f x')) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
-  destruct_fs_beh fs_x' (fun x' -> fs_r_f x') (h++lt1) lt2 fs_r;
-  eliminate exists (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a)) (fs_r_x:fs_val a).
-    lt2 == (lt2a@lt2b) /\ fs_beh fs_x' (h++lt1) lt2a fs_r_x /\ fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt2b fs_r
-    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
-  // From a ⫃ (h++lt1, fs_x', x), get the argument value
+  lem_values_are_values (a ^->!@ b) (h++lt1) fs_r_f f';
+  lem_value_is_irred f';
   assert (a ⫃ (h++lt1, fs_x', x));
-  eliminate forall (lt':local_trace (h++lt1)) (fs_r':get_Type a). fs_beh fs_x' (h++lt1) lt' fs_r' ==> exists e'. a ∈ ((h++lt1)++lt', fs_r', e') /\ e_beh x e' (h++lt1) lt' with lt2a fs_r_x;
-  eliminate exists x'. a ∈ ((h++lt1)++lt2a, fs_r_x, x') /\ e_beh x x' (h++lt1) lt2a
-    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
-  // Unfold IO arrow and get application result
-  unfold_member_of_io_arrow a b fs_r_f f1 (h++lt1);
-  lem_values_are_values a ((h++lt1)++lt2a) fs_r_x x';
-  eliminate forall (v:value) (fs_v:fs_val a) (lt_v:local_trace (h++lt1)).
-    a ∈ ((h++lt1)++lt_v, fs_v, v) ==> b ⫃ ((h++lt1)++lt_v, fs_r_f fs_v, subst_beta v f1) with x' fs_r_x lt2a;
-  // From b ⫃ ((h++lt1)++lt2a, fs_r_f fs_r_x, subst_beta x' f1)
-  eliminate forall (lt':local_trace ((h++lt1)++lt2a)) (fs_r':get_Type b).
-    fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt' fs_r' ==> exists e'. b ∈ (((h++lt1)++lt2a)++lt', fs_r', e') /\ e_beh (subst_beta x' f1) e' ((h++lt1)++lt2a) lt' with lt2b fs_r;
-  eliminate exists e'. b ∈ (((h++lt1)++lt2a)++lt2b, fs_r, e') /\ e_beh (subst_beta x' f1) e' ((h++lt1)++lt2a) lt2b
-    returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
-  // Construct steps: EApp f x -->* e'
-  FStar.Squash.bind_squash #(steps f (ELam f1) h lt1) () (fun sts_f ->
-  FStar.Squash.bind_squash #(steps x x' (h++lt1) lt2a) () (fun sts_x ->
-  FStar.Squash.bind_squash #(steps (subst_beta x' f1) e' ((h++lt1)++lt2a) lt2b) () (fun sts_body ->
-  construct_steps_eapp f f1 x x' e' h lt1 lt2a lt2b sts_f sts_x sts_body;
-  trans_history (h++lt1) lt2a lt2b;
-  trans_history h lt1 (lt2a@lt2b))))
-  end
-  end
-  end
+  assert (fs_outer_k fs_r_f == fs_comp_bind fs_x' (fun x' -> fs_r_f x')) by (norm []; trefl ());
+  helper_ocomp_app_inner_bind h lt a b lt1 lt2 fs_r_f fs_r fs_x' f' f x
   end
   end
 #pop-options
