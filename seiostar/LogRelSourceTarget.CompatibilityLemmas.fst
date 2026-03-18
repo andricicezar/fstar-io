@@ -1722,7 +1722,7 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   end
 #pop-options
 
-#push-options "--split_queries always"
+#push-options "--z3rlimit 10"
 let compat_ocomp_case #g (#a #b #c:qType)
   (fs_cond:fs_ocomp g (a ^+ b))
   (fs_inlc:fs_ocomp (extend a g) c)
