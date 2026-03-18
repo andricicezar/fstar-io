@@ -965,13 +965,6 @@ let lem_irred_sem_shape_gives_value_shape (t:typ) (e:closed_exp) (h:history) :
   assert (steps e e h []);
   assert (indexed_irred e (h++[]))
 
-let ecall_arg_typ (op:io_ops) : typ =
-  match op with
-  | OOpen -> TString
-  | ORead -> TFileDescr
-  | OWrite -> TPair TFileDescr TString
-  | OClose -> TFileDescr
-
 let can_step_ecall_val (op:io_ops) (arg:closed_exp{exists (args:io_args op). arg == as_e_io_args op args}) (h:history) :
   Lemma (exists e' oev. step (ECall op arg) e' h oev) =
   match op with
