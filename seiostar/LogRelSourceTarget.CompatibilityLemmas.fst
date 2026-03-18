@@ -1291,27 +1291,46 @@ let helper_compat_ocomp_fmap_snd_steps (h:history) (lt:local_trace h) (t1 t2:qTy
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --split_queries always"
-let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
-  (fs_e1':fs_comp t1) (fs_e2':fs_comp t2) (fs_r:fs_val (t1 ^* t2)) (e1 e2:closed_exp) :
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_ocomp_pair_from_values
+  (h:history) (lt:local_trace h) (t1 t2:qType)
+  (lt1:local_trace h) (lt2a:local_trace (h++lt1))
+  (fs_v1:fs_val t1) (fs_v2:fs_val t2) (em1 em2 e1 e2:closed_exp) :
   Lemma
-    (requires fs_beh (fs_comp_bind fs_e1' (fun v1 -> fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (v1, v2)))) h lt fs_r /\
-              t1 ⫃ (h, fs_e1', e1) /\
-              (forall (lt':local_trace h). t2 ⫃ (h++lt', fs_e2', e2)))
-    (ensures exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt) =
-  let fs_k1 : fs_val t1 -> fs_comp (t1 ^* t2) = fun v1 -> fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (v1, v2)) in
-  assert (fs_comp_bind fs_e1' fs_k1 == io_bind fs_e1' fs_k1) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
-  destruct_fs_beh fs_e1' fs_k1 h lt fs_r;
-  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_v1:fs_val t1).
-    lt == (lt1@lt2) /\ fs_beh fs_e1' h lt1 fs_v1 /\ fs_beh (fs_k1 fs_v1) (h++lt1) lt2 fs_r
-    returns exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt with _. begin
-  // Get e1 value
-  eliminate forall (lt':local_trace h) (fs_r':get_Type t1). fs_beh fs_e1' h lt' fs_r' ==> exists em'. t1 ∈ (h++lt', fs_r', em') /\ e_beh e1 em' h lt' with lt1 fs_v1;
-  eliminate exists em1. t1 ∈ (h++lt1, fs_v1, em1) /\ e_beh e1 em1 h lt1
-    returns exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt with _. begin
+    (requires
+      lt == lt1@lt2a /\
+      t1 ∈ (h++lt1, fs_v1, em1) /\ e_beh e1 em1 h lt1 /\
+      t2 ∈ ((h++lt1)++lt2a, fs_v2, em2) /\ e_beh e2 em2 (h++lt1) lt2a)
+    (ensures exists e'. (t1 ^* t2) ∈ (h++lt, (fs_v1, fs_v2), e') /\ e_beh (EPair e1 e2) e' h lt) =
   lem_values_are_values t1 (h++lt1) fs_v1 em1;
+  lem_values_are_values t2 ((h++lt1)++lt2a) fs_v2 em2;
   lem_value_is_irred em1;
-  // Decompose inner bind: fs_comp_bind fs_e2' (fun v2 -> return (fs_v1, v2))
+  lem_value_is_irred em2;
+  trans_history h lt1 lt2a;
+  val_type_closed_under_history_extension t1 (h++lt1) fs_v1 em1;
+  lem_value_is_irred (EPair em1 em2);
+  let goal : Type0 = (exists e'. (t1 ^* t2) ∈ (h++lt, (fs_v1, fs_v2), e') /\ e_beh (EPair e1 e2) e' h lt) in
+  FStar.Squash.bind_squash #(steps e1 em1 h lt1) #goal () (fun sts1 ->
+  FStar.Squash.bind_squash #(steps e2 em2 (h++lt1) lt2a) #goal () (fun sts2 ->
+  construct_steps_epair e1 em1 e2 em2 h lt1 lt2a sts1 sts2;
+  assert (steps (EPair e1 e2) (EPair em1 em2) h (lt1@lt2a))))
+#pop-options
+
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_ocomp_pair_inner_bind
+  (h:history) (lt:local_trace h) (t1 t2:qType)
+  (lt1:local_trace h) (lt2:local_trace (h++lt1))
+  (fs_v1:fs_val t1) (em1:closed_exp)
+  (fs_e2':fs_comp t2) (fs_r:fs_val (t1 ^* t2))
+  (e1 e2:closed_exp) :
+  Lemma
+    (requires
+      lt == lt1@lt2 /\
+      t1 ∈ (h++lt1, fs_v1, em1) /\ e_beh e1 em1 h lt1 /\
+      is_value em1 /\ indexed_irred em1 (h++lt1) /\
+      fs_beh (fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (fs_v1, v2))) (h++lt1) lt2 fs_r /\
+      t2 ⫃ (h++lt1, fs_e2', e2))
+    (ensures exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt) =
   let fs_k2 : fs_val t2 -> fs_comp (t1 ^* t2) = fun v2 -> return (fs_v1, v2) in
   assert (fs_comp_bind #t2 #(t1 ^* t2) fs_e2' fs_k2 == io_bind fs_e2' fs_k2) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
   destruct_fs_beh fs_e2' fs_k2 (h++lt1) lt2 fs_r;
@@ -1328,23 +1347,37 @@ let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   assert (lt2b == []);
   assert (fs_r == val_);
   unit_l lt2a;
-  // Get e2 value
   assert (t2 ⫃ (h++lt1, fs_e2', e2));
   eliminate forall (lt':local_trace (h++lt1)) (fs_r':get_Type t2). fs_beh fs_e2' (h++lt1) lt' fs_r' ==> exists em'. t2 ∈ ((h++lt1)++lt', fs_r', em') /\ e_beh e2 em' (h++lt1) lt' with lt2a fs_v2;
   eliminate exists em2. t2 ∈ ((h++lt1)++lt2a, fs_v2, em2) /\ e_beh e2 em2 (h++lt1) lt2a
     returns exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt with _. begin
-  lem_values_are_values t2 ((h++lt1)++lt2a) fs_v2 em2;
-  lem_value_is_irred em2;
-  trans_history h lt1 lt2a;
-  val_type_closed_under_history_extension t1 (h++lt1) fs_v1 em1;
-  lem_value_is_irred (EPair em1 em2);
-  // Construct: EPair e1 e2 -->* EPair em1 em2
-  FStar.Squash.bind_squash #(steps e1 em1 h lt1) () (fun sts1 ->
-  FStar.Squash.bind_squash #(steps e2 em2 (h++lt1) lt2a) () (fun sts2 ->
-  construct_steps_epair e1 em1 e2 em2 h lt1 lt2a sts1 sts2;
-  assert (steps (EPair e1 e2) (EPair em1 em2) h (lt1@lt2a))))
+  helper_ocomp_pair_from_values h lt t1 t2 lt1 lt2a fs_v1 fs_v2 em1 em2 e1 e2
   end
   end
+#pop-options
+
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
+  (fs_e1':fs_comp t1) (fs_e2':fs_comp t2) (fs_r:fs_val (t1 ^* t2)) (e1 e2:closed_exp) :
+  Lemma
+    (requires fs_beh (fs_comp_bind fs_e1' (fun v1 -> fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (v1, v2)))) h lt fs_r /\
+              t1 ⫃ (h, fs_e1', e1) /\
+              (forall (lt':local_trace h). t2 ⫃ (h++lt', fs_e2', e2)))
+    (ensures exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt) =
+  let fs_k1 : fs_val t1 -> fs_comp (t1 ^* t2) = fun v1 -> fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (v1, v2)) in
+  assert (fs_comp_bind fs_e1' fs_k1 == io_bind fs_e1' fs_k1) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
+  destruct_fs_beh fs_e1' fs_k1 h lt fs_r;
+  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_v1:fs_val t1).
+    lt == (lt1@lt2) /\ fs_beh fs_e1' h lt1 fs_v1 /\ fs_beh (fs_k1 fs_v1) (h++lt1) lt2 fs_r
+    returns exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt with _. begin
+  eliminate forall (lt':local_trace h) (fs_r':get_Type t1). fs_beh fs_e1' h lt' fs_r' ==> exists em'. t1 ∈ (h++lt', fs_r', em') /\ e_beh e1 em' h lt' with lt1 fs_v1;
+  eliminate exists em1. t1 ∈ (h++lt1, fs_v1, em1) /\ e_beh e1 em1 h lt1
+    returns exists e'. (t1 ^* t2) ∈ (h++lt, fs_r, e') /\ e_beh (EPair e1 e2) e' h lt with _. begin
+  lem_values_are_values t1 (h++lt1) fs_v1 em1;
+  lem_value_is_irred em1;
+  assert (t2 ⫃ (h++lt1, fs_e2', e2));
+  assert (fs_k1 fs_v1 == fs_comp_bind #t2 #(t1 ^* t2) fs_e2' (fun v2 -> return (fs_v1, v2))) by (norm []; trefl ());
+  helper_ocomp_pair_inner_bind h lt t1 t2 lt1 lt2 fs_v1 em1 fs_e2' fs_r e1 e2
   end
   end
 #pop-options
