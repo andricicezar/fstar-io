@@ -53,7 +53,7 @@ let compat_oval_string g (str:string) : Lemma (fs_oval_return g #qString str ⊐
     end
   end
 
-#push-options "--z3rlimit 20 --split_queries always"
+#push-options "--z3rlimit 20"
 let helper_compat_val_string_eq (e':closed_exp) (h:history) (lt:local_trace h) (fs_e1:fs_val qString) (fs_e2:fs_val qString) (e1 e2:closed_exp)
   : Lemma
     (requires e_beh (EStringEq e1 e2) e' h lt /\
@@ -142,7 +142,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊐ EVar 
     end
   end
 
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--z3rlimit 32"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
@@ -542,7 +542,7 @@ let helper_compat_val_case (e':closed_exp)
     get_squash (t3 ∋ (h, fs_val_case fs_sc fs_li fs_ri, e') /\ lt == []))
 #pop-options
 
-#push-options "--split_queries always"
+#push-options "--split_queries always --ifuel 0"
 let compat_oval_case
   #g
   (#t1 #t2 #t3:qType)
@@ -637,7 +637,7 @@ let compat_ocomp_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
     end
   end
 
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--split_queries always --z3rlimit 32 --ifuel 0"
 let helper_compat_ocomp_bind (e':closed_exp) (#h:history) (lt:local_trace h) (#a:qType) (#b:qType) (fs_k':fs_val a -> fs_comp b) (fs_m:fs_comp a) (m k':exp) :
 Lemma
   (requires is_closed (EApp (ELam k') m) /\
@@ -1146,7 +1146,6 @@ let compat_ocomp_var g (x:var{Some? (g x)}) : Lemma (fs_ocomp_var g x ⊒ EVar x
   compat_oval_var g x;
   compat_ocomp_return (fs_oval_var g x) (EVar x)
 
-#push-options "--split_queries always"
 let compat_ocomp_app #g (#a #b:qType) (fs_f:fs_ocomp g (a ^->!@ b)) (fs_x:fs_ocomp g a) (f x:exp)
   : Lemma
     (requires fs_f ⊒ f /\ fs_x ⊒ x)
@@ -1192,7 +1191,6 @@ let compat_ocomp_app #g (#a #b:qType) (fs_f:fs_ocomp g (a ^->!@ b)) (fs_x:fs_oco
         end
       end
     end
-#pop-options
 
 let compat_ocomp_lambda #g (#t1:qType) (#t2:qType)
   (fs_body:fs_ocomp (extend t1 g) t2)
@@ -1289,7 +1287,7 @@ let compat_ocomp_inr #g (t1 t2:qType) (fs_e:fs_ocomp g t2) (e:exp)
     end
   end
 
-#push-options "--split_queries always"
+#push-options "--z3rlimit 64 --fuel 1 --ifuel 0"
 let compat_ocomp_pair #g
   (#t1 #t2:qType)
   (fs_e1:fs_ocomp g t1) (fs_e2:fs_ocomp g t2)
@@ -1354,7 +1352,49 @@ let compat_ocomp_pair #g
   end
 #pop-options
 
-#push-options "--z3rlimit 20 --split_queries always"
+#push-options "--z3rlimit 20 --fuel 2 --ifuel 1"
+private let helper_compat_ocomp_string_eq_inner
+  (fs_e1':fs_comp qString) (fs_e2':fs_comp qString)
+  (h:history)
+  (lt1:local_trace h) (lt2:local_trace (h++lt1)) (lt'':local_trace ((h++lt1)++lt2))
+  (s1:string) (s2:string) (e':closed_exp)
+  (fs_r_e1:fs_val qString) (fs_r_e2:fs_val qString)
+  (lt:local_trace h)
+  (fs_e:fs_comp qBool)
+  (sts3:steps (EStringEq (EString s1) (EString s2)) e' ((h++lt1)++lt2) lt'')
+  : Lemma
+    (requires
+      fs_e == fs_comp_bind fs_e1' (fun x' -> fs_comp_bind #qString #qBool fs_e2' (fun y' -> return (x' = y'))) /\
+      lt == lt1 @ lt2 @ lt'' /\
+      fs_beh fs_e1' h lt1 fs_r_e1 /\
+      qString ∋ (h++lt1, fs_r_e1, EString s1) /\
+      fs_beh fs_e2' (h++lt1) lt2 fs_r_e2 /\
+      qString ∋ ((h++lt1)++lt2, fs_r_e2, EString s2) /\
+      indexed_irred e' (((h++lt1)++lt2)++lt''))
+    (ensures exists (fs_r:fs_val qBool). qBool ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) =
+  match sts3 with
+  | SRefl _ _ ->
+    let _ : step (EStringEq (EString s1) (EString s2)) (if s1 = s2 then ETrue else EFalse) ((h++lt1)++lt2) None = StringEqReturn s1 s2 ((h++lt1)++lt2) in
+    false_elim ()
+  | STrans step_seq step_rest ->
+    match step_seq with
+    | StringEqReturn _ _ _ ->
+      lem_value_is_irred (if s1 = s2 then ETrue else EFalse);
+      lem_irred_implies_srefl_steps step_rest;
+      lem_fs_beh_return #qBool (fs_r_e1 = fs_r_e2) ((h++lt1)++lt2);
+      lem_fs_beh_bind #qString #qBool fs_e2' (h++lt1) lt2 fs_r_e2 (fun y' -> return (fs_r_e1 = y')) [] (fs_r_e1 = fs_r_e2);
+      unit_l lt2;
+      lem_fs_beh_bind #qString #qBool fs_e1' h lt1 fs_r_e1 (fun x' -> (fs_comp_bind #qString #qBool fs_e2' (fun y' -> return (x' = y')))) lt2 (fs_r_e1 = fs_r_e2);
+      unit_l lt2
+    | StringEqLeft _ step_e1 ->
+      lem_value_is_irred (EString s1);
+      false_elim ()
+    | StringEqRight _ step_e2 ->
+      lem_value_is_irred (EString s2);
+      false_elim ()
+#pop-options
+
+#push-options "--z3rlimit 20"
 let compat_ocomp_string_eq #g
   (fs_e1:fs_ocomp g qString) (fs_e2:fs_ocomp g qString)
   (e1:exp) (e2:exp)
@@ -1405,27 +1445,7 @@ let compat_ocomp_string_eq #g
               let EString s2 = e2v in
               trans_history (h++lt1) lt2 lt'';
               bind_squash (steps (EStringEq (EString s1) (EString s2)) e' ((h++lt1)++lt2) lt'') (fun sts3 ->
-                match sts3 with
-                | SRefl _ _ ->
-                  let _ : step (EStringEq (EString s1) (EString s2)) (if s1 = s2 then ETrue else EFalse) ((h++lt1)++lt2) None = StringEqReturn s1 s2 ((h++lt1)++lt2) in
-                  false_elim ()
-                | STrans step_seq step_rest ->
-                  match step_seq with
-                  | StringEqReturn _ _ _ ->
-                    lem_value_is_irred (if s1 = s2 then ETrue else EFalse);
-                    lem_irred_implies_srefl_steps step_rest;
-                    lem_fs_beh_return #qBool (fs_r_e1 = fs_r_e2) ((h++lt1)++lt2);
-                    lem_fs_beh_bind #qString #qBool fs_e2' (h++lt1) lt2 fs_r_e2 (fun y' -> return (fs_r_e1 = y')) [] (fs_r_e1 = fs_r_e2);
-                    unit_l lt2;
-                    lem_fs_beh_bind #qString #qBool fs_e1' h lt1 fs_r_e1 (fun x' -> (fs_comp_bind #qString #qBool fs_e2' (fun y' -> return (x' = y')))) lt2 (fs_r_e1 = fs_r_e2);
-                    unit_l lt2
-                  | StringEqLeft _ step_e1 ->
-                    lem_value_is_irred (EString s1);
-                    false_elim ()
-                  | StringEqRight _ step_e2 ->
-                    lem_value_is_irred (EString s2);
-                    false_elim ()
-              )
+                helper_compat_ocomp_string_eq_inner fs_e1' fs_e2' h lt1 lt2 lt'' s1 s2 e' fs_r_e1 fs_r_e2 lt fs_e sts3)
             end)
           end)
         end
@@ -1486,7 +1506,6 @@ let compat_ocomp_fst #g
     end
   end
 
-#push-options "--split_queries always"
 let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
@@ -1536,7 +1555,6 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
       end
     end
   end
-#pop-options
 
 let helper_lemma_compat_ocomp_case #g #a #b
   (fs_e:fs_ocomp (extend a g) b)
