@@ -897,23 +897,6 @@ let lem_ecall_result_facts
   | OWrite -> lem_thetaP_call OWrite fs_arg res h
 #pop-options
 
-(* Preservation of ⊇ under reduction: if arg steps to arg', ⊇ is preserved *)
-let lem_superset_preserved_by_step
-  (t:qType) (h:history) (fs_v:fs_val t) (e e':closed_exp) (oev:option (event_h h)) :
-  Lemma
-    (requires t ⊇ (h, fs_v, e) /\ squash (step e e' h oev))
-    (ensures t ⊇ (h++(as_lt oev), fs_v, e')) =
-  introduce forall (e'':closed_exp) (lt':local_trace (h++(as_lt oev))). e_beh e' e'' (h++(as_lt oev)) lt' ==> (t ∋ (h++(as_lt oev), fs_v, e'') /\ lt' == []) with begin
-    introduce _ ==> _ with _. begin
-      lem_step_implies_steps e e' h oev;
-      trans_history h (as_lt oev) lt';
-      lem_steps_transitive e e' e'' h (as_lt oev) lt';
-      assert (e_beh e e'' h ((as_lt oev) @ lt'));
-      assert (t ∋ (h, fs_v, e'') /\ ((as_lt oev) @ lt') == []);
-      assert (as_lt oev == [] /\ lt' == [])
-    end
-  end
-
 (* General helper for all ops - no case analysis on op *)
 #push-options "--fuel 32 --z3rlimit 64"
 let rec destruct_steps_ecall_arg_all
@@ -943,7 +926,7 @@ let rec destruct_steps_ecall_arg_all
     assert (e_beh arg arg h []);
     assert ((q_io_args op) ∋ (h, fs_arg, arg));
     lem_val_rel_implies_ecall_args op h fs_arg arg;
-    can_step_ecall_val_all op arg h;
+    can_step_ecall_val op arg h;
     false_elim ()
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin
@@ -1012,7 +995,7 @@ let rec destruct_steps_ecall_arg_comp
     assert (e_beh arg0 arg h0 lt_acc);
     (* From ⫄ + e_beh, derive that arg has the as_e_io_args form *)
     Classical.forall_intro (Classical.move_requires (fun (fs_r:fs_val (q_io_args op)) -> lem_val_rel_implies_ecall_args op (h0++lt_acc) fs_r arg));
-    can_step_ecall_val_all op arg h;
+    can_step_ecall_val op arg h;
     false_elim ()
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_ecall step_ecall_steps -> begin

@@ -690,22 +690,6 @@ let lem_irred_implies_srefl_steps (#e #e':closed_exp) (#h:history) (#lt:local_tr
   | SRefl e h -> ()
   | STrans _ _ -> false_elim ()
 
-let get_read_arg (ev:event{EvRead? ev}) : io_args ORead =
-  match ev with
-  | EvRead arg res -> arg
-
-let get_read_res (args:io_args ORead) (ev:event{EvRead? ev}) : io_res ORead args =
-  match ev with
-  | EvRead arg res -> res
-
-let get_open_arg (ev:event{EvOpen? ev}) : io_args OOpen =
-  match ev with
-  | EvOpen arg res -> arg
-
-let get_open_res (args:io_args OOpen) (ev:event{EvOpen? ev}) : io_res OOpen args =
-  match ev with
-  | EvOpen arg res -> res
-
 let get_einl_v (x:closed_exp{EInl? x}) =
   match x with
   | EInl v -> v
