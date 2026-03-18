@@ -1486,6 +1486,7 @@ let compat_ocomp_fst #g
     end
   end
 
+#push-options "--split_queries always"
 let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
@@ -1521,6 +1522,8 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
               eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
               eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t2). t2 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+              assert (e12' == EPair e1 e2);
+              assert (t2 ∋ (h++lt12, snd #(fs_val t1) #(fs_val t2) fs_r_e12, e2));
               lem_destruct_steps_epair_snd e1 e2 e' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #t2 (snd #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
@@ -1533,6 +1536,7 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
       end
     end
   end
+#pop-options
 
 let helper_lemma_compat_ocomp_case #g #a #b
   (fs_e:fs_ocomp (extend a g) b)
