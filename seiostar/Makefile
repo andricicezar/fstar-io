@@ -158,7 +158,7 @@ new_temp_session: $(IMAGE_FILE)
 		--rm \
  		-v ~/agentstemp/claude:/home/agent/.claude \
  		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
-		-v ~/agentstemp/copilot:/home/agent/.copilot \
+		--env-file .env \
 		-it \
 		$(IMAGE_NAME) /bin/bash
 
@@ -167,7 +167,7 @@ new_session: $(IMAGE_FILE)
 		--name $(CONTAINER_NAME) \
  		-v ~/agentstemp/claude:/home/agent/.claude \
  		-v ~/agentstemp/claude.json:/home/agent/.claude.json \
-		-v ~/agentstemp/copilot:/home/agent/.copilot \
+		--env-file .env \
 		-it $(IMAGE_NAME) \
 		/bin/bash
 

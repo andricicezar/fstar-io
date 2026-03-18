@@ -14,6 +14,7 @@ dep.pdf
 .depend
 .depend.rsp
 .build
+.env
 
 hints/
 
