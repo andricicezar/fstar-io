@@ -135,16 +135,14 @@ clean:
 
 ## Commands for agents
 
-
-AGENT_NAME ?= copilot
 IMAGE_TAG ?= latest
 SESSION_NAME ?= current
-IMAGE_FILE ?= $(BUILD_DIR)/image_$(AGENT_NAME)_$(IMAGE_TAG)
-IMAGE_NAME ?= seiostar_$(AGENT_NAME):$(IMAGE_TAG)
-CONTAINER_NAME ?= seiostar_$(AGENT_NAME)_$(SESSION_NAME)
+IMAGE_FILE ?= $(BUILD_DIR)/image_$(IMAGE_TAG)
+IMAGE_NAME ?= seiostar:$(IMAGE_TAG)
+CONTAINER_NAME ?= seiostar_$(SESSION_NAME)
 
 $(IMAGE_FILE): | $(BUILD_DIR)
-	IMAGE_TAG=$(IMAGE_TAG) nix-build $(AGENT_NAME)-sandbox.nix -o $(IMAGE_FILE)
+	IMAGE_TAG=$(IMAGE_TAG) nix-build sandbox.nix -o $(IMAGE_FILE)
 	docker image load -i $(IMAGE_FILE)
 
 create_image: $(IMAGE_FILE)

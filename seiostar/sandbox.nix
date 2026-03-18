@@ -74,20 +74,18 @@ let
   ];
 in
 pkgs.dockerTools.buildLayeredImage {
-  name = "seiostar_copilot";
+  name = "seiostar";
   tag = imageTag;
 
   contents = runtimePackages;
 
   config = {
-    Entrypoint = [ "/workspace/seiostar/copilot-sandbox.entrypoint.sh" ];
+    Entrypoint = [ "/workspace/seiostar/sandbox.entrypoint.sh" ];
     Cmd = [ "/bin/bash" ];
     Env = [
       "PATH=/bin"
       "HOME=/home/${userName}"
       "BUILD_DIR=/tmp/seiostar_build"
-      "COPILOT_OTEL_ENABLED=true"
-      "COPILOT_OTEL_FILE_EXPORTER_PATH=/tmp/copilot-traces.json"
       "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
       "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
       "CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
@@ -100,7 +98,7 @@ pkgs.dockerTools.buildLayeredImage {
   extraCommands = ''
     mkdir -p bin etc home/${userName} tmp workspace
     cp -r ${repoDir}/. workspace/
-    chmod 0755 workspace/seiostar/copilot-sandbox.entrypoint.sh
+    chmod 0755 workspace/seiostar/sandbox.entrypoint.sh
 
     printf 'root:x:0:0:root:/root:/bin/bash\n${userName}:x:${toString userUid}:${toString userGid}:${userName}:/home/${userName}:/bin/bash\n' > etc/passwd
     printf 'root:x:0:\n${userName}:x:${toString userGid}:\n' > etc/group
