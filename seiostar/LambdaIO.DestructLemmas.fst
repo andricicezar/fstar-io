@@ -965,19 +965,27 @@ let lem_irred_sem_shape_gives_value_shape (t:typ) (e:closed_exp) (h:history) :
   assert (steps e e h []);
   assert (indexed_irred e (h++[]))
 
+let destruct_e_io_args (op:io_ops) (arg:closed_exp{exists (args:io_args op). arg == as_e_io_args op args})
+  : GTot (args:io_args op{arg == as_e_io_args op args}) =
+  match op with
+  | ORead -> get_fd arg
+  | OWrite -> (get_fd (get_epair_e1 arg), EString?.s (get_epair_e2 arg))
+  | OOpen -> EString?.s arg
+  | OClose -> get_fd arg
+
+let default_io_res (h:history) (op:io_ops) (args:io_args op)
+  : (res:io_res op args{io_pre h op args /\ io_post h op args res}) =
+  match op with
+  | ORead -> Inr #string #unit ()
+  | OWrite -> Inr #unit #unit ()
+  | OOpen -> Inr #file_descr #unit ()
+  | OClose -> Inr #unit #unit ()
+
 let can_step_ecall_val (op:io_ops) (arg:closed_exp{exists (args:io_args op). arg == as_e_io_args op args}) (h:history) :
   Lemma (exists e' oev. step (ECall op arg) e' h oev) =
-  match op with
-  | ORead ->
-    let _ = SCallReturn h ORead (get_fd arg) (Inr #string #unit ()) in ()
-  | OWrite ->
-    let fd = get_fd (get_epair_e1 arg) in
-    let s = EString?.s (get_epair_e2 arg) in
-    let _ = SCallReturn h OWrite (fd, s) (Inl #unit #unit ()) in ()
-  | OOpen ->
-    let _ = SCallReturn h OOpen (EString?.s arg) (Inr #file_descr #unit ()) in ()
-  | OClose ->
-    let _ = SCallReturn h OClose (get_fd arg) (Inr #unit #unit ()) in ()
+  let args = destruct_e_io_args op arg in
+  let res = default_io_res h op args in
+  let _ = SCallReturn h op args res in ()
 
 #push-options "--z3rlimit 32"
 let destruct_steps_ecall
