@@ -862,15 +862,10 @@ let lem_value_steps_gives_refl (e:value) (e':closed_exp) (h:history) (lt:local_t
   end
 
 (* From ∋ at q_io_args, derive the as_e_io_args representation *)
-let lem_val_rel_implies_ecall_args (op:io_ops) (h:history) (fs_arg:fs_val (q_io_args op)) (val_arg:closed_exp) :
+let lem_if_arg_value_then_exists (op:io_ops) (h:history) (fs_arg:fs_val (q_io_args op)) (val_arg:closed_exp) :
   Lemma
     (requires (q_io_args op) ∋ (h, fs_arg, val_arg))
-    (ensures exists (args:io_args op). val_arg == as_e_io_args op args) =
-  match op with
-  | OOpen -> ()
-  | ORead -> ()
-  | OClose -> ()
-  | OWrite -> ()
+    (ensures exists (args:io_args op). val_arg == as_e_io_args op args) = ()
 
 #push-options "--fuel 10 --z3rlimit 100"
 let lem_ecall_result_facts
@@ -925,7 +920,7 @@ let rec destruct_steps_ecall_arg_all
     end;
     assert (e_beh arg arg h []);
     assert ((q_io_args op) ∋ (h, fs_arg, arg));
-    lem_val_rel_implies_ecall_args op h fs_arg arg;
+    lem_if_arg_value_then_exists op h fs_arg arg;
     can_step_ecall_val op arg h;
     false_elim ()
     end
@@ -956,7 +951,7 @@ let rec destruct_steps_ecall_arg_all
       lem_value_is_irred (as_e_io_args op args);
       assert (e_beh arg arg h []);
       assert ((q_io_args op) ∋ (h, fs_arg, arg));
-      lem_val_rel_implies_ecall_args op h fs_arg arg;
+      lem_if_arg_value_then_exists op h fs_arg arg;
       (arg, (| [], lt |))
       end
     end
@@ -994,7 +989,7 @@ let rec destruct_steps_ecall_arg_comp
     end;
     assert (e_beh arg0 arg h0 lt_acc);
     (* From ⫄ + e_beh, derive that arg has the as_e_io_args form *)
-    Classical.forall_intro (Classical.move_requires (fun (fs_r:fs_val (q_io_args op)) -> lem_val_rel_implies_ecall_args op (h0++lt_acc) fs_r arg));
+    Classical.forall_intro (Classical.move_requires (fun (fs_r:fs_val (q_io_args op)) -> lem_if_arg_value_then_exists op (h0++lt_acc) fs_r arg));
     can_step_ecall_val op arg h;
     false_elim ()
     end

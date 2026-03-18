@@ -849,13 +849,8 @@ let compat_ocomp_case_oval #g (#a #b #c:qType) (fs_cond:fs_oval g (a ^+ b)) (fs_
   end
 #pop-options
 
-private let lem_call_res_val_rel_st (op:io_ops) (h:history) (args:io_args op) (res:io_res op args) :
-  Lemma ((q_io_res op) ∈ (h, res, as_e_io_res op args res)) =
-  match op with
-  | OOpen -> let res : resexn file_descr = res in (match res with | Inl _ -> () | Inr () -> ())
-  | ORead -> let res : resexn string = res in (match res with | Inl _ -> () | Inr () -> ())
-  | OClose -> let res : resexn unit = res in (match res with | Inl () -> () | Inr () -> ())
-  | OWrite -> let res : resexn unit = res in (match res with | Inl () -> () | Inr () -> ())
+private let lem_call_result_is_value (op:io_ops) (h:history) (args:io_args op) (res:io_res op args) :
+  Lemma ((q_io_res op) ∈ (h, res, as_e_io_res op args res)) = ()
 
 let helper_compat_ocomp_call_oval_steps (op:io_ops) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) (fs_r:fs_val (q_io_res op)) :
@@ -872,7 +867,7 @@ let helper_compat_ocomp_call_oval_steps (op:io_ops) (h:history) (lt:local_trace 
   let st_call : step (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h (Some (op_to_ev op fs_arg fs_r)) = SCallReturn h op fs_arg fs_r in
   lem_step_implies_steps (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h (Some (op_to_ev op fs_arg fs_r));
   lem_steps_transitive (ECall op arg) (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h [] [op_to_ev op fs_arg fs_r];
-  lem_call_res_val_rel_st op (h++lt) fs_arg fs_r;
+  lem_call_result_is_value op (h++lt) fs_arg fs_r;
   lem_value_is_irred (as_e_io_res op fs_arg fs_r))
   end
 
