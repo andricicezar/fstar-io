@@ -2,7 +2,6 @@ let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
   pkgs = import nixpkgs {
     config = {
-      allowUnfreePredicate = pkg: (pkg.pname or "") == "copilot-cli";
     };
     overlays = [];
   };
@@ -23,7 +22,6 @@ let
 
   writablePaths = [
     "/workspace/.git"
-    "/workspace/seiostar/README.md"
     "/workspace/seiostar/Backtranslation.fst"
     "/workspace/seiostar/Compilation.fst"
     "/workspace/seiostar/IOStar.DestructLemmas.fst"
@@ -71,6 +69,7 @@ let
     pkgs.which
     fstar.packages.${system}.fstar
     fstar.packages.${system}.z3
+    llmAgents.packages.${system}."claude-code"
     llmAgents.packages.${system}."copilot-cli"
   ];
 in
@@ -87,6 +86,8 @@ pkgs.dockerTools.buildLayeredImage {
       "PATH=/bin"
       "HOME=/home/${userName}"
       "BUILD_DIR=/tmp/seiostar_build"
+      "COPILOT_OTEL_ENABLED=true"
+      "COPILOT_OTEL_FILE_EXPORTER_PATH=/tmp/copilot-traces.json"
       "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
       "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
       "CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt"
