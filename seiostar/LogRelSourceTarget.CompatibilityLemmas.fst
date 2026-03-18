@@ -917,7 +917,51 @@ let helper_compat_ocomp_if_steps_pre (g:typ_env) (e:closed_exp) (h:history) (lt:
   (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e2 fsG), e2)) /\
   (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e3 fsG), e3))
 
-#push-options "--z3rlimit 15 --split_queries always"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
+let helper_ocomp_if_from_bool_value (h:history) (lt:local_trace h) (t:qType)
+  (lt1:local_trace h) (lt2:local_trace (h++lt1))
+  (fs_b:fs_val qBool) (e1':closed_exp) (fs_e2 fs_e3:fs_comp t) (fs_r:fs_val t)
+  (e1 e2 e3:closed_exp) :
+  Lemma
+    (requires
+      lt == lt1@lt2 /\
+      qBool ∈ (h++lt1, fs_b, e1') /\ e_beh e1 e1' h lt1 /\
+      is_value e1' /\ indexed_irred e1' (h++lt1) /\
+      fs_beh (fs_comp_if_val fs_b fs_e2 fs_e3) (h++lt1) lt2 fs_r /\
+      (forall (lt':local_trace h). t ⫃ (h++lt', fs_e2, e2)) /\
+      (forall (lt':local_trace h). t ⫃ (h++lt', fs_e3, e3)))
+    (ensures exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt) =
+  trans_history h lt1 lt2;
+  if fs_b then begin
+    assert (e1' == ETrue);
+    assert (fs_beh fs_e2 (h++lt1) lt2 fs_r);
+    assert (t ⫃ (h++lt1, fs_e2, e2));
+    eliminate forall (lt'':local_trace (h++lt1)) (fs_r':get_Type t).
+      fs_beh fs_e2 (h++lt1) lt'' fs_r' ==> exists e'. t ∈ ((h++lt1)++lt'', fs_r', e') /\ e_beh e2 e' (h++lt1) lt'' with lt2 fs_r;
+    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e2 e' (h++lt1) lt2
+      returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
+    let goal : Type0 = (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt) in
+    FStar.Squash.bind_squash #(steps e1 e1' h lt1) #goal () (fun sts_e1 ->
+    FStar.Squash.bind_squash #(steps e2 e' (h++lt1) lt2) #goal () (fun sts_branch ->
+    construct_steps_eif e1 ETrue e2 e3 e' h lt1 lt2 sts_e1 sts_branch))
+    end
+  end else begin
+    assert (e1' == EFalse);
+    assert (fs_beh fs_e3 (h++lt1) lt2 fs_r);
+    assert (t ⫃ (h++lt1, fs_e3, e3));
+    eliminate forall (lt'':local_trace (h++lt1)) (fs_r':get_Type t).
+      fs_beh fs_e3 (h++lt1) lt'' fs_r' ==> exists e'. t ∈ ((h++lt1)++lt'', fs_r', e') /\ e_beh e3 e' (h++lt1) lt'' with lt2 fs_r;
+    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e3 e' (h++lt1) lt2
+      returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
+    let goal : Type0 = (exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt) in
+    FStar.Squash.bind_squash #(steps e1 e1' h lt1) #goal () (fun sts_e1 ->
+    FStar.Squash.bind_squash #(steps e3 e' (h++lt1) lt2) #goal () (fun sts_branch ->
+    construct_steps_eif e1 EFalse e2 e3 e' h lt1 lt2 sts_e1 sts_branch))
+    end
+  end
+#pop-options
+
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_if_steps (h:history) (lt:local_trace h) (t:qType)
   (fs_e1:fs_comp qBool) (fs_e2 fs_e3:fs_comp t) (fs_r:fs_val t)
   (e1 e2 e3:closed_exp) :
@@ -933,39 +977,13 @@ let helper_compat_ocomp_if_steps (h:history) (lt:local_trace h) (t:qType)
   eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_b:fs_val qBool).
     lt == (lt1@lt2) /\ fs_beh fs_e1 h lt1 fs_b /\ fs_beh (fs_k fs_b) (h++lt1) lt2 fs_r
     returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
-  // From qBool ⫃ (h, fs_e1, e1), get the boolean value expression
   eliminate forall (lt':local_trace h) (fs_r':get_Type qBool). fs_beh fs_e1 h lt' fs_r' ==> exists e1'. qBool ∈ (h++lt', fs_r', e1') /\ e_beh e1 e1' h lt' with lt1 fs_b;
   eliminate exists e1'. qBool ∈ (h++lt1, fs_b, e1') /\ e_beh e1 e1' h lt1
     returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
   lem_values_are_values qBool (h++lt1) fs_b e1';
   lem_value_is_irred e1';
-  trans_history h lt1 lt2;
-  if fs_b then begin
-    assert (e1' == ETrue);
-    assert (fs_beh fs_e2 (h++lt1) lt2 fs_r);
-    // From forall lt'. t ⫃ (h++lt', fs_e2, e2), specialize with lt1
-    assert (t ⫃ (h++lt1, fs_e2, e2));
-    eliminate forall (lt'':local_trace (h++lt1)) (fs_r':get_Type t).
-      fs_beh fs_e2 (h++lt1) lt'' fs_r' ==> exists e'. t ∈ ((h++lt1)++lt'', fs_r', e') /\ e_beh e2 e' (h++lt1) lt'' with lt2 fs_r;
-    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e2 e' (h++lt1) lt2
-      returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
-    FStar.Squash.bind_squash #(steps e1 e1' h lt1) () (fun sts_e1 ->
-    FStar.Squash.bind_squash #(steps e2 e' (h++lt1) lt2) () (fun sts_branch ->
-    construct_steps_eif e1 ETrue e2 e3 e' h lt1 lt2 sts_e1 sts_branch))
-    end
-  end else begin
-    assert (e1' == EFalse);
-    assert (fs_beh fs_e3 (h++lt1) lt2 fs_r);
-    assert (t ⫃ (h++lt1, fs_e3, e3));
-    eliminate forall (lt'':local_trace (h++lt1)) (fs_r':get_Type t).
-      fs_beh fs_e3 (h++lt1) lt'' fs_r' ==> exists e'. t ∈ ((h++lt1)++lt'', fs_r', e') /\ e_beh e3 e' (h++lt1) lt'' with lt2 fs_r;
-    eliminate exists e'. t ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh e3 e' (h++lt1) lt2
-      returns exists e'. t ∈ (h++lt, fs_r, e') /\ e_beh (EIf e1 e2 e3) e' h lt with _. begin
-    FStar.Squash.bind_squash #(steps e1 e1' h lt1) () (fun sts_e1 ->
-    FStar.Squash.bind_squash #(steps e3 e' (h++lt1) lt2) () (fun sts_branch ->
-    construct_steps_eif e1 EFalse e2 e3 e' h lt1 lt2 sts_e1 sts_branch))
-    end
-  end
+  assert (fs_k fs_b == fs_comp_if_val fs_b fs_e2 fs_e3) by (norm []; trefl ());
+  helper_ocomp_if_from_bool_value h lt t lt1 lt2 fs_b e1' fs_e2 fs_e3 fs_r e1 e2 e3
   end
   end
 #pop-options
