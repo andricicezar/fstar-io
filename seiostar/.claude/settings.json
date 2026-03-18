@@ -1,39 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "allow": [
-      "Bash(*)",
-      "Read(*)",
-      "Write(*)",
-      "Edit(*)",
-      "MultiEdit(*)",
-      "Glob(*)",
-      "Grep(*)",
-      "LS(*)",
-      "WebFetch(*)",
-      "TodoRead(*)",
-      "TodoWrite(*)",
-      "NotebookRead(*)",
-      "NotebookEdit(*)"
-    ],
-    "deny": []
+    "defaultMode": "bypassPermissions"
   },
-  "model": "sonnet",
+  "model": "opus",
   "env": {},
-  "enableAllProjectMcpServers": true,
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "{ read -r json; f=$(echo \"$json\" | grep -oP '\"file_path\"\\s*:\\s*\"\\K[^\"]+'); echo \"$f\" | grep -qE '\\.(fsti?)$' && { rel=\"${f#/workspace/seiostar/}\"; make -C /workspace/seiostar verify \"$rel\"; }; } 2>/dev/null || true",
-            "statusMessage": "Verifying F* file..."
-          }
-        ]
-      }
-    ]
-  }
+  "enableAllProjectMcpServers": true
 }
