@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ read -r json; f=$(echo \"$json\" | grep -oP '\"file_path\"\\s*:\\s*\"\\K[^\"]+'); echo \"$f\" | grep -qE '\\.(fsti?)$' && { rel=\"${f#/workspace/seiostar/}\"; make -C /workspace/seiostar verify \"$rel\"; }; } 2>/dev/null || true",
+            "statusMessage": "Verifying F* file..."
+          }
+        ]
+      }
+    ]
+  }
+}
