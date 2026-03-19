@@ -186,7 +186,6 @@ let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
     end
   end
 
-#push-options "--split_queries always"
 let rec destruct_steps_eif
   (e1:closed_exp)
   (e2:closed_exp)
@@ -242,7 +241,6 @@ let rec destruct_steps_eif
         (e1, (| [], lt |))
         end
       end
-#pop-options
 
   (**
     How the steps look like:
@@ -267,7 +265,6 @@ let lem_irred_epair_implies_irred_e2 (e1':closed_exp{is_value e1'}) (e2:closed_e
     end
   end
 
-#push-options "--split_queries always"
 let rec destruct_steps_epair_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -310,7 +307,6 @@ let rec destruct_steps_epair_e1
       end
     | _ -> (e1, (| [], lt |))
     end
-#pop-options
 
 let rec destruct_steps_epair_e2
   (e1':closed_exp{is_value e1'})
@@ -399,7 +395,6 @@ let lem_irred_estringeq_implies_irred_e2 (e1':closed_exp{EString? e1'}) (e2:clos
     end
   end
 
-#push-options "--split_queries always"
 let rec destruct_steps_estringeq_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -491,7 +486,6 @@ let rec destruct_steps_estringeq_e2
       (e2, (| [], lt |))
       end
     end
-#pop-options
 
 let can_step_efst_when_reduced (e12:closed_exp) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TPair t1 t2) e12 h)
@@ -888,7 +882,7 @@ let can_step_ecase_when_safe (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)
     end
   end
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 10"
 let rec destruct_steps_ecase
   (e_case:closed_exp)
   (e_lc:exp{is_closed (ELam e_lc)})
@@ -987,7 +981,7 @@ let can_step_ecall_val (op:io_ops) (arg:closed_exp{exists (args:io_args op). arg
   let res = default_io_res h op args in
   let _ = SCallReturn h op args res in ()
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 10"
 let destruct_steps_ecall
   (op:io_ops)
   (val_arg:closed_exp{exists (args:io_args op). val_arg == as_e_io_args op args})
