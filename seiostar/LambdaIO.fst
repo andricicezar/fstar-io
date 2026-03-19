@@ -187,7 +187,12 @@ let rec lem_value_is_closed (e:exp) : Lemma
 type value = e:exp{is_value e}
 type closed_exp = e:exp{is_closed e}
 
-#push-options "--split_queries always"
+let lem_sub_elam_shifting_bound (s:sub true) :
+  Lemma (requires forall (x:var). EVar?.v (s x) <= x+1)
+        (ensures forall (x:var). EVar?.v (sub_elam s x) <= x+1)
+  = ()
+
+#push-options "--z3rlimit 10"
 let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires (free_vars_indx e n == [] /\
@@ -195,15 +200,9 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     (ensures (free_vars_indx (subst s e) (n+1) == []))
     (decreases e) =
   match e with
-  | ELam e' -> begin
-    assert (free_vars_indx e' (n+1) == []);
-    let s' : sub true = sub_elam s in
-    assert (forall (x:var). EVar?.v (s' x) <= x+1);
-    lem_shifting_preserves_closed s' e' (n+1);
-    assert (free_vars_indx (subst s' e') (n+2) == []);
-    assert (free_vars_indx (subst s' e') (n+2) ==
-            free_vars_indx (subst s (ELam e')) (n+1))
-  end
+  | ELam e' ->
+    lem_sub_elam_shifting_bound s;
+    lem_shifting_preserves_closed (sub_elam s) e' (n+1)
   | EFst e
   | ESnd e
   | EInl e
@@ -221,9 +220,11 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     lem_shifting_preserves_closed s e3 n
   | ECase e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
+    lem_sub_elam_shifting_bound s;
     lem_shifting_preserves_closed (sub_elam s) e2 (n+1);
     lem_shifting_preserves_closed (sub_elam s) e3 (n+1)
   | _ -> ()
+#pop-options
 
 let lemma_memP_append (l1 l2:list var) :
   Lemma ((forall x. x `L.memP` l1 ==> x `L.memP` (l1 `L.append` l2)) /\
@@ -233,13 +234,39 @@ let lemma_memP_append (l1 l2:list var) :
     (x `L.memP` l2 ==> x `L.memP` (l1 `L.append` l2))
   with L.append_memP l1 l2 x
 
+let lem_shifting_under_sub_elam #b (s:sub b) (n:nat) :
+  Lemma (forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (sub_elam s (x+1)) (n+1) == [])
+  = introduce forall (x:var). free_vars_indx (s x) n == [] ==> free_vars_indx (sub_elam s (x+1)) (n+1) == [] with begin
+      introduce _ ==> _ with _.
+        lem_shifting_preserves_closed sub_inc (s x) n
+    end
+
+let lem_sub_elam_identity_below #b (s:sub b) (n:nat) :
+  Lemma (requires forall (x:var). x < n ==> EVar? (s x) /\ EVar?.v (s x) < n)
+        (ensures forall (x:var). x < n+1 ==> EVar? (sub_elam s x) /\ EVar?.v (sub_elam s x) < n+1)
+  = ()
+
+let lem_sub_elam_recursive_preconditions #b (s:sub b) (e':exp) (n:nat) :
+  Lemma
+    (requires
+      (forall (x:var). x < n ==> EVar? (s x) /\ EVar?.v (s x) < n) /\
+      (forall fv. fv `L.memP` free_vars_indx e' (n+1) ==> free_vars_indx (s (n+fv)) n == []))
+    (ensures
+      (forall (x:var). x < n+1 ==> EVar? (sub_elam s x) /\ EVar?.v (sub_elam s x) < n+1) /\
+      (forall fv. fv `L.memP` free_vars_indx e' (n+1) ==> free_vars_indx (sub_elam s ((n+1)+fv)) (n+1) == []))
+  = lem_sub_elam_identity_below s n;
+    introduce forall (fv:var). fv `L.memP` free_vars_indx e' (n+1) ==> free_vars_indx (sub_elam s ((n+1)+fv)) (n+1) == []
+    with begin
+      introduce _ ==> _ with _.
+        lem_shifting_preserves_closed sub_inc (s (n+fv)) n
+    end
+
+#push-options "--z3rlimit 10"
 let rec lem_subst_freevars_closes_exp
   #b
   (s:sub b)
   (e:exp)
-  (n:nat) // number of binders
-        // the substitutions for the free variables are in s from pos n to infinity
-        // recursively, n increases, and s is shifted
+  (n:nat)
   :
   Lemma
     (requires (
@@ -250,17 +277,8 @@ let rec lem_subst_freevars_closes_exp
     (decreases e) =
   match e with
   | ELam e' ->
-    let s' = sub_elam s in
-    let n' = n+1 in
-    assert (free_vars_indx e n == free_vars_indx e' n');
-    introduce forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (s' (x+1)) n' == [] with begin
-      introduce _ ==> _ with _. begin
-        assert (free_vars_indx (s x) n == []);
-        lem_shifting_preserves_closed (sub_inc) (s x) n;
-        assert (free_vars_indx (subst sub_inc (s x)) n' == [])
-      end
-    end;
-    lem_subst_freevars_closes_exp s' e' n'
+    lem_sub_elam_recursive_preconditions s e' n;
+    lem_subst_freevars_closes_exp (sub_elam s) e' (n+1)
   | EApp e1 e2
   | EStringEq e1 e2
   | EPair e1 e2 ->
@@ -279,22 +297,14 @@ let rec lem_subst_freevars_closes_exp
   | EInr e'
   | ECall _ e' ->
     lem_subst_freevars_closes_exp s e' n
-  | ECase e1 e2 e3 -> begin
-    let s' = sub_elam s in
-    let n' = n+1 in
-    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n');
-    lemma_memP_append (free_vars_indx e1 n `L.append` free_vars_indx e2 n') (free_vars_indx e3 n');
+  | ECase e1 e2 e3 ->
+    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 (n+1));
+    lemma_memP_append (free_vars_indx e1 n `L.append` free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
     lem_subst_freevars_closes_exp s e1 n;
-    introduce forall x. free_vars_indx (s x) n == [] ==> free_vars_indx (s' (x+1)) n' == [] with begin
-      introduce _ ==> _ with _. begin
-        assert (free_vars_indx (s x) n == []);
-        lem_shifting_preserves_closed (sub_inc) (s x) n;
-        assert (free_vars_indx (subst sub_inc (s x)) n' == [])
-      end
-    end;
-    lem_subst_freevars_closes_exp s' e2 n';
-    lem_subst_freevars_closes_exp s' e3 n'
-  end
+    lem_sub_elam_recursive_preconditions s e2 n;
+    lem_subst_freevars_closes_exp (sub_elam s) e2 (n+1);
+    lem_sub_elam_recursive_preconditions s e3 n;
+    lem_subst_freevars_closes_exp (sub_elam s) e3 (n+1)
   | _ -> ()
 #pop-options
 
