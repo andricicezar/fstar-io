@@ -53,7 +53,7 @@ let compat_oval_string g (str:string) : Lemma (fs_oval_return g #qString str ⊐
     end
   end
 
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 10"
 let helper_compat_val_string_eq (e':closed_exp) (h:history) (lt:local_trace h) (fs_e1:fs_val qString) (fs_e2:fs_val qString) (e1 e2:closed_exp)
   : Lemma
     (requires e_beh (EStringEq e1 e2) e' h lt /\
@@ -142,7 +142,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊐ EVar 
     end
   end
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 20"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
@@ -506,7 +506,7 @@ let compat_oval_inr #g (t1 #t2:qType) (fs_e:fs_oval g t2) (e:exp) : Lemma
     end
   end
 
-#push-options "--fuel 32 --z3rlimit 10"
+#push-options "--fuel 2 --z3rlimit 10"
 let helper_compat_val_case (e':closed_exp)
   (#h:history) (lt:local_trace h)
   (#t1 #t2 #t3:qType)
@@ -542,7 +542,7 @@ let helper_compat_val_case (e':closed_exp)
     get_squash (t3 ∋ (h, fs_val_case fs_sc fs_li fs_ri, e') /\ lt == []))
 #pop-options
 
-#push-options "--split_queries always --ifuel 0"
+#push-options "--z3rlimit 10"
 let compat_oval_case
   #g
   (#t1 #t2 #t3:qType)
@@ -637,7 +637,7 @@ let compat_ocomp_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
     end
   end
 
-#push-options "--split_queries always --z3rlimit 32 --ifuel 0"
+#push-options "--ifuel 0 --z3rlimit 10"
 let helper_compat_ocomp_bind (e':closed_exp) (#h:history) (lt:local_trace h) (#a:qType) (#b:qType) (fs_k':fs_val a -> fs_comp b) (fs_m:fs_comp a) (m k':exp) :
 Lemma
   (requires is_closed (EApp (ELam k') m) /\
@@ -780,7 +780,7 @@ let compat_ocomp_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_ocom
     end
   end
 
-#push-options "--fuel 32 --z3rlimit 32"
+#push-options "--fuel 2 --z3rlimit 10"
 let helper_compat_prod_case_val
   (e':closed_exp)
   (#h:history) (lt:local_trace h)
@@ -867,7 +867,7 @@ let lem_if_arg_value_then_exists (op:io_ops) (h:history) (fs_arg:fs_val (q_io_ar
     (requires (q_io_args op) ∋ (h, fs_arg, val_arg))
     (ensures exists (args:io_args op). val_arg == as_e_io_args op args) = ()
 
-#push-options "--fuel 10 --z3rlimit 100"
+#push-options "--fuel 2 --z3rlimit 10"
 let lem_ecall_result_facts
   (op:io_ops)
   (fs_arg:fs_val (q_io_args op))
@@ -893,7 +893,7 @@ let lem_ecall_result_facts
 #pop-options
 
 (* General helper for all ops - no case analysis on op *)
-#push-options "--fuel 32 --z3rlimit 64"
+#push-options "--fuel 4 --z3rlimit 20"
 let rec destruct_steps_ecall_arg_all
   (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op))
@@ -961,7 +961,7 @@ let rec destruct_steps_ecall_arg_all
    Unlike destruct_steps_ecall_arg_all (which uses ⊇), this threads the original
    ⫄ computation relation and accumulated steps through the recursion.
    This avoids needing indexed_sem_expr_shape, which doesn't exist for OWrite. *)
-#push-options "--fuel 32 --z3rlimit 64"
+#push-options "--fuel 4 --z3rlimit 20"
 let rec destruct_steps_ecall_arg_comp
   (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
   (st:steps (ECall op arg) e' h lt)
@@ -1020,7 +1020,7 @@ let rec destruct_steps_ecall_arg_comp
 #pop-options
 
 (* General helper - works for all ops without case analysis on op *)
-#push-options "--fuel 32 --z3rlimit 64"
+#push-options "--fuel 2 --z3rlimit 10"
 let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
@@ -1352,7 +1352,7 @@ let compat_ocomp_pair #g
   end
 #pop-options
 
-#push-options "--z3rlimit 20 --fuel 2 --ifuel 1"
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 10"
 private let helper_compat_ocomp_string_eq_inner
   (fs_e1':fs_comp qString) (fs_e2':fs_comp qString)
   (h:history)
@@ -1394,7 +1394,7 @@ private let helper_compat_ocomp_string_eq_inner
       false_elim ()
 #pop-options
 
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 10"
 let compat_ocomp_string_eq #g
   (fs_e1:fs_ocomp g qString) (fs_e2:fs_ocomp g qString)
   (e1:exp) (e2:exp)
@@ -1506,6 +1506,7 @@ let compat_ocomp_fst #g
     end
   end
 
+#push-options "--z3refresh"
 let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
@@ -1555,6 +1556,7 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
       end
     end
   end
+#pop-options
 
 let helper_lemma_compat_ocomp_case #g #a #b
   (fs_e:fs_ocomp (extend a g) b)
