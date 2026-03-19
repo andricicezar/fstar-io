@@ -917,7 +917,7 @@ let helper_compat_ocomp_if_steps_pre (g:typ_env) (e:closed_exp) (h:history) (lt:
   (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e2 fsG), e2)) /\
   (forall (lt:local_trace h). t ⫃ (h++lt, (fs_e3 fsG), e3))
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_if_from_bool_value (h:history) (lt:local_trace h) (t:qType)
   (lt1:local_trace h) (lt2:local_trace (h++lt1))
   (fs_b:fs_val qBool) (e1':closed_exp) (fs_e2 fs_e3:fs_comp t) (fs_r:fs_val t)
@@ -961,7 +961,7 @@ let helper_ocomp_if_from_bool_value (h:history) (lt:local_trace h) (t:qType)
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_if_steps (h:history) (lt:local_trace h) (t:qType)
   (fs_e1:fs_comp qBool) (fs_e2 fs_e3:fs_comp t) (fs_r:fs_val t)
   (e1 e2 e3:closed_exp) :
@@ -1030,7 +1030,7 @@ let compat_ocomp_var g (x:var{Some? (g x)}) : Lemma (fs_ocomp_var g x ⊑ EVar x
   compat_oval_var g x;
   compat_ocomp_return (fs_oval_var g x) (EVar x)
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_app_from_arg_value (h:history) (lt:local_trace h) (a b:qType)
   (lt1:local_trace h) (lt2a:local_trace (h++lt1)) (lt2b:local_trace ((h++lt1)++lt2a))
   (fs_r_f:fs_val (a ^->!@ b)) (fs_r_x:fs_val a) (fs_r:fs_val b)
@@ -1063,7 +1063,7 @@ let helper_ocomp_app_from_arg_value (h:history) (lt:local_trace h) (a b:qType)
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_app_inner_bind (h:history) (lt:local_trace h) (a b:qType)
   (lt1:local_trace h) (lt2:local_trace (h++lt1))
   (fs_r_f:fs_val (a ^->!@ b)) (fs_r:fs_val b)
@@ -1091,7 +1091,7 @@ let helper_ocomp_app_inner_bind (h:history) (lt:local_trace h) (a b:qType)
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_app_steps (h:history) (lt:local_trace h) (a b:qType)
   (fs_f':fs_comp (a ^->!@ b)) (fs_x':fs_comp a) (fs_r:fs_val b)
   (f x:closed_exp) :
@@ -1309,7 +1309,7 @@ let helper_compat_ocomp_fmap_snd_steps (h:history) (lt:local_trace h) (t1 t2:qTy
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_pair_from_values
   (h:history) (lt:local_trace h) (t1 t2:qType)
   (lt1:local_trace h) (lt2a:local_trace (h++lt1))
@@ -1334,7 +1334,7 @@ let helper_ocomp_pair_from_values
   assert (steps (EPair e1 e2) (EPair em1 em2) h (lt1@lt2a))))
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_pair_inner_bind
   (h:history) (lt:local_trace h) (t1 t2:qType)
   (lt1:local_trace h) (lt2:local_trace (h++lt1))
@@ -1374,7 +1374,7 @@ let helper_ocomp_pair_inner_bind
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   (fs_e1':fs_comp t1) (fs_e2':fs_comp t2) (fs_r:fs_val (t1 ^* t2)) (e1 e2:closed_exp) :
   Lemma
@@ -1535,7 +1535,7 @@ let compat_ocomp_pair #g
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_string_eq_from_values
   (h:history) (lt1:local_trace h) (lt2a:local_trace (h++lt1))
   (fs_v1 fs_v2:fs_val qString) (em1 em2 e1 e2:closed_exp)
@@ -1568,7 +1568,7 @@ let helper_ocomp_string_eq_from_values
   unit_l (lt1@lt2a)))
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_ocomp_string_eq_inner_bind
   (h:history) (lt:local_trace h)
   (lt1:local_trace h) (lt2:local_trace (h++lt1))
@@ -1602,7 +1602,7 @@ let helper_ocomp_string_eq_inner_bind
   end
 #pop-options
 
-#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 15 --split_queries always --fuel 1 --ifuel 1"
 let helper_compat_ocomp_string_eq_steps (h:history) (lt:local_trace h)
   (fs_e1':fs_comp qString) (fs_e2':fs_comp qString) (fs_r:fs_val qBool) (e1 e2:closed_exp) :
   Lemma
@@ -1854,4 +1854,5 @@ let compat_ocomp_call #g (op:io_ops) (fs_arg:fs_ocomp g (q_io_args op)) (arg:exp
     end
   end
 #pop-options
+
 
