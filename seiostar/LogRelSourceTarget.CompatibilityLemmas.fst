@@ -606,7 +606,7 @@ let compat_ocomp_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
     end
   end
 
-#push-options "--z3rlimit 10"
+#push-options "--z3rlimit 10 --fuel 2 --ifuel 0"
 let helper_compat_ocomp_bind_steps (h:history) (lt:local_trace h) (a b:qType)
   (fs_m:fs_comp a) (fs_k:fs_val a -> fs_comp b) (fs_r:fs_val b)
   (m:closed_exp) (k:exp{is_closed (ELam k)}) :
@@ -761,7 +761,7 @@ let compat_ocomp_if_oval #g (#a:qType) (fs_c:fs_oval g qBool) (fs_t fs_e:fs_ocom
     end
   end
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 let helper_compat_ocomp_case_oval_steps (h:history) (lt:local_trace h) (a b c:qType)
   (fs_cond:fs_val (a ^+ b))
   (fs_inlc:fs_val (a ^->!@ c))
@@ -1156,7 +1156,7 @@ let compat_ocomp_lambda #g (#t1:qType) (#t2:qType)
 
 (** ---- Helpers for fmap-based lemmas (inl, inr, fst, snd) ---- **)
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 let helper_compat_ocomp_fmap_inl_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   (fs_e':fs_comp t1) (fs_r:fs_val (t1 ^+ t2)) (e:closed_exp) :
   Lemma
@@ -1191,7 +1191,7 @@ let helper_compat_ocomp_fmap_inl_steps (h:history) (lt:local_trace h) (t1 t2:qTy
   end
 #pop-options
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 let helper_compat_ocomp_fmap_inr_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   (fs_e':fs_comp t2) (fs_r:fs_val (t1 ^+ t2)) (e:closed_exp) :
   Lemma
@@ -1400,7 +1400,7 @@ let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
 
 (** ---- Helpers for IO operation bind decomposition ---- **)
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 let helper_compat_ocomp_call_steps (op:io_ops) (h:history) (lt:local_trace h)
   (fs_arg':fs_comp (q_io_args op)) (fs_r:fs_val (q_io_res op)) (arg:closed_exp) :
   Lemma
@@ -1443,7 +1443,7 @@ let lem_fs_beh_return_inv (#t:qType) (val_:fs_val t) (h:history) (lt:local_trace
 
 (** ---- Case helper for bind decomposition ---- **)
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 let helper_compat_ocomp_case_steps (h:history) (lt:local_trace h) (a b c:qType)
   (fs_sc':fs_comp (a ^+ b))
   (fs_inlc:fs_val (a ^->!@ c))
@@ -1712,7 +1712,7 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
     end
   end
 
-#push-options "--z3rlimit 10"
+#push-options "--z3rlimit 10 --fuel 2 --ifuel 0"
 let compat_ocomp_case #g (#a #b #c:qType)
   (fs_cond:fs_ocomp g (a ^+ b))
   (fs_inlc:fs_ocomp (extend a g) c)
