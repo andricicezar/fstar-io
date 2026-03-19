@@ -1226,7 +1226,7 @@ let helper_compat_ocomp_fmap_inr_steps (h:history) (lt:local_trace h) (t1 t2:qTy
   end
 #pop-options
 
-#push-options "--z3rlimit 15"
+#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
 let helper_compat_ocomp_fmap_fst_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   (fs_e12':fs_comp (t1 ^* t2)) (fs_r:fs_val t1) (e12:closed_exp) :
   Lemma
@@ -1267,7 +1267,7 @@ let helper_compat_ocomp_fmap_fst_steps (h:history) (lt:local_trace h) (t1 t2:qTy
   end
 #pop-options
 
-#push-options "--z3rlimit 15"
+#push-options "--z3rlimit 15 --fuel 1 --ifuel 1"
 let helper_compat_ocomp_fmap_snd_steps (h:history) (lt:local_trace h) (t1 t2:qType)
   (fs_e12':fs_comp (t1 ^* t2)) (fs_r:fs_val t2) (e12:closed_exp) :
   Lemma
