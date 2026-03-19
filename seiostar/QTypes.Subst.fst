@@ -226,7 +226,7 @@ let lem_equiv_subst_comp_inc_ren (r:sub true) (e:exp) :
 (** Helper: composition of two renamings (both sub true).
     Unlike subst_comp which coerces the first arg to sub false,
     this keeps all subst calls at #r=true, avoiding SMT encoding mismatches. *)
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--z3rlimit 32"
 let rec subst_comp_ren_ren (f:sub true) (g:sub true) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
@@ -268,7 +268,7 @@ let lem_pointwise_sub_elam_ren #b (r:sub true) (g:sub b) (x:var) :
       lem_equiv_subst_comp_inc_ren r gx
     end
 
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--z3rlimit 32"
 
 let rec subst_comp_ren #b (r:sub true) (g:sub b) (e:exp) :
   Lemma (ensures subst r (subst g e) == subst (gsub_comp r g) e)
@@ -307,7 +307,7 @@ let lem_pointwise_sub_elam_ren_right #b (f:sub b) (g:sub true) (x:var) :
          | EVar _ -> ()
 
 (** Composition with a renaming on the right, for general left substitution. *)
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--z3rlimit 32"
 let rec subst_comp_ren_right #b (f:sub b) (g:sub true) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
@@ -359,7 +359,7 @@ let lem_pointwise_sub_elam_gen #b1 #b2 (f:sub b1) (g:sub b2) (x:var) :
       lem_equiv_subst_comp_inc_gen f (g (x-1))
     end
 
-#push-options "--split_queries always --z3rlimit 32"
+#push-options "--z3rlimit 32"
 let rec subst_comp_general #b1 #b2 (f:sub b1) (g:sub b2) (e:exp) :
   Lemma (ensures subst f (subst g e) == subst (gsub_comp f g) e)
         (decreases e) =
