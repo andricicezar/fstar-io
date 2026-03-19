@@ -70,7 +70,25 @@ let rec lem_free_vars_indx_shift (e:exp) (n:nat) :
 
 (** Helper: a "shift-at-depth-n" substitution (identity below n, +1 at/above n)
     shifts all free variable indices by +1. *)
-#push-options "--split_queries always --z3rlimit 15"
+let lem_sub_elam_inc (s:sub true) (n:nat) :
+  Lemma
+    (requires
+      (forall (y:var). y < n ==> s y == EVar y) /\
+      (forall (y:var). y >= n ==> s y == EVar (y + 1)))
+    (ensures (let s' = sub_elam s in
+      (forall (y:var). y < n+1 ==> s' y == EVar y) /\
+      (forall (y:var). y >= n+1 ==> s' y == EVar (y + 1))))
+  = let s' = sub_elam s in
+    introduce forall (y:var). y < n+1 ==> s' y == EVar y with begin
+      introduce _ ==> _ with _. begin
+        if y = 0 then () else ()
+      end
+    end;
+    introduce forall (y:var). y >= n+1 ==> s' y == EVar (y + 1) with begin
+      introduce _ ==> _ with _. ()
+    end
+
+#push-options "--z3rlimit 10"
 let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
   Lemma
     (requires
@@ -83,16 +101,8 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
   | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
   | EVar _ -> ()
   | ELam e' ->
-    let s' = sub_elam s in
-    introduce forall (y:var). y < n+1 ==> s' y == EVar y with begin
-      introduce _ ==> _ with _. begin
-        if y = 0 then () else ()
-      end
-    end;
-    introduce forall (y:var). y >= n+1 ==> s' y == EVar (y + 1) with begin
-      introduce _ ==> _ with _. ()
-    end;
-    lem_free_vars_subst_inc s' e' (n+1)
+    lem_sub_elam_inc s n;
+    lem_free_vars_subst_inc (sub_elam s) e' (n+1)
   | EFst e' | ESnd e' | EInl e' | EInr e'
   | ECall _ e' ->
     lem_free_vars_subst_inc s e' n
@@ -111,19 +121,11 @@ let rec lem_free_vars_subst_inc (s:sub true) (e:exp) (n:nat) :
     append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 n)
   | ECase e1 e2 e3 ->
     lem_free_vars_subst_inc s e1 n;
-    let s' = sub_elam s in
-    introduce forall (y:var). y < n+1 ==> s' y == EVar y with begin
-      introduce _ ==> _ with _. begin
-        if y = 0 then () else ()
-      end
-    end;
-    introduce forall (y:var). y >= n+1 ==> s' y == EVar (y + 1) with begin
-      introduce _ ==> _ with _. ()
-    end;
-    lem_free_vars_subst_inc s' e2 (n+1);
-    lem_free_vars_subst_inc s' e3 (n+1);
-    append_memP_forall (free_vars_indx (subst s e1) n @ free_vars_indx (subst s' e2) (n+1)) (free_vars_indx (subst s' e3) (n+1));
-    append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst s' e2) (n+1));
+    lem_sub_elam_inc s n;
+    lem_free_vars_subst_inc (sub_elam s) e2 (n+1);
+    lem_free_vars_subst_inc (sub_elam s) e3 (n+1);
+    append_memP_forall (free_vars_indx (subst s e1) n @ free_vars_indx (subst (sub_elam s) e2) (n+1)) (free_vars_indx (subst (sub_elam s) e3) (n+1));
+    append_memP_forall (free_vars_indx (subst s e1) n) (free_vars_indx (subst (sub_elam s) e2) (n+1));
     append_memP_forall (free_vars_indx e1 n @ free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
     append_memP_forall (free_vars_indx e1 n) (free_vars_indx e2 (n+1))
 #pop-options
