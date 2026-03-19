@@ -182,7 +182,7 @@ let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' 
   = assert (backtranslate_exp (TyCall o h') == fs_ocomp_call o (backtranslate_exp h'))
       by (norm [delta_only [`%backtranslate_exp]; zeta; iota]; trefl ())
 
-#push-options "--split_queries always"
+#push-options "--z3rlimit 10"
 let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊒ e) =
    match e with
   | EUnit -> C1.compat_ocomp_unit g
