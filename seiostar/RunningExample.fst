@@ -1,7 +1,6 @@
 module RunningExample
 
 open FStar.Tactics.V1
-open FStar.Classical
 open Trace
 open IOStar
 open RQ.Metaprogram
@@ -764,142 +763,142 @@ let main agent =
 
 // %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
-// %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-// [@@ (preprocess_with simplify_qType)]
-// let main_derivation #g : typing g (fs_oval_return g main)
-//   by (trefl ())
-//   = QLambdaIO (
-//       QBind
-//         (QAppIO
-//           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-//                 (QStringLit "overwrite"))
-//           QAxiom)
-//         (QCaseIO QAxiom
-//           (QReturn QTrue)
-//           (QReturn QFalse)))
+%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+[@@ (preprocess_with simplify_qType)]
+let main_derivation #g : typing g (fs_oval_return g main)
+  by (trefl ())
+  = QLambdaIO (
+      QBind
+        (QAppIO
+          (QApp (QApp wrapper_derivation (QStringLit "./temp"))
+                (QStringLit "overwrite"))
+          QAxiom)
+        (QCaseIO QAxiom
+          (QReturn QTrue)
+          (QReturn QFalse)))
 
-// let re_int : intS = {
-//   ct = (qString ^-> qString ^->!@ qUnit)
-// }
+let re_int : intS = {
+  ct = (qString ^-> qString ^->!@ qUnit)
+}
 
 
-// val ps_main : progS re_int
-// let ps_main : progS re_int=
-//   (| main, main_derivation #empty |)
+val ps_main : progS re_int
+let ps_main : progS re_int=
+  (| main, main_derivation #empty |)
 
-// let pt_main = RrHP.compile_prog ps_main
+let pt_main = RrHP.compile_prog ps_main
 
-// (* bad: this agent does nothing *)
-// let lazy_agent : exp = ELam (ELam EUnit)
+(* bad: this agent does nothing *)
+let lazy_agent : exp = ELam (ELam EUnit)
 
-// (* good: this agent writes the expected string on the file *)
-// let write_agent : exp =
-//   ELam (* filename *)
-//     (ELam (* content *)
-//       (ECase (ECall OOpen (EVar 1))
-//         (* Inl fd *)
-//         (
-//           (* fd = EVar 0
-//              content = EVar 1
-//              filename = EVar 2 *)
-//           EApp
-//             (* after io_call OWrite: io_call OClose fd *)
-//             (ELam (ECall OClose (EVar 1)))
-//             (ECall OWrite (EPair (EVar 0) (EVar 1)))
-//         )
-//         (* Inr _ => unit *)
-//         EUnit
-//       )
-//     )
+(* good: this agent writes the expected string on the file *)
+let write_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (ECall OOpen (EVar 1))
+        (* Inl fd *)
+        (
+          (* fd = EVar 0
+             content = EVar 1
+             filename = EVar 2 *)
+          EApp
+            (* after io_call OWrite: io_call OClose fd *)
+            (ELam (ECall OClose (EVar 1)))
+            (ECall OWrite (EPair (EVar 0) (EVar 1)))
+        )
+        (* Inr _ => unit *)
+        EUnit
+      )
+    )
 
-// (* bad: this agent writes twice the string on the file *)
-// let write_twice_agent : exp =
-//   ELam (* filename *)
-//     (ELam (* content *)
-//       (ECase (ECall OOpen (EVar 1))
+(* bad: this agent writes twice the string on the file *)
+let write_twice_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (ECall OOpen (EVar 1))
 
-//         (* Inl fd *)
-//         (
-//           EApp
-//             (* after first io_call OWrite *)
-//             (ELam
-//               (EApp
-//                 (* after second io_call OWrite *)
-//                 (ELam (ECall OClose (EVar 2)))
-//                 (ECall OWrite (EPair (EVar 1) (EVar 2)))
-//               ))
-//             (ECall OWrite (EPair (EVar 0) (EVar 1)))
-//         )
-//         (* Inr _ *)
-//         EUnit
-//       )
-//     )
+        (* Inl fd *)
+        (
+          EApp
+            (* after first io_call OWrite *)
+            (ELam
+              (EApp
+                (* after second io_call OWrite *)
+                (ELam (ECall OClose (EVar 2)))
+                (ECall OWrite (EPair (EVar 1) (EVar 2)))
+              ))
+            (ECall OWrite (EPair (EVar 0) (EVar 1)))
+        )
+        (* Inr _ *)
+        EUnit
+      )
+    )
 
-// (* bad: this agent, confused writes the filename on a file named by string *)
-// let write_mixedup_agent : exp =
-//   ELam (* filename *)
-//     (ELam (* content *)
-//       (ECase (ECall OOpen (EVar 0))
-//         (* Inl fd *)
-//         (
-//           (* fd = EVar 0
-//              content = EVar 1
-//              filename = EVar 2 *)
-//           EApp
-//             (* after io_call OWrite: io_call OClose fd *)
-//             (ELam (ECall OClose (EVar 1)))
-//             (ECall OWrite (EPair (EVar 0) (EVar 2)))
-//         )
-//         (* Inr _ => unit *)
-//         EUnit
-//       )
-//     )
+(* bad: this agent, confused writes the filename on a file named by string *)
+let write_mixedup_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (ECase (ECall OOpen (EVar 0))
+        (* Inl fd *)
+        (
+          (* fd = EVar 0
+             content = EVar 1
+             filename = EVar 2 *)
+          EApp
+            (* after io_call OWrite: io_call OClose fd *)
+            (ELam (ECall OClose (EVar 1)))
+            (ECall OWrite (EPair (EVar 0) (EVar 2)))
+        )
+        (* Inr _ => unit *)
+        EUnit
+      )
+    )
 
-// (* good: this agent first writes the given filename into a file "TMP", then reads the filename back from "TMP", opens that file, and writes the provided content into it *)
-// let indirect_agent : exp =
-//   ELam (* filename *)
-//     (ELam (* content *)
-//       (* open "TMP" *)
-//       (ECase (ECall OOpen (EString "TMP"))
-//         (* Inl tmpfd *)
-//         (
-//           EApp
-//             (* after writing filename to TMP *)
-//             (ELam
-//               (* reopen TMP *)
-//               (ECase (ECall OOpen (EString "TMP"))
-//                 (* Inl tmpfd2 *)
-//                 (
-//                   ECase (ECall ORead (EVar 0))
-//                     (* Inl fname *)
-//                     (
-//                       EApp
-//                         (* after closing tmpfd2 *)
-//                         (ELam
-//                           (* open fname *)
-//                           (ECase (ECall OOpen (EVar 1))
-//                             (* Inl fd *)
-//                             (
-//                               EApp
-//                                 (ELam (ECall OClose (EVar 1)))
-//                                 (ECall OWrite (EPair (EVar 0) (EVar 6)))
-//                             )
-//                             (* Inr _ *)
-//                             EUnit
-//                           )
-//                         )
-//                         (ECall OClose (EVar 1))
-//                     )
-//                     (* Inr _ *)
-//                     EUnit
-//                 )
-//                 (* Inr _ *)
-//                 EUnit
-//               )
-//             )
-//             (ECall OWrite (EPair (EVar 0) (EVar 2)))
-//         )
-//         (* Inr _ *)
-//         EUnit
-//       )
-//     )
+(* good: this agent first writes the given filename into a file "TMP", then reads the filename back from "TMP", opens that file, and writes the provided content into it *)
+let indirect_agent : exp =
+  ELam (* filename *)
+    (ELam (* content *)
+      (* open "TMP" *)
+      (ECase (ECall OOpen (EString "TMP"))
+        (* Inl tmpfd *)
+        (
+          EApp
+            (* after writing filename to TMP *)
+            (ELam
+              (* reopen TMP *)
+              (ECase (ECall OOpen (EString "TMP"))
+                (* Inl tmpfd2 *)
+                (
+                  ECase (ECall ORead (EVar 0))
+                    (* Inl fname *)
+                    (
+                      EApp
+                        (* after closing tmpfd2 *)
+                        (ELam
+                          (* open fname *)
+                          (ECase (ECall OOpen (EVar 1))
+                            (* Inl fd *)
+                            (
+                              EApp
+                                (ELam (ECall OClose (EVar 1)))
+                                (ECall OWrite (EPair (EVar 0) (EVar 6)))
+                            )
+                            (* Inr _ *)
+                            EUnit
+                          )
+                        )
+                        (ECall OClose (EVar 1))
+                    )
+                    (* Inr _ *)
+                    EUnit
+                )
+                (* Inr _ *)
+                EUnit
+              )
+            )
+            (ECall OWrite (EPair (EVar 0) (EVar 2)))
+        )
+        (* Inr _ *)
+        EUnit
+      )
+    )
