@@ -87,7 +87,6 @@ type mst_cmds : Type0 -> Type u#1 =
 (** Events record heap-modifying operations and their arguments.
     Witness/Recall are ghost operations that don't modify the heap,
     so they don't produce events.
-    - EvInit h0: bootstrapping event encoding the initial heap
     - EvRead ref: a reference was read (heap unchanged)
     - EvWrite ref v: a reference was updated to v
     - EvAlloc r init: reference r was allocated with initial value init
@@ -96,14 +95,12 @@ type mst_cmds : Type0 -> Type u#1 =
 
 noeq
 type mst_event =
-  | EvInit    : heap -> mst_event
   | EvRead    : #b:Type0 -> #rel:preorder b -> mref b rel -> mst_event
   | EvWrite   : #b:Type0 -> #rel:preorder b -> mref b rel -> b -> mst_event
   | EvAlloc   : #b:Type0 -> #rel:preorder b -> mref b rel -> b -> mst_event
 
 let apply_event (ev:mst_event) (h:heap) : GTot heap =
   match ev with
-  | EvInit h0 -> h0
   | EvRead _ -> h
   | EvWrite r v -> upd h r v
   | EvAlloc r init -> upd h r init
@@ -199,12 +196,11 @@ let mst_cwp (_c:caller) (#r:Type0) (op:mst_cmds r) : hist #mst_event r =
 
 (** Lifting from hist-based WPs to state-based WPs.
     Converts a hist WP over mst_event events to a state-based WP.
-    The initial history [EvInit h0] encodes the starting heap.
-    apply_events folds the local trace to compute the final heap. **)
+    apply_events folds the local trace from h0 to compute the final heap. **)
 
 let lift_hist_to_st (#a:Type) (wp:hist #mst_event a) : st_mwp_h heap a =
   fun (p:st_post_h heap a) (h0:heap) ->
-    wp (fun lt r -> p r (apply_events h0 lt)) [EvInit h0]
+    wp (fun lt r -> p r (apply_events h0 lt)) []
 
 (** Embedding state-based WPs into hist-based WPs.
     Converts a state WP into a hist WP by universally quantifying over
