@@ -11,6 +11,8 @@ open Free
 open Hist
 open DMFree
 
+module L = FStar.List.Tot.Base
+module LP = FStar.List.Tot.Properties
 module W = FStar.Monotonic.Witnessed
 
 (**
@@ -116,6 +118,27 @@ let rec apply_events (h0:heap) (lt:list mst_event) : GTot heap (decreases lt) =
   | [] -> h0
   | ev :: rest -> apply_events (apply_event ev h0) rest
 
+(** apply_events distributes over list append *)
+let rec apply_events_append (h0:heap) (lt1 lt2:list mst_event)
+  : Lemma (ensures apply_events h0 (L.append lt1 lt2) == apply_events (apply_events h0 lt1) lt2)
+          (decreases lt1) =
+  match lt1 with
+  | [] -> ()
+  | ev :: rest -> apply_events_append (apply_event ev h0) rest lt2
+
+(** current_heap of (rev lt @ h) equals apply_events (current_heap h) lt.
+    This bridges the hist monad's reverse-chronological history representation
+    with the left-to-right event application in apply_events. *)
+let rec current_heap_rev_append (lt:list mst_event) (h:list mst_event)
+  : Lemma (ensures current_heap (L.append (L.rev lt) h) == apply_events (current_heap h) lt)
+          (decreases lt) =
+  match lt with
+  | [] -> ()
+  | ev :: rest ->
+    LP.rev_append [ev] rest;
+    LP.append_assoc (L.rev rest) [ev] h;
+    current_heap_rev_append rest (ev :: h)
+
 (** State-based WP definitions for each command.
     These match the natural lift of the hist-based command WPs.
     Stronger properties (heap_rel, modifies, etc.) follow from heap axioms. *)
@@ -189,15 +212,11 @@ let lift_hist_to_st (#a:Type) (wp:hist #mst_event a) : st_mwp_h heap a =
     This is the right adjoint to lift_hist_to_st:
       theta m ⊑ embed_st_to_hist wp  ==>  lift_hist_to_st (theta m) `st_ord` wp **)
 
+unfold
 let embed_st_to_hist (#a:Type) (wp:st_mwp_h heap a) : hist #mst_event a =
-  let wp' : hist0 #mst_event a =
-    fun (p : hist_post #mst_event a) (h : list mst_event) ->
-      let h0 = current_heap h in
-      wp (fun r h1 -> forall lt. apply_events h0 lt == h1 ==> p lt r) h0
-  in
-  assert (forall (p1 p2:hist_post #mst_event a).
-    (hist_post_ord p1 p2 ==> (forall h. wp' p1 h ==> wp' p2 h)));
-  wp'
+  fun (p : hist_post #mst_event a) (h : list mst_event) ->
+    let h0 = current_heap h in
+    wp (fun r h1 -> forall lt. apply_events h0 lt == h1 ==> p lt r) h0
 
 (** ** END Section 3: MST events + hist-based command WPs **)
 
@@ -212,11 +231,83 @@ let mst (a:Type) (wp:st_mwp_h heap a) =
 let mst_return (#a:Type) (x:a) : mst a (st_return x) =
   dm_subcomp mst_cwp (hist_return x) (embed_st_to_hist (st_return x)) (dm_return mst_cwp x)
 
-(** mst_bind requires that embed_st_to_hist distributes over hist_bind,
-    i.e., hist_bind (embed wp_v) (fun x -> embed (wp_f x)) ⊑ embed (st_bind wp_v wp_f).
-    This holds because mst_cwp only depends on current_heap (not the full
-    history structure). We assume this; a full proof would require showing
-    theta mst_cwp is history-shape-insensitive. *)
+(** embed_st_to_hist is a lax monad morphism: it distributes over bind.
+    Proof sketch: unfolding both sides yields wp_v applied to different
+    postconditions. The RHS postcondition (from embed of st_bind) is
+    pointwise stronger than the LHS (from hist_bind of embeds) because:
+    - current_heap (rev lt1 @ h) == apply_events h0 lt1 (bridges hist's
+      reverse-chronological encoding with left-to-right event application)
+    - apply_events h0 (lt1 @ lt2) == apply_events (apply_events h0 lt1) lt2
+      (allows decomposing a trace into first-phase and second-phase events)
+    Monotonicity of wp_v and wp_f then gives the result. *)
+(** Helper: applying WP monotonicity with explicitly named postconditions.
+    This is trivially provable because Z3 can trigger on the free variables p1, p2.
+    The key insight: calling this with specific postconditions avoids Z3's need to
+    pattern-match complex lambda terms against the monotonicity axiom. *)
+let wp_mono (#a:Type) (wp:st_mwp_h heap a) (p1 p2:st_post_h heap a) (h:heap)
+  : Lemma (requires st_post_ord p1 p2 /\ wp p1 h) (ensures wp p2 h) = ()
+
+(** Helper: the inner postcondition ordering for the bind distribution.
+    Proves that Q_A (combined postcondition, quantifying over all traces from h0)
+    implies Q_B (per-trace postcondition, quantifying over continuations from h1),
+    when apply_events h0 lt1 == h1. Follows from apply_events_append. *)
+let inner_post_ord (#b:Type) (h0:heap) (p:hist_post #mst_event b)
+  (h1:heap) (lt1:list mst_event) (r2:b) (h2:heap) (lt2:list mst_event)
+  : Lemma
+    (requires apply_events h0 lt1 == h1 /\ apply_events h1 lt2 == h2 /\
+             (forall (lt:list mst_event). apply_events h0 lt == h2 ==> p lt r2))
+    (ensures p (L.append lt1 lt2) r2) =
+  apply_events_append h0 lt1 lt2
+
+(** Main distribution lemma: embed_st_to_hist is a lax monad morphism.
+    Proof strategy: break the nested monotonicity reasoning into explicit steps
+    with named postconditions so Z3 can apply monotonicity axioms. *)
+#push-options "--z3rlimit 40 --fuel 8"
+let lemma_embed_bind_dist (#a #b:Type)
+  (wp_v:st_mwp_h heap a) (wp_f:a -> st_mwp_h heap b) :
+  Lemma (hist_bind (embed_st_to_hist wp_v) (fun x -> embed_st_to_hist (wp_f x)) ⊑
+         embed_st_to_hist (st_bind wp_v wp_f)) =
+  introduce forall (p:hist_post #mst_event b) (h:list mst_event).
+    embed_st_to_hist (st_bind wp_v wp_f) p h ==>
+    hist_bind (embed_st_to_hist wp_v) (fun x -> embed_st_to_hist (wp_f x)) p h
+  with begin
+    introduce _ ==> _ with _. begin
+      let h0 = current_heap h in
+      // Bridge hist's reverse-chronological encoding with apply_events
+      Classical.forall_intro (fun (lt1:list mst_event) -> current_heap_rev_append lt1 h);
+      // Make inner_post_ord available as a universal fact
+      let inner (h1:heap) (lt1:list mst_event) (r2:b) (h2:heap) (lt2:list mst_event)
+        : Lemma (requires apply_events h0 lt1 == h1 /\ apply_events h1 lt2 == h2 /\
+                          (forall (lt:list mst_event). apply_events h0 lt == h2 ==> p lt r2))
+                (ensures p (L.append lt1 lt2) r2) =
+        inner_post_ord h0 p h1 lt1 r2 h2 lt2
+      in
+      Classical.forall_intro_3 (fun h1 lt1 r2 ->
+        Classical.forall_intro_2 (fun h2 lt2 ->
+          Classical.move_requires (inner h1 lt1 r2 h2) lt2));
+
+      // Name postconditions for wp_f's monotonicity step
+      let qa : st_post_h heap b =
+        fun r2 h2 -> forall (lt:list mst_event). apply_events h0 lt == h2 ==> p lt r2 in
+
+      // For each r1, h1, lt1: use wp_f r1's monotonicity to go from qa to qb
+      let mono_f (r1:a) (h1:heap) (lt1:list mst_event) :
+        Lemma (requires apply_events h0 lt1 == h1)
+              (ensures wp_f r1 qa h1 ==>
+                       wp_f r1 (fun r2 h2 -> forall (lt2:list mst_event).
+                         apply_events h1 lt2 == h2 ==> p (L.append lt1 lt2) r2) h1) =
+        let qb : st_post_h heap b =
+          fun r2 h2 -> forall (lt2:list mst_event). apply_events h1 lt2 == h2 ==> p (L.append lt1 lt2) r2 in
+        assert (st_post_ord qa qb);
+        ()
+      in
+      Classical.forall_intro_3 (fun r1 h1 lt1 ->
+        Classical.move_requires (mono_f r1 h1) lt1);
+      ()
+    end
+  end
+#pop-options
+
 #push-options "--z3rlimit 40"
 let mst_bind
   (#a : Type)
@@ -228,7 +319,7 @@ let mst_bind
   Tot (mst b (st_bind wp_v wp_f)) =
   let hwp_v = embed_st_to_hist wp_v in
   let hwp_f = fun x -> embed_st_to_hist (wp_f x) in
-  assume (hist_bind hwp_v hwp_f ⊑ embed_st_to_hist (st_bind wp_v wp_f));
+  lemma_embed_bind_dist wp_v wp_f;
   dm_subcomp mst_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
     (dm_bind mst_cwp hwp_v hwp_f v f)
 #pop-options
@@ -259,7 +350,17 @@ let mst_read (#a:Type) (#rel:preorder a) (r:mref a rel) : mst a (read_wp r) =
 let mst_write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : mst unit (write_wp r v) =
   Call Prog (CWrite r v) (fun _ -> Return ())
 
+#push-options "--fuel 2"
+let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_event (mref a rel)) (h:list mst_event) :
+  Lemma (requires embed_st_to_hist (alloc_wp init) p h)
+        (ensures theta mst_cwp (Call Prog (CAlloc #a #rel init) (Return #mst_cmds #(mref a rel))) p h) =
+  let h0 = current_heap h in
+  assert (forall (r:mref a rel). apply_events h0 [EvAlloc r init] == upd h0 r init);
+  assert (forall (r:mref a rel). L.append [EvAlloc r init] ([] #mst_event) == [EvAlloc r init])
+#pop-options
+
 let mst_alloc (#a:Type) (#rel:preorder a) (init:a) : mst (mref a rel) (alloc_wp init) =
+  Classical.forall_intro_2 (Classical.move_requires_2 (lemma_alloc_embed #a #rel init));
   Call Prog (CAlloc init) Return
 
 let mst_witness (pred:heap_predicate_stable) : mst unit (witness_wp pred) =
