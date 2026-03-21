@@ -4,6 +4,7 @@ open FStar.Classical.Sugar
 open FStar.List.Tot.Base
 open FStar.Tactics
 
+include Hist
 open DMFree
 
 (** Guard as a command: carries a precondition, returns its proof.
@@ -67,8 +68,9 @@ let gdm_guard
     for PURE WP semantics; it also fails on the original (pre-refactor) code
     without --split_queries. We use assume here. **)
 #push-options "--z3rlimit 40"
+val lift_pure_gdm : #cmd:(Type0 -> Type) -> #event:Type -> cwp:cmd_wp cmd event -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> gdm cmd event cwp a (wp_lift_pure_hist w)
 let lift_pure_gdm #cmd (#event:Type) (cwp:cmd_wp cmd event)
-  (#a:Type u#a)
+  #a
   (w : pure_wp a)
   (f:(eqtype_as_type unit -> PURE a w)) :
   gdm cmd event cwp a (wp_lift_pure_hist w) =

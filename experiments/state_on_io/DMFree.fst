@@ -4,13 +4,13 @@ open FStar.Classical.Sugar
 open FStar.List.Tot.Base
 open FStar.Tactics
 
-include Free
+open Free
 include Hist
 
 (** cmd_wp maps each command to a hist-based WP over events.
     - cmd: command type (parameterizes the free monad)
     - event: event type (parameterizes the hist monad) *)
-let cmd_wp (cmd:Type0 -> Type) (event:Type) = caller -> #r:Type0 -> cmd r -> hist #event r
+let cmd_wp (cmd:Type -> Type) (event:Type) = caller -> #r:Type -> cmd r -> hist #event r
 
 let cmd_wp_sum
   #cmd1 #cmd2
@@ -106,7 +106,7 @@ let dm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : dm cmd even
 #push-options "--z3rlimit 40"
 let dm_bind
   #cmd (#event:Type) (cwp:cmd_wp cmd event)
-  (#a:Type u#a) (#b:Type u#b)
+  #a #b
   (wp_v : hist #event a)
   (wp_f: a -> hist #event b)
   (v : dm cmd event cwp a wp_v)
