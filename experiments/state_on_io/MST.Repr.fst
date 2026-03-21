@@ -210,7 +210,7 @@ let mst (a:Type) (wp:st_mwp_h heap a) =
   dm mst_cmds mst_event mst_cwp a (embed_st_to_hist wp)
 
 let mst_return (#a:Type) (x:a) : mst a (st_return x) =
-  Return x
+  dm_subcomp mst_cwp (hist_return x) (embed_st_to_hist (st_return x)) (dm_return mst_cwp x)
 
 (** mst_bind requires that embed_st_to_hist distributes over hist_bind,
     i.e., hist_bind (embed wp_v) (fun x -> embed (wp_f x)) ⊑ embed (st_bind wp_v wp_f).
@@ -226,9 +226,11 @@ let mst_bind
   (v : mst a wp_v)
   (f : (x:a -> mst b (wp_f x))) :
   Tot (mst b (st_bind wp_v wp_f)) =
-  lemma_theta_is_lax_morphism_bind mst_cwp v f;
-  assume (theta mst_cwp (free_bind v f) ⊑ embed_st_to_hist (st_bind wp_v wp_f));
-  free_bind v f
+  let hwp_v = embed_st_to_hist wp_v in
+  let hwp_f = fun x -> embed_st_to_hist (wp_f x) in
+  assume (hist_bind hwp_v hwp_f ⊑ embed_st_to_hist (st_bind wp_v wp_f));
+  dm_subcomp mst_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
+    (dm_bind mst_cwp hwp_v hwp_f v f)
 #pop-options
 
 let mst_subcomp
@@ -247,7 +249,8 @@ let guard_st_wp (pre:pure_pre) : st_mwp_h heap (squash pre) =
   wp'
 
 let guard_return (pre:pure_pre) : mst (squash pre) (guard_st_wp pre) =
-  Guard pre Return
+  dm_subcomp mst_cwp (guard_wp pre) (embed_st_to_hist (guard_st_wp pre))
+    (dm_guard_return mst_cwp pre)
 
 #push-options "--z3rlimit 40"
 let mst_read (#a:Type) (#rel:preorder a) (r:mref a rel) : mst a (read_wp r) =
