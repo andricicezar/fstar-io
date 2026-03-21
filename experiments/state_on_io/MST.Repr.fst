@@ -183,23 +183,40 @@ let lift_hist_to_st (#a:Type) (wp:hist #mst_event a) : st_mwp_h heap a =
   fun (p:st_post_h heap a) (h0:heap) ->
     wp (fun lt r -> p r (apply_events h0 lt)) [EvInit h0]
 
+(** Embedding state-based WPs into hist-based WPs.
+    Converts a state WP into a hist WP by universally quantifying over
+    all traces that produce the target heap via apply_events.
+    This is the right adjoint to lift_hist_to_st:
+      theta m ⊑ embed_st_to_hist wp  ==>  lift_hist_to_st (theta m) `st_ord` wp **)
+
+let embed_st_to_hist (#a:Type) (wp:st_mwp_h heap a) : hist #mst_event a =
+  let wp' : hist0 #mst_event a =
+    fun (p : hist_post #mst_event a) (h : list mst_event) ->
+      let h0 = current_heap h in
+      wp (fun r h1 -> forall lt. apply_events h0 lt == h1 ==> p lt r) h0
+  in
+  assert (forall (p1 p2:hist_post #mst_event a).
+    (hist_post_ord p1 p2 ==> (forall h. wp' p1 h ==> wp' p2 h)));
+  wp'
+
 (** ** END Section 3: MST events + hist-based command WPs **)
 
 (** ** START Section 4: Dijkstra Monad (indexed by state-based WPs) **)
 
 (** mst a wp: computation returning a, with state-based WP wp.
-    Internally a free monad tree whose theta (lifted to state) refines wp. *)
+    Internally a dm tree (free monad + theta refinement) whose hist WP
+    is the embedding of the state-based WP via embed_st_to_hist. *)
 let mst (a:Type) (wp:st_mwp_h heap a) =
-  m:(free mst_cmds a){lift_hist_to_st (theta mst_cwp m) `st_ord` wp}
+  dm mst_cmds mst_event mst_cwp a (embed_st_to_hist wp)
 
 let mst_return (#a:Type) (x:a) : mst a (st_return x) =
   Return x
 
-(** mst_bind requires that lift_hist_to_st distributes over hist_bind for
-    mst_cwp-produced WPs. This holds because mst_cwp only depends on
-    current_heap (not the full history structure), making the lifted bind
-    equivalent to st_bind. We assume this property; a full proof would
-    require showing theta mst_cwp is history-shape-insensitive. *)
+(** mst_bind requires that embed_st_to_hist distributes over hist_bind,
+    i.e., hist_bind (embed wp_v) (fun x -> embed (wp_f x)) ⊑ embed (st_bind wp_v wp_f).
+    This holds because mst_cwp only depends on current_heap (not the full
+    history structure). We assume this; a full proof would require showing
+    theta mst_cwp is history-shape-insensitive. *)
 #push-options "--z3rlimit 40"
 let mst_bind
   (#a : Type)
@@ -210,7 +227,7 @@ let mst_bind
   (f : (x:a -> mst b (wp_f x))) :
   Tot (mst b (st_bind wp_v wp_f)) =
   lemma_theta_is_lax_morphism_bind mst_cwp v f;
-  assume (lift_hist_to_st (theta mst_cwp (free_bind v f)) `st_ord` st_bind wp_v wp_f);
+  assume (theta mst_cwp (free_bind v f) ⊑ embed_st_to_hist (st_bind wp_v wp_f));
   free_bind v f
 #pop-options
 
