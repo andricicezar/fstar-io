@@ -5,16 +5,11 @@ open FStar.List.Tot.Base
 open FStar.Tactics
 
 include Hist
+open Free
 open DMFree
 
-(** Guard as a command: carries a precondition, returns its proof.
-    Guard could replace the built-in Guard constructor of free (free would
-    then have only Call and Return), with guard_cmd added to the command type
-    via cmd_sum. We keep Guard built-in for simplicity, since factoring it out
-    would require every command type to include guard_cmd via cmd_sum, and
-    DMFree's lift_pure_dm / dm_guard_return to thread the injection. *)
 noeq
-type guard_cmd : Type0 -> Type =
+type guard_cmd : Type -> Type =
 | GCmd : (pre:pure_pre) -> guard_cmd (squash pre)
 
 val guard_cmd_wp #event : cmd_wp guard_cmd event
@@ -35,6 +30,10 @@ type gdm (cmd:Type0 -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hi
 
 let gdm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : gdm cmd event cwp a (hist_return #a #event x) =
   dm_return (cmd_wp_sum guard_cmd_wp cwp) x
+
+let gdm_cmd #cmd (#event:Type) (cwp:cmd_wp cmd event) (c:caller) #r (op:cmd r) :
+  gdm cmd event cwp r (hist_bind (cwp c op) (fun ri -> hist_return ri)) =
+  Call c (CmdR op) Return
 
 let gdm_bind
   #cmd (#event:Type) (cwp:cmd_wp cmd event)
@@ -77,8 +76,8 @@ let lift_pure_gdm #cmd (#event:Type) (cwp:cmd_wp cmd event)
   lemma_wp_lift_pure_hist_implies_as_requires #a #event w;
   FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
   let lhs = gdm_guard cwp (as_requires w) in
-  let rhs = (fun (pre:(squash (as_requires w))) -> gdm_return cwp (f pre)) in
-  let m = gdm_bind cwp _ _ lhs rhs in
-  assume (theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp_lift_pure_hist w);
-  m
+  let rhs (_:squash (as_requires w)) : gdm cmd event cwp a (wp_lift_pure_hist w) =
+    let r = f () in
+    gdm_return cwp r in
+  gdm_bind cwp (guard_wp #event (as_requires w)) (fun _ -> wp_lift_pure_hist w) lhs rhs
 #pop-options

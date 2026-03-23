@@ -8,8 +8,7 @@ open FStar.Monotonic.Heap
 open FStar.Ghost
 
 open Free
-open Hist
-open DMFree
+open GuardedDMFree
 
 module L = FStar.List.Tot.Base
 module LP = FStar.List.Tot.Properties
@@ -222,10 +221,10 @@ let embed_st_to_hist (#a:Type) (wp:st_mwp_h heap a) : hist #mst_event a =
     Internally a dm tree (free monad + theta refinement) whose hist WP
     is the embedding of the state-based WP via embed_st_to_hist. *)
 let mst (a:Type) (wp:st_mwp_h heap a) =
-  dm mst_cmds mst_event mst_cwp a (embed_st_to_hist wp)
+  gdm mst_cmds mst_event mst_cwp a (embed_st_to_hist wp)
 
 let mst_return (#a:Type) (x:a) : mst a (st_return x) =
-  dm_subcomp mst_cwp (hist_return x) (embed_st_to_hist (st_return x)) (dm_return mst_cwp x)
+  gdm_subcomp mst_cwp (hist_return x) (embed_st_to_hist (st_return x)) (gdm_return mst_cwp x)
 
 (** embed_st_to_hist is a lax monad morphism: it distributes over bind.
     Proof sketch: unfolding both sides yields wp_v applied to different
@@ -304,7 +303,6 @@ let lemma_embed_bind_dist (#a #b:Type)
   end
 #pop-options
 
-#push-options "--z3rlimit 40"
 let mst_bind
   (#a : Type)
   (#b : Type)
@@ -316,9 +314,8 @@ let mst_bind
   let hwp_v = embed_st_to_hist wp_v in
   let hwp_f = fun x -> embed_st_to_hist (wp_f x) in
   lemma_embed_bind_dist wp_v wp_f;
-  dm_subcomp mst_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
-    (dm_bind mst_cwp hwp_v hwp_f v f)
-#pop-options
+  gdm_subcomp mst_cwp (hist_bind hwp_v hwp_f) (embed_st_to_hist (st_bind wp_v wp_f))
+    (gdm_bind mst_cwp hwp_v hwp_f v f)
 
 let mst_subcomp
   (#a : Type)
@@ -336,20 +333,20 @@ let guard_st_wp (pre:pure_pre) : st_mwp_h heap (squash pre) =
   wp'
 
 let guard_return (pre:pure_pre) : mst (squash pre) (guard_st_wp pre) =
-  dm_subcomp mst_cwp (guard_wp pre) (embed_st_to_hist (guard_st_wp pre))
-    (dm_guard_return mst_cwp pre)
+  gdm_subcomp mst_cwp (guard_wp pre) (embed_st_to_hist (guard_st_wp pre))
+    (gdm_guard mst_cwp pre)
 
 #push-options "--z3rlimit 40"
 let mst_read (#a:Type) (#rel:preorder a) (r:mref a rel) : mst a (read_wp r) =
-  Call Prog (CRead r) Return
+  Call Prog (CmdR (CRead r)) Return
 
 let mst_write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : mst unit (write_wp r v) =
-  Call Prog (CWrite r v) (fun _ -> Return ())
+  Call Prog (CmdR (CWrite r v)) (fun _ -> Return ())
 
 #push-options "--fuel 2"
 let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_event (mref a rel)) (h:list mst_event) :
   Lemma (requires embed_st_to_hist (alloc_wp init) p h)
-        (ensures theta mst_cwp (Call Prog (CAlloc #a #rel init) (Return #mst_cmds #(mref a rel))) p h) =
+        (ensures DMFree.theta mst_cwp (Call Prog (CmdR (CAlloc #a #rel init)) (Return #mst_cmds #(mref a rel))) p h) =
   let h0 = current_heap h in
   assert (forall (r:mref a rel). apply_events h0 [EvAlloc r init] == upd h0 r init);
   assert (forall (r:mref a rel). L.append [EvAlloc r init] ([] #mst_event) == [EvAlloc r init])

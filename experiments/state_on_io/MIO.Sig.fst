@@ -2,11 +2,15 @@ module MIO.Sig
 
 open FStar.List.Tot.Base
 
-include CommonUtils
 include Free
 include Hist
 
-unfold let no_cf (a:Type0) = r:resexn a{~(r == Inr Contract_failure)}
+
+type file_descr = int
+exception Contract_failure
+type resexn a = either a exn
+
+unfold let no_cf (a:Type) = r:resexn a{~(r == Inr Contract_failure)}
 
 (** IO commands (parameterize the free monad). *)
 noeq
@@ -15,8 +19,6 @@ type io_cmds : Type0 -> Type0 =
 | Read     : file_descr -> io_cmds (no_cf string)
 | Write    : file_descr -> string -> io_cmds (no_cf unit)
 | Close    : file_descr -> io_cmds (no_cf unit)
-
-type caller = Free.caller
 
 (** IO events (parameterize the hist monad).
     Each event records the command, caller, and result. *)
@@ -125,15 +127,15 @@ unfold let mio_cwp #mst (c:caller) (#r:Type0) (op:mio_cmds mst r) : hist #io_eve
   | CmdR GetST -> forall (s:mst.typ). s `mst.abstracts` h ==> p [] s
   | CmdL iocmd -> io_pre iocmd h /\ (forall (res:r). io_post iocmd res ==> p [convert_call_to_event c iocmd res] res)
 
-open DMFree
+open GuardedDMFree
 
 (** Instantiation of the Dijkstra monad from DMFree with MIO commands/events **)
 
 let mio_dm (mst:mstate) (a:Type) (wp:hist #io_event a) =
-  dm (mio_cmds mst) io_event mio_cwp a wp
+  gdm (mio_cmds mst) io_event mio_cwp a wp
 
 let mio_dm_return (mst:mstate) #a (x:a) : mio_dm mst a (hist_return #a #io_event x) =
-  dm_return mio_cwp x
+  gdm_return mio_cwp x
 
 #push-options "--z3rlimit 40"
 let mio_dm_bind (mst:mstate) #a #b
@@ -142,27 +144,25 @@ let mio_dm_bind (mst:mstate) #a #b
   (v : mio_dm mst a wp_v)
   (f : (x:a -> mio_dm mst b (wp_f x))) :
   Tot (mio_dm mst b (hist_bind wp_v wp_f)) =
-  dm_bind mio_cwp wp_v wp_f v f
+  gdm_bind mio_cwp wp_v wp_f v f
 #pop-options
 
 let mio_dm_subcomp (mst:mstate) #a (wp1 wp2 : hist #io_event a) (f : mio_dm mst a wp1) :
   Pure (mio_dm mst a wp2)
     (requires wp1 ⊑ wp2)
     (ensures fun _ -> True) =
-  dm_subcomp mio_cwp wp1 wp2 f
+  gdm_subcomp mio_cwp wp1 wp2 f
 
 let mio_dm_if_then_else (mst:mstate) #a
   (wp1 wp2 : hist #io_event a) (f : mio_dm mst a wp1) (g : mio_dm mst a wp2) (b : bool) : Type =
-  dm_if_then_else mio_cwp wp1 wp2 f g b
+  gdm_if_then_else mio_cwp wp1 wp2 f g b
 
 let mio_dm_guard_return (mst:mstate)
   (pre:pure_pre) : mio_dm mst (squash pre) (guard_wp pre) =
-  dm_guard_return mio_cwp pre
+  gdm_guard mio_cwp pre
 
-#push-options "--z3rlimit 40"
 let mio_dm_lift_pure (mst:mstate) #a
   (w : pure_wp a)
   (f : (eqtype_as_type unit -> PURE a w)) :
   mio_dm mst a (wp_lift_pure_hist w) =
-  lift_pure_dm mio_cwp w f
-#pop-options
+  lift_pure_gdm mio_cwp w f

@@ -103,7 +103,10 @@ type dm (cmd:Type0 -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:his
 let dm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : dm cmd event cwp a (hist_return #a #event x) =
   free_return x
 
-#push-options "--z3rlimit 40"
+let dm_cmd #cmd (#event:Type) (cwp:cmd_wp cmd event) (c:caller) #r (op:cmd r) :
+  dm cmd event cwp r (hist_bind (cwp c op) (fun ri -> hist_return ri)) =
+  Call c op Return
+
 let dm_bind
   #cmd (#event:Type) (cwp:cmd_wp cmd event)
   #a #b
@@ -114,7 +117,6 @@ let dm_bind
   Tot (dm cmd event cwp b (hist_bind wp_v wp_f)) =
   lemma_theta_is_lax_morphism_bind cwp v f;
   free_bind v f
-#pop-options
 
 let dm_subcomp #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (wp1 wp2: hist #event a) (f : dm cmd event cwp a wp1) :
   Pure (dm cmd event cwp a wp2)
