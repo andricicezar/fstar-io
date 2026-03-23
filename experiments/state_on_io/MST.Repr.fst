@@ -338,15 +338,21 @@ let guard_return (pre:pure_pre) : mst (squash pre) (guard_st_wp pre) =
 
 #push-options "--z3rlimit 40"
 let mst_read (#a:Type) (#rel:preorder a) (r:mref a rel) : mst a (read_wp r) =
-  Call Prog (CmdR (CRead r)) Return
+  gdm_subcomp mst_cwp
+    (hist_bind (mst_cwp Prog (CRead r)) (fun x -> hist_return x))
+    (embed_st_to_hist (read_wp r))
+    (gdm_cmd mst_cwp Prog (CRead r))
 
 let mst_write (#a:Type) (#rel:preorder a) (r:mref a rel) (v:a) : mst unit (write_wp r v) =
-  Call Prog (CmdR (CWrite r v)) (fun _ -> Return ())
+  gdm_subcomp mst_cwp
+    (hist_bind (mst_cwp Prog (CWrite r v)) (fun x -> hist_return x))
+    (embed_st_to_hist (write_wp r v))
+    (gdm_cmd mst_cwp Prog (CWrite r v))
 
 #push-options "--fuel 2"
 let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_event (mref a rel)) (h:list mst_event) :
   Lemma (requires embed_st_to_hist (alloc_wp init) p h)
-        (ensures DMFree.theta mst_cwp (Call Prog (CmdR (CAlloc #a #rel init)) (Return #mst_cmds #(mref a rel))) p h) =
+        (ensures hist_bind (mst_cwp Prog (CAlloc #a #rel init)) (fun r -> hist_return r) p h) =
   let h0 = current_heap h in
   assert (forall (r:mref a rel). apply_events h0 [EvAlloc r init] == upd h0 r init);
   assert (forall (r:mref a rel). L.append [EvAlloc r init] ([] #mst_event) == [EvAlloc r init])
@@ -354,13 +360,22 @@ let lemma_alloc_embed (#a:Type) (#rel:preorder a) (init:a) (p:hist_post #mst_eve
 
 let mst_alloc (#a:Type) (#rel:preorder a) (init:a) : mst (mref a rel) (alloc_wp init) =
   Classical.forall_intro_2 (Classical.move_requires_2 (lemma_alloc_embed #a #rel init));
-  Call Prog (CAlloc init) Return
+  gdm_subcomp mst_cwp
+    (hist_bind (mst_cwp Prog (CAlloc init)) (fun x -> hist_return x))
+    (embed_st_to_hist (alloc_wp init))
+    (gdm_cmd mst_cwp Prog (CAlloc init))
 
 let mst_witness (pred:heap_predicate_stable) : mst unit (witness_wp pred) =
-  Call Prog (CWitness pred) (fun _ -> Return ())
+  gdm_subcomp mst_cwp
+    (hist_bind (mst_cwp Prog (CWitness pred)) (fun x -> hist_return x))
+    (embed_st_to_hist (witness_wp pred))
+    (gdm_cmd mst_cwp Prog (CWitness pred))
 
 let mst_recall (pred:heap_predicate_stable) : mst unit (recall_wp pred) =
-  Call Prog (CRecall pred) (fun _ -> Return ())
+  gdm_subcomp mst_cwp
+    (hist_bind (mst_cwp Prog (CRecall pred)) (fun x -> hist_return x))
+    (embed_st_to_hist (recall_wp pred))
+    (gdm_cmd mst_cwp Prog (CRecall pred))
 #pop-options
 
 (* CGetHeap returns erased heap : Type (universe 1), which cannot be an index

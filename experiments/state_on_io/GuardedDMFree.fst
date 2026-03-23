@@ -25,7 +25,7 @@ let guard_wp (#event:Type) (pre:pure_pre) : hist #event (squash pre) =
   guard_cmd_wp #event Prog (GCmd pre)
 
 // The Dijkstra Monad
-type gdm (cmd:Type0 -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
+type gdm (cmd:Type -> Type) (event:Type) (cwp:cmd_wp cmd event) (a:Type) (wp:hist #event a) =
   (m:(free (cmd_sum guard_cmd cmd) a){theta (cmd_wp_sum guard_cmd_wp cwp) m ⊑ wp})
 
 let gdm_return #cmd (#event:Type) (cwp:cmd_wp cmd event) #a (x : a) : gdm cmd event cwp a (hist_return #a #event x) =
@@ -67,7 +67,7 @@ let gdm_guard
     for PURE WP semantics; it also fails on the original (pre-refactor) code
     without --split_queries. We use assume here. **)
 #push-options "--z3rlimit 40"
-val lift_pure_gdm : #cmd:(Type0 -> Type) -> #event:Type -> cwp:cmd_wp cmd event -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> gdm cmd event cwp a (wp_lift_pure_hist w)
+val lift_pure_gdm : #cmd:(Type -> Type) -> #event:Type -> cwp:cmd_wp cmd event -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> gdm cmd event cwp a (wp_lift_pure_hist w)
 let lift_pure_gdm #cmd (#event:Type) (cwp:cmd_wp cmd event)
   #a
   (w : pure_wp a)

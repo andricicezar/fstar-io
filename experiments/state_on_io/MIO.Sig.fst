@@ -131,7 +131,7 @@ open GuardedDMFree
 
 (** Instantiation of the Dijkstra monad from DMFree with MIO commands/events **)
 
-let mio_dm (mst:mstate) (a:Type) (wp:hist #io_event a) =
+let mio_dm (mst:mstate) (a:Type) (wp:hist #io_event a) : Type =
   gdm (mio_cmds mst) io_event mio_cwp a wp
 
 let mio_dm_return (mst:mstate) #a (x:a) : mio_dm mst a (hist_return #a #io_event x) =
@@ -161,8 +161,15 @@ let mio_dm_guard_return (mst:mstate)
   (pre:pure_pre) : mio_dm mst (squash pre) (guard_wp pre) =
   gdm_guard mio_cwp pre
 
+val mio_dm_lift_pure : mst:mstate -> #a:Type u#a -> w:pure_wp a -> f:(eqtype_as_type unit -> PURE a w) -> mio_dm mst a (wp_lift_pure_hist w)
 let mio_dm_lift_pure (mst:mstate) #a
   (w : pure_wp a)
   (f : (eqtype_as_type unit -> PURE a w)) :
   mio_dm mst a (wp_lift_pure_hist w) =
-  lift_pure_gdm mio_cwp w f
+  lemma_wp_lift_pure_hist_implies_as_requires #a #io_event w;
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
+  let lhs = mio_dm_guard_return mst (as_requires w) in
+  let rhs (_:squash (as_requires w)) : mio_dm mst a (wp_lift_pure_hist w) =
+    let r = f () in
+    mio_dm_return mst r in
+  mio_dm_bind mst (guard_wp #io_event (as_requires w)) (fun _ -> wp_lift_pure_hist w) lhs rhs
