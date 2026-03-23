@@ -295,58 +295,58 @@ let helper_seq wpV v wpK k =
 
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
-type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
-| CUnit       : #g:env ->  compilable g _ (helper_unit g)
-| CTrue       : #g:env ->  compilable g _ (helper_true g)
-| CFalse      : #g:env ->  compilable g _ (helper_false g)
+type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
+| CUnit       : #g:env ->  typing g _ (helper_unit g)
+| CTrue       : #g:env ->  typing g _ (helper_true g)
+| CFalse      : #g:env ->  typing g _ (helper_false g)
 
 | CVar0       : #g:env ->
                 #a:Type ->
-                compilable #a _ _ (helper_var0 g a)
+                typing #a _ _ (helper_var0 g a)
 
 | CVar1       : #g:env ->
                 #a:Type ->
                 #b:Type ->
-                compilable #a _ _ (helper_var1 g a b)
+                typing #a _ _ (helper_var1 g a b)
 | CVar2       : #g:env ->
                 #a:Type ->
                 #b:Type ->
                 #c:Type ->
-                compilable #a _ _ (helper_var2 g a b c)
+                typing #a _ _ (helper_var2 g a b c)
 
 | CApp        : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpF : spec_env g (a -> b) ->
                 #f :fs_oexp g (a -> b) wpF ->
-                cf:compilable g wpF f ->
+                cf:typing g wpF f ->
                 #wpX : spec_env g a ->
                 #x :fs_oexp g a wpX ->
-                cx:compilable g wpX x ->
-                compilable #b g _ (helper_app #_ #_ #_ #wpF f x)
+                cx:typing g wpX x ->
+                typing #b g _ (helper_app #_ #_ #_ #wpF f x)
 
 | CIf         : #g :env ->
                 #a :Type ->
                 #wpC : spec_env g bool ->
                 #c   : fs_oexp g bool wpC ->
-                cc   : compilable g wpC c ->
+                cc   : typing g wpC c ->
                 #wpT : spec_env g a ->
                 #t   : fs_oexp g a wpT ->
-                ct   : compilable g wpT t ->
+                ct   : typing g wpT t ->
                 #wpE : spec_env g a ->
                 #e   : fs_oexp g a wpE ->
-                ce   : compilable g wpE e ->
-                compilable g _ (helper_if c t e)
+                ce   : typing g wpE e ->
+                typing g _ (helper_if c t e)
 
 | CLambda     : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpCtx:spec_env (extend a g) b ->
                 #body :fs_oexp (extend a g) b wpCtx ->
-                cf:compilable #b (extend a g)
+                cf:typing #b (extend a g)
                               wpCtx
                               body ->
-                compilable g (wp_lambda #g #a #b wpCtx body) (helper_lambda body)
+                typing g (wp_lambda #g #a #b wpCtx body) (helper_lambda body)
 
 | QLambda :
   #g : env ->
@@ -355,8 +355,8 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
   wpCtx : spec_env (extend a g) b ->
   wpFun : (a -> pure_wp b) ->
   #body : fs_oexp (extend a g) b wpCtx ->
-  compilable #b (extend a g) wpCtx body ->
-  compilable #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpCtx wpFun body) (test wpCtx wpFun body)
+  typing #b (extend a g) wpCtx body ->
+  typing #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpCtx wpFun body) (test wpCtx wpFun body)
 
 | CRefinement : #g:env ->
                 #a:Type ->
@@ -364,35 +364,35 @@ type compilable : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type 
                 #ref2:(a -> Type0) ->
                 #wpV:spec_env g (x:a{ref1 x}) ->
                 #v:fs_oexp g (x:a{ref1 x}) wpV ->
-                compilable #(x:a{ref1 x}) g wpV v ->
-                compilable #(x:a{ref2 x}) g _ (helper_refv ref2 wpV v)
+                typing #(x:a{ref1 x}) g wpV v ->
+                typing #(x:a{ref2 x}) g _ (helper_refv ref2 wpV v)
 
 | CSeq        : #g:env ->
                 ref1:Type0 ->
                 #wpV:spec_env g (_:unit{ref1}) ->
                 #v:fs_oexp g (_:unit{ref1}) wpV ->
-                compilable #(_:unit{ref1}) g wpV v -> (** the name compilable is misleading here.
+                typing #(_:unit{ref1}) g wpV v -> (** the name typing is misleading here.
                                          I have to compute the WP of `v` to be able to
                                          compile the entire term, even if this is computationally irelevant **)
 
                 #a:Type ->
                 #wpK:spec_env g a ->
                 #k:fs_oexp g a wpK ->
-                compilable #a g wpK k ->
-                compilable #a g _ (helper_seq wpV v wpK k)
+                typing #a g wpK k ->
+                typing #a g _ (helper_seq wpV v wpK k)
 
 
 let test_app0 ()
-  : Tot (compilable (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
+  : Tot (typing (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
   = CApp CVar0 CTrue
 
 // FIXME, why does it need tactics to do such simple proofs?
 // let test_app1 ()
-//   : Tot (compilable (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
+//   : Tot (typing (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
 //   = CApp (CApp CVar0 CTrue) CFalse
 
 let test2_var
-  : compilable (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
+  : typing (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
   = CVar1
 
 unfold
@@ -402,56 +402,56 @@ let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <=
 
 #push-options "--no_smt"
 
-type compilable_closed #a (#wp:spec_env empty a) (x:a) =
-  proof:squash (forall fsG. wp fsG <= pure_return a x) -> compilable empty wp (helper_oexp x #wp #proof)
+type typing_closed #a (#wp:spec_env empty a) (x:a) =
+  proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing empty wp (helper_oexp x #wp #proof)
 
-type compilable_debug #a (wp:spec_env empty a) (x:a) =
-  compilable_closed #a #wp x
+type typing_debug #a (wp:spec_env empty a) (x:a) =
+  typing_closed #a #wp x
 
 let test1_exp ()
-  : compilable_closed #(bool -> bool) (fun x -> x)
+  : typing_closed #(bool -> bool) (fun x -> x)
   = fun _ -> CLambda CVar0
 
 let test1_exp' ()
-  : Tot (compilable_closed #(bool -> bool -> bool) (fun x y -> y))
+  : Tot (typing_closed #(bool -> bool -> bool) (fun x y -> y))
   = fun _ ->  CLambda (CLambda CVar0)
 
 let test_fapp1 ()
-  : compilable_closed #((unit -> unit) -> unit) (fun f -> f ())
+  : typing_closed #((unit -> unit) -> unit) (fun f -> f ())
   = fun _ -> CLambda (CApp CVar0 CUnit)
 
 let test_fapp2 ()
-  : Tot (compilable_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false))
+  : Tot (typing_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false))
   by (dump "h")
   = fun _ -> CLambda (CApp (CApp CVar0 CTrue) CFalse)
 
 let test4_exp' ()
-  : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
+  : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
   = fun _ -> CLambda (CLambda (CLambda CVar2))
 
 let test5_exp' ()
-  : compilable_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
+  : typing_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
   = fun _ -> CLambda (CLambda (CLambda CVar1))
 
 let test6_exp' ()
-  : compilable_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
+  : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
   = fun _ -> CLambda (CLambda (CLambda CVar0))
 
 [@expect_failure]
 let test4_exp'' ()
-  : compilable_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
+  : typing_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
   = fun _ -> CLambda (CLambda (CLambda CVar0))
 
 let test1_hoc ()
-  : compilable_closed #((bool -> bool) -> bool) (fun f -> f false)
+  : typing_closed #((bool -> bool) -> bool) (fun f -> f false)
   = fun _ -> CLambda (CApp CVar0 CFalse)
 
 let test2_if0 ()
-  : compilable_closed #(bool) (if true then false else true)
+  : typing_closed #(bool) (if true then false else true)
   = fun _ -> (CIf CTrue CFalse CTrue)
 
 let test2_if ()
-  : compilable_closed #(bool -> bool) (fun x -> if x then false else true)
+  : typing_closed #(bool -> bool) (fun x -> if x then false else true)
   = fun _ -> CLambda (CIf CVar0 CFalse CTrue)
 
 #pop-options
@@ -462,7 +462,7 @@ let on_true (b : bool) : Pure bool (requires b == true) (ensures fun r -> r == b
 
 [@@expect_failure]
 let test_on_true ()
-  : compilable_closed #(b: bool -> Pure bool (requires b == true) (ensures fun r -> r == b)) on_true
+  : typing_closed #(b: bool -> Pure bool (requires b == true) (ensures fun r -> r == b)) on_true
 =
   // let wp : bool -> pure_wp bool = _ in
   // let wp' : spec_env (extend bool empty) bool = fun fsG p -> True in
@@ -484,48 +484,48 @@ val creame : bool -> (bool -> bool)
 let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
 
 let test3_if_ho ()
-  : compilable_closed #(bool -> (bool -> bool)) creame
+  : typing_closed #(bool -> (bool -> bool)) creame
   = fun _ -> CLambda (CIf CVar0
                        (CLambda #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
                        (CLambda #_ #_ #_ #_ #myid CVar0))
 
 let test1_if ()
-  : compilable_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
+  : typing_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
   = fun _ -> CLambda (CLambda (CIf CVar1 CFalse CVar0))
 
 let test1_comp_ref ()
-  : compilable_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
+  : typing_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
   = fun _ -> CLambda CVar0
 
 let test1_erase_ref ()
-  : compilable_closed #(x:bool{x == true} -> bool) (fun x -> x)
+  : typing_closed #(x:bool{x == true} -> bool) (fun x -> x)
   = fun _ -> CLambda (CRefinement _ CVar0)
 
 open Examples
 
 let test_erase_refine_again ()
-  : compilable_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
+  : typing_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
   = fun _ -> CLambda (CRefinement _ (CRefinement _ CVar0))
 
 [@expect_failure]
 let test_just_false
-  : compilable_closed #(bool -> (x:bool{x == true})) (fun x -> false)
+  : typing_closed #(bool -> (x:bool{x == true})) (fun x -> false)
   = fun _ -> CLambda (CRefinement _ CFalse)
 
 let test_just_true' ()
-  : compilable_closed just_true
+  : typing_closed just_true
   = fun _ -> CLambda (CRefinement _ CTrue)
 
 let test_moving_ref' ()
-  : compilable_closed moving_ref
+  : typing_closed moving_ref
   = fun _ -> CLambda (CRefinement _ CUnit)
 
 let test_always_false' ()
-  : compilable_closed always_false
+  : typing_closed always_false
   = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
 
 let test_always_false'' ()
-  : Tot (compilable_closed always_false)
+  : Tot (typing_closed always_false)
   by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
   = fun _ ->
     CLambda (CIf CVar0
@@ -533,36 +533,36 @@ let test_always_false'' ()
                 (CRefinement (fun y -> True) CVar0))
 
 let test_always_false_complex' ()
-  : compilable_closed always_false_complex
+  : typing_closed always_false_complex
   = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
 
 let test_always_false_complex'' ()
-  : compilable_closed always_false_complex
+  : typing_closed always_false_complex
   = fun _ -> CLambda (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
 
 let test_always_false_ho ()
-  : compilable_closed always_false_ho
+  : typing_closed always_false_ho
   = fun _ -> CLambda (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
 
 let test_if_x' ()
-  : compilable_closed if_x
+  : typing_closed if_x
   by (norm [delta_only [`%if_x]]) // TODO: why is the unfolding necessary?
   = fun _ -> CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
 
 let test_seq_basic' ()
-  : compilable_closed seq_basic
+  : typing_closed seq_basic
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
 
 let test_seq_qref' ()
-  : compilable_closed seq_qref
+  : typing_closed seq_qref
   = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
 let test_seq_p_implies_q' ()
-  : compilable_closed seq_p_implies_q
+  : typing_closed seq_p_implies_q
   = fun _ -> CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
-  : compilable_closed if_seq
+  : typing_closed if_seq
   by (norm [delta_only [`%if_seq]]) // TODO: why is the unfolding necessary?
   = fun _ -> CLambda (CLambda (
      CIf CVar0
@@ -579,7 +579,7 @@ let myid2 : fs_oexp (extend (f:(x:bool{x == true}) -> bool -> bool) (extend bool
 #push-options "--no_smt"
 
 let test_context' ()
-  : compilable_closed context
+  : typing_closed context
   by (norm [delta_only [`%context]]; tadmit ()) // TODO: why is the unfolding necessary? // TODO: why is the tadmit necessary?
   = fun _ ->
     // TODO: why does it fail here?
