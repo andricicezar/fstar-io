@@ -149,19 +149,18 @@ let helper_if #_ #_ #wpC c #wpT t #wpE e =
     M.elim_pure_wp_monotonicity (wpE fsG);
     if c fsG then t fsG else e fsG
 
-val wp_lambda : #g :env ->
+val wp_lambda_tot : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 wpCtx:spec_env (extend a g) b ->
                 body:fs_oexp (extend a g) b wpCtx ->
                 spec_env g (a -> b)
 
-let wp_lambda #g #a #b wpCtx body fsG : pure_wp (a -> b) = (** Cezar: this seems to be exactly what F* generates **)
+let wp_lambda_tot #g #a #b wpCtx body fsG : pure_wp (a -> b) = (** Cezar: this seems to be exactly what F* generates **)
   M.as_pure_wp
   fun (p:pure_post (a -> b)) ->
     (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
     pure_return _ (fun x -> body (fs_stack fsG x)) p
-//    p (fun x -> body (fs_stack fsG x))
 
 unfold
 val helper_lambda : #g :env ->
@@ -169,11 +168,11 @@ val helper_lambda : #g :env ->
                 #b :Type ->
                 #wpCtx:spec_env (extend a g) b ->
                 body :fs_oexp (extend a g) b wpCtx ->
-                fs_oexp g (a -> b) (wp_lambda wpCtx body)
+                fs_oexp g (a -> b) (wp_lambda_tot wpCtx body)
 let helper_lambda #g #a #b #wpCtx body fsG =
   (fun x -> body (fs_stack fsG x))
 
-val wp_lambda' :
+val wp_lambda_wp :
   #g :env ->
   #a :Type ->
   #b :Type ->
@@ -182,7 +181,7 @@ val wp_lambda' :
   fs_oexp (extend a g) b wpCtx ->
   spec_env g (x:a -> PURE b (wpFun x))
 
-let wp_lambda' #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x))  =
+let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x))  =
   let w : pure_wp' _ = fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
     (forall (x: a) (p: pure_post b).
       wpFun x p ==>
@@ -210,60 +209,18 @@ let wp_lambda' #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x))
   //     p f
 
 
-val test :
+val helper_lambda_wp :
   #g : env ->
   #a : Type ->
   #b : Type ->
   wpCtx : spec_env (extend a g) b ->
   wpFun : (a -> pure_wp b) ->
   body : fs_oexp (extend a g) b wpCtx ->
-  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body)
+  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda_wp wpCtx wpFun body)
 
-let test #g #a #b wpCtx wpFun body fsG : PURE (x:a -> PURE b (wpFun x)) (wp_lambda' wpCtx wpFun body fsG) by (dump "H")=
-  // assume (forall fsG x. wpCtx (fs_stack fsG x) (fun _ -> True)) ;
-  // assume (forall p (f:(x:a -> PURE b (wpFun x))). p f) ;
-  // assume (False) ;
-  // admit () ;
-  // assume (forall (fsG: fs_env g).
-  //     forall (p: pure_post (x: a -> PURE b (wpFun x))).
-  //       // wp_lambda' wpFun wpCtx fsG p ==>
-  //       forall (f:(x:a -> PURE b (wpFun x))).
-  //       ((forall (x: a).
-  //           (* forall (q: pure_post b) *) (* q' *)(* . *)
-  //             // wpFun x q ==>
-  //             wpCtx (fs_stack fsG x) (* q' *) (fun _ -> True)
-  //               (* (fun r -> p f) *)) /\
-  //           p f)) ;
-  // assume (
-  //   forall (fsG: fs_env g).
-  //     forall (p: pure_post (x: a -> PURE b (wpFun x))) (* (f:fs_oexp (extend a g) b wpCtx) *).
-  //       wp_lambda' wpFun wpCtx fsG p ==>
-  //       (forall (x: a).
-  //           forall (p: pure_post b).
-  //             wpFun x p ==>
-  //             wpCtx (fs_stack fsG x)
-  //               (fun res ->
-  //                   res == body (fs_stack fsG x) ==>
-  //                   (forall (return_val: b). return_val == res ==> p return_val))) /\
-  //       p (fun x -> body (fs_stack fsG x))
-  // ) ;
+let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (x:a -> PURE b (wpFun x)) (wp_lambda_wp wpCtx wpFun body fsG) =
   fun x ->
     body (fs_stack fsG x)
-
-// unfold
-// val helper_lambdaWP :
-//   #g :env ->
-//   #a :Type ->
-//   #b :Type ->
-//   #wp: _ ->
-//   #wp': _ ->
-//   fs_oexp g (x:a -> PURE b (wp x)) (wp_lambdaWP wp wp') ->
-//   fs_oexp (extend a g) b wp'
-
-// let helper_lambdaWP #g #a f fsG =
-//   admit () ;
-//   f (fs_tail #a fsG) (fs_hd fsG)
-
 
 unfold
 val helper_refv: #g:env ->
@@ -338,17 +295,15 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 ce   : typing g wpE e ->
                 typing g _ (helper_if c t e)
 
-| CLambda     : #g :env ->
+| CLambdaTot  : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpCtx:spec_env (extend a g) b ->
                 #body :fs_oexp (extend a g) b wpCtx ->
-                cf:typing #b (extend a g)
-                              wpCtx
-                              body ->
-                typing g (wp_lambda #g #a #b wpCtx body) (helper_lambda body)
+                cf:typing #b (extend a g) wpCtx body ->
+                typing g (wp_lambda_tot #g #a #b wpCtx body) (helper_lambda body)
 
-| QLambda :
+| CLambdaWP :
   #g : env ->
   #a : Type ->
   #b : Type ->
@@ -356,7 +311,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
   wpFun : (a -> pure_wp b) ->
   #body : fs_oexp (extend a g) b wpCtx ->
   typing #b (extend a g) wpCtx body ->
-  typing #(x:a -> PURE b (wpFun x)) g (wp_lambda' wpCtx wpFun body) (test wpCtx wpFun body)
+  typing g (wp_lambda_wp wpCtx wpFun body) (helper_lambda_wp wpCtx wpFun body)
 
 | CRefinement : #g:env ->
                 #a:Type ->
@@ -410,41 +365,41 @@ type typing_debug #a (wp:spec_env empty a) (x:a) =
 
 let test1_exp ()
   : typing_closed #(bool -> bool) (fun x -> x)
-  = fun _ -> CLambda CVar0
+  = fun _ -> CLambdaTot CVar0
 
 let test1_exp' ()
   : Tot (typing_closed #(bool -> bool -> bool) (fun x y -> y))
-  = fun _ ->  CLambda (CLambda CVar0)
+  = fun _ ->  CLambdaTot (CLambdaTot CVar0)
 
 let test_fapp1 ()
   : typing_closed #((unit -> unit) -> unit) (fun f -> f ())
-  = fun _ -> CLambda (CApp CVar0 CUnit)
+  = fun _ -> CLambdaTot (CApp CVar0 CUnit)
 
 let test_fapp2 ()
   : Tot (typing_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false))
   by (dump "h")
-  = fun _ -> CLambda (CApp (CApp CVar0 CTrue) CFalse)
+  = fun _ -> CLambdaTot (CApp (CApp CVar0 CTrue) CFalse)
 
 let test4_exp' ()
   : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
-  = fun _ -> CLambda (CLambda (CLambda CVar2))
+  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar2))
 
 let test5_exp' ()
   : typing_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
-  = fun _ -> CLambda (CLambda (CLambda CVar1))
+  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar1))
 
 let test6_exp' ()
   : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
-  = fun _ -> CLambda (CLambda (CLambda CVar0))
+  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar0))
 
 [@expect_failure]
 let test4_exp'' ()
   : typing_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = fun _ -> CLambda (CLambda (CLambda CVar0))
+  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar0))
 
 let test1_hoc ()
   : typing_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = fun _ -> CLambda (CApp CVar0 CFalse)
+  = fun _ -> CLambdaTot (CApp CVar0 CFalse)
 
 let test2_if0 ()
   : typing_closed #(bool) (if true then false else true)
@@ -452,7 +407,7 @@ let test2_if0 ()
 
 let test2_if ()
   : typing_closed #(bool -> bool) (fun x -> if x then false else true)
-  = fun _ -> CLambda (CIf CVar0 CFalse CTrue)
+  = fun _ -> CLambdaTot (CIf CVar0 CFalse CTrue)
 
 #pop-options
 
@@ -485,86 +440,86 @@ let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
 
 let test3_if_ho ()
   : typing_closed #(bool -> (bool -> bool)) creame
-  = fun _ -> CLambda (CIf CVar0
-                       (CLambda #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
-                       (CLambda #_ #_ #_ #_ #myid CVar0))
+  = fun _ -> CLambdaTot (CIf CVar0
+                       (CLambdaTot #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
+                       (CLambdaTot #_ #_ #_ #_ #myid CVar0))
 
 let test1_if ()
   : typing_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = fun _ -> CLambda (CLambda (CIf CVar1 CFalse CVar0))
+  = fun _ -> CLambdaTot (CLambdaTot (CIf CVar1 CFalse CVar0))
 
 let test1_comp_ref ()
   : typing_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = fun _ -> CLambda CVar0
+  = fun _ -> CLambdaTot CVar0
 
 let test1_erase_ref ()
   : typing_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = fun _ -> CLambda (CRefinement _ CVar0)
+  = fun _ -> CLambdaTot (CRefinement _ CVar0)
 
 open Examples
 
 let test_erase_refine_again ()
   : typing_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
-  = fun _ -> CLambda (CRefinement _ (CRefinement _ CVar0))
+  = fun _ -> CLambdaTot (CRefinement _ (CRefinement _ CVar0))
 
 [@expect_failure]
 let test_just_false
   : typing_closed #(bool -> (x:bool{x == true})) (fun x -> false)
-  = fun _ -> CLambda (CRefinement _ CFalse)
+  = fun _ -> CLambdaTot (CRefinement _ CFalse)
 
 let test_just_true' ()
   : typing_closed just_true
-  = fun _ -> CLambda (CRefinement _ CTrue)
+  = fun _ -> CLambdaTot (CRefinement _ CTrue)
 
 let test_moving_ref' ()
   : typing_closed moving_ref
-  = fun _ -> CLambda (CRefinement _ CUnit)
+  = fun _ -> CLambdaTot (CRefinement _ CUnit)
 
 let test_always_false' ()
   : typing_closed always_false
-  = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CFalse) CVar0))
+  = fun _ -> CLambdaTot (CRefinement _ (CIf CVar0 (CFalse) CVar0))
 
 let test_always_false'' ()
   : Tot (typing_closed always_false)
   by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
   = fun _ ->
-    CLambda (CIf CVar0
+    CLambdaTot (CIf CVar0
                 (CRefinement (fun y -> True) CFalse)
                 (CRefinement (fun y -> True) CVar0))
 
 let test_always_false_complex' ()
   : typing_closed always_false_complex
-  = fun _ -> CLambda (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
+  = fun _ -> CLambdaTot (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
 
 let test_always_false_complex'' ()
   : typing_closed always_false_complex
-  = fun _ -> CLambda (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
+  = fun _ -> CLambdaTot (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
 
 let test_always_false_ho ()
   : typing_closed always_false_ho
-  = fun _ -> CLambda (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
+  = fun _ -> CLambdaTot (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
 
 let test_if_x' ()
   : typing_closed if_x
   by (norm [delta_only [`%if_x]]) // TODO: why is the unfolding necessary?
-  = fun _ -> CLambda (CLambda (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
+  = fun _ -> CLambdaTot (CLambdaTot (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
 
 let test_seq_basic' ()
   : typing_closed seq_basic
-  = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) CUnit)
+  = fun _ -> CLambdaTot (CSeq _ (CApp CVar0 CUnit) CUnit)
 
 let test_seq_qref' ()
   : typing_closed seq_qref
-  = fun _ -> CLambda (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
+  = fun _ -> CLambdaTot (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
 
 let test_seq_p_implies_q' ()
   : typing_closed seq_p_implies_q
-  = fun _ -> CLambda (CLambda (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
+  = fun _ -> CLambdaTot (CLambdaTot (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
 
 let test_if_seq' ()
   : typing_closed if_seq
   by (norm [delta_only [`%if_seq]]) // TODO: why is the unfolding necessary?
-  = fun _ -> CLambda (CLambda (
+  = fun _ -> CLambdaTot (CLambdaTot (
      CIf CVar0
        (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
                      (CRefinement _ CVar0))
@@ -583,6 +538,6 @@ let test_context' ()
   by (norm [delta_only [`%context]]; tadmit ()) // TODO: why is the unfolding necessary? // TODO: why is the tadmit necessary?
   = fun _ ->
     // TODO: why does it fail here?
-    CLambda (CLambda (CIf CVar1
+    CLambdaTot (CLambdaTot (CIf CVar1
                           (CApp CVar0 (CRefinement _ CVar1))
-                          (CLambda #_ #_ #_ #_ #(fun _ y -> y) CVar0)))
+                          (CLambdaTot #_ #_ #_ #_ #(fun _ y -> y) CVar0)))
