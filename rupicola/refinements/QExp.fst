@@ -52,6 +52,19 @@ let fs_tail #t #g fsG =
     #(fun x -> Some?.v (g x))
     (fun y -> fsG (y+1))
 
+val lem_hd_stack #t #g (fsG:fs_env g) (v:t)
+  : Lemma (
+ // (fs_hd fsG == fs_hd (fs_tail (fs_stack fsG v))) /\
+   fs_hd (fs_stack fsG v) == v)
+  [SMTPat (fs_hd (fs_stack fsG v))]
+let lem_hd_stack fsG v = ()
+
+
+val lem_tail_stack_inverse #g (fsG:fs_env g) #t (x:t)
+  : Lemma (fs_tail (fs_stack fsG x) == fsG)
+  [SMTPat (fs_tail (fs_stack fsG x))]
+let lem_tail_stack_inverse #g fsG #t v = admit ()
+
 type spec_env (g:env) (a:Type) =
   fsG:fs_env g -> pure_wp a
 
@@ -59,27 +72,25 @@ type spec_env (g:env) (a:Type) =
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> PURE a (wpG fsG)
 
+val helper_weaken : #g:env ->
+                    #a:Type u#a ->
+                    b:Type0 ->
+                    wpX:spec_env g a ->
+                    x:fs_oexp g a wpX ->
+                    fs_oexp (extend b g) a (fun fsG -> wpX (fs_tail fsG))
+let helper_weaken #g #a b wpX x fsG : PURE a (wpX (fs_tail fsG)) =
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#0 ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity (wpX (fs_tail fsG));
+  // admit (); // monotonicity of wpX (fs_tail fsG): Z3 can't instantiate the trigger
+  x (fs_tail fsG)
+
 unfold
 val helper_var0 : g:env ->
                  a:Type ->
                  fs_oexp (extend a g) a (fun fsG -> ret (fs_hd fsG))
 let helper_var0 g a fsG : PURE a (ret (fs_hd fsG)) =
   fs_hd fsG
-
-unfold
-val helper_var1 : g:env ->
-                  a:Type ->
-                  b:Type ->
-                  fs_oexp (extend b (extend a g)) a (fun fsG -> ret (fs_hd (fs_tail #b fsG)))
-let helper_var1 g a b fsG = fs_hd (fs_tail #b fsG)
-
-unfold
-val helper_var2 : g:env ->
-                  a:Type ->
-                  b:Type ->
-                  c:Type ->
-                  fs_oexp (extend c (extend b (extend a g))) a (fun fsG -> ret (fs_hd (fs_tail #b (fs_tail #c fsG))))
-let helper_var2 g a b c fsG = fs_hd (fs_tail #b (fs_tail #c fsG))
 
 unfold
 val helper_unit : g:env -> fs_oexp g unit (fun _ -> ret ())
@@ -149,6 +160,7 @@ let helper_if #_ #_ #wpC c #wpT t #wpE e =
     M.elim_pure_wp_monotonicity (wpE fsG);
     if c fsG then t fsG else e fsG
 
+unfold
 val wp_lambda_tot : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -172,6 +184,7 @@ val helper_lambda : #g :env ->
 let helper_lambda #g #a #b #wpCtx body fsG =
   (fun x -> body (fs_stack fsG x))
 
+unfold
 val wp_lambda_wp :
   #g :env ->
   #a :Type ->
@@ -208,7 +221,7 @@ let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x
   //     ) ==>
   //     p f
 
-
+unfold
 val helper_lambda_wp :
   #g : env ->
   #a : Type ->
@@ -253,25 +266,23 @@ let helper_seq wpV v wpK k =
 [@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
-| CUnit       : #g:env ->  typing g _ (helper_unit g)
-| CTrue       : #g:env ->  typing g _ (helper_true g)
-| CFalse      : #g:env ->  typing g _ (helper_false g)
+| Qtt       : #g:env ->  typing g _ (helper_unit g)
+| QTrue       : #g:env ->  typing g _ (helper_true g)
+| QFalse      : #g:env ->  typing g _ (helper_false g)
 
-| CVar0       : #g:env ->
-                #a:Type ->
-                typing #a _ _ (helper_var0 g a)
+| QAxiom      : #g : env ->
+                #a : Type ->
+                typing (extend a g) _ (helper_var0 g a)
 
-| CVar1       : #g:env ->
-                #a:Type ->
-                #b:Type ->
-                typing #a _ _ (helper_var1 g a b)
-| CVar2       : #g:env ->
-                #a:Type ->
-                #b:Type ->
-                #c:Type ->
-                typing #a _ _ (helper_var2 g a b c)
+| QWeaken      : #g : env ->
+                #a : Type ->
+                #b : Type ->
+                #wpX : spec_env g a ->
+                #x : fs_oexp g a wpX ->
+                typing g wpX x ->
+                typing (extend b g) _ (helper_weaken b wpX x)
 
-| CApp        : #g :env ->
+| QApp        : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpF : spec_env g (a -> b) ->
@@ -282,7 +293,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 cx:typing g wpX x ->
                 typing #b g _ (helper_app #_ #_ #_ #wpF f x)
 
-| CIf         : #g :env ->
+| QIf         : #g :env ->
                 #a :Type ->
                 #wpC : spec_env g bool ->
                 #c   : fs_oexp g bool wpC ->
@@ -295,7 +306,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 ce   : typing g wpE e ->
                 typing g _ (helper_if c t e)
 
-| CLambdaTot  : #g :env ->
+| QLambdaTot  : #g :env ->
                 #a :Type ->
                 #b :Type ->
                 #wpCtx:spec_env (extend a g) b ->
@@ -303,7 +314,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 cf:typing #b (extend a g) wpCtx body ->
                 typing g (wp_lambda_tot #g #a #b wpCtx body) (helper_lambda body)
 
-| CLambdaWP :
+| QLambdaWP :
   #g : env ->
   #a : Type ->
   #b : Type ->
@@ -313,7 +324,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
   typing #b (extend a g) wpCtx body ->
   typing g (wp_lambda_wp wpCtx wpFun body) (helper_lambda_wp wpCtx wpFun body)
 
-| CRefinement : #g:env ->
+| QRefinement : #g:env ->
                 #a:Type ->
                 ref1:(a -> Type0) ->
                 #ref2:(a -> Type0) ->
@@ -322,7 +333,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 typing #(x:a{ref1 x}) g wpV v ->
                 typing #(x:a{ref2 x}) g _ (helper_refv ref2 wpV v)
 
-| CSeq        : #g:env ->
+| QSeq        : #g:env ->
                 ref1:Type0 ->
                 #wpV:spec_env g (_:unit{ref1}) ->
                 #v:fs_oexp g (_:unit{ref1}) wpV ->
@@ -337,25 +348,10 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 typing #a g _ (helper_seq wpV v wpK k)
 
 
-let test_app0 ()
-  : Tot (typing (extend (bool -> bool) empty) _ (fun fsG -> fs_hd fsG true))
-  = CApp CVar0 CTrue
-
-// FIXME, why does it need tactics to do such simple proofs?
-// let test_app1 ()
-//   : Tot (typing (extend (bool -> bool -> bool) empty) _ (fun fsG -> ((fs_hd fsG) true) false))
-//   = CApp (CApp CVar0 CTrue) CFalse
-
-let test2_var
-  : typing (extend unit (extend unit empty)) _ (fun fsG -> fs_hd (fs_tail fsG))
-  = CVar1
-
 unfold
 let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <= pure_return 'a x))
   : fs_oexp empty 'a wp
   = fun _ -> x
-
-#push-options "--no_smt"
 
 type typing_closed #a (#wp:spec_env empty a) (x:a) =
   proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing empty wp (helper_oexp x #wp #proof)
@@ -363,181 +359,253 @@ type typing_closed #a (#wp:spec_env empty a) (x:a) =
 type typing_debug #a (wp:spec_env empty a) (x:a) =
   typing_closed #a #wp x
 
-let test1_exp ()
-  : typing_closed #(bool -> bool) (fun x -> x)
-  = fun _ -> CLambdaTot CVar0
+let (⊢) (#a:Type)(g:env) (#wp:spec_env g a) (x:fs_oexp g a wp) =
+  typing g wp x
 
-let test1_exp' ()
-  : Tot (typing_closed #(bool -> bool -> bool) (fun x y -> y))
-  = fun _ ->  CLambdaTot (CLambdaTot CVar0)
+let (⊩) (a:Type) (#wp:spec_env empty a) (x:a) =
+  proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof)
 
-let test_fapp1 ()
-  : typing_closed #((unit -> unit) -> unit) (fun f -> f ())
-  = fun _ -> CLambdaTot (CApp CVar0 CUnit)
+let simplify_stack_ops () : Tac unit =
+   l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
-let test_fapp2 ()
-  : Tot (typing_closed #((bool -> bool -> bool) -> bool) (fun f -> f true false))
-  by (dump "h")
-  = fun _ -> CLambdaTot (CApp (CApp CVar0 CTrue) CFalse)
 
-let test4_exp' ()
-  : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> x)
-  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar2))
+let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> fs_hd (fs_tail fsG)) =
+  QWeaken QAxiom
 
-let test5_exp' ()
-  : typing_closed #(bool -> bool -> bool -> bool) (fun x -> fun y z -> y)
-  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar1))
+let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> fs_hd (fs_tail (fs_tail fsG))) =
+  QWeaken qVar1
 
-let test6_exp' ()
-  : typing_closed #(bool -> bool -> bool -> bool) (fun x y z -> z)
-  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar0))
-
-[@expect_failure]
-let test4_exp'' ()
-  : typing_closed #(unit -> unit -> unit -> unit) (fun x y z -> y)
-  = fun _ -> CLambdaTot (CLambdaTot (CLambdaTot CVar0))
-
-let test1_hoc ()
-  : typing_closed #((bool -> bool) -> bool) (fun f -> f false)
-  = fun _ -> CLambdaTot (CApp CVar0 CFalse)
-
-let test2_if0 ()
-  : typing_closed #(bool) (if true then false else true)
-  = fun _ -> (CIf CTrue CFalse CTrue)
-
-let test2_if ()
-  : typing_closed #(bool -> bool) (fun x -> if x then false else true)
-  = fun _ -> CLambdaTot (CIf CVar0 CFalse CTrue)
-
-#pop-options
-
-unfold
-let on_true (b : bool) : Pure bool (requires b == true) (ensures fun r -> r == b) =
-  b
-
-[@@expect_failure]
-let test_on_true ()
-  : typing_closed #(b: bool -> Pure bool (requires b == true) (ensures fun r -> r == b)) on_true
-=
-  // let wp : bool -> pure_wp bool = _ in
-  // let wp' : spec_env (extend bool empty) bool = fun fsG p -> True in
-  // fun _ -> CLambdaDepWP #_ #bool #bool wp wp' CVar0
-  fun _ -> CLambdaDepWP #_ #bool #bool _ _ CVar0
-
-// TODO: why do I have to hoist these outside?
-unfold
-let myf : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd (fs_tail fsG)))) =
-  fun fsG y -> fs_hd fsG
-
-unfold
-let myid : fs_oexp (extend bool empty) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
-  fun fsG z -> z
-
+(**
 #push-options "--no_smt"
-
-val creame : bool -> (bool -> bool)
-let creame = (fun x -> if x then (fun y -> x) else (fun z -> z))
-
-let test3_if_ho ()
-  : typing_closed #(bool -> (bool -> bool)) creame
-  = fun _ -> CLambdaTot (CIf CVar0
-                       (CLambdaTot #_ #_ #_ #_ #myf CVar1) // TODO: why cannot it infer myf?
-                       (CLambdaTot #_ #_ #_ #_ #myid CVar0))
-
-let test1_if ()
-  : typing_closed #(bool -> bool -> bool) (fun x y -> if x then false else y)
-  = fun _ -> CLambdaTot (CLambdaTot (CIf CVar1 CFalse CVar0))
-
-let test1_comp_ref ()
-  : typing_closed #(x:bool{x == true} -> x:bool{x == true}) (fun x -> x)
-  = fun _ -> CLambdaTot CVar0
-
-let test1_erase_ref ()
-  : typing_closed #(x:bool{x == true} -> bool) (fun x -> x)
-  = fun _ -> CLambdaTot (CRefinement _ CVar0)
 
 open Examples
 
-let test_erase_refine_again ()
-  : typing_closed #(x:bool{p_ref x} -> x:bool{p_ref x}) (fun x -> x)
-  = fun _ -> CLambdaTot (CRefinement _ (CRefinement _ CVar0))
+let test_ut_unit ()
+  : unit ⊩ ut_unit
+  = fun _ -> Qtt
+
+let test_ut_true
+  : bool ⊩ ut_true
+  = fun _ -> QTrue
+
+let test_ut_false
+  : bool ⊩ ut_false
+  = fun _ -> QFalse
+
+// val var0 : fs_oexp (extend bool empty) bool 
+// let var0 fsG = fun _ -> hd fsG
+
+// val var1 : fs_oexp (extend bool (extend bool empty)) bool
+// let var1 fsG = hd (tail fsG)
+
+// let var2 : fs_oexp (extend bool (extend bool (extend bool empty))) bool =
+//   fun fsG -> hd (tail (tail fsG))
+
+// let test_var0
+//   : (extend bool empty) ⊢ var0
+//   = QAxiom
+
+// let test_var1
+//   : (extend bool (extend bool empty)) ⊢ var1
+//   = qVar1
+
+// let test_var2
+//   : (extend bool (extend bool (extend bool empty))) ⊢ var2
+//   = qVar2
+
+let test_constant
+  : ((bool -> bool) ⊩ constant)
+  = fun _ -> QLambdaTot QTrue
+
+let test_constant'
+  : ((bool -> bool) ⊩ constant)
+  = fun _ -> QLambdaTot (QWeaken QTrue)
+
+let test_identity
+  : (bool -> bool) ⊩ identity
+  = fun _ -> QLambdaTot QAxiom
+
+let test_thunked_id
+  : (bool -> (bool -> bool)) ⊩ thunked_id
+  = fun _ -> QLambdaTot (QLambdaTot QAxiom)
+
+let test_proj1
+  : (bool -> bool -> bool -> bool) ⊩ proj1
+  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar2))
+
+let test_proj2
+  : (bool -> bool -> bool -> bool) ⊩ proj2
+  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar1))
+
+let test_proj3
+  : (bool -> bool -> bool -> bool) ⊩ proj3
+  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom))
+
+let test_apply_top_level_def
+  : (bool -> bool) ⊩ apply_top_level_def
+  = fun _ -> QLambdaTot (QApp
+              (QApp
+                (QLambdaTot (QLambdaTot QAxiom))
+                QAxiom)
+              QTrue)
+
+let test_apply_top_level_def'
+  : (bool -> bool -> bool) ⊩ apply_top_level_def'
+  = fun _ -> QLambdaTot (QLambdaTot (QApp
+                       (QApp
+                          (QLambdaTot (QLambdaTot QAxiom))
+                          qVar1)
+                       QAxiom))
+
+let test_papply__top_level_def
+  : (bool -> bool -> bool) ⊩ papply__top_level_def
+  = fun _ -> QLambdaTot (QApp
+              (QLambdaTot (QLambdaTot QAxiom))
+              QAxiom)
+
+let test_apply_arg
+  : ((unit -> unit) -> unit) ⊩ apply_arg
+  = fun _ -> QLambdaTot (QApp QAxiom Qtt)
+
+let test_apply_arg2 ()
+  : ((bool -> bool -> bool) -> bool) ⊩ apply_arg2
+  by (simplify_stack_ops (); trefl ())
+  = fun _ -> QLambdaTot (QApp (QApp QAxiom QTrue) QFalse)
+
+let test_papply_arg2 ()
+  : ((bool -> bool -> bool) -> bool -> bool) ⊩ papply_arg2
+  by (simplify_stack_ops (); trefl ())
+  = fun _ -> QLambdaTot (QApp QAxiom QTrue)
 
 [@expect_failure]
-let test_just_false
-  : typing_closed #(bool -> (x:bool{x == true})) (fun x -> false)
-  = fun _ -> CLambdaTot (CRefinement _ CFalse)
+let test_proj2'
+  : (bool -> bool -> bool -> bool) ⊩ proj2
+  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom))
 
-let test_just_true' ()
-  : typing_closed just_true
-  = fun _ -> CLambdaTot (CRefinement _ CTrue)
+let test_anif
+  : bool ⊩ anif
+  = fun _ -> QIf QTrue QFalse QTrue
 
-let test_moving_ref' ()
-  : typing_closed moving_ref
-  = fun _ -> CLambdaTot (CRefinement _ CUnit)
+let test_negb
+  : (bool -> bool) ⊩ negb
+  = fun _ -> QLambdaTot (QIf QAxiom QFalse QTrue)
 
-let test_always_false' ()
-  : typing_closed always_false
-  = fun _ -> CLambdaTot (CRefinement _ (CIf CVar0 (CFalse) CVar0))
+let test_negb_pred
+  : ((bool -> bool) -> bool -> bool) ⊩ negb_pred
+  = fun _ -> QLambdaTot (QLambdaTot (QIf (QApp qVar1 QAxiom) QFalse QTrue))
 
-let test_always_false'' ()
-  : Tot (typing_closed always_false)
-  by (norm [delta_only [`%always_false]]) // TODO: why is the unfolding necessary?
-  = fun _ ->
-    CLambdaTot (CIf CVar0
-                (CRefinement (fun y -> True) CFalse)
-                (CRefinement (fun y -> True) CVar0))
+let test_if2 ()
+  : (bool -> bool -> bool) ⊩ if2
+  by (simplify_stack_ops (); trefl ())
+  = fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom))
 
-let test_always_false_complex' ()
-  : typing_closed always_false_complex
-  = fun _ -> CLambdaTot (CRefinement _ (CIf CVar0 (CIf CVar0 CFalse CTrue) CFalse))
+let test_callback_return ()
+  : (bool -> (bool -> bool)) ⊩ callback_return
+  by (simplify_stack_ops (); trefl ())
+  = fun _ -> QLambdaTot (QIf QAxiom
+                 (QLambdaTot qVar1)
+                 (QLambdaTot QAxiom))
 
-let test_always_false_complex'' ()
-  : typing_closed always_false_complex
-  = fun _ -> CLambdaTot (CIf CVar0 (CIf CVar0 (CRefinement _ CFalse) (CRefinement _ CTrue)) (CRefinement _ CFalse))
+let test_callback_return' ()
+  : (bool -> (bool -> bool)) ⊩ callback_return'
+  by (simplify_stack_ops (); trefl ())
+  = fun _ -> QLambdaTot (QIf QAxiom
+                 (QLambdaTot qVar1)
+                 (QLambdaTot QAxiom)) // TODO: why does it not work to unfold identity here?
 
-let test_always_false_ho ()
-  : typing_closed always_false_ho
-  = fun _ -> CLambdaTot (CIf (CRefinement _ (CApp CVar0 CUnit)) (CRefinement _ CFalse) (CRefinement _ CTrue))
+**)
 
-let test_if_x' ()
-  : typing_closed if_x
-  by (norm [delta_only [`%if_x]]) // TODO: why is the unfolding necessary?
-  = fun _ -> CLambdaTot (CLambdaTot (CIf CVar0 (CApp CVar1 (CRefinement _ CVar0)) CFalse))
+// let test_make_pair
+//   : (bool -> bool -> (bool * bool)) ⊩ make_pair
+//   = fun _ -> QLambdaTot (QLambdaTot (QMkpair qVar1 QAxiom))
 
-let test_seq_basic' ()
-  : typing_closed seq_basic
-  = fun _ -> CLambdaTot (CSeq _ (CApp CVar0 CUnit) CUnit)
+// let test_pair_of_functions ()
+//   : Tot (((bool -> bool) * (bool -> bool -> bool))
+//                             ⊩ pair_of_functions)
+//   by (simplify_stack_ops (); trefl ())
+//   = fun _ ->  QMkpair
+//       (QLambdaTot (QApp
+//                   (QLambdaTot (QIf QAxiom QFalse QTrue))
+//                   QAxiom))
+//       (QLambdaTot (QLambdaTot QAxiom))
 
-let test_seq_qref' ()
-  : typing_closed seq_qref
-  = fun _ -> CLambdaTot (CSeq _ (CApp CVar0 CUnit) (CRefinement _ CUnit))
+// let test_pair_of_functions2 ()
+//   : (((bool -> bool) * (bool -> bool -> bool))
+//     ⊩ pair_of_functions2)
+//   by (simplify_stack_ops (); trefl ())
+//   =  fun _ -> QMkpair
+//       (QLambdaTot (QIf QAxiom QFalse QTrue))
+//       (QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom)))
 
-let test_seq_p_implies_q' ()
-  : typing_closed seq_p_implies_q
-  = fun _ -> CLambdaTot (CLambdaTot (CSeq _ (CApp CVar1 CVar0) (CRefinement _ CVar0)))
+// let test_fst_pair
+//   : (bool) ⊩ fst_pair
+//   =  fun _ -> (QFst (QMkpair QTrue Qtt))
 
-let test_if_seq' ()
-  : typing_closed if_seq
-  by (norm [delta_only [`%if_seq]]) // TODO: why is the unfolding necessary?
-  = fun _ -> CLambdaTot (CLambdaTot (
-     CIf CVar0
-       (CSeq _ (CApp CVar1 (CRefinement _ CVar0))
-                     (CRefinement _ CVar0))
-       (CRefinement _ CVar0)))
+// let test_wrap_fst
+//   : ((bool * bool) -> bool) ⊩ wrap_fst
+//   =  fun _ -> QLambdaTot (QFst QAxiom)
+
+// let test_wrap_fst_pa
+//   : ((bool * bool) -> bool) ⊩ wrap_fst_pa
+//   =  fun _ -> QLambdaTot (QFst QAxiom)
+
+// let test_snd_pair
+//   : (unit) ⊩ snd_pair
+//   =  fun _ -> (QSnd (QMkpair QTrue Qtt))
+
+// let test_wrap_snd
+//   : ((bool * unit) -> unit) ⊩ wrap_snd
+//   =  fun _ -> QLambdaTot (QSnd QAxiom)
+
+// let test_wrap_snd_pa
+//   : ((bool * unit) -> unit) ⊩ wrap_snd_pa
+//   =  fun _ -> QLambdaTot (QSnd QAxiom)
+
+// let qLet #g (#a #b:qType) (#x:fs_oexp g a) (#f:fs_oexp (extend a g) b)
+//   (qx : typing g x) (qf : typing _ f) :
+//   typing g (fun fsG -> let y = x fsG in f (stack fsG y)) =
+//    fun _ -> QApp (QLambdaTot qf) qx
+
+// let test_a_few_lets
+//   : (bool -> unit) ⊩ a_few_lets
+//   =  fun _ -> QLambda
+//      (qLet (QMkpair QAxiom QAxiom)
+//      (qLet qVar1
+//      (qLet (QFst qVar1)
+//      (qLet (QMkpair qVar1 QAxiom)
+//      Qtt))))
+
+// let test_inl_true
+//   : (either bool unit) ⊩ inl_true
+//   = fun _ -> QInl QTrue
+
+// let test_inr_unit
+//   : (either bool unit) ⊩ inr_unit
+//   = fun _ -> QInr Qtt
+
+// let test_return_either ()
+//   : (bool -> (either unit unit)) ⊩ return_either
+//   by (simplify_stack_ops (); trefl ())
+//   = fun _ -> QLambdaTot (QIf QAxiom (QInl Qtt) (QInr Qtt))
+
+// let test_match_either ()
+//   : ((either bool bool) -> bool) ⊩ match_either
+//   by (simplify_stack_ops (); trefl ())
+//   = fun _ ->  QLambdaTot (QCase QAxiom QAxiom QAxiom)
+
+// [@expect_failure]
+// let test_match_either' ()
+//   : ((either bool bool) -> bool) ⊩ match_either'
+//   by (simplify_stack_ops (); trefl ())
+//   = fun _ ->  QLambdaTot (QCase QAxiom QAxiom QAxiom)
+
+// let test_match_either_arg ()
+//   : (((either bool bool) -> bool -> bool) ⊩ match_either_arg)
+//   by (simplify_stack_ops (); trefl ())
+//   = fun _ -> QLambdaTot (QLambdaTot (
+//        QCase
+//          qVar1
+//          QAxiom
+//          qVar1))
 
 #pop-options
-
-unfold
-let myid2 : fs_oexp (extend (f:(x:bool{x == true}) -> bool -> bool) (extend bool empty)) (bool -> bool) (wp_lambda (fun fsG -> ret (fs_hd fsG))) =
-  fun fsG y -> y
-
-#push-options "--no_smt"
-
-let test_context' ()
-  : typing_closed context
-  by (norm [delta_only [`%context]]; tadmit ()) // TODO: why is the unfolding necessary? // TODO: why is the tadmit necessary?
-  = fun _ ->
-    // TODO: why does it fail here?
-    CLambdaTot (CLambdaTot (CIf CVar1
-                          (CApp CVar0 (CRefinement _ CVar1))
-                          (CLambdaTot #_ #_ #_ #_ #(fun _ y -> y) CVar0)))

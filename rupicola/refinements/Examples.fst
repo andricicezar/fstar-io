@@ -1,56 +1,109 @@
 module Examples
 
-let refbool : (t:bool{t == true}) = true
+let ut_unit = ()
+let ut_true = true
+let ut_false = false
 
-let falsepre : (x:bool{False} -> bool) =
+let constant (x: bool) : bool =
+  true
+
+let identity : bool -> bool =
   fun x -> x
 
-let just_true
-  : bool -> (x:bool{x == true})
-  = fun x -> true
+let thunked_id : bool -> bool -> bool =
+  fun x y -> y
 
-assume val some_ref : Type0
-let moving_ref
-  : _:bool{some_ref} -> _:unit{some_ref}
-  = fun _ -> ()
+let proj1 : bool -> bool -> bool -> bool =
+  fun x y z -> x
 
-let always_false
-  : bool -> y:bool{y == false}
-  = fun x -> if x then false else x
+let proj2 : bool -> bool -> bool -> bool =
+  fun x y z -> y
 
-let always_false_complex
-  : bool -> y:bool{y == false}
-  = fun x -> if x then if x then false else true else false
+let proj3 : bool -> bool -> bool -> bool =
+  fun x y z -> z
 
-let always_false_ho
-  : (f:(unit -> x:bool{x == true})) -> y:bool{y == false}
-  = fun f -> if f () then false else true
+let apply_top_level_def : bool -> bool =
+  fun x -> thunked_id x true
 
-let if_x
-  : (f:(x:bool{x == true}) -> bool) -> bool -> bool
-  = fun f x -> if x then f x else false
+let apply_top_level_def' : bool -> bool -> bool =
+  fun x y -> thunked_id x y
 
-assume val p_ref : bool -> Type0
-assume val q_ref : Type0
+let papply__top_level_def : bool -> bool -> bool =
+  fun x -> thunked_id x
 
-let seq_basic
-  : (f: (unit -> unit)) -> unit
-  = fun f -> (f ()) ; ()
+let apply_arg : (unit -> unit) -> unit =
+  fun f -> f ()
 
-let seq_qref
-  : (f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})
-  = fun f -> (f ()) ; ()
+let apply_arg2 : (bool -> bool -> bool) -> bool =
+  fun f -> f true false
 
-let seq_p_implies_q
-  : (f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})
-  = fun f x -> f x ; x
+let papply_arg2 : (bool -> bool -> bool) -> bool -> bool =
+  fun f -> f true
 
-let if_seq
-  : (f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (r:bool{r == true ==>  q_ref})
-  = fun f x -> if x then (f x ; x) else x
+let anif : bool = if true then false else true
 
-let context
-  : (x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool
-  = fun x f ->
-    if x then (f x)
-    else (fun y -> y)
+let negb : bool -> bool =
+  fun x -> if x then false else true
+
+let negb_pred : (bool -> bool) -> bool -> bool =
+  fun f x -> negb (f x)
+
+let if2 : bool -> bool -> bool =
+  fun x y -> if x then false else y
+
+let callback_return : bool -> (bool -> bool) =
+  fun x -> if x then (fun _ -> x) else (fun z -> z)
+
+let callback_return' : bool -> (bool -> bool) =
+  fun x -> if x then (fun _ -> x) else identity
+
+let make_pair : bool -> bool -> (bool * bool) =
+  fun x y -> (x, y)
+
+let pair_of_functions : (bool -> bool) & (bool -> bool -> bool) =
+  (fun x -> negb x), (fun x y -> y)
+
+let pair_of_functions2 : (bool -> bool) & (bool -> bool -> bool) =
+  (negb, if2)
+
+let fst_pair : bool = fst (true, ())
+let wrap_fst : (bool & bool) -> bool = fun p -> fst p
+let wrap_fst_pa : (bool & bool) -> bool = fst
+
+let snd_pair : unit = snd (true, ())
+let wrap_snd : (bool & unit) -> unit = fun p -> snd p
+let wrap_snd_pa : (bool & unit) -> unit = snd
+
+let a_few_lets : bool -> unit =
+  fun x ->
+    let p = (x, x) in
+    let y = x in
+    let z = fst p in
+    let g = (y, z) in
+    ()
+
+let inl_true : either bool unit = Inl true
+let inr_unit : either bool unit = Inr ()
+let return_either : bool -> either unit unit =
+  fun x -> if x then Inl () else Inr ()
+
+let match_either : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inl x -> x
+    | Inr x -> x
+
+let match_either' : either bool bool -> bool =
+  fun x ->
+    match x with
+    | Inr x -> x
+    | Inl x -> x
+
+let match_either_arg : either bool bool -> bool -> bool =
+  fun x y ->
+    match x with
+    | Inl x -> x
+    | Inr x -> y
+
+let greeting (b:bool) : string = if b then "hello" else "goodbye"
+let const_str : string = "constant"
