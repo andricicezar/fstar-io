@@ -6,14 +6,16 @@ open FStar.Tactics.V2
 module M = FStar.Monotonic.Pure
 
 let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-let ret (#a:Type u#a) x : pure_wp a =
-  FStar.Monotonic.Pure.as_pure_wp
-  (fun p -> p x)
+let ret (#a:Type u#a) x : pure_wp a = pure_return a x
+
+(* Local helper to convert pure_wp' to pure_wp by proving monotonicity *)
+private unfold
+let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
+  M.intro_pure_wp_monotonicity wp; wp
 
 let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
   pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
-    FStar.Monotonic.Pure.as_pure_wp
-      (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
+    mk_pure_wp (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
 
 (** Typing environment **)
 type env = var -> option Type0
@@ -44,7 +46,6 @@ let fs_stack #g fsG #t fs_v =
     (fun y ->
       if y = 0 then fs_v else fsG (y-1))
 
-unfold
 val fs_tail : #t:Type -> #g:_ -> fs_env (extend t g) -> fs_env g
 let fs_tail #t #g fsG =
   FE.on_dom
@@ -72,18 +73,19 @@ type spec_env (g:env) (a:Type) =
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> PURE a (wpG fsG)
 
+#restart-solver
+
 val helper_weaken : #g:env ->
                     #a:Type u#a ->
                     b:Type0 ->
                     wpX:spec_env g a ->
                     x:fs_oexp g a wpX ->
                     fs_oexp (extend b g) a (fun fsG -> wpX (fs_tail fsG))
-let helper_weaken #g #a b wpX x fsG : PURE a (wpX (fs_tail fsG)) =
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#a ();
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity_forall u#0 ();
-  FStar.Monotonic.Pure.elim_pure_wp_monotonicity (wpX (fs_tail fsG));
-  // admit (); // monotonicity of wpX (fs_tail fsG): Z3 can't instantiate the trigger
+let helper_weaken #g #a b wpX x fsG =
+  reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#a);
   x (fs_tail fsG)
+
+#restart-solver
 
 unfold
 val helper_var0 : g:env ->
@@ -169,10 +171,9 @@ val wp_lambda_tot : #g :env ->
                 spec_env g (a -> b)
 
 let wp_lambda_tot #g #a #b wpCtx body fsG : pure_wp (a -> b) = (** Cezar: this seems to be exactly what F* generates **)
-  M.as_pure_wp
-  fun (p:pure_post (a -> b)) ->
+  mk_pure_wp (fun (p:pure_post (a -> b)) ->
     (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
-    pure_return _ (fun x -> body (fs_stack fsG x)) p
+    p (fun x -> body (fs_stack fsG x)))
 
 unfold
 val helper_lambda : #g :env ->
@@ -206,7 +207,7 @@ let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x
     ) /\ p (fun x -> body (fs_stack fsG x))
   in
   assume (M.is_monotonic w);
-  M.as_pure_wp w
+  mk_pure_wp w
 
 
 
@@ -607,5 +608,3 @@ let test_callback_return' ()
 //          qVar1
 //          QAxiom
 //          qVar1))
-
-#pop-options
