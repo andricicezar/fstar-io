@@ -376,7 +376,6 @@ let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> fs_hd (fs_tail fsG)
 let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> fs_hd (fs_tail (fs_tail fsG))) =
   QWeaken qVar1
 
-(**
 #push-options "--no_smt"
 
 open Examples
@@ -430,36 +429,48 @@ let test_thunked_id
   : (bool -> (bool -> bool)) ⊩ thunked_id
   = fun _ -> QLambdaTot (QLambdaTot QAxiom)
 
-let test_proj1
-  : (bool -> bool -> bool -> bool) ⊩ proj1
+let simplify_via_norm () : Tac unit =
+  norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; iota; zeta; primops; simplify];
+  or_else (fun () -> trivial ())
+    (fun () ->
+      let _ = repeat forall_intro in
+      or_else (fun () -> trivial ()) (fun () -> trefl ()))
+
+let test_proj1 ()
+  : Tot ((bool -> bool -> bool -> bool) ⊩ proj1)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar2))
 
-let test_proj2
-  : (bool -> bool -> bool -> bool) ⊩ proj2
+let test_proj2 ()
+  : Tot ((bool -> bool -> bool -> bool) ⊩ proj2)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar1))
 
 let test_proj3
   : (bool -> bool -> bool -> bool) ⊩ proj3
   = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom))
 
-let test_apply_top_level_def
-  : (bool -> bool) ⊩ apply_top_level_def
+let test_apply_top_level_def ()
+  : Tot ((bool -> bool) ⊩ apply_top_level_def)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QApp
               (QApp
                 (QLambdaTot (QLambdaTot QAxiom))
                 QAxiom)
               QTrue)
 
-let test_apply_top_level_def'
-  : (bool -> bool -> bool) ⊩ apply_top_level_def'
+let test_apply_top_level_def' ()
+  : Tot ((bool -> bool -> bool) ⊩ apply_top_level_def')
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QLambdaTot (QApp
                        (QApp
                           (QLambdaTot (QLambdaTot QAxiom))
                           qVar1)
                        QAxiom))
 
-let test_papply__top_level_def
-  : (bool -> bool -> bool) ⊩ papply__top_level_def
+let test_papply__top_level_def ()
+  : Tot ((bool -> bool -> bool) ⊩ papply__top_level_def)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QApp
               (QLambdaTot (QLambdaTot QAxiom))
               QAxiom)
@@ -469,13 +480,13 @@ let test_apply_arg
   = fun _ -> QLambdaTot (QApp QAxiom Qtt)
 
 let test_apply_arg2 ()
-  : ((bool -> bool -> bool) -> bool) ⊩ apply_arg2
-  by (simplify_stack_ops (); trefl ())
+  : Tot (((bool -> bool -> bool) -> bool) ⊩ apply_arg2)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QApp (QApp QAxiom QTrue) QFalse)
 
 let test_papply_arg2 ()
-  : ((bool -> bool -> bool) -> bool -> bool) ⊩ papply_arg2
-  by (simplify_stack_ops (); trefl ())
+  : Tot (((bool -> bool -> bool) -> bool -> bool) ⊩ papply_arg2)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QApp QAxiom QTrue)
 
 [@expect_failure]
@@ -491,30 +502,37 @@ let test_negb
   : (bool -> bool) ⊩ negb
   = fun _ -> QLambdaTot (QIf QAxiom QFalse QTrue)
 
-let test_negb_pred
-  : ((bool -> bool) -> bool -> bool) ⊩ negb_pred
+let test_negb_pred ()
+  : Tot (((bool -> bool) -> bool -> bool) ⊩ negb_pred)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QLambdaTot (QIf (QApp qVar1 QAxiom) QFalse QTrue))
 
 let test_if2 ()
-  : (bool -> bool -> bool) ⊩ if2
-  by (simplify_stack_ops (); trefl ())
+  : Tot ((bool -> bool -> bool) ⊩ if2)
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom))
 
 let test_callback_return ()
-  : (bool -> (bool -> bool)) ⊩ callback_return
-  by (simplify_stack_ops (); trefl ())
+  : Tot ((bool -> (bool -> bool)) ⊩ callback_return)
+  by (norm [delta; iota; zeta_full; primops; unmeta; unascribe];
+      norm [simplify];
+      or_else (fun () -> trivial ())
+        (fun () ->
+          let _ = repeat forall_intro in
+          or_else (fun () -> trivial ()) (fun () -> trefl ())))
   = fun _ -> QLambdaTot (QIf QAxiom
                  (QLambdaTot qVar1)
                  (QLambdaTot QAxiom))
 
+[@expect_failure]
 let test_callback_return' ()
-  : (bool -> (bool -> bool)) ⊩ callback_return'
-  by (simplify_stack_ops (); trefl ())
+  : Tot ((bool -> (bool -> bool)) ⊩ callback_return')
+  by (simplify_via_norm ())
   = fun _ -> QLambdaTot (QIf QAxiom
                  (QLambdaTot qVar1)
                  (QLambdaTot QAxiom)) // TODO: why does it not work to unfold identity here?
 
-**)
+#pop-options
 
 // let test_make_pair
 //   : (bool -> bool -> (bool * bool)) ⊩ make_pair
