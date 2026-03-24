@@ -544,3 +544,70 @@ let test_callback_return' ()
                  (QLambdaTot QAxiom)) // TODO: why does it not work to unfold identity here?
 
 #pop-options
+
+let squash_wp () : Tac unit =
+  norm [primops; iota; delta; zeta; simplify; unmeta; unascribe];
+  or_else (fun () ->
+    let _ = forall_intro () in
+    let _ = forall_intro () in
+    let h = implies_intro () in
+    let _ = forall_intro () in
+    let h2 = implies_intro () in
+    rewrite h2;
+    assumption ()
+  ) (fun () ->
+    pointwise' (fun () ->
+      norm [primops; iota; delta; zeta; simplify; unmeta; unascribe];
+      or_else trefl (fun () -> smt ())
+    );
+    or_else (fun () ->
+      let _ = forall_intro () in
+      let _ = forall_intro () in
+      let h = implies_intro () in
+      let _ = forall_intro () in
+      let h2 = implies_intro () in
+      rewrite h2;
+      assumption ()
+    ) (fun () ->
+      smt ()
+    )
+  )
+
+let d_test_constant () : typing _ _ _ by (compute ()) =
+  test_constant (synth_by_tactic squash_wp)
+let d_test_constant' () : typing _ _ _ by (compute ()) =
+  test_constant' (synth_by_tactic squash_wp)
+let d_test_identity () : typing _ _ _ by (compute ()) =
+  test_identity (synth_by_tactic squash_wp)
+let d_test_thunked_id () : typing _ _ _ by (compute ()) =
+  test_thunked_id (synth_by_tactic squash_wp)
+let d_test_proj1 () : typing _ _ _ by (compute ()) =
+  test_proj1 () (synth_by_tactic squash_wp)
+let d_test_proj2 () : typing _ _ _ by (compute ()) =
+  test_proj2 () (synth_by_tactic squash_wp)
+let d_test_proj3 () : typing _ _ _ by (compute ()) =
+  test_proj3 (synth_by_tactic squash_wp)
+let d_test_apply_top_level_def () : typing _ _ _ by (compute ()) =
+  test_apply_top_level_def () (synth_by_tactic squash_wp)
+let d_test_apply_top_level_def' () : typing _ _ _ by (compute ()) =
+  test_apply_top_level_def' () (synth_by_tactic squash_wp)
+let d_test_papply__top_level_def () : typing _ _ _ by (compute ()) =
+  test_papply__top_level_def () (synth_by_tactic squash_wp)
+let d_test_apply_arg () : typing _ _ _ by (compute ()) =
+  test_apply_arg (synth_by_tactic squash_wp)
+let d_test_apply_arg2 () : typing _ _ _ by (compute ()) =
+  test_apply_arg2 () (synth_by_tactic squash_wp)
+let d_test_papply_arg2 () : typing _ _ _ by (compute ()) =
+  test_papply_arg2 () (synth_by_tactic squash_wp)
+let d_test_anif () : typing _ _ _ by (compute ()) =
+  test_anif (synth_by_tactic squash_wp)
+let d_test_negb () : typing _ _ _ by (compute ()) =
+  test_negb (synth_by_tactic squash_wp)
+let d_test_negb_pred () : typing _ _ _ by (compute ()) =
+  test_negb_pred () (synth_by_tactic squash_wp)
+let d_test_if2 () : typing _ _ _ by (compute ()) =
+  test_if2 () (synth_by_tactic squash_wp)
+let d_test_callback_return () : typing _ _ _ by (compute ()) =
+  test_callback_return () (synth_by_tactic squash_wp)
+let d_test_callback_return' () : typing _ _ _ by (compute ()) =
+  test_callback_return' () (synth_by_tactic squash_wp)
