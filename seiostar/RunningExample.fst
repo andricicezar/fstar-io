@@ -471,7 +471,7 @@ let wrapper_sat_spec f task agent :
 
 val main : (string -> string -> io unit) -> io bool
 let main agent =
-  let!@ r = wrapper "./temp" "overwrite" agent in
+  let!@ r = wrapper "./temp" "overwrite\n" agent in
   match r with
   | Inl _ -> return true
   | Inr _ -> return false
@@ -489,7 +489,7 @@ let main_derivation #g : oval_quotation g (helper_oval_g #_ #g main)
       QBindProd
         (QAppProd
           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-                (QStringLit "overwrite"))
+                (QStringLit "overwrite\n"))
           QVar0)
         (QCaseProd QVar0
           (QReturn QTrue)
