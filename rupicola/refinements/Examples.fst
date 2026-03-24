@@ -7,10 +7,10 @@ let ut_false = false
 let constant (x: bool) : bool =
   true
 
-unfold let identity : bool -> bool =
+let identity : bool -> bool =
   fun x -> x
 
-unfold let thunked_id : bool -> bool -> bool =
+let thunked_id : bool -> bool -> bool =
   fun x y -> y
 
 let proj1 : bool -> bool -> bool -> bool =
@@ -22,13 +22,13 @@ let proj2 : bool -> bool -> bool -> bool =
 let proj3 : bool -> bool -> bool -> bool =
   fun x y z -> z
 
-unfold let apply_top_level_def : bool -> bool =
+let apply_top_level_def : bool -> bool =
   fun x -> thunked_id x true
 
-unfold let apply_top_level_def' : bool -> bool -> bool =
+let apply_top_level_def' : bool -> bool -> bool =
   fun x y -> thunked_id x y
 
-unfold let papply__top_level_def : bool -> bool -> bool =
+let papply__top_level_def : bool -> bool -> bool =
   fun x -> thunked_id x
 
 let apply_arg : (unit -> unit) -> unit =
@@ -42,10 +42,10 @@ let papply_arg2 : (bool -> bool -> bool) -> bool -> bool =
 
 let anif : bool = if true then false else true
 
-unfold let negb : bool -> bool =
+let negb : bool -> bool =
   fun x -> if x then false else true
 
-unfold let negb_pred : (bool -> bool) -> bool -> bool =
+let negb_pred : (bool -> bool) -> bool -> bool =
   fun f x -> negb (f x)
 
 let if2 : bool -> bool -> bool =
@@ -54,7 +54,7 @@ let if2 : bool -> bool -> bool =
 let callback_return : bool -> (bool -> bool) =
   fun x -> if x then (fun _ -> x) else (fun z -> z)
 
-unfold let callback_return' : bool -> (bool -> bool) =
+let callback_return' : bool -> (bool -> bool) =
   fun x -> if x then (fun _ -> x) else identity
 
 let make_pair : bool -> bool -> (bool * bool) =
