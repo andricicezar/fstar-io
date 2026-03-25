@@ -541,43 +541,43 @@ open ExamplesRefs
 
 let test_refbool
   : (t:bool{t == true}) ⊩ refbool
-  = mk_dturniqet #_ #refbool (fun _ -> QRefinement (fun _ -> True) QTrue)
+  = mk_dturniqet #_ #refbool (fun _ -> QRefinement _ QTrue)
 
 let test_falsepre ()
   : Tot ((x:bool{False} -> bool) ⊩ falsepre)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #falsepre (fun _ -> QLambdaTot (QRefinement (fun _ -> False) QAxiom))
+  = mk_dturniqet #_ #falsepre (fun _ -> QLambdaTot (QRefinement _ QAxiom))
 
 let test_just_true ()
   : Tot ((bool -> (x:bool{x == true})) ⊩ just_true)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #just_true (fun _ -> QLambdaTot (QRefinement (fun _ -> True) QTrue))
+  = mk_dturniqet #_ #just_true (fun _ -> QLambdaTot (QRefinement _ QTrue))
 
 let test_moving_ref ()
   : Tot ((_:bool{some_ref} -> _:unit{some_ref}) ⊩ moving_ref)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #moving_ref (fun _ -> QLambdaTot (QRefinement (fun _ -> True) Qtt))
+  = mk_dturniqet #_ #moving_ref (fun _ -> QLambdaTot (QRefinement _ Qtt))
 
 let test_always_false ()
   : Tot ((bool -> y:bool{y == false}) ⊩ always_false)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #always_false (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf QAxiom QFalse QAxiom)))
+  = mk_dturniqet #_ #always_false (fun _ -> QLambdaTot (QRefinement _ (QIf QAxiom QFalse QAxiom)))
 
 let test_always_false_complex ()
   : Tot ((bool -> y:bool{y == false}) ⊩ always_false_complex)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #always_false_complex (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
+  = mk_dturniqet #_ #always_false_complex (fun _ -> QLambdaTot (QRefinement _ (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
 
 let test_always_false_ho ()
   : Tot (((f:(unit -> x:bool{x == true})) -> y:bool{y == false}) ⊩ always_false_ho)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #always_false_ho (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf (QRefinement (fun x -> x == true) (QApp QAxiom Qtt)) QFalse QTrue)))
+  = mk_dturniqet #_ #always_false_ho (fun _ -> QLambdaTot (QRefinement _ (QIf (QRefinement _ (QApp QAxiom Qtt)) QFalse QTrue)))
 
 let test_if_x ()
   : Tot (((f:(x:bool{x == true}) -> bool) -> bool -> bool) ⊩ if_x)
   by (simplify_via_norm ())
   = mk_dturniqet #_ #if_x (fun _ ->
-      QLambdaTot (QLambdaTot (QIf QAxiom (QApp qVar1 (QRefinement (fun _ -> True) QAxiom)) QFalse)))
+      QLambdaTot (QLambdaTot (QIf QAxiom (QApp qVar1 (QRefinement _ QAxiom)) QFalse)))
 
 let test_seq_basic ()
   : Tot (((f: (unit -> unit)) -> unit) ⊩ seq_basic)
@@ -587,7 +587,7 @@ let test_seq_basic ()
 let test_seq_qref ()
   : Tot (((f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})) ⊩ seq_qref)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #seq_qref (fun _ -> QLambdaTot (QSeq q_ref (QApp QAxiom Qtt) (QRefinement (fun _ -> True) Qtt)))
+  = mk_dturniqet #_ #seq_qref (fun _ -> QLambdaTot (QSeq q_ref (QApp QAxiom Qtt) (QRefinement _ Qtt)))
 
 // The following three tests require --admit_smt_queries true because
 // wp_lambda_tot needs a monotonicity proof (M.is_monotonic) which Z3
@@ -599,7 +599,7 @@ let test_seq_p_implies_q ()
   : Tot (((f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})) ⊩ seq_p_implies_q)
   by (simplify_via_norm ())
   = mk_dturniqet #_ #seq_p_implies_q (fun _ ->
-      QLambdaTot (QLambdaTot (QSeq q_ref (QApp qVar1 QAxiom) (QRefinement (fun x -> p_ref x) QAxiom))))
+      QLambdaTot (QLambdaTot (QSeq q_ref (QApp qVar1 QAxiom) (QRefinement _ QAxiom))))
 
 let test_if_seq ()
   : Tot (((f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (r:bool{r == true ==> q_ref})) ⊩ if_seq)
@@ -607,9 +607,9 @@ let test_if_seq ()
   = mk_dturniqet #_ #if_seq (fun _ ->
       QLambdaTot (QLambdaTot (QIf QAxiom
         (QSeq q_ref
-          (QApp qVar1 (QRefinement (fun _ -> True) QAxiom))
-          (QRefinement (fun _ -> True) QAxiom))
-        (QRefinement (fun _ -> True) QAxiom))))
+          (QApp qVar1 (QRefinement _ QAxiom))
+          (QRefinement _ QAxiom))
+        (QRefinement _ QAxiom))))
 
 let test_context ()
   : Tot (((x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool) ⊩ context)
@@ -618,7 +618,7 @@ let test_context ()
       QLambdaTot
         (QLambdaTot
           (QIf qVar1
-            (QApp QAxiom (QRefinement (fun _ -> True) qVar1))
+            (QApp QAxiom (QRefinement _ qVar1))
             (QLambdaTot QAxiom))))
 
 #pop-options

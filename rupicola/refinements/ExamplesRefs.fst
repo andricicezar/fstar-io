@@ -1,4 +1,4 @@
-module Examples
+module ExamplesRefs
 
 let refbool : (t:bool{t == true}) = true
 
