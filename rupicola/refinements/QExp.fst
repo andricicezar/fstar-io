@@ -185,6 +185,8 @@ val helper_lambda : #g :env ->
 let helper_lambda #g #a #b #wpCtx body fsG =
   (fun x -> body (fs_stack fsG x))
 
+type eff_fun (a:Type) (b:Type) (wpFun: a -> pure_wp b) = x:a -> PURE b (wpFun x)
+
 unfold
 val wp_lambda_wp :
   #g :env ->
@@ -193,21 +195,19 @@ val wp_lambda_wp :
   wpCtx : spec_env (extend a g) b ->
   wpFun : (a -> pure_wp b) ->
   fs_oexp (extend a g) b wpCtx ->
-  spec_env g (x:a -> PURE b (wpFun x))
+  spec_env g (eff_fun a b wpFun)
 
-let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (x:a -> PURE b (wpFun x))  =
-  let w : pure_wp' _ = fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
+let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (eff_fun a b wpFun) =
+  mk_pure_wp (fun (p:pure_post (eff_fun a b wpFun)) ->
     (forall (x: a) (p: pure_post b).
       wpFun x p ==>
       (wpCtx (fs_stack fsG x) (fun _ -> True) /\ (** Cezar: this is the only extra thing compared to the VC created by F* **)
       wpCtx (fs_stack fsG x) (fun res ->
         res == body (fs_stack fsG x) ==>
         pure_return _ res p))
-    //) /\ pure_return _ (fun x -> body (fs_stack fsG x)) p // Cezar: this is not accepted?
-    ) /\ p (fun x -> body (fs_stack fsG x))
-  in
-  assume (M.is_monotonic w);
-  mk_pure_wp w
+    ) /\
+    (forall (f: eff_fun a b wpFun).
+      f == (fun x -> body (fs_stack fsG x)) ==> p f))
 
 
 
@@ -230,9 +230,9 @@ val helper_lambda_wp :
   wpCtx : spec_env (extend a g) b ->
   wpFun : (a -> pure_wp b) ->
   body : fs_oexp (extend a g) b wpCtx ->
-  fs_oexp g (x:a -> PURE b (wpFun x)) (wp_lambda_wp wpCtx wpFun body)
+  fs_oexp g (eff_fun a b wpFun) (wp_lambda_wp wpCtx wpFun body)
 
-let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (x:a -> PURE b (wpFun x)) (wp_lambda_wp wpCtx wpFun body fsG) =
+let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (eff_fun a b wpFun) (wp_lambda_wp wpCtx wpFun body fsG) =
   fun x ->
     body (fs_stack fsG x)
 
