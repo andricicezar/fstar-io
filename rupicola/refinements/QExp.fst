@@ -376,7 +376,7 @@ let simplify_via_norm () : Tac unit =
       or_else 
         (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
         (fun () -> norm [delta; zeta_full]; trivial ()))
-    (fun () -> trefl ())
+    trefl
 
 
 let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> fs_hd (fs_tail fsG)) =
@@ -558,7 +558,7 @@ let squash_wp () : Tac unit =
   ) (fun () ->
     pointwise' (fun () ->
       norm [primops; iota; delta; zeta; simplify; unmeta; unascribe];
-      or_else trefl (fun () -> smt ())
+      or_else trefl smt
     );
     or_else (fun () ->
       let _ = forall_intro () in
@@ -568,46 +568,44 @@ let squash_wp () : Tac unit =
       let h2 = implies_intro () in
       rewrite h2;
       assumption ()
-    ) (fun () ->
-      smt ()
-    )
+    ) smt
   )
 
-let d_test_constant () : typing _ _ _ by (compute ()) =
+let d_test_constant () : typing _ _ _ =
   test_constant (synth_by_tactic squash_wp)
-let d_test_constant' () : typing _ _ _ by (compute ()) =
+let d_test_constant' () : typing _ _ _ =
   test_constant' (synth_by_tactic squash_wp)
-let d_test_identity () : typing _ _ _ by (compute ()) =
+let d_test_identity () : typing _ _ _ =
   test_identity (synth_by_tactic squash_wp)
-let d_test_thunked_id () : typing _ _ _ by (compute ()) =
+let d_test_thunked_id () : typing _ _ _ =
   test_thunked_id (synth_by_tactic squash_wp)
-let d_test_proj1 () : typing _ _ _ by (compute ()) =
+let d_test_proj1 () : typing _ _ _ =
   test_proj1 () (synth_by_tactic squash_wp)
-let d_test_proj2 () : typing _ _ _ by (compute ()) =
+let d_test_proj2 () : typing _ _ _ =
   test_proj2 () (synth_by_tactic squash_wp)
-let d_test_proj3 () : typing _ _ _ by (compute ()) =
+let d_test_proj3 () : typing _ _ _ =
   test_proj3 (synth_by_tactic squash_wp)
-let d_test_apply_top_level_def () : typing _ _ _ by (compute ()) =
+let d_test_apply_top_level_def () : typing _ _ _ =
   test_apply_top_level_def () (synth_by_tactic squash_wp)
-let d_test_apply_top_level_def' () : typing _ _ _ by (compute ()) =
+let d_test_apply_top_level_def' () : typing _ _ _ =
   test_apply_top_level_def' () (synth_by_tactic squash_wp)
-let d_test_papply__top_level_def () : typing _ _ _ by (compute ()) =
+let d_test_papply__top_level_def () : typing _ _ _ =
   test_papply__top_level_def () (synth_by_tactic squash_wp)
-let d_test_apply_arg () : typing _ _ _ by (compute ()) =
+let d_test_apply_arg () : typing _ _ _ =
   test_apply_arg (synth_by_tactic squash_wp)
-let d_test_apply_arg2 () : typing _ _ _ by (compute ()) =
+let d_test_apply_arg2 () : typing _ _ _ =
   test_apply_arg2 () (synth_by_tactic squash_wp)
-let d_test_papply_arg2 () : typing _ _ _ by (compute ()) =
+let d_test_papply_arg2 () : typing _ _ _ =
   test_papply_arg2 () (synth_by_tactic squash_wp)
-let d_test_anif () : typing _ _ _ by (compute ()) =
+let d_test_anif () : typing _ _ _ =
   test_anif (synth_by_tactic squash_wp)
-let d_test_negb () : typing _ _ _ by (compute ()) =
+let d_test_negb () : typing _ _ _ =
   test_negb (synth_by_tactic squash_wp)
-let d_test_negb_pred () : typing _ _ _ by (compute ()) =
+let d_test_negb_pred () : typing _ _ _ =
   test_negb_pred () (synth_by_tactic squash_wp)
-let d_test_if2 () : typing _ _ _ by (compute ()) =
+let d_test_if2 () : typing _ _ _ =
   test_if2 () (synth_by_tactic squash_wp)
-let d_test_callback_return () : typing _ _ _ by (compute ()) =
+let d_test_callback_return () : typing _ _ _ =
   test_callback_return () (synth_by_tactic squash_wp)
-let d_test_callback_return' () : typing _ _ _ by (compute ()) =
+let d_test_callback_return' () : typing _ _ _ =
   test_callback_return' () (synth_by_tactic squash_wp)
