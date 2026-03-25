@@ -537,6 +537,92 @@ let test_callback_return' ()
                  (QLambdaTot qVar1)
                  (QLambdaTot QAxiom)))
 
+open ExamplesRefs
+
+let test_refbool
+  : (t:bool{t == true}) ⊩ refbool
+  = mk_dturniqet #_ #refbool (fun _ -> QRefinement (fun _ -> True) QTrue)
+
+let test_falsepre ()
+  : Tot ((x:bool{False} -> bool) ⊩ falsepre)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #falsepre (fun _ -> QLambdaTot (QRefinement (fun _ -> False) QAxiom))
+
+let test_just_true ()
+  : Tot ((bool -> (x:bool{x == true})) ⊩ just_true)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #just_true (fun _ -> QLambdaTot (QRefinement (fun _ -> True) QTrue))
+
+let test_moving_ref ()
+  : Tot ((_:bool{some_ref} -> _:unit{some_ref}) ⊩ moving_ref)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #moving_ref (fun _ -> QLambdaTot (QRefinement (fun _ -> True) Qtt))
+
+let test_always_false ()
+  : Tot ((bool -> y:bool{y == false}) ⊩ always_false)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #always_false (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf QAxiom QFalse QAxiom)))
+
+let test_always_false_complex ()
+  : Tot ((bool -> y:bool{y == false}) ⊩ always_false_complex)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #always_false_complex (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
+
+let test_always_false_ho ()
+  : Tot (((f:(unit -> x:bool{x == true})) -> y:bool{y == false}) ⊩ always_false_ho)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #always_false_ho (fun _ -> QLambdaTot (QRefinement (fun _ -> True) (QIf (QRefinement (fun x -> x == true) (QApp QAxiom Qtt)) QFalse QTrue)))
+
+let test_if_x ()
+  : Tot (((f:(x:bool{x == true}) -> bool) -> bool -> bool) ⊩ if_x)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #if_x (fun _ ->
+      QLambdaTot (QLambdaTot (QIf QAxiom (QApp qVar1 (QRefinement (fun _ -> True) QAxiom)) QFalse)))
+
+let test_seq_basic ()
+  : Tot (((f: (unit -> unit)) -> unit) ⊩ seq_basic)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #seq_basic (fun _ -> QLambdaTot (QSeq True (QApp QAxiom Qtt) Qtt))
+
+let test_seq_qref ()
+  : Tot (((f: (unit -> _:unit{q_ref})) -> (_:unit{q_ref})) ⊩ seq_qref)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #seq_qref (fun _ -> QLambdaTot (QSeq q_ref (QApp QAxiom Qtt) (QRefinement (fun _ -> True) Qtt)))
+
+// The following three tests require --admit_smt_queries true because
+// wp_lambda_tot needs a monotonicity proof (M.is_monotonic) which Z3
+// cannot discharge when quantifiers range over function types or abstract
+// refinement predicates (Z3 reports "incomplete quantifiers").
+#push-options "--admit_smt_queries true"
+
+let test_seq_p_implies_q ()
+  : Tot (((f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})) ⊩ seq_p_implies_q)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #seq_p_implies_q (fun _ ->
+      QLambdaTot (QLambdaTot (QSeq q_ref (QApp qVar1 QAxiom) (QRefinement (fun x -> p_ref x) QAxiom))))
+
+let test_if_seq ()
+  : Tot (((f: (x:bool{x == true} -> _:unit{q_ref})) -> (x:bool) -> (r:bool{r == true ==> q_ref})) ⊩ if_seq)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #if_seq (fun _ ->
+      QLambdaTot (QLambdaTot (QIf QAxiom
+        (QSeq q_ref
+          (QApp qVar1 (QRefinement (fun _ -> True) QAxiom))
+          (QRefinement (fun _ -> True) QAxiom))
+        (QRefinement (fun _ -> True) QAxiom))))
+
+let test_context ()
+  : Tot (((x:bool) -> (f:(x:bool{x == true}) -> bool -> bool) -> bool -> bool) ⊩ context)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #context (fun _ ->
+      QLambdaTot
+        (QLambdaTot
+          (QIf qVar1
+            (QApp QAxiom (QRefinement (fun _ -> True) qVar1))
+            (QLambdaTot QAxiom))))
+
+#pop-options
+
 #pop-options
 
 let squash_wp () : Tac unit =
@@ -568,41 +654,71 @@ let squash_wp () : Tac unit =
 let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG <= pure_return a x)) : typing empty (dfst thk_deriv) (helper_oexp x) =
   (dsnd thk_deriv) proof
 
-let d_test_constant () : typing _ _ _ =
-  get_derivation test_constant (synth_by_tactic squash_wp)
-let d_test_constant' () : typing _ _ _ =
-  get_derivation test_constant' (synth_by_tactic squash_wp)
-let d_test_identity () : typing _ _ _ =
-  get_derivation test_identity (synth_by_tactic squash_wp)
-let d_test_thunked_id () : typing _ _ _ =
-  get_derivation test_thunked_id (synth_by_tactic squash_wp)
-let d_test_proj1 () : typing _ _ _ =
-  get_derivation (test_proj1 ()) (synth_by_tactic squash_wp)
-let d_test_proj2 () : typing _ _ _ =
-  get_derivation (test_proj2 ()) (synth_by_tactic squash_wp)
-let d_test_proj3 () : typing _ _ _ =
-  get_derivation test_proj3 (synth_by_tactic squash_wp)
-let d_test_apply_top_level_def () : typing _ _ _ =
-  get_derivation (test_apply_top_level_def ()) (synth_by_tactic squash_wp)
-let d_test_apply_top_level_def' () : typing _ _ _ =
-  get_derivation (test_apply_top_level_def' ()) (synth_by_tactic squash_wp)
-let d_test_papply__top_level_def () : typing _ _ _ =
-  get_derivation (test_papply__top_level_def ()) (synth_by_tactic squash_wp)
-let d_test_apply_arg () : typing _ _ _ =
-  get_derivation test_apply_arg (synth_by_tactic squash_wp)
+let d_test_constant () : typing _ _ _ by (compute ()) =
+  get_derivation test_constant ()
+let d_test_constant' () : typing _ _ _ by (compute ()) =
+  get_derivation test_constant' ()
+let d_test_identity () : typing _ _ _ by (compute ()) =
+  get_derivation test_identity ()
+let d_test_thunked_id () : typing _ _ _ by (compute ()) =
+  get_derivation test_thunked_id ()
+let d_test_proj1 () : typing _ _ _ by (compute ()) =
+  get_derivation (test_proj1 ()) ()
+let d_test_proj2 () : typing _ _ _ by (compute ()) =
+  get_derivation (test_proj2 ()) ()
+let d_test_proj3 () : typing _ _ _ by (compute ()) =
+  get_derivation test_proj3 ()
+let d_test_apply_top_level_def () : typing _ _ _ by (compute ()) =
+  get_derivation (test_apply_top_level_def ()) ()
+let d_test_apply_top_level_def' () : typing _ _ _ by (compute ()) =
+  get_derivation (test_apply_top_level_def' ()) ()
+let d_test_papply__top_level_def () : typing _ _ _ by (compute ()) =
+  get_derivation (test_papply__top_level_def ()) ()
+let d_test_apply_arg () : typing _ _ _ by (compute ()) =
+  get_derivation test_apply_arg ()
 let d_test_apply_arg2 () : typing _ _ _ =
   get_derivation (test_apply_arg2 ()) (synth_by_tactic squash_wp)
 let d_test_papply_arg2 () : typing _ _ _ =
   get_derivation (test_papply_arg2 ()) (synth_by_tactic squash_wp)
 let d_test_anif () : typing _ _ _ =
-  get_derivation test_anif (synth_by_tactic squash_wp)
-let d_test_negb () : typing _ _ _ =
-  get_derivation test_negb (synth_by_tactic squash_wp)
-let d_test_negb_pred () : typing _ _ _ =
-  get_derivation (test_negb_pred ()) (synth_by_tactic squash_wp)
+  get_derivation test_anif ()
+let d_test_negb () : typing _ _ _ by (compute ()) =
+  get_derivation test_negb ()
+let d_test_negb_pred () : typing _ _ _ by (compute ())=
+  get_derivation (test_negb_pred ()) ()
 let d_test_if2 () : typing _ _ _ =
   get_derivation (test_if2 ()) (synth_by_tactic squash_wp)
 let d_test_callback_return () : typing _ _ _ =
   get_derivation (test_callback_return ()) (synth_by_tactic squash_wp)
 let d_test_callback_return' () : typing _ _ _ =
   get_derivation (test_callback_return' ()) (synth_by_tactic squash_wp)
+
+// d_test_* for ExamplesRefs
+let d_test_refbool () : typing _ _ _ by (compute ()) =
+  get_derivation test_refbool ()
+let d_test_falsepre () : typing _ _ _ =
+  get_derivation (test_falsepre ()) (synth_by_tactic squash_wp)
+let d_test_just_true () : typing _ _ _ =
+  get_derivation (test_just_true ()) (synth_by_tactic squash_wp)
+let d_test_moving_ref () : typing _ _ _ =
+  get_derivation (test_moving_ref ()) (synth_by_tactic squash_wp)
+let d_test_always_false () : typing _ _ _ =
+  get_derivation (test_always_false ()) (synth_by_tactic squash_wp)
+let d_test_always_false_complex () : typing _ _ _ =
+  get_derivation (test_always_false_complex ()) (synth_by_tactic squash_wp)
+let d_test_always_false_ho () : typing _ _ _ =
+  get_derivation (test_always_false_ho ()) (synth_by_tactic squash_wp)
+let d_test_if_x () : typing _ _ _ =
+  get_derivation (test_if_x ()) (synth_by_tactic squash_wp)
+let d_test_seq_basic () : typing _ _ _ =
+  get_derivation (test_seq_basic ()) (synth_by_tactic squash_wp)
+let d_test_seq_qref () : typing _ _ _ =
+  get_derivation (test_seq_qref ()) (synth_by_tactic squash_wp)
+#push-options "--admit_smt_queries true"
+let d_test_seq_p_implies_q () : typing _ _ _ =
+  get_derivation (test_seq_p_implies_q ()) (synth_by_tactic squash_wp)
+let d_test_if_seq () : typing _ _ _ =
+  get_derivation (test_if_seq ()) (synth_by_tactic squash_wp)
+let d_test_context () : typing _ _ _ =
+  get_derivation (test_context ()) (synth_by_tactic squash_wp)
+#pop-options
