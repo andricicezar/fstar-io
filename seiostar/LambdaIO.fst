@@ -14,6 +14,7 @@ type typ =
   | TArr   : typ -> typ -> typ
   | TPair  : typ -> typ -> typ
   | TSum   : typ -> typ -> typ
+  | TNat   : typ
 
 let var = nat
 type exp =
@@ -34,6 +35,9 @@ type exp =
   | EString : s:string -> exp
   | EStringEq : exp -> exp -> exp
   | ECall  : io_ops -> exp -> exp
+  | EZero  : exp
+  | ESucc  : exp -> exp
+  | ENRec  : exp -> exp -> exp -> exp
 
 (* Parallel substitution operation `subst` *)
 let sub (renaming:bool) =
@@ -73,6 +77,9 @@ let rec subst (#r:bool)
     | EFileDescr i -> EFileDescr i
     | EString s' -> EString s'
     | EStringEq e1 e2 -> EStringEq (subst s e1) (subst s e2)
+    | EZero -> EZero
+    | ESucc e' -> ESucc (subst s e')
+    | ENRec e1 e2 e3 -> ENRec (subst s e1) (subst s e2) (subst s e3)
 
 and sub_elam (#r:bool) (s:sub r)
   : Tot (sub r)
@@ -110,12 +117,14 @@ let rec equiv_subs_implies_equiv_substs #b #b' (f:sub b) (g:sub b') (e:exp) : Le
   | EFalse
   | EVar _
   | EFileDescr _
-  | EString _ -> ()
+  | EString _
+  | EZero -> ()
   | ELam e1 -> equiv_subs_implies_equiv_substs (sub_elam f) (sub_elam g) e1
   | EFst e1
   | ESnd e1
   | EInl e1
   | EInr e1
+  | ESucc e1
   | ECall _ e1 -> equiv_subs_implies_equiv_substs f g e1
   | EStringEq e1 e2
   | EApp e1 e2
@@ -124,6 +133,11 @@ let rec equiv_subs_implies_equiv_substs #b #b' (f:sub b) (g:sub b') (e:exp) : Le
     equiv_subs_implies_equiv_substs f g e2
     end
   | EIf e1 e2 e3 -> begin
+    equiv_subs_implies_equiv_substs f g e1;
+    equiv_subs_implies_equiv_substs f g e2;
+    equiv_subs_implies_equiv_substs f g e3
+    end
+  | ENRec e1 e2 e3 -> begin
     equiv_subs_implies_equiv_substs f g e1;
     equiv_subs_implies_equiv_substs f g e2;
     equiv_subs_implies_equiv_substs f g e3
@@ -142,18 +156,21 @@ let rec free_vars_indx (e:exp) (n:nat) : list var = // n is the number of binder
   | ETrue
   | EFalse
   | EFileDescr _
-  | EString _ -> []
+  | EString _
+  | EZero -> []
   | EVar i -> if i < n then [] else [i-n]
   | EFst e'
   | ESnd e'
   | EInl e'
   | EInr e'
+  | ESucc e'
   | ECall _ e' -> free_vars_indx e' n
   | EPair e1 e2
   | EStringEq e1 e2
   | EApp e1 e2 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n
   | ELam e' -> free_vars_indx e' (n+1)
   | EIf e1 e2 e3 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n `L.append` free_vars_indx e3 n
+  | ENRec e1 e2 e3 -> free_vars_indx e1 n `L.append` free_vars_indx e2 n `L.append` free_vars_indx e3 n
   | ECase e1 e2 e3 -> free_vars_indx e1 n `L.append` free_vars_indx e2 (n+1) `L.append` free_vars_indx e3 (n+1)
 
 let free_vars e = free_vars_indx e 0
@@ -172,6 +189,8 @@ let rec is_value (e:exp) : Type0 =
   | EPair e1 e2 -> is_value e1 /\ is_value e2
   | EInl e'
   | EInr e' -> is_value e'
+  | EZero -> True
+  | ESucc e' -> is_value e'
   | _ -> False
 
 let rec lem_value_is_closed (e:exp) : Lemma
@@ -181,7 +200,8 @@ let rec lem_value_is_closed (e:exp) : Lemma
   match e with
   | EPair e1 e2 -> lem_value_is_closed e1; lem_value_is_closed e2
   | EInl e'
-  | EInr e' -> lem_value_is_closed e'
+  | EInr e'
+  | ESucc e' -> lem_value_is_closed e'
   | _ -> ()
 
 type value = e:exp{is_value e}
@@ -207,6 +227,7 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
   | ESnd e
   | EInl e
   | EInr e
+  | ESucc e
   | ECall _ e ->
     lem_shifting_preserves_closed s e n
   | EApp e1 e2
@@ -215,6 +236,10 @@ let rec lem_shifting_preserves_closed (s:sub true) (e:exp) (n:nat) :
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n
   | EIf e1 e2 e3 ->
+    lem_shifting_preserves_closed s e1 n;
+    lem_shifting_preserves_closed s e2 n;
+    lem_shifting_preserves_closed s e3 n
+  | ENRec e1 e2 e3 ->
     lem_shifting_preserves_closed s e1 n;
     lem_shifting_preserves_closed s e2 n;
     lem_shifting_preserves_closed s e3 n
@@ -291,10 +316,17 @@ let rec lem_subst_freevars_closes_exp
     lem_subst_freevars_closes_exp s e1 n;
     lem_subst_freevars_closes_exp s e2 n;
     lem_subst_freevars_closes_exp s e3 n
+  | ENRec e1 e2 e3 ->
+    lemma_memP_append (free_vars_indx e1 n) (free_vars_indx e2 n);
+    lemma_memP_append (free_vars_indx e1 n `L.append` free_vars_indx e2 n) (free_vars_indx e3 n);
+    lem_subst_freevars_closes_exp s e1 n;
+    lem_subst_freevars_closes_exp s e2 n;
+    lem_subst_freevars_closes_exp s e3 n
   | EFst e'
   | ESnd e'
   | EInl e'
   | EInr e'
+  | ESucc e'
   | ECall _ e' ->
     lem_subst_freevars_closes_exp s e' n
   | ECase e1 e2 e3 ->
@@ -318,10 +350,10 @@ let rec lem_free_vars_next_binder (e:exp) (n:nat) :
     (ensures (forall x. x `L.memP` free_vars_indx e n ==> x == 0))
     (decreases e) =
   match e with
-  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ -> ()
+  | EUnit | ETrue | EFalse | EFileDescr _ | EString _ | EZero -> ()
   | EVar _ -> ()
   | ELam e' -> lem_free_vars_next_binder e' (n+1)
-  | EFst e' | ESnd e' | EInl e' | EInr e' | ECall _ e' ->
+  | EFst e' | ESnd e' | EInl e' | EInr e' | ESucc e' | ECall _ e' ->
     lem_free_vars_next_binder e' n
   | EApp e1 e2 | EPair e1 e2 | EStringEq e1 e2 ->
     append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
@@ -331,6 +363,16 @@ let rec lem_free_vars_next_binder (e:exp) (n:nat) :
     with introduce _ ==> _ with _.
       L.append_memP (free_vars_indx e1 n) (free_vars_indx e2 n) x
   | EIf e1 e2 e3 ->
+    append_eq_nil (free_vars_indx e1 (n+1) `L.append` free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
+    append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
+    lem_free_vars_next_binder e1 n;
+    lem_free_vars_next_binder e2 n;
+    lem_free_vars_next_binder e3 n;
+    introduce forall x. x `L.memP` free_vars_indx e n ==> x == 0
+    with introduce _ ==> _ with _.
+      (L.append_memP (free_vars_indx e1 n `L.append` free_vars_indx e2 n) (free_vars_indx e3 n) x;
+       L.append_memP (free_vars_indx e1 n) (free_vars_indx e2 n) x)
+  | ENRec e1 e2 e3 ->
     append_eq_nil (free_vars_indx e1 (n+1) `L.append` free_vars_indx e2 (n+1)) (free_vars_indx e3 (n+1));
     append_eq_nil (free_vars_indx e1 (n+1)) (free_vars_indx e2 (n+1));
     lem_free_vars_next_binder e1 n;
@@ -566,6 +608,33 @@ type step : closed_exp -> closed_exp -> (h:history) -> option (event_h h) -> Typ
     s2:string ->
     h:history ->
     step (EStringEq (EString s1) (EString s2)) (if s1 = s2 then ETrue else EFalse) h None
+  | SSucc :
+    #e:closed_exp ->
+    #e':closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    step e e' h oev ->
+    step (ESucc e) (ESucc e') h oev
+  | SNRecV :
+    #e1:closed_exp ->
+    #e1':closed_exp ->
+    e2:closed_exp ->
+    e3:closed_exp ->
+    #h:history ->
+    #oev:option (event_h h) ->
+    step e1 e1' h oev ->
+    step (ENRec e1 e2 e3) (ENRec e1' e2 e3) h oev
+  | SNRec0 :
+    e2:closed_exp ->
+    e3:closed_exp ->
+    h:history ->
+    step (ENRec EZero e2 e3) e2 h None
+  | SNRecIter :
+    v:closed_exp{is_value v} ->
+    e2:closed_exp ->
+    e3:closed_exp ->
+    h:history ->
+    step (ENRec (ESucc v) e2 e3) (ENRec v (EApp e3 e2) e3) h None
 
 let can_step (e:closed_exp) : Type0 =
   exists (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev
@@ -612,6 +681,16 @@ let rec lem_value_is_irred (e:closed_exp) : Lemma
         FStar.Squash.bind_squash #(step e e' h oev) () (fun st ->
         match st with
         | SInr hst -> ()
+        | _ -> ())
+      end
+    end
+  | ESucc e12 ->
+    lem_value_is_irred e12;
+    introduce forall (e':closed_exp) (h:history) (oev:option (event_h h)). step e e' h oev ==> False with begin
+      introduce step e e' h oev ==> False with _. begin
+        FStar.Squash.bind_squash #(step e e' h oev) () (fun st ->
+        match st with
+        | SSucc hst -> ()
         | _ -> ())
       end
     end
@@ -726,6 +805,7 @@ let sem_value_shape (t:typ) (e:closed_exp) : Tot Type0 =
   | TArr t1 t2 -> ELam? e /\ is_closed e
   | TPair t1 t2 -> EPair? e /\ is_value (get_epair_e1 e) /\ is_value (get_epair_e2 e)
   | TSum t1 t2 -> (EInl? e /\ is_value (get_einl_v e)) \/ (EInr? e /\ is_value (get_einr_v e))
+  | TNat -> EZero? e \/ ESucc? e
 
 let indexed_sem_expr_shape (t:typ) (e:closed_exp) (h:history) : Tot Type0 =
   forall (e':closed_exp) (lt:local_trace h). steps e e' h lt /\ indexed_irred e' (h++lt) ==> sem_value_shape t e'
@@ -752,3 +832,11 @@ let lem_step_preserve_indexed_sem_expr_shape (e e':closed_exp) (h:history) (oev:
       trans_history h (as_lt oev) lt'
     end
   end
+
+let rec nat_to_exp (n:nat) : closed_exp =
+  if n = 0 then EZero else ESucc (nat_to_exp (n-1))
+
+let rec lem_nat_to_exp_is_value (n:nat) : Lemma (is_value (nat_to_exp n)) [SMTPat (is_value (nat_to_exp n))] =
+  if n = 0 then () else lem_nat_to_exp_is_value (n-1)
+
+let lem_nat_to_exp_succ (n:nat) : Lemma (nat_to_exp (n+1) == ESucc (nat_to_exp n)) = ()

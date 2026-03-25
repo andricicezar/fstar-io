@@ -2,6 +2,7 @@ module LambdaIO.DestructLemmas
 
 open FStar.Squash
 open LambdaIO
+open LogRel.Semantics
 
 // DESTRUCT LEMMAS
 
@@ -186,6 +187,7 @@ let can_step_eif_when_safe (e1 e2 e3:closed_exp) (h:history) : Lemma
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_eif
   (e1:closed_exp)
   (e2:closed_exp)
@@ -241,6 +243,7 @@ let rec destruct_steps_eif
         (e1, (| [], lt |))
         end
       end
+#pop-options
 
   (**
     How the steps look like:
@@ -265,6 +268,7 @@ let lem_irred_epair_implies_irred_e2 (e1':closed_exp{is_value e1'}) (e2:closed_e
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_epair_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -276,6 +280,7 @@ let rec destruct_steps_epair_e1
     (requires indexed_irred e' (h++lt) /\
       indexed_safe e1 h)
     (ensures fun (e1', (| lt1, lt' |)) ->
+      is_closed e1' /\
       steps e1 e1' h lt1 /\
       steps (EPair e1 e2) (EPair e1' e2) h lt1 /\
       steps (EPair e1' e2) e' (h++lt1) lt' /\
@@ -286,6 +291,7 @@ let rec destruct_steps_epair_e1
   | SRefl (EPair e1 e2) h -> begin
     lem_irred_epair_implies_irred_e1 e1 e2 h;
     assert (steps e1 e1 h []);
+    lem_value_is_closed e1;
     (e1, (| [], lt |))
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_epair step_epair_steps -> begin
@@ -305,8 +311,13 @@ let rec destruct_steps_epair_e1
       lem_steps_transitive (EPair e1 e2) (EPair e1' e2) (EPair e1'' e2) h lt1 lt1';
       (e1'', (| (lt1 @ lt1'), lt' |))
       end
-    | _ -> (e1, (| [], lt |))
+    | PairRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
+      let _ = step_e2 in
+      lem_value_is_closed e1;
+      (e1, (| [], lt |))
+      end
     end
+#pop-options
 
 let rec destruct_steps_epair_e2
   (e1':closed_exp{is_value e1'})
@@ -395,6 +406,7 @@ let lem_irred_estringeq_implies_irred_e2 (e1':closed_exp{EString? e1'}) (e2:clos
     end
   end
 
+#push-options "--split_queries always"
 let rec destruct_steps_estringeq_e1
   (e1:closed_exp)
   (e2:closed_exp)
@@ -406,6 +418,7 @@ let rec destruct_steps_estringeq_e1
     (requires indexed_irred e' (h++lt) /\
       indexed_safe e1 h)
     (ensures fun (e1', (| lt1, lt' |)) ->
+      is_closed e1' /\
       steps e1 e1' h lt1 /\
       steps (EStringEq e1 e2) (EStringEq e1' e2) h lt1 /\
       steps (EStringEq e1' e2) e' (h++lt1) lt' /\
@@ -416,6 +429,7 @@ let rec destruct_steps_estringeq_e1
   | SRefl (EStringEq e1 e2) h -> begin
     lem_irred_estringeq_implies_irred_e1 e1 e2 h;
     assert (steps e1 e1 h []);
+    lem_value_is_closed e1;
     (e1, (| [], lt |))
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_estringeq step_estringeq_steps -> begin
@@ -435,8 +449,17 @@ let rec destruct_steps_estringeq_e1
       lem_steps_transitive (EStringEq e1 e2) (EStringEq e1' e2) (EStringEq e1'' e2) h lt1 lt1';
       (e1'', (| (lt1 @ lt1'), lt' |))
       end
-    | _ -> (e1, (| [], lt |))
+    | StringEqRight e1 #e2 #e2' #h #oev2 step_e2 -> begin
+      let _ = step_e2 in
+      lem_value_is_closed e1;
+      (e1, (| [], lt |))
+      end
+    | StringEqReturn _ _ _ -> begin
+      lem_value_is_closed e1;
+      (e1, (| [], lt |))
+      end
     end
+#pop-options
 
 let rec destruct_steps_estringeq_e2
   (e1':closed_exp{EString? e1'})
@@ -449,6 +472,7 @@ let rec destruct_steps_estringeq_e2
     (requires indexed_irred e' (h++lt) /\
       indexed_safe e2 h)
     (ensures fun (e2', (| lt2, lt' |)) ->
+      is_closed e2' /\
       steps e2 e2' h lt2 /\
       steps (EStringEq e1' e2) (EStringEq e1' e2') h lt2 /\
       steps (EStringEq e1' e2') e' (h++lt2) lt' /\
@@ -459,6 +483,7 @@ let rec destruct_steps_estringeq_e2
   | SRefl (EStringEq e1' e2) h -> begin
     lem_irred_estringeq_implies_irred_e2 e1' e2 h;
     assert (steps e2 e2 h []);
+    lem_value_is_closed e2;
     (e2, (| [], lt |))
     end
   | STrans #e #f2 #e' #h #_ #lt23 step_estringeq step_estringeq_steps -> begin
@@ -480,9 +505,11 @@ let rec destruct_steps_estringeq_e2
       end
     | StringEqLeft _ _ -> begin
       lem_value_is_irred e1';
+      lem_value_is_closed e2;
       (e2, (| [], lt |))
       end
     | StringEqReturn _ _ _ -> begin
+      lem_value_is_closed e2;
       (e2, (| [], lt |))
       end
     end
@@ -852,6 +879,122 @@ let lem_destruct_steps_einr
     | STrans #e #f2 #e' #h #_ #lt23 step_einr step_einr_steps -> false_elim ()
     )
   end
+
+let srefl_esucc_implies_value (e12:closed_exp) (h:history) : Lemma
+  (requires indexed_safe e12 h /\ indexed_irred (ESucc e12) h)
+  (ensures is_value (ESucc e12)) =
+  introduce indexed_irred e12 h ==> is_value (ESucc e12) with _. begin
+    assert (steps e12 e12 h []);
+    ()
+  end;
+  introduce ~(indexed_irred e12 h) ==> is_value (ESucc e12) with _. begin
+    assert (exists e12' oev12. step e12 e12' h oev12);
+    eliminate exists e12' oev12. step e12 e12' h oev12 returns exists e' oev. step (ESucc e12) e' h oev with st. begin
+      bind_squash st (fun st -> return_squash (SSucc st))
+    end;
+    false_elim ()
+  end
+
+let rec destruct_steps_esucc
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps (ESucc e12) e' h lt) :
+  Pure (value * (lt12:local_trace h & local_trace (h++lt12)))
+    (requires indexed_irred e' (h++lt) /\ indexed_safe e12 h)
+    (ensures fun (e12', (| lt12, lt_f |)) ->
+      indexed_irred e12' (h++lt12) /\
+      steps e12 e12' h lt12 /\
+      steps (ESucc e12) (ESucc e12') h lt12 /\
+      is_closed (ESucc e12') /\
+      steps (ESucc e12') e' (h++lt12) lt_f /\
+      lt == (lt12 @ lt_f) /\
+      (indexed_irred e12 h ==> (lt12 == [] /\ e12 == e12')))
+    (decreases st)
+  = match st with
+    | SRefl (ESucc e12) h -> begin
+      srefl_esucc_implies_value e12 h;
+      lem_value_is_irred e12;
+      (e12, (| [], [] |))
+      end
+    | STrans #e #f2 #e' #h #_ #lt23 step_esucc step_esucc_steps -> begin
+      let (ESucc e12) = e in
+      let SSucc #e12 #e12' #h #oev12 step_e12 = step_esucc in
+      let (ESucc e12') = f2 in
+      lem_step_implies_steps e12 e12' h oev12;
+      lem_step_implies_steps (ESucc e12) (ESucc e12') h oev12;
+      let lt12 : local_trace h = as_lt oev12 in
+      lem_step_preserve_indexed_safe e12 e12' h oev12;
+      let s2 : steps (ESucc e12') e' (h++lt12) lt23 = step_esucc_steps in
+      trans_history h lt12 lt23;
+      let (e12'', (| lt12', lt_f |)) = destruct_steps_esucc e12' e' (h++lt12) lt23 s2 in
+      trans_history h lt12 lt12';
+      lem_steps_transitive e12 e12' e12'' h lt12 lt12';
+      lem_steps_transitive (ESucc e12) (ESucc e12') (ESucc e12'') h lt12 lt12';
+      (e12'', (| (lt12 @ lt12'), lt_f |))
+      end
+
+let lem_destruct_steps_esucc
+  (e12:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h) :
+  Lemma (requires steps (ESucc e12) e' h lt /\
+                  indexed_irred e12 h /\
+                  indexed_irred (ESucc e12) h)
+        (ensures (ESucc e12 == e') /\ lt == []) =
+  introduce steps (ESucc e12) e' h lt ==> ((ESucc e12 == e') /\ lt == []) with _. begin
+    FStar.Squash.bind_squash #(steps (ESucc e12) e' h lt) () (fun sts ->
+    match sts with
+    | SRefl (ESucc e12) h -> ()
+    | STrans #e #f2 #e' #h #_ #lt23 step_esucc _ -> false_elim ()
+    )
+  end
+
+// If ENRec EZero e_b e_f takes steps to irreducible e', then so does e_b.
+let destruct_ebeh_enrec_zero (e_b:closed_exp) (e_f:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h) :
+  Lemma (requires e_beh (ENRec EZero e_b e_f) e' h lt)
+        (ensures e_beh e_b e' h lt) =
+  FStar.Squash.bind_squash #(steps (ENRec EZero e_b e_f) e' h lt) #(e_beh e_b e' h lt) () (fun sts_c ->
+    match sts_c with
+    | SRefl _ _ ->
+      // e' = ENRec EZero e_b e_f, but SNRec0 gives a step — contradicts indexed_irred in context
+      let _ : step (ENRec EZero e_b e_f) e_b h None = SNRec0 e_b e_f h in
+      false_elim ()
+    | STrans #_ #_ #_ #_ #oev #lt23 step1 rest ->
+      match step1 with
+      | SNRec0 _ _ _ ->
+        // oev = None, lt = []@lt23 = lt23, rest : steps e_b e' h lt
+        // indexed_irred e' (h++lt) is in context from requires
+        ()
+      | SNRecV _ _ _ ->
+        // EZero is a value and cannot step
+        lem_value_is_irred EZero;
+        false_elim ()
+  )
+
+// If ENRec (ESucc v) e_b e_f (v a value) steps to irreducible e', then so does ENRec v (EApp e_f e_b) e_f.
+let destruct_ebeh_enrec_succ (v:closed_exp{is_value v}) (e_b:closed_exp) (e_f:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h) :
+  Lemma (requires e_beh (ENRec (ESucc v) e_b e_f) e' h lt)
+        (ensures e_beh (ENRec v (EApp e_f e_b) e_f) e' h lt) =
+  FStar.Squash.bind_squash #(steps (ENRec (ESucc v) e_b e_f) e' h lt) #(e_beh (ENRec v (EApp e_f e_b) e_f) e' h lt) () (fun sts_c ->
+    match sts_c with
+    | SRefl _ _ ->
+      // SNRecIter applies (since v is a value) — contradicts indexed_irred in context
+      let _ : step (ENRec (ESucc v) e_b e_f) (ENRec v (EApp e_f e_b) e_f) h None = SNRecIter v e_b e_f h in
+      false_elim ()
+    | STrans #_ #_ #_ #_ #oev #lt23 step1 rest ->
+      match step1 with
+      | SNRecIter _ _ _ _ ->
+        // oev = None, lt = lt23, rest : steps (ENRec v (EApp e_f e_b) e_f) e' h lt
+        // indexed_irred e' (h++lt) is in context from requires
+        ()
+      | SNRecV _ _ _ ->
+        // ESucc v is a value and cannot step
+        lem_value_is_irred (ESucc v);
+        false_elim ()
+  )
 
 let can_step_ecase_when_safe (e_case:closed_exp) (e_lc:exp{is_closed (ELam e_lc)}) (e_rc:exp{is_closed (ELam e_rc)}) (h:history) (t1 t2:typ) : Lemma
   (requires indexed_sem_expr_shape (TSum t1 t2) e_case h)
