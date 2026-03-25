@@ -363,8 +363,12 @@ type typing_debug #a (wp:spec_env empty a) (x:a) =
 let (⊢) (#a:Type)(g:env) (#wp:spec_env g a) (x:fs_oexp g a wp) =
   typing g wp x
 
-let (⊩) (a:Type) (#wp:spec_env empty a) (x:a) =
-  proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof)
+let (⊩) (a:Type) (x:a) =
+  wp:spec_env empty a & (proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))
+
+let mk_dturniqet #a #x (#wp:spec_env empty a) (thk_dv:(proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))) : a ⊩ x =
+  (| _, thk_dv |)
+
 
 let simplify_stack_ops () : Tac unit =
    l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
@@ -374,7 +378,7 @@ let simplify_via_norm () : Tac unit =
   or_else 
     (fun () -> 
       or_else 
-        (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
+        (fun () -> norm [delta_only [`%helper_oexp;`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
         (fun () -> norm [delta; zeta_full]; trivial ()))
     trefl
 
@@ -391,15 +395,15 @@ open Examples
 
 let test_ut_unit ()
   : unit ⊩ ut_unit
-  = fun _ -> Qtt
+  = mk_dturniqet (fun _ -> Qtt)
 
 let test_ut_true
   : bool ⊩ ut_true
-  = fun _ -> QTrue
+  = mk_dturniqet (fun _ -> QTrue)
 
 let test_ut_false
   : bool ⊩ ut_false
-  = fun _ -> QFalse
+  = mk_dturniqet (fun _ -> QFalse)
 
 // val var0 : fs_oexp (extend bool empty) bool 
 // let var0 fsG = fun _ -> hd fsG
@@ -424,33 +428,33 @@ let test_ut_false
 
 let test_constant
   : ((bool -> bool) ⊩ constant)
-  = fun _ -> QLambdaTot QTrue
+  = mk_dturniqet (fun _ -> QLambdaTot QTrue)
 
 let test_constant'
   : ((bool -> bool) ⊩ constant)
-  = fun _ -> QLambdaTot (QWeaken QTrue)
+  = mk_dturniqet (fun _ -> QLambdaTot (QWeaken QTrue))
 
 let test_identity
   : (bool -> bool) ⊩ identity
-  = fun _ -> QLambdaTot QAxiom
+  = mk_dturniqet (fun _ -> QLambdaTot QAxiom)
 
 let test_thunked_id
   : (bool -> (bool -> bool)) ⊩ thunked_id
-  = fun _ -> QLambdaTot (QLambdaTot QAxiom)
+  = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot QAxiom))
 
 let test_proj1 ()
   : Tot ((bool -> bool -> bool -> bool) ⊩ proj1)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar2))
+  = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar2)))
 
 let test_proj2 ()
   : Tot ((bool -> bool -> bool -> bool) ⊩ proj2)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar1))
+  = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot (QLambdaTot qVar1)))
 
 let test_proj3
   : (bool -> bool -> bool -> bool) ⊩ proj3
-  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom))
+  = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom)))
 
 #push-options "--print_implicits --print_universes"
 
@@ -466,82 +470,86 @@ let _ = assert (t == t1) by (
 
 // TODO: why is `Pervasives.norm []` needed here?
 let test_apply_top_level_def ()
-  : Tot ((bool -> bool) ⊩ Pervasives.norm [] apply_top_level_def)
-  by (norm [delta_only [`%apply_top_level_def]; zeta; iota]; 
-      dump "H";
-      simplify_via_norm ())
-  = fun _ -> QLambdaTot (QApp
+  : Tot ((bool -> bool) ⊩ apply_top_level_def)
+  by (simplify_via_norm ())
+  = mk_dturniqet #_ #(Pervasives.norm [] apply_top_level_def) (
+      fun _ -> QLambdaTot (QApp
               (QApp
                 (QLambdaTot (QLambdaTot QAxiom))
                 QAxiom)
-              QTrue)
+              QTrue))
 
 let test_apply_top_level_def' ()
-  : Tot ((bool -> bool -> bool) ⊩ Pervasives.norm [] apply_top_level_def')
+  : Tot ((bool -> bool -> bool) ⊩ apply_top_level_def')
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QLambdaTot (QApp
+  = mk_dturniqet #_ #(Pervasives.norm [] apply_top_level_def') (
+      fun _ -> QLambdaTot (QLambdaTot (QApp
                        (QApp
                           (QLambdaTot (QLambdaTot QAxiom))
                           qVar1)
-                       QAxiom))
+                       QAxiom)))
 
 let test_papply__top_level_def ()
-  : Tot ((bool -> bool -> bool) ⊩ Pervasives.norm [] papply__top_level_def)
+  : Tot ((bool -> bool -> bool) ⊩ papply__top_level_def)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QApp
+  = mk_dturniqet #_ #(Pervasives.norm [] papply__top_level_def) (
+      fun _ -> QLambdaTot (QApp
               (QLambdaTot (QLambdaTot QAxiom))
-              QAxiom)
+              QAxiom))
 
 let test_apply_arg
   : ((unit -> unit) -> unit) ⊩ apply_arg
-  = fun _ -> QLambdaTot (QApp QAxiom Qtt)
+  = mk_dturniqet (fun _ -> QLambdaTot (QApp QAxiom Qtt))
 
 let test_apply_arg2 ()
   : Tot (((bool -> bool -> bool) -> bool) ⊩ apply_arg2)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QApp (QApp QAxiom QTrue) QFalse)
+  = mk_dturniqet (fun _ -> QLambdaTot (QApp (QApp QAxiom QTrue) QFalse))
 
 let test_papply_arg2 ()
   : Tot (((bool -> bool -> bool) -> bool -> bool) ⊩ papply_arg2)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QApp QAxiom QTrue)
+  = mk_dturniqet (fun _ -> QLambdaTot (QApp QAxiom QTrue))
 
 [@expect_failure]
 let test_proj2'
   : (bool -> bool -> bool -> bool) ⊩ proj2
-  = fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom))
+  = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom)))
 
 let test_anif
   : bool ⊩ anif
-  = fun _ -> QIf QTrue QFalse QTrue
+  = mk_dturniqet (fun _ -> QIf QTrue QFalse QTrue)
 
 let test_negb
   : (bool -> bool) ⊩ negb
-  = fun _ -> QLambdaTot (QIf QAxiom QFalse QTrue)
+  = mk_dturniqet (fun _ -> QLambdaTot (QIf QAxiom QFalse QTrue))
 
 let test_negb_pred ()
-  : Tot (((bool -> bool) -> bool -> bool) ⊩ Pervasives.norm [] negb_pred)
+  : Tot (((bool -> bool) -> bool -> bool) ⊩ negb_pred)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QLambdaTot (QIf (QApp qVar1 QAxiom) QFalse QTrue))
+  = mk_dturniqet #_ #(Pervasives.norm [] negb_pred) 
+    (fun _ -> QLambdaTot (QLambdaTot (QIf (QApp qVar1 QAxiom) QFalse QTrue)))
 
 let test_if2 ()
   : Tot ((bool -> bool -> bool) ⊩ if2)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom))
+  = mk_dturniqet #_ #(Pervasives.norm [] if2) (fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom)))
 
 let test_callback_return ()
   : Tot ((bool -> (bool -> bool)) ⊩ callback_return)
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QIf QAxiom
+  = mk_dturniqet #_ #callback_return (
+      fun _ -> QLambdaTot (QIf QAxiom
                  (QLambdaTot qVar1)
-                 (QLambdaTot QAxiom))
+                 (QLambdaTot QAxiom)))
 
 let test_callback_return' ()
   : Tot ((bool -> (bool -> bool)) ⊩ callback_return')
   by (simplify_via_norm ())
-  = fun _ -> QLambdaTot (QIf QAxiom
+  = mk_dturniqet #_ #callback_return' (
+      fun _ -> QLambdaTot (QIf QAxiom
                  (QLambdaTot qVar1)
-                 (QLambdaTot QAxiom)) // TODO: why does it not work to unfold identity here?
+                 (QLambdaTot QAxiom)))
 
 #pop-options
 
@@ -571,41 +579,44 @@ let squash_wp () : Tac unit =
     ) smt
   )
 
+let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG <= pure_return a x)) : typing empty (dfst thk_deriv) (helper_oexp x) =
+  (dsnd thk_deriv) proof
+
 let d_test_constant () : typing _ _ _ =
-  test_constant (synth_by_tactic squash_wp)
+  get_derivation test_constant (synth_by_tactic squash_wp)
 let d_test_constant' () : typing _ _ _ =
-  test_constant' (synth_by_tactic squash_wp)
+  get_derivation test_constant' (synth_by_tactic squash_wp)
 let d_test_identity () : typing _ _ _ =
-  test_identity (synth_by_tactic squash_wp)
+  get_derivation test_identity (synth_by_tactic squash_wp)
 let d_test_thunked_id () : typing _ _ _ =
-  test_thunked_id (synth_by_tactic squash_wp)
+  get_derivation test_thunked_id (synth_by_tactic squash_wp)
 let d_test_proj1 () : typing _ _ _ =
-  test_proj1 () (synth_by_tactic squash_wp)
+  get_derivation (test_proj1 ()) (synth_by_tactic squash_wp)
 let d_test_proj2 () : typing _ _ _ =
-  test_proj2 () (synth_by_tactic squash_wp)
+  get_derivation (test_proj2 ()) (synth_by_tactic squash_wp)
 let d_test_proj3 () : typing _ _ _ =
-  test_proj3 (synth_by_tactic squash_wp)
+  get_derivation test_proj3 (synth_by_tactic squash_wp)
 let d_test_apply_top_level_def () : typing _ _ _ =
-  test_apply_top_level_def () (synth_by_tactic squash_wp)
+  get_derivation (test_apply_top_level_def ()) (synth_by_tactic squash_wp)
 let d_test_apply_top_level_def' () : typing _ _ _ =
-  test_apply_top_level_def' () (synth_by_tactic squash_wp)
+  get_derivation (test_apply_top_level_def' ()) (synth_by_tactic squash_wp)
 let d_test_papply__top_level_def () : typing _ _ _ =
-  test_papply__top_level_def () (synth_by_tactic squash_wp)
+  get_derivation (test_papply__top_level_def ()) (synth_by_tactic squash_wp)
 let d_test_apply_arg () : typing _ _ _ =
-  test_apply_arg (synth_by_tactic squash_wp)
+  get_derivation test_apply_arg (synth_by_tactic squash_wp)
 let d_test_apply_arg2 () : typing _ _ _ =
-  test_apply_arg2 () (synth_by_tactic squash_wp)
+  get_derivation (test_apply_arg2 ()) (synth_by_tactic squash_wp)
 let d_test_papply_arg2 () : typing _ _ _ =
-  test_papply_arg2 () (synth_by_tactic squash_wp)
+  get_derivation (test_papply_arg2 ()) (synth_by_tactic squash_wp)
 let d_test_anif () : typing _ _ _ =
-  test_anif (synth_by_tactic squash_wp)
+  get_derivation test_anif (synth_by_tactic squash_wp)
 let d_test_negb () : typing _ _ _ =
-  test_negb (synth_by_tactic squash_wp)
+  get_derivation test_negb (synth_by_tactic squash_wp)
 let d_test_negb_pred () : typing _ _ _ =
-  test_negb_pred () (synth_by_tactic squash_wp)
+  get_derivation (test_negb_pred ()) (synth_by_tactic squash_wp)
 let d_test_if2 () : typing _ _ _ =
-  test_if2 () (synth_by_tactic squash_wp)
+  get_derivation (test_if2 ()) (synth_by_tactic squash_wp)
 let d_test_callback_return () : typing _ _ _ =
-  test_callback_return () (synth_by_tactic squash_wp)
+  get_derivation (test_callback_return ()) (synth_by_tactic squash_wp)
 let d_test_callback_return' () : typing _ _ _ =
-  test_callback_return' () (synth_by_tactic squash_wp)
+  get_derivation (test_callback_return' ()) (synth_by_tactic squash_wp)
