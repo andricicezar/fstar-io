@@ -348,8 +348,7 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 typing #a g wpK k ->
                 typing #a g _ (helper_seq wpV v wpK k)
 
-
-unfold
+// DO NOT MARK WITH UNFOLD
 let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <= pure_return 'a x))
   : fs_oexp empty 'a wp
   = fun _ -> x
@@ -378,7 +377,7 @@ let simplify_via_norm () : Tac unit =
   or_else 
     (fun () -> 
       or_else 
-        (fun () -> norm [delta_only [`%helper_oexp;`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
+        (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
         (fun () -> norm [delta; zeta_full]; trivial ()))
     trefl
 
@@ -456,23 +455,10 @@ let test_proj3
   : (bool -> bool -> bool -> bool) ⊩ proj3
   = mk_dturniqet (fun _ -> QLambdaTot (QLambdaTot (QLambdaTot QAxiom)))
 
-#push-options "--print_implicits --print_universes"
-
-let t = apply_top_level_def
-let t1 = Pervasives.norm [] apply_top_level_def
-
-let _ = assert (t == t1) by (
-    norm [delta_only [`%t;`%t1;`%apply_top_level_def]; zeta];
-    norm [delta_only [`%apply_top_level_def]; zeta];
-    // They are the same!
-    dump "H")
-#pop-options
-
-// TODO: why is `Pervasives.norm []` needed here?
 let test_apply_top_level_def ()
   : Tot ((bool -> bool) ⊩ apply_top_level_def)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #(Pervasives.norm [] apply_top_level_def) (
+  = mk_dturniqet #_ #apply_top_level_def (
       fun _ -> QLambdaTot (QApp
               (QApp
                 (QLambdaTot (QLambdaTot QAxiom))
@@ -482,7 +468,7 @@ let test_apply_top_level_def ()
 let test_apply_top_level_def' ()
   : Tot ((bool -> bool -> bool) ⊩ apply_top_level_def')
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #(Pervasives.norm [] apply_top_level_def') (
+  = mk_dturniqet #_ #apply_top_level_def' (
       fun _ -> QLambdaTot (QLambdaTot (QApp
                        (QApp
                           (QLambdaTot (QLambdaTot QAxiom))
@@ -492,7 +478,7 @@ let test_apply_top_level_def' ()
 let test_papply__top_level_def ()
   : Tot ((bool -> bool -> bool) ⊩ papply__top_level_def)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #(Pervasives.norm [] papply__top_level_def) (
+  = mk_dturniqet #_ #papply__top_level_def (
       fun _ -> QLambdaTot (QApp
               (QLambdaTot (QLambdaTot QAxiom))
               QAxiom))
@@ -527,13 +513,13 @@ let test_negb
 let test_negb_pred ()
   : Tot (((bool -> bool) -> bool -> bool) ⊩ negb_pred)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #(Pervasives.norm [] negb_pred) 
+  = mk_dturniqet #_ #negb_pred
     (fun _ -> QLambdaTot (QLambdaTot (QIf (QApp qVar1 QAxiom) QFalse QTrue)))
 
 let test_if2 ()
   : Tot ((bool -> bool -> bool) ⊩ if2)
   by (simplify_via_norm ())
-  = mk_dturniqet #_ #(Pervasives.norm [] if2) (fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom)))
+  = mk_dturniqet #_ #if2 (fun _ -> QLambdaTot (QLambdaTot (QIf qVar1 QFalse QAxiom)))
 
 let test_callback_return ()
   : Tot ((bool -> (bool -> bool)) ⊩ callback_return)
