@@ -13,6 +13,7 @@ private unfold
 let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
   M.intro_pure_wp_monotonicity wp; wp
 
+val refv_wp: #a:Type -> ref1:(a -> Type0) -> ref2:(a -> Type0) -> pure_wp (x:a{ref1 x}) -> pure_wp (x:a{ref2 x})
 let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
   pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
     mk_pure_wp (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
@@ -162,7 +163,6 @@ let helper_if #_ #_ #wpC c #wpT t #wpE e =
     M.elim_pure_wp_monotonicity (wpE fsG);
     if c fsG then t fsG else e fsG
 
-unfold
 val wp_lambda_tot : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -175,7 +175,6 @@ let wp_lambda_tot #g #a #b wpCtx body fsG : pure_wp (a -> b) = (** Cezar: this s
     (forall x. wpCtx (fs_stack fsG x) (fun _ -> True)) /\
     p (fun x -> body (fs_stack fsG x)))
 
-unfold
 val helper_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -187,7 +186,6 @@ let helper_lambda #g #a #b #wpCtx body fsG =
 
 type eff_fun (a:Type) (b:Type) (wpFun: a -> pure_wp b) = x:a -> PURE b (wpFun x)
 
-unfold
 val wp_lambda_wp :
   #g :env ->
   #a :Type ->
@@ -222,7 +220,6 @@ let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (eff_fun a b wpFun) =
   //     ) ==>
   //     p f
 
-unfold
 val helper_lambda_wp :
   #g : env ->
   #a : Type ->
@@ -236,7 +233,6 @@ let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (eff_fun a b wpFun) (w
   fun x ->
     body (fs_stack fsG x)
 
-unfold
 val helper_refv: #g:env ->
                 #a:Type ->
                 #ref1:(a -> Type0) ->
@@ -372,17 +368,35 @@ let mk_dturniqet #a #x (#wp:spec_env empty a) (thk_dv:(proof:squash (forall fsG.
 let simplify_stack_ops () : Tac unit =
    l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
+let rec solve_all () : Tac unit =
+  or_else (fun () -> trivial ())
+    (fun () -> or_else (fun () -> trefl ())
+      (fun () -> or_else 
+        (fun () -> let _ = forall_intro () in solve_all ())
+        (fun () -> or_else
+          (fun () -> let h = implies_intro () in rewrite h; solve_all ())
+          (fun () -> or_else
+            (fun () -> split (); solve_all (); solve_all ())
+            (fun () -> fail "stuck")))))
+
 let simplify_via_norm () : Tac unit =
   let _ = repeat forall_intro in
   or_else 
+    (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
     (fun () -> 
-      or_else 
-        (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
-        (fun () -> norm [delta; zeta_full]; trivial ()))
-    trefl
+      norm [delta_only [`%helper_lambda; `%helper_lambda_wp; `%helper_oexp; 
+                         `%fs_stack; `%fs_hd; `%fs_tail;
+                         `%helper_app; `%helper_if; `%helper_seq; `%helper_weaken;
+                         `%helper_var0; `%helper_refv; `%refv_wp;
+                         `%wp_app; `%wp_if; `%wp_lambda_tot; `%wp_lambda_wp;
+                         `%mk_pure_wp;
+                         `%FE.on_dom; `%ret; `%pure_return; `%pure_return0];
+            delta_namespace ["Examples"];
+            zeta_full; iota; primops; unmeta; unascribe];
+      solve_all ())
 
 
-let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> fs_hd (fs_tail fsG)) =
+let qVar1 #g #a #b : typing #a (extend b (extend a g)) _ _ =
   QWeaken QAxiom
 
 let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> fs_hd (fs_tail (fs_tail fsG))) =
@@ -589,12 +603,6 @@ let test_seq_qref ()
   by (simplify_via_norm ())
   = mk_dturniqet #_ #seq_qref (fun _ -> QLambdaTot (QSeq q_ref (QApp QAxiom Qtt) (QRefinement _ Qtt)))
 
-// The following three tests require --admit_smt_queries true because
-// wp_lambda_tot needs a monotonicity proof (M.is_monotonic) which Z3
-// cannot discharge when quantifiers range over function types or abstract
-// refinement predicates (Z3 reports "incomplete quantifiers").
-#push-options "--admit_smt_queries true"
-
 let test_seq_p_implies_q ()
   : Tot (((f: (x:bool{p_ref x} -> _:unit{q_ref})) -> (x:bool{p_ref x}) -> (x:bool{q_ref})) ⊩ seq_p_implies_q)
   by (simplify_via_norm ())
@@ -716,9 +724,12 @@ let d_test_seq_basic () : typing _ _ _ =
   get_derivation (test_seq_basic ()) (synth_by_tactic squash_wp)
 let d_test_seq_qref () : typing _ _ _ =
   get_derivation (test_seq_qref ()) (synth_by_tactic squash_wp)
-#push-options "--admit_smt_queries true"
 let d_test_seq_p_implies_q () : typing _ _ _ =
   get_derivation (test_seq_p_implies_q ()) (synth_by_tactic squash_wp)
+
+// d_test_if_seq and d_test_context need --admit_smt_queries true due to
+// incomplete quantifiers over function types in QRefinement's subtyping checks
+#push-options "--admit_smt_queries true"
 let d_test_if_seq () : typing _ _ _ =
   get_derivation (test_if_seq ()) (synth_by_tactic squash_wp)
 let d_test_context () : typing _ _ _ =
