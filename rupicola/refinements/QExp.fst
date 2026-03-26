@@ -621,7 +621,9 @@ let test_context ()
             (QApp QAxiom (QRefinement _ qVar1))
             (QLambdaTot QAxiom))))
 
-#pop-options
+// let test_wrap_fst_pa
+//   : ((bool * bool) -> bool) ⊩ wrap_fst_pa
+//   =  fun _ -> QLambdaTot (QFst QAxiom)
 
 #pop-options
 
