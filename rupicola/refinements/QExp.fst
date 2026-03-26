@@ -204,8 +204,7 @@ let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (eff_fun a b wpFun) =
         res == body (fs_stack fsG x) ==>
         pure_return _ res p))
     ) /\
-    (forall (f: eff_fun a b wpFun).
-      f == (fun x -> body (fs_stack fsG x)) ==> p f))
+    pure_return (eff_fun a b wpFun) (fun x -> body (fs_stack fsG x)) p)
 
 
 
@@ -391,7 +390,6 @@ let simplify_via_norm () : Tac unit =
                          `%wp_app; `%wp_if; `%wp_lambda_tot; `%wp_lambda_wp;
                          `%mk_pure_wp;
                          `%FE.on_dom; `%ret; `%pure_return; `%pure_return0];
-            delta_namespace ["Examples"];
             zeta_full; iota; primops; unmeta; unascribe];
       solve_all ())
 
