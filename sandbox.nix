@@ -29,10 +29,14 @@ let
     pkgs.git
     pkgs.gnugrep
     pkgs.gnumake
+    pkgs.gnutar
+    pkgs.gzip
     pkgs.less
+    pkgs.procps
     pkgs.which
     fstar.packages.${system}.fstar
     fstar.packages.${system}.z3
+    fstar.packages.${system}.emacs
     llmAgents.packages.${system}.claude-code
     llmAgents.packages.${system}.copilot-cli
     llmAgents.packages.${system}.gemini-cli
