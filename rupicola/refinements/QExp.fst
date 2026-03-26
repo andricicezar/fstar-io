@@ -367,31 +367,19 @@ let mk_dturniqet #a #x (#wp:spec_env empty a) (thk_dv:(proof:squash (forall fsG.
 let simplify_stack_ops () : Tac unit =
    l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
-let rec solve_all () : Tac unit =
-  or_else (fun () -> trivial ())
-    (fun () -> or_else (fun () -> trefl ())
-      (fun () -> or_else 
-        (fun () -> let _ = forall_intro () in solve_all ())
-        (fun () -> or_else
-          (fun () -> let h = implies_intro () in rewrite h; solve_all ())
-          (fun () -> or_else
-            (fun () -> split (); solve_all (); solve_all ())
-            (fun () -> fail "stuck")))))
-
 let simplify_via_norm () : Tac unit =
+  norm [delta_only [`%helper_lambda; `%helper_lambda_wp; `%helper_oexp; 
+                    `%helper_app; `%helper_if; `%helper_seq; `%helper_weaken;
+                    `%helper_var0; `%helper_refv; 
+                    `%refv_wp;`%wp_app; `%wp_if; `%wp_lambda_tot; `%wp_lambda_wp;
+                    `%fs_stack; `%fs_hd; `%fs_tail;
+                    `%mk_pure_wp;
+                    `%FE.on_dom; `%ret; `%pure_return; `%pure_return0];
+        zeta_full; // TODO: what recursive function is unfolded using this? is it something opaque?
+        unascribe // TODO: why is this necessary?
+        ];
   let _ = repeat forall_intro in
-  or_else 
-    (fun () -> norm [delta_only [`%fs_tail; `%FE.on_dom; `%ret; `%pure_return; `%pure_return0]; zeta; iota]; trivial ())
-    (fun () -> 
-      norm [delta_only [`%helper_lambda; `%helper_lambda_wp; `%helper_oexp; 
-                         `%fs_stack; `%fs_hd; `%fs_tail;
-                         `%helper_app; `%helper_if; `%helper_seq; `%helper_weaken;
-                         `%helper_var0; `%helper_refv; `%refv_wp;
-                         `%wp_app; `%wp_if; `%wp_lambda_tot; `%wp_lambda_wp;
-                         `%mk_pure_wp;
-                         `%FE.on_dom; `%ret; `%pure_return; `%pure_return0];
-            zeta_full; iota; primops; unmeta; unascribe];
-      solve_all ())
+  or_else trivial trefl // TODO: why is it not always trefl?
 
 
 let qVar1 #g #a #b : typing #a (extend b (extend a g)) _ _ =
