@@ -19,10 +19,10 @@ FLAGS += --warn_error -241-247-274-321-333
 FLAGS += --silent
 FLAGS += $(OTHERFLAGS)
 
+all: verify
+
 $(BUILD_DIR) $(CACHEDIR) $(ODIR):
 	mkdir -p $@
-
-all: verify
 
 $(CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
