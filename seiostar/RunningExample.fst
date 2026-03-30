@@ -239,7 +239,7 @@ let read_close_return_sat_spec (fd:file_descr) :
     hist_bind (read_spec fd) (hist_inl (fun r ->
       hist_bind (close_spec fd) (hist_inl (fun () -> hist_return (Inl r)))))
   )
-= 
+=
   assert (
     theta (
       let!@! r = io_call ORead fd in
@@ -753,7 +753,7 @@ let wrapper_sat_spec f task agent :
 
 val main : (string -> string -> io unit) -> io bool
 let main agent =
-  let!@ r = wrapper "./temp" "overwrite" agent in
+  let!@ r = wrapper "./temp" "overwrite\n" agent in
   match r with
   | Inl _ -> return true
   | Inr _ -> return false
@@ -764,6 +764,7 @@ let main agent =
 // %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
 %splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
+
 [@@ (preprocess_with simplify_qType)]
 let main_derivation #g : typing g (fs_oval_return g main)
   by (trefl ())
@@ -771,7 +772,7 @@ let main_derivation #g : typing g (fs_oval_return g main)
       QBind
         (QAppIO
           (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-                (QStringLit "overwrite"))
+                (QStringLit "overwrite\n"))
           QAxiom)
         (QCaseIO QAxiom
           (QReturn QTrue)

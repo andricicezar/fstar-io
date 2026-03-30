@@ -59,10 +59,11 @@ let def_Runtime_io_read fd =
       let rec read_line () =
         let got = Unix.read ufd b 0 1 in
         if got = 0 then ()
-        else
+        else begin
           let c = Bytes.get b 0 in
-          if c = '\n' then ()
-          else begin Buffer.add_char buf c; read_line () end
+          Buffer.add_char buf c;
+          read_line ()
+        end
       in
       read_line ();
       make_inl (Obj.repr (Buffer.contents buf))
@@ -78,6 +79,10 @@ let def_Runtime_io_write (fd : Obj.t) (msg : Obj.t) : Obj.t =
       let b = Bytes.of_string s in
       let len = Bytes.length b in
       let _ = Unix.write ufd b 0 len in
+      (* truncate up to current pos *)
+      let pos = Unix.lseek ufd 0 Unix.SEEK_CUR in
+      Unix.ftruncate ufd pos;
+
       make_inl unit_val
     with _ -> make_inr unit_val)
 
