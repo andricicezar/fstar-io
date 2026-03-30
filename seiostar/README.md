@@ -6,34 +6,29 @@ This contains the artifact associated with the ICFP 2026 submission with the nam
 The artifact contains the F* formalization from the paper. In particular, the
 proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
 
-In file `RunningExample.fst`, we implement the running example from section 2,
-and we use the metaprogram to find the derivation, and then we instantiate the
+Additionally, in file `RunningExample.fst`, we implement the running example from section 2,
+we verify it, and we use the metaprogram to find the derivation, and then we instantiate the
 compilation model from section 6, which shows that it is secure to link the
 extracted running example with unverified agents.
 
-The artifact contains two assumptions that are not relevant to the fully
-mechanized proof that SEIO* satisfies RrHP:
-1. We did not manage to finish the proof that the source code of the running
-   example satisfies the spec presented in section 2.3. We just ran out of time,
-   but we think the proof is going to be finished soon.
-2. We still have an assumption in the unverified metaprogram that generates
-   derivations. When checking that the derivation has the expected type,
-   we end up checking for equality between types by
-   manually creating a statement of form `t1 == t2`.
-   Since we build this statement manually, F* does not internally register it as
-   an equality between types, which prevents us from retyping the derivation.
-   Therefore, we assume that the successful checking of the statement
-   gives us equality between types.
-   (Extraction will anyway fail if the types are not equal)
-   We did not figure out in time how to use Meta-F* to avoid this assumption,
-   but we are in contact with the developers of F* to get rid of it.
+The artifact contains one assumptions that is not relevant to the fully
+mechanized proof that SEIO* satisfies RrHP. This assumption is 
+in the unverified metaprogram that generates typing derivations.
+When checking that the derivation has the expected type,
+we end up checking for equality between types by
+manually creating a statement of form `t1 == t2`.
+Since we build this statement manually, F* does not internally register it as
+an equality between types, which prevents us from retyping the derivation.
+Therefore, we assume that the successful checking of the statement
+gives us equality between types.
+(Extraction will anyway fail if the types are not equal)
+We did not figure out in time how to use Meta-F* to avoid this assumption,
+but we are in contact with the developers of F* to get rid of it.
 
 ## Table of Contents
-* [Setup](#setup)
 * [List of Claims](#list-of-claims)
-* [Download and Installation](#download-and-installation)
+* [Installing F* locally](#installing-f-locally)
 * [Evaluation Instructions](#evaluation-instructions)
-* [Reusability](#reusability)
 * [License](#license)
 
 ## List of Claims
@@ -41,7 +36,7 @@ mechanized proof that SEIO* satisfies RrHP:
 The artifact contains:
 * a formalization of the contributions from the paper;
 * the mechanized proof of RrHP;
-* the running example, and other examples
+* the running example verifying and compiling, and other examples.
 
 We list where the definitions and theorems of the paper are.
 
@@ -76,10 +71,7 @@ We list where the definitions and theorems of the paper are.
 
 ## Installing F* locally
 
-Two opam switches are used:
-- `only-fstar`     -- default; used for F* checking, `malfunction`, and `ocamlfind` steps
-
-1. Create the only-fstar switch:
+The simplest way for OPAM users is to create the `only-fstar` switch:
 
 $ opam switch import only-fstar.export --switch only-fstar
 
@@ -95,7 +87,7 @@ Some warnings are expected, they are benign.
 ### Verify SEIO\*
 
 **Expected time.**
-Around 10 minutes (if running 8 jobs in parallel). 
+Around 10 minutes (if running 8 jobs in parallel with `make verify -j 8`). 
 
 **Script for this step.**
 After setting up F*, running `make` in this repository should verify all the F*
@@ -120,16 +112,6 @@ the [fstar-vscode-assistant](https://github.com/FStarLang/fstar-vscode-assistant
 extension installed. Make sure `fstar.exe` is in your PATH, or edit the
 `fstar_exe` field in the `.fst.config.json` file to the full path of the F*
 executable.
-
-If you are using the VM, you can SSH into it from VS Code (F1 -> "Remote-SSH:
-Connect to Host") and have the same experience. You will have to install the
-extension into the VM by going into the VS Code menus.
-
-**Checking for lack of axioms.**
-To check that we use no axioms or admit any proofs, you can clean the already
-built F* modules (by `make clean`) and then run `make validate`. This will run
-the build passing the `--report_assumes error` flag to F*. If any unsafe feature
-is used, you should see a hard error.
 
 ### Running the example
 
