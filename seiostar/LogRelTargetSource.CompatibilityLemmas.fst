@@ -1506,7 +1506,7 @@ let compat_ocomp_fst #g
     end
   end
 
-#push-options "--z3refresh"
+#push-options "--z3refresh --fuel 4 --z3rlimit 20"
 let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)

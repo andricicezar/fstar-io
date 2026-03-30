@@ -9,10 +9,18 @@ include QTypes.EvalEnv
 (** F* works better with these functions because it helps dealing with qTypes,
     even if they are synonyms *)
 
-(** Closed values **)
-type fs_val (t:qType) =
-  get_Type t
+type fs_val (t:qType) = get_Type t
+type fs_comp (t:qType) = io (fs_val t)
 
+type spec_env (g:typ_env) (a:qType) =
+  eval_env g -> pure_wp (fs_val a)
+
+type fs_oval (g:typ_env) (t:qType) =
+  eval_env g -> fs_val t
+type fs_ocomp (g:typ_env) (t:qType) =
+  eval_env g -> fs_comp t
+
+(** Closed values **)
 let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
   if c then e else t
 
@@ -34,9 +42,6 @@ let fs_val_pair (#a #b:qType) (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
   (x, y)
 
 (** Closed computations **)
-type fs_comp (t:qType) =
-   io (get_Type t)
-
 unfold
 val fs_comp_bind : #a:qType ->
                     #b:qType ->
@@ -75,9 +80,6 @@ val fs_comp_call_val :
 let fs_comp_call_val o args = io_call o args
 
 (** Open values **)
-type fs_oval (g:typ_env) (t:qType) =
-  eval_env g -> get_Type t
-
 unfold
 let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
   fun _ -> x
@@ -164,9 +166,6 @@ let fs_oval_case cond inlc inrc fsG =
   | Inr x -> inrc (stack fsG x)
 
 (** Open computations **)
-
-type fs_ocomp (g:typ_env) (t:qType) =
-  eval_env g -> io (get_Type t)
 
 unfold
 val fs_ocomp_return :

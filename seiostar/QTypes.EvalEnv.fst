@@ -10,6 +10,7 @@ include QTypes.TypEnv
 (** Evaluation Environment for IOStar: variable -> F* values **)
 type eval_env g =
   FE.restricted_t (x:var{Some? (g x)}) (fun x -> get_Type (Some?.v (g x)))
+  
 let empty_eval : eval_env empty =
   FE.on_dom
     (x:var{Some? (empty x)})
