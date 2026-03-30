@@ -43,18 +43,18 @@ We list where the definitions and theorems of the paper are.
 | From the paper | In the artifact |
 | -------------- | --------------- |
 | **Section 2/3** - Relational quotation | |
-| Typing relations for values and computations | `RQ.TypingRelation.fst` as the type constructors `oval_quotation` and `oprod_quotation` |
-| Events | `IO.fst` as the type constructor `event` |
-| Local traces | `IO.fst` |
+| Typing relations for values and computations | `RQ.TypingRelation.fst` as the type constructors `typing` and `typing_io` |
+| Events | `Trace.fst` as the type constructor `event` |
+| Traces | `Trace.fst` |
 | Metaprogram | `RQ.Metaprogram.fst` as function `generate_derivation` |
 | **Section 4** - Relating trace-producing semantics | |
 | Syntax and semantics of $\lambda_{io}$ | `LambdaIO.fst` as type constructors `exp`, `step`, and `steps` |
-| Behaviors of $\lambda_{io}$ expressions | `QTyp.fst` as `e_beh` |
-| Syntax of $IO^{\star}$ | `IO.fst` as type constructor `io` |
+| Behaviors of $\lambda_{io}$ expressions | `LogRel.Semantics.fst` as `e_beh` |
+| Syntax of $IO^{\star}$ | `IOStar.fst` as type constructor `io` |
 | Functor part of predicate transformer monad | `Hist.fst` |
-| Semantics of $IO^{\star}$ | `IO.fst` as functions `op_wp` and `theta` |
-| Behaviors of $IO^{\star}$ computations | `QTyp.fst` as `fs_beh` |
-| Predicate on types for logical relation | `QTyp.fst` as type constructor `type_quotation` |
+| Semantics of $IO^{\star}$ | `IOStar.fst` as functions `op_wp` and `theta` |
+| Behaviors of $IO^{\star}$ computations | `LogRel.Semantics.fst` as `fs_beh` |
+| Predicate on types for logical relation | `QTypes.fst` as type constructor `type_quotation` |
 | Target-to-source logical relation | `LogRelTargetSource.fst` |
 | Source-to-target logical relation | `LogRelSourceTarget.fst` |
 | Target-to-source compatibility lemmas | `LogRelTargetSource.CompatibilityLemmas.fst` |
@@ -67,7 +67,7 @@ We list where the definitions and theorems of the paper are.
 | Compiling from $\lambda_{io}$ to $\lambda_{\square}$ | `lambdabox/LambdaIOToLambdaBox.fst` |
 | Compiling running example | `lambdabox/LambdaBoxExamples.fst` |
 | Runtime with implementing primitives | `lambdabox/axioms.ml` |
-| **More examples** | The other files named as `Examples.*.fst` |
+| **More examples** | The other files named as `Examples*.fst` |
 
 ## Installing F* locally
 
@@ -87,7 +87,7 @@ Some warnings are expected, they are benign.
 ### Verify SEIO\*
 
 **Expected time.**
-Around 10 minutes (if running 8 jobs in parallel with `make verify -j 8`). 
+Around 4 minutes (if running 8 jobs in parallel with `make verify -j 8`). 
 
 **Script for this step.**
 After setting up F*, running `make` in this repository should verify all the F*
