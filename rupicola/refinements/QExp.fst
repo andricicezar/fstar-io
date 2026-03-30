@@ -5,18 +5,10 @@ open FStar.Tactics.V2
 (** Helpers to deal with Monotonicity of Pure **)
 module M = FStar.Monotonic.Pure
 
-let (<=) #a (wp1 wp2:pure_wp a) = pure_stronger a wp1 wp2
-let ret (#a:Type u#a) x : pure_wp a = pure_return a x
-
 (* Local helper to convert pure_wp' to pure_wp by proving monotonicity *)
 private unfold
 let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
   M.intro_pure_wp_monotonicity wp; wp
-
-val refv_wp: #a:Type -> ref1:(a -> Type0) -> ref2:(a -> Type0) -> pure_wp (x:a{ref1 x}) -> pure_wp (x:a{ref2 x})
-let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
-  pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
-    mk_pure_wp (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
 
 (** Typing environment **)
 type env = var -> option Type0
@@ -74,8 +66,6 @@ type spec_env (g:env) (a:Type) =
 type fs_oexp (g:env) (a:Type) (wpG:spec_env g a) =
   fsG:fs_env g -> PURE a (wpG fsG)
 
-#restart-solver
-
 val helper_weaken : #g:env ->
                     #a:Type u#a ->
                     b:Type0 ->
@@ -86,25 +76,23 @@ let helper_weaken #g #a b wpX x fsG =
   reveal_opaque (`%pure_wp_monotonic) (pure_wp_monotonic u#a);
   x (fs_tail fsG)
 
-#restart-solver
-
 unfold
 val helper_var0 : g:env ->
                  a:Type ->
-                 fs_oexp (extend a g) a (fun fsG -> ret (fs_hd fsG))
-let helper_var0 g a fsG : PURE a (ret (fs_hd fsG)) =
+                 fs_oexp (extend a g) a (fun fsG -> pure_return _ (fs_hd fsG))
+let helper_var0 g a fsG : PURE a (pure_return _ (fs_hd fsG)) =
   fs_hd fsG
 
 unfold
-val helper_unit : g:env -> fs_oexp g unit (fun _ -> ret ())
+val helper_unit : g:env -> fs_oexp g unit (fun _ -> pure_return _ ())
 let helper_unit g = fun _ -> ()
 
 unfold
-val helper_true : g:env -> fs_oexp g bool (fun _ -> ret true)
+val helper_true : g:env -> fs_oexp g bool (fun _ -> pure_return _ true)
 let helper_true g = fun _ -> true
 
 unfold
-val helper_false : g:env -> fs_oexp g bool (fun _ -> ret false)
+val helper_false : g:env -> fs_oexp g bool (fun _ -> pure_return _ false)
 let helper_false g = fun _ -> false
 
 val wp_app:     #g :env ->
@@ -206,19 +194,6 @@ let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (eff_fun a b wpFun) =
     ) /\
     pure_return (eff_fun a b wpFun) (fun x -> body (fs_stack fsG x)) p)
 
-
-
-  // fun (p:pure_post (x:a -> PURE b (wpFun x))) ->
-  //   (forall x. (* wpFun x (fun _ -> True) ==> *) wpCtx (fs_stack fsG x) (fun _ -> True)) /\
-  //   forall (f:(x:a -> PURE b (wpFun x))).
-  //     (
-  //       forall (q : pure_post b) (x:a).
-  //         wpFun x q ==>
-  //         wpCtx (fs_stack fsG x) q ==>
-  //         q (f x)
-  //     ) ==>
-  //     p f
-
 val helper_lambda_wp :
   #g : env ->
   #a : Type ->
@@ -231,6 +206,11 @@ val helper_lambda_wp :
 let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (eff_fun a b wpFun) (wp_lambda_wp wpCtx wpFun body fsG) =
   fun x ->
     body (fs_stack fsG x)
+
+val refv_wp: #a:Type -> ref1:(a -> Type0) -> ref2:(a -> Type0) -> pure_wp (x:a{ref1 x}) -> pure_wp (x:a{ref2 x})
+let refv_wp #a (ref1 ref2:a -> Type0) (wpV:pure_wp (x:a{ref1 x})) : pure_wp (x:a{ref2 x}) =
+  pure_bind_wp (x:a{ref1 x}) (x:a{ref2 x}) wpV (fun r ->
+    mk_pure_wp (fun (p:pure_post (x:a{ref2 x})) -> ref2 r /\ p r))
 
 val helper_refv: #g:env ->
                 #a:Type ->
@@ -344,12 +324,12 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 typing #a g _ (helper_seq wpV v wpK k)
 
 // DO NOT MARK WITH UNFOLD
-let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG <= pure_return 'a x))
+let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG `pure_stronger _` pure_return 'a x))
   : fs_oexp empty 'a wp
   = fun _ -> x
 
 type typing_closed #a (#wp:spec_env empty a) (x:a) =
-  proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing empty wp (helper_oexp x #wp #proof)
+  proof:squash (forall fsG. wp fsG `pure_stronger _` pure_return a x) -> typing empty wp (helper_oexp x #wp #proof)
 
 type typing_debug #a (wp:spec_env empty a) (x:a) =
   typing_closed #a #wp x
@@ -358,9 +338,9 @@ let (⊢) (#a:Type)(g:env) (#wp:spec_env g a) (x:fs_oexp g a wp) =
   typing g wp x
 
 let (⊩) (a:Type) (x:a) =
-  wp:spec_env empty a & (proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))
+  wp:spec_env empty a & (proof:squash (forall fsG. wp fsG `pure_stronger _` pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))
 
-let mk_dturniqet #a #x (#wp:spec_env empty a) (thk_dv:(proof:squash (forall fsG. wp fsG <= pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))) : a ⊩ x =
+let mk_dturniqet #a #x (#wp:spec_env empty a) (thk_dv:(proof:squash (forall fsG. wp fsG `pure_stronger _` pure_return a x) -> typing #a empty wp (helper_oexp x #wp #proof))) : a ⊩ x =
   (| _, thk_dv |)
 
 
@@ -374,7 +354,7 @@ let simplify_via_norm () : Tac unit =
                     `%refv_wp;`%wp_app; `%wp_if; `%wp_lambda_tot; `%wp_lambda_wp;
                     `%fs_stack; `%fs_hd; `%fs_tail;
                     `%mk_pure_wp;
-                    `%FE.on_dom; `%ret; `%pure_return; `%pure_return0];
+                    `%FE.on_dom; `%pure_return; `%pure_return0];
         zeta_full; // TODO: what recursive function is unfolded using this? is it something opaque?
         unascribe // TODO: why is this necessary?
         ];
@@ -647,7 +627,7 @@ let squash_wp () : Tac unit =
     ) smt
   )
 
-let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG <= pure_return a x)) : typing empty (dfst thk_deriv) (helper_oexp x) =
+let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG `pure_stronger _` pure_return a x)) : typing empty (dfst thk_deriv) (helper_oexp x) =
   (dsnd thk_deriv) proof
 
 let d_test_constant () : typing _ _ _ by (compute ()) =
