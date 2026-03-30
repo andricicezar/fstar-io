@@ -49,6 +49,8 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
     | Inr fs_v', EInr e' -> pack qt2 ∋ (h, fs_v', e')
     | _ -> False
   end
+  | QRefinement #t qt ref -> False // TODO
+
                            (** vvvvvvvvvv defined over values **)
 and (⊇) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in

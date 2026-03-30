@@ -6,6 +6,7 @@ open IOStar
 (** We define quotation for Type **)
 
 (** We need quotation for types to define the logical relation. **)
+[@@no_auto_projectors] // FStarLang/FStar#3986
 noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : type_quotation unit
@@ -32,7 +33,11 @@ type type_quotation : Type0 -> Type u#1 =
           type_quotation t1 ->
           type_quotation t2 ->
           type_quotation (either t1 t2)
-
+| QRefinement : #t:Type -> 
+                type_quotation t -> 
+                ref: (t -> Type0) ->
+                type_quotation (x:t{ref x})
+                
 let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   match tq with
   | QUnit -> assert (t == unit)
@@ -43,6 +48,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
   | QSum #t1 #t2 _ _ -> assert (t == either t1 t2)
+  | QRefinement #t' _ ref -> assert (x:t'{ref x} == t)
 
 let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   match qt with
@@ -55,6 +61,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   | QArrIO qt1 qt2 ->
     TArr (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QSum qt1 qt2 -> TSum (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
+  | QRefinement #t qt ref -> (type_quotation_to_typ qt)
 
 (** Type of Quotable Types **)
 type qType =
