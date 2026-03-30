@@ -151,6 +151,7 @@ let helper_if #_ #_ #wpC c #wpT t #wpE e =
     M.elim_pure_wp_monotonicity (wpE fsG);
     if c fsG then t fsG else e fsG
 
+unfold
 val wp_lambda_tot : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -178,17 +179,17 @@ val wp_lambda_wp :
   #g :env ->
   #a :Type ->
   #b :Type ->
-  wpCtx : spec_env (extend a g) b ->
+  #wpBody : spec_env (extend a g) b ->
+  fs_oexp (extend a g) b wpBody ->
   wpFun : (a -> pure_wp b) ->
-  fs_oexp (extend a g) b wpCtx ->
   spec_env g (eff_fun a b wpFun)
 
-let wp_lambda_wp #g #a #b wpCtx wpFun body fsG : pure_wp (eff_fun a b wpFun) =
+let wp_lambda_wp #g #a #b #wpBody body wpFun fsG : pure_wp (eff_fun a b wpFun) =
   mk_pure_wp (fun (p:pure_post (eff_fun a b wpFun)) ->
     (forall (x: a) (p: pure_post b).
       wpFun x p ==>
-      (wpCtx (fs_stack fsG x) (fun _ -> True) /\ (** Cezar: this is the only extra thing compared to the VC created by F* **)
-      wpCtx (fs_stack fsG x) (fun res ->
+      (wpBody (fs_stack fsG x) (fun _ -> True) /\ (** Cezar: this is the only extra thing compared to the VC created by F* **)
+      wpBody (fs_stack fsG x) (fun res ->
         res == body (fs_stack fsG x) ==>
         pure_return _ res p))
     ) /\
@@ -198,12 +199,12 @@ val helper_lambda_wp :
   #g : env ->
   #a : Type ->
   #b : Type ->
-  wpCtx : spec_env (extend a g) b ->
+  #wpBody : spec_env (extend a g) b ->
+  body : fs_oexp (extend a g) b wpBody ->
   wpFun : (a -> pure_wp b) ->
-  body : fs_oexp (extend a g) b wpCtx ->
-  fs_oexp g (eff_fun a b wpFun) (wp_lambda_wp wpCtx wpFun body)
+  fs_oexp g (eff_fun a b wpFun) (wp_lambda_wp body wpFun)
 
-let helper_lambda_wp #g #a #b wpCtx wpFun body fsG : PURE (eff_fun a b wpFun) (wp_lambda_wp wpCtx wpFun body fsG) =
+let helper_lambda_wp #g #a #b #wpBody body wpFun fsG : PURE (eff_fun a b wpFun) (wp_lambda_wp body wpFun fsG) =
   fun x ->
     body (fs_stack fsG x)
 
@@ -285,20 +286,20 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
 | QLambdaTot  : #g :env ->
                 #a :Type ->
                 #b :Type ->
-                #wpCtx:spec_env (extend a g) b ->
-                #body :fs_oexp (extend a g) b wpCtx ->
-                cf:typing #b (extend a g) wpCtx body ->
-                typing g (wp_lambda_tot #g #a #b wpCtx body) (helper_lambda body)
+                #wpBody:spec_env (extend a g) b ->
+                #body :fs_oexp (extend a g) b wpBody ->
+                cf:typing #b (extend a g) wpBody body ->
+                typing g (wp_lambda_tot #g #a #b wpBody body) (helper_lambda body)
 
 | QLambdaWP :
   #g : env ->
   #a : Type ->
   #b : Type ->
-  wpCtx : spec_env (extend a g) b ->
+  #wpBody : spec_env (extend a g) b ->
+  #body : fs_oexp (extend a g) b wpBody ->
+  typing #b (extend a g) wpBody body ->
   wpFun : (a -> pure_wp b) ->
-  #body : fs_oexp (extend a g) b wpCtx ->
-  typing #b (extend a g) wpCtx body ->
-  typing g (wp_lambda_wp wpCtx wpFun body) (helper_lambda_wp wpCtx wpFun body)
+  typing g (wp_lambda_wp body wpFun) (helper_lambda_wp body wpFun )
 
 | QRefinement : #g:env ->
                 #a:Type ->
@@ -322,6 +323,19 @@ type typing : #a:Type -> g:env -> wp:spec_env g a -> fs_oexp g a wp -> Type =
                 #k:fs_oexp g a wpK ->
                 typing #a g wpK k ->
                 typing #a g _ (helper_seq wpV v wpK k)
+
+// val qLambdaTot: #g :env ->
+//                 #a :Type ->
+//                 #b :Type ->
+//                 #wpBody:spec_env (extend a g) b ->
+//                 #body :fs_oexp (extend a g) b wpBody ->
+//                 cf:typing #b (extend a g) wpBody body ->
+//                 typing g (wp_lambda_tot #g #a #b wpBody body) (helper_lambda body)
+
+// let qLambdaTot #g #a #b #wpBody #body cf =
+//   assume False;
+//   // assume (forall fsG. wp_lambda_tot #g #a #b wpBody body fsG `pure_stronger _` wp_lambda_wp body (fun _ -> pure_null_wp b) fsG);
+//   QLambdaWP cf (fun _ -> pure_null_wp b)
 
 // DO NOT MARK WITH UNFOLD
 let helper_oexp (x:'a) (#wp:spec_env empty 'a) (#_:squash (forall fsG. wp fsG `pure_stronger _` pure_return 'a x))
