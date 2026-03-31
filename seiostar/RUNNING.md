@@ -14,15 +14,9 @@ Two opam switches are used:
 
 2. Create the only-peregrine switch (Peregrine + Rocq stack):
 
-        $ opam switch create only-peregrine ocaml-base-compiler.4.14.2
-        $ opam repo add coq-released   https://coq.inria.fr/opam/released      --on-switch only-peregrine
-        $ opam repo add rocq-released  https://rocq-prover.org/opam/released   --on-switch only-peregrine
-        $ opam repo add rocq-core-dev  https://rocq-prover.org/opam/core-dev   --on-switch only-peregrine
-        $ opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev  --on-switch only-peregrine
-        $ opam update
         $ opam switch import only-peregrine.export --switch only-peregrine
 
-Note: export file generated with `opam switch export`. First build takes a while.
+Note: First build takes a while.
 
 3. Build (activate only-fstar first):
 
