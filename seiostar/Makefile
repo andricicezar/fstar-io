@@ -118,14 +118,14 @@ $(BUILD_DIR)/io_program_raw.mlf: $(BUILD_DIR)/io_program.ast | $(BUILD_DIR)
 $(BUILD_DIR)/axioms.cmx: $(LAMBDABOX_DIR)/axioms.ml | $(BUILD_DIR)
 	ocamlfind ocamlopt -package unix -c -o $@ $<
 
-$(BUILD_DIR)/io_program_raw.cmx: $(BUILD_DIR)/io_program_raw.mlf | $(BUILD_DIR)
-	malfunction cmx $<
+$(BUILD_DIR)/io_program_raw.cmx: $(BUILD_DIR)/io_program_raw.mlf $(BUILD_DIR)/axioms.cmx | $(BUILD_DIR)
+	cd $(BUILD_DIR) && malfunction cmx $(notdir $<)
 
 $(BUILD_DIR)/io_program_exe: $(BUILD_DIR)/axioms.cmx $(BUILD_DIR)/io_program_raw.cmx | $(BUILD_DIR)
 	ocamlfind ocamlopt -package unix -linkpkg $^ -o $@
 
-.PHONY: $(BUILD_DIR)/io_program
-$(BUILD_DIR)/io_program: $(BUILD_DIR)/io_program_exe
+.PHONY: io_program
+io_program: $(BUILD_DIR)/io_program_exe
 
 
 clean:

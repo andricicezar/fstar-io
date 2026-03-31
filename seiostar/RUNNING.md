@@ -27,17 +27,17 @@ Note: export file generated with `opam switch export`. First build takes a while
 3. Build (activate only-fstar first):
 
         $ opam switch only-fstar && eval $(opam env)
-        $ make io_program_exe
+        $ make io_program
 
 The Peregrine step (`io_program_raw.mlf`) runs automatically under
 `opam exec --switch=only-peregrine`, no manual switch needed for that step.
 
 4. Test io_program_exe:
 
-        seiostar/io$ echo "foo" > temp
-        seiostar/io$ ./io_program_exe
+        seiostar/io$ echo "foo" > .build/temp
+        seiostar/io$ .build/io_program_exe
         true
-        seiostar/io$ cat temp
+        seiostar/io$ cat .build/temp
         overwrite
 
 5. Test other agents:

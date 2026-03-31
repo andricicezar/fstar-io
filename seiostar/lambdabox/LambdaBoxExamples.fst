@@ -27,4 +27,4 @@ let io_program (main : exp) (agent : exp) : program =
 // other agents available: lazy_agent, write_twice_agent, write_mixedup_agent, indirect_agent
 let _ =
   assert True
-    by (write_term_to_file "io_program.ast" (`(string_of_prog (io_program pt_main write_agent))); trivial ())
+    by (write_term_to_file ".build/io_program.ast" (`(string_of_prog (io_program pt_main write_agent))); trivial ())
