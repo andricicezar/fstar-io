@@ -26,8 +26,19 @@ type fs_oval (g:typ_env) (t:qType) (wpG:spec_env g t) =
 let spec_env_return (#g:typ_env) (#a:qType) (x:fs_val a) : spec_env g a =
   fun _ -> pure_return _ x
 
-let spec_env_bind (#g:typ_env) (#a:qType) (#b:qType) (wpP:spec_env g a) (wpK:(fs_val a -> spec_env g b)) : spec_env g b =
-  fun fsG -> pure_bind_wp _ _ (wpP fsG) (fun x -> wpK x fsG)
+unfold
+val spec_env_bind : #g:typ_env ->
+                    #a:qType ->
+                    #b:qType ->
+                    wpM : spec_env g a ->
+                    wpK : (spec_env (extend a g) b) ->
+                    spec_env g b
+let spec_env_bind wpM wpK fsG =
+  M.elim_pure_wp_monotonicity (wpM fsG);
+  pure_bind_wp _ _ (wpM fsG) (fun x -> wpK (stack fsG x))
+
+let spec_env_bind' (#g:typ_env) (#a:qType) (#b:qType) (wpP:spec_env g a) (wpK:(fs_val a -> spec_env g b)) : spec_env g b =
+  spec_env_bind wpP (fun fsG -> wpK (hd fsG) (tail fsG))
 
 let spec_env_axiom (#g:typ_env) (#a:qType) : spec_env (extend a g) a =
   fun fsG -> pure_return _ (hd fsG)
@@ -146,7 +157,7 @@ let fs_oval_fmap
   (#wpP : spec_env g a)
   (m : fs_oval g a wpP)
   (f : fs_val a -> fs_val b)
-  : fs_oval g b (spec_env_bind wpP (fun x -> spec_env_return (f x))) =
+  : fs_oval g b (spec_env_bind' wpP (fun x -> spec_env_return (f x))) =
   fun fsG ->
     M.elim_pure_wp_monotonicity (wpP fsG);
     f (m fsG)
@@ -222,7 +233,7 @@ val fs_oval_eq_string :
   s1 : fs_oval g qString wpS1 ->
   #wpS2 : spec_env g qString ->
   s2 : fs_oval g qString wpS2 ->
-  fs_oval g qBool (spec_env_bind wpS1 (fun s1' -> spec_env_bind wpS2 (fun s2' -> spec_env_return (s1' = s2'))))
+  fs_oval g qBool (spec_env_bind' wpS1 (fun s1' -> spec_env_bind' wpS2 (fun s2' -> spec_env_return (s1' = s2'))))
 let fs_oval_eq_string #_ #wpS1 s1 #wpS2 s2 fsG =
   M.elim_pure_wp_monotonicity (wpS1 fsG);
   M.elim_pure_wp_monotonicity (wpS2 fsG);
@@ -263,7 +274,7 @@ val fs_oval_pair : #g : typ_env ->
                    x : fs_oval g a wpX ->
                    #wpY : spec_env g b ->
                    y : fs_oval g b wpY ->
-                   fs_oval g (a ^* b) (spec_env_bind wpX (fun x -> spec_env_bind wpY (fun y -> spec_env_return (x, y))))
+                   fs_oval g (a ^* b) (spec_env_bind' wpX (fun x -> spec_env_bind' wpY (fun y -> spec_env_return (x, y))))
 let fs_oval_pair #_ #_ #_ #wpX x #wpY y fsG =
   M.elim_pure_wp_monotonicity (wpX fsG);
   M.elim_pure_wp_monotonicity (wpY fsG);
@@ -321,7 +332,7 @@ val fs_ocomp_return_oval :
         #a:qType ->
         #wpX:spec_env g a ->
         x:fs_oval g a wpX ->
-        fs_ocomp g a (spec_env_bind wpX (fun x -> spec_env_return_comp (io_return x)))
+        fs_ocomp g a (spec_env_bind' wpX (fun x -> spec_env_return_comp (io_return x)))
 let fs_ocomp_return_oval #_ #_ #wpX x fsG =
   M.elim_pure_wp_monotonicity (wpX fsG);
   io_return (x fsG)
@@ -334,9 +345,6 @@ val fs_ocomp_return_val :
 let fs_ocomp_return_val g a x =
   fs_ocomp_return_oval (fs_oval_return g x)
 
-let spec_env_bind_ocomp (#g:typ_env) (#a:qType) (#b:qType) (wpP:spec_env g a) (wpK:(spec_env (extend a g) b)) : spec_env g b =
-  fun fsG -> pure_bind_wp _ _ (wpP fsG) (fun x -> wpK (stack fsG x))
-
 unfold
 val fs_ocomp_bind : #g:typ_env ->
                     #a:qType ->
@@ -345,8 +353,13 @@ val fs_ocomp_bind : #g:typ_env ->
                     m:fs_ocomp g a wpM ->
                     #wpK : (spec_env (extend a g) b) ->
                     k:fs_ocomp (extend a g) b wpK ->
-                    fs_ocomp g b (spec_env_bind_ocomp wpM wpK)
-let fs_ocomp_bind #_ #_ #_ #wpM m #wpK k fsG =
+                    fs_ocomp g b (spec_env_bind wpM wpK)
+let fs_ocomp_bind #g #_ #b #wpM m #wpK k fsG :
+  PURE (fs_comp b) (fs_ocomp_wp g _ (spec_env_bind wpM wpK) fsG)
+  by (
+    dump "H"
+  ) =
+  // admit ();
   M.elim_pure_wp_monotonicity (wpM fsG);
   fs_comp_bind (m fsG) (fun x ->
     k (stack fsG x))
@@ -356,18 +369,21 @@ unfold
 val fs_ocomp_bind' : #g:typ_env ->
                     #a:qType ->
                     #b:qType ->
-                    m:fs_ocomp g a ->
-                    k:(fs_val a -> fs_ocomp g b) ->
-                    fs_ocomp g b
+                    #wpM : spec_env g a ->
+                    m:fs_ocomp g a wpM ->
+                    #wpK : (fs_val a -> spec_env g b) ->
+                    k:(x:fs_val a -> fs_ocomp g b (wpK x)) ->
+                    fs_ocomp g b (spec_env_bind' wpM wpK)
 let fs_ocomp_bind' m k =
   fs_ocomp_bind m (fun fsG -> k (hd fsG) (tail fsG))
 
 val fs_ocomp_fmap : #g:typ_env ->
                     #a:qType ->
                     #b:qType ->
-                    p : fs_ocomp g a ->
+                    #wpP : spec_env g a ->
+                    p : fs_ocomp g a wpP ->
                     f : (fs_val a -> fs_val b) ->
-                    fs_ocomp g b
+                    fs_ocomp g b (spec_env_bind' wpP (fun x -> spec_env_return_comp (io_return (f x))))
 let fs_ocomp_fmap p f =
   fs_ocomp_bind' p (fun p' ->
     fs_ocomp_return_val _ _ (f p'))
@@ -377,66 +393,86 @@ unfold
 val fs_ocomp_call :
         #g:typ_env ->
         o:io_ops ->
-        args:fs_ocomp g (q_io_args o) ->
-        fs_ocomp g (q_io_res o)
+        #wpArgs : spec_env g (q_io_args o) ->
+        args:fs_ocomp g (q_io_args o) wpArgs ->
+        fs_ocomp g (q_io_res o) (spec_env_bind' wpArgs (fun a -> spec_env_return_comp (io_call o a)))
 let fs_ocomp_call o args =
   fs_ocomp_bind' args (fun args' ->
     fs_ocomp_return _ (io_call o args'))
 
+#push-options "--z3rlimit 100"
 unfold
 val fs_ocomp_call_oval :
         #g:typ_env ->
         o:io_ops ->
-        args:fs_oval g (q_io_args o) ->
-        fs_ocomp g (q_io_res o)
-let fs_ocomp_call_oval o args fsG = io_call o (args fsG)
+        #wpArgs : spec_env g (q_io_args o) ->
+        args:fs_oval g (q_io_args o) wpArgs ->
+        fs_ocomp g (q_io_res o) (spec_env_bind' (spec_env_bind' wpArgs (fun x -> spec_env_return_comp (io_return x))) (fun a -> spec_env_return_comp (io_call o a)))
+let fs_ocomp_call_oval o args =
+  fs_ocomp_call o (fs_ocomp_return_oval args)
+#pop-options
 
-unfold
-val fs_oval_lambda_ocomp : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                body :fs_ocomp (extend a g) b ->
-                fs_oval g (a ^->!@ b)
-let fs_oval_lambda_ocomp #_ #_ body fsG x = body (stack fsG x)
+// unfold
+// val fs_oval_lambda_ocomp : #g :typ_env ->
+//                 #a :qType ->
+//                 #b :qType ->
+//                 #wpBody : spec_env (extend a g) b ->
+//                 body :fs_ocomp (extend a g) b wpBody ->
+//                 fs_oval g (a ^->!@ b) (spec_env_lambda_ocomp wpBody)
+// let fs_oval_lambda_ocomp #_ #_ #_ #_ body fsG x = body (stack fsG x)
 
 unfold
 val fs_ocomp_app_oval_oval :
                 #g : typ_env ->
                 #a : qType ->
                 #b : qType ->
-                f :fs_oval g (a ^->!@ b) ->
-                x :fs_oval g a ->
-                fs_ocomp g b
-let fs_ocomp_app_oval_oval f x fsG =
+                #wpF : spec_env g (a ^->!@ b) ->
+                f :fs_oval g (a ^->!@ b) wpF ->
+                #wpX : spec_env g a ->
+                x :fs_oval g a wpX ->
+                fs_ocomp g b (spec_env_bind' wpF (fun f' -> spec_env_bind' wpX (fun x' -> spec_env_return_comp (f' x'))))
+let fs_ocomp_app_oval_oval #_ #_ #_ #wpF f #wpX x fsG =
+  M.elim_pure_wp_monotonicity (wpF fsG);
+  M.elim_pure_wp_monotonicity (wpX fsG);
   (f fsG) (x fsG)
 
 unfold
 val fs_ocomp_if_val : #g :typ_env ->
                 #a  : qType ->
                 c   : fs_val qBool ->
-                t   : fs_ocomp g a ->
-                e   : fs_ocomp g a ->
-                fs_ocomp g a
+                #wpT : spec_env g a ->
+                t   : fs_ocomp g a wpT ->
+                #wpE : spec_env g a ->
+                e   : fs_ocomp g a wpE ->
+                fs_ocomp g a (fun fsG -> if c then wpT fsG else wpE fsG)
 let fs_ocomp_if_val c t e fsG =
-  fs_comp_if_val c (t fsG) (e fsG)
+  if c then t fsG else e fsG
 
 unfold
 val fs_ocomp_if_oval : #g :typ_env ->
                 #a  : qType ->
-                c   : fs_oval g qBool ->
-                t   : fs_ocomp g a ->
-                e   : fs_ocomp g a ->
-                fs_ocomp g a
-let fs_ocomp_if_oval c t e fsG =
+                #wpC : spec_env g qBool ->
+                c   : fs_oval g qBool wpC ->
+                #wpT : spec_env g a ->
+                t   : fs_ocomp g a wpT ->
+                #wpE : spec_env g a ->
+                e   : fs_ocomp g a wpE ->
+                fs_ocomp g a (spec_env_bind' wpC (fun c' -> if c' then wpT else wpE))
+let fs_ocomp_if_oval #_ #_ #wpC c t e fsG =
+  M.elim_pure_wp_monotonicity (wpC fsG);
   fs_ocomp_if_val (c fsG) t e fsG
 
 val fs_ocomp_if : #g :typ_env ->
                   #a : qType ->
-                  c  : fs_ocomp g qBool ->
-                  t  : fs_ocomp g a ->
-                  e  : fs_ocomp g a ->
-                  fs_ocomp g a
+                  #wpC : spec_env g qBool ->
+                  c  : fs_ocomp g qBool wpC ->
+                  #wpT : spec_env g a ->
+                  t  : fs_ocomp g a wpT ->
+                  #wpE : spec_env g a ->
+                  e  : fs_ocomp g a wpE ->
+                  fs_ocomp g a (spec_env_bind' wpC (fun c' -> if c' then wpT else wpE))
 let fs_ocomp_if c t e =
+  admit ();
   fs_ocomp_bind' c (fun c' -> fs_ocomp_if_val c' t e)
 
 unfold
@@ -445,9 +481,11 @@ val fs_ocomp_case_val : #g :typ_env ->
                 #b : qType ->
                 #c : qType ->
                 cond : fs_val (a ^+ b) ->
-                inlc : fs_ocomp (extend a g) c ->
-                inrc : fs_ocomp (extend b g) c ->
-                fs_ocomp g c
+                #wpInlc : spec_env (extend a g) c ->
+                inlc : fs_ocomp (extend a g) c wpInlc ->
+                #wpInrc : spec_env (extend b g) c ->
+                inrc : fs_ocomp (extend b g) c wpInrc ->
+                fs_ocomp g c (fun fsG -> match cond with | Inl x -> wpInlc (stack fsG x) | Inr x -> wpInrc (stack fsG x))
 let fs_ocomp_case_val cond inlc inrc fsG =
   match cond with
   | Inl x -> inlc (stack fsG x)
@@ -458,42 +496,52 @@ val fs_ocomp_case_oval : #g :typ_env ->
                 #a  : qType ->
                 #b : qType ->
                 #c : qType ->
-                cond : fs_oval g (a ^+ b) ->
-                inlc : fs_ocomp (extend a g) c ->
-                inrc : fs_ocomp (extend b g) c ->
-                fs_ocomp g c
-let fs_ocomp_case_oval cond inlc inrc fsG =
+                #wpCond : spec_env g (a ^+ b) ->
+                cond : fs_oval g (a ^+ b) wpCond ->
+                #wpInlc : spec_env (extend a g) c ->
+                inlc : fs_ocomp (extend a g) c wpInlc ->
+                #wpInrc : spec_env (extend b g) c ->
+                inrc : fs_ocomp (extend b g) c wpInrc ->
+                fs_ocomp g c (spec_env_case wpCond wpInlc wpInrc)
+let fs_ocomp_case_oval #_ #_ #_ #_ #wpCond cond inlc inrc fsG =
+  M.elim_pure_wp_monotonicity (wpCond fsG);
   fs_ocomp_case_val (cond fsG) inlc inrc fsG
 
 val fs_ocomp_case : #g :typ_env ->
                 #a  : qType ->
                 #b : qType ->
                 #c : qType ->
-                cond : fs_ocomp g (a ^+ b) ->
-                inlc : fs_ocomp (extend a g) c ->
-                inrc : fs_ocomp (extend b g) c ->
-                fs_ocomp g c
+                #wpCond : spec_env g (a ^+ b) ->
+                cond : fs_ocomp g (a ^+ b) wpCond ->
+                #wpInlc : spec_env (extend a g) c ->
+                inlc : fs_ocomp (extend a g) c wpInlc ->
+                #wpInrc : spec_env (extend b g) c ->
+                inrc : fs_ocomp (extend b g) c wpInrc ->
+                fs_ocomp g c (spec_env_bind' wpCond (fun cond' -> fun fsG -> match cond' with | Inl x -> wpInlc (stack fsG x) | Inr x -> wpInrc (stack fsG x)))
 let fs_ocomp_case cond inlc inrc =
   fs_ocomp_bind' cond (fun cond' ->
     fs_ocomp_case_val cond' inlc inrc)
 
-let fs_ocomp_var (g:typ_env) (x:var{Some? (g x)}) : fs_ocomp g (Some?.v (g x)) =
+let fs_ocomp_var (g:typ_env) (x:var{Some? (g x)}) : fs_ocomp g (Some?.v (g x)) (spec_env_bind' (spec_env_index x) (fun v -> spec_env_return_comp (io_return v))) =
   fs_ocomp_return_oval (fs_oval_var g x)
 
-val fs_ocomp_lambda : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                body :fs_ocomp (extend a g) b ->
-                fs_ocomp g (a ^->!@ b)
-let fs_ocomp_lambda body =
-  fs_ocomp_return_oval (fs_oval_lambda_ocomp body)
+// val fs_ocomp_lambda : #g :typ_env ->
+//                 #a :qType ->
+//                 #b :qType ->
+//                 #wpBody : spec_env (extend a g) b ->
+//                 body :fs_ocomp (extend a g) b wpBody ->
+//                 fs_ocomp g (a ^->!@ b) (spec_env_bind' (spec_env_lambda_ocomp wpBody) (fun x -> spec_env_return_comp (io_return x)))
+// let fs_ocomp_lambda body =
+//   fs_ocomp_return_oval (fs_oval_lambda_ocomp body)
 
 val fs_ocomp_app : #g:typ_env ->
                     #a:qType ->
                     #b:qType ->
-                    f:fs_ocomp g (a ^->!@ b) ->
-                    x:fs_ocomp g a ->
-                    fs_ocomp g b
+                    #wpF : spec_env g (a ^->!@ b) ->
+                    f:fs_ocomp g (a ^->!@ b) wpF ->
+                    #wpX : spec_env g a ->
+                    x:fs_ocomp g a wpX ->
+                    fs_ocomp g b (spec_env_bind' wpF (fun f' -> spec_env_bind' wpX (fun x' -> spec_env_return_comp (f' x'))))
 let fs_ocomp_app f x =
   fs_ocomp_bind' f (fun f' ->
     fs_ocomp_bind' x (fun x' ->
@@ -502,18 +550,22 @@ let fs_ocomp_app f x =
 val fs_ocomp_pair : #g : typ_env ->
                    #a : qType ->
                    #b : qType ->
-                   x : fs_ocomp g a ->
-                   y : fs_ocomp g b ->
-                   fs_ocomp g (a ^* b)
+                   #wpX : spec_env g a ->
+                   x : fs_ocomp g a wpX ->
+                   #wpY : spec_env g b ->
+                   y : fs_ocomp g b wpY ->
+                   fs_ocomp g (a ^* b) (spec_env_bind' wpX (fun x' -> spec_env_bind' wpY (fun y' -> spec_env_return_comp (io_return (fs_val_pair x' y')))))
 let fs_ocomp_pair x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (fs_val_pair x' y')))
 
 val fs_ocomp_string_eq : #g : typ_env ->
-                         x : fs_ocomp g qString ->
-                         y : fs_ocomp g qString ->
-                         fs_ocomp g qBool
+                         #wpX : spec_env g qString ->
+                         x : fs_ocomp g qString wpX ->
+                         #wpY : spec_env g qString ->
+                         y : fs_ocomp g qString wpY ->
+                         fs_ocomp g qBool (spec_env_bind' wpX (fun x' -> spec_env_bind' wpY (fun y' -> spec_env_return_comp (io_return (x' = y')))))
 let fs_ocomp_string_eq x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
