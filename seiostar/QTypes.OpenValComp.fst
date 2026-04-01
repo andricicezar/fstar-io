@@ -15,7 +15,6 @@ let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
     even if they are synonyms *)
 
 type fs_val (t:qType) = get_Type t
-type fs_comp (t:qType) = io (fs_val t)
 
 type spec_env (g:typ_env) (a:qType) =
   eval_env g -> pure_wp (fs_val a)
@@ -61,26 +60,29 @@ let spec_env_app #_ #a #b wpF wpX =
       pure_bind_wp _ _ (wpX fsG) (fun x' ->
         pure_return _ (f' x'))))
 
-let fs_ocomp_wp (g:typ_env) (t:qType) (wpG:spec_env g t) fsG : pure_wp (fs_comp t) =
-  // mk_pure_wp (fun (p:pure_post (fs_comp t)) -> 
-  //   forall comp. theta (comp) ⊑ wp_lift_pure_hist (wpG fsG) ==> p comp)
+// let fs_ocomp_wp (g:typ_env) (t:qType) (wpG:spec_env g t) fsG : pure_wp (fs_comp t) =
+//   mk_pure_wp (fun (p:pure_post (fs_comp t)) ->
+//     forall (comp:fs_comp t). theta (comp) ⊑ wp_lift_pure_hist (wpG fsG) ==> p comp)
   // CA: I think the previous would be intuitively what we want,
   //     which could be simplified to the following since the operations
   //     have no pre-conditions for now.
   // Q:  The use of `as_requires` is weird, but we do not have a `p` to apply to `wpG`.
-  mk_pure_wp (fun (p:pure_post (fs_comp t)) -> 
-    as_requires (wpG fsG) /\ forall comp. p comp)
+  // mk_pure_wp (fun (p:pure_post (fs_comp t)) ->
+  //   as_requires (wpG fsG) /\ forall comp. p comp)
+
+// type fs_comp (t:qType) = io (fs_val t)
+type fs_comp_ref (t:qType) (ref:fs_val t -> Type0) = io (r:(fs_val t){ref r})
 
 type fs_ocomp (g:typ_env) (t:qType) (wpG:spec_env g t) =
-  fsG:eval_env g -> PURE (fs_comp t) (fs_ocomp_wp g t wpG fsG)
+  // fsG:eval_env g -> PURE (fs_comp t) (fs_ocomp_wp g t wpG fsG)
+  fsG:eval_env g -> fs_comp_ref t (fun r -> wpG fsG `pure_stronger _` pure_return _ r)
 
-let spec_env_return_comp (#g:typ_env) (#a:qType) (comp:fs_comp a) : spec_env g a =
-  fun _ -> mk_pure_wp (fun (p:pure_post (fs_val a)) -> 
-    // TODO: forall h here does not make much sense, does it?
-    // since there is no pre on the operations, this may work, but it is a hack
-    // and to fix it, we should use hists
-    forall r h. theta comp h (fun _ r' -> r == r') ==> p r)
-    // io_bind comp (fun x -> pure_return _ x p))
+let spec_env_return_comp_ref (#g:typ_env) (#a:qType) #ref (comp:fs_comp_ref a ref) : spec_env g a =
+  fun _ -> mk_pure_wp (fun (p:pure_post (fs_val a)) -> forall r. ref r ==> p r)
+
+
+let spec_env_return_oval (#g:typ_env) (#a:qType) #wpX (x:fs_oval g a wpX) : spec_env g a =
+  wpX
 
 (** Closed values **)
 let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
@@ -107,50 +109,63 @@ let fs_val_pair (#a #b:qType) (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
 unfold
 val fs_comp_bind : #a:qType ->
                     #b:qType ->
-                    m:fs_comp a ->
-                    k:(fs_val a -> fs_comp b) ->
-                    fs_comp b
-let fs_comp_bind m k = io_bind m k
+                    #refM:(fs_val a -> Type0) ->
+                    m:fs_comp_ref a refM ->
+                    #refK:(fs_val b -> Type0) ->
+                    k:(fs_val a -> fs_comp_ref b refK) ->
+                    fs_comp_ref b refK
+let fs_comp_bind m k = 
+  io_bind m k
+
+let recast_ref #a (#refM:fs_val a -> Type0) (#refK:fs_val a -> Type0) (m:fs_comp_ref a refM) : 
+  Pure (fs_comp_ref a refK) 
+    (requires (forall x. refM x ==> refK x)) 
+    (ensures fun _ -> True) =
+  io_bind m (fun x -> io_return #(x:(fs_val a){refK x}) x)
 
 unfold
 val fs_comp_if_val :
                 #a  : qType ->
                 c   : fs_val qBool ->
-                t   : fs_comp a ->
-                e   : fs_comp a ->
-                fs_comp a
+                #refT : (fs_val a -> Type0) ->
+                t   : fs_comp_ref a refT ->
+                #refE : (fs_val a -> Type0) ->
+                e   : fs_comp_ref a refE ->
+                fs_comp_ref a (fun r -> (c ==> refT r) /\ (~c ==> refE r))
 let fs_comp_if_val c t e =
-  if c then t else e
+  if c then (recast_ref t) else (recast_ref e)
 
 unfold
 val fs_comp_case_val : #a  : qType ->
                 #b : qType ->
                 #c : qType ->
                 cond : fs_val (a ^+ b) ->
-                inlc : (fs_val a -> fs_comp c) ->
-                inrc : (fs_val b -> fs_comp c) ->
-                fs_comp c
+                #refInlc : (fs_val c -> Type0) ->
+                inlc : (fs_val a -> fs_comp_ref c refInlc) ->
+                #refInrc : (fs_val c -> Type0) ->
+                inrc : (fs_val b -> fs_comp_ref c refInrc) ->
+                fs_comp_ref c (match cond with Inl x -> refInlc | Inr x -> refInrc)
 let fs_comp_case_val cond inlc inrc =
   match cond with
   | Inl x -> inlc x
   | Inr x -> inrc x
-  
+
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
-        fs_comp (q_io_res o)
+        fs_comp_ref (q_io_res o) (fun _ -> True)
 let fs_comp_call_val o args = io_call o args
 
 (** Open values **)
 unfold
-let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) 
+let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t)
   : fs_oval g t (spec_env_return x)
   = fun _ -> x
 
 open FStar.Tactics
 
 unfold
-let fs_oval_fmap 
+let fs_oval_fmap
   (#g:typ_env)
   (#a:qType)
   (#b:qType)
@@ -163,19 +178,19 @@ let fs_oval_fmap
     f (m fsG)
 
 unfold
-let fs_oval_axiom (g:typ_env) (t:qType) 
+let fs_oval_axiom (g:typ_env) (t:qType)
   : fs_oval (extend t g) t (spec_env_axiom) =
   fun fsG -> hd fsG
 
 unfold
-let fs_oval_weaken (#g:typ_env) (#a:qType) (b:qType) (#wpX:spec_env g a) (x:fs_oval g a wpX) 
-  : fs_oval (extend b g) a (spec_env_weaken wpX) 
+let fs_oval_weaken (#g:typ_env) (#a:qType) (b:qType) (#wpX:spec_env g a) (x:fs_oval g a wpX)
+  : fs_oval (extend b g) a (spec_env_weaken wpX)
   = fun fsG ->
     M.elim_pure_wp_monotonicity (wpX (tail fsG));
     x (tail fsG)
 
 unfold
-let fs_oval_var (g:typ_env) (x:var{Some? (g x)}) 
+let fs_oval_var (g:typ_env) (x:var{Some? (g x)})
   : fs_oval g (Some?.v (g x)) (spec_env_index x)
   = fun fsG -> index fsG x
 
@@ -188,7 +203,7 @@ val fs_oval_app: #g : typ_env ->
                  #wpX : spec_env g a ->
                  x :fs_oval g a wpX ->
                  fs_oval g b (spec_env_app wpF wpX)
-let fs_oval_app #_ #_ #_ #wpF f #wpX x fsG = 
+let fs_oval_app #_ #_ #_ #wpF f #wpX x fsG =
   M.elim_pure_wp_monotonicity (wpF fsG);
   M.elim_pure_wp_monotonicity (wpX fsG);
   (f fsG) (x fsG)
@@ -207,14 +222,14 @@ let spec_env_lambda_tot #g #a #b #wpBody body fsG : pure_wp (fs_val (a ^-> b)) b
 )= (** Cezar: this looks exactly like what F* generates **)
   mk_pure_wp (fun (p:pure_post (fs_val (a ^-> b))) ->
     (forall (x:a._1). auto_squash (wpBody (stack fsG x) (fun _ -> True))) /\
-    (pure_bind_wp _ _ 
+    (pure_bind_wp _ _
       (pure_return (fs_val (a ^-> b)) (fun x -> body (stack fsG x))))
       (pure_return (fs_val (a ^-> b))) p)
     // pure_return (fs_val (a ^-> b)) (fun (x:a._1) -> body (stack fsG x)) p)
     // p (fun (x:fs_val a) -> body (stack fsG x)))
 
 unfold
-let fs_oval_lambda 
+let fs_oval_lambda
   (#g :typ_env)
   (#a :qType)
   (#b :qType)
@@ -310,10 +325,10 @@ val fs_oval_case : #g :typ_env ->
 let fs_oval_case #_ #_ #_ #_ #wpCond cond #wpInlc inlc #wpInrc inrc fsG =
   M.elim_pure_wp_monotonicity (wpCond fsG);
   match cond fsG with
-  | Inl x -> 
+  | Inl x ->
     M.elim_pure_wp_monotonicity (wpInlc (stack fsG x));
     inlc (stack fsG x)
-  | Inr x -> 
+  | Inr x ->
     M.elim_pure_wp_monotonicity (wpInrc (stack fsG x));
     inrc (stack fsG x)
 
@@ -322,9 +337,10 @@ unfold
 val fs_ocomp_return :
         g:typ_env ->
         #a:qType ->
-        x:fs_comp a ->
-        fs_ocomp g a (spec_env_return_comp x)
-let fs_ocomp_return _ x _ = x
+        #refX:(fs_val a -> Type0) ->
+        x:fs_comp_ref a refX ->
+        fs_ocomp g a (spec_env_return_comp_ref x)
+let fs_ocomp_return g #a x _ = recast_ref x
 
 unfold
 val fs_ocomp_return_oval :
@@ -332,9 +348,11 @@ val fs_ocomp_return_oval :
         #a:qType ->
         #wpX:spec_env g a ->
         x:fs_oval g a wpX ->
-        fs_ocomp g a (spec_env_bind' wpX (fun x -> spec_env_return_comp (io_return x)))
-let fs_ocomp_return_oval #_ #_ #wpX x fsG =
+        fs_ocomp g a wpX
+let fs_ocomp_return_oval #_ #a #wpX x fsG : 
+  fs_comp_ref a (fun r -> wpX fsG `pure_stronger _` pure_return _ r) by (dump "H")=
   M.elim_pure_wp_monotonicity (wpX fsG);
+  assume (as_requires (wpX fsG));
   io_return (x fsG)
 
 val fs_ocomp_return_val :
@@ -359,7 +377,7 @@ let fs_ocomp_bind #g #_ #b #wpM m #wpK k fsG :
   by (
     dump "H"
   ) =
-  // admit ();
+  admit ();
   M.elim_pure_wp_monotonicity (wpM fsG);
   fs_comp_bind (m fsG) (fun x ->
     k (stack fsG x))
