@@ -2,49 +2,81 @@ module QTypes
 
 open LambdaIO
 open IOStar
+open FStar.Universe
+
+(** Universe wrapper to accommodate io being in universe max 1 a **)
+noeq
+type uType : Type u#2 =
+| U0 : Type u#0 -> uType
+| U1 : Type u#1 -> uType
+
+(** Operations on uType, following the pattern of ^-> from QExp.fsti **)
+let uArr (a b:uType) : uType =
+  match a, b with
+  | U0 a, U0 b -> U0 (a -> b)
+  | U0 a, U1 b -> U1 (a -> b)
+  | U1 a, U0 b -> U1 (a -> b)
+  | U1 a, U1 b -> U1 (a -> b)
+
+let uArrIO (a b:uType) : uType =
+  match a, b with
+  | U0 a, U0 b -> U1 (a -> io b)
+  | U0 a, U1 b -> U1 (a -> io b)
+  | U1 a, U0 b -> U1 (a -> io b)
+  | U1 a, U1 b -> U1 (a -> io b)
+
+let uPair (a b:uType) : uType =
+  match a, b with
+  | U0 a, U0 b -> U0 (a & b)
+  | U0 a, U1 b -> U1 (a & b)
+  | U1 a, U0 b -> U1 (a & b)
+  | U1 a, U1 b -> U1 (a & b)
+
+let uSum (a b:uType) : uType =
+  match a, b with
+  | U0 a, U0 b -> U0 (either a b)
+  | U0 a, U1 b -> U1 (either a b)
+  | U1 a, U0 b -> U1 (either a b)
+  | U1 a, U1 b -> U1 (either a b)
 
 (** We define quotation for Type **)
 
 (** We need quotation for types to define the logical relation. **)
 noeq
-type type_quotation : Type0 -> Type u#1 =
-| QUnit : type_quotation unit
-| QBool : type_quotation bool
-| QFileDescriptor : type_quotation file_descr
-| QString : type_quotation string
-| QArr : #t1:Type ->
-         #t2:Type ->
-         type_quotation t1 ->
-         type_quotation t2 ->
-         type_quotation (t1 -> t2)
-| QArrIO : #t1:Type ->
-         #t2:Type ->
-         type_quotation t1 ->
-         type_quotation t2 ->
-         type_quotation (t1 -> io t2)
-| QPair : #t1:Type ->
-          #t2:Type ->
-          type_quotation t1 ->
-          type_quotation t2 ->
-          type_quotation (t1 & t2)
-| QSum  : #t1:Type ->
-          #t2:Type ->
-          type_quotation t1 ->
-          type_quotation t2 ->
-          type_quotation (either t1 t2)
+type type_quotation : uType -> Type u#2 =
+| QUnit : type_quotation (U0 unit)
+| QBool : type_quotation (U0 bool)
+| QFileDescriptor : type_quotation (U0 file_descr)
+| QString : type_quotation (U0 string)
+| QArr : #u1:uType -> #u2:uType ->
+         type_quotation u1 ->
+         type_quotation u2 ->
+         type_quotation (uArr u1 u2)
+| QArrIO : #u1:uType -> #u2:uType ->
+         type_quotation u1 ->
+         type_quotation u2 ->
+         type_quotation (uArrIO u1 u2)
+| QPair : #u1:uType -> #u2:uType ->
+          type_quotation u1 ->
+          type_quotation u2 ->
+          type_quotation (uPair u1 u2)
+| QSum  : #u1:uType -> #u2:uType ->
+          type_quotation u1 ->
+          type_quotation u2 ->
+          type_quotation (uSum u1 u2)
 
-let test_match t (tq:type_quotation t) = (** why does this work so well? **)
+let test_match (t:uType) (tq:type_quotation t) =
   match tq with
-  | QUnit -> assert (t == unit)
-  | QBool -> assert (t == bool)
-  | QFileDescriptor -> assert (t == file_descr)
-  | QString -> assert (t == string)
-  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
-  | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
-  | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
-  | QSum #t1 #t2 _ _ -> assert (t == either t1 t2)
+  | QUnit -> assert (t == U0 unit)
+  | QBool -> assert (t == U0 bool)
+  | QFileDescriptor -> assert (t == U0 file_descr)
+  | QString -> assert (t == U0 string)
+  | QArr #u1 #u2 _ _ -> assert (t == uArr u1 u2)
+  | QArrIO #u1 #u2 _ _ -> assert (t == uArrIO u1 u2)
+  | QPair #u1 #u2 _ _ -> assert (t == uPair u1 u2)
+  | QSum #u1 #u2 _ _ -> assert (t == uSum u1 u2)
 
-let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
+let rec type_quotation_to_typ #s (qt:type_quotation s) : Tot typ (decreases qt) =
   match qt with
   | QUnit -> TUnit
   | QBool -> TBool
@@ -58,7 +90,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
 
 (** Type of Quotable Types **)
 type qType =
-  t:Type & type_quotation t
+  t:uType & type_quotation t
 
 let pack (q:type_quotation 's) : qType = (| _, q |)
 
@@ -66,10 +98,10 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
 
-let qUnit : qType = (| _, QUnit |)
-let qBool : qType = (| _, QBool |)
-let qFileDescr : qType = (| _, QFileDescriptor |)
-let qString : qType = (| _, QString |)
+let qUnit : qType = (| U0 unit, QUnit |)
+let qBool : qType = (| U0 bool, QBool |)
+let qFileDescr : qType = (| U0 file_descr, QFileDescriptor |)
+let qString : qType = (| U0 string, QString |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =
