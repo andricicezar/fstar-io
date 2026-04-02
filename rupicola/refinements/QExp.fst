@@ -348,7 +348,7 @@ type typing_closed #a (#wp:spec_env empty a) (x:a) =
 type typing_debug #a (wp:spec_env empty a) (x:a) =
   typing_closed #a #wp x
 
-let (⊢) (#a:Type)(g:env) (#wp:spec_env g a) (x:fs_oexp g a wp) =
+let (⊢) (#a:Type) (g:env) (#wp:spec_env g a) (x:fs_oexp g a wp) =
   typing g wp x
 
 let (⊩) (a:Type) (x:a) =
