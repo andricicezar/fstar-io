@@ -5,30 +5,15 @@ open Trace
 open RQ.TypingRelation
 open QTypes.HelperTactics
 
-#push-options "--no_smt"
-
-open Examples
-
-let test_ut_unit
-  : qUnit ⊩ ut_unit
-  = Qtt
-
-let test_ut_true
-  : qBool ⊩ ut_true
-  = QTrue
-
-let test_ut_false
-  : qBool ⊩ ut_false
-  = QFalse
-
-val var0 : fs_oval (extend qBool empty) qBool
+val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
 
-val var1 : fs_oval (extend qBool (extend qBool empty)) qBool
-let var1 fsG = hd (tail fsG)
+// val var1 : fs_oval (extend qBool (extend qBool empty)) qBool
+//   (spec_env_bind (spec_env_weaken) (spec_env_axiom))
+// let var1 fsG = hd (tail fsG)
 
-let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
-  fun fsG -> hd (tail (tail fsG))
+// let var2 : fs_oval (extend qBool (extend qBool (extend qBool empty))) qBool =
+//   fun fsG -> hd (tail (tail fsG))
 
 let test_var0
   : (extend qBool empty) ⊢ var0
@@ -40,49 +25,65 @@ let qVar1 #g #a #b : (extend b (extend a g)) ⊢ (fun fsG -> hd (tail fsG)) =
 let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (tail (tail fsG))) =
   QWeaken qVar1
 
-let test_var1
-  : (extend qBool (extend qBool empty)) ⊢ var1
-  = qVar1
+// let test_var1
+//   : (extend qBool (extend qBool empty)) ⊢ var1
+//   = qVar1
 
-let test_var2
-  : (extend qBool (extend qBool (extend qBool empty))) ⊢ var2
-  = qVar2
+// let test_var2
+//   : (extend qBool (extend qBool (extend qBool empty))) ⊢ var2
+//   = qVar2
+
+#push-options "--no_smt"
+
+open Examples
+
+let test_ut_unit
+  : qUnit ⊩ ut_unit
+  = mk_dturniqet (fun _ -> Qtt)
+
+let test_ut_true
+  : qBool ⊩ ut_true
+  = mk_dturniqet (fun _ -> QTrue)
+
+let test_ut_false
+  : qBool ⊩ ut_false
+  = mk_dturniqet (fun _ -> QFalse)
 
 let test_constant
   : ((qBool ^-> qBool) ⊩ constant)
-  = QLambda QTrue
+  = mk_dturniqet (fun _ -> QLambda QTrue)
 
 let test_constant'
   : ((qBool ^-> qBool) ⊩ constant)
-  = QLambda (QWeaken QTrue)
+  = mk_dturniqet (fun _ -> QLambda (QWeaken QTrue))
 
 let test_identity
   : (qBool ^-> qBool) ⊩ identity
-  = QLambda QAxiom
+  = mk_dturniqet (fun _ -> QLambda QAxiom)
 
 let test_thunked_id
   : (qBool ^-> (qBool ^-> qBool)) ⊩ thunked_id
-  = QLambda (QLambda QAxiom)
+  = mk_dturniqet (fun _ -> QLambda (QLambda QAxiom))
 
 let test_proj1
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj1
-  = QLambda (QLambda (QLambda qVar2))
+  = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda qVar2)))
 
 let test_proj2
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj2
-  = QLambda (QLambda (QLambda qVar1))
+  = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda qVar1)))
 
 let test_proj3
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj3
-  = QLambda (QLambda (QLambda QAxiom))
+  = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda QAxiom)))
 
 let test_apply_top_level_def
   : (qBool ^-> qBool) ⊩ apply_top_level_def
-  = QLambda (QApp
+  = mk_dturniqet (fun _ -> QLambda (QApp
               (QApp
                 (QLambda (QLambda QAxiom))
                 QAxiom)
-              QTrue)
+              QTrue))
 
 let test_apply_top_level_def'
   : (qBool ^-> qBool ^-> qBool) ⊩ apply_top_level_def'

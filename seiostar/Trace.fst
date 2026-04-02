@@ -9,7 +9,7 @@ module Trace
 
 (** Base types **)
 type resexn a = either a unit
-type file_descr = int
+type file_descr = nat
 
 type io_ops = | ORead | OWrite | OOpen | OClose
 
