@@ -7,7 +7,7 @@ include QTypes.TypEnv
 include QTypes.EvalEnv
 
 module M = FStar.Monotonic.Pure
-private unfold
+unfold
 let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
   M.intro_pure_wp_monotonicity wp; wp
 
