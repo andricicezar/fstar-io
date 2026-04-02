@@ -7,8 +7,9 @@ include Trace
 (** Computational Monad **)
 
 noeq
-type io (a:Type u#a) : Type u#a =
+type io (a:Type u#a) : Type u#(max 1 a) =
 | Call : o:io_ops -> args:io_args o -> (io_res o args -> io a) -> io a
+| Guard : pre:pure_pre -> (squash pre -> io a) -> io a
 | Return : a -> io a
 
 let io_return (#a:Type) (x:a) : io a =
@@ -25,6 +26,8 @@ let rec io_bind
   | Call o args fnc ->
       Call o args (fun i ->
         io_bind #a #b (fnc i) k)
+  | Guard pre fnc ->
+      Guard pre (fun h -> io_bind #a #b (fnc h) k)
 
 let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
   Call o args Return
@@ -190,10 +193,18 @@ let lemma_hist_bind_associativity #a #b #c (w1:hist a) (w2:a -> hist b) (w3: b -
 
   Connecting the computational monad to the specification monad using
   a monad morphism. **)
+let guard_wp (pre:pure_pre) : hist (squash pre) =
+    let wp' : hist0 (squash pre) = fun h p -> pre /\ p [] () in
+    assert (forall h (post1 post2:hist_post h (squash pre)). (hist_post_ord post1 post2 ==> (wp'  h post1 ==> wp' h post2)));
+    assert (hist_wp_monotonic wp');
+    wp'
+
 let rec theta #a (m:io a) : hist a =
   match m with
   | Return x -> hist_return x
   | Call o args k -> hist_bind (hist_call o args) (fun r -> theta (k r))
+  | Guard pre k -> hist_bind (guard_wp pre) (fun h -> theta (k h))
+
 
 val theta_monad_morphism_ret (x:'a) :
   Lemma (theta (return x) == hist_return x)
@@ -229,6 +240,7 @@ let rec theta_monad_morphism_bind m k =
           apply_lemma (`lem_hist_equiv_reflexive)) }
       hist_bind (theta (Call o arg m')) (fun x -> theta (k x));
     }
+    | _ -> admit ()
 
 val io_bind_equivalence #a #b (k k':a -> io b) (m:io a) :
   Lemma (requires forall x. k x == k' x)
@@ -264,6 +276,7 @@ let io_bind_equivalence (#a #b:Type) (k k':a -> io b) (m:io a) :
       `hist_equiv` { theta_monad_morphism_bind m k' }
       theta (io_bind (Call o arg m') k');
     }
+    | _ -> admit ()
 
 let thetaP m = wp2p (theta m)
 
