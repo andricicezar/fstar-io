@@ -67,7 +67,7 @@ let fs_comp_case_val cond inlc inrc =
   match cond with
   | Inl x -> inlc x
   | Inr x -> inrc x
-  
+
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
@@ -373,16 +373,19 @@ let fs_ocomp_string_eq x y =
 let rec fs_nrec_val (#a:qType) (n:nat) (b:get_Type a) (f:get_Type a -> get_Type a) : get_Type a =
   if n = 0 then b else fs_nrec_val #a (n-1) (f b) f
 
+unfold
 let fs_oval_zero (g:typ_env) : fs_oval g qNat =
   fun _ -> 0
 
+unfold
 let fs_oval_succ (#g:typ_env) (n:fs_oval g qNat) : fs_oval g qNat =
   fun fsG -> n fsG + 1
 
+unfold
 let fs_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (b:fs_oval g a) (f:fs_oval g (a ^-> a)) : fs_oval g a =
   fun fsG -> fs_nrec_val #a (n fsG) (b fsG) (f fsG)
 
-let rec fs_io_nrec_val (#a:qType) (n:nat) (b:get_Type a) (f:get_Type a -> io (get_Type a)) : io (get_Type a) =
+let rec fs_io_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_comp a) : fs_comp a =
   if n = 0 then io_return b
   else io_bind (f b) (fun b' -> fs_io_nrec_val #a (n-1) b' f)
 
