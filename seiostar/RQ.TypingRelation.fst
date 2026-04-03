@@ -1,7 +1,5 @@
 module RQ.TypingRelation
 
-open FStar.Tactics
-
 open IOStar
 include QTypes.OpenValComp
 
@@ -24,13 +22,25 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g x ->
                 typing (extend b g) (fs_oval_weaken b x)
 
-| QAppGhost   : #g : typ_env ->
+| QRefine     : #g : typ_env ->
                 #a : qType ->
-                #preF : spec_env g ->
-                #f : fs_oval g (a ^-> qUnit) preF ->
-                #preX : spec_env g ->
-                #x : fs_oval g a preX ->
-                typing g (fs_oval_app f x)
+                #ref1 : (fs_val a -> Type0) ->
+                ref2 : (fs_val a -> Type0) ->
+                #preV : spec_env g ->
+                #v : fs_oval g (qRef a ref1) preV ->
+                typing g v ->
+                typing g (fs_oval_refine ref2 v)
+
+| QSeqGhost  : #g : typ_env ->
+                ref : Type0 ->
+                #preV : spec_env g ->
+                #v : fs_oval g (qRef qUnit (fun _ -> ref)) preV ->
+                typing g v ->
+                #a : qType ->
+                #preK : spec_env g ->
+                #k : fs_oval g a preK ->
+                typing g k ->
+                typing g (fs_oval_seq_ghost ref v k)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->
@@ -207,8 +217,11 @@ let fs_oval_helper (#a:qType) (x:fs_val a) (#pre:spec_env empty) (#_:squash (for
   : fs_oval empty a pre
   = fun _ -> x
 
-let (⊩) (a:qType) (x:fs_val a) =
+let (⊩) (a:qType) (x: fs_val a) =
   pre:spec_env empty & (proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))
 
 let mk_dturniqet #a #x (#pre:spec_env empty) (thk_dv:(proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))) : a ⊩ x =
   (| _, thk_dv |)
+
+let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG)) : typing empty (fs_oval_helper x) =
+  (dsnd thk_deriv) proof

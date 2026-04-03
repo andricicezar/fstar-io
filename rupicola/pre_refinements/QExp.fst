@@ -2,14 +2,6 @@ module QExp
 
 open FStar.Tactics.V2
 
-(** Helpers to deal with Monotonicity of Pure **)
-module M = FStar.Monotonic.Pure
-
-(* Local helper to convert pure_wp' to pure_wp by proving monotonicity *)
-private unfold
-let mk_pure_wp #a (wp:pure_wp' a{M.is_monotonic wp}) : pure_wp a =
-  M.intro_pure_wp_monotonicity wp; wp
-
 (** Typing environment **)
 type env = var -> option Type0
 let empty : env = fun _ -> None
@@ -39,6 +31,7 @@ let fs_stack #g fsG #t fs_v =
     (fun y ->
       if y = 0 then fs_v else fsG (y-1))
 
+unfold
 val fs_tail : #t:Type -> #g:_ -> fs_env (extend t g) -> fs_env g
 let fs_tail #t #g fsG =
   FE.on_dom
@@ -66,6 +59,7 @@ type spec_env (g:env) =
 type fs_oexp (g:env) (a:Type) (pre:spec_env g) =
   fsG:fs_env g -> Pure a (requires (pre fsG)) (ensures (fun _ -> True))
 
+unfold
 val helper_weaken : #g:env ->
                     #a:Type u#a ->
                     b:Type0 ->
@@ -147,6 +141,7 @@ val pre_lambda_tot : #g :env ->
 let pre_lambda_tot #g #a preBody fsG : pure_pre =
   forall x. preBody (fs_stack fsG x)
 
+unfold
 val helper_lambda : #g :env ->
                 #a :Type ->
                 #b :Type ->
@@ -332,16 +327,6 @@ let simplify_stack_ops () : Tac unit =
    l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
 let simplify_via_norm () : Tac unit =
-  norm [delta_only [`%helper_lambda; `%helper_lambda_wp; `%helper_oexp; 
-                    `%helper_app; `%helper_if; `%helper_seq; `%helper_weaken;
-                    `%helper_var0; `%helper_refv; 
-                    `%pre_app; `%pre_if; `%pre_lambda_tot; `%pre_lambda_wp;
-                    `%fs_stack; `%fs_hd; `%fs_tail;
-                    `%mk_pure_wp;
-                    `%FE.on_dom; `%pure_return; `%pure_return0];
-        zeta_full; // TODO: what recursive function is unfolded using this? is it something opaque?
-        unascribe // TODO: why is this necessary?
-        ];
   let _ = repeat forall_intro in
   or_else trivial trefl // TODO: why is it not always trefl?
 
@@ -368,7 +353,7 @@ let test_ut_false
   : bool ⊩ ut_false
   = mk_dturniqet (fun _ -> QFalse)
 
-// val var0 : fs_oexp (extend bool empty) bool 
+// val var0 : fs_oexp (extend bool empty) bool
 // let var0 fsG = fun _ -> hd fsG
 
 // val var1 : fs_oexp (extend bool (extend bool empty)) bool
@@ -620,7 +605,7 @@ let d_test_apply_arg () : typing _ _ _ =
 let d_test_apply_arg2 () : typing _ _ _ =
   get_derivation (test_apply_arg2 ()) ()
 let d_test_papply_arg2 () : typing _ _ _ =
-  get_derivation (test_papply_arg2 ()) () 
+  get_derivation (test_papply_arg2 ()) ()
 let d_test_anif () : typing _ _ _ =
   get_derivation test_anif ()
 let d_test_negb () : typing _ _ _ =

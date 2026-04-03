@@ -77,6 +77,8 @@ let qUnit : qType = (| _, QUnit |)
 let qBool : qType = (| _, QBool |)
 let qFileDescr : qType = (| _, QFileDescriptor |)
 let qString : qType = (| _, QString |)
+let qRef (t:qType) (ref: get_Type t -> Type0) : qType =
+  (| _, QRefinement (get_rel t) ref |)
 let (^->) (t1 t2:qType) : qType =
   (| _, QArr (get_rel t1) (get_rel t2) |)
 let (^->!@) (t1 t2:qType) : qType =

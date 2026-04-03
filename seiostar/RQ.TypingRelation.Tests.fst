@@ -6,60 +6,8 @@ open RQ.TypingRelation
 open QTypes.HelperTactics
 
 let simplify_via_norm () : Tac unit =
-  norm [delta_only [
-    `%fs_oval_helper; `%mk_dturniqet;
-    `%fs_oval_return; `%fs_oval_fmap; `%fs_oval_axiom; `%fs_oval_weaken;
-    `%fs_oval_var; `%fs_oval_app; `%fs_oval_lambda; `%fs_oval_eq_string;
-    `%fs_oval_if; `%fs_oval_pair; `%fs_oval_case;
-    `%fs_oval_lambda_ocomp;
-    `%spec_env_return; `%spec_env_bind; `%spec_env_bind';
-    `%spec_env_axiom; `%spec_env_weaken; `%spec_env_index;
-    `%spec_env_app; `%spec_env_return_comp; `%spec_env_return_oval;
-    `%spec_env_lambda_tot; `%spec_env_lambda_tot_ocomp;
-    `%spec_env_if; `%spec_env_case;
-    `%fs_ocomp_return; `%fs_ocomp_return_oval; `%fs_ocomp_return_val;
-    `%fs_ocomp_bind; `%fs_ocomp_bind'; `%fs_ocomp_fmap;
-    `%fs_ocomp_call; `%fs_ocomp_call_oval;
-    `%fs_ocomp_app_oval_oval;
-    `%fs_ocomp_if_val; `%fs_ocomp_if_oval; `%fs_ocomp_if;
-    `%fs_ocomp_case_val; `%fs_ocomp_case_oval; `%fs_ocomp_case;
-    `%fs_ocomp_var; `%fs_ocomp_lambda; `%fs_ocomp_app;
-    `%fs_ocomp_pair; `%fs_ocomp_string_eq;
-    `%stack; `%hd; `%tail;
-    `%FStar.FunctionalExtensionality.on_dom; `%pure_return; `%pure_return0
-  ]; zeta_full; unascribe];
   let _ = repeat forall_intro in
-  or_else trivial (fun () -> or_else trefl smt)
-
-// Needed for tests involving if-expressions that return lambdas
-// (e.g. callback_return). The second norm phase simplifies away
-// WP obligations from refined function types.
-let simplify_via_norm_if_lambda () : Tac unit =
-  norm [delta_only [
-    `%fs_oval_helper; `%mk_dturniqet;
-    `%fs_oval_return; `%fs_oval_fmap; `%fs_oval_axiom; `%fs_oval_weaken;
-    `%fs_oval_var; `%fs_oval_app; `%fs_oval_lambda; `%fs_oval_eq_string;
-    `%fs_oval_if; `%fs_oval_pair; `%fs_oval_case;
-    `%fs_oval_lambda_ocomp;
-    `%spec_env_return; `%spec_env_bind; `%spec_env_bind';
-    `%spec_env_axiom; `%spec_env_weaken; `%spec_env_index;
-    `%spec_env_app; `%spec_env_return_comp; `%spec_env_return_oval;
-    `%spec_env_lambda_tot; `%spec_env_lambda_tot_ocomp;
-    `%spec_env_if; `%spec_env_case;
-    `%fs_ocomp_return; `%fs_ocomp_return_oval; `%fs_ocomp_return_val;
-    `%fs_ocomp_bind; `%fs_ocomp_bind'; `%fs_ocomp_fmap;
-    `%fs_ocomp_call; `%fs_ocomp_call_oval;
-    `%fs_ocomp_app_oval_oval;
-    `%fs_ocomp_if_val; `%fs_ocomp_if_oval; `%fs_ocomp_if;
-    `%fs_ocomp_case_val; `%fs_ocomp_case_oval; `%fs_ocomp_case;
-    `%fs_ocomp_var; `%fs_ocomp_lambda; `%fs_ocomp_app;
-    `%fs_ocomp_pair; `%fs_ocomp_string_eq;
-    `%stack; `%hd; `%tail;
-    `%FStar.FunctionalExtensionality.on_dom; `%pure_return; `%pure_return0
-  ]; zeta_full; unascribe];
-  norm [iota; primops; simplify];
-  let _ = repeat forall_intro in
-  or_else trivial (fun () -> or_else trefl smt)
+  or_else trivial trefl
 
 val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
@@ -121,7 +69,6 @@ let test_thunked_id
   : (qBool ^-> (qBool ^-> qBool)) ⊩ thunked_id
   = mk_dturniqet (fun _ -> QLambda (QLambda QAxiom))
 
-// #pop-options
 let test_proj1 ()
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj1
   by (simplify_via_norm ())
@@ -131,7 +78,6 @@ let test_proj2 ()
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj2
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda qVar1)))
-// #push-options "--no_smt"
 
 let test_proj3
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj3
@@ -199,22 +145,22 @@ let test_negb_pred ()
 
 let test_if2 ()
   : (qBool ^-> qBool ^-> qBool) ⊩ if2
-  by (simplify_via_norm ())
+  by (simplify_stack_ops (); simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1 QFalse QAxiom)))
 
 let test_callback_return ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return
-  by (simplify_via_norm_if_lambda ())
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QIf QAxiom
                  (QLambda qVar1)
                  (QLambda QAxiom)))
 
 let test_callback_return' ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ callback_return'
-  by (simplify_via_norm_if_lambda ())
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QIf QAxiom
                  (QLambda qVar1)
-                 (QLambda QAxiom))) // TODO: why does it not work to unfold identity here?
+                 (QLambda QAxiom)))
 
 let test_make_pair ()
   : (qBool ^-> qBool ^-> (qBool ^* qBool)) ⊩ make_pair
@@ -225,18 +171,14 @@ let test_make_pair ()
 let test_pair_of_functions ()
   : Tot (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                             ⊩ pair_of_functions)
-  by (simplify_via_norm ())
+  by (simplify_stack_ops (); simplify_via_norm ())
   = mk_dturniqet (fun _ ->  QMkpair
       (QLambda (QApp
                   (QLambda (QIf QAxiom QFalse QTrue))
                   QAxiom))
       (QLambda (QLambda QAxiom)))
 
-// Known limitation: when both pair components use QIf (producing fs_oval_if
-// with conditional preconditions), the subtyping check fs_oval_pair ... ==
-// fs_oval_helper pair_of_functions2 cannot be resolved by SMT.
-// Each component verifies individually (test_negb, test_if2).
-[@@ expect_failure; (preprocess_with simplify_qType)]
+[@@ (preprocess_with simplify_qType)]
 let test_pair_of_functions2 ()
   : (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
     ⊩ pair_of_functions2)
@@ -280,20 +222,17 @@ let qLet #g (#a #b:qType) #wpx #wpf (#x:fs_oval g a wpx) (#f:fs_oval (extend a g
   : typing g (fs_oval_app (fs_oval_lambda f) x)
   = QApp (QLambda qf) qx
 
-// a_few_lets has 4 nested lets which causes normalization blowup.
-// We test a 3-let version instead to demonstrate qLet nesting.
 let three_lets : bool -> unit =
   fun x -> let p = (x, x) in let _y = x in let _z = fst p in ()
 
-// Commented out for now to test if other tests verify
-// let test_three_lets ()
-//   : (qBool ^-> qUnit) ⊩ three_lets
-//   by (simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> QLambda
-//      (qLet (QMkpair QAxiom QAxiom)
-//      (qLet (QWeaken QAxiom)
-//      (qLet (QFst qVar1)
-//      Qtt))))
+ let test_three_lets ()
+   : (qBool ^-> qUnit) ⊩ three_lets
+   by (simplify_via_norm ())
+   = mk_dturniqet (fun _ -> QLambda
+      (qLet (QMkpair QAxiom QAxiom)
+      (qLet (QWeaken QAxiom)
+      (qLet (QFst qVar1)
+      Qtt))))
 
 let test_inl_true
   : (qBool ^+ qUnit) ⊩ inl_true
@@ -326,7 +265,48 @@ let test_match_either_arg ()
          qVar1
          QAxiom
          qVar1)))
+#pop-options
 
+let d_test_constant () : typing _ _ =
+  get_derivation test_constant ()
+let d_test_constant' () : typing _ _ =
+  get_derivation test_constant' ()
+let d_test_identity () : typing _ _ =
+  get_derivation test_identity ()
+let d_test_thunked_id () : typing _ _ =
+  get_derivation test_thunked_id ()
+let d_test_proj1 () : typing _ _ =
+  get_derivation (test_proj1 ()) ()
+let d_test_proj2 () : typing _ _ =
+  get_derivation (test_proj2 ()) ()
+let d_test_proj3 () : typing _ _ =
+  get_derivation test_proj3 ()
+let d_test_apply_top_level_def () : typing _ _ =
+  get_derivation (test_apply_top_level_def ()) ()
+let d_test_apply_top_level_def' () : typing _ _ =
+  get_derivation (test_apply_top_level_def' ()) ()
+let d_test_papply__top_level_def () : typing _ _ =
+  get_derivation (test_papply__top_level_def ()) ()
+let d_test_apply_arg () : typing _ _ =
+  get_derivation (test_apply_arg ()) ()
+let d_test_apply_arg2 () : typing _ _ =
+  get_derivation (test_apply_arg2 ()) ()
+let d_test_papply_arg2 () : typing _ _ =
+  get_derivation (test_papply_arg2 ()) ()
+let d_test_anif () : typing _ _ =
+  get_derivation (test_anif ()) ()
+let d_test_negb () : typing _ _ =
+  get_derivation (test_negb ()) ()
+let d_test_negb_pred () : typing _ _ =
+  get_derivation (test_negb_pred ()) ()
+let d_test_if2 () : typing _ _ =
+  get_derivation (test_if2 ()) ()
+let d_test_callback_return () : typing _ _ =
+  get_derivation (test_callback_return ()) ()
+let d_test_callback_return' () : typing _ _ =
+  get_derivation (test_callback_return' ()) ()
+
+#push-options "--no_smt"
 open ExamplesIO
 
 let test_u_return ()
@@ -389,35 +369,32 @@ let test_apply_io_bind_write ()
          (QReturn QAxiom)
          (QCall OWrite (QMkpair (QFd 2) QAxiom))))
 
-// QCaseIO tests are slow (timeout in both old and new versions).
-// They can be verified individually but normalization is expensive
-// when all tests are in the same module.
-// [@@ (preprocess_with simplify_qType)]
-// let test_apply_io_bind_read_write ()
-//   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
-//   by (simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 4))
-//     (QCaseIO #_ #qString #qUnit QAxiom
-//      (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
-//      (QReturn (QInr QAxiom)))))
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write ()
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
+  by ( simplify_stack_ops (); simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 4))
+    (QCaseIO #_ #qString #qUnit QAxiom
+      (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
+      (QReturn (QInr QAxiom)))))
 
-// [@@ (preprocess_with simplify_qType)]
-// let test_apply_io_bind_read_write' ()
-//   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
-//   by (simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 9)) (
-//       QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom)))))
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write' ()
+   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
+   by (simplify_via_norm ())
+   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 9)) (
+       QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom)))))
 
-// [@@ (preprocess_with simplify_qType)]
-// let test_apply_io_bind_read_if_write ()
-//   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
-//   by (simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> QLambdaIO
-//       (QBind
-//         (QCall ORead (QFd 0))
-//         (QCaseIO #_ #qString #qUnit QAxiom
-//           (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
-//           (QReturn (QInr QAxiom)))))
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_if_write ()
+  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO
+      (QBind
+        (QCall ORead (QFd 0))
+         (QCaseIO #_ #qString #qUnit QAxiom
+           (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
+           (QReturn (QInr QAxiom)))))
 
 let test_sendError400 ()
   : (qBool ^->!@ qUnit) ⊩ sendError400
@@ -436,74 +413,86 @@ let test_greeting ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QIf QAxiom (QStringLit "hello") (QStringLit "goodbye")))
 
-// ---- ExamplesRefs tests ----
-// Adapted from rupicola/pre_refinements/ExamplesRefs.fst.
-// Refinements are stripped to base qTypes; seiostar tracks
-// preconditions via spec_env, not type-level refinements.
+#pop-options
 
+#push-options "--no_smt --print_implicits"
 open ExamplesRefs
 
-let test_refbool
-  : qBool ⊩ refbool
-  = mk_dturniqet (fun _ -> QTrue)
+let test_refbool ()
+  : qRef qBool (fun t -> t == true) ⊩ refbool
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QRefine (fun t -> t == true) QTrue)
 
-let test_falsepre
-  : (qBool ^-> qBool) ⊩ falsepre
-  = mk_dturniqet (fun _ -> QLambda QAxiom)
+let test_falsepre ()
+  : (qRef qBool (fun _ -> False) ^-> qBool) ⊩ falsepre
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambda (QUnrefine (fun _ -> False) QAxiom))
 
-let test_just_true
-  : (qBool ^-> qBool) ⊩ just_true
-  = mk_dturniqet (fun _ -> QLambda QTrue)
+let test_just_true ()
+  : (qBool ^-> qRef qBool (fun x -> x == true)) ⊩ just_true
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambda (QRefine (fun x -> x == true) QTrue))
 
-let test_moving_ref
-  : (qBool ^-> qUnit) ⊩ moving_ref
-  = mk_dturniqet (fun _ -> QLambda Qtt)
+let test_moving_ref ()
+  : (qRef qBool (fun _ -> some_ref) ^-> qRef qUnit (fun _ -> some_ref)) ⊩ moving_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambda (QRefine (fun _ -> some_ref) Qtt))
 
 let test_always_false ()
-  : (qBool ^-> qBool) ⊩ always_false
+  : (qBool ^-> qRef qBool (fun y -> y == false)) ⊩ always_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QIf QAxiom QFalse QAxiom))
+  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false) (QIf QAxiom QFalse QAxiom)))
 
 let test_always_false_complex ()
-  : (qBool ^-> qBool) ⊩ always_false_complex
+  : (qBool ^-> qRef qBool (fun y -> y == false)) ⊩ always_false_complex
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse))
+  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false) (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
 
 let test_always_false_ho ()
-  : ((qUnit ^-> qBool) ^-> qBool) ⊩ always_false_ho
+  : ((qUnit ^-> qRef qBool (fun x -> x == true)) ^-> qRef qBool (fun y -> y == false))
+    ⊩ always_false_ho
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QIf (QApp QAxiom Qtt) QFalse QTrue))
+  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false)
+      (QIf (QUnrefine (fun x -> x == true) (QApp QAxiom Qtt)) QFalse QTrue)))
 
 let test_if_x ()
-  : ((qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
+  : ((qRef qBool (fun x -> x == true) ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom (QApp qVar1 QAxiom) QFalse)))
+  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
+      (QApp qVar1 (QRefine (fun x -> x == true) QAxiom)) QFalse)))
 
 let test_seq_basic ()
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_basic
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QRefine (fun _ -> True) (QApp QAxiom Qtt)) Qtt))
 
 let test_seq_qref ()
-  : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_qref
+  : ((qUnit ^-> qRef qUnit (fun _ -> q_ref)) ^-> qRef qUnit (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QRefine (fun _ -> q_ref) Qtt)))
 
 let test_seq_p_implies_q ()
-  : ((qBool ^-> qUnit) ^-> qBool ^-> qBool) ⊩ seq_p_implies_q
+  : ((qRef qBool p_ref ^-> qRef qUnit (fun _ -> q_ref)) ^-> qRef qBool p_ref ^-> qRef qBool (fun _ -> q_ref))
+    ⊩ seq_p_implies_q
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QLambda (qLet (QApp qVar1 QAxiom) (QWeaken QAxiom))))
+  = mk_dturniqet (fun _ -> QLambda (QLambda
+      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QRefine (fun _ -> q_ref) (QUnrefine p_ref QAxiom)))))
 
 let test_if_seq ()
-  : ((qBool ^-> qUnit) ^-> qBool ^-> qBool) ⊩ if_seq
+  : ((qRef qBool (fun x -> x == true) ^-> qRef qUnit (fun _ -> q_ref)) ^-> qBool ^-> qRef qBool (fun r -> r == true ==> q_ref))
+    ⊩ if_seq
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
-    (qLet (QApp qVar1 QAxiom) (QWeaken QAxiom))
-    QAxiom)))
+      (QSeqGhost q_ref
+        (QApp qVar1 (QRefine (fun x -> x == true) QAxiom))
+        (QRefine (fun r -> r == true ==> q_ref) QAxiom))
+      (QRefine (fun r -> r == true ==> q_ref) QAxiom))))
 
 let test_context ()
-  : (qBool ^-> (qBool ^-> qBool ^-> qBool) ^-> qBool ^-> qBool) ⊩ context
+  : (qBool ^-> (qRef qBool (fun x -> x == true) ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)
+    ⊩ context
   by (simplify_via_norm_if_lambda ())
-  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1 (QApp QAxiom qVar1) (QLambda QAxiom))))
-
+  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1
+      (QApp QAxiom (QRefine (fun x -> x == true) qVar1))
+      (QLambda QAxiom))))
 #pop-options

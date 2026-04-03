@@ -17,6 +17,7 @@ type spec_env (g:typ_env) =
 type fs_oval (g:typ_env) (t:qType) (pre:spec_env g) =
   fsG:eval_env g -> Pure (fs_val t) (requires (pre fsG)) (ensures (fun _ -> True))
 
+unfold
 let spec_env_return (#g:typ_env) (#a:qType) (x:fs_val a) : spec_env g =
   fun _ -> True
 
@@ -25,19 +26,24 @@ let spec_env_bind (#g:typ_env) (#a:qType)
   (preM:spec_env g) (preK:spec_env (extend a g)) : spec_env g =
   fun fsG -> preM fsG /\ (forall (x:fs_val a). preK (stack fsG x))
 
+unfold
 let spec_env_bind' (#g:typ_env) (#a:qType)
   (preP:spec_env g) (preK:(fs_val a -> spec_env g)) : spec_env g =
   spec_env_bind preP (fun fsG -> preK (hd fsG) (tail fsG))
 
+unfold
 let spec_env_axiom (#g:typ_env) (#a:qType) : spec_env (extend a g) =
   fun _ -> True
 
+unfold
 let spec_env_weaken (#g:typ_env) (#b:qType) (x:spec_env g) : spec_env (extend b g) =
   fun fsG -> x (tail fsG)
 
+unfold
 let spec_env_index (#g:typ_env) (x:var{Some? (g x)}) : spec_env g =
   fun _ -> True
 
+unfold
 val spec_env_app : #g :typ_env ->
                 preF : spec_env g ->
                 preX : spec_env g ->
@@ -45,19 +51,60 @@ val spec_env_app : #g :typ_env ->
 let spec_env_app preF preX =
   (fun fsG -> preF fsG /\ preX fsG)
 
+unfold
+val spec_env_lambda_tot : #g :typ_env ->
+                #a :qType ->
+                preBody:spec_env (extend a g) ->
+                spec_env g
+
+let spec_env_lambda_tot #g #a preBody fsG : pure_pre =
+  forall (x:fs_val a). preBody (stack fsG x)
+
 type fs_comp (t:qType) = io (fs_val t)
 
 type fs_ocomp (g:typ_env) (t:qType) (pre:spec_env g) =
   fsG:eval_env g -> Pure (fs_comp t) (requires (pre fsG)) (ensures (fun _ -> True))
 
+unfold
 let spec_env_return_comp (#g:typ_env) (#a:qType) (comp:fs_comp a) : spec_env g =
   fun _ -> True
 
-
+unfold
 let spec_env_return_oval (#g:typ_env) (#a:qType) #preX (x:fs_oval g a preX) : spec_env g =
   preX
 
+unfold
+val spec_env_if : #g :typ_env ->
+                #preC : spec_env g ->
+                c : fs_oval g qBool preC ->
+                preT : spec_env g ->
+                preE : spec_env g ->
+                spec_env g
+let spec_env_if #_ #preC c preT preE =
+  (fun fsG -> preC fsG /\ (c fsG ==> preT fsG) /\ ((~(c fsG)) ==> preE fsG))
+
+unfold
+val spec_env_seq_ghost : #g:typ_env ->
+                ref:Type0 ->
+                preV:spec_env g ->
+                preK:spec_env g ->
+                spec_env g
+let spec_env_seq_ghost ref preV preK =
+  fun fsG -> preV fsG /\ (ref ==> preK fsG)
+
+unfold
+val spec_env_refine : #g:typ_env ->
+                #a:qType ->
+                ref2:(fs_val a -> Type0) ->
+                #ref1:(fs_val a -> Type0) ->
+                preV:spec_env g ->
+                v:fs_oval g (qRef a ref1) preV ->
+                spec_env g
+let spec_env_refine ref2 preV v =
+  fun fsG -> preV fsG /\ ref2 (v fsG)
+
 (** Closed values **)
+unfold
 let fs_val_if (#a:qType) (c:fs_val qBool) (e:fs_val a) (t:fs_val a) : fs_val a =
   if c then e else t
 
@@ -85,7 +132,7 @@ val fs_comp_bind : #a:qType ->
                     m:fs_comp a ->
                     k:(fs_val a -> fs_comp b) ->
                     fs_comp b
-let fs_comp_bind m k = 
+let fs_comp_bind m k =
   io_bind m k
 
 unfold
@@ -111,6 +158,7 @@ let fs_comp_case_val cond inlc inrc =
   | Inl x -> inlc x
   | Inr x -> inrc x
 
+unfold
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
@@ -122,8 +170,6 @@ unfold
 let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t)
   : fs_oval g t (spec_env_return x)
   = fun _ -> x
-
-open FStar.Tactics
 
 unfold
 let fs_oval_fmap
@@ -167,26 +213,38 @@ let fs_oval_app #_ #_ #_ #preF f #preX x fsG =
 
 
 unfold
-val spec_env_lambda_tot : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                #preBody:spec_env (extend a g) ->
-                body:fs_oval (extend a g) b preBody ->
-                spec_env g
-
-let spec_env_lambda_tot #g #a #b #preBody body fsG : pure_pre =
-  forall (x:fs_val a). preBody (stack fsG x)
-
-unfold
 let fs_oval_lambda
   (#g :typ_env)
   (#a :qType)
   (#b :qType)
   (#preBody : spec_env (extend a g))
   (body :fs_oval (extend a g) b preBody)
-  : fs_oval g (a ^-> b) (spec_env_lambda_tot body)
+  : fs_oval g (a ^-> b) (spec_env_lambda_tot preBody)
   = fun fsG ->
       fun x -> body (stack fsG x)
+
+unfold
+val fs_oval_refine : #g:typ_env ->
+                #a:qType ->
+                #ref1:(fs_val a -> Type0) ->
+                ref2:(fs_val a -> Type0) ->
+                #preV:spec_env g ->
+                v:fs_oval g (qRef a ref1) preV ->
+                fs_oval g (qRef a ref2) (spec_env_refine ref2 preV v)
+let fs_oval_refine _ v =
+  fun fsG -> v fsG
+
+unfold
+val fs_oval_seq_ghost : #g:typ_env ->
+                #preV:spec_env g ->
+                ref:Type0 ->
+                v:fs_oval g (qRef qUnit (fun _ -> ref)) preV ->
+                #a:qType ->
+                #preK:spec_env g ->
+                k:fs_oval g a preK ->
+                fs_oval g a (spec_env_seq_ghost ref preV preK)
+let fs_oval_seq_ghost ref v k =
+  fun fsG -> v fsG ; k fsG
 
 unfold
 val fs_oval_eq_string :
@@ -198,15 +256,6 @@ val fs_oval_eq_string :
   fs_oval g qBool (spec_env_app preS1 preS2)
 let fs_oval_eq_string #_ #preS1 s1 #preS2 s2 fsG =
   (s1 fsG) = (s2 fsG)
-
-val spec_env_if : #g :typ_env ->
-                #preC : spec_env g ->
-                c : fs_oval g qBool preC ->
-                preT : spec_env g ->
-                preE : spec_env g ->
-                spec_env g
-let spec_env_if #_ #preC c preT preE =
-  (fun fsG -> preC fsG /\ (c fsG ==> preT fsG) /\ ((~(c fsG)) ==> preE fsG))
 
 unfold
 val fs_oval_if : #g :typ_env ->
@@ -352,23 +401,12 @@ let fs_ocomp_call_oval o args =
   fs_ocomp_call o (fs_ocomp_return_oval args)
 
 unfold
-val spec_env_lambda_tot_ocomp : #g :typ_env ->
-                #a :qType ->
-                #b :qType ->
-                #preBody:spec_env (extend a g) ->
-                body:fs_ocomp (extend a g) b preBody ->
-                spec_env g
-
-let spec_env_lambda_tot_ocomp #g #a #b #preBody body fsG : pure_pre =
-  forall (x:fs_val a). preBody (stack fsG x)
-
-unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
                 #preBody : spec_env (extend a g) ->
                 body :fs_ocomp (extend a g) b preBody ->
-                fs_oval g (a ^->!@ b) (spec_env_lambda_tot_ocomp body)
+                fs_oval g (a ^->!@ b) (spec_env_lambda_tot preBody)
 let fs_oval_lambda_ocomp #_ #_ #_ #_ body fsG x = body (stack fsG x)
 
 unfold
@@ -477,7 +515,7 @@ val fs_ocomp_lambda : #g :typ_env ->
                 #b :qType ->
                 #preBody : spec_env (extend a g) ->
                 body :fs_ocomp (extend a g) b preBody ->
-                fs_ocomp g (a ^->!@ b) (spec_env_bind' #g #(a ^->!@ b) (spec_env_lambda_tot_ocomp body) (fun x -> spec_env_return_comp #g #(a ^->!@ b) (io_return x)))
+                fs_ocomp g (a ^->!@ b) (spec_env_bind' #g #(a ^->!@ b) (spec_env_lambda_tot preBody) (fun x -> spec_env_return_comp #g #(a ^->!@ b) (io_return x)))
 let fs_ocomp_lambda body =
   fs_ocomp_return_oval (fs_oval_lambda_ocomp body)
 
