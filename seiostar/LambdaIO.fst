@@ -183,7 +183,7 @@ let rec is_value (e:exp) : Type0 =
   | EUnit
   | ETrue
   | EFalse
-  | EFileDescr _ 
+  | EFileDescr _
   | EString _ -> True
   | ELam _ -> is_closed e
   | EPair e1 e2 -> is_value e1 /\ is_value e2
@@ -441,7 +441,7 @@ let as_e_io_args op arg =
   match op with
   | OOpen -> EString arg
   | ORead -> EFileDescr arg
-  | OWrite -> 
+  | OWrite ->
     let arg : file_descr * string = arg in
     EPair (EFileDescr (fst arg)) (EString (snd arg))
   | OClose -> EFileDescr arg
@@ -840,3 +840,13 @@ let rec lem_nat_to_exp_is_value (n:nat) : Lemma (is_value (nat_to_exp n)) [SMTPa
   if n = 0 then () else lem_nat_to_exp_is_value (n-1)
 
 let lem_nat_to_exp_succ (n:nat) : Lemma (nat_to_exp (n+1) == ESucc (nat_to_exp n)) = ()
+
+let lem_irred_enrec_implies_irred_e1 (e1 eb ef:closed_exp) (h:history) :
+  Lemma
+    (requires indexed_irred (ENRec e1 eb ef) h)
+    (ensures indexed_irred e1 h) =
+  introduce forall (e1':closed_exp) (oev:option (event_h h)). step e1 e1' h oev ==> False with begin
+    introduce _ ==> _ with st. begin
+      FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SNRecV #e1 #e1' eb ef #h #oev st))
+    end
+  end

@@ -13,7 +13,7 @@ open QTypes.OpenValComp
 open QTypes.HelperTactics
 open LogRelSourceTarget
 
-let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) = 
+let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =
   FStar.Squash.bind_squash #a () f
 
 let compat_oval_unit g : Lemma (fs_oval_return g #qUnit () ⊏ EUnit) =
@@ -188,7 +188,7 @@ let compat_oval_lambda #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g)
   end
 
 let helper_compat_oval_app_steps (h:history) (lt:local_trace h) (t1 t2:qType) (fs_e1:fs_val (t1 ^-> t2)) (fs_e2:fs_val t1) (e1 e2:closed_exp) :
-  Lemma 
+  Lemma
     (requires (t1 ^-> t2) ⊆ (h, fs_e1, e1) /\
               (forall (lt:local_trace h). t1 ⊆ (h++lt, fs_e2, e2)))
     (ensures exists (e':closed_exp). e_beh (EApp e1 e2) e' h [] /\ t2 ∈ (h, fs_e1 fs_e2, e')) =
@@ -2064,7 +2064,6 @@ private let rec helper_compat_ocomp_nrec_steps
       unit_l lt)
     end
   end
-#pop-options
 
 let compat_ocomp_nrec (#g:typ_env) (#a:qType)
     (fn:fs_ocomp g qNat) (fb:fs_ocomp g a) (ff:fs_ocomp g (a ^->!@ a))
@@ -2142,6 +2141,7 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
     end
   end
   end
+#pop-options
 
 let compat_ocomp_call #g (op:io_ops) (fs_arg:fs_ocomp g (q_io_args op)) (arg:exp)
   : Lemma

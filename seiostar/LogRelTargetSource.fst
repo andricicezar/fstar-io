@@ -266,6 +266,21 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
     end
   end
 
+let indexed_safety_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma
+    (requires t ⊇ (h, fs_e, e))
+    (ensures indexed_safe e h) =
+  introduce forall (e':closed_exp) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
+        assert (e_beh e e' h lt);
+        assert (t ∋ (h, fs_e, e') /\ lt == []);
+        lem_values_are_values t h fs_e e'
+      end
+    end
+  end
+
 let indexed_safety_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) : Lemma
   (requires t ⫄ (h, fs_e, e))
   (ensures indexed_safe e h) =
@@ -322,7 +337,7 @@ let lem_superset_preserved_by_step
       assert (as_lt oev == [] /\ lt' == [])
     end
   end
-  
+
 open FStar.Tactics.V1
 
 let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)

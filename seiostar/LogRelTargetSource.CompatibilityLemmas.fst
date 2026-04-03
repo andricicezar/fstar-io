@@ -14,21 +14,6 @@ let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires
 
 let get_squash = FStar.Squash.get_proof
 
-let indexed_safety_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
-  Lemma
-    (requires t ⊇ (h, fs_e, e))
-    (ensures indexed_safe e h) =
-  introduce forall (e':closed_exp) (lt:local_trace h).
-    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
-    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
-      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
-        assert (e_beh e e' h lt);
-        assert (t ∋ (h, fs_e, e') /\ lt == []);
-        lem_values_are_values t h fs_e e'
-      end
-    end
-  end
-
 let compat_oval_unit g : Lemma (fs_oval_return g #qUnit () ⊐ EUnit) =
   introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qUnit ⊇ (h, (), gsubst s EUnit) with begin
     introduce _ ==> _ with _. begin
@@ -1897,16 +1882,6 @@ let compat_ocomp_succ (#g:typ_env) (fs_n:fs_ocomp g qNat) (e:exp)
   end
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
-private let lem_irred_enrec_implies_irred_e1 (e1 eb ef:closed_exp) (h:history) :
-  Lemma
-    (requires indexed_irred (ENRec e1 eb ef) h)
-    (ensures indexed_irred e1 h) =
-  introduce forall (e1':closed_exp) (oev:option (event_h h)). step e1 e1' h oev ==> False with begin
-    introduce _ ==> _ with st. begin
-      FStar.Squash.bind_squash st (fun st -> FStar.Squash.return_squash (SNRecV #e1 #e1' eb ef #h #oev st))
-    end
-  end
-
 private let rec destruct_steps_enrec_nat
   (e1 eb ef e':closed_exp) (h:history) (lt:local_trace h)
   (st:steps (ENRec e1 eb ef) e' h lt) :
