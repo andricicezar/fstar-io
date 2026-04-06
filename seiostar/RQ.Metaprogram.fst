@@ -27,6 +27,7 @@ let mk_qarr (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater) [(
 let mk_qarrio (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qpair (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qsum (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_qnat : term = mk_app (`QTypes.qNat) []
 
 let rec typ_translation (qt:term) : Tac term =
   match inspect_ln qt with
@@ -36,6 +37,8 @@ let rec typ_translation (qt:term) : Tac term =
     | "Prims.bool" -> mk_qbool
     | "Prims.string" -> mk_qstring
     | "Trace.file_descr" -> mk_qfiledescr
+    | "Prims.nat" -> mk_qnat
+    | "Prims.int" -> mk_qnat
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
 
@@ -97,6 +100,14 @@ let mk_qfalse : term = mk_app (`QFalse) []
 let mk_qif (b:term) (t1:term) (t2:term) : term =
   mk_app (`QIf) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 
+let mk_qzero : term = mk_app (`QZero) []
+let mk_qsucc (n:term) : term = mk_app (`QSucc) [(n, Q_Explicit)]
+let mk_qnrec (n base f : term) : term = mk_app (`QNRec) [(n, Q_Explicit); (base, Q_Explicit); (f, Q_Explicit)]
+
+let rec mk_nat_literal (n:nat) : Tot term (decreases n) =
+  if n = 0 then mk_qzero
+  else mk_qsucc (mk_nat_literal (n - 1))
+
 let mk_qeq_string (v1 v2 : term) : term =
   mk_app (`QStringEq) [(v1, Q_Explicit); (v2, Q_Explicit)]
 
@@ -151,6 +162,21 @@ let is_io_type (ty:term) : Tot bool =
 (** Cache of already-generated derivations: maps source fvar name to term to emit at cache hit.
     Each term should be of the form `deriv_name g_env_term`, i.e. the derivation fvar applied to g_env. **)
 type prior_derivations = list (string & term)
+
+let is_nat_type (fstar_ty:option typ) : bool =
+  match fstar_ty with
+  | None -> false
+  | Some ty ->
+    match inspect_ln ty with
+    | Tv_FVar fv ->
+      let nm = fv_to_string fv in
+      nm = "Prims.nat" || nm = "Prims.int"
+    | Tv_Refine b _ ->
+      let sort = (inspect_binder b).sort in
+      (match inspect_ln sort with
+       | Tv_FVar fv -> fv_to_string fv = "Prims.int"
+       | _ -> false)
+    | _ -> false
 
 let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (fuel:int) (is_comp:bool) (fstar_ty:option typ) (qfs:term) : Tac term =
   if fuel <= 0 then
@@ -251,9 +277,27 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
+    | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f] ->
+      mk_qnrec
+        (create_derivation g dbmap prior_derivs fuel false (Some (`nat)) n)
+        (create_derivation g dbmap prior_derivs fuel false fstar_ty base)
+        (create_derivation g dbmap prior_derivs fuel false None f)
+    | Some "Prims.op_Addition", [v1; v2] ->
+      (match inspect_ln v2 with
+       | Tv_Const (C_Int 1) ->
+         mk_qsucc (create_derivation g dbmap prior_derivs fuel false fstar_ty v1)
+       | _ -> fail "only n + 1 (successor) is supported for nat addition")
     | _ ->
+      let arg_fstar_ty =
+        match tc_term g hd with
+        | Some (_, (_, ty)), _ ->
+          (match inspect_ln ty with
+           | Tv_Arrow b _ -> Some (binder_sort b)
+           | _ -> None)
+        | _ -> None
+      in
       let f = (create_derivation g dbmap prior_derivs fuel false None hd) in
-      let x = (create_derivation g dbmap prior_derivs fuel false None a) in
+      let x = (create_derivation g dbmap prior_derivs fuel false arg_fstar_ty a) in
       if is_comp then mk_qappcomp f x
       else mk_qapp f x
   end
@@ -262,7 +306,11 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
   | Tv_Const C_True -> mk_qtrue
   | Tv_Const C_False -> mk_qfalse
   | Tv_Const (C_String s) -> mk_qstringlit (pack_ln (Tv_Const (C_String s)))
-  | Tv_Const (C_Int i) -> mk_qfd qfs
+  | Tv_Const (C_Int i) ->
+    if is_nat_type fstar_ty then (
+      if i >= 0 then mk_nat_literal i
+      else fail ("negative integer not supported as nat"))
+    else mk_qfd qfs
   | Tv_Const c -> fail ("constant " ^ (print_vconst c) ^ " not implemented")
 
   | Tv_Match b _ brs -> begin
