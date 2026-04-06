@@ -277,7 +277,8 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
       | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
     end
-    | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f] ->
+    | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f]
+    | Some "IOStar.io_nrec", [n; base; f] ->
       mk_qnrec
         (create_derivation g dbmap prior_derivs fuel false (Some (`nat)) n)
         (create_derivation g dbmap prior_derivs fuel false fstar_ty base)

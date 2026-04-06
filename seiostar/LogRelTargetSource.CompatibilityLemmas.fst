@@ -143,7 +143,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊐ EVar 
     end
   end
 
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 30"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
   : Lemma
@@ -962,7 +962,7 @@ let rec destruct_steps_ecall_arg_all
    Unlike destruct_steps_ecall_arg_all (which uses ⊇), this threads the original
    ⫄ computation relation and accumulated steps through the recursion.
    This avoids needing indexed_sem_expr_shape, which doesn't exist for OWrite. *)
-#push-options "--fuel 4 --z3rlimit 20"
+#push-options "--fuel 4 --z3rlimit 40"
 let rec destruct_steps_ecall_arg_comp
   (op:io_ops) (arg:closed_exp) (e':closed_exp) (h:history) (lt:local_trace h)
   (st:steps (ECall op arg) e' h lt)
@@ -1288,7 +1288,7 @@ let compat_ocomp_inr #g (t1 t2:qType) (fs_e:fs_ocomp g t2) (e:exp)
     end
   end
 
-#push-options "--z3rlimit 64 --fuel 1 --ifuel 0"
+#push-options "--z3rlimit 20 --fuel 1 --ifuel 0"
 let compat_ocomp_pair #g
   (#t1 #t2:qType)
   (fs_e1:fs_ocomp g t1) (fs_e2:fs_ocomp g t2)
@@ -1507,14 +1507,14 @@ let compat_ocomp_fst #g
     end
   end
 
-#push-options "--z3refresh"
+#push-options "--z3rlimit 20"
 let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
     (ensures fs_ocomp_fmap fs_e12 snd ⊒ (ESnd e12)) =
   lem_fv_in_env_snd g e12;
   introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> t2 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG, gsubst s (ESnd e12)) with begin
-  introduce _ ==> _ with _. begin
+    introduce _ ==> _ with _. begin
       let fs_e12' : fs_comp (t1 ^* t2) = fs_e12 fsG in
       let fs_e = fs_comp_bind #(t1 ^* t2) #t2 fs_e12' (fun e12' -> return (snd #(fs_val t1) #(fs_val t2) e12')) in
       assert (fs_e == (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG) by (
@@ -1522,7 +1522,7 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
         simplify_stack_ops ();
         trefl ());
       let e = ESnd (gsubst s e12) in
-      assert (gsubst s (ESnd e12) == e);
+      assert (gsubst s (ESnd e12) == e) by (trefl ());
       let ESnd e12 = e in
       introduce fsG `(∽) h` s ==> t2 ⫄ (h, fs_e, e) with _. begin
         introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val t2). t2 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
@@ -1540,11 +1540,10 @@ let compat_ocomp_snd #g (#t1 #t2:qType) (fs_e12:fs_ocomp g (t1 ^* t2)) (e12:exp)
               lem_value_is_irred e2;
               assert ((t1 ^* t2) ⫄ (h, fs_e12', e12));
               assert (e_beh e12 e12' h lt12);
-              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
+              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==>
+                (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
               eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t2). t2 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              assert (e12' == EPair e1 e2);
-              assert (t2 ∋ (h++lt12, snd #(fs_val t1) #(fs_val t2) fs_r_e12, e2));
               lem_destruct_steps_epair_snd e1 e2 e' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #t2 (snd #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);

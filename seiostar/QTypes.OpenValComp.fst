@@ -35,7 +35,7 @@ let fs_val_pair (#a #b:qType) (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
 
 (** Closed computations **)
 type fs_comp (t:qType) =
-   io (get_Type t)
+   io (fs_val t)
 
 unfold
 val fs_comp_bind : #a:qType ->
@@ -76,7 +76,7 @@ let fs_comp_call_val o args = io_call o args
 
 (** Open values **)
 type fs_oval (g:typ_env) (t:qType) =
-  eval_env g -> get_Type t
+  eval_env g -> fs_val t
 
 unfold
 let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
@@ -166,7 +166,7 @@ let fs_oval_case cond inlc inrc fsG =
 (** Open computations **)
 
 type fs_ocomp (g:typ_env) (t:qType) =
-  eval_env g -> io (get_Type t)
+  eval_env g -> io (fs_val t)
 
 unfold
 val fs_ocomp_return :
@@ -370,8 +370,8 @@ let fs_ocomp_string_eq x y =
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
 
-let rec fs_nrec_val (#a:qType) (n:nat) (b:get_Type a) (f:get_Type a -> get_Type a) : get_Type a =
-  if n = 0 then b else fs_nrec_val #a (n-1) (f b) f
+let fs_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_val a) : fs_val a =
+  io_nrec n b f
 
 unfold
 let fs_oval_zero (g:typ_env) : fs_oval g qNat =

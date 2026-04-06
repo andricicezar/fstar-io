@@ -114,8 +114,8 @@ let nat_two  : nat = 2
 
 let nat_succ_fn : nat -> nat = fun n -> n + 1
 
-let nat_add2 : nat -> nat = fun n -> QTypes.OpenValComp.fs_nrec_val #QTypes.qNat 2 n (fun x -> x + 1)
+let nat_add2 : nat -> nat = fun n -> IOStar.io_nrec 2 n (fun x -> x + 1)
 
-let nat_five1 : nat = QTypes.OpenValComp.fs_nrec_val #QTypes.qNat 3 2 (fun x -> x + 1)
+let nat_five1 : nat = IOStar.io_nrec 3 2 (fun x -> x + 1)
 
 let nat_five2 : nat = nat_add2 3
