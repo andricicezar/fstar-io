@@ -9,6 +9,16 @@ let simplify_via_norm () : Tac unit =
   let _ = repeat forall_intro in
   or_else trivial trefl
 
+let simplify_d () : Tac unit = norm [delta_only [
+      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
+      `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;
+      `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
+      `%op_Hat_Subtraction_Greater_Bang_At;
+      `%get_rel; `%get_Type;
+      `%q_io_args; `%q_io_res;
+      `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+    iota]
+
 val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
 
@@ -427,68 +437,114 @@ let test_greeting ()
 
 #pop-options
 
+let d_test_u_return () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_u_return ()) ()
+let d_test_apply_io_return () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_return ()) ()
+let d_test_apply_read () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_read ()) ()
+let d_test_apply_write_const () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_write_const ()) ()
+let d_test_apply_write () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_write ()) ()
+let d_test_apply_io_bind_const () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_const ()) ()
+let d_test_apply_io_bind_identity () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_identity ()) ()
+let d_test_apply_io_bind_pure_if () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_pure_if ()) ()
+let d_test_apply_io_bind_write () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_write ()) ()
+let d_test_apply_io_bind_read_write () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_read_write ()) ()
+let d_test_apply_io_bind_read_write' () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_read_write' ()) ()
+let d_test_apply_io_bind_read_if_write () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_apply_io_bind_read_if_write ()) ()
+let d_test_sendError400 () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_sendError400 ()) ()
+let d_test_const_str () : typing _ _
+  by (simplify_d ())
+  = get_derivation test_const_str ()
+let d_test_greeting () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_greeting ()) ()
+
 #push-options "--no_smt"
 open ExamplesRefs
 
 let test_refbool ()
   : qBoolR (fun t -> t == true) ⊩ refbool
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QSubtype QTrue)
+  = mk_dturniqet (fun _ -> QRetype QTrue)
 
 let test_falsepre ()
   : (qBoolR (fun _ -> False) ^-> qBool) ⊩ falsepre
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype QAxiom))
+  = mk_dturniqet (fun _ -> QLambda (QRetype QAxiom))
 
 let test_just_true ()
   : (qBool ^-> qBoolR (fun x -> x == true)) ⊩ just_true
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype QTrue))
+  = mk_dturniqet (fun _ -> QLambda (QRetype QTrue))
 
 let test_moving_ref ()
   : (qBoolR (fun _ -> some_ref) ^-> qUnitR (fun _ -> some_ref)) ⊩ moving_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QRetype Qtt))
 
 let test_always_false ()
   : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype (QIf QAxiom QFalse QAxiom)))
+  = mk_dturniqet (fun _ -> QLambda (QRetype (QIf QAxiom QFalse QAxiom)))
 
 let test_always_false_complex ()
   : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false_complex
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
+  = mk_dturniqet (fun _ -> QLambda (QRetype (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
 
 let test_always_false_ho ()
   : ((qUnit ^-> qBoolR (fun x -> x == true)) ^-> qBoolR (fun y -> y == false))
     ⊩ always_false_ho
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSubtype
-      (QIf (QSubtype (QApp QAxiom Qtt)) QFalse QTrue)))
+  = mk_dturniqet (fun _ -> QLambda (QRetype
+      (QIf (QRetype (QApp QAxiom Qtt)) QFalse QTrue)))
 
 let test_if_x ()
   : ((qBoolR (fun x -> x == true) ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
-      (QApp qVar1 (QSubtype QAxiom)) QFalse)))
+      (QApp qVar1 (QRetype QAxiom)) QFalse)))
 
 let test_seq_basic ()
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_basic
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QSubtype (QApp QAxiom Qtt)) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QRetype (QApp QAxiom Qtt)) Qtt))
 
 let test_seq_qref ()
   : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QSubtype Qtt)))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QRetype Qtt)))
 
 let test_seq_p_implies_q ()
   : ((qBoolR p_ref ^-> qUnitR (fun _ -> q_ref)) ^-> qBoolR p_ref ^-> qBoolR (fun _ -> q_ref))
     ⊩ seq_p_implies_q
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda
-      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QSubtype QAxiom))))
+      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QRetype QAxiom))))
 
 let test_if_seq ()
   : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
@@ -496,15 +552,56 @@ let test_if_seq ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
       (QSeqGhost q_ref
-        (QApp qVar1 (QSubtype QAxiom))
-        (QSubtype QAxiom))
-      (QSubtype QAxiom))))
+        (QApp qVar1 (QRetype QAxiom))
+        (QRetype QAxiom))
+      (QRetype QAxiom))))
 
 let test_context ()
   : (qBool ^-> (qBoolR (fun x -> x == true) ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)
     ⊩ context
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1
-      (QApp QAxiom (QSubtype qVar1))
+      (QApp QAxiom (QRetype qVar1))
       (QLambda QAxiom))))
 #pop-options
+
+let d_test_refbool () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_refbool ()) (_ by (norm [delta; iota]))
+
+let d_test_falsepre () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_falsepre ()) ()
+let d_test_just_true () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_just_true ()) ()
+let d_test_moving_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_moving_ref ()) ()
+let d_test_always_false () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_always_false ()) ()
+let d_test_always_false_complex () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_always_false_complex ()) ()
+let d_test_always_false_ho () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_always_false_ho ()) (())
+let d_test_if_x () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_if_x ()) ()
+let d_test_seq_basic () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_seq_basic ()) ()
+let d_test_seq_qref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_seq_qref ()) ()
+let d_test_seq_p_implies_q () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_seq_p_implies_q ()) ()
+let d_test_if_seq () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_if_seq ()) ()
+let d_test_context () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_context ()) ()

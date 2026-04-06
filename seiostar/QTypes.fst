@@ -75,8 +75,8 @@ let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
 
-let subQtype_of (a b:qType) : Type0 =
-  get_Type a `subtype_of` get_Type b
+// let subQtype_of (a b:qType) : Type0 =
+//   get_Type a `subtype_of` get_Type b
 
 let qUnitR ref : qType = (| _, QUnit #ref |)
 let qBoolR ref : qType = (| _, QBool #ref |)
