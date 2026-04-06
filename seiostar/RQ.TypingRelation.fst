@@ -22,25 +22,24 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g x ->
                 typing (extend b g) (fs_oval_weaken b x)
 
-| QRefine     : #g : typ_env ->
-                #a : qType ->
-                #ref1 : (fs_val a -> Type0) ->
-                ref2 : (fs_val a -> Type0) ->
-                #preV : spec_env g ->
-                #v : fs_oval g (qRef a ref1) preV ->
-                typing g v ->
-                typing g (fs_oval_refine ref2 v)
-
 | QSeqGhost  : #g : typ_env ->
                 ref : Type0 ->
                 #preV : spec_env g ->
-                #v : fs_oval g (qRef qUnit (fun _ -> ref)) preV ->
+                #v : fs_oval g (qUnitR (fun _ -> ref)) preV ->
                 typing g v ->
                 #a : qType ->
                 #preK : spec_env g ->
                 #k : fs_oval g a preK ->
                 typing g k ->
                 typing g (fs_oval_seq_ghost ref v k)
+
+| QSubtype    : #g : typ_env ->
+                #a : qType ->
+                #preV : spec_env g ->
+                #v : fs_oval g a preV ->
+                typing g v ->
+                #b : qType ->
+                typing g (fs_oval_subtype v b)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->

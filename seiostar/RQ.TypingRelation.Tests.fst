@@ -53,20 +53,24 @@ let test_ut_false
   : qBool ⊩ ut_false
   = mk_dturniqet (fun _ -> QFalse)
 
-let test_constant
+let test_constant ()
   : ((qBool ^-> qBool) ⊩ constant)
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda QTrue)
 
-let test_constant'
+let test_constant' ()
   : ((qBool ^-> qBool) ⊩ constant)
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QWeaken QTrue))
 
-let test_identity
+let test_identity ()
   : (qBool ^-> qBool) ⊩ identity
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda QAxiom)
 
-let test_thunked_id
+let test_thunked_id ()
   : (qBool ^-> (qBool ^-> qBool)) ⊩ thunked_id
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda QAxiom))
 
 let test_proj1 ()
@@ -79,8 +83,9 @@ let test_proj2 ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda qVar1)))
 
-let test_proj3
+let test_proj3 ()
   : (qBool ^-> qBool ^-> qBool ^-> qBool) ⊩ proj3
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QLambda QAxiom)))
 
 let test_apply_top_level_def ()
@@ -234,19 +239,23 @@ let three_lets : bool -> unit =
       (qLet (QFst qVar1)
       Qtt))))
 
-let test_inl_true
+let test_inl_true ()
   : (qBool ^+ qUnit) ⊩ inl_true
+   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QInl QTrue)
 
-let test_inr_unit
+let test_inr_unit ()
   : (qBool ^+ qUnit) ⊩ inr_unit
+   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QInr Qtt)
 
+[@@ (preprocess_with simplify_qType)]
 let test_return_either ()
   : (qBool ^-> (qUnit ^+ qUnit)) ⊩ return_either
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QIf QAxiom (QInl Qtt) (QInr Qtt)))
 
+[@@ (preprocess_with simplify_qType)]
 let test_match_either ()
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either
   by (simplify_via_norm ())
@@ -257,6 +266,7 @@ let test_match_either'
   : ((qBool ^+ qBool) ^-> qBool) ⊩ match_either'
   = mk_dturniqet (fun _ -> QLambda (QCase QAxiom QAxiom QAxiom))
 
+[@@ (preprocess_with simplify_qType)]
 let test_match_either_arg ()
   : (((qBool ^+ qBool) ^-> qBool ^-> qBool) ⊩ match_either_arg)
   by (simplify_via_norm ())
@@ -268,19 +278,19 @@ let test_match_either_arg ()
 #pop-options
 
 let d_test_constant () : typing _ _ =
-  get_derivation test_constant ()
+  get_derivation (test_constant ()) ()
 let d_test_constant' () : typing _ _ =
-  get_derivation test_constant' ()
+  get_derivation (test_constant' ()) ()
 let d_test_identity () : typing _ _ =
-  get_derivation test_identity ()
+  get_derivation (test_identity ()) ()
 let d_test_thunked_id () : typing _ _ =
-  get_derivation test_thunked_id ()
+  get_derivation (test_thunked_id ()) ()
 let d_test_proj1 () : typing _ _ =
   get_derivation (test_proj1 ()) ()
 let d_test_proj2 () : typing _ _ =
   get_derivation (test_proj2 ()) ()
 let d_test_proj3 () : typing _ _ =
-  get_derivation test_proj3 ()
+  get_derivation (test_proj3 ()) ()
 let d_test_apply_top_level_def () : typing _ _ =
   get_derivation (test_apply_top_level_def ()) ()
 let d_test_apply_top_level_def' () : typing _ _ =
@@ -319,9 +329,10 @@ let test_apply_io_return ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (QReturn QAxiom))
 
+[@@ (preprocess_with simplify_qType)]
 let test_apply_read ()
   : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
-  by (simplify_via_norm ())
+  by (simplify_stack_ops (); norm [delta_only [`%fs_oval_helper;`%apply_read];iota]; simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (QCall ORead (QFd 0)))
 
 let test_apply_write_const ()
@@ -336,6 +347,7 @@ let test_apply_write ()
 
 let test_apply_io_bind_const ()
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
+
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
       QBind
@@ -415,84 +427,84 @@ let test_greeting ()
 
 #pop-options
 
-#push-options "--no_smt --print_implicits"
+#push-options "--no_smt"
 open ExamplesRefs
 
 let test_refbool ()
-  : qRef qBool (fun t -> t == true) ⊩ refbool
+  : qBoolR (fun t -> t == true) ⊩ refbool
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QRefine (fun t -> t == true) QTrue)
+  = mk_dturniqet (fun _ -> QSubtype QTrue)
 
 let test_falsepre ()
-  : (qRef qBool (fun _ -> False) ^-> qBool) ⊩ falsepre
+  : (qBoolR (fun _ -> False) ^-> qBool) ⊩ falsepre
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QUnrefine (fun _ -> False) QAxiom))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype QAxiom))
 
 let test_just_true ()
-  : (qBool ^-> qRef qBool (fun x -> x == true)) ⊩ just_true
+  : (qBool ^-> qBoolR (fun x -> x == true)) ⊩ just_true
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRefine (fun x -> x == true) QTrue))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype QTrue))
 
 let test_moving_ref ()
-  : (qRef qBool (fun _ -> some_ref) ^-> qRef qUnit (fun _ -> some_ref)) ⊩ moving_ref
+  : (qBoolR (fun _ -> some_ref) ^-> qUnitR (fun _ -> some_ref)) ⊩ moving_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRefine (fun _ -> some_ref) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype Qtt))
 
 let test_always_false ()
-  : (qBool ^-> qRef qBool (fun y -> y == false)) ⊩ always_false
+  : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false) (QIf QAxiom QFalse QAxiom)))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype (QIf QAxiom QFalse QAxiom)))
 
 let test_always_false_complex ()
-  : (qBool ^-> qRef qBool (fun y -> y == false)) ⊩ always_false_complex
+  : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false_complex
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false) (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
 
 let test_always_false_ho ()
-  : ((qUnit ^-> qRef qBool (fun x -> x == true)) ^-> qRef qBool (fun y -> y == false))
+  : ((qUnit ^-> qBoolR (fun x -> x == true)) ^-> qBoolR (fun y -> y == false))
     ⊩ always_false_ho
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRefine (fun y -> y == false)
-      (QIf (QUnrefine (fun x -> x == true) (QApp QAxiom Qtt)) QFalse QTrue)))
+  = mk_dturniqet (fun _ -> QLambda (QSubtype
+      (QIf (QSubtype (QApp QAxiom Qtt)) QFalse QTrue)))
 
 let test_if_x ()
-  : ((qRef qBool (fun x -> x == true) ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
+  : ((qBoolR (fun x -> x == true) ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
-      (QApp qVar1 (QRefine (fun x -> x == true) QAxiom)) QFalse)))
+      (QApp qVar1 (QSubtype QAxiom)) QFalse)))
 
 let test_seq_basic ()
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_basic
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QRefine (fun _ -> True) (QApp QAxiom Qtt)) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QSubtype (QApp QAxiom Qtt)) Qtt))
 
 let test_seq_qref ()
-  : ((qUnit ^-> qRef qUnit (fun _ -> q_ref)) ^-> qRef qUnit (fun _ -> q_ref)) ⊩ seq_qref
+  : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QRefine (fun _ -> q_ref) Qtt)))
+  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QSubtype Qtt)))
 
 let test_seq_p_implies_q ()
-  : ((qRef qBool p_ref ^-> qRef qUnit (fun _ -> q_ref)) ^-> qRef qBool p_ref ^-> qRef qBool (fun _ -> q_ref))
+  : ((qBoolR p_ref ^-> qUnitR (fun _ -> q_ref)) ^-> qBoolR p_ref ^-> qBoolR (fun _ -> q_ref))
     ⊩ seq_p_implies_q
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda
-      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QRefine (fun _ -> q_ref) (QUnrefine p_ref QAxiom)))))
+      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QSubtype QAxiom))))
 
 let test_if_seq ()
-  : ((qRef qBool (fun x -> x == true) ^-> qRef qUnit (fun _ -> q_ref)) ^-> qBool ^-> qRef qBool (fun r -> r == true ==> q_ref))
+  : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
     ⊩ if_seq
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
       (QSeqGhost q_ref
-        (QApp qVar1 (QRefine (fun x -> x == true) QAxiom))
-        (QRefine (fun r -> r == true ==> q_ref) QAxiom))
-      (QRefine (fun r -> r == true ==> q_ref) QAxiom))))
+        (QApp qVar1 (QSubtype QAxiom))
+        (QSubtype QAxiom))
+      (QSubtype QAxiom))))
 
 let test_context ()
-  : (qBool ^-> (qRef qBool (fun x -> x == true) ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)
+  : (qBool ^-> (qBoolR (fun x -> x == true) ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)
     ⊩ context
-  by (simplify_via_norm_if_lambda ())
+  by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1
-      (QApp QAxiom (QRefine (fun x -> x == true) qVar1))
+      (QApp QAxiom (QSubtype qVar1))
       (QLambda QAxiom))))
 #pop-options

@@ -93,15 +93,14 @@ let spec_env_seq_ghost ref preV preK =
   fun fsG -> preV fsG /\ (ref ==> preK fsG)
 
 unfold
-val spec_env_refine : #g:typ_env ->
+val spec_env_subtype : #g:typ_env ->
                 #a:qType ->
-                ref2:(fs_val a -> Type0) ->
-                #ref1:(fs_val a -> Type0) ->
-                preV:spec_env g ->
-                v:fs_oval g (qRef a ref1) preV ->
+                b:qType ->
+                #preV:spec_env g ->
+                v:fs_oval g a preV ->
                 spec_env g
-let spec_env_refine ref2 preV v =
-  fun fsG -> preV fsG /\ ref2 (v fsG)
+let spec_env_subtype #_ #a b #preV v =
+  fun fsG -> preV fsG /\ a `subQtype_of` b
 
 (** Closed values **)
 unfold
@@ -163,7 +162,11 @@ val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
         fs_comp (q_io_res o)
-let fs_comp_call_val o args = io_call o args
+let fs_comp_call_val o args : fs_comp (q_io_res o) =
+  assume (has_type args (io_args o));
+  let r = io_call o args in
+  assume (has_type r (io_res o args));
+  r
 
 (** Open values **)
 unfold
@@ -224,21 +227,20 @@ let fs_oval_lambda
       fun x -> body (stack fsG x)
 
 unfold
-val fs_oval_refine : #g:typ_env ->
+val fs_oval_subtype : #g:typ_env ->
                 #a:qType ->
-                #ref1:(fs_val a -> Type0) ->
-                ref2:(fs_val a -> Type0) ->
                 #preV:spec_env g ->
-                v:fs_oval g (qRef a ref1) preV ->
-                fs_oval g (qRef a ref2) (spec_env_refine ref2 preV v)
-let fs_oval_refine _ v =
+                v:fs_oval g a preV ->
+                b:qType ->
+                fs_oval g b (spec_env_subtype b v)
+let fs_oval_subtype v _ =
   fun fsG -> v fsG
 
 unfold
 val fs_oval_seq_ghost : #g:typ_env ->
                 #preV:spec_env g ->
                 ref:Type0 ->
-                v:fs_oval g (qRef qUnit (fun _ -> ref)) preV ->
+                v:fs_oval g (qUnitR (fun _ -> ref)) preV ->
                 #a:qType ->
                 #preK:spec_env g ->
                 k:fs_oval g a preK ->
@@ -385,10 +387,10 @@ val fs_ocomp_call :
         o:io_ops ->
         #preArgs : spec_env g ->
         args:fs_ocomp g (q_io_args o) preArgs ->
-        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (io_call o a)))
+        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
 let fs_ocomp_call o args =
   fs_ocomp_bind' args (fun args' ->
-    fs_ocomp_return _ (io_call o args'))
+    fs_ocomp_return _ (fs_comp_call_val o args'))
 
 unfold
 val fs_ocomp_call_oval :
@@ -396,7 +398,7 @@ val fs_ocomp_call_oval :
         o:io_ops ->
         #preArgs : spec_env g ->
         args:fs_oval g (q_io_args o) preArgs ->
-        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (io_call o a)))
+        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
 let fs_ocomp_call_oval o args =
   fs_ocomp_call o (fs_ocomp_return_oval args)
 
