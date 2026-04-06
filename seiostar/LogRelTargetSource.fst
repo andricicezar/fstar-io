@@ -49,6 +49,7 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
     | Inr fs_v', EInr e' -> pack qt2 ∋ (h, fs_v', e')
     | _ -> False
   end
+  | QNat -> e == nat_to_exp fs_v
                            (** vvvvvvvvvv defined over values **)
 and (⊇) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
@@ -95,10 +96,12 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
     lem_values_are_values (pack qt2) h (snd #t1 #t2 fs_e) e2
-  | QSum #t1 #t2 qt1 qt2 ->
+  | QSum #t1 #t2 qt1 qt2 -> begin
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+    end
+  | QNat -> lem_nat_to_exp_is_value fs_e
 
 let lem_values_are_expressions t h fs_e e : (** lemma used by Amal **)
   Lemma (requires t ∋ (h, fs_e, e))
@@ -248,6 +251,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     | Inr fs_v', EInr e' -> val_type_closed_under_history_extension (pack qt2) h fs_v' e'
     | _ -> false_elim ()
     end
+  | QNat -> ()
   end
 
 let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) :
@@ -258,6 +262,21 @@ let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env 
         introduce _ ==> _ with _. begin
           val_type_closed_under_history_extension (Some?.v (g x)) h (index fsG x) (s x)
         end
+      end
+    end
+  end
+
+let indexed_safety_val (#t:qType) (fs_e:fs_val t) (e:closed_exp) (h:history) :
+  Lemma
+    (requires t ⊇ (h, fs_e, e))
+    (ensures indexed_safe e h) =
+  introduce forall (e':closed_exp) (lt:local_trace h).
+    steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with begin
+    introduce steps e e' h lt ==> is_value e' \/ indexed_can_step e' (h++lt) with _. begin
+      introduce indexed_irred e' (h++lt) ==> is_value e' with _. begin
+        assert (e_beh e e' h lt);
+        assert (t ∋ (h, fs_e, e') /\ lt == []);
+        lem_values_are_values t h fs_e e'
       end
     end
   end
@@ -318,7 +337,7 @@ let lem_superset_preserved_by_step
       assert (as_lt oev == [] /\ lt' == [])
     end
   end
-  
+
 open FStar.Tactics.V1
 
 let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
@@ -365,7 +384,7 @@ let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp
 (** Unused
 let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
   Lemma (requires equiv_val fs_e e)
-        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
+        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) = ()
 **)
 let sem_expr_shape_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) :
   Lemma (requires t ⫄ (h, fs_e, e))

@@ -45,6 +45,21 @@ type typing : #a:qType -> g:typ_env -> fs_oval g a -> Type =
                 typing (extend a g) body ->
                 typing #(a ^-> b) g (fs_oval_lambda body)
 
+| QZero       : #g : typ_env -> typing #qNat g (fs_oval_zero g)
+| QSucc       : #g : typ_env ->
+                #n : fs_oval g qNat ->
+                typing g n ->
+                typing #qNat g (fs_oval_succ n)
+| QNRec       : #g : typ_env ->
+                #a : qType ->
+                #n : fs_oval g qNat ->
+                #base : fs_oval g a ->
+                #f : fs_oval g (a ^-> a) ->
+                typing g n ->
+                typing g base ->
+                typing g f ->
+                typing g (fs_oval_nrec n base f)
+
 | QTrue       : #g : typ_env -> typing g (fs_oval_return g #qBool true)
 | QFalse      : #g : typ_env -> typing g (fs_oval_return g #qBool false)
 | QStringLit  : #g : typ_env -> s:string -> typing g (fs_oval_return g #qString s)

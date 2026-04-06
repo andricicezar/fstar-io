@@ -32,6 +32,7 @@ type type_quotation : Type0 -> Type u#1 =
           type_quotation t1 ->
           type_quotation t2 ->
           type_quotation (either t1 t2)
+| QNat  : type_quotation nat
 
 let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   match tq with
@@ -43,6 +44,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
   | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
   | QSum #t1 #t2 _ _ -> assert (t == either t1 t2)
+  | QNat -> assert (t == nat)
 
 let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   match qt with
@@ -55,6 +57,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   | QArrIO qt1 qt2 ->
     TArr (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QSum qt1 qt2 -> TSum (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
+  | QNat -> TNat
 
 (** Type of Quotable Types **)
 type qType =
@@ -79,6 +82,8 @@ let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) |)
 let (^+) (t1 t2:qType) : qType =
   (| _, QSum (get_rel t1) (get_rel t2) |)
+
+let qNat : qType = (| _, QNat |)
 
 let qResexn (t1:qType) : qType = t1 ^+ qUnit
 

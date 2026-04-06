@@ -403,6 +403,50 @@ let rec construct_steps_eif_e1
     lem_steps_transitive (EIf e1 e2 e3) (EIf e1_ e2 e3) (EIf e1' e2 e3) h lt' lt23
     end
 
+let rec construct_steps_esucc
+  (e:closed_exp)
+  (e':closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e e' h lt) :
+  Lemma
+    (requires indexed_irred e' (h++lt))
+    (ensures steps (ESucc e) (ESucc e') h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e_ #_ #_ #oev #lt23 step_e rest -> begin
+    let _ : step (ESucc e) (ESucc e_) h oev = SSucc step_e in
+    lem_step_implies_steps (ESucc e) (ESucc e_) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_esucc e_ e' (h++lt') lt23 rest;
+    lem_steps_transitive (ESucc e) (ESucc e_) (ESucc e') h lt' lt23
+    end
+
+let rec construct_steps_enrec_arg
+  (e1:closed_exp)
+  (e1':closed_exp)
+  (e2:closed_exp)
+  (e3:closed_exp)
+  (h:history)
+  (lt:local_trace h)
+  (st:steps e1 e1' h lt) :
+  Lemma
+    (requires indexed_irred e1' (h++lt))
+    (ensures steps (ENRec e1 e2 e3) (ENRec e1' e2 e3) h lt)
+    (decreases st) =
+  match st with
+  | SRefl _ _ -> ()
+  | STrans #_ #e1_ #_ #_ #oev #lt23 step_e1 rest -> begin
+    let _ : step (ENRec e1 e2 e3) (ENRec e1_ e2 e3) h oev = SNRecV e2 e3 step_e1 in
+    lem_step_implies_steps (ENRec e1 e2 e3) (ENRec e1_ e2 e3) h oev;
+    let lt' : local_trace h = as_lt oev in
+    trans_history h lt' lt23;
+    construct_steps_enrec_arg e1_ e1' e2 e3 (h++lt') lt23 rest;
+    lem_steps_transitive (ENRec e1 e2 e3) (ENRec e1_ e2 e3) (ENRec e1' e2 e3) h lt' lt23
+    end
+
 let construct_steps_eif
   (e1:closed_exp)
   (e1':closed_exp{ETrue? e1' \/ EFalse? e1'})

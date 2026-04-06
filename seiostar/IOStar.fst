@@ -32,6 +32,9 @@ let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
 let return = io_return
 let (let!@) = io_bind
 
+let rec io_nrec (#a:Type) (n:nat) (b:a) (f:a -> a) : a =
+  if n = 0 then b else io_nrec (n-1) (f b) f
+
 (** Specification monad **)
 
 (** The postcondition for an io computation is defined over the

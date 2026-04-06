@@ -35,7 +35,7 @@ let fs_val_pair (#a #b:qType) (x:fs_val a) (y:fs_val b) : fs_val (a ^* b) =
 
 (** Closed computations **)
 type fs_comp (t:qType) =
-   io (get_Type t)
+   io (fs_val t)
 
 unfold
 val fs_comp_bind : #a:qType ->
@@ -67,7 +67,7 @@ let fs_comp_case_val cond inlc inrc =
   match cond with
   | Inl x -> inlc x
   | Inr x -> inrc x
-  
+
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
@@ -76,7 +76,7 @@ let fs_comp_call_val o args = io_call o args
 
 (** Open values **)
 type fs_oval (g:typ_env) (t:qType) =
-  eval_env g -> get_Type t
+  eval_env g -> fs_val t
 
 unfold
 let fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t) : fs_oval g t =
@@ -166,7 +166,7 @@ let fs_oval_case cond inlc inrc fsG =
 (** Open computations **)
 
 type fs_ocomp (g:typ_env) (t:qType) =
-  eval_env g -> io (get_Type t)
+  eval_env g -> io (fs_val t)
 
 unfold
 val fs_ocomp_return :
@@ -369,3 +369,38 @@ let fs_ocomp_string_eq x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
+
+let fs_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_val a) : fs_val a =
+  io_nrec n b f
+
+unfold
+let fs_oval_zero (g:typ_env) : fs_oval g qNat =
+  fun _ -> 0
+
+unfold
+let fs_oval_succ (#g:typ_env) (n:fs_oval g qNat) : fs_oval g qNat =
+  fun fsG -> n fsG + 1
+
+unfold
+let fs_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (b:fs_oval g a) (f:fs_oval g (a ^-> a)) : fs_oval g a =
+  fun fsG -> fs_nrec_val #a (n fsG) (b fsG) (f fsG)
+
+let rec fs_io_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_comp a) : fs_comp a =
+  if n = 0 then io_return b
+  else io_bind (f b) (fun b' -> fs_io_nrec_val #a (n-1) b' f)
+
+let rec fs_io_nrec_comp (#a:qType) (n:nat) (b:fs_comp a) (f:fs_comp (a ^->!@ a)) : fs_comp a =
+  if n = 0 then b
+  else fs_io_nrec_comp #a (n-1)
+    (fs_comp_bind f (fun f' ->
+      fs_comp_bind b (fun b' ->
+        f' b')))
+    f
+
+let fs_ocomp_nrec (#g:typ_env) (#a:qType)
+    (fn:fs_ocomp g qNat)
+    (fb:fs_ocomp g a)
+    (ff:fs_ocomp g (a ^->!@ a))
+    : fs_ocomp g a =
+  fs_ocomp_bind' fn (fun n' ->
+    fun fsG -> fs_io_nrec_comp #a n' (fb fsG) (ff fsG))
