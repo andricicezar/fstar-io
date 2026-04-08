@@ -208,7 +208,8 @@ val fs_oval_app: #g : typ_env ->
                  #a : qType ->
                  #b : qType ->
                  #preF :spec_env g ->
-                 f :fs_oval g (a ^-> b) preF ->
+                 #post : _ ->
+                 f :fs_oval g (qArrR a b post) preF ->
                  #preX : spec_env g ->
                  x :fs_oval g a preX ->
                  fs_oval g b (spec_env_app preF preX)

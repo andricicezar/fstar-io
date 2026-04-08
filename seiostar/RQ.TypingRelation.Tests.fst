@@ -729,42 +729,44 @@ let test_ior_io_apply_callback ()
 
 (** Example 21: Validate with refined callback in IO *)
 
-// [@@ (preprocess_with simplify_qType)]
-// let test_ior_io_validate_simp ()
-//   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^-> qResexn (qStringR (fun x -> valid x))) ⊩ pure_validate
-//  by (dump "H"; simplify_stack_ops (); simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> 
-//       QLambda (QLambda (
-//         (QIf
-//             (QApp QAxiom (QWeaken QAxiom))
-//             (QInl (QRetype (QWeaken QAxiom) #(qStringR (fun x -> valid x))))
-//             (QInr Qtt)))))
-
-// [@@ (preprocess_with simplify_qType)]
-// let test_ior_io_validate_simp ()
-//   : (qString ^-> (qArrR qString qBool (fun f -> forall x. f x ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
-//  // by (simplify_stack_ops (); simplify_via_norm ())
-//   = mk_dturniqet (fun _ -> QLambdaIO (
-//               (QReturn (QIf (QApp (QRetype QAxiom) (QWeaken QAxiom))
-//                             (QInl (QRetype (QWeaken QAxiom)))
-//                             (QInr Qtt)))))
-
-(**
 [@@ (preprocess_with simplify_qType)]
-let test_ior_io_validate ()
-  : (qValidator ^->!@ qResexn qValidStr) ⊩ io_validate
-  by (dump "H"; simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (
-      QBind (QCall OOpen (QStringLit "./file"))
-        (QCaseIO #_ #qFileDescr #qUnit QAxiom
-          (QBind (QCall ORead QAxiom)
-            (QCaseIO #_ #qString #qUnit QAxiom
-              (QReturn (QIf (QApp (QRetype (QWeaken (QWeaken (QWeaken (QWeaken QAxiom))))) QAxiom)
-                            (QInl (QRetype QAxiom))
-                            (QInr Qtt)))
-              (QReturn (QInr QAxiom))))
-          (QReturn (QInr QAxiom)))))
-**)
+let test_ior_pure_validate ()
+  : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^-> qResexn (qStringR (fun x -> valid x))) ⊩ pure_validate
+ by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> 
+      QLambda (QLambda (
+        (QIf (QApp QAxiom (QWeaken QAxiom))
+            (QInl (QRetype (QWeaken QAxiom)))
+            (QInr Qtt)))))
+
+[@@ (preprocess_with simplify_qType)]
+let test_ior_io_validate_simp ()
+  : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
+ by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> 
+      QLambda (QLambdaIO (
+        (QReturn 
+          (QIf (QApp QAxiom (QWeaken QAxiom))
+              (QInl (QRetype (QWeaken QAxiom)))
+              (QInr Qtt))))))
+
+// [@@ (preprocess_with simplify_qType)]
+// let test_ior_io_validate ()
+//   : ((qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate
+//   by (simplify_stack_ops (); simplify_via_norm ())
+//   = mk_dturniqet (fun _ ->
+//     QLambdaIO (
+//       QBind (QCall OOpen (QStringLit "./file"))
+//         (QCaseIO QAxiom
+//           (QBind (QCall ORead QAxiom)
+//             (QCaseIO QAxiom
+//               (QReturn 
+//                 (QIf (QApp (QWeaken (QWeaken (QWeaken (QWeaken QAxiom)))) QAxiom)
+//                     (QInl (QRetype QAxiom))
+//                     (QInr Qtt)))
+//               (QReturn (QInr QAxiom))))
+//           (QReturn (QInr QAxiom)))))
+
 #pop-options
 
 
@@ -825,6 +827,12 @@ let d_test_ior_io_ghost_seq () : typing _ _
 let d_test_ior_io_apply_callback () : typing _ _
   by (simplify_d ())
   = get_derivation (test_ior_io_apply_callback ()) ()
-let d_test_ior_io_validate () : typing _ _
+let d_test_ior_pure_validate () : typing _ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_validate ()) (_ by (norm [delta; iota]))
+  = get_derivation (test_ior_pure_validate ()) (_ by (norm [delta; iota]))
+let d_test_ior_io_validate_simp () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_validate_simp ()) (_ by (norm [delta; iota]))
+// let d_test_ior_io_validate () : typing _ _
+//   by (simplify_d ())
+//   = get_derivation (test_ior_io_validate ()) (_ by (norm [delta; iota]))

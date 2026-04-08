@@ -25,7 +25,7 @@ type type_quotation : Type0 -> Type u#1 =
          type_quotation t1 ->
          type_quotation t2 ->
          #ref:((t1 -> io t2) -> Type0) ->
-         type_quotation (f:(t1 -> io t2){ref f})
+         type_quotation (f:(t1 -> io t2){ref f}) (** TODO: update to be the same as QArr. Also, update typing relation to be the same **)
 | QPair : #t1:Type ->
           #t2:Type ->
           type_quotation t1 ->
@@ -83,7 +83,7 @@ let qUnitR ref : qType = (| _, QUnit #ref |)
 let qBoolR ref : qType = (| _, QBool #ref |)
 let qFileDescrR ref : qType = (| _, QFileDescriptor #ref |)
 let qStringR ref : qType = (| _, QString #ref |)
-let qArrR (t1 t2:qType) ref : qType = (| _, QArr (get_rel t1) (get_rel t2) #ref |)
+let qArrR (t1 t2:qType) post : qType = (| _, QArr (get_rel t1) (get_rel t2) #post |)
 
 let qUnit : qType = qUnitR (fun _ -> True)
 let qBool : qType = qBoolR (fun _ -> True)
