@@ -396,7 +396,7 @@ let test_apply_io_bind_read_write ()
   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by ( simplify_stack_ops (); simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 4))
-    (QCaseIO #_ #qString #qUnit QAxiom
+    (QCaseIO QAxiom
       (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
       (QReturn (QInr QAxiom)))))
 
@@ -405,7 +405,7 @@ let test_apply_io_bind_read_write' ()
    : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
    by (simplify_via_norm ())
    = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 9)) (
-       QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom)))))
+       QCaseIO QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom)))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
@@ -414,7 +414,7 @@ let test_apply_io_bind_read_if_write ()
   = mk_dturniqet (fun _ -> QLambdaIO
       (QBind
         (QCall ORead (QFd 0))
-         (QCaseIO #_ #qString #qUnit QAxiom
+         (QCaseIO QAxiom
            (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
            (QReturn (QInr QAxiom)))))
 
@@ -550,7 +550,8 @@ let test_if_seq ()
   : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
     ⊩ if_seq
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
+  = mk_dturniqet (fun _ -> 
+    QLambda (QLambda (QIf QAxiom
       (QSeqGhost q_ref
         (QApp qVar1 (QRetype QAxiom))
         (QRetype QAxiom))
@@ -605,3 +606,225 @@ let d_test_if_seq () : typing _ _
 let d_test_context () : typing _ _
   by (simplify_d ())
   = get_derivation (test_context ()) ()
+
+#push-options "--no_smt"
+open ExamplesIORefinements
+
+(** Example 1: Erase refinement in IO *)
+let test_ior_simple_erase_ref ()
+  : (qBoolR (fun t -> t == true) ^->!@ qBool) ⊩ simple_erase_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QAxiom)))
+
+(** Example 2: Preserve refinement in IO *)
+let test_ior_simple_ref_id ()
+  : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true)) ⊩ simple_ref_id
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn QAxiom))
+
+(** Example 3: Weaken refinement in IO *)
+let test_ior_simple_reref_id ()
+  : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_reref_id
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QAxiom)))
+
+(** Example 4: Bind with IO call, then return refined *)
+let test_ior_simple_ref_bind ()
+  : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_ref_bind
+  by (simplify_stack_ops (); simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./string")) (QReturn (QRetype (QWeaken QAxiom)))))
+
+(** Example 6: Return refined true constant *)
+let test_ior_io_ret_ref_true ()
+  : (qUnit ^->!@ qBoolR (fun x -> x == true)) ⊩ io_ret_ref_true
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QTrue)))
+
+(** Example 7: Return refined false constant *)
+let test_ior_io_ret_ref_false ()
+  : (qUnit ^->!@ qBoolR (fun x -> x == false)) ⊩ io_ret_ref_false
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QFalse)))
+
+(** Example 8: Negate refined input in IO *)
+let test_ior_io_negate_ref ()
+  : (qBoolR (fun x -> x == true) ^->!@ qBoolR (fun y -> y == false)) ⊩ io_negate_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype (QIf (QRetype QAxiom) QFalse QTrue))))
+
+(** Example 9: If-then-else with both branches false *)
+let test_ior_io_if_both_false ()
+  : (qBool ^->!@ qBoolR (fun y -> y == false)) ⊩ io_if_both_false
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype (QIf QAxiom QFalse QFalse))))
+
+(** Example 10: Bind with unit, then return refined *)
+let test_ior_io_bind_ret_ref ()
+  : (qUnit ^->!@ qBoolR (fun x -> x == true)) ⊩ io_bind_ret_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QReturn Qtt) (QReturn (QRetype QTrue))))
+
+(** Example 11: IO call then return refined *)
+let test_ior_io_call_ret_ref ()
+  : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_call_ret_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QReturn (QRetype QTrue))))
+
+(** Example 12: Two IO calls then return refined *)
+let test_ior_io_two_calls_ref ()
+  : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_two_calls_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./a")) (QBind (QCall OOpen (QStringLit "./b")) (QReturn (QRetype QTrue)))))
+
+(** Example 13: Inject Inl with refined input in IO *)
+let test_ior_io_inl_ref ()
+  : (qBoolR (fun x -> x == true) ^->!@ qResexn qBool) ⊩ io_inl_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QInl (QRetype QAxiom))))
+
+(** Example 14: Inject Inr (error) in IO *)
+let test_ior_io_inr_ref ()
+  : (qUnit ^->!@ qResexn qBool) ⊩ io_inr_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QInr Qtt)))
+
+(** Example 15: Return pair with refined input in IO *)
+let test_ior_io_pair_ref ()
+  : (qBoolR (fun x -> x == true) ^->!@ (qBool ^* qUnit)) ⊩ io_pair_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QMkpair (QRetype QAxiom) Qtt)))
+
+(** Example 16: Case analysis returning refined in IO *)
+[@@ (preprocess_with simplify_qType)]
+let test_ior_io_case_ref ()
+  : ((qBool ^+ qUnit) ^->!@ qBoolR (fun y -> y == false)) ⊩ io_case_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QCaseIO QAxiom (QReturn (QRetype QFalse)) (QReturn (QRetype QFalse))))
+
+(** Example 17: if!@ with refined result *)
+[@@ (preprocess_with simplify_qType)]
+let test_ior_io_ifbang_ref ()
+  : (qBool ^->!@ qBoolR (fun y -> y == true)) ⊩ io_ifbang_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QReturn QAxiom) (QIfIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QTrue)))))
+
+(** Example 18: match!@ on IO call with refined result *)
+[@@ (preprocess_with simplify_qType)]
+let test_ior_io_matchbang_ref ()
+  : (qUnit ^->!@ qBoolR (fun y -> y == true \/ y == false)) ⊩ io_matchbang_ref
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QCaseIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QFalse)))))
+
+(** Example 19: Ghost sequencing before IO return *)
+let test_ior_io_ghost_seq ()
+  : ((qUnit ^-> qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ^->!@ qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ⊩ io_ghost_seq
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QSeqGhost ExamplesIORefinements.q_ref (QApp QAxiom Qtt) (QRetype Qtt))))
+
+(** Example 20: Apply refined callback in IO *)
+let test_ior_io_apply_callback ()
+  : ((qBoolR (fun x -> x == true) ^-> qBool) ^->!@ qBool) ⊩ io_apply_callback
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QApp QAxiom (QRetype QTrue))))
+
+(** Example 21: Validate with refined callback in IO *)
+
+// [@@ (preprocess_with simplify_qType)]
+// let test_ior_io_validate_simp ()
+//   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^-> qResexn (qStringR (fun x -> valid x))) ⊩ pure_validate
+//  by (dump "H"; simplify_stack_ops (); simplify_via_norm ())
+//   = mk_dturniqet (fun _ -> 
+//       QLambda (QLambda (
+//         (QIf
+//             (QApp QAxiom (QWeaken QAxiom))
+//             (QInl (QRetype (QWeaken QAxiom) #(qStringR (fun x -> valid x))))
+//             (QInr Qtt)))))
+
+// [@@ (preprocess_with simplify_qType)]
+// let test_ior_io_validate_simp ()
+//   : (qString ^-> (qArrR qString qBool (fun f -> forall x. f x ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
+//  // by (simplify_stack_ops (); simplify_via_norm ())
+//   = mk_dturniqet (fun _ -> QLambdaIO (
+//               (QReturn (QIf (QApp (QRetype QAxiom) (QWeaken QAxiom))
+//                             (QInl (QRetype (QWeaken QAxiom)))
+//                             (QInr Qtt)))))
+
+(**
+[@@ (preprocess_with simplify_qType)]
+let test_ior_io_validate ()
+  : (qValidator ^->!@ qResexn qValidStr) ⊩ io_validate
+  by (dump "H"; simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambdaIO (
+      QBind (QCall OOpen (QStringLit "./file"))
+        (QCaseIO #_ #qFileDescr #qUnit QAxiom
+          (QBind (QCall ORead QAxiom)
+            (QCaseIO #_ #qString #qUnit QAxiom
+              (QReturn (QIf (QApp (QRetype (QWeaken (QWeaken (QWeaken (QWeaken QAxiom))))) QAxiom)
+                            (QInl (QRetype QAxiom))
+                            (QInr Qtt)))
+              (QReturn (QInr QAxiom))))
+          (QReturn (QInr QAxiom)))))
+**)
+#pop-options
+
+
+let d_test_ior_simple_erase_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_simple_erase_ref ()) ()
+let d_test_ior_simple_ref_id () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_simple_ref_id ()) ()
+let d_test_ior_simple_reref_id () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_simple_reref_id ()) ()
+let d_test_ior_simple_ref_bind () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_simple_ref_bind ()) ()
+let d_test_ior_io_ret_ref_true () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_ret_ref_true ()) ()
+let d_test_ior_io_ret_ref_false () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_ret_ref_false ()) ()
+let d_test_ior_io_negate_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_negate_ref ()) ()
+let d_test_ior_io_if_both_false () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_if_both_false ()) ()
+let d_test_ior_io_bind_ret_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_bind_ret_ref ()) ()
+let d_test_ior_io_call_ret_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_call_ret_ref ()) ()
+let d_test_ior_io_two_calls_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_two_calls_ref ()) ()
+let d_test_ior_io_inl_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_inl_ref ()) ()
+let d_test_ior_io_inr_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_inr_ref ()) ()
+let d_test_ior_io_pair_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_pair_ref ()) ()
+let d_test_ior_io_case_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_case_ref ()) (_ by (norm [delta; iota]))
+let d_test_ior_io_ifbang_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_ifbang_ref ()) ()
+let d_test_ior_io_matchbang_ref () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_matchbang_ref ()) (_ by (norm [delta; iota]))
+let d_test_ior_io_ghost_seq () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_ghost_seq ()) ()
+let d_test_ior_io_apply_callback () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_apply_callback ()) ()
+let d_test_ior_io_validate () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_ior_io_validate ()) (_ by (norm [delta; iota]))

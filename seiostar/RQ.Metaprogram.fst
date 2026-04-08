@@ -235,9 +235,9 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         mk_qbind qm qk
       | _ -> fail "IOStar.io_bind continuation is not a lambda"
     end
-    | Some "ExamplesIO.eq_string", [v1; v2] ->
+    | Some "ExamplesIO.eq_string", [v1; v2] -> // TODO: Move eq_string in IOStar.fst.
       mk_qeq_string (create_derivation g dbmap prior_derivs fuel false None v1) (create_derivation g dbmap prior_derivs fuel false None v2)
-    | Some "ExamplesIO.op_let_Bang_At_Bang", [m; k] -> begin
+    | Some "IOStar.op_let_Bang_At_Bang", [m; k] -> begin
       (** let!@! m k = match!@ m with Inl x -> k x | Inr y -> return (Inr y)
           Translates to: QBind m (QCaseIO QAxiom (k_body) (QReturn (QInr QAxiom)))
           The dbmap for k_body needs two shifts (bind + case) but only one new binder from k's lambda.
@@ -249,7 +249,7 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
         let qk_body = create_derivation g dbmap' prior_derivs fuel true None body in
         let qinr_branch = mk_qreturn (mk_qinr mk_qaxiom) in
         mk_qbind qm (mk_qcasecomp mk_qaxiom qk_body qinr_branch)
-      | _ -> fail "ExamplesIO.op_let_Bang_At_Bang continuation is not a lambda"
+      | _ -> fail "IOStar.op_let_Bang_At_Bang continuation is not a lambda"
     end
     | _ ->
       let f = (create_derivation g dbmap prior_derivs fuel false None hd) in

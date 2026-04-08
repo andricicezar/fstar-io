@@ -32,6 +32,11 @@ let io_call (o:io_ops) (args:io_args o) : io (io_res o args) =
 let return = io_return
 let (let!@) = io_bind
 
+let (let!@!) #a #b (m:io (resexn a)) (k:a -> io (resexn b)) =
+  match!@ m with
+  | Inl x -> k x
+  | Inr x -> io_return (Inr x)
+
 (** Specification monad **)
 
 (** The postcondition for an io computation is defined over the
