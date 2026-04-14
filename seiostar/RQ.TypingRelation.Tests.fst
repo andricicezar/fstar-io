@@ -564,6 +564,15 @@ let test_context ()
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1
       (QApp QAxiom (QRetype qVar1))
       (QLambda QAxiom))))
+
+[@@expect_failure]
+// [@@ (preprocess_with simplify_qType)]
+let test_pure_fun ()
+  : (qArrR (qBoolR (fun b -> b = true)) qBool (fun (b : (x:bool{x = true})) r -> r = b)) ⊩ pure_fun
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambda QTrue)
+
+
 #pop-options
 
 let d_test_refbool () : typing _ _

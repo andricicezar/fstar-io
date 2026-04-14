@@ -54,3 +54,12 @@ let context
   = fun x f ->
     if x then (f x)
     else (fun y -> y)
+
+// val pure_fun : b:bool -> Pure bool (requires b = true) (ensures fun r -> r = b)
+// let pure_fun b = true
+
+// val pure_fun_ref : f:(b:bool { b = true } -> bool){ forall b. b = true ==> f b = b }
+// let pure_fun_ref b = true
+
+val pure_fun : b:(b:bool{ b = true }) -> r:bool { r = b }
+let pure_fun b = true
