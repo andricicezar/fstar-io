@@ -570,7 +570,7 @@ let test_context ()
 let test_pure_fun ()
   : (qArrR (qBoolR (fun b -> b = true)) qBool (fun (b : (x:bool{x = true})) r -> r = b)) ⊩ pure_fun
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda QTrue)
+  = mk_dturniqet (fun _ -> QRetype (QLambda (QRetype QTrue)))
 
 
 #pop-options
