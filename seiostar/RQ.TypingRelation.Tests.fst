@@ -565,12 +565,10 @@ let test_context ()
       (QApp QAxiom (QRetype qVar1))
       (QLambda QAxiom))))
 
-[@@expect_failure]
-// [@@ (preprocess_with simplify_qType)]
 let test_pure_fun ()
  : (qArrR (qBoolR (fun b -> b == true)) qBool (fun b r -> r == b)) ⊩ pure_fun
-  by (simplify_stack_ops (); dump "H"; simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype QTrue))
+  by (simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QRetype (QLambda #(qBoolR (fun b -> b == true)) QTrue))
 
 
 #pop-options
@@ -615,6 +613,9 @@ let d_test_if_seq () : typing _ _
 let d_test_context () : typing _ _
   by (simplify_d ())
   = get_derivation (test_context ()) ()
+let d_test_pure_fun () : typing _ _
+  by (simplify_d ())
+  = get_derivation (test_pure_fun ()) (_ by (norm [delta; iota]))
 
 #push-options "--no_smt"
 open ExamplesIORefinements
