@@ -61,5 +61,5 @@ let context
 // val pure_fun_ref : f:(b:bool { b = true } -> bool){ forall b. b = true ==> f b = b }
 // let pure_fun_ref b = true
 
-val pure_fun : b:(b:bool{ b = true }) -> r:bool { r = b }
+val pure_fun : b:bool{ b == true } -> r:bool { r == b }
 let pure_fun b = true

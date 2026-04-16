@@ -550,7 +550,7 @@ let test_if_seq ()
   : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
     ⊩ if_seq
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
     QLambda (QLambda (QIf QAxiom
       (QSeqGhost q_ref
         (QApp qVar1 (QRetype QAxiom))
@@ -568,9 +568,9 @@ let test_context ()
 [@@expect_failure]
 // [@@ (preprocess_with simplify_qType)]
 let test_pure_fun ()
-  : (qArrR (qBoolR (fun b -> b = true)) qBool (fun (b : (x:bool{x = true})) r -> r = b)) ⊩ pure_fun
-  by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QRetype (QLambda (QRetype QTrue)))
+ : (qArrR (qBoolR (fun b -> b == true)) qBool (fun b r -> r == b)) ⊩ pure_fun
+  by (simplify_stack_ops (); dump "H"; simplify_via_norm ())
+  = mk_dturniqet (fun _ -> QLambda (QRetype QTrue))
 
 
 #pop-options
@@ -742,7 +742,7 @@ let test_ior_io_apply_callback ()
 let test_ior_pure_validate ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^-> qResexn (qStringR (fun x -> valid x))) ⊩ pure_validate
  by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
       QLambda (QLambda (
         (QIf (QApp QAxiom (QWeaken QAxiom))
             (QInl (QRetype (QWeaken QAxiom)))
@@ -752,9 +752,9 @@ let test_ior_pure_validate ()
 let test_ior_io_validate_simp ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
  by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
       QLambda (QLambdaIO (
-        (QReturn 
+        (QReturn
           (QIf (QApp QAxiom (QWeaken QAxiom))
               (QInl (QRetype (QWeaken QAxiom)))
               (QInr Qtt))))))
@@ -769,7 +769,7 @@ let test_ior_io_validate_simp ()
 //         (QCaseIO QAxiom
 //           (QBind (QCall ORead QAxiom)
 //             (QCaseIO QAxiom
-//               (QReturn 
+//               (QReturn
 //                 (QIf (QApp (QWeaken (QWeaken (QWeaken (QWeaken QAxiom)))) QAxiom)
 //                     (QInl (QRetype QAxiom))
 //                     (QInr Qtt)))
