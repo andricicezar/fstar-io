@@ -24,8 +24,8 @@ type type_quotation : Type0 -> Type u#1 =
          #t2:Type ->
          type_quotation t1 ->
          type_quotation t2 ->
-         #ref:((t1 -> io t2) -> Type0) ->
-         type_quotation (f:(t1 -> io t2){ref f}) (** TODO: update to be the same as QArr. Also, update typing relation to be the same **)
+         #post:(t1 -> io t2 -> Type0) ->
+         type_quotation (f:(x:t1 -> y:(io t2){post x y})) (** TODO: update to be the same as QArr. Also, update typing relation to be the same **)
 | QPair : #t1:Type ->
           #t2:Type ->
           type_quotation t1 ->
@@ -50,7 +50,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QFileDescriptor #ref -> assert (t == x:file_descr{ref x})
   | QString #ref -> assert (t == x:string{ref x})
   | QArr #t1 #t2 _ _ #post -> assert (t == ((x:t1 -> y:t2{post x y})))
-  | QArrIO #t1 #t2 _ _ #ref -> assert (t == (f:(t1 -> io t2){ref f}))
+  | QArrIO #t1 #t2 _ _ #post -> assert (t == ((x:t1 -> y:(io t2){post x y})))
   | QPair #t1 #t2 _ _ #ref -> assert (t == (x:(t1 & t2){ref x}))
   | QSum #t1 #t2 _ _ #ref -> assert (t == (x:(either t1 t2){ref x}))
 
@@ -84,6 +84,7 @@ let qBoolR ref : qType = (| _, QBool #ref |)
 let qFileDescrR ref : qType = (| _, QFileDescriptor #ref |)
 let qStringR ref : qType = (| _, QString #ref |)
 let qArrR (t1 t2:qType) post : qType = (| _, QArr (get_rel t1) (get_rel t2) #post |)
+let qArrIOR (t1 t2:qType) post : qType = (| _, QArrIO (get_rel t1) (get_rel t2) #post |)
 
 let qUnit : qType = qUnitR (fun _ -> True)
 let qBool : qType = qBoolR (fun _ -> True)
@@ -95,7 +96,7 @@ let qString : qType = qStringR (fun _ -> True)
 let (^->) (t1 t2:qType) : qType =
   qArrR t1 t2 (fun _ _ -> True)
 let (^->!@) (t1 t2:qType) : qType =
-  (| _, QArrIO (get_rel t1) (get_rel t2) #(fun _ -> True) |)
+  qArrIOR t1 t2 (fun _ _ -> True)
 let (^*) (t1 t2:qType) : qType =
   (| _, QPair (get_rel t1) (get_rel t2) #(fun _ -> True) |)
 let (^+) (t1 t2:qType) : qType =
