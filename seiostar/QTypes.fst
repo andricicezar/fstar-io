@@ -24,8 +24,8 @@ type type_quotation : Type0 -> Type u#1 =
          #t2:Type ->
          type_quotation t1 ->
          type_quotation t2 ->
-         #post:(t1 -> io t2 -> Type0) ->
-         type_quotation (f:(x:t1 -> y:(io t2){post x y})) (** TODO: update to be the same as QArr. Also, update typing relation to be the same **)
+         #post:(t1 -> t2 -> Type0) ->
+         type_quotation (f:(x:t1 -> io (y:t2{post x y}))) (** TODO: update to be the same as QArr. Also, update typing relation to be the same **)
 | QPair : #t1:Type ->
           #t2:Type ->
           type_quotation t1 ->
@@ -50,7 +50,7 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QFileDescriptor #ref -> assert (t == x:file_descr{ref x})
   | QString #ref -> assert (t == x:string{ref x})
   | QArr #t1 #t2 _ _ #post -> assert (t == ((x:t1 -> y:t2{post x y})))
-  | QArrIO #t1 #t2 _ _ #post -> assert (t == ((x:t1 -> y:(io t2){post x y})))
+  | QArrIO #t1 #t2 _ _ #post -> assert (t == ((x:t1 -> io (y:t2{post x y}))))
   | QPair #t1 #t2 _ _ #ref -> assert (t == (x:(t1 & t2){ref x}))
   | QSum #t1 #t2 _ _ #ref -> assert (t == (x:(either t1 t2){ref x}))
 
