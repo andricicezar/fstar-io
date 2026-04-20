@@ -86,22 +86,25 @@ let helper_compat_oval_string_eq_steps (h:history) (fs_e1:fs_val qString) (fs_e2
   end
 #pop-options
 
-let compat_oval_string_eq #g
-  (fs_e1:fs_oval g qString) (fs_e2:fs_oval g qString)
+let compat_oval_string_eq #g #preS1 #preS2
+  (fs_e1:fs_oval g qString preS1) (fs_e2:fs_oval g qString preS2)
   (e1:exp) (e2:exp)
   : Lemma
     (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2)
     (ensures fs_oval_eq_string fs_e1 fs_e2 ⊏ EStringEq e1 e2) =
   lem_fv_in_env_string_eq g e1 e2;
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> qBool ⊆ (h, (fs_e1 fsG = fs_e2 fsG), gsubst s (EStringEq e1 e2)) with begin
-    let fs_e1 = fs_e1 fsG in
-    let fs_e2 = fs_e2 fsG in
-    let fs_e = (fs_e1 = fs_e2) in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_app preS1 preS2) fsG) ==> qBool ⊆ (h, (fs_e1 fsG = fs_e2 fsG), gsubst s (EStringEq e1 e2)) with begin
+    let preS1 = preS1 fsG in
+    let preS2 = preS2 fsG in
+    let pre = (preS1 /\ preS2) in
+    let fs_e1 () : Pure (fs_val qString) (requires preS1) (ensures (fun _ -> True)) = fs_e1 fsG in
+    let fs_e2 () : Pure (fs_val qString) (requires preS2) (ensures (fun _ -> True)) = fs_e2 fsG in
+    let fs_e () : Pure (fs_val qBool) (requires pre) (ensures (fun _ -> True)) = (fs_e1 () = fs_e2 ()) in
     let e = EStringEq (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EStringEq e1 e2) == e);
     let EStringEq e1 e2 = e in
-    introduce fsG `(≍) h` s ==> qBool ⊆ (h, fs_e, e) with _. begin
-      helper_compat_oval_string_eq_steps h fs_e1 fs_e2 e1 e2
+    introduce (fsG `(≍) h` s /\ pre) ==> qBool ⊆ (h, fs_e (), e) with _. begin
+      helper_compat_oval_string_eq_steps h (fs_e1 ()) (fs_e2 ()) e1 e2
     end
   end
 
@@ -126,35 +129,35 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊏ EVar 
 
 #push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
  (** Used in compilation **)
-let compat_weaken (#g:typ_env) #a #t (s:fs_oval g a) (e:exp)
+let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
   : Lemma
       (requires (s ⊏ e))
       (ensures (fs_oval_weaken t s ⊏ subst sub_inc e))
   =
   lem_fv_in_env_weaken g t e;
-  introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). fsG `(≍) h` s' ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
-    introduce fsG `(≍) h` s' ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
+  introduce forall b (s':gsub (extend t g) b) (fsG:eval_env (extend t g)) (h:history). (fsG `(≍) h` s' /\ (spec_env_weaken pre) fsG) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with begin
+    introduce (fsG `(≍) h` s' /\ (spec_env_weaken pre) fsG) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
       lem_index_tail fsG;
       let f : var -> exp = fun (y:var) -> s' (y+1) in
       introduce (forall (x:var{x>0}). EVar? (s' x)) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
-        eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). fsG_ `(≍) h_` s_ ==> a ⊆ (h_, s fsG_, gsubst s_ e) with true f (tail fsG) h;
+        eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). (fsG_ `(≍) h_` s_  /\ pre fsG_) ==> a ⊆ (h_, s fsG_, gsubst s_ e) with true f (tail fsG) h;
         shift_sub_equiv_sub_inc_rename #t s' e f
       end;
-      introduce (~(forall (x:var{x>0}). EVar? (s' x))) ==> a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e)) with _. begin
-        eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). fsG_ `(≍) h_` s_  ==> a ⊆ (h_, s fsG_, gsubst s_ e) with false f (tail fsG) h;
+      introduce (~(forall (x:var{x>0}). EVar? (s' x))) ==> ((spec_env_weaken pre) fsG /\ a ⊆ (h, s (tail fsG), gsubst s' (subst sub_inc e))) with _. begin
+        eliminate forall b_ (s_:gsub g b_) (fsG_:eval_env g) (h_:history). (fsG_ `(≍) h_` s_ /\ pre fsG_)  ==> a ⊆ (h_, s fsG_, gsubst s_ e) with false f (tail fsG) h;
         shift_sub_equiv_sub_inc_no_rename #t #g s' e f
       end
     end
   end
 #pop-options
 
-let compat_oval_lambda #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2) (body:exp) : Lemma
+let compat_oval_lambda #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qType) (fs_body:fs_oval (extend t1 g) t2 preBody) (body:exp) : Lemma
   (requires fs_body ⊏ body)
   (ensures (fs_oval_lambda fs_body ⊏ ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  let f : fs_oval g (t1 ^-> t2) = fun fsG x -> fs_body (stack fsG x) in
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> (t1 ^-> t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin
+  let f : fs_oval g (t1 ^-> t2) (spec_env_lambda_tot preBody) = fun fsG x -> fs_body (stack fsG x) in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_lambda_tot preBody) fsG) ==> (t1 ^-> t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
@@ -163,8 +166,9 @@ let compat_oval_lambda #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g)
           let s' = gsub_extend s t1 v in
           let fsG' = stack fsG fs_v in
           let h' = h++lt_v in
-          eliminate forall b (s':gsub g' b) (fsG':eval_env g') h'. fsG' `(≍) h'` s' ==> t2 ⊆ (h', f (tail #t1 fsG') (hd #t1 #g fsG'), gsubst s' body)
-            with false s' fsG' h';
+          let f' () : Pure (fs_val (t1 ^-> t2)) (requires ((spec_env_lambda_tot preBody) fsG)) (ensures (fun _ -> True)) = f (tail #t1 fsG') in
+          let f' : fs_val t2 = f' () (hd #t1 #g fsG') in
+          assert ((fsG' `(≍) h'` s' /\ preBody fsG') ==> t2 ⊆ (h', f', gsubst s' body));
           assert (fsG `(≍) h` s);
           assert (t1 ∈ (h++lt_v, fs_v, v));
           introduce forall (x:var). Some? (g x) ==> Some?.v (g x) ∈ (h++lt_v, index fsG x, s x) with begin
@@ -173,12 +177,10 @@ let compat_oval_lambda #g (#t1:qType) (#t2:qType) (fs_body:fs_oval (extend t1 g)
             end
           end;
           assert (stack fsG fs_v `(≍) h'` gsub_extend s t1 v);
-          assert (t2 ⊆ (h', f (tail fsG') (hd fsG'), (gsubst s' body)));
+          assert (t2 ⊆ (h', f', (gsubst s' body)));
           assert (hd (stack fsG fs_v) == fs_v);
-          assert (t2 ⊆ (h', f (tail fsG') fs_v, (gsubst s' body)));
-          assert (t2 ⊆ (h', f fsG fs_v, (gsubst s' body)));
           lem_substitution s t1 v body;
-          assert (t2 ⊆ (h', f fsG fs_v, subst_beta v body'))
+          assert (t2 ⊆ (h', f', subst_beta v body'))
         end
       end;
       assert ((t1 ^-> t2) ∈ (h, f fsG, gsubst s (ELam body)));
@@ -211,24 +213,27 @@ let helper_compat_oval_app_steps (h:history) (lt:local_trace h) (t1 t2:qType) (f
   end
   end
 
-let compat_oval_app #g
+let compat_oval_app #g #preS1 #preS2
   (#t1:qType) (#t2:qType)
-  (fs_e1:fs_oval g (t1 ^-> t2)) (fs_e2:fs_oval g t1)
+  (fs_e1:fs_oval g (t1 ^-> t2) preS1) (fs_e2:fs_oval g t1 preS2)
   (e1:exp) (e2:exp)
   : Lemma
     (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2)
     (ensures fs_oval_app fs_e1 fs_e2 ⊏ EApp e1 e2) =
   lem_fv_in_env_app g e1 e2;
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t2 ⊆ (h, (fs_e1 fsG) (fs_e2 fsG), gsubst s (EApp e1 e2)) with begin
-    let fs_e1 = fs_e1 fsG in
-    let fs_e2 = fs_e2 fsG in
-    let fs_e = fs_e1 fs_e2 in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_app preS1 preS2) fsG) ==> t2 ⊆ (h, (fs_e1 fsG) (fs_e2 fsG), gsubst s (EApp e1 e2)) with begin
+    let preS1 = preS1 fsG in
+    let preS2 = preS2 fsG in
+    let pre = (preS1 /\ preS2) in
+    let fs_e1 () : Pure (fs_val (t1 ^-> t2)) (requires preS1) (ensures (fun _ -> True)) = fs_e1 fsG in
+    let fs_e2 () : Pure (fs_val t1) (requires preS2) (ensures (fun _ -> True)) = fs_e2 fsG in
+    let fs_e () : Pure (fs_val t2) (requires pre) (ensures (fun _ -> True)) = (fs_e1 ()) (fs_e2 ()) in
     let e = EApp (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EApp e1 e2) == e);
     let EApp e1 e2 = e in
-    introduce fsG `(≍) h` s ==> t2 ⊆ (h, fs_e, e) with _. begin
+    introduce (fsG `(≍) h` s /\ pre) ==> t2 ⊆ (h, fs_e (), e) with _. begin
       lem_shift_type_value_environments h fsG s;
-      helper_compat_oval_app_steps h [] t1 t2 fs_e1 fs_e2 e1 e2
+      helper_compat_oval_app_steps h [] t1 t2 (fs_e1 ()) (fs_e2 ()) e1 e2
     end
   end
 
@@ -248,24 +253,28 @@ let helper_compat_oval_if_steps (h:history) (t:qType) (fs_c:fs_val qBool) (fs_t 
     end
   end
 
-let compat_oval_if #g
-  (#t:qType)
-  (fs_e1:fs_oval g qBool) (fs_e2:fs_oval g t) (fs_e3:fs_oval g t)
+(*let compat_oval_if #g
+  (#t:qType) #preC #preT #preE
+  (fs_e1:fs_oval g qBool preC) (fs_e2:fs_oval g t preT) (fs_e3:fs_oval g t preE)
   (e1:exp) (e2:exp) (e3:exp)
   : Lemma
     (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2 /\ fs_e3 ⊏ e3)
     (ensures fs_oval_if fs_e1 fs_e2 fs_e3 ⊏ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t ⊆ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
-    let fs_e1 = fs_e1 fsG in
-    let fs_e2 = fs_e2 fsG in
-    let fs_e3 = fs_e3 fsG in
-    let fs_e = if fs_e1 then fs_e2 else fs_e3 in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊆ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
+    let preC = preC fsG in
+    let preT = preT fsG in
+    let preE = preE fsG in
+    let fs_e1 () : Pure (fs_val qBool) (requires preC) (ensures (fun _ -> True)) = fs_e1 fsG in
+    let pre = (preC /\ (fs_e1 () ==> preT) /\ (~(fs_e1 ()) ==> preE)) in
+    let fs_e2 () : Pure (fs_val t) (requires preT) (ensures (fun _ -> True)) = fs_e2 fsG in
+    let fs_e3 () : Pure (fs_val t) (requires preE) (ensures (fun _ -> True)) = fs_e3 fsG in
+    let fs_e () : Pure (fs_val t) (requires pre) (ensures (fun _ -> True)) = if fs_e1 () then fs_e2 () else fs_e3 () in
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
-    introduce fsG `(≍) h` s ==> t ⊆ (h, fs_e, e) with _. begin
-      helper_compat_oval_if_steps h t fs_e1 fs_e2 fs_e3 e1 e2 e3
+    introduce (fsG `(≍) h` s /\ pre) ==> t ⊆ (h, fs_e (), e) with _. begin
+      helper_compat_oval_if_steps h t (fs_e1 ()) (fs_e2 ()) (fs_e3 ()) e1 e2 e3
     end
   end
 
@@ -538,26 +547,28 @@ let compat_oval_case
     introduce fsG `(≍) h` s ==> t3 ⊆ (h, fs_e, e) with _. begin
       helper_compat_oval_case_steps h t1 t2 t3 fs_case fs_lc_lam fs_rc_lam e_case e_lc e_rc
     end
-  end
+  end*)
 
-let compat_oval_lambda_ocomp #g (#t1:qType) (#t2:qType) (fs_body:fs_ocomp (extend t1 g) t2) (body:exp)
+#push-options "--z3rlimit 10 --fuel 2 --ifuel 0"
+let compat_oval_lambda_ocomp #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qType) (fs_body:fs_ocomp (extend t1 g) t2 preBody) (body:exp)
   : Lemma
     (requires fs_body ⊑ body)
     (ensures fs_oval_lambda_ocomp fs_body ⊏ (ELam body)) =
   lem_fv_in_env_lam g t1 body;
   let g' = extend t1 g in
-  let f : fs_oval g (t1 ^->!@ t2) = fun fsG x -> fs_body (stack fsG x) in
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> (t1 ^->!@ t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin
+  let f : fs_oval g (t1 ^->!@ t2) (spec_env_lambda_tot preBody) = fun fsG x -> fs_body (stack fsG x) in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_lambda_tot preBody) fsG) ==> (t1 ^->!@ t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin 
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
-      introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∈ (h++lt_v, fs_v, v) ==> t2 ⫃ (h++lt_v, (f fsG) fs_v, subst_beta v body') with begin
+      introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∈ (h++lt_v, fs_v, v) ==> t2 ⫃ (h++lt_v, f fsG fs_v, subst_beta v body') with begin
         introduce _ ==> _ with _. begin
           let s' = gsub_extend s t1 v in
           let fsG' = stack fsG fs_v in
           let h' = h++lt_v in
-          eliminate forall b (s':gsub g' b) (fsG':eval_env g') h'. fsG' `(≍) h'` s' ==> t2 ⫃ (h', f (tail #t1 fsG') (hd #t1 #g fsG'), gsubst s' body)
-            with false s' fsG' h';
+          let f' () : Pure (fs_val (t1 ^->!@ t2)) (requires ((spec_env_lambda_tot preBody) fsG)) (ensures (fun _ -> True)) = f (tail #t1 fsG') in
+          let f' : fs_comp t2 = f' () (hd #t1 #g fsG') in
+          assert ((fsG' `(≍) h'` s' /\ preBody fsG') ==> t2 ⫃ (h', f', gsubst s' body));
           assert (fsG `(≍) h` s);
           assert (t1 ∈ (h++lt_v, fs_v, v));
           introduce forall (x:var). Some? (g x) ==> Some?.v (g x) ∈ (h++lt_v, index fsG x, s x) with begin
@@ -566,25 +577,26 @@ let compat_oval_lambda_ocomp #g (#t1:qType) (#t2:qType) (fs_body:fs_ocomp (exten
             end
           end;
           assert (stack fsG fs_v `(≍) h'` gsub_extend s t1 v);
-          assert (t2 ⫃ (h', f (tail fsG') (hd fsG'), gsubst s' body));
+          assert (t2 ⫃ (h', f', gsubst s' body));
           assert (hd (stack fsG fs_v) == fs_v);
-          assert (t2 ⫃ (h', f (tail fsG') fs_v, gsubst s' body));
-          assert (t2 ⫃ (h', f fsG fs_v, gsubst s' body));
           lem_substitution s t1 v body;
-          assert (t2 ⫃ (h', f fsG fs_v, subst_beta v body'))
+          assert (t2 ⫃ (h', f', subst_beta v body'))
         end
       end;
-      assert ((t1 ^->!@ t2) ∈ (h, f fsG, gsubst s (ELam body)));
+      assert (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∈ (h++lt_v, fs_v, v) ==> t2 ⫃ (h++lt_v, f fsG fs_v, subst_beta v body'));
+      assume ((t1 ^->!@ t2) ∈ (h, f fsG, gsubst s (ELam body)));
       lem_values_are_expressions (t1 ^->!@ t2) h (f fsG) (gsubst s (ELam body));
       assert ((t1 ^->!@ t2) ⊆ (h, f fsG, gsubst s (ELam body)))
     end
-  end
+  end;
+  assume (fs_oval_lambda_ocomp fs_body ⊏ (ELam body))
+#pop-options
 
-let compat_ocomp_return #g (#t:qType) (fs_x:fs_oval g t) (x:exp)
+let compat_ocomp_return #g (#t:qType) #pre (fs_x:fs_oval g t pre) (x:exp)
   : Lemma
     (requires fs_x ⊏ x)
     (ensures fs_ocomp_return_oval fs_x ⊑ x) =
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==> t ⫃ (h, return (fs_x fsG), gsubst s x) with begin
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ pre fsG) ==> t ⫃ (h, return (fs_x fsG), gsubst s x) with begin
     introduce _ ==> _ with _. begin
       let fs_x = fs_x fsG in
       let fs_e = return fs_x in
