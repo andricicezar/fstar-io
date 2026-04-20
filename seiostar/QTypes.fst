@@ -75,6 +75,11 @@ let pack (q:type_quotation 's) : qType = (| _, q |)
 let get_Type (t:qType) = Mkdtuple2?._1 t
 let get_rel (t:qType) = Mkdtuple2?._2 t
 let lem_pack_get_rel t : Lemma (pack (get_rel t) == t) = ()
+let rec io_map (#a #b:Type) (f:a -> b) (m:io a) : io b = // need this for forgetting refinement under io
+  match m with
+  | Return x -> Return (f x)
+  | Call o args k -> Call o args (fun r -> io_map f (k r))
+let forget_ref #t1 #t2 #post (x:t1) (y:t2{post x y}) : t2 = y
 
 // let subQtype_of (a b:qType) : Type0 =
 //   get_Type a `subtype_of` get_Type b
