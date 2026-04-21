@@ -86,14 +86,8 @@ let rec typ_translation (qt:term) : Tac term =
 
 (** Quotation of expressions **)
 
-// type p_typing (#a:qType) (#preG:spec_env empty) (t:fs_oval empty a preG) =
-//   g:typ_env -> typing #ty g #pre t
-
-
 unfold let ptyping (ty:qType) (t:fs_val ty) =
   g:typ_env -> typing #ty g (fs_oval_return g #ty t)
-
-// typing ty g_env (fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t))
 
 let mk_ptyj (ty t : term) : Tot term =
   mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
