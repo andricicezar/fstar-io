@@ -253,7 +253,7 @@ let helper_compat_oval_if_steps (h:history) (t:qType) (fs_c:fs_val qBool) (fs_t 
     end
   end
 
-(*let compat_oval_if #g
+let compat_oval_if #g
   (#t:qType) #preC #preT #preE
   (fs_e1:fs_oval g qBool preC) (fs_e2:fs_oval g t preT) (fs_e3:fs_oval g t preE)
   (e1:exp) (e2:exp) (e3:exp)
@@ -304,23 +304,26 @@ let helper_compat_oval_pair_steps (h:history) (t1 t2:qType) (fs_e1:fs_val t1) (f
 #pop-options
 
 let compat_oval_pair #g
-  (#t1 #t2:qType)
-  (fs_e1:fs_oval g t1) (fs_e2:fs_oval g t2)
+  (#t1 #t2:qType) #preX #preY
+  (fs_e1:fs_oval g t1 preX) (fs_e2:fs_oval g t2 preY)
   (e1:exp) (e2:exp)
   : Lemma
     (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2)
     (ensures fs_oval_pair fs_e1 fs_e2 ⊏ EPair e1 e2) =
   lem_fv_in_env_pair g e1 e2;
   let t = t1 ^* t2 in
-  introduce forall b (s:gsub g b) fsG h. fsG `(≍) h` s ==>  t ⊆ (h, (fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
-    let fs_e1 = fs_e1 fsG in
-    let fs_e2 = fs_e2 fsG in
-    let fs_e = (fs_e1, fs_e2) in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_app preX preY) fsG) ==> t ⊆ (h, (fs_e1 fsG, fs_e2 fsG), gsubst s (EPair e1 e2)) with begin
+    let preX = preX fsG in
+    let preY = preY fsG in
+    let pre = (preX /\ preY) in
+    let fs_e1 () : Pure (fs_val t1) (requires preX) (ensures (fun _ -> True)) = fs_e1 fsG in
+    let fs_e2 () : Pure (fs_val t2) (requires preY) (ensures (fun _ -> True)) = fs_e2 fsG in
+    let fs_e () : Pure (fs_val (t1 ^* t2)) (requires pre) (ensures (fun _ -> True)) = (fs_e1 (), fs_e2()) in
     let e = EPair (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EPair e1 e2) == e);
     let EPair e1 e2 = e in
-    introduce fsG `(≍) h` s ==>  t ⊆ (h, fs_e, e) with _. begin
-      helper_compat_oval_pair_steps h t1 t2 fs_e1 fs_e2 e1 e2
+    introduce (fsG `(≍) h` s /\ pre) ==> t ⊆ (h, fs_e (), e) with _. begin
+      helper_compat_oval_pair_steps h t1 t2 (fs_e1 ()) (fs_e2 ()) e1 e2
     end
   end
 
@@ -547,7 +550,7 @@ let compat_oval_case
     introduce fsG `(≍) h` s ==> t3 ⊆ (h, fs_e, e) with _. begin
       helper_compat_oval_case_steps h t1 t2 t3 fs_case fs_lc_lam fs_rc_lam e_case e_lc e_rc
     end
-  end*)
+  end
 
 #push-options "--z3rlimit 10 --fuel 2 --ifuel 0"
 let compat_oval_lambda_ocomp #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qType) (fs_body:fs_ocomp (extend t1 g) t2 preBody) (body:exp)
