@@ -12,8 +12,8 @@ open RQ.TypingRelation
 open QTypes.HelperTactics
 
 let print_debug (s:string) : Tac unit =
-  ()
- // print s
+  // ()
+ print s
 
 (** Quotation of types **)
 
@@ -86,11 +86,33 @@ let rec typ_translation (qt:term) : Tac term =
 
 (** Quotation of expressions **)
 
+unfold let sqh (g:typ_env) (pre:spec_env g) =
+  squash (forall (fsG:eval_env g). pre fsG)
+
 unfold let ptyping (ty:qType) (t:fs_val ty) =
-  g:typ_env -> typing #ty g (fs_oval_return g #ty t)
+  g:typ_env -> pre:spec_env g & (sqh g pre -> typing #ty g #pre (fs_oval_return g #ty t))
 
 let mk_ptyj (ty t : term) : Tot term =
   mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
+
+let mk_sqh (g_env pre : term) : Tot term =
+  mk_app (`sqh) [(g_env, Q_Explicit); (pre, Q_Explicit)]
+
+let mk_wrap_deriv (typj : term) : Tot term =
+  let g_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
+  let g_env = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "g_env"; index = 0; sort = seal (`QTypes.TypEnv.typ_env) }))) in
+
+  let pre_sort = mk_app (`spec_env) [(g_env, Q_Explicit)] in
+  let pre_binder = pack_binder ({ ppname = seal "pre"; qual = Q_Explicit; attrs = []; sort = pre_sort }) in
+
+  let pre = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "pre"; index = 0; sort = seal pre_sort }))) in
+  let g_env_under_pre = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "g_env"; index = 1; sort = seal (`QTypes.TypEnv.typ_env) }))) in
+  let proof_binder = pack_binder ({ ppname = seal "proof"; qual = Q_Explicit; attrs = []; sort = (mk_sqh g_env_under_pre pre) }) in
+  
+  let proof_to_typj = pack_ln (Tv_Abs pre_binder (pack_ln (Tv_Abs proof_binder typj))) in
+  // let x = Mkdtuple2 int (fun x -> y:int{x == y})
+  let pair_pre_and_deriv = mk_app (`Mkdtuple2) [(pack_ln Tv_Unknown, Q_Explicit); (proof_to_typj , Q_Explicit)] in
+  pack_ln (Tv_Abs g_binder pair_pre_and_deriv)
 
 let mk_tyj (ty t g_env : term) : Tot term =
   let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
@@ -101,6 +123,7 @@ let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 
 let mk_qtrue : term = mk_app (`QTrue) []
 let mk_qfalse : term = mk_app (`QFalse) []
+
 let mk_qif (b:term) (t1:term) (t2:term) : term =
   mk_app (`QIf) [(b, Q_Explicit); (t1, Q_Explicit); (t2, Q_Explicit)]
 
@@ -334,8 +357,8 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
-  let goal_ty = norm_term_env g [delta_only [`%ptyping]; iota] goal_ty in
-  let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; iota] goal_ty in
+  let goal_ty = norm_term_env g [delta_only [`%ptyping;`%sqh]; iota] goal_ty in
+  // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; delta_namespace ["Examples"]; iota] goal_ty in
   // print_debug ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
   let u = must <| universe_of g goal_ty in
   print_debug ("DEBUG: successfully got universe");
@@ -353,7 +376,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
   print_debug ("DEBUG: entering type_check_derivation");
   let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   print_debug ("DEBUG: instantiate_implicits done");
-  // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
+  print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
   let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
   print_debug ("DEBUG: done type checking the derivation");
   if E_Ghost? eff then fail "derivation is not a total type. impossible!"
@@ -379,8 +402,7 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
   let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
   // probably I want to shift g.
   let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
-  let g_env_binder = pack_binder ({ ppname = seal "g"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
-  let qderivation = pack_ln (Tv_Abs g_env_binder open_qderivation) in
+  let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation g qderivation desired_qtyp
 
   // (** Close the body: replace named variable g_env_nv with de Bruijn index 0 **)
@@ -442,3 +464,5 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping prior_derivs qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
+
+%splice_t[tgt5] (generate_derivation "tgt5" (`Examples.identity))
