@@ -86,9 +86,22 @@ let rec typ_translation (qt:term) : Tac term =
 
 (** Quotation of expressions **)
 
+// type p_typing (#a:qType) (#preG:spec_env empty) (t:fs_oval empty a preG) =
+//   g:typ_env -> typing #ty g #pre t
+
+
+unfold let ptyping (ty:qType) (t:fs_val ty) =
+  g:typ_env -> typing #ty g (fs_oval_return g #ty t)
+
+// typing ty g_env (fs_oval_return (g:typ_env) (#t:qType) (x:fs_val t))
+
+let mk_ptyj (ty t : term) : Tot term =
+  mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
+
 let mk_tyj (ty t g_env : term) : Tot term =
   let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
   mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
+
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 
@@ -327,12 +340,13 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
   let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
   let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
-  // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; zeta; iota; simplify] goal_ty in
+  let goal_ty = norm_term_env g [delta_only [`%ptyping]; iota] goal_ty in
+  let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; iota] goal_ty in
   // print_debug ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
   let u = must <| universe_of g goal_ty in
   print_debug ("DEBUG: successfully got universe");
   let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
- //   simplify_stack_ops ();
+   simplify_stack_ops ();
     trefl ()) u goal_ty in
   print_debug ("DEBUG: proved equality!");
 
@@ -361,40 +375,43 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
 let initial_unfold_fuel : int = 32
 
 let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-
   (** Create a fresh binder g_env : typ_env to parameterize the derivation **)
-  let g_env_uid = fresh () in
-  let g_env_nv = pack_namedv ({ ppname = seal "g_env"; sort = seal (`QTypes.TypEnv.typ_env); uniq = g_env_uid }) in
-  let g_env_term = pack_ln (Tv_Var g_env_nv) in
-  let g' = push_namedv g g_env_nv in
+  // let g_env_uid = fresh () in
+  // let g_env_nv = pack_namedv ({ ppname = seal "g_env"; sort = seal (`QTypes.TypEnv.typ_env); uniq = g_env_uid }) in
+  // let g_env_term = pack_ln (Tv_Var g_env_nv) in
+  // let g' = push_namedv g g_env_nv in
 
-  let desired_qtyp = mk_tyj (typ_translation qtyp) qprog g_env_term in
-  let initial_is_comp = is_io_type qtyp in
-  let qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel initial_is_comp (Some qtyp) qprog in
-  let (qderivation_body, qtyp_body) = type_check_derivation g' qderivation desired_qtyp in
+  let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
+  let initial_is_comp = is_io_type qtyp in (** TODO: Isn't this always false? **)
+  let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
+  // probably I want to shift g.
+  let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel initial_is_comp (Some qtyp) qprog in
+  let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
+  let qderivation = pack_ln (Tv_Abs g_env_binder open_qderivation) in
+  type_check_derivation g qderivation desired_qtyp
 
-  (** Close the body: replace named variable g_env_nv with de Bruijn index 0 **)
-  let g_env_nv = var_as_namedv g_env_uid in
-  let qderivation_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qderivation_body in
-  let qtyp_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qtyp_body in
+  // (** Close the body: replace named variable g_env_nv with de Bruijn index 0 **)
+  // // TODO: can't we directly use a deBruijn variable?
+  // let g_env_nv = var_as_namedv g_env_uid in
+  // let qderivation_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qderivation_body in
+  // let qtyp_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qtyp_body in
 
-  (** Wrap in lambda: fun (g_env : typ_env) -> derivation_body **)
-  let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
-  let qderivation_fun = pack_ln (Tv_Abs g_env_binder qderivation_closed) in
+  // (** Wrap in lambda: fun (g_env : typ_env) -> derivation_body **)
+  // let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
+  // let qderivation_fun = pack_ln (Tv_Abs g_env_binder qderivation_closed) in
 
-  (** Build the arrow type: (g_env : typ_env) -> typing g_env (...) **)
-  let qtyp_fun = pack_ln (Tv_Arrow g_env_binder (pack_comp (C_Total qtyp_closed))) in
+  // (** Build the arrow type: (g_env : typ_env) -> typing g_env (...) **)
+  // let qtyp_fun = pack_ln (Tv_Arrow g_env_binder (pack_comp (C_Total qtyp_closed))) in
 
-  (** Type-check the wrapped function in the original environment **)
-  let (qderivation_fun, (eff, qtyp_inferred)) = must <| tc_term g qderivation_fun in
-  if E_Ghost? eff then fail "wrapped derivation is not total!"
-  else begin
-    check_if_derivation_types_are_equal g qtyp_inferred qtyp_fun;
-    token_as_typing g qderivation_fun eff qtyp_inferred;
-    lem_retype_expression g qderivation_fun qtyp_inferred qtyp_fun;
-    (qderivation_fun, qtyp_fun)
-  end
+  // (** Type-check the parameterized derivation in the original environment **)
+  // let (qderivation_fun, (eff, qtyp_inferred)) = must <| tc_term g qderivation_fun in
+  // if E_Ghost? eff then fail "wrapped derivation is not total!"
+  // else begin
+  //   check_if_derivation_types_are_equal g qtyp_inferred qtyp_fun;
+  //   token_as_typing g qderivation_fun eff qtyp_inferred;
+  //   lem_retype_expression g qderivation_fun qtyp_inferred qtyp_fun;
+  //   (qderivation_fun, qtyp_fun)
+  // end
 
 let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   match expected_t with
