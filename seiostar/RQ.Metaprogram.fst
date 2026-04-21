@@ -376,10 +376,9 @@ let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_de
   // let g' = push_namedv g g_env_nv in
 
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
-  let initial_is_comp = is_io_type qtyp in (** TODO: Isn't this always false? **)
   let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
   // probably I want to shift g.
-  let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel initial_is_comp (Some qtyp) qprog in
+  let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
   let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
   let qderivation = pack_ln (Tv_Abs g_env_binder open_qderivation) in
   type_check_derivation g qderivation desired_qtyp
