@@ -11,9 +11,11 @@ open FStar.Stubs.Reflection.V2.Data
 open RQ.TypingRelation
 open QTypes.HelperTactics
 
+// #push-options "--debug Tac --print_implicits"
+
 let print_debug (s:string) : Tac unit =
-  // ()
- print s
+  if debugging () then print s
+  else ()
 
 (** Quotation of types **)
 
@@ -90,13 +92,16 @@ unfold let sqh (g:typ_env) (pre:spec_env g) =
   squash (forall (fsG:eval_env g). pre fsG)
 
 unfold let ptyping (ty:qType) (t:fs_val ty) =
-  g:typ_env -> pre:spec_env g & (sqh g pre -> typing #ty g #pre (fs_oval_return g #ty t))
+  g:typ_env -> pre:spec_env g & (proof:sqh g pre -> typing #ty g #pre (fs_oval_helper_g ty t g pre proof))
 
 let mk_ptyj (ty t : term) : Tot term =
   mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
 
-let mk_sqh (g_env pre : term) : Tot term =
-  mk_app (`sqh) [(g_env, Q_Explicit); (pre, Q_Explicit)]
+let mk_sqh (pre : term) : Tot term =
+  mk_app (`sqh) [(pack_ln Tv_Unknown, Q_Explicit); (pre, Q_Explicit)]
+
+let mk_dpair (t1 t2:term) : Tot term =
+  mk_app (`Mkdtuple2) [(t1, Q_Explicit); (t2, Q_Explicit)]
 
 let mk_wrap_deriv (typj : term) : Tot term =
   let g_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
@@ -106,17 +111,17 @@ let mk_wrap_deriv (typj : term) : Tot term =
   let pre_binder = pack_binder ({ ppname = seal "pre"; qual = Q_Explicit; attrs = []; sort = pre_sort }) in
 
   let pre = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "pre"; index = 0; sort = seal pre_sort }))) in
-  let g_env_under_pre = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "g_env"; index = 1; sort = seal (`QTypes.TypEnv.typ_env) }))) in
-  let proof_binder = pack_binder ({ ppname = seal "proof"; qual = Q_Explicit; attrs = []; sort = (mk_sqh g_env_under_pre pre) }) in
-  
-  let proof_to_typj = pack_ln (Tv_Abs pre_binder (pack_ln (Tv_Abs proof_binder typj))) in
+  let proof_binder = pack_binder ({ ppname = seal "proof"; qual = Q_Explicit; attrs = []; sort = (pack_ln Tv_Unknown) (** (mk_sqh pre) **) }) in
+
+  //let proof_to_typj = pack_ln (Tv_Abs pre_binder (pack_ln (Tv_Abs proof_binder typj))) in
+  let proof_to_typj = pack_ln (Tv_Abs proof_binder typj) in
   // let x = Mkdtuple2 int (fun x -> y:int{x == y})
   let pair_pre_and_deriv = mk_app (`Mkdtuple2) [(pack_ln Tv_Unknown, Q_Explicit); (proof_to_typj , Q_Explicit)] in
   pack_ln (Tv_Abs g_binder pair_pre_and_deriv)
 
-let mk_tyj (ty t g_env : term) : Tot term =
-  let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
-  mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
+// let mk_tyj (ty t g_env : term) : Tot term =
+//   let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
+//   mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
 
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
@@ -362,11 +367,12 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
   // print_debug ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
   let u = must <| universe_of g goal_ty in
   print_debug ("DEBUG: successfully got universe");
-  let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
-   simplify_stack_ops ();
-    trefl ()) u goal_ty in
-  print_debug ("DEBUG: proved equality!");
-
+  (let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
+    let _ = repeat forall_intro in
+    simplify_stack_ops ();
+    or_else trivial trefl;
+    dump "done after unification") u goal_ty in
+  print_debug ("DEBUG: proved equality!"));
   // we dynamically check that the types are equal (thus, extraction would fail if they are not)
   // w is proof that t == desired_t, but it is a typing_token and not a sub_typing token
   // how to go from one to the other?
@@ -374,67 +380,62 @@ let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (s
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   print_debug ("DEBUG: entering type_check_derivation");
-  let (_, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
+  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  // print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
+  let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
+  if List.length l > 0 then fail "Not all implicits solved" else ();
   print_debug ("DEBUG: instantiate_implicits done");
-  print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
-  let (qderivation, (eff, qtyp)) = must <| tc_term g qderivation in (** type check the derivation, it gets its own type **)
+  // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
+  set_guard_policy Goal;
+  let token = must <| core_check_term g qderivation desired_qtyp E_Total in
+  with_compat_pre_core 0 (fun () ->
+    norm [
+        delta_only [
+        `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
+        `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qArrR;`%qArrIOR;
+        `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
+        `%op_Hat_Subtraction_Greater_Bang_At;
+        `%get_rel; `%get_Type;
+        `%q_io_args; `%q_io_res;
+        `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+        iota;
+    ];
+    explode ();
+    ignore (repeat (fun () -> (or_else trivial trefl))));
+(**      ignore (repeat (forall_intro ()));
+
+    let _ = forall_intro () in
+    split (); let _ = repeat (forall_intro) in dump "H1"; trefl ();
+    let _ = repeat forall_intro in
+    simplify_stack_ops ();
+    dump "h123";
+    tadmit ()
+//    or_else trivial trefl
+  );**)
+  set_guard_policy Force;
   print_debug ("DEBUG: done type checking the derivation");
-  if E_Ghost? eff then fail "derivation is not a total type. impossible!"
-  else begin
-    check_if_derivation_types_are_equal g qtyp desired_qtyp;
-
-    token_as_typing g qderivation eff qtyp;
-    lem_retype_expression g qderivation qtyp desired_qtyp;
-
-    (qderivation, desired_qtyp)
-  end
+  token_as_typing g qderivation E_Total desired_qtyp;
+  (qderivation, desired_qtyp)
 
 let initial_unfold_fuel : int = 32
 
 let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  (** Create a fresh binder g_env : typ_env to parameterize the derivation **)
-  // let g_env_uid = fresh () in
-  // let g_env_nv = pack_namedv ({ ppname = seal "g_env"; sort = seal (`QTypes.TypEnv.typ_env); uniq = g_env_uid }) in
-  // let g_env_term = pack_ln (Tv_Var g_env_nv) in
-  // let g' = push_namedv g g_env_nv in
-
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
   let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
-  // probably I want to shift g.
   let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
   let qderivation = mk_wrap_deriv open_qderivation in
   type_check_derivation g qderivation desired_qtyp
 
-  // (** Close the body: replace named variable g_env_nv with de Bruijn index 0 **)
-  // // TODO: can't we directly use a deBruijn variable?
-  // let g_env_nv = var_as_namedv g_env_uid in
-  // let qderivation_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qderivation_body in
-  // let qtyp_closed = FStar.Stubs.Reflection.V2.Builtins.subst_term [FStar.Stubs.Syntax.Syntax.NM g_env_nv 0] qtyp_body in
-
-  // (** Wrap in lambda: fun (g_env : typ_env) -> derivation_body **)
-  // let g_env_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Implicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
-  // let qderivation_fun = pack_ln (Tv_Abs g_env_binder qderivation_closed) in
-
-  // (** Build the arrow type: (g_env : typ_env) -> typing g_env (...) **)
-  // let qtyp_fun = pack_ln (Tv_Arrow g_env_binder (pack_comp (C_Total qtyp_closed))) in
-
-  // (** Type-check the parameterized derivation in the original environment **)
-  // let (qderivation_fun, (eff, qtyp_inferred)) = must <| tc_term g qderivation_fun in
-  // if E_Ghost? eff then fail "wrapped derivation is not total!"
-  // else begin
-  //   check_if_derivation_types_are_equal g qtyp_inferred qtyp_fun;
-  //   token_as_typing g qderivation_fun eff qtyp_inferred;
-  //   lem_retype_expression g qderivation_fun qtyp_inferred qtyp_fun;
-  //   (qderivation_fun, qtyp_fun)
-  // end
-
 let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
+  set_guard_policy Force;
   match expected_t with
   | Some t -> fail ("expected type " ^ tag_of t ^ " not supported")
   | None -> begin
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping [] qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
+
+%splice_t[tgt4] (generate_derivation "tgt4" (`Examples.constant))
 
 (** Generate a derivation for a program, reusing already-generated derivations.
     `deps` is a list of (source_program, derivation) pairs where:
@@ -464,5 +465,3 @@ let generate_derivation_using (nm:string) (qprog:term) (deps: list (string & ter
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping prior_derivs qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
-
-%splice_t[tgt5] (generate_derivation "tgt5" (`Examples.identity))
