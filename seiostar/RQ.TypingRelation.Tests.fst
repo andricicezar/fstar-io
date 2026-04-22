@@ -383,8 +383,9 @@ let test_apply_io_bind_pure_if ()
            (QReturn QFalse)
            (QReturn QTrue))))
 
+[@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_write ()
-  : _ ⊩ apply_io_bind_write
+  : (qString ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_write
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
       QBind

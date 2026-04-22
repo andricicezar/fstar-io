@@ -119,10 +119,6 @@ let mk_wrap_deriv (typj : term) : Tot term =
   let pair_pre_and_deriv = mk_app (`Mkdtuple2) [(pack_ln Tv_Unknown, Q_Explicit); (proof_to_typj , Q_Explicit)] in
   pack_ln (Tv_Abs g_binder pair_pre_and_deriv)
 
-// let mk_tyj (ty t g_env : term) : Tot term =
-//   let t = mk_app (`fs_oval_return) [(g_env, Q_Explicit); (ty, Q_Implicit); (t, Q_Explicit)] in
-//   mk_app (`typing) [(ty, Q_Implicit); (g_env, Q_Explicit); (t, Q_Explicit)]
-
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
 
@@ -359,38 +355,8 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
-let check_if_derivation_types_are_equal (g:env) (t:typ) (desired_t:typ) : Tac (squash (sub_typing g t desired_t)) =
-  let goal_ty = mk_app (`(Prims.eq2 u#2)) [((`Type u#1), Q_Implicit); (t, Q_Explicit); (desired_t, Q_Explicit)] in
-  let goal_ty = simplify_qType_g g goal_ty in (* manual unfoldings and simplifications using norm *)
-  let goal_ty = norm_term_env g [delta_only [`%ptyping;`%sqh]; iota] goal_ty in
-  // let goal_ty = norm_term_env g [delta_qualifier ["unfold"]; delta_namespace ["Examples"]; iota] goal_ty in
-  // print_debug ("DEBUG: getting the universe before checking for equality" ^ term_to_string goal_ty);
-  let u = must <| universe_of g goal_ty in
-  print_debug ("DEBUG: successfully got universe");
-  (let w : (w:term{typing_token g w (E_Total, goal_ty)}) = must <| call_subtac g (fun () ->
-    let _ = repeat forall_intro in
-    simplify_stack_ops ();
-    or_else trivial trefl;
-    dump "done after unification") u goal_ty in
-  print_debug ("DEBUG: proved equality!"));
-  // we dynamically check that the types are equal (thus, extraction would fail if they are not)
-  // w is proof that t == desired_t, but it is a typing_token and not a sub_typing token
-  // how to go from one to the other?
-  assume (sub_typing g t desired_t)
-
-let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
-  print_debug ("DEBUG: entering type_check_derivation");
-  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  // print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
-  let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
-  if List.length l > 0 then fail "Not all implicits solved" else ();
-  print_debug ("DEBUG: instantiate_implicits done");
-  // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
-  set_guard_policy Goal;
-  let token = must <| core_check_term g qderivation desired_qtyp E_Total in
-  print_debug ("DEBUG: Core check term finished");
-  with_compat_pre_core 0 (fun () ->
-    norm [
+let prove_equality () : Tac unit =
+  norm [
         delta_only [
         `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
         `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qArrR;`%qArrIOR;
@@ -401,21 +367,24 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
         `%Mkdtuple2?._1;`%Mkdtuple2?._2];
         iota;
     ];
-    explode ();
-    ignore (repeat (fun () ->
-      simplify_stack_ops ();
-      (or_else trivial trefl)));
-    or_else qed (fun () -> dump "RQ's unification failed"));
-(**      ignore (repeat (forall_intro ()));
-
-    let _ = forall_intro () in
-    split (); let _ = repeat (forall_intro) in dump "H1"; trefl ();
-    let _ = repeat forall_intro in
+  explode ();
+  ignore (repeat (fun () ->
     simplify_stack_ops ();
-    dump "h123";
-    tadmit ()
-//    or_else trivial trefl
-  );**)
+    (or_else trivial trefl)));
+  or_else qed (fun () -> dump "RQ's unification failed")
+
+let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+  print_debug ("DEBUG: entering type_check_derivation");
+  // print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  // print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
+  let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
+  if List.length l > 0 then fail "Not all implicits solved" else ();
+  print_debug ("DEBUG: instantiate_implicits done");
+  print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
+  set_guard_policy Goal;
+  let token = must <| core_check_term g qderivation desired_qtyp E_Total in
+  print_debug ("DEBUG: Core check term finished");
+  with_compat_pre_core 0 prove_equality;
   set_guard_policy Force;
   print_debug ("DEBUG: done type checking the derivation");
   token_as_typing g qderivation E_Total desired_qtyp;

@@ -213,9 +213,16 @@ and typing_io : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_ocomp g a preG -
 let (⊢) (#a:qType) (g:typ_env) (#pre:spec_env g) (x:fs_oval g a pre) =
   typing g x
 
+let fs_oval_helper_g (a:qType) (x:fs_val a) (g:typ_env) (pre:spec_env g) (_:squash (forall fsG. pre fsG))
+  : fs_oval g a pre
+  = fun _ -> x
+
 let fs_oval_helper (#a:qType) (x:fs_val a) (#pre:spec_env empty) (#_:squash (forall fsG. pre fsG))
   : fs_oval empty a pre
-  = fun _ -> x
+  = fs_oval_helper_g a x empty pre ()
+
+unfold let sqh (g:typ_env) (pre:spec_env g) =
+  squash (forall (fsG:eval_env g). pre fsG)
 
 let (⊩) (a:qType) (x: fs_val a) =
   pre:spec_env empty & (proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))
