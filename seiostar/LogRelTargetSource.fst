@@ -383,3 +383,67 @@ let sem_expr_shape_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) :
       end
     end
   end
+
+(** Inverse of [unfold_member_of_io_arrow]: given the unwrapped [⫃]-property,
+    fold back into [(t1 ^->!@ t2) ∈ ...]. Works the same way: the refinement is
+    trivial, so [io_map (forget_ref _)] preserves [theta]. **)
+(** The "wrapped" function we get from [∈] at [QArrIO] for [^->!@]:
+    [fun x -> io_map (forget_ref x) (fs_e1 x)] where the refinement is trivial. *)
+let io_arrow_wrap (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) : get_Type t1 -> io (get_Type t2) =
+  fun x -> io_map (forget_ref #(get_Type t1) #(get_Type t2) #(fun _ _ -> True) x) (fs_e1 x)
+
+(** The body of the [QArrIO] branch of [∈] applied to [^->!@]. *)
+let io_arrow_in_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp{is_closed (ELam e11)}) : Type0 =
+  forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h).
+    t1 ∋ (h++lt_v, fs_v, v) ==>
+      t2 ⫄ (h++lt_v, io_arrow_wrap t1 t2 fs_e1 fs_v, subst_beta v e11)
+
+(** Bridge: unfold [∈ (QArrIO ...)] into its [io_map (forget_ref ...)] body. *)
+let lem_unfold_in_io_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp{is_closed (ELam e11)})
+  : Lemma
+    (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body t1 t2 h fs_e1 e11) =
+  assert (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body t1 t2 h fs_e1 e11)
+    by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%io_arrow_in_body; `%io_arrow_wrap;
+                                           `%get_rel;
+                                           `%(^->!@); `%qArrIOR;
+                                           `%Mkdtuple2?._2; `%Mkdtuple2?._1];
+                               zeta; iota];
+        FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
+        FStar.Tactics.V1.l_to_r [`lem_pack_get_rel];
+        FStar.Tactics.V1.norm [iota];
+        FStar.Tactics.V1.smt ())
+
+(** Bridge: [io_arrow_wrap] at [^->!@] has the same [theta] (pointwise in [fs_v])
++    as the identity wrap, since [forget_ref] with trivial post is the identity. *)
+let lem_io_arrow_wrap_preserves_superset_comp
+  (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (fs_v:fs_val t1) (e:closed_exp)
+  : Lemma
+      (t2 ⫄ (h, io_arrow_wrap t1 t2 fs_e1 fs_v, e) <==>
+       t2 ⫄ (h, fs_e1 fs_v, e)) =
+  let post : get_Type t1 -> get_Type t2 -> Type0 = fun _ _ -> True in
+  let fs_e1_outer : x:get_Type t1 -> io (y:get_Type t2{post x y}) = fs_e1 in
+  let fg : (y:get_Type t2{post fs_v y}) -> get_Type t2 =
+    forget_ref #(get_Type t1) #(get_Type t2) #post fs_v in
+  assert (forall (y:(y:get_Type t2{post fs_v y})). fg y == y);
+  theta_io_map_id #(get_Type t2) fg (fs_e1_outer fs_v);
+  assert (theta (io_map fg (fs_e1_outer fs_v)) `hist_equiv` theta (fs_e1_outer fs_v));
+  assert (io_arrow_wrap t1 t2 fs_e1 fs_v == io_map fg (fs_e1_outer fs_v))
+    by (FStar.Tactics.V1.norm [delta_only [`%io_arrow_wrap]; zeta; iota];
+        FStar.Tactics.V1.trefl ());
+  assert (fs_e1_outer fs_v == fs_e1 fs_v)
+
+let fold_in_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
+  : Lemma
+      (requires (is_closed (ELam e11)) /\
+                (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h).
+                  t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))
+      (ensures ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11))) =
+  introduce forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h).
+    t1 ∋ (h++lt_v, fs_v, v) ==>
+      t2 ⫄ (h++lt_v, io_arrow_wrap t1 t2 fs_e1 fs_v, subst_beta v e11) with begin
+    introduce _ ==> _ with _. begin
+      lem_io_arrow_wrap_preserves_superset_comp t1 t2 (h++lt_v) fs_e1 fs_v (subst_beta v e11)
+    end
+  end;
+  assert (io_arrow_in_body t1 t2 h fs_e1 e11);
+  lem_unfold_in_io_arrow_to_body t1 t2 h fs_e1 e11

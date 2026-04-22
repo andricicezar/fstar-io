@@ -81,6 +81,35 @@ let rec io_map (#a #b:Type) (f:a -> b) (m:io a) : io b = // need this for forget
   | Call o args k -> Call o args (fun r -> io_map f (k r))
 let forget_ref #t1 #t2 #post (x:t1) (y:t2{post x y}) : t2 = y
 
+(** When the function applied by [io_map] is the identity on its argument,
+    [io_map] does not change the [theta] of the computation. This is needed
+    for forgetting trivial refinements on IO results. **)
+let rec theta_io_map_id (#a:Type) (f:a -> a) (m:io a)
+  : Lemma
+      (requires (forall (x:a). f x == x))
+      (ensures (theta (io_map f m) `hist_equiv` theta m))
+      (decreases m) =
+  match m with
+  | Return x -> ()
+  | Call o args k ->
+    introduce forall r. theta (io_map f (k r)) `hist_equiv` theta (k r) with begin
+      theta_io_map_id f (k r)
+    end;
+    lem_hist_bind_equiv (hist_call o args) (hist_call o args)
+      (fun r -> theta (io_map f (k r))) (fun r -> theta (k r));
+    assert (theta (io_map f (Call o args k)) ==
+            hist_bind (hist_call o args) (fun r -> theta (io_map f (k r))))
+      by (FStar.Tactics.compute ());
+    assert (theta (Call o args k) ==
+            hist_bind (hist_call o args) (fun r -> theta (k r)))
+      by (FStar.Tactics.compute ())
+
+let thetaP_io_map_id (#a:Type) (f:a -> a) (m:io a) (h:history) (lt:local_trace h) (r:a)
+  : Lemma
+      (requires (forall (x:a). f x == x))
+      (ensures (thetaP (io_map f m) h lt r <==> thetaP m h lt r)) =
+  theta_io_map_id f m
+
 // let subQtype_of (a b:qType) : Type0 =
 //   get_Type a `subtype_of` get_Type b
 
