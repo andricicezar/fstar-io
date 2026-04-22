@@ -388,6 +388,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
   // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
   set_guard_policy Goal;
   let token = must <| core_check_term g qderivation desired_qtyp E_Total in
+  print_debug ("DEBUG: Core check term finished");
   with_compat_pre_core 0 (fun () ->
     norm [
         delta_only [
@@ -401,7 +402,10 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
         iota;
     ];
     explode ();
-    ignore (repeat (fun () -> (or_else trivial trefl))));
+    ignore (repeat (fun () ->
+      simplify_stack_ops ();
+      (or_else trivial trefl)));
+    or_else qed (fun () -> dump "RQ's unification failed"));
 (**      ignore (repeat (forall_intro ()));
 
     let _ = forall_intro () in
