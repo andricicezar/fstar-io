@@ -99,25 +99,25 @@ let helper_compat_val_string_eq (e':closed_exp) (h:history) (lt:local_trace h) (
       )))
 #pop-options
 
-let compat_oval_string_eq #g
-  (fs_e1:fs_oval g qString) (fs_e2:fs_oval g qString)
+let compat_oval_string_eq #g #preS1 #preS2
+  (fs_e1:fs_oval g qString preS1) (fs_e2:fs_oval g qString preS2)
   (e1:exp) (e2:exp)
   : Lemma
     (requires fs_e1 ⊐ e1 /\ fs_e2 ⊐ e2)
     (ensures fs_oval_eq_string fs_e1 fs_e2 ⊐ EStringEq e1 e2) =
   lem_fv_in_env_string_eq g e1 e2;
-  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qBool ⊇ (h, (fs_e1 fsG = fs_e2 fsG), gsubst s (EStringEq e1 e2)) with begin
-    let fs_e1 = fs_e1 fsG in
-    let fs_e2 = fs_e2 fsG in
-    let fs_e = (fs_e1 = fs_e2) in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(∽) h` s /\ (spec_env_app preS1 preS2) fsG) ==> qBool ⊇ (h, (fs_e1 fsG = fs_e2 fsG), gsubst s (EStringEq e1 e2)) with begin
+    let preS1 = preS1 fsG in
+    let preS2 = preS2 fsG in
+    let pre = (preS1 /\ preS2) in
     let e = EStringEq (gsubst s e1) (gsubst s e2) in
     assert (gsubst s (EStringEq e1 e2) == e);
     let EStringEq e1 e2 = e in
-    introduce fsG `(∽) h` s ==> qBool ⊇ (h, fs_e, e) with _. begin
-      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (qBool ∋ (h, fs_e, e') /\ lt == []) with begin
-        introduce e_beh e e' h lt ==> (qBool ∋ (h, fs_e, e') /\ lt == []) with _. begin
+    introduce (fsG `(∽) h` s /\ pre) ==> qBool ⊇ (h, (fs_e1 fsG = fs_e2 fsG), e) with _. begin
+      introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (qBool ∋ (h, (fs_e1 fsG = fs_e2 fsG), e') /\ lt == []) with begin
+        introduce e_beh e e' h lt ==> (qBool ∋ (h, (fs_e1 fsG = fs_e2 fsG), e') /\ lt == []) with _. begin
           lem_shift_type_value_environments h fsG s;
-          helper_compat_val_string_eq e' h lt fs_e1 fs_e2 e1 e2
+          helper_compat_val_string_eq e' h lt (fs_e1 fsG) (fs_e2 fsG) e1 e2
         end
       end
     end
