@@ -106,7 +106,6 @@ let mk_dpair (t1 t2:term) : Tot term =
 let mk_wrap_deriv (typj : term) : Tot term =
   let g_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
   let g_env = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "g_env"; index = 0; sort = seal (`QTypes.TypEnv.typ_env) }))) in
-
   let pre_sort = mk_app (`spec_env) [(g_env, Q_Explicit)] in
   let pre_binder = pack_binder ({ ppname = seal "pre"; qual = Q_Explicit; attrs = []; sort = pre_sort }) in
 
@@ -368,8 +367,8 @@ let prove_equality () : Tac unit =
         iota;
     ];
   explode ();
-  ignore (repeat (fun () ->
-    simplify_stack_ops ();
+  ignore (iterAll (fun () ->
+    // simplify_stack_ops ();
     (or_else trivial trefl)));
   or_else qed (fun () -> dump "RQ's unification failed")
 
@@ -407,8 +406,6 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping [] qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
-
-%splice_t[tgt4] (generate_derivation "tgt4" (`Examples.constant))
 
 (** Generate a derivation for a program, reusing already-generated derivations.
     `deps` is a list of (source_program, derivation) pairs where:
