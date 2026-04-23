@@ -1057,31 +1057,6 @@ let lem_if_arg_value_then_exists (op:io_ops) (h:history) (fs_arg:fs_val (q_io_ar
     end
   | _ -> ()
 
-(*#push-options "--fuel 2 --z3rlimit 10"
-let lem_ecall_result_facts
-  (op:io_ops)
-  (fs_arg:fs_val (q_io_args op){fs_val (q_io_args op) == io_args op})
-  (args:io_args op)
-  (res:io_res op args{fs_val (q_io_res op) == io_res op args})
-  (val_arg:value)
-  (e':closed_exp)
-  (h:history) :
-  Lemma
-    (requires
-      (q_io_args op) ∋ (h, fs_arg, val_arg) /\
-      io_post h op args res /\
-      val_arg == as_e_io_args op args /\
-      e' == as_e_io_res op args res)
-    (ensures
-      (q_io_res op) ∋ (h ++ [op_to_ev op args res], res, e') /\
-      fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res) =
-  match op with
-  | OOpen -> lem_thetaP_call OOpen fs_arg res h
-  | ORead -> lem_thetaP_call ORead fs_arg res h
-  | OClose -> lem_thetaP_call OClose fs_arg res h
-  | OWrite -> lem_thetaP_call OWrite fs_arg res h
-#pop-options*)
-
 (* General helper for all ops - no case analysis on op *)
 #push-options "--fuel 4 --z3rlimit 20"
 let rec destruct_steps_ecall_arg_all
@@ -1210,18 +1185,20 @@ let rec destruct_steps_ecall_arg_comp
 #pop-options
 
 (* General helper - works for all ops without case analysis on op *)
-#push-options "--fuel 2 --z3rlimit 10"
+#push-options "--fuel 4 --z3rlimit 20 --ifuel 1 --split_queries always"
 let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) :
   Lemma
     (requires e_beh (ECall op arg) e' h lt /\
               (q_io_args op) ⊇ (h, fs_arg, arg))
     (ensures (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\
-             fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)) = admit ()
-  (*let the_goal = exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r in
+             fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)) =
+  let the_goal = exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r in
   lem_forall_values_are_values (q_io_args op) h fs_arg;
   bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
     let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg_all op arg e' h lt fs_arg steps_e_e' in
+    lem_value_is_closed arg';
+    assert (is_closed (ECall op arg'));
     FStar.Squash.bind_squash #(steps (ECall op arg') e' (h++lt1) lt') #the_goal () (fun sts1 ->
       trans_history h lt1 lt';
       let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
@@ -1239,42 +1216,97 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
         returns the_goal with _. begin
           match op with
           | OOpen -> begin
+            assert (fs_val (q_io_args OOpen) == string)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
             lem_thetaP_call OOpen fs_arg res h;
-            //let _ : either file_descr unit = res in
-            //assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
-            //assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'));
-            admit ()
+            assert (fs_val (q_io_res OOpen) == resexn file_descr)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
+            assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'))
             end
-          | _ -> admit ()
-          //lem_ecall_result_facts op fs_arg args res arg' e_r (h++lt1)
+          | ORead -> begin
+            assert (fs_val (q_io_args ORead) == file_descr)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            lem_thetaP_call ORead fs_arg res h;
+            assert (fs_val (q_io_res ORead) == resexn string)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
+            assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'))
+            end
+          | OWrite -> begin
+            assert (fs_val (q_io_args OWrite) == (file_descr * string))
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            lem_thetaP_call OWrite fs_arg res h;
+            assert (fs_val (q_io_res OWrite) == resexn unit)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
+            assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'))
+            end
+          | OClose -> begin
+            lem_thetaP_call OClose fs_arg res h;
+            assert (fs_val (q_io_args OClose) == file_descr)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            assert (fs_val (q_io_res OClose) == resexn unit)
+              by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+            assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
+            assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'))
+            end
         end
       in
       goal_lemma ();
-      get_squash the_goal))*)
+      get_squash the_goal))
 #pop-options
 
 (* General compat_ocomp_call_oval - works for all ops *)
+#push-options "--z3rlimit 30 --fuel 2 --ifuel 2 --split_queries always"
 let compat_ocomp_call_oval #g (op:io_ops) #preArgs (fs_arg:fs_oval g (q_io_args op) preArgs) (arg:exp)
   : Lemma
     (requires fs_arg ⊐ arg)
     (ensures fs_ocomp_call_oval op fs_arg ⊒ ECall op arg)
-  = admit ()
-  (*lem_fv_in_env_call g op arg;
-  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). (fsG `(∽) h` s /\ (spec_env_bind' #g #(q_io_args op) preArgs (fun a -> spec_env_return_comp #g #(q_io_res op) (fs_comp_call_val op a))) fsG) ==> (q_io_res op) ⫄ (h, io_call op (fs_arg fsG), gsubst s (ECall op arg)) with begin
-    let fs_arg_v = fs_arg fsG in
-    let fs_e = io_call op fs_arg_v in
+  =
+  lem_fv_in_env_call g op arg;
+  assert (fs_val (q_io_args OOpen) == string)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OOpen) == resexn file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args ORead) == file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res ORead) == resexn string)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args OWrite) == (file_descr * string))
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OWrite) == resexn unit)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args OClose) == file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OClose) == resexn unit)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  let pre : spec_env g = spec_env_bind' #g #(q_io_args op) preArgs (fun a -> spec_env_return_comp #g #(q_io_res op) (fs_comp_call_val op a)) in
+  let fs_e : fs_ocomp g (q_io_res op) pre = fs_ocomp_call_oval op fs_arg in
+  introduce forall b (s:gsub g b) (fsG:eval_env g) (h:history). (fsG `(∽) h` s /\ pre fsG) ==> (q_io_res op) ⫄ (h, fs_e fsG, gsubst s (ECall op arg)) with begin
     let e = ECall op (gsubst s arg) in
     assert (gsubst s (ECall op arg) == e);
-    let ECall _ arg = e in
-    introduce fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, fs_e, e) with _. begin
-      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
+    let ECall _ arg_sub = e in
+    introduce (fsG `(∽) h` s /\ pre fsG) ==> (q_io_res op) ⫄ (h, fs_e fsG, e) with _. begin
+      assert (preArgs fsG);
+      let fs_arg_v : fs_val (q_io_args op) = fs_arg fsG in
+      let fs_e_call : fs_comp (q_io_res op) = fs_comp_call_val op fs_arg_v in
+      assert (fs_e fsG == fs_e_call) by (
+        FStar.Tactics.V1.norm [delta_only [`%fs_ocomp_call_oval;`%fs_ocomp_call;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return;`%fs_ocomp_return_oval;`%fs_comp_bind;`%io_bind;`%io_return]];
+        FStar.Tactics.V1.compute ();
+        FStar.Tactics.V1.trefl ());
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r) with _. begin
           lem_shift_type_value_environments h fsG s;
-          helper_compat_ocomp_call_oval op e' h lt fs_arg_v arg
+          helper_compat_ocomp_call_oval op e' h lt fs_arg_v arg_sub
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_call_oval op fs_arg ⊒ ECall op arg) by (
+    FStar.Tactics.V1.norm [delta_only [`%(⊒); `%superset_ocomp]];
+    FStar.Tactics.V1.smt ())
+#pop-options
 
 let compat_ocomp_unit g : Lemma (fs_ocomp_return_val g qUnit () ⊒ EUnit) =
   compat_oval_unit g;
@@ -1410,12 +1442,13 @@ let compat_ocomp_lambda #g (#t1:qType) (#t2:qType) (#preBody:spec_env (extend t1
 let compat_ocomp_inl #g (t1 t2:qType) (#preP:spec_env g) (fs_e:fs_ocomp g t1 preP) (e:exp)
   : Lemma
     (requires fs_e ⊒ e)
-    (ensures fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊒ (EInl e)) = admit ()
-  (*lem_fv_in_env_inl g e;
-  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind #g #t1 preP (fun fsG -> (fun x -> (fun _ -> True)) (hd fsG) (tail fsG))) fsG) ==> (t1 ^+ t2) ⫄ (h, (fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl) fsG, gsubst s (EInl e)) with begin
+    (ensures fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊒ (EInl e)) =
+  lem_fv_in_env_inl g e;
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #t1 preP (fun x -> spec_env_return_comp #g #(t1 ^+ t2) (io_return (Inl x)))) fsG) ==> (t1 ^+ t2) ⫄ (h, (fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl) fsG, gsubst s (EInl e)) with begin
     introduce _ ==> _ with _. begin
-      let fs_e' : fs_comp t1 = fs_e fsG in
-      let fs_ex = fs_comp_bind #t1 #(t1 ^+ t2) fs_e' (fun e' -> return (Inl #(fs_val t1) #(fs_val t2) e')) in
+      assert (preP fsG);
+      let fs_e' () : Pure (fs_comp t1) (requires preP fsG) (ensures (fun _ -> True)) = fs_e fsG in
+      let fs_ex = fs_comp_bind #t1 #(t1 ^+ t2) (fs_e' ()) (fun e' -> return (Inl #(fs_val t1) #(fs_val t2) e')) in
       assert (fs_ex == (fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl) fsG) by (
         norm [delta_only [`%fs_ocomp_fmap;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return_val]];
         simplify_stack_ops ();
@@ -1429,38 +1462,45 @@ let compat_ocomp_inl #g (t1 t2:qType) (#preP:spec_env g) (fs_e:fs_ocomp g t1 pre
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod t1 h;
-              indexed_safety_comp fs_e' e h;
+              indexed_safety_comp (fs_e' ()) e h;
               let (e12', (| lt12, lt_f |)) = destruct_steps_einl e ex' h lt sts1 in
               trans_history h lt12 lt_f;
               lem_value_is_irred e12';
               lem_value_is_irred (EInl e12');
-              assert (t1 ⫄ (h, fs_e', e));
-              eliminate forall lt12 e12'. e_beh e e12' h lt12 ==> (exists (fs_r_e12:fs_val t1). t1 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e' h lt12 fs_r_e12) with lt12 e12';
-              eliminate exists (fs_r_e12:fs_val t1). t1 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e' h lt12 fs_r_e12
+              assert (t1 ⫄ (h, fs_e' (), e));
+              eliminate forall lt12 e12'. e_beh e e12' h lt12 ==> (exists (fs_r_e12:fs_val t1). t1 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e' ()) h lt12 fs_r_e12) with lt12 e12';
+              eliminate exists (fs_r_e12:fs_val t1). t1 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e' ()) h lt12 fs_r_e12
                 returns exists (fs_r:fs_val (t1 ^+ t2)). (t1 ^+ t2) ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r with _. begin
               lem_destruct_steps_einl e12' ex' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #(t1 ^+ t2) (Inl #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
               assert (fs_beh #(t1 ^+ t2) ((fun e' -> (return (Inl #(fs_val t1) #(fs_val t2) e'))) fs_r_e12) (h++lt12) [] (Inl #(fs_val t1) #(fs_val t2) fs_r_e12));
-              lem_fs_beh_bind #t1 #(t1 ^+ t2) fs_e' h lt12 fs_r_e12 (fun e' -> (return (Inl #(fs_val t1) #(fs_val t2) e'))) [] (Inl #(fs_val t1) #(fs_val t2) fs_r_e12);
+              lem_fs_beh_bind #t1 #(t1 ^+ t2) (fs_e' ()) h lt12 fs_r_e12 (fun e' -> (return (Inl #(fs_val t1) #(fs_val t2) e'))) [] (Inl #(fs_val t1) #(fs_val t2) fs_r_e12);
               unit_l lt12
             end)
           end
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_fmap #g #t1 #(t1 ^+ t2) fs_e Inl ⊒ (EInl e))
+    by (FStar.Tactics.norm [delta_only [`%superset_ocomp]];
+        FStar.Tactics.smt ())
 
 let compat_ocomp_inr #g (t1 t2:qType) #preP (fs_e:fs_ocomp g t2 preP) (e:exp)
   : Lemma
     (requires fs_e ⊒ e)
-    (ensures fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ⊒ (EInr e)) = admit ()
-  (*lem_fv_in_env_inr g e;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> (t1 ^+ t2) ⫄ (h, (fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr) fsG, gsubst s (EInr e)) with begin
+    (ensures fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ⊒ (EInr e)) =
+  lem_fv_in_env_inr g e;
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #t2 preP (fun x -> spec_env_return_comp #g #(t1 ^+ t2) (io_return (Inr x)))) fsG) ==> (t1 ^+ t2) ⫄ (h, (fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr) fsG, gsubst s (EInr e)) with begin
     introduce _ ==> _ with _. begin
-      let fs_e' : fs_comp t2 = fs_e fsG in
-      let fs_ex = fs_comp_bind #t2 #(t1 ^+ t2) fs_e' (fun e' -> return (Inr #(fs_val t1) #(fs_val t2) e')) in
-      assert (fs_ex == (fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr) fsG) by (trefl ());
+      assert (preP fsG);
+      let fs_e' () : Pure (fs_comp t2) (requires preP fsG) (ensures (fun _ -> True)) = fs_e fsG in
+      let fs_ex = fs_comp_bind #t2 #(t1 ^+ t2) (fs_e' ()) (fun e' -> return (Inr #(fs_val t1) #(fs_val t2) e')) in
+      assert (fs_ex == (fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr) fsG) by (
+        norm [delta_only [`%fs_ocomp_fmap;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return_val]];
+        simplify_stack_ops ();
+        trefl ());
       let ex = EInr (gsubst s e) in
       assert (gsubst s (EInr e) == ex) by (trefl ());
       let EInr e = ex in
@@ -1470,27 +1510,30 @@ let compat_ocomp_inr #g (t1 t2:qType) #preP (fs_e:fs_ocomp g t2 preP) (e:exp)
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod t2 h;
-              indexed_safety_comp fs_e' e h;
+              indexed_safety_comp (fs_e' ()) e h;
               let (e12', (| lt12, lt_f |)) = destruct_steps_einr e ex' h lt sts1 in
               trans_history h lt12 lt_f;
               lem_value_is_irred e12';
               lem_value_is_irred (EInr e12');
-              assert (t2 ⫄ (h, fs_e', e));
-              eliminate forall lt12 e12'. e_beh e e12' h lt12 ==> (exists (fs_r_e12:fs_val t2). t2 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e' h lt12 fs_r_e12) with lt12 e12';
-              eliminate exists (fs_r_e12:fs_val t2). t2 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e' h lt12 fs_r_e12
+              assert (t2 ⫄ (h, fs_e' (), e));
+              eliminate forall lt12 e12'. e_beh e e12' h lt12 ==> (exists (fs_r_e12:fs_val t2). t2 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e' ()) h lt12 fs_r_e12) with lt12 e12';
+              eliminate exists (fs_r_e12:fs_val t2). t2 ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e' ()) h lt12 fs_r_e12
                 returns exists (fs_r:fs_val (t1 ^+ t2)). (t1 ^+ t2) ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r with _. begin
               lem_destruct_steps_einr e12' ex' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #(t1 ^+ t2) (Inr #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
               assert (fs_beh #(t1 ^+ t2) ((fun e' -> (return (Inr #(fs_val t1) #(fs_val t2) e'))) fs_r_e12) (h++lt12) [] (Inr #(fs_val t1) #(fs_val t2) fs_r_e12));
-              lem_fs_beh_bind #t2 #(t1 ^+ t2) fs_e' h lt12 fs_r_e12 (fun e' -> (return (Inr #(fs_val t1) #(fs_val t2) e'))) [] (Inr #(fs_val t1) #(fs_val t2) fs_r_e12);
+              lem_fs_beh_bind #t2 #(t1 ^+ t2) (fs_e' ()) h lt12 fs_r_e12 (fun e' -> (return (Inr #(fs_val t1) #(fs_val t2) e'))) [] (Inr #(fs_val t1) #(fs_val t2) fs_r_e12);
               unit_l lt12
             end)
           end
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_fmap #g #t2 #(t1 ^+ t2) fs_e Inr ⊒ (EInr e))
+    by (FStar.Tactics.norm [delta_only [`%superset_ocomp]];
+        FStar.Tactics.smt ())
 
 #push-options "--z3rlimit 64 --fuel 1 --ifuel 0"
 let compat_ocomp_pair #g
@@ -1680,12 +1723,13 @@ let compat_ocomp_fst #g
   (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures fs_ocomp_fmap fs_e12 fst ⊒ (EFst e12)) = admit ()
-  (*lem_fv_in_env_fst g e12;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> t1 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t1 fs_e12 fst) fsG, gsubst s (EFst e12)) with begin
+    (ensures fs_ocomp_fmap fs_e12 fst ⊒ (EFst e12)) =
+  lem_fv_in_env_fst g e12;
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #(t1 ^* t2) preP (fun x -> spec_env_return_comp #g #t1 (io_return (fst #(fs_val t1) #(fs_val t2) x)))) fsG) ==> t1 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t1 fs_e12 fst) fsG, gsubst s (EFst e12)) with begin
     introduce _ ==> _ with _. begin
-      let fs_e12' : fs_comp (t1 ^* t2) = fs_e12 fsG in
-      let fs_e = fs_comp_bind #(t1 ^* t2) #t1 fs_e12' (fun e12' -> return (fst #(fs_val t1) #(fs_val t2) e12')) in
+      assert (preP fsG);
+      let fs_e12' () : Pure (fs_comp (t1 ^* t2)) (requires preP fsG) (ensures (fun _ -> True)) = fs_e12 fsG in
+      let fs_e = fs_comp_bind #(t1 ^* t2) #t1 (fs_e12' ()) (fun e12' -> return (fst #(fs_val t1) #(fs_val t2) e12')) in
       assert (fs_e == (fs_ocomp_fmap #g #(t1 ^* t2) #t1 fs_e12 fst) fsG) by (
         norm [delta_only [`%fs_ocomp_fmap;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return_val]];
         simplify_stack_ops ();
@@ -1707,35 +1751,39 @@ let compat_ocomp_fst #g
               let EPair e1 e2 = e12' in
               lem_value_is_irred e1;
               lem_value_is_irred e2;
-              assert ((t1 ^* t2) ⫄ (h, fs_e12', e12));
+              assert ((t1 ^* t2) ⫄ (h, fs_e12' (), e12));
               assert (e_beh e12 e12' h lt12);
               eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==>
-                (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
-              eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
+                (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh (fs_e12' ()) h lt' fs_r) with lt12 e12';
+              eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e12' ()) h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t1). t1 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               lem_destruct_steps_epair_fst e1 e2 e' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #t1 (fst #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
               assert (fs_beh #t1 ((fun e12' -> (return (fst #(fs_val t1) #(fs_val t2) e12'))) fs_r_e12) (h++lt12) [] (fst #(fs_val t1) #(fs_val t2) fs_r_e12));
-              lem_fs_beh_bind #(t1 ^* t2) #t1 fs_e12' h lt12 fs_r_e12 (fun e' -> (return (fst #(fs_val t1) #(fs_val t2) e'))) [] (fst #(fs_val t1) #(fs_val t2) fs_r_e12);
+              lem_fs_beh_bind #(t1 ^* t2) #t1 (fs_e12' ()) h lt12 fs_r_e12 (fun e' -> (return (fst #(fs_val t1) #(fs_val t2) e'))) [] (fst #(fs_val t1) #(fs_val t2) fs_r_e12);
               unit_l lt12
             end)
           end
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_fmap #g #(t1 ^* t2) #t1 fs_e12 fst ⊒ (EFst e12))
+    by (FStar.Tactics.norm [delta_only [`%superset_ocomp]];
+        FStar.Tactics.smt ())
 
 #push-options "--z3refresh --fuel 4 --z3rlimit 20"
 let compat_ocomp_snd #g (#t1 #t2:qType) #preP (fs_e12:fs_ocomp g (t1 ^* t2) preP) (e12:exp)
   : Lemma
     (requires fs_e12 ⊒ e12) (** is this too strict? we only care for the left to be equivalent. **)
-    (ensures fs_ocomp_fmap fs_e12 snd ⊒ (ESnd e12)) = admit ()
-  (*lem_fv_in_env_snd g e12;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> t2 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG, gsubst s (ESnd e12)) with begin
+    (ensures fs_ocomp_fmap fs_e12 snd ⊒ (ESnd e12)) =
+  lem_fv_in_env_snd g e12;
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #(t1 ^* t2) preP (fun x -> spec_env_return_comp #g #t2 (io_return (snd #(fs_val t1) #(fs_val t2) x)))) fsG) ==> t2 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG, gsubst s (ESnd e12)) with begin
   introduce _ ==> _ with _. begin
-      let fs_e12' : fs_comp (t1 ^* t2) = fs_e12 fsG in
-      let fs_e = fs_comp_bind #(t1 ^* t2) #t2 fs_e12' (fun e12' -> return (snd #(fs_val t1) #(fs_val t2) e12')) in
+      assert (preP fsG);
+      let fs_e12' () : Pure (fs_comp (t1 ^* t2)) (requires preP fsG) (ensures (fun _ -> True)) = fs_e12 fsG in
+      let fs_e = fs_comp_bind #(t1 ^* t2) #t2 (fs_e12' ()) (fun e12' -> return (snd #(fs_val t1) #(fs_val t2) e12')) in
       assert (fs_e == (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd) fsG) by (
         norm [delta_only [`%fs_ocomp_fmap;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return_val]];
         simplify_stack_ops ();
@@ -1757,10 +1805,10 @@ let compat_ocomp_snd #g (#t1 #t2:qType) #preP (fs_e12:fs_ocomp g (t1 ^* t2) preP
               let EPair e1 e2 = e12' in
               lem_value_is_irred e1;
               lem_value_is_irred e2;
-              assert ((t1 ^* t2) ⫄ (h, fs_e12', e12));
+              assert ((t1 ^* t2) ⫄ (h, fs_e12' (), e12));
               assert (e_beh e12 e12' h lt12);
-              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh fs_e12' h lt' fs_r) with lt12 e12';
-              eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh fs_e12' h lt12 fs_r_e12
+              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh (fs_e12' ()) h lt' fs_r) with lt12 e12';
+              eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e12' ()) h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t2). t2 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
               assert (e12' == EPair e1 e2);
               assert (t2 ∋ (h++lt12, snd #(fs_val t1) #(fs_val t2) fs_r_e12, e2));
@@ -1768,14 +1816,17 @@ let compat_ocomp_snd #g (#t1 #t2:qType) #preP (fs_e12:fs_ocomp g (t1 ^* t2) preP
               trans_history h lt12 [];
               lem_fs_beh_return #t2 (snd #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
               assert (fs_beh #t2 ((fun e12' -> (return (snd #(fs_val t1) #(fs_val t2) e12'))) fs_r_e12) (h++lt12) [] (snd #(fs_val t1) #(fs_val t2) fs_r_e12));
-              lem_fs_beh_bind #(t1 ^* t2) #t2 fs_e12' h lt12 fs_r_e12 (fun e' -> (return (snd #(fs_val t1) #(fs_val t2) e'))) [] (snd #(fs_val t1) #(fs_val t2) fs_r_e12);
+              lem_fs_beh_bind #(t1 ^* t2) #t2 (fs_e12' ()) h lt12 fs_r_e12 (fun e' -> (return (snd #(fs_val t1) #(fs_val t2) e'))) [] (snd #(fs_val t1) #(fs_val t2) fs_r_e12);
               unit_l lt12
             end)
           end
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_fmap #g #(t1 ^* t2) #t2 fs_e12 snd ⊒ (ESnd e12))
+    by (FStar.Tactics.norm [delta_only [`%superset_ocomp]];
+        FStar.Tactics.smt ())
 #pop-options
 
 let helper_lemma_compat_ocomp_case #g #a #b (#preBody:spec_env (extend a g))
@@ -1948,43 +1999,68 @@ let compat_ocomp_case #g (#a #b #c:qType) #preCond
   end
 #pop-options
 
+#push-options "--z3rlimit 30 --fuel 2 --ifuel 2 --split_queries always"
 let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) preArgs) (arg:exp)
   : Lemma
     (requires fs_arg ⊒ arg)
-    (ensures fs_ocomp_call op fs_arg ⊒ ECall op arg) = admit ()
-  (*lem_fv_in_env_call g op arg;
-  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #(q_io_args op) preArgs (fun a -> spec_env_return_comp #g #(q_io_res op) (fs_comp_call_val op a))) fsG) ==> (q_io_res op) ⫄ (h, (fs_ocomp_call op fs_arg) fsG, gsubst s (ECall op arg)) with begin
-    introduce _ ==> _ with _. begin
+    (ensures fs_ocomp_call op fs_arg ⊒ ECall op arg) =
+  lem_fv_in_env_call g op arg;
+  assert (fs_val (q_io_args OOpen) == string)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OOpen) == resexn file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args ORead) == file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res ORead) == resexn string)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args OWrite) == (file_descr * string))
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OWrite) == resexn unit)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_args OClose) == file_descr)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  assert (fs_val (q_io_res OClose) == resexn unit)
+    by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  let pre : spec_env g = spec_env_bind' #g #(q_io_args op) preArgs (fun a -> spec_env_return_comp #g #(q_io_res op) (fs_comp_call_val op a)) in
+  let fs_e : fs_ocomp g (q_io_res op) pre = fs_ocomp_call op fs_arg in
+  introduce forall b' (s:gsub g b') (fsG:eval_env g) (h:history). (fsG `(∽) h` s /\ pre fsG) ==> (q_io_res op) ⫄ (h, fs_e fsG, gsubst s (ECall op arg)) with begin
+    let e = ECall op (gsubst s arg) in
+    assert (gsubst s (ECall op arg) == e);
+    let ECall _ arg_sub = e in
+    introduce (fsG `(∽) h` s /\ pre fsG) ==> (q_io_res op) ⫄ (h, fs_e fsG, e) with _. begin
+      assert (preArgs fsG);
       let fs_arg' : fs_comp (q_io_args op) = fs_arg fsG in
-      let fs_e = fs_comp_bind #(q_io_args op) #(q_io_res op) fs_arg' (fun arg' -> fs_comp_call_val op arg') in
-      assert (fs_e == (fs_ocomp_call op fs_arg) fsG) by (trefl ());
-      let e = ECall op (gsubst s arg) in
-      assert (gsubst s (ECall op arg) == e);
-      let ECall _ arg = e in
-      introduce fsG `(∽) h` s ==> (q_io_res op) ⫄ (h, fs_e, e) with _. begin
-        introduce forall lt (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with begin
-          introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r) with _. begin
-            lem_shift_type_value_environments h fsG s;
-            bind_squash (steps e e' h lt) (fun sts1 ->
-              assert ((q_io_args op) ⫄ (h, fs_arg', arg));
-              let (arg_val, (| lt1, lt' |)) = destruct_steps_ecall_arg_comp op arg e' h lt sts1 arg h [] fs_arg' in
-              eliminate forall lt1 arg_val. e_beh arg arg_val h lt1 ==> (exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg) with lt1 arg_val;
-              lem_value_is_irred arg_val;
-              eliminate exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg
-                returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+      let fs_e_call = fs_comp_bind #(q_io_args op) #(q_io_res op) fs_arg' (fun arg' -> fs_comp_call_val op arg') in
+      assert (fs_e fsG == fs_e_call) by (
+        FStar.Tactics.V1.norm [delta_only [`%fs_ocomp_call;`%fs_ocomp_bind';`%fs_ocomp_bind;`%fs_ocomp_return;`%fs_comp_bind;`%io_bind;`%io_return]];
+        FStar.Tactics.V1.compute ();
+        FStar.Tactics.V1.trefl ());
+      introduce forall (lt:local_trace h) (e':closed_exp). e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r) with begin
+        introduce e_beh e e' h lt ==> (exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r) with _. begin
+          lem_shift_type_value_environments h fsG s;
+          bind_squash (steps e e' h lt) (fun sts1 ->
+            assert ((q_io_args op) ⫄ (h, fs_arg', arg_sub));
+            let (arg_val, (| lt1, lt' |)) = destruct_steps_ecall_arg_comp op arg_sub e' h lt sts1 arg_sub h [] fs_arg' in
+            eliminate forall lt1 arg_val. e_beh arg_sub arg_val h lt1 ==> (exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg) with lt1 arg_val;
+            lem_value_is_irred arg_val;
+            eliminate exists (fs_r_arg:fs_val (q_io_args op)). (q_io_args op) ∋ (h++lt1, fs_r_arg, arg_val) /\ fs_beh fs_arg' h lt1 fs_r_arg
+              returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r with _. begin
               lem_values_are_expressions (q_io_args op) (h++lt1) fs_r_arg arg_val;
               trans_history h lt1 lt';
               helper_compat_ocomp_call_oval op e' (h++lt1) lt' fs_r_arg arg_val;
               eliminate exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ ((h++lt1)++lt', fs_r, e') /\ fs_beh (fs_comp_call_val op fs_r_arg) (h++lt1) lt' fs_r
-                returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
+                returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_e fsG) h lt fs_r with _. begin
                 lem_fs_beh_bind #(q_io_args op) #(q_io_res op) fs_arg' h lt1 fs_r_arg (fun x -> fs_comp_call_val op x) lt' fs_r
               end
             end)
-          end
         end
       end
     end
-  end*)
+  end;
+  assert (fs_ocomp_call op fs_arg ⊒ ECall op arg) by (
+    FStar.Tactics.V1.norm [delta_only [`%(⊒); `%superset_ocomp]];
+    FStar.Tactics.V1.smt ())
+#pop-options
 
 (** Auxiliary: under the [QRef] rule we only change the *top-level*
     refinement of the qType -- the underlying F* type and every nested

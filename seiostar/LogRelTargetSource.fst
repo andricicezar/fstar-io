@@ -303,7 +303,6 @@ let safety_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) : Lemma
     end
   end
 
-
 (* Preservation of ⊇ under reduction: if arg steps to arg', ⊇ is preserved *)
 let lem_superset_preserved_by_step
   (t:qType) (h:history) (fs_v:fs_val t) (e e':closed_exp) (oev:option (event_h h)) :
@@ -323,52 +322,63 @@ let lem_superset_preserved_by_step
 
 open FStar.Tactics.V1
 
+(** The body of the [QArr] branch of [∋] applied to [^->]. *)
+let arrow_in_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp{is_closed (ELam e11)}) : Type0 =
+  forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h).
+    t1 ∋ (h++lt_v, fs_v, v) ==>
+      t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11)
+
+(** Bridge: unfold [∋ (QArr ...)] into its body. *)
+let lem_unfold_in_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp{is_closed (ELam e11)})
+  : Lemma
+    (((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)) <==> arrow_in_body t1 t2 h fs_e1 e11) =
+  assert (((t1 ^-> t2) ∋ (h, fs_e1, ELam e11)) <==> arrow_in_body t1 t2 h fs_e1 e11)
+    by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%arrow_in_body;
+                                           `%get_rel;
+                                           `%(^->);
+                                           `%Mkdtuple2?._2; `%Mkdtuple2?._1];
+                               zeta; iota];
+        FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
+        FStar.Tactics.V1.l_to_r [`lem_pack_get_rel];
+        FStar.Tactics.V1.norm [iota];
+        FStar.Tactics.V1.smt ())
+
 let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
   : Lemma
     (requires is_closed (ELam e11) /\ (t1 ^-> t2) ∋ (h, fs_e1, ELam e11))
     (ensures forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⊇ (h++lt_v, fs_e1 fs_v, subst_beta v e11))
-  (*by (explode ();
-    bump_nth 4;
-    let x = nth_binder (-2) in
-    let x', x'' = destruct_and x in
-    clear x;
-    let (x'0, x'1) = destruct_and x' in
-    clear x';
-    binder_retype x'1;
-      norm [delta_once [`%op_u8715;`%(^->);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
-      l_to_r [`lem_pack_get_rel];
-    trefl ();
-    let x''' = instantiate x'' (fresh_uvar None) in
-    clear x'';
-    mapply x''';
-    clear x''')*)
-  = admit ()
+  =
+  lem_unfold_in_arrow_to_body t1 t2 h fs_e1 e11
+
+(** The body of the [QArrIO] branch of [∋] applied to [^->!@], stated directly
+    in terms of [fs_e1 fs_v] (no wrapper). *)
+let io_arrow_in_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp{is_closed (ELam e11)}) : Type0 =
+  forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h).
+    t1 ∋ (h++lt_v, fs_v, v) ==>
+      t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)
+
+(** Bridge: unfold [∋ (QArrIO ...)] into its direct body. *)
+let lem_unfold_in_io_arrow_to_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp{is_closed (ELam e11)})
+  : Lemma
+    (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body_direct t1 t2 h fs_e1 e11) =
+  assert (((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)) <==> io_arrow_in_body_direct t1 t2 h fs_e1 e11)
+    by (FStar.Tactics.V1.norm [delta_once [`%op_u8715; `%io_arrow_in_body_direct;
+                                           `%get_rel;
+                                           `%(^->!@);
+                                           `%Mkdtuple2?._2; `%Mkdtuple2?._1];
+                               zeta; iota];
+        FStar.Tactics.V1.norm [delta_only [`%fs_val; `%get_Type; `%Mkdtuple2?._1]; iota];
+        FStar.Tactics.V1.l_to_r [`lem_pack_get_rel];
+        FStar.Tactics.V1.norm [iota];
+        FStar.Tactics.V1.smt ())
 
 let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp) (h:history)
   : Lemma
     (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∋ (h, fs_e1, ELam e11)))
     (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∋ (h++lt_v, fs_v, v) ==> t2 ⫄ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))
-  (*by (explode ();
-    bump_nth 4;
-    let x = nth_binder (-2) in
-    let x', x'' = destruct_and x in
-    clear x;
-    let (x'0, x'1) = destruct_and x' in
-    clear x';
-    binder_retype x'1;
-      norm [delta_once [`%op_u8715;`%(^->!@);`%get_rel; `%Mkdtuple2?._2;`%Mkdtuple2?._1]; zeta; delta; iota];
-      l_to_r [`lem_pack_get_rel];
-    trefl ();
-    let x''' = instantiate x'' (fresh_uvar None) in
-    clear x'';
-    mapply x''')*)
-  = admit ()
+  =
+  lem_unfold_in_io_arrow_to_body_direct t1 t2 h fs_e1 e11
 
-(** Unused
-let sem_expr_shape_val (#t:qType) (fs_e:fs_val t) (e:exp) (h:history) :
-  Lemma (requires equiv_val fs_e e)
-        (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =  admit ()
-**)
 let sem_expr_shape_comp (#t:qType) (fs_e:fs_comp t) (e:closed_exp) (h:history) :
   Lemma (requires t ⫄ (h, fs_e, e))
         (ensures indexed_sem_expr_shape (type_quotation_to_typ (get_rel t)) e h) =
@@ -412,24 +422,17 @@ let lem_unfold_in_io_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^
         FStar.Tactics.V1.smt ())
 
 (** Bridge: [io_arrow_wrap] at [^->!@] has the same [theta] (pointwise in [fs_v])
-+    as the identity wrap, since [forget_ref] with trivial post is the identity. *)
++    as the identity wrap, since [forget_ref] with trivial post is the identity.
+    With refinements removed, [io_arrow_wrap t1 t2 fs_e1 fs_v == fs_e1 fs_v]
+    definitionally, so this reduces to a reflexive equivalence. *)
 let lem_io_arrow_wrap_preserves_superset_comp
   (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (fs_v:fs_val t1) (e:closed_exp)
   : Lemma
       (t2 ⫄ (h, io_arrow_wrap t1 t2 fs_e1 fs_v, e) <==>
        t2 ⫄ (h, fs_e1 fs_v, e)) =
-  admit ()
-(**  let post : get_Type t1 -> get_Type t2 -> Type0 = fun _ _ -> True in
-  let fs_e1_outer : x:get_Type t1 -> io (y:get_Type t2{post x y}) = fs_e1 in
-  let fg : (y:get_Type t2{post fs_v y}) -> get_Type t2 =
-    forget_ref #(get_Type t1) #(get_Type t2) #post fs_v in
-  assert (forall (y:(y:get_Type t2{post fs_v y})). fg y == y);
-  theta_io_map_id #(get_Type t2) fg (fs_e1_outer fs_v);
-  assert (theta (io_map fg (fs_e1_outer fs_v)) `hist_equiv` theta (fs_e1_outer fs_v));
-  assert (io_arrow_wrap t1 t2 fs_e1 fs_v == io_map fg (fs_e1_outer fs_v))
+  assert (io_arrow_wrap t1 t2 fs_e1 fs_v == fs_e1 fs_v)
     by (FStar.Tactics.V1.norm [delta_only [`%io_arrow_wrap]; zeta; iota];
-        FStar.Tactics.V1.trefl ());
-  assert (fs_e1_outer fs_v == fs_e1 fs_v) **)
+        FStar.Tactics.V1.trefl ())
 
 let fold_in_io_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp)
   : Lemma
