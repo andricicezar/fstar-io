@@ -46,8 +46,7 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 #a : qType ->
                 #b : qType ->
                 #preF : spec_env g ->
-                #post : _ ->
-                #f : fs_oval g (qArrR a b post) preF ->
+                #f : fs_oval g (a ^-> b) preF ->
                 #preX : spec_env g ->
                 #x : fs_oval g a preX ->
                 typing g f ->

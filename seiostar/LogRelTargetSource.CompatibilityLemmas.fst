@@ -752,7 +752,7 @@ Lemma
             (a ⫄ (h, fs_m, m)))
   (ensures (exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_bind fs_m (fun m' -> fs_k' m')) h lt fs_r)) =
   bind_squash (steps (EApp (ELam k') m) e' h lt) #(exists (fs_r:fs_val b). b ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_bind fs_m (fun m' -> fs_k' m')) h lt fs_r) (fun sts1 ->
-    assert ((a ^->!@ b) ⊇ (h, fs_k', (ELam k'))); 
+    assert ((a ^->!@ b) ⊇ (h, fs_k', (ELam k')));
     assert (forall k_ lt1. e_beh (ELam k') k_ h lt1 ==> (ELam? k_ /\ is_closed k_));
     let a_typ = type_quotation_to_typ (get_rel a) in
     let b_typ = type_quotation_to_typ (get_rel b) in
@@ -897,7 +897,7 @@ let compat_ocomp_if_oval #g (#a:qType) #preC #preT #preE
     end
   end
 
-#push-options "--fuel 2 --z3rlimit 10"
+#push-options "--fuel 4 --z3rlimit 32"
 let helper_compat_prod_case_val
   (e':closed_exp)
   (#h:history) (lt:local_trace h)
@@ -911,13 +911,13 @@ let helper_compat_prod_case_val
     (requires (
       steps (ECase e_sc e_li e_ri) e' h lt /\
       indexed_irred e' (h++lt) /\
-      (a ^+ b) ⊇ (h, fs_sc, e_sc) /\ 
+      (a ^+ b) ⊇ (h, fs_sc, e_sc) /\
       (Inl? fs_sc ==> (forall (v:value). a ∋ (h, Inl?.v fs_sc, v) ==> c ⫄ (h, fs_r, subst_beta v e_li))) /\
       (Inr? fs_sc ==> (forall (v:value). b ∋ (h, Inr?.v fs_sc, v) ==> c ⫄ (h, fs_r, subst_beta v e_ri)))))
     (ensures (exists (fs_r':fs_val c). c ∋ (h++lt, fs_r', e') /\ fs_beh fs_r h lt fs_r')) =
   lem_forall_values_are_values (a ^+ b) h fs_sc;
   assert (forall e_sc' lt'. e_beh e_sc e_sc' h lt' ==> (EInl? e_sc' \/ EInr? e_sc'));
-  bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) #(exists (fs_r':fs_val c). c ∋ (h++lt, fs_r', e') /\ fs_beh fs_r h lt fs_r') (fun sts -> 
+  bind_squash (steps (ECase e_sc e_li e_ri) e' h lt) #(exists (fs_r':fs_val c). c ∋ (h++lt, fs_r', e') /\ fs_beh fs_r h lt fs_r') (fun sts ->
     let a_typ = type_quotation_to_typ (get_rel a) in
     let b_typ = type_quotation_to_typ (get_rel b) in
     let (e_sc', (| lt1, lt2 |)) = destruct_steps_ecase e_sc e_li e_ri e' h lt sts a_typ b_typ in
@@ -944,15 +944,15 @@ let helper_compat_prod_case_val
 #pop-options
 
 #push-options "--z3rlimit 10 --split_queries always --fuel 1 --ifuel 1"
-let compat_ocomp_case_oval 
-  #g 
-  (#a #b #c:qType) 
+let compat_ocomp_case_oval
+  #g
+  (#a #b #c:qType)
   (#preCond:spec_env g)
   (#preInlc:spec_env (extend a g))
   (#preInrc:spec_env (extend b g))
-  (fs_cond:fs_oval g (a ^+ b) preCond) 
-  (fs_inlc:fs_ocomp (extend a g) c preInlc) 
-  (fs_inrc:fs_ocomp (extend b g) c preInrc) 
+  (fs_cond:fs_oval g (a ^+ b) preCond)
+  (fs_inlc:fs_ocomp (extend a g) c preInlc)
+  (fs_inrc:fs_ocomp (extend b g) c preInrc)
   (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊐ cond /\ fs_inlc ⊒ inlc /\ fs_inrc ⊒ inrc)
@@ -983,7 +983,7 @@ let compat_ocomp_case_oval
       introduce Inl? (fs_sc_v ()) ==> (forall (v:value). a ∋ (h, Inl?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inlc_s)) with _. begin
         let prove_inl_branch () : Lemma
           (requires Inl? (fs_sc_v ()))
-          (ensures forall (v:value). a ∋ (h, Inl?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inlc_s)) = 
+          (ensures forall (v:value). a ∋ (h, Inl?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inlc_s)) =
           introduce forall (v:value). a ∋ (h, Inl?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inlc_s) with begin
             introduce _ ==> _ with _. begin
             let s' = gsub_extend s a v in
@@ -991,7 +991,7 @@ let compat_ocomp_case_oval
             assert ((fsG' `(∽) h` s' /\ preInlc fsG') ==> c ⫄ (h, fs_inlc fsG', gsubst s' inlc));
             assert (fsG `(∽) h` s);
             assert (a ∋ (h, Inl?.v (fs_sc_v ()), v));
-            lem_values_are_values a h (Inl?.v (fs_sc_v ())) v; 
+            lem_values_are_values a h (Inl?.v (fs_sc_v ())) v;
             assert (stack fsG (Inl?.v (fs_sc_v ())) `(∽) h` gsub_extend s a v);
             assert (preInlc fsG');
             assert (c ⫄ (h, fs_inlc fsG', gsubst s' inlc));
@@ -1006,7 +1006,7 @@ let compat_ocomp_case_oval
       introduce Inr? (fs_sc_v ()) ==> (forall (v:value). b ∋ (h, Inr?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inrc_s)) with _. begin
         let prove_inr_branch () : Lemma
           (requires Inr? (fs_sc_v ()))
-          (ensures forall (v:value). b ∋ (h, Inr?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inrc_s)) = 
+          (ensures forall (v:value). b ∋ (h, Inr?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inrc_s)) =
           introduce forall (v:value). b ∋ (h, Inr?.v (fs_sc_v ()), v) ==> c ⫄ (h, fs_e (), subst_beta v inrc_s) with begin
             introduce _ ==> _ with _. begin
             let s' = gsub_extend s b v in
@@ -1014,7 +1014,7 @@ let compat_ocomp_case_oval
             assert ((fsG' `(∽) h` s' /\ preInrc fsG') ==> c ⫄ (h, fs_inrc fsG', gsubst s' inrc));
             assert (fsG `(∽) h` s);
             assert (b ∋ (h, Inr?.v (fs_sc_v ()), v));
-            lem_values_are_values b h (Inr?.v (fs_sc_v ())) v; 
+            lem_values_are_values b h (Inr?.v (fs_sc_v ())) v;
             assert (stack fsG (Inr?.v (fs_sc_v ())) `(∽) h` gsub_extend s b v);
             assert (preInrc fsG');
             assert (c ⫄ (h, fs_inrc fsG', gsubst s' inrc));
@@ -1798,7 +1798,7 @@ let helper_lemma_compat_ocomp_case #g #a #b (#preBody:spec_env (extend a g))
       (a ^->!@ b) ⊇ (h, fs_oval_lambda_ocomp fs_e fsG, gsubst s (ELam e))
   with bo s fsG h
 
-#push-options "--z3rlimit 60 --fuel 2 --ifuel 2 --split_queries always"
+#push-options "--z3rlimit 120 --fuel 2 --ifuel 2 --split_queries always"
 let compat_ocomp_case #g (#a #b #c:qType) #preCond
   (fs_cond:fs_ocomp g (a ^+ b) preCond)
   (#preInlc:spec_env (extend a g))

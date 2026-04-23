@@ -18,17 +18,16 @@ let rec (∈) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   | QBool #ref -> (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
   | QFileDescriptor -> e == EFileDescr fs_v
   | QString -> (match e with | EString s -> fs_v == s | _ -> False)
-  | QArr #t1 #t2 qt1 qt2 #post -> begin
-    let fs_f : (x:t1) -> (y:t2{post x y}) = fs_v in
+  | QArr #t1 #t2 qt1 qt2 -> begin
+    let fs_f : t1 -> t2 = fs_v in
     match e with
     | ELam e' ->
       (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∈ (h++lt_v, fs_v, v) ==>
         pack qt2 ⊆ (h++lt_v, fs_f fs_v, subst_beta v e'))
     | _ -> False
   end
-  | QArrIO #t1 #t2 qt1 qt2 #post -> begin
-    let fs_f : (x:t1) -> io (y:t2{post x y}) = fs_v in
-    let fs_f : t1 -> io t2 = fun (x:t1) -> io_map (forget_ref #t1 #t2 #post x) (fs_f x) in
+  | QArrIO #t1 #t2 qt1 qt2 -> begin
+    let fs_f : t1 -> io t2 = fs_v in
     match e with
     | ELam e' -> // instead quantify over h'' - extensions of the history:
       (forall (v:value) (fs_v:t1) (lt_v:local_trace h). pack qt1 ∈ (h++lt_v, fs_v, v) ==>
@@ -224,9 +223,8 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
       end
     end
     end
-  | QArrIO #t1 #t2 qt1 qt2 #post -> begin
-    let fs_f : (x:t1) -> io (y:t2{post x y}) = fs_v in
-    let fs_f : t1 -> io t2 = fun (x:t1) -> io_map (forget_ref #t1 #t2 #post x) (fs_f x) in
+  | QArrIO #t1 #t2 qt1 qt2 -> begin
+    let fs_f : t1 -> io t2 = fs_v in
     let ELam e' = e in
     introduce forall (v:value) (fs_v':t1) (lt_v':local_trace (h++lt)). pack qt1 ∈ ((h++lt)++lt_v', fs_v', v) ==> pack qt2 ⫃ ((h++lt)++lt_v', fs_f fs_v', subst_beta v e') with begin
       introduce pack qt1 ∈ ((h++lt)++lt_v', fs_v', v) ==> _ with _. begin

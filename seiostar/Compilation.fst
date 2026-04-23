@@ -51,7 +51,7 @@ let rec lem_compile_superset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s
     lem_compile_superset qx;
     C1.compat_weaken #g' #a #b #pre' x (compile qx)
   | QFd fd -> C1.compat_oval_file_descr g fd
-  | QApp #_ #qa #qb #preF #_ #f #preX #x qf qx ->
+  | QApp #_ #qa #qb #preF #f #preX #x qf qx ->
     lem_compile_superset qf;
     lem_compile_superset qx;
     C1.compat_oval_app #_ #preF #preX #qa #qb f x (compile qf) (compile qx)
@@ -138,7 +138,7 @@ let rec lem_compile_subset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s)
     lem_compile_subset qx;
     C2.compat_weaken #g' #a #b #preX x (compile qx)
   | QFd fd -> C2.compat_oval_file_descr g fd
-  | QApp #_ #qa #qb #preF #_ #f #preX #x qf qx ->
+  | QApp #_ #qa #qb #preF #f #preX #x qf qx ->
     lem_compile_subset qf;
     lem_compile_subset qx;
     C2.compat_oval_app #_ #preF #preX #qa #qb f x (compile qf) (compile qx)

@@ -566,11 +566,12 @@ let test_context ()
       (QApp QAxiom (QRetype qVar1))
       (QLambda QAxiom))))
 
+(**
 let test_pure_fun ()
  : (qArrR (qBoolR (fun b -> b == true)) qBool (fun b r -> r == b)) ⊩ pure_fun
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QRetype (QLambda #(qBoolR (fun b -> b == true)) QTrue))
-
+**)
 
 #pop-options
 
@@ -614,9 +615,9 @@ let d_test_if_seq () : _ ⊫ _
 let d_test_context () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_context ()) ()
-let d_test_pure_fun () : _ ⊫ _
-  by (simplify_d ())
-  = mk_turniqet (test_pure_fun ()) (_ by (norm [delta; iota]))
+// let d_test_pure_fun () : _ ⊫ _
+//   by (simplify_d ())
+//   = mk_turniqet (test_pure_fun ()) (_ by (norm [delta; iota]))
 
 #push-options "--no_smt"
 open ExamplesIORefinements
@@ -727,12 +728,10 @@ let test_ior_io_matchbang_ref ()
   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QCaseIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QFalse)))))
 
 (** Example 19: Ghost sequencing before IO return *)
-(**
 let test_ior_io_ghost_seq ()
   : ((qUnit ^-> qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ^->!@ qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ⊩ io_ghost_seq
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (QReturn (qLet (QApp QAxiom Qtt) (QRetype Qtt))))
-**)
 
 (** Example 20: Apply refined callback in IO *)
 let test_ior_io_apply_callback ()
@@ -742,6 +741,7 @@ let test_ior_io_apply_callback ()
 
 (** Example 21: Validate with refined callback in IO *)
 
+(**
 [@@ (preprocess_with simplify_qType)]
 let test_ior_pure_validate ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^-> qResexn (qStringR (fun x -> valid x))) ⊩ pure_validate
@@ -752,7 +752,6 @@ let test_ior_pure_validate ()
             (QInl (QRetype (QWeaken QAxiom)))
             (QInr Qtt)))))
 
-(**
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_validate_simp ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
@@ -842,9 +841,9 @@ let d_test_ior_io_matchbang_ref () : _ ⊫ _
 let d_test_ior_io_apply_callback () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_ior_io_apply_callback ()) ()
-let d_test_ior_pure_validate () : _ ⊫ _
-  by (simplify_d ())
-  = mk_turniqet (test_ior_pure_validate ()) (_ by (norm [delta; iota]))
+// let d_test_ior_pure_validate () : _ ⊫ _
+//   by (simplify_d ())
+//   = mk_turniqet (test_ior_pure_validate ()) (_ by (norm [delta; iota]))
 //let d_test_ior_io_validate_simp () : _ ⊫ _
 //  by (simplify_d ())
 //  = mk_turniqet (test_ior_io_validate_simp ()) (_ by (norm [delta; iota]))
