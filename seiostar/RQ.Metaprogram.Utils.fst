@@ -60,6 +60,28 @@ let token_as_typing (g:env) (e:term) (eff:tot_or_ghost) (ty:typ)
     assert (typing_token g e (eff, ty));
     Squash.return_squash (T_Token _ _ _ (Squash.get_proof (typing_token g e (eff, ty))))
 
+let lem_retype_token (g:env) (e:term) (ty:typ) (desired_ty:typ)
+  : Lemma
+    (requires typing_token g e (E_Total, ty) /\ equiv_token g desired_ty ty)
+    (ensures typing_token g e (E_Total, desired_ty)) =
+  Squash.bind_squash #(typing_token g e (E_Total, ty)) () (fun ty_tok ->
+    Squash.bind_squash #(equiv_token g desired_ty ty) () (fun eq_tok ->
+      let d_eq : related g desired_ty R_Eq ty =
+        Rel_eq_token g desired_ty ty (Squash.return_squash eq_tok) in
+      let d_eq_sym : related g ty R_Eq desired_ty =
+        Rel_sym g desired_ty ty d_eq in
+      let d_sub : related g ty R_Sub desired_ty =
+        Rel_equiv g ty desired_ty R_Sub d_eq_sym in
+      let d_sub_comp : related_comp g (E_Total, ty) R_Sub (E_Total, desired_ty) =
+        Relc_typ g ty desired_ty E_Total R_Sub d_sub in
+      let d_typ : typing g e (E_Total, ty) =
+        T_Token g e (E_Total, ty) (Squash.return_squash ty_tok) in
+      let d_res : typing g e (E_Total, desired_ty) =
+        T_Sub g e (E_Total, ty) (E_Total, desired_ty) d_typ d_sub_comp in
+      let d_res_tok : typing_token g e (E_Total, desired_ty) =
+        typing_to_token d_res in
+      Squash.return_squash d_res_tok))
+
 let rec fold_left (f:'a -> 'b -> 'a) (acc:'a) (l:list 'b) : Tot 'a (decreases l)=
   match l with
   | [] -> acc

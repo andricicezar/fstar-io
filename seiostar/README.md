@@ -1,7 +1,7 @@
 # Artifact for "Misquoted No More: Securely Extracting F\* Programs with IO"
 
 This contains the artifact associated with the ICFP 2026 submission with the name:
-"[Misquoted No More: Securely Extracting F\* Programs with IO](https://arxiv.org/pdf/2602.19973)".
+"[Misquoted No More: Securely Extracting F\* Programs with IO]()".
 
 The artifact contains the F* formalization from the paper. In particular, the
 proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
@@ -11,19 +11,7 @@ we verify it, and we use the metaprogram to find the derivation, and then we ins
 compilation model from section 6, which shows that it is secure to link the
 extracted running example with unverified agents.
 
-The artifact contains one assumptions that is not relevant to the fully
-mechanized proof that SEIO* satisfies RrHP. This assumption is 
-in the unverified metaprogram that generates typing derivations.
-When checking that the derivation has the expected type,
-we end up checking for equality between types by
-manually creating a statement of form `t1 == t2`.
-Since we build this statement manually, F* does not internally register it as
-an equality between types, which prevents us from retyping the derivation.
-Therefore, we assume that the successful checking of the statement
-gives us equality between types.
-(Extraction will anyway fail if the types are not equal)
-We did not figure out in time how to use Meta-F* to avoid this assumption,
-but we are in contact with the developers of F* to get rid of it.
+The artifact is admit free.
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
@@ -104,6 +92,12 @@ Should be a long list of files verified by F\*. A few warnings appear
 that the name of our `IO` module conflicts with F*'s module,
 they are benign and can be ignored.
 Also logs from the metaprogram appear.
+
+**Checking for lack of axioms.**
+To check that we use no axioms or admit any proofs, you can clean the already
+built F* modules (by `make clean`) and then run `make validate`. This will run
+the build passing the `--report_assumes error` flag to F*. If any unsafe feature
+is used, you should see a hard error.
 
 **Opening the files interactively.**
 If you installed F* in your system, you should be able just open VS Code in the
