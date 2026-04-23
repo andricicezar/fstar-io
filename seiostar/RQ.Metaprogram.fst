@@ -413,7 +413,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
   set_guard_policy Goal;
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let desired_qtyp' = norm_well_typed_term g [
-    delta_only ["hocf"; "Examples.constant"; "Examples.make_pair"; "Examples.a_few_lets"; "ExamplesIO.open2_read_write"; "RunningExample.wrapper"]] desired_qtyp in
+    delta_only ["Examples.constant"; "Examples.make_pair"; "Examples.a_few_lets"]] desired_qtyp in
   print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp');
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
   print_debug ("DEBUG: done type checking the derivation");
