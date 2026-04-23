@@ -404,7 +404,7 @@ let prove_equality () : Tac unit =
     (or_else trivial trefl));
   or_else qed (fun () -> dump "RQ's unification failed")
 
-let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   print_debug ("DEBUG: entering type_check_derivation");
   let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   if List.length l > 0 then fail "Not all implicits solved" else ();
@@ -413,7 +413,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term)  : Tac (r:(te
   set_guard_policy Goal;
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
   let desired_qtyp' = norm_well_typed_term g [
-    delta_only ["Examples.constant"; "Examples.make_pair"; "Examples.a_few_lets"]] desired_qtyp in
+    delta_only unfold_names] desired_qtyp in
   print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp');
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
   print_debug ("DEBUG: done type checking the derivation");
@@ -429,10 +429,14 @@ let initial_unfold_fuel : int = 32
 
 let create_and_type_check_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (qprog:term) : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   let (qprog, (_, qtyp)) = must <| tc_term g qprog in (** one has to dynamically retype the term to get its type **)
+  let unfold_names = match get_fv qprog with
+    | Some nm -> [nm]
+    | None -> []
+  in
   let desired_qtyp = mk_ptyj (typ_translation qtyp) qprog in
   let open_qderivation = create_derivation g dbmap prior_derivs initial_unfold_fuel false (Some qtyp) qprog in
   let qderivation = mk_wrap_deriv open_qderivation in
-  type_check_derivation g qderivation desired_qtyp
+  type_check_derivation g qderivation desired_qtyp unfold_names
 
 let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_t) ->
   set_guard_policy Force;
