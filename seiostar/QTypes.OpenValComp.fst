@@ -164,10 +164,33 @@ val fs_comp_call_val :
         args:fs_val (q_io_args o) ->
         fs_comp (q_io_res o)
 let fs_comp_call_val o args : fs_comp (q_io_res o) =
-  assume (has_type args (io_args o));
-  let r = io_call o args in
-  assume (has_type r (io_res o args));
-  r
+  match o with
+  | OOpen  ->
+    let args : string = args in
+    let r : io (resexn file_descr) = io_call OOpen args in
+    assert (fs_val (q_io_res OOpen) == resexn file_descr)
+      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+    r
+  | ORead  ->
+    let args : file_descr = args in
+    let r : io (resexn string) = io_call ORead args in
+    assert (fs_val (q_io_res ORead) == resexn string)
+      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+    r
+  | OWrite ->
+    assert (fs_val (q_io_args OWrite) == file_descr * string)
+      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+    let args : file_descr * string = args in
+    let r : io (resexn unit) = io_call OWrite args in
+    assert (fs_val (q_io_res OWrite) == resexn unit)
+      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+    r
+  | OClose ->
+    let args : file_descr = args in
+    let r : io (resexn unit) = io_call OClose args in
+    assert (fs_val (q_io_res OClose) == resexn unit)
+      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+    r
 
 (** Open values **)
 unfold
