@@ -34,13 +34,13 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g k ->
                 typing g (fs_oval_seq_ghost ref v k)**)
 
-| QRetype    : #g : typ_env ->
+| QRef    : #g : typ_env ->
                 #a : qType ->
                 #preV : spec_env g ->
                 #v : fs_oval g a preV ->
                 typing g v ->
-                #b : qType ->
-                typing g (fs_oval_retype v b)
+                #ref : (ref_type a -> Type0) ->
+                typing g (fs_oval_ref v ref)
 
 | QApp        : #g : typ_env ->
                 #a : qType ->

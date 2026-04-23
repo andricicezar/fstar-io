@@ -490,45 +490,47 @@ open ExamplesRefs
 let test_refbool ()
   : qBoolR (fun t -> t == true) ⊩ refbool
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QRetype QTrue)
+  = mk_dturniqet (fun _ -> QRef QTrue #(fun t -> t == true))
 
 let test_falsepre ()
   : (qBoolR (fun _ -> False) ^-> qBool) ⊩ falsepre
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype QAxiom))
+  = mk_dturniqet (fun _ -> QLambda (QRef QAxiom #(fun _ -> True)))
 
 let test_just_true ()
   : (qBool ^-> qBoolR (fun x -> x == true)) ⊩ just_true
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype QTrue))
+  = mk_dturniqet (fun _ -> QLambda (QRef QTrue #(fun t -> t == true)))
 
 let test_moving_ref ()
   : (qBoolR (fun _ -> some_ref) ^-> qUnitR (fun _ -> some_ref)) ⊩ moving_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype Qtt))
+  = mk_dturniqet (fun _ -> QLambda (QRef Qtt #(fun _ -> some_ref)))
 
+[@@ (preprocess_with simplify_qType)]
 let test_always_false ()
   : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype (QIf QAxiom QFalse QAxiom)))
+  = mk_dturniqet (fun _ -> QLambda (QRef (QIf QAxiom QFalse QAxiom) #(fun t -> t == false)))
 
+[@@ (preprocess_with simplify_qType)]
 let test_always_false_complex ()
   : (qBool ^-> qBoolR (fun y -> y == false)) ⊩ always_false_complex
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse)))
+  = mk_dturniqet (fun _ -> QLambda (QRef (QIf QAxiom (QIf QAxiom QFalse QTrue) QFalse) #(fun t -> t == false)))
 
 let test_always_false_ho ()
   : ((qUnit ^-> qBoolR (fun x -> x == true)) ^-> qBoolR (fun y -> y == false))
     ⊩ always_false_ho
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QRetype
-      (QIf (QRetype (QApp QAxiom Qtt)) QFalse QTrue)))
+  = mk_dturniqet (fun _ -> QLambda (QRef (QIf (QRef (QApp QAxiom Qtt) #(fun _ -> True)) QFalse QTrue) #(fun t -> t == false)))
 
+[@@ (preprocess_with simplify_qType)]
 let test_if_x ()
   : ((qBoolR (fun x -> x == true) ^-> qBool) ^-> qBool ^-> qBool) ⊩ if_x
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda (QIf QAxiom
-      (QApp qVar1 (QRetype QAxiom)) QFalse)))
+      (QApp qVar1 (QRef QAxiom #(fun x -> x == true))) QFalse)))
 
 let test_seq_basic ()
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_basic
@@ -538,32 +540,36 @@ let test_seq_basic ()
 let test_seq_qref ()
   : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) (QRetype Qtt)))
+  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) (QRef Qtt #(fun _ -> q_ref))))
 
 let test_seq_p_implies_q ()
   : ((qBoolR p_ref ^-> qUnitR (fun _ -> q_ref)) ^-> qBoolR p_ref ^-> qBoolR (fun _ -> q_ref))
     ⊩ seq_p_implies_q
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda
-      (qLet (QApp qVar1 QAxiom) (QRetype qVar1))))
+      (qLet (QApp qVar1 QAxiom) (QRef qVar1 #(fun _ -> q_ref)))))
 
+[@@ (preprocess_with simplify_qType)]
 let test_if_seq ()
   : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
     ⊩ if_seq
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ ->
-    QLambda (QLambda (QIf QAxiom
-      (qLet
-        (QApp qVar1 (QRetype QAxiom))
-        (QRetype qVar1))
-      (QRetype QAxiom))))
+    QLambda (QLambda (
+      QIf QAxiom
+        (qLet
+          (QApp qVar1 (QRef QAxiom #(fun x -> x == true)))
+          (QRef qVar1 #(fun r -> r == true ==> q_ref)))
+        (QRef QAxiom #(fun r -> r == true ==> q_ref)))))
 
+[@@ (preprocess_with simplify_qType)]
 let test_context ()
   : (qBool ^-> (qBoolR (fun x -> x == true) ^-> qBool ^-> qBool) ^-> qBool ^-> qBool)
     ⊩ context
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QLambda (QIf qVar1
-      (QApp QAxiom (QRetype qVar1))
+  = mk_dturniqet (fun _ -> QLambda (QLambda (
+    QIf qVar1
+      (QApp QAxiom (QRef qVar1 #(fun x -> x == true)))
       (QLambda QAxiom))))
 
 (**
@@ -626,7 +632,7 @@ open ExamplesIORefinements
 let test_ior_simple_erase_ref ()
   : (qBoolR (fun t -> t == true) ^->!@ qBool) ⊩ simple_erase_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QAxiom)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRef QAxiom #(fun _ -> True))))
 
 (** Example 2: Preserve refinement in IO *)
 let test_ior_simple_ref_id ()
@@ -638,61 +644,79 @@ let test_ior_simple_ref_id ()
 let test_ior_simple_reref_id ()
   : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_reref_id
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QAxiom)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRef QAxiom #(fun t -> t == true \/ t == false))))
 
 (** Example 4: Bind with IO call, then return refined *)
 let test_ior_simple_ref_bind ()
   : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_ref_bind
   by (simplify_stack_ops (); simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./string")) (QReturn (QRetype (QWeaken QAxiom)))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+    QBind 
+      (QCall OOpen (QStringLit "./string")) 
+      (QReturn (QRef (QWeaken QAxiom) #(fun t -> t == true \/ t == false)))))
 
 (** Example 6: Return refined true constant *)
 let test_ior_io_ret_ref_true ()
   : (qUnit ^->!@ qBoolR (fun x -> x == true)) ⊩ io_ret_ref_true
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QTrue)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRef QTrue #(fun x -> x == true))))
 
 (** Example 7: Return refined false constant *)
 let test_ior_io_ret_ref_false ()
   : (qUnit ^->!@ qBoolR (fun x -> x == false)) ⊩ io_ret_ref_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype QFalse)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRef QFalse #(fun x -> x == false))))
 
 (** Example 8: Negate refined input in IO *)
+
+// [@@ (preprocess_with simplify_qType)]
 let test_ior_io_negate_ref ()
   : (qBoolR (fun x -> x == true) ^->!@ qBoolR (fun y -> y == false)) ⊩ io_negate_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype (QIf (QRetype QAxiom) QFalse QTrue))))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (
+      QRef (QIf (QRef QAxiom) QFalse QTrue) #(fun x -> x == false))))
 
 (** Example 9: If-then-else with both branches false *)
 let test_ior_io_if_both_false ()
   : (qBool ^->!@ qBoolR (fun y -> y == false)) ⊩ io_if_both_false
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRetype (QIf QAxiom QFalse QFalse))))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QRef (QIf QAxiom QFalse QFalse) #(fun x -> x == false))))
 
 (** Example 10: Bind with unit, then return refined *)
 let test_ior_io_bind_ret_ref ()
   : (qUnit ^->!@ qBoolR (fun x -> x == true)) ⊩ io_bind_ret_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QReturn Qtt) (QReturn (QRetype QTrue))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+    QBind
+      (QReturn Qtt) 
+      (QReturn (QRef QTrue #(fun x -> x == true)))))
 
 (** Example 11: IO call then return refined *)
 let test_ior_io_call_ret_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_call_ret_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QReturn (QRetype QTrue))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+      QBind 
+        (QCall OOpen (QStringLit "./file"))
+        (QReturn (QRef QTrue #(fun x -> x == true)))))
 
 (** Example 12: Two IO calls then return refined *)
 let test_ior_io_two_calls_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_two_calls_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./a")) (QBind (QCall OOpen (QStringLit "./b")) (QReturn (QRetype QTrue)))))
+  = mk_dturniqet (fun _ -> 
+    QLambdaIO (
+      QBind 
+        (QCall OOpen (QStringLit "./a")) 
+        (QBind 
+          (QCall OOpen (QStringLit "./b")) 
+          (QReturn (QRef QTrue #(fun x -> x == true))))))
 
 (** Example 13: Inject Inl with refined input in IO *)
 let test_ior_io_inl_ref ()
   : (qBoolR (fun x -> x == true) ^->!@ qResexn qBool) ⊩ io_inl_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QInl (QRetype QAxiom))))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QInl (QRef QAxiom))))
 
 (** Example 14: Inject Inr (error) in IO *)
 let test_ior_io_inr_ref ()
@@ -704,40 +728,56 @@ let test_ior_io_inr_ref ()
 let test_ior_io_pair_ref ()
   : (qBoolR (fun x -> x == true) ^->!@ (qBool ^* qUnit)) ⊩ io_pair_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QMkpair (QRetype QAxiom) Qtt)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QMkpair (QRef QAxiom) Qtt)))
 
 (** Example 16: Case analysis returning refined in IO *)
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_case_ref ()
   : ((qBool ^+ qUnit) ^->!@ qBoolR (fun y -> y == false)) ⊩ io_case_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QCaseIO QAxiom (QReturn (QRetype QFalse)) (QReturn (QRetype QFalse))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+      QCaseIO QAxiom 
+        (QReturn (QRef QFalse #(fun y -> y == false))) 
+        (QReturn (QRef QFalse #(fun y -> y == false)))))
 
 (** Example 17: if!@ with refined result *)
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_ifbang_ref ()
   : (qBool ^->!@ qBoolR (fun y -> y == true)) ⊩ io_ifbang_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QReturn QAxiom) (QIfIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QTrue)))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+      QBind 
+        (QReturn QAxiom) 
+        (QIfIO QAxiom 
+          (QReturn (QRef QTrue #(fun y -> y == true))) 
+          (QReturn (QRef QTrue #(fun y -> y == true))))))
 
 (** Example 18: match!@ on IO call with refined result *)
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_matchbang_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true \/ y == false)) ⊩ io_matchbang_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QCaseIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QFalse)))))
+  = mk_dturniqet (fun _ -> 
+    QLambdaIO (
+      QBind 
+        (QCall OOpen (QStringLit "./file")) 
+        (QCaseIO QAxiom 
+          (QReturn (QRef QTrue #(fun y -> y == true \/ y == false))) 
+          (QReturn (QRef QFalse #(fun y -> y == true \/ y == false))))))
 
 (** Example 19: Ghost sequencing before IO return *)
 let test_ior_io_ghost_seq ()
   : ((qUnit ^-> qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ^->!@ qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ⊩ io_ghost_seq
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (qLet (QApp QAxiom Qtt) (QRetype Qtt))))
+  = mk_dturniqet (fun _ -> QLambdaIO (
+    QReturn (qLet (QApp QAxiom Qtt) (QRef Qtt))))
 
 (** Example 20: Apply refined callback in IO *)
 let test_ior_io_apply_callback ()
   : ((qBoolR (fun x -> x == true) ^-> qBool) ^->!@ qBool) ⊩ io_apply_callback
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QApp QAxiom (QRetype QTrue))))
+  = mk_dturniqet (fun _ -> 
+    QLambdaIO (QReturn (QApp QAxiom (QRef QTrue #(fun x -> x == true)))))
 
 (** Example 21: Validate with refined callback in IO *)
 

@@ -1917,96 +1917,74 @@ let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) 
     end
   end*)
 
-(** Auxiliary: a value-level relation transports across a retyping whenever
-    the value also has the new underlying F* type. Proof is by structural
-    recursion on [get_rel b]; the ground-type cases ([QUnit], [QBool],
-    [QFileDescriptor], [QString]) and the aggregate cases ([QPair], [QSum])
-    are discharged completely.
-
-    The two arrow cases ([QArr], [QArrIO]) are admitted: their proof would
-    need to derive [forall (x:bt1). has_type x at1] from the combination
-    [v : at1 -> at2] and [has_type v (bt1 -> bt2)] -- a contravariance fact
-    that F*'s SMT encoding does not internalize (cf. the warning on
-    [Prims.has_type]). Without this derivation, the recursive call that
-    transports an arrow input from [bt1 ∈] to [at1 ∈] cannot be made in
-    standard F*. *)
-#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
-let rec lem_retype_value_subset (a b : qType) (h : history) (v : fs_val a) (e : closed_exp)
+(** Auxiliary: under the [QRef] rule we only change the top-level
+    refinement of the qType, leaving the underlying F* type and every
+    nested type quotation untouched (cf. [QTypes.change_refinement]). The
+    source-side value relation [(∈)] at ground types does not inspect the
+    refinement (for [QBool] the positive branch's [ref true] is the one
+    place where it does, and that follows from [ref v] with [v == true]);
+    at aggregates [(∈)] recurses on the component qTypes, which
+    [change_refinement] leaves alone; at arrows [change_refinement] is the
+    identity. *)
+let lem_ref_value_subset (a : qType) (ref : ref_type a -> Type0)
+  (h : history) (v : fs_val a) (e : closed_exp)
   : Lemma
-    (requires a ∈ (h, v, e) /\ has_type v (get_Type b))
-    (ensures b ∈ (h, v, e))
-    (decreases %[get_rel b])
+    (requires a ∈ (h, v, e) /\ ref v)
+    (ensures (change_refinement a ref) ∈ (h, v, e))
   =
-  match get_rel b with
+  match get_rel a with
   | QUnit -> ()
   | QBool -> ()
   | QFileDescriptor -> ()
   | QString -> ()
-  | QPair #bt1 #bt2 qtb1 qtb2 -> begin
-    match get_rel a with
-    | QPair #at1 #at2 qta1 qta2 ->
-      let EPair e1 e2 = e in
-      lem_retype_value_subset (QTypes.pack qta1) (QTypes.pack qtb1) h (fst #at1 #at2 v) e1;
-      lem_retype_value_subset (QTypes.pack qta2) (QTypes.pack qtb2) h (snd #at1 #at2 v) e2
-    | _ -> ()
-    end
-  | QSum #bt1 #bt2 qtb1 qtb2 -> begin
-    match get_rel a with
-    | QSum #at1 #at2 qta1 qta2 -> begin
-      let v_a : either at1 at2 = v in
-      match v_a, e with
-      | Inl v', EInl e' ->
-        lem_retype_value_subset (QTypes.pack qta1) (QTypes.pack qtb1) h v' e'
-      | Inr v', EInr e' ->
-        lem_retype_value_subset (QTypes.pack qta2) (QTypes.pack qtb2) h v' e'
-      | _ -> ()
-      end
-    | _ -> ()
-    end
-  | QArr _ _ -> admit ()    (* see note above on F* arrow [has_type] *)
-  | QArrIO _ _ -> admit ()  (* see note above on F* arrow [has_type] *)
-#pop-options
+  | QPair _ _ -> ()
+  | QSum _ _ -> ()
+  | QArr _ _ -> ()
+  | QArrIO _ _ -> ()
 
 (** Pointwise lift to [⊆]. *)
-let lem_retype_pointwise_subset
-  (a b : qType) (h : history) (v : fs_val a) (e : closed_exp)
+let lem_ref_pointwise_subset (a : qType) (ref : ref_type a -> Type0)
+  (h : history) (v : fs_val a) (e : closed_exp)
   : Lemma
-    (requires a ⊆ (h, v, e) /\ has_type v (get_Type b))
-    (ensures (assert (has_type v (get_Type b)); b ⊆ (h, v, e)))
+    (requires a ⊆ (h, v, e) /\ ref v)
+    (ensures ((change_refinement a ref) ⊆ (h, v, e)))
   =
   eliminate exists (e':closed_exp). e_beh e e' h [] /\ a ∈ (h, v, e')
-    returns b ⊆ (h, v, e) with _. begin
-    lem_retype_value_subset a b h v e';
-    assert (b ∈ (h, v, e'))
+    returns (change_refinement a ref) ⊆ (h, v, e) with _. begin
+    lem_ref_value_subset a ref h v e';
+    assert ((change_refinement a ref) ∈ (h, v, e'))
   end
 
-(** Compatibility lemma for [QRetype]: retyping does not change the
-    underlying value, so the source-subset-of-target relation is preserved. *)
+(** Compatibility lemma for [QRef]: refining a [fs_oval] by a new
+    refinement [ref] that the underlying value satisfies preserves the
+    source-subset-of-target relation, since [fs_oval_ref v ref] is the
+    same function as [v] and [change_refinement] only touches the
+    top-level refinement. *)
 #push-options "--z3rlimit 30"
-let compat_oval_retype #g (#a:qType) (#preV:spec_env g)
-  (fs_v:fs_oval g a preV) (b:qType) (e:exp)
+let compat_oval_ref #g (#a:qType) (#preV:spec_env g)
+  (fs_v:fs_oval g a preV) (ref:ref_type a -> Type0) (e:exp)
   : Lemma
     (requires (fs_v ⊏ e))
-    (ensures (fs_oval_retype fs_v b ⊏ e))
+    (ensures (fs_oval_ref fs_v ref ⊏ e))
   =
   assert (fv_in_env g e);
-  assert_norm (subset_oval b (fs_oval_retype fs_v b) e ==
+  assert_norm (subset_oval (change_refinement a ref) (fs_oval_ref fs_v ref) e ==
     (fv_in_env g e /\
      (forall bo (s:gsub g bo) (fsG:eval_env g) (h:history).
-        (fsG `(≍) h` s /\ (spec_env_retype b fs_v) fsG) ==>
-          b ⊆ (h, (fs_oval_retype fs_v b) fsG, gsubst s e))));
+        (fsG `(≍) h` s /\ (spec_env_ref fs_v ref) fsG) ==>
+          (change_refinement a ref) ⊆ (h, (fs_oval_ref fs_v ref) fsG, gsubst s e))));
   introduce forall bo (s:gsub g bo) (fsG:eval_env g) (h:history).
-    (fsG `(≍) h` s /\ (spec_env_retype b fs_v) fsG) ==>
-      b ⊆ (h, (fs_oval_retype fs_v b) fsG, gsubst s e)
+    (fsG `(≍) h` s /\ (spec_env_ref fs_v ref) fsG) ==>
+      (change_refinement a ref) ⊆ (h, (fs_oval_ref fs_v ref) fsG, gsubst s e)
   with begin
-    introduce (fsG `(≍) h` s /\ (spec_env_retype b fs_v) fsG) ==>
-              b ⊆ (h, (fs_oval_retype fs_v b) fsG, gsubst s e) with _. begin
+    introduce (fsG `(≍) h` s /\ (spec_env_ref fs_v ref) fsG) ==>
+              (change_refinement a ref) ⊆ (h, (fs_oval_ref fs_v ref) fsG, gsubst s e) with _. begin
       assert (preV fsG);
-      assert (has_type (fs_v fsG) (get_Type b));
+      assert (ref (fs_v fsG));
       assert (a ⊆ (h, fs_v fsG, gsubst s e));
-      lem_retype_pointwise_subset a b h (fs_v fsG) (gsubst s e);
-      assert ((fs_oval_retype fs_v b) fsG == fs_v fsG);
-      assert (b ⊆ (h, fs_v fsG, gsubst s e))
+      lem_ref_pointwise_subset a ref h (fs_v fsG) (gsubst s e);
+      assert ((fs_oval_ref fs_v ref) fsG == fs_v fsG);
+      assert ((change_refinement a ref) ⊆ (h, fs_v fsG, gsubst s e))
     end
   end
 #pop-options

@@ -93,15 +93,15 @@ let spec_env_seq_ghost ref preV preK =
   fun fsG -> preV fsG /\ (ref ==> preK fsG)
 
 unfold
-val spec_env_retype : #g:typ_env ->
-                #a:qType ->
-                b:qType ->
+val spec_env_ref : #g:typ_env ->
                 #preV:spec_env g ->
+                #a:qType ->
                 v:fs_oval g a preV ->
+                ref:(ref_type a -> Type0)  ->
                 spec_env g
-let spec_env_retype #_ #a b #preV v =
-  fun fsG -> preV fsG /\ // a `subQtype_of` b 
-             has_type (v fsG) (get_Type b)
+let spec_env_ref #_ #preV v ref =
+  fun fsG -> preV fsG /\ // a `subQtype_of` b
+             ref (v fsG)
 
 (** Closed values **)
 unfold
@@ -251,13 +251,13 @@ let fs_oval_lambda
       fun x -> body (stack fsG x)
 
 unfold
-val fs_oval_retype : #g:typ_env ->
+val fs_oval_ref : #g:typ_env ->
                 #a:qType ->
                 #preV:spec_env g ->
                 v:fs_oval g a preV ->
-                b:qType ->
-                fs_oval g b (spec_env_retype b v)
-let fs_oval_retype v _ =
+                ref:(ref_type a -> Type0) ->
+                fs_oval g (change_refinement a ref) (spec_env_ref v ref)
+let fs_oval_ref v _ =
   fun fsG -> v fsG
 
 unfold

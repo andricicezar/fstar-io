@@ -115,6 +115,9 @@ let qUnitR ref : qType = (| _, QUnit #ref |)
 let qBoolR ref : qType = (| _, QBool #ref |)
 let qFileDescrR ref : qType = (| _, QFileDescriptor #ref |)
 let qStringR ref : qType = (| _, QString #ref |)
+let qSumR t1 t2 ref : qType = (| _, QSum (get_rel t1) (get_rel t2) #ref |)
+let qPairR t1 t2 ref : qType = (| _, QPair (get_rel t1) (get_rel t2) #ref |)
+
 //let qArrR (t1 t2:qType) post : qType = (| _, QArr (get_rel t1) (get_rel t2) #post |)
 //let qArrIOR (t1 t2:qType) post : qType = (| _, QArrIO (get_rel t1) (get_rel t2) #post |)
 
@@ -136,6 +139,32 @@ let (^+) (t1 t2:qType) : qType =
 
 let qResexn (t1:qType) : qType = t1 ^+ qUnit
 
+unfold
+let ref_type' #t (qt:type_quotation t) : Type0 =
+  match qt with
+  | QUnit -> unit
+  | QBool -> bool
+  | QFileDescriptor -> file_descr
+  | QString -> string
+  | QSum #t1 #t2 qt1 qt2 -> either t1 t2
+  | QPair #t1 #t2 qt1 qt2 -> t1 & t2
+  | QArr #t1 #t2 qt1 qt2 -> (t1 -> t2)
+  | QArrIO #t1 #t2 qt1 qt2 -> (t1 -> io t2)
+
+unfold
+let ref_type (t:qType) : Type0 =
+  ref_type' (get_rel t)
+
+unfold
+let change_refinement (t:qType) (ref: ref_type t -> Type0) : qType =
+  match get_rel t with
+  | QUnit -> qUnitR ref
+  | QBool -> qBoolR ref
+  | QFileDescriptor -> qFileDescrR ref
+  | QString -> qStringR ref
+  | QSum qt1 qt2 -> qSumR (pack qt1) (pack qt2) ref
+  | QPair qt1 qt2 -> qPairR (pack qt1) (pack qt2) ref
+  | _ -> t
 
 let q_io_args (o:io_ops) : qType =
   match o with

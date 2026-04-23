@@ -32,7 +32,7 @@ let rec compile #g #a #pre (#s:fs_oval g a pre) (qs:g ⊢ s) : Tot exp (decrease
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
   | QLambdaIO qbody -> ELam (compile_ocomp qbody)
   // | QSeqGhost _ _ qk -> compile qk  -- QSeqGhost is commented out in RQ.TypingRelation
-  | QRetype qv -> compile qv
+  | QRef qv -> compile qv
 and compile_ocomp #g #a #pre (#s:fs_ocomp g a pre) (qs:typing_io g s) : Tot exp (decreases qs) =
   match qs with
   | QCall o qargs -> ECall o (compile qargs)
@@ -97,9 +97,9 @@ let rec lem_compile_superset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s
   // | QSeqGhost _ _ #_ #_ #k qk ->
   //   lem_compile_superset qk;
   //   admit ()
-  | QRetype #_ #_ #_ #v qv #b ->
+  | QRef #_ #_ #_ #v qv #ref ->
     lem_compile_superset qv;
-    C1.compat_oval_retype v b (compile qv)
+    C1.compat_oval_ref v ref (compile qv)
 and lem_compile_superset_comp #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typing_io g s)
   : Lemma (ensures (s ⊒ (compile_ocomp qs))) (decreases qs)
   =
@@ -184,9 +184,9 @@ let rec lem_compile_subset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s)
 //  | QSeqGhost _ _ #_ #_ #k qk ->
 //    lem_compile_subset qk;
 //    admit ()
-  | QRetype #_ #_ #_ #v qv #b ->
+  | QRef #_ #_ #_ #v qv #ref ->
     lem_compile_subset qv;
-    C2.compat_oval_retype v b (compile qv)
+    C2.compat_oval_ref v ref (compile qv)
 and lem_compile_subset_comp #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typing_io g s)
   : Lemma (ensures (s ⊑ (compile_ocomp qs))) (decreases qs)
   =
@@ -270,7 +270,7 @@ let rec lem_compile_fv_in_env #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ 
     lem_fv_in_env_lam g qa (compile_ocomp qbody)
 //  | QSeqGhost _ _ #_ #_ #k qk ->
 //    lem_compile_fv_in_env qk
-  | QRetype qv ->
+  | QRef qv ->
     lem_compile_fv_in_env qv
 and lem_compile_fv_in_env_prod #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typing_io g s)
   : Lemma (ensures fv_in_env g (compile_ocomp qs)) (decreases qs)
