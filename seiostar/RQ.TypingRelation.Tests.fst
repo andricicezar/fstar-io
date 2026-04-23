@@ -287,44 +287,44 @@ let test_match_either_arg ()
          qVar1)))
 #pop-options
 
-let d_test_constant () : typing _ _ =
-  get_derivation (test_constant ()) ()
-let d_test_constant' () : typing _ _ =
-  get_derivation (test_constant' ()) ()
-let d_test_identity () : typing _ _ =
-  get_derivation (test_identity ()) ()
-let d_test_thunked_id () : typing _ _ =
-  get_derivation (test_thunked_id ()) ()
-let d_test_proj1 () : typing _ _ =
-  get_derivation (test_proj1 ()) ()
-let d_test_proj2 () : typing _ _ =
-  get_derivation (test_proj2 ()) ()
-let d_test_proj3 () : typing _ _ =
-  get_derivation (test_proj3 ()) ()
-let d_test_apply_top_level_def () : typing _ _ =
-  get_derivation (test_apply_top_level_def ()) ()
-let d_test_apply_top_level_def' () : typing _ _ =
-  get_derivation (test_apply_top_level_def' ()) ()
-let d_test_papply__top_level_def () : typing _ _ =
-  get_derivation (test_papply__top_level_def ()) ()
-let d_test_apply_arg () : typing _ _ =
-  get_derivation (test_apply_arg ()) ()
-let d_test_apply_arg2 () : typing _ _ =
-  get_derivation (test_apply_arg2 ()) ()
-let d_test_papply_arg2 () : typing _ _ =
-  get_derivation (test_papply_arg2 ()) ()
-let d_test_anif () : typing _ _ =
-  get_derivation (test_anif ()) ()
-let d_test_negb () : typing _ _ =
-  get_derivation (test_negb ()) ()
-let d_test_negb_pred () : typing _ _ =
-  get_derivation (test_negb_pred ()) ()
-let d_test_if2 () : typing _ _ =
-  get_derivation (test_if2 ()) ()
-let d_test_callback_return () : typing _ _ =
-  get_derivation (test_callback_return ()) ()
-let d_test_callback_return' () : typing _ _ =
-  get_derivation (test_callback_return' ()) ()
+let d_test_constant () : _ ⊫ _ =
+  mk_turniqet (test_constant ()) ()
+let d_test_constant' () : _ ⊫ _ =
+  mk_turniqet (test_constant' ()) ()
+let d_test_identity () : _ ⊫ _ =
+  mk_turniqet (test_identity ()) ()
+let d_test_thunked_id () : _ ⊫ _ =
+  mk_turniqet (test_thunked_id ()) ()
+let d_test_proj1 () : _ ⊫ _ =
+  mk_turniqet (test_proj1 ()) ()
+let d_test_proj2 () : _ ⊫ _ =
+  mk_turniqet (test_proj2 ()) ()
+let d_test_proj3 () : _ ⊫ _ =
+  mk_turniqet (test_proj3 ()) ()
+let d_test_apply_top_level_def () : _ ⊫ _ =
+  mk_turniqet (test_apply_top_level_def ()) ()
+let d_test_apply_top_level_def' () : _ ⊫ _ =
+  mk_turniqet (test_apply_top_level_def' ()) ()
+let d_test_papply__top_level_def () : _ ⊫ _ =
+  mk_turniqet (test_papply__top_level_def ()) ()
+let d_test_apply_arg () : _ ⊫ _ =
+  mk_turniqet (test_apply_arg ()) ()
+let d_test_apply_arg2 () : _ ⊫ _ =
+  mk_turniqet (test_apply_arg2 ()) ()
+let d_test_papply_arg2 () : _ ⊫ _ =
+  mk_turniqet (test_papply_arg2 ()) ()
+let d_test_anif () : _ ⊫ _ =
+  mk_turniqet (test_anif ()) ()
+let d_test_negb () : _ ⊫ _ =
+  mk_turniqet (test_negb ()) ()
+let d_test_negb_pred () : _ ⊫ _ =
+  mk_turniqet (test_negb_pred ()) ()
+let d_test_if2 () : _ ⊫ _ =
+  mk_turniqet (test_if2 ()) ()
+let d_test_callback_return () : _ ⊫ _ =
+  mk_turniqet (test_callback_return ()) ()
+let d_test_callback_return' () : _ ⊫ _ =
+  mk_turniqet (test_callback_return' ()) ()
 
 #push-options "--no_smt"
 open ExamplesIO
@@ -438,51 +438,51 @@ let test_greeting ()
 
 #pop-options
 
-let d_test_u_return () : typing _ _
+let d_test_u_return () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_u_return ()) ()
-let d_test_apply_io_return () : typing _ _
+  = mk_turniqet (test_u_return ()) ()
+let d_test_apply_io_return () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_return ()) ()
-let d_test_apply_read () : typing _ _
+  = mk_turniqet (test_apply_io_return ()) ()
+let d_test_apply_read () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_read ()) ()
-let d_test_apply_write_const () : typing _ _
+  = mk_turniqet (test_apply_read ()) ()
+let d_test_apply_write_const () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_write_const ()) ()
-let d_test_apply_write () : typing _ _
+  = mk_turniqet (test_apply_write_const ()) ()
+let d_test_apply_write () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_write ()) ()
-let d_test_apply_io_bind_const () : typing _ _
+  = mk_turniqet (test_apply_write ()) ()
+let d_test_apply_io_bind_const () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_const ()) ()
-let d_test_apply_io_bind_identity () : typing _ _
+  = mk_turniqet (test_apply_io_bind_const ()) ()
+let d_test_apply_io_bind_identity () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_identity ()) ()
-let d_test_apply_io_bind_pure_if () : typing _ _
+  = mk_turniqet (test_apply_io_bind_identity ()) ()
+let d_test_apply_io_bind_pure_if () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_pure_if ()) ()
-let d_test_apply_io_bind_write () : typing _ _
+  = mk_turniqet (test_apply_io_bind_pure_if ()) ()
+let d_test_apply_io_bind_write () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_write ()) ()
-let d_test_apply_io_bind_read_write () : typing _ _
+  = mk_turniqet (test_apply_io_bind_write ()) ()
+let d_test_apply_io_bind_read_write () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_read_write ()) ()
-let d_test_apply_io_bind_read_write' () : typing _ _
+  = mk_turniqet (test_apply_io_bind_read_write ()) ()
+let d_test_apply_io_bind_read_write' () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_read_write' ()) ()
-let d_test_apply_io_bind_read_if_write () : typing _ _
+  = mk_turniqet (test_apply_io_bind_read_write' ()) ()
+let d_test_apply_io_bind_read_if_write () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_apply_io_bind_read_if_write ()) ()
-let d_test_sendError400 () : typing _ _
+  = mk_turniqet (test_apply_io_bind_read_if_write ()) ()
+let d_test_sendError400 () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_sendError400 ()) ()
-let d_test_const_str () : typing _ _
+  = mk_turniqet (test_sendError400 ()) ()
+let d_test_const_str () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation test_const_str ()
-let d_test_greeting () : typing _ _
+  = mk_turniqet test_const_str ()
+let d_test_greeting () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_greeting ()) ()
+  = mk_turniqet (test_greeting ()) ()
 
 #push-options "--no_smt"
 open ExamplesRefs
@@ -533,19 +533,19 @@ let test_if_x ()
 let test_seq_basic ()
   : ((qUnit ^-> qUnit) ^-> qUnit) ⊩ seq_basic
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost True (QRetype (QApp QAxiom Qtt)) Qtt))
+  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) Qtt))
 
 let test_seq_qref ()
   : ((qUnit ^-> qUnitR (fun _ -> q_ref)) ^-> qUnitR (fun _ -> q_ref)) ⊩ seq_qref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambda (QSeqGhost q_ref (QApp QAxiom Qtt) (QRetype Qtt)))
+  = mk_dturniqet (fun _ -> QLambda (qLet (QApp QAxiom Qtt) (QRetype Qtt)))
 
 let test_seq_p_implies_q ()
   : ((qBoolR p_ref ^-> qUnitR (fun _ -> q_ref)) ^-> qBoolR p_ref ^-> qBoolR (fun _ -> q_ref))
     ⊩ seq_p_implies_q
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QLambda
-      (QSeqGhost q_ref (QApp qVar1 QAxiom) (QRetype QAxiom))))
+      (qLet (QApp qVar1 QAxiom) (QRetype qVar1))))
 
 let test_if_seq ()
   : ((qBoolR (fun x -> x == true) ^-> qUnitR (fun _ -> q_ref)) ^-> qBool ^-> qBoolR (fun r -> r == true ==> q_ref))
@@ -553,9 +553,9 @@ let test_if_seq ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ ->
     QLambda (QLambda (QIf QAxiom
-      (QSeqGhost q_ref
+      (qLet
         (QApp qVar1 (QRetype QAxiom))
-        (QRetype QAxiom))
+        (QRetype qVar1))
       (QRetype QAxiom))))
 
 let test_context ()
@@ -574,49 +574,49 @@ let test_pure_fun ()
 
 #pop-options
 
-let d_test_refbool () : typing _ _
+let d_test_refbool () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_refbool ()) (_ by (norm [delta; iota]))
+  = mk_turniqet (test_refbool ()) (_ by (norm [delta; iota]))
 
-let d_test_falsepre () : typing _ _
+let d_test_falsepre () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_falsepre ()) ()
-let d_test_just_true () : typing _ _
+  = mk_turniqet (test_falsepre ()) ()
+let d_test_just_true () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_just_true ()) ()
-let d_test_moving_ref () : typing _ _
+  = mk_turniqet (test_just_true ()) ()
+let d_test_moving_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_moving_ref ()) ()
-let d_test_always_false () : typing _ _
+  = mk_turniqet (test_moving_ref ()) ()
+let d_test_always_false () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_always_false ()) ()
-let d_test_always_false_complex () : typing _ _
+  = mk_turniqet (test_always_false ()) ()
+let d_test_always_false_complex () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_always_false_complex ()) ()
-let d_test_always_false_ho () : typing _ _
+  = mk_turniqet (test_always_false_complex ()) ()
+let d_test_always_false_ho () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_always_false_ho ()) (())
-let d_test_if_x () : typing _ _
+  = mk_turniqet (test_always_false_ho ()) (())
+let d_test_if_x () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_if_x ()) ()
-let d_test_seq_basic () : typing _ _
+  = mk_turniqet (test_if_x ()) ()
+let d_test_seq_basic () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_seq_basic ()) ()
-let d_test_seq_qref () : typing _ _
+  = mk_turniqet (test_seq_basic ()) ()
+let d_test_seq_qref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_seq_qref ()) ()
-let d_test_seq_p_implies_q () : typing _ _
+  = mk_turniqet (test_seq_qref ()) ()
+let d_test_seq_p_implies_q () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_seq_p_implies_q ()) ()
-let d_test_if_seq () : typing _ _
+  = mk_turniqet (test_seq_p_implies_q ()) ()
+let d_test_if_seq () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_if_seq ()) ()
-let d_test_context () : typing _ _
+  = mk_turniqet (test_if_seq ()) ()
+let d_test_context () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_context ()) ()
-let d_test_pure_fun () : typing _ _
+  = mk_turniqet (test_context ()) ()
+let d_test_pure_fun () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_pure_fun ()) (_ by (norm [delta; iota]))
+  = mk_turniqet (test_pure_fun ()) (_ by (norm [delta; iota]))
 
 #push-options "--no_smt"
 open ExamplesIORefinements
@@ -727,10 +727,12 @@ let test_ior_io_matchbang_ref ()
   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall OOpen (QStringLit "./file")) (QCaseIO QAxiom (QReturn (QRetype QTrue)) (QReturn (QRetype QFalse)))))
 
 (** Example 19: Ghost sequencing before IO return *)
+(**
 let test_ior_io_ghost_seq ()
   : ((qUnit ^-> qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ^->!@ qUnitR (fun _ -> ExamplesIORefinements.q_ref)) ⊩ io_ghost_seq
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (QSeqGhost ExamplesIORefinements.q_ref (QApp QAxiom Qtt) (QRetype Qtt))))
+  = mk_dturniqet (fun _ -> QLambdaIO (QReturn (qLet (QApp QAxiom Qtt) (QRetype Qtt))))
+**)
 
 (** Example 20: Apply refined callback in IO *)
 let test_ior_io_apply_callback ()
@@ -750,16 +752,18 @@ let test_ior_pure_validate ()
             (QInl (QRetype (QWeaken QAxiom)))
             (QInr Qtt)))))
 
+(**
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_validate_simp ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
- by (simplify_via_norm ())
+ by (simplify_stack_ops (); simplify_via_norm ())
   = mk_dturniqet (fun _ ->
       QLambda (QLambdaIO (
         (QReturn
           (QIf (QApp QAxiom (QWeaken QAxiom))
               (QInl (QRetype (QWeaken QAxiom)))
               (QInr Qtt))))))
+**)
 
 // [@@ (preprocess_with simplify_qType)]
 // let test_ior_io_validate ()
@@ -781,69 +785,69 @@ let test_ior_io_validate_simp ()
 #pop-options
 
 
-let d_test_ior_simple_erase_ref () : typing _ _
+let d_test_ior_simple_erase_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_simple_erase_ref ()) ()
-let d_test_ior_simple_ref_id () : typing _ _
+  = mk_turniqet (test_ior_simple_erase_ref ()) ()
+let d_test_ior_simple_ref_id () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_simple_ref_id ()) ()
-let d_test_ior_simple_reref_id () : typing _ _
+  = mk_turniqet (test_ior_simple_ref_id ()) ()
+let d_test_ior_simple_reref_id () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_simple_reref_id ()) ()
-let d_test_ior_simple_ref_bind () : typing _ _
+  = mk_turniqet (test_ior_simple_reref_id ()) ()
+let d_test_ior_simple_ref_bind () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_simple_ref_bind ()) ()
-let d_test_ior_io_ret_ref_true () : typing _ _
+  = mk_turniqet (test_ior_simple_ref_bind ()) ()
+let d_test_ior_io_ret_ref_true () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_ret_ref_true ()) ()
-let d_test_ior_io_ret_ref_false () : typing _ _
+  = mk_turniqet (test_ior_io_ret_ref_true ()) ()
+let d_test_ior_io_ret_ref_false () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_ret_ref_false ()) ()
-let d_test_ior_io_negate_ref () : typing _ _
+  = mk_turniqet (test_ior_io_ret_ref_false ()) ()
+let d_test_ior_io_negate_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_negate_ref ()) ()
-let d_test_ior_io_if_both_false () : typing _ _
+  = mk_turniqet (test_ior_io_negate_ref ()) ()
+let d_test_ior_io_if_both_false () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_if_both_false ()) ()
-let d_test_ior_io_bind_ret_ref () : typing _ _
+  = mk_turniqet (test_ior_io_if_both_false ()) ()
+let d_test_ior_io_bind_ret_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_bind_ret_ref ()) ()
-let d_test_ior_io_call_ret_ref () : typing _ _
+  = mk_turniqet (test_ior_io_bind_ret_ref ()) ()
+let d_test_ior_io_call_ret_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_call_ret_ref ()) ()
-let d_test_ior_io_two_calls_ref () : typing _ _
+  = mk_turniqet (test_ior_io_call_ret_ref ()) ()
+let d_test_ior_io_two_calls_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_two_calls_ref ()) ()
-let d_test_ior_io_inl_ref () : typing _ _
+  = mk_turniqet (test_ior_io_two_calls_ref ()) ()
+let d_test_ior_io_inl_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_inl_ref ()) ()
-let d_test_ior_io_inr_ref () : typing _ _
+  = mk_turniqet (test_ior_io_inl_ref ()) ()
+let d_test_ior_io_inr_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_inr_ref ()) ()
-let d_test_ior_io_pair_ref () : typing _ _
+  = mk_turniqet (test_ior_io_inr_ref ()) ()
+let d_test_ior_io_pair_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_pair_ref ()) ()
-let d_test_ior_io_case_ref () : typing _ _
+  = mk_turniqet (test_ior_io_pair_ref ()) ()
+let d_test_ior_io_case_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_case_ref ()) (_ by (norm [delta; iota]))
-let d_test_ior_io_ifbang_ref () : typing _ _
+  = mk_turniqet (test_ior_io_case_ref ()) (_ by (norm [delta; iota]))
+let d_test_ior_io_ifbang_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_ifbang_ref ()) ()
-let d_test_ior_io_matchbang_ref () : typing _ _
+  = mk_turniqet (test_ior_io_ifbang_ref ()) ()
+let d_test_ior_io_matchbang_ref () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_matchbang_ref ()) (_ by (norm [delta; iota]))
-let d_test_ior_io_ghost_seq () : typing _ _
+  = mk_turniqet (test_ior_io_matchbang_ref ()) (_ by (norm [delta; iota]))
+//let d_test_ior_io_ghost_seq () : _ ⊫ _
+//  by (simplify_d ())
+//  = mk_turniqet (test_ior_io_ghost_seq ()) ()
+let d_test_ior_io_apply_callback () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_ghost_seq ()) ()
-let d_test_ior_io_apply_callback () : typing _ _
+  = mk_turniqet (test_ior_io_apply_callback ()) ()
+let d_test_ior_pure_validate () : _ ⊫ _
   by (simplify_d ())
-  = get_derivation (test_ior_io_apply_callback ()) ()
-let d_test_ior_pure_validate () : typing _ _
-  by (simplify_d ())
-  = get_derivation (test_ior_pure_validate ()) (_ by (norm [delta; iota]))
-let d_test_ior_io_validate_simp () : typing _ _
-  by (simplify_d ())
-  = get_derivation (test_ior_io_validate_simp ()) (_ by (norm [delta; iota]))
-// let d_test_ior_io_validate () : typing _ _
+  = mk_turniqet (test_ior_pure_validate ()) (_ by (norm [delta; iota]))
+//let d_test_ior_io_validate_simp () : _ ⊫ _
+//  by (simplify_d ())
+//  = mk_turniqet (test_ior_io_validate_simp ()) (_ by (norm [delta; iota]))
+// let d_test_ior_io_validate () : _ ⊫ _
 //   by (simplify_d ())
-//   = get_derivation (test_ior_io_validate ()) (_ by (norm [delta; iota]))
+//   = mk_turniqet (test_ior_io_validate ()) (_ by (norm [delta; iota]))

@@ -18,7 +18,7 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
-  qs:((i.ct ^->!@ qBool) ⊩ ps){ QLambdaIO? qs }
+  qs:((i.ct ^->!@ qBool) ⊫ ps){ QLambdaIO? qs._3 }
 
 type ctxS (i:intS) = fs_val i.ct
 type wholeS = fs_comp qBool
@@ -50,7 +50,7 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
 
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
   lem_compile_closed_valid (dsnd ps);
-  compile (dsnd ps)
+  compile (ps._2._3)
 
 let rel_bools (fs_e:bool) (e:closed_exp) : Type0 =
   (e == ETrue /\ fs_e == true) \/
@@ -178,7 +178,7 @@ let proof_rrtp_right i : Lemma (rrtp_right i) =
     let ps = dfst pS in
     let qps = dsnd pS in
     let pt : progT (comp_int i) = compile_prog pS in
-    assert (pt == compile qps);
+    assert (pt == compile qps._3);
     let cs = backtranslate_ctx cT in
     let (| ct, tyj |) = cT in
     let ws : wholeS = ps cs in
@@ -214,7 +214,7 @@ let proof_rrhp_1 i : Lemma (rrhp_1 i) =
     let ps = dfst pS in
     let qps = dsnd pS in
     let pt : progT (comp_int i) = compile_prog pS in
-    assert (pt == compile qps);
+    assert (pt == compile qps._3);
     let cs = backtranslate_ctx cT in
     let (| ct, tyj |) = cT in
     let ws : wholeS = ps cs in

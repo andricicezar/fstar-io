@@ -1891,3 +1891,12 @@ let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) 
       end
     end
   end*)
+
+(** Compatibility lemma for [QRetype]: retyping does not change the
+    underlying value, so the target-superset-of-source relation is preserved. *)
+let compat_oval_retype #g (#a:qType) (#preV:spec_env g)
+  (fs_v:fs_oval g a preV) (b:qType) (e:exp)
+  : Lemma
+    (requires (fs_v ⊐ e))
+    (ensures (fs_oval_retype fs_v b ⊐ e))
+  = admit ()

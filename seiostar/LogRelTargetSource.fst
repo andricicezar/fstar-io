@@ -190,8 +190,8 @@ let superset_ocomp (#g:typ_env) (t:qType) (#pre:spec_env g) (fs_e:fs_ocomp g t p
 let (⊒) (#g:typ_env) (#t:qType) (#pre:spec_env g) (fs_v:fs_ocomp g t pre) (e:exp) : Type0 =
   superset_ocomp #g t fs_v e
 
-let lem_value_superset_valid_contains t (fs_e:fs_oval empty t (fun _ -> True)) (e:value) :
-  Lemma (requires fs_e ⊐ e)
+let lem_value_superset_valid_contains t #pre (fs_e:fs_oval empty t pre) (e:value) :
+  Lemma (requires pre empty_eval /\ fs_e ⊐ e)
         (ensures  valid_contains #t (fs_e empty_eval) e) =
   introduce forall h. t ∋ (h, fs_e empty_eval, e) with begin
     eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).
@@ -322,7 +322,7 @@ let lem_superset_preserved_by_step
       assert (as_lt oev == [] /\ lt' == [])
     end
   end
-  
+
 open FStar.Tactics.V1
 
 let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)

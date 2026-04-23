@@ -22,6 +22,7 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g x ->
                 typing (extend b g) (fs_oval_weaken b x)
 
+(**
 | QSeqGhost  : #g : typ_env ->
                 ref : Type0 ->
                 #preV : spec_env g ->
@@ -31,7 +32,7 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 #preK : spec_env g ->
                 #k : fs_oval g a preK ->
                 typing g k ->
-                typing g (fs_oval_seq_ghost ref v k)
+                typing g (fs_oval_seq_ghost ref v k)**)
 
 | QRetype    : #g : typ_env ->
                 #a : qType ->
@@ -227,8 +228,21 @@ unfold let sqh (g:typ_env) (pre:spec_env g) =
 let (⊩) (a:qType) (x: fs_val a) =
   pre:spec_env empty & (proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))
 
+let (⊫) (a:qType) (x: fs_val a) =
+  pre:spec_env empty &
+  proof:squash (forall fsG. pre fsG) &
+  typing #a empty #pre (fs_oval_helper x #pre #proof)
+
 let mk_dturniqet #a #x (#pre:spec_env empty) (thk_dv:(proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))) : a ⊩ x =
   (| _, thk_dv |)
 
 let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG)) : typing empty (fs_oval_helper x) =
   (dsnd thk_deriv) proof
+
+(** Package a thunked derivation together with its precondition and
+    a witness discharging it into the [⊫] dependent triple. *)
+let mk_turniqet #a #x
+  (thk_deriv:a ⊩ x)
+  (proof:squash (forall fsG. (dfst thk_deriv) fsG))
+  : a ⊫ x
+  = (| dfst thk_deriv, proof, (dsnd thk_deriv) proof |)

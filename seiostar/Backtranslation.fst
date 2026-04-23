@@ -111,8 +111,8 @@ type typing : typ_env -> exp -> qType -> Type =
            $h2:typing g e2 qString ->
            typing g (EStringEq e1 e2) qBool
 
-val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t
-let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t) =
+val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t (fun _ -> True)
+let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
   match e with
   | EUnit -> fs_ocomp_return_val g t ()
   | ETrue -> fs_ocomp_return_val g t true
@@ -317,7 +317,7 @@ let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
   | ELam _ ->
     let TyLam #t1 #t2 hbody = h in
     let hbody : typing (extend t1 empty) _ t2 = hbody in
-    fun x -> (backtranslate_exp hbody) (stack empty_eval x)
+    fs_oval_lambda_ocomp #empty #t1 #t2 (backtranslate_exp hbody) empty_eval
   | EPair _ _ ->
     let TyPair #_ #_ #_ #t1 #t2 h1 h2 = h in
     let h1 : typing empty _ t1 = h1 in
@@ -345,8 +345,8 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_superset_exp hbody;
-    C1.compat_oval_lambda_ocomp (backtranslate_exp hbody) body;
-    let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
+    C1.compat_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) body;
+    let f' = fs_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) in
     lem_value_superset_valid_contains (t1 ^->!@ t2) f' e;
     assert (valid_contains #(t1 ^->!@ t2) (f' empty_eval) e)
   | EPair _ _ ->
@@ -370,8 +370,8 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
   | ELam _ ->
     let TyLam #t1 #t2 #body hbody = h in
     lem_backtranslate_subset_exp hbody;
-    C2.compat_oval_lambda_ocomp (backtranslate_exp hbody) body;
-    let f' : fs_oval empty (t1 ^->!@ t2) = (fun fsG x -> (backtranslate_exp hbody) (stack fsG x)) in
+    C2.compat_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) body;
+    let f' = fs_oval_lambda_ocomp (backtranslate_exp #(extend t1 empty) hbody) in
     lem_value_subset_valid_member_of (t1 ^->!@ t2) f' e;
     assert (valid_member_of #(t1 ^->!@ t2) (f' empty_eval) e)
   | EPair _ _ ->
