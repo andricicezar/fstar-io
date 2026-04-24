@@ -761,31 +761,15 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 
-// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
-
-%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-
-[@@ (preprocess_with simplify_qType)]
-let main_derivation #g : typing g (fs_oval_return g main)
-  by (trefl ())
-  = QLambdaIO (
-      QBind
-        (QAppIO
-          (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-                (QStringLit "overwrite\n"))
-          QAxiom)
-        (QCaseIO QAxiom
-          (QReturn QTrue)
-          (QReturn QFalse)))
+%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
 let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
 }
 
-
 val ps_main : progS re_int
 let ps_main : progS re_int=
-  (| main, main_derivation #empty |)
+  (| main, main_derivation empty |)
 
 let pt_main = RrHP.compile_prog ps_main
 

@@ -3,8 +3,9 @@ FSTAR_EXE ?= fstar.exe
 FSTAR := $(FSTAR_EXE)
 
 LAMBDABOX_DIR := lambdabox
-ROOTS := RQ.Metaprogram.Tests.fst \
-	     RunningExample.fst \
+ROOTS := RQ.TypingRelation.Tests.fst \
+	 RQ.Metaprogram.Tests.fst \
+	 RunningExample.fst \
          $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
          $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
