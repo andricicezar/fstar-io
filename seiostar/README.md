@@ -1,29 +1,23 @@
 # Artifact for "Misquoted No More: Securely Extracting F\* Programs with IO"
 
-This contains the artifact associated with the ICFP 2026 submission with the name:
-"[Misquoted No More: Securely Extracting F\* Programs with IO](https://arxiv.org/pdf/2602.19973)".
+This contains an extension of the artifact that extends IO\* with refinements.
 
-The artifact contains the F* formalization from the paper. In particular, the
-proof that SEIO* satisfies RrHP is fully mechanized, as claimed in the paper.
+To see how we implemented refinements check the following files:
+1. In `QTypes.fst` to see how we added refinements to the supported types
+2. In `RQ.TypingRelation.fst` to see how we updated the typing relation:
+  a) The typing relation is now indexed by a pre-condition.
+  b) The typing rule `QRef` that changes the refinement of a value.
+3. In `ExamplesRefs.fst` and `ExamplesIORefinements.fst` to see what
+  kind of examples we can do, and `RQ.TypingRelation.Tests.fst` to see
+  how the manually written derivations look like.
 
-Additionally, in file `RunningExample.fst`, we implement the running example from section 2,
-we verify it, and we use the metaprogram to find the derivation, and then we instantiate the
-compilation model from section 6, which shows that it is secure to link the
-extracted running example with unverified agents.
+The extension is still ongoing.
+After extending IO\* with refinements, we managed to update compilation and
+backtranslation and reprove that SEIO* satisfies RrHP.
+The proof of RrHP contains one admitted compatibility lemma that we did not
+have time to finish, but should be provable. 
 
-The artifact contains one assumptions that is not relevant to the fully
-mechanized proof that SEIO* satisfies RrHP. This assumption is 
-in the unverified metaprogram that generates typing derivations.
-When checking that the derivation has the expected type,
-we end up checking for equality between types by
-manually creating a statement of form `t1 == t2`.
-Since we build this statement manually, F* does not internally register it as
-an equality between types, which prevents us from retyping the derivation.
-Therefore, we assume that the successful checking of the statement
-gives us equality between types.
-(Extraction will anyway fail if the types are not equal)
-We did not figure out in time how to use Meta-F* to avoid this assumption,
-but we are in contact with the developers of F* to get rid of it.
+What we don't yet have a complete answer for is how to automatically produce such typing derivations in a meta-program. Especially without any user annotations, this is a challenge that we are calling out as future work in the submission (lines 1061-1063) and that is specific to the way F* does refinement types, as opposed to the sigma types of Rocq and Lean, which we think would be easier to support (hinted at in lines 1071-1073, which we will make more explicit).
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)

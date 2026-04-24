@@ -36,10 +36,6 @@ type type_quotation : Type0 -> Type u#1 =
           type_quotation t2 ->
           #ref:(either t1 t2 -> Type0) ->
           type_quotation (x:(either t1 t2){ref x})
-// | QRefinement : #t:Type ->
-//                 type_quotation t ->
-//                 ref: (t -> Type0) ->
-//                 type_quotation (x:t{ref x})
 
 let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   match tq with

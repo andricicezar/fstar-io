@@ -22,18 +22,6 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
                 typing g x ->
                 typing (extend b g) (fs_oval_weaken b x)
 
-(**
-| QSeqGhost  : #g : typ_env ->
-                ref : Type0 ->
-                #preV : spec_env g ->
-                #v : fs_oval g (qUnitR (fun _ -> ref)) preV ->
-                typing g v ->
-                #a : qType ->
-                #preK : spec_env g ->
-                #k : fs_oval g a preK ->
-                typing g k ->
-                typing g (fs_oval_seq_ghost ref v k)**)
-
 | QRef    : #g : typ_env ->
                 #a : qType ->
                 #preV : spec_env g ->

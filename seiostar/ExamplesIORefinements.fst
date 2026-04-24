@@ -98,6 +98,8 @@ let io_ghost_seq (f: (unit -> _:unit{q_ref})) : io (_:unit{q_ref}) =
 let io_apply_callback (f:(x:bool{x == true}) -> bool) : io bool =
   return (f true)
 
+
+(**
 assume val valid : string -> Type0
 
 let pure_validate (x:string) (f:(x:string -> y:bool{y ==> valid x})) : (resexn (x:string{valid x})) =
@@ -117,4 +119,4 @@ let io_validate (f:(x:string -> y:bool{y ==> valid x})) : io (resexn (x:string{v
   return #(resexn (x:string{valid x})) (
     if f data
     then Inl data
-    else Inr ())
+    else Inr ())**)
