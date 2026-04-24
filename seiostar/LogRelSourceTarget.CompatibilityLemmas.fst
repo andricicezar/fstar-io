@@ -127,7 +127,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊏ EVar 
     end
   end
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 1 --split_queries always"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
   : Lemma
@@ -857,7 +857,10 @@ let compat_ocomp_if_oval #g (#a:qType) #preC #preT #preE
   end
 
 #push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
-let helper_compat_ocomp_case_oval_steps (h:history) (lt:local_trace h) (a b c:qType)
+let helper_compat_ocomp_case_oval_steps
+  (h:history)
+  (lt:local_trace h)
+  (a b c:qType)
   (fs_cond:fs_val (a ^+ b))
   (fs_inlc:fs_val (a ^->!@ c))
   (fs_inrc:fs_val (b ^->!@ c))
@@ -974,8 +977,17 @@ let helper_compat_ocomp_case_oval_steps_inr (h:history) (lt:local_trace h) (a b 
   end
 #pop-options
 
-#push-options "--split_queries always"
-let compat_ocomp_case_oval #g (#a #b #c:qType) #preCond (fs_cond:fs_oval g (a ^+ b) preCond) (#preInlc:spec_env (extend a g)) (fs_inlc:fs_ocomp (extend a g) c preInlc) (#preInrc:spec_env (extend b g)) (fs_inrc:fs_ocomp (extend b g) c preInrc) (cond inlc inrc:exp)
+#push-options "--z3rlimit 10 --split_queries always --fuel 1 --ifuel 1"
+let compat_ocomp_case_oval
+  #g
+  (#a #b #c:qType)
+  #preCond
+  (fs_cond:fs_oval g (a ^+ b) preCond)
+  (#preInlc:spec_env (extend a g))
+  (fs_inlc:fs_ocomp (extend a g) c preInlc)
+  (#preInrc:spec_env (extend b g))
+  (fs_inrc:fs_ocomp (extend b g) c preInrc)
+  (cond inlc inrc:exp)
   : Lemma
     (requires fs_cond ⊏ cond /\ fs_inlc ⊑ inlc /\ fs_inrc ⊑ inrc)
     (ensures (fs_ocomp_case_oval fs_cond fs_inlc fs_inrc) ⊑ (ECase cond inlc inrc)) =
@@ -1705,25 +1717,19 @@ let helper_compat_ocomp_pair_steps (h:history) (lt:local_trace h) (t1 t2:qType)
 (** ---- Helpers for IO operation bind decomposition ---- **)
 
 #push-options "--z3rlimit 30 --fuel 2 --ifuel 2 --split_queries always"
-let helper_compat_ocomp_call_steps (op:io_ops) (h:history) (lt:local_trace h)
-  (fs_arg':fs_comp (q_io_args op){fs_val (q_io_args op) == io_args op}) (fs_e:fs_comp (q_io_res op){fs_e == fs_comp_bind #(q_io_args op) #(q_io_res op) fs_arg' (fun arg' -> fs_comp_call_val op arg')}) (fs_r:fs_val (q_io_res op)) (arg:closed_exp) :
+let helper_compat_ocomp_call_steps
+  (op:io_ops)
+  (h:history)
+  (lt:local_trace h)
+  (fs_arg':fs_comp (q_io_args op){fs_val (q_io_args op) == io_args op})
+  (fs_e:fs_comp (q_io_res op){fs_e == fs_comp_bind #(q_io_args op) #(q_io_res op) fs_arg' (fun arg' -> fs_comp_call_val op arg')})
+  (fs_r:fs_val (q_io_res op))
+  (arg:closed_exp) :
   Lemma
     (requires fs_beh fs_e h lt fs_r /\
               fs_e == fs_comp_bind fs_arg' (fun arg' -> fs_comp_call_val op arg') /\
               (q_io_args op) ⫃ (h, fs_arg', arg))
-    (ensures exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt) = admit ()
-  (*let fs_k : fs_val (q_io_args op) -> fs_comp (q_io_res op) = fun arg' -> fs_comp_call_val op arg' in
-  assert (fs_comp_bind fs_arg' fs_k == io_bind fs_arg' fs_k) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
-  assert (fs_e == fs_comp_bind fs_arg' fs_k);
-  destruct_fs_beh fs_arg' fs_k h lt fs_r;
-  eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_arg_val:fs_val (q_io_args op)).
-    lt == (lt1@lt2) /\ fs_beh fs_arg' h lt1 fs_arg_val /\ fs_beh (fs_k fs_arg_val) (h++lt1) lt2 fs_r
-    returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
-  eliminate forall (lt':local_trace h) (fs_r':get_Type (q_io_args op)). fs_beh fs_arg' h lt' fs_r' ==> exists em'. (q_io_args op) ∈ (h++lt', fs_r', em') /\ e_beh arg em' h lt' with lt1 fs_arg_val;
-  eliminate exists em'. (q_io_args op) ∈ (h++lt1, fs_arg_val, em') /\ e_beh arg em' h lt1
-    returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
-  lem_values_are_values (q_io_args op) (h++lt1) fs_arg_val em';
-  trans_history h lt1 lt2;
+    (ensures exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt) =
   assert (fs_val (q_io_args OOpen) == string)
     by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
   assert (fs_val (q_io_res OOpen) == resexn file_descr)
@@ -1740,6 +1746,19 @@ let helper_compat_ocomp_call_steps (op:io_ops) (h:history) (lt:local_trace h)
     by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
   assert (fs_val (q_io_res OClose) == resexn unit)
     by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
+  let fs_k : fs_val (q_io_args op) -> fs_comp (q_io_res op) = fun arg' -> fs_comp_call_val op arg' in
+  assert (fs_comp_bind fs_arg' fs_k == io_bind fs_arg' fs_k) by (norm [delta_only [`%fs_comp_bind]]; trefl ());
+  assert (fs_e == fs_comp_bind fs_arg' fs_k);
+  destruct_fs_beh fs_arg' fs_k h lt fs_r;
+  admit ()
+  (*eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (fs_arg_val:fs_val (q_io_args op)).
+    lt == (lt1@lt2) /\ fs_beh fs_arg' h lt1 fs_arg_val /\ fs_beh (fs_k fs_arg_val) (h++lt1) lt2 fs_r
+    returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
+  eliminate forall (lt':local_trace h) (fs_r':get_Type (q_io_args op)). fs_beh fs_arg' h lt' fs_r' ==> exists em'. (q_io_args op) ∈ (h++lt', fs_r', em') /\ e_beh arg em' h lt' with lt1 fs_arg_val;
+  eliminate exists em'. (q_io_args op) ∈ (h++lt1, fs_arg_val, em') /\ e_beh arg em' h lt1
+    returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
+  lem_values_are_values (q_io_args op) (h++lt1) fs_arg_val em';
+  trans_history h lt1 lt2;
   helper_compat_ocomp_call_oval_steps op (h++lt1) lt2 fs_arg_val em' fs_e fs_r;
   eliminate exists e'. (q_io_res op) ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh (ECall op em') e' (h++lt1) lt2
     returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
@@ -1766,7 +1785,10 @@ let lem_fs_beh_return_inv (#t:qType) (val_:fs_val t) (h:history) (lt:local_trace
 (** ---- Case helper for bind decomposition ---- **)
 
 #push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
-let helper_compat_ocomp_case_steps (h:history) (lt:local_trace h) (a b c:qType)
+let helper_compat_ocomp_case_steps
+  (h:history)
+  (lt:local_trace h)
+  (a b c:qType)
   (fs_sc':fs_comp (a ^+ b))
   (fs_inlc:fs_val (a ^->!@ c))
   (fs_inrc:fs_val (b ^->!@ c))
@@ -1808,6 +1830,7 @@ let helper_compat_ocomp_case_steps (h:history) (lt:local_trace h) (a b c:qType)
   val_type_closed_under_history_extension (b ^->!@ c) h fs_inrc (ELam e_rc);
   lem_values_are_expressions (b ^->!@ c) (h++lt1) fs_inrc (ELam e_rc)
   end;
+  trans_history h lt1 lt2;
   helper_compat_ocomp_case_oval_steps (h++lt1) lt2 a b c fs_cond_val fs_inlc fs_inrc fs_r em' e_lc e_rc;
   eliminate exists e'. c ∈ ((h++lt1)++lt2, fs_r, e') /\ e_beh (ECase em' e_lc e_rc) e' (h++lt1) lt2
     returns exists e'. c ∈ (h++lt, fs_r, e') /\ e_beh (ECase e_sc e_lc e_rc) e' h lt with _. begin
