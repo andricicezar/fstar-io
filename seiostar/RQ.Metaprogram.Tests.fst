@@ -158,3 +158,6 @@ let _ = assert (tgt_nat_add2 #empty == test_nat_add2 ()) by (trefl ())
 let _ = assert (tgt_nat_five1 #empty == test_nat_nrec_two_plus_three1 ()) by (trefl ())
 
 %splice_t[tgt_nat_five2] (generate_derivation "tgt_nat_five2" (`Examples.nat_five2))
+
+%splice_t[tgt_fact_five] (generate_derivation "tgt_fact_five" (`Examples.fact_five))
+let _ = assert (tgt_fact_five #empty == test_nat_fact_five ()) by (trefl ())

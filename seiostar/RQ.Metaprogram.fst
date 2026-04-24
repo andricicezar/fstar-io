@@ -178,6 +178,23 @@ let is_nat_type (fstar_ty:option typ) : bool =
        | _ -> false)
     | _ -> false
 
+let as_pair_type (fstar_ty:option typ) : Tac (option (typ & typ)) =
+  match fstar_ty with
+  | None -> None
+  | Some ty ->
+    match inspect_ln ty with
+    | Tv_App _ _ ->
+      let (head, args) = collect_app ty in
+      (match get_fv head, args with
+       | Some "FStar.Pervasives.Native.tuple2", [(v1, _); (v2, _)] ->
+         Some (v1, v2)
+       | _ -> None)
+    | _ -> None
+
+let mk_total_arrow_type (dom:typ) (cod:typ) : typ =
+  let b = pack_binder ({ ppname = seal "_"; qual = Q_Explicit; attrs = []; sort = dom }) in
+  pack_ln (Tv_Arrow b (pack_comp (C_Total cod)))
+
 let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (fuel:int) (is_comp:bool) (fstar_ty:option typ) (qfs:term) : Tac term =
   if fuel <= 0 then
     fail ("Unfolding depth exceeded while processing: " ^ tag_of qfs ^ " — " ^ term_to_string qfs
@@ -237,11 +254,26 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
       args |> List.Tot.filter (fun (_, q) -> Q_Explicit? q) |> List.Tot.map fst in
     match get_fv head, explicit_args with
     | Some "FStar.Pervasives.Native.Mktuple2", [v1; v2] ->
-      mk_qmkpair (create_derivation g dbmap prior_derivs fuel false None v1) (create_derivation g dbmap prior_derivs fuel false None v2)
+      let (ty1, ty2) =
+        match as_pair_type fstar_ty with
+        | Some (ty1, ty2) -> (Some ty1, Some ty2)
+        | None -> (None, None)
+      in
+      mk_qmkpair (create_derivation g dbmap prior_derivs fuel false ty1 v1) (create_derivation g dbmap prior_derivs fuel false ty2 v2)
     | Some "FStar.Pervasives.Native.fst", [v1] ->
-      mk_qfst (create_derivation g dbmap prior_derivs fuel false None v1)
+      let arg_ty =
+        match tc_term g v1 with
+        | Some (_, (_, ty)), _ -> Some ty
+        | _ -> None
+      in
+      mk_qfst (create_derivation g dbmap prior_derivs fuel false arg_ty v1)
     | Some "FStar.Pervasives.Native.snd", [v1] ->
-      mk_qsnd (create_derivation g dbmap prior_derivs fuel false None v1)
+      let arg_ty =
+        match tc_term g v1 with
+        | Some (_, (_, ty)), _ -> Some ty
+        | _ -> None
+      in
+      mk_qsnd (create_derivation g dbmap prior_derivs fuel false arg_ty v1)
     | Some "FStar.Pervasives.Inl", [v1] ->
       mk_qinl (create_derivation g dbmap prior_derivs fuel false None v1)
     | Some "FStar.Pervasives.Inr", [v1] ->
@@ -279,10 +311,18 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
     end
     | Some "QTypes.OpenValComp.fs_nrec_val", [n; base; f]
     | Some "IOStar.io_nrec", [n; base; f] ->
+      let fn_ty =
+        match fstar_ty with
+        | Some ty -> Some (mk_total_arrow_type ty ty)
+        | None ->
+          (match tc_term g f with
+           | Some (_, (_, ty)), _ -> Some ty
+           | _ -> None)
+      in
       mk_qnrec
         (create_derivation g dbmap prior_derivs fuel false (Some (`nat)) n)
         (create_derivation g dbmap prior_derivs fuel false fstar_ty base)
-        (create_derivation g dbmap prior_derivs fuel false None f)
+        (create_derivation g dbmap prior_derivs fuel false fn_ty f)
     | Some "Prims.op_Addition", [v1; v2] ->
       (match inspect_ln v2 with
        | Tv_Const (C_Int 1) ->

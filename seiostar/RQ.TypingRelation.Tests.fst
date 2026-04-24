@@ -376,4 +376,22 @@ let test_nat_nrec_two_plus_three2 ()
   : qNat ⊩ nat_five2
   = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
 
+let test_nat_fact_five ()
+  : qNat ⊩ fact_five
+  = QSnd (
+      QNRec
+        (QSucc (QSucc (QSucc (QSucc (QSucc QZero)))))
+        (QMkpair QZero (QSucc QZero))
+        (QLambda
+          (QMkpair
+            (QSucc (QFst QAxiom))
+            (QNRec
+              (QSucc (QFst QAxiom))
+              QZero
+              (QLambda
+                (QNRec
+                  (QSnd (QWeaken QAxiom))
+                  QAxiom
+                  (QLambda (QSucc QAxiom))))))))
+
 #pop-options
