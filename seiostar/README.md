@@ -64,7 +64,7 @@ The simplest way for OPAM users is to create the `only-fstar` switch:
 $ opam switch import only-fstar.export --switch only-fstar
 
 If you want to install F* manually,
-You need F* version 2025.12.15 (or higher) to run this artifact.
+You need F* version 2026.03.24 to run this artifact.
 See more details about [how to install F\* here](https://github.com/FStarLang/FStar/blob/master/INSTALL.md).
 
 ## Evaluation Instructions
