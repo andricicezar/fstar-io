@@ -119,3 +119,5 @@ let nat_add2 : nat -> nat = fun n -> IOStar.io_nrec 2 n (fun x -> x + 1)
 let nat_five1 : nat = IOStar.io_nrec 3 2 (fun x -> x + 1)
 
 let nat_five2 : nat = nat_add2 3
+
+let fact_five : nat = snd (IOStar.io_nrec 5 (0, 1) (fun (v : nat*nat) -> (fst v + 1, IOStar.io_nrec (fst v + 1) 0 (fun (a : nat) -> IOStar.io_nrec (snd v) a (fun (w : nat) -> w + 1)))))

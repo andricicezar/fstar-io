@@ -254,16 +254,16 @@ let test_apply_io_return
   = QLambdaIO (QReturn QAxiom)
 
 let test_apply_read
-  : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
-  = QLambdaIO (QCall ORead (QFd 0))
+  : (qFileDescr ^->!@ (qResexn qString)) ⊩ apply_read
+  = QLambdaIO (QCall ORead QAxiom)
 
 let test_apply_write_const
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_write_const
-  = QLambdaIO (QCall OWrite (QMkpair (QFd 2) (QStringLit "hello")))
+  : (qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_write_const
+  = QLambdaIO (QCall OWrite (QMkpair QAxiom (QStringLit "hello")))
 
 let test_apply_write
   : _ ⊩  apply_write
-  = QLambdaIO (QCall OWrite (QMkpair (QFd 1) QAxiom))
+  = QLambda (QLambdaIO (QCall OWrite (QMkpair qVar1 QAxiom)))
 
 let test_apply_io_bind_const
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
@@ -292,37 +292,37 @@ let test_apply_io_bind_pure_if ()
 
 let test_apply_io_bind_write
   : _ ⊩ apply_io_bind_write
-  = QLambdaIO (
+  = QLambda (QLambdaIO (
       QBind
          (QReturn QAxiom)
-         (QCall OWrite (QMkpair (QFd 2) QAxiom)))
+         (QCall OWrite (QMkpair qVar2 QAxiom))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
+  : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by (simplify_stack_ops (); trefl ())
-  = QLambdaIO (QBind (QCall ORead (QFd 4))
+  = QLambda (QLambdaIO (QBind (QCall ORead qVar1)
     (QCaseIO #_ #qString #qUnit QAxiom
-     (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
-     (QReturn (QInr QAxiom))))
+     (QCall OWrite (QMkpair qVar2 (QStringLit "data")))
+     (QReturn (QInr QAxiom)))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
+  : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
   by (simplify_stack_ops (); trefl ())
-  = QLambdaIO (QBind (QCall ORead (QFd 9)) (
-      QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom))))
+  = QLambda (QLambdaIO (QBind (QCall ORead qVar1) (
+      QCaseIO #_ #qString #qUnit QAxiom (QCall OWrite (QMkpair qVar2 (QStringLit "data"))) (QReturn (QInr QAxiom)))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
+  : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
   by (simplify_stack_ops (); trefl ())
-  = QLambdaIO
+  = QLambda (QLambdaIO
       (QBind
-        (QCall ORead (QFd 0))
+        (QCall ORead qVar1)
         (QCaseIO #_ #qString #qUnit QAxiom
-          (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
-          (QReturn (QInr QAxiom))))
+          (QCall OWrite (QMkpair qVar2 (QStringLit "data")))
+          (QReturn (QInr QAxiom)))))
 
 let qLetIO #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_ocomp (extend a g) b)
   (qx : typing g x) (qf : typing_io _ f) :
@@ -330,10 +330,10 @@ let qLetIO #g (#a #b:qType) (#x:fs_oval g a) (#f:fs_ocomp (extend a g) b)
   QAppIO (QLambdaIO qf) qx
 
 let test_sendError400 ()
-  : (qBool ^->!@ qUnit) ⊩ sendError400
+  : (qFileDescr ^->!@ qUnit) ⊩ sendError400
   = QLambdaIO
       (QBind
-        (QCall OWrite (QMkpair (QFd 9) (QStringLit "error400")))
+        (QCall OWrite (QMkpair QAxiom (QStringLit "error400")))
         (QReturn Qtt))
 
 let test_const_str
@@ -375,5 +375,23 @@ let test_nat_nrec_two_plus_three1 ()
 let test_nat_nrec_two_plus_three2 ()
   : qNat ⊩ nat_five2
   = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+
+let test_nat_fact_five ()
+  : qNat ⊩ fact_five
+  = QSnd (
+      QNRec
+        (QSucc (QSucc (QSucc (QSucc (QSucc QZero)))))
+        (QMkpair QZero (QSucc QZero))
+        (QLambda
+          (QMkpair
+            (QSucc (QFst QAxiom))
+            (QNRec
+              (QSucc (QFst QAxiom))
+              QZero
+              (QLambda
+                (QNRec
+                  (QSnd (QWeaken QAxiom))
+                  QAxiom
+                  (QLambda (QSucc QAxiom))))))))
 
 #pop-options

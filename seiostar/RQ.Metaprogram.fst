@@ -22,6 +22,7 @@ let print_debug (s:string) : Tac unit =
 let mk_qunit : term = mk_app (`QTypes.qUnit) []
 let mk_qbool : term = mk_app (`QTypes.qBool) []
 let mk_qfiledescr : term = mk_app (`QTypes.qFileDescr) []
+let mk_qnat : term = mk_app (`QTypes.qNat) []
 let mk_qstring : term = mk_app (`QTypes.qString) []
 let mk_qstringlit (s:term) : term = mk_app (`QStringLit) [(s, Q_Explicit)]
 let mk_qresexn (t:term) : term = mk_app (`QTypes.qResexn) [(t, Q_Explicit)]
@@ -29,7 +30,6 @@ let mk_qarr (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater) [(
 let mk_qarrio (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Subtraction_Greater_Bang_At) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qpair (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Star) [(t1, Q_Explicit); (t2, Q_Explicit)]
 let mk_qsum (t1 t2:term) : term = mk_app (`QTypes.op_Hat_Plus) [(t1, Q_Explicit); (t2, Q_Explicit)]
-let mk_qnat : term = mk_app (`QTypes.qNat) []
 
 let rec typ_translation (qt:term) : Tac term =
   match inspect_ln qt with
@@ -38,8 +38,8 @@ let rec typ_translation (qt:term) : Tac term =
     | "Prims.unit" -> mk_qunit
     | "Prims.bool" -> mk_qbool
     | "Prims.string" -> mk_qstring
-    | "Trace.file_descr" -> mk_qfiledescr
     | "Prims.nat" -> mk_qnat
+    | "Trace.file_descr" -> mk_qfiledescr
     | "Prims.int" -> mk_qnat
     | _ -> fail ("Type " ^ fv_to_string fv ^ " not supported")
   end
@@ -174,21 +174,6 @@ let is_io_type (ty:term) : Tot bool =
     Each term should be of the form `deriv_name g_env_term`, i.e. the derivation fvar applied to g_env. **)
 type prior_derivations = list (string & term)
 
-let is_nat_type (fstar_ty:option typ) : bool =
-  match fstar_ty with
-  | None -> false
-  | Some ty ->
-    match inspect_ln ty with
-    | Tv_FVar fv ->
-      let nm = fv_to_string fv in
-      nm = "Prims.nat" || nm = "Prims.int"
-    | Tv_Refine b _ ->
-      let sort = (inspect_binder b).sort in
-      (match inspect_ln sort with
-       | Tv_FVar fv -> fv_to_string fv = "Prims.int"
-       | _ -> false)
-    | _ -> false
-
 let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) (fuel:int) (is_comp:bool) (fstar_ty:option typ) (qfs:term) : Tac term =
   if fuel <= 0 then
     fail ("Unfolding depth exceeded while processing: " ^ tag_of qfs ^ " — " ^ term_to_string qfs
@@ -319,10 +304,8 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
   | Tv_Const C_False -> mk_qfalse
   | Tv_Const (C_String s) -> mk_qstringlit (pack_ln (Tv_Const (C_String s)))
   | Tv_Const (C_Int i) ->
-    if is_nat_type fstar_ty then (
       if i >= 0 then mk_nat_literal i
-      else fail ("negative integer not supported as nat"))
-    else mk_qfd qfs
+      else fail ("negative integer not supported as nat")
   | Tv_Const c -> fail ("constant " ^ (print_vconst c) ^ " not implemented")
 
   | Tv_Match b _ brs -> begin
@@ -384,12 +367,12 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
-#push-options "--print_implicits"
+// #push-options "--print_implicits"
 
 let prove_equality () : Tac unit =
   norm [
         delta_only [
-        `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
+        `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
         `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
         `%op_Hat_Subtraction_Greater_Bang_At;
         `%get_rel; `%get_Type;
@@ -406,6 +389,8 @@ let prove_equality () : Tac unit =
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   print_debug ("DEBUG: entering type_check_derivation");
+  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
   let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   if List.length l > 0 then fail "Not all implicits solved" else ();
   print_debug ("DEBUG: instantiate_implicits done");
