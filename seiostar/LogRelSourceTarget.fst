@@ -282,7 +282,7 @@ let lem_unfold_in_arrow_to_body (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> 
         FStar.Tactics.V1.norm [iota];
         FStar.Tactics.V1.smt ())
 
-let unfold_contains_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
+let unfold_member_of_arrow (t1 t2:qType) (h:history) (fs_e1:fs_val (t1 ^-> t2)) (e11:exp)
   : Lemma
     (requires is_closed (ELam e11) /\ (t1 ^-> t2) ∈ (h, fs_e1, ELam e11))
     (ensures forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∈ (h++lt_v, fs_v, v) ==> t2 ⊆ (h++lt_v, fs_e1 fs_v, subst_beta v e11))
@@ -311,7 +311,7 @@ let lem_unfold_in_io_arrow_to_body_direct (t1 t2:qType) (h:history) (fs_e1:fs_va
         FStar.Tactics.V1.norm [iota];
         FStar.Tactics.V1.smt ())
 
-let unfold_contains_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp) (h:history)
+let unfold_member_of_io_arrow (t1 t2:qType) (fs_e1:fs_val (t1 ^->!@ t2)) (e11:exp) (h:history)
   : Lemma
     (requires (is_closed (ELam e11)) /\ ((t1 ^->!@ t2) ∈ (h, fs_e1, ELam e11)))
     (ensures (forall (v:value) (fs_v:fs_val t1) (lt_v:local_trace h). t1 ∈ (h++lt_v, fs_v, v) ==> t2 ⫃ (h++lt_v, fs_e1 fs_v, subst_beta v e11)))

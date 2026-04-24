@@ -13,7 +13,7 @@ open QTypes.OpenValComp
 open QTypes.HelperTactics
 open LogRelSourceTarget
 
-let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) = 
+let bind_squash (a #b:Type) (f:a -> GTot (squash b)) : Pure (squash b) (requires a) (ensures fun _ -> True) =
   FStar.Squash.bind_squash #a () f
 
 let compat_oval_unit g : Lemma (fs_oval_return g #qUnit () ⊏ EUnit) =
@@ -190,14 +190,14 @@ let compat_oval_lambda #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#t2:qTy
   end
 
 let helper_compat_oval_app_steps (h:history) (lt:local_trace h) (t1 t2:qType) (fs_e1:fs_val (t1 ^-> t2)) (fs_e2:fs_val t1) (e1 e2:closed_exp) :
-  Lemma 
+  Lemma
     (requires (t1 ^-> t2) ⊆ (h, fs_e1, e1) /\
               (forall (lt:local_trace h). t1 ⊆ (h++lt, fs_e2, e2)))
     (ensures exists (e':closed_exp). e_beh (EApp e1 e2) e' h [] /\ t2 ∈ (h, fs_e1 fs_e2, e')) =
   eliminate exists (e1':closed_exp). e_beh e1 e1' h [] /\ (t1 ^-> t2) ∈ (h, fs_e1, e1')
     returns exists (e':closed_exp). e_beh (EApp e1 e2) e' h [] /\ t2 ∈ (h, fs_e1 fs_e2, e') with _. begin
   let ELam e11 = e1' in
-  unfold_contains_arrow t1 t2 h fs_e1 e11;
+  unfold_member_of_arrow t1 t2 h fs_e1 e11;
   lem_forall_values_are_values t1 h fs_e2;
   eliminate exists (e2':closed_exp). e_beh e2 e2' h [] /\ t1 ∈ (h, fs_e2, e2')
     returns exists (e':closed_exp). e_beh (EApp e1 e2) e' h [] /\ t2 ∈ (h, fs_e1 fs_e2, e') with _. begin
@@ -616,7 +616,7 @@ let compat_oval_lambda_ocomp #g (#t1:qType) (#preBody:spec_env (extend t1 g)) (#
   let f : fs_oval g (t1 ^->!@ t2) (spec_env_lambda_tot preBody) = fun fsG x -> fs_body (stack fsG x) in
   assert (f == fs_oval_lambda_ocomp fs_body)
     by (FStar.Tactics.norm [delta_only [`%fs_oval_lambda_ocomp]]; FStar.Tactics.trefl ());
-  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_lambda_tot preBody) fsG) ==> (t1 ^->!@ t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin 
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_lambda_tot preBody) fsG) ==> (t1 ^->!@ t2) ⊆ (h, f fsG, gsubst s (ELam body)) with begin
     introduce _ ==> _ with _. begin
       let body' = subst (sub_elam s) body in
       assert (gsubst s (ELam body) == ELam body');
@@ -704,7 +704,7 @@ let helper_compat_ocomp_bind_steps (h:history) (lt:local_trace h) (a b:qType)
   eliminate exists (lam':closed_exp). e_beh (ELam k) lam' h [] /\ (a ^->!@ b) ∈ (h, fs_k, lam')
     returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp (ELam k) m) e' h lt with _. begin
   steps_val_id (ELam k) lam' h;
-  unfold_contains_io_arrow a b fs_k k h;
+  unfold_member_of_io_arrow a b fs_k k h;
   lem_values_are_values a (h++lt1) fs_m_val em';
   eliminate forall (v:value) (fs_v:fs_val a) (lt_v:local_trace h).
     a ∈ (h++lt_v, fs_v, v) ==> b ⫃ (h++lt_v, fs_k fs_v, subst_beta v k) with em' fs_m_val lt1;
@@ -774,7 +774,7 @@ let helper_compat_ocomp_app_oval_oval_steps (h:history) (lt:local_trace h) (a b:
   eliminate exists (f':closed_exp). e_beh f f' h [] /\ (a ^->!@ b) ∈ (h, fs_f, f')
     returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
   let ELam f1 = f' in
-  unfold_contains_io_arrow a b fs_f f1 h;
+  unfold_member_of_io_arrow a b fs_f f1 h;
   lem_forall_values_are_values a h fs_x;
   eliminate exists (x':closed_exp). e_beh x x' h [] /\ a ∈ (h, fs_x, x')
     returns exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt with _. begin
@@ -881,7 +881,7 @@ let helper_compat_ocomp_case_oval_steps (h:history) (lt:local_trace h) (a b c:qT
     eliminate exists (elc':closed_exp). e_beh (ELam e_lc) elc' h [] /\ (a ^->!@ c) ∈ (h, fs_inlc, elc')
       returns exists e'. c ∈ (h++lt, fs_r, e') /\ e_beh (ECase e_cond e_lc e_rc) e' h lt with _. begin
     steps_val_id (ELam e_lc) elc' h;
-    unfold_contains_io_arrow a c fs_inlc e_lc h;
+    unfold_member_of_io_arrow a c fs_inlc e_lc h;
     eliminate forall (v':value) (fs_v:fs_val a) (lt_v:local_trace h).
       a ∈ (h++lt_v, fs_v, v') ==> c ⫃ (h++lt_v, fs_inlc fs_v, subst_beta v' e_lc) with v x [];
     eliminate forall (lt':local_trace h) (fs_r':get_Type c). fs_beh (fs_inlc x) h lt' fs_r' ==>
@@ -900,7 +900,7 @@ let helper_compat_ocomp_case_oval_steps (h:history) (lt:local_trace h) (a b c:qT
     eliminate exists (erc':closed_exp). e_beh (ELam e_rc) erc' h [] /\ (b ^->!@ c) ∈ (h, fs_inrc, erc')
       returns exists e'. c ∈ (h++lt, fs_r, e') /\ e_beh (ECase e_cond e_lc e_rc) e' h lt with _. begin
     steps_val_id (ELam e_rc) erc' h;
-    unfold_contains_io_arrow b c fs_inrc e_rc h;
+    unfold_member_of_io_arrow b c fs_inrc e_rc h;
     eliminate forall (v':value) (fs_v:fs_val b) (lt_v:local_trace h).
       b ∈ (h++lt_v, fs_v, v') ==> c ⫃ (h++lt_v, fs_inrc fs_v, subst_beta v' e_rc) with v x [];
     eliminate forall (lt':local_trace h) (fs_r':get_Type c). fs_beh (fs_inrc x) h lt' fs_r' ==>
@@ -1319,7 +1319,7 @@ let helper_ocomp_app_from_arg_value (h:history) (lt:local_trace h) (a b:qType)
       fs_beh (fs_r_f fs_r_x) ((h++lt1)++lt2a) lt2b fs_r)
     (ensures exists e'. b ∈ (h++lt, fs_r, e') /\ e_beh (EApp f x) e' h lt) =
   let ELam f1 = f' in
-  unfold_contains_io_arrow a b fs_r_f f1 (h++lt1);
+  unfold_member_of_io_arrow a b fs_r_f f1 (h++lt1);
   eliminate forall (v:value) (fs_v:fs_val a) (lt_v:local_trace (h++lt1)).
     a ∈ ((h++lt1)++lt_v, fs_v, v) ==> b ⫃ ((h++lt1)++lt_v, fs_r_f fs_v, subst_beta v f1) with x' fs_r_x lt2a;
   eliminate forall (lt':local_trace ((h++lt1)++lt2a)) (fs_r':get_Type b).

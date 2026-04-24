@@ -1,5 +1,15 @@
 module LogRelTargetSource.CompatibilityLemmas
 
+(* Warning 271 (SMT patterns that normalize to an [ite] cascade and are
+   therefore dropped) fires at every call site of [destruct_steps_ecall*]
+   because their [ensures] clauses quantify over [io_args op] / [io_res op _]
+   with an abstract [op]. After unfolding these dependent types reduce to a
+   match-on-[io_ops], which F*'s SMT encoding prints as a nested [ite] and
+   rejects as a pattern head. The patterns are only dropped (not unsound),
+   and nothing we do here triggers the weakness, so we locally demote the
+   warning for this module. *)
+#push-options "--warn_error -271"
+
 open LambdaIO
 open LambdaIO.DestructLemmas
 open IOStar
@@ -2138,4 +2148,7 @@ let compat_oval_ref #g (#a:qType) (#preV:spec_env g)
       assert ((change_refinement a ref) ⊇ (h, fs_v fsG, gsubst s e))
     end
   end
+#pop-options
+
+(* pop the module-wide [--warn_error -271] from the top of the file *)
 #pop-options
