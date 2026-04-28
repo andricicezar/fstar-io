@@ -8,7 +8,6 @@ ROOTS := RQ.TypingRelation.Tests.fst \
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
-FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
 
 FLAGS = --cache_checked_modules --cache_dir $(abspath $(CACHEDIR))
 FLAGS += --record_hints --use_hints --hint_dir $(abspath $(BUILD_DIR)/hints)
@@ -91,6 +90,8 @@ $(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 package:
 	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
 
+
+FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
 mcp:
 	@test -f "$(FSTAR_LSP_MCP_MAIN)" || (echo "Missing MCP server entrypoint: $(FSTAR_LSP_MCP_MAIN)" 1>&2; exit 1)
 	@mkdir -p "$(CACHEDIR)" "$(ODIR)" "$(BUILD_DIR)/hints"
