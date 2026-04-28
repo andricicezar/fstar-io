@@ -8,13 +8,13 @@ ROOTS := RQ.TypingRelation.Tests.fst \
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
+FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
 
-FLAGS = --cache_checked_modules --cache_dir $(CACHEDIR)
-FLAGS += --record_hints --use_hints --hint_dir $(BUILD_DIR)/hints
-FLAGS += --odir $(ODIR)
-FLAGS += --include $(LAMBDABOX_DIR)
+FLAGS = --cache_checked_modules --cache_dir $(abspath $(CACHEDIR))
+FLAGS += --record_hints --use_hints --hint_dir $(abspath $(BUILD_DIR)/hints)
+FLAGS += --odir $(abspath $(ODIR))
+FLAGS += --include $(abspath $(LAMBDABOX_DIR))
 FLAGS += --warn_error -241-247-274-288-321-333
-FLAGS += --silent
 FLAGS += $(OTHERFLAGS)
 
 all: verify
@@ -56,8 +56,8 @@ ifeq (validate,$(firstword $(MAKECMDGOALS)))
   endif
 endif
 
-# If we're building a package or a single file, we don't need to run the dep analysis.
-ifneq ($(MAKECMDGOALS),package)
+# If we're building a package, running MCP, or a single file, we don't need to run dep analysis.
+ifeq ($(filter package mcp,$(MAKECMDGOALS)),)
 ifeq ($(_SINGLE_FILE),)
 include $(BUILD_DIR)/depend.mk
 endif
@@ -87,9 +87,16 @@ $(BUILD_DIR)/dep.pdf: $(BUILD_DIR)/dep.graph
 
 # Package this directory (from Git). Note: git archive apparently
 # already removes user and host names (good!)
-.PHONY: package
+.PHONY: package mcp
 package:
 	git archive --prefix seiostar/ -o artifact.tar.gz HEAD .
+
+mcp:
+	@test -f "$(FSTAR_LSP_MCP_MAIN)" || (echo "Missing MCP server entrypoint: $(FSTAR_LSP_MCP_MAIN)" 1>&2; exit 1)
+	@mkdir -p "$(CACHEDIR)" "$(ODIR)" "$(BUILD_DIR)/hints"
+	@ARGS_FILE="$(abspath $(BUILD_DIR)/fstar-lsp.args)"; \
+	  printf '%s\n' $(FLAGS) > "$$ARGS_FILE"; \
+	  FSTAR_WORKSPACE_ROOT="$(CURDIR)" FSTAR_LSP_ARGS_FILE="$$ARGS_FILE" exec node "$(FSTAR_LSP_MCP_MAIN)"
 
 ifdef _SINGLE_FILE
 validate: | $(CACHEDIR) $(ODIR)
