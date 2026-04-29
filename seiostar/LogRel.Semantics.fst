@@ -11,11 +11,24 @@ unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Typ
 let e_beh e e' h lt =
   steps e e' h lt /\ indexed_irred e' (h++lt)
 
+let io_call_q (o:io_ops) (args:io_args o) : fs_comp (q_io_res o) =
+  lem_q_io_res o;
+  assert (get_Type (q_io_res o) == io_res o args);
+  io_call o args
+
+let io_res_q (o:io_ops) (args:io_args o) (res:io_res o args) : fs_val (q_io_res o) =
+  lem_q_io_res o;
+  assert (get_Type (q_io_res o) == io_res o args);
+  res
+
 let lem_fs_beh_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
   Lemma (requires io_post h o args res)
-        //(ensures fs_beh #(q_io_res o) (io_call o args) h [op_to_ev o args res] res) =
-        (ensures thetaP (io_call o args) h [op_to_ev o args res] res) =
-  lem_thetaP_call o args res h
+        (ensures fs_beh #(q_io_res o) (io_call_q o args) h [op_to_ev o args res] (io_res_q o args res)) =
+  match o with
+  | OOpen -> lem_thetaP_call OOpen args res h
+  | ORead -> lem_thetaP_call ORead args res h
+  | OWrite -> lem_thetaP_call OWrite args res h
+  | OClose -> lem_thetaP_call OClose args res h
 
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =
@@ -26,4 +39,3 @@ let lem_fs_beh_bind #a #b (m:fs_comp a) (h:history) (lt1:local_trace h) (fs_r_m:
                   fs_beh (k fs_r_m) (h++lt1) lt2 fs_r)
         (ensures fs_beh (fs_comp_bind m k) h (lt1@lt2) fs_r) =
   lem_thetaP_bind m h lt1 fs_r_m k lt2 fs_r
-
