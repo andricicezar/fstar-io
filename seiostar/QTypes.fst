@@ -175,3 +175,21 @@ let q_io_res (o:io_ops) : qType =
   | ORead  -> qResexn qString
   | OWrite -> qResexn qUnit
   | OClose -> qResexn qUnit
+
+let lem_q_io_args (o:io_ops) :
+  Lemma (get_Type (q_io_args o) == io_args o)
+  [SMTPat (q_io_args o)] =
+  match o with
+  | OOpen -> assert (get_Type (q_io_args OOpen) == io_args OOpen) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | ORead -> assert (get_Type (q_io_args ORead) == io_args ORead) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | OWrite -> assert (get_Type (q_io_args OWrite) == io_args OWrite) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | OClose -> assert (get_Type (q_io_args OClose) == io_args OClose) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+
+let lem_q_io_res (o:io_ops) :
+  Lemma (forall (a:io_args o). get_Type (q_io_res o) == io_res o a)
+  [SMTPat (q_io_res o)] =
+  match o with
+  | OOpen -> assert (get_Type (q_io_res OOpen) == resexn file_descr) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | ORead -> assert (get_Type (q_io_res ORead) == resexn string) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | OWrite -> assert (get_Type (q_io_res OWrite) == resexn unit) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
+  | OClose -> assert (get_Type (q_io_res OClose) == resexn unit) by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ())
