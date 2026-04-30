@@ -8,6 +8,7 @@ ROOTS := RQ.TypingRelation.Tests.fst \
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir
+ABS_CACHEDIR := $(abspath $(CACHEDIR))
 
 FLAGS = --cache_checked_modules --cache_dir $(abspath $(CACHEDIR))
 FLAGS += --record_hints --use_hints --hint_dir $(abspath $(BUILD_DIR)/hints)
@@ -25,11 +26,23 @@ $(CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+$(ABS_CACHEDIR)/%.fst.checked: %.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 $(CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
+$(ABS_CACHEDIR)/%.fst.checked: $(LAMBDABOX_DIR)/%.fst | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
 $(CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
+	$(FSTAR) $(FLAGS) $<
+	@touch -c $@ # update timestamp
+
+$(ABS_CACHEDIR)/%.fsti.checked: %.fsti | $(CACHEDIR) $(ODIR)
 	$(FSTAR) $(FLAGS) $<
 	@touch -c $@ # update timestamp
 
@@ -92,9 +105,8 @@ package:
 
 
 FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
-mcp:
+mcp: | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	@test -f "$(FSTAR_LSP_MCP_MAIN)" || (echo "Missing MCP server entrypoint: $(FSTAR_LSP_MCP_MAIN)" 1>&2; exit 1)
-	@mkdir -p "$(CACHEDIR)" "$(ODIR)" "$(BUILD_DIR)/hints"
 	@ARGS_FILE="$(abspath $(BUILD_DIR)/fstar-lsp.args)"; \
 	  printf '%s\n' $(FLAGS) > "$$ARGS_FILE"; \
 	  FSTAR_WORKSPACE_ROOT="$(CURDIR)" FSTAR_LSP_ARGS_FILE="$$ARGS_FILE" exec node "$(FSTAR_LSP_MCP_MAIN)"
