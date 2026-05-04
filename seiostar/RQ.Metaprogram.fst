@@ -381,9 +381,10 @@ let prove_equality () : Tac unit =
   norm [delta_only qType_defs_list; iota;];
   //simplify_stack_ops ();
   explode ();
-  if debugging () then dump "RQ's unification goal" else ();
   iterAll (fun () ->
-    (or_else trivial trefl));
+    ignore (trytac (fun () -> 
+      or_else trivial trefl)));
+  if debugging () then dump "RQ's unification goal" else ();
   // TODO: refactor so that only the goals that did not solve are printed
   or_else qed (fun () -> dump "RQ's unification failed")
 
