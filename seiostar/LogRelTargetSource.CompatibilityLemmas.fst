@@ -1912,11 +1912,13 @@ let helper_compat_oval_succ (ex':closed_exp) (h:history) (lt:local_trace h) (fs_
     assert (qNat ∋ (h, fs_k + 1, ex'));
     get_squash (qNat ∋ (h, fs_k + 1, ex') /\ lt == []))
 
-let compat_oval_succ (#g:typ_env) (n:fs_oval g qNat) (e:exp)
+let compat_oval_succ (#g:typ_env) (#preN:spec_env g) (n:fs_oval g qNat preN) (e:exp)
   : Lemma (requires n ⊐ e)
           (ensures fs_oval_succ n ⊐ ESucc e) =
   lem_fv_in_env_succ g e;
-  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> qNat ⊇ (h, fs_oval_succ n fsG, gsubst s (ESucc e)) with begin
+  introduce forall b (s:gsub g b) fsG h. (fsG `(∽) h` s /\ preN fsG) ==> qNat ⊇ (h, fs_oval_succ n fsG, gsubst s (ESucc e)) with begin
+    introduce _ ==> _ with _. begin
+      assert (preN fsG);
     let fs_k = n fsG in
     let ex = ESucc (gsubst s e) in
     assert (gsubst s (ESucc e) == ex);
@@ -1927,6 +1929,7 @@ let compat_oval_succ (#g:typ_env) (n:fs_oval g qNat) (e:exp)
           helper_compat_oval_succ ex' h lt fs_k e
         end
       end
+    end
     end
   end
 
@@ -2044,17 +2047,26 @@ private let rec helper_nrec_C0
   end
 #pop-options
 
-let compat_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (base:fs_oval g a) (f:fs_oval g (a ^-> a)) (en eb ef:exp)
+let compat_oval_nrec (#g:typ_env) (#a:qType)
+    (#preN:spec_env g) (n:fs_oval g qNat preN)
+    (#preB:spec_env g) (base:fs_oval g a preB)
+    (#preF:spec_env g) (f:fs_oval g (a ^-> a) preF)
+    (en eb ef:exp)
   : Lemma (requires n ⊐ en /\ base ⊐ eb /\ f ⊐ ef)
           (ensures fs_oval_nrec n base f ⊐ ENRec en eb ef) =
   lem_fv_in_env_nrec g en eb ef;
-  introduce forall b (s:gsub g b) fsG h. fsG `(∽) h` s ==> a ⊇ (h, fs_oval_nrec n base f fsG, gsubst s (ENRec en eb ef)) with begin
+  introduce forall b (s:gsub g b) fsG h.
+    (fsG `(∽) h` s /\ (spec_env_app preN (spec_env_app preB preF)) fsG) ==> a ⊇ (h, fs_oval_nrec n base f fsG, gsubst s (ENRec en eb ef)) with begin
+    introduce _ ==> _ with _. begin
+      assert (preN fsG);
+      assert (preB fsG);
+      assert (preF fsG);
     let k : nat = n fsG in
     let b0 : fs_val a = base fsG in
     let f0 : fs_val (a ^-> a) = f fsG in
-    let en_s = gsubst s en in
-    let eb_s = gsubst s eb in
-    let ef_s = gsubst s ef in
+    let en_s : closed_exp = gsubst s en in
+    let eb_s : closed_exp = gsubst s eb in
+    let ef_s : closed_exp = gsubst s ef in
     assert (gsubst s (ENRec en eb ef) == ENRec en_s eb_s ef_s);
     introduce fsG `(∽) h` s ==> a ⊇ (h, fs_nrec_val #a k b0 f0, ENRec en_s eb_s ef_s) with _. begin
       lem_shift_type_value_environments h fsG s;
@@ -2078,18 +2090,21 @@ let compat_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (base:fs_oval g 
         end
       end
     end
+    end
   end
 
 let compat_ocomp_zero g : Lemma (fs_ocomp_return_val g qNat 0 ⊒ EZero) =
   compat_oval_zero g;
   compat_ocomp_return (fs_oval_zero g) EZero
 
-let compat_ocomp_succ (#g:typ_env) (fs_n:fs_ocomp g qNat) (e:exp)
+let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN) (e:exp)
   : Lemma (requires fs_n ⊒ e)
           (ensures (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) ⊒ ESucc e) =
   lem_fv_in_env_succ g e;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> qNat ⫄ (h, (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) fsG, gsubst s (ESucc e)) with begin
+  introduce forall b' (s:gsub g b') fsG h.
+    (fsG `(∽) h` s /\ (spec_env_bind' #g #qNat preN (fun x -> spec_env_return_comp #g #qNat (io_return (x + 1)))) fsG) ==> qNat ⫄ (h, (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) fsG, gsubst s (ESucc e)) with begin
     introduce _ ==> _ with _. begin
+      assert (preN fsG);
       let fs_n' : fs_comp qNat = fs_n fsG in
       let fs_ex = fs_comp_bind #qNat #qNat fs_n' (fun n -> return (n + 1)) in
       assert (fs_ex == (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) fsG) by (
@@ -2099,9 +2114,10 @@ let compat_ocomp_succ (#g:typ_env) (fs_n:fs_ocomp g qNat) (e:exp)
       let ex = ESucc (gsubst s e) in
       assert (gsubst s (ESucc e) == ex) by (trefl ());
       let ESucc e = ex in
-      introduce fsG `(∽) h` s ==> qNat ⫄ (h, fs_ex, ex) with _. begin
+      introduce (fsG `(∽) h` s /\ (spec_env_bind' #g #qNat preN (fun x -> spec_env_return_comp #g #qNat (io_return (x + 1)))) fsG) ==> qNat ⫄ (h, fs_ex, ex) with _. begin
         introduce forall lt (ex':closed_exp). e_beh ex ex' h lt ==> (exists (fs_r:nat). qNat ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with begin
           introduce e_beh ex ex' h lt ==> (exists (fs_r:nat). qNat ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
+            assert (preN fsG);
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps ex ex' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod qNat h;
@@ -2116,16 +2132,21 @@ let compat_ocomp_succ (#g:typ_env) (fs_n:fs_ocomp g qNat) (e:exp)
                 returns exists (fs_r:nat). qNat ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r with _. begin
               lem_nat_to_exp_succ fs_r_e12;
               lem_destruct_steps_esucc e12' ex' (h++lt12) lt_f;
+              assert (qNat ∋ (h++lt12, fs_r_e12 + 1, ESucc e12'));
               trans_history h lt12 [];
               lem_fs_beh_return #qNat (fs_r_e12 + 1) (h++lt12);
               lem_fs_beh_bind #qNat #qNat fs_n' h lt12 fs_r_e12 (fun n -> return (n + 1)) [] (fs_r_e12 + 1);
-              unit_l lt12
+              unit_l lt12;
+              assert (exists (fs_r:nat). qNat ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r)
               end)
           end
         end
       end
     end
-  end
+  end;
+  assert ((fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) ⊒ ESucc e) by (
+    FStar.Tactics.V1.norm [delta_only [`%(⊒); `%superset_ocomp]];
+    FStar.Tactics.V1.smt ())
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 40"
 private let rec destruct_steps_enrec_nat
@@ -2255,14 +2276,26 @@ private let rec helper_compat_ocomp_nrec_steps
 #pop-options
 
 let compat_ocomp_nrec (#g:typ_env) (#a:qType)
-    (fn:fs_ocomp g qNat) (fb:fs_ocomp g a) (ff:fs_ocomp g (a ^->!@ a))
+    (#preN:spec_env g) (fn:fs_ocomp g qNat preN)
+    (#preB:spec_env g) (fb:fs_ocomp g a preB)
+    (#preF:spec_env g) (ff:fs_ocomp g (a ^->!@ a) preF)
     (en eb ef:exp)
     : Lemma
       (requires fn ⊒ en /\ fb ⊒ eb /\ ff ⊒ ef)
       (ensures fs_ocomp_nrec fn fb ff ⊒ ENRec en eb ef)
     =
   lem_fv_in_env_nrec g en eb ef;
-  introduce forall b' (s:gsub g b') fsG h. fsG `(∽) h` s ==> a ⫄ (h, fs_ocomp_nrec fn fb ff fsG, gsubst s (ENRec en eb ef)) with begin
+  introduce forall b' (s:gsub g b') fsG h.
+    (fsG `(∽) h` s /\ (spec_env_bind' #g #qNat preN (fun _ -> spec_env_app preB preF)) fsG) ==> a ⫄ (h, fs_ocomp_nrec fn fb ff fsG, gsubst s (ENRec en eb ef)) with begin
+    introduce _ ==> _ with _. begin
+    assert (preN fsG);
+    assert ((spec_env_bind' #g #qNat preN (fun _ -> spec_env_app preB preF)) fsG);
+    assert (forall (x:fs_val qNat). (spec_env_app preB preF) fsG) by (
+      FStar.Tactics.norm [delta_only [`%spec_env_bind';`%spec_env_bind]];
+      FStar.Tactics.smt ());
+    eliminate forall (x:fs_val qNat). (spec_env_app preB preF) fsG with (0 <: fs_val qNat);
+    assert (preB fsG);
+    assert (preF fsG);
     let fs_n' : fs_comp qNat = fn fsG in
     let fs_b' : fs_comp a = fb fsG in
     let fs_f' : fs_comp (a ^->!@ a) = ff fsG in
@@ -2272,22 +2305,18 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
     let ef_s = gsubst s ef in
     let e = ENRec en_s eb_s ef_s in
     assert (gsubst s (ENRec en eb ef) == e);
-    introduce fsG `(∽) h` s ==> a ⫄ (h, fs_ocomp_nrec fn fb ff fsG, e) with _. begin
+    introduce (fsG `(∽) h` s /\ (spec_env_bind' #g #qNat preN (fun _ -> spec_env_app preB preF)) fsG) ==> a ⫄ (h, fs_ocomp_nrec fn fb ff fsG, e) with _. begin
       assert (fs_ocomp_nrec fn fb ff fsG == fs_comp_bind fs_n' fs_k) by (
         norm [delta_only [`%fs_ocomp_nrec;`%fs_ocomp_bind';`%fs_ocomp_bind]];
         simplify_stack_ops ();
         trefl ());
       assert (qNat ⫄ (h, fs_n', en_s));
       lem_shift_type_value_environments h fsG s;
+      sem_expr_shape_comp #qNat fs_n' en_s h;
       introduce forall (e1v:closed_exp) (lt1:local_trace h). steps en_s e1v h lt1 /\ indexed_irred e1v (h++lt1) ==> sem_value_shape TNat e1v with begin
-        introduce _ ==> _ with _. begin
+        introduce (steps en_s e1v h lt1 /\ indexed_irred e1v (h++lt1)) ==> sem_value_shape TNat e1v with _. begin
           assert (e_beh en_s e1v h lt1);
-          eliminate forall (e'':closed_exp) (lt':local_trace h). e_beh en_s e'' h lt' ==> exists (fs_r:nat). qNat ∋ (h++lt', fs_r, e'') /\ fs_beh fs_n' h lt' fs_r with e1v lt1;
-          eliminate exists (fs_r:nat). qNat ∋ (h++lt1, fs_r, e1v) /\ fs_beh fs_n' h lt1 fs_r
-            returns sem_value_shape TNat e1v with _. begin
-          assert (e1v == nat_to_exp fs_r);
-          lem_nat_to_exp_is_value fs_r
-          end
+          eliminate forall (e'':closed_exp) (lt':local_trace h). e_beh en_s e'' h lt' ==> sem_value_shape TNat e'' with e1v lt1
         end
       end;
       introduce forall (lta:local_trace h). a ⫄ (h++lta, fs_b', eb_s) with begin
@@ -2305,16 +2334,13 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
             eliminate exists (k:nat). qNat ∋ (h++lt1, k, en_v) /\ fs_beh fs_n' h lt1 k
               returns exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, e') /\ fs_beh (fs_ocomp_nrec fn fb ff fsG) h lt fs_r with _. begin
             assert (qNat ∋ (h++lt1, k, en_v));
+            assert_norm (qNat ∋ (h++lt1, k, en_v) == (en_v == nat_to_exp k));
             assert (en_v == nat_to_exp k);
             lem_nat_to_exp_is_value k;
             lem_value_is_irred (nat_to_exp k);
-            let enrec_k : closed_exp = ENRec (nat_to_exp k) eb_s ef_s in
-            assert (enrec_k == ENRec (nat_to_exp k) eb_s ef_s);
-            assert (steps (ENRec en_v eb_s ef_s) e' (h++lt1) lt2);
-            assert (ENRec en_v eb_s ef_s == enrec_k);
+            assert (ENRec en_v eb_s ef_s == ENRec (nat_to_exp k) eb_s ef_s);
             trans_history h lt1 lt2;
             assert (indexed_irred e' ((h++lt1)++lt2));
-            assert (e_beh enrec_k e' (h++lt1) lt2);
             introduce forall (lta:local_trace (h++lt1)). a ⫄ ((h++lt1)++lta, fs_b', eb_s) with begin
               eliminate forall (lta0:local_trace h). a ⫄ (h++lta0, fs_b', eb_s) with (lt1@lta);
               trans_history h lt1 lta
@@ -2333,9 +2359,8 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
         end
       end
     end
+    end
   end
-#pop-options 
-
 #push-options "--z3rlimit 30 --fuel 2 --ifuel 2 --split_queries always"
 let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) preArgs) (arg:exp)
   : Lemma
@@ -2381,8 +2406,6 @@ let compat_ocomp_call #g (op:io_ops) #preArgs (fs_arg:fs_ocomp g (q_io_args op) 
   assert (fs_ocomp_call op fs_arg ⊒ ECall op arg) by (
     FStar.Tactics.V1.norm [delta_only [`%(⊒); `%superset_ocomp]];
     FStar.Tactics.V1.smt ())
-#pop-options
-
 #pop-options
 
 (** Compatibility lemma for [QRef]: refining a [fs_oval] by a new

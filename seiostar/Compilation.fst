@@ -95,10 +95,10 @@ let rec lem_compile_superset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s
     lem_compile_superset qinrc;
     C1.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
   | QZero -> C1.compat_oval_zero g
-  | QSucc #_ #n qn ->
+  | QSucc #_ #_ #n qn ->
     lem_compile_superset qn;
     C1.compat_oval_succ n (compile qn)
-  | QNRec #_ #a #n #base #f qn qbase qf ->
+  | QNRec #_ #a #_ #n #_ #base #_ #f qn qbase qf ->
     lem_compile_superset qn;
     lem_compile_superset qbase;
     lem_compile_superset qf;
@@ -191,10 +191,10 @@ let rec lem_compile_subset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s)
     lem_compile_subset qinrc;
     C2.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
   | QZero -> C2.compat_oval_zero g
-  | QSucc #_ #n qn ->
+  | QSucc #_ #_ #n qn ->
     lem_compile_subset qn;
     C2.compat_oval_succ n (compile qn)
-  | QNRec #_ #a #n #base #f qn qbase qf ->
+  | QNRec #_ #a #_ #n #_ #base #_ #f qn qbase qf ->
     lem_compile_subset qn;
     lem_compile_subset qbase;
     lem_compile_subset qf;

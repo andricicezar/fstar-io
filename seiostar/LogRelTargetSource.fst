@@ -17,7 +17,8 @@ let rec (∋) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   let (h, fs_v, e) = p in
   match get_rel t with // way to "match" on F* types
   | QUnit -> fs_v == () /\ e == EUnit
-  | QBool #ref -> (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse)
+  | QBool #ref -> (let fs_v : bool = fs_v in
+     (ref true /\ fs_v == true /\ e == ETrue) \/ (fs_v == false /\ e == EFalse))
   | QFileDescriptor ->  e == EFileDescr fs_v
   | QString -> (match e with | EString s -> fs_v == s | _ -> False)
   | QArr #t1 #t2 qt1 qt2 -> begin

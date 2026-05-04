@@ -590,11 +590,20 @@ unfold
 let fs_oval_zero (g:typ_env) : fs_oval g qNat _ = fs_oval_return g 0
 
 unfold
-let fs_oval_succ (#g:typ_env) (n:fs_oval g qNat) : fs_oval g qNat =
+let fs_oval_succ (#g:typ_env) (#preN:spec_env g) (n:fs_oval g qNat preN) : fs_oval g qNat preN =
   fun fsG -> n fsG + 1
 
 unfold
-let fs_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (b:fs_oval g a) (f:fs_oval g (a ^-> a)) : fs_oval g a =
+let fs_oval_nrec
+  (#g:typ_env)
+  (#a:qType)
+  (#preN:spec_env g)
+  (n:fs_oval g qNat preN)
+  (#preB:spec_env g)
+  (b:fs_oval g a preB)
+  (#preF:spec_env g)
+  (f:fs_oval g (a ^-> a) preF)
+  : fs_oval g a (spec_env_app preN (spec_env_app preB preF)) =
   fun fsG -> fs_nrec_val #a (n fsG) (b fsG) (f fsG)
 
 let rec fs_io_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_comp a) : fs_comp a =
@@ -609,10 +618,15 @@ let rec fs_io_nrec_comp (#a:qType) (n:nat) (b:fs_comp a) (f:fs_comp (a ^->!@ a))
         f' b')))
     f
 
-let fs_ocomp_nrec (#g:typ_env) (#a:qType)
-    (fn:fs_ocomp g qNat)
-    (fb:fs_ocomp g a)
-    (ff:fs_ocomp g (a ^->!@ a))
-    : fs_ocomp g a =
+let fs_ocomp_nrec
+    (#g:typ_env)
+    (#a:qType)
+    (#preN:spec_env g)
+    (fn:fs_ocomp g qNat preN)
+    (#preB:spec_env g)
+    (fb:fs_ocomp g a preB)
+    (#preF:spec_env g)
+    (ff:fs_ocomp g (a ^->!@ a) preF)
+    : fs_ocomp g a (spec_env_bind' #g #qNat preN (fun _ -> spec_env_app preB preF)) =
   fs_ocomp_bind' fn (fun n' ->
     fun fsG -> fs_io_nrec_comp #a n' (fb fsG) (ff fsG))

@@ -341,19 +341,19 @@ let test_apply_io_return ()
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_read ()
-  : (qUnit ^->!@ (qResexn qString)) ⊩ apply_read
+  : (qFileDescr ^->!@ (qResexn qString)) ⊩ apply_read
   by (simplify_stack_ops (); norm [delta_only [`%fs_oval_helper;`%apply_read];iota]; simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QCall ORead (QFd 0)))
+  = mk_dturniqet (fun _ -> QLambdaIO (QCall ORead QAxiom))
 
 let test_apply_write_const ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_write_const
+  : (qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_write_const
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QCall OWrite (QMkpair (QFd 2) (QStringLit "hello"))))
+  = mk_dturniqet (fun _ -> QLambdaIO (QCall OWrite (QMkpair QAxiom (QStringLit "hello"))))
 
 let test_apply_write ()
-  : _ ⊩  apply_write
+  : (qFileDescr ^-> qString ^->!@ (qResexn qUnit)) ⊩ apply_write
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QCall OWrite (QMkpair (QFd 1) QAxiom)))
+  = mk_dturniqet (fun _ -> QLambda (QLambdaIO (QCall OWrite (QMkpair (QWeaken QAxiom) QAxiom))))
 
 let test_apply_io_bind_const ()
   : (qUnit ^->!@ qBool) ⊩ apply_io_bind_const
@@ -385,46 +385,49 @@ let test_apply_io_bind_pure_if ()
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_write ()
-  : (qString ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_write
+  : (qFileDescr ^-> qString ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_write
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (
+  = mk_dturniqet (fun _ -> QLambda (QLambdaIO (
       QBind
          (QReturn QAxiom)
-         (QCall OWrite (QMkpair (QFd 2) QAxiom))))
+         (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) QAxiom)))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
+  : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
   by ( simplify_stack_ops (); simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 4))
+  = mk_dturniqet (fun _ -> QLambda (QLambdaIO (QBind (QCall ORead (QWeaken QAxiom))
     (QCaseIO QAxiom
-      (QCall OWrite (QMkpair (QFd 1) (QStringLit "data")))
-      (QReturn (QInr QAxiom)))))
+      (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+      (QReturn (QInr QAxiom))))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write' ()
-   : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
+   : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write'
    by (simplify_via_norm ())
-   = mk_dturniqet (fun _ -> QLambdaIO (QBind (QCall ORead (QFd 9)) (
-       QCaseIO QAxiom (QCall OWrite (QMkpair (QFd 2) (QStringLit "data"))) (QReturn (QInr QAxiom)))))
+   = mk_dturniqet (fun _ -> QLambda (QLambdaIO (
+       QBind (QCall ORead (QWeaken QAxiom))
+         (QCaseIO QAxiom
+           (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+           (QReturn (QInr QAxiom))))))
 
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_if_write ()
-  : (qUnit ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
+  : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_if_write
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QLambdaIO
+  = mk_dturniqet (fun _ -> QLambda (QLambdaIO
       (QBind
-        (QCall ORead (QFd 0))
+        (QCall ORead (QWeaken QAxiom))
          (QCaseIO QAxiom
-           (QCall OWrite (QMkpair (QFd 7) (QStringLit "data")))
-           (QReturn (QInr QAxiom)))))
+           (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
+           (QReturn (QInr QAxiom))))))
 
 let test_sendError400 ()
-  : (qBool ^->!@ qUnit) ⊩ sendError400
+  : (qFileDescr ^->!@ qUnit) ⊩ sendError400
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO
       (QBind
-        (QCall OWrite (QMkpair (QFd 9) (QStringLit "error400")))
+        (QCall OWrite (QMkpair QAxiom (QStringLit "error400")))
         (QReturn Qtt)))
 
 let test_const_str
@@ -438,39 +441,39 @@ let test_greeting ()
 
 let test_nat_zero
   : qNat ⊩ nat_zero
-  = QZero
+  = mk_dturniqet (fun _ -> QZero)
 
 let test_nat_one
   : qNat ⊩ nat_one
-  = QSucc QZero
+  = mk_dturniqet (fun _ -> QSucc QZero)
 
 let test_nat_two
   : qNat ⊩ nat_two
-  = QSucc (QSucc QZero)
+  = mk_dturniqet (fun _ -> QSucc (QSucc QZero))
 
 let test_nat_succ_fn
   : (qNat ^-> qNat) ⊩ nat_succ_fn
-  = QLambda (QSucc QAxiom)
+  = mk_dturniqet (fun _ -> QLambda (QSucc QAxiom))
 
 let test_nat_nrec_base ()
   : qNat ⊩ nat_two
-  = QNRec QZero (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+  = mk_dturniqet (fun _ -> QNRec QZero (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
 let test_nat_add2 ()
   : (qNat ^-> qNat) ⊩ nat_add2
-  = QLambda (QNRec (QSucc (QSucc QZero)) QAxiom (QLambda (QSucc QAxiom)))
+  = mk_dturniqet (fun _ -> QLambda (QNRec (QSucc (QSucc QZero)) QAxiom (QLambda (QSucc QAxiom))))
 
 let test_nat_nrec_two_plus_three1 ()
   : qNat ⊩ nat_five1
-  = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+  = mk_dturniqet (fun _ -> QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
 let test_nat_nrec_two_plus_three2 ()
   : qNat ⊩ nat_five2
-  = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+  = mk_dturniqet (fun _ -> QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
 let test_nat_fact_five ()
   : qNat ⊩ fact_five
-  = QSnd (
+  = mk_dturniqet (fun _ -> QSnd (
       QNRec
         (QSucc (QSucc (QSucc (QSucc (QSucc QZero)))))
         (QMkpair QZero (QSucc QZero))
@@ -484,7 +487,7 @@ let test_nat_fact_five ()
                 (QNRec
                   (QSnd (QWeaken QAxiom))
                   QAxiom
-                  (QLambda (QSucc QAxiom))))))))
+                  (QLambda (QSucc QAxiom)))))))))
 
 #pop-options
 

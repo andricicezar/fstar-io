@@ -51,14 +51,18 @@ type typing : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_oval g a preG -> T
 
 | QZero       : #g : typ_env -> typing #qNat g (fs_oval_zero g)
 | QSucc       : #g : typ_env ->
-                #n : fs_oval g qNat ->
+                #preN : spec_env g ->
+                #n : fs_oval g qNat preN ->
                 typing g n ->
                 typing #qNat g (fs_oval_succ n)
 | QNRec       : #g : typ_env ->
                 #a : qType ->
-                #n : fs_oval g qNat ->
-                #base : fs_oval g a ->
-                #f : fs_oval g (a ^-> a) ->
+                #preN : spec_env g ->
+                #n : fs_oval g qNat preN ->
+                #preBase : spec_env g ->
+                #base : fs_oval g a preBase ->
+                #preF : spec_env g ->
+                #f : fs_oval g (a ^-> a) preF ->
                 typing g n ->
                 typing g base ->
                 typing g f ->
