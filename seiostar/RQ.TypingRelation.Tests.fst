@@ -651,8 +651,8 @@ let test_ior_simple_ref_bind ()
   : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_ref_bind
   by (simplify_stack_ops (); simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
-    QBind 
-      (QCall OOpen (QStringLit "./string")) 
+    QBind
+      (QCall OOpen (QStringLit "./string"))
       (QReturn (QRef (QWeaken QAxiom) #(fun t -> t == true \/ t == false)))))
 
 (** Example 6: Return refined true constant *)
@@ -688,7 +688,7 @@ let test_ior_io_bind_ret_ref ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
     QBind
-      (QReturn Qtt) 
+      (QReturn Qtt)
       (QReturn (QRef QTrue #(fun x -> x == true)))))
 
 (** Example 11: IO call then return refined *)
@@ -696,7 +696,7 @@ let test_ior_io_call_ret_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_call_ret_ref
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
-      QBind 
+      QBind
         (QCall OOpen (QStringLit "./file"))
         (QReturn (QRef QTrue #(fun x -> x == true)))))
 
@@ -704,12 +704,12 @@ let test_ior_io_call_ret_ref ()
 let test_ior_io_two_calls_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true)) ⊩ io_two_calls_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
     QLambdaIO (
-      QBind 
-        (QCall OOpen (QStringLit "./a")) 
-        (QBind 
-          (QCall OOpen (QStringLit "./b")) 
+      QBind
+        (QCall OOpen (QStringLit "./a"))
+        (QBind
+          (QCall OOpen (QStringLit "./b"))
           (QReturn (QRef QTrue #(fun x -> x == true))))))
 
 (** Example 13: Inject Inl with refined input in IO *)
@@ -736,8 +736,8 @@ let test_ior_io_case_ref ()
   : ((qBool ^+ qUnit) ^->!@ qBoolR (fun y -> y == false)) ⊩ io_case_ref
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
-      QCaseIO QAxiom 
-        (QReturn (QRef QFalse #(fun y -> y == false))) 
+      QCaseIO QAxiom
+        (QReturn (QRef QFalse #(fun y -> y == false)))
         (QReturn (QRef QFalse #(fun y -> y == false)))))
 
 (** Example 17: if!@ with refined result *)
@@ -746,10 +746,10 @@ let test_ior_io_ifbang_ref ()
   : (qBool ^->!@ qBoolR (fun y -> y == true)) ⊩ io_ifbang_ref
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambdaIO (
-      QBind 
-        (QReturn QAxiom) 
-        (QIfIO QAxiom 
-          (QReturn (QRef QTrue #(fun y -> y == true))) 
+      QBind
+        (QReturn QAxiom)
+        (QIfIO QAxiom
+          (QReturn (QRef QTrue #(fun y -> y == true)))
           (QReturn (QRef QTrue #(fun y -> y == true))))))
 
 (** Example 18: match!@ on IO call with refined result *)
@@ -757,12 +757,12 @@ let test_ior_io_ifbang_ref ()
 let test_ior_io_matchbang_ref ()
   : (qUnit ^->!@ qBoolR (fun y -> y == true \/ y == false)) ⊩ io_matchbang_ref
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
     QLambdaIO (
-      QBind 
-        (QCall OOpen (QStringLit "./file")) 
-        (QCaseIO QAxiom 
-          (QReturn (QRef QTrue #(fun y -> y == true \/ y == false))) 
+      QBind
+        (QCall OOpen (QStringLit "./file"))
+        (QCaseIO QAxiom
+          (QReturn (QRef QTrue #(fun y -> y == true \/ y == false)))
           (QReturn (QRef QFalse #(fun y -> y == true \/ y == false))))))
 
 (** Example 19: Ghost sequencing before IO return *)
@@ -776,7 +776,7 @@ let test_ior_io_ghost_seq ()
 let test_ior_io_apply_callback ()
   : ((qBoolR (fun x -> x == true) ^-> qBool) ^->!@ qBool) ⊩ io_apply_callback
   by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> 
+  = mk_dturniqet (fun _ ->
     QLambdaIO (QReturn (QApp QAxiom (QRef QTrue #(fun x -> x == true)))))
 
 (** Example 21: Validate with refined callback in IO *)

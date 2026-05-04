@@ -108,8 +108,8 @@ FSTAR_LSP_MCP_MAIN ?= $(HOME)/.copilot/fstar-lsp-mcp/main.js
 mcp: | $(BUILD_DIR) $(CACHEDIR) $(ODIR)
 	@test -f "$(FSTAR_LSP_MCP_MAIN)" || (echo "Missing MCP server entrypoint: $(FSTAR_LSP_MCP_MAIN)" 1>&2; exit 1)
 	@ARGS_FILE="$(abspath $(BUILD_DIR)/fstar-lsp.args)"; \
-	  printf '%s\n' $(FLAGS) > "$$ARGS_FILE"; \
-	  FSTAR_WORKSPACE_ROOT="$(CURDIR)" FSTAR_LSP_ARGS_FILE="$$ARGS_FILE" exec node "$(FSTAR_LSP_MCP_MAIN)"
+    printf '%s\n' $(FLAGS) > "$$ARGS_FILE"; \
+	FSTAR_WORKSPACE_ROOT="$(CURDIR)" FSTAR_LSP_ARGS_FILE="$$ARGS_FILE" exec node "$(FSTAR_LSP_MCP_MAIN)"
 
 ifdef _SINGLE_FILE
 validate: | $(CACHEDIR) $(ODIR)

@@ -1171,7 +1171,7 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
       trans_history h lt1 lt';
       let (e_r, (| lt2, lt3 |)) = destruct_steps_ecall op arg' e' (h++lt1) lt' sts1 in
       lem_value_is_irred arg';
-      lem_value_is_irred e_r; 
+      lem_value_is_irred e_r;
       introduce steps e_r e' ((h++lt1)++lt2) lt3 ==> (e_r == e' /\ lt3 == []) with _. begin
         FStar.Squash.bind_squash #(steps e_r e' ((h++lt1)++lt2) lt3) () (fun sts ->
         lem_irred_implies_srefl_steps sts)
