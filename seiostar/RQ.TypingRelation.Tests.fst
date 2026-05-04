@@ -9,15 +9,7 @@ let simplify_via_norm () : Tac unit =
   let _ = repeat forall_intro in
   or_else trivial trefl
 
-let simplify_d () : Tac unit = norm [delta_only [
-      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
-      `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;
-      `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
-      `%op_Hat_Subtraction_Greater_Bang_At;
-      `%get_rel; `%get_Type;
-      `%q_io_args; `%q_io_res;
-      `%Mkdtuple2?._1;`%Mkdtuple2?._2];
-    iota]
+let simplify_d () : Tac unit = norm [delta_only qType_defs_list; iota]
 
 val var0 : fs_oval (extend qBool empty) qBool spec_env_axiom
 let var0 fsG = hd fsG
@@ -536,6 +528,34 @@ let d_test_const_str () : _ ⊫ _
 let d_test_greeting () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_greeting ()) ()
+let d_test_nat_zero () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet test_nat_zero ()
+let d_test_nat_one () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet test_nat_one ()
+let d_test_nat_two () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet test_nat_two ()
+let d_test_nat_succ_fn () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet test_nat_succ_fn ()
+let d_test_nat_nrec_base () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_nat_nrec_base ()) ()
+let d_test_nat_add2 () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_nat_add2 ()) ()
+let d_test_nat_nrec_two_plus_three1 () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_nat_nrec_two_plus_three1 ()) ()
+let d_test_nat_nrec_two_plus_three2 () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_nat_nrec_two_plus_three2 ()) ()
+let d_test_nat_fact_five () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_nat_fact_five ()) ()
+
 
 #push-options "--no_smt"
 open ExamplesRefs
@@ -625,18 +645,16 @@ let test_context ()
       (QApp QAxiom (QRef qVar1 #(fun x -> x == true)))
       (QLambda QAxiom))))
 
-(**
-let test_pure_fun ()
- : (qArrR (qBoolR (fun b -> b == true)) qBool (fun b r -> r == b)) ⊩ pure_fun
-  by (simplify_via_norm ())
-  = mk_dturniqet (fun _ -> QRetype (QLambda #(qBoolR (fun b -> b == true)) QTrue))
-**)
+// let test_pure_fun ()
+//  : (qArrR (qBoolR (fun b -> b == true)) qBool (fun b r -> r == b)) ⊩ pure_fun
+//   by (simplify_via_norm ())
+//   = mk_dturniqet (fun _ -> QRetype (QLambda #(qBoolR (fun b -> b == true)) QTrue))
 
 #pop-options
 
 let d_test_refbool () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet (test_refbool ()) (_ by (norm [delta; iota]))
+  = mk_turniqet (test_refbool ()) ()
 
 let d_test_falsepre () : _ ⊫ _
   by (simplify_d ())
@@ -921,13 +939,13 @@ let d_test_ior_io_pair_ref () : _ ⊫ _
   = mk_turniqet (test_ior_io_pair_ref ()) ()
 let d_test_ior_io_case_ref () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet (test_ior_io_case_ref ()) (_ by (norm [delta; iota]))
+  = mk_turniqet (test_ior_io_case_ref ()) ()
 let d_test_ior_io_ifbang_ref () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_ior_io_ifbang_ref ()) ()
 let d_test_ior_io_matchbang_ref () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet (test_ior_io_matchbang_ref ()) (_ by (norm [delta; iota]))
+  = mk_turniqet (test_ior_io_matchbang_ref ()) ()
 //let d_test_ior_io_ghost_seq () : _ ⊫ _
 //  by (simplify_d ())
 //  = mk_turniqet (test_ior_io_ghost_seq ()) ()

@@ -8,9 +8,7 @@ open QTypes.OpenValComp
 let simplify_stack_ops () : Tac unit =
    l_to_r [`lem_hd_stack; `lem_tail_stack_inverse]
 
-let simplify_qType_g g (x:term) : Tac term =
-  norm_term_env g [
-    delta_only [
+let qType_defs_list = [
       `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
       `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;
       `%change_refinement;`%ref_type;`%ref_type';
@@ -18,7 +16,11 @@ let simplify_qType_g g (x:term) : Tac term =
       `%op_Hat_Subtraction_Greater_Bang_At;
       `%get_rel; `%get_Type;
       `%q_io_args; `%q_io_res;
-      `%Mkdtuple2?._1;`%Mkdtuple2?._2];
+      `%Mkdtuple2?._1;`%Mkdtuple2?._2]
+
+let simplify_qType_g g (x:term) : Tac term =
+  norm_term_env g [
+      delta_only qType_defs_list;
     iota;
   ] x
 
