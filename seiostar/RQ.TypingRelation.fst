@@ -242,9 +242,6 @@ let pack_turnstile #a #x (#pre:spec_env empty) (turnstile:(empty ⊢ (fs_oval_he
   : a ⊩ x =
   pack_turnstile_g turnstile
 
-let rec lemma_pre_is_always_provable #a #x (packed_turnstile:a ⊩ x) : Lemma ((dfst packed_turnstile) empty_eval) =
-  admit ()
-
 let (⊫) (a:qType) (x: fs_val a) =
   pre:spec_env empty &
   proof:squash (pre empty_eval) &

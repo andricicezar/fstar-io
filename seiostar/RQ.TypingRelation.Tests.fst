@@ -652,6 +652,15 @@ let test_context ()
 
 #pop-options
 
+(* Counterexample: on a refinable base type, QRef can make the top-level precondition unsatisfiable. *)
+let test_qref_false_pre_on_bool ()
+  : qBool ⊩ true
+  = pack_turnstile (QRef (QRef QTrue #(fun _ -> False)) #(fun _ -> True))
+
+let test_qref_false_pre_on_bool_unsat ()
+  : Lemma (~((dfst (test_qref_false_pre_on_bool ())) empty_eval))
+  = ()
+
 let d_test_refbool () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_refbool ()) ()
