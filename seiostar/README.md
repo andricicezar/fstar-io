@@ -1,6 +1,7 @@
 # Artifact for "Misquoted No More: Securely Extracting F\* Programs with IO"
 
-This contains an extension of the artifact that extends IO\* with refinements.
+This contains the artifact associated with the ICFP 2026 submission with the name:
+"[Misquoted No More: Securely Extracting F\* Programs with IO]()".
 
 To see how we implemented refinements check the following files:
 1. In `QTypes.fst` to see how we added refinements to the supported types
@@ -17,7 +18,7 @@ backtranslation and reprove that SEIO* satisfies RrHP.
 The proof of RrHP contains one admitted compatibility lemma that we did not
 have time to finish, but should be provable. 
 
-What we don't yet have a complete answer for is how to automatically produce such typing derivations in a meta-program. Especially without any user annotations, this is a challenge that we are calling out as future work in the submission (lines 1061-1063) and that is specific to the way F* does refinement types, as opposed to the sigma types of Rocq and Lean, which we think would be easier to support (hinted at in lines 1071-1073, which we will make more explicit).
+The artifact is admit free.
 
 ## Table of Contents
 * [List of Claims](#list-of-claims)
@@ -70,7 +71,7 @@ The simplest way for OPAM users is to create the `only-fstar` switch:
 $ opam switch import only-fstar.export --switch only-fstar
 
 If you want to install F* manually,
-You need F* version 2025.12.15 (or higher) to run this artifact.
+You need F* version 2026.03.24 to run this artifact.
 See more details about [how to install F\* here](https://github.com/FStarLang/FStar/blob/master/INSTALL.md).
 
 ## Evaluation Instructions
@@ -98,6 +99,12 @@ Should be a long list of files verified by F\*. A few warnings appear
 that the name of our `IO` module conflicts with F*'s module,
 they are benign and can be ignored.
 Also logs from the metaprogram appear.
+
+**Checking for lack of axioms.**
+To check that we use no axioms or admit any proofs, you can clean the already
+built F* modules (by `make clean`) and then run `make validate`. This will run
+the build passing the `--report_assumes error` flag to F*. If any unsafe feature
+is used, you should see a hard error.
 
 **Opening the files interactively.**
 If you installed F* in your system, you should be able just open VS Code in the

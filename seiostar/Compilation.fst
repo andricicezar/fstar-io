@@ -30,6 +30,9 @@ let rec compile #g #a #pre (#s:fs_oval g a pre) (qs:g ⊢ s) : Tot exp (decrease
   | QInl qp -> EInl (compile qp)
   | QInr qp -> EInr (compile qp)
   | QCase cond inlc inrc -> ECase (compile cond) (compile inlc) (compile inrc)
+  | QZero -> EZero
+  | QSucc qn -> ESucc (compile qn)
+  | QNRec qn qbase qf -> ENRec (compile qn) (compile qbase) (compile qf)
   | QLambdaIO qbody -> ELam (compile_ocomp qbody)
   // | QSeqGhost _ _ qk -> compile qk  -- QSeqGhost is commented out in RQ.TypingRelation
   | QRef qv -> compile qv
@@ -91,6 +94,15 @@ let rec lem_compile_superset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s
     lem_compile_superset qinlc;
     lem_compile_superset qinrc;
     C1.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> C1.compat_oval_zero g
+  | QSucc #_ #n qn ->
+    lem_compile_superset qn;
+    C1.compat_oval_succ n (compile qn)
+  | QNRec #_ #a #n #base #f qn qbase qf ->
+    lem_compile_superset qn;
+    lem_compile_superset qbase;
+    lem_compile_superset qf;
+    C1.compat_oval_nrec #_ #a n base f (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #_ #_ #_ #body qbody ->
     lem_compile_superset_comp qbody;
     C1.compat_oval_lambda_ocomp body (compile_ocomp qbody)
@@ -178,6 +190,15 @@ let rec lem_compile_subset #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ s)
     lem_compile_subset qinlc;
     lem_compile_subset qinrc;
     C2.compat_oval_case cond inlc inrc (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> C2.compat_oval_zero g
+  | QSucc #_ #n qn ->
+    lem_compile_subset qn;
+    C2.compat_oval_succ n (compile qn)
+  | QNRec #_ #a #n #base #f qn qbase qf ->
+    lem_compile_subset qn;
+    lem_compile_subset qbase;
+    lem_compile_subset qf;
+    C2.compat_oval_nrec #_ #a n base f (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #_ #_ #_ #body qbody ->
     lem_compile_subset_comp qbody;
     C2.compat_oval_lambda_ocomp body (compile_ocomp qbody)
@@ -265,6 +286,15 @@ let rec lem_compile_fv_in_env #g #pre (#a:qType) (#s:fs_oval g a pre) (qs:g ⊢ 
     lem_compile_fv_in_env qinlc;
     lem_compile_fv_in_env qinrc;
     lem_fv_in_env_case g ta tb (compile qcond) (compile qinlc) (compile qinrc)
+  | QZero -> lem_fv_in_env_zero g
+  | QSucc qn ->
+    lem_compile_fv_in_env qn;
+    lem_fv_in_env_succ g (compile qn)
+  | QNRec qn qbase qf ->
+    lem_compile_fv_in_env qn;
+    lem_compile_fv_in_env qbase;
+    lem_compile_fv_in_env qf;
+    lem_fv_in_env_nrec g (compile qn) (compile qbase) (compile qf)
   | QLambdaIO #_ #qa #_ #body qbody ->
     lem_compile_fv_in_env_prod qbody;
     lem_fv_in_env_lam g qa (compile_ocomp qbody)

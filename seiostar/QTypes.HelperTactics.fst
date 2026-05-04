@@ -11,7 +11,7 @@ let simplify_stack_ops () : Tac unit =
 let simplify_qType_g g (x:term) : Tac term =
   norm_term_env g [
     delta_only [
-      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr;
+      `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
       `%qUnitR;`%qBoolR;`%qFileDescrR;`%qStringR;`%qSumR;`%qPairR;
       `%change_refinement;`%ref_type;`%ref_type';
       `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;

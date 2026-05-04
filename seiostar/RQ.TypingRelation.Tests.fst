@@ -436,6 +436,56 @@ let test_greeting ()
   by (simplify_via_norm ())
   = mk_dturniqet (fun _ -> QLambda (QIf QAxiom (QStringLit "hello") (QStringLit "goodbye")))
 
+let test_nat_zero
+  : qNat ⊩ nat_zero
+  = QZero
+
+let test_nat_one
+  : qNat ⊩ nat_one
+  = QSucc QZero
+
+let test_nat_two
+  : qNat ⊩ nat_two
+  = QSucc (QSucc QZero)
+
+let test_nat_succ_fn
+  : (qNat ^-> qNat) ⊩ nat_succ_fn
+  = QLambda (QSucc QAxiom)
+
+let test_nat_nrec_base ()
+  : qNat ⊩ nat_two
+  = QNRec QZero (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+
+let test_nat_add2 ()
+  : (qNat ^-> qNat) ⊩ nat_add2
+  = QLambda (QNRec (QSucc (QSucc QZero)) QAxiom (QLambda (QSucc QAxiom)))
+
+let test_nat_nrec_two_plus_three1 ()
+  : qNat ⊩ nat_five1
+  = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+
+let test_nat_nrec_two_plus_three2 ()
+  : qNat ⊩ nat_five2
+  = QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom))
+
+let test_nat_fact_five ()
+  : qNat ⊩ fact_five
+  = QSnd (
+      QNRec
+        (QSucc (QSucc (QSucc (QSucc (QSucc QZero)))))
+        (QMkpair QZero (QSucc QZero))
+        (QLambda
+          (QMkpair
+            (QSucc (QFst QAxiom))
+            (QNRec
+              (QSucc (QFst QAxiom))
+              QZero
+              (QLambda
+                (QNRec
+                  (QSnd (QWeaken QAxiom))
+                  QAxiom
+                  (QLambda (QSucc QAxiom))))))))
+
 #pop-options
 
 let d_test_u_return () : _ ⊫ _

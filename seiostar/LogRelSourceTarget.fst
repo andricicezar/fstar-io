@@ -49,6 +49,7 @@ let rec (∈) (t:qType) (p:(history * fs_val t * closed_exp)) : Tot Type0 (decre
   end
   //| QRefinement #t qt ref -> False // TODO
 
+  | QNat -> e == nat_to_exp fs_v
                            (** vvvvvvvvvv defined over values **)
 and (⊆) (t:qType) (p:history * fs_val t * closed_exp) : Tot Type0 (decreases %[get_rel t;1]) =
   let (h, fs_e, e) = p in
@@ -84,10 +85,12 @@ let rec lem_values_are_values t h fs_e (e:closed_exp) :
     let EPair e1 e2 = e in
     lem_values_are_values (pack qt1) h (fst #t1 #t2 fs_e) e1;
     lem_values_are_values (pack qt2) h (snd #t1 #t2 fs_e) e2
-  | QSum #t1 #t2 qt1 qt2 ->
+  | QSum #t1 #t2 qt1 qt2 -> begin
     match fs_e, e with
     | Inl fs_e', EInl e' -> lem_values_are_values (pack qt1) h fs_e' e'
     | Inr fs_e', EInr e' -> lem_values_are_values (pack qt2) h fs_e' e'
+    end
+  | QNat -> lem_nat_to_exp_is_value fs_e
 
 let steps_val_id (e:value) (e':closed_exp) (h:history)
   : Lemma (requires squash (steps e e' h []))
@@ -245,6 +248,7 @@ let rec val_type_closed_under_history_extension (t:qType) (h:history) (fs_v:fs_v
     | Inr fs_v', EInr e' -> val_type_closed_under_history_extension (pack qt2) h fs_v' e'
     | _ -> false_elim ()
     end
+  | QNat -> ()
   end
 
 let lem_shift_type_value_environments (#g:typ_env) #b (h:history) (fsG:eval_env g) (s:gsub g b) :

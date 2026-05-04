@@ -341,6 +341,7 @@ let fs_oval_case #_ #_ #_ #_ #preCond cond #preInlc inlc #preInrc inrc fsG =
     inrc (stack fsG x)
 
 (** Open computations **)
+
 unfold
 val fs_ocomp_return :
         g:typ_env ->
@@ -581,3 +582,37 @@ let fs_ocomp_string_eq x y =
   fs_ocomp_bind' x (fun x' ->
     fs_ocomp_bind' y (fun y' ->
       fs_ocomp_return_val _ _ (x' = y')))
+
+let fs_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_val a) : fs_val a =
+  io_nrec n b f
+
+unfold
+let fs_oval_zero (g:typ_env) : fs_oval g qNat _ = fs_oval_return g 0
+
+unfold
+let fs_oval_succ (#g:typ_env) (n:fs_oval g qNat) : fs_oval g qNat =
+  fun fsG -> n fsG + 1
+
+unfold
+let fs_oval_nrec (#g:typ_env) (#a:qType) (n:fs_oval g qNat) (b:fs_oval g a) (f:fs_oval g (a ^-> a)) : fs_oval g a =
+  fun fsG -> fs_nrec_val #a (n fsG) (b fsG) (f fsG)
+
+let rec fs_io_nrec_val (#a:qType) (n:nat) (b:fs_val a) (f:fs_val a -> fs_comp a) : fs_comp a =
+  if n = 0 then io_return b
+  else io_bind (f b) (fun b' -> fs_io_nrec_val #a (n-1) b' f)
+
+let rec fs_io_nrec_comp (#a:qType) (n:nat) (b:fs_comp a) (f:fs_comp (a ^->!@ a)) : fs_comp a =
+  if n = 0 then b
+  else fs_io_nrec_comp #a (n-1)
+    (fs_comp_bind f (fun f' ->
+      fs_comp_bind b (fun b' ->
+        f' b')))
+    f
+
+let fs_ocomp_nrec (#g:typ_env) (#a:qType)
+    (fn:fs_ocomp g qNat)
+    (fb:fs_ocomp g a)
+    (ff:fs_ocomp g (a ^->!@ a))
+    : fs_ocomp g a =
+  fs_ocomp_bind' fn (fun n' ->
+    fun fsG -> fs_io_nrec_comp #a n' (fb fsG) (ff fsG))

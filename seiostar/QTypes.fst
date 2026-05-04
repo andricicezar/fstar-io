@@ -12,6 +12,7 @@ noeq
 type type_quotation : Type0 -> Type u#1 =
 | QUnit : #ref:(unit -> Type0) -> type_quotation (x:unit{ref x})
 | QBool : #ref:(bool -> Type0) -> type_quotation (x:bool{ref x})
+| QNat  : type_quotation nat
 | QFileDescriptor : #ref:(file_descr -> Type0) -> type_quotation (x:file_descr{ref x})
 | QString : #ref:(string -> Type0) -> type_quotation (x:string{ref x})
 | QArr : #t1:Type ->
@@ -47,6 +48,15 @@ let test_match t (tq:type_quotation t) = (** why does this work so well? **)
   | QArrIO #t1 #t2 _ _ -> assert (t == ((x:t1 -> io (y:t2))))
   | QPair #t1 #t2 _ _ #ref -> assert (t == (x:(t1 & t2){ref x}))
   | QSum #t1 #t2 _ _ #ref -> assert (t == (x:(either t1 t2){ref x}))
+  | QUnit -> assert (t == unit)
+  | QBool -> assert (t == bool)
+  | QFileDescriptor -> assert (t == file_descr)
+  | QString -> assert (t == string)
+  | QArr #t1 #t2 _ _ -> assert (t == (t1 -> t2))
+  | QArrIO #t1 #t2 _ _ -> assert (t == (t1 -> io t2))
+  | QPair #t1 #t2 _ _ -> assert (t == (t1 & t2))
+  | QSum #t1 #t2 _ _ -> assert (t == either t1 t2)
+  | QNat -> assert (t == nat)
 
 let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   match qt with
@@ -59,6 +69,7 @@ let rec type_quotation_to_typ #s (qt:type_quotation s) : typ =
   | QArrIO qt1 qt2 ->
     TArr (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
   | QSum qt1 qt2 -> TSum (type_quotation_to_typ qt1) (type_quotation_to_typ qt2)
+  | QNat -> TNat
 
 (** Type of Quotable Types **)
 type qType =
@@ -133,6 +144,8 @@ let (^*) (t1 t2:qType) : qType =
 let (^+) (t1 t2:qType) : qType =
   (| _, QSum (get_rel t1) (get_rel t2) #(fun _ -> True) |)
 
+let qNat : qType = (| _, QNat |)
+
 let qResexn (t1:qType) : qType = t1 ^+ qUnit
 
 unfold
@@ -141,6 +154,7 @@ let ref_type' #t (qt:type_quotation t) : Type0 =
   | QUnit -> unit
   | QBool -> bool
   | QFileDescriptor -> file_descr
+  | QNat -> nat
   | QString -> string
   | QSum #t1 #t2 qt1 qt2 -> either t1 t2
   | QPair #t1 #t2 qt1 qt2 -> t1 & t2

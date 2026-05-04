@@ -107,3 +107,17 @@ let match_either_arg : either bool bool -> bool -> bool =
 
 let greeting (b:bool) : string = if b then "hello" else "goodbye"
 let const_str : string = "constant"
+
+let nat_zero : nat = 0
+let nat_one  : nat = 1
+let nat_two  : nat = 2
+
+let nat_succ_fn : nat -> nat = fun n -> n + 1
+
+let nat_add2 : nat -> nat = fun n -> IOStar.io_nrec 2 n (fun x -> x + 1)
+
+let nat_five1 : nat = IOStar.io_nrec 3 2 (fun x -> x + 1)
+
+let nat_five2 : nat = nat_add2 3
+
+let fact_five : nat = snd (IOStar.io_nrec 5 (0, 1) (fun (v : nat*nat) -> (fst v + 1, IOStar.io_nrec (fst v + 1) 0 (fun (a : nat) -> IOStar.io_nrec (snd v) a (fun (w : nat) -> w + 1)))))

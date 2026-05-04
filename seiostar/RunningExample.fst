@@ -761,31 +761,15 @@ let main agent =
 // %splice_t[validate_derivation] (generate_derivation "validate_derivation" (`validate))
 // %splice_t[read_file_derivation] (generate_derivation "read_file_derivation" (`read_file))
 
-// %splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
-
-%splice_t[wrapper_derivation] (generate_derivation "wrapper_derivation" (`wrapper))
-
-[@@ (preprocess_with simplify_qType)]
-let main_derivation #g : typing g (fs_oval_return g main)
-  by (trefl ())
-  = QLambdaIO (
-      QBind
-        (QAppIO
-          (QApp (QApp wrapper_derivation (QStringLit "./temp"))
-                (QStringLit "overwrite\n"))
-          QAxiom)
-        (QCaseIO QAxiom
-          (QReturn QTrue)
-          (QReturn QFalse)))
+%splice_t[main_derivation] (generate_derivation "main_derivation" (`main))
 
 let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
 }
 
-
 val ps_main : progS re_int
 let ps_main : progS re_int=
-  (| main, main_derivation #empty |)
+  (| main, main_derivation empty |)
 
 let pt_main = RrHP.compile_prog ps_main
 
@@ -852,6 +836,56 @@ let write_mixedup_agent : exp =
         )
         (* Inr _ => unit *)
         EUnit
+      )
+    )
+
+(* bad: this agent writes the content fact(5)=120 times on the file.
+   fact(5) is computed dynamically by ENRec using a pair accumulator (c,a):
+     ENRec 5 (0,1) (λ(c,a). (c+1, (c+1)*a))  →  (5, 120)
+   then snd gives 120, and a second ENRec loops 120 writes. *)
+let bad_factorial_agent : exp =
+  ELam (* filename *)
+    (ELam (* EVar 0 = content, EVar 1 = filename *)
+      (* Bind n = fact(5) computed by ENRec *)
+      (EApp
+        (ELam (* EVar 0 = n, EVar 1 = content, EVar 2 = filename *)
+          (* Open file *)
+          (ECase (ECall OOpen (EVar 2))
+            (* Inl fd: EVar 0 = fd, EVar 1 = n, EVar 2 = content, EVar 3 = filename *)
+            (EApp
+              (* After all writes: close fd *)
+              (ELam (* EVar 0 = _, EVar 1 = fd, EVar 2 = n, EVar 3 = content *)
+                (ECall OClose (EVar 1))
+              )
+              (* Loop n times, each step writes (fd, content) *)
+              (ENRec (EVar 1) EUnit
+                (ELam (* EVar 0 = _, EVar 1 = fd, EVar 2 = n, EVar 3 = content *)
+                  (ECall OWrite (EPair (EVar 1) (EVar 3)))
+                )
+              )
+            )
+            (* Inr _ *)
+            EUnit
+          )
+        )
+        (* Compute fact(5) via pair accumulator (counter, product):
+             ENRec 5 (0,1) (λ(c,a). (c+1, mult (c+1) a))
+           where mult a b = ENRec a 0 (λacc. ENRec b acc succ) *)
+        (ESnd (ENRec (nat_to_exp 5) (EPair EZero (ESucc EZero))
+          (ELam (* EVar 0 = (c, a) *)
+            (EPair
+              (ESucc (EFst (EVar 0)))
+              (* mult (c+1) a = ENRec (c+1) 0 (λacc_m. ENRec a acc_m succ) *)
+              (ENRec
+                (ESucc (EFst (EVar 0)))
+                EZero
+                (ELam (* EVar 0 = acc_m, EVar 1 = (c, a) *)
+                  (ENRec (ESnd (EVar 1)) (EVar 0) (ELam (ESucc (EVar 0))))
+                )
+              )
+            )
+          )
+        ))
       )
     )
 

@@ -110,6 +110,21 @@ type typing : typ_env -> exp -> qType -> Type =
            $h1:typing g e1 qString ->
            $h2:typing g e2 qString ->
            typing g (EStringEq e1 e2) qBool
+| TyZero : #g:typ_env ->
+           typing g EZero qNat
+| TySucc : #g:typ_env ->
+           #e:exp ->
+           $h:typing g e qNat ->
+           typing g (ESucc e) qNat
+| TyNRec : #a:qType ->
+           #g:typ_env ->
+           #e1:exp ->
+           #e2:exp ->
+           #e3:exp ->
+           $h1:typing g e1 qNat ->
+           $h2:typing g e2 a ->
+           $h3:typing g e3 (a ^->!@ a) ->
+           typing g (ENRec e1 e2 e3) a
 
 val backtranslate_exp (#g:typ_env) (#e:exp) (#t:qType) (h:typing g e t) : fs_ocomp g t (fun _ -> True)
 let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
@@ -175,6 +190,19 @@ let rec backtranslate_exp #g #e #t h : Tot (fs_ocomp g t (fun _ -> True)) =
     let h1 : typing g _ qString = h1 in
     let h2 : typing g _ qString = h2 in
     fs_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2)
+  | EZero ->
+    let TyZero = h in
+    fs_ocomp_return_val g qNat 0
+  | ESucc e' ->
+    let TySucc h' = h in
+    let h' : typing g e' qNat = h' in
+    fs_ocomp_fmap #g #qNat #qNat (backtranslate_exp h') (fun n -> n + 1)
+  | ENRec _ _ _ ->
+    let TyNRec #a h1 h2 h3 = h in
+    let h1 : typing g _ qNat = h1 in
+    let h2 : typing g _ a = h2 in
+    let h3 : typing g _ (a ^->!@ a) = h3 in
+    fs_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3)
 
 private
 let backtranslate_exp_call_eq (#g:typ_env) (o:io_ops) (#e':exp) (h':typing g e' (q_io_args o))
@@ -244,6 +272,20 @@ let rec lem_backtranslate_superset_exp #g #e #t (h:typing g e t) : Lemma (backtr
     lem_backtranslate_superset_exp h1;
     lem_backtranslate_superset_exp h2;
     C1.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+  | EZero -> C1.compat_ocomp_zero g
+  | ESucc e' ->
+    let TySucc h' = h in
+    lem_backtranslate_superset_exp h';
+    C1.compat_ocomp_succ (backtranslate_exp h') e'
+  | ENRec e1 e2 e3 ->
+    let TyNRec #a h1 h2 h3 = h in
+    let h1 : typing g _ qNat = h1 in
+    let h2 : typing g _ a = h2 in
+    let h3 : typing g _ (a ^->!@ a) = h3 in
+    lem_backtranslate_superset_exp h1;
+    lem_backtranslate_superset_exp h2;
+    lem_backtranslate_superset_exp h3;
+    C1.compat_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
 
 let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtranslate_exp h ⊑ e) =
    match e with
@@ -306,6 +348,20 @@ let rec lem_backtranslate_subset_exp #g #e #t (h:typing g e t) : Lemma (backtran
     lem_backtranslate_subset_exp h1;
     lem_backtranslate_subset_exp h2;
     C2.compat_ocomp_string_eq (backtranslate_exp h1) (backtranslate_exp h2) e1 e2
+  | EZero -> C2.compat_ocomp_zero g
+  | ESucc e' ->
+    let TySucc h' = h in
+    lem_backtranslate_subset_exp h';
+    C2.compat_ocomp_succ (backtranslate_exp h') e'
+  | ENRec e1 e2 e3 ->
+    let TyNRec #a h1 h2 h3 = h in
+    let h1 : typing g _ qNat = h1 in
+    let h2 : typing g _ a = h2 in
+    let h3 : typing g _ (a ^->!@ a) = h3 in
+    lem_backtranslate_subset_exp h1;
+    lem_backtranslate_subset_exp h2;
+    lem_backtranslate_subset_exp h3;
+    C2.compat_ocomp_nrec #g #a (backtranslate_exp h1) (backtranslate_exp h2) (backtranslate_exp h3) e1 e2 e3
 #pop-options
 
 let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
@@ -334,6 +390,12 @@ let rec backtranslate (#e:value) (#t:qType) (h:typing empty e t) : fs_val t =
   | EFileDescr _ ->
     let TyFileDescr fd = h in
     fd
+  | EZero ->
+    let TyZero = h in
+    0
+  | ESucc _ ->
+    let TySucc h' = h in
+    1 + backtranslate h'
 
 let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Lemma (valid_contains #t (backtranslate h) e) =
   match e with
@@ -359,6 +421,10 @@ let rec lem_backtranslate_valid_contains (#e:value) #t (h:typing empty e t) : Le
   | EInr _ ->
     let TyInr t1 #t2 #e' h' = h in
     lem_backtranslate_valid_contains h'
+  | EZero -> ()
+  | ESucc _ ->
+    let TySucc h' = h in
+    lem_backtranslate_valid_contains h'
 
 let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : Lemma (valid_member_of #t (backtranslate h) e) =
   match e with
@@ -383,6 +449,10 @@ let rec lem_backtranslate_valid_member_of (#e:value) #t (h:typing empty e t) : L
     lem_backtranslate_valid_member_of h'
   | EInr _ ->
     let TyInr t1 #t2 #e' h' = h in
+    lem_backtranslate_valid_member_of h'
+  | EZero -> ()
+  | ESucc _ ->
+    let TySucc h' = h in
     lem_backtranslate_valid_member_of h'
 
 val lem_backtranslate (#e:value) #t (h:typing empty e t)
