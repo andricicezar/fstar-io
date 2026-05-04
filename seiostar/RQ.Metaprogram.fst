@@ -90,45 +90,25 @@ let rec typ_translation (qt:term) : Tac term =
   | _ -> fail ("not implemented in types: " ^ tag_of qt)
 
 (** Quotation of expressions **)
-unfold let ptyping (ty:qType) (t:fs_val ty) =
-  g:typ_env -> typing #ty g (fs_oval_return g #ty t)
-
-let mk_ptyj (ty t : term) : Tot term =
-  mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
-
-let mk_wrap_deriv (typj : term) : Tot term =
-  let g_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
-  pack_ln (Tv_Abs g_binder typj)
-
 unfold let sqh (g:typ_env) (pre:spec_env g) =
   squash (forall (fsG:eval_env g). pre fsG)
 
 unfold let ptyping (ty:qType) (t:fs_val ty) =
-  g:typ_env -> pre:spec_env g & (proof:sqh g pre -> typing #ty g #pre (fs_oval_helper_g ty t g pre proof))
+  g:typ_env -> packed_turnstile_g g ty t
 
 let mk_ptyj (ty t : term) : Tot term =
   mk_app (`ptyping) [(ty, Q_Explicit); (t, Q_Explicit)]
 
-let mk_sqh (pre : term) : Tot term =
-  mk_app (`sqh) [(pack_ln Tv_Unknown, Q_Explicit); (pre, Q_Explicit)]
-
-let mk_dpair (t1 t2:term) : Tot term =
-  mk_app (`Mkdtuple2) [(t1, Q_Explicit); (t2, Q_Explicit)]
+let mk_pack_turnstile_g (g:term) (ptyj:term) : Tot term =
+  mk_app (`RQ.TypingRelation.pack_turnstile_g) [
+    (g, Q_Implicit);
+    (ptyj, Q_Explicit)]
 
 let mk_wrap_deriv (typj : term) : Tot term =
   let g_binder = pack_binder ({ ppname = seal "g_env"; qual = Q_Explicit; attrs = []; sort = (`QTypes.TypEnv.typ_env) }) in
   let g_env = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "g_env"; index = 0; sort = seal (`QTypes.TypEnv.typ_env) }))) in
-  let pre_sort = mk_app (`spec_env) [(g_env, Q_Explicit)] in
-  let pre_binder = pack_binder ({ ppname = seal "pre"; qual = Q_Explicit; attrs = []; sort = pre_sort }) in
-
-  let pre = pack_ln (Tv_BVar (pack_bv ({ ppname = seal "pre"; index = 0; sort = seal pre_sort }))) in
-  let proof_binder = pack_binder ({ ppname = seal "proof"; qual = Q_Explicit; attrs = []; sort = (pack_ln Tv_Unknown) (** (mk_sqh pre) **) }) in
-
-  //let proof_to_typj = pack_ln (Tv_Abs pre_binder (pack_ln (Tv_Abs proof_binder typj))) in
-  let proof_to_typj = pack_ln (Tv_Abs proof_binder typj) in
-  // let x = Mkdtuple2 int (fun x -> y:int{x == y})
-  let pair_pre_and_deriv = mk_app (`Mkdtuple2) [(pack_ln Tv_Unknown, Q_Explicit); (proof_to_typj , Q_Explicit)] in
-  pack_ln (Tv_Abs g_binder pair_pre_and_deriv)
+  let packed_turnstile_g = mk_pack_turnstile_g g_env typj in
+  pack_ln (Tv_Abs g_binder packed_turnstile_g)
 
 let mk_qtt : term = mk_app (`Qtt) []
 let mk_qfd (t:term) = mk_app (`QFd) [(t, Q_Explicit)]
@@ -398,21 +378,13 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 // #push-options "--print_implicits"
 
 let prove_equality () : Tac unit =
-  norm [
-        delta_only [
-        `%fs_oval; `%fs_val; `%qUnit; `%qBool; `%qString; `%qResexn; `%qFileDescr; `%qNat;
-        `%op_Hat_Subtraction_Greater; `%op_Hat_Star; `%op_Hat_Plus;
-        `%op_Hat_Subtraction_Greater_Bang_At;
-        `%get_rel; `%get_Type;
-        `%q_io_args; `%q_io_res;
-        `%Mkdtuple2?._1;`%Mkdtuple2?._2];
-        iota;
-    ];
+  norm [delta_only qType_defs_list; iota;];
   //simplify_stack_ops ();
   explode ();
   if debugging () then dump "RQ's unification goal" else ();
   iterAll (fun () ->
     (or_else trivial trefl));
+  // TODO: refactor so that only the goals that did not solve are printed
   or_else qed (fun () -> dump "RQ's unification failed")
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
