@@ -15,7 +15,7 @@ type spec_env (g:typ_env) =
   eval_env g -> pure_pre
 
 type fs_oval (g:typ_env) (t:qType) (pre:spec_env g) =
-  fsG:eval_env g -> Pure (fs_val t) (requires (pre fsG)) (ensures (fun _ -> True))
+  fsG:(eval_env g){pre fsG} -> fs_val t
 
 unfold
 let spec_env_return (#g:typ_env) (#a:qType) (x:fs_val a) : spec_env g =
@@ -63,7 +63,7 @@ let spec_env_lambda_tot #g #a preBody fsG : pure_pre =
 type fs_comp (t:qType) = io (fs_val t)
 
 type fs_ocomp (g:typ_env) (t:qType) (pre:spec_env g) =
-  fsG:eval_env g -> Pure (fs_comp t) (requires (pre fsG)) (ensures (fun _ -> True))
+  fsG:(eval_env g){pre fsG} -> fs_comp t
 
 unfold
 let spec_env_return_comp (#g:typ_env) (#a:qType) (comp:fs_comp a) : spec_env g =

@@ -286,18 +286,19 @@ let compat_oval_if #g
     (requires fs_e1 ⊐ e1 /\ fs_e2 ⊐ e2 /\ fs_e3 ⊐ e3)
     (ensures fs_oval_if fs_e1 fs_e2 fs_e3 ⊐ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
-  introduce forall b (s:gsub g b) fsG h. (fsG `(∽) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊇ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
+  introduce forall b (s:gsub g b) fsG h. (fsG `(∽) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊇ (h, fs_oval_if fs_e1 fs_e2 fs_e3 fsG, gsubst s (EIf e1 e2 e3)) with begin
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
-    introduce (fsG `(∽) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊇ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), e) with _. begin
-      let fs_e1 = fs_e1 fsG in
-      let fs_e = if fs_e1 then fs_e2 fsG else fs_e3 fsG in
+    introduce (fsG `(∽) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊇ (h, fs_oval_if fs_e1 fs_e2 fs_e3 fsG, e) with _. begin
+      let fs_b = fs_e1 fsG in
+      let fs_e = if fs_b then fs_e2 fsG else fs_e3 fsG in
+      assert (fs_e == fs_oval_if fs_e1 fs_e2 fs_e3 fsG);
       introduce forall (e':closed_exp) lt. e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with begin
         introduce e_beh e e' h lt ==> (t ∋ (h, fs_e, e') /\ lt == []) with _. begin
-          assert (qBool ⊇ (h, fs_e1, e1));
-          assert (if fs_e1 then t ⊇ (h, fs_e, e2) else t ⊇ (h, fs_e, e3));
-          helper_compat_val_if e' lt t fs_e1 fs_e e1 e2 e3
+          assert (qBool ⊇ (h, fs_b, e1));
+          assert (if fs_b then t ⊇ (h, fs_e, e2) else t ⊇ (h, fs_e, e3));
+          helper_compat_val_if e' lt t fs_b fs_e e1 e2 e3
         end
       end
     end
@@ -873,18 +874,19 @@ let compat_ocomp_if_oval #g (#a:qType) #preC #preT #preE
     (requires fs_c ⊐ c /\ fs_t ⊒ t /\ fs_e ⊒ e)
     (ensures (fs_ocomp_if_oval fs_c fs_t fs_e) ⊒ (EIf c t e)) =
   lem_fv_in_env_if g c t e;
-  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫄ (h, (if (fs_c fsG) then (fs_t fsG) else (fs_e fsG)), gsubst s (EIf c t e)) with begin
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫄ (h, fs_ocomp_if_oval fs_c fs_t fs_e fsG, gsubst s (EIf c t e)) with begin
     let ex = EIf (gsubst s c) (gsubst s t) (gsubst s e) in
     assert (gsubst s (EIf c t e) == ex);
     let EIf c t e = ex in
-    introduce (fsG `(∽) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫄ (h, (if fs_c fsG then fs_t fsG else fs_e fsG), ex) with _. begin
-      let fs_c = fs_c fsG in
-      let fs_ex = if fs_c then fs_t fsG else fs_e fsG in
+    introduce (fsG `(∽) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫄ (h, fs_ocomp_if_oval fs_c fs_t fs_e fsG, ex) with _. begin
+      let fs_c' = fs_c fsG in
+      let fs_ex = if fs_c' then fs_t fsG else fs_e fsG in
+      assert (fs_ex == fs_ocomp_if_oval fs_c fs_t fs_e fsG);
       introduce forall lt (ex':closed_exp). e_beh ex ex' h lt ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with begin
         introduce e_beh ex ex' h lt ==> (exists (fs_r:fs_val a). a ∋ (h++lt, fs_r, ex') /\ fs_beh fs_ex h lt fs_r) with _. begin
-          assert (qBool ⊇ (h, fs_c, c));
-          assert (if fs_c then a ⫄ (h, fs_ex, t) else a ⫄ (h, fs_ex, e));
-          helper_compat_ocomp_if_val ex' lt a fs_c fs_ex c t e
+          assert (qBool ⊇ (h, fs_c', c));
+          assert (if fs_c' then a ⫄ (h, fs_ex, t) else a ⫄ (h, fs_ex, e));
+          helper_compat_ocomp_if_val ex' lt a fs_c' fs_ex c t e
         end
       end
     end

@@ -360,4 +360,4 @@ let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
     lem_compile_superset qs._3;
     lem_value_superset_valid_contains a #qs._1 (fun _ -> s) (compile qs._3);
     lem_compile_subset qs._3;
-    lem_value_subset_valid_member_of a (fun _ -> s) (compile qs._3)
+    lem_value_subset_valid_member_of a #qs._1 (fun _ -> s) (compile qs._3)

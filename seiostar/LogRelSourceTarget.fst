@@ -196,8 +196,8 @@ let subset_ocomp (#g:typ_env) (t:qType) (#pre:spec_env g) (fs_e:fs_ocomp g t pre
 let (⊑) (#g:typ_env) (#t:qType) (#pre:spec_env g) (fs_v:fs_ocomp g t pre) (e:exp) : Type0 =
   subset_ocomp #g t fs_v e
 
-let lem_value_subset_valid_member_of t (fs_e:fs_oval empty t (fun _ -> True)) (e:value) :
-  Lemma (requires fs_e ⊏ e)
+let lem_value_subset_valid_member_of t #pre (fs_e:fs_oval empty t pre) (e:value) :
+  Lemma (requires pre empty_eval /\ fs_e ⊏ e)
         (ensures  valid_member_of #t (fs_e empty_eval) e) =
   introduce forall h. t ∈ (h, fs_e empty_eval, e) with begin
     eliminate forall b (s:gsub empty b) (fsG:eval_env empty) (h:history).

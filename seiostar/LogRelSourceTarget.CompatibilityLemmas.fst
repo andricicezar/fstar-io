@@ -260,20 +260,17 @@ let compat_oval_if #g
     (requires fs_e1 ⊏ e1 /\ fs_e2 ⊏ e2 /\ fs_e3 ⊏ e3)
     (ensures fs_oval_if fs_e1 fs_e2 fs_e3 ⊏ EIf e1 e2 e3) =
   lem_fv_in_env_if g e1 e2 e3;
-  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊆ (h, (if fs_e1 fsG then fs_e2 fsG else fs_e3 fsG), gsubst s (EIf e1 e2 e3)) with begin
-    let preC = preC fsG in
-    let preT = preT fsG in
-    let preE = preE fsG in
-    let fs_e1 () : Pure (fs_val qBool) (requires preC) (ensures (fun _ -> True)) = fs_e1 fsG in
-    let pre = (preC /\ (fs_e1 () ==> preT) /\ (~(fs_e1 ()) ==> preE)) in
-    let fs_e2 () : Pure (fs_val t) (requires preT) (ensures (fun _ -> True)) = fs_e2 fsG in
-    let fs_e3 () : Pure (fs_val t) (requires preE) (ensures (fun _ -> True)) = fs_e3 fsG in
-    let fs_e () : Pure (fs_val t) (requires pre) (ensures (fun _ -> True)) = if fs_e1 () then fs_e2 () else fs_e3 () in
+  introduce forall b (s:gsub g b) fsG h. (fsG `(≍) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊆ (h, fs_oval_if fs_e1 fs_e2 fs_e3 fsG, gsubst s (EIf e1 e2 e3)) with begin
     let e = EIf (gsubst s e1) (gsubst s e2) (gsubst s e3) in
     assert (gsubst s (EIf e1 e2 e3) == e);
     let EIf e1 e2 e3 = e in
-    introduce (fsG `(≍) h` s /\ pre) ==> t ⊆ (h, fs_e (), e) with _. begin
-      helper_compat_oval_if_steps h t (fs_e1 ()) (fs_e ()) e1 e2 e3
+    introduce (fsG `(≍) h` s /\ (spec_env_if fs_e1 preT preE) fsG) ==> t ⊆ (h, fs_oval_if fs_e1 fs_e2 fs_e3 fsG, e) with _. begin
+      let fs_c = fs_e1 fsG in
+      let fs_r = if fs_c then fs_e2 fsG else fs_e3 fsG in
+      assert (fs_r == fs_oval_if fs_e1 fs_e2 fs_e3 fsG);
+      assert (qBool ⊆ (h, fs_c, e1));
+      assert (if fs_c then t ⊆ (h, fs_r, e2) else t ⊆ (h, fs_r, e3));
+      helper_compat_oval_if_steps h t fs_c fs_r e1 e2 e3
     end
   end
 
@@ -831,18 +828,19 @@ let compat_ocomp_if_oval #g (#a:qType) #preC #preT #preE
     (requires fs_c ⊏ c /\ fs_t ⊑ t /\ fs_e ⊑ e)
     (ensures (fs_ocomp_if_oval fs_c fs_t fs_e) ⊑ (EIf c t e)) =
   lem_fv_in_env_if g c t e;
-  introduce forall b' (s:gsub g b') fsG h. (fsG `(≍) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫃ (h, (if (fs_c fsG) then (fs_t fsG) else (fs_e fsG)), gsubst s (EIf c t e)) with begin
+  introduce forall b' (s:gsub g b') fsG h. (fsG `(≍) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫃ (h, fs_ocomp_if_oval fs_c fs_t fs_e fsG, gsubst s (EIf c t e)) with begin
     let ex = EIf (gsubst s c) (gsubst s t) (gsubst s e) in
     assert (gsubst s (EIf c t e) == ex);
     let EIf c t e = ex in
-    introduce (fsG `(≍) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫃ (h, (if fs_c fsG then fs_t fsG else fs_e fsG), ex) with _. begin
-      let fs_c = fs_c fsG in
-      let fs_ex = if fs_c then fs_t fsG else fs_e fsG in
+    introduce (fsG `(≍) h` s /\ (spec_env_if fs_c preT preE) fsG) ==> a ⫃ (h, fs_ocomp_if_oval fs_c fs_t fs_e fsG, ex) with _. begin
+      let fs_c' = fs_c fsG in
+      let fs_ex = if fs_c' then fs_t fsG else fs_e fsG in
+      assert (fs_ex == fs_ocomp_if_oval fs_c fs_t fs_e fsG);
       introduce forall (lt:local_trace h) (fs_r:fs_val a). fs_beh fs_ex h lt fs_r ==> exists ex'. a ∈ (h++lt, fs_r, ex') /\ e_beh ex ex' h lt with begin
         introduce fs_beh fs_ex h lt fs_r ==> exists ex'. a ∈ (h++lt, fs_r, ex') /\ e_beh ex ex' h lt with _. begin
-          assert (qBool ⊆ (h, fs_c, c));
-          assert (if fs_c then a ⫃ (h, fs_ex, t) else a ⫃ (h, fs_ex, e));
-          helper_compat_ocomp_if_val lt a fs_c fs_ex fs_r c t e
+          assert (qBool ⊆ (h, fs_c', c));
+          assert (if fs_c' then a ⫃ (h, fs_ex, t) else a ⫃ (h, fs_ex, e));
+          helper_compat_ocomp_if_val lt a fs_c' fs_ex fs_r c t e
         end
       end
     end
@@ -2487,16 +2485,20 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
         trefl ());
       lem_shift_type_value_environments h fsG s;
       introduce forall (lta:local_trace h). a ⫃ (h++lta, fs_b', eb_s) with begin
-        ()
+        assert (preB fsG);
+        assert (a ⫃ (h++lta, fs_b', eb_s))
       end;
       introduce forall (lta:local_trace h). (a ^->!@ a) ⫃ (h++lta, fs_f', ef_s) with begin
-        ()
+        assert (preF fsG);
+        assert ((a ^->!@ a) ⫃ (h++lta, fs_f', ef_s))
       end;
       introduce forall lt (fs_r:fs_val a). fs_beh (fs_ocomp_nrec fn fb ff fsG) h lt fs_r ==> exists e'. a ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with begin
         introduce fs_beh (fs_ocomp_nrec fn fb ff fsG) h lt fs_r ==> exists e'. a ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
           introduce forall (lt':local_trace h) (fs_r':get_Type qNat).
             fs_beh fs_n' h lt' fs_r' ==> exists e'. qNat ∈ (h++lt', fs_r', e') /\ e_beh en_s e' h lt' with begin
-            ()
+            assert (qNat ⫃ (h, fs_n', en_s));
+            eliminate forall (lt0:local_trace h) (fs_r0:get_Type qNat).
+              fs_beh fs_n' h lt0 fs_r0 ==> exists e'. qNat ∈ (h++lt0, fs_r0, e') /\ e_beh en_s e' h lt0 with lt' fs_r'
           end;
           destruct_fs_beh fs_n' fs_k h lt fs_r;
           eliminate exists (lt1:local_trace h) (lt2:local_trace (h++lt1)) (k:nat).
@@ -2505,10 +2507,10 @@ let compat_ocomp_nrec (#g:typ_env) (#a:qType)
           eliminate forall (lt':local_trace h) (fs_r':get_Type qNat). fs_beh fs_n' h lt' fs_r' ==> exists e'. qNat ∈ (h++lt', fs_r', e') /\ e_beh en_s e' h lt' with lt1 k;
           eliminate exists en_v. qNat ∈ (h++lt1, k, en_v) /\ e_beh en_s en_v h lt1
             returns exists e'. a ∈ (h++lt, fs_r, e') /\ e_beh e e' h lt with _. begin
+          assert_norm (qNat ∈ (h++lt1, k, en_v) == (en_v == nat_to_exp k));
           assert (en_v == nat_to_exp k);
           lem_nat_to_exp_is_value k;
           lem_value_is_irred (nat_to_exp k);
-          assert (is_closed (ENRec (nat_to_exp k) eb_s ef_s));
           let enrec_k : closed_exp = ENRec (nat_to_exp k) eb_s ef_s in
           assert (enrec_k == ENRec (nat_to_exp k) eb_s ef_s);
           introduce forall (lta:local_trace (h++lt1)). a ⫃ ((h++lt1)++lta, fs_b', eb_s) with begin
