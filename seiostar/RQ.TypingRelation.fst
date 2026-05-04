@@ -220,35 +220,40 @@ and typing_io : #a:qType -> g:typ_env -> #preG:spec_env g -> fs_ocomp g a preG -
 let (⊢) (#a:qType) (g:typ_env) (#pre:spec_env g) (x:fs_oval g a pre) =
   typing g x
 
-let fs_oval_helper_g (a:qType) (x:fs_val a) (g:typ_env) (pre:spec_env g) (_:squash (forall fsG. pre fsG))
+let fs_oval_helper_g (g:typ_env) (#a:qType) (x:fs_val a) (pre:spec_env g)
   : fs_oval g a pre
   = fun _ -> x
 
-let fs_oval_helper (#a:qType) (x:fs_val a) (#pre:spec_env empty) (#_:squash (forall fsG. pre fsG))
-  : fs_oval empty a pre
-  = fs_oval_helper_g a x empty pre ()
+let fs_oval_helper #a x pre = fs_oval_helper_g empty #a x pre
 
-unfold let sqh (g:typ_env) (pre:spec_env g) =
-  squash (forall (fsG:eval_env g). pre fsG)
+(* guarded_turnstile *)
+let packed_turnstile_g g (a:qType) (x:fs_val a) =
+  pre:spec_env g & (g ⊢ (fs_oval_helper_g g x pre))
+
+let pack_turnstile_g #g #a #x (#pre:spec_env g) (turnstile:(g ⊢ (fs_oval_helper_g g x pre))) : 
+  packed_turnstile_g g a x
+   =
+  (| _, turnstile |)
 
 let (⊩) (a:qType) (x: fs_val a) =
-  pre:spec_env empty & (proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))
+  packed_turnstile_g empty a x
+
+let pack_turnstile #a #x (#pre:spec_env empty) (turnstile:(empty ⊢ (fs_oval_helper_g empty x pre))) 
+  : a ⊩ x =
+  pack_turnstile_g turnstile
+
+let rec lemma_pre_is_always_provable #a #x (packed_turnstile:a ⊩ x) : Lemma ((dfst packed_turnstile) empty_eval) =
+  admit ()
 
 let (⊫) (a:qType) (x: fs_val a) =
   pre:spec_env empty &
-  proof:squash (forall fsG. pre fsG) &
-  typing #a empty #pre (fs_oval_helper x #pre #proof)
-
-let mk_dturniqet #a #x (#pre:spec_env empty) (thk_dv:(proof:squash (forall fsG. pre fsG) -> typing #a empty #pre (fs_oval_helper x #pre #proof))) : a ⊩ x =
-  (| _, thk_dv |)
-
-let get_derivation #a #x (thk_deriv:a ⊩ x) (proof:squash (forall fsG. (dfst thk_deriv) fsG)) : typing empty (fs_oval_helper x) =
-  (dsnd thk_deriv) proof
+  proof:squash (pre empty_eval) &
+  typing #a empty #pre (fs_oval_helper x pre)
 
 (** Package a thunked derivation together with its precondition and
     a witness discharging it into the [⊫] dependent triple. *)
 let mk_turniqet #a #x
   (thk_deriv:a ⊩ x)
-  (proof:squash (forall fsG. (dfst thk_deriv) fsG))
+  (proof:squash ((dfst thk_deriv) empty_eval))
   : a ⊫ x
-  = (| dfst thk_deriv, proof, (dsnd thk_deriv) proof |)
+  = (| dfst thk_deriv, proof, (dsnd thk_deriv) |)
