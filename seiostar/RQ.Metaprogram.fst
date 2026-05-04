@@ -11,8 +11,6 @@ open FStar.Stubs.Reflection.V2.Data
 open RQ.TypingRelation
 open QTypes.HelperTactics
 
-// #push-options "--debug Tac --print_implicits"
-
 let print_debug (s:string) : Tac unit =
   if debugging () then print s
   else ()
@@ -375,32 +373,29 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
-// #push-options "--print_implicits"
-
 let prove_equality () : Tac unit =
-  norm [delta_only qType_defs_list; iota;];
+  norm [delta_only qType_defs_list; iota];
   //simplify_stack_ops ();
   explode ();
   iterAll (fun () ->
-    ignore (trytac (fun () -> 
+    ignore (trytac (fun () ->
+      or_else trivial trefl)));
+  iterAll (fun () ->
+    ignore (trytac simplify_stack_ops);
+    ignore (trytac (fun () ->
       or_else trivial trefl)));
   if debugging () then dump "RQ's unification goal" else ();
-  // TODO: refactor so that only the goals that did not solve are printed
   or_else qed (fun () -> dump "RQ's unification failed")
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
+  set_guard_policy Goal;
+  let desired_qtyp' = norm_well_typed_term g [delta_only unfold_names] desired_qtyp in
   print_debug ("DEBUG: entering type_check_derivation");
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
-  let (l, qderivation, desired_qtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
-  if List.length l > 0 then fail "Not all implicits solved" else ();
-  print_debug ("DEBUG: instantiate_implicits done");
-  // print_debug ("DEBUG: elaborated = " ^ term_to_string qderivation);
-  set_guard_policy Goal;
-  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  let desired_qtyp' = norm_well_typed_term g [
-    delta_only unfold_names] desired_qtyp in
   print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp');
+  let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp') true in
+  if List.length l > 0 then fail "Not all implicits solved" else ();
+  print_debug ("DEBUG: instantiate_implicits done\n deriv = " ^ term_to_string qderivation);
   let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
   print_debug ("DEBUG: done type checking the derivation");
   try_with (fun () -> with_compat_pre_core 0 prove_equality) (fun _ -> ());
@@ -432,6 +427,9 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping [] qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
+
+// #push-options "--debug Tac"
+// #push-options "--print_implicits"
 
 (** Generate a derivation for a program, reusing already-generated derivations.
     `deps` is a list of (source_program, derivation) pairs where:
