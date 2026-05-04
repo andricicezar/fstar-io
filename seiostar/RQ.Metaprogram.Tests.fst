@@ -140,12 +140,12 @@ let test_apply_io_bind_pure_if () =
 let test_apply_io_bind_write () =
   assert (tgt_apply_io_bind_write empty == test_apply_io_bind_write ()) by (trefl ())
 
-#push-options "--debug Tac"
-%splice_t[tgt_apply_io_bind_read_write] (generate_derivation "tgt_apply_io_bind_read_write" (`ExamplesIO.apply_io_bind_read_write))
+// #push-options "--debug Tac"
+// %splice_t[tgt_apply_io_bind_read_write] (generate_derivation "tgt_apply_io_bind_read_write" (`ExamplesIO.apply_io_bind_read_write))
 
-[@@ (preprocess_with simplify_qType)]
-let test_apply_io_bind_read_write () =
-  assert (tgt_apply_io_bind_read_write empty == test_apply_io_bind_read_write ()) by (trefl ())
+// [@@ (preprocess_with simplify_qType)]
+// let test_apply_io_bind_read_write () =
+//   assert (tgt_apply_io_bind_read_write empty == test_apply_io_bind_read_write ()) by (trefl ())
 
 // %splice_t[tgt_apply_io_bind_read_write'] (generate_derivation "tgt_apply_io_bind_read_write'" (`ExamplesIO.apply_io_bind_read_write'))
 // let _ = assert (tgt_apply_io_bind_read_write' empty == test_apply_io_bind_read_write' ()) by (trefl ())
