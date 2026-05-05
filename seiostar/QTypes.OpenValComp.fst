@@ -423,9 +423,9 @@ val fs_ocomp_call_oval :
         o:io_ops ->
         #preArgs : spec_env g ->
         args:fs_oval g (q_io_args o) preArgs ->
-        fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
+        fs_ocomp g (q_io_res o) preArgs
 let fs_ocomp_call_oval o args =
-  fs_ocomp_call o (fs_ocomp_return_oval args)
+  fun fsG -> fs_comp_call_val o (args fsG)
 
 unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->

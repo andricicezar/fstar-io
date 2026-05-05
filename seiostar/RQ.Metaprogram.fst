@@ -375,16 +375,14 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
 
 let prove_equality () : Tac unit =
   norm [delta_only qType_defs_list; iota];
-  //simplify_stack_ops ();
   explode ();
   iterAll (fun () ->
     ignore (trytac (fun () ->
       or_else trivial trefl)));
-  iterAll (fun () ->
-    ignore (trytac simplify_stack_ops);
-    ignore (trytac (fun () ->
-      or_else trivial trefl)));
-  if debugging () then dump "RQ's unification goal" else ();
+  // iterAll (fun () ->
+  //   ignore (trytac simplify_stack_ops);
+  //   ignore (trytac (fun () ->
+  //     or_else trivial trefl)));
   or_else qed (fun () -> dump "RQ's unification failed")
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =

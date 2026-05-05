@@ -140,23 +140,26 @@ let test_apply_io_bind_pure_if () =
 let test_apply_io_bind_write () =
   assert (tgt_apply_io_bind_write empty == test_apply_io_bind_write ()) by (trefl ())
 
-// #push-options "--debug Tac"
-// %splice_t[tgt_apply_io_bind_read_write] (generate_derivation "tgt_apply_io_bind_read_write" (`ExamplesIO.apply_io_bind_read_write))
+%splice_t[tgt_apply_io_bind_read_write] (generate_derivation "tgt_apply_io_bind_read_write" (`ExamplesIO.apply_io_bind_read_write))
 
-// [@@ (preprocess_with simplify_qType)]
-// let test_apply_io_bind_read_write () =
-//   assert (tgt_apply_io_bind_read_write empty == test_apply_io_bind_read_write ()) by (trefl ())
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write () =
+  assert (tgt_apply_io_bind_read_write empty == test_apply_io_bind_read_write ()) by (trefl ())
 
-// %splice_t[tgt_apply_io_bind_read_write'] (generate_derivation "tgt_apply_io_bind_read_write'" (`ExamplesIO.apply_io_bind_read_write'))
-// let _ = assert (tgt_apply_io_bind_read_write' empty == test_apply_io_bind_read_write' ()) by (trefl ())
+%splice_t[tgt_apply_io_bind_read_write'] (generate_derivation "tgt_apply_io_bind_read_write'" (`ExamplesIO.apply_io_bind_read_write'))
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_write' () =
+  assert (tgt_apply_io_bind_read_write' empty == test_apply_io_bind_read_write' ()) by (trefl ())
 
-// %splice_t[tgt_apply_io_bind_read_if_write] (generate_derivation "tgt_apply_io_bind_read_if_write" (`ExamplesIO.apply_io_bind_read_if_write))
-// let _ = assert (tgt_apply_io_bind_read_if_write empty == test_apply_io_bind_read_if_write ()) by (trefl ())
+%splice_t[tgt_apply_io_bind_read_if_write] (generate_derivation "tgt_apply_io_bind_read_if_write" (`ExamplesIO.apply_io_bind_read_if_write))
+[@@ (preprocess_with simplify_qType)]
+let test_apply_io_bind_read_if_write () =
+  assert (tgt_apply_io_bind_read_if_write empty == test_apply_io_bind_read_if_write ()) by (trefl ())
 
 %splice_t[tgt_sendError400] (generate_derivation "tgt_sendError400" (`ExamplesIO.sendError400))
 %splice_t[tgt_get_req] (generate_derivation "tgt_get_req" (`ExamplesIO.get_req))
 
-// %splice_t[tgt_open2_read_write] (generate_derivation "tgt_open2_read_write" (`ExamplesIO.open2_read_write))
+%splice_t[tgt_open2_read_write] (generate_derivation "tgt_open2_read_write" (`ExamplesIO.open2_read_write))
 
 %splice_t[tgt_nat_zero] (generate_derivation "tgt_nat_zero" (`Examples.nat_zero))
 let _ = assert (tgt_nat_zero empty == test_nat_zero) by (trefl ())
@@ -167,11 +170,11 @@ let _ = assert (tgt_nat_one empty == test_nat_one) by (trefl ())
 %splice_t[tgt_nat_two] (generate_derivation "tgt_nat_two" (`Examples.nat_two))
 let _ = assert (tgt_nat_two empty == test_nat_two) by (trefl ())
 
-// %splice_t[tgt_nat_succ_fn] (generate_derivation "tgt_nat_succ_fn" (`Examples.nat_succ_fn))
-// let _ = assert (tgt_nat_succ_fn empty == test_nat_succ_fn) by (trefl ())
+%splice_t[tgt_nat_succ_fn] (generate_derivation "tgt_nat_succ_fn" (`Examples.nat_succ_fn))
+let _ = assert (tgt_nat_succ_fn empty == test_nat_succ_fn) by (trefl ())
 
-// %splice_t[tgt_nat_add2] (generate_derivation "tgt_nat_add2" (`Examples.nat_add2))
-// let _ = assert (tgt_nat_add2 empty == test_nat_add2 ()) by (trefl ())
+%splice_t[tgt_nat_add2] (generate_derivation "tgt_nat_add2" (`Examples.nat_add2))
+let _ = assert (tgt_nat_add2 empty == test_nat_add2 ()) by (trefl ())
 
 %splice_t[tgt_nat_five1] (generate_derivation "tgt_nat_five1" (`Examples.nat_five1))
 let _ = assert (tgt_nat_five1 empty == test_nat_nrec_two_plus_three1 ()) by (trefl ())
