@@ -1055,7 +1055,7 @@ let compat_ocomp_case_oval
 let helper_compat_ocomp_call_oval_steps (op:io_ops) (h:history) (lt:local_trace h)
   (fs_arg:fs_val (q_io_args op)) (arg:closed_exp) (fs_r:fs_val (q_io_res op)) :
   Lemma
-    (requires fs_beh (io_call_q op fs_arg) h lt fs_r /\
+    (requires fs_beh (q_io_call op fs_arg) h lt fs_r /\
               (q_io_args op) ⊆ (h, fs_arg, arg))
     (ensures exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt) =
   eliminate exists (arg':closed_exp). e_beh arg arg' h [] /\ (q_io_args op) ∈ (h, fs_arg, arg')

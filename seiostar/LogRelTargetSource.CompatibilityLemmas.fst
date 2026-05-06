@@ -1050,6 +1050,7 @@ let rec destruct_steps_ecall_arg_all
     end;
     assert (e_beh arg arg h []);
     assert ((q_io_args op) ∋ (h, fs_arg, arg));
+    lem_q_io_args op;
     can_step_ecall_val op arg h;
     false_elim ()
     end
@@ -1117,6 +1118,7 @@ let rec destruct_steps_ecall_arg_comp
     end;
     assert (e_beh arg0 arg h0 lt_acc);
     (* From ⫄ + e_beh, derive that arg has the as_e_io_args form *)
+    lem_q_io_args op;
     can_step_ecall_val op arg h;
     false_elim ()
     end
@@ -1146,16 +1148,6 @@ let rec destruct_steps_ecall_arg_comp
     end
 #pop-options
 
-(* Warning 271 (SMT patterns that normalize to an [ite] cascade and are
-   therefore dropped) fires at every call site of [destruct_steps_ecall*]
-   because their [ensures] clauses quantify over [io_args op] / [io_res op _]
-   with an abstract [op]. After unfolding these dependent types reduce to a
-   match-on-[io_ops], which F*'s SMT encoding prints as a nested [ite] and
-   rejects as a pattern head. The patterns are only dropped (not unsound),
-   and nothing we do here triggers the weakness, so we locally demote the
-   warning for this module. *)
-#push-options "--warn_error -271"
-
 (* General helper - works for all ops without case analysis on op *)
 #push-options "--fuel 4 --z3rlimit 20 --ifuel 1 --split_queries always"
 let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:local_trace h)
@@ -1167,6 +1159,8 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
              fs_beh (fs_comp_call_val op fs_arg) h lt fs_r)) =
   lem_forall_values_are_values (q_io_args op) h fs_arg;
   bind_squash (steps (ECall op arg) e' h lt) (fun steps_e_e' ->
+    lem_q_io_args op;
+    lem_q_io_res op;
     let (arg', (| lt1, lt' |)) = destruct_steps_ecall_arg_all op arg e' h lt fs_arg steps_e_e' in
     lem_value_is_closed arg';
     assert (is_closed (ECall op arg'));
@@ -1182,18 +1176,57 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
       assert (e_beh arg arg' h lt1);
       assert (lt1 == []);
       assert ((q_io_args op) ∋ (h, fs_arg, arg'));
-      eliminate exists (args:io_args op) (res:io_res op args).
-          io_pre (h++lt1) op args /\ io_post (h++lt1) op args res /\
-          arg' == as_e_io_args op args /\
-          e_r == as_e_io_res op args res /\
-          lt2 == [op_to_ev op args res]
-      returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r with _. begin
-      lem_fs_beh_call op fs_arg res h;
-      assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op args res] res);
-      assert ((q_io_res op) ∋ (h++[op_to_ev op args res], res, e'))
-      end))
-#pop-options
-
+      match op with
+      | OOpen ->
+        eliminate exists (args:io_args OOpen) (res:io_res OOpen args).
+            io_pre (h++lt1) OOpen args /\ io_post (h++lt1) OOpen args res /\
+            arg' == as_e_io_args OOpen args /\
+            e_r == as_e_io_res OOpen args res /\
+            lt2 == [op_to_ev OOpen args res]
+        returns exists (fs_r:fs_val (q_io_res OOpen)). (q_io_res OOpen) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OOpen fs_arg) h lt fs_r with _. begin
+        assert (get_Type (q_io_res OOpen) == io_res OOpen args) by (
+          FStar.Tactics.V1.compute ();
+          FStar.Tactics.V1.trefl ());
+        lem_fs_beh_call OOpen fs_arg res h;
+        assert (fs_beh (fs_comp_call_val OOpen fs_arg) h [op_to_ev OOpen args res] res);
+        assert ((q_io_res OOpen) ∋ (h++[op_to_ev OOpen args res], res, e'))
+        end
+      | ORead ->
+        eliminate exists (args:io_args ORead) (res:io_res ORead args).
+            io_pre (h++lt1) ORead args /\ io_post (h++lt1) ORead args res /\
+            arg' == as_e_io_args ORead args /\
+            e_r == as_e_io_res ORead args res /\
+            lt2 == [op_to_ev ORead args res]
+        returns exists (fs_r:fs_val (q_io_res ORead)). (q_io_res ORead) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_arg) h lt fs_r with _. begin
+        let fs_r : fs_val (q_io_res ORead) = (match res with | Inl s -> Inl s | Inr u -> Inr u) in
+        lem_fs_beh_call ORead fs_arg fs_r h;
+        assert (fs_beh (fs_comp_call_val ORead fs_arg) h [op_to_ev ORead args fs_r] fs_r);
+        assert ((q_io_res ORead) ∋ (h++[op_to_ev ORead args fs_r], fs_r, e'))
+        end
+      | OWrite ->
+        eliminate exists (args:io_args OWrite) (res:io_res OWrite args).
+            io_pre (h++lt1) OWrite args /\ io_post (h++lt1) OWrite args res /\
+            arg' == as_e_io_args OWrite args /\
+            e_r == as_e_io_res OWrite args res /\
+            lt2 == [op_to_ev OWrite args res]
+        returns exists (fs_r:fs_val (q_io_res OWrite)). (q_io_res OWrite) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OWrite fs_arg) h lt fs_r with _. begin
+        let fs_r : fs_val (q_io_res OWrite) = (match res with | Inl u1 -> Inl u1 | Inr u2 -> Inr u2) in
+        lem_fs_beh_call OWrite fs_arg fs_r h;
+        assert (fs_beh (fs_comp_call_val OWrite fs_arg) h [op_to_ev OWrite args fs_r] fs_r);
+        assert ((q_io_res OWrite) ∋ (h++[op_to_ev OWrite args fs_r], fs_r, e'))
+        end
+      | OClose ->
+        eliminate exists (args:io_args OClose) (res:io_res OClose args).
+            io_pre (h++lt1) OClose args /\ io_post (h++lt1) OClose args res /\
+            arg' == as_e_io_args OClose args /\
+            e_r == as_e_io_res OClose args res /\
+            lt2 == [op_to_ev OClose args res]
+        returns exists (fs_r:fs_val (q_io_res OClose)). (q_io_res OClose) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_arg) h lt fs_r with _. begin
+        let fs_r : fs_val (q_io_res OClose) = (match res with | Inl u1 -> Inl u1 | Inr u2 -> Inr u2) in
+        lem_fs_beh_call OClose fs_arg fs_r h;
+        assert (fs_beh (fs_comp_call_val OClose fs_arg) h [op_to_ev OClose args fs_r] fs_r);
+        assert ((q_io_res OClose) ∋ (h++[op_to_ev OClose args fs_r], fs_r, e'))
+        end))
 #pop-options
 
 (* General compat_ocomp_call_oval - works for all ops *)

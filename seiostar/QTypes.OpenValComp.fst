@@ -158,39 +158,18 @@ let fs_comp_case_val cond inlc inrc =
   | Inl x -> inlc x
   | Inr x -> inrc x
 
+let q_io_call (o:io_ops) (arg:fs_val (q_io_args o)) : fs_comp (q_io_res o) =
+  lem_q_io_args o;
+  lem_q_io_res o;
+  io_call o arg
+
 unfold
 val fs_comp_call_val :
         o:io_ops ->
         args:fs_val (q_io_args o) ->
         fs_comp (q_io_res o)
 let fs_comp_call_val o args : fs_comp (q_io_res o) =
-  match o with
-  | OOpen  ->
-    let args : string = args in
-    let r : io (resexn file_descr) = io_call OOpen args in
-    assert (fs_val (q_io_res OOpen) == resexn file_descr)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | ORead  ->
-    let args : file_descr = args in
-    let r : io (resexn string) = io_call ORead args in
-    assert (fs_val (q_io_res ORead) == resexn string)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | OWrite ->
-    assert (fs_val (q_io_args OWrite) == file_descr * string)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    let args : file_descr * string = args in
-    let r : io (resexn unit) = io_call OWrite args in
-    assert (fs_val (q_io_res OWrite) == resexn unit)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
-  | OClose ->
-    let args : file_descr = args in
-    let r : io (resexn unit) = io_call OClose args in
-    assert (fs_val (q_io_res OClose) == resexn unit)
-      by (FStar.Tactics.V1.compute (); FStar.Tactics.V1.trefl ());
-    r
+  q_io_call o args
 
 (** Open values **)
 unfold
@@ -414,8 +393,7 @@ val fs_ocomp_call :
         args:fs_ocomp g (q_io_args o) preArgs ->
         fs_ocomp g (q_io_res o) (spec_env_bind' #g #(q_io_args o) preArgs (fun a -> spec_env_return_comp #g #(q_io_res o) (fs_comp_call_val o a)))
 let fs_ocomp_call o args =
-  fs_ocomp_bind' args (fun args' ->
-    fs_ocomp_return _ (fs_comp_call_val o args'))
+  fs_ocomp_bind' args (fun args' fsG -> q_io_call o args')
 
 unfold
 val fs_ocomp_call_oval :
@@ -425,7 +403,7 @@ val fs_ocomp_call_oval :
         args:fs_oval g (q_io_args o) preArgs ->
         fs_ocomp g (q_io_res o) preArgs
 let fs_ocomp_call_oval o args =
-  fun fsG -> fs_comp_call_val o (args fsG)
+  fun fsG -> q_io_call o (args fsG)
 
 unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->

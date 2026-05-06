@@ -11,19 +11,12 @@ unfold val e_beh : closed_exp -> closed_exp -> h:history -> local_trace h -> Typ
 let e_beh e e' h lt =
   steps e e' h lt /\ indexed_irred e' (h++lt)
 
-let io_call_q (o:io_ops) (args:io_args o) : fs_comp (q_io_res o) =
-  lem_q_io_res o;
-  assert (get_Type (q_io_res o) == io_res o args);
-  io_call o args
-
-let io_res_q (o:io_ops) (args:io_args o) (res:io_res o args) : fs_val (q_io_res o) =
-  lem_q_io_res o;
-  assert (get_Type (q_io_res o) == io_res o args);
-  res
-
-let lem_fs_beh_call (o:io_ops) (args:io_args o) (res:io_res o args) (h:history) :
-  Lemma (requires io_post h o args res)
-        (ensures fs_beh #(q_io_res o) (io_call_q o args) h [op_to_ev o args res] (io_res_q o args res)) =
+let lem_fs_beh_call (o:io_ops) (args:fs_val (q_io_args o)) (res:fs_val (q_io_res o)) (h:history) :
+  Lemma (requires (lem_q_io_args o;lem_q_io_res o;
+                  io_post h o args res))
+        (ensures (lem_q_io_args o; lem_q_io_res o;
+        fs_beh #(q_io_res o) (q_io_call o args) h [op_to_ev o args res] res)) =
+  lem_q_io_args o;lem_q_io_res o;
   match o with
   | OOpen -> lem_thetaP_call OOpen args res h
   | ORead -> lem_thetaP_call ORead args res h
