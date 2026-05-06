@@ -143,7 +143,7 @@ let compat_oval_axiom (g:typ_env) (t:qType) : Lemma (fs_oval_axiom g t ⊐ EVar 
     end
   end
 
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 1 --split_queries always"
  (** Used in compilation **)
 let compat_weaken (#g:typ_env) #a #t #pre (s:fs_oval g a pre) (e:exp)
   : Lemma
