@@ -334,7 +334,7 @@ let test_apply_io_return ()
 [@@ (preprocess_with simplify_qType)]
 let test_apply_read ()
   : (qFileDescr ^->!@ (qResexn qString)) ⊩ apply_read
-  by (simplify_stack_ops (); norm [delta_only [`%fs_oval_helper;`%apply_read];iota]; simplify_via_norm ())
+  by (simplify_stack_ops (); simplify_via_norm ())
   = pack_turnstile (QLambdaIO (QCall ORead QAxiom))
 
 let test_apply_write_const ()
@@ -389,7 +389,7 @@ let test_apply_io_bind_write ()
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
-  by ( simplify_stack_ops (); dump "H"; simplify_via_norm ())
+  by (simplify_stack_ops (); simplify_via_norm ())
   = pack_turnstile (QLambda (QLambdaIO (QBind (QCall ORead (QWeaken QAxiom))
     (QCaseIO QAxiom
       (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))

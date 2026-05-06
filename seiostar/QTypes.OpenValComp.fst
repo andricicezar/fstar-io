@@ -158,6 +158,7 @@ let fs_comp_case_val cond inlc inrc =
   | Inl x -> inlc x
   | Inr x -> inrc x
 
+unfold
 let q_io_call (o:io_ops) (arg:fs_val (q_io_args o)) : fs_comp (q_io_res o) =
   lem_q_io_args o;
   lem_q_io_res o;

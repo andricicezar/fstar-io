@@ -88,9 +88,6 @@ let rec typ_translation (qt:term) : Tac term =
   | _ -> fail ("not implemented in types: " ^ tag_of qt)
 
 (** Quotation of expressions **)
-unfold let sqh (g:typ_env) (pre:spec_env g) =
-  squash (forall (fsG:eval_env g). pre fsG)
-
 unfold let ptyping (ty:qType) (t:fs_val ty) =
   g:typ_env -> packed_turnstile_g g ty t
 
@@ -374,35 +371,44 @@ let rec create_derivation g (dbmap:db_mapping) (prior_derivs:prior_derivations) 
   | _ -> fail ("not implemented in expressions: " ^ tag_of qfs)
 
 let prove_equality () : Tac unit =
-  norm [delta_only qType_defs_list; iota];
   explode ();
   iterAll (fun () ->
     ignore (trytac (fun () ->
+ //     norm [delta_only qType_defs_list; delta_only [`%IOStar.op_let_Bang_At]; iota];
       or_else trivial trefl)));
-  // iterAll (fun () ->
-  //   ignore (trytac simplify_stack_ops);
-  //   ignore (trytac (fun () ->
-  //     or_else trivial trefl)));
-  or_else qed (fun () -> dump "RQ's unification failed")
+//   iterAll (fun () ->
+//     ignore (trytac simplify_stack_ops);
+//     ignore (trytac (fun () ->
+//       or_else trivial trefl)));
+  or_else qed (fun () -> dump "RQ's unification failed"; fail "unification failed")
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
-  let desired_qtyp' = norm_well_typed_term g [delta_only unfold_names] desired_qtyp in
-  print_debug ("DEBUG: entering type_check_derivation");
-  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp');
-  let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp') true in
+ // let desired_qtyp' = norm_well_typed_term g [delta_only [`%fs_oval_helper_g; `%fs_oval_helper]; iota] desired_qtyp in
+  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): entering type_check_derivation");
+  let (l, qderivation, qderivtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
+
+  print_debug ("DEBUG: deriv_typ = " ^ term_to_string qderivtyp);
+  print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
+ // print_debug ("DEBUG: typ' = " ^ term_to_string desired_qtyp');
   if List.length l > 0 then fail "Not all implicits solved" else ();
-  print_debug ("DEBUG: instantiate_implicits done\n deriv = " ^ term_to_string qderivation);
-  let token = must <| core_check_term g qderivation desired_qtyp' E_Total in
-  print_debug ("DEBUG: done type checking the derivation");
-  try_with (fun () -> with_compat_pre_core 0 prove_equality) (fun _ -> ());
+ // print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): instantiate_implicits done\n deriv = " ^ term_to_string qderivation);
+  let qderivation' = norm_well_typed_term g [delta_only qType_defs_list; iota] qderivation in
+  print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation);
+  let token = must <| core_check_term g qderivation' desired_qtyp E_Total in
+//  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): done type checking the derivation");
+  (match ngoals () with
+  | 0 -> ()
+  | 1 ->  with_compat_pre_core 0 prove_equality
+  | _ -> fail "too many goals");
+  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): done proving the equality");
   set_guard_policy Force;
-  assert (typing_token g qderivation (E_Total, desired_qtyp'));
-  assert (equiv_token g desired_qtyp desired_qtyp');
-  lem_retype_token g qderivation desired_qtyp' desired_qtyp;
-  token_as_typing g qderivation E_Total desired_qtyp;
-  (qderivation, desired_qtyp)
+ //assert (typing_token g qderivation' (E_Total, desired_qtyp'));
+ // assert (equiv_token g desired_qtyp desired_qtyp');
+ // lem_retype_token g qderivation' desired_qtyp' desired_qtyp;
+ // assume (typing_token g qderivation (E_Total, desired_qtyp));
+  token_as_typing g qderivation' E_Total desired_qtyp;
+  (qderivation', desired_qtyp)
 
 let initial_unfold_fuel : int = 32
 
