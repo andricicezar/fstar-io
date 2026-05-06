@@ -331,17 +331,20 @@ and lem_compile_fv_in_env_prod #g #pre (#a:qType) (#s:fs_ocomp g a pre) (qs:typi
     lem_fv_in_env_case g ta tb (compile qcond) (compile_ocomp qinlc) (compile_ocomp qinrc)
 
 let lem_compile_closed_arrow_is_elam (#a #b:qType) (#s:fs_val (a ^->!@ b))
-  (qs:(a ^->!@ b) ⊫ s)
-  : Lemma (requires (QLambdaIO? qs._3))
-          (ensures (ELam? (compile qs._3)))
+  (qs:(a ^->!@ b) ⊩ s)
+  : Lemma (requires (QLambdaIO? qs._2))
+          (ensures (ELam? (compile qs._2)))
   =
-  match qs._3 with
+  match qs._2 with
   | QLambdaIO qbody ->
-    assert (ELam? (compile qs._3)) by (norm [delta_once [`%compile];zeta;iota])
+    assert (ELam? (compile qs._2)) by (norm [delta_once [`%compile];zeta;iota])
 
-let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
-  : Lemma (is_closed (compile qs._3))
-  = lem_compile_fv_in_env qs._3
+let lem_compile_is_closed (#a:qType) (#s:fs_val a) (qs:a ⊩ s)
+  : Lemma (is_closed (compile qs._2))
+  = lem_compile_fv_in_env qs._2
+
+let cast (#a:qType) (#s:fs_val a) (qs:a ⊫ s) : a ⊩ s =
+  (| qs._1, qs._3 |)
 
 let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
   : Lemma
@@ -354,8 +357,8 @@ let lem_compile_closed_valid (#a:qType) (#s:fs_val a) (qs:a ⊫ s)
       )) =
   match qs._3 with
   | QLambdaIO #_ #b #c qbody ->
-    lem_compile_is_closed qs;
-    lem_compile_closed_arrow_is_elam #b #c #s qs;
+    lem_compile_is_closed (cast qs);
+    lem_compile_closed_arrow_is_elam #b #c #s (cast qs);
     assert (is_value (compile qs._3));
     lem_compile_superset qs._3;
     lem_value_superset_valid_contains a #qs._1 (fun _ -> s) (compile qs._3);

@@ -384,10 +384,12 @@ let test_apply_io_bind_write ()
          (QReturn QAxiom)
          (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) QAxiom)))))
 
+#set-options "--print_implicits"
+
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
-  by ( simplify_stack_ops (); simplify_via_norm ())
+  by ( simplify_stack_ops (); dump "H"; simplify_via_norm ())
   = pack_turnstile (QLambda (QLambdaIO (QBind (QCall ORead (QWeaken QAxiom))
     (QCaseIO QAxiom
       (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
@@ -651,15 +653,6 @@ let test_context ()
 //   = pack_turnstile (QRetype (QLambda #(qBoolR (fun b -> b == true)) QTrue))
 
 #pop-options
-
-(* Counterexample: on a refinable base type, QRef can make the top-level precondition unsatisfiable. *)
-let test_qref_false_pre_on_bool ()
-  : qBool ⊩ true
-  = pack_turnstile (QRef (QRef QTrue #(fun _ -> False)) #(fun _ -> True))
-
-let test_qref_false_pre_on_bool_unsat ()
-  : Lemma (~((dfst (test_qref_false_pre_on_bool ())) empty_eval))
-  = ()
 
 let d_test_refbool () : _ ⊫ _
   by (simplify_d ())
@@ -970,3 +963,12 @@ let d_test_ior_io_apply_callback () : _ ⊫ _
 // let d_test_ior_io_validate () : _ ⊫ _
 //   by (simplify_d ())
 //   = mk_turniqet (test_ior_io_validate ()) (_ by (norm [delta; iota]))
+
+(* Counterexample: on a refinable base type, QRef can make the top-level precondition unsatisfiable. *)
+let test_qref_false_pre_on_bool ()
+  : qBool ⊩ true
+  = pack_turnstile (QRef (QRef QTrue #(fun _ -> False)) #(fun _ -> True))
+
+let test_qref_false_pre_on_bool_unsat ()
+  : Lemma (~((dfst (test_qref_false_pre_on_bool ())) empty_eval))
+  = ()
