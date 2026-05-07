@@ -384,31 +384,27 @@ let prove_equality () : Tac unit =
 
 let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names:list string)  : Tac (r:(term & term){tot_typing g (fst r) (snd r)}) =
   set_guard_policy Goal;
- // let desired_qtyp' = norm_well_typed_term g [delta_only [`%fs_oval_helper_g; `%fs_oval_helper]; iota] desired_qtyp in
-  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): entering type_check_derivation");
-  let (l, qderivation, qderivtyp) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
-
-  print_debug ("DEBUG: deriv_typ = " ^ term_to_string qderivtyp);
-  print_debug ("DEBUG: typ = " ^ term_to_string desired_qtyp);
- // print_debug ("DEBUG: typ' = " ^ term_to_string desired_qtyp');
+  print_debug ("DEBUG: entering type_check_derivation");
+  let (l, qderivation, _) = must <| instantiate_implicits g qderivation (Some desired_qtyp) true in
   if List.length l > 0 then fail "Not all implicits solved" else ();
- // print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): instantiate_implicits done\n deriv = " ^ term_to_string qderivation);
-  let qderivation' = norm_well_typed_term g [delta_only qType_defs_list; iota] qderivation in
+
+  print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
+  let qderivation = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
   print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation);
-  let token = must <| core_check_term g qderivation' desired_qtyp E_Total in
-//  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): done type checking the derivation");
+ // let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; delta_once unfold_names; iota] desired_qtyp in
+  let token = must <| core_check_term g qderivation desired_qtyp E_Total in
+
+  print_debug ("DEBUG: core_checm_term successfull, "^ string_of_int (ngoals ()) ^" goals to prove");
   (match ngoals () with
   | 0 -> ()
   | 1 ->  with_compat_pre_core 0 prove_equality
   | _ -> fail "too many goals");
-  print_debug ("DEBUG ("^ string_of_int (ngoals ()) ^" goals): done proving the equality");
+  print_debug ("DEBUG: proved equality!");
   set_guard_policy Force;
- //assert (typing_token g qderivation' (E_Total, desired_qtyp'));
  // assert (equiv_token g desired_qtyp desired_qtyp');
- // lem_retype_token g qderivation' desired_qtyp' desired_qtyp;
- // assume (typing_token g qderivation (E_Total, desired_qtyp));
-  token_as_typing g qderivation' E_Total desired_qtyp;
-  (qderivation', desired_qtyp)
+//  lem_retype_token g qderivation desired_qtyp' desired_qtyp;
+  token_as_typing g qderivation E_Total desired_qtyp;
+  (qderivation, desired_qtyp)
 
 let initial_unfold_fuel : int = 32
 
@@ -431,9 +427,6 @@ let generate_derivation (nm:string) (qprog:term) : dsl_tac_t = fun (g, expected_
     let (qderivation, qtyp_derivation) = create_and_type_check_derivation g empty_mapping [] qprog in
     ([], mk_checked_let g (cur_module ()) nm qderivation qtyp_derivation, [])
   end
-
-// #push-options "--debug Tac"
-// #push-options "--print_implicits"
 
 (** Generate a derivation for a program, reusing already-generated derivations.
     `deps` is a list of (source_program, derivation) pairs where:

@@ -229,11 +229,9 @@ unfold
 let fs_oval_helper #a x pre = fs_oval_helper_g empty #a x pre
 
 (* guarded_turnstile *)
-unfold
 let packed_turnstile_g g (a:qType) (x:fs_val a) =
   pre:spec_env g & (g ⊢ (fs_oval_helper_g g x pre))
 
-unfold
 let pack_turnstile_g #g #a #x (#pre:spec_env g) (turnstile:(g ⊢ (fs_oval_helper_g g x pre))) :
   packed_turnstile_g g a x
    =
@@ -242,7 +240,6 @@ let pack_turnstile_g #g #a #x (#pre:spec_env g) (turnstile:(g ⊢ (fs_oval_helpe
 let (⊩) (a:qType) (x: fs_val a) =
   packed_turnstile_g empty a x
 
-unfold
 let pack_turnstile #a #x (#pre:spec_env empty) (turnstile:(empty ⊢ (fs_oval_helper_g empty x pre)))
   : a ⊩ x =
   pack_turnstile_g turnstile
