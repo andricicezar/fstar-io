@@ -88,7 +88,7 @@ let rec typ_translation (qt:term) : Tac term =
   | _ -> fail ("not implemented in types: " ^ tag_of qt)
 
 (** Quotation of expressions **)
-unfold let ptyping (ty:qType) (t:fs_val ty) =
+let ptyping (ty:qType) (t:fs_val ty) =
   g:typ_env -> packed_turnstile_g g ty t
 
 let mk_ptyj (ty t : term) : Tot term =
