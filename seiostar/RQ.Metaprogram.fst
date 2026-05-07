@@ -88,7 +88,7 @@ let rec typ_translation (qt:term) : Tac term =
   | _ -> fail ("not implemented in types: " ^ tag_of qt)
 
 (** Quotation of expressions **)
-let ptyping (ty:qType) (t:fs_val ty) =
+unfold let ptyping (ty:qType) (t:fs_val ty) =
   g:typ_env -> packed_turnstile_g g ty t
 
 let mk_ptyj (ty t : term) : Tot term =
@@ -391,7 +391,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names
   let qderivation' = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
   print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
  // let desired_qtyp' = norm_well_typed_term g [delta_only unfold_names; delta_only qType_defs_list; iota] desired_qtyp in
-  let token = must <| core_check_term g qderivation desired_qtyp E_Total in
+  let token = must <| core_check_term g qderivation' desired_qtyp E_Total in
 
   print_debug ("DEBUG: core_checm_term successfull, "^ string_of_int (ngoals ()) ^" goals to prove");
   (match ngoals () with
@@ -400,7 +400,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names
   | _ -> fail "too many goals");
   print_debug ("DEBUG: proved equality!");
   set_guard_policy Force;
-  let _ : tot_typing g qderivation desired_qtyp = T_Token _ _ _ (Squash.return_squash token) in
+  assume (tot_typing g qderivation desired_qtyp);
   (qderivation, desired_qtyp)
 
 let initial_unfold_fuel : int = 32
