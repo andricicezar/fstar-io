@@ -374,7 +374,6 @@ let prove_equality () : Tac unit =
   explode ();
   iterAll (fun () ->
     ignore (trytac (fun () ->
- //     norm [delta_only qType_defs_list; delta_only [`%IOStar.op_let_Bang_At]; iota];
       or_else trivial trefl)));
 //   iterAll (fun () ->
 //     ignore (trytac simplify_stack_ops);
@@ -389,9 +388,9 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names
   if List.length l > 0 then fail "Not all implicits solved" else ();
 
   print_debug ("DEBUG: deriv = " ^ term_to_string qderivation);
-  let qderivation = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
-  print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation);
- // let desired_qtyp' = norm_well_typed_term g [delta_only qType_defs_list; delta_once unfold_names; iota] desired_qtyp in
+  let qderivation' = norm_well_typed_term g [(*delta_only unfold_names;*) delta_only qType_defs_list; iota] qderivation in
+  print_debug ("DEBUG: deriv' = " ^ term_to_string qderivation');
+ // let desired_qtyp' = norm_well_typed_term g [delta_only unfold_names; delta_only qType_defs_list; iota] desired_qtyp in
   let token = must <| core_check_term g qderivation desired_qtyp E_Total in
 
   print_debug ("DEBUG: core_checm_term successfull, "^ string_of_int (ngoals ()) ^" goals to prove");
@@ -401,9 +400,7 @@ let type_check_derivation g (qderivation:term) (desired_qtyp:term) (unfold_names
   | _ -> fail "too many goals");
   print_debug ("DEBUG: proved equality!");
   set_guard_policy Force;
- // assert (equiv_token g desired_qtyp desired_qtyp');
-//  lem_retype_token g qderivation desired_qtyp' desired_qtyp;
-  token_as_typing g qderivation E_Total desired_qtyp;
+  let _ : tot_typing g qderivation desired_qtyp = T_Token _ _ _ (Squash.return_squash token) in
   (qderivation, desired_qtyp)
 
 let initial_unfold_fuel : int = 32
