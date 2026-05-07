@@ -1176,57 +1176,26 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
       assert (e_beh arg arg' h lt1);
       assert (lt1 == []);
       assert ((q_io_args op) ∋ (h, fs_arg, arg'));
-      match op with
-      | OOpen ->
-        eliminate exists (args:io_args OOpen) (res:io_res OOpen args).
-            io_pre (h++lt1) OOpen args /\ io_post (h++lt1) OOpen args res /\
-            arg' == as_e_io_args OOpen args /\
-            e_r == as_e_io_res OOpen args res /\
-            lt2 == [op_to_ev OOpen args res]
-        returns exists (fs_r:fs_val (q_io_res OOpen)). (q_io_res OOpen) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OOpen fs_arg) h lt fs_r with _. begin
-        assert (get_Type (q_io_res OOpen) == io_res OOpen args) by (
-          FStar.Tactics.V1.compute ();
-          FStar.Tactics.V1.trefl ());
-        lem_fs_beh_call OOpen fs_arg res h;
-        assert (fs_beh (fs_comp_call_val OOpen fs_arg) h [op_to_ev OOpen args res] res);
-        assert ((q_io_res OOpen) ∋ (h++[op_to_ev OOpen args res], res, e'))
-        end
-      | ORead ->
-        eliminate exists (args:io_args ORead) (res:io_res ORead args).
-            io_pre (h++lt1) ORead args /\ io_post (h++lt1) ORead args res /\
-            arg' == as_e_io_args ORead args /\
-            e_r == as_e_io_res ORead args res /\
-            lt2 == [op_to_ev ORead args res]
-        returns exists (fs_r:fs_val (q_io_res ORead)). (q_io_res ORead) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val ORead fs_arg) h lt fs_r with _. begin
-        let fs_r : fs_val (q_io_res ORead) = (match res with | Inl s -> Inl s | Inr u -> Inr u) in
-        lem_fs_beh_call ORead fs_arg fs_r h;
-        assert (fs_beh (fs_comp_call_val ORead fs_arg) h [op_to_ev ORead args fs_r] fs_r);
-        assert ((q_io_res ORead) ∋ (h++[op_to_ev ORead args fs_r], fs_r, e'))
-        end
-      | OWrite ->
-        eliminate exists (args:io_args OWrite) (res:io_res OWrite args).
-            io_pre (h++lt1) OWrite args /\ io_post (h++lt1) OWrite args res /\
-            arg' == as_e_io_args OWrite args /\
-            e_r == as_e_io_res OWrite args res /\
-            lt2 == [op_to_ev OWrite args res]
-        returns exists (fs_r:fs_val (q_io_res OWrite)). (q_io_res OWrite) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OWrite fs_arg) h lt fs_r with _. begin
-        let fs_r : fs_val (q_io_res OWrite) = (match res with | Inl u1 -> Inl u1 | Inr u2 -> Inr u2) in
-        lem_fs_beh_call OWrite fs_arg fs_r h;
-        assert (fs_beh (fs_comp_call_val OWrite fs_arg) h [op_to_ev OWrite args fs_r] fs_r);
-        assert ((q_io_res OWrite) ∋ (h++[op_to_ev OWrite args fs_r], fs_r, e'))
-        end
-      | OClose ->
-        eliminate exists (args:io_args OClose) (res:io_res OClose args).
-            io_pre (h++lt1) OClose args /\ io_post (h++lt1) OClose args res /\
-            arg' == as_e_io_args OClose args /\
-            e_r == as_e_io_res OClose args res /\
-            lt2 == [op_to_ev OClose args res]
-        returns exists (fs_r:fs_val (q_io_res OClose)). (q_io_res OClose) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val OClose fs_arg) h lt fs_r with _. begin
-        let fs_r : fs_val (q_io_res OClose) = (match res with | Inl u1 -> Inl u1 | Inr u2 -> Inr u2) in
-        lem_fs_beh_call OClose fs_arg fs_r h;
-        assert (fs_beh (fs_comp_call_val OClose fs_arg) h [op_to_ev OClose args fs_r] fs_r);
-        assert ((q_io_res OClose) ∋ (h++[op_to_ev OClose args fs_r], fs_r, e'))
-        end))
+      let io_arg = cast_io_args op fs_arg in
+      assert (arg' == as_e_io_args op io_arg);
+      eliminate exists (args:io_args op) (res:io_res op args).
+          io_pre (h++lt1) op args /\ io_post (h++lt1) op args res /\
+          arg' == as_e_io_args op args /\
+          e_r == as_e_io_res op args res /\
+          lt2 == [op_to_ev op args res]
+      returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r with _. begin
+      let fs_r : fs_val (q_io_res op) = res in
+      let io_res = cast_io_res op fs_arg fs_r in
+      assert (args == io_arg);
+      assert (res == io_res);
+      assert (io_post h op io_arg io_res);
+      assert (e_r == as_e_io_res op io_arg io_res);
+      assert (lt2 == [op_to_ev op io_arg io_res]);
+      lem_fs_beh_call op fs_arg fs_r h;
+      assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op io_arg io_res] fs_r);
+      assert (lt == [op_to_ev op io_arg io_res]);
+      assert ((q_io_res op) ∋ (h++lt, fs_r, e'))
+      end))
 #pop-options
 
 (* General compat_ocomp_call_oval - works for all ops *)

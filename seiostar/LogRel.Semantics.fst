@@ -23,6 +23,15 @@ let lem_fs_beh_call (o:io_ops) (args:fs_val (q_io_args o)) (res:fs_val (q_io_res
   | OWrite -> lem_thetaP_call OWrite args res h
   | OClose -> lem_thetaP_call OClose args res h
 
+let cast_io_args (op:io_ops) (args:fs_val (q_io_args op)) : io_args op =
+  lem_q_io_args op;
+  args
+
+let cast_io_res (op:io_ops) (args:fs_val (q_io_args op)) (res:fs_val (q_io_res op)) : io_res op (cast_io_args op args) =
+  lem_q_io_args op;
+  lem_q_io_res op;
+  res
+
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =
   lem_thetaP_return x h

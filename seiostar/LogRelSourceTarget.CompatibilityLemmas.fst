@@ -1061,13 +1061,15 @@ let helper_compat_ocomp_call_oval_steps (op:io_ops) (h:history) (lt:local_trace 
   eliminate exists (arg':closed_exp). e_beh arg arg' h [] /\ (q_io_args op) ∈ (h, fs_arg, arg')
     returns exists e'. (q_io_res op) ∈ (h++lt, fs_r, e') /\ e_beh (ECall op arg) e' h lt with _. begin
   lem_values_are_values (q_io_args op) h fs_arg arg';
-  destruct_thetaP_call op fs_arg h lt fs_r;
+  let io_arg = cast_io_args op fs_arg in
+  let io_res = cast_io_res op fs_arg fs_r in
+  destruct_thetaP_call op io_arg h lt io_res;
   FStar.Squash.bind_squash #(steps arg arg' h []) () (fun sts_arg ->
   construct_steps_ecall op arg arg' h [] sts_arg;
-  let st_call : step (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h (Some (op_to_ev op fs_arg fs_r)) = SCallReturn h op fs_arg fs_r in
-  lem_step_implies_steps (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h (Some (op_to_ev op fs_arg fs_r));
-  lem_steps_transitive (ECall op arg) (ECall op (as_e_io_args op fs_arg)) (as_e_io_res op fs_arg fs_r) h [] [op_to_ev op fs_arg fs_r];
-  lem_value_is_irred (as_e_io_res op fs_arg fs_r))
+  let st_call : step (ECall op (as_e_io_args op io_arg)) (as_e_io_res op io_arg io_res) h (Some (op_to_ev op io_arg io_res)) = SCallReturn h op io_arg io_res in
+  lem_step_implies_steps (ECall op (as_e_io_args op io_arg)) (as_e_io_res op io_arg io_res) h (Some (op_to_ev op io_arg io_res));
+  lem_steps_transitive (ECall op arg) (ECall op (as_e_io_args op io_arg)) (as_e_io_res op io_arg io_res) h [] [op_to_ev op io_arg io_res];
+  lem_value_is_irred (as_e_io_res op io_arg io_res))
   end
 #pop-options
 
@@ -2348,7 +2350,9 @@ let compat_ocomp_succ (#g:typ_env) (#preN:spec_env g) (fs_n:fs_ocomp g qNat preN
     (fsG `(≍) h` s /\ (spec_env_bind' #g #qNat preN (fun x -> spec_env_return_comp #g #qNat (io_return (x + 1)))) fsG) ==> qNat ⫃ (h, (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) fsG, gsubst s (ESucc e))
     with begin
     introduce _ ==> _ with _. begin
-      assert (preN fsG);
+      assert (preN fsG) by (
+        FStar.Tactics.V1.norm [delta_only [`%spec_env_bind';`%spec_env_bind;`%spec_env_return_comp]];
+        FStar.Tactics.V1.smt ());
       let fs_n' : fs_comp qNat = fs_n fsG in
       let fs_ex = fs_comp_bind #qNat #qNat fs_n' (fun n -> return (n + 1)) in
       assert (fs_ex == (fs_ocomp_fmap #g #qNat #qNat fs_n (fun n -> n + 1)) fsG) by (
