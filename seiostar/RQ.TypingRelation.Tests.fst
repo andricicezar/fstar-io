@@ -43,16 +43,19 @@ let qVar2 #g #a #b #c : (extend c (extend b (extend a g))) ⊢ (fun fsG -> hd (t
 
 open Examples
 
-let test_ut_unit
+let test_ut_unit ()
   : qUnit ⊩ ut_unit
+  by (simplify_via_norm ())
   = pack_turnstile Qtt
 
-let test_ut_true
+let test_ut_true ()
   : qBool ⊩ ut_true
+  by (simplify_via_norm ())
   = pack_turnstile QTrue
 
-let test_ut_false
+let test_ut_false ()
   : qBool ⊩ ut_false
+  by (simplify_via_norm ())
   = pack_turnstile QFalse
 
 let test_constant ()
@@ -424,8 +427,9 @@ let test_sendError400 ()
         (QCall OWrite (QMkpair QAxiom (QStringLit "error400")))
         (QReturn Qtt)))
 
-let test_const_str
+let test_const_str ()
   : qString ⊩ const_str
+  by (simplify_via_norm ())
   = pack_turnstile (QStringLit "constant")
 
 let test_greeting ()
@@ -433,40 +437,50 @@ let test_greeting ()
   by (simplify_via_norm ())
   = pack_turnstile (QLambda (QIf QAxiom (QStringLit "hello") (QStringLit "goodbye")))
 
-let test_nat_zero
+let test_nat_zero ()
   : qNat ⊩ nat_zero
+  by (simplify_via_norm ())
   = pack_turnstile (QZero)
 
-let test_nat_one
+let test_nat_one ()
   : qNat ⊩ nat_one
+  by (simplify_via_norm ())
   = pack_turnstile (QSucc QZero)
 
-let test_nat_two
+let test_nat_two ()
   : qNat ⊩ nat_two
+  by (simplify_via_norm ())
   = pack_turnstile (QSucc (QSucc QZero))
 
-let test_nat_succ_fn
+let test_nat_succ_fn ()
   : (qNat ^-> qNat) ⊩ nat_succ_fn
+  by (simplify_via_norm ())
   = pack_turnstile (QLambda (QSucc QAxiom))
 
 let test_nat_nrec_base ()
   : qNat ⊩ nat_two
+  by (simplify_via_norm ())
   = pack_turnstile (QNRec QZero (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
 let test_nat_add2 ()
   : (qNat ^-> qNat) ⊩ nat_add2
+  by (simplify_via_norm ())
   = pack_turnstile (QLambda (QNRec (QSucc (QSucc QZero)) QAxiom (QLambda (QSucc QAxiom))))
 
 let test_nat_nrec_two_plus_three1 ()
   : qNat ⊩ nat_five1
+  by (simplify_via_norm ())
   = pack_turnstile (QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
 let test_nat_nrec_two_plus_three2 ()
   : qNat ⊩ nat_five2
+  by (simplify_via_norm ())
   = pack_turnstile (QNRec (QSucc (QSucc (QSucc QZero))) (QSucc (QSucc QZero)) (QLambda (QSucc QAxiom)))
 
+[@@ (preprocess_with simplify_qType)]
 let test_nat_fact_five ()
   : qNat ⊩ fact_five
+  by (simplify_via_norm ())
   = pack_turnstile (QSnd (
       QNRec
         (QSucc (QSucc (QSucc (QSucc (QSucc QZero)))))
@@ -526,22 +540,22 @@ let d_test_sendError400 () : _ ⊫ _
   = mk_turniqet (test_sendError400 ()) ()
 let d_test_const_str () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet test_const_str ()
+  = mk_turniqet (test_const_str ()) ()
 let d_test_greeting () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_greeting ()) ()
 let d_test_nat_zero () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet test_nat_zero ()
+  = mk_turniqet (test_nat_zero ()) ()
 let d_test_nat_one () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet test_nat_one ()
+  = mk_turniqet (test_nat_one ()) ()
 let d_test_nat_two () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet test_nat_two ()
+  = mk_turniqet (test_nat_two ()) ()
 let d_test_nat_succ_fn () : _ ⊫ _
   by (simplify_d ())
-  = mk_turniqet test_nat_succ_fn ()
+  = mk_turniqet (test_nat_succ_fn ()) ()
 let d_test_nat_nrec_base () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_nat_nrec_base ()) ()
@@ -564,6 +578,14 @@ open ExamplesRefs
 
 let test_refbool ()
   : qBoolR (fun t -> t == true) ⊩ refbool
+  by (simplify_via_norm ())
+  = pack_turnstile (QRef QTrue)
+
+(* The refinement inferred for [QRef] need not be the one from [refbool]'s
+   original F* type. The same derivation also checks at a different, weaker
+   refinement that is nowhere mentioned by the source term. *)
+let test_refbool_infers_weaker_refinement ()
+  : qBoolR (fun t -> t == true \/ t == false) ⊩ refbool
   by (simplify_via_norm ())
   = pack_turnstile (QRef QTrue)
 
@@ -658,6 +680,10 @@ let d_test_refbool () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_refbool ()) ()
 
+let d_test_refbool_infers_weaker_refinement () : _ ⊫ _
+  by (simplify_d ())
+  = mk_turniqet (test_refbool_infers_weaker_refinement ()) ()
+
 let d_test_falsepre () : _ ⊫ _
   by (simplify_d ())
   = mk_turniqet (test_falsepre ()) ()
@@ -701,6 +727,8 @@ let d_test_context () : _ ⊫ _
 #push-options "--no_smt"
 open ExamplesIORefinements
 
+
+
 (** Example 1: Erase refinement in IO *)
 let test_ior_simple_erase_ref ()
   : (qBoolR (fun t -> t == true) ^->!@ qBool) ⊩ simple_erase_ref
@@ -720,6 +748,7 @@ let test_ior_simple_reref_id ()
   = pack_turnstile (QLambdaIO (QReturn (QRef QAxiom)))
 
 (** Example 4: Bind with IO call, then return refined *)
+[@@ (preprocess_with simplify_qType)]
 let test_ior_simple_ref_bind ()
   : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_ref_bind
   by (simplify_stack_ops (); simplify_via_norm ())
@@ -967,6 +996,7 @@ let d_test_ior_io_apply_callback () : _ ⊫ _
 (* Counterexample: on a refinable base type, QRef can make the top-level precondition unsatisfiable. *)
 let test_qref_false_pre_on_bool ()
   : qBool ⊩ true
+  by (simplify_via_norm ())
   = pack_turnstile (QRef (QRef QTrue #(fun _ -> False)) #(fun _ -> True))
 
 let test_qref_false_pre_on_bool_unsat ()

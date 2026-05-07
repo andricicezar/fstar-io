@@ -206,7 +206,7 @@ val fs_oval_app: #g : typ_env ->
 let fs_oval_app #_ #_ #_ #preF f #preX x fsG =
   (f fsG) (x fsG)
 
-
+unfold
 let fs_oval_lambda
   (#g :typ_env)
   (#a :qType)
@@ -394,6 +394,7 @@ val fs_ocomp_call_oval :
 let fs_ocomp_call_oval o args =
   fun fsG -> q_io_call o (args fsG)
 
+unfold
 val fs_oval_lambda_ocomp : #g :typ_env ->
                 #a :qType ->
                 #b :qType ->
