@@ -155,7 +155,7 @@ let test_negb_pred ()
 
 let test_if2 ()
   : (qBool ^-> qBool ^-> qBool) ⊩ if2
-  by (simplify_stack_ops (); simplify_via_norm ())
+  by (simplify_via_norm ())
   = pack_turnstile (QLambda (QLambda (QIf qVar1 QFalse QAxiom)))
 
 let test_callback_return ()
@@ -181,7 +181,7 @@ let test_make_pair ()
 let test_pair_of_functions ()
   : Tot (((qBool ^-> qBool) ^* (qBool ^-> qBool ^-> qBool))
                             ⊩ pair_of_functions)
-  by (simplify_stack_ops (); simplify_via_norm ())
+  by (simplify_via_norm ())
   = pack_turnstile (QMkpair
       (QLambda (QApp
                   (QLambda (QIf QAxiom QFalse QTrue))
@@ -337,7 +337,7 @@ let test_apply_io_return ()
 [@@ (preprocess_with simplify_qType)]
 let test_apply_read ()
   : (qFileDescr ^->!@ (qResexn qString)) ⊩ apply_read
-  by (simplify_stack_ops (); simplify_via_norm ())
+  by (simplify_via_norm ())
   = pack_turnstile (QLambdaIO (QCall ORead QAxiom))
 
 let test_apply_write_const ()
@@ -392,7 +392,7 @@ let test_apply_io_bind_write ()
 [@@ (preprocess_with simplify_qType)]
 let test_apply_io_bind_read_write ()
   : (qFileDescr ^-> qFileDescr ^->!@ (qResexn qUnit)) ⊩ apply_io_bind_read_write
-  by (simplify_stack_ops (); simplify_via_norm ())
+  by (simplify_via_norm ())
   = pack_turnstile (QLambda (QLambdaIO (QBind (QCall ORead (QWeaken QAxiom))
     (QCaseIO QAxiom
       (QCall OWrite (QMkpair (QWeaken (QWeaken QAxiom)) (QStringLit "data")))
@@ -751,7 +751,7 @@ let test_ior_simple_reref_id ()
 [@@ (preprocess_with simplify_qType)]
 let test_ior_simple_ref_bind ()
   : (qBoolR (fun t -> t == true) ^->!@ qBoolR (fun t -> t == true \/ t == false)) ⊩ simple_ref_bind
-  by (simplify_stack_ops (); simplify_via_norm ())
+  by (simplify_via_norm ())
   = pack_turnstile (QLambdaIO (
     QBind
       (QCall OOpen (QStringLit "./string"))
@@ -897,7 +897,7 @@ let test_ior_pure_validate ()
 [@@ (preprocess_with simplify_qType)]
 let test_ior_io_validate_simp ()
   : (qString ^-> (qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate_simp
- by (simplify_stack_ops (); simplify_via_norm ())
+ by (simplify_via_norm ())
   = pack_turnstile (
       QLambda (QLambdaIO (
         (QReturn
@@ -909,7 +909,7 @@ let test_ior_io_validate_simp ()
 // [@@ (preprocess_with simplify_qType)]
 // let test_ior_io_validate ()
 //   : ((qArrR qString qBool (fun x y -> y ==> valid x)) ^->!@ qResexn (qStringR (fun x -> valid x))) ⊩ io_validate
-//   by (simplify_stack_ops (); simplify_via_norm ())
+//   by (simplify_via_norm ())
 //   = pack_turnstile (
 //     QLambdaIO (
 //       QBind (QCall OOpen (QStringLit "./file"))
