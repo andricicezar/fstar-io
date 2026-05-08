@@ -5,10 +5,10 @@ FSTAR := $(FSTAR_EXE)
 LAMBDABOX_DIR := lambdabox
 ROOTS := RrHP.Tests.fst \
          RQ.TypingRelation.Tests.fst \
-         RQ.Metaprogram.Tests.fst
-# RunningExample.fst \
-# $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
-# $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
+         RQ.Metaprogram.Tests.fst \
+	 RunningExample.fst \
+	 $(LAMBDABOX_DIR)/LambdaIOToLambdaBox.fst \
+	 $(LAMBDABOX_DIR)/LambdaBoxToSexp.fst
 
 CACHEDIR := $(BUILD_DIR)/cache
 ODIR := $(BUILD_DIR)/odir

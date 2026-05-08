@@ -32,6 +32,10 @@ let cast_io_res (op:io_ops) (args:fs_val (q_io_args op)) (res:fs_val (q_io_res o
   lem_q_io_res op;
   res
 
+let cast_q_io_res (op:io_ops) (args:io_args op) (res:io_res op args) : fs_val (q_io_res op) =
+  lem_q_io_res op;
+  res
+
 let lem_fs_beh_return #a (x:fs_val a) (h:history) :
   Lemma (fs_beh (return x) h [] x) =
   lem_thetaP_return x h

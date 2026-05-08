@@ -543,11 +543,13 @@ let compat_oval_case
       = match fs_case_v () with
         | Inl x -> fs_lc (stack fsG x)
         | Inr x -> fs_rc (stack fsG x) in
-    let e = ECase (gsubst s e_case) (subst (sub_elam s) e_lc) (subst (sub_elam s) e_rc) in
+    let e_case_s = gsubst s e_case in
+    let e_lc_s = subst (sub_elam s) e_lc in
+    let e_rc_s = subst (sub_elam s) e_rc in
+    let e = ECase e_case_s e_lc_s e_rc_s in
     assert (gsubst s (ECase e_case e_lc e_rc) == e);
-    let ECase e_case_s e_lc_s e_rc_s = e in
-    assert (e_lc_s == subst (sub_elam s) e_lc);
-    assert (e_rc_s == subst (sub_elam s) e_rc);
+    assert (gsubst s (ELam e_lc) == ELam e_lc_s);
+    assert (gsubst s (ELam e_rc) == ELam e_rc_s);
     introduce (fsG `(≍) h` s /\ (spec_env_case fs_case preLc preRc) fsG) ==> t3 ⊆ (h, fs_e (), e) with _. begin
       assert ((t1 ^+ t2) ⊆ (h, fs_case_v (), e_case_s));
       introduce Inl? (fs_case_v ()) ==> (forall (v:value). t1 ∈ (h, Inl?.v (fs_case_v ()), v) ==> t3 ⊆ (h, fs_e (), subst_beta v e_lc_s)) with _. begin
@@ -559,6 +561,7 @@ let compat_oval_case
           assert (fsG `(≍) h` s);
           assert (t1 ∈ (h, Inl?.v (fs_case_v ()), v));
           lem_values_are_values t1 h (Inl?.v (fs_case_v ())) v;
+          lem_value_is_closed v;
           assert (stack fsG (Inl?.v (fs_case_v ())) `(≍) h` gsub_extend s t1 v);
           assert (preLc fsG');
           assert (t3 ⊆ (h, fs_lc fsG', gsubst s' e_lc));
@@ -579,6 +582,7 @@ let compat_oval_case
           assert (fsG `(≍) h` s);
           assert (t2 ∈ (h, Inr?.v (fs_case_v ()), v));
           lem_values_are_values t2 h (Inr?.v (fs_case_v ())) v;
+          lem_value_is_closed v;
           assert (stack fsG (Inr?.v (fs_case_v ())) `(≍) h` gsub_extend s t2 v);
           assert (preRc fsG');
           assert (t3 ⊆ (h, fs_rc fsG', gsubst s' e_rc));

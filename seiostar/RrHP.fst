@@ -18,7 +18,7 @@ noeq type intS = {
 type progS (i:intS) =
   ps:(fs_val (i.ct ^->!@ qBool))
   &
-  qs:((i.ct ^->!@ qBool) ⊫ ps){ QLambdaIO? qs._3 }
+  qs:((i.ct ^->!@ qBool) ⊫ ps){ QLambdaIO? qs._1._2 }
 
 type ctxS (i:intS) = fs_val i.ct
 type wholeS = fs_comp qBool
@@ -49,8 +49,8 @@ let linkT (#i:intT) (pt:progT i) (ct:ctxT i) : wholeT =
   wt
 
 let compile_prog (#i:intS) (ps:progS i) : progT (comp_int i) =
-  lem_compile_closed_valid (dsnd ps);
-  compile (ps._2._3)
+  lem_compile_closed_valid ps._2;
+  compile (ps._2._1._2)
 
 let rel_bools (fs_e:bool) (e:closed_exp) : Type0 =
   (e == ETrue /\ fs_e == true) \/
@@ -161,14 +161,14 @@ let rrschp_bt (i:intS) =
 let proof_rrschp_bt i : Lemma (rrschp_bt i) =
   introduce forall pS cT. behS (linkS pS (backtranslate_ctx cT)) `behS_in_behT` behT (linkT (compile_prog pS) cT) with begin
     let t : qType = i.ct in
-    let ps = dfst pS in
-    let qps = dsnd pS in
+    let ps = pS._1 in
+    let qps = pS._2 in
     let pt : progT (comp_int i) = compile_prog pS in
-    assert (pt == compile qps._3);
+    assert (pt == compile qps._1._2);
     let cs = backtranslate_ctx cT in
     let (| ct, tyj |) = cT in
     let ws : wholeS = ps cs in
-    lem_compile_closed_arrow_is_elam (cast qps);
+    lem_compile_closed_arrow_is_elam qps._1;
     assert (ELam? pt /\ is_closed pt);
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
@@ -184,7 +184,7 @@ let proof_rrschp_bt i : Lemma (rrschp_bt i) =
       eliminate forall h (lt_v:local_trace h). t ∈ (h++lt_v, cs, ct) ==> qBool ⫃ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
       with h []
     end;
-    lem_backtranslate (dsnd cT);
+    lem_backtranslate cT._2;
     assert (valid_subset_comp (ps cs) (subst_beta ct (ELam?.b pt)));
     lem_rel_behST ws (subst_beta ct (ELam?.b pt));
     lem_app_eq_subst_beta pt ct;
@@ -199,14 +199,14 @@ let rrtp_right (i:intS) =
 let proof_rrtp_right i : Lemma (rrtp_right i) =
   introduce forall pS cT. behT (linkT (compile_prog pS) cT) `behT_in_behS` behS (linkS pS (backtranslate_ctx cT)) with begin
     let t : qType = i.ct in
-    let ps = dfst pS in
-    let qps = dsnd pS in
+    let ps = pS._1 in
+    let qps = pS._2 in
     let pt : progT (comp_int i) = compile_prog pS in
-    assert (pt == compile qps._3);
+    assert (pt == compile qps._1._2);
     let cs = backtranslate_ctx cT in
     let (| ct, tyj |) = cT in
     let ws : wholeS = ps cs in
-    lem_compile_closed_arrow_is_elam (cast qps);
+    lem_compile_closed_arrow_is_elam qps._1;
     assert (ELam? pt /\ is_closed pt);
     let wt : wholeT = subst_beta ct (ELam?.b pt) in
 
@@ -222,7 +222,7 @@ let proof_rrtp_right i : Lemma (rrtp_right i) =
       eliminate forall h (lt_v:local_trace h). t ∋ (h++lt_v, cs, ct) ==> qBool ⫄ (h++lt_v, ps cs, subst_beta ct (ELam?.b pt))
       with h []
     end;
-    lem_backtranslate (dsnd cT);
+    lem_backtranslate cT._2;
     assert (valid_superset_comp (ps cs) (subst_beta ct (ELam?.b pt)));
     lem_rel_behTS ws (subst_beta ct (ELam?.b pt));
     lem_app_eq_subst_beta pt ct;

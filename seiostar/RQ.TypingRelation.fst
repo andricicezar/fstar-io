@@ -257,14 +257,12 @@ let pack_turnstile
   pack_turnstile_g t
 
 let (⊫) (a:qType) (x: fs_val a) =
-  pre:spec_env empty &
-  proof:squash (pre empty_eval) &
-  typing #a empty #pre (fs_oval_helper x pre)
+  t:(a ⊩ x) & squash (t._1 empty_eval)
 
 (** Package a thunked derivation together with its precondition and
     a witness discharging it into the [⊫] dependent triple. *)
 let mk_turniqet #a #x
   (thk_deriv:a ⊩ x)
-  (proof:squash ((dfst thk_deriv) empty_eval))
+  (proof:squash (thk_deriv._1 empty_eval))
   : a ⊫ x
-  = (| dfst thk_deriv, proof, (dsnd thk_deriv) |)
+  = (| thk_deriv, proof |)

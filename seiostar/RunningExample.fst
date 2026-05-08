@@ -767,9 +767,13 @@ let re_int : intS = {
   ct = (qString ^-> qString ^->!@ qUnit)
 }
 
+
+let main' () : fs_val (re_int.ct ^->!@ qBool) by (compute ()) =
+  main
+
 val ps_main : progS re_int
-let ps_main : progS re_int=
-  (| main, main_derivation empty |)
+let ps_main : progS re_int =
+  (| main' (), (| main_derivation empty, (_ by (norm [delta; iota])) |) |)
 
 let pt_main = RrHP.compile_prog ps_main
 

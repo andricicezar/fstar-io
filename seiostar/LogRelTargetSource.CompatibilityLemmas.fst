@@ -1184,17 +1184,18 @@ let helper_compat_ocomp_call_oval (op:io_ops) (e':closed_exp) (h:history) (lt:lo
           e_r == as_e_io_res op args res /\
           lt2 == [op_to_ev op args res]
       returns exists (fs_r:fs_val (q_io_res op)). (q_io_res op) ∋ (h++lt, fs_r, e') /\ fs_beh (fs_comp_call_val op fs_arg) h lt fs_r with _. begin
-      let fs_r : fs_val (q_io_res op) = res in
-      let io_res = cast_io_res op fs_arg fs_r in
-      assert (args == io_arg);
-      assert (res == io_res);
-      assert (io_post h op io_arg io_res);
-      assert (e_r == as_e_io_res op io_arg io_res);
-      assert (lt2 == [op_to_ev op io_arg io_res]);
-      lem_fs_beh_call op fs_arg fs_r h;
-      assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op io_arg io_res] fs_r);
-      assert (lt == [op_to_ev op io_arg io_res]);
-      assert ((q_io_res op) ∋ (h++lt, fs_r, e'))
+        assert (args == io_arg);
+        let io_res' : io_res op io_arg = res in
+        let fs_r : fs_val (q_io_res op) = cast_q_io_res op io_arg io_res' in
+        let io_res = cast_io_res op fs_arg fs_r in
+        assert (io_res' == io_res);
+        assert (io_post h op io_arg io_res);
+        assert (e_r == as_e_io_res op io_arg io_res);
+        assert (lt2 == [op_to_ev op io_arg io_res]);
+        lem_fs_beh_call op fs_arg fs_r h;
+        assert (fs_beh (fs_comp_call_val op fs_arg) h [op_to_ev op io_arg io_res] fs_r);
+        assert (lt == [op_to_ev op io_arg io_res]);
+        assert ((q_io_res op) ∋ (h++lt, fs_r, e'))
       end))
 #pop-options
 
@@ -1651,7 +1652,7 @@ let compat_ocomp_fst #g
     (ensures fs_ocomp_fmap fs_e12 fst ⊒ (EFst e12)) =
   lem_fv_in_env_fst g e12;
   introduce forall b' (s:gsub g b') fsG h. (fsG `(∽) h` s /\ (spec_env_bind' #g #(t1 ^* t2) preP (fun x -> spec_env_return_comp #g #t1 (io_return (fst #(fs_val t1) #(fs_val t2) x)))) fsG) ==> t1 ⫄ (h, (fs_ocomp_fmap #g #(t1 ^* t2) #t1 fs_e12 fst) fsG, gsubst s (EFst e12)) with begin
-    introduce _ ==> _ with _. begin
+  introduce _ ==> _ with _. begin
       assert (preP fsG);
       let fs_e12' () : Pure (fs_comp (t1 ^* t2)) (requires preP fsG) (ensures (fun _ -> True)) = fs_e12 fsG in
       let fs_e = fs_comp_bind #(t1 ^* t2) #t1 (fs_e12' ()) (fun e12' -> return (fst #(fs_val t1) #(fs_val t2) e12')) in
@@ -1668,6 +1669,8 @@ let compat_ocomp_fst #g
             lem_shift_type_value_environments h fsG s;
             bind_squash (steps e e' h lt) (fun sts1 ->
               lem_forall_values_are_values_prod (t1 ^* t2) h;
+              assert ((t1 ^* t2) ⫄ (h, fs_e12' (), e12));
+              sem_expr_shape_comp (fs_e12' ()) e12 h;
               let t1_typ = type_quotation_to_typ (get_rel t1) in
               let t2_typ = type_quotation_to_typ (get_rel t2) in
               let (e12', (| lt12, lt_f |)) = destruct_steps_epair_fst e12 e' h lt sts1 t1_typ t2_typ in
@@ -1676,13 +1679,15 @@ let compat_ocomp_fst #g
               let EPair e1 e2 = e12' in
               lem_value_is_irred e1;
               lem_value_is_irred e2;
-              assert ((t1 ^* t2) ⫄ (h, fs_e12' (), e12));
+              lem_value_is_closed e1;
+              lem_value_is_closed e2;
+              let e1' : closed_exp = e1 in
+              let e2' : closed_exp = e2 in
               assert (e_beh e12 e12' h lt12);
-              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==>
-                (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh (fs_e12' ()) h lt' fs_r) with lt12 e12';
+              eliminate forall (lt':local_trace h) (e'':closed_exp). e_beh e12 e'' h lt' ==> (exists (fs_r:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt', fs_r, e'') /\ fs_beh (fs_e12' ()) h lt' fs_r) with lt12 e12';
               eliminate exists (fs_r_e12:fs_val (t1 ^* t2)). (t1 ^* t2) ∋ (h++lt12, fs_r_e12, e12') /\ fs_beh (fs_e12' ()) h lt12 fs_r_e12
                 returns exists (fs_r:fs_val t1). t1 ∋ (h++lt, fs_r, e') /\ fs_beh fs_e h lt fs_r with _. begin
-              lem_destruct_steps_epair_fst e1 e2 e' (h++lt12) lt_f;
+              lem_destruct_steps_epair_fst e1' e2' e' (h++lt12) lt_f;
               trans_history h lt12 [];
               lem_fs_beh_return #t1 (fst #(fs_val t1) #(fs_val t2) fs_r_e12) (h++lt12);
               assert (fs_beh #t1 ((fun e12' -> (return (fst #(fs_val t1) #(fs_val t2) e12'))) fs_r_e12) (h++lt12) [] (fst #(fs_val t1) #(fs_val t2) fs_r_e12));
